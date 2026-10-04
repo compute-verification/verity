@@ -513,16 +513,22 @@ Pc8CapWordUnitDef = CompositeDefinition(
     conformance="protocol-defined")
 
 
-def _grid(tm: int, tn: int, t):
-    return Array(tm, Array(tn, t))
+#: the tile's and the tally's per-word ports are one entry per word, row-major (word (i, j) at i·TN + j), so each word's
+#: row is one index of each port, as C-Flock's unit lowering reads a row
+def _cells(tm: int, tn: int, t):
+    return Array(tm * tn, t)
+
+
+def _tile_body(B, S_, c, u):
+    grid = Array(S_.TM, Array(S_.TN, F32))
+    return B.call(L.tile_digest(S_.TM, S_.TN), c.reshape(grid), u.reshape(grid))
 
 
 Pc8CapTileDef = CompositeDefinition(
     "Pc8CapTile", 1, ("TM", "TN"),
-    lambda S_: ((("c", _grid(S_.TM, S_.TN, F32)), ("u", _grid(S_.TM, S_.TN, F32))), L.DIGEST),
-    lambda B, S_, c, u: B.call(L.tile_digest(S_.TM, S_.TN), c, u),
-    doc="The split cap's tile: its words' tile digest (`leaves.PearlTileDigest` of their C̃ and U).",
-    conformance="protocol-defined")
+    lambda S_: ((("c", _cells(S_.TM, S_.TN, F32)), ("u", _cells(S_.TM, S_.TN, F32))), L.DIGEST), _tile_body,
+    doc="The split cap's tile: its words' tile digest (`leaves.PearlTileDigest` of their C̃ and U, one per word, "
+        "row-major).", conformance="protocol-defined")
 
 
 #: a strip's admission bits in its cap-rows row: the scheme's tile rows, so TM <= 64
@@ -553,8 +559,8 @@ Pc8CapStripDef = CompositeDefinition(
 def _tally_sig(S_):
     k, tm, tn = S_.K, S_.TM, S_.TN
     _cap_constants(k, tm, tn, S_.N, S_.RHO, S_.DEV)
-    return ((("flags", _grid(tm, tn, Array(flag_bits(k), BIT))), ("atoms", _grid(tm, tn, I32)),
-             ("zeros", _grid(tm, tn, I32)), ("good", _grid(tm, tn, OK)), ("mask", Array(STRIP_BITS, BIT)),
+    return ((("flags", _cells(tm, tn, Array(flag_bits(k), BIT))), ("atoms", _cells(tm, tn, I32)),
+             ("zeros", _cells(tm, tn, I32)), ("good", _cells(tm, tn, OK)), ("mask", Array(STRIP_BITS, BIT)),
              ("bound", I32), ("sd", Array(tm, Array(k // SLICE, I32)))), OK)
 
 
@@ -566,11 +572,12 @@ def _tally_body(B, S_, flags, atoms, zeros, good, mask, bound, sd):
         ok = mask[i]
         row_atoms = row_zeros = 0
         row_good = 1
-        for j in range(S_.TN):
-            row_atoms = _add(e, row_atoms, atoms[i][j])
-            row_zeros = _add(e, row_zeros, zeros[i][j])
-            row_good = _and(e, row_good, e.call(Bf16GtStrict, good[i][j], 0))
-        sums = _masked_add(e, sums, ok, (row_atoms, row_zeros, _row_elems(e, [flags[i][j] for j in range(S_.TN)], sd[i], k)))
+        row = range(i * S_.TN, (i + 1) * S_.TN)
+        for w in row:
+            row_atoms = _add(e, row_atoms, atoms[w])
+            row_zeros = _add(e, row_zeros, zeros[w])
+            row_good = _and(e, row_good, e.call(Bf16GtStrict, good[w], 0))
+        sums = _masked_add(e, sums, ok, (row_atoms, row_zeros, _row_elems(e, [flags[w] for w in row], sd[i], k)))
         bad = _or(e, bad, _and(e, ok, _not(e, row_good)))
     return pc4.ok_word(e, _and(e, _not(e, bad), _within(e, consts, sums, bound)))
 
@@ -610,10 +617,10 @@ def _call_cap_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, b
     for rs in range(m // tm):
         words = [B.batch(tp["word"], ac[i], pa[i], bc, pb, cert[i], axes=(None, None, 0, 0, 0))
                  for i in range(rs * tm, (rs + 1) * tm)]
-        grid = lambda f: array_of([array_of([array_of([words[i][cs * tn + j][f] for j in range(tn)])  # noqa: E731
-                                             for i in range(tm)]) for cs in range(n // tn)])
-        tiles = B.batch(tp["tile"], grid(0), grid(1), axes=(0, 0))
-        tallies = B.batch(tp["tally"], grid(2), grid(3), grid(4), grid(5), strips[rs][0], strips[rs][1], sds[rs],
+        cells = lambda f: array_of([array_of([words[i][cs * tn + j][f] for i in range(tm) for j in range(tn)])  # noqa: E731
+                                    for cs in range(n // tn)])
+        tiles = B.batch(tp["tile"], cells(0), cells(1), axes=(0, 0))
+        tallies = B.batch(tp["tally"], cells(2), cells(3), cells(4), cells(5), strips[rs][0], strips[rs][1], sds[rs],
                           axes=(0, 0, 0, 0, None, None, None))
         digests.append(array_of([tiles[cs] for cs in range(n // tn)]))
         verdicts.append(array_of([tallies[cs] for cs in range(n // tn)]))
