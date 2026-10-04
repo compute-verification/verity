@@ -223,9 +223,9 @@ _MOE_DISPATCH_OPS = ("moe_forward", "moe_forward_shared", "fused_experts")
 
 
 def _moe_c_fake_impls() -> list:
-    """Fake (meta) kernels for the `_moe_C` / `_C` leaf ops the traced MoE body launches, when the pinned vLLM registers none: every one
-    of them writes into caller-allocated outputs and returns nothing, so the fake is `None` (shapes are the allocations').  Returns the
-    ops registered (nothing to undo: registration is per process and is only ever the same None-returning fake)."""
+    """Fake (meta) kernels for the `_moe_C` / `_C` leaf ops the traced MoE body launches, when the pinned vLLM registers none: all but
+    `grouped_topk` write into caller-allocated outputs and return nothing, so their fake is `None` (shapes are the allocations').  Returns
+    the ops registered (nothing to undo: registration is per process and is only ever the same fake)."""
     done = []
     for ns, name in (("_moe_C", "topk_softmax"), ("_moe_C", "moe_align_block_size"), ("_moe_C", "moe_sum"), ("_C", "silu_and_mul")):
         try:
@@ -237,6 +237,15 @@ def _moe_c_fake_impls() -> list:
             done.append(f"{ns}::{name}")
         except RuntimeError:  # already has a fake / meta kernel
             pass
+    # `grouped_topk(scores [M, E], n_group, topk_group, topk, ...)` allocates its outputs: f32 weights and int32 ids, [M, topk]
+    try:
+        torch.ops._moe_C.grouped_topk
+        torch.library.register_fake("_moe_C::grouped_topk")(
+            lambda scores, n_group, topk_group, topk, *a, **k: (scores.new_empty((scores.shape[0], topk), dtype=torch.float32),
+                                                                scores.new_empty((scores.shape[0], topk), dtype=torch.int32)))
+        done.append("_moe_C::grouped_topk")
+    except (AttributeError, RuntimeError):
+        pass
     return done
 
 
