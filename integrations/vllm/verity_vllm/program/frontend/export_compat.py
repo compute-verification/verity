@@ -66,7 +66,8 @@ def apply_target_profile(profile):
     * `current_platform.get_device_capability()` answers `profile.compute_capability` — this selects the FA version
       (`get_flash_attn_version`), the batch-invariant GEMM override family and the tuned-GEMM table (`resolve_tuned_matmul_configs`);
     * `num_compute_units()` answers `profile.num_sms` — vLLM's batch-invariant GEMM sizes its persistent grid by it
-      (`matmul_persistent`), and the GEMM rule checks every launch against the same profile value.
+      (`matmul_persistent`), and the GEMM rule checks every launch against the same profile value; the platform's own
+      `current_platform.num_compute_units()` answers it too (`TritonMLAImpl.__init__` reads it).
 
     The builder constructs for the DECLARED target on any host: the patch is applied whether or not a GPU is visible (a visible
     GPU's own answers are recorded by the driver under `target.host`, never used). There is no other place these two values are set;
@@ -79,6 +80,7 @@ def apply_target_profile(profile):
     with hooks.Hooks() as h:
         h.patch(type(current_platform), "get_device_capability",
                 classmethod(lambda c, device_id=0, _M=major, _m=minor: DeviceCapability(major=_M, minor=_m)))
+        h.patch(type(current_platform), "num_compute_units", classmethod(lambda c, device_id=0, _n=profile.num_sms: _n))
         _reset_tuned_table_cache(h)
         for modname in _NUM_CU_MODULES:
             try:

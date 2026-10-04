@@ -177,6 +177,7 @@ def test_export_shims_restore_torch_and_vllm() -> None:
     from verity_vllm.program.frontend.export_compat import _NUM_CU_MODULES, apply_target_profile, moe_ops_traced
     cls = type(current_platform)
     cap = vars(cls).get("get_device_capability", hooks.ABSENT)
+    cu = vars(cls).get("num_compute_units", hooks.ABSENT)
     mods = []
     for name in _NUM_CU_MODULES:
         try:
@@ -186,8 +187,10 @@ def test_export_shims_restore_torch_and_vllm() -> None:
     cus = [vars(m).get("num_compute_units", hooks.ABSENT) for m in mods]
     with apply_target_profile(SimpleNamespace(compute_capability=(8, 9), num_sms=142)):
         assert tuple(cls.get_device_capability()) == (8, 9)
+        assert current_platform.num_compute_units() == 142
         assert all(m.num_compute_units() == 142 for m in mods if hasattr(m, "num_compute_units"))
     assert vars(cls).get("get_device_capability", hooks.ABSENT) is cap
+    assert vars(cls).get("num_compute_units", hooks.ABSENT) is cu
     assert [vars(m).get("num_compute_units", hooks.ABSENT) for m in mods] == cus
 
     fm = pytest.importorskip("vllm.model_executor.layers.fused_moe.fused_moe")   # registers torch.ops.vllm.fused_experts
