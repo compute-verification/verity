@@ -39,6 +39,7 @@ import Pous.SecurityProofs.Thm1.Theorem1iiSeq
 import Pous.SecurityProofs.Thm1.Theorem1iiiTimed
 import Pous.SecurityProofs.Chain.PubFamily
 import Pous.SecurityProofs.Chain.PubRounds
+import Pous.SecurityProofs.Rebuild.Exclusion
 
 /-!
 # The proved guarantees
@@ -153,6 +154,8 @@ theorem ChainDenseMeets111 : Pous.Guarantees.ChainDenseMeets111 := PousSpongeCha
 theorem BandGradedMeetsFamily : Pous.Guarantees.BandGradedMeetsFamily := PousGraded.band_graded_meets_family
 theorem PerAnswer : Pous.Guarantees.PerAnswer := PousContinuous.per_answer
 theorem ContinuousAudit : Pous.Guarantees.ContinuousAudit := PousContinuous.continuous_audit
+theorem BackgroundRebuildExcluded : Pous.Guarantees.BackgroundRebuildExcluded :=
+  PousRebuild.background_rebuild_excluded
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
 theorem P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond := PousP2p.family

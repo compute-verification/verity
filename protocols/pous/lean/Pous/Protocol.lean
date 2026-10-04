@@ -2,6 +2,7 @@ import Pous.Protocol.Accounting.GradedMeets
 import Pous.Protocol.Accounting.LemmaA
 import Pous.Protocol.Accounting.Params
 import Pous.Protocol.Accounting.PubMeets
+import Pous.Protocol.Accounting.Rebuild
 import Pous.Protocol.Game.Oracle
 import Pous.Protocol.Game.Prob
 import Pous.Protocol.Model.Audit
