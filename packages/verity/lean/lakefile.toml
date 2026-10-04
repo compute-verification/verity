@@ -15,4 +15,3 @@ rev = "5ed2965256430c3649e86755f9576b54eca72435"
 # definitions (`verity.ml.tc`).
 [[lean_lib]]
 name = "Verity"
-roots = ["Verity.Assumptions", "Verity.Guarantees", "Verity.Protocol", "Verity.SecurityProofs.Fp32.Vectors", "Verity.SecurityProofs.Prims.Vectors", "Verity.SecurityProofs.Scalar.Vectors", "Verity.SecurityProofs.TC.Vectors"]
