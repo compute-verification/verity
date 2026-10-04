@@ -132,32 +132,28 @@ coins.
   `live/src/coin_tree.rs`; the live `PROTOCOL.md` §9). A6 for these sessions is the following.
   - *The coins.* At `Hello`, after the prover's nonce and before its first message (`Commit`), the coin server reads
     from `/dev/urandom` a fresh hm96 key (256 bytes, bit 2047 cleared: hm96 §2's key space), then a block of coins and a 192-byte salt for each stream and round
-    (`CoinTree::draw_with`, called at `Hello` in `live/src/lib.rs`). It commits to every block at once, as keyed hm96
-    leaves under one SHA-512 tree, and answers `Hello` with the root and the key. It opens round `r`'s leaves only in
+    (`CoinTree::draw_with`, at `Hello` in `live/src/lib.rs`), commits to every block as keyed hm96 leaves under one
+    SHA-512 tree, and answers `Hello` with the root and the key. It opens round `r`'s leaves only in
     its answer to the prover's round-`r` message. That ordering takes the place of "drawn after the prover's message"
-    in the statement above. As with A6 itself, no check of the record establishes it: flock-verify checks that each
-    opening opens the root, not when the server drew or opened it.
-  - *Why the model's coins are still the run's.* Given the key, the leaves are independent, and opening one reveals
-    nothing about another, because each has its own salt. A hybrid compares the real tree with a tree whose unopened
-    leaves commit to independent coins, with the openings resampled consistently. Each leaf moves it by at most
-    `2^-256`: hm96 `PROTOCOL.md` §3's two-vector case. §3's `2^-257` per leaf is the distance to the ideal
-    distribution, and the coin digests aren't uniform, so the hybrid needs the two-vector bound. So for every event `E`
+    in the statement above. As with A6 itself, the record can't establish it: flock-verify checks each opening against
+    the root, not when it was drawn or opened.
+  - *Why the model's coins are still the run's.* Given the key, each leaf has its own salt, so opening one reveals
+    nothing about another. A hybrid swaps the unopened leaves for commitments to independent coins (openings resampled
+    consistently); each leaf moves it by at most
+    `2^-256`: hm96 `PROTOCOL.md` §3's two-vector case (§3's `2^-257` is the distance to the ideal distribution, which
+    doesn't apply, because the coin digests aren't uniform). So for every event `E`
     of the transcript, `Pr_run[E] ≤ Pr_model[E] + N·2^-256`, with the published root and key treated as randomness the
-    prover could have drawn itself. The step is statistical only: it uses no hash property, no `hash-derived-key` and
-    no common-reference-string step, because the key is fresh for each session, not pinned.
-  - *N.* `N` counts every hm96 leaf committed under the session's key, opened or not: `N = |streams| · 2^rounds_log`
-    (`CoinTree::build`, one leaf per stream and round). The streams' tree is padded to a power of two with the constant
-    `SHA-512(PAD)`, which commits to no coin and is no leaf. flock-circuit's schedule (`coin_spec_of`,
-    `live/src/bin/flock-circuit.rs`) is the session's stream plus two reps per table, at `rounds_log = 8`, so
-    `N = (1 + 2J)·256` for `J` tables: `768·2^-256 < 2^-246` at one table.
+    prover could have drawn itself. The step is statistical only (no hash property, no `hash-derived-key`, no CRS):
+    the key is fresh for each session.
+  - *N* counts every leaf committed under the session's key, opened or not: `|streams| · 2^rounds_log`
+    (`CoinTree::build`; the `SHA-512(PAD)` padding is no leaf). flock-circuit's schedule (`coin_spec_of`) has the
+    session's stream plus two reps per table at `rounds_log = 8`: `N = (1 + 2J)·256`, so `N·2^-256 < 2^-246` at J = 1.
   - *What the bound needs.* The salts are uniform and independent, one per leaf, never reused. The key is independent
     of the salts, drawn after the prover's nonce, and never reused across sessions. Both come from `/dev/urandom`, which
-    is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the draw at `Hello`. Two test
-    hooks are outside A6, both under the test-only `seed-injection` feature: a server given a coin tape
-    (`inject_coin_tape`, a ChaCha20 tape) draws no OS coins, and one given an edit (`inject_coin_edit`) commits to
-    coins of its choosing. Unlike the opening order, this exclusion is checkable from the record: the backend identity
-    carries `seed_injection` (`live/src/bin/flock-circuit.rs`), the statement digest pins it (`Flock/Tags.lean`), and it
-    is false in every proving build (`check_build.sh`).
+    is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the draw at `Hello`. The
+    test-only `seed-injection` hooks (`inject_coin_tape`, `inject_coin_edit`) are outside A6. Unlike the opening order,
+    this is checkable from the record: the backend identity carries `seed_injection`, the statement digest pins it
+    (`Flock/Tags.lean`), and it is false in every proving build (`check_build.sh`).
   - *Citing condition* (@lean, Oct 3). Until a Lean lemma states the hybrid, every citation of a `--zk` headline
     (`zk_session_sound` and its hidden-output, J-table and registered forms) gives δ as the Lean bound plus
     `N·2^-256`, and names that term as a step argued by hand.
@@ -436,10 +432,8 @@ before the session's first coin, not bounds state by state.
 - **`seed` coins** (PR #83, `coin-commit/sha256/v1`; M0's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
   add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,
   so a run on seed coins is outside the headline (The headline, its coins).
-- **`tree` coins** (`--zk`, `coin-tree/hm96-sha512/v2`). Every coin is drawn from `/dev/urandom` at `Hello` and
-  committed before the prover's first message, and round `r`'s coins are opened only after the prover's round-`r`
-  message. Soundness uses the commitment's hiding, which is statistical, and pays `N·2^-256` for it (A6, tree coins).
-  Zero knowledge uses its binding (`cr/sha-512`). The `--zk` headlines are for these coins.
+- **`tree` coins** (`--zk`, `coin-tree/hm96-sha512/v2`): the `--zk` headlines' coins. Soundness pays `N·2^-256` for
+  the commitment's statistical hiding (A6, tree coins); zero knowledge uses its binding (`cr/sha-512`).
 - **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check (DESIGN.md §2).
 - **Quantum provers** (DESIGN.md §9). The oracle layer holds against them, but the compiled theorem is classical. The
   compiled protocol is post-quantum sound only asymptotically, and only if SHA-512 is collapsing, which is a conjecture
