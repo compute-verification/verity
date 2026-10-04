@@ -7430,6 +7430,7 @@
   "FlockSoundness.Discharge.FailClosed.flock_headline_exec_dec": {},
   "FlockSoundness.Discharge.FailClosed.flock_headline_exec_hidden": {},
   "FlockSoundness.Discharge.FailClosed.flock_headline_exec_hidden_dec": {},
+  "FlockSoundness.Discharge.FailClosed.flock_verify_sound": {},
   "FlockSoundness.Discharge.FailClosed.scopeOk_eq": {},
   "FlockSoundness.Discharge.FailClosed.zk_session_composed": {},
   "FlockSoundness.Discharge.FailClosed.zk_session_composedHJ": {},
