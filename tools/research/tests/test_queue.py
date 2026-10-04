@@ -655,7 +655,7 @@ def test_a_grant_carries_to_a_restack_with_a_byte_identical_lean_audit_change_an
     another machine and comes through the store's remote, pulled for every head of the PR at once."""
     q = _carrying(world)
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
-    pin = {"pkg/lean-audit.json": json.dumps({**audit, "pins": {"T": "2"}})}
+    pin = {"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}
     world.gh.put(1, old := world.change(pin))
     _grant(world, 1, old, "statement-reviewer")
     assert [m.pr for m in q.sync()[0]] == [1]
@@ -672,7 +672,7 @@ def test_a_grant_carries_to_a_merge_of_main_and_not_to_any_other_lean_audit_chan
     the same `lean-audit.json` meanwhile, since its change now starts from other bytes (fail closed: a new grant, or a lean_review)."""
     q = _carrying(world)
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
-    world.gh.put(1, old := world.change({"pkg/lean-audit.json": json.dumps({**audit, "pins": {"T": "2"}})}))
+    world.gh.put(1, old := world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}))
     _grant(world, 1, old, "statement-reviewer")
     q.sync()
     _move_main(world, {"d.txt": "landed meanwhile\n"})
@@ -688,9 +688,9 @@ def test_a_grant_carries_to_a_merge_of_main_and_not_to_any_other_lean_audit_chan
         assert (f"research queue: grant statement-reviewer on pr:1@{old} doesn't carry to {h[:12]}: its lean-audit.json change "
                 f"isn't byte-identical (pkg/lean-audit.json)") in world.logs
 
-    refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "pins": {"T": "3"}})}))
-    _move_main(world, {"pkg/lean-audit.json": json.dumps({**audit, "pins": {"T": "1", "U": "1"}})})
-    refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "pins": {"T": "2", "U": "1"}})}))
+    refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "3"}})}))
+    _move_main(world, {"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "1", "U": "1"}})})
+    refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2", "U": "1"}})}))
 
 
 def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
@@ -796,10 +796,10 @@ def test_a_file_name_that_isnt_utf8_compares_byte_for_byte_and_prints_escaped(wo
 def test_a_change_under_a_name_git_would_quote_needs_its_grants(world):
     """Red team of #955: `git diff --name-only` quotes a name with bytes outside ASCII (`"pk\\303\\251/lean-audit.json"`), which
     matched neither a rule's path nor `lean-audit.json`, so such a pin change or file needed no grant."""
-    audit = {"pins": {"T": "1"}, "reads": {}}
+    audit = {"guarantees": {"T": "1"}, "reads": {}}
     _move_main(world, {"pké/lean-audit.json": json.dumps(audit)})
     rules = Rules.parse(RULES)
-    pin = world.change({"pké/lean-audit.json": json.dumps({**audit, "pins": {"T": "2"}})})
+    pin = world.change({"pké/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})})
     assert rules.needs(world.dev, "origin/main", pin) == {"statement-reviewer"}
     assert rules.needs(world.dev, "origin/main", world.change({"integrations/vllm/café.py": "x\n"})) == {"vllm-coordinator"}
 
