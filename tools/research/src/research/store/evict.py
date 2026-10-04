@@ -19,15 +19,17 @@ Two kinds of local copy can go, and only these:
   conditions (Slack, 4 Oct 03:48Z; condition 1 read as recoverability, root 4 Oct 17:27Z), each established afresh: (1) it is
   recoverable on the node: its commit is reachable from a ref of the node's `<root>/git/verity.git`, which holds
   `refs/research/src/<sha>` for every tree shipped and from which `research run` re-ships it (`git ls-remote`, or of
-  `--src-origin`); (2) nothing uses it: no live
-  process names it (cwd, root, exe, open file, map, command line, environment), no run that has not ended and no request without a
+  `--src-origin`, `--no-replace-objects`), and the tree is exactly that commit (its `.git` HEAD is it and `git status` shows
+  nothing but READY.json); (2) nothing uses it: no live process names it (cwd, root, exe, open file, map, command line,
+  environment, any `src/<sha>` they spell, a thread's cwd when its leader exited), no git worktree made from it, no run that has not ended and no request without a
   run dir names it, no live check or Lean slot holder or waiter (`<root>/locks`) names it, no job script queued for the fill
   (`retention.JobScripts`) names it, and nothing in it changed and no run naming it was recorded within `SRC_KEEP_S`; (3) no run
   record holds it as its source's only copy: its READY.json names its own commit, and every run record naming it names that commit
   as its clean source.  A tree with a `research keep` record is left to `research retention`.  Not on a free-space target: an
   unused tree costs inodes as much as bytes (node 1 at 74% inodes, 4 Oct), and `research run` re-ships one from
   `refs/research/src/<sha>`.  Before a deletion the tree is checked again, renamed to `.evicting-<sha>-<nonce>` (never executable
-  by name), checked once more (renamed back when something uses it) and removed READY.json first.  It fails closed: a condition
+  by name), checked once more (renamed back when something uses it, or on any error) and removed READY.json first, one pass at a
+  time (`<src>/.evict.lock`).  It fails closed: a condition
   it cannot establish (the repository unlisted, a process it cannot read, a record it cannot read) deletes nothing and says why.
 
 Never touched: pending (unpushed or unverified) objects, `manifests/`, `attempts/`, `labels/`, `catalog.sqlite`, `scratch/`.
@@ -37,6 +39,7 @@ tests inject their own.
 """
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -374,6 +377,7 @@ SRC_BUDGET_S = 30 * 60       # no deletion starts after this long, so the unit's
 GIT_TIMEOUT_S = 300
 ASIDE = ".evicting-"         # <src>/.evicting-<sha>-<nonce>: a tree on its way out, never executable by name
 READY_FILE = "READY.json"    # remote.READY_FILE: the marker that makes <src>/<sha> executable
+LOCK = ".evict.lock"         # <src>/.evict.lock: one pass at a time
 ENDED = TERMINAL_STATES + ("refused",)
 PF_KTHREAD = 0x00200000      # /proc/<pid>/stat flags: a kernel thread, which opens no file of ours
 _SHA = re.compile(r"[0-9a-f]{40}")
@@ -388,8 +392,8 @@ def _redact(url: str) -> str:
 
 
 def _git(args: list[str], stdin: str | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], input=stdin, capture_output=True, text=True, timeout=GIT_TIMEOUT_S,
-                          env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    return subprocess.run(["git", "--no-replace-objects", *args], input=stdin, capture_output=True, text=True, timeout=GIT_TIMEOUT_S,
+                          env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"})
 
 
 def on_origin(shas: set[str], origin: str, git_dir: Path) -> set[str]:
@@ -409,12 +413,18 @@ def on_origin(shas: set[str], origin: str, git_dir: Path) -> set[str]:
         raise Unestablished(f"1: {_redact(origin)} lists no refs")
     found = shas & tips
     if shas - found:
+        if bad := [str(f) for f in (git_dir / "shallow", git_dir / "info" / "grafts") if f.exists()]:
+            raise Unestablished(f"1: {', '.join(bad)} would rewrite the history the ancestor walk reads")
         g = ["--git-dir", str(git_dir)]
         have = run([*g, "cat-file", "--batch-check"], f"git cat-file in {git_dir}", "\n".join(sorted(tips)) + "\n")
         local = [f[0] for f in (ln.split() for ln in have.splitlines()) if len(f) > 1 and f[1] in ("commit", "tag")]
         if local:
             found |= (shas - found) & set(run([*g, "rev-list", "--stdin"], f"git rev-list in {git_dir}", "\n".join(local) + "\n").split())
     return found
+
+
+_LOOSE = re.compile(rf"(?:^|[/\0\s:=])src/+(?:\./)*(?:{re.escape(ASIDE)})?([0-9a-f]{{40}})(?![0-9a-f])")
+"""A tree named however a process spells it (`src/<sha>` relative to its cwd, `//`, `/./`): any `src/<sha>` keeps that sha."""
 
 
 def _tree_pattern(src_root: Path) -> re.Pattern[str]:
@@ -433,12 +443,17 @@ def _quiet(fn: Callable[[], Any]) -> Any:
 def _proc_texts(base: Path) -> list[str]:
     """Every path and string process `base` names: cwd, root, exe, open files, maps, command line, environment.  Empty for a kernel
     thread or a process gone meanwhile; PermissionError when it can't be read."""
+    task = base.parent.name == "task"
     stat = _quiet((base / "stat").read_text)
-    if stat is None or int(stat.rsplit(")", 1)[1].split()[6]) & PF_KTHREAD:
+    if not task and (stat is None or int(stat.rsplit(")", 1)[1].split()[6]) & PF_KTHREAD):
         return []
     out = [_quiet(lambda n=n: os.readlink(base / n)) for n in ("cwd", "root", "exe")]
     out += [_quiet(lambda f=f: os.readlink(base / "fd" / f)) for f in _quiet(lambda: os.listdir(base / "fd")) or []]
     out += [_quiet(lambda n=n: (base / n).read_bytes().decode(errors="replace")) for n in ("maps", "cmdline", "environ")]
+    if out[0] is None and not task:     # a leader that exited while its threads run: they show under task/
+        for tid in _quiet(lambda: os.listdir(base / "task")) or []:
+            if tid != base.name:
+                out += _proc_texts(base / "task" / tid)
     return [t for t in out if t]
 
 
@@ -458,7 +473,8 @@ def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc")) -> dict[str,
         except PermissionError as e:
             raise Unestablished(f"2: {proc / pid} is unreadable ({e.strerror}) as uid {os.geteuid()}: the pass needs root or "
                                 "CAP_SYS_PTRACE") from None
-        for m in pattern.finditer("\n".join(texts)):
+        joined = "\n".join(texts)
+        for m in [*pattern.finditer(joined), *_LOOSE.finditer(joined)]:
             comm = (_quiet((proc / pid / "comm").read_text) or "?").strip()
             uses.setdefault(m.group(1), set()).add(f"2: process {pid} ({comm}) uses it")
     return uses
@@ -537,6 +553,9 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
                 continue
             sha = _get(job, "run", "remote", "source_sha") or (_doc(texts["remote.json"]) or {}).get("source_sha")
             src = _get(job, "store", "conditions", "source") or {}
+            if not isinstance(src, dict):
+                add(named, f"3: run {name}'s store.conditions.source is not an object")
+                continue
             for t in named:
                 other = next((x for x in (sha, src.get("commit")) if x not in (None, t)), None)
                 if other:
@@ -611,6 +630,33 @@ def _own_reasons(src_root: Path, sha: str, now: float, keep_s: float) -> tuple[s
     return why, newest
 
 
+def _local_changes(tree: Path, sha: str) -> set[str]:
+    """Why the tree is not exactly its commit, so deleting it would lose work no ref holds: no `.git` to compare with, a HEAD other
+    than `sha`, any change `git status` shows (tracked, or untracked and not ignored) but READY.json, or a worktree made from it.
+    Run only for a tree about to go: it reads every file's metadata."""
+    why: set[str] = set()
+    gd = tree / ".git"
+    if not os.path.lexists(gd):
+        return {"1: not recoverable on the node: no .git to compare it with its commit"}
+    if gd.is_dir() and _quiet(lambda: os.listdir(gd / "worktrees")):
+        why.add("2: a git worktree made from it (.git/worktrees) may be in use")
+    try:
+        r = _git(["--git-dir", str(gd), "--work-tree", str(tree), "status", "--porcelain=v2", "--branch", "-z",
+                  "--untracked-files=normal", "--ignore-submodules=none"])
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return why | {f"1: git status failed: {type(e).__name__}: {e}"}
+    if r.returncode:
+        return why | {f"1: git status failed (rc {r.returncode}): {(r.stderr or r.stdout).strip()[-200:]}"}
+    entries = [e for e in r.stdout.split("\0") if e]
+    head = next((e.split()[2] for e in entries if e.startswith("# branch.oid ")), None)
+    changes = [e for e in entries if not e.startswith("#") and e != f"? {READY_FILE}"]
+    if head != sha:
+        why.add(f"1: not recoverable on the node: its HEAD is {head}")
+    if changes:
+        why.add(f"1: not recoverable on the node: {len(changes)} local change(s) no commit holds, e.g. {changes[0][-120:]!r}")
+    return why
+
+
 def _remove_tree(path: Path) -> tuple[int, int]:
     """`rm -r path`, READY.json first; (inodes, bytes) it frees, so a hard link into the uv cache counts once, where it goes."""
     inodes = nbytes = 0
@@ -672,6 +718,15 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
     pattern = _tree_pattern(src_root)
     rep: dict[str, Any] = {"src_root": str(src_root), "dry_run": dry_run, "origin": _redact(origin), "trees": 0, "deleted": [],
                            "kept": [], "deleted_inodes": 0, "deleted_bytes": 0, "kept_by": {}, "error": None}
+    if not dry_run and src_root.is_dir():
+        lock = open(src_root / LOCK, "a")      # held for the pass: another pass would take this one's aside tree for a leftover
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock.close()
+            rep["error"] = f"another pass holds {src_root / LOCK}"
+            say(f"src: nothing done: {rep['error']}")
+            return rep
 
     def live(shas: set[str]) -> dict[str, set[str]]:
         """Condition 2 and the run records' part of 3, read afresh."""
@@ -720,6 +775,9 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
             if clock() - t0 > budget_s:
                 reasons[s].add(f"budget: no deletion starts after {budget_s / 60:g} min; the next pass goes on")
                 continue
+            if changes := _local_changes(src_root / s, s):
+                reasons[s] |= changes
+                continue
             if dry_run:
                 rep["deleted"].append({"tree": s, "age_h": round((t_wall - mtime) / 3600, 1), "inodes": None, "bytes": None})
                 deleted.add(s)
@@ -736,7 +794,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
                 continue
             try:
                 after = live({s}).get(s, set())
-            except Unestablished:
+            except BaseException:
                 _put_back(aside, src_root / s)
                 raise
             if after:

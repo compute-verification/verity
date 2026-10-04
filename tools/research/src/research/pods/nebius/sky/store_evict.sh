@@ -8,6 +8,7 @@
 # With $VY_EVICT_SRC (research's unit, store_evict_src.conf: /workspace/research/src) it also deletes the `research run` source
 # trees there recoverable on the node (a ref of $VY_EVICT_ORIGIN, default <root>/git/verity.git) that nothing uses, every hour whatever the mark
 # (`--src-dir`, store/evict.py `evict_src`); the line says how many went and why the rest stayed.
+# A tool too old for --src-dir still evicts the rest, and the line says so. Python runs from / so nothing in a writable cwd imports.
 #   VY_RESEARCH_TOOL: the research tool to run (default the newest snapshot under /workspace/research/tool).
 set -uo pipefail
 FREE=${VY_EVICT_FREE_GB:-2500}
@@ -21,13 +22,16 @@ if [ -z "$TOOL" ] || [ ! -d "$TOOL/research" ]; then
   exit 1
 fi
 args=(--target-free-gb "$FREE" --runs --runs-dir "$RUNS")
-if [ -n "$SRCDIR" ]; then
+srcnote=
+if [ -n "$SRCDIR" ] && grep -q -- '"--src-dir"' "$TOOL/research/store/cli.py" 2> /dev/null; then
   args+=(--src-dir "$SRCDIR")
   [ -n "${VY_EVICT_ORIGIN:-}" ] && args+=(--src-origin "$VY_EVICT_ORIGIN")
+elif [ -n "$SRCDIR" ]; then
+  srcnote="; src trees: not evicted, $(basename "$TOOL") has no --src-dir"
 fi
 avail() { df -B1G --output=avail /workspace | tail -1 | tr -d ' '; }
 before=$(avail)
-out=$(cd /tmp && RESEARCH_STORE=$STORE PYTHONPATH=$TOOL timeout 3000 python3 -m research data evict "${args[@]}" --json 2>&1)
+out=$(cd / && RESEARCH_STORE=$STORE PYTHONPATH=$TOOL timeout 3000 python3 -m research data evict "${args[@]}" --json 2>&1)
 summary=$(printf '%s' "$out" | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
@@ -46,4 +50,4 @@ if [ -z "$summary" ]; then
   echo "vy-store-evict: research data evict failed: $(printf '%s' "$out" | tail -2 | tr '\n' ' ')" >&2
   exit 1
 fi
-echo "vy-store-evict: free $before -> $(avail) GiB (mark $FREE GB): evicted $summary ($(basename "$TOOL"))"
+echo "vy-store-evict: free $before -> $(avail) GiB (mark $FREE GB): evicted $summary$srcnote ($(basename "$TOOL"))"

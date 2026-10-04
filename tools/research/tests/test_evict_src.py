@@ -35,10 +35,15 @@ def _age(path: Path, hours: float) -> None:
 
 
 def tree(src: Path, sha: str, hours: float = 3.0, ready: str | None = "self") -> Path:
-    t = src / sha
-    (t / "tools").mkdir(parents=True)
-    (t / "tools" / "x.py").write_text("x" * 10)
-    (t / "README.md").write_text("r")
+    """What a git ship makes: a checkout of the node's repository detached at `sha` with READY.json beside it, or for a commit the
+    repository lacks, a plain directory."""
+    t, gd = src / sha, src.parent / "git" / "verity.git"
+    if subprocess.run(["git", "--git-dir", str(gd), "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True).returncode == 0:
+        _git(src.parent, "clone", "-q", "--shared", "--no-checkout", str(gd), str(t))
+        _git(t, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", sha)
+    else:
+        t.mkdir(parents=True)
+        (t / "f").write_text(sha)
     if ready:
         (t / EV.READY_FILE).write_text(json.dumps({"schema": "research/source-ready/v0.1", "identity": sha if ready == "self" else ready}))
     _age(t, hours)
@@ -112,15 +117,20 @@ def write_run(n, name: str, *, state: str | None = "done", source: str | None = 
     return rd
 
 
+def _usage(t: Path) -> tuple[int, int]:
+    files = [p for p in t.rglob("*") if not p.is_dir() or p.is_symlink()]
+    return len(list(t.rglob("*"))) + 1, sum(p.lstat().st_size for p in files)
+
+
 def test_trees_meeting_every_condition_go_oldest_first_and_the_rest_are_kept_with_reasons(node):
+    usage = {s: _usage(node.src / s) for s in (node.a, node.b)}
     rep = run(node)
     assert rep["error"] is None and rep["trees"] == 3
     assert [d["tree"] for d in rep["deleted"]] == [node.a, node.b], "oldest first; a is on origin through main's history"
-    ready = len(json.dumps({"schema": "research/source-ready/v0.1", "identity": node.a}))
-    assert all(d["inodes"] == 5 and d["bytes"] == 10 + 1 + ready for d in rep["deleted"]), "3 files, tools/ and the tree itself"
-    assert rep["deleted_inodes"] == 10
+    assert [(d["inodes"], d["bytes"]) for d in rep["deleted"]] == [usage[node.a], usage[node.b]], "every file, directory and the tree"
+    assert rep["deleted_inodes"] == usage[node.a][0] + usage[node.b][0]
     assert kept(rep) == {node.c: [f"1: not recoverable on the node: on no ref of {node.origin}"]} and rep["kept_by"] == {"1": 1}
-    assert sorted(os.listdir(node.src)) == [node.c], "nothing left aside"
+    assert sorted(set(os.listdir(node.src)) - {EV.LOCK}) == [node.c], "nothing left aside"
     assert (node.src / node.c / EV.READY_FILE).exists()
 
 
@@ -365,7 +375,7 @@ def test_a_user_that_appears_before_the_deletion_keeps_the_tree_and_after_the_re
     assert kept(rep)[node.a] == ["2: process 7 (late) uses it"]
     assert kept(rep)[node.b] == ["2: moved back", "2: process 8 (later) uses it"]
     assert rep["deleted"] == [] and os.stat(node.src / node.b).st_ino == ino and (node.src / node.b / EV.READY_FILE).exists()
-    assert sorted(os.listdir(node.src)) == sorted([node.a, node.b, node.c])
+    assert sorted(set(os.listdir(node.src)) - {EV.LOCK}) == sorted([node.a, node.b, node.c])
 
 
 def test_a_check_that_fails_after_the_rename_puts_the_tree_back_and_stops(node, monkeypatch):
@@ -380,7 +390,7 @@ def test_a_check_that_fails_after_the_rename_puts_the_tree_back_and_stops(node, 
     monkeypatch.setattr(EV, "proc_uses", failing)
     rep = run(node)
     assert rep["error"] == "2: /proc/9 is unreadable" and rep["deleted"] == []
-    assert sorted(os.listdir(node.src)) == sorted([node.a, node.b, node.c]) and (node.src / node.a / EV.READY_FILE).exists()
+    assert sorted(set(os.listdir(node.src)) - {EV.LOCK}) == sorted([node.a, node.b, node.c]) and (node.src / node.a / EV.READY_FILE).exists()
 
 
 def test_an_interrupted_deletion_is_finished_unless_something_uses_it(node):
@@ -436,3 +446,112 @@ def test_by_default_a_tree_is_recoverable_when_the_nodes_own_repository_holds_it
     assert rep["error"] is None and rep["origin"] == str(node.root / "git" / "verity.git")
     assert node.c in {d["tree"] for d in rep["deleted"]} and not (node.src / node.c).exists()
     assert kept(rep)[stray] == [f"1: not recoverable on the node: on no ref of {node.root / 'git' / 'verity.git'}"]
+
+
+def test_a_tree_that_is_not_exactly_its_commit_is_kept(node):
+    """Red team (bc-ddc07abc) on node 1: trees with lean-audit.json rewritten in place after the ship would have gone.  The commit is
+    recoverable, its tree's own changes are not: a tracked file edited, an untracked file however deep, another HEAD, no .git."""
+    (node.src / node.a / "f").write_text("edited in place: no commit has this")
+    (node.src / node.b / "notes" / "deep").mkdir(parents=True)
+    (node.src / node.b / "notes" / "deep" / "result.json").write_text('{"only": "copy"}')
+    _git(node.src / node.c, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", node.b)
+    for s in (node.a, node.b, node.c):
+        _age(node.src / s, 5)
+    rep = run(node, origin=None)
+    assert rep["deleted"] == [] and rep["error"] is None
+    why = kept(rep)
+    assert why[node.a] == ["1: not recoverable on the node: 1 local change(s) no commit holds, e.g. '" + _status_line(node.src / node.a) + "'"]
+    assert why[node.b] == ["1: not recoverable on the node: 1 local change(s) no commit holds, e.g. '? notes/'"]
+    assert why[node.c] == [f"1: not recoverable on the node: its HEAD is {node.b}"]
+    _git(node.src / node.c, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", node.c)
+    import shutil
+    shutil.rmtree(node.src / node.c / ".git")
+    assert kept(run(node, origin=None))[node.c] == ["1: not recoverable on the node: no .git to compare it with its commit"]
+
+
+def _status_line(t: Path) -> str:
+    out = _git(t, "status", "--porcelain=v2", "-z", "--untracked-files=normal")
+    return next(e for e in out.split("\0") if e and e != f"? {EV.READY_FILE}")[-120:]
+
+
+def test_a_git_worktree_made_from_a_tree_keeps_it(node):
+    """ci-bundle.sh and train.sh `git worktree add` from a checkout: its git data lives in the tree, its processes elsewhere."""
+    _git(node.src / node.a, "worktree", "add", "-q", "--detach", str(node.tmp / "wt"), node.a)
+    _age(node.src / node.a, 5)
+    assert "2: a git worktree made from it (.git/worktrees) may be in use" in kept(run(node))[node.a]
+
+
+def test_one_pass_at_a_time(node, monkeypatch):
+    """A second pass during the first would take its aside tree for an interrupted pass's leftover and delete it while the first
+    is still finding a user; it does nothing instead."""
+    real, calls, inner = EV.proc_uses, [], []
+
+    def hooked(pattern, proc):
+        calls.append(1)
+        found = real(pattern, proc)
+        if len(calls) == 3:                      # a's check after its rename: another pass starts
+            inner.append(EV.evict_src(node.src, origin=node.origin, now=NOW, proc=node.proc, jobs_dirs=[], clock=lambda: 0.0))
+            found.setdefault(node.a, set()).add("2: process 77 (lean) uses it")
+        return found
+
+    monkeypatch.setattr(EV, "proc_uses", hooked)
+    rep = run(node)
+    assert inner[0]["error"] == f"another pass holds {node.src / EV.LOCK}" and inner[0]["deleted"] == []
+    assert kept(rep)[node.a] == ["2: moved back", "2: process 77 (lean) uses it"] and (node.src / node.a / EV.READY_FILE).exists()
+
+
+def test_a_replace_ref_or_graft_in_the_nodes_repository_places_nothing(node):
+    """Anyone who can push to the node's repository could graft a commit under a tip origin has."""
+    gd = node.root / "git" / "verity.git"
+    _git(node.tmp, "--git-dir", str(gd), "replace", "--graft", node.b, node.c)
+    assert node.c in kept(run(node))
+    (gd / "info").mkdir(exist_ok=True)
+    (gd / "info" / "grafts").write_text(f"{node.b} {node.c}\n")
+    rep = run(node)
+    assert rep["error"] == f"1: {gd / 'info' / 'grafts'} would rewrite the history the ancestor walk reads" and node.c in kept(rep)
+
+
+@pytest.mark.parametrize("how", ["relative-cmdline", "double-slash-env", "dot-env"])
+def test_a_process_naming_a_tree_however_it_spells_the_path_keeps_it(node, how):
+    a = node.a
+    if how == "relative-cmdline":
+        fake_proc(node.proc, 500, cwd=str(node.root), cmdline=f"python3 src/{a}/tools/check/check.py")
+    elif how == "double-slash-env":
+        fake_proc(node.proc, 500, environ=f"PYTHONPATH={node.root}//src/{a}/tools/research/src\0")
+    else:
+        fake_proc(node.proc, 500, environ=f"PYTHONPATH={node.src}/./{a}/tools/research/src\0")
+    assert kept(run(node))[a] == ["2: process 500 (p500) uses it"]
+
+
+def test_a_thread_group_whose_leader_exited_is_read_through_its_threads(node):
+    d = node.proc / "600"
+    fake_proc(node.proc, 600)
+    for n in ("cwd", "root", "exe"):
+        os.unlink(d / n)
+    (d / "cmdline").write_text("")
+    (d / "task" / "601").mkdir(parents=True)
+    os.symlink(f"{node.src}/{node.a}/backends", d / "task" / "601" / "cwd")
+    assert kept(run(node))[node.a] == ["2: process 600 (p600) uses it"]
+
+
+def test_a_record_of_an_unexpected_shape_keeps_its_tree_and_an_error_after_the_rename_puts_it_back(node, monkeypatch):
+    rd = write_run(node, "r20", source=node.a, store={"commit": node.a})
+    job = json.loads((rd / "job.json").read_text())
+    job["store"]["conditions"]["source"] = "a string"
+    (rd / "job.json").write_text(json.dumps(job))
+    _age(rd, 3)
+    assert "3: run r20's store.conditions.source is not an object" in kept(run(node))[node.a]
+    import shutil
+    shutil.rmtree(rd)
+    real, calls = EV.record_uses, []
+
+    def boom(*a, **k):
+        calls.append(1)
+        if len(calls) == 3:                      # a's check after its rename
+            raise AttributeError("unexpected")
+        return real(*a, **k)
+
+    monkeypatch.setattr(EV, "record_uses", boom)
+    with pytest.raises(AttributeError):
+        run(node)
+    assert (node.src / node.a / EV.READY_FILE).exists() and not [n for n in os.listdir(node.src) if n.startswith(EV.ASIDE)]

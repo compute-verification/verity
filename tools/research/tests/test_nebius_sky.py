@@ -868,9 +868,12 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     (tool / "research").mkdir(parents=True)
     bin_dir.mkdir()
     (tool / "research" / "__init__.py").write_text("")
+    (tool / "research" / "store").mkdir()
+    (tool / "research" / "store" / "cli.py").write_text('ap.add_argument("--src-dir")\n')
     (tool / "research" / "__main__.py").write_text(
         "import json, os, sys\n"
         "open(os.environ['FAKE_ARGV'], 'w').write(json.dumps(sys.argv[1:]))\n"
+        "open(os.environ['FAKE_ARGV'] + '.cwd', 'w').write(os.getcwd())\n"
         "src = {'deleted': [{'tree': 'a'}, {'tree': 'b'}], 'deleted_bytes': 31e9, 'deleted_inodes': 812345, 'kept': [{'tree': 'c'}] * 3,\n"
         "       'kept_by': {'1': 1, '2': 2}, 'error': os.environ.get('FAKE_ERROR')}\n"
         "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src}))\n"
@@ -888,3 +891,8 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
                                                                      "FAKE_ERROR": "2: /proc/1 is unreadable"}, capture_output=True, text=True)
     assert json.loads((tmp_path / "argv.json").read_text())[-3:] == ["--src-origin", "/workspace/research/git/verity.git", "--json"]
     assert r.returncode == 0 and "kept 3 (1:1 2:2), nothing more deleted: 2: /proc/1 is unreadable (tool)" in r.stdout
+    assert (tmp_path / "argv.json.cwd").read_text() == "/", "python -m puts its cwd first on sys.path: never a writable one"
+    (tool / "research" / "store" / "cli.py").unlink()
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env=env, capture_output=True, text=True)
+    assert "--src-dir" not in json.loads((tmp_path / "argv.json").read_text()), "a tool too old for it still evicts the rest"
+    assert r.returncode == 0 and "; src trees: not evicted, tool has no --src-dir (tool)" in r.stdout

@@ -332,7 +332,7 @@ The disk floor: `research run` and `research fetch --all` refuse (exit 3) while 
 `$RESEARCH_DISK_FLOOR_GB` free (default 1.5; `0` turns it off), naming the eviction that frees it. `research data custody RUN
 --publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
 names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly research unit) also deletes, oldest first
-and whatever the mark, each shipped source tree recoverable on the node (a ref of its `git/verity.git`) that no process, run, request, slot or fill job uses, unchanged for 2 h
+and whatever the mark, each shipped source tree recoverable on the node (exactly a commit on a ref of its `git/verity.git`) that no process, run, request, slot or fill job uses, unchanged for 2 h
 and its runs' clean source; a condition it can't establish keeps them all (`store/evict.py`).
 
 ### research data
