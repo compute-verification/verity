@@ -260,9 +260,9 @@ def reference_digest(ref: Any) -> str:
     """sha256 of the reference's id, its bindings and the :data:`REFERENCE_SOURCES` of ``verity``, in that order."""
     from pathlib import Path
 
-    import verity
+    import verity.ml
 
-    root = Path(verity.__file__).resolve().parent
+    root = Path(verity.ml.__file__).resolve().parents[1]
     h = hashlib.sha256(f"{ref.id}|{json.dumps(ref.bindings, sort_keys=True)}".encode())
     for rel in REFERENCE_SOURCES:
         h.update(b"|" + rel.encode() + b"|" + (root / rel).read_bytes())

@@ -202,10 +202,10 @@ def test_unit_draw_check(tmp_path):
 
 def _template_vectors():
     try:
-        import verity
+        import verity.ir
     except ImportError:
         return None
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "template_instance_vectors.json"
+    v = Path(verity.ir.__file__).resolve().parents[3] / "tests" / "ir" / "template_instance_vectors.json"
     return v if v.exists() else None
 
 
@@ -584,11 +584,11 @@ def test_check_cut_agrees_with_the_reference(tmp_path):
 
 def _qword_vector_file():
     try:
-        import verity
+        import verity.ir
         from verity.ir.codec import decode_program  # noqa: F401
     except ImportError:
         return None
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "qword_vectors.json"
+    v = Path(verity.ir.__file__).resolve().parents[3] / "tests" / "ir" / "qword_vectors.json"
     return v if v.exists() else None
 
 
@@ -613,8 +613,8 @@ def _qword_vectors():
         from verity.ir.cut import cut_word  # noqa: F401
     except ImportError:
         return None
-    import verity
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "partition_vectors.json"
+    import verity.ir
+    v = Path(verity.ir.__file__).resolve().parents[3] / "tests" / "ir" / "partition_vectors.json"
     return v if v.exists() else None
 
 
@@ -628,10 +628,10 @@ def test_qword_evaluator_agrees_with_the_reference(tmp_path):
 
 def _format_vectors():
     try:
-        import verity
+        import verity.ir
     except ImportError:
         return None
-    ir = Path(verity.__file__).resolve().parents[2] / "tests" / "ir"
+    ir = Path(verity.ir.__file__).resolve().parents[3] / "tests" / "ir"
     need = [ir / "format_vectors.json", ir / "partition_vectors.json", ir / "test_format_spec.py"]
     return ir if all(p.exists() for p in need) else None
 

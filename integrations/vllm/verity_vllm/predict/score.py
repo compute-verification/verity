@@ -377,14 +377,17 @@ def code_version() -> str:
     `verity_vllm`)."""
     from pathlib import Path
 
+    import pkgutil
+
     import verity
     import verity_vllm
     h = hashlib.sha256()
     for pkg in (verity, verity_vllm):
-        root = Path(pkg.__file__).resolve().parent
-        for p in sorted(root.rglob("*")):
+        # `verity` is a namespace package: every portion that holds a module (not a directory that joined it without one)
+        roots = [Path(r).resolve() for r in pkg.__path__ if any(pkgutil.iter_modules([r]))]
+        for rel, p in sorted((p.relative_to(root), p) for root in roots for p in root.rglob("*")):
             if p.is_file() and "__pycache__" not in p.parts:
-                h.update(f"{pkg.__name__}/{p.relative_to(root).as_posix()}\0".encode() + hashlib.sha256(p.read_bytes()).digest())
+                h.update(f"{pkg.__name__}/{rel.as_posix()}\0".encode() + hashlib.sha256(p.read_bytes()).digest())
     return h.hexdigest()[:16]
 
 

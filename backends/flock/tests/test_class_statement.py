@@ -391,11 +391,12 @@ def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache
     import verity
 
     src = {}                                                       # the packages' sources, as the stage key's code digest reads them
-    for name, pkg in (("verity_flock", Path(CS.__file__).parent), ("verity", Path(verity.__file__).parent)):
+    for name, pkgs in (("verity_flock", [Path(CS.__file__).parent]), ("verity", [Path(p) for p in verity.__path__])):
         src[name] = tmp_path / "src" / name
-        for f in pkg.rglob("*.py"):
-            (src[name] / f.relative_to(pkg)).parent.mkdir(parents=True, exist_ok=True)
-            (src[name] / f.relative_to(pkg)).write_bytes(f.read_bytes())
+        for pkg in pkgs:                                           # `verity` is a namespace package: every member's portion
+            for f in pkg.rglob("*.py"):
+                (src[name] / f.relative_to(pkg)).parent.mkdir(parents=True, exist_ok=True)
+                (src[name] / f.relative_to(pkg)).write_bytes(f.read_bytes())
     find_spec = importlib.util.find_spec
     monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: SimpleNamespace(submodule_search_locations=[str(src[name])])
                         if name in src else find_spec(name, *a))
