@@ -148,6 +148,13 @@ src = "tools/research/src/research/pods/nebius/n1_lease.py"
 nodes = ["vy-nebius-1"]
 run = ["tmux:n1-lease", "tmux:n1-lease-circuits"]
 
+# the description and code n1_lease.py's $VY_POOL_POLICY command runs (`cluster policy show`), apart from cluster-src, which
+# the dispatcher's `cluster submit` reads; no `run`: n1_lease.py runs it afresh every POLICY_EVERY_S
+[[tree]]
+path = "/workspace/verity-guest/cluster-policy"
+src = "tools/cluster"
+nodes = ["vy-nebius-1"]
+
 [[file]]
 path = "/workspace/verity-guest/bin/pool_n1.py"
 src = "tools/research/src/research/pods/nebius/pool_n1.py"
