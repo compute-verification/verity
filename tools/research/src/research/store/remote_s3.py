@@ -300,6 +300,10 @@ class MultipartError(Exception):
     """A multipart upload that did not complete as the local bytes say it should (aborted on the service when it could be)."""
 
 
+class PresignRefused(ValueError):
+    """A URL would carry the session token of a credential that may do more than such URLs (`credentials.narrow_problem`)."""
+
+
 # ---- connections ------------------------------------------------------------------------------------------------------------------------
 
 _RETRIABLE = (http.client.HTTPException, ConnectionError, TimeoutError, socket.timeout, ssl.SSLError, OSError)
@@ -709,7 +713,14 @@ class S3Remote:
 
     def presign(self, key: str, expires_s: int, method: str = "GET") -> str:
         """A URL for one `method` request on `key`, valid `expires_s` seconds (`presign`): read access to one object for a machine
-        that holds no key."""
+        that holds no key.  A temporary credential's session token travels in the URL, and whoever holds the token of a locally
+        minted one holds the whole credential (credentials.py), so PresignRefused unless it may do only `method`'s action, on named
+        objects with `key` among them, and expires with the URL (`credentials.narrow_problem`; `credentials.presign_gets` mints one)."""
+        if self.session_token:
+            from .credentials import narrow_problem
+
+            if why := narrow_problem(self.session_token, method, key, expires_s):
+                raise PresignRefused(f"not presigning {method} {key}: {why}")
         return presign(method, self.scheme, self.host, self._path(key), self.access_key, self.secret_key, self.region, self._now(),
                        expires_s, self.session_token)
 

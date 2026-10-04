@@ -15,6 +15,10 @@ token (`X-Amz-Security-Token`, which `S3Remote(session_token=...)` sends).  Two 
   api     `mint_api`: POST /client/v4/accounts/{account}/r2/temp-access-credentials with a Cloudflare API token (`CLOUDFLARE_API_TOKEN`)
           -> {accessKeyId, secretAccessKey, sessionToken}.  Cannot scope by action (the API has `permission`, `prefixes`, `objects`).
 
+A URL presigned with a temporary credential carries its session token, so whoever holds the URL of a locally minted one can
+rebuild the whole credential: `presign_gets` signs with one minted for exactly the GETs it signs, and `S3Remote.presign` refuses
+any other (`narrow_problem`).
+
 Scopes (`permission`): object-read-only | object-read-write | admin-read-only | admin-read-write.  TTL <= 7 days (604800 s).  A
 temporary credential never exceeds its parent; revoking the parent kills every child.  Nothing here writes a secret to disk: the CLI
 prints JSON, or `--env` export lines for a pod's bootstrap.
@@ -110,6 +114,47 @@ def mint_local(endpoint: str, account_id: str, parent_access_key_id: str, parent
     return {"accessKeyId": parent_access_key_id, "secretAccessKey": hashlib.sha256(jwt.encode("utf-8")).hexdigest(),
             "sessionToken": base64.b64encode(f"jwt/{jwt}".encode("utf-8")).decode("ascii"),
             "expires_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(iat + ttl_s)), "jwt": jwt}
+
+
+#: the one action a presigned URL's credential may hold, by the URL's method (`narrow_problem`)
+PRESIGN_ACTIONS = {"GET": "GetObject", "HEAD": "HeadObject", "PUT": "PutObject"}
+
+
+def narrow_problem(session_token: str, method: str, key: str, expires_s: int, now: float | None = None) -> str | None:
+    """Why a URL for one ``method`` request on ``key``, valid ``expires_s`` seconds, may not carry ``session_token`` (None: it may).
+    The token rebuilds a locally minted credential (module docstring), so only one minted here for that request's action alone, on
+    named objects with ``key`` among them, and expiring with the URL passes; a token that isn't one minted here can't be read."""
+    try:
+        raw = base64.b64decode(session_token, validate=True).decode("utf-8")
+        claims = decode_jwt(raw[len("jwt/"):])[1] if raw.startswith("jwt/") else None
+    except ValueError:
+        claims = None
+    if not isinstance(claims, dict):
+        return "its session token is not one minted here (`mint_local`), so nothing shows what it grants"
+    action = PRESIGN_ACTIONS.get(method.upper())
+    if "scope" in claims or claims.get("actions") != [action]:
+        return f"its credential may do {claims.get('scope') or claims.get('actions')}, not {action or method} alone"
+    paths = claims.get("paths") or {}
+    if paths.get("prefixPaths") or key not in (paths.get("objectPaths") or []):
+        return f"its credential is not limited to named objects, {key} among them"
+    if not isinstance(claims.get("exp"), int) or claims["exp"] > (time.time() if now is None else now) + expires_s:
+        return "its credential outlives the URL"
+    return None
+
+
+def presign_gets(keys: list[str], ttl_s: int, *, environ: dict[str, str] | None = None,
+                 config_path: str | os.PathLike[str] | None = None) -> dict[str, str]:
+    """{key: URL}: a GET of each object, valid ``ttl_s`` seconds, signed with a credential minted here from the parent key (`mint`,
+    local) for GetObject on exactly ``keys`` for those seconds, so the credential each URL carries grants only what the URLs do.
+    MintError when this machine can't mint one (no parent key, a temporary credential in the environment, no endpoint)."""
+    from .remote_s3 import S3Remote
+
+    if not keys:
+        return {}
+    cred = mint(via="local", scope="object-read-only", actions=["GetObject"], objects=sorted(keys), ttl_s=ttl_s, environ=environ,
+                config_path=config_path)
+    r = S3Remote(cred["endpoint"], cred["bucket"], cred["accessKeyId"], cred["secretAccessKey"], session_token=cred["sessionToken"])
+    return {k: r.presign(k, ttl_s) for k in keys}
 
 
 def mint_api(account_id: str, api_token: str, bucket: str, parent_access_key_id: str, permission: str, *, ttl_s: int = 3600,

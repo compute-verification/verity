@@ -585,10 +585,67 @@ def test_presigned_url_aws_documented_vector():
                    "&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20130524T000000Z"
                    "&X-Amz-Expires=86400&X-Amz-SignedHeaders=host"
                    "&X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404")
-    r = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bkt", AK, SK, session_token="tok")
+    r = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bkt", AK, SK)
     got = r.presign("objects/sha256/ab", 600)
-    assert got.startswith("https://acct.r2.cloudflarestorage.com/bkt/objects/sha256/ab?") and "X-Amz-Security-Token=tok" in got
+    assert got.startswith("https://acct.r2.cloudflarestorage.com/bkt/objects/sha256/ab?") and "X-Amz-Security-Token" not in got
     assert SK not in got and "X-Amz-Expires=600" in got
+    with pytest.raises(remote_s3.PresignRefused, match="not one minted here"):
+        remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bkt", AK, SK, session_token="tok").presign("objects/sha256/ab", 600)
+
+
+def _rebuilt(url: str) -> tuple[str, str, dict]:
+    """(access key id, secret, JWT claims): the credential anyone holding ``url`` holds, rebuilt from its query alone as
+    `credentials.mint_local` derives it (red team, #1055 F1)."""
+    import base64
+    import urllib.parse
+
+    from research.store import credentials as C
+
+    q = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query))
+    jwt = base64.b64decode(q["X-Amz-Security-Token"]).decode()[len("jwt/"):]
+    return q["X-Amz-Credential"].split("/")[0], hashlib.sha256(jwt.encode()).hexdigest(), C.decode_jwt(jwt)[1]
+
+
+def test_a_presigned_url_holds_a_credential_for_its_gets_alone(tmp_path):
+    """A URL carries its credential's session token, and a locally minted credential's secret follows from it, so whoever holds the
+    URL holds the credential. `presign_gets` mints one for GetObject on exactly the objects it signs, for as long as the URLs live;
+    a custody key, or any wider one, is refused."""
+    from research.store import credentials as C
+    from research.store.custody import ACTIONS
+
+    acct = "0" * 32
+    ep = f"https://{acct}.r2.cloudflarestorage.com"
+    env = {"R2_ENDPOINT": ep, "R2_BUCKET": "dummy-bucket", "AWS_ACCESS_KEY_ID": "dummy-parent-key-id", "AWS_SECRET_ACCESS_KEY": "dummy-parent-secret"}
+    keys = ["objects/sha256/" + "cd" * 32, "objects/sha256/" + "ab" * 32]
+    urls = C.presign_gets(keys, 21600, environ=env, config_path=tmp_path / "none.toml")
+    assert set(urls) == set(keys)
+    for k, url in urls.items():
+        assert url.startswith(f"{ep}/dummy-bucket/{k}?") and "X-Amz-Expires=21600" in url and "dummy-parent-secret" not in url
+        ak, secret, claims = _rebuilt(url)
+        assert ak == "dummy-parent-key-id" and secret != "dummy-parent-secret"
+        assert claims["actions"] == ["GetObject"] and "scope" not in claims, "GetObject alone"
+        assert claims["paths"] == {"prefixPaths": [], "objectPaths": sorted(keys)} and claims["exp"] - claims["iat"] == 21600
+    with pytest.raises(C.MintError, match="session token"):
+        C.presign_gets(keys, 21600, environ={**env, "AWS_SESSION_TOKEN": "dummy"}, config_path=tmp_path / "none.toml")
+
+    def token(**kw) -> str:
+        return C.mint_local(ep, acct, "dummy-parent-key-id", "dummy-parent-secret", "dummy-bucket", "object-read-only", now=0, **kw)["sessionToken"]
+
+    k = keys[0]
+    assert C.narrow_problem(token(actions=["GetObject"], objects=[k], ttl_s=600), "GET", k, 600, now=0) is None
+    for tok, method, why in [
+        (token(actions=list(ACTIONS), ttl_s=21600), "GET", "may do ['HeadObject', 'GetObject'"),      # a custody key
+        (token(ttl_s=600), "GET", "may do object-read-only"),
+        (token(actions=["GetObject"], objects=[k], ttl_s=600), "HEAD", "not HeadObject alone"),
+        (token(actions=["GetObject"], ttl_s=600), "GET", "not limited to named objects"),
+        (token(actions=["GetObject"], prefixes=["objects/"], objects=[k], ttl_s=600), "GET", "not limited to named objects"),
+        (token(actions=["GetObject"], objects=[keys[1]], ttl_s=600), "GET", "not limited to named objects"),
+        (token(actions=["GetObject"], objects=[k], ttl_s=604800), "GET", "outlives the URL"),
+    ]:
+        assert why in (C.narrow_problem(tok, method, k, 600, now=0) or ""), why
+    custody = remote_s3.S3Remote(ep, "dummy-bucket", "dummy-parent-key-id", "dummy", session_token=token(actions=list(ACTIONS), ttl_s=21600))
+    with pytest.raises(remote_s3.PresignRefused, match="not presigning GET"):
+        custody.presign(k, 21600)
 
 
 def test_s3remote_against_a_fake_bucket(tmp_path):
