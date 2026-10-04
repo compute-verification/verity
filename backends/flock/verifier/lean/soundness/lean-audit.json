@@ -160,6 +160,16 @@
     "about": "Assumptions.Zk.RecordCustodyZK (live-verifier): the record flock-verify verify --zk reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
     "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
     "ack": []
+   },
+   "reg-hides": {
+    "about": "Assumptions.RegHides (route P's privacy, RegHides(A)): the registered commitment hides the wiring across the openings one registration allows",
+    "mentions": ["CommitmentScheme.hidingAdvantage"],
+    "ack": []
+   },
+   "wiring-sound": {
+    "about": "RouteP.wiring_sound: the grand-product permutation check, |ι|/|F| by Schwartz-Zippel (hand-proved)",
+    "mentions": ["Equiv.Perm", "MvPolynomial.totalDegree"],
+    "ack": []
    }
   }
  },
@@ -10831,6 +10841,14 @@
    "assumptions": [],
    "type_hash": "bfd88d92ed8fdff020096125b2147df318d9d03c658801a12d72d94f5fcf4d49"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.RouteP.wireId_of_wired": {},
+  "FlockSoundness.Discharge.PrivateCircuit.RouteP.wirePoly_eq_zero_iff": {},
+  "FlockSoundness.Discharge.PrivateCircuit.RouteP.wirePoly_eval": {},
+  "FlockSoundness.Discharge.PrivateCircuit.RouteP.wired_diag": {},
+  "FlockSoundness.Discharge.PrivateCircuit.RouteP.wired_iff_cycles": {},
+  "FlockSoundness.Discharge.PrivateCircuit.RouteP.wired_of_wirePoly_eq_zero": {},
+  "FlockSoundness.Discharge.PrivateCircuit.RouteP.wiring_escape": {},
+  "FlockSoundness.Discharge.PrivateCircuit.RouteP.wiring_sound": {},
   "FlockSoundness.Discharge.PrivateCircuit.circuit_indist": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.circuit_indist : FlockSoundness.Discharge.PrivateCircuit.CircuitIndist"
@@ -12466,6 +12484,7 @@
    "assumptions": [],
    "type_hash": "f4a5ead15d67146f887cff5d8fe7bfc80c6db374faa08784a8ba159f5f549579"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.route_p_sound": {},
   "FlockSoundness.Discharge.PrivateCircuit.wired_cone": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.wired_cone (T : FlockSoundness.Discharge.PrivateCircuit.Universal.Topo)",
