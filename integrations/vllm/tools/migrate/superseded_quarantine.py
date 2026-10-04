@@ -118,7 +118,11 @@ REDIRECTS: tuple[tuple[str, str, str], ...] = tuple(
          "from verity_vllm.program.registry.moe import MoeExpertGemm"),
         ("collectives/test_tp_collective.py", 'rep = lint(REPO / "verity_vllm" / "program" / "registry" / "quarantine")',
          "rep = lint(Path(QC.__file__).resolve().parents[1])"),
-    ))
+    )) + (
+    # the shipped PYTHONPATH's roots follow the root's dependencies, which now include the experimental member
+    ("tools/research/tests/test_pythonpath.py", '"backends/flock/python", "tools/circuit_check/src"]',
+     f'"backends/flock/python", "tools/circuit_check/src",\n              "{EXPERIMENTAL}"]'),
+)
 
 PYPROJECT = f'''[project]
 name = "{DISTRIBUTION}"
