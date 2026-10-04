@@ -107,7 +107,7 @@ import tempfile
 import threading
 import time
 import tomllib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import IO, Any, Callable
 
 from . import clone
@@ -444,6 +444,17 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> d
     if "refused" in out:
         raise Refused(f"the queue refuses the job: {out['refused']}")
     return out
+
+
+def knows_job_user(pkg: Path | None) -> bool:
+    """Whether the research package that will run on the machine runs the workload as `--job-user` (one that predates it would
+    run it as the machine's own user)."""
+    if pkg is None:
+        return True
+    try:
+        return (Path(pkg) / "jobuser.py").is_file() and '"job_user"' in (Path(pkg) / "remote.py").read_text()
+    except OSError:
+        return False
 
 
 def knows_clone(pkg: Path | None) -> bool:
@@ -967,6 +978,14 @@ def _read_json(p: Path) -> dict[str, Any] | None:
         return None
 
 
+def _json_line(line: str) -> dict[str, Any]:
+    try:
+        d = json.loads(line)
+    except ValueError:
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
 def _holder_live(runs_root: Path, holder: str) -> bool:
     d = runs_root / holder
     st = _read_json(d / "status.json")
@@ -1212,6 +1231,15 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         env = _runner_env(req, runs_root, src_dir, remote)
         if req.get("custody") and not (request_path.parent / CUSTODY_DIR / "cred.json").is_file():
             raise Refused(f"--custody-r2: no staged key under {request_path.parent / CUSTODY_DIR}; the run could not publish its custody")
+        if req.get("job_user"):
+            from . import jobuser
+
+            try:
+                jobuser.check_user(req["job_user"])
+                jobuser.check_run_dir(run_dir, run_id)
+            except jobuser.Refused as e:
+                raise Refused(str(e)) from None
+            remote["job_user"] = req["job_user"]
         holder = exclusive_holder(runs_root)
         if holder and holder != run_id:
             raise Refused(f"machine is exclusively held by run {holder} (still live); not starting {run_id}")
@@ -1259,6 +1287,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
     if req.get("custody"):
         argv += ["--custody-dir", str(request_path.parent / CUSTODY_DIR)]
+    if req.get("job_user"):
+        argv += ["--job-user", req["job_user"]]
     argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *req["command"]]
     if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
         argv = [*req[QUEUE_WRAP], *argv]
@@ -1411,11 +1441,12 @@ def workload_cwd(harness_args: list[str], tool_pkg: Path | None) -> str:
 def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, command: list[str], harness_args: list[str],
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
-           preflight_tool: str | None = None, queue: dict[str, Any] | None = None) -> dict[str, Any]:
+           preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
-    is held until the runner, custody included, exits."""
+    is held until the runner, custody included, exits.  `job_user` (--job-user): the machine runs the workload as that user
+    (research.jobuser), and refuses the run when it can't."""
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
                            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args,
@@ -1454,6 +1485,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if queue and not knows_queue(tool_pkg):
             raise Refused(f"--queue: the research package in {source} predates it, so the machine would run the job outside its "
                           f"allocation.  Commit a tree that has it")
+        if job_user and not knows_job_user(tool_pkg):
+            raise Refused(f"--job-user: the research package in {source} predates it, so the machine would run the workload as its "
+                          f"own user.  Commit a tree that has it")
         cwd_clone = clone.sub(flag_value(harness_args, "--cwd")) is not None
         if cwd_clone and not knows_clone(tool_pkg):
             raise Refused(f"--cwd clone: the research package in {source} predates it (no research/clone.py), so the machine would look "
@@ -1487,6 +1521,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
+                   **({"job_user": job_user} if job_user else {}),
                    **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
                    "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
@@ -1543,10 +1578,12 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         raise
 
 
-def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None) -> Path:
+def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None,
+          unique: bool = False) -> Path:
     """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine, write
     the remote.json `launch` would have (phase `adopted`), and fetch its records.  Refused when the id is not a full run id, when no
-    machine holds it (each machine's answer in the reason), or when the local dir already exists."""
+    machine holds it (each machine's answer in the reason), or when the local dir already exists; with `unique` (a cancel), every
+    machine is asked and an id more than one holds is refused rather than taken from the first."""
     from .store import ids
 
     if not ids.is_run_id(run_id):
@@ -1556,7 +1593,7 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         raise Refused(f"{local} exists already")
     ms = load_machines() if machines is None else machines
     names = [on] if on else sorted(n for n, m in ms.items() if m.get("provider") == "ssh")
-    answers = []
+    answers, held = [], []
     for name in names:
         m = ms.get(name)
         if m is None:
@@ -1576,6 +1613,13 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         if r.returncode != 0:
             answers.append(f"{name}: " + (f"no {rd}" if r.returncode == 1 else f"ssh rc {r.returncode}: {r.stderr.decode(errors='replace').strip()[-160:]}"))
             continue
+        held.append((name, m, tgt, rd))
+        if not unique:
+            break
+    if len(held) > 1:
+        raise Refused(f"{' and '.join(h[0] for h in held)} each hold a run {run_id}: name one with --on")
+    if held:
+        name, m, tgt, rd = held[0]
         local.mkdir(parents=True, exist_ok=False)
         write_json_atomic(local / "remote.json", {
             "schema": "research/remote/v0.1", "run_id": run_id, "machine": name, "project": m.get("project"), "phase": "adopted",
@@ -1641,7 +1685,11 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
 def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
     run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  Never the runner and never SIGKILL:
-    the runner records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody."""
+    the runner records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody.
+    A run another VM launched (`adopt`) has no shipped tool in its remote.json; the machine's job.json names it (`run.remote.tool`), and
+    it must be a snapshot under the machine's <root>/tool/.  The group is signalled only if one of its members is this run's workload
+    (`--expect-run-dir`: RESEARCH_RUN_DIR in its environment), since a runner that died leaves status.json `running` and pids wrap; a
+    run whose shipped tool predates that check is refused, not signalled unchecked."""
     rec = fetch(local_dir)
     if err := rec.get("last_fetch_error"):
         raise Refused(f"the machine is unreachable ({err['stderr'].strip() or 'rc ' + str(err['rc'])}); nothing was signalled")
@@ -1651,20 +1699,28 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     pgid = st.get("pgid")
     if not isinstance(pgid, int) or pgid <= 1:
         raise Refused(f"{local_dir.name}'s status.json names no workload process group (pgid {pgid!r})")
-    if not rec.get("tool"):
-        raise Refused(f"{local_dir.name}'s remote.json names no shipped tool to record the cancel with")
+    tool = rec.get("tool") or ((((_read_json(local_dir / "job.json") or {}).get("run") or {}).get("remote") or {}).get("tool"))
+    if not tool:
+        raise Refused(f"neither {local_dir.name}'s remote.json nor its job.json names a shipped tool to record the cancel with")
+    snap, root = PurePosixPath(tool), rec.get("root")
+    if not root or snap.parent != PurePosixPath(root) / "tool" or ":" in tool or snap.name in ("", ".", ".."):
+        raise Refused(f"{local_dir.name}'s tool {tool!r} is not a snapshot under {root}/tool/; nothing was signalled")
     rd = rec["remote_run_dir"]
-    tele = ["env", f"PYTHONPATH={rec['tool']}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
-            "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-nonempty", "--attempt-dir", rd,
+    tele = ["env", f"PYTHONPATH={tool}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
+            "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-run-dir", rd, "--attempt-dir", rd,
             "--deliver"]
-    script = f"{shlex.join(tele)}; rc=$?; tail -n 1 {shlex.quote(rd)}/events.jsonl; exit $rc"
+    # every line appended since the cancel began: the runner records the workload's exit there as soon as the signal lands
+    script = (f"f={shlex.quote(rd)}/events.jsonl; n=$(wc -l < \"$f\" 2>/dev/null || echo 0); {shlex.join(tele)}; rc=$?; "
+              f"tail -n +$((n + 1)) \"$f\"; exit $rc")
     r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
-    try:
-        res = json.loads(r.stdout.decode(errors="replace").splitlines()[-1])
-    except (IndexError, ValueError):
-        res = {}
-    if res.get("kind") != "cancel_result":
-        raise Refused(f"the cancel did not run on the machine (rc {r.returncode}): {r.stderr.decode(errors='replace').strip()[-300:]}")
+    stderr = r.stderr.decode(errors="replace").strip()
+    if r.returncode == 2 and "--expect-run-dir" in stderr:
+        raise Refused(f"{local_dir.name}'s research package ({tool}) predates the workload check, so nothing was signalled; on the machine, "
+                      f"`kill -TERM -{pgid}` once /proc/<pid>/environ of a group member names RESEARCH_RUN_DIR={rd}")
+    res = next((x for x in map(_json_line, r.stdout.decode(errors="replace").splitlines())
+                if x.get("kind") == "cancel_result" and (x.get("target") or {}).get("pgid") == pgid), None)
+    if res is None:
+        raise Refused(f"the cancel recorded no result on the machine (rc {r.returncode}): {stderr[-300:]}")
     return {"pgid": pgid, "processes": len((res.get("target") or {}).get("members") or []), "delivered": bool(res.get("delivered")),
             "why": res.get("reason")}
 
