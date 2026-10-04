@@ -55,10 +55,13 @@ No value is ever printed. `research data mint-credential` already read the
 same variables.
 
 On a cloud VM a long-lived shell can lose the injected secrets that a fresh
-tmux login shell still has. When a secret named in
-`$CLOUD_AGENT_INJECTED_SECRET_NAMES` is missing from the shell, the store,
-`research queue ready`, node ssh and the Nebius scripts fail and say `rerun
-from a fresh tmux login shell` (`secret_hint.py`).
+tmux login shell still has. Every `research` command first sets each secret
+named in `$CLOUD_AGENT_INJECTED_SECRET_NAMES` and missing from the shell from
+the tmux server's global environment, where that login shell gets them
+(`secret_hint.recover`); one run under a test doesn't, so a secret the test
+unset stays unset. If one is still missing, the store, `research queue
+ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
+login shell` (`secret_hint.py`).
 
 ## Commands
 
@@ -428,6 +431,7 @@ research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regener
 research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
 research retention report [--root /workspace] [--depth 2] [--json]
 research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
 `--preserve` puts the path in the store as `node-data/v1` and pushes it PRESERVED (the store README's §7) before recording its id;
@@ -443,6 +447,15 @@ count as preserved, and `preserved.check` in head mode must find the artifact PR
 for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
 no remote; either way it prints every deletion and every skip with its reason. Its named failure: on 1 Oct node 2 held 737 GiB of
 unowned, unpreserved bitsets that nobody could decide to delete.
+
+`rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
+record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
+`--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. A
+path no record covers has nobody to say yes and is never deleted. The records are read again just before `--apply` deletes. Each
+decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
+with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. Its named failure: on 3 Oct a disk cleanup ran a bare `rm -rf`
+on four FP8 passes (about 74 GB each) under `pouw/mvp-e2e`. Their record named @compute-accounting as owner until 7 Oct, but another
+lane had approved the deletion, so the passes were lost. Here that `rm` is refused with the true owner's name.
 
 ### Slack
 

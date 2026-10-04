@@ -150,16 +150,21 @@ def test_samples_read_the_kernels_layout(small_tiles):
 
 
 def test_gamma_reproduces_the_lanes_pins():
-    """`Gamma.lean`'s pinned values (cheap-binding.md §1): 377/130850 and 697/258850 at a zero debit, 47/5234 chain-only at
-    8,192³, and the table's 0.537% / 1.147% at the cap.  The constants are pearl_c's W_ref terms."""
-    assert B.gamma(8192, 8192)["floor"] == Fraction(377, 130850)
-    assert B.gamma(16384, 16384)["floor"] == Fraction(697, 258850)
-    assert B.gamma(8192, 8192)["floor_chain_only"] == Fraction(47, 5234)
+    """rev1's pinned values at the cap, `DeviceRev1Gamma.lean`'s `pearlCGammaH100Rev1_8192` and `_16384`: 140237/26090000
+    (0.538%) and 89359/17230000, and 1.149% chain-only at 8,192³; 188/65225 and 116/43075 at a zero debit and 587/65225
+    chain-only (`Gamma.lean`'s 377/130850, 697/258850 and 47/5234 before rev1 took the first promotion add out).  The
+    constants are pearl_c's W_ref terms."""
+    assert B.gamma(8192, 8192)["cap"] == Fraction(140237, 26090000)
+    assert B.gamma(16384, 16384)["cap"] == Fraction(89359, 17230000)
+    assert B.gamma(8192, 8192)["floor"] == Fraction(188, 65225)
+    assert B.gamma(16384, 16384)["floor"] == Fraction(116, 43075)
+    assert B.gamma(8192, 8192)["floor_chain_only"] == Fraction(587, 65225)
     g = B.gamma(8192, 8192)
-    assert round(float(g["cap"]) * 100, 3) == 0.537 and round(float(g["cap_chain_only"]) * 100, 3) == 1.147
+    assert round(float(g["cap"]) * 100, 3) == 0.538 and round(float(g["cap_chain_only"]) * 100, 3) == 1.149
     h100 = C.H100_PRICES
     assert (B.FORMING_CREDITED, B.FORMING_A_ONLY) == (h100.forming_credited, h100.forming_a_only) and B.RANK == C.R
     assert B.PEEL_UNITS == h100.bf16_mac * C.PEEL_K and B.FADD_PER_MAC == Fraction(h100.fadd, C.WINDOW)
+    assert B.WINDOW == C.WINDOW
     assert B.T == C.TILE == W.T
 
 
