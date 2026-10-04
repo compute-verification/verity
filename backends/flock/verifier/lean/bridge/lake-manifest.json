@@ -23,6 +23,15 @@
   {
    "type": "path",
    "scope": "",
+   "name": "pouw",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../../../../protocols/pouw/lean",
+   "configFile": "lakefile.toml"
+  },
+  {
+   "type": "path",
+   "scope": "",
    "name": "flock_level3",
    "manifestFile": "lake-manifest.json",
    "inherited": true,

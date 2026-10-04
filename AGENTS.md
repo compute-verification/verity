@@ -179,8 +179,8 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
 
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
   about the executable's definitions, Mathlib), `soundness/` (the protocol's proofs, ArkLib) and `bridge/` (C-Flock's
-  games, circuits and partitions as core's, and soundness against registered values in core's terms; `soundness/` and
-  core's), and `protocols/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
+  games, circuits and partitions as core's, soundness against registered values in core's terms, and decisiveness in
+  PoUW's; `soundness/`, core's and PoUW's), and `protocols/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
   named assumptions and the proofs behind its γ, Mathlib and core's), `protocols/network_warden/lean/` (the network
   warden's timing-channel guarantees and their proofs, Mathlib), `protocols/nci/lean/` (NCI's policy and guarantees, on
   core's), and `packages/verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
