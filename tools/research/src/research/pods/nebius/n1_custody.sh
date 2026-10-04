@@ -25,8 +25,9 @@
 # its logs; one line counts them, and they fail the round until a person rules on them.
 # Bounds as n2_custody.sh's: at most VY_CUSTODY_MAX_RUNS Jobs, none started after VY_CUSTODY_PASS_S, runs that failed before going
 # last; a run dir over VY_CUSTODY_MAX_FILES files or VY_CUSTODY_MAX_GB GiB is held. A failed Job is logged with its last line and
-# retried every round, except a remote that holds another attempt document (triage's `conflict`; an attempt key is write-once), which
-# is held after its one Job. A hold (STATE/held/RUN says why) fails the round, and lifts itself once triage no longer lists the run as
+# retried every round, except what no Job can mend, since an attempt key is write-once: a remote that holds another attempt document
+# (triage's `conflict`), or a run dir that holds what its attempt's run record lacks (a run forced, then written to), each held after
+# its one Job. A hold (STATE/held/RUN says why) fails the round, and lifts itself once triage no longer lists the run as
 # needing action (a label, a fetch, --reconcile); remove it by hand to have the next round try again.
 # No Job starts in node 1's daily hold, VY_CUSTODY_QUIET (UTC; dispatch.py's PACK_HOLD to the quiet hour's end), and none runs into
 # the quiet hour (QUIET_AT, 12:30Z, which measurements own): each Job's activeDeadlineSeconds ends it a minute before, and a Job that would
@@ -389,6 +390,13 @@ while IFS='|' read -r kind a b c camp status files bytes; do
         rm -f "$STATE/failures/$r"
         log "$d ($camp, $status): its attempt is on R2 without a run record (published without one, and an attempt is immutable):" \
           "triage lists it as attempt-no-record until its logs are waived"
+      elif grep -qs -e "not in the run record" -e "changed since it was taken" "$tmp/job.err"; then
+        rm -f "$STATE/failures/$r"
+        echo "changed: the run dir holds what its attempt's run record lacks" > "$STATE/held/$r"
+        log "$d ($camp, $status): held: its attempt's run record, taken from the run dir as it was earlier, lacks what it holds now," \
+          "and an attempt never changes: the rest is on R2 with that record, the difference only in this run dir. Keep it, or put it in" \
+          "the store (research data put --kind K --tree DIR --preserve), then label it (as uid ${UID_OF[$root]}," \
+          "RESEARCH_STORE=${STORE[$root]}: research data label $r custody waived --by WHO) and the hold lifts itself"
       else
         n=$(( $(cat "$STATE/failures/$r" 2> /dev/null || echo 0) + 1 ))
         echo "$n" > "$STATE/failures/$r"

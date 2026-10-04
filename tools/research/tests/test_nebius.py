@@ -2160,6 +2160,38 @@ def test_store_push_template_pushes_no_record_less_attempt(tmp_path, monkeypatch
     assert not (node.vault / attempt_key(less)).exists() and (node.vault / attempt_key(full)).exists()
 
 
+@N1_CUSTODY
+def test_n1_custody_holds_a_forced_attempt_whose_run_dir_changed_after_its_one_job(tmp_path, monkeypatch):
+    """#1004's red-team recheck N2: a run published --force whose dir then gained a file is forced-unverified, and a round started a
+    custody Job for it every round, for good, though none can mend it: its attempt is write-once. As n2_custody.sh does, the round
+    holds it after its one Job and says what a person does; a `custody waived` label lifts the hold."""
+    from research.store import attempt as A
+    from research.store.cli import main as data_main
+    from research.store.local import LocalStore
+
+    node = _n1_custody(tmp_path)
+    rid = "r20261003-200000-2201"
+    d = node.run(node.jobs, rid, "running")
+    st = LocalStore(node.jobs / "store", config_path=node.remote)
+    assert A.publish(d, store=st, remote_push=False, run_record=True, force=True)["published"]
+    assert CU.push_run(st, rid) == [] and CU.verify(st, d)["preserved"]
+    (d / "out" / "late.json").write_text('{"verdict": "pass"}\n')
+    (d / "status.json").write_text(json.dumps({"state": "done", "transitions": [{"state": "running", "pid": 4243}, {"state": "done"}]}))
+    rounds = []
+    for _ in range(2):
+        for p in d.rglob("*"):
+            os.utime(p, (N1_OLD, N1_OLD))
+        rounds.append(node.round_())
+    out = "\n".join(o.stdout + o.stderr for o in rounds)
+    assert [n for n in node.created() if n.startswith("n1-custody-")] == [f"n1-custody-{rid}"] and node.held() == [rid], out
+    assert all(o.returncode == 1 for o in rounds) and "Job failed" not in out
+    assert "held: its attempt's run record, taken from the run dir as it was earlier, lacks what it holds now" in rounds[0].stdout
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(node.absent))
+    assert data_main(["label", rid, "custody", "waived", "--by", "test", "--store", str(node.jobs / "store")]) == 0
+    lifted = node.round_()
+    assert lifted.returncode == 0 and node.held() == [] and f"{rid}: hold lifted" in lifted.stdout, lifted.stdout
+
+
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path):
     """Node 2's store has no remote, so a cited Build's manifest missing there failed cov-g217's precheck after a 19-min bootstrap:
