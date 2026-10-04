@@ -56,7 +56,7 @@ theorem tablesAtZKH_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : 
 
 /-- Table `j` of the hidden-output plan, at a draw at which `verify --zk` sets table `j` up, is its table. -/
 theorem planZHJ_get_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (j : Fin (nTab I))
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (S : Finset (Fin n)) (R : Reg) (j : Fin (nTab I))
     (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
     (planZHJ (Reg := Reg) dj y₀ S R).get (Fin.cast (planZHJ_length dj y₀ S R).symm j) = y.table := by
   simp only [planZHJ, List.get_ofFn, Fin.cast_cast, Fin.cast_eq_self]
@@ -162,7 +162,7 @@ refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins beca
 (`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until
 the verifier's D11 refusal in `Net.ofRows` discharges it. -/
 theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
       (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
@@ -185,7 +185,8 @@ refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins beca
 the verifier's D11 refusal in `Net.ofRows` discharges it. -/
 theorem zk_session_composedHJ
     (I : Inputs) (ht : I.tags.typed = false)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file
