@@ -17,6 +17,7 @@ import Pous.Protocol.Model.BandChain
 import Pous.Protocol.Model.Pebbling
 import Pous.Protocol.Model.SampledAudit
 import Pous.Guarantees.P2
+import Pous.Guarantees.SecureErasure
 import Pous.Protocol.Model.BandGraph
 import Pous.Protocol.Model.SegLift
 
