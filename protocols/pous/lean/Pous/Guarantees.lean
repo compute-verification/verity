@@ -1030,27 +1030,28 @@ def ContinuousTimeAverage : Prop :=
                 else 0)
         ≤ ENNReal.ofReal βe + T * (β + 1) * π
 
-/-- **Unconditional: the continuous audit's time-averaged bound on the band store at `D = 1, 2, 5` rounds, at every
-segment count from 1 to 2^64.** `ContinuousTimeAverage` instantiated on the `N`-segment band
+/-- **Unconditional: the continuous audit's time-averaged bound on the band store at `D = 0, 1, 2, 5` rounds, at
+every segment count from 1 to 2^64.** `ContinuousTimeAverage` instantiated on the `N`-segment band
 `chainBandSeg N (2^9) d 524288 512 dom`, for every `N` with `1 ≤ N ≤ 2^64`, both domain layouts (the
-implementation's per-segment tags `segDom salt`, any 192-bit salt, and one global salt `dom salt`), every `d ≥ D`, at
-`Q = 2^20` and each `(D, k)` of `(1, 93)`, `(2, 97)`, `(5, 111)`. `β` is the compression width of the sequential
-certificate at `(D, k)` (`BandMultiMeetsFamilyD1`, `D2`, `BandMultiMeetsFamily`): `524288·(511 − D) − 69·(512 − D) −
-1 − (9k + 129)` at `N = 1` and `523898·(512 − D)·N − 532588` at `N ≥ 2`. The tail is at most `2^-(9k + 99)` per slot:
-`2^-936`, `2^-972`, `2^-1098` (at `N ≥ 2` it is below `2^-8206`). So `ε_proof = 1 − (β − 512·N)/(N·2^28)`
-(`epsProof`) is
+implementation's per-segment tags `segDom salt`, any 192-bit salt, and one global salt `dom salt`), every `d ≥ D`
+(every `d` at `D = 0`), at `Q = 2^20` and each `(D, k)` of `(0, 89)`, `(1, 93)`, `(2, 97)`, `(5, 111)`. `β` is the
+compression width of the sequential certificate at `(D, k)` (`BandMultiMeetsFamilyD0`, `D1`, `D2`,
+`BandMultiMeetsFamily`): `524288·(511 − D) − 69·(512 − D) − 1 − (9k + 129)` at `N = 1` and
+`523898·(512 − D)·N − 532588` at `N ≥ 2`. The tail is at most `2^-(9k + 99)` per slot: `2^-900`, `2^-936`, `2^-972`,
+`2^-1098` (at `N ≥ 2` it is below `2^-8206`). So `ε_proof = 1 − (β − 512·N)/(N·2^28)` (`epsProof`) is
 
 | `D` | `k` | `N = 1` | `N = 2` | `N = 448` | `N = 2240` |
 |---|---|---|---|---|---|
+| 0 | 89 | 0.2090% | 0.1738% | 0.0750% | 0.0747% |
 | 1 | 93 | 0.4043% | 0.3689% | 0.2702% | 0.2698% |
 | 2 | 97 | 0.5996% | 0.5641% | 0.4654% | 0.4650% |
 | 5 | 111 | 1.1855% | 1.1496% | 1.0509% | 1.0505% |
 
-The row `D = 0`, `k = 89` (0.2090% at `N = 1`) is not here: it waits for the `D = 0` parameter point's own pin, and
-the proof (`PousContinuous.band_cont_time_average_row`) already covers it. Proof:
-`PousContinuous.band_family_continuous_time_average`; here `Pous.SecurityProofs.BandFamilyContinuousTimeAverage`. -/
+Proof: `PousContinuous.band_family_continuous_time_average`; here
+`Pous.SecurityProofs.BandFamilyContinuousTimeAverage`. -/
 def BandFamilyContinuousTimeAverage : Prop :=
-  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ Dk ∈ ([(1, 93), (2, 97), (5, 111)] : List (ℕ × ℕ)), ∀ d : ℕ, Dk.1 ≤ d →
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ Dk ∈ ([(0, 89), (1, 93), (2, 97), (5, 111)] : List (ℕ × ℕ)), ∀ d : ℕ,
+    Dk.1 ≤ d →
     ∀ dom : ℕ → Bits 512,
       ((∃ salt : Bits 192, dom = Pous.BandMulti.segDom salt (2 ^ 9)) ∨ ∃ salt : Bits 256, dom = Pous.Sponge.dom salt) →
     let sch := Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 dom

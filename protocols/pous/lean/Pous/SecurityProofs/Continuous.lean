@@ -31,7 +31,7 @@ its clock. The statements are `Pous.Guarantees.PerAnswer`, `Pous.Guarantees.Cont
 * `Continuous/TimeAverage.lean`: the verifier draws the arrivals, and the bound reads the memory at every idle slot
   (`PousContinuous.continuous_time_average`; pinned as `Pous.SecurityProofs.ContinuousTimeAverage`).
 * `Continuous/BandTimeAverage.lean`: that bound on the `N`-segment band at every `D ≤ 510`, `k ≤ 900`
-  (`PousContinuous.band_cont_time_average_row`), and the rows `D = 1, 2, 5`
+  (`PousContinuous.band_cont_time_average_row`), and the rows `D = 0, 1, 2, 5`
   (`PousContinuous.band_family_continuous_time_average`; pinned as
-  `Pous.SecurityProofs.BandFamilyContinuousTimeAverage`). The row `D = 0` is `band_cont_time_average_d0`, unpinned.
+  `Pous.SecurityProofs.BandFamilyContinuousTimeAverage`).
 -/

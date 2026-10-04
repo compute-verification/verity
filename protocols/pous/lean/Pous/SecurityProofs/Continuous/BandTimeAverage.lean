@@ -14,7 +14,8 @@ unconditional `chainExPostFactoG_v6` (`band_seg_timedINC`), for every `D ≤ d` 
   `union_term_rounds`), so `(β + 1)·π ≤ 2^-8206` (`band_cont_tail_fam`), below `2^-(9k + 99)` for every `k ≤ 900`.
 
 `band_cont_time_average_row` proves the bound at every `D ≤ 510` and `k ≤ 900`; the pinned family takes the rows
-`(1, 93)`, `(2, 97)`, `(5, 111)`. The row `(0, 89)` is `band_cont_time_average_d0`, unpinned.
+`(0, 89)`, `(1, 93)`, `(2, 97)`, `(5, 111)`, the parameter points of `BandMultiMeetsFamilyD0`, `D1`, `D2` and
+`BandMultiMeetsFamily`.
 -/
 
 namespace PousContinuous
@@ -122,19 +123,15 @@ theorem band_cont_time_average_row (D k : ℕ) (hD : D ≤ 510) (hk : k ≤ 900)
   rw [mul_assoc]
   exact add_le_add le_rfl (mul_le_mul' le_rfl (band_cont_tail N D k hN hD hk))
 
-/-- **`Pous.Guarantees.BandFamilyContinuousTimeAverage`**: the rows `(1, 93)`, `(2, 97)`, `(5, 111)`. -/
+/-- **`Pous.Guarantees.BandFamilyContinuousTimeAverage`**: the rows `(0, 89)`, `(1, 93)`, `(2, 97)`, `(5, 111)`. -/
 theorem band_family_continuous_time_average : Pous.Guarantees.BandFamilyContinuousTimeAverage := by
   intro N _ hN Dk hDk
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hDk
-  rcases hDk with rfl | rfl | rfl
+  rcases hDk with rfl | rfl | rfl | rfl
+  · exact band_cont_time_average_row 0 89 (by norm_num) (by norm_num) N hN
   · exact band_cont_time_average_row 1 93 (by norm_num) (by norm_num) N hN
   · exact band_cont_time_average_row 2 97 (by norm_num) (by norm_num) N hN
   · exact band_cont_time_average_row 5 111 (by norm_num) (by norm_num) N hN
-
-/-- The row `D = 0`, `k = 89`. TODO(D = 0): not in `Pous.Guarantees.BandFamilyContinuousTimeAverage` and not pinned
-until the `D = 0` parameter point's own pin lands; then add `(0, 89)` to that statement's list and its table. -/
-theorem band_cont_time_average_d0 : BandContTimeAverageRow 0 89 :=
-  band_cont_time_average_row 0 89 (by norm_num) (by norm_num)
 
 /-! ## `ε_proof` at one segment -/
 
@@ -144,6 +141,12 @@ theorem βOne_5_111 : βOne 5 111 = 265253616 := rfl
 theorem band_epsProof_one (d : ℕ) (dom : ℕ → Bits 512) (β : ℕ) :
     epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) β = 1 - ((β : ℝ) - 512) / 2 ^ 28 := by
   show (1 : ℝ) - ((β : ℝ) - ((1 * 2 ^ 9 : ℕ) : ℝ)) / (((1 * 2 ^ 9 : ℕ) : ℝ) * ((524288 : ℕ) : ℝ)) = _
+  norm_num
+
+/-- `ε_proof` at `D = 0`, `k = 89`, one segment: `561059/2^28 ≈ 0.2090%`. -/
+theorem band_epsProof_d0 (d : ℕ) (dom : ℕ → Bits 512) :
+    epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) (βOne 0 89) = 561059 / 2 ^ 28 := by
+  rw [band_epsProof_one, βOne_0_89]
   norm_num
 
 /-- `ε_proof` at `D = 1`, `k = 93`, one segment: `1085314/2^28 ≈ 0.4043%`. -/

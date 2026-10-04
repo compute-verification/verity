@@ -708,7 +708,7 @@
    "pins": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
   },
   "Pous.Guarantees": {
-   "digest": "5272e10684d9a5ff1117c61a73333db59bd5d3a0fab82f778fe7b7365bccb8ad",
+   "digest": "d25db3fee31de4b7f165c3ce71f61134948fd238a2d82d0335b6171353f15656",
    "definitions": {
     "Pous.Guarantees.A1CompressionCard": "4bdc9218360926b7313e50a5882d2d7c72bf905191984cb666c8cad07a435774",
     "Pous.Guarantees.A1CompressionPr": "45e347c38d963ece9d1f073c9efb190b752629dc1364ddeee128432ee1e5fd9d",
@@ -728,7 +728,7 @@
     "Pous.Guarantees.BandChainMeets64D5": "0d4eb049d79e6c42fe35dadf0746b0d8634782cd9b2fd9f4a55c1fdbd59f10ae",
     "Pous.Guarantees.BandChainMeets64Rounds1": "c944d4dcf616ec2d63a59b540380bbd1b9f3318046e8781bac2d3c7c8d934976",
     "Pous.Guarantees.BandChainMeets64Rounds2": "362be886c2f94038ff4932ec56c10cbdfa4783551699504480cfe32434851775",
-    "Pous.Guarantees.BandFamilyContinuousTimeAverage": "b83362c42c82bf1fcc6e0c978bea601f5f96fd44974f1c6ae8eb0cbd436b4b04",
+    "Pous.Guarantees.BandFamilyContinuousTimeAverage": "3c815072274f6480e6a106a9d4d119cc4884029ff6f2623f33eb2ace30af593e",
     "Pous.Guarantees.BandGradedMeetsFamily": "d7e4a45aa7c5c286613454e568c0fd92b2a9bbf4b4df2fcc59f61ae2a24efa4b",
     "Pous.Guarantees.BandMultiMeets14": "ee4d8b855ec67b97b91433094ddcb5b0075cb8373125dce1327e0ad58c7d4b01",
     "Pous.Guarantees.BandMultiMeets14K106": "e6d4bc050a0ab8957694ca111b89f29bebb0d215c24e6e6c189021772b08eb75",
