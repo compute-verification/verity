@@ -87,7 +87,39 @@ theorem zk_session_drawnRegValsHR
         regTermZC execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH (Reg := Reg) dj y₀)
           (tabAtZKH dj y₀) ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub))
           (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k Rw ρ qW := by
-  sorry
+  have hdec := decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
+    (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hRec hDraw)
+  have hc' := zk_flock_drawnRegValsC_cr execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n))
+    (planAtZKH dj y₀) (tabAtZKH dj y₀) execArith_correct (placeZH dj y₀ ht hc hscope hU)
+    ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub))
+    (regOpenZH dj y₀ ht hc hscope hU hpub rd) hk hRw hM hρ hr ht' (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ)
+    hCR hW
+  refine le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
+    (zk_headline_exec_drawn execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun R S =>
+      ¬ Disjoint (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+          (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
+            ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub))
+            (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ))
+            (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ)) k Rw)) S ∨
+      ∃ u ∈ S, ∃ g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u,
+        rd.isRead ((layShH dj y₀ ht hc hscope hU (pub := pub)).pos g) ∧
+        (layShH dj y₀ ht hc hscope hU (pub := pub)).regLeaf R ((layShH dj y₀ ht hc hscope hU (pub := pub)).pos g) =
+          rd.leaf ((layShH dj y₀ ht hc hscope hU (pub := pub)).pos g) ∧
+        XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
+            ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub))
+            (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ))
+            (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ)) k Rw g ≠
+          (layShH dj y₀ ht hc hscope hU (pub := pub)).bit (rd.wv ((layShH dj y₀ ht hc hscope hU (pub := pub)).pos g)) g) _
+      (le_trans (prob_mono ?_ _ _) hc'))
+  rintro o ⟨hacc, hw | ⟨u, hu, g, hg, hread, hleaf, hne⟩⟩
+  · exact ⟨hacc, Or.inl hw⟩
+  refine ⟨hacc, Or.inr ⟨u, hu, g, hg, ?_, hne⟩⟩
+  refine Prod.ext rfl ?_
+  show ((rsZHS dj y₀ ht hc hscope hU hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
+  unfold HmRowsZ.scheme
+  split_ifs with hrow
+  · exact hleaf.symm
+  · exact absurd (rd.read_row _ hread) hrow
 
 /-- **No drawn unit of a hidden-output `--zk --registered` session reads a registered read whose leaf is not the
 registrant's**, except with probability `qR²/2^513`: `zk_session_offR` at `zk_session_soundHR`'s session. -/
@@ -118,6 +150,13 @@ theorem zk_session_offHR
           (layShH dj y₀ ht hc hscope hU (pub := pub)).regLeaf o.1 ((layShH dj y₀ ht hc hscope hU (pub := pub)).pos g) ≠
             rd.leaf ((layShH dj y₀ ht hc hscope hU (pub := pub)).pos g)) G σ ≤
       ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  have hchk : ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveAcceptsZKR I own o →
+      (rd.restrict (FlockSoundness.Registered.drawnReads (layShH dj y₀ ht hc hscope hU (pub := pub)) o.2.1)).Checked
+        o.1 (regPathsH c pub o.2.2 rd.port) := fun o hacc =>
+    checked_of_acceptsH I ht own dj y₀ hc hU hpub hscope hTags o hacc
+      (rd.restrict (FlockSoundness.Registered.drawnReads (layShH dj y₀ ht hc hscope hU (pub := pub)) o.2.1))
+      (hown o hacc)
+  exact FlockSoundness.Registered.Reads.prob_offDrawn_le (lay := layShH dj y₀ ht hc hscope hU (pub := pub)) G σ
+    (LiveAcceptsZKR I own) (fun o => o.2.1) (fun o => o.1) (fun o => regPathsH c pub o.2.2 rd.port) rd hchk hR
 
 end FlockSoundness.Discharge.ZkReg
