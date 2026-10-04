@@ -300,7 +300,11 @@ is the minimum.
 - **Collision resistance** (`cr/sha-512`) enters only soundness (binding of the prover's trees) and M2's binding of the
   verifier's coin commitment (§9), not M1's hiding.
 - **Refused coins.** The prover's refusals are exactly the ones the argument uses: `β = 0` (the inner proof),
-  `ρ^r_0, ρ^r_1` dependent over F128 (`W^r` invertible), and mask-slot weights of rank `< 128·(claim points)` (§6).
+  `ρ^r_0, ρ^r_1` dependent over F128 (`W^r` invertible), mask-slot weights of rank `< 128·(claim points)` (§6), and a
+  zerocheck outer coin `r_j = 1` (the replay's round `j` divides by zero there, and the honest pads miss the inner proof's
+  constraint by a witness-dependent amount). Each stops the prover before it sends anything that depends on the coins it
+  reads, and reads only opened coins; `r_j = 1` is checked as the coin opens, in `zk_veil::Masking`'s draw. Under uniform
+  coins that one refuses with probability at most `(#outer coins)·2^-128`, `m − 13` per rep.
   The mask slot must have `blocks · 2^(mask_log−7) ≥ 128 · 4` words for the rank to be reachable. Both sides refuse a
   statement, or a table of a split session, with fewer than `128 · 4 + 64` words when it is built, before `Hello`
   (`zk_shape_ok`). RoPE and GEMM have 1024 at every split tried: m ≥ 25 at their `k_log` means at least 8 blocks.
@@ -390,7 +394,7 @@ and a Goldreich–Kahan simulator rewinds once, to just after that commitment.
   the coins the round uses. The prover checks every opening against the root before it uses a coin (`coin_tree::Checked`)
   and stops at one that does not open, before it answers anything that depends on it.
 - This replaces M0's step 0 (a seed commitment with derived streams): no PRF. The prover's refusals (`β = 0`, the mask
-  rank, dependent `ρ`) stay functions of committed coins.
+  rank, dependent `ρ`, an outer coin `r_j = 1`) stay functions of committed coins.
 - **Two properties, two roles.** *Hiding* of the unopened coins is what soundness uses: statistical in the standard model
   (hm96 `PROTOCOL.md` §3), since every block and salt comes from `/dev/urandom`; no random oracle. *Binding* is the one
   assumption M2's zero knowledge adds: SHA-512 collision resistance (`cr/sha-512`), which holds whatever salts V* chooses
@@ -470,7 +474,8 @@ The reused opening is caught in both directions: cap-gated's rewinds then comple
 extraction run's lucky pass every time. Evidence is kept in the private store.
 
 Selftest negatives: `zk_verifier_coin_off_its_commitment` (the prover stops at rep 0's round 3),
-`zk_verifier_commits_beta_zero` (it stops at the β round, 98), `zk_dummy_witness_passes_the_region_claims` (the dummy is
+`zk_verifier_commits_beta_zero` (it stops at the β round, 98), `zk_verifier_commits_outer_coin_one` (it stops at the
+round that opens the outer coins), `zk_dummy_witness_passes_the_region_claims` (the dummy is
 rejected by the inner proof alone).
 
 **Still to do.**
