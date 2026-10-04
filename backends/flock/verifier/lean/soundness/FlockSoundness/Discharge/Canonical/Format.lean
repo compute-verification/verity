@@ -19,7 +19,7 @@ retires with `sha512/row/v1`).
 nothing into). `vusPow2` is new and does narrow: it is what `outNet = unitNet` gave the region pin for free.
 
 **Proof work.** `formatOk_spec` is `Layout.scopeOk_spec`'s unfolding at the new conjuncts (`Bool.and_eq_true`,
-`List.all_eq_true`): mechanical, no new lemma.
+`List.all_eq_true`): mechanical, no new lemma. `formatOk_g_pos` and `formatOk_vu_lt` are proved here.
 -/
 
 namespace FlockSoundness.Discharge.Canonical
@@ -75,5 +75,19 @@ theorem formatOk_spec {c : Circuit} (hU : Built c.unit) (h : formatOk c = true) 
       (∀ net slot col, Aliased.srcKey c x ≠ .wire net slot col) ∧ ∀ col, Aliased.srcKey c x ≠ .lit col) ∧
     Layout.PortReads c hU ∧ (∀ {g : ℕ}, g < c.g → g < 2 ^ c.g.log2) := by
   sorry
+
+theorem vusPow2_of_formatOk {c : Circuit} (h : formatOk c = true) : 2 ^ c.g.log2 = c.g := by
+  simp only [formatOk, vusPow2, Bool.and_eq_true, beq_iff_eq] at h
+  exact h.2
+
+/-- **A canonical circuit has a VU per block** (`g_pos` without `outNet = unitNet`). -/
+theorem formatOk_g_pos {c : Circuit} (h : formatOk c = true) : 0 < c.g := by
+  rw [← vusPow2_of_formatOk h]
+  exact Nat.two_pow_pos _
+
+/-- **Every VU of a canonical circuit is below `2^⌊log₂ g⌋`** (`Layout.vu_lt_pow2` without `outNet = unitNet`). -/
+theorem formatOk_vu_lt {c : Circuit} (h : formatOk c = true) {g : ℕ} (hg : g < c.g) : g < 2 ^ c.g.log2 := by
+  rw [vusPow2_of_formatOk h]
+  exact hg
 
 end FlockSoundness.Discharge.Canonical
