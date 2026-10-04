@@ -112,7 +112,7 @@ noncomputable def PearlCSem.unitUsefulDev (sem : PearlCSem Q R S) (d : PearlCDev
   let W := wordsVal sh.n sh.k (U.weight (U.layout.wid u))
   let z := sem.noise H s U u act
   let AB := sem.unitChain H s U u act
-  let be := fun (β : ℚ) (e : Fin Params.pi.r → ℚ) (p : Fin 32) => bf16WordOf (codeVal (lineCodes β e p))
+  let be := fun (β : ℚ) (e : Fin Params.pi.r → ℚ) (p : Fin 32) => codeBf16 (lineCodes β e p)
   d.useful AB.1 AB.2 (fun l p => e4m3 (z.FA l p)) (fun l p => e4m3 (z.FB l p))
     (fun i => be (sem.beta sh.k (X i)) (z.EA i)) (fun j => be (sem.beta sh.k (W j)) (z.EB j))
 

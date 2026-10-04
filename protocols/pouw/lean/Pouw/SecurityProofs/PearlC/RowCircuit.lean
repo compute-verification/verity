@@ -1470,4 +1470,71 @@ theorem pc8Sem_scales {Q R S : Type} (p : Pipeline)
 
 end RoundTrip
 
+/-! ## E4M3 and FP32 words are never NaN -/
+
+section NotNaN
+
+open Pouw.Fp8Atom.Proofs
+
+theorem roundEven_le_of_lt {m : ℚ} {n : ℤ} (h : m < n + 1 / 2) : roundEven m ≤ n := by
+  have hf : ⌊m⌋ < n + 1 := Int.floor_lt.2 (by push_cast; linarith)
+  rcases (show ⌊m⌋ < n ∨ ⌊m⌋ = n by omega) with hl | he
+  · have := roundEven_le m; omega
+  · unfold roundEven; dsimp only
+    rw [he, ite_eq_left (by linarith)]
+
+/-- `e4m3`'s magnitude bits on a non-negative value are at most `126` (`448`). -/
+theorem e4m3Mag_le {t : ℚ} (ht : 0 ≤ t) : e4m3Mag t ≤ 126 := by
+  rcases ht.lt_or_eq with ht | rfl
+  swap
+  · simp [e4m3Mag]
+  unfold e4m3Mag
+  rw [ite_eq_right ht.ne']
+  by_cases h464 : 464 ≤ t
+  · rw [ite_eq_left h464]
+  rw [ite_eq_right h464]
+  rw [not_le] at h464
+  dsimp only
+  obtain ⟨hb1, hb2⟩ := binade_spec ht
+  have hb9 : binade t < 9 := by
+    have : (2 : ℚ) ^ binade t < 2 ^ (9 : ℤ) := lt_of_le_of_lt hb1 (by norm_num; linarith)
+    exact (zpow_lt_zpow_iff_right₀ (one_lt_two (α := ℚ))).1 this
+  have hE8 : max (binade t) (-6) ≤ 8 := max_le (by omega) (by norm_num)
+  have hu : (0 : ℚ) < 2 ^ (max (binade t) (-6) - 3) := two_zpow_pos _
+  have k16 : (2 : ℚ) ^ (max (binade t) (-6) - 3) * 16 = 2 ^ (max (binade t) (-6) + 1) := by
+    rw [show (16 : ℚ) = 2 ^ (4 : ℤ) by norm_num, ← zpow_add₀ two_ne_zero]; congr 1; ring
+  have hlt : t < 2 ^ (max (binade t) (-6) + 1) :=
+    lt_of_lt_of_le hb2 (zpow_le_zpow_right₀ one_le_two (by omega))
+  have h16 : t / 2 ^ (max (binade t) (-6) - 3) < ((16 : ℤ) : ℚ) + 1 / 2 := by
+    rw [div_lt_iff₀ hu]; push_cast; linarith
+  have hR := roundEven_le_of_lt h16
+  rcases (show max (binade t) (-6) ≤ 7 ∨ max (binade t) (-6) = 8 by omega) with h7 | h8
+  · omega
+  · have h14 : t / 2 ^ (max (binade t) (-6) - 3) < ((14 : ℤ) : ℚ) + 1 / 2 := by
+      rw [h8, div_lt_iff₀ (by norm_num)]; norm_num; linarith
+    have := roundEven_le_of_lt h14
+    omega
+
+/-- `f32Word` never writes a NaN. -/
+theorem f32Word_notNaN (y : ℚ) : (f32Word y >>> 23) % 256 = 255 → f32Word y % 2 ^ 23 = 0 := by
+  unfold f32Word
+  dsimp only
+  by_cases h0 : |y| = 0
+  · rw [ite_eq_left h0]; simp
+  rw [ite_eq_right h0]
+  have hN := f32Word_N (lt_of_le_of_ne (abs_nonneg y) (Ne.symm h0))
+  generalize (roundEven (|y| / 2 ^ (max (binade |y|) (-126) - 23))).toNat = N₀ at hN ⊢
+  generalize max (binade |y|) (-126) = E₀
+  simp only [Nat.shiftRight_eq_div_pow]
+  split_ifs <;> omega
+
+/-- `e4m3` of a value is never the E4M3 NaN. -/
+theorem e4m3_notNaN (v : ℚ) : (e4m3 v).val % 128 ≠ 127 := by
+  have h := e4m3Mag_le (abs_nonneg v)
+  unfold e4m3
+  dsimp only
+  split_ifs <;> omega
+
+end NotNaN
+
 end Pouw.PearlC.RowCircuit

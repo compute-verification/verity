@@ -11,8 +11,8 @@ protocol's word functions agree only conditionally:
 * `Pc8OpsAgree ops`: core's primitives (`F32ToE4m3Sat`, `E4m3ToF32`, `F32Mul`, `F32Fma`, `F32Neg`, `F2fpBf16`) agree
   with the protocol's word functions where both are defined. Core's Lean semantics will discharge them;
 * `Row8OK`: a row's words are step words (no `−0`), as are its `α` and `β`, and `β > 0`;
-* `Line8OK`: the noise lines' entries are E4M3 values, and their rescaled codes `E′` are neither NaN nor `−0`. The
-  protocol reads `bf16(E′)` as `bf16WordOf (codeVal E′)`, which loses `−0`'s sign, while the table keeps it;
+* `Line8OK`: the noise lines' entries are E4M3 values (`NoiseCode`). Their rescaled codes `E′` are never NaN
+  (`lineCodes_notNaN`), and the table's `bf16(E′)` is the protocol's `codeBf16 E′`, `−0` included (`be8_word`);
 * `CastWord` of the formed words, so the cast is `e4m3` of the formed value.
 
 On them a row unit's codes are `pc8Sem`'s (`quant8`, so `quant8A`/`quant8B` are `unitChain`'s `A′`/`B̃`) and its
@@ -132,8 +132,8 @@ end Words
 /-- **Core's primitives agree with the protocol's word functions** where both are defined: the E4M3 cast is
 `e4m3Word`; the widening of a code other than NaN and `−0` is its value's FP32 word; FP32 multiply and FMA round as
 `f32Word`, `fmaWord?` (a zero product of equal signs is `+0`); negation flips the sign bit; the BF16 narrowing is
-`rnBf16?`. Each is a fact about IEEE binary32 (round to nearest even, gradual underflow), open until core's Lean
-semantics of the primitives. -/
+`rnBf16?`; and the widening of `−0` is FP32's `−0`. Each is a fact about IEEE binary32 (round to nearest even, gradual
+underflow), open until core's Lean semantics of the primitives. -/
 structure Pc8OpsAgree (ops : RowOps) : Prop where
   cast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val
   widen : ∀ c : Code, c.isNaN = false → c.val ≠ 0x80 → ops.e4m3ToF32 c.val % 2 ^ 32 = f32Word (codeVal c)
@@ -143,14 +143,13 @@ structure Pc8OpsAgree (ops : RowOps) : Prop where
     ops.f32FmaV2 a b c % 2 ^ 32 = w
   neg : ∀ w < 2 ^ 32, ops.f32Neg w % 2 ^ 32 = negWord w
   bf16 : ∀ w x : ℕ, w < 2 ^ 32 → rnBf16? w = some x → ops.f2fpBf16 w % 2 ^ 16 = x
+  widenNeg0 : ops.e4m3ToF32 0x80 % 2 ^ 32 = 0x80000000
 
-/-- A noise entry the table reads exactly: its E4M3 code is neither NaN nor `−0`, and has its value. -/
-def NoiseCode (v : ℚ) : Prop := (e4m3 v).isNaN = false ∧ (e4m3 v).val ≠ 0x80 ∧ codeVal (e4m3 v) = v
+/-- A noise entry the table reads exactly: an E4M3 value, so its code has its value. -/
+def NoiseCode (v : ℚ) : Prop := codeVal (e4m3 v) = v
 
-/-- A noise line rescaled by `β` as the table reads it: every entry a `NoiseCode`, and every rescaled code `E′` neither
-NaN nor `−0`. -/
-def Line8OK (β : ℚ) (e : Fin Params.pi.r → ℚ) : Prop :=
-  ∀ q, NoiseCode (e q) ∧ (lineCodes β e q).isNaN = false ∧ (lineCodes β e q).val ≠ 0x80
+/-- A noise line as the table reads it: every entry a `NoiseCode`. The noise is `pc8Sem`'s parameter. -/
+def Line8OK (e : Fin Params.pi.r → ℚ) : Prop := ∀ q, NoiseCode (e q)
 
 /-- A row of words as values, as `wordsVal` reads it. -/
 def rowQ (k : ℕ) (w : ℕ → ℕ) : Fin k → ℚ := fun l => (wordQ (w l)).getD 0
@@ -165,6 +164,55 @@ def Row8OK (ops : RowOps) (k : ℕ) (w : ℕ → ℕ) : Prop :=
 def formWord8 (ops : RowOps) (p : Pipeline) (α x β : ℚ) (e f : Fin Params.pi.r → ℚ) : ℕ :=
   form8 ops p (f32Word α) (f32Word x) (fun l => eTilde8 ops (f32Word β) (encCodes e l)) (encCodes f)
 
+/-- A `NoiseCode`'s code is neither NaN nor `−0`: `e4m3` never writes NaN, and `−0` has value `0`, whose code is
+`+0`. -/
+theorem NoiseCode.code {v : ℚ} (h : NoiseCode v) : (e4m3 v).isNaN = false ∧ (e4m3 v).val ≠ 0x80 := by
+  refine ⟨by simpa [Code.isNaN] using e4m3_notNaN v, fun h80 => ?_⟩
+  have hv : v = 0 := by rw [← h, show e4m3 v = 0x80 from Fin.ext h80]; decide +kernel
+  subst hv
+  exact absurd h80 (by decide +kernel)
+
+/-- `e4m3Word` of an `f32Word` is never NaN: `f32Word` never writes a NaN, and the cast saturates the rest. -/
+theorem e4m3Word_f32Word_notNaN (y : ℚ) : (e4m3Word (f32Word y)).isNaN = false := by
+  have hN := f32Word_notNaN y
+  unfold e4m3Word
+  dsimp only
+  split
+  next x _ =>
+    have := e4m3Mag_le (abs_nonneg x)
+    simp only [Code.isNaN, beq_eq_false_iff_ne, ne_eq]
+    split_ifs <;> omega
+  next hq =>
+    have h255 : (f32Word y >>> 23) % 256 = 255 := by
+      by_contra h
+      rw [PeelExactProofs.wordQ_fields h] at hq
+      exact absurd hq (by simp)
+    rw [ite_eq_left (hN h255)]
+    simp only [Code.isNaN, beq_eq_false_iff_ne, ne_eq]
+    split_ifs <;> omega
+
+/-- `E′` is never NaN. -/
+theorem lineCodes_notNaN (β : ℚ) (e : Fin Params.pi.r → ℚ) (q : Fin Params.pi.r) : (lineCodes β e q).isNaN = false :=
+  e4m3Word_f32Word_notNaN _
+
+/-- `codeBf16` is `bf16WordOf` of the code's value on every code but NaN and `−0`. -/
+theorem codeBf16_eq : ∀ c : Code, c.isNaN = false → c.val ≠ 0x80 → codeBf16 c = bf16WordOf (codeVal c) := by
+  decide +kernel
+
+theorem codeBf16_lt : ∀ c : Code, codeBf16 c < 2 ^ 16 := by decide +kernel
+
+theorem codeBf16_shift_lt : ∀ c : Code, codeBf16 c <<< 16 < 2 ^ 32 := by decide +kernel
+
+/-- A code's BF16 word widened to FP32 narrows back to it. -/
+theorem rnBf16_codeBf16 : ∀ c : Code, c.isNaN = false → rnBf16? (codeBf16 c <<< 16) = some (codeBf16 c) := by
+  decide +kernel
+
+/-- `−0`, `+0`, `1.0` and `−448` widen to `0x8000`, `0x0000`, `0x3F80` and `0xC3E0`
+(`test_bf16_of_code_keeps_the_sign_of_minus_zero`). -/
+theorem codeBf16_examples :
+    [codeBf16 0x80, codeBf16 0, codeBf16 0x38, codeBf16 0xFE] = [0x8000, 0, 0x3F80, 0xC3E0] := by
+  decide +kernel
+
 /-! ## A row's words in the protocol's terms -/
 
 section Row8
@@ -175,7 +223,8 @@ include hops
 /-- **A rescaled noise code is `lineCodes`'s**: `eTilde8` at `β`'s step word and an exact noise entry's code. -/
 theorem eTilde8_line {b : ℕ} (hb : AccumProofs.StepWord b) (hpos : 0 < wordVal b) {e : Fin Params.pi.r → ℚ}
     (q : Fin Params.pi.r) (he : NoiseCode (e q)) : eTilde8 ops b (encCodes e q) = (lineCodes (wordVal b) e q).val := by
-  obtain ⟨hn, h80, hv⟩ := he
+  obtain ⟨hn, h80⟩ := he.code
+  have hv : codeVal (e4m3 (e q)) = e q := he
   have hβ := stepWord_wordQ hb
   have hw : Prim.eval ops .e4m3ToF32 [encCodes e q] = f32Word (e q) := by
     simp only [Prim.eval, Prim.w, List.getD_cons_zero, encCodes, q.isLt, ↓reduceDIte]
@@ -191,15 +240,21 @@ theorem eTilde8_line {b : ℕ} (hb : AccumProofs.StepWord b) (hpos : 0 < wordVal
   simp only [Prim.eval, Prim.w, List.getD_cons_zero, hops.cast]
   exact Nat.mod_eq_of_lt (e4m3Word _).isLt
 
-/-- **`bf16(E′)`** of a code other than NaN and `−0` is `bf16WordOf` of its value. -/
-theorem be8_word {c : Code} (hn : c.isNaN = false) (h80 : c.val ≠ 0x80) :
-    Prim.eval ops .f2fpBf16 [Prim.eval ops .e4m3ToF32 [c.val]] = bf16WordOf (codeVal c) := by
-  have hw : Prim.eval ops .e4m3ToF32 [c.val] = f32Word (codeVal c) := by
-    simp only [Prim.eval, Prim.w, List.getD_cons_zero]
-    exact hops.widen c hn h80
-  rw [hw]
+/-- **The widening of a code** other than NaN is its `codeBf16` word in FP32's top half, `−0` included. -/
+theorem widen8_word {c : Code} (hn : c.isNaN = false) : Prim.eval ops .e4m3ToF32 [c.val] = codeBf16 c <<< 16 := by
   simp only [Prim.eval, Prim.w, List.getD_cons_zero]
-  exact hops.bf16 _ _ (f32Word_lt _) (rnBf16_f32Word_code c hn)
+  by_cases h80 : c.val = 0x80
+  · rw [h80, hops.widenNeg0, show c = 0x80 from Fin.ext h80]
+    decide +kernel
+  · rw [hops.widen c hn h80, codeBf16_eq c hn h80]
+    exact (bf16_shift_code c hn).symm
+
+/-- **`bf16(E′)`** of a code other than NaN is its widening `codeBf16`, `−0` included. -/
+theorem be8_word {c : Code} (hn : c.isNaN = false) :
+    Prim.eval ops .f2fpBf16 [Prim.eval ops .e4m3ToF32 [c.val]] = codeBf16 c := by
+  rw [widen8_word hops hn]
+  simp only [Prim.eval, Prim.w, List.getD_cons_zero]
+  exact hops.bf16 _ _ (codeBf16_shift_lt c) (rnBf16_codeBf16 c hn)
 
 /-- **A row's code is `pc8Sem`'s**: `code8W` on a row holding `encRow`'s words, the noise line's and a basis row's codes
 is `e4m3` of `pc8Form` at `alpha8`'s and `beta8`'s values, the entry and the two rows, where the formed word is a
@@ -300,7 +355,7 @@ end Sem8
 def basis8 {k : ℕ} (F : Matrix (Fin k) (Fin Params.pi.r) ℚ) : Matrix (Fin k) (Fin 32) Code := fun l q => e4m3 (F l q)
 
 /-- A noise line's `bf16(E′)` words as the protocol reads them, `E′ = lineCodes β e`. -/
-def be8 (β : ℚ) (e : Fin Params.pi.r → ℚ) : Fin 32 → ℕ := fun q => bf16WordOf (codeVal (lineCodes β e q))
+def be8 (β : ℚ) (e : Fin Params.pi.r → ℚ) : Fin 32 → ℕ := fun q => codeBf16 (lineCodes β e q)
 
 /-! ## The row units' ports -/
 
@@ -369,19 +424,13 @@ theorem code8_quant (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) {V w : ℕ → ℕ} 
   code8W_sem hops p hK (x := rowQ K w) (fun l => by rw [hx l l.isLt, encRow_rowQ hA.1 l l.isLt]) hA.2.1 hA.2.2.1 e
     (F t) t he hf hD
 
-/-- `bf16(E′)` of a noise code: its value's widening. -/
-theorem widen8_word {c : Code} (hn : c.isNaN = false) (h80 : c.val ≠ 0x80) :
-    Prim.eval ops .e4m3ToF32 [c.val] = f32Word (codeVal c) := by
-  simp only [Prim.eval, Prim.w, List.getD_cons_zero]
-  exact hops.widen c hn h80
-
 /-- **A row unit's rescaled noise code is `lineCodes`'s** at `pc8Sem`'s `β` of the row's words. -/
 theorem eTilde8_row {K : ℕ} (hK : 8 ≤ K) {V w : ℕ → ℕ} (hx : ∀ l < K, V l = w l) (hA : Row8OK ops K w)
-    {e : Fin Params.pi.r → ℚ} (hL : Line8OK (betaQ8 ops K w) e) (he : ∀ l < 32, V (K + l) = encCodes e l) {s : ℕ}
+    {e : Fin Params.pi.r → ℚ} (hL : Line8OK e) (he : ∀ l < 32, V (K + l) = encCodes e l) {s : ℕ}
     (hs : s < 32) : eTilde8 ops (beta8 ops V K) (V (K + s)) = (lineCodes (betaQ8 ops K w) e ⟨s, hs⟩).val := by
   have hV : ∀ l < K, V l = encRow K (rowQ K w) l := fun l hl => by rw [hx l hl, encRow_rowQ hA.1 l hl]
   rw [beta8_congr (ops := ops) hK hV, he s hs]
-  exact eTilde8_line hops hA.2.2.1 hA.2.2.2 ⟨s, hs⟩ (hL ⟨s, hs⟩).1
+  exact eTilde8_line hops hA.2.2.1 hA.2.2.2 ⟨s, hs⟩ (hL ⟨s, hs⟩)
 
 end RowWords
 
@@ -414,7 +463,7 @@ theorem row8A_paWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
     (he : ∀ l < 32, val XA (128 * nw + l) = encCodes e l)
     (hf : ∀ t : Fin (128 * nw), ∀ l < 32, val XA (128 * nw + 32 + 32 * t + l) = encCodes (F t) l)
     (hb : ∀ t : Fin (128 * nw), ∀ q < 32, val XA (33 * (128 * nw) + 32 + 32 * t + q) = encCodes (Fc t) q)
-    (hA : Row8OK ops (128 * nw) w) (hL : Line8OK (betaQ8 ops (128 * nw) w) e)
+    (hA : Row8OK ops (128 * nw) w) (hL : Line8OK e)
     (hD : ∀ t : Fin (128 * nw), CastWord (formWord8 ops p (alphaQ8 ops (128 * nw) w) (rowQ (128 * nw) w t)
       (betaQ8 ops (128 * nw) w) e (F t)))
     {af pa : List ℕ}
@@ -434,7 +483,7 @@ theorem row8A_paWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
   unfold paOut8
   by_cases hq32 : q < 32
   · rw [ite_eq_left hq32, hdiv, row8A_be p hnw rfl XA hX hq32, eTilde8_row hops hK8 hx hA hL he hq32,
-      be8_word hops (hL _).2.1 (hL _).2.2, hpa1 q hq32, getD_ofFn32 _ hq32]
+      be8_word hops (lineCodes_notNaN _ _ _), hpa1 q hq32, getD_ofFn32 _ hq32]
     rfl
   · have hq' : q - 32 < 32 := by omega
     have hc := hafq ⟨q - 32, hq'⟩
@@ -453,7 +502,7 @@ theorem row8B_pbWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
     (he : ∀ l < 32, val XB (128 * nw + l) = encCodes e l)
     (hf : ∀ t : Fin (128 * nw), ∀ l < 32, val XB (128 * nw + 32 + 32 * t + l) = encCodes (F t) l)
     (hb : ∀ t : Fin (128 * nw), ∀ q < 32, val XB (33 * (128 * nw) + 32 + 32 * t + q) = encCodes (Fc t) q)
-    (hA : Row8OK ops (128 * nw) w) (hL : Line8OK (betaQ8 ops (128 * nw) w) e)
+    (hA : Row8OK ops (128 * nw) w) (hL : Line8OK e)
     (hD : ∀ t : Fin (128 * nw), CastWord (formWord8 ops p (alphaQ8 ops (128 * nw) w) (rowQ (128 * nw) w t)
       (betaQ8 ops (128 * nw) w) e (F t)))
     {bf pb : List ℕ} {gL : List (List ℕ)}
@@ -478,8 +527,8 @@ theorem row8B_pbWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
     have hc := hbfq ⟨q, hq32⟩
     have hew : ∀ s (hs : s < 32), Prim.eval ops .e4m3ToF32
         [eTilde8 ops (beta8 ops (val XB) (128 * nw)) (val XB (128 * nw + s))] =
-          f32Word (codeVal (lineCodes (betaQ8 ops (128 * nw) w) e ⟨s, hs⟩)) := fun s hs => by
-      rw [eTilde8_row hops hK8 hx hA hL he hs, widen8_word hops (hL _).2.1 (hL _).2.2]
+          codeBf16 (lineCodes (betaQ8 ops (128 * nw) w) e ⟨s, hs⟩) <<< 16 := fun s hs => by
+      rw [eTilde8_row hops hK8 hx hA hL he hs, widen8_word hops (lineCodes_notNaN _ _ _)]
     have hlist : ((List.range (31 + 1)).map fun s =>
         ((List.ofFn (be8 (betaQ8 ops (128 * nw) w) e)).getD s 0, (gL.getD s []).getD q 0)) =
           List.ofFn fun p : Fin 32 => (be8 (betaQ8 ops (128 * nw) w) e p, (gL.getD p []).getD q 0) := by
@@ -496,10 +545,10 @@ theorem row8B_pbWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
         (by norm_num) acc ?_
       · dsimp only
         rw [hew s hs, getD_ofFn32 _ hs]
-        exact (bf16_shift_code _ (hL _).2.1).symm
+        rfl
       · dsimp only
         rw [hew s hs]
-        exact f32Word_lt _
+        exact codeBf16_shift_lt _
       · rw [hlist]
         unfold accChain? at hacc
         rwa [PeelExactProofs.zip_col hgl q] at hacc
@@ -518,8 +567,8 @@ theorem row8B_pbWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
     have h2 := hpb2 (q - 32) hq'
     rw [show 32 + (q - 32) = q by omega, getD_ofFn32 _ hq'] at h2
     rw [ite_eq_right hq32, hdiv, row8B_nbe p hnw rfl XB hX hq', eTilde8_row hops hK8 hx hA hL he hq',
-      be8_word hops (hL _).2.1 (hL _).2.2, h2]
-    have hx16 := bf16WordOf_lt (codeVal (lineCodes (betaQ8 ops (128 * nw) w) e ⟨q - 32, hq'⟩))
+      be8_word hops (lineCodes_notNaN _ _ _), h2]
+    have hx16 := codeBf16_lt (lineCodes (betaQ8 ops (128 * nw) w) e ⟨q - 32, hq'⟩)
     have hxor := Nat.xor_lt_two_pow hx16 (show 0x8000 < 2 ^ 16 by norm_num)
     simp only [Prim.eval, Prim.w, List.getD_cons_zero, bf16NegWord, Nat.mod_mod]
     exact Nat.mod_eq_of_lt hxor
@@ -559,7 +608,7 @@ theorem entry8_words (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw : 
     (hfb : ∀ t : Fin K, ∀ l < 32, val X (fbAt M N K + 32 * (t : ℕ) + l) = encCodes (z.FB t) l)
     (hg : ∀ s < 32, ∀ q < 32, val X (gAt M N K + 32 * s + q) = gram8 p z s q)
     (hA : Row8OK ops K (act i)) (hB : Row8OK ops K (wt j))
-    (hLA : Line8OK (betaQ8 ops K (act i)) (z.EA i)) (hLB : Line8OK (betaQ8 ops K (wt j)) (z.EB j))
+    (hLA : Line8OK (z.EA i)) (hLB : Line8OK (z.EB j))
     (hDA : ∀ t : Fin K, CastWord (formWord8 ops p (alphaQ8 ops K (act i)) (rowQ K (act i) t) (betaQ8 ops K (act i))
       (z.EA i) (z.FA t)))
     (hDB : ∀ t : Fin K, CastWord (formWord8 ops p (alphaQ8 ops K (wt j)) (rowQ K (wt j) t) (betaQ8 ops K (wt j))
@@ -867,8 +916,8 @@ structure Pc8EntryOK (ops : RowOps) (p : Pipeline) {m n k : ℕ} (z : Noise m n 
     (i : Fin m) (j : Fin n) : Prop where
   rowA : Row8OK ops k (act i)
   rowB : Row8OK ops k (wt j)
-  lineA : Line8OK (betaQ8 ops k (act i)) (z.EA i)
-  lineB : Line8OK (betaQ8 ops k (wt j)) (z.EB j)
+  lineA : Line8OK (z.EA i)
+  lineB : Line8OK (z.EB j)
   castA : ∀ t : Fin k, CastWord (formWord8 ops p (alphaQ8 ops k (act i)) (rowQ k (act i) t) (betaQ8 ops k (act i))
     (z.EA i) (z.FA t))
   castB : ∀ t : Fin k, CastWord (formWord8 ops p (alphaQ8 ops k (wt j)) (rowQ k (wt j) t) (betaQ8 ops k (wt j))

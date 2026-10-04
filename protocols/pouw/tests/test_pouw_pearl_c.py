@@ -295,6 +295,12 @@ def test_v1_peel_uses_e_prime_exactly():
         assert ops.pb[i][C.R:] == [P.f32_to_bf16(P.fp8_to_f32(c)) ^ 0x8000 for c in ops.b.ep[i]]
 
 
+def test_bf16_of_code_keeps_the_sign_of_minus_zero():
+    """`bf16(E′)` widens `−0` (0x80) to `0x8000`, with its sign. The Lean's `codeBf16` pins the same words
+    (`WholeCircuit.codeBf16_examples`)."""
+    assert [C._bf16_of_code(c) for c in (0x80, 0x00, 0x38, 0xFE)] == [0x8000, 0x0000, 0x3F80, 0xC3E0]
+
+
 def test_v1_registry_and_cost():
     s = get("pearl-c-h100-v1")
     assert s.name == "pearl-c-h100-v1" and dict(s.certificate.parameters)["forming"] == "v1"
