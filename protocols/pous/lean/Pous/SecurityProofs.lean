@@ -12,6 +12,7 @@ import Pous.SecurityProofs.Chain.Flat
 import Pous.SecurityProofs.Chain.Family
 import Pous.SecurityProofs.Chain.FamilyRounds
 import Pous.SecurityProofs.Continuous
+import Pous.SecurityProofs.Graded.Band
 import Pous.SecurityProofs.P2.Margin
 import Pous.SecurityProofs.Accounting.Numbers
 import Pous.SecurityProofs.Audit.SampledAudit
@@ -148,6 +149,7 @@ theorem BandPubMeetsFamily : Pous.Guarantees.BandPubMeetsFamily := PousPub.band_
 theorem BandPubMeetsFamilyD2 : Pous.Guarantees.BandPubMeetsFamilyD2 := PousPub.band_pub_meets_family_d2
 theorem BandPubMeetsFamilyD1 : Pous.Guarantees.BandPubMeetsFamilyD1 := PousPub.band_pub_meets_family_d1
 theorem ChainDenseMeets111 : Pous.Guarantees.ChainDenseMeets111 := PousSpongeChain.chainDenseMeets111_final
+theorem BandGradedMeetsFamily : Pous.Guarantees.BandGradedMeetsFamily := PousGraded.band_graded_meets_family
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
 theorem P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond := PousP2p.family

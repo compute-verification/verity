@@ -60,6 +60,28 @@
    "assumptions": [],
    "type_hash": "823fadfc71bbd70bb7d1b371d8148c6a54e6e63a9a6843d371d743d001f741c8"
   },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate : NetTiming.Guarantees.EncardAccSeqsLeConstantRate"
+   ],
+   "assumptions": [],
+   "type_hash": "5caed7ee8a100a9d93ca89b56802ab4a910a4db1c88e5e7788023283170da941"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": {
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock :",
+    "  NetTiming.Guarantees.EncardAccSeqsLeConstantRateFixedClock"
+   ],
+   "assumptions": [],
+   "type_hash": "20fc39951575ab482c9cae2fd98b1f3227bada256f634044e929818e3bd26afb"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": {
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows : NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows"
+   ],
+   "assumptions": [],
+   "type_hash": "0b1f8a5253756424c59436b951f35d3c27d1ad0a2e780734d7ce6d21b6af784a"
+  },
   "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": {
    "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock : NetTiming.Guarantees.EncardAccSeqsLeFixedClock"],
    "assumptions": [],
@@ -84,6 +106,13 @@
    "signature": ["NetTiming.SecurityProofs.EncardDecodableLeBlocks : NetTiming.Guarantees.EncardDecodableLeBlocks"],
    "assumptions": [],
    "type_hash": "ea0d8acb8a2a5711c199aa1d7abd4ce9a53a7b750dcd511fd0998914510848dc"
+  },
+  "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
+   "signature": [
+    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate : NetTiming.Guarantees.EncardDecodableLeConstantRate"
+   ],
+   "assumptions": [],
+   "type_hash": "39a3ef7e0a076cb6b30cd12c203a8efb190a4e1e7092c69f1647bbc6dbd6289b"
   },
   "NetTiming.SecurityProofs.EncardFifoGrids": {
    "signature": ["NetTiming.SecurityProofs.EncardFifoGrids : NetTiming.Guarantees.EncardFifoGrids"],
@@ -138,6 +167,11 @@
    "assumptions": [],
    "type_hash": "0a3dad879e152c0af9af48a2761127ce88794f823622cdec16a4d52cad676951"
   },
+  "NetTiming.SecurityProofs.ExpectedRowCausal": {
+   "signature": ["NetTiming.SecurityProofs.ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal"],
+   "assumptions": [],
+   "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
+  },
   "NetTiming.SecurityProofs.FillInjective": {
    "signature": ["NetTiming.SecurityProofs.FillInjective : NetTiming.Guarantees.FillInjective"],
    "assumptions": [],
@@ -191,6 +225,58 @@
    ],
    "assumptions": [],
    "type_hash": "16ef675c77312a82d790394b3ff53cb5eb300fb3feaece762ff3a002fd1b59ac"
+  },
+  "NetTiming.constantRate_joint_witness": {
+   "signature": [
+    "NetTiming.constantRate_joint_witness :",
+    "  And (NetTiming.Regenerates NetTiming.syncInteraction.warden fun x o => o)",
+    "    (And (NetTiming.JitterBounded NetTiming.syncInteraction.warden 1)",
+    "      (And",
+    "        (∀ (z : Bool),",
+    "          Set.instMembership.mem Set.univ z →",
+    "            NetTiming.AcceptedUpTo (NetTiming.constantRate 2 1 NetTiming.twoSyncs NetTiming.oneFrame)",
+    "              NetTiming.syncInteraction.op 2 (NetTiming.syncInteraction.obsRun z 2))",
+    "        (And",
+    "          (∀ (z : Bool),",
+    "            Set.instMembership.mem Set.univ z →",
+    "              Eq",
+    "                ((fun w =>",
+    "                    (Option.map (fun x => Decidable.decide (Eq (x.rows 0 0) Option.none)) w.head?).getD Bool.false)",
+    "                  (NetTiming.syncInteraction.wireRun z 2))",
+    "                z)",
+    "          (And (instLENat.le 2 (instHMul.hMul 1 2))",
+    "            (Eq Set.univ.encard",
+    "              (instHMul.hMul",
+    "                  (instHMul.hMul (Fintype.card Unit) (instHPow.hPow NetTiming.twoSyncs.size (instMinNat.min 1 1)))",
+    "                  (instHPow.hPow 1 2)).cast)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "6cffc1e8c9160036bbd429d1adaef14b6fd4c8bdff72fc6b4c60417afbada404"
+  },
+  "NetTiming.constantRate_not_framesRead_counts": {
+   "signature": [
+    "NetTiming.constantRate_not_framesRead_counts :",
+    "  Not",
+    "    (NetTiming.FramesReadNoTimingAdvice (NetTiming.constantRate 3 1 NetTiming.twoSyncs NetTiming.twoFrames)",
+    "      (fun c => c.snd.val) fun c ins a =>",
+    "      NetTiming.rowCount",
+    "        ((NetTiming.constantRate 3 1 NetTiming.twoSyncs NetTiming.twoFrames).rows c.snd.val ins a c.fst))"
+   ],
+   "assumptions": [],
+   "type_hash": "8fd5c98a95eb62f956d5c563ea9e0c9f283c2a03019e39dc4c87d08ed9feba41"
+  },
+  "NetTiming.constantRate_not_windowBlocks": {
+   "signature": [
+    "NetTiming.constantRate_not_windowBlocks {C : Type} {U : C → Type} (step : C → Nat) (blk : C → Fin 2)",
+    "  (hblk : ∀ (c : C), Eq (blk c).val (instHDiv.hDiv (step c) 2))",
+    "  (occ : (c : C) → List Unit → Prod Unit (Fin 2 → NetTiming.twoSyncs.Elem) → U c) :",
+    "  Not",
+    "    (And",
+    "      (NetTiming.FramesReadNoTimingAdvice (NetTiming.constantRate 2 2 NetTiming.twoSyncs NetTiming.lateFrame) step occ)",
+    "      (NetTiming.OccupancyReadsOwnBlock blk occ))"
+   ],
+   "assumptions": [],
+   "type_hash": "0c47f8ab26c23e611e9a47ea3b071d4e5d6b983387fd6cfb54d1911dea89a850"
   },
   "NetTiming.ingress_witness": {
    "signature": [
@@ -338,6 +424,7 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts",
     "NetTiming.SecurityProofs.EncardDecodableLe",
     "NetTiming.SecurityProofs.EncardDecodableLeBlocks",
+    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -345,6 +432,9 @@
     "NetTiming.SecurityProofs.NoFaultOfAccepted",
     "NetTiming.SecurityProofs.RecordedRowEqFill",
     "NetTiming.allocated_witness",
+    "NetTiming.constantRate_joint_witness",
+    "NetTiming.constantRate_not_framesRead_counts",
+    "NetTiming.constantRate_not_windowBlocks",
     "NetTiming.ingress_witness",
     "NetTiming.joint_witness",
     "NetTiming.witnessProgram_conditions",
@@ -352,7 +442,7 @@
    ]
   },
   "NetTiming.Guarantees": {
-   "digest": "07fca4d59b1b81426d98390284feffb3d68baef8f1a57fb9d2699cf983dfb2f2",
+   "digest": "a89a706e2df5300d82ea416d7b9bf36f06277c98c38d54216fefd3045b0ff159",
    "definitions": {
     "NetTiming.Guarantees.CardCountsEqLe": "76cfdb78cd7740508d7036e568b2d06e1e8477270445c6b7d9d0c5ce450f39db",
     "NetTiming.Guarantees.CardCountsLeLe": "64f0e73869b7ea545e022ccf6c998534d9c135b3dabf813fe92d8224d9b25454",
@@ -361,11 +451,15 @@
     "NetTiming.Guarantees.EncardAccSeqsLeAdvice": "0be07efc80b345c40aa62a5cae26005156fa12b7fa463f7df69bfb51877d8d7c",
     "NetTiming.Guarantees.EncardAccSeqsLeBlocks": "4c923e97bdb4dd6b8f6af42dd1e0b3c934e74a79578564da6a973375beb63539",
     "NetTiming.Guarantees.EncardAccSeqsLeBlocksCounts": "a49f18706c77fac2d8abe977adc27c1002c6101413a43104dcced37c4b02cc4b",
+    "NetTiming.Guarantees.EncardAccSeqsLeConstantRate": "b519169913a7015c8d7e76a91676d4f5c4e31d9008d1b93ccfa1ddc38fc78919",
+    "NetTiming.Guarantees.EncardAccSeqsLeConstantRateFixedClock": "93c31cd95d771eafd5f2ccf4647668f221401ecd830cf894831cbf44df253e69",
+    "NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows": "7c950bc34144cd89f79445a1c6ddd56e4d1ba1adec0fd3786ed7033b03f373a2",
     "NetTiming.Guarantees.EncardAccSeqsLeFixedClock": "8cbd2e1bdb724dec1911df60d98518e3b2de2a3de4be6a360a8e85dd99ac4ceb",
     "NetTiming.Guarantees.EncardAccSeqsLeSync": "1613a2d1d782c1606c0802e412999354e1783d8377ee34a109f97e0d79cca289",
     "NetTiming.Guarantees.EncardAcceptedRunsLe": "f2c59156191ddc165e7868d2628438c46ce65c6a3bcbf596e92988692eaff419",
     "NetTiming.Guarantees.EncardDecodableLe": "32b328d449ed571559325631b99ec9bd7d293d2d4e13d58875335ddbbc595e7a",
     "NetTiming.Guarantees.EncardDecodableLeBlocks": "8b77384cb898fb63d1dcd9faff312818b1f25cdd841bd3841683615c6805eaf9",
+    "NetTiming.Guarantees.EncardDecodableLeConstantRate": "bef0960e29791d57280dcc5caa7f3f253fc3f19cdec2ee4daf6c8bbab078f664",
     "NetTiming.Guarantees.EncardFifoGrids": "86ea321749434f1d29655b5a06b833fc54462d0abf395c9adde5b9ea406d42aa",
     "NetTiming.Guarantees.EncardFifoGridsLeOfAvailable": "628485a6510b139296104a67939d308fcd61b3a51833f59dd11e11fa3d3cf6c6",
     "NetTiming.Guarantees.EncardIngressDecodableLe": "b217f6eb0d314816080e87a816c4ea287e3534d178f563e6d15e298d21eb715e",
@@ -375,6 +469,7 @@
     "NetTiming.Guarantees.EncardLeProdOfBranching": "5203b1a24dcdccc7097737b28c5ffaa6478f40d8cd74cb232d5cd03120ec1440",
     "NetTiming.Guarantees.EncardObsDecodableLe": "9a25f15d497c2d2a9b5377b8d3dca84a12b9eec73af91ac01107b3a162ea5d45",
     "NetTiming.Guarantees.ExistsFillOfLeftPacked": "ff8a4fed42a05220972bff8b93f509fe94bd1826e6c153e494dca3f74f0043c0",
+    "NetTiming.Guarantees.ExpectedRowCausal": "85dd5fa499a040c042f939c9e4fd249e9375914a67193e9ea5cde5b7560689f3",
     "NetTiming.Guarantees.FillInjective": "607cbc5b48d8dd14eec9fcb42f3bfbc78c5fb2e07ef8926ef0f2d2ddb19fba82",
     "NetTiming.Guarantees.NoFaultOfAccepted": "587c42d1ee6c7f70a6c190a8eade67178bf39217c52f547aa0f3849508eb95cd",
     "NetTiming.Guarantees.RecordedRowEqFill": "b09c9fb8781c65a9d6f4168b7a3c2aa9c2fbf04ba17a23402d11b9881fd567a0",
@@ -389,11 +484,15 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeAdvice",
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks",
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
     "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeSync",
     "NetTiming.SecurityProofs.EncardAcceptedRunsLe",
     "NetTiming.SecurityProofs.EncardDecodableLe",
     "NetTiming.SecurityProofs.EncardDecodableLeBlocks",
+    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardFifoGrids",
     "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
@@ -403,6 +502,7 @@
     "NetTiming.SecurityProofs.EncardLeProdOfBranching",
     "NetTiming.SecurityProofs.EncardObsDecodableLe",
     "NetTiming.SecurityProofs.ExistsFillOfLeftPacked",
+    "NetTiming.SecurityProofs.ExpectedRowCausal",
     "NetTiming.SecurityProofs.FillInjective",
     "NetTiming.SecurityProofs.NoFaultOfAccepted",
     "NetTiming.SecurityProofs.RecordedRowEqFill",
@@ -432,11 +532,15 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeAdvice",
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks",
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
     "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeSync",
     "NetTiming.SecurityProofs.EncardAcceptedRunsLe",
     "NetTiming.SecurityProofs.EncardDecodableLe",
     "NetTiming.SecurityProofs.EncardDecodableLeBlocks",
+    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardFifoGrids",
     "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
@@ -445,12 +549,16 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardObsDecodableLe",
     "NetTiming.SecurityProofs.ExistsFillOfLeftPacked",
+    "NetTiming.SecurityProofs.ExpectedRowCausal",
     "NetTiming.SecurityProofs.FillInjective",
     "NetTiming.SecurityProofs.NoFaultOfAccepted",
     "NetTiming.SecurityProofs.RecordedRowEqFill",
     "NetTiming.SecurityProofs.ReleasedSelf",
     "NetTiming.SecurityProofs.SumReleasedLe",
     "NetTiming.allocated_witness",
+    "NetTiming.constantRate_joint_witness",
+    "NetTiming.constantRate_not_framesRead_counts",
+    "NetTiming.constantRate_not_windowBlocks",
     "NetTiming.ingress_witness",
     "NetTiming.joint_witness",
     "NetTiming.toy_leftPacked",
@@ -518,11 +626,15 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeAdvice",
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks",
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
     "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeSync",
     "NetTiming.SecurityProofs.EncardAcceptedRunsLe",
     "NetTiming.SecurityProofs.EncardDecodableLe",
     "NetTiming.SecurityProofs.EncardDecodableLeBlocks",
+    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -531,6 +643,9 @@
     "NetTiming.SecurityProofs.NoFaultOfAccepted",
     "NetTiming.SecurityProofs.RecordedRowEqFill",
     "NetTiming.allocated_witness",
+    "NetTiming.constantRate_joint_witness",
+    "NetTiming.constantRate_not_framesRead_counts",
+    "NetTiming.constantRate_not_windowBlocks",
     "NetTiming.ingress_witness",
     "NetTiming.joint_witness",
     "NetTiming.witnessProgram_conditions",
@@ -539,6 +654,41 @@
     "NetTiming.witnessWarden_jitter_varies",
     "NetTiming.zP_accepts_one",
     "NetTiming.zP_constOp_accepts_one"
+   ]
+  },
+  "NetTiming.Protocol.Schedule": {
+   "digest": "7a2f8e4d2926bb4eda2b5fa8fff327d0feb7c3d96e804634c51e0925afa72fc2",
+   "definitions": {
+    "NetTiming.ClockSync": "c1303c6db001a581bc8b9860dc2702e35895c754014c79665de6aad2a53189de",
+    "NetTiming.ClockSync.delta": "386473e534351b83f1afd51bf5bd78c093664a5bf912974c1003b0b39339c633",
+    "NetTiming.ClockSync.rho": "126c8be1ca479289bf0a52a8403a9b34d9e15a61a52a429d1f681fe4e92f1848",
+    "NetTiming.LogicalFrame": "c9b3db1d0275fb95f1759349420ba3a804d54aa3aad9bbbc6eb2cf54b0280c2e",
+    "NetTiming.LogicalFrame.anchor": "0d5824643aa62c95879f99f4768acc3eeaf58d2c022051a57fbfa921f11bf552",
+    "NetTiming.LogicalFrame.index": "cf836226b36cc8a37ffa53c86b1f6c449c2a9656b276ce921b61767750b52f62",
+    "NetTiming.LogicalFrame.payload": "0dd2fa88cf933d5efcd80d9b76c8b90192c0cb46d7ec222182be100f3fa153e1",
+    "NetTiming.SyncSet": "fb60974bd64e44bc221128ddb6d0576d958a68030e84ce97ce6a31aca781b50b",
+    "NetTiming.SyncSet.Elem": "b2d00ee7d62bfde48d43ebdfa5154ff15f5c24ffd55d935ac8393952c14111cb",
+    "NetTiming.SyncSet.deltas": "dcbbb26e3cb0c7571a5733999f38b9c2e6266acc0acda614d91b905a81e48711",
+    "NetTiming.SyncSet.rhos": "9f8a68565714e6f01b9a98d2b50415c8823b6c079dd53a16c98e9edf9d777414",
+    "NetTiming.SyncSet.size": "47c4c2093304fe315dc0866a8d927d07724c3b162da446641c79a3ca44d64087",
+    "NetTiming.SyncSet.sync": "0c9293bea888935fcc58b9fce5bf093de740da9da33051e8a9c01236a5b4e891",
+    "NetTiming.constantRate": "19ed7628056194464d909d589ba36698f283a4e7eb8e21a263111eb07df59273",
+    "NetTiming.eligible": "67ce9ddb22533ead1670f1b87dc02ef4188f4c6bb874c8e9dc03de125a885856",
+    "NetTiming.enqueued": "a9121ee81e7d32bd20e08fb70c800deedfe3aeeea525e56223263b0dce4ad3ff",
+    "NetTiming.expectedRow": "a8f5b931c613c020cb3dc0409e0d5ea95f450b98faefcf7be8bd3318fe4c04f0",
+    "NetTiming.handingBuckets": "41f46728f0aaee014d5b5ebd8eddf94f517e89933df180c31e5f76d78924efdf",
+    "NetTiming.handingFrom": "607425da711bd04e5a8da14485601f1ddf0bd2afac5ff5428b7b6cfa8119ba5d",
+    "NetTiming.payloads": "629f7e81bf6e3bc9a64a924267226b9298a3069c46e5d2a8101b6bc9e43f1d87"
+   },
+   "pins": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
+    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
+    "NetTiming.SecurityProofs.ExpectedRowCausal",
+    "NetTiming.constantRate_joint_witness",
+    "NetTiming.constantRate_not_framesRead_counts",
+    "NetTiming.constantRate_not_windowBlocks"
    ]
   }
  },

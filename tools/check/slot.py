@@ -129,7 +129,7 @@ def asker(by: str | None = None) -> dict:
 
 def describe(who: dict) -> str:
     parts = [f"run {who['run']}" if who.get("run") else "", f"tree {Path(who['tree']).name}" if who.get("tree") else "",
-             f"by {who['by']}" if who.get("by") else ""]
+             f"by {who['by']}" if who.get("by") else "", f"slot taken {who['took']}" if who.get("took") else ""]
     return ", ".join(p for p in parts if p)
 
 
@@ -144,19 +144,31 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
     """`--status`'s lines; with `before` (a ticket's name), only the waiters that came before it."""
     out = []
     for slot in slots:
-        pid, held = holder(lock_dir / f"check-{slot['name']}.lock", proc), "free"
-        if pid is not None:
-            t = started(pid, proc)
-            try:
-                cmd = (proc / str(pid) / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
-            except OSError:
-                cmd = "(gone)"
-            since = f" since {t:%Y-%m-%dT%H:%MZ} ({(now - t).total_seconds() / 60:.0f} min)" if t else ""
-            who = _read(lock_dir / f"check-{slot['name']}.who")
-            held = f"held by pid {pid}{since}" + (f" ({describe(who)})" if who.get("pid") == pid and describe(who) else "") + f": {cmd[:200]}"
+        held = held_by(lock_dir / f"check-{slot['name']}.lock", lock_dir / f"check-{slot['name']}.who", now, proc)
         why = blocked(slot, now)
         out.append(f"{slot['name']}  cores {slot['cpus']}  {held}" + (f"; blocked: {why}" if why else ""))
-    line = lock_dir / LINE
+    return out + waiters(lock_dir / LINE, now, before)
+
+
+def held_by(lock: Path, who_file: Path, now: datetime, proc: Path = Path("/proc")) -> str:
+    """`free`, or who holds ``lock``: its pid, since when, the run and asker its holder recorded in ``who_file`` (shown only
+    while that pid holds the lock), and its command."""
+    pid = holder(lock, proc)
+    if pid is None:
+        return "free"
+    t = started(pid, proc)
+    try:
+        cmd = (proc / str(pid) / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
+    except OSError:
+        cmd = "(gone)"
+    since = f" since {t:%Y-%m-%dT%H:%MZ} ({(now - t).total_seconds() / 60:.0f} min)" if t else ""
+    who = _read(who_file)
+    return f"held by pid {pid}{since}" + (f" ({describe(who)})" if who.get("pid") == pid and describe(who) else "") + f": {cmd[:200]}"
+
+
+def waiters(line: Path, now: datetime, before: str | None = None) -> list[str]:
+    """One line per live waiter in ``line``, oldest first; with `before` (a ticket's name), only those that came before it."""
+    out = []
     for p in sorted(line.iterdir()) if line.is_dir() else []:
         if before is not None and p.name >= before:
             break
@@ -185,10 +197,10 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
 PRIORITY = "!"
 
 
-def join(lock_dir: Path, priority: bool = False, who: dict | None = None) -> tuple[Path, int]:
+def join(lock_dir: Path, priority: bool = False, who: dict | None = None, line: str = LINE) -> tuple[Path, int]:
     """This waiter's ticket in the line and the descriptor holding its lock; named by arrival (after every priority ticket
     unless it is one), and locked before it is visible."""
-    d = lock_dir / LINE
+    d = lock_dir / line
     d.mkdir(exist_ok=True)
     name = f"{PRIORITY if priority else ''}{time.time_ns():020d}-{os.getpid()}"
     fd = os.open(d / f".{name}", os.O_RDWR | os.O_CREAT, 0o664)
