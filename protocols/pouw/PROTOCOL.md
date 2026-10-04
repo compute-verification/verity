@@ -853,6 +853,35 @@ useful    U/(α_A·α_B), glue
   and one 64 × 1,024 × 64 NVFP4 tile, each with its replayed debit and cap, and A row 0's F1′ inputs (the noise law's
   digest, the modal bytes, p_t) and charge.
 
+### A row's statistics, scales and forming (`pc8`, `pc4`)
+
+A row of `K` words `x_0, …, x_{K−1}` (`pc8`: FP32; `pc4`: BF16, widened by `Bf16ToF32_v1` wherever read) gives its
+scales and codes by the following primitive calls, in this order. Each result is a word of its primitive's return width;
+`|·|` is `F32Fabs_v1`.
+
+1. **Running max.** `s_0 = |x_0|`, and for `t = 1, …, K − 1`, `s_t = SelectI32_v1(I32Le_v1(s_{t−1}, |x_t|), |x_t|, s_{t−1})`.
+   `s = s_{K−1}`.
+2. **Mean square and `ρ`.** With `n = K/8`, partial `i < n` is `a_i = F32Fma_v2(x_{8i}, x_{8i}, c_i)`, where `c_i = +0`
+   for `i < 32` and `c_i = a_{i−32}` otherwise (accumulator `i mod 32`); accumulator `j` is its last partial. The butterfly
+   runs rounds `h = 16, 8, 4, 2, 1`, each mapping the sums `v` to `v'_j = F32Add_v2(v_j, v_{j+h})` for `j < min(h, n)`,
+   with `+0` for `v_{j+h}` when `j + h ≥ n`. `Σ` is the last round's `v'_0`, and
+   `ρ = PouwF32SqrtRn_v1(F32Div_v2(Σ, f32(n)))`.
+3. **`pc8`'s scales and floor.** `α = F32Div_v2(448, F32Fmaxf_v1(F32Add_v2(s, F32Mul_v2(4, ρ)), 2⁻³²))` and
+   `β = F32Mul_v2(F32Mul_v2(ρ, α), 0x3AB504F3)` (`2^(−19/2)`). The floor is `φ = F32Fma_v2(ρ, α, −1)`: the row is above
+   the noise floor where `I32Le_v1(0, φ)`.
+4. **`pc8`'s forming.** Noise code `e_l` (`l < 32`) becomes `ẽ_l = F32ToE4m3Sat_v1(F32Mul_v2(β, E4m3ToF32_v1(e_l)))`.
+   Position `t`'s formed word `D_t` is one E4M3 k32 atom of the device (`BlackwellE4m3QmmaDot32_v1` on sm_120,
+   `HopperE4m3QgmmaDot32_v1` on the H100), with accumulator `F32Mul_v2(α, x_t)`, over the pairs `(ẽ_l, F_{t,l})`, where
+   `F_t` is the form basis' row `t`. The code is `F32ToE4m3Sat_v1(D_t)`.
+5. **`pc4`'s scales.** `δρ = F32Mul_v2(ρ, 1/4)`, then `α = F32Div_v2(2688, F32Fmaxf_v1(F32Add_v2(s, F32Mul_v2(4, δρ)), 2⁻³²))`
+   and `β = F32Mul_v2(F32Mul_v2(δρ, α), 0x3EA920A7)` (`k_β`).
+
+The Lean names are `rowMax`, `rowRho`, `alpha8`, `beta8`, `floor8`, `eTilde8`, `code8W`, `alpha4` and `beta4`
+(`Pouw/Protocol/PearlC/RowSem.lean`, namespace `PearlC.RowCircuit`). Pearl-C's and Pearl-C4's semantics at them are `pc8Sem` and
+`pc4Sem`, on the row's words re-encoded (`f32Word`; `pc4`: `bf16WordOf`). Their `α` and `β` are those words read back as
+values. `pc8Sem`'s floor is `φ`'s value plus 1, so the rule `1 ≤ floor` is `φ ≥ 0`. `pc8Sem`'s forming value is `D_t`'s,
+and its `e4m3` is the code wherever `F32ToE4m3Sat_v1` agrees with `e4m3Word` and `D_t` is not NaN.
+
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
