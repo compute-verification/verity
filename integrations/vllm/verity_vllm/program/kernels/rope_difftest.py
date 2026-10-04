@@ -1,8 +1,8 @@
 """Differential-test adapter (`verity_vllm.properties.admission`) for `RoPE_v1{NHEADS,D}` against vLLM d9105ea80's CUDA
 `_C.rotary_embedding` (NeoX, bf16 query / key / cos-sin cache), one token per case:
 
-    # pod, torch venv:  verity-vllm properties-admission produce --adapter verity_vllm.program.registry.rope_difftest --n 48 --seed 11 --out DIR
-    # verity venv:      verity-vllm properties-admission check   --adapter verity_vllm.program.registry.rope_difftest --dir DIR --out RUN/rope.json
+    # pod, torch venv:  verity-vllm properties-admission produce --adapter verity_vllm.program.kernels.rope_difftest --n 48 --seed 11 --out DIR
+    # verity venv:      verity-vllm properties-admission check   --adapter verity_vllm.program.kernels.rope_difftest --dir DIR --out RUN/rope.json
 
 The cache has one row, `cs = [cos[0:D/2] | sin[0:D/2]]`, at position 0; the kernel rotates the query (NH heads) and the key (KVH heads)
 in place with it, and each is one `RoPE_v1` call on that row.  Head dims 64 / 96 / 128 / 256 and the served models' head counts;
