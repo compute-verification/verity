@@ -8,6 +8,7 @@ uv sync
 uv run python examples/remote.py [f32_add|bf16_gt_strict]
 uv run python examples/onsite.py [f32_add|bf16_gt_strict]
 uv run python examples/integrity.py [f32_add|bf16_gt_strict] [replay|transparent|sp1]
+uv run python examples/datacenter.py [scenario ...]    # a site over a period of epochs, honest and otherwise
 lake build    # the Lean beside the Python
 ~~~
 
@@ -24,10 +25,14 @@ what they see stays their own, and reaches the verifier only as what they send i
 
 Everything over the prover's work reads one stream (`verity.primitives.registration`). First, before any coins, the
 registration: the prover's builder, the program that builds each execution's circuit and partition from a bounded
-bitstring of advice (the runtime choices no one could fix ahead of time: how requests were batched, a preemption, an
-autotune pick), holding the baseline (weights, constants) as every circuit's first inputs. Then per execution its advice
-and a root over the boundary wires of its partition, until the prover closes the stream: one epoch. The verifier
-rebuilds each execution's circuit from its advice. Every statement over the stream names its digest.
+bitstring of advice (the runtime choices no one could fix ahead of time: how requests were batched, which step a
+session continues, a preemption, an autotune pick), holding the baseline (weights, constants) as every circuit's first
+inputs. Then per execution its advice and a root over the boundary wires of its partition's regions, until the prover
+closes the stream: one epoch. A partition has two levels (`verity.primitives.partition`): isolation units, which NCI
+bounds, each split into regions, which proofs sample. An execution may read state an earlier one wrote (as a decode
+step reads its KV cache): that wire is committed once, in the writer's root, so the step that reads it reads what the
+step that wrote it committed. The verifier rebuilds each execution's circuit from its advice (`Stream`). Every
+statement over the stream names its digest.
 
 What the verifier establishes splits in two. **Accounting** says what happened, in three families, each reading the
 ones before it:
@@ -40,7 +45,8 @@ ones before it:
 
 **Compliance** says whether that was allowed: a policy's parameters are its limits, and its statement says whether the
 epoch kept to them. NCI is the first; its limits include how much headroom it tolerates, since whatever ran in the
-headroom went unchecked.
+headroom went unchecked. An epoch's verdict says nothing outside its window, so a period of epochs complies only if
+each does and their windows leave no gap (`nci.period`).
 
 The two products, `remote` and `onsite`, run the same accounting and policies, and differ in who reports each
 reading. Remotely the verifier has nothing at the site: its own clock times the work, and the prover declares its
@@ -50,7 +56,7 @@ links, so it also bounds memory and network, and its inventory is a measurement.
 
 A construction is a frozen dataclass of its parameters, with a method per principal it involves that returns that
 principal's actor (`Replay(k, delta).verifier()`). A trusted principal's method takes its readings
-(`pinger(fleet, work_seconds, space_seconds)`), and an actor that reads one takes the principal it trusts for it
+(`pinger(fleet, work_window, space_seconds)`), and an actor that reads one takes the principal it trusts for it
 (`Work.verifier(clock_from)`). Choosing a construction is choosing a value. A product is a construction whose fields
 are constructions: its methods return the lists of its parts' actors, and its guarantee is proved from theirs. Actors
 have no names and are not wired: anyone can send to anyone, so an actor waits for each kind of event only from the
@@ -71,10 +77,11 @@ verity/accounting          what happened, each family reading the ones below it:
     coverage               the headroom per resource (compute, memory, network), from the inventory and the warden
     utilization            work and space used between a challenge and a clock's reading
     integrity              whether the executions are what their circuits compute (replay, proofs)
-verity/primitives          events, circuits and partitions, commitments, randomness, the registration
+verity/primitives          events, circuits and partitions, commitments, randomness, the registration and its stream
 ~~~
 
-`examples/` sit on top. An integration (vLLM) is a prover.
+`examples/` sit on top: a run of each product, integrity alone, and a datacenter over a period of epochs. An
+integration (vLLM) is a prover.
 
 ## Conventions
 

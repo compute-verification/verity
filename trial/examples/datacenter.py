@@ -6,7 +6,7 @@ The site is a fleet of six H100s and two A100s serving two models behind one sch
 several steps each and carry their state from step to step, as a decode step reads its KV cache (verity's FP32 adder,
 keeping a running sum: `Sessions`); a classifier's requests take one step each (verity's BF16 comparison). The
 builder, declared before the first epoch, routes each step to a model (`Routed`: a route bit, then the model's advice),
-and each session is one isolation unit of the stream however many steps it took. The census's facts per device are
+and a session's later steps read its state where the step that wrote it committed it. The census's facts per device are
 its peak (tries a second) and its memory (bytes), at toy scale. Each epoch is one run: the prover registers, takes the
 salt, streams the epoch's steps and closes the stream, and the verifier's view holds the account and NCI's verdict. A
 period is the epochs back to back, each window opening where the last closed (`nci.period`).

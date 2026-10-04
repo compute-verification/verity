@@ -1,17 +1,17 @@
 """Novel communication intensity: the policy that throttles frontier training and leaves inference alone
-(`Nci.Protocol` in the main repo). Every isolation unit of the stream has at most `gamma` gates and reads at most
-`alpha` bits of novel information per gate. The stream's isolation units are its executions', joined where one reads
-state another wrote (`registration.isolation_units`), so a session is one unit however many steps it took, and state
-it wrote itself is not novel to it. Any other bit is novel unless it is on the baseline, which is on no isolation
-unit's boundary; so the baseline must have been declared up front, before any epoch whose outputs could have shaped
-it, and the registration must name one of the `builders` declared then. Advice is novel too, and reaches a unit
-through the structure the builder gives it rather than through its boundary: the builder reads all of it, so any unit
-of the execution may depend on all of it, and each is charged it beside its boundary. And the rule binds only what is
-in the account: whatever ran in the compute that coverage leaves uncovered went unchecked, so at most `headroom` of
-the capacity may be left.
+(`Nci.Protocol` in the main repo). Every isolation unit of an execution's partition has at most `gamma` gates and
+reads at most `alpha` bits of novel information per gate. A bit is novel unless it is on the baseline, which is on no
+isolation unit's boundary; so the baseline must have been declared up front, before any epoch whose outputs could have
+shaped it, and the registration must name one of the `builders` declared then. State an execution reads from an
+earlier one (its KV cache) is novel to it, like anything another unit computed: no unit spans executions, since one
+joining a session's steps would grow with the session, past any `gamma` small enough to throttle training. Advice is
+novel too, and reaches a unit through the structure the builder gives it rather than through its boundary: the builder
+reads all of it, so any unit of the execution may depend on all of it, and each is charged it beside its boundary. And
+the rule binds only what is in the account: whatever ran in the compute that coverage leaves uncovered went unchecked,
+so at most `headroom` of the capacity may be left.
 
-    verifier    takes the registration, the stream (one epoch) and compute coverage over it; rebuilds each execution's
-                circuit, and records whether the epoch complies
+    verifier    takes the registration, the stream (one epoch) and compute coverage over it; rebuilds each distinct
+                advice's circuit, and records whether the epoch complies
 
 Coverage reads integrity, so the policy reads it through coverage, and holds except with coverage's probability.
 
@@ -29,7 +29,7 @@ from verity.accounting.coverage.compute import ComputeCoverage
 from verity.accounting.utilization.work import Window
 from verity.primitives import partition as P
 from verity.primitives.events import Actor, Send, collect, receive
-from verity.primitives.registration import Closed, Execution, Registration, Stream, isolation_units
+from verity.primitives.registration import Closed, Execution, Registration, Stream, built
 
 
 @dataclass(frozen=True)
@@ -76,32 +76,20 @@ class Nci:
             reasons.append(
                 f"{coverage.headroom / coverage.capacity:.0%} of compute uncovered, over {self.headroom:.0%}"
             )
-        try:
-            units = isolation_units(stream)
-        except ValueError as error:
-            units = []
-            reasons.append(str(error))
-        for parts in units:
-            gates, novel = _reads(stream, parts)
-            if gates > self.gamma or novel > self.alpha * gates:
-                (i, u), steps = parts[0], len({i for i, _ in parts})
-                reasons.append(
-                    f"isolation unit {u} of execution {i}, over {steps} executions: {gates} gates reading {novel} novel"
-                    " bits"
-                )
+        for advice in dict.fromkeys(e.advice for e in stream.executions):
+            try:
+                circuit, partition = built(registration.builder, advice)
+            except ValueError as error:
+                reasons.append(str(error))
+                continue
+            for u, unit in enumerate(partition):
+                gates = P.gates(unit)
+                novel = len(P.boundary(circuit, gates)[0]) + len(advice)
+                if len(gates) > self.gamma or novel > self.alpha * len(gates):
+                    reasons.append(
+                        f"advice {advice!r} isolation unit {u}: {len(gates)} gates reading {novel} novel bits"
+                    )
         return (Send(Complies(stream.digest(), coverage.window, not reasons, coverage.delta, tuple(reasons))),)
-
-
-def _reads(stream: Stream, parts: Sequence[tuple[int, int]]) -> tuple[int, int]:
-    """An isolation unit of the stream's gates, and the novel bits it reads: each part's boundary but the state the
-    unit wrote itself, and the advice of each execution it is part of."""
-    gates = novel = 0
-    for i, u in parts:
-        circuit, partition = stream.built(i)
-        unit = P.gates(partition[u])
-        gates += len(unit)
-        novel += sum(circuit.carried(w) is None for w in P.boundary(circuit, unit)[0])
-    return gates, novel + sum(len(stream.executions[i].advice) for i in {i for i, _ in parts})
 
 
 def period(epochs: Sequence[Complies]) -> Period:
