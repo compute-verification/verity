@@ -80,4 +80,24 @@ def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables
         else if scopeOk c then .ok ()
         else .error (refusal (scopeWhy c))
 
+/-- What a draw's law is, when no soundness claim draws by it: the claims draw by the stratified law (with or without
+`--zk`) and, under `--zk`, by the subset law, so a bernoulli draw, a work draw (with or without a closure) and a subset
+draw without `--zk` are outside them. -/
+def lawWhy (zk : Bool) (d : Draw.UnitDraw) : Option String :=
+  match d.law with
+  | .stratified .. => none
+  | .subset _ => if zk then none else some "a subset draw without --zk"
+  | .bernoulli .. => some "a bernoulli draw"
+  | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
+
+/-- **The session's draw is by a law a soundness claim draws by** (PROTOCOL.md §16.15): `draw` is the record's
+(`recordDraw`), none for a session without one. A draw that does not parse is refused too. -/
+def drawLaw (zk : Bool) : Option Lean.Json → Except String Unit
+  | none => .ok ()
+  | some j => match Draw.UnitDraw.ofJson j with
+    | .error e => .error s!"refused: a draw that does not parse ({e})"
+    | .ok d => match lawWhy zk d with
+      | some why => .error s!"refused: {why}: no soundness claim draws by this law"
+      | none => .ok ()
+
 end Flock.ProvedScope

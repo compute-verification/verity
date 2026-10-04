@@ -2,7 +2,7 @@
 
     python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] [--partition F] [--program F] \
         --public F [--registered F] [--tables DIR] [--zk] [--session-tables J] [--expect FILE]... [--lean-refuses WHY] \
-        [--jobs J] --out DIR --sessions DIR...
+        [--lean-refuses-drawn WHY] [--jobs J] --out DIR --sessions DIR...
 
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
@@ -12,10 +12,11 @@ is its directory's basename, and `why` is a prefix of the Lean verifier's reason
 of the Lean verifier's. `--lean-refuses WHY` is D12, a statement whose form the soundness proof does not cover: the Lean
 verifier must reject every session, a session expected accepted with a reason starting `WHY` and one expected rejected with
 `WHY` or its expected reason (a statement that does not set up is refused for that first), and upstream must return each
-session's expected verdict; a session with none (a fuzz case) only needs the refusal. A session directory may carry its own
-public file (`pub.bin`, a forgery's false statement), the verifier's own registered reads (`registered.json`, in place of
-`--registered`; null for none; upstream reads none) and its expected verdict (`case.json`, from the vectors patch's
-`forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
+session's expected verdict; a session with none (a fuzz case) only needs the refusal. `--lean-refuses-drawn WHY` is D12 at a
+draw law no soundness claim draws by: the same, for every session whose record carries a unit draw, which may meet either
+refusal when a set has both. A session directory may carry its own public file (`pub.bin`, a forgery's false
+statement), the verifier's own registered reads (`registered.json`, in place of `--registered`; null for none; upstream
+reads none) and its expected verdict (`case.json`, from the vectors patch's `forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
 their digests (PROTOCOL.md §16.8); upstream reads the paths. Writes DIR/agreement.tsv, the two
 verdict logs and DIR/result.json; exits 1 if the verifiers disagree on any session or either misses an expectation.
 """
@@ -192,6 +193,8 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--expect", action="append", default=[])
     ap.add_argument("--lean-refuses", default=None, metavar="WHY",
                     help="D12: the Lean verifier refuses every session with this reason; upstream gives each its expected verdict")
+    ap.add_argument("--lean-refuses-drawn", default=None, metavar="WHY",
+                    help="D12 at a draw law: the same, for every session whose record carries a unit draw")
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--sessions", nargs="+", required=True)
     ap.add_argument("--jobs", type=int, default=1, help="verifier processes at once (each builds its own statement)")
@@ -204,20 +207,21 @@ def main(argv=None, slots=None, quiet=False):
         case = Path(s) / "case.json"
         if case.exists():
             expect.setdefault(Path(s).name, {"accepted": json.loads(case.read_text())["expect"] == "accept", "why": ""})
-    if a.lean_refuses is not None:
-        # the refusal replaces every verdict of a statement that sets up; one that doesn't keeps its setup's reason
-        expect = {k: {"accepted": False, "whys": [a.lean_refuses] + ([] if e["accepted"] else [e["why"]]),
-                      "upstream_accepted": e.get("upstream_accepted", e["accepted"])} for k, e in expect.items()}
     lean, up = verdicts(a, slots)
     rows, bad = ["session\texpect\tlean\tupstream\tok\tlean_why\tupstream_why"], []
     for s in a.sessions:
         name = Path(s).name
         L, U, e = lean.get(s), up.get(s), expect.get(name)
+        refuses = [w for w, on in ((a.lean_refuses, True), (a.lean_refuses_drawn, drawn(s))) if w is not None and on]
+        if refuses and e is not None:
+            # a refusal replaces every verdict of a statement that sets up; one that doesn't keeps its setup's reason
+            e = {"accepted": False, "whys": refuses + ([] if e["accepted"] else [e["why"]]),
+                 "upstream_accepted": e.get("upstream_accepted", e["accepted"])}
         up_want = e.get("upstream_accepted", L["accepted"] if L else None) if e else (L["accepted"] if L else None)
         ok = L is not None and U is not None and U["accepted"] == up_want
-        if e is None and a.lean_refuses is not None:
+        if e is None and refuses:
             # no expected verdict (a fuzz case that may not change it): the Lean verifier verifies nothing to compare
-            ok = L is not None and U is not None and not L["accepted"] and L["why"].startswith(a.lean_refuses)
+            ok = L is not None and U is not None and not L["accepted"] and L["why"].startswith(tuple(refuses))
         if e is not None:
             ok = ok and L["accepted"] == e["accepted"] and any(L["why"].startswith(w) for w in e.get("whys") or [e["why"]])
         if not ok:

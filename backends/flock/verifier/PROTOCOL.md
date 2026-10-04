@@ -1502,6 +1502,13 @@ first rule it fails:
    read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
    `sha512/row/v1` row of `16 · words` bits in at least one chunk.
 
+Before those rules, a session whose statement sets up is refused when no soundness claim draws by its draw's law
+(`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified law, with or without
+`--zk`, and under `--zk` by the subset law (`FailClosed.SoundZJ`, `SoundZHJ`). The verdict is `refused: <why>: no
+soundness claim draws by this law`, `<why>` one of `a bernoulli draw`, `a work draw`, `a work draw with a closure` and
+`a subset draw without --zk`. A session without a draw is verified against the population's statement and meets
+neither refusal; no claim covers it yet (each claim's record hypothesis reads the record's draw).
+
 The soundness package proves `scopeOk` the computable check (`FailClosed.scopeOk_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
 the one theorem: at every statement, with or without `--zk`, it states the headline of the statement's case (public or
@@ -1517,7 +1524,8 @@ Upstream's Rust verifier (below, with `backends/flock/live`'s `ReplayChallenger`
 run in CI on every change to the Lean verifier, the statements or the pinned files:
 
 1. **Agreement on the corpus.** For every entry of `vectors.json` (§18), both verifiers produce the same verdict:
-   - every honest session: both accept, except a set marked `lean_refuses` (D12 below);
+   - every honest session: both accept, except a set marked `lean_refuses` and a drawn session of one marked
+     `lean_refuses_drawn` (D12 below);
    - every record-level negative: both reject, except the recipes marked `accept` (both accept), `info` (both return
      the same verdict) and the divergence recipes D1, D2 below (the Lean verifier rejects, upstream accepts);
    - every red-team forgery, materialised as a record and proofs: both reject.
@@ -1556,7 +1564,11 @@ expectation):
   it on the Lean verifier.
 - **D12:** a statement form the soundness proof does not cover (§16.15). The pinned upstream builds verify it; the spec
   refuses every session, as `backends/flock/live`'s now does. A set marked `lean_refuses` in `vectors.json` expects that
-  refusal of the Lean verifier and each session's own verdict of upstream (`agree.py --lean-refuses`).
+  refusal of the Lean verifier and each session's own verdict of upstream (`agree.py --lean-refuses`). So, too, a draw
+  by a law no soundness claim draws by (§16.15: a bernoulli draw, a work draw with or without a closure, and a subset
+  draw without `--zk`), which the Lean verifier alone refuses (the live server and upstream verify it): a set marked
+  `lean_refuses_drawn` expects that refusal of every drawn session (`agree.py --lean-refuses-drawn`).
+  `backends/flock/tests/test_lean_draw_laws.py` runs each law on the Lean verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

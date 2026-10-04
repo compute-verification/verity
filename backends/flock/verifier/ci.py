@@ -11,7 +11,8 @@ For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an up
   (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;
 - runs `agree.py` on all of them, with `--lean-refuses` for a set marked `lean_refuses` (D12: a statement form the soundness
-  proof does not cover, which the Lean verifier refuses whatever the session).
+  proof does not cover, which the Lean verifier refuses whatever the session), and `--lean-refuses-drawn` for one marked
+  `lean_refuses_drawn` (D12 at its drawn sessions' law, which no soundness claim draws by).
 
 `--live` runs `live.sets` instead: sets with no upstream binary, whose upstream verdicts are the live server's in each
 case's `case.json` (`agree.py --upstream live`).
@@ -116,6 +117,8 @@ def run_set(i, s, a, ups, store):
         cmd += ["--tables", tables]
     if "lean_refuses" in s:
         cmd += ["--lean-refuses", s["lean_refuses"]]
+    if "lean_refuses_drawn" in s:
+        cmd += ["--lean-refuses-drawn", s["lean_refuses_drawn"]]
     # in-process: every set's verifier processes draw on one budget (SLOTS), so a long set takes the slots short ones free
     rc = agree.main([str(x) for x in cmd[2:]], slots=SLOTS, quiet=True)
     r = json.loads((w / "agree" / "result.json").read_text())

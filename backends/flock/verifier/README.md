@@ -21,7 +21,10 @@ every session with `refused: <why>: a statement form the soundness proof does no
 That refuses every version before `hm96-sha512` rows, the typed statements, public input ports, several tables without
 `--zk`, shared-row public files, and circuits outside `Layout.scopeOk` (a unit reading more than one input group, a tail
 that computes the outputs, among others). Those statements still parse and set up (`statement` prints their digest and
-Σ), and the agreement check expects the refusal of them (D12, `vectors.json`'s `lean_refuses`).
+Σ), and the agreement check expects the refusal of them (D12, `vectors.json`'s `lean_refuses`). A session drawn by a law
+no soundness claim draws by is refused too, with `refused: <why>: no soundness claim draws by this law`
+(`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with or without a closure, and a subset draw without `--zk`
+(`lean_refuses_drawn`).
 
 ## Build and run
 
