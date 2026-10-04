@@ -109,7 +109,45 @@ theorem keyProgHW_copies : (keyReadersHW hparse outs popOf).Copies (keyPlaceH hp
 theorem keyProgHW_bcPinned
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteH (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
-    (keyReadersHW hparse outs popOf).BcPinned (P := (keyProg c hU n).partition outs) := sorry
+    (keyReadersHW hparse outs popOf).BcPinned (P := (keyProg c hU n).partition outs) := by
+  have hunit : ∀ {u u' : Fin n} (x : Fin ((keyProg c hU n).rows u).w) {q : Fin c.ports.size}
+      {k : Fin (portRowW c q)},
+      rowOfHW c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some (u', ⟨q, k⟩) → u' = u := by
+    intro u u' x q k hr
+    unfold rowOfHW at hr
+    rcases hk : keyRowOf c hU n (portRowW c) ((Const.Prog.instC (keyProg c hU n) outs u).wire x) with _ | r
+    · rw [hk] at hr
+      dsimp only at hr
+      unfold outRowOfW at hr
+      rcases hgu : (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) with _ | u''
+      · rw [hgu] at hr
+        exact absurd hr (by simp)
+      · rw [hgu] at hr
+        dsimp only at hr
+        rw [← (unit_wire outs x hgu).1]
+        split at hr
+        · unfold outBitRowW at hr
+          split at hr
+          · split at hr
+            · simp only [Option.some.injEq, Prod.mk.injEq] at hr
+              exact hr.1.symm
+            · exact absurd hr (by simp)
+          · exact absurd hr (by simp)
+        · exact absurd hr (by simp)
+    · rw [hk] at hr
+      dsimp only at hr
+      rw [hr] at hk
+      exact (Layout.keyRowOf_wire outs x hk).1
+  refine Layout.ofRows_bcPinned _ fun S R u hu M hM g hg u' q k hr => ?_
+  obtain ⟨x, rfl⟩ := Layout.exists_col_of_io ((keyPlaceH hparse outs) S R u hu).inst hg
+  rw [hunit x hr]
+  have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
+  have hnp : (si.acc S R u hu).st.c.ports.size = c.ports.size := by rw [hc]
+  have := bc_site_ofH (hsite S R u hu M hM) hM (si.hvu S R u hu) (p := q.val) (by rw [hnp]; exact q.isLt)
+  rw [hnp] at this
+  unfold keyBcAddrH
+  simp only [hu, ↓reduceDIte]
+  exact this
 
 include ho hW houts in
 /-- **The single gates at `keyProg`'s sites are the constant and the zero**, as `keyProgH_valPinned`: a computed

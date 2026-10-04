@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.HiddenExec.Sites
+import FlockSoundness.Discharge.ScopeW.OutPairs
 import FlockSoundness.Discharge.ScopeW.Scope
 
 /-!
@@ -26,7 +27,8 @@ four shapes: `HiddenExec.unitRowsFlat` with `outPairs_ne_unit` at bit rows and s
 theorem unitRowsFlatW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
-    (hW : ∀ p ∈ st.c.ports.toList, rowShapeW p = true) : UnitRowsFlat st := sorry
+    (hW : ∀ p ∈ st.c.ports.toList, rowShapeW p = true) : UnitRowsFlat st :=
+  unitRowsFlat_any ht h
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ}
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
