@@ -170,6 +170,33 @@ def test_put_fetch_roundtrip_file_and_tree(store, tmp_path, capsys):
         store.fetch(nop)
 
 
+def test_a_tree_another_fetch_landed_first_is_completed_never_replaced(store, tmp_path, monkeypatch):
+    """Two processes fetching one tree into trees/ at once: the one whose rename loses must leave the winner's tree in place,
+    since the winner has returned it and is reading it (16 xdist workers resolving one regression row's records did)."""
+    tart = store.put_artifact("run-files/v1", {"run": "x"}, tree=_tree(tmp_path / "tree"))
+    final = store.root / "trees" / ids.hex_of(tart)
+    real = LocalStore._materialise
+    held: dict[str, int] = {}
+
+    def racing(srcs, dst):
+        if dst.name.startswith(".tmp-") and not final.exists():   # the other process lands the whole tree meanwhile ...
+            real(srcs, final)
+            held["top.json"] = (final / "top.json").stat().st_ino   # ... and holds one of its files
+        real(srcs, dst)
+    monkeypatch.setattr(LocalStore, "_materialise", staticmethod(racing))
+    assert store.fetch(tart) == final
+    assert held and (final / "top.json").stat().st_ino == held["top.json"], "the winner's file was replaced under it"
+    assert (final / "a/b/deep.bin").read_bytes() == bytes(range(256))
+    assert not [p for p in final.parent.iterdir() if p.name.startswith(".tmp-")], "the loser's work dir is left behind"
+
+    monkeypatch.setattr(LocalStore, "_materialise", staticmethod(real))
+    part = store.put_artifact("run-files/v1", {"run": "y"}, tree=_tree(tmp_path / "tree2"))
+    cached = store.fetch(part, paths=["top.json"])
+    ino = (cached / "top.json").stat().st_ino
+    assert store.fetch(part) == cached and (cached / "a/x.txt").read_text() == "x"
+    assert (cached / "top.json").stat().st_ino == ino, "a full fetch over a partial one replaced a file a reader may hold"
+
+
 def test_snapshot_identity_is_content(store):
     a, b = "art:" + "1" * 64, "art:" + "2" * 64
     s1 = store.snapshot("nightly", [a, b], note="first freeze")

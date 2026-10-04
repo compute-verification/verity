@@ -46,6 +46,9 @@ KINDS: dict[str, str] = {
                         "meta {targets, files, taken_utc, host}",
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
     "check/v1": "a repository check run's result.json (each step's status and seconds); what `research merge` reads is its attempt",
+    "lean-fast/v1": "a Lean fast-path run's result.json (tools/check/lean_changed.py --records): one package's records audited without "
+                    "the kernel replay or the tests; meta {validation, workload_fingerprint {package, update}}; `research merge` refuses "
+                    "an attempt with this result whatever its tool (research.merge.REFUSED_KINDS)",
     "lean-review/v1": "an `audit.py --update` run's audit.json (tools/lean): per package its review, statement_changes, and the pins and "
                       "reads it compared with (before) beside those it wrote; a `lean_review` label on pr:<n>@<head> names it "
                       "(research.queue.reviewed)",
