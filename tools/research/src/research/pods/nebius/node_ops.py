@@ -71,6 +71,18 @@ def in_verity_scope(pid: int) -> bool:
         return False
 
 
+TIMING_SLICE = os.environ.get("FILL_TIMING_SLICE", "vy-timing.slice")
+
+
+def in_timing_slice(pid: int) -> bool:
+    """Fill's timing jobs run in scopes of the top-level FILL_TIMING_SLICE (fill_runner.py, through root's systemd-run), on cores
+    of their own.  A slice of that name under a user's manager (`systemd-run --user --slice=...`) is anyone's to make."""
+    try:
+        return any(l.startswith(f"0::/{TIMING_SLICE}/") for l in Path(f"/proc/{pid}/cgroup").read_text().splitlines())
+    except OSError:
+        return False
+
+
 def oom_kills() -> int:
     for line in Path("/proc/vmstat").read_text().splitlines():
         if line.startswith("oom_kill "):
@@ -159,7 +171,8 @@ class Quiet:
     """While a timed window holds GPUs (a lease tagged timed=1, or every GPU held by one holder), stop this user's CPU-heavy
     process groups other than the window's own, and continue them once it ends.  CPU-heavy: at least one core busy over the last
     tick, or a build, Lean or cargo process in the group.  Left running: the window's process tree, research runners, fill jobs
-    (their runner pauses them), anything under GNU `timeout` (it would lose the paused time), and PROTECT's daemons.  Measured
+    (their runner pauses them), fill's timing jobs (a pause voids their chunk, and nothing stops them before their max_min),
+    anything under GNU `timeout` (it would lose the paused time), and PROTECT's daemons.  Measured
     reason: CPU load on the other NUMA node slows decode-shape GEMM timing by 0.3-1.4% (run r20260930-075259-37cc)."""
 
     STATE = OUT / "logs" / "quiet-paused.json"
@@ -266,7 +279,7 @@ class Quiet:
             text = " | ".join(g["cmds"])
             if PROTECT.search(text) or QUIET_EXEMPT.search(text) or (QUIET_MATCH and not QUIET_MATCH.search(text)):
                 continue
-            if g["rate"] >= 1.0 or g["comms"] & BUILD or SAMPLER.search(text):
+            if (g["rate"] >= 1.0 or g["comms"] & BUILD or SAMPLER.search(text)) and not any(map(in_timing_slice, g["pids"])):
                 try:
                     os.killpg(pgid, signal.SIGSTOP)
                 except (ProcessLookupError, PermissionError):
@@ -375,6 +388,18 @@ def stop_at() -> datetime | None:
     return datetime.fromtimestamp(min(ends), timezone.utc) if ends else None
 
 
+def fill_alerts() -> None:
+    """The fill runner's last 50 events that need a person: a failed job, and a timing job's scope that root's systemctl couldn't
+    kill (its processes keep the GPU's lease until someone does)."""
+    for line in (FILL / "events.jsonl").read_text().splitlines()[-50:] if (FILL / "events.jsonl").exists() else []:
+        e = json.loads(line)
+        if e.get("event") == "failed":
+            alert("fill-failed", e["job"], f"fill job {e['job']} (owner {e.get('owner')}) failed rc={e.get('rc')}")
+        elif e.get("event") == "scope-kill-failed":
+            alert("fill-scope-kill-failed", e["job"], f"fill couldn't {e.get('signal')} {e.get('unit')}.scope (job {e['job']}): "
+                  f"what is left in it holds its GPU's lease; `sudo systemctl kill --signal=SIGKILL {e.get('unit')}.scope`")
+
+
 def page() -> str:
     t = now()
     stop = stop_at()
@@ -387,10 +412,7 @@ def page() -> str:
     fill = (FILL / "status.txt").read_text().strip().splitlines() if (FILL / "status.txt").exists() else ["(no fill runner)"]
     if (FILL / "status.txt").exists() and time.time() - (FILL / "status.txt").stat().st_mtime > 180:
         alert("stale", "fill", "the fill runner's status is over 3 min old")
-    for line in (FILL / "events.jsonl").read_text().splitlines()[-50:] if (FILL / "events.jsonl").exists() else []:
-        e = json.loads(line)
-        if e.get("event") == "failed":
-            alert("fill-failed", e["job"], f"fill job {e['job']} (owner {e.get('owner')}) failed rc={e.get('rc')}")
+    fill_alerts()
     live, failed = runs()
     m = meminfo()
     L = [f"# vy-nebius-2 at {iso(t)}", "",

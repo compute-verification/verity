@@ -66,7 +66,7 @@ def repo_modules_loaded() -> dict[str, Any]:
     jit = []
     if nc is not None and getattr(nc, "_EXT", None) is not None:
         here = Path(getattr(nc, "HERE", str(root / "verity_vllm" / "commit" / "committer")))
-        jit = [str(Path(here, n).resolve().relative_to(root)) for n in ("native_collect.cpp", "native_gather.cu", "native_tree.cu") if Path(here, n).exists()]
+        jit = [str(Path(here, n).resolve().relative_to(root)) for n in ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_plans.h") if Path(here, n).exists()]
         files.update(jit)
     return {"method": "runtime: sys.modules of this process filtered to the repo root + vllm-poc, plus native_collect's cpp_extension sources when loaded (TP-11)",
             "pid": os.getpid(), "n": len(files), "files": sorted(files), "native_collect_jit_sources": jit}
@@ -537,12 +537,12 @@ class TP2CaptureWorkerExtension:
         sites += [(mod, "tensor_model_parallel_all_reduce", "all_reduce") for mod in st["moe_sites"]]
         # [R19 moe F-r19-moe-1, row #70] MID-module sites: a model class that imports a collective name into ITS OWN module and calls it
         # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
-        # above -- R17 row #70 recorded 34 collectives per step against the Build's 66 links (structure FAIL).  The one finder shared
-        # with the committer's TPPartialSource names the modules (hooked below for attribution) and the python modules to patch.
-        from verity_vllm.collectives.collective_sites import mid_module_sites, patch_targets
-        mid = mid_module_sites(model, world)
-        st["mid_sites"] = {s["name"]: s for s in mid}
-        sites += patch_targets(mid)
+        # above -- R17 row #70 recorded 34 collectives per step against the Build's 66 links (structure FAIL).  The one census shared
+        # with the committer's TPPartialSource names the modules (hooked below) and the python modules to patch, a ruled-out call's too.
+        from verity_vllm.collectives.collective_sites import mid_module_site_census, patch_targets
+        census = mid_module_site_census(model, world)
+        st["mid_sites"] = {s["name"]: s for s in census["sites"]}
+        sites += patch_targets(census["sites"] + census["ruled_out"])
         wrapped: set[tuple[str, str]] = set()
         for mod, attr, kind in sites:
             if hasattr(mod, attr) and (mod.__name__, attr) not in wrapped:
@@ -580,10 +580,10 @@ class TP2CaptureWorkerExtension:
             hooked.append(n)
         st["handles"].append(model.register_forward_pre_hook(model_pre, with_kwargs=True))
         meta = {"rank": rank, "world_size": world, "facts": facts, "hooked": hooked, "nested_moe_sites_dropped": nested_moe, "store_steps": int(store_steps),
-                "mid_module_sites": {n: {"cls": s["cls"], "py_module": s["py_module"], "calls": s["calls"]} for n, s in st["mid_sites"].items()},
+                "mid_module_sites": {n: {"cls": s["cls"], "py_module": s["py_module"], "calls": s["calls"]} for n, s in st["mid_sites"].items()}, "mid_module_sites_ruled_out": census["ruled_out"],
                 "attribution_rule": "outermost hooked module (cur is a stack; a fused-MoE runner nested under a hooked fused-MoE wrapper is not hooked)"}
         (out / f"coll_meta.rank{rank}.json").write_text(json.dumps(meta, indent=1, default=str) + "\n")
-        return _jsonable({"rank": rank, "world_size": world, "n_hooked": len(hooked)})
+        return _jsonable({"rank": rank, "world_size": world, "n_hooked": len(hooked), "mid_module_sites_ruled_out": len(census["ruled_out"])})
 
     def tp2_coll_close(self) -> dict[str, Any]:
         import torch
