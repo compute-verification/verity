@@ -151,7 +151,8 @@ variable {mPts n : ℕ} {Reg : Type}
 /-- **No drawn unit of a `--zk --registered` session is wrong, except with probability `ε_ks + δ_link`**: in
 `flock-verify verify --zk --registered F` sessions, `own` F's ports, at the committed values `zk_session_soundR` reads
 (`XplurZC` at `simZ … τ`), `Pr[accept ∧ some drawn unit is wrong] ≤ ε_ks + δ_link`, on `zk_session_soundR`'s
-assumptions without A3 (the law's count curve is not read). This is the `hwrong` a registered-reads core theorem takes. -/
+assumptions without A3 (the law's count curve is not read). It is the `hwrong` of the bridge's
+`FlockBridge.Registered.registered_core` (`bridge/FlockBridge/Registered.lean`), with its `Off` false. -/
 theorem zk_session_drawnR
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
