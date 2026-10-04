@@ -239,7 +239,11 @@ outputs the honest prefix on the dummy witness, within `2·|LeafPos|·2^-193` (`
 every coin vector and T1 on every pre-final leaf). At an outer coin `1` the prover doesn't refuse (`inv 0 = 0` in the
 residual round) the view is not simulated, and the theorem charges those coins' probability, at most `(m − 13)·2^-128`
 per rep (`uncovered_le`), to its bound: `2·|LeafPos|·2^-193 + 2·(m − 13)·2^-128`, both ways. So that mass is no longer
-outside the statement.
+outside the statement. That charge is for uniform coins only, so both statements are honest-verifier zero knowledge. A
+malicious verifier can choose an outer coin `1` (the coin tree commits verifier-chosen values, and `refused_coins` doesn't
+refuse it), and there the honest pads miss the inner constraint by a witness-dependent amount (`ZK/Table.lean`), so the view
+leaks. Zero knowledge against a malicious verifier needs the prover to refuse an outer coin `1` too, so that `Admits`
+excludes it and `Covered` is `Admits`.
 - A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
 - A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
 - `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding
