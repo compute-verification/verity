@@ -5,7 +5,8 @@
 # (and, under --zk, a re-registration), the acyclicity table, and the circuit's C-Flock rows tiled COPIES times. Each
 # measurement is its own process; JSON lines in out/zk-<form>.jsonl, the load before each in out/load.txt.
 # Form `cmp`: the sampled circuit built twice, without and with each block's CMP_D-bit read comparator (READ_D), their gate
-# tables alternated GATE_REPS times per mode, then the per-unit acyclicity table of the comparator build.
+# tables alternated GATE_REPS times per mode, then the per-unit acyclicity table of the comparator build at each block of
+# ACYC_UNIT_KLOGS="16".
 # Run from the verity tree (research run --cwd source --declared-output 'out/*'); builds and circuits under W, outside the run.
 # env: THREADS=32 RUNS=2 FORMS="full sampled" BASE_KLOG=23 FILL=0.9 UNITS=8 UNIT_LOG=22 COPIES="8 16 32" MODES="m0 zk"
 #      STEPS="gate sigma acyc base" (full and sampled) ACYC_FULL=1 (the full form's acyclicity table as one table, at each
