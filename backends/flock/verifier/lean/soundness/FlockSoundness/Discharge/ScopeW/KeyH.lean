@@ -47,7 +47,12 @@ def outRunOf (o : ℕ) : ℕ := Nat.findGreatest (fun j => (HmOut.outGroup c j).
 variable (c) in
 /-- **An output row's bit, at runs**: copy `d.1`'s output `d.2.1`, bit `d.2.2`, of unit `u` is bit
 `16 (o - at) + d.2.2` of `u`'s output row `nIn + j`, where the copy's output word `o` is in output row `j`'s run
-(`outRunOf`), which starts at output word `at`; none past the row. -/
+(`outRunOf`), which starts at output word `at`; none past the row.
+
+The width check is not what keeps `o` in its run: the runs are contiguous (`outGroup_start_succ`), so an output word
+of the circuit is in `outRunOf`'s run (`outRunOf_spec`), and an output row is at least as wide as its run
+(`outRowW_words`: exactly its run's words, or a lone port's padded to whole blocks), so the check passes there
+(`outBitRowW_ne_none`). -/
 def outBitRowW (u : Fin n) (d : ℕ × ℕ × ℕ) : Option (Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) :=
   if hq : HmOut.nIn c + outRunOf c (outWordOf c d) < c.ports.size then
     if hk : 16 * (outWordOf c d - (HmOut.outGroup c (outRunOf c (outWordOf c d))).2.2.1) + d.2.2 <
@@ -55,6 +60,142 @@ def outBitRowW (u : Fin n) (d : ℕ × ℕ × ℕ) : Option (Fin n × (q : Fin c
       some (u, ⟨⟨_, hq⟩, ⟨_, hk⟩⟩)
     else none
   else none
+
+variable (c) in
+/-- Output row `j + 1`'s run starts at the output port after output row `j`'s run. -/
+theorem outGroup_first_succ {j : ℕ} (hj : j < c.outRowPorts.size) :
+    (HmOut.outGroup c (j + 1)).1 = (HmOut.outGroup c j).1 + (HmOut.outGroup c j).2.1 := by
+  have hl : j < c.outRowPorts.toList.length := by simpa using hj
+  simp only [HmOut.outGroup, ← Array.foldl_toList, Array.toList_extract, List.extract_eq_take_drop, List.drop_zero,
+    Nat.sub_zero, List.take_add_one, List.getElem?_eq_getElem hl, Option.toList_some, List.foldl_append,
+    List.foldl_cons, List.foldl_nil, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj, Option.getD_some,
+    Array.getElem_toList]
+
+variable (c) in
+/-- **The runs are contiguous**: output row `j + 1`'s run starts at the output word where output row `j`'s ends. -/
+theorem outGroup_start_succ {j : ℕ} (hj : j < c.outRowPorts.size) :
+    (HmOut.outGroup c (j + 1)).2.2.1 = (HmOut.outGroup c j).2.2.1 + (HmOut.outGroup c j).2.2.2 := by
+  have hf := outGroup_first_succ c hj
+  simp only [HmOut.outGroup] at hf ⊢
+  rw [hf]
+  simp only [← Array.foldl_toList, Array.toList_extract, List.extract_eq_take_drop, List.drop_zero, Nat.sub_zero,
+    Nat.add_sub_cancel_left, Hidden.foldl_snd_eq, List.take_add, List.map_append, List.sum_append]
+  omega
+
+variable (c) in
+/-- **The runs' starts increase with `j`.** -/
+theorem outGroup_start_mono {j j' : ℕ} (h : j ≤ j') (hj' : j' ≤ c.outRowPorts.size) :
+    (HmOut.outGroup c j).2.2.1 ≤ (HmOut.outGroup c j').2.2.1 := by
+  obtain ⟨d, rfl⟩ := Nat.exists_eq_add_of_le h
+  clear h
+  induction d with
+  | zero => exact le_rfl
+  | succ d ih =>
+    rw [← Nat.add_assoc, outGroup_start_succ c (j := j + d) (by omega)]
+    exact (ih (by omega)).trans (Nat.le_add_right _ _)
+
+variable (c) in
+/-- **The runs end at the last output word** when they cover the output ports (`Hidden.parse_rowPorts`). -/
+theorem outGroup_start_size (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size) :
+    (HmOut.outGroup c c.outRowPorts.size).2.2.1 = c.outWords := by
+  have e1 : (HmOut.outGroup c c.outRowPorts.size).1 = c.outPorts.size := by
+    rw [← hsum]
+    simp only [HmOut.outGroup, ← Array.foldl_toList, Array.toList_extract, List.extract_eq_take_drop, List.drop_zero,
+      Nat.sub_zero]
+    rw [List.take_of_length_le (by simp)]
+  simp only [HmOut.outGroup] at e1 ⊢
+  rw [e1]
+  simp only [Circuit.outWords, ← Array.foldl_toList, Array.toList_extract, List.extract_eq_take_drop, List.drop_zero,
+    Nat.sub_zero]
+  rw [List.take_of_length_le (by simp)]
+
+variable (c) in
+/-- **Output word `o` is in output row `outRunOf c o`'s run**, for an output word of the circuit (`o < outWords`) when
+the runs cover the output ports (`Hidden.parse_rowPorts`): at or past the run's first word, before its end. -/
+theorem outRunOf_spec (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size) {o : ℕ} (ho : o < c.outWords) :
+    outRunOf c o < c.outRowPorts.size ∧ (HmOut.outGroup c (outRunOf c o)).2.2.1 ≤ o ∧
+      o < (HmOut.outGroup c (outRunOf c o)).2.2.1 + (HmOut.outGroup c (outRunOf c o)).2.2.2 := by
+  have h0 : (HmOut.outGroup c 0).2.2.1 = 0 := by
+    simp only [HmOut.outGroup, ← Array.foldl_toList, Array.toList_extract, List.extract_eq_take_drop, List.drop_zero,
+      Nat.sub_zero, List.take_zero, List.foldl_nil]
+  have hR : 0 < c.outRowPorts.size := by
+    rcases Nat.eq_zero_or_pos c.outRowPorts.size with hz | hz
+    · have := outGroup_start_size c hsum
+      rw [hz, h0] at this
+      omega
+    · exact hz
+  have hP0 : (HmOut.outGroup c 0).2.2.1 ≤ o := by
+    rw [h0]
+    exact Nat.zero_le _
+  have hP : (HmOut.outGroup c (outRunOf c o)).2.2.1 ≤ o :=
+    Nat.findGreatest_spec (P := fun j => (HmOut.outGroup c j).2.2.1 ≤ o) (n := c.outRowPorts.size - 1)
+      (Nat.zero_le _) hP0
+  have hle : outRunOf c o ≤ c.outRowPorts.size - 1 := Nat.findGreatest_le _
+  refine ⟨by omega, hP, ?_⟩
+  rw [← outGroup_start_succ c (j := outRunOf c o) (by omega)]
+  rcases Nat.lt_or_ge (outRunOf c o) (c.outRowPorts.size - 1) with hlt | hge
+  · have hng := Nat.findGreatest_is_greatest (P := fun j => (HmOut.outGroup c j).2.2.1 ≤ o)
+      (n := c.outRowPorts.size - 1) (k := outRunOf c o + 1) (Nat.lt_add_one _) (by omega)
+    simp only [not_le] at hng
+    exact hng
+  · have he : outRunOf c o + 1 = c.outRowPorts.size := by omega
+    rw [he, outGroup_start_size c hsum]
+    exact ho
+
+variable (c) in
+/-- **An output row is at least as wide as its run**: exactly its run's words, or a lone output port's words
+zero-padded to whole SHA-512 blocks (`Hidden.checkRows_out`, at rows of `16 · words` bits, `rowShapeW_bits`). -/
+theorem outRowW_words (hcr : HmOut.checkRows c = .ok ()) (hW : ∀ p ∈ c.ports.toList, rowShapeW p = true) {j : ℕ}
+    (hj : j < c.outRowPorts.size) :
+    HmOut.nIn c + j < c.ports.size ∧
+      ((c.ports.getD (HmOut.nIn c + j) default).words = (HmOut.outGroup c j).2.2.2 ∨
+        ((HmOut.outGroup c j).2.1 = 1 ∧
+          (c.ports.getD (HmOut.nIn c + j) default).words = ((HmOut.outGroup c j).2.2.2 + 63) / 64 * 64)) := by
+  obtain ⟨hq, hrow⟩ := Hidden.checkRows_out hcr hj
+  have hmem : c.ports.getD (HmOut.nIn c + j) default ∈ c.ports.toList := by
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hq, Option.getD_some]
+    exact Array.getElem_mem_toList hq
+  have hb := rowShapeW_bits (hW _ hmem)
+  refine ⟨hq, ?_⟩
+  rcases hrow with ⟨h1, hw, -, -⟩ | ⟨-, hb'⟩
+  · exact Or.inr ⟨h1, hw⟩
+  · exact Or.inl (by omega)
+
+theorem outBitRowW_spec {u u' : Fin n} {d : ℕ × ℕ × ℕ} {q : Fin c.ports.size} {k : Fin (portRowW c q)}
+    (h : outBitRowW c u d = some (u', ⟨q, k⟩)) :
+    u' = u ∧ q.val = HmOut.nIn c + outRunOf c (outWordOf c d) ∧
+      k.val = 16 * (outWordOf c d - (HmOut.outGroup c (outRunOf c (outWordOf c d))).2.2.1) + d.2.2 := by
+  unfold outBitRowW at h
+  split at h
+  · split at h
+    · simp only [Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨hu, hs⟩ := h
+      subst hu
+      cases hs
+      exact ⟨rfl, rfl, rfl⟩
+    · exact absurd h (by simp)
+  · exact absurd h (by simp)
+
+/-- **An output word's bit is an output row's, at runs**: at an output word of the circuit (`outWords`), when the runs
+cover the output ports and the output rows pass `HmOut.checkRows`, each of its 16 bits is a bit of the output row whose
+run holds it (`outRunOf_spec`, `outRowW_words`). -/
+theorem outBitRowW_ne_none (hcr : HmOut.checkRows c = .ok ()) (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size)
+    (hW : ∀ p ∈ c.ports.toList, rowShapeW p = true) (u : Fin n) {d : ℕ × ℕ × ℕ}
+    (hw : outWordOf c d < c.outWords) (ht : d.2.2 < 16) : outBitRowW c u d ≠ none := by
+  obtain ⟨hj, hle, hlt⟩ := outRunOf_spec c hsum hw
+  obtain ⟨hq, hwords⟩ := outRowW_words c hcr hW hj
+  have hpw : portRowW c ⟨_, hq⟩ =
+      16 * (c.ports.getD (HmOut.nIn c + outRunOf c (outWordOf c d)) default).words := by
+    unfold portRowW
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hq, Option.getD_some]
+    rfl
+  have hk : 16 * (outWordOf c d - (HmOut.outGroup c (outRunOf c (outWordOf c d))).2.2.1) + d.2.2 <
+      portRowW c ⟨_, hq⟩ := by
+    rw [hpw]
+    rcases hwords with hwe | ⟨-, hwe⟩ <;> rw [hwe] <;> omega
+  unfold outBitRowW
+  rw [dite_eq_left hq, dite_eq_left hk]
+  exact Option.some_ne_none _
 
 variable (c hU n) in
 open Classical in
