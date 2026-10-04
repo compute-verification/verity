@@ -71,7 +71,8 @@
         "benchmarks/commitments/",
         "benchmarks/dot_product/",
         "benchmarks/ir_call/",
-        "benchmarks/latency_compare.py"
+        "benchmarks/latency_compare.py",
+        "benchmarks/private_circuit/"
       ]
     },
     {
