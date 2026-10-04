@@ -359,6 +359,8 @@ def test_G4_quarantine(tmp_path):
     arts = passing_artifacts()
     arts["resolution.json"]["spec_modules"] = {"NewOp_v1{N=8}": "verity_vllm.program.registry.quarantine"}
     assert G.quarantine_specs(arts["resolution.json"]) == ["NewOp_v1{N=8}"]
+    arts["resolution.json"]["spec_modules"] = {"AllReduceSumBf16_v1{N=8,R=2}": "verity_quarantine.collective.allreduce"}
+    assert G.quarantine_specs(arts["resolution.json"]) == ["AllReduceSumBf16_v1{N=8,R=2}"], "the experimental lanes are quarantine too"
 
 
 # --- G5 --------------------------------------------------------------------------------------------------
