@@ -208,8 +208,42 @@ def test_the_allowlist_entries_follow_their_symbols():
     moved = '  {"file": "verity_vllm/program/registry/b1.py", "kind": "table", "symbol": "SERVE_FAMILIES", "pattern": "x"},\n'
     kept = '  {"file": "verity_vllm/program/registry/b1.py", "kind": "model-name", "symbol": "<module>", "pattern": "y"},\n'
     out = S.rewrite_allowlist(moved + kept)
-    assert out == moved.replace("registry/b1.py", "vocabulary/b1.py") + kept
+    assert out == moved.replace("registry/b1.py", "vocabulary/serve.py") + kept
     assert "SERVE_FAMILIES" in sp.names
+
+
+def test_the_ratchet_entries_follow_what_moved(family):
+    """A symbol's entry follows the symbol, an import edge follows the import, a module's size comes down to its size now
+    (and goes under the limit), and two entries that land on one key add their counts."""
+    S.run(family, log=lambda _m: None)
+    tree = S.Tree(family)
+    entries = [
+        {"file": "verity_vllm/program/registry/defs.py", "kind": "doc-round", "symbol": "twin", "detail": "R1N"},
+        {"file": "verity_vllm/program/twins/defs.py", "kind": "doc-round", "symbol": "twin", "detail": "R1N", "count": 2},
+        {"file": "verity_vllm/program/registry/defs.py", "kind": "doc-round", "symbol": "body", "detail": "R1N"},
+        {"file": "verity_vllm/program/registry/defs.py", "kind": "layer", "symbol": "<module>",
+         "detail": "program.registry.defs -> functools"},
+        {"file": "verity_vllm/program/registry/defs.py", "kind": "layer", "symbol": "<module>", "detail": "program.registry.defs -> math"},
+        {"file": "verity_vllm/program/registry/defs.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 900},
+    ]
+    text = '{\n  "rule": "x",\n  "entries": [\n' + ",\n".join("    " + S.json.dumps(e) for e in entries) + "\n  ]\n}\n"
+    out = S.json.loads(S.rewrite_ratchet(tree, text))["entries"]
+    assert out == [
+        {"file": "verity_vllm/program/twins/defs.py", "kind": "doc-round", "symbol": "twin", "detail": "R1N", "count": 3},
+        entries[2],
+        {"file": "verity_vllm/program/twins/defs.py", "kind": "layer", "symbol": "<module>", "detail": "program.twins.defs -> functools"},
+        entries[4],
+    ]
+
+
+def test_an_importer_grown_past_its_size_cap_joins_its_imports():
+    rel = "integrations/vllm/verity_vllm/x.py"
+    before = "from a.b import c\nfrom a.b import d as D\n\nX = 1\n"
+    after = "from a.b import c\nfrom a.b import d as D\nfrom e import f\n\nX = 1\n"
+    assert S.fit_size(rel, before, after, {"verity_vllm/x.py": 4}) == "from a.b import c, d as D\nfrom e import f\n\nX = 1\n"
+    assert S.fit_size(rel, before, after, {"verity_vllm/x.py": 5}) == after
+    with pytest.raises(S.Refused, match="over its P10 cap of 3"):
+        S.fit_size(rel, before, after, {"verity_vllm/x.py": 3})
 
 
 def test_this_tree_has_the_split_applied():
