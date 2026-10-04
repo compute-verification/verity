@@ -403,7 +403,23 @@ theorem row_copies_wholeW (hupv : 0 < st.c.upv) {regs : List (Model.Region st.c.
         (shaBase st.c g p (st.c.ports[p]!.chunks - 1) + shaOut st.c (shaSub st.c p (st.c.ports[p]!.chunks - 1)) + t)) ∧
     (∀ t < 1024, blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 1 + t) =
       wordsBit (HmRow.padWords st.c.ports[p]!.words) t) := by
-  sorry
+  obtain ⟨hst, hch, hcon, -⟩ := row_copies_flatW L F hΔ Lf hupv hz o hg hp
+  have hs := h.1
+  have hc0 : 0 < st.c.ports[p]!.chunks := h.2.2.1
+  refine ⟨fun t ht => ?_, fun k hk t ht => ?_, fun t ht => ?_, fun t ht => ?_⟩
+  · have := hst 0 (Nat.zero_le _) 0 (by simp [chainStart_unseg hs]) t ht
+    rw [cvAt_lt hp hc0] at this
+    rw [this]
+    simp [startMid, segsOf, hs, HmRow.midstateOf]
+  · have := hch (k + 1) (Nat.succ_pos _) hk.le (by simp [chainStart_unseg hs]) t ht
+    rw [cvAt_lt hp hk, Nat.add_sub_cancel] at this
+    exact this
+  · have := hch _ hc0 le_rfl (by simp [chainStart_unseg hs, Nat.pos_iff_ne_zero.1 hc0]) t ht
+    rw [cvAt_hm hp] at this
+    exact this
+  · have := hcon _ le_rfl t ht _ (msgBit_whole_pad h ht)
+    rw [msgAt_hm hp] at this
+    exact this
 
 /-- **The copies into a short row** (`RowV2Short`, no compression): its `hm96` slot's `cv` the row prefix's midstate, and
 its `pad` past the row's `2 · words` bytes the row's padding. -/
@@ -415,7 +431,17 @@ theorem row_copies_shortW (hupv : 0 < st.c.upv) {regs : List (Model.Region st.c.
     (∀ t < 1024, 2 * st.c.ports[p]!.words ≤ (HmRow.blockBit t).1 →
       blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 1 + t) =
         tailBit (HmRow.tailOf st.c.ports[p]!) (2 * st.c.ports[p]!.words) t) := by
-  sorry
+  obtain ⟨hst, -, hcon, -⟩ := row_copies_flatW L F hΔ Lf hupv hz o hg hp
+  have hs := h.2.1
+  have hc := h.2.2.2.2.1
+  refine ⟨fun t ht => ?_, fun t ht hr => ?_⟩
+  · have := hst _ le_rfl 0 (by simp [chainStart_unseg hs, hc]) t ht
+    rw [cvAt_hm hp] at this
+    rw [this]
+    simp [startMid, segsOf, hs, HmRow.midstateOf]
+  · have := hcon _ le_rfl t ht _ (msgBit_short_tail h ht hr)
+    rw [msgAt_hm hp] at this
+    exact this
 
 /-- **The copies into a whole-block segmented row** (`RowSegWhole`): each segment's chain from its midstate through its
 data blocks, its last block the padding block; the outer chain from the row prefix's midstate into the `hm96` slot, its
@@ -445,7 +471,45 @@ theorem row_copies_segW (hupv : 0 < st.c.upv) {regs : List (Model.Region st.c.kL
     (∀ t < 1024, 64 * (segsOf st.c.ports[p]!).size % 128 ≤ (HmRow.blockBit t).1 →
       blockBit (L.model regs) z o (msgAt st.c g p st.c.ports[p]!.chunks + t) =
         tailBit (HmRow.tailOf st.c.ports[p]!) (64 * (segsOf st.c.ports[p]!).size % 128) t) := by
-  sorry
+  obtain ⟨hst, hch, hcon, hdig⟩ := row_copies_flatW L F hΔ Lf hupv hz o hg hp
+  have hcs := seg_chunks h
+  have hsucc : ∀ {j}, j < (segsOf st.c.ports[p]!).size → segFirst st.c.ports[p]! (j + 1) =
+      segFirst st.c.ports[p]! j + ((segsOf st.c.ports[p]!)[j]!).1 / 1024 + 1 := fun hj => by
+    rw [segFirst_succ _ hj, (segs_whole h hj).2.2]
+    omega
+  have hle : ∀ {j}, j ≤ (segsOf st.c.ports[p]!).size → segFirst st.c.ports[p]! j ≤ st.c.ports[p]!.chunks :=
+    fun hj => by
+      have := segFirst_mono st.c.ports[p]! hj le_rfl
+      omega
+  refine ⟨fun j hj t ht => ?_, fun j hj i hi t ht => ?_, fun j hj t ht => ?_, fun t ht => ?_,
+    fun k hk hk' t ht => ?_, fun e he b hb => ?_, fun t ht hr => hcon _ le_rfl t ht _ (msgBit_seg_tail h ht hr)⟩
+  · rw [hst _ (hle hj.le) j (chainStart_seg h hj.le) t ht]
+    simp only [startMid, hj, ↓reduceIte]
+  · have h1 := hsucc hj
+    have h2 := hle (show j + 1 ≤ _ by omega)
+    have hnone : HmRow.chainStart st.c.ports[p]! (segFirst st.c.ports[p]! j + i + 1) = none := by
+      refine chainStart_none fun j' hj' he => ?_
+      rcases Nat.lt_or_ge j j' with hjj | hjj
+      · have := segFirst_mono st.c.ports[p]! (show j + 1 ≤ j' by omega) hj'
+        omega
+      · have := segFirst_mono st.c.ports[p]! hjj hj.le
+        omega
+    have := hch (segFirst st.c.ports[p]! j + i + 1) (by omega) (by omega) hnone t ht
+    rw [Nat.add_sub_cancel] at this
+    exact this
+  · have h1 := hsucc hj
+    have h2 := hle (show j + 1 ≤ _ by omega)
+    exact hcon _ (by omega) t ht _ (msgBit_seg_pad h hj ht)
+  · rw [hst _ (hle le_rfl) _ (chainStart_seg h le_rfl) t ht]
+    simp only [startMid, Nat.lt_irrefl, ↓reduceIte, HmRow.midstateOf]
+  · have hnone : HmRow.chainStart st.c.ports[p]! (k + 1) = none := by
+      refine chainStart_none fun j' hj' he => ?_
+      have := segFirst_mono st.c.ports[p]! hj' le_rfl
+      omega
+    have := hch (k + 1) (Nat.succ_pos _) (by omega) hnone t ht
+    rw [Nat.add_sub_cancel] at this
+    exact this
+  · exact hdig _ (by omega) _ (by omega) _ _ (msgBit_seg_digest h he hb)
 
 end Rows
 
