@@ -33,15 +33,13 @@ onsite = Onsite(
     network=Network(max_timing_bits=7, side_bits=1000),
     nci=Nci(gamma=4096, alpha=0.2, headroom=0.3, builders=frozenset({builder.id()})),
 )
-registration, executions, transcripts = executed(
-    builder, schedule(requests, (3, 1, 4), builder), onsite.integrity.scheme
-)
+stream, transcripts = executed(builder, schedule(requests, (3, 1, 4), builder), onsite.integrity.scheme)
 fleet = {"gpu": 2}
 principals = {
     "verifier": onsite.verifier(),
-    "prover": onsite.prover(registration, executions, transcripts, encode(b"weights", 2048)),
+    "prover": onsite.prover(stream, transcripts, encode(b"weights", 2048)),
     "replayer": onsite.replayer(),
-    "pinger": onsite.pinger(fleet, Window(0.0, tries(registration, executions) / (2 * 1000.0)), space_seconds=0.0004),
+    "pinger": onsite.pinger(fleet, Window(0.0, tries(stream) / (2 * 1000.0)), space_seconds=0.0004),
     "warden": onsite.warden(bytes_out=len(requests) * len(circuit.outputs) // 8, timing_bits=7),
 }
 for event in run(principals, view="verifier"):

@@ -28,18 +28,12 @@ from __future__ import annotations
 import hashlib
 import math
 import secrets
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from verity.primitives.events import Actor, Send, collect, gather, receive, tell
 from verity.primitives.randomness import derive
-from verity.primitives.registration import (
-    Closed,
-    Execution,
-    Registration,
-    built,
-    digest,
-)
+from verity.primitives.registration import Closed, Execution, Registration, Stream
 
 
 @dataclass(frozen=True)
@@ -80,25 +74,22 @@ class Work:
     def verifier(self, clock_from: str) -> Actor:
         secret = secrets.token_bytes(32)
         registration = yield from receive(Registration, "prover")
-        salt = derive(secret, "verity/work/salt/v0", digest(registration))
-        executions = yield from collect(Execution, Closed, "prover", Send(Salt(salt), "prover"))
+        salt = derive(secret, "verity/work/salt/v0", Stream(registration).digest())
+        stream = Stream(registration, (yield from collect(Execution, Closed, "prover", Send(Salt(salt), "prover"))))
         got = yield from gather({Shares: "prover", Window: clock_from})
         shares, window = got[Shares].nonces, got[Window]
         valid = sum(
-            len(
-                {n for n in shares.get(i, ()) if 0 <= n < _budget(registration, e) and self._share(_key(salt, i, e), n)}
-            )
-            for i, e in enumerate(executions)
+            len({n for n in shares.get(i, ()) if 0 <= n < _budget(stream, i) and self._share(_key(salt, i, e), n)})
+            for i, e in enumerate(stream.executions)
         )
-        bound = WorkBound(digest(registration, executions), self._tries(valid), window, clock_from, self.delta)
-        return (Send(bound),)
+        return (Send(WorkBound(stream.digest(), self._tries(valid), window, clock_from, self.delta)),)
 
-    def prover(self, registration: Registration, executions: Sequence[Execution]) -> Actor:
+    def prover(self, stream: Stream) -> Actor:
         salt = (yield from receive(Salt, "verifier")).salt
         nonces = {}
-        for i, e in enumerate(executions):
+        for i, e in enumerate(stream.executions):
             key = _key(salt, i, e)
-            nonces[i] = tuple(n for n in range(_budget(registration, e)) if self._share(key, n))
+            nonces[i] = tuple(n for n in range(_budget(stream, i)) if self._share(key, n))
         return (Send(Shares(nonces), "verifier"),)
 
     def clock(self, window: Window) -> Actor:
@@ -118,10 +109,10 @@ class Work:
         return max(0, int((shares - t) * 2**self.difficulty))
 
 
-def _budget(registration: Registration, execution: Execution) -> int:
-    """The tries an execution's work has: one per gate it ran, and none for advice that builds nothing."""
+def _budget(stream: Stream, i: int) -> int:
+    """The tries execution i's work has: one per gate it ran, and none for advice that builds nothing."""
     try:
-        return len(built(registration.builder, execution.advice)[0].gates)
+        return len(stream.built(i)[0].gates)
     except ValueError:
         return 0
 

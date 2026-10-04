@@ -17,13 +17,7 @@ from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit, evaluate, transcript
 from verity.primitives.commitments import CommitmentScheme
 from verity.primitives.events import Event
-from verity.primitives.registration import (
-    Builder,
-    Execution,
-    Registration,
-    built,
-    commit,
-)
+from verity.primitives.registration import Builder, Registration, Stream, built, commit
 
 
 def load(name: str, n: int = 8, seed: int = 0) -> tuple[Circuit, list[tuple[int, ...]]]:
@@ -95,18 +89,31 @@ def schedule(
     return steps
 
 
+def transcribe(builder: Builder, steps: Sequence[tuple[str, tuple[int, ...]]]) -> list[tuple[int, ...]]:
+    """Each step run honestly, from its advice and fresh inputs: its transcript, its state read from the transcripts of
+    the steps that wrote it."""
+    transcripts: list[tuple[int, ...]] = []
+    for advice, fresh in steps:
+        circuit, i, state = built(builder, advice)[0], len(transcripts), []
+        for back, k in circuit.state:
+            writer = built(builder, steps[i - back][0])[0]
+            state.append(transcripts[i - back][writer.outputs[k]])
+        transcripts.append(transcript(circuit, (*state, *fresh)))
+    return transcripts
+
+
 def executed(
     builder: Builder, steps: Sequence[tuple[str, tuple[int, ...]]], scheme: CommitmentScheme
-) -> tuple[Registration, list[Execution], list[tuple[int, ...]]]:
-    """What the prover's runtime leaves: its registration, each step run and committed, and the transcripts it keeps."""
-    transcripts = [transcript(built(builder, advice)[0], inputs) for advice, inputs in steps]
-    executions = [commit(builder, advice, values, scheme) for (advice, _), values in zip(steps, transcripts)]
-    return Registration(builder), executions, transcripts
+) -> tuple[Stream, list[tuple[int, ...]]]:
+    """What the prover's runtime leaves: its stream, each step run and committed, and the transcripts it keeps."""
+    transcripts = transcribe(builder, steps)
+    executions = tuple(commit(builder, advice, values, scheme) for (advice, _), values in zip(steps, transcripts))
+    return Stream(Registration(builder), executions), transcripts
 
 
-def tries(registration: Registration, executions: Sequence[Execution]) -> int:
+def tries(stream: Stream) -> int:
     """The work the stream holds: one try per gate per execution."""
-    return sum(len(built(registration.builder, e.advice)[0].gates) for e in executions)
+    return sum(len(stream.built(i)[0].gates) for i in range(len(stream.executions)))
 
 
 def show(event: Event) -> None:

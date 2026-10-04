@@ -2,9 +2,9 @@
 
     verifier    takes the registration and the stream, draws executions from its secret once the stream closes, each
                 as likely as its gates and output bits ask (`sampling.Weighted`), and sends the draw to the prover and
-                the registration with the drawn executions to the replayer
-    prover      opens each drawn execution's inputs and outputs from its transcript against its root, and sends them to
-                the replayer
+                the stream with the draw to the replayer
+    prover      opens each drawn execution's inputs and outputs from the transcripts where they are committed (its
+                state where its writer committed it), and sends them to the replayer
     replayer    rebuilds each drawn execution's circuit from its advice, runs it again from the opened inputs, and tells
                 the verifier whether it gave the opened outputs; it is trusted and sealed: it sees the values, and the
                 verifier and the auditor do not
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from verity.accounting.integrity.profile import profile
 from verity.accounting.integrity.sampling import Draw, Weighted
 from verity.primitives import partition as P
-from verity.primitives.circuit import Circuit, evaluate
+from verity.primitives.circuit import evaluate
 from verity.primitives.commitments import CommitmentScheme, MerkleSha256
 from verity.primitives.events import Actor, Send, collect, gather, receive
 from verity.primitives.randomness import derive
@@ -30,26 +30,24 @@ from verity.primitives.registration import (
     Execution,
     Opening,
     Registration,
-    built,
+    Stream,
     check,
-    digest,
     open_wires,
     verify_opening,
-    wires,
 )
 
 
 @dataclass(frozen=True)
 class ToReplay:
-    """Verifier to replayer: the registration, and the drawn executions as streamed."""
+    """Verifier to replayer: the stream, and which of its executions were drawn."""
 
-    registration: Registration
-    executions: Mapping[int, Execution]
+    stream: Stream
+    drawn: tuple[int, ...]
 
 
 @dataclass(frozen=True)
 class Inputs:
-    """Prover to replayer: each drawn execution's inputs and outputs, opened against its root."""
+    """Prover to replayer: each drawn execution's inputs and outputs, opened where they are committed."""
 
     openings: Mapping[int, Opening]
 
@@ -70,21 +68,18 @@ class Replay:
     def verifier(self) -> Actor:
         secret = secrets.token_bytes(32)
         registration = yield from receive(Registration, "prover")
-        executions = yield from collect(Execution, Closed, "prover")
-        stream = digest(registration, executions)
-        refused = check(registration, executions, self.scheme)
+        stream = Stream(registration, (yield from collect(Execution, Closed, "prover")))
+        refused = check(stream, self.scheme)
         if refused:
-            return (Send(profile(stream, "execution", [], [], self.law, self.delta, refused)),)
+            return (Send(profile(stream.digest(), "execution", [], [], self.law, self.delta, refused)),)
 
-        circuits = [built(registration.builder, e.advice)[0] for e in executions]
+        circuits = [stream.built(i)[0] for i in range(len(stream.executions))]
         gates, outputs = [len(c.gates) for c in circuits], [len(c.outputs) for c in circuits]
-        drawn = self.law.draw(derive(secret, "verity/integrity/replay/v2", stream), gates, outputs, self.delta)
+        coins = derive(secret, "verity/integrity/replay/v2", stream.digest())
+        drawn = self.law.draw(coins, gates, outputs, self.delta)
         results = (
             yield from receive(
-                Replayed,
-                "replayer",
-                Send(Draw(drawn), "prover"),
-                Send(ToReplay(registration, {i: executions[i] for i in drawn}), "replayer"),
+                Replayed, "replayer", Send(Draw(drawn), "prover"), Send(ToReplay(stream, drawn), "replayer")
             )
         ).results
         reasons = tuple(
@@ -92,41 +87,31 @@ class Replay:
             for i in drawn
             if not results.get(i)
         )
-        return (Send(profile(stream, "execution", gates, outputs, self.law, self.delta, reasons)),)
+        return (Send(profile(stream.digest(), "execution", gates, outputs, self.law, self.delta, reasons)),)
 
     def replayer(self) -> Actor:
         got = yield from gather({ToReplay: "verifier", Inputs: "prover"})
         expected, openings = got[ToReplay], got[Inputs].openings
-        builder = expected.registration.builder
-        results = {
-            i: i in openings and _replays(self.scheme, *built(builder, e.advice), e, openings[i])
-            for i, e in expected.executions.items()
-        }
+        results = {i: i in openings and _replays(self.scheme, expected.stream, i, openings[i]) for i in expected.drawn}
         return (Send(Replayed(results), "verifier"),)
 
-    def prover(
-        self, registration: Registration, executions: Sequence[Execution], transcripts: Sequence[Sequence[int]]
-    ) -> Actor:
+    def prover(self, stream: Stream, transcripts: Sequence[Sequence[int]]) -> Actor:
         draw = yield from receive(Draw, "verifier")
-        opened = {}
-        for i in draw.units:
-            circuit, partition = built(registration.builder, executions[i].advice)
-            opened[i] = open_wires(self.scheme, circuit, partition, transcripts[i], _io(circuit, partition))
+        opened = {i: open_wires(self.scheme, stream, transcripts, _io(stream, i)) for i in draw.units}
         return (Send(Inputs(opened), "replayer"),)
 
 
-def _io(circuit: Circuit, partition: P.Partition) -> tuple[int, ...]:
-    """The committed wires that are the execution's inputs, then its outputs."""
-    return tuple(dict.fromkeys([*(w for w in wires(circuit, partition) if w < circuit.inputs), *circuit.outputs]))
+def _io(stream: Stream, i: int) -> tuple[tuple[int, int], ...]:
+    """Where execution i's inputs that a gate reads, then its outputs, are committed."""
+    circuit = stream.built(i)[0]
+    read = P.boundary(circuit, range(len(circuit.gates)))[0]
+    return tuple(dict.fromkeys([*(stream.locate(i, w) for w in read), *((i, o) for o in circuit.outputs)]))
 
 
-def _replays(
-    scheme: CommitmentScheme, circuit: Circuit, partition: P.Partition, execution: Execution, opening: Opening
-) -> bool:
-    if set(opening.values) != set(_io(circuit, partition)):
+def _replays(scheme: CommitmentScheme, stream: Stream, i: int, opening: Opening) -> bool:
+    if set(opening.values) != set(_io(stream, i)) or not verify_opening(scheme, stream, opening):
         return False
-    if not verify_opening(scheme, circuit, partition, execution.root, opening):
-        return False
+    circuit = stream.built(i)[0]
     # an input no gate reads is not committed
-    inputs = tuple(opening.values.get(w, 0) for w in range(len(circuit.baseline), circuit.inputs))
-    return evaluate(circuit, inputs) == tuple(opening.values[o] for o in circuit.outputs)
+    inputs = tuple(opening.values.get(stream.locate(i, w), 0) for w in range(len(circuit.baseline), circuit.inputs))
+    return evaluate(circuit, inputs) == tuple(opening.values[i, o] for o in circuit.outputs)

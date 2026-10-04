@@ -34,10 +34,10 @@ else:
     law = Weighted(gates=0.05, outputs=0.05)
     integrity, others = Proofs(law=law, max_width=16, delta=0.01, system=system()), {}
 
-registration, executions, transcripts = executed(builder, schedule(requests, (3, 1, 4), builder), integrity.scheme)
+stream, transcripts = executed(builder, schedule(requests, (3, 1, 4), builder), integrity.scheme)
 principals = {
     "verifier": [integrity.verifier()],
-    "prover": [serve(registration, executions), integrity.prover(registration, executions, transcripts)],
+    "prover": [serve(stream), integrity.prover(stream, transcripts)],
     **others,
 }
 for event in run(principals, view="verifier"):

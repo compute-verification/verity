@@ -27,13 +27,11 @@ remote = Remote(
     compute=Compute(peak={"gpu": 1000.0}),
     nci=Nci(gamma=4096, alpha=0.2, headroom=0.4, builders=frozenset({builder.id()})),
 )
-registration, executions, transcripts = executed(
-    builder, schedule(requests, (3, 1, 4), builder), remote.integrity.scheme
-)
+stream, transcripts = executed(builder, schedule(requests, (3, 1, 4), builder), remote.integrity.scheme)
 fleet = {"gpu": 2}
 principals = {
-    "verifier": remote.verifier(Window(0.0, tries(registration, executions) / (2 * 1000.0))),
-    "prover": remote.prover(registration, executions, transcripts, fleet),
+    "verifier": remote.verifier(Window(0.0, tries(stream) / (2 * 1000.0))),
+    "prover": remote.prover(stream, transcripts, fleet),
 }
 for event in run(principals, view="verifier"):
     show(event)

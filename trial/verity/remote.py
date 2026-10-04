@@ -21,7 +21,7 @@ from verity.accounting.integrity.proofs.construction import Proofs
 from verity.accounting.utilization.work import Salt, Window, Work
 from verity.compliance.nci import Nci
 from verity.primitives.events import Actor
-from verity.primitives.registration import Execution, Registration, serve
+from verity.primitives.registration import Stream, serve
 
 
 @dataclass(frozen=True)
@@ -41,16 +41,10 @@ class Remote:
             self.nci.verifier(),
         ]
 
-    def prover(
-        self,
-        registration: Registration,
-        executions: Sequence[Execution],
-        transcripts: Sequence[Sequence[int]],
-        fleet: Mapping[str, int],
-    ) -> list[Actor]:
+    def prover(self, stream: Stream, transcripts: Sequence[Sequence[int]], fleet: Mapping[str, int]) -> list[Actor]:
         return [
-            serve(registration, executions, after=Salt),
-            self.integrity.prover(registration, executions, transcripts),
-            self.work.prover(registration, executions),
+            serve(stream, after=Salt),
+            self.integrity.prover(stream, transcripts),
+            self.work.prover(stream),
             inventory(fleet),
         ]

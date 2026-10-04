@@ -1,8 +1,8 @@
 """What a proof system proves, and its interface. A unit is one region of one streamed execution, whose circuit and
 partition the builder built from its advice; it is right when the outputs committed for it are what its region computes
-from the inputs committed for it. A proof system proves a batch of units right against their roots, and checks such a
-proof, in the verifier's view: a zero-knowledge one reveals nothing, a transparent one reveals the units' boundary
-values."""
+from the inputs committed for it, each where `Stream.locate` says (a state input where its writer committed it). A
+proof system proves a batch of units right against their roots, and checks such a proof, in the verifier's view: a
+zero-knowledge one reveals nothing, a transparent one reveals the units' boundary values."""
 
 from __future__ import annotations
 
@@ -13,15 +13,19 @@ from typing import Protocol
 
 from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit
-from verity.primitives.commitments import Commitment, CommitmentScheme
+from verity.primitives.commitments import CommitmentScheme
+from verity.primitives.registration import Stream
 
 
 @dataclass(frozen=True)
 class Unit:
-    circuit: Circuit
-    partition: P.Partition
-    root: Commitment
-    gates: P.Region  # one of the partition's regions
+    stream: Stream
+    execution: int
+    gates: P.Region  # one of its partition's regions
+
+    @property
+    def circuit(self) -> Circuit:
+        return self.stream.built(self.execution)[0]
 
     @property
     def outputs(self) -> tuple[int, ...]:
@@ -35,7 +39,7 @@ def _outputs(circuit: Circuit) -> frozenset[int]:
 
 
 class ProofSystem(Protocol):
-    def prove(self, scheme: CommitmentScheme, units: Sequence[Unit], values: Sequence[Sequence[int]]) -> object:
-        """One proof of every unit in the batch; `values` is every wire of each unit's execution, rematerialized."""
+    def prove(self, scheme: CommitmentScheme, units: Sequence[Unit], transcripts: Sequence[Sequence[int]]) -> object:
+        """One proof of every unit in the batch; `transcripts` is every execution's, rematerialized."""
 
     def verify(self, scheme: CommitmentScheme, units: Sequence[Unit], proof: object) -> bool: ...

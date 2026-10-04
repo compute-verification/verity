@@ -18,12 +18,15 @@ from verity.primitives.registration import Opening
 
 @dataclass(frozen=True)
 class Sp1(ProofSystem):
-    def prove(self, scheme: CommitmentScheme, units: Sequence[Unit], values: Sequence[Sequence[int]]) -> str:
-        openings = transparent.Transparent().prove(scheme, units, values)
+    def prove(self, scheme: CommitmentScheme, units: Sequence[Unit], transcripts: Sequence[Sequence[int]]) -> str:
+        openings = transparent.Transparent().prove(scheme, units, transcripts)
         return tomli_w.dumps(
             {
                 "units": [
-                    {str(w): {"value": v, "path": [p.hex() for p in o.paths[w]]} for w, v in o.values.items()}
+                    {
+                        f"{i}:{w}": {"value": v, "path": [p.hex() for p in o.paths[i, w]]}
+                        for (i, w), v in o.values.items()
+                    }
                     for o in openings
                 ]
             }
@@ -32,11 +35,10 @@ class Sp1(ProofSystem):
     def verify(self, scheme: CommitmentScheme, units: Sequence[Unit], proof: object) -> bool:
         if not isinstance(proof, str):
             return False
-        parsed = tomllib.loads(proof)["units"]
+        parsed = [{tuple(map(int, k.split(":"))): x for k, x in o.items()} for o in tomllib.loads(proof)["units"]]
         openings = [
             Opening(
-                {int(w): x["value"] for w, x in o.items()},
-                {int(w): [bytes.fromhex(p) for p in x["path"]] for w, x in o.items()},
+                {k: x["value"] for k, x in o.items()}, {k: [bytes.fromhex(p) for p in x["path"]] for k, x in o.items()}
             )
             for o in parsed
         ]

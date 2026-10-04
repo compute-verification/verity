@@ -11,6 +11,9 @@ structure Circuit where
   outputs : List Nat
   /-- What its first inputs hold in every execution; the rest vary. -/
   baseline : List Nat := []
+  /-- Per input after the baseline that an earlier execution of the stream wrote: how many executions back, and which
+  of its outputs. Where an input comes from, not what the circuit computes from it. -/
+  state : List (Nat × Nat) := []
 
 def Op.apply : Op → Nat → Nat → Nat
   | .add, a, b => (a + b) % 2 ^ 32

@@ -2,12 +2,14 @@
 
     uv run python examples/datacenter.py [scenario ...]
 
-The site is a fleet of six H100s and two A100s serving two models, verity's FP32 adder and BF16 comparison, behind one
-scheduler. Its builder, declared before the first epoch, routes each step to a model and batches it (`Routed`: a route
-bit, then the model's batch size less one), and each request is its own isolation unit. The census's facts per device
-are its peak (tries a second) and its memory (bytes), at toy scale. Each epoch is one run: the prover registers, takes
-the salt, streams the epoch's steps and closes the stream, and the verifier's view holds the account and NCI's verdict.
-A period is the epochs back to back, each window opening where the last closed (`nci.period`).
+The site is a fleet of six H100s and two A100s serving two models behind one scheduler. A generator's sessions take
+several steps each and carry their state from step to step, as a decode step reads its KV cache (verity's FP32 adder,
+keeping a running sum: `Sessions`); a classifier's requests take one step each (verity's BF16 comparison). The
+builder, declared before the first epoch, routes each step to a model (`Routed`: a route bit, then the model's advice),
+and each session is one isolation unit of the stream however many steps it took. The census's facts per device are
+its peak (tries a second) and its memory (bytes), at toy scale. Each epoch is one run: the prover registers, takes the
+salt, streams the epoch's steps and closes the stream, and the verifier's view holds the account and NCI's verdict. A
+period is the epochs back to back, each window opening where the last closed (`nci.period`).
 
 A simulated site produces every reading: how long the epoch took on the fleet that ran it, which devices are there,
 what memory held, what left on the links. Each scenario changes what the site did, and runs under both products with
@@ -22,7 +24,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
-from common import Batched, load
+from common import Batched, load, transcribe
 
 from verity.accounting.coverage.compute import Compute
 from verity.accounting.coverage.memory import Memory
@@ -38,7 +40,7 @@ from verity.onsite import Onsite
 from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit, transcript
 from verity.primitives.events import Actor, receive
-from verity.primitives.registration import Builder, Execution, Registration, built, commit
+from verity.primitives.registration import Builder, Registration, Stream, built, commit
 from verity.remote import Remote
 from verity.run import run
 
@@ -47,15 +49,56 @@ MEMORY = {"h100": 80 * 1024, "a100": 40 * 1024}  # bytes
 FLEET = {"h100": 6, "a100": 2}
 RTT = 0.02  # seconds between the verifier and the site
 EPOCHS = 3
-REQUESTS = (32, 96)  # per model per epoch
+SESSIONS, STEPS = 8, 4  # the generator's sessions per epoch, and each one's steps
+REQUESTS = 96  # the classifier's, per epoch
 BLOCKS = 16 * 1024  # of the weights' encoding, 32 bytes each: 512 KiB of the fleet's 560
+
+
+@dataclass(frozen=True)
+class Sessions:
+    """The builder of a step of sessions through `circuit`, side by side as `Batched` puts requests: advice is the batch
+    size less one, then how many executions back the step its sessions continue is (0: they open). A session that
+    opens reads all its inputs; one that continues reads its first inputs from the outputs its slot gave in that step
+    (its state) and the rest fresh."""
+
+    circuit: Circuit
+    partition: P.Partition
+    batch_bits: int = 3
+    back_bits: int = 3
+
+    @property
+    def advice_bits(self) -> int:
+        return self.batch_bits + self.back_bits
+
+    def id(self) -> str:
+        return _id(["examples/Sessions/v0", self.circuit.id(), self.partition, self.batch_bits, self.back_bits])
+
+    def build(self, advice: str) -> tuple[Circuit, P.Partition]:
+        if len(advice) != self.advice_bits:
+            raise ValueError(f"advice {advice!r} is not {self.advice_bits} bits")
+        n, back = int(advice[: self.batch_bits], 2) + 1, int(advice[self.batch_bits :], 2)
+        step, partition = Batched(self.circuit, self.partition, self.batch_bits).build(advice[: self.batch_bits])
+        if not back:
+            return step, partition
+        b, own, m = len(step.baseline), self.circuit.inputs - len(step.baseline), len(self.circuit.outputs)
+
+        def wire(w: int) -> int:
+            """Slot j's input k, its state first: every slot's state, then every slot's fresh inputs."""
+            if not b <= w < step.inputs:
+                return w
+            j, k = divmod(w - b, own)
+            return b + j * m + k if k < m else b + n * m + j * (own - m) + (k - m)
+
+        gates = tuple((op, wire(x), wire(y)) for op, x, y in step.gates)
+        state = tuple((back, j * m + k) for j in range(n) for k in range(m))
+        return Circuit(step.inputs, gates, step.outputs, step.baseline, state), partition
 
 
 @dataclass(frozen=True)
 class Routed:
     """The builder of a step the scheduler routed to one of `models`: advice is the route, then the model's own."""
 
-    models: tuple[Batched, ...]
+    models: tuple[Builder, ...]
 
     @property
     def route_bits(self) -> int:
@@ -98,7 +141,7 @@ class Training:
 class Withheld(Work):
     """A prover's work that keeps its shares: it takes the salt and sends nothing."""
 
-    def prover(self, registration: Registration, executions: Sequence[Execution]) -> Actor:
+    def prover(self, stream: Stream) -> Actor:
         yield from receive(Salt, "verifier")
         return ()
 
@@ -107,12 +150,12 @@ def _id(body: object) -> str:
     return hashlib.sha256(json.dumps(body).encode()).hexdigest()[:16]
 
 
-adder, adds = load("f32_add", n=EPOCHS * REQUESTS[0], seed=1)
-comparison, compares = load("bf16_gt_strict", n=EPOCHS * REQUESTS[1], seed=2)
-ROUTED = Routed((Batched(adder, P.greedy(adder, 16), 3), Batched(comparison, P.greedy(comparison, 16), 3)))
+adder, adds = load("f32_add", n=EPOCHS * SESSIONS * STEPS, seed=1)
+comparison, compares = load("bf16_gt_strict", n=EPOCHS * REQUESTS, seed=2)
+ROUTED = Routed((Sessions(adder, P.greedy(adder, 16)), Batched(comparison, P.greedy(comparison, 16), 3)))
 WEIGHTS = encode(b"weights", BLOCKS)
 
-NCI = Nci(gamma=4096, alpha=0.2, headroom=0.2, builders=frozenset({ROUTED.id()}))
+NCI = Nci(gamma=16384, alpha=0.2, headroom=0.2, builders=frozenset({ROUTED.id()}))
 WORK = Work(difficulty=3, delta=0.01)
 REMOTE = Remote(
     integrity=Proofs(law=Weighted(gates=0.03, outputs=1.0), max_width=16, delta=0.01, system=Transparent()),
@@ -139,7 +182,7 @@ class Site:
     busy: float = 0.9  # the share of its peak the requests kept the declared fleet busy
     fill: float = 0.0  # the share of its peak the scheduler fills up to with filler steps, if more
     hidden: float = 0.0  # the share of the declared fleet's time that went to undeclared work
-    batch: int = 8  # requests per step, at most
+    batch: int = 8  # sessions or requests per step, at most
     builder: Builder = ROUTED  # the one it registered
     forge: Callable[[Sequence[Circuit], list], list] | None = None  # what it changed in its transcripts
     held: float = 1.0  # the share of the weights' encoding its memory held
@@ -161,6 +204,14 @@ def flip(circuits: Sequence[Circuit], transcripts: list) -> list:
     return [tuple(values), *transcripts[1:]]
 
 
+def inject(circuits: Sequence[Circuit], transcripts: list) -> list:
+    """Every continuing step run on state its session did not write: zeros, as if its context came from elsewhere."""
+    return [
+        transcript(c, (*(0,) * len(c.state), *t[len(c.baseline) + len(c.state) : c.inputs])) if c.state else t
+        for c, t in zip(circuits, transcripts)
+    ]
+
+
 # name -> (the site, whether remote should find it complying over the period, whether onsite should, what it shows);
 # None: either
 SCENARIOS: dict[str, tuple[Site, bool | None, bool | None, str]] = {
@@ -177,7 +228,8 @@ SCENARIOS: dict[str, tuple[Site, bool | None, bool | None, str]] = {
     "between-epochs": (Site(gap=3.0), False, False, "3 s of undeclared work between windows; each epoch complies"),
     "skipped-step": (Site(forge=skip), False, False, "one step's transcript made up rather than computed"),
     "flipped-bit": (Site(forge=flip), None, False, "one response bit wrong: priced into remote's bound"),
-    "unbatched": (Site(batch=1), True, True, "a step per request: each request pays its own step's 4 bits of advice"),
+    "injected-state": (Site(forge=inject), False, False, "every continuing step reads state its session never wrote"),
+    "unbatched": (Site(batch=1), True, True, "a step per session or request, each paying its own step's advice"),
     "training": (Site(builder=Training(ROUTED)), False, False, "an undeclared builder, a step per isolation unit"),
     "evicted-weights": (Site(held=0.7), True, True, "memory holds 70% of the weights: no policy reads memory yet"),
     "exfiltration": (Site(leaked=4096), True, True, "4 KiB leave beside the responses: no policy reads network yet"),
@@ -185,47 +237,70 @@ SCENARIOS: dict[str, tuple[Site, bool | None, bool | None, str]] = {
 }
 
 
-def stream(site: Site, epoch: int) -> tuple[Registration, list[Execution], list, float, int]:
-    """What the site's runtime leaves for an epoch: its registration, each step committed and the transcripts it keeps;
-    and the seconds the epoch took, and the output bits its responses carry."""
-    steps = []
-    for route, (requests, n) in enumerate(zip((adds, compares), REQUESTS)):
-        mine = requests[epoch * n : (epoch + 1) * n]
-        steps += [
-            (f"{route:01b}{len(b) - 1:03b}", sum(b, ()))
-            for b in (mine[s : s + site.batch] for s in range(0, n, site.batch))
-        ]
+def schedule(site: Site, epoch: int) -> list[tuple[str, tuple[int, ...]]]:
+    """The scheduler's steps for an epoch, each its advice and fresh inputs: the generator's sessions in cohorts of
+    `site.batch`, a cohort's steps in turn, spread evenly among the classifier's."""
+    sessions = [adds[(epoch * SESSIONS + s) * STEPS :][:STEPS] for s in range(SESSIONS)]
+    cohorts = [sessions[c : c + site.batch] for c in range(0, SESSIONS, site.batch)]
+    # a session opens on its first pair, and adds each later pair's second number to its running sum
+    generator = [
+        (c, t, len(cohort), sum((s[t] if t == 0 else s[t][len(s[t]) // 2 :] for s in cohort), ()))
+        for c, cohort in enumerate(cohorts)
+        for t in range(STEPS)
+    ]
+    mine = compares[epoch * REQUESTS : (epoch + 1) * REQUESTS]
+    classifier = [(len(b), sum(b, ())) for b in (mine[r : r + site.batch] for r in range(0, REQUESTS, site.batch))]
+    order = sorted(
+        [(k / len(generator), 0, k) for k in range(len(generator))]
+        + [(k / len(classifier), 1, k) for k in range(len(classifier))]
+    )
+    steps, last = [], {}
+    for _, route, k in order:
+        if route == 1:
+            n, fresh = classifier[k]
+            steps.append((f"1{n - 1:03b}", fresh))
+            continue
+        c, t, n, fresh = generator[k]
+        back = len(steps) - last[c] if t else 0
+        last[c] = len(steps)
+        steps.append((f"0{n - 1:03b}{back:03b}", fresh))
+    return steps
+
+
+def runtime(site: Site, epoch: int) -> tuple[Stream, list, float, int]:
+    """What the site's runtime leaves for an epoch: its stream and the transcripts it keeps; and the seconds the epoch
+    took, and the output bits its responses carry."""
+    steps = schedule(site, epoch)
     circuits = [built(site.builder, advice)[0] for advice, _ in steps]
     rate = sum(n * PEAK[d] for d, n in FLEET.items())
     seconds = sum(len(c.gates) for c in circuits) / (rate * site.busy * (1 - site.hidden))
-    filler = (adder.inputs - len(adder.baseline)) * 8 * (0,)  # eight requests of zeros through the adder
+    filler = (adder.inputs - len(adder.baseline)) * 8 * (0,)  # eight one-step sessions of zeros
     while sum(len(c.gates) for c in circuits) < site.fill * rate * seconds:
-        steps.append(("0111", filler))
-        circuits.append(built(site.builder, "0111")[0])
-    transcripts = [transcript(c, inputs) for c, (_, inputs) in zip(circuits, steps)]
+        steps.append(("0111000", filler))
+        circuits.append(built(site.builder, "0111000")[0])
+    transcripts = transcribe(site.builder, steps)
     if site.forge:
         transcripts = site.forge(circuits, transcripts)
-    executions = [
-        commit(site.builder, advice, t, REMOTE.integrity.scheme) for (advice, _), t in zip(steps, transcripts)
-    ]
-    return Registration(site.builder), executions, transcripts, seconds, sum(len(c.outputs) for c in circuits)
+    scheme = REMOTE.integrity.scheme
+    executions = tuple(commit(site.builder, advice, t, scheme) for (advice, _), t in zip(steps, transcripts))
+    return Stream(Registration(site.builder), executions), transcripts, seconds, sum(len(c.outputs) for c in circuits)
 
 
 def epoch(product: str, site: Site, e: int, opened: float) -> dict[str, object]:
     """The verifier's records for one epoch whose window opened at `opened`, by the product's clock."""
-    registration, executions, transcripts, seconds, outputs = stream(site, e)
+    stream, transcripts, seconds, outputs = runtime(site, e)
     work = Withheld(WORK.difficulty, WORK.delta) if site.withheld else WORK
     if product == "remote":
         principals = {
             "verifier": REMOTE.verifier(Window(opened, opened + seconds + RTT)),
-            "prover": replace(REMOTE, work=work).prover(registration, executions, transcripts, FLEET),
+            "prover": replace(REMOTE, work=work).prover(stream, transcripts, FLEET),
         }
     else:
         held = int(site.held * BLOCKS)
         principals = {
             "verifier": ONSITE.verifier(),
             "prover": replace(ONSITE, work=work).prover(
-                registration, executions, transcripts, WEIGHTS[:held] + (bytes(32),) * (BLOCKS - held)
+                stream, transcripts, WEIGHTS[:held] + (bytes(32),) * (BLOCKS - held)
             ),
             "replayer": ONSITE.replayer(),
             "pinger": ONSITE.pinger(site.devices, Window(opened, opened + seconds), space_seconds=0.0004),
@@ -239,9 +314,8 @@ def line(records: Mapping[str, object]) -> str:
     parts = []
     if c := records.get("ComputeCoverage"):
         window = f"[{c.window.opened:5.2f}, {c.window.closed:5.2f}]s"
-        parts.append(
-            f"{window} compute {_share(c.covered, c.capacity)} covered" if not c.reasons else "compute not covered"
-        )
+        covered = f"{window} compute {_share(c.covered, c.capacity)} covered"
+        parts.append(covered if not c.reasons else "compute not covered")
     for kind, name in (("MemoryCoverage", "memory"), ("NetworkCoverage", "network")):
         if r := records.get(kind):
             total = getattr(r, "capacity", None) or r.bits
@@ -251,7 +325,7 @@ def line(records: Mapping[str, object]) -> str:
         missing = [k for k in ("WorkBound", "IntegrityProfile", "ComputeCoverage", "Complies") if k not in records]
         parts.append(f"NO VERDICT (no {', '.join(missing)})")
     else:
-        parts.append("complies" if verdict.complies else f"FAILS: {'; '.join(verdict.reasons)}")
+        parts.append("complies" if verdict.complies else f"FAILS: {'; '.join(verdict.reasons[:2])}")
     return ", ".join(parts)
 
 
@@ -288,6 +362,6 @@ def scenario(name: str) -> list[str]:
 
 if __name__ == "__main__":
     names = sys.argv[1:] or list(SCENARIOS)
-    print(f"fleet {FLEET}; builder {ROUTED.id()}; {EPOCHS} epochs of {REQUESTS} requests; NCI {NCI}")
+    print(f"fleet {FLEET}; builder {ROUTED.id()}; {EPOCHS} epochs; NCI {NCI}")
     surprises = [s for name in names for s in scenario(name)]
     print("\n" + ("\n".join(surprises) if surprises else "every scenario came out as described"))
