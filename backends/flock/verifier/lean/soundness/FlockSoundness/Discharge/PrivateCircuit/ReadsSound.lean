@@ -7,35 +7,36 @@ import FlockSoundness.Discharge.PrivateCircuit.InstanceHides
 /-!
 # Protocol 2 with hidden reads, end to end
 
-`U cls` is the class circuit (a library block plus its read gadget, `ClassRel`), and the program is the topology table,
+`U cls` is the class circuit (a unit circuit plus its read gadget, `ClassRel`), and the program is the topology table,
 each unit's entry its dimensions and the store cells it reads. The registrant registers the table under the root `rtT₀`
-and the row store under `rtS₀`, and holds an opening of every index of each (`tr`, `wo`). The registered model is the
+and the row store under `rtS₀`, and holds an opening of every index of each (`tr`, `wo`). The registered circuit is the
 table `T₀ j = (tr j).val` and the store `w c = (wo (idx c)).val`; its registered cells `w (.reg m)` are the committed
-inputs and weights.
+public and secret inputs.
 
 * `private_circuit_sound_reads`, soundness at the drawn units, for every live prover of a session whose registration
   carries the registrant's roots:
   1. the delivered values are the committed ones: a delivered public input other than the store's registered cell, or a
      delivered output other than the store's output row, is a read off the store, at most `q_S²/2^513`;
-  2. if the registered model's owed outputs are wrong (`OwedWrongR`), accepting is at most the law's escape at the units
+  2. if the registered circuit's owed outputs are wrong (`OwedWrongR`), accepting is at most the law's escape at the units
      wrong against the store (`bad T₀ w`, fixed before the draw) plus `ε_ks + δ_link` plus `q_S²/2^513` plus `q_T²/2^513`:
      a drawn unit wrong against the store is wrong in the committed values, or its gadget's reads are not the
      registered ones (a collision with the registrant's opening: the store's finder, `readPick`; the table's, through
      `ran_registered` at `regCommit`);
   3. together: accepting with a delivered public input other than the committed cell, or a delivered output other than
-     the registered model's end to end on the committed cells, is at most `q_S²/2^513` when the registered model's owed
-     outputs are right, and part 2's bound otherwise.
-  The inputs condition is explicit: the model runs on the committed cells, and the delivered public inputs are bound to
-  them (`pubIn`); every other registered cell (the weights, any private input) is the registrant's.
+     the registered circuit's end to end on the committed cells, is at most `q_S²/2^513` when the registered circuit's
+     owed outputs are right, and part 2's bound otherwise.
+  The inputs condition is explicit: the circuit runs on the committed cells, and the delivered public inputs are bound
+  to them (`pubIn`); every other registered cell (the secret inputs) is the registrant's.
 * `private_circuit_private_reads`, `private_circuit_indist_reads`: privacy at a public class list `cl` (`ClassList`:
   template, dimension class and padded count per block). The program commitment is `readsScheme`, the topology table's
   `cl.units` entries registered as hm96 rows. The verifier's view at the registered table is within
   `2·cl.units·δ₁ + zkGap` of the simulator's, which reads the class list `cl` and the owed outputs `o` only; so two
-  models of one class list, for the same owed outputs, give every event of the view probabilities within twice that.
+  circuits of one class list, for the same owed outputs, give every event of the view probabilities within twice that.
   What is public is exactly the class list and the owed outputs (with the session's public parameters, the class
-  circuit `U cl`): the view's distribution is a function of them, nothing more. The class list is not hidden, and at
-  census granularity it identifies the model (no two census workloads share one), so these theorems hide the table's
-  contents (dimensions within a class, read positions) among the models of one class list, not the model.
+  circuit `U cl`): the view's distribution is a function of them, nothing more. The class list is not hidden: it can
+  tell apart circuits whose class lists differ, and within one class list only the committed contents of the table
+  (dimensions within a class, read positions) are hidden. At hidden unit circuits the class list is size-only
+  (`ReadsHidden.lean`).
 
 Protocol 1's drawn bound (`ZkSessionDrawn`, `zk_session_drawnR`'s form) is a hypothesis, as `ZkSessionSound` was. The
 class circuit enters as a fact about its net (`ClassComputes`: each unit's check gate computes `ClassRel`), not as its
@@ -82,9 +83,9 @@ openings of the table and the store check against its roots (`htr`, `hwo`); the 
 outputs and public inputs against the registration's store root (`hdel`); and the store's and the table's finders meet
 `cr/sha-512` at budgets `qS`, `qT` (`hS`, `hT`). Then, at sessions whose registration carries the registrant's roots, with
 `T₀`, `w` the registered table and store: (1) a delivered value off the committed one is at most `q_S²/2^513`; (2) if the
-registered model's owed outputs are wrong, accepting is at most `escape(bad T₀ w) + ε_ks + δ_link + q_S²/2^513 +
-q_T²/2^513`; (3) a delivered public input off the committed cell or a delivered output off the registered model's end to
-end on the committed cells is at most `q_S²/2^513` plus, when the registered model's owed outputs are wrong,
+registered circuit's owed outputs are wrong, accepting is at most `escape(bad T₀ w) + ε_ks + δ_link + q_S²/2^513 +
+q_T²/2^513`; (3) a delivered public input off the committed cell or a delivered output off the registered circuit's end
+to end on the committed cells is at most `q_S²/2^513` plus, when the registered circuit's owed outputs are wrong,
 `escape(bad T₀ w) + ε_ks + δ_link + q_T²/2^513`. -/
 theorem private_circuit_sound_reads
     (L : ReadLayout P C.N) (lfT : ExplicitLeaf (Entry P)) (lfS : ExplicitLeaf V) (idx : Cell → Fin M)
@@ -235,7 +236,7 @@ registration `v` only. Under `hash-derived-key` at `δ₁` (`hKey`), where the t
 meet `ZkWireFixed`'s conditions (`hZk`) and the honest witness satisfies them (`hSat`): for every dummy table `p₀` and
 dummy witness `w₀`, every encoding of the session's views and every event of the registration's view and that encoding,
 the real view and the simulator's, which reads `cl` and `o` and nothing of `C`, are within `2·cl.units·δ₁ +
-zkGap (zs cl)`, both ways. The class list is public; this hides the table among the models of class list `cl`.
+zkGap (zs cl)`, both ways. The class list is public; within it the table's contents are hidden.
 `circuit_private` at `readsScheme`. -/
 theorem private_circuit_private_reads
     {Circ Out Ent : Type} {K W Hi VL : Type} [Field K] [Fintype K] [DecidableEq K]
@@ -256,10 +257,10 @@ theorem private_circuit_private_reads
   circuit_private (readsScheme fits tab encE J zs U) cl (2 * cl.units * δ₁) (hm96Reg_hides _ hKey) o C w hZk hSat p₀ w₀
     encV E
 
-/-- **The view is a function of the public class list and the owed outputs**: any two models `C`, `C'` registered at
+/-- **The view is a function of the public class list and the owed outputs**: any two circuits `C`, `C'` registered at
 one class list `cl` (template, dimension class and padded count per block), with honest witnesses for the same owed
 outputs `o`, give every event of the verifier's view probabilities within `2·(2·cl.units·δ₁ + zkGap (zs cl))`, under
-`hash-derived-key` at `δ₁`. Nothing is claimed for models of different class lists: the class list is public.
+`hash-derived-key` at `δ₁`. Nothing is claimed for circuits of different class lists: the class list is public.
 `circuit_indist` at `readsScheme`. -/
 theorem private_circuit_indist_reads
     {Circ Out Ent : Type} {K W Hi VL : Type} [Field K] [Fintype K] [DecidableEq K]

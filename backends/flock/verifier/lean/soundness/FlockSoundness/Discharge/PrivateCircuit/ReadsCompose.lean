@@ -3,7 +3,7 @@ import FlockSoundness.Discharge.PrivateCircuit.ReadsDefs
 /-!
 # Wrong units against the topology table and the row store
 
-What the verifier is owed is the registered model's outputs end to end on the registered cells: `evalR` at the
+What the verifier is owed is the registered circuit's outputs end to end on the registered cells: `evalR` at the
 registered table `T` on the store's registered cells. The units are judged against the same objects: unit `j` is correct
 when its block, at the dimensions of `T`'s entry `j`, on the store's values at the cells that entry names, gives the
 store's values at `j`'s output rows (`UnitOk`).
@@ -28,7 +28,7 @@ open scoped ENNReal
 variable {V : Type} [Inhabited V] (P : Pop V)
 
 /-- **The units feeding unit `i`, correct against the store, give its owed outputs**: `i`'s output rows in the store are
-the model's end to end on the store's registered cells. -/
+the circuit's end to end on the store's registered cells. -/
 theorem store_cone (T : Table P) (w : Cell → V) (i : Fin P.N) (h : ∀ j, Reaches P T j i → UnitOk P T w j) :
     ∀ l : Fin P.o, w (.out i l) = evalR P T (fun m => w (.reg m)) i l := by
   suffices H : ∀ n (i : Fin P.N), i.val = n → (∀ j, Reaches P T j i → UnitOk P T w j) →

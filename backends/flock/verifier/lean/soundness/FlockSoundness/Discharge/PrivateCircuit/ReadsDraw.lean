@@ -5,7 +5,7 @@ import FlockSoundness.Discharge.PrivateCircuit.InstanceReal
 # The draw over the padded population, set by set
 
 The verifier draws over the public padded population, with the block classes as strata (`Law.stratified`). The set the
-sampling term is about is the registered model's units wrong against the store, `bad T w`: the registration fixes it
+sampling term is about is the registered circuit's units wrong against the store, `bad T w`: the registration fixes it
 before the draw, so the useful bound is the law's escape at that one set, not its miss at a count (`miss(1)` is near 1
 under sparse sampling).
 

@@ -1,21 +1,21 @@
 import FlockSoundness.Discharge.PrivateCircuit.InstanceDefs
 
 /-!
-# Protocol 2 with hidden reads: a padded bag of library blocks over a committed row store
+# Protocol 2 with hidden reads: a padded bag of unit circuits over a committed row store
 
-The design of `docs/hiding-model-architectures.md`. Every proof unit is a public library block at its class's padded
-size; the hidden program is a **topology table**, committed under a registered root: for each unit its dimensions and the
+The full circuit is cut into proof units, each running its class's unit circuit (a template) at its class's padded size;
+the hidden program is a **topology table**, committed under a registered root: for each unit its dimensions and the
 store cells its read slots read. A **row store**, committed under a second registered root, holds every cell a unit reads
-or writes: the registered cells (the model's inputs and weights) and each unit's output rows. A unit's circuit is its
-block plus a read gadget that opens its table entry at its own index, opens each input cell at the index the entry names,
+or writes: the registered cells (the full circuit's public and secret inputs) and each unit's output rows. A proof unit's
+circuit is its unit circuit plus a read gadget that opens its table entry at its own index, opens each input cell at the index the entry names,
 and opens each of its output rows at that row's public index, every opening checked against the registration's roots in
 the circuit (`Flock.Registered.opensLeaf`, hm96 leaves).
 
-* **The model** (`Pop`, `Entry`, `Table`, `evalR`): unit `j`'s outputs end to end are its block on the cells its entry
+* **The full circuit** (`Pop`, `Entry`, `Table`, `evalR`): unit `j`'s outputs end to end are its block on the cells its entry
   names, a registered cell `x m` or an earlier unit's output row (`Entry.Acyclic`, which the gadget checks).
 * **Against a store** (`UnitOk`, `bad`, `Reaches`, `cone`, `OwedWrongR`): unit `j` is correct against the store `w` when
   its entry is acyclic and its block on `w` at its entry's cells gives `w` at its output rows; `bad T w` is the set of
-  units that are not. The registered model's owed outputs are wrong (`OwedWrongR`) when the store's value at an owed
+  units that are not. The registered circuit's owed outputs are wrong (`OwedWrongR`) when the store's value at an owed
   output row is not `evalR`'s on the store's registered cells.
 * **Reads** (`ReadVal`, `ReadOk`, `readPair`, `regCommit`): an opening of index `i` of a registered root is a value, its
   salt and its path; it checks when the hm96 leaf of the value under the salt opens the root at `i`. `readPair` is the
@@ -29,7 +29,9 @@ the circuit (`Flock.Registered.opensLeaf`, hm96 leaves).
   `ClassComputes` is the class-net fact it follows from (`classWrongOn_of_computes`): each unit's one committed gate is
   its check, set at the good assignments, which the unit's gates compute as the relation.
 * **The public class list** (`BlockClass`, `ClassList`): template, dimension class and padded count per
-  block, public; the topology table is hidden only among the models of one class list.
+  block, public. It can tell apart circuits whose class lists differ; within one class list only the committed contents
+  (dimensions within a class, read positions) are hidden. At hidden unit circuits the class list is size-only
+  (`ReadsHidden.lean`).
 * **The session's headlines, as Props** (`ZkSessionDrawn`, `DrawEscapes`): protocol 1's drawn bound (no drawn unit wrong
   except with `ε_ks + δ_link`, `zk_session_drawnR`'s form) and the draw's escape at a set fixed before it.
 -/
@@ -39,16 +41,16 @@ namespace FlockSoundness.Discharge.PrivateCircuit.Reads
 open Flock FlockSoundness.Game FlockSoundness.Registered Refine Binding Audit
 open scoped ENNReal
 
-/-! ## The model: library blocks over a row store -/
+/-! ## The full circuit: unit circuits over a row store -/
 
-/-- **A store cell**: registered cell `m` (an input or a weight), or output row `l` of unit `i`. -/
+/-- **A store cell**: registered cell `m` (a public or secret input), or output row `l` of unit `i`. -/
 inductive Cell where
   | reg (m : ℕ)
   | out (i l : ℕ)
   deriving DecidableEq
 
-/-- **A padded population of library blocks**: `N` units, each reading `r` cells and writing `o` output rows of values
-`V`; unit `j` runs the public block `blk j` (its class's, so a function of `j`'s public class) at the dimensions `d : Dm`
+/-- **A padded population of unit circuits**: `N` units, each reading `r` cells and writing `o` output rows of values
+`V`; unit `j` runs the block `blk j` (its class's unit circuit, so a function of `j`'s class) at the dimensions `d : Dm`
 its topology entry holds. -/
 structure Pop (V : Type) where
   N : ℕ
@@ -73,7 +75,7 @@ abbrev Table (P : Pop V) : Type := Fin P.N → Entry P
 
 variable (P : Pop V)
 
-/-- **The model end to end** on the registered cells `x` under the table `T`: unit `j`'s outputs are its block at its
+/-- **The full circuit end to end** on the registered cells `x` under the table `T`: unit `j`'s outputs are its block at its
 entry's dimensions on its entry's cells, `x m` for a registered cell and the earlier unit's output row for an output
 (`default` for an entry that is not acyclic). -/
 def evalR [Inhabited V] (T : Table P) (x : ℕ → V) (j : Fin P.N) : Fin P.o → V :=
@@ -104,8 +106,8 @@ open Classical in
 noncomputable def cone (T : Table P) (i : Fin P.N) : Finset (Fin P.N) :=
   Finset.univ.filter fun j => Reaches P T j i
 
-/-- **The registered model's owed outputs are wrong**: at some owed output row `(i, l)`, the store's value is not the
-model's end to end on the store's registered cells. -/
+/-- **The registered circuit's owed outputs are wrong**: at some owed output row `(i, l)`, the store's value is not the
+circuit's end to end on the store's registered cells. -/
 def OwedWrongR [Inhabited V] (T : Table P) (w : Cell → V) (owed : Finset (Fin P.N × Fin P.o)) : Prop :=
   ∃ p ∈ owed, w (.out p.1 p.2) ≠ evalR P T (fun m => w (.reg m)) p.1 p.2
 
@@ -209,7 +211,7 @@ structure ClassComputes {C : Audit.Circuit} {n : ℕ} {Reg : Type} (Pt : Audit.P
 
 /-! ## The public class list -/
 
-/-- **A block's public class**: its library template, its dimension class and its padded count (the units of that
+/-- **A block's public class**: its template (the unit circuit it runs), its dimension class and its padded count (the units of that
 class in the padded population). -/
 structure BlockClass where
   template : ℕ
@@ -217,9 +219,9 @@ structure BlockClass where
   padded : ℕ
   deriving DecidableEq
 
-/-- **The public class list**, one `BlockClass` per block. The verifier sees it: at pow2 per-template granularity it
-identifies the model among the census workloads (no two share one), so the protocol hides the topology table's contents
-among the models of one class list, not the class list itself. -/
+/-- **The public class list**, one `BlockClass` per block. The verifier sees it, so it can tell apart circuits whose
+class lists differ; within one class list only the committed contents of the topology table (dimensions within a class,
+read positions) are hidden. `ReadsHidden.lean`'s `SizeList` is the size-only form, at committed unit circuits. -/
 abbrev ClassList := List BlockClass
 
 /-- The topology table's length at a class list: the padded population, every block's padded count. -/
