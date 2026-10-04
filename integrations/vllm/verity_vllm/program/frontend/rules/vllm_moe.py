@@ -289,18 +289,16 @@ class GroupedTopkRule(OpRule):
         return True
 
     def emit(self, node, ctx):
-        from verity.ml.fp32 import bits_of  # noqa: PLC0415
         scores, _ng, _tg, TOPK, _rn, scale, bias = node.args[:7]
         rows, lead = rows_of(ctx.coll(scores))
         M, E = shape(ctx, scores)
         kernel = grouped_topk_kernel(E, M)
-        SCALE = bits_of(float(scale))
-        fn = ctx.kind("moe_router_sigmoid_bias", node, E=E, TOPK=TOPK, SCALE=SCALE, KERNEL=kernel)
+        fn = ctx.kind("moe_router_sigmoid_bias", node, E=E, TOPK=TOPK, RSF=float(scale), KERNEL=kernel)
         b = ctx.coll(bias)
         outs = [ctx.call(fn, r, b, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.define(node, [from_rows([o[0] for o in outs], lead), from_rows([o[1] for o in outs], lead)])
         ctx.bind_weight_role(bias, self, "router.e_score_correction_bias", E=E)
-        ctx.record(self, node, {"E": E, "TOPK": TOPK, "SCALE": SCALE, "KERNEL": kernel, "rows": M}, emitted=f"{fn.id} x{M}")
+        ctx.record(self, node, {"E": E, "TOPK": TOPK, "SCALE": float(scale), "KERNEL": kernel, "rows": M}, emitted=f"{fn.id} x{M}")
 
 
 class MoeAlignBlockSizeRule(InPlaceRule):

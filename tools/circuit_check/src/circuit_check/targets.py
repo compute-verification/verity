@@ -449,7 +449,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("RoPEGptJ_v2", lambda: bind(ref_prims.RoPEGptJV2, NHEADS=2, D=16)),
         ("RoPEInterleavedRef_v1", lambda: bind(ref_prims.RoPEInterleavedRef, D=16, DT="bf16")),
         # the word twins of `mla`'s Boolean decode and bmm: 17 keys, so one block with a full DOT group and a masked one
-        ("TritonMlaDecodeWord_v1", lambda: bind(mla_word.TritonMlaDecodeWord, H=1, T=17, DL=16, DR=16, BN=32, SPLITS=1,
+        ("TritonMlaDecodeWord_v1", lambda: bind(mla_word.TritonMlaDecodeWord, H=1, T=65, DL=16, DR=16, BN=32, SPLITS=1,
                                                 SCALE=0x3D800000, DOT=hopper.HopperBF16WgmmaDot16)),
         ("MlaBmmWord_v1", lambda: bind(mla_word.MlaBmmWord, NHEADS=2, K=32, N=3, DOT=hopper.HopperBF16WgmmaDot16)),
     ]
@@ -499,7 +499,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
              "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
              "SCALE": "shared-per-block", "S": 4,
-             "CONSTRUCTION": "shared-greedy"}
+             "CONSTRUCTION": "shared-greedy", "RSF": 2.5, "KERNEL": "block", "DL": 16, "DR": 16, "SPLITS": 1, "SM_SCALE": 0x3D800000}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
     vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]
     kinds = [(f"{v.name}/{k}", make) for v in vocabularies for k, make in v.kinds.items()]

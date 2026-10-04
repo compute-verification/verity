@@ -14,6 +14,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.attention import _vllm_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_launch_context, active_target_profile
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import _target_kinds, gemm_pins_for
+from verity_vllm.program.registry.mla_word import BLOCK_N
 
 BF16 = Value(16)
 
@@ -27,9 +28,6 @@ MLA_PINS = {"attention": "mla", "impl": "vllm.v1.attention.backends.mla.triton_m
 """What the MLA kinds model, every field read from the instantiated layer (`vllm_meta.mla_attention_impls`): `forward_mqa` on
 `TritonMLAImpl` (one split under batch invariance) after the bf16 absorb bmm, and `forward_mha` on FA2's varlen prefill over the
 call's own rows.  The FA version pin is the active target's (`registry.targets.check_flash_attn_registered`)."""
-
-#: `_fwd_grouped_kernel_stage1`'s key block at `is_mla=True` (the MLA lane's `TritonMlaDecode_v1` checks it)
-DECODE_BLOCK_N = 32
 
 
 def _f32_bits(x: float) -> int:
@@ -266,12 +264,12 @@ class MlaAttentionWithOutputRule(StateRule):
         mqa_q = Coll(Array(NH, Array(L + DR, BF16)), concat([r for h in range(NH) for r in (ql[h].refs, q0[h][DN:DN + DR].refs)]))
         kv = Coll(Array(P, Array(L + DR, BF16)), hist.cut(P))
         SCALE = _f32_bits(scale)
-        dec = ctx.kind("mla_decode", node, H=NH, T=P, DL=L, DR=DR, BN=DECODE_BLOCK_N, SPLITS=1, SCALE=SCALE, DOT=dot)
+        dec = ctx.kind("mla_decode", node, H=NH, T=P, DL=L, DR=DR, SPLITS=1, SM_SCALE=SCALE, DOT=dot)
         o = ctx.call(dec, mqa_q, kv, node=node, rule=self, name=f"{hint}[t={P - 1}]")
         w_uv = Coll(Array(NH, Array(DV, Array(L, BF16))), concat([W[h * H + DN:(h + 1) * H].refs for h in range(NH)]))
         vup = ctx.kind("mla_bmm", node, NHEADS=NH, K=L, N=DV, DOT=dot)
         y = ctx.call(vup, o, w_uv, node=node, rule=self, name=f"{hint}/v_up")
-        detail = {"decode": {"T": P, "BN": DECODE_BLOCK_N, "SPLITS": 1, "SCALE": f"0x{SCALE:08X}", "DOT": dot.name,
+        detail = {"decode": {"T": P, "BN": BLOCK_N, "SPLITS": 1, "SCALE": f"0x{SCALE:08X}", "DOT": dot.name,
                              "absorb": absorb.id, "attention": dec.id, "v_up": vup.id},
                   "emitted": f"{absorb.id} + {dec.id} + {vup.id}"}
         return y, detail

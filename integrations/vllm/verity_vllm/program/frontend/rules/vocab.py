@@ -355,13 +355,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT),
            "moe_expert_gemm_w_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmWV2, E=E, K=K, N=N, DOT=DOT),
            "moe_sum": lambda TOPK, H: ir_bind(_moe.MoeSum, TOPK=TOPK, H=H),
-           "moe_router_sigmoid_bias": lambda E, TOPK, SCALE, KERNEL: ir_bind(_moe.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=SCALE, KERNEL=KERNEL),
+           "moe_router_sigmoid_bias": lambda E, TOPK, RSF, KERNEL: ir_bind(_moe.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=RSF, KERNEL=KERNEL),
            "rope_gptj": lambda NHEADS, D: ir_bind(RP.RoPEGptJV2, NHEADS=NHEADS, D=D),
            # MLA (`rules/vllm_bindings/mla_attention.py`): the absorb / V-up bmms and Triton's one-split MLA decode, the word twins of
            # `registry.mla`'s Boolean Definitions
            "mla_bmm": lambda NHEADS, K, N, DOT: ir_bind(_mlaw.MlaBmmWord, NHEADS=NHEADS, K=K, N=N, DOT=DOT),
-           "mla_decode": lambda H, T, DL, DR, BN, SPLITS, SCALE, DOT: ir_bind(_mlaw.TritonMlaDecodeWord, H=H, T=T, DL=DL, DR=DR, BN=BN,
-                                                                              SPLITS=SPLITS, SCALE=SCALE, DOT=DOT),
+           "mla_decode": lambda H, T, DL, DR, SPLITS, SM_SCALE, DOT: ir_bind(_mlaw.TritonMlaDecodeWord, H=H, T=T, DL=DL, DR=DR,
+                                                                             BN=_mlaw.BLOCK_N, SPLITS=SPLITS, SCALE=SM_SCALE, DOT=DOT),
            # [R17-42 route A (3)] the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
            # construction from the router logits (`registry.moe_pad.MoeFfnFixedL_v1`: ALL E expert bodies on their own weights, the TOPK slot
            # outputs selected by the router ids, `MoeSum_v1`); its lift of record is the hand-authored `LMoeFfnL_v1` (unselected slots DISABLED).
@@ -427,15 +427,16 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm_w_dot": "MoeExpertGemmW_v2{E,K,N,DOT}: MoeExpertGemmW_v1 with the target's k16 step DOT — "
                                     "bf16_rne(f32mul(DotBf16_v2{K,DOT}(x, W[e][n,:]), g))",
            "moe_sum": "MoeSum_v1{TOPK,H}: _moe_C.moe_sum — per token, ascending-k f32 sum of the TOPK weighted expert rows from +0, one bf16 RNE",
-           "moe_router_sigmoid_bias": "MoeRouterSigmoidBias_v1{E,TOPK,SCALE,KERNEL}: _moe_C.grouped_topk(n_group=1, topk_group=1, renormalize=True, "
+           "moe_router_sigmoid_bias": "MoeRouterSigmoidBias_v1{E,TOPK,SCALE=RSF,KERNEL}: _moe_C.grouped_topk(n_group=1, topk_group=1, renormalize=True, "
                                       "SIGMOID) per token row of f32 logits with the f32 selection bias -> (weights f32[TOPK], ids i32[TOPK]); "
                                       "KERNEL the launch (block / warp kernel, registry.moe)",
            "rope_gptj": "RoPEGptJ_v2{NHEADS,D}: vLLM _C.rotary_embedding GPT-J (interleaved pairs 2i, 2i+1; the odd output's y*cos rounded, "
                         "x*sin fused), bf16 cos/sin cache row as Input",
            "mla_bmm": "MlaBmmWord_v1{NHEADS,K,N,DOT}: vLLM's batch-invariant bmm_kernel for one token row, Gemm_v2{K,N,DOT} per head "
                       "(MLA's W_UK_T absorb and W_UV up-projection; word twin of registry.mla.MlaBmm_v1)",
-           "mla_decode": "TritonMlaDecodeWord_v1{H,T,DL,DR,BN,SPLITS,SCALE,DOT}: Triton's one-split MLA decode (decode_attention_fwd, "
-                         "is_mla) of one query token over the request's T cache rows [kv_c | k_pe] (word twin of registry.mla.TritonMlaDecode_v1)",
+           "mla_decode": "TritonMlaDecodeWord_v1{H,T,DL,DR,BN=32,SPLITS,SCALE=SM_SCALE,DOT}: Triton's one-split MLA decode (decode_attention_fwd, "
+                         "is_mla, BLOCK_N 32) of one query token over the request's T cache rows [kv_c | k_pe] (word twin of "
+                         "registry.mla.TritonMlaDecode_v1); SM_SCALE the f32 word of sm_scale",
            "moe_ffn_fixed": "MoeFfnFixedL_v1{E,TOPK,VPT,H,I}: [R17-42 padded] the whole fused block of one token from its router logits -- "
                             "MoeRouterTopK_v1 -> ALL E MoeExpertBody_v1{H,I} on their own weights (g_e the routed weight of the slot the router "
                             "picked, 0.0f otherwise) -> the TOPK slot outputs selected by the ids -> MoeSum_v1; value-equal to the indexed-read "
