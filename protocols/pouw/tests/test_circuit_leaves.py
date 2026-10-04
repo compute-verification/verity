@@ -79,18 +79,18 @@ def test_a_rows_commit_string_is_cores_at_every_padding_edge(row, role, sizes):
         assert L.commit(row, role, words, y) == L.INST.commit_string(L.KEY, x, y), n
 
 
-def test_every_per_call_row_but_ok_the_tile_and_the_caps_small_rows_is_a_row_seg_row():
+def test_every_per_call_row_but_ok_the_tile_and_the_caps_rows_is_a_row_seg_row():
     """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`, `cap.PORTS`) are exactly the rows with a schema, and the
-    row-seg ones are the per-call rows (role X) but ok, the tile digest and the cap's per-word and per-row-sum rows: A_i,
-    A′_i ‖ P_A,i of both checks, A's salt-dead counts, and the cap's chunk digests and strip row, which C-Flock's composer
-    needs to be row-seg (a unit none of whose rows hashes a block before its last is refused).  Every other row, each
-    registered row (role W) included, is a `sha512/row/v2` row: no row is `sha512/row/v1`."""
+    row-seg ones are the per-call rows (role X) but ok, the tile digest and the cap's rows: A_i, A′_i ‖ P_A,i of both
+    checks and A's salt-dead counts.  Every other row, each registered row (role W) and the cap's chunk digests and strip
+    row (64 words, one whole block, so a unit that reads or writes one hashes a block before its last) included, is a
+    `sha512/row/v2` row: no row is `sha512/row/v1`."""
     from verity_pouw.circuit import cap
 
     used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS, cap.PORTS) for unit in ports.values()
             for row, role, _ in unit["rows"]}
     assert used == set(L.ROW_SCHEMA)
-    seg = {(row, ROLE_X) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p", "sd", "cap-chunks", "cap-rows")}
+    seg = {(row, ROLE_X) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p", "sd")}
     assert {k for k, s in L.ROW_SCHEMA.items() if s == SCHEMA_HM96_SHA512_ROW_SEG} == seg
     assert {k for k, s in L.ROW_SCHEMA.items() if s == SCHEMA_HM96_SHA512_ROW_V2} == set(L.ROW_SCHEMA) - seg
 

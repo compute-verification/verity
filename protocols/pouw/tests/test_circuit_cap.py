@@ -353,7 +353,8 @@ def _split(k: int, tile, n: int, rho: int, ac, bc, ok, sd, cert=None, dev: str =
     sums = [evaluate(tp["row_tally"], field(row, 2, 2 + fb), field(row, 2 + fb, 3 + fb), field(row, 3 + fb, 4 + fb),
                      field(row, 4 + fb, 5 + fb), sd[i]) for i, row in enumerate(words)]
     digest = evaluate(tp["tile"], [x for ch in chunks for x in ch])
-    verdict, = evaluate(tp["tally"], *([s[f] for s in sums] for f in range(4)), list(strip[:cap.STRIP_BITS]), strip[-1])
+    verdict, = evaluate(tp["tally"], *([s[f] for s in sums] for f in range(4)), list(strip[:cap.STRIP_BITS]),
+                        strip[cap.STRIP_BITS], list(strip[cap.STRIP_BITS + 1:]))
     return words, strip, chunks, sums, digest, verdict
 
 
@@ -433,15 +434,16 @@ def test_the_split_h0_is_pearl_tile_digests_on_edge_tiles(tile):
     for cr, ur, ch in zip(c, u, chunks):
         want = b"".join(C.message_digest(struct.pack(f"<{len(cr[h:h + 32])}I", *cr[h:h + 32]) +
                                          struct.pack(f"<{len(ur[h:h + 32])}I", *ur[h:h + 32])) for h in range(0, tn, 32))
-        assert L.digest_bytes(ch) == want + bytes(32 * L.CAP_CHUNKS - len(want))
+        assert L.digest_bytes(ch) == want + bytes(2 * L.CAP_ROW_WORDS - len(want))
 
 
 def test_the_split_units_rows_are_their_ports_words():
     """Each output row of the split's units is its ports' bits (`rowleaf.bit_row`) and its schema's words (`leaves`):
     the word unit's C̃ ‖ U and flags (padded with zero bits) ‖ count ‖ later +0 promotions ‖ good, a row digest's chunk
-    digests (the second zero at TN <= 32), a row tally's sums of its words' counts and promotions ‖ forming elements ‖
-    good, and the strip's admission bits (padded to 64) ‖ bound, which is `_cap_constants`' table at the passing rows'
-    count."""
+    digests (the second zero at TN <= 32) ‖ zero words, a row tally's sums of its words' counts and promotions ‖
+    forming elements ‖ good, and the strip's admission bits (padded to 64) ‖ bound ‖ zero words, its bound
+    `_cap_constants`' table at the passing rows' count; the chunk digests' and the strip's rows are each 64 words, one
+    whole SHA-512 block."""
     k, tile, n, rho = 256, (2, 2), 2, 1000
     rng = random.Random("cap-split-rows")
     ac, bc = _random_tile(rng, k, *tile)
@@ -455,15 +457,18 @@ def test_the_split_units_rows_are_their_ports_words():
                                  L.words_cap_flags(flags[:k // 32], atoms, zeros, good))):
             assert bit_row(*cols) == (row_bytes(want, 16), 16 * L.ROW_WORDS[row](k)), row
     for row, ch, (atoms, zeros, elems, good) in zip(words, chunks, sums):
-        assert ch[8:] == (0,) * 8
+        assert ch[8:] == (0,) * (cap.CHUNK_WORDS - 8)
         assert bit_row((list(ch), 32)) == (row_bytes(L.words_cap_chunks([L.digest_bytes(ch[:8])]), 16),
                                            16 * L.ROW_WORDS["cap-chunks"](k))
         assert (atoms, zeros) == (sum(w[2 + fb] for w in row), sum(w[3 + fb] for w in row))
         assert bit_row(([atoms, zeros, elems], 32), ([good], 16)) == (
             row_bytes(L.words_cap_sums(atoms, zeros, elems, good), 16), 16 * L.ROW_WORDS["cap-sums"](k))
-    mask, bound = list(strip[:cap.STRIP_BITS]), strip[-1]
+    mask, bound, tail = list(strip[:cap.STRIP_BITS]), strip[cap.STRIP_BITS], list(strip[cap.STRIP_BITS + 1:])
     assert mask == [1, 0] + [0] * (cap.STRIP_BITS - 2) and bound == cap._cap_constants(k, *tile, n, rho, "sm120")[-1][1]
-    assert bit_row((mask, 1), ([bound], 32)) == (row_bytes(L.words_cap_rows([1, 0], bound), 16), 16 * L.ROW_WORDS["cap-rows"](k))
+    assert tail == [0] * cap.STRIP_TAIL
+    assert bit_row((mask, 1), ([bound], 32), (tail, 16)) == (row_bytes(L.words_cap_rows([1, 0], bound), 16),
+                                                            16 * L.ROW_WORDS["cap-rows"](k))
+    assert L.ROW_WORDS["cap-chunks"](k) == L.ROW_WORDS["cap-rows"](k) == 64
 
 
 @pytest.mark.parametrize("role", ["row_b", "row_a", "strip", "word", "row_digest", "row_tally", "tile", "tally"])
@@ -519,6 +524,20 @@ def test_no_unit_of_a_deployed_tiles_closure_has_more_than_66_rows():
         sizes[role] = len(rows)
         assert any(s == SCHEMA_HM96_SHA512_ROW_SEG or -(-bits // 8) + 17 > 128 for s, bits in rows), role
     assert sizes == {"tile": 65, "row_a": 4, "strip": 65, "word": 4, "row_digest": 65, "row_tally": 66, "tally": 65}
+
+
+@pytest.mark.parametrize("k", [4096, 8192, 12288, 14336])
+def test_every_row_of_a_deployed_tile_is_whole_blocks_or_a_short_v2_row(k):
+    """At each served k, every row a split unit reads or writes at the deployed 64 × 64 tile is one C-Flock's widened
+    proved scope takes: its bytes whole SHA-512 blocks (a row-seg row's segments then end on a block, and a v2 row hashes
+    a block before its last), or a v2 row that ends in its first block with SHA-512's 17 bytes of padding.  The strip's
+    and the chunk digests' rows are the ones padded to a block for it."""
+    reads = cap.reads((64, 64))
+    for role, ports in cap.PORTS.items():
+        for s, bits in L.statement_rows(ports, k, reads[role])["row_schemas"]:
+            n = bits // 8
+            assert bits % 16 == 0 and 0 < n and (n % 128 == 0 or s != SCHEMA_HM96_SHA512_ROW_SEG and n + 17 <= 128), \
+                (role, s, bits)
 
 
 def _call_inputs(shape: pc8.Shape, name: str):

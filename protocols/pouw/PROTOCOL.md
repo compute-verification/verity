@@ -812,25 +812,29 @@ useful    U/(α_A·α_B), glue
     pouw/cap-flags/v1    a cap word's k/32 flag bits 16 a word, low bit first      ⌈k/512⌉ + 5       X                  v2
                          (the last word's high bits 0), its flag count and later
                          +0 promotions as two words each, then good's ok word
-    pouw/cap-chunks/v1   a tile row's chunk digests, TurboSHAKE128 (D = 0x21) of   32                X                  seg
+    pouw/cap-chunks/v1   a tile row's chunk digests, TurboSHAKE128 (D = 0x21) of   64                X                  v2
                          each 32 columns' C̃ and U (`pearl_c.message_digest`), two
                          bytes a word, low byte first (TN ≤ 64; the second 0 at
-                         TN ≤ 32)
+                         TN ≤ 32), then 32 zero words
     pouw/cap-sums/v1     a tile row's flag count, later +0 promotions and forming  7                 X                  v2
                          elements as two words each, then its words' good as an ok
                          word
-    pouw/cap-rows/v1     a strip's admission bits 16 a word, 64 bits (TM ≤ 64,     6                 X                  seg
-                         the rest 0), then the cap's bound as two words
+    pouw/cap-rows/v1     a strip's admission bits 16 a word, 64 bits (TM ≤ 64,     64                X                  v2
+                         the rest 0), then the cap's bound as two words, then 58
+                         zero words
     ~~~
 
-    Every per-call row (role X) but ok, the tile digest and the cap's per-word and per-row-sum rows is a row-seg row, so
-    decode's serial hash chain is a segment's, not the row's (Daniel's ruling, card 637f70c6): A_i (bf16, 8 KiB at
-    k = 4,096, 8 segments), A′_i ‖ P_A,i (3 segments), and Pearl-C's FP32 A_i (16 KiB, 16 segments), fp8-p row
-    (5 segments), salt-dead counts (1 KiB at k = 8,192, 1 segment), and the cap's chunk digests and strip row. The cap's
-    per-word and per-row-sum rows are at most one SHA-512 block at k ≤ 2^14, so a segment's chain is the row's, and v2
-    hashes them in fewer blocks. The chunk digests and the strip row are as short, and row-seg because C-Flock's
-    composer refuses a unit none of whose rows hashes a block before its last, which a row-seg row always does: without
-    them the strip, a row digest, the tile and the tally would read and write only one-block v2 rows. Every other
+    Every per-call row (role X) but ok, the tile digest and the cap's rows is a row-seg row, so decode's serial hash
+    chain is a segment's, not the row's (Daniel's ruling, card 637f70c6): A_i (bf16, 8 KiB at k = 4,096, 8 segments),
+    A′_i ‖ P_A,i (3 segments), and Pearl-C's FP32 A_i (16 KiB, 16 segments), fp8-p row (5 segments) and salt-dead
+    counts (1 KiB at k = 8,192, 1 segment). The cap's per-word and per-row-sum rows are at most one SHA-512 block at
+    k ≤ 2^14, so a segment's chain is the row's, and v2 hashes them in fewer blocks. The chunk digests and the strip row
+    are v2 rows padded with zero words to 64, one whole block: C-Flock's composer refuses a unit none of whose rows
+    hashes a block before its last, and without a whole block the strip, a row digest, the tile and the tally would
+    read and write only one-block v2 rows. They are not row-seg rows because C-Flock's widened proved scope takes a v2
+    row whose bytes are whole blocks or end in its first block, and a row-seg row only of whole blocks; padded, each
+    costs two compressions, as its short row-seg row did, where a row-seg row padded to a block would cost three. A row
+    digest and the strip write the zero words as constants, and the tile and the tally leave them unread. Every other
     row is a v2 row, the registered rows (role W) included, in the registered tree and in every statement that reads or
     writes them, so each (row, role) has one leaf schema wherever it appears and no row is `sha512/row/v1` (Daniel's
     ruling, Slack 1790973124.259289). A v2 row costs what a v1 row of the same words would, a 128-byte prefix block and
