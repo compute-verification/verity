@@ -1443,6 +1443,32 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 PROTOCOL.md's masked protocol on §7.4's coin tree (`Flock.Zk*`). `hooks` is upstream's `zk_identity`; `proof_class`
 stays `NON_ZK_PROOF`. **Agreement:** README.
 
+### 16.15 The forms the soundness proof covers
+
+`verify` fails closed (Daniel, Oct 4): soundness is one theorem over every session it accepts, with no condition on the
+circuit, the public file or the statement's form, so it refuses every statement outside the forms the proof covers. A
+refusal is a completeness limit; accepting an uncovered form is a soundness gap. `Flock.ProvedScope.check` is the one
+rule; widening it to another form is one line of it plus the proof that the headlines cover that form. Once a statement
+sets up, every session's verdict is `refused: <why>: a statement form the soundness proof does not cover`, `<why>` the
+first rule it fails:
+
+1. an hm96-sha512 row statement (§16.10 on): `<name>, a statement before hm96-sha512 rows`;
+2. untyped (§16.11): `<name>, a typed statement`;
+3. retained rounds (§6.2) and `hm96-sha512/v1` leaves (`<name>, a statement without retained rounds`, `... with <leaf>
+   leaves`);
+4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`;
+5. no public input ports: `public input ports (--public-inputs)`;
+6. no shared-row public file: `a shared-row public file (header shared_rows)`;
+7. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
+   outputs (`a circuit whose outputs a tail stage computes (META out_net)`), of at most `2^32` rows, whose computed rows
+   read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
+   `sha512/row/v1` row of `16 · words` bits in at least one chunk.
+
+The soundness package proves `scopeOk` the computable check (`FailClosed.scopeOk_eq`), and `FailClosed.*`'s headlines
+are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. The live server refuses the same
+statements with the same reason (`backends/flock/live`'s `proved_scope`): its verdict is the refusal, and
+`without_refusal` keeps the session's verdict otherwise.
+
 ## 17. Acceptance, assumptions and trust
 
 ### 17.1 How the Lean verifier becomes the verifier of record
@@ -1451,7 +1477,7 @@ Upstream's Rust verifier (below, with `backends/flock/live`'s `ReplayChallenger`
 run in CI on every change to the Lean verifier, the statements or the pinned files:
 
 1. **Agreement on the corpus.** For every entry of `vectors.json` (§18), both verifiers produce the same verdict:
-   - every honest session: both accept;
+   - every honest session: both accept, except a set marked `lean_refuses` (D10 below);
    - every record-level negative: both reject, except the recipes marked `accept` (both accept), `info` (both return
      the same verdict) and the divergence recipes D1, D2 below (the Lean verifier rejects, upstream accepts);
    - every red-team forgery, materialised as a record and proofs: both reject.
@@ -1484,6 +1510,9 @@ expectation):
   `backends/flock/live`'s now does. No vector exercises it.
 - **D9:** at least one VU per block (§16.10). Upstream's `Composite::check` in the same builds lets `vus_per_block = 0`
   through when a tail returns the outputs; the spec refuses it, as `backends/flock/live`'s now does. No vector exercises it.
+- **D10:** a statement form the soundness proof does not cover (§16.15). The pinned upstream builds verify it; the spec
+  refuses every session, as `backends/flock/live`'s now does. A set marked `lean_refuses` in `vectors.json` expects that
+  refusal of the Lean verifier and each session's own verdict of upstream (`agree.py --lean-refuses`).
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

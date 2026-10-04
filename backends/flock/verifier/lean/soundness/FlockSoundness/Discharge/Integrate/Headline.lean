@@ -19,6 +19,9 @@ session's inputs (`planAt`, `Sites.lean`), with:
 * `lay := Layout.keyedLayout` (`layAt`) and `rs := Layout.keyedRowsOuts` (`rsAt`) at row widths `16 · words` and the
   rows' salt columns `Discharge.Hm.saltCol`, with `hsite` from `sitesAt_bcSite`;
 * `hHm := Discharge.Hm.keyedRowsOuts_computes` (`rsAt_computes`).
+
+Its hypotheses on the statement's form (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`) are ones flock-verify refuses a statement
+failing (PROTOCOL.md §16.15), and `FailClosed.flock_headline_exec` takes none of them.
 -/
 
 namespace FlockSoundness.Discharge.Integrate
