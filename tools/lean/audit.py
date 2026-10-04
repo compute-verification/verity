@@ -140,8 +140,8 @@ FIXTURES = HERE / "tests" / "fixtures"
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
-ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
-         "upstream", "guarantees", "reads", "dependencies")
+ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time",
+         "dependency_unchecked", "layers", "upstream", "guarantees", "reads", "dependencies")
 
 
 def sibling(name: str):
@@ -630,7 +630,7 @@ def module_files(pkg: Path) -> dict[str, Path]:
 
 def provers(pkg: Path, policy: dict) -> list[tuple[str, Path]]:
     """The packages the policy's `proved_in` names, each as written (a path relative to ``pkg``) and resolved."""
-    return [(p, (pkg / p).resolve()) for p in policy.get("proved_in", [])]
+    return [(p, (pkg / p).resolve()) for p in policy.get("proved_in", []) if isinstance(p, str)]
 
 
 def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str], dict[str, list[str]]]:
@@ -663,7 +663,9 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
     roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of guarantees proved in ``pkg``.
     Raises RuntimeError when a package's facts cannot be read."""
     fails, sources, conflicts = [], [("this package", facts, lean_modules(pkg))], list(facts.get("moved_conflicts", []))
-    for entry, q in provers(pkg, policy):
+    if not isinstance(named := policy["proved_in"], list) or not all(isinstance(p, str) for p in named):
+        fails.append("proved_in: a list of paths, each relative to this package")
+    for entry, q in provers(pkg, policy) if isinstance(named, list) else []:
         if q == pkg.resolve() or not (q / POLICY).is_file():
             fails.append(f"proved_in: {entry} is {'this package' if q == pkg.resolve() else f'no package with a {POLICY}'}")
             continue
@@ -675,6 +677,9 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
             qpol = load(q)
         except ValueError as e:
             fails.append(f"proved_in: {entry}/{POLICY}: {e}")
+            continue
+        if not qpol.get("roots"):
+            fails.append(f"proved_in: {entry}'s {POLICY} names no `roots`")
             continue
         if qpol.get("guarantees"):
             fails.append(f"proved_in: {entry}'s {POLICY} lists guarantees; the guarantees it proves are recorded here, in "
@@ -697,8 +702,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         if unaudited := sorted(loaded - set(qf["modules"])):
             fails.append(f"proved_in: {entry}'s roots ({', '.join(qpol['roots'])}) import its {', '.join(unaudited)}, which are "
                          f"not under them, so its replay does not check them")
+        listed = qpol.get("compile_time", {})
         for n, p in qf["pins"].items():
-            listed = qpol.get("compile_time", {})
             if p.get("kind", "missing") != "missing" and p.get("module") in files and (
                     hit := sorted({p["module"], *(r["module"] for r in p.get("reads", []))} & set(listed))):
                 fails.append(f"compile-time: {entry} lists {', '.join(hit)} under `compile_time`, where {n} is declared or "

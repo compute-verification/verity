@@ -570,7 +570,13 @@ def test_a_proving_package_requires_the_spec_records_no_guarantee_and_keeps_its_
     assert fails == ["proved_in: ../proofs does not require this package by path, so its theorems are not about this "
                      "package's statements", f"proved_in: ../nowhere is no package with a {A.POLICY}",
                      "proved_in: . is this package"]
+    assert A.proved(spec, policy | {"proved_in": "../proofs"}, facts(modules=[], pins={}), tmp_path / "work")[0] == [
+        "proved_in: a list of paths, each relative to this package"]
     (q / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "spec", "dir": "../spec"}]}))
+    (q / A.POLICY).write_text("{}")
+    assert A.proved(spec, policy | {"proved_in": ["../proofs"]}, facts(modules=[], pins={}), tmp_path / "work")[0] == [
+        f"proved_in: ../proofs's {A.POLICY} names no `roots`"]
+    (q / A.POLICY).write_text(json.dumps({"roots": ["Core.SecurityProofs"], "guarantees": {"Core.t": {}}}))
     fails = A.proved(spec, policy | {"proved_in": ["../proofs"]}, facts(modules=[], pins={}), tmp_path / "work")[0]
     assert fails == [f"proved_in: ../proofs's {A.POLICY} lists guarantees; the guarantees it proves are recorded here, in the "
                      "spec's lock, and it records none",
