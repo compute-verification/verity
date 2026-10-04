@@ -37,6 +37,8 @@ def f():
     return rmsnorm_fused_sweep, "verity_vllm.properties.difftests.rope_gptj_difftest"
 '''
 CYCLE = '{"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "%s"}'
+BY_NAME = ('[\n  {"file": "verity_vllm/program/registry/rmsnorm_fused_sweep.py", "kind": "model-name"},\n'
+           '  {"file": "verity_vllm/program/registry/spec.py", "kind": "model-name"}\n]\n')
 P09 = CYCLE % "program.frontend.target_profile <-> program.registry.gemm_targets" + "\n"
 
 
@@ -51,6 +53,7 @@ def _tree(root: Path) -> Path:
     (v / "tests").mkdir()
     (v / "tests/allow.json").write_text('[{"file": "verity_vllm/program/registry/gemm_targets.py"}]\n')
     (v / "tests/p09_layering.json").write_text(P09)
+    (v / "tests/by_name_allowlist.json").write_text(BY_NAME)
     (v / "tests/census_roots.txt").write_text("verity_vllm.program.registry.rope_difftest     # adapter\nverity_vllm.pipeline\n")
     (root / "CHANGELOG.md").write_text("- moved verity_vllm.program.registry.gemm_targets\n")
     return v
@@ -70,6 +73,7 @@ def test_the_split_moves_rewrites_and_reruns_as_a_no_op(tmp_path):
     assert (v / "tests/census_roots.txt").read_text() == (
         "verity_vllm/properties/difftests/      # the difftest adapters, imported by name (properties-admission --adapter)\n"
         "verity_vllm.pipeline\n")
+    assert (v / "tests/by_name_allowlist.json").read_text() == '[\n  {"file": "verity_vllm/program/registry/spec.py", "kind": "model-name"}\n]\n'
     assert (v / "verity_vllm/properties/difftests/__init__.py").exists()
     assert "registry.gemm_targets" in (tmp_path / "CHANGELOG.md").read_text()
     again = SD.plan(tmp_path)

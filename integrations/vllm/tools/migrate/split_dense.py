@@ -82,6 +82,9 @@ NEW_PACKAGES = {f"{PKG}.properties.difftests": '"""Difftest adapters (`verity_vl
 EXCLUDE = (f"{VLLM}/tools/migrate/", f"{VLLM}/tests/tools/test_split_dense.py", "CHANGELOG.md")
 FIXTURE = "tools/circuit_check/tests/fixtures/split/dense.json"
 ROOTS = f"{VLLM}/tests/census_roots.txt"
+BY_NAME = f"{VLLM}/tests/by_name_allowlist.json"
+#: `tests/test_no_by_name_rules.py`'s SKIP_DIRS: a moved file under one leaves that scan, and its entries go stale
+BY_NAME_UNSCANNED = ("kernels",)
 #: census roots for what only the registry walk (`registry.catalog.load()`) reached: a moved module's own root folds into its
 #: package's
 ROOT_DIRS = {f"{PKG}.properties.difftests": "the difftest adapters, imported by name (properties-admission --adapter)"}
@@ -166,12 +169,24 @@ def _add_roots(text: str) -> str:
     return "".join(lines)
 
 
+def _drop_unscanned(text: str) -> str:
+    gone = {m.new_path for m in MOVES if set(Path(m.new_path).parts[:-1]) & set(BY_NAME_UNSCANNED)}
+    out = "".join(ln for ln in text.splitlines(keepends=True) if not any(f'"file": "{g}"' in ln for g in gone))
+    try:
+        json.loads(out)
+    except ValueError as e:
+        raise SplitError(f"{BY_NAME}: dropping the entries of {sorted(gone)} leaves invalid JSON ({e}); drop them by hand") from None
+    return out
+
+
 def rewrite(text: str, where: str = "<text>") -> str:
     text = _rewrite_names(_rewrite_imports(text, where))
     if where.endswith("p09_layering.json"):
         text = _sort_cycles(text)
     if where.endswith(ROOTS):
         text = _add_roots(text)
+    if where.endswith(BY_NAME):
+        text = _drop_unscanned(text)
     return text
 
 
