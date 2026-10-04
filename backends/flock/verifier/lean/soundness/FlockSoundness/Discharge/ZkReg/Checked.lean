@@ -125,9 +125,9 @@ theorem loadPublic_header {tags : Flock.Tags} {c : Circuit} {file : ByteArray} {
       cases hp : Lean.Json.parse s with
       | error e => simp only [hp, throw_bind'] at h; exact absurd h (Refine.throw_ne_ok _ _)
       | ok j =>
-        simp only [hp, pure_bind] at h ⊢
-        dsimp only at h
-        simp only [throw_bind'] at h
+        simp only [hp] at h ⊢
+        try dsimp only at h
+        try simp only [throw_bind'] at h
         repeat' walk_step
         all_goals
           simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -142,7 +142,10 @@ theorem drawnUnit {proved units : Array ℕ} {u : ℕ} (hu : u ∈ proved) :
     have := Array.findIdx_getElem (xs := proved) (p := (· == u)) (w := hi)
     simp only [beq_iff_eq] at this
     exact this
-  simp only [Array.getD, Array.size_map, hi, ↓reduceDIte, Array.getElem_map, hget]
+  first
+    | rw [Array.getD_eq_getD_getElem? (xs := proved.map (units.getD · 0)), Array.getElem?_map,
+        Array.getElem?_eq_getElem hi, Option.map_some, Option.getD_some, hget]
+    | simp [hi, hget]
 
 variable {mPts n : ℕ} {Reg : Type}
 
