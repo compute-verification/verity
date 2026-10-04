@@ -25,9 +25,9 @@ import argparse
 import json
 import math
 import mmap
+import multiprocessing
 import sys
 from fractions import Fraction
-from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
@@ -189,7 +189,7 @@ def check_split(path: Path, jobs: int) -> dict:
     man = json.loads((path / "manifest.json").read_text())
     mats = man["matmuls"]
     work = [(str(path), rec, s) for rec, s in zip(mats, sample_rows(mats))]
-    with Pool(jobs) as pool:
+    with multiprocessing.get_context("fork").Pool(jobs) as pool:
         units = list(pool.imap(check_matmul, work, chunksize=1 if len(work) < 1000 else 8))
     worst_slack = sorted(units, key=lambda u: u["slack"])[:5]
     margins = [u for u in units if u["min_margin"] is not None]

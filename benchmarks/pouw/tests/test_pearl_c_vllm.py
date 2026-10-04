@@ -691,10 +691,11 @@ def test_forming_headroom_on_a_recorded_line(tmp_path):
 FD = load("pearl_c_vllm_forming_domain", KERNEL.parent / "pearl_c_vllm" / "forming_domain.py")
 
 
-def test_forming_domain_on_a_synthetic_pass(tmp_path):
+def test_forming_domain_on_a_synthetic_pass(tmp_path, monkeypatch):
     """The domain check's numpy rows agree with s5_stats and an all-Fraction count on every credited row, skip filler and
     excluded rows, and find a row with α·s > 444 (no stride energy: ρ = 0, α·s = 448, so every element of it is loud and its
-    unit fails liveness too), a row through the subnormal fallback, and a unit whose loud elements break liveness at 8ρ_max."""
+    unit fails liveness too), a row through the subnormal fallback, and a unit whose loud elements break liveness at 8ρ_max.
+    Its pool forks: under forkserver (Python 3.14's default) a worker can't import this file's module to unpickle a task."""
     rng = np.random.default_rng(7)
     k = 256
     bf16 = lambda a: (np.asarray(a, np.float32).view(np.uint32) >> 16).astype("<u2")
@@ -728,7 +729,10 @@ def test_forming_domain_on_a_synthetic_pass(tmp_path):
     assert unit["rows_out"] == sum(1 for a_s, _ in want[0] if a_s > 444) == 1 and unit["min_margin_row"] == 5
     assert unit["loud"] == sum(n for _, n in want[0]) and unit["max_out_per_tile"] == 1
     out = tmp_path / "fd.json"
+    methods, get_context = [], FD.multiprocessing.get_context
+    monkeypatch.setattr(FD.multiprocessing, "get_context", lambda method=None: methods.append(method) or get_context(method))
     assert FD.main([str(tmp_path), "--splits", "decode", "--jobs", "2", "--out", str(out)]) == 0
+    assert methods == ["fork"]
     doc = json.loads(out.read_text())
     r = doc["splits"]["decode"]
     assert r["rows_checked"] == 63 and r["rows_out_of_domain"] == 1 and r["units_failing_live"] == 2
