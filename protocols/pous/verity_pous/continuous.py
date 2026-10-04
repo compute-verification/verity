@@ -23,6 +23,11 @@ with `audit_cap=audit.AUDIT_CAP` (1,505 calls of `call_ns`, ≈ 363.5 ms at 241.
 stream, which then reveals no other index, never accepts and is never retried.  The cap is off by default, because
 the continuous audit's guarantee does not need it and its arrivals may spread past it.
 
+Every count of calls here (`D`, `D_late`, the cap) converts wall-clock time at `call_ns` per whole `Π₂` call, which
+holds in the ideal-permutation model only.  `ContinuousAudit` is sound in that model, but at the reference
+Feistel-SHAKE256 `Π₂` a prover holding 1.53% of `C` answers every challenge in 481 Keccak-f, about 24 µs, so the
+storage conclusion fails there (red team, 4 Oct 2026, art:7617c8017e80; `primitives.pi2_keccak_f`).
+
 `n` is fixed before the stream (the realized number of arrivals, from the verifier's own randomness), so the stream is
 never stopped or extended on misses, though it may reject early once they pass `max_misses` (`exceeded`).  When each
 challenge arrives is the caller's (`run_continuous`'s `wait`): the arrival times must be the verifier's own randomness,
