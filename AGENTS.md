@@ -190,7 +190,7 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   protocols' packages, never a backend's. All packages share one toolchain and
   one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
 - Core's and NCI's packages are laid out under four names: `Protocol` (definitions), `Assumptions` (named `Prop`s) and
-  `Guarantees` (each a `def G : Prop`) are the trusted text, importing only one another, core's trusted text and
+  `Guarantees` (each a `def G : Prop`) are the spec (README "Glossary"), importing only one another, core's spec and
   Mathlib (`layers` in `lean-audit.json`); `SecurityProofs` holds every proof and lemma, with `SecurityProofs.G : G` for
   each guarantee proved. The other packages move to this layout one at a time.
 - Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
@@ -198,7 +198,7 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
   is replayed through the kernel.
 - A guarantee (README "Glossary"), the theorem a ledger, a table or a PR cites as proved, is listed in `lean-audit.json`,
-  and `audit.py --update` records what it says: its statement and every definition the statement reads. No axiom check
+  and `audit.py --update` records what it says in the lock: its statement and every definition the statement reads. No axiom check
   can catch a weakened definition, so when a change to those records lands on `main`, Daniel gets a DM showing it (each
   changed statement before and after, each changed definition as it is now). Nobody signs off and nothing waits on it.
   A guarantee that only moved to another module or name sends nothing when `--update --moved MOVES.json` (old names to
