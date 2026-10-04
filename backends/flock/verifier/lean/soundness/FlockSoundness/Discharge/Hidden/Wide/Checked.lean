@@ -74,6 +74,8 @@ def OutputsCommittedV2Checked : Prop :=
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
+    st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
+    (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
@@ -95,6 +97,8 @@ def OutputsBindingV2Checked : Prop :=
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
+    st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
+    (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ (L' : Layout st') (regs' : List (Model.Region st'.c.kLog (st'.m - st'.c.kLog))),
@@ -124,6 +128,8 @@ def OutputsCommittedWideChecked : Prop :=
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
+    st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
+    (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
@@ -145,6 +151,8 @@ def OutputsBindingWideChecked : Prop :=
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
+    st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
+    (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ (L' : Layout st') (regs' : List (Model.Region st'.c.kLog (st'.m - st'.c.kLog))),
