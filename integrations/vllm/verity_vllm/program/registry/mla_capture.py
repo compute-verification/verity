@@ -3,6 +3,10 @@
 
     # node, torch venv:  python -m verity_vllm.program.registry.mla_capture produce --out DIR [--suite NAME]
     # verity venv:       python -m verity_vllm.program.registry.mla_capture check --dir DIR [--out REPORT.json]
+    #                    python -m verity_vllm.program.registry.mla_capture check-bits --dir DIR [--tmax T] [--worker I --workers N] [--out R.json]
+
+`check` holds the numpy models (`mla_check`) to every captured word; `check-bits` evaluates the Boolean
+`mla.TritonMlaDecodeHead` itself on the one-split decode rows.
 
 The inputs are counter-based (`words`: splitmix64 of the case seed and the word index), so the check rebuilds them from the
 manifest and only the kernel's outputs are stored: `o` (bf16 words `[B, H, 512]`), `lse` (bf16 `[B, H]`) and the stage-1
@@ -311,6 +315,64 @@ def produce(out: Path, suite_name: str, device: str = "cuda") -> dict:
     return man
 
 
+def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int = 1, out: Path | None = None) -> dict:
+    """`mla.TritonMlaDecodeHead` on bits (`verity.evaluation.bits`) at GLM-4.7-Flash's statics against the captured `o` of
+    every one-split decode row (one head of one request) with T <= tmax: one evaluation per distinct T, that T's rows its
+    instances. The T values are dealt to `workers` shares by key count (largest first) and this call takes share `worker`;
+    each finished T is written to `out` at once, so a stopped worker keeps what it checked."""
+    import time
+    from collections import defaultdict
+
+    from verity.evaluation import bits as BS
+    from verity.ir.defs import bind
+    from verity_vllm.program.registry import mla as M
+
+    man = json.loads((d / "manifest.json").read_text())
+    G = M.GLM47_FLASH
+    rows: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    for i, case in enumerate(man["cases"]):
+        if case.get("op", "decode") == "decode" and case["splits"] == 1:
+            for b, T in enumerate(case["seqlens"]):
+                if tmax is None or T <= tmax:
+                    rows[T].append((i, b))
+    load, mine = [0] * workers, []
+    for T in sorted(rows, reverse=True):
+        w = load.index(min(load))
+        load[w] += T + 64
+        if w == worker:
+            mine.append(T)
+    rep: dict = {"dir": str(d), "worker": worker, "workers": workers, "tmax": tmax, "rows": 0, "mismatched_rows": 0,
+                 "words_bad": 0, "first_mismatch": None, "by_T": {}}
+    for T in sorted(mine):
+        t0 = time.time()
+        qs, kvs, want = [], [], []
+        for i, b in rows[T]:
+            case = man["cases"][i]
+            seed, kind = int(case["seed"]), case["kind"]
+            q = words(seed, 0, len(case["seqlens"]) * H * D, kind, "q").reshape(-1, H, D)[b]
+            kv = words(seed, 1 + b, T * D, kind, "kv").reshape(T, D)
+            qs.append(q)
+            kvs.append(np.broadcast_to(kv, (H, T, D)))
+            want.append(np.load(d / f"case_{i}.npz")["o"][b])
+        head = bind(M.TritonMlaDecodeHead, T=T, DL=G["DL"], DR=G["DR"], BN=G["BN"], SPLITS=1, SCALE=G["SCALE"], DOT=G["DOT"])
+        got = np.asarray(BS.evaluate_words(head, np.concatenate(qs), np.concatenate(kvs))).astype(np.uint16)
+        bad = got != np.concatenate(want).astype(np.uint16)
+        n, nb = bad.shape[0], int(bad.any(axis=1).sum())
+        if nb and rep["first_mismatch"] is None:
+            r, c = (int(v) for v in np.argwhere(bad)[0])
+            i, b = rows[T][r // H]
+            rep["first_mismatch"] = {"case": i, "request": b, "T": T, "head": r % H, "column": c,
+                                     "got": int(got[r, c]), "want": int(np.concatenate(want)[r, c])}
+        rep["rows"] += n
+        rep["mismatched_rows"] += nb
+        rep["words_bad"] += int(bad.sum())
+        rep["by_T"][T] = {"rows": n, "mismatched_rows": nb, "seconds": round(time.time() - t0, 1)}
+        print(f"T={T} rows={n} bad_rows={nb} {time.time() - t0:.1f}s", flush=True)
+        if out:
+            out.write_text(json.dumps(rep, indent=1) + "\n")
+    return rep
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="mla_capture")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -321,10 +383,20 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("check")
     c.add_argument("--dir", required=True)
     c.add_argument("--out")
+    cb = sub.add_parser("check-bits")
+    cb.add_argument("--dir", required=True)
+    cb.add_argument("--out")
+    cb.add_argument("--tmax", type=int)
+    cb.add_argument("--worker", type=int, default=0)
+    cb.add_argument("--workers", type=int, default=1)
     a = ap.parse_args(argv)
     if a.cmd == "produce":
         produce(Path(a.out), a.suite, a.device)
         return 0
+    if a.cmd == "check-bits":
+        rep = check_bits(Path(a.dir), a.tmax, a.worker, a.workers, Path(a.out) if a.out else None)
+        print(json.dumps({k: rep[k] for k in ("rows", "mismatched_rows", "words_bad", "first_mismatch")}), file=sys.stderr)
+        return 0 if rep["mismatched_rows"] == 0 else 1
     from verity_vllm.program.registry import mla_check
 
     rep = mla_check.check(Path(a.dir))
