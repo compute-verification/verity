@@ -18,7 +18,7 @@ ideal-hash result transfers to a concrete hash by citation. So "no named assumpt
 ideal-hash model only, and so do the dense scheme's deployment results below. The chosen fix is H as the overwrite chain
 over an ideal permutation `Π₂` of width `2m + 512`, proved in the ideal-permutation model. Its pebbling side and its ex
 post facto bounds are proved in this package (`Pous/SecurityProofs/Chain/Flat.lean`): `ChainExPostFacto` (B5 for `Π₂`)
-for dense, and its DAG-generic form `ChainExPostFactoG` for the band, with the pinned finals below (P3 with the concrete
+for dense, and its DAG-generic form `ChainExPostFactoG` for the band, with the guarantees below (P3 with the concrete
 `H`, the band, and the dense chain scheme). They hold in the ideal-permutation model only. `Π₂` itself (Feistel-SHAKE)
 is a heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
 `docs/band-vs-dense.md`.
@@ -135,8 +135,8 @@ P3 has no certificate. `Pous.SecurityProofs.P3ConcreteMeets64` (one segment), `P
 `P3ConcreteMeets64D12` (`B(220, 16)` at `D = 12`) are proved, with no hypothesis, for P3 over the overwrite chain in
 the ideal two-permutation model, at the operating point's parameters, `D = 10`, `Q = 2^20` and `k = 106`. But Lean's
 chain starts from `iv(domP3 tag L v)`: zeros, then `tag_s ‖ u256(2v + L)` in the 512-bit capacity part. The code's
-`h_0` is the instantiation's 48-byte header ("Backends") in the low bytes, with the capacity part zero. The pins are
-about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 item 16).
+`h_0` is the instantiation's 48-byte header ("Backends") in the low bytes, with the capacity part zero. The guarantees
+are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 item 16).
 
 ## Lifecycle
 
@@ -168,7 +168,7 @@ about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 item 
      `D = 2`, `k = 97` and at `D = 1`, `k = 93`;
    - dense: `dense_pub_meets_64` and `seg_pub_meets_14` (a random-oracle `H`), and `chain_pub_meets_64` (the overwrite
      chain), given `ChainExPostFacto`, which `chainExPostFacto_v6` proves (`lean/Pous/SecurityProofs/Chain/Flat.lean`;
-     not pinned).
+     not a guarantee).
 
    An accept-all check provably fails (`acceptAll_fails_dense`). P3 goes through the same code, but its
    encode-after-decode lemma is not proved.
@@ -204,7 +204,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `theorem`, and its open `hypotheses`;
   - `claims`: ids in `verity.claims`' format.
 
-  Each `theorem` is the pinned proof `Pous.SecurityProofs.X` it rests on, of the guarantee `Pous.Guarantees.X`. At
+  Each `theorem` is the recorded proof `Pous.SecurityProofs.X` it rests on, of the guarantee `Pous.Guarantees.X`. At
   the frozen point, the band's certificate is `Pous.SecurityProofs.BandMultiMeetsFamily`, with no hypothesis: k 111,
   D 5, Q 2^20, 241.5 µs, cliff at `d`, for every segment count N from 1 to `2^64` (all that `BandParams` allows), so no
   segment count is a gap. It is one `Meets` for the whole
@@ -226,13 +226,13 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     for these keys. SHAKE256 would cost about 12% of device throughput (an estimate). The choice goes to Daniel with P2
     Decision 1.
   - Its certificate is `P2MeetsM1pB19Uncond`: k 88 at 2^19 blocks (8 segments of 2^16), for every payload width in
-    range, `p2-2054B`'s among them, with no hypothesis. It is a **proposed** pin, graded PASS but not yet in the
+    range, `p2-2054B`'s among them, with no hypothesis. It is a **proposed** guarantee, graded PASS but not yet in the
     trusted set. It is an abstract-M1 result, and the SMS-to-M1 instantiation assumption is pending Daniel.
   - SeqRoot sets `call_ns`, half the fastest 16,448-bit root, and no root may fit within `Δ + RTT`.
   - `Scheme.experimental` carries that reason. The verifier audits an experimental scheme only with
     `experimental=True`, and its profile's statement begins with it. No experimental scheme is ever the default.
 
-  P3 has no certificate: the concrete-`H` pins have its parameters, but their chain starts from a different `h_0`
+  P3 has no certificate: the concrete-`H` guarantees have its parameters, but their chain starts from a different `h_0`
   ("P3 (research)").
 - **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
   - a `k` below the certificate's;

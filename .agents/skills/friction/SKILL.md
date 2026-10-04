@@ -142,8 +142,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-01 (9:50 AM PDT): lane notes are records (reports, checkpoints, findings, drafts, friction), never a channel.
   A handoff, an order or an ask goes on Slack (`research msg`), or to your own Cursor workers as a follow-up; a note
   written as a message reaches nobody.
-- 2026-10-01 (9:24 AM PDT): a top-level record of Daniel's approval of a changed `lean-audit.json` pin, citing his
-  message, counts as the named statement reviewer's sign-off for `research merge`.
 - 2026-10-01 (9:12 AM PDT): agents message each other directly, without a coordinator relaying, and adding a handle
   needs no Slack admin. Comms owns the routing (`@<name>` at the start of a post wakes that lead's agent).
 
@@ -154,7 +152,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   their children and deletes landed branches. `research merge --push` pushes the merge and then sweeps, so a lander passes it.
 - 2026-09-30: the Lean infrastructure lane changes `tools/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
   Lean foundations and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. It speeds up another
-  lane's proofs when no pinned record changes; a changed record in another lane's package goes through that lane. What a
+  lane's proofs when no guarantee's record changes; a changed record in another lane's package goes through that lane. What a
   headline theorem may rest on, what "proved" means, retiring a theorem a table cites, spend past a budget line and any
   new human gate go to Daniel.
 - 2026-09-30: a lane fixes a bug it hits in `tools/research` in a small PR of its own, and the research coordinator only

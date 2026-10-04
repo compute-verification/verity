@@ -296,10 +296,10 @@ def test_a_conflict_only_on_import_lines_keeps_both_sides_and_any_other_line_ref
 
 
 def test_a_json_file_git_merges_into_a_repeated_key_refuses_the_train(tmp_path, monkeypatch, capsys):
-    """Two PRs pinning a record of the same name in one `lean-audit.json`, a few lines apart: git merges the lines cleanly into
+    """Two PRs adding a guarantee of the same name in one `lean-audit.json`, a few lines apart: git merges the lines cleanly into
     an object with the key twice, which `json.loads` would read as the last one silently."""
     main, _feat, _tip = _repos(tmp_path)
-    audit = '{\n  "pins": {\n    "a": 1,\n    "m": 5,\n    "z": 9\n  }\n}\n'
+    audit = '{\n  "guarantees": {\n    "a": 1,\n    "m": 5,\n    "z": 9\n  }\n}\n'
     origin, heads = _origin_with(tmp_path, main, {"lean-audit.json": audit}, {
         11: {"lean-audit.json": audit.replace('"a": 1,\n', '"a": 1,\n    "b": 2,\n')},
         12: {"lean-audit.json": audit.replace('"m": 5,\n', '"m": 5,\n    "b": 3,\n')}})
@@ -316,19 +316,19 @@ def _store_remote(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
 
 
-def test_a_pin_change_goes_into_a_train_only_with_the_statement_reviewer_grant_at_its_head(tmp_path, monkeypatch, capsys):
-    """old-circuits-and-proofs held #828 and #858-#866 out of trains by hand on 2 Oct: each changed a pinned record with no
+def test_a_guarantee_change_goes_into_a_train_only_with_the_statement_reviewer_grant_at_its_head(tmp_path, monkeypatch, capsys):
+    """old-circuits-and-proofs held #828 and #858-#866 out of trains by hand on 2 Oct: each changed a guarantee's record with no
     statement reviewer named.  The queue's rule for it refuses such a ref before its train is built (`--prepare`) or checked
     (`--train`), until the `grant` label is on the pull request's pinned head; a change to another section needs none."""
     from research.store.local import LocalStore
 
     _store_remote(tmp_path, monkeypatch)
     main, _feat, _tip = _repos(tmp_path)
-    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
+    audit = {"roots": ["P"], "guarantees": {"P.t": {"type_hash": "1"}}, "reads": {}}
     _origin, heads = _origin_with(tmp_path, main, {
-        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["pins", "reads"]\n',
+        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["guarantees", "reads"]\n',
         "lean-audit.json": json.dumps(audit, indent=1)}, {
-        20: {"lean-audit.json": json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)},
+        20: {"lean-audit.json": json.dumps({**audit, "guarantees": {"P.t": {"type_hash": "2"}}}, indent=1)},
         21: {"lean-audit.json": json.dumps({**audit, "roots": ["P", "Q"]}, indent=1)}})
     _git(main, "push", "-q", "origin", "pr20:refs/heads/side")
     monkeypatch.chdir(main)
@@ -357,12 +357,12 @@ def test_a_move_audit_py_prints_as_the_same_statements_needs_no_grant_and_a_chan
 
     _store_remote(tmp_path, monkeypatch)
     main, _feat, _tip = _repos(tmp_path)
-    base = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {"P.Defs": {"hash": "d"}}}
-    moved = {**base, "pins": {"Q.t": {"type_hash": "1q"}}, "reads": {"Q.Defs": {"hash": "dq"}}}
-    restated = {**moved, "pins": {"Q.t": {"type_hash": "2q"}}}
+    base = {"roots": ["P"], "guarantees": {"P.t": {"type_hash": "1"}}, "reads": {"P.Defs": {"hash": "d"}}}
+    moved = {**base, "guarantees": {"Q.t": {"type_hash": "1q"}}, "reads": {"Q.Defs": {"hash": "dq"}}}
+    restated = {**moved, "guarantees": {"Q.t": {"type_hash": "2q"}}}
     (main / "lean").mkdir()
     _origin, heads = _origin_with(tmp_path, main, {
-        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["pins", "reads"]\n',
+        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["guarantees", "reads"]\n',
         "lean/lean-audit.json": json.dumps(base, indent=1)}, {
         22: {"lean/lean-audit.json": json.dumps(moved, indent=1)},
         23: {"lean/lean-audit.json": json.dumps(restated, indent=1)}})
@@ -372,14 +372,14 @@ def test_a_move_audit_py_prints_as_the_same_statements_needs_no_grant_and_a_chan
         f = tmp_path / f"audit-{n}-{changes}.json"
         f.write_text(json.dumps({"passed": True, "failed": [], "packages": [{
             "package": "/w/verity/lean", "review": [], "statement_changes": changes,
-            "before": {k: base[k] for k in ("pins", "reads")}, "pins": after["pins"], "reads": after["reads"]}]}))
+            "before": {k: base[k] for k in ("guarantees", "reads")}, "guarantees": after["guarantees"], "reads": after["reads"]}]}))
         store.add_label(f"pr:{n}@{heads[n]}", "lean_review", store.put_artifact("lean-review/v1", {}, file=f), "lean")
 
     monkeypatch.chdir(main)
     lint = ["--lint", "true"]
     review(22, moved, False)
     assert merge_main(["--train", "--prepare", "train-prep/m", f"22@{heads[22][:9]}", *lint]) == 0, capsys.readouterr().err
-    review(23, restated, True)                       # it printed `pin Q.t: changed (moved from P.t)` for a reviewer
+    review(23, restated, True)                       # it printed `guarantee Q.t: changed (moved from P.t)` for a reviewer
     assert merge_main(["--train", "--prepare", "train-prep/n", f"23@{heads[23][:9]}", *lint]) == 1
     err = capsys.readouterr().err
     assert f"#23 needs the statement-reviewer grant at {heads[23][:12]}" in err

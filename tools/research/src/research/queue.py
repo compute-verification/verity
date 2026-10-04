@@ -23,7 +23,7 @@ the ready label is what says one is done.  The hold label keeps a PR out whateve
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
-(`pins`, `reads`), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
+(`guarantees`, `reads`), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
 store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new grants.  A `lean-audit.json` change needs no grant when a `lean_review` label on the target names the audit.json of an
 `audit.py --update` (`--moved` for a move) that printed that whole change as the same statements (`reviewed`).  Grants and ready are read after pulling the target's labels from the store's remote; when that pull can't happen (no
 remote here, one that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.
@@ -37,7 +37,7 @@ which files conflict and which queued PRs touched them.
 
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
 the tree that was checked, with no new merge commit.  A push refused because `main` moved leaves `main` alone; the next sync rebuilds
-`next` on the new `main`.
+`next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).
 
 Notices.  A refusal (a conflict, an ejection) is sent once per PR head: a handoff in the owner's lane directory of the notes, or in
 `lanes/coordinator/` for an owner known only by agent id.
@@ -559,6 +559,10 @@ class Queue:
             if dry_run or self.shadow:
                 self.log(f"research queue: would land {prs} ({m.commit[:12]}, check {attempt})" + (" [shadow]" if self.shadow else ""))
                 return m
+            from .spec_alert import alert, remote_head
+
+            was = (remote_head(self.workdir, "origin", "main", self.auth)
+                   or _git(self.workdir, "rev-parse", "refs/heads/main").stdout.strip())
             _git(self.workdir, "merge", "-q", "--ff-only", m.commit)
             r = self._remote(self.workdir, "push", "-q", "origin", "main:refs/heads/main", ok=None)
             if r.returncode:
@@ -567,6 +571,7 @@ class Queue:
                          f"the next sync rebuilds `{self.branch}` on the new `main`")
                 return None
             self.log(f"research queue: landed {prs} on `main` at {m.commit[:12]} (check {attempt})")
+            alert(self.workdir, was, m.commit, prs=[x.pr for x in chain[: chain.index(m) + 1]], log=self.log)
             return m
         self.log(f"research queue: no commit on `{self.branch}` has a passing check yet (newest: {newest})")
         return None
