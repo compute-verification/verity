@@ -22504,7 +22504,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "95a51836660f4bedab04c75fac6c292d43f816a32a9a65dc7c1394c2cedec724",
+   "digest": "21d22ecc84d7fde7b291758e5042ea6ad8fd2e3b2ddc67486e1fc720d98b1cf4",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -22528,8 +22528,8 @@
     "Flock.HmLinks.parse": "a936083203913e55d63a842e5f7b3985b9a00e382024ce0fda33afd6aa83d64a",
     "Flock.HmLinks.units": "2183e2c819d868883dcac2198a85a462e54dcb5025f9a13ec2d3e65b9b6dc142",
     "Flock.HmOut.checkPublic": "2adeefd817818e4305440a2fe4b13fac2f3b0809948a4944f110a07052092c0c",
-    "Flock.HmOut.checkRows": "42fbf66c6ab89fba1cb8345cee42eb1bc1c42aba224689dca9a1299e233ed0ee",
-    "Flock.HmOut.delta": "c1faeb3568eaf49144284ccfa3d6191732c294f61bca18c9c30050c6af0dba32",
+    "Flock.HmOut.checkRows": "88fe6cc8a0c1c154efabfb6f918a7b147e0ce1a7149a168e01bf9321ffed9afe",
+    "Flock.HmOut.delta": "875f7d33ec778bc4cdec670c5a910ba9ae6450a52dbb3a265d059ba4aec8eb8a",
     "Flock.HmOut.drawn": "090a440eae96cadac82a4e5d8d8c3bc02130d2a7c8e133e5c2963ebc1dab98c6",
     "Flock.HmOut.dummyRow": "fb417c608f6f03de5cd4dee79b93927fe47f0aff47dcc20c063d1ba5cc7a0131",
     "Flock.HmOut.inWords": "5d9dc416126e0e8455ec2f4e1ee19bcac4a5189cd1f273791034a6b62fb0fe34",
@@ -22626,7 +22626,7 @@
     "Flock.HmRow.wordsBE": "2649069b0c46f7d101cfc4ea1b6e26b2766a4d65488e54032ee142546d201433",
     "Flock.HmRow.workLaw": "efb93a2ae6398da29d22cc33c23b9339b5d372711de510dbbb9433230d779fd0",
     "Flock.HmRow.zeroRowBc": "70914d394be7bc1eb39db8688cfc653ec4fa9eaa394b9a4e18acdce1feb9ea3f",
-    "Flock.Stmt.setupH": "29dee0ad42dcb4fc97bb262279e0aa743f0e2f8782d4da7894dd823dc3b8ac15",
+    "Flock.Stmt.setupH": "86c591dc6ab28e186151dccdfaf49a348058403ee292b5e728eda50acb9a562f",
     "Flock.Stmt.setupHidden": "05a79d8e5fc0ed5d93534f998e6efac8a751f3c51fed7e93660206f1692dd381",
     "Flock.Stmt.setupTables": "81c96add663693bc4bf4bbbbbcc412d3004f2a71b7a09d742a59b66551ddb4a0",
     "_private.Flock.HmRow.0.Flock.HmRow.ctx": "be137ad375de546cbbc26a3840c9dda721fa5d02e7a0e715321bc4d87666e495",
@@ -27075,7 +27075,7 @@
    ]
   },
   "Flock.Tags": {
-   "digest": "6804f63a251ab4a18b907dfb63d0cb128fa647679b0c1a32c7786a84caeab2af",
+   "digest": "32b58a1889d428005e503c2183c9ed13ecd3c9b8f0c7d7b0d2ffcf1207f14b41",
    "definitions": {
     "Flock.TablesTags": "616e6a1133659aca6313acb08b641dbdb15f03279404705add3efd103a55fd45",
     "Flock.TablesTags.domainPrefix": "58ccbc9ce507eb6dde62a067432ef3c853a3ec9ab55ec5910f0fd9cdda2dc3c1",
@@ -27111,6 +27111,7 @@
     "Flock.Tags.merkleLeaf": "6be4a7307bd5f5c2374a67bee0b0218c7c84c2d6afd6e12e0f09711a9a8926e0",
     "Flock.Tags.name": "71ad1cd6c17aad83f9364dd414a1c7509d2ae0f256388abf5fa58e58439a4c44",
     "Flock.Tags.outRowsIdentity": "0040c044249b11ca3a094742e1cd5022058b8feea9ae42cd3db018e7f8667e09",
+    "Flock.Tags.outRowsV2Identity": "ea6cc1fd879dc34f5a1d6d6179c2d3d54f117a7a5367825d67e881b53a6b2daa",
     "Flock.Tags.pinnedLeafScheme": "258373fd740b4a89c171b6b0810912e9f8e676f3cfca8402f5bee05c186b5380",
     "Flock.Tags.publicCircuitKey": "a28de26401b991f4dd2375960c479d32241293885675d8ae72913e60b7eff642",
     "Flock.Tags.publicFormat": "6a33fa73422924b4e93c9a53caeb775b224d1cdfa3cedcb34329d9bdfcee6be5",
@@ -34955,7 +34956,7 @@
    ]
   },
   "FlockSoundness.Discharge.Hidden.Defs": {
-   "digest": "83f3574953064028f14737a79fedabe0e5d95a886318d45e6496b2619e06e58b",
+   "digest": "439e9dcc55aed8716f5cee2000c9db46543af3ea0ffec6278eea0ee4ca91db03",
    "definitions": {
     "FlockSoundness.Discharge.Hidden.CommitPairSpec": "4ceb460df145ac8736fbea13f161e9735ba67ae044fefbcda334322bdbf0b430",
     "FlockSoundness.Discharge.Hidden.HiddenDelta": "62ceb2d2cfb1c92e5df4f38932560f8a76dbb6ff4971a06f96a854f21b04017b",
@@ -34966,7 +34967,7 @@
     "FlockSoundness.Discharge.Hidden.SetupHiddenSpec": "bc83edf18ad7447de3aea569b7612910cc7d37a51bacd44fdcc5c89bfc7068ea",
     "FlockSoundness.Discharge.Hidden.Spec": "27ff7beecbad78478785bec7cc9dc4bd4a388bbe5bfa836e09b3c54fb5777e10",
     "FlockSoundness.Discharge.Hidden.commitPair": "9c14f0373461f5208ae53ad25ebed957edb39626305a32366c30fba6028855bf",
-    "FlockSoundness.Discharge.Hidden.deltaMsgCol": "71923bbd779f3bb146f501a8d99ee9f01e54fb2e1975bddcf70dfd132dd43269",
+    "FlockSoundness.Discharge.Hidden.deltaMsgCol": "2aca31215ae09c2d14aae7d207aa31bffd42aa47ce1662a89d9cf3d8cfb00c00",
     "FlockSoundness.Discharge.Hidden.outAt": "d25ef6df5a3c8ca52a01818bc7ffb4a6368dc9bbe62194648196cf8c54a9cd9f",
     "FlockSoundness.Discharge.Hidden.outBytes": "6d4ffc1f96159fc34a92b1bdb99bad719f97e9d0d9d0a0903645b0d7c49ef987",
     "FlockSoundness.Discharge.Hidden.outPairs": "fa168cf25769efffb2becf37b0a4e4ccae654444d33442f1bbb024820bd57805",
@@ -35034,14 +35035,14 @@
    ]
   },
   "FlockSoundness.Discharge.Hidden.Wide.Checked": {
-   "digest": "0192442bae13b685a3c2c44ad81e5e93f1222ee793b81385634cc49f9f25bc63",
+   "digest": "6876d0a1f54fda798a45f40906ebc70dc44e632d9524d55497fd81ddb693b6aa",
    "definitions": {
     "FlockSoundness.Discharge.Hidden.OutputsBindingTailChecked": "7e7b52ed6ce8e0d18ffdebb48736fe2050af7c459e8aa80af401c7e05ca2ddae",
-    "FlockSoundness.Discharge.Hidden.OutputsBindingV2Checked": "41962332f46b0fd2832b0164671d8adaa01b6a7dbe345005efdd98251d2d224f",
-    "FlockSoundness.Discharge.Hidden.OutputsBindingWideChecked": "918f656517d61dd74279367657549de6884a9897bcb287db1cfdc8a5bc9ac102",
+    "FlockSoundness.Discharge.Hidden.OutputsBindingV2Checked": "75aaa724ef4a232a5fee69d9c5a1c5c7b4b06b665f3c8797bf38470ec2984af9",
+    "FlockSoundness.Discharge.Hidden.OutputsBindingWideChecked": "9f5a96be9a22108c0a2248b409ef13d29a45eb03179481791bf95a93ba07eee9",
     "FlockSoundness.Discharge.Hidden.OutputsCommittedTailChecked": "281816c0e9d5ecf22ed55f0845b10c760ea5fc1c6dcbf6627307850e8bb8de32",
-    "FlockSoundness.Discharge.Hidden.OutputsCommittedV2Checked": "7a81eaa2822d1c8014710ad7bc8f6c0593b31a626e5e6939c1ea25e470f5bdb8",
-    "FlockSoundness.Discharge.Hidden.OutputsCommittedWideChecked": "3524cbdee9b3f2f21ed8aabe0e182e0c4e44140558b8933f18cd2eb55328fade"
+    "FlockSoundness.Discharge.Hidden.OutputsCommittedV2Checked": "f93e36c0a234bd9586ff1c8a8e8e46eef66cbc89c599f1fe4fbeae8658d7175c",
+    "FlockSoundness.Discharge.Hidden.OutputsCommittedWideChecked": "2091b717d7c078c74c64a360a210e0c07f572b0a0d1f7d68284277826e15cd89"
    },
    "pins": [
     "FlockSoundness.Discharge.Hidden.outputs_binding_tail_checked",
@@ -35053,14 +35054,14 @@
    ]
   },
   "FlockSoundness.Discharge.Hidden.Wide.Defs": {
-   "digest": "f2845c1b02d6412ca60a74df23af9f07c5958a903dd9ab2ca0277e78a4028bff",
+   "digest": "cfdacd72260ee8e59b763642e23514ccd077b06b8952d532f573c1a3fc216513",
    "definitions": {
     "FlockSoundness.Discharge.Hidden.OutputsBindingTail": "c74f7086d3b9bb995eed308952114bc80068ec666b839da9f8109ed4fcb845e5",
-    "FlockSoundness.Discharge.Hidden.OutputsBindingV2": "1f42eeb9f5070d312f54a8c37b3db0d1ca2683dd49b68078abe70dc75b7a5197",
-    "FlockSoundness.Discharge.Hidden.OutputsBindingWide": "c0f83760e36a8afb45ef5e7a32e6c77fffc46d7316c293438b4db3f26e62789c",
+    "FlockSoundness.Discharge.Hidden.OutputsBindingV2": "5adda1fdae7b5ee04895e5026e412ed7b8ad2ddcc3bd978ac8e7cf9f2a739abe",
+    "FlockSoundness.Discharge.Hidden.OutputsBindingWide": "7efcf785ab4dc8447e3a09c2b7e2ace2361862c322b15f2f0d206d0455c7605a",
     "FlockSoundness.Discharge.Hidden.OutputsCommittedTail": "b7bc5abd2e96feb7bfebee92220918d89bf643648f748c5a07aaff5676b3b7f2",
-    "FlockSoundness.Discharge.Hidden.OutputsCommittedV2": "886ef8a4b18a3d4b86b25c8f4273444646559d0a2af9c6ec4796f9c5b849e8fb",
-    "FlockSoundness.Discharge.Hidden.OutputsCommittedWide": "b9a9c408175e65a106bb8e2a15ab5de9a2586e3a7dad711822bb4c5d89f74cfd"
+    "FlockSoundness.Discharge.Hidden.OutputsCommittedV2": "1469c85a73ca21cc4e642ea688c39e0331211bb318f7ec140ea1625c1f99a6bd",
+    "FlockSoundness.Discharge.Hidden.OutputsCommittedWide": "51171aba5a9a07707b247ecdf1433eae2f889807471f7eee5d6bbe9fb7cf97dc"
    },
    "pins": [
     "FlockSoundness.Discharge.Hidden.outputs_binding_tail",

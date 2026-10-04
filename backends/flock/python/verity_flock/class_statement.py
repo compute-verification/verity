@@ -568,11 +568,13 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
 
 
 def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes,
-          packed: bool | None = None, core_rows: bool | None = None, wiring: Wiring | None = None) -> dict:
+          packed: bool | None = None, core_rows: bool | None = None, wiring: Wiring | None = None, seg_ports: frozenset = frozenset(),
+          seg_out_rows: tuple = (), v2_out_rows: tuple = ()) -> dict:
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
     and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
     source identities share equal rows; ``packed``: narrow words share leaves, default FLOCK_PACK_WORDS; ``core_rows``: an FP
     GEMM coordinate's rows are core's bit rows, packed, one port per row (`element_rows`), default FLOCK_CORE_ROWS).
+    ``seg_ports``, ``seg_out_rows`` and ``v2_out_rows`` are `circuit.compose`'s, over the shims' port names (``p0``, …, ``out``).
 
     ``wiring`` (a template-instance partition, lanes with source identities, the instances its ``indices``): META names the
     template as the unit class's ``definition``, and every read of another unit's outputs is a link port (`link_ports`, META
@@ -625,7 +627,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
                        (b"/links:" + json.dumps(links).encode() if links else b""), len(groups))
     rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packs)
     got, _cut, ok = low.evaluate(rows.astype(np.uint64))
-    text = FC.compose(low, sub, partition=partition, program=program, port_bits=bits, links=links or None, definition=definition)
+    text = FC.compose(low, sub, partition=partition, program=program, port_bits=bits, seg_ports=seg_ports, seg_out_rows=seg_out_rows,
+                      v2_out_rows=v2_out_rows, links=links or None, definition=definition)
     if not int(ok) == (1 << len(rows)) - 1 or not np.array_equal(got.astype(np.uint16), outs):
         raise AssertionError(f"class {name}: the laid-out unit rows disagree with the reference on its lanes")
     if bits is not None:
