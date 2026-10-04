@@ -79,7 +79,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     Other modules are created when code lands, not before.
   - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
- stdlib, `verity` and itself (`tests/test_protocol_boundaries.py`).
+ stdlib, `verity`, itself and the protocols Daniel has allowed it (PoUW imports sampled proofs;
+ `EDGES` in `tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the one-stage
  audit (`one_stage`: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile), the two-stage law, its draws from the verifier's own
@@ -110,6 +111,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   enforces it. Developer notes in its `README.md`. Code reaches the Nebius
   nodes only through `research deploy install` from a pushed commit, listed in
   `pods/nebius/deploy.toml`; `research deploy drift` names what isn't `main`'s.
+  Delete data you don't own on a node only with `research retention gc` or `research retention rm --approved-by @OWNER`, never a bare `rm`.
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).
@@ -195,14 +197,12 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
   `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
   is replayed through the kernel.
-- A guarantee (README "Glossary"), the theorem a ledger, a table or a PR cites as proved, is pinned in `lean-audit.json`.
-  `audit.py --update` records it. A changed record means the guarantee now says something else (its statement, or a
-  definition the statement reads).
-  No axiom check can catch a weakened definition, so a changed record needs a named statement reviewer, who reads what
-  `--update` prints (each changed signature before and after, each changed definition as it is now), and the PR
-  description names them. A guarantee that only moved to another module or name needs no reviewer when `--update
-  --moved MOVES.json` (old names to new) prints it as the same statement under its old names: its statement and every
-  definition it reads match their records.
+- A guarantee (README "Glossary"), the theorem a ledger, a table or a PR cites as proved, is listed in `lean-audit.json`,
+  and `audit.py --update` records what it says: its statement and every definition the statement reads. No axiom check
+  can catch a weakened definition, so when a change to those records lands on `main`, Daniel gets a DM showing it (each
+  changed statement before and after, each changed definition as it is now). Nobody signs off and nothing waits on it.
+  A guarantee that only moved to another module or name sends nothing when `--update --moved MOVES.json` (old names to
+  new) prints it as the same statement under its old names.
 - A named assumption or hand-proved lemma that a pinned dependency could prove, because its statement can be written in
   that dependency's constants, has an entry in the package's `upstream` watch list. The audit fails when the pinned
   dependency proves a theorem about it that nobody has acknowledged (`tools/lean/upstream.py`). One stated over the
@@ -247,6 +247,10 @@ A guard never fails open, and an agent VM can be suspended at any moment, so
 nothing that bounds spend or preserves results may depend on one: pods bound
 themselves (`research pods create --max-hours`, under a line of the notes repo's
 `budgets.toml`), and runs preserve their results from the pod.
+
+Never print a secret's value. List environment variable names with `compgen -e` (or `env -0 | cut -z -d= -f1 | tr '\0' '\n'`),
+never `env | cut`, `env | grep` or `printenv | …`: a multi-line value's later lines print as if they were names. A secret
+is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env` on the VM.
 
 Architectural rationale and human-facing reports belong in Notion;
 experimental evidence belongs in artifact storage. Temporary working notes

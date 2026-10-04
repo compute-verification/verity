@@ -490,6 +490,20 @@ def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):
     assert "--gpu" not in seen[1]
 
 
+def test_each_selftest_case_keeps_its_stderr_beside_the_class_records(monkeypatch, tmp_path: Path):
+    def run(cmd, **_kw):
+        case = cmd[cmd.index("--only") + 1] if "--only" in cmd else None
+        return CS.subprocess.CompletedProcess(cmd, 0, stdout=f'NEG\t{{"case": "{case}", "pass": false}}\n',
+                                              stderr=f"thread 'main' panicked: {case}: out of memory\n")
+
+    monkeypatch.setattr(CS.subprocess, "run", run)
+    rec = CS.prove("flock-circuit", tmp_path, 16, 0, selftest="gpu_proofs_match_cpu", gpu=True)
+    assert rec["finished"] is True and rec["all_pass"] is False and "stderr_tail" not in rec   # a verdict: no tail in the record
+    CS.prove("flock-circuit", tmp_path, 16, 0, selftest=True)
+    assert (tmp_path / "selftest-gpu_proofs_match_cpu.err").read_text() == "thread 'main' panicked: gpu_proofs_match_cpu: out of memory\n"
+    assert (tmp_path / "selftest-all.err").read_text() == "thread 'main' panicked: None: out of memory\n"
+
+
 def test_a_verifier_pod_serves_every_point_of_a_gpu_session_on_the_same_processes(monkeypatch, tmp_path: Path):
     """Each prover process sends its session k to verifier process k mod S from k = 0, so a pod bounded for P points serves
     P provers one after another: each process exits after exactly the sessions the P provers send it."""

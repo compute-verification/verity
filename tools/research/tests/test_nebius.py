@@ -519,6 +519,42 @@ def test_gpu_lease_backfills_a_short_request_ahead_of_a_waiter_that_cannot_start
 
 
 @needs_flock
+def test_gpu_lease_refuses_a_lease_that_overlaps_a_booked_window_unless_it_is_the_timed_one(tmp_path):
+    """At 10:00Z with 10:40-11:25Z booked: a lease ending by 10:40 runs, a longer one or one with no --max-min is refused holding
+    nothing, --timed runs, a lease inside the window is refused and one after it runs; with --wait it waits without queuing."""
+    windows = tmp_path / "windows"
+    windows.write_text("# start UTC, minutes\n2026-10-04T09:00Z 30 # over\nnot a line\n"
+                       "2026-10-04T10:40Z 45 # compute-accounting exhaustion window; slot-d=runs\n")
+    at = {"10:00": "1791108000", "10:50": "1791111000", "11:25": "1791113100"}
+    env = {**gpu_env(tmp_path, count=2), "GPU_LEASE_WINDOWS": str(windows), "GPU_LEASE_POLL_S": "0.1"}
+    ran = tmp_path / "ran"
+
+    def lease(when: str, *flags: str) -> subprocess.CompletedProcess:
+        ran.unlink(missing_ok=True)
+        return subprocess.run(["bash", str(GPU_LEASE), "1", *flags, "--mem-gb", "0", "--", "touch", str(ran)],
+                              env={**env, "GPU_LEASE_NOW": at[when]}, capture_output=True, text=True)
+
+    for when, flags, ok in (("10:00", ["--max-min", "30"], True), ("10:00", ["--max-min", "40"], True),
+                            ("10:00", ["--max-min", "45"], False), ("10:00", [], False), ("10:00", ["--timed"], True),
+                            ("10:50", ["--max-min", "5"], False), ("11:25", ["--max-min", "45"], True), ("11:25", [], True)):
+        r = lease(when, *flags)
+        assert (r.returncode == 0) == ok == ran.exists(), (when, flags, r.stderr)
+        if not ok:
+            assert r.returncode == 75 and "2026-10-04T10:40Z 45 # compute-accounting exhaustion window" in r.stderr, r.stderr
+            assert ("with no --max-min" in r.stderr) == (not flags)
+    status = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout.split("\n")
+    assert [ln.split()[:2] for ln in status if ln] == [["0", "free"], ["1", "free"]]
+    waiter = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--max-min", "45", "--mem-gb", "0", "--", "true"],
+                              env={**env, "GPU_LEASE_NOW": at["10:00"]}, stderr=subprocess.PIPE, text=True)
+    try:
+        assert "waiting, unqueued, until the lease clears it" in waiter.stderr.readline()
+        assert not list((tmp_path / "gl").glob("wait.*"))
+    finally:
+        waiter.kill()
+        waiter.wait()
+
+
+@needs_flock
 def test_a_waiter_stops_a_preemptible_lease_and_leaves_an_ordinary_one(tmp_path):
     env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_POLL_S": "0.1"}
     pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
@@ -732,7 +768,7 @@ def test_launch_refuses_to_spend_without_yes_and_a_lease():
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set" in r.stderr
 
 
-def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_still_takes_the_multi_line_secret(tmp_path):
+def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi_line_secret(tmp_path):
     fake = tmp_path / "nebius"
     fake.write_text('#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = --private-key-file-path ] && cp "$2" "$OUT"; shift; done\n')
     fake.chmod(0o755)
@@ -748,7 +784,10 @@ def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_still_takes_the_m
 
     r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
     assert r.returncode == 0 and key == body and r.stdout == r.stderr == ""
-    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body.rstrip("\n"))
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body.rstrip("\n"))    # a multi-line secret leaks through `env | cut -d= -f1`
+    assert r.returncode == 1 and key == "" and "NEBIUS_SA_PRIVATE_KEY (the multi-line key) is no longer read" in r.stderr
+    assert "dummy line" not in r.stderr
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body, NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
     assert r.returncode == 0 and key == body
     r, _ = auth(NEBIUS_SA_PRIVATE_KEY_B64="not base64!")
     assert r.returncode == 1 and "NEBIUS_SA_PRIVATE_KEY_B64 is not base64" in r.stderr
@@ -1373,7 +1412,11 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
     assert rec["question"] == "Does cov-gm149's Commit validate on vy-nebius-2?"
     r = place(src, gpus="9")
     assert r.returncode == 3 and "refuses" in r.stderr and not r.stdout
-    r = place(tmp_path / "no-cluster")
+    silent = tmp_path / "silent-cluster"     # answers nothing; a missing one would fall through to tools/cluster's editable install
+    (silent / "src" / "cluster").mkdir(parents=True)
+    (silent / "src" / "cluster" / "__init__.py").write_text("")
+    (silent / "src" / "cluster" / "__main__.py").write_text("import sys\nsys.exit('no queue here')\n")
+    r = place(silent)
     assert r.returncode == 0 and not r.stdout and "no placement" in r.stderr
 
 
@@ -1550,6 +1593,34 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
     monkeypatch.setattr(m, "kubectl", kubectl)
     monkeypatch.setattr(m, "gpu_table", lambda: {"GPU-a": 0, "GPU-b": 1, "GPU-c": 2, "GPU-d": 3})
     return m, calls, state
+
+
+def test_n1_lease_setup_makes_lease_files_writable_as_root_but_never_through_a_link(monkeypatch, tmp_path):
+    """The lease dir is 0777 and setup's chmod runs as root, so a job that planted a symlink to a file of root's there (or a hard
+    link, or swapped a listed file for a symlink) had root make that file world-writable."""
+    m, _, _ = _n1_lease(monkeypatch, tmp_path)
+    gl = tmp_path / "gl"
+    gl.chmod(0o777)
+    secret, other = tmp_path / "secret", tmp_path / "other"
+    for p in (secret, other, gl / "0.owner"):
+        p.write_text("x")
+        p.chmod(0o600)
+    (gl / "planted").symlink_to(secret)
+    os.link(other, gl / "hard")
+    real, ran = subprocess.run, []
+    monkeypatch.setattr(m.subprocess, "run", lambda argv, **kw: ran.append(argv) or subprocess.CompletedProcess(argv, 0))
+    m.setup()
+    monkeypatch.setattr(m.subprocess, "run", real)
+    assert {a[-1] for a in ran} == {str(gl / "0.owner"), str(gl / "hard")}          # a symlink is never handed to root
+    for argv in ran:
+        assert argv[:4] == ["sudo", "-n", "python3", "-c"]
+        real([sys.executable, *argv[3:]], check=True)
+    assert (gl / "0.owner").stat().st_mode & 0o777 == 0o666
+    assert secret.stat().st_mode & 0o777 == 0o600 and other.stat().st_mode & 0o777 == 0o600
+    (gl / "0.owner").unlink()
+    (gl / "0.owner").symlink_to(secret)                                                  # swapped after setup listed it
+    assert real([sys.executable, "-c", m.FIX_MODE, str(gl / "0.owner")], capture_output=True).returncode != 0
+    assert secret.stat().st_mode & 0o777 == 0o600
 
 
 @needs_flock

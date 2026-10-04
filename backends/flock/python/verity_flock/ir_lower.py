@@ -100,9 +100,21 @@ GATE_FAMILIES = {r"And(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [fp.and_reduce(C,
                  r"Xor(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [reduce(lambda s, b: s ^ b[0], x[1:], x[0][0])]}
 
 
+def _boolean_build(key):
+    """The ``build`` of a registered Boolean Definition (``verity.ml.boolean.trace.definition``) whose ``word`` is the
+    primitive ``key``: a `forms` builder on the operand words, as a piece is."""
+    from verity.ir.defs import REGISTRY
+
+    for d in list(REGISTRY.defs.values()):
+        w, build = getattr(d, "word", None), getattr(d, "build", None)
+        if callable(build) and getattr(w, "id", None) == key:
+            return build
+    return None
+
+
 class _Pieces(dict):
     """:data:`PIECES`, which also resolves a primitive whose id carries a width (``tail_pieces.FAMILIES``: ``BitAtx{W}_v1``)
-    or an arity (:data:`GATE_FAMILIES`); ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest."""
+    or an arity (:data:`GATE_FAMILIES`), or that a registered Boolean Definition computes (`_boolean_build`); ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest."""
 
     wrap = None
 
@@ -113,6 +125,10 @@ class _Pieces(dict):
             if isinstance(key, str) and re.fullmatch(pat, key):
                 self[key] = self.wrap(key, fn) if self.wrap else fn
                 return self[key]
+        fn = _boolean_build(key)
+        if fn is not None:
+            self[key] = self.wrap(key, fn) if self.wrap else fn
+            return self[key]
         return None
 
     def __missing__(self, key):

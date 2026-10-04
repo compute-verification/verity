@@ -11,18 +11,30 @@ NetTiming/Protocol/Run.lean    trusted: statuses, observations, the warden, the 
                                Program, acceptance (Accepted, AcceptedUpTo) and accepted observation sequences (AccSeqs)
 NetTiming/Protocol/Ingress.lean  trusted: the interaction read inward, a link's frames with the timing erased (rowFrames,
                                linkFrames), and acceptance as it bears on ingress (StatusComplete)
+NetTiming/Protocol/Schedule.lean trusted: the Program's logical schedule as `schedule.py` defines it (ClockSync, SyncSet,
+                               LogicalFrame, eligible, handingBuckets, enqueued, expectedRow) and the constant-rate
+                               Program it gives (constantRate)
 NetTiming/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them), J, and Theorem 3's two
                                dataflow conditions
-NetTiming/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 1(b), Theorem 3, the
-                               ingress bound)
+NetTiming/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 1(b), Theorem 3,
+                               Theorem 3 for the constant-rate Program, the ingress bound)
 NetTiming/SecurityProofs.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee, from the lemmas below
 NetTiming/SecurityProofs/Occupancy.lean  Proposition 2 (the occupancy counts, fill, and the FIFO warden's tightness)
 NetTiming/SecurityProofs/Counting.lean   Theorem 1(b) (the tree lemma on accepted runs, zero error, W6 on accepted runs)
 NetTiming/SecurityProofs/Advice.lean     Theorem 3 (the 2^A cap, one clock-sync value per window, the fixed clock, the
                                          block caps)
+NetTiming/SecurityProofs/Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap, causality, seven bits
+                                         per window opened, the composed statement) and its witnesses
 NetTiming/SecurityProofs/Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
+NetTiming/SecurityProofs/PerWindow.lean  the last two over the run's first `m` whole windows: the factor per window and
+                                         per link-window
 NetTiming/SecurityProofs/Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
+NetTiming/Difftest.lean        tested: the definitions evaluated on an instance (expectedRow, and Accepted of constantRate
+                               and StatusComplete by decide), in the shape of the Python audit's results
+NetTimingDifftest.lean         the difftest's run (`runs` in lean-audit.json): every instance against the Python audit's
+                               results
+scripts/difftest_vectors.py    the difftest's data: 10,000 random instances and the Python audit's results on them
 lean-audit.json                the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean               one #print axioms line per pin, then the three proved but unpinned lemmas
 ~~~
@@ -31,7 +43,10 @@ CheckAxioms.lean               one #print axioms line per pin, then the three pr
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/lean/audit.py .                      # Verity's Lean audit
-lake env lean CheckAxioms.lean                              # the axioms of the 39 pins and the 3 unpinned
+lake env lean CheckAxioms.lean                              # the axioms of the 51 pins and the 3 unpinned
+# the difftest, which the audit runs: its data from this checkout's Python audit, then the Lean side on it
+uv run python scripts/difftest_vectors.py ../../.. --out /tmp/dt
+lake env lean --run NetTimingDifftest.lean /tmp/dt/difftest/instances.jsonl /tmp/dt/difftest/python.jsonl 10000
 ~~~
 
 **Trusted without proof:** the statements in `NetTiming/Protocol/`, `NetTiming/Assumptions.lean` and
@@ -42,7 +57,8 @@ as `docs/…` and `internal/…` name the network-transparency project store, wh
 **The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
-record, a kernel replay, and the 39 pins' records, whose meaning it follows through those three (`meaning`).
+record, a kernel replay, and the 51 pins' records, whose meaning it follows through those three (`meaning`). It then
+runs the difftest (`runs`): on 10,000 random instances, the definitions give what the Python audit gives.
 A changed record needs a named statement reviewer (Verity's `AGENTS.md`).
 
 ## The model
@@ -72,6 +88,15 @@ charges content bits, as reads, plus timing bits. Taking `log2 #Cs` to be those 
 part of the theorem. It is exact under fixed-length frames (W3): N frames of B bits have `2^(N·B)` contents, so for
 `Cs` all of them, `log2 #Cs` is the `N·B` bits read.
 
+**The shipped schedule** (`NetTiming.Protocol.Schedule`). `constantRate T W ss frames` is `schedule.py`'s Program:
+windows of `T` buckets, `W` of them with advice, one clock-sync value of `ss` (Σ_sync) per window, and the Program's
+frames, anchors and logical indices `frames ins c ℓ`, read from the ingress and the content advice. A frame is eligible
+at `anchor + δ + ⌊λ/ρ⌋`, handed at `h(k) = max(eligible(k), h(k−1))`, and released by `fifoGrid`. Its advice type is
+`Ac × (Fin W → ss.Elem)`, so the sync is its only timing advice by definition, and Theorem 3's clock-sync form holds for
+it with no dataflow hypothesis (`Guarantees.EncardAccSeqsLeConstantRate`). The block cap's two conditions fail for it in
+their natural instances (`constantRate_not_framesRead_counts`, `constantRate_not_windowBlocks`), so the advice cap is its
+bound: the horizon is one block (`timing-channel.md` §2.4).
+
 ## The trusted layer (`NetTiming.Assumptions`)
 
 | Note | Lean | Says |
@@ -99,7 +124,7 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 ## The pins
 
-The 39 records in `lean-audit.json`. The 26 guarantees are pinned as `NetTiming.SecurityProofs.G`, each proved by the
+The 51 records in `lean-audit.json`. The 35 guarantees are pinned as `NetTiming.SecurityProofs.G`, each proved by the
 lemma of the same statement whose name it spells in UpperCamelCase (`SecurityProofs.CardFree` by `card_free`):
 
 - **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `FillInjective`,
@@ -109,13 +134,21 @@ lemma of the same statement whose name it spells in UpperCamelCase (`SecurityPro
   `EncardObsDecodableLe`, `EncardDecodableLe`, `NoFaultOfAccepted`.
 - **Theorem 3** (`NetTiming.SecurityProofs.Advice`): `RecordedRowEqFill`, `EncardAccSeqsLeAdvice`, `EncardAccSeqsLeSync`,
   `EncardAccSeqsLeFixedClock`, `EncardAccSeqsLeBlocks`, `EncardAccSeqsLeBlocksCounts`, `EncardDecodableLeBlocks`.
+- **Theorem 3 for the constant-rate Program** (`NetTiming.SecurityProofs.Schedule`): `EncardAccSeqsLeConstantRate`,
+  `EncardAccSeqsLeConstantRateFixedClock`, `ExpectedRowCausal`, `EncardAccSeqsLeConstantRateWindows`,
+  `EncardDecodableLeConstantRate`.
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`): `EncardIngressObsDecodableLe`, `EncardIngressDecodableLe`,
   `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`.
+- **Per window** (`NetTiming.SecurityProofs.PerWindow`): `EncardAccSeqsLeConstantRatePerWindow`,
+  `EncardDecodableLeConstantRatePerWindow`, `EncardIngressObsDecodableLePerWindow`,
+  `EncardIngressObsDecodableLeContentsPerWindow`.
 
-The 13 witnesses are pinned as lemmas, under their own names (`NetTiming.SecurityProofs.Sanity`):
+The 16 witnesses are pinned as lemmas, under their own names (`NetTiming.SecurityProofs.Sanity`, and the last three in
+`NetTiming.SecurityProofs.Schedule`):
 `witnessWarden_assumptions`, `witnessWarden_jitter_varies`, `witnessProgram_conditions`,
 `witnessProgram_timing_matters`, `joint_witness`, `joint_witness_bound`, `zP_accepts_one`, `zP_constOp_accepts_one`,
-`ingress_witness`, `ingress_witness_tight`, `allocated_witness`, `allocated_witness_tight`, `toy_leftPacked`. Their witness definitions are outside `meaning`, so the audit records each witness's statement but
+`ingress_witness`, `ingress_witness_tight`, `allocated_witness`, `allocated_witness_tight`, `toy_leftPacked`,
+`constantRate_not_framesRead_counts`, `constantRate_not_windowBlocks`, `constantRate_joint_witness`. Their witness definitions are outside `meaning`, so the audit records each witness's statement but
 does not follow it into the definitions it constructs.
 
 **Proved and audited, not pinned:** `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid`
@@ -126,14 +159,24 @@ The audit checks them like every declaration, and they use only the three axioms
 The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
 ingress bound's statements were frozen before their proofs as well; the review of the first two is on the pull request
 that added them (danielreuter/verity#894), and the review of the content versions is on the one stacked on it. The
-reference implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 15 of the pins and the three
-unpinned lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python
-counterpart.
+constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and pinned before
+their proofs. Their statement review, on danielreuter/verity#949, gave GO with one change: the four counts take
+`n ≤ W·T`. All 51 pins are proved. The reference
+implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 19 of the pins and the three unpinned
+lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
 ## Modelling choices a statement reviewer checks
 
-1. **Steps are buckets across all of ∂X.** The note states Theorem 1 per link-window. The tree lemma is granularity-free,
-   and a per-window count follows by applying it to window chunks; that chunking is not stated.
+1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
+   Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole
+   windows of `T` buckets, `n = m·T`, each with its parent's hypotheses at that horizon and no other: the shipped
+   schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
+   `EncardDecodableLeConstantRatePerWindow`), and the ingress bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
+   (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version). The egress factor per window is the bound's,
+   not a count per window: content advice and an earlier window's sync can first show in a later window, so one window
+   may continue a given prefix in more than `#Σ_sync · D^T` ways. So the egress bound is cumulative from the run's
+   first window, and a temporal unit that starts later is not bounded by its own windows. Ingress is not affected:
+   `Packed`, `Allocated` and `JitterBounded` bound every step's branching whatever came before.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
    more permissive, so the bounds cover more Programs.
 3. **Theorem 3 counts all accepted sequences,** not only those a run produces, which makes it stronger and needs no
@@ -163,8 +206,28 @@ The ingress bound adds these:
     and W4 hold for every action, faults included, and complete statuses carry nothing.
 11. **One allocation per link, one bucket width.** Link `ℓ` has allocation `r ℓ` (`Allocated`) within the shared slot
     count `S`, and every link shares the step, a bucket of ∂X. Ingress links with different bucket widths are not
-    modelled; the per-link-window count `(r_in + 1)^T` follows by reading the product over steps and links.
+    modelled. Over the first `m` whole windows each link-window contributes `(r ℓ + 1)^T`
+    (`EncardIngressObsDecodableLePerWindow`).
 12. **No Program, no clock.** The bound reads no Program and no advice: the outside sender chooses when frames arrive,
     so no clock pins ingress timing. Jitter on the inward release adds `D^n` (J, `D = 1` when tested ideal). W3's frame
     length and the FIFO rule are not used; the FIFO warden attains the bound (`EncardFifoGrids`, read for the ingress
     grid).
+
+The constant-rate Program adds these:
+
+13. **Exactly `schedule.py`.** Each definition in `NetTiming.Protocol.Schedule` names the Python it mirrors, and computes
+    the same rows: δ is a `ℕ`, ρ a positive `Rat`, `⌊λ/ρ⌋` is Python's `(λ · den) // num`, a frame anchored past the last
+    window with advice is handed at `max(last, W·T, anchor)`, and frames handed at or after the horizon `W·T` are never
+    enqueued. Past the horizon, where Python has no grid, the queue drains with nothing enqueued. The audit checks `W`
+    windows, so the four counts take `n ≤ W·T` (`hn`): every step they count is a step the audit checks.
+14. **The frames are the Program's computation, left abstract.** `frames ins c ℓ` gives link `ℓ`'s frames in canonical
+    order, with their content, anchors and logical indices, from the ingress and the content advice `c`. Every guarantee
+    holds for every such function, so it covers any way the Program fixes anchors (the recorded bucket of the request a
+    frame answers) and indices. Content advice that moves anchors is counted in `#Ac`.
+15. **One clock per spatial unit.** Every egress link reads the same window's sync (decision A's default), and the
+    audit enforces it (danielreuter/verity#956). A clock per link is a different advice type, covered by
+    `EncardAccSeqsLeAdvice` directly.
+16. **The allocation is the slot count `S`** on every egress link, as in Python, where a row has `allocation` slots.
+17. **In-set advice.** The advice ranges over `ss.Elem`, the values of Σ_sync: a run whose declared sync is outside the
+    set is an `advice` violation and rejected, so its advice is never counted. `ExpectedRowCausal` takes any clock-sync
+    values, in the set or not, which is what the audit's verdicts on earlier windows rely on.
