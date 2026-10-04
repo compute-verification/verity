@@ -14,6 +14,8 @@ import FlockSoundness.Discharge.PrivateCircuit.InstanceReal
 import FlockSoundness.Discharge.PrivateCircuit.InstanceRows
 import FlockSoundness.Discharge.PrivateCircuit.InstanceWired
 import FlockSoundness.Discharge.PrivateCircuit.InstanceRealH
+import FlockSoundness.Discharge.PrivateCircuit.ReadsDraw
+import FlockSoundness.Discharge.PrivateCircuit.ReadsSound
 
 /-!
 # Protocol 2, the private circuit
@@ -29,4 +31,11 @@ reads "fewer than `K` wrong units" of the padded program as the same of the circ
 (`InstanceJoint.lean`) states soundness and privacy over one registration. The wiring between units is a public topology
 of the class (`PrivateCircuit/Wiring.lean`): `wired_eval` composes correct units along it into `C` end to end, and
 `wired_wrong` reads an owed output off it as a wrong unit.
+
+With hidden reads (`PrivateCircuit/Reads*.lean`) the units are public library blocks and the program is a committed
+topology table: each unit reads its inputs from a committed row store at hidden positions, through openings its own
+circuit checks. `read_binding` makes a read off the registered store or table a SHA-512 collision, the registered
+model's wrong units are judged against the store (`store_cone`), the draw's escape is taken at that one set
+(`drawEscapes_realR`), and `private_circuit_sound_reads` and `private_circuit_private_reads` are `ran_registered` and
+`circuit_private` at the class circuit and the table.
 -/

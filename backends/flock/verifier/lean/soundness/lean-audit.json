@@ -9729,6 +9729,17 @@
    "assumptions": [],
    "type_hash": "52fdb3fb9347548a38b3414cf174c989d442b8a4b5d71c83da15b25c2025e84d"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.Reads.classRel_bad": {},
+  "FlockSoundness.Discharge.PrivateCircuit.Reads.drawEscapes_realR": {},
+  "FlockSoundness.Discharge.PrivateCircuit.Reads.escape_bad_le_cone": {},
+  "FlockSoundness.Discharge.PrivateCircuit.Reads.owedWrong_bad": {},
+  "FlockSoundness.Discharge.PrivateCircuit.Reads.owedWrong_cone": {},
+  "FlockSoundness.Discharge.PrivateCircuit.Reads.prob_auditLive_escape_set": {},
+  "FlockSoundness.Discharge.PrivateCircuit.Reads.read_binding": {},
+  "FlockSoundness.Discharge.PrivateCircuit.Reads.reads_bind_le": {},
+  "FlockSoundness.Discharge.PrivateCircuit.Reads.realR_escape_stratified": {},
+  "FlockSoundness.Discharge.PrivateCircuit.Reads.regCommit_binding": {},
+  "FlockSoundness.Discharge.PrivateCircuit.Reads.store_cone": {},
   "FlockSoundness.Discharge.PrivateCircuit.circuit_indist": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.circuit_indist : FlockSoundness.Discharge.PrivateCircuit.CircuitIndist"
@@ -9935,6 +9946,7 @@
    "assumptions": [],
    "type_hash": "fd72e957b4fcdcf39c72ebb8344dd7c13792464ed21d28025cdaca4602e69443"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_private_reads": {},
   "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound",
@@ -10065,6 +10077,7 @@
    "assumptions": [],
    "type_hash": "5a5333cb3a9dcf99416443b31cbd5e702a598eb214a18cff429b65386590e0ab"
   },
+  "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_reads": {},
   "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_real": {
    "signature": [
     "FlockSoundness.Discharge.PrivateCircuit.private_circuit_sound_real {mPts : Nat} {Reg : Type}",
