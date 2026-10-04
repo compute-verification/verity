@@ -1,6 +1,10 @@
 {
  "roots": ["FlockLevel3"],
  "meaning": ["FlockLevel3", "Flock"],
+ "reads_exempt": {
+  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "FlockLevel3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+ },
  "pins": {
   "FlockLevel3.F128.poly_add": {
    "owner": "@proofs",

@@ -79,6 +79,12 @@
    "why": "the lifting worker's grid-density and slice lemmas (L2, L3) stand alone on Mathlib"
   }
  },
+ "reads_exempt": {
+  "Pouw.SecurityProofs.Dimension.Lifting": "read by guarantees PoUW's lock reduction drops (repo-organization plan item 1); leaves security_proofs at the split",
+  "Pouw.SecurityProofs.PearlC.Gamma": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
+  "Pouw.SecurityProofs.PearlC.TileGamma": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
+  "Pouw.SecurityProofs.Sanity": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)"
+ },
  "guarantees": {
   "Pouw.AlignedExact.card_block_le": {
    "owner": "@compute-accounting",

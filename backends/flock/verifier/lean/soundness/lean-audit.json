@@ -8,6 +8,11 @@
    "digest": "c86a84bed584d07dde045f113c2e8937b7d5887fb9cda37aebe771db55960a14"
   }
  },
+ "reads_exempt": {
+  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "FlockLevel3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "FlockSoundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+ },
  "upstream": {
   "scan": {
    "Arklib": {

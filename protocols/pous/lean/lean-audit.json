@@ -65,6 +65,10 @@
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   }
  },
+ "reads_exempt": {
+  "Pous.SecurityProofs.Accounting.Numbers": "memory-accounting to move reportP₀ into Pous.Protocol (lean's recommendation), or drop report_k214 from the lock",
+  "Pous.SecurityProofs.Sanity": "non-vacuity witnesses; they leave the lock in @memory-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)"
+ },
  "guarantees": {
   "Pous.Accounting.p₀_at_report": {
    "owner": "@memory-accounting",
