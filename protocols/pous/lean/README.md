@@ -27,11 +27,16 @@ Pous/Protocol/Model/Graded.lean     the graded audit: up to `t` late rounds, eac
 Pous/Protocol/Model/Continuous.lean the continuous audit: an explicit timed verifier (sequential reveal, a hard
                                     deadline, every answer past `Δ` counted) and a responder on its clock; the
                                     arrivals the verifier draws (queued, never dropped) and the memory at each time
-Pous/Protocol/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild}.lean
+Pous/Protocol/Model/{Digest,SecureErasure}.lean
+                                    the keyed digest of a region (from PR #1010, without its bandwidth
+                                    assumption); the secure-erasure audit: a keyed fill of all volatile memory,
+                                    timed spot reads, and the foreign content the prover keeps (4 Oct model)
+Pous/Protocol/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild,EraseMeets}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
                                     `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`;
                                     a band segment's re-encode cost `R(d)`, a graded row's round span and
-                                    the verifier's cap on an audit's duration
+                                    the verifier's cap on an audit's duration; `EraseMeets`,
+                                    the secure-erasure requirement
 Pous/Protocol/P2/Cost.lean          P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
@@ -42,6 +47,11 @@ Pous/Guarantees.lean                trusted, the Guarantees layer: 73 statements
                                     cited outside the package
 Pous/Guarantees/P2.lean             six statements about the abstract model `m1p` at P2's parameters,
                                     which grade.sh also grades against; none is about the concrete P2
+Pous/Guarantees/SecureErasure.lean  four statements, which grade.sh also grades against: the digest is almost
+                                    universal (`DigestAU`), secure erasure from any sequential audit bound
+                                    (`SecureErasureMeets`), and on the band at every `N` and at 96 GiB
+                                    (`SecureErasureMeetsFamily`, `SecureErasureMeets96GiB`); no named assumption,
+                                    no bandwidth-separation premise
 Pous/SecurityProofs.lean            proved, the SecurityProofs layer: imports every proof module, and proves
                                     Pous.SecurityProofs.X : Pous.Guarantees.X for each proved guarantee
 Pous/SecurityProofs/{Sanity,Accounting/Numbers}.lean
@@ -66,6 +76,9 @@ Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem
 Pous/SecurityProofs/Rebuild/        proved: under the verifier's duration cap, no audit re-encodes a whole band
                                     segment from `W` alone (`Clock.lean`, the cumulative chain clock;
                                     `Window.lean`, the counts; `Exclusion.lean`, `BackgroundRebuildExcluded`)
+Pous/SecurityProofs/SecureErasure/  proved: `DigestAU` (Digest), secure erasure from the audit by counting
+                                    (Reduction), and the band's audit at 2152 reads with `EraseMeets` at
+                                    `f = 1/19`, `ε = 2^-128` (Band)
 lean-audit.json                     the policy and guarantee records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets
