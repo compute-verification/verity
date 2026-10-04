@@ -89,3 +89,17 @@ def test_a_strict_program_refuses_data():
     Program(_dot(P.AmpereBF16TcDot16), strict=O.program_data)
     with pytest.raises(ValueError, match="holds data"):
         Program(_dot(P.AmpereBF16TcDot16), strict=K.program_data)
+
+
+def test_a_public_port_is_data_unless_its_derivation_is_listed(monkeypatch):
+    """A public input port carries only the verifier's own recomputation: it names a seed and a listed derivation, and any
+    other is data. No derivation is listed yet, so every public port is data, and the first entry changes the digest."""
+    ports = {"cs": {"seed": "rope/positions", "derivation": "verity/rope/neox-bf16/cos-sin/v1"}}
+    assert O.DERIVATIONS == frozenset() and O.public_data(ports) == {
+        "public input cs": [(0, "verity/rope/neox-bf16/cos-sin/v1")]}
+    monkeypatch.setattr(O, "DERIVATIONS", frozenset({"verity/rope/neox-bf16/cos-sin/v1"}))
+    assert O.public_data(ports) == {} and O.digest() != DIGEST_V1
+    rope = "verity/rope/neox-bf16/cos-sin/v1"
+    for bad in ({"derivation": rope}, {"seed": "", "derivation": rope}, {"seed": "rope/positions", "derivation": "request/x"},
+                {"seed": "rope/positions"}, "request/x"):
+        assert list(O.public_data({"cs": bad})) == ["public input cs"], bad

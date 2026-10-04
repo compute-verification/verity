@@ -49,6 +49,7 @@ def load_registries() -> None:
     import verity.ml.boolean.gemm  # noqa: F401
     import verity.ml.boolean.mufu  # noqa: F401
     import verity.ml.boolean.scalar  # noqa: F401
+    import verity.ml.boolean.universal  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
     import verity.ml.prims  # noqa: F401
@@ -58,6 +59,8 @@ def load_registries() -> None:
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
     import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
+    import verity_pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
+    import verity_pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -194,9 +197,15 @@ def _pouw_roots() -> list[Any]:
     """PoUW's `ncp-v2` unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on
     it (`verity_pouw.circuit.ncp2`), for both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); the package's own tests check
     their template partitions and the Z separator. Beside them, the model Program's rows at a PoUW site, without and with the
-    bias (`verity_vllm.program.registry.pouw_rows`)."""
+    bias (`verity_vllm.program.registry.pouw_rows`), and Pearl-C4's tile check (`verity_pouw.circuit.pc4`): its unit
+    templates at k = 64 with a one-word tile (small enough to lower whole), and its weight side, call side and whole check at
+    one row a side; and Pearl-C's (`verity_pouw.circuit.pc8`) the same way at k = 128 (one promotion window), its templates
+    on the H100's and sm_120's records and its roots on sm_120's.  Both checks' hiding tiles and roots (``hidden``: the tile
+    digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes."""
+    from dataclasses import replace
+
     from verity.ir.defs import bind
-    from verity_pouw.circuit import ncp2
+    from verity_pouw.circuit import ncp2, pc4, pc8
     from verity_vllm.program.registry import pouw_rows
 
     shape = ncp2.Shape(16, 64, 16)
@@ -204,6 +213,15 @@ def _pouw_roots() -> list[Any]:
     for kind in ("shift24", "word"):
         out += [t for t in ncp2.templates(64, kind).values() if t not in out]
         out += [ncp2.linear(shape, kind), ncp2.weight(shape, kind), ncp2.window(shape, 2, kind)]
+    tile = pc4.Shape(1, 64, 1, tile=(1, 1))
+    out += [*pc4.templates(64, tile.tile).values(), pc4.weight(tile), pc4.call(tile), pc4.check(tile)]
+    tile8 = pc8.Shape(1, 128, 1, tile=(1, 1), dev="sm120")
+    out += [*pc8.templates(128, tile8.tile, "h100").values(), *pc8.templates(128, tile8.tile, "sm120").values(),
+            pc8.weight(tile8), pc8.call(tile8), pc8.check(tile8)]
+    h4, h8 = replace(tile, hidden=True), replace(tile8, hidden=True)
+    out += [t for t in [*pc4.templates(64, h4.tile, True).values(), pc4.weight(h4), pc4.call(h4), pc4.check(h4),
+                        *pc8.templates(128, h8.tile, "sm120", True).values(), pc8.weight(h8), pc8.call(h8), pc8.check(h8)]
+            if t not in out]
     return out + [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
                   bind(pouw_rows.NcpLinearCoordinate, K=64)]
 
@@ -296,6 +314,15 @@ def _boolean_gather_roots() -> list[Any]:
     from verity_vllm.program.registry import boolean_gather as BGA
 
     return [bind(BGA.Embedding, V=64, H=16), bind(BGA.gather_bf16(1100))]
+
+
+def _universal_roots() -> list[Any]:
+    """Protocol 2's universal unit (`verity.ml.boolean.universal`) at two size classes: G = 16 gates over 16 inputs (W = 32 wires)
+    with 8 outputs, and G = 64 over 64 (W = 128) with 32."""
+    from verity.ir.defs import bind
+    from verity.ml.boolean.universal import UniversalUnit
+
+    return [bind(UniversalUnit, G=16, N_IN=16, N_OUT=8), bind(UniversalUnit, G=64, N_IN=64, N_OUT=32)]
 
 
 def _kernel_roots() -> list[Any]:
@@ -541,7 +568,7 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
+    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _universal_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
     for label, make in _model_roots():
         try:
             fn = make()

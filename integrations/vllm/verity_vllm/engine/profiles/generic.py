@@ -117,6 +117,9 @@ def rank_hf_config(cfg: dict[str, Any], world: int) -> dict[str, Any]:
         if not out.get("head_dim"):
             out["head_dim"] = int(out["hidden_size"]) // int(out["num_attention_heads"])   # the FULL model's head width: a rank keeps it
         for k in sharded_keys(cfg):
+            if k == "num_key_value_heads" and out[k] < world and world % out[k] == 0:
+                out[k] = 1          # QKVParallelLinear: each key/value head on world // heads ranks (num_kv_head_replicas)
+                continue
             if out[k] % world:
                 raise ValueError(f"{k}={out[k]} is not divisible by the world {world}")
             out[k] = out[k] // world

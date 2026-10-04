@@ -46,6 +46,7 @@ markers = [
     "regression: R19 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
     "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
     "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
+    "rebuild: recomputes from a row's Programs (a manifest rebuild, a component decode); skipped unless VERITY_REGRESSION_REBUILD=1, as after each train on main (tools/check/post_train.py)",
 ]
 
 [tool.verity.tests]
