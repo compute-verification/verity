@@ -22,7 +22,9 @@
 //! uniform, `τ = (⟨c, Y⟩ + t) / β`, and the opened columns are uniform subject to `C(Y)_j = C(h)_j + β C(μ)_j` (the padding
 //! makes any `Q ≤ K_PAD` columns of one codeword uniform). The prover refuses the degenerate coins `β = 0` and `ε`-independent
 //! cases, a zerocheck outer coin `r_j = 1` ([`Masking`], as it opens), and a mask slot whose weights fail to span
-//! (`mask_rank_ok`); the simulator refuses the same coins.
+//! (`mask_rank_ok`); the simulator refuses the same coins. The prover also stops when its own batched constraint fails
+//! ([`SelfCheck`]), before `τ`'s commitment: the simulation covers runs whose constraint holds, and `Y` of a failing one
+//! gives away `⟨c, h⟩ + t`.
 
 use flock_core::{
     lincheck::{LincheckCircuit, QuirkyPoint, SkipPoint, build_quirky_eq_table_from_weights},
@@ -964,12 +966,25 @@ pub fn query_positions(words: &[F128], n: usize) -> Vec<usize> {
     words.iter().map(|x| (x.lo as usize) & (n - 1)).collect()
 }
 
+/// Whether [`prove_inner`] checks the batched constraint on its own pads before it sends anything after the batching coins.
+/// A failing constraint's `Y` gives away `⟨c, h⟩ + t`, a value of the witness, so the prover checks before it speaks
+/// ([`SelfCheck::Stop`], every honest plan's). [`SelfCheck::Skip`] belongs to a negative control, whose witness fails by
+/// design and whose proof the verifier must refuse, and to the simulator's dummy runs, which must look like the prover's
+/// runs until the proofs whatever the dummy witness is.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SelfCheck {
+    #[default]
+    Stop,
+    Skip,
+}
+
 /// The prover's inner proof, on the rep's challenger after the opening. `cons` are the algebraic phase's and the ring
 /// switch's constraints (the triple's are added here). `final_c`: the proof's `final_c'`, a constant of two of `cons` that
-/// nothing before absorbs, absorbed before `ε` so that it is fixed before the batching coins. Refuses `β = 0` (the simulator
+/// nothing before absorbs, absorbed before `ε` so that it is fixed before the batching coins. With [`SelfCheck::Stop`] it
+/// stops when `⟨c, h⟩ ≠ t` after the batching coins, before `τ`'s commitment goes out. Refuses `β = 0` (the simulator
 /// refuses the same coins).
 pub fn prove_inner<Ch: Challenger>(ic: &InnerCommit, p: &Pads, lay: &Layout, final_c: F128, mut cons: Vec<(&'static str, Lin)>,
-                                   ch: &mut Ch) -> Result<InnerProof, String> {
+                                   check: SelfCheck, ch: &mut Ch) -> Result<InnerProof, String> {
     ch.observe_label(LABEL_INNER);
     ch.observe_f128(final_c);
     let eps = ch.sample_f128();
@@ -978,7 +993,10 @@ pub fn prove_inner<Ch: Challenger>(ic: &InnerCommit, p: &Pads, lay: &Layout, fin
     ch.observe_f128_slice(&[rho, sigma]);
     cons.extend(triple_constraints(lay, eps, rho, sigma));
     let gammas = ch.sample_f128_vec(cons.len());
-    let (c, _t) = batch(&cons, &gammas);
+    let (c, t) = batch(&cons, &gammas);
+    if check == SelfCheck::Stop && c.iter().zip(&p.h).fold(t, |a, (x, y)| a + *x * *y) != F128::ZERO {
+        return Err("PROVER-STOPPED: the batched constraint fails (⟨c, h⟩ ≠ t)".into());
+    }
     let tau = c.iter().zip(&p.mu).fold(F128::ZERO, |a, (x, y)| a + *x * *y);
     let tau_salt = p.tau_salt.clone();
     let tau_commit = tau_commitment(tau, &tau_salt);
@@ -1179,7 +1197,7 @@ mod tests {
         l.a[0] = F128::ONE;
         l.a[1] = F128::ONE;
         let coins: Vec<F128> = (1..2000u64).map(|i| F128::new(i * 7919, i)).collect();
-        let pr = prove_inner(&ic, &p, &lay, F128::ZERO, vec![("t", l.clone())], &mut Tape::new(&coins)).unwrap();
+        let pr = prove_inner(&ic, &p, &lay, F128::ZERO, vec![("t", l.clone())], SelfCheck::Stop, &mut Tape::new(&coins)).unwrap();
         verify_inner(&pr, &lay, F128::ZERO, vec![("t", l.clone())], &mut Tape::new(&coins)).unwrap();
         let mut bad = l.clone();
         bad.c += F128::ONE;
@@ -1211,7 +1229,8 @@ mod tests {
         let schedule = vec![vec![coin(1)], (10..16).map(coin).collect(), vec![coin(99)], (100..100 + Q as u64).map(coin).collect()];
         let run = |broken: bool, solve: bool| -> bool {
             let mut pch = crate::RecordingChallenger::new(b"rep", schedule.clone());
-            let pr = prove_inner(&ic, &p, &lay, fc, cons(fc, broken), &mut pch).unwrap();
+            let check = if broken { SelfCheck::Skip } else { SelfCheck::Stop };
+            let pr = prove_inner(&ic, &p, &lay, fc, cons(fc, broken), check, &mut pch).unwrap();
             let mut sent = fc;
             if solve {
                 let mut all = cons(fc, broken);
@@ -1230,6 +1249,51 @@ mod tests {
         assert!(!run(true, false), "a failing row");
         assert!(!run(true, true), "a failing row cancelled by final_c' solved after γ");
     }
+
+    /// The prover checks before it speaks: on a failing row it stops after the batching coins, with the rounds an honest run
+    /// sends up to them and nothing observed after them. On the honest witness the check changes nothing: the same rounds and
+    /// the same proof bytes as the unchecked prover's, pinned from the prover before the check.
+    #[test]
+    fn the_prover_stops_before_tau_on_a_failing_row() {
+        let lay = Layout::new(20, 16, 0, 0);
+        let s = lay.len();
+        let p = Pads::draw(&mut ProverRng::from_seed(ProverSeed::injected([7; 32])), &lay, 0);
+        let code = Code::new(s + K_PAD);
+        let ic = InnerCommit::new(&p, crate::zk_hooks::LeafSalts::for_seed(&ProverSeed::injected([8; 32])).expand(9, code.n));
+        let v = F128::new(0xc0ffee, 0x5eed);
+        let fc = v + p.h[lay.fc()];
+        let cons = |broken: bool| -> Vec<(&'static str, Lin)> {
+            let ab = p.h[lay.fa()] + if broken { F128::ONE } else { F128::ZERO };
+            vec![("zerocheck c_eval", Lin::masked(fc, lay.fc(), s).add_const(v)), ("zerocheck final a·b", Lin::masked(ab, lay.fa(), s)),
+                 ("ring switch c", Lin::masked(fc, lay.fc(), s).add_const(v))]
+        };
+        let coin = |k: u64| F128::new(k.wrapping_mul(0x9e37_79b9_7f4a_7c15), k + 1);
+        let schedule = vec![vec![coin(1)], (10..16).map(coin).collect(), vec![coin(99)], (100..100 + Q as u64).map(coin).collect()];
+        let run = |broken: bool, check: SelfCheck| {
+            let mut pch = crate::RecordingChallenger::new(b"rep", schedule.clone());
+            let pr = prove_inner(&ic, &p, &lay, fc, cons(broken), check, &mut pch);
+            assert!(pch.mismatch.is_none());
+            (pr.map(|pr| bincode::serialize(&pr).unwrap()), pch)
+        };
+        let (honest, hch) = run(false, SelfCheck::Stop);
+        let (unchecked, uch) = run(false, SelfCheck::Skip);
+        let honest = honest.unwrap();
+        assert_eq!(Ok(&honest), unchecked.as_ref());
+        assert_eq!(hch.rounds, uch.rounds);
+        assert_eq!(hch.rounds.len(), 4);
+        let (stopped, sch) = run(true, SelfCheck::Stop);
+        assert_eq!(stopped, Err("PROVER-STOPPED: the batched constraint fails (⟨c, h⟩ ≠ t)".to_string()));
+        assert_eq!(sch.rounds, hch.rounds[..2], "ε's round and the batching coins' round, as the honest run sends them");
+        assert!(sch.pending.is_empty(), "nothing observed after the batching coins");
+        let (sent, bch) = run(true, SelfCheck::Skip);
+        assert!(sent.is_ok() && bch.rounds.len() == 4, "the negative control's prover sends its proof");
+        let digest: String = Sha512::digest(&honest).iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(digest, HONEST_INNER_PROOF_SHA512);
+    }
+
+    /// SHA-512 of the honest inner proof's bincode in [`the_prover_stops_before_tau_on_a_failing_row`], from `prove_inner`
+    /// before the self-check existed (main at 5049de02f).
+    const HONEST_INNER_PROOF_SHA512: &str = "TODO";
 
     /// The prover stops at a zerocheck outer coin `r_j = 1` as the coin opens, drawn as one vector or one at a time, and at
     /// no other coin equal to 1 (a skip coin, a later one).
