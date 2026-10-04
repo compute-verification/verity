@@ -36,7 +36,12 @@ variable {I Blk Salt B Cs D : Type} [Fintype Salt]
 /-- **A salt the posterior can draw opens the leaf**, when some salt opens it at the block. -/
 theorem postK_opens (ℓ : I → Blk × Salt → D) (q : I → Blk × Salt) (j : I) (b : Blk) (y : Salt)
     (hy : postK ℓ q j b y ≠ 0) (hf : ∃ y', ℓ j (b, y') = ℓ j (q j)) : ℓ j (b, y) = ℓ j (q j) := by
-  sorry
+  unfold postK kern at hy
+  split_ifs at hy with h1 h2
+  · exact h2
+  · exact absurd rfl hy
+  · obtain ⟨y', hy'⟩ := hf
+    exact absurd ⟨y', by simp [hy']⟩ h1
 
 /-- **Two openings of one leaf are a collision**: of the leaf hash `H`, of the salt hash `cs`, or of the round's
 digest `dig`. -/
@@ -44,7 +49,17 @@ theorem leaf_collision [AddCommGroup B] (dig : I → Blk → B) (My : Salt → B
     {z z' : Blk × Salt} (h : leaf dig My cs H j z = leaf dig My cs H j z') (hne : z ≠ z') :
     (∃ u v, u ≠ v ∧ H u = H v) ∨ (z.2 ≠ z'.2 ∧ cs z.2 = cs z'.2) ∨
       (z.2 = z'.2 ∧ z.1 ≠ z'.1 ∧ dig j z.1 = dig j z'.1) := by
-  sorry
+  obtain ⟨b, y⟩ := z
+  obtain ⟨b', y'⟩ := z'
+  simp only [leaf] at h
+  dsimp only
+  by_cases hin : (dig j b + My y, cs y) = (dig j b' + My y', cs y')
+  · obtain ⟨h1, h2⟩ := Prod.mk.inj hin
+    by_cases hyy : y = y'
+    · subst hyy
+      exact Or.inr (Or.inr ⟨rfl, fun hbb => hne (by rw [hbb]), add_right_cancel h1⟩)
+    · exact Or.inr (Or.inl ⟨hyy, h2⟩)
+  · exact Or.inl ⟨_, _, hin, h⟩
 
 /-- **The mixture's salt at another block is a collision**: at a block `b` other than `q j`'s, a salt the posterior
 of `q j`'s leaf can draw opens nothing, or is a collision of `H`, of `cs`, or of `dig`. -/
@@ -53,6 +68,13 @@ theorem posterior_collision [AddCommGroup B] (dig : I → Blk → B) (My : Salt 
     (hb : b ≠ (q j).1) :
     (∀ y', leaf dig My cs H j (b, y') ≠ leaf dig My cs H j (q j)) ∨ (∃ u v, u ≠ v ∧ H u = H v) ∨
       (y ≠ (q j).2 ∧ cs y = cs (q j).2) ∨ (y = (q j).2 ∧ dig j b = dig j (q j).1) := by
-  sorry
+  by_cases hf : ∃ y', leaf dig My cs H j (b, y') = leaf dig My cs H j (q j)
+  · refine Or.inr ?_
+    have hne : (b, y) ≠ q j := fun e => hb (congrArg Prod.fst e)
+    rcases leaf_collision dig My cs H j (postK_opens _ q j b y hy hf) hne with h | h | ⟨h1, -, h3⟩
+    · exact Or.inl h
+    · exact Or.inr (Or.inl h)
+    · exact Or.inr (Or.inr ⟨h1, h3⟩)
+  · exact Or.inl fun y' h => hf ⟨y', h⟩
 
 end FlockSoundness.Discharge.ZkTree
