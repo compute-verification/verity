@@ -1,6 +1,6 @@
 """Integrity end to end on a real circuit: verity's FP32 adder or BF16 comparison, exported as a Boolean circuit with
 reference vectors from `verity.evaluation.bits.evaluate_bits` (`data/`). The prover serves eight requests, each a pair
-of random floats; `run` plays the parties against each other and prints the verifier's view.
+of random floats; `run` plays the actors against each other and prints the verifier's view.
 
     uv run python examples/integrity.py [f32_add|bf16_gt_strict] [replay|transparent|sp1]
 
@@ -17,10 +17,10 @@ from pathlib import Path
 from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit, evaluate
 from verity.primitives.commitments import MerkleSha256
-from verity.protocol.run import run
-from verity.subprotocols.integrity.proofs.construction import Proofs
-from verity.subprotocols.integrity.proofs.transparent import Transparent
-from verity.subprotocols.integrity.replay import Replay
+from verity.protocols.integrity.proofs.construction import Proofs
+from verity.protocols.integrity.proofs.transparent import Transparent
+from verity.protocols.integrity.replay import Replay
+from verity.run import run
 
 circuit_name, construction = (sys.argv[1:] + ["f32_add", "replay"][len(sys.argv) - 1:])[:2]
 data = json.loads((Path(__file__).parent / "data" / f"{circuit_name}.json").read_text())
@@ -48,16 +48,16 @@ scheme = MerkleSha256()
 
 if construction == "replay":
     replay = Replay(k=2, delta=0.01)
-    parties = {**replay.verifier(scheme), **replay.replayer(scheme), **replay.prover(scheme, circuit, requests)}
+    actors = {**replay.verifier(scheme), **replay.replayer(scheme), **replay.prover(scheme, circuit, requests)}
 else:
     if construction == "sp1":
-        from verity.subprotocols.integrity.proofs.sp1.sp1 import Sp1 as system
+        from verity.protocols.integrity.proofs.sp1.sp1 import Sp1 as system
     else:
         system = Transparent
     proofs = Proofs(k=64, max_width=16, delta=0.01, system=system())
-    parties = {**proofs.verifier(scheme), **proofs.prover(scheme, circuit, P.greedy(circuit, 16), requests)}
+    actors = {**proofs.verifier(scheme), **proofs.prover(scheme, circuit, P.greedy(circuit, 16), requests)}
 
-for event in run(parties, view="verifier"):
+for event in run(actors, view="verifier"):
     body = event.body
     sizes = {name: len(value) for name, value in vars(body).items() if isinstance(value, (tuple, dict)) and name != "reasons"}
     what = body if type(body).__name__ == "IntegrityProfile" else f"{type(body).__name__}({', '.join(f'{n}: {s}' for n, s in sizes.items())})"

@@ -9,27 +9,28 @@ lake build    # the Lean beside the Python
 
 ## The model
 
-Every party (a prover, a verifier, a replayer, a warden, a pinger) is a transducer over one ordered log of events: it
-receives the events addressed to it and sends events in reply (`verity.primitives.events`). What it observes and
-computes in between is its own state and never enters the log. A party's name starts with its domain
-(`verifier/integrity`). `verity.protocol.run.run(parties, view)` plays the parties against each other and yields one
-domain's view. The auditor trusts the verifier, so the verifier's view is the output: its profiles are events in it.
-Replayers, wardens and pingers are trusted too but sealed: what they see stays their own, and reaches the verifier only
-as what they send it.
+The principals are the prover, the verifier, and the trusted hardware: replayers, wardens, pingers. An actor is one
+principal's part in one protocol, a transducer over one ordered log of events: it receives the events addressed to it
+and sends events in reply (`verity.primitives.events`). What it observes and computes in between is its own state and
+never enters the log. An actor's name starts with its principal (`verifier/integrity`). `verity.run.run(actors, view)`
+plays the actors against each other and yields one principal's view. The auditor trusts the verifier, so the
+verifier's view is the output: what its actors establish are events in it. Replayers, wardens and pingers are trusted
+too but sealed: what they see stays their own, and reaches the verifier only as what they send it.
 
-A construction is a frozen dataclass of its parameters, with a method per domain it occupies that returns that
-domain's parties (`Replay(k, delta).verifier(scheme)`). Choosing a construction is choosing a value.
-
-There are no epochs: each subprotocol keeps its own cadence over the log. Order in the log is logical; physical time
-enters only as trusted readouts in what a trusted party sends.
+A construction is a frozen dataclass of its parameters, with a method per principal it involves that returns that
+principal's actors (`Replay(k, delta).verifier(scheme)`). Choosing a construction is choosing a value, and running
+several protocols together is putting their actors in one mapping. Nothing orchestrates them: each actor moves when an
+event reaches it, so each protocol keeps its own cadence over the log. Order in the log is logical; physical time
+enters only as trusted readouts in what a trusted principal sends.
 
 ## Layers
 
 Imports point down only, in Python and in Lean:
 
 ~~~text
-verity/protocol        run; later, the composition: accounting per resource, then policy
-verity/subprotocols    each an interactive protocol that establishes its own statement; never imports another
+verity/run.py          the runner
+verity/protocols       each establishes its own statement, from the prover (integrity) or from other protocols'
+                       statements and physical facts (accounting, policy); imports another only for the events it reads
 verity/primitives      events, circuits and partitions, commitments, randomness
 ~~~
 

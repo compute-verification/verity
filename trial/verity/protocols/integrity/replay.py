@@ -19,13 +19,13 @@ from dataclasses import dataclass
 from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit, evaluate, trace
 from verity.primitives.commitments import CommitmentScheme
-from verity.primitives.events import Party, Send, receive
+from verity.primitives.events import Actor, Send, receive
 from verity.primitives.randomness import derive
-from verity.subprotocols.integrity.profile import IntegrityProfile
-from verity.subprotocols.integrity.registration import (
+from verity.protocols.integrity.profile import IntegrityProfile
+from verity.protocols.integrity.registration import (
     Execution, Opening, Registered, check, open_wires, register, verify_opening, wires,
 )
-from verity.subprotocols.integrity.sampling import Draw, Subset
+from verity.protocols.integrity.sampling import Draw, Subset
 
 
 @dataclass(frozen=True)
@@ -55,19 +55,19 @@ class Replay:
     delta: float
     name: str = "integrity"
 
-    def verifier(self, scheme: CommitmentScheme) -> dict[str, Party]:
+    def verifier(self, scheme: CommitmentScheme) -> dict[str, Actor]:
         return {f"verifier/{self.name}": self._verifier(scheme)}
 
-    def replayer(self, scheme: CommitmentScheme) -> dict[str, Party]:
+    def replayer(self, scheme: CommitmentScheme) -> dict[str, Actor]:
         return {f"replayer/{self.name}": self._replayer(scheme)}
 
     def prover(
         self, scheme: CommitmentScheme, circuit: Circuit, inputs: Sequence[tuple[int, ...]], partition: P.Partition | None = None
-    ) -> dict[str, Party]:
+    ) -> dict[str, Actor]:
         whole = (tuple(range(len(circuit.gates))),)
         return {f"prover/{self.name}": self._prover(scheme, circuit, partition or whole, inputs)}
 
-    def _verifier(self, scheme: CommitmentScheme) -> Party:
+    def _verifier(self, scheme: CommitmentScheme) -> Actor:
         secret = secrets.token_bytes(32)
         registered = (yield from receive(Registered)).body
         registration = registered.registration
@@ -86,7 +86,7 @@ class Replay:
         reasons = tuple(f"execution {i}: " + ("not replayed" if i not in results else "replays differently") for i in drawn if not results.get(i))
         return (Send(IntegrityProfile(digest, "execution", not reasons, n, law.bound(n, self.delta), self.delta, reasons)),)
 
-    def _replayer(self, scheme: CommitmentScheme) -> Party:
+    def _replayer(self, scheme: CommitmentScheme) -> Actor:
         expected: Mapping[int, Execution] | None = None
         provided: Mapping[int, tuple[Circuit, Opening]] | None = None
         while expected is None or provided is None:
@@ -99,7 +99,7 @@ class Replay:
         results = {i: i in provided and _replays(scheme, e, *provided[i]) for i, e in expected.items()}
         return (Send(Replayed(results), to=(f"verifier/{self.name}",)),)
 
-    def _prover(self, scheme: CommitmentScheme, circuit: Circuit, partition: P.Partition, inputs: Sequence[tuple[int, ...]]) -> Party:
+    def _prover(self, scheme: CommitmentScheme, circuit: Circuit, partition: P.Partition, inputs: Sequence[tuple[int, ...]]) -> Actor:
         registration = register(circuit, partition, inputs, scheme)
         draw = (yield from receive(Draw, Send(Registered(registration, {circuit.id(): circuit}), to=(f"verifier/{self.name}",)))).body
         io = _io(circuit, partition)

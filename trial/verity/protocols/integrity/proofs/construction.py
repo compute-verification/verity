@@ -16,12 +16,12 @@ from dataclasses import dataclass
 from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit, trace
 from verity.primitives.commitments import CommitmentScheme
-from verity.primitives.events import Party, Send, receive
+from verity.primitives.events import Actor, Send, receive
 from verity.primitives.randomness import derive
-from verity.subprotocols.integrity.profile import IntegrityProfile
-from verity.subprotocols.integrity.proofs.system import ProofSystem, Unit
-from verity.subprotocols.integrity.registration import Registered, Registration, check, register
-from verity.subprotocols.integrity.sampling import Draw, Subset
+from verity.protocols.integrity.profile import IntegrityProfile
+from verity.protocols.integrity.proofs.system import ProofSystem, Unit
+from verity.protocols.integrity.registration import Registered, Registration, check, register
+from verity.protocols.integrity.sampling import Draw, Subset
 
 
 @dataclass(frozen=True)
@@ -40,13 +40,13 @@ class Proofs:
     system: ProofSystem
     name: str = "integrity"
 
-    def verifier(self, scheme: CommitmentScheme) -> dict[str, Party]:
+    def verifier(self, scheme: CommitmentScheme) -> dict[str, Actor]:
         return {f"verifier/{self.name}": self._verifier(scheme)}
 
-    def prover(self, scheme: CommitmentScheme, circuit: Circuit, partition: P.Partition, inputs: Sequence[tuple[int, ...]]) -> dict[str, Party]:
+    def prover(self, scheme: CommitmentScheme, circuit: Circuit, partition: P.Partition, inputs: Sequence[tuple[int, ...]]) -> dict[str, Actor]:
         return {f"prover/{self.name}": self._prover(scheme, circuit, partition, inputs)}
 
-    def _verifier(self, scheme: CommitmentScheme) -> Party:
+    def _verifier(self, scheme: CommitmentScheme) -> Actor:
         secret = secrets.token_bytes(32)
         registered = (yield from receive(Registered)).body
         registration, circuits = registered.registration, registered.circuits
@@ -72,7 +72,7 @@ class Proofs:
         reasons = tuple(f"region {u}: does not verify" for u in drawn if not results[u])
         return (Send(IntegrityProfile(digest, "region", not reasons, n, law.bound(n, self.delta), self.delta, reasons)),)
 
-    def _prover(self, scheme: CommitmentScheme, circuit: Circuit, partition: P.Partition, inputs: Sequence[tuple[int, ...]]) -> Party:
+    def _prover(self, scheme: CommitmentScheme, circuit: Circuit, partition: P.Partition, inputs: Sequence[tuple[int, ...]]) -> Actor:
         registration = register(circuit, partition, inputs, scheme)
         circuits = {circuit.id(): circuit}
         draw = (yield from receive(Draw, Send(Registered(registration, circuits), to=(f"verifier/{self.name}",)))).body

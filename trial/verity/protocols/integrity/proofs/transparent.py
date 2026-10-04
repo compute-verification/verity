@@ -8,8 +8,8 @@ from dataclasses import dataclass
 
 from verity.primitives import partition as P
 from verity.primitives.commitments import CommitmentScheme
-from verity.subprotocols.integrity.proofs.system import ProofSystem, Unit
-from verity.subprotocols.integrity.registration import Opening, open_wires, verify_opening
+from verity.protocols.integrity.proofs.system import ProofSystem, Unit
+from verity.protocols.integrity.registration import Opening, open_wires, verify_opening
 
 
 @dataclass(frozen=True)

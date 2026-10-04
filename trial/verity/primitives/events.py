@@ -1,9 +1,10 @@
-"""Events: what one party sends to others, in one ordered log.
+"""Events: what one actor sends to others, in one ordered log.
 
-Every party (a prover, a verifier, a warden, a pinger) is a transducer over the events addressed to it. Written as a
-generator: it yields what it sends, receives the next event addressed to it, and returns its last sends when it is done.
-What it saw and did in between is its own state and never enters the log. An event's body is a frozen dataclass whose
-class is its kind, defined by the module that owns it; a send to nobody is a record, kept only in its sender's view.
+An actor is one principal's (a prover's, a verifier's, a warden's, a pinger's) part in one protocol: a transducer over
+the events addressed to it. Written as a generator: it yields what it sends, receives the next event addressed to it,
+and returns its last sends when it is done. What it saw and did in between is its own state and never enters the log.
+An event's body is a frozen dataclass whose class is its kind, defined by the module that owns it; a send to nobody is
+a record, kept only in its sender's view.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ class Event:
     body: object
 
 
-Party = Generator[tuple[Send, ...], Event, tuple[Send, ...]]
+Actor = Generator[tuple[Send, ...], Event, tuple[Send, ...]]
 
 
 def receive(kind: type, *sends: Send) -> Generator[tuple[Send, ...], Event, Event]:

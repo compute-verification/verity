@@ -11,9 +11,9 @@ from dataclasses import dataclass
 import tomli_w  # the heavy dependency
 
 from verity.primitives.commitments import CommitmentScheme
-from verity.subprotocols.integrity.proofs import transparent
-from verity.subprotocols.integrity.proofs.system import ProofSystem, Unit
-from verity.subprotocols.integrity.registration import Opening
+from verity.protocols.integrity.proofs import transparent
+from verity.protocols.integrity.proofs.system import ProofSystem, Unit
+from verity.protocols.integrity.registration import Opening
 
 
 @dataclass(frozen=True)
