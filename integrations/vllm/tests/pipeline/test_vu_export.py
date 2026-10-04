@@ -228,11 +228,13 @@ def _store_one(tmp_path, fam, st, ops, out, refs, limits):
     return root, ev, sets
 
 
-def test_an_fp8_block_coordinate_is_the_row_word(tmp_path):
+@pytest.mark.parametrize("N", [256, 192])
+def test_an_fp8_block_coordinate_is_the_row_word(tmp_path, N):
+    """N = 192 ends mid-block: its last 64 coordinates read the weight-scale row cdiv(N, G) - 1."""
     rng = np.random.default_rng(7)
-    K, N, G = 256, 256, 128
+    K, G = 256, 128
     f32 = lambda a: np.asarray(a, dtype=np.float32).view(np.uint32)       # noqa: E731
-    xq, w, sx, ws = _e4m3(rng, K), _e4m3(rng, (N, K)), f32(rng.uniform(1e-3, 0.1, K // G)), f32(rng.uniform(1e-3, 0.1, (N // G, K // G)))
+    xq, w, sx, ws = _e4m3(rng, K), _e4m3(rng, (N, K)), f32(rng.uniform(1e-3, 0.1, K // G)), f32(rng.uniform(1e-3, 0.1, (-(-N // G), K // G)))
     st, ops = {"K": K, "N": N, "G": G}, [xq, sx, w.reshape(-1), ws.reshape(-1)]
     out = EV.evaluate("ScaledMmFp8Block_v1", st, [[xq], [sx], [], []], [None, None, ops[2], ops[3]])
     insts = VX.decompose("ScaledMmFp8Block_v1", st, ops, out, lambda n, k: list(range(0, n, n // k)), VX.Limits(gemm_coords_per_row=8))
