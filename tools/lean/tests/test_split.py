@@ -77,7 +77,8 @@ def checkout(tmp: Path, mathlib: bool = False, extra: dict[str, str] | None = No
               "meaning": ["P.Protocol", "P.Guarantees"],
               "layers": {"P.Protocol": {"imports": ["P.Protocol"], "except": [], "why": "trusted text"},
                          "P.SecurityProofs.Lemma": {"imports": ["P.Protocol"], "except": [], "why": "a lemma of the definitions"}},
-              "guarantees": {"P.SecurityProofs.t": {}}}
+              "guarantees": {"P.SecurityProofs.t": {}},
+              "reads": {"P.Protocol": {"pins": ["P.SecurityProofs.t"], "digest": "0" * 64}}}
     A.dump(root / PKG, policy)
     (root / "tools" / "lean").mkdir(parents=True)
     (root / "README.md").write_text(f"The lemma: `{PKG}/P/SecurityProofs/Lemma.lean`; the proofs: `{PKG}/P/SecurityProofs/`.\n"
@@ -138,12 +139,13 @@ def test_the_split_is_a_pure_move(tmp_path):
     assert "R  protocols/p/lean/P/SecurityProofs/Lemma.lean -> security_proofs/p/P/SecurityProofs/Lemma.lean" in status
     assert (dest / "P.lean").exists() and not (root / PKG / "P.lean").exists()
     assert (dest / "lean-toolchain").read_text() == TOOLCHAIN
-    new_spec = A.load(root / PKG)
+    new_spec = json.loads((root / PKG / "lean-audit.json").read_text())
     old = json.loads(lock)
     assert new_spec["roots"] == ["P.Guarantees", "P.Protocol"]
     assert {k: v for k, v in new_spec.items() if k not in ("roots", "exempt", "layers")} == \
         {k: v for k, v in old.items() if k not in ("roots", "exempt", "layers")}
     assert json.dumps(new_spec["guarantees"]) == json.dumps(old["guarantees"])
+    assert (root / PKG / "lean-audit.json").read_text() == A.text(new_spec) and '"pins": ["P.SecurityProofs.t"]' in lock
     cfg = tomllib.loads((dest / "lakefile.toml").read_text())
     assert [(r["name"], r.get("path"), r.get("rev")) for r in cfg["require"]] == \
         [("mathlib", None, FETCHED["rev"]), ("p", "../../protocols/p/lean", None)]

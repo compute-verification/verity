@@ -103,7 +103,7 @@ class Refused(Exception):
 def plan(pkg: Path, area: str, keep: list[str], root: Path = ROOT) -> dict:
     """The split of ``pkg``, computed from its sources, lakefile and lock; raises `Refused` with the reason."""
     pkg, root = pkg.resolve(), root.resolve()
-    policy = A.load(pkg)
+    policy = json.loads((pkg / A.POLICY).read_text())
     files = A.lean_modules(pkg)
     imp = {m: imports(pkg / f) for m, f in files.items()}
     roots = policy["roots"]
@@ -491,7 +491,7 @@ def describe(p: dict) -> str:
              f"  proofs: {len(p['proofs'])} modules, roots {', '.join(p['proof_roots'])}; {len(p['moves'])} files move",
              f"  requires: spec {p['spec_requires'] or '(no path packages)'}; proofs: "
              + ", ".join(["the spec", *(r for r in p["proofs_requires"] if r not in p["spec_requires"])]),
-             f"  lock: guarantees {len(p['lock_spec'].get('guarantees', {}))} and reads {len(p['lock_spec'].get('reads', {}))} stay byte for "
+             f"  lock: guarantees {len(A.as_guarantees(dict(p['lock_spec'])).get('guarantees', {}))} and reads {len(p['lock_spec'].get('reads', {}))} stay byte for "
              f"byte; to the proofs: " + (", ".join(f"{k} {list(v) if isinstance(v, dict) and k != 'dependencies' else ''}".strip()
                                                     for k, v in p["lock_proofs"].items() if k != "guarantees") or "nothing")]
     lines += [f"  dependent: {d['package']} imports {', '.join(d['imports'])}: gains a require of {p['dest']}"
