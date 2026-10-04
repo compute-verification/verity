@@ -55,10 +55,13 @@ No value is ever printed. `research data mint-credential` already read the
 same variables.
 
 On a cloud VM a long-lived shell can lose the injected secrets that a fresh
-tmux login shell still has. When a secret named in
-`$CLOUD_AGENT_INJECTED_SECRET_NAMES` is missing from the shell, the store,
-`research queue ready`, node ssh and the Nebius scripts fail and say `rerun
-from a fresh tmux login shell` (`secret_hint.py`).
+tmux login shell still has. Every `research` command first sets each secret
+named in `$CLOUD_AGENT_INJECTED_SECRET_NAMES` and missing from the shell from
+the tmux server's global environment, where that login shell gets them
+(`secret_hint.recover`); one run under a test doesn't, so a secret the test
+unset stays unset. If one is still missing, the store, `research queue
+ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
+login shell` (`secret_hint.py`).
 
 ## Commands
 
@@ -136,7 +139,10 @@ A tool's declaration may name result steps a merge needs by path (`Tool.merge_re
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
 `lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
-needs.
+needs. It may also name what runs after a landing (`Tool.after_land`, an argv, read from the target's checkout too): once
+`--push` has pushed a merge or a train, that argv is started in the checkout, in a session of its own, with the landed commit
+appended, and nothing it does changes the merge's exit code. `check`'s is `tools/check/post_train.py`, the vLLM reference
+regression's manifest rebuilds, which label the landing's check attempt when they end.
 
 **Not live yet:** `main` still moves only by the trains the research coordinator lands with `research merge`, so a `ready`
 label alone lands nothing; ask the train runner on Slack as well until the queue lands a full train.
@@ -151,8 +157,7 @@ conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
-workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory, `--cwd clone` = a
-clone of it at HEAD in a temporary directory, removed afterwards), so a relative
+workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory, `clone` = a clone of it), so a relative
 `result.json` lands there and never in the checkout; `--env K=V` is set for the
 workload only and recorded as the attempt's `params.env` (values of
 secret-named keys redacted). Four facts
@@ -225,8 +230,7 @@ directory is renamed into place carrying `READY.json` (identity, archive
 sha256, file count, launcher). A failed or truncated transfer removes its
 partial directory and the run is refused (`SourceNotReady`); the machine
 refuses to execute from a source directory without a `READY.json` naming the
-requested identity (the legacy `.complete` marker is verified per file once,
-then adopted or quarantined). The attempt records `execution.remote.source_sha`
+requested identity. The attempt records `execution.remote.source_sha`
 and `source_archive_sha256`.
 
 The commit travels as git objects when it can: the launcher `git push`es it
@@ -245,25 +249,9 @@ of push (15.6 s end to end, mostly ssh handshakes), against about 28 s for the
 stream. The shipped tree is the runner's source root, not
 the workload's cwd: the workload runs in its own run directory, as locally,
 because every run of one commit shares `<root>/src/<sha>/` and relative outputs
-used to race there. `--cwd source` (or `source/SUB`) is the explicit opt-in to
-run inside the tree; job.json records `run.cwd` and `run.cwd_basis`. A workload
-that writes into the tree (a build, a Lean `.lake`) takes `--cwd clone` (or
-`clone/SUB`) instead: the runner makes it a `git clone --shared` of the shipped
-tree at `<root>/scratch/<run-id>/tree` (about a second; the objects are
-borrowed), checks that it is a clean checkout of the shipped commit, and removes
-it once the workload exits, however it ends, so a cancel or an EXIT trap in one
-run never reaches another's files (`research/clone.py`; job.json
-`run.cwd_clone`). What is left of the workload's process group is SIGKILLed
-first, and a clone that still could not be removed goes when the next clone is
-made on that machine, once its run is over (never a live run's). The workload imports the tree's Python from the clone too: each
-`PYTHONPATH` entry under the shipped tree is moved to the same directory in the
-clone (`run.remote.pythonpath` says so), and bytecode goes beside the clone, so a
-module that writes beside its `__file__` writes into the clone. A tree the archive stream shipped has no `.git`, so the
-launcher, and the runner after it, refuse `--cwd clone` there and name
-`--cwd source`; so does a launch whose shipped research package predates it.
-Locally `--cwd clone` needs a clean checkout's top level, and only the cwd moves:
-an editable install still points at the invoking checkout, so the workload
-imports, and writes beside `__file__`, there. The
+used to race there. `--cwd source` (or `source/SUB`) runs it in the tree, and
+`--cwd clone` (`clone/SUB`), for a workload that writes there, in its own clone
+of it, removed when it exits (`research/clone.py`); job.json records `run.cwd` and `run.cwd_basis`. The
 runner and the workload get the tree's `PYTHONPATH` derived from its root
 `pyproject.toml` workspace members and each member's build config
 (`src/`, `python/`, flat), with a user `--env PYTHONPATH` appended; job.json
@@ -443,6 +431,7 @@ research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regener
 research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
 research retention report [--root /workspace] [--depth 2] [--json]
 research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
 `--preserve` puts the path in the store as `node-data/v1` and pushes it PRESERVED (the store README's §7) before recording its id;
@@ -458,6 +447,15 @@ count as preserved, and `preserved.check` in head mode must find the artifact PR
 for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
 no remote; either way it prints every deletion and every skip with its reason. Its named failure: on 1 Oct node 2 held 737 GiB of
 unowned, unpreserved bitsets that nobody could decide to delete.
+
+`rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
+record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
+`--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. A
+path no record covers has nobody to say yes and is never deleted. The records are read again just before `--apply` deletes. Each
+decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
+with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. Its named failure: on 3 Oct a disk cleanup ran a bare `rm -rf`
+on four FP8 passes (about 74 GB each) under `pouw/mvp-e2e`. Their record named @compute-accounting as owner until 7 Oct, but another
+lane had approved the deletion, so the passes were lost. Here that `rm` is refused with the true owner's name.
 
 ### Slack
 
