@@ -265,7 +265,8 @@ class BuildConfig:
 
     build_jobs: str | None = option("--build-jobs", env="BUILD_JOBS", default=None,
                                     help="concurrent derives: N, or auto (default): 0.8 x the memory headroom (or --build-ram-budget-gb, if "
-                                         "smaller) over the largest shape's planned derive peak, at most one per CPU (TP: ranks x shapes)")
+                                         "smaller) over the largest shape's planned derive peak, at most one per CPU and one per derive "
+                                         "(TP: ranks x (shapes + 1); its per-rank composes are sized from memory too)")
     build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
                                                help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
@@ -317,12 +318,18 @@ class CommitConfig:
     pairs: int = option("--pairs", env="PAIRS", type=int, default=3, help="instrumented/control pairs")
     config_run: str = option("--config-run", env="CONFIG_RUN", default="0",
                              help="1 = the config run (docs/vllm-config-sweep-plan.md §2): Build and the strict word check, ONE instrumented "
-                                  "Commit (no control arm, no pairs) under bounded staging, a k-unit replay stratified by family, then "
+                                  "Commit (no control arm, no pairs) under bounded staging, a k-unit replay (--replay-draw), then "
                                   "config_record.json; no Match, no manifest-verify rebuild, no VU export")
     replay_k: int = option("--replay-k", env="REPLAY_K", type=int, default=256, help="config run: the replay's k units")
     replay_deferred: str = option("--replay-deferred", env="REPLAY_DEFERRED", default="0",
                                   help="config run: 1 = the Commit writes a replay bundle and exits without the replay; the verdict "
                                        "stays pending until `row stage replay` (CPU) replays the bundle; slim = a slim bundle")
+    config_baseline: str = option("--config-baseline", env="CONFIG_BASELINE", default="0",
+                                  help="config run: 1 = the Commit also runs the uninstrumented control arm (one pair), the baseline of "
+                                       "the record's extraction slowdown")
+    replay_draw: str = option("--replay-draw", env="REPLAY_DRAW", default="uniform", choices=("uniform", "family"),
+                              help="config run: the k units drawn uniformly from every unit (k/k equal bounds the wrong fraction) or "
+                                   "stratified by family (each family at least once, the rest split evenly)")
     commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
                                          help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")
     window_mb: int = option("--window-mb", env="WINDOW_MB", type=int, default=256, help="device staging window (0 = per-step blocks)")

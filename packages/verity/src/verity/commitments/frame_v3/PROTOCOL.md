@@ -164,6 +164,43 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
   needs another block), then NVFP4 (k = 32), MXFP4 (k = 64), E4M3 (k = 5), BF16 (k = 3) and three-E2M1 rows with their elements.
   `test_rowleaf_bits.py` checks them.
 
+**Segmented bit rows: `sha512/row-seg/v1`.** The same ℓ-bit row and row bytes as `sha512/row/v2`, cut into segments of 1024 bytes
+that hash independently, so a prover hashes them in parallel; one more hash combines them. It is the inner digest of PoUW's A rows
+(role X, the per-call rows on decode's path; Daniel's ruling, card 637f70c6).
+
+~~~text
+s           = ⌈ℓ / 8192⌉                     segment j holds row bytes [1024 j, 1024 j + ⌈m_j / 8⌉)
+m_j         = 8192 for j < s − 1, and m_(s−1) = ℓ − 8192 (s − 1)   (1 ≤ m_j ≤ 8192 bits)
+Q(ℓ)        = ( "verity/sha512-row-seg/v1\0" ‖ u64be ℓ ‖ u64be s ‖ u32be 1024 )  zero-padded to 128 bytes
+S(j, s, m)  = ( "verity/sha512-row-seg/v1/segment\0" ‖ u64be j ‖ u64be s ‖ u64be m )  zero-padded to 128 bytes
+d_j         = SHA-512( S(j, s, m_j) ‖ segment j )
+digest      = SHA-512( Q(ℓ) ‖ d_0 ‖ … ‖ d_(s−1) )
+~~~
+
+- **Cases.** The empty row has no segment: its message is Q(0) alone. Only the last segment may be short, and its fill bits are the
+  row's (zero). No segment is empty.
+- **Separation.** The three tags (`…row/v2\0`, `…row-seg/v1\0`, `…row-seg/v1/segment\0`) differ before each one's only zero byte, so
+  no outer, segment or v2 prefix block equals another. Each message decodes to its fields; with `cr/sha-512` the digest fixes ℓ and
+  every d_j, each d_j fixes its segment's bits, so the encoding is injective like v2's. The schema string differs from v2's, and so do
+  the tree leaves.
+- **Constant midstates.** Q(ℓ) and every S(j, s, m_j) is one block fixed by ℓ. An 8 KiB row (ℓ = 65,536) costs 8 × 9 segment
+  compressions plus 5 outer ones, 77 against `sha512/row/v2`'s 65, with a serial chain of 9 + 5 = 14 against 65.
+- **Word rows.** A row of n w-bit words (BF16 A_i rows, w = 16; Pearl-C's FP32 A rows, w = 32) is the bit row of its elements
+  (above): ℓ = w·n and the row bytes are the words little-endian, `row_bytes` byte for byte (`sha512_row_seg_word_digest`). Like
+  v2, no role or word width enters the digest, so it is not the row's `sha512/row/v1` digest: a consumer reads the port's leaf
+  schema, and a word row moved to row-seg has new digests, leaves and roots.
+- **Hiding.** `hm96-sha512/row-seg/v1` is the hiding leaf over this digest, under unchanged `hm96-sha512/v1`.
+- **Written by several ports (C-Flock).** A row one unit writes as several output ports and another reads as one input port
+  (PoUW's A′ ‖ P_A) is one row on both sides. The writer's META `out_row_ports` lists each output row's run of consecutive
+  output ports (absent: one row per port, zero-padded to whole blocks); a run's row is a row-seg row of exactly their words
+  in port order (ℓ = 16 · their words), named after its first port, and its message bits are copies of those output words.
+  Its digest, `b ‖ c` and tree leaf are then the reader's for the same words and salt. Both verifiers refuse runs that do not
+  cover the output ports once in order, a run whose row is not row-seg of exactly their words, and a padded row of more
+  than one port. The pair vectors are `ROW_SEG_PAIRS` in `backends/flock/tests/test_lean_verifier.py`.
+- **Reference and conformance.** `rowleaf.sha512_row_seg_segments`, `_prefix`, `_segment_prefix` and `_digest`, the last refusing a
+  nonzero fill. `row_seg_leaves` in `vectors_sha512.json`: random rows at ℓ = 0, 1, 13, 8191, 8192, 8193, 24,581 and 65,536 and word rows (BF16 k = 4096 and 5, FP32 k = 4096), with every
+  segment's prefix and digest, and the 65,536-bit row's hiding leaf. `test_rowleaf_seg.py` checks them and the cost above.
+
 **Hiding rows.** A hiding row wraps its row digest in `hm96-sha512/v1` (`hm96/PROTOCOL.md`):
 
 ~~~text
