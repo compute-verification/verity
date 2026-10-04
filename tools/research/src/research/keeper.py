@@ -145,6 +145,9 @@ def cmd_set(argv: list[str]) -> int:
     except (ValueError, SystemExit) as e:
         print(f"research keeper set: unknown or malformed `research run` flags {shlex.join(harness_opts)} ({e})", file=sys.stderr)
         return 2
+    if bad := sorted({o.split("=", 1)[0] for o in harness_opts} & {"--attempt-dir", "--job"}):
+        print(f"research keeper set: {', '.join(bad)}: the runner sets each chunk's run dir and id (argparse would keep yours)", file=sys.stderr)
+        return 2
     src = Path(ns.source).expanduser() if ns.source else None
     asked_cwd = remote.flag_value(harness_opts, "--cwd")
     if asked_cwd is not None and not os.path.isabs(asked_cwd) and src is None:

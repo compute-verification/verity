@@ -12,9 +12,11 @@ A target is KEEPER_DIR/targets/<name>.json (research/keeper-target/v0): its owne
 (UTC, at most KEEPER_MAX_AHEAD_H, 48, after it was set), `gpus` (default 1, at most KEEPER_MAX_GPUS: 7 on node 2, where one holder
 of all 8 is a timed window to node_ops), `max_min` per chunk, `command` (an argv in which `{seed}` stands for the chunk's seed)
 and `request`: the launch request `research run --on` stages (the shipped tool snapshot and source tree, the runner's cwd, the env
-and the `research run` flags), which `research keeper set` builds. Its env is set inside the lease, so neither the runner nor gpu-lease
-sees it (but PYTHONPATH: see chunk_request), and may not set GPU_LEASE_*, CUDA_VISIBLE_DEVICES, CUDA_DEVICE_ORDER or
-RESEARCH_KEEPER_*: the lease, its GPUs and the seed are the keeper's; nor its flags --env. Its state,
+and the `research run` flags), which `research keeper set` builds, and no other key. Its env is set inside the lease, so neither the
+runner nor gpu-lease sees it (but PYTHONPATH: see chunk_request), and may not set GPU_LEASE_*, CUDA_VISIBLE_DEVICES,
+CUDA_DEVICE_ORDER or RESEARCH_KEEPER_*: the lease, its GPUs and the seed are the keeper's. Its flags may not hold `--`, nor give
+those the runner and the keeper decide (RUNNERS_FLAGS: --attempt-dir, --job, --id, --on, --env, ...), nor one that `set` writes
+twice: argparse keeps the last, and --attempt-dir would move the run out of the keeper's reach. Its state,
 KEEPER_DIR/state/<name>.json, holds the seed counter, the live chunks, the failures in a row and why it starts nothing; every
 change is a line of KEEPER_DIR/events.jsonl. `set` keeps the counter (it only rises, to `seed_from` if that is higher) and clears
 a stop, a pause and the failure count; a target another owner set is refused.
@@ -79,8 +81,12 @@ MAX_AHEAD_H = float(os.environ.get("KEEPER_MAX_AHEAD_H", "48"))
 HOLD_POLL_S = float(os.environ.get("KEEPER_HOLD_POLL_S", "5"))
 NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
 OWNER = re.compile(r"[@\w.:-]{1,64}")
+REQUEST_KEYS = {"schema", "runs_root", "tool", "python", "cwd", "env", "harness_args", "exclusive", "cost", "remote"}
 ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 KEEPERS_ENV = re.compile(r"GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES|CUDA_DEVICE_ORDER|RESEARCH_KEEPER_\w*")
+RUNNERS_FLAGS = {"--attempt-dir", "--job", "--runs-dir", "--id", "--claimed", "--cost-json", "--remote-json", "--exclusive-lock",
+                 "--custody-dir", "--on", "--queue", "--env"}
+SET_ONCE = {"--stage", "--project", "--tool", "--campaign", "--tree-sha", "--source-identity"}
 DELIVERED = "SIGTERM delivered"
 LIVE = {"active", "activating", "deactivating", "reloading", "refreshing"}
 ENDED = {"inactive", "failed"}
@@ -143,6 +149,11 @@ def parse_target(doc: Any, name: str) -> dict[str, Any]:
     req = doc.get("request")
     if not isinstance(req, dict) or req.get("schema") != REQUEST_SCHEMA:
         raise ValueError(f"request is not a {REQUEST_SCHEMA} request")
+    if extra := sorted(set(req) - REQUEST_KEYS):
+        raise ValueError(f"request has {', '.join(extra)}: a chunk's request is what `research keeper set` writes (a wrap would "
+                         "wrap the lease)")
+    if req.get("exclusive"):
+        raise ValueError("request is exclusive: a chunk never holds the whole machine")
     if req.get("runs_root") != str(ROOT / "runs"):
         raise ValueError(f"request's runs_root {req.get('runs_root')!r} is not {ROOT / 'runs'}")
     if not isinstance(req.get("tool"), str) or Path(req["tool"]).parent != ROOT / "tool":
@@ -155,8 +166,13 @@ def parse_target(doc: Any, name: str) -> dict[str, Any]:
         raise ValueError(f"request's env has {', '.join(bad)}, not variable names")
     if bad := sorted(k for k in env if KEEPERS_ENV.fullmatch(k)):
         raise ValueError(f"request's env sets {', '.join(bad)}: the lease, the GPUs it grants and the seed are the keeper's")
-    if any(a == "--env" or a.startswith("--env=") for a in args):
-        raise ValueError("request's harness_args carry --env: a target's environment is its request's env")
+    if "--" in args:
+        raise ValueError("request's harness_args hold `--`: what follows it would be the workload, outside the lease")
+    flags = [a.split("=", 1)[0] for a in args if a.startswith("--")]
+    if bad := sorted(set(flags) & RUNNERS_FLAGS):
+        raise ValueError(f"request's harness_args give {', '.join(bad)}: the runner and the keeper decide those (argparse keeps the last)")
+    if bad := sorted(f for f in SET_ONCE if flags.count(f) > 1):
+        raise ValueError(f"request's harness_args give {', '.join(bad)} more than once (argparse keeps the last)")
     return {**doc, "n": n, "gpus": gpus, "max_min": max_min, "until_t": until}
 
 

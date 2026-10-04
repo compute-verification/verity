@@ -410,7 +410,9 @@ def test_research_keeper_set_status_and_stop_reach_the_nodes_keeper_over_ssh(tmp
     for flags, why in ((["--env", "GPU_LEASE_TIMED=1"], "--env GPU_LEASE_TIMED: the chunks' lease"),
                        (["--env", "CUDA_DEVICE_ORDER=FASTEST_FIRST"], "--env CUDA_DEVICE_ORDER: the chunks' lease"),
                        (["--env", "BASH_FUNC_timeout%%=() { :; }"], "--env BASH_FUNC_timeout%%: not a variable name"),
-                       (["--env", "HF_TOKEN=hf_x"], "--env HF_TOKEN: a secret's name, and a chunk's env is set on its command line")):
+                       (["--env", "HF_TOKEN=hf_x"], "--env HF_TOKEN: a secret's name, and a chunk's env is set on its command line"),
+                       (["--attempt-dir", str(tmp_path / "elsewhere")], "--attempt-dir: the runner sets each chunk's run dir"),
+                       (["--job=j"], "--job: the runner sets")):
         assert cli.main([*s, "--until", "2099-01-01T00:00Z", "--owner", "@proofs", *flags, "--", "x", "{seed}"]) == 2
         assert why in capsys.readouterr().err
     with pytest.raises(SystemExit):               # a chunk without max_min would run through every hold it is granted into
@@ -515,11 +517,19 @@ def test_an_exit_143_frees_the_place_only_with_a_cancel_or_a_preemption_on_recor
     ({"env": {"GPU_LEASE_TIMED": "1"}}, "env sets GPU_LEASE_TIMED: the lease"), ({"env": {"CUDA_VISIBLE_DEVICES": "0"}}, "sets CUDA_VISIBLE_DEVICES"),
     ({"env": {"CUDA_DEVICE_ORDER": "FASTEST_FIRST"}}, "sets CUDA_DEVICE_ORDER"), ({"env": {"RESEARCH_KEEPER_SEED": "0"}}, "sets RESEARCH_KEEPER_SEED"),
     ({"env": {"BASH_FUNC_timeout%%": "() { :; }"}}, "env has 'BASH_FUNC_timeout%%', not variable names"),
-    ({"harness_args": ["--stage", "run", "--env", "GPU_LEASE_TIMED=1"]}, "carry --env"), ({"harness_args": ["--env=GPU_LEASE_TIMED=1"]}, "carry --env")])
+    ({remote.QUEUE_WORKLOAD_WRAP: ["env", "GPU_LEASE_TIMED=1"]}, "request has workload_wrap"),
+    ({remote.QUEUE_WRAP: ["env", "GPU_LEASE_TIMED=1"]}, "request has wrap"), ({"exclusive": True}, "request is exclusive"),
+    ({"harness_args": ["--stage", "run", "--attempt-dir", "/tmp/elsewhere"]}, "give --attempt-dir: the runner"),
+    ({"harness_args": ["--attempt-dir=/tmp/elsewhere"]}, "give --attempt-dir: the runner"),
+    ({"harness_args": ["--job", "j", "--id", "r-x", "--runs-dir", "/tmp"]}, "give --id, --job, --runs-dir: the runner"),
+    ({"harness_args": ["--on", "vy-nebius-1"]}, "give --on"), ({"harness_args": ["--env=GPU_LEASE_TIMED=1"]}, "give --env"),
+    ({"harness_args": ["--stage", "run", "--", "python3", "-m", "x"]}, "hold `--`: what follows it would be the workload"),
+    ({"harness_args": ["--project", "verity", "--project", "other"]}, "give --project more than once")])
 def test_a_targets_request_cannot_reach_the_lease_nor_give_the_runners_own_flags(node, over, why):
-    """gpu-lease reads its knobs from the environment (GPU_LEASE_TIMED=1 would make every chunk a timed window to node_ops), and
-    the GPUs it grants are CUDA_VISIBLE_DEVICES in CUDA_DEVICE_ORDER. `set` refuses each, and a tick starts nothing for a target
-    written by hand."""
+    """gpu-lease reads its knobs from the environment (GPU_LEASE_TIMED=1 would make every chunk a timed window to node_ops), a
+    wrap would put something around the lease, argparse keeps the last of a flag (--attempt-dir moves status.json out of
+    runs/<rid>, where no hold, until or stop reaches the chunk) and a `--` makes what follows it the workload, outside the lease.
+    `set` refuses each, and a tick starts nothing for a target written by hand."""
     k, sd, now, _ = node
     doc = target(k, n=1, request={**target(k)["request"], **over})
     with pytest.raises(ValueError, match=re.escape(why)):
