@@ -14,7 +14,8 @@ import the torch frontend package.
 The script moves each module (`git mv` in a work tree), then rewrites every reference repo-wide: imports, including
 `from verity_vllm.program.registry import a, rope_difftest` (split into two statements) and relative ones; dotted names and
 file paths in any tracked or untracked text file (allowlists, the CLI table, docstrings, `census_roots.txt`) except `KEPT`;
-and drops lint allowlist entries a move puts in a directory the lint does not scan (`DROPPED_ENTRIES`). It is idempotent: on a tree where a
+drops lint allowlist entries a move puts in a directory the lint does not scan (`DROPPED_ENTRIES`); and adds the dead-module
+census root a module leaving the registry needs (`ADDED_LINES`). It is idempotent: on a tree where a
 module is already moved it only rewrites references left to its old path, so a branch rebased past the split reruns it. It
 fails loudly, changing nothing, when a module is at both paths or at neither, when a module it would move registers a
 Definition, when a Definition module imports anything but `verity`, the standard library, numpy and Definition modules, or
@@ -56,6 +57,15 @@ ALLOWED_TOP = frozenset({"verity", "numpy", "__future__"}) | frozenset(sys.stdli
 #: that directory (`tests/test_no_by_name_rules.py`: `SKIP_DIRS` holds `kernels`)
 DROPPED_ENTRIES: dict[str, tuple[str, ...]] = {
     "integrations/vllm/tests/by_name_allowlist.json": ("verity_vllm/program/kernels/rmsnorm_fused_sweep.py",),
+}
+
+#: lines a move makes necessary, by file (repo-relative): (the line to insert after, the line); the dead-module census reaches
+#: every module of the registry (`tests/dead_code_census.py`), so a moved module that only a string names needs its own root
+ADDED_LINES: dict[str, tuple[tuple[str, str], ...]] = {
+    "integrations/vllm/tests/census_roots.txt": (
+        ("verity_vllm.program.kernels.rope_difftest ",
+         "verity_vllm.program.kernels.rope_gptj_difftest     # properties-admission --adapter: imported by name\n"),
+    ),
 }
 
 #: directories whose files name the old paths on purpose (this script and its tests)
@@ -242,6 +252,20 @@ def drop_entries(rel: str, text: str) -> str:
     return re.sub(r",(\s*\])", r"\1", joined)
 
 
+def add_lines(rel: str, text: str) -> str:
+    """``text`` with each of `ADDED_LINES`'s lines for ``rel`` that it lacks (by its first word) inserted after its anchor."""
+    for anchor, line in ADDED_LINES.get(rel, ()):
+        lines = text.splitlines(keepends=True)
+        if any(ln.split()[:1] == line.split()[:1] for ln in lines):
+            continue
+        at = [i for i, ln in enumerate(lines) if ln.startswith(anchor)]
+        if len(at) != 1:
+            raise SplitError(f"{rel}: {len(at)} lines start with {anchor.strip()!r}, so {line.split()[0]} has no place")
+        lines.insert(at[0] + 1, line)
+        text = "".join(lines)
+    return text
+
+
 # --- the plan -------------------------------------------------------------------------------------------------------------
 
 @dataclass
@@ -312,7 +336,10 @@ def plan(root: Path = REPO) -> Plan:
             moved_from = REGISTRY if src_rel in renames else None
             pkg = _package_of(rel) if rel.startswith(PKG + "/") else None
             new = rewrite_imports(new, pkg, moved_from)
-        new = drop_entries(rel, rewrite_text(new))
+        try:
+            new = add_lines(rel, drop_entries(rel, rewrite_text(new)))
+        except SplitError as e:
+            errors.append(str(e))
         if new != text or dest_rel != src_rel:
             p.edits[root / dest_rel] = new
         if rel.endswith(".py") and new != text:

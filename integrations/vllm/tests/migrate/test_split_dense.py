@@ -93,7 +93,9 @@ def test_moves_the_twins_and_rewrites_every_reference(tmp_path):
     assert (root / f"{KER}/derived_rows.py").read_text() == FILES[f"{KER}/derived_rows.py"].replace(
         f"{OLD}.rmsnorm_fused_sweep", "verity_vllm.program.kernels.rmsnorm_fused_sweep")
     assert (root / "integrations/vllm/tests/census_roots.txt").read_text() == (
-        f"verity_vllm.program.kernels.rope_difftest     # adapter\n{OLD}.moe_difftest      # adapter\n")
+        "verity_vllm.program.kernels.rope_difftest     # adapter\n"
+        "verity_vllm.program.kernels.rope_gptj_difftest     # properties-admission --adapter: imported by name\n"
+        f"{OLD}.moe_difftest      # adapter\n")
     assert json.loads((root / "integrations/vllm/tests/by_name_allowlist.json").read_text()) == [
         {"file": "verity_vllm/program/registry/lifted.py", "kind": "table"}]
     assert json.loads((root / "integrations/vllm/tests/lint/allowlists/p08_facts.json").read_text()) == {
@@ -188,6 +190,12 @@ def test_refuses_attribute_access_it_cannot_rewrite(tmp_path):
     use = f"from verity_vllm.program import registry\nCASES = registry.rope_difftest.cases\n"
     root = _tree(tmp_path, {**FILES, "integrations/vllm/tests/test_attr.py": use})
     _refused(root, "test_attr.py", "registry.rope_difftest")
+
+
+def test_refuses_a_census_root_without_its_place(tmp_path):
+    root = _tree(tmp_path, {**FILES, "integrations/vllm/tests/census_roots.txt": f"{OLD}.moe_difftest      # adapter\n"})
+    _refused(root, "census_roots.txt: 0 lines start with 'verity_vllm.program.kernels.rope_difftest'",
+             "verity_vllm.program.kernels.rope_gptj_difftest has no place")
 
 
 def test_refuses_a_kept_file_that_imports_a_moved_module(tmp_path):
