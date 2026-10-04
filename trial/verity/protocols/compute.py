@@ -47,7 +47,9 @@ class Compute:
             if profile.registration != work.registration
             else ()
         )
-        verified = 0 if reasons else work.work * (profile.units - profile.wrong_units) // profile.units
+        verified = (
+            0 if reasons or not profile.units else work.work * (profile.units - profile.wrong_units) // profile.units
+        )
         delta = profile.delta + work.delta
         account = ComputeAccount(
             profile.registration, capacity, self.capacity_from, verified, max(capacity - verified, 0), delta, reasons
