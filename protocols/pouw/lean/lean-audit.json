@@ -15727,7 +15727,7 @@
    ]
   },
   "Pouw.Protocol.PearlC.DeviceFp4": {
-   "digest": "075c9ea6e2c9c5d84ac8674c495447e00163f0c2aa5c27db1c73bd7ff543422d",
+   "digest": "8ddd05bcbee3e68dc0ac4387825cf08e3cd29da4c29496b19a3fc0421a11a4a9",
    "definitions": {
     "Pouw.PearlC.Fp4Dev.Fire4": "30b9898b21ff1a6d0b1809ad5a3901728d7cfbec1e2d3617fbf938ac1b99be98",
     "Pouw.PearlC.Fp4Dev.Op4": "fac14db9df452432138fc3e58c0abe9218e1f3697f2580bc5523740f16d79adc",
@@ -15797,8 +15797,8 @@
     "Pouw.PearlC.Fp4Prices.qa": "680b456969aa355b5109f3444dccbe99ce7796476216d6757c42db44fdc96048",
     "Pouw.PearlC.Fp4Prices.sm120": "9a8ab41d4b78e8b9c0224b7ce6145eb6fb4b9df8541debdfaa323cb17199d0c4",
     "Pouw.PearlC.Fp4Sem": "a294e7e8c08e387935c6d690658108d5eaf76acb88231a4bf5ac8e0b6ce62d79",
-    "Pouw.PearlC.Fp4Sem.OperandOK": "f8b26a7e3e3b9588125847552e073875d7313bd804edbd2a6908b95de3fef881",
-    "Pouw.PearlC.Fp4Sem.RowOK": "d2fe9d6ff4fdc0184ba23fdd4efffa6de9bc85824805a92f79c084129545d82a",
+    "Pouw.PearlC.Fp4Sem.OperandOK": "17fc2e3397bef6d83487c7a44836217320798952a3f98e2e6e2d4c0a9e768c69",
+    "Pouw.PearlC.Fp4Sem.RowOK": "72ebde3f0ce492c1f3da044f38b92391d5ab259b4dbdb424064c892fdae2e24c",
     "Pouw.PearlC.Fp4Sem.SaltKeyedB": "f8797f476d19848a2720dac1429d9eac005c82b83fd6ef868f75a2de76a0d49b",
     "Pouw.PearlC.Fp4Sem.alpha": "40e94b94e471b610172cb47dd2ab5a0b39f67ca231b746d9be9774e301e91b00",
     "Pouw.PearlC.Fp4Sem.beta": "b1bfd5721c3acfec18c9e78abaa6b94d913a45d4d3b80d4447c353f730fde9de",
