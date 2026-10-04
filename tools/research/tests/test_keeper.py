@@ -8,6 +8,8 @@ import importlib.util
 import json
 import os
 import re
+import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -22,6 +24,8 @@ from research.pods import registry
 
 KEEPER = Path(registry.__file__).resolve().parent / "nebius" / "keeper.py"
 TOOL = Path(remote.__file__).resolve().parents[1]
+GPU_LEASE_SH = Path(registry.__file__).resolve().parent / "sh" / "gpu_lease.sh"
+needs_flock = pytest.mark.skipif(shutil.which("flock") is None or shutil.which("bash") is None, reason="gpu-lease needs bash and flock(1)")
 
 
 def t(s: str) -> float:
@@ -144,12 +148,12 @@ def test_a_tick_tops_the_target_up_to_n_and_a_waiting_chunk_counts_live(node):
     k.tick()
     assert seeds(sd) == [0, 1, 2]
     unit, req = sd.started[1]
-    assert req["command"] == ["/bin/gpu-lease", "1", "--wait", "--preemptible", "--max-min", "25", "--", "python3", "-m", "x", "--seed", "1"]
+    assert req["command"] == ["/bin/gpu-lease", "1", "--wait", "--preemptible", "--max-min", "25", "--", "/usr/bin/env", "OMP_NUM_THREADS=8",
+                              "python3", "-m", "x", "--seed", "1"]
     assert req["run_id"] == unit.removeprefix("keeper-") and req["runs_root"] == str(k.ROOT / "runs")
     assert req["remote"]["keeper"] == {"target": "sweep", "owner": "@proofs", "seed": 1, "node": "vy-nebius-2", "unit": unit}
     assert req["remote"]["source_sha"] == "sha" and req["harness_args"] == ["--stage", "run", "--project", "verity"]
-    assert req["env"] == {"OMP_NUM_THREADS": "8", "GPU_LEASE_WHO": "keeper:@proofs", "RESEARCH_KEEPER_TARGET": "sweep",
-                          "RESEARCH_KEEPER_SEED": "1"}
+    assert req["env"] == {"GPU_LEASE_WHO": "keeper:@proofs", "RESEARCH_KEEPER_TARGET": "sweep", "RESEARCH_KEEPER_SEED": "1"}
     assert (k.ROOT / "requests" / req["run_id"] / "request.json").is_file()
     k.tick()                                      # all three still running or waiting for their lease
     assert len(sd.started) == 3
@@ -403,8 +407,12 @@ def test_research_keeper_set_status_and_stop_reach_the_nodes_keeper_over_ssh(tmp
     assert cli.main([*s, "--until", "2099-01-03T00:00Z", "--owner", "@proofs", "--", "x", "{seed}"]) == 2
     assert "is not in the next 48 h" in capsys.readouterr().err
     assert cli.main([*s, "--until", "2099-01-01T00:00Z", "--owner", "@proofs", "--", "x", "1"]) == 2
-    assert cli.main([*s, "--until", "2099-01-01T00:00Z", "--owner", "@proofs", "--env", "GPU_LEASE_TIMED=1", "--", "x", "{seed}"]) == 2
-    assert "--env GPU_LEASE_TIMED: gpu-lease reads its own knobs" in capsys.readouterr().err
+    for flags, why in ((["--env", "GPU_LEASE_TIMED=1"], "--env GPU_LEASE_TIMED: the chunks' lease"),
+                       (["--env", "CUDA_DEVICE_ORDER=FASTEST_FIRST"], "--env CUDA_DEVICE_ORDER: the chunks' lease"),
+                       (["--env", "BASH_FUNC_timeout%%=() { :; }"], "--env BASH_FUNC_timeout%%: not a variable name"),
+                       (["--env", "HF_TOKEN=hf_x"], "--env HF_TOKEN: a secret's name, and a chunk's env is set on its command line")):
+        assert cli.main([*s, "--until", "2099-01-01T00:00Z", "--owner", "@proofs", *flags, "--", "x", "{seed}"]) == 2
+        assert why in capsys.readouterr().err
     with pytest.raises(SystemExit):               # a chunk without max_min would run through every hold it is granted into
         cli.main(["keeper", "set", "sweep", *on, "--project", "verity", "--n", "2", "--until", "2099-01-01T00:00Z", "--owner", "@proofs",
                   "--", "x", "{seed}"])
@@ -503,18 +511,91 @@ def test_an_exit_143_frees_the_place_only_with_a_cancel_or_a_preemption_on_recor
     assert len(sd.started) == 5 and k.status("sweep")[0]["paused"].startswith("3 failures in a row, the last: seed 4")
 
 
-@pytest.mark.parametrize("over", [{"env": {"GPU_LEASE_TIMED": "1"}}, {"env": {"GPU_LEASE_DIR": "/tmp/my-own-leases"}},
-                                  {"env": {"GPU_LEASE_ALLOWED_FILE": "/tmp/all"}}, {"env": {"CUDA_VISIBLE_DEVICES": "0"}},
-                                  {"harness_args": ["--stage", "run", "--env", "GPU_LEASE_TIMED=1"]},
-                                  {"harness_args": ["--env=GPU_LEASE_TIMED=1"]}])
-def test_a_targets_env_cannot_reach_the_lease(node, over):
-    """gpu-lease reads its knobs from the environment: GPU_LEASE_TIMED=1 would make every chunk a timed window to node_ops,
-    GPU_LEASE_DIR a lease no waiter can see."""
+@pytest.mark.parametrize("over,why", [
+    ({"env": {"GPU_LEASE_TIMED": "1"}}, "env sets GPU_LEASE_TIMED: the lease"), ({"env": {"CUDA_VISIBLE_DEVICES": "0"}}, "sets CUDA_VISIBLE_DEVICES"),
+    ({"env": {"CUDA_DEVICE_ORDER": "FASTEST_FIRST"}}, "sets CUDA_DEVICE_ORDER"), ({"env": {"RESEARCH_KEEPER_SEED": "0"}}, "sets RESEARCH_KEEPER_SEED"),
+    ({"env": {"BASH_FUNC_timeout%%": "() { :; }"}}, "env has 'BASH_FUNC_timeout%%', not variable names"),
+    ({"harness_args": ["--stage", "run", "--env", "GPU_LEASE_TIMED=1"]}, "carry --env"), ({"harness_args": ["--env=GPU_LEASE_TIMED=1"]}, "carry --env")])
+def test_a_targets_request_cannot_reach_the_lease_nor_give_the_runners_own_flags(node, over, why):
+    """gpu-lease reads its knobs from the environment (GPU_LEASE_TIMED=1 would make every chunk a timed window to node_ops), and
+    the GPUs it grants are CUDA_VISIBLE_DEVICES in CUDA_DEVICE_ORDER. `set` refuses each, and a tick starts nothing for a target
+    written by hand."""
     k, sd, now, _ = node
-    with pytest.raises(ValueError, match="gpu-lease reads its own knobs|harness_args carry --env"):
-        k.set_target("sweep", target(k, n=1, request={**target(k)["request"], **over}))
+    doc = target(k, n=1, request={**target(k)["request"], **over})
+    with pytest.raises(ValueError, match=re.escape(why)):
+        k.set_target("sweep", doc)
+    (k.DIR / "targets").mkdir(parents=True, exist_ok=True)
+    (k.DIR / "targets" / "sweep.json").write_text(json.dumps({**doc, "schema": k.SCHEMA, "name": "sweep", "set_utc": "2026-10-04T00:00Z"}))
     k.tick()
-    assert sd.started == []
+    assert sd.started == [] and why in events(k, "skipped")[0]["why"]
+
+
+@needs_flock
+def test_a_targets_env_is_set_inside_the_lease_where_bash_env_cannot_make_it_timed(node, tmp_path, monkeypatch):
+    """gpu-lease is `#!/usr/bin/env bash`: a BASH_ENV in its environment runs before its first line and can export any of its knobs
+    (GPU_LEASE_TIMED=1 here, or the since= that the holds' cancels read). Set inside the lease, it reaches the workload alone."""
+    k, sd, now, _ = node
+    (tmp_path / "be.sh").write_text("export GPU_LEASE_TIMED=1\n")
+    req = {**target(k)["request"], "env": {"BASH_ENV": str(tmp_path / "be.sh"), "PYTHONPATH": "/mine"}}
+    k.set_target("sweep", target(k, n=1, request=req, command=["sh", "-c", 'echo "inside $BASH_ENV"; sed "s/ cmd=.*//" "$GPU_LEASE_DIR"/0.owner # {seed}']))
+    monkeypatch.setattr(k, "GPU_LEASE", ["bash", str(GPU_LEASE_SH)])
+    k.tick()
+    _, chunk = sd.started[0]
+    assert chunk["env"] == {"PYTHONPATH": "/mine", "GPU_LEASE_WHO": "keeper:@proofs", "RESEARCH_KEEPER_TARGET": "sweep", "RESEARCH_KEEPER_SEED": "0"}
+    env = {key: v for key, v in os.environ.items() if not key.startswith(("GPU_LEASE_", "RESEARCH_RUN", "BASH_ENV"))}
+    env.update(GPU_LEASE_DIR=str(tmp_path / "gl"), GPU_LEASE_COUNT="1", GPU_LEASE_UUID_TABLE="GPU-a0", RESEARCH_RUN_ID="r-x",
+               GPU_LEASE_USAGE_LOG=str(tmp_path / "u.jsonl"), GPU_LEASE_UTIL_LOG=str(tmp_path / "util-*.jsonl"), **chunk["env"])
+    r = subprocess.run(chunk["command"], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    owner = next(x for x in r.stdout.splitlines() if x.startswith("pid="))
+    assert f"inside {tmp_path / 'be.sh'}" in r.stdout.splitlines() and "who=keeper:@proofs" in owner and " timed=1" not in owner
+
+
+@pytest.mark.parametrize("unit", ["vy-keeper-n1.service", "vy-keeper-n2.service"])
+def test_the_lease_wrapper_names_its_programs_by_path_and_a_targets_path_cannot_replace_them(node, tmp_path, monkeypatch, unit):
+    """The runner looks its workload's argv[0] up in its own PATH (node 1's wrapper starts with env), as do gpu-lease's shebang
+    and its flock and timeout calls; a target's PATH, set inside the lease, decides none of them."""
+    k, sd, now, _ = node
+    line, = [x for x in (KEEPER.parent / unit).read_text().splitlines() if "KEEPER_GPU_LEASE=" in x]
+    wrapper = shlex.split(shlex.split(line.removeprefix("Environment="))[0].partition("=")[2])
+    progs = [a for a in wrapper if "=" not in a]
+    assert progs[-1].endswith("/gpu-lease") and all(os.path.isabs(p) for p in progs), wrapper
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    for prog in ("env", "bash", "flock", "timeout", "gpu-lease"):
+        (fake / prog).write_text(f"#!/bin/sh\ntouch {tmp_path / 'replaced'}\n")
+        (fake / prog).chmod(0o755)
+    (tmp_path / "gpu-lease").write_text(f"#!/bin/sh\ntouch {tmp_path / 'leased'}\n")
+    (tmp_path / "gpu-lease").chmod(0o755)
+    monkeypatch.setattr(k, "GPU_LEASE", [str(tmp_path / "gpu-lease") if a == progs[-1] else a for a in wrapper])
+    k.set_target("sweep", target(k, n=1, request={**target(k)["request"], "env": {"PATH": f"{fake}:{os.environ['PATH']}"}}, command=["true", "{seed}"]))
+    k.tick()
+    _, chunk = sd.started[0]
+    assert "PATH" not in chunk["env"] and f"PATH={fake}:{os.environ['PATH']}" in chunk["command"]
+    subprocess.run(chunk["command"], env={**os.environ, **chunk["env"]}, check=True)
+    assert (tmp_path / "leased").exists() and not (tmp_path / "replaced").exists()
+
+
+def test_a_chunks_runner_sees_only_the_keepers_env_and_pythonpath_and_runs_the_lease_as_its_workload(node, monkeypatch):
+    """launch-request applies the request's env to the runner, which hands it on to gpu-lease: only the keeper's keys and
+    PYTHONPATH (behind the tool snapshot, as with --on) go there, and the workload after `--` is the keeper's lease."""
+    k, sd, now, _ = node
+    req = {**target(k)["request"], "env": {"BASH_ENV": "/x", "PATH": "/evil", "PYTHONPATH": "/mine"}, "remote": {"machine": "vy-nebius-2"}}
+    k.set_target("sweep", target(k, n=1, request=req))
+    k.tick()
+    seen = []
+
+    class Proc:
+        pid = 4242
+
+    monkeypatch.setattr(remote.subprocess, "Popen", lambda argv, **kw: seen.append((argv, kw["env"])) or Proc())
+    assert remote._launch_request(k.ROOT / "requests" / run_of(sd.started[0][0]) / "request.json")["started"]
+    (argv, env), = seen
+    assert argv[:4] == ["python3", "-m", "research", "run"]
+    assert argv[argv.index("--") + 1:] == ["/bin/gpu-lease", "1", "--wait", "--preemptible", "--max-min", "30", "--", "/usr/bin/env",
+                                           "BASH_ENV=/x", "PATH=/evil", "python3", "-m", "x", "--seed", "0"]
+    assert env.get("BASH_ENV") != "/x" and env["PATH"] != "/evil" and env["PYTHONPATH"] == f"{k.ROOT / 'tool' / 'abc'}:/mine"
+    assert (env["GPU_LEASE_WHO"], env["RESEARCH_KEEPER_SEED"]) == ("keeper:@proofs", "0")
 
 
 def test_node_2_keeps_a_chunk_off_all_8_gpus(node, monkeypatch):

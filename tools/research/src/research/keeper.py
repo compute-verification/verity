@@ -16,7 +16,9 @@ chunks of CMD live (running, or waiting for their lease) until UTC, at most 48 h
 seed of the target's counter. Every chunk is a recorded `research run` on that machine, its workload under `gpu-lease G --wait
 --preemptible --max-min M`, so a waiter can always take its GPUs back (a preempted chunk's place goes to a new seed). M counts
 from the lease's grant: the node cancels a chunk whose lease would meet a window booked on node 2 or node 1's daily hold
-(12:10-13:30Z), and one still waiting at UTC. --env may not set GPU_LEASE_* or CUDA_VISIBLE_DEVICES: the lease is the keeper's.
+(12:10-13:30Z), and one still waiting at UTC. --env is set inside the lease, on the chunk's command line, so never a secret
+(PYTHONPATH stays the runner's, as with --on); it may not set GPU_LEASE_*, CUDA_VISIBLE_DEVICES, CUDA_DEVICE_ORDER or
+RESEARCH_KEEPER_*.
 Setting a NAME again replaces its values and re-arms it after a stop or a pause (3 failed chunks in a row); its seed counter
 carries on, and another owner's NAME is refused. `stop` starts no more chunks; `--cancel` also sends SIGTERM to the live chunks'
 workloads, recorded as manual cancels. Stop chunks that way, never by stopping their unit: systemd then SIGKILLs the runner,
@@ -127,10 +129,16 @@ def cmd_set(argv: list[str]) -> int:
     env = cli._parse_env(ns.env)
     if env is None:
         return 2
-    if bad := sorted(k for k in env if re.fullmatch(r"GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES", k)):
-        print(f"research keeper set: --env {', '.join(bad)}: gpu-lease reads its own knobs from the env, and the chunks' lease is the "
-              "keeper's", file=sys.stderr)
-        return 2
+    from .telemetry.job import SECRET_KEY
+
+    for bad, why in (([k for k in env if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", k)], "not a variable name"),
+                     ([k for k in env if re.fullmatch(r"GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES|CUDA_DEVICE_ORDER|RESEARCH_KEEPER_\w*", k)],
+                      "the chunks' lease, the GPUs it grants and their seeds are the keeper's"),
+                     ([k for k in env if SECRET_KEY.search(k)], "a secret's name, and a chunk's env is set on its command line, inside "
+                      "its lease (launch.json records it as it is)")):
+        if bad:
+            print(f"research keeper set: --env {', '.join(sorted(bad))}: {why}", file=sys.stderr)
+            return 2
     try:
         harness_opts = cli._normalize_timeout(harness_opts)
         cli._harness_parser("research keeper set").parse_args(["--attempt-dir", "-", "--stage", ns.stage, *harness_opts])

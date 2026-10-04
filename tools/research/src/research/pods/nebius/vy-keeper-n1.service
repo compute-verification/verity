@@ -9,7 +9,7 @@ TimeoutStartSec=5min
 Environment=XDG_RUNTIME_DIR=/run/user/1001
 Environment=KEEPER_NODE=vy-nebius-1
 # node 1's GPUs are Kueue's, lent per lease by n1_lease.py's pool (tools/cluster submit.py's N1_LEASE_ENV)
-Environment="KEEPER_GPU_LEASE=env GPU_LEASE_DIR=/run/gpu-lease GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus /workspace/verity-guest/bin/gpu-lease"
+Environment="KEEPER_GPU_LEASE=/usr/bin/env GPU_LEASE_DIR=/run/gpu-lease GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus /workspace/verity-guest/bin/gpu-lease"
 # the daily quota cutover and quiet hour: Kueue holds every queue from 12:10Z (dispatch.py PACK_HOLD)
 Environment=KEEPER_DAILY_HOLD=12:10-13:30
 ExecStart=/usr/bin/python3 /usr/local/bin/vy-keeper tick

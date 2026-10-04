@@ -12,8 +12,9 @@ A target is KEEPER_DIR/targets/<name>.json (research/keeper-target/v0): its owne
 (UTC, at most KEEPER_MAX_AHEAD_H, 48, after it was set), `gpus` (default 1, at most KEEPER_MAX_GPUS: 7 on node 2, where one holder
 of all 8 is a timed window to node_ops), `max_min` per chunk, `command` (an argv in which `{seed}` stands for the chunk's seed)
 and `request`: the launch request `research run --on` stages (the shipped tool snapshot and source tree, the runner's cwd, the env
-and the `research run` flags), which `research keeper set` builds. Its env may not set GPU_LEASE_* or CUDA_VISIBLE_DEVICES, nor
-its flags --env: gpu-lease reads its own knobs from the environment, and the lease is the keeper's. Its state,
+and the `research run` flags), which `research keeper set` builds. Its env is set inside the lease, so neither the runner nor gpu-lease
+sees it (but PYTHONPATH: see chunk_request), and may not set GPU_LEASE_*, CUDA_VISIBLE_DEVICES, CUDA_DEVICE_ORDER or
+RESEARCH_KEEPER_*: the lease, its GPUs and the seed are the keeper's; nor its flags --env. Its state,
 KEEPER_DIR/state/<name>.json, holds the seed counter, the live chunks, the failures in a row and why it starts nothing; every
 change is a line of KEEPER_DIR/events.jsonl. `set` keeps the counter (it only rises, to `seed_from` if that is higher) and clears
 a stop, a pause and the failure count; a target another owner set is refused.
@@ -35,7 +36,8 @@ Each tick, under KEEPER_DIR/.lock (which set and stop take too), for each target
     state before the chunk starts, so a seed is never handed out twice, even across a crash. It runs as a recorded `research
     run` on this machine with the claim and runner `research run --on` gets (`research launch-request`), in a transient user
     unit keeper-<run id> so that it outlives the tick; its workload is `gpu-lease G --wait --preemptible --max-min M --
-    COMMAND`, so it waits for its GPUs like any request and a waiter can always take them back. job.json's run.remote.keeper
+    /usr/bin/env K=V ... COMMAND`, so it waits for its GPUs like any request and a waiter can always take them back, and
+    KEEPER_GPU_LEASE names its programs by absolute path. job.json's run.remote.keeper
     names the target, owner and seed; the workload sees RESEARCH_KEEPER_TARGET and RESEARCH_KEEPER_SEED, and its lease
     who=keeper:<owner>.
 A unit systemd can't report on counts as live (never more than n). The keeper signals only its own chunks' workloads: a cancel
@@ -77,7 +79,8 @@ MAX_AHEAD_H = float(os.environ.get("KEEPER_MAX_AHEAD_H", "48"))
 HOLD_POLL_S = float(os.environ.get("KEEPER_HOLD_POLL_S", "5"))
 NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
 OWNER = re.compile(r"[@\w.:-]{1,64}")
-LEASE_ENV = re.compile(r"GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES")
+ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+KEEPERS_ENV = re.compile(r"GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES|CUDA_DEVICE_ORDER|RESEARCH_KEEPER_\w*")
 DELIVERED = "SIGTERM delivered"
 LIVE = {"active", "activating", "deactivating", "reloading", "refreshing"}
 ENDED = {"inactive", "failed"}
@@ -144,12 +147,15 @@ def parse_target(doc: Any, name: str) -> dict[str, Any]:
         raise ValueError(f"request's runs_root {req.get('runs_root')!r} is not {ROOT / 'runs'}")
     if not isinstance(req.get("tool"), str) or Path(req["tool"]).parent != ROOT / "tool":
         raise ValueError(f"request's tool {req.get('tool')!r} is not a snapshot under {ROOT / 'tool'}")
-    if not isinstance(req.get("python"), str) or not isinstance(req.get("env") or {}, dict) \
-            or not isinstance(req.get("harness_args") or [], list) or not isinstance(req.get("remote") or {}, dict):
+    env, args = req.get("env") or {}, req.get("harness_args") or []
+    if not isinstance(req.get("python"), str) or not isinstance(env, dict) or not isinstance(args, list) \
+            or not all(isinstance(a, str) for a in args) or not isinstance(req.get("remote") or {}, dict):
         raise ValueError("request's python, env, harness_args or remote is malformed")
-    if bad := sorted(k for k in req.get("env") or {} if LEASE_ENV.fullmatch(str(k))):
-        raise ValueError(f"request's env sets {', '.join(bad)}: gpu-lease reads its own knobs from the env, and the lease is the keeper's")
-    if any(str(a) == "--env" or str(a).startswith("--env=") for a in req.get("harness_args") or []):
+    if bad := sorted(repr(k) for k in env if not ENV_NAME.fullmatch(k)):
+        raise ValueError(f"request's env has {', '.join(bad)}, not variable names")
+    if bad := sorted(k for k in env if KEEPERS_ENV.fullmatch(k)):
+        raise ValueError(f"request's env sets {', '.join(bad)}: the lease, the GPUs it grants and the seed are the keeper's")
+    if any(a == "--env" or a.startswith("--env=") for a in args):
         raise ValueError("request's harness_args carry --env: a target's environment is its request's env")
     return {**doc, "n": n, "gpus": gpus, "max_min": max_min, "until_t": until}
 
@@ -462,11 +468,16 @@ def new_run_id(now: float) -> str:
 
 
 def chunk_request(name: str, t: dict[str, Any], rid: str, seed: int, unit: str) -> dict[str, Any]:
+    """The target's request as this chunk's: its env set inside the lease, so that neither the runner nor gpu-lease sees it, but
+    PYTHONPATH, which the runner appends behind the tool snapshot and the tree's import roots (inside, it would replace them)."""
     req = json.loads(json.dumps(t["request"]))
-    lease = [*GPU_LEASE, str(t["gpus"]), "--wait", "--preemptible", "--max-min", str(t["max_min"]), "--"]
+    env = {k: str(v) for k, v in (req.get("env") or {}).items()}
+    inner = [f"{k}={v}" for k, v in env.items() if k != "PYTHONPATH"]
+    lease = [*GPU_LEASE, str(t["gpus"]), "--wait", "--preemptible", "--max-min", str(t["max_min"]), "--",
+             *(["/usr/bin/env", *inner] if inner else [])]
     req.update(run_id=rid, runs_root=str(ROOT / "runs"), command=[*lease, *(a.replace("{seed}", str(seed)) for a in t["command"])],
-               env={**(req.get("env") or {}), "GPU_LEASE_WHO": f"keeper:{t['owner']}", "RESEARCH_KEEPER_TARGET": name,
-                    "RESEARCH_KEEPER_SEED": str(seed)},
+               env={**{k: v for k, v in env.items() if k == "PYTHONPATH"}, "GPU_LEASE_WHO": f"keeper:{t['owner']}",
+                    "RESEARCH_KEEPER_TARGET": name, "RESEARCH_KEEPER_SEED": str(seed)},
                remote={**(req.get("remote") or {}), "keeper": {"target": name, "owner": t["owner"], "seed": seed, "node": NODE, "unit": unit}})
     return req
 
