@@ -40,9 +40,11 @@ A package's fetched dependencies (`.lake/packages`: Mathlib's cache, ArkLib's bu
 `lake-manifest.json` plus `lean-toolchain`. They're moved into the scratch package's own `.lake` before its build (the only place
 its sandbox lets it write, never a shared symlink) and back afterwards only when that package's audit passed; after a failure
 they're dropped, so a run's compile-time code cannot leave the next run a cache it wrote. Lake rebuilds nothing it built in an
-earlier passing run. The audit's `dependencies` check still compares their `.olean` files with the
-package's record, and the kernel replay still covers the package's own modules. Lean gets this machine's CPUs
-(`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
+earlier passing run. The package's own `.lake/build` is kept the same way (`WarmBuilds`), under its toolchain, manifest and
+lakefile less the paths to what it requires (`build_key`), not under its path: Lake decides what is up to date by content
+hashes, not paths or mtimes, so a moved package rebuilds nothing. The audit's `dependencies` check still compares their
+`.olean` files with the package's record, and the kernel replay still covers the package's own modules. Lean gets this
+machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 
 A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
 throttles anonymous clones from shared addresses. `lean-deps.json` pins one bundle per `lake-manifest.json` + `lean-toolchain`
@@ -432,11 +434,17 @@ class WarmDeps:
 
 
 def build_key(pkg: str, root: Path) -> str:
-    """What a kept build is reused under: the package's path, its toolchain, its manifest and its lakefile. Within that, Lake's
-    own traces (each module's source and its imports' traces) decide what it rebuilds."""
-    h = hashlib.sha256(pkg.encode() + b"\0")
+    """What a kept build is reused under: the package's toolchain, its manifest and its lakefile, less the paths to the packages
+    it requires by path, and not where the package is: a moved package takes the build it left, which Lake reuses where it
+    is now. Within that, Lake's own traces (each module's source and its imports' traces) decide what it rebuilds."""
+    h = hashlib.sha256(b"lean-build/v2\0")
     for f in ("lean-toolchain", "lake-manifest.json", "lakefile.toml", "lakefile.lean"):
-        h.update(f.encode() + b"\0" + ((root / pkg / f).read_bytes() if (root / pkg / f).is_file() else b"-") + b"\0")
+        text = (root / pkg / f).read_bytes() if (root / pkg / f).is_file() else b"-"
+        if f == "lake-manifest.json":
+            text = re.sub(rb'"dir"\s*:\s*"[^"]*"', b'"dir": ""', text)
+        elif f == "lakefile.toml":
+            text = re.sub(rb'(?m)^([ \t]*path[ \t]*=).*$', rb"\1", text)
+        h.update(f.encode() + b"\0" + text + b"\0")
     return h.hexdigest()
 
 

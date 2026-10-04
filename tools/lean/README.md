@@ -8,8 +8,8 @@ toolchain's `lean`; nothing here imports Verity, so another repository can copy 
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
 own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they stay with this repository.
 `check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
-path relative to the package, a package required by path as its own content, so a `git mv` of a package is no miss
-(`lean_audit.py`'s docstring has the key, `--explain PKG` what a miss changed).
+path relative to the package, a package required by path as its own content, so a `git mv` of a package is no miss, and its
+kept `.lake/build` follows it (`lean_audit.py`'s docstring has the key, `--explain PKG` what a miss changed).
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them

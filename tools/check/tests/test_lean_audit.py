@@ -243,6 +243,24 @@ def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
     assert LA.build_key("pkg/a", root) != ka
 
 
+def test_a_moved_package_takes_the_build_it_left(tmp_path, monkeypatch):
+    """A kept build is keyed by the package's toolchain, manifest and lakefile, not its path or the paths to what it requires:
+    after a move, its build comes in warm, and Lake reuses it where the package is now (`.lake/build` survives a move)."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    _requires_a_at(root, "pkg/b", "../a")
+    builds = lambda n: sorted((tmp_path / f"out{n}" / "builds.txt").read_text().split("\n")[:-1])
+    assert _run(tmp_path, 1)[0] == 0
+    kb = LA.build_key("pkg/b", root)
+    _move(root, monkeypatch, "pkg/a", "core/a")
+    _requires_a_at(root, "pkg/b", "../../core/a")
+    assert LA.build_key("pkg/b", root) == kb
+    (root / "core/a/A.lean").write_text("theorem a : True := by trivial\n")      # so that both are audited again
+    assert _run(tmp_path, 2)[0] == 0 and builds(2) == ["core/a warm", "pkg/b warm"]
+    (root / "pkg/b/lakefile.toml").write_text('name = "b2"\n\n[[require]]\nname = "a"\npath = "../../core/a"\n')
+    assert LA.build_key("pkg/b", root) != kb
+
+
 def test_a_cache_reached_through_a_symlink_keeps_every_report(tmp_path, monkeypatch):
     """audit.py names each package by its resolved path. With the cache behind a symlink (node 1's `~/.cache/verity-check`),
     the scratch tree's unresolved path matched no report, so a package that passed was failed as unreported
