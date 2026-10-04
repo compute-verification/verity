@@ -146,6 +146,37 @@ class Bf16ScalarChainRule(OpRule):
         ctx.record(self, node, {**det, "rows": len(rows), **({"member": member} if member else {})}, emitted=f"{fn.id} x{len(rows)}")
 
 
+class Bf16ScalarMulInPlaceRule(InPlaceRule):
+    """`aten.mul_.Tensor(x! bf16, C)` with a static Python float -> `bf16_mul_scalar{N,C}` per row (the same ATen kernel as the
+    functional `mul`); `x` is rebound and the node aliases it (vLLM's `MoERunner`: `fused_output.mul_(routed_scaling_factor)`)."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("Bf16ScalarMulInPlace[aten]", 1, "in-place-binding", applies_to="aten.mul_.Tensor(Tensor! x bf16, C: float)",
+                    preconditions=("x is a bf16 value collection of rank >= 1", "C is a static Python float"),
+                    evidence_domain="structural; numerics: Bf16MulScalar_v1")
+
+    def targets(self):
+        return {aten.mul_.Tensor}
+
+    def applies(self, node, ctx):
+        x = node.args[0]
+        r = _row_value(ctx, x, "x")
+        if r:
+            return r
+        if len(node.args) != 2 or not isinstance(node.args[1], (float, int)) or isinstance(node.args[1], bool):
+            return "the second operand is not a static Python scalar"
+        return True
+
+    def emit(self, node, ctx):
+        x, C = node.args[0], float(node.args[1])
+        rows, lead = rows_of(ctx.coll(x))
+        N = rows[0].type.n
+        fn, value = scalar_kind(ctx, "bf16_mul_scalar", node, N, C)
+        outs = [ctx.call(fn, r, *value, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        ctx.rebind(x, from_rows(outs, lead), self, what="x")
+        ctx.define(node, ctx.coll(x), view_of=x)
+        ctx.record(self, node, {"N": N, "C": C, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
+
+
 def _softcap_member(node, ctx) -> str | None:
     """[R15 dense / manifest] `aten.mul.Tensor(tanh(x / C), C)` — the last op of a logits soft cap `C * tanh(x / C)` — produces the value
     its module returns: the row names carry the member hint `out` (the manifest's `members_for` reads it; the div / tanh rows are the
