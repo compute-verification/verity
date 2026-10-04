@@ -542,6 +542,27 @@ def test_a_waiter_stops_a_preemptible_lease_and_leaves_an_ordinary_one(tmp_path)
         ordinary.wait()
 
 
+@needs_flock
+def test_a_preemptible_waiter_waits_for_a_preemptible_lease_instead_of_stopping_it(tmp_path):
+    """Node 1, 2026-10-03: a queue of --preemptible trace chunks stopped its own newest lease every ~20 s, each new chunk the
+    oldest waiter in turn."""
+    env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_POLL_S": "0.1"}
+    pause = [sys.executable, "-c", "import sys; print('ready', flush=True); sys.stdin.read()"]
+    fill = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--preemptible", "--mem-gb", "0", "--", *pause], env=env,
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    assert fill.stdout.readline().strip() == "ready"
+    nxt = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--preemptible", "--mem-gb", "0", "--", "echo", "got"], env=env,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        queued(nxt)
+        assert fill.poll() is None and not (tmp_path / "gl" / "preempted.log").exists()
+    finally:
+        fill.stdin.close()
+    assert fill.wait() == 0
+    out, _ = nxt.communicate()
+    assert nxt.returncode == 0 and out.strip() == "got"
+
+
 def hold_agent_lock(gl: Path) -> int:
     """Stand in for `cluster agent --mode live`: hold agent.lock (the descriptor is not inherited by gpu-lease)."""
     gl.mkdir(exist_ok=True)
@@ -711,7 +732,7 @@ def test_launch_refuses_to_spend_without_yes_and_a_lease():
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set" in r.stderr
 
 
-def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_still_takes_the_multi_line_secret(tmp_path):
+def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi_line_secret(tmp_path):
     fake = tmp_path / "nebius"
     fake.write_text('#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = --private-key-file-path ] && cp "$2" "$OUT"; shift; done\n')
     fake.chmod(0o755)
@@ -727,7 +748,10 @@ def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_still_takes_the_m
 
     r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
     assert r.returncode == 0 and key == body and r.stdout == r.stderr == ""
-    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body.rstrip("\n"))
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body.rstrip("\n"))    # a multi-line secret leaks through `env | cut -d= -f1`
+    assert r.returncode == 1 and key == "" and "NEBIUS_SA_PRIVATE_KEY (the multi-line key) is no longer read" in r.stderr
+    assert "dummy line" not in r.stderr
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY=body, NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
     assert r.returncode == 0 and key == body
     r, _ = auth(NEBIUS_SA_PRIVATE_KEY_B64="not base64!")
     assert r.returncode == 1 and "NEBIUS_SA_PRIVATE_KEY_B64 is not base64" in r.stderr
@@ -1911,6 +1935,24 @@ def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared
     (tmp_path / "cg" / cg.lstrip("/") / "memory.peak").write_text(f"{12_340_000_000}\n")
     monkeypatch.setattr(fr, "CGROUP_ROOT", str(tmp_path / "cg"))
     assert fr.mem_peak_gb(os.getpid()) == 12.34 and fr.mem_peak_gb(2**22 + 7) is None
+
+
+def test_slot_d_runs_through_a_window_only_on_a_slot_d_runs_clause(tmp_path):
+    """Node 2, 3 Oct 2:22 PM UTC: circuits' 14:30Z window said "no merge checks on node 2 through it (no slot-d=runs)", and the
+    words alone let slot d run into it. A window that starts in 2000 and lasts 190 years is open whatever the time."""
+    src = (NEBIUS / "check_slot_d.sh").read_text()
+    program = src[src.index("\n", src.index("<< 'EOF'")) + 1:src.index("\nEOF\n")]
+    windows = tmp_path / "windows"
+
+    def refuses(comment: str) -> bool:
+        windows.write_text(f"# slot-d=runs in a header line\n2000-01-01T00:00Z 99999999 # {comment}\n")
+        return subprocess.run([sys.executable, "-", str(windows), "30"], input=program, text=True,
+                              capture_output=True).returncode != 0
+
+    assert refuses("circuits TP8; no merge checks on node 2 through it (no slot-d=runs)")
+    assert refuses("circuits TP8 (slot-d=runs only for the 8:00 run)")
+    assert not refuses("pouw-ncp, bc-2f661c92 (fallback 13:35Z); slot-d=runs (its host threads stay off 0-47)")
+    assert not refuses("slot-d=runs: Pearl-C4 re-time")
 
 
 def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_its_lock(tmp_path, monkeypatch):
