@@ -2,7 +2,8 @@
 and tail in sequence give the whole row unit's outputs, for Pearl-C on the H100, sm_120 and sm_120 unpromoted and for
 Pearl-C4, rows of A and of B; the cut roots give today's roots' outputs with the same computing gates, and their partition
 computes every value in exactly one unit; each piece's ports are committed rows of `leaves`' schemas and public input
-regions, a form's its segment of F_A and F_B under the slice rule; and with ``row_k`` unset nothing is the cut's."""
+regions, a form's its segment of F_A and F_B under the slice rule, and the head commits the words its readers read; and
+with ``row_k`` unset nothing is the cut's."""
 from __future__ import annotations
 
 import json
@@ -58,19 +59,27 @@ def _split(out, types_) -> list:
     return fields
 
 
-def _in_sequence(pieces, ks: int, n_head: int, n_codes: int, x, before, after, own, other, extra):
+def _head_row(head, head_row: tuple, x, before) -> tuple[list, tuple]:
+    """The head's output leaves on one row: (its row's fields, ``head_row``'s, as the forms and tail read them; its
+    other outputs' leaves)."""
+    out = evaluate(head, x, *before)
+    n = sum(len(t.leaf_widths()) for _n, t in head_row)
+    return _split(out[:n], [t for _n, t in head_row]), out[n:]
+
+
+def _in_sequence(pieces, ks: int, head_row: tuple, n_codes: int, x, before, after, own, other, extra):
     """One row through its pieces as separate instances: the head, each segment's form on its slice of the bases with the
-    carry the form before it returned, then the tail; (the head's fields, the tail's output leaves)."""
+    carry the form before it returned, then the tail; (the head's other outputs' leaves, the tail's output leaves)."""
     head, first, forms, tail = pieces
-    h = _split(evaluate(head, x, *before), head.signature()[1].fields)
+    h, rest = _head_row(head, head_row, x, before)
     segs, carry = [], []
     for j, fn in enumerate((first, *forms)):
         lo, hi = len(own) * j * ks // len(x), len(own) * (j + 1) * ks // len(x)
-        out = _split(evaluate(fn, x, *h[:n_head], *carry, *after, own[lo:hi], other[lo:hi]), fn.signature()[1].fields)
+        out = _split(evaluate(fn, x, *h, *carry, *after, own[lo:hi], other[lo:hi]), fn.signature()[1].fields)
         segs.append(out[:n_codes])
         carry = out[n_codes:]
     cs = [[v for s in segs for v in s[f]] for f in range(n_codes)]
-    return h, evaluate(tail, *h[:n_head], *cs, *carry, *after, *extra)
+    return rest, evaluate(tail, *h, *cs, *carry, *after, *extra)
 
 
 # ---- the pieces against the whole row ---------------------------------------------------------------------------------
@@ -115,7 +124,7 @@ def test_pearl_c_pieces_give_the_whole_rows_outputs(side, dev, k, ks):
     verdicts = {}
     for name, x in _rows8(k).items():
         want = evaluate(whole, x, e, own, other, *extra)
-        _h, got = _in_sequence(pieces, ks, len(rowk.HEAD8), 1, x, (e,), (), own, other, extra)
+        _rest, got = _in_sequence(pieces, ks, rowk.HEAD8, 1, x, (e,), (), own, other, extra)
         assert got == want, name
         verdicts[name] = want[-1]
     assert {n for n, v in verdicts.items() if v} >= {"honest-0", "honest-1", "negated", "dead-limit"}
@@ -148,8 +157,8 @@ def test_pearl_c4_pieces_give_the_whole_rows_outputs(side):
     for i, (name, x) in enumerate(_rows4(K4).items()):
         e = F.line(SEED, F.ROLE_EA if side == "a" else F.ROLE_EB, i)
         want = evaluate(whole, x, e, own, other, *extra)
-        h, got = _in_sequence(pieces, KS4, len(rowk.HEAD4), 2, x, (), (e,), own, other, extra)
-        assert got + (h[-1],) == want, name
+        ok, got = _in_sequence(pieces, KS4, rowk.HEAD4, 2, x, (), (e,), own, other, extra)
+        assert got + ok == want, name
         verdicts[name] = want[-1]
     assert {n for n, v in verdicts.items() if v} == {"honest-0", "honest-1", "negated", "spike-256"}
 
@@ -291,6 +300,51 @@ def test_the_ports_are_each_pieces_committed_rows(shape):
     for role, fns in _pieces_of(shape).items():
         for fn in fns:
             CF.check_ports(fn, ports[role], shape.derivations, shape.k, {"cs": segs, "ss": segs}, {codes: shape.row_k})
+
+
+def _words(types_, values) -> list[int]:
+    """Values of ``types_`` (an int per scalar, a list per array or tuple) as u16 words: their leaves' bits run together
+    little-endian, zero-padded to a whole word."""
+    bits, at = 0, 0
+    for t, v in zip(types_, values, strict=True):
+        for w, leaf in zip(t.leaf_widths(), v if isinstance(v, list) else [v], strict=True):
+            bits |= (leaf & ((1 << w) - 1)) << at
+            at += w
+    return [(bits >> (16 * j)) & 0xFFFF for j in range(-(-at // 16))]
+
+
+@pytest.mark.parametrize("side", ["a", "b"])
+@pytest.mark.parametrize("shape", [SHAPES[1], SHAPES[-1]], ids=["sm120", "pc4"])
+def test_the_head_commits_the_row_its_readers_read(shape, side):
+    """C-Flock commits each output port zero-padded to whole u16 words and reads an input row as its parameters' bits
+    run together (`class_statement.unit_lowering`).  So on every row, admitted or refused (Pearl-C's at every pair of
+    finite and floor bits), the head's pc8-head (pc4-head) ports, each padded, are `leaves.words_pc8_head`
+    (`words_pc4_head`) of its values: the very words the first form, each form and the tail read from that row."""
+    pc8_ = isinstance(shape, pc8.Shape)
+    head_row, schema = (rowk.HEAD8, "pc8-head") if pc8_ else (rowk.HEAD4, "pc4-head")
+    ports, pieces = shape.ports, _pieces_of(shape)
+    (head,) = pieces[f"row_{side}_head"]
+    fields = head.signature()[1].fields
+    (outs,) = [ps for s, _r, ps in ports[f"row_{side}_head"]["rows"] if s == schema]
+    readers = [(role, fn) for role in (f"row_{side}_{p}" for p in ("first", "form", "tail")) for fn in pieces[role]]
+    assert len(readers) == shape.k // shape.row_k + 1
+    rows = _rows8(shape.k) if pc8_ else _rows4(shape.k)
+    seen = set()
+    for i, (name, x) in enumerate(rows.items()):
+        before = (P.sample_line(SEED, 0 if side == "a" else 1, i, 5),) if pc8_ else ()
+        vals = _split(evaluate(head, x, *before), fields)
+        committed = [w for p in outs for w in _words([fields[p]], [vals[p]])]
+        h = dict(zip([n for n, _t in head_row], _head_row(head, head_row, x, before)[0]))
+        want = (L.words_pc8_head(h["alpha"], h["ep"], h["th"], h["finite"], h["floor"]) if pc8_
+                else L.words_pc4_head(h["alpha"], h["ae"]))
+        assert len(want) == L.ROW_WORDS[schema](shape.k)
+        assert committed == want, name
+        for role, fn in readers:
+            (names,) = [ps for s, _r, ps in ports[role]["rows"] if s == schema]
+            types_ = dict(fn.signature()[0])
+            assert _words([types_[n] for n in names], [h[n] for n in names]) == want, (name, fn.id)
+        seen.add(want[-1])
+    assert seen == {0, 1, 2, 3} if pc8_ else len(seen) > 2, seen
 
 
 def test_each_row_is_its_elements_bits():
