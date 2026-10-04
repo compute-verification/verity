@@ -38,9 +38,10 @@ The ue8m0 quantisation (`_fp8_ue8m0_quantize`, kernels.py:50-60), in the PTX of 
     p   = fma.rn.ftz(0x3DC6B27F, t, 0xBE2C7F30); p = fma.rn.ftz(p, t, c) for c in LOG2F_POLY[2:]
     y   = add.f32(ef, fma.rn.ftz(t, 0x3FB8AA3B, mul.f32(t, mul.f32(t, p))))
 
-and three branches no operand reaches: the prescale `s < 2^-126` and `s == 0` (s >= 1e-4 / 448), and `bits(s) >= 0x7F800000`
-(`fma(s, inf, inf)`), taken only by s = +inf, for which the polynomial gives y = 128 as well (e = 128, m = 1).  So the scale is a
-power of two in [2^-22, 2^127], or +inf when amax is.
+and two branches that change no scale: the prescale (`setp.lt.f32 s, 2^-126`: s times 2^23 and ef's addend -23), which no operand
+reaches (s >= 1e-4 / 448), and `bits(s) >= 0x7F800000` unsigned (`fma.rn.ftz(s, inf, inf)`), reached only by s = +inf, for which
+the polynomial gives y = 128 (e = 128, m = 1) and so the same scale, ex2(128) = +inf.  So the scale is a power of two in
+[2^-22, 2^127], or +inf when amax is.
 
 Registered functions (all `Name_v1`):
   U32And, I32Sub, F32CeilFtz                 primitives: and.b32, sub.s32, cvt.rpi.ftz.f32.f32
@@ -136,7 +137,12 @@ class Ops:
     `boolean_dsa` their Boolean versions, so each body is written once."""
 
     def __init__(self, B, defs: dict, word, neg):
-        self.B, self._defs, self.word, self.neg = B, defs, word, neg
+        self.B, self._defs, self._word, self.neg, self._words = B, defs, word, neg, {}
+
+    def word(self, bits: int):
+        if bits not in self._words:
+            self._words[bits] = self._word(bits)
+        return self._words[bits]
 
     def __getattr__(self, name: str):
         d = self._defs[name]
@@ -210,8 +216,10 @@ def DsaUe8m0Quant(B, S, x):
 
 
 def check_row_statics(D: int, ROPE: int) -> None:
-    if not (D == 128 and 0 < ROPE <= D and ROPE % 2 == 0):
-        raise ValueError(f"the indexer kernels take one 128-element row with an even rotary prefix (D={D}, ROPE={ROPE})")
+    """GLM-5.3's rows are D = 128 (the PTX's); D = 32 or 64 is the same body at one or two warps, for the checks."""
+    if not (D in (32, 64, 128) and 0 < ROPE <= D and ROPE % 2 == 0):
+        raise ValueError(f"the indexer kernels take a row of 32 x a power-of-two warps (at most 4) with an even rotary prefix "
+                         f"(D={D}, ROPE={ROPE})")
 
 
 def rope_interleaved(o: Ops, x: list, cs, ROPE: int) -> list:
@@ -232,18 +240,15 @@ def k_row(o: Ops, D: int, ROPE: int, k, w, b, cs, eps) -> list:
     """`DsaIndexerKRow_v1`'s f32 row before its quantisation."""
     check_row_statics(D, ROPE)
     x = [o.cvt(k[i]) for i in range(D)]
-
-    def cta(warps):
-        return o.add(o.add(warps[0], warps[2]), o.add(warps[1], warps[3]))
-
+    warps = range(D // 32)
     n = o.word(f32_bits(D))
     rcp = o.rcp(n)
-    mean = o.mul(o.scale_a(cta([halving_tree(x[32 * g:32 * g + 32], o.add) for g in range(4)]), n), rcp)
+    mean = o.mul(o.scale_a(halving_tree([halving_tree(x[32 * g:32 * g + 32], o.add) for g in warps], o.add), n), rcp)
     nmean = o.neg(mean)
     d = [o.add(x[i], nmean) for i in range(D)]
     sq = [halving_tree([o.fma(d[32 * g + t], d[32 * g + t], o.mul(d[32 * g + t + 16], d[32 * g + t + 16])) for t in range(16)], o.add)
-          for g in range(4)]
-    var = o.mul(o.scale_a(cta(sq), n), rcp)
+          for g in warps]
+    var = o.mul(o.scale_a(halving_tree(sq, o.add), n), rcp)
     rstd = o.rsqrt(o.add(eps, var))
     normed = [o.fma(o.mul(d[i], rstd), w[i], b[i]) for i in range(D)]
     return rope_interleaved(o, normed, cs, ROPE)
