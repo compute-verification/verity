@@ -19,8 +19,8 @@ elan toolchain install "$toolchain"
 (cd / && lean --version >/dev/null 2>&1) || elan default "$toolchain"
 lake --version
 root=$(git rev-parse --show-toplevel 2>/dev/null || true)
-if [ ! -e .lake/packages ] && [ -n "$root" ] && [ -f "$root/tools/check/lean_audit.py" ] && command -v uv >/dev/null 2>&1; then
-  (cd "$root" && uv run --quiet python tools/check/lean_audit.py --restore "$(realpath --relative-to="$root" .)") \
+if [ ! -e .lake/packages ] && [ -n "$root" ] && [ -f "$root/tools/lean/lean_audit.py" ] && command -v uv >/dev/null 2>&1; then
+  (cd "$root" && uv run --quiet python tools/lean/lean_audit.py --restore "$(realpath --relative-to="$root" .)") \
     || echo "setup.sh: the pinned dependency bundle didn't restore; lake fetches the dependencies"
 fi
 lake env true
