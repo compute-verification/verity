@@ -80,7 +80,19 @@ theorem prob_off_le_run {β : Type} (G : Game β) (σ : Strategy G) (accept : β
     (hchk : ∀ o, Game.Out G o → accept o → (rdo o).Checked (R o) (path o)) {qR : ℝ}
     (hR : (StrictCR.oneRun G σ fun o => (rdo o).pick (R o) (path o)).CR H512 qR) :
     prob (fun o => accept o ∧ (rdo o).Off (R o)) G σ ≤ ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  have hle : prob (fun o => accept o ∧ (rdo o).Off (R o)) G σ ≤
+      prob (fun o => StrictCR.IsColl H512 ((rdo o).pick (R o) (path o))) G σ :=
+    prob_mono_reach (fun o ho ⟨ha, hoff⟩ =>
+      ((rdo o).openings (R o) (path o) ((rdo o).offAt (R o))).isColl
+        ((rdo o).offAt_conflict (hchk o ho ha) hoff)) σ
+  have hev : (prob (fun o => StrictCR.IsColl H512 ((rdo o).pick (R o) (path o))) G σ).toReal ≤
+      qR ^ 2 / 2 ^ (513 : ℝ) := by
+    rw [prob_toReal]
+    have := StrictCR.Finder.CR.le hR
+    rwa [StrictCR.oneRun_ev] at this
+  have hfin : prob (fun o => StrictCR.IsColl H512 ((rdo o).pick (R o) (path o))) G σ ≠ ⊤ :=
+    ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)
+  exact hle.trans ((ENNReal.le_ofReal_iff_toReal_le hfin (by positivity)).2 hev)
 
 /-- **No drawn unit reads a registered read whose leaf is not the registrant's**, except with probability
 `qR²/2^513` under `SHA512CRStrict` (`cr/sha-512`): in a game `G` played by `σ`, with drawn units `drawn o` and
@@ -93,7 +105,10 @@ theorem prob_offDrawn_le {β : Type} (G : Game β) (σ : Strategy G) (accept : �
     prob (fun o => accept o ∧ ∃ u ∈ drawn o, ∃ g ∈ P.io u, rd.isRead (lay.pos g) ∧
         lay.regLeaf (R o) (lay.pos g) ≠ rd.leaf (lay.pos g)) G σ ≤
       ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  refine le_trans (prob_mono (fun o ho => ?_) G σ)
+    (prob_off_le_run G σ accept R (fun o => rd.restrict (drawnReads lay (drawn o))) path hchk hR)
+  obtain ⟨ha, u, hu, g, hg, hrd, hl⟩ := ho
+  exact ⟨ha, lay.pos g, ⟨hrd, u, hu, g, hg, rfl⟩, hl⟩
 
 end Reads
 
@@ -158,6 +173,15 @@ theorem zk_session_offR
             rd.leaf ((laySh ht dj y₀ hc hU (pub := pub)).pos g))
         (auditLive L Reg (liveOf dg mPts N wr)) σ ≤
       ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
-  sorry
+  have hchk : ∀ o, Game.Out (auditLive L Reg (liveOf dg mPts N wr)) o → LiveAcceptsZKR I own o →
+      (rd.restrict (FlockSoundness.Registered.drawnReads (laySh ht dj y₀ hc hU (pub := pub)) o.2.1)).Checked o.1
+        (regPaths c pub o.2.2 rd.port) := by
+    intro o ho hacc
+    obtain ⟨R, ω, lo, rfl⟩ := auditLive_outcome ho
+    exact checked_of_accepts I ht own dj y₀ hc hU hpub hscope hTags _ hacc
+      (rd.restrict (FlockSoundness.Registered.drawnReads (laySh ht dj y₀ hc hU (pub := pub)) (L.draw ω)))
+      (hown R ω lo hacc)
+  exact FlockSoundness.Registered.Reads.prob_offDrawn_le (lay := laySh ht dj y₀ hc hU (pub := pub)) _ σ
+    (LiveAcceptsZKR I own) (fun o => o.2.1) (fun o => o.1) (fun o => regPaths c pub o.2.2 rd.port) rd hchk hR
 
 end FlockSoundness.Discharge.ZkReg
