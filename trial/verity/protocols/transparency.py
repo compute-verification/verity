@@ -33,14 +33,10 @@ class Traffic:
 @dataclass(frozen=True)
 class Transparency:
     max_timing_bits: int
-    name: str = "transparency"
 
-    def verifier(self, to: tuple[str, ...] = ()) -> dict[str, Actor]:
-        return {f"verifier/{self.name}": self._verifier(to)}
-
-    def warden(self, bytes_out: int, timing_bits: int) -> dict[str, Actor]:
-        return {f"warden/{self.name}": tell(Send(Observed(bytes_out, timing_bits), to=(f"verifier/{self.name}",)))}
-
-    def _verifier(self, to: tuple[str, ...]) -> Actor:
+    def verifier(self) -> Actor:
         observed = yield from receive(Observed, "warden")
-        return (Send(Traffic(observed.bytes, observed.timing_bits, observed.timing_bits <= self.max_timing_bits), to=to),)
+        return (Send(Traffic(observed.bytes, observed.timing_bits, observed.timing_bits <= self.max_timing_bits)),)
+
+    def warden(self, bytes_out: int, timing_bits: int) -> Actor:
+        return tell(Send(Observed(bytes_out, timing_bits), "verifier"))

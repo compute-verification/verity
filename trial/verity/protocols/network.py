@@ -23,11 +23,7 @@ class NetworkAccount:
 @dataclass(frozen=True)
 class Network:
     side_bits: int  # what the side channels carry over the period: an assumption
-    name: str = "network"
 
-    def verifier(self, to: tuple[str, ...] = ()) -> dict[str, Actor]:
-        return {f"verifier/{self.name}": self._verifier(to)}
-
-    def _verifier(self, to: tuple[str, ...]) -> Actor:
+    def verifier(self) -> Actor:
         traffic = yield from receive(Traffic, "verifier")
-        return (Send(NetworkAccount(8 * traffic.bytes + traffic.timing_bits + self.side_bits, traffic.accepted), to=to),)
+        return (Send(NetworkAccount(8 * traffic.bytes + traffic.timing_bits + self.side_bits, traffic.accepted)),)

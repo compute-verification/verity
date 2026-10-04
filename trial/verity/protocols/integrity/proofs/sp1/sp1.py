@@ -11,20 +11,33 @@ from dataclasses import dataclass
 import tomli_w  # the heavy dependency
 
 from verity.primitives.commitments import CommitmentScheme
+from verity.primitives.registration import Opening
 from verity.protocols.integrity.proofs import transparent
 from verity.protocols.integrity.proofs.system import ProofSystem, Unit
-from verity.protocols.integrity.registration import Opening
 
 
 @dataclass(frozen=True)
 class Sp1(ProofSystem):
     def prove(self, scheme: CommitmentScheme, units: Sequence[Unit], values: Sequence[Sequence[int]]) -> str:
         openings = transparent.Transparent().prove(scheme, units, values)
-        return tomli_w.dumps({"units": [{str(w): {"value": v, "path": [p.hex() for p in o.paths[w]]} for w, v in o.values.items()} for o in openings]})
+        return tomli_w.dumps(
+            {
+                "units": [
+                    {str(w): {"value": v, "path": [p.hex() for p in o.paths[w]]} for w, v in o.values.items()}
+                    for o in openings
+                ]
+            }
+        )
 
     def verify(self, scheme: CommitmentScheme, units: Sequence[Unit], proof: object) -> bool:
         if not isinstance(proof, str):
             return False
         parsed = tomllib.loads(proof)["units"]
-        openings = [Opening({int(w): x["value"] for w, x in o.items()}, {int(w): [bytes.fromhex(p) for p in x["path"]] for w, x in o.items()}) for o in parsed]
+        openings = [
+            Opening(
+                {int(w): x["value"] for w, x in o.items()},
+                {int(w): [bytes.fromhex(p) for p in x["path"]] for w, x in o.items()},
+            )
+            for o in parsed
+        ]
         return len(openings) == len(units) and all(transparent.check(scheme, u, o) for u, o in zip(units, openings))

@@ -1,10 +1,10 @@
 """Compute accounting: how much of the hardware's capacity the verified work accounts for, and so how much is left where
 other work could hide.
 
-    verifier    reads integrity's profile and PoUW's bound, over one registration, and a capacity reading from the
-                principal it is told to take it from; records the account
-    prover      declares capacity (remote: the account then rests on the declaration being true)
-    pinger      measures it (onsite)
+    verifier    reads integrity's profile and PoUW's bound, over one registration, and a capacity reading from
+                `capacity_from`; records the account
+    capacity    the reading, run by `capacity_from`: the prover's declaration (remote, an assumption) or a pinger's
+                measurement (onsite)
 """
 
 from __future__ import annotations
@@ -37,24 +37,22 @@ class ComputeAccount:
 
 @dataclass(frozen=True)
 class Compute:
-    name: str = "compute"
+    capacity_from: str  # the principal the verifier takes capacity from
 
-    def verifier(self, capacity_from: str, to: tuple[str, ...] = ()) -> dict[str, Actor]:
-        return {f"verifier/{self.name}": self._verifier(capacity_from, to)}
-
-    def prover(self, capacity: int) -> dict[str, Actor]:
-        return {f"prover/{self.name}": tell(Send(Capacity(capacity), to=(f"verifier/{self.name}",)))}
-
-    def pinger(self, capacity: int) -> dict[str, Actor]:
-        return {f"pinger/{self.name}": tell(Send(Capacity(capacity), to=(f"verifier/{self.name}",)))}
-
-    def _verifier(self, capacity_from: str, to: tuple[str, ...]) -> Actor:
-        got = yield from gather({IntegrityProfile: "verifier", UsefulWork: "verifier", Capacity: capacity_from})
+    def verifier(self) -> Actor:
+        got = yield from gather({IntegrityProfile: "verifier", UsefulWork: "verifier", Capacity: self.capacity_from})
         profile, work, capacity = got[IntegrityProfile], got[UsefulWork], got[Capacity].work
         reasons = (("integrity not established",) if not profile.accepted else ()) + (
-            ("integrity and PoUW are over different registrations",) if profile.registration != work.registration else ()
+            ("integrity and PoUW are over different registrations",)
+            if profile.registration != work.registration
+            else ()
         )
         verified = 0 if reasons else work.work * (profile.units - profile.wrong_units) // profile.units
         delta = profile.delta + work.delta
-        account = ComputeAccount(profile.registration, capacity, capacity_from, verified, max(capacity - verified, 0), delta, reasons)
-        return (Send(account, to=to),)
+        account = ComputeAccount(
+            profile.registration, capacity, self.capacity_from, verified, max(capacity - verified, 0), delta, reasons
+        )
+        return (Send(account),)
+
+    def capacity(self, work: int) -> Actor:
+        return tell(Send(Capacity(work), "verifier"))

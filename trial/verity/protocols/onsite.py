@@ -1,10 +1,11 @@
-"""Onsite Verity: remote Verity's protocols, with the verifier's hardware at the prover's site. A replayer there can run
-executions again without their inputs leaving the site; pingers measure capacity instead of taking the prover's word,
-and time PoUS's audit; a warden on the link sees the traffic.
+"""Onsite Verity: remote Verity's protocols, with the verifier's hardware at the prover's site. A replayer there runs
+drawn executions again without their inputs leaving the site; a pinger measures capacity instead of taking the
+prover's word, and times PoUS's audit; a warden on the link sees the traffic.
 
-    verifier    integrity -> pouw, nci, compute;  pouw -> compute;  pous -> memory;  transparency -> network
-    prover      registers its work once; answers integrity and PoUW as remotely, and holds PoUS's encoding
-    replayer    integrity's, when it replays
+    verifier    integrity, PoUW and NCI read the registration; compute reads integrity's profile and PoUW's bound;
+                memory reads PoUS's bound; network reads the traffic
+    prover      registers its work; opens it for the replayer, salts it, and holds PoUS's encoding
+    replayer    integrity's
     pinger      measures compute and memory capacity, and times PoUS's challenges
     warden      reads the link
 """
@@ -13,13 +14,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import ClassVar
 
 from verity.primitives import partition as P
 from verity.primitives.circuit import Circuit
-from verity.primitives.events import Actor
+from verity.primitives.events import Actor, Send, tell
+from verity.primitives.registration import register
 from verity.protocols.compute import Compute
-from verity.protocols.integrity.proofs.construction import Proofs
-from verity.protocols.integrity.registration import register
 from verity.protocols.integrity.replay import Replay
 from verity.protocols.memory import Memory
 from verity.protocols.nci import Nci
@@ -31,45 +32,44 @@ from verity.protocols.transparency import Transparency
 
 @dataclass(frozen=True)
 class Onsite:
-    integrity: Replay | Proofs
+    integrity: Replay
     pouw: Pouw
     nci: Nci
     pous: Pous
     transparency: Transparency
     network: Network
-    compute: Compute = Compute()
-    memory: Memory = Memory()
+    compute: ClassVar[Compute] = Compute(capacity_from="pinger")
+    memory: ClassVar[Memory] = Memory(capacity_from="pinger")
 
-    def verifier(self) -> dict[str, Actor]:
-        pouw, nci, compute, memory, network = (
-            f"verifier/{p.name}" for p in (self.pouw, self.nci, self.compute, self.memory, self.network)
+    def verifier(self) -> list[Actor]:
+        protocols = (
+            self.integrity,
+            self.pouw,
+            self.nci,
+            self.compute,
+            self.pous,
+            self.memory,
+            self.transparency,
+            self.network,
         )
-        return {
-            **self.integrity.verifier(to=(pouw, nci, compute)),
-            **self.pouw.verifier(to=(compute,)),
-            **self.nci.verifier(),
-            **self.compute.verifier(capacity_from="pinger"),
-            **self.pous.verifier(to=(memory,)),
-            **self.memory.verifier(capacity_from="pinger"),
-            **self.transparency.verifier(to=(network,)),
-            **self.network.verifier(),
-        }
+        return [p.verifier() for p in protocols]
 
     def prover(
         self, circuit: Circuit, partition: P.Partition, inputs: Sequence[tuple[int, ...]], encoding: Sequence[bytes]
-    ) -> dict[str, Actor]:
+    ) -> list[Actor]:
         registration = register(circuit, partition, inputs, self.integrity.scheme)
-        return {
-            **self.integrity.prover(circuit, inputs, registration),
-            **self.pouw.prover(circuit, inputs, registration),
-            **self.pous.prover(encoding),
-        }
+        return [
+            tell(Send(registration, "verifier")),
+            self.integrity.prover(inputs, registration),
+            self.pouw.prover(registration),
+            self.pous.prover(encoding),
+        ]
 
-    def replayer(self) -> dict[str, Actor]:
-        return self.integrity.replayer() if isinstance(self.integrity, Replay) else {}
+    def replayer(self) -> list[Actor]:
+        return [self.integrity.replayer()]
 
-    def pinger(self, compute: int, memory: int, elapsed: float) -> dict[str, Actor]:
-        return {**self.compute.pinger(compute), **self.memory.pinger(memory), **self.pous.pinger(elapsed)}
+    def pinger(self, compute: int, memory: int, elapsed: float) -> list[Actor]:
+        return [self.compute.capacity(compute), self.memory.capacity(memory), self.pous.pinger(elapsed)]
 
-    def warden(self, bytes_out: int, timing_bits: int) -> dict[str, Actor]:
-        return self.transparency.warden(bytes_out, timing_bits)
+    def warden(self, bytes_out: int, timing_bits: int) -> list[Actor]:
+        return [self.transparency.warden(bytes_out, timing_bits)]

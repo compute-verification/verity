@@ -1,2 +1,3 @@
-"""Verity. `run` (actors against each other over one log), `protocols` (one per directory, with its constructions),
-`primitives` (events, circuits, commitments, randomness). Import from the owning module; nothing is re-exported here."""
+"""Verity. `run` (principals' actors against each other over one log), `protocols` (flat, one module or directory each),
+`primitives` (events, circuits, commitments, randomness, the registration). Import from the owning module; nothing is
+re-exported here."""

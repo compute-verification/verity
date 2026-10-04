@@ -1,6 +1,6 @@
 """Replay: sample whole executions, and have a sealed replayer run each drawn one again.
 
-    verifier    receives the registration, draws executions from its secret, and sends the draw to the prover and the
+    verifier    takes the registration, draws executions from its secret, and sends the draw to the prover and the
                 drawn executions, as registered, to the replayer
     prover      opens each drawn execution's inputs and outputs against its root, and sends them to the replayer
     replayer    runs each execution again from its opened inputs and tells the verifier whether it gave the opened
@@ -21,10 +21,16 @@ from verity.primitives.circuit import Circuit, evaluate, trace
 from verity.primitives.commitments import CommitmentScheme, MerkleSha256
 from verity.primitives.events import Actor, Send, gather, receive
 from verity.primitives.randomness import derive
-from verity.protocols.integrity.profile import IntegrityProfile
-from verity.protocols.integrity.registration import (
-    Execution, Opening, Registered, Registration, check, open_wires, verify_opening, wires,
+from verity.primitives.registration import (
+    Execution,
+    Opening,
+    Registration,
+    check,
+    open_wires,
+    verify_opening,
+    wires,
 )
+from verity.protocols.integrity.profile import IntegrityProfile
 from verity.protocols.integrity.sampling import Draw, Subset
 
 
@@ -54,51 +60,51 @@ class Replay:
     k: int  # executions drawn
     delta: float
     scheme: CommitmentScheme = MerkleSha256()
-    name: str = "integrity"
 
-    def verifier(self, to: tuple[str, ...] = ()) -> dict[str, Actor]:
-        """`to`: the actors that read the registration it accepts and the profile it establishes."""
-        return {f"verifier/{self.name}": self._verifier(to)}
-
-    def replayer(self) -> dict[str, Actor]:
-        return {f"replayer/{self.name}": self._replayer()}
-
-    def prover(self, circuit: Circuit, inputs: Sequence[tuple[int, ...]], registration: Registration) -> dict[str, Actor]:
-        return {f"prover/{self.name}": self._prover(circuit, inputs, registration)}
-
-    def _verifier(self, to: tuple[str, ...]) -> Actor:
+    def verifier(self) -> Actor:
         secret = secrets.token_bytes(32)
-        registered = yield from receive(Registered, "prover")
-        registration = registered.registration
+        registration = yield from receive(Registration, "prover")
         digest, n = registration.digest(), len(registration.executions)
-        refused = check(registered, self.scheme)
+        refused = check(registration, self.scheme)
         if refused:
-            return (Send(IntegrityProfile(digest, "execution", False, n, n, self.delta, refused), to=to),)
+            return (Send(IntegrityProfile(digest, "execution", False, n, n, self.delta, refused)),)
 
         law = Subset(self.k)
         drawn = law.draw(derive(secret, "verity/integrity/replay/v1", digest), n)
-        results = (yield from receive(
-            Replayed, "replayer",
-            Send(registered, to=to),
-            Send(Draw(drawn), to=(f"prover/{self.name}",)),
-            Send(ToReplay({i: registration.executions[i] for i in drawn}), to=(f"replayer/{self.name}",)),
-        )).results
-        reasons = tuple(f"execution {i}: " + ("not replayed" if i not in results else "replays differently") for i in drawn if not results.get(i))
-        return (Send(IntegrityProfile(digest, "execution", not reasons, n, law.bound(n, self.delta), self.delta, reasons), to=to),)
+        results = (
+            yield from receive(
+                Replayed,
+                "replayer",
+                Send(Draw(drawn), "prover"),
+                Send(ToReplay({i: registration.executions[i] for i in drawn}), "replayer"),
+            )
+        ).results
+        reasons = tuple(
+            f"execution {i}: " + ("not replayed" if i not in results else "replays differently")
+            for i in drawn
+            if not results.get(i)
+        )
+        return (
+            Send(IntegrityProfile(digest, "execution", not reasons, n, law.bound(n, self.delta), self.delta, reasons)),
+        )
 
-    def _replayer(self) -> Actor:
+    def replayer(self) -> Actor:
         got = yield from gather({ToReplay: "verifier", Inputs: "prover"})
         expected, provided = got[ToReplay].executions, got[Inputs].executions
         results = {i: i in provided and _replays(self.scheme, e, *provided[i]) for i, e in expected.items()}
-        return (Send(Replayed(results), to=(f"verifier/{self.name}",)),)
+        return (Send(Replayed(results), "verifier"),)
 
-    def _prover(self, circuit: Circuit, inputs: Sequence[tuple[int, ...]], registration: Registration) -> Actor:
-        draw = yield from receive(Draw, "verifier", Send(Registered(registration, {circuit.id(): circuit}), to=(f"verifier/{self.name}",)))
+    def prover(self, inputs: Sequence[tuple[int, ...]], registration: Registration) -> Actor:
+        draw = yield from receive(Draw, "verifier")
         opened = {}
         for i in draw.units:
-            partition = registration.executions[i].partition
-            opened[i] = (circuit, open_wires(self.scheme, circuit, partition, trace(circuit, inputs[i]), _io(circuit, partition)))
-        return (Send(Inputs(opened), to=(f"replayer/{self.name}",)),)
+            e = registration.executions[i]
+            circuit = registration.circuits[e.circuit]
+            opened[i] = (
+                circuit,
+                open_wires(self.scheme, circuit, e.partition, trace(circuit, inputs[i]), _io(circuit, e.partition)),
+            )
+        return (Send(Inputs(opened), "replayer"),)
 
 
 def _io(circuit: Circuit, partition: P.Partition) -> tuple[int, ...]:

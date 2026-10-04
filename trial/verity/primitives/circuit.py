@@ -26,15 +26,18 @@ class Circuit:
     inputs: int
     gates: tuple[tuple[str, int, int], ...]  # (op, wire, wire); wire i < inputs is input i, then one wire per gate
     outputs: tuple[int, ...]
+    baseline: tuple[int, ...] = ()  # the inputs bound when it is registered (weights, constants); the rest per run
 
     def id(self) -> str:
-        body = {"inputs": self.inputs, "gates": self.gates, "outputs": self.outputs}
+        body = {"inputs": self.inputs, "gates": self.gates, "outputs": self.outputs, "baseline": self.baseline}
         return hashlib.sha256(json.dumps(body, separators=(",", ":")).encode()).hexdigest()[:16]
 
     @classmethod
     def from_json(cls, obj: dict) -> Circuit:
-        """The flat format `examples/data/*.json` carries: `inputs`, `gates` as [op, wire, wire], `outputs`."""
-        return cls(int(obj["inputs"]), tuple((op, int(a), int(b)) for op, a, b in obj["gates"]), tuple(obj["outputs"]))
+        """The flat format `examples/data/*.json` carries: `inputs`, `gates` as [op, wire, wire], `outputs`, and the
+        `constants` its first inputs hold, which are its baseline."""
+        gates = tuple((op, int(a), int(b)) for op, a, b in obj["gates"])
+        return cls(int(obj["inputs"]), gates, tuple(obj["outputs"]), tuple(range(len(obj.get("constants", ())))))
 
 
 def trace(circuit: Circuit, inputs: tuple[int, ...]) -> tuple[int, ...]:

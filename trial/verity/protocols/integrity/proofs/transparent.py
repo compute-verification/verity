@@ -8,17 +8,25 @@ from dataclasses import dataclass
 
 from verity.primitives import partition as P
 from verity.primitives.commitments import CommitmentScheme
+from verity.primitives.registration import Opening, open_wires, verify_opening
 from verity.protocols.integrity.proofs.system import ProofSystem, Unit
-from verity.protocols.integrity.registration import Opening, open_wires, verify_opening
 
 
 @dataclass(frozen=True)
 class Transparent(ProofSystem):
-    def prove(self, scheme: CommitmentScheme, units: Sequence[Unit], values: Sequence[Sequence[int]]) -> tuple[Opening, ...]:
-        return tuple(open_wires(scheme, u.circuit, u.execution.partition, v, _boundary(u)) for u, v in zip(units, values))
+    def prove(
+        self, scheme: CommitmentScheme, units: Sequence[Unit], values: Sequence[Sequence[int]]
+    ) -> tuple[Opening, ...]:
+        return tuple(
+            open_wires(scheme, u.circuit, u.execution.partition, v, _boundary(u)) for u, v in zip(units, values)
+        )
 
     def verify(self, scheme: CommitmentScheme, units: Sequence[Unit], proof: object) -> bool:
-        return isinstance(proof, tuple) and len(proof) == len(units) and all(check(scheme, u, o) for u, o in zip(units, proof))
+        return (
+            isinstance(proof, tuple)
+            and len(proof) == len(units)
+            and all(check(scheme, u, o) for u, o in zip(units, proof))
+        )
 
 
 def check(scheme: CommitmentScheme, unit: Unit, opening: Opening) -> bool:

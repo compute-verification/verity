@@ -61,33 +61,24 @@ class Pous:
     deadline: float  # seconds
     rho: float
     delta: float
-    name: str = "pous"
 
-    def verifier(self, to: tuple[str, ...] = ()) -> dict[str, Actor]:
-        return {f"verifier/{self.name}": self._verifier(to)}
-
-    def pinger(self, elapsed: float) -> dict[str, Actor]:
-        return {f"pinger/{self.name}": self._pinger(elapsed)}
-
-    def prover(self, encoding: Sequence[bytes]) -> dict[str, Actor]:
-        return {f"prover/{self.name}": self._prover(encoding)}
-
-    def _verifier(self, to: tuple[str, ...]) -> Actor:
+    def verifier(self) -> Actor:
         secret = secrets.token_bytes(32)
-        indices = tuple(int.from_bytes(derive(secret, "verity/pous/v0", str(j)), "big") % self.blocks for j in range(self.k))
-        timed = yield from receive(Timed, "pinger", Send(Challenge(indices), to=(f"pinger/{self.name}",)))
+        indices = tuple(
+            int.from_bytes(derive(secret, "verity/pous/v0", str(j)), "big") % self.blocks for j in range(self.k)
+        )
+        timed = yield from receive(Timed, "pinger", Send(Challenge(indices), "pinger"))
         expected = encode(self.seed, self.blocks)
         reasons = (("wrong blocks",) if timed.blocks != tuple(expected[i] for i in indices) else ()) + (
             (f"answered in {timed.elapsed}s, over the deadline",) if timed.elapsed > self.deadline else ()
         )
-        bound = SpaceBound(self.blocks * len(expected[0]), self.rho, self.delta, not reasons, reasons)
-        return (Send(bound, to=to),)
+        return (Send(SpaceBound(self.blocks * len(expected[0]), self.rho, self.delta, not reasons, reasons)),)
 
-    def _pinger(self, elapsed: float) -> Actor:
+    def pinger(self, elapsed: float) -> Actor:
         challenge = yield from receive(Challenge, "verifier")
-        answer = yield from receive(Answer, "prover", Send(challenge, to=(f"prover/{self.name}",)))
-        return (Send(Timed(answer.blocks, elapsed), to=(f"verifier/{self.name}",)),)
+        answer = yield from receive(Answer, "prover", Send(challenge, "prover"))
+        return (Send(Timed(answer.blocks, elapsed), "verifier"),)
 
-    def _prover(self, encoding: Sequence[bytes]) -> Actor:
+    def prover(self, encoding: Sequence[bytes]) -> Actor:
         challenge = yield from receive(Challenge, "pinger")
-        return (Send(Answer(tuple(encoding[i] for i in challenge.indices)), to=(f"pinger/{self.name}",)),)
+        return (Send(Answer(tuple(encoding[i] for i in challenge.indices)), "pinger"),)

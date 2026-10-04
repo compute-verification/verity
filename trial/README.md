@@ -14,21 +14,27 @@ lake build    # the Lean beside the Python
 ## The model
 
 The principals are the prover, the verifier, and the trusted hardware: replayers, wardens, pingers. An actor is one
-principal's part in one protocol, a transducer over one ordered log of events: it receives the events addressed to it
-and sends events in reply (`verity.primitives.events`). What it observes and computes in between is its own state and
-never enters the log. An actor's name starts with its principal (`verifier/integrity`). `verity.run.run(actors, view)`
-plays the actors against each other and yields one principal's view. The auditor trusts the verifier, so the
-verifier's view is the output: what its actors establish are events in it. Replayers, wardens and pingers are trusted
-too but sealed: what they see stays their own, and reaches the verifier only as what they send it.
+principal's part in one protocol, a transducer over one ordered log of events (`verity.primitives.events`). A send goes
+to a principal, and every actor of that principal receives it; a record (a send to no one) goes to the sender's own
+principal, which is how one protocol's verifier reads what another's established. What an actor observes and computes
+in between is its own state and never enters the log. `verity.run.run(principals, view)` takes each principal's actors,
+plays them against each other and yields one principal's view. The auditor trusts the verifier, so the verifier's view
+is the output: what its actors establish are records in it. Replayers, wardens and pingers are trusted too but sealed:
+what they see stays their own, and reaches the verifier only as what they send it.
+
+Every protocol over the prover's work reads one object, the prover's first message: its registration
+(`verity.primitives.registration`), the circuits it declares (each with its baseline) and a root per execution over
+the boundary wires of the partition it chose, sent before any coins are drawn. Integrity opens and proves against the
+roots, PoUW salts the digest, NCI checks the partitions.
 
 A construction is a frozen dataclass of its parameters, with a method per principal it involves that returns that
-principal's actors (`Replay(k, delta).verifier()`). A trusted principal's method takes its readings (`pinger(elapsed)`).
+principal's actor (`Replay(k, delta).verifier()`). A trusted principal's method takes its readings (`pinger(elapsed)`).
 Choosing a construction is choosing a value. A composite is a construction whose fields are constructions: its methods
-put their actors in one mapping, wired by name (a verifier's `to` names who reads what it establishes), and its
-guarantee is proved from theirs. Anyone can address anyone, so an actor takes each kind of event only from the
-principal it trusts for it (`receive(kind, sender)`). Nothing orchestrates the actors: each moves when an event reaches
-it, so each protocol keeps its own cadence over the log. Order in the log is logical; physical time enters only as
-trusted readouts in what a trusted principal sends.
+return the lists of its parts' actors, and its guarantee is proved from theirs. Actors have no names and are not wired:
+anyone can send to anyone, so an actor takes each kind of event only from the principal it trusts for it
+(`receive(kind, sender)`, `gather`). Nothing orchestrates the actors: each moves when an event reaches it, so each
+protocol keeps its own cadence over the log. Order in the log is logical; physical time enters only as trusted
+readouts in what a trusted principal sends.
 
 ## Layers
 

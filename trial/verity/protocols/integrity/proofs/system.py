@@ -11,7 +11,7 @@ from typing import Protocol
 
 from verity.primitives.circuit import Circuit
 from verity.primitives.commitments import CommitmentScheme
-from verity.protocols.integrity.registration import Execution
+from verity.primitives.registration import Execution
 
 
 @dataclass(frozen=True)

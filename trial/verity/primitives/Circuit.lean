@@ -9,6 +9,8 @@ structure Circuit where
   inputs : Nat
   gates : List (Op × Nat × Nat)
   outputs : List Nat
+  /-- The inputs bound when it is registered; the rest are bound per run. -/
+  baseline : List Nat := []
 
 def Op.apply : Op → Nat → Nat → Nat
   | .add, a, b => (a + b) % 2 ^ 32

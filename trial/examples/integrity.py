@@ -12,27 +12,31 @@ import sys
 from common import load, show
 
 from verity.primitives import partition as P
+from verity.primitives.events import Send, tell
+from verity.primitives.registration import register
 from verity.protocols.integrity.proofs.construction import Proofs
 from verity.protocols.integrity.proofs.transparent import Transparent
-from verity.protocols.integrity.registration import register
 from verity.protocols.integrity.replay import Replay
 from verity.run import run
 
-circuit_name, construction = (sys.argv[1:] + ["f32_add", "replay"][len(sys.argv) - 1:])[:2]
-circuit, requests, _ = load(circuit_name)
+circuit_name, construction = (sys.argv[1:] + ["f32_add", "replay"][len(sys.argv) - 1 :])[:2]
+circuit, requests = load(circuit_name)
 
 if construction == "replay":
-    replay = Replay(k=2, delta=0.01)
-    registration = register(circuit, P.whole(circuit), requests, replay.scheme)
-    actors = {**replay.verifier(), **replay.replayer(), **replay.prover(circuit, requests, registration)}
+    integrity, partition = Replay(k=2, delta=0.01), P.whole(circuit)
+    others = {"replayer": [integrity.replayer()]}
 else:
     if construction == "sp1":
         from verity.protocols.integrity.proofs.sp1.sp1 import Sp1 as system
     else:
         system = Transparent
-    proofs = Proofs(k=64, max_width=16, delta=0.01, system=system())
-    registration = register(circuit, P.greedy(circuit, 16), requests, proofs.scheme)
-    actors = {**proofs.verifier(), **proofs.prover(circuit, requests, registration)}
+    integrity, partition, others = Proofs(k=64, max_width=16, delta=0.01, system=system()), P.greedy(circuit, 16), {}
 
-for event in run(actors, view="verifier"):
+registration = register(circuit, partition, requests, integrity.scheme)
+principals = {
+    "verifier": [integrity.verifier()],
+    "prover": [tell(Send(registration, "verifier")), integrity.prover(requests, registration)],
+    **others,
+}
+for event in run(principals, view="verifier"):
     show(event)

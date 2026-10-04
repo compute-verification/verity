@@ -18,22 +18,22 @@ from verity.protocols.pouw import Pouw
 from verity.protocols.transparency import Transparency
 from verity.run import run
 
-circuit, requests, baseline = load(sys.argv[1] if len(sys.argv) > 1 else "f32_add")
+circuit, requests = load(sys.argv[1] if len(sys.argv) > 1 else "f32_add")
 
 onsite = Onsite(
     integrity=Replay(k=2, delta=0.01),
     pouw=Pouw(difficulty=6, delta=0.01),
-    nci=Nci(gamma=4096, alpha=0.2, baseline=baseline),
+    nci=Nci(gamma=4096, alpha=0.2),
     pous=Pous(seed=b"weights", blocks=1024, k=16, deadline=0.001, rho=18 / 19, delta=0.01),
     transparency=Transparency(max_timing_bits=7),
     network=Network(side_bits=1000),
 )
-actors = {
-    **onsite.verifier(),
-    **onsite.prover(circuit, P.whole(circuit), requests, encode(b"weights", 1024)),
-    **onsite.replayer(),
-    **onsite.pinger(compute=2 * len(requests) * len(circuit.gates), memory=64 * 1024, elapsed=0.0004),
-    **onsite.warden(bytes_out=8 * len(requests), timing_bits=7),
+principals = {
+    "verifier": onsite.verifier(),
+    "prover": onsite.prover(circuit, P.whole(circuit), requests, encode(b"weights", 1024)),
+    "replayer": onsite.replayer(),
+    "pinger": onsite.pinger(compute=2 * len(requests) * len(circuit.gates), memory=64 * 1024, elapsed=0.0004),
+    "warden": onsite.warden(bytes_out=8 * len(requests), timing_bits=7),
 }
-for event in run(actors, view="verifier"):
+for event in run(principals, view="verifier"):
     show(event)

@@ -1,8 +1,7 @@
 """Memory accounting: how much of the site's memory PoUS shows holding useful data, and so how much is left.
 
-    verifier    reads PoUS's bound and a capacity reading from the principal it is told to take it from; records the
-                account
-    pinger      measures memory capacity
+verifier    reads PoUS's bound and a capacity reading from `capacity_from`; records the account
+capacity    the reading, run by `capacity_from` (a pinger)
 """
 
 from __future__ import annotations
@@ -31,16 +30,13 @@ class MemoryAccount:
 
 @dataclass(frozen=True)
 class Memory:
-    name: str = "memory"
+    capacity_from: str  # the principal the verifier takes capacity from
 
-    def verifier(self, capacity_from: str, to: tuple[str, ...] = ()) -> dict[str, Actor]:
-        return {f"verifier/{self.name}": self._verifier(capacity_from, to)}
-
-    def pinger(self, capacity: int) -> dict[str, Actor]:
-        return {f"pinger/{self.name}": tell(Send(Capacity(capacity), to=(f"verifier/{self.name}",)))}
-
-    def _verifier(self, capacity_from: str, to: tuple[str, ...]) -> Actor:
-        got = yield from gather({SpaceBound: "verifier", Capacity: capacity_from})
+    def verifier(self) -> Actor:
+        got = yield from gather({SpaceBound: "verifier", Capacity: self.capacity_from})
         space, capacity = got[SpaceBound], got[Capacity].bytes
         held = int(space.bytes * space.rho) if space.accepted else 0
-        return (Send(MemoryAccount(capacity, held, max(capacity - held, 0), space.delta), to=to),)
+        return (Send(MemoryAccount(capacity, held, max(capacity - held, 0), space.delta)),)
+
+    def capacity(self, bytes_: int) -> Actor:
+        return tell(Send(Capacity(bytes_), "verifier"))

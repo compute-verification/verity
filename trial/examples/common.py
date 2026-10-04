@@ -14,8 +14,8 @@ from verity.primitives.circuit import Circuit, evaluate
 from verity.primitives.events import Event
 
 
-def load(name: str) -> tuple[Circuit, list[tuple[int, ...]], frozenset[int]]:
-    """The circuit, the requests, and the baseline wires (its constants)."""
+def load(name: str) -> tuple[Circuit, list[tuple[int, ...]]]:
+    """The circuit (its baseline is its constants) and the requests."""
     data = json.loads((Path(__file__).parent / "data" / f"{name}.json").read_text())
     circuit = Circuit.from_json(data)
     bits = (circuit.inputs - len(data["constants"])) // 2  # per operand
@@ -33,12 +33,13 @@ def load(name: str) -> tuple[Circuit, list[tuple[int, ...]], frozenset[int]]:
     print(f"{data['source']}: {len(circuit.gates)} gates, agrees with its {len(data['vectors'])} reference vectors")
     rng = random.Random(0)
     requests = [wires(pattern(rng.uniform(-100, 100)), pattern(rng.uniform(-100, 100))) for _ in range(8)]
-    return circuit, requests, frozenset(range(len(data["constants"])))
+    return circuit, requests
 
 
 def show(event: Event) -> None:
     fields = ", ".join(f"{name}={_brief(value)}" for name, value in vars(event.body).items())
-    print(f"{event.sender} -> {', '.join(event.to) or 'record'}: {type(event.body).__name__}({fields})")
+    to = "record" if event.to == event.sender else event.to
+    print(f"{event.sender} -> {to}: {type(event.body).__name__}({fields})")
 
 
 def _brief(value: object) -> str:
