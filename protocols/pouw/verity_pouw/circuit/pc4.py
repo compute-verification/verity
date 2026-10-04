@@ -72,6 +72,7 @@ from ..protocol import DomainError
 from ..schemes import pearl_c as C
 from ..schemes import pearl_c4 as S
 from . import anchors as A
+from . import boolean as _boolean  # noqa: F401  registers the _v2 Definitions C-Flock's lowering falls back to
 from . import leaves as L
 from . import words as W
 
