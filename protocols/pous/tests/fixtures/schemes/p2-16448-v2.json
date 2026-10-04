@@ -1,6 +1,6 @@
 {
  "certificate": {
-  "call_ns": 2900000,
+  "call_ns": 854000,
   "claims": [
    "m1-ideal-permutations",
    "sms-m1-instantiation",

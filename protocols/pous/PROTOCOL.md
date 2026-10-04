@@ -236,11 +236,24 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     its `λ = 128` row, for every block count from 2^8 to 2^23 and every payload width in range, `p2-2054B`'s among
     them, with no hypothesis; the certified store is 2^19 blocks (8 segments of 2^16). It is an abstract-M1 result, and
     the SMS-to-M1 instantiation assumption is not accepted (the spec's decision 8).
-  - SeqRoot sets `call_ns`, half the fastest single-core 16,448-bit root, and no root may fit within `Δ + RTT`. That
-    floor does not count cooperating cores, which the frozen spec allows within one chiplet. With them the fastest root
-    is an estimated 1.41–2.52 ms (art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c), so the
-    current `call_ns` admits windows the 2× margin does not cover. It stays until Daniel rules on the response window.
-  - `Scheme.experimental` carries that reason. The verifier audits an experimental scheme only with
+  - SeqRoot sets `call_ns` (`ROOT_CALL_NS` = 854 µs), half the fastest 16,448-bit root with 8 cores of one chiplet
+    cooperating, which the spec allows. No root may fit within twice `Δ + RTT`. The spec's v1.1 (`p2/PROTOCOL.md`, 4 Oct
+    2026, Daniel's ruling) caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 350 µs, so `Δ + RTT ≤ 850 µs`; the frozen
+    v1's 1 ms cap did not keep the 2× margin. The derivation:
+    - The single-core floor is the timing red team's Zen 5 core at 5.7 GHz with full-rate IFMA and its best
+      Toom-4/Karatsuba plan: τ_F = 361.55 ns per squaring (`regate.py` at w = 16,448). A root is 16,446 squarings plus
+      about 20 multiplications (40 squaring-equivalents), so 16,486 × 361.55 ns = 5,960.5 µs. The note's 5.97 ms rounds
+      τ_F to 362 ns first.
+    - The cooperation speedup is the measured 8-core one, 2,716.7 / 778.5 = 3.490× per squaring on one Zen 4 chiplet
+      (run `r20260929-060834-0ec4`, art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed). The
+      cooperating root is 5,960.5 / 3.490 = 1,708.0 µs, half of it 854.0 µs, and 854.0 − 500 = 354.0 µs, rounded down.
+    - Sources: `note:20261004T2102Z-report-relay-p2-redteam-timing`, with its scripts and logs in
+      art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57; the review that found the frozen cap
+      unsafe, art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c.
+    - The red team's sync model (t_sync = 20–40 ns per squaring, `coop.log`) gives 4.2–5.5× at 8 cores, more than
+      measured. The cap rests on the measured speedup, not that model.
+  - `Scheme.experimental` carries the remaining reasons: the SMS-to-M1 instantiation is not accepted, and the
+    XOR-then-reduce compression attack on it is open. The verifier audits an experimental scheme only with
     `experimental=True`, and its profile's statement begins with it. No experimental scheme is ever the default.
 
   P3 has no certificate: the concrete-`H` pins have its parameters, but their chain starts from a different `h_0`

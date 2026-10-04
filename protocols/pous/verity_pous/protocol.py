@@ -62,8 +62,8 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
           "Square-mask-square with fresh per-block keys instantiates M1's slow-inverse permutation (novel and "
           "algebraic; pending Daniel)", "SMS as M1", "conjectured"),
     Entry("seq-root", "assumption",
-          "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core "
-          "(cooperating cores excluded)", "SeqRoot", "conjectured"),
+          "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core, "
+          "with up to 8 cores of one chiplet cooperating", "SeqRoot", "conjectured"),
 )}
 """Claims a certificate cites that `verity.claims` does not hold yet, in its id format.  Each moves to core when a
 render cites it; the tests fail once core defines an id this table still holds."""

@@ -18,7 +18,7 @@ from verity_pous import band, dense, primitives, protocol, schemes
 from verity_pous.codec import Geometry
 from verity_pous.layout import Layout
 from verity_pous.params import Params
-from verity_pous.schemes.p2 import CHACHA8, CHACHA8_NONCONFORMING, EXPERIMENTAL, P2Params
+from verity_pous.schemes.p2 import CHACHA8, CHACHA8_NONCONFORMING, EXPERIMENTAL, RTT_ALLOWANCE_CAP_NS, P2Params
 from verity_pous.verifier import VerifierKey
 
 SALT = bytes(range(24))
@@ -508,7 +508,9 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
 def test_p2_is_experimental_and_says_so():
     """P2 (`p2-16448/v3`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the verifier refuses it
     unless asked, never makes it the default, and its profile states why.  The certificate is the pinned
-    `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile."""
+    `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile.  Its call is half the
+    fastest cooperating root, 854 µs: the spec v1.1's cap, `Δ + RTT ≤ 850 µs`, is inside it, and the frozen v1's 1 ms is
+    not."""
     for name in ("p2-16448/v3", "p2-16448/v2"):
         sch = schemes.get(name, segments=8)
         v2 = name.endswith("v2")
@@ -516,8 +518,8 @@ def test_p2_is_experimental_and_says_so():
         assert sch.params.profile == sch.params.manifest()["profile"] == "p2-2054B"
         assert ("expander" in sch.params.manifest()) is not v2
         cert = sch.certificate
-        assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.segments, cert.hypotheses) == (
-            "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, 8, ())
+        assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.call_ns, cert.segments, cert.hypotheses) == (
+            "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, 854_000, 8, ())
         assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root"} <= set(cert.claims)
         one = schemes.get(name)
         vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
@@ -526,8 +528,12 @@ def test_p2_is_experimental_and_says_so():
             protocol.Verifier(one, vk, key)
         v = protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
         assert v.k == 105 and v.gaps == ("W has 1 segments; Pous.SecurityProofs.P2SlackFamilyUncond is about 8",)
-        with pytest.raises(ValueError, match="covers 0"):
-            protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=2_400_000)
+        capped = protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
+        assert capped.limit_ns == 850_000
+        assert protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=353_999).k == 105
+        for rtt in (354_000, 1_000_000):
+            with pytest.raises(ValueError, match="covers 0, so Δ \\+ RTT must stay under 854000 ns"):
+                protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=rtt)
         p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 105, 536_800, cert,
                                     experimental=sch.experimental)
         assert p.certified and p.statement().startswith(f"EXPERIMENTAL ({sch.experimental}). ")
