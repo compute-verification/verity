@@ -49,6 +49,12 @@ for pkg in named:
         (deps / "built").write_text("x")
     with open(out / "ran.txt", "a") as f:
         f.write(f"{pkg.relative_to(root)} {'warm' if warm else 'cold'}\n")
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+    with open(out / "builds.txt", "a") as f:
+        f.write(f"{pkg.relative_to(root)} {'warm' if lib.is_dir() else 'cold'}\n")
+    lib.mkdir(parents=True, exist_ok=True)
+    for src in pkg.glob("*.lean"):
+        (lib / (src.stem + ".olean")).write_text("built")
     reps.append({"package": str(pkg), "failures": [f"reads {m}" for m in missing]})
     if missing:
         failed.append(str(pkg))
@@ -116,6 +122,30 @@ def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": ["tools/lean/tests/fixtures/control.lean"]}))
     rc, _ran, doc = _run(tmp_path, 3)
     assert rc == 1 and doc["failed"] == ["pkg/b"]
+
+
+def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
+    """b201 rebuilt all 561 of `soundness`'s modules (2,508 s) because the auditor changed, though no `.olean` depends on it."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    store = tmp_path / "cache" / "lean-builds"
+    builds = lambda n: sorted((tmp_path / f"out{n}" / "builds.txt").read_text().split("\n")[:-1])
+    assert _run(tmp_path, 1)[0] == 0 and builds(1) == ["pkg/a cold", "pkg/b cold"]
+    ka, kb = LA.build_key("pkg/a", root), LA.build_key("pkg/b", root)
+    assert (store / ka / "lib/lean/A.olean").is_file() and (store / kb / "lib/lean/B.olean").is_file()
+    (store / ka / "lib/lean/Gone.olean").write_text("its source was deleted")
+    (root / "tools/lean/audit.py").write_text(FAKE_AUDIT + "\n# the auditor changed\n")
+    assert _run(tmp_path, 2)[0] == 0 and builds(2) == ["pkg/a warm", "pkg/b warm"]
+    assert (store / ka / "lib/lean/A.olean").is_file() and not (store / ka / "lib/lean/Gone.olean").exists()
+    (root / "pkg/b/B.lean").write_text("-- b changed\n")
+    logged = []
+    rc = LA.run(tmp_path / "out3", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps", log=logged.append)
+    assert rc == 0 and builds(3) == ["pkg/b warm"]                    # a reused; its build copied in as b's path dependency
+    assert any(ln.startswith("lean-audit: pkg/a: build warm") and "a copy" in ln for ln in logged) and (store / ka).is_dir()
+    (root / "pkg/a/lean-audit.json").write_text(json.dumps({"reads": ["nowhere.txt"]}))
+    assert _run(tmp_path, 4)[0] == 1 and not (store / ka).exists()     # a failed: its build is dropped, not kept
+    (root / "pkg/a/lean-toolchain").write_text("v2\n")
+    assert LA.build_key("pkg/a", root) != ka
 
 
 def test_a_cache_reached_through_a_symlink_keeps_every_report(tmp_path, monkeypatch):

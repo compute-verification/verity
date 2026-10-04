@@ -316,6 +316,69 @@ class WarmDeps:
         return done
 
 
+def build_key(pkg: str, root: Path) -> str:
+    """What a kept build is reused under: the package's path, its toolchain, its manifest and its lakefile. Within that, Lake's
+    own traces (each module's source and its imports' traces) decide what it rebuilds."""
+    h = hashlib.sha256(pkg.encode() + b"\0")
+    for f in ("lean-toolchain", "lake-manifest.json", "lakefile.toml", "lakefile.lean"):
+        h.update(f.encode() + b"\0" + ((root / pkg / f).read_bytes() if (root / pkg / f).is_file() else b"-") + b"\0")
+    return h.hexdigest()
+
+
+def prune(pkg: Path) -> int:
+    """Remove the kept outputs of modules whose source is gone, so no `.olean` outlives its `.lean`; the number removed."""
+    n = 0
+    for sub in ("lib/lean", "ir"):
+        base = pkg / ".lake" / "build" / sub
+        for f in sorted(base.rglob("*")) if base.is_dir() else ():
+            if f.is_file() and not (pkg / f.relative_to(base).parent / (f.name.split(".")[0] + ".lean")).is_file():
+                f.unlink()
+                n += 1
+    return n
+
+
+class WarmBuilds:
+    """Each package's own `.lake/build`, kept under its `build_key` by the last run whose audit of it passed, so an auditor
+    change, or a change to one module, doesn't rebuild every module. An audited package's is moved in and back only when its
+    audit passed: its compile-time code may write in it. A package in the tree only as a path dependency gets a copy, which
+    never comes back. The audit still checks every statement against these `.olean` files and replays every declaration
+    through the kernel."""
+
+    def __init__(self, store: Path):
+        self.store = store
+
+    def _lock(self, k: str):
+        self.store.mkdir(parents=True, exist_ok=True)
+        f = open(self.store / f"{k}.lock", "w")
+        fcntl.flock(f, fcntl.LOCK_EX)
+        return f
+
+    def take(self, work: Path, pkg: str, audited: bool, log=print) -> None:
+        k = build_key(pkg, work)
+        src, dst = self.store / k, work / pkg / ".lake" / "build"
+        with self._lock(k):
+            if not src.is_dir() or dst.exists():
+                log(f"lean-audit: {pkg}: build cold ({k[:12]})")
+                return
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if audited:
+                _move(src, dst)
+            else:
+                shutil.copytree(src, dst, symlinks=True)
+        log(f"lean-audit: {pkg}: build warm ({k[:12]}){'' if audited else ', a copy'}; {prune(work / pkg)} stale output(s) removed")
+
+    def give_back(self, work: Path, passed: set[Path]) -> None:
+        for pkg in passed:
+            src = pkg / ".lake" / "build"
+            if not src.is_dir():
+                continue
+            home = self.store / build_key(os.path.relpath(pkg, work), work)
+            with self._lock(home.name):
+                if home.exists():
+                    shutil.rmtree(home, ignore_errors=True)
+                _move(src, home)
+
+
 def _move(src: Path, dst: Path) -> None:
     try:
         os.replace(src, dst)
@@ -354,6 +417,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     # cache reached through a symlink would otherwise match no report to its package
     work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent)).resolve()
     warm = WarmDeps(deps, urls)
+    builds = WarmBuilds(deps.parent / "lean-builds")
     passed: set[Path] = set()
     audited: list[str] = []
     failed: list[str] = []
@@ -363,6 +427,9 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         audited = sorted(missed)
         with ThreadPoolExecutor(max_workers=max(1, len(audited))) as ex:
             list(ex.map(lambda p: warm.take(work / p, log), audited))
+        if not fresh:
+            for p in sorted({*audited, *(d for q in audited for d in path_deps(q))}):
+                builds.take(work, p, p in audited, log)
         env = {**os.environ, "LEAN_NUM_THREADS": str(COMMON.cores())}
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
@@ -388,6 +455,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         passed = {work / p for p in audited if p in reports and (not reports[p].get("failures") or transient(reports[p]))}
     finally:
         warm.give_back(passed)
+        if not fresh:
+            builds.give_back(work, {work / p for p in audited if p in reports and not reports[p].get("failures")})
         shutil.rmtree(work, ignore_errors=True)
     return failed, audited
 
