@@ -176,14 +176,17 @@ def test_the_gate_reads_checks_own_produces_whatever_quotes_one_above_it(above):
     assert tr.state == "landed", tr.why
 
 
-def test_the_repositorys_own_check_declaration_parses_to_what_importing_it_declares():
+def test_the_repositorys_own_check_declaration_parses_to_what_importing_it_declares(tmp_path):
     """The regression the patterns had: main's tools/check/tool.py changed its layout (a keyword after merge_requires) and the
     gate silently read no merge_requires.  This reads the file itself, so a layout the gate can't parse fails here first."""
     from research.merge import declaration
 
-    repo = Path(__file__).resolve().parents[3]
-    tool = declaration(repo, "check")
-    assert trains.declared((repo / trains.TOOL_PY).read_text()) == (tool.produces, tool.merge_requires)
+    text = (Path(__file__).resolve().parents[3] / trains.TOOL_PY).read_text()
+    # imported from a copy: importing the real file reads its tools/check/__pycache__, which the suite's inputs don't cover
+    (tmp_path / trains.TOOL_PY).parent.mkdir(parents=True)
+    (tmp_path / trains.TOOL_PY).write_text(text)
+    tool = declaration(tmp_path, "check")
+    assert trains.declared(text) == (tool.produces, tool.merge_requires)
     assert tool.produces and tool.merge_requires
 
 
