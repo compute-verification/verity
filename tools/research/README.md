@@ -119,11 +119,12 @@ the prefixes are bisected (each checked the same way) to the first ref whose mer
 the longest prefix that passed.
 
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain of merges, onto
-the remote's `--into` or the prep branch of a train ahead (`--onto`), in a scratch worktree, so the checkout it runs from is never
-touched. Each `N@SHA` (pull request N) or `BRANCH@SHA` is fetched and refused unless its head is still SHA. The build stops at
+the remote's `--into` or the prep branch of a train ahead (`--onto`), in a scratch worktree, never the checkout it runs from.
+Each `N@SHA` (pull request N) or `BRANCH@SHA` is refused unless its head is still SHA. The build stops at
 the first ref that doesn't merge. Then check's preflight runs on the result (`check.py --preflight`: `uv.lock`, the wall-clock
 lint and the repository's tests, among them the markdown caps), and the tip is pushed as BRANCH, never forced, and read back.
-Nothing is recorded or landed: `tools/check/train.sh BRANCH MACHINE` checks it, and `research merge BRANCH` lands it.
+Nothing is recorded or landed: `tools/check/train.sh BRANCH MACHINE` checks it (`auto`: the node `check.py --slots` picks), and
+`research merge BRANCH` lands it.
 
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`), and `research merge --sweep` does only that.
 It fetches the remote's copy of the target, closes every open pull request whose head is on it with a one-line comment naming
