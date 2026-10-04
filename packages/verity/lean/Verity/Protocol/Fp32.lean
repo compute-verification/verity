@@ -19,7 +19,7 @@ the nearest word. The Python computes add, sub, mul and div in numpy `float32` (
 the FMA in exact rational arithmetic; `Verity.SecurityProofs.Fp32.Vectors` holds both to these definitions.
 -/
 
-namespace Verity.Protocol.Fp32
+namespace Verity.Fp32
 
 /-- `scalar.F32_NAN_PTX`: the GPU's word for every NaN result of the FP32 arithmetic. -/
 def F32_NAN_PTX : Nat := 0x7FFFFFFF
@@ -209,4 +209,4 @@ def bf16MulF32 (a s : Nat) : Nat := f32ToBf16RnBits (f32MulV2 (bf16ToF32Bits a) 
 /-- `Bf16MulBf16` v1, `_f16Vec *= _f16Vec`: `bf16_rn(f32(a) * f32(b))`; every NaN `0x7FFF`. -/
 def bf16MulBf16 (a b : Nat) : Nat := f32ToBf16RnBits (f32MulV2 (bf16ToF32Bits a) (bf16ToF32Bits b)) BF16_NAN_F2FP
 
-end Verity.Protocol.Fp32
+end Verity.Fp32

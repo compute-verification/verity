@@ -4,7 +4,7 @@ import Verity.Protocol.Fp32
 # Vectors: `verity.ml.fp32`'s primitives
 
 Each theorem is one input of a primitive of `verity.ml.fp32` and the word its Python evaluator returns,
-checked by the kernel against the definition of the same name in `Verity.Protocol.Fp32`.
+checked by the kernel against the definition of the same name in `Verity.Fp32`.
 `packages/verity/tests/ml/test_lean_fp32_vectors.py` checks the same vectors against the Python, and that
 they reach every case the Python distinguishes, so a change on either side fails a build: the definitions
 cannot drift silently. That test, run as a script, writes this file.
@@ -12,7 +12,7 @@ cannot drift silently. That test, run as a script, writes this file.
 
 namespace Verity.SecurityProofs.Fp32.Vectors
 
-open Verity.Protocol.Fp32
+open Verity.Fp32
 
 /-- NaN operand; NaN result -/
 theorem f32AddV2_000 : f32AddV2 0x7fc00000 0x3f800000 = 0x7fffffff := by decide +kernel
