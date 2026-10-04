@@ -160,10 +160,10 @@ def split_ranges(T: int, S: int) -> list[tuple[int, int]]:
     return [(s * per, min(s * per + per, T)) for s in range(S)]
 
 
-def stage1(qk: np.ndarray, kv: np.ndarray, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """One split of one request for every head: qk (H, T) scaled scores, kv (T, 576) -> (tv (H, 512), e_max (H,), e_sum (H,))."""
+def stage1(qk: np.ndarray, kv: np.ndarray, lo: int, hi: int, DL: int = MC.DL) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """One split of one request for every head: qk (H, T) scaled scores, kv (T, DL + DR) -> (tv (H, DL), e_max (H,),
+    e_sum (H,))."""
     H = qk.shape[0]
-    DL = MC.DL
     e_max = np.full(H, NEG_INF, U32)
     e_sum = np.zeros(H, U32)
     acc = np.zeros((H, DL), U32)
@@ -171,7 +171,7 @@ def stage1(qk: np.ndarray, kv: np.ndarray, lo: int, hi: int) -> tuple[np.ndarray
         cols = np.arange(n0, n0 + BLOCK)
         valid = cols < hi
         blk = np.where(valid[None, :], qk[:, np.minimum(cols, hi - 1)], NEG_INF)
-        v = np.where(valid[:, None], kv[np.minimum(cols, hi - 1), :DL], np.uint16(0))       # (32, 512)
+        v = np.where(valid[:, None], kv[np.minimum(cols, hi - 1), :DL], np.uint16(0))        # (32, DL)
         n = fmax(row_max(blk), e_max)
         re = exp_tl(sub(e_max, n))
         p = exp_tl(sub(blk, n[:, None]))
@@ -185,22 +185,22 @@ def stage1(qk: np.ndarray, kv: np.ndarray, lo: int, hi: int) -> tuple[np.ndarray
     return div_full(acc, e_sum[:, None]), e_max, e_sum
 
 
-def decode_rows(q: np.ndarray, kv: np.ndarray, splits: int, scale: int = 0x3D800000) -> dict:
-    """One request: q (H, 576) and kv (T, 576) bf16 words -> o (H, 512) and lse (H,) bf16 words, logits (H, S, 513) f32 words
-    (zero for an empty split, which the kernel leaves unwritten)."""
+def decode_rows(q: np.ndarray, kv: np.ndarray, splits: int, scale: int = 0x3D800000, DL: int = MC.DL) -> dict:
+    """One request: q (H, DL + DR) and kv (T, DL + DR) bf16 words -> o (H, DL) and lse (H,) bf16 words, logits (H, S, DL + 1)
+    f32 words (zero for an empty split, which the kernel leaves unwritten)."""
     H, T = q.shape[0], kv.shape[0]
     qk = mul(dot_chain(q, kv), U32(scale))
-    logits = np.zeros((H, splits, MC.DL + 1), U32)
+    logits = np.zeros((H, splits, DL + 1), U32)
     present = np.zeros(splits, bool)
     e_max = np.full(H, NEG_INF, U32)
     e_sum = np.zeros(H, U32)
-    acc = np.zeros((H, MC.DL), U32)
+    acc = np.zeros((H, DL), U32)
     for s, (lo, hi) in enumerate(split_ranges(T, splits)):
         if hi <= lo:
             continue
-        tv, m, l = stage1(qk, kv, lo, hi)
+        tv, m, l = stage1(qk, kv, lo, hi, DL)
         tl = add(m, logf(l))
-        logits[:, s, :MC.DL], logits[:, s, MC.DL] = tv, tl
+        logits[:, s, :DL], logits[:, s, DL] = tv, tl
         present[s] = True
         n = fmax(tl, e_max)
         old = exp_tl(sub(e_max, n))
