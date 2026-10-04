@@ -168,8 +168,8 @@ def test_the_word_definitions() -> None:
     assert [TR.word_of(bind(d)).id for d in HALVES] == ["RopeOut_v1", "RopeOutAdd_v1"]
     assert all(TR.word_of(t) == bind(b1.RoPEHead, **t.bindings) for t in HEADS.values())
     assert all(TR.word_of(t) == bind(b1.RoPE, **t.bindings) for t in ROPES)
-    assert TR.word_of(GPTJ_HEAD) == bind(ref_prims.RoPEHeadGptJV2, D=64)
-    assert all(TR.word_of(t) == bind(ref_prims.RoPEGptJV2, **t.bindings) for t in GPTJ)
+    assert TR.word_of(GPTJ_HEAD) == bind(R.RoPEHeadGptJV2, D=64)
+    assert all(TR.word_of(t) == bind(R.RoPEGptJV2, **t.bindings) for t in GPTJ)
 
 
 @pytest.mark.parametrize("d", HALVES, ids=lambda d: d.name)
