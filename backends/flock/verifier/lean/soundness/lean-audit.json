@@ -12035,7 +12035,9 @@
   "FlockSoundness.Discharge.ZkReg.zk_flock_drawnC_cr": {},
   "FlockSoundness.Discharge.ZkReg.zk_flock_regValsC_cr": {},
   "FlockSoundness.Discharge.ZkReg.zk_headline_exec_drawn": {},
+  "FlockSoundness.Discharge.ZkReg.zk_session_drawnHR": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_drawnR": {},
+  "FlockSoundness.Discharge.ZkReg.zk_session_regValsHR": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_regValsR": {},
   "FlockSoundness.Discharge.ZkReg.zk_session_soundHR": {
    "signature": [
