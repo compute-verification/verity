@@ -210,8 +210,9 @@ at any `w0`) are within `2·|LeafPos|·2^-193 + 2·(m − 13)·2^-128`, both way
 second is the coins with a zerocheck outer coin `1` (`CoinedSetup.Covered`), the only ones where the view is not
 simulated.
 
-For an untyped statement (`ht`) whose Δ and regions avoid the mask slot (`avoidsMask`), and for any prover of Ligerito's
-levels ≥ 1 (`LigProver`), as `Composed.zk_session_view`. -/
+For an untyped statement (`ht`) whose Δ and regions avoid the mask slot (`avoidsMask`, a named hypothesis until the
+verifier's D3 refusal in `Net.ofRows` discharges it), and for any prover of Ligerito's levels ≥ 1 (`LigProver`), as
+`Composed.zk_session_view`. -/
 theorem zk_session_view_all (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)

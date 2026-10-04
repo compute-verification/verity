@@ -55,8 +55,9 @@ every coin vector the honest prover doesn't refuse (`refused_coins`; `CoinedSetu
 `ρ₀, ρ₁` independent) with no zerocheck outer coin `1` (`CoinedSetup.Covered`), the verifier's view of the draw's table at the executable's leaves, at any valid witness whose
 registered values are the public ones, is within `2·|Hid|·2^-193` of `S_shvzk`'s at any `w0`, both ways.
 
-For an untyped statement (`ht`, as every soundness theorem) whose Δ and regions avoid the mask slot (`avoidsMask`, a condition
-the honest prover checks on the statement it builds), and for any prover of Ligerito's levels ≥ 1 (`LigProver`).
+For an untyped statement (`ht`, as every soundness theorem) whose Δ and regions avoid the mask slot (`avoidsMask`, a named
+hypothesis that no check implies yet, until the verifier's D3 refusal in `Net.ofRows` discharges it), and for any prover
+of Ligerito's levels ≥ 1 (`LigProver`).
 
 Coverage: covered coins only. An outer coin `1` is a bad event of probability at most `(m − 13)·2^-128` per rep, which
 the prover doesn't refuse and this doesn't charge. At a refused coin the honest prover stops (`flock-circuit.rs`'s `refused_coins`:
