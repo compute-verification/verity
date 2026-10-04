@@ -1538,7 +1538,9 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
     rd = rec["remote_run_dir"]
     if everything:
-        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && tar -cf - ."]
+        # tar exits 1 when a file changed as it read it (a running run's resources.jsonl): every member is still in the stream,
+        # and the hashes below judge what is preserved
+        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && {{ tar -cf - .; rc=$?; [ $rc -eq 1 ] && rc=0; exit $rc; }}"]
     else:
         names = " ".join(shlex.quote(n) for n in SMALL_FILES)
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && ls {names} 2>/dev/null | tar -cf - -T -"]

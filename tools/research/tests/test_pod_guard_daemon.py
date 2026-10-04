@@ -442,6 +442,20 @@ def test_fetch_all_with_a_mismatch_writes_no_marker(tmp_path, monkeypatch):
     assert rec["preserve_error"]["mismatched_or_missing"] == ["a.txt"]
 
 
+def test_fetch_all_of_a_run_whose_file_changed_mid_read_still_observes_it(tmp_path, monkeypatch):
+    """GNU tar exits 1 when a file grows while it reads it, as a running run's resources.jsonl does; the copy is still whole."""
+    d, local = _fake_machine(tmp_path, monkeypatch, {"out/a.json": b"{}", "status.json": b'{"state": "running"}'})
+    real = subprocess.run(["sh", "-c", "command -v tar"], capture_output=True, text=True, check=True).stdout.strip()
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "tar").write_text(f"#!/bin/sh\n{real} \"$@\"\necho 'tar: ./resources.jsonl: file changed as we read it' >&2\nexit 1\n")
+    (bin_ / "tar").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    rec = remote.fetch(local, everything=True)
+    assert "last_fetch_error" not in rec and rec["last_observed"]["state"] == "running", rec
+    assert (local / "out" / "a.json").read_bytes() == b"{}"
+
+
 def test_fetch_all_streams_the_run_instead_of_holding_it(tmp_path, monkeypatch):
     blob = os.urandom(1 << 20) * 24                 # 24 MiB
     d, local = _fake_machine(tmp_path, monkeypatch, {"big.bin": blob})
