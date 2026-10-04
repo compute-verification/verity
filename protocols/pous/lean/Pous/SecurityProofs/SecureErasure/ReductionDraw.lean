@@ -4,8 +4,8 @@ import Pous.SecurityProofs.SecureErasure.Reduction
 # Secure erasure from the sequential audit, over any read draw
 
 `Pous.Guarantees.SecureErasureMeetsDraw`: `secure_erasure_meets` with the read indices `rd r` for a uniform `r : R`.
-The proof is that one, line for line: it never looks at how the indices are drawn. `auditSecure_iff_draw` shows the
-draw `id` on `Fin s → Fin B` is the with-replacement audit.
+The proof is that one, line for line: it never looks at how the indices are drawn. `auditSecure_iff_draw` and
+`eraseSecure_iff_draw` show the draw `id` on `Fin s → Fin B` is the with-replacement audit and erasure game.
 -/
 
 namespace PousErase
@@ -18,6 +18,12 @@ variable {M : IdealModel}
 /-- The with-replacement sequential audit is the audit over the draw `id`. -/
 theorem auditSecure_iff_draw (sch : Scheme M) (S D Q s : ℕ) (δ ε : ℝ≥0∞) :
     AuditSecure sch .sequential S D Q s δ ε ↔ AuditSecureDraw sch (id : (Fin s → Fin sch.B) → _) S D Q δ ε :=
+  Iff.rfl
+
+/-- The with-replacement secure-erasure audit is the one over the draw `id`. -/
+theorem eraseSecure_iff_draw (sch : Scheme M) {K V : Type} [Fintype K] (dig : K → sch.Code → V) (S S_φ D Q s : ℕ)
+    (ε : ℝ≥0∞) :
+    EraseSecure sch dig S S_φ D Q s ε ↔ EraseSecureDraw sch (id : (Fin s → Fin sch.B) → _) dig S S_φ D Q ε :=
   Iff.rfl
 
 theorem secure_erasure_meets_draw : Pous.Guarantees.SecureErasureMeetsDraw := by

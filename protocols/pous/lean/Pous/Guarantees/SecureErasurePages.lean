@@ -77,8 +77,9 @@ volatile memory, on-chip SRAM and host DRAM included: memory outside the fill ad
 The numbers: the union term is at most `2^-130` once a prediction may be wrong on `w = 30324·P` bytes
 (`94^30324 · 2^(7947103 + 8·30324 + 142) ≤ 2^(2^23)` per page, with `C(B, w) ≤ (e·B/w)^w`), and the sampling term
 `((2^20 − 30324)/(2^20 − 3429))^3430 ≤ 2^-129` at the worst case `P = 1`; the foreign content's count is at most
-`3430 · 2^-256 ≤ 2^-130`. A read is right with probability up to about `0.9711` for large `P`, not `18/19`: a byte
-not held is guessed with probability `2^-8`, and a memory of `18/19` of the fill can hold a lossy summary of all of it.
+`3430 · 2^-256 ≤ 2^-130`. The bound charges each read up to about `0.9711` for large `P`, not `18/19`: it allows for a
+byte not held being guessed with probability `2^-8`, and for a memory of `18/19` of the fill holding a lossy summary of
+all of it.
 
 It rests on the ideal-permutation model of the pages (P3's idealization) and the `D = 0` deadline; no named assumption
 and no bandwidth-separation premise. Proof: `PousErase.secure_erasure_pages_family`. -/
@@ -101,7 +102,7 @@ memory, its on-chip SRAM and any host DRAM, adds to what a prover can keep.
 
 Cite it as "cannot keep it through all the reads", for a verifier that draws 3046 distinct byte reads, each within a
 `T_read` below one page's recomputation (1.7352 ms for 1 MiB pages; `D = 0`). The numbers: `w = 30335·P` wrong bytes
-(`(9397/100)^30335 · 2^(7947103 + 8·30335 + 2) ≤ 2^(2^23)` per page, so the union term is at most `2^(-2P) ≤ 2^-130`),
+(`(9397/100)^30335 · 2^(7947103 + 8·30335 + 2) ≤ 2^(2^23)` per page, so the union term is at most `3046 · 2^(-2P) ≤ 2^-130`),
 `((2^20 − 30335)·96112 / (2^20·96112 − 3045))^3046 ≤ 2^-129`, and the foreign content's count `3046 · 2^-256 ≤ 2^-130`.
 Same footing as the family: the ideal-permutation model of the pages and the `D = 0` deadline, no named assumption.
 Proof: `PousErase.secure_erasure_pages_96112`. -/
