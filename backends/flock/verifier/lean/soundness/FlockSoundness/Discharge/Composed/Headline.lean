@@ -60,9 +60,8 @@ the honest prover checks on the statement it builds), and for any prover of Lige
 
 Coverage: covered coins only. An outer coin `1` is a bad event of probability at most `(m − 13)·2^-128` per rep, which
 the prover doesn't refuse and this doesn't charge. At a refused coin the honest prover stops (`flock-circuit.rs`'s `refused_coins`:
-`at_open` returns `Err` before any `ŝ` leaves), and this says nothing about the view there. The follow-up is the proof
-at every coin vector, through `ZK.Session.session_prefinal_indep_cut` (Lemma A cut where the session stops)
-(`ASSUMPTIONS.md`, open items). -/
+`at_open` returns `Err` before any `ŝ` leaves), and this says nothing about the view there. The statement at every coin
+vector, which charges the outer coins `1`, is `ZkEveryCoin.zk_session_view_all`. -/
 theorem zk_session_view (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)

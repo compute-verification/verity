@@ -20,7 +20,8 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 
 Soundness rests on four. Three are `Prop`s in `FlockSoundness/Assumptions.lean`, taken as hypotheses: SHA-512's
 collision resistance in two forms, and the Lean verifier's randomness for the unit draw (Daniel, Sep 30). The fourth, A6,
-is the coin server's randomness for the round coins, which the model embodies (A6, below). The development declares no
+is the coin server's randomness for the round coins, which the model embodies (A6, below). The table's last row is zero
+knowledge's, not soundness's: a model claim about the honest prover. The development declares no
 `axiom`. So a mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
 
 | `Prop` | Claim id | Bound | Taken for |
@@ -29,6 +30,7 @@ is the coin server's randomness for the round coins, which the model embodies (A
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
 | `Assumptions.UniformRandomBytes` (A3) | `uniform/io-getrandombytes` | every event has its probability for uniform bytes | the unit draw (`ht`; `hA3` in the headline) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, drawn after the prover's message | the round coins |
+| none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P` |
 
 Both collision-resistance `Prop`s are **per finder, and per prover**. Some finder outputs a collision after no
 evaluations, since collisions exist, so neither is stated for all finders: each theorem takes it for the finders it builds
@@ -224,16 +226,20 @@ A6, which no check of the record establishes.
 Not soundness's: the PoUW window's keyed draw takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
 prove. Zero knowledge's two (`Hm96Hiding`, `PadNonvanishing`) are in `FlockSoundness/Assumptions.lean` and
 `docs/zk-proof-public.md`. `Hm96Hiding` is now proved for hm96 at a bound on its gap (`CROnly.hm96Hiding_gap`; for
-hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, below), while zero knowledge still takes
-`hash-derived-key` for the pinned key and `PadNonvanishing`. `hash-derived-key` is `Assumptions.HashDerivedKey`: `Hm96Hiding` at `2^-193`, instantiated at hm96-sha512's
+hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, below), and `PadNonvanishing` is proved at
+M1's padding constant (`ZK.padNonvanishing40`: `Ŵ_cols(ω_q)` is 0 or 1, and `PAD_C = x` is neither), so zero knowledge
+takes only `hash-derived-key` for the pinned key. `hash-derived-key` is `Assumptions.HashDerivedKey`: `Hm96Hiding` at `2^-193`, instantiated at hm96-sha512's
 `ZkView.My` and `ZkView.saltHash` (`Composed.zk_session_composed`).
-Open item (zero knowledge's coverage): `Composed.zk_session_view` holds at the coin vectors the honest prover doesn't
+Zero knowledge's coverage (was open): `Composed.zk_session_view` holds at the coin vectors the honest prover doesn't
 refuse (`refused_coins` in `flock-circuit.rs`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank `128·k`, `ρ₀, ρ₁`
 independent over F128; the verifier also checks `β` and `ρ`) with no zerocheck outer coin `1` (`CoinedSetup.Covered`),
-and says nothing about the view at the others. The prover already stops at a refused coin (`at_open` returns `Err`
-before any `ŝ` leaves); an outer coin `1` it doesn't refuse (`inv 0 = 0` in the residual round), a bad event of
-probability at most `(m − 13)·2^-128` per rep. What is open is the proof at every coin vector, through
-`ZK.Session.session_prefinal_indep_cut` (Lemma A cut where the session stops), charging that bad event to `δ`.
+and says nothing about the view at the others. `ZkEveryCoin.zk_session_view_all` holds at every coin vector, with the
+coins uniform. At a refused coin the prover stops (`at_open` returns `Err` before any `ŝ` leaves), and the simulator
+outputs the honest prefix on the dummy witness, within `2·|LeafPos|·2^-193` (`ZK.Table.table_abort_hm96`: Lemma A at
+every coin vector and T1 on every pre-final leaf). At an outer coin `1` the prover doesn't refuse (`inv 0 = 0` in the
+residual round) the view is not simulated, and the theorem charges those coins' probability, at most `(m − 13)·2^-128`
+per rep (`uncovered_le`), to its bound: `2·|LeafPos|·2^-193 + 2·(m − 13)·2^-128`, both ways. So that mass is no longer
+outside the statement.
 - A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
 - A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
 - `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding
