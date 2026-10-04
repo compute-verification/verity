@@ -20,11 +20,13 @@ generic over the hash). The legacy module (pure-block, IR frame) is not written 
 every session with `refused: <why>: a statement form the soundness proof does not cover` (`Flock.ProvedScope.check`).
 That refuses every version before `hm96-sha512` rows, the typed statements, public input ports, several tables without
 `--zk`, shared-row public files, and circuits outside `Layout.scopeOk` (a unit reading more than one input group, a tail
-that computes the outputs, among others). Those statements still parse and set up (`statement` prints their digest and
-Σ), and the agreement check expects the refusal of them (D12, `vectors.json`'s `lean_refuses`). A session drawn by a law
-no soundness claim draws by is refused too, with `refused: <why>: no soundness claim draws by this law`
-(`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with or without a closure, and a subset draw without `--zk`
-(`lean_refuses_drawn`).
+that computes the outputs, among others), except, at a `--zk` statement with hidden outputs, a circuit in the canonical
+I/O format whose unit returns the outputs (§16.16's V1, `Flock.ProvedScope.canonicalOk`). Those statements still parse
+and set up (`statement` prints their digest and Σ), and the agreement check expects the refusal of them (D12,
+`vectors.json`'s `lean_refuses`). A session drawn by a law no soundness claim draws by is refused too, with `refused:
+<why>: no soundness claim draws by this law` (`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with or without
+a closure, a subset draw without `--zk`, and a stratified draw at a statement only the canonical format admits
+(`Flock.ProvedScope.canonicalLaw`; `lean_refuses_drawn`).
 
 ## Build and run
 

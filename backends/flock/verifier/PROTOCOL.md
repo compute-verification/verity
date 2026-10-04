@@ -1502,29 +1502,36 @@ first rule it fails:
 7. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
    outputs (`a circuit whose outputs a tail stage computes (META out_net)`), of at most `2^32` rows, whose computed rows
    read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
-   `sha512/row/v1` row of `16 · words` bits in at least one chunk.
+   `sha512/row/v1` row of `16 · words` bits in at least one chunk; or, at a `--zk` statement with hidden outputs, the
+   canonical format with the unit returning the outputs (§16.16's V1, `ProvedScope.canonicalOk`). There, a circuit with a
+   `sha512/row/v2` row is refused with the first of V1's reasons it fails, and any other with this rule's.
 
 Before those rules, a session whose statement sets up is refused when no soundness claim draws by its draw's law
 (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified law, with or without
 `--zk`, and under `--zk` by the subset law (`FailClosed.SoundZJ`, `SoundZHJ`). The verdict is `refused: <why>: no
 soundness claim draws by this law`, `<why>` one of `a bernoulli draw`, `a work draw`, `a work draw with a closure` and
-`a subset draw without --zk`. A session without a draw is verified against the population's statement and meets
-neither refusal; no claim covers it yet (each claim's record hypothesis reads the record's draw).
+`a subset draw without --zk`. At a statement only the canonical format admits (rule 7's second form), a stratified draw
+is refused too (`ProvedScope.canonicalLaw`: `a stratified draw at a canonical statement`): the canonical claim draws by
+the subset law. A session without a draw is verified against the population's statement and meets neither refusal; no
+claim covers it yet (each claim's record hypothesis reads the record's draw).
 
-The soundness package proves `scopeOk` the computable check (`FailClosed.scopeOk_eq`), and `FailClosed.*`'s headlines
-are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
-the one theorem: at every statement, with or without `--zk`, it states the headline of the statement's case (public or
-hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several). The live server refuses the same
+The soundness package proves `scopeOk` the computable check (`FailClosed.scopeOk_eq`) and `canonicalOk` the canonical
+format (`Canonical.parse_formatOk`), and `FailClosed.*`'s headlines and `Canonical.zk_session_sound_canonical` are over
+`Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is the one
+theorem: at every statement, with or without `--zk`, it states the headline of the statement's case (public or hidden
+outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several, and at hidden outputs `Layout.scopeOk` or
+the canonical format). The live server refuses the same
 statements with the same reason (`backends/flock/live`'s `proved_scope`): its verdict is the refusal, and
 `without_refusal` keeps the session's verdict otherwise.
 
-### 16.16 The canonical I/O format (target; V1 enforces it)
+### 16.16 The canonical I/O format (V1 accepts it under `--zk` at hidden outputs)
 
 One row format for everything an untyped §16.13 statement registers, so a new workload needs no verifier or proof change.
-It narrows §16.10 and §16.13, and V1 (below) makes the verifier refuse every untyped circuit outside it. The soundness
-package states its binding and the session headline at this format (`FlockSoundness/Discharge/Canonical/`), outside the
-root import, so §17.4 is unchanged. The headline is proved from V1's `parse_formatOk`, which is `sorry` until V1 lands, and
-the three statements of `Canonical/Gaps.lean` are `sorry`.
+It narrows §16.10 and §16.13. V1 (below) is in §16.15's statement check: at a `--zk` statement with hidden outputs, a
+circuit outside `Layout.scopeOk` is accepted exactly when it is in this format and its unit returns the outputs. The
+soundness package states its binding and the session headline at this format (`FlockSoundness/Discharge/Canonical/`),
+all of it under the root import but `Gaps.lean`. The headline (`zk_session_sound_canonical`, and `SoundZHJC` in
+`FailClosed.flock_verify_sound`) is proved from V1 (`parse_formatOk`); the three statements of `Gaps.lean` are `sorry`.
 
 - **Rows.** Every row, input or output, is §16.10's bit row (`hm96-sha512/row/v2`) at its own `ℓ < 2^64`:
   `x = SHA-512(P(ℓ) ‖ bytes)`, `B = ⌈ℓ/8⌉` bytes, bits low first, fill bits zero, then SHA-512's own padding
@@ -1539,13 +1546,13 @@ the three statements of `Canonical/Gaps.lean` are `sorry`.
   bits for the run's `w` words. Bit `16k + t` is bit `t` of the run's word `k`, as the returning net (the unit, or a tail's
   last stage) computes it. That is the row a reader of the run as one input port commits (§16.13 linking). There is no
   zero-padded output row.
-- **Shared rows** (§16.10 `shared_rows`) are tables of rows in this form, and nothing changes for them. Public input ports are
+- **Shared rows** (§16.10 `shared_rows`) are tables of rows in this form, and nothing changes for them. The headline covers
+  them (`Canonical/Shared.lean`); the check still refuses a shared-row public file (§16.15 rule 6). Public input ports are
   in the format (a public leaf is a zero leaf of `leaves_in`), but the session headline doesn't cover them yet. Registered
   reads (§16.10) require `v1` rows until V3. `Canonical/Gaps.lean` states what each of these needs, and what a tail's
   outputs need.
-- **VUs.** `vus_per_block` is a power of two for every circuit. `Digest(p)` has `⌊log₂ G⌋` free VU bits, so its claim
-  reaches only the VUs below `2^⌊log₂ G⌋`. §16.10 checks the power of two only when the unit returns the outputs, so
-  today a tail that returns them at `G = 3` is parsed, and VU 2's `b ‖ c` lies outside the region's VUs.
+- **VUs.** `vus_per_block` is a power of two for every circuit (D9, §16.10; `formatOk`'s `vusPow2` restates it).
+  `Digest(p)` has `⌊log₂ G⌋` free VU bits, so its claim reaches only the VUs below `2^⌊log₂ G⌋`, which is every VU.
 - **Instances and retirements.**
   - A §16.13 `v2` statement whose output rows are exact is already an instance.
   - `hm96-sha512/row/v1` rows and zero-padded output rows retire. They have other prefixes, so a workload that moves
@@ -1554,13 +1561,22 @@ the three statements of `Canonical/Gaps.lean` are `sorry`.
     Daniel rules on it. Keeping it costs one lemma family. Each segment is a row's chain under its own prefix, ending
     in a plain SHA-512 digest instead of `hm96`, and the outer row's message bits are wired from those digests.
   - Typed statements (§16.11) are outside the format.
-- **V1.** After `checkRows`, `HmOut.parse` and `flock-verify`'s twin refuse an untyped circuit that fails
-  `Canonical.formatOk`, one refusal per conjunct:
-  - `rowOk`: every row `v2` and unsegmented;
-  - `outRowsExact`;
-  - `readsRows` and `portReadsB`;
-  - `unit_log ≤ 32`;
-  - `vusPow2`.
+- **V1.** `ProvedScope.canonicalOk`: `--zk`, hidden outputs, the unit returning the outputs (`a circuit whose outputs a
+  tail stage computes (META out_net)`; a tail waits for V2) and `ProvedScope.formatOk`, the executable
+  `Canonical.formatOk`, each conjunct with its reason:
+  - `rowOk`: every row `v2` and unsegmented (`a row that is not an unsegmented sha512/row/v2 row, in a circuit with
+    sha512/row/v2 rows`);
+  - `outRowsExact` (`an output row that is not exactly its output ports' bits`);
+  - `cutsCovered`: every cut port of every copy has a leaf cut, which at a parsed circuit is `readsRows`
+    (`Canonical.readsRows_of_cutsCovered`; `a unit input wired from another net's output, not a row bit`), and
+    `portReadsB` (`a unit row reading an input column that is not a port bit`);
+  - `unit_log ≤ 32` (`a unit of 2^<k> rows`);
+  - `vusPow2` (`a vus_per_block that is not a power of two`).
+
+  Public input ports (§16.15 rule 5), registered reads (`checkRegistered`, and rule 6 against the shared-row public file
+  `Registered.check` needs) and typed statements stay refused. `flock-verify`'s twin (`backends/flock/live`'s `proved_scope`) refuses the same with the same reasons; its
+  statements all have hidden outputs, so it checks the format exactly under `--zk`. No claim draws stratified there:
+  `ProvedScope.canonicalLaw` refuses that draw (§16.15).
 - **V2** (a tail's outputs). The verifier walks each VU's output cone over the block's `A₀`, `B₀` and Δ, and refuses a
   cycle or a column that is neither pinned (the pin, a region bit), an input row's data bit, nor computed from such
   columns. Main accepts any wiring of the right widths, so a tail's outputs need not be a function of its inputs. A
