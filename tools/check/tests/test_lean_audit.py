@@ -24,21 +24,23 @@ spec = importlib.util.spec_from_file_location("check_for_test_lean_audit", ROOT 
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
-#: a stand-in for tools/lean/audit.py --all --build --root R --out O: each package fails when a file its policy names under
-#: "reads" is missing (an input the key would not cover), fetches its git dependencies into .lake/packages, and notes what ran
+#: a stand-in for tools/lean/audit.py --build PKG... --out O, run in the scratch tree: each named package fails when a file its
+#: policy names under "reads" is missing (an input the key would not cover) or a package it requires by path is not in the tree,
+#: fetches its git dependencies into .lake/packages, and notes what ran
 FAKE_AUDIT = r'''
 import json, sys
 from pathlib import Path
 a = sys.argv[1:]
-root, out = Path(a[a.index("--root") + 1]), Path(a[a.index("--out") + 1])
+root, out = Path.cwd(), Path(a[a.index("--out") + 1])
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo"))]
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 reps, failed = [], []
-for pol in sorted(root.rglob("lean-audit.json")):
-    pkg = pol.parent
-    if "tools/lean" in str(pkg):
-        continue
+for pkg in named:
+    pol = pkg / "lean-audit.json"
     missing = [r for r in json.loads(pol.read_text()).get("reads", []) if not (root / r).exists()]
+    missing += [d["dir"] for d in json.loads((pkg / "lake-manifest.json").read_text())["packages"]
+                if d["type"] == "path" and not (pkg / d["dir"] / "lean-audit.json").exists()]
     deps = pkg / ".lake" / "packages" / "dep"
     warm = (deps / "built").exists()
     if json.loads((pkg / "lake-manifest.json").read_text())["packages"]:
@@ -89,8 +91,8 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     rc, ran, doc = _run(tmp_path, 1)
     assert rc == 1 and sorted(ran) == ["pkg/a cold", "pkg/b cold"] and doc["failed"] == ["pkg/b"] and doc["cached"] == {}
     (root / "pkg/b/lean-audit.json").write_text("{}")
-    rc, ran, doc = _run(tmp_path, 2)                   # a reused; b (and a, its path dependency) audited, a's dependencies warm
-    assert rc == 0 and sorted(ran) == ["pkg/a warm", "pkg/b cold"] and list(doc["cached"]) == ["pkg/a"]
+    rc, ran, doc = _run(tmp_path, 2)                   # a reused; only b audited, with a, its path dependency, in its tree
+    assert rc == 0 and ran == ["pkg/b cold"] and list(doc["cached"]) == ["pkg/a"]
     rc, ran, doc = _run(tmp_path, 3)                   # nothing changed: nothing runs
     assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"] and doc["passed"]
     (root / "pkg/a/A.lean").write_text("theorem a : True := by trivial\n")

@@ -16,7 +16,8 @@ that round's conditional miss probability, `q h ≤ Pr_a[X h a]`, fixed by the h
   `Pr[#misses ≤ f ∧ s ≤ Σ_j q_j] ≤ exp(θ·f − (1 − e^−θ)·s)`   (`pr_misses_le`),
 
 and at `s` just above `G(f) = inf_{θ > 0} (θ·f + ln(1/β)) / (1 − e^−θ)` the right side is `β`
-(`pr_misses_gt_le`). `G(f) = n·g(f)` for the explorer's `g(f) = G(f)/(λT)` at `n = λT` challenges.
+(`pr_misses_gt_le`). Per challenge, `g(f) = G(f)/N` at the realized number `N` of challenges, never `G(f)/(λT)`
+(`Pous/Protocol/Model/Continuous.lean`).
 
 The proof is the exponential supermartingale `exp(−θ·#misses + (1 − e^−θ)·Σ q)`: one round multiplies its mean by
 `e^{(1 − e^−θ) q}·(1 − (1 − e^−θ)·p) ≤ 1` when `q ≤ p` (`sum_exp_le`), and Markov's inequality does the rest. A history

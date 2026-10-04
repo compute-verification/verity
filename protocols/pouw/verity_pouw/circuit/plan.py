@@ -17,9 +17,9 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
   a **window's** budget: a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units, and its y cells at the
   floor ⌈K_y·n_c/N⌉ of the window's N, K_y = K (`window_laws`, root's option B on X-SPC-105).
 
-**The tile checks' layout** (`tile_layout`, `pc4` and `pc8`) is beside it: a drawn tile's closure is its rows' `RowA`
-units in the call (TM, or `pc8`'s short last tile row's r), and its TN `RowB` units in the weight's Program (``b_rows``),
-each once per plan (`Plan.proved_b`); its W_ref is the caller's (the tile's cells' share of the scheme's).  It opens
+**The tile checks' layout** (`tile_layout`, `pc4` and `pc8`) is beside it: a drawn tile's closure is its rows' units
+in the call (`RowA`, or `rowk`'s pieces; TM rows, or `pc8`'s short last tile row's r), and its TN rows' units in the
+weight's Program (``b_rows``), each once per plan (`Plan.proved_b`); its W_ref is the caller's (the tile's cells' share of the scheme's).  It opens
 nothing: its rows are C-Flock-committed ports.
 
 **Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
@@ -269,22 +269,27 @@ def layout(shape: Shape, kind: str = "shift24") -> Layout:
 
 def tile_layout(shape, w_ref: int) -> Layout:
     """A tile check's layout (`pc4.Shape` or `pc8.Shape`), from the shape alone: the call's units and strata, each tile's
-    closure (itself, then its rows' `RowA` units: TM, or a short last tile row's r) and its TN `RowB` units in the weight's
-    Program, at W_ref ``w_ref`` a whole tile.  A short tile is its own template's stratum at its rows' share of that,
-    w_ref·r/TM, which must be whole; a call with whole and short tiles is then two tile strata, which the work law refuses
+    closure (itself, then its rows of A's units: TM, or a short last tile row's r) and its TN rows of B's units in the
+    weight's Program, at W_ref ``w_ref`` a whole tile.  A row's units are its `RowA` (`RowB`) unit, or with ``row_k`` its
+    head, forms and tail (`rowk`).  A short tile is its own template's stratum at its rows' share of that, w_ref·r/TM, which
+    must be whole; a call with whole and short tiles is then two tile strata, which the work law refuses
     (`check_work_strata`)."""
     from . import pc4, pc8
 
     mod = pc8 if isinstance(shape, pc8.Shape) else pc4
     us, ws = mod.units(mod.call(shape)), mod.units(mod.weight(shape))
     tm, tn = shape.tile
-    row_a = {u.where[0]: u.index for u in us if u.role == "row_a"}
-    row_b = {u.where[0]: u.index for u in ws if u.role == "row_b"}
+    row_a: dict[int, list[int]] = {}
+    row_b: dict[int, list[int]] = {}
+    for rows, side, units_ in ((row_a, "row_a", us), (row_b, "row_b", ws)):
+        for u in units_:
+            if u.role.startswith(side):
+                rows.setdefault(u.where[0], []).append(u.index)
     closure, b_rows = {}, {}
     for t in (u for u in us if u.role == "tile"):
         rs, cs = t.where
-        closure[t.index] = (t.index, *(row_a[i] for i in range(rs * tm, min(shape.m, (rs + 1) * tm))))
-        b_rows[t.index] = tuple(row_b[cs * tn + j] for j in range(tn))
+        closure[t.index] = (t.index, *(a for i in range(rs * tm, min(shape.m, (rs + 1) * tm)) for a in row_a[i]))
+        b_rows[t.index] = tuple(b for j in range(tn) for b in row_b[cs * tn + j])
     strata, r = template_strata(us, w_ref), shape.m % tm
     if r:
         if w_ref * r % tm:
