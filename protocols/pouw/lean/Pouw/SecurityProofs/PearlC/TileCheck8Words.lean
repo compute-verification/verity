@@ -1,5 +1,6 @@
 import Pouw.SecurityProofs.PearlC.TileCheck8
 import Pouw.SecurityProofs.PearlC.TileProtocol
+import Pouw.SecurityProofs.PearlC.TileGamma
 
 /-!
 # `pc8`'s tile check computes the words (proofs)
@@ -18,6 +19,14 @@ On them a row unit's codes are `pc8Sem`'s (`quant8`, so `quant8A`/`quant8B` are 
 factor row is the peel's (`row8A_paWords`, `row8B_pbWords`). `entry8_words` chains RowA `i` and RowB `j` into their
 tile (`TileCheck8`'s `chain8_*`): where the three units are correct and the peel's factor rows exist, entry `(i, j)`'s
 `C̃` and `U` are the device's ticket and useful words (`tile_devAt`).
+
+On the whole table a gate holds its assignment's low bits at its width (`val_in8`, `val_tile8`), so where the public
+gates hold the anchors (`anchors8`) and the registered gates `rows8`'s values, an entry's registered words are the
+device's (`entry8_accepts`). `tileCheck8_computesWords` is L3's words for the plain `pc8` Program, with `Collides` never
+used: on tile rules whose tiles lie in their unit and a domain of whole-tile shapes (`Shape8`), under `Pc8OpsAgree` and
+the named hypotheses at each entry of a credited row (`Pc8EntryOK`, which includes that the peel's factor rows exist);
+`tileCheck8_computesWords_pearlC` is it on the audit's tiles. The cap is not part of it: its verdict is a separate
+conjunct, decided by units of its own.
 -/
 
 namespace Pouw.PearlC.WholeCircuit
@@ -609,5 +618,412 @@ theorem entry8_words (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw : 
   exact ⟨h1, h2⟩
 
 end Entry8
+
+/-! ## The anchors and the registered values, region by region -/
+
+section Regions8
+
+variable (p : Pipeline)
+
+theorem layout8 (M N K : ℕ) : bAt M K = eaAt M K + 32 * M ∧ ebAt M N K = bAt M K + N * K ∧
+    faAt M N K = ebAt M N K + 32 * N ∧ fbAt M N K = faAt M N K + 32 * K ∧ gAt M N K = fbAt M N K + 32 * K ∧
+    in8 M N K = gAt M N K + 1024 := by
+  unfold eaAt bAt ebAt faAt fbAt gAt in8
+  exact ⟨by ring, by ring, by ring, by ring, by ring, rfl⟩
+
+theorem encCodes_lt8 {r : ℕ} (e : Fin r → ℚ) (l : ℕ) : encCodes e l < 2 ^ 8 := by
+  unfold encCodes
+  split_ifs
+  · exact (e4m3 _).isLt
+  · norm_num
+
+theorem gram8_lt {m n k : ℕ} (z : Noise m n k Params.pi.r) (s q : ℕ) : gram8 p z s q < 2 ^ 32 := by
+  unfold gram8
+  split_ifs
+  · rcases h : chainWordP? p 4 _ with _ | c
+    · norm_num
+    · exact chainWordP?_lt h
+  · norm_num
+
+variable {m n k : ℕ} (z : Noise m n k Params.pi.r)
+
+theorem anchors8_ea {i l : ℕ} (hi : i < m) (hl : l < 32) :
+    anchors8 p z (eaAt m k + 32 * i + l) = encCodes (z.EA ⟨i, hi⟩) l := by
+  obtain ⟨h1, -⟩ := layout8 m n k
+  have hq : (eaAt m k + 32 * i + l - eaAt m k) / 32 = i := by omega
+  have hr : (eaAt m k + 32 * i + l - eaAt m k) % 32 = l := by omega
+  unfold anchors8
+  rw [ite_eq_right (by omega), ite_eq_left (by omega)]
+  simp only [hq, hr, hi, ↓reduceDIte]
+
+theorem anchors8_eb {j l : ℕ} (hj : j < n) (hl : l < 32) :
+    anchors8 p z (ebAt m n k + 32 * j + l) = encCodes (z.EB ⟨j, hj⟩) l := by
+  obtain ⟨h1, h2, h3, -⟩ := layout8 m n k
+  have hq : (ebAt m n k + 32 * j + l - ebAt m n k) / 32 = j := by omega
+  have hr : (ebAt m n k + 32 * j + l - ebAt m n k) % 32 = l := by omega
+  unfold anchors8
+  rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_left (by omega)]
+  simp only [hq, hr, hj, ↓reduceDIte]
+
+theorem anchors8_fa {t l : ℕ} (ht : t < k) (hl : l < 32) :
+    anchors8 p z (faAt m n k + 32 * t + l) = encCodes (z.FA ⟨t, ht⟩) l := by
+  obtain ⟨h1, h2, h3, h4, -⟩ := layout8 m n k
+  have hq : (faAt m n k + 32 * t + l - faAt m n k) / 32 = t := by omega
+  have hr : (faAt m n k + 32 * t + l - faAt m n k) % 32 = l := by omega
+  unfold anchors8
+  rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega),
+    ite_eq_left (by omega)]
+  simp only [hq, hr, ht, ↓reduceDIte]
+
+theorem anchors8_fb {t l : ℕ} (ht : t < k) (hl : l < 32) :
+    anchors8 p z (fbAt m n k + 32 * t + l) = encCodes (z.FB ⟨t, ht⟩) l := by
+  obtain ⟨h1, h2, h3, h4, h5, -⟩ := layout8 m n k
+  have hq : (fbAt m n k + 32 * t + l - fbAt m n k) / 32 = t := by omega
+  have hr : (fbAt m n k + 32 * t + l - fbAt m n k) % 32 = l := by omega
+  unfold anchors8
+  rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega),
+    ite_eq_right (by omega), ite_eq_left (by omega)]
+  simp only [hq, hr, ht, ↓reduceDIte]
+
+theorem anchors8_g {s q : ℕ} (hs : s < 32) (hq : q < 32) :
+    anchors8 p z (gAt m n k + 32 * s + q) = gram8 p z s q := by
+  obtain ⟨h1, h2, h3, h4, h5, h6⟩ := layout8 m n k
+  have hq' : (gAt m n k + 32 * s + q - gAt m n k) / 32 = s := by omega
+  have hr' : (gAt m n k + 32 * s + q - gAt m n k) % 32 = q := by omega
+  unfold anchors8
+  rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega),
+    ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_left (by omega), hq', hr']
+
+end Regions8
+
+section Rows8
+
+variable (p : Pipeline) {M N K TM TN : ℕ} (act wt tk us : Codes)
+
+theorem rows8_a {i l : ℕ} (hi : i < M) (hl : l < K) : rows8 p M N K TM TN act wt tk us (i * K + l) = act i l := by
+  have hK : 0 < K := by omega
+  unfold rows8
+  rw [ite_eq_left (show i * K + l < eaAt M K from mul_add_lt hi hl),
+    show (i * K + l) / K = i by rw [Nat.add_comm, Nat.add_mul_div_right _ _ hK, Nat.div_eq_of_lt hl, Nat.zero_add],
+    show (i * K + l) % K = l by rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hl]]
+
+theorem rows8_b {j l : ℕ} (hj : j < N) (hl : l < K) :
+    rows8 p M N K TM TN act wt tk us (bAt M K + j * K + l) = wt j l := by
+  have hK : 0 < K := by omega
+  obtain ⟨h1, h2, -⟩ := layout8 M N K
+  have := mul_add_lt hj hl
+  unfold rows8
+  rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_left (by omega),
+    show bAt M K + j * K + l - bAt M K = j * K + l by omega,
+    show (j * K + l) / K = j by rw [Nat.add_comm, Nat.add_mul_div_right _ _ hK, Nat.div_eq_of_lt hl, Nat.zero_add],
+    show (j * K + l) % K = l by rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hl]]
+
+/-- The registered value on a tile gate of entry `(i, j)`'s block: its ticket word at `C̃`, its useful word at `U`. -/
+theorem rows8_block {i j r : ℕ} (hTM : TM ∣ M) (hTN : TN ∣ N) (hi : i < M) (hj : j < N) (hr : r < blockLen K) :
+    rows8 p M N K TM TN act wt tk us
+        (tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (entryBase K TM TN (i % TM) (j % TN) + r)) =
+      if r = 5 * (K / 128) - 1 then tk i j else if r = blockLen K - 1 then us i j else 0 := by
+  obtain ⟨-, hie, hje⟩ := tile_index hTM hTN hi hj
+  have hti := Nat.mod_lt i (pos_of_dvd_lt hTM hi)
+  have htj := Nat.mod_lt j (pos_of_dvd_lt hTN hj)
+  have hbl := blockLen_pos K
+  have hL : tileN K TM TN - tileIn K TM TN = TM * TN * blockLen K := by unfold tileN; omega
+  have he := mul_add_lt (L := TN) hti htj
+  have hb := mul_add_lt (L := blockLen K) he hr
+  have hLp : 0 < TM * TN * blockLen K := by omega
+  have hg : tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (entryBase K TM TN (i % TM) (j % TN) + r) =
+      tiles8 p M N K + ((i / TM * (N / TN) + j / TN) * (TM * TN * blockLen K) +
+        ((i % TM * TN + j % TN) * blockLen K + r)) := by
+    unfold tile8 tiles8 entryBase; rw [hL]; omega
+  have hq1 : ((i / TM * (N / TN) + j / TN) * (TM * TN * blockLen K) + ((i % TM * TN + j % TN) * blockLen K + r)) /
+      (TM * TN * blockLen K) = i / TM * (N / TN) + j / TN := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ hLp, Nat.div_eq_of_lt hb, Nat.zero_add]
+  have hr1 : ((i / TM * (N / TN) + j / TN) * (TM * TN * blockLen K) + ((i % TM * TN + j % TN) * blockLen K + r)) %
+      (TM * TN * blockLen K) = (i % TM * TN + j % TN) * blockLen K + r := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hb]
+  have hq2 : ((i % TM * TN + j % TN) * blockLen K + r) / blockLen K = i % TM * TN + j % TN := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ hbl, Nat.div_eq_of_lt hr, Nat.zero_add]
+  have hr2 : ((i % TM * TN + j % TN) * blockLen K + r) % blockLen K = r := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hr]
+  have htn : 0 < TN := by omega
+  have hq3 : (i % TM * TN + j % TN) / TN = i % TM := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ htn, Nat.div_eq_of_lt htj, Nat.zero_add]
+  have hr3 : (i % TM * TN + j % TN) % TN = j % TN := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt htj]
+  obtain ⟨h1, h2, h3, h4, h5, h6⟩ := layout8 M N K
+  have ht8 : in8 M N K ≤ tiles8 p M N K := by unfold tiles8; omega
+  unfold rows8 entry8
+  rw [hg, ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega)]
+  simp only [Nat.add_sub_cancel_left, hL, hq1, hr1, hq2, hr2, hq3, hr3, hie, hje]
+
+theorem rows8_C {i j : ℕ} (hTM : TM ∣ M) (hTN : TN ∣ N) (hi : i < M) (hj : j < N) (hK : 0 < K / 128) :
+    rows8 p M N K TM TN act wt tk us (cGlob8 p M N K TM TN i j) = tk i j := by
+  have hcg : cGate K TM TN (i % TM) (j % TN) = entryBase K TM TN (i % TM) (j % TN) + (5 * (K / 128) - 1) := by
+    unfold cGate; omega
+  unfold cGlob8
+  rw [hcg, rows8_block p act wt tk us hTM hTN hi hj (by unfold blockLen; omega), ite_eq_left rfl]
+
+theorem rows8_U {i j : ℕ} (hTM : TM ∣ M) (hTN : TN ∣ N) (hi : i < M) (hj : j < N) :
+    rows8 p M N K TM TN act wt tk us (uGlob8 p M N K TM TN i j) = us i j := by
+  have hbl := blockLen_pos K
+  have hug : uGate K TM TN (i % TM) (j % TN) = entryBase K TM TN (i % TM) (j % TN) + (blockLen K - 1) := by
+    unfold uGate; omega
+  unfold uGlob8
+  rw [hug, rows8_block p act wt tk us hTM hTN hi hj (by omega), ite_eq_right (by unfold blockLen; omega),
+    ite_eq_left rfl]
+
+end Rows8
+
+/-! ## The gates' widths -/
+
+theorem tileGate_w (p : Pipeline) {K TM TN g : ℕ} (hg : tileIn K TM TN ≤ g) : (tileGate p K TM TN g).w = 32 := by
+  have h1 : ¬ g < (TM + TN) * K := by unfold tileIn at hg; omega
+  unfold tileGate
+  rw [ite_eq_right h1, ite_eq_right (not_lt.2 hg)]
+  unfold entryGate
+  split_ifs <;> rfl
+
+theorem val_bv {S : Spec} (X : S.toCircuit.Transcript) {g : ℕ} (hg : g < S.N) {v : ℕ}
+    (h : X ⟨g, hg⟩ = BitVec.ofNat _ v) : val X g = v % 2 ^ (S.gate g).w := by
+  rw [val_of_lt X hg, h, BitVec.toNat_ofNat]
+
+section Widths8
+
+variable (ops : RowOps) (p : Pipeline) {M K N TM TN : ℕ}
+
+theorem inW8_a {g : ℕ} (h : g < eaAt M K) : inW8 M N K g = 32 := by
+  unfold inW8; rw [ite_eq_left h]
+
+theorem inW8_e {g : ℕ} (h1 : eaAt M K ≤ g) (h2 : g < bAt M K) : inW8 M N K g = 8 := by
+  unfold inW8; rw [ite_eq_right (not_lt.2 h1), ite_eq_left h2]
+
+theorem inW8_b {g : ℕ} (h1 : bAt M K ≤ g) (h2 : g < ebAt M N K) : inW8 M N K g = 32 := by
+  obtain ⟨e1, -⟩ := layout8 M N K
+  unfold inW8; rw [ite_eq_right (by omega), ite_eq_right (not_lt.2 h1), ite_eq_left h2]
+
+theorem inW8_f {g : ℕ} (h1 : ebAt M N K ≤ g) (h2 : g < gAt M N K) : inW8 M N K g = 8 := by
+  obtain ⟨e1, e2, -⟩ := layout8 M N K
+  unfold inW8; rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (not_lt.2 h1), ite_eq_left h2]
+
+theorem inW8_g {g : ℕ} (h1 : gAt M N K ≤ g) : inW8 M N K g = 32 := by
+  obtain ⟨e1, e2, e3, e4, e5, -⟩ := layout8 M N K
+  unfold inW8; rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega)]
+
+theorem in8_le_N : in8 M N K ≤ (whole8 ops p M K N TM TN).spec.toCircuit.N := by
+  rw [whole8_N]; omega
+
+/-- An input gate's value is its assignment's low `inW8` bits. -/
+theorem val_in8 (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {g v : ℕ} (hg : g < in8 M N K)
+    (hgN : g < (whole8 ops p M K N TM TN).spec.toCircuit.N) (h : X ⟨g, hgN⟩ = BitVec.ofNat _ v) :
+    val X g = v % 2 ^ inW8 M N K g := by
+  rw [val_bv X hgN h]
+  show v % 2 ^ ((whole8 ops p M K N TM TN).gate g).w = _
+  unfold Whole.gate
+  rw [ite_eq_left (show g < (whole8 ops p M K N TM TN).nIn from hg)]
+  rfl
+
+theorem tile8_lt {e a : ℕ} (he : e < M / TM * (N / TN)) (ha1 : tileIn K TM TN ≤ a) (ha2 : a < tileN K TM TN) :
+    tile8 p M N K TM TN e a < (whole8 ops p M K N TM TN).spec.toCircuit.N := by
+  rw [tile8_eq ops p M K N TM TN]
+  exact (whole8 ops p M K N TM TN).inst_lt (whole8_T ops p M K N TM TN) he ha1 ha2
+
+/-- A tile gate's value is its assignment's low 32 bits. -/
+theorem val_tile8 (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {e a v : ℕ}
+    (he : e < M / TM * (N / TN)) (ha1 : tileIn K TM TN ≤ a) (ha2 : a < tileN K TM TN)
+    (h : X ⟨_, tile8_lt ops p he ha1 ha2⟩ = BitVec.ofNat _ v) : val X (tile8 p M N K TM TN e a) = v % 2 ^ 32 := by
+  rw [val_bv X _ h]
+  show v % 2 ^ ((whole8 ops p M K N TM TN).gate (tile8 p M N K TM TN e a)).w = _
+  rw [tile8_eq ops p M K N TM TN, (whole8 ops p M K N TM TN).gate_inst (whole8_T ops p M K N TM TN) he ha1 ha2]
+  show v % 2 ^ (tileGate p K TM TN a).w = _
+  rw [tileGate_w p ha1]
+
+omit ops p in
+theorem cGate_bounds {i j : ℕ} (hi : i < TM) (hj : j < TN) (hK : 0 < K / 128) :
+    tileIn K TM TN ≤ cGate K TM TN i j ∧ cGate K TM TN i j < tileN K TM TN := by
+  have hb := entry_bounds K TM TN hi hj (r := 5 * (K / 128) - 1) (by unfold blockLen; omega)
+  have hcg : cGate K TM TN i j = entryBase K TM TN i j + (5 * (K / 128) - 1) := by unfold cGate; omega
+  rw [hcg]; exact hb
+
+omit ops p in
+theorem uGate_bounds {i j : ℕ} (hi : i < TM) (hj : j < TN) :
+    tileIn K TM TN ≤ uGate K TM TN i j ∧ uGate K TM TN i j < tileN K TM TN := by
+  have hbl := blockLen_pos K
+  have hb := entry_bounds K TM TN hi hj (r := blockLen K - 1) (by omega)
+  have hug : uGate K TM TN i j = entryBase K TM TN i j + (blockLen K - 1) := by unfold uGate; omega
+  rw [hug]; exact hb
+
+end Widths8
+
+/-! ## An accepted entry -/
+
+/-- A whole-tile `pc8` shape: `64 ∣ m`, `64 ∣ n` (`pc8.Shape.check`), and `k` a positive multiple of 128. -/
+def Shape8 (sh : Shape) : Prop := 64 ∣ sh.m ∧ 64 ∣ sh.n ∧ ∃ nw, 0 < nw ∧ sh.k = 128 * nw
+
+/-- **The named hypotheses at entry `(i, j)`** of a unit with noise `z`, activations `act` and weights `wt`: `Row8OK` at
+row `i` of `act` and row `j` of `wt`, `Line8OK` at their noise lines, `CastWord` at their formed words, and the peel's
+factor rows exist (`peelRowsP`, which `devAt`'s useful word reads; where it fails the useful value is `none`). -/
+structure Pc8EntryOK (ops : RowOps) (p : Pipeline) {m n k : ℕ} (z : Noise m n k Params.pi.r) (act wt : Codes)
+    (i : Fin m) (j : Fin n) : Prop where
+  rowA : Row8OK ops k (act i)
+  rowB : Row8OK ops k (wt j)
+  lineA : Line8OK (betaQ8 ops k (act i)) (z.EA i)
+  lineB : Line8OK (betaQ8 ops k (wt j)) (z.EB j)
+  castA : ∀ t : Fin k, CastWord (formWord8 ops p (alphaQ8 ops k (act i)) (rowQ k (act i) t) (betaQ8 ops k (act i))
+    (z.EA i) (z.FA t))
+  castB : ∀ t : Fin k, CastWord (formWord8 ops p (alphaQ8 ops k (wt j)) (rowQ k (wt j) t) (betaQ8 ops k (wt j))
+    (z.EB j) (z.FB t))
+  peel : (PeelExactProofsP.peelRowsP p 4 (quant8A ops p z act) (quant8B ops p z wt) (basis8 z.FA) (basis8 z.FB)
+    (fun i => be8 (betaQ8 ops k (act i)) (z.EA i)) (fun j => be8 (betaQ8 ops k (wt j)) (z.EB j)) i j).isSome
+
+section Accept8
+
+variable {ops : RowOps} (hops : Pc8OpsAgree ops)
+include hops
+
+/-- **An accepted entry's registered words are the protocol's.** On `pc8`'s whole table at a whole-tile shape: where
+every unit in the cone of a set `T` holding entry `(i, j)`'s `C̃` and `U` is correct, the public gates hold the anchors
+of the noise `z` and the registered gates the activations `act`, the weights `wt` and the words `tk`, `us`, then under
+the named hypotheses at `(i, j)` the registered words `tk i j` and `us i j` read as the device's ticket and useful words
+on `pc8Sem`'s operands. -/
+theorem entry8_accepts (p : Pipeline) (pr : Prices) {M K N nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw)
+    (hM : 64 ∣ M) (hN : 64 ∣ N) (X : (whole8 ops p M K N 64 64).spec.toCircuit.Transcript)
+    (z : Noise M N K Params.pi.r) (act wt tk us : Codes) (i : Fin M) (j : Fin N)
+    {T : Finset (Fin (whole8 ops p M K N 64 64).spec.toCircuit.N)}
+    (hT : ∀ g : Fin (whole8 ops p M K N 64 64).spec.toCircuit.N,
+      (g.val = cGlob8 p M N K 64 64 i j ∨ g.val = uGlob8 p M N K 64 64 i j) → g ∈ T)
+    (hcone : ∀ v ∈ (whole8 ops p M K N 64 64).part.cone T, (whole8 ops p M K N 64 64).part.Correct X v)
+    (hpub : ∀ g (hg : g < (whole8 ops p M K N 64 64).spec.toCircuit.N),
+      ((eaAt M K ≤ g ∧ g < bAt M K) ∨ (ebAt M N K ≤ g ∧ g < in8 M N K)) → X ⟨g, hg⟩ = BitVec.ofNat _ (anchors8 p z g))
+    (hreg : ∀ g (hg : g < (whole8 ops p M K N 64 64).spec.toCircuit.N),
+      (g < eaAt M K ∨ (bAt M K ≤ g ∧ g < ebAt M N K) ∨
+        ∃ i < M, ∃ j < N, g = cGlob8 p M N K 64 64 i j ∨ g = uGlob8 p M N K 64 64 i j) →
+      X ⟨g, hg⟩ = BitVec.ofNat _ (rows8 p M N K 64 64 act wt tk us g))
+    (hE : Pc8EntryOK ops p z act wt i j) :
+    wordQ (tk i j) = (devAt p 4 pr).ticket (quant8A ops p z act) (quant8B ops p z wt) i j ∧
+      wordQ (us i j) = (devAt p 4 pr).useful (quant8A ops p z act) (quant8B ops p z wt)
+        (basis8 z.FA) (basis8 z.FB) (fun i => be8 (betaQ8 ops K (act i)) (z.EA i))
+        (fun j => be8 (betaQ8 ops K (wt j)) (z.EB j)) i j := by
+  obtain ⟨hA, hB, hLA, hLB, hDA, hDB, hP⟩ := hE
+  obtain ⟨⟨c, pa, pb⟩, hr⟩ := Option.isSome_iff_exists.1 hP
+  have hK0 : 0 < K / 128 := by subst hK; omega
+  obtain ⟨h1, h2, h3, h4, h5, h6⟩ := layout8 M N K
+  have hNin := in8_le_N ops p (M := M) (K := K) (N := N) (TM := 64) (TN := 64)
+  have hea0 : eaAt M K = M * K := rfl
+  have hxa : ∀ l < K, val X ((i : ℕ) * K + l) = act i l := fun l hl => by
+    have := mul_add_lt i.isLt hl
+    have hg : (i : ℕ) * K + l < eaAt M K := by omega
+    rw [val_in8 ops p X (by omega) (by omega) (hreg _ _ (Or.inl hg)), rows8_a p act wt tk us i.isLt hl, inW8_a hg,
+      Nat.mod_eq_of_lt (hA.1 l hl).1]
+  have hxb : ∀ l < K, val X (bAt M K + (j : ℕ) * K + l) = wt j l := fun l hl => by
+    have := mul_add_lt j.isLt hl
+    rw [val_in8 ops p X (by omega) (by omega) (hreg _ _ (Or.inr (Or.inl ⟨by omega, by omega⟩))),
+      rows8_b p act wt tk us j.isLt hl, inW8_b (by omega) (by omega), Nat.mod_eq_of_lt (hB.1 l hl).1]
+  have hea : ∀ l < 32, val X (eaAt M K + 32 * (i : ℕ) + l) = encCodes (z.EA i) l := fun l hl => by
+    have := i.isLt
+    rw [val_in8 ops p X (by omega) (by omega) (hpub _ _ (Or.inl ⟨by omega, by omega⟩)), anchors8_ea p z i.isLt hl,
+      inW8_e (by omega) (by omega), Nat.mod_eq_of_lt (encCodes_lt8 _ _)]
+  have heb : ∀ l < 32, val X (ebAt M N K + 32 * (j : ℕ) + l) = encCodes (z.EB j) l := fun l hl => by
+    have := j.isLt
+    rw [val_in8 ops p X (by omega) (by omega) (hpub _ _ (Or.inr ⟨by omega, by omega⟩)), anchors8_eb p z j.isLt hl,
+      inW8_f (by omega) (by omega), Nat.mod_eq_of_lt (encCodes_lt8 _ _)]
+  have hfa : ∀ t : Fin K, ∀ l < 32, val X (faAt M N K + 32 * (t : ℕ) + l) = encCodes (z.FA t) l := fun t l hl => by
+    have := t.isLt
+    rw [val_in8 ops p X (by omega) (by omega) (hpub _ _ (Or.inr ⟨by omega, by omega⟩)), anchors8_fa p z t.isLt hl,
+      inW8_f (by omega) (by omega), Nat.mod_eq_of_lt (encCodes_lt8 _ _)]
+  have hfb : ∀ t : Fin K, ∀ l < 32, val X (fbAt M N K + 32 * (t : ℕ) + l) = encCodes (z.FB t) l := fun t l hl => by
+    have := t.isLt
+    rw [val_in8 ops p X (by omega) (by omega) (hpub _ _ (Or.inr ⟨by omega, by omega⟩)), anchors8_fb p z t.isLt hl,
+      inW8_f (by omega) (by omega), Nat.mod_eq_of_lt (encCodes_lt8 _ _)]
+  have hg : ∀ s < 32, ∀ q < 32, val X (gAt M N K + 32 * s + q) = gram8 p z s q := fun s hs q hq => by
+    rw [val_in8 ops p X (by omega) (by omega) (hpub _ _ (Or.inr ⟨by omega, by omega⟩)), anchors8_g p z hs hq,
+      inW8_g (by omega), Nat.mod_eq_of_lt (gram8_lt p z s q)]
+  obtain ⟨w1, w2⟩ := entry8_words hops p pr hnw hK hM hN X z act wt i j
+    (hcone _ (cone8T ops p M K N 64 64 hM hN i.isLt j.isLt hK0 fun g hg => hT g (Or.inl hg)))
+    (hcone _ (cone8A ops p M K N 64 64 hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
+    (hcone _ (cone8B ops p M K N 64 64 hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
+    hxa hea hxb heb hfa hfb hg hA hB hLA hLB hDA hDB hr
+  obtain ⟨he, -, -⟩ := tile_index hM hN i.isLt j.isLt
+  have hti := Nat.mod_lt (i : ℕ) (show 0 < 64 by norm_num)
+  have htj := Nat.mod_lt (j : ℕ) (show 0 < 64 by norm_num)
+  have hc := cGate_bounds (K := K) hti htj hK0
+  have hu := uGate_bounds (K := K) hti htj
+  have vC : val X (cGlob8 p M N K 64 64 i j) = tk i j % 2 ^ 32 := by
+    unfold cGlob8
+    rw [val_tile8 ops p X he hc.1 hc.2 (hreg _ _ (Or.inr (Or.inr ⟨i, i.isLt, j, j.isLt, Or.inl rfl⟩)))]
+    rw [show tile8 p M N K 64 64 (i / 64 * (N / 64) + j / 64) (cGate K 64 64 (i % 64) (j % 64)) =
+      cGlob8 p M N K 64 64 i j from rfl, rows8_C p act wt tk us hM hN i.isLt j.isLt hK0]
+  have vU : val X (uGlob8 p M N K 64 64 i j) = us i j % 2 ^ 32 := by
+    unfold uGlob8
+    rw [val_tile8 ops p X he hu.1 hu.2 (hreg _ _ (Or.inr (Or.inr ⟨i, i.isLt, j, j.isLt, Or.inr rfl⟩)))]
+    rw [show tile8 p M N K 64 64 (i / 64 * (N / 64) + j / 64) (uGate K 64 64 (i % 64) (j % 64)) =
+      uGlob8 p M N K 64 64 i j from rfl, rows8_U p act wt tk us hM hN i.isLt j.isLt]
+  rw [vC, wordQ_mod32] at w1
+  rw [vU, wordQ_mod32] at w2
+  exact ⟨w1, w2⟩
+
+end Accept8
+
+/-! ## `pc8`'s tile check computes the words -/
+
+variable {Q R S : Type}
+
+/-- **L3's words for the plain `pc8` Program** (`tileCheck8`) at the device record `devAt p 4 pr` and `pc8Sem`: on
+tile rules whose tiles lie in their unit and whose domain has whole-tile shapes (`Shape8`), an accepted tile's ticket and
+useful words have the reference values on every credited row, under `Pc8OpsAgree` and the named hypotheses at each
+entry of a credited row (`Pc8EntryOK`). `Collides` is `False` and never needed. -/
+theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pipeline) (pr : Prices) (ρ : ℚ)
+    (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
+      Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
+    (TR : TileRules Q R S) (D : Layout → Prop)
+    (hsh : ∀ L, D L → ∀ g < (TR.tiling L).NT, Shape8 (L.shape ((TR.tiling L).unit g)))
+    (hrows : ∀ L g, ∀ i ∈ (TR.tiling L).rows g, i < (L.shape ((TR.tiling L).unit g)).m)
+    (hcols : ∀ L g, ∀ j ∈ (TR.tiling L).cols g, j < (L.shape ((TR.tiling L).unit g)).n)
+    (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
+      (j : Fin (U.layout.shape u).n), TR.rowOK (U.layout.shape u) act i →
+        Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
+    (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ) TR D := by
+  intro U hU H s g hg c X ⟨hcone, hpub, hreg⟩
+  left
+  intro i hi hok j hj
+  have him := hrows U.layout g i hi
+  have hjn := hcols U.layout g j hj
+  obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2.1 g hg
+  obtain ⟨w1, w2⟩ := entry8_accepts hops p pr hnw hK hM hN X _ c.act _ c.ticket c.useful ⟨i, him⟩ ⟨j, hjn⟩
+    (fun v hv => Finset.mem_filter.2 ⟨Finset.mem_univ _, i, hi, j, hj, him, hjn, hv⟩) hcone
+    (fun v hv h => hpub ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
+    (fun v hv h => hreg ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
+    (hent H s U _ c.act ⟨i, him⟩ ⟨j, hjn⟩ hok)
+  refine ⟨w1.trans ?_, w2.trans ?_⟩
+  · show _ = atNat _ i j
+    unfold atNat
+    rw [dite_eq_left ⟨him, hjn⟩]
+    rfl
+  · show _ = atNat _ i j
+    unfold atNat
+    rw [dite_eq_left ⟨him, hjn⟩]
+    rfl
+
+theorem auditTiling_rows_lt (tm tn : ℕ) (L : Layout) (g : ℕ) :
+    ∀ i ∈ (auditTiling tm tn L).rows g, i < (L.shape ((auditTiling tm tn L).unit g)).m := fun _ hi =>
+  lt_of_lt_of_le (Finset.mem_Ico.1 hi).2 (min_le_right _ _)
+
+theorem auditTiling_cols_lt (tm tn : ℕ) (L : Layout) (g : ℕ) :
+    ∀ j ∈ (auditTiling tm tn L).cols g, j < (L.shape ((auditTiling tm tn L).unit g)).n := fun _ hj =>
+  lt_of_lt_of_le (Finset.mem_Ico.1 hj).2 (min_le_right _ _)
+
+/-- **L3's words for the plain `pc8` Program on the audit's tiles** (`pearlCTiles`, the `64 × 64` grid): on a domain
+whose every unit has a whole-tile shape, `tileCheck8_computesWords` with the grid's tiles in their units. -/
+theorem tileCheck8_computesWords_pearlC {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pipeline) (pr : Prices) (c : Costs)
+    (ρ : ℚ) (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
+      Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
+    (D : Layout → Prop) (hsh : ∀ L, D L → ∀ u < L.N, Shape8 (L.shape u))
+    (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
+      (j : Fin (U.layout.shape u).n), (pc8Sem ops p noise).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
+        Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
+    (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ)
+      (pearlCTiles (pc8Sem ops p noise) c ρ) D :=
+  tileCheck8_computesWords hops p pr ρ noise _ D
+    (fun L hL _ hg => hsh L hL _ (auditTiling_unit_lt 64 64 L hg))
+    (auditTiling_rows_lt 64 64) (auditTiling_cols_lt 64 64) hent
 
 end Pouw.PearlC.WholeCircuit
