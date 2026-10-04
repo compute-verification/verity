@@ -73,17 +73,15 @@ def test_every_template_is_checked():
 
 
 def _descriptor_digest(fn) -> str:
-    """A target's canonical descriptor digest: its Program's, or a primitive's descriptor entry inside a one-Call wrapper."""
+    """A target's canonical descriptor digest: `program_digest` of the one-call Program at its statics."""
     from verity.ir import codec
-    from verity.ir.annotations import definition_digest
-    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
+    from verity.ir.defs import CompositeDefinition, bind
     from verity.ir.program import Program
 
-    if not isinstance(fn, PrimitiveDefinition):
-        return codec.program_digest(codec.encode_program(Program(fn)))
     params, ret = fn.signature()
-    wrap = CompositeDefinition("SplitDigestWrap", 1, (), lambda S: (params, ret), lambda B, S, *a: B.call(fn, *a), register=False)
-    return definition_digest(codec.encode_program(Program(bind(wrap))), fn.id)
+    shell = CompositeDefinition(f"Show[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a),
+                                register=False)
+    return codec.program_digest(codec.encode_program(Program(bind(shell))))
 
 
 @pytest.mark.parametrize("pinned", sorted((Path(__file__).parent / "fixtures" / "split").glob("*.json")), ids=lambda p: p.stem)
