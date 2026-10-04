@@ -23,7 +23,9 @@ A closed pull request's head branch is deleted from the remote unless an open pu
 head that landed (GitHub's "delete head branch" fires only on merges made on GitHub, and trains merge locally).
 The remote's branch, fetched first, is the truth, never the checkout. With --push, a merge that lands is pushed to the remote
 (never forced) and then swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
-`research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct).
+`research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct). After the push, a change
+to a `lean-audit.json`'s `pins` or `reads` between the remote's BRANCH before and after is sent to Daniel as a Slack DM, or, when
+the DM fails, printed and posted to #agent-alerts (`research.spec_alert`; Daniel, 3 Oct).
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
 from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`).
