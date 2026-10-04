@@ -12,6 +12,8 @@
 //!   UNIT_LOG, only unit 0's σ_u.
 //! - `base DIR COPIES`: C-Flock's proof of the same circuit's rows as one block A_0, tiled COPIES ≥ 8 times (upstream's
 //!   lincheck needs 8 blocks), verified.
+//! - `gate` and `base` then time upstream's lincheck and the commit alone (`*_phases`); `base` also times the lincheck's
+//!   circuit-dependent sum over its matrices as a parallel gather per column.
 //! - `selftest`: the streaming GKR against `prove_batched` (same proof bytes) at small sizes.
 //!
 //! env: RUNS=3 (timed runs after a first, cold run that also gives peak memory), FILL=0.9 BASE_KLOG=23 P_FRESH=0.25
@@ -21,6 +23,7 @@ use std::{
     env::{args, var},
     fs,
     hash::{BuildHasherDefault, Hasher},
+    hint::black_box,
     path::{Path, PathBuf},
     sync::OnceLock,
     time::Instant,
@@ -29,7 +32,7 @@ use std::{
 use flock_core::{
     challenger::FsChallenger,
     field::F128,
-    lincheck::{QuirkyPoint, pack_z_lincheck_from_packed},
+    lincheck::{QuirkyPoint, SkipPoint, pack_z_lincheck_from_packed, prove_padded_capture_z_vec_with_grinding},
     pcs::{
         self, PcsParams,
         ligerito::{LigeritoProfile, embedded_initial_k_or_default},
@@ -575,6 +578,28 @@ fn load_matrix(p: &Path, k: usize) -> (SparseBinaryMatrix, usize) {
     (SparseBinaryMatrix::new(k, k, rows), nnz)
 }
 
+/// A matrix file's column-major form: (column pointers, row indices).
+fn load_csc(p: &Path, k: usize) -> (Vec<u32>, Vec<u32>) {
+    let v = read_u32s(p);
+    let (n, nnz) = (v[0] as usize, v[1] as usize);
+    let (ptr, idx) = (&v[2..3 + n], &v[3 + n..3 + n + nnz]);
+    let mut cptr = vec![0u32; k + 1];
+    for &c in idx {
+        cptr[c as usize + 1] += 1;
+    }
+    for c in 0..k {
+        cptr[c + 1] += cptr[c];
+    }
+    let (mut at, mut rows) = (cptr.clone(), vec![0u32; nnz]);
+    for i in 0..n {
+        for &c in &idx[ptr[i] as usize..ptr[i + 1] as usize] {
+            rows[at[c as usize] as usize] = i as u32;
+            at[c as usize] += 1;
+        }
+    }
+    (cptr, rows)
+}
+
 // ---------------------------------------------------------------------------
 // build
 // ---------------------------------------------------------------------------
@@ -846,6 +871,57 @@ fn r1cs_runs(label: &str, r1cs: &BlockR1cs, z: &[F128], extra: usize, json: &str
     );
 }
 
+/// Two phases of the same prover timed alone: upstream's lincheck (`prove_padded_capture_z_vec_with_grinding`, which
+/// builds its circuit-dependent sum `comb` from the CSC circuit) and the commit. With `csc` (A's and B's column-major
+/// forms), also `comb[c] = α·Σ_{i ∈ A's column c} e[i] + Σ_{i ∈ B's column c} e[i]` as one parallel gather per column.
+fn phases(label: &str, r1cs: &BlockR1cs, z: &[F128], csc: Option<[(Vec<u32>, Vec<u32>); 2]>, json: &str) {
+    let (m, k_log, k) = (r1cs.m, r1cs.k_log, 1usize << r1cs.k_log);
+    let pp = params(m);
+    let zl = pack_z_lincheck_from_packed(z, m, k_log);
+    let circuit = r1cs.csc_lincheck_circuit();
+    let mut rng = Rng::new(0x11C);
+    let timed = |f: &mut dyn FnMut()| -> f64 {
+        let ts: Vec<f64> = (0..=runs())
+            .map(|_| {
+                let t = Instant::now();
+                f();
+                t.elapsed().as_secs_f64()
+            })
+            .skip(1)
+            .collect();
+        median(ts)
+    };
+    let lincheck = timed(&mut || {
+        let x_ab = r1cs.x_ab_from_multilinear_values(SkipPoint::Phi8(rng.f128()), &rng.f128_vec(m - r1cs.k_skip));
+        let mut ch = FsChallenger::new(b"rec-holo-kill");
+        black_box(prove_padded_capture_z_vec_with_grinding(
+            &zl, m, k_log, r1cs.k_skip, r1cs.useful_bits, circuit, &x_ab, pp.lincheck_grinding(), &mut ch,
+        ));
+    });
+    let commit = timed(&mut || {
+        black_box(pcs::commit(z, &pp));
+    });
+    let gather = csc.map(|[(ca, ra), (cb, rb)]| {
+        let (e, alpha) = (rng.f128_vec(k), rng.f128());
+        let s = timed(&mut || {
+            let comb: Vec<F128> = (0..k)
+                .into_par_iter()
+                .map(|c| {
+                    let sum = |p: &[u32], r: &[u32]| r[p[c] as usize..p[c + 1] as usize].iter().fold(F128::ZERO, |acc, &i| acc + e[i as usize]);
+                    alpha * sum(&ca, &ra) + sum(&cb, &rb)
+                })
+                .collect();
+            black_box(comb);
+        });
+        (s, ra.len() + rb.len())
+    });
+    let (g, ns) = gather.map_or(("null".into(), "null".into()), |(s, nnz)| (format!("{s:.6}"), format!("{:.3}", s * 1e9 / nnz as f64)));
+    println!(
+        r#"{{"kind":"{label}_phases","m":{m},"k_log":{k_log},{json}"threads":{},"lincheck_s":{lincheck:.6},"commit_s":{commit:.6},"comb_gather_s":{g},"comb_ns_per_nonzero":{ns}}}"#,
+        rayon::current_num_threads()
+    );
+}
+
 fn gate(dir: &Path) {
     let (mu, k_log) = (meta(dir, "mu"), meta(dir, "gate_klog"));
     let z = bits_to_packed(&read_u64s(&dir.join("rp_z.bin")));
@@ -859,6 +935,7 @@ fn gate(dir: &Path) {
     let json = format!(r#""setup_s":{setup:.3},"#);
     r1cs_runs("gate", &r1cs, &z, 0, &json);
     r1cs_runs("gate", &r1cs, &z, 3, &json);
+    phases("gate", &r1cs, &z, None, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -884,6 +961,8 @@ fn base(dir: &Path, copies: usize) {
     let setup = t.elapsed().as_secs_f64();
     let json = format!(r#""copies":{copies},"nnz_a":{nnz_a},"nnz_b":{nnz_b},"load_s":{load:.3},"setup_s":{setup:.3},"#);
     r1cs_runs("base", &r1cs, &z, 0, &json);
+    let csc = [load_csc(&dir.join("base_a.bin"), k), load_csc(&dir.join("base_b.bin"), k)];
+    phases("base", &r1cs, &z, Some(csc), &format!(r#""copies":{copies},"#));
 }
 
 // ---------------------------------------------------------------------------
