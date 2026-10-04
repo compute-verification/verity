@@ -71,13 +71,13 @@ theorem checkPort_ok {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
 /-- **`Registered.check` accepting.** If the verifier holds registered roots (`own`) and `check` accepts the statement, the
 units were derived from the verifier's own program, and for each of the verifier's registered ports `reg` (the circuit's
 port `p`, whose rows of u16 words are `reg`'s registered rows: `Port.fits`) and each instance `i`, the verifier's program
-reads a position `pos` of `reg`'s value in instance `i`'s unit (`indices`: the units the public file's header names,
-which the partition check derived), and instance `i`'s row (`Public.digest`, its `b ‖ c`) climbs from its
+reads a position `pos` of `reg`'s value in instance `i`'s unit (`indices`: the statement's instances' units, `units ()`,
+of the population the partition check derived), and instance `i`'s row (`Public.digest`, its `b ‖ c`) climbs from its
 frame-v3-sha512 leaf at `pos` (its `hm96-sha512/row/v1` leaf, framed at `pos` under `reg`'s domain) through a path of
 one 64-byte sibling per level to `reg`'s root. -/
-theorem check_ok {c : Circuit} {pub : Public} {own : Array Port} {derived : Bool}
-    (h : check c pub (some own) derived = .ok ()) :
-    derived = true ∧ ∃ indices, unitIndices pub = .ok indices ∧
+theorem check_ok {c : Circuit} {pub : Public} {own : Array Port} {derived : Bool} {units : Unit → V (Array Nat)}
+    (h : check c pub (some own) derived units = .ok ()) :
+    derived = true ∧ ∃ indices, units () = .ok indices ∧
       ∀ reg ∈ own, ∃ p, p < c.ports.size ∧ c.ports[p]!.name = reg.name ∧ reg.fits c.ports[p]!.words = true ∧
         ∀ i < pub.n, ∃ pos path, reg.reads[indices.getD i 0]? = some (some pos) ∧ pos < reg.leaves ∧
           path.size = 64 * log2ceil reg.leaves ∧
@@ -102,6 +102,28 @@ theorem check_ok {c : Circuit} {pub : Public} {own : Array Port} {derived : Bool
         exact ⟨pos, path, hr, ho.1.1, ho.1.2, by simpa only [Public.digest, ht, tableRow, ref] using ho.2⟩
       · exact absurd h (throw_ne_ok _ _)
     · exact absurd h (throw_ne_ok _ _)
+
+/-- A session's registered check accepting accepts each of its tables' statements. -/
+theorem checkSession_ok {sts : Array Stmt} {file : ByteArray} {draw : Option Lean.Json} {count : Nat}
+    {own : Option (Array Port)} (h : checkSession sts file draw count own = .ok ()) :
+    ∀ j < sts.size, checkStmt sts[j]! file draw count j own = .ok () :=
+  fun j hj => forM_ok h j (List.mem_range.mpr hj)
+
+/-- **One table's units at a draw** (`tableUnits`, `count ≤ 1`): the population header's units at the draw's proved
+units. -/
+theorem tableUnits_one {file : ByteArray} {d : Lean.Json} {count j : Nat} {indices : Array Nat} (hc : count ≤ 1)
+    (h : tableUnits file (some d) count j = .ok indices) :
+    ∃ header units D, publicHeader file = .ok header ∧ unitIndices header = .ok units ∧
+      Draw.UnitDraw.ofJson d = .ok D ∧ indices = D.proved.map (units.getD · 0) := by
+  unfold tableUnits at h
+  obtain ⟨header, hh, h⟩ := except_bind_ok h
+  obtain ⟨units, hu, h⟩ := except_bind_ok h
+  obtain ⟨u?, hd, h⟩ := except_bind_ok h
+  simp only [Option.mapM_some] at hd
+  obtain ⟨D, hD, hd⟩ := except_bind_ok hd
+  cases hd
+  simp only [hc, ↓reduceIte, Option.map_some, Option.getD_some, pure, Except.pure, Except.ok.injEq] at h
+  exact ⟨header, units, D, hh, hu, hD, h.symm⟩
 
 /-! ### The extractor: two accepted openings at one position give an explicit SHA-512 collision
 
