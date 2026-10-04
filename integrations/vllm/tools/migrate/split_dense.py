@@ -286,20 +286,18 @@ def apply(root: Path = REPO, log=print) -> dict:
 # --- the invariants ---------------------------------------------------------------------------------------------------------
 
 def _digest(fn) -> str | None:
-    """The canonical descriptor digest of a circuit-check target: the Program digest of a specialization, the descriptor entry's
-    digest of a primitive (inside a one-Call wrapper, which is not registered)."""
+    """A circuit-check target's canonical descriptor digest: `verity.ir.codec.program_digest` of the one-call Program at its
+    statics (the shell `pipeline.program_graph._encoded` builds), for a primitive and a specialization alike."""
     from verity.ir import codec
-    from verity.ir.annotations import definition_digest
     from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
     from verity.ir.program import Program
 
-    if isinstance(fn, SpecializedDefinition):
-        return codec.program_digest(codec.encode_program(Program(fn)))
-    if isinstance(fn, PrimitiveDefinition):
-        params, ret = fn.signature()
-        wrap = CompositeDefinition("SplitDigestWrap", 1, (), lambda S: (params, ret), lambda B, S, *a: B.call(fn, *a), register=False)
-        return definition_digest(codec.encode_program(Program(bind(wrap))), fn.id)
-    return None
+    if not isinstance(fn, (SpecializedDefinition, PrimitiveDefinition)):
+        return None
+    params, ret = fn.signature()
+    shell = CompositeDefinition(f"Show[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a),
+                                register=False)
+    return codec.program_digest(codec.encode_program(Program(bind(shell))))
 
 
 def family_ids() -> dict[str, str]:
