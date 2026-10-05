@@ -19,7 +19,7 @@ from verity.ml.boolean import gemm as BG
 from verity.ml.boolean import mufu as BM
 from verity_vllm.program.registry import sparse_mla as M
 from verity_vllm.program.registry.boolean_attention import BF16, F32, Fa3InvSum, _Bits
-from verity_vllm.program.registry.boolean_dsa import flat
+from verity_vllm.program.dsa.boolean_dsa import flat
 
 BITS = dict(max=BA.F32Max, guard=BA.GuardNegInfZero, ex2=BM.MufuEx2Ftz, mul=BA.F32MulFtz, sub=BA.F32SubFtz, fmasub=BA.F32FmaSubFtz,
             fma=BA.F32FmaFtz, add=BA.F32AddFtz, cvt=BG.F2fpBf16)

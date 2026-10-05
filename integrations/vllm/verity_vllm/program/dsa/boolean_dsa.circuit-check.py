@@ -9,7 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.ir.defs import bind
-    from verity_vllm.program.registry import boolean_dsa
+    from verity_vllm.program.dsa import boolean_dsa
 
     return [
         ("DsaUe8m0Quant_v2", lambda: bind(boolean_dsa.DsaUe8m0QuantV2, N=4)),
