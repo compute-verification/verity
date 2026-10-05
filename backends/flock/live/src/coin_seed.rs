@@ -1,7 +1,7 @@
 //! Live coins from a seed the verifier commits at step 0 (lane flock-circuit; the malicious-verifier ZK groundwork of
 //! B-Ligero PROTOCOL §5.3): the verifier draws a 256-bit seed and nonce from the OS before anything else, sends the commitment
 //! `SHA-512(TAG || nonce || seed)` in answer to `Hello`, derives every coin from the seed with `verity.primitives.randomness.derive`
-//! (byte-compatible: `tests/randomness/vectors.json`'s formats) and reveals seed and nonce in its verdict, so the prover can
+//! (byte-compatible: `verity/primitives/randomness/tests/vectors.json`'s formats) and reveals seed and nonce in its verdict, so the prover can
 //! check that every coin it was sent was fixed before it committed. The commitment scheme is named (`SCHEME`) and swappable:
 //! HM96, as B-Ligero's coin commitment, is the target.
 
