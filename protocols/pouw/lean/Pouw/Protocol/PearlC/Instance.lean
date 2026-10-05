@@ -50,6 +50,10 @@ def atNat {p q : ℕ} (M : Matrix (Fin p) (Fin q) (Option ℚ)) : ℕ → ℕ �
 /-- The BF16 word of a value BF16 represents exactly (an E4M3 code's value): the top half of its FP32 word. -/
 def bf16WordOf (v : ℚ) : ℕ := f32Word v >>> 16
 
+/-- **An E4M3 code widened to BF16** (`F2fpBf16 ∘ E4m3ToF32`, `pearl_c._bf16_of_code`): the code's sign bit over the
+BF16 word of its magnitude, which BF16 holds exactly. So `−0` (`0x80`) widens to `0x8000`. -/
+def codeBf16 (c : Code) : ℕ := bf16WordOf |codeVal c| ||| (if c.sign then 0x8000 else 0)
+
 /-- A committed operand of `p` rows and `q` columns passes the domain rules: every word finite, every row live
 (`LiveRow` at δ under §5's statistic `Stat.every8`, the ρ of the noise scale) and above the noise floor. Under the
 full row's RMS the rule would admit every nonzero row (`liveRow_of_meanSq_pos`). -/
@@ -70,7 +74,7 @@ noncomputable def PearlCSem.unitChain (sem : PearlCSem Q R S) (H : Q → R) (s :
 
 /-- **The unit's useful output U under the pinned order** (`PeelExact.peelExactVal`), from the unit's noisy codes
 (`unitChain`), the bases `F_A` and `F_B` as E4M3 codes (their entries are E4M3 values, so `e4m3` reads them exactly),
-and the peel's noise rows under §5's forming: `bf16(E′)` with `E′ = lineCodes β e` per row. -/
+and the peel's noise rows under §5's forming: `bf16(E′)` (`codeBf16`) with `E′ = lineCodes β e` per row. -/
 noncomputable def PearlCSem.unitUseful (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
     Matrix (Fin (U.layout.shape u).m) (Fin (U.layout.shape u).n) (Option ℚ) :=
   let sh := U.layout.shape u
@@ -78,7 +82,7 @@ noncomputable def PearlCSem.unitUseful (sem : PearlCSem Q R S) (H : Q → R) (s 
   let W := wordsVal sh.n sh.k (U.weight (U.layout.wid u))
   let z := sem.noise H s U u act
   let AB := sem.unitChain H s U u act
-  let be := fun (β : ℚ) (e : Fin Params.pi.r → ℚ) (p : Fin 32) => bf16WordOf (codeVal (lineCodes β e p))
+  let be := fun (β : ℚ) (e : Fin Params.pi.r → ℚ) (p : Fin 32) => codeBf16 (lineCodes β e p)
   PeelExact.peelExactVal AB.1 AB.2 (fun l p => e4m3 (z.FA l p)) (fun l p => e4m3 (z.FB l p))
     (fun i => be (sem.beta sh.k (X i)) (z.EA i)) (fun j => be (sem.beta sh.k (W j)) (z.EB j))
 

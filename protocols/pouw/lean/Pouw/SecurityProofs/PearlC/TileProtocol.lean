@@ -216,9 +216,9 @@ theorem unitUsefulDev_eq (p : Pipeline) (pr : Prices) (sem : PearlCSem Q R S) (H
     sem.unitUsefulDev (devAt p 4 pr) H s U u act =
       (devAt p 4 pr).useful (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2
         (fun l q => e4m3 (z.FA l q)) (fun l q => e4m3 (z.FB l q))
-        (fun i q => bf16WordOf (codeVal (lineCodes (sem.beta sh.k (wordsVal sh.m sh.k act i)) (z.EA i) q)))
-        (fun j q => bf16WordOf (codeVal (lineCodes (sem.beta sh.k (wordsVal sh.n sh.k (U.weight (U.layout.wid u)) j))
-          (z.EB j) q))) :=
+        (fun i q => codeBf16 (lineCodes (sem.beta sh.k (wordsVal sh.m sh.k act i)) (z.EA i) q))
+        (fun j q => codeBf16 (lineCodes (sem.beta sh.k (wordsVal sh.n sh.k (U.weight (U.layout.wid u)) j))
+          (z.EB j) q)) :=
   rfl
 
 /-- `tile4_protocol`'s `hU` at the unit's own bases and `Ẽ` rows. -/

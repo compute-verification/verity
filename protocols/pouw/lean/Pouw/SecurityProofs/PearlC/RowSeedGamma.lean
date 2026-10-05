@@ -233,7 +233,7 @@ theorem unitChain_snd_apply (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : W
         ((sem.noise H s U u act).EB b) ((sem.noise H s U u act).FB l) := rfl
 
 /-- The peel's BF16 noise row of one operand row, `bf16(E′)` with `E′ = lineCodes β e`, as `unitUsefulDev` reads it. -/
-def beRow (β : ℚ) (e : Fin Params.pi.r → ℚ) : Fin 32 → ℕ := fun p => bf16WordOf (codeVal (lineCodes β e p))
+def beRow (β : ℚ) (e : Fin Params.pi.r → ℚ) : Fin 32 → ℕ := fun p => codeBf16 (lineCodes β e p)
 
 theorem atNat_ticket_row {d : PearlCDevice} (hd : d.RowLocal) {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code)
     (B : Matrix (Fin n) (Fin k) Code) {i : ℕ} (hi : i < m) (j : ℕ) :
