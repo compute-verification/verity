@@ -303,7 +303,7 @@ EXECUTED_PREFIX_RULE = ("R17-1: a request that served a_r < cap tokens (its serv
 
 
 def _continuation_rule() -> Callable[..., dict[str, Any]] | None:
-    """Continuation_v1's `executed_prefix_by_rule(served, cap=, A=, eos=)` (pad, `verity.ir/continuation.py`, R17-32) when the unit is on
+    """Continuation_v1's `executed_prefix_by_rule(served, cap=, A=, eos=)` (pad, `verity.primitives.circuits.ir/continuation.py`, R17-32) when the unit is on
     the tree -- the ONE mechanism revb S-r17b-20 (R3) asks for: the not-executed class = {t : r_t = 0} of the recurrence over the served
     list.  None when the unit is not on this tree (the caller then records the arithmetic as the mechanism BY NAME, never silently)."""
     try:

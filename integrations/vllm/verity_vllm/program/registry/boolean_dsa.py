@@ -11,7 +11,7 @@ The callees are core's Boolean FP32 pieces (`verity.ml.boolean`'s `elementwise`,
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
 its word Definition on every word, NaN payloads included.  No table or lookup gate.
 
-Each composite is one traced circuit (`flat`): its body over those callees, compiled (`verity.evaluation.bits.compile`) and its
+Each composite is one traced circuit (`flat`): its body over those callees, compiled (`verity.primitives.circuits.evaluation.bits.compile`) and its
 gates traced again (`trace.trace`), so a constant operand is folded and a value its calls share (the log2f polynomial's ``t``,
 the scale every quantized element divides by, a row's mean) is computed once (`Q_word`'s no-recompute rule).
 """
@@ -19,11 +19,11 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from verity.evaluation import bits as BS
-from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.refs import Coll, concat
-from verity.ir.types import Array, Tuple
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import CompositeDefinition, bind
+from verity.primitives.circuits.ir.refs import Coll, concat
+from verity.primitives.circuits.ir.types import Array, Tuple
 from verity.ml.boolean import attention as BA
 from verity.ml.boolean import cast as BC
 from verity.ml.boolean import elementwise as EW

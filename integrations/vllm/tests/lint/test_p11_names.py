@@ -126,7 +126,7 @@ def test_detectors_on_examples() -> None:
     src = (
         "'''Lane tp2 [lane tp2] (window 2026-09-17), coord M-0451, rev F-r16-18, R17.'''\n"
         "import os\n"
-        "from verity.ir.defs import primitive\n"
+        "from verity.primitives.circuits.ir.defs import primitive\n"
         "@primitive('Gemm', 1, [], None)\n"
         "def Gemm_v1(a): return a\n"
         "def build_v2(p, fast=False): return os.environ.get('VERITY_TP2_MODE')\n"

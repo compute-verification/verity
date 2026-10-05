@@ -16,11 +16,11 @@ import types
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation import evaluate
-from verity.ir import boolean as BL
-from verity.ir.defs import bind
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import bind
 from verity.ml.boolean import gemm as BG
 from verity.ml.boolean import trace as TR
 from verity.ml.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32

@@ -55,7 +55,7 @@ def offsets(E: int, TOPK: int, renormalize: bool) -> dict[str, int]:
 
 
 def router_fn(E: int, TOPK: int, VPT: int, renormalize: bool) -> Any:
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.ir.defs import bind
     from verity_vllm.program.registry import moe
 
     return bind(moe.MoeRouterTopKOrderedNorm if renormalize else moe.MoeRouterTopKOrdered, E=E, TOPK=TOPK, VPT=VPT)

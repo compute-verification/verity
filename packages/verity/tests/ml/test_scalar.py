@@ -7,7 +7,7 @@ import math
 import random
 import struct
 
-from verity.ir.defs import REGISTRY
+from verity.primitives.circuits.ir.defs import REGISTRY
 from verity.ml import scalar as S
 
 NAN32, PINF32, NINF32, ONE32, NEG0 = 0x7FC00000, 0x7F800000, 0xFF800000, 0x3F800000, 0x80000000

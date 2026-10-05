@@ -14,16 +14,16 @@ A table of 2^IB entries of EW u16 words (an entry's low word first) is the regis
 `GeluTanhMulBf16_v3` / `GeluTanhMul_v3{I}` are `GeluTanhMulBf16_v1` / `GeluTanhMul_v1{I}` with the activation read from the
 registered `gelu_tanh_bf16` rather than computed by the primitive's evaluator.  `TanhF32Rn_v2` is `TanhF32Rn_v1` with |x| in
 [LO, HI) read from the registered `tanh_rn`, as C-Flock's piece computes it (`verity_flock.tail_pieces.tanh_rn`); its 2^28 words
-are read lazily (`verity.evaluation.RegisteredTable`, `tanh_rn_table`), never flattened.
+are read lazily (`verity.primitives.circuits.evaluation.RegisteredTable`, `tanh_rn_table`), never flattened.
 """
 from __future__ import annotations
 
 from functools import lru_cache
 
-from verity.evaluation import RegisteredTable
-from verity.ir.codec import register_lazy_family
-from verity.ir.defs import PrimitiveDefinition, composite
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.evaluation import RegisteredTable
+from verity.primitives.circuits.ir.codec import register_lazy_family
+from verity.primitives.circuits.ir.defs import PrimitiveDefinition, composite
+from verity.primitives.circuits.ir.types import Array, Value
 from verity.ml import scalar as SC
 from verity.ml.prims import const
 from verity_vllm.program.registry import dense
@@ -103,7 +103,7 @@ def table_words(name: str, entry=None):
 
 
 def tanh_rn_table() -> RegisteredTable:
-    """The registered `tanh_rn` as `verity.evaluation.evaluate` reads it: leaf j is word j & 1 of `tanh_rn_entry(j >> 1)`, computed
+    """The registered `tanh_rn` as `verity.primitives.circuits.evaluation.evaluate` reads it: leaf j is word j & 1 of `tanh_rn_entry(j >> 1)`, computed
     when a gate reads it."""
     return RegisteredTable("tanh_rn", lambda j: (tanh_rn_entry(j >> 1) >> (16 * (j & 1))) & 0xFFFF, 2 << 27, dense.TanhF32Rn)
 

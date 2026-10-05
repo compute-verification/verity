@@ -25,12 +25,13 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.workspace]
-members = ["tools/research", "tools/cluster", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pous", "protocols/network_warden", "protocols/pouw", "backends/flock", "tools/circuit_check", "tools/check", "tools/lean", "tools/native_peak", "tools/tc_probe", "tools/tc_probe_fp4", "benchmarks/commitments", "backends/gkr", "backends/direct", "benchmarks/pouw", "benchmarks/network_traces"]
+members = ["tools/research", "tools/cluster", "packages/verity", "verity/primitives/circuits", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pous", "protocols/network_warden", "protocols/pouw", "backends/flock", "tools/circuit_check", "tools/check", "tools/lean", "tools/native_peak", "tools/tc_probe", "tools/tc_probe_fp4", "benchmarks/commitments", "backends/gkr", "backends/direct", "benchmarks/pouw", "benchmarks/network_traces"]
 
 [tool.uv.sources]
 research = { workspace = true }
 cluster = { workspace = true }
 verity = { workspace = true }
+verity-primitives-circuits = { workspace = true }
 verity-sp1 = { workspace = true }
 verity-numerical = { workspace = true }
 verity-vllm = { workspace = true }

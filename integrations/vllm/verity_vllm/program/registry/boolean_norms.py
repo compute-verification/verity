@@ -54,11 +54,11 @@ from typing import Callable
 
 import numpy as np
 
-from verity.evaluation import evaluate
-from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind, composite
-from verity.ir.refs import Coll, Explicit, array_of, coll_concat, tuple_of
-from verity.ir.types import Array, Tuple, Value
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import CompositeDefinition, bind, composite
+from verity.primitives.circuits.ir.refs import Coll, Explicit, array_of, coll_concat, tuple_of
+from verity.primitives.circuits.ir.types import Array, Tuple, Value
 from verity.ml import fp32 as W
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp

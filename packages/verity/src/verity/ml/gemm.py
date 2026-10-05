@@ -15,15 +15,15 @@ one `F2fpBf16`:
     GemmCoordinateNvf4_v1{K, DOT}   (x, wrow: e2m1[K], sx, sw: ue4m3[K/16]) -> bf16; k = 64   GEMM_SM120_NVF4: BlackwellNvf4OmmaDot64_v1
     GemmCoordinateMxf4_v1{K, DOT}   (x, wrow: e2m1[K], sx, sw: ue8m0[K/32]) -> bf16; k = 64   GEMM_SM120_MXF4: BlackwellMxf4OmmaDot64_v1
 
-Provenance: veritor `verity.ir/registry/b1.py` `DotBf16V2` / `GemmCoordinateV2` / `GemmV2` and the binding records
+Provenance: veritor `verity.primitives.circuits.ir/registry/b1.py` `DotBf16V2` / `GemmCoordinateV2` / `GemmV2` and the binding records
 `GEMM_AMPERE` (b1.py) / `GEMM_HOPPER` (hopper.py).  The `_v1` forms, which named the Ampere step in their bodies, were not
 carried over: the static form is the definition the proof work targets, and their bodies would now name a different
 primitive id (see `prims.AmpereBF16TcDot16`).
 """
 from __future__ import annotations
 
-from verity.ir.defs import bind, composite
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.ir.defs import bind, composite
+from verity.primitives.circuits.ir.types import Array, Value
 
 from . import prims as P
 from .prims import BF16, E2M1, E4M3, F32, ZERO32
@@ -105,7 +105,7 @@ GEMM_SM120_MXF4: dict = {"DOT": P.BlackwellMxf4OmmaDot64}
 
 
 def _register_kernels() -> None:
-    from verity.evaluation import register_kernel
+    from verity.primitives.circuits.evaluation import register_kernel
 
     from . import kernels as K
     from .tc.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4

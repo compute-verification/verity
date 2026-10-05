@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ir import boolean as BL
-from verity.ir.defs import bind
-from verity.ir.refs import Coll, concat, tuple_of
-from verity.ir.types import Array, Tuple
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import bind
+from verity.primitives.circuits.ir.refs import Coll, concat, tuple_of
+from verity.primitives.circuits.ir.types import Array, Tuple
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import gemm as BG
 from verity.ml.boolean import scalar as SC

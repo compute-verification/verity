@@ -115,8 +115,8 @@ def case_list() -> list[dict[str, Any]]:
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against `AttentionSoftcap_v2` (a worker process: numpy words in, a record out)."""
-    from verity.evaluation.reference import evaluate
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.evaluation.reference import evaluate
+    from verity.primitives.circuits.ir.defs import bind
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.registry import b1, hopper

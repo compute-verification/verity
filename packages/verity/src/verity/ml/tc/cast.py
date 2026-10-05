@@ -1,6 +1,6 @@
 """Word casts between FP32, BF16, E4M3 and E2M1 encodings, as pure integer (and exact rational) functions.
 
-Promoted from ``veritor`` ``verity.ir/registry/prims.py`` (``bf16_to_f32_bits``, ``f32_to_bf16_rn_bits``, ``f32_is_nan``)
+Promoted from ``veritor`` ``verity.primitives.circuits.ir/registry/prims.py`` (``bf16_to_f32_bits``, ``f32_to_bf16_rn_bits``, ``f32_is_nan``)
 and ``src/veritor/core/tc.py`` (the word-level casts); the numpy array forms were left behind.  The E4M3 cast is the
 vLLM integration's ``f32_to_e4m3_sat_bits``, moved verbatim.
 """

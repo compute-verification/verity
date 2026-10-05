@@ -32,9 +32,9 @@ import functools
 import operator
 from typing import Any, Callable, Sequence
 
-from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.types import Array, Type
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import CompositeDefinition, bind
+from verity.primitives.circuits.ir.types import Array, Type
 
 from .. import fp32 as W
 from .. import scalar as S

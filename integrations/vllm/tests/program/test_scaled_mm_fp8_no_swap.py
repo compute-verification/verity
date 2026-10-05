@@ -6,8 +6,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.evaluation import evaluate
-from verity.ir.defs import bind
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.ir.defs import bind
 from verity.ml.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import fp8

@@ -13,8 +13,8 @@ reciprocal, whose table read is a plain circuit. The QK dot is `gemm.DotBf16_v3`
 """
 from __future__ import annotations
 
-from verity.ir import boolean as BL
-from verity.ir.types import Array
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.types import Array
 
 from .. import fp32 as W
 from .. import mufu as M

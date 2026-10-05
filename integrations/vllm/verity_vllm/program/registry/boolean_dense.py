@@ -44,9 +44,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ir import boolean as BL
-from verity.ir.defs import bind
-from verity.ir.types import Array
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import bind
+from verity.primitives.circuits.ir.types import Array
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
 from verity.ml.boolean.elementwise import bf16_band

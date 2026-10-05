@@ -16,6 +16,6 @@ Formerly ``verity.verification`` (item 25).  Two layers, both promoted from veri
 Verification plans and sampling are a protocol, ``protocols/sampled_proofs`` (decision 41).  ``conformance`` is the Python
 column of the cross-language vector suite in ``fixtures/typed-obligation-v0``.
 
-Import from the owning submodule.  This package depends on ``verity.ir``, ``verity.ml`` (for the pinned
+Import from the owning submodule.  This package depends on ``verity.primitives.circuits.ir``, ``verity.ml`` (for the pinned
 tensor-core family) and ``verity.commitments``; never on a backend.
 """

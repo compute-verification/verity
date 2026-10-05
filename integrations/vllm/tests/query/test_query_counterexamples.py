@@ -3,14 +3,14 @@ with a gap (a forgotten Input gate, a forgotten constant gate), a set whose inte
 w_out is 32 (dead return), sets whose exact w_out exceeds 32 (AttnBlock calls: 640 / 672 bits), scan-carry boundaries,
 fan-out counted once, dead parameters, 64-bit gates -- and the RA rule that `Unsupported` is never a pass.
 
-The three core modules are other owners' (`verity.ir.query_ast`, `verity.ir.boundary`, `verity.ir.partition`): every test
+The three core modules are other owners' (`verity.primitives.circuits.ir.query_ast`, `verity.primitives.circuits.ir.boundary`, `verity.primitives.circuits.ir.partition`): every test
 `importorskip`s what it needs, so this file SKIPS (never fails) until the branches are merged.  The oracle side of every
 assertion is `fixtures_query` (explicit `GateSelection` on the expanded circuit)."""
 from __future__ import annotations
 
 import pytest
 
-from verity.ir.parts import Limits, Part, Unsupported
+from verity.primitives.circuits.ir.parts import Limits, Part, Unsupported
 from tests.program import fixtures_query as FX
 
 # ---------------------------------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ from tests.program import fixtures_query as FX
 _OWNER = {"gateset": "qapi", "boundary": "qbound", "partition": "qpart"}
 
 
-_MODULES = {"gateset": "verity.ir.query_ast", "boundary": "verity.ir.boundary", "partition": "verity.ir.partition"}
+_MODULES = {"gateset": "verity.primitives.circuits.ir.query_ast", "boundary": "verity.primitives.circuits.ir.boundary", "partition": "verity.primitives.circuits.ir.partition"}
 
 
 def _mod(name: str):

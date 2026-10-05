@@ -24,8 +24,8 @@ from functools import lru_cache
 
 import numpy as np
 
-from verity.ir.defs import PrimitiveDefinition, primitive
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.ir.defs import PrimitiveDefinition, primitive
+from verity.primitives.circuits.ir.types import Array, Value
 # Re-exported: this package reaches the FP32/BF16 primitives and helpers through this module.
 from verity.ml.fp32 import (BF16_NAN_F2FP, BF16_NAN_TORCH, F32_NAN, Bf16Add, Bf16AddF2fp, Bf16MulBf16, Bf16MulF32, F32Add,
                             F32AddFtz, F32Div, F32Fma, F32FmaFtz, F32FmaSubFtz, F32Max, F32Mul, F32MulFtz, F32SubFtz,

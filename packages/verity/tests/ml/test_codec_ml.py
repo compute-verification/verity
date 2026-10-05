@@ -1,15 +1,15 @@
 """A `GemmCoordinate_v2` program round-trips through the descriptor codec, including the on-demand `Const` family that
-`verity.ml.prims` registers with `verity.ir.codec.register_lazy_family` (the IR itself knows no semantics package)."""
+`verity.ml.prims` registers with `verity.primitives.circuits.ir.codec.register_lazy_family` (the IR itself knows no semantics package)."""
 from __future__ import annotations
 
 import json
 
 import pytest
 
-from verity.ir.codec import _lookup_primitive, decode_program, encode_program, program_digest
-from verity.ir.defs import REGISTRY, Registry, bind
-from verity.ir.evaluate import evaluate_region
-from verity.ir.program import Program
+from verity.primitives.circuits.ir.codec import _lookup_primitive, decode_program, encode_program, program_digest
+from verity.primitives.circuits.ir.defs import REGISTRY, Registry, bind
+from verity.primitives.circuits.ir.evaluate import evaluate_region
+from verity.primitives.circuits.ir.program import Program
 from verity.ml import gemm as G
 from verity.ml import prims as P
 

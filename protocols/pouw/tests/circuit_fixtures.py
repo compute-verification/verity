@@ -7,7 +7,7 @@ import struct
 import types
 from collections import Counter
 
-from verity.ir.types import Tuple
+from verity.primitives.circuits.ir.types import Tuple
 from verity_pouw.circuit import leaves as L
 from verity_pouw.circuit import reference as R
 from verity_pouw.schemes import pearl_c as C

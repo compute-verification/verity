@@ -16,11 +16,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-pytest.importorskip("verity.ir.units")
+pytest.importorskip("verity.primitives.circuits.ir.units")
 pytest.importorskip("verity_vllm.program.registry")
 from circuit_check import targets as TG  # noqa: E402
-from verity.ir.defs import bind  # noqa: E402
-from verity.ir.program import Program  # noqa: E402
+from verity.primitives.circuits.ir.defs import bind  # noqa: E402
+from verity.primitives.circuits.ir.program import Program  # noqa: E402
 
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
@@ -91,7 +91,7 @@ def test_a_partitions_binding_and_owners_are_its_own_when_a_freed_partitions_add
     import gc
     import weakref
 
-    from verity.ir import partition_object as PO
+    from verity.primitives.circuits.ir import partition_object as PO
 
     monkeypatch.setattr(CS, "id", lambda o: 0, raising=False)
     gemm_fp = _gemm_fp()
@@ -116,7 +116,7 @@ def test_packed_rows_are_the_packed_tensor_bytes_and_the_unit_is_the_definition(
     block padding is read, the unit has the default layout's gates, and on circuit-check's vectors it equals the IR evaluator."""
     from circuit_check import checks as CK
     from circuit_check import vectors as V
-    from verity.evaluation.reference import signature_of
+    from verity.primitives.circuits.evaluation.reference import signature_of
 
     units, s, cl, act, uc, groups = _fp_class(dtype, 128)
     plain = CS.class_lowering(act, uc, "unit-class/plain", groups)
@@ -186,7 +186,7 @@ def test_core_rows_are_core_bit_rows_and_decode_as_the_default_layout(dtype):
     from circuit_check import checks as CK
     from circuit_check import vectors as V
     from verity.commitments.rowleaf import bit_row
-    from verity.evaluation.reference import signature_of
+    from verity.primitives.circuits.evaluation.reference import signature_of
 
     units, _s, cl, act, uc, groups = _fp_class(dtype, 128)
     merged, joins, bits = CS.element_rows(act, uc, groups)

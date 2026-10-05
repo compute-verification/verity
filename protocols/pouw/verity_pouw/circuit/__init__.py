@@ -1,4 +1,4 @@
-"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.ir` Program, verified by sampled proofs (design note
+"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.primitives.circuits.ir` Program, verified by sampled proofs (design note
 `docs/pouw/sampled-proofs-circuit.md`; `PROTOCOL.md` §`ncp-v2`).
 
 * `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
@@ -55,21 +55,21 @@ class Traced:
 
     def digest(self) -> str:
         """The call Program's digest, as the verifier builds it."""
-        from verity.ir.codec import program_digest
-        from verity.ir.program import Program
+        from verity.primitives.circuits.ir.codec import program_digest
+        from verity.primitives.circuits.ir.program import Program
 
         return program_digest(Program(self.definition))
 
     def weight_digest(self) -> str:
-        from verity.ir.codec import program_digest
-        from verity.ir.program import Program
+        from verity.primitives.circuits.ir.codec import program_digest
+        from verity.primitives.circuits.ir.program import Program
 
         return program_digest(Program(self.weight))
 
     def check_descriptor(self, descriptor: dict) -> None:
         """Refuse a descriptor that is not the verifier's own call Program."""
-        from verity.ir.codec import decode_program, program_digest
-        from verity.ir.defs import REGISTRY
+        from verity.primitives.circuits.ir.codec import decode_program, program_digest
+        from verity.primitives.circuits.ir.defs import REGISTRY
 
         from ..protocol import DomainError
 

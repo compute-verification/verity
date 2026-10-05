@@ -61,9 +61,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ir.defs import bind, composite, primitive
-from verity.ir.refs import Coll, concat, tuple_of
-from verity.ir.types import Array, Tuple
+from verity.primitives.circuits.ir.defs import bind, composite, primitive
+from verity.primitives.circuits.ir.refs import Coll, concat, tuple_of
+from verity.primitives.circuits.ir.types import Array, Tuple
 from verity.ml.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
 from verity.ml.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
 from verity_vllm.program.registry import prims as P

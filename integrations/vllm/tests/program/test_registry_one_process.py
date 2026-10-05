@@ -18,10 +18,10 @@ CHECK = """
 import importlib, sys
 for m in sys.argv[1:]:
     importlib.import_module(m)
-from verity.ir.defs import REGISTRY
+from verity.primitives.circuits.ir.defs import REGISTRY
 from verity.ml import fp32 as F, gemm as G, mufu as M, prims as C, scalar as S
 from verity_vllm.program.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM, targets as T
-from verity.ir.defs import PrimitiveDefinition
+from verity.primitives.circuits.ir.defs import PrimitiveDefinition
 core = [C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16, C.HopperBF16WgmmaDot16, C.AmpereBF16TcDot16, C.F32ToE4m3Sat,
         C.HopperE4m3QgmmaDot32, C.ZERO32, G.DotBf16, G.GemmCoordinate, G.Gemm]
 core += [getattr(S, n) for n in S.__all__ if n not in ("BIT", "BF16", "F32", "I32")]
@@ -42,8 +42,8 @@ assert PP.ALL_NEW == [S.BitAnd, S.BitNot] and (SM.F32Eq, SM.BitOr, SM.BitNot) ==
 assert H.HopperBF16WgmmaDot16 is C.HopperBF16WgmmaDot16 is T.DOTS["HopperBF16WgmmaDot16"]
 assert (b1.DotBf16V2, b1.GemmCoordinateV2, b1.GemmV2) == (G.DotBf16, G.GemmCoordinate, G.Gemm)
 assert b1.const is C.const and b1.ZERO32 is C.ZERO32 and b1.const(16, 0) is C.const(16, 0)
-from verity.ir.codec import decode_program, encode_program, program_digest
-from verity.ir.program import Program
+from verity.primitives.circuits.ir.codec import decode_program, encode_program, program_digest
+from verity.primitives.circuits.ir.program import Program
 prog = Program(b1.GemmV2.bind(K=32, N=2, DOT=H.HopperBF16WgmmaDot16))
 desc = encode_program(prog)
 assert program_digest(encode_program(decode_program(desc, REGISTRY))) == program_digest(desc)

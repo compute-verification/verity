@@ -24,8 +24,8 @@ live ANDs; a backend whose lowering takes `forms` builders (C-Flock's pieces) ca
 """
 from __future__ import annotations
 
-from verity.ir import boolean as BL
-from verity.ir.types import Array
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.types import Array
 from verity.ml.boolean import fp
 from verity.ml.boolean.forms import (NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
                                      or_reduce, shl_window, sub)

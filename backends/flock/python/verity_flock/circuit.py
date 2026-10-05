@@ -113,9 +113,9 @@ def set_statics(input_set) -> dict:
 
 def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
     """META ``program_digests``: core's ``program_digest`` of the subcircuit's Definition at the instance statics, keyed by its
-    descriptor id (``verity.ir.codec``'s, the id the canonical partition and the verifier name a template by); a silicon
+    descriptor id (``verity.primitives.circuits.ir.codec``'s, the id the canonical partition and the verifier name a template by); a silicon
     reference no core Definition wraps keeps its own key."""
-    from verity.ir.codec import _spec_id
+    from verity.primitives.circuits.ir.codec import _spec_id
 
     digests = sub.program_digests([statics or {}])
     try:
@@ -129,8 +129,8 @@ def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
 def program_sha512(sub, statics: dict | None = None) -> str:
     """SHA-512 over the canonical descriptor core's ``program_digest`` hashes (the subcircuit's Definition at its default
     statics); a caller that builds the partition over another Program passes that Program's SHA-512 instead."""
-    from verity.ir.codec import canonical_json, encode_program
-    from verity.ir.program import Program
+    from verity.primitives.circuits.ir.codec import canonical_json, encode_program
+    from verity.primitives.circuits.ir.program import Program
 
     try:
         desc = encode_program(Program(sub.definition(**(statics or {}))))
@@ -807,9 +807,9 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     (``{port: (n, words)}``), else the set's.
 
     ``identifier``: the header's ``identifier`` (PROTOCOL.md §16.10), a JSON object C-Flock does not read, on which canonical JSON
-    is RFC 8785 (``verity.ir.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
+    is RFC 8785 (``verity.primitives.circuits.ir.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
     (``--identifier F``)."""
-    from verity.ir.codec import jcs_domain_error
+    from verity.primitives.circuits.ir.codec import jcs_domain_error
 
     if identifier is not None:
         bad = jcs_domain_error(identifier, "identifier") if isinstance(identifier, dict) else "identifier: not a JSON object"

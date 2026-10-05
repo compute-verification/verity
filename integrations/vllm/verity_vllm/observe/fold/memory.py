@@ -1,7 +1,7 @@
 """Versioned memory model (pure): `(allocation, element interval) -> Refs` with generations.
 
 Implemented by lane L2.  The model maps physical storage to *immutable* source-gate references in the fold's
-root body (`("p", i, leaf)` parameters, `("n", k, leaf)` node outputs; see `verity.ir/refs.py`).  Device
+root body (`("p", i, leaf)` parameters, `("n", k, leaf)` node outputs; see `verity.primitives.circuits.ir/refs.py`).  Device
 addresses are capture-time information only: once a value is referenced by an instance, that reference never
 changes, whatever later happens to the memory.
 
@@ -69,7 +69,7 @@ from __future__ import annotations
 from bisect import bisect_right
 from dataclasses import dataclass, field
 
-from verity.ir.refs import Affine, Concat, Explicit, Refs, Strided, broadcast, concat
+from verity.primitives.circuits.ir.refs import Affine, Concat, Explicit, Refs, Strided, broadcast, concat
 
 from verity_vllm.observe.events import StorageAlloc, ViewDesc
 from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view

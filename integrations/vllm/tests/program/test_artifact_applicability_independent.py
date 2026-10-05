@@ -48,7 +48,7 @@ R9_REFERENCE_MANIFESTS = [  # other construction hosts, same profile (pre-fix ma
     REPO / "out/gen/r9/cb-a/request_8_4/construction_manifest.json",                          # cp-cba (4090), cuda_available true
     REPO / "out/gen/r10/cb-test/repro_base/sens/base/construction_manifest.json",             # cp-cb8 (L40S hidden), owner 9
 ]
-SOURCE_ROOTS = ("verity.ir", "verity_vllm", "EXPORT.json", "pyproject.toml")  # what a build needs (A's driver imports only these)
+SOURCE_ROOTS = ("verity.primitives.circuits.ir", "verity_vllm", "EXPORT.json", "pyproject.toml")  # what a build needs (A's driver imports only these)
 #: core `verity` is not copied into the build trees (only the integration is mutated); the builds import it from the repo
 CORE_SRC = REPO.parents[1] / "packages" / "verity" / "src"
 
@@ -333,7 +333,7 @@ def _rewrite(tree: pathlib.Path, subs: list[tuple[re.Pattern, str]], only: str |
     done = []
     for p in sorted(tree.rglob("*.py")):
         rel = str(p.relative_to(tree))
-        if "tests" in p.parts or not (rel.startswith(("verity_vllm/check/match/global_match.py", "verity_vllm/check/match/global_match_fast.py", "verity_vllm/check/match/program_compare.py", "verity_vllm/check/match/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/inputs_trace.py", "verity_vllm/program/frontend/triton_capture.py", "verity_vllm/program/frontend/vllm_meta.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/program/frontend/export_ops.py")) or rel.startswith("verity.ir/frontend")):
+        if "tests" in p.parts or not (rel.startswith(("verity_vllm/check/match/global_match.py", "verity_vllm/check/match/global_match_fast.py", "verity_vllm/check/match/program_compare.py", "verity_vllm/check/match/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/inputs_trace.py", "verity_vllm/program/frontend/triton_capture.py", "verity_vllm/program/frontend/vllm_meta.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/program/frontend/export_ops.py")) or rel.startswith("verity.primitives.circuits.ir/frontend")):
             continue
         if only is not None and rel != only:
             continue

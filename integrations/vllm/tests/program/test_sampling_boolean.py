@@ -13,13 +13,13 @@ import zlib
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation.reference import standalone_call
-from verity.ir import boolean as BL
-from verity.ir import codec
-from verity.ir.cut import separable
-from verity.ir.defs import REGISTRY, bind
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir import codec
+from verity.primitives.circuits.ir.cut import separable
+from verity.primitives.circuits.ir.defs import REGISTRY, bind
 from verity.ml.boolean import trace as TR
 from verity.ml.boolean.forms import Circuit
 from verity_vllm.program.kernels import rows
@@ -213,7 +213,7 @@ def test_one_logit_is_index_0() -> None:
 
 
 @pytest.mark.xfail(strict=True, reason="TokenSelect_v1{V=1} returns logits[0], not 0: its scan has no iterations, and "
-                   "verity.ir.layout.resolve_gate reads a zero-length scan's carry from iteration n - 1 = -1 instead of from init")
+                   "verity.primitives.circuits.ir.layout.resolve_gate reads a zero-length scan's carry from iteration n - 1 = -1 instead of from init")
 def test_word_view_at_one_logit() -> None:
     x = SPECIALS[:, None]
     assert not E.evaluate_batch(bind(b1.TokenSelect, V=1), x).any()

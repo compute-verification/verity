@@ -8,7 +8,7 @@ from math import comb
 
 import pytest
 
-from verity.ir.partition import Level
+from verity.primitives.circuits.ir.partition import Level
 from verity.proofs.profile import Bernoulli, IntegrityProfile
 from verity_sampled_proofs.law import (CHECK, REPLAY, OwnRandomness, ReplayUnit, Stage, TwoStageLaw, check_probability, ru_key,
                                        select_replay_units, select_verification_units, vu_key)

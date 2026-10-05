@@ -7,8 +7,8 @@ import json
 
 import numpy as np
 import pytest
-from verity.evaluation import evaluate
-from verity.ir.defs import bind
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.ir.defs import bind
 from verity_vllm.program.registry import moe
 
 from tests.properties import sigmoid_router_capture_gpu as S

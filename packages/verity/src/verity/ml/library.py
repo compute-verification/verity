@@ -6,7 +6,7 @@ Every circuit type and every table a statement names carries a label. It is ``li
 list, and ``program`` otherwise:
 
 * the verifier holds library objects and folds them itself; they are the public track, and it holds nothing else;
-* a program table or value is a registered input (`verity.ir.program`'s `RegisteredInput<w>_v1`, bound at registration), a
+* a program table or value is a registered input (`verity.primitives.circuits.ir.program`'s `RegisteredInput<w>_v1`, bound at registration), a
   value committed under a hiding leaf and always hidden; a program's circuit types stay committed in c. There is one build,
   the private one.
 
@@ -27,7 +27,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import asdict, dataclass
 
-from verity.ir.codec import canonical_json
+from verity.primitives.circuits.ir.codec import canonical_json
 
 LIBRARY = "library"
 PROGRAM = "program"

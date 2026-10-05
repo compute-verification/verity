@@ -65,8 +65,8 @@ from typing import Sequence
 from verity.commitments import hm96
 from verity.commitments.frame_v3 import BitRowLeaf, RowLeaf
 from verity.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, row_bytes
-from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.ir.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.primitives.circuits.ir.types import Array, Value
 
 from ..schemes import pearl_c as C
 from . import hashes as H

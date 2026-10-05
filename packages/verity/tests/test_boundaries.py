@@ -8,9 +8,9 @@ An import is an import statement (a relative one resolved against its package), 
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
 time: a module named as data is still a dependency.
 
-numpy is a core dependency (architecture decision: `verity.evaluation` batches over numpy arrays and kernels sit beside
+numpy is a core dependency (architecture decision: `verity.primitives.circuits.evaluation` batches over numpy arrays and kernels sit beside
 their Definitions in `verity.ml`).  The plain-integer references stay numpy-free on purpose, because they are the
-specification the Rust guest, the Lean vectors and the probes are checked against: `verity.ir` and `verity.ml.tc`.
+specification the Rust guest, the Lean vectors and the probes are checked against: `verity.primitives.circuits.ir` and `verity.ml.tc`.
 `verity.randomness` is exact stdlib arithmetic too.
 """
 

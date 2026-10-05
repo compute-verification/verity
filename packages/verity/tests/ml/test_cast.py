@@ -1,7 +1,7 @@
 """The word casts of `verity.ml.tc.cast` against the measured `cvt.rn.bf16.f32` campaign and an exhaustive NaN sweep, and
 the E4M3 cast on its grid and midpoints.
 
-Ported from veritor ``tests/veritor/core/test_tc_nan.py`` (139-181) and ``verity.ir/tests/test_nan_conversion.py`` (41-64);
+Ported from veritor ``tests/veritor/core/test_tc_nan.py`` (139-181) and ``verity.primitives.circuits.ir/tests/test_nan_conversion.py`` (41-64);
 the numpy array forms were not carried over, so the sweeps are pure integer loops (the 2^32 sweep stays behind).
 """
 from __future__ import annotations

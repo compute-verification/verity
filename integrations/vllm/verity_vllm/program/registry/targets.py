@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.ir.defs import bind
 from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2

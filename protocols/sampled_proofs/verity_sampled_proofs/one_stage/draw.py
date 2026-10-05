@@ -39,8 +39,8 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
-from verity.ir.codec import canonical_json
-from verity.ir.program import Program
+from verity.primitives.circuits.ir.codec import canonical_json
+from verity.primitives.circuits.ir.program import Program
 
 from . import partition as P
 from .verdict import Verdict, _Collect

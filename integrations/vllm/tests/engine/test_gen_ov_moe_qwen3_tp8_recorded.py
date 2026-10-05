@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 
 from tests.engine.moe_scope_cut import cut, write
-from verity.ir.refs import Affine, runs
+from verity.primitives.circuits.ir.refs import Affine, runs
 from verity_vllm.check.match import program_compare as PC
 from verity_vllm.engine.profiles import generic
 from verity_vllm.observe.events import Note

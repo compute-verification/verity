@@ -29,10 +29,10 @@ hardware captures.
 """
 from __future__ import annotations
 
-from verity.ir import boolean as BL
-from verity.ir.defs import bind, composite
-from verity.ir.refs import Coll, broadcast
-from verity.ir.types import Array
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import bind, composite
+from verity.primitives.circuits.ir.refs import Coll, broadcast
+from verity.primitives.circuits.ir.types import Array
 
 from .. import gemm as G
 from .. import prims as P

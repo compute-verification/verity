@@ -21,11 +21,11 @@ import numpy as np
 import pytest
 
 from verity.commitments import hm96
-from verity.ir.codec import canonical_json, encode_program
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.program import Program
-from verity.ir.refs import coll_concat
-from verity.ir.types import Array
+from verity.primitives.circuits.ir.codec import canonical_json, encode_program
+from verity.primitives.circuits.ir.defs import CompositeDefinition, bind
+from verity.primitives.circuits.ir.program import Program
+from verity.primitives.circuits.ir.refs import coll_concat
+from verity.primitives.circuits.ir.types import Array
 from verity_flock import circuit as FC
 from verity_sampled_proofs.one_stage import partition as P, registered as G
 

@@ -7,8 +7,8 @@ cast, f32 -> bf16 as F2FP rounds it, is `gemm.F2fpBf16_v2`.
 """
 from __future__ import annotations
 
-from verity.ir import boolean as BL
-from verity.ir.types import Array
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.types import Array
 
 from .. import prims as P
 from . import fp

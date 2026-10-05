@@ -31,8 +31,8 @@ from typing import Any, Iterable, Mapping, Sequence
 from verity.commitments.identity import identity_digest
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.ir.codec import canonical_json
-from verity.ir.program import Program
+from verity.primitives.circuits.ir.codec import canonical_json
+from verity.primitives.circuits.ir.program import Program
 
 from . import draw as D, partition as P, registered as G
 from .verdict import Verdict, _Collect

@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import struct
 
-from verity.ir.defs import primitive
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.ir.defs import primitive
+from verity.primitives.circuits.ir.types import Array, Value
 from verity.ml.tc import cast as _cast
 from verity.ml.tc import fp32 as _fp32
 

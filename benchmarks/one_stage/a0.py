@@ -27,8 +27,8 @@ from pathlib import Path
 from verity.commitments.identity import identity_digest
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.ir.codec import canonical_json, encode_program, program_digest
-from verity.ir.program import Program
+from verity.primitives.circuits.ir.codec import canonical_json, encode_program, program_digest
+from verity.primitives.circuits.ir.program import Program
 from verity_numerical.bench.input_sets import InputSet
 from verity_sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
 

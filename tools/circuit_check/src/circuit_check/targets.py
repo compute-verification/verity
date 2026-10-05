@@ -41,7 +41,7 @@ def load_registries() -> None:
     global _LOADED
     if _LOADED:
         return
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.ir.defs import REGISTRY
 
     import verity.ml.boolean.attention  # noqa: F401
     import verity.ml.boolean.cast  # noqa: F401
@@ -210,7 +210,7 @@ def _pouw_roots() -> list[Any]:
     hiding."""
     from dataclasses import replace
 
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.ir.defs import bind
     from verity_pouw.circuit import ncp2, pc4, pc8, rowk
     from verity_vllm.program.registry import pouw_rows
 
@@ -242,7 +242,7 @@ def _pouw_roots() -> list[Any]:
 
 
 def _core_roots() -> list[Any]:
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.ir.defs import bind
     from verity.ml import gemm as G
     from verity.ml import kernels as K
     from verity.ml import prims as P
@@ -282,7 +282,7 @@ def _boolean_roots() -> list[Any]:
     two heads of 8. MLA (`registry.mla`): Triton's one-split decode at one head of two keys over a 16 + 16 latent (a partial
     block, so its masked columns), which reaches the head, the block, the score and every element; the absorb bmm at two heads,
     K = 32, N = 3; the shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.ir.defs import bind
     from verity.ml.boolean import attention as BAT
     from verity.ml.boolean import gemm as BG
     from verity.ml.boolean import mufu as BM
@@ -337,7 +337,7 @@ def _boolean_roots() -> list[Any]:
 def _boolean_gather_roots() -> list[Any]:
     """The Boolean embedding (`verity_vllm.program.registry.boolean_gather`) over gathers traced whole (V = 64), and a gather
     that is a tree of Calls with a partial last chunk (V = 1100); the bf16 widening (`verity.ml.boolean.cast`) is static-free."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.ir.defs import bind
     from verity_vllm.program.registry import boolean_gather as BGA
 
     return [bind(BGA.Embedding, V=64, H=16), bind(BGA.gather_bf16(1100))]
@@ -346,7 +346,7 @@ def _boolean_gather_roots() -> list[Any]:
 def _universal_roots() -> list[Any]:
     """Protocol 2's universal unit (`verity.ml.boolean.universal`) at two size classes: G = 16 gates over 16 inputs (W = 32 wires)
     with 8 outputs, and G = 64 over 64 (W = 128) with 32."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.ir.defs import bind
     from verity.ml.boolean.universal import UniversalUnit
 
     return [bind(UniversalUnit, G=16, N_IN=16, N_OUT=8), bind(UniversalUnit, G=64, N_IN=64, N_OUT=32)]
@@ -356,7 +356,7 @@ def _merkle_roots() -> list[Any]:
     """The hidden-index Merkle read (`verity.ml.boolean.merkle`), binary and 4-ary, at one level (a level is two or three
     SHA-512 compressions: deeper reads repeat it). About two minutes each; the 4-ary one checks the slot multiplexers among
     three siblings that the binary swap does not have."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.ir.defs import bind
     from verity.ml.boolean.merkle import MerkleRead
 
     return [bind(MerkleRead, ARITY=2, D=1), bind(MerkleRead, ARITY=4, D=1)]
@@ -373,7 +373,7 @@ def _kernel_roots() -> list[Any]:
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Tiny whole-model configurations (the vLLM tests' `TINY`) and the leaf families they do not reach."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
     from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
@@ -618,8 +618,8 @@ def call_families() -> set[str]:
 def boolean_call_families(word_calls: set[str]) -> set[str]:
     """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
     switch's table of `word=` links) of each catalog specialization of a word Call family that has one."""
-    from verity.evaluation import ScalarReference
-    from verity.ir import boolean as BL
+    from verity.primitives.circuits.evaluation import ScalarReference
+    from verity.primitives.circuits.ir import boolean as BL
     from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
 
     out: set[str] = set()
@@ -635,7 +635,7 @@ def boolean_call_families(word_calls: set[str]) -> set[str]:
 
 def catalog() -> list[Any]:
     """The roots: every primitive, every static-free composite, and the bindings above."""
-    from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+    from verity.primitives.circuits.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 
     load_registries()
     roots: list[Any] = []
@@ -661,8 +661,8 @@ def catalog() -> list[Any]:
 
 def reachable(roots: Iterable[Any]) -> dict[str, Any]:
     """Every Definition (primitive, complete specialisation) or reference reachable from ``roots``, by id."""
-    from verity.evaluation import ScalarReference
-    from verity.ir.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.primitives.circuits.evaluation import ScalarReference
+    from verity.primitives.circuits.ir.defs import PrimitiveDefinition, SpecializedDefinition
 
     out: dict[str, Any] = {}
     stack = list(roots)
@@ -691,7 +691,7 @@ def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
     """The specialisations the suite checks: every one of at most ``max_gates`` gates, and a family's smallest otherwise, with its
     smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at its Boolean version, which
     the Program on bits calls)."""
-    from verity.ir import boolean as BL
+    from verity.primitives.circuits.ir import boolean as BL
 
     by: dict[str, list[Any]] = {}
     for fn in found.values():

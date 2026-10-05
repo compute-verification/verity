@@ -50,9 +50,9 @@ every selection score but NaN, which `MoeRouterBiasScore_v1` never makes.
 """
 from __future__ import annotations
 
-from verity.ir import boolean as BL
-from verity.ir.defs import bind
-from verity.ir.types import Array, Tuple
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import bind
+from verity.primitives.circuits.ir.types import Array, Tuple
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
 from verity.ml.boolean.forms import NOT, OR, ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, shr, sub

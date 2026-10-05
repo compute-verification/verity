@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ir import codec
-from verity.ir import constants as K
-from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ir.program import Program
-from verity.ir.types import Array
+from verity.primitives.circuits.ir import codec
+from verity.primitives.circuits.ir import constants as K
+from verity.primitives.circuits.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+from verity.primitives.circuits.ir.program import Program
+from verity.primitives.circuits.ir.types import Array
 from verity.ml import gemm as G
 from verity.ml import mufu
 from verity.ml import operations as O

@@ -1,6 +1,6 @@
 """`GemmCoordinate_v2{K, DOT}` through the IR oracle on 30 authenticated RTX 4090 GEMM coordinates.
 
-Ported from veritor ``verity.ir/tests/test_composition.py`` §3 (`test_gemm_on_ampere_captured_coordinates`), with the
+Ported from veritor ``verity.primitives.circuits.ir/tests/test_composition.py`` §3 (`test_gemm_on_ampere_captured_coordinates`), with the
 numpy fixture loading replaced by `array('H')`.  The recorded cross-architecture numbers (Hopper step on the same operands:
 same bf16 word on all 30, f32 accumulators differ on 26/30) are pinned as in the source.
 """
@@ -12,9 +12,9 @@ from array import array
 from pathlib import Path
 
 
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.evaluate import evaluate_call
-from verity.ir.program import Program
+from verity.primitives.circuits.ir.defs import CompositeDefinition, bind
+from verity.primitives.circuits.ir.evaluate import evaluate_call
+from verity.primitives.circuits.ir.program import Program
 from verity.ml import gemm as G
 from verity.ml import prims as P
 from verity.ml.tc.cast import f32_to_bf16_hw_word

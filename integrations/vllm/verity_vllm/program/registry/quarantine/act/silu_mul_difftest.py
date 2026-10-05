@@ -44,7 +44,7 @@ def production(statics: dict, inputs: list) -> list:
 
 
 def spec(statics: dict):
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.ir.defs import bind
     from verity_vllm.program.registry.quarantine.act.silu_mul import SiluMul
 
     return bind(SiluMul, I=int(statics["I"]))

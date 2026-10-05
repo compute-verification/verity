@@ -32,10 +32,10 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from verity.ir.defs import bind
-from verity.ir.evaluate import MissingValue, evaluate_region
-from verity.ir.layout import Circuit, FunctionCall, resolve
-from verity.ir.program import Program
+from verity.primitives.circuits.ir.defs import bind
+from verity.primitives.circuits.ir.evaluate import MissingValue, evaluate_region
+from verity.primitives.circuits.ir.layout import Circuit, FunctionCall, resolve
+from verity.primitives.circuits.ir.program import Program
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.registry import b1
 

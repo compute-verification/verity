@@ -1,6 +1,6 @@
 """C-Flock's generic IR lowering: an IR Definition becomes a Flock binary circuit by composing :mod:`fp` pieces.
 
-:func:`lower` walks the Definition's gates in canonical order, as ``verity.ir.evaluate`` does, and maps each primitive to
+:func:`lower` walks the Definition's gates in canonical order, as ``verity.primitives.circuits.ir.evaluate`` does, and maps each primitive to
 its piece in :data:`PIECES` (a primitive without one is an error naming it). Constant gates, and gates whose operands are
 all constant, are evaluated by the primitive's own evaluator and become constant wires.
 
@@ -94,7 +94,7 @@ PIECES: dict[str, Callable] = {
 }
 PIECES.update(tail_pieces.PIECES)
 PIECES["AmpereBF16TcDot16_v2"] = PIECES["AmpereBF16TcDot16_v1"]  # core's id (verity.ml.prims) for the same total function
-# the Boolean core's gates (verity.ir.boolean): an n-input And is n - 1 ANDs, Xor and Not are free
+# the Boolean core's gates (verity.primitives.circuits.ir.boolean): an n-input And is n - 1 ANDs, Xor and Not are free
 PIECES["Not_v1"] = lambda C, a: [a[0].inv()]
 GATE_FAMILIES = {r"And(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [fp.and_reduce(C, [b[0] for b in x])],
                  r"Xor(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [reduce(lambda s, b: s ^ b[0], x[1:], x[0][0])]}
@@ -103,7 +103,7 @@ GATE_FAMILIES = {r"And(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [fp.and_reduce(C,
 def _boolean_build(key):
     """The ``build`` of a registered Boolean Definition (``verity.ml.boolean.trace.definition``) whose ``word`` is the
     primitive ``key``: a `forms` builder on the operand words, as a piece is."""
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.ir.defs import REGISTRY
 
     for d in list(REGISTRY.defs.values()):
         w, build = getattr(d, "word", None), getattr(d, "build", None)
@@ -166,7 +166,7 @@ def _value(word) -> int:
 
 
 def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Callable] | None = None) -> dict[int, list]:
-    """Lower ``gates`` (``verity.ir.layout.Gate``s in canonical order) into C, reading operand words from ``wires`` (gate index
+    """Lower ``gates`` (``verity.primitives.circuits.ir.layout.Gate``s in canonical order) into C, reading operand words from ``wires`` (gate index
     -> word) and writing each gate's output word there; ``pieces`` (default :data:`PIECES`) maps primitive ids to pieces."""
     pieces = PIECES if pieces is None else pieces
     for g in gates:
@@ -191,15 +191,15 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
 
 
 def standalone(target):
-    from verity.evaluation.reference import resolve, standalone_call
+    from verity.primitives.circuits.evaluation.reference import resolve, standalone_call
 
     return standalone_call(resolve(target))
 
 
 def lower(C: Circuit, target, inputs: Sequence[list]) -> list[list]:
     """The output words of ``target`` (a primitive or a bound composite) on the input words ``inputs`` (one per input leaf)."""
-    from verity.evaluation.reference import resolve
-    from verity.ir.defs import PrimitiveDefinition
+    from verity.primitives.circuits.evaluation.reference import resolve
+    from verity.primitives.circuits.ir.defs import PrimitiveDefinition
 
     t = resolve(target)
     if isinstance(t, PrimitiveDefinition):
@@ -455,7 +455,7 @@ def tc_units(target, prim: str | None = None) -> Units:
 
 
 def _leaf_width(target, pos: int) -> int:
-    from verity.evaluation.reference import signature_of
+    from verity.primitives.circuits.evaluation.reference import signature_of
     params, _ = signature_of(target)
     widths = [w for pt in params for w in pt.leaf_widths()]
     return widths[pos]
@@ -771,7 +771,7 @@ def digest(text: str) -> str:
 
 def _flat_ports(t) -> list[list[int]]:
     """``[leaves, bits]`` per port of a type: a Value or (nested) Array of Values is one port; a Tuple, one per field."""
-    from verity.ir.types import Array, Tuple, Value
+    from verity.primitives.circuits.ir.types import Array, Tuple, Value
 
     if isinstance(t, Tuple):
         return [x for f in t.fields for x in _flat_ports(f)]
@@ -947,7 +947,7 @@ def lowering(definition, name: str, cut: Callable | None = None, group: int = 1,
 def cut_words(low: Lowering, flat_inputs: np.ndarray) -> np.ndarray:
     """``(n, len(cut))``: every instance's cut words by the IR reference evaluator (the verifier's own computation; the
     native tail's values included)."""
-    from verity.ir.evaluate import evaluate_call
+    from verity.primitives.circuits.ir.evaluate import evaluate_call
 
     prog, call = standalone(low.definition)
     out = np.zeros((len(flat_inputs), len(low.units.cut)), dtype=np.uint64)

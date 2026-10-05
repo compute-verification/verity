@@ -13,14 +13,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation.batch import type_shape
-from verity.evaluation.reference import standalone_call
-from verity.ir import boolean as BL
-from verity.ir import codec
-from verity.ir.defs import bind
-from verity.ir.types import Array
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation.batch import type_shape
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir import codec
+from verity.primitives.circuits.ir.defs import bind
+from verity.primitives.circuits.ir.types import Array
 from verity.ml.boolean import attention as BA
 from verity.ml.boolean import gemm as BG
 from verity.ml.boolean import mufu as BM

@@ -8,12 +8,12 @@ import random
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation.reference import standalone_call
-from verity.ir import boolean as BL
-from verity.ir import codec
-from verity.ir.defs import bind
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir import codec
+from verity.primitives.circuits.ir.defs import bind
 from verity.ml.boolean import universal as U
 
 #: (G, N_IN, N_OUT) -> (And, Xor, Not gates, standalone program digest)

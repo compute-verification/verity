@@ -2,7 +2,7 @@
 the v3 and v2 bodies (`b1`) and the v5 and v4 bodies (`fa2_check_inf`, `fa3_check_inf`) line for line over Boolean
 Definitions, so their word views are those chains at the same statics.
 
-Every word is its bits (`verity.ir.boolean.word_type`): a bf16 word `Array<16, Value<1>>`, an f32 word `Array<32, Value<1>>`. The
+Every word is its bits (`verity.primitives.circuits.ir.boolean.word_type`): a bf16 word `Array<16, Value<1>>`, an f32 word `Array<32, Value<1>>`. The
 callees are the Boolean versions of the word chains': `DotBf16_v3{K=D, DOT}` and `DOT` itself (`verity.ml.boolean.gemm`;
 v6's is `AmpereBF16TcDot16_v3`), `F2fpBf16_v2`, the FTZ f32 operations, `F32Max_v2`, `GuardNegInfZero_v2` and the inverse sum
 (v6's `Fa2InvSum_v2`; v7's, v8's and v9's `INV`: `Fa2InvSum_v2` or `Fa3InvSum_v2`, FA3's, here) and `MufuEx2Ftz_v2`
@@ -13,12 +13,12 @@ is for `max * scale` too.
 """
 from __future__ import annotations
 
-from verity.ir import boolean as BL
+from verity.primitives.circuits.ir import boolean as BL
 from collections.abc import Callable
 
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.refs import Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.ir.types import Array, Tuple
+from verity.primitives.circuits.ir.defs import CompositeDefinition, bind
+from verity.primitives.circuits.ir.refs import Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.primitives.circuits.ir.types import Array, Tuple
 from verity.ml.boolean import attention as BA
 from verity.ml.boolean import gemm as BG
 from verity.ml.boolean import mufu as BM

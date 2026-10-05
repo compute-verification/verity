@@ -16,10 +16,10 @@ import random
 import numpy as np
 import pytest
 
-from verity.ir.annotations import definition_digest
-from verity.ir.codec import encode_program, program_digest
-from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ir.program import Program
+from verity.primitives.circuits.ir.annotations import definition_digest
+from verity.primitives.circuits.ir.codec import encode_program, program_digest
+from verity.primitives.circuits.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+from verity.primitives.circuits.ir.program import Program
 from verity.ml import library as L
 from verity.ml import mufu as M
 from verity.proofs import reduce_mufu as R

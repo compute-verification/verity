@@ -18,16 +18,16 @@ lo >= r, and each case selects 0x7FFF. `GatherBf16x{N}u{k}_v1` over more than 10
 
 No gate of a gather reads the token alone (`gather`), so `Embedding_v2`'s H gathers, one per column of the table by one
 token, share no gate, and since its body reads only its parameters and returns every gather's word, it is cut gather by gather
-(`verity.ir.cut.separable`): each gather one unit of 16 output bits under `Q_word_v1{X=16,W=32}`.
+(`verity.primitives.circuits.ir.cut.separable`): each gather one unit of 16 output bits under `Q_word_v1{X=16,W=32}`.
 """
 from __future__ import annotations
 
 from typing import Any
 
-from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.refs import Coll, concat, strided_view
-from verity.ir.types import Array
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import CompositeDefinition, bind
+from verity.primitives.circuits.ir.refs import Coll, concat, strided_view
+from verity.primitives.circuits.ir.types import Array
 from verity.ml.boolean.gather import gather
 from verity.ml.boolean.trace import definition
 

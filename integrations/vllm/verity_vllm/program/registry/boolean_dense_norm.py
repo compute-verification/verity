@@ -31,9 +31,9 @@ from __future__ import annotations
 
 from functools import cache
 
-from verity.ir.defs import bind, composite
-from verity.ir.refs import Coll, array_of, coll_concat
-from verity.ir.types import Array
+from verity.primitives.circuits.ir.defs import bind, composite
+from verity.primitives.circuits.ir.refs import Coll, array_of, coll_concat
+from verity.primitives.circuits.ir.types import Array
 from verity.ml import fp32 as W
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp

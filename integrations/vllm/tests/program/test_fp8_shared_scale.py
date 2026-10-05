@@ -12,10 +12,10 @@ import types
 
 import pytest
 
-from verity.evaluation import evaluate
-from verity.ir.cut import call_scope
-from verity.ir.defs import bind
-from verity.ir.layout import resolve
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.ir.cut import call_scope
+from verity.primitives.circuits.ir.defs import bind
+from verity.primitives.circuits.ir.layout import resolve
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity_vllm.program.registry import fp8
 from verity_vllm.query import word as W

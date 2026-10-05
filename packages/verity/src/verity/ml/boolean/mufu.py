@@ -46,8 +46,8 @@ from importlib import resources
 
 import numpy as np
 
-from verity.ir import boolean as BL
-from verity.ir.types import Array
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.types import Array
 
 from .. import mufu as M
 from .forms import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce, shl_window, sub

@@ -23,9 +23,9 @@ nibble; the scale bytes are the swizzled [ceil(M/128)*128, round_up(K/16, 4)] la
 """
 from __future__ import annotations
 
-from verity.ir.defs import bind, composite
-from verity.ir.refs import Coll as _Coll, concat, tuple_of
-from verity.ir.types import Array, Tuple, Value
+from verity.primitives.circuits.ir.defs import bind, composite
+from verity.primitives.circuits.ir.refs import Coll as _Coll, concat, tuple_of
+from verity.primitives.circuits.ir.types import Array, Tuple, Value
 from verity.ml.prims import E4m3ToF32, F32ToE2m1Sat, F32ToE4m3Sat
 from verity.ml.scalar import F32Eq, F32Fabs, F32Fmaxf, SelectF32
 from verity_vllm.program.registry import b1

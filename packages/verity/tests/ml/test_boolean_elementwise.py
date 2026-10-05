@@ -14,13 +14,13 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation.reference import standalone_call
-from verity.ir import boolean as BL
-from verity.ir import codec
-from verity.ir.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
-from verity.ir.types import Array
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir import codec
+from verity.primitives.circuits.ir.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
+from verity.primitives.circuits.ir.types import Array
 from verity.ml import fp32 as W
 from verity.ml import kernels as K
 from verity.ml.boolean import elementwise as EW

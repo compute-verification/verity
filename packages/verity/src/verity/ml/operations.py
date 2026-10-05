@@ -2,10 +2,10 @@
 
 Daniel's rulings (1 Oct 2026, PDT): an operation's own definition is gates (the floating-point formats' constants, the round
 constants of SHA-512 and Keccak-f, and every measured MUFU table in `verity.ml.library`: exp2, rcp, sqrt, rsq and tanh), and
-everything a program or a request brings is a value, committed under a hiding leaf and always hidden (`verity.ir.constants`).
-`verity.ir` names no operations, so the list is here and the guard passes it in:
+everything a program or a request brings is a value, committed under a hiding leaf and always hidden (`verity.primitives.circuits.ir.constants`).
+`verity.primitives.circuits.ir` names no operations, so the list is here and the guard passes it in:
 
-    program_data(root) = verity.ir.constants.program_data(root, is_operation, is_library_table)
+    program_data(root) = verity.primitives.circuits.ir.constants.program_data(root, is_operation, is_library_table)
 
 lists every constant held outside an operation and every table a primitive holds that is not a library table. No statement
 or table claims that a Program's values are always hidden until the guard returns {} for it, and
@@ -30,9 +30,9 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Iterator
 
-from verity.ir import constants as K
-from verity.ir.codec import canonical_json
-from verity.ir.defs import REGISTRY, PrimitiveDefinition, SpecializedDefinition
+from verity.primitives.circuits.ir import constants as K
+from verity.primitives.circuits.ir.codec import canonical_json
+from verity.primitives.circuits.ir.defs import REGISTRY, PrimitiveDefinition, SpecializedDefinition
 
 from . import library
 
@@ -103,7 +103,7 @@ def is_operation(fn: Any) -> bool:
 
 
 def program_data(root: Any) -> dict[str, list[tuple[int, str]]]:
-    """The guard: the data `root` (a Program's root Definition) still holds, as `verity.ir.constants.program_data` lists it
+    """The guard: the data `root` (a Program's root Definition) still holds, as `verity.primitives.circuits.ir.constants.program_data` lists it
     under this list and the library's tables. {} exactly when the Program holds no data."""
     return _Guard().data(root)
 

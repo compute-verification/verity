@@ -18,7 +18,7 @@
                       the bf16 -> f32 widening on bits, and `scalar`: the bf16 comparator, the selects, fabsf, PTX max / min
                       and the f32 -> E4M3 cast on bits
     verity.ml.kernels numpy batch forms of the steps and GEMM coordinates (BF16, FP8 E4M3, NVFP4 / MXFP4), registered with
-                      `verity.evaluation` and self-checked against `verity.ml.tc`
+                      `verity.primitives.circuits.evaluation` and self-checked against `verity.ml.tc`
 """
 from __future__ import annotations
 

@@ -15,9 +15,9 @@ on an FA2 target whose family registers `fa2_construction = "check-inf-per-itera
 """
 from __future__ import annotations
 
-from verity.ir.defs import bind, composite
-from verity.ir.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.ir.types import Array, Tuple
+from verity.primitives.circuits.ir.defs import bind, composite
+from verity.primitives.circuits.ir.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.primitives.circuits.ir.types import Array, Tuple
 from verity.ml.gemm import DotBf16 as DotBf16V2
 from verity.ml.prims import ZERO32, const
 from verity_vllm.program.registry import prims as P

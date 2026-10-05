@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ir import Program
-from verity.ir.codec import encode_program
-from verity.ir.defs import REGISTRY
+from verity.primitives.circuits.ir import Program
+from verity.primitives.circuits.ir.codec import encode_program
+from verity.primitives.circuits.ir.defs import REGISTRY
 from verity_vllm.program import workload as W
 from verity_vllm.program.registry import b1, lifted as L
 from verity_vllm.program.registry import serve3_reference as ref
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
-from verity.ir.types import Value
+from verity.primitives.circuits.ir.types import Value
 
 CAP = D_MAX + 1
 BOUNDARY = "Final_v2"

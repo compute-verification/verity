@@ -10,11 +10,11 @@ import random
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation.reference import standalone_call
-from verity.ir import boolean as BL
-from verity.ir import codec
-from verity.ir.defs import bind
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir import codec
+from verity.primitives.circuits.ir.defs import bind
 from verity.ml.boolean import merkle as M
 from verity.ml.boolean import sha512 as S
 from verity.ml.boolean.forms import ONE, Circuit

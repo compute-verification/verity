@@ -11,7 +11,7 @@ operand at once; the random instances then draw each leaf as an edge word (1 in 
 floats only: arithmetic in the range serving sees) or a uniform word.
 
 A registered table a target reads (`TableProbe`: `tanh_rn` is 2^27 entries) is no vector: every instance reads the program's
-own table as one `verity.evaluation.RegisteredTable`, and the probes add instances that read its first and last entries and the
+own table as one `verity.primitives.circuits.evaluation.RegisteredTable`, and the probes add instances that read its first and last entries and the
 first and last of each region (`probe_entries`), never all of them; the record says how many words the instances read.
 """
 from __future__ import annotations
@@ -21,9 +21,9 @@ from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
-from verity.evaluation import RegisteredTable
-from verity.evaluation.batch import type_dtype, type_shape
-from verity.ir.types import Type
+from verity.primitives.circuits.evaluation import RegisteredTable
+from verity.primitives.circuits.evaluation.batch import type_dtype, type_shape
+from verity.primitives.circuits.ir.types import Type
 
 BF16 = (0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x0080, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC0, 0x7F81, 0x3F80, 0xBF80)
 FP16 = (0x7C00, 0xFC00, 0x7E00, 0x7D00, 0x7BFF, 0xFBFF, 0x03FF, 0x0400, 0x3C00)
@@ -96,8 +96,8 @@ def vectors(params: Sequence[Type], n: int, seed: int) -> list[np.ndarray]:
 
 
 def instance_args(params: Sequence[Type], arrays: Sequence[np.ndarray], i: int) -> list:
-    """Instance ``i`` as `verity.evaluation.evaluate` takes it: an int per ``Value``, a flat int list per aggregate."""
-    from verity.ir.types import Value
+    """Instance ``i`` as `verity.primitives.circuits.evaluation.evaluate` takes it: an int per ``Value``, a flat int list per aggregate."""
+    from verity.primitives.circuits.ir.types import Value
 
     args = []
     for pt, a in zip(params, arrays):

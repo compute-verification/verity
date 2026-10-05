@@ -21,10 +21,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
-from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, FunctionDefinition, SpecializedDefinition
-from verity.ir.refs import Affine, Coll, Explicit, Ref, concat
-from verity.ir.types import Array, Type
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import CompositeDefinition, FunctionDefinition, SpecializedDefinition
+from verity.primitives.circuits.ir.refs import Affine, Coll, Explicit, Ref, concat
+from verity.primitives.circuits.ir.types import Array, Type
 
 from .forms import ONE, Circuit, L
 

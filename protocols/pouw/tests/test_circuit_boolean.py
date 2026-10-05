@@ -8,7 +8,7 @@ import random
 import numpy as np
 import pytest
 
-from verity.evaluation.bits import evaluate_bits, evaluate_words
+from verity.primitives.circuits.evaluation.bits import evaluate_bits, evaluate_words
 from verity_pouw.circuit import boolean as B
 from verity_pouw.circuit import words as W
 
@@ -44,7 +44,7 @@ def _wide(d, ref, cols, widths):
 def test_each_names_its_word_primitive_and_is_boolean():
     """Each is the next version of its word primitive and names it; each but `PouwSqCeil_v2` (traced in its own, slow test)
     is Boolean through its body."""
-    from verity.ir.boolean import is_boolean
+    from verity.primitives.circuits.ir.boolean import is_boolean
     from verity.ml.boolean.trace import word_of
 
     for d, w in ((B.PouwF32SqrtRn, W.PouwF32SqrtRn), (B.PouwETilde, W.PouwETilde), (B.PouwBf16Neg, W.PouwBf16Neg),
@@ -61,7 +61,7 @@ def test_building_a_tile_check_registers_them():
 
     ids = [w.id.replace("_v1", "_v2") for w in (W.PouwF32SqrtRn, W.PouwETilde, W.PouwBf16Neg, W.PouwSqAcc, W.PouwSqCeil,
                                                 W.PouwSqGe)]
-    code = ("import sys, verity_pouw.circuit.pc8\nfrom verity.ir.defs import REGISTRY\n"
+    code = ("import sys, verity_pouw.circuit.pc8\nfrom verity.primitives.circuits.ir.defs import REGISTRY\n"
             f"missing = [i for i in {ids!r} if i not in REGISTRY]\nsys.exit(','.join(missing) if missing else 0)")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
@@ -127,7 +127,7 @@ def test_sq_ceil_at_its_rounding_boundaries():
         t = R.choice([-(-q * n // 64), q * n // 64, R.getrandbits(R.randrange(0, 577))])
         ts.append(t & M576)
         ns.append(n)
-    from verity.ir.boolean import is_boolean
+    from verity.primitives.circuits.ir.boolean import is_boolean
 
     assert is_boolean(B.PouwSqCeil.bind())
     _wide(B.PouwSqCeil, W.PouwSqCeil, [ts, ns], [576, 32])

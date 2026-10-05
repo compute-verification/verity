@@ -30,10 +30,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ir import codec  # noqa: E402
-from verity.ir.defs import REGISTRY, CompositeDefinition, bind  # noqa: E402
-from verity.ir.evaluate import evaluate_call  # noqa: E402
-from verity.ir.program import Program  # noqa: E402
+from verity.primitives.circuits.ir import codec  # noqa: E402
+from verity.primitives.circuits.ir.defs import REGISTRY, CompositeDefinition, bind  # noqa: E402
+from verity.primitives.circuits.ir.evaluate import evaluate_call  # noqa: E402
+from verity.primitives.circuits.ir.program import Program  # noqa: E402
 from verity_vllm.program.registry import b1  # noqa: E402
 from verity_vllm.program.registry import prims as P  # noqa: E402
 from verity_vllm.program.registry import ref_prims as R  # noqa: E402
@@ -750,7 +750,7 @@ def test_codec_roundtrip_and_lazy_gather_f32():
     assert dec.gates == prog.circuit.root.gates
     # the on-demand f32 gather family resolves through the extended lazy table even for a vocab never built here
     p = codec._lookup_primitive(REGISTRY, "GatherF32x12345_v1")
-    assert p.id == "GatherF32x12345_v1" and p.params[1][1] == __import__("verity.ir.types", fromlist=["Array"]).Array(12345, P.F32)
+    assert p.id == "GatherF32x12345_v1" and p.params[1][1] == __import__("verity.primitives.circuits.ir.types", fromlist=["Array"]).Array(12345, P.F32)
     prog2 = Program(bind(_ST, FN=bind(R.EmbeddingRef, V=9, H=3, DT="f32")))
     desc2 = codec.encode_program(prog2)
     assert codec.decode_program(desc2, REGISTRY).gates == prog2.circuit.root.gates

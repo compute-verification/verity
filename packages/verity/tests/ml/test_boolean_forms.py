@@ -7,9 +7,9 @@ import random
 
 import numpy as np
 
-from verity.evaluation.bits import evaluate_words
-from verity.ir import boolean as BL
-from verity.ir.types import Array
+from verity.primitives.circuits.evaluation.bits import evaluate_words
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.types import Array
 from verity.ml.boolean.forms import ONE, ZERO, Circuit
 from verity.ml.boolean.trace import definition
 

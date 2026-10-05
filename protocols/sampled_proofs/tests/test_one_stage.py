@@ -13,10 +13,10 @@ import pytest
 
 import verity.ml.prims  # noqa: F401  (with verity.ml.scalar, the primitives partition_vectors.json's descriptor names)
 import verity.ml.scalar  # noqa: F401
-from verity.ir import codec, partition_object as PO
-from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
-from verity.ir.program import Program
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.ir import codec, partition_object as PO
+from verity.primitives.circuits.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.primitives.circuits.ir.program import Program
+from verity.primitives.circuits.ir.types import Array, Value
 from verity_sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -183,7 +183,7 @@ def test_profile_counts_wrong_units():
 def _v0(registration, draw, delta):
     """The record's `profile` and `wrong_units` as `audit.py` computed them before the profile was one type (`main` at
     6746f408), kept as the oracle for the bytes recorded runs hold."""
-    from verity.ir.partition import Level
+    from verity.primitives.circuits.ir.partition import Level
     from verity.proofs.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
     n, law = registration["population"], D.law_of(draw)
     core = (Stratified.uniform(n, law["k"]) if law["law"] == "subset" else Stratified(tuple(
@@ -286,7 +286,7 @@ def test_a_record_over_an_explicit_partition_object():
 
 def test_the_wrong_unit_bound_matches_worst_case_and_scales():
     """The profile's Subset(k) bound is the exact count, the generic worst_case rounded down, and serves N = 183,680."""
-    from verity.ir.partition import Level
+    from verity.primitives.circuits.ir.partition import Level
     from verity.proofs.profile import IntegrityProfile, Subset
     for n, k, delta in ((1024, 256, 2.0 ** -20), (1024, 16, 0.01), (344, 128, 2.0 ** -20), (6, 2, 0.25), (50, 50, 0.01)):
         p = IntegrityProfile((Level("unit"),), (n,), {"unit": Subset(k)}, delta)
@@ -440,7 +440,7 @@ def test_a4_under_the_stratified_rule():
     assert got["bound"] == 91_063 and list(got["per_template"].values()) == [286, 91_016, 11_468, 286, 286, 84_773]
 
 
-# ---- the partition is core's `verity/partition/v1` (`verity.ir.partition_object`), byte for byte ------------------------
+# ---- the partition is core's `verity/partition/v1` (`verity.primitives.circuits.ir.partition_object`), byte for byte ------------------------
 
 CORE_VECTORS = Path(__file__).resolve().parents[3] / "packages" / "verity" / "tests" / "ir"
 QWORD = json.loads((CORE_VECTORS / "partition_vectors.json").read_text())

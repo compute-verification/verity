@@ -4,11 +4,11 @@ lowering (`Program(fn)` -> Input batches + body), the same descriptor codec."""
 
 import pytest
 
-from verity.ir.codec import SCHEMA_V1, _encode_body, _Tables, encode_program, program_digest
-from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
-from verity.ir.program import Program
-from verity.ir.refs import coll_concat
-from verity.ir.types import Array, Record, Value
+from verity.primitives.circuits.ir.codec import SCHEMA_V1, _encode_body, _Tables, encode_program, program_digest
+from verity.primitives.circuits.ir.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
+from verity.primitives.circuits.ir.program import Program
+from verity.primitives.circuits.ir.refs import coll_concat
+from verity.primitives.circuits.ir.types import Array, Record, Value
 from verity_vllm.program import workload as W
 
 _ADD = PrimitiveDefinition("GpTestAdd16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: (a + b) & 0xFFFF)
@@ -203,7 +203,7 @@ def _registered_component(LP: int, values_n: int = 2, registered=("values",)):
 def test_registered_values_are_shared_once_and_registered_at_the_root():
     """A registered_values component's `values` are the program's (bound once, at registration), not the request's: the workload
     Program holds them once as `shared.values`, a registered root parameter, beside `shared.weights` bound per run."""
-    from verity.ir.constants import REGISTRATION, RUN, inputs
+    from verity.primitives.circuits.ir.constants import REGISTRATION, RUN, inputs
     ca, cb = _registered_component(2), _registered_component(5)
     assert ca.bindings == (RUN, REGISTRATION, RUN)
     wl = W.WorkloadProgram([W.WorkloadRequest("a", 0, 2, 1, 0, ca), W.WorkloadRequest("b", 1, 5, 1, 0, cb)], lag=0)
@@ -395,7 +395,7 @@ def test_canon_is_per_compose_conflicts_refused_inside_one_never_across_composes
     disagree on a definition under the same id are refused (E_IDENTITY, fail closed); a LATER compose in the same process with its own
     canon is compared against its own components only, never against an earlier compose's definitions."""
     import copy
-    from verity.ir.defs import IdentityConflict
+    from verity.primitives.circuits.ir.defs import IdentityConflict
     da = encode_program(Program(_stepped_request(3, 2)))
     sid = next(k for k, v in da["definitions"].items() if v["form"] == "composite" and k.startswith("GpTestStep"))
     db = copy.deepcopy(da)

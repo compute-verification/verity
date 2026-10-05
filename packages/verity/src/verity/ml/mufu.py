@@ -13,7 +13,7 @@ MufuTanh section).  All were measured on an RTX 4090 (sm_89): conformance eviden
 the captures of records `W11-40f0cebeb670-20260907T1800Z` (ex2, rcp) and `W11C-40f0cebeb670-20260907T1900Z` (rsq, sqrt); the
 Triton record `W11R-40f0cebeb670-20260907T1802Z` measured the same rcp and sqrt words.
 
-Batch kernels.  Every primitive but `MufuTanh` has a numpy kernel registered with `verity.evaluation` (domain: every encoding).
+Batch kernels.  Every primitive but `MufuTanh` has a numpy kernel registered with `verity.primitives.circuits.evaluation` (domain: every encoding).
 
 Provenance.  These are the definitions the vLLM integration registered in `verity_vllm.program.registry.prims` (same ids,
 signatures and conformance statuses), which re-exports them from here.  The bit rules are the integration's C++ models
@@ -30,9 +30,9 @@ from importlib import resources
 
 import numpy as np
 
-from verity.evaluation import register_kernel
-from verity.ir.defs import primitive
-from verity.ir.types import Value
+from verity.primitives.circuits.evaluation import register_kernel
+from verity.primitives.circuits.ir.defs import primitive
+from verity.primitives.circuits.ir.types import Value
 
 from . import library
 from .fp32 import bits_of, f32_is_nan, f32_of

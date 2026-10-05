@@ -1,7 +1,7 @@
 """The served Program on bits: the Boolean version of each Definition a derived Program calls, and how far a Program is from
 pure bits.
 
-A Definition is Boolean (`verity.ir.boolean.is_boolean`) when it computes on 1-bit wires with And/Xor/Not gates and constant bits
+A Definition is Boolean (`verity.primitives.circuits.ir.boolean.is_boolean`) when it computes on 1-bit wires with And/Xor/Not gates and constant bits
 only, through every sub-Call.  A Boolean Definition names the word Definition it computes (`verity.ml.boolean.trace.word_of`: its
 ``word``, a Definition, or for one with statics a function of its bindings, in which case it carries its word's name).  Those
 links are the one table this module reads: `boolean_version(fn)` is the registered Boolean Definition whose word is ``fn``,
@@ -34,11 +34,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from verity.ir import boolean as BL
-from verity.ir.codec import descriptor_id
-from verity.ir.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ir.refs import Coll, PartLog, concat, prefix_runs, runs
-from verity.ir.types import Array, Record, Tuple, Type, Value
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.codec import descriptor_id
+from verity.primitives.circuits.ir.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.primitives.circuits.ir.refs import Coll, PartLog, concat, prefix_runs, runs
+from verity.primitives.circuits.ir.types import Array, Record, Tuple, Type, Value
 from verity_vllm.config import option
 
 SCHEMA = "verity-vllm/boolean-purity/v1"
@@ -348,9 +348,9 @@ def derived(rep, *, check_registry: bool = True):
     digest in its provenance (``ir``); a refusal (``numerics_unregistered``) names every Call with no Boolean version."""
     from dataclasses import replace
 
-    from verity.ir.codec import encode_program, program_digest
-    from verity.ir.liveness import dead_gates
-    from verity.ir.program import Program
+    from verity.primitives.circuits.ir.codec import encode_program, program_digest
+    from verity.primitives.circuits.ir.liveness import dead_gates
+    from verity.primitives.circuits.ir.program import Program
     from verity_vllm.program.frontend.derive import DeriveReport, Unsupported
     from verity_vllm.program.frontend.torch_frontend import check_identity
 
@@ -483,7 +483,7 @@ class Options:
 
 
 def load_program(path: Path):
-    from verity.ir.codec import decode_program, program_digest
+    from verity.primitives.circuits.ir.codec import decode_program, program_digest
     from verity_vllm.program.registry.catalog import load as load_registry
     opener = gzip.open if str(path).endswith(".gz") else open
     with opener(path, "rt") as f:

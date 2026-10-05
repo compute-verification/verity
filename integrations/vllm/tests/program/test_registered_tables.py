@@ -7,12 +7,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.evaluation import RegisteredTable, evaluate
-from verity.ir.codec import encode_program, program_digest
-from verity.ir.constants import REGISTRATION, inputs, program_data
-from verity.ir.defs import bind
-from verity.ir.program import Program
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.evaluation import RegisteredTable, evaluate
+from verity.primitives.circuits.ir.codec import encode_program, program_digest
+from verity.primitives.circuits.ir.constants import REGISTRATION, inputs, program_data
+from verity.primitives.circuits.ir.defs import bind
+from verity.primitives.circuits.ir.program import Program
+from verity.primitives.circuits.ir.types import Array, Value
 from verity_vllm.program.registry import dense as D
 from verity_vllm.program.registry import tables as T
 
@@ -45,7 +45,7 @@ def test_a_program_reading_a_table_decodes_where_it_was_not_built(tmp_path):
     prog = Program(T.GeluTanhMulBf16V3, registered=("gelu_tanh_bf16",))
     d = tmp_path / "p.json"
     d.write_text(json.dumps(encode_program(prog)))
-    code = ("import json, sys; from verity.ir.codec import decode_program, program_digest; from verity.ir.defs import REGISTRY; "
+    code = ("import json, sys; from verity.primitives.circuits.ir.codec import decode_program, program_digest; from verity.primitives.circuits.ir.defs import REGISTRY; "
             "import verity_vllm.program.registry.tables; assert 'TableRead16x1_v1' not in REGISTRY; "
             "print(program_digest(decode_program(json.load(open(sys.argv[1])), REGISTRY)))")
     out = subprocess.run([sys.executable, "-c", code, str(d)], capture_output=True, text=True, check=True).stdout.split()

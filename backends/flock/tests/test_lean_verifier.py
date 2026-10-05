@@ -59,7 +59,7 @@ def test_audit_layer_is_abstract():
 
 def _has_unit_cut():
     try:
-        from verity.ir.partition import validate_unit_cut  # noqa: F401
+        from verity.primitives.circuits.ir.partition import validate_unit_cut  # noqa: F401
     except ImportError:
         return False
     return True
@@ -567,13 +567,13 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
 
 def _has_check_cut():
     try:
-        from verity.ir.cut import check_cut  # noqa: F401
+        from verity.primitives.circuits.ir.cut import check_cut  # noqa: F401
     except ImportError:
         return False
     return True
 
 
-@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ir.cut (PR #111)")
+@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.primitives.circuits.ir.cut (PR #111)")
 def test_check_cut_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(LEAN.parent / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
@@ -585,7 +585,7 @@ def test_check_cut_agrees_with_the_reference(tmp_path):
 def _qword_vector_file():
     try:
         import verity
-        from verity.ir.codec import decode_program  # noqa: F401
+        from verity.primitives.circuits.ir.codec import decode_program  # noqa: F401
     except ImportError:
         return None
     v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "qword_vectors.json"
@@ -609,8 +609,8 @@ def test_qword_cuts_agree_with_core_verify(tmp_path):
 
 def _qword_vectors():
     try:
-        import verity.ir.partition_object  # noqa: F401
-        from verity.ir.cut import cut_word  # noqa: F401
+        import verity.primitives.circuits.ir.partition_object  # noqa: F401
+        from verity.primitives.circuits.ir.cut import cut_word  # noqa: F401
     except ImportError:
         return None
     import verity
@@ -919,7 +919,7 @@ def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True)
 
     import numpy as np
 
-    from verity.ir.types import Array, Tuple, Value
+    from verity.primitives.circuits.ir.types import Array, Tuple, Value
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
     from verity_flock import gf2

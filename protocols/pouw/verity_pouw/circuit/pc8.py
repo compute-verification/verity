@@ -48,10 +48,10 @@ from functools import lru_cache
 from typing import Any, ClassVar
 
 from verity.commitments.rowleaf import ROLE_W, ROLE_X
-from verity.ir import partition_object as PO
-from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ir.refs import array_of, tuple_of
-from verity.ir.types import Array, Tuple, Value
+from verity.primitives.circuits.ir import partition_object as PO
+from verity.primitives.circuits.ir.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.primitives.circuits.ir.refs import array_of, tuple_of
+from verity.primitives.circuits.ir.types import Array, Tuple, Value
 from verity.ml.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
 from verity.ml.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperBF16WgmmaDot16,
                              HopperE4m3QgmmaDot32)

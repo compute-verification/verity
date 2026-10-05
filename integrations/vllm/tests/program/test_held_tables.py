@@ -3,8 +3,8 @@ activations (`silu_bf16`, `tanh_rn`, `gelu_tanh_bf16`) are the program's, regist
 guard (`verity.ml.operations.program_data`) lists them; FA3's MUFU.RCP table is the library's."""
 from __future__ import annotations
 
-from verity.ir import constants as K
-from verity.ir.program import Program
+from verity.primitives.circuits.ir import constants as K
+from verity.primitives.circuits.ir.program import Program
 from verity.ml import operations as O
 from verity_vllm.program.registry import b1, dense, hopper
 from verity_vllm.program.registry import prims as P

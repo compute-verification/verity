@@ -13,7 +13,7 @@ once.
 """
 from __future__ import annotations
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.ir.defs import bind
 from verity.ml.boolean import attention as BA
 from verity.ml.boolean import gemm as BG
 from verity.ml.boolean import mufu as BM

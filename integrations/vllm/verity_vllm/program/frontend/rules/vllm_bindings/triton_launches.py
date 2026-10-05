@@ -6,7 +6,7 @@ import sys
 
 import torch
 
-from verity.ir.refs import Coll
+from verity.primitives.circuits.ir.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo

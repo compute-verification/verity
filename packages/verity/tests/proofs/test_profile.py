@@ -16,9 +16,9 @@ from math import comb, exp, inf, log, sqrt
 
 import pytest
 
-from verity.ir import Program, bind
-from verity.ir import query_ast as G
-from verity.ir.partition import Level, members_per_parent, validate_partition
+from verity.primitives.circuits.ir import Program, bind
+from verity.primitives.circuits.ir import query_ast as G
+from verity.primitives.circuits.ir.partition import Level, members_per_parent, validate_partition
 from verity.ml import gemm
 from verity.proofs.profile import HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
 

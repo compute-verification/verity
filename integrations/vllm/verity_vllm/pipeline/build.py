@@ -23,7 +23,7 @@ import time
 import traceback
 from dataclasses import dataclass
 
-from verity.ir.partition_object import program_sha512
+from verity.primitives.circuits.ir.partition_object import program_sha512
 from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.boolean import derived
@@ -32,7 +32,7 @@ from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_li
 
 
 def _spec_histogram(program) -> dict[str, int]:
-    from verity.ir.codec import _spec_id
+    from verity.primitives.circuits.ir.codec import _spec_id
     h: dict[str, int] = {}
     for n in program.fn.body.nodes:
         if n.form in ("call", "primitive"):
@@ -46,8 +46,8 @@ def _spec_histogram(program) -> dict[str, int]:
 
 def _instance_rows(program):
     """The flat body as (spec, argument runs) rows — the comparator's unit (compare.py), one at a time."""
-    from verity.ir.codec import descriptor_id
-    from verity.ir.refs import runs
+    from verity.primitives.circuits.ir.codec import descriptor_id
+    from verity.primitives.circuits.ir.refs import runs
     for k, n in enumerate(program.fn.body.nodes):
         yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [runs(a.refs) for a in n.args]}  # json writes a run tuple as the list it was
 
@@ -572,7 +572,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
 def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling: dict, launch: dict | None, tp: int, rank: int,
                    model_root: str | None) -> None:
     """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
-    from verity.ir.codec import canonical_json, encode_program
+    from verity.primitives.circuits.ir.codec import canonical_json, encode_program
     from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
     from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity
@@ -699,7 +699,7 @@ def _write_manifest(out: str, res: dict) -> None:
                           "site_packages_by_package": tr.get("site_packages_by_package"),
                           "non_site_packages_paths": [p for p in tr.get("non_site_packages_paths", []) if not p.startswith("/usr/lib/python")]},
          "program": res.get("program"), "spec_histogram": res.get("spec_histogram"), "ok": res.get("ok"), "unsupported": res.get("unsupported"),
-         "files": ["descriptor.json.gz (verity.ir descriptor v1)", "instances.json.gz (instance sequence: spec + operand runs)", "derive-report.json", "inputs.json", "result.json",
+         "files": ["descriptor.json.gz (verity.primitives.circuits.ir descriptor v1)", "instances.json.gz (instance sequence: spec + operand runs)", "derive-report.json", "inputs.json", "result.json",
                    "artifact.json (verity/aot-artifact/v1: identity + construction_version + target_profile + applicability + program_digest)"]}
     if res.get("relabeled_from"):
         m["relabeled_from"] = res["relabeled_from"]

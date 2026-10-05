@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.ir.defs import bind
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry.quarantine.ln import gelu_erf, layer_norm_aten
 

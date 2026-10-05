@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ir.partition import Level
+from verity.primitives.circuits.ir.partition import Level
 from verity.proofs.profile import IntegrityProfile, Subset
 
 AUDIT = Path(__file__).resolve().parents[1] / "verifier" / "lean" / "soundness" / "FlockSoundness" / "Audit"

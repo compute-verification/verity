@@ -33,7 +33,7 @@ from verity.commitments.identity import identity_digest
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, row_leaf, sha512_row_digest
-from verity.ir.program import Program
+from verity.primitives.circuits.ir.program import Program
 
 from . import partition as P
 

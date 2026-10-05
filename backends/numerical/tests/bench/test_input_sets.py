@@ -144,8 +144,8 @@ def test_evaluation_targets_equal_the_definitions():
     """Heads evaluate through a batch Definition that has a kernel; each equals the head's gate reference, and the captured
     vLLM GEMM step (core's AmpereBF16TcDot16_v2 since the re-baseline re-key; the retired _v1 evaluated the same function) equals the
     kernel."""
-    from verity.evaluation import evaluate_batch
-    from verity.ir.defs import REGISTRY, bind
+    from verity.primitives.circuits.evaluation import evaluate_batch
+    from verity.primitives.circuits.ir.defs import REGISTRY, bind
     from verity.ml import gemm
 
     key = G.key_for(TM.subcircuit("attention-head", D=16, BN=16), 0)

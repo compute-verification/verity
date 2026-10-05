@@ -44,7 +44,7 @@ from verity.commitments.identity import identity_digest
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, sha512_row_prefix
-from verity.ir.codec import canonical_json
+from verity.primitives.circuits.ir.codec import canonical_json
 
 from .hiding import HidingLeaves
 

@@ -7,7 +7,7 @@ each weights wrong units by what one costs it, through the generic weighted boun
 its reader lives with the application, not in core.  One `delta` serves every consumer; the application's failure
 union counts it once.
 
-The law is stated over named levels of a partition hierarchy (`verity.ir.partition.Level`): each level's members
+The law is stated over named levels of a partition hierarchy (`verity.primitives.circuits.ir.partition.Level`): each level's members
 partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`, `Stratified`) or only
 groups.  The names are the producer's labels (sampled proofs' two-stage law is one level "replay" drawn
 `Bernoulli(p * k / n_v)`); the profile carries draws, never roles.
@@ -21,7 +21,7 @@ from fractions import Fraction
 from math import comb, expm1, floor, inf, lgamma, log, log1p, nextafter, prod
 from types import MappingProxyType
 
-from verity.ir.partition import Hierarchy, Level
+from verity.primitives.circuits.ir.partition import Hierarchy, Level
 
 
 #: `worst_case`'s margin: risks are shrunk and the bound raised by this relative amount, far above the arithmetic's error

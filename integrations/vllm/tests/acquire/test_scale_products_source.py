@@ -35,9 +35,9 @@ def _f32(words) -> "torch.Tensor":
 
 
 def _ir(xs: list[int], ws: list[list[int]]) -> list[int]:
-    from verity.evaluation.reference import standalone_call
-    from verity.ir.defs import bind
-    from verity.ir.evaluate import evaluate_call
+    from verity.primitives.circuits.evaluation.reference import standalone_call
+    from verity.primitives.circuits.ir.defs import bind
+    from verity.primitives.circuits.ir.evaluate import evaluate_call
 
     prog, call = standalone_call(bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G))
     t: dict[int, int] = {}

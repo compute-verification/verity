@@ -9,11 +9,11 @@ import json
 import numpy as np
 import pytest
 
-from verity.evaluation import evaluate_batch
-from verity.ir.codec import descriptor_id
-from verity.ir.defs import Builder, bind
-from verity.ir.refs import Affine, Coll
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.evaluation import evaluate_batch
+from verity.primitives.circuits.ir.codec import descriptor_id
+from verity.primitives.circuits.ir.defs import Builder, bind
+from verity.primitives.circuits.ir.refs import Affine, Coll
+from verity.primitives.circuits.ir.types import Array, Value
 from verity_vllm.pipeline import boolean_replay as BR
 from verity_vllm.program.kernels.kernel_registry import Declined
 from verity_vllm.program.registry import b1

@@ -7,8 +7,8 @@ These ids appear in stored Programs registered by the vLLM integration; each den
 """
 from __future__ import annotations
 
-from verity.ir.defs import primitive
-from verity.ir.types import Value
+from verity.primitives.circuits.ir.defs import primitive
+from verity.primitives.circuits.ir.types import Value
 
 from .tc.cast import bf16_is_nan, f32_is_nan
 

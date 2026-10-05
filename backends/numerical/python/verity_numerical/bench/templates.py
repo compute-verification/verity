@@ -4,7 +4,7 @@
     subcircuit = a template with every parameter bound                     (``gemm-coordinate/k2048/sm80-mma-bf16``)
 
 A :class:`Subcircuit` carries what both kinds of input set need: the IR target its instances are evaluated with
-(``verity.evaluation.evaluate_batch``, the one evaluator: a registered kernel where one is self-checked against the gate
+(``verity.primitives.circuits.evaluation.evaluate_batch``, the one evaluator: a registered kernel where one is self-checked against the gate
 reference, else the reference), its input and output ports, and the ``relation`` / set name the vLLM VU exporter writes
 (``verity_vllm.pipeline.vu_export``, PR #42), so a synthetic set and a captured set of one subcircuit have the same name,
 relation and ports.  :func:`identify` maps a set's ``relation`` back to its subcircuit, whichever wrote it.
@@ -126,7 +126,7 @@ def finite_bf16(words: np.ndarray) -> np.ndarray:
 # --- statics as the Program records them ---------------------------------------------------------------------------------------
 
 def encode_static(v: Any) -> Any:
-    """A static as a vLLM Program's call records it (``verity.ir.codec``): a float is the JSON string ``{"f64":"<hex>"}``."""
+    """A static as a vLLM Program's call records it (``verity.primitives.circuits.ir.codec``): a float is the JSON string ``{"f64":"<hex>"}``."""
     if isinstance(v, float):
         return json.dumps({"f64": v.hex()}, separators=(",", ":"))
     return v
@@ -196,9 +196,9 @@ class Subcircuit:
 
     def evaluate(self, inputs: Mapping[str, Sequence[np.ndarray]], instance_statics: Sequence[Mapping[str, int]] | None = None
                  ) -> dict[str, list[np.ndarray]]:
-        """Every instance's outputs through ``verity.evaluation.evaluate_batch``: ``inputs[port][i]`` the words of instance i;
+        """Every instance's outputs through ``verity.primitives.circuits.evaluation.evaluate_batch``: ``inputs[port][i]`` the words of instance i;
         instances are batched by their instance statics.  Returns ``{output port: [words of instance i]}``."""
-        from verity.evaluation import evaluate_batch
+        from verity.primitives.circuits.evaluation import evaluate_batch
 
         n = len(next(iter(inputs.values()))) if inputs else 0
         if instance_statics is None:
@@ -235,12 +235,12 @@ class Subcircuit:
         return ok
 
     def program_digests(self, instance_statics: Sequence[Mapping[str, int]] = ({},)) -> dict[str, str]:
-        """``{definition id: verity.ir.codec.program_digest}`` of the subcircuit's own Definition at each instance-statics binding.
+        """``{definition id: verity.primitives.circuits.ir.codec.program_digest}`` of the subcircuit's own Definition at each instance-statics binding.
         A ``ScalarReference`` (a silicon function no core Definition wraps yet) has no Program: its entry is
         :func:`reference_digest`."""
-        from verity.evaluation import ScalarReference
-        from verity.ir.codec import program_digest
-        from verity.ir.program import Program
+        from verity.primitives.circuits.evaluation import ScalarReference
+        from verity.primitives.circuits.ir.codec import program_digest
+        from verity.primitives.circuits.ir.program import Program
 
         out = {}
         for st in {tuple(sorted(s.items())): s for s in instance_statics}.values():
@@ -441,7 +441,7 @@ def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype:
         raise ValueError(f"gemm-coordinate {semantics}: datatype is bf16, not {datatype!r}")
 
     def target(**_st: int) -> Any:
-        from verity.ir.defs import bind
+        from verity.primitives.circuits.ir.defs import bind
         from verity.ml import gemm, prims
 
         return bind(gemm.GemmCoordinate, K=K, DOT=getattr(prims, s.step))
@@ -530,7 +530,7 @@ def attention_head(D: int, BN: int, T: Any = "1:512", semantics: str = "sm80.fa2
         return {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 
     def target(T: int) -> Any:
-        from verity.ir.defs import bind
+        from verity.primitives.circuits.ir.defs import bind
         from verity_vllm.program.registry import b1
 
         if family == "Attention_v3":
@@ -538,7 +538,7 @@ def attention_head(D: int, BN: int, T: Any = "1:512", semantics: str = "sm80.fa2
         return bind(b1.AttentionV2, T=int(T), NH=1, KVH=1, D=D, BN=BN, **_v2())
 
     def definition(T: int) -> Any:
-        from verity.ir.defs import bind
+        from verity.primitives.circuits.ir.defs import bind
         from verity_vllm.program.registry import b1
 
         if family == "Attention_v3":
@@ -583,13 +583,13 @@ def rope_head(D: int) -> Subcircuit:
         raise ValueError(f"rope-head: D = {D} is not a positive even number")
 
     def target(**_st: int) -> Any:
-        from verity.ir.defs import bind
+        from verity.primitives.circuits.ir.defs import bind
         from verity_vllm.program.registry import b1
 
         return bind(b1.RoPE, NHEADS=1, D=D)
 
     def definition(**_st: int) -> Any:
-        from verity.ir.defs import bind
+        from verity.primitives.circuits.ir.defs import bind
         from verity_vllm.program.registry import b1
 
         return bind(b1.RoPEHead, D=D)
@@ -638,9 +638,9 @@ def _row_subcircuit(row: _Row, **params: Any) -> Subcircuit:
     st = {k: (float(params[k]) if isinstance(params[k], float) or k == "EPS" else int(params[k])) for k in row.statics}
 
     def target(**_s: int) -> Any:
-        from verity.ir.defs import bind
+        from verity.primitives.circuits.ir.defs import bind
 
-        import verity_vllm.program.kernels.rows  # noqa: F401  (registers the self-checked row kernels with verity.evaluation)
+        import verity_vllm.program.kernels.rows  # noqa: F401  (registers the self-checked row kernels with verity.primitives.circuits.evaluation)
         return bind(_composite(row.registry), **st)
 
     enc = {k: encode_static(v) for k, v in st.items()}
@@ -815,7 +815,7 @@ def embedding_row(V: int, H: int) -> Subcircuit:
     V, H = int(V), int(H)
 
     def target(**_s: int) -> Any:
-        from verity.ir.defs import bind
+        from verity.primitives.circuits.ir.defs import bind
         from verity_vllm.program.registry import b1
 
         import verity_vllm.program.kernels.rows  # noqa: F401
@@ -847,7 +847,7 @@ def _expert_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
 def _expert_eval(sub: Subcircuit, arrays: list[np.ndarray], _st: Mapping[str, int]) -> np.ndarray:
     """``MoeExpertGemm(W)_v1{E, K, N=1}`` (its registered row kernel) on the input's x, e (and g) and a slab of +0 holding the
     input's row at expert e: the coordinate Definition's value (``test_templates``)."""
-    from verity.evaluation import evaluate_batch
+    from verity.primitives.circuits.evaluation import evaluate_batch
 
     E, K = sub.params["E"], sub.params["K"]
     x, e, *rest = arrays
@@ -864,14 +864,14 @@ def moe_expert_coordinate(E: int, K: int, weighted: bool = False, tile: int = 32
                         else ("MoeExpertGemm_v1", "MoeExpertCoordinate", "MoeExpertGemm"))
 
     def target(**_s: int) -> Any:
-        from verity.ir.defs import bind
+        from verity.primitives.circuits.ir.defs import bind
         from verity_vllm.program.registry import moe
 
         import verity_vllm.program.kernels.rows  # noqa: F401
         return bind(getattr(moe, gemm), E=E, K=K, N=1)
 
     def definition(**_s: int) -> Any:
-        from verity.ir.defs import bind
+        from verity.primitives.circuits.ir.defs import bind
         from verity_vllm.program.registry import moe
 
         return bind(getattr(moe, coord), E=E, K=K)
@@ -924,7 +924,7 @@ def scaled_mm_fp8_block_coordinate(K: int, G: int = 128, semantics: str = "sm90.
         raise ValueError(f"scaled-mm-fp8-block-coordinate: K = {K}, G = {G} (K a multiple of G, G of 32)")
 
     def target(**_s: int) -> Any:
-        from verity.ir.defs import bind
+        from verity.primitives.circuits.ir.defs import bind
         from verity_vllm.program.registry import fp8
 
         return bind(fp8.ScaledMmFp8BlockCoordinate, K=K, G=G)

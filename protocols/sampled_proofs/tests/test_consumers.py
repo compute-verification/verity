@@ -10,7 +10,7 @@ from fractions import Fraction
 from math import log2
 from pathlib import Path
 
-from verity.ir.partition import Level
+from verity.primitives.circuits.ir.partition import Level
 from verity.proofs.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
 from verity_sampled_proofs.one_stage.consumers import compute_bound, exfiltration_bound, location_bits
 

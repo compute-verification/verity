@@ -392,7 +392,7 @@ def prims() -> dict:
         import importlib
         import pkgutil
 
-        from verity.ir.defs import PrimitiveDefinition
+        from verity.primitives.circuits.ir.defs import PrimitiveDefinition
 
         mods = ["verity.ml.prims"]
         import verity_vllm.program.registry as R
@@ -786,9 +786,9 @@ class Commitments:
         self.openings = walker.openings
 
     def of(self, fn) -> str:
-        from verity.ir.codec import _spec_id
-        from verity.ir.cut import separable
-        from verity.ir.defs import PrimitiveDefinition
+        from verity.primitives.circuits.ir.codec import _spec_id
+        from verity.primitives.circuits.ir.cut import separable
+        from verity.primitives.circuits.ir.defs import PrimitiveDefinition
         from verity_vllm.query import word as WQ
 
         fid = _spec_id(fn)
@@ -867,8 +867,8 @@ class Commitments:
         from collections import Counter
 
         import numpy as np
-        from verity.ir.codec import _spec_id
-        from verity.ir.layout import WIDE_FAN_IN
+        from verity.primitives.circuits.ir.codec import _spec_id
+        from verity.primitives.circuits.ir.layout import WIDE_FAN_IN
 
         G = WQ.Graph(fn)
         R = WQ.units(G, X_BITS, W_BITS)
@@ -876,7 +876,7 @@ class Commitments:
         own2, _k, head = WQ.partition(G, X_BITS)
         if not (own2 == owner).all():
             raise AssertionError(f"{fid}: the partition is not deterministic")
-        from verity.ir.cut import call_scope
+        from verity.primitives.circuits.ir.cut import call_scope
         c, call = call_scope(fn)
         lo = call.offset
         leaves = _leaf_lookup(fn.signature()[0])
@@ -1006,7 +1006,7 @@ def _empty(fid, gates) -> dict:
 def _leaf_lookup(params):
     """``leaf(k) -> (parameter name, width)`` for the Call's k-th input leaf, without listing the leaves (an embedding table
     parameter has over 10^8)."""
-    from verity.ir.types import Array, Record, Tuple
+    from verity.primitives.circuits.ir.types import Array, Record, Tuple
 
     starts, names, types, o = [], [], [], 0
     for name, t in params:
@@ -1393,7 +1393,7 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
     q = g.get("q_word_v1") or {}
     try:
         if g["definition"] in OPENED and GATHERS == "opening":
-            from verity.ir.defs import PrimitiveDefinition
+            from verity.primitives.circuits.ir.defs import PrimitiveDefinition
 
             fn = specialization(g["definition"], g["statics"])
             cm.openings.update(n.fn.id for n in fn.body.nodes if isinstance(n.fn, PrimitiveDefinition) and n.fn.id.startswith("Gather"))

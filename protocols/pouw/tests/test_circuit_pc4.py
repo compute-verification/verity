@@ -16,9 +16,9 @@ import pytest
 
 import circuit_fixtures as CF
 import pearl_c4_vectors as V
-from verity.evaluation import evaluate
-from verity.ir import partition_object as PO
-from verity.ir.program import Program
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.ir import partition_object as PO
+from verity.primitives.circuits.ir.program import Program
 from verity.ml.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16WgmmaDot16
 from verity.ml.scalar import F32Fabs, F32Fmaxf, I32Le
 from verity.ml.tc import fp32

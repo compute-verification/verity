@@ -5,10 +5,10 @@ body (m = 0 for primitive/call nodes).  Out(part) = gates of the part that are (
 part, or (b) returned by S's body (escape to the parent; exact when S is the root, conservative otherwise)."""
 import sys
 sys.path.insert(0, "/private/tmp/lane-coverage")
-from verity.ir.defs import PrimitiveDefinition, bind
-from verity.ir.layout import Scope, GateSelection, resolve
-from verity.ir.program import Program
-from verity.ir.refs import Affine, Concat, Strided, runs
+from verity.primitives.circuits.ir.defs import PrimitiveDefinition, bind
+from verity.primitives.circuits.ir.layout import Scope, GateSelection, resolve
+from verity.primitives.circuits.ir.program import Program
+from verity.primitives.circuits.ir.refs import Affine, Concat, Strided, runs
 from verity_vllm.program.registry import b1
 
 

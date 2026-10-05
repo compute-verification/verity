@@ -15,13 +15,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.evaluation import evaluate, evaluate_words
-from verity.ir import boolean as BL
-from verity.ir.codec import _spec_id
-from verity.ir.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ir.program import Program
-from verity.ir.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
-from verity.ir.types import Array, Record, Tuple as TupleT, Value
+from verity.primitives.circuits.evaluation import evaluate, evaluate_words
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.codec import _spec_id
+from verity.primitives.circuits.ir.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
+from verity.primitives.circuits.ir.program import Program
+from verity.primitives.circuits.ir.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
+from verity.primitives.circuits.ir.types import Array, Record, Tuple as TupleT, Value
 from verity.ml import fp32 as W
 from verity.ml import gemm as G
 from verity.ml import prims as MP
@@ -152,7 +152,7 @@ def test_the_lifted_program_is_bits_throughout_and_the_word_program_is_not():
 
 
 def test_a_word_derivation_report_becomes_its_program_on_bits():
-    from verity.ir.codec import encode_program, program_digest
+    from verity.primitives.circuits.ir.codec import encode_program, program_digest
     from verity_vllm.program.frontend.derive import DeriveReport
 
     P = Program(_derived(), annotations={"note": "carried"})

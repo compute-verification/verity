@@ -4,7 +4,7 @@ Four identities, each with one meaning:
 
     query_id        sha256 of the canonical JSON of the query AST -- the program-independent identity of the query
                     text (`query_codec.query_id` / `gateset.query_id` when present; the same construction here).
-    program_digest  `verity.ir.codec.program_digest` -- re-exported, untouched, never recomputed differently.
+    program_digest  `verity.primitives.circuits.ir.codec.program_digest` -- re-exported, untouched, never recomputed differently.
     binding_id      sha256(schema || query_id || program_digest) over the query document's schema string: the
                     identity of "this query over this Program".  UTF-8, plain concatenation (the two digests are
                     fixed-length hex, so the concatenation is unambiguous).
@@ -29,7 +29,7 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
-from verity.ir.codec import canonical_json, program_digest  # re-exported identity; never wrapped or altered
+from verity.primitives.circuits.ir.codec import canonical_json, program_digest  # re-exported identity; never wrapped or altered
 
 QUERY_SCHEMA = "verity-ir/query/v1"
 USE_SCHEMA = "verity-ir/query-use/v1"
@@ -45,7 +45,7 @@ EVALUATOR_VERSION = "verity-ir/partition/0.1"
 def _as_query(query: Any) -> Any:
     """A `gateset.Query` when `query` is one (or its string form and `gateset` is importable), else None."""
     try:
-        from verity.ir import query_ast as gateset
+        from verity.primitives.circuits.ir import query_ast as gateset
     except ImportError:
         return None
     if isinstance(query, gateset.Query):
@@ -62,7 +62,7 @@ def query_json(query: Any) -> Any:
         return query
     q = _as_query(query)
     if q is not None:
-        from verity.ir.query_codec import to_json
+        from verity.primitives.circuits.ir.query_codec import to_json
         return to_json(q)
     fn = getattr(query, "to_json", None)
     if fn is not None:
@@ -76,7 +76,7 @@ def query_id(query: Any) -> str:
     else by the same construction over `query_json(query)`."""
     q = _as_query(query)
     if q is not None:
-        from verity.ir.query_codec import query_id as _qid
+        from verity.primitives.circuits.ir.query_codec import query_id as _qid
         return _qid(q)
     return hashlib.sha256(canonical_json(query_json(query))).hexdigest()
 

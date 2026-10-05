@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.ir import query
-from verity.ir.codec import program_digest
-from verity.ir.layout import FunctionCall
+from verity.primitives.circuits.ir import query
+from verity.primitives.circuits.ir.codec import program_digest
+from verity.primitives.circuits.ir.layout import FunctionCall
 from verity_sampled_proofs.law import Stage, ru_key, select_replay_units
 from verity_sampled_proofs.plan import DEFAULT_CLASS, Obligation, UnconditionalObligation, VerificationPlan, weight_binding_plan
 

@@ -21,9 +21,9 @@ import hashlib
 
 import numpy as np
 
-from verity.ir.defs import PrimitiveDefinition, bind, composite
-from verity.ir.refs import Affine, Coll, Explicit, Strided, concat
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.ir.defs import PrimitiveDefinition, bind, composite
+from verity.primitives.circuits.ir.refs import Affine, Coll, Explicit, Strided, concat
+from verity.primitives.circuits.ir.types import Array, Value
 from verity.ml.scalar import BitAnd, I32Eq, SelectF32
 from verity_vllm.program.registry.b1 import const
 from verity_vllm.program.registry.prims import BF16, BIT, F32, I32

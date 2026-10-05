@@ -133,7 +133,7 @@ REF_INTEGRITY_RULE = {
 }
 #: Every gate `evaluate_gates` runs, in report order.
 ALL_GATES = GATES + STRUCTURAL_GATES + INTEGRITY_GATES
-#: G8 — the schema of the query-use document (`verity.ir/query_artifact.py`, partition owner).
+#: G8 — the schema of the query-use document (`verity.primitives.circuits.ir/query_artifact.py`, partition owner).
 QUERY_USE_SCHEMA = "verity-ir/query-use/v1"
 QUERY_USE_KIND = "vu-partition"
 

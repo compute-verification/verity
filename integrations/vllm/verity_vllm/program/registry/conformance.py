@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.primitives.circuits.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity_vllm.config import option
 from verity_vllm.program.registry import b1, prims  # noqa: F401  (registration)
 

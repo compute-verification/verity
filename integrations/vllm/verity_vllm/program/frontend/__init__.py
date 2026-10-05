@@ -6,8 +6,8 @@
                             not semantic components of gate outputs.
 
 `torch_frontend` (needs torch) is the PyTorch authoring frontend. `correspond` (program correspondence across
-reference encodings) and `provenance` (export/derivation provenance records) are pure `verity.ir` and import
-without torch. Dead gates are `verity.ir.liveness`.
+reference encodings) and `provenance` (export/derivation provenance records) are pure `verity.primitives.circuits.ir` and import
+without torch. Dead gates are `verity.primitives.circuits.ir.liveness`.
 """
 
 from verity_vllm.program.frontend.correspond import CorrespondenceReport, correspond  # noqa: F401

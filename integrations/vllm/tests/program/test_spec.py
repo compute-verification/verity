@@ -13,8 +13,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ir import Program, bind  # noqa: E402
-from verity.ir.evaluate import evaluate_call  # noqa: E402
+from verity.primitives.circuits.ir import Program, bind  # noqa: E402
+from verity.primitives.circuits.ir.evaluate import evaluate_call  # noqa: E402
 from verity_vllm.program.registry import spec  # noqa: E402
 from verity_vllm.program.registry.b1 import Serve  # noqa: E402
 from tests.program.crosscheck import _standalone  # noqa: E402
@@ -99,8 +99,8 @@ def test_verify_branch_tiny_evaluates_and_accepts_own_argmax():
 
 
 def _eval_program(prog: Program, inputs: list[list[int]]) -> list[int]:
-    from verity.ir.evaluate import evaluate_region
-    from verity.ir.layout import resolve
+    from verity.primitives.circuits.ir.evaluate import evaluate_region
+    from verity.primitives.circuits.ir.layout import resolve
     C = prog.circuit
     t = {}
     for pi, vals in enumerate(inputs):

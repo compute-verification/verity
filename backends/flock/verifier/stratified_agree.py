@@ -78,8 +78,8 @@ def reference_draw(law: dict, src: bytes) -> list[int] | None:
 
 
 def _templates(m: int):
-    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
-    from verity.ir.types import Array, Value
+    from verity.primitives.circuits.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
+    from verity.primitives.circuits.ir.types import Array, Value
     xor = PrimitiveDefinition("StratAgreeXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                               register=False)
     return [bind(CompositeDefinition(f"StratAgreeT{i}", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
@@ -140,7 +140,7 @@ def main() -> int:
     ap.add_argument("--os-draws", type=int, default=400, help="OS draws of the small program, for the frequency check")
     ap.add_argument("--seed", type=int, default=20260927)
     a = ap.parse_args()
-    from verity.ir.codec import canonical_json, encode_program
+    from verity.primitives.circuits.ir.codec import canonical_json, encode_program
     from verity_sampled_proofs.one_stage import audit, draw as D, partition as P
 
     rng = random.Random(a.seed)

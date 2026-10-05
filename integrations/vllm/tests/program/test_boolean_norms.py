@@ -16,14 +16,14 @@ import zlib
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation.batch import type_shape
-from verity.evaluation.reference import standalone_call
-from verity.ir import boolean as BL
-from verity.ir import codec
-from verity.ir.defs import PrimitiveDefinition, bind
-from verity.ir.parts import n_members
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation.batch import type_shape
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir import codec
+from verity.primitives.circuits.ir.defs import PrimitiveDefinition, bind
+from verity.primitives.circuits.ir.parts import n_members
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
 from verity.ml.boolean import mufu as MU
@@ -429,7 +429,7 @@ def _reached(fn) -> set[str]:
 
 @pytest.mark.parametrize("which", ["cuda", "triton"])
 def test_only_the_mufu_sub_calls_are_word_ids(which) -> None:
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.ir.defs import REGISTRY
     top = _top(which, 1536, 1e-6)
     prims = {i for i in _reached(top) if isinstance(REGISTRY.defs.get(i), PrimitiveDefinition)}
     assert prims <= {"And2_v1", "Xor2_v1", "Not_v1", "Const1[0x0]_v1", "Const1[0x1]_v1"}, prims

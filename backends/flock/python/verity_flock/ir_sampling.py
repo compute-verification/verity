@@ -81,7 +81,7 @@ PIECES = IL.PIECES
 # --- the lane unit, lowered from the IR composites ------------------------------------------------------------------------------
 
 def _composites(V: int):
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.ir.defs import bind
     from verity_vllm.program.registry import sampling as SM
 
     return SM.TemperatureLane, bind(SM.TopPMaskStep, V=V), SM.GumbelSelectStep

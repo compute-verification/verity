@@ -10,11 +10,11 @@ import verity.ml.scalar  # noqa: F401
 from verity.commitments import hm96
 from verity.commitments.merkle import merkle_depth
 from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
-from verity.ir.codec import canonical_json
-from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ir.program import Program
-from verity.ir.refs import coll_concat
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.ir.codec import canonical_json
+from verity.primitives.circuits.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.primitives.circuits.ir.program import Program
+from verity.primitives.circuits.ir.refs import coll_concat
+from verity.primitives.circuits.ir.types import Array, Value
 from verity_sampled_proofs.one_stage import audit, draw as D, partition as P, registered as G, registration as R
 
 XOR8 = PrimitiveDefinition("RegisteredTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,

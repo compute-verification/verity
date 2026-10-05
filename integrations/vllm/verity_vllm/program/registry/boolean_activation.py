@@ -22,9 +22,9 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.types import Array
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import CompositeDefinition, bind
+from verity.primitives.circuits.ir.types import Array
 from verity.ml.boolean import fp
 from verity.ml.boolean.forms import NOT, ZERO, and_reduce, const_bits, or_reduce, sub
 from verity.ml.boolean.trace import definition

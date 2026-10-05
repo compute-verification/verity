@@ -15,15 +15,15 @@ import json
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation.reference import standalone_call
-from verity.ir import boolean as BL
-from verity.ir import codec
-from verity.ir import partition_object as PO
-from verity.ir.defs import REGISTRY, CompositeDefinition, bind
-from verity.ir.refs import array_of, tuple_of
-from verity.ir.types import Array, Tuple
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir import codec
+from verity.primitives.circuits.ir import partition_object as PO
+from verity.primitives.circuits.ir.defs import REGISTRY, CompositeDefinition, bind
+from verity.primitives.circuits.ir.refs import array_of, tuple_of
+from verity.primitives.circuits.ir.types import Array, Tuple
 from verity.ml.boolean import trace as TR
 from verity.ml.boolean.forms import ZERO
 from verity_vllm.program import boolean as SW

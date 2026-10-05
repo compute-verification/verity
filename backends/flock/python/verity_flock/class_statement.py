@@ -1,4 +1,4 @@
-"""A unit class of any partition (`verity.ir.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
+"""A unit class of any partition (`verity.primitives.circuits.ir.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
 ``flock-circuit`` per class.
 
     python -m verity_flock.class_statement --model tiny --partition q-word --out DIR [--binary PATH] [--n 16] [--selftest]
@@ -49,10 +49,10 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from verity.ir import partition_object as PO
-from verity.ir.types import Array, Value
-from verity.ir.cut import DefinitionCut
-from verity.ir.units import Activation, PartitionUnits, UnitCircuit
+from verity.primitives.circuits.ir import partition_object as PO
+from verity.primitives.circuits.ir.types import Array, Value
+from verity.primitives.circuits.ir.cut import DefinitionCut
+from verity.primitives.circuits.ir.units import Activation, PartitionUnits, UnitCircuit
 
 from . import circuit as FC
 from . import class_sweep
@@ -419,9 +419,9 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     row's and the row's unit counts are the per-Call counts times the Call counts. ``definitions`` ({descriptor id: Call count})
     adds Definitions without a graph (bound from the registry, no digest to check); ``exclude`` drops the ids it matches."""
     from circuit_check import targets as TG
-    from verity.ir.codec import descriptor_id
-    from verity.ir.defs import CompositeDefinition
-    from verity.ir.program import Program
+    from verity.primitives.circuits.ir.codec import descriptor_id
+    from verity.primitives.circuits.ir.defs import CompositeDefinition
+    from verity.primitives.circuits.ir.program import Program
     from verity_vllm.pipeline.program_graph import _encoded, definition_digest
 
     TG.load_registries()
@@ -448,14 +448,14 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     arity = [len(fn.signature()[0]) for fn in fns]
 
     def body(B, S, *xs):
-        from verity.ir.refs import tuple_of
+        from verity.primitives.circuits.ir.refs import tuple_of
         outs, at = [], 0
         for fn, k in zip(fns, arity):
             outs.append(B.call(fn, *xs[at:at + k]))
             at += k
         return tuple_of(*outs)
 
-    from verity.ir.types import Tuple as TupleT
+    from verity.primitives.circuits.ir.types import Tuple as TupleT
     ret = TupleT(*[fn.signature()[1] for fn in fns])
     root = CompositeDefinition("DistinctCalls", 1, (), lambda S: (tuple(params), ret), body, register=False)
     return Program(root), calls, prov
@@ -604,7 +604,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     writers: list = []
     definition = None
     if wiring is not None:
-        from verity.ir.codec import descriptor_id
+        from verity.primitives.circuits.ir.codec import descriptor_id
 
         if core_rows or idents is None:
             raise ValueError(f"class {name}: a wired class has u16 rows and lanes with source identities")
@@ -1313,7 +1313,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     row_units: dict[str, int] = {}
     per_definition: dict[str, dict[str, int]] = {}
     if calls is not None:
-        from verity.ir.codec import descriptor_id
+        from verity.primitives.circuits.ir.codec import descriptor_id
         for _k, _m, fn, cut in units._calls():
             per_definition[descriptor_id(fn)] = dict(units._count(cut, fn))
             for sh, c in per_definition[descriptor_id(fn)].items():

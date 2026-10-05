@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from verity.ir.defs import REGISTRY
+from verity.primitives.circuits.ir.defs import REGISTRY
 from verity.ml import library as L
 from verity.ml import prims  # noqa: F401  (registers the listed Definitions)
 
@@ -44,7 +44,7 @@ def test_the_digest_is_pinned():
 
 
 def test_every_core_primitive_declares_only_library_tables():
-    from verity.ir.defs import PrimitiveDefinition
+    from verity.primitives.circuits.ir.defs import PrimitiveDefinition
     from verity.ml import mufu  # noqa: F401  (registers the MUFU primitives)
 
     names = {t.name for t in L.TABLES}

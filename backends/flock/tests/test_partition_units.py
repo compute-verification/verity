@@ -7,9 +7,9 @@ import pytest
 
 pytest.importorskip("verity_vllm.program.registry")
 from circuit_check import targets as TG  # noqa: E402
-from verity.ir import partition_object as PO  # noqa: E402
-from verity.ir.defs import bind  # noqa: E402
-from verity.ir.program import Program  # noqa: E402
+from verity.primitives.circuits.ir import partition_object as PO  # noqa: E402
+from verity.primitives.circuits.ir.defs import bind  # noqa: E402
+from verity.primitives.circuits.ir.program import Program  # noqa: E402
 
 from verity_flock import partition_units as PU  # noqa: E402
 
@@ -45,8 +45,8 @@ def test_odd_partitions(rope, spec):
 
 
 def test_a_registered_input_is_an_input():
-    from verity.ir.defs import CompositeDefinition
-    from verity.ir.types import Value
+    from verity.primitives.circuits.ir.defs import CompositeDefinition
+    from verity.primitives.circuits.ir.types import Value
     from verity.ml.scalar import I32Add
 
     I32 = Value(32)

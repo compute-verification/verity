@@ -17,8 +17,8 @@ from verity_vllm.program.kernels import kernel_registry as KR
 from verity_vllm.program.kernels import twins as TW
 from verity_vllm.pipeline import cli
 from tests.check.test_replay_synthetic import consistent_toy, snapshots  # noqa: F401 - fixtures
-from verity.evaluation import evaluate
-from verity.ir.defs import bind
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.ir.defs import bind
 
 FAMILIES = sorted(TW.FAMILIES)
 

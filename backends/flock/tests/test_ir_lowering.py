@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ir.defs import REGISTRY
+from verity.primitives.circuits.ir.defs import REGISTRY
 from verity_flock import fp, gf2
 from verity_flock import ir_lower as IL
 
@@ -113,8 +113,8 @@ def test_a_primitive_without_a_piece_lowers_through_the_boolean_definition_of_it
     running that Definition's ``build``: found through core's registry, not imported from its owner."""
     from types import SimpleNamespace
 
-    from verity.ir import boolean as BL
-    from verity.ir.types import Array
+    from verity.primitives.circuits.ir import boolean as BL
+    from verity.primitives.circuits.ir.types import Array
     from verity.ml.boolean.forms import NOT
     from verity.ml.boolean.trace import definition
 
@@ -790,9 +790,9 @@ def test_rmsnorm_warp_widths():
 
 
 def test_units_refuse_components_of_different_shapes():
-    from verity.ir.defs import CompositeDefinition, bind
-    from verity.ir.refs import array_of
-    from verity.ir.types import Array, Value
+    from verity.primitives.circuits.ir.defs import CompositeDefinition, bind
+    from verity.primitives.circuits.ir.refs import array_of
+    from verity.primitives.circuits.ir.types import Array, Value
 
     mixed = CompositeDefinition("FlockLoweringMixed", 1, (), lambda S: ((("x", Array(4, Value(32))),), Array(2, Value(32))),
                                 lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Mul, x[2], x[3])]),
@@ -802,8 +802,8 @@ def test_units_refuse_components_of_different_shapes():
 
 
 def test_a_primitive_without_a_piece_is_named():
-    from verity.ir.defs import PrimitiveDefinition
-    from verity.ir.types import Value
+    from verity.primitives.circuits.ir.defs import PrimitiveDefinition
+    from verity.primitives.circuits.ir.types import Value
 
     odd = PrimitiveDefinition("FlockLoweringTestOnly", 1, (("a", Value(8)),), Value(8), lambda a: a ^ 0x55, register=False)
     C = gf2.Circuit()

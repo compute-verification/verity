@@ -8,7 +8,7 @@ share this one object.
 - A type holds no dead item: dead code is removed only against its own outputs.
 - The prover lays a type out as rows at a placement. That's its layout, with a digest of its own; the type holds none of it.
 
-**Content**, hashed as canonical JSON (RFC 8785, `verity.ir.codec.canonical_json`)::
+**Content**, hashed as canonical JSON (RFC 8785, `verity.primitives.circuits.ir.codec.canonical_json`)::
 
     {"format": "verity/circuit-type/v1", "label": "library" | "program",
      "in": [[count, width], ...], "out": [[count, width], ...],       ports: arrays of elements, in order
@@ -22,7 +22,7 @@ Wires 0 .. in_bits - 1 are the input bits: ports in order, elements in order, bi
     [4, t, [F_1 .. F_n]]     a read of tables[t] at n index forms its value_bits wires
 
 A form is ``[[w, ...], c]``: the XOR of the ascending, distinct wires ``w`` and the constant ``c`` (0 or 1), so XOR and NOT
-are free, as in `gf2`. Every constant inside a type is bound at registration (`verity.ir.constants`). ``calls`` and
+are free, as in `gf2`. Every constant inside a type is bound at registration (`verity.primitives.circuits.ir.constants`). ``calls`` and
 ``tables`` list each entry once, in order of first use. The op codes are the export's module codes; its XOR, NOT and tap
 items don't occur.
 
@@ -40,7 +40,7 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence
 
-from verity.ir.codec import canonical_json
+from verity.primitives.circuits.ir.codec import canonical_json
 from verity.ml import library
 
 from .gf2 import L

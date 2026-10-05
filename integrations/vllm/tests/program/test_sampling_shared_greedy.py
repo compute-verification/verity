@@ -9,10 +9,10 @@ import re
 
 import pytest
 
-from verity.evaluation import evaluate
-from verity.ir.defs import bind
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.ir.defs import bind
 from verity_vllm.program.registry import sampling as SM
-from verity.ir.cut import call_scope
+from verity.primitives.circuits.ir.cut import call_scope
 from verity_vllm.query import word as W
 
 PAIRS = [(SM.GumbelTokenSelect, SM.GumbelTokenSelectSharedGreedy), (SM.GumbelTopPTokenSelect, SM.GumbelTopPTokenSelectSharedGreedy)]
@@ -29,7 +29,7 @@ def _canon(fn, table: dict) -> tuple[int, ...]:
         g = c.gate(lo + j)
         ops = tuple(ids[o - lo] if lo <= o < lo + n else table.setdefault(("in", o), len(table)) for o in g.operands)
         ids[j] = table.setdefault((g.prim.id, ops), len(table))
-    from verity.ir.layout import resolve
+    from verity.primitives.circuits.ir.layout import resolve
     return tuple(ids[resolve(call, r) - lo] for r in fn.body.ret)
 
 

@@ -12,8 +12,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.ir.defs import bind
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.ir.defs import bind
 from verity.ml import gemm as G
 from verity.ml import kernels as K
 from verity.ml import prims as P
@@ -78,7 +78,7 @@ def test_the_lowered_coordinate_computes_gemm_coordinate_v2() -> None:
 
 @pytest.mark.parametrize("n", [2, 3, 8, 33])
 def test_an_n_input_gate_lowers_to_n_minus_1_ands_or_none(n) -> None:
-    from verity.ir import boolean as BL
+    from verity.primitives.circuits.ir import boolean as BL
 
     T = 64
     bits = np.random.default_rng(n).integers(0, 2, size=(T, n), dtype=np.uint64)

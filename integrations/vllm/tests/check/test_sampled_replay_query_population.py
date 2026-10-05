@@ -457,7 +457,7 @@ def test_f_r17b_39_the_last_phase_is_anchored_to_the_last_executed_step_and_the_
 
 
 def _rule_like_pad(served, *, cap, A, eos):
-    """A stand-in with pad's `executed_prefix_by_rule` semantics (verity.ir/continuation.py a80a99ae7): the FIRST EOS stops, the lag slot(s)
+    """A stand-in with pad's `executed_prefix_by_rule` semantics (verity.primitives.circuits.ir/continuation.py a80a99ae7): the FIRST EOS stops, the lag slot(s)
     after it are executed rows without a served token, served past the first EOS / an early stop without EOS / over the cap are problems."""
     eos = set(eos)
     a = len(served)

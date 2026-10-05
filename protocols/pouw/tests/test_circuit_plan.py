@@ -36,7 +36,7 @@ def _by_role(lay):
 def test_the_strata_are_the_verifiers_own():
     """One stratum per template, its units as merged ranges, in the order of their first unit (`Flock/Draw.lean` `strataOf`
     over core's evaluation of the partition query), covering the population exactly."""
-    from verity.ir import partition_object as PO
+    from verity.primitives.circuits.ir import partition_object as PO
     from verity_pouw.circuit import partition as P
 
     shape = ncp2.Shape(32, 64, 32)
@@ -686,7 +686,7 @@ def test_the_call_s_y_is_linked_to_the_weight_program():
     import pytest
 
     import circuit_fixtures as F
-    from verity.evaluation import evaluate
+    from verity.primitives.circuits.evaluation import evaluate
     from verity_pouw.circuit import ncp2, traced_as
     from verity_pouw.protocol import DomainError
 

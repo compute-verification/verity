@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import types
 
-from verity.ir.defs import CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, primitive
+from verity.primitives.circuits.ir.defs import CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, primitive
 from verity.ml.prims import HopperBF16WgmmaDot16
 from verity.ml.tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 from verity_vllm.program.registry import b1

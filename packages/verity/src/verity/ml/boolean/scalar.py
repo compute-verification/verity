@@ -26,8 +26,8 @@ from __future__ import annotations
 import functools
 import operator
 
-from verity.ir import boolean as BL
-from verity.ir.types import Array
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.types import Array
 
 from .. import prims as P
 from .. import scalar as S

@@ -22,11 +22,11 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
-from verity.ir import partition_object as PO
-from verity.ir.codec import descriptor_id
-from verity.ir.cut import CallGraph, boundary_widths, check_cut, fits
-from verity.ir.partition import CutVerdict
-from verity.ir.program import Program
+from verity.primitives.circuits.ir import partition_object as PO
+from verity.primitives.circuits.ir.codec import descriptor_id
+from verity.primitives.circuits.ir.cut import CallGraph, boundary_widths, check_cut, fits
+from verity.primitives.circuits.ir.partition import CutVerdict
+from verity.primitives.circuits.ir.program import Program
 
 from . import ncp2
 from .ncp2 import D, Shape

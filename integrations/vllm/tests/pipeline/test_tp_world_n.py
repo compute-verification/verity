@@ -9,10 +9,10 @@ import json
 import numpy as np
 import pytest
 
-from verity.ir.defs import bind
-from verity.ir.evaluate import evaluate_region
-from verity.ir.layout import resolve
-from verity.ir.program import Program
+from verity.primitives.circuits.ir.defs import bind
+from verity.primitives.circuits.ir.evaluate import evaluate_region
+from verity.primitives.circuits.ir.layout import resolve
+from verity.primitives.circuits.ir.program import Program
 from verity_vllm.program.registry import b1_tp2 as TP2
 from verity_vllm.program.registry import prims as P
 

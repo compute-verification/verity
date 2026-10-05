@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "sys_platform != 'darwin' and extra != 'extra-10-verity-gkr-torch' and extra != 'extra-11-verity-vllm-torch' and extra != 'extra-13-verity-direct-torch' and extra == 'extra-16-verity-workspace-torch-cpu' and extra != 'extra-18-verity-native-peak-torch'",
@@ -40,6 +40,7 @@ members = [
     "verity-pous",
     "verity-pouw",
     "verity-pouw-benchmarks",
+    "verity-primitives-circuits",
     "verity-sampled-proofs",
     "verity-sp1",
     "verity-tc-probe",
@@ -1401,10 +1402,14 @@ version = "0.1.0"
 source = { editable = "packages/verity" }
 dependencies = [
     { name = "numpy" },
+    { name = "verity-primitives-circuits" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "numpy", specifier = ">=1.26" }]
+requires-dist = [
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "verity-primitives-circuits", editable = "verity/primitives/circuits" },
+]
 
 [[package]]
 name = "verity-check"
@@ -1658,6 +1663,17 @@ requires-dist = [
     { name = "verity-pouw", editable = "protocols/pouw" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+
+[[package]]
+name = "verity-primitives-circuits"
+version = "0.1.0"
+source = { editable = "verity/primitives/circuits" }
+dependencies = [
+    { name = "numpy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "numpy", specifier = ">=1.26" }]
 
 [[package]]
 name = "verity-sampled-proofs"

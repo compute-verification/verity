@@ -15,7 +15,7 @@ Sanity facts the table satisfies (checked by the lane's test): gelu(+0) = +0, ge
 gelu(x) = -0 for x <= -2^4 (erff = -1, `(-x * 0.5f) * 0 = -0`), NaN words -> 0x7FFF, +inf -> +inf, -inf -> NaN (`-inf * 0`)."""
 from __future__ import annotations
 
-from verity.ir.defs import primitive
+from verity.primitives.circuits.ir.defs import primitive
 
 from verity_vllm.program.registry.quarantine.ln._common import BF16
 from verity_vllm.program.registry.quarantine.ln.gelu_erf_table import TABLE_WORDS

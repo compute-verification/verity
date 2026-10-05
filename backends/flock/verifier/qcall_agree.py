@@ -1,5 +1,5 @@
 """Conformance of the Lean `Q_call` v1 and input decoding (`flock-verify qcall-program`, `input-ids`; `Flock/Qcall.lean`,
-`Flock/Program.lean`) with core's (`verity.ir.cut`'s "Q_call v1", `verity.ir.partition_object`, `verity.ir.program`).
+`Flock/Program.lean`) with core's (`verity.primitives.circuits.ir.cut`'s "Q_call v1", `verity.primitives.circuits.ir.partition_object`, `verity.primitives.circuits.ir.program`).
 
     python qcall_agree.py --lean BIN --out DIR --qcall qcall_vectors.json --format format_vectors.json
 
@@ -112,11 +112,11 @@ def check_live(a, out, bad):
     """A program with a registered input: Q_call at several X field for field, and Q_word's units, against core."""
     sys.path.insert(0, str(Path(a.qcall).parent))
     spec = importlib.import_module("test_qcall_vectors")
-    from verity.ir import codec, partition_object as PO
-    from verity.ir.defs import CompositeDefinition, bind
-    from verity.ir.program import Program
-    from verity.ir.refs import tuple_of
-    from verity.ir.types import Array, Tuple, Value
+    from verity.primitives.circuits.ir import codec, partition_object as PO
+    from verity.primitives.circuits.ir.defs import CompositeDefinition, bind
+    from verity.primitives.circuits.ir.program import Program
+    from verity.primitives.circuits.ir.refs import tuple_of
+    from verity.primitives.circuits.ir.types import Array, Tuple, Value
     from verity.ml.scalar import I32Add
 
     I32 = Value(32)

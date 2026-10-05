@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ir.codec import canonical_json
+from verity.primitives.circuits.ir.codec import canonical_json
 
 pytest.importorskip("verity_numerical")
 pytest.importorskip("verity_vllm.program.registry.prims")

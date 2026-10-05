@@ -13,7 +13,7 @@ import pytest
 import pouw_rows_vectors as V
 from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, bit_row, nvfp4_row_bytes, row_bytes, sha512_row_digest,
                                         sha512_row_v2_digest)
-from verity.evaluation import evaluate
+from verity.primitives.circuits.evaluation import evaluate
 from verity.ml.scalar import BitAnd, SelectBf16
 
 from verity_pouw.circuit import leaves as L

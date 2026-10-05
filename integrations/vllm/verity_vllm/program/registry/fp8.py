@@ -46,9 +46,9 @@ import types
 
 import numpy as np
 
-from verity.ir.defs import CompositeDefinition, bind, composite
-from verity.ir.refs import Coll as _Coll, concat, tuple_of
-from verity.ir.types import Array, Record, Tuple, Value
+from verity.primitives.circuits.ir.defs import CompositeDefinition, bind, composite
+from verity.primitives.circuits.ir.refs import Coll as _Coll, concat, tuple_of
+from verity.primitives.circuits.ir.types import Array, Record, Tuple, Value
 from verity.ml.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
 from verity.ml.scalar import F32Fabs, F32Fmaxf, F32Fminf
 from verity_vllm.program.registry import b1
@@ -504,7 +504,7 @@ def scale_products(x_s: np.ndarray, w_s: np.ndarray) -> np.ndarray:
     token row's K/G activation scales ([K/G], or [R, K/G] for R rows) and `w_s` the checkpoint's [N/G, K/G] block scales, both as u32
     words; returns [N/G, K/G] (or [R, N/G, K/G]) u32 words.  numpy's array multiply is `F32Mul_v1` on every product but a NaN, whose
     payload it takes from the other operand: those lanes go through the IR's evaluator."""
-    from verity.evaluation import evaluate_batch
+    from verity.primitives.circuits.evaluation import evaluate_batch
     xs = np.asarray(x_s, dtype=np.uint32)
     ws = np.asarray(w_s, dtype=np.uint32)
     if ws.ndim != 2 or xs.ndim not in (1, 2) or xs.shape[-1] != ws.shape[1]:

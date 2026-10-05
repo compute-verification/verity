@@ -1,4 +1,4 @@
-"""The partition as a named query over a program, P = Q(C): core's `verity/partition/v1` (`verity.ir.partition_object`),
+"""The partition as a named query over a program, P = Q(C): core's `verity/partition/v1` (`verity.primitives.circuits.ir.partition_object`),
 applied here with the template queries `Q_template_instance` v0 and `Q_template_instances` v0, and the programs this
 protocol builds for them.
 
@@ -21,13 +21,13 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Mapping, Sequence
 
-from verity.ir import partition_object as PO
-from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ir.partition_object import (FORMAT, QueryRefused, program_sha512, template_id, template_instance_query,
+from verity.primitives.circuits.ir import partition_object as PO
+from verity.primitives.circuits.ir.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.primitives.circuits.ir.partition_object import (FORMAT, QueryRefused, program_sha512, template_id, template_instance_query,
                                         template_instances_query)
-from verity.ir.program import Program
-from verity.ir.refs import coll_concat
-from verity.ir.types import Array, Tuple
+from verity.primitives.circuits.ir.program import Program
+from verity.primitives.circuits.ir.refs import coll_concat
+from verity.primitives.circuits.ir.types import Array, Tuple
 
 _PRE_CANONICAL = {"program", "query"}
 

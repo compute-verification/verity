@@ -32,13 +32,13 @@ witness, not a function of the row — REPORT.md §6.3, "RNG/root/state contract
 
 from __future__ import annotations
 
-from verity.ir.defs import bind, composite
-from verity.ir.refs import tuple_of
+from verity.primitives.circuits.ir.defs import bind, composite
+from verity.primitives.circuits.ir.refs import tuple_of
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as RP
 from verity_vllm.program.registry.b1 import const
 from verity_vllm.program.registry.prims import BF16, F32, I32
-from verity.ir.types import Array, Tuple
+from verity.primitives.circuits.ir.types import Array, Tuple
 
 SEMANTIC_ID = "ov-sampling/GumbelArgmaxBf16@v1"
 

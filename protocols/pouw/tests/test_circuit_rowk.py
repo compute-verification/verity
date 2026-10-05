@@ -18,12 +18,12 @@ import circuit_fixtures as CF
 import pearl_c4_vectors as V4
 import pearl_c_vectors as V8
 from verity.commitments.rowleaf import bit_row, row_bytes
-from verity.evaluation import evaluate
-from verity.ir import partition_object as PO
-from verity.ir.cut import CallGraph
-from verity.ir.defs import CompositeDefinition
-from verity.ir.program import Program
-from verity.ir.types import Value
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.ir import partition_object as PO
+from verity.primitives.circuits.ir.cut import CallGraph
+from verity.primitives.circuits.ir.defs import CompositeDefinition
+from verity.primitives.circuits.ir.program import Program
+from verity.primitives.circuits.ir.types import Value
 from verity.ml.scalar import BitAnd, SelectBf16
 from verity_pouw.circuit import leaves as L
 from verity_pouw.circuit import pc4, pc8, plan, rowk

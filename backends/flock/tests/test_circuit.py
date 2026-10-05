@@ -278,7 +278,7 @@ def test_public_input_ports_carry_the_verifiers_recomputation(tmp_path):
 def test_program_digests_are_keyed_by_descriptor_id(tmp_path):
     """META ``program_digests`` names the template by core's descriptor id (the canonical partition's and the verifier's), not
     its display id: RMSNorm's EPS is its f64 hex."""
-    from verity.ir.codec import _spec_id
+    from verity.primitives.circuits.ir.codec import _spec_id
 
     s = _set("rmsnorm-triton/n2048-eps1e-05/bf16", 1, tmp_path)
     got = FC.program_digests(s.subcircuit, FC.set_statics(s))

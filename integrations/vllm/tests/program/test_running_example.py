@@ -7,10 +7,10 @@ import random
 
 import pytest
 
-from verity.ir import (Array, FunctionCall, Program, Region, Tuple, Value, bind, composite, decode_program, descriptor_size,
+from verity.primitives.circuits.ir import (Array, FunctionCall, Program, Region, Tuple, Value, bind, composite, decode_program, descriptor_size,
                        encode_program, evaluate_call, evaluate_region, primitive, program_digest, query, GapError,
                        QueryError, REGISTRY)
-from verity.ir.defs import CompositeDefinition
+from verity.primitives.circuits.ir.defs import CompositeDefinition
 
 V16 = Value(16)
 MASK = 0xFFFF
@@ -134,7 +134,7 @@ def test_gap_rejected():
         r0 = B.call(bind(Row, act=Relu16), x, w)
         t = B.call(Id16, r0)
         r1 = B.call(bind(Row, act=Relu16), x, w)
-        from verity.ir import array_of
+        from verity.primitives.circuits.ir import array_of
         return array_of([t, r1])
 
     C = Program(bind(Gappy)).circuit
@@ -173,7 +173,7 @@ def test_repeated_references_in_interface():
     # (one id, one body — verity_vllm.program.frontend.check_identity)
     @composite("FRepeated", 1, [], lambda S: ((("a", V16), ("b", V16)), Tuple(V16, V16, V16)))
     def F(B, S, a, b):
-        from verity.ir import tuple_of
+        from verity.primitives.circuits.ir import tuple_of
         t = B.call(Add16, a, a)
         return tuple_of(t, a, t)
 

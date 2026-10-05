@@ -21,8 +21,8 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any
 
-from verity.ir.layout import FunctionCall, Gate, GateSelection
-from verity.ir.program import Program
+from verity.primitives.circuits.ir.layout import FunctionCall, Gate, GateSelection
+from verity.primitives.circuits.ir.program import Program
 
 from .law import ReplayUnit, Stage, TwoStageLaw
 

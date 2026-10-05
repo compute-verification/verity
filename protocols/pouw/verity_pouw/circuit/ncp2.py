@@ -44,9 +44,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 
-from verity.ir.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
-from verity.ir.refs import Coll, array_of, concat, tuple_of
-from verity.ir.types import Array, Tuple, Value
+from verity.primitives.circuits.ir.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
+from verity.primitives.circuits.ir.refs import Coll, array_of, concat, tuple_of
+from verity.primitives.circuits.ir.types import Array, Tuple, Value
 
 import verity.ml.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
 import verity.ml.prims  # noqa: F401  (registers F32ToBf16Rn_v1)

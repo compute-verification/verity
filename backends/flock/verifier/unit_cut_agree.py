@@ -1,5 +1,5 @@
 """Conformance of the Lean partition check (`flock-verify unit-cut`, PROTOCOL.md §16.7) with the reference,
-`verity.ir.partition.validate_unit_cut`, on random cuts.
+`verity.primitives.circuits.ir.partition.validate_unit_cut`, on random cuts.
 
     python unit_cut_agree.py --lean BIN --out DIR [--seed S] [--n N]
 
@@ -11,7 +11,7 @@ DIR/result.json; exits 1 unless the Lean verifier's codes equal the reference's 
 import argparse, json, random, subprocess, sys
 from pathlib import Path
 
-from verity.ir.partition import INPUT_UNIT, validate_unit_cut
+from verity.primitives.circuits.ir.partition import INPUT_UNIT, validate_unit_cut
 
 
 def cut(rng):

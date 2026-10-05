@@ -33,9 +33,9 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition
-from verity.ir.types import Array
+from verity.primitives.circuits.ir import boolean as BL
+from verity.primitives.circuits.ir.defs import CompositeDefinition
+from verity.primitives.circuits.ir.types import Array
 
 from . import trace as TR
 from .forms import and_reduce, const_bits
@@ -89,7 +89,7 @@ def _digest_bits(d: bytes) -> list[int]:
 
 def arguments(ARITY: int, root: bytes, leaf: bytes, pos: int, path: Sequence[Sequence[bytes]]) -> tuple[list[int], ...]:
     """``MerkleRead_v1{ARITY, D = len(path)}``'s four arguments, each a flat list of bits in leaf order
-    (`verity.evaluation.evaluate`'s form)."""
+    (`verity.primitives.circuits.evaluation.evaluate`'s form)."""
     D = len(path)
     _check(ARITY, D)
     if any(len(s) != ARITY - 1 for s in path) or not 0 <= pos < ARITY ** D:

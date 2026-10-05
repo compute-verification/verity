@@ -7,9 +7,9 @@ import struct
 
 import pytest
 
-from verity.evaluation import evaluate
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.types import Array
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.ir.defs import CompositeDefinition, bind
+from verity.primitives.circuits.ir.types import Array
 
 from verity_pouw.circuit import words as W
 from verity_pouw.circuit.hashes import Emit, keccak_lanes, sha512, sha_words, shake256

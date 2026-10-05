@@ -1,9 +1,9 @@
-"""The Program inputs the committer's classes cover, named by binding and leaf width (`verity.ir.program.input_prim`)."""
+"""The Program inputs the committer's classes cover, named by binding and leaf width (`verity.primitives.circuits.ir.program.input_prim`)."""
 from __future__ import annotations
 
 import re
 
-from verity.ir.program import RUN, input_prim
+from verity.primitives.circuits.ir.program import RUN, input_prim
 
 TOKEN_IDS_INPUT = input_prim(32, RUN).id
 
