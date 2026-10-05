@@ -15,10 +15,12 @@ The partition (`Whole.part`) puts each instance's gates in a unit of its own, nu
 `verity_pouw.circuit.pc4.units` numbers the root body's members.
 
 * **`pc8`** (`whole8`, `Pc8Check{M, K, N, TM, TN, DEV}`): the inputs in `Pc8Check`'s parameter-leaf order (`a`, `ea`,
-  `b`, `eb`, `fa`, `fb`, `g`), then `N` instances of `Pc8RowB_v1{K}` (`row8B`), `M` of `Pc8RowA_v1{K}` (`row8A`) and
-  `(M / TM)·(N / TN)` of `Pc8Tile_v1{K, TM, TN}` (`tileSpec`), the tiles row-major. Tile `(rs, cs)` reads `A′`'s codes and
-  `P_A` from RowA `rs·TM + i` and `B̃`'s codes and `P_B` from RowB `cs·TN + j`. The noise lines and `G` are input
-  regions: in the deployed Program they are verifier-derived public inputs, so no unit computes `G`.
+  `b`, `eb`, `fa`, `fb`, `g`), then `N` instances of `Pc8RowB_v1{K}` (`row8B`), `M` of `Pc8RowA_v1{K}` (`row8A`),
+  `(M / TM)·(N / TN)` of `Pc8Tile_v1{K, TM, TN}` (`tileSpec`), the tiles row-major, and where `TM ∤ M` the short last
+  tile row, `N / TN` instances of `Pc8Tile_v1{K, r, TN}` at `r = M mod TM` (`shortTiles8`). Tile `(rs, cs)` reads `A′`'s
+  codes and `P_A` from RowA `rs·TM + i` and `B̃`'s codes and `P_B` from RowB `cs·TN + j`, and short tile `cs` from RowA
+  `(M / TM)·TM + i` and RowB `cs·TN + j` (`portTile8`). The noise lines and `G` are input regions: in the deployed
+  Program they are verifier-derived public inputs, so no unit computes `G`.
 
 The inputs' widths, the ports, the unit numbering and the outputs are checked against `pc8.unit_cut` of `Pc8Check`, with
 its descriptor digests pinned, by `tests/test_circuit_whole_lean.py`; each unit's own table is tied to its template by
@@ -243,6 +245,15 @@ def tile8 (p : Pipeline) (M N K TM TN e a : ℕ) : ℕ :=
   in8 M N K + N * ((row8B p K).N - rowIn K true) + M * ((row8A p K).N - rowIn K false) +
     e * (tileN K TM TN - tileIn K TM TN) + (a - tileIn K TM TN)
 
+/-- The short last tile row's tiles: `N / TN` of `M mod TM` rows where `TM ∤ M`, else none. -/
+def shortTiles8 (M N TM TN : ℕ) : ℕ := if M % TM = 0 then 0 else N / TN
+
+/-- Short tile `cs`'s copy of its template's gate `a`, after the whole tiles. -/
+def short8 (p : Pipeline) (M N K TM TN cs a : ℕ) : ℕ :=
+  in8 M N K + N * ((row8B p K).N - rowIn K true) + M * ((row8A p K).N - rowIn K false) +
+    M / TM * (N / TN) * (tileN K TM TN - tileIn K TM TN) + cs * (tileN K (M % TM) TN - tileIn K (M % TM) TN) +
+      (a - tileIn K (M % TM) TN)
+
 /-- RowA's `P_A` word `w`: its rescaled noise' BF16 word `w` (`w < 32`), else its chain against the chain basis' column
 `w − 32`, cast to BF16. -/
 def paOut8 (K w : ℕ) : ℕ :=
@@ -254,25 +265,33 @@ def pbOut8 (K w : ℕ) : ℕ :=
   if w < 32 then post8At K (rowIn K true) + w * (5 * (K / 128) + 35) + 5 * (K / 128) + 34
   else post8At K (rowIn K true) + 32 * (5 * (K / 128) + 35) + 2 * (w - 32) + 1
 
-/-- Tile `e = rs·(N / TN) + cs`'s inputs (`tileIn K TM TN`): row `i` of its `A′` and its `P_A` row `i` from RowA
-`rs·TM + i`, row `j` of its `B̃` and its `P_B` row `j` from RowB `cs·TN + j`. -/
-def portT8 (p : Pipeline) (M N K TM TN e a : ℕ) : ℕ :=
-  if a < TM * K then rowA8 p M N K (e / (N / TN) * TM + a / K) (code8 K (rowIn K false) (a % K))
-  else if a < (TM + TN) * K then
-    rowB8 p M N K (e % (N / TN) * TN + (a - TM * K) / K) (code8 K (rowIn K true) ((a - TM * K) % K))
-  else if a < (TM + TN) * K + 64 * TM then
-    rowA8 p M N K (e / (N / TN) * TM + (a - (TM + TN) * K) / 64) (paOut8 K ((a - (TM + TN) * K) % 64))
+/-- The inputs (`tileIn K TH TN`) of a tile of `TH` rows from RowA `i0` and `TN` columns from RowB `j0`: row `i` of its
+`A′` and its `P_A` row `i` from RowA `i0 + i`, row `j` of its `B̃` and its `P_B` row `j` from RowB `j0 + j`. -/
+def portTile8 (p : Pipeline) (M N K TH TN i0 j0 a : ℕ) : ℕ :=
+  if a < TH * K then rowA8 p M N K (i0 + a / K) (code8 K (rowIn K false) (a % K))
+  else if a < (TH + TN) * K then
+    rowB8 p M N K (j0 + (a - TH * K) / K) (code8 K (rowIn K true) ((a - TH * K) % K))
+  else if a < (TH + TN) * K + 64 * TH then
+    rowA8 p M N K (i0 + (a - (TH + TN) * K) / 64) (paOut8 K ((a - (TH + TN) * K) % 64))
   else
-    rowB8 p M N K (e % (N / TN) * TN + (a - ((TM + TN) * K + 64 * TM)) / 64)
-      (pbOut8 K ((a - ((TM + TN) * K + 64 * TM)) % 64))
+    rowB8 p M N K (j0 + (a - ((TH + TN) * K + 64 * TH)) / 64) (pbOut8 K ((a - ((TH + TN) * K + 64 * TH)) % 64))
 
-/-- `C̃_ij`'s gate: entry `(i mod TM, j mod TN)` of tile `(i / TM, j / TN)`. -/
+/-- Tile `e = rs·(N / TN) + cs`'s inputs: RowA `rs·TM + i` and RowB `cs·TN + j`. -/
+def portT8 (p : Pipeline) (M N K TM TN e a : ℕ) : ℕ := portTile8 p M N K TM TN (e / (N / TN) * TM) (e % (N / TN) * TN) a
+
+/-- Short tile `cs`'s inputs: RowA `(M / TM)·TM + i`, below the whole tile rows, and RowB `cs·TN + j`. -/
+def portS8 (p : Pipeline) (M N K TM TN cs a : ℕ) : ℕ := portTile8 p M N K (M % TM) TN (M / TM * TM) (cs * TN) a
+
+/-- `C̃_ij`'s gate: entry `(i mod TM, j mod TN)` of tile `(i / TM, j / TN)`, or below the whole tile rows of short tile
+`j / TN`. -/
 def cGlob8 (p : Pipeline) (M N K TM TN i j : ℕ) : ℕ :=
-  tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (cGate K TM TN (i % TM) (j % TN))
+  if i < M / TM * TM then tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (cGate K TM TN (i % TM) (j % TN))
+  else short8 p M N K TM TN (j / TN) (cGate K (M % TM) TN (i % TM) (j % TN))
 
 /-- `U_ij`'s gate. -/
 def uGlob8 (p : Pipeline) (M N K TM TN i j : ℕ) : ℕ :=
-  tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (uGate K TM TN (i % TM) (j % TN))
+  if i < M / TM * TM then tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (uGate K TM TN (i % TM) (j % TN))
+  else short8 p M N K TM TN (j / TN) (uGate K (M % TM) TN (i % TM) (j % TN))
 
 /-- `Pc8Check`'s outputs: every `C̃_ij` and `U_ij`, then each A row's flag and each B row's. -/
 def outs8 (p : Pipeline) (M N K TM TN : ℕ) : Finset ℕ :=
@@ -391,27 +410,55 @@ theorem tile_col_lt {M N TM TN e j : ℕ} (he : e < M / TM * (N / TN)) (hj : j <
   have := Nat.div_mul_le_self N TN
   omega
 
-theorem portT8_lt (p : Pipeline) {M N K TM TN e a : ℕ} (he : e < M / TM * (N / TN)) (ha : a < tileIn K TM TN) :
-    portT8 p M N K TM TN e a <
+/-- Row `i` of the short last tile row is a row of A. -/
+theorem short_row_lt {M TM i : ℕ} (hi : i < M % TM) : M / TM * TM + i < M := by
+  have := Nat.div_add_mod' M TM
+  omega
+
+/-- Row `j < TN` of tile column `cs < N / TN` is a row of B. -/
+theorem short_col_lt {N TN cs j : ℕ} (hcs : cs < N / TN) (hj : j < TN) : cs * TN + j < N := by
+  have := mul_add_lt (L := TN) hcs hj
+  have := Nat.div_mul_le_self N TN
+  omega
+
+theorem shortTiles8_lt {M N TM TN cs : ℕ} (h : cs < shortTiles8 M N TM TN) : cs < N / TN := by
+  unfold shortTiles8 at h
+  split_ifs at h
+  · omega
+  · exact h
+
+theorem portTile8_lt (p : Pipeline) {M N K TH TN i0 j0 a : ℕ} (hi : ∀ t < TH, i0 + t < M) (hj : ∀ t < TN, j0 + t < N)
+    (ha : a < tileIn K TH TN) :
+    portTile8 p M N K TH TN i0 j0 a <
       in8 M N K + N * ((row8B p K).N - rowIn K true) + M * ((row8A p K).N - rowIn K false) := by
   have hNA : post8At K (rowIn K false) < (row8A p K).N := by rw [row8A_N]; omega
   have hNB : post8At K (rowIn K true) < (row8B p K).N := by rw [row8B_N]; omega
-  unfold portT8
+  unfold portTile8
   unfold tileIn at ha
-  have hsplit : (TM + TN) * K = TM * K + TN * K := Nat.add_mul _ _ _
+  have hsplit : (TH + TN) * K = TH * K + TN * K := Nat.add_mul _ _ _
   split_ifs with h1 h2 h3
   · have hK : 0 < K := Nat.pos_of_ne_zero fun h => by simp [h] at h1
-    exact rowA8_lt p (tile_row_lt he ((Nat.div_lt_iff_lt_mul hK).2 h1))
-      (lt_trans (code8_bounds (Nat.mod_lt _ hK)).2 hNA)
+    exact rowA8_lt p (hi _ ((Nat.div_lt_iff_lt_mul hK).2 h1)) (lt_trans (code8_bounds (Nat.mod_lt _ hK)).2 hNA)
   · have hK : 0 < K := Nat.pos_of_ne_zero fun h => by simp [h] at h2
-    have hj : (a - TM * K) / K < TN := (Nat.div_lt_iff_lt_mul hK).2 (by omega)
-    exact lt_of_lt_of_le (rowB8_lt p (tile_col_lt he hj) (lt_trans (code8_bounds (Nat.mod_lt _ hK)).2 hNB))
+    have hj' : (a - TH * K) / K < TN := (Nat.div_lt_iff_lt_mul hK).2 (by omega)
+    exact lt_of_lt_of_le (rowB8_lt p (hj _ hj') (lt_trans (code8_bounds (Nat.mod_lt _ hK)).2 hNB))
       (Nat.le_add_right _ _)
-  · have hi : (a - (TM + TN) * K) / 64 < TM := (Nat.div_lt_iff_lt_mul (by norm_num)).2 (by omega)
-    exact rowA8_lt p (tile_row_lt he hi) (paOut8_bounds p (Nat.mod_lt _ (by norm_num))).2
-  · have hj : (a - ((TM + TN) * K + 64 * TM)) / 64 < TN := (Nat.div_lt_iff_lt_mul (by norm_num)).2 (by omega)
-    exact lt_of_lt_of_le (rowB8_lt p (tile_col_lt he hj) (pbOut8_bounds p (Nat.mod_lt _ (by norm_num))).2)
+  · have hi' : (a - (TH + TN) * K) / 64 < TH := (Nat.div_lt_iff_lt_mul (by norm_num)).2 (by omega)
+    exact rowA8_lt p (hi _ hi') (paOut8_bounds p (Nat.mod_lt _ (by norm_num))).2
+  · have hj' : (a - ((TH + TN) * K + 64 * TH)) / 64 < TN := (Nat.div_lt_iff_lt_mul (by norm_num)).2 (by omega)
+    exact lt_of_lt_of_le (rowB8_lt p (hj _ hj') (pbOut8_bounds p (Nat.mod_lt _ (by norm_num))).2)
       (Nat.le_add_right _ _)
+
+theorem portT8_lt (p : Pipeline) {M N K TM TN e a : ℕ} (he : e < M / TM * (N / TN)) (ha : a < tileIn K TM TN) :
+    portT8 p M N K TM TN e a <
+      in8 M N K + N * ((row8B p K).N - rowIn K true) + M * ((row8A p K).N - rowIn K false) :=
+  portTile8_lt (i0 := e / (N / TN) * TM) (j0 := e % (N / TN) * TN) p (fun _ h => tile_row_lt he h)
+    (fun _ h => tile_col_lt he h) ha
+
+theorem portS8_lt (p : Pipeline) {M N K TM TN cs a : ℕ} (hcs : cs < N / TN) (ha : a < tileIn K (M % TM) TN) :
+    portS8 p M N K TM TN cs a <
+      in8 M N K + N * ((row8B p K).N - rowIn K true) + M * ((row8A p K).N - rowIn K false) :=
+  portTile8_lt (i0 := M / TM * TM) (j0 := cs * TN) p (fun _ h => short_row_lt h) (fun _ h => short_col_lt hcs h) ha
 
 /-- **`Pc8Check{M, K, N, TM, TN}`'s table** on the step `p`, with `ops` for core's primitives. -/
 def whole8 (ops : RowOps) (p : Pipeline) (M K N TM TN : ℕ) : Whole where
@@ -419,9 +466,11 @@ def whole8 (ops : RowOps) (p : Pipeline) (M K N TM TN : ℕ) : Whole where
   inW := inW8 M N K
   blocks := [⟨(row8B p K).spec ops, rowIn K true, N, portB8 M N K⟩,
     ⟨(row8A p K).spec ops, rowIn K false, M, portA8 M N K⟩,
-    ⟨tileSpec p K TM TN, tileIn K TM TN, M / TM * (N / TN), portT8 p M N K TM TN⟩]
+    ⟨tileSpec p K TM TN, tileIn K TM TN, M / TM * (N / TN), portT8 p M N K TM TN⟩,
+    ⟨tileSpec p K (M % TM) TN, tileIn K (M % TM) TN, shortTiles8 M N TM TN, portS8 p M N K TM TN⟩]
   outs := outs8 p M N K TM TN
   ok := ⟨fun _ hj _ ha => portB8_lt hj ha, fun _ hi _ ha => lt_of_lt_of_le (portA8_lt hi ha) (Nat.le_add_right _ _),
-    fun _ he _ ha => portT8_lt p he ha, trivial⟩
+    fun _ he _ ha => portT8_lt p he ha,
+    fun _ hcs _ ha => lt_of_lt_of_le (portS8_lt p (shortTiles8_lt hcs) ha) (Nat.le_add_right _ _), trivial⟩
 
 end Pouw.PearlC.WholeCircuit

@@ -5,12 +5,12 @@ import Pouw.SecurityProofs.PearlC.TileCheck4Words
 /-!
 # The plain `pc8` and `pc4` tile checks compute the words (proofs)
 
-L3's words for the plain `pc8` and `pc4` Programs: on tile rules whose tiles lie in their unit and a domain of
-whole-tile shapes (`Shape8`, `Shape4`), an accepted tile's ticket and useful words have the reference values on every
-credited row, with `Collides` never used. Each composes its table's accepted entry (`entry8_accepts`, `entry4_accepts`)
-with the rows' statistics from the rules. A credited row passes `RowOK` (the tile rules' `rowOK`, `hrow`), and each of
-the tile's weight rows passes it too, since the check accepts only then (`TileCheck.Accepts`, the protocol's
-`weightOK`). By magnitudes (`RowStats`) these give
+L3's words for the plain `pc8` and `pc4` Programs: on tile rules whose tiles lie in their unit and a domain of the
+Programs' shapes (`Shape8`, where `pc8`'s last tile row may be short, and the whole-tile `Shape4`), an accepted tile's
+ticket and useful words have the reference values on every credited row, with `Collides` never used. Each composes its
+table's accepted entry (`entry8_accepts`, `entry4_accepts`) with the rows' statistics from the rules. A credited row
+passes `RowOK` (the tile rules' `rowOK`, `hrow`), and each of the tile's weight rows passes it too, since the check
+accepts only then (`TileCheck.Accepts`, the protocol's `weightOK`). By magnitudes (`RowStats`) these give
 
 * `pc8`: `Row8OK` (`row8OK_of_floor`), since `pc8Sem`'s floor is at least `1` only where `ρ`'s word is finite and
   `φ ≥ 0` (`stats8OK_of_rho`);
@@ -18,9 +18,9 @@ the tile's weight rows passes it too, since the check accepts only then (`TileCh
   their values (`widen_of_word`), and `RowAdmit4` holds only where `β`'s word is finite, with `0 ≤ β` and `e4m3(β)`
   at least code `8` (`row4OK_stats_of_beta`).
 
-What stays named: `Pc8OpsAgree` and `Pc4OpsAgree` (core's primitives), `Noise8OK` (no NaN code in `pc8`'s noise),
-and, for `pc8`, `Pc8EntryOK` at each entry of a credited row (the peel's rows exist). `_pearlC` is each on the audit's
-tiles, and `_domain` on `D_dev`'s whole-tile layouts and on D₄. At a step `⟨[32], w, z⟩` with `w ≥ 24` (`sm120E4m3`),
+What stays named: `Pc8OpsAgree` and `Pc4OpsAgree` (core's primitives), `Noise8OK` (no NaN code in `pc8`'s noise), and,
+for `pc8`, `Pc8EntryOK` at each entry of a credited row (the peel's rows exist). `_pearlC` is each on the audit's tiles,
+and `_domain` on `D_dev`'s layouts of `pc8` shapes and on D₄. At a step `⟨[32], w, z⟩` with `w ≥ 24` (`sm120E4m3`),
 `D_dev`'s `k ≤ 2^16` and `Noise8OK` give `Pc8EntryOK` (`PeelExists`), so `tileCheck8_computesWords_wide` names no
 hypothesis at an entry. `pc4` names none at an entry: the two rows' `Row4OK` and `k ≤ 2^16` give `Pc4EntryOK`
 (`PeelExists.pc4EntryOK_of_rows`), and D₄'s shapes have `k ≤ 2^16`.
@@ -74,7 +74,7 @@ end Rows
 
 /-- **L3's words for the plain `pc8` Program** (`tileCheck8`) at the device record `devAt p 4 pr` and `pc8Sem`: on
 tile rules whose tiles lie in their unit, whose credited rows pass `pc8Sem`'s rules (`hrow`) and whose domain has
-whole-tile shapes (`Shape8`), an accepted tile's ticket and useful words have the reference values on every credited
+`pc8`'s shapes (`Shape8`), an accepted tile's ticket and useful words have the reference values on every credited
 row, under `Pc8OpsAgree`, `Noise8OK` at the noise (`hnoise`) and the named hypothesis at each entry of a credited row
 (`Pc8EntryOK`). `Collides` is `False` and never needed. -/
 theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pipeline) (pr : Prices) (ρ : ℚ)
@@ -96,10 +96,10 @@ theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pi
   intro i hi hok j hj
   have him := hrows U.layout g i hi
   have hjn := hcols U.layout g j hj
-  obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2 g hg
+  obtain ⟨-, hN, nw, hnw, hK⟩ := hsh U.layout hU.2 g hg
   have hW : (pc8Sem ops p noise).RowOK _ _ (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j := hwt j hj
   have hR := hrow _ c.act i hok
-  obtain ⟨w1, w2⟩ := entry8_accepts hops p pr hnw hK hM hN X _ c.act _ c.ticket c.useful ⟨i, him⟩ ⟨j, hjn⟩
+  obtain ⟨w1, w2⟩ := entry8_accepts hops p pr hnw hK hN X _ c.act _ c.ticket c.useful ⟨i, him⟩ ⟨j, hjn⟩
     (fun v hv => Finset.mem_filter.2 ⟨Finset.mem_univ _, i, hi, j, hj, him, hjn, hv⟩) hcone
     (fun v hv h => hpub ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
     (fun v hv h => hreg ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
@@ -117,7 +117,7 @@ theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pi
     rfl
 
 /-- **L3's words for the plain `pc8` Program on the audit's tiles** (`pearlCTiles`, the `64 × 64` grid): on a domain
-whose every unit has a whole-tile shape, `tileCheck8_computesWords` with the grid's tiles in their units. -/
+whose every unit has a `pc8` shape, `tileCheck8_computesWords` with the grid's tiles in their units. -/
 theorem tileCheck8_computesWords_pearlC {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pipeline) (pr : Prices) (c : Costs)
     (ρ : ℚ) (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
@@ -133,8 +133,9 @@ theorem tileCheck8_computesWords_pearlC {ops : RowOps} (hops : Pc8OpsAgree ops) 
     (fun L hL _ hg => hsh L hL _ (auditTiling_unit_lt 64 64 L hg)) (fun L _ hg => auditTiling_unit_lt 64 64 L hg)
     (auditTiling_rows_lt 64 64) (auditTiling_cols_lt 64 64) (fun _ _ _ h => h) hnoise hent
 
-/-- **L3's words for the plain `pc8` Program on `D_dev`'s whole-tile layouts** and the audit's tiles, those whose every
-unit's tile divides its shape (served decode's `m = 32` among them): `tileCheck8_computesWords_pearlC` with `Shape8`'s
+/-- **L3's words for the plain `pc8` Program on `D_dev`'s layouts of `pc8` shapes** and the audit's tiles, those whose
+every unit's `m` is a multiple of `min(m, 16)` and whose tile divides its `n` (served decode's `m = 32` among them, and
+`m = 80`, a 64-row tile row and a short 16-row one): `tileCheck8_computesWords_pearlC` with `Shape8`'s
 `k` from `D_dev` (`shape8_of_pearlCDomainDev`). -/
 theorem tileCheck8_computesWords_domain {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pipeline) (pr : Prices)
     (c : Costs) (ρ : ℚ) (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
@@ -146,13 +147,13 @@ theorem tileCheck8_computesWords_domain {ops : RowOps} (hops : Pc8OpsAgree ops) 
         Pc8EntryOK ops p (noise H s U u act) act (U.weight (U.layout.wid u)) i j) :
     (tileCheck8 ops p noise).ComputesWords (pearlCProtocolDev (devAt p 4 pr) (pc8Sem ops p noise) ρ)
       (pearlCTiles (pc8Sem ops p noise) c ρ) (fun L => pearlCDomainDev (devAt p 4 pr) L ∧
-        ∀ u < L.N, tileSide (L.shape u).m ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
+        ∀ u < L.N, min (L.shape u).m 16 ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
   tileCheck8_computesWords_pearlC hops p pr c ρ noise _
     (fun _ hL u hu => shape8_of_pearlCDomainDev hL.1 hu (hL.2 u hu).1 (hL.2 u hu).2) hnoise
     fun H s U u act i j hD hu => hent H s U u act i j hD.1 hu
 
 /-- **L3's words for the plain `pc8` Program at a step `⟨[32], w, z⟩` with `w ≥ 24`** (`sm120E4m3` among them), on
-`D_dev`'s whole-tile layouts: `tileCheck8_computesWords_domain` with no hypothesis at an entry, since `D_dev`'s
+`D_dev`'s layouts of `pc8` shapes: `tileCheck8_computesWords_domain` with no hypothesis at an entry, since `D_dev`'s
 `k ≤ 2^16` and `Noise8OK` give the peel's rows (`PeelExists.pc8EntryOK_of_wide`). -/
 theorem tileCheck8_computesWords_wide {ops : RowOps} (hops : Pc8OpsAgree ops) {w : ℕ} (hw : 24 ≤ w) (zf : ℤ)
     (pr : Prices) (c : Costs) (ρ : ℚ) (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
@@ -161,7 +162,7 @@ theorem tileCheck8_computesWords_wide {ops : RowOps} (hops : Pc8OpsAgree ops) {w
     (tileCheck8 ops ⟨[32], w, zf⟩ noise).ComputesWords
       (pearlCProtocolDev (devAt ⟨[32], w, zf⟩ 4 pr) (pc8Sem ops ⟨[32], w, zf⟩ noise) ρ)
       (pearlCTiles (pc8Sem ops ⟨[32], w, zf⟩ noise) c ρ) (fun L => pearlCDomainDev (devAt ⟨[32], w, zf⟩ 4 pr) L ∧
-        ∀ u < L.N, tileSide (L.shape u).m ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
+        ∀ u < L.N, min (L.shape u).m 16 ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
   tileCheck8_computesWords_domain hops _ pr c ρ noise hnoise fun H s U u act i j hD hu _ =>
     PeelExists.pc8EntryOK_of_wide hw zf (hD u hu).2.2.2.2.2 (hnoise H s U u act) act _ i j
 

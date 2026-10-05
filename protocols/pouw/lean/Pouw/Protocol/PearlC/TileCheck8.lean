@@ -19,9 +19,9 @@ table (`WholeCircuit.whole8`) at the audit grid's tile at that shape (`tileSide`
   activations, its unit's weights, and its ticket and useful words (`rows8`), each as the gate's low 32 bits;
 * `Collides`: `False`, since the checked words are registered wires.
 
-The Program needs whole tiles (`pc8.Shape.check`: `TM ∣ m`, `TN ∣ n`), so a shape whose last tile is narrower than
-the others (`m = 80`: a 64-row tile and a 16-row one) is outside it. There the table is still defined, and L3 is
-stated on shapes whose tile divides them.
+The Program needs whole tiles across (`pc8.Shape.check`: `TN ∣ n`) and whole 16-row ticket subtiles down
+(`min(TM, 16) ∣ m`), so where `TM ∤ m` its last tile row is short (`m = 80`: a 64-row tile row and a 16-row one), its
+own batch of `Pc8Tile_v1{K, m mod TM, TN}` after the whole tiles (`whole8`'s fourth block, `shorts8`).
 -/
 
 namespace Pouw.PearlC.WholeCircuit
@@ -38,18 +38,32 @@ def tileSide (d : ℕ) : ℕ := min d 64
 def tiles8 (p : Pipeline) (M N K : ℕ) : ℕ :=
   in8 M N K + N * ((row8B p K).N - rowIn K true) + M * ((row8A p K).N - rowIn K false)
 
-/-- The ticket or useful word registered on a tile gate `g`: gate `g` is position `r` of entry `(ti, tj)`'s block in
-tile `e = rs·(N / TN) + cs`, so of entry `(rs·TM + ti, cs·TN + tj)`; its `C̃` is the ticket word, its `U` the useful
-word, `0` elsewhere. -/
+/-- The first gate of the short last tile row's tiles, after the whole tiles. -/
+def shorts8 (p : Pipeline) (M N K TM TN : ℕ) : ℕ :=
+  tiles8 p M N K + M / TM * (N / TN) * (tileN K TM TN - tileIn K TM TN)
+
+/-- The ticket or useful word registered at position `b` past the inputs of a tile whose first entry is `(i0, j0)`:
+`b` is position `r` of entry `(ti, tj)`'s block, so of entry `(i0 + ti, j0 + tj)`; its `C̃` is the ticket word, its `U`
+the useful word, `0` elsewhere. -/
+def tileWord8 (K TN : ℕ) (tk us : Codes) (i0 j0 b : ℕ) : ℕ :=
+  let i := i0 + b / blockLen K / TN
+  let j := j0 + b / blockLen K % TN
+  if b % blockLen K = 5 * (K / 128) - 1 then tk i j
+  else if b % blockLen K = blockLen K - 1 then us i j else 0
+
+/-- The ticket or useful word registered on a tile gate `g`: in tile `e = rs·(N / TN) + cs`, at its entry
+`(rs·TM + ti, cs·TN + tj)`, or past the whole tiles in short tile `cs`, at its entry
+`((M / TM)·TM + ti, cs·TN + tj)`. -/
 def entry8 (p : Pipeline) (M N K TM TN : ℕ) (tk us : Codes) (g : ℕ) : ℕ :=
   if g < tiles8 p M N K then 0
-  else
+  else if g < shorts8 p M N K TM TN then
     let e := (g - tiles8 p M N K) / (tileN K TM TN - tileIn K TM TN)
-    let b := (g - tiles8 p M N K) % (tileN K TM TN - tileIn K TM TN)
-    let i := e / (N / TN) * TM + b / blockLen K / TN
-    let j := e % (N / TN) * TN + b / blockLen K % TN
-    if b % blockLen K = 5 * (K / 128) - 1 then tk i j
-    else if b % blockLen K = blockLen K - 1 then us i j else 0
+    tileWord8 K TN tk us (e / (N / TN) * TM) (e % (N / TN) * TN)
+      ((g - tiles8 p M N K) % (tileN K TM TN - tileIn K TM TN))
+  else
+    let cs := (g - shorts8 p M N K TM TN) / (tileN K (M % TM) TN - tileIn K (M % TM) TN)
+    tileWord8 K TN tk us (M / TM * TM) (cs * TN)
+      ((g - shorts8 p M N K TM TN) % (tileN K (M % TM) TN - tileIn K (M % TM) TN))
 
 /-- The registered values on gate `g`: activation word `(i, t)` on `a`'s gates, weight word `(j, t)` on `b`'s, the
 ticket and useful words on the tiles' `C̃` and `U` gates, `0` elsewhere. -/

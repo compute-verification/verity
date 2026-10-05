@@ -25,18 +25,20 @@ On them the formed words are `CastWord`s (`formWord8_castWord`), so the cast is 
 writes a NaN only from a NaN and never writes `−0`, and its accumulator `α·x_t` (a product of step words), `E′` and the
 basis' codes are not NaN. A row unit's codes are `pc8Sem`'s (`quant8`, so `quant8A`/`quant8B` are `unitChain`'s
 `A′`/`B̃`) and its factor row is the peel's (`row8A_paWords`, `row8B_pbWords`). `entry8_words` chains RowA `i` and RowB
-`j` into their tile (`TileCheck8`'s `chain8_*`): where the three units are correct and the peel's factor rows exist,
-entry `(i, j)`'s `C̃` and `U` are the device's ticket and useful words (`tile_devAt`).
+`j` into the tile entry `(i, j)` lies in (`TileCheck8`'s `Loc8` and `chainTile_*`), a whole tile or a short one: where
+the three units are correct and the peel's factor rows exist, entry `(i, j)`'s `C̃` and `U` are the device's ticket and
+useful words (`tile_devAt`, at the tile's own row count).
 
-On the whole table a gate holds its assignment's low bits at its width (`val_in8`, `val_tile8`), so where the public
-gates hold the anchors (`anchors8`) and the registered gates `rows8`'s values, an entry's registered words are the
-device's (`entry8_accepts`), at two `Row8OK` rows and the named hypothesis at the entry (`Pc8EntryOK`: the peel's
-factor rows exist). `TileCheckWords` composes these into L3's words for the plain `pc8` Program on a domain of whole-tile
-shapes (`Shape8`). The Program's tile at a unit's shape is the audit grid's there (`tileSide`: `64`, or the side itself
-below 64, so decode's `32 × 64`), and whole-tile means that it divides the shape: each of `m` and `n` at most 64 or a
-multiple of 64 (`tileSide_dvd_iff`). `D_dev` (`pearlCDomainDev`) gives `Shape8`'s `k` but leaves `m` and `n` free
-(`shape8_of_pearlCDomainDev`). A last tile narrower than the others (`m = 80`) is outside the Program. The cap is not
-part of it: its verdict is a separate conjunct, decided by units of its own.
+On the whole table a gate holds its assignment's low bits at its width (`val_in8`, `val_tileBlock8`), so where the
+public gates hold the anchors (`anchors8`) and the registered gates `rows8`'s values (`rows8_tile`, `rows8_short`), an
+entry's registered words are the device's (`entry8_accepts`), at two `Row8OK` rows and the named hypothesis at the entry
+(`Pc8EntryOK`: the peel's factor rows exist). `TileCheckWords` composes these into L3's words for the plain `pc8`
+Program on a domain of its shapes (`Shape8`, `pc8.Shape.check`). The Program's tile at a unit's shape is the audit
+grid's there (`tileSide`: `64`, or the side itself below 64, so decode's `32 × 64`). Across, it divides the shape: `n`
+at most 64 or a multiple of 64 (`tileSide_dvd_iff`). Down, `m` need only be a multiple of `min(m, 16)`: where `TM ∤ m`
+the last tile row is short (`m = 80`: a 64-row tile row and a 16-row one). `D_dev` (`pearlCDomainDev`) gives `Shape8`'s
+`k` but leaves `m` and `n` free (`shape8_of_pearlCDomainDev`). The cap is not part of it: its verdict is a separate
+conjunct, decided by units of its own.
 -/
 
 namespace Pouw.PearlC.WholeCircuit
@@ -887,10 +889,9 @@ hold row `i` of the activations, row `j` of the weights, their noise lines, the 
 hypotheses at the two rows, and where the peel's factor rows exist, `C̃_ij` and `U_ij` are the device's ticket and
 useful words on `pc8Sem`'s `A′` and `B̃` (`quant8A`, `quant8B`), the bases' codes and the lines' `bf16(E′)`. -/
 theorem entry8_words (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw)
-    (hTM : TM ∣ M) (hTN : TN ∣ N) (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript)
-    (z : Noise M N K Params.pi.r) (act wt : Codes) (i : Fin M) (j : Fin N)
-    (hXT : (whole8 ops p M K N TM TN).part.Correct X
-      ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_T ops p M K N TM TN) (tile_index hTM hTN i.isLt j.isLt).1⟩)
+    (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript)
+    (z : Noise M N K Params.pi.r) (act wt : Codes) (i : Fin M) (j : Fin N) (lc : Loc8 ops p M K N TM TN i j)
+    (hXT : (whole8 ops p M K N TM TN).part.Correct X ⟨_, (whole8 ops p M K N TM TN).unit_lt lc.hW lc.hq⟩)
     (hXA : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_A ops p M K N TM TN) i.isLt⟩)
     (hXB : (whole8 ops p M K N TM TN).part.Correct X
@@ -942,19 +943,27 @@ theorem entry8_words (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw : 
       rw [portB8_g hs hq, hg s hs q hq, gram8_eq p z hs hq, Nat.mod_eq_of_lt (chainWordP?_lt h), h]
       rfl)
     hpb
-  have hti := Nat.mod_lt i (pos_of_dvd_lt hTM i.isLt)
-  have htj := Nat.mod_lt j (pos_of_dvd_lt hTN j.isLt)
   have hk := Nat.dvd_mul_right 128 nw
   obtain ⟨h1, h2⟩ := tile_devAt p pr hnw _
-    ((whole8 ops p M (128 * nw) N TM TN).cut_correct X (blockT8 p M (128 * nw) N TM TN) (i / TM * (N / TN) + j / TN))
+    ((whole8 ops p M (128 * nw) N TM TN).cut_correct X (tileBlock8 p M (128 * nw) N TN lc.TH lc.cnt lc.i0 lc.j0) lc.q)
     (quant8A ops p z act) (quant8B ops p z wt) (basis8 z.FA) (basis8 z.FB)
     (fun i => be8 (betaQ8 ops (128 * nw) (act i)) (z.EA i)) (fun j => be8 (betaQ8 ops (128 * nw) (wt j)) (z.EB j)) i j
-    hti htj (fun l => (chain8_A ops p M (128 * nw) N TM TN X hTM hTN i.isLt j.isLt hk hXA l.isLt).trans (codeA l))
-    (fun l => (chain8_B ops p M (128 * nw) N TM TN X hTM hTN i.isLt j.isLt hk hXB l.isLt).trans (codeB l)) hr
-    (fun q hq => (chain8_PA ops p M (128 * nw) N TM TN X hTM hTN i.isLt j.isLt hXA hq).trans (paA q hq))
-    (fun q hq => (chain8_PB ops p M (128 * nw) N TM TN X hTM hTN i.isLt j.isLt hXB hq).trans (pbB q hq))
-  rw [chain8_C ops p M (128 * nw) N TM TN X hTM hTN i.isLt j.isLt (by omega) hXT,
-    chain8_U ops p M (128 * nw) N TM TN X hTM hTN i.isLt j.isLt hXT]
+    lc.hti lc.htj
+    (fun l => (chainTile_A ops p M (128 * nw) N TM TN X lc.hW lc.hq lc.hi0 lc.hj0 lc.hti lc.htj lc.hi i.isLt hk hXA
+      l.isLt).trans (codeA l))
+    (fun l => (chainTile_B ops p M (128 * nw) N TM TN X lc.hW lc.hq lc.hi0 lc.hj0 lc.hti lc.htj lc.hj j.isLt hk hXB
+      l.isLt).trans (codeB l)) hr
+    (fun q hq => (chainTile_PA ops p M (128 * nw) N TM TN X lc.hW lc.hq lc.hi0 lc.hj0 lc.hti lc.htj lc.hi i.isLt hXA
+      hq).trans (paA q hq))
+    (fun q hq => (chainTile_PB ops p M (128 * nw) N TM TN X lc.hW lc.hq lc.hi0 lc.hj0 lc.hti lc.htj lc.hj j.isLt hXB
+      hq).trans (pbB q hq))
+  have hc := cGate_bounds (K := 128 * nw) lc.hti lc.htj (by omega)
+  have hu := uGate_bounds (K := 128 * nw) lc.hti lc.htj
+  rw [lc.hC, lc.hU,
+    chainTile_out ops p M (128 * nw) N TM TN X lc.hW lc.hq lc.hi0 lc.hj0 hXT hc.1 hc.2
+      (by rw [← lc.hC]; exact outs8_C p M (128 * nw) N TM TN i.isLt j.isLt),
+    chainTile_out ops p M (128 * nw) N TM TN X lc.hW lc.hq lc.hi0 lc.hj0 hXT hu.1 hu.2
+      (by rw [← lc.hU]; exact outs8_U p M (128 * nw) N TM TN i.isLt j.isLt)]
   exact ⟨h1, h2⟩
 
 end Entry8
@@ -1058,19 +1067,22 @@ theorem rows8_b {j l : ℕ} (hj : j < N) (hl : l < K) :
     show (j * K + l) / K = j by rw [Nat.add_comm, Nat.add_mul_div_right _ _ hK, Nat.div_eq_of_lt hl, Nat.zero_add],
     show (j * K + l) % K = l by rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hl]]
 
-/-- The registered value on a tile gate of entry `(i, j)`'s block: its ticket word at `C̃`, its useful word at `U`. -/
-theorem rows8_block {i j r : ℕ} (hTM : TM ∣ M) (hTN : TN ∣ N) (hi : i < M) (hj : j < N) (hr : r < blockLen K) :
+/-- The registered value on a gate of entry `(i, j)`'s block in its whole tile: its ticket word at `C̃`, its useful word
+at `U`. -/
+theorem rows8_tile {i j r : ℕ} (hTN : TN ∣ N) (hi : i < M / TM * TM) (hj : j < N) (hr : r < blockLen K) :
     rows8 p M N K TM TN act wt tk us
         (tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (entryBase K TM TN (i % TM) (j % TN) + r)) =
       if r = 5 * (K / 128) - 1 then tk i j else if r = blockLen K - 1 then us i j else 0 := by
-  obtain ⟨-, hie, hje⟩ := tile_index hTM hTN hi hj
-  have hti := Nat.mod_lt i (pos_of_dvd_lt hTM hi)
+  obtain ⟨hE, hie, hje⟩ := whole_index hTN hi hj
+  have h0 : 0 < TM := Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hi; omega
+  have hti := Nat.mod_lt i h0
   have htj := Nat.mod_lt j (pos_of_dvd_lt hTN hj)
   have hbl := blockLen_pos K
   have hL : tileN K TM TN - tileIn K TM TN = TM * TN * blockLen K := by unfold tileN; omega
   have he := mul_add_lt (L := TN) hti htj
   have hb := mul_add_lt (L := blockLen K) he hr
   have hLp : 0 < TM * TN * blockLen K := by omega
+  have hS := mul_add_lt (L := TM * TN * blockLen K) hE hb
   have hg : tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (entryBase K TM TN (i % TM) (j % TN) + r) =
       tiles8 p M N K + ((i / TM * (N / TN) + j / TN) * (TM * TN * blockLen K) +
         ((i % TM * TN + j % TN) * blockLen K + r)) := by
@@ -1092,25 +1104,78 @@ theorem rows8_block {i j r : ℕ} (hTM : TM ∣ M) (hTN : TN ∣ N) (hi : i < M)
     rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt htj]
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := layout8 M N K
   have ht8 : in8 M N K ≤ tiles8 p M N K := by unfold tiles8; omega
+  have hs8 : shorts8 p M N K TM TN = tiles8 p M N K + M / TM * (N / TN) * (TM * TN * blockLen K) := by
+    unfold shorts8; rw [hL]
   unfold rows8 entry8
-  rw [hg, ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega)]
-  simp only [Nat.add_sub_cancel_left, hL, hq1, hr1, hq2, hr2, hq3, hr3, hie, hje]
+  rw [hg, ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega),
+    ite_eq_left (by rw [hs8]; omega)]
+  simp only [tileWord8, Nat.add_sub_cancel_left, hL, hq1, hr1, hq2, hr2, hq3, hr3, hie, hje]
 
-theorem rows8_C {i j : ℕ} (hTM : TM ∣ M) (hTN : TN ∣ N) (hi : i < M) (hj : j < N) (hK : 0 < K / 128) :
+/-- The registered value on a gate of entry `(i, j)`'s block in its short tile, below the whole tile rows. -/
+theorem rows8_short {i j r : ℕ} (hTN : TN ∣ N) (hi1 : M / TM * TM ≤ i) (hi : i < M) (hj : j < N)
+    (hr : r < blockLen K) :
+    rows8 p M N K TM TN act wt tk us
+        (short8 p M N K TM TN (j / TN) (entryBase K (M % TM) TN (i % TM) (j % TN) + r)) =
+      if r = 5 * (K / 128) - 1 then tk i j else if r = blockLen K - 1 then us i j else 0 := by
+  obtain ⟨hie, hti⟩ := short_index hi1 hi
+  have htj := Nat.mod_lt j (pos_of_dvd_lt hTN hj)
+  have hbl := blockLen_pos K
+  have hL : tileN K (M % TM) TN - tileIn K (M % TM) TN = M % TM * TN * blockLen K := by unfold tileN; omega
+  have he := mul_add_lt (L := TN) hti htj
+  have hb := mul_add_lt (L := blockLen K) he hr
+  have hLp : 0 < M % TM * TN * blockLen K := by omega
+  have hg : short8 p M N K TM TN (j / TN) (entryBase K (M % TM) TN (i % TM) (j % TN) + r) =
+      shorts8 p M N K TM TN + (j / TN * (M % TM * TN * blockLen K) + ((i % TM * TN + j % TN) * blockLen K + r)) := by
+    unfold short8 shorts8 tiles8 entryBase; rw [hL]; omega
+  have hq1 : (j / TN * (M % TM * TN * blockLen K) + ((i % TM * TN + j % TN) * blockLen K + r)) /
+      (M % TM * TN * blockLen K) = j / TN := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ hLp, Nat.div_eq_of_lt hb, Nat.zero_add]
+  have hr1 : (j / TN * (M % TM * TN * blockLen K) + ((i % TM * TN + j % TN) * blockLen K + r)) %
+      (M % TM * TN * blockLen K) = (i % TM * TN + j % TN) * blockLen K + r := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hb]
+  have hq2 : ((i % TM * TN + j % TN) * blockLen K + r) / blockLen K = i % TM * TN + j % TN := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ hbl, Nat.div_eq_of_lt hr, Nat.zero_add]
+  have hr2 : ((i % TM * TN + j % TN) * blockLen K + r) % blockLen K = r := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hr]
+  have htn : 0 < TN := by omega
+  have hq3 : (i % TM * TN + j % TN) / TN = i % TM := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ htn, Nat.div_eq_of_lt htj, Nat.zero_add]
+  have hr3 : (i % TM * TN + j % TN) % TN = j % TN := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt htj]
+  obtain ⟨h1, h2, h3, h4, h5, h6⟩ := layout8 M N K
+  have ht8 : in8 M N K ≤ tiles8 p M N K := by unfold tiles8; omega
+  have hs8 : tiles8 p M N K ≤ shorts8 p M N K TM TN := by unfold shorts8; omega
+  unfold rows8 entry8
+  rw [hg, ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega),
+    ite_eq_right (by omega)]
+  simp only [tileWord8, Nat.add_sub_cancel_left, hL, hq1, hr1, hq2, hr2, hq3, hr3, hie, Nat.div_add_mod' j TN]
+
+theorem rows8_C {i j : ℕ} (hTN : TN ∣ N) (hi : i < M) (hj : j < N) (hK : 0 < K / 128) :
     rows8 p M N K TM TN act wt tk us (cGlob8 p M N K TM TN i j) = tk i j := by
-  have hcg : cGate K TM TN (i % TM) (j % TN) = entryBase K TM TN (i % TM) (j % TN) + (5 * (K / 128) - 1) := by
-    unfold cGate; omega
   unfold cGlob8
-  rw [hcg, rows8_block p act wt tk us hTM hTN hi hj (by unfold blockLen; omega), ite_eq_left rfl]
+  split_ifs with h
+  · have hcg : cGate K TM TN (i % TM) (j % TN) = entryBase K TM TN (i % TM) (j % TN) + (5 * (K / 128) - 1) := by
+      unfold cGate; omega
+    rw [hcg, rows8_tile p act wt tk us hTN h hj (by unfold blockLen; omega), ite_eq_left rfl]
+  · have hcg : cGate K (M % TM) TN (i % TM) (j % TN) =
+        entryBase K (M % TM) TN (i % TM) (j % TN) + (5 * (K / 128) - 1) := by
+      unfold cGate; omega
+    rw [hcg, rows8_short p act wt tk us hTN (not_lt.1 h) hi hj (by unfold blockLen; omega), ite_eq_left rfl]
 
-theorem rows8_U {i j : ℕ} (hTM : TM ∣ M) (hTN : TN ∣ N) (hi : i < M) (hj : j < N) :
+theorem rows8_U {i j : ℕ} (hTN : TN ∣ N) (hi : i < M) (hj : j < N) :
     rows8 p M N K TM TN act wt tk us (uGlob8 p M N K TM TN i j) = us i j := by
   have hbl := blockLen_pos K
-  have hug : uGate K TM TN (i % TM) (j % TN) = entryBase K TM TN (i % TM) (j % TN) + (blockLen K - 1) := by
-    unfold uGate; omega
   unfold uGlob8
-  rw [hug, rows8_block p act wt tk us hTM hTN hi hj (by omega), ite_eq_right (by unfold blockLen; omega),
-    ite_eq_left rfl]
+  split_ifs with h
+  · have hug : uGate K TM TN (i % TM) (j % TN) = entryBase K TM TN (i % TM) (j % TN) + (blockLen K - 1) := by
+      unfold uGate; omega
+    rw [hug, rows8_tile p act wt tk us hTN h hj (by omega), ite_eq_right (by unfold blockLen; omega),
+      ite_eq_left rfl]
+  · have hug : uGate K (M % TM) TN (i % TM) (j % TN) =
+        entryBase K (M % TM) TN (i % TM) (j % TN) + (blockLen K - 1) := by
+      unfold uGate; omega
+    rw [hug, rows8_short p act wt tk us hTN (not_lt.1 h) hi hj (by omega), ite_eq_right (by unfold blockLen; omega),
+      ite_eq_left rfl]
 
 end Rows8
 
@@ -1162,43 +1227,28 @@ theorem val_in8 (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {g v 
   rw [ite_eq_left (show g < (whole8 ops p M K N TM TN).nIn from hg)]
   rfl
 
-theorem tile8_lt {e a : ℕ} (he : e < M / TM * (N / TN)) (ha1 : tileIn K TM TN ≤ a) (ha2 : a < tileN K TM TN) :
-    tile8 p M N K TM TN e a < (whole8 ops p M K N TM TN).spec.toCircuit.N := by
-  rw [tile8_eq ops p M K N TM TN]
-  exact (whole8 ops p M K N TM TN).inst_lt (whole8_T ops p M K N TM TN) he ha1 ha2
-
 /-- A tile gate's value is its assignment's low 32 bits. -/
-theorem val_tile8 (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {e a v : ℕ}
-    (he : e < M / TM * (N / TN)) (ha1 : tileIn K TM TN ≤ a) (ha2 : a < tileN K TM TN)
-    (h : X ⟨_, tile8_lt ops p he ha1 ha2⟩ = BitVec.ofNat _ v) : val X (tile8 p M N K TM TN e a) = v % 2 ^ 32 := by
+theorem val_tileBlock8 (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {L1 L2 : List Block} {TH cnt : ℕ}
+    {i0 j0 : ℕ → ℕ} (hW : (whole8 ops p M K N TM TN).blocks = L1 ++ tileBlock8 p M K N TN TH cnt i0 j0 :: L2)
+    {q : ℕ} (hq : q < cnt) {a : ℕ} (ha1 : tileIn K TH TN ≤ a) (ha2 : a < tileN K TH TN) {g : ℕ}
+    (hg : g = (whole8 ops p M K N TM TN).nIn + blocksLen L1 + q * (tileBlock8 p M K N TN TH cnt i0 j0).len +
+      (a - (tileBlock8 p M K N TN TH cnt i0 j0).nIn))
+    {hgN : g < (whole8 ops p M K N TM TN).spec.toCircuit.N} {v : ℕ} (h : X ⟨g, hgN⟩ = BitVec.ofNat _ v) :
+    val X g = v % 2 ^ 32 := by
   rw [val_bv X _ h]
-  show v % 2 ^ ((whole8 ops p M K N TM TN).gate (tile8 p M N K TM TN e a)).w = _
-  rw [tile8_eq ops p M K N TM TN, (whole8 ops p M K N TM TN).gate_inst (whole8_T ops p M K N TM TN) he ha1 ha2]
-  show v % 2 ^ (tileGate p K TM TN a).w = _
+  show v % 2 ^ ((whole8 ops p M K N TM TN).gate g).w = _
+  rw [hg, (whole8 ops p M K N TM TN).gate_inst hW hq ha1 ha2]
+  show v % 2 ^ (tileGate p K TH TN a).w = _
   rw [tileGate_w p ha1]
-
-omit ops p in
-theorem cGate_bounds {i j : ℕ} (hi : i < TM) (hj : j < TN) (hK : 0 < K / 128) :
-    tileIn K TM TN ≤ cGate K TM TN i j ∧ cGate K TM TN i j < tileN K TM TN := by
-  have hb := entry_bounds K TM TN hi hj (r := 5 * (K / 128) - 1) (by unfold blockLen; omega)
-  have hcg : cGate K TM TN i j = entryBase K TM TN i j + (5 * (K / 128) - 1) := by unfold cGate; omega
-  rw [hcg]; exact hb
-
-omit ops p in
-theorem uGate_bounds {i j : ℕ} (hi : i < TM) (hj : j < TN) :
-    tileIn K TM TN ≤ uGate K TM TN i j ∧ uGate K TM TN i j < tileN K TM TN := by
-  have hbl := blockLen_pos K
-  have hb := entry_bounds K TM TN hi hj (r := blockLen K - 1) (by omega)
-  have hug : uGate K TM TN i j = entryBase K TM TN i j + (blockLen K - 1) := by unfold uGate; omega
-  rw [hug]; exact hb
 
 end Widths8
 
 /-! ## An accepted entry -/
 
-/-- A whole-tile `pc8` shape: the tile at its own shape divides it, `tileSide m ∣ m` and `tileSide n ∣ n`
-(`pc8.Shape.check`), and `k` is a positive multiple of 128. -/
-def Shape8 (sh : Shape) : Prop := tileSide sh.m ∣ sh.m ∧ tileSide sh.n ∣ sh.n ∧ ∃ nw, 0 < nw ∧ sh.k = 128 * nw
+/-- A `pc8` shape (`pc8.Shape.check`): whole 16-row ticket subtiles down, `min(m, 16) ∣ m` (`min(TM, 16)` at
+`TM = tileSide m`), so a last tile row narrower than the others is short; whole tiles across, `tileSide n ∣ n`; and `k`
+a positive multiple of 128. -/
+def Shape8 (sh : Shape) : Prop := min sh.m 16 ∣ sh.m ∧ tileSide sh.n ∣ sh.n ∧ ∃ nw, 0 < nw ∧ sh.k = 128 * nw
 
 /-- The tile at a shape divides it where the dimension is at most `64` or a multiple of `64`. -/
 theorem tileSide_dvd_iff (d : ℕ) : tileSide d ∣ d ↔ d ≤ 64 ∨ 64 ∣ d := by
@@ -1220,13 +1270,14 @@ section Accept8
 variable {ops : RowOps} (hops : Pc8OpsAgree ops)
 include hops
 
-/-- **An accepted entry's registered words are the protocol's.** On `pc8`'s whole table at a whole-tile shape: where
+/-- **An accepted entry's registered words are the protocol's.** On `pc8`'s whole table at a shape of whole tile
+columns (`TN ∣ N`), its last tile row whole or short: where
 every unit in the cone of a set `T` holding entry `(i, j)`'s `C̃` and `U` is correct, the public gates hold the anchors
 of the noise `z` and the registered gates the activations `act`, the weights `wt` and the words `tk`, `us`, then at
 `Row8OK` rows `i` of `act` and `j` of `wt`, under `Noise8OK z` and the named hypothesis at `(i, j)`, the registered
 words `tk i j` and `us i j` read as the device's ticket and useful words on `pc8Sem`'s operands. -/
 theorem entry8_accepts (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw)
-    (hM : TM ∣ M) (hN : TN ∣ N) (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript)
+    (hN : TN ∣ N) (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript)
     (z : Noise M N K Params.pi.r) (act wt tk us : Codes) (i : Fin M) (j : Fin N)
     {T : Finset (Fin (whole8 ops p M K N TM TN).spec.toCircuit.N)}
     (hT : ∀ g : Fin (whole8 ops p M K N TM TN).spec.toCircuit.N,
@@ -1275,26 +1326,28 @@ theorem entry8_accepts (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw 
   have hg : ∀ s < 32, ∀ q < 32, val X (gAt M N K + 32 * s + q) = gram8 p z s q := fun s hs q hq => by
     rw [val_in8 ops p X (by omega) (by omega) (hpub _ _ (Or.inr ⟨by omega, by omega⟩)), anchors8_g p z hs hq,
       inW8_g (by omega), Nat.mod_eq_of_lt (gram8_lt p z s q)]
-  obtain ⟨w1, w2⟩ := entry8_words hops p pr hnw hK hM hN X z act wt i j
-    (hcone _ (cone8T ops p M K N TM TN hM hN i.isLt j.isLt hK0 fun g hg => hT g (Or.inl hg)))
-    (hcone _ (cone8A ops p M K N TM TN hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
-    (hcone _ (cone8B ops p M K N TM TN hM hN i.isLt j.isLt fun g hg => hT g (Or.inr hg)))
+  obtain ⟨lc⟩ := loc8_exists ops p M K N TM TN hN i.isLt j.isLt
+  have hc := cGate_bounds (K := K) lc.hti lc.htj hK0
+  have hu := uGate_bounds (K := K) lc.hti lc.htj
+  obtain ⟨w1, w2⟩ := entry8_words hops p pr hnw hK X z act wt i j lc
+    (hcone _ (coneTile_T ops p M K N TM TN lc.hW lc.hq hc.1 hc.2 fun g hg => hT g (Or.inl (hg.trans lc.hC.symm))))
+    (hcone _ (coneTile_A ops p M K N TM TN lc.hW lc.hq lc.hti lc.htj lc.hi i.isLt fun g hg =>
+      hT g (Or.inr (hg.trans lc.hU.symm))))
+    (hcone _ (coneTile_B ops p M K N TM TN lc.hW lc.hq lc.hti lc.htj lc.hj j.isLt fun g hg =>
+      hT g (Or.inr (hg.trans lc.hU.symm))))
     hxa hea hxb heb hfa hfb hg hA hB hz hr
-  obtain ⟨he, -, -⟩ := tile_index hM hN i.isLt j.isLt
-  have hti := Nat.mod_lt (i : ℕ) (Nat.pos_of_dvd_of_pos hM (Nat.zero_lt_of_lt i.isLt))
-  have htj := Nat.mod_lt (j : ℕ) (Nat.pos_of_dvd_of_pos hN (Nat.zero_lt_of_lt j.isLt))
-  have hc := cGate_bounds (K := K) hti htj hK0
-  have hu := uGate_bounds (K := K) hti htj
+  have hCN : cGlob8 p M N K TM TN i j < (whole8 ops p M K N TM TN).spec.toCircuit.N := by
+    rw [lc.hC]; exact (whole8 ops p M K N TM TN).inst_lt lc.hW lc.hq hc.1 hc.2
+  have hUN : uGlob8 p M N K TM TN i j < (whole8 ops p M K N TM TN).spec.toCircuit.N := by
+    rw [lc.hU]; exact (whole8 ops p M K N TM TN).inst_lt lc.hW lc.hq hu.1 hu.2
   have vC : val X (cGlob8 p M N K TM TN i j) = tk i j % 2 ^ 32 := by
-    unfold cGlob8
-    rw [val_tile8 ops p X he hc.1 hc.2 (hreg _ _ (Or.inr (Or.inr ⟨i, i.isLt, j, j.isLt, Or.inl rfl⟩)))]
-    rw [show tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (cGate K TM TN (i % TM) (j % TN)) =
-      cGlob8 p M N K TM TN i j from rfl, rows8_C p act wt tk us hM hN i.isLt j.isLt hK0]
+    rw [val_tileBlock8 ops p X lc.hW lc.hq hc.1 hc.2 lc.hC
+        (hreg _ hCN (Or.inr (Or.inr ⟨i, i.isLt, j, j.isLt, Or.inl rfl⟩))),
+      rows8_C p act wt tk us hN i.isLt j.isLt hK0]
   have vU : val X (uGlob8 p M N K TM TN i j) = us i j % 2 ^ 32 := by
-    unfold uGlob8
-    rw [val_tile8 ops p X he hu.1 hu.2 (hreg _ _ (Or.inr (Or.inr ⟨i, i.isLt, j, j.isLt, Or.inr rfl⟩)))]
-    rw [show tile8 p M N K TM TN (i / TM * (N / TN) + j / TN) (uGate K TM TN (i % TM) (j % TN)) =
-      uGlob8 p M N K TM TN i j from rfl, rows8_U p act wt tk us hM hN i.isLt j.isLt]
+    rw [val_tileBlock8 ops p X lc.hW lc.hq hu.1 hu.2 lc.hU
+        (hreg _ hUN (Or.inr (Or.inr ⟨i, i.isLt, j, j.isLt, Or.inr rfl⟩))),
+      rows8_U p act wt tk us hN i.isLt j.isLt]
   rw [vC, wordQ_mod32] at w1
   rw [vU, wordQ_mod32] at w2
   exact ⟨w1, w2⟩
@@ -1312,9 +1365,9 @@ theorem auditTiling_cols_lt (tm tn : ℕ) (L : Layout) (g : ℕ) :
   lt_of_lt_of_le (Finset.mem_Ico.1 hj).2 (min_le_right _ _)
 
 /-- `D_dev`'s `k` is whole-tile for `pc8`, a positive multiple of 128. Its `m` and `n` are free, so `Shape8` also needs
-the tile at the unit's shape to divide it. -/
+`m`'s 16-row subtiles and `n`'s tiles to divide them. -/
 theorem shape8_of_pearlCDomainDev {d : PearlCDevice} {L : Layout} (h : pearlCDomainDev d L) {u : ℕ} (hu : u < L.N)
-    (hm : tileSide (L.shape u).m ∣ (L.shape u).m) (hn : tileSide (L.shape u).n ∣ (L.shape u).n) :
+    (hm : min (L.shape u).m 16 ∣ (L.shape u).m) (hn : tileSide (L.shape u).n ∣ (L.shape u).n) :
     Shape8 (L.shape u) := by
   obtain ⟨-, -, hk0, ⟨c, hc⟩, -, -⟩ := h u hu
   exact ⟨hm, hn, c, by omega, hc⟩
