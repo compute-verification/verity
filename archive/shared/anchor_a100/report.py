@@ -54,7 +54,7 @@ WOULD_NOT_RUN = [
     "The packed lane's plain k=0 direct 2^28 (140 GB) does not fit the 80 GB card on any GPU; k=2..4 at 2^28 were run (17.8-34.4 GB).",
     "`cupy` and `blake3` were absent from the pod's venv and were installed (`cupy-cuda12x`, `blake3`); the hash_gpu / encode benches otherwise ran unchanged.",
     "The A100's `torch._int_mm` reaches 0.12 of the datasheet INT8 peak at 8192^3 (the 4090 got 0.25): the 'fraction of INT8 peak' floors on this card are against a ceiling cuBLAS itself does not approach.",
-    "b-ligero needed `PYTHONPATH=.:benchmarks/numerical/python:.` and `verity_numerical.bench.instances build` on the pod first (the operand arrays are built, not committed); `bench-vu` has no `--vus` flag (85 VUs come from `--batch 8192`).  Run r20260922-080532-9bbb is the failed attempt.",
+    "b-ligero needed `PYTHONPATH=.:benchmarks/numerical/python` and `verity_numerical.bench.instances build` on the pod first (the operand arrays are built, not committed); `bench-vu` has no `--vus` flag (85 VUs come from `--batch 8192`).  Run r20260922-080532-9bbb is the failed attempt.",
     "Model-only rows (`explore.tensor` at 0.172 utilisation) are ESTIMATES; the A vs B section labels every still-modelled bucket.  No proof was produced in this lane except the b-ligero prover runs (section 7, `NON_ZK_PROOF_DIAGNOSTIC`).",
 ]
 
