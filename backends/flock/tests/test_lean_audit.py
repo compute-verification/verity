@@ -129,8 +129,9 @@ def _encode(es: list[tuple]) -> bytes:
 def test_the_honest_run_accepts_and_its_transcript_replays(zk, tmp_path):
     """The program draws the recorded session's units and accepts it, the serving side was asked for that draw, and the run's
     transcript replays to the same verdict (`replay_simulate`); a transcript whose last proof is not the object its key
-    names is refused on replay as in a run. It is the one test of an accepting run through the workers, the frames and the
-    content store (three Lean runs of the session's setup, two of them verifying)."""
+    names does not replay, since the program refuses that object and so asks the audit worker about another verdict than
+    the one recorded. It is the one test of an accepting run through the workers, the frames and the content store (three
+    Lean runs of the session's setup, two of them verifying)."""
     v, p = _run(zk, tmp_path)
     recorded = json.loads((_drawn(zk) / "session.json").read_text())["unit_draw"]
     assert v["accepted"], v["why"]
@@ -147,7 +148,7 @@ def test_the_honest_run_accepts_and_its_transcript_replays(zk, tmp_path):
     es[i] = es[i][:3] + (reply[:-1] + bytes([reply[-1] ^ 1]),)
     (tmp_path / "flipped.bin").write_bytes(_encode(es))
     w = _replay(zk, tmp_path / "flipped.bin")
-    assert not w["accepted"] and w["why"].startswith("archive: the object held under ") and w["why"].endswith("does not hash to it")
+    assert not w["accepted"] and w["why"] == "replay: the recorded request on audit is not the program's", w["why"]
 
 
 @pytest.mark.slow
