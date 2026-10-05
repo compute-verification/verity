@@ -1,5 +1,14 @@
 {
  "definitions": {
+  "DsaTopKShortRow_v2{TOPK=16}": {
+   "and": 469
+  },
+  "DsaUe8m0Scale_v2": {
+   "and": 50895
+  },
+  "F32CeilFtz_v2": {
+   "and": 315
+  },
   "GatherBf16x1024u10_v1": {
    "and": 16368
   },
@@ -14,6 +23,15 @@
   },
   "GatherBf16x76u10_v1": {
    "and": 1296
+  },
+  "I32Sub_v2": {
+   "and": 31
+  },
+  "I32ToF32_v2": {
+   "and": 368
+  },
+  "U32And_v2": {
+   "and": 32
   }
  },
  "pieces": {

@@ -1303,6 +1303,9 @@ with open(env["FAKE_LOG"], "a") as f:
 if env.get("UNREACHABLE"):
     sys.exit(255)
 if "test -f" in cmd:
+    if env.get("UNTRUSTED"):
+        print(env["UNTRUSTED"])
+        sys.exit(4)
     sys.exit(1 if env.get("NO_SRC") else 0)
 if "{.metadata.name}" in cmd:
     name = re.search(r"get job (\S+)", cmd).group(1)
@@ -1452,6 +1455,10 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert not n2.calls()
     no_src = n2.round_(NO_SRC="1")
     assert no_src.returncode == 3 and "no research tree at n1.invalid:/n1/src/abc" in no_src.stdout and "rsync" not in n2.calls()
+    writable = n2.round_(UNTRUSTED="/n1/src/abc/tools/research/src/research/store")
+    assert writable.returncode == 3 and "rsync" not in n2.calls()
+    assert "refused: n1.invalid:/n1/src/abc/tools/research/src/research/store could be changed by a uid other than root" in writable.stdout
+    assert "find /n1/src/abc/tools/research /workspace/custody/python -path /workspace/custody/python/.lock -prune" in n2.calls()
     unreached = n2.round_(UNREACHABLE="1")
     assert unreached.returncode == 3 and "refused: node 1 not reached (`ssh n1.invalid` exited 255)" in unreached.stdout
 
@@ -1471,8 +1478,10 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     assert f"{root}/{R['done']}/ n1.invalid:/n1/runs/{R['done']}/" in calls and R["fresh"] not in calls
     assert not [k for k in ("live", "retimed", "unread") if R[k] in calls], "a live run is never published as dead"
     assert f"data custody /n1/runs/{R['dead']} --publish --keep-local --force --runner-gone" in calls
-    assert f'data custody /n1/runs/{R["done"]} --publish --keep-local "]' in calls
+    assert f'data custody /n1/runs/{R["done"]} --publish --keep-local  & wait $!"]' in calls
     assert "PYTHONPATH=/n1/src/abc/tools/research/src" in calls and R["preserved"] not in calls and R["big"] not in calls
+    assert ('"bash", "-c", "trap \'exit 143\' TERM; cd / || exit 1; HOME=/tmp PYTHONDONTWRITEBYTECODE=1 ' in calls and "uv run" not in calls
+            and " /workspace/custody/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12 -m research data custody " in calls)
     assert "touch pwned" not in calls and rogue.name not in n2.names("pushed") + n2.names("held")
     keepalive = "ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "
     assert all(x.startswith(keepalive) for x in calls.splitlines() if x.startswith("ssh ")), "a dropped link ends every call"
@@ -1515,7 +1524,8 @@ def test_n2_custody_holds_what_no_retry_can_mend_each_with_its_reason(tmp_path):
     said = {d.name: next(x for x in first.stdout.splitlines() if f"{d} (c1, failed): held: " in x) for d in (legacy, conflict, stale, differs)}
     assert "Label it `custody waived`" in said[legacy.name] and "custody waived" not in said[conflict.name] + said[stale.name]
     assert f"R2 already holds another attempt for {conflict.name}" in said[conflict.name] and f"{conflict}/.custody names its" in said[conflict.name]
-    assert f"`research data reconcile-attempts {conflict.name} --apply` there" in said[conflict.name]
+    assert f"on node 1, `sudo -u research vy-custody --reconcile {conflict.name} --by WHO`" in said[conflict.name]
+    assert f"rm {n2.state}/held/{conflict.name} instead, and the next round brings its .custody home" in said[conflict.name]
     assert "R2 already holds another attempt" in said[differs.name] and "lacks what the run dir holds now" in said[stale.name]
     assert said[legacy.name].endswith(f"then mv {n2.state}/held/{legacy.name} {n2.state}/pushed/")
     n2.job_err({})
@@ -1654,8 +1664,8 @@ def test_n2_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_pat
     assert not n2.calls() and f"would push {a}" in n2.round_("--dry-run", clock=at("1215")).stdout, "a dry run starts no Job"
 
     assert n2.round_(clock=at("1150"), VY_CUSTODY_MAX_RUNS="1").returncode == 0 and n2.names("pushed") == [a.name]
-    assert '"activeDeadlineSeconds": 2340,' in n2.calls(), "40 min to 12:30Z, less the minute"
-    cut = n2.round_(clock=at("1204"), CLOCK_AFTER_RSYNC=str(at("1226")))
+    assert '"activeDeadlineSeconds": 2330,' in n2.calls(), "40 min to 12:30Z, less the minute and the grace"
+    cut = n2.round_(clock=at("1203"), CLOCK_AFTER_RSYNC=str(at("1226")))
     assert cut.returncode == 0 and n2.names("pushed") == [a.name] and f"data custody /n1/runs/{b.name}" not in n2.calls()
     assert ("paused after 0 push(es), for node 1's daily hold (1210-1330 UTC; no Job of it runs past 1230Z, where node 1's quiet hour "
             "starts): 0s left, the copy waits on node 1: 2 run dir(s) left for the next round") in cut.stdout
@@ -1663,6 +1673,610 @@ def test_n2_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_pat
     assert late.returncode == 0 and n2.names("pushed") == [a.name, b.name, c.name]
     assert n2.calls().count('"activeDeadlineSeconds": 3600,') == 2
     assert n2.round_(clock=at("1215"), VY_CUSTODY_QUIET="").returncode == 0, "VY_CUSTODY_QUIET='' turns the hold off"
+
+
+# a stand-in kubectl: a created n1-custody Job runs its command at once, against the fs vault KVAULT names (the Secret's R2); `get pod`
+# finds the pods LIVE_PODS lists, or can't reach the API server under POD_ERR
+FAKE_KUBECTL = '''
+import json, os, subprocess, sys
+from pathlib import Path
+jobs, log, a = Path(os.environ["KSTATE"]), Path(os.environ["KLOG"]), sys.argv[1:]
+with log.open("a") as f:
+    f.write("kubectl " + " ".join(a) + "\\n")
+if a[:2] == ["get", "pod"]:
+    if os.environ.get("POD_ERR"):
+        sys.exit("Unable to connect to the server: dial tcp 10.0.0.1:6443: i/o timeout")
+    if a[2] not in os.environ.get("LIVE_PODS", "").split(","):
+        sys.exit(f'Error from server (NotFound): pods "{a[2]}" not found')
+    print(f"pod/{a[2]}")
+elif a[:2] == ["delete", "job"]:
+    (jobs / a[2]).unlink(missing_ok=True)
+elif a[:3] == ["create", "-f", "-"]:
+    job = json.load(sys.stdin)
+    name, spec = job["metadata"]["name"], job["spec"]["template"]["spec"]
+    with log.open("a") as f:
+        f.write(f"created {name}\\n")
+    rc, out = 0, ""
+    if name.startswith("n1-custody-"):
+        cmd = spec["containers"][0]["command"]
+        if os.environ.get("FAIL_RUN") and os.environ["FAIL_RUN"] in name:
+            rc, out = 1, "Error: boom\\n"
+        else:
+            p = subprocess.run(["bash", "-c", cmd[5].replace("HOME=/tmp", "HOME=" + os.environ["KHOME"]), *cmd[6:]], capture_output=True,
+                               text=True, stdin=subprocess.DEVNULL, env={**os.environ, "RESEARCH_STORE_CONFIG": os.environ["KVAULT"]})
+            rc, out = p.returncode, p.stdout + p.stderr
+    (jobs / name).write_text(json.dumps({"job": job, "rc": rc, "out": out}))
+elif a[:2] == ["get", "job"]:
+    if not (jobs / a[2]).exists():
+        sys.exit(f'Error from server (NotFound): jobs.batch "{a[2]}" not found')
+    failed = json.loads((jobs / a[2]).read_text())["rc"] or (os.environ.get("FAIL_PENDING") and a[2].startswith("n1-store-push-"))
+    print("Failed=True " if failed else "Complete=True ", end="")
+elif a[0] == "logs":
+    print("\\n".join(json.loads((jobs / a[1].split("/", 1)[1]).read_text())["out"].splitlines()[-int(a[2].split("=")[1]):]))
+'''
+
+
+N1_OLD, N1_FUTURE = 1_000_000_000, 4_102_444_800     # a run's records last changed in 2001 (settled, and stale for a pod), or in 2100
+N1_CUSTODY = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("flock") is None or not Path("/proc/self/stat").exists(),
+                                reason="n1_custody.sh is bash, and takes a flock")
+
+
+def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
+    """Node 1 for n1_custody.sh: its runs roots `jobs` (store uid 1000) and `research` (1001), node 2's relay copies under jobs/runs-n2,
+    and the Secret's R2 as the fs vault `vault`. `run` makes a run dir from the run_v0.2 fixture (a pod's, pod-RUN, unless `host`),
+    `round_` runs one round through FAKE_KUBECTL and a sudo that logs its argv (at `clock`, when given, as _n2_custody's), `created`
+    lists the Jobs created so far, `job` reads one back with its outcome, `command` its container's command, `held` the holds."""
+    src_root = Path(registry.__file__).resolve().parents[2]
+    n = types.SimpleNamespace(jobs=tmp_path / "jobs", research=tmp_path / "research", state=tmp_path / "state", vault=tmp_path / "vault",
+                              log=tmp_path / "calls.log", absent=tmp_path / "absent.toml", remote=tmp_path / "vault.toml")
+    bin_, kjobs, home = tmp_path / "bin", tmp_path / "k8s", tmp_path / "home"
+    for d in (n.jobs / "runs", n.research / "runs", bin_, kjobs, n.vault, home, tmp_path / "py" / "bin"):
+        d.mkdir(parents=True)
+    # the round runs only a tree and a Python that no other uid can change: copies, not links into the checkout
+    shutil.copytree(src_root, tmp_path / "src" / "tools" / "research" / "src", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy(src_root.parent / "store.pod.toml", tmp_path / "src" / "tools" / "research" / "store.pod.toml")
+    (tmp_path / "py" / "bin" / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    (tmp_path / "py" / "bin" / "python3").chmod(0o755)
+    for p in (tmp_path, tmp_path / "src", *(tmp_path / "src").rglob("*"), tmp_path / "py", *(tmp_path / "py").rglob("*")):
+        p.chmod(p.stat().st_mode & ~0o022)       # tmp_path too: a subdirectory a test makes takes the node's umask (002 on node 1)
+    n.src, n.py = tmp_path / "src", tmp_path / "py" / "bin" / "python3"
+    n.remote.write_text(f'[remote]\ntype = "fs"\npath = "{n.vault}"\n')
+    (bin_ / "kubectl").write_text(f"#!{sys.executable}\n{FAKE_KUBECTL}")
+    (bin_ / "sudo").write_text(f'#!/bin/sh\necho "sudo $*" >> {n.log}\n[ "$1 $2" = "-n -u" ] || exit 1\nshift 3\nexec "$@"\n')
+    (bin_ / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    (tmp_path / "datebin").mkdir()
+    (tmp_path / "datebin" / "date").write_text(_FAKE_DATE % (shutil.which("date"), shutil.which("date")))
+    for f in (*bin_.iterdir(), tmp_path / "datebin" / "date"):
+        f.chmod(0o755)
+
+    def run(root, rid, state, *, boot="boot-n1", host=None, t=N1_OLD, empty=False, extra=0, runs="runs", status=None,
+            stdout="the workload's stdout\n", files=None):
+        d = root / runs / rid
+        if empty:
+            d.mkdir()
+            (d / "stdout.log").write_text("")
+            (d / "stderr.log").write_text("")
+            job = json.loads((Path(__file__).parent / "fixtures" / "run_v0.2" / "job.json").read_text())
+        else:
+            shutil.copytree(Path(__file__).parent / "fixtures" / "run_v0.2", d)
+            (d / "state.json").unlink()
+            (d / "stdout.log").write_text(stdout)
+            job = json.loads((d / "job.json").read_text())
+        job["run"]["id"], job["environment"]["boot_id"], job["environment"]["hostname"] = rid, boot, host or f"pod-{rid}"
+        (d / "job.json").write_text(json.dumps(job))
+        (d / "status.json").write_text(json.dumps(status or {"state": state, "transitions": [{"state": state, "pid": 4243}]}))
+        for i in range(extra):
+            (d / f"row{i}.jsonl").write_text("{}\n")
+        for rel, text in (files or {}).items():
+            (d / rel).write_text(text)
+        for p in d.rglob("*"):
+            os.utime(p, (t, t))
+        return d
+
+    def round_(*args, clock=None, **env):
+        if clock is not None:                                   # `date -u +FORMAT` reads FAKE_CLOCK
+            (tmp_path / "clock").write_text(str(clock))
+            env = {"FAKE_CLOCK": str(tmp_path / "clock"), **env}
+        path = f"{tmp_path / 'datebin'}:{bin_}" if clock is not None else str(bin_)
+        return subprocess.run(["bash", str(NEBIUS / "n1_custody.sh"), *args], capture_output=True, text=True,
+                              env={**os.environ, "PATH": f"{path}:{os.environ['PATH']}", "HOME": str(home), "KSTATE": str(kjobs),
+                                   "KLOG": str(n.log), "KHOME": str(home), "KVAULT": str(n.remote), "RESEARCH_STORE_CONFIG": str(n.absent),
+                                   "VY_CUSTODY_QUIET": "", "VY_CUSTODY_BOOT": "boot-n1", "VY_CUSTODY_PY": str(n.py),
+                                   "VY_CUSTODY_PYHOME": str(tmp_path / "py"), "VY_CUSTODY_STATE": str(n.state), "VY_CUSTODY_SRC": str(n.src),
+                                   "VY_CUSTODY_ROOTS": f"{n.jobs}/runs={n.jobs}/store=1000,{n.research}/runs={n.research}/store=1001",
+                                   "VY_CUSTODY_RELAY": f"{n.jobs}/runs-n2={n.jobs}/store=1000", "VY_CUSTODY_MAX_FILES": "10", **env})
+
+    n.run, n.round_ = run, round_
+    n.created = lambda: [ln.split()[1] for ln in n.log.read_text().splitlines() if ln.startswith("created ")] if n.log.exists() else []
+    n.job = lambda name: json.loads((kjobs / name).read_text())
+    n.command = lambda name: n.job(name)["job"]["spec"]["template"]["spec"]["containers"][0]["command"]
+    n.held = lambda: sorted(p.name for p in (n.state / "held").iterdir())
+    return n
+
+
+@N1_CUSTODY
+def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_bounded_rounds(tmp_path, monkeypatch):
+    """3 Oct: ~326 runs under node 1's runs roots had ended, a pod preempted before its runner recorded an end among them, and sat
+    there without custody. A round takes each run this machine ran, once it has settled, through a Job as its store's owner, with
+    the Secret's R2: `research data custody --publish --keep-local`, --force --runner-gone for a status that never became terminal
+    once Kubernetes says its pod is gone. A run that never ran its workload is held (never published as evidence) until a label
+    lifts it, and so is one over the bounds and one whose remote holds another attempt document (after its one Job), until
+    `--reconcile`. Node 2's relay copies, live runs, settling runs and an attempt published without its run record get no Job (one
+    R2 lacks is held record-less, and the pending push leaves it out, until a person rules). A
+    round runs at most VY_CUSTODY_MAX_RUNS Jobs within VY_CUSTODY_PASS_S, runs that failed before going last, none in node 1's daily
+    hold, and starts each store's pending push."""
+    from research.store import attempt as A
+    from research.store.cli import main as data_main
+    from research.store.local import LocalStore, attempt_key
+
+    node = _n1_custody(tmp_path)
+    jobs, research, state, log, vault, absent = node.jobs, node.research, node.state, node.log, node.vault, node.absent
+    run, round_, created, job, command, held = node.run, node.round_, node.created, node.job, node.command, node.held
+    old, future = N1_OLD, N1_FUTURE
+
+    def preserved(d):
+        return json.loads((d / ".custody").read_text())["preserved"] is True
+
+    R = {k: f"r20261003-0000{n:02d}-00{n:02d}" for n, k in enumerate(
+        ("done", "dead", "empty", "n2copy", "fresh", "fails", "big", "legacy", "conflict", "live", "new", "research", "relay"), 1)}
+    n1 = {k: f"n1-custody-{r}" for k, r in R.items()}
+    J = {k: jobs / "runs" / r for k, r in R.items()}
+    J["relay"] = jobs / "runs-n2" / R["relay"]
+    run(jobs, R["done"], "done")
+    run(jobs, R["dead"], "running")                       # a preempted pod: no record changed for 24 h
+    run(jobs, R["empty"], "submitted", empty=True, status={"state": "submitted"})      # its runner never spawned the workload
+    run(jobs, R["n2copy"], "done", boot="boot-n2")        # node 2's relay copy: n2_custody.sh's
+    run(jobs, R["fresh"], "failed", t=future)
+    run(jobs, R["fails"], "failed")
+    run(jobs, R["big"], "done", extra=4)
+    run(jobs, R["legacy"], "done")
+    run(jobs, R["conflict"], "done")
+    run(jobs, R["live"], "running", t=future)
+    run(research, R["research"], "done")
+    run(jobs, R["relay"], "done", boot="boot-n2", runs="runs-n2")
+    offline = LocalStore(jobs / "store", config_path=absent)
+    assert A.publish(J["legacy"], store=offline, remote_push=False, run_record=False)["published"]
+    for k in ("conflict", "relay"):
+        assert A.publish(J[k], store=offline, remote_push=False, run_record=True)["published"]
+        other = json.loads(offline.attempt_path(R[k]).read_bytes())
+        other["status"]["rc"] = 99
+        (vault / attempt_key(R[k])).parent.mkdir(parents=True, exist_ok=True)
+        (vault / attempt_key(R[k])).write_text(json.dumps(other, sort_keys=True, separators=(",", ":")))
+    for d in (J["legacy"], J["conflict"], J["relay"]):
+        for p in d.rglob("*"):
+            os.utime(p, (old, old))
+
+    assert round_("--now").returncode == 2 and round_("--reconcile", R["done"], "--by").returncode == 2
+    assert round_("--reconcile", f"../{R['done']}", "--by", "x").returncode == 2
+    no_src = round_(VY_CUSTODY_SRC=str(tmp_path / "nowhere"))
+    assert no_src.returncode == 3 and f"refused: no research tree at {tmp_path}/nowhere" in no_src.stdout
+    quiet = round_(VY_CUSTODY_QUIET="0000-2400")
+    assert quiet.returncode == 0 and "node 1's daily hold" in quiet.stdout and not log.exists()
+    assert round_("--reconcile", R["conflict"], "--by", "x", VY_CUSTODY_QUIET="0000-2400").returncode == 3
+
+    dry = round_("--dry-run")
+    assert dry.returncode == 0 and created() == [] and not held() and not (state / "boots").exists(), dry.stdout + dry.stderr
+    assert f"would publish {J['done']} (r21-fixture, done, 8 files" in dry.stdout
+    assert (f"would publish {J['dead']} (r21-fixture, running, 8 files, 5.9 KiB) with --force --runner-gone (its pod pod-{R['dead']} "
+            "is NotFound)") in dry.stdout
+    assert f"would hold {J['empty']}: never ran its workload (r21-fixture, status submitted" in dry.stdout
+    assert f"would hold {J['big']}: over 10 files" in dry.stdout and f"would publish {research}/runs/{R['research']}" in dry.stdout
+    assert "no Job: 1 not run by this machine, 1 settling (triage lists them)" in dry.stdout
+    assert R["n2copy"] not in dry.stdout and R["fresh"] not in dry.stdout and R["live"] not in dry.stdout
+    assert f"would start {jobs}/store's pending push (Job n1-store-push-jobs)" in dry.stdout
+    assert "1 record-less attempt(s) held (triage's attempt-unpreserved)" in dry.stdout
+    assert "sudo -n -u #1000 env" in log.read_text() and "sudo -n -u #1001 env" in log.read_text()
+
+    unbounded = round_(VY_CUSTODY_PASS_S="0")
+    assert unbounded.returncode == 1 and created() == ["n1-store-push-jobs", "n1-store-push-research"], unbounded.stdout
+    assert "round bounded (0 Job(s) in" in unbounded.stdout and "5 run(s) left" in unbounded.stdout
+    assert held() == [R["empty"], R["big"]] and "2 run(s) held" in unbounded.stdout
+    assert f"research data label {R['empty']} custody never-ran --by WHO) and the hold lifts itself" in unbounded.stdout
+    push = job("n1-store-push-research")["job"]
+    assert push["spec"]["template"]["spec"]["securityContext"] == {"runAsUser": 1001, "runAsGroup": 1001}
+    assert push["spec"]["ttlSecondsAfterFinished"] == 3600 and "research data push --pending --jobs 8" in command("n1-store-push-research")[5]
+    assert command("n1-store-push-research")[6:] == ["n1-custody", str(node.src), str(node.py), f"{research}/store", f"{research}/runs",
+                                                     "--skip-record-less"]
+
+    bounded = round_(VY_CUSTODY_MAX_RUNS="1")
+    assert bounded.returncode == 1 and created()[2:] == [n1["done"]] and "4 run(s) left" in bounded.stdout, bounded.stdout
+    assert preserved(J["done"]) and LocalStore(jobs / "store", config_path=tmp_path / "vault.toml").get_attempt(R["done"])
+    spec = job(n1["done"])["job"]["spec"]
+    pod = spec["template"]["spec"]
+    assert (spec["backoffLimit"], spec["activeDeadlineSeconds"], pod["nodeSelector"]) == (0, 1800, {"verity.dev/server": "vy-nebius-1"})
+    assert pod["securityContext"]["runAsUser"] == 1000 and pod["containers"][0]["envFrom"] == [{"secretRef": {"name": "research-r2"}}]
+    assert command(n1["done"])[:5] == ["taskset", "-c", "96-127", "bash", "-c"]
+    assert command(n1["done"])[5].endswith('{ "$2" -m research data custody "$5" --publish --keep-local "${@:6}"; } & wait $!')
+    assert command(n1["done"])[6:] == ["n1-custody", str(node.src), str(node.py), f"{jobs}/store", f"{jobs}/runs", str(J["done"])]
+    assert (state / "boots").read_text() == "boot-n1\n"
+
+    first = round_(FAIL_RUN=R["fails"])
+    assert first.returncode == 1, first.stdout + first.stderr
+    assert created()[3:] == [n1["dead"], n1["fails"], n1["conflict"], n1["research"]]
+    assert command(n1["dead"])[-3:] == [str(J["dead"]), "--force", "--runner-gone"]
+    assert f"kubectl get pod pod-{R['dead']} --namespace=default --output=name --request-timeout=30s" in log.read_text()
+    assert preserved(J["dead"]) and preserved(research / "runs" / R["research"])
+    assert job(n1["research"])["job"]["spec"]["template"]["spec"]["securityContext"]["runAsUser"] == 1001
+    assert LocalStore(research / "store", config_path=tmp_path / "vault.toml").get_attempt(R["research"])
+    assert f"{R['fails']} (r21-fixture, failed): Job failed (1 so far): Job {n1['fails']}: Error: boom; the next round" in first.stdout
+    assert "1 record-less attempt(s) held" in first.stdout and not (vault / attempt_key(R["legacy"])).exists()
+    assert f"{R['conflict']} (r21-fixture, done): held: R2 holds another attempt document" in first.stdout
+    assert f"vy-custody --reconcile {R['conflict']} --by WHO" in first.stdout
+    assert held() == [R["empty"], R["big"], R["conflict"]] and (state / "failures" / R["fails"]).read_text() == "1\n"
+    assert not (state / "failures" / R["legacy"]).exists() and not (state / "failures" / R["conflict"]).exists()
+
+    run(jobs, R["new"], "done")
+    newer = round_(VY_CUSTODY_MAX_RUNS="1")
+    assert created()[7:] == [n1["new"]], "a run that failed before goes last"
+    assert newer.returncode == 1 and "1 run(s) left" in newer.stdout, newer.stdout
+    second = round_()
+    assert created()[8:] == [n1["fails"]] and preserved(J["fails"]) and not list((state / "failures").iterdir())
+    assert second.returncode == 1 and "3 run(s) held" in second.stdout
+
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(absent))
+    assert data_main(["label", R["empty"], "custody", "never-ran", "--by", "test", "--store", str(jobs / "store")]) == 0
+    lifted = round_()
+    assert f"{R['empty']}: hold lifted" in lifted.stdout and held() == [R["big"], R["conflict"]] and len(created()) == 9, lifted.stdout
+
+    with (state / ".lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        busy = round_("--reconcile", R["conflict"], "--by", "test")
+        assert busy.returncode == 3 and "--reconcile after it" in busy.stderr
+        assert round_().returncode == 0 and len(created()) == 9, "a round never waits on another"
+    assert round_("--reconcile", "r20261003-000099-0099", "--by", "test").returncode == 2
+    rec = round_("--reconcile", R["conflict"], "--by", "test")
+    assert rec.returncode == 0 and f"{R['conflict']}: reconciled by test" in rec.stdout, rec.stdout + rec.stderr
+    assert "node 2's copy" not in rec.stdout
+    assert 'reconcile-attempts "$5" --apply &&' in command(n1["conflict"])[5] and command(n1["conflict"])[-2:] == [R["conflict"], str(J["conflict"])]
+    assert preserved(J["conflict"]) and list((jobs / "store" / "attempts" / ".superseded").iterdir())
+    assert held() == [R["big"]]
+    assert R["relay"] not in "".join(created()) and not (J["relay"] / ".custody").exists(), "node 2's copies are n2_custody.sh's"
+    relay = round_("--reconcile", R["relay"], "--by", "test")
+    assert relay.returncode == 0 and "(node 2's copy: remove n2_custody.sh's hold on node 2" in relay.stdout and preserved(J["relay"])
+
+    (state / "held" / R["big"]).unlink()
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(node.remote))
+    assert data_main(["push", R["legacy"], "--store", str(jobs / "store")]) == 0       # a person's ruling: on R2 as it is
+    done = round_(VY_CUSTODY_MAX_FILES="20")
+    assert done.returncode == 0 and created()[-1] == n1["big"] and preserved(J["big"]), done.stdout
+    assert "record-less" not in done.stdout and "1 attempt-no-record" in done.stdout
+    assert round_().returncode == 0 and created()[-1] == n1["big"], "nothing left: no Job"
+    pending = round_(FAIL_PENDING="1")
+    assert pending.returncode == 1 and f"{jobs}/store: the pending push failed (Job n1-store-push-jobs" in pending.stdout
+
+
+@N1_CUSTODY
+def test_n1_custody_forces_a_status_that_never_ended_only_once_its_runner_is_seen_gone(tmp_path):
+    """#1004's red-team F1 and F2: a round published a run --force as dead while it ran, and an attempt is write-once, so its real
+    end never reached R2. A host run's runner is gone when its pid is (a pid-less `tele set-timeout` transition is no end); a pod's
+    when `kubectl get pod` says NotFound, however long its records have been quiet, as backfill_attempts.sh asks. A pod Kubernetes
+    still lists waits without failing the round; a kubectl that doesn't answer publishes nothing and fails it; a hostname of 63
+    characters may be a longer pod name cut short, so its NotFound proves nothing."""
+    import socket
+
+    node = _n1_custody(tmp_path)
+    boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
+    R = {k: f"r20261003-2000{n:02d}-0a{n:02d}" for n, k in enumerate(("retimed", "dead", "alive", "sampling", "gone", "long"), 1)}
+    J = {k: node.jobs / "runs" / r for k, r in R.items()}
+    host = socket.gethostname()
+    node.run(node.research, R["retimed"], "running", boot=boot, host=host, status={
+        "state": "running", "pid": os.getpid(), "starttime_ticks": me,
+        "transitions": [{"state": "running", "pid": os.getpid(), "starttime_ticks": me},
+                        {"state": "running", "timeout_s": 7200, "timeout_changed_utc": "2026-10-03T20:00:00.000Z"}]})
+    node.run(node.research, R["dead"], "running", boot=boot, host=host,
+             status={"state": "running", "transitions": [{"state": "running", "pid": 2**22 + 7, "starttime_ticks": 1}]})
+    node.run(node.jobs, R["alive"], "running", boot=boot)
+    d = node.run(node.jobs, R["sampling"], "running", boot=boot, files={"resources.jsonl": '{"kind": "sample"}\n'})
+    os.utime(d / "resources.jsonl", (N1_FUTURE, N1_FUTURE))
+    node.run(node.jobs, R["gone"], "running", boot=boot)
+    node.run(node.jobs, R["long"], "running", boot=boot, host="p" * 63)
+    live = {"LIVE_PODS": f"pod-{R['alive']},pod-{R['sampling']}", "VY_CUSTODY_BOOT": boot}
+
+    dry = node.round_("--dry-run", **live)
+    assert dry.returncode == 0 and node.created() == [], dry.stdout + dry.stderr
+    assert f"would leave {J['alive']} (r21-fixture, running): its pod pod-{R['alive']} still runs" in dry.stdout
+    assert f"would publish {J['gone']} (r21-fixture, running, 8 files, 5.9 KiB) with --force --runner-gone (its pod" in dry.stdout
+    assert f"with --force --runner-gone (its runner's pid is gone)" in dry.stdout and "1 its runner not seen gone" in dry.stdout
+    assert not [k for k in ("retimed", "sampling", "long") if R[k] in dry.stdout], dry.stdout
+
+    unreached = node.round_(POD_ERR="1", **live)
+    assert unreached.returncode == 1 and node.created() == [f"n1-custody-{R['dead']}", "n1-store-push-jobs", "n1-store-push-research"]
+    assert (f"{J['gone']} (r21-fixture, running): not published: `kubectl get pod pod-{R['gone']}` failed: Unable to connect to the "
+            "server: dial tcp 10.0.0.1:6443: i/o timeout; the next round asks again") in unreached.stdout
+    assert node.command(f"n1-custody-{R['dead']}")[-3:] == [f"{node.research}/runs/{R['dead']}", "--force", "--runner-gone"]
+
+    first = node.round_(**live)
+    assert first.returncode == 0 and node.created()[3:] == [f"n1-custody-{R['gone']}"], first.stdout + first.stderr
+    assert node.command(f"n1-custody-{R['gone']}")[-3:] == [str(J["gone"]), "--force", "--runner-gone"]
+    assert "1 run(s) wait on their pod, which Kubernetes still lists" in first.stdout
+    assert not [k for k in ("retimed", "alive", "sampling", "long") if f"n1-custody-{R[k]}" in node.created()]
+    assert node.round_(VY_CUSTODY_BOOT=boot).returncode == 0 and node.created()[-1] == f"n1-custody-{R['alive']}", "its pod ended"
+
+
+@N1_CUSTODY
+def test_n1_custody_holds_as_never_ran_only_a_run_that_shows_no_sign_it_started(tmp_path):
+    """#1004's red-team F3: the never-ran hold took any status that never ended with empty stdout and stderr, counting the sampler's
+    readings and the events as the runner's bookkeeping, and asked a person to label the run `custody never-ran`. All six runs node 1
+    would have held (overnight-sep30) were `running` with a pid, span_start and sampler_start events and 6-70 sampler readings of
+    the workload's processes: they ran, were killed and printed nothing. Only a status before `running` with none of ran_evidence's
+    signs of a start is held; a killed run is a failed attempt, published --force once its pod is gone."""
+    node = _n1_custody(tmp_path)
+    killed, spoke, idle = (f"r20261003-2000{i:02d}-0d{i:02d}" for i in (1, 2, 3))
+    d = node.run(node.jobs, killed, "running", stdout="", files={
+        "stderr.log": "", "sampler.log": "", "resources.jsonl": '{"kind": "sample", "root_pid": 450, "processes": [{"pid": 451}]}\n' * 55,
+        "events.jsonl": '{"kind": "started"}\n{"kind": "span_start", "stage": "run", "cmd0": "python"}\n{"kind": "sampler_start"}\n'})
+    shutil.rmtree(d / "out")
+    for p in ("result.json", "failure.json"):
+        (d / p).unlink()
+    node.run(node.jobs, spoke, "submitted", status={"state": "submitted"}, files={"events.jsonl": ""})
+    node.run(node.jobs, idle, "admitted", empty=True, status={"state": "admitted"})
+    out = node.round_()
+    assert out.returncode == 1 and node.held() == [idle], out.stdout + out.stderr
+    assert f"{node.jobs}/runs/{idle}: held: never ran its workload (r21-fixture, status admitted: no pid, start event" in out.stdout
+    assert {f"n1-custody-{killed}", f"n1-custody-{spoke}"} <= set(node.created())
+    assert node.command(f"n1-custody-{killed}")[-2:] == ["--force", "--runner-gone"]
+
+
+@N1_CUSTODY
+def test_n1_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_path):
+    """#1004's red-team F4: the daily hold only kept Jobs from starting at 12:10Z, so a custody Job started at 12:09 could run to
+    12:39 (activeDeadlineSeconds 1800) and the pending push (7200; the research store's first one uploads 22.3 GiB) to 14:09, through
+    node 1's quiet hour (12:30-13:30Z), which measurements own. Every Job's deadline and its grace (10 s) end it a minute before
+    12:30Z, none starts with under 5 min left, and a round in the daily hold starts nothing."""
+    at = lambda hhmm: N2_NOW + (int(hhmm[:2]) - 3) * 3600 + int(hhmm[2:]) * 60          # N2_NOW is 03:00Z
+    rid = "r20261003-200000-0e01"
+    deadlines = {}
+    for hhmm in ("1209", "1150", "1331"):
+        node = _n1_custody(tmp_path / hhmm)
+        node.run(node.jobs, rid, "done")
+        out = node.round_(clock=at(hhmm), VY_CUSTODY_QUIET="1210-1330")
+        assert out.returncode == 0, out.stdout + out.stderr
+        deadlines[hhmm] = [node.job(n)["job"]["spec"]["activeDeadlineSeconds"] for n in node.created()]
+        assert node.created() == [f"n1-custody-{rid}", "n1-store-push-jobs", "n1-store-push-research"], hhmm
+    assert deadlines == {"1209": [1190, 1190, 1190], "1150": [1800, 2330, 2330], "1331": [1800, 7200, 7200]}
+    node = _n1_custody(tmp_path / "held")
+    node.run(node.jobs, rid, "done")
+    for hhmm, quiet in (("1210", "1210-1330"), ("1329", "1210-1330"), ("1226", "1228-1330")):
+        out = node.round_(clock=at(hhmm), VY_CUSTODY_QUIET=quiet)
+        assert out.returncode == 0 and f"node 1's daily hold ({quiet} UTC; no Job runs past 1230Z" in out.stdout, hhmm
+        rec = node.round_("--reconcile", rid, "--by", "test", clock=at(hhmm), VY_CUSTODY_QUIET=quiet)
+        assert rec.returncode == 3 and "--reconcile after it" in rec.stderr
+    assert node.created() == [] and not node.log.exists()
+
+
+def _sigterm_while_research_runs(argv: list[str], research: Path) -> int:
+    """A Job's command (taskset aside) with `research`, the Python it names, a stand-in that says it runs and blocks: SIGTERM then,
+    and the command's exit status. The stand-in is let go after."""
+    r, w = os.pipe()
+    research.write_text(f"#!{sys.executable}\nimport os\nprint('research runs', flush=True)\nos.read({r}, 1)\n")
+    research.chmod(0o755)
+    p = subprocess.Popen(argv, stdout=subprocess.PIPE, text=True, pass_fds=(r,))
+    os.close(r)
+    try:
+        assert p.stdout.readline() == "research runs\n", "research never ran"
+        p.send_signal(signal.SIGTERM)
+        return p.wait()
+    finally:
+        os.close(w)
+        p.stdout.close()
+        p.wait()
+
+
+@N1_CUSTODY
+@N2_CUSTODY
+def test_n1_custody_no_job_outlives_its_deadline_into_the_quiet_hour(tmp_path):
+    """#1004's red-team recheck N3: the deadline was read to the minute (a Job created at 12:07:45Z got 1320 s, to 12:29:45), and a
+    Job stopped at its deadline has its pod's grace (30 s unless set) before SIGKILL, which its main process, a PID namespace's init
+    that ignores SIGTERM without a handler, used up: to 12:30:15. Each Job of n1_custody.sh and n2_custody.sh gets a deadline to the
+    second that, with its grace (10 s), ends it a minute before 12:30Z, and its bash, the container's init, traps SIGTERM and exits
+    while research runs."""
+    at = lambda h, m, s: N2_NOW + (h - 3) * 3600 + m * 60 + s                         # N2_NOW is 03:00Z
+    node = _n1_custody(tmp_path / "n1")
+    node.run(node.jobs, "r20261003-200000-2301", "done")
+    out = node.round_(clock=at(12, 7, 45), VY_CUSTODY_QUIET="1210-1330")
+    assert out.returncode == 0 and len(node.created()) == 3, out.stdout + out.stderr
+    for name in node.created():
+        spec = node.job(name)["job"]["spec"]
+        assert spec["activeDeadlineSeconds"] + spec["template"]["spec"]["terminationGracePeriodSeconds"] == 22 * 60 + 15 - 60, name
+        cmd = node.command(name)
+        assert _sigterm_while_research_runs([*cmd[3:8], str(tmp_path / "research"), *cmd[9:]], tmp_path / "research") == 143, name
+
+    (tmp_path / "n2").mkdir()
+    n2 = _n2_custody(tmp_path / "n2")
+    n2.run("r20261003-100001-0001", {"state": "done"})
+    assert n2.round_(clock=at(11, 50, 30), VY_CUSTODY_PY=str(tmp_path / "research")).returncode == 0
+    calls = n2.calls()
+    job = json.JSONDecoder().raw_decode(calls[calls.index('{"apiVersion"'):])[0]
+    assert job["spec"]["activeDeadlineSeconds"] + job["spec"]["template"]["spec"]["terminationGracePeriodSeconds"] == 39 * 60 + 30 - 60
+    cmd = job["spec"]["template"]["spec"]["containers"][0]["command"]
+    assert _sigterm_while_research_runs(cmd[3:], tmp_path / "research") == 143
+
+
+@N1_CUSTODY
+def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_path):
+    """#1004's red-team F5: the round runs its research tree on the host as research (sudo ALL) and in Jobs with the Secret
+    research-r2, from /workspace/jobs/custody, which /workspace/jobs (1777) let any uid-1000 workload create first and deploy.py
+    then installs into keeping that owner, with ubuntu's Python under /workspace/jobs/cache. The tree and the Python are root's under
+    /workspace/custody; a round refuses when a file of either, or a directory above, could be changed by a uid other than root and
+    its own (another owner, or writable by group or others; a sticky directory such as /tmp above, or uv's empty .lock, aside), and
+    when its Python isn't under PYHOME."""
+    node = _n1_custody(tmp_path)
+    rid = "r20261003-200000-0f01"
+    node.run(node.jobs, rid, "done")
+    tree, custody_py = node.src / "tools" / "research", node.src / "tools" / "research" / "src" / "research" / "store" / "custody.py"
+    (tmp_path / "py" / ".lock").write_text("")
+    (tmp_path / "py" / ".lock").chmod(0o666)
+    said = []
+    for p, mode in ((tree, 0o777), (custody_py, 0o664), (node.src, 0o775), (node.py, 0o757)):
+        was = p.stat().st_mode
+        p.chmod(mode)
+        out = node.round_()
+        rec = node.round_("--reconcile", rid, "--by", "test")
+        p.chmod(was)
+        assert out.returncode == 3 and rec.returncode == 3 and f"refused: {p} could be changed by a uid other than root and " in out.stdout, p
+        said.append(out.stdout)
+    assert "on this host and in Jobs with the Secret research-r2" in said[0]
+    elsewhere = node.round_(VY_CUSTODY_PY=sys.executable)
+    assert elsewhere.returncode == 3 and f"refused: {sys.executable} is no interpreter under {tmp_path / 'py'}" in elsewhere.stdout
+    assert node.created() == [] and "sudo" not in (node.log.read_text() if node.log.exists() else ""), "a refused round runs nothing"
+    ok = node.round_()
+    assert ok.returncode == 0 and node.created()[0] == f"n1-custody-{rid}", ok.stdout + ok.stderr
+
+
+@N1_CUSTODY
+def test_n1_custody_takes_a_run_dirs_text_as_data_never_as_a_plan_line_or_a_shells(tmp_path):
+    """#1004's red-team F6: status.json's state went into the plan's `|`-lines as written, and the force list into the Job's bash -c
+    unquoted, so a run dir's writer (uid 1000: any workload) could add a Job line and run a command as uid 1001 with the Secret
+    research-r2. A state the runner never writes holds the run, unechoed; a campaign shows anything but [A-Za-z0-9._:@+/-] as `?`;
+    a Job's script is fixed, with the run dir and the force flags as its arguments, and its JSON is written by json."""
+    node = _n1_custody(tmp_path)
+    pwned = tmp_path / "PWNED"
+    evil, other, odd = (f"r20261003-200000-10{i:02d}" for i in (1, 2, 3))
+    node.run(node.jobs, evil, "running", status={"state": f'running\njob|{node.research}/runs|{other}|;touch {pwned};|c|s|1|1"',
+                                                  "transitions": [{"state": "running", "pid": 7}]})
+    d = node.run(node.jobs, odd, "done")
+    job = json.loads((d / "job.json").read_text())
+    job["store"]["campaign"] = "x$(id)|y\nz"
+    (d / "job.json").write_text(json.dumps(job))
+    os.utime(d / "job.json", (N1_OLD, N1_OLD))
+    dry = node.round_("--dry-run")
+    assert f"would hold {node.jobs}/runs/{evil}: its status.json says a state the runner never writes (r21-fixture)" in dry.stdout
+    assert f"would publish {d} (x??id??y?z, done, " in dry.stdout and other not in dry.stdout, dry.stdout
+    out = node.round_()
+    assert out.returncode == 1 and not pwned.exists() and node.held() == [evil], out.stdout + out.stderr
+    assert "touch" not in out.stdout and node.created() == [f"n1-custody-{odd}", "n1-store-push-jobs", "n1-store-push-research"]
+    assert node.command(f"n1-custody-{odd}")[6:] == ["n1-custody", str(node.src), str(node.py), f"{node.jobs}/store", f"{node.jobs}/runs", str(d)]
+
+
+@N1_CUSTODY
+def test_n1_custody_triages_with_no_remote_another_uid_could_name(tmp_path):
+    """#1004's red-team F8: triage ran with HOME=/tmp and no RESEARCH_STORE_CONFIG, so its remote was /tmp/.research/store.toml,
+    which any uid on node 1 may write first: get_attempt would cache that remote's attempt documents into the store, and the next
+    Job push one to R2 as the run's write-once attempt. Triage runs with the round's own HOME and RESEARCH_STORE_CONFIG=/dev/null,
+    which no uid but root can replace and which names no remote."""
+    node = _n1_custody(tmp_path)
+    node.run(node.jobs, "r20261003-200000-1201", "done")
+    assert node.round_("--dry-run").returncode == 0
+    triage = [ln for ln in node.log.read_text().splitlines() if ln.startswith("sudo ") and "--triage" in ln]
+    assert len(triage) == 2 and all(f" HOME={tmp_path / 'home'} " in ln and " RESEARCH_STORE_CONFIG=/dev/null " in ln for ln in triage), triage
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="node_ops reads /proc")
+def test_node_ops_reads_a_runs_pid_from_its_runners_transition_not_the_last(tmp_path, monkeypatch):
+    """`tele set-timeout` appends a `running` transition without a pid, and node_ops read the pid from the last transition only, so it
+    alerted dead-run on a run whose runner was alive (the reading #1004's red team found in triage, F1)."""
+    from research.pods.nebius import node_ops as NO
+
+    me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
+    d = tmp_path / "r20261003-200000-1301"
+    d.mkdir()
+    (d / "status.json").write_text(json.dumps({"state": "running", "pid": os.getpid(), "starttime_ticks": me, "transitions": [
+        {"state": "running", "pid": os.getpid(), "starttime_ticks": me, "command": ["python", "x.py"], "started_utc": "2026-10-03T20:00:00.000Z"},
+        {"state": "running", "timeout_s": 7200, "timeout_changed_utc": "2026-10-03T21:00:00.000Z"}]}))
+    alerts = []
+    monkeypatch.setattr(NO, "RUNS", tmp_path)
+    monkeypatch.setattr(NO, "alert", lambda *a, **kw: alerts.append(a))
+    assert NO.runs() == ([{"run": d.name, "since": "2026-10-03T20:00:00", "cmd": "python x.py", "alive": True}], []) and alerts == []
+
+
+@N1_CUSTODY
+def test_n1_custody_pushes_no_record_less_attempt_that_never_left_node_1(tmp_path, monkeypatch):
+    """#1004's red-team F7: a local attempt published without its run record that R2 lacks is `attempt-unpreserved`, so a round ran
+    `custody --publish` on it, and each store's pending push takes every attempt R2 lacks: R2's write-once key would keep it without
+    its logs for good (28 under node 1's /workspace/jobs/runs on 3 Oct). Until a person rules, a round holds them record-less: no
+    Job, one line counting them, a failed round and nothing superseded; the pending push's own command skips every attempt without a
+    run record. Once one is on R2 (pushed by hand, as it is) triage calls it attempt-no-record, and it is no longer held."""
+    from research.store import attempt as A
+    from research.store.cli import main as data_main
+    from research.store.local import LocalStore, attempt_key
+
+    node = _n1_custody(tmp_path)
+    rid, ok, gone = "r20261003-200000-1101", "r20261003-200000-1102", "r20261003-200000-1103"
+    d = node.run(node.jobs, rid, "done")
+    node.run(node.jobs, ok, "done")
+    for r in (rid, gone):                                   # `gone`'s run dir was removed: no triage lists it, the push still skips it
+        assert A.publish(node.run(node.jobs, r, "done") if r == gone else d, store=LocalStore(node.jobs / "store", config_path=node.absent),
+                         remote_push=False, run_record=False)["published"]
+    shutil.rmtree(node.jobs / "runs" / gone)
+    for p in d.rglob("*"):
+        os.utime(p, (N1_OLD, N1_OLD))
+    out = node.round_()
+    assert out.returncode == 1 and node.created() == [f"n1-custody-{ok}", "n1-store-push-jobs", "n1-store-push-research"], out.stdout + out.stderr
+    assert "1 record-less attempt(s) held (triage's attempt-unpreserved)" in out.stdout and not node.held()
+    push = node.command("n1-store-push-jobs")
+    assert push[-1] == "--skip-record-less"
+    pushed = subprocess.run(["bash", "-c", push[5].replace("HOME=/tmp", f"HOME={tmp_path / 'home'}"), *push[6:]], capture_output=True,
+                            text=True, env={**os.environ, "RESEARCH_STORE_CONFIG": str(node.remote)})
+    assert pushed.returncode == 0, pushed.stdout + pushed.stderr
+    assert f"2 attempt(s) without a run record not pushed (--skip-record-less): {rid} {gone}" in pushed.stderr, pushed.stderr
+    assert not (node.vault / attempt_key(rid)).exists() and not (node.vault / attempt_key(gone)).exists()
+    assert not (node.jobs / "store" / "attempts" / ".superseded").exists()
+
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(node.remote))
+    assert data_main(["push", rid, "--store", str(node.jobs / "store")]) == 0
+    after = node.round_()
+    assert after.returncode == 0 and "record-less" not in after.stdout and "1 attempt-no-record" in after.stdout, after.stdout
+    assert len(node.created()) == 3
+
+
+def test_store_push_template_pushes_no_record_less_attempt(tmp_path, monkeypatch, capsys):
+    """#1004's red-team recheck N1: the store-push template's MODE=push (one ready file on node 1 starts it; it pushed 146 objects
+    on 2 Oct) ran `research data push --pending` on node 1's job store without --skip-record-less, so it would have put every
+    attempt n1_custody.sh holds record-less on R2's write-once keys before a person rules. Every template's pending push skips them,
+    and still pushes the rest. `push --pending` itself still takes them: a local `research run` without --run-record publishes one,
+    and `push --pending` is what the store says preserves it."""
+    from research.store import attempt as A
+    from research.store.cli import main as data_main
+    from research.store.local import LocalStore, attempt_key
+
+    lines = [ln for t in (NEBIUS / "sky" / "jobs").glob("*.yaml") for ln in t.read_text().splitlines()
+             if "data push --pending" in ln and not ln.lstrip().startswith("#")]
+    assert lines and all("--skip-record-less" in ln for ln in lines), lines
+    line = next(ln for ln in lines if ln.strip().startswith("push)"))
+    argv = shlex.split(re.search(r"research data (push [^>]*)", line).group(1).replace('"$PUSH_JOBS"', "1"))
+    node = _n1_custody(tmp_path)
+    less, full = "r20261003-200000-2101", "r20261003-200000-2102"
+    for rid in (less, full):
+        assert A.publish(node.run(node.jobs, rid, "done"), store=LocalStore(node.jobs / "store", config_path=node.absent),
+                         remote_push=False, run_record=rid == full)["published"]
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(node.remote))
+    monkeypatch.setenv("RESEARCH_STORE", str(node.jobs / "store"))
+    assert data_main(argv) == 0
+    assert f"1 attempt(s) without a run record not pushed (--skip-record-less): {less}" in capsys.readouterr().err
+    assert not (node.vault / attempt_key(less)).exists() and (node.vault / attempt_key(full)).exists()
+
+
+@N1_CUSTODY
+def test_n1_custody_holds_a_forced_attempt_whose_run_dir_changed_after_its_one_job(tmp_path, monkeypatch):
+    """#1004's red-team recheck N2: a run published --force whose dir then gained a file is forced-unverified, and a round started a
+    custody Job for it every round, for good, though none can mend it: its attempt is write-once. As n2_custody.sh does, the round
+    holds it after its one Job and says what a person does; a `custody waived` label lifts the hold."""
+    from research.store import attempt as A
+    from research.store.cli import main as data_main
+    from research.store.local import LocalStore
+
+    node = _n1_custody(tmp_path)
+    rid = "r20261003-200000-2201"
+    d = node.run(node.jobs, rid, "running")
+    st = LocalStore(node.jobs / "store", config_path=node.remote)
+    assert A.publish(d, store=st, remote_push=False, run_record=True, force=True)["published"]
+    assert CU.push_run(st, rid) == [] and CU.verify(st, d)["preserved"]
+    (d / "out" / "late.json").write_text('{"verdict": "pass"}\n')
+    (d / "status.json").write_text(json.dumps({"state": "done", "transitions": [{"state": "running", "pid": 4243}, {"state": "done"}]}))
+    rounds = []
+    for _ in range(2):
+        for p in d.rglob("*"):
+            os.utime(p, (N1_OLD, N1_OLD))
+        rounds.append(node.round_())
+    out = "\n".join(o.stdout + o.stderr for o in rounds)
+    assert [n for n in node.created() if n.startswith("n1-custody-")] == [f"n1-custody-{rid}"] and node.held() == [rid], out
+    assert all(o.returncode == 1 for o in rounds) and "Job failed" not in out
+    assert "held: its attempt's run record, taken from the run dir as it was earlier, lacks what it holds now" in rounds[0].stdout
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(node.absent))
+    assert data_main(["label", rid, "custody", "waived", "--by", "test", "--store", str(node.jobs / "store")]) == 0
+    lifted = node.round_()
+    assert lifted.returncode == 0 and node.held() == [] and f"{rid}: hold lifted" in lifted.stdout, lifted.stdout
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
@@ -2206,6 +2820,95 @@ def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_s
     assert [e.get("signal") for e in c.tick(t + 1 + m.KILL_AFTER_S)["events"]] == ["SIGKILL"]
     assert proc.wait() == -9
     os.close(lock)
+
+
+def _policy_lease(monkeypatch, tmp_path, max_: int, policy: str | None = None):
+    """The controller with VY_POOL_MAX=`max_` under a policy command (`cat` of a document, or `policy`), and a waiter that wants
+    3 GPUs, which 3 nominal allow; the waiter's lock fd, and `keys(**kv)`, which writes the document."""
+    import fcntl
+    doc = tmp_path / "policy.json"
+    m, calls, _ = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=max_, VY_POOL_POLICY=policy or f"cat {doc}")
+    w = tmp_path / "gl" / "wait.1.4242"
+    w.write_text("pid=4242 n=3 who=adhoc:me since=x\n")
+    fd = os.open(w, os.O_RDONLY)
+    fcntl.flock(fd, fcntl.LOCK_SH)
+
+    def keys(pools=("provers",), **kv):
+        doc.write_text(json.dumps({"schema": "cluster/policy/v1", "keys": [
+            {"key": f"vy-nebius-1.lease-pool.{p}.{k.replace('_', '-')}", "value": v} for p in pools for k, v in kv.items()]}))
+    return m, calls, fd, doc, keys
+
+
+@needs_flock
+def test_n1_lease_takes_its_pool_limits_from_the_policy_command_and_keeps_the_last_while_it_fails(monkeypatch, tmp_path, reap):
+    t = 1_800_000_000.0
+    m, calls, fd, doc, keys = _policy_lease(monkeypatch, tmp_path, 1)
+    c = m.Controller()
+    steps = [(lambda: doc.write_text("Traceback"), t, 1, "JSONDecodeError", "environment"),  # never answered: the environment's 1
+             (lambda: keys(max=3, borrow=0, idle_s=600), t + 1, 1, None, "environment"),     # read again after POLICY_EVERY_S
+             (lambda: None, t + m.POLICY_EVERY_S, 3, None, "policy"),            # 3 wanted, 3 nominal, max 3 by policy
+             (lambda: keys(max=2), t + 2 * m.POLICY_EVERY_S, 2, None, "policy"),
+             (lambda: doc.write_text("Traceback"), t + 3 * m.POLICY_EVERY_S, 2, "JSONDecodeError", "last-policy"),
+             (lambda: keys(max=3, borrow_until="tomorrow"), t + 4 * m.POLICY_EVERY_S, 2, "borrow-until 'tomorrow'", "last-policy"),
+             (lambda: keys(("provers", "circuits"), max=3), t + 5 * m.POLICY_EVERY_S, 2, "two keys give max", "last-policy")]
+    for change, at, want, error, source in steps:
+        change()
+        calls.clear()
+        events = [e for e in c.tick(at)["events"] if e["ev"] == "policy"]
+        assert len([a for a, _ in calls if a[0] == "create"]) == want, (at - t, want)
+        if error:
+            assert len(events) == 1 and error in events[0]["error"] and \
+                (events[0]["limits"]["max"], events[0]["fallback"]) == (want, source)
+        assert (tmp_path / "gl" / "n1-lease.limits").read_text() == f"max={want} borrow=0 borrow-until= from={source}\n"
+    os.close(fd)
+
+
+@needs_flock
+def test_n1_lease_kills_everything_a_policy_command_that_overruns_started(monkeypatch, tmp_path, reap):
+    started, alive, block = tmp_path / "started", tmp_path / "alive", tmp_path / "block"
+    for f in (started, alive, block):
+        os.mkfifo(f)
+    # the shell's child holds `alive` open for writing until it dies, so its read end's EOF is that death (a kill that misses it
+    # leaves the read blocked)
+    hung = f"sh -c 'exec 3>{alive}; echo $$ > {started}; cat {block}'; true"
+    m, calls, fd, _, _ = _policy_lease(monkeypatch, tmp_path, 3, policy=hung)
+    r = os.open(alive, os.O_RDONLY | os.O_NONBLOCK)
+    os.set_blocking(r, True)
+    child: list[int] = []
+
+    def overrun(p, timeout):
+        child.append(int(started.read_text()))
+        raise subprocess.TimeoutExpired(p.args, timeout)
+    monkeypatch.setattr(m, "communicate", overrun)
+    events = [e for e in m.Controller().tick(1_800_000_000.0)["events"] if e["ev"] == "policy"]
+    os.close(fd)
+    assert os.read(r, 1) == b"" and child
+    os.close(r)
+    assert len(events) == 1 and events[0]["error"].startswith("TimeoutExpired") and events[0]["fallback"] == "environment"
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+
+
+@needs_flock
+def test_n1_lease_logs_a_limits_file_it_cant_write_and_goes_on(monkeypatch, tmp_path, reap):
+    m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 1)
+    keys(max=3)
+    (tmp_path / "gl" / "n1-lease.limits").mkdir()
+    events = [e["ev"] for e in m.Controller().tick(1_800_000_000.0)["events"]]
+    os.close(fd)
+    assert events[:2] == ["policy", "limits-write-failed"]
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+
+
+@needs_flock
+@pytest.mark.parametrize("value", ["-1", -1, 1.5, float("inf"), "8x", 5, True, None])
+def test_n1_lease_refuses_a_policy_max_that_isnt_a_whole_number_of_its_gpus_and_goes_on(monkeypatch, tmp_path, reap, value):
+    m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 3)
+    keys(max=value)
+    events = [e for e in m.Controller().tick(1_800_000_000.0)["events"] if e["ev"] == "policy"]
+    os.close(fd)
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+    assert len(events) == 1 and events[0]["limits"]["max"] == 3 and events[0]["fallback"] == "environment"
+    assert f"max {value!r} isn't a whole number of GPUs from 0 to 4" in events[0]["error"]
 
 
 @needs_flock

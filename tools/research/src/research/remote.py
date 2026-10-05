@@ -83,9 +83,11 @@
     custody         --custody-r2: the launcher mints a delete-free R2 key (store.custody.mint_for_machine) and stages it with a secret-free
                     store.toml in <root>/requests/<run-id>/custody/ (mode 600, never in request.json or the workload's environment);
                     launch-request passes --custody-dir to the runner, which after the workload publishes the attempt with every run file
-                    (outputs.run_record), verifies it on the remote, deletes the key and writes <run>/.custody (store.custody).  It terminates with the
-                    pod's OWN key (RUNPOD_API_KEY in /proc/1/environ); without one it is not installed and the launch says so.  The account
-                    key is never sent.  <root>/guard/state.json: verdict, last activity, idle minutes, refusal reasons.
+                    (outputs.run_record) but a sent credential, deleted first (store.custody.CREDENTIALS), verifies it on the remote,
+                    deletes the key and writes <run>/.custody (store.custody).  A refused launch deletes the key and those credentials from
+                    the request dir.  It terminates with the pod's OWN key (RUNPOD_API_KEY in /proc/1/environ); without one it is not
+                    installed and the launch says so.  The account key is never sent.  <root>/guard/state.json: verdict, last activity,
+                    idle minutes, refusal reasons.
     lease           a pod `research pods create` made carries a lease (research.pods.lease, pods/sh/lease.sh): it ends itself at the
                     lease's expiry.  The request's `lease_extend_s` (the run's --timeout + lease.RUN_MARGIN_S) makes launch-request
                     push the expiry to at least now + that, so the lease cannot end the run; the answer's `lease` says what it did.
@@ -1261,6 +1263,9 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             M.release(mem_rec["reservation"], run_id)
         if req.get("custody"):                    # nothing will publish: the key goes now, not at its expiry
             (request_path.parent / CUSTODY_DIR / "cred.json").unlink(missing_ok=True)
+        from .store.custody import drop_credentials
+
+        drop_credentials(request_path.parent)     # sent URLs: no run will take them out of the staged inputs/
         pf = {"preflight": e.report} if isinstance(e, PreflightFailed) and e.report else {}
         write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": str(e), "fault": type(e).__name__, "at_utc": utc_now_ms(), **pf})
         return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": str(e), "fault": type(e).__name__, **pf}
