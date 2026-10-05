@@ -7052,15 +7052,19 @@
     "          (Pouw.PearlC.pearlCProtocolDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400))",
     "          (Pouw.PearlC.pearlCDomainDev Pouw.PearlC.devH100) Pouw.PearlC.witnessWorkload)",
     "        (And",
-    "          ((Pouw.PearlC.pearlCProtocolDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400)).capOK",
-    "            (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload 0 (Pouw.PearlC.witnessAct 0))",
-    "          (Real.instLT.lt 0",
-    "            ((Finset.range Pouw.PearlC.witnessWorkload.layout.N).sum fun u =>",
-    "              (Pouw.PearlC.pearlCProtocolDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400)).credit",
-    "                (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload u (Pouw.PearlC.witnessAct u))))))"
+    "          (Pouw.PearlC.Workload.WeightsOK",
+    "            (Pouw.PearlC.pearlCProtocolDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400))",
+    "            Pouw.PearlC.witnessWorkload)",
+    "          (And",
+    "            ((Pouw.PearlC.pearlCProtocolDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400)).capOK",
+    "              (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload 0 (Pouw.PearlC.witnessAct 0))",
+    "            (Real.instLT.lt 0",
+    "              ((Finset.range Pouw.PearlC.witnessWorkload.layout.N).sum fun u =>",
+    "                (Pouw.PearlC.pearlCProtocolDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400)).credit",
+    "                  (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload u (Pouw.PearlC.witnessAct u)))))))"
    ],
    "assumptions": [],
-   "type_hash": "49f6ee621653888632efbe22b58fdf45a244f209a2d008b6f0f3c762330b8256"
+   "type_hash": "4db0e1ee8c42bc668e5885d66dfe159add777c5e7a4028f9705563a62c0cb96b"
   },
   "Pouw.PearlC.ttOutPearlCWitness": {
    "signature": [
@@ -7079,15 +7083,19 @@
     "          (Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400))",
     "          (Pouw.PearlC.pearlCDomain Pouw.PearlC.Params.pi) Pouw.PearlC.witnessWorkload)",
     "        (And",
-    "          ((Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400)).capOK",
-    "            (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload 0 (Pouw.PearlC.witnessAct 0))",
-    "          (Real.instLT.lt 0",
-    "            ((Finset.range Pouw.PearlC.witnessWorkload.layout.N).sum fun u =>",
-    "              (Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400)).credit",
-    "                (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload u (Pouw.PearlC.witnessAct u))))))"
+    "          (Pouw.PearlC.Workload.WeightsOK",
+    "            (Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400))",
+    "            Pouw.PearlC.witnessWorkload)",
+    "          (And",
+    "            ((Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400)).capOK",
+    "              (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload 0 (Pouw.PearlC.witnessAct 0))",
+    "            (Real.instLT.lt 0",
+    "              ((Finset.range Pouw.PearlC.witnessWorkload.layout.N).sum fun u =>",
+    "                (Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400)).credit",
+    "                  (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload u (Pouw.PearlC.witnessAct u)))))))"
    ],
    "assumptions": [],
-   "type_hash": "c667b9421a944d675c3d773bea519d6322aeb6558eea70322815960a0fc20306"
+   "type_hash": "e7d386bd3d6e42f4ea9fda7137833931c7a9acb4868534b3918aeaeb0252d328"
   },
   "Pouw.PearlC.ttOutRowSeedCode_of_ttOut": {
    "signature": [
@@ -7300,18 +7308,22 @@
     "          (Pouw.PearlC.pearlCProtocolDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400))",
     "          (Pouw.PearlC.pearlCDomainDev Pouw.PearlC.devH100) Pouw.PearlC.witnessWorkload)",
     "        (And",
-    "          ((Pouw.PearlC.pearlCTilesDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400)).capOK",
-    "            (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload 0 (Pouw.PearlC.witnessAct 0))",
-    "          (Real.instLT.lt 0",
-    "            ((Finset.range",
-    "                  ((Pouw.PearlC.pearlCTilesDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400)).tiling",
-    "                      Pouw.PearlC.witnessWorkload.layout).NT).sum",
-    "              fun g =>",
-    "              (Pouw.PearlC.pearlCTilesDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400)).credit",
-    "                (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload g (Pouw.PearlC.witnessAct 0))))))"
+    "          (Pouw.PearlC.Workload.WeightsOK",
+    "            (Pouw.PearlC.pearlCProtocolDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400))",
+    "            Pouw.PearlC.witnessWorkload)",
+    "          (And",
+    "            ((Pouw.PearlC.pearlCTilesDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400)).capOK",
+    "              (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload 0 (Pouw.PearlC.witnessAct 0))",
+    "            (Real.instLT.lt 0",
+    "              ((Finset.range",
+    "                    ((Pouw.PearlC.pearlCTilesDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400)).tiling",
+    "                        Pouw.PearlC.witnessWorkload.layout).NT).sum",
+    "                fun g =>",
+    "                (Pouw.PearlC.pearlCTilesDevRev1 Pouw.PearlC.devH100 Pouw.PearlC.witnessSem (1 / 400)).credit",
+    "                  (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload g (Pouw.PearlC.witnessAct 0)))))))"
    ],
    "assumptions": [],
-   "type_hash": "dfd8d93ba00a8bef914c410115892b7975f8effdb9338d7a40fa4c66e3258f41"
+   "type_hash": "808f1b29de4efbf41442212803f0027516dcab6ff84bef45a3c581e8342b744d"
   },
   "Pouw.PearlC.ttOutTileRowSeedCode_of_ttOutTile": {
    "signature": [
@@ -9939,9 +9951,9 @@
    ]
   },
   "Pouw.Assumptions.PearlC.HonestCap": {
-   "digest": "9d49adf42cf695a8ee159d23e4f7317f20f5fe60fd85db54dcfb66682c674dcf",
+   "digest": "3be78821815b291986566e5a5797062f1781ecdc837ea360278f9a227bc5ade5",
    "definitions": {
-    "Pouw.PearlC.Assumptions.HonestTileCapRate": "cc40b5d910a6fbc1c45a1064daa4fd019ce6b37cccbf32de412027b4a294a191"
+    "Pouw.PearlC.Assumptions.HonestTileCapRate": "1d1f2b2fa238d7a7645500f1ee251d8427864cdd7692dc206d98f1d826bf56be"
    },
    "pins": [
     "Pouw.PearlC.completeSampledDevRev1K",
@@ -10647,11 +10659,11 @@
    ]
   },
   "Pouw.Assumptions.PearlC.TTOutUOnly": {
-   "digest": "c1b43ccd7a61b6d3f1ee168bfba34943bbae38c6f4455e86403080db934e218c",
+   "digest": "b0780d9b9fcc31da076fa9c4d9809dbe443f4eee21b8b04dfdd2adf3aaf709b4",
    "definitions": {
     "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly": "1ee654da67496d20a07fd1cb1e56995d9cc84d373d2081b1cf4e0d393c985409",
     "Pouw.PearlC.Assumptions.TTOutU": "7a543d8cfb0ef693a1c889f901a9946bceaa170cab43447d4897ed7e92da385f",
-    "Pouw.PearlC.CorrectU": "eccf2e13d1c25db9ef07d24a44bb71203be87e9164ff30754bc00e14650234e3",
+    "Pouw.PearlC.CorrectU": "d3ce7dce232fed50bc654fb85ceaee5f1f56045d7b1afc7bcd56b2c2f2b3978f",
     "Pouw.PearlC.GγU": "1deb508aa34e8e69400b9c7081082f29536f378222faaa3808787383dd6c7d59",
     "Pouw.PearlC.WinsU": "2d6a53fb682ba4e3aae06aa2223195b8414c5864167c317a09b9d6931436462c",
     "Pouw.PearlC.correctSetU": "19ce334a79474ff6821aff36d3e0ee5d39495fad9f2f73827aea74cfc2e3ecb8"
@@ -15000,9 +15012,9 @@
    ]
   },
   "Pouw.Protocol.PearlC.Completeness": {
-   "digest": "53083c8361f257ec09c3f6a854d3cea5ed62b8ce24b9dca18debb84ebe7dd4e9",
+   "digest": "7dfafa84e2b6d2616f4ab88176ea872dfd3ae58d1a20915aceef2bdd995d2a35",
    "definitions": {
-    "Pouw.PearlC.CompleteSampled": "7ed970d793c0f18f16acd6998d6af43c59f6877fd578e8895198e60376dab312"
+    "Pouw.PearlC.CompleteSampled": "3b7d4b8b9ae4325078cd74a57064285131a8fdfc14de33cba86935b5da30ac7c"
    },
    "pins": [
     "Pouw.PearlC.completeSampledDevRev1K",
@@ -17346,9 +17358,9 @@
    ]
   },
   "Pouw.Protocol.PearlC.Game": {
-   "digest": "93912f6069a2f25ec1873f72928dd60383e74ec7f7017e93a80f3fac93d40900",
+   "digest": "a709793164487f0c7537de86b505a88b8453253fa5492b92bb81af435877d0f9",
    "definitions": {
-    "Pouw.PearlC.AdmitsRef": "3a3ec4f4b5001d0b5094e99f752c3fa064a6a1612f249e3d82737f780266128d",
+    "Pouw.PearlC.AdmitsRef": "6a64c3694599c3937d017adac74c7c21a8d616274d01c3bcbbca3aba31710d82",
     "Pouw.PearlC.Adversary": "0ee52871dcaf758b253ac426e7aeb15102769c78de176d68a249b87972c3008c",
     "Pouw.PearlC.Adversary.Bounded": "6e1c94b133f0936f2204620b0d3768b543cb0bbd21fd0440a115b65ccf71ae79",
     "Pouw.PearlC.Adversary.act": "8caf59e46fa020a16731837fc2d86ae8740d5618dd353b7ce7c85ce317dca8f5",
@@ -17360,7 +17372,7 @@
     "Pouw.PearlC.Commit.act": "e448abf7f9857aab7352a0a00c2091fe2f5d6263f2ea649a2c48362b4fd25b38",
     "Pouw.PearlC.Commit.ticket": "b47e653bfeea1a824a6f44f3ba237e76c9f5683831101f64d8db155078d54193",
     "Pouw.PearlC.Commit.useful": "0d98b923405e557771ddf584fa9308a91943f1e310c99dbf2add638a8c07487c",
-    "Pouw.PearlC.Correct": "53947b8abbac170ce3241bef1262308bd7163b8e8ea1ed55128f695a91821254",
+    "Pouw.PearlC.Correct": "dfbbc9af2453e8be3d6f85368e9b6a2d9494a39a360bdabac2b6ecc4ac56080c",
     "Pouw.PearlC.CostModel": "3a12c83fcaea85b3e9e00eb4b3acc8de79cbb0e9d0aa8050d488c75ed5bbe3ff",
     "Pouw.PearlC.CostModel.Prog": "109a75e5991fec32f93b0205aa33572c2499873b046a81964ec87e6637ca67bd",
     "Pouw.PearlC.CostModel.Queries": "fc29e1557a05a37f97631427f66d0dd276f05cdf08f24f105463684364a0e909",
@@ -17391,7 +17403,8 @@
     "Pouw.PearlC.Transcript": "01915b871a61c562bc5195d19e42d6a3a6bd0be5023bbfbe216f572858af2885",
     "Pouw.PearlC.Wins": "f53d3c889ce8d6190c6df125f7b1dc238d7a8a2c5e1eff4f1f48b19f289dc8da",
     "Pouw.PearlC.Workload": "9cd1543c70786feed6819a0120e994b055abe74b0d5b0fef0f56b3a3482dcaaa",
-    "Pouw.PearlC.Workload.InDomain": "b1a385cab71650f191cc076d7e808904c6086c46fc8a12c4b991b20165877001",
+    "Pouw.PearlC.Workload.InDomain": "931d0d0fd0bc86616f351f65f67d64a6abff1cc19acd25c37d9c5da66f0a265d",
+    "Pouw.PearlC.Workload.WeightsOK": "781d3a8d284e7849e7656ef2abf1dc9be237c00ff0998bfa489e65c46073b758",
     "Pouw.PearlC.Workload.layout": "5f6bd4d81877288371f418efe90bcc684474a79dc542741f5e33880ebcbe7f92",
     "Pouw.PearlC.Workload.weight": "9dcef7340fa3c71ed2e000337b336b7ada9efc19e1daa368a5bcb6ccc12b54e8",
     "Pouw.PearlC.actOf": "675eb5219d23ddb2b3d714b65d3bd9a333473823c7bc24e3bea4278e9087e2a2",
@@ -19892,15 +19905,15 @@
    ]
   },
   "Pouw.Protocol.PearlC.Tile": {
-   "digest": "a4a848c8a60e1c5157857b8a0acd98441cbad1f737585e8b593cf216e366296a",
+   "digest": "5be7f1ad8eab591b0d3d5029388017e54f3d1049250b151df6363e27fdd5791e",
    "definitions": {
-    "Pouw.PearlC.AdmitsRefTile": "c4ef403681a99203460741a47e707a459372929f9fa55e1e8c2f26437caa4897",
+    "Pouw.PearlC.AdmitsRefTile": "961568c920947179c74399681e6c2e81c3781f4f4d5b3344ca29a412d5fbde57",
     "Pouw.PearlC.GγSampled": "9279ec55cc7369b92f405866f30c59640610f26feb40111325cdad9ef8020a35",
     "Pouw.PearlC.GγSampledU": "d323cdade25603d796ea398baa2b70d8aa8709b5ca9a50dbf723ad98f49a0c14",
     "Pouw.PearlC.PearlCSem.passRows": "501dbad8f3a8e06e8bb593ceaa0a7e85bcd2ce56d2ad81056371c8e4fb83fa22",
     "Pouw.PearlC.PearlCSem.tileDebit": "cae963e1886eb8c93d1842768e1ec2ee2a27a775cc79a014cdc90c80de3de0b0",
-    "Pouw.PearlC.TileGood": "c99536ca410cc07e1ae0a9b50b81c23f062ae7e08e0c33eb87f0e90130833150",
-    "Pouw.PearlC.TileGoodU": "5d6317c25f8205cc6a248b6454680e3d93cd69019a74848f64625f803e70815a",
+    "Pouw.PearlC.TileGood": "351054e8bb81da78e089d086bac1419eeb20f1a9708a2e0d5d1437cb81d2bf20",
+    "Pouw.PearlC.TileGoodU": "3865e5619a939ad8148310dda9c90fcff64b5a2fa64545a27b06e601691acaf5",
     "Pouw.PearlC.TileRules": "649f993305ac489d086e2d2dcfbc8e2086fff7596f7c0e5575aeab71a8c3061e",
     "Pouw.PearlC.TileRules.Wcred": "309ab3b7ef23ebaf3fdb24f11c9edb455d031922e217237b30bfc244b23eb99a",
     "Pouw.PearlC.TileRules.Wref": "97a4344ba87dc0cfdcd7794748f0bd94c1bb859dcf9e9a02807240c15a797ece",
