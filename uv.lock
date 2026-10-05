@@ -1547,6 +1547,7 @@ dependencies = [
     { name = "research" },
     { name = "verity" },
     { name = "verity-catalog" },
+    { name = "verity-experimental" },
     { name = "verity-kernels" },
     { name = "verity-numerical" },
 ]
@@ -1564,6 +1565,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
     { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-experimental", editable = "experimental" },
     { name = "verity-kernels", editable = "kernels" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
