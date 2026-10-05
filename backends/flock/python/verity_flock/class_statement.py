@@ -1,4 +1,4 @@
-"""A unit class of any partition (`verity.ir.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
+"""A unit class of any partition (`verity.primitives.circuits.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
 ``flock-circuit`` per class.
 
     python -m verity_flock.class_statement --model tiny --partition q-word --out DIR [--binary PATH] [--n 16] [--selftest]
@@ -49,10 +49,10 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from verity.ir import partition_object as PO
-from verity.ir.types import Array, Tuple, Value
-from verity.ir.cut import DefinitionCut
-from verity.ir.units import Activation, PartitionUnits, UnitCircuit
+from verity.primitives.circuits import partition_object as PO
+from verity.primitives.circuits.types import Array, Tuple, Value
+from verity.primitives.circuits.cut import DefinitionCut
+from verity.primitives.circuits.units import Activation, PartitionUnits, UnitCircuit
 
 from . import circuit as FC
 from . import class_sweep
@@ -140,7 +140,7 @@ def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[
 
 def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
     """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row and the W column with its
-    scales another, each core's bit row (``verity.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
+    scales another, each core's bit row (``verity.primitives.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
     the scales, nothing after). Returns the merged source groups, the `sources` groups each one joins, and each row's length in
     bits. Refuses a Definition that is not such a coordinate and a source that is not one whole parameter in element order. A
     row of any length is staged: the verifiers derive its fill bits and SHA-512 padding from the length."""
@@ -419,9 +419,9 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     row's and the row's unit counts are the per-Call counts times the Call counts. ``definitions`` ({descriptor id: Call count})
     adds Definitions without a graph (bound from the registry, no digest to check); ``exclude`` drops the ids it matches."""
     from circuit_check import targets as TG
-    from verity.ir.codec import descriptor_id
-    from verity.ir.defs import CompositeDefinition
-    from verity.ir.program import Program
+    from verity.primitives.circuits.codec import descriptor_id
+    from verity.primitives.circuits.defs import CompositeDefinition
+    from verity.primitives.circuits.program import Program
     from verity_vllm.pipeline.program_graph import _encoded, definition_digest
 
     TG.load_registries()
@@ -448,14 +448,14 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     arity = [len(fn.signature()[0]) for fn in fns]
 
     def body(B, S, *xs):
-        from verity.ir.refs import tuple_of
+        from verity.primitives.circuits.refs import tuple_of
         outs, at = [], 0
         for fn, k in zip(fns, arity):
             outs.append(B.call(fn, *xs[at:at + k]))
             at += k
         return tuple_of(*outs)
 
-    from verity.ir.types import Tuple as TupleT
+    from verity.primitives.circuits.types import Tuple as TupleT
     ret = TupleT(*[fn.signature()[1] for fn in fns])
     root = CompositeDefinition("DistinctCalls", 1, (), lambda S: (tuple(params), ret), body, register=False)
     return Program(root), calls, prov
@@ -604,7 +604,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     writers: list = []
     definition = None
     if wiring is not None:
-        from verity.ir.codec import descriptor_id
+        from verity.primitives.circuits.codec import descriptor_id
 
         if core_rows or idents is None:
             raise ValueError(f"class {name}: a wired class has u16 rows and lanes with source identities")
@@ -700,7 +700,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
 def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
                     name: str, lanes: int = 8) -> None:
     """The first ``lanes`` staged rows of each port are core's bit row of the lane's elements (``rowleaf.bit_row``), then zero."""
-    from verity.commitments.rowleaf import bit_row
+    from verity.primitives.commitments.rowleaf import bit_row
 
     for i, (g, n_bits) in enumerate(zip(groups, bits)):
         rows = per_port[f"p{i}"]
@@ -792,7 +792,7 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     it), of exactly its words (its bits a multiple of 16); output
     port ``o{j}`` is return field ``j``'s leaves concatenated the same way, zero-padded to whole u16 words. Every
     parameter (or each of its rows) is in one row, or is one of ``public``: a public input port before the rows, each leaf in
-    its own ceil(bits / 16) u16 words, low first (`verity_pouw.circuit.anchors.region_words`' layout, the unit's leaves as
+    its own ceil(bits / 16) u16 words, low first (`verity.protocols.accounting.work.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
     `circuit.compose`'s public input ports read them). Returns the lowering and each output port's words."""
     params, ret = definition.signature()
     types = dict(params)
@@ -859,13 +859,13 @@ def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Seq
     rows ``(row, schema, bits, params)`` (`unit_lowering`; ``schema`` ``hm96-sha512/row/v2`` or ``…/row-seg/v1``, ``bits`` its
     META length), ``out_rows`` each output row ``(schema, output ports)``, a run of consecutive output ports of exactly their
     words (`circuit.compose`'s ``seg_out_rows`` / ``v2_out_rows``), ``rows`` each input row's words per instance ``(n, words)``
-    u16. The outputs are the lowering's, checked against the IR reference (`verity.evaluation.evaluate`) on every instance;
+    u16. The outputs are the lowering's, checked against the IR reference (`verity.primitives.circuits.evaluation.evaluate`) on every instance;
     the salts are ``salts``' where given, else `circuit.stage_salts`'. ``public_inputs`` (``{param: {"seed", "derivation"}}``):
     parameters that are public input ports, not rows (`circuit.compose`; PoUW's anchors, which the verifier recomputes from
     public seeds), laid out as `unit_lowering`'s ``public``, ``rows[param]`` their words per instance. Writes ``circuit.txt``,
     ``inst.bin`` and ``pub.bin``; returns META, the outputs per port and every row's salts."""
-    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
-    from verity.evaluation import evaluate
+    from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
+    from verity.primitives.circuits.evaluation import evaluate
 
     public_inputs = dict(public_inputs or {})
     low, out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs))
@@ -1152,7 +1152,7 @@ def _source_digest() -> str:
     subpackages; two portions that define one module make the import depend on that order, and raise ValueError."""
     import importlib.util
     h = hashlib.sha256()
-    for name in ("verity", "verity_flock", "circuit_check", "verity_vllm", "verity_pouw"):
+    for name in ("verity", "verity_flock", "circuit_check", "verity_vllm", "verity.protocols.accounting.work.pouw"):
         spec = importlib.util.find_spec(name)
         roots = [Path(r) for r in (spec.submodule_search_locations or [])] if spec else []
         owner: dict[tuple[str, ...], Path] = {}
@@ -1474,7 +1474,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     row_units: dict[str, int] = {}
     per_definition: dict[str, dict[str, int]] = {}
     if calls is not None:
-        from verity.ir.codec import descriptor_id
+        from verity.primitives.circuits.codec import descriptor_id
         for _k, _m, fn, cut in units._calls():
             per_definition[descriptor_id(fn)] = dict(units._count(cut, fn))
             for sh, c in per_definition[descriptor_id(fn)].items():

@@ -1,5 +1,5 @@
-"""PoUW's tile-check rows (`verity_pouw.circuit.leaves`) are C-Flock's rows byte for byte: every row's vector of
-``protocols/pouw/tests/vectors/pouw_rows.json``, recomputed from its case's words and salt through the port C-Flock stages
+"""PoUW's tile-check rows (`verity.protocols.accounting.work.pouw.circuit.leaves`) are C-Flock's rows byte for byte: every row's vector of
+``verity/protocols/accounting/work/pouw/tests/vectors/pouw_rows.json``, recomputed from its case's words and salt through the port C-Flock stages
 for the row (`circuit._port`: ``n_words`` u16 leaves, a bit row of ``16 n_words`` bits under ``hm96-sha512/row/v2`` or
 ``hm96-sha512/row-seg/v1``), gives the pinned row bytes, digest, commit string (`circuit._commit_strings`) and tree leaf;
 one vector of each row version and a tile's give the same commit string and tree leaf from the Lean verifier's own row
@@ -21,15 +21,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 from test_lean_verifier import ROW_SEG_PAIRS, ROW_V2_PAIRS, _bit_row_toy, _public_bcs, _seg_writer_toy
-from verity.commitments import hm96
-from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
+from verity.primitives.commitments import hm96
+from verity.primitives.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
                                         sha512_row_v2_digest)
-from verity.ir.types import Tuple
+from verity.primitives.circuits.types import Tuple
 from verity_flock import circuit as FC
-from verity_pouw.circuit import leaves as L
-from verity_pouw.circuit import pc4, pc8
+from verity.protocols.accounting.work.pouw.circuit import leaves as L
+from verity.protocols.accounting.work.pouw.circuit import pc4, pc8
 
-POUW_TESTS = Path(__file__).resolve().parents[3] / "protocols" / "pouw" / "tests"
+POUW_TESTS = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "work" / "pouw" / "tests"
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 _spec = importlib.util.spec_from_file_location("pouw_rows_vectors", POUW_TESTS / "pouw_rows_vectors.py")
 V = importlib.util.module_from_spec(_spec)
@@ -227,7 +227,7 @@ def _unit_toy(m: str, role: str, d: Path, n: int = 2) -> tuple[dict, dict, list,
     row's words, the output words and every row's salts."""
     from types import SimpleNamespace
 
-    from verity.ir.types import Array, Value
+    from verity.primitives.circuits.types import Array, Value
     from verity_flock import class_statement as CS
     from verity_flock import gf2
     from verity_flock import ir_lower as IL
@@ -429,10 +429,10 @@ def test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation
     file (`TileAnchors.public_inputs`), and refuses that file with a wrong anchor, and a public file whose anchor the prover
     chose.  A stand-in unit with Pc4RowA's anchor parameters (it copies ``x``) keeps the test off PoUW's pieces; the real
     unit's run is the lane's record."""
-    from verity.ir.defs import CompositeDefinition, bind
-    from verity.ir.types import Array, Value
+    from verity.primitives.circuits.defs import CompositeDefinition, bind
+    from verity.primitives.circuits.types import Array, Value
     from verity_flock import class_statement as CS
-    from verity_pouw.circuit.anchors import public_ports
+    from verity.protocols.accounting.work.pouw.circuit.anchors import public_ports
 
     spec = importlib.util.spec_from_file_location("pouw_regions_vectors", POUW_TESTS / "pouw_regions_vectors.py")
     RV = importlib.util.module_from_spec(spec)

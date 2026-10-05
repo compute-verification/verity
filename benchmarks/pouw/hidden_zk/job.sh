@@ -108,7 +108,7 @@ setup() {
     log "build FAILED"; for f in "$OUT"/build-*.log; do echo "== $f"; tail -20 "$f"; done | tee -a "$OUT/job.log"; exit 1
   fi
   sha256sum "$BIN" "$SBIN" "$LEAN" | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
-  "$PY" -c "import numpy, blake3, verity_pouw, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
+  "$PY" -c "import numpy, blake3, verity.protocols.accounting.work.pouw, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
   TIME="$PY $J/timed.py"
   log "built"
 }
@@ -205,8 +205,8 @@ $(tail -1 "$O/lean-$tag.err" | cut -c1-160)"
 stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged files, from the stage cache or staged now
   local role=$1 k=$2 tag=$3 D=$4 O=$5 key S rc=0
   key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py benchmarks/pouw/hidden_zk/core3_scratch.py \
-    benchmarks/pouw/hidden_zk/hash_scratch.py backends/flock/python packages/verity/src protocols/pouw/verity_pouw \
-    protocols/pouw/tests/pouw_rows_vectors.py)
+    benchmarks/pouw/hidden_zk/hash_scratch.py backends/flock/python . verity/protocols/accounting/work/pouw \
+    verity/protocols/accounting/work/pouw/tests/pouw_rows_vectors.py)
   S=${HZ_CACHE:-$W/cache}/stage/$tag-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"
   (

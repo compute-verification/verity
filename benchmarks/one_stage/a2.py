@@ -2,7 +2,7 @@
 heads at serving time in M0's row format and hands over the registration, the verifier's public file, the prover's file
 and the unit index; nothing else changes.
 
-    PYTHONPATH=<tree>/packages/verity/src:<tree>/backends/numerical/python:<tree>/integrations/vllm:<tree>/protocols/sampled_proofs \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/verity/protocols/verification/sampled_proofs \\
       python benchmarks/one_stage/a2.py --served DIR --template-set DIR --m0-pythonpath PATH --bin flock-circuit \\
       --lean flock-verify --out DIR [--k 256] [--delta 2^-20]
 
@@ -31,9 +31,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.ir.codec import canonical_json, encode_program  # noqa: E402
+from verity.primitives.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
-from verity_sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R  # noqa: E402
+from verity.protocols.verification.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R  # noqa: E402
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:

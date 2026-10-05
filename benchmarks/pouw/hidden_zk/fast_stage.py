@@ -27,7 +27,7 @@ from functools import reduce
 from operator import xor
 from pathlib import Path
 
-from verity.ml.boolean import forms
+from verity.primitives.circuits.boolean import forms
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
