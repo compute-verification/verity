@@ -1,4 +1,4 @@
-"""The exhaustive bf16 table of `aten.gelu(x, approximate='none')` (see `gelu_erf_bf16.py`): output word for every input
+"""The exhaustive bf16 table of `aten.gelu(x, approximate='none')` (see `act.GeluErfBf16`): output word for every input
 word 0x0000..0xFFFF, measured by `verity_vllm/ops/gelu_erf_table_probe.py`.
 
     torch 2.13.0+cu129, device NVIDIA GeForce RTX 4090, sha256(raw little-endian uint16 words) = c577423f9580e2d2e5943d57e92770a98d875d95a87861e32525d3db97df811f

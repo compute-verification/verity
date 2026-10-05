@@ -1,7 +1,7 @@
 """GPT-NeoX's `nn.LayerNorm` (weight + bias) exported under the pinned `b1-eager-v3` profile binds `aten.layer_norm` to
 `LayerNormAten_v1{N,EPS}` per row (`vllm_bindings.layer_norm`), the Definition the eager Match fold resolves the same op to
 (`engine/profiles/gen_ln_patterns.py`); the Program's rows evaluate to the Definition's own words; forms the vectorized kernel does
-not run are refused by name.  The kernel equality is the difftest's (`quarantine/ln/layer_norm_aten_difftest.py`, on the GPU)."""
+not run are refused by name.  The kernel equality is the difftest's (`registry/layer_norm_difftest.py`, on the GPU)."""
 from __future__ import annotations
 
 import numpy as np
@@ -13,7 +13,7 @@ from verity.evaluation import evaluate
 from verity.ir.defs import bind
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, vllm_ruleset
-from verity_vllm.program.registry.quarantine.ln.layer_norm_aten import LayerNormAten
+from verity_vllm.program.registry.layer_norm import LayerNormAten
 from verity_vllm.program.kernels.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager-v3")

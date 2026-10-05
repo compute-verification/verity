@@ -185,7 +185,7 @@ from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import sampling as _sampling  # [R15 stoch]
 from verity_vllm.program.registry import sampling_vocab
 from verity_vllm.program.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
-from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as _LN
+from verity_vllm.program.registry import layer_norm as _LN
 
 
 def _norm_v2(role: str):
@@ -390,7 +390,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
            "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8_vocab.block_gemm(K, N, G, SCALE, FP8_DOT),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
-           # (quarantine lane cov-ln, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
+           # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
            "layer_norm_aten_value": lambda N: ir_bind(_LN.LayerNormAtenV2, N=N)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,

@@ -58,7 +58,7 @@
     {"file": "verity_vllm/program/registry/b1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1146},
     {"file": "verity_vllm/program/kernels/derived_rows.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 944},
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2228},
-    {"file": "verity_vllm/program/registry/quarantine/ln/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
+    {"file": "verity_vllm/program/registry/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
     {"file": "verity_vllm/program/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 805},
     {"file": "verity_vllm/query/required.py", "kind": "function", "symbol": "request_manifest", "detail": "lines", "count": 187}
   ]
