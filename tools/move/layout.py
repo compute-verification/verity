@@ -21,12 +21,15 @@ What it rewrites, in every tracked text file the map doesn't exclude:
 A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. An
 old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
 and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
-It appends [paths] to research's `moves.json` (once), whose recorded moves it never rewrites.
+A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
+no dotted name and no lone quoted word in one is rewritten. A tracked file that a `.gitignore` matches stays tracked where
+it moves. It appends [paths] to research's `moves.json` (once), whose recorded moves it never rewrites.
 """
 from __future__ import annotations
 
 import argparse
 import ast
+import bisect
 import fnmatch
 import hashlib
 import json
@@ -442,8 +445,8 @@ class Run:
                 token, trail = token[:-1], token[-1] + trail
             if "/" not in token:
                 after = text[m.end("p"):m.end("p") + 1]
-                if not (before in "\"'" and after == before) or path.endswith(".py"):
-                    return m.group(0)                   # in Python a lone quoted word is a name ("census": a key); joins are `_joins`'s
+                if not (before in "\"'" and after == before) or path.endswith((".py", ".rs", ".lean")):
+                    return m.group(0)                   # in code a lone quoted word is a name ("census": a key); joins are `_joins`'s
             new = self._map_token(token, path)
             if new is None or new == token:
                 return m.group(0)
@@ -928,9 +931,12 @@ class Run:
             singles = [n for n in self.L.modules if "." not in n and n.startswith("verity_")]
             # `verity_pouw::ncp_linear` is a torch op's namespace, not the module, and a namespace holds no dot
             self._single_re = re.compile(r"(?<![\w.$@/\-])(" + "|".join(map(re.escape, singles)) + r")(?![\w/\-]|::)") if singles else None
+        spans = rust_literals(text) if path.endswith(".rs") else []
 
         def fix(m: re.Match) -> str:
             name = m.group(1)
+            if _inside(spans, m.start()):
+                return name
             if name.rpartition(".")[2] in FILE_SUFFIXES and name not in self.L.modules:
                 return name
             if any(name == d or name.startswith(d + ".") for d in self.L.keep_dotted):
@@ -949,8 +955,12 @@ class Run:
 
         text = self._dot_re.sub(fix, text)
         if self._single_re is not None:
+            spans = rust_literals(text) if path.endswith(".rs") else []
+
             def one(m: re.Match) -> str:
                 at = m.start()
+                if _inside(spans, at):
+                    return m.group(1)
                 if any(text.startswith(d, at) and not re.match(r"\w", text[at + len(d):at + len(d) + 1]) for d in self.L.keep_dotted):
                     return m.group(1)
                 self._count(path, "dotted names")
@@ -1112,6 +1122,51 @@ def _ancestors(p: str):
     while d:
         yield d
         d = posixpath.dirname(d)
+
+
+_RAW = re.compile(r'(?<!\w)b?r(#*)"')
+_CHAR = re.compile(r"'(?:\\.[^'\n]*|[^'\\\n])'")
+
+
+def rust_literals(text: str) -> list[tuple[int, int]]:
+    """The (start, end) offsets of each string literal in Rust source, quotes included: plain, byte and raw ones. A quote in a
+    comment or a char literal opens none; a `'` that closes no char literal is a lifetime's."""
+    spans, i, n = [], 0, len(text)
+    while i < n:
+        c = text[i]
+        if text.startswith("//", i):
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+        elif text.startswith("/*", i):
+            depth, i = 1, i + 2
+            while i < n and depth:
+                if text.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                elif text.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+        elif c in "br" and (m := _RAW.match(text, i)):
+            j = text.find('"' + m.group(1), m.end())
+            end = n if j < 0 else j + 1 + len(m.group(1))
+            spans.append((i, end))
+            i = end
+        elif c == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            spans.append((i, min(j + 1, n)))
+            i = j + 1
+        elif c == "'" and (m := _CHAR.match(text, i)):
+            i = m.end()
+        else:
+            i += 1
+    return spans
+
+
+def _inside(spans: list[tuple[int, int]], at: int) -> bool:
+    k = bisect.bisect_right(spans, (at, float("inf"))) - 1
+    return k >= 0 and spans[k][0] <= at < spans[k][1]
 
 
 def _wrap(stmt: str, indent: str, width: int = 120) -> str:
@@ -1339,6 +1394,9 @@ def main(argv: list[str] | None = None) -> int:
     run.changes["modules renamed"] = renamed_modules
     if not a.dry_run:
         git(root, "add", "-A")
+        if moves:
+            subprocess.run(["git", "--literal-pathspecs", "add", "-f", "--pathspec-from-file=-", "--pathspec-file-nul"], cwd=root,
+                           input="\0".join(n for _, n in moves).encode(), check=True, capture_output=True)
         if not a.no_lock:
             r = subprocess.run(["uv", "lock"], cwd=root, capture_output=True, text=True)
             if r.returncode:
