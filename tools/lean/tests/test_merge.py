@@ -37,11 +37,12 @@ def thm(reads: list[dict], statement: str = "P.f n = n", h: str = "0000000000000
             "type_sha256": sha(h), "hypotheses": [], "reads": reads}
 
 
-def record(deps: dict | None = None, **pins: dict) -> dict:
-    """The record `audit.py --update` writes for a package that pins ``pins`` (name suffix: its facts)."""
+def record(deps: dict | None = None, **guarantees: dict) -> dict:
+    """The record `audit.py --update` writes for a package whose guarantees are ``guarantees`` (name suffix: its facts)."""
     facts = {"lean": "4.34.0", "modules": list(FILES), "imports": {}, "declarations": {}, "axioms": STD, "offenders": [],
-             "declared_axioms": [], "escapes": [], "pins": {f"P.{n}": f for n, f in pins.items()}}
-    fails, pol = A.judge({"roots": ["P"], "meaning": ["P"], "pins": {f"P.{n}": {} for n in pins}}, facts, FILES, update=True)
+             "declared_axioms": [], "escapes": [], "pins": {f"P.{n}": f for n, f in guarantees.items()}}
+    fails, pol = A.judge({"roots": ["P"], "meaning": ["P"], "guarantees": {f"P.{n}": {} for n in guarantees}}, facts, FILES,
+                         update=True, owner="@lean")
     assert fails == []
     return pol | {"dependencies": deps or {"mathlib": "a" * 64, "toolchain": "c" * 64}}
 
@@ -53,7 +54,7 @@ def text_conflicts(base: dict, ours: dict, theirs: dict, tmp: Path) -> bool:
                           capture_output=True).returncode != 0
 
 
-def test_two_branches_that_each_pin_theorems_merge_to_the_record_of_the_merged_tree(tmp_path):
+def test_two_branches_that_each_add_guarantees_merge_to_the_record_of_the_merged_tree(tmp_path):
     base = record(t=thm([F]))
     ours = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"), deps={"mathlib": "b" * 64, "toolchain": "c" * 64})
     theirs = record(t=thm([F]), v=thm([H, K], "P.h n = P.k n", "00000000000000cc"))
@@ -62,7 +63,7 @@ def test_two_branches_that_each_pin_theorems_merge_to_the_record_of_the_merged_t
     tree = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"), v=thm([H, K], "P.h n = P.k n", "00000000000000cc"),
                   deps={"mathlib": "b" * 64, "toolchain": "c" * 64})
     assert A.text(merged) == A.text(tree)
-    assert merged["reads"]["P.Defs"]["pins"] == ["P.t", "P.u", "P.v"] and list(merged["reads"]["P.Defs"]["definitions"]) == [
+    assert merged["reads"]["P.Defs"]["guarantees"] == ["P.t", "P.u", "P.v"] and list(merged["reads"]["P.Defs"]["definitions"]) == [
         "P.f", "P.g", "P.h"]
     assert text_conflicts(base, ours, theirs, tmp_path)
     assert M.merge(base, ours, ours) == (ours, [])
@@ -73,7 +74,7 @@ def test_a_hand_written_section_one_side_extends_is_kept():
     ours = base | {"meaning": ["P", "P.More"]}
     theirs = record(t=thm([F]), v=thm([H], "P.h n = n", "00000000000000cc"))
     merged, why = M.merge(base, ours, theirs)
-    assert why == [] and merged["meaning"] == ["P", "P.More"] and "P.v" in merged["pins"]
+    assert why == [] and merged["meaning"] == ["P", "P.More"] and "P.v" in merged["guarantees"]
     assert M.merge(base, ours, base | {"meaning": ["P", "P.Other"]})[1] == ["meaning: changed on both sides, differently"]
 
 
@@ -82,7 +83,7 @@ def test_a_key_both_sides_changed_refuses():
     u, v = thm([F, G], "P.g n = n", "00000000000000bb"), thm([H], "P.h n = n", "00000000000000cc")
     restated = M.merge(base, record(t=thm([F], "P.f n ≤ n", "00000000000000dd"), u=u),
                        record(t=thm([F], "P.f n < n + 1", "00000000000000ee"), v=v))[1]
-    assert restated == ["pins[P.t]: changed on both sides, differently"]
+    assert restated == ["guarantees[P.t]: changed on both sides, differently"]
     moved = M.merge(base, record(t=thm([read("P.f", "P.Defs", "9" * 16)]), u=u),
                     record(t=thm([read("P.f", "P.Defs", "8" * 16)]), v=v))[1]
     assert moved == ["reads[P.Defs].definitions[P.f]: changed on both sides, differently"]
@@ -90,7 +91,17 @@ def test_a_key_both_sides_changed_refuses():
                      base | {"dependencies": {"mathlib": "d" * 64, "toolchain": "c" * 64}})[1]
     assert bumped == ["dependencies[mathlib]: changed on both sides, differently"]
     added = M.merge(base, record(t=thm([F]), u=u), record(t=thm([F]), u=thm([F], "P.f n = 0 + n", "00000000000000ff")))[1]
-    assert added == ["pins[P.u]: added on both sides, differently"]
+    assert added == ["guarantees[P.u]: added on both sides, differently"]
+
+
+def test_an_owner_merges_apart_from_the_statement():
+    base = record(t=thm([F]))
+    unowned = {**base, "guarantees": {"P.t": A.unowned(base["guarantees"]["P.t"])}}
+    restated = record(t=thm([F], "P.f n ≤ n", "00000000000000dd"))
+    merged, why = M.merge(unowned, base, {**restated, "guarantees": {"P.t": A.unowned(restated["guarantees"]["P.t"])}})
+    assert why == [] and merged["guarantees"] == restated["guarantees"], "one side's owner, the other's restatement"
+    other = {**base, "guarantees": {"P.t": base["guarantees"]["P.t"] | {"owner": "@proofs"}}}
+    assert M.merge(unowned, base, other)[1] == ["guarantees[P.t].owner: added on both sides, differently"]
 
 
 def test_a_definition_one_side_stops_reading_refuses_when_the_other_side_changed_its_module():
@@ -98,19 +109,40 @@ def test_a_definition_one_side_stops_reading_refuses_when_the_other_side_changed
     ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
     theirs = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
     assert M.merge(base, ours, theirs)[1] == [
-        "reads[P.Defs].definitions[P.g]: no longer read on one side, while the other side changed what the pins read in "
-        "P.Defs; the record does not say which pins read P.g"]
+        "reads[P.Defs].definitions[P.g]: no longer read on one side, while the other side changed what the guarantees read "
+        "in P.Defs; the record does not say which guarantees read P.g"]
     assert M.merge(base, ours, record(t=thm([F, G]), v=thm([K], "P.k n = n", "00000000000000cc")))[1] == []
 
 
 def test_a_32_bit_group_is_not_merged_with_a_rehashed_one():
     base = record(t=thm([F]))
-    old = base | {"reads": A.read_groups(A.pinned_reads({"pins": {"P.t": thm([F])}}), old=True)}
-    ours = old | {"reads": A.read_groups(A.pinned_reads({"pins": {"P.t": thm([F]), "P.u": thm([F, G])}}), old=True),
-                  "pins": record(t=thm([F]), u=thm([F, G]))["pins"]}
+    old = base | {"reads": A.read_groups(A.guarantee_reads({"pins": {"P.t": thm([F])}}), old=True)}
+    ours = old | {"reads": A.read_groups(A.guarantee_reads({"pins": {"P.t": thm([F]), "P.u": thm([F, G])}}), old=True),
+                  "guarantees": record(t=thm([F]), u=thm([F, G]))["guarantees"]}
     why = M.merge(old, ours, base)[1]
     assert why and all(w.startswith("reads[P.Defs]") for w in why)
     assert "reads[P.Defs]: its definitions would mix 32-bit and SHA-256 hashes (one side's record was rehashed)" in why
+
+
+def before_the_rename(rec: dict) -> dict:
+    """``rec`` as a branch from before guarantees were called that writes it: `pins`, and each module's readers as `pins`."""
+    out = {("pins" if k == "guarantees" else k): v for k, v in rec.items()}
+    out["reads"] = {m: {("pins" if k == "guarantees" else k): v for k, v in g.items()} for m, g in rec["reads"].items()}
+    return out
+
+
+def test_a_side_from_before_the_rename_merges_under_today_s_names(tmp_path):
+    base = record(t=thm([F]))
+    ours = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"))
+    theirs = record(t=thm([F]), v=thm([H, K], "P.h n = P.k n", "00000000000000cc"))
+    tree = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"), v=thm([H, K], "P.h n = P.k n", "00000000000000cc"))
+    for n, d in (("base", before_the_rename(base)), ("ours", ours), ("theirs", before_the_rename(theirs))):
+        (tmp_path / n).write_text(A.text(d))
+    assert M.main([str(tmp_path / n) for n in ("base", "ours", "theirs")]) == 0
+    assert (tmp_path / "ours").read_text() == A.text(tree)
+    (tmp_path / "theirs").write_text(A.text(theirs | {"pins": {"P.w": {}}}))
+    assert M.main([str(tmp_path / n) for n in ("base", "ours", "theirs")]) == 1
+    assert (tmp_path / "ours").read_text() == A.text(tree)
 
 
 def test_normalize_recomputes_each_digest_from_its_definitions(tmp_path):
@@ -131,7 +163,7 @@ def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
     return r
 
 
-def test_git_merges_two_branches_that_add_pins_and_refuses_a_real_conflict(tmp_path, monkeypatch):
+def test_git_merges_two_branches_that_add_guarantees_and_refuses_a_real_conflict(tmp_path, monkeypatch):
     for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                  "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():
         monkeypatch.setenv(k, v)
@@ -167,6 +199,6 @@ def test_git_merges_two_branches_that_add_pins_and_refuses_a_real_conflict(tmp_p
     git(repo, "checkout", "-q", "c")
     refused = git(repo, "merge", "--no-edit", "d", check=False)
     assert refused.returncode and "merge.py: pkg/lean-audit.json: refused" in refused.stderr
-    assert "pins[P.t]: changed on both sides, differently" in refused.stderr
+    assert "guarantees[P.t]: changed on both sides, differently" in refused.stderr
     assert git(repo, "diff", "--name-only", "--diff-filter=U").stdout.split() == ["pkg/lean-audit.json"]
     assert rec.read_text() == A.text(branches["c"])

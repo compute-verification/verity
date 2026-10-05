@@ -1,16 +1,17 @@
-"""`merge.py`: git's merge driver for `lean-audit.json`, so that two branches that each pin theorems merge without a rebuild.
+"""`merge.py`: git's merge driver for `lean-audit.json`, so that two branches that each add guarantees merge without a rebuild.
 
     python tools/lean/merge.py BASE OURS THEIRS [PATH]   what git runs (`%O %A %B %P`): the merge is written to OURS
     python tools/lean/merge.py --install [REPO]         register the driver in the repository's git config, once per clone
     python tools/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions
 
 `.gitattributes` names this driver for every `lean-audit.json`, and git runs it when both sides changed the file. A record is
-a map of entries by name: the pins, the modules under `reads`, the dependencies, and the policy's own sections. Each side's
-change to an entry (added, changed or removed) applies, and an entry both sides changed differently refuses the merge. A
-pin's record and a dependency's digest are one entry each. Under `reads`, which two branches pinning theorems that read one
-module both change, the module's definitions merge the same way, its readers (`pins`) as sets, and its digest is recomputed
-from the merged definitions (`audit.module_digest`). The merge also refuses when one side stops reading a definition in a
-module the other side changed: the record does not say which pins read which definition.
+a map of entries by name: the guarantees, the modules under `reads`, the dependencies, and the policy's own sections. Each
+side's change to an entry (added, changed or removed) applies, and an entry both sides changed differently refuses the merge.
+A guarantee's record (its `owner` aside, which merges on its own) and a dependency's digest are one entry each. Under `reads`, which two branches adding guarantees that
+read one module both change, the module's definitions merge the same way, its readers (`guarantees`) as sets, and its digest
+is recomputed from the merged definitions (`audit.module_digest`). The merge also refuses when one side stops reading a
+definition in a module the other side changed: the record does not say which guarantees read which definition. A side
+written before guarantees were called that (`pins`) is read under today's names (`audit.as_guarantees`).
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`audit.py --update`), as without the driver. A merged record is a candidate, never
@@ -34,7 +35,7 @@ _spec.loader.exec_module(A)
 #: the driver's name in `.gitattributes` and git's config
 NAME = "lean-audit"
 #: the sections `audit.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
-SORTED = {"pins", "reads", "dependencies", "compile_time"}
+SORTED = {"guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`)
 NESTED = {"upstream"}
 MISSING = object()
@@ -72,9 +73,27 @@ def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1
     return out
 
 
+def guarantees(o: dict, a: dict, b: dict, why: list[str]) -> dict:
+    """The guarantees entry by entry, each one's `owner` apart from the rest of its record: a branch that restates a guarantee
+    and one that gives it an owner merge."""
+    out = {}
+    for k in keys("guarantees", a, b):
+        x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
+        if MISSING in (y, z) or not all(isinstance(r, dict) for r in (y, z, {} if x is MISSING else x)):
+            v = one(f"guarantees[{k}]", x, y, z, why)
+        else:
+            v = one(f"guarantees[{k}]", x if x is MISSING else A.unowned(x), A.unowned(y), A.unowned(z), why)
+            who = one(f"guarantees[{k}].owner", MISSING if x is MISSING else x.get("owner", MISSING), y.get("owner", MISSING),
+                      z.get("owner", MISSING), why)
+            v = v if who is MISSING else {"owner": who} | v
+        if v is not MISSING:
+            out[k] = v
+    return out
+
+
 def core(group):
     """What a `reads` entry says, its digest (which it determines) aside."""
-    return None if group is None else (A.definitions(group), sorted(group.get("pins", [])))
+    return None if group is None else (A.definitions(group), sorted(group.get("guarantees", [])))
 
 
 def group(m: str, x: dict, y: dict, z: dict, why: list[str]) -> dict:
@@ -87,12 +106,12 @@ def group(m: str, x: dict, y: dict, z: dict, why: list[str]) -> dict:
         if v is not MISSING:
             defs[d] = v
         elif p is not MISSING and (q is MISSING) != (r is MISSING):
-            why.append(f"reads[{m}].definitions[{d}]: no longer read on one side, while the other side changed what the pins "
-                       f"read in {m}; the record does not say which pins read {d}")
+            why.append(f"reads[{m}].definitions[{d}]: no longer read on one side, while the other side changed what the "
+                       f"guarantees read in {m}; the record does not say which guarantees read {d}")
     if len({len(h) for h in defs.values() if isinstance(h, str)}) > 1:
         why.append(f"reads[{m}]: its definitions would mix 32-bit and SHA-256 hashes (one side's record was rehashed)")
-    xp, yp, zp = set(x.get("pins", [])), set(y.get("pins", [])), set(z.get("pins", []))
-    return {"definitions": defs, "pins": sorted((yp & zp) | (yp - xp) | (zp - xp))}
+    xp, yp, zp = set(x.get("guarantees", [])), set(y.get("guarantees", [])), set(z.get("guarantees", []))
+    return {"definitions": defs, "guarantees": sorted((yp & zp) | (yp - xp) | (zp - xp))}
 
 
 def reads(o: dict, a: dict, b: dict, why: list[str]) -> dict:
@@ -106,14 +125,14 @@ def reads(o: dict, a: dict, b: dict, why: list[str]) -> dict:
         elif core(z) == core(x):
             g = y
         elif y is None or z is None:
-            why.append(f"reads[{m}]: no longer read on one side, while the other side changed what the pins read there")
+            why.append(f"reads[{m}]: no longer read on one side, while the other side changed what the guarantees read there")
             continue
         else:
             g = group(m, x or {}, y, z, why)
         if g is not None:
             defs = A.definitions(g)
             out[m] = {"digest": A.module_digest(defs), "definitions": dict(sorted(defs.items())),
-                      "pins": sorted(g.get("pins", []))}
+                      "guarantees": sorted(g.get("guarantees", []))}
     return out
 
 
@@ -125,24 +144,26 @@ def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
         o, a, b = base.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING)
         if k == "reads":
             v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why)
+        elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
+            v = guarantees({} if o is MISSING else o, a, b, why)
         elif isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1)
         else:
             v = one(k, o, a, b, why)
         if v is not MISSING:
             out[k] = v
-    pins = set(out.get("pins", {}))
+    kept = set(out.get("guarantees", {}))
     for m, g in out.get("reads", {}).items():
-        if not g["definitions"] or not g["pins"]:
+        if not g["definitions"] or not g["guarantees"]:
             why.append(f"reads[{m}]: the merge leaves it without {'definitions' if not g['definitions'] else 'readers'}")
-        if extra := sorted(set(g["pins"]) - pins):
-            why.append(f"reads[{m}]: read by {', '.join(extra)}, which the merged record does not pin")
+        if extra := sorted(set(g["guarantees"]) - kept):
+            why.append(f"reads[{m}]: read by {', '.join(extra)}, which the merged record does not list as guarantees")
     return out, why
 
 
 def load(path: Path) -> dict:
     text = path.read_text()
-    return json.loads(text) if text.strip() else {}
+    return A.as_guarantees(json.loads(text)) if text.strip() else {}
 
 
 def install(repo: Path) -> None:
@@ -151,7 +172,7 @@ def install(repo: Path) -> None:
     top = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=repo, capture_output=True, text=True,
                               check=True).stdout.strip())
     driver = f"python3 {Path(os.path.relpath(HERE / 'merge.py', top)).as_posix()} %O %A %B %P"
-    for k, v in (("name", "lean-audit.json: each side's pins, reads and dependencies (tools/lean/merge.py)"), ("driver", driver)):
+    for k, v in (("name", "lean-audit.json: each side's guarantees, reads and dependencies (tools/lean/merge.py)"), ("driver", driver)):
         subprocess.run(["git", "config", f"merge.{NAME}.{k}", v], cwd=repo, check=True)
     print(f"merge.py: merge.{NAME}.driver = {driver} (in {top})")
 
@@ -187,7 +208,7 @@ def main(argv: list[str]) -> int:
     try:
         merged, why = merge(load(base), load(ours), load(theirs))
     except ValueError as e:
-        why = [f"a side is not JSON ({e})"]
+        why = [f"a side is not JSON ({e})" if isinstance(e, json.JSONDecodeError) else f"a side: {e}"]
     if why:
         print(f"merge.py: {path}: refused; regenerate the record on the merged tree (`audit.py --update`):", file=sys.stderr)
         print("\n".join(f"  {w}" for w in why), file=sys.stderr)

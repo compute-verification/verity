@@ -68,6 +68,8 @@ STAGE = "stage"
 SOURCE = "source"
 SUPERSEDED_BY = "superseded_by"
 ABANDONED = "abandoned"
+REPLAY_SET = "replay_set"
+REPLAY_EXPECT = "replay_expect"
 INTERACTION_ATTEMPT_OF = "interaction_attempt_of"
 HASH = "hash"
 SHARING = "sharing"
@@ -88,6 +90,8 @@ SAME_DEVICE = "same_device"
 BELOW_BAR = "below_bar"                               # verified, but its whole-proof bound misses the tables' 2^-128 bar
 OUTCOME = "outcome"
 COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artifact: whether the history rewrite it records applies
+CUSTODY = "custody"                                   # on a run id: whether `research data custody --triage` needs more of it
+CUSTODY_VALUES = ("waived", "never-ran", "needed")
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -223,16 +227,19 @@ class Key:
     doc: str
     values: tuple[str, ...] = ()
     status: str = CURRENT
+    pattern: str = ""
 
     def check(self, value: Any) -> str | None:
-        """Why `value` is outside this key's declared set, as one line, or None (free forms are never checked)."""
+        """Why `value` is outside this key's declared set or `pattern`, as one line, or None (other free forms are never checked)."""
         if self.values and scalar_text(value) not in self.values:
             return f"{self.name}={scalar_text(value)!r} is not one of {', '.join(self.values)}"
+        if self.pattern and not re.fullmatch(self.pattern, scalar_text(value)):
+            return f"{self.name}={scalar_text(value)!r} does not match {self.pattern}"
         return None
 
 
-def _k(name: str, group: str, form: str, doc: str, values: tuple[str, ...] = (), status: str = CURRENT) -> Key:
-    return Key(name, group, form, doc, TRUE_FALSE if form == BOOL else values, status)
+def _k(name: str, group: str, form: str, doc: str, values: tuple[str, ...] = (), status: str = CURRENT, pattern: str = "") -> Key:
+    return Key(name, group, form, doc, TRUE_FALSE if form == BOOL else values, status, pattern)
 
 
 VOCAB: dict[str, Key] = {k.name: k for k in (
@@ -268,6 +275,12 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(SOURCE, GROUP_RESULT, TEXT, "branch@commit the result was produced from, for an artifact no Attempt records; old spellings `tree`, `release`"),
     _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store); on an "
        "approach record, the <campaign>/<slug> that replaces it"),
+    _k(REPLAY_SET, GROUP_RESULT, TEXT, "the replay set a run or artifact belongs to, as AREA/TIER: TIER re-verify (its preserved records "
+       "checked again at a new commit, bit for bit) or re-run (our code's timed result run again); one label per area that cites it "
+       "(`research data select --label replay_set=warden/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
+    _k(REPLAY_EXPECT, GROUP_RESULT, TEXT, "the change a replay at current main should show instead of the recorded verdict, with --ref "
+       "naming the ruling: `refused: FORM` (the verifier of record now refuses that form) or `blocked: GATE` (fail-closed refuses the "
+       "session kind until GATE, e.g. V3)", pattern=r"(refused|blocked): \S.*"),
     _k(ABANDONED, GROUP_RESULT, TEXT, "the line of work this evidence belongs to was given up, in a few words; --ref names the note that says why "
                                       "(note:<lane>/<file name without .md>), so nobody builds on it unawares"),
     _k(INTERACTION_ATTEMPT_OF, GROUP_RESULT, TEXT, "on an interaction attempt that is not the cell's figure (refused, or run on an earlier pair): the art: id of "
@@ -292,6 +305,11 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        status=IGNORED),
     _k(FINDING, GROUP_VERIFICATION, TEXT, "a red-team or audit finding in prose (DOWNGRADE / EARNED / HOLDS ...), beside the proof_class verdict it explains"),
     _k(SAME_DEVICE, GROUP_VERIFICATION, BOOL, "whether the verifier ran on the prover's machine"),
+    _k(CUSTODY, GROUP_VERIFICATION, ENUM, "on a run id, by whoever looked at its records: whether custody triage needs more of it (waived: "
+       "nothing more, its logs stay where they are, or are gone; never-ran: it never ran its workload, so it holds no evidence, which "
+       "triage believes only while the run dir shows no sign of a start: no pid in status.json, no started, span_start or sampler_start "
+       "event, no sampler reading, no output; needed: triage reads its records again, which withdraws an earlier waived or never-ran); "
+       "the latest label wins", CUSTODY_VALUES),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",

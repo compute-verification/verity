@@ -208,6 +208,26 @@ def test_handles_and_subscriptions(registry, capsys):
     assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and ALERTS not in out
 
 
+def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
+    rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
+                     "packages/verity/src/verity/ml/tc.py", "packages/verity/src/verity/ir/cut.py", "AGENTS.md", "nowhere/x")
+    assert rc == 0 and [line.split() for line in out.splitlines()] == [
+        ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
+        ["@circuits", "packages/verity/src/verity/ml/tc.py"], ["@proofs", "packages/verity/src/verity/ir/cut.py"],
+        ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
+    monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
+    rc, out, _ = run(capsys, "owners")
+    assert [line.split()[0] for line in out.splitlines()] == ["@infra", "@top"]
+
+
+def test_registry_refuses_a_path_two_handles_own(registry, capsys):
+    reg = json.loads(registry.read_text())
+    reg["handles"][1]["owns"] = [reg["handles"][0]["owns"][0]]
+    registry.write_text(json.dumps(reg))
+    rc, _, err = run(capsys, "owners", "AGENTS.md")
+    assert rc == 2 and "no other handle owns" in err
+
+
 def test_subscriptions_fail_visibly_without_channel_ids(registry, capsys):
     reg = json.loads(registry.read_text())
     reg["channels"]["agent-coordination"]["id"] = None
@@ -227,6 +247,20 @@ def test_ask_tags_one_owner_with_its_user_group_and_carries_no_footer(fake, regi
     assert TOKEN not in out + err
     assert run(capsys, "ask", "--as", "compute-accounting", "--to", "@compute-accounting", "--text", "x")[0] == 2
     assert run(capsys, "ask", "--as", "pous-worker-3", "--to", "@infra", "--text", "x")[0] == 2      # workers aren't on Slack
+
+
+def test_a_post_that_went_out_stands_when_its_permalink_fails(capsys):
+    """A caller that retries on a raise (the monitors' relay) would otherwise post it twice."""
+    class Api:
+        dry_run = False
+
+        def call(self, method, **kw):
+            if method == "chat.getPermalink":
+                raise slack.SlackError("chat.getPermalink: HTTP 429 (rate limited; retry after 1 s)")
+            return {"ok": True, "ts": "1700000000.000100"}
+
+    assert slack._post(Api(), ALERTS, "infra", "hello") == "1700000000.000100"
+    assert capsys.readouterr().out == "1700000000.000100 -\n"
 
 
 def test_ask_without_a_group_id_uses_plain_text_and_the_body_can_come_from_a_file(fake, registry, capsys, tmp_path):
@@ -318,6 +352,19 @@ def broker(fake, monkeypatch):
     monkeypatch.setattr(slack, "post", b)
     monkeypatch.setattr(slack, "oidc_token", b.oidc)
     return b
+
+
+def test_a_not_ok_answer_s_error_and_needed_scopes_are_echoed_only_as_codes():
+    answers = iter([{"ok": False, "error": "missing_scope", "needed": "chat:write,users:read.email"},
+                    {"ok": False, "error": "<html>refused dummy-verity-bot</html>", "needed": "see https://example.invalid/x\n"},
+                    {"ok": False, "error": "invalid_auth\n"}, {"ok": False, "error": 7}])
+    api = slack.Slack(TOKEN, transport=lambda url, data, headers: next(answers))
+    said = []
+    for _ in range(4):
+        with pytest.raises(slack.SlackError) as e:
+            api.call("auth.test")
+        said.append(str(e.value))
+    assert said == ["auth.test: missing_scope (needed scope chat:write,users:read.email)"] + ["auth.test: not ok"] * 3
 
 
 def test_the_transport_is_direct_with_a_token_and_the_broker_without_or_when_forced(monkeypatch):
