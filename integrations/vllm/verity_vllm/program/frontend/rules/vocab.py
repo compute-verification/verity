@@ -11,7 +11,7 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Callable
 
-from verity.ir.defs import bind as ir_bind
+from verity.primitives.circuits.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
 from verity_vllm.program.registry import fa2_check_inf as _f2

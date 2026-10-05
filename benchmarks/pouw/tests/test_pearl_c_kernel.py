@@ -59,8 +59,8 @@ def test_form_s5_stores_code_pairs_at_the_tiled_offsets():
 
 
 def test_kernel_constants_match_the_reference():
-    from verity_pouw.schemes import pearl_c as C
-    from verity_pouw.schemes import pearl_kw as P
+    from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
+    from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
 
     consts = dict(re.findall(r"constexpr uint(?:16|32)_t (\w+) = (0x[0-9A-Fa-f]+);", SOURCE))
     dr, dstd = P.delta_consts(P.H100)
@@ -73,12 +73,12 @@ def test_kernel_constants_match_the_reference():
     import run as R
 
     assert {k: bytes.fromhex(v) for k, v in R.H1_KEYS.items()} == {"k_msg": C.H1_KEYS["message"], "k_leaf": C.H1_KEYS["leaf"]}
-    from verity.commitments.blake3 import blake3
+    from verity.primitives.crypto.blake3 import blake3
 
     assert bytes.fromhex(R.SEED_KEY) == blake3(C.LABELS["seed-A"])
     n256, n16 = re.search(r"NORM_256, NORM_16 = (0x[0-9A-F]+), (0x[0-9A-F]+)", run).groups()
     assert int(n256, 16) == P.f32_to_bf16(P.NOISE_NORM * 32) and int(n16, 16) == P.f32_to_bf16(C.LINE_NORM_V1 * 32)
-    from verity_pouw.audit import ROW_SCHEMA, TILE_SCHEMA, rows_domain
+    from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, TILE_SCHEMA, rows_domain
 
     for name, schema in (("ROW_SCHEMA", ROW_SCHEMA), ("TILE_SCHEMA", TILE_SCHEMA)):
         chars = re.search(rf"__constant__ uint8_t {name}\[(\d+)\] = \{{([^}}]*)\}}", SOURCE)
