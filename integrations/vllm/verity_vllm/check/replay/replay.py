@@ -6,7 +6,7 @@ tier-level `status` in {"pass", "fail", "skipped", "error"}; per-instance entrie
 "computed" (evaluated, but no snapshot of the output exists to compare with — normal in tiers B/C).
 
     uv run verity-vllm replay --log data/logs/m1.jsonl.gz --snapshots data/logs/m1 \
-        --profile vllm_d9105ea80_sm89_eager --tier a --k 3 --seed S --out out/capture/reports/replay_a.json
+        --profile vllm_d9105ea80_sm89_eager --tier a --k 3 --seed S [--jobs N] --out out/capture/reports/replay_a.json
     ... --tier b --step 1 --max-arg-leaves 4000000 [--layers 0,1,2] [--max-instances N] [--evaluator gates|twins|auto]
     ... --tier c                                     # pod only: hours for a real model
 
@@ -73,6 +73,7 @@ from verity.ir.layout import FunctionCall
 from verity.ir.refs import runs
 
 from verity_vllm.check.fold_compare import SnapshotStore, Values, WeightSource, _attach_specs, _component_ranges, _jsonable, _max_rss_gb, fold_log, load_profile
+from verity_vllm.check.replay.tier_a_pool import _distinct_step_order, evaluate_strata
 from verity_vllm.observe.fold.fold import FoldResult
 from verity_vllm.commit import challenge as CH
 
@@ -484,15 +485,14 @@ class Replayer:
                     return sub
         return None
 
-    def evaluate_child(self, m: dict, path: list[tuple[int, int]], rng: random.Random) -> dict:
-        """Tier A evaluation of one child unit of instance `m` along `path` (members drawn from `rng`): argument
-        values by gate from the instance's arguments, expected returns by gate from the instance's output snapshot."""
+    def evaluate_child(self, m: dict, path: list[tuple[int, int]], members: list[int]) -> dict:
+        """Tier A evaluation of one child unit of instance `m` along `path` at `members` (one per level, tier A draws them):
+        argument values by gate from the instance's arguments, expected returns by gate from the instance's output snapshot."""
         k = m["node"]
         t0 = time.time()
         call = self.call(k)
         labels = []
-        for j, nm in path:
-            member = rng.randrange(nm)
+        for (j, _), member in zip(path, members):
             call = FunctionCall(self.circuit, call.scope(), j, member)
             labels.append(f"{call.id}#{member}")
         entry: dict[str, Any] = {"node": k, "name": m["name"], "spec": m["spec"], "step": m["step"],
@@ -519,6 +519,15 @@ class Replayer:
                      first_diff=first, evaluator="gates", twin_id=None, seconds=round(time.time() - t0, 3))
         return entry
 
+    def outcome(self, m: dict, path: list[tuple[int, int]] | None, members: list[int] | None) -> tuple[str, Any]:
+        """One tier A evaluation (the whole instance when `path` is None) as ("ok", entry), ("skipped", reason) or ("error", message)."""
+        try:
+            return "ok", (self.evaluate_instance(m) if path is None else self.evaluate_child(m, path, members))
+        except Skipped as ex:
+            return "skipped", ex.reason
+        except Exception as ex:  # noqa: BLE001 - evaluator / MUFU table problems are reported, not fatal
+            return "error", f"{type(ex).__name__}: {ex}"
+
 
 # ---------------------------------------------------------------------------------------------------------
 # tier A — body exactness per specialization
@@ -526,14 +535,15 @@ class Replayer:
 
 
 def tier_a(result: FoldResult, store: SnapshotStore, weights: WeightSource | None, *, k: int = 3, seed: int,
-           max_arg_leaves: int = 4_000_000, steps: Iterable[int] | None = None) -> dict:
+           max_arg_leaves: int = 4_000_000, steps: Iterable[int] | None = None, jobs: int = 1) -> dict:
     """Body exactness: up to `k` seeded-random instances per specialization (stratified by the full specialization
     label), evaluated bit-exactly against their output snapshots; oversize instances at a child unit.  See the module
-    docstring for the pass rule."""
+    docstring for the pass rule.  `jobs` > 1 evaluates on that many forked workers with the same draw (`tier_a_pool`):
+    the report is the same apart from `jobs`, `seconds` and `max_rss_gb`."""
     t0 = time.time()
     rng = CH.stream(seed)
     snap_steps = sorted(set(store.steps) if steps is None else set(store.steps) & set(int(s) for s in steps))
-    report: dict[str, Any] = {"tier": "a", "status": "pass", "k": k, "seed": seed, "snapshot_steps": snap_steps,
+    report: dict[str, Any] = {"tier": "a", "status": "pass", "k": k, "seed": seed, "jobs": jobs, "snapshot_steps": snap_steps,
                               "max_arg_leaves": max_arg_leaves, "coverage": {}, "instances": [], "uncovered_specs": []}
     try:
         rep = Replayer(result, store, weights, chain=False, snapshots=True)
@@ -543,74 +553,7 @@ def tier_a(result: FoldResult, store: SnapshotStore, weights: WeightSource | Non
     by_spec: dict[str, list[dict]] = defaultdict(list)
     for m in result.instances:
         by_spec[m["spec"]].append(m)
-    report["strata"] = 0
-    for spec in sorted(by_spec):
-        metas = by_spec[spec]
-        cov = {"instances": len(metas), "evaluable": 0, "evaluated": 0, "pass": 0, "fail": 0, "skipped": 0, "error": 0,
-               "granularity": None, "regimes": {}}
-        report["coverage"][spec] = cov
-        cands = [m for m in metas if m["step"] in snap_steps]
-        # Strata (D82): the specialization x the execution regime it ran in.  `k` per stratum; within a stratum the
-        # sample prefers distinct steps (early/late KV lengths) before repeating a step.
-        regimes: dict[str, list[dict]] = defaultdict(list)
-        for m in cands:
-            regimes[_regime(m)].append(m)
-        for rg in sorted(regimes):
-            cov["regimes"][rg] = {"instances": len(regimes[rg]), "pass": 0, "fail": 0, "error": 0, "skipped": 0}
-        report["strata"] += len(regimes)
-        if not cands:
-            present = sorted({m["step"] for m in metas})
-            report["uncovered_specs"].append({"spec": spec, "reason": f"no snapshot step contains it (present at steps {present[:6]}"
-                                                                     f"{'...' if len(present) > 6 else ''}; snapshot steps {snap_steps})"})
-            continue
-        leaves = rep.arg_leaves(cands[0]["node"])
-        path: list[tuple[int, int]] | None = None
-        if leaves <= max_arg_leaves:
-            cov["granularity"] = "instance"
-        else:
-            try:
-                path = rep.plan_child(cands[0]["node"], max_arg_leaves, rng)
-            except Exception as e:  # noqa: BLE001 - reported per spec
-                path = None
-                cov["plan_error"] = f"{type(e).__name__}: {e}"
-            if path is None:
-                report["uncovered_specs"].append({"spec": spec, "reason": f"{leaves} argument leaves exceed max_arg_leaves={max_arg_leaves} "
-                                                                         "and no child unit fits (or its interface is interior)"})
-                continue
-            probe = rep.call(cands[0]["node"])
-            for j, nm in path:
-                probe = FunctionCall(rep.circuit, probe.scope(), j, 0)
-            cov["granularity"] = f"child:{probe.id}"
-            cov["child_arg_leaves"] = sum(t.leaves for t in probe.arg_types())
-        cov["evaluable"] = len(cands)
-        need = sum(min(k, len(ms)) for ms in regimes.values())
-        cov["required"] = need
-        reasons: Counter = Counter()
-        for rg in sorted(regimes):
-            rc = cov["regimes"][rg]
-            need_rg = min(k, len(regimes[rg]))
-            for m in _distinct_step_order(regimes[rg], rng):
-                if rc["pass"] + rc["fail"] + rc["error"] >= need_rg:
-                    break
-                try:
-                    e = rep.evaluate_child(m, path, rng) if path is not None else rep.evaluate_instance(m)
-                except Skipped as ex:
-                    e = {"node": m["node"], "name": m["name"], "spec": spec, "step": m["step"], "status": "skipped", "reason": ex.reason,
-                         "granularity": cov["granularity"]}
-                    reasons[_reason_class(ex.reason)] += 1
-                except Exception as ex:  # evaluator / MUFU table problems are reported, not fatal
-                    e = {"node": m["node"], "name": m["name"], "spec": spec, "step": m["step"], "status": "error",
-                         "reason": f"{type(ex).__name__}: {ex}", "granularity": cov["granularity"]}
-                e["regime"] = rg
-                report["instances"].append(e)
-                cov[e["status"]] += 1
-                rc[e["status"]] += 1
-                if e["status"] != "skipped":
-                    cov["evaluated"] += 1
-        if cov["fail"] or cov["error"] or cov["pass"] < need:
-            if cov["pass"] < need and not (cov["fail"] or cov["error"]):
-                why = "; ".join(f"{r} (x{n})" for r, n in reasons.most_common(3)) or "no evaluation completed"
-                report["uncovered_specs"].append({"spec": spec, "reason": f"{cov['pass']} of {need} required evaluations passed; skipped: {why}"})
+    evaluate_strata(rep, report, by_spec, snap_steps, k=k, max_arg_leaves=max_arg_leaves, rng=rng, jobs=jobs)
     # Served tokens (D82): every TokenSelect instance at a snapshot step, evaluated from its observed operands (the
     # logits boundary); the computed token must equal the token the engine served for that (request, step).  This
     # proves TokenSelect given those logits, not the logits from the roots (that is what the sampled bodies + the
@@ -676,30 +619,6 @@ def vu_population(result: FoldResult, rep: Replayer, max_arg_leaves: int | None,
         return {"status": "error", "error": f"{type(e).__name__}: {e}", "seconds": round(time.time() - t0, 3)}
 
 
-def _regime(m: dict) -> str:
-    """The execution regime of an instance: `prefill` (step 0) or `decode`."""
-    return "prefill" if int(m["step"]) == 0 else "decode"
-
-
-def _distinct_step_order(metas: list[dict], rng: random.Random) -> list[dict]:
-    """A seeded order that visits distinct steps first (round-robin over steps, each step's instances shuffled)."""
-    by_step: dict[int, list[dict]] = defaultdict(list)
-    for m in metas:
-        by_step[m["step"]].append(m)
-    steps = sorted(by_step)
-    rng.shuffle(steps)
-    for st in steps:
-        rng.shuffle(by_step[st])
-    out: list[dict] = []
-    i = 0
-    while len(out) < len(metas):
-        for st in steps:
-            if i < len(by_step[st]):
-                out.append(by_step[st][i])
-        i += 1
-    return out
-
-
 def _served_tokens(rep: "Replayer", result: FoldResult, snap_steps: list[int]) -> dict:
     """Evaluate every TokenSelect instance at a snapshot step from its observed operands and compare with the served token."""
     out: dict[str, Any] = {"steps": [], "evaluated": 0, "equal": 0, "skipped": 0, "mismatch": [], "per_step": {}}
@@ -730,15 +649,6 @@ def _served_tokens(rep: "Replayer", result: FoldResult, snap_steps: list[int]) -
     out["steps"] = sorted(int(x) for x in out["per_step"])
     out["all_rows_equal"] = bool(out["evaluated"]) and not out["mismatch"] and not out["skipped"]
     return out
-
-
-def _reason_class(reason: str) -> str:
-    """Short class of a skip reason for the per-spec summary."""
-    if "no snapshot" in reason or "has no snapshot" in reason:
-        return "operand/output not snapshotted"
-    if "weight source" in reason:
-        return "no weight source"
-    return reason[:80]
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -1104,6 +1014,7 @@ class Options:
     chain_max_nodes: int = option("--chain-max-nodes", type=int, default=8)
     step: int | None = option("--step", type=int, default=None, help="tier b: the step to replay; tier c: replay steps 0..STEP")
     k: int = option("--k", type=int, default=3)
+    jobs: int = option("--jobs", "-j", type=int, default=1, help="tier a: evaluate on this many forked workers (tier_a_pool); the same seed gives the same instances, members and report")
     seed: int | None = option("--seed", type=int, default=None, help="tiers a, chain: the sample's seed (required); tiers b, c: the twin self-check's (default 0)")
     max_arg_leaves: int | None = option("--max-arg-leaves", type=int, default=None, help="tier a default 4000000; tiers b/c default unlimited")
     max_instances: int | None = option("--max-instances", type=int, default=None, help="tier b: replay only this prefix of the step's instances")
@@ -1120,6 +1031,8 @@ class Options:
 def main(a: Options) -> int:
     if a.self_check_n < 3:
         raise UsageError("--self-check-n must be >= 3")
+    if a.jobs < 1:
+        raise UsageError("--jobs must be >= 1")
     if a.seed is None and a.tier in ("a", "chain"):
         raise UsageError(f"--seed is required for tier {a.tier}: its sample is drawn from it")
 
@@ -1145,7 +1058,7 @@ def main(a: Options) -> int:
         if store is None:
             rep = {"tier": "a", "status": "skipped", "reason": "no snapshots.json"}
         else:
-            rep = tier_a(result, store, weights, k=a.k, seed=a.seed, max_arg_leaves=a.max_arg_leaves if a.max_arg_leaves is not None else 4_000_000)
+            rep = tier_a(result, store, weights, k=a.k, seed=a.seed, max_arg_leaves=a.max_arg_leaves if a.max_arg_leaves is not None else 4_000_000, jobs=a.jobs)
     elif a.tier == "chain":
         if store is None:
             rep = {"tier": "chain", "status": "skipped", "reason": "no snapshots.json"}

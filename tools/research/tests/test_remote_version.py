@@ -90,9 +90,11 @@ def test_a_package_that_predates_the_check_fails_closed_and_the_launcher_names_i
 def test_the_runner_refuses_itself_when_it_is_not_the_shipped_package(tmp_path):
     root = tmp_path / "root"
     out = remote.launch_request(_request(root, "shadowed", identity="f" * 16))
-    assert out["started"], "launch_request (called in-process here, no --expect-tool) starts the runner; the runner checks too"
+    assert out["started"] is False and out["fault"] == "ResearchVersionMismatch", \
+        "launch_request (called in-process here, no --expect-tool) starts the runner, which checks too and refuses before its first record"
     run_dir = root / "runs" / "shadowed"
     assert _settled(run_dir)["state"] == "refused"
     refused = json.loads((run_dir / "refused.json").read_text())
+    assert out["refused"] == refused["reason"], "the launch answers with the runner's own refusal"
     assert refused["fault"] == "ResearchVersionMismatch" and "identity " + "f" * 16 in refused["reason"]
     assert not (root / "ran-shadowed").exists() and not (run_dir / "job.json").exists(), "the workload never ran"
