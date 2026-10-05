@@ -9,7 +9,7 @@ import random
 from collections import defaultdict
 
 import pytest
-from verity_network_warden import active
+from verity_network_warden import active, online
 from verity_network_warden.active import (
     DATA,
     LAST,
@@ -70,16 +70,18 @@ def random_instance(rng: random.Random, T: int = 4, windows: int = 3):
     return frames, ready, syncs
 
 
-def feed_shaper(frames, ready, syncs, params, sync_set, arrive_bucket=None):
-    """Drive a `Shaper` for the windows of `syncs`, each frame arriving before the tick of its arrival bucket (its
-    ready bucket by default), in a shuffled order. Returns its records and its rows."""
+def feed_shaper(frames, ready, syncs, params, sync_set, arrive_bucket=None, prover=None, windows=None):
+    """Drive a `Shaper` for the windows of `syncs` (or `windows` of them, declared by `prover`), each frame arriving
+    before the tick of its arrival bucket (its ready bucket by default), in a shuffled order. Returns its records and
+    its rows."""
     arrive_bucket = arrive_bucket or ready
-    shaper, records, rows = Shaper(Warden("responses", params), syncs, sync_set), [], []
+    windows = len(syncs) if windows is None else windows
+    shaper, records, rows = Shaper(Warden("responses", params), syncs, sync_set, prover, windows), [], []
     rng = random.Random(len(frames))
     order = list(range(len(frames)))
     rng.shuffle(order)
     sent = set()
-    for t in range(len(syncs) * params.buckets):
+    for t in range(windows * params.buckets):
         for k in order:
             if k not in sent and arrive_bucket[k] <= t:
                 shaper.arrive(k, frames[k], ready[k])
@@ -106,6 +108,26 @@ def test_the_shaper_is_run_shapers_rule():
             last = max(h, r, last)
             hands.append(last)
         assert shaper.hands == [h for h in hands if h < len(syncs) * P.buckets]
+
+
+@pytest.mark.parametrize("name", ["last", "cover-2-1", "cover-2-0-fallback"])
+def test_a_shaper_with_an_online_prover_declares_what_it_declares_offline(name):
+    """Frames arriving in any order at their ready buckets: the shaper's prover declares each window's sync at its
+    first tick, the values `online.declare` gives on the whole run, and the records are `run_shaper`'s under them."""
+    P = GridParams(buckets=4, allocation=2, frame_bytes=1)
+    sync_set = SyncSet((0, 1, 2), (1, 2, 1 / 2))
+    envelope = ClockSync(2, 1 / 2)
+    rng = random.Random(8)
+    for _ in range(200):
+        frames, ready, _ = random_instance(rng, windows=4)
+        ready = [max(r, f.anchor + 1) for f, r in zip(frames, ready, strict=True)]
+        order = sorted(range(len(frames)), key=lambda j: (ready[j], frames[j].anchor, j))
+        frames, ready = [frames[j] for j in order], [ready[j] for j in order]
+        prover = online.Prover(sync_set, P.buckets, online.rule(name), envelope)
+        shaper, records, _ = feed_shaper(frames, ready, [], P, sync_set, prover=prover, windows=4)
+        want, _ = online.declare([(frames, ready)], sync_set, P.buckets, online.rule(name), 4, envelope)
+        assert shaper.syncs == want
+        assert records == run_shaper(frames, ready, want, Warden("responses", P))
 
 
 def test_out_of_set_advice_duplicates_and_overflow_fail_closed():

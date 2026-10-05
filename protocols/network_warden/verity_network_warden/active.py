@@ -23,8 +23,9 @@ then releases min(queue, r) of them, left-packed, and the proxy writes those and
 **Ingress.** A frame read from the link at time s is enqueued at bucket ⌈s/τ_in⌉ (`calibration.size_ingress_ms`'s
 model) and released by the ingress `Warden` at r_in into its stream's server connection.
 
-**Advice.** The proxy runs the windows of its declared syncs, one per window, which the prover gives before the run.
-A frame anchored past them is never handed, nor is any frame behind it (`schedule.handing_buckets`).
+**Advice.** The proxy runs the windows of its declared syncs, one per window, which the prover gives before the run,
+or which an online prover (`online.Prover`) declares at each window's first tick from the frames ready by then. A
+frame anchored past them is never handed, nor is any frame behind it (`schedule.handing_buckets`).
 
 **Faults fail closed** through `Warden.fault`: the rest of the window is padding, the queue is dropped, and the status
 names the first reason (W6). Since the Program's grid carries a queue into the next window, an egress window that
@@ -64,6 +65,7 @@ from verity_network_warden.grid import (
     Warden,
     row_count,
 )
+from verity_network_warden.online import Prover
 from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 
 HEADER = struct.Struct(">BII")
@@ -116,10 +118,15 @@ class Shaper:
     Fed every frame at its ready bucket, the records equal `run_shaper`'s and `hands` its hand times.
 
     `queued` is what the warden's queue would hold had no fault dropped it. A window that closes faulted with frames
-    still queued faults the next one too, with the same reason: the Program's grid carries them over."""
+    still queued faults the next one too, with the same reason: the Program's grid carries them over.
 
-    def __init__(self, warden: Warden, syncs: Sequence[ClockSync], sync_set: SyncSet) -> None:
+    With a `prover` (`online.Prover`), the syncs after the given ones are its: it sees every frame the shaper takes, and
+    declares each of the first `windows` windows' syncs at the window's first tick, before anything is handed."""
+
+    def __init__(self, warden: Warden, syncs: Sequence[ClockSync], sync_set: SyncSet, prover: Prover | None = None,
+                 windows: int | None = None) -> None:
         self.warden, self.syncs, self.sync_set = warden, list(syncs), sync_set
+        self.prover, self.windows = prover, len(self.syncs) if windows is None else windows
         self.pending: dict[int, tuple[LogicalFrame, int]] = {}
         self.next = 0
         self.h = self.last = self.t = self.queued = 0
@@ -138,9 +145,14 @@ class Shaper:
             self.warden.fault(Reason.OVERFLOW)
         else:
             self.pending[position] = (frame, ready)
+            if self.prover is not None:
+                self.prover.arrive(0, position, frame, ready)
 
     def tick(self) -> tuple[Row, Record | None]:
         T = self.warden.params.buckets
+        if self.prover is not None and self.t % T == 0 and self.t // T == len(self.syncs) < self.windows:
+            self.syncs.append(self.prover.declare())
+            self._check_advice()
         while self.next in self.pending:
             frame, ready = self.pending[self.next]
             w = frame.anchor // T
@@ -230,7 +242,7 @@ class _Stream:
 
 class Proxy:
     """The active warden on one link: `run(reader, writer)` serves the link connection from `origin`, the clock's time
-    of bucket 0, for the windows of `syncs`, then closes it.
+    of bucket 0, for the windows of `syncs` (or `windows` of them, the rest declared by `prover`), then closes it.
 
     - `publish(record, params)` receives every window's record, egress and ingress, as it closes (by default they are
       kept in `records`);
@@ -244,13 +256,14 @@ class Proxy:
                  clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
                  publish: Callable[[Record, GridParams], None] | None = None,
-                 egress_link: str = "responses", ingress_link: str = "requests") -> None:
+                 egress_link: str = "responses", ingress_link: str = "requests",
+                 prover: Prover | None = None, windows: int | None = None) -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
         self.upstream, self.egress, self.ingress = upstream, egress, ingress
         self.origin, self.slack, self.clock, self.sleep = origin, slack, clock, sleep
-        self.windows = len(syncs)
-        self.shaper = Shaper(Warden(egress_link, egress), syncs, sync_set)
+        self.windows = len(syncs) if windows is None else windows
+        self.shaper = Shaper(Warden(egress_link, egress), syncs, sync_set, prover, self.windows)
         self.bucketer = Bucketer(Warden(ingress_link, ingress))
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
