@@ -573,7 +573,7 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
 
 
 def test_the_cache_reuses_a_targets_result_only_while_every_read_is_unchanged(tmp_path):
-    """Two runs of one target: the second reuses it.  An entry whose recorded digest of one file it read no longer matches (as
+    """Two runs of one target: the second reuses it.  An entry whose recorded digest of one module it held no longer matches (as
     after an edit) is not reused, and the run records a new entry."""
     import subprocess
     import sys
@@ -587,9 +587,9 @@ def test_the_cache_reuses_a_targets_result_only_while_every_read_is_unchanged(tm
     assert "1 of 2 targets reused" in run("F32Mul_v1", "rope-head")           # per target: the new one runs, the old one is reused
     (entry,) = [p for p in tmp_path.glob("*/*/*.json") if json.loads(p.read_text())["key"]["request"]["target"][1] == "F32Mul_v1"]
     e = json.loads(entry.read_text())
-    assert "packages/verity/src/verity/ir/defs.py" in e["reads"]["files"] and e["reads"]["dirs"]
+    assert "verity.ir.defs" in e["reads"]["modules"] and e["reads"]["enums"]
     assert e["key"]["version"] == entry.parent.parent.name and e["key"]["request"]["target"] == ["definition", "F32Mul_v1"]
-    e["reads"]["files"]["packages/verity/src/verity/ir/defs.py"] = "0" * 64
+    e["reads"]["modules"]["verity.ir.defs"]["d"] = "0" * 64
     entry.write_text(json.dumps(e))
     assert "0 of 1 targets reused" in run("F32Mul_v1") and len(list(entry.parent.glob("*.json"))) == 2
 

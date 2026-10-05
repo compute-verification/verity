@@ -58,11 +58,12 @@ def test_drift_posts_when_its_findings_change_and_clears_once_none_is_left():
     def rep(*entries, strays=()):
         return {"commit": "c", "entries": [{"path": p, "state": s, "restart": r, **({"tree": "/t"} if t else {})}
                                            for p, s, r, t in entries], "strays": list(strays)}
-    a = rep(("/b/a.py", "stale", None, False), ("/t/x", "missing", None, True), ("/b/c.py", "ok", "restart tmux:c", False),
-            strays=["/b/a.py.bak-1"])
+    a = rep(("/b/a.py", "stale", None, False), ("/t/x", "missing", None, True), ("/b/c.py", "ok", "restart systemd:c", False),
+            ("/u/d.service", "held", None, False), strays=["/b/a.py.bak-1"])
     P.drift_step(state, {"vy-nebius-1": a, "vy-nebius-2": {"error": "ssh: timed out"}}, post)
     assert len(posts) == 1 and "`vy-nebius-1` restart 1, stale 1, stray 1." in posts[0]
     assert "• vy-nebius-1 stale /b/a.py" in posts[0] and "/t/x" not in posts[0]       # a tree's missing file is no finding
+    assert "/u/d.service" not in posts[0]                                              # nor a held one
     P.drift_step(state, {"vy-nebius-1": a}, post)
     P.drift_step(state, {"vy-nebius-1": {"error": "ssh: timed out"}}, post)
     assert len(posts) == 1

@@ -643,6 +643,44 @@ def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cann
         ST.main(["--model", "qwen", str(files["q"]), "--out", str(out)])
 
 
+def test_the_served_table_labels_a_windows_fraction_as_the_replay_diagnostic_beside_proving_cost(tmp_path):
+    """A window's row comes from its accepting audit: credited against claimed GEMMs, capacity, the certified fraction with
+    its uncertified end, the overhead over cuBLASLt and a proving-cost cell that points to hidden-zk until it has a number;
+    a rejecting audit is refused."""
+    inputs = tmp_path / "inputs.json"
+    inputs.write_text(json.dumps({"m": 1, "inputs": [{"pass": "decode", "run": "rq", "manifest_sha256": "ab", "matmul": 0,
+                                                     "k": 4096, "n": 4096, "NT": 64, "W": 64, "w_max": 1, "method": "census",
+                                                     "drawn": 64, "openings_failed": 0, "failures": 0, "share_max": 5e-5}]}))
+    audit = lambda n, cap, ok=True: {
+        "ok": ok, "scheme": "pearl-c-sm120-v1-h2", "shape": [8192, 8192, 8192], "t_s": "t0", "t_d": "t1", "verifier_commit": "c",
+        "gemms": {"0": n // 2, "1": n - n // 2}, "tiles": [{"ok": True}] * 3,
+        "controls": [{"label": "tampered", "ok": False}, {"label": "wrong salt", "ok": False}],
+        "checks": [{"check": "gamma", "ok": ok}],
+        "fraction": {"credited_gemms": n, "capacity_gemms": cap, "uncertified_fraction": n / cap, "fraction": 0.98 * n / cap,
+                     "gamma": "1/100", "eps_s": "1/100", "slowdown": cap / n}}
+    paths = []
+    for i, doc in enumerate((audit(5_500, 10_000.4), audit(5_400, 10_000.4))):
+        paths.append(tmp_path / f"a{i}.json")
+        paths[-1].write_text(json.dumps(doc))
+    out = tmp_path / "t"
+    assert ST.main(["--model", "qwen", str(inputs), "--window", "w0", "r0", str(paths[0]), "--window", "w1", "r1", str(paths[1]),
+                    "--out", str(out)]) == 0
+    w0, w1 = json.loads((out / "table.json").read_text())["windows"]
+    assert (w0["credited_gemms"], w0["claimed_gemms"], w0["tiles_accepted"], w0["proving_cost"]) == (5_500, 5_500, 3, None)
+    assert w0["controls"] == {"tampered": "REJECT", "wrong salt": "REJECT"} and w1["fraction"] == pytest.approx(0.98 * 0.54, 1e-4)
+    md = (out / "table.md").read_text()
+    assert "## Replay diagnostic: salt-to-deadline windows" in md and "a diagnostic, not a verification" in md
+    assert ("| `w0` | `r0` | pearl-c-sm120-v1-h2 | t0 | 5,500 / 5,500 | 10,000 | 53.90% [0.5390, 0.5500] | 1.818 | "
+            "— (hidden-zk) | 3 / 3 | tampered REJECT, wrong salt REJECT |") in md
+    assert "spans 52.92% to 53.90% (spread 0.98%, 98.0 basis points)" in md
+    assert ST.main(["--model", "qwen", str(inputs), "--window", "w0", "r0", str(paths[0]),
+                    "--proving-cost", "pearl-c-sm120-v1-h2", "$1.00 per GEMM", "--out", str(out)]) == 0
+    assert "| $1.00 per GEMM | 3 / 3 |" in (out / "table.md").read_text()
+    paths[1].write_text(json.dumps(audit(5_400, 10_000.4, ok=False)))
+    with pytest.raises(ValueError, match="did not accept"):
+        ST.main(["--model", "qwen", str(inputs), "--window", "w1", "r1", str(paths[1]), "--out", str(out)])
+
+
 FH = load("pearl_c_vllm_forming_headroom", KERNEL.parent / "pearl_c_vllm" / "forming_headroom.py")
 
 
