@@ -7,7 +7,8 @@ Checked today, against ``allowlists/p12_shared_keys.json``:
 * ``row-id-split``: splitting a string on ``"__"`` (``split``/``rsplit``/``partition``/``rpartition``), the other way
   the row id gets parsed.
 * ``root-list``: a hand-written list, tuple or set of string literals naming code roots (``verity_vllm``, ``verity``,
-  ``research``, ``integrations/vllm``, ``verity/...``, ``tools/research/...`` or paths under them), which is
+  ``research``, ``integrations/vllm``, ``verity/...``, ``catalog/...`` (its census aside), ``kernels/...``,
+  ``experimental/...``, ``tools/research/...`` or paths under them), which is
   how code identity gets defined outside the one ``code_identity()``.
 
 The owners, ``config.py`` (row-id grammar) and ``pipeline/identity.py`` (code identity), do not exist yet; the modules
@@ -28,7 +29,8 @@ RULE = "P12 (each shared key has one owner)"
 OWNERS = frozenset({"verity_vllm/config.py", "verity_vllm/pipeline/identity.py", "verity_vllm/target_family.py",
                     "verity_vllm/pipeline/source_identity.py", "verity_vllm/pipeline/release_json.py"})
 ROW_REGEX = re.compile(r"__\(?(?:\?:)?(?:tp|bi|b|i|o|c)?\(?\\d|__\[\^_\]|\[\^_\]\+__")
-CODE_ROOT = re.compile(r"^(?:\.\./)*(verity_vllm|verity|research|integrations/vllm|verity|tools/research)(?:/|$)")
+CODE_ROOT = re.compile(r"^(?:\.\./)*(?:(verity_vllm|verity|verity_catalog|verity_kernels|verity_experimental|research|integrations/vllm|tools/research)(?:/|$)"
+                       r"|catalog/(?!census)|kernels/|experimental/)")
 
 
 def file_violations(src: str, rel: str) -> list[R.Violation]:
@@ -78,10 +80,10 @@ def test_detectors_on_examples() -> None:
         "TP = re.compile(r'__tp(\\d+)__')\n"
         "def batch(row):\n"
         "    m = re.search(r'__b(\\d+)__', row)\n"
-        "    return row.split('__')[4], ['git', 'status', '--', 'verity_vllm', '../../packages/verity/src/verity']\n"
+        "    return row.split('__')[4], ['git', 'status', '--', 'verity_vllm', '../../verity']\n"
     )
     got = sorted((v.kind, v.detail) for v in file_violations(bad, "verity_vllm/pipeline/x.py"))
-    assert got == [("root-list", "verity_vllm"), ("root-list", "verity_vllm, ../../packages/verity/src/verity"),
+    assert got == [("root-list", "verity_vllm"), ("root-list", "verity_vllm, ../../verity"),
                    ("row-id-regex", "__b(\\d+)__"), ("row-id-regex", "__tp(\\d+)__"), ("row-id-split", "split('__')")], got
     good = "MODS = ('verity_vllm.program', 'verity_vllm.check')\nKEY = 'a__b'\nx = name.split('_')\n"
     assert file_violations(good, "verity_vllm/pipeline/x.py") == []
