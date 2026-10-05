@@ -68,17 +68,45 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
             assert live["coins"] == ("live-os" if os.environ.get("FC_COINS") == "os" else "os-seed-prf")
 
 
-def _fp_class(dtype: str, K: int):
-    import importlib.util
-
+def _gemm_fp():
     spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[1] / "pod" / "gemm_fp.py")
     gemm_fp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gemm_fp)
+    return gemm_fp
+
+
+def _fp_class(dtype: str, K: int):
     CS.cache_slot_circuits()
-    units = PU.partition_units(gemm_fp.program(dtype, K, 4), "q-word")
+    units = PU.partition_units(_gemm_fp().program(dtype, K, 4), "q-word")
     ((s, cl),) = units.classes().items()
     act, uc = units.activation(cl.definition), cl.representative
     return units, s, cl, act, uc, CS.sources(act, uc, CS.owners_of(units, cl.definition.id))
+
+
+def test_a_partitions_binding_and_owners_are_its_own_when_a_freed_partitions_address_is_reused(monkeypatch):
+    """`partition_binding` and `owners_of` cache per `PartitionUnits` object, so a partition freed while cached leaves no entry
+    that a later partition allocated at its address could read (test_wired_links' flat staging once bound the freed wired
+    partition's digest that way). Two programs alternate, each partition freed after its binding, with every address made
+    one (`id` constant in `class_statement`), so a cache keyed by address reads the other program's entry every time."""
+    import gc
+    import weakref
+
+    from verity.ir import partition_object as PO
+
+    monkeypatch.setattr(CS, "id", lambda o: 0, raising=False)
+    gemm_fp = _gemm_fp()
+    programs = [gemm_fp.program("e4m3", K, 4) for K in (128, 256)]
+    bindings = len(CS._BINDINGS)
+    for i in range(16):
+        units = PU.partition_units(programs[i % 2], "q-word")
+        assert CS.partition_binding(units, "q-word")[0] == PO.digest(PO.build(units.program, units.query))
+        ((_s, cl),) = units.classes().items()
+        assert CS.owners_of(units, cl.definition.id)
+        assert len(CS._BINDINGS) == bindings + 1 and len(CS._OWNERS) == 1
+        gone = weakref.ref(units)
+        del units
+        gc.collect()
+        assert gone() is None and len(CS._BINDINGS) == bindings and not CS._OWNERS
 
 
 @pytest.mark.parametrize("dtype", ["e4m3", "nvf4", "mxf4"])
@@ -360,13 +388,17 @@ def test_core_row_prefixes_name_the_row_length_only_and_no_old_frames_prefix():
 
 
 def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache(monkeypatch, tmp_path: Path):
-    pkg, src = Path(CS.__file__).parent, tmp_path / "src"          # verity_flock's sources, as the stage key's code digest reads them
-    for f in pkg.rglob("*.py"):
-        (src / f.relative_to(pkg)).parent.mkdir(parents=True, exist_ok=True)
-        (src / f.relative_to(pkg)).write_bytes(f.read_bytes())
+    import verity
+
+    src = {}                                                       # the packages' sources, as the stage key's code digest reads them
+    for name, pkg in (("verity_flock", Path(CS.__file__).parent), ("verity", Path(verity.__file__).parent)):
+        src[name] = tmp_path / "src" / name
+        for f in pkg.rglob("*.py"):
+            (src[name] / f.relative_to(pkg)).parent.mkdir(parents=True, exist_ok=True)
+            (src[name] / f.relative_to(pkg)).write_bytes(f.read_bytes())
     find_spec = importlib.util.find_spec
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: SimpleNamespace(submodule_search_locations=[str(src)])
-                        if name == "verity_flock" else find_spec(name, *a))
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: SimpleNamespace(submodule_search_locations=[str(src[name])])
+                        if name in src else find_spec(name, *a))
 
     def fresh(s):
         (CS._CTX["out"] / s[:16]).mkdir(parents=True, exist_ok=True)
@@ -389,11 +421,12 @@ def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache
 
     assert not cached("first") and built == [1]
     assert cached("again") and built == [1]                            # a cache hit composes nothing
-    sha = src / "sha512_circuit.py"
+    sha = src["verity"] / "ml" / "boolean" / "sha512.py"
     assert "CARRY_EVERY = 5" in sha.read_text()
     sha.write_text(sha.read_text().replace("CARRY_EVERY = 5", "CARRY_EVERY = 4"))
     assert not cached("sha512-parameter") and built == [1, 1]          # a SHA-512 parameter is in the key
-    (src / "class_statement.py").write_text((src / "class_statement.py").read_text() + "\n# another version\n")
+    cs = src["verity_flock"] / "class_statement.py"
+    cs.write_text(cs.read_text() + "\n# another version\n")
     assert not cached("code") and built == [1, 1, 1]                   # and so is the code's version
 
 

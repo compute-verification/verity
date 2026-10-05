@@ -589,7 +589,7 @@ class S3Remote:
                     return out
                 with out:
                     err_body = out.read()
-                if (resp.status >= 500 or resp.status == 429) and attempt < RETRIES:
+                if (resp.status >= 500 or resp.status == 429) and attempt < retries:
                     time.sleep(retry_delay(resp.headers.get("Retry-After"), attempt))
                     continue
                 raise urllib.error.HTTPError(url, resp.status, resp.reason, resp.headers, io.BytesIO(err_body))   # other 4xx are the caller's (404 = absent, 403 = credentials)

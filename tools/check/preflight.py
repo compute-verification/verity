@@ -59,7 +59,7 @@ def _module(path: Path, name: str):
     return m
 
 
-LA = _module(ROOT / "tools" / "check" / "lean_audit.py", "check_preflight_lean_audit")
+LA = _module(ROOT / "tools" / "lean" / "lean_audit.py", "check_preflight_lean_audit")
 CHECK = _module(ROOT / "tools" / "check" / "check.py", "check_preflight_check")
 SLOT = _module(ROOT / "tools" / "check" / "slot.py", "check_preflight_slot")
 

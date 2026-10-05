@@ -32,7 +32,8 @@ def _sha(b: bytes) -> str:
 
 def _tree(tmp_path: Path, *, rustflags: str = "-C target-cpu=x86-64-v3", pinned: bool = True) -> Path:
     t = tmp_path / "tree"
-    (t / "tools" / "check").mkdir(parents=True)
+    for d in ("check", "lean"):
+        (t / "tools" / d).mkdir(parents=True)
     (t / "tools" / "check" / "pod_setup.sh").write_text("set -e\nUV_VERSION=${UV_VERSION:-0.12.20}\n")
     for pkg, deps in (("backends/flock/verifier/lean", []), ("pkg/a", [{"type": "git", "name": "mathlib", "rev": "r1"}])):
         d = t / pkg
@@ -43,7 +44,7 @@ def _tree(tmp_path: Path, *, rustflags: str = "-C target-cpu=x86-64-v3", pinned:
         (d / "lake-manifest.json").write_text(json.dumps({"packages": deps}))
     (t / "backends" / "flock" / "verifier" / "upstream.json").write_text(json.dumps({"upstream": {"sha256": _sha(UPSTREAM), "rustflags": rustflags}}))
     deps = {PF.LA.deps_key(t / "pkg" / "a"): {"package": "pkg/a", "sha256": _sha(BUNDLE), "bytes": len(BUNDLE), "run": "r1"}} if pinned else {}
-    (t / "tools" / "check" / "lean-deps.json").write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": deps}))
+    (t / "tools" / "lean" / "lean-deps.json").write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": deps}))
     for args in (["init", "-q"], ["add", "."], ["commit", "-q", "-m", "tree"]):         # not this machine's git config (a signing helper)
         subprocess.run([GIT, "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=t, check=True, capture_output=True,
                        env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"})
