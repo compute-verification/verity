@@ -275,7 +275,8 @@ def test_a_machine_that_cannot_make_the_clone_directory_refuses_the_run(tmp_path
     sha = _git(repo, "rev-parse", "HEAD")
     subprocess.run(["git", "clone", "-q", "--shared", str(repo), str(root / "src" / sha)], check=True)
     (root / "scratch").write_text("")
-    assert remote.launch_request(_request(root, root / "src" / sha, sha, "r-x"))["started"]
+    out = remote.launch_request(_request(root, root / "src" / sha, sha, "r-x"))
+    assert not out["started"] and out["fault"] == "CloneRefused", out          # refused before its first record: never `launched`
     wait_runner(root / "runs" / "r-x")
     refused = json.loads((root / "runs" / "r-x" / "refused.json").read_text())
     assert refused["fault"] == "CloneRefused" and "could not create a directory for the clone (NotADirectoryError" in refused["reason"]
@@ -431,7 +432,8 @@ def test_the_machine_refuses_a_tree_it_cannot_clone_as_the_shipped_commit(tmp_pa
     (root / "src" / plain).mkdir(parents=True)
     for sha, why in ((moved, f"is at {head}, not {moved}, the commit the run was shipped for"),
                      (plain, "is not the top level of a git checkout")):
-        assert remote.launch_request(_request(root, root / "src" / sha, sha, f"r-{sha[0]}", custody=True))["started"]
+        out = remote.launch_request(_request(root, root / "src" / sha, sha, f"r-{sha[0]}", custody=True))
+        assert not out["started"] and out["fault"] == "CloneRefused" and why in out["refused"], out
         run_dir = root / "runs" / f"r-{sha[0]}"
         wait_runner(run_dir)
         refused = json.loads((run_dir / "refused.json").read_text())

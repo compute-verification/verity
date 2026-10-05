@@ -5,6 +5,7 @@ read or resolved, and nothing another target or the task list read."""
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -73,15 +74,23 @@ def SynIdle(B, S, a, b):
     # what a check looks up in a module, which runs none of its code: imported by the first target's check, already loaded for
     # the next one's
     "syn/reg.py": 'KINDS = {"SynTop_v1": "top"}\n',
-    # the checks: a Definition's gate count, its pin, and a value memoized across a run's targets (computed by `syn.h`)
+    # the checks: a Definition's gate count, its value on one input (its evaluators run), its pin, and a value memoized across a
+    # run's targets (computed by `syn.h`)
     "syn/check.py": """
 def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
+    import inspect
+    import sys
+
+    from verity.evaluation.reference import evaluate
+
+    inspect.getmodule(sys._getframe())                 # as torch's import does: it looks for every loaded module's source
     if "h" not in memo:
         from syn import h
         memo["h"] = h.compute()
     from syn import reg
     pin = pins.get("pieces", {}).get(fn.id)
-    return {"failures": [], "warnings": [], "gates": fn.gates, "h": memo["h"], "pin": pin, "kind": reg.KINDS.get(fn.id)}
+    return {"failures": [], "warnings": [], "gates": fn.gates, "value": evaluate(fn, 3, 0x0105), "h": memo["h"], "pin": pin,
+            "kind": reg.KINDS.get(fn.id)}
 """,
     # the bindings, as the harness runs them (`targets._produce`), and the families the suite keeps of what their roots reach
     "syn/catalog.py": """
@@ -106,6 +115,22 @@ def made():
 def sized():
     from syn import ksize, kdef
     return [bind(kdef.SynK, K=ksize.K + 1)]
+
+
+def xor():
+    from syn import xdef
+    return [bind(xdef.SynX)]
+
+
+def setknob():
+    from syn import knob, ksize
+    knob.N[0] = ksize.K + 1
+    return []
+
+
+def knobbed():
+    from syn import kn
+    return [bind(kn.SynKn)]
 
 
 BINDINGS = [(("_core_roots",), core), (("_model_roots:SynOther_v1",), model)]
@@ -142,7 +167,57 @@ def SynK(B, S, a, b):
     return out
 """,
     "syn/ksize.py": "K = 1\n",
+    # a primitive whose evaluator reads a constant of another module, and the Definition that calls it
+    "syn/consts.py": "MASK = 0xFFFF\n",
+    "syn/xkern.py": """
+from verity.ir import primitive
+
+from syn.consts import MASK
+from syn.prims import V
+
+
+@primitive("SynXor", 1, [("a", V), ("b", V)], V)
+def SynXor(a, b):
+    return (a ^ b) & MASK
+""",
+    "syn/xdef.py": """
+from verity.ir import composite
+
+from syn.xkern import SynXor
+from syn.prims import V
+
+
+@composite("SynX", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynX(B, S, a, b):
+    return B.call(SynXor, a, b)
+""",
+    # a Definition whose body reads module state another binding sets from a module only that binding read
+    "syn/knob.py": "N = [1]\n",
+    "syn/kn.py": """
+from verity.ir import composite
+
+from syn.prims import SynAdd, V
+
+
+@composite("SynKn", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynKn(B, S, a, b):
+    from syn import knob
+    out = a
+    for _ in range(knob.N[0]):
+        out = B.call(SynAdd, out, b)
+    return out
+""",
     "targets.py": """
+import importlib
+import pkgutil
+
+
+def load_registries():
+    import syn
+    for m in pkgutil.iter_modules(syn.__path__):
+        importlib.import_module(f"syn.{m.name}")
+
+
 def _core_roots():
     return ["SynTop_v1"]
 
@@ -176,8 +251,13 @@ inner = CC._interpreter_dirs
 CC._interpreter_dirs = lambda: (*inner(), str(repo) + "/")      # the checker's own modules come from the repository
 CC.trace(root)
 
-# the registries, imported before any check, as `load_registries` does
-import syn.extra, syn.idle, syn.kdef, syn.other, syn.top  # noqa: E401
+# the registries, imported before any check: enumerated by the catalog's own `load_registries`, or by name without one
+import runpy
+load = runpy.run_path(str(root / "targets.py")).get("load_registries")
+if load is not None:
+    load()
+else:
+    import syn.extra, syn.idle, syn.kdef, syn.other, syn.top
 from syn import catalog, check
 
 suite = {}
@@ -207,8 +287,10 @@ def _tree(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _run(root: Path) -> dict:
-    r = subprocess.run([sys.executable, "-c", HARNESS, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO)
+def _run(root: Path, harness: str = HARNESS) -> dict:
+    # no bytecode: an edit that keeps a file's size within the second its bytecode was written would run the old code
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO, env=env)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout.strip().splitlines()[-1])
     assert not out["stats"]["untraced"] and not out["stats"]["errors"] and not out["stats"]["changed"], out
@@ -220,6 +302,12 @@ def _edit(root: Path, rel: str, old: str, new: str) -> None:
     text = p.read_text()
     assert old in text
     p.write_text(text.replace(old, new, 1))
+
+
+def _values(root: Path, target: str) -> list:
+    """The values every stored entry of ``target`` reported."""
+    return sorted(e["report"]["value"] for p in (root / "cache").glob("*/*/*.json")
+                  if (e := json.loads(p.read_text()))["key"]["request"]["target"][1] == target)
 
 
 def _entry(root: Path, target: str) -> dict:
@@ -235,13 +323,15 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
     assert _run(root)["hits"] == []
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
     top, other = _entry(root, "SynTop_v1")["reads"], _entry(root, "SynOther_v1")["reads"]
-    assert {"syn/top.py", "syn/sub.py", "syn/prims.py", "syn/check.py", "syn/h.py"} <= set(top["files"])
-    assert {"syn/other.py", "syn/prims.py", "syn/h.py"} <= set(other["files"])
-    assert not {"syn/idle.py", "syn/top.py", "syn/sub.py"} & set(other["files"]) and "syn/idle.py" not in top["files"]
+    assert {"syn.top", "syn.sub", "syn.prims", "syn.check", "syn.h"} <= set(top["modules"])
+    assert {"syn.other", "syn.prims", "syn.h"} <= set(other["modules"])
+    assert not {"syn.idle", "syn.top", "syn.sub"} & set(other["modules"]) and "syn.idle" not in top["modules"]
+    assert not [f for f in [*top["files"], *other["files"]] if f.endswith(".py")]   # modules are held by name, not path
     assert set(top["units"]) == {"targets.py#_core_roots", "targets.py#common"}
     assert set(other["units"]) == {"targets.py#_model_roots:SynOther_v1", "targets.py#common"}
     assert set(top["pins"]) == {"pins.json#pieces#SynTop_v1"} and set(other["pins"]) == {"pins.json#pieces#SynOther_v1"}
     assert "targets.py" not in top["files"] and "pins.json" not in top["files"]
+    assert set(top["enums"]) == {"syn"} and {"top", "other", "idle"} <= set(top["enums"]["syn"])   # `load_registries` listed it
 
 
 def test_editing_a_registry_module_no_target_resolves_reuses_every_target(tmp_path):
@@ -289,7 +379,7 @@ def test_a_target_that_would_reuse_a_memoized_result_reruns_when_its_dependency_
     never read `syn/h.py`.  Each traced check has a memo of its own, so both hold it."""
     root = _tree(tmp_path)
     _run(root)
-    assert "syn/h.py" in _entry(root, "SynTop_v1")["reads"]["files"]
+    assert "syn.h" in _entry(root, "SynTop_v1")["reads"]["modules"]
     _edit(root, "syn/h.py", "return 7", "return 8")
     assert _run(root)["hits"] == []
 
@@ -299,7 +389,7 @@ def test_a_module_an_earlier_target_imported_is_held_by_every_check_that_imports
     yet what it looks up there is its verdict."""
     root = _tree(tmp_path)
     _run(root)
-    assert "syn/reg.py" in _entry(root, "SynOther_v1")["reads"]["files"] and "syn/reg.py" in _entry(root, "SynTop_v1")["reads"]["files"]
+    assert all("syn.reg" in _entry(root, t)["reads"]["modules"] for t in ("SynOther_v1", "SynTop_v1"))
     _edit(root, "syn/reg.py", '"top"', '"tip"')
     assert _run(root)["hits"] == []
 
@@ -318,7 +408,7 @@ def test_a_registry_module_a_binding_imports_reruns_only_what_that_binding_made(
     _bindings(root, families=("SynSub_v1",))
     _run(root)
     top, sub = _entry(root, "SynTop_v1")["reads"], _entry(root, "SynSub_v1")["reads"]
-    assert "syn/extra.py" in top["files"] and "syn/extra.py" not in sub["files"]
+    assert "syn.extra" in top["modules"] and "syn.extra" not in sub["modules"]
     assert "targets.py#_core_roots" in sub["units"]
     _edit(root, "syn/extra.py", "X = 1", "X = 2")
     assert _run(root)["hits"] == ["SynOther_v1", "SynSub_v1"]
@@ -330,24 +420,175 @@ def test_a_definition_a_binding_made_reruns_when_a_module_the_binding_read_chang
     root = _tree(tmp_path)
     _bindings(root, '(("_made_roots",), made)', families=("SynMade_v1",))
     _run(root)
-    assert "syn/ops.py" in _entry(root, "SynMade_v1")["reads"]["files"]
+    assert "syn.ops" in _entry(root, "SynMade_v1")["reads"]["modules"]
     _edit(root, "syn/ops.py", "SWAP = False", "SWAP = True")
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
 
 
 def test_a_static_a_binding_computed_from_a_module_reruns_its_definition(tmp_path):
     """SynK is bound at ``K = ksize.K + 1``: a change to `syn.ksize` changes the specialization's id and the module the binding
-    read, so it reruns either way, and the other targets do not."""
+    read, so it reruns either way, and the other targets do not; a comment is no change of the module."""
     root = _tree(tmp_path)
     _bindings(root, '(("_sized_roots",), sized)', families=("SynK_v1",))
     out = _run(root)
     assert out["stats"]["stored"] == 3
-    assert "syn/ksize.py" in _entry(root, "SynK_v1{K=2}")["reads"]["files"]
+    assert "syn.ksize" in _entry(root, "SynK_v1{K=2}")["reads"]["modules"]
     _edit(root, "syn/ksize.py", "K = 1", "K = 1  # unchanged value")
-    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    assert _run(root)["hits"] == ["SynK_v1{K=2}", "SynOther_v1", "SynTop_v1"]
     _edit(root, "syn/ksize.py", "K = 1  # unchanged value", "K = 2")
     out = _run(root)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 1
+
+
+def _move(root: Path, src: str, dst: str, *rewrites: tuple[str, str, str]) -> None:
+    """Move ``src`` to ``dst`` (a new package's ``__init__.py`` a docstring alone) and rewrite the import lines ``rewrites``."""
+    (root / dst).parent.mkdir(parents=True, exist_ok=True)
+    if not (init := (root / dst).parent / "__init__.py").exists():
+        init.write_text('"""Families, moved here."""\n')
+    (root / src).rename(root / dst)
+    for rel, old, new in rewrites:
+        _edit(root, rel, old, new)
+
+
+def test_a_pure_move_of_a_registry_module_reuses_every_target(tmp_path):
+    """`syn/top.py` (SynTop's module, which `load_registries` enumerates) moves to a new package `syn/fam/`, and the one import
+    that names it is rewritten, split from the import it shared and put first (as an import sorter orders them): no module's
+    content changes, nor any binding unit, and the
+    moved module is imported anyway (by the core binding), so every target is reused, SynTop's included.  The checks' `inspect`
+    lookups probed `syn/top.py`, which is held as the module, not the path.  Each reused entry is stored again where its modules
+    are now, so a later edit of the moved module reruns SynTop alone, not every target that held the enumeration."""
+    root = _tree(tmp_path)
+    _run(root)
+    assert any("syn.top" in _entry(root, t)["reads"]["present"] for t in ("SynOther_v1", "SynTop_v1"))
+    _move(root, "syn/top.py", "syn/fam/top.py",
+          ("syn/catalog.py", "from syn import extra, top", "from syn.fam import top\n    from syn import extra"))
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 0
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "syn/fam/top.py", "*operands(a, b)", "*operands(b, a)")
+    assert _run(root)["hits"] == ["SynOther_v1"]
+
+
+def test_a_move_that_is_not_pure_reruns_what_it_changes(tmp_path):
+    """A moved module that reads its own path (`__file__`) reruns what holds it; a registry module moved where nothing
+    imports it is no longer registered by the enumeration, which every target holds, so every target reruns."""
+    root = _tree(tmp_path)
+    _edit(root, "syn/shape.py", "def operands", "HERE = __file__\n\n\ndef operands")
+    _run(root)
+    _move(root, "syn/shape.py", "syn/fam/shape.py", ("syn/top.py", "from syn.shape import", "from syn.fam.shape import"))
+    assert _run(root)["hits"] == ["SynOther_v1"]
+    _move(root, "syn/idle.py", "syn/fam/idle.py")
+    assert _run(root)["hits"] == []
+
+
+def test_a_descriptor_change_reruns_exactly_its_target_when_no_module_it_holds_changed(tmp_path):
+    """SynKn's body reads `syn.knob.N`, which another binding sets from `syn.ksize` and which makes nothing SynKn reaches, so
+    no module SynKn holds changes when `syn.ksize` does; its body, and so its descriptor, does, and SynKn alone reruns."""
+    root = _tree(tmp_path)
+    _bindings(root, '(("_set_roots",), setknob)', '(("_knobbed_roots",), knobbed)', families=("SynKn_v1",))
+    assert _run(root)["hits"] == []
+    assert "syn.ksize" not in _entry(root, "SynKn_v1")["reads"]["modules"]
+    _edit(root, "syn/ksize.py", "K = 1", "K = 2")
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 1
+    assert _values(root, "SynKn_v1") == [[3 + 2 * 0x0105], [3 + 3 * 0x0105]]
+
+
+def test_an_evaluator_or_a_module_constant_it_reads_reruns_its_target(tmp_path):
+    """SynX calls the primitive SynXor, whose evaluator (`syn.xkern`) masks with `syn.consts.MASK`: neither is in SynX's
+    descriptor (a primitive's entry is its signature), and each is held as a module SynX's check ran or imported."""
+    root = _tree(tmp_path)
+    _bindings(root, '(("_xor_roots",), xor)', families=("SynX_v1",))
+    assert _run(root)["hits"] == []
+    assert _entry(root, "SynX_v1")["report"]["value"] == [3 ^ 0x0105]
+    _edit(root, "syn/xkern.py", "return (a ^ b) & MASK", "return (b ^ a) & MASK")
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "syn/consts.py", "MASK = 0xFFFF", "MASK = 0x00FF")
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    assert [(3 ^ 0x0105) & 0xFF] in _values(root, "SynX_v1")
+
+
+def test_what_runs_of_a_module_is_its_source_not_bytecode_of_another_version(tmp_path):
+    """Python takes a module's cached bytecode when its header matches the source's mtime, in whole seconds, and its size: an
+    edit of the same size within the second the bytecode was written (here the source's mtime set back to the old one) runs the
+    old code, while the key digests the new source.  A module the cache imports while tracing is compiled from its source, so
+    SynX's verdict after such an edit of its evaluator is the new one; one imported before tracing from such bytecode makes the
+    process uncacheable, and stale bytecode Python did not take (its header no longer matches) does not."""
+    import importlib.util
+    import py_compile
+
+    root = _tree(tmp_path)
+    _bindings(root, '(("_xor_roots",), xor)', families=("SynX_v1",))
+    assert _run(root)["hits"] == []
+    p = root / "syn/xkern.py"
+    py_compile.compile(str(p), doraise=True)
+    before = f"""
+import sys
+from pathlib import Path
+sys.path.insert(0, {str(root)!r})
+import syn.xkern
+from circuit_check import cache as CC
+CC.trace(Path({str(root)!r}))
+print(CC.untraced())
+"""
+    pre = subprocess.run([sys.executable, "-c", before], capture_output=True, text=True, cwd=REPO, check=True)
+    assert pre.stdout.strip() == "[]"
+    st = p.stat()
+    _edit(root, "syn/xkern.py", "return (a ^ b) & MASK", "return (a | b) & MASK")
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns))
+    head = Path(importlib.util.cache_from_source(str(p))).read_bytes()[:16]
+    assert int.from_bytes(head[8:12], "little") == int(p.stat().st_mtime) and int.from_bytes(head[12:16], "little") == st.st_size
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    assert [3 | 0x0105] in _values(root, "SynX_v1")
+    post = subprocess.run([sys.executable, "-c", before], capture_output=True, text=True, cwd=REPO, check=True)
+    assert "syn/xkern.py: imported before tracing from bytecode that is not its source's" in post.stdout
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    later = subprocess.run([sys.executable, "-c", before], capture_output=True, text=True, cwd=REPO, check=True, env=env)
+    assert Path(importlib.util.cache_from_source(str(p))).read_bytes()[:16] == head
+    assert later.stdout.strip() == "[]"                # the old bytecode is still there, but its header no longer matches
+
+
+#: a kernel module imported, as `verity_vllm.program.kernels` imports its rows, by a registry module the catalog enumerates
+KERNEL_FILES = {
+    "syn/rows.py": """
+import numpy as np
+
+from verity.evaluation import register_kernel
+
+register_kernel("SynTop_v1", lambda a, b: ((a.astype(np.uint64) + b) & 0xFFFF, None))
+""",
+    "syn/kernels.py": "from syn import rows\n",
+    "syn/corr.py": """
+def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
+    from circuit_check import checks as CK
+    from verity.evaluation.reference import resolve
+
+    F = CK.Findings()
+    CK.correspondence(resolve(fn), opts, F)
+    return {"failures": F.failures, "warnings": F.warnings}
+""",
+}
+
+
+def test_a_pure_move_of_a_kernel_module_reuses_its_target_and_a_kernel_edit_reruns_it(tmp_path):
+    """SynTop's check looks up its kernel, registered in `syn/rows.py`: the lookup is held by where the kernel is defined in
+    the module's content, not by its path, so moving `syn/rows.py` to `syn/fam/rows.py` (its one import rewritten) reuses
+    SynTop's entry, and a wrong kernel there afterwards reruns it, which fails `correspondence/kernel-mismatch`."""
+    root = _tree(tmp_path)
+    for rel, text in KERNEL_FILES.items():
+        (root / rel).write_text(text.lstrip("\n"))
+    harness = HARNESS.replace("from syn import catalog, check\n", "from syn import catalog\nfrom syn import corr as check\n")
+    assert _run(root, harness)["hits"] == []
+    assert list(_entry(root, "SynTop_v1")["reads"]["kernels"]) == ["SynTop_v1"]
+    _move(root, "syn/rows.py", "syn/fam/rows.py", ("syn/kernels.py", "from syn import rows", "from syn.fam import rows"))
+    assert _run(root, harness)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "syn/fam/rows.py", "+ b) & 0xFFFF", "- b) & 0xFFFF")
+    assert _run(root, harness)["hits"] == ["SynOther_v1"]
+    codes = {tuple(sorted(f"{f['check']}/{f['code']}" for f in e["report"]["failures"]))
+             for p in (root / "cache").glob("*/*/*.json")
+             if (e := json.loads(p.read_text()))["key"]["request"]["target"][1] == "SynTop_v1"}
+    assert codes == {(), ("correspondence/kernel-mismatch",)}
 
 
 def test_the_catalogs_units_are_its_root_functions_and_entries():
@@ -359,7 +600,7 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     from circuit_check import targets as TG
 
     src = CC.TARGETS.read_text()
-    units, _spans = CC._units_of(src)
+    units, _spans, _sites = CC._units_of(src)
     labels = re.findall(r'^ +\("([^"]+)", lambda', src, re.M)
     assert {f"_model_roots:{label}" for label in labels} <= set(units) and len(labels) > 50
     assert {f"TEMPLATE_PARAMS:{tid}" for tid in TG.TEMPLATE_PARAMS} <= set(units)
@@ -368,3 +609,49 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     edited = CC._units_of(src.replace('("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16))',
                                       '("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=32))', 1))[0]
     assert {u for u in units if edited.get(u) != units[u]} == {"_model_roots:ResidualAdd_v1"}
+
+
+def test_a_run_of_imports_is_held_by_the_names_it_binds_not_their_order():
+    """`cache._commuted`: a run of consecutive imports ordered otherwise digests alike, with its sites; two that bind one name,
+    a statement between two, or an ``import *`` among them keep their order."""
+    import ast
+
+    from circuit_check import cache as CC
+
+    def norm(src: str) -> tuple:
+        return CC._normalized(ast.parse(src))[:2]
+
+    assert norm("from a import x, y\nimport b.c\nfrom d import z as w\n") == \
+        norm("from d import z as w\nimport b.c\nfrom a import y\nfrom a import x\n")
+    assert norm("from a import f\nfrom b import f\n") != norm("from b import f\nfrom a import f\n")
+    assert norm("from a import x\nX = 1\nfrom b import y\n") != norm("from b import y\nX = 1\nfrom a import x\n")
+    assert norm("from a import *\nfrom b import y\n") != norm("from b import y\nfrom a import *\n")
+
+
+def test_each_enumerator_only_imports_what_it_lists():
+    """`cache._ENUMERATORS` (and `targets.load_registries`) are held by the modules a package lists rather than by its
+    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields is only compared, imported
+    (``importlib.import_module``) or written into an error."""
+    import ast
+    import importlib
+    import inspect
+    import textwrap
+
+    from circuit_check import cache as CC
+
+    for mod, qual in sorted(CC._ENUMERATORS | {("circuit_check.targets", "load_registries")}):
+        fn = importlib.import_module(mod)
+        for part in qual.split("."):
+            fn = getattr(fn, part)
+        tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+        loops = [n for n in ast.walk(tree) if isinstance(n, ast.For) and "iter_modules" in ast.unparse(n.iter)]
+        assert loops, (mod, qual)
+        for loop in loops:
+            allowed: set[int] = set()
+            for n in ast.walk(loop):
+                if isinstance(n, ast.Call) and ast.unparse(n.func) in ("importlib.import_module", "errors.append"):
+                    allowed |= {id(x) for a in n.args for x in ast.walk(a)}
+                elif isinstance(n, ast.Compare):
+                    allowed |= {id(x) for x in ast.walk(n)}
+            uses = [n for s in loop.body for n in ast.walk(s) if isinstance(n, ast.Name) and n.id == loop.target.id]
+            assert uses and all(id(n) in allowed for n in uses), (mod, qual, ast.unparse(loop))

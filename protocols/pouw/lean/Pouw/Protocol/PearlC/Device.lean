@@ -112,8 +112,8 @@ noncomputable def PearlCSem.unitUsefulDev (sem : PearlCSem Q R S) (d : PearlCDev
   let W := wordsVal sh.n sh.k (U.weight (U.layout.wid u))
   let z := sem.noise H s U u act
   let AB := sem.unitChain H s U u act
-  let be := fun (β : ℚ) (e : Fin Params.pi.r → ℚ) (p : Fin 32) => bf16WordOf (codeVal (lineCodes β e p))
-  d.useful AB.1 AB.2 (fun l p => e4m3 (z.FA l p)) (fun l p => e4m3 (z.FB l p))
+  let be := fun (β : ℚ) (e : Fin Params.pi.r → Code) (p : Fin 32) => codeBf16 (lineCodes β e p)
+  d.useful AB.1 AB.2 (fun l p => z.FA l p) (fun l p => z.FB l p)
     (fun i => be (sem.beta sh.k (X i)) (z.EA i)) (fun j => be (sem.beta sh.k (W j)) (z.EB j))
 
 open Classical in
@@ -132,7 +132,7 @@ noncomputable def pearlCProtocolDev (d : PearlCDevice) (sem : PearlCSem Q R S) (
   ticket := fun H s U u act => atNat (d.ticket (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUsefulDev d H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
-  weightOK := fun sh w => sem.OperandOK sh.n sh.k w
+  weightOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act =>
     ((creditDev d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s U u act) : ℚ) : ℝ)
   capOK := fun H s U u act => debitDev d (sem.unitDebitDev d H s U u act) ≤ ρ * creditDev d (U.layout.shape u)

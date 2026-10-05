@@ -18,7 +18,7 @@ from verity.proofs.families import make_tc_ampere_bf16_gate_set
 from verity.proofs.programs import gemm_coordinate
 from verity.proofs.target import FAMILY, FAMILY_DIGEST, FIRST, K16_VECTOR, K1536_VECTOR
 
-FIXTURES = Path(__file__).resolve().parents[4] / "fixtures" / "typed-obligation-v0"
+FIXTURES = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists()) / "fixtures" / "typed-obligation-v0"
 
 
 def vector(name: str) -> dict:

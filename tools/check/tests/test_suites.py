@@ -360,6 +360,24 @@ def test_a_declared_package_is_its_directory_without_its_dependencies(tmp_path, 
     assert touched() == ["a", "b", "c"]
 
 
+def test_the_roots_own_distribution_is_a_member_and_its_dependents_key_on_the_packages_it_ships(tmp_path, monkeypatch):
+    """The root's pyproject.toml builds `core`, so uv makes it a member; a suite that depends on it keys on `core/`, not on the
+    whole tree its directory holds."""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "core"\n' + _HATCH + '\n[tool.hatch.build.targets.wheel]\n'
+                                             'packages = ["core"]\n\n[tool.uv.workspace]\nmembers = ["p"]\n')
+    (tmp_path / "core").mkdir()
+    (tmp_path / "core" / "__init__.py").write_text("")
+    (tmp_path / "p" / "tests").mkdir(parents=True)
+    (tmp_path / "p" / "pyproject.toml").write_text('[project]\nname = "p"\ndependencies = ["core"]\n\n[tool.uv.sources]\n'
+                                                   'core = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs = S.members()
+    assert pkgs == {"core": ".", "p": "p"} and S.importable(pkgs) == {"core": "."}
+    assert S.inputs_of({s.name: s for s in S.discover()}["p"], pkgs) == ["core", "p"]
+
+
 def test_a_pass_is_reused_only_while_what_it_used_beside_its_key_holds(tmp_path, monkeypatch):
     _workspace(tmp_path)
     S = _suites(monkeypatch, tmp_path)
@@ -734,6 +752,29 @@ def test_what_a_child_reads_outside_the_inputs_fails_the_suite_and_names_the_tes
     assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "cached  pkg" in p.stdout, p.stdout
+
+
+def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds_while_it_is_unchanged(tmp_path):
+    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `fixtures/artifacts.json` for
+    repo replicas: in the test's process or a child's, that read fails no suite, and the test's own read is watched."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    (root / "fixtures").mkdir()
+    (root / "fixtures" / "artifacts.json").write_text("{}\n")
+    (tests / "test_registry.py").write_text(
+        "import os, subprocess, sys\n\ndef test_registry():\n"
+        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'fixtures', 'artifacts.json')\n"
+        "    open(p).read()\n"
+        "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "registry")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
+    assert "cached  pkg" in _run_suite(root, tmp_path).stdout
+    (root / "fixtures" / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout
 
 
 def test_a_fork_a_collection_or_a_child_whose_tracer_fails_fails_the_suite_under_xdist(tmp_path):

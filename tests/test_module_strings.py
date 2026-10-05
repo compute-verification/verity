@@ -51,6 +51,9 @@ EXEMPT = {
     # the tool specs the preflight tests feed it, which name no tool on purpose
     ("tools/research/tests/test_remote_preflight.py", "tools.fake.tool:FAKE"): "a stand-in",
     ("tools/research/tests/test_remote_preflight.py", "tools.other.tool:X"): "a stand-in",
+    # a tool declaration the move guards find in a synthetic tree, under its pre-move or post-move path
+    ("tests/test_gate_paths.py", "backends.gkr.gpu.tool:G"): "a stand-in",
+    ("tools/research/tests/test_store_prov.py", "tools.agree.tool:AGREE"): "a stand-in",
     # the shell line the one-CLI lint must pass over: a `-m` in a comment
     ("integrations/vllm/tests/lint/test_p06_one_cli.py", "verity_vllm.not_code"): "a stand-in",
 }
