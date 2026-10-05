@@ -2,7 +2,8 @@
 the suite runs over, every registered Definition and template at small bindings.
 
     definition  ``F32Add_v1``, ``RMSNormTriton_v1{N=64,EPS=1e-05}``, ``GemmCoordinate_v2{K=64,DOT=AmpereBF16TcDot16_v2}``: a
-                registered Definition bound to the statics its id writes (a function-valued static by its id)
+                registered Definition bound to the statics its id writes (a function-valued static by its id, a record by the
+                digest its id prints, ``StepBody_v1{C={d0dc81b7fa41},T=4,...}``, one of the records the suite binds)
     template    ``rope-head`` (its example parameters), ``rope-head:D=128`` (parameters given), or a subcircuit id
                 (``gemm-coordinate/k2048/sm80-mma-bf16``); ``attention-head`` is checked at the ends of its key-count range
     row         a Build's request Program: its directory or its ``instances.json.gz``
@@ -110,9 +111,29 @@ def _split(body: str) -> dict[str, str]:
 
 def _value(s: str) -> Any:
     try:
-        return ast.literal_eval(s)
+        v = ast.literal_eval(s)
     except (ValueError, SyntaxError):
         return s
+    return (v,) if s.startswith("(") and not isinstance(v, tuple) else v    # an id prints a tuple of one as `(7)`
+
+
+#: a record (dict-valued) static as a Definition id prints it, a prefix of its digest (`verity.ir.defs`): the record itself is
+#: not in the id, so it is looked up among the records the suite's Definitions are bound to
+_RECORD = re.compile(r"\{[0-9a-f]{12}\}")
+_RECORDS: dict[str, Any] = {}
+
+
+def _record(text: str) -> Any:
+    """The record that a suite Definition's id prints as ``text``."""
+    if not _RECORDS:
+        for fn in suite().values():
+            m = re.fullmatch(r"[^{]+\{(.*)\}", fn.id)
+            for k, v in (_split(m[1]).items() if m else ()):
+                if _RECORD.fullmatch(v) and k in getattr(fn, "bindings", {}):
+                    _RECORDS.setdefault(v, fn.bindings[k])
+    if text not in _RECORDS:
+        raise KeyError(f"record static {text}: no Definition the suite checks is bound to a record of that digest")
+    return _RECORDS[text]
 
 
 def definition(spec: str) -> Any:
@@ -125,7 +146,7 @@ def definition(spec: str) -> Any:
     if m is None:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
-    statics = {k: _value(v) for k, v in _split(body).items()} if body else {}
+    statics = {k: _record(v) if _RECORD.fullmatch(v) else _value(v) for k, v in _split(body).items()} if body else {}
     try:
         fn = W.specialization(fam, statics)
     except KeyError:

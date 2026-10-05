@@ -98,6 +98,23 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
         TG.definition("NoSuchDefinition_v9")
 
 
+def test_a_target_with_a_record_static_parses_as_its_id_prints_it(monkeypatch):
+    """Every suite target whose statics hold a record (printed as a digest, ``C={d0dc81b7fa41}``) parses back from its id to
+    itself, the record also at statics the suite does not bind, and a digest of no record the suite binds raises."""
+    import re
+
+    monkeypatch.setattr(TG, "suite", lambda: SUITE)
+    records = [fid for fid in SUITE if re.search(r"=\{[0-9a-f]{12}\}", fid)]
+    assert "StepBody_v1{C={d0dc81b7fa41},T=4,GEMM={1af1018d695c},ATTENTION={f63c865fa1fc},NORM={c0107547e710}}" in records
+    for fid in records:
+        assert TG.definition(fid).id == fid
+    step = next(fid for fid in records if fid.startswith("StepBody_v1{"))
+    other = TG.definition(step.replace(",T=4,", ",T=6,"))
+    assert other.id == step.replace(",T=4,", ",T=6,") and other.bindings["C"] is SUITE[step].bindings["C"]
+    with pytest.raises(KeyError, match="no Definition the suite checks"):
+        TG.definition("StepBody_v1{C={000000000000},T=4}")
+
+
 # --- the suite ----------------------------------------------------------------------------------------------------------------
 
 @pytest.mark.circuit_suite
