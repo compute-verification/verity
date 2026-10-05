@@ -60,7 +60,7 @@ use crate::{
 
 pub const TAG: &[u8] = b"verity/flock-ir-frame/v2";
 pub const TAG_SAMPLING: &[u8] = b"verity/flock-ir-sampling/v1";
-/// `verity.commitments.rowleaf.blake3_row_key(ROLE_X)`: the only row key a sampling file may name (red-team-flock-2 IR6).
+/// `verity.primitives.commitments.rowleaf.blake3_row_key(ROLE_X)`: the only row key a sampling file may name (red-team-flock-2 IR6).
 pub const ROW_KEY_X: &[u8; 32] = b"verity/blake3-leaf/v1/x\0\0\0\0\0\0\0\0\0";
 /// A sampling file's public ports: `GumbelTopPTokenSelect_v1`'s top_p, seed, pos, temp, splits as 32-bit words.
 pub const SAMPLING_PUBLIC: [(&str, usize); 5] = [("in1", 1), ("in2", 2), ("in3", 2), ("in4", 1), ("in5", 1)];
@@ -282,7 +282,7 @@ fn hexb(s: &str) -> Result<Vec<u8>, String> {
     (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).map_err(|e| e.to_string())).collect()
 }
 
-// --- frame-v3 (verity.commitments.merkle), natively ---------------------------------------------------------------------
+// --- frame-v3 (verity.primitives.commitments.merkle), natively ---------------------------------------------------------------------
 
 fn fv3_hash(tag: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     let mut h = Sha256::new();
