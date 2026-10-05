@@ -1,7 +1,7 @@
 import Nci.Guarantees
 import Nci.SecurityProofs.Inequalities
 import Nci.SecurityProofs.LoomisWhitney
-import Verity.SecurityProofs
+import VerityProofs.SecurityProofs
 
 /-!
 # Proofs of NCI's guarantees

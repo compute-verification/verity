@@ -1,7 +1,7 @@
 import Pouw.Protocol.PearlC.TileCircuit
 import Pouw.Protocol.PearlC.PeelExactP
 import Pouw.SecurityProofs.PearlC.AccumProofs
-import Verity.SecurityProofs.Circuit
+import VerityProofs.SecurityProofs.Circuit
 
 /-!
 # The tile unit computes `C̃` and `U` (proofs)

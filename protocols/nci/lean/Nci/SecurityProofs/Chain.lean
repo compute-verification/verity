@@ -1,5 +1,5 @@
 import Nci.Guarantees
-import Verity.SecurityProofs
+import VerityProofs.SecurityProofs
 
 /-!
 # Lemmas 1 and 2: what an IU reads at full and other positions
