@@ -91,11 +91,6 @@
    "assumptions": [],
    "type_hash": "f3438832e610286d546e7304364d649d9ccd4406d71b453af26635837203032d"
   },
-  "Pous.SecurityProofs.DigestAU": {
-   "signature": ["Pous.SecurityProofs.DigestAU : Pous.Guarantees.DigestAU"],
-   "assumptions": [],
-   "type_hash": "28507ba76d5d5e6bef11710bb963e141a485088072b26732e3721309ac4cfefa"
-  },
   "Pous.SecurityProofs.P2ErrorSplitB19Uncond": {
    "signature": ["Pous.SecurityProofs.P2ErrorSplitB19Uncond : Pous.Guarantees.P2ErrorSplitB19Uncond"],
    "assumptions": [],
@@ -125,21 +120,6 @@
    "signature": ["Pous.SecurityProofs.P2SlackFamilyUncond : Pous.Guarantees.P2SlackFamilyUncond"],
    "assumptions": [],
    "type_hash": "a7362ea74a7037fe8af6f390997f4cf697055cf410f55bde27c35526c4b2b7c4"
-  },
-  "Pous.SecurityProofs.SecureErasureMeets": {
-   "signature": ["Pous.SecurityProofs.SecureErasureMeets : Pous.Guarantees.SecureErasureMeets"],
-   "assumptions": [],
-   "type_hash": "f4cfa7811bb2176a907b8c7000f144301e447f90f62507f48d45e2a739e7a309"
-  },
-  "Pous.SecurityProofs.SecureErasureMeets96GiB": {
-   "signature": ["Pous.SecurityProofs.SecureErasureMeets96GiB : Pous.Guarantees.SecureErasureMeets96GiB"],
-   "assumptions": [],
-   "type_hash": "318251ded382a3566886a469f97ee26b768d7831c549344a67d6f22af787c9ad"
-  },
-  "Pous.SecurityProofs.SecureErasureMeetsFamily": {
-   "signature": ["Pous.SecurityProofs.SecureErasureMeetsFamily : Pous.Guarantees.SecureErasureMeetsFamily"],
-   "assumptions": [],
-   "type_hash": "e877b6118f63c5f3114ffd8ab8a54911832b8c4449ff3cdb5d652fe3aa74d2fe"
   }
  },
  "reads": {
