@@ -6,6 +6,7 @@ its wire byte for byte, and one that holds a session past every sync is rejected
 from __future__ import annotations
 
 import importlib.util
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -197,6 +198,29 @@ def test_the_command_line_parses_a_sync_rule(tmp_path, capsys):
         ar.main([*argv, "--syncs", "cover"])
     assert bad.value.code == 2 and "--syncs" in capsys.readouterr().err
     assert ar.parse_sync_policy("cover-3-2") == "cover-3-2"
+
+
+@pytest.mark.parametrize("ms, responses, requests", [
+    (15, None, None),
+    (110, "status:delivery-refused", "status:delivery-refused"),
+    (300, "status:monitor-unavailable", "status:delivery-refused"),
+])
+def test_a_stalled_proxy_fails_its_window_closed(setup, runs, tmp_path, ms, responses, requests):
+    """The proxy stopped right after window 1's first release (`--stall`): under the slack nothing faults; 110 ms,
+    between two ticks, forwards the request late (`delivery-refused`), though no tick is late enough to fault; 300 ms
+    also makes the egress tick late. Only window 1 fails, both links, and nowhere is there a mismatch."""
+    _, report, _ = setup
+    plan, _ = runs
+    run = tmp_path / "stalled"
+    ar.run_virtual(plan, report, run, stalls=[(T + 1, ms / 1000)])
+    assert [(s["tick"], s["paused_ms"]) for s in json.loads((run / "stalls.json").read_text())] == \
+        [(T + 1, ms)]
+    audit = ar.audit_configuration(plan, report, run)
+    assert [(r["link"], r["window"], r["raw"], r["committed"]) for r in audit["rows"]] == \
+        [("responses", w, responses if w == 1 else None, responses if w == 1 else None) for w in range(3)] + \
+        [("requests", w, requests if w == 1 else None, requests if w == 1 else None) for w in range(3)]
+    assert audit["comparisons"]["released_not_the_programs"] == 0
+    assert audit["comparisons"]["frames_log_is_the_programs"]
 
 
 TOKENS = 4

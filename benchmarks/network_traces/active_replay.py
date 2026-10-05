@@ -783,12 +783,64 @@ def prover_args(plan: dict, setup: Setup) -> dict:
     return {"syncs": [], "prover": prover, "windows": plan["windows"]}
 
 
-def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], conn, out: str) -> None:
+class Stalls(asyncio.Event):
+    """Test-only (`--stall`): the proxy's change event, which pauses the proxy right after an ingress tick has released
+    a request and before the proxy writes it upstream, once for each (bucket, seconds): at the first such tick at or
+    after the bucket whose egress tick has already run, so the pause falls between two ticks. `pause(seconds)` stops
+    the proxy; `done` lists each stall with how long the proxy's clock saw it last."""
+
+    def __init__(self, proxy: Proxy, stalls: Sequence[tuple[int, float]], pause) -> None:
+        super().__init__()
+        self.proxy, self.todo, self.pause = proxy, sorted(stalls), pause
+        self.released, self.done = 0, []
+
+    def set(self) -> None:
+        p = self.proxy
+        if self.todo and p.requests_released > self.released:
+            t = len(p.lateness["ingress"]) - 1
+            if t >= self.todo[0][0] and len(p.lateness["egress"]) > t:
+                bucket, seconds = self.todo.pop(0)
+                start = p.clock()
+                self.pause(seconds)
+                self.done.append({"bucket": bucket, "tick": t, "ms": seconds * 1000,
+                                  "at_ms": round((start - p.origin) * 1000, 3),
+                                  "paused_ms": round((p.clock() - start) * 1000, 3)})
+        self.released = p.requests_released
+        super().set()
+
+
+def _stopper():
+    """A pause of the whole process: it stops itself (SIGSTOP), and a child forked now, before any thread starts, sends
+    SIGCONT the pause after it has stopped, from the core the process was on."""
+    r, w = os.pipe()
+    parent = os.getpid()
+    if os.fork() == 0:
+        os.close(w)
+        while len(b := os.read(r, 8)) == 8:
+            os.sched_setaffinity(0, os.sched_getaffinity(parent))
+            while Path(f"/proc/{parent}/stat").read_text().rsplit(") ", 1)[1][0] != "T":
+                pass
+            time.sleep(struct.unpack("d", b)[0])
+            os.kill(parent, signal.SIGCONT)
+        os._exit(0)
+    os.close(r)
+
+    def pause(seconds: float) -> None:
+        os.write(w, struct.pack("d", seconds))
+        os.kill(parent, signal.SIGSTOP)
+
+    return pause
+
+
+def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], conn, out: str,
+                  stalls: Sequence[tuple[int, float]] = ()) -> None:
     _quiet_runtime()
-    asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out)))
+    pause = _stopper() if stalls else None
+    asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out), stalls, pause))
 
 
-async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out: Path) -> None:
+async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out: Path,
+                 stalls: Sequence[tuple[int, float]] = (), pause=None) -> None:
     publish = Publisher(out, setup)
     advice = prover_args(plan, setup)
     done = asyncio.get_running_loop().create_future()
@@ -804,10 +856,14 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
     proxy = holder["proxy"] = Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set,
                                     advice.pop("syncs"), origin=origin, publish=publish, egress_link=setup.egress_link,
                                     ingress_link=setup.ingress_link, **advice)
+    if stalls:
+        proxy._changed = Stalls(proxy, stalls, pause)
     await done
     listening.close()
     publish.close()
     write_logs(out, proxy=proxy)
+    if stalls:
+        (out / "stalls.json").write_text(json.dumps(proxy._changed.done))
 
 
 def peer_process(plan: dict, params: dict, link_port: int, conn, out: str) -> None:
@@ -837,16 +893,17 @@ class Evicted(Exception):
 
 
 def run_configuration(plan: dict, report: dict, out: Path, nice: int | None = None,
-                      upstream: tuple[str, int] | None = None, cpus: Sequence[int] | None = None) -> dict:
+                      upstream: tuple[str, int] | None = None, cpus: Sequence[int] | None = None,
+                      stalls: Sequence[tuple[int, float]] = ()) -> dict:
     """One configuration in real time: the server, then the proxy, then the peer, released together at one origin.
     With `nice`, every thread of the three runs at that niceness (`renice`, through sudo); with `cpus`, the server's,
     the proxy's and the peer's threads each run on one core of their own. Threads they start later inherit both. With
-    `upstream`, the server is `LiveServer` in front of the endpoint there. On `Evicted` the three are terminated and it
-    is raised again."""
+    `upstream`, the server is `LiveServer` in front of the endpoint there. With `stalls` (test-only), the proxy stops
+    itself as `Stalls` says. On `Evicted` the three are terminated and it is raised again."""
     params = wire_params(Setup(report)) | ({"upstream": list(upstream)} if upstream else {})
     started: list = []
     try:
-        return _run_configuration(plan, report, out, nice, cpus, params, started)
+        return _run_configuration(plan, report, out, nice, cpus, params, started, stalls)
     except Evicted:
         for proc in started:
             proc.terminate()
@@ -854,7 +911,7 @@ def run_configuration(plan: dict, report: dict, out: Path, nice: int | None = No
 
 
 def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, cpus: Sequence[int] | None,
-                       params: dict, started: list) -> dict:
+                       params: dict, started: list, stalls: Sequence[tuple[int, float]] = ()) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     ctx = multiprocessing.get_context("spawn")
     (s, s_child), (p, p_child), (q, q_child) = ctx.Pipe(), ctx.Pipe(), ctx.Pipe()
@@ -862,7 +919,7 @@ def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, cp
     started.append(server)
     server.start()
     port = s.recv()
-    proxy = ctx.Process(target=proxy_process, args=(plan, report, ("127.0.0.1", port), p_child, str(out)))
+    proxy = ctx.Process(target=proxy_process, args=(plan, report, ("127.0.0.1", port), p_child, str(out), stalls))
     started.append(proxy)
     proxy.start()
     link = p.recv()
@@ -890,23 +947,26 @@ def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, cp
     return codes
 
 
-def run_virtual(plan: dict, report: dict, out: Path, upstream: tuple[str, int] | None = None) -> dict:
+def run_virtual(plan: dict, report: dict, out: Path, upstream: tuple[str, int] | None = None,
+                stalls: Sequence[tuple[int, float]] = ()) -> dict:
     """One configuration on an injected clock: the same sockets, proxy, server and peer in one event loop, the clock
     moved to each instant something is due (a tick, a server batch, a send) once everything due before it is done.
-    With `upstream`, the server is `LiveServer` in front of an endpoint that answers without the clock moving."""
+    With `upstream`, the server is `LiveServer` in front of an endpoint that answers without the clock moving. A stall
+    (`stalls`, test-only) moves the clock past the pause at once, before anything else runs."""
     out.mkdir(parents=True, exist_ok=True)
-    asyncio.run(_virtual(plan, Setup(report), out, upstream))
+    asyncio.run(_virtual(plan, Setup(report), out, upstream, stalls))
     (out / "processes.json").write_text(json.dumps({"exit": {"server": 0, "proxy": 0, "peer": 0}, "origin": 0.0,
                                                     "clock": "virtual"}))
     return {"server": 0, "proxy": 0, "peer": 0}
 
 
-def virtual_process(plan: dict, report: dict, out: Path) -> None:
+def virtual_process(plan: dict, report: dict, out: Path, stalls: Sequence[tuple[int, float]] = ()) -> None:
     _quiet_runtime()
-    run_virtual(plan, report, out)
+    run_virtual(plan, report, out, stalls=stalls)
 
 
-async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int] | None = None) -> None:
+async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int] | None = None,
+                   stalls: Sequence[tuple[int, float]] = ()) -> None:
     e, i = setup.egress_params, setup.ingress_params
     params = wire_params(setup) | ({"upstream": list(upstream)} if upstream else {})
     clock = VirtualClock(-1.0)
@@ -923,6 +983,8 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     proxy = holder["proxy"] = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, advice.pop("syncs"),
                                     origin=0.0, clock=clock, sleep=clock.sleep, publish=publish,
                                     egress_link=setup.egress_link, ingress_link=setup.ingress_link, **advice)
+    if stalls:
+        proxy._changed = Stalls(proxy, stalls, lambda seconds: clock.advance(clock.now + seconds))
     accepted: asyncio.Future = asyncio.get_running_loop().create_future()
     link = await asyncio.start_server(lambda r, w: accepted.set_result(asyncio.create_task(proxy.run(r, w))),
                                       "127.0.0.1", 0)
@@ -962,6 +1024,8 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     server.close()
     publish.close()
     write_logs(out, proxy, server, peer)
+    if stalls:
+        (out / "stalls.json").write_text(json.dumps(proxy._changed.done))
 
 
 # The audit.
@@ -1274,6 +1338,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--served-model", default="served", help="the live endpoint's model name")
     ap.add_argument("--syncs", type=parse_sync_policy,
                     help=f"the prover's syncs: {', '.join(SYNC_POLICIES)} (default: envelope live, else model)")
+    ap.add_argument("--stall", dest="stalls", action="append", default=[], metavar="BUCKET:MS",
+                    type=lambda s: (int(s.split(":")[0]), float(s.split(":")[1]) / 1000),
+                    help="test-only: stop the proxy for MS right after the first ingress tick at or after BUCKET that "
+                         "releases a request, in every configuration (`Stalls`)")
     ap.add_argument("--max-minutes", type=float,
                     help="start no configuration that would end later than this from the start")
     args = ap.parse_args(argv)
@@ -1398,14 +1466,14 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
                         json.dump(mine, fh)
                     t0 = time.monotonic()
                     if args.clock == "virtual":
-                        job = ctx.Process(target=virtual_process, args=(mine, report, run))
+                        job = ctx.Process(target=virtual_process, args=(mine, report, run, args.stalls))
                         job.start()
                         job.join()
                         if job.exitcode:
                             return 1
                     else:
                         try:
-                            run_configuration(mine, report, run, args.nice, upstream, args.cpus)
+                            run_configuration(mine, report, run, args.nice, upstream, args.cpus, args.stalls)
                         except Evicted:
                             stopped = f"evicted in {name}"
                             print(stopped, flush=True)
