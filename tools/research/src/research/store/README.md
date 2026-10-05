@@ -190,7 +190,7 @@ from research.store.tool import Tool
 TC_PROBE = Tool(
     name="tc_probe", version="1",
     command=["python", "tools/tc_probe/tc_probe.py"],
-    closure=["tools/tc_probe/**", "packages/verity/src/verity/ml/tc/**"],   # repo-relative globs -> file manifest at run time
+    closure=["tools/tc_probe/**", "catalog/verity_catalog/silicon/**"],   # repo-relative globs -> file manifest at run time
     key_params=["instruction", "families", "seed", "n_random", "replay_golden"],
     key_conditions=["hw.family"],
     param_artifacts=["replay_golden", "replay_instances"],                     # path-valued params: identity = content, never pathname
@@ -199,7 +199,7 @@ TC_PROBE = Tool(
 )
 ~~~
 
-Declarations live next to the tool they describe (`tools/tc_probe/tool.py`, `backends/direct/ligero/tool.py`; the example above is
+Declarations live next to the tool they describe (`tools/tc_probe/tool.py`, `archive/direct/ligero/tool.py`; the example above is
 illustrative, the files follow the scripts' real argparse) and are found by `research run --tool <dotted.module:NAME>` or
 `--tool <name>` via the registry in `research/store/tools_registry.py` (a dict name -> dotted path; keep it tiny). A declaration
 imports nothing but `research.store.tool`: it must load on the control machine and in a shipped source tree alike (`load` falls
