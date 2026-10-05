@@ -23,6 +23,10 @@ DEFS = """import P.Base
 
 namespace P
 
+open Hid
+
+open Nat Simproc
+
 /-- `f`, the identity. -/
 def f (n : Nat) : Nat := n
 
@@ -84,7 +88,8 @@ end P
 FILES = {
     "lakefile.toml": 'name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n',
     "P.lean": "import P.Thms\nimport P.Assumptions\n",
-    "P/Base.lean": "theorem P.base_thm : True := trivial\n\ndef P.base : Nat := 0\n",
+    "P/Base.lean": "theorem P.base_thm : True := trivial\n\ndef P.base : Nat := 0\n\nnamespace P.Hid\n\ndef hid : Nat := 0\n\n"
+                   "end P.Hid\n",
     "P/Assumptions.lean": "def P.Hyp : Prop := True\n",
     "P/Defs.lean": DEFS,
     "P/Thms.lean": "import P.Defs\n\ntheorem P.t : P.g = 1 := P.g_eq\n\ntheorem P.u : P.base = 0 := rfl\n",
@@ -128,6 +133,7 @@ def test_a_mixed_module_splits_into_a_spec_half_and_its_proofs_and_still_builds(
     before = decls(pkg)
     uses = {x["n"]: x["u"] for x in before["modules"]["P.Defs"]["decls"]}
     assert "P.lt3" not in uses["P.three"] and "P.f_four" not in uses["P.four_eq"] and "P.f_five" not in uses["P.five_eq"]
+    assert "P.Hid" in before["namespaces"]["P.Base"] and "Nat.Simproc" in {n for ns in before["namespaces"].values() for n in ns}
     p = S.plan(pkg, before, [])
     assert p["side"] == {"P": "proofs", "P.Assumptions": "spec", "P.Base": "proofs", "P.Defs": "mixed", "P.Thms": "proofs"}
     assert p["protocol"] == {"P.Defs": "P.Protocol.Defs"} and p["new_imports"]["P.Protocol.Defs"] == []
@@ -142,8 +148,9 @@ def test_a_mixed_module_splits_into_a_spec_half_and_its_proofs_and_still_builds(
     assert all(x in proofs for x in ("theorem f_id", "@[simp] theorem g_eq", "theorem one_eq", "/-- An example. -/\nexample"))
     assert "def " not in proofs and all(x.count('/-- One. -/\nlocal notation "𝟙"') == 1 for x in (spec_half, proofs))
     assert "\nvariable (k : Nat)\n" in spec_half and "base" not in spec_half
+    assert "Hid" not in spec_half and all("\nopen Nat Simproc\n" in x for x in (spec_half, proofs)) and "\nopen Hid\n" in proofs
     assert "\nvariable (k : Nat) (b : Fin (base + 1))\n" in proofs and "theorem b_lt" in proofs
-    assert p["warnings"] == ["P.Defs:54: the spec half leaves out the `variable` binders b (naming P.base), a proof's or one "
+    assert p["warnings"] == ["P.Defs:58: the spec half leaves out the `variable` binders b (naming P.base), a proof's or one "
                              "left out"]
     after = decls(pkg)
     assert names(after) == names(before)

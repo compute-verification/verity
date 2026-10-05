@@ -7,7 +7,8 @@ import Lean
 environment extension loaded, as `Facts.lean` does, and writes one JSON document to `out`: for each module under `under`,
 its imports and each constant it declares, with its kind, its source range (`declRangeExt`: first line and column, last
 line and column, columns in code points) when it has one, and the constants under `under` its type and value use. It
-also lists every imported module's imports (`imports`), so a reader can follow a module's closure into its dependencies.
+also lists every imported module's imports (`imports`), so a reader can follow a module's closure into its dependencies,
+and the namespaces each module registers (`namespaces`), which an `open` needs.
 `model_split.py` reads it; it reports facts and decides nothing.
 -/
 
@@ -40,6 +41,13 @@ unsafe def entriesOf (α : Type) (data : ModuleData) (ext : Name) : Array (Name 
   | some (_, es) => es.map fun e => unsafeCast e
   | none => #[]
 
+/-- The namespaces a module registers (`namespace` commands and its declarations' prefixes), from the entries of core's
+private `namespacesExt`. -/
+unsafe def namespacesOf (data : ModuleData) : Array Name :=
+  match data.entries.find? (fun e => match e.1 with | .str _ s => s == "namespacesExt" | _ => false) with
+  | some (_, es) => es.map fun e => unsafeCast e
+  | none => #[]
+
 def names (j : Json) (k : String) : Array Name :=
   ((j.getObjValD k).getArr?.toOption.getD #[]).filterMap fun v => v.getStr?.toOption.map String.toName
 
@@ -61,10 +69,14 @@ unsafe def main (args : List String) : IO UInt32 := do
     | none => false
   let mut mods := #[]
   let mut imports := #[]
+  let mut nss := #[]
   for h : i in [0:mnames.size] do
     let m := mnames[i]
     let data := env.header.moduleData[i]!
     imports := imports.push (m.toString, toJson (data.imports.map (·.module.toString)))
+    let ns := namespacesOf data
+    if !ns.isEmpty then
+      nss := nss.push (m.toString, toJson (ns.map toString))
     if !under pre m then continue
     let mut ranges : Std.HashMap Name DeclarationRanges := {}
     for (n, r) in entriesOf DeclarationRanges data declRangeExt.name do
@@ -78,6 +90,6 @@ unsafe def main (args : List String) : IO UInt32 := do
     mods := mods.push (m.toString, Json.mkObj [("imports", toJson (data.imports.map (·.module.toString))),
       ("decls", toJson decls)])
   let doc := Json.mkObj [("lean", toJson Lean.versionString), ("modules", Json.mkObj mods.toList),
-    ("imports", Json.mkObj imports.toList)]
+    ("imports", Json.mkObj imports.toList), ("namespaces", Json.mkObj nss.toList)]
   IO.FS.writeFile out doc.compress
   return 0

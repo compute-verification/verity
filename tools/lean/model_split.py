@@ -202,7 +202,7 @@ def commands_of(lines: list[str], code: list[str], i: int) -> int:
 
 def scopes(code: list[str]) -> list[tuple[list[str], list[str]]]:
     """For each line, the namespace it is in (its components) and the namespaces opened in the scopes around it."""
-    stack: list[tuple[str, list[str], list[str]]] = []
+    stack: list[tuple[str, list[str], list[str]]] = [("file", [], [])]
     out = []
     for line in code:
         ns = [c for k, comps, _ in stack if k == "ns" for c in comps]
@@ -213,12 +213,12 @@ def scopes(code: list[str]) -> list[tuple[list[str], list[str]]]:
         elif re.match(r"^(noncomputable\s+)?section\b", line):
             stack.append(("sec", [], []))
         elif m := re.match(r"^end\b\s*(\S*)", line):
-            want = len(m.group(1).split(".")) if m.group(1) and stack and stack[-1][0] == "ns" else 1
-            for _ in range(min(want, len(stack))):
-                stack.pop()
+            # `end A.B` closes the scopes `namespace A.B` (one) or `namespace A` and `namespace B` (two) opened.
+            want = len(m.group(1).split(".")) if m.group(1) and stack[-1][0] == "ns" else 1
+            while want > 0 and len(stack) > 1:
+                want -= max(len(stack.pop()[1]), 1)
         elif re.match(r"^open\s", line) and not IN_END.search(s):
-            if stack:
-                stack[-1][2].extend(open_items(s)[0])
+            stack[-1][2].extend(open_items(s)[0])
     return out
 
 
@@ -268,6 +268,13 @@ def open_items(cmd: str) -> tuple[list[str], str]:
     if "hiding" in body.split() or "renaming" in body.split() or "(" in body:
         return [body.split()[0]], "scoped " if scoped else ""
     return body.split(), "scoped " if scoped else ""
+
+
+def candidates(ns: list[str], opens: list[str], t: str) -> list[str]:
+    """The names ``t`` may stand for in namespace ``ns`` with ``opens`` open (each relative to an enclosing namespace)."""
+    if t.startswith("_root_."):
+        return [t[len("_root_."):]]
+    return [".".join(ns[:k] + [o, t] if o else ns[:k] + [t]) for o in [""] + opens for k in range(len(ns), -1, -1)]
 
 
 def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
@@ -328,9 +335,8 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
                     parts = t.lstrip("@").split(".")
                     got = set()
                     for p in (".".join(parts[:k]) for k in range(len(parts), 0, -1)):
-                        cands = [p[len("_root_."):]] if p.startswith("_root_.") else \
-                            [".".join(ns[:k] + [o, p] if o else ns[:k] + [p]) for o in [""] + opens for k in range(len(ns), -1, -1)]
-                        got |= {n for c in cands for n in by_user.get(c, ()) if not n.startswith("_private.") or where[n][0] == m}
+                        got |= {n for c in candidates(ns, opens, p) for n in by_user.get(c, ())
+                                if not n.startswith("_private.") or where[n][0] == m}
                     memo_names[key] = frozenset(got)
                 named[(m, i)] |= memo_names[key]
             deps[(m, i)] |= {where[n] for n in named[(m, i)]} - {(m, i)}
@@ -490,18 +496,67 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
     # Commands by side, and the `open`s and `attribute`s a half can't keep.
     spec_consts = {n for m, mod in mods.items() for n, i in mod.of.items() if (m, i) in spec or side[m] in ("spec", "tool")}
     pkg_consts = set(where) | set(free_uses)
-    full_ns = {p for n in pkg_consts for p in prefixes(n)}
-    spec_ns = {p for n in spec_consts for p in prefixes(n)}
+    # `open N` needs `N` registered where it stands: by a `namespace` command or a declaration under `N`, earlier in its
+    # module or in a module it imports. What each line of a spec module (or a spec half) registers:
+    ns_events: dict[str, list[tuple[int, set, bool]]] = {}
     for m, mod in mods.items():
-        sc = scopes(mod.code)
+        if side[m] == "proofs":
+            continue
+        ev = []
         for i, line in enumerate(mod.code):
             if mm := re.match(r"^namespace\s+(\S+)", line):
-                full = ".".join(sc[i][0] + mm.group(1).split("."))
-                ps = full.split(".")
-                names = {".".join(ps[:k]) for k in range(1, len(ps) + 1)}
-                full_ns |= names
-                if side[m] != "proofs":
-                    spec_ns |= names
+                ps = scopes_of[m][i][0] + mm.group(1).split(".")
+                ev.append((i, {".".join(ps[:k]) for k in range(1, len(ps) + 1)}, False))
+        ev += [(s, {p for n in members[(m, i)] for p in prefixes(n)}, True) for i, (s, _) in enumerate(mod.spans)
+               if (m, i) in spec or side[m] in ("spec", "tool")]
+        ns_events[protocol.get(m, m)] = ev
+    imported_ns = {k: set().union(*(x for j in spec_closure(k) for _, x, _ in ns_events.get(j, ()))) for k in ns_events}
+
+    def registered(key: str, i: int) -> set:
+        return imported_ns[key].union(*(x for k, x, _ in ns_events[key] if k < i))
+
+    if "namespaces" not in decls:
+        raise Refused("the decls facts list no `namespaces`: rerun Decls.lean")
+    # The split keeps every dependency a module's closure had, so what dependencies register stays registered.
+    dep_ns = {n for d, ns in decls["namespaces"].items() if d not in mods for n in ns}
+
+    def open_keep(key: str, m: str, i: int, items: list[str]) -> list[str]:
+        """The items of line ``i``'s `open` that spec module ``key`` keeps: all but one no namespace registered there
+        matches (through the enclosing namespaces and those open, as Lean resolves it). Nothing the spec names comes
+        through it, since the module of what it names would register it; it refuses when a spec declaration later in
+        the file is under it."""
+        here, (ns, opens) = registered(key, i), scopes_of[m][i]
+        later = set().union(*(x for k, x, decl in ns_events[key] if decl and k > i))
+        keep = []
+        for it in items:
+            cands = set(candidates(ns, opens + keep, it))
+            if cands & here or cands & dep_ns:
+                keep.append(it)
+            elif hit := sorted(cands & later):
+                raise Refused(f"{m}:{i + 1}: `open {it}` stands before the first spec declaration under {hit[0]}")
+        return keep
+
+    def open_edit(m: str, i: int, keep: list[str], drop: set, edits: dict) -> None:
+        e = commands_of(mods[m].lines, mods[m].code, i)
+        body = " ".join(x.strip() for x in mods[m].code[i:e + 1])
+        if not keep:
+            drop.update(range(i, e + 1))
+        else:
+            edits[i] = f"open {open_items(body)[1]}{' '.join(keep)}{' in' if IN_END.search(body) else ''}"
+            drop.update(range(i + 1, e + 1))
+
+    whole_edits = {}
+    for m, mod in sorted(mods.items()):
+        if side[m] not in ("spec", "tool"):
+            continue
+        drop, edits = set(), {}
+        for i, line in enumerate(mod.code):
+            if line.startswith("open "):
+                items = open_items(" ".join(x.strip() for x in mod.code[i:commands_of(mod.lines, mod.code, i) + 1]))[0]
+                if len(keep := open_keep(m, m, i, items)) != len(items):
+                    open_edit(m, i, keep, drop, edits)
+        if drop or edits:
+            whole_edits[m] = {"drop": sorted(drop), "edits": edits}
     halves = {}
     warnings = []
     for m, mod in sorted(mods.items()):
@@ -530,7 +585,7 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
                 ns, opens = sc[i]
                 sides = set()
                 for t in targets:
-                    for c in [".".join(ns[:k] + [t]) for k in range(len(ns), -1, -1)] + [f"{o}.{t}" for o in opens]:
+                    for c in candidates(ns, opens, t):
                         if c in where:
                             sides.add("spec" if c in spec_consts else "proofs")
                             break
@@ -543,14 +598,9 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
             elif line.startswith("open "):
                 e = commands_of(mod.lines, mod.code, i)
                 body = " ".join(x.strip() for x in mod.code[i:e + 1])
-                items, form = open_items(body)
+                items = open_items(body)[0]
                 ns = sc[i][0]
-                keep = []
-                for it in items:
-                    cands = [".".join(ns[:k] + [it]) for k in range(len(ns), -1, -1)]
-                    found = [c for c in cands if c in full_ns]
-                    if not found or any(c in spec_ns for c in cands) or not all(A.under([root], c) for c in found):
-                        keep.append(it)
+                keep = open_keep(protocol[m], m, i, items)
                 if len(keep) == len(items):
                     if "(" in body:
                         got = re.search(r"\((.*)\)", body)
@@ -565,12 +615,7 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
                             else:
                                 spec_drop.update(range(i, e + 1))
                     continue
-                if not keep:
-                    spec_drop.update(range(i, e + 1))
-                else:
-                    tail = " in" if IN_END.search(body) else ""
-                    edits[i] = f"open {form}{' '.join(keep)}{tail}"
-                    spec_drop.update(range(i + 1, e + 1))
+                open_edit(m, i, keep, spec_drop, edits)
             elif line.startswith("variable") and not IN_END.search(line):
                 # A binder whose type names a proof's constant, or a binder left out before it, is left out of the spec
                 # half; the rest stay, since a spec declaration may use them (an unused `variable` binder is not one
@@ -584,8 +629,7 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
                     for t in (r.lstrip("@") for r in refs if r.lstrip("@") not in local_names):
                         if bad:
                             break
-                        c = next((c for c in [".".join(ns[:k] + [t]) for k in range(len(ns), -1, -1)] +
-                                  [f"{o}.{t}" for o in opens] if c in where), None)
+                        c = next((c for c in candidates(ns, opens, t) if c in where), None)
                         if c and c not in spec_consts:
                             bad = c
                     if bad:
@@ -644,7 +688,7 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
     ext_spec = sorted({i for m in spec_mods for i in new_imports.get(m, []) if i not in mods and i not in protocol.values()})
     return {"package": str(pkg), "root": root, "side": side, "protocol": protocol, "new_imports": new_imports,
             "proof_imports": {m: v for m, v in proof_imports.items() if v != mods[m].imports}, "added": added,
-            "halves": halves, "lock": lock, "layers": layers, "warnings": warnings, "counts": dict(sorted(counts.items())),
+            "halves": halves, "whole_edits": whole_edits, "lock": lock, "layers": layers, "warnings": warnings, "counts": dict(sorted(counts.items())),
             "spec_modules": spec_mods, "dependency_imports": ext_spec, "files": {m: files[m] for m in mods}}
 
 
@@ -707,7 +751,11 @@ def render(p: dict) -> dict[str, str]:
             if lost:
                 raise Refused(f"{m}: the split would lose {sum(lost.values())} line(s), such as {next(iter(lost))!r}")
         elif side in ("spec", "tool"):
-            if p["new_imports"][m] != imports_of(code):
+            w = p["whole_edits"].get(m)
+            if w:
+                drop, edits = set(w["drop"]), {int(k): v for k, v in w["edits"].items()}
+                lines, code = without(lines, drop, edits), without(code, drop, edits)
+            if w or p["new_imports"][m] != imports_of(code):
                 out[rel] = "\n".join(with_imports(lines, code, p["new_imports"][m]))
         elif m in p["proof_imports"]:
             out[rel] = "\n".join(with_imports(lines, code, p["proof_imports"][m]))
@@ -743,6 +791,9 @@ def describe(p: dict) -> str:
              f"  proof modules given imports their closure lost: {len(p['added'])}",
              f"  lock: reads keyed by {len(p['protocol'])} new module names; layers rules added: {', '.join(p['layers']) or 'none'}"]
     lines += [f"  warning: {w}" for w in p["warnings"]]
+    lines += [f"  spec {m}: an `open` loses a namespace only the proofs register, line(s) " +
+              ", ".join(str(k + 1) for k in sorted({int(k) for k in w["edits"]} | {k for k in w["drop"] if k - 1 not in w["drop"]}))
+              for m, w in sorted(p["whole_edits"].items())]
     lines += [f"  mixed {m} -> {p['protocol'][m]}" for m in sorted(p["protocol"])]
     return "\n".join(lines)
 
