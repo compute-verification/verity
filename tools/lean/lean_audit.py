@@ -1,7 +1,8 @@
 """`lean_audit`: Lean's audit job, which `check` runs as its lean-audit step. `tools/lean/audit.py --build` on the packages
 whose passes can't be reused, with dependencies kept warm.
 
-    python tools/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
+    python tools/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
+                                                      (only those packages: a shard's share, `check.py --shard`)
     python tools/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
@@ -26,7 +27,7 @@ moved: a `..` left (after the paths above) in its lakefile, manifest, toolchain 
 puts the package's path back into its key.
 
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
-`tools/lean`. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
+`tools/lean` (named by its creator's pid; an audit first removes every scratch tree no audit holds, `sweep`). So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
 (the counterpart of `suites.py`'s read guard). Only the missed packages are audited. A package one of them requires by path is
 in the tree and built as far as it imports it, but not audited again: what vouches for its modules is its own pass, under its
 own key, and the run passes only when every package has one. The dependent's axiom walk follows its declarations into those
@@ -537,6 +538,61 @@ def scratch_tree(dest: Path, files: list[str]) -> None:
             shutil.copy2(s, d)
 
 
+SCRATCH = "lean-audit-scratch-"
+#: how long a scratch tree without its creator's pid in its name is kept unheld: an older check's, which may be filling it
+SCRATCH_GRACE_S = 3600
+
+
+def _links(proc: Path) -> tuple[list[str], bool]:
+    """(every cwd, root and open file of the processes under ``proc``, whether some process's could not be read)."""
+    out, blind = [], False
+    for p in proc.iterdir():
+        if not p.name.isdigit():
+            continue
+        try:
+            names = [p / "cwd", p / "root", *(p / "fd").iterdir()]
+        except FileNotFoundError:
+            continue
+        except OSError:
+            blind = True
+            continue
+        for n in names:
+            try:
+                out.append(os.readlink(n))
+            except FileNotFoundError:
+                pass
+            except OSError:
+                blind = True
+    return out, blind
+
+
+def sweep(base: Path, log=print, proc: Path = Path("/proc"), now: float | None = None) -> list[str]:
+    """Remove each ``lean-audit-scratch-*`` under ``base`` that no audit holds: one an audit left when it was killed before its
+    ``finally``.  A tree is held while a live process has its cwd, root or an open file inside it, while the pid its name holds
+    is alive, or, for a name without one, while some process can't be read or the tree changed within ``SCRATCH_GRACE_S``."""
+    trees = [d for d in base.glob(SCRATCH + "*") if d.is_dir() and not d.is_symlink()] if base.is_dir() else []
+    if not trees:
+        return []
+    links, blind = _links(proc)
+    now = time.time() if now is None else now
+    gone = []
+    for d in trees:
+        top = str(d.resolve())
+        if any(t == top or t.startswith(top + os.sep) for t in links):
+            continue
+        pid = d.name[len(SCRATCH):].split("-", 1)[0]
+        if pid.isdigit() and "-" in d.name[len(SCRATCH):]:
+            if (proc / pid).exists():
+                continue
+        elif blind or now - d.stat().st_mtime < SCRATCH_GRACE_S:
+            continue
+        shutil.rmtree(d, ignore_errors=True)
+        gone.append(d.name)
+    if gone:
+        log(f"lean-audit: removed {len(gone)} scratch tree(s) no audit holds: {', '.join(sorted(gone))}")
+    return gone
+
+
 #: a dependency fetch that failed for a reason outside the audit (GitHub throttles anonymous clones from a busy address)
 TRANSIENT = ("could not read Username for 'https://github.com'", "Could not resolve host", "expected flush after ref listing",
              "Failed to connect to", "The requested URL returned error: 429", "The requested URL returned error: 5")
@@ -556,7 +612,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because audit.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
-    work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent)).resolve()
+    sweep(deps.parent, log)
+    work = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-", dir=deps.parent)).resolve()
     warm = WarmDeps(deps, urls)
     builds = WarmBuilds(deps.parent / "lean-builds")
     passed: set[Path] = set()
@@ -602,14 +659,28 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     return failed, audited
 
 
+def select(pkgs: list[str], only: list[str] | None) -> list[str]:
+    """``pkgs`` less those ``only`` (`--package`, a shard's share) leaves out; ValueError naming one ``only`` has and ``pkgs``
+    lacks."""
+    if not only:
+        return pkgs
+    if unknown := sorted(set(only) - set(pkgs)):
+        raise ValueError(f"no audited package {', '.join(unknown)} on this tree")
+    return [p for p in pkgs if p in only]
+
+
 def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls: dict[str, str] | None = None,
-        export: Path | None = None) -> int:
+        export: Path | None = None, only: list[str] | None = None) -> int:
     files = COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
         fresh = True
         files = [str(p.relative_to(ROOT)) for p in ROOT.rglob("*") if p.is_file() and ".lake" not in p.parts]
-    pkgs = packages(files)
+    try:
+        pkgs = select(packages(files), only)
+    except ValueError as e:
+        log(f"lean-audit: FAIL: {e}")
+        return 1
     comps = {p: components(p, files, FLAGS) for p in pkgs}
     keys = {p: key_of(c) for p, c in comps.items()}
     out.mkdir(parents=True, exist_ok=True)
@@ -756,9 +827,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--fresh", action="store_true", help="audit every package and store nothing")
     ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")
+    ap.add_argument("--package", action="append", metavar="PKG", help="audit only this package (repeatable): a shard's share")
     a = ap.parse_args(argv)
     urls = json.loads(a.urls.read_text()) if a.urls and a.urls.is_file() else None
-    return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export)
+    return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export, only=a.package)
 
 
 if __name__ == "__main__":

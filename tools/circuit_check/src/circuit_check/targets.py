@@ -18,10 +18,14 @@ import ast
 import importlib
 import pkgutil
 import re
+import sys
 import zlib
+from pathlib import Path
 from typing import Any, Callable, Iterable
 
 import numpy as np
+
+from . import cache as CC
 
 _LOADED = False
 #: the ids registered once every registry module is imported: the authored Definitions (a lazy family's members, such as
@@ -29,11 +33,25 @@ _LOADED = False
 REGISTERED: list[str] = []
 
 
+#: the repository's root: a Definition is this tree's when the module defining it is a file under it
+REPO = Path(__file__).resolve().parents[4]
+
+
 def _authored(d: Any) -> bool:
-    """A Definition the core, the vLLM registry or PoUW's circuit defines (not one a test module registered in the same
-    session)."""
+    """A Definition this tree's code defines, decided by the file of the module that defines it: under the repository and
+    outside every `tests/` directory and conftest, not one a test module registered in the same session. A Definition whose
+    module has no file here to judge by raises, naming it, rather than drop out of `REGISTERED` unchecked."""
     fn = getattr(d, "evaluate", None) or getattr(d, "body", None)
-    return getattr(fn, "__module__", "").partition(".")[0] in ("verity", "verity_vllm", "verity_pouw")
+    name = getattr(fn, "__module__", None)
+    file = getattr(sys.modules.get(name or ""), "__file__", None)
+    if not file:
+        raise LookupError(f"{getattr(d, 'id', d)!r}: its defining module {name!r} has no file, so circuit-check can't tell "
+                          f"whether this tree authored it")
+    path = Path(file).resolve()
+    if not path.is_relative_to(REPO):
+        return False
+    rel = path.relative_to(REPO)
+    return "tests" not in rel.parts[:-1] and rel.name != "conftest.py"
 
 
 def load_registries() -> None:
@@ -183,6 +201,20 @@ TEMPLATE_PARAMS = {
 }
 
 
+#: the binding units (`cache`'s units of this module: a root function, a `_model_roots` entry, a `TEMPLATE_PARAMS` entry) whose
+#: roots reach each suite target, by Definition id (`suite`) or template label (`templates`)
+BINDINGS: dict[str, set[str]] = {}
+
+
+def _produce(units: tuple[str, ...], make: Callable[[], list[Any]], by_unit: list | None = None) -> list[Any]:
+    """``make()``'s roots, recorded while it runs, with every Definition it makes (`cache.producing`)."""
+    with CC.producing(units):
+        got = make()
+    if by_unit is not None:
+        by_unit.append((units, got))
+    return got
+
+
 def templates() -> list[tuple[str, Any, list[dict]]]:
     """(label, subcircuit, instance statics) for every template in the catalogue: `TEMPLATE_PARAMS`, else its example."""
     from verity_numerical.bench import templates as TM
@@ -190,9 +222,11 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
     load_registries()
     out = []
     for tid, t in sorted(TM.TEMPLATES.items()):
+        unit = (f"TEMPLATE_PARAMS:{tid}",)
         for params in TEMPLATE_PARAMS.get(tid, [dict(t.example)]):
-            sub = t.bind(**params)
-            out.append((sub.id, sub, instance_statics(sub, params)))
+            sub, sts = _produce(unit, lambda t=t, params=params: (lambda s: [s, instance_statics(s, params)])(t.bind(**params)))
+            BINDINGS.setdefault(sub.id, set()).update(unit)
+            out.append((sub.id, sub, sts))
     return out
 
 
@@ -379,7 +413,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
     from verity_vllm.program.registry import serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
-    from verity_vllm.program.registry import boolean_attention, boolean_fp8, boolean_fp8_moe, boolean_rope, tables
+    from verity_vllm.program.registry import boolean_attention, boolean_dsa, boolean_fp8, boolean_fp8_moe, boolean_rope
+    from verity_vllm.program.registry import boolean_sparse_mla, dsa, sparse_mla, tables
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -467,6 +502,33 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("SiluMulFp8BlockQuantResult_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantResultV2)),
         ("SiluMulFp8BlockQuantGroup_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantGroupV2, G=4)),
         ("SiluMulFp8BlockQuant_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantV2, I=8, G=4)),
+        # GLM-5.3's DSA indexer at its served shapes (D = 128, 32 heads, the top-2048 row), and on bits at one warp
+        ("DsaUe8m0Quant_v1", lambda: bind(dsa.DsaUe8m0Quant, N=128)),
+        ("DsaIndexerKRow_v1", lambda: bind(dsa.DsaIndexerKRow, D=128, ROPE=64, EPS=1e-6)),
+        ("DsaIndexerQHead_v1", lambda: bind(dsa.DsaIndexerQHead, D=128, ROPE=64, NH=32)),
+        ("DsaIndexerQ_v1", lambda: bind(dsa.DsaIndexerQ, H=32, D=128, ROPE=64)),
+        ("DsaMqaLogit_v1", lambda: bind(dsa.DsaMqaLogit, H=32, D=128)),
+        ("DsaMqaLogits_v1", lambda: bind(dsa.DsaMqaLogits, N=4, H=32, D=128)),
+        ("DsaTopKShortRow_v1", lambda: bind(dsa.DsaTopKShortRow, TOPK=2048)),
+        ("DsaUe8m0Quant_v2", lambda: bind(boolean_dsa.DsaUe8m0QuantV2, N=4)),
+        ("DsaIndexerKRow_v2", lambda: bind(boolean_dsa.DsaIndexerKRowV2, D=32, ROPE=16, EPS=1e-6)),
+        ("DsaIndexerQHead_v2", lambda: bind(boolean_dsa.DsaIndexerQHeadV2, D=32, ROPE=16, NH=32)),
+        ("DsaIndexerQ_v2", lambda: bind(boolean_dsa.DsaIndexerQV2, H=2, D=32, ROPE=16)),
+        ("DsaMqaLogit_v2", lambda: bind(boolean_dsa.DsaMqaLogitV2, H=8, D=32)),
+        ("DsaMqaLogits_v2", lambda: bind(boolean_dsa.DsaMqaLogitsV2, N=2, H=8, D=32)),
+        ("DsaTopKShortRow_v2", lambda: bind(boolean_dsa.DsaTopKShortRowV2, TOPK=16)),
+        # its sparse MLA (FA3 over the selected rows) at the served statics, two blocks; on bits at DR = DV = BN = 16
+        ("SparseMlaBlock_v1", lambda: bind(sparse_mla.SparseMlaBlock, NVIS=64, FIRST=False,
+                                           **{k: sparse_mla.SPARSE_MLA_GLM53[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")})),
+        ("SparseMlaHead_v1", lambda: bind(sparse_mla.SparseMlaHead, T=65,
+                                          **{k: v for k, v in sparse_mla.SPARSE_MLA_GLM53.items() if k != "NH"})),
+        ("SparseMla_v1", lambda: bind(sparse_mla.SparseMla, T=65, **sparse_mla.SPARSE_MLA_GLM53)),
+        ("SparseMlaBlock_v2", lambda: bind(boolean_sparse_mla.SparseMlaBlockV2, DR=16, DV=16, NVIS=5, FIRST=True, BN=16,
+                                           DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625)),
+        ("SparseMlaHead_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadV2, T=5, DR=16, DV=16, BN=16, SCALE=0.0625,
+                                          DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], INV=boolean_sparse_mla.SPARSE_MLA_GLM53["INV"])),
+        ("SparseMla_v2", lambda: bind(boolean_sparse_mla.SparseMlaV2, T=5, NH=2, DR=16, DV=16, BN=16, SCALE=0.0625,
+                                      DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], INV=boolean_sparse_mla.SPARSE_MLA_GLM53["INV"])),
         ("LServe_v2", lambda: lifted.lserve(TINY, 3, 2, (7,), lag=0)),
         ("ServeSpec_v1", lambda: bind(spec.ServeSpec, C=long, CD={**TINY_NOBIAS, "MAX_POS": 16}, LP=3, K=2, A=(2, 2))),
         ("ServeDraft_v1", lambda: bind(spec.ServeDraft, C=long, LP=3, STEPS=2)),
@@ -605,8 +667,9 @@ def boolean_call_families(word_calls: set[str]) -> set[str]:
     return out
 
 
-def catalog() -> list[Any]:
-    """The roots: every primitive, every static-free composite, and the bindings above."""
+def catalog(by_unit: list | None = None) -> list[Any]:
+    """The roots: every primitive, every static-free composite, and the bindings above; with ``by_unit``, each binding's
+    (units, roots) appended to it."""
     from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 
     load_registries()
@@ -617,17 +680,23 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _universal_roots() + _merkle_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
+    for units, make in ((("_core_roots",), _core_roots), (("_boolean_roots",), _boolean_roots),
+                        (("_boolean_gather_roots",), _boolean_gather_roots), (("_universal_roots",), _universal_roots),
+                        (("_merkle_roots",), _merkle_roots), (("_kernel_roots",), _kernel_roots),
+                        (("_vocabulary_roots", "_vocabulary_bindings"), _vocabulary_roots), (("_pouw_roots",), _pouw_roots)):
+        roots += _produce(units, make, by_unit)
     for label, make in _model_roots():
-        try:
+        def built(make=make):
             fn = make()
             _ = fn.body
-            roots.append(fn)
+            return [fn]
+        try:
+            roots += _produce((f"_model_roots:{label}",), built, by_unit)
         except Exception as e:  # noqa: BLE001  (named, and the suite fails on it)
             ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
     for _label, sub, sts in templates():
-        for st in sts:
-            roots += [sub.definition(**st), sub.target(**st)]
+        roots += _produce((f"TEMPLATE_PARAMS:{sub.template.id}",),
+                          lambda sub=sub, sts=sts: [x for st in sts for x in (sub.definition(**st), sub.target(**st))], by_unit)
     return roots
 
 
@@ -682,9 +751,14 @@ def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
 
 def suite() -> dict[str, Any]:
     """Every Definition the suite checks, by id: `select`'s, and PoUW's roots whatever their size (each P's whole call and
-    window share a family and a gate count, so `select` alone keeps one of them)."""
-    out = select(reachable(catalog()))
-    out.update({fn.id: fn for fn in _pouw_roots()})
+    window share a family and a gate count, so `select` alone keeps one of them).  Records each one's `BINDINGS`."""
+    by_unit: list = []
+    out = select(reachable(catalog(by_unit)))
+    out.update({fn.id: fn for fn in _produce(("_pouw_roots",), _pouw_roots, by_unit)})
+    for units, roots in by_unit:
+        for fid in reachable(roots):
+            if fid in out:
+                BINDINGS.setdefault(fid, set()).update(units)
     return dict(sorted(out.items()))
 
 
