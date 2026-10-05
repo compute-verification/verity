@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """vy-nebius-1's process-level GPU leases: node 2's `gpu-lease` (the same lock files and rules) on GPUs that Kubernetes lends it.
 
-    n1_lease.py loop [--every 5]     as research on node 1 (tmux `n1-lease`)
+    n1_lease.py loop [--every 5]     as research on node 1 (unit vy-n1-lease@POOL, one per pool)
     n1_lease.py tick | status
 
 A job leases a GPU for its GPU phase only: its pod requests no `nvidia.com/gpu`, runs with `hostPID`, runtime class nvidia and
