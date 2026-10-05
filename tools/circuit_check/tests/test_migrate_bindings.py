@@ -56,15 +56,14 @@ def _core_roots() -> list[Any]:
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Tiny configurations."""
     from verity.primitives.circuits.defs import bind
-    from verity_catalog.definitions import gemm as G
-    from verity_catalog.definitions.prims import AmpereBF16TcDot16
+    from verity.primitives.commitments.gates import merkle as M
     from verity_vllm.program.registry import b1
 
     n = TINY["H"] // 2
     return [
         # the residual at half the tiny width
         ("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=n)),
-        ("DotBf16_v1", lambda: bind(G.DotBf16, K=TINY["H"], DOT=AmpereBF16TcDot16)),
+        ("MerkleRead_v1", lambda: bind(M.MerkleRead, ARITY=2, D=TINY["H"] // 32)),
     ]
 
 
@@ -128,9 +127,9 @@ def test_a_model_entry_moves_with_its_comment_and_what_it_reads_and_a_core_one_r
     moved, targets, summary = planned
     b1 = moved["verity_vllm.program.registry.b1"]["_model_roots"]
     assert "# the residual at half the tiny width" in b1 and "from circuit_check.targets import TINY" in b1
-    assert 'n = TINY["H"] // 2' in b1 and "gemm" not in b1 and "AmpereBF16TcDot16" not in b1
+    assert 'n = TINY["H"] // 2' in b1 and "merkle" not in b1
     assert [label for label, _make in _run(b1, "_model_roots")] == ["ResidualAdd_v1"]
-    assert '("DotBf16_v1"' in targets and '("ResidualAdd_v1"' not in targets
+    assert '("MerkleRead_v1"' in targets and '("ResidualAdd_v1"' not in targets
     assert any("circuit_check.targets' TINY" in s for s in summary["stays"])
 
 
