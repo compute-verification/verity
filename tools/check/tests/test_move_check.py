@@ -15,8 +15,8 @@ MC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(MC)
 
 ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}      # not this machine's git config
-PYPROJECT = 'name = "pous"\n[tool.verity.tests]\ninputs = ["protocols/pous/data", "census/hardware.json"]\n'
-LAKEFILE = '[[require]]\nname = "verity"\npath = "../../../packages/verity/lean"\n'
+PYPROJECT = 'name = "pous"\n[tool.verity.tests]\ninputs = ["verity/protocols/accounting/space/pous/data", "catalog/census/hardware.json"]\n'
+LAKEFILE = '[[require]]\nname = "verity"\npath = "../../../verity/lean"\n'
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -52,60 +52,60 @@ def _check(repo: Path, base: str, extra: dict[str, str] | None = None) -> dict:
 
 
 BASE_FILES = {
-    "protocols/pous/src/verity_pous/__init__.py": "",
-    "protocols/pous/src/verity_pous/codec.py": "def encode(x):\n    return x + 1\n",
-    "protocols/pous/lean/Pous.lean": "theorem t : 1 = 1 := rfl\n",
-    "protocols/pous/lean/lean-audit.json": '{"guarantees": {"Pous.t": "abc"}}\n',
-    "protocols/pouw/src/verity_pouw/x.py": "X = 1\n",
-    "tests/test_pous.py": "from verity_pous.codec import encode\nimport verity_pous.codec as c\n\n\ndef test():\n    assert encode(1) == 2\n",
+    "verity/protocols/accounting/space/pous/src/verity_pous/__init__.py": "",
+    "verity/protocols/accounting/space/pous/src/verity_pous/codec.py": "def encode(x):\n    return x + 1\n",
+    "verity/protocols/accounting/space/pous/lean/Pous.lean": "theorem t : 1 = 1 := rfl\n",
+    "verity/protocols/accounting/space/pous/lean/lean-audit.json": '{"guarantees": {"Pous.t": "abc"}}\n',
+    "verity/protocols/accounting/work/pouw/src/verity_pouw/x.py": "X = 1\n",
+    "tests/test_pous.py": "from verity.protocols.accounting.space.pous.codec import encode\nimport verity.protocols.accounting.space.pous.codec as c\n\n\ndef test():\n    assert encode(1) == 2\n",
 }
 
 
 def test_pure_rename_is_certified(tmp_path):
     repo, base = _repo(tmp_path, BASE_FILES)
-    _move(repo, "protocols/pous", "security_proofs/pous")
+    _move(repo, "verity/protocols/accounting/space/pous", "security_proofs/pous")
     r = _check(repo, base)
     assert r["certified"], r["refusals"]
     assert len(r["renames"]) == 4 and not r["edits"]
-    # the map is the moved directory, not `protocols`, since `protocols/pouw` stayed
-    assert r["map"] == {"protocols/pous": "security_proofs/pous"}
+    # the map is the moved directory, not `protocols`, since `verity/protocols/accounting/work/pouw` stayed
+    assert r["map"] == {"verity/protocols/accounting/space/pous": "security_proofs/pous"}
 
 
 def test_rename_with_a_one_byte_edit_is_refused(tmp_path):
     repo, base = _repo(tmp_path, BASE_FILES)
-    _move(repo, "protocols/pous", "security_proofs/pous")
+    _move(repo, "verity/protocols/accounting/space/pous", "security_proofs/pous")
     _write(repo, {"security_proofs/pous/src/verity_pous/codec.py": "def encode(x):\n    return x + 2\n"})
     r = _check(repo, base)
     assert not r["certified"]
     [f] = r["refusals"]
-    assert f["path"] == "security_proofs/pous/src/verity_pous/codec.py" and f["old"] == "protocols/pous/src/verity_pous/codec.py"
+    assert f["path"] == "security_proofs/pous/src/verity_pous/codec.py" and f["old"] == "verity/protocols/accounting/space/pous/src/verity_pous/codec.py"
     assert "-    return x + 1" in f["hunk"] and "+    return x + 2" in f["hunk"]
 
 
 def test_pyproject_path_edit_is_certified(tmp_path):
-    repo, base = _repo(tmp_path, {**BASE_FILES, "protocols/pous/pyproject.toml": PYPROJECT,
-                                  "pyproject.toml": '[tool.uv.workspace]\nmembers = ["protocols/pous", "protocols/pouw"]\n'})
-    _move(repo, "protocols/pous", "security_proofs/pous")
-    _write(repo, {"security_proofs/pous/pyproject.toml": PYPROJECT.replace("protocols/pous/data", "security_proofs/pous/data"),
-                  "pyproject.toml": '[tool.uv.workspace]\nmembers = ["security_proofs/pous", "protocols/pouw"]\n'})
+    repo, base = _repo(tmp_path, {**BASE_FILES, "verity/protocols/accounting/space/pous/pyproject.toml": PYPROJECT,
+                                  "pyproject.toml": '[tool.uv.workspace]\nmembers = ["verity/protocols/accounting/space/pous", "verity/protocols/accounting/work/pouw"]\n'})
+    _move(repo, "verity/protocols/accounting/space/pous", "security_proofs/pous")
+    _write(repo, {"security_proofs/pous/pyproject.toml": PYPROJECT.replace("verity/protocols/accounting/space/pous/data", "security_proofs/pous/data"),
+                  "pyproject.toml": '[tool.uv.workspace]\nmembers = ["security_proofs/pous", "verity/protocols/accounting/work/pouw"]\n'})
     r = _check(repo, base)
     assert r["certified"], r["refusals"]
     assert {e["path"] for e in r["edits"]} == {"pyproject.toml", "security_proofs/pous/pyproject.toml"}
 
 
 def test_path_edit_to_a_directory_that_did_not_move_is_refused(tmp_path):
-    repo, base = _repo(tmp_path, {**BASE_FILES, "pyproject.toml": 'members = ["protocols/pous", "protocols/pouw"]\n'})
-    _move(repo, "protocols/pous", "security_proofs/pous")
+    repo, base = _repo(tmp_path, {**BASE_FILES, "pyproject.toml": 'members = ["verity/protocols/accounting/space/pous", "verity/protocols/accounting/work/pouw"]\n'})
+    _move(repo, "verity/protocols/accounting/space/pous", "security_proofs/pous")
     _write(repo, {"pyproject.toml": 'members = ["security_proofs/pous", "security_proofs/pouw"]\n'})
     [f] = _check(repo, base)["refusals"]
     assert f["path"] == "pyproject.toml" and "security_proofs/pouw" in f["hunk"]
 
 
 def test_non_path_edit_in_pyproject_is_refused(tmp_path):
-    repo, base = _repo(tmp_path, {**BASE_FILES, "protocols/pous/pyproject.toml": PYPROJECT})
-    _move(repo, "protocols/pous", "security_proofs/pous")
+    repo, base = _repo(tmp_path, {**BASE_FILES, "verity/protocols/accounting/space/pous/pyproject.toml": PYPROJECT})
+    _move(repo, "verity/protocols/accounting/space/pous", "security_proofs/pous")
     _write(repo, {"security_proofs/pous/pyproject.toml":
-                  PYPROJECT.replace("protocols/pous/data", "security_proofs/pous/data").replace('"pous"', '"pous2"')})
+                  PYPROJECT.replace("verity/protocols/accounting/space/pous/data", "security_proofs/pous/data").replace('"pous"', '"pous2"')})
     r = _check(repo, base)
     [f] = r["refusals"]
     assert f["path"] == "security_proofs/pous/pyproject.toml" and f["reason"] == "edit beyond path strings"
@@ -114,8 +114,8 @@ def test_non_path_edit_in_pyproject_is_refused(tmp_path):
 
 def test_import_line_rewrite_is_certified(tmp_path):
     repo, base = _repo(tmp_path, BASE_FILES)
-    _move(repo, "protocols/pous/src/verity_pous", "security_proofs/pous/src/pous")
-    _write(repo, {"tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity_pous", "pous")})
+    _move(repo, "verity/protocols/accounting/space/pous/src/verity_pous", "security_proofs/pous/src/pous")
+    _write(repo, {"tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity.protocols.accounting.space.pous", "pous")})
     r = _check(repo, base)
     assert r["certified"], r["refusals"]
     assert r["edits"] == [{"path": "tests/test_pous.py", "kind": "import"}]
@@ -123,15 +123,15 @@ def test_import_line_rewrite_is_certified(tmp_path):
 
 def test_import_of_a_module_that_did_not_move_is_refused(tmp_path):
     repo, base = _repo(tmp_path, BASE_FILES)
-    _move(repo, "protocols/pous/src/verity_pous", "security_proofs/pous/src/pous")
-    _write(repo, {"tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity_pous.codec", "pous.other")})
+    _move(repo, "verity/protocols/accounting/space/pous/src/verity_pous", "security_proofs/pous/src/pous")
+    _write(repo, {"tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity.protocols.accounting.space.pous.codec", "pous.other")})
     [f] = _check(repo, base)["refusals"]
     assert f["path"] == "tests/test_pous.py" and f["reason"] == "edit beyond import lines"
 
 
 def test_a_new_file_is_refused(tmp_path):
     repo, base = _repo(tmp_path, BASE_FILES)
-    _move(repo, "protocols/pous", "security_proofs/pous")
+    _move(repo, "verity/protocols/accounting/space/pous", "security_proofs/pous")
     _write(repo, {"security_proofs/pous/NEW.md": "hello\n"})
     [f] = _check(repo, base)["refusals"]
     assert (f["path"], f["status"], f["reason"]) == ("security_proofs/pous/NEW.md", "A", "added")
@@ -148,57 +148,57 @@ def test_names_with_spaces_and_odd_characters(tmp_path):
 
 
 def test_lean_package_move_with_relative_require(tmp_path):
-    files = {**BASE_FILES, "packages/verity/lean/Verity.lean": "def v := 1\n", "protocols/pous/lean/lakefile.toml": LAKEFILE}
+    files = {**BASE_FILES, "verity/lean/Verity.lean": "def v := 1\n", "verity/protocols/accounting/space/pous/lean/lakefile.toml": LAKEFILE}
     repo, base = _repo(tmp_path, files)
-    _move(repo, "packages/verity/lean", "verity/lean")
-    _move(repo, "protocols/pous/lean", "security_proofs/pous")
-    _write(repo, {"security_proofs/pous/lakefile.toml": LAKEFILE.replace("../../../packages/verity/lean", "../../verity/lean")})
+    _move(repo, "verity/lean", "verity/lean")
+    _move(repo, "verity/protocols/accounting/space/pous/lean", "security_proofs/pous")
+    _write(repo, {"security_proofs/pous/lakefile.toml": LAKEFILE.replace("../../../verity/lean", "../../verity/lean")})
     r = _check(repo, base)
     assert r["certified"], r["refusals"]
-    assert r["edits"] == [{"path": "security_proofs/pous/lakefile.toml", "old": "protocols/pous/lean/lakefile.toml", "kind": "path"}]
+    assert r["edits"] == [{"path": "security_proofs/pous/lakefile.toml", "old": "verity/protocols/accounting/space/pous/lean/lakefile.toml", "kind": "path"}]
 
 
 def test_byte_identical_lakefile_whose_relative_require_broke_is_refused(tmp_path):
-    files = {**BASE_FILES, "packages/verity/lean/Verity.lean": "def v := 1\n", "protocols/pous/lean/lakefile.toml": LAKEFILE}
+    files = {**BASE_FILES, "verity/lean/Verity.lean": "def v := 1\n", "verity/protocols/accounting/space/pous/lean/lakefile.toml": LAKEFILE}
     repo, base = _repo(tmp_path, files)
-    _move(repo, "protocols/pous/lean", "security_proofs/pous")
+    _move(repo, "verity/protocols/accounting/space/pous/lean", "security_proofs/pous")
     [f] = _check(repo, base)["refusals"]
     assert f["reason"] == "relative path now resolves elsewhere"
 
 
 def test_lean_audit_pin_change_is_refused(tmp_path):
     repo, base = _repo(tmp_path, BASE_FILES)
-    _move(repo, "protocols/pous", "security_proofs/pous")
+    _move(repo, "verity/protocols/accounting/space/pous", "security_proofs/pous")
     _write(repo, {"security_proofs/pous/lean/lean-audit.json": '{"guarantees": {"Pous.t": "abd"}}\n'})
     [f] = _check(repo, base)["refusals"]
     assert f["path"] == "security_proofs/pous/lean/lean-audit.json"
 
 
 def test_explicit_map_and_cli(tmp_path, capsys, monkeypatch):
-    repo, base = _repo(tmp_path, {**BASE_FILES, "AGENTS.md": "See `protocols/pous/lean/Pous.lean`.\n"})
+    repo, base = _repo(tmp_path, {**BASE_FILES, "AGENTS.md": "See `verity/protocols/accounting/space/pous/lean/Pous.lean`.\n"})
     _write(repo, {"AGENTS.md": "See `elsewhere/Pous.lean`.\n"})
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "doc")
     monkeypatch.chdir(repo)
     assert MC.main([base, "HEAD", "--json"]) == 1
     assert not json.loads(capsys.readouterr().out)["certified"]
-    assert MC.main([base, "HEAD", "--map", "protocols/pous/lean=elsewhere"]) == 0
+    assert MC.main([base, "HEAD", "--map", "verity/protocols/accounting/space/pous/lean=elsewhere"]) == 0
     assert capsys.readouterr().out.startswith("move-check: certified")
 
 
-SPEC = "packages/verity/lean"
+SPEC = "verity/lean"
 PROOFS = "security_proofs/core"
 LAKEFILE_SPEC = ('name = "verity"\ndefaultTargets = ["Verity"]\n\n[[require]]\nname = "mathlib"\n'
                  'git = "https://github.com/leanprover-community/mathlib4"\nrev = "abc"\n\n# Verity core\'s Lean.\n'
                  '[[lean_lib]]\nname = "Verity"\n')
 LAKEFILE_PROOFS = ('name = "coreproofs"\ndefaultTargets = ["CoreProofs"]\n\n[[require]]\nname = "mathlib"\n'
                    'git = "https://github.com/leanprover-community/mathlib4"\nrev = "abc"\n\n[[require]]\nname = "verity"\n'
-                   'path = "../../packages/verity/lean"\n\n# The proofs of core\'s guarantees.\n[[lean_lib]]\nname = "CoreProofs"\n'
+                   'path = "../../verity/lean"\n\n# The proofs of core\'s guarantees.\n[[lean_lib]]\nname = "CoreProofs"\n'
                    'globs = ["CoreProofs.+"]\n')
 MATHLIB = {"url": "https://github.com/leanprover-community/mathlib4", "type": "git", "name": "mathlib", "rev": "abc",
            "inherited": False, "configFile": "lakefile.lean"}
 VERITY_PATH = {"type": "path", "scope": "", "name": "verity", "manifestFile": "lake-manifest.json", "inherited": False,
-               "dir": "../../packages/verity/lean", "configFile": "lakefile.toml"}
+               "dir": "../../verity/lean", "configFile": "lakefile.toml"}
 PINS = {"Verity.SecurityProofs.G": {"signature": ["Verity.SecurityProofs.G : Verity.G"], "assumptions": [], "type_hash": "aa"}}
 READS = {"Verity.Guarantees": {"digest": "dd", "definitions": {"Verity.G": "ee"}}}
 FOO = "import Verity.Guarantees\n\nnamespace Verity.SecurityProofs\n\ntheorem G : Verity.G := rfl\n\nend Verity.SecurityProofs\n"
@@ -300,7 +300,7 @@ REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n 
 REGISTRY_FILES = {"backends/flock/tool.py": "FLOCK_PURE = 1\n", "backends/flock/prove.py": "",
                   "benchmarks/pouw/tool.py": "POUW_GEMM = 1\n",
                   "tools/research/src/research/store/tools_registry.py": REGISTRY,
-                  "backends/numerical/python/verity_numerical/bench/lowerings.py":
+                  "benchmarks/numerical/python/verity_numerical/bench/lowerings.py":
                       'DIRECTORIES = {\n    "C-Flock": REPO / "backends" / "flock" / "templates",\n}\n',
                   "tools/research/src/research/store/parity.py":
                       'argv = [sys.executable, "-m", f"backends.flock.{mod}", "--root", str(root)]\n'}
@@ -310,14 +310,14 @@ def test_tools_registry_dotted_rewrite_is_certified(tmp_path):
     repo, base = _repo(tmp_path, REGISTRY_FILES)
     _move(repo, "backends/flock", "catalog/flock")
     _write(repo, {"tools/research/src/research/store/tools_registry.py": REGISTRY.replace("backends.flock", "catalog.flock"),
-                  "backends/numerical/python/verity_numerical/bench/lowerings.py":
+                  "benchmarks/numerical/python/verity_numerical/bench/lowerings.py":
                       'DIRECTORIES = {\n    "C-Flock": REPO / "catalog" / "flock" / "templates",\n}\n',
                   "tools/research/src/research/store/parity.py":
                       'argv = [sys.executable, "-m", f"catalog.flock.{mod}", "--root", str(root)]\n'})
     r = _check(repo, base)
     assert r["certified"], r["refusals"]
     assert {e["path"] for e in r["edits"]} == {"tools/research/src/research/store/tools_registry.py",
-                                               "backends/numerical/python/verity_numerical/bench/lowerings.py",
+                                               "benchmarks/numerical/python/verity_numerical/bench/lowerings.py",
                                                "tools/research/src/research/store/parity.py"}
 
 
@@ -338,34 +338,34 @@ def test_module_argument_outside_a_dash_m_line_is_refused(tmp_path):
     assert f["path"] == "tools/research/src/research/x.py"
 
 
-WORKSPACE = '[tool.uv.workspace]\nmembers = ["protocols/pous", "protocols/pouw"]\n\n[tool.uv.sources]\npous = { workspace = true }\n'
+WORKSPACE = '[tool.uv.workspace]\nmembers = ["verity/protocols/accounting/space/pous", "verity/protocols/accounting/work/pouw"]\n\n[tool.uv.sources]\npous = { workspace = true }\n'
 
 
 def _new_member(tmp_path: Path, members: str, sources: str = "") -> dict:
     repo, base = _repo(tmp_path, {**BASE_FILES, "pyproject.toml": WORKSPACE})
-    _move(repo, "protocols/pous", "security_proofs/pous")
-    _write(repo, {"pyproject.toml": WORKSPACE.replace('"protocols/pous"', '"security_proofs/pous"')
-                  .replace('"protocols/pouw"]', members + "]") + sources})
+    _move(repo, "verity/protocols/accounting/space/pous", "security_proofs/pous")
+    _write(repo, {"pyproject.toml": WORKSPACE.replace('"verity/protocols/accounting/space/pous"', '"security_proofs/pous"')
+                  .replace('"verity/protocols/accounting/work/pouw"]', members + "]") + sources})
     return _check(repo, base)
 
 
 def test_workspace_member_for_a_new_package_is_certified(tmp_path):
-    r = _new_member(tmp_path, '"protocols/pouw", "security_proofs/pous/src"')
+    r = _new_member(tmp_path, '"verity/protocols/accounting/work/pouw", "security_proofs/pous/src"')
     assert r["certified"], r["refusals"]
 
 
 def test_workspace_member_for_an_old_or_missing_directory_is_refused(tmp_path):
-    for i, extra in enumerate(('"protocols/pouw", "tests"', '"protocols/pouw", "nowhere"')):
+    for i, extra in enumerate(('"verity/protocols/accounting/work/pouw", "tests"', '"verity/protocols/accounting/work/pouw", "nowhere"')):
         [f] = _new_member(tmp_path / str(i), extra)["refusals"]
         assert f["path"] == "pyproject.toml"
 
 
 def test_uv_source_for_a_package_not_created_by_the_range_is_refused(tmp_path):
-    [f] = _new_member(tmp_path, '"protocols/pouw"', "other = { workspace = true }\n")["refusals"]
+    [f] = _new_member(tmp_path, '"verity/protocols/accounting/work/pouw"', "other = { workspace = true }\n")["refusals"]
     assert f["path"] == "pyproject.toml" and "+other = { workspace = true }" in f["hunk"]
 
 
-LEAN_PACKAGES = 'PACKAGES = [\n    ROOT / "packages" / "verity" / "lean",\n]\n'
+LEAN_PACKAGES = 'PACKAGES = [\n    ROOT / "verity" / "lean",\n]\n'
 
 
 def test_lean_packages_entry_for_a_new_lake_package_is_certified(tmp_path):
@@ -377,7 +377,7 @@ def test_lean_packages_entry_for_a_new_lake_package_is_certified(tmp_path):
 
 
 def test_lean_packages_entry_for_an_existing_package_is_refused(tmp_path):
-    entry = '    ROOT / "packages" / "verity" / "lean",\n'
+    entry = '    ROOT / "verity" / "lean",\n'
     _, _, r = _split(tmp_path, base={"tests/test_lean_packages.py": LEAN_PACKAGES},
                      files={"tests/test_lean_packages.py": LEAN_PACKAGES.replace("]\n", entry + "]\n")})
     [f] = r["refusals"]

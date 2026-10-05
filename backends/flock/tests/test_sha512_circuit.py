@@ -2,7 +2,7 @@
 import os
 import random
 
-from verity.commitments import hm96
+from verity.primitives.commitments import hm96
 from verity_flock import sha512_circuit as S
 
 
@@ -31,7 +31,7 @@ def test_compression_circuit():
 
 def test_hm96_row_circuit():
     inst = hm96.SHA512
-    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+    from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_digest
 
     H = S.hm96_row()
     words = [[random.Random(i).getrandbits(16) for _ in range(64)] for i in range(2)]
