@@ -908,15 +908,16 @@ def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4, seg: frozenset
 
 
 def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True, in_bits: int = 1024,
-                    share_rows: bool = False) -> tuple[str, dict, dict]:
+                    share_rows: bool = False, edit=None, public_words: dict | None = None) -> tuple[str, dict, dict]:
     """A statement whose one unit writes output ports ``a0, a1, …`` of ``out_words`` words, committed as one
     `hm96-sha512/row-seg/v1` row ``a0`` of exactly their words (META ``out_row_ports``; ``seg`` false: one exact-length
     `hm96-sha512/row/v2` row, META ``out_row_ports`` only for a run of several), staged in ``d`` like `_bit_row_toy`:
     one input row ``p0`` of 64 words and ``in_bits`` bits, 1009 to 1024 (seed 1; the bits past ``in_bits`` zero), output
     word ``o`` the XOR of input word ``o mod 64`` and input word ``o + 1 mod 64`` rotated by ``o mod 16``, with AND(bit 0,
     bit 1) of the first added at word 0's bit 0. The salts are SHAKE-256 of ``row-seg-pair`` and the row. ``share_rows``:
-    the files hold the input row as a shared-row table (`FC.write`'s). Returns the circuit text, the row's words per
-    instance and its salts."""
+    the files hold the input row as a shared-row table (`FC.write`'s). ``edit`` changes META before the files are staged
+    for it, and ``public_words`` (``{port: (n, words)}``) are its public input ports' words. Returns the circuit text, the
+    row's words per instance and its salts."""
     import hashlib
     from types import SimpleNamespace
 
@@ -952,6 +953,11 @@ def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True,
     names = tuple(f"a{i}" for i in range(len(out_words)))
     assert 1009 <= in_bits <= 1024
     text = FC.compose(low, sub, port_bits=[in_bits], **({"seg_out_rows": (names,)} if seg else {"v2_out_rows": (names,)}))
+    if edit is not None:
+        head, meta_line, rest = text.split("\n", 2)
+        meta = json.loads(meta_line[5:])
+        edit(meta)
+        text = f"{head}\nMETA {json.dumps(meta)}\n{rest}"
     rows = {"p0": np.random.default_rng(1).integers(0, 1 << 16, (n, 64), dtype=np.uint64).astype(np.uint16)}
     if in_bits % 16:
         rows["p0"][:, -1] &= np.uint16((1 << (in_bits % 16)) - 1)
@@ -965,7 +971,8 @@ def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True,
     salts["p0"] = FC.stage_salts(iset, 0, n, FC._meta_ports(meta)[:1], b"k" * 32)["p0"]
     d.mkdir(parents=True, exist_ok=True)
     (d / "circuit.txt").write_text(text)
-    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", b"k" * 32, rows=rows, outs=outs, salts=salts, share_rows=share_rows)
+    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", b"k" * 32, rows=rows, outs=outs, salts=salts, share_rows=share_rows,
+             public_words=public_words)
     return text, got, salts["a0"]
 
 

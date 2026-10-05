@@ -216,7 +216,7 @@ mod tests {
     /// `check` accepts a circuit in the canonical format under `--zk` alone, and refuses each other form with the Lean
     /// verifier's reason: without `--zk` the v1-row rule's, under it the first canonical conjunct the circuit fails (an
     /// output row padded past its port's word, a segmented row, VUs per block not a power of two, a unit past `2^32` rows),
-    /// and before either a tail, public input ports and a shared-row public file.
+    /// and before either a tail, public input ports (under `--zk` too, in the canonical format) and a shared-row public file.
     #[test]
     fn the_canonical_format_is_accepted_under_zk_alone() {
         use crate::circuit::tests::{flat_tail_statement, flat_v2_statement};
@@ -251,6 +251,9 @@ mod tests {
         assert_eq!(refused(&public, &inst), refusal("public input ports (--public-inputs)"));
         inst.tables = Some(RowTables { counts: vec![1, 1], rows: None, salts: None, refs: vec![] });
         assert_eq!(refused(&c, &inst), refusal("a shared-row public file (header shared_rows)"));
+        // public input ports are a statement rule's, before the public file's (test_lean_canonical_format's
+        // `test_a_canonical_statement_with_a_public_input_port_is_refused_for_its_ports`)
+        assert_eq!(refused(&public, &inst), refusal("public input ports (--public-inputs)"));
     }
 
     #[test]
