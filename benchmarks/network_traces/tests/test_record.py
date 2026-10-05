@@ -292,7 +292,8 @@ class FakeCommitter:
     def finalize(self):
         self.calls.append("finalize")
         return types.SimpleNamespace(steps=[types.SimpleNamespace(n_bytes=8)] * 2, run_root=bytes(32),
-                                     root_ready_delay_s=0.001, extra={"errors_n": 0})
+                                     root_ready_delay_s=0.001, extra={"errors_n": 0, "native_collect": {
+                                         "plans_dropped": 4, "plans_pending": 0, "plans_pending_emptied_step": 2, "copies": 9}})
 
     def __getattr__(self, name):
         return lambda: self.calls.append(name)
@@ -332,6 +333,8 @@ def test_the_offline_loop_admits_on_time_stamps_each_step_and_commits_one_run_pe
     assert r["send_ms"] == r["sched_ms"] == 10_000.0 and 0 <= r["admit_ms"] - r["send_ms"] < 25
     assert [n for _, n in r["chunks"]] == [1, 1, 1] and r["chunks"][0][0] > r["admit_ms"]
     assert [c["t_ms"] // 60_000 for c in commits] == [0, 1, 2] and commits[0]["steps"] == 2
+    assert {k: v for k, v in commits[0].items() if k.startswith("plans")} == {
+        "plans_dropped": 4, "plans_pending": 0, "plans_pending_emptied_step": 2} and "copies" not in commits[0]
     assert com.calls[:6] == ["reset", "install", "finalize", "uninstall", "reset", "install"]
     assert sum(s["tokens"] for s in steps) == 270 and all(s["gc_ms"] >= 0 for s in steps + commits)
     com.errors.append("worker step 7: ImportError('no research')")

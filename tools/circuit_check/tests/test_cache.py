@@ -169,7 +169,7 @@ def SynK(B, S, a, b):
     "syn/ksize.py": "K = 1\n",
     # a primitive whose evaluator reads a constant of another module, and the Definition that calls it
     "syn/consts.py": "MASK = 0xFFFF\n",
-    "syn/kern.py": """
+    "syn/xkern.py": """
 from verity.ir import primitive
 
 from syn.consts import MASK
@@ -183,7 +183,7 @@ def SynXor(a, b):
     "syn/xdef.py": """
 from verity.ir import composite
 
-from syn.kern import SynXor
+from syn.xkern import SynXor
 from syn.prims import V
 
 
@@ -251,9 +251,13 @@ inner = CC._interpreter_dirs
 CC._interpreter_dirs = lambda: (*inner(), str(repo) + "/")      # the checker's own modules come from the repository
 CC.trace(root)
 
-# the registries, enumerated and imported before any check by the catalog's own `load_registries`
+# the registries, imported before any check: enumerated by the catalog's own `load_registries`, or by name without one
 import runpy
-runpy.run_path(str(root / "targets.py"))["load_registries"]()
+load = runpy.run_path(str(root / "targets.py")).get("load_registries")
+if load is not None:
+    load()
+else:
+    import syn.extra, syn.idle, syn.kdef, syn.other, syn.top
 from syn import catalog, check
 
 suite = {}
@@ -490,13 +494,13 @@ def test_a_descriptor_change_reruns_exactly_its_target_when_no_module_it_holds_c
 
 
 def test_an_evaluator_or_a_module_constant_it_reads_reruns_its_target(tmp_path):
-    """SynX calls the primitive SynXor, whose evaluator (`syn.kern`) masks with `syn.consts.MASK`: neither is in SynX's
+    """SynX calls the primitive SynXor, whose evaluator (`syn.xkern`) masks with `syn.consts.MASK`: neither is in SynX's
     descriptor (a primitive's entry is its signature), and each is held as a module SynX's check ran or imported."""
     root = _tree(tmp_path)
     _bindings(root, '(("_xor_roots",), xor)', families=("SynX_v1",))
     assert _run(root)["hits"] == []
     assert _entry(root, "SynX_v1")["report"]["value"] == [3 ^ 0x0105]
-    _edit(root, "syn/kern.py", "return (a ^ b) & MASK", "return (b ^ a) & MASK")
+    _edit(root, "syn/xkern.py", "return (a ^ b) & MASK", "return (b ^ a) & MASK")
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
     _edit(root, "syn/consts.py", "MASK = 0xFFFF", "MASK = 0x00FF")
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]

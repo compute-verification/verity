@@ -35,42 +35,46 @@ input), and, for each import site, the module it resolves to (by the path-based 
 path too.  `targets.py` and `pins.json` are not files of any target: a target holds the parts of `targets.py` it depends on (its
 binding units and the rest of the module with every binding unit cut out, ``common``, each its AST digested as a module's is,
 with its import sites; any `targets.py` code its check ran, by the unit that holds it) and the entries of `pins.json` its check
-looked up (`recorded_pins`), each by its value, or absent.  A package an enumerator listed (`targets.load_registries`, the
-vLLM registry's ``catalog.load`` and ``boolean._load``, `_ENUMERATORS`: each imports every module it lists and names any that
-fails, nothing else) is held by the modules it lists, each by its content (`_children`), rather than by its listing, and the
-modules it imported are not pinned to their names.  A module whose source `inspect` looked for is held by its name and
-content (``present``).  The checker's own version is the digest of
-this package's sources less those two.  Beside them the key holds the interpreter, the platform, the installed distributions,
-``sys.path`` (in-tree entries relative to the tree), the request (the target, its options, whether the partition invariant
-applies to it, as the catalog resolved it, and for a Definition the digest of every primitive and specialization it reaches,
-each by its descriptor id and canonical descriptor entry, `descriptor`) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment.
-Each target's check runs with a memo of its own, so no result an earlier target computed stands in for its reads.
+looked up (`recorded_pins`), each by its value, or absent.  Likewise each Definition whose kernels its check looked up in
+`verity.evaluation.batch._KERNELS` (`_RecordedKernels`), by what is registered for it now (each kernel's name, domain, version
+and which function and sampler it is, `_where`: by its module's content and its own definition, not its path), or none: the
+module that registers a kernel is imported with the registries, and no check of a target without one runs any of it.  A package
+an enumerator listed (`targets.load_registries`, the vLLM registry's ``catalog.load`` and ``boolean._load``, `_ENUMERATORS`:
+each imports every module it lists and names any that fails, nothing else) is held by the modules it lists, each by its content
+(`_children`), rather than by its listing, and the modules it imported are not pinned to their names.  A module whose source
+`inspect` looked for is held by its name and content (``present``).  The checker's own version is the digest of this package's
+sources less those two.  Beside them the key holds the interpreter, the platform, the installed distributions, ``sys.path``
+(in-tree entries relative to the tree), the request (the target, its options, whether the partition invariant applies to it, as
+the catalog resolved it, and for a Definition the digest of every primitive and specialization it reaches, each by its
+descriptor id and canonical descriptor entry, `descriptor`) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment. Each
+target's check runs with a memo of its own, so no result an earlier target computed stands in for its reads.
 
-A hit means every file, listing, probe, library and pin this target's check read is unchanged (the tree as git has it,
-`visible`: bytecode or a build inside the tree counts as absent), and every module and `targets.py` unit it held is unchanged
-but for where its modules are (`_moved`): following the import sites from its units and from each module still at its name,
-every module it held is found, its content unchanged, at the name the sites now resolve to (one no site leads to: the one module
-of that content this process imported before any check); a module imported by a computed name, that reads its own path or name,
-or an import of which failed, is still at its name; each package a moved module now imports through is one it held, or empty or
-a docstring alone; each enumerated package lists the same modules, or each it lists no longer is imported anyway and each new
-one it lists is a renamed one or empty; and each module whose source `inspect` looked for still resolves by its name (its
-content may differ: only where it is was asked), or is the one imported module of its content.  Not covered: a file a C
-extension reads with its own I/O (none here); anything outside the repository, which the interpreter, platform, distribution
-list and ``sys.path`` stand for; a file a module read while it was imported before tracing began (the checker's own imports,
-``verity.ir`` and ``verity.evaluation`` among them: their sources are inputs, data they opened at import is not); what a
-function read or imported in its body when it did not run in the recording (a value a process-wide cache, ``functools.cache``
-and the like, holds from a call another target's check made, beyond the function's own module and its closure); an edit to a
-binding that does not reach the target, even if it changes which object of the same id the catalog builds (the registry refuses
-two Definitions of one id); what a binding ran that changes, keeping its id, what a Definition it did not make does at check
-time without changing its descriptor: a value it computed (from a module only it imported) and left in a module's state, or
-closed over, where an evaluator reads it; behaviour that depends on a module's name or path through another object (an object's
-``__module__``, a code object's ``co_filename``, ``inspect.getfile``: a moved module's objects report their new name;
-`targets._authored` reads ``__module__`` for the task list only), and on the order in which modules were imported before the
-check (a moved registry module is imported by its importer rather than by the enumeration); report text that names a module or a
-path is the text of the run that stored it; and a source edited without changing its size within the second its bytecode was
-written, which Python runs as the old bytecode.  A new non-empty module in a package the registries enumerate, or one moved
-where nothing imports it, reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``, ``os.system``,
-``exec``, ``posix_spawn``) makes the process's later results uncacheable (`untraced`).
+A hit means every file, listing, probe, library, pin and kernel registration this target's check read is unchanged (the tree as
+git has it, `visible`: a file git does not track, bytecode, a build or a fetched file inside the tree, counts as absent, so a
+read of one is never keyed on its content), and every module and `targets.py` unit it held is unchanged but for where its
+modules are (`_moved`): following the import sites from its units and from each module still at its name, every module it held
+is found, its content unchanged, at the name the sites now resolve to (one no site leads to: the one module of that content this
+process imported before any check); a module imported by a computed name, that reads its own path or name, or an import of which
+failed, is still at its name; each package a moved module now imports through is one it held, or empty or a docstring alone;
+each enumerated package lists the same modules, or each it lists no longer is imported anyway and each new one it lists is a
+renamed one or empty; and each module whose source `inspect` looked for still resolves by its name (its content may differ: only
+where it is was asked), or is the one imported module of its content.  Not covered: a file a C extension reads with its own I/O
+(none here); anything outside the repository, which the interpreter, platform, distribution list and ``sys.path`` stand for; a
+file a module read while it was imported before tracing began (the checker's own imports, ``verity.ir`` and
+``verity.evaluation`` among them: their sources are inputs, data they opened at import is not); what a function read or imported
+in its body when it did not run in the recording (a value a process-wide cache, ``functools.cache`` and the like, holds from a
+call another target's check made, beyond the function's own module and its closure); an edit to a binding that does not reach
+the target, even if it changes which object of the same id the catalog builds (the registry refuses two Definitions of one id);
+what a binding ran that changes, keeping its id, what a Definition it did not make does at check time without changing its
+descriptor: a value it computed (from a module only it imported) and left in a module's state, or closed over, where an
+evaluator reads it; behaviour that depends on a module's name or path through another object (an object's ``__module__``, a code
+object's ``co_filename``, ``inspect.getfile``: a moved module's objects report their new name; `targets._authored` reads
+``__module__`` for the task list only), and on the order in which modules were imported before the check (a moved registry
+module is imported by its importer rather than by the enumeration); report text that names a module or a path is the text of the
+run that stored it; and a source edited without changing its size within the second its bytecode was written, which Python runs
+as the old bytecode.  A new non-empty module in a package the registries enumerate, or one moved where nothing imports it,
+reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``, ``os.system``, ``exec``, ``posix_spawn``, a
+``fork``) makes the process's later results uncacheable (`untraced`).
 
 Only a verdict is stored, of the tree its check read: not a check that raised (an ImportError says the environment was broken,
 not what the target is), nor one whose reads, digested again by the process that ran it right after, differ from the digests
@@ -97,7 +101,7 @@ from typing import Any, Iterable, Iterator
 SCHEMA = "circuit-check-cache/v3"
 _ROOT: list[Path] = []
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
-UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn")
+UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork")
 _UNTRACED: list[str] = []
 _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
@@ -107,9 +111,11 @@ TARGETS, PINS = _HERE / "targets.py", _HERE / "pins.json"
 
 class Frame:
     """What one recording saw: reads (relative to the root), the files of the code that ran, the first lines of `targets.py`'s
-    code that ran, the specializations whose body it read, and the pins it looked up."""
+    code that ran, the specializations whose body it read, the pins it looked up, and the Definitions whose kernels it looked
+    up."""
 
-    __slots__ = ("files", "dirs", "probes", "libs", "code", "lines", "defs", "pins", "enums", "named", "missing", "sources")
+    __slots__ = ("files", "dirs", "probes", "libs", "code", "lines", "defs", "pins", "enums", "named", "missing", "sources",
+                 "kernels")
 
     def __init__(self) -> None:
         self.files: set[str] = set()
@@ -126,6 +132,7 @@ class Frame:
         self.named: set[str] = set()
         self.missing: set[str] = set()
         self.sources: set[str] = set()
+        self.kernels: set[str] = set()
 
     def merge(self, o: "Frame", defs: bool = True) -> None:
         self.files |= o.files
@@ -141,6 +148,7 @@ class Frame:
         self.named |= o.named
         self.missing |= o.missing
         self.sources |= o.sources
+        self.kernels |= o.kernels
 
 
 #: the open recordings, innermost last; the first holds what the process read outside every recording
@@ -431,6 +439,12 @@ def _instrument() -> None:
         from verity.ir import defs as D
     except ImportError:
         return
+    try:
+        from verity.evaluation import batch
+    except ImportError:
+        batch = None
+    if batch is not None and not isinstance(batch._KERNELS, _RecordedKernels):
+        batch._KERNELS = _RecordedKernels(batch._KERNELS)
     build0 = D._build_body
 
     def _build_body(sp):
@@ -817,6 +831,106 @@ def _loaded(root: Path) -> dict[str, list[str]]:
         _LOADED.append(ix)
     return _LOADED[0]
 
+# --- the kernels a check looked up ------------------------------------------------------------------------------------------
+
+class _RecordedKernels(dict):
+    """`verity.evaluation.batch._KERNELS`, noting in the open recording each Definition whose kernels are looked up (a lookup
+    that finds none included), and all of them on any enumeration.  Registering (``setdefault``) is no lookup."""
+
+    def _note(self, key: Any) -> None:
+        if len(_FRAMES) > 1 and not _INTERNAL:
+            _FRAMES[-1].kernels.add(str(key))
+
+    def get(self, key, default=None):
+        self._note(key)
+        return dict.get(self, key, default)
+
+    def __getitem__(self, key):
+        self._note(key)
+        return dict.__getitem__(self, key)
+
+    def __contains__(self, key) -> bool:
+        self._note(key)
+        return dict.__contains__(self, key)
+
+    def __iter__(self):
+        self._note("*")
+        return dict.__iter__(self)
+
+    def keys(self):
+        self._note("*")
+        return dict.keys(self)
+
+    def values(self):
+        self._note("*")
+        return dict.values(self)
+
+    def items(self):
+        self._note("*")
+        return dict.items(self)
+
+
+def _where(fn: Any) -> str | None:
+    """Which function ``fn`` is, wherever its module is: for one defined in a tracked file of the tree, that module's content
+    digest (`_parsed`), its qualified name and the digest of its own definition (`_defined_at`: its imports cut as a module's
+    are, so a pure move changes none of them); for one defined in an untracked file, its path and first line; outside the tree,
+    its file and first line; for a callable that is no function, its type's name."""
+    import functools
+    import inspect
+
+    if fn is None:
+        return None
+    while isinstance(fn, functools.partial):
+        fn = fn.func
+    fn = inspect.unwrap(fn)
+    code = getattr(fn, "__code__", None) or getattr(getattr(fn, "__call__", None), "__code__", None)
+    if code is None:
+        return f"{type(fn).__module__}.{type(fn).__qualname__}"
+    rel = _rel(code.co_filename)
+    if rel is None or not _ROOT:
+        return f"{code.co_filename}:{code.co_firstlineno}"
+    p, v = _ROOT[0] / rel, visible(_ROOT[0])
+    if (v is not None and rel not in v[0]) or not p.is_file():
+        return f"untracked:{rel}:{code.co_firstlineno}"
+    return f"{_parsed(p)[0]}:{code.co_qualname}:{_defined_at(p, code.co_firstlineno)}"
+
+
+_TREES: dict[str, ast.Module | None] = {}
+
+
+def _defined_at(p: Path, line: int) -> str:
+    """The digest (`_normalized`) of the function, lambda or class definitions in source file ``p`` whose code starts at
+    ``line`` (a decorated one at its first decorator), or the line itself when none does."""
+    data = p.read_bytes()
+    h = hashlib.sha256(data).hexdigest()
+    if h not in _TREES:
+        try:
+            _TREES[h] = ast.parse(data)
+        except (SyntaxError, ValueError):
+            _TREES[h] = None
+    tree = _TREES[h]
+    defs = ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda
+    nodes = [] if tree is None else [
+        n for n in ast.walk(tree) if isinstance(n, defs)
+        and min([n.lineno, *(d.lineno for d in getattr(n, "decorator_list", ()))]) == line]
+    if not nodes:
+        return f"line:{line}"
+    return hashlib.sha256("".join(_normalized(n)[0] for n in nodes).encode()).hexdigest()
+
+
+def _kernels_now(key: str) -> str | None:
+    """What is registered now for ``key`` (``*``: for every Definition), digested; None when nothing is."""
+    try:
+        from verity.evaluation import batch
+    except ImportError:
+        return None
+    reg = batch._KERNELS
+    keys = sorted(dict.keys(reg)) if key == "*" else [key]
+    got = {k: {n: [kn.domain, kn.version, _where(kn.fn), _where(kn.sample)] for n, kn in sorted(dict.get(reg, k, {}).items())}
+           for k in keys}
+    got = {k: v for k, v in got.items() if v}
+    return hashlib.sha256(json.dumps(got, sort_keys=True).encode()).hexdigest() if got else None
+
 
 # --- targets.py's units -----------------------------------------------------------------------------------------------------
 
@@ -833,13 +947,14 @@ def _digest_ast(node: ast.AST, sites: dict[str, list] | None = None, unit: str =
 
 
 def _model_list(fn: ast.FunctionDef) -> list[ast.expr] | None:
-    """The entries of `_model_roots`' returned list, when every one is a ``(label, make)`` tuple."""
+    """The entries of `_model_roots`' returned list, when every one is a ``(label, make)`` tuple and no two share a label (each
+    entry's unit is named by its label, so two of one label are one unit, and the whole function is that unit then)."""
     rets = [n for n in ast.walk(fn) if isinstance(n, ast.Return)]
     if len(rets) != 1 or not isinstance(rets[0].value, ast.List):
         return None
     elts = rets[0].value.elts
     if all(isinstance(e, ast.Tuple) and e.elts and isinstance(e.elts[0], ast.Constant) and isinstance(e.elts[0].value, str)
-           for e in elts):
+           for e in elts) and len({e.elts[0].value for e in elts}) == len(elts):
         return elts
     return None
 
@@ -1032,6 +1147,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
     acc.named |= outside.named
     acc.missing |= outside.missing
     acc.sources |= outside.sources
+    acc.kernels |= outside.kernels
     root = _ROOT[0]
     mods: set[str] = set()
 
@@ -1081,6 +1197,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
         acc.named |= f.named
         acc.missing |= f.missing
         acc.sources |= f.sources
+        acc.kernels |= f.kernels
         work.extend(f.code)
         if defs:
             stack.extend(f.defs.values())
@@ -1141,7 +1258,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
             "libs": sorted(acc.libs), "units": sorted(f"{trel}#{u}" for u in unit_names) if trel is not None else [],
             "pins": sorted(f"{prel}#{p}" for p in acc.pins) if prel is not None else [],
             "modules": sorted(mods), "named": sorted(acc.named & mods), "missing": sorted(acc.missing), "enums": sorted(enums),
-            "present": sorted(present - mods)}
+            "present": sorted(present - mods), "kernels": sorted(acc.kernels)}
 
 
 def version() -> str:
@@ -1283,12 +1400,13 @@ def _digests_of(root: Path, got: dict[str, list[str]], fresh: bool) -> dict[str,
     missing = {r: memo("c", r, lambda r=r: _local(root, r)) for r in got.get("missing", [])}
     enums = {r: memo("e", r, lambda r=r: _children(root, r)) for r in got.get("enums", [])}
     present = {r: memo("c", r, lambda r=r: _local(root, r)) for r in got.get("present", [])}
+    kernels = {r: memo("k", r, lambda r=r: _kernels_now(r)) for r in got.get("kernels", [])}
     return {"files": files, "dirs": dirs, "probes": probes, "libs": libs, "units": units, "pins": pins, "modules": modules,
-            "named": named, "missing": missing, "enums": enums, "present": present}
+            "named": named, "missing": missing, "enums": enums, "present": present, "kernels": kernels}
 
 
-#: what matches by equality alone: paths and their contents, pins, and the names imports looked up by name
-_EXACT = ("files", "dirs", "probes", "libs", "pins", "named", "missing")
+#: what matches by equality alone: paths and their contents, pins, the names imports looked up by name, kernel registrations
+_EXACT = ("files", "dirs", "probes", "libs", "pins", "named", "missing", "kernels")
 
 
 def _moved(root: Path, rec: dict, now: dict, renamed: dict[str, str] | None = None) -> bool:
