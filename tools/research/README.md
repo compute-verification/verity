@@ -97,8 +97,7 @@ research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
-research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build a train, lint it, push it for train.sh;
-                                                                     # refused if it drops lines no PR's own commit removes
+research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
