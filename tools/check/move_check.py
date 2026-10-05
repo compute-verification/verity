@@ -32,7 +32,7 @@ Anything else is refused, with what differed and its first offending hunk. Exit 
 git error.
 
 The path map comes from the renames. Each rename contributes the shortest prefix pair (old directory, new directory) whose
-whole subtree in BASE moved there file by file. When only `protocols/pous` moved, `protocols -> security_proofs` is never
+whole subtree in BASE moved there file by file. When only `verity/protocols/accounting/space/pous` moved, `protocols -> security_proofs` is never
 inferred. Renames are git's exact ones, and its similar ones (`-M`) as candidates, each edit then judged as above.
 `--map OLD=NEW` adds an entry, and a dotted one (no `/`) also maps a Python or Lean module and those below it.
 """
@@ -55,7 +55,7 @@ PY_PATH_FILES = {
     "tests/test_lean_packages.py",                                        # the Lean packages
     "tools/research/src/research/store/tools_registry.py",                # REGISTRY: tool -> dotted repo path
     "tools/research/src/research/store/vocab.py",                         # its mirror of PROOF_CLASSES names their source
-    "backends/numerical/python/verity_numerical/bench/lowerings.py",      # DIRECTORIES
+    "benchmarks/numerical/python/verity_numerical/bench/lowerings.py",      # DIRECTORIES
 }
 #: `research`'s sources, whose `python -m M` / `"-m", "M"` lines may rewrite M to where the module moved
 MODULE_ARG_PREFIX = "tools/research/src/research/"

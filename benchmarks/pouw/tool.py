@@ -18,7 +18,7 @@ from research.store.tool import Tool
 
 TREE = workspace_root(__file__)
 
-CLOSURE = ["benchmarks/pouw/**", "protocols/pouw/verity_pouw/**",
+CLOSURE = ["benchmarks/pouw/**", "verity/protocols/accounting/work/pouw/**",
            *package_paths(TREE, "verity", "randomness/**", "commitments/**", "ml/tc/**", "errors.py")]
 
 
