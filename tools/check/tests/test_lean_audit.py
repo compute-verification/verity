@@ -427,6 +427,16 @@ def test_inputs_are_the_package_its_path_dependencies_and_the_auditor(tmp_path, 
     assert "pkg/a/inner/X.lean" not in LA.own_files("pkg/a", nested)
 
 
+def test_a_spec_reads_the_packages_proving_its_guarantees_and_misses_with_them(tmp_path, monkeypatch):
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/a/lean-audit.json").write_text(json.dumps({"proved_in": ["../b", "../b/"]}))
+    files = LA.COMMON.tracked_files()
+    assert LA.provers("pkg/a") == ["pkg/b"] and LA.provers("pkg/b") == []
+    assert "pkg/b/B.lean" in LA.inputs("pkg/a", files) and LA.inputs("pkg/a", files) == LA.inputs("pkg/b", files)
+    (root / "pkg/a/lean-audit.json").write_text("{not json")
+    assert LA.provers("pkg/a") == []
+
+
 def test_the_real_packages_and_their_inputs():
     files = LA.COMMON.tracked_files()
     pkgs = LA.packages(files)

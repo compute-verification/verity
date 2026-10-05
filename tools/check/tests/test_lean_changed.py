@@ -63,6 +63,20 @@ def test_it_builds_each_package_whose_audit_misses_those_it_requires_first(tmp_p
     assert LC.closure("a") == ["a", "p"]
 
 
+def test_a_spec_is_built_after_the_packages_proving_its_guarantees_and_its_tree_holds_them(tmp_path, monkeypatch):
+    """`s`'s guarantees are proved in `sp` (`proved_in`), which requires `s`: `records` reads `sp`'s build for them."""
+    root, files = _tree(tmp_path, monkeypatch)
+    more = {"s/lakefile.toml": "", "s/lean-audit.json": json.dumps({"proved_in": ["../sp"]}), "s/S.lean": "",
+            "sp/lakefile.toml": "", "sp/lean-audit.json": "{}", "sp/Sp.lean": "",
+            "sp/lake-manifest.json": json.dumps({"packages": [{"name": "s", "type": "path", "dir": "../s"}]})}
+    for f, text in more.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text)
+    files = sorted([*files, *more])
+    assert LC.missed(files, tmp_path / "cache") == ["c", "p", "a", "sp", "s"]
+    assert LC.closure("s") == ["s", "sp"] and LC.closure("sp") == ["sp", "s"]
+
+
 def test_the_tree_holds_the_tracked_files_and_keeps_each_lake(tmp_path, monkeypatch):
     root, files = _tree(tmp_path, monkeypatch)
     tree = tmp_path / "tree"
