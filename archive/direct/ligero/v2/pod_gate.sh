@@ -1,6 +1,6 @@
 set -e
 export PATH=/usr/local/cuda-12.4/bin:$PATH
-export PYTHONPATH=.:benchmarks/numerical/python:.
+export PYTHONPATH=.:benchmarks/numerical/python
 PY=/workspace/venv312/bin/python   # + cupy-cuda12x, blake3 (uv pip install, 2026-09-22: GPU Merkle; without them the host-hash fallback costs ~4 s/proof)
 BI=/workspace/bi/v1
 if [ ! -f $BI/vu-k1536.x.u16 ]; then mkdir -p /workspace/bi; $PY -m verity_numerical.bench.instances build --out $BI --seeds fixtures/bench-instances/v1/seeds --procs $(nproc); fi
