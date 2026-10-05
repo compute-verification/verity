@@ -2,8 +2,8 @@
 `boolean_rope.RoPEGptJ_v3`) against vLLM d9105ea80's CUDA `_C.rotary_embedding(..., is_neox=False)` (bf16 query / key /
 cos-sin cache), one token per case:
 
-    # node, torch venv:  verity-vllm properties-admission produce --adapter verity_vllm.program.registry.rope_gptj_difftest --n 60 --seed 13 --out DIR
-    # verity venv:       verity-vllm properties-admission check   --adapter verity_vllm.program.registry.rope_gptj_difftest --dir DIR --out RUN/rope-gptj.json
+    # node, torch venv:  verity-vllm properties-admission produce --adapter verity_vllm.properties.difftests.rope_gptj_difftest --n 60 --seed 13 --out DIR
+    # verity venv:       verity-vllm properties-admission check   --adapter verity_vllm.properties.difftests.rope_gptj_difftest --dir DIR --out RUN/rope-gptj.json
 
 As `rope_difftest` with the interleaved pairing: the cache has one row, `cs = [cos[0:D/2] | sin[0:D/2]]`, at position 0, and
 the kernel rotates the query (NH heads) and the key (KVH heads) in place with it. The shapes are DeepSeek-V2 MLA's (q_pe of

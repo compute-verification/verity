@@ -1,7 +1,7 @@
 """A target's bf16 linear, measured bit for bit against its registered GEMM Definition.
 
 The registered Definition of a bf16 ``[M,K] x W[N,K]^T`` linear under batch invariance comes from the target's ``GemmTarget``
-(``verity_vllm.program.registry.gemm_targets``): per output coordinate one FP32 accumulator advanced over the K/16 steps of the
+(``verity_vllm.program.frontend.gemm_targets``): per output coordinate one FP32 accumulator advanced over the K/16 steps of the
 record's k16 step (``GemmTarget.dot``) in ascending k order from zero, then RNE to bf16.  Which kernel computes the linear
 depends on the target: the pinned vLLM's ``init_batch_invariance()`` installs the Triton ``matmul_kernel_persistent`` override on
 cc 8.x and leaves cuBLASLt with split-K disabled everywhere else.  Whatever runs, this driver measures whether its output is the
@@ -294,7 +294,7 @@ def check_case(case: dict, d, wd, model, spec_of) -> dict[str, Any]:
 
 def check(a: CheckOptions) -> int:
     from verity_vllm.program.kernels import cpu_model as CM
-    from verity_vllm.program.registry.gemm_targets import gemm_target_for
+    from verity_vllm.program.frontend.gemm_targets import gemm_target_for
 
     root = Path(a.case_dir)
     meta = json.loads((root / "cases.json").read_text())

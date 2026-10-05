@@ -257,7 +257,7 @@ def gemm_target_for(compute_capability, arch_family: Any = ...) -> GemmTarget:
     known = ", ".join(f"{t.key} (cc {'/'.join(f'{a}.{b}' for a, b in t.compute_capabilities)}, family {t.vllm_arch_family!r})" for t in REGISTERED.values())
     raise UnregisteredGemmTarget(f"numerics_unregistered: no registered GEMM specialization for target cc {cc[0]}.{cc[1]} "
                                  f"(tuned_gemm_arch_family={fam!r}); registered: {known}. A launch showing a registered tiling on this target is still "
-                                 f"refused — register the target with its own correspondence evidence (verity_vllm/program/registry/gemm_targets.py)")
+                                 f"refused — register the target with its own correspondence evidence (verity_vllm/program/frontend/gemm_targets.py)")
 
 
 def try_gemm_target_for(compute_capability, arch_family=...) -> tuple[GemmTarget | None, str | None]:
