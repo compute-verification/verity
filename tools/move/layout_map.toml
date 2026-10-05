@@ -155,8 +155,8 @@ new = { verity = "verity", verity_catalog = "catalog/verity_catalog", verity_ker
 [pyproject."pyproject.toml"]
 # the root is the one `verity` distribution (its package is verity/, a regular package in exact editable mode), and no longer
 # depends on the members: they depend on it
+# (its own `verity = { workspace = true }` source stays: the members inherit the root's sources)
 testpaths_replace = { protocols = ["verity/protocols", "catalog/tests", "experimental/tests"], experimental = ["experimental/tests"] }
-sources_drop = ["verity"]
 
 [pyproject."pyproject.toml".replace]
 "project" = """

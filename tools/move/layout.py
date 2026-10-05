@@ -972,8 +972,10 @@ class Run:
                 continue
             try:
                 proj = tomllib.loads(body).get("project")
-            except tomllib.TOMLDecodeError:
-                proj = {}
+            except tomllib.TOMLDecodeError as e:
+                self.note("pyprojects that don't parse", f"{pp}: {e}")
+                keep.append(it)
+                continue
             if proj and proj.get("name") not in self.L.merged:
                 keep.append(it)
         if keep == items_in:
@@ -1112,7 +1114,14 @@ def _add_dependencies(text: str, add: list[str]) -> str:
         new_body = body.rstrip("\n") + f"\ndependencies = [{items}]\n" + body[len(body.rstrip("\n")) + 1:]
     else:
         old = m.group("items")
-        new_body = body[: m.start("items")] + (old.rstrip() + ", " if old.strip() else "") + items + body[m.end("items"):]
+        if "\n" in old.strip("\n ") or old.endswith("\n"):          # one item per line: append in that style
+            indent = re.search(r"\n([ \t]*)\S", old).group(1)
+            head = old.rstrip()
+            added = "".join(f"\n{indent}{json.dumps(a)}," for a in add)
+            new_items = (head if head.endswith(",") else head + ",") + added + old[len(head):]
+        else:
+            new_items = (old.rstrip().rstrip(",") + ", " if old.strip() else "") + items
+        new_body = body[: m.start("items")] + new_items + body[m.end("items"):]
     return text.replace(body, new_body, 1)
 
 
