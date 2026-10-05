@@ -150,10 +150,10 @@ Every GPU tier holds to these. Each came from a voided row, a lost window or GPU
 
 **γ at both prices.** Compute γ at the cheapest bit-exact FADD (8.00 W1 per word) and at the measured in-loop price
 (1047/125 = 8.376), publish the larger, and say which won.
-- The prices come from the Lean pins (`campaigns/pouw/price-twins-lean/` in the notes), not from a device record or a
-  diagnostic.
-- In the harness you don't compute or type γ. The attempt record looks it up in `price_twins.json`, the Lean pins'
-  twins, on the variant's `prices` path, at both prices. A result that types γ in gets no record.
+- The prices come from the Lean guarantees (`campaigns/pouw/price-twins-lean/` in the notes), not from a device record
+  or a diagnostic.
+- In the harness you don't compute or type γ. The attempt record looks it up in `price_twins.json`, the Lean
+  guarantees' twins, on the variant's `prices` path, at both prices. A result that types γ in gets no record.
 - The path you price is the path you run. A kernel that casts with 64-bit stores at a 160-byte stride is priced at that
   cast's 8.72 per code; if the block scale is priced on `lut256` (8.55), forming runs `lut256`. Name the path from the
   kernel your forming step launches at the run's commit, not the one you plan to reach.
@@ -280,7 +280,7 @@ until it lands, you are the check.
 | An interleaved same-die baseline, with per-rep clocks | `bench.py`'s warm-up, equal-time items and per-item NVML; `panel.py` requires both sides' clocks and tags a gap over 0.5% | — |
 | Decode as a dependent chain | `bench.py`'s default; `panel.py` keeps other measured decode rows off the plots | — |
 | A timed run holds a `--timed` lease | `gpu-lease --timed` pauses the fill queue; nothing checks that a row's run had one | the attempt record naming its lease (to propose with #491's self-recording) |
-| γ at both prices, the larger published, from the Lean pins, on the path that ran | the harness's attempt records (#491): γ from the price twins on the variant's declared `prices`, and a typed-in γ refused; outside the harness, nothing (`panel.py --gamma` is typed by hand) | a check that the declared path is the one the binary runs; `variant_refusals` on a priced-path mismatch (#567) |
+| γ at both prices, the larger published, from the Lean guarantees, on the path that ran | the harness's attempt records (#491): γ from the price twins on the variant's declared `prices`, and a typed-in γ refused; outside the harness, nothing (`panel.py --gamma` is typed by hand) | a check that the declared path is the one the binary runs; `variant_refusals` on a priced-path mismatch (#567) |
 | Every attempt recorded | `research run` custody for runs; the harness's `kernel-attempt/v1` records (#491), published by the runner under `research run --on` (#590); other panel rows by hand | — |
 | A variant serves only with its own passing gate, and nothing tunes at serving | nothing (#540 caches kernel modules under fixed names) | `register`, `select` and `variant_refusals` (#567) |
 | No CPU work inside a GPU lease | nothing | none planned; a candidate for `gpu-lease`, which could report a lease's idle GPU time |

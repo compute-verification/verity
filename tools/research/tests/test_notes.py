@@ -726,6 +726,21 @@ def test_push_sends_the_lane_branch_never_main_and_never_forces(tmp_path, repo):
     assert notes.push_branch(root, "nobranch", repo) == (f"REFUSED nobranch: no local branch lane/nobranch in {repo}", 2)
 
 
+def test_push_in_the_notes_clone_lands_the_lane_on_the_notes_main_not_a_lane_branch(tmp_path):
+    origin = tmp_path / "notes.git"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    root = tmp_path / "notes"
+    _git(tmp_path, "clone", "-q", str(origin), str(root))
+    _git(root, "checkout", "-q", "-b", "main")
+    _report(root, "p", "CHECKPOINT 1111111 (20:00Z) [open] x\n", 30)
+    (root / "lanes" / "q").mkdir(parents=True)
+    (root / "lanes" / "q" / "other.md").write_text("another lane's draft\n")
+    line, rc = notes.push_branch(root, "p", root)
+    assert rc == 0 and "; pushed" in line, line
+    assert _git(origin, "ls-tree", "-r", "--name-only", "main").split() == [str(notes.report_for(root, "p").relative_to(root))]
+    assert not _git(origin, "for-each-ref", "refs/heads/lane/").strip()
+
+
 @pytest.mark.slow
 def test_branches_lists_what_origin_lacks_and_blocks_only_on_open_lanes(tmp_path, repo):
     root = tmp_path / "notes"
