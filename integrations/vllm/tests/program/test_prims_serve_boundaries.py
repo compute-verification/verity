@@ -16,7 +16,7 @@ REG = "verity_vllm.program.registry"
 FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths", "b1",
           "b1_tp2", "serve3", "spec", "pouw_rows")
 #: the other families' Definition modules this family reads (each family's own split judges its modules)
-OTHER_FAMILIES = {"dense", "fa2_softcap", "fa3_check_inf", "sampling", "topp_split", "topp_word_gates"}
+OTHER_FAMILIES = {"dense", "fa2_softcap", "fa3_check_inf", "sampling", "topp_geometry", "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
 #: (module, what it imports outside the rule) -> why it stays
 EXCEPTIONS = {("pouw_rows", "verity_pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition, which the row binds"}
