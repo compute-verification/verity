@@ -494,12 +494,12 @@ def _sites(model: Any, layers: list[Any]) -> dict[str, int]:
 
 @cache
 def ncp_linear_op() -> Any:
-    """``verity.protocols.accounting.work.pouw::ncp_linear(x, weight, bias, entry, w) -> y``: one `ncp-v2` call as one dispatcher op, whose body is the
+    """``verity_pouw::ncp_linear(x, weight, bias, entry, w) -> y``: one `ncp-v2` call as one dispatcher op, whose body is the
     live run's `gemm`. It is the executor's own record of the call: an observer records the op with its operands and its
     served y, and nothing of the host work inside it (`observe.fold.patterns.pouw`)."""
     import torch
 
-    @torch.library.custom_op("verity.protocols.accounting.work.pouw::ncp_linear", mutates_args=(), schema="(Tensor x, Tensor weight, Tensor? bias, str entry, int w) -> Tensor")
+    @torch.library.custom_op("verity_pouw::ncp_linear", mutates_args=(), schema="(Tensor x, Tensor weight, Tensor? bias, str entry, int w) -> Tensor")
     def ncp_linear(x, weight, bias, entry, w):
         return _CIRCUIT_RUNS[entry][0].gemm(w, x, weight, bias)
 

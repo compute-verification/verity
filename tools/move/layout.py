@@ -922,7 +922,8 @@ class Run:
         if not hasattr(self, "_dot_re"):
             self._dot_re = re.compile(r"(?<![\w.$@/\-])([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)(?![\w/\-])")
             singles = [n for n in self.L.modules if "." not in n and n.startswith("verity_")]
-            self._single_re = re.compile(r"(?<![\w.$@/\-])(" + "|".join(map(re.escape, singles)) + r")(?![\w/\-])") if singles else None
+            # `verity_pouw::ncp_linear` is a torch op's namespace, not the module, and a namespace holds no dot
+            self._single_re = re.compile(r"(?<![\w.$@/\-])(" + "|".join(map(re.escape, singles)) + r")(?![\w/\-]|::)") if singles else None
 
         def fix(m: re.Match) -> str:
             name = m.group(1)
