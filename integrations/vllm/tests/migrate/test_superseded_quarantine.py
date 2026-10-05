@@ -1,6 +1,8 @@
 """`tools/migrate/superseded_quarantine.py` on synthetic trees: it deletes only the versions its `DELETE` lists (with their
-circuit-check binding and pins) and refuses everything else, moves the quarantine lanes core does not bind and rewrites what
-names them, refuses when core's library code imports a lane that would move, and changes nothing when run again."""
+circuit-check binding and pins) and refuses everything else, promotes the lanes core binds into the registry (moving or merging
+their modules, rewriting their importers, re-keying or dropping the lists keyed by them) and refuses whatever would leave a name of
+them behind, moves the quarantine lanes core does not bind and rewrites what names them, refuses when core's library code imports
+a lane that would move, and changes nothing when run again.  The promotion here is a synthetic one (`PROMOTE` below)."""
 from __future__ import annotations
 
 import importlib.util
@@ -27,6 +29,21 @@ Q = "verity_vllm.program.registry.quarantine"
 QDIR = "integrations/vllm/verity_vllm/program/registry/quarantine"
 REG = "integrations/vllm/verity_vllm/program/registry"
 PKG = f"{M.DEST}/{M.PACKAGE}"
+REAL_PROMOTED_LANES = M.PROMOTED_LANES
+R = "verity_vllm.program.registry"
+
+PROMOTE = (M.Promotion("ln/norm.py", "norm.py", edits=((f"from {Q}.ln._common import BF16\n", "BF16 = 16\n"),)),
+           M.Promotion("ln/gelu.py", "act.py"))
+EDITS = (("integrations/vllm/tests/test_ln.py", f"from {Q}.ln import ALL\n", "ALL = ()\n"),)
+
+
+@pytest.fixture(autouse=True)
+def _synthetic_promotion(monkeypatch):
+    monkeypatch.setattr(M, "PROMOTE", PROMOTE)
+    monkeypatch.setattr(M, "PROMOTED_IDS", ("Norm_v1", "Gelu_v1"))
+    monkeypatch.setattr(M, "PROMOTED_LANES", ("ln",))
+    monkeypatch.setattr(M, "promote_edits", lambda dest: EDITS)
+
 
 FILES = {
     "pyproject.toml": '[project]\nname = "w"\ndependencies = ["verity"]\n\n[tool.uv.workspace]\nmembers = ["packages/verity", '
@@ -36,23 +53,34 @@ FILES = {
     f"{REG}/__init__.py": "",
     f"{REG}/b1.py": ('from verity.ir.defs import composite\n\n\n@composite("Old", 1, ["N"], None)\ndef OldV1(S, x):\n    return x\n\n\n'
                      '@composite("Old", 2, ["N"], None)\ndef Old(S, x):\n    return x\n'),
-    f"{REG}/vocab.py": f"from {Q}.ln import layer_norm as LN\n",
+    f"{REG}/vocab.py": f"from {Q}.ln import norm as LN\n",
+    f"{REG}/act.py": "from verity.ir.defs import composite\n\nBF16 = 16\n\n\ndef silu(x):\n    return x\n",
     f"{QDIR}/__init__.py": '"""the old quarantine"""\n',
     f"{QDIR}/act/__init__.py": f"from {Q}.act import silu_mul  # noqa: F401\n",
     f"{QDIR}/act/silu_mul.py": 'SEMANTIC_ID = "act/SiluMul@v2"\n',
     f"{QDIR}/collective/__init__.py": "",
     f"{QDIR}/dense/__init__.py": "",
     f"{QDIR}/ov_moe/__init__.py": "",
-    f"{QDIR}/ln/__init__.py": "",
-    f"{QDIR}/ln/layer_norm.py": 'SEMANTIC_ID = "ln/LayerNormAten@v1"\n',
+    f"{QDIR}/ln/__init__.py": f"from {Q}.ln import gelu, norm  # noqa: F401\n\nALL = [norm.Norm, gelu.Gelu]\n",
+    f"{QDIR}/ln/_common.py": "BF16 = 16\n",
+    f"{QDIR}/ln/norm.py": (f'"""the norm"""\nfrom verity.ir.defs import composite\nfrom {Q}.ln._common import BF16\n\n'
+                           'SEMANTIC_ID = "ln/Norm@v1"\n\n\n@composite("Norm", 1, ["N"], None)\ndef Norm(B, S, x):\n    return BF16\n'),
+    f"{QDIR}/ln/gelu.py": (f'"""the erf GELU"""\nfrom verity.ir.defs import composite\nfrom {Q}.ln._common import BF16\n\n'
+                           'SEMANTIC_ID = "ln/Gelu@v1"\n\n\n# one word\n@composite("Gelu", 1, [], None)\ndef Gelu(B, S, x):\n'
+                           '    return BF16\n\n\n__all__ = ["Gelu"]\n'),
     "integrations/vllm/tests/test_lanes.py": (f"from {Q}.act import silu_mul as S\nfrom {Q} import collective as QC\n"
-                                              f"from {Q}.ln import layer_norm\nMODULE = \"{Q}.act.silu_mul\"\n"),
+                                              f"from {Q}.ln import gelu, norm\nMODULE = \"{Q}.act.silu_mul\"\nNORM = \"{Q}.ln.norm\"\n"),
+    "integrations/vllm/tests/test_ln.py": f"from {Q}.ln import ALL\nfrom {Q}.ln.gelu import Gelu  # the GELU\n",
     "integrations/vllm/tests/program/fixtures_query.py": f"def f():\n    from {Q}.ov_moe import moe as Q\n    return Q\n",
     "integrations/vllm/tests/lint/allowlists/p11_names.json": (
         '{\n  "entries": [\n'
         '    {"file": "verity_vllm/program/registry/quarantine/act/silu_mul.py", "kind": "doc-round"},\n'
         '    {"file": "verity_vllm/program/registry/quarantine/ln/__init__.py", "kind": "doc-date"}\n  ]\n}\n'),
-    "integrations/vllm/tests/dead_code_keep.json": (f'{{\n "modules": {{\n  "{Q}.ln.layer_norm": "stays",\n'
+    "integrations/vllm/tests/lint/allowlists/p10_size.json": (
+        '{\n  "entries": [\n'
+        '    {"file": "verity_vllm/program/registry/quarantine/ln/norm.py", "kind": "module", "count": 900},\n'
+        '    {"file": "verity_vllm/program/registry/quarantine/ln/gelu.py", "kind": "module", "count": 801}\n  ]\n}\n'),
+    "integrations/vllm/tests/dead_code_keep.json": (f'{{\n "modules": {{\n  "verity_vllm.linear": "kept",\n  "{Q}.ln.norm": "promoted",\n'
                                                     f'  "{Q}.act.silu_mul": "moves"\n }}\n}}\n'),
     "integrations/vllm/verity_vllm/engine/profiles/quarantine/REC.json": f'{{"adapter": "{Q}.act.silu_mul_difftest"}}\n',
     "tools/circuit_check/src/circuit_check/targets.py": ('def _model_roots():\n    from verity_vllm.program.registry import b1\n'
@@ -70,6 +98,8 @@ def _tree(root: Path, extra: dict[str, str] | None = None) -> Path:
         (root / rel).write_text(text)
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+                    "commit", "-qm", "tree"], check=True)
     return root
 
 
@@ -81,22 +111,32 @@ def _apply(root: Path, *only: str, dest: str | None = None) -> int:
     return M.main(["apply", "--root", str(root), *(["--only", *only] if only else []), *(["--dest", dest] if dest else [])])
 
 
-def test_apply_moves_the_lanes_core_does_not_bind_and_rewrites_what_names_them(tmp_path, capsys):
+def test_apply_promotes_and_moves_the_lanes_and_rewrites_what_names_them(tmp_path, capsys):
     root = _tree(tmp_path)
     assert _apply(root) == 0
     for lane in M.MOVE:
         assert (root / PKG / lane / "__init__.py").is_file() and not (root / QDIR / lane).exists()
-    assert (root / QDIR / "ln" / "layer_norm.py").is_file()
+    assert not (root / QDIR / "ln").exists()
     assert (root / QDIR / "__init__.py").read_text() == M.core_doc(M.DEST) and (root / PKG / "__init__.py").read_text() == M.PACKAGE_DOC
     assert (root / PKG / "act" / "__init__.py").read_text() == f"from {M.PACKAGE}.act import silu_mul  # noqa: F401\n"
     assert (root / "integrations/vllm/tests/test_lanes.py").read_text() == (
         f"from {M.PACKAGE}.act import silu_mul as S\nfrom {M.PACKAGE} import collective as QC\n"
-        f"from {Q}.ln import layer_norm\nMODULE = \"{M.PACKAGE}.act.silu_mul\"\n")
+        f"from {R} import act as gelu, norm\nMODULE = \"{M.PACKAGE}.act.silu_mul\"\nNORM = \"{R}.norm\"\n")
     assert "from verity_vllm.program.registry import moe as Q" in (root / "integrations/vllm/tests/program/fixtures_query.py").read_text()
 
+    assert (root / REG / "norm.py").read_text() == FILES[f"{QDIR}/ln/norm.py"].replace(f"from {Q}.ln._common import BF16\n", "BF16 = 16\n")
+    assert (root / REG / "act.py").read_text() == FILES[f"{REG}/act.py"] + (
+        '\n\n# one word\n@composite("Gelu", 1, [], None)\ndef Gelu(B, S, x):\n    return BF16\n')
+    assert (root / REG / "vocab.py").read_text() == f"from {R} import norm as LN\n"
+    assert (root / "integrations/vllm/tests/test_ln.py").read_text() == f"ALL = ()\nfrom {R}.act import Gelu  # the GELU\n"
+    tracked = subprocess.run(["git", "-C", str(root), "ls-files"], check=True, capture_output=True, text=True).stdout.split()
+    assert f"{REG}/norm.py" in tracked and not [t for t in tracked if t.startswith(f"{QDIR}/ln/")]
+
+    sizes = json.loads((root / "integrations/vllm/tests/lint/allowlists/p10_size.json").read_text())["entries"]
+    assert sizes == [{"file": "verity_vllm/program/registry/norm.py", "kind": "module", "count": 900}]
     entries = json.loads((root / "integrations/vllm/tests/lint/allowlists/p11_names.json").read_text())["entries"]
-    assert [e["file"] for e in entries] == ["verity_vllm/program/registry/quarantine/ln/__init__.py"]
-    assert json.loads((root / "integrations/vllm/tests/dead_code_keep.json").read_text())["modules"] == {f"{Q}.ln.layer_norm": "stays"}
+    assert entries == []
+    assert json.loads((root / "integrations/vllm/tests/dead_code_keep.json").read_text())["modules"] == {"verity_vllm.linear": "kept"}
     assert (root / "integrations/vllm/verity_vllm/engine/profiles/quarantine/REC.json").read_text() == FILES[
         "integrations/vllm/verity_vllm/engine/profiles/quarantine/REC.json"]
 
@@ -159,12 +199,47 @@ def test_apply_refuses_while_core_library_code_imports_a_lane_that_would_move(tm
     assert _contents(root) == before
 
 
-def test_apply_refuses_an_import_of_moved_and_staying_lanes_together(tmp_path, capsys):
+def test_apply_refuses_an_import_of_moved_and_other_lanes_together(tmp_path, capsys):
     root = _tree(tmp_path, {"integrations/vllm/tests/test_mixed.py": f"from {Q} import act, ln\n"})
     before = _contents(root)
     assert _apply(root) == 2
-    assert "moved and staying" in capsys.readouterr().err
+    assert "moved and other lanes" in capsys.readouterr().err
     assert _contents(root) == before
+
+
+@pytest.mark.parametrize("extra, edits, says", [
+    ({}, (), f"`from {Q}.ln import ALL`: ALL is not a promoted module of lane ln"),
+    ({"integrations/vllm/tests/test_pkg.py": f"from {Q} import ln\n"}, EDITS, "imports a promoted lane's package"),
+    ({f"{QDIR}/ln/extra.py": "X = 1\n"}, EDITS, f"lane ln keeps {QDIR}/ln/extra.py, which is not promoted"),
+    ({"integrations/vllm/README.md": "see `registry/quarantine/ln/norm.py`\n"}, EDITS,
+     "would still name a promoted lane:\n  integrations/vllm/README.md:1: see `registry/quarantine/ln/norm.py`"),
+    ({f"{REG}/act.py": "from verity.ir.defs import composite\nBF16 = 16\nGelu = None\n"}, EDITS, "Gelu already bound in act.py"),
+    ({f"{REG}/act.py": "from verity.ir.defs import composite\n"}, EDITS, "act.py does not bind BF16"),
+    ({}, (("integrations/vllm/tests/test_ln.py", "no such text", ""),), "expected one 'no such text', found 0"),
+])
+def test_apply_refuses_a_promotion_that_would_leave_a_name_behind_or_clash(tmp_path, monkeypatch, capsys, extra, edits, says):
+    monkeypatch.setattr(M, "promote_edits", lambda dest: edits)
+    root = _tree(tmp_path, extra)
+    before = _contents(root)
+    assert _apply(root) == 2
+    assert says in capsys.readouterr().err
+    assert _contents(root) == before
+
+
+def test_apply_refuses_a_promoted_module_that_declares_an_unlisted_id(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(M, "PROMOTED_IDS", ("Norm_v1",))
+    root = _tree(tmp_path)
+    before = _contents(root)
+    assert _apply(root) == 2
+    assert "declare ['Gelu_v1', 'Norm_v1'], not PROMOTED_IDS ['Norm_v1']" in capsys.readouterr().err
+    assert _contents(root) == before
+
+
+def test_apply_refuses_a_partly_promoted_lane(tmp_path, capsys):
+    root = _tree(tmp_path)
+    (root / QDIR / "ln" / "gelu.py").unlink()
+    assert _apply(root) == 2
+    assert "partly promoted: ln/gelu.py gone" in capsys.readouterr().err
 
 
 def test_apply_refuses_a_version_not_in_its_list(tmp_path, capsys):
@@ -223,8 +298,17 @@ def test_verify_allows_only_the_deleted_versions_to_go():
     assert M.verify(before, changed, []) == ["suite: digest changed A_v1{N=8}: a -> b"]
 
 
+def test_verify_allows_new_ids_only_where_the_promoted_targets_reach():
+    before = {"suite": {"A_v1{N=8}": "a"}, "registry": {"A_v1": "g", "P_v1": "p"}, "root_errors": []}
+    after = {"suite": {"A_v1{N=8}": "a", "P_v1{N=4}": "q", "Const32[0x1]_v1": "c"}, "registry": {"A_v1": "g", "P_v1": "p", "Const32[0x1]_v1": "c"},
+             "root_errors": [], "promoted_closure": ["Const32[0x1]_v1", "P_v1{N=4}"]}
+    assert M.verify(before, after, []) == []
+    assert M.verify(before, {**after, "promoted_closure": ["P_v1{N=4}"]}, []) == ["suite: new Const32[0x1]_v1", "registry: new Const32[0x1]_v1"]
+    assert M.verify(before, {**after, "registry": {**after["registry"], "P_v1": "p2"}}, []) == ["registry: digest changed P_v1: p -> p2"]
+
+
 def test_the_lists_are_disjoint_and_name_every_reviewed_version():
-    assert not set(M.DELETE) & set(M.KEPT) and not set(M.MOVE) & set(M.STAY)
+    assert not set(M.DELETE) & set(M.KEPT) and not set(M.MOVE) & set(REAL_PROMOTED_LANES)
     assert set(M.KEPT) == {"RMSNormFusedCuda_v1", "SiluMul_v1", "SiluMulBf16_v1", "SiluMul_v3", "SiluMulBf16_v3", "Attention_v1",
                            "AttentionHead_v1", "AttnBlock_v1", "Serve_v1", "Serve_v2", "Serve_v3", "LayerPre_v1", "LayerPost_v1",
                            "Final_v1"}

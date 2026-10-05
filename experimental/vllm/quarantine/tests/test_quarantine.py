@@ -1,6 +1,7 @@
 """The experimental quarantine lanes, from where they now live: each module passes the quarantine's purity and identity lint, a
 lane's re-export of a promoted Definition is the registry's own object, each difftest adapter builds its specialization
-without torch, and the lanes here and the lanes core keeps are the migration's `MOVE` and `STAY`."""
+without torch, and the lanes here are the migration's `MOVE` while core's quarantine keeps none (the lanes core bound were
+promoted into the registry)."""
 from __future__ import annotations
 
 import importlib
@@ -68,4 +69,4 @@ def test_an_adapter_builds_its_definition_without_torch(name):
 
 def test_the_lanes_here_and_in_core_are_the_migration_s():
     assert _lanes(verity_quarantine) == {"act", "collective", "dense", "ov_moe"}
-    assert _lanes(core_quarantine) == {"ln", "ov_sampling"}
+    assert _lanes(core_quarantine) == set()
