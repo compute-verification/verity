@@ -97,6 +97,13 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
+  piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
+  critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
+  work still names its question.
+- 2026-10-04 (2:21 PM PDT): during the migration, ci resolves a conflict that is only a rename (a moved file that another
+  PR edited) in the train tip's merge commit, instead of sending the PR back for a restack, and names each resolution in
+  the handoff. A conflict that needs judgment still goes to the PR's owner, and `check` still runs on the merged tree.
 - 2026-10-04 (8:42 AM PDT): the proof system proves batches of arbitrary Boolean circuits, so soundness is **one
   theorem over everything the compiled Lean verifier accepts**, with no hypothesis on the circuit file or the statement's
   form (no `scopeOk`, no `pub.tables = none`). The verifier fails closed: it refuses every form the proof doesn't cover,
@@ -113,8 +120,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-03 (the coordinator's): data you don't own on a node is deleted only with `research retention gc` or `research
   retention rm --approved-by @OWNER`, which refuses unless every retention record on the path names that owner; never a bare
   `rm`, and never on another lane's word about who owns it.
-- 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`EDGES` in
-  `tests/test_protocol_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
+- 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`ALLOWED` in
+  `verity/tests/test_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
   edges stay acyclic. The layout that follows (lean with compute-accounting): a protocol guarantee that needs a proof
   system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
   registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
