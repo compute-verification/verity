@@ -3,6 +3,7 @@
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...`: build a train and push it as BRANCH for its check (`prepare`).
 `research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed and delete their branches
 (`sweep`).
+`research merge --mirror [SHA]`: push SHA (default main's tip) to node 1's bare repository's main, as --push does (`push_mirror`).
 `research merge --canary [--tool check] [--json]`: the gates' self-test, run daily: attempts the merge gate, the push guard and the
 train gate must refuse and a control they must admit, in scratch stores (`canary`).
 
@@ -32,7 +33,10 @@ head that landed (GitHub's "delete head branch" fires only on merges made on Git
 The remote's branch, fetched first, is the truth, never the checkout. With --push, a merge that lands is pushed to the remote
 (never forced), what the tool's declaration runs after a landing (`Tool.after_land`) is started, detached, on the landed commit,
 and then it is swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
-`research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct).
+`research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct). Once origin has main, the
+same commit goes to vy-nebius-1's bare repository, whose main node 1's builds check out (`vy-lean-sandbox checkout`): a plain
+push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
+it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
 from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`); the gate
@@ -49,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -901,6 +906,45 @@ def _sweep_after(repo: Path, into: str, remote: str) -> None:
               file=sys.stderr)
 
 
+MIRROR, MIRROR_ENV, MIRROR_TIMEOUT_S = "vy-nebius-1", "RESEARCH_MERGE_MIRROR", 120
+
+
+def mirror_name() -> str | None:
+    name = os.environ.get(MIRROR_ENV, MIRROR).strip()
+    return None if name.lower() in ("", "none", "off") else name
+
+
+def _mirror_target(name: str) -> tuple[list[str], str]:
+    """``name``'s ssh argv, as `research deploy` and `research run --on` reach it, and its bare repository."""
+    from . import remote
+
+    m = remote.resolve_machine(name, "verity")
+    t = remote.ssh_host_target(m)
+    return remote.ssh_argv(t["host"], t["port"], user=t["user"]), f"{m['root']}/{remote.POD_GIT_REPO}"
+
+
+def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run) -> bool:
+    """``sha`` to the main of ``name``'s bare repository: a plain push, so only a fast-forward. False, after one line naming the
+    failure and the command that reruns it, when it doesn't land."""
+    from .remote import git_push_url
+
+    rerun = f"cd {shlex.quote(str(repo))} && research merge --mirror {sha}"
+    try:
+        ssh, bare = (target or _mirror_target)(name)
+        r = run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, bare), f"{sha}:refs/heads/main"],
+                cwd=repo, capture_output=True, text=True, timeout=MIRROR_TIMEOUT_S)
+        why = None if r.returncode == 0 else f"git push exited {r.returncode}: {' '.join((r.stderr or r.stdout).split())[-300:]}"
+    except subprocess.TimeoutExpired:
+        why = f"no answer within {MIRROR_TIMEOUT_S} s"
+    except Exception as e:                                      # noqa: BLE001: a machine that can't be reached fails only this push
+        why = f"{type(e).__name__}: {e}"
+    if why:
+        print(f"research merge: main ({sha[:12]}) not pushed to {name} ({why}); rerun: {rerun}", file=sys.stderr)
+        return False
+    print(f"research merge: pushed main ({sha[:12]}) to {name}:{bare}")
+    return True
+
+
 def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen) -> list[str] | None:
     """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
@@ -930,7 +974,8 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = 
     """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), DM Daniel the spec change it
     landed on main (`spec_alert`), start what ``tool`` runs after a landing (`after_land`) and sweep, since the sweep closes only
     what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
-    says so, and `research merge --sweep` after the push does it."""
+    says so, and `research merge --sweep` after the push does it. Main on origin goes to the mirror too, before `after_land`
+    starts, and the mirror can fail without failing the merge."""
     if push:
         from .spec_alert import alert, remote_head
 
@@ -947,6 +992,8 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = 
             else:
                 print(f"research merge: no {remote}/{into} before the push to compare with; no spec change was looked for, "
                       f"so read this push's lean-audit.json changes yourself", file=sys.stderr)
+        if into == "main" and remote == "origin" and (name := mirror_name()):
+            push_mirror(repo, _git(repo, "rev-parse", f"refs/heads/{into}").stdout.strip(), name)
         after_land(repo, tool, _git(repo, "rev-parse", "HEAD").stdout.strip())
     _sweep_after(repo, into, remote)
     return 0
@@ -977,6 +1024,8 @@ def main(argv: list[str]) -> int:
                     "without it the sweep runs before the push and can close nothing the merge landed")
     ap.add_argument("--tool", default="check", help="the tool whose passing attempt the merge requires (default check)")
     ap.add_argument("-m", "--message", default=None, help="the merge commit's message (default `Merge REF (sha)`)")
+    ap.add_argument("--mirror", action="store_true", help=f"merge nothing: push REF (default --into's tip) to the main of "
+                    f"${MIRROR_ENV}'s bare repository (default {MIRROR}'s), as --push does after the remote")
     ap.add_argument("--dry-run", action="store_true", help="check the gate, merge nothing")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--guard-push", action="store_true", help="the pre-push hook `research merge` installs: read git's pre-push "
@@ -994,7 +1043,7 @@ def main(argv: list[str]) -> int:
     if a.json and not a.canary:
         ap.error("--json goes with --canary")
     if a.canary:
-        if a.ref or a.train or a.sweep or a.guard_push:
+        if a.ref or a.train or a.sweep or a.guard_push or a.mirror:
             ap.error("--canary takes no refs and no other mode")
         try:
             report = canary(repo, a.tool)
@@ -1020,6 +1069,17 @@ def main(argv: list[str]) -> int:
         return REFUSED if bad else OK
     if not a.sweep and not a.dry_run and (hook := install_push_guard(repo, a.into, a.tool)):
         print(f"research merge: installed the push guard {hook}", file=sys.stderr)
+    if a.mirror:
+        if len(a.ref) > 1 or a.train or a.sweep:
+            ap.error("--mirror takes at most one ref")
+        if not (name := mirror_name()):
+            print(f"research merge: ${MIRROR_ENV} turns the mirror off", file=sys.stderr)
+            return 1
+        r = _git(repo, "rev-parse", "--verify", f"{a.ref[0] if a.ref else 'refs/heads/' + a.into}^{{commit}}", check=False)
+        if r.returncode:
+            print(f"research merge: no commit {a.ref[0] if a.ref else a.into}", file=sys.stderr)
+            return 1
+        return 0 if push_mirror(repo, r.stdout.strip(), name) else 1
     if a.sweep:
         if a.ref or a.train:
             ap.error("--sweep takes no refs")
