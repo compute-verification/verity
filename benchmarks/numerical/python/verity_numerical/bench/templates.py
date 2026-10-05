@@ -253,19 +253,21 @@ class Subcircuit:
 
 
 #: The core sources a ``ScalarReference``'s function is defined by (its model, its total rules, the reference itself).
-REFERENCE_SOURCES = ("ml/kernels.py", "ml/tc/models.py", "ml/tc/total_fp8.py", "ml/tc/term.py")
+REFERENCE_SOURCES = ("verity_kernels/tc.py", "verity_catalog/silicon/models.py", "verity_catalog/silicon/total_fp8.py",
+                     "verity_catalog/silicon/term.py")
 
 
 def reference_digest(ref: Any) -> str:
-    """sha256 of the reference's id, its bindings and the :data:`REFERENCE_SOURCES` of ``verity``, in that order."""
+    """sha256 of the reference's id, its bindings and the :data:`REFERENCE_SOURCES` (each a path under its import package), in
+    that order."""
+    import importlib
     from pathlib import Path
 
-    import verity
-
-    root = Path(verity.__file__).resolve().parent
     h = hashlib.sha256(f"{ref.id}|{json.dumps(ref.bindings, sort_keys=True)}".encode())
     for rel in REFERENCE_SOURCES:
-        h.update(b"|" + rel.encode() + b"|" + (root / rel).read_bytes())
+        package, _, path = rel.partition("/")
+        root = Path(importlib.import_module(package).__file__).resolve().parent
+        h.update(b"|" + rel.encode() + b"|" + (root / path).read_bytes())
     return h.hexdigest()
 
 

@@ -47,6 +47,9 @@ _SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # the shell runners 
 CLOSURE = [
     "integrations/vllm/**",
     "verity/**",
+    "catalog/**",
+    "kernels/**",
+    "experimental/**",
 ]
 
 # Row id grammar (see verity_vllm/ops/README):
