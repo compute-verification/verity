@@ -30,8 +30,8 @@ theorem goodTiles_subset_goodTilesU (P : Protocol Q R S) (TR : TileRules Q R S) 
   unfold goodTiles at hg
   unfold goodTilesU
   rw [mem_filter] at hg ⊢
-  obtain ⟨hg, c, hc, hcap, hw⟩ := hg
-  exact ⟨hg, c, hc, hcap, fun i hi hr j hj => (hw i hi hr j hj).2⟩
+  obtain ⟨hg, c, hc, hcap, hB, hw⟩ := hg
+  exact ⟨hg, c, hc, hcap, hB, fun i hi hr j hj => (hw i hi hr j hj).2⟩
 
 theorem goodTilesU_subset (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S)
     (τ : Transcript) : goodTilesU P TR U H s τ ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U τ := by
@@ -92,7 +92,7 @@ theorem ttOutTilePearlCDevRev1_of_uOnly [Fintype Q] [DecidableEq Q] [Fintype R] 
   unfold goodTilesU at hg
   rw [mem_filter] at hg
   have hu := auditTiling_unit_lt 64 64 U.layout (mem_range.mp hg.1)
-  obtain ⟨_, _, hk, _, hgd, _⟩ := hU.2.1 _ hu
+  obtain ⟨_, _, hk, _, hgd, _⟩ := hU.2 _ hu
   have hcr := creditDevRev1_nonneg d hadd hbf _ hk hgd
   simp only [pearlCTilesDevRev1]
   have hsh := tileShare_nonneg (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
@@ -118,7 +118,7 @@ theorem pearlCSampledDevUOnlyAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fint
         (pearlCTilesDevRev1 d sem ρ).Wcred U.layout g act ≤ (ω : ℝ) * (pearlCTilesDevRev1 d sem ρ).credit H s' U g act := by
     intro U hU H s' g hg act _
     have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.2 _ hu
+    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.2 _ hu
     simp only [pearlCTilesDevRev1]
     rw [hsh, hω]
     push_cast
@@ -128,13 +128,13 @@ theorem pearlCSampledDevUOnlyAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fint
         (pearlCTilesDevRev1 d sem ρ).Wcred U.layout g act ≤ (pearlCTilesDevRev1 d sem ρ).Wref U.layout g := by
     intro U hU g hg act
     have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.2 _ hu
+    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.2 _ hu
     simp only [pearlCTilesDevRev1]
     rw [hsh]
     exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ _ _) _) hw0
   have hmono : TTOutTileU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDevAt d s)
       (1 / 400) εPearlC :=
-    ⟨hTT.1, fun U hU => hTT.2 U ⟨hU.1, hU.2.1.1, hU.2.2⟩⟩
+    ⟨hTT.1, fun U hU => hTT.2 U ⟨hU.1, hU.2.1⟩⟩
   have key := gammaSampledU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDevAt d s)
     (1 / 400) (ω : ℝ) εPearlC (by norm_num) (by exact_mod_cast hω0) hW hWc hmono
   have e : (γ : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hγ]; push_cast; ring

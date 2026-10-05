@@ -79,7 +79,7 @@ theorem gammaFromTTOut {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [F
 theorem ttOut_mono_domain {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
     {P : Protocol Q R S} {D D' : Layout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ} (hD : ∀ L, D' L → D L)
     (h : TTOut CM P D γ₀ ε) : TTOut CM P D' γ₀ ε :=
-  ⟨h.1, fun U hU => h.2 U ⟨hU.1, hD _ hU.2.1, hU.2.2⟩⟩
+  ⟨h.1, fun U hU => h.2 U ⟨hU.1, hD _ hU.2⟩⟩
 
 theorem wref_le_at {Q R S : Type} (P : Protocol Q R S) (c : Costs) (ρ : ℚ) (s : Shape) (ω : ℚ) (hω0 : 0 ≤ ω)
     (hω : wrefOf Params.pi c s = ω * ((1 - ρ) * creditOf Params.pi c s)) (hacc : PearlCAccounting P Params.pi c ρ) :
@@ -87,7 +87,7 @@ theorem wref_le_at {Q R S : Type} (P : Protocol Q R S) (c : Costs) (ρ : ℚ) (s
       ∀ act : Codes, P.actOK (U.layout.shape u) act → P.capOK H s' U u act →
         P.Wref U.layout u ≤ (ω : ℝ) * P.credit H s' U u act := by
   intro U hU H s' u hu act _ hcap
-  have hsh : U.layout.shape u = s := hU.2.1.2 u hu
+  have hsh : U.layout.shape u = s := hU.2.2 u hu
   have hc := hacc.2 H s' U u act hcap
   rw [hsh] at hc
   rw [hacc.1, hsh, hω]
@@ -311,13 +311,14 @@ theorem witness_operandOK (p : ℕ) : witnessSem.OperandOK p 128 (fun _ _ => 106
   · simp [witnessSem]
 
 /-- `TTOutPearlC` is satisfiable at a two-program witness cost model, beside an honest reference at `W_ref` and an
-in-domain unit within the cap with positive credit. At the real H100 cost model the row is falsified by the
-first-promotion skip (rating D); rev1 (`TTOutPearlCDevRev1`) is its repair. -/
+in-domain unit, whose weight passes the rules, within the cap with positive credit. At the real H100 cost model the row
+is falsified by the first-promotion skip (rating D); rev1 (`TTOutPearlCDevRev1`) is its repair. -/
 theorem ttOutPearlCWitness :
     AdmitsRef (witnessCM (pearlCProtocol witnessSem Costs.adopted (1 / 400))) (pearlCProtocol witnessSem Costs.adopted (1 / 400))
         (pearlCDomain Params.pi) (fun _ => 0) ∧
       TTOutPearlC (witnessCM (pearlCProtocol witnessSem Costs.adopted (1 / 400))) witnessSem Costs.adopted (1 / 400) ∧
       witnessWorkload.InDomain (pearlCProtocol witnessSem Costs.adopted (1 / 400)) (pearlCDomain Params.pi) ∧
+      witnessWorkload.WeightsOK (pearlCProtocol witnessSem Costs.adopted (1 / 400)) ∧
       (pearlCProtocol witnessSem Costs.adopted (1 / 400)).capOK (fun _ => ()) () witnessWorkload 0 (witnessAct 0) ∧
       0 < ∑ u ∈ range witnessWorkload.layout.N,
         (pearlCProtocol witnessSem Costs.adopted (1 / 400)).credit (fun _ => ()) () witnessWorkload u (witnessAct u) := by
@@ -330,8 +331,8 @@ theorem ttOutPearlCWitness :
     unfold debitOf
     rw [ha, he]
     simp
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · refine ⟨true, fun U _ act _ H s => ⟨by simp [witnessCM], ?_, by simp [witnessCM]⟩⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · refine ⟨true, fun U _ _ act _ H s => ⟨by simp [witnessCM], ?_, by simp [witnessCM]⟩⟩
     show (if true = true then ∑ u ∈ range U.layout.N, max (P.credit H s U u (act u)) 0 else 0) ≤ _
     simp only [↓reduceIte]
     apply sum_le_sum
@@ -362,13 +363,14 @@ theorem ttOutPearlCWitness :
         nlinarith
       unfold Adversary.transcript at hx
       linarith
-  · refine ⟨by norm_num [witnessWorkload], ?_, fun u _ j hj =>
-      ⟨fun l hl => (witness_operandOK 1).1 j hj l hl, fun hj' => (witness_operandOK 1).2 ⟨j, hj'⟩⟩⟩
+  · refine ⟨by norm_num [witnessWorkload], ?_⟩
     intro u _
     refine ⟨by norm_num [witnessWorkload], by norm_num [witnessWorkload], by norm_num [witnessWorkload], ?_,
       by norm_num [witnessWorkload], rfl⟩
     show 32 * 4 ∣ 128
     norm_num
+  · exact fun u _ j hj =>
+      ⟨fun l hl => (witness_operandOK 1).1 j hj l hl, fun hj' => (witness_operandOK 1).2 ⟨j, hj'⟩⟩
   · show debitOf Params.pi Costs.adopted (witnessSem.unitDebit (fun _ => ()) () witnessWorkload 0 (witnessAct 0)) ≤
       1 / 400 * creditOf Params.pi Costs.adopted (witnessWorkload.layout.shape 0)
     rw [hzero]
