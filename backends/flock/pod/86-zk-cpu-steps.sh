@@ -177,7 +177,7 @@ if step == "build":
     s["key"] = text(o / "key.txt").strip()
     s["binary"] = text(o / "binary.sha256").strip()
     s["lean"] = text(o / "lean.sha").strip()
-    s["staged"] = {f.name: text(f) for f in sorted(o.glob("stage-*/statement.txt"))}
+    s["staged"] = {f.parent.name: text(f) for f in sorted(o.glob("stage-*/statement.txt"))}
 elif step == "prove":
     for b in builds:
         s[b] = {name: live(d / f"{b}-{name}") for name in ("m0", "zk") if (d / f"{b}-{name}").exists()}
