@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ir.types import Type
+from verity.primitives.circuits.types import Type
 
 
 def load_safetensors_words(paths: Iterable[Path]) -> tuple[dict[str, np.ndarray], dict[str, str]]:

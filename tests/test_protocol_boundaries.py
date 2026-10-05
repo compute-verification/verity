@@ -43,7 +43,7 @@ def _sources(name: str) -> list[Path]:
 
 
 def test_a_lean_packages_tooling_is_not_the_protocols_code():
-    assert ROOT / "pouw" / "verity_pouw" / "protocol.py" in _sources("pouw")
+    assert ROOT / "pouw" / "verity.protocols.accounting.work.pouw" / "protocol.py" in _sources("pouw")
     assert not [p for p in _sources("pouw") if (ROOT / "pouw" / "lean") in p.parents]
 
 
@@ -61,9 +61,9 @@ def test_edges_name_protocols_and_stay_acyclic():
 
 
 def test_an_edge_grants_one_direction_to_one_protocol():
-    assert "verity_sampled_proofs" in _allowed("pouw")
-    assert "verity_pouw" not in _allowed("sampled_proofs")
-    assert "verity_pous" not in _allowed("pouw")
+    assert "verity.protocols.verification.sampled_proofs" in _allowed("pouw")
+    assert "verity.protocols.accounting.work.pouw" not in _allowed("sampled_proofs")
+    assert "verity.protocols.accounting.space.pous" not in _allowed("pouw")
 
 
 @pytest.mark.parametrize("name", PROTOCOLS)
