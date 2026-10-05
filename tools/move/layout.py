@@ -507,6 +507,8 @@ class Run:
                 self.note("approximate directory paths", f"{path}: {token} -> {new_target}")
         else:
             new_target = self.L.file(target) or target
+        if path == old and new_target == target:
+            return None                                 # neither end moved: the token stays as written
         rel = posixpath.relpath(new_target, posixpath.dirname(path) or ".")
         if t.startswith("./") and not rel.startswith("."):
             rel = "./" + rel
