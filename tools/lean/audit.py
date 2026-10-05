@@ -900,7 +900,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     says what its record says (`lifted_into`) gets one line, and the definition, new and read by nothing else, needs no
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
-    (moved from its old name, lifted), and the definitions that are the same are counted on one line."""
+    (moved from its old name, lifted), and the definitions that are the same are counted on one line.  A definition that
+    another moved into (two copies merged, the record holding both) is compared under its own name as well, and gets no
+    line while it is the same."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
@@ -938,28 +940,41 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
                        f"{', '.join(b.get('assumptions', [])) or 'none'}")
     spans = {r["name"]: r.get("lines") for p in facts["pins"].values() for r in p.get("reads", [])}
     now: dict[str, dict] = {}
+    own: dict[str, dict] = {}
     for m, es in guarantee_reads(facts).items():
         groups: dict[str, list] = {}
+        mine: dict[str, list] = {}
         for n, e in es.items():
             groups.setdefault(parent(e["moved"]["as"] if moves and e.get("moved") else n), []).append(e)
+            mine.setdefault(parent(n), []).append(e)
         for d, g in groups.items():
             as_was = [{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]}
                       if moves and e.get("moved") else e for e in g]
             now[d] = {"name": parent(min(e["name"] for e in g)), "module": m, "sha256": digest(as_was),
-                      "hash": digest(g, old=True)[:OLD], "guarantees": sorted(set().union(*(e["guarantees"] for e in g)))}
+                      "hash": digest(g, old=True)[:OLD], "guarantees": sorted(set().union(*(e["guarantees"] for e in g))),
+                      "own": sorted({parent(e["name"]) for e in g})}
+        own |= {d: {"sha256": digest(g), "hash": digest(g, old=True)[:OLD]} for d, g in mine.items()}
     oreads = old.get("reads", {})
     recorded = {d: {"module": m, "hash": h, "guarantees": rec.get("guarantees", [])}
                 for m, rec in oreads.items() for d, h in definitions(rec).items()}
     regrouped = sum(old_group(rec) and all(now.get(d, {}).get("hash") == h for d, h in definitions(rec).items())
                     for rec in oreads.values())
+    def same(x: dict, y: dict) -> bool:
+        return x["hash"] is not None and x["hash"] == y["hash" if len(x["hash"]) == OLD else "sha256"]
+
     elsewhere = 0
     for d in sorted(set(recorded) | set(now)):
         x, y = recorded.get(d), now.get(d)
         away = bool(x and y) and (x["module"] != y["module"] or y["name"] != d)
-        if x and y and x["hash"] is not None and x["hash"] == y["hash" if len(x["hash"]) == OLD else "sha256"]:
+        if x and y and same(x, y):
             elsewhere += away and len(x["hash"]) != OLD
             continue
         if y and not x and set(y["guarantees"]) <= lifts.get(y["name"], set()):
+            continue
+        # a merge reads the surviving copy back under the old name, so it is missing (x) or new (y) under that grouping only
+        if x and not y and d in own and same(x, own[d]):
+            continue
+        if y and not x and all(r in recorded and r in own and same(recorded[r], own[r]) for r in y["own"]):
             continue
         state = "new" if not x else "gone" if not y else "changed" if x["hash"] is not None else "in a changed module"
         z = y or x

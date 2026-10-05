@@ -443,6 +443,38 @@ def test_a_moved_guarantee_and_its_definitions_are_compared_with_their_old_recor
     assert text[:2] == ["guarantee Q.t: changed (moved from P.t)", "  before:"] and A.statement_changes(text) == text[:-1]
 
 
+def test_a_definition_moved_into_one_the_record_holds_is_compared_under_both_names():
+    """`P.f` merged into `P.C.f`, which `K.u` already read: under the old names the build reads `P.C.f` back as `P.f`,
+    and under its own name it is still `K.u`'s `P.C.f`, so neither shows as gone or new."""
+    def reads(f="P.C.f"):
+        return [{"name": f, "module": "P.Core", "kind": "def", "hash": "1" * 32},
+                {"name": f"{f}.match_1", "module": "P.Core", "kind": "def", "hash": "2" * 32}]
+
+    core = fact(signature="K.u : P.C.f 0 = 0", hyps=[], reads=reads(), h="00000000000000dd")
+    policy = {**POLICY, "guarantees": {"P.t": {"owner": "@lean"}, "K.u": {"owner": "@lean"}}}
+    old = A.judge(policy, facts(pins={"P.t": fact(), "K.u": core}), FILES, update=True)[1]
+    assert {"P.Defs", "P.Core"} <= set(old["reads"])
+
+    def merged(f_was="1" * 32):
+        back = {"P.C.f": ("P.f", f_was), "P.C.f.match_1": ("P.f.match_1", "2" * 32), "P.Hyp": ("P.Hyp", "3" * 32)}
+        t = fact(signature="P.t (h : P.Hyp) (n : Nat) : P.C.f n = n", h="00000000000000cc",
+                 reads=reads() + [{k: v for k, v in fact()["reads"][2].items() if k != "sha256"}])
+        u = fact(signature="K.u : P.C.f 0 = 0", hyps=[], reads=reads(), h="00000000000000dd")
+        for p in (t, u):
+            for r in p["reads"]:
+                r["moved"] = {"as": back[r["name"]][0], "sha256": sha(back[r["name"]][1])}
+        t["moved"] = {"as": "P.t", "sha256": sha("00000000000000aa")}
+        u["moved"] = {"as": "K.u", "sha256": sha("00000000000000ee")}
+        return facts(pins={"P.t": t, "K.u": u})
+
+    now = merged()
+    text = A.review(old, A.judge(policy, now, FILES, update=True)[1], now, {}, {"P.f": "P.C.f"})
+    assert text == [f"guarantee P.t: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"] and A.statement_changes(text) == []
+    now = merged(f_was="9" * 32)
+    text = A.review(old, A.judge(policy, now, FILES, update=True)[1], now, {}, {"P.f": "P.C.f"})
+    assert text == [f"guarantee P.t: {A.MOVED}", "definition P.C.f (P.Core), was P.f (P.Defs), read by K.u, P.t: changed"]
+
+
 def test_a_moved_statement_lifted_into_a_guarantees_definition_is_the_same_statement():
     old = recorded()
     current = {**POLICY, "guarantees": {"Q.t": old["guarantees"]["P.t"]}}
