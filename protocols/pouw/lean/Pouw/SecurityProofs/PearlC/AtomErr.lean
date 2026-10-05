@@ -361,8 +361,8 @@ theorem product_two_zpow {a b : Code} (ha : a.isNaN = false) (hb : b.isNaN = fal
 def lineCode (β : ℚ) : Code := e4m3Word (f32Word (β * 44))
 
 /-- The noise the atom adds on the flat pair `(flat (fun _ => false), flatF s')`: `E′`'s value times the sum of the
-`F` line, `(11/4)·(32 − 2j)` for `j` negative entries (`flatNoise_eq`). -/
-def flatNoise (β : ℚ) (s' : Fin 32 → Bool) : ℚ := codeVal (lineCode β) * ∑ t, flatF s' t
+`F` line's values, `(11/4)·(32 − 2j)` for `j` negative entries (`flatNoise_eq`). -/
+def flatNoise (β : ℚ) (s' : Fin 32 → Bool) : ℚ := codeVal (lineCode β) * ∑ t, codeVal (flatF s' t)
 
 /-- The cast of a finite FP32 word reads the word's value: `e4m3Word u` and `e4m3` of its value have the same value
 (the codes differ only at `−0`). -/
@@ -434,9 +434,9 @@ theorem lineCode_err {β : ℚ} (hβ : 0 ≤ β) (hβ' : β * 44 ≤ 448) :
   linarith
 
 theorem sum_flat {r : Nat} (s : Fin r → Bool) :
-    ∑ t, flatF s t = 11 / 4 * ((r : ℚ) - 2 * (Finset.univ.filter fun t => s t = true).card) := by
-  have h : ∀ t, flatF s t = 11 / 4 - 11 / 2 * (if s t = true then 1 else 0) := by
-    intro t; simp only [flatF]; cases s t <;> norm_num
+    ∑ t, codeVal (flatF s t) = 11 / 4 * ((r : ℚ) - 2 * (Finset.univ.filter fun t => s t = true).card) := by
+  have h : ∀ t, codeVal (flatF s t) = 11 / 4 - 11 / 2 * (if s t = true then 1 else 0) := by
+    intro t; rw [codeVal_flatF]; cases s t <;> norm_num
   simp only [h, Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
     ← Finset.mul_sum, Finset.sum_boole]
   ring
@@ -445,14 +445,16 @@ theorem flatNoise_eq (β : ℚ) (s' : Fin 32 → Bool) :
     flatNoise β s' = codeVal (lineCode β) * (11 / 4 * (32 - 2 * (Finset.univ.filter fun t => s' t = true).card)) := by
   rw [flatNoise, sum_flat]; norm_num
 
-theorem sum_flat_not {r : Nat} (s : Fin r → Bool) : ∑ t, flatF (fun t => !s t) t = -∑ t, flatF s t := by
-  rw [← neg_flatF]; simp only [Pi.neg_apply, Finset.sum_neg_distrib]
+theorem sum_flat_not {r : Nat} (s : Fin r → Bool) :
+    ∑ t, codeVal (flatF (fun t => !s t) t) = -∑ t, codeVal (flatF s t) := by
+  rw [← neg_flatF]; simp only [codeVal_negLine, Finset.sum_neg_distrib]
 
 theorem flatNoise_not (β : ℚ) (s' : Fin 32 → Bool) : flatNoise β (fun t => !s' t) = -flatNoise β s' := by
   rw [flatNoise, flatNoise, sum_flat_not, mul_neg]
 
 /-- A nonzero sum of a flat `F` line of length 32 is at least `11/2` in magnitude. -/
-theorem abs_sum_flat_ge (s : Fin 32 → Bool) (h : ∑ t, flatF s t ≠ 0) : 11 / 2 ≤ |∑ t, flatF s t| := by
+theorem abs_sum_flat_ge (s : Fin 32 → Bool) (h : ∑ t, codeVal (flatF s t) ≠ 0) :
+    11 / 2 ≤ |∑ t, codeVal (flatF s t)| := by
   rw [sum_flat] at h ⊢
   set j := (Finset.univ.filter fun t => s t = true).card
   have hj : j ≠ 16 := by rintro hj; apply h; rw [hj]; norm_num
@@ -462,22 +464,36 @@ theorem abs_sum_flat_ge (s : Fin 32 → Bool) (h : ∑ t, flatF s t ≠ 0) : 11 
   · have : (17 : ℚ) ≤ j := by exact_mod_cast hj
     rw [abs_of_neg (by push_cast; linarith)]; push_cast; linarith
 
-theorem e4m3_flat {r : Nat} (s : Fin r → Bool) (t : Fin r) :
-    (e4m3 (flatF s t)).isNaN = false ∧ (e4m3 (flatF s t)).sig = 11 ∧ val (e4m3 (flatF s t)) = flatF s t := by
+theorem e4m3_flat {r : Nat} (s : Fin r → Bool) (t : Fin r) : (flatF s t).isNaN = false ∧ (flatF s t).sig = 11 := by
   unfold flatF; split <;> decide +kernel
+
+/-- `E′` on a flat `E` line of `+44`s is `lineCode`'s, `β = 0` included (`+0`: the zero product's signs agree). -/
+theorem lineCodes_flat (β : ℚ) (t : Fin 32) : lineCodes β (flat fun _ => false : Fin 32 → Code) t = lineCode β := by
+  have h44 : codeVal (flat (fun _ => false) t : Code) = 44 := by rw [codeVal_flat]; rfl
+  have hs : (flat (fun _ : Fin 32 => false) t : Code).sign = false := by
+    show (e4m3 (if false = true then -44 else 44)).sign = false
+    decide +kernel
+  unfold lineCodes mulCode lineCode
+  rw [h44, hs]
+  by_cases h0 : β * 44 = 0
+  · have hβ : β = 0 := by linarith
+    subst hβ
+    simp [f32Word]
+  · rw [ite_eq_right h0]
 
 theorem val_ne_zero_spec : ∀ c : Code, val c ≠ 0 → c.isNaN = false ∧ 1 / 512 ≤ |val c| ∧ 1 ≤ c.sig := by
   decide +kernel
 
 /-- A product of a noise line code `L` and a flat `F` entry: `2^e ≤ 16·|L|`. -/
 theorem product_flat_two_zpow {L : Code} (hLn : L.isNaN = false) (hLs : 1 ≤ L.sig) (s' : Fin 32 → Bool) (l : Fin 32)
-    (hm : (product L (e4m3 (flatF s' l))).mag ≠ 0) : (2 : ℚ) ^ (product L (e4m3 (flatF s' l))).exp ≤ 16 * |val L| := by
-  obtain ⟨hn, hs, hv⟩ := e4m3_flat s' l
+    (hm : (product L (flatF s' l)).mag ≠ 0) : (2 : ℚ) ^ (product L (flatF s' l)).exp ≤ 16 * |val L| := by
+  obtain ⟨hn, hs⟩ := e4m3_flat s' l
   have h := product_two_zpow hLn hn hm
-  have hf : |flatF s' l| = 11 / 4 := by unfold flatF; split <;> norm_num
-  rw [hs, hv, abs_mul, hf] at h
+  have hf : |val (flatF s' l)| = 11 / 4 := by
+    rw [show val (flatF s' l) = codeVal (flatF s' l) from rfl, codeVal_flatF]; split <;> norm_num
+  rw [hs, abs_mul, hf] at h
   push_cast at h
-  have hp := two_zpow_pos (product L (e4m3 (flatF s' l))).exp
+  have hp := two_zpow_pos (product L (flatF s' l)).exp
   have hLs' : (1 : ℚ) ≤ L.sig := by exact_mod_cast hLs
   nlinarith
 
@@ -491,16 +507,16 @@ theorem atomMix_flat_err {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α)
   have hA := mul_nonneg hα (abs_nonneg x)
   obtain ⟨tc, hw, hc⟩ := f32Word_spec (y := α * x) (by rw [hy]; norm_num; linarith)
   have hV0 : val (lineCode β) ≠ 0 := fun h => hN (by rw [flatNoise, codeVal, ← val, h, zero_mul])
-  have hK0 : ∑ t, flatF s' t ≠ 0 := fun h => hN (by rw [flatNoise, h, mul_zero])
+  have hK0 : ∑ t, codeVal (flatF s' t) ≠ 0 := fun h => hN (by rw [flatNoise, h, mul_zero])
   obtain ⟨hLn, hV512, hLs⟩ := val_ne_zero_spec _ hV0
   obtain ⟨a, ha_def⟩ : ∃ a : Fin 32 → Code, a = fun _ => lineCode β := ⟨_, rfl⟩
-  obtain ⟨b, hb_def⟩ : ∃ b : Fin 32 → Code, b = fun t => e4m3 (flatF s' t) := ⟨_, rfl⟩
+  obtain ⟨b, hb_def⟩ : ∃ b : Fin 32 → Code, b = fun t => flatF s' t := ⟨_, rfl⟩
   have hal : ∀ l, a l = lineCode β := fun l => by rw [ha_def]
-  have hbl : ∀ l, b l = e4m3 (flatF s' l) := fun l => by rw [hb_def]
+  have hbl : ∀ l, b l = flatF s' l := fun l => by rw [hb_def]
   have hval : FormChain.atomMix.value α x β (flat fun _ => false) (flatF s') =
       PearlC.wordVal (hopperStep (f32Word (α * x)) a b) := by
-    have hla : lineCodes β (flat fun _ => false : Fin 32 → ℚ) = a := by
-      rw [ha_def]; funext t; simp [lineCodes, flat, lineCode]
+    have hla : lineCodes β (flat fun _ => false : Fin 32 → Code) = a := by
+      rw [ha_def]; funext t; exact lineCodes_flat β t
     rw [hb_def, ← hla]; rfl
   rw [hval]
   have ha : ∀ l, (a l).isNaN = false := fun l => by rw [hal]; exact hLn
@@ -508,8 +524,8 @@ theorem atomMix_flat_err {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α)
   have hpm : ∀ l, (product (a l) (b l)).mag ≠ 0 := by
     intro l
     rw [hal, hbl]
-    have h1 : ((lineCode β).sig * (e4m3 (flatF s' l)).sig) <<< 17 ≠ 0 := by
-      rw [Nat.shiftLeft_eq, (e4m3_flat s' l).2.1]
+    have h1 : ((lineCode β).sig * (flatF s' l).sig) <<< 17 ≠ 0 := by
+      rw [Nat.shiftLeft_eq, (e4m3_flat s' l).2]
       exact Nat.mul_ne_zero (Nat.mul_ne_zero (by omega) (by norm_num)) (by positivity)
     unfold product; dsimp only; rw [ite_eq_right h1]; exact h1
   -- the powers of two the bound meets, as fractions
@@ -545,10 +561,10 @@ theorem atomMix_flat_err {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α)
   have herr := hopperStep_err hw a b ha hb hE1 hE2
   have hsum : ∑ l, val (a l) * val (b l) = flatNoise β s' := by
     rw [flatNoise, codeVal, ← val, Finset.mul_sum]
-    exact Finset.sum_congr rfl fun l _ => by rw [hal, hbl, (e4m3_flat s' l).2.2]
+    exact Finset.sum_congr rfl fun l _ => by rw [hal, hbl]; rfl
   rw [hsum] at herr
   -- the grid
-  have hNabs : |flatNoise β s'| = |val (lineCode β)| * |∑ t, flatF s' t| := by
+  have hNabs : |flatNoise β s'| = |val (lineCode β)| * |∑ t, codeVal (flatF s' t)| := by
     rw [flatNoise, codeVal, ← val, abs_mul]
   have hK88 := abs_sum_flat_ge s' hK0
   have hVN : 11 / 2 * |val (lineCode β)| ≤ |flatNoise β s'| := by

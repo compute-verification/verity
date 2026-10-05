@@ -194,12 +194,12 @@ theorem codeVal_ne_of_gap {y z : ℚ} (hy : |y| < 464) (hz : |z| < 464)
 
 /-! ## (a) Salt-live elements, over an abstract value function -/
 
-/-- A forming value function: from `α`, `x`, `β` and the element's noise rows `e = E[i]`, `f = F[l]` to the number the
-cast reads: the signature of a forming chain's value (`FormChain.value`). -/
-abbrev ValueFn (r : Nat) := ℚ → ℚ → ℚ → (Fin r → ℚ) → (Fin r → ℚ) → ℚ
+/-- A forming value function: from `α`, `x`, `β` and the element's noise rows of codes `e = E[i]`, `f = F[l]` to the
+number the cast reads: the signature of a forming chain's value (`FormChain.value`). -/
+abbrev ValueFn (r : Nat) := ℚ → ℚ → ℚ → (Fin r → Code) → (Fin r → Code) → ℚ
 
 /-- The noise's support for one element: the pairs `(E row, F row)` the salt can give it (Pearl's `L × L`). -/
-abbrev Support (r : Nat) := Set ((Fin r → ℚ) × (Fin r → ℚ))
+abbrev Support (r : Nat) := Set ((Fin r → Code) × (Fin r → Code))
 
 variable {r : Nat}
 
@@ -220,7 +220,7 @@ theorem SaltLiveVal.saltLive {v : ValueFn r} {S : Support r} {α x β : ℚ} (h 
 /-- **The core of (a).** A pair `p, q` in the support at which the value is within `η` of `a − N` and `a + N` makes the
 element salt-live, if `|a| + 17η < 15N` (the gap beats E4M3's relative error), `N > 2^−10 + η` (it beats the
 subnormal spacing) and `|a| + N + η < 464` (no saturation). -/
-theorem saltLive_of_pair {v : ValueFn r} {S : Support r} {α x β a N η : ℚ} {p q : (Fin r → ℚ) × (Fin r → ℚ)}
+theorem saltLive_of_pair {v : ValueFn r} {S : Support r} {α x β a N η : ℚ} {p q : (Fin r → Code) × (Fin r → Code)}
     (hp : p ∈ S) (hq : q ∈ S) (hvp : |v α x β p.1 p.2 - (a - N)| ≤ η) (hvq : |v α x β q.1 q.2 - (a + N)| ≤ η)
     (hfloor : 1 / 1024 + η < N) (hthr : |a| + 17 * η < 15 * N) (hsat : |a| + N + η < 464) :
     SaltLiveVal v S α x β := by
@@ -240,7 +240,7 @@ theorem saltLive_of_pair {v : ValueFn r} {S : Support r} {α x β a N η : ℚ} 
 /-- **(a) in σ units.** With §5's scale (`α·(|x| + 4σ) ≤ 448`, which `α = 448/(s + 4σ)` and `|x| ≤ s` give), a pair
 whose noise is `N = c·ασ` with `c ≤ 4`, and a chain error `η < 16`, the element is salt-live when
 `α|x| + 17η < 15·c·ασ` and `2^−10 + η < c·ασ`: in σ units, `|x| < (15c − 17η/(ασ))·σ`. -/
-theorem saltLive_sigma {v : ValueFn r} {S : Support r} {α x β σ c η : ℚ} {p q : (Fin r → ℚ) × (Fin r → ℚ)}
+theorem saltLive_sigma {v : ValueFn r} {S : Support r} {α x β σ c η : ℚ} {p q : (Fin r → Code) × (Fin r → Code)}
     (hp : p ∈ S) (hq : q ∈ S) (hvp : |v α x β p.1 p.2 - (α * x - c * (α * σ))| ≤ η)
     (hvq : |v α x β q.1 q.2 - (α * x + c * (α * σ))| ≤ η) (hα : 0 < α) (hασ : 0 ≤ α * σ)
     (hsat : α * (|x| + 4 * σ) ≤ 448) (hc4 : c ≤ 4) (hη : η < 16) (hfloor : 1 / 1024 + η < c * (α * σ))
@@ -252,12 +252,12 @@ theorem saltLive_sigma {v : ValueFn r} {S : Support r} {α x β σ c η : ℚ} {
 /-- The chain's error on a flip pair, relative to its scale: at `p` and `q` the value is within `ε·(α|x| + N)` of
 `α·x − N` and `α·x + N`. This is the named hypothesis the BF16 and atom-mix instances take until the chains' error
 lemmas exist; the exact check measures it on Pearl's flat pairs under the atom-mix. -/
-def PairErr (v : ValueFn r) (α x β N ε : ℚ) (p q : (Fin r → ℚ) × (Fin r → ℚ)) : Prop :=
+def PairErr (v : ValueFn r) (α x β N ε : ℚ) (p q : (Fin r → Code) × (Fin r → Code)) : Prop :=
   |v α x β p.1 p.2 - (α * x - N)| ≤ ε * (α * |x| + N) ∧ |v α x β q.1 q.2 - (α * x + N)| ≤ ε * (α * |x| + N)
 
 /-- **(a) for a chain with relative error `ε ≤ 1/32`.** Under §5's scale, the noise floor `ασ ≥ 1` and a flip pair of
 noise `c·ασ` with `8/15 ≤ c ≤ 4`, the element is salt-live when `(1 + 17ε)·|x| < (15 − 17ε)·c·σ`. -/
-theorem saltLive_rel {v : ValueFn r} {S : Support r} {α x β σ c ε : ℚ} {p q : (Fin r → ℚ) × (Fin r → ℚ)}
+theorem saltLive_rel {v : ValueFn r} {S : Support r} {α x β σ c ε : ℚ} {p q : (Fin r → Code) × (Fin r → Code)}
     (hp : p ∈ S) (hq : q ∈ S) (herr : PairErr v α x β (c * (α * σ)) ε p q) (hα : 0 < α) (hfloor : 1 ≤ α * σ)
     (hsat : α * (|x| + 4 * σ) ≤ 448) (hc : 8 / 15 ≤ c) (hc4 : c ≤ 4) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 32)
     (hx : (1 + 17 * ε) * |x| < (15 - 17 * ε) * c * σ) : SaltLiveVal v S α x β := by
@@ -278,35 +278,50 @@ theorem saltLive_rel {v : ValueFn r} {S : Support r} {α x β σ c ε : ℚ} {p 
 
 /-! ### The noise's support: flat lines -/
 
-/-- A flat `E` line (norm 256): every entry `±44`, negative where `s` is true. -/
-def flat (s : Fin r → Bool) : Fin r → ℚ := fun t => if s t then -44 else 44
+/-- A flat `E` line (norm 256): every entry the code of `±44`, negative where `s` is true. -/
+def flat (s : Fin r → Bool) : Fin r → Code := fun t => e4m3 (if s t then -44 else 44)
 
-/-- A flat `F` line (Π's norm 16): every entry `±11/4`, negative where `s` is true. -/
-def flatF (s : Fin r → Bool) : Fin r → ℚ := fun t => if s t then -(11 / 4) else 11 / 4
+/-- A flat `F` line (Π's norm 16): every entry the code of `±11/4`, negative where `s` is true. -/
+def flatF (s : Fin r → Bool) : Fin r → Code := fun t => e4m3 (if s t then -(11 / 4) else 11 / 4)
+
+/-- A line with every code's sign bit flipped (`Peel.negCode`). -/
+def negLine (e : Fin r → Code) : Fin r → Code := fun t => Peel.negCode (e t)
+
+theorem codeVal_negLine (e : Fin r → Code) (t : Fin r) : codeVal (negLine e t) = -codeVal (e t) :=
+  Peel.codeVal_negCode _
+
+theorem codeVal_flat (s : Fin r → Bool) (t : Fin r) : codeVal (flat s t) = if s t then -44 else 44 := by
+  unfold flat; cases s t <;> decide +kernel
+
+theorem codeVal_flatF (s : Fin r → Bool) (t : Fin r) : codeVal (flatF s t) = if s t then -(11 / 4) else 11 / 4 := by
+  unfold flatF; cases s t <;> decide +kernel
 
 /-- The support fact the instances use: every pair of a flat `E` line and a flat `F` line is in the support. Pearl's
 line rule gives `±44` at norm 256 and `±11/4` at norm 16 at every entry when all `b_t mod 128` are equal, with the signs
 free (the exact check, over all 128 magnitudes). -/
 def FlatPairs (S : Support r) : Prop := ∀ s s' : Fin r → Bool, (flat s, flatF s') ∈ S
 
-theorem neg_flat (s : Fin r → Bool) : -flat s = flat (fun t => !s t) := by
-  funext t; simp only [flat, Pi.neg_apply]
-  rcases Bool.eq_false_or_eq_true (s t) with h | h <;> simp [h]
+theorem neg_flat (s : Fin r → Bool) : negLine (flat s) = flat (fun t => !s t) := by
+  funext t
+  rcases Bool.eq_false_or_eq_true (s t) with h | h <;>
+    simp only [negLine, flat, h, Bool.not_true, Bool.not_false, Bool.false_eq_true, ↓reduceIte] <;> decide +kernel
 
-theorem neg_flatF (s : Fin r → Bool) : -flatF s = flatF (fun t => !s t) := by
-  funext t; simp only [flatF, Pi.neg_apply]
-  rcases Bool.eq_false_or_eq_true (s t) with h | h <;> simp [h]
+theorem neg_flatF (s : Fin r → Bool) : negLine (flatF s) = flatF (fun t => !s t) := by
+  funext t
+  rcases Bool.eq_false_or_eq_true (s t) with h | h <;>
+    simp only [negLine, flatF, h, Bool.not_true, Bool.not_false, Bool.false_eq_true, ↓reduceIte] <;> decide +kernel
 
 /-- Flat lines give flip pairs: `(−e, f)` and `(e, f)` are both in the support. -/
 theorem flipPair_of_flat {S : Support r} (hS : FlatPairs S) (s s' : Fin r → Bool) :
-    (-flat s, flatF s') ∈ S ∧ (flat s, flatF s') ∈ S := by
+    (negLine (flat s), flatF s') ∈ S ∧ (flat s, flatF s') ∈ S := by
   rw [neg_flat]; exact ⟨hS _ _, hS _ _⟩
 
 /-- A flat `E` line and a flat `F` line with `j` sign disagreements have dot product `121·(r − 2j)`. -/
 theorem dot_flat (s s' : Fin r → Bool) :
-    ∑ t, flat s t * flatF s' t = 121 * ((r : ℚ) - 2 * (Finset.univ.filter fun t => s t ≠ s' t).card) := by
-  have h : ∀ t, flat s t * flatF s' t = 121 - 242 * (if s t ≠ s' t then 1 else 0) := by
-    intro t; simp only [flat, flatF]; cases s t <;> cases s' t <;> norm_num
+    ∑ t, codeVal (flat s t) * codeVal (flatF s' t) =
+      121 * ((r : ℚ) - 2 * (Finset.univ.filter fun t => s t ≠ s' t).card) := by
+  have h : ∀ t, codeVal (flat s t) * codeVal (flatF s' t) = 121 - 242 * (if s t ≠ s' t then 1 else 0) := by
+    intro t; simp only [codeVal_flat, codeVal_flatF]; cases s t <;> cases s' t <;> norm_num
   simp only [h, Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
     ← Finset.mul_sum, Finset.sum_boole]
   ring
@@ -314,37 +329,41 @@ theorem dot_flat (s s' : Fin r → Bool) :
 /-! ### The exact instance -/
 
 /-- The exact value function, `α·x + β·(e·f)`: `FormChain.exact`'s. -/
-def exactValue (r : Nat) : ValueFn r := fun α x β e f => α * x + β * ∑ t, e t * f t
+def exactValue (r : Nat) : ValueFn r := fun α x β e f => α * x + β * ∑ t, codeVal (e t) * codeVal (f t)
 
 /-- **(a), exact.** A flip pair `(−e, f)`, `(e, f)` in the support with noise `N = β·(e·f)` makes the element salt-live
 when `α|x| < 15N`, `N > 2^−10` and `α|x| + N < 464`. -/
-theorem exact_saltLive {S : Support r} {α x β : ℚ} {e f : Fin r → ℚ} (hp : (-e, f) ∈ S) (hq : (e, f) ∈ S)
-    (hfloor : 1 / 1024 < β * ∑ t, e t * f t) (hthr : |α * x| < 15 * (β * ∑ t, e t * f t))
-    (hsat : |α * x| + β * ∑ t, e t * f t < 464) : SaltLiveVal (exactValue r) S α x β := by
-  have hneg : ∑ t, (-e) t * f t = -∑ t, e t * f t := by simp [Finset.sum_neg_distrib]
-  refine saltLive_of_pair (a := α * x) (N := β * ∑ t, e t * f t) (η := 0) hp hq ?_ ?_
+theorem exact_saltLive {S : Support r} {α x β : ℚ} {e f : Fin r → Code} (hp : (negLine e, f) ∈ S) (hq : (e, f) ∈ S)
+    (hfloor : 1 / 1024 < β * ∑ t, codeVal (e t) * codeVal (f t))
+    (hthr : |α * x| < 15 * (β * ∑ t, codeVal (e t) * codeVal (f t)))
+    (hsat : |α * x| + β * ∑ t, codeVal (e t) * codeVal (f t) < 464) : SaltLiveVal (exactValue r) S α x β := by
+  have hneg : ∑ t, codeVal (negLine e t) * codeVal (f t) = -∑ t, codeVal (e t) * codeVal (f t) := by
+    simp [codeVal_negLine, Finset.sum_neg_distrib]
+  refine saltLive_of_pair (a := α * x) (N := β * ∑ t, codeVal (e t) * codeVal (f t)) (η := 0) hp hq ?_ ?_
     (by linarith) (by linarith) (by linarith)
-  · show |α * x + β * ∑ t, (-e) t * f t - (α * x - β * ∑ t, e t * f t)| ≤ 0
-    rw [hneg, show α * x + β * -∑ t, e t * f t - (α * x - β * ∑ t, e t * f t) = 0 by ring, abs_zero]
-  · show |α * x + β * ∑ t, e t * f t - (α * x + β * ∑ t, e t * f t)| ≤ 0
+  · show |α * x + β * ∑ t, codeVal (negLine e t) * codeVal (f t) - (α * x - β * ∑ t, codeVal (e t) * codeVal (f t))| ≤ 0
+    rw [hneg, show α * x + β * -∑ t, codeVal (e t) * codeVal (f t) -
+      (α * x - β * ∑ t, codeVal (e t) * codeVal (f t)) = 0 by ring, abs_zero]
+  · show |α * x + β * ∑ t, codeVal (e t) * codeVal (f t) - (α * x + β * ∑ t, codeVal (e t) * codeVal (f t))| ≤ 0
     rw [sub_self, abs_zero]
 
 /-- **(a), exact, in σ units.** Under §5's scale and the noise floor `ασ ≥ 1`, a flip pair of noise
 `β·(e·f) = c·ασ` with `2^−10 < c ≤ 4` makes the element salt-live when `|x| < 15·c·σ`. -/
-theorem exact_saltLive_sigma {S : Support r} {α x β σ c : ℚ} {e f : Fin r → ℚ} (hp : (-e, f) ∈ S)
+theorem exact_saltLive_sigma {S : Support r} {α x β σ c : ℚ} {e f : Fin r → Code} (hp : (negLine e, f) ∈ S)
     (hq : (e, f) ∈ S) (hα : 0 < α) (hfloor : 1 ≤ α * σ) (hsat : α * (|x| + 4 * σ) ≤ 448) (hc0 : 1 / 1024 < c)
-    (hc4 : c ≤ 4) (hN : β * ∑ t, e t * f t = c * (α * σ)) (hx : |x| < 15 * c * σ) :
+    (hc4 : c ≤ 4) (hN : β * ∑ t, codeVal (e t) * codeVal (f t) = c * (α * σ)) (hx : |x| < 15 * c * σ) :
     SaltLiveVal (exactValue r) S α x β := by
-  have hneg : ∑ t, (-e) t * f t = -∑ t, e t * f t := by simp [Finset.sum_neg_distrib]
+  have hneg : ∑ t, codeVal (negLine e t) * codeVal (f t) = -∑ t, codeVal (e t) * codeVal (f t) := by
+    simp [codeVal_negLine, Finset.sum_neg_distrib]
   have hfl : 1 / 1024 < c * (α * σ) := by
     calc (1 / 1024 : ℚ) < c * 1 := by linarith
       _ ≤ c * (α * σ) := mul_le_mul_of_nonneg_left hfloor (by linarith)
   have hthr : α * |x| < α * (15 * c * σ) := mul_lt_mul_of_pos_left hx hα
   refine saltLive_sigma (η := 0) (c := c) (σ := σ) hp hq ?_ ?_ hα (by linarith) hsat hc4 (by norm_num)
     (by linarith) (by linarith)
-  · show |α * x + β * ∑ t, (-e) t * f t - (α * x - c * (α * σ))| ≤ 0
+  · show |α * x + β * ∑ t, codeVal (negLine e t) * codeVal (f t) - (α * x - c * (α * σ))| ≤ 0
     rw [hneg, mul_neg, hN, show α * x + -(c * (α * σ)) - (α * x - c * (α * σ)) = 0 by ring, abs_zero]
-  · show |α * x + β * ∑ t, e t * f t - (α * x + c * (α * σ))| ≤ 0
+  · show |α * x + β * ∑ t, codeVal (e t) * codeVal (f t) - (α * x + c * (α * σ))| ≤ 0
     rw [hN, sub_self, abs_zero]
 
 /-! ### The three chains -/
@@ -352,9 +371,9 @@ theorem exact_saltLive_sigma {S : Support r} {α x β σ c : ℚ} {e f : Fin r �
 theorem exactValue_eq (r : Nat) : exactValue r = (FormChain.exact r).value := rfl
 
 /-- **(a) for `FormChain.exact`**: `exact_saltLive_sigma` on the chain's value. -/
-theorem exactChain_saltLive {S : Support r} {α x β σ c : ℚ} {e f : Fin r → ℚ} (hp : (-e, f) ∈ S)
+theorem exactChain_saltLive {S : Support r} {α x β σ c : ℚ} {e f : Fin r → Code} (hp : (negLine e, f) ∈ S)
     (hq : (e, f) ∈ S) (hα : 0 < α) (hfloor : 1 ≤ α * σ) (hsat : α * (|x| + 4 * σ) ≤ 448) (hc0 : 1 / 1024 < c)
-    (hc4 : c ≤ 4) (hN : β * ∑ t, e t * f t = c * (α * σ)) (hx : |x| < 15 * c * σ) :
+    (hc4 : c ≤ 4) (hN : β * ∑ t, codeVal (e t) * codeVal (f t) = c * (α * σ)) (hx : |x| < 15 * c * σ) :
     SaltLiveVal (FormChain.exact r).value S α x β :=
   exact_saltLive_sigma hp hq hα hfloor hsat hc0 hc4 hN hx
 
@@ -378,9 +397,11 @@ private theorem bf16_chain_err {a n n0 η : ℚ} (hη : η ≤ |n0| / 256) (hn :
 
 /-- **#311's chain has relative error `1/64` on a pair**, if the noise wgmma (its accumulation order is a parameter) is
 within `N/256` of `∓N` at the pair's two points. -/
-theorem bf16_pairErr {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ} {α x β N η : ℚ} {p q : (Fin r → ℚ) × (Fin r → ℚ)}
-    (hα : 0 ≤ α) (hN : 0 ≤ N) (hη : η ≤ N / 256) (hp : |noise (fun t => β * p.1 t) p.2 - -N| ≤ η)
-    (hq : |noise (fun t => β * q.1 t) q.2 - N| ≤ η) : PairErr (FormChain.bf16 r noise).value α x β N (1 / 64) p q := by
+theorem bf16_pairErr {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ} {α x β N η : ℚ}
+    {p q : (Fin r → Code) × (Fin r → Code)} (hα : 0 ≤ α) (hN : 0 ≤ N) (hη : η ≤ N / 256)
+    (hp : |noise (fun t => β * codeVal (p.1 t)) (fun t => codeVal (p.2 t)) - -N| ≤ η)
+    (hq : |noise (fun t => β * codeVal (q.1 t)) (fun t => codeVal (q.2 t)) - N| ≤ η) :
+    PairErr (FormChain.bf16 r noise).value α x β N (1 / 64) p q := by
   have hax : |α * x| = α * |x| := by rw [abs_mul, abs_of_nonneg hα]
   constructor
   · have h := bf16_chain_err (a := α * x) (n0 := -N) (by rw [abs_neg, abs_of_nonneg hN]; exact hη) hp
@@ -393,8 +414,9 @@ theorem bf16_pairErr {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ} {α x
 /-- **(a) for `FormChain.bf16`** (#311's chain): with the wgmma within `N/256` of `∓N`, the element is salt-live when
 `(81/64)·|x| < (943/64)·c·σ`, about `|x| < 11.6·c·σ`. -/
 theorem bf16Chain_saltLive {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ} {S : Support r} {α x β σ c η : ℚ}
-    {p q : (Fin r → ℚ) × (Fin r → ℚ)} (hpS : p ∈ S) (hqS : q ∈ S)
-    (hp : |noise (fun t => β * p.1 t) p.2 - -(c * (α * σ))| ≤ η) (hq : |noise (fun t => β * q.1 t) q.2 - c * (α * σ)| ≤ η)
+    {p q : (Fin r → Code) × (Fin r → Code)} (hpS : p ∈ S) (hqS : q ∈ S)
+    (hp : |noise (fun t => β * codeVal (p.1 t)) (fun t => codeVal (p.2 t)) - -(c * (α * σ))| ≤ η)
+    (hq : |noise (fun t => β * codeVal (q.1 t)) (fun t => codeVal (q.2 t)) - c * (α * σ)| ≤ η)
     (hη : η ≤ c * (α * σ) / 256) (hα : 0 < α) (hfloor : 1 ≤ α * σ) (hsat : α * (|x| + 4 * σ) ≤ 448)
     (hc : 8 / 15 ≤ c) (hc4 : c ≤ 4) (hx : (1 + 17 * (1 / 64)) * |x| < (15 - 17 * (1 / 64)) * c * σ) :
     SaltLiveVal (FormChain.bf16 r noise).value S α x β := by
@@ -404,7 +426,7 @@ theorem bf16Chain_saltLive {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ}
 /-- **(a) for `FormChain.atomMix`** (§5's chain): with the atom's relative error `ε ≤ 1/32` on the pair (`PairErr`, the
 named hypothesis until `hopperStep` has an error lemma; the exact check measures `ε ≤ 0.00228` on Pearl's flat pairs),
 the element is salt-live when `(1 + 17ε)·|x| < (15 − 17ε)·c·σ`. -/
-theorem atomMixChain_saltLive {S : Support 32} {α x β σ c ε : ℚ} {p q : (Fin 32 → ℚ) × (Fin 32 → ℚ)} (hpS : p ∈ S)
+theorem atomMixChain_saltLive {S : Support 32} {α x β σ c ε : ℚ} {p q : (Fin 32 → Code) × (Fin 32 → Code)} (hpS : p ∈ S)
     (hqS : q ∈ S) (herr : PairErr FormChain.atomMix.value α x β (c * (α * σ)) ε p q) (hα : 0 < α)
     (hfloor : 1 ≤ α * σ) (hsat : α * (|x| + 4 * σ) ≤ 448) (hc : 8 / 15 ≤ c) (hc4 : c ≤ 4) (hε0 : 0 ≤ ε)
     (hε : ε ≤ 1 / 32) (hx : (1 + 17 * ε) * |x| < (15 - 17 * ε) * c * σ) :
@@ -414,11 +436,11 @@ theorem atomMixChain_saltLive {S : Support 32} {α x β σ c ε : ℚ} {p q : (F
 /-! ## (b) The credit: every stage of a salt-live element reads the salt -/
 
 /-- A function of the noise varies over the support: it takes two different values on it. -/
-def Varies {γ : Type*} (S : Support r) (g : (Fin r → ℚ) × (Fin r → ℚ) → γ) : Prop :=
+def Varies {γ : Type*} (S : Support r) (g : (Fin r → Code) × (Fin r → Code) → γ) : Prop :=
   ∃ p ∈ S, ∃ q ∈ S, g p ≠ g q
 
 /-- A stage whose output varies has an input that varies: the chain's earlier stages all read the salt. -/
-theorem Varies.of_comp {γ γ' : Type*} {S : Support r} {h : (Fin r → ℚ) × (Fin r → ℚ) → γ} (g : γ → γ')
+theorem Varies.of_comp {γ γ' : Type*} {S : Support r} {h : (Fin r → Code) × (Fin r → Code) → γ} (g : γ → γ')
     (hv : Varies S (g ∘ h)) : Varies S h := by
   obtain ⟨p, hp, q, hq, hne⟩ := hv
   exact ⟨p, hp, q, hq, fun h' => hne (by simp only [Function.comp, h'])⟩
@@ -435,10 +457,10 @@ theorem SaltLive.value {v : ValueFn r} {S : Support r} {α x β : ℚ} (h : Salt
 /-- At a salt-live element, every stage the value factors through varies: if `v α x β e f = g (h e f)`, then `h`'s
 output varies over the support (for the atom-mix, the atom's word; for #311's chain, the noise wgmma's output). -/
 theorem SaltLive.stage {v : ValueFn r} {S : Support r} {α x β : ℚ} {γ : Type*}
-    (h : (Fin r → ℚ) → (Fin r → ℚ) → γ) (g : γ → ℚ) (hv : ∀ e f, v α x β e f = g (h e f))
+    (h : (Fin r → Code) → (Fin r → Code) → γ) (g : γ → ℚ) (hv : ∀ e f, v α x β e f = g (h e f))
     (hl : SaltLive v S α x β) : Varies S (fun p => h p.1 p.2) := by
   have hvar := hl.varies
-  have heq : (fun p : (Fin r → ℚ) × (Fin r → ℚ) => e4m3 (v α x β p.1 p.2)) = (e4m3 ∘ g) ∘ fun p => h p.1 p.2 := by
+  have heq : (fun p : (Fin r → Code) × (Fin r → Code) => e4m3 (v α x β p.1 p.2)) = (e4m3 ∘ g) ∘ fun p => h p.1 p.2 := by
     funext p; simp only [Function.comp, hv]
   rw [heq] at hvar
   exact Varies.of_comp _ hvar
@@ -576,8 +598,8 @@ salt-live, so the liveness rule gives the budget with `ρ_D = 1/64`. -/
 theorem rhoD_exact_pi (fs : ℕ) (s : Shape) {S : Support Params.pi.r} {α β ρ : Fin s.m → ℚ}
     {X : Matrix (Fin s.m) (Fin s.k) ℚ} (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
-    (hpair : ∀ i, ∃ (e f : Fin Params.pi.r → ℚ) (c : ℚ), (-e, f) ∈ S ∧ (e, f) ∈ S ∧ 8 / 15 ≤ c ∧ c ≤ 4 ∧
-      β i * ∑ t, e t * f t = c * (α i * ρ i))
+    (hpair : ∀ i, ∃ (e f : Fin Params.pi.r → Code) (c : ℚ), (negLine e, f) ∈ S ∧ (e, f) ∈ S ∧ 8 / 15 ≤ c ∧ c ≤ 4 ∧
+      β i * ∑ t, codeVal (e t) * codeVal (f t) = c * (α i * ρ i))
     (hlive : LiveOperand Params.pi.δ ρ X) :
     (fs : ℚ) * s.m * s.k - rhoD * fs * s.m * s.k ≤
       fs * (live (FormChain.exact Params.pi.r).value S α β X).card := by
@@ -596,7 +618,7 @@ theorem rhoD_exact_pi (fs : ℕ) (s : Shape) {S : Support Params.pi.r} {α β ρ
 the chain meets `PairErr` with `ε ≤ 1/32`, and `8·(1 + 17ε) ≤ (15 − 17ε)·c_i ≤ 60` so that (a) covers `8ρ_i`; with §5's
 scale and the noise floor, the liveness rule gives the budget with `ρ_D = 1/64`. -/
 theorem rhoD_rel_pi (fs : ℕ) (s : Shape) {v : ValueFn Params.pi.r} {S : Support Params.pi.r} {α β ρ c : Fin s.m → ℚ}
-    {ε : ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → ℚ) × (Fin Params.pi.r → ℚ)}
+    {ε : ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)}
     (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
     (herr : ∀ i l, PairErr v (α i) (X i l) (β i) (c i * (α i * ρ i)) ε (p i) (q i)) (hα : ∀ i, 0 < α i)
     (hfloor : ∀ i, 1 ≤ α i * ρ i) (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
@@ -620,7 +642,7 @@ theorem rhoD_rel_pi (fs : ℕ) (s : Shape) {v : ValueFn Params.pi.r} {S : Suppor
 
 /-- **ρ_D for §5's atom-mix at Π's parameters**, with `PairErr` (the named hypothesis) at relative error `ε`. -/
 theorem rhoD_atomMix_pi (fs : ℕ) (s : Shape) {S : Support Params.pi.r} {α β ρ c : Fin s.m → ℚ} {ε : ℚ}
-    {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → ℚ) × (Fin Params.pi.r → ℚ)}
+    {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)}
     (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
     (herr : ∀ i l, PairErr FormChain.atomMix.value (α i) (X i l) (β i) (c i * (α i * ρ i)) ε (p i) (q i))
     (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i) (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
@@ -633,9 +655,9 @@ theorem rhoD_atomMix_pi (fs : ℕ) (s : Shape) {S : Support Params.pi.r} {α β 
 noise `N_i = c_i·α_iρ_i` with `648/943 ≤ c_i ≤ 4`. -/
 theorem rhoD_bf16_pi (fs : ℕ) (s : Shape) {noise : (Fin Params.pi.r → ℚ) → (Fin Params.pi.r → ℚ) → ℚ}
     {S : Support Params.pi.r} {α β ρ c η : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ}
-    {p q : Fin s.m → (Fin Params.pi.r → ℚ) × (Fin Params.pi.r → ℚ)} (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
-    (hp : ∀ i, |noise (fun t => β i * (p i).1 t) (p i).2 - -(c i * (α i * ρ i))| ≤ η i)
-    (hq : ∀ i, |noise (fun t => β i * (q i).1 t) (q i).2 - c i * (α i * ρ i)| ≤ η i)
+    {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)} (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
+    (hp : ∀ i, |noise (fun t => β i * codeVal ((p i).1 t)) (fun t => codeVal ((p i).2 t)) - -(c i * (α i * ρ i))| ≤ η i)
+    (hq : ∀ i, |noise (fun t => β i * codeVal ((q i).1 t)) (fun t => codeVal ((q i).2 t)) - c i * (α i * ρ i)| ≤ η i)
     (hη : ∀ i, η i ≤ c i * (α i * ρ i) / 256) (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448) (hc : ∀ i, 648 / 943 ≤ c i) (hc4 : ∀ i, c i ≤ 4)
     (hlive : LiveOperand Params.pi.δ ρ X) :
@@ -786,9 +808,9 @@ theorem formDebit_eq_elems (fs : ℕ) (v : ValueFn r) (S : Support r) (alpha bet
 
 /-! ### Π's salt-dead predicate (`SaltDead.saltDead`) -/
 
-theorem flat_eq_flatLine (s : Fin 32 → Bool) : (flat s : Fin 32 → ℚ) = SaltDead.flatLine s := rfl
+theorem flat_eq_flatLine (s : Fin 32 → Bool) : (flat s : Fin 32 → Code) = SaltDead.flatLine s := rfl
 
-theorem flatF_eq_flatLineF (s : Fin 32 → Bool) : (flatF s : Fin 32 → ℚ) = SaltDead.flatLineF s := rfl
+theorem flatF_eq_flatLineF (s : Fin 32 → Bool) : (flatF s : Fin 32 → Code) = SaltDead.flatLineF s := rfl
 
 /-- `SaltDead.support` has every flat pair (`E` at `±44`, `F` at `±11/4`), so `AtomErr.rhoD_atomMix_pi_flat` applies
 at it. -/
@@ -847,8 +869,8 @@ theorem formCredit_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {v : ValueFn Params.
 theorem formCredit_exact_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {S : Support Params.pi.r} {α β ρ : Fin s.m → ℚ}
     {X : Matrix (Fin s.m) (Fin s.k) ℚ} (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
-    (hpair : ∀ i, ∃ (e f : Fin Params.pi.r → ℚ) (c : ℚ), (-e, f) ∈ S ∧ (e, f) ∈ S ∧ 8 / 15 ≤ c ∧ c ≤ 4 ∧
-      β i * ∑ t, e t * f t = c * (α i * ρ i))
+    (hpair : ∀ i, ∃ (e f : Fin Params.pi.r → Code) (c : ℚ), (negLine e, f) ∈ S ∧ (e, f) ∈ S ∧ 8 / 15 ≤ c ∧ c ≤ 4 ∧
+      β i * ∑ t, codeVal (e t) * codeVal (f t) = c * (α i * ρ i))
     (hlive : LiveOperand Params.pi.δ ρ X) :
     (1 - rhoD) * fs * s.m * s.k ≤
       formCredit fs (FormChain.exact Params.pi.r).value S α β X (noFlags : Flags s.m s.n) := by
@@ -857,7 +879,7 @@ theorem formCredit_exact_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {S : Support P
 /-- **(i) for a chain of relative error `ε`**, under `rhoD_rel_pi`'s hypotheses. -/
 theorem formCredit_rel_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {v : ValueFn Params.pi.r} {S : Support Params.pi.r}
     {α β ρ c : Fin s.m → ℚ} {ε : ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ}
-    {p q : Fin s.m → (Fin Params.pi.r → ℚ) × (Fin Params.pi.r → ℚ)} (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
+    {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)} (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
     (herr : ∀ i l, PairErr v (α i) (X i l) (β i) (c i * (α i * ρ i)) ε (p i) (q i)) (hα : ∀ i, 0 < α i)
     (hfloor : ∀ i, 1 ≤ α i * ρ i) (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
     (hc : ∀ i, 8 * (1 + 17 * ε) ≤ (15 - 17 * ε) * c i) (hc4 : ∀ i, c i ≤ 4) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 32)
@@ -867,7 +889,7 @@ theorem formCredit_rel_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {v : ValueFn Par
 
 /-- **(i) for §5's atom-mix**, under `rhoD_atomMix_pi`'s hypotheses (`PairErr` named). -/
 theorem formCredit_atomMix_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {S : Support Params.pi.r} {α β ρ c : Fin s.m → ℚ}
-    {ε : ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → ℚ) × (Fin Params.pi.r → ℚ)}
+    {ε : ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)}
     (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
     (herr : ∀ i l, PairErr FormChain.atomMix.value (α i) (X i l) (β i) (c i * (α i * ρ i)) ε (p i) (q i))
     (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i) (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
@@ -879,10 +901,10 @@ theorem formCredit_atomMix_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {S : Support
 /-- **(i) for #311's BF16 chain**, under `rhoD_bf16_pi`'s hypotheses. -/
 theorem formCredit_bf16_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n)
     {noise : (Fin Params.pi.r → ℚ) → (Fin Params.pi.r → ℚ) → ℚ} {S : Support Params.pi.r} {α β ρ c η : Fin s.m → ℚ}
-    {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → ℚ) × (Fin Params.pi.r → ℚ)}
+    {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)}
     (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
-    (hp : ∀ i, |noise (fun t => β i * (p i).1 t) (p i).2 - -(c i * (α i * ρ i))| ≤ η i)
-    (hq : ∀ i, |noise (fun t => β i * (q i).1 t) (q i).2 - c i * (α i * ρ i)| ≤ η i)
+    (hp : ∀ i, |noise (fun t => β i * codeVal ((p i).1 t)) (fun t => codeVal ((p i).2 t)) - -(c i * (α i * ρ i))| ≤ η i)
+    (hq : ∀ i, |noise (fun t => β i * codeVal ((q i).1 t)) (fun t => codeVal ((q i).2 t)) - c i * (α i * ρ i)| ≤ η i)
     (hη : ∀ i, η i ≤ c i * (α i * ρ i) / 256) (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448) (hc : ∀ i, 648 / 943 ≤ c i) (hc4 : ∀ i, c i ≤ 4)
     (hlive : LiveOperand Params.pi.δ ρ X) :
