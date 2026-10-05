@@ -18,32 +18,38 @@ NetTiming/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's alloc
                                dataflow conditions
 NetTiming/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 1(b), Theorem 3,
                                Theorem 3 for the constant-rate Program, the ingress bound)
-NetTiming/SecurityProofs.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee, from the lemmas below
-NetTiming/SecurityProofs/Occupancy.lean  Proposition 2 (the occupancy counts, fill, and the FIFO warden's tightness)
-NetTiming/SecurityProofs/Counting.lean   Theorem 1(b) (the tree lemma on accepted runs, zero error, W6 on accepted runs)
-NetTiming/SecurityProofs/Advice.lean     Theorem 3 (the 2^A cap, one clock-sync value per window, the fixed clock, the
-                                         block caps)
-NetTiming/SecurityProofs/Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap, causality, seven bits
-                                         per window opened, the composed statement) and its witnesses
-NetTiming/SecurityProofs/Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
-NetTiming/SecurityProofs/PerWindow.lean  the last two over the run's first `m` whole windows: the factor per window and
-                                         per link-window
-NetTiming/SecurityProofs/Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
-                                         toy of the September draft
 NetTiming/Difftest.lean        tested: the definitions evaluated on an instance (expectedRow, and Accepted of constantRate
                                and StatusComplete by decide), in the shape of the Python audit's results
 NetTimingDifftest.lean         the difftest's run (`runs` in lean-audit.json): every instance against the Python audit's
                                results
 scripts/difftest_vectors.py    the difftest's data: 10,000 random instances and the Python audit's results on them
 lean-audit.json                the policy and guarantee records for tools/lean/audit.py
+~~~
+
+The proofs are the package `security_proofs/warden/`, which requires this one by path. Its modules are under
+`NetTimingProofs`, and their declarations keep the names the records hold (`NetTiming.SecurityProofs.G`):
+
+~~~text
+NetTimingProofs/SecurityProofs.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee, from the lemmas below
+NetTimingProofs/SecurityProofs/Occupancy.lean  Proposition 2 (the occupancy counts, fill, and the FIFO warden's tightness)
+NetTimingProofs/SecurityProofs/Counting.lean   Theorem 1(b) (the tree lemma on accepted runs, zero error, W6 on accepted runs)
+NetTimingProofs/SecurityProofs/Advice.lean     Theorem 3 (the 2^A cap, one clock-sync value per window, the fixed clock, the
+                                               block caps)
+NetTimingProofs/SecurityProofs/Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap, causality, seven bits
+                                               per window opened, the composed statement) and its witnesses
+NetTimingProofs/SecurityProofs/Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
+NetTimingProofs/SecurityProofs/PerWindow.lean  the last two over the run's first `m` whole windows: the factor per window and
+                                               per link-window
+NetTimingProofs/SecurityProofs/Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
+                                               toy of the September draft
 CheckAxioms.lean               one #print axioms line per statement and witness, then three more lemmas
 ~~~
 
 ~~~bash
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
-lake build                                                  # NetTiming (the default target)
-python3 ../../../tools/lean/audit.py .                      # Verity's Lean audit
-lake env lean CheckAxioms.lean                              # the axioms of the 35 statements, 16 witnesses and 3 lemmas
+lake build                                                  # the spec (NetTiming, the default target)
+python3 ../../../tools/lean/audit.py .                      # Verity's Lean audit, of the spec and its proofs
+(cd ../../../security_proofs/warden && lake env lean CheckAxioms.lean)  # the axioms of the 35 statements, 16 witnesses and 3 lemmas
 # the difftest, which the audit runs: its data from this checkout's Python audit, then the Lean side on it
 uv run python scripts/difftest_vectors.py ../../.. --out /tmp/dt
 lake env lean --run NetTimingDifftest.lean /tmp/dt/difftest/instances.jsonl /tmp/dt/difftest/python.jsonl 10000
@@ -54,7 +60,7 @@ lake env lean --run NetTimingDifftest.lean /tmp/dt/difftest/instances.jsonl /tmp
 as `docs/…` and `internal/…` name the network-transparency project store, where the covert-capacity note
 (`docs/network-transparency/timing-channel.md`) and the reviews live.
 
-**The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
+**The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming` and its proofs' `NetTimingProofs`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
 record, a kernel replay, and the 4 guarantees' records, whose meaning it follows through those three (`meaning`). It then

@@ -19,7 +19,7 @@ those states: with SHAKE's 1600-bit state, Dense in one round from about 20% of 
 ideal-hash result transfers to a concrete hash by citation. So "no named assumption" for `DenseMeets` means within the
 ideal-hash model only, and so do the dense scheme's deployment results below. The chosen fix is H as the overwrite chain
 over an ideal permutation `Π₂` of width `2m + 512`, proved in the ideal-permutation model. Its pebbling side and its ex
-post facto bounds are proved in this package (`Pous/SecurityProofs/Chain/Flat.lean`): `ChainExPostFacto` (B5 for `Π₂`)
+post facto bounds are proved in PoUS's proofs (`security_proofs/pous/PousProofs/SecurityProofs/Chain/Flat.lean`): `ChainExPostFacto` (B5 for `Π₂`)
 for dense, and its DAG-generic form `ChainExPostFactoG` for the band, with the guarantees below (P3 with the concrete
 `H`, the band, and the dense chain scheme). They hold in the ideal-permutation model only. `Π₂` itself (Feistel-SHAKE)
 was taken as a heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
@@ -517,27 +517,27 @@ the timed audit and the simulator with the dense codec as default.
   `Pous/Guarantees.lean`.
 - **`Meets sch reveal D Q k ε`:** `ε ≤ 2^-128`, `sch` is correct, `|C| ≥ |W|`, the space bound holds, and
   `AuditSecure` holds at a state of `⌊ρ|C|⌋` bits with bound `δ + ε`.
-- **Proofs:** `Pous/SecurityProofs/`, checked by Verity's `tools/lean/audit.py` against `lean-audit.json`.
-  `Pous/SecurityProofs.lean` proves `Pous.Guarantees.X` as `Pous.SecurityProofs.X`.
+- **Proofs:** `security_proofs/pous/PousProofs/SecurityProofs/`, checked by Verity's `tools/lean/audit.py` against `lean-audit.json`.
+  `security_proofs/pous/PousProofs/SecurityProofs.lean` proves `Pous.Guarantees.X` as `Pous.SecurityProofs.X`.
 - **Untrusted submissions:** `grade.sh FILE Pous.Guarantees.X` grades one file against one guarantee (`lean/README.md`).
 
 ### The band
 
 `Pous.BandChain.chainBand B d ℓ c dom` (`Pous/Protocol/Model/BandChain.lean`) is the band over the overwrite chain on
 one ideal permutation `Π₂`, and `Pous.BandMulti.chainBandSeg` lays out segments of it. The proofs are in this package
-(`Pous/SecurityProofs/Chain/Flat.lean`, from the POUS store's `lean/submissions/band-chain/`, `band-multi/` and
+(`security_proofs/pous/PousProofs/SecurityProofs/Chain/Flat.lean`, from the POUS store's `lean/submissions/band-chain/`, `band-multi/` and
 `sponge-dense/`), with no hypothesis: `Pous.SecurityProofs.BandChainMeets64` gives `Meets` at 64 KiB, `B = 512`,
 `D = 5`, `Q = 2^20`, `k = 111` and `ε = 2^-128` for every `d ≥ 5`; `BandMultiMeets14` the same for 448 segments
 (14 GiB), with per-segment and with global salts, `BandMultiMeets14K106` at `k = 106` per segment, and
 `BandMultiMeetsFamily` the `k = 111` row for every segment count `N` with `1 ≤ N ≤ 2^64`
-(`Pous/SecurityProofs/Chain/Family.lean`). `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1` and
+(`security_proofs/pous/PousProofs/SecurityProofs/Chain/Family.lean`). `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1` and
 `BandMultiMeetsFamilyD0` are that family at fewer rounds, `D = 2` with `k = 97` for every `d ≥ 2`, `D = 1` with
 `k = 93` for every `d ≥ 1` and `D = 0` with `k = 89` for every `d`, and
 `BandChainMeets64Rounds2` and `BandChainMeets64Rounds1` their one-segment rows
-(`Pous/SecurityProofs/Chain/FamilyRounds.lean`). `BandPubMeets*` are the same rows with an untrusted server encoding and the
+(`security_proofs/pous/PousProofs/SecurityProofs/Chain/FamilyRounds.lean`). `BandPubMeets*` are the same rows with an untrusted server encoding and the
 exact setup check (`Pous/Protocol/Model/PubEncoder.lean`), under the four deployment conditions in their docstrings;
 `BandPubMeetsFamily`, `BandPubMeetsFamilyD2` and `BandPubMeetsFamilyD1` are `BandMultiMeetsFamily`'s and its two rows at
-fewer rounds (`Pous/SecurityProofs/Chain/PubFamily.lean`, `PubRounds.lean`). The
+fewer rounds (`security_proofs/pous/PousProofs/SecurityProofs/Chain/PubFamily.lean`, `PubRounds.lean`). The
 band needs `d ≥ D`.
 
 ### The graded audit
@@ -549,7 +549,7 @@ accepts when every answer is correct and at most `t` are late; at `t = 0` it is 
 (`gradedMeets_zero_iff`). `Pous.SecurityProofs.BandGradedMeetsFamily` proves, with no hypothesis, the band at every
 segment count from 1 to `2^64` and every `d ≥ 5`, at `D = 5`, `Q = 2^20`, `ε = 2^-128`, `δ = 1%`, for
 `(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, whenever `5 ≤ D_late ≤ d`, `D_late ≤ 12` and `Q_late ≥ 2^20`
-(`Pous/SecurityProofs/Graded/`: `theorem1_ii_graded` with the binomial tail `pr_hits_ge_le_binomial`).
+(`security_proofs/pous/PousProofs/SecurityProofs/Graded/`: `theorem1_ii_graded` with the binomial tail `pr_hits_ge_le_binomial`).
 
 The game assumes three requirements on the protocol, and the certificate says nothing about a protocol that breaks one:
 
@@ -574,7 +574,7 @@ audit's duration:** it aborts, without accepting, an audit that lasts more than 
 (≈ 6.3 ms) for the worst row's 242 gaps if every round answers at its deadline.
 `Pous.SecurityProofs.BackgroundRebuildExcluded` proves the counts, and that programs which know `W` but hold no state
 about `Π₂`, each within any `T ≤ 1,505` sequential calls and `2^128` queries, output every label of a segment with
-probability at most `2^-128` (`Pous/SecurityProofs/Rebuild/`). The bound rests on the cap, which is the proof's reach,
+probability at most `2^-128` (`security_proofs/pous/PousProofs/SecurityProofs/Rebuild/`). The bound rests on the cap, which is the proof's reach,
 not on `R(d)`.
 
 It excludes only re-encoding a *whole* segment from `W` with *no* state about `Π₂`, and is not a claim that no rebuild
@@ -618,7 +618,7 @@ same rounds, work and acceptance probability, and the restricted oracle is again
 `tag_injective_14` record the index-level fact: the tagged keying is the global one relabeled injectively.
 
 **Over the overwrite chain** (`Pous.Sponge.chainDense`, `H` the overwrite chain on an ideal permutation, proved with no
-hypothesis in `Pous/SecurityProofs/Chain/Flat.lean`): `Pous.SecurityProofs.ChainDenseMeets64`, 512 blocks of 64 KiB at
+hypothesis in `security_proofs/pous/PousProofs/SecurityProofs/Chain/Flat.lean`): `Pous.SecurityProofs.ChainDenseMeets64`, 512 blocks of 64 KiB at
 `D = 5`, `Q = 2^20`, `k = 111`; and the deployment point, `Pous.SecurityProofs.ChainDenseMeets111`, `2^16` blocks of
 1 KiB at `D = 64`, `Q = 2^20`, `k = 111`. The deployment was pinned at `k = 107`, which the ex post facto argument does
 not reach; it is re-pinned at `k = 111`, four challenges more.
