@@ -181,7 +181,7 @@ fn uint(x: usize) -> Vec<u8> {
     b[z..].to_vec()
 }
 
-/// A frame-v3 root over a range domain (`verity.commitments.merkle.tree_levels`).
+/// A frame-v3 root over a range domain (`verity.primitives.commitments.merkle.tree_levels`).
 fn fv3_root(domain_id: &[u8], leaves: Vec<[u8; 32]>) -> [u8; 32] {
     let n = leaves.len();
     assert!(n > 0);

@@ -9,7 +9,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-from verity_network_warden import calibration
+from verity.protocols.accounting.communication.warden import calibration
 
 HERE = Path(__file__).resolve().parents[1]
 T = 60  # buckets per window
