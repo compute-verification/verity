@@ -1128,9 +1128,10 @@ def test_renders_never_land_in_the_notes(tmp_path, renders, monkeypatch):
 
 
 def test_the_render_imports_every_workspace_package_of_its_source_tree(tmp_path, renders):
-    """The control pod's render died with `ModuleNotFoundError: verity` (a hand-kept PYTHONPATH without .): the render
-    command's environment is the source tree's workspace roots (`research env --source`) plus the tree root."""
-    from research.pythonpath import import_roots_dir, pythonpath
+    """The control pod's render died with `ModuleNotFoundError: verity` (a hand-kept PYTHONPATH without packages/verity/src): the render
+    command's environment is the source tree's workspace roots (`research env --source`), the shim first; this tree's root is a
+    package (`verity`), which the shim reaches, so the root itself is not on it."""
+    from research.pythonpath import import_roots_dir, pythonpath, shim_dir
 
     repo = Path(__file__).resolve().parents[3]
     (tmp_path / "steward.toml").write_text(f'[[render]]\nat = "20:30Z"\nsource = "{repo}"\nout = "r"\nrefresh = false\n')
@@ -1143,9 +1144,9 @@ def test_the_render_imports_every_workspace_package_of_its_source_tree(tmp_path,
     notes.render_lines(tmp_path, NOW, {}, run=run)
     parts = envs[0].split(":")
     assert envs and all(e == envs[0] for e in envs)
-    assert str(repo) in parts and str(repo / "benchmarks" / "numerical" / "python") in parts
-    assert str(repo / "tools" / "research" / "src") in parts and parts[-1] == str(repo)
-    assert envs[0] == pythonpath(str(repo), import_roots_dir(repo), extra=str(repo))
+    assert parts[0] == shim_dir(str(repo), ["verity"]) and str(repo / "benchmarks" / "numerical" / "python") in parts
+    assert str(repo / "tools" / "research" / "src") in parts and str(repo) not in parts
+    assert envs[0] == pythonpath(str(repo), import_roots_dir(repo))
 
 
 FRESH = ["--on", "vy-lean", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_audit", "--",

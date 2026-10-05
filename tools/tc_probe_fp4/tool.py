@@ -147,7 +147,7 @@ def parse_f1(argv: list[str]) -> dict:
 TC_RATES_FP4 = Tool(
     name="tc_rates_fp4", version="1",
     command=["python", "tools/tc_probe_fp4/f1_rates.py"],
-    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity", "ml/tc/**")],
+    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity_catalog", "silicon/**")],
     key_params=["cmd", "forms", "family", "libs", "reps", "target_ms", "sustain_s", "seed", "locked_mhz", "corrupt_word", "fake_silicon",
                 "tolerance"],
     key_conditions=["hw.family"],
@@ -184,7 +184,7 @@ def parse_f3(argv: list[str]) -> dict:
 TC_LUT_FP4 = Tool(
     name="tc_lut_fp4", version="1",
     command=["python", "tools/tc_probe_fp4/f3_lut.py"],
-    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity", "ml/tc/**")],
+    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity_catalog", "silicon/**")],
     key_params=["cmd", "width", "reps", "target_ms", "sustain_s", "seed", "sample", "locked_mhz", "corrupt_word", "fake_silicon",
                 "tolerance"],
     key_conditions=["hw.family"],
@@ -221,7 +221,7 @@ def parse_f2(argv: list[str]) -> dict:
 TC_STRASSEN_FP4 = Tool(
     name="tc_strassen_fp4", version="1",
     command=["python", "tools/tc_probe_fp4/f2_strassen.py"],
-    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity", "ml/tc/**")],
+    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity_catalog", "silicon/**")],
     key_params=["cmd", "level", "reps", "target_ms", "sustain_s", "seed", "sample", "locked_mhz", "corrupt_word", "fake_silicon",
                 "tolerance"],
     key_conditions=["hw.family"],
@@ -254,7 +254,7 @@ def parse_recheck(argv: list[str]) -> dict:
 TC_RECHECK_FP4 = Tool(
     name="tc_recheck_fp4", version="1",
     command=["python", "tools/tc_probe_fp4/recheck.py"],
-    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity", "ml/tc/**")],
+    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity_catalog", "silicon/**")],
     key_params=["cmd", "instruction", "seed", "seeds", "n_random", "fixed_mult", "expect_model", "fake_silicon"],
     key_conditions=["hw.family"],
     caches=["nvcc"],
@@ -287,7 +287,7 @@ def parse_sparse_e4m3(argv: list[str]) -> dict:
 TC_SPARSE_E4M3 = Tool(
     name="tc_sparse_e4m3", version="1",
     command=["python", "tools/tc_probe_fp4/sp_e4m3.py"],
-    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity", "ml/tc/**")],
+    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity_catalog", "silicon/**")],
     key_params=["cmd", "arch", "seed", "seeds", "n_random", "fixed_mult", "fake_silicon"],
     key_conditions=["hw.family"],
     caches=["nvcc"],
@@ -299,7 +299,7 @@ TC_SPARSE_E4M3 = Tool(
 TC_PRICE_FP4 = Tool(
     name="tc_price_fp4", version="2",
     command=["python", "tools/tc_probe_fp4/w1_price.py"],
-    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity", "ml/tc/**")],
+    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity_catalog", "silicon/**")],
     key_params=["rows", "ops", "reps", "target_ms", "sustain_s", "warps_per_sm", "op_warps_per_sm", "latency_iters", "no_scale_update",
                 "seed", "locked_mhz", "corrupt_word", "fake_silicon", "sass_only"],
     key_conditions=["hw.family"],
@@ -312,7 +312,7 @@ TC_PRICE_FP4 = Tool(
 TC_PROBE_FP4 = Tool(
     name="tc_probe_fp4", version="1",
     command=["python", "tools/tc_probe_fp4/probe.py"],
-    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity", "ml/tc/**")],
+    closure=["tools/tc_probe_fp4/**", *package_paths(TREE, "verity_catalog", "silicon/**")],
     key_params=["instruction", "arch", "families", "seed", "n", "group", "sweep", "golden_per_family", "replay_autoproof", "sass_check",
                 "chain2", "smem_strides", "chain", "expect_model", "corrupt_word", "fake_silicon", "sass_only", "hot_bits",
                 "model_sample", "vectors", "vector_list", "vector_ids", "chain_ids", "special_ids", "collect"],
