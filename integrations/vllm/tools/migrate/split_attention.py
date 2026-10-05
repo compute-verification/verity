@@ -621,7 +621,7 @@ def family_of(fn) -> str:
 def served_bindings() -> dict[str, object]:
     """`targets.attention_spec` on the registered targets at served shapes: the bindings the vocabulary computes (`MASKED_FROM`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.registry import targets as TGT
+    from verity_vllm.program.frontend import targets as TGT
 
     profiles = {"ada": TargetProfile(), "h100-fa3": TargetProfile(compute_capability=(9, 0), num_sms=132, flash_attn_version=3),
                 "h100-guard": TargetProfile(compute_capability=(9, 0), num_sms=132, flash_attn_version=3,
