@@ -23,7 +23,7 @@ f880248af5267b110f4cdfd91c67000c4a81917eb942429f7cae2ee5d4850f66  ../../../../..
 b677a8872dabcb6219f1ae2c271c35d1d8ca1ca3a4327a880500992691e0f0bc  ../../../../../Security/Definitions/Pous/Game/Oracle.lean
 88069a0c9b4dda40aee828ba450e3eea2cdcf0f87d277834f8374ec12022d8d7  ../../../../../Security/Definitions/Pous/Game/Prob.lean
 92c1792e266811db21dee902c0abfca25cccc24d25f82d5491b205e31cd7dddb  ../../../../../Security/Definitions/Pous/Model/Audit.lean
-a762840bd3220f27af86e96584edfc76d73002a9aa76b559f89e9a3b12ed0410  ../../../../../Security/Definitions/Pous/Model/BandChain.lean
+4305b8c5f35bddc8c64800b146302dba4e90e032b8fc3378370c5c523fd67bae  ../../../../../Security/Definitions/Pous/Model/BandChain.lean
 de7f95a3337997aebdcc6bc391f32055040272e5262d9616a797cecdc003bc7f  ../../../../../Security/Definitions/Pous/Model/BandGraph.lean
 bf08a5d4fd4f4a182a5918df5719c8b3f1367ee558b8df44a55f48ff801791ca  ../../../../../Security/Definitions/Pous/Model/ColumnGame.lean
 dc5c84fe034af361ff7d19eb852c08b384838d9dd2db5e075b2efc57c247b411  ../../../../../Security/Definitions/Pous/Model/Continuous.lean
