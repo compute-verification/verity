@@ -103,8 +103,9 @@ clock-sync value per window from `Sync`, for example an offset δ and a rate ρ,
 accepted sequences number at most `#Ac · #Sync^W · D^n`, that is `A_c + W·log2 #Sync` bits plus jitter.
 
 Instantiated for constant-rate release, this bounds the timing channel when the Program's only timing advice is the
-clock sync. That the logical schedule leaves no other timing freedom is the Program's definition, which is not
-formalized here. A sync alphabet that varies by window is covered by `encard_accSeqs_le_advice` directly. -/
+clock sync. The shipped schedule is such a Program by its definition (`constantRate`), and
+`EncardAccSeqsLeConstantRate` states this bound for it. A sync alphabet that varies by window is covered by
+`encard_accSeqs_le_advice` directly. -/
 theorem encard_accSeqs_le_sync {Ac Sync : Type} [Fintype Ac] [Fintype Sync] (W : ℕ)
     (P : Program L S In (Ac × (Fin W → Sync))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
     (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * Fintype.card Sync ^ W * D ^ n : ℕ) : ℕ∞) := by

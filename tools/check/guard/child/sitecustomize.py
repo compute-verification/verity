@@ -1,7 +1,7 @@
 """On the PYTHONPATH `suites.py` gives a suite's tests, so every Python a test starts traces what it reads (`verity_suite_reads.py`)
 while a test module is collected or run (`VERITY_SUITE_MODULE` is set). A tracer that can't start says so in the reads file
-(`E`), and `suites.py` then keeps no per-test verdict for the module. Then the interpreter's own `sitecustomize`, which this one
-shadows, is loaded as it would have been. Programs that aren't Python are not traced."""
+(`E`), and `suites.py` then fails the suite. Then the interpreter's own `sitecustomize`, which this one shadows, is loaded as it
+would have been. Programs that aren't Python are not traced."""
 import os
 import sys
 
@@ -19,8 +19,9 @@ def _trace() -> None:
         spec.loader.exec_module(mod)
         mod.Reads().install()
     except Exception as e:  # noqa: BLE001  (an untraced child must not pass for a traced one)
+        test, why = os.environ.get("VERITY_SUITE_TEST"), " ".join(f"{type(e).__name__}: {e}".split())     # one line, no tabs
         with open(os.environ["VERITY_SUITE_READS"], "a") as f:
-            f.write(f"E\t{os.environ['VERITY_SUITE_MODULE']}\tthe tracer did not start: {type(e).__name__}: {e}\n")
+            f.write(f"E\t{os.environ['VERITY_SUITE_MODULE']}\tthe tracer did not start: {why}" + (f"\t{test}" if test else "") + "\n")
 
 
 def _next() -> None:

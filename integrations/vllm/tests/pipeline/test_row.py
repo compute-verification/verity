@@ -124,9 +124,12 @@ def test_a_foreign_verity_tree_is_refused_by_name(tmp_path, capsys):
 # ---------------------------------------------------------------------------------------------------------------- cancel
 
 # the stage: a python parent that forks a grandchild; both write their pids (and the stage its `timeout`'s), close their end of the
-# test's FIFO and block on a pipe nobody writes to, until a signal ends them.  A row's fold / commit look like this.
+# test's FIFO and block on a pipe nobody writes to, until a signal ends them.  A row's fold / commit look like this.  SIGINT is the
+# kernel's default here: Python's handler only flags the signal, so one that lands between closing the FIFO and entering read()
+# leaves that process blocked for good, and the test's wait with it.
 STAGE = r'''
-import os, sys
+import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
 d = sys.argv[1]
 for name, pid in (("stage", os.getpid()), ("timeout", os.getppid())):
     open(os.path.join(d, name + ".pid"), "w").write(str(pid))
@@ -520,7 +523,7 @@ def test_a_tp_row_stops_after_its_build_on_any_call_boundary(tmp_path, monkeypat
         (Path(t.d) / "manifest.json").write_text(json.dumps({**man, "ranks": 2}))
         return 0
 
-    for name, fn in (("jobs", lambda n: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", lambda ranks: None),
+    for name, fn in (("derive_jobs", lambda shapes, derives: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", lambda ranks: None),
                      ("guarded_summary", lambda: "PASS"), ("manifest_global", manifest_global)):
         monkeypatch.setattr(t, name, fn)
     monkeypatch.setattr(R, "tp_build_digests", lambda d: ("d" * 16, []))

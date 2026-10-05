@@ -47,8 +47,10 @@ def load_registries() -> None:
     import verity.ml.boolean.cast  # noqa: F401
     import verity.ml.boolean.elementwise  # noqa: F401
     import verity.ml.boolean.gemm  # noqa: F401
+    import verity.ml.boolean.merkle  # noqa: F401
     import verity.ml.boolean.mufu  # noqa: F401
     import verity.ml.boolean.scalar  # noqa: F401
+    import verity.ml.boolean.universal  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
     import verity.ml.prims  # noqa: F401
@@ -57,7 +59,11 @@ def load_registries() -> None:
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
+    import verity_pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits, the six `pc4` and `pc8` rows call)
     import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
+    import verity_pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
+    import verity_pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
+    import verity_pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -194,9 +200,18 @@ def _pouw_roots() -> list[Any]:
     """PoUW's `ncp-v2` unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on
     it (`verity_pouw.circuit.ncp2`), for both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); the package's own tests check
     their template partitions and the Z separator. Beside them, the model Program's rows at a PoUW site, without and with the
-    bias (`verity_vllm.program.registry.pouw_rows`)."""
+    bias (`verity_vllm.program.registry.pouw_rows`), and Pearl-C4's tile check (`verity_pouw.circuit.pc4`): its unit
+    templates at k = 64 with a one-word tile (small enough to lower whole), and its weight side, call side and whole check at
+    one row a side; and Pearl-C's (`verity_pouw.circuit.pc8`) the same way at k = 128 (one promotion window), its templates
+    on the H100's and sm_120's records and its roots on sm_120's.  Both checks' hiding tiles and roots (``hidden``: the tile
+    digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes.  The row units cut along k
+    (`verity_pouw.circuit.rowk`, ``Shape.row_k``) in two segments: Pearl-C4's pieces at k = 128 and its roots, Pearl-C's
+    pieces at k = 256 on the H100's and sm_120's records and at k = 64 unpromoted, and its roots on sm_120's, plain and
+    hiding."""
+    from dataclasses import replace
+
     from verity.ir.defs import bind
-    from verity_pouw.circuit import ncp2
+    from verity_pouw.circuit import ncp2, pc4, pc8, rowk
     from verity_vllm.program.registry import pouw_rows
 
     shape = ncp2.Shape(16, 64, 16)
@@ -204,6 +219,24 @@ def _pouw_roots() -> list[Any]:
     for kind in ("shift24", "word"):
         out += [t for t in ncp2.templates(64, kind).values() if t not in out]
         out += [ncp2.linear(shape, kind), ncp2.weight(shape, kind), ncp2.window(shape, 2, kind)]
+    tile = pc4.Shape(1, 64, 1, tile=(1, 1))
+    out += [*pc4.templates(64, tile.tile).values(), pc4.weight(tile), pc4.call(tile), pc4.check(tile)]
+    tile8 = pc8.Shape(1, 128, 1, tile=(1, 1), dev="sm120")
+    out += [*pc8.templates(128, tile8.tile, "h100").values(), *pc8.templates(128, tile8.tile, "sm120").values(),
+            pc8.weight(tile8), pc8.call(tile8), pc8.check(tile8)]
+    h4, h8 = replace(tile, hidden=True), replace(tile8, hidden=True)
+    out += [t for t in [*pc4.templates(64, h4.tile, True).values(), pc4.weight(h4), pc4.call(h4), pc4.check(h4),
+                        *pc8.templates(128, h8.tile, "sm120", True).values(), pc8.weight(h8), pc8.call(h8), pc8.check(h8)]
+            if t not in out]
+    cut = [p for side in ("a", "b") for pieces in (rowk.pieces4(128, 64, side), rowk.pieces8(256, 128, "h100", side),
+                                                    rowk.pieces8(256, 128, "sm120", side),
+                                                    rowk.pieces8(64, 32, "sm120-unpromoted", side))
+           for p in (pieces[0], pieces[1], *pieces[2], pieces[3])]
+    for mod, s in ((pc4, pc4.Shape(1, 128, 1, tile=(1, 1), row_k=64)),
+                   (pc8, pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", row_k=128))):
+        cut += [build(replace(s, hidden=h)) for h in (False, True) for build in (mod.weight, mod.call, mod.check)]
+    seen = {t.id for t in out}
+    out += [t for t in cut if t.id not in seen and not seen.add(t.id)]
     return out + [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
                   bind(pouw_rows.NcpLinearCoordinate, K=64)]
 
@@ -230,7 +263,8 @@ def _boolean_roots() -> list[Any]:
     `SiluMul_v2` of `registry.act`), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
     `registry.dense`'s rows on bits at 8 elements with Gemma-2's constants (`boolean_dense`: `gelu_tanh_and_mul` at I = 8, the
     RMSNorm chain's and the logit softcap's element-wise rows at N = 8), and OLMoE's routed sum at TOPK = 8 over 8 columns
-    and its router at 8 experts, 2 slots, 4 values per thread (`boolean_moe`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
+    and its router at 8 experts, 2 slots, 4 values per thread (`boolean_moe`), and GLM-5.3's sigmoid `noaux_tc` router at 8
+    experts, 2 slots, on both of its kernels, on bits and its word view (`registry.moe.MoeRouterSigmoidBias_v1`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
     operations (`verity.ml.boolean.elementwise`), the MUFU operations (`verity.ml.boolean.mufu`), the comparator, selects, max /
     min and E4M3 cast (`verity.ml.boolean.scalar`), the argmax step, `SiluMulBf16_v3` and the rows' static-free elements are
     static-free. vLLM's Boolean RoPE (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which
@@ -244,7 +278,10 @@ def _boolean_roots() -> list[Any]:
     about 600,000 gates each, every lane about 300,000) and at a full group plus a remainder; the stream key, setup, lane and
     their pieces are static-free; the f32 argmax tree's stages at two and three levels reach its other shapes. FA2 with logit
     soft-capping on bits (`boolean_softcap`) at one head of 17 keys, two blocks (a full one and a partial one) with Check_inf in
-    both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks."""
+    both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks. vLLM's GPT-J RoPE on bits at
+    two heads of 8. MLA (`registry.mla`): Triton's one-split decode at one head of two keys over a 16 + 16 latent (a partial
+    block, so its masked columns), which reaches the head, the block, the score and every element; the absorb bmm at two heads,
+    K = 32, N = 3; the shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor."""
     from verity.ir.defs import bind
     from verity.ml.boolean import attention as BAT
     from verity.ml.boolean import gemm as BG
@@ -259,14 +296,19 @@ def _boolean_roots() -> list[Any]:
     from verity_vllm.program.registry import boolean_silu as BSL
     from verity_vllm.program.registry import boolean_softcap as BSC
     from verity_vllm.program.registry import gumbel_boolean as GB
+    from verity_vllm.program.registry import mla
+    from verity_vllm.program.registry import moe as M
     from verity_vllm.program.registry import prims as P
     from verity_vllm.program.registry import sampling_boolean as SB
 
+    HOP = BG.HopperBF16WgmmaDot16
     rows = [bind(d, N=8) for d in (BDN.SquareBf16, BDN.SquareF32, BDN.AddWidenedBf16, BDN.ScaleRowBf16, BDN.ScaleRowF32,
                                    BDN.MulVecF32, BDN.Bf16MulScalarTensor)]
     rows += [bind(BDN.AddScalarF32, N=8, C=1e-6), bind(BDN.AddScalarBf16, N=8, C=1.0), bind(BDN.Bf16DivScalar, N=8, C=30.0),
              bind(BDN.Bf16MulScalar, N=8, C=30.0), bind(BMOE.MoeSum, TOPK=8, H=8),
              bind(BMOE.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4)]
+    rows += [bind(d, E=8, TOPK=2, SCALE=2.5, KERNEL=k) for d in (BMOE.MoeRouterSigmoidBias, M.MoeRouterSigmoidBias)
+             for k in M.ROUTER_KERNELS]
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
             bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER),
             bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER),
@@ -286,7 +328,10 @@ def _boolean_roots() -> list[Any]:
             bind(BSC.AttentionSoftcap, T=17, NH=1, KVH=1, D=16, BN=16, CAP=50.0, DOT=BG.HopperBF16WgmmaDot16, INV=BAT.Fa2InvSum,
                  MASKED_FROM=0, TANH=BM.MufuTanh, EX2=BM.MufuEx2Ftz),
             bind(GB.GumbelSelectF32, V=2), bind(GB.GumbelSelectF32, V=65),
-            *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage)] + rows
+            *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage),
+            bind(boolean_rope.RoPEGptJ, NHEADS=2, D=8),
+            bind(mla.TritonMlaDecode, H=1, T=2, DL=16, DR=16, BN=32, SPLITS=1, SCALE=0x3D800000, DOT=HOP),
+            bind(mla.MlaBmm, NHEADS=2, K=32, N=3, DOT=HOP), bind(mla.MoeSharedCombine, H=8, RSF=0x3FE66666)] + rows
 
 
 def _boolean_gather_roots() -> list[Any]:
@@ -296,6 +341,25 @@ def _boolean_gather_roots() -> list[Any]:
     from verity_vllm.program.registry import boolean_gather as BGA
 
     return [bind(BGA.Embedding, V=64, H=16), bind(BGA.gather_bf16(1100))]
+
+
+def _universal_roots() -> list[Any]:
+    """Protocol 2's universal unit (`verity.ml.boolean.universal`) at two size classes: G = 16 gates over 16 inputs (W = 32 wires)
+    with 8 outputs, and G = 64 over 64 (W = 128) with 32."""
+    from verity.ir.defs import bind
+    from verity.ml.boolean.universal import UniversalUnit
+
+    return [bind(UniversalUnit, G=16, N_IN=16, N_OUT=8), bind(UniversalUnit, G=64, N_IN=64, N_OUT=32)]
+
+
+def _merkle_roots() -> list[Any]:
+    """The hidden-index Merkle read (`verity.ml.boolean.merkle`), binary and 4-ary, at one level (a level is two or three
+    SHA-512 compressions: deeper reads repeat it). About two minutes each; the 4-ary one checks the slot multiplexers among
+    three siblings that the binary swap does not have."""
+    from verity.ir.defs import bind
+    from verity.ml.boolean.merkle import MerkleRead
+
+    return [bind(MerkleRead, ARITY=2, D=1), bind(MerkleRead, ARITY=4, D=1)]
 
 
 def _kernel_roots() -> list[Any]:
@@ -316,7 +380,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_vllm.program.registry import ref_prims, sampling
     from verity_vllm.program.registry import serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
-    from verity_vllm.program.registry import boolean_attention, boolean_fp8, boolean_fp8_moe, tables
+    from verity_vllm.program.registry import boolean_attention, boolean_dsa, boolean_fp8, boolean_fp8_moe, boolean_rope
+    from verity_vllm.program.registry import boolean_sparse_mla, dsa, sparse_mla, tables
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -435,6 +500,33 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("SiluMulFp8BlockQuantResult_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantResultV2)),
         ("SiluMulFp8BlockQuantGroup_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantGroupV2, G=4)),
         ("SiluMulFp8BlockQuant_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantV2, I=8, G=4)),
+        # GLM-5.3's DSA indexer at its served shapes (D = 128, 32 heads, the top-2048 row), and on bits at one warp
+        ("DsaUe8m0Quant_v1", lambda: bind(dsa.DsaUe8m0Quant, N=128)),
+        ("DsaIndexerKRow_v1", lambda: bind(dsa.DsaIndexerKRow, D=128, ROPE=64, EPS=1e-6)),
+        ("DsaIndexerQHead_v1", lambda: bind(dsa.DsaIndexerQHead, D=128, ROPE=64, NH=32)),
+        ("DsaIndexerQ_v1", lambda: bind(dsa.DsaIndexerQ, H=32, D=128, ROPE=64)),
+        ("DsaMqaLogit_v1", lambda: bind(dsa.DsaMqaLogit, H=32, D=128)),
+        ("DsaMqaLogits_v1", lambda: bind(dsa.DsaMqaLogits, N=4, H=32, D=128)),
+        ("DsaTopKShortRow_v1", lambda: bind(dsa.DsaTopKShortRow, TOPK=2048)),
+        ("DsaUe8m0Quant_v2", lambda: bind(boolean_dsa.DsaUe8m0QuantV2, N=4)),
+        ("DsaIndexerKRow_v2", lambda: bind(boolean_dsa.DsaIndexerKRowV2, D=32, ROPE=16, EPS=1e-6)),
+        ("DsaIndexerQHead_v2", lambda: bind(boolean_dsa.DsaIndexerQHeadV2, D=32, ROPE=16, NH=32)),
+        ("DsaIndexerQ_v2", lambda: bind(boolean_dsa.DsaIndexerQV2, H=2, D=32, ROPE=16)),
+        ("DsaMqaLogit_v2", lambda: bind(boolean_dsa.DsaMqaLogitV2, H=8, D=32)),
+        ("DsaMqaLogits_v2", lambda: bind(boolean_dsa.DsaMqaLogitsV2, N=2, H=8, D=32)),
+        ("DsaTopKShortRow_v2", lambda: bind(boolean_dsa.DsaTopKShortRowV2, TOPK=16)),
+        # its sparse MLA (FA3 over the selected rows) at the served statics, two blocks; on bits at DR = DV = BN = 16
+        ("SparseMlaBlock_v1", lambda: bind(sparse_mla.SparseMlaBlock, NVIS=64, FIRST=False,
+                                           **{k: sparse_mla.SPARSE_MLA_GLM53[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")})),
+        ("SparseMlaHead_v1", lambda: bind(sparse_mla.SparseMlaHead, T=65,
+                                          **{k: v for k, v in sparse_mla.SPARSE_MLA_GLM53.items() if k != "NH"})),
+        ("SparseMla_v1", lambda: bind(sparse_mla.SparseMla, T=65, **sparse_mla.SPARSE_MLA_GLM53)),
+        ("SparseMlaBlock_v2", lambda: bind(boolean_sparse_mla.SparseMlaBlockV2, DR=16, DV=16, NVIS=5, FIRST=True, BN=16,
+                                           DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625)),
+        ("SparseMlaHead_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadV2, T=5, DR=16, DV=16, BN=16, SCALE=0.0625,
+                                          DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], INV=boolean_sparse_mla.SPARSE_MLA_GLM53["INV"])),
+        ("SparseMla_v2", lambda: bind(boolean_sparse_mla.SparseMlaV2, T=5, NH=2, DR=16, DV=16, BN=16, SCALE=0.0625,
+                                      DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], INV=boolean_sparse_mla.SPARSE_MLA_GLM53["INV"])),
         ("LServe_v2", lambda: lifted.lserve(TINY, 3, 2, (7,), lag=0)),
         ("ServeSpec_v1", lambda: bind(spec.ServeSpec, C=long, CD={**TINY_NOBIAS, "MAX_POS": 16}, LP=3, K=2, A=(2, 2))),
         ("ServeDraft_v1", lambda: bind(spec.ServeDraft, C=long, LP=3, STEPS=2)),
@@ -448,6 +540,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("EmbeddingShard_v1", lambda: bind(b1_tp2.EmbeddingShard, VS=16, H=16, START=16)),
         ("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16)),
         ("RoPEGptJ_v1", lambda: bind(ref_prims.RoPEGptJ, NHEADS=2, D=16)),
+        ("RoPEGptJ_v2", lambda: bind(boolean_rope.RoPEGptJV2, NHEADS=2, D=16)),
         ("RoPEInterleavedRef_v1", lambda: bind(ref_prims.RoPEInterleavedRef, D=16, DT="bf16")),
     ]
 
@@ -491,13 +584,14 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     Definition, or the error)."""
     from verity.ml.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.frontend.rules import vocab as V
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.registry import prims as P
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
              "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
              "SCALE": "shared-per-block", "S": 4, "KB": 32, "SWAP": False, "FP8_DOT": BlackwellE4m3QmmaDot32,
-             "CONSTRUCTION": "shared-greedy"}
+             "CONSTRUCTION": "shared-greedy", "TARGET": TargetProfile.default()}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
     e4m3 = {**small, "G": 32, "DOT": BlackwellE4m3QmmaDot32}  # the block-FP8 MoE pair forms: an e4m3 step, one K tile per scale block
     vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]
@@ -584,7 +678,7 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
+    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _universal_roots() + _merkle_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
     for label, make in _model_roots():
         try:
             fn = make()

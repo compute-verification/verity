@@ -16,6 +16,7 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
 from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import _check_pins, _fmt, attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.target import _targets, target_of
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext, Supplied
 from verity_vllm.observe.fold.tree import TreeNode
 
@@ -78,7 +79,8 @@ class RMSNormTritonLaunch:
 class FusedAddRMSNorm:
     """`_C.fused_add_rms_norm(input!, residual!, weight, epsilon)` (in place: input ← norm(input+residual),
     residual ← input+residual) → `Compute(RMSNormFusedCuda_v2{N,EPS}, rows=M, (PerRow(x), PerRow(res), Shared(w)),
-    (PerRow(x), PerRow(res)))`.  The fold reads all operands before writing (the outputs alias the inputs)."""
+    (PerRow(x), PerRow(res)))` on a batch-invariant record target (`registry.targets.rmsnorm_fused_spec`, the selector the Build's
+    vocabulary calls; refused by name elsewhere).  The fold reads all operands before writing (the outputs alias the inputs)."""
 
     eps: float | None = None
     name: str = "rmsnorm.fused_add_rms_norm"
@@ -102,9 +104,13 @@ class FusedAddRMSNorm:
             return unsupported(node, "epsilon differs from the profile's EPS", eps=eps, pinned=self.eps)
         M = x.shape[0]
         roots = ctx.roots_of(w)
-        spec, operands = bind(b1.RMSNormFusedCuda, N=N, EPS=self.eps if self.eps is not None else eps), (PerRow(x), PerRow(res), Shared(w))
-        if getattr(ctx.profile, "registered_values", False):
-            spec, operands = bind(VI.RMSNormFusedCudaV4, N=N), operands + (eps_input(self.eps if self.eps is not None else eps),)
+        eps = self.eps if self.eps is not None else eps
+        registered = getattr(ctx.profile, "registered_values", False)
+        try:
+            spec = _targets().rmsnorm_fused_spec(target_of(ctx)[0], N, eps, eps_input=registered)
+        except _targets().UnregisteredTarget as e:
+            return unsupported(node, f"target has no registered fused_add_rms_norm binding: {e}")
+        operands = (PerRow(x), PerRow(res), Shared(w)) + ((eps_input(eps),) if registered else ())
         return Compute(spec, M, operands, (PerRow(x), PerRow(res)), (node.id,),
                        hint=hint_of(node, roots[0].name if roots else "fused_add_rms_norm"), kernels=("fused_add_rms_norm_kernel",),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name)

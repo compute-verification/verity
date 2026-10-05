@@ -117,6 +117,9 @@ def rank_hf_config(cfg: dict[str, Any], world: int) -> dict[str, Any]:
         if not out.get("head_dim"):
             out["head_dim"] = int(out["hidden_size"]) // int(out["num_attention_heads"])   # the FULL model's head width: a rank keeps it
         for k in sharded_keys(cfg):
+            if k == "num_key_value_heads" and out[k] < world and world % out[k] == 0:
+                out[k] = 1          # QKVParallelLinear: each key/value head on world // heads ranks (num_kv_head_replicas)
+                continue
             if out[k] % world:
                 raise ValueError(f"{k}={out[k]} is not divisible by the world {world}")
             out[k] = out[k] // world
@@ -454,10 +457,10 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
         E, T, I, H = C["NUM_EXPERTS"], C["TOPK"], C["I"], C["H"]
         if isinstance(moe, MoEFusedExpertsFp8):
             fp8 = f"G={moe.group},KB={moe.fused_pins['BLOCK_SIZE_K']},SWAP=False,DOT=the record target's e4m3 step"
-            experts = [f"Fp8GroupQuant_v1{{K={H},G={moe.group}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},{fp8}}}", f"SiluMul_v1{{I={I}}} (base)",
+            experts = [f"Fp8GroupQuant_v1{{K={H},G={moe.group}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},{fp8}}}", f"SiluMul_v2{{I={I}}}",
                        f"Fp8GroupQuant_v1{{K={I},G={moe.group}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},{fp8}}}"]
         else:
-            experts = [f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v1{{I={I}}} (base)", f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}"]
+            experts = [f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v2{{I={I}}}", f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}"]
         notes["moe"] = {"status": "constructive: Computes over registry.moe definitions per step per rank",
                         "scope_pattern": f"gen_ov_moe_patterns.{type(moe).__name__} (vllm.moe_forward*), renormalize={bool(C.get('RENORMALIZE', False))}",
                         "definitions": [f"MoeRouterTopK{'Ordered' if moe.router == 'ordered' else ''}{'Norm' if C.get('RENORMALIZE') else ''}_v1"
