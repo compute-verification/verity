@@ -8,6 +8,11 @@ on (lo, hi) half-lanes), the same function on bits.
     PouwSqAcc_v2       (acc: Array<576, Value<1>>, x: Array<32, Value<1>>) -> Array<576, Value<1>>  word view: PouwSqAcc_v1
     PouwSqCeil_v2      (t: Array<576, Value<1>>, n: Array<32, Value<1>>) -> Array<64, Value<1>>     word view: PouwSqCeil_v1
     PouwSqGe_v2        (x: Array<32, Value<1>>, th: Array<64, Value<1>>) -> Value<1>                word view: PouwSqGe_v1
+    PouwBlackwellE4m3Window_v2  (a, b: Array<128, Array<8, Value<1>>>) -> Array<480, Value<1>>     word view: PouwBlackwellE4m3Window_v1
+    PouwHopperE4m3Window_v2     the same signature                                                word view: PouwHopperE4m3Window_v1
+    PouwWindowWord_v2  (x: Array<480, Value<1>>, m: Array<4, Value<1>>) -> Array<32, Value<1>>      word view: PouwWindowWord_v1
+    PouwBlackwellE4m3SaltDead_v2  (acc: Array<32, Value<1>>, cb: Array<8, Value<1>>) -> Value<1>   word view: PouwBlackwellE4m3SaltDead_v1
+    PouwHopperE4m3SaltDead_v2     the same signature                                               word view: PouwHopperE4m3SaltDead_v1
     PouwXor32_v2       (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>                       word view: PouwXor32_v1
     PouwChi32_v2       (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>                    word view: PouwChi32_v1
     PouwRotl64Lo_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Lo_v1
@@ -16,6 +21,16 @@ on (lo, hi) half-lanes), the same function on bits.
 Each is traced from a builder over core's `forms` (`verity.primitives.circuits.boolean.trace.definition`), so its And gates are the builder's
 live ANDs but for its commits (`forms.Circuit.commit`, a row of a `forms` lowering and no gate); a backend whose lowering
 takes `forms` builders (C-Flock's pieces) can run the builder itself (``.build``).
+
+* the windows: the 15 calls of the atom's own builder (`verity_catalog.definitions.boolean.gemm`) that build a window's masked words, on a
+  view of the circuit that keeps its own AND memo (`_Shared`), so atom j's 32 products, and every part of its step that
+  doesn't read the accumulator, are built once for its 2^j words on any circuit, C-Flock's (which has no common-subexpression
+  pass) included: on sm_120 102,409 ANDs where the 15 calls are 145,651.
+* `window_word`: a 4-to-16 decode and one AND per bit and mask, so a constant m (each of the cap word's reads) costs none.
+* the salt-dead bits: the atom's builder at the support's two ends (E′ the one code c_β at all 32 positions, F the
+  constant ±0x43) and the cast, on an `_Shared` view, so the 32 equal products are built once and the two ends share
+  every AND that doesn't read F's sign: on sm_120 2,493 ANDs where two atom calls and casts are 20,062 (1,806 against
+  15,230 on the H100).
 
 * `f32_sqrt_rn`: the significand normalized, the exponent made even by doubling it, and a digit-by-digit root (`isqrt`) of
   the 50-bit radicand to 25 bits; the last bit rounds, since no square root of a float lies halfway between two (the
@@ -40,20 +55,24 @@ from __future__ import annotations
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.types import Array
 from verity_catalog.silicon import fp
+from verity_catalog.definitions.boolean import gemm as BG
+from verity_catalog.definitions.boolean import scalar as BS
 from verity.primitives.circuits.boolean.forms import (NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
                                      or_reduce, shl_window, sub)
 from verity.primitives.circuits.boolean.trace import definition
 
 from . import words as W
 
-__all__ = ["PouwBf16Neg", "PouwChi32", "PouwETilde", "PouwF32SqrtRn", "PouwRotl64Hi", "PouwRotl64Lo", "PouwSqAcc", "PouwSqCeil",
-           "PouwSqGe", "PouwXor32", "chi32", "e_tilde", "f32_sqrt_rn", "isqrt", "rotl64", "sq_acc", "sq_ceil", "sq_ge", "square",
-           "up48"]
+__all__ = ["PouwBf16Neg", "PouwBlackwellE4m3SaltDead", "PouwBlackwellE4m3Window", "PouwChi32", "PouwETilde", "PouwF32SqrtRn",
+           "PouwHopperE4m3SaltDead", "PouwHopperE4m3Window", "PouwRotl64Hi", "PouwRotl64Lo", "PouwSqAcc", "PouwSqCeil",
+           "PouwSqGe", "PouwWindowWord", "PouwXor32", "chi32", "e_tilde", "f32_sqrt_rn", "isqrt", "rotl64", "salt_dead",
+           "sq_acc", "sq_ceil", "sq_ge", "square", "up48", "window", "window_word"]
 
 BIT = BL.BIT
 F32 = U32 = Array(32, BIT)
 BF16, E2M1, U8 = Array(16, BIT), Array(4, BIT), Array(8, BIT)
 SQ, SQ48 = Array(576, BIT), Array(64, BIT)
+U4, CODES, MASKED = Array(4, BIT), Array(W.WINDOW, U8), Array(W.MASKED.w, BIT)
 _NAN_PTX = 0x7FFFFFFF
 
 
@@ -169,6 +188,71 @@ def sq_ge(C, x, th):
     return [NOT(sub(C, m + ex + [ZERO] * 7, th, 64)[1])]
 
 
+class _Shared:
+    """The circuit ``C`` with its own AND memo (`forms.Circuit`'s ``cse``): an AND of two forms already ANDed through the view
+    reuses that bit. Everything else is ``C``'s."""
+
+    def __init__(self, C):
+        object.__setattr__(self, "_C", C)
+        object.__setattr__(self, "_memo", {})
+
+    def AND(self, a, b):
+        if a.is_const() or b.is_const() or a.s == b.s:
+            return self._C.AND(a, b)
+        key = frozenset((a.key(), b.key()))
+        w = self._memo.get(key)
+        if w is None:
+            w = self._memo[key] = self._C.AND(a, b)
+        return w
+
+    def __getattr__(self, name):
+        return getattr(self._C, name)
+
+    def __setattr__(self, name, value):
+        setattr(self._C, name, value)
+
+
+def window(atom):
+    """The builder of a window's masked words (`words.masked_words`) under the Boolean atom ``atom``, packed as `words.MASKED`."""
+
+    def build(C, *ab):
+        S, a, b = _Shared(C), ab[:W.WINDOW], ab[W.WINDOW:]
+        words = {0: [ZERO] * 32}
+        for j in range(4):
+            aj, bj = a[32 * j:32 * j + 32], b[32 * j:32 * j + 32]
+            nxt = {}
+            for mask, w in words.items():
+                nxt[mask], nxt[mask | 1 << j] = atom.build(S, w, *aj, *bj), w
+            words = nxt
+        return [x for m in range(W.MASKS) for x in words[m]]
+    return build
+
+
+def salt_dead(atom):
+    """The builder of an element's salt-dead bit (`words.ends_agree`) under the Boolean atom ``atom``: the two ends' casts
+    on a view with its own AND memo, then their comparison by value (equal, or both zeros)."""
+
+    def build(C, acc, cb):
+        S = _Shared(C)
+        ends = [BS.f32_to_e4m3_sat(S, atom.build(S, list(acc), *[list(cb)] * 32, *[const_bits(f, 8)] * 32))
+                for f in W.F_ENDS]
+        d = [x ^ y for x, y in zip(*ends)]
+        return [S.AND(NOT(or_reduce(S, d[:7])), OR(S, NOT(d[7]), NOT(or_reduce(S, ends[0][:7]))))]
+    return build
+
+
+def window_word(C, x, m):
+    """``PouwWindowWord_v1``: mask m's 32 bits of x, 0 for m = 15."""
+    sel = fp.decode(C, list(m))
+    out = []
+    for t in range(32):
+        bit = ZERO
+        for i in range(W.MASKS):
+            bit = bit ^ C.AND(sel[i], x[32 * i + t])
+        out.append(bit)
+    return out
+
+
 def chi32(C, a, b, c):
     """``PouwChi32_v1``: a xor (not b and c), committed."""
     return C.commit([x ^ C.AND(NOT(y), z) for x, y, z in zip(a, b, c)])
@@ -196,6 +280,28 @@ PouwSqCeil = definition("PouwSqCeil", 2, sq_ceil, (("t", SQ), ("n", U32)), SQ48,
                         conformance=W.PouwSqCeil.conformance, doc="up48(⌈64 t / n⌉) on bits: PouwSqCeil_v1")
 PouwSqGe = definition("PouwSqGe", 2, sq_ge, (("x", F32), ("th", SQ48)), BIT, word=W.PouwSqGe,
                       conformance=W.PouwSqGe.conformance, doc="up48(2^300 · x²) >= θ on bits: PouwSqGe_v1")
+PouwBlackwellE4m3Window = definition(
+    "PouwBlackwellE4m3Window", 2, window(BG.BlackwellE4m3QmmaDot32), (("a", CODES), ("b", CODES)), MASKED,
+    word=W.PouwBlackwellE4m3Window, conformance=W.PouwBlackwellE4m3Window.conformance,
+    doc="A promotion window's masked words under sm_120's atom on bits, each atom's products built once: "
+        "PouwBlackwellE4m3Window_v1")
+PouwHopperE4m3Window = definition(
+    "PouwHopperE4m3Window", 2, window(BG.HopperE4m3QgmmaDot32), (("a", CODES), ("b", CODES)), MASKED,
+    word=W.PouwHopperE4m3Window, conformance=W.PouwHopperE4m3Window.conformance,
+    doc="A promotion window's masked words under the H100's atom on bits, each atom's products built once: "
+        "PouwHopperE4m3Window_v1")
+PouwWindowWord = definition("PouwWindowWord", 2, window_word, (("x", MASKED), ("m", U4)), F32, word=W.PouwWindowWord,
+                            conformance=W.PouwWindowWord.conformance, doc="Mask m's word of a window on bits: PouwWindowWord_v1")
+PouwBlackwellE4m3SaltDead = definition(
+    "PouwBlackwellE4m3SaltDead", 2, salt_dead(BG.BlackwellE4m3QmmaDot32), (("acc", F32), ("cb", U8)), BIT,
+    word=W.PouwBlackwellE4m3SaltDead, conformance=W.PouwBlackwellE4m3SaltDead.conformance,
+    doc="An element's salt-dead bit under sm_120's atom on bits, the two ends' common parts built once: "
+        "PouwBlackwellE4m3SaltDead_v1")
+PouwHopperE4m3SaltDead = definition(
+    "PouwHopperE4m3SaltDead", 2, salt_dead(BG.HopperE4m3QgmmaDot32), (("acc", F32), ("cb", U8)), BIT,
+    word=W.PouwHopperE4m3SaltDead, conformance=W.PouwHopperE4m3SaltDead.conformance,
+    doc="An element's salt-dead bit under the H100's atom on bits, the two ends' common parts built once: "
+        "PouwHopperE4m3SaltDead_v1")
 PouwXor32 = definition("PouwXor32", 2, lambda C, a, b: [x ^ y for x, y in zip(a, b)], (("a", U32), ("b", U32)), U32,
                        word=W.PouwXor32, conformance=W.PouwXor32.conformance, doc="a xor b on bits: PouwXor32_v1")
 PouwChi32 = definition("PouwChi32", 2, chi32, (("a", U32), ("b", U32), ("c", U32)), U32, word=W.PouwChi32,
