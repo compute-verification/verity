@@ -174,6 +174,22 @@ def test_a_session_held_past_every_sync_is_rejected(runs):
     assert not ar.against_honest(run, results["honest"][0])["wire_is_honests"]
 
 
+def test_a_proxy_that_declares_its_own_syncs_is_accepted_and_is_run_shapers(setup, tmp_path):
+    """Under an online rule the proxy's prover declares each window's sync from the frames it has read: the envelope
+    (δ = 3) with no history, then a bucket past what the earlier windows needed. They are what the plan declares on the
+    model's run, the audit accepts every link-window, and the records are `run_shaper`'s under them."""
+    doc, report, s = setup
+    plan = ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1")
+    assert plan["sync_rule"] == "cover-2-1" and [d for d, _ in plan["syncs"]] == [3, 4, 4]
+    assert ar.run_virtual(plan, report, tmp_path) == {"server": 0, "proxy": 0, "peer": 0}
+    audit = ar.audit_configuration(plan, report, tmp_path)
+    assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"])
+    c = audit["comparisons"]
+    assert c["declared_are_planned"] and c["records_are_run_shapers"] and c["hands_are_the_rules"]
+    with pytest.raises(ValueError):
+        ar.plan_configuration(doc["configurations"][0], s, syncs="cover")
+
+
 TOKENS = 4
 
 

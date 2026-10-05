@@ -11,7 +11,7 @@ Each configuration is one run of three processes on the host's monotonic clock, 
   frame k as one server-sent event written in the middle of bucket R + d_k − 1, where d_k is the frame's
   `ready − anchor` in the trace. An event's `id:` is its position in the canonical order (ready, anchor, session, k).
 
-**The honest prover** declares `calibration.choose_syncs` over the run the model predicts: each request released by the
+**The honest prover** declares (`--syncs model`) `calibration.choose_syncs` over the run the model predicts: each request released by the
 ingress warden's rule, its frame k ready d_k buckets after its release. The replay keeps every bucket the warden sees and
 leaves half a bucket of margin around each write; a write later than that moves its bucket.
 
@@ -32,10 +32,13 @@ OpenAI endpoint behind a shim inside the boundary (`LiveServer`). The peer sends
 `record.py` sent it (its session names the workload's request: prompt token ids, `max_tokens`, `ignore_eos`), padded to
 whole link frames. The shim forwards it to vLLM and writes vLLM's stream back cut at `\\n\\n`, each event with `id:` its
 position in write order, and logs every event it wrote; it writes nothing from 1.5 buckets before the horizon on. The
-audit's Program is that log. A live prover can't choose syncs on frames it hasn't seen, so it declares one value for
-every window (`--syncs envelope`): the largest δ and the smallest ρ the calibration's honest prover declared, met by
-every window any declared value meets. The audit also counts the windows the trace's model syncs and a hindsight
-prover (`choose_syncs` on the frames as read) would have met.
+audit's Program is that log. A live prover can't choose syncs on frames it hasn't seen, so by default it declares one
+value for every window (`--syncs envelope`): the largest δ and the smallest ρ the calibration's honest prover declared,
+met by every window any declared value meets. Under an online rule (`--syncs cover-K-M`, `online`) the proxy's own
+prover declares each window's sync at its first tick from the frames it has read, the audit checks the syncs the
+proxy logged, and `declared_are_planned` says whether they are what the rule declares on the model's run. The audit
+also counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
+have met.
 
     python active_replay.py --calibration REPORT.json --out DIR [--windows 60] [--config-windows 4:10] TRACE.json ...
     python active_replay.py --vllm MODEL --calibration REPORT.json --out DIR --config NAME ... TRACE.json ...
@@ -70,6 +73,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import replay
+from verity_network_warden import online
 from verity_network_warden.active import (
     DATA,
     HEADER,
@@ -277,20 +281,26 @@ class Setup(replay.Setup):
         e, i = self.egress[self.egress_link], self.ingress[self.ingress_link]
         self.egress_params = GridParams(e.buckets, e.allocation, g["frame_bytes"], e.bucket_ms, e.queue_capacity)
         self.ingress_params = GridParams(i.buckets, i.allocation, g["frame_bytes"], i.bucket_ms, i.queue_capacity)
-        declared = report["clock_sync"].get("declared")
-        self.envelope = ClockSync(max(declared["delta"]), min(Fraction(r) for r in declared["rho"])) if declared else None
 
 
-SYNC_POLICIES = ("model", "envelope")
+SYNC_POLICIES = ("model", "envelope", "an online rule (last, cover-K-M[-fallback])")
+
+
+def sync_policy(name: str) -> str:
+    """`model`, `envelope`, or an online rule (`online.rule`), which the proxy declares window by window."""
+    if name not in ("model", "envelope"):
+        online.rule(name)
+    return name
 
 
 def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, syncs: str = "model") -> dict:
     """The run of one configuration: its sessions (rank = list order, stream id, d_k per frame), its requests (stream,
     session, frames, the trace's send time and the peer's), the model's release of each request and the prover's
-    syncs: `model`, chosen over the model's run, or `envelope`, the calibration's envelope in every window. With
-    `live_model`, a request takes the frames of its live body when they are more than the trace's."""
-    if syncs not in SYNC_POLICIES:
-        raise ValueError(f"syncs is one of {SYNC_POLICIES}, not {syncs!r}")
+    syncs: `model`, chosen over the model's run; `envelope`, the calibration's envelope in every window; or an online
+    rule, which the proxy declares at each window's first tick from what it has read (`sync_rule`), and `syncs` holds
+    what it declares on the model's run. With `live_model`, a request takes the frames of its live body when they are
+    more than the trace's."""
+    sync_policy(syncs)
     e, i = setup.egress_params, setup.ingress_params
     T, windows = e.buckets, replay.config_windows(cfg, e.buckets)
     if len(cfg["egress"]) != 1 or len(cfg["ingress"]) != 1:
@@ -347,12 +357,19 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
     chosen, _, misses = choose_syncs([(frames, ready)], sync_set, T)
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
     chosen = (list(chosen) + [eager] * windows)[:windows]
-    declared = chosen if syncs == "model" else [setup.envelope] * windows
+    if syncs == "model":
+        declared = chosen
+    elif syncs == "envelope":
+        declared = [setup.envelope] * windows
+    else:
+        declared, _ = online.declare([(frames, ready)], sync_set, T, online.rule(syncs), windows, setup.envelope)
     out = {"name": cfg.get("name"), "windows": windows, "sessions": sessions, "requests": peer,
            "model_release": {str(k): v for k, v in release.items()}, "model_misses": misses,
            "unmatched_sessions": unmatched, "ingress_only_requests": len(extra),
            "syncs": [[s.delta, str(s.rho)] for s in declared], "sync_policy": syncs,
            "model_syncs": [[s.delta, str(s.rho)] for s in chosen]}
+    if syncs not in ("model", "envelope"):
+        out["sync_rule"] = syncs
     if live_model is not None:
         out["live_model"] = live_model
     return out
@@ -723,6 +740,7 @@ class Publisher:
 
 def proxy_log(proxy: Proxy) -> dict:
     return {"lateness_ms": {k: [round(x * 1000, 3) for x in v] for k, v in proxy.lateness.items()},
+            "syncs": [[s.delta, str(s.rho)] for s in proxy.shaper.syncs],
             "frames": proxy.frames, "hands": proxy.shaper.hands, "link_frames_read": proxy.link_frames_read,
             "streams": len(proxy.streams), "slack_ms": proxy.slack * 1000} | _usage()
 
@@ -756,6 +774,14 @@ async def _server(plan: dict, params: dict, conn, out: Path) -> None:
     write_logs(out, server=server)
 
 
+def prover_args(plan: dict, setup: Setup) -> dict:
+    """The proxy's advice: the plan's syncs, or, under an online rule, its own prover's over the plan's windows."""
+    if "sync_rule" not in plan:
+        return {"syncs": [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]}
+    prover = online.Prover(setup.sync_set, setup.egress_params.buckets, online.rule(plan["sync_rule"]), setup.envelope)
+    return {"syncs": [], "prover": prover, "windows": plan["windows"]}
+
+
 def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], conn, out: str) -> None:
     _quiet_runtime()
     asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out)))
@@ -763,7 +789,7 @@ def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], con
 
 async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out: Path) -> None:
     publish = Publisher(out, setup)
-    syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
+    advice = prover_args(plan, setup)
     done = asyncio.get_running_loop().create_future()
     holder: dict = {}
 
@@ -774,9 +800,9 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
     listening = await asyncio.start_server(on_link, "127.0.0.1", 0)
     conn.send(listening.sockets[0].getsockname()[1])
     origin = conn.recv()
-    proxy = holder["proxy"] = Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs,
-                                    origin=origin, publish=publish, egress_link=setup.egress_link,
-                                    ingress_link=setup.ingress_link)
+    proxy = holder["proxy"] = Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set,
+                                    advice.pop("syncs"), origin=origin, publish=publish, egress_link=setup.egress_link,
+                                    ingress_link=setup.ingress_link, **advice)
     await done
     listening.close()
     publish.close()
@@ -892,10 +918,10 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     peer = Peer(plan, params, clock, clock.sleep, notify)
     listening = await asyncio.start_server(server.handle, "127.0.0.1", 0)
     publish = Publisher(out, setup, threaded=False)
-    syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
-    proxy = holder["proxy"] = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0,
-                                    clock=clock, sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,
-                                    ingress_link=setup.ingress_link)
+    advice = prover_args(plan, setup)
+    proxy = holder["proxy"] = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, advice.pop("syncs"),
+                                    origin=0.0, clock=clock, sleep=clock.sleep, publish=publish,
+                                    egress_link=setup.egress_link, ingress_link=setup.ingress_link, **advice)
     accepted: asyncio.Future = asyncio.get_running_loop().create_future()
     link = await asyncio.start_server(lambda r, w: accepted.set_result(asyncio.create_task(proxy.run(r, w))),
                                       "127.0.0.1", 0)
@@ -999,7 +1025,10 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
     e, i = setup.egress_params, setup.ingress_params
     T, windows = e.buckets, plan["windows"]
     horizon = windows * T
-    syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
+    with gzip.open(run / "proxy.json.gz", "rt") as fh:
+        log = json.load(fh)
+    declared = log["syncs"] if "sync_rule" in plan else plan["syncs"]
+    syncs = [ClockSync(d, Fraction(r)) for d, r in declared]
     in_records = [unpack_record(b, i.frame_bytes) for b in read_blobs(run / "requests.records")]
     release, in_frames = ingress_releases(in_records, i, e)
     live = "live_model" in plan
@@ -1018,8 +1047,6 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
              "direction": "egress" if a.link == setup.egress_link else "ingress",
              "raw": a.violation, "committed": b.violation} for a, b in zip(*verdicts, strict=True)]
 
-    with gzip.open(run / "proxy.json.gz", "rt") as fh:
-        log = json.load(fh)
     seen = {p: (stream, k, anchor, ready) for p, stream, k, anchor, ready in log["frames"]}
     ready = [seen[p][3] if p in seen else horizon for p in range(len(frames))]
     ref = run_shaper(frames, ready, syncs, Warden(setup.egress_link, e))
@@ -1042,6 +1069,7 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
         "releases_off_model": sum(1 for s, r in release.items() if model_release.get(s) != r)
             + sum(1 for s in model_release if s not in release),
         "model_misses": plan["model_misses"],
+        "declared_are_planned": declared == plan["syncs"],
     }
     if live:
         comparisons |= live_comparisons(plan, setup, frames, ready)
@@ -1180,6 +1208,8 @@ def summarize(results: Sequence[dict], models: Sequence[dict]) -> dict:
     out["comparisons"] |= {k: sum(r["comparisons"][k] for r in results)
                            for k in ("ready_off_meant", "releases_off_model", "model_misses",
                                      "released_not_the_programs")}
+    out["comparisons"]["declared_are_planned"] = all(r["comparisons"].get("declared_are_planned", True)
+                                                     for r in results)
     if any("hindsight" in r["comparisons"] for r in results):
         out["live"] = {
             "model_syncs_met_windows": sum(r["comparisons"]["model_syncs_met_windows"] for r in results),
@@ -1241,7 +1271,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--vllm", metavar="MODEL", help="start a vLLM server for MODEL as record.py does, and use it live")
     ap.add_argument("--vllm-cpus", help="with --vllm: its CPUs (taskset -c); the harness takes the rest of its own")
     ap.add_argument("--served-model", default="served", help="the live endpoint's model name")
-    ap.add_argument("--syncs", choices=SYNC_POLICIES, help="the prover's syncs (default: envelope live, else model)")
+    ap.add_argument("--syncs", type=sync_policy,
+                    help=f"the prover's syncs: {', '.join(SYNC_POLICIES)} (default: envelope live, else model)")
     ap.add_argument("--max-minutes", type=float,
                     help="start no configuration that would end later than this from the start")
     args = ap.parse_args(argv)
@@ -1349,7 +1380,7 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
                 stopped = f"{name}: would end after --max-minutes"
                 print(stopped, flush=True)
                 break
-            mrows, mtally = replay.replay_configuration(cfg, replay.Setup(report))
+            mrows, mtally, _ = replay.replay_configuration(cfg, replay.Setup(report), plan.get("sync_rule", "hindsight"))
             del cfg
             for strategy in strategies:
                 run = runs / slug(name) / strategy
