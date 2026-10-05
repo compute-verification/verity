@@ -14,6 +14,7 @@ def moe_router_topk(logits: np.ndarray, *, E: int, TOPK: int, VPT: int, renormal
     the winner masked to -10000.f.  `renormalize` (MoeRouterTopKNorm_v1, MOE-04): selected sum ascending from 0.f, denom = sum > 0 ? sum :
     1.f, scale = 1.f / denom (F32Div), w_k = w_k * scale (F32Mul).  Returns (router_w f32 words [TOPK] u32, router_ids i32 words [TOPK] u32)."""
     from verity_vllm.program.registry import moe as RMOE
+    from verity_vllm.program.kernels import moe_twins
     from verity_vllm.program.registry import prims as P
     from verity_vllm.program.registry import ref_prims as R
 
@@ -36,7 +37,7 @@ def moe_router_topk(logits: np.ndarray, *, E: int, TOPK: int, VPT: int, renormal
             m = P.F32Max.evaluate(m, x[t * VPT + j])
         tmax.append(m)
     rmax = butterfly(P.F32Max.evaluate, tmax)
-    ex = [RMOE.nv_expf_bits(R.F32Sub.evaluate(x[i], rmax)) for i in range(E)]
+    ex = [moe_twins.nv_expf_bits(R.F32Sub.evaluate(x[i], rmax)) for i in range(E)]
     tsum = []
     for t in range(T):
         s = 0

@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
+import Proofs.Flock.Soundness.Discharge.ZkSession.InnerSound
 import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
 import Proofs.Flock.Soundness.Discharge.ZkSession.Level0
 import Proofs.Flock.Soundness.Discharge.ZkSession.Algebraic

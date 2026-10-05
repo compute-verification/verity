@@ -17,7 +17,7 @@ Its cryptographic hypotheses are instances of three assumptions, each for the fi
 * `SHA512CRExpected` (`ecr/sha-512`) through `hCR` (`LinkCR`);
 * A3 (`uniform/io-getrandombytes`) through `hA3` (`UniformRandomBytes`).
 
-The others are the named obligations `assumptions/e2e-checklist.md` lists: W6 and `Layout.Aliased` (`pp.placed`,
+The others are the named obligations `assumption-notes/e2e-checklist.md` lists: W6 and `Layout.Aliased` (`pp.placed`,
 `pp.aliased`), `HmRowComputes` (`hHm`), the layout's facts (`lay`, `rs`, in place of `vb`), the serving roots' rewinding
 (`tr`, in place of `hExec`; `TreeRewind.ofNever` builds it from `hExec` at `δ_tree = 0`), `hConst` and `hZero`. The rest
 (`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht`) are numeric conditions and the strata's match. The budgets must bound

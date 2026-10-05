@@ -22,8 +22,6 @@ bits.
 """
 from __future__ import annotations
 
-import numpy as np
-
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.refs import Coll, concat, tuple_of
@@ -39,9 +37,9 @@ BF16 = Array(16, BL.BIT)
 F32 = Array(32, BL.BIT)
 E4M3 = Array(8, BL.BIT)
 
-F448 = bits_of(np.float32(448.0))
-F_NEG448 = bits_of(np.float32(-448.0))
-EPS_QUANT = bits_of(np.float32(1e-10))
+F448 = bits_of(448.0)
+F_NEG448 = bits_of(-448.0)
+EPS_QUANT = bits_of(1e-10)
 
 
 def _row_absmax(B, S, x):

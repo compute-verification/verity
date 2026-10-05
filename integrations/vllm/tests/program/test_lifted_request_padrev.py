@@ -15,7 +15,7 @@ from verity.primitives.circuits.codec import encode_program
 from verity.primitives.circuits.defs import REGISTRY
 from verity_vllm.program import workload as W
 from verity_vllm.program.registry import b1, lifted as L
-from verity_vllm.program.registry import serve3_reference as ref
+from verity_vllm.program.kernels import serve3_reference as ref
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
 from verity.primitives.circuits.types import Value
 

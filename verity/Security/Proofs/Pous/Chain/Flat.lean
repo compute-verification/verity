@@ -4579,7 +4579,7 @@ theorem p3_meets_64_band16 (h10 : N10primeAt fun D => (D + 1) / 2) (h1 : Pous.Gu
     Meets (p3SchemeR 2384 (bandGraph 220 16)) .sequential 20 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_64_of _ h10 h1 12 (by norm_num) band_twoWay_220_16
 
-instance : NeZero (971 : ℕ) := ⟨by norm_num⟩
+instance instNeZeroNatOfNat_pous : NeZero (971 : ℕ) := ⟨by norm_num⟩
 
 /-- 14 GB: `|C| = 971·220·524480 = 112039417600` bits (14.005 GB), `S = ⌊(18/19)·|C|⌋`. -/
 theorem stateBound_14GB_64 : (p3SchemeNR 2384 Gr 971).stateBound Params.ρ = 106142606147 := by
@@ -51972,7 +51972,7 @@ theorem seg_timedINC (N B ℓ D Q β : ℕ) [NeZero (N * B)] (hN : 0 < N) (hD : 
   refine le_trans (le_of_eq (by rw [Finset.card_univ, Fintype.card_fin]))
     (Finset.card_le_card (s := Finset.univ) fun c _ => Finset.mem_filter.2 ⟨Finset.mem_univ _, hH c⟩)
 
-instance : NeZero (448 * 2 ^ 9) := ⟨by norm_num⟩
+instance instNeZeroHMulOfNatHPow_pous : NeZero (448 * 2 ^ 9) := ⟨by norm_num⟩
 
 /-- `|Hist|·π ≤ 2^-128` at `N = 448`, `B = 2^9`, `ℓ = 524288`, `D = 5`, `Q = 2^20`, `k = 106`, `β = 119067414778`.
 `N*B = 229376 ≤ 2^18`, `(N*B(Q+1)+N*B)^2 ≤ 2^76`, and the exponent `(524288−76)·227136 − (18·106 + 18 + β) = 128`. -/
@@ -53520,12 +53520,12 @@ theorem pubMeets_exact {M : IdealModel} (sch : Scheme M) [Subsingleton sch.Coins
 
 /-! ### Instances -/
 
-instance (B ℓ : ℕ) [NeZero B] : Subsingleton (Pous.Dense.denseScheme B ℓ).Coins := inferInstanceAs (Subsingleton Unit)
+instance instSubsingletonCoinsDenseScheme (B ℓ : ℕ) [NeZero B] : Subsingleton (Pous.Dense.denseScheme B ℓ).Coins := inferInstanceAs (Subsingleton Unit)
 
 instance (N B ℓ : ℕ) [NeZero (N * B)] : Subsingleton (Pous.DenseReCert.segScheme N B ℓ).Coins :=
   inferInstanceAs (Subsingleton Unit)
 
-instance (B ℓ c : ℕ) [NeZero B] (dom : ℕ → Bits c) : Subsingleton (Pous.Sponge.chainDense B ℓ c dom).Coins :=
+instance instSubsingletonCoinsChainDense (B ℓ c : ℕ) [NeZero B] (dom : ℕ → Bits c) : Subsingleton (Pous.Sponge.chainDense B ℓ c dom).Coins :=
   inferInstanceAs (Subsingleton Unit)
 
 /-- The trusted `Pous.Dense.denseScheme` is the dense file's `PousDenseChain.denseScheme`, verbatim. -/
@@ -53780,7 +53780,7 @@ namespace Pous.BandChain
 open Pous Pous.Sponge
 open scoped ENNReal
 
-instance (B d ℓ c : ℕ) [NeZero B] (dom : ℕ → Bits c) : Subsingleton (chainBand B d ℓ c dom).Coins :=
+instance instSubsingletonCoinsChainBand (B d ℓ c : ℕ) [NeZero B] (dom : ℕ → Bits c) : Subsingleton (chainBand B d ℓ c dom).Coins :=
   inferInstanceAs (Subsingleton Unit)
 
 /-- The band codec at the 64 KiB point (`2^9` blocks, in-degree `d`, capacity 512), for every salt, with a public
@@ -53843,7 +53843,7 @@ theorem pubMeets_exact_iff {M : IdealModel} (sch : Scheme M) [Subsingleton sch.C
 
 /-! ### The band codec at 14 GB -/
 
-instance (N B d ℓ c : ℕ) [NeZero (N * B)] (dom : ℕ → Bits c) :
+instance instSubsingletonCoinsChainBandSeg (N B d ℓ c : ℕ) [NeZero (N * B)] (dom : ℕ → Bits c) :
     Subsingleton (Pous.BandMulti.chainBandSeg N B d ℓ c dom).Coins :=
   inferInstanceAs (Subsingleton Unit)
 

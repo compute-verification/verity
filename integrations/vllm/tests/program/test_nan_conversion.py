@@ -17,7 +17,8 @@ import pytest
 from verity.primitives.circuits.codec import encode_program, program_digest
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.program import Program
-from verity_vllm.program.registry import b1, conformance as CF
+from verity_vllm.program.registry import b1
+from verity_vllm.program.frontend import conformance as CF
 from verity_vllm.program.registry import prims as P
 
 from verity_catalog.silicon.cast import f32_is_nan as is_nan_f32_word, f32_to_bf16_hw_word, f32_to_bf16_word
