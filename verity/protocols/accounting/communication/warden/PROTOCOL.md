@@ -211,6 +211,19 @@ docstring) and sizes:
   order, which is step-major for a batching engine, so a long session interleaves with later windows' frames.
   While a window is chosen, later windows take their most eager value; that only lowers hand times, so a window found
   met stays met.
+- **The online prover** (`online.Prover`): that choice is in hindsight, from all of a window's frames. A live prover
+  declares window w's sync at its first bucket, w·T, from the frames ready by then (the canonical prefix it has read,
+  each anchored earlier) and the earlier declarations, and nothing else. A rule (`online.rule`) sees, for each recent
+  window, the least δ per ρ that would have met the frames seen of it with the other windows as declared. `cover-K-M`
+  takes the value of least estimated hand time whose δ is M buckets past every one of the last K windows' least δ at its
+  ρ, `-fallback` declares the envelope (the largest δ and smallest ρ the calibration's prover declared) while one of
+  them was late under its own declaration, and `last` is `cover-1-0`. A window with no history declares the envelope.
+  A configuration cut from one run at a dropped window may start from the previous one's history
+  (`Prover(prior=…)`). The bound charges log2 #Σ_sync bits per window whatever chose the value, so it holds under
+  any rule. What changes is who can use those bits: a sync chosen before the run, or from the trace's model, doesn't
+  depend on the sender, but an online prover reads the sender's timing, so the sender steers every declaration after
+  its first (in the injected-clock replay, the burst, spread and bits senders each move the declared δ, and the wire
+  differs from honest's in every window but the first).
 - **The honest miss rate:** a window that no value meets on every egress link is a miss, which is a violation. A
   larger δ or a smaller ρ only raises hand times, so a window misses exactly when the most lenient value misses on some
   link. A window is the configuration's, so the rate is the configurations' missed windows over their windows
@@ -254,7 +267,8 @@ them.
     frames follow them on the wire.
 - **Ingress:** a frame read at time s is enqueued at bucket ⌈s/τ_in⌉ and released by the ingress `Warden` at r_in
   (`Bucketer`, `calibration.size_ingress_ms`'s model).
-- **Advice:** the declared syncs, one per window, are given before the run.
+- **Advice:** the declared syncs, one per window, are given before the run, or an online prover (`Shaper(prover=…)`)
+  declares each at its window's first tick, before anything is handed, from the frames the shaper has taken.
 - **Faults fail closed** (W6). Each one maps to a status:
 
   | Fault | Status |
