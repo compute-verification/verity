@@ -135,7 +135,9 @@ about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bound
 | Ingress, per link-window (the K charge's unit) | `T·log2(r_in + 1)` bits per link-window over the first m whole windows, plus `T·log2 D` of jitter per window, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerWindow`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
 
 The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
-plus what survived that wipe. `capacity.k_share` expresses bits as a share of `K = 9.12e7` bits.
+plus what survived that wipe. `capacity.k_share` expresses bits as a share of K, which the caller passes in bits
+(`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under NCI's inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
+calibration report records the K it used.
 
 `lean-audit.json` lists as guarantees only the four whose bounds `calibration.calibrate` reports: egress over a horizon
 (`capacity.egress_bits_per_day_one_clock`, `SecurityProofs.EncardDecodableLeConstantRate`) and per window
