@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Model.Session
 import Proofs.Flock.Soundness.Accounting.Numbers
+import Mathlib.Algebra.Polynomial.Degree.Defs
 import Mathlib.Algebra.Polynomial.Eval.Defs
 import Mathlib.Algebra.CharP.Defs
 
