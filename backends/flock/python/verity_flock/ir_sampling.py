@@ -81,7 +81,7 @@ PIECES = IL.PIECES
 # --- the lane unit, lowered from the IR composites ------------------------------------------------------------------------------
 
 def _composites(V: int):
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.defs import bind
     from verity_vllm.program.registry import sampling as SM
 
     return SM.TemperatureLane, bind(SM.TopPMaskStep, V=V), SM.GumbelSelectStep
@@ -188,7 +188,7 @@ def lane(V: int) -> Lane:
 
 def _prim(name: str):
     from verity_vllm.program.registry import prims as P
-    from verity.ml import scalar as S
+    from verity_catalog.definitions import scalar as S
 
     return getattr(P, name, None) or getattr(S, name)
 
@@ -335,11 +335,11 @@ def statement(input_set, lo: int, hi: int, logits: np.ndarray, scalars: dict, ou
     to the set, the range, the port and its schema (``ir_frame.BINDING_TAG``). Returns the header's ``frame_v3`` entry and
     the logits row digests."""
     import blake3
-    from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
-    from verity.commitments.identity import identity_digest
-    from verity.commitments.indexed import RangeIndexedDomain
-    from verity.commitments.merkle import CommitmentDomain
-    from verity.commitments.rowleaf import ROLE_X, SCHEMA_BLAKE3_ROW, blake3_row_key
+    from verity.primitives.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
+    from verity.primitives.commitments.identity import identity_digest
+    from verity.primitives.commitments.indexed import RangeIndexedDomain
+    from verity.primitives.commitments.merkle import CommitmentDomain
+    from verity.primitives.commitments.rowleaf import ROLE_X, SCHEMA_BLAKE3_ROW, blake3_row_key
 
     n, V = logits.shape
     widths = {p: (2 if input_set.subcircuit.inputs[[q.name for q in input_set.subcircuit.inputs].index(p)].dtype == "u64" else 1)

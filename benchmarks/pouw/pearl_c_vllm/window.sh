@@ -38,7 +38,7 @@ fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 [ -x "$PY" ] && [ -f "$WORK/ready.json" ] || fail SETUP "no $WORK/ready.json: run setup.sh first"
 export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f
 export HF_HOME=${HF_HOME:-/workspace/hf}
-export PYTHONPATH=$PWD/packages/verity/src:$PWD/protocols/pouw:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/verity/protocols/accounting/work/pouw:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
 # NVML ignores CUDA_VISIBLE_DEVICES, so every nvidia-smi query names the leased GPU by its UUID (gpu-lease's first)
 UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}

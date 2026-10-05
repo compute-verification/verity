@@ -42,7 +42,7 @@ sha256sum $W/bin/flock-circuit $W/bin/flock-verify | tee $O/binaries.sha256
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 M0PATH=$W/m0/packages/verity/src:$W/m0/backends/numerical/python:$W/m0/backends/flock/python:$W/m0/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
-export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/integrations/vllm:$REPO/protocols/sampled_proofs
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/integrations/vllm:$REPO/verity/protocols/verification/sampled_proofs
 if [ "${RUN:-a0}" = a2 ]; then
   rm -rf $W/served && mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
   SERVED=$(dirname $(find $W/served -name registration.json | head -1))

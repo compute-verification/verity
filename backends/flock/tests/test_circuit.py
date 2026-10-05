@@ -33,9 +33,9 @@ def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
     header is the layout's (names, the range, the unit indices, the circuit's pin, the frame's domains bound to those alone),
     its body exactly the ``b || c`` (then a shared-row file's refs), each the hm96 commit of one of the prover's rows (an output
     row too) under a nonzero salt. An output word, a digest of the set's values or any other value fails it."""
-    from verity.commitments import hm96
-    from verity.commitments.identity import identity_digest
-    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.identity import identity_digest
+    from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_digest
     from verity_flock import ir_frame
 
     meta = json.loads(text.split("\n", 2)[1][5:])
@@ -96,8 +96,8 @@ def test_rope_composes_private_by_default(tmp_path):
     assert hp["units"]["indices"] == [0, 1, 2, 3] and hp["units"]["blocks"] == [[0, 1, 2, 3][b:b + G] for b in range(0, 4, G)]
     assert len(meta["partition"]["digest"]) == 128, "a 64-byte SHA-512 partition digest"
     # a row's public b || c is hm96-sha512 of its private row and salt
-    from verity.commitments import hm96
-    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_digest
 
     ports = meta["ports"]
     rb, np_ = sum(2 * w for _, w, _ in ports), len(ports)
@@ -278,7 +278,7 @@ def test_public_input_ports_carry_the_verifiers_recomputation(tmp_path):
 def test_program_digests_are_keyed_by_descriptor_id(tmp_path):
     """META ``program_digests`` names the template by core's descriptor id (the canonical partition's and the verifier's), not
     its display id: RMSNorm's EPS is its f64 hex."""
-    from verity.ir.codec import _spec_id
+    from verity.primitives.circuits.codec import _spec_id
 
     s = _set("rmsnorm-triton/n2048-eps1e-05/bf16", 1, tmp_path)
     got = FC.program_digests(s.subcircuit, FC.set_statics(s))
@@ -290,7 +290,7 @@ def test_program_digests_are_keyed_by_descriptor_id(tmp_path):
 def test_leaf_scheme_reserves_what_hm96_needs():
     import hashlib
 
-    from verity.commitments import hm96
+    from verity.primitives.commitments import hm96
 
     t = FC.LEAF_SCHEME
     assert (t["id"], t["salt_bytes"]) == (hm96.SHA512.name, hm96.SHA512.salt_bytes)
