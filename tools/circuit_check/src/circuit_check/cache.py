@@ -14,7 +14,7 @@ the task list's build, nor an earlier target's check):
   at import decides a lookup that runs none of its code); a module imported by a name computed at run time (``import_module``,
   ``__import__`` called rather than an ``import`` statement), and every name an import of which failed;
 - what the Definitions the check reached were built from: each specialization whose body it read (and every one reachable from
-  its target through body nodes) brings the recording of its body's build (`verity.ir.defs._build_body`: the code that ran and
+  its target through body nodes) brings the recording of its body's build (`verity.primitives.circuits.defs._build_body`: the code that ran and
   the files read while it was traced, wherever in the process that happened, its nested builds included), and each primitive
   the module of its evaluator;
 - what made the Definitions it reached: the recording of each catalog root function, `_model_roots` entry or `TEMPLATE_PARAMS`
@@ -38,7 +38,7 @@ name (``__file__``, ``__name__``, ``__spec__`` and the like) is held at its path
 files of any target: a target holds the parts of `targets.py` it depends on (its binding units and the rest of the module with
 every binding unit cut out, ``common``, each its AST digested as a module's is, with its import sites; any `targets.py` code its
 check ran, by the unit that holds it) and the entries of `pins.json` its check looked up (`recorded_pins`), each by its value,
-or absent.  Likewise each Definition whose kernels its check looked up in `verity.evaluation.batch._KERNELS`
+or absent.  Likewise each Definition whose kernels its check looked up in `verity.primitives.circuits.evaluation.batch._KERNELS`
 (`_RecordedKernels`), by what is registered for it now (each kernel's name, domain, version and which function and sampler it
 is, `_where`: by its module's content and its own definition, not its path), or none, and by each in-tree module whose import
 registered it, as a module it ran (so a wrapper's `_where` hides no change of what it wraps): the module that registers a kernel
@@ -65,8 +65,8 @@ each enumerated package lists the same modules, or each it lists no longer is im
 renamed one or empty; and each module whose source `inspect` looked for still resolves by its name (its content may differ: only
 where it is was asked), or is the one imported module of its content.  Not covered: a file a C extension reads with its own I/O
 (none here); anything outside the repository, which the interpreter, platform, distribution list and ``sys.path`` stand for; a
-file a module read while it was imported before tracing began (the checker's own imports, ``verity.ir`` and
-``verity.evaluation`` among them: their sources are inputs, data they opened at import is not); what a function read or imported
+file a module read while it was imported before tracing began (the checker's own imports, ``verity.primitives.circuits`` and
+``verity.primitives.circuits.evaluation`` among them: their sources are inputs, data they opened at import is not); what a function read or imported
 in its body when it did not run in the recording (a value a process-wide cache, ``functools.cache`` and the like, holds from a
 call another target's check made, beyond the function's own module and its closure); an edit to a binding that does not reach
 the target, even if it changes which object of the same id the catalog builds (the registry refuses two Definitions of one id);
@@ -451,11 +451,11 @@ def _instrument() -> None:
 
     builtins.__import__, importlib.import_module = __import__, import_module
     try:
-        from verity.ir import defs as D
+        from verity.primitives.circuits import defs as D
     except ImportError:
         return
     try:
-        from verity.evaluation import batch
+        from verity.primitives.circuits.evaluation import batch
     except ImportError:
         batch = None
     if batch is not None and not isinstance(batch._KERNELS, _RecordedKernels):
@@ -799,8 +799,23 @@ def _roots(root: Path) -> list[str]:
     return out
 
 
+def _redirected(root: Path) -> dict[str, str]:
+    """The top-level packages an exact-mode editable install serves from the tree, each by its source file relative to ``root``:
+    `editables`' finder, which hatch's `dev-mode-exact` puts on ``sys.meta_path`` after the path-based one, maps each name to a
+    file, so no ``sys.path`` entry finds them (the tree's root, where core's `verity` is, never is one)."""
+    out: dict[str, str] = {}
+    for finder in sys.meta_path:
+        if isinstance(red := getattr(finder, "_redirections", None), dict):
+            for name, p in red.items():
+                rel = os.path.relpath(os.path.realpath(p), root) if isinstance(p, str) else ".."
+                if not rel.startswith("..") and rel.split(os.sep)[0] != ".venv":
+                    out.setdefault(name, rel)
+    return out
+
+
 def _path_entries(root: Path) -> list[str]:
-    """``sys.path`` as the key holds it: in-tree entries relative to the tree, the interpreter's own relative to its prefix."""
+    """``sys.path`` as the key holds it: in-tree entries relative to the tree, the interpreter's own relative to its prefix;
+    then each in-tree editable redirect (`_redirected`)."""
     out = []
     for e in sys.path:
         p = os.path.realpath(e or os.getcwd())
@@ -814,17 +829,18 @@ def _path_entries(root: Path) -> list[str]:
                 break
         else:
             out.append(p)
-    return out
+    return out + [f"<redirect>{name}=<tree>/{rel}" for name, rel in sorted(_redirected(root).items())]
 
 
 def _resolve(root: Path, name: str) -> Path | None:
     """The tree's source file module ``name`` imports from (a package's ``__init__.py``), as the path-based finder searches
     the in-tree import path: a regular package or a module in the first entry that has one, else a namespace package's
-    portions; None when it resolves to no visible file (absent, a namespace package, or outside the tree)."""
+    portions, else, for a top-level name, the file an editable redirect (`_redirected`) maps it to; None when it resolves to
+    no visible file (absent, a namespace package, or outside the tree)."""
     v = visible(root)
     isfile = (lambda r: r in v[0] and (root / r).is_file()) if v is not None else (lambda r: (root / r).is_file())
     isdir = (lambda r: r in v[1] and (root / r).is_dir()) if v is not None else (lambda r: (root / r).is_dir())
-    paths, found = _roots(root), None
+    paths, found, top = _roots(root), None, True
     for part in name.split("."):
         if not part.isidentifier():
             return None
@@ -839,11 +855,13 @@ def _resolve(root: Path, name: str) -> Path | None:
                 break
             if isdir(pk):
                 portions.append(pk)
+        if found is None and not portions and top and isfile(r := _redirected(root).get(part, "")):
+            found, nxt = r, [os.path.dirname(r)] if os.path.basename(r) == "__init__.py" else []
         if found is None:
             if not portions:
                 return None
             nxt = portions
-        paths = nxt
+        paths, top = nxt, False
     return root / found if found is not None and (root / found).is_file() else None
 
 
@@ -932,7 +950,7 @@ def _loaded(root: Path) -> dict[str, list[str]]:
 # --- the kernels a check looked up ------------------------------------------------------------------------------------------
 
 class _RecordedKernels(dict):
-    """`verity.evaluation.batch._KERNELS`, noting in the open recording each Definition whose kernels are looked up (a lookup
+    """`verity.primitives.circuits.evaluation.batch._KERNELS`, noting in the open recording each Definition whose kernels are looked up (a lookup
     that finds none included), and all of them on any enumeration.  Registering (``setdefault``) is no lookup; it notes the
     in-tree module whose import registered each key (`by`), which a lookup of that key adds to the code the recording ran."""
 
@@ -1035,7 +1053,7 @@ def _defined_at(p: Path, line: int) -> str:
 def _kernels_now(key: str) -> str | None:
     """What is registered now for ``key`` (``*``: for every Definition), digested; None when nothing is."""
     try:
-        from verity.evaluation import batch
+        from verity.primitives.circuits.evaluation import batch
     except ImportError:
         return None
     reg = batch._KERNELS
@@ -1412,10 +1430,10 @@ _OWN: dict[int, tuple[Any, str]] = {}
 
 def descriptor(fn: Any) -> str:
     """The digest of every primitive and specialization ``fn`` reaches (through body nodes and function statics), each by its
-    descriptor id and the digest of its canonical descriptor entry (`verity.ir.codec`): what the target is, whatever module or
+    descriptor id and the digest of its canonical descriptor entry (`verity.primitives.circuits.codec`): what the target is, whatever module or
     path it was written in.  A body that cannot be built gives the error's type, so no stored entry matches."""
-    from verity.ir import codec as C
-    from verity.ir.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.primitives.circuits import codec as C
+    from verity.primitives.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
 
     def statics(v: Any) -> Iterator[Any]:
         if isinstance(v, FunctionDefinition):

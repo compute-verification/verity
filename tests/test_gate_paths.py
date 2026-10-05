@@ -108,7 +108,7 @@ def test_every_suite_input_and_artifact_is_in_this_tree():
     """A suite's inputs key its pass cache: one that isn't there keys nothing, and a test that skips on a missing file then
     passes with nothing checked. An artifact is a Lake build's output, so its package must be here."""
     tables = _suite_tables()
-    assert "packages/verity/pyproject.toml" in tables
+    assert "verity/pyproject.toml" in tables
     bad = [(f, i) for f, t in tables.items() for i in t.get("inputs", []) if (f, i) not in EXEMPT and not resolves(i)]
     bad += [(f, a) for f, t in tables.items() for a in t.get("artifacts", [])
             if not (ROOT / a.split("/.lake/")[0] / "lakefile.toml").is_file()]
@@ -190,6 +190,8 @@ def test_every_registered_tool_is_declared_in_this_tree():
 
 #: a string that reads as a repository path: a tracked top-level directory, then path segments, no globs or expansions
 _PATH = re.compile(r"^[\w.-]+(/[\w.@+-]+)+/?$")
+#: a format id (`verity/slack-route/v1`), which reads as a path under the tree's `verity/`
+_FORMAT_ID = re.compile(r"^verity/[\w.-]+/v\d+$")
 
 
 @functools.cache
@@ -214,7 +216,7 @@ def path_constants(rel: str, text: str, tops: frozenset[str]) -> list[tuple[int,
         while stack:
             sub = stack.pop()
             if isinstance(sub, ast.Constant) and isinstance(sub.value, str) and _PATH.match(sub.value) \
-                    and sub.value.split("/")[0] in tops:
+                    and not _FORMAT_ID.match(sub.value) and sub.value.split("/")[0] in tops:
                 out.append((sub.lineno, sub.value, "string"))
             elif isinstance(sub, ast.BinOp) and (a := anchor(sub, rel, names)) is not None:
                 if "/" in a:
@@ -274,11 +276,11 @@ def test_each_check_catches_a_dangling_path():
     assert tool_problems("t", tool, files) == ["closure glob 'verity/**' matches no tracked file",
                                                "command names 'backends/flock/run.sh', which isn't tracked",
                                                "merge_requires['s'] prefixes ['verity/flock/'] match no tracked file"]
-    gkr = frozenset({"backends/gkr/gpu/tool.py", "backends/gkr/gpu/run.py"})
-    tool = Tool(name="g", command=["python", "-m", "gpu.run"], closure=["backends/gkr/gpu/**"])
-    tool.spec = "backends.gkr.gpu.tool:G"
-    assert tool_problems("g", tool, gkr) == []
+    gkr = frozenset({"archive/gkr/gpu/tool.py", "archive/gkr/gpu/run.py"})
+    tool = Tool(name="g", command=["python", "-m", "gpu.run"], closure=["archive/gkr/gpu/**"])
     tool.spec = "archive.gkr.gpu.tool:G"
+    assert tool_problems("g", tool, gkr) == []
+    tool.spec = "elsewhere.gkr.gpu.tool:G"
     assert tool_problems("g", tool, gkr) == ["command runs -m gpu.run, which isn't a module here"]
 
     text = ('from pathlib import Path\nROOT = Path(__file__).resolve().parents[2]\nA = ROOT / "tools" / "check" / "x.py"\n'

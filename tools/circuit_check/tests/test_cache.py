@@ -15,7 +15,7 @@ REPO = Path(__file__).resolve().parents[3]
 FILES = {
     "syn/__init__.py": "",
     "syn/prims.py": """
-from verity.ir import Value, primitive
+from verity.primitives.circuits import Value, primitive
 
 V = Value(16)
 
@@ -26,7 +26,7 @@ def SynAdd(a, b):
 """,
     # the sub-Definition SynTop resolves: imported only while SynTop's body is built, so no import statement names it
     "syn/sub.py": """
-from verity.ir import composite
+from verity.primitives.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -36,7 +36,7 @@ def SynSub(B, S, a, b):
     return B.call(SynAdd, a, b)
 """,
     "syn/top.py": """
-from verity.ir import composite
+from verity.primitives.circuits import composite
 
 from syn.prims import V
 
@@ -50,7 +50,7 @@ def SynTop(B, S, a, b):
     # a helper SynTop's body builder runs: no Definition, and imported only during the build
     "syn/shape.py": "def operands(a, b):\n    return a, b\n",
     "syn/other.py": """
-from verity.ir import composite
+from verity.primitives.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -61,7 +61,7 @@ def SynOther(B, S, a, b):
 """,
     # registered with the rest, resolved by no target
     "syn/idle.py": """
-from verity.ir import composite
+from verity.primitives.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -81,7 +81,7 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     import inspect
     import sys
 
-    from verity.evaluation.reference import evaluate
+    from verity.primitives.circuits.evaluation.reference import evaluate
 
     inspect.getmodule(sys._getframe())                 # as torch's import does: it looks for every loaded module's source
     if "h" not in memo:
@@ -94,7 +94,7 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
 """,
     # the bindings, as the harness runs them (`targets._produce`), and the families the suite keeps of what their roots reach
     "syn/catalog.py": """
-from verity.ir.defs import bind
+from verity.primitives.circuits.defs import bind
 
 
 def core():
@@ -140,7 +140,7 @@ FAMILIES = ["SynOther_v1", "SynTop_v1"]
     "syn/extra.py": "X = 1\n",
     # a Definition a binding makes, whose body closes over a value the binding read from `syn.ops`
     "syn/factory.py": """
-from verity.ir import composite
+from verity.primitives.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -154,7 +154,7 @@ def make(swap):
     "syn/ops.py": "SWAP = False\n",
     # a Definition bound at a static the binding computed from `syn.ksize`
     "syn/kdef.py": """
-from verity.ir import composite
+from verity.primitives.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -170,7 +170,7 @@ def SynK(B, S, a, b):
     # a primitive whose evaluator reads a constant of another module, and the Definition that calls it
     "syn/consts.py": "MASK = 0xFFFF\n",
     "syn/xkern.py": """
-from verity.ir import primitive
+from verity.primitives.circuits import primitive
 
 from syn.consts import MASK
 from syn.prims import V
@@ -181,7 +181,7 @@ def SynXor(a, b):
     return (a ^ b) & MASK
 """,
     "syn/xdef.py": """
-from verity.ir import composite
+from verity.primitives.circuits import composite
 
 from syn.xkern import SynXor
 from syn.prims import V
@@ -194,7 +194,7 @@ def SynX(B, S, a, b):
     # a Definition whose body reads module state another binding sets from a module only that binding read
     "syn/knob.py": "N = [1]\n",
     "syn/kn.py": """
-from verity.ir import composite
+from verity.primitives.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -332,6 +332,29 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
     assert set(top["pins"]) == {"pins.json#pieces#SynTop_v1"} and set(other["pins"]) == {"pins.json#pieces#SynOther_v1"}
     assert "targets.py" not in top["files"] and "pins.json" not in top["files"]
     assert set(top["enums"]) == {"syn"} and {"top", "other", "idle"} <= set(top["enums"]["syn"])   # `load_registries` listed it
+
+
+#: the harness with `syn` served as hatch's `dev-mode-exact` serves core's `verity`: by `editables`' finder, after the path-based
+#: one, with the tree's root on no `sys.path` entry
+EXACT = HARNESS.replace("sys.path.insert(0, str(root))",
+                        "from editables.redirector import RedirectingFinder\n"
+                        "RedirectingFinder.install()\n"
+                        "RedirectingFinder.map_module('syn', str(root / 'syn' / '__init__.py'))")
+
+
+def test_a_package_an_exact_editable_install_serves_is_held_like_one_on_the_path(tmp_path):
+    """Its modules are the tree's, held by name, the redirect is in the key, and an edit to one a target resolved reruns that
+    target (held by none, as before this, every target would be reused after any edit to core)."""
+    assert EXACT != HARNESS
+    root = _tree(tmp_path)
+    assert _run(root, EXACT)["hits"] == []
+    assert _run(root, EXACT)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    top = _entry(root, "SynTop_v1")
+    assert {"syn.top", "syn.sub", "syn.prims", "syn.check", "syn.h"} <= set(top["reads"]["modules"])
+    assert "<redirect>syn=<tree>/syn/__init__.py" in top["key"]["path"]
+    _edit(root, "syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)")
+    out = _run(root, EXACT)
+    assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
 
 
 def test_editing_a_registry_module_no_target_resolves_reuses_every_target(tmp_path):
@@ -554,7 +577,7 @@ KERNEL_FILES = {
     "syn/rows.py": """
 import numpy as np
 
-from verity.evaluation import register_kernel
+from verity.primitives.circuits.evaluation import register_kernel
 
 register_kernel("SynTop_v1", lambda a, b: ((a.astype(np.uint64) + b) & 0xFFFF, None))
 """,
@@ -562,7 +585,7 @@ register_kernel("SynTop_v1", lambda a, b: ((a.astype(np.uint64) + b) & 0xFFFF, N
     "syn/corr.py": """
 def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     from circuit_check import checks as CK
-    from verity.evaluation.reference import resolve
+    from verity.primitives.circuits.evaluation.reference import resolve
 
     F = CK.Findings()
     CK.correspondence(resolve(fn), opts, F)

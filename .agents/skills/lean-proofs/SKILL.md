@@ -8,7 +8,7 @@ description: >
   of what we assume (tools/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
   directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
   them). Use when adding or changing Lean proofs, definitions or packages (backends/flock/verifier/lean, level3,
-  soundness, packages/verity/lean, protocols/pous/lean, protocols/network_warden/lean), when a Lean build or proof is
+  soundness, verity/lean, verity/protocols/accounting/space/pous/lean, verity/protocols/accounting/communication/warden/lean), when a Lean build or proof is
   slow, editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
@@ -22,8 +22,8 @@ The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/READ
   prover runs: `backends/flock/verifier/lean/` (no dependencies). Facts about the executable's definitions:
   `level3/` (Mathlib). C-Flock's guarantees (soundness, knowledge soundness, zero knowledge, audits): `soundness/`
   (ArkLib).
-  Proofs about core's own definitions (`verity.ml.tc` and the like), and the model every protocol states its guarantees
-  in (circuits, partitions, declarations, games): `packages/verity/lean/` (Mathlib only), since core depends on no
+  Proofs about core's own definitions (`verity_catalog.silicon` and the like), and the model every protocol states its guarantees
+  in (circuits, partitions, declarations, games): `verity/lean/` (Mathlib only), since core depends on no
   backend. A protocol's guarantees: its own package under `protocols/<name>/lean/`, which may require core's and other
   protocols' packages. A new package only when the dependencies differ; give it a `lean-audit.json` and the shared `lean-toolchain`.
 - **Own a subdirectory and namespace** (`FlockSoundness/Knowledge/`, `FlockSoundness.Knowledge`), with one aggregator
@@ -171,7 +171,7 @@ These are Daniel's rulings, newest first.
 - 2026-10-01: a Lean protocol package may require another protocol's package (NCI's requiring sampled proofs', say),
   because composing their guarantees needs it. The requires stay acyclic, and a protocol never requires a backend. Such a
   `path` require changes no revision, so a feature PR may add it. Python's protocols import only `verity`, themselves
-  and the protocols `EDGES` in `tests/test_protocol_boundaries.py` lists (PoUW → sampled proofs, the ruling of
+  and the protocols `ALLOWED` in `verity/tests/test_boundaries.py` lists (PoUW → sampled proofs, the ruling of
   2026-10-03 in `.agents/skills/friction/SKILL.md`).
 - 2026-10-01: there are guarantees and assumptions, and a guarantee is **proved under its assumptions**; there is no
   third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one

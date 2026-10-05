@@ -1129,8 +1129,9 @@ def test_renders_never_land_in_the_notes(tmp_path, renders, monkeypatch):
 
 def test_the_render_imports_every_workspace_package_of_its_source_tree(tmp_path, renders):
     """The control pod's render died with `ModuleNotFoundError: verity` (a hand-kept PYTHONPATH without packages/verity/src): the render
-    command's environment is the source tree's workspace roots (`research env --source`) plus the tree root."""
-    from research.pythonpath import import_roots_dir, pythonpath
+    command's environment is the source tree's workspace roots (`research env --source`), the shim first; this tree's root is a
+    package (`verity`), which the shim reaches, so the root itself is not on it."""
+    from research.pythonpath import import_roots_dir, pythonpath, shim_dir
 
     repo = Path(__file__).resolve().parents[3]
     (tmp_path / "steward.toml").write_text(f'[[render]]\nat = "20:30Z"\nsource = "{repo}"\nout = "r"\nrefresh = false\n')
@@ -1143,9 +1144,9 @@ def test_the_render_imports_every_workspace_package_of_its_source_tree(tmp_path,
     notes.render_lines(tmp_path, NOW, {}, run=run)
     parts = envs[0].split(":")
     assert envs and all(e == envs[0] for e in envs)
-    assert str(repo / "packages" / "verity" / "src") in parts and str(repo / "backends" / "numerical" / "python") in parts
-    assert str(repo / "tools" / "research" / "src") in parts and parts[-1] == str(repo)
-    assert envs[0] == pythonpath(str(repo), import_roots_dir(repo), extra=str(repo))
+    assert parts[0] == shim_dir(str(repo), ["verity"]) and str(repo / "benchmarks" / "numerical" / "python") in parts
+    assert str(repo / "tools" / "research" / "src") in parts and str(repo) not in parts
+    assert envs[0] == pythonpath(str(repo), import_roots_dir(repo))
 
 
 FRESH = ["--on", "vy-lean", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_audit", "--",
@@ -1308,13 +1309,13 @@ def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys, 
     wt.mkdir(parents=True)
     notes.bind(root, "late", final="12:00Z", worktree=str(wt))
     _set_mtime(root / "lanes" / "late" / "binding.json", NOW - dt.timedelta(hours=48))
-    bench = src / "backends" / "numerical" / "python" / "verity_numerical" / "bench"
+    bench = src / "benchmarks" / "numerical" / "python" / "verity_numerical" / "bench"
     bench.mkdir(parents=True)
     for f in (bench.parent / "__init__.py", bench / "__init__.py"):
         f.write_text("")
     (bench / "tables.py").write_text("import sys\nprint('# tables', *sys.argv[1:])\n")
-    (src / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["backends/numerical"]\n')
-    (src / "backends" / "numerical" / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["python/verity_numerical"]\n')
+    (src / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["benchmarks/numerical"]\n')
+    (src / "benchmarks" / "numerical" / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["python/verity_numerical"]\n')
     (root / "steward.toml").write_text(f'[[render]]\nat = "00:00Z"\nsource = "{src}"\nout = "render"\nstore = "{tmp_path / "store"}"\n\n'
                                        f'[[run]]\nname = "here"\nat = "00:00Z"\nsource = "{src}"\nargs = ["--", "true"]\n')
     log.write_text(f"2026-09-24T10:00:00+00:00 KILLED pid=7 mem=1.1GB reason=per-proc cap 1.0GB cwd={wt} cmd=python -m pytest\n")

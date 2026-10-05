@@ -57,7 +57,7 @@ def test_a_package_the_plan_doesnt_name_goes_to_the_shard_with_the_rest():
     new = [*PACKAGES, "protocols/new/lean"]
     for n in D.plans():
         [holder] = [s for s in _resolved(n, new) if "lean-audit:protocols/new/lean" in s]
-        assert "lean-audit:packages/verity/lean" in holder and SOUNDNESS not in holder
+        assert "lean-audit:verity/lean" in holder and SOUNDNESS not in holder
 
 
 def test_a_plan_naming_a_package_the_tree_lacks_stops_the_shard():
@@ -159,7 +159,7 @@ def test_a_shard_without_the_other_half_gets_every_core(tmp_path):
 
 def test_lean_audit_audits_only_the_packages_it_is_given():
     assert LA.select(PACKAGES, None) == PACKAGES
-    assert LA.select(PACKAGES, ["protocols/pous/lean", "packages/verity/lean"]) == ["packages/verity/lean", "protocols/pous/lean"]
+    assert LA.select(PACKAGES, ["verity/protocols/accounting/space/pous/lean", "verity/lean"]) == ["verity/lean", "verity/protocols/accounting/space/pous/lean"]
     with pytest.raises(ValueError, match="no audited package nowhere"):
         LA.select(PACKAGES, ["nowhere"])
 
@@ -281,3 +281,22 @@ def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch
     assert sent == {"--shard 3/5": (True, False), "--shard 1/5": (False, True), "--shard 4/5": (False, False),
                     "--combine r1 r2": (False, False), "": (True, True)}
     assert CHECK.record(["--base", "HEAD", "--shard", "9/5"]) == 2
+
+
+def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
+    """The preflight asks for the Lean dependencies of the packages a shard audits, the only ones it carries URLs for."""
+    real, parts = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            sent = [Path(cmd[i + 1]) for i, x in enumerate(cmd) if x == "--send" and cmd[i + 1].endswith(CHECK.SHARD_PARTS)]
+            parts.append([json.loads(p.read_text()) for p in sent])
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(CHECK, "landable", lambda base: True)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(subprocess, "run", run)
+    for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
+        assert CHECK.record(["--base", "HEAD", "--on", "pod", *args]) == 0
+    assert parts == [[[SOUNDNESS]], [["pytest"]], [[]], []], "an unsharded check sends none"

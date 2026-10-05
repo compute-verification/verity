@@ -68,7 +68,7 @@ def test_every_record_merges_with_the_driver():
                        f"FILE` recomputes them): {stale}")
 
 
-CORE = ROOT / "packages" / "verity" / "lean"
+CORE = ROOT / "verity" / "lean"
 #: the Lake names of the protocols' packages, so the rule below can't go vacuous when they move
 PROTOCOL_PACKAGES = {"nci", "networktiming", "pous", "pouw"}
 
@@ -78,7 +78,7 @@ def _requires(pkg: Path) -> list[dict]:
 
 
 def test_core_package_requires_only_mathlib():
-    """Core's Lean (`packages/verity/lean`) is the model every protocol states its guarantees in, so it requires nothing of
+    """Core's Lean (`verity/lean`) is the model every protocol states its guarantees in, so it requires nothing of
     the repository: a path dependency here would put a protocol or a backend under every guarantee."""
     assert CORE in lake_packages()
     assert [r["name"] for r in _requires(CORE)] == ["mathlib"]
@@ -87,14 +87,14 @@ def test_core_package_requires_only_mathlib():
 def test_protocol_packages_require_core_and_protocols_only():
     """A protocol's Lean package may require core's and other protocols' packages (the ruling of Oct 1 in
     `.agents/skills/lean-proofs/SKILL.md`), never a backend's: backends instantiate protocols, not the reverse."""
-    protocols = [pkg for pkg in lake_packages() if pkg.relative_to(ROOT).parts[0] == "protocols"]
+    protocols = [pkg for pkg in lake_packages() if pkg.relative_to(ROOT).parts[:2] == ("verity", "protocols")]
     names = {tomllib.loads((pkg / "lakefile.toml").read_text())["name"] for pkg in protocols}
-    assert PROTOCOL_PACKAGES <= names, f"the protocols' Lake packages aren't under protocols/: {PROTOCOL_PACKAGES - names}"
+    assert PROTOCOL_PACKAGES <= names, f"the protocols' Lake packages aren't under verity/protocols/: {PROTOCOL_PACKAGES - names}"
     bad = []
     for pkg in protocols:
         for r in _requires(pkg):
             if "path" in r:
                 target = (pkg / r["path"]).resolve()
-                if target != CORE and target.relative_to(ROOT).parts[0] != "protocols":
+                if target != CORE and target.relative_to(ROOT).parts[:2] != ("verity", "protocols"):
                     bad.append(f"{pkg.relative_to(ROOT)} requires {target.relative_to(ROOT)}")
     assert not bad, bad
