@@ -10,6 +10,8 @@ from research.pythonpath import package_paths, workspace_root
 from research.store.tool import Tool
 
 TREE = workspace_root(__file__)
+#: core and the catalog, the kernels and experimental beside it, wherever the tree keeps them
+CORE = [p for n in ("verity", "verity_catalog", "verity_kernels", "verity_experimental") for p in package_paths(TREE, n, "**")]
 
 KEYS = ("REL", "MODE", "SELF_VUS", "START", "MAX", "RUNS", "VERIFIER", "SERVE_VUS")
 
@@ -27,7 +29,7 @@ FLOCK_PURE = Tool(
     name="flock_pure", version="1",
     command=["bash", "backends/flock/pod/20-pure.sh"],
     closure=["backends/flock/**", "benchmarks/numerical/**", "archive/direct/ligero/relations.py", "archive/direct/ligero/hashauth.py",
-             "archive/direct/ligero/auth.py", "archive/direct/ligero/timing_guard.py", *package_paths(TREE, "verity", "**")],
+             "archive/direct/ligero/auth.py", "archive/direct/ligero/timing_guard.py", *CORE],
     key_params=["REL", "MODE", "SELF_VUS", "START", "MAX", "RUNS", "VERIFIER", "SERVE_VUS"],
     key_conditions=["hw.family"],
     caches=[],
@@ -55,7 +57,7 @@ def parse_class_sweep(argv: list[str]) -> dict:
 FLOCK_CLASS_SWEEP = Tool(
     name="flock_class_sweep", version="1",
     command=["bash", "backends/flock/pod/70-class-sweep.sh"],
-    closure=["backends/flock/**", "benchmarks/numerical/python/**", *package_paths(TREE, "verity", "**"), "integrations/vllm/verity_vllm/**",
+    closure=["backends/flock/**", "benchmarks/numerical/python/**", *CORE, "integrations/vllm/verity_vllm/**",
              "tools/circuit_check/src/**"],
     key_params=list(CLASS_SWEEP_KEYS),
     param_artifacts=["GRAPH", "DEFS", "SHAPES"],
