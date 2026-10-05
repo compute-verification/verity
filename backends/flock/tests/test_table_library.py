@@ -1,11 +1,11 @@
-"""Core's library list (`verity.ml.library`) and the backend's table pins name the same tables: the Lean verifier's
+"""Core's library list (`verity.primitives.circuits.library`) and the backend's table pins name the same tables: the Lean verifier's
 `MUFU_TABLES` (its archive keys), the lowering's SHA-256 pins, and the derived tables that stay `program`."""
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-from verity.ml import library as L
+from verity.primitives.circuits import library as L
 from verity_flock import ir_lower as IL
 from verity_flock import tail_pieces as TP
 

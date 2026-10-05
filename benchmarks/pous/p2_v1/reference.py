@@ -1,8 +1,8 @@
 """P2 v1 on the CPU, as the frozen specification states it (the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, v1,
 29 Sep 2026): the reference the harness's GPU kernels are gated against.
 
-A port of the P2 lane's `internal/efficient-crypto/p2-bounty-kit/p2_ref.py` onto core: `verity.randomness.frame` and
-`derive` are the spec's framing and derivation, and `verity.commitments.identity.canonical_json_bytes` its manifest
+A port of the P2 lane's `internal/efficient-crypto/p2-bounty-kit/p2_ref.py` onto core: `verity.primitives.randomness.frame` and
+`derive` are the spec's framing and derivation, and `verity.primitives.commitments.identity.canonical_json_bytes` its manifest
 encoding. Big integers are Python's (gmpy2's `powmod` when it is installed). It is pinned by `vectors.json` beside it, the
 kit's `p2-test-vectors/v1` (SHA-256 `781fec77…`, the file hash in the spec's §7).
 
@@ -20,8 +20,8 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.commitments.identity import canonical_json_bytes
-from verity.randomness import Key, derive, frame
+from verity.primitives.commitments.identity import canonical_json_bytes
+from verity.primitives.randomness import Key, derive, frame
 
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"

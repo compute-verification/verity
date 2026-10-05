@@ -38,7 +38,7 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.defs import bind
 from verity_vllm.program.registry import act as _ACT
 from verity_vllm.program.registry import moe as _MOE
 from verity_vllm.program.registry import targets as T
