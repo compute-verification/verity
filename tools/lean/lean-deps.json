@@ -54,6 +54,12 @@
    "run": "r20261003-152421-a7fe",
    "sha256": "78ebf43752e745c04c962d52f132fb063ea3a0ede75eb2973afabdc5ebd57120"
   },
+  "dd11cf1b38844effc96baa804fbb766b711927034623b08d4ec219aecd649c9b": {
+   "bytes": 700285760,
+   "package": "security_proofs/pous",
+   "run": "r20261002-013330-8cff",
+   "sha256": "c9a35455c168955a68a87fb6e8301e84114ef79c032ae4efdb14f3be669af603"
+  },
   "e160c5c17ee3eab614cc70b10e233b647d12a17eb539884c2917632c3de966d1": {
    "bytes": 701550733,
    "package": "security_proofs/nci",
