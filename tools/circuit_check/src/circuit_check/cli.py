@@ -77,8 +77,12 @@ def _work(i: int) -> tuple[int, dict, dict | None, list[str], dict | None]:
     return i, r, *_observe(r, got)
 
 
-def target_key(kind: str, label: str, opts: CK.Options, as_call: bool | None) -> dict:
-    return CC.key({"target": [kind, label], "as_call": as_call, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}})
+def target_key(kind: str, label: str, opts: CK.Options, as_call: bool | None, roots: tuple = ()) -> dict:
+    """A target's key: its request, and for a Definition the digest of what it reaches as descriptors (`cache.descriptor`)."""
+    request = {"target": [kind, label], "as_call": as_call, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}}
+    if roots:
+        request["descriptor"] = CC.descriptor(roots[0])
+    return CC.key(request)
 
 
 def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None) -> list[tuple]:
@@ -148,7 +152,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     tracing = cache is not None and CC.tracing()
     tasks = _tasks(specs, opts, everything, as_call)
     out: list[dict | None] = [None] * len(tasks)
-    keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call)) for t in tasks] if tracing else []
+    keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks] \
+        if tracing else []
     stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:

@@ -422,16 +422,16 @@ theorem atomMixP_flat_err {z : ℤ} (hz : z ≤ -5) {α x β : ℚ} (s' : Fin 32
   have hA := mul_nonneg hα (abs_nonneg x)
   obtain ⟨tc, hw, hc⟩ := f32Word_spec (y := α * x) (by rw [hy]; norm_num; linarith)
   have hV0 : val (lineCode β) ≠ 0 := fun h => hN (by rw [flatNoise, codeVal, ← val, h, zero_mul])
-  have hK0 : ∑ t, flatF s' t ≠ 0 := fun h => hN (by rw [flatNoise, h, mul_zero])
+  have hK0 : ∑ t, codeVal (flatF s' t) ≠ 0 := fun h => hN (by rw [flatNoise, h, mul_zero])
   obtain ⟨hLn, hV512, hLs⟩ := val_ne_zero_spec _ hV0
   obtain ⟨a, ha_def⟩ : ∃ a : Fin 32 → Code, a = fun _ => lineCode β := ⟨_, rfl⟩
-  obtain ⟨b, hb_def⟩ : ∃ b : Fin 32 → Code, b = fun t => e4m3 (flatF s' t) := ⟨_, rfl⟩
+  obtain ⟨b, hb_def⟩ : ∃ b : Fin 32 → Code, b = fun t => flatF s' t := ⟨_, rfl⟩
   have hal : ∀ l, a l = lineCode β := fun l => by rw [ha_def]
-  have hbl : ∀ l, b l = e4m3 (flatF s' l) := fun l => by rw [hb_def]
+  have hbl : ∀ l, b l = flatF s' l := fun l => by rw [hb_def]
   have hval : (atomMixP (sm120E4m3K32 z)).value α x β (flat fun _ => false) (flatF s') =
       PearlC.wordVal (sm120StepAt z (f32Word (α * x)) a b) := by
-    have hla : lineCodes β (flat fun _ => false : Fin 32 → ℚ) = a := by
-      rw [ha_def]; funext t; simp [lineCodes, flat, lineCode]
+    have hla : lineCodes β (flat fun _ => false : Fin 32 → Code) = a := by
+      rw [ha_def]; funext t; exact lineCodes_flat β t
     rw [hb_def, ← hla]; rfl
   rw [hval]
   have ha : ∀ l, (a l).isNaN = false := fun l => by rw [hal]; exact hLn
@@ -439,8 +439,8 @@ theorem atomMixP_flat_err {z : ℤ} (hz : z ≤ -5) {α x β : ℚ} (s' : Fin 32
   have hpm : ∀ l, (product (a l) (b l)).mag ≠ 0 := by
     intro l
     rw [hal, hbl]
-    have h1 : ((lineCode β).sig * (e4m3 (flatF s' l)).sig) <<< 17 ≠ 0 := by
-      rw [Nat.shiftLeft_eq, (e4m3_flat s' l).2.1]
+    have h1 : ((lineCode β).sig * (flatF s' l).sig) <<< 17 ≠ 0 := by
+      rw [Nat.shiftLeft_eq, (e4m3_flat s' l).2]
       exact Nat.mul_ne_zero (Nat.mul_ne_zero (by omega) (by norm_num)) (by positivity)
     unfold product; dsimp only; rw [ite_eq_right h1]; exact h1
   have z150 : (2 : ℚ) ^ (-150 : ℤ) = 1 / 2 ^ 150 := by norm_num
@@ -472,9 +472,9 @@ theorem atomMixP_flat_err {z : ℤ} (hz : z ≤ -5) {α x β : ℚ} (s' : Fin 32
   have herr := sm120Step_err hw a b ha hb hE1 hE2
   have hsum : ∑ l, val (a l) * val (b l) = flatNoise β s' := by
     rw [flatNoise, codeVal, ← val, Finset.mul_sum]
-    exact Finset.sum_congr rfl fun l _ => by rw [hal, hbl, (e4m3_flat s' l).2.2]
+    exact Finset.sum_congr rfl fun l _ => by rw [hal, hbl]; rfl
   rw [hsum] at herr
-  have hNabs : |flatNoise β s'| = |val (lineCode β)| * |∑ t, flatF s' t| := by
+  have hNabs : |flatNoise β s'| = |val (lineCode β)| * |∑ t, codeVal (flatF s' t)| := by
     rw [flatNoise, codeVal, ← val, abs_mul]
   have hK88 := abs_sum_flat_ge s' hK0
   have hVN : 11 / 2 * |val (lineCode β)| ≤ |flatNoise β s'| := by
