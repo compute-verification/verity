@@ -1,7 +1,7 @@
 """One-stage audit, run A0: a template's captured served values through registration, the verifier's draw, M0's prover and
 verifier, the Lean verifier's draw checks, and the audit record with its integrity profile; then the negatives.
 
-    PYTHONPATH=<tree>/packages/verity/src:<tree>/backends/numerical/python:<tree>/integrations/vllm:<tree>/protocols/sampled_proofs \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/verity/protocols/verification/sampled_proofs \\
       python benchmarks/one_stage/a0.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
       [--k 16] [--delta 0.01] [--port 7511]
 
@@ -24,13 +24,13 @@ import sys
 import time
 from pathlib import Path
 
-from verity.commitments.identity import identity_digest
-from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain
-from verity.ir.codec import canonical_json, encode_program, program_digest
-from verity.ir.program import Program
+from verity.primitives.commitments.identity import identity_digest
+from verity.primitives.commitments.indexed import RangeIndexedDomain
+from verity.primitives.commitments.merkle import CommitmentDomain
+from verity.primitives.circuits.codec import canonical_json, encode_program, program_digest
+from verity.primitives.circuits.program import Program
 from verity_numerical.bench.input_sets import InputSet
-from verity_sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
+from verity.protocols.verification.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"

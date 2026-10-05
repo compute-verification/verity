@@ -18,9 +18,9 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from verity.evaluation import evaluate
-from verity.ir.defs import bind
-from verity.ml.prims import HopperE4m3QgmmaDot32 as DOT
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.defs import bind
+from verity_catalog.definitions.prims import HopperE4m3QgmmaDot32 as DOT
 from verity_vllm.program.registry import dsa as D
 from verity_vllm.program.registry import prims as P
 from tests.program.test_fp8_moe import _ffma, _fmul, _q, _rn

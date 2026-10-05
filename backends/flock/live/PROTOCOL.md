@@ -292,7 +292,7 @@ is the minimum.
 - The statistics (§8) test both functionals as classes of one value per session.
 
 **Assumptions.** The table's argument is exact (perfect hiding) for uniform prover randomness, given the commitments hide.
-- **hm96-sha512 hiding is statistical, in the standard model** (`verity/commitments/hm96/PROTOCOL.md` §3: a
+- **hm96-sha512 hiding is statistical, in the standard model** (`verity/primitives/commitments/hm96/PROTOCOL.md` §3: a
   leftover-hash-lemma argument over the Hankel family, which uses no property of SHA-512). Caps, paths and roots are
   functions of the leaves, so they inherit the bound. It needs:
   - uniform, independent salts, never reused: leaf `j` of tree `id` takes ChaCha20 blocks `3j … 3j+2` under nonce `id`, and

@@ -4,8 +4,8 @@ Build's consumers read as the last parameter."""
 
 from __future__ import annotations
 
-from verity.ir.refs import Affine, Coll
-from verity.ir.types import Record, Type, Value
+from verity.primitives.circuits.refs import Affine, Coll
+from verity.primitives.circuits.types import Record, Type, Value
 
 from verity_vllm.program.registry.tables import table_type
 
