@@ -33,11 +33,11 @@ import sys
 
 import pytest
 
-import verity.ir
+import verity.primitives.circuits
 from verity_vllm.program.frontend.target_profile import ApplicabilityError, ArtifactIdentity, TargetProfile, check_reuse, reuse_mismatches
 
 INTEGRATION = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # integrations/vllm
-CORE_SRC = os.path.dirname(os.path.dirname(os.path.abspath(verity.ir.__file__)))  # packages/verity/src
+CORE_SRC = os.path.dirname(os.path.dirname(os.path.abspath(verity.primitives.circuits.__file__)))  # .
 EVIDENCE = os.path.join(INTEGRATION, "out", "gen", "r10", "cb-fix", "evidence", "fix")
 DERIVE_STEP = os.path.join(INTEGRATION, "verity_vllm", "pipeline", "build.py")
 

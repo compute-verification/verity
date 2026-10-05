@@ -1,21 +1,21 @@
 """The checks, over one Definition, one subcircuit (a template bound), or one served row's request Program.
 
-    correspondence   the reference (`verity.evaluation.evaluate`, the IR evaluator; a vLLM Definition's is its registered
+    correspondence   the reference (`verity.primitives.circuits.evaluation.evaluate`, the IR evaluator; a vLLM Definition's is its registered
                      evaluator) on the edge and random vectors of `circuit_check.vectors`: it must be total (a Definition whose
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
-                     kernel (`verity.evaluation.self_check`), a template's evaluated target where it is another Definition, and
+                     kernel (`verity.primitives.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
                      proof units otherwise); a Boolean Definition with a word counterpart
-                     (`verity.ml.boolean.trace.word_of`) also equals that word Definition through its word view.  A
+                     (`verity.primitives.circuits.boolean.trace.word_of`) also equals that word Definition through its word view.  A
                      registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
                      entries (`vectors.table_instances`), recorded under ``table`` with the words the instances read
     redundant gates  a value computed twice inside one unit: the IR gates `verity_vllm.query.word.Graph` finds recomputed (same
                      primitive, same operands by value) that `word.units` puts in one unit, and the ANDs of a Boolean unit on
                      identical operands; counted, with where (primitive @ activation, or the named subcircuit)
-    dead gates       gates no output depends on (`verity.ir.liveness.dead_gates`, transitive), by primitive @ activation
+    dead gates       gates no output depends on (`verity.primitives.circuits.liveness.dead_gates`, transitive), by primitive @ activation
     partition        `Q_word_v1{X,W,R=no-recompute}` (`word.unit_rule` per Definition, `word.check_query` over a row): every gate
                      certified by exactly one unit, cross-unit reads only through committed values, no value computed in two
-                     units, the width rule (`verity.ir.partition.validate_unit_cut`'s codes and the word's width classes);
+                     units, the width rule (`verity.primitives.circuits.partition.validate_unit_cut`'s codes and the word's width classes);
                      recorded: the whole Definition's cut under `Q_word` v2 (its codes, and the values computed in two units
                      it reports, `recomputed_across`).  A Boolean Call is judged by v2: its `recomputed_across` is recorded,
                      in its entry and the summary, and every other code fails as under v1.  `Q_call` v1 {X = 32} is recorded
@@ -42,11 +42,11 @@ from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
-from verity.evaluation import ScalarReference, evaluate, kernels, self_check
-from verity.evaluation.reference import resolve, signature_of, standalone_call
-from verity.ir import boolean as BL
-from verity.ir.boolean import is_boolean
-from verity.ir.defs import PrimitiveDefinition
+from verity.primitives.circuits.evaluation import ScalarReference, evaluate, kernels, self_check
+from verity.primitives.circuits.evaluation.reference import resolve, signature_of, standalone_call
+from verity.primitives.circuits import boolean as BL
+from verity.primitives.circuits.boolean import is_boolean
+from verity.primitives.circuits.defs import PrimitiveDefinition
 
 from .vectors import edge_count, flat, instance_args, vectors
 
@@ -206,7 +206,7 @@ def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.nd
 
 def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings) -> dict | None:
     """A template evaluated through another Definition (``Subcircuit.target``) against its own Definition's reference."""
-    from verity.evaluation import evaluate_batch
+    from verity.primitives.circuits.evaluation import evaluate_batch
 
     if target is definition or getattr(target, "id", None) == getattr(definition, "id", None):
         return None
@@ -227,9 +227,9 @@ def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings)
 
 def _wide_words(t: Any, params: Sequence[Any], ret: Any, arrays: Sequence[np.ndarray], n: int) -> np.ndarray:
     """`evaluate_words` where an element is wider than its 64 bits (PoUW's 576-bit sums of squares): Python ints, each element
-    through its bits (`verity.evaluation.bits.evaluate_bits`)."""
-    from verity.evaluation.batch import type_shape
-    from verity.evaluation.bits import evaluate_bits
+    through its bits (`verity.primitives.circuits.evaluation.bits.evaluate_bits`)."""
+    from verity.primitives.circuits.evaluation.batch import type_shape
+    from verity.primitives.circuits.evaluation.bits import evaluate_bits
 
     ins = []
     for a, p in zip(arrays, params):
@@ -248,13 +248,13 @@ def _wide_words(t: Any, params: Sequence[Any], ret: Any, arrays: Sequence[np.nda
 
 
 def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
-    """A Boolean Definition against the word Definition it computes (`verity.ml.boolean.trace.word_of`), through the word view
-    (`verity.evaluation.bits.evaluate_words`), on the word Definition's edge and random vectors."""
+    """A Boolean Definition against the word Definition it computes (`verity.primitives.circuits.boolean.trace.word_of`), through the word view
+    (`verity.primitives.circuits.evaluation.bits.evaluate_words`), on the word Definition's edge and random vectors."""
     if isinstance(t, (PrimitiveDefinition, ScalarReference)) or not is_boolean(t):
         return None
-    from verity.evaluation import evaluate_batch
-    from verity.evaluation.bits import evaluate_words
-    from verity.ml.boolean.trace import word_of
+    from verity.primitives.circuits.evaluation import evaluate_batch
+    from verity.primitives.circuits.evaluation.bits import evaluate_words
+    from verity.primitives.circuits.boolean.trace import word_of
 
     try:
         word = word_of(t)
@@ -377,7 +377,7 @@ def _pieces_used(t: Any, pins: dict) -> tuple[Counter, Counter, int]:
 
 def _piece_status(pid: str, opts: Options, pins: dict, memo: dict) -> None:
     """Record in ``memo["pieces"]`` how many vectors the piece of the primitive ``pid`` gets wrong."""
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.defs import REGISTRY
 
     prim = REGISTRY.defs[pid]
     params, _ = signature_of(prim)
@@ -475,7 +475,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     if isinstance(t, PrimitiveDefinition):
         rec["pin"] = _counts_against_pin("pieces", t.id, {"and": counts["ands"]}, pins, F, t.id)
     elif is_boolean(t):
-        from verity.evaluation.bits import compile as compile_bits
+        from verity.primitives.circuits.evaluation.bits import compile as compile_bits
 
         own = rec["definition_ands"] = compile_bits(t).counts["and"]
         if counts["ands"] > own:
@@ -506,7 +506,7 @@ def redundant_gates(fn: Any, opts: Options, F: Findings, rule: dict, graph: tupl
 
 
 def dead_gates(fn: Any, opts: Options, F: Findings) -> dict:
-    from verity.ir.liveness import dead_gates as dead
+    from verity.primitives.circuits.liveness import dead_gates as dead
 
     prog, _call = standalone_call(fn)
     rep = dead(prog, limit=opts.dead_ids, transitive=True)
@@ -588,7 +588,7 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
     """`Q_call{X = cut.CALL_X}` v1 on one Call of ``fn``: its units, committed gates and bits, and the values two units compute
     (reported, as `Q_word` v2 does); or why the query refuses it (``inapplicable``: a gate wider than X, a warning).  A code of
     the cut's own check fails by name (``partition/q-call-<code>``); none is expected, since the cut derives what it checks."""
-    from verity.ir import cut
+    from verity.primitives.circuits import cut
 
     X = cut.CALL_X
     if fn.gates > opts.partition_max_gates:
@@ -653,7 +653,7 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
         entry["redundant_gates"] = {"checked": False}
         entry["dead_gates"] = dead_gates(t, opts, F) if kind == "composite" else {"count": 0}
     elif kind == "composite":
-        from verity.ir import boolean as BL
+        from verity.primitives.circuits import boolean as BL
 
         part, rule = partition(t, opts, F, memo.setdefault("word", {}), applies=as_call, q_word=2 if BL.is_boolean(t) else 1)
         graph = part.pop("_graph", None)
