@@ -34,7 +34,7 @@ by = "the vLLM coordinator"
 
 [[grant]]
 role = "statement-reviewer"
-lean_audit = ["pins", "reads"]
+lean_audit = ["guarantees", "reads"]
 """
 AGENT = "bc-605d7c89-ca73-5a32-a582-ee77c49e762a"
 
@@ -70,7 +70,7 @@ class World:
         self.tmp, self.origin, self.dev = tmp, tmp / "origin.git", tmp / "dev"
         _git(tmp, "init", "-q", "--bare", "-b", "main", str(self.origin))
         for rel, text in {"a.txt": "a\n", "b.txt": "b\n", "c.txt": "c\n", "ci/queue.toml": RULES, ".gitignore": "__pycache__/\n",
-                          "pkg/lean-audit.json": json.dumps({"pins": {"T": "1"}, "reads": {}, "dependencies": {"M": "1"}}),
+                          "pkg/lean-audit.json": json.dumps({"guarantees": {"T": "1"}, "reads": {}, "dependencies": {"M": "1"}}),
                           "mytools/decl_check.py": "from research.store.tool import Tool\nT = Tool(name='check', version='1')\n",
                           **CHECK_FILES}.items():
             (self.dev / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -184,7 +184,7 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
 def test_grants_follow_paths_and_lean_audit_sections_at_the_exact_head(world):
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
     world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 1\n"}))
-    world.gh.put(2, world.change({"pkg/lean-audit.json": json.dumps({**audit, "pins": {"T": "2"}})}))
+    world.gh.put(2, world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}))
     world.gh.put(3, world.change({"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})}))
     q = world.queue()
     _, entries = q.sync()
@@ -218,15 +218,15 @@ def test_a_lean_review_covers_only_the_change_it_printed_as_the_same_statements(
     nothing a reviewer must read, and only for entries it saw change: one another PR changed on `main` meanwhile isn't covered."""
     from research.queue import reviewed
 
-    old, new = {"pins": {"P.t": "1", "P.u": "5"}, "reads": None}, {"pins": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
-    rep = {"package": "lean", "statement_changes": False, "before": {"pins": {"P.t": "1", "P.u": "5"}, "reads": {}},
-           "pins": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
+    old, new = {"guarantees": {"P.t": "1", "P.u": "5"}, "reads": None}, {"guarantees": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
+    rep = {"package": "lean", "statement_changes": False, "before": {"guarantees": {"P.t": "1", "P.u": "5"}, "reads": {}},
+           "guarantees": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
     assert reviewed("lean/lean-audit.json", old, new, rep)
     assert reviewed("lean/lean-audit.json", old, new, rep | {"package": "/w/verity/lean/"})
     assert not reviewed("other/lean/lean-audit.json", old, new, rep) and not reviewed("lean-audit.json", old, new, rep)
     assert not reviewed("lean/lean-audit.json", old, new, rep | {"statement_changes": True})
     assert not reviewed("lean/lean-audit.json", old, new, {k: v for k, v in rep.items() if k != "before"})
-    assert not reviewed("lean/lean-audit.json", {**old, "pins": {"P.t": "1", "P.u": "6"}}, new, rep), "P.u changed on main since"
+    assert not reviewed("lean/lean-audit.json", {**old, "guarantees": {"P.t": "1", "P.u": "6"}}, new, rep), "P.u changed on main since"
     assert not reviewed("lean/lean-audit.json", old, {**new, "reads": "{not json"}, rep)
 
 
@@ -997,6 +997,17 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
+
+
+def test_research_queue_ready_and_judge_name_a_lane_never_merge_queue(world, monkeypatch, capsys):
+    """Ready is the owner's word, and the merge gate refuses one by `merge-queue`: with no --by and no $RESEARCH_LANE, `ready`
+    and `judge` refuse before writing anything; `eject` still defaults to merge-queue."""
+    monkeypatch.chdir(world.dev)
+    monkeypatch.delenv("RESEARCH_LANE", raising=False)
+    for argv in (["queue", "ready", "1", "--local"], ["queue", "judge", "r20261004-160000-abcd"]):
+        with pytest.raises(SystemExit) as e:
+            research_main(argv)
+        assert e.value.code == 2 and "writes the owner's ready mark: pass --by <lane>" in capsys.readouterr().err
 
 
 def test_quick_tier_py_refuses_a_call_it_cannot_place(tmp_path, monkeypatch):
