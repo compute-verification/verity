@@ -46,7 +46,7 @@ reported `nondeterministic`.
 
 ## Where a test goes
 
-- **In the tests/ of the package it tests**, mirroring the package's modules (`packages/verity/tests/ir/` tests `verity.ir`).
+- **In the tests/ of the package it tests**, mirroring the package's modules (`verity/primitives/circuits/tests/` tests `verity.primitives.circuits`).
   Never in another package's suite, and never in the root `tests/`, which is only for invariants of the whole repository.
 - **A new package** joins the workspace (`[tool.uv.workspace] members` in the root pyproject) with the pytest table its
   siblings have. A directory with tests but no importable package is a virtual member (`[tool.uv] package = false`), like

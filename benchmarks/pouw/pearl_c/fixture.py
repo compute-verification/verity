@@ -1,9 +1,9 @@
 """Pearl-C's GPU check fixture, built off the pod (needs verity and numpy): inputs at a small shape and every buffer the
 kernels write, for both formings and the plain baseline.  Forming, lines and hashes come from
-`verity_pouw.schemes.pearl_c` itself; the products over every cell are batched in numpy with
-`verity.ml.kernels.group_sum_total_batch`, and one whole 64 x 64 tile is recomputed by the scheme (`encode`,
+`verity.protocols.accounting.work.pouw.schemes.pearl_c` itself; the products over every cell are batched in numpy with
+`verity_kernels.tc.group_sum_total_batch`, and one whole 64 x 64 tile is recomputed by the scheme (`encode`,
 `checked`, `digest`, `tickets`) and must agree.  The hashing is format -h1, the verifier's: BLAKE3 messages and leaves,
-and A's rows and the tile leaves committed as `verity_pouw.audit` commits them (frame-b3), whose roots must agree too.  Each
+and A's rows and the tile leaves committed as `verity.protocols.accounting.work.pouw.audit` commits them (frame-b3), whose roots must agree too.  Each
 forming's seed_A is its unit's over its own A rows' root (`pearl_c.unit_seed_a`), as the device derives it, so E_A's lines,
 A's forming and the tickets follow A's commitment.
 run.py compares the device's buffers with these bytes before it times anything.
@@ -27,20 +27,20 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "protocols" / "pouw" / "tests"))
+sys.path.insert(0, str(ROOT / "verity" / "protocols" / "accounting" / "work" / "pouw" / "tests"))
 
 import pearl_c_vectors as CV  # noqa: E402
-from verity.commitments.blake3 import blake3, keyed  # noqa: E402
-from verity.ml.kernels import group_sum_total_batch  # noqa: E402
-from verity.ml.tc import fp32  # noqa: E402
-from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32  # noqa: E402
-from verity.commitments import MerkleTree  # noqa: E402
-from verity.commitments.merkle import tree_levels  # noqa: E402
-from verity_pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
+from verity.primitives.crypto.blake3 import blake3, keyed  # noqa: E402
+from verity_kernels.tc import group_sum_total_batch  # noqa: E402
+from verity_catalog.silicon import fp32  # noqa: E402
+from verity_catalog.silicon.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32  # noqa: E402
+from verity.primitives.commitments import MerkleTree  # noqa: E402
+from verity.primitives.commitments.merkle import tree_levels  # noqa: E402
+from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
                                rows_domain, transcript_domain)
-from verity_pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
-from verity_pouw.schemes import pearl_c as C  # noqa: E402
-from verity_pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
+from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P  # noqa: E402
 
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
 HASHING = "h1"                     # the kernels' hashing format: BLAKE3 messages, leaves and frame-b3 trees
@@ -202,7 +202,7 @@ def tree_bytes(domain, values: list[bytes], schema: str) -> bytes:
 
 
 def a_domain(ctx: Context):
-    """The domain A's rows are committed under (`verity_pouw.audit`): the activation binding, frame-b3."""
+    """The domain A's rows are committed under (`verity.protocols.accounting.work.pouw.audit`): the activation binding, frame-b3."""
     return rows_domain(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, ctx.matmul.shape.m, "blake3")
 
 
@@ -383,7 +383,7 @@ def ieee_inputs(seed: int = 20260930) -> tuple[np.ndarray, np.ndarray]:
 
 def ieee_reference(x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """ieee_ops' six words per element (x / y, 448 / x, x / 448, 1 / x, sqrt x, bf16(x) / bf16(y)) and ieee_q's 448 / x, each
-    correctly rounded with subnormals kept (`verity.ml.tc.fp32`)."""
+    correctly rounded with subnormals kept (`verity_catalog.silicon.fp32`)."""
     bx, by = rne_bf16(x).astype(np.uint32) << 16, rne_bf16(y).astype(np.uint32) << 16
     ops = np.array([[fp32.div(int(a), int(b)), fp32.div(F448, int(a)), fp32.div(int(a), F448), fp32.div(ONE, int(a)),
                      fp32.sqrt(int(a)), int(rne_bf16(np.array([fp32.div(int(p), int(q))], np.uint32))[0])]
@@ -401,7 +401,7 @@ def ieee_coverage(x: np.ndarray, y: np.ndarray, ops: np.ndarray) -> dict[str, in
 
 def crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, lv, m, n) -> dict:
     """One 64 x 64 tile (rows 64-127, the last 64 columns) through the scheme itself: encode, checked, digest, tickets; and the
-    trees' roots as `verity_pouw.audit` commits A's rows and the tile leaves."""
+    trees' roots as `verity.protocols.accounting.work.pouw.audit` commits A's rows and the tile leaves."""
     s = C.PearlC(forming=forming, hashing=HASHING)
     root_a = commit_rows(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, ra, s.commitment_hash).commitment.root
     assert tree_bytes(a_domain(ctx), ra, ROW_SCHEMA)[-32:] == root_a == ctx.root_a

@@ -18,9 +18,9 @@ coordinates.  The gathers are total: a routed id is always in range, and an id o
 """
 from __future__ import annotations
 
-from verity.ir.defs import PrimitiveDefinition, bind, composite
-from verity.ir.refs import Coll, concat, strided_view
-from verity.ir.types import Array
+from verity.primitives.circuits.defs import PrimitiveDefinition, bind, composite
+from verity.primitives.circuits.refs import Coll, concat, strided_view
+from verity.primitives.circuits.types import Array
 from verity_vllm.program.registry import fp8_moe as FM
 from verity_vllm.program.registry.fp8 import E4M3, E4M3_NAN, weight_blocks
 from verity_vllm.program.registry.prims import BF16, F32, I32
