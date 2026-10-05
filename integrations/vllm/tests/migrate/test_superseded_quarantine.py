@@ -317,3 +317,15 @@ def test_the_lists_are_disjoint_and_name_every_reviewed_version():
 @pytest.mark.parametrize("target, fam", [("Serve_v2{C={d0},LP=3}", "Serve_v2"), ("Attention_v6/x", "Attention_v6"), ("F_v1", "F_v1")])
 def test_family(target, fam):
     assert M.family(target) == fam
+
+
+def test_add_entries_puts_each_new_entry_in_its_sorted_place_once():
+    def e(f, d):
+        return {"file": f, "kind": "gpu", "symbol": "<module>", "detail": d}
+    text = '{\n  "rule": "P8",\n  "entries": [\n' + ",\n".join("    " + json.dumps(x) for x in (e("a.py", "h100"), e("c.py", "a100"))) + "\n  ]\n}\n"
+    out = M._add_entries(text, (e("b.py", "l40s"), e("a.py", "h100")), "p08")
+    assert json.loads(out)["entries"] == [e("a.py", "h100"), e("b.py", "l40s"), e("c.py", "a100")]
+    assert out.splitlines()[4] == '    {"file": "b.py", "kind": "gpu", "symbol": "<module>", "detail": "l40s"},'
+    assert M._add_entries(out, (e("b.py", "l40s"),), "p08") == out
+    with pytest.raises(M.Refused, match="not one sorted entry per line"):
+        M._add_entries(text.replace("a.py", "d.py"), (), "p08")
