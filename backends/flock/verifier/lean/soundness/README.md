@@ -137,6 +137,11 @@ link term per audit.
   or the statement's form. The old forms, which take those hypotheses, are the lemmas they apply.
   `FailClosed.flock_verify_sound` (`One.lean`) is the one theorem: at every statement, with or without `--zk`, the
   headline of its case (public or hidden outputs; under `--zk`, one table or several).
+- **The spec** (`Spec/`, namespace `FlockSpec`). What `flock-verify verify` accepts (`FlockSpec.Accepts`), the
+  interaction model and the named assumptions, in closed form over the executable verifier and Mathlib; the `layers`
+  rules in `lean-audit.json` keep every proof out of it. `SpecBridge` proves each the proofs' own (`accepts_iff`: it is
+  `FailClosed.FlockVerifyAccepts`; the assumptions' `_iff`s). `flock_verify_sound`'s conclusions are not in it: they
+  read the proofs' extractor, collision finders and zero-knowledge view, which are their meaning.
 - **`registered_weights`** (`Binding/Weights.lean`). At each of a drawn unit's wires, the row a satisfying witness of
   its table holds is the registered row (any opening of the registered leaf: the weights and salt the registrant
   committed to), or `collide` of the two openings is a SHA-512 collision (`Layout.registered_weights`; from
