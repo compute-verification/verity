@@ -618,9 +618,7 @@ def render_sidecar(mod: str, bindings: dict[str, str], existing: str | None) -> 
 def move_pins() -> dict[str, int]:
     """Every pin into the pins file of the module that owns it (`sidecars.pin_owner`), else `pins.json`; {file: pins}."""
     from circuit_check import sidecars as SC
-    from circuit_check import targets as TG
 
-    TG.catalog()                                            # the families made on demand, registered by the catalog
     SC.discover.cache_clear()
     pins = SC.load_pins(PINS)
     by: dict[Path, dict[str, dict]] = {}

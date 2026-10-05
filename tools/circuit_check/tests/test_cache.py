@@ -498,14 +498,12 @@ def test_every_binding_and_pin_is_in_the_module_it_binds():
 
     from circuit_check import checks as CK
     from circuit_check import sidecars as SC
-    from circuit_check import targets as TG
 
     spec = importlib.util.spec_from_file_location("migrate_bindings", REPO / "tools/circuit_check/migrate_bindings.py")
     MB = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(MB)
     moved, _text, summary = MB.plan(strict=True)
     assert not moved and not summary["stays"], (sorted(moved), summary["stays"])
-    TG.catalog()
     misplaced = []
     for kind, pins in CK.load_pins().items():
         for key in pins:
@@ -514,3 +512,34 @@ def test_every_binding_and_pin_is_in_the_module_it_binds():
             if (have := SC.pin_file(kind, key)) != want:
                 misplaced.append(f"{kind} {key}: in {SC.rel(have)}, owned by {SC.rel(want)}")
     assert not misplaced, misplaced
+
+
+OWNERS = """
+import json
+from circuit_check import checks as CK, sidecars as SC
+from verity.ir.defs import REGISTRY, bind
+
+ON_DEMAND = [("definitions", "GatherBf16x1024u10_v1"), ("definitions", "GatherBf16x64_v2"), ("pieces", "GatherBf16x1_v1"),
+             ("pieces", "BitAtx32_v1")]
+keys = sorted({*((kind, key) for kind, pins in CK.load_pins().items() for key in pins), *ON_DEMAND})
+owners = lambda: {f"{kind} {key}": SC.pin_owner(kind, key) for kind, key in keys}
+before = owners()
+from verity_vllm.program.registry import boolean_gather, prims, sampling
+_ = bind(boolean_gather.gather_bf16(1100)).body
+boolean_gather.gather_bf16(64), prims.gather_bf16(1), sampling.bit_at(32)
+print(json.dumps({"before": before, "after": owners(), "built": [key for _, key in ON_DEMAND if key in REGISTRY.defs]}))
+"""
+
+
+def test_a_pins_owner_is_what_its_key_names_not_what_the_process_built():
+    """`sidecars.pin_owner` asked in a fresh process, then again once the on-demand Definitions are built (an earlier test in the
+    process, or another target's check, builds them): the same owner for every pin, so a pin's file is a function of the tree.
+    An on-demand primitive is its factory's (`prims`, `sampling`), not its caller's; a level of a gather's tree, which no key
+    makes alone, has none."""
+    r = subprocess.run([sys.executable, "-c", OWNERS], capture_output=True, text=True, cwd=REPO, check=True)
+    got = json.loads(r.stdout)
+    assert len(got["built"]) == 4, got["built"]
+    assert got["before"] == got["after"], {k: (v, got["after"][k]) for k, v in got["before"].items() if got["after"][k] != v}
+    assert got["before"]["pieces GatherBf16x1_v1"] == "verity_vllm.program.registry.prims"
+    assert got["before"]["pieces BitAtx32_v1"] == "verity_vllm.program.registry.sampling"
+    assert got["before"]["definitions GatherBf16x1024u10_v1"] is None

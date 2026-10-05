@@ -3,6 +3,12 @@
   "BitAtx16_v1": {
    "and": 43
   },
+  "BitAtx32_v1": {
+   "and": 58
+  },
+  "BitAtx64_v1": {
+   "and": 89
+  },
   "GumbelNoiseLane_v1": {
    "and": 109421
   },

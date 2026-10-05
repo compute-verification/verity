@@ -6,10 +6,12 @@
     fp8.circuit-check.json    its pins (`checks`' lowering counts by kind: ``definitions``, ``pieces``, ``units``)
 
 A module's bindings bind the Definitions it defines (a template module's, its templates), and its pins are the counts of its
-Definitions (`owner`; a template's subcircuits for the template module).  circuit-check finds every sidecar under the packages
+Definitions (`owner`; a template's subcircuits for the template module), each the one its pin's key names alone (`pin_owner`),
+so a pin's file is a function of the tree, never of what a process built first.  circuit-check finds every sidecar under the packages
 that define Definitions or templates (`PACKAGES`) and loads a binding file by its path: its name is no module name, so no
 registry enumeration imports it, and a Definition module imports nothing of circuit-check.  A sidecar whose module is gone is
-an error.  `targets.py` keeps what no one module owns, and `pins.json` the pins of Definitions no module defines.
+an error.  `targets.py` keeps what no one module owns, and `pins.json` the pins of Definitions no key names alone (made only inside
+another's body) or no module defines.
 """
 from __future__ import annotations
 
@@ -167,15 +169,36 @@ def write_pins(updates: dict[tuple[str, str], Any]) -> None:
 
 def pin_owner(kind: str, key: str) -> str | None:
     """The module that owns a pin: a template's subcircuit's, the module that defines the template (``units``); a Definition's
-    or a piece's, the module that defines that Definition (`owner`).  None when nothing registered names it."""
+    or a piece's, the module that defines the Definition its key names (`named`, `owner`).  None when the key alone names none,
+    whatever this process has built: then the pin is in `pins.json`."""
     if kind == "units":
         from verity_numerical.bench import templates as TM
 
         return TM.__name__ if key.partition("/")[0] in TM.TEMPLATES else None
-    from verity.ir.defs import REGISTRY
-
-    d = REGISTRY.defs.get(key.partition("{")[0])
+    d = named(key.partition("{")[0])
     return owner(d) if d is not None else None
+
+
+_NAMED: dict[str, Any] = {}
+
+
+def named(fid: str) -> Any | None:
+    """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else one an
+    on-demand family makes from it (`verity.ir.codec.lookup_primitive` with nothing registered, so the family's own factory
+    whoever asked for it first).  None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by
+    nothing, built in this process or not."""
+    from verity.ir.codec import lookup_primitive
+    from verity.ir.defs import Registry
+
+    if not _NAMED:
+        _NAMED.update({v.id: v for v, _mod in _index().values()})
+    if (d := _NAMED.get(fid)) is not None:
+        return d
+    with CC.internal():
+        try:
+            return lookup_primitive(Registry(), fid)
+        except (KeyError, ValueError):
+            return None
 
 
 def _function_module(d: Any) -> str | None:
@@ -252,5 +275,5 @@ def owner(d: Any) -> str | None:
     return e[1] if e is not None and e[0] is d else _function_module(d)
 
 
-__all__ = ["PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "binding_modules", "discover", "load_pins", "owner", "path_of",
-           "pin_file", "pin_files", "pin_owner", "pin_reads", "rel", "write_pins"]
+__all__ = ["PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "binding_modules", "discover", "load_pins", "named", "owner",
+           "path_of", "pin_file", "pin_files", "pin_owner", "pin_reads", "rel", "write_pins"]
