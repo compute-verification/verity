@@ -1,5 +1,5 @@
 """A shipped tree's PYTHONPATH comes from its workspace declaration (research.pythonpath), never a hand list: two silent failures came
-from a list that left out verity."""
+from a list that left out packages/verity/src."""
 from __future__ import annotations
 
 import json
@@ -18,8 +18,8 @@ from waits import wait_runner
 REPO = Path(__file__).resolve().parents[3]
 SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
-REAL_ROOTS = ["tools/research/src", "tools/cluster/src", "verity", "archive/sp1/python", "benchmarks/numerical/python", "integrations/vllm",
-              "verity/protocols/verification/sampled_proofs", "verity/protocols/accounting/space/pous", "verity/protocols/accounting/communication/warden", "verity/protocols/accounting/work/pouw", "backends/flock/python", "tools/circuit_check/src"]
+REAL_ROOTS = ["tools/research/src", "tools/cluster/src", ".", "archive/sp1/python", "benchmarks/numerical/python", "integrations/vllm",
+              "backends/flock/python", "tools/circuit_check/src"]
 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):
@@ -72,6 +72,13 @@ def test_layouts_globs_exclude_and_missing(tmp_path):
     assert P.pythonpath("/w/src/s", d, extra="/mine:/w/src/s/flat") == \
         "/w/src/s/libs/a/src:/w/src/s/libs/b/src:/w/src/s/flat:/w/src/s/st_dir/lib:/w/src/s/st_find/code:/mine"
     assert P.import_roots_dir(tmp_path)["roots"] == [] and P.import_roots_dir(tmp_path)["source"].startswith("none")
+
+
+def test_an_editable_install_of_dev_mode_dirs_puts_those_directories_on_the_path(tmp_path):
+    _write(tmp_path, "pyproject.toml", '[tool.uv.workspace]\nmembers = ["core"]\n')
+    _write(tmp_path, "core/pyproject.toml", '[project]\nname = "core"\n\n[tool.hatch.build]\ndev-mode-dirs = [".."]\n')
+    _write(tmp_path, "core/__init__.py", "")
+    assert P.import_roots_dir(tmp_path)["roots"] == ["."]
 
 
 def test_launch_request_sets_the_trees_pythonpath_appends_the_users_and_records_it(tmp_path):

@@ -106,6 +106,28 @@ def test_every_declared_package_is_probed_whatever_its_name_and_one_that_wont_im
     assert S.foreign(pkgs, env) == "archive_old from nowhere (not importable)"
 
 
+def test_an_editable_install_of_dev_mode_dirs_ships_their_packages_and_its_dependents_read_them(tmp_path, monkeypatch):
+    """`core`'s editable install puts the root on sys.path (hatch's `dev-mode-dirs`): its packages are the root's regular
+    packages, and a suite that depends on it has their directories among its inputs."""
+    _member(tmp_path, "core", "core", None)
+    (tmp_path / "core" / "pyproject.toml").write_text((tmp_path / "core" / "pyproject.toml").read_text()
+                                                      + '\n[tool.hatch.build]\ndev-mode-dirs = [".."]\n')
+    (tmp_path / "data").mkdir()
+    for pkg in ("core", "data"):
+        (tmp_path / pkg / "__init__.py").write_text("")
+    (tmp_path / "loose").mkdir()                       # not a regular package: nothing ships it
+    (tmp_path / "app" / "tests").mkdir(parents=True)
+    (tmp_path / "app" / "pyproject.toml").write_text('[project]\nname = "app"\ndependencies = ["core"]\n\n'
+                                                     '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["core", "app"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs = S.members()
+    assert S.importable(pkgs) == {"core": "core", "data": "core"}
+    app = next(s for s in S.discover() if s.name == "app")
+    assert S.closure(app, pkgs) == ["core", "data"]
+
+
 def test_a_member_that_builds_but_declares_no_package_is_named(tmp_path, monkeypatch):
     _member(tmp_path, "odd", "odd", None)
     S = _suites(monkeypatch, tmp_path)
