@@ -25,6 +25,7 @@ def _tree(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     (repo / CORE / "ir").mkdir(parents=True)
     (repo / "pyproject.toml").write_text("[project]\nname = 'verity'\n")
+    (repo / "uv.lock").write_text("")
     (repo / ".gitignore").write_text("__pycache__/\n*.pyc\nout/\n")
     (repo / CORE / "__init__.py").write_text("")
     (repo / CORE / "ir" / "codec.py").write_text("def _spec_id(fn): return fn\n")
