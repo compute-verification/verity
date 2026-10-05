@@ -51,14 +51,14 @@ def EndToEnd : Prop :=
     (I : Inputs) (ht : I.tags.typed = false)
     (c : Flock.Circuit) (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
-    (hscope : Layout.scopeOk c = true)
+    (hscope : Discharge.Layout.scopeOk c = true)
     -- the law: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     -- the record: the draw file at each draw, and the session at each draw and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n))
     (y₀ : DrawSetupZK I (mPtsOf c.g (kd / nTab I)) S₀ (dj S₀))
     (wr : (S : Finset (Fin n)) → (R : Reg) →
-      LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
+      LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
@@ -73,7 +73,7 @@ def EndToEnd : Prop :=
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
     (qF qS : ℝ),
     let L := Law.execOS (n := n) src (.subset kd) n
-    let P := (keyProg c hU n).partition (Layout.outsOf c hU n)
+    let P := (keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)
     let vb := (rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope)
     let σ := simZJ execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) dg (decAtZJ (planZJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
