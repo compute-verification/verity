@@ -49,7 +49,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import f1_rates as F1  # noqa: E402
-import fp4_emulation_1ad1aaa2 as E  # noqa: E402
+from emulation import E  # noqa: E402
 import probe as P  # noqa: E402
 
 from verity_catalog.silicon import models as M  # noqa: E402
