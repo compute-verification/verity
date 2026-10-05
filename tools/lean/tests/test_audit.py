@@ -510,7 +510,12 @@ def test_a_move_map_renames_by_its_longest_prefix_and_must_map_back():
     moved = {"A": "X", "A.b": "Y"}
     assert [A.renamed(n, moved) for n in ("A", "A.b.c", "A.d", "Ab.c", "Z")] == ["X", "Y.c", "X.d", "Ab.c", "Z"]
     assert A.move_errors(moved) == [] and A.move_errors({"A": "X", "A.y": "X.y"}) == []
-    assert A.move_errors({"A": "A", "B": "X", "C": "X"}) == ["A moves to itself", "B, C all move to X"]
+    assert A.move_errors({"A": "A", "B": "X", "C": "X"}) == ["A moves to itself, under no name that moves",
+                                                             "B, C all move to X"]
+    keep = {"A": "X", "A.p": "A.p"}
+    assert A.move_errors(keep) == [] and A.move_errors({"A": "X", "B.p": "B.p"}) == [
+        "B.p moves to itself, under no name that moves"]
+    assert [A.renamed(n, keep) for n in ("A", "A.b", "A.p", "A.p.c", "A.pq")] == ["X", "X.b", "A.p", "A.p.c", "X.pq"]
     assert A.move_errors({"A": "X", "B": "X.y"}) == [
         "B moves to X.y, under X, where A moves; the names under X.y would map back under A, not B"]
 

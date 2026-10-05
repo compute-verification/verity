@@ -86,9 +86,9 @@ definition of a `Guarantees` module (`theorem t (xs) : G as` for `theorem t (xs)
 unfolded once (its value at the type's universe levels, its leading `fun`s instantiated by `as`, nothing else reduced),
 hashes to the record's type hash and its named assumptions are the record's (`lifted_into`); `G` then needs no reading of
 its own, and any other lift is a change of meaning.  `--moved FILE` (a JSON object of old names to new ones, each a
-declaration or a namespace) renames the record's guarantees and compares the build with the records under the old names: a
-guarantee moved or lifted that says what its record says, and the definitions the same under their old names, get one
-line each.  `--all` first runs the controls (`controls`): a fixture package built with each audited toolchain (which
+declaration or a namespace; a name under one that moves, mapped to itself, keeps its name) renames the record's guarantees
+and compares the build with the records under the old names: a guarantee moved or lifted that says what its record says,
+and the definitions the same under their old names, get one line each.  `--all` first runs the controls (`controls`): a fixture package built with each audited toolchain (which
 `--build` installs first), which must pass clean and fail each check once a violation is added.
 Each package's report lists, without failing, the spec definitions that no guarantee reads, neither its own nor one of a
 package that requires it by path (`unread_spec`): a definition of the trusted text that nothing cites.
@@ -457,7 +457,8 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
 
 def renamed(name: str, moved: dict[str, str]) -> str:
     """``name`` after the moves ``moved`` ({old: new}, a declaration or a namespace each): its longest moved prefix
-    replaced by the new name (`Facts.lean`'s `renameName` maps back the same way)."""
+    replaced by the new name, so a prefix mapped to itself keeps the names under it (`Facts.lean`'s `renameName` maps back
+    the same way)."""
     parts = name.split(".")
     for i in range(len(parts), 0, -1):
         if (p := ".".join(parts[:i])) in moved:
@@ -466,9 +467,11 @@ def renamed(name: str, moved: dict[str, str]) -> str:
 
 
 def move_errors(moved: dict[str, str]) -> list[str]:
-    """Why ``moved`` cannot be read back: two old names moved to one new name, a name moved to itself, or a new name under
+    """Why ``moved`` cannot be read back: two old names moved to one new name, a name moved to itself that no moved name
+    holds (mapped to itself, a name under one that moves keeps its own, and the names under it theirs), or a new name under
     another new name whose old names are not nested the same way (the build's names would map back to the wrong ones)."""
-    errs = [f"{old} moves to itself" for old, new in sorted(moved.items()) if old == new]
+    errs = [f"{old} moves to itself, under no name that moves" for old, new in sorted(moved.items())
+            if old == new and not any(p != old and moved[p] != p and under([p], old) for p in moved)]
     by_new: dict[str, list[str]] = {}
     for old, new in moved.items():
         by_new.setdefault(new, []).append(old)
@@ -1408,7 +1411,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--build", action="store_true", help="`setup.sh` (elan, the toolchain, Mathlib's cache) and `lake build` first")
     ap.add_argument("--update", action="store_true", help="write the guarantees' records from the build instead of comparing them")
     ap.add_argument("--moved", type=Path, metavar="FILE", help="with --update: a JSON object {old name: new name} of the "
-                    "declarations and namespaces moved since the record (the longest prefix applies); the record's guarantees are "
+                    "declarations and namespaces moved since the record (the longest prefix applies, and a name mapped to itself "
+                    "under one that moves keeps its name); the record's guarantees are "
                     "renamed, and the review compares the build with the records under the old names")
     ap.add_argument("--owner", metavar="@LANE", help="with --update: the owner of each guarantee whose entry names none")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
