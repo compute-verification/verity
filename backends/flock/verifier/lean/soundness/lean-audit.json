@@ -7727,6 +7727,7 @@
    "type_hash": "607a4a9eaee30e48aec21d8fb83f079600f24e67df47b6a7bd73e81444d3d4d6"
   },
   "FlockSoundness.Discharge.FailClosed.DrawSetupZHJ.avoidsMask": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.DrawSetupZHJ.avoidsMask {I' : FlockSoundness.Discharge.Exec.Inputs} {n mPts : Nat}",
     "  {S : Finset (Fin n)} {d : Lean.Json} (y : FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ I' mPts S d) :",
@@ -7736,6 +7737,7 @@
    "type_hash": "0ebabc465466126eccfe7a244d0623ea25a2901cf3a68668952737d5c0188627"
   },
   "FlockSoundness.Discharge.FailClosed.DrawSetupZK.avoidsMask": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.DrawSetupZK.avoidsMask {I : FlockSoundness.Discharge.Exec.Inputs} {n mPts : Nat}",
     "  {S : Finset (Fin n)} {d : Lean.Json} (y : FlockSoundness.Discharge.ZkLink.DrawSetupZK I mPts S d) :",
@@ -7745,6 +7747,7 @@
    "type_hash": "859b516118b3332f1e4ca13267cb62b50f0e225b273c9a896d95d4357e3e8c16"
   },
   "FlockSoundness.Discharge.FailClosed.avoidsMask_of_shapeOk": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.avoidsMask_of_shapeOk {st : Flock.Stmt} (hw : FlockSoundness.Refine.RegionsWF st)",
     "  (h : Eq (Flock.Zk.shapeOk st) (Except.ok Unit.unit)) : Eq (FlockSoundness.Discharge.Composed.avoidsMask st) Bool.true"
@@ -7753,6 +7756,7 @@
    "type_hash": "ec7e22ad345a78be80e5d432d49301291e38bf6f6164c3b395538af9fa1225cc"
   },
   "FlockSoundness.Discharge.FailClosed.exists_k": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.exists_k {α : Type} {n : Nat} {Reg : Type} (w : α → Nat)",
     "  (plan : Finset (Fin n) → Reg → List α) (hp : ∀ (S : Finset (Fin n)) (R R' : Reg), Eq (plan S R) (plan S R'))",
@@ -7766,6 +7770,7 @@
    "type_hash": "2bfbbd86f83bde18561e5b4deeb22cedc812d78b4861bcdf770f862eeeb6d100"
   },
   "FlockSoundness.Discharge.FailClosed.exists_k_rateB": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.exists_k_rateB {n mPts : Nat} {Reg : Type}",
     "  (plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts))",
@@ -7779,6 +7784,7 @@
    "type_hash": "9d41d381d08956595d07b4b87f30c81c0ff39b7226f376ed4bc6c0259e6539e5"
   },
   "FlockSoundness.Discharge.FailClosed.exists_k_rateZ": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.exists_k_rateZ {F : Type} [Field F] [Fintype F] [DecidableEq F] {n mPts : Nat}",
     "  {Reg : Type} (plan : Finset (Fin n) → Reg → List (FlockSoundness.Discharge.ZkSession.TabZK F mPts))",
@@ -7792,6 +7798,7 @@
    "type_hash": "2b83f2a514b042f40b4ee095cadf0fc068cca88b45572f9a619f99f5f30ede80"
   },
   "FlockSoundness.Discharge.FailClosed.flock_headline_exec": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.flock_headline_exec {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs}",
     "  (hh : Eq I.tags.hiddenOutputs Bool.false) {mPts : Nat} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
@@ -7921,6 +7928,7 @@
    "type_hash": "7884f624d773c784087771357bc532065b33071d3ca72e2b43f5738cebd6df02"
   },
   "FlockSoundness.Discharge.FailClosed.flock_headline_exec_dec": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.flock_headline_exec_dec {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs}",
     "  (hh : Eq I.tags.hiddenOutputs Bool.false) {mPts : Nat} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
@@ -8079,6 +8087,7 @@
    "type_hash": "e20515c59e1fa99eddb8a6318b2d129d25c1296ac64f65be2f88aee5ec414168"
   },
   "FlockSoundness.Discharge.FailClosed.flock_headline_exec_hidden": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.flock_headline_exec_hidden {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs}",
     "  (hh : Eq I.tags.hiddenOutputs Bool.true) {mPts : Nat} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
@@ -8205,6 +8214,7 @@
    "type_hash": "b17ea8711c01863092255e7bf0a01957bb29193f97654606c3813b959a070cfd"
   },
   "FlockSoundness.Discharge.FailClosed.flock_headline_exec_hidden_dec": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.flock_headline_exec_hidden_dec {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs}",
     "  (hh : Eq I.tags.hiddenOutputs Bool.true) {mPts : Nat} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
@@ -8363,6 +8373,7 @@
    "type_hash": "29c4f74308d01c8d071cf8eabb6792525442b3edfb9e5f9ef7c612eb651b6292"
   },
   "FlockSoundness.Discharge.FailClosed.flock_verify_sound": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound (zk : Bool) (I : FlockSoundness.Discharge.Exec.Inputs) :",
     "  if hh : Eq I.tags.hiddenOutputs Bool.true then",
@@ -8382,6 +8393,7 @@
    "type_hash": "c9966b2f94eb2f3911a6f78f62f88dd8a2b5facf13d0a4165598be443eb72cdd"
   },
   "FlockSoundness.Discharge.FailClosed.hr_exec": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.hr_exec (I : FlockSoundness.Discharge.Exec.Inputs) {n mPts : Nat}",
     "  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
@@ -8397,6 +8409,7 @@
    "type_hash": "bcd2102fd2f08aafc3f626a1e56df78f1e67a4515594152068cfa8298636b847"
   },
   "FlockSoundness.Discharge.FailClosed.hr_execH": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.hr_execH (I : FlockSoundness.Discharge.Exec.Inputs) {n mPts : Nat}",
     "  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
@@ -8411,6 +8424,7 @@
    "type_hash": "2cf1860214deba780d8327bbcd0501056bf5a8dcaffd2d5417a44ab6bb6d5617"
   },
   "FlockSoundness.Discharge.FailClosed.hr_z": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.hr_z (I : FlockSoundness.Discharge.Exec.Inputs) {n mPts : Nat}",
     "  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
@@ -8426,6 +8440,7 @@
    "type_hash": "07623d0e4a161b2051710950b44f43491be6f0d23ba5beab09cc8182eba3ced9"
   },
   "FlockSoundness.Discharge.FailClosed.hr_zh": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.hr_zh (I : FlockSoundness.Discharge.Exec.Inputs) {n mPts : Nat}",
     "  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
@@ -8441,6 +8456,7 @@
    "type_hash": "a041845ad7f21e042dd82f6acc3ec594d9e0b33f70c6d3ba5e918613fa6562e6"
   },
   "FlockSoundness.Discharge.FailClosed.hr_zhj": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.hr_zhj (I : FlockSoundness.Discharge.Exec.Inputs) {n mPts : Nat}",
     "  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}",
@@ -8456,6 +8472,7 @@
    "type_hash": "c2e8188acf446b76189a0fb542375f46688084c33b60e2ad9026dbdbceebdd68"
   },
   "FlockSoundness.Discharge.FailClosed.hr_zj": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.hr_zj (I : FlockSoundness.Discharge.Exec.Inputs) {n mPts : Nat}",
     "  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}",
@@ -8471,6 +8488,7 @@
    "type_hash": "caebef989dd8748a01e78c513566b5ae3f0bb9b9560345310473cffdc1192cb9"
   },
   "FlockSoundness.Discharge.FailClosed.scopeOk_eq": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.scopeOk_eq (c : Flock.Circuit) :",
     "  Eq (Flock.ProvedScope.scopeOk c) (FlockSoundness.Discharge.Layout.scopeOk c)"
@@ -8479,6 +8497,7 @@
    "type_hash": "d09501d88a1cbd73486adbbe3d3010a67b96244b9b052cfa292596a6b1a8924b"
   },
   "FlockSoundness.Discharge.FailClosed.setupH_of_verifies": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.setupH_of_verifies (I : FlockSoundness.Discharge.Exec.Inputs)",
     "  (hh : Eq I.tags.hiddenOutputs Bool.true) {n mPts : Nat} {S : Finset (Fin n)} {d : Lean.Json}",
@@ -8499,6 +8518,7 @@
    "type_hash": "4f4cc70b7f75ea5862cae30ec059053b932e46d8f203abb212c49f29ad2135b2"
   },
   "FlockSoundness.Discharge.FailClosed.setupZHJ_of_verifiesZK": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.setupZHJ_of_verifiesZK (I : FlockSoundness.Discharge.Exec.Inputs)",
     "  (hh : Eq I.tags.hiddenOutputs Bool.true) {n mPts : Nat} (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)}",
@@ -8513,6 +8533,7 @@
    "type_hash": "59af3db13739368bdf2ee994a6d3c0143bdee80f8c63cde1ce58525f06860337"
   },
   "FlockSoundness.Discharge.FailClosed.setupZH_of_verifiesZK": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.setupZH_of_verifiesZK (I : FlockSoundness.Discharge.Exec.Inputs)",
     "  (hh : Eq I.tags.hiddenOutputs Bool.true) (hn : instLENat.le I.count 1) {n mPts : Nat}",
@@ -8526,6 +8547,7 @@
    "type_hash": "9969506a1e4f3f7d84bbe57c73791d78022ea074d9e0fd36d4c8417f1a45fb7c"
   },
   "FlockSoundness.Discharge.FailClosed.setupZJ_of_verifiesZK": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.setupZJ_of_verifiesZK (I : FlockSoundness.Discharge.Exec.Inputs)",
     "  (hh : Eq I.tags.hiddenOutputs Bool.false) {n mPts : Nat} (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)}",
@@ -8540,6 +8562,7 @@
    "type_hash": "188ec331180cbb014aa1af0b61ec20420646ede86fa584f272afbad5baa7b2f1"
   },
   "FlockSoundness.Discharge.FailClosed.setupZ_of_verifiesZK": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.setupZ_of_verifiesZK (I : FlockSoundness.Discharge.Exec.Inputs)",
     "  (hh : Eq I.tags.hiddenOutputs Bool.false) (hn : instLENat.le I.count 1) {n mPts : Nat}",
@@ -8553,6 +8576,7 @@
    "type_hash": "5e5c913faef808a689a493e9b575461313556c3e2b12e34f99f9fd38bf352f50"
   },
   "FlockSoundness.Discharge.FailClosed.setup_of_verifies": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.setup_of_verifies (I : FlockSoundness.Discharge.Exec.Inputs)",
     "  (hh : Eq I.tags.hiddenOutputs Bool.false) {n mPts : Nat} {S : Finset (Fin n)} {d : Lean.Json}",
@@ -8571,6 +8595,7 @@
    "type_hash": "f86aca4cccaf91bd9a8efd8623f34e29189771d9ca363fc82ac457d96a4ad6ee"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_composed": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_composed {mPts n : Nat} {Reg : Type}",
     "  (P : FlockSoundness.Discharge.Composed.LigProver) (I : FlockSoundness.Discharge.Exec.Inputs)",
@@ -8714,6 +8739,7 @@
    "type_hash": "a86cd9b1120526e866efaf62eff70df8fd14f30a0902bfac81ff9c9f097ffa27"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_composedHJ": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_composedHJ {mPts n : Nat} {Reg : Type}",
     "  (P : FlockSoundness.Discharge.Composed.LigProver) (I : FlockSoundness.Discharge.Exec.Inputs)",
@@ -8835,6 +8861,7 @@
    "type_hash": "99684b6e795be3fbf577a425da63c79f081e154498ffbbd787e5353e4fd35a62"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_sound": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_sound {mPts n : Nat} {Reg : Type}",
     "  (I : FlockSoundness.Discharge.Exec.Inputs) (hh : Eq I.tags.hiddenOutputs Bool.false) (hn : instLENat.le I.count 1)",
@@ -8967,6 +8994,7 @@
    "type_hash": "4665de3240c086b6238cc39df246222b80a479d22fde5c2a919c895b5835aa6d"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_soundH": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_soundH {mPts n : Nat} {Reg : Type}",
     "  (I : FlockSoundness.Discharge.Exec.Inputs) (hh : Eq I.tags.hiddenOutputs Bool.true) (hn : instLENat.le I.count 1)",
@@ -9105,6 +9133,7 @@
    "type_hash": "c2abaf12abb533d0e986e1326411e70fd0638615196b7100b27964ecd9cf9fbe"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_soundHJ": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_soundHJ {mPts n : Nat} {Reg : Type}",
     "  (I : FlockSoundness.Discharge.Exec.Inputs) (hh : Eq I.tags.hiddenOutputs Bool.true) (dj : Finset (Fin n) → Lean.Json)",
@@ -9212,6 +9241,7 @@
    "type_hash": "ffb47002c7b4dab12cf94eac652066c0eda10e332c97b23485f687c47180ad9c"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_soundHJ_custody": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_soundHJ_custody {n : Nat} {Reg : Type}",
     "  (I : FlockSoundness.Discharge.Exec.Inputs) (hh : Eq I.tags.hiddenOutputs Bool.true) (kd : Nat)",
@@ -9321,6 +9351,7 @@
    "type_hash": "0be9400add8936e38899f094914eafc50c7f2cd0c6082cf4a23fa135271cac4e"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_soundHJ_custody_json": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_soundHJ_custody_json {n : Nat} {Reg : Type}",
     "  (I : FlockSoundness.Discharge.Exec.Inputs) (hh : Eq I.tags.hiddenOutputs Bool.true) (kd : Nat)",
@@ -9432,6 +9463,7 @@
    "type_hash": "d80fc0b1c7a1b17ede0074da1c54202954892f010deff16225b4f5c07b64ee3a"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_soundH_custody": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_soundH_custody {n : Nat} {Reg : Type}",
     "  (I : FlockSoundness.Discharge.Exec.Inputs) (hh : Eq I.tags.hiddenOutputs Bool.true) (hn : instLENat.le I.count 1)",
@@ -9583,6 +9615,7 @@
    "type_hash": "b39338a6299f52ab3ef4e280b23d5c1c5c603d133d9d80a31ce4f240de1a4894"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_soundJ": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_soundJ {mPts n : Nat} {Reg : Type}",
     "  (I : FlockSoundness.Discharge.Exec.Inputs) (hh : Eq I.tags.hiddenOutputs Bool.false) (dj : Finset (Fin n) → Lean.Json)",
@@ -9688,6 +9721,7 @@
    "type_hash": "5aa684498ca40a03732e52cd57664c72346a63a6da30d8c9652e4b07674a7b4c"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_soundJ_custody": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_soundJ_custody {n : Nat} {Reg : Type}",
     "  (I : FlockSoundness.Discharge.Exec.Inputs) (hh : Eq I.tags.hiddenOutputs Bool.false) (kd : Nat)",
@@ -9795,6 +9829,7 @@
    "type_hash": "5250bc65f8a170afc95d145a987644ab226a52b85ee09235430c0316985e4488"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_soundJ_custody_json": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_soundJ_custody_json {n : Nat} {Reg : Type}",
     "  (I : FlockSoundness.Discharge.Exec.Inputs) (hh : Eq I.tags.hiddenOutputs Bool.false) (kd : Nat)",
@@ -9904,6 +9939,7 @@
    "type_hash": "c26dda38acf31aa4ac8079fe65a998466bdea8bf7f29af7f8e59aa1c28908986"
   },
   "FlockSoundness.Discharge.FailClosed.zk_session_sound_custody": {
+   "owner": "@proofs",
    "signature": [
     "FlockSoundness.Discharge.FailClosed.zk_session_sound_custody {n : Nat} {Reg : Type}",
     "  (I : FlockSoundness.Discharge.Exec.Inputs) (hh : Eq I.tags.hiddenOutputs Bool.false) (hn : instLENat.le I.count 1)",
