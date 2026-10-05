@@ -213,7 +213,7 @@ Runs: `python -m archive.direct.ligero.run bench-vu [--zk] --batch 16384 --total
 ## Runs
 
 ~~~
-# on vy-g3, /workspace/bl/src, PYTHONPATH=.:benchmarks/numerical/python:.
+# on vy-g3, /workspace/bl/src, PYTHONPATH=.:benchmarks/numerical/python
 python -m archive.direct.ligero.run gate     --root fixtures/bench-instances/v1 --device cuda --vus 64   # notes-asset:campaigns/r20-proof/assets/b-ligero/results/gate_unit.log
 python -m archive.direct.ligero.run bench    --root fixtures/bench-instances/v1 --device cuda --reps 5 --out results/result_unit_b4096.json
 python -m archive.direct.ligero.run gate-vu  --root fixtures/bench-instances/v1 --device cuda --vus 64   # notes-asset:campaigns/r20-proof/assets/b-ligero/results/gate_vu.json

@@ -2,7 +2,7 @@
 heads at serving time in M0's row format and hands over the registration, the verifier's public file, the prover's file
 and the unit index; nothing else changes.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/verity/protocols/verification/sampled_proofs \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a2.py --served DIR --template-set DIR --m0-pythonpath PATH --bin flock-circuit \\
       --lean flock-verify --out DIR [--k 256] [--delta 2^-20]
 
