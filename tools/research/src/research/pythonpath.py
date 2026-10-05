@@ -1,6 +1,6 @@
 """A source tree's Python import roots, derived from its workspace declaration -- never a hand-written PYTHONPATH list.
 
-Hand lists for shipped trees failed silently twice (a missing `.`: `verity` not importable -> one lane crashed, and a
+Hand lists for shipped trees failed silently twice (a missing `packages/verity/src`: `verity` not importable -> one lane crashed, and a
 night earlier an incomplete manifest looked like a result).  The tree already says what its packages are:
 
     <tree>/pyproject.toml   [tool.uv.workspace] members = [...] (globs allowed), exclude = [...]; a [project] here is a member
@@ -132,7 +132,7 @@ def pythonpath(root: str, derived: dict, extra: str | None = None) -> str:
 def tree_pythonpath(tree: Path | str) -> str:
     """The PYTHONPATH a command run from a source tree needs: the tree's workspace import roots (what `research env --source` prints),
     then the tree root itself (modules addressed from the top, `archive.direct...`).  The steward's render and the parity tool's
-    render both use it, so a new workspace member (`.`) reaches them without a hand-kept list."""
+    render both use it, so a new workspace member (`catalog`) reaches them without a hand-kept list."""
     root = str(Path(tree))
     return pythonpath(root, import_roots_dir(root), extra=root)
 
