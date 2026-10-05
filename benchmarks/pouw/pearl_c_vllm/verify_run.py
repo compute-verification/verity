@@ -32,10 +32,10 @@ import multiprocessing
 from pathlib import Path
 
 import numpy as np
-from verity.commitments import Commitment, Opening
-from verity_pouw.audit import Epoch, TileOpening, Transcript, Verifier, Workload
-from verity_pouw.protocol import Context, Matmul, Shape
-from verity_pouw.schemes import pearl_c_work as PW
+from verity.primitives.commitments import Commitment, Opening
+from verity.protocols.accounting.work.pouw.audit import Epoch, TileOpening, Transcript, Verifier, Workload
+from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -85,7 +85,7 @@ def f32_row(data, k: int, i: int) -> bytes:
 
 
 class Opened:
-    """The prover's side of the audit from the pass's files: `open`, as `verity_pouw.audit.Prover` has it."""
+    """The prover's side of the audit from the pass's files: `open`, as `verity.protocols.accounting.work.pouw.audit.Prover` has it."""
 
     def __init__(self, man: dict, files: Files, refs):
         self.man, self.files, self.refs = man, files, refs

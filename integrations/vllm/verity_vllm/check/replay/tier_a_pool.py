@@ -26,7 +26,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from verity.ir.layout import FunctionCall
+from verity.primitives.circuits.layout import FunctionCall
 from verity_vllm.check.replay import fork as FK
 
 Outcome = tuple[str, Any]          # `Replayer.outcome`: ("ok", entry) | ("skipped", reason) | ("error", "<type>: <message>")
