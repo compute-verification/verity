@@ -41,9 +41,9 @@ FADD_PRICES = (Fraction(8), Fraction(1047, 125))
 #: the POUS Project store's pin files, relative to its root: the Lean store's audit first (what is pinned), then what is
 #: staged with a red-team GO (price-twins-lean/README.md)
 LEAN_STORE = "lean/submissions/pouw/lean-audit.json"
-#: the repository's PoUW Lean audit, where pins land now; read after the store's files, so a pin they hold keeps its row
-REPO_AUDIT = HERE.parents[2] / "verity" / "protocols" / "accounting" / "work" / "pouw" / "lean" / "lean-audit.json"
-REPO_SOURCE = "verity/protocols/accounting/work/pouw/lean/lean-audit.json"
+#: the repository's security analysis audit, where PoUW's pins land now; read after the store's files, so a pin they hold keeps its row
+REPO_AUDIT = HERE.parents[2] / "verity" / "Security" / "lean-audit.json"
+REPO_SOURCE = "verity/Security/lean-audit.json"
 STAGED = ("internal/pouw/price-twins-lean/proposed-pins.json", "internal/pouw/price-twins-lean/v2-hot/v2-hot-pins.json",
           "internal/pouw/price-twins-lean/v1-hot/v1-hot-pins.json", "internal/pouw/price-twins-lean/fp4-delta/fp4-delta-pins.json")
 CASTS = {"8": "cast-8", "8p72": "cast-8.72", "16": "cast-16", "32": "cast-32", "32p06": "cast-32.06"}

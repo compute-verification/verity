@@ -12,13 +12,13 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
-TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the soundness package's Mathlib and ArkLib pin v4.34.0
+TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the security packages' Mathlib and ArkLib pin v4.34.0
 FORBIDDEN = re.compile(r"\b(native_decide|implemented_by|extern|unsafe)\b")
 
 
 def sources():
-    """The executable's sources (the proofs' package, `soundness/`, has its own dependencies and checks)."""
-    return sorted(p for p in LEAN.rglob("*.lean") if ".lake" not in p.parts and "soundness" not in p.relative_to(LEAN).parts)
+    """The executable's sources (its proofs are under `verity/Security/Proofs/Flock/`, with their own dependencies and checks)."""
+    return sorted(p for p in LEAN.rglob("*.lean") if ".lake" not in p.parts)
 
 
 def test_toolchain_is_pinned():
