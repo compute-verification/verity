@@ -976,7 +976,7 @@ def _replace_section(text: str, header: str, body: str) -> str:
             continue
         else:
             out.append(b)
-    return "".join(out)
+    return "".join(out).rstrip("\n") + "\n"
 
 
 def _add_table_entries(text: str, header: str, entries: dict[str, str], before: str) -> str:

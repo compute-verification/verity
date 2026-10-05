@@ -1,5 +1,5 @@
 """A shipped tree's PYTHONPATH comes from its workspace declaration (research.pythonpath), never a hand list: two silent failures came
-from a list that left out packages/verity/src."""
+from a hand list that left out core's source directory."""
 from __future__ import annotations
 
 import json
