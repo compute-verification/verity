@@ -1,13 +1,16 @@
-import Definitions.Warden
+import Warden.Ingress
+import Warden.Schedule
 import Lean.Data.Json
 
 /-!
-# The difftest: `NetTiming`'s definitions against the Python audit, on random instances
+# The difftest: the warden program against the Python audit, on random instances
 
 `scripts/difftest_vectors.py` generates instances and runs the Python audit on them (`schedule.expected_grids`,
-`Audit.check_link`, `Audit.check_ingress_link`). `NetTimingDifftest.lean` reads both files and fails unless `evaluate`,
-which computes the same results from `NetTiming`'s definitions, gives every one of them. The Lean audit runs it (`runs`
-in `lean-audit.json`): compiled evaluation, a test and not a proof.
+`Audit.check_link`, `Audit.check_ingress_link`). `Warden/DifftestMain.lean` reads both files and fails unless `evaluate`,
+which computes the same results from the program's definitions (`NetTiming.Code`), gives every one of them. The Lean
+audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof. `Proofs.Warden.Code`
+(`security_proofs`) proves what it evaluates (`expectedRow`, `Accepted` of `constantRate`, `StatusComplete`, membership
+in `Σ_sync`) equal to the reference definitions in `verity/Security/Definitions/Warden/`, which the guarantees read.
 
 An instance is `L` egress links and `K ≥ L` boundary links (the egress links first), windows of `T` buckets, `W` of
 them with advice, the allocation `S`, the sync set `Σ_sync`, and per egress link its frames in canonical order and the
@@ -31,15 +34,23 @@ records stop at a window boundary, so the sequence has `T` steps per window reco
 * for every prefix, `complete`: `StatusComplete` on the first `m·T` steps, by `decide`.
 -/
 
-namespace NetTiming.Difftest
+namespace NetTiming.Code.Difftest
 
 open Lean
 
-instance decidableAccepted {L K S : ℕ} {In Adv : Type} (P : Program L S In Adv) (op : ℕ → List (Obs L K S) → In)
-    (k : ℕ) (o : List (Obs L K S)) (a : Adv) : Decidable (Accepted P op k o a) := by
+/-- Rows and their records are functions on `Fin`; Lean core decides their equality slot by slot. -/
+instance decEqFinFun {n : Nat} {α : Type} [DecidableEq α] : DecidableEq (Fin n → α) := fun f g =>
+  decidable_of_iff (∀ i, f i = g i) ⟨funext, fun h _ => h ▸ rfl⟩
+
+/-- `Accepted`'s `∃ h : t < o.length, …`, decided by its premise. -/
+instance decidableExistsProp {p : Prop} {q : p → Prop} [Decidable p] [∀ h, Decidable (q h)] : Decidable (∃ h, q h) :=
+  if hp : p then decidable_of_iff (q hp) ⟨fun h => ⟨hp, h⟩, fun ⟨_, h⟩ => h⟩ else isFalse fun ⟨h, _⟩ => hp h
+
+instance decidableAccepted {L K S : Nat} {In Adv : Type} (P : Program L S In Adv) (op : Nat → List (Obs L K S) → In)
+    (k : Nat) (o : List (Obs L K S)) (a : Adv) : Decidable (Accepted P op k o a) := by
   unfold Accepted; infer_instance
 
-instance decidableStatusComplete {L K S : ℕ} (k : ℕ) (o : List (Obs L K S)) : Decidable (StatusComplete k o) := by
+instance decidableStatusComplete {L K S : Nat} (k : Nat) (o : List (Obs L K S)) : Decidable (StatusComplete k o) := by
   unfold StatusComplete; infer_instance
 
 /-- A payload's bits from its bytes in lowercase hex, eight per byte, most significant first. -/
@@ -83,12 +94,12 @@ def ratOfJson (j : Json) : Except String Rat := do
   pure (mkRat n d.toNat)
 
 /-- A clock sync `[delta, num, den]`. -/
-def syncOfJson (j : Json) : Except String (ℕ × Rat) := do
+def syncOfJson (j : Json) : Except String (Nat × Rat) := do
   let #[d, n, m] ← fromJson? (α := Array Json) j | throw s!"not [delta, num, den]: {j.compress}"
   pure (← fromJson? d, ← ratOfJson (.arr #[n, m]))
 
 /-- The clock sync of a declared value, whose ρ Python's `ClockSync` requires positive (`evaluate` checks it). -/
-def clockOf (p : ℕ × Rat) : ClockSync :=
+def clockOf (p : Nat × Rat) : ClockSync :=
   if h : 0 < p.2 then ⟨p.1, p.2, h⟩ else ⟨p.1, 1, by decide⟩
 
 /-- A frame `[payload, anchor, index]`. -/
@@ -106,14 +117,14 @@ def slotJson : Option (List Bool) → Json
 
 /-- An instance as read, before its sizes become types. -/
 structure Raw where
-  T : ℕ
-  W : ℕ
-  S : ℕ
-  K : ℕ
-  deltas : List ℕ
+  T : Nat
+  W : Nat
+  S : Nat
+  K : Nat
+  deltas : List Nat
   rhos : List Rat
   frames : Array (List LogicalFrame)
-  syncs : Array (Array (ℕ × Rat))
+  syncs : Array (Array (Nat × Rat))
   rows : Array (Array (Array (Option (List Bool))))
   status : Array (Array Status)
 
@@ -122,8 +133,8 @@ def arrOf (j : Json) : Except String (Array Json) := fromJson? j
 def rawOfJson (j : Json) : Except String Raw := do
   let obs ← arrOf (← j.getObjVal? "obs")
   pure {
-    T := ← j.getObjValAs? ℕ "T", W := ← j.getObjValAs? ℕ "W", S := ← j.getObjValAs? ℕ "S", K := ← j.getObjValAs? ℕ "K"
-    deltas := ← j.getObjValAs? (List ℕ) "deltas"
+    T := ← j.getObjValAs? Nat "T", W := ← j.getObjValAs? Nat "W", S := ← j.getObjValAs? Nat "S", K := ← j.getObjValAs? Nat "K"
+    deltas := ← j.getObjValAs? (List Nat) "deltas"
     rhos := (← (← arrOf (← j.getObjVal? "rhos")).mapM ratOfJson).toList
     frames := ← (← arrOf (← j.getObjVal? "frames")).mapM fun l => do (← arrOf l).toList.mapM frameOfJson
     syncs := ← (← arrOf (← j.getObjVal? "syncs")).mapM fun l => do (← arrOf l).mapM syncOfJson
@@ -131,14 +142,14 @@ def rawOfJson (j : Json) : Except String Raw := do
     status := ← obs.mapM fun x => do (← arrOf (← x.getObjVal? "status")).mapM statusOfJson }
 
 /-- The first element of `l` in `s`, with its membership. -/
-def pick {α : Type} [DecidableEq α] (l : List α) (s : Finset α) : Option {x // x ∈ s} :=
+def pick {α : Type} [DecidableEq α] (l : List α) (s : List α) : Option {x // x ∈ s} :=
   l.findSome? fun x => if h : x ∈ s then some ⟨x, h⟩ else none
 
 def verdictJson : Option String → Json
   | none => .null
   | some v => .str v
 
-/-- What `NetTiming`'s definitions give on an instance, in the shape of the Python audit's results. -/
+/-- What the program's definitions give on an instance, in the shape of the Python audit's results. -/
 def evaluate (r : Raw) : Except String Json := do
   let L := r.frames.size
   let T := r.T
@@ -152,29 +163,27 @@ def evaluate (r : Raw) : Except String Json := do
     throw "an observation sequence of whole windows"
   unless r.rows.all (fun x => x.size = L ∧ x.all (·.size = S)) ∧ r.status.all (·.size = K) do
     throw "a step has L rows of S slots and K statuses"
-  let deltas := r.deltas.toFinset
-  let rhos := r.rhos.toFinset
-  let ss : SyncSet ← if h : deltas.Nonempty ∧ rhos.Nonempty ∧ ∀ ρ ∈ rhos, 0 < ρ then
-      pure ⟨deltas, rhos, h.1, h.2.1, h.2.2⟩
+  let ss : SyncSet ← if h : r.deltas ≠ [] ∧ r.rhos ≠ [] ∧ (∀ ρ ∈ r.rhos, 0 < ρ) ∧ r.deltas.Nodup ∧ r.rhos.Nodup then
+      pure ⟨r.deltas, r.rhos, h.1, h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2⟩
     else throw "not a sync set"
   let some d0 := pick r.deltas ss.deltas | throw "no delta"
   let some ρ0 := pick r.rhos ss.rhos | throw "no rho"
-  let decl (ℓ : Fin L) (w : Fin W) : ℕ × Rat := (r.syncs.getD ℓ #[]).getD w (0, 1)
+  let decl (ℓ : Fin L) (w : Fin W) : Nat × Rat := (r.syncs.getD ℓ #[]).getD w (0, 1)
   let syncs (ℓ : Fin L) : Fin W → ClockSync := fun w => clockOf (decl ℓ w)
-  let unit (w : Fin W) : ℕ × Rat := decl ⟨0, (not_not.mp hL).1⟩ w
-  let elem (p : ℕ × Rat) : ss.Elem :=
+  let unit (w : Fin W) : Nat × Rat := decl ⟨0, (Decidable.of_not_not hL).1⟩ w
+  let elem (p : Nat × Rat) : ss.Elem :=
     if h : p.1 ∈ ss.deltas ∧ p.2 ∈ ss.rhos then (⟨p.1, h.1⟩, ⟨p.2, h.2⟩) else (d0, ρ0)
   let frames (ℓ : Fin L) : List LogicalFrame := r.frames.getD ℓ []
   let o : List (Obs L K S) := (List.range r.rows.size).map fun t =>
     { rows := fun ℓ s => ((r.rows.getD t #[]).getD ℓ #[]).getD s none, jitter := 0
       status := fun κ => (r.status.getD t #[]).getD κ .complete }
   let P : Program L S Unit (Unit × (Fin W → ss.Elem)) := constantRate T W ss fun _ _ ℓ => frames ℓ
-  let op : ℕ → List (Obs L K S) → Unit := fun _ _ => ()
+  let op : Nat → List (Obs L K S) → Unit := fun _ _ => ()
   let σ : Fin W → ss.Elem := fun w => elem (unit w)
-  let recorded (w : ℕ) : Bool := (w + 1) * T ≤ o.length
-  let window (w : ℕ) : List ℕ := (List.range T).map (w * T + ·)
+  let recorded (w : Nat) : Bool := (w + 1) * T ≤ o.length
+  let window (w : Nat) : List Nat := (List.range T).map (w * T + ·)
   -- `check_ingress_link`'s verdict for boundary link `κ` in window `w`, from its statuses there
-  let statusVerdict (κ : Fin K) (w : ℕ) : Option String :=
+  let statusVerdict (κ : Fin K) (w : Nat) : Option String :=
     if recorded w then
       (window w).findSome? fun t =>
         if h : t < o.length then
@@ -183,19 +192,19 @@ def evaluate (r : Raw) : Except String Json := do
           | .notEstablished why => some s!"status:{reasonText why}"
         else none
     else some "no-verdict"
-  let rowAgrees (ℓ : Fin L) (t : ℕ) : Bool :=
+  let rowAgrees (ℓ : Fin L) (t : Nat) : Bool :=
     if h : t < o.length then decide (o[t].rows ℓ = expectedRow S T W (syncs ℓ) (frames ℓ) t) else false
   let advice (ℓ : Fin L) (w : Fin W) : Bool :=
     decide ((decl ℓ w).1 ∈ ss.deltas ∧ (decl ℓ w).2 ∈ ss.rhos) && decl ℓ w == unit w
-  let diff (ℓ : Fin L) (w : ℕ) : Option ℕ := if recorded w then (window w).find? (! rowAgrees ℓ ·) else none
+  let diff (ℓ : Fin L) (w : Nat) : Option Nat := if recorded w then (window w).find? (! rowAgrees ℓ ·) else none
   let verdict (ℓ : Fin L) (w : Fin W) : Option String :=
     match statusVerdict ⟨ℓ, by omega⟩ w with
     | some v => some v
     | none => if !advice ℓ w then some "advice" else (diff ℓ w).map fun _ => "mismatch"
-  let accepted (m : ℕ) : Bool :=
+  let accepted (m : Nat) : Bool :=
     (List.finRange W).all (fun w => decide (m ≤ w.1) || (List.finRange L).all (advice · w)) &&
       decide (Accepted P op (m * T) o ((), σ))
-  let complete (m : ℕ) : Bool := decide (StatusComplete (m * T) o)
+  let complete (m : Nat) : Bool := decide (StatusComplete (m * T) o)
   let links := (List.finRange L).toArray
   let horizon := (List.finRange W).toArray
   pure <| Json.mkObj [
@@ -212,7 +221,7 @@ def evaluate (r : Raw) : Except String Json := do
 def fields : List String := ["rows", "verdicts", "diff", "status", "accepted", "complete"]
 
 /-- How the Lean side's results for instance line `i` differ from Python's, one line per field that differs. -/
-def differences (i : ℕ) (inst python : String) : List String :=
+def differences (i : Nat) (inst python : String) : List String :=
   match Json.parse inst >>= rawOfJson >>= evaluate, Json.parse python with
   | .error e, _ => [s!"instance {i}: the Lean side rejects it: {e}"]
   | _, .error e => [s!"instance {i}: Python's results don't parse: {e}"]
@@ -221,10 +230,10 @@ def differences (i : ℕ) (inst python : String) : List String :=
     let b := py.getObjValD k
     if a == b then none else some s!"instance {i}: {k}: Lean {a.compress}, Python {b.compress}"
 
-/-- `lake env lean --run NetTimingDifftest.lean INSTANCES PYTHON N`: every instance line of `INSTANCES` evaluated side
+/-- `lake env lean --run Warden/DifftestMain.lean INSTANCES PYTHON N`: every instance line of `INSTANCES` evaluated side
 by side, each compared with the same line of `PYTHON`. Fails unless both files have `N` lines and none differs. -/
 def main (args : List String) : IO UInt32 := do
-  let [insts, py, n] := args | IO.eprintln "usage: NetTimingDifftest.lean INSTANCES PYTHON N"; return 2
+  let [insts, py, n] := args | IO.eprintln "usage: Warden/DifftestMain.lean INSTANCES PYTHON N"; return 2
   let lines (p : String) : IO (Array String) := do
     return ((← IO.FS.readFile p).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   let a ← lines insts
@@ -238,4 +247,4 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"difftest: {a.size} instances compared, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
-end NetTiming.Difftest
+end NetTiming.Code.Difftest

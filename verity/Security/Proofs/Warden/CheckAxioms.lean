@@ -2,7 +2,6 @@ import Definitions.Warden
 import Specs.Warden.Assumptions
 import Specs.Warden.Guarantees
 import Proofs.Warden
-import Proofs.Warden.Difftest
 open NetTiming
 
 -- The 35 statements' proofs (four of them `lean-audit.json`'s `guarantees`), then the 16 witnesses.

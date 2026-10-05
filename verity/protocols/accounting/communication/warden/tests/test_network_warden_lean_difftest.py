@@ -1,10 +1,11 @@
-"""The difftest of the Python audit against `NetTiming`'s Lean definitions: the Python half.
+"""The difftest of the Python audit against the warden's Lean program: the Python half.
 
 `lean/scripts/difftest_vectors.py` writes 10,000 random instances and this package's results on each
 (`schedule.expected_grids`, `Audit.check_link` with the first differing bucket, `Audit.check_ingress_link`, and each
-prefix's acceptance). `check` runs the Lean half in its Lean audit (`runs` in `verity/Security/Proofs/lean-audit.json`):
-`Proofs/Warden/DifftestMain.lean` evaluates every instance with `NetTiming`'s definitions (`expectedRow`, and `Accepted` of
-`constantRate` and `StatusComplete` by `decide`) and fails on any difference. The audit checks that data against the
+prefix's acceptance). `check` runs the Lean half in its Lean audit (`runs` in `lean/lean-audit.json`):
+`lean/Warden/DifftestMain.lean` evaluates every instance with the program's definitions (`NetTiming.Code`: `expectedRow`,
+and `Accepted` of `constantRate` and `StatusComplete` by `decide`) and fails on any difference, and `security_proofs`
+proves those definitions equal to `NetTiming`'s, which the guarantees read. The audit checks that data against the
 record's SHA-256, and its pass is cached on the Lean package's files alone, so the test here is what says the data is
 still what this package computes: a change to the audit's verdicts changes the data, fails this test, and
 `audit.py --update` records the new data, which makes `check` run the Lean half on it. The tests here also check, on the
@@ -24,12 +25,12 @@ import pytest
 from verity.protocols.accounting.communication.warden.grid import released
 from verity.protocols.accounting.communication.warden.schedule import ClockSync, LogicalFrame, handing_buckets
 
-PROOFS = Path(__file__).resolve().parents[5] / "Security" / "Proofs"
-SCRIPT = Path(__file__).resolve().parents[1] / "lean" / "scripts" / "difftest_vectors.py"
+LEAN = Path(__file__).resolve().parents[1] / "lean"
+SCRIPT = LEAN / "scripts" / "difftest_vectors.py"
 _spec = importlib.util.spec_from_file_location("difftest_vectors", SCRIPT)
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)
-RUN = json.loads((PROOFS / "lean-audit.json").read_text())["runs"]["Proofs.Warden.DifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["Warden.DifftestMain"]
 
 
 def test_the_data_is_what_the_audit_pins(tmp_path):
