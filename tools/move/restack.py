@@ -207,6 +207,7 @@ def line(r: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global SCRIPT
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("branches", nargs="+", metavar="BRANCH")
     ap.add_argument("--move-commit", required=True, metavar="SHA", help="the commit layout.py generated")
@@ -220,7 +221,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="report only; never push")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    global SCRIPT
     if not a.script.startswith(SCRIPT_DIR + "/"):
         ap.error(f"--script: a script under {SCRIPT_DIR}/")
     SCRIPT = a.script

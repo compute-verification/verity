@@ -11,12 +11,13 @@ What it does, on the tree as it is (so it reruns on a later main, and a branch i
 2. moves the files with `layout.py`'s machinery (`layout.Run` on a map it generates: one row per file, one per module
    directory, the old package directories as tokens), which also rewrites every path that names them in the tree;
 3. rewrites every `import` of every `.lean` file, and the module names after `lake build`, `lake env lean` and `import` in
-   scripts and docs;
+   scripts and docs, and has each `Proofs.<Area>` import what its dropped package root imported and nothing else does;
 4. writes the umbrellas (`Definitions`, `Specs`, `Proofs.<Area>`), the lakefiles, manifests and toolchains of `security` and
    `security_proofs`, and the code packages' lakefiles;
 5. merges the old locks into `verity/Security/lean-audit.json` (the guarantees and their `reads`, under the modules' new
    names; `proved_in` the proofs package) and `verity/Security/Proofs/lean-audit.json` (roots, exempt, runs, compile_time,
-   upstream), and regenerates the code packages' locks. Declarations keep their names, so no guarantee changes:
+   upstream, the layers of proof modules), and regenerates the code packages' locks, which keep the guarantees their code
+   files declare. Declarations keep their names, so no guarantee changes:
    `audit.py --update --moved` on the result prints each as the same statement.
 Old locks and package files are removed once merged. A step that finds nothing left to do does nothing.
 """
@@ -38,6 +39,9 @@ import layout as L  # noqa: E402
 
 POLICY = "lean-audit.json"
 PKG_FILES = ("lakefile.toml", "lake-manifest.json", "lean-toolchain", POLICY, ".gitignore")
+#: the PoUS grader was exempt from its package's audit; as a code package of its own it is audited, and its one escape is this
+GRADER_ESCAPE = ("@[extern] opaque: Lean's resident-memory limit (`lean -M`, the runtime's lean_internal_set_max_memory), "
+                 "which the grader sets from POUS_GRADE_MEMORY_MB before elaborating a submission; no proof is about it")
 AREAS = ("Core", "Nci", "Pous", "Pouw", "Warden", "Flock")
 IMPORT = re.compile(r"^(\s*(?:public\s+|private\s+|meta\s+)*import\s+)(.*)$")
 
@@ -143,6 +147,39 @@ def rename_all(m: Map, mods: dict) -> tuple[dict[str, str], dict[str, list[str]]
     return ren, dropped, by_path
 
 
+DECL = re.compile(r"^\s*(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable)\s+)*(?:theorem|lemma)\s+([^\s:({\[]+)")
+NAMESPACE = re.compile(r"^\s*namespace\s+(\S+)")
+SECTION = re.compile(r"^\s*(?:noncomputable\s+)?section(?:\s+\S+)?\s*$")
+END = re.compile(r"^\s*end(?:\s+\S+)?\s*$")
+
+
+def theorems(text: str) -> set[str]:
+    """The full names of the theorems a Lean file declares, from its `namespace`/`section`/`end` lines."""
+    stack: list[list[str]] = []
+    out = set()
+    for line in text.split("\n"):
+        if (mo := NAMESPACE.match(line)):
+            stack.append(mo.group(1).split("."))
+        elif SECTION.match(line):
+            stack.append([])
+        elif END.match(line):
+            if stack:
+                stack.pop()
+        elif (mo := DECL.match(line)):
+            n = mo.group(1)
+            out.add(n[len("_root_."):] if n.startswith("_root_.") else ".".join([p for ps in stack for p in ps] + [n]))
+    return out
+
+
+def code_theorems(m: Map, mods: dict) -> dict[str, set[str]]:
+    """{code package: the theorems its code files declare}: a guarantee proved beside the code stays in its lock."""
+    out: dict[str, set[str]] = {}
+    for p, (k, old) in mods.items():
+        if old.split(".")[0] in m.pkgs[k].get("code", []):
+            out.setdefault(k, set()).update(theorems((m.root / p).read_text()))
+    return out
+
+
 def expand(name: str, ren: dict, dropped: dict, seen=()) -> list[str]:
     if name in dropped:
         return [y for x in dropped[name] if x not in seen for y in expand(x, ren, dropped, (*seen, name))]
@@ -227,6 +264,44 @@ def rewrite_imports(root: Path, ren: dict, dropped: dict, dry: bool) -> int:
             if not dry:
                 (root / p).write_text("\n".join(out))
     return n
+
+
+def keep_reachable(m: Map, root: Path, ren: dict, dropped: dict, dry: bool) -> list[str]:
+    """What a dropped package root imported, and nothing under `Proofs.<Area>` imports any more, is imported by that root:
+    a module only the old root imported (`Nci.SecurityProofs.Throttling`) would otherwise be built and audited by nobody."""
+    sec = root / m.sec
+
+    def path(mod: str) -> Path:
+        return sec / (mod.replace(".", "/") + ".lean")
+
+    def reach(start: str) -> set[str]:
+        seen, todo = set(), [start]
+        while todo:
+            x = todo.pop()
+            if x in seen or not path(x).exists():
+                continue
+            seen.add(x)
+            todo += [y for _, _, ms in header_imports(path(x).read_text())[0] for y in ms]
+        return seen
+
+    added = []
+    for old in sorted(dropped):
+        if "." in old:
+            continue
+        for x in expand(old, ren, dropped):
+            parts = x.split(".")
+            if parts[0] != "Proofs" or len(parts) < 3 or not path(top := ".".join(parts[:2])).exists():
+                continue
+            if x in reach(top) or not path(x).exists():
+                continue
+            text = path(top).read_text()
+            imps, _ = header_imports(text)
+            lines = text.split("\n")
+            lines.insert(imps[-1][0] + 1 if imps else 0, f"import {x}")
+            if not dry:
+                path(top).write_text("\n".join(lines))
+            added.append(f"{top} imports {x}")
+    return added
 
 
 CMD = re.compile(r"(lake\s+(?:build|env\s+lean|exe)\s+|import\s+)([A-Za-z_][\w.' ]*)")
@@ -420,7 +495,7 @@ def rekey_bundles(m: Map, root: Path, old_keys: dict, LA) -> dict:
 
 # ------------------------------------------------------------------------------------------------------------- step 5
 
-def merge_locks(m: Map, root: Path, locks: dict, dry: bool):
+def merge_locks(m: Map, root: Path, locks: dict, code_thms: dict, dry: bool):
     import audit as A
     sec = {"roots": ["Definitions", "Specs"], "proved_in": ["Proofs"], "assumptions": [], "meaning": [],
            "layers": {}, "reads_exempt": {}, "guarantees": {}, "reads": {}, "dependencies": {}}
@@ -428,7 +503,8 @@ def merge_locks(m: Map, root: Path, locks: dict, dry: bool):
            "upstream": {"imports": [], "watch": {}}, "dependencies": {}}
     code = {"verifier": {"roots": ["Flock", "FlockVerify"], "exempt": {}, "meaning": ["Flock"], "escapes": {},
                          "dependencies": {}},
-            "pous": {"roots": ["Grader.Registry", "Grader.Main"], "exempt": {}, "dependencies": {}}}
+            "pous": {"roots": ["Grader.Registry", "Grader.Main"], "exempt": {}, "escapes": {"setMaxMemory": GRADER_ESCAPE},
+                     "dependencies": {}}}
     conflicts: list[str] = []
     gen = {"pouw": "verity/protocols/accounting/work/pouw/lean", "warden": "verity/protocols/accounting/communication/warden/lean"}
     for k, pol in locks.items():
@@ -448,22 +524,29 @@ def merge_locks(m: Map, root: Path, locks: dict, dry: bool):
             if mp(x) not in sec["meaning"]:
                 sec["meaning"].append(mp(x))
         for lay, rule in pol.get("layers", {}).items():
-            sec["layers"][mp(lay)] = {"imports": [mp(x) for x in rule["imports"]],
+            (prf if mp(lay).startswith("Proofs.") else sec).setdefault("layers", {})[mp(lay)] = {"imports": [mp(x) for x in rule["imports"]],
                                            "except": [mp(x) for x in rule.get("except", [])], "why": rule["why"]}
+        here = code_thms.get(k, set()) if k in code else set()
         for x, why in pol.get("reads_exempt", {}).items():
             sec["reads_exempt"].setdefault(mp(x), why)
-        sec["guarantees"].update(pol.get("guarantees", {}))
+            if here and x.split(".")[0] in m.pkgs[k]["code"]:
+                code[k].setdefault("reads_exempt", {})[x] = why
+        for g, rec in pol.get("guarantees", {}).items():
+            (code[k] if g in here else sec).setdefault("guarantees", {})[g] = rec
         for mod, g in pol.get("reads", {}).items():
-            new = mp(mod)
-            cur = sec["reads"].setdefault(new, {"digest": "", "definitions": {}, "guarantees": []})
             defs = g.get("definitions", {})
             if isinstance(defs, list):
                 raise SystemExit(f"{k}: `reads` {mod} is a record written before SHA-256 hashes; `audit.py --update` it first")
-            for d, h in defs.items():
-                if cur["definitions"].setdefault(d, h) != h:
-                    conflicts.append(f"{d} ({k})")
-            cur["guarantees"] = sorted({*cur["guarantees"], *g.get("guarantees", [])})
-            cur["digest"] = A.module_digest(cur["definitions"])
+            mine = [x for x in g.get("guarantees", []) if x in here]
+            for pol_to, gs in ((code.get(k), mine), (sec, [x for x in g.get("guarantees", []) if x not in here])):
+                if pol_to is None or not gs:
+                    continue
+                cur = pol_to.setdefault("reads", {}).setdefault(mp(mod), {"digest": "", "definitions": {}, "guarantees": []})
+                for d, h in defs.items():
+                    if cur["definitions"].setdefault(d, h) != h:
+                        conflicts.append(f"{d} ({k})")
+                cur["guarantees"] = sorted({*cur["guarantees"], *gs})
+                cur["digest"] = A.module_digest(cur["definitions"])
         for x, why in pol.get("exempt", {}).items():
             n = mp(x)
             if k == "verifier" and x == "FlockRows":
@@ -487,6 +570,10 @@ def merge_locks(m: Map, root: Path, locks: dict, dry: bool):
                 if w in prf["upstream"]["watch"]:
                     raise SystemExit(f"upstream watch {w} in two locks")
                 prf["upstream"]["watch"][w] = e
+            for s, e in up.get("scan", {}).items():
+                if s in prf["upstream"].setdefault("scan", {}):
+                    raise SystemExit(f"upstream scan {s} in two locks")
+                prf["upstream"]["scan"][s] = e
         if k == "verifier":
             code["verifier"]["escapes"] = pol.get("escapes", {})
         for d, h in pol.get("dependencies", {}).items():
@@ -498,6 +585,10 @@ def merge_locks(m: Map, root: Path, locks: dict, dry: bool):
     sec["reads_exempt"] = {k: v for k, v in sec["reads_exempt"].items() if k not in ("Grader",)}
     sec["reads"] = dict(sorted(sec["reads"].items()))
     sec["guarantees"] = dict(sorted(sec["guarantees"].items()))
+    for pol in code.values():
+        for key in ("guarantees", "reads"):
+            if key in pol:
+                pol[key] = dict(sorted(pol[key].items()))
     prf["dependencies"] = {**sec["dependencies"], **prf["dependencies"]}
     for pol in (sec, prf, *code.values()):
         for key in [k for k, v in pol.items() if v in ({}, [], {"imports": [], "watch": {}})]:
@@ -516,6 +607,16 @@ def merge_locks(m: Map, root: Path, locks: dict, dry: bool):
 
 
 # ---------------------------------------------------------------------------------------------------------------- main
+
+def case_clashes(paths) -> list[list[str]]:
+    """Paths (and their directories) that differ only in case: a checkout on a case-insensitive filesystem holds one."""
+    seen: dict[str, set[str]] = {}
+    for f in paths:
+        parts = f.split("/")
+        for i in range(1, len(parts) + 1):
+            seen.setdefault("/".join(parts[:i]).lower(), set()).add("/".join(parts[:i]))
+    return sorted(sorted(v) for v in seen.values() if len(v) > 1)
+
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -556,12 +657,14 @@ def main(argv=None) -> int:
     sys.path.insert(0, str(root / "tools" / "lean"))
     import lean_audit as LA
     old_keys = {k: LA.deps_key(root / d) for k, d in old_pkgs.items()}
+    code_thms = code_theorems(m, mods)
     data = layout_map(m, files, mods, by_path)
     print(f"  layout: {run_layout(root, data, False)}")
     for p, (k, o) in mods.items():
         if o in dropped and (root / p).exists():
             git(root, "rm", "-q", p)
     print(f"  imports rewritten in {rewrite_imports(root, ren, dropped, False)} files")
+    print(f"  kept reachable: {keep_reachable(m, root, ren, dropped, False)}")
     print(f"  commands rewritten in {rewrite_commands(root, {**ren, 'Main': 'FlockVerify'}, False)} files")
     print(f"  umbrellas: {umbrellas(m, root, False)}")
     keep = {m.pkgs["verifier"]["dir"], m.pkgs["pous"]["dir"]}
@@ -571,8 +674,10 @@ def main(argv=None) -> int:
                 git(root, "rm", "-q", f"{d}/{f}")
     print(f"  lake: {lake_files(m, root, manifests, toolchain, False)}")
     print(f"  lean-deps.json: {rekey_bundles(m, root, old_keys, LA)}")
-    print(f"  locks: {json.dumps(merge_locks(m, root, locks, False))}")
+    print(f"  locks: {json.dumps(merge_locks(m, root, locks, code_thms, False))}")
     git(root, "add", "-A")
+    if clash := case_clashes(tracked(root)):
+        raise SystemExit(f"paths that differ only in case (a [files] entry in {a.map.name} must keep them apart): {clash}")
     return 0
 
 
