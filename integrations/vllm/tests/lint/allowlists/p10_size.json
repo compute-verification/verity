@@ -2,7 +2,7 @@
   "rule": "P10 (size ratchet)",
   "entries": [
     {"file": "verity_vllm/check/c2_rules.py", "kind": "function", "symbol": "c2_rules", "detail": "lines", "count": 159},
-    {"file": "verity_vllm/check/fold_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 919},
+    {"file": "verity_vllm/check/fold_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 897},
     {"file": "verity_vllm/check/gates.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1397},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "function", "symbol": "decompose", "detail": "lines", "count": 348},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 894},
