@@ -44,6 +44,9 @@ namespace FlockSoundness.Discharge.Exec
 open Game Model Accounting Extract LinkFinder Audit Audit.Partition
 open scoped ENNReal
 
+/-- The executable's field. -/
+local notation "𝔽" => FlockLevel3.GF128
+
 variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} [Inhabited D] [Inhabited Sl]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))

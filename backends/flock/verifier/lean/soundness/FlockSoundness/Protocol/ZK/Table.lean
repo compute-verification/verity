@@ -2,15 +2,7 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.CharP.Defs
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Logic.Function.Basic
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Basic.Finite.Prod
-import Mathlib.Data.Finset.Card
-import Mathlib.Logic.Function.Iterate
-import Mathlib.Algebra.Group.Basic
-import Mathlib.Tactic.Abel
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Tactic.FinCases
+import FlockSoundness.Protocol.ZK.Blocks
 import Mathlib.Data.Fintype.Card
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Order.BigOperators.Group.Finset

@@ -29,6 +29,9 @@ namespace FlockSoundness.Audit
 open Game Model Accounting Extract LinkFinder
 open scoped ENNReal
 
+/-- The executable's field. -/
+local notation "𝔽" => FlockLevel3.GF128
+
 open Classical in
 /-- **The committed transcript with its public wires**: 1 on `ones` (the gates the units' constants read), 0 on `zeros`
 (the statement's zero) and `vals` elsewhere. -/

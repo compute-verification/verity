@@ -30,6 +30,9 @@ namespace FlockSoundness.StrictCR
 open Game Model Accounting
 open scoped ENNReal
 
+/-- The executable's field. -/
+local notation "𝔽" => FlockLevel3.GF128
+
 /-- A finder's output: two byte strings, or nothing. -/
 abbrev Pair : Type := Option (List UInt8 × List UInt8)
 

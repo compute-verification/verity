@@ -28,7 +28,9 @@ theorem ev_eq (z : Var → Bool) (f : Lin) : ev z f = (f.s.foldr (fun v b => z v
   cases f.c <;> cases g.c <;> simp
 
 @[simp] theorem ev_zero (z : Var → Bool) : ev z Lin.zero = false := rfl
+@[simp] theorem ev_one (z : Var → Bool) : ev z Lin.one = true := rfl
 @[simp] theorem ev_var (z : Var → Bool) (v : Var) : ev z (Lin.var v) = z v := by simp [Lin.var, ev]
+@[simp] theorem ev_const (z : Var → Bool) (b : Bool) : ev z (Lin.const b) = b := rfl
 
 theorem ev_of_isConst {f : Lin} (h : f.isConst = true) (z : Var → Bool) : ev z f = f.c := by
   obtain ⟨s, c⟩ := f

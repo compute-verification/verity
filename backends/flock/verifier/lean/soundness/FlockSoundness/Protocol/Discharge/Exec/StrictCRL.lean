@@ -21,6 +21,9 @@ namespace FlockSoundness.Discharge.Exec
 open Game Model Accounting StrictCR
 open scoped ENNReal
 
+/-- The executable's field. -/
+local notation "𝔽" => FlockLevel3.GF128
+
 /-! ## The compiled theorem -/
 
 section Compiled

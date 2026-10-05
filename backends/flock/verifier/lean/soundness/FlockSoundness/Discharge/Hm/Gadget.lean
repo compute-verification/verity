@@ -10,9 +10,6 @@ namespace FlockSoundness.Discharge.Hm
 
 open Flock.HmNets hiding and
 
-@[simp] theorem ev_one (z : Var → Bool) : ev z Lin.one = true := rfl
-@[simp] theorem ev_const (z : Var → Bool) (b : Bool) : ev z (Lin.const b) = b := rfl
-
 namespace Sound
 
 variable {α β : Type}

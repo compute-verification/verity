@@ -3,6 +3,7 @@ import Mathlib.Data.Fin.VecNotation
 import Mathlib.Data.Fintype.Pi
 import Mathlib.Data.Fintype.Prod
 import Mathlib.Tactic.FinCases
+import FlockSoundness.Protocol.ZK.Blocks
 
 /-!
 # Zero knowledge: `Adaptivity`'s two lemmas for four blocks of randomness
@@ -28,27 +29,10 @@ section Four
 
 variable {G₀ G₁ G₂ G₃ : Type}
 
-/-- The four blocks as a family over `Fin 4`. -/
-abbrev Blocks (G₀ G₁ G₂ G₃ : Type) : Fin 4 → Type := ![G₀, G₁, G₂, G₃]
-
 /-- A family of instances on the four blocks, from one on each. -/
 abbrev blocksInst (P : Type → Type) (i₀ : P G₀) (i₁ : P G₁) (i₂ : P G₂) (i₃ : P G₃) :
     ∀ k, P (Blocks G₀ G₁ G₂ G₃ k) :=
   Fin.cases i₀ (Fin.cases i₁ (Fin.cases i₂ (Fin.cases i₃ finZeroElim)))
-
-/-- The product of the four blocks is the dependent function type over `Fin 4`. -/
-def blocksEquiv : G₀ × G₁ × G₂ × G₃ ≃ ∀ k, Blocks G₀ G₁ G₂ G₃ k where
-  toFun ω := Fin.cases ω.1 (Fin.cases ω.2.1 (Fin.cases ω.2.2.1 (Fin.cases ω.2.2.2 finZeroElim)))
-  invFun g := (g 0, g 1, g 2, g 3)
-  left_inv ω := rfl
-  right_inv g := by
-    funext k
-    fin_cases k <;> rfl
-
-@[simp] theorem blocksEquiv_apply_zero (ω : G₀ × G₁ × G₂ × G₃) : blocksEquiv ω 0 = ω.1 := rfl
-@[simp] theorem blocksEquiv_apply_one (ω : G₀ × G₁ × G₂ × G₃) : blocksEquiv ω 1 = ω.2.1 := rfl
-@[simp] theorem blocksEquiv_apply_two (ω : G₀ × G₁ × G₂ × G₃) : blocksEquiv ω 2 = ω.2.2.1 := rfl
-@[simp] theorem blocksEquiv_apply_three (ω : G₀ × G₁ × G₂ × G₃) : blocksEquiv ω 3 = ω.2.2.2 := rfl
 
 end Four
 

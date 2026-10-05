@@ -16,6 +16,9 @@ namespace FlockSoundness.Refine
 
 open Flock Game
 
+/-- The executable's field. -/
+local notation "𝔽" => FlockLevel3.GF128
+
 /-- A word of the proof as a model field element. -/
 abbrev fOf (a : F128) : 𝔽 := FlockLevel3.GF128.of a
 

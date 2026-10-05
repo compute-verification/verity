@@ -45,6 +45,9 @@ namespace FlockSoundness.Audit
 open Game Model Accounting Extract LinkFinder
 open scoped ENNReal
 
+/-- The executable's field. -/
+local notation "𝔽" => FlockLevel3.GF128
+
 namespace Partition
 
 variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]

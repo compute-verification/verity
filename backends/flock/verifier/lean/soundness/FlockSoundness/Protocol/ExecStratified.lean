@@ -42,6 +42,9 @@ def ExecStrata (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m → Flock.D
 
 end Law
 
+/-- The executable's field. -/
+local notation "𝔽" => FlockLevel3.GF128
+
 namespace Partition
 
 open Model Accounting Extract LinkFinder

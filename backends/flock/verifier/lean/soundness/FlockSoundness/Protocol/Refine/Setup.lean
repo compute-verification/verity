@@ -1,6 +1,6 @@
+import FlockSoundness.Refine.Walk
 import Flock.HmRow
 import FlockSoundness.Protocol.Refine.Regions
-import FlockSoundness.Protocol.Refine.Walk
 
 /-!
 # The statement decoding, part 3: the setup's statements are well formed (PROTOCOL.md §16.1, §16.2)
