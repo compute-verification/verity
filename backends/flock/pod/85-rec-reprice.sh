@@ -9,8 +9,12 @@
 #                WARM + RUNS sessions), upstream's replay of the last one and V*'s hashing reference (rec_vstar) over it; then
 #                the same statement on loopback, M0 and --zk, WARM + RUNS sessions each (today's numbers, this node and build)
 #   STEP=ostage  (CPU) V*'s RecOpen statements, one per Ligerito level of the inner's last session (rec_outer --link-rows)
-#   STEP=oprove  (GPU) each level proved with --zk on loopback, WARM + RUNS sessions; upstream's replay --zk of the last
-#   STEP=lean    (CPU) Lean's flock-verify verify --zk on each level's last session (INNER_LEAN=1: also the inner's, --coins os)
+#   STEP=alg     (CPU) V*'s algebra: InnerClaims.lean's claims on the inner's last session, and rec_residuals' InnerRepCheck
+#                on both reps staged into data/$TAG/alg/honest
+#   STEP=oprove  (GPU) each level (and the algebra, once staged) proved with --zk on loopback, WARM + RUNS sessions;
+#                upstream's replay --zk of the last
+#   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
+#                --coins os)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json.
 # env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (the Gemm_v2 contraction: DEFS is Gemm_v2{K,N=4096})  N=2048
@@ -199,6 +203,13 @@ elif step == "ostage":
         lv = f.stem
         s["levels"][lv] = {"stage": json.loads(text(f).splitlines()[0]) if text(f).strip() else text(d / f"{lv}.err")[-1500:],
                            "wall": tv(d / f"time-{lv}.txt", r"Elapsed \(wall clock\) time"), "peak_gb": gb(d / f"time-{lv}.txt")}
+elif step == "alg":
+    s["claims"] = (lambda c: {"m": c.get("m"), "k_log": c.get("k_log"), "extras": [len(r["extras"]) for r in c.get("reps", [])]})(
+        json.loads(text(d / "claims.json"))) if text(d / "claims.json").strip() else text(d / "claims.err")[-1500:]
+    s["claims_wall"], s["claims_peak_gb"] = tv(d / "time-claims.txt", r"Elapsed \(wall clock\) time"), gb(d / "time-claims.txt")
+    s["stage"] = json.loads(text(d / "stage.json").splitlines()[0]) if text(d / "stage.json").strip() else text(d / "stage.err")[-1500:]
+    s["stage_wall"], s["stage_peak_gb"] = tv(d / "time-stage.txt", r"Elapsed \(wall clock\) time"), gb(d / "time-stage.txt")
+    s["sizes"] = text(d / "sizes.txt")
 elif step == "oprove":
     s["levels"] = {}
     for x in sorted(p for p in d.iterdir() if p.is_dir()):
@@ -296,10 +307,39 @@ pub, _, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) for l
     "/usr/bin/time -v -o $O/ostage/time-L{}.txt python3 -m verity_flock.rec_outer $INNER $DD/outer --levels {} --link-rows > $O/ostage/L{}.json 2> $O/ostage/L{}.err; echo L{} exit \$?"
   for l in ${LEVELS:-$ALL}; do du -sb $DD/outer/L$l/* > $O/ostage/sizes-L$l.txt; done
   ;;
+alg)
+  # V*'s algebra: InnerClaims.lean (as an executable, cached by its sources as 80-rec-inner.sh caches it) reads the inner's last
+  # proxied session for each rep's extra claims and circuit fold, and rec_residuals stages InnerRepCheck on both reps
+  INNER=${INNER:-$DD/inner/s$((NS - 1))}
+  [ -f $INNER/session/session.json ] || { echo "INNER=$INNER: no session (run STEP=inner first)"; exit 1; }
+  CSHA=$( (echo $LSHA; cat backends/flock/tests/lean/InnerClaims.lean) | sha256sum | cut -c1-16)
+  CLAIMS_BIN=$L/claims-$CSHA/inner-claims
+  (
+    export PATH=$HOME/.elan/bin:$PATH
+    command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
+    exec 9>$L/claims.lock; flock 9
+    if [ ! -x $CLAIMS_BIN ]; then
+      C=$L/claims-src; rm -rf $C && mkdir -p $C && cp -r backends/flock/verifier/lean/. $C/ && cp backends/flock/tests/lean/InnerClaims.lean $C/ \
+        && printf '\n[[lean_exe]]\nname = "inner-claims"\nroot = "InnerClaims"\n' >> $C/lakefile.toml \
+        && (cd $C && lake build inner-claims) && mkdir -p $L/claims-$CSHA && cp $C/.lake/build/bin/inner-claims $CLAIMS_BIN
+    fi
+  ) > $O/build-claims.log 2>&1 || { tail -30 $O/build-claims.log; exit 1; }
+  mkdir -p $O/alg
+  /usr/bin/time -v -o $O/alg/time-claims.txt $CLAIMS_BIN verity/flock-circuit $DD/stage/circuit.txt $DD/stage/pub-$N.bin \
+    $INNER/session os > $INNER/claims.json 2> $O/alg/claims.err
+  echo "claims exit $?"
+  cp $INNER/claims.json $O/alg/
+  rm -rf $DD/alg
+  /usr/bin/time -v -o $O/alg/time-stage.txt python3 -m verity_flock.rec_residuals $INNER $DD/alg > $O/alg/stage.json 2> $O/alg/stage.err
+  echo "alg stage exit $?"
+  du -sb $DD/alg/honest/* > $O/alg/sizes.txt
+  ;;
 oprove)
   [ -d $DD/outer ] || { echo "run STEP=ostage first"; exit 1; }
-  for C in $(ls -d $DD/outer/L* | sort -V); do
-    l=$(basename $C); [ -n "${LEVELS:-}" ] && [[ ",$LEVELS," != *",${l#L},"* ]] && continue
+  # every level's RecOpen statement, then the algebra's (STEP=alg) when it is staged; LEVELS=0,1,alg picks some
+  for C in $(ls -d $DD/outer/L* | sort -V) $( [ -f $DD/alg/honest/inst.bin ] && echo $DD/alg/honest); do
+    l=$(basename $C); [ $l = honest ] && l=alg
+    [ -n "${LEVELS:-}" ] && [[ ",$LEVELS," != *",${l#L},"* ]] && continue
     loopback $l $C/pub.bin $C/inst.bin $C/circuit.txt --zk
     [ -n "${LAST:-}" ] || continue
     taskset -c $VCPU /usr/bin/time -v -o $O/oprove/$l/time-replay.txt $B replay --zk --instances $C/pub.bin --circuit $C/circuit.txt \
@@ -312,8 +352,10 @@ oprove)
 lean)
   [ -x $LEAN_BIN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
   mkdir -p $O/lean
-  for S in $(ls -d $DD/outer-sess/L* | sort -V); do l=$(basename $S); C=$DD/outer/$l
-    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $S > $O/lean/$l.log 2>&1; echo $l lean exit \$?"
+  for S in $(ls -d $DD/outer-sess/* | sort -V); do l=$(basename $S); C=$DD/outer/$l; [ $l = alg ] && C=$DD/alg/honest
+    [ -n "${LEVELS:-}" ] && [[ ",$LEVELS," != *",${l#L},"* ]] && continue
+    PI=; [ -f $C/public-inputs.bin ] && PI="--public-inputs $C/public-inputs.bin"
+    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $PI --session $S > $O/lean/$l.log 2>&1; echo $l lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   if [ "${INNER_LEAN:-0}" = 1 ]; then
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit --circuit $DD/stage/circuit.txt \
