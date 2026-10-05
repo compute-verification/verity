@@ -1,6 +1,6 @@
 import Pouw.Assumptions.PearlC.HiddenTile
 import Pouw.SecurityProofs.PearlC.DeviceCapRev1Gamma
-import Verity.SecurityProofs.Game.Prob
+import VerityProofs.SecurityProofs.Game.Prob
 
 /-!
 # The hidden audit keeps the sampled audit's γ (compute accounting's file)

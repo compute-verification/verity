@@ -148,7 +148,7 @@ def test_names_with_spaces_and_odd_characters(tmp_path):
 
 
 def test_lean_package_move_with_relative_require(tmp_path):
-    files = {**BASE_FILES, "packages/verity/lean/Verity.lean": "def v := 1\n", "protocols/pous/lean/lakefile.toml": LAKEFILE}
+    files = {**BASE_FILES, "security_proofs/core/VerityProofs.lean": "def v := 1\n", "protocols/pous/lean/lakefile.toml": LAKEFILE}
     repo, base = _repo(tmp_path, files)
     _move(repo, "packages/verity/lean", "verity/lean")
     _move(repo, "protocols/pous/lean", "security_proofs/pous")
@@ -159,7 +159,7 @@ def test_lean_package_move_with_relative_require(tmp_path):
 
 
 def test_byte_identical_lakefile_whose_relative_require_broke_is_refused(tmp_path):
-    files = {**BASE_FILES, "packages/verity/lean/Verity.lean": "def v := 1\n", "protocols/pous/lean/lakefile.toml": LAKEFILE}
+    files = {**BASE_FILES, "security_proofs/core/VerityProofs.lean": "def v := 1\n", "protocols/pous/lean/lakefile.toml": LAKEFILE}
     repo, base = _repo(tmp_path, files)
     _move(repo, "protocols/pous/lean", "security_proofs/pous")
     [f] = _check(repo, base)["refusals"]
