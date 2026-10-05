@@ -26,14 +26,14 @@ def _module(monkeypatch, name: str, file) -> None:
 
 def test_registered_is_what_the_import_name_rule_gave():
     """Today's tree: deciding by file keeps exactly the Definitions the old rule (the top-level import name is `verity`,
-    `verity_vllm` or `verity_pouw`) kept. Drop this once a rename moves a package off those names."""
-    from verity.ir.defs import REGISTRY
+    `verity_vllm` or `verity.protocols.accounting.work.pouw`) kept. Drop this once a rename moves a package off those names."""
+    from verity.primitives.circuits.defs import REGISTRY
 
     TG.load_registries()
     defs = dict(REGISTRY.defs)          # by now the session's other tests may have made lazy family members and registered their own
     old = sorted(i for i, d in defs.items()
                  if getattr(getattr(d, "evaluate", None) or getattr(d, "body", None), "__module__", "").partition(".")[0]
-                 in ("verity", "verity_vllm", "verity_pouw"))
+                 in ("verity", "verity_vllm", "verity.protocols.accounting.work.pouw"))
     assert len(TG.REGISTERED) > 200
     assert sorted(i for i, d in defs.items() if TG._authored(d)) == old
     assert set(TG.REGISTERED) <= set(old)
