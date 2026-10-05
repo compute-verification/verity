@@ -27,10 +27,10 @@ open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.FormingP Pouw.PearlC.SaltDead
 /-! ## The ends and the signed count -/
 
 /-- The support's ends: every product `+|E′|·11/4`. -/
-def plusEnd : (Fin 32 → ℚ) × (Fin 32 → ℚ) := (flatLine fun _ => false, flatLineF fun _ => false)
+def plusEnd : (Fin 32 → Code) × (Fin 32 → Code) := (flatLine fun _ => false, flatLineF fun _ => false)
 
 /-- The support's ends: every product `−|E′|·11/4`. -/
-def minusEnd : (Fin 32 → ℚ) × (Fin 32 → ℚ) := (flatLine fun _ => false, flatLineF fun _ => true)
+def minusEnd : (Fin 32 → Code) × (Fin 32 → Code) := (flatLine fun _ => false, flatLineF fun _ => true)
 
 /-- What RowA tests per element: the two ends' codes have one value. -/
 def EndsAgree (p : Pipeline) (α y β : ℚ) : Prop :=
@@ -114,8 +114,9 @@ theorem product_pair {c₀ c₁ f₀ f₁ : Code} (hc : CodePair c₀ c₁) (hf 
   rw [product_sgnT (c₀ := c₀) (f₀ := f₀) (by cases σ₁ <;> simp [hcs]) (by cases σ₁ <;> simp [hce])
     (by cases σ₂ <;> simp [hfs]) (by cases σ₂ <;> simp [hfe]), e1, e2]
 
-/-- An `E′` entry's sign bit on a flat line: the line's sign, flipped when `β < 0`, and clear at `β = 0`. -/
-def sgnB (β : ℚ) (b : Bool) : Bool := if 0 < β then b else if β < 0 then !b else false
+/-- An `E′` entry's sign bit on a flat line: the line's sign, flipped when `β < 0`. At `β = 0` the zero product keeps
+the line's sign (`mulCode`: `+0·(−44)` is `−0`). -/
+def sgnB (β : ℚ) (b : Bool) : Bool := if β < 0 then !b else b
 
 /-- Every `E′` code on a flat line is `c₀` or `c₁ = c₀` with the sign bit set, by `sgnB`; `c₀` has significand `0`
 at `β = 0`. -/
@@ -123,45 +124,57 @@ theorem lineCodes_flat (β : ℚ) : ∃ c₀ c₁ : Code, CodePair c₀ c₁ ∧
     ∀ (s : Fin 32 → Bool) (t : Fin 32), lineCodes β (flatLine s) t = if sgnB β (s t) then c₁ else c₀ := by
   obtain ⟨K, hK, hpos, hneg⟩ := e4m3Word_signs (β * 44)
   have hc := code_pair ⟨K, by omega⟩ ⟨128 + K, by omega⟩ hK rfl
-  have claim : ∀ b : Bool, e4m3Word (f32Word (β * if b then -44 else 44)) =
+  have hv : ∀ b : Bool, codeVal (e4m3 (if b then -44 else 44)) = if b then -44 else 44 := by
+    intro b; cases b <;> decide +kernel
+  have hsg : ∀ b : Bool, (e4m3 (if b then -44 else 44)).sign = b := by
+    intro b; cases b <;> decide +kernel
+  have hK0 : β = 0 → K = 0 := by
+    rintro rfl
+    have h0 : (e4m3Word (f32Word 0)).val = 0 := by decide +kernel
+    simpa [h0] using hpos.symm
+  have claim : ∀ b : Bool, e4m3Word (mulCode β (e4m3 (if b then -44 else 44))) =
       if sgnB β b then ⟨128 + K, by omega⟩ else ⟨K, by omega⟩ := by
     intro b
-    have hb : β * (if b then -44 else 44) = if b then -(β * 44) else β * 44 := by cases b <;> simp
-    rw [hb]
+    rcases eq_or_ne β 0 with rfl | hβ0
+    · obtain rfl := hK0 rfl
+      have z0 : (e4m3Word 0).val = 0 := by decide +kernel
+      have z1 : (e4m3Word 0x80000000).val = 128 := by decide +kernel
+      unfold mulCode sgnB
+      rw [hv, hsg]
+      cases b <;> simp only [zero_mul, ↓reduceIte, lt_self_iff_false, decide_false, Bool.bne_true, Bool.bne_false,
+        Bool.not_false, Bool.false_eq_true] <;> first | exact Fin.ext z0 | exact Fin.ext z1
+    have hb : β * codeVal (e4m3 (if b then -44 else 44)) = if b then -(β * 44) else β * 44 := by
+      rw [hv]; cases b <;> simp
+    have hne : β * codeVal (e4m3 (if b then -44 else 44)) ≠ 0 := by
+      rw [hb]; cases b <;> simp [hβ0]
+    unfold mulCode
+    rw [ite_eq_right hne, hb]
     apply Fin.ext
-    rcases lt_trichotomy β 0 with hβ | rfl | hβ
+    rcases lt_or_gt_of_ne hβ0 with hβ | hβ
     · have h1 : β * 44 < 0 := by linarith
       have h2 : ¬ 0 < β * 44 := by linarith
-      have hs : sgnB β b = !b := by simp [sgnB, hβ, not_lt.2 hβ.le]
+      have hs : sgnB β b = !b := by simp [sgnB, hβ]
       rw [hs]
       cases b
       · simp only [Bool.false_eq_true, ite_false, Bool.not_false, ite_true]; rw [hpos]; simp [h1]
       · simp only [ite_true, Bool.not_true, Bool.false_eq_true, ite_false]; rw [hneg]; simp [h2]
-    · have h0 : (e4m3Word (f32Word 0)).val = K := by simpa using hpos
-      cases b <;> simpa [sgnB] using h0
     · have h1 : ¬ β * 44 < 0 := by linarith
       have h2 : 0 < β * 44 := by linarith
-      have hs : sgnB β b = b := by simp [sgnB, hβ]
+      have hs : sgnB β b = b := by simp [sgnB, not_lt.2 hβ.le]
       rw [hs]
       cases b
       · simp only [Bool.false_eq_true, ite_false]; rw [hpos]; simp [h1]
       · simp only [ite_true]; rw [hneg]; simp [h2]
   refine ⟨⟨K, by omega⟩, ⟨128 + K, by omega⟩, hc, fun hβ => ?_, fun s t => ?_⟩
-  · have e := claim false
-    subst hβ
-    simp only [Bool.false_eq_true, ite_false, zero_mul, sgnB, lt_irrefl] at e
-    have hK0 : K = 0 := by
-      have h0 : (e4m3Word (f32Word 0)).val = 0 := by decide +kernel
-      rw [e] at h0; exact h0
-    subst hK0
+  · obtain rfl := hK0 hβ
     show Code.sig (⟨0, by decide⟩ : Code) = 0
     decide
   · rw [← claim (s t)]; rfl
 
 theorem codePair_F : CodePair ⟨67, by decide⟩ ⟨195, by decide⟩ := code_pair _ _ (by decide) rfl
 
-theorem e4m3_flatLineF (s' : Fin 32 → Bool) (t : Fin 32) :
-    e4m3 (flatLineF s' t) = if s' t then (⟨195, by decide⟩ : Code) else ⟨67, by decide⟩ := by
+theorem flatLineF_eq (s' : Fin 32 → Bool) (t : Fin 32) :
+    flatLineF s' t = if s' t then (⟨195, by decide⟩ : Code) else ⟨67, by decide⟩ := by
   unfold flatLineF; cases s' t <;> decide +kernel
 
 /-! ## The alignment on the support -/
@@ -217,7 +230,7 @@ theorem sum_sgnB_pos {β : ℚ} (hβ : 0 < β) (s s' : Fin 32 → Bool) :
     ∑ t, (if (sgnB β (s t) ^^ s' t) then -1 else 1 : ℤ) = flatCount s s' := by
   unfold flatCount
   refine Finset.sum_congr rfl fun t _ => ?_
-  simp only [sgnB, hβ, ite_true]
+  simp only [sgnB, not_lt.2 hβ.le, ite_false]
   cases s t <;> cases s' t <;> rfl
 
 theorem sum_sgnB_neg {β : ℚ} (hβ : β < 0) (s s' : Fin 32 → Bool) :
@@ -225,7 +238,7 @@ theorem sum_sgnB_neg {β : ℚ} (hβ : β < 0) (s s' : Fin 32 → Bool) :
   unfold flatCount
   rw [← Finset.sum_neg_distrib]
   refine Finset.sum_congr rfl fun t _ => ?_
-  simp only [sgnB, not_lt.2 hβ.le, hβ, ite_true, ite_false]
+  simp only [sgnB, hβ, ite_true]
   cases s t <;> cases s' t <;> rfl
 
 /-! ## The step on the support -/
@@ -266,15 +279,15 @@ theorem flat_fin_eq {w : ℕ} (z : ℤ) (α y β : ℚ) {tc : Term} (hacc : fp32
       codeW w (maxExp z (tc :: List.ofFn fun _ : Fin 32 => product c₀ ⟨67, by decide⟩))
         (alignedSum w (maxExp z (tc :: List.ofFn fun _ : Fin 32 => product c₀ ⟨67, by decide⟩))
           (tc :: List.ofFn fun t => sgnT (sgnB β (s t) ^^ s' t) (product c₀ ⟨67, by decide⟩))) := by
-  have hprod : ∀ t, product (lineCodes β (flatLine s) t) (e4m3 (flatLineF s' t)) =
+  have hprod : ∀ t, product (lineCodes β (flatLine s) t) (flatLineF s' t) =
       sgnT (sgnB β (s t) ^^ s' t) (product c₀ ⟨67, by decide⟩) := fun t => by
-    rw [hline, e4m3_flatLineF]; exact product_pair hc codePair_F _ _
+    rw [hline, flatLineF_eq]; exact product_pair hc codePair_F _ _
   have hna : ∀ t, (lineCodes β (flatLine s) t).isNaN = false := fun t => by
     rw [hline]; split
     · exact hc.2.2.1
     · exact hc.1
-  have hnb : ∀ t, (e4m3 (flatLineF s' t)).isNaN = false := fun t => by
-    rw [e4m3_flatLineF]; split <;> decide
+  have hnb : ∀ t, (flatLineF s' t).isNaN = false := fun t => by
+    rw [flatLineF_eq]; split <;> decide
   have hstep := pipeStep_fin (w := w) (z := z) hacc _ _ hna hnb
   simp only [hprod, groupSum] at hstep
   rw [maxExp_sgnT] at hstep
@@ -326,10 +339,10 @@ theorem flat_structure (p : Pipeline) (hp : p.groups = [32]) (hw : 1 ≤ p.width
       rw [hline]; split
       · exact hc.2.2.1
       · exact hc.1
-    have hnb : ∀ t, (e4m3 (flatLineF s' t)).isNaN = false := fun t => by
-      rw [e4m3_flatLineF]; split <;> decide
+    have hnb : ∀ t, (flatLineF s' t).isNaN = false := fun t => by
+      rw [flatLineF_eq]; split <;> decide
     show codeVal (e4m3 (PearlC.wordVal ((⟨[32], w, z⟩ : Pipeline).step (f32Word (α * y))
-      (List.ofFn (lineCodes β (flatLine s))) (List.ofFn fun t => e4m3 (flatLineF s' t))))) = _
+      (List.ofFn (lineCodes β (flatLine s))) (List.ofFn (flatLineF s'))))) = _
     rw [pipeStep_nonfin hfin _ _ hna hnb]
 
 /-! ## The lemma -/
