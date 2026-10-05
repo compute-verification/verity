@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The repository's layout move: move every file `layout_map.toml` names and rewrite every reference to it.
 
-    python3 tools/move/layout.py              move and rewrite, then `uv lock`; prints what it changed
+    python3 tools/move/layout.py              move and rewrite, then `uv lock` (the uv pod_setup.sh pins); prints what it changed
     python3 tools/move/layout.py --dry-run    print what it would change, and change nothing
     python3 tools/move/layout.py --modules    print the module renames that [paths] and [roots] imply ([modules] must equal it)
     python3 tools/move/layout.py --resolve M  the name module M has after the move (for readers of recorded data)
@@ -1273,6 +1273,18 @@ def load(path: Path) -> Layout:
     return Layout(tomllib.loads(path.read_text()))
 
 
+def unpinned_uv(root: Path) -> str | None:
+    """Why `uv lock` here wouldn't be the pinned uv's (`tools/check/pod_setup.sh`), or None.  Another uv writes another lock
+    header, so the move would differ from a rerun of the script with the pinned one, which `restack.py` refuses."""
+    m = re.search(r"^UV_VERSION=\$\{UV_VERSION:-([^}]+)\}", (root / "tools" / "check" / "pod_setup.sh").read_text(), re.M)
+    if not m:
+        return "tools/check/pod_setup.sh pins no UV_VERSION"
+    if not shutil.which("uv"):
+        return f"uv isn't on the PATH (pod_setup.sh pins {m.group(1)})"
+    got = subprocess.run(["uv", "--version"], capture_output=True, text=True).stdout.split()[1:2]
+    return None if got == [m.group(1)] else f"uv is {got[0] if got else 'broken'}, not the {m.group(1)} pod_setup.sh pins"
+
+
 def renamed(name: str, map_path: Path = HERE / "layout_map.toml") -> str:
     """The name module `name` has after the move (unchanged when the move didn't rename it)."""
     return load(map_path).module(name)
@@ -1307,6 +1319,8 @@ def main(argv: list[str] | None = None) -> int:
     root = (a.root or Path(git(HERE, "rev-parse", "--show-toplevel").strip())).resolve()
     if not a.allow_dirty and git(root, "status", "--porcelain").strip():
         raise SystemExit(f"{root}: the worktree isn't clean")
+    if not a.dry_run and not a.no_lock and (why := unpinned_uv(root)):
+        raise SystemExit(f"{why}: put the pinned uv first on the PATH, or pass --no-lock")
     base = git(root, "rev-parse", "HEAD").strip()
     run = Run(root, layout, a.dry_run)
     moves = run.plan()
@@ -1325,7 +1339,7 @@ def main(argv: list[str] | None = None) -> int:
     run.changes["modules renamed"] = renamed_modules
     if not a.dry_run:
         git(root, "add", "-A")
-        if not a.no_lock and shutil.which("uv"):
+        if not a.no_lock:
             r = subprocess.run(["uv", "lock"], cwd=root, capture_output=True, text=True)
             if r.returncode:
                 run.note("uv lock failed", r.stderr.strip()[-2000:])
