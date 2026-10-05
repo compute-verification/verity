@@ -188,7 +188,7 @@ def lean(p):
         return text(p)[-600:]
     v = json.JSONDecoder(strict=False).raw_decode(text(p)[at + 8:])[0]
     # Main's stderr: inputs (from start), setup (from the session's start), then the session's whole time (setup included)
-    ms = [int(x) for x in re.findall(r"^(?:inputs|setup|/\S+): (\d+) ms$", text(p), re.M)]
+    ms = [int(x) for x in re.findall(r"^(?:inputs|setup|/\S+): (\d+) ms$", text(p.with_suffix(".err")), re.M)]
     split = {"inputs_s": ms[0] / 1e3, "setup_s": ms[1] / 1e3, "verify_s": (ms[2] - ms[1]) / 1e3} if len(ms) == 3 else {}
     return {**{k: v.get(k) for k in ("accepted", "why", "registered")}, **split}
 
@@ -389,18 +389,18 @@ lean)
   for S in $(ls -d $DD/outer-sess/* | sort -V); do l=$(basename $S); C=$DD/outer/$l; [ $l = alg ] && C=$DD/alg/honest
     [ -n "${LEVELS:-}" ] && [[ ",$LEVELS," != *",${l#L},"* ]] && continue
     PI=; [ -f $C/public-inputs.bin ] && PI="--public-inputs $C/public-inputs.bin"
-    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $PI --session $S > $O/lean/$l.log 2>&1; echo $l lean exit \$?"
+    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $PI --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   if [ "${INNER_LEAN:-0}" = 1 ]; then
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit --circuit $DD/stage/circuit.txt \
-      --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --coins os --session $DD/inner/s$((NS - 1))/session > $O/lean/inner.log 2>&1
+      --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --coins os --session $DD/inner/s$((NS - 1))/session > $O/lean/inner.log 2> $O/lean/inner.err
     echo "inner lean exit $?"
   fi
   # ZK_LEAN=1: today's --zk on the same statement (the inner step's last loopback --zk session), for Lean's like-for-like
   if [ "${ZK_LEAN:-0}" = 1 ]; then
     ZS=$(ls -d $DD/inner-zk/sessions/l* | sort | tail -1)
     /usr/bin/time -v -o $O/lean/time-zk.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $DD/stage/circuit.txt \
-      --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --session $ZS > $O/lean/zk.log 2>&1
+      --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --session $ZS > $O/lean/zk.log 2> $O/lean/zk.err
     echo "zk lean exit $?"
   fi
   ;;
