@@ -20,9 +20,11 @@ mkdir -p "$d/tree/benchmarks/pous/timing_loop" "$d/tree/backends/flock/verifier"
 cp -r "$SRC/benchmarks/pous/timing_loop/lean" "$LEAN"
 cp -r "$SRC/backends/flock/verifier/lean" "$d/tree/backends/flock/verifier/lean"
 (cd "$LEAN" && rm -rf .lake && lake build)
+EXE=$LEAN/.lake/build/bin/timing-loop
+[ -x "$EXE" ] || { echo "node.sh: no $EXE after lake build" >&2; exit 1; }
 mkdir -p "$OUT"
-gpu-lease 1 --wait --on "$GPUS" --max-min "${TIMING_MAX_MIN:-30}" -- \
+gpu-lease 1 --wait --on "$GPUS" --max-min "${TIMING_MAX_MIN:-45}" -- \
     env VY_POUS_QUIET_CPUS="${TIMING_CPUS:-120-127}" vy-pous-quiet "$PY" "$SRC/benchmarks/pous/timing_loop/bench.py" \
-    --out "$OUT" --scratch "$d/scratch" --lean-exe "$d/lean/.lake/build/bin/timing-loop" \
+    --out "$OUT" --scratch "$d/scratch" --lean-exe "$EXE" \
     --build-dir "${TIMING_BUILD_DIR:-/workspace/jobs/cache/jit/pous_native}" \
     --verifier-cpu 126 --helper-cpu 127 --responder-cpu 124 "$@"
