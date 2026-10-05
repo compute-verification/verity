@@ -11,6 +11,8 @@ carry over, and alignment is preserved (`Aligned.batchLock`).
 
 `value_batch_getD_le`: an event of one position's output is at most as likely, for an optimal
 prover, as the same event in that position's game alone.
+
+`batch` is core's (`Verity.Game.batch`), under its name here.
 -/
 
 namespace FlockSoundness
@@ -19,10 +21,7 @@ namespace Game
 
 variable {α β γ : Type}
 
-/-- Interactions run concurrently, the prover choosing the schedule; the outputs in order. -/
-def batch : List (Game α) → Game (List α)
-  | [] => .ret []
-  | g :: gs => (g.interleave (batch gs)).map fun x => x.1 :: x.2
+export Verity.Game (batch)
 
 /-- **One position of a batch.** An event of one position's output is at most as likely, for an
 optimal prover, as the same event in that position's game alone. -/
