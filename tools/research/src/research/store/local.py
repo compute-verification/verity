@@ -34,7 +34,7 @@ from pathlib import Path
 from collections.abc import Sequence
 from typing import Any, Callable
 
-from ..secret_hint import lost
+from ..secret_hint import FRESH_SHELL, lost
 from . import canon, ids, kinds
 from .index import Index
 from .model import ArtifactManifest, Label, Payload, TreeFile, utc_now, validate_attempt_doc
@@ -218,8 +218,21 @@ class LocalStore:
         r = self.remote
         if r is None:
             why = getattr(self, "remote_error", None)
-            raise StoreError(why or lost("R2_ENDPOINT", "R2_BUCKET") or "no remote configured (~/.research/store.toml or $RESEARCH_STORE_CONFIG)")
+            raise StoreError(why or lost("R2_ENDPOINT", "R2_BUCKET") or self.remote_lost()
+                             or "no remote configured (~/.research/store.toml or $RESEARCH_STORE_CONFIG)")
         return r
+
+    def remote_lost(self) -> str:
+        """'' unless nothing here names a remote (no `$RESEARCH_WRITE_THROUGH`, store.toml, `$RESEARCH_STORE_CONFIG`, `R2_ENDPOINT` or
+        `R2_BUCKET`) yet the catalog holds artifacts pulled from or verified on one; then the hint.  A cloud shell can lose
+        $CLOUD_AGENT_INJECTED_SECRET_NAMES along with the secrets (so `lost` says nothing), and its writes would stay local unannounced."""
+        if (self._config_path is not None or os.environ.get(WRITE_THROUGH_ENV, "").strip() or "RESEARCH_STORE_CONFIG" in os.environ
+                or os.environ.get("R2_ENDPOINT") or os.environ.get("R2_BUCKET") or config_path().is_file()):
+            return ""
+        if self.index.db.execute("SELECT 1 FROM replicas WHERE location='remote' UNION ALL SELECT 1 FROM artifacts WHERE remote=1 LIMIT 1").fetchone() is None:
+            return ""
+        return ("R2_ENDPOINT and R2_BUCKET are not in this shell, but this store has used the remote (its catalog holds artifacts from it): "
+                f"the shell lost the VM's secrets; {FRESH_SHELL}")
 
     @property
     def repo(self) -> Path | None:

@@ -1,0 +1,26 @@
+[Unit]
+Description=node 1's queued Commits moved to node 2's fill queue, and reclaimed when they wait there (n2_commit.sh offload --loop)
+After=network-online.target k3s.service
+Wants=network-online.target
+RequiresMountsFor=/workspace
+StartLimitIntervalSec=1h
+StartLimitBurst=10
+
+[Service]
+User=research
+Group=research
+WorkingDirectory=/home/research
+EnvironmentFile=/etc/environment
+EnvironmentFile=/etc/vy/env/research.env
+EnvironmentFile=/etc/vy/env/%N.env
+ExecStart=/bin/bash /workspace/verity-guest/bin/n2_commit.sh offload --loop
+Restart=on-failure
+RestartSec=15
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+StandardOutput=append:/workspace/verity-guest/n2-commit-offload.log
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target
