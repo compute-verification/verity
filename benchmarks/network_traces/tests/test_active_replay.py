@@ -11,9 +11,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity_network_warden import calibration
-from verity_network_warden.active import DATA, LAST, encode_frame
-from verity_network_warden.grid import COMPLETE, GridParams, Reason, Record, Status, Warden
+from verity.protocols.accounting.communication.warden import calibration
+from verity.protocols.accounting.communication.warden.active import DATA, LAST, encode_frame
+from verity.protocols.accounting.communication.warden.grid import COMPLETE, GridParams, Reason, Record, Status, Warden
 
 HERE = Path(__file__).resolve().parents[1]
 T = 60

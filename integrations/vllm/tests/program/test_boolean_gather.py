@@ -10,13 +10,13 @@ import json
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation.reference import standalone_call
-from verity.ir import boolean as BL
-from verity.ir import codec
-from verity.ir.defs import REGISTRY, bind
-from verity.ml.boolean.trace import word_of
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits import boolean as BL
+from verity.primitives.circuits import codec
+from verity.primitives.circuits.defs import REGISTRY, bind
+from verity.primitives.circuits.boolean.trace import word_of
 from verity_vllm.program.registry import boolean_gather as BGA
 from verity_vllm.program.registry import prims as P
 from verity_vllm.query import word as W
