@@ -1,4 +1,4 @@
-"""The -h2 kernels (`pearl_c/hash_h2.cuh`) against frame-b3s, `verity.commitments.merkle`'s reference, through
+"""The -h2 kernels (`pearl_c/hash_h2.cuh`) against frame-b3s, `verity.primitives.commitments.merkle`'s reference, through
 `simt_twin.py`'s thread-for-thread host build: the segment-tree level keys, row leaves at every length class (the aligned
 16-byte-load path and the byte path, short last segments, odd levels), short-value leaves, and whole trees against
 `MerkleTree`'s root; and rows form `s` (`pearl_c_sm120/h2_rows_stats.cuh`), the row leaves with forming's stats against the
@@ -13,10 +13,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
-from verity.commitments.merkle import b3s_level_key
-from verity.ml.tc import fp32
-from verity_pouw.schemes import pearl_c as C
+from verity.primitives.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
+from verity.primitives.commitments.merkle import b3s_level_key
+from verity_catalog.silicon import fp32
+from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c"
 spec = importlib.util.spec_from_file_location("simt_twin", HERE / "simt_twin.py")
@@ -123,8 +123,8 @@ def test_whole_trees_are_merkle_trees_roots(m, rb, schema):
 def test_kernel_nodes_are_complete_keyed_blake3_calls():
     """The kernels' segment-tree node, the node over two leaves (hash_tree_small) and a one-segment leaf are complete keyed
     BLAKE3 calls (the ROOT flag included): equal to the standard keyed hash, and not to the bare PARENT compression."""
-    from verity.commitments.blake3 import compress, keyed
-    from verity.commitments.merkle import b3s_levels, b3s_segment_key, blake3_node_key
+    from verity.primitives.crypto.blake3 import compress, keyed
+    from verity.primitives.commitments.merkle import b3s_levels, b3s_segment_key, blake3_node_key
 
     def parent(key: bytes, block: bytes, flags: int) -> bytes:
         kw = tuple(int.from_bytes(key[4 * i:4 * i + 4], "little") for i in range(8))
