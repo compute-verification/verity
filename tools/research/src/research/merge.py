@@ -13,7 +13,11 @@ the attempt's own record says (the index only finds it); a run of the command th
 (`Tool.command`, in a check slot or not, followed by nothing but check.py's own flags: `unlike`); and its own result, of a kind
 that declaration produces (`Tool.produces`: `check/v1` for check; an attempt with no result, or whose record or result can't
 be read, passes no gate) and not in `REFUSED_KINDS` (the Lean fast path's `lean-fast/v1`, which skips the kernel replay), with
-the verdict passed and no step listed twice.  With a usable remote the catalog's attempts are refreshed first, so an attempt
+the verdict passed and no step listed twice.  A sharded check (`check.py --shard K/N`, one Attempt per shard, its result a
+`check-shard/v1`) passes only through the Attempt of `check.py --combine RUN...` on the same commit, and only when the gate,
+reading the shards itself (`shard_set`), finds them a passing check of that clean commit (one plan, K = 1..N once each, the
+commit's own `tools/check/`, every part once, every job of its `ci.toml`, no step failed) and the combine's steps theirs; a
+shard alone passes nothing.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
 ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
@@ -90,13 +94,15 @@ SLOT_WRAP = ("python3", "tools/check/slot.py")
 CHECK_FLAGS = ("--no-cache", "--keep-going")
 
 
-def unlike(argv, command) -> str | None:
-    """Why an attempt's ``argv`` isn't a run of the target's declared ``command``, or None: it is ``command`` itself, in a check
-    slot (`SLOT_WRAP`) or not, followed by nothing but check.py's own flags (`CHECK_FLAGS`)."""
+def invocation(argv, command) -> tuple[str, object]:
+    """What an attempt's ``argv`` ran of the target's declared ``command``: ("check", None), ``command`` itself, in a check slot
+    (`SLOT_WRAP`) or not, followed by nothing but check.py's own flags (`CHECK_FLAGS`); ("shard", (K, N)), the same with
+    `--shard K/N` once (`tools/check/check.py`'s sharding); ("combine", [run ids]), ``command`` with `--combine RUN...` and
+    nothing else; or ("refused", why) for anything else."""
     if not command:
-        return "the target's declaration of the tool names no command to hold it to"
+        return "refused", "the target's declaration of the tool names no command to hold it to"
     if not (isinstance(argv, list) and all(isinstance(x, str) for x in argv)):
-        return "its record has no argv"
+        return "refused", "its record has no argv"
     run = argv
     if tuple(argv[:2]) == SLOT_WRAP:
         opts = argv[2:]
@@ -104,14 +110,157 @@ def unlike(argv, command) -> str | None:
         opts = opts[2:] if opts[:1] == ["--by"] and len(opts) > 1 else opts
         run = opts[1:] if opts[:1] == ["--"] else argv
     if run[:len(command)] != list(command):
-        return f"its command `{shlex.join(argv)}` isn't the target's declared `{shlex.join(command)}`"
-    rest = [x for x in run[len(command):] if x not in CHECK_FLAGS]
+        return "refused", f"its command `{shlex.join(argv)}` isn't the target's declared `{shlex.join(command)}`"
+    tail = run[len(command):]
+    if tail[:1] == ["--combine"]:
+        ids = tail[1:]
+        return ("combine", ids) if ids and not any(x.startswith("-") for x in ids) else (
+            "refused", f"its command gives the declared one `{shlex.join(tail)}`, which check.py doesn't take")
+    rest = [x for x in tail if x not in CHECK_FLAGS]
     if "--verdicts-in" in rest[:-1]:
         i = rest.index("--verdicts-in")
         rest = rest[:i] + rest[i + 2:]
+    mode: tuple[str, object] = ("check", None)
+    if "--shard" in rest[:-1] and (m := re.fullmatch(r"([1-9]\d*)/([1-9]\d*)", rest[rest.index("--shard") + 1])):
+        i = rest.index("--shard")
+        mode, rest = ("shard", (int(m.group(1)), int(m.group(2)))), rest[:i] + rest[i + 2:]
     if rest and not (rest[0] == "--cores" and len(rest) == 2 and rest[1].isdigit()):
-        return f"its command gives the declared one `{shlex.join(rest)}`, which check.py doesn't take"
-    return None
+        return "refused", f"its command gives the declared one `{shlex.join(rest)}`, which check.py doesn't take"
+    return mode
+
+
+def unlike(argv, command) -> str | None:
+    """Why an attempt's ``argv`` isn't a whole run of the target's declared ``command``, or None (`invocation`'s "check"): a
+    shard passes no gate alone, and a combine only through `refused`'s reading of its shards."""
+    mode, arg = invocation(argv, command)
+    if mode == "shard":
+        return (f"it is shard {arg[0]}/{arg[1]} of a sharded check, which passes no gate alone: `check.py --record --combine` "
+                "its set")
+    if mode == "combine":
+        return "it combines shards, which only the gate's own reading of them admits"
+    return arg if mode == "refused" else None
+
+
+#: a sharded check's shard result (`tools/check/check.py --shard`): never a kind the tool produces, read only by `shard_set`
+SHARD_KIND = "check-shard/v1"
+
+
+def declared_jobs(repo: Path, commit: str) -> list[str] | str:
+    """The job names ``commit``'s own `tools/check/ci.toml` declares, or why they can't be read."""
+    import tomllib
+
+    r = _git(repo, "show", f"{commit}:tools/check/ci.toml", check=False)
+    try:
+        jobs = [t["name"] for t in tomllib.loads(r.stdout).get("job", [])] if r.returncode == 0 else None
+    except (tomllib.TOMLDecodeError, TypeError, KeyError, AttributeError):
+        jobs = None
+    if not jobs or not all(isinstance(j, str) for j in jobs):
+        return f"{commit[:12]}'s tools/check/ci.toml can't be read for the jobs a check runs"
+    return jobs
+
+
+def _read(store, run_id: str, tool: str | None, commit: str | None):
+    """(record, result id, result manifest or None) of the attempt, or why it can't pass whatever it ran: its record can't be
+    read, or doesn't say it is a passing ``tool`` attempt of the clean ``commit``, or its result can't be read."""
+    try:
+        doc = store.get_attempt(run_id)
+    except Exception as e:  # noqa: BLE001  (a guard never fails open)
+        return f"its attempt can't be read ({type(e).__name__}: {e})"
+    if not isinstance(doc, dict):
+        return "its attempt can't be read"
+    st, src = doc.get("status") or {}, doc.get("source") or {}
+    said = {"tool": (doc.get("tool") or {}).get("name"), "commit": src.get("commit"), "dirty": src.get("dirty"),
+            "state": st.get("state"), "rc": st.get("rc")}
+    want = {"tool": tool, "commit": commit, "dirty": False, "state": "done", "rc": 0}
+    if off := [f"{k} {said[k]}" for k, v in want.items() if v is not None and said[k] != v]:
+        return f"its record says {', '.join(off)}, not the index's passing check"
+    art = (doc.get("outputs") or {}).get("result")
+    try:
+        return doc, art, store.get_manifest(art) if art else None
+    except Exception as e:  # noqa: BLE001  (a guard never fails open)
+        return f"its result can't be read ({type(e).__name__}: {e})"
+
+
+def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check",
+              command: tuple[str, ...] = ()) -> tuple[list[dict] | None, str | None]:
+    """(the steps of the one check the shard attempts ``ids`` make, None) when together they are a passing check of the clean
+    ``commit``, else (None, why).  Each must be a passing ``tool`` attempt of ``commit`` whose command is the declared
+    ``command`` with `--shard K/N` (`invocation`), whose own result is a passed `SHARD_KIND` naming that shard, ``commit`` and
+    its config (``commit``'s tree of `tools/check/`), with no step but passed or skipped and its steps' parts its shard's parts;
+    together, one N with K = 1..N once each, one list of every part, which their parts make exactly once and which covers every
+    job ``commit``'s `ci.toml` declares, and the same steps outside their parts (the preflight), passed in each.  The steps: those
+    once, then each part as its shard's step ran it."""
+    if not ids or len(set(ids)) != len(ids):
+        return None, "a set of shards names each shard's attempt once" if ids else "no shard is named"
+    config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/check", check=False).stdout.strip()
+    if not config:
+        return None, f"{commit[:12]} has no tools/check/ to hold the shards' config to"
+    jobs = declared_jobs(repo, commit)
+    if isinstance(jobs, str):
+        return None, jobs
+    shards: dict[int, tuple[str, dict, list[dict]]] = {}
+    plans = set()
+    for rid in ids:
+        got = _read(store, rid, tool, commit)
+        if isinstance(got, str):
+            return None, f"{rid}: {got}"
+        doc, art, result = got
+        mode, arg = invocation(doc.get("argv"), command)
+        if mode != "shard":
+            return None, f"{rid}: {arg if mode == 'refused' else 'it is not a shard (`check.py --shard K/N`)'}"
+        kind = result.kind if result else None
+        if kind != SHARD_KIND:
+            return None, f"{rid}: its result is {f'a {kind}' if kind else 'missing'}, not a {SHARD_KIND}"
+        meta = result.meta if isinstance(result.meta, dict) else {}
+        sh = meta.get("shard") if isinstance(meta.get("shard"), dict) else {}
+        steps = meta.get("steps", [])
+        if meta.get("run_id") != rid:
+            return None, f"{rid}: its result names run {meta.get('run_id')}"
+        if (meta.get("validation") or {}).get("status") != "passed":
+            return None, f"{rid}: its result's verdict is {(meta.get('validation') or {}).get('status')}, not passed"
+        if why := twice(steps):
+            return None, f"{rid}: {why}"
+        if (sh.get("k"), sh.get("n")) != arg:
+            return None, f"{rid}: its result is shard {sh.get('k')}/{sh.get('n')}, its command {arg[0]}/{arg[1]}"
+        if sh.get("commit") != commit or sh.get("config") != config:
+            return None, (f"{rid}: its result checked commit {sh.get('commit')} with config {sh.get('config')}, not {commit[:12]}'s "
+                          f"tools/check/ ({config[:12]})")
+        if not all(isinstance(sh.get(f), list) and all(isinstance(p, str) for p in sh[f]) for f in ("parts", "all")):
+            return None, f"{rid}: its result doesn't list its parts and every part"
+        if bad := [s["step"] for s in steps if s.get("status") not in ("passed", "skipped")]:
+            return None, f"{rid}: {', '.join(bad)} didn't pass"
+        ran = [p for s in steps for p in (s.get("parts") or [])]
+        if not all(isinstance(p, str) for p in ran) or sorted(ran) != sorted(sh["parts"]):
+            return None, f"{rid}: its steps ran {', '.join(map(str, ran)) or 'nothing'}, not its shard's parts"
+        if arg[0] in shards:
+            return None, f"shard {arg[0]}/{arg[1]} is named twice ({shards[arg[0]][0]}, {rid})"
+        shards[arg[0]] = (rid, sh, steps)
+        plans.add((arg[1], json.dumps(sh["all"])))
+    if len(plans) != 1:
+        return None, "the shards are of different plans (their N, or every part they say an unsharded check covers)"
+    (n, _), = plans
+    if missing := [k for k in range(1, n + 1) if k not in shards]:
+        return None, f"shard {', '.join(f'{k}/{n}' for k in missing)} is not among them"
+    every = shards[1][1]["all"]
+    covered = [p for k in sorted(shards) for p in shards[k][1]["parts"]]
+    if len(set(every)) != len(every):
+        return None, "their list of every part names one twice"
+    if sorted(covered) != sorted(every):
+        again = sorted({p for p in covered if covered.count(p) > 1})
+        return None, (f"their parts aren't every part once (twice: {', '.join(again) or 'none'}; in no shard: "
+                      f"{', '.join(sorted(set(every) - set(covered))) or 'none'}; not a part: "
+                      f"{', '.join(sorted(set(covered) - set(every))) or 'none'})")
+    if uncovered := [j for j in jobs if not any(p == j or p.startswith(j + ":") for p in every)]:
+        return None, f"no shard runs {', '.join(uncovered)}, which {commit[:12]}'s ci.toml declares"
+    names = {p.partition(":")[0] for p in every}
+    common = [[s["step"] for s in shards[k][2] if not s.get("parts")] for k in sorted(shards)]
+    if any(sorted(c) != sorted(common[0]) for c in common) or names & set(common[0]):
+        return None, "the shards ran different steps outside their parts, or a job outside its parts"
+    out = [{"step": s, "status": "passed" if all(x.get("status") == "passed" for k in shards for x in shards[k][2] if x["step"] == s)
+            else "skipped", "shards": [shards[k][0] for k in sorted(shards)]} for s in common[0]]
+    part = {p: {"step": p, "status": s.get("status"), "shard": k, "run_id": shards[k][0], "seconds": s.get("seconds")}
+            for k in sorted(shards) for s in shards[k][2] for p in (s.get("parts") or [])}
+    return out + [part[p] for p in every], None
 
 
 def declaration(repo: Path, tool: str):
@@ -139,31 +288,21 @@ def declared_command(repo: Path, tool: str) -> tuple[str, ...]:
 
 
 def refused(store, run_id: str, kinds: frozenset[str], tool: str | None = None, commit: str | None = None,
-            command: tuple[str, ...] | None = None) -> str | None:
+            command: tuple[str, ...] | None = None, repo: Path | None = None) -> str | None:
     """Why the attempt can't pass the gate whatever the index says of it, or None: its record can't be read, or doesn't say
     what the index row did (a passing ``tool`` attempt of the clean ``commit``), or ran something other than ``command`` (the
     tool's `declared_command`, `unlike`; with none, nothing passes), or its result can't be read, is in `REFUSED_KINDS`, is not
     of a kind in ``kinds`` (the tool's `produced`; an attempt that published no result has none), is another run's, has a
-    verdict other than passed, or lists a step twice (the gates would read it two ways)."""
-    try:
-        doc = store.get_attempt(run_id)
-    except Exception as e:  # noqa: BLE001  (a guard never fails open)
-        return f"its attempt can't be read ({type(e).__name__}: {e})"
-    if not isinstance(doc, dict):
-        return "its attempt can't be read"
-    st, src = doc.get("status") or {}, doc.get("source") or {}
-    said = {"tool": (doc.get("tool") or {}).get("name"), "commit": src.get("commit"), "dirty": src.get("dirty"),
-            "state": st.get("state"), "rc": st.get("rc")}
-    want = {"tool": tool, "commit": commit, "dirty": False, "state": "done", "rc": 0}
-    if off := [f"{k} {said[k]}" for k, v in want.items() if v is not None and said[k] != v]:
-        return f"its record says {', '.join(off)}, not the index's passing check"
-    if why := unlike(doc.get("argv"), command):
+    verdict other than passed, or lists a step twice (the gates would read it two ways).  A `--combine` of shards passes only
+    when, read in ``repo`` (the target's checkout), its shards are a passing check of ``commit`` (`shard_set`) and its steps are
+    the ones they make."""
+    got = _read(store, run_id, tool, commit)
+    if isinstance(got, str):
+        return got
+    doc, art, result = got
+    mode, ids = invocation(doc.get("argv"), command)
+    if mode != "combine" and (why := unlike(doc.get("argv"), command)):
         return why
-    art = (doc.get("outputs") or {}).get("result")
-    try:
-        result = store.get_manifest(art) if art else None
-    except Exception as e:  # noqa: BLE001  (a guard never fails open)
-        return f"its result can't be read ({type(e).__name__}: {e})"
     kind = result.kind if result else None
     if kind in REFUSED_KINDS:
         return f"its result is a {kind}, which no merge accepts"
@@ -177,7 +316,18 @@ def refused(store, run_id: str, kinds: frozenset[str], tool: str | None = None, 
     verdict = validation.get("status") if isinstance(validation, dict) else None
     if verdict != "passed":
         return f"its result's verdict is {verdict}, not passed"
-    return twice(meta.get("steps", []))
+    if why := twice(meta.get("steps", [])):
+        return why
+    if mode == "combine":
+        if repo is None or commit is None:
+            return "it combines shards, which this gate reads only in the target's checkout, for a commit"
+        steps, why = shard_set(store, repo, commit, ids, tool or "check", command or ())
+        if why:
+            return f"its shards aren't a passing check: {why}"
+        seen = sorted((s["step"], s.get("status")) for s in meta.get("steps", []))
+        if seen != sorted((s["step"], s["status"]) for s in steps):
+            return "its steps aren't the ones its shards make"
+    return None
 
 
 def twice(steps) -> str | None:
@@ -192,7 +342,7 @@ def twice(steps) -> str | None:
 
 
 def passing(store, commit: str, tool: str = "check", *, kinds: frozenset[str], command: tuple[str, ...], tree: str | None = None,
-            maps=None) -> list[str]:
+            maps=None, repo: Path | None = None) -> list[str]:
     """Ids of the attempts of ``tool`` that passed on the clean tree of ``commit``, newest first, less those `refused` names
     (``kinds`` and ``command``: the result kinds that may pass and the command that must have run, the target's `produced` and
     `declared_command`).  After a history rewrite (`commitmap`), an attempt of an old commit counts for its image when the map
@@ -207,7 +357,7 @@ def passing(store, commit: str, tool: str = "check", *, kinds: frozenset[str], c
             recorded = (json.loads(doc).get("source") or {}).get("tree") if doc else None
             if tree is None or recorded in (None, tree):
                 found.append((rid, old))
-    return [rid for rid, c in found if refused(store, rid, kinds, tool, c, command) is None]
+    return [rid for rid, c in found if refused(store, rid, kinds, tool, c, command, repo) is None]
 
 
 def tree_identical(repo: Path, commit: str) -> bool:
@@ -244,10 +394,10 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print,
         raise Refused("; ".join(why))
     tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
     kinds, command = produced(repo, tool), declared_command(repo, tool)
-    ids = passing(store, commit, tool, kinds=kinds, command=command, tree=tree, maps=maps)
+    ids = passing(store, commit, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
     if not ids:
         rows = store.index.sql("SELECT id, state, rc, source_dirty FROM attempts WHERE tool = ? AND source_commit = ?", (tool, commit))
-        why = {r[0]: refused(store, r[0], kinds, tool, commit, command) for r in rows if r[1] == "done" and r[2] == 0 and not r[3]}
+        why = {r[0]: refused(store, r[0], kinds, tool, commit, command, repo) for r in rows if r[1] == "done" and r[2] == 0 and not r[3]}
         seen = "; ".join(f"{r[0]} {r[1]} rc={r[2]}{' dirty' if r[3] else ''}{f' refused: {why[r[0]]}' if why.get(r[0]) else ''}"
                          for r in rows) or "none"
         raise Refused(f"no passing `{tool}` attempt for {commit} in the evidence store (attempts of it: {seen}); "
@@ -293,7 +443,7 @@ def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", to
         tree = _git(repo, "rev-parse", f"{tip}^{{tree}}").stdout.strip()
         parents = _git(repo, "rev-list", "--parents", "-n", "1", tip).stdout.split()[1:]
         if not any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree
-                   and passing(store, x, tool, kinds=kinds, command=command, tree=tree) for x in [tip, *parents[1:]]):
+                   and passing(store, x, tool, kinds=kinds, command=command, tree=tree, repo=repo) for x in [tip, *parents[1:]]):
             bad.append(tip)
     return bad
 
