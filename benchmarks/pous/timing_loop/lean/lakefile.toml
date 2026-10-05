@@ -5,7 +5,12 @@ defaultTargets = ["timing-loop"]
 [leanOptions]
 autoImplicit = false
 
-# PoUS's timing loop with Lean holding the clock, for the measurement in `../bench.py`; it needs nothing but the toolchain.
+# Only `Flock.Hash` is imported (SHA-256, no imports of its own), for the leaf check of `timing-loop own --check digest`.
+[[require]]
+name = "flock_verifier"
+path = "../../../../backends/flock/verifier/lean"
+
+# PoUS's timing loop with Lean holding the clock, for the measurement in `../bench.py`.
 [[lean_lib]]
 name = "TimingLoop"
 

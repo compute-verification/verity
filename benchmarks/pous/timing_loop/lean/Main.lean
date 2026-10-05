@@ -1,13 +1,15 @@
+import Flock.Hash
 import TimingLoop.Frame
 import TimingLoop.Wire
 
 /-!
 `timing-loop`: PoUS's sequential-reveal timing loop with Lean holding the clock (`IO.monoNanosNow`), two ways.
 
-* `own --port P --challenges FILE --store FILE --block B --k K --pings N --limit-ns L --out FILE`: Lean owns the socket. It
-  connects to the responder, sends each index of `FILE` (8 little-endian bytes each, `k` to an audit, drawn by the Python
-  side as `audit.TimedVerifier` draws them), times each round from just before the send to the whole answer, and checks the
-  answer byte for byte against block `i` of the store.
+* `own --port P --challenges FILE --store FILE --block B --k K --pings N --limit-ns L --out FILE [--check digest --leaves
+  FILE --prefixes FILE]`: Lean owns the socket. It connects to the responder, sends each index of `FILE` (8 little-endian
+  bytes each, `k` to an audit, drawn by the Python side as `audit.TimedVerifier` draws them), times each round from just
+  before the send to the whole answer, and checks the answer byte for byte against block `i` of the store, or with `--check
+  digest` as `VerifierKey.check` does: `Flock.Sha256` of leaf `i`'s 35-byte prefix and the block against leaf `i`.
 * `drive --k K --audits A --pings N --limit-ns L --out FILE -- CMD ARGS…`: Lean drives a Python worker (`CMD ARGS…`,
   `helper.py`) that keeps the socket and the verifier. Each round asks it for the challenge (`D`), then times the reveal
   (`R`: the worker sends it and replies with the answer's header once the whole answer is in), then asks for the verdict
@@ -46,7 +48,10 @@ def ownCmd (args : List String) : IO UInt32 := do
     | IO.eprintln "own: --challenges FILE --store FILE --out FILE"; return 2
   let (port, block, k, pings, limit) :=
     (natOf args "--port" 0, natOf args "--block" 65536, natOf args "--k" 111, natOf args "--pings" 0, natOf args "--limit-ns" 0)
+  let digest := argOf args "--check" == some "digest"
   let store ← IO.FS.readBinFile storePath
+  let leaves ← if digest then IO.FS.readBinFile ((argOf args "--leaves").getD "") else pure .empty
+  let prefixes ← if digest then IO.FS.readBinFile ((argOf args "--prefixes").getD "") else pure .empty
   let raw ← IO.FS.readBinFile chal
   let n := raw.size / 8
   let s ← connect port
@@ -64,8 +69,10 @@ def ownCmd (args : List String) : IO UInt32 := do
   for j in [0:n] do
     let i := ofU64le raw (8 * j)
     let a ← roundtrip s block opChallenge i
+    let answer := a.bytes.extract header (header + block)
     let ok := a.status == 0 && a.bytes.size == header + block &&
-      a.bytes.extract header (header + block) == store.extract (i * block) ((i + 1) * block)
+      if digest then Flock.Sha256.hash (prefixes.extract (35 * i) (35 * i + 35) ++ answer) == leaves.extract (32 * i) (32 * i + 32)
+      else answer == store.extract (i * block) ((i + 1) * block)
     let onTime := a.receivedNs - a.sentNs ≤ limit
     if !ok then wrong := wrong + 1
     if !onTime then late := late + 1

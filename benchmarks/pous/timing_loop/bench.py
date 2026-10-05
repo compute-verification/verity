@@ -9,7 +9,8 @@
   challenge, the reveal and the verdict, while Python keeps the socket: the Lean-to-Python hop on every round.
 - **lean-own**: Lean owns the socket and the clock (`timing-loop own`, `Std.Internal.UV.TCP`), sends indices drawn here as
   `audit.TimedVerifier` draws them, and checks each answer byte for byte against the store. `lean-own-2cpu` is the same loop
-  with the verifier CPU's sibling allowed too, so Lean's event-loop thread need not share the loop's CPU.
+  with the verifier CPU's sibling allowed too, so Lean's event-loop thread need not share the loop's CPU; `lean-own-digest`
+  checks each answer as `VerifierKey.check` does, its leaf digest in Lean (`Flock.Sha256`), on one CPU.
 
 The responder is `pous_native.cu`'s over a store `C` encoded on the GPU from a random `W` (`--segments` segments of the band),
 or with `--cpu-responder` the harness's `ControlResponder` over random bytes. `idle` runs each loop alone; `load` runs the
@@ -46,7 +47,7 @@ sys.path.insert(0, str(HERE.parent / "band_gpu"))
 import live  # noqa: E402
 
 SCHEME = "band-chain/d12/v1"
-LOOPS = ("python", "lean-drive", "lean-own", "lean-own-2cpu")
+LOOPS = ("python", "lean-drive", "lean-own", "lean-own-2cpu", "lean-own-digest")
 THRESHOLDS_NS = (500_000, 850_000)
 WEIGHT_SETS = HERE.parent / "weight_sets.json"
 
@@ -165,10 +166,11 @@ def loop_cmd(loop: str, a: argparse.Namespace, files: dict[str, Path], audits: i
         return pin(vcpu) + [a.lean_exe, "drive", "--k", str(k), "--audits", str(audits), "--pings", str(a.pings),
                             "--limit-ns", str(a.limit_ns), "--out", str(raw), "--"] + py + ["helper", *common] + (
             ["--cpu", str(a.helper_cpu)] if a.helper_cpu is not None else [])
-    sib = vcpu if loop == "lean-own" or not vcpu else sibling_list(a.verifier_cpu)
+    sib = sibling_list(a.verifier_cpu) if loop == "lean-own-2cpu" and vcpu else vcpu
+    digest = ["--check", "digest", "--leaves", str(files["leaves"]), "--prefixes", str(files["prefixes"])]
     return pin(sib) + [a.lean_exe, "own", "--port", "{port}", "--challenges", str(files["challenges"]), "--store",
                        str(files["store"]), "--block", str(files["block"]), "--k", str(k), "--pings", str(a.pings),
-                       "--limit-ns", str(a.limit_ns), "--out", str(raw)]
+                       "--limit-ns", str(a.limit_ns), "--out", str(raw)] + (digest if loop == "lean-own-digest" else [])
 
 
 def sibling_list(cpu: int) -> str:
@@ -275,6 +277,7 @@ def env() -> dict[str, str]:
 def main(argv: list[str] | None = None) -> int:
     from benchmarks.pous.band_gpu.harness import SALT
     from verity.protocols.accounting.space.pous import audit, protocol, schemes
+    from verity.protocols.accounting.space.pous.labels import salt_value, tag
     from verity.protocols.accounting.space.pous.verifier import VerifierKey, leaf_hash
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -318,9 +321,11 @@ def main(argv: list[str] | None = None) -> int:
     k = scheme.certificate.k if scheme.certificate is not None else audit.CHALLENGES
     audits = math.ceil(a.rounds / k)
     files = {"ready": scratch / "ready.json", "leaves": scratch / "leaves.bin", "store": scratch / "store.bin",
-             "challenges": scratch / "challenges.bin", "block": width}
+             "challenges": scratch / "challenges.bin", "prefixes": scratch / "prefixes.bin", "block": width}
     files["leaves"].write_bytes(b"".join(leaves))
     files["store"].write_bytes(c_host)
+    files["prefixes"].write_bytes(b"".join(b"\x00" + tag(salt_value(SALT), s).to_bytes(32, "little") + v.to_bytes(2, "little")
+                                           for s in range(p.segments) for v in range(p.blocks_per_segment)))
     draws = []
     for _ in range(audits):
         key = protocol.challenge_key(os.urandom(32), vk)

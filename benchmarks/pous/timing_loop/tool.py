@@ -34,6 +34,7 @@ TIMING_LOOP = Tool(
     version="1",
     command=["bash", "benchmarks/pous/timing_loop/node.sh"],
     closure=["benchmarks/pous/timing_loop/**", "benchmarks/pous/band_gpu/**", "benchmarks/pous/weight_sets.json",
+             "backends/flock/verifier/lean/Flock/Hash.lean", "backends/flock/verifier/lean/lakefile.toml",
              *package_paths(TREE, "verity", "protocols/accounting/space/pous/**")],
     key_params=["responder", "rounds", "loads", "loops", "limit_ns"],
     produces=["run-files/v1"],

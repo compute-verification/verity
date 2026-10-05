@@ -15,8 +15,11 @@ export GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting:timing-loop}
 SRC=$(pwd)
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
-cp -r "$SRC/benchmarks/pous/timing_loop/lean" "$d/lean"
-(cd "$d/lean" && rm -rf .lake && lake build)
+LEAN=$d/tree/benchmarks/pous/timing_loop/lean
+mkdir -p "$d/tree/benchmarks/pous/timing_loop" "$d/tree/backends/flock/verifier"
+cp -r "$SRC/benchmarks/pous/timing_loop/lean" "$LEAN"
+cp -r "$SRC/backends/flock/verifier/lean" "$d/tree/backends/flock/verifier/lean"
+(cd "$LEAN" && rm -rf .lake && lake build)
 mkdir -p "$OUT"
 gpu-lease 1 --wait --on "$GPUS" --max-min "${TIMING_MAX_MIN:-30}" -- \
     env VY_POUS_QUIET_CPUS="${TIMING_CPUS:-120-127}" vy-pous-quiet "$PY" "$SRC/benchmarks/pous/timing_loop/bench.py" \
