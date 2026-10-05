@@ -222,9 +222,10 @@ def scopes(code: list[str]) -> list[tuple[list[str], list[str]]]:
     return out
 
 
-def binders(body: str) -> tuple[list[str], list[str]]:
-    """A `variable` command's binder names, and the identifiers its binders' types name."""
-    names, refs, depth, start = [], [], 0, 0
+def binder_groups(body: str) -> list[tuple[str, list[str], list[str]]]:
+    """A `variable` command's bracketed binder groups: each one's text, the names it binds and the identifiers its type
+    names."""
+    groups, depth, start = [], 0, 0
     for k, ch in enumerate(body):
         if ch in "({[⦃":
             if depth == 0:
@@ -237,9 +238,25 @@ def binders(body: str) -> tuple[list[str], list[str]]:
                 head, sep, ty = inner.partition(" : ")
                 if not sep:
                     head, ty = ("", inner) if body[start] == "[" else (inner, "")
-                names += head.split()
-                refs += IDENT.findall(ty)
-    return names, refs
+                groups.append((body[start:k + 1], head.split(), IDENT.findall(ty)))
+    return groups
+
+
+def binders(body: str) -> tuple[list[str], list[str]]:
+    """A `variable` command's binder names, and the identifiers its binders' types name."""
+    groups = binder_groups(body)
+    return [n for _, ns, _ in groups for n in ns], [r for *_, rs in groups for r in rs]
+
+
+def wrap(head: str, parts: list[str], width: int = 120) -> str:
+    """``head`` and ``parts`` joined by spaces, broken before a part that would pass ``width``, continued indented."""
+    lines = [head]
+    for k, part in enumerate(parts):
+        if k and len(lines[-1]) + 1 + len(part) > width:
+            lines.append("  " + part)
+        else:
+            lines[-1] += " " + part
+    return "\n".join(lines)
 
 
 def open_items(cmd: str) -> tuple[list[str], str]:
@@ -555,20 +572,36 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
                     edits[i] = f"open {form}{' '.join(keep)}{tail}"
                     spec_drop.update(range(i + 1, e + 1))
             elif line.startswith("variable") and not IN_END.search(line):
+                # A binder whose type names a proof's constant, or a binder left out before it, is left out of the spec
+                # half; the rest stay, since a spec declaration may use them (an unused `variable` binder is not one
+                # of a declaration's parameters).
                 e = commands_of(mod.lines, mod.code, i)
-                names, refs = binders(" ".join(x.strip() for x in mod.code[i:e + 1])[len("variable"):])
+                groups = binder_groups(" ".join(x.strip() for x in mod.code[i:e + 1])[len("variable"):])
                 ns, opens = sc[i]
-                bad = None
-                for t in (r.lstrip("@") for r in refs if r.lstrip("@") not in local_names):
-                    c = next((c for c in [".".join(ns[:k] + [t]) for k in range(len(ns), -1, -1)] +
-                              [f"{o}.{t}" for o in opens] if c in where), None)
-                    if c and c not in spec_consts:
-                        bad = c
-                        break
-                if bad:
-                    spec_drop.update(range(i, e + 1))
-                    gone |= set(names)
-                    warnings.append(f"{m}:{i + 1}: the spec half leaves out a `variable` whose type names {bad}, a proof's")
+                kept, left = [], []
+                for text, names, refs in groups:
+                    bad = next((r for r in refs if r.lstrip("@").split(".")[0] in gone), None)
+                    for t in (r.lstrip("@") for r in refs if r.lstrip("@") not in local_names):
+                        if bad:
+                            break
+                        c = next((c for c in [".".join(ns[:k] + [t]) for k in range(len(ns), -1, -1)] +
+                                  [f"{o}.{t}" for o in opens] if c in where), None)
+                        if c and c not in spec_consts:
+                            bad = c
+                    if bad:
+                        gone |= set(names)
+                        left.append((names, bad))
+                    else:
+                        kept.append(text)
+                if left:
+                    if kept:
+                        edits[i] = wrap("variable", kept)
+                        spec_drop.update(range(i + 1, e + 1))
+                    else:
+                        spec_drop.update(range(i, e + 1))
+                    warnings.append(f"{m}:{i + 1}: the spec half leaves out the `variable` binders " +
+                                    ", ".join(f"{' '.join(bs) or '[instance]'} (naming {b})" for bs, b in left) +
+                                    ", a proof's or one left out")
             elif line.startswith("include ") and gone:
                 e = commands_of(mod.lines, mod.code, i)
                 names = " ".join(x.strip() for x in mod.code[i:e + 1]).split()[1:]

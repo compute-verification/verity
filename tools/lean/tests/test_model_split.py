@@ -68,6 +68,17 @@ theorem one_eq : 𝟙 = 1 := rfl
 /-- An example. -/
 example : g = 1 := rfl
 
+section
+
+variable (k : Nat) (b : Fin (base + 1))
+
+/-- It names `k`, a binder of a `variable` whose other binder's type names a proof module's definition. -/
+def addk (n : Nat) : Nat := n + k
+
+theorem b_lt : b.val < base + 1 := b.isLt
+
+end
+
 end P
 """
 FILES = {
@@ -81,7 +92,7 @@ FILES = {
 LOCK = {"roots": ["P"], "assumptions": ["P.Assumptions"],
         "pins": {"P.t": {"signature": ["P.t : Eq P.g 1"], "assumptions": [], "type_hash": "aa"}},
         "reads": {"P.Defs": {"digest": "d", "definitions": {"P.f": "1", "P.g": "2", "P.two": "3", "P.three": "4", "P.four": "5",
-                                                            "P.five": "6", "P.one": "7"}}}}
+                                                            "P.five": "6", "P.one": "7", "P.addk": "8"}}}}
 
 
 def package(tmp: Path) -> Path:
@@ -130,6 +141,10 @@ def test_a_mixed_module_splits_into_a_spec_half_and_its_proofs_and_still_builds(
     assert proofs.startswith("import P.Base\nimport P.Protocol.Defs\n")
     assert all(x in proofs for x in ("theorem f_id", "@[simp] theorem g_eq", "theorem one_eq", "/-- An example. -/\nexample"))
     assert "def " not in proofs and all(x.count('/-- One. -/\nlocal notation "𝟙"') == 1 for x in (spec_half, proofs))
+    assert "\nvariable (k : Nat)\n" in spec_half and "base" not in spec_half
+    assert "\nvariable (k : Nat) (b : Fin (base + 1))\n" in proofs and "theorem b_lt" in proofs
+    assert p["warnings"] == ["P.Defs:54: the spec half leaves out the `variable` binders b (naming P.base), a proof's or one "
+                             "left out"]
     after = decls(pkg)
     assert names(after) == names(before)
     lock = A.load(pkg)
