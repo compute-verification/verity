@@ -11,7 +11,7 @@ For each program (A4 P6's six-template population, as #164's test builds it, and
 - on a small program, each unit's inclusion frequency over OS draws against `k_s / n_s`;
 - A4's law as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
 
-Needs core with #164 on PYTHONPATH (`.` and `verity/protocols/verification/sampled_proofs`). Prints one JSON line; exit 0 iff
+Needs core with #164 on PYTHONPATH (the repository root). Prints one JSON line; exit 0 iff
 everything agrees.
 """
 from __future__ import annotations
