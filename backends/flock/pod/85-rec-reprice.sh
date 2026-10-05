@@ -14,7 +14,7 @@
 #   STEP=oprove  (GPU) each level (and the algebra, once staged) proved with --zk on loopback, WARM + RUNS sessions;
 #                upstream's replay --zk of the last
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
-#                --coins os)
+#                --coins os; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json.
 # env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (the Gemm_v2 contraction: DEFS is Gemm_v2{K,N=4096})  N=2048
@@ -187,7 +187,10 @@ def lean(p):
     if at < 0:
         return text(p)[-600:]
     v = json.JSONDecoder(strict=False).raw_decode(text(p)[at + 8:])[0]
-    return {k: v.get(k) for k in ("accepted", "why", "registered")}
+    # Main's stderr: inputs (from start), setup (from the session's start), then the session's whole time (setup included)
+    ms = [int(x) for x in re.findall(r"^(?:inputs|setup|/\S+): (\d+) ms$", text(p), re.M)]
+    split = {"inputs_s": ms[0] / 1e3, "setup_s": ms[1] / 1e3, "verify_s": (ms[2] - ms[1]) / 1e3} if len(ms) == 3 else {}
+    return {**{k: v.get(k) for k in ("accepted", "why", "registered")}, **split}
 
 s = {"step": step, "warm": warm, "runs": runs}
 d = o / step
@@ -392,6 +395,13 @@ lean)
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit --circuit $DD/stage/circuit.txt \
       --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --coins os --session $DD/inner/s$((NS - 1))/session > $O/lean/inner.log 2>&1
     echo "inner lean exit $?"
+  fi
+  # ZK_LEAN=1: today's --zk on the same statement (the inner step's last loopback --zk session), for Lean's like-for-like
+  if [ "${ZK_LEAN:-0}" = 1 ]; then
+    ZS=$(ls -d $DD/inner-zk/sessions/l* | sort | tail -1)
+    /usr/bin/time -v -o $O/lean/time-zk.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $DD/stage/circuit.txt \
+      --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --session $ZS > $O/lean/zk.log 2>&1
+    echo "zk lean exit $?"
   fi
   ;;
 esac
