@@ -17,16 +17,19 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
     opened tile per excluded row, every one.
   - A credited row must pass the rules.
 * **Credit.**
-  - A cell's draw weight is its row's share of `wref` at |K|: Lean's `wrefOf`, with no weight side (F2), so padding to
-    `k_unit` and filler earn nothing.
-  - An accepted unit is credited (1 − ρ)·`creditOf` over its credited cells, at the scheme's cap ρ (`scheme.cap`: Pearl-C's
-    is its device record's, 1/400 on the H100 and 1/1,000 on sm_120; Pearl-C4's is its own 1/400).
+  - A cell's draw weight is its row's share of `W_ref` at |K|, with no weight side (F2), so padding to `k_unit` and
+    filler earn nothing. `W_ref` is the one the draw's Lean statement weighs by (`draw_wref`): on sm_120 at its cap
+    1/1,000, `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72 (`SM120_LOOP_CAST_8P72`), so that a served
+    step's mixed linears are drawn in proportion to it (red team #919 F1); elsewhere the scheme's own `wref`, Lean's
+    `wrefDevRev1` at its record.  W, the profile's work, stays the scheme's own `wref`.
+  - An accepted unit is credited (1 − ρ)·`creditDevRev1` over its credited cells, at the scheme's cap ρ (`scheme.cap`:
+    Pearl-C's is its device record's, 1/400 on the H100 and 1/1,000 on sm_120; Pearl-C4's is its own 1/400).
 * **The tile rule (`check_opened`)**, beside `verity_pouw.audit.Verifier.check_tile`'s openings and digest:
   - filler rows are zero;
   - every opened row is zero past |K| (F7);
   - credited rows pass the per-row rules, and excluded rows fail them;
   - the debit replayed over the credited words (`pearl_c_debit`) is at most ρ times the credited cells' credit, their
-    share of the unit's `creditOf` (F1; `tile_cap`).
+    share of the unit's `creditDevRev1` (F1; `tile_cap`).
   A failure is a wrong tile, reported as a reason; nothing raises.
 * **Voluntary rows (V-EX; research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md`` §6.13, the assessor's B at
   17:32Z).**
@@ -52,10 +55,11 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
 
 from __future__ import annotations
 
+import copy
 import struct
 from bisect import bisect_right
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from functools import partial
 from itertools import accumulate
@@ -69,6 +73,7 @@ from ..protocol import Context, Matmul, Shape, Tile, tagged
 from . import pearl_c as C
 from . import pearl_c_debit as D
 from . import pearl_kw as P
+from .pearl_c_device import SM120, Prices
 
 RECORDS_TAG = "verity/pouw/pearl-c/records/v2"
 SPLIT_TAG = "verity/pouw/pearl-c/split/v1"
@@ -178,7 +183,7 @@ def check_records(epoch: Epoch, splits: Mapping[int, Split], records: Sequence[U
 
 
 def cell_wref(scheme: C.PearlC, record: UnitRecord) -> Fraction:
-    """A cell's share of its row's `wref` at |K| (Lean's `wrefOf` is linear in m)."""
+    """A cell's share of its row's `wref` at |K| (Lean's `wrefDevRev1` is linear in m)."""
     s = record.matmul.shape
     return Fraction(scheme.wref(Shape(1, record.k_kept, s.n)), s.n)
 
@@ -188,20 +193,66 @@ def cell_credit(scheme: C.PearlC, record: UnitRecord) -> Fraction:
     return Fraction(scheme.credit_of(Shape(1, record.k_kept, s.n)), s.n)
 
 
+@dataclass(frozen=True)
+class DrawWref:
+    """The `W_ref` a Lean statement's draw weighs by: `wrefDevRev1K (devAt d prices) c`, the scheme's rev1 `wref` at the
+    statement's prices plus `c` per activation element (the honest kernel's forming beyond the record's).  `GγSampled`,
+    `HonestTileCapRate` and `CompleteSampled` take tickets proportional to a tile's `Wref`, over all of its rows and
+    columns, so a draw by another price record's `wref` attains the statement's γ only on a layout of one (n, k): on a
+    served step's four linears the per-linear ratios differ (red team #919 F1).  `tile_weight` counts credited cells
+    only, so the tickets are the statement's on fully credited tiles; a tile with filler, excluded or voluntary rows
+    gets less than its `Wref`'s ticket at the scale that fully credited tiles get theirs, so unless every tile's
+    credited share is the same, no Lean statement covers that draw yet (red team #1014)."""
+
+    statement: str
+    device: str
+    cap: Fraction
+    prices: Prices
+    c: Fraction
+
+
+#: The statement Pearl-C v1's served γ and ε cite on sm_120 at its cap 1/1,000 (`ServedMixedRev1Gamma`, `Completeness`'s
+#: `HonestTileCapRate`): `Prices.sm120Loop` ⟨1047/125, 2, ⟨40, 2⟩⟩ and the honest cast at 218/25 against the record's
+#: 8953/1000 (the credited cast 8 and the A-only forming's measured 1.047, rounded up to qa = 2).
+SM120_LOOP_CAST_8P72 = DrawWref("pearlCSampledSm120v1LoopCast8p72Rev1Cap1000", SM120.name, SM120.cap,
+                                replace(SM120.prices, fadd=Fraction(1047, 125), forming_a_only=2),
+                                Fraction(218, 25) - Fraction(8953, 1000))
+DRAW_WREF = {(SM120.name, SM120.prices, SM120.cap): SM120_LOOP_CAST_8P72}
+
+
+def draw_wref(scheme: C.PearlC) -> DrawWref | None:
+    """The statement the scheme's draw weighs by, or None for the scheme's own `wref` (Lean's at its record, c = 0)."""
+    if type(scheme) is not C.PearlC or scheme.forming != "v1":
+        return None
+    return DRAW_WREF.get((scheme.device.name, scheme.prices, scheme.cap))
+
+
+def ticket_cell(scheme: C.PearlC, record: UnitRecord) -> Fraction:
+    """A credited cell's draw weight: its row's share of the drawn statement's `W_ref` at |K| (`draw_wref`)."""
+    at = draw_wref(scheme)
+    if at is None:
+        return cell_wref(scheme, record)
+    priced = copy.copy(scheme)
+    priced.prices = at.prices
+    s = record.matmul.shape
+    return (Fraction(priced.wref(Shape(1, record.k_kept, s.n))) + at.c * record.k_kept) / s.n
+
+
 def tile_weight(scheme: C.PearlC, record: UnitRecord, tile: Tile) -> Fraction:
     rows, cols = record.credited(tile)
-    return cell_wref(scheme, record) * len(rows) * len(cols)
+    return ticket_cell(scheme, record) * len(rows) * len(cols)
 
 
 def tickets(scheme: C.PearlC, records: Sequence[UnitRecord]) -> list[tuple[int, Tile, int]]:
-    """(record position, tile, integer ticket) for every tile of every record, by its credited cells' `wref`."""
+    """(record position, tile, integer ticket) for every tile of every record, by its credited cells' `W_ref` at the
+    statement the draw cites (`draw_wref`)."""
     weights = [(p, t, tile_weight(scheme, r, t)) for p, r in enumerate(records) for t in scheme.tiles(r.matmul.shape)]
     den = lcm(*(w.denominator for _, _, w in weights)) if weights else 1
     return [(p, t, int(w * den)) for p, t, w in weights]
 
 
 def work(scheme: C.PearlC, records: Sequence[UnitRecord]) -> tuple[Fraction, Fraction]:
-    """(W, credit): the credited cells' `wref`, and (1 − ρ)·`creditOf` over them."""
+    """(W, credit): the credited cells' `wref`, and (1 − ρ)·`creditDevRev1` over them."""
     cells = [(r, len(rows) * len(cols)) for r in records for rows, cols in (r.credited(t) for t in scheme.tiles(r.matmul.shape))]
     return (sum((cell_wref(scheme, r) * c for r, c in cells), Fraction(0)),
             (1 - scheme.cap) * sum((cell_credit(scheme, r) * c for r, c in cells), Fraction(0)))
@@ -223,12 +274,13 @@ def row_passes(words: Sequence[int]) -> bool:
 
 def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[int]], b_codes: Sequence[Sequence[int]]
              ) -> tuple[Fraction, Fraction]:
-    """(debit, cap) over credited words given as their A′ and B̃ code rows: `debitOf` of the replayed debit, and ρ times
-    the credited cells' credit, the unit's `creditOf` at |K| times their share |rows|·|cols|/(m·n) (the per-tile
-    statement's `tileShare`).  A row's own terms (its forming and A′·F_B) so count once across its row band, a
-    |cols|/n share in each tile, not whole in every tile."""
+    """(debit, cap) over credited words given as their A′ and B̃ code rows: the replayed debit, rev1's `tileDebitRev1`,
+    and ρ times the credited cells' credit, the unit's `creditDevRev1` at |K| times their share |rows|·|cols|/(m·n) (the
+    per-tile statement's `tileShare`, `pearlCTilesDevRev1`).  A row's own terms (its forming and A′·F_B) so count once
+    across its row band, a |cols|/n share in each tile, not whole in every tile."""
     d = scheme.device
-    debit = D.debit_units(D.chain_atoms(a_codes, b_codes, d), D.forming_elements(a_codes, b_codes), scheme.prices, d)
+    atoms, zeros = D.chain_debit(a_codes, b_codes, d)
+    debit = D.debit_units(atoms, D.forming_elements(a_codes, b_codes), scheme.prices, d, zeros=zeros)
     return debit, scheme.cap * cell_credit(scheme, record) * len(a_codes) * len(b_codes)
 
 
@@ -354,8 +406,8 @@ def exclusion_tiles(scheme: C.PearlC, records: Sequence[UnitRecord]) -> list[tup
 
 @dataclass(frozen=True)
 class WorkAudit:
-    """An audit by the records: the verdicts, W (the credited cells' `wref`), the credit (1 − ρ)·`creditOf` over them, and
-    the weight side once per weight (outside both)."""
+    """An audit by the records: the verdicts, W (the credited cells' `wref`), the credit (1 − ρ)·`credit_of` over them,
+    and the weight side once per weight (outside both)."""
 
     audit: Audit
     wref: Fraction

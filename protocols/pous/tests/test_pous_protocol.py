@@ -287,13 +287,13 @@ def test_certificates_at_their_points():
         protocol.Certificate(111, 5, 1 << 20, 483_000, "x", claims=("no-such-claim",))
 
 
-def test_certificates_name_proved_pins():
-    """A certificate's `theorem` is the pinned proof `Pous.SecurityProofs.X` it rests on (in `lean/lean-audit.json`), of
-    the guarantee `Pous.Guarantees.X` (`lean/Pous/Guarantees.lean`).  Experimental schemes are exempt: P2's pin is
+def test_certificates_name_proved_guarantees():
+    """A certificate's `theorem` is the proof `Pous.SecurityProofs.X` it rests on, a guarantee in `lean/lean-audit.json`,
+    of the statement `Pous.Guarantees.X` (`lean/Pous/Guarantees.lean`).  Experimental schemes are exempt: P2's is
     proposed."""
     lean = Path(__file__).parents[1] / "lean"
     statements = set(re.findall(r"^def (\w+) : Prop", (lean / "Pous" / "Guarantees.lean").read_text(), re.M))
-    pins = json.loads((lean / "lean-audit.json").read_text())["pins"]
+    guarantees = json.loads((lean / "lean-audit.json").read_text())["guarantees"]
     checked = 0
     for name in schemes.REGISTRY:
         sch = schemes.get(name)
@@ -303,9 +303,9 @@ def test_certificates_name_proved_pins():
         for cert in sch.certificates:
             x = cert.theorem.removeprefix("Pous.SecurityProofs.")
             assert cert.theorem == f"Pous.SecurityProofs.{x}" and x in statements, name
-            assert cert.theorem in pins, name
+            assert cert.theorem in guarantees, name
             checked += 1
-    assert checked == 4
+    assert checked == 5
 
 
 def test_p3_has_no_certificate_because_its_chain_does_not_start_from_leans():
@@ -377,22 +377,24 @@ def test_the_verifier_enforces_the_certificate():
         protocol.Verifier(schemes.get(segments=2), vk, k)
 
 
-def test_the_band_has_certificates_at_two_and_one_rounds():
-    """`BandMultiMeetsFamilyD2` (`k = 97` at `D = 2`, every `d ≥ 2`) and `BandMultiMeetsFamilyD1` (`k = 93` at `D = 1`,
-    every `d ≥ 1`) follow the default `D = 5` certificate, each for every segment count.  A certificate at `D` covers
-    `Δ + RTT` up to `(D + 1)·call_ns` exclusive: 1.449 ms, 724.5 µs and 483 µs."""
+def test_the_band_has_certificates_at_fewer_rounds():
+    """`BandMultiMeetsFamilyD2` (`k = 97` at `D = 2`, every `d ≥ 2`), `BandMultiMeetsFamilyD1` (`k = 93` at `D = 1`,
+    every `d ≥ 1`) and `BandMultiMeetsFamilyD0` (`k = 89` at `D = 0`, every `d`) follow the default `D = 5`
+    certificate, each for every segment count.  A certificate at `D` covers `Δ + RTT` up to `(D + 1)·call_ns`
+    exclusive: 1.449 ms, 724.5 µs, 483 µs and 241.5 µs."""
     def rows(d: int) -> list[tuple[int, int, str, int | None]]:
         return [(c.rounds, c.k, c.theorem.removeprefix("Pous.SecurityProofs."), c.cliff)
                 for c in schemes.Band(band.BandParams(512, 524_288, d)).certificates]
 
-    d2, d1 = (2, 97, "BandMultiMeetsFamilyD2"), (1, 93, "BandMultiMeetsFamilyD1")
-    assert rows(12) == [(5, 111, "BandMultiMeetsFamily", 12), (*d2, 12), (*d1, 12)]
-    assert rows(5) == [(5, 111, "BandMultiMeetsFamily", 5), (*d2, 5), (*d1, 5)]
-    assert rows(4) == [(*d2, 4), (*d1, 4)] and rows(2) == [(*d2, 2), (*d1, 2)] and rows(1) == [(*d1, 1)]
+    d2, d1, d0 = (2, 97, "BandMultiMeetsFamilyD2"), (1, 93, "BandMultiMeetsFamilyD1"), (0, 89, "BandMultiMeetsFamilyD0")
+    assert rows(12) == [(5, 111, "BandMultiMeetsFamily", 12), (*d2, 12), (*d1, 12), (*d0, 12)]
+    assert rows(5) == [(5, 111, "BandMultiMeetsFamily", 5), (*d2, 5), (*d1, 5), (*d0, 5)]
+    assert rows(4) == [(*d2, 4), (*d1, 4), (*d0, 4)] and rows(2) == [(*d2, 2), (*d1, 2), (*d0, 2)]
+    assert rows(1) == [(*d1, 1), (*d0, 1)]
     assert schemes.Band(band.BandParams(256, 524_288, 12)).certificates == ()
-    assert [c.segments for c in schemes.get(segments=448).certificates] == [448] * 3
+    assert [c.segments for c in schemes.get(segments=448).certificates] == [448] * 4
     certs = schemes.get().certificates
-    assert [(c.rounds + 1) * c.call_ns for c in certs] == [1_449_000, 724_500, 483_000]
+    assert [(c.rounds + 1) * c.call_ns for c in certs] == [1_449_000, 724_500, 483_000, 241_500]
     for c in certs:
         tau = (c.rounds + 1) * c.call_ns
         assert c.refusals(c.k, tau - 1) == () and c.refusals(c.k, tau) != () and c.refusals(c.k - 1, 0) != ()

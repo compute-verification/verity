@@ -86,7 +86,7 @@ def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
     assert r["method"].startswith("runtime:") and r["n"] == len(r["files"]) == len(set(r["files"]))
     assert "verity_vllm/engine/rank_worker.py" in r["files"] and "verity_vllm/check/weights_of_record.py" in r["files"]
     assert all(not f.startswith("/") and not f.endswith(".pyc") for f in r["files"])
-    assert r["native_collect_jit_sources"] == [] or all(f.endswith((".cpp", ".cu")) for f in r["native_collect_jit_sources"])
+    assert r["native_collect_jit_sources"] == [] or all(f.endswith((".cpp", ".cu", ".h")) for f in r["native_collect_jit_sources"])
 
 
 # ---- [rev M-0460] the decode-only (step-ranged) request-label swap negative ------------------------------------------------------------

@@ -521,3 +521,128 @@ def test_keep_refuses_a_bad_owner_and_a_bad_expiry_and_report_prints_a_table(tmp
     lines = capsys.readouterr().out.splitlines()
     assert lines[2].startswith("UNOWNED") and lines[2].endswith(" cache") and lines[3].startswith("recorded")
     assert lines[-1].startswith("totals: unowned ")
+
+
+# ---- rm -----------------------------------------------------------------------------------------------------------------------------------
+
+REF = "C0C5RCXL66N/1791060198.615929"
+BY = "https://cursor.com/agents/bc-test"
+
+
+def passes(root: Path) -> list[Path]:
+    """The 3 Oct shape: one record on pouw/mvp-e2e, owned by @compute-accounting and unexpired, over pass dirs without their own."""
+    area = data(root, "pouw/mvp-e2e")
+    R.keep(area, root=root, owner="@compute-accounting", expires=FUTURE, priority="normal", why="PoUW served-path e2e", now=clock,
+           node=NODE)
+    return [data(root, f"pouw/mvp-e2e/passes/r{i}") for i in range(2)]
+
+
+def log_lines(root: Path) -> list[dict]:
+    p = root / R.LOG
+    return [json.loads(x) for x in p.read_text().splitlines()] if p.exists() else []
+
+
+def test_rm_refuses_a_kept_pass_on_another_lanes_yes_and_names_its_owner(tmp_path):
+    root = tmp_path / "ws"
+    p0, p1 = passes(root)
+    plan = R.rm([p0, p1], approved_by="@memory-accounting", ref=REF, root=root, apply=True, by=BY, in_use=never_in_use, now=clock,
+                node=NODE)
+    assert p0.exists() and p1.exists() and plan["freed_bytes"] == 0
+    a = plan["actions"][0]
+    assert a["action"] == "refuse" and a["owners"] == ["@compute-accounting"] and a["bytes"] == UNIT
+    assert a["reason"] == ("pouw/mvp-e2e is kept by @compute-accounting until 2026-10-08T00:00:00Z (priority normal: PoUW served-path "
+                           "e2e), and --approved-by @memory-accounting is not its owner: only @compute-accounting can say yes")
+    lines = log_lines(root)
+    assert [x["action"] for x in lines] == ["refuse", "refuse"] and {x["schema"] for x in lines} == {R.LOG_SCHEMA}
+    assert lines[0]["by"] == BY and lines[0]["owner"] == "@compute-accounting" and lines[0]["path"] == str(p0)
+    assert "approved by @memory-accounting (C0C5RCXL66N/1791060198.615929)" in lines[0]["reason"]
+
+
+def test_rm_deletes_with_the_owners_yes_leaves_the_covering_record_and_logs_who(tmp_path):
+    root = tmp_path / "ws"
+    p0, p1 = passes(root)
+    dry = R.rm([p0], approved_by="@compute-accounting", ref=REF, root=root, in_use=never_in_use, now=clock, node=NODE)
+    assert dry["actions"][0]["action"] == "delete" and p0.exists() and not (root / R.LOG).exists(), "a dry run deletes and logs nothing"
+    plan = R.rm([p0], approved_by="@compute-accounting", ref=REF, root=root, apply=True, by=BY, in_use=never_in_use, now=clock,
+                node=NODE)
+    assert not p0.exists() and p1.exists() and R.load(root / "pouw/mvp-e2e")["owner"] == "@compute-accounting"
+    assert plan["freed_bytes"] == UNIT and plan["actions"][0]["reason"].endswith("and its owner said yes")
+    (line,) = log_lines(root)
+    assert (line["action"], line["by"], line["bytes"], line["files"]) == ("delete", BY, UNIT, 1)
+
+
+def test_rm_refuses_unowned_keep_another_owner_beneath_in_use_read_only_and_non_data(tmp_path):
+    root = tmp_path / "ws"
+    data(root, "cache/uv")
+    kept(root, "pouw/a", owner="@compute-accounting", priority="keep", expires=None)
+    area = kept(root, "pouw/b", owner="@compute-accounting", expires=FUTURE)
+    kept(root, "pouw/b/inner", owner="@circuits", expires=FUTURE)
+    kept(root, "pouw/c", owner="@compute-accounting", expires=FUTURE)
+    ro = kept(root, "pouw/d", owner="@compute-accounting", expires=FUTURE)
+    (ro / "sub").mkdir()
+    (ro / "sub").chmod(0o555)
+    lane_area = kept(root, "research/old", owner="@x", expires=FUTURE)
+    run_dir(root, "research/old/r1", lane="y")
+    try:
+        paths = [root / "cache/uv", root / "pouw/a", area, root / "pouw/c", ro, lane_area, root / "nope", area / R.SIDECAR, root]
+        plan = R.rm(paths, approved_by="@compute-accounting", ref=REF, root=root, now=clock, node=NODE,
+                    in_use=lambda p: "q.sh names it" if p.name == "c" else None)
+    finally:
+        (ro / "sub").chmod(0o755)
+    why = {Path(a["path"]).relative_to(root).as_posix() if a["path"] != str(root) else ".": a["reason"] for a in plan["actions"]}
+    assert all(a["action"] == "refuse" for a in plan["actions"])
+    assert why["cache/uv"].startswith("no record covers it, so nobody can say yes")
+    assert "priority keep is never deleted" in why["pouw/a"]
+    assert why["pouw/b"].startswith("pouw/b/inner is kept by @circuits") and "only @circuits can say yes" in why["pouw/b"]
+    assert why["pouw/c"] == "in use: q.sh names it"
+    assert why["pouw/d"] == f"{ro / 'sub'} is read-only: its owner makes it writable first"
+    assert "research/old is kept by @x" in why["research/old"], "the area's own owner is checked before the run beneath it"
+    assert why["nope"].endswith("does not exist") and "is a record, not data" in why[f"pouw/b/{R.SIDECAR}"] and "is the root" in why["."]
+    plan = R.rm([lane_area], approved_by="@x", ref=REF, root=root, now=clock, node=NODE, in_use=never_in_use)
+    assert plan["actions"][0]["reason"].startswith("research/old/r1 is kept by @y"), "an implicit record beneath counts, its lane as @y"
+
+
+def test_rm_apply_needs_who_and_a_writable_log_and_rereads_the_records(tmp_path):
+    root = tmp_path / "ws"
+    p0, _ = passes(root)
+    with pytest.raises(R.RecordError, match="--by: say who deletes"):
+        R.rm([p0], approved_by="@compute-accounting", ref=REF, root=root, apply=True, in_use=never_in_use, now=clock)
+    with pytest.raises(R.RecordError, match="--ref"):
+        R.rm([p0], approved_by="@compute-accounting", ref=" ", root=root, in_use=never_in_use, now=clock)
+    with pytest.raises(R.RecordError, match="lane handle"):
+        R.rm([p0], approved_by="compute-accounting", ref=REF, root=root, in_use=never_in_use, now=clock)
+    (tmp_path / "ro-log").mkdir(mode=0o555)
+    try:
+        with pytest.raises(R.RecordError, match="can't write the deletion log"):
+            R.rm([p0], approved_by="@compute-accounting", ref=REF, root=root, apply=True, by=BY, in_use=never_in_use, now=clock,
+                 log=tmp_path / "ro-log" / "sub" / "deletions.jsonl")
+    finally:
+        (tmp_path / "ro-log").chmod(0o755)
+
+    def renewing(p: Path) -> None:
+        R.keep(root / "pouw/mvp-e2e", root=root, owner="@compute-accounting", expires="2026-10-09T00:00:00Z", priority="normal",
+               now=clock, node=NODE)
+
+    plan = R.rm([p0], approved_by="@compute-accounting", ref=REF, root=root, apply=True, by=BY, in_use=renewing, now=clock, node=NODE)
+    assert p0.exists() and plan["actions"][0]["action"] == "failed"
+    assert plan["actions"][0]["error"] == "its records changed during rm: run it again" and log_lines(root)[-1]["action"] == "failed"
+
+
+def test_rm_through_research(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(R, "utc_now", clock)
+    monkeypatch.setattr(R, "DEFAULT_JOBS_DIRS", ())
+    monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
+    root = tmp_path / "ws"
+    p0, p1 = passes(root)
+    base = ["retention", "rm", str(p0), str(p1), "--ref", REF, "--root", str(root)]
+    assert research_main([*base, "--approved-by", "@memory-accounting", "--apply", "--by", BY]) == 1
+    out = capsys.readouterr().out
+    assert out.count("REFUSED") == 2 and "only @compute-accounting can say yes" in out and p0.exists()
+    assert research_main([*base, "--approved-by", "@compute-accounting", "--apply"]) == 2
+    assert "--by: say who deletes" in capsys.readouterr().err
+    monkeypatch.setenv("RESEARCH_AGENT_URL", BY)
+    assert research_main([*base, "--approved-by", "@compute-accounting", "--json"]) == 0
+    assert [a["action"] for a in json.loads(capsys.readouterr().out)["actions"]] == ["delete", "delete"] and p0.exists()
+    assert research_main([*base, "--approved-by", "@compute-accounting", "--apply"]) == 0
+    assert not p0.exists() and not p1.exists() and "deleted 2 of 2 path(s)" in capsys.readouterr().out
+    assert [x["by"] for x in log_lines(root)][-2:] == [BY, BY]

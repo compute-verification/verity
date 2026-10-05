@@ -1,3 +1,4 @@
+import Pouw.Assumptions.Deadline
 import Pouw.Assumptions.Dimension.A2Words
 import Pouw.Assumptions.Dimension.Assumptions
 import Pouw.Assumptions.Dimension.Embed
@@ -35,6 +36,7 @@ import Pouw.Assumptions.NCP.GamePinned
 import Pouw.Assumptions.NCP.RouteUAssumptions
 import Pouw.Assumptions.NCP.RouteUGame
 import Pouw.Assumptions.NCP.RouteUWord
+import Pouw.Assumptions.PearlC.Deadline
 import Pouw.Assumptions.PearlC.DeviceChainCap
 import Pouw.Assumptions.PearlC.DeviceChainCapKernel
 import Pouw.Assumptions.PearlC.HiddenTile

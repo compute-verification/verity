@@ -12,7 +12,8 @@ forward pre-hook, named `<module path>/part_rank<r>` (the all-gather input: `<mo
 Expected population (install time, not from the collector): every hooked collective site produces exactly ONE partial per step; the
 committer's `identity_check` verifies it per step (`tp_sites_bad`).  Bytes/step for the arena bound: `extra_step_bytes(envelope)`.
 The same seam as `tp2_worker.tp2_coll_install` (module-global collective names in vLLM's linear / vocab_parallel_embedding /
-logits_processor modules); the computation is unchanged (the wrapper snapshots `x` and calls the original).
+logits_processor modules); the computation is unchanged (the wrapper snapshots `x` and calls the original).  A model that fuses
+the all-reduce into the RMSNorm after it (`fused_allreduce_rms_norm`) adds one site per norm it passes there, bound by `allreduce_norm`.
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ import importlib
 import time
 from typing import Any
 
+from verity_vllm.acquire.sources.allreduce_norm import AllReduceNorm
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.engine import hooks
 from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
@@ -143,8 +145,12 @@ class TPPartialSource:
         # (shared with the Match recorder); this source hooks the modules for attribution, patches their modules' collective names, binds
         # each call's rank-local input (`<module>/shard_rank<r>` | `/part_rank<r>`) AND received output (`<module>/out`; no layer module
         # hook binds it) -- the k-th call of the step is the binder's occurrence k = the manifest's invocation k (`collective_site_aliases`).
-        from verity_vllm.collectives.collective_sites import mid_module_sites
-        self.mid_sites: dict[str, dict[str, Any]] = {s["name"]: s for s in mid_module_sites(model, self.world)}
+        # A call its instance's flags rule out (Qwen3MoeSparseMoeBlock's sequence-parallel all_gather) is no expected partial; it is listed
+        # (`mid_sites_ruled_out`, the identity report's `tp_sites_ruled_out`) and its module stays patched, so a call that runs is named.
+        from verity_vllm.collectives.collective_sites import mid_module_site_census
+        census = mid_module_site_census(model, self.world)
+        self.mid_sites: dict[str, dict[str, Any]] = {s["name"]: s for s in census["sites"]}
+        self.mid_sites_ruled_out: list[dict[str, Any]] = census["ruled_out"]
         self.sites += [(s["name"], s["cls"]) for s in self.mid_sites.values() if s["name"] not in {n for n, _c in self.sites}]
         self._occ: dict[tuple[int, str], int] = {}                       # (step, member) -> calls bound so far (mid-module sites commit a member twice)
         self.modules = [(n, m) for n, m in model.named_modules() if n in {s[0] for s in self.sites}]
@@ -154,10 +160,11 @@ class TPPartialSource:
         self._hooks = hooks.Hooks()
         self.active = False
         self.stats = {"launches": 0, "bytes": 0, "sites": len(self.sites), "acquire_s": 0.0, "unattributed": 0, "shapes": {}, "kinds": {}}
+        self.far = AllReduceNorm(self, model)
 
     # -- expected population / arena bound -----------------------------------------------------------------------------------
     def site_names(self) -> list[str]:
-        return [n for n, _c in self.sites]
+        return [n for n, _c in self.sites] + self.far.site_names()
 
     def received_site_names(self) -> list[str]:
         """The sites whose RECEIVED collective output this source binds as `<module>/out` (fused-MoE blocks and mid-module sites; a
@@ -168,7 +175,7 @@ class TPPartialSource:
     def site_counts(self) -> dict[str, int]:
         """Rank-local partials this source binds per site per step: 1 (one collective per module forward), or a mid-module site's static
         call count (OlmoeAttention: 2) -- what identity_check requires exactly (`tp_sites_bad` otherwise)."""
-        return {n: int(self.mid_sites[n]["per_step"]) if n in self.mid_sites else 1 for n, _c in self.sites}
+        return {**{n: int(self.mid_sites[n]["per_step"]) if n in self.mid_sites else 1 for n, _c in self.sites}, **dict.fromkeys(self.far.site_names(), 1)}
 
     def extra_step_bytes(self, envelope: dict[str, Any], model: Any) -> dict[str, int]:
         """Bytes this source adds to ONE step (prefill worst case): every RowParallelLinear partial is (tokens, output_size) bf16,
@@ -205,7 +212,8 @@ class TPPartialSource:
                         or getattr(cfg, "hidden_size", 0) or 0)
                 per_token += int(self.mid_sites[n]["per_step"]) * 2 * h * isz
                 n_moe_out += 2 * int(self.mid_sites[n]["per_step"]) - 1                  # per call: partial + out; the site itself counted once below
-        return {"per_token_bytes": per_token, "per_seq_bytes": per_seq, "tensors_per_step": len(self.sites) + n_moe_out}
+        far_pt, far_n = self.far.extra_step_bytes()
+        return {"per_token_bytes": per_token + far_pt, "per_seq_bytes": per_seq, "tensors_per_step": len(self.sites) + n_moe_out + far_n}
 
     # -- install / uninstall -------------------------------------------------------------------------------------------------
     def begin_run(self) -> None:
@@ -238,15 +246,17 @@ class TPPartialSource:
                 targets.append((importlib.import_module(modname), attr, kind))
             except Exception:  # noqa: BLE001
                 continue
-        if self.mid_sites:
+        if self.mid_sites or self.mid_sites_ruled_out:
             from verity_vllm.collectives.collective_sites import patch_targets
-            targets += patch_targets(list(self.mid_sites.values()))               # [R19 moe] the model classes' own imports of the names
+            targets += patch_targets(list(self.mid_sites.values()) + self.mid_sites_ruled_out)   # [R19 moe] the model classes' own imports
         done: set[tuple[int, str]] = set()
         for mod, attr, kind in targets:
             if (id(mod), attr) in done or not hasattr(mod, attr):
                 continue
             done.add((id(mod), attr))
             self._hooks.wrap(mod, attr, lambda orig, kind=kind: self._wrap(kind, orig))
+        for mod, attr in self.far.targets:
+            self._hooks.wrap(mod, attr, self.far.wrap)
         self.active = True
 
     def uninstall(self) -> None:
@@ -254,11 +264,16 @@ class TPPartialSource:
             h.remove()
         self._handles = []
         self._hooks.uninstall()
+        self.far.uninstall()
         self.active = False
 
     def on_step_begin(self) -> None:
         self.cur = None
         self._cur_stack = []
+        self.far.close_step()
+
+    def on_step_end(self, job: Any) -> None:
+        self.far.close_step()
 
     # -- acquisition -------------------------------------------------------------------------------------------------------
     def _bind(self, kind: str, x: Any) -> None:
@@ -568,9 +583,11 @@ class TPPartialSource:
     def declaration_classes(self) -> list[dict]:
         return [{"class": "tp_rank_partials", "how": "bound-as-leaf", "covers_families": COVERS_FAMILIES, "rule": None, "count": None,
                  "bytes": self.stats["bytes"], "tensors": self.stats["launches"], "rank": self.rank, "world": self.world,
-                 "sites": len(self.sites), "site_names": self.site_names(),
+                 "sites": len(self.site_names()), "site_names": self.site_names(),
                  "received_site_names": self.received_site_names(), "nested_moe_sites_dropped": self.nested_moe_sites_dropped,
                  "mid_module_sites": {n: {"cls": s["cls"], "calls": s["calls"]} for n, s in self.mid_sites.items()},          # [R19 moe F-r19-moe-1]
+                 "mid_module_sites_ruled_out": self.mid_sites_ruled_out,
+                 "allreduce_norm": self.far.record(),
                  "evidence": ("TP-03 source: wraps tensor_model_parallel_all_reduce (linear, vocab_parallel_embedding) and "
                               "tensor_model_parallel_all_gather/gather (logits_processor) in THIS rank's process, plus the same names in the "
                               "python module of every model class that calls one directly (mid-module sites, R19 moe: OlmoeAttention's q/k "

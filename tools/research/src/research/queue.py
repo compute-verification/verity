@@ -6,20 +6,27 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue land [--dry-run]                fast-forward `main` to the newest commit on `next` that passed `check`, push it
     research queue eject PR --reason TEXT          keep the PR's current head out of `next`; a new push re-admits it
-    research queue ready PR [--by LANE]            the owner's word that the PR is ready at its current head (a new push needs it again),
-                                                   once the quick tier passes there (`QuickTier`)
+    research queue ready PR (--on MACHINE | --local) [--by LANE]
+                                                   the owner's word that the PR is ready at its current head (a new push needs it again),
+                                                   once the quick tier passes there: as a run on MACHINE in a check slot
+                                                   (`RemoteQuickTier`), or here (`QuickTier`)
+    research queue judge RUN [--on MACHINE] [--by LANE]
+                                                   the mark `ready --on` writes, from its quick-tier run RUN that already ended
+                                                   (its caller gone), for the open PR at the head the tier ran at
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, is marked ready at its head, and
 has every grant its change needs.  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that `research queue ready PR`
 writes, so a new push needs a new one, and only after the quick tier passes at that head: `suites.py --quick` on the suites the PR
-changes, from a clean checkout (`QuickTier`); a failure refuses and names the tests.  Once the queue lands trains it replaces the
+changes, from a clean checkout, either as a `research run` on a machine (`--on`, `RemoteQuickTier`: in one of its check slots, so
+several PRs' tiers run at once and the caller only waits) or here (`--local`, `QuickTier`); a failure refuses and names the tests, and
+a remote run whose result can't be read, or that reports another head, is a failure.  Once the queue lands trains it replaces the
 merge request (until then `main` moves only by the coordinator's trains, so ask on Slack too).  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
-(`pins`, `reads`), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
+(`guarantees`, `reads`), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
 store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new grants.  A `lean-audit.json` change needs no grant when a `lean_review` label on the target names the audit.json of an
 `audit.py --update` (`--moved` for a move) that printed that whole change as the same statements (`reviewed`).  Grants and ready are read after pulling the target's labels from the store's remote; when that pull can't happen (no
 remote here, one that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.
@@ -33,7 +40,7 @@ which files conflict and which queued PRs touched them.
 
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
 the tree that was checked, with no new merge commit.  A push refused because `main` moved leaves `main` alone; the next sync rebuilds
-`next` on the new `main`.
+`next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).
 
 Notices.  A refusal (a conflict, an ejection) is sent once per PR head: a handoff in the owner's lane directory of the notes, or in
 `lanes/coordinator/` for an owner known only by agent id.
@@ -51,6 +58,7 @@ clone fetched last.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fcntl
 import hashlib
 import json
@@ -66,6 +74,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
 
+from . import quick_tier
+from .gates import git_env
 from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
@@ -87,7 +97,7 @@ class QueueError(Exception):
 
 def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
-                       env={**os.environ, "GIT_TERMINAL_PROMPT": "0", **(env or {})})
+                       env=git_env(GIT_TERMINAL_PROMPT="0", **(env or {})))
     if check and r.returncode:
         raise QueueError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()[-400:]}")
     return r
@@ -210,7 +220,7 @@ class Rules:
         from .merge import rule_touches
 
         mb = _out(repo, "merge-base", base, head)
-        changed = [p for p in _out(repo, "diff", "--name-only", mb, head).splitlines() if p]
+        changed = [p for p in _out(repo, "diff", "--no-renames", "--name-only", mb, head).splitlines() if p]   # a rename's source too
         roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
         reports = None
@@ -422,7 +432,7 @@ class Queue:
             elif ejected and ejected["head"] == p.head:
                 e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push re-admits it)"
             elif not self.ready(p.number, p.head):
-                e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number}`"
+                e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number} --on MACHINE` (or --local)"
             elif missing := rules.needs(self.workdir, "origin/main", p.head, lambda: self.reviews(p.number, p.head)) - \
                     self.grants(p.number, p.head):
                 e.state, e.why = "waiting", (f"waiting for the {', '.join(sorted(missing))} grant at {p.head[:8]}: "
@@ -553,6 +563,10 @@ class Queue:
             if dry_run or self.shadow:
                 self.log(f"research queue: would land {prs} ({m.commit[:12]}, check {attempt})" + (" [shadow]" if self.shadow else ""))
                 return m
+            from .spec_alert import alert, remote_head
+
+            was = (remote_head(self.workdir, "origin", "main", self.auth)
+                   or _git(self.workdir, "rev-parse", "refs/heads/main").stdout.strip())
             _git(self.workdir, "merge", "-q", "--ff-only", m.commit)
             r = self._remote(self.workdir, "push", "-q", "origin", "main:refs/heads/main", ok=None)
             if r.returncode:
@@ -561,6 +575,7 @@ class Queue:
                          f"the next sync rebuilds `{self.branch}` on the new `main`")
                 return None
             self.log(f"research queue: landed {prs} on `main` at {m.commit[:12]} (check {attempt})")
+            alert(self.workdir, was, m.commit, prs=[x.pr for x in chain[: chain.index(m) + 1]], log=self.log)
             return m
         self.log(f"research queue: no commit on `{self.branch}` has a passing check yet (newest: {newest})")
         return None
@@ -644,21 +659,24 @@ def _render(entries: dict[int, Entry]) -> str:
 
 
 #: the quick tier, run from the checkout's root: the suites the PR changes since `--changed REV`, without the tests marked `slow`
-SUITES = "tools/check/suites.py"
+SUITES = quick_tier.SUITES
 QUICK_TIER = ["uv", "run", "--locked", "--extra", "torch-cpu", "python", SUITES, "--quick"]
-#: variables that would point the quick tier's Python at the caller's tree or environment instead of the checkout's own
-CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
 #: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
 LEAN_BUILDS = ("backends/flock/verifier/lean",)
 
 
 class QuickTier:
-    """`suites.py --quick --changed {merge base with main}` at a PR's head, from a clean checkout: one worktree of the caller's
-    repository per machine under `root`, checked out at the head and cleaned of everything but its `.venv` and the `.lake` of each
-    of `LEAN_BUILDS` for each PR (one PR at a time: `{name}.lock`), so its environment syncs only what moved and Lake rebuilds only
-    what changed.  Each of `LEAN_BUILDS` is built first (with `lake` on the PATH; a failed build refuses).  Passes are cached by
-    input (`suites.py`), so a re-run after a failure runs only what failed."""
+    """`suites.py --quick --changed {merge base with main}` at a PR's head, from a clean checkout (`quick_tier.tier`, judged by
+    `quick_tier.judge`): one worktree of the caller's repository per machine under `root`, checked out at the head and cleaned of
+    everything but its `.venv` and the `.lake` of each of `LEAN_BUILDS` for each PR (one PR at a time: `{name}.lock`), so its
+    environment syncs only what moved and Lake rebuilds only what changed.  Each of `LEAN_BUILDS` is built first (with the PATH's
+    `lake`, else elan's; none, or a failed build, refuses).  Passes are cached by input (`suites.py`), so a re-run after a failure
+    runs only what failed."""
+
+    #: the worktree's name after the hash of the caller's git common dir: a remote tier ships its own (`-ship`), so a local tier,
+    #: which holds its worktree's lock for the whole tier, never holds up a remote one's checkout from the same repository
+    WORKTREE_SUFFIX = ""
 
     def __init__(self, repo: Path, remote: str, root: Path | None = None):
         self.repo, self.remote = Path(repo), remote
@@ -666,16 +684,26 @@ class QuickTier:
 
     def __call__(self, pr: PR) -> str | None:
         """None when the tier passes at ``pr``'s head; else what failed, for the refusal."""
+        with self._checkout(pr) as (wt, base):
+            if base is None:
+                return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
+            out = self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
+            return quick_tier.judge(quick_tier.tier(wt, out, pr.head, base, QUICK_TIER, LEAN_BUILDS), pr.head)
+
+    @contextlib.contextmanager
+    def _checkout(self, pr: PR):
+        """Under the worktree's lock: the worktree at ``pr``'s head, cleaned, and the head's merge base with `main` (None when the
+        head isn't on the remote)."""
         common = Path(_out(self.repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
-        wt = self.root / hashlib.sha256(str(common).encode()).hexdigest()[:12]
+        wt = self.root / (hashlib.sha256(str(common).encode()).hexdigest()[:12] + self.WORKTREE_SUFFIX)
         self.root.mkdir(parents=True, exist_ok=True)
-        lock = open(self.root / f"{wt.name}.lock", "w")  # noqa: SIM115  (held until this returns)
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        try:
+        with open(self.root / f"{wt.name}.lock", "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
             _git(self.repo, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/ready/main",
                  f"+refs/pull/{pr.number}/head:refs/queue/ready/pr")
             if _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode:
-                return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
+                yield wt, None
+                return
             _git(self.repo, "worktree", "prune")
             if not (wt / ".git").exists():
                 shutil.rmtree(wt, ignore_errors=True)
@@ -683,52 +711,182 @@ class QuickTier:
             else:
                 _git(wt, "checkout", "-q", "--detach", "--force", pr.head)
             _git(wt, "clean", "-qffdx", "-e", "/.venv", *(x for d in LEAN_BUILDS for x in ("-e", f"/{d}/.lake")))
-            base = _out(self.repo, "merge-base", "refs/queue/ready/main", pr.head)
-            report, logs = self.root / f"{wt.name}.json", self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
-            report.unlink(missing_ok=True)
-            env = {k: v for k, v in os.environ.items() if k not in CALLER_ENV}
-            for d in LEAN_BUILDS if shutil.which("lake") else ():
-                if (wt / d / "lakefile.toml").is_file():
-                    print(f"research queue: `lake build` in {d}", flush=True)
-                    if rc := subprocess.run(["lake", "build"], cwd=wt / d, env=env).returncode:
-                        return f"`lake build` in {d} exited {rc} (its output is above)"
-            runner = wt / SUITES
-            changed = ["--changed", base]
-            if runner.is_file() and '"--changed"' not in runner.read_text():
-                print(f"research queue: {pr.head[:12]}'s suites.py predates --changed, so every suite runs (merge main into the branch "
-                      f"to run only the ones it changes)", flush=True)
-                changed = []
+            yield wt, _out(self.repo, "merge-base", "refs/queue/ready/main", pr.head)
+
+
+#: what a remote quick tier may take: the run's own timeout on the machine (waiting for a check slot included), and how much longer the
+#: caller waits for its records to say it ended (custody's upload, a machine briefly unreachable) before it gives up on the run
+REMOTE_TIMEOUT_S = 3 * 3600
+REMOTE_GRACE_S = 1800
+REMOTE_POLL_S = 30
+
+
+def _launch(argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
+
+
+class RemoteQuickTier(QuickTier):
+    """The quick tier as a `research run` on machine ``on``: a worktree of its own (`WORKTREE_SUFFIX`), checked out and cleaned as
+    `QuickTier` does, is the run's `--source`, and the worktree's lock is held only while it is checked out and shipped, so several PRs' tiers run at once.  On
+    the machine the run waits for a free check slot (`tools/check/slot.py` from the caller's checkout, sent with the run, as
+    `check.py --record --on` takes one) and runs `quick_tier.py` (sent too) in the shipped tree.  The caller polls the run's records
+    (`research fetch`) until it ends and judges the facts in its result.json as the local tier's are judged; a run that ends without
+    them, with facts from another run or head, or other than `done` with exit 0, is a failure.  The run itself is bounded on the
+    machine (`--timeout`), and the caller's wait by that plus REMOTE_GRACE_S of ``clock`` time (a fetch can take its ssh's own
+    timeout, so polls are not counted), past which it ends with the poll under way."""
+
+    WORKTREE_SUFFIX = "-ship"
+
+    def __init__(self, repo: Path, remote: str, on: str, *, by: str = "", project: str = "verity", root: Path | None = None,
+                 slot: Path | None = None, timeout_s: float = REMOTE_TIMEOUT_S, poll_s: float = REMOTE_POLL_S,
+                 launch: Callable[[list[str], Path], subprocess.CompletedProcess] = _launch, fetch: Callable[[Path], dict] | None = None,
+                 sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic):
+        super().__init__(repo, remote, root)
+        self.on, self.by, self.project, self.timeout_s, self.poll_s = on, by, project, timeout_s, poll_s
+        self.slot = Path(slot or self.repo / "tools" / "check" / "slot.py")
+        self.launch, self.fetch, self.sleep, self.clock = launch, fetch, sleep, clock
+
+    def __call__(self, pr: PR) -> str | None:
+        from . import runs as R
+
+        if not self.slot.is_file():
+            return f"{self.slot} isn't there to take a check slot on {self.on} with (run it from a checkout of the repository)"
+        job = Path(quick_tier.__file__)
+        rid = R.new_run_id()
+        with self._checkout(pr) as (wt, base):
+            if base is None:
+                return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
+            args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", pr.head, "--base", base, "--", *QUICK_TIER]
+            script = (f'i="$RESEARCH_RUN_DIR/inputs"; exec python3 "$i/{self.slot.name}" {shlex.join(["--by", self.by] if self.by else [])} '
+                      f'-- python3 "$i/{job.name}" {shlex.join(args)}')
+            r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", self.on, "--project", self.project,
+                             "--source", str(wt), "--cwd", "source", "--send", str(job), "--send", str(self.slot), "--require-result",
+                             "--timeout", f"{self.timeout_s:g}", "--declared-output", "out/*", "--", "sh", "-c", script], wt)
+        if r.returncode:
+            return f"`research run --on {self.on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
+        print(f"research queue: the quick tier runs as {rid} on {self.on}, in a check slot; waiting for it to end "
+              f"(`research inspect {rid}`)", flush=True)
+        d = R.runs_root() / rid
+        status, why = self._wait(d)
+        return why or judge_run(d, rid, self.on, pr.head, status)
+
+    def _wait(self, d: Path) -> tuple[dict, str | None]:
+        """The run's status.json once it says the run ended, from its records fetched every `poll_s` until the wait's deadline; or why
+        the wait gave up."""
+        from . import remote
+        from . import runs as R
+
+        fetch = self.fetch or remote.fetch
+        status: dict = {}
+        deadline = self.clock() + self.timeout_s + REMOTE_GRACE_S
+        while self.clock() < deadline:
+            self.sleep(self.poll_s)
             try:
-                rc = subprocess.run([*QUICK_TIER, *changed, "--json", str(report), "--logs", str(logs)], cwd=wt, env=env).returncode
-            except FileNotFoundError as e:
-                return f"can't run it here ({e})"
-            if rc == 0:
-                return None
-            try:
-                rows = json.loads(report.read_text())
-            except (OSError, ValueError):
-                return f"`suites.py` exited {rc} before it reported (its output is above)"
-            failed = [r for r in rows if r.get("status") == "failed"]
-            if not failed:
-                return f"`suites.py` exited {rc}: the tests changed files in the checkout (its output is above)"
-            return "; ".join(f"{r['name']}: {', '.join(r.get('failed_tests') or []) or 'see ' + str(r.get('log') or logs)}" for r in failed)
-        finally:
-            lock.close()
+                rec = fetch(d)
+            except Exception as e:  # noqa: BLE001  (a fetch that fails is a poll that saw nothing)
+                rec = {"last_fetch_error": {"stderr": f"{type(e).__name__}: {e}"}}
+            status = _json_file(d / "status.json")
+            if status.get("state") in R.TERMINAL:
+                return status, None
+            if gone := rec.get("launcher_exited"):
+                return status, f"run {d.name}'s runner on {self.on} exited before the run ended ({gone.get('last_line') or 'no log line'})"
+        return status, (f"run {d.name} on {self.on} didn't end within {self.timeout_s + REMOTE_GRACE_S:g} s (last seen "
+                        f"{status.get('state') or 'without a status'}): `research inspect {d.name}`")
+
+
+def tier_report(d: Path, rid: str, on: str, status: dict):
+    """Run ``rid``'s result.json (its records in ``d``, its `status.json` ``status``) as a `quick_tier` report, and None; or None and
+    why it isn't one."""
+    from .result import check
+
+    res = check(d, rid)
+    if not res.present:
+        return None, f"run {rid} on {on} ended {status.get('state')} (exit {status.get('rc')}) without a result.json (`research inspect {rid}`)"
+    if not res.valid:
+        return None, f"run {rid}'s result.json is unreadable: {'; '.join(res.errors)[:400]}"
+    if (kind := res.doc.get("kind")) != quick_tier.KIND:
+        return None, f"run {rid}'s result is a {kind or 'result with no kind'}, not a {quick_tier.KIND} report"
+    return res, None
+
+
+def judge_report(res, rid: str, on: str, head: str, status: dict) -> str | None:
+    """None when the report ``res`` of run ``rid``, ended with ``status``, shows the tier passed at ``head``; else what failed."""
+    if (why := quick_tier.judge(res.doc.get("tier"), head, f"its output is in run {rid}'s log on {on}")) is not None:
+        return why
+    if status.get("state") != "done" or status.get("rc") != 0 or res.validation_status != "passed":
+        return (f"run {rid}'s facts show a pass, but it ended {status.get('state')} (exit {status.get('rc')}) with validation "
+                f"{res.validation_status}")
+    return None
+
+
+def judge_run(d: Path, rid: str, on: str, head: str, status: dict) -> str | None:
+    """None when ended run ``rid`` (records in ``d``) reports a pass of the quick tier at ``head``; else what failed: a run that ends
+    without the facts, with facts from another run or head, or other than `done` with exit 0, is a failure."""
+    res, why = tier_report(d, rid, on, status)
+    return why or judge_report(res, rid, on, head, status)
+
+
+def _json_file(p: Path) -> dict:
+    try:
+        doc = json.loads(p.read_text())
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
 
 
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None]) -> int:
-    """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `QuickTier`), and once it passes write
-    `ready = true` on `pr:{n}@{that head}` and push it to the store's remote."""
-    from .store.cli import _label_write_through
-
+    """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
+    it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote."""
     pr = next((p for p in github.open_prs() if p.number == number), None) if number is not None else None
     if pr is None:
         print(f"research queue ready: {'#' + str(number) if number is not None else 'a PR number'} is not an open PR", file=sys.stderr)
         return 2
     print(f"research queue: the quick tier at #{pr.number}'s head {pr.head[:12]}: `suites.py --quick` on the suites it changes", flush=True)
-    if (failed := tier(pr)) is not None:
-        print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: the quick tier failed: {failed}. Push a fix, "
-              f"or run `research queue ready {pr.number}` again: what passed is reused, so a re-run runs only what failed", file=sys.stderr)
+    return _mark(store, pr, by, tier(pr), "ready")
+
+
+def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callable[[Path], dict] | None = None,
+          runs_root: Path | None = None) -> int:
+    """`research queue judge RUN`: what `ready --on` does once its run ends, for a quick-tier run that already ended (its waiting
+    client gone): fetch its records (`research fetch`; a run another VM launched is adopted from its machine, ``on`` or each), judge
+    them as `RemoteQuickTier` does, at the head the tier ran at, and mark the open PR at that head ready.  Refused when the run can't
+    be fetched, hasn't ended, isn't a quick tier, failed, or no open PR is at that head now."""
+    from . import cli, remote
+    from . import runs as R
+
+    def refuse(why: str) -> int:
+        print(f"research queue judge: {why}", file=sys.stderr)
+        return 1
+
+    try:
+        d = cli._run_dir(R.runs_root(runs_root), ref, on)
+        rec = (fetch or remote.fetch)(d)
+    except (FileNotFoundError, LookupError, remote.Refused) as e:
+        return refuse(str(e))
+    rid, machine, status = d.name, rec.get("machine") or "its machine", _json_file(d / "status.json")
+    if status.get("state") not in R.TERMINAL:
+        err = (rec.get("last_fetch_error") or {}).get("stderr")
+        return refuse(f"run {rid} hasn't ended (last seen {status.get('state') or 'without a status'}"
+                      f"{'; its machine is unreachable: ' + err.strip()[-200:] if err else ''}): `research inspect {rid}`")
+    res, why = tier_report(d, rid, machine, status)
+    if why:
+        return refuse(why)
+    head = tier.get("head") if isinstance(tier := res.doc.get("tier"), dict) else None
+    prs = [p for p in github.open_prs() if p.head == head]
+    if len(prs) != 1:
+        return refuse(f"run {rid} ran the quick tier at {str(head)[:12]}, " + (
+            f"the head of each of {', '.join('#' + str(p.number) for p in prs)}: mark one with `research queue ready`" if prs else
+            "which is no open PR's head now (pushed again since, or closed?)"))
+    return _mark(store, prs[0], by, judge_report(res, rid, machine, head, status), "judge")
+
+
+def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
+    """`ready = true` on `pr:{n}@{head}`, pushed to the store's remote, unless the quick tier ``failed`` there (the refusal)."""
+    from .store.cli import _label_write_through
+
+    if failed is not None:
+        print(f"research queue {command}: #{pr.number} is not marked ready at {pr.head[:12]}: the quick tier failed: {failed}. Push a "
+              f"fix, or run it again: passes are cached by input, so a re-run on the same cache runs only what failed", file=sys.stderr)
         return 1
     target = grant_target(pr.number, pr.head)
     store.add_label(target, vocab.READY, True, by)
@@ -739,10 +897,11 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready"])
-    ap.add_argument("pr", nargs="?", type=int, help="eject, ready: the PR number")
+    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge"])
+    ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
-    ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or "merge-queue", help="eject, ready: who ejects it or says it's ready")
+    ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or "merge-queue",
+                    help="eject, ready, judge: who ejects it or says it's ready")
     ap.add_argument("--shadow", action="store_true", help=f"build `{SHADOW_BRANCH}`, never push `main`, send no notices")
     ap.add_argument("--dry-run", action="store_true", help="sync/land: decide and report, push nothing, tell no one")
     ap.add_argument("--workdir", type=Path, default=Path.home() / ".research" / "queue" / "verity", help="the queue's own clone")
@@ -751,7 +910,18 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--rules", type=Path, default=None, help=f"the admission rules (default: {RULES} on `main`)")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--json", action="store_true", help="status: as JSON")
+    ap.add_argument("--on", metavar="MACHINE", help="ready: run the quick tier as a `research run` there, in a check slot; judge: look "
+                                                    "for a run another VM launched there only")
+    ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     a = ap.parse_args(argv)
+    if a.command == "ready" and bool(a.on) == a.local:
+        ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot) and --local (here)")
+    if a.command == "judge" and not a.pr:
+        ap.error("judge needs the quick tier's run id")
+    if a.command != "judge" and a.pr is not None:
+        if not a.pr.isdigit():
+            ap.error(f"{a.command}: {a.pr!r} is not a PR number")
+        a.pr = int(a.pr)
     from .store.local import LocalStore
 
     try:
@@ -760,8 +930,12 @@ def main(argv: list[str]) -> int:
         if not repo:
             raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
         store = LocalStore(a.store)
+        if a.command == "judge":
+            return judge(GitHub(repo), store, a.pr, a.by, on=a.on)
         if a.command == "ready":
-            return ready(GitHub(repo), store, a.pr, a.by, QuickTier(Path(_out(Path.cwd(), "rev-parse", "--show-toplevel")), remote))
+            top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
+            tier = RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
+            return ready(GitHub(repo), store, a.pr, a.by, tier)
         labels = StoreGrants(store)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), grants=labels, ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None, reviews=labels.reviews,
