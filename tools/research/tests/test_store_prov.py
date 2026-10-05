@@ -257,14 +257,45 @@ def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
 
 
 def test_former_modules_map_a_module_back_through_each_move():
-    moves = [{"backends/flock/verifier/tool.py": "tools/lean_agreement/tool.py", "archive/gkr": "archive/gkr"},
+    moves = [{"backends/flock/verifier/tool.py": "tools/lean_agreement/tool.py", "old/gkr": "attic/gkr"},
              {"tools/lean_agreement/": "tools/agree/"}]
     assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "backends.flock.verifier.tool"]
-    assert tools_registry.former_modules("archive.gkr.gpu.tool", moves) == ["archive.gkr.gpu.tool"]
-    assert tools_registry.former_modules("archive.gkrx.tool", moves) == []
+    assert tools_registry.former_modules("attic.gkr.gpu.tool", moves) == ["old.gkr.gpu.tool"]
+    assert tools_registry.former_modules("attic.gkrx.tool", moves) == []
     assert tools_registry.former_modules("tools.check.tool", moves) == []
     shipped = json.loads(tools_registry.MOVES.read_text())["moves"]
     assert all(isinstance(m["paths"], dict) for m in shipped)
+    assert tools_registry.former_modules("archive.gkr.gpu.tool") == ["backends.gkr.gpu.tool"]
+
+
+def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_path, monkeypatch):
+    """Red-team 1171: `locate` read `moves.json` before looking at the current path, so a corrupt one made `merge.declaration`
+    none and `merge.required_steps` require nothing (a train sent no lean-agreement inputs)."""
+    from research import merge
+
+    moves = tmp_path / "moves.json"
+    moves.write_text("{not json")
+    monkeypatch.setattr(tools_registry, "MOVES", moves)
+    monkeypatch.setitem(tools_registry.REGISTRY, "agree", "tools.agree.tool:AGREE")
+    repo = tmp_path / "repo"
+    (repo / "tools/agree").mkdir(parents=True)
+    (repo / "tools/agree/tool.py").write_text("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', "
+                                              "command=['true'], merge_requires={'agreement': ['backends/flock/']})\n")
+    (repo / "backends/flock").mkdir(parents=True)
+    (repo / "backends/flock/a.py").write_text("x = 1\n")
+    git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)  # noqa: E731
+    git("init", "-q")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "change")
+
+    assert tools_registry.locate("agree", repo) == ("tools.agree.tool", "AGREE")
+    assert merge.declaration(repo, "agree").name == "agree"
+    assert merge.required_steps(repo, "HEAD~1", "HEAD", "agree") == {"agreement": ["backends/flock/"]}
+    (repo / "tools/agree/tool.py").unlink()
+    with pytest.raises(json.JSONDecodeError):
+        tools_registry.locate("agree", repo)
+    assert merge.declaration(repo, "agree") is None
 
 
 def test_a_tree_from_before_a_move_still_declares_its_tools(tmp_path, monkeypatch):
@@ -385,7 +416,7 @@ def test_attempt_build_from_fixture_run_dir(tmp_path):
     assert m["conditions"]["hw.family"] == "h100" and set(E.KEYS) <= set(m["conditions"])
     assert m["source"] == {"commit": "0123456789abcdef0123456789abcdef01234567", "tree": "89abcdef0123456789abcdef0123456789abcdef", "dirty": False,
                            "dirty_digest": None, "lockfiles": {"uv.lock": "4" * 64}}
-    assert m["closure"] == {"archive/direct/ligero/run.py": "3" * 64}
+    assert m["closure"] == {"backends/direct/ligero/run.py": "3" * 64}
     ex = m["execution"]
     assert ex["start_utc"] == "2026-09-22T12:00:01.000Z" and ex["end_utc"] == "2026-09-22T12:00:13.300Z" and ex["wall_s"] == 12.3
     assert ex["exclusive"] is True and ex["host"] == "vy-g5" and ex["project"] == "verity" and ex["campaign"] == "r21-fixture"

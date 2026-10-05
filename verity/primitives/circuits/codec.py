@@ -11,7 +11,7 @@ signature + body nodes with reference sequences), and the root binding. Referenc
 references only* (parameter leaves and node-output leaves); the descriptor contains no authentication
 locations, no commitments, no gate-output components.
 
-The format is specified in `PROTOCOL.md` beside this module, with pinned vectors (`tests/ir/format_vectors.json`). The bytes
+The format is specified in `PROTOCOL.md` beside this module, with pinned vectors (`verity/primitives/circuits/tests/format_vectors.json`). The bytes
 the program digest hashes are RFC 8785 (JCS) of the descriptor without `annotations`: `canonical_json` is JCS on the domain a
 descriptor is held to (strings ASCII without DEL, integers of magnitude at most 2^53 - 1, no floats; `jcs_domain_error`).
 

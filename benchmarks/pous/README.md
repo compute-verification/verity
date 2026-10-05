@@ -89,7 +89,7 @@ Implementations:
 A new one is a class in `bench.py`'s `IMPLS`.
 
 ~~~bash
-PYTHONPATH=.:verity/protocols/accounting/space/pous python benchmarks/pous/bench.py --impl reference \
+PYTHONPATH=. python benchmarks/pous/bench.py --impl reference \
   --weight-set qwen2.5-0.5b/linears+head --hardware local --out /tmp/pous-bench --max-segments 1   # about 50 s
 
 git -C <#188 checkout> archive -o impl.tar 4e49163193c3750dad580f3a28f5428fbb722a8a
