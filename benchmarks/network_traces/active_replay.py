@@ -286,7 +286,7 @@ class Setup(replay.Setup):
 SYNC_POLICIES = ("model", "envelope", "an online rule (last, cover-K-M[-fallback])")
 
 
-def sync_policy(name: str) -> str:
+def parse_sync_policy(name: str) -> str:
     """`model`, `envelope`, or an online rule (`online.rule`), which the proxy declares window by window."""
     if name not in ("model", "envelope"):
         online.rule(name)
@@ -300,7 +300,7 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
     rule, which the proxy declares at each window's first tick from what it has read (`sync_rule`), and `syncs` holds
     what it declares on the model's run. With `live_model`, a request takes the frames of its live body when they are
     more than the trace's."""
-    sync_policy(syncs)
+    parse_sync_policy(syncs)
     e, i = setup.egress_params, setup.ingress_params
     T, windows = e.buckets, replay.config_windows(cfg, e.buckets)
     if len(cfg["egress"]) != 1 or len(cfg["ingress"]) != 1:
@@ -1271,7 +1271,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--vllm", metavar="MODEL", help="start a vLLM server for MODEL as record.py does, and use it live")
     ap.add_argument("--vllm-cpus", help="with --vllm: its CPUs (taskset -c); the harness takes the rest of its own")
     ap.add_argument("--served-model", default="served", help="the live endpoint's model name")
-    ap.add_argument("--syncs", type=sync_policy,
+    ap.add_argument("--syncs", type=parse_sync_policy,
                     help=f"the prover's syncs: {', '.join(SYNC_POLICIES)} (default: envelope live, else model)")
     ap.add_argument("--max-minutes", type=float,
                     help="start no configuration that would end later than this from the start")

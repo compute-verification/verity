@@ -190,6 +190,15 @@ def test_a_proxy_that_declares_its_own_syncs_is_accepted_and_is_run_shapers(setu
         ar.plan_configuration(doc["configurations"][0], s, syncs="cover")
 
 
+def test_the_command_line_parses_a_sync_rule(tmp_path, capsys):
+    """`--syncs` takes an online rule's name and refuses anything else, as an argument error."""
+    argv = ["t.json", "--calibration", "c.json", "--out", str(tmp_path)]
+    with pytest.raises(SystemExit) as bad:
+        ar.main([*argv, "--syncs", "cover"])
+    assert bad.value.code == 2 and "--syncs" in capsys.readouterr().err
+    assert ar.parse_sync_policy("cover-3-2") == "cover-3-2"
+
+
 TOKENS = 4
 
 

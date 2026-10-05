@@ -149,7 +149,7 @@ def diagnose(w: int, buckets: int, own_late: int, deviating: Sequence[tuple[int,
 def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
                          prior: Sequence[online.Past] = ()) -> tuple[list[dict], dict, list[online.Past]]:
     """One configuration through prover, shaper, warden, records and audit, raw and committed. The prover's syncs are
-    `syncs` (`sync_policy`), and an online rule starts from `prior`. Returns one row per link-window, the
+    `syncs` (`parse_sync_policy`), and an online rule starts from `prior`. Returns one row per link-window, the
     configuration's tallies and the online prover's history (empty for the other policies)."""
     sync_set = setup.sync_set
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
@@ -356,7 +356,7 @@ def replay_file(args: tuple[Path, dict, str, bool]) -> tuple[list[dict], dict]:
     return rows, tally
 
 
-def sync_policy(name: str) -> str:
+def parse_sync_policy(name: str) -> str:
     """`hindsight` (`calibration.choose_syncs`), `envelope` (the calibration's envelope in every window), or an online
     rule (`online.rule`)."""
     if name not in ("hindsight", "envelope"):
@@ -367,8 +367,8 @@ def sync_policy(name: str) -> str:
 def replay(paths: Iterable[Path], report: dict, jobs: int = 1, syncs: str = "hindsight",
            fresh: bool = False) -> tuple[list[dict], dict]:
     """Every configuration of the traces at `paths`, at the report's parameters, with the prover's `syncs`
-    (`sync_policy`). With `jobs` > 1, one file per worker."""
-    tasks = [(Path(p), report, sync_policy(syncs), fresh) for p in paths]
+    (`parse_sync_policy`). With `jobs` > 1, one file per worker."""
+    tasks = [(Path(p), report, parse_sync_policy(syncs), fresh) for p in paths]
     rows, tally = [], new_tally()
     if jobs > 1 and len(tasks) > 1:
         with multiprocessing.get_context("spawn").Pool(jobs, maxtasksperchild=1) as pool:
@@ -387,7 +387,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--calibration", required=True, type=Path, help="network-warden-calibrate's report (JSON)")
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--jobs", type=int, default=1, help="trace files replayed in parallel")
-    ap.add_argument("--syncs", type=sync_policy, default="hindsight",
+    ap.add_argument("--syncs", type=parse_sync_policy, default="hindsight",
                     help="the prover's syncs: hindsight, envelope, or an online rule (last, cover-K-M[-fallback])")
     ap.add_argument("--fresh", action="store_true",
                     help="an online rule starts every configuration with no history, even within one run")
