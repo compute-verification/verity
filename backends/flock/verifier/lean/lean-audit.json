@@ -31,7 +31,7 @@
   "_private.Flock.Program.0.Flock.Program.gateIn": "partial def: a gate's inputs in an activation, resolving references through scopes (descriptor §6, §7); no proof is about it, and qword_program_agree.py covers it",
   "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it"
  },
- "pins": {},
+ "guarantees": {},
  "reads": {},
  "dependencies": {
   "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"

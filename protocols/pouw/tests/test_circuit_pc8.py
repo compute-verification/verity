@@ -3,9 +3,12 @@ the row's admission bit admits, its units evaluate to `schemes.pearl_c`'s formin
 ``test-16-v1`` vector on the H100, the scheme itself on both sm_120 records), its admission bit is the scheme's on every row
 (finiteness, the noise floor and `live_row`, each at its boundary), and its partition computes every value in exactly one
 unit; its hiding Programs publish only admission bits and tile digests, their units' ports are `PORTS`, and the verifier
-derives the anchored inputs (`anchors.TileAnchors`)."""
+derives the anchored inputs (`anchors.TileAnchors`).  A short last tile row (m = 80, 112, and decode's 32 at the scheme's
+tile, the pinned decode-32 case among them) is the scheme's too, the row cut refuses it, and whole-tile Programs and layouts
+are pinned."""
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import struct
@@ -23,6 +26,7 @@ from verity.ml.fp32 import F32FmaV2
 from verity.ml.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
 from verity.ml.scalar import I32Le
 from verity.ml.tc.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
+from verity.randomness import derive
 from verity_pouw.circuit import pc8, plan
 from verity_pouw.circuit.anchors import TileAnchors
 from verity_pouw.circuit import words as W
@@ -34,6 +38,7 @@ from verity_pouw.schemes.pearl_c_device import DEVICES, SM120_UNPROMOTED
 K = 128
 CASE = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "test-16-v1")
 SEED = bytes(range(32))
+MIXED_ZERO = {0: 0x80000000, 16: 0, 3: 0x80000000, 5: 0, 9: 0x80000000}
 
 
 def _flat(lines) -> list[int]:
@@ -124,8 +129,8 @@ def test_the_floor_is_the_sign_of_one_fma():
 
 # ---- the units against the scheme -------------------------------------------------------------------------------------
 
-def _case(case: str, shape: tuple[int, int, int], dev: str, index: int = 3, weight: int = 9):
-    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=DEVICES[dev])
+def _case(case: str, shape: tuple[int, int, int], dev: str, index: int = 3, weight: int = 9, tile=(16, 16)):
+    s = C.PearlC(k_min=32, tile=tile, forming="v1", device=DEVICES[dev])
     ctx = V.ctx_of(case, shape, index, weight)
     m, k, n = shape
     a, b = V.rows_f32(case, "A", m, k), V.rows_f32(case, "B", n, k)
@@ -209,8 +214,9 @@ def _flip(words: list[int], at: int, admitted) -> tuple[list[int], list[int]]:
 
 def _rows(dev: str) -> dict[str, list[int]]:
     """Honest rows and rows the scheme refuses: non-finite words at sampled (0, 8, …) and unsampled positions, an overflowing
-    sum of squares, a zero row, a subnormal row, the largest word, and both sides of the noise floor and of liveness (one
-    word bisected to its flip; and a row whose third dead entry meets the threshold with equality)."""
+    sum of squares (ρ not finite: `pc8Sem_squaresOverflow`), a zero row, an all-(−0) row, a subnormal row, the largest word, and both sides of the noise floor and
+    of liveness (one word bisected to its flip; and a row whose third dead entry meets the threshold with equality); and an
+    honest row with +0 and −0 words at sampled and unsampled positions."""
     base = [C.parse_f32_row(r, K) for r in V.rows_f32("pc8-circuit", "A", 3, K)]
     at = lambda w, updates: [updates.get(t, v) for t, v in enumerate(w)]  # noqa: E731
     ok = lambda w: _scheme_row(w, "row_a", dev) is not None  # noqa: E731
@@ -222,7 +228,7 @@ def _rows(dev: str) -> dict[str, list[int]]:
             "inf-unsampled": at(base[0], {1: 0x7F800000}), "minus-inf-sampled": at(base[0], {0: 0xFF800000}),
             "nan-unsampled": at(base[0], {3: 0x7FC00000}), "nan-sampled": at(base[0], {8: 0xFFC00001}),
             "squares-overflow": at(base[0], {p: _bits(2.0 ** 126) for p in range(0, K, 8)}), "zero": [0] * K,
-            "subnormal": [1] * K, "max-unsampled": at(base[0], {1: 0x7F7FFFFF}), "floor-in": floor_in, "floor-out": floor_out,
+            "minus-zero": [0x80000000] * K, "mixed-zero": at(base[0], MIXED_ZERO), "subnormal": [1] * K, "max-unsampled": at(base[0], {1: 0x7F7FFFFF}), "floor-in": floor_in, "floor-out": floor_out,
             "live-in": live_in, "live-out": live_out, "live-equal": at(two_dead, {3: _bits(8.0)}),
             "live-below": at(two_dead, {3: _bits(8.0) - 1})}
 
@@ -244,7 +250,22 @@ def test_the_row_units_admission_is_the_schemes_and_their_outputs_the_schemes(si
         if want is not None:
             admitted.add(name)
             assert list(out[:K]) == want[0] and list(out[K:-1]) == want[1], name
-    assert admitted == {"honest-0", "honest-1", "negated", "floor-in", "live-in", "live-below"}
+    assert admitted == {"honest-0", "honest-1", "negated", "mixed-zero", "floor-in", "live-in", "live-below"}
+
+
+@pytest.mark.parametrize("side", ["row_a", "row_b"])
+def test_a_row_unit_reads_minus_zero_as_zero(side):
+    """A row unit's outputs on a row with −0 words are its outputs with +0 in their place, as the Lean's `pc8Sem` reads
+    a row by value, and the scheme's (the admission test above)."""
+    fa, fb = C._basis(SEED, 0, K, C.LINE_NORM_V1), C._basis(SEED, 1, K, C.LINE_NORM_V1)
+    own, other = (fa, fb) if side == "row_a" else (fb, fa)
+    extra = [] if side == "row_a" else [_flat(C.gram(SEED, K, C.LINE_NORM_V1, DEVICES["h100"]))]
+    fn, e = pc8.templates(K, pc8.TILE, "h100")[side], P.sample_line(SEED, 0 if side == "row_a" else 1, 0, 5)
+    run = lambda w: evaluate(fn, w, e, _flat(own), _flat(other), *extra)  # noqa: E731
+    rows = _rows("h100")
+    plus = lambda w: [0 if x == 0x80000000 else x for x in w]  # noqa: E731
+    assert run(rows["mixed-zero"]) == run(plus(rows["mixed-zero"])) and run(rows["mixed-zero"])[-1] == 1
+    assert run(rows["minus-zero"]) == run(rows["zero"]) and run(rows["minus-zero"])[-1] == 0
 
 
 # ---- the partition ----------------------------------------------------------------------------------------------------
@@ -319,12 +340,188 @@ def test_the_verifier_derives_the_anchored_inputs(dev):
                                                                                              17: tuple(range(16))}
 
 
+# ---- a short last tile row --------------------------------------------------------------------------------------------
+
+def _scheme_leaves(s: C.PearlC, ctx, case: str) -> tuple[int, ...]:
+    """The scheme's leaf of each of its tiles (`PearlC.tiles`, row-major; a short tile's over its real rows), flat as the
+    hiding call returns its digests."""
+    m, k, n = ctx.matmul.shape.m, ctx.matmul.shape.k, ctx.matmul.shape.n
+    noise, a, b = s.noise(ctx), V.rows_f32(case, "A", m, k), V.rows_f32(case, "B", n, k)
+    out: list[int] = []
+    for t in s.tiles(ctx.matmul.shape):
+        ops = s.encode(ctx, noise, [a[i] for i in t.rows], [b[j] for j in t.cols], t)
+        d = s.digest(ctx, noise, s.checked(ctx, ops))
+        out += [int.from_bytes(d[4 * w:4 * w + 4], "little") for w in range(8)]
+    return tuple(out)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("m", [80, 112, 32])
+def test_a_short_last_tile_row_is_the_schemes(m):
+    """At 64-row tiles where 64 ∤ m (m = 80 and 112: a 16- and a 48-row last tile row; m = 32: one 32-row tile row) the
+    Programs give the scheme's A′, P_A, C̃ and U on every word and admit every row, `Pc8Check` is the two sides in one
+    root, and the hiding call gives each of the scheme's tiles its leaf (`PearlC.tiles`), the short ones' over their real
+    rows."""
+    tile, case = (64, 16), "pc8-short"
+    s, ctx, ops, *inputs = _case(case, (m, K, 16), "sm120", tile=tile)
+    s.check(ctx.matmul)
+    assert s.admissible(ctx, ops)
+    shape = pc8.Shape(m, K, 16, tile=tile)
+    assert shape.tile_rows() == tuple(len(range(i, min(i + 64, m))) for i in range(0, m, 64))
+    assert [len(t.rows) for t in s.tiles(ctx.matmul.shape)] == list(shape.tile_rows())
+    checked = s.checked(ctx, ops)
+    got = _evaluate(shape, *inputs)
+    assert got["a_codes"] == _flat(ops.a.codes) and got["pa"] == ops.pa and got["ok_a"] == [1] * m
+    assert [list(r) for r in got["c"]] == checked.c and [list(r) for r in got["u"]] == checked.u
+    a, ea, _b, _eb, fa, fb, _g = inputs
+    hidden = evaluate(pc8.call(replace(shape, hidden=True)), a, ea, fa, fb, got["b_codes"], _flat(got["pb"]))
+    assert hidden == _scheme_leaves(s, ctx, case) + (1,) * m
+
+
+@pytest.mark.slow
+def test_the_decode_32_case_is_one_short_tile_row():
+    """`pearl_c.json`'s decode-32 case (32 × 1,024 × 64 on the H100; its h1 and h2 twins share these words) through
+    `Pc8Weight` and `Pc8Call` at the scheme's own 64 × 64 tile, one 32-row tile row: the vector's B̃ codes, P_B, C̃ and U,
+    every row admitted.  About 40 s: the only test that takes a pinned production-depth case through the circuit."""
+    case = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "decode-32-v1-h1")
+    (m, k, n), base = case["shape"], case["case"].removesuffix("-h1")
+    s, ctx, _ops, a, ea, b, eb, fa, fb, g = _case(base, (m, k, n), "h100", case["index"], case["weight"])
+    noise = s.noise(ctx)
+    assert (noise.seed_a.hex(), noise.seed_b.hex()) == (case["seed_a"], case["seed_b"])
+    shape = pc8.Shape(m, k, n, dev="h100")
+    assert shape.tile == (64, 64) and shape.tile_rows() == (32,)
+    wout = evaluate(pc8.weight(shape), b, eb, fa, fb, g)
+    bc, pb = list(wout[:n * k]), list(wout[n * k:-n])
+    cout = evaluate(pc8.call(shape), a, ea, fa, fb, bc, pb)
+    c, u = ([cout[f * m * n + i * n:f * m * n + (i + 1) * n] for i in range(m)] for f in range(2))
+    assert V.sha(bytes(bc)) == case["b_codes_sha256"] and V.sha(V.halves([pb[64 * j:64 * (j + 1)] for j in range(n)])) == case["pb_sha256"]
+    assert V.sha(V.words(c)) == case["c_sha256"] and V.sha(V.words(u)) == case["u_sha256"]
+    assert list(wout[-n:]) == [1] * n and list(cout[2 * m * n:]) == [1] * m
+
+
+SHORT = pc8.Shape(80, K, 2, tile=(64, 1), dev="sm120")
+
+
+@pytest.mark.parametrize("hidden", [False, pytest.param(True, marks=pytest.mark.slow)], ids=["plain", "hidden"])
+@pytest.mark.parametrize("side", ["check", "call"])
+def test_a_short_tile_row_is_its_own_template_instance(side, hidden):
+    """At m = 80 the call's tiles are two template instances of one Definition, `Pc8Tile` (or `Pc8TileHidden`) at
+    64 × 1 and at 16 × 1, in that order in the query, the short ones at tile row 1; the partition still computes every
+    value in exactly one unit."""
+    shape = replace(SHORT, hidden=hidden)
+    whole, short = pc8.tile_templates(shape)
+    tp = pc8.templates(K, (16, 1), shape.dev, hidden)
+    assert whole == pc8.templates(K, shape.tile, shape.dev, hidden)["tile"] and short == tp["tile"]
+    assert whole.defn is short.defn and shape.tile_rows() == (64, 16)
+    fn = {"check": pc8.check, "call": pc8.call}[side](shape)
+    prog, q = Program(fn), pc8.query(shape, side)
+    assert q["params"]["templates"][-2:] == [PO.template_id(whole), PO.template_id(short)]
+    us = pc8.units(fn)
+    tiles = [(u.template, u.where) for u in us if u.role == "tile"]
+    assert tiles == [(PO.template_id(whole), (0, 0)), (PO.template_id(whole), (0, 1)), (PO.template_id(short), (1, 0)),
+                     (PO.template_id(short), (1, 1))]
+    assert Counter(u.role for u in us) == {"row_a": 80, "tile": 4} | ({"row_b": 2} if side == "check" else {})
+    assert PO.verify(PO.build(prog, q), prog).ok
+    _g, _owner, verdict = pc8.unit_cut(fn)
+    assert verdict.ok, verdict.codes
+
+
+def test_a_short_tile_is_proved_with_its_rows_in_its_own_stratum():
+    """`plan.tile_layout` at m = 80 proves a 16-row tile with its 16 `RowA` units, in its own stratum at 16/64 of a whole
+    tile's W_ref.  That is two tile strata, which the work law refuses (`check_work_strata`, the window pin's `hone`) and
+    the count law draws; a W_ref with no whole quarter is refused.  At m = 32, one tile row, the work law draws, and
+    `unsound_work_bound` reads the short tile's W_ref."""
+    key = derive(bytes(32), plan.DRAW_DOMAIN, {"test": "pc8-short"})
+    lay = plan.tile_layout(replace(SHORT, hidden=True), 64)
+    lay.check()
+    us = lay.units
+    assert [(s.role, len(s.units), s.work) for s in lay.strata] == [("row_a", 80, 0), ("tile", 2, 2 * 64), ("tile", 2, 2 * 16)]
+    for t in (u for u in us if u.role == "tile"):
+        rs, cs = t.where
+        rows = range(64) if rs == 0 else range(64, 80)
+        assert [(us[i].role, us[i].where) for i in lay.closure[t.index][1:]] == [("row_a", (i,)) for i in rows]
+        assert lay.b_rows[t.index] == (cs,)
+    for refused in (lambda: plan.WorkLaw().sizes(lay.strata), lambda: plan.work_table(lay), lambda: plan.draw(key, lay, plan.WorkLaw())):
+        with pytest.raises(ValueError, match="one stratum"):
+            refused()
+    p = plan.draw(key, lay, plan.CountLaw(4))
+    assert set(p.proved) == set(p.drawn) | {i for t in p.drawn if us[t].role == "tile" for i in lay.closure[t]}
+    with pytest.raises(DomainError):
+        plan.tile_layout(SHORT, 2)
+    decode = plan.tile_layout(pc8.Shape(32, K, 2, tile=(64, 1), hidden=True), 64)
+    tile = next(s for s in decode.strata if s.role == "tile")
+    assert [(s.role, s.work) for s in decode.strata] == [("row_a", 0), ("tile", 2 * 32)]
+    p = plan.draw(key, decode, plan.WorkLaw(2))
+    assert set(p.proved) == set(range(34)) and p.proved_b == (0, 1)
+    assert 32 <= plan.unsound_work_bound(decode, {tile.name: 1}, 0.25) < 64
+
+
+#: each whole-tile shape's Programs (their ids, queries and, up to 4,096 words, digests) and tile layout, pinned: a short
+#: last tile row leaves every whole-tile shape as it is, with the row cut (``row_k``) or without
+WHOLE = {
+    pc8.Shape(1, 128, 1, tile=(1, 1)): "c906341a1377f29d1d03abda8cd10f9e45e0c5df4fc76e9c8418a7503e25f076",
+    pc8.Shape(1, 128, 1, tile=(1, 1), hidden=True): "bfcdf4bda1ae9cec62b2184b5fb3f0794e7a48b3186963c7b850c31522160f22",
+    pc8.Shape(4, 128, 6, tile=(2, 3)): "bb12e1f6ee0cfa62c4fc6136b7b7172987ffcb347e732edb20e42f7389337cc4",
+    pc8.Shape(4, 128, 6, tile=(2, 3), hidden=True): "9ac3bada057d19b71ad95001f8c2a4b2010fbd1321a0ae17d882090d60ff3083",
+    pc8.Shape(16, 128, 16, tile=(4, 8), dev="h100"): "5d7f419bdc59301605dc7869ceb664a2346172d9893b5cd13c4191df51010ebd",
+    pc8.Shape(16, 160, 16, tile=(8, 16), dev="sm120-unpromoted"):
+        "ebbcf53de05b062e9a0e4fbddb59813f23227510730db5d8a9b5ee361a5f665b",
+    pc8.Shape(32, 128, 64, tile=(32, 64), hidden=True): "53a0e0a4ba17c301d5b2c2342696f9e85317ccd9eca43e529224985c05a78195",
+    pc8.Shape(64, 128, 64, hidden=True): "46bbd94ebd4d295805b18aa3900d902a10dab58029f4a616d96a757a61469ccf",
+    pc8.Shape(128, 128, 128): "42bf79753583e3318a6ee174dc9eecf279eabd011963a715d1fb79028dd445cd",
+    pc8.Shape(128, 128, 128, hidden=True): "8df370c86fb0876347efc0efd99aa338656f73d91e3ea6bf7ba511e4e2ac5c67",
+    pc8.Shape(2, 384, 2, tile=(1, 1), dev="h100", row_k=128):
+        "6e57e2e6bfa3ac03b0ec43028e24740643e2ad9a1861cc061f8503d31115848f",
+    pc8.Shape(2, 384, 2, tile=(1, 1), hidden=True, row_k=128):
+        "533372e79842f43f1494b08255cc2ad65b28622bc10fb78b8df79cceee6fe66f",
+    pc8.Shape(2, 96, 2, tile=(1, 1), dev="sm120-unpromoted", row_k=32):
+        "52dc8f86afba68200cbc9f6e58666de2c52d14d61ccd3df4c033e3dba810b489",
+    pc8.Shape(4, 384, 6, tile=(2, 3), hidden=True, row_k=128):
+        "98527b5e389229acebc30c4dae44d757f666255a7b8ff28b45eb40adba2feda6",
+    pc8.Shape(64, 256, 64, hidden=True, row_k=128): "f7140c9770354efbfd59c4c4db0f1977a04f4fb25942ba6c2ccb5b4a6abf7788",
+}
+
+
+@pytest.mark.parametrize("shape", list(WHOLE), ids=[f"{s.m}x{s.k}x{s.n}-tile{s.tile[0]}x{s.tile[1]}-{s.dev}"
+                                                    f"{'-hidden' * s.hidden}{f'-rowk{s.row_k}' * (s.row_k is not None)}"
+                                                    for s in WHOLE])
+def test_whole_tile_programs_and_layouts_are_pinned(shape):
+    """`Pc8Weight`, `Pc8Call` and `Pc8Check` (or their hiding forms), their queries and `plan.tile_layout` at W_ref 4,096
+    are the pinned ones on every whole-tile shape."""
+    row = {"layout": CF.layout_sha(plan.tile_layout(shape, 4096))}
+    for side, build in (("weight", pc8.weight), ("call", pc8.call), ("check", pc8.check)):
+        fn = build(shape)
+        row[side] = {"id": fn.id, "query": json.dumps(pc8.query(shape, side), sort_keys=True)}
+        if shape.m * shape.n <= 4096:
+            row[side]["program"] = PO.program_sha512(Program(fn))
+    assert hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest() == WHOLE[shape]
+
+
 def test_shapes_outside_the_circuit_are_refused():
+    """The scheme's domain: whole tiles across, and down the rows whole 16-row ticket subtiles (whole tiles under 16 rows),
+    so 40 and 72 rows at 64-row tiles are refused and 16, 32, 80 and 112 admitted."""
     assert SM120_UNPROMOTED.window == 32
     pc8.Shape(1, 96, 1, tile=(1, 1), dev="sm120-unpromoted").check()
+    for m in (16, 32, 80, 112):
+        pc8.Shape(m, 128, 64).check()
     for shape in (pc8.Shape(1, 96, 1, tile=(1, 1)), pc8.Shape(0, 128, 1, tile=(1, 1)), pc8.Shape(1, 128, 0, tile=(1, 1)),
                   pc8.Shape(1, 1 << 17, 1, tile=(1, 1)), pc8.Shape(2, 128, 2, tile=(4, 1)), pc8.Shape(4, 128, 3, tile=(2, 2)),
-                  pc8.Shape(1, 128, 1, tile=(0, 1)), pc8.Shape(1, 128, 1, tile=(1, 1), dev="b200")):
+                  pc8.Shape(1, 128, 1, tile=(0, 1)), pc8.Shape(1, 128, 1, tile=(1, 1), dev="b200"), pc8.Shape(40, 128, 64),
+                  pc8.Shape(72, 128, 64), pc8.Shape(80, 128, 96), pc8.Shape(24, 128, 64, tile=(16, 64))):
         for build in (pc8.check, pc8.weight, pc8.call):
             with pytest.raises(DomainError):
                 build(shape)
+
+
+def test_the_row_cut_refuses_a_short_tile_row():
+    """The row cut (``row_k``) takes whole tiles only: 80 rows and decode's 32 at 64-row tiles, admitted without it, are
+    refused with it by every root and by the tile layout, and 64 rows are admitted with it."""
+    pc8.Shape(64, 256, 64, row_k=128).check()
+    for m in (80, 32):
+        pc8.Shape(m, 256, 64).check()
+        shape = pc8.Shape(m, 256, 64, row_k=128)
+        for refused in (pc8.check, pc8.weight, pc8.call, lambda s: plan.tile_layout(s, 4096)):
+            with pytest.raises(DomainError, match="row cut takes whole tiles only"):
+                refused(shape)
+        with pytest.raises(DomainError, match="row cut takes whole tiles only"):
+            plan.tile_layout(replace(shape, hidden=True), 4096)

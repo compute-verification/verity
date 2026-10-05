@@ -48,28 +48,33 @@
    }
   }
  },
- "pins": {
+ "guarantees": {
   "Nci.SecurityProofs.Inference": {
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.Inference : Nci.Guarantees.Inference"],
    "assumptions": [],
    "type_hash": "9577814bc7cda3860fee9d3428ecde7e11d7299009a1d3bfb405e11c92e5c600"
   },
   "Nci.SecurityProofs.ReadBound": {
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ReadBound : Nci.Guarantees.ReadBound"],
    "assumptions": [],
    "type_hash": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548"
   },
   "Nci.SecurityProofs.Training": {
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.Training : Nci.Guarantees.Training"],
    "assumptions": [],
    "type_hash": "b3e344c8c136829d0a3a4130fa3fc8a8d5bb34e0a0fe3f5673183e5e7cd2cf3a"
   },
   "Nci.SecurityProofs.UpdatedMatMul": {
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.UpdatedMatMul : Nci.Guarantees.UpdatedMatMul"],
    "assumptions": [],
    "type_hash": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b"
   },
   "Nci.SecurityProofs.full_positions": {
+   "owner": "@lean",
    "signature": [
     "Nci.SecurityProofs.full_positions {D : Verity.Circuit} (c : Nci.Chain D) (R : Finset (Fin D.N)) (d : Nat)",
     "  (hd : ∀ (ℓ : Fin c.L), instLENat.le d (c.d ℓ)) :",
@@ -89,6 +94,7 @@
    "type_hash": "0be1f142229f412b399a736e39e8d50f020462af3b5666531fafe52754deb854"
   },
   "Nci.SecurityProofs.iu_reads": {
+   "owner": "@lean",
    "signature": [
     "Nci.SecurityProofs.iu_reads (D : Verity.Declaration) (c : Nci.Chain D.D) (Γ : Nat) (K b_w b_a : Real) (d : Nat)",
     "  (hd : ∀ (ℓ : Fin c.L), instLENat.le d (c.d ℓ)) (hb_a : Real.instLE.le 0 b_a)",
@@ -106,6 +112,7 @@
    "type_hash": "d5d11e43644ce9e4ad964bfcda1cf765924fc720b505c56993f236f058d9d693"
   },
   "Nci.SecurityProofs.loomis_whitney": {
+   "owner": "@lean",
    "signature": [
     "Nci.SecurityProofs.loomis_whitney.{u_1, u_2, u_3} {α : Type u_1} {β : Type u_2} {γ : Type u_3} [DecidableEq α]",
     "  [DecidableEq β] [DecidableEq γ] (T : Finset (Prod α (Prod β γ))) :",
@@ -119,6 +126,7 @@
    "type_hash": "699c0e8c25ebd5e02db7990880c2aab5edf63a3a632f092488b8826906380abe"
   },
   "Nci.SecurityProofs.other_positions": {
+   "owner": "@lean",
    "signature": [
     "Nci.SecurityProofs.other_positions {D : Verity.Circuit} (c : Nci.Chain D) {n : Nat} (P : Verity.Partition D n)",
     "  (u : Fin n) :",
@@ -140,7 +148,7 @@
     "Nci.Assumptions.ActivationsIncompressible": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a",
     "Nci.Assumptions.PartialSumsIncompressible": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
    },
-   "pins": ["Nci.SecurityProofs.Training", "Nci.SecurityProofs.UpdatedMatMul", "Nci.SecurityProofs.iu_reads"]
+   "guarantees": ["Nci.SecurityProofs.Training", "Nci.SecurityProofs.UpdatedMatMul", "Nci.SecurityProofs.iu_reads"]
   },
   "Nci.Guarantees": {
    "digest": "766daef01d1febae2310342a74ed2f97908c6a09b2d03c85f8750ec6ce7015df",
@@ -150,7 +158,7 @@
     "Nci.Guarantees.Training": "cb2ed87094fe723c57f7327f35b1c25bc823ee878bee89603ec3d5019462a4a5",
     "Nci.Guarantees.UpdatedMatMul": "e0aea8b94ad0a9a9cedcbba81016e1756664aaccf5740ac10a84a45a67500ca4"
    },
-   "pins": [
+   "guarantees": [
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",
@@ -182,7 +190,7 @@
     "Nci.novelReads": "f9a643aedf8a9ffa1542961e8c8a249e4e9954abe74c705a91d60d6565a6cf79",
     "Nci.slowdown": "47f31dfc1e426587b79935cd908a1d4daa0c1a2bf91a9883a452c55b3de3d2b2"
    },
-   "pins": [
+   "guarantees": [
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",
@@ -217,7 +225,7 @@
     "Verity.Implementation": "c144286a7ea1ac466678724b49cdff938962d7a3b1e86cc04ea6968c3ee0a529",
     "Verity.Implementation.inp": "997e0ba3c6cf816c20ad7aecf22ecb9aef93d68ebcf8cec1ed8c071b89d64202"
    },
-   "pins": [
+   "guarantees": [
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",
@@ -236,7 +244,7 @@
     "Verity.Declaration.Implements": "0b973c0f940a9a9bf3bd04e3124fe027e62d041007816a4834a681c1c53e3aa1",
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
-   "pins": [
+   "guarantees": [
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",
@@ -251,7 +259,7 @@
     "Verity.Partition.gates": "ee436a2cedef88f54396204589ab1dfaf55be636d8a0a1376f41740dd9ba79c7",
     "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9"
    },
-   "pins": [
+   "guarantees": [
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",

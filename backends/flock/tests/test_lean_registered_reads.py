@@ -276,8 +276,8 @@ def test_a_registered_output_row_is_on_both_sides(staged):
 
 def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
     """`verify` sets up every table's statement through the same check (§16.12): with two tables, table 1's drawn statement
-    (units 4-7) is refused when the verifier's program moves unit 5's read, and under the honest reads setup passes and the
-    session meets the refusal of its form, two tables without `--zk` (§16.15), which only a statement that sets up meets."""
+    (units 4-7) is refused when the verifier's program moves unit 5's read, and under the honest reads setup passes, so the
+    verifier goes on to read the (empty) session's proofs, which it names by the tables it set up."""
     sess = staged.dir / "session"
     sess.mkdir(exist_ok=True)
     (sess / "session.json").write_text("{}")
@@ -291,8 +291,8 @@ def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
         assert line["accepted"] is False
         return line["why"]
 
-    assert why(staged.dir / "own.json") == ("refused: 2 tables in a session without --zk: a statement form the soundness proof "
-                                            "does not cover"), "setup passes"
+    honest = why(staged.dir / "own.json")
+    assert honest.startswith("session files: ") and "circuit-00.rep0.bin" in honest, honest
     moved = _own(staged, "own-moved-5", lambda ps: ps["cs"]["reads"].__setitem__(5, 10))
     assert why(moved) == f"setup: registered reads: port cs: unit 5 reads position {POSITIONS[5]}, and the verifier's program reads 10"
 

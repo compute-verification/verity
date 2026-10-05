@@ -51,10 +51,14 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
           "Perfect isolation"),
     Entry("sequential-step-floor", "assumption",
           "No call of the scheme's permutation completes faster than the certificate's call time on a CPU or GPU core "
-          "(ASICs out of scope)", "Step floor", "conjectured"),
+          "(ASICs out of scope); it bounds an adversary only in the ideal-permutation model, since at the reference "
+          "Feistel-SHAKE256 permutation a prover answers from kept round states without completing any call",
+          "Step floor", "conjectured"),
     Entry("feistel-indifferentiability", "assumption",
-          "A 10-round Feistel network over SHAKE256 in place of the ideal permutation keeps the storage bound "
-          "(indifferentiability is not known to compose in storage games)", "Feistel-SHAKE256 as ideal", "conjectured"),
+          "REFUTED: a 10-round Feistel network over SHAKE256 in place of the ideal permutation keeps the storage bound. "
+          "It does not: a prover keeps five 200-byte post-absorb round states per 64 KiB block (1.53% of C) and "
+          "rebuilds any label in 481 sequential Keccak-f (red team, 4 Oct 2026, art:7617c8017e80)",
+          "Feistel-SHAKE256 as ideal (refuted)", "conjectured"),
     Entry("m1-ideal-permutations", "model",
           "Model M1: independent forward-only ideal permutations, one per block, each block the inverse image of its "
           "data", "M1"),
@@ -83,7 +87,8 @@ class Certificate:
 
     A server that holds fewer than `⌊rho · |C|⌋` bits when the challenges arrive, and answers each within `rounds`
     sequential calls of at least `call_ns` each using at most `work` calls, passes `k` challenges with probability at
-    most `delta + 2^eps_log2`.  This is `theorem`, given the open named `hypotheses`, under `claims`.
+    most `delta + 2^eps_log2`.  This is `theorem`, given the open named `hypotheses`, under `claims`; where a claim is
+    refuted (`feistel-indifferentiability` at the reference `Π₂`), it holds only in the model the others name.
 
     `cliff` is the most rounds the structure tolerates at any `k`, or None when security degrades gracefully past
     `rounds`.  The band has its cliff at its in-degree `d`.  `segments` is the number of segments of `W` the theorem is
@@ -254,8 +259,9 @@ def verifier_key(scheme: Scheme, commitment: bytes, salt: bytes, *, mode: str = 
 
 
 def challenge_key(source: bytes, vk: VerifierKey) -> Key:
-    """The audit's key, bound to `vk`'s root and salt; `source` is the verifier's secret or a beacon round after `vk`
-    is fixed, never the prover's (`audit.challenge_key`)."""
+    """The audit's key, bound to `vk`'s root and salt; `source` is the verifier's own secret, kept secret until the
+    audit starts, never a public beacon or the prover's (`audit.challenge_key`). A public source lets a prover compute
+    the challenged indices before the audit and rebuild only those blocks within the deadline."""
     return audit.challenge_key(source, vk)
 
 

@@ -51,13 +51,13 @@ python tools/lean/audit.py PKG                once, before pushing (seconds; lev
 Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
 never change a `require`, a revision or `lean-toolchain` in a feature PR.
 
-To check your records, or get the `--update` printout a statement reviewer reads, without a build of your own, use the
-fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took about 22 minutes
-unpinned on the check cores.
+To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
+your own, use the fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took
+about 22 minutes unpinned on the check cores.
 
 ~~~text
 research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- \
-  python3 tools/check/lean_changed.py --records PKG --update
+  python3 tools/lean/lean_changed.py --records PKG --update
 ~~~
 
 It waits for one of the node's Lean slots of pool `build` (`lean_slot.py`; a node whose slot file lists no `build` pool
@@ -120,7 +120,7 @@ simp with that.
   guarantee easier: don't strengthen an input relation, weaken an output relation, shrink the challenge space, add an
   unmotivated hypothesis, or move a verifier check into an assumption. That list is also what Daniel looks for when a change reaches him.
 - **List what you cite.** When a ledger row, a table or a PR description cites a guarantee as proved, add its theorem
-  (`SecurityProofs.G` under the four names) to `pins` and run `python tools/lean/audit.py --update PKG`. Commit the
+  (`SecurityProofs.G` under the four names) to `guarantees` and run `python tools/lean/audit.py --update PKG`. Commit the
   record with the proof.
 - **Watch upstream for what you assume.** A new named assumption or a lemma you prove by hand that a pinned dependency
   (Mathlib, ArkLib, VCVio, CompPoly) could prove gets an entry under `upstream.watch` in the package's `lean-audit.json`.
@@ -141,8 +141,12 @@ simp with that.
 - **A move is not a change.** When you rename guarantees or move what they read (a package moving to the four names), write
   the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
   `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A guarantee that says what its
-  record says, renamed or restated as a `Guarantees` definition, and the definitions the same under their old names, each
-  get one line and send no DM; the rest prints in full. Moving a definition to another module needs no map.
+  record says, renamed or lifted, and the definitions the same under their old names, each get one line; the rest prints
+  in full. Moving a definition to another module needs no map.
+- **A lift needs no map.** `theorem X (xs) : e` becoming `theorem X (xs) : G as`, with `def G (ys) : Prop := e` in a
+  `Guarantees` module, prints as "lifted into G" on a plain `--update` when `G` unfolded once is `e` (the same type hash)
+  and the theorem keeps its named assumptions as binders (tools/lean/README.md, "A lift is not a change"). It needs no
+  statement reviewer, but Daniel's DM still lists the changed record.
 
 ## Before the PR
 

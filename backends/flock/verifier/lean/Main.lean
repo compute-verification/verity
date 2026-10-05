@@ -312,9 +312,11 @@ verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one wi
 values its own `--registered F` (`Registered.check`), a circuit with public input ports its own `--public-inputs F`, and
 a public file whose header names an identifier its own `--identifier F` (§16.10). Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
-A statement whose form the soundness proof does not cover is refused (`ProvedScope.check`, §16.15), each session with
-the reason, and so is a session whose draw is by a law no soundness claim draws by (`ProvedScope.drawLaw`: a bernoulli or
-work draw, whatever flags it holds, or a subset draw without `--zk`). Exit 0 iff every session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
+A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
+work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
+soundness proof does not cover (`ProvedScope.check`, §16.15) is refused, and so is a session without a draw, both after
+every check has passed (so the reason is the refusal only when nothing else fails; the form's first). Exit 0 iff every
+session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
@@ -369,8 +371,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
     | some k => match k.toNat? with
       | some k => pure (some k)
       | none => IO.eprintln "verify: --stratified K: K is a natural number"; return 2
-  -- a statement that sets up is still refused when no soundness claim draws by its draw's law (`ProvedScope.drawLaw`) or
-  -- the soundness proof does not cover its form (`ProvedScope.check`)
+  -- a drawn statement that sets up is still refused when no soundness claim draws by its draw's law
+  -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
+  -- each session's verdict
   let scope := ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
@@ -378,7 +381,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
           registered publicInputs (identifier.map Prod.snd)
         if zk then r.2.forM Zk.shapeOk
         pure r) with
-    | .ok (spec, sts) => (ProvedScope.drawLaw zk draw).bind fun () => scope.map fun () =>
+    | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
@@ -418,6 +421,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
       let (spec, tabs, _) ← st
       if zk then Zk.verify spec tabs record proofs else verify spec tabs record proofs
+      -- last, so a session that fails a check keeps that check's reason: the form's refusal, then a draw-less session's
+      scope
+      if draw.isNone then ProvedScope.drawLaw zk draw
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok

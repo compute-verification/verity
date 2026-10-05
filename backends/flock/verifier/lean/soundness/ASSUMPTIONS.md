@@ -380,13 +380,8 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
   that rows satisfied with the constant 1 carry the gate circuit's outputs, checked in the kernel. Once every Definition
   lowers to a Boolean circuit over AND, XOR and NOT (lane proofs-ir), a generic Boolean-semantics lemma replaces the
   per-template `RowsCert`.
-- **The statement's form** (no hypothesis). `flock-verify verify` refuses every statement outside the forms the proof
-  covers (the verifier's PROTOCOL.md §16.15, `Flock.ProvedScope.check`): typed or pre-hm96 statements, unretained rounds,
-  leaves other than `hm96-sha512/v1`, several tables without `--zk`, public input ports, shared-row public files, and
-  circuits failing `Layout.scopeOk` (`FailClosed.scopeOk_eq`). So the headlines over what it accepts (`Discharge/FailClosed`:
-  `Verifies`, `LiveVerifiesZK`) take no hypothesis on the circuit, the public file or the statement's form; the
-  conditions the older forms take (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`, `ho`, `TagsOk`'s rounds and leaves) follow
-  from the acceptance. Refusing an uncovered form is a completeness limit (Daniel, Oct 4).
+- **The statement's form** is no hypothesis: `verify` refuses every form the proof doesn't cover (verifier
+  PROTOCOL.md §16.15).
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
   read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
   statements of PROTOCOL.md §16 satisfy it.
