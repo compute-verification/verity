@@ -101,7 +101,7 @@ research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] N@SHA ...      # build a train, lint it, push it for train.sh
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
-research merge --mirror [SHA]                                           # main (or SHA) to node 1's bare repository, as --push does
+research merge --mirror [SHA]                                           # main (or SHA) to node 1's bare repo, as --push does
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
@@ -138,9 +138,9 @@ it). From the remote's copy of the target, the truth rather than the checkout, i
 it, naming the commit, retargets each whose base branch's tip is on it (stacks GitHub never closes), and deletes a closed one's
 head branch unless an open one uses it. With `--push`, which whoever lands a train passes (Daniel, 1 Oct), a merge that lands is
 pushed, never forced, before the sweep, and a refused push sweeps nothing and exits 1; without it, run `research merge --sweep`
-after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Once origin has `main`, the commit is
-pushed over ssh to node 1's bare repository (`vy-lean-sandbox checkout` builds from it), cut off after 120 s; a failure logs the
-`research merge --mirror SHA` that reruns it, and the merge stands (`RESEARCH_MERGE_MIRROR`: another machine, or empty to skip).
+after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Once origin has `main`, it goes over ssh
+to node 1's bare repository (`vy-lean-sandbox checkout` builds from it) within 120 s; a failure logs the `research merge --mirror
+SHA` that reruns it, and the merge stands (`RESEARCH_MERGE_MIRROR`: another host; empty skips).
 
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
