@@ -74,6 +74,26 @@ def test_layouts_globs_exclude_and_missing(tmp_path):
     assert P.import_roots_dir(tmp_path)["roots"] == [] and P.import_roots_dir(tmp_path)["source"].startswith("none")
 
 
+def test_a_package_split_across_members_is_found_in_each_and_one_found_nowhere_raises(tmp_path):
+    t = tmp_path / "tree"
+    _write(t, "pyproject.toml", '[tool.uv.workspace]\nmembers = ["upper", "lower", "other"]\n')
+    for member, module in (("upper", "ml"), ("lower", "ir")):
+        _write(t, f"{member}/pyproject.toml", '[tool.hatch.build.targets.wheel]\npackages = ["src/core"]\n')
+        _write(t, f"{member}/src/core/{module}/__init__.py", "")
+    _write(t, "other/pyproject.toml", "[project]\nname='other'\n")
+    _write(t, "other/src/other/__init__.py", "")
+    assert P.package_dirs(t, "core") == ["upper/src/core", "lower/src/core"]
+    assert P.package_dirs(t, "other") == ["other/src/other"]
+    with pytest.raises(LookupError, match="'gone'"):
+        P.package_dirs(t, "gone")
+    with pytest.raises(LookupError):
+        P.package_dirs(tmp_path, "core")
+    assert P.workspace_root(t / "lower" / "src" / "core" / "ir" / "__init__.py") == t.resolve()
+    assert P.workspace_root(t / "upper") == t.resolve(), "a member's own pyproject.toml declares no workspace"
+    with pytest.raises(LookupError):
+        P.workspace_root(tmp_path)
+
+
 def test_launch_request_sets_the_trees_pythonpath_appends_the_users_and_records_it(tmp_path):
     root = tmp_path / "root"
     sha = "d" * 40

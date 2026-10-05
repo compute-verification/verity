@@ -118,6 +118,32 @@ def import_roots_git(git_dir: Path | str, rev: str) -> dict:
     return import_roots(read, lambda rel: rel in ("", ".") or rel in tree_dirs, lambda: sorted(tree_dirs))
 
 
+def workspace_root(path: Path | str) -> Path:
+    """The tree `path` belongs to: the nearest directory at or above it whose pyproject.toml declares `[tool.uv.workspace]`, found by
+    what the tree declares rather than by `path`'s depth in it.  Raises LookupError when there is none."""
+    p = Path(path).resolve()
+    for d in (p, *p.parents):
+        try:
+            doc = tomllib.loads((d / "pyproject.toml").read_text())
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if "workspace" in ((doc.get("tool") or {}).get("uv") or {}):
+            return d
+    raise LookupError(f"no pyproject.toml declaring [tool.uv.workspace] at or above {p}")
+
+
+def package_dirs(tree: Path | str, name: str) -> list[str]:
+    """Where `tree` ships the import package `name`, relative to the tree: `<root>/<name>` for each workspace import root that holds
+    it, in member order.  One directory for a regular package, one per member for a namespace split across members.  A closure, a
+    dirty check or a source identity over a package names these, so a member that moves or splits stays covered.  Raises
+    LookupError when no root holds `name`, so a caller never gets a list over nothing."""
+    t = Path(tree)
+    dirs = [posixpath.join(r, name) for r in import_roots_dir(t)["roots"] if (t / r / name).is_dir()]
+    if not dirs:
+        raise LookupError(f"no workspace import root of {t} holds a package {name!r}")
+    return dirs
+
+
 def pythonpath(root: str, derived: dict, extra: str | None = None) -> str:
     """`root`-absolute roots joined with ':', then `extra` (the user's own PYTHONPATH) appended."""
     parts = [posixpath.join(root, r) if r not in ("", ".") else root for r in derived["roots"]]

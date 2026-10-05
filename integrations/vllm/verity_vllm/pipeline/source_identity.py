@@ -81,11 +81,12 @@ def code_identity(root: str | os.PathLike[str]) -> dict[str, Any]:
     """The code the integration executes, by content: the canonical sha256 of the manifest {repo path: sha256} of the repository at
     `root` over `research_tools.CLOSURE` (the integration plus Verity core), the files the store records as the research Tools' closure.
     The one code identity: the hot Commit worker's key and the TP Commit's tree of record.  Raises FileNotFoundError when `root` holds
-    no integration or no core file (not a repository root: an empty manifest would be a constant key)."""
+    no file under one of the closure's directories, the integration or a directory of core (not a repository root: a manifest
+    missing one would be a key that ignores it)."""
     from verity_vllm.pipeline.research_tools import VLLM_BUILD
 
     files = VLLM_BUILD.closure_manifest(root)
-    for part in ("integrations/vllm/", "packages/verity/src/verity/"):
+    for part in (g.removesuffix("**") for g in VLLM_BUILD.closure):
         if not any(p.startswith(part) for p in files):
             raise FileNotFoundError(f"code identity: no {part} file under {os.fspath(root)!r} (not a repository root)")
     canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode()
