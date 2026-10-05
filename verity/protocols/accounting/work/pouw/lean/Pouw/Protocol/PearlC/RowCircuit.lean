@@ -1,4 +1,7 @@
 import Pouw.Protocol.PearlC.RowPrims
+import Verity.Protocol.Fp32
+import Verity.Protocol.Prims
+import Verity.Protocol.Scalar
 
 /-!
 # The row units as core circuits (definitions only)
@@ -11,7 +14,7 @@ gate, read plain or through core's wiring (`Wire`, which the IR's `CallGraph` fo
 Its value is the primitive's word function on the operands' values (`Prim.eval`):
 
 * core's primitives are the fields of `RowOps`, a parameter named as core's Lean (`Verity.Protocol.Fp32`, `.Scalar`,
-  `.Prims`), which a later instance fills from it;
+  `.Prims`), which `coreOps` fills from it;
 * PoUW's own (`PouwF32SqrtRn_v1`, `PouwETilde_v1`, `PouwBf16Neg_v1`, `PouwSq*`) are `RowPrims`' word functions;
 * `F32Add_v2` is `TileCircuit.f32Add`, the E4M3 k32 atom is the device's `p.step` (`TileCircuit.atomF`) and the NVF4
   atom is `nvf4Word` (`TileCircuit.atom4F`), as in the tile.
@@ -32,8 +35,8 @@ open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit
 
 /-! ## Core's primitives, as a parameter -/
 
-/-- The word functions of core's primitives that the row units read and that have no Lean semantics in PoUW, each on
-words as naturals, named as core's (`Verity.Protocol.Fp32`, `.Scalar`, `.Prims`). -/
+/-- The word functions of core's primitives that the row units read, each on words as naturals, named as core's
+(`Verity.Protocol.Fp32`, `.Scalar`, `.Prims`). `coreOps` is core's own. -/
 structure RowOps where
   /-- `F32Mul_v2` -/
   f32MulV2 : ℕ → ℕ → ℕ
@@ -67,6 +70,25 @@ structure RowOps where
   f32Fabs : ℕ → ℕ
   /-- `Bf16ToF32_v1`, wiring -/
   bf16ToF32 : ℕ → ℕ
+
+/-- Core's primitives, as core's Lean defines them. -/
+def coreOps : RowOps where
+  f32MulV2 := Verity.Fp32.f32MulV2
+  f32DivV2 := Verity.Fp32.f32DivV2
+  f32FmaV2 := Verity.Fp32.f32FmaV2
+  f32Fmaxf := Verity.Scalar.f32Fmaxf
+  f32Neg := Verity.Scalar.f32Neg
+  f32ToE4m3Sat := Verity.Prims.f32ToE4m3Sat
+  f32ToE2m1Sat := Verity.Prims.f32ToE2m1Sat
+  e4m3ToF32 := Verity.Prims.e4m3ToF32
+  f2fpBf16 := Verity.Prims.f2fpBf16
+  i32Le := Verity.Scalar.i32Le
+  selectI32 := Verity.Scalar.selectI32
+  selectBf16 := Verity.Scalar.selectBf16
+  bitAnd := Verity.Scalar.bitAnd
+  i32Add := Verity.Scalar.i32Add
+  f32Fabs := Verity.Scalar.f32Fabs
+  bf16ToF32 := Verity.Prims.bf16ToF32
 
 /-! ## Gates that name their primitive -/
 

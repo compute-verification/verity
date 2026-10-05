@@ -102,7 +102,7 @@ theorem ttOutTilePearlCDevRev1_cap_transfer [Fintype Q] [DecidableEq Q] [Fintype
     rw [← Rat.cast_mul, show (1 - ρ') / (1 - ρ) * ((1 - ρ) / (1 - ρ')) = 1 by field_simp, Rat.cast_one]
   refine ⟨h.1, fun U hU T hT q hq A hA => le_trans (Pouw.pr_mono ?_) (h.2 U hU T hT q hq A hA)⟩
   intro x hx
-  have hsum := rev1_tile_cap_credit_sum_le d sem ρ ρ' hadd hbf hle hρ1 U hU.2.1 x.1 x.2 (A.transcript U x.1 x.2)
+  have hsum := rev1_tile_cap_credit_sum_le d sem ρ ρ' hadd hbf hle hρ1 U hU.2 x.1 x.2 (A.transcript U x.1 x.2)
   rw [show 1 - (1 - (1 - γ₀) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ)) = (1 - γ₀) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ) by ring,
     div_mul_eq_div_div] at hx
   have h2 := lt_of_lt_of_le hx hsum
@@ -125,7 +125,7 @@ theorem pearlCSampledDevRev1KAt_gen [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
           (ω : ℝ) * (pearlCTilesDevRev1K d sem ρ c).credit H s' U g act := by
     intro U hU H s' g hg act _
     have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.2 _ hu
+    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.2 _ hu
     simp only [pearlCTilesDevRev1K, pearlCTilesDevRev1]
     rw [hsh, hω]
     push_cast
@@ -135,7 +135,7 @@ theorem pearlCSampledDevRev1KAt_gen [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
         (pearlCTilesDevRev1K d sem ρ c).Wcred U.layout g act ≤ (pearlCTilesDevRev1K d sem ρ c).Wref U.layout g := by
     intro U hU g hg act
     have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.2 _ hu
+    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.2 _ hu
     simp only [pearlCTilesDevRev1K, pearlCTilesDevRev1]
     rw [hsh]
     exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ _ _) _) hw0
