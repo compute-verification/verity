@@ -12,7 +12,7 @@ A `Key` drives exact integer samplers over counter-mode streams.  Every draw is 
 for different items are independent streams, and any shard of a population computes its own draws without the rest
 (`Key.shard` hands a worker a sub-key).  Stdlib only.
 
-Byte formats (pinned by ``tests/randomness/vectors.json``):
+Byte formats (pinned by ``verity/primitives/randomness/tests/vectors.json``):
 
 * ``frame(x)`` = tag || len(body) as 8 bytes big-endian || body, with tag ``b`` for bytes, ``s`` for UTF-8 str, ``i``
   for a nonnegative int as minimal big-endian bytes (0 is one zero byte).  An index or a tuple of parts frames each
