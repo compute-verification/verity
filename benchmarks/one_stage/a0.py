@@ -1,7 +1,7 @@
 """One-stage audit, run A0: a template's captured served values through registration, the verifier's draw, M0's prover and
 verifier, the Lean verifier's draw checks, and the audit record with its integrity profile; then the negatives.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/verity/protocols/verification/sampled_proofs \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a0.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
       [--k 16] [--delta 0.01] [--port 7511]
 
