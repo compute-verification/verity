@@ -1,9 +1,12 @@
 # tools/lean: the Lean audit
 
-One audit for every Lake package, run by `check` (`python tools/lean/audit.py --all --build`). It needs the standard
-library, `lake` and the toolchain's `lean`; nothing here imports Verity, so another repository can copy the directory
-(`audit.py`, `Facts.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `tests/`) and
-point it at its own packages.
+One audit for every Lake package (`python tools/lean/audit.py --all --build`), which `check` runs on the packages whose inputs
+changed (`audit.py --build PKG...`). Lean's jobs in `check` are here too: `lean_audit.py` (the lean-audit step: which
+packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, and a lane's fast path to its
+records) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
+toolchain's `lean`; nothing here imports Verity, so another repository can copy the auditor (`audit.py`, `Facts.lean`,
+`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
+own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they stay with this repository.
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
@@ -12,9 +15,11 @@ the same way. The only package code that runs is the build's and, after the fact
 code and runs outside it.
 
 ~~~text
-bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, Mathlib's cache when Mathlib is a dependency
+bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
+                                                  Mathlib is a dependency, and main's cached build of PKG (below)
+python tools/lean/cache.py get [PKG...]           main's cached build of each package, every file sha256-checked
 python tools/lean/audit.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
-python tools/lean/audit.py --update PKG...        write the pins' records from the build; commit the diff (a copy of
+python tools/lean/audit.py --update PKG...        write the guarantees' records from the build; commit the diff (a copy of
                                                   each record goes beside its reports, which a recorded run publishes)
 python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
 python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
@@ -41,18 +46,19 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   imports it;
 - no source file runs code while it compiles (`initialize`, `#eval`, `run_cmd`, `run_elab`, an `elab`, `macro` or `syntax`
   definition, an elaborator attribute), unless its module is listed under `compile_time` with a reason and the digest of
-  its file as it was reviewed. No listed module may declare a pin or a definition a pin reads.
+  its file as it was reviewed. No listed module may declare a guarantee or a definition a guarantee reads.
   The package has a `lakefile.toml`, not a `lakefile.lean` (which `lake` runs whenever it loads the package);
 - the `.olean` files of the modules the package imports, as each fetched package (Mathlib's downloaded cache, ArkLib's
   build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
   imports change (run `--update`) or at a bump; checking it takes seconds;
 - each `layers` rule holds: the modules under a prefix import only the listed prefixes;
-- the pins say what their records say (below);
+- the guarantees say what their records say (below);
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
 - the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies, each
-  declaration in a task of its own on Lean's threads, `LEAN_NUM_THREADS`, checked against the import and the
+  declaration in a task of its own on Lean's threads, `LEAN_NUM_THREADS` (by default the CPUs the audit may use: its
+  affinity, bounded by the cgroup quota, where Lean's own default is the whole machine), checked against the import and the
   declarations it comes after): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
   The replay also walks the environment it checked for the axioms the package uses, and the audit fails if they differ
   from the sets the `.olean` files recorded. No `#print axioms` output is parsed anywhere. A replay killed by a signal
@@ -100,84 +106,91 @@ installs it first, so a machine without elan works), must pass clean and fail on
  "compile_time": {"Pkg.Tactic": {"why": "why this module must run code while it compiles", "digest": "…"}},
  "dependency_unchecked": {"Dep.Loader": "why the package imports a dependency module that names a kernel bypass"},
  "layers": {"Pkg.Model": {"imports": ["Mathlib", "Pkg.Model"], "except": [], "why": "definitions import no proofs"}},
- "pins": {"Pkg.main_theorem": {}}
+ "guarantees": {"Pkg.main_theorem": {}}
 }
 ~~~
 
 - `roots`: the modules the audit imports; every module under them is audited. `axioms` is optional.
 - `runs`: the package's tests, compiled evaluation that no proof reads (a bulk conformance check over more vectors than
-  the kernel pins). Each is an exempt module, run after the replay by `lake env lean --run` in the build sandbox, and
+  the kernel checks). Each is an exempt module, run after the replay by `lake env lean --run` in the build sandbox, and
   passes when it exits 0. An argument `{NAME}` is the path of data file NAME, which is what `generate` writes (run first,
   outside the sandbox, with `{repo}` the checkout, `--repo`, and `{out}` the directory it writes) or else the package's
   own file, either one possibly gzipped (`NAME.gz`). A file is used only with the SHA-256 under `data`: another fails the
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a pin: its named assumptions.
-- `meaning` (default `roots`): the modules whose definitions a pin's meaning is followed through. What a
+- `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a guarantee: its named assumptions.
+- `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
 - `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
   adds the `digest` of the module's file. Any later edit of the file fails the audit until someone has reviewed its
-  compile-time code and `--update` records the new digest, and `--update` lists the module among what a reviewer reads.
-  No listed module may declare a pin or a definition a pin reads: a term elaborator, a notation
+  compile-time code and `--update` records the new digest, and `--update` prints the module in its review.
+  No listed module may declare a guarantee or a definition a guarantee reads: a term elaborator, a notation
   or a macro there could change what a statement means. A proof-only tactic belongs in a module of its own.
 - `dependency_unchecked`: the modules of fetched packages (for a lakefile, `<package>/lakefile.lean`) whose source may
   name a kernel bypass, each with the reason. An entry that no longer matches a hit fails, so the list stays current.
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
-- `pins`: the guarantees, the theorems a document or a PR cites as proved (README "Glossary"), and any lemma pinned
-  beside them. `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions
-  among the hypotheses, a hash of the type, and for each module the definitions the pins read, with a hash each, the pins that read them, and a `digest` of those hashes (which
-  the record therefore determines). Without `--update` the audit fails on any difference, so a statement, or a definition
-  it depends on, cannot change without a visible diff of this file. A record holds the statement, not the proof: pin a
-  `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
+- `guarantees`: the theorems a document or a PR cites as proved (README "Glossary"), and any lemma listed beside them.
+  `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
+  hypotheses, a hash of the type, and for each module the definitions the guarantees read, with a hash each, the
+  guarantees that read them, and a `digest` of those hashes (which the record therefore determines). Without `--update`
+  the audit fails on any difference, so a statement, or a definition it depends on, cannot change without a visible diff
+  of this file. A record holds the statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof
+  with allowed axioms replaces it. A record written before guarantees were called that holds them (and each module's
+  readers) under `pins`: the audit reads it so, `--update` rewrites it under today's names, and a record holding both
+  is refused.
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
   therefore the same statement, and a different term is a different one. Records written with `Expr.hash`, which has
   32 bits, are still checked as they are, and the run notes them. `--update` rewrites them, and its review says
-  "rehashed" where the 32-bit hash still matches, so no reviewer is needed for that.
+  "rehashed" where the 32-bit hash still matches, which Daniel's DM (below) leaves out.
 
-**A changed pin needs a named statement reviewer.** A weakened definition leaves every proof valid, so the axiom checks
-and the replay pass it: only the pins see it, and only a person can judge it. (A redefinition of `Collision` once made
-a Merkle binding guarantee vacuous for unsalted schemes; the pins flagged it and review caught it.) `--update` records the
-change and prints what the reviewer reads: each changed pin's signature before and after, and each changed definition a
-pin reads, with the pins that read it and its source now (also in `review.txt` among the reports). The PR description
-names the reviewer and the pins they read. A pin whose statement is the same but prints differently (the same type hash
-and named assumptions, after a toolchain bump or a change of notation) gets one line, "printed differently", and needs no
-reviewer. Definitions are compared by name, so one read from another module with the same content is counted on one line.
+**A changed guarantee reaches Daniel.** A weakened definition leaves every proof valid, so the axiom checks and the
+replay pass it: only the records see it, and only a person can judge it. (A redefinition of `Collision` once made a
+Merkle binding guarantee vacuous for unsalted schemes; the records flagged it and a review caught it.) `--update` records
+the change and prints it: each changed guarantee's signature before and after, and each changed definition a guarantee
+reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
+When the change lands on `main` (`research merge --push`, `research queue land`), Daniel gets a DM with each new, removed
+or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
+statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
+of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one
+read from another module with the same content is counted on one line. A grant in `tools/check/queue.toml`
+(`lean_audit = ["guarantees", "reads"]`) would make such a change wait for a reviewer again.
 
-**A move is not a change.** When declarations move (pins renamed, the definitions they read renamed or moved to other
+**A move is not a change.** When declarations move (guarantees renamed, the definitions they read renamed or moved to other
 namespaces, a statement restated as a `def G : Prop` that a theorem `t : G` proves), write the moves as a JSON object of
 old names to new ones, each a declaration or a namespace (the longest prefix applies), and run
-`audit.py --update --moved MOVES.json PKG` on the record as it was before the move. The record's pins are renamed, and
-`Facts.lean` writes each pin's statement and each definition it reads once more with the build's names mapped back to
+`audit.py --update --moved MOVES.json PKG` on the record as it was before the move. The record's guarantees are renamed, and
+`Facts.lean` writes each guarantee's statement and each definition it reads once more with the build's names mapped back to
 the old ones, a statement whose type is a `Prop` definition under `meaning` also with that definition unfolded (and the
 proofs Lean abstracts out of a definition, its `G._proof_<n>` theorems, put back in place, as a theorem's type keeps them).
-The review compares those texts with the records of the old names: a pin that says what its record says gets one line, "the
+The review compares those texts with the records of the old names: a guarantee that says what its record says gets one line, "the
 same statement under its old names" (moved from its old name, or restated as `G`, which then needs no reading of its own),
-and the definitions the same under their old names are counted on one line; neither needs a reviewer. Everything else
+and the definitions the same under their old names are counted on one line; neither is in Daniel's DM. Everything else
 prints as without the map. A map whose new names nest differently from its old ones is refused, and so is one under which two
-constants of those texts (or two pins) would have one old name, since the comparison could not tell them apart; an old
-theorem kept under its old name as the lemma behind a new pin is no conflict.
+constants of those texts (or two guarantees) would have one old name, since the comparison could not tell them apart; an old
+theorem kept under its old name as the lemma behind a new guarantee is no conflict.
 
 ## Merging records: `merge.py`
 
-Two branches that each pin guarantees both change `lean-audit.json`, usually in the same `reads` module, so git's text merge
+Two branches that each add guarantees both change `lean-audit.json`, usually in the same `reads` module, so git's text merge
 conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/lean/merge.py --install` has registered
-it in the clone's git config. It merges entry by entry: each side's change to a pin, a module under `reads`, a dependency
+it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
 or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
-the digest is recomputed. Pins arrive byte for byte from their branches, and a hand-written section one side extends (a
-module added to `meaning`) is kept.
+the digest is recomputed. Guarantees arrive byte for byte from their branches, and a hand-written section one side extends
+(a module added to `meaning`) is kept. A side written before guarantees were called that (`pins`) is read under today's
+names.
 
-It refuses when both sides changed one entry differently: a pin restated on both, a definition whose content both changed,
+It refuses when both sides changed one entry differently: a guarantee restated on both, a definition whose content both changed,
 a dependency both bumped. It also refuses when one side stops reading a definition in a module the other side changed,
-since the record doesn't say which pins read it. A refusal is a conflict in git, with the entries named. Resolve it the
+since the record doesn't say which guarantees read it. A refusal is a conflict in git, with the entries named. Resolve it the
 old way: take either side and run `audit.py --update` on the merged tree.
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
-so a merge that is clean but wrong (a definition that changed on one side without a pin there reading it, while the other
-side's new pin reads it) fails there. `merge.py --normalize FILE` recomputes a record's digests without a build.
+so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the
+other side's new guarantee reads it) fails there. `merge.py --normalize FILE` recomputes a record's digests without a build.
 
 ## Noticing when a dependency proves what we assume: `upstream.py`
 
@@ -214,9 +227,33 @@ A hit is a theorem whose statement mentions every constant under `mentions`. The
 
 A proved hit not under its entry's `ack` is new, and the exit code is 1. Someone checks whether it discharges the
 assumption or replaces the hand proof, then records it with `--ack`: the list says what has been looked at, not what was
-used. To see what upstream has proved since the pin, run `upstream.py PKG --fetch --rev origin/main`; a weekly
+used. To see what upstream has proved since the pinned revision, run `upstream.py PKG --fetch --rev origin/main`; a weekly
 `research run` of it tells us when a bump would gain something. A document's "status upstream" line cites this output
 instead of asserting a status.
+
+## The build cache: `cache.py`
+
+Integration publishes the build of each package at every merged commit, and a development machine restores the newest one
+that is an ancestor of its `HEAD`. Lake then unpacks the modules whose input hashes match and compiles the rest. Lake's
+input hashes don't depend on the checkout's path: a build published from `/build/verity` restores in `/workspace`. The
+module docstring has the layout and the rules. In short:
+- The client checks every file's sha256 against the commit's record before Lake sees it, and hands the files to Lake with
+  `lake cache unstage`. Lake never reads the bucket itself, because its hashes aren't cryptographic.
+- A miss or a mismatch means building from source. So do a missing read credential (`LEAN_CACHE_R2_*`), the kill switch
+  (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
+- The audit never reads the cache: `lake_env()` sets `LAKE_ARTIFACT_CACHE=false` and `LEAN_CACHE=off`, so the validator
+  builds from source.
+- Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
+  its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
+  bucket-scoped key (`/etc/verity/lean-cache.env`). The build's user wrote the stage, so the publisher follows no link
+  below `--out`, takes only regular files with one link, and uploads a private copy of the bytes it hashed: a link
+  planted to the key uploads nothing.
+- Every write is conditional. A blob that already exists (a 412 or a 409) must have the same MD5, and blobs go up in one
+  part so that their ETag is their MD5. Records go last.
+- On node 1, `run_daily.py` is the daily publish (`vy-lean-cache-daily.timer`, deployed with the `cache.py` beside it).
+  It builds a fresh clone of main at `/build/verity` per package in infra's sandbox (`vy-lean-sandbox`), with the
+  dependencies fetched outside as research and bound read-only. It runs `publish` and `prune` only after
+  `vy-lean-sandbox clean` passes. A probe that got through, a refused sandbox or an unclean tree publishes nothing.
 
 ## Using it from another repository
 
@@ -224,6 +261,6 @@ Copy this directory at a commit of Verity's `main` and record the commit beside 
 package (`audit.py` prints a template when one is missing), run `audit.py --update` once on the trusted statements,
 review and commit the records, and run `audit.py --all --build` wherever the repository runs its checks.
 
-Pins suit statements that are merged and reviewed. An external, untrusted submission still needs its theorem checked by
+These records suit statements that are merged and reviewed. An external, untrusted submission still needs its theorem checked by
 `isDefEq` against a trusted `Prop` taken from the trusted commit, never from the submission's tree, and the submission
 built in a sandbox, as POUS's grader does.

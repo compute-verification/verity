@@ -13,7 +13,10 @@ import Verity.SecurityProofs.Game.Lock
 import Verity.SecurityProofs.Game.Batch
 import Verity.SecurityProofs.Game.BatchInduced
 import Verity.SecurityProofs.Game.Rewinding
+import Verity.SecurityProofs.Scalar.Vectors
+import Verity.SecurityProofs.Prims.Vectors
 import Verity.SecurityProofs.TC
+import Verity.SecurityProofs.Fp32
 
 /-!
 # Proofs of core's guarantees

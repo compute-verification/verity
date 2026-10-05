@@ -144,6 +144,12 @@
   "DotE4m3_v4{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
    "and": 17984
   },
+  "DsaTopKShortRow_v2{TOPK=16}": {
+   "and": 469
+  },
+  "DsaUe8m0Scale_v2": {
+   "and": 50895
+  },
   "E4m3ToF32_v2": {
    "and": 15
   },
@@ -215,6 +221,9 @@
   },
   "F32ArgmaxStage_v1{V=65,L=1}": {
    "and": 39
+  },
+  "F32CeilFtz_v2": {
+   "and": 315
   },
   "F32Div_v3": {
    "and": 2517
@@ -351,6 +360,12 @@
   "I32Add_v2": {
    "and": 31
   },
+  "I32Sub_v2": {
+   "and": 31
+  },
+  "I32ToF32_v2": {
+   "and": 368
+  },
   "MeanCombineTriton_v1{N=1030}": {
    "and": 5897
   },
@@ -390,6 +405,24 @@
   "MeanWarpsTriton_v1{N=16}": {
    "and": 7224
   },
+  "MoeExpertFp8BlockCoordinateW_v2{K=64,G=32,KB=32,SWAP=True}": {
+   "and": 28533
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}": {
+   "and": 26103
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=32,SWAP=True}": {
+   "and": 26103
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=False}": {
+   "and": 19391
+  },
+  "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='block'}": {
+   "and": 11371
+  },
+  "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='warp'}": {
+   "and": 12914
+  },
   "MoeRouterNormalize_v1{E=8,VPT=4}": {
    "and": 26738
   },
@@ -398,6 +431,21 @@
   },
   "MoeRouterShift_v1{E=8,VPT=4}": {
    "and": 6268
+  },
+  "MoeRouterSigmoidIn_v1": {
+   "and": 23369
+  },
+  "MoeRouterSigmoidMid_v1": {
+   "and": 719
+  },
+  "MoeRouterSigmoidOut_v1": {
+   "and": 4776
+  },
+  "MoeRouterSigmoidScore_v2": {
+   "and": 30795
+  },
+  "MoeSharedCombine_v1{H=8,RSF=1072064102}": {
+   "and": 12632
   },
   "MoeSumCoordinate_v2{TOPK=8}": {
    "and": 5222
@@ -531,6 +579,9 @@
   "RMSNormWarpsTriton_v1{N=16}": {
    "and": 812
   },
+  "RoPEGptJ_v3{NHEADS=2,D=8}": {
+   "and": 47456
+  },
   "RoPEHead_v2{D=8}": {
    "and": 23728
   },
@@ -570,8 +621,14 @@
   "ScaledMmFp8BlockCoordinateGivenScale_v2{K=64,G=32}": {
    "and": 21175
   },
+  "ScaledMmFp8BlockCoordinateGivenScale_v4{K=64,G=32,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 25779
+  },
   "ScaledMmFp8BlockCoordinate_v2{K=32,G=32}": {
    "and": 12566
+  },
+  "ScaledMmFp8BlockCoordinate_v4{K=32,G=32,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 14868
   },
   "ScaledMmFp8Coordinate_v2{K=32,BIAS=False}": {
    "and": 11514
@@ -596,6 +653,9 @@
   },
   "SiluMulBf16_v4": {
    "and": 1380
+  },
+  "SiluMulFp8BlockQuantResult_v2": {
+   "and": 16899
   },
   "SiluMul_v3{I=8}": {
    "and": 10976
@@ -638,6 +698,15 @@
   },
   "TokenSelect_v2{V=50}": {
    "and": 2661
+  },
+  "U32And_v2": {
+   "and": 32
+  },
+  "UniversalUnit_v1{G=16,N_IN=16,N_OUT=8}": {
+   "and": 1066
+  },
+  "UniversalUnit_v1{G=64,N_IN=64,N_OUT=32}": {
+   "and": 16674
   }
  },
  "pieces": {

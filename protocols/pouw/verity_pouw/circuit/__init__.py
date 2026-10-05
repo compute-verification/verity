@@ -18,6 +18,8 @@
 * `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
   their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are C-Flock-committed
   ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
+* `rowk`: their row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
+  piece fits C-Flock's block.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs
