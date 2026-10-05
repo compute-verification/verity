@@ -40,7 +40,7 @@ def test_health_runs_pod_health_over_ssh_and_record_writes_the_worktree_referenc
     assert part.main(["health", "vy-x", "--seconds", "5"]) == 0
     script = calls[-1][2]
     assert calls[-1][:2] == ["ssh", "root@pod"] and script.startswith(". /workspace/env.sh 2>/dev/null; cd /workspace/src && ")
-    assert script.endswith("-m backends.direct.ligero.pod_health --seconds 5.0")
+    assert script.endswith("-m archive.direct.ligero.pod_health --seconds 5.0")
     answer["rc"] = 3
     assert part.main(["health", "vy-x", "--no-bench"]) == 3 and calls[-1][2].endswith("pod_health --no-bench")
 
