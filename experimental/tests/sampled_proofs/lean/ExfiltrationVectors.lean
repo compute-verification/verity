@@ -1,5 +1,5 @@
-import FlockSoundness.Audit.Influence
-import FlockSoundness.Audit.StratifiedMiss
+import Proofs.Flock.Soundness.Audit.Influence
+import Proofs.Flock.Soundness.Audit.StratifiedMiss
 import Mathlib.Algebra.BigOperators.Fin
 
 /-!

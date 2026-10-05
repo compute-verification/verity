@@ -2,8 +2,8 @@
 16-deep checkpoint: route U's `Pouw.NCP.mmWU 128` (the checked values) and the unbiased `Pouw.mmW` over `stackX` /
 `stackY` (retired, kept for comparison).  The pinned result is ``tests/vectors/ncp_lean.json``.
 
-    python verity/protocols/accounting/work/pouw/tests/ncp_lean.py write DIR        # DIR: a copy of verity/protocols/accounting/work/pouw/lean (Mathlib built)
-    (cd DIR && lake build Pouw.Protocol.NCP.RouteU && lake env lean NcpCheck.lean > ncp_lean.out)
+    python verity/protocols/accounting/work/pouw/tests/ncp_lean.py write DIR        # DIR: a copy of verity/Security (Mathlib built)
+    (cd DIR && lake build Definitions.Pouw.NCP.RouteU && lake env lean NcpCheck.lean > ncp_lean.out)
     python verity/protocols/accounting/work/pouw/tests/ncp_lean.py pin DIR/ncp_lean.out DIR
 
 Inputs are derived here (SHAKE256 of fixed labels), so only Lean's output is pinned.
@@ -74,7 +74,7 @@ def lean_arr(rows: list[list[int]]) -> str:
 
 
 def lean_source() -> str:
-    out = ["import Pouw.Protocol.NCP.RouteU", "open Pouw Pouw.NCP", "",
+    out = ["import Definitions.Pouw.NCP.RouteU", "open Pouw Pouw.NCP", "",
            "def ofRows (xs : Array (Array Int)) : Mat := fun i j => (xs.getD i #[]).getD j 0",
            "def ofCols (xs : Array (Array Int)) : Mat := fun l j => (xs.getD j #[]).getD l 0",
            "def signedPerm (pi : Array Nat) (sg : Array Int) : Mat := fun i j => if j < pi.size ∧ i = pi.getD j 0 then sg.getD j 0 else 0",
