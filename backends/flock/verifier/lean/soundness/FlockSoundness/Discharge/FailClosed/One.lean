@@ -27,7 +27,7 @@ given its `DecodesOn` (`hdec`), which the `_dec` forms prove for the verifier's 
 `zk_session_composed` and `zk_session_composedHJ` are `zk_session_sound` and `zk_session_soundHJ`; the four `_custody`
 forms take the record (`hRec`) and draw (`hDraw`) facts from one named assumption (`Assumptions.Zk.RecordCustodyZK`,
 `RecordCustodyZKJ`), and the two `_custody_json` forms the draw fact from the draw file being `flock-verify draw`'s
-(`hdj`). The headlines remain, pinned, as lemmas.
+(`hdj`). The headlines remain as lemmas.
 -/
 
 namespace FlockSoundness.Discharge.FailClosed
