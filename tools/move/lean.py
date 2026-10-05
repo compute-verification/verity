@@ -442,19 +442,19 @@ def merge_locks(m: Map, root: Path, locks: dict, dry: bool):
                 if "pins" in g:
                     g["guarantees"] = g.pop("pins")
         for x in pol.get("assumptions", []):
-            if mp(x, ren) not in sec["assumptions"]:
-                sec["assumptions"].append(mp(x, ren))
+            if mp(x) not in sec["assumptions"]:
+                sec["assumptions"].append(mp(x))
         for x in pol.get("meaning", []):
-            if mp(x, ren) not in sec["meaning"]:
-                sec["meaning"].append(mp(x, ren))
+            if mp(x) not in sec["meaning"]:
+                sec["meaning"].append(mp(x))
         for lay, rule in pol.get("layers", {}).items():
-            sec["layers"][mp(lay, ren)] = {"imports": [mp(x, ren) for x in rule["imports"]],
-                                           "except": [mp(x, ren) for x in rule.get("except", [])], "why": rule["why"]}
+            sec["layers"][mp(lay)] = {"imports": [mp(x) for x in rule["imports"]],
+                                           "except": [mp(x) for x in rule.get("except", [])], "why": rule["why"]}
         for x, why in pol.get("reads_exempt", {}).items():
-            sec["reads_exempt"].setdefault(mp(x, ren), why)
+            sec["reads_exempt"].setdefault(mp(x), why)
         sec["guarantees"].update(pol.get("guarantees", {}))
         for mod, g in pol.get("reads", {}).items():
-            new = mp(mod, ren)
+            new = mp(mod)
             cur = sec["reads"].setdefault(new, {"digest": "", "definitions": {}, "guarantees": []})
             defs = g.get("definitions", {})
             if isinstance(defs, list):
@@ -465,7 +465,7 @@ def merge_locks(m: Map, root: Path, locks: dict, dry: bool):
             cur["guarantees"] = sorted({*cur["guarantees"], *g.get("guarantees", [])})
             cur["digest"] = A.module_digest(cur["definitions"])
         for x, why in pol.get("exempt", {}).items():
-            n = mp(x, ren)
+            n = mp(x)
             if k == "verifier" and x == "FlockRows":
                 code["verifier"]["exempt"][x] = why
             elif k == "pous" and x in ("Grader", "submissions"):
@@ -478,9 +478,9 @@ def merge_locks(m: Map, root: Path, locks: dict, dry: bool):
             if run.get("generate"):
                 rel = os.path.relpath(gen[k], m.proofs)
                 run["generate"] = [a if not a.startswith("scripts/") else f"{rel}/{a}" for a in run["generate"]]
-            prf["runs"][mp(x, ren)] = run
+            prf["runs"][mp(x)] = run
         for x, ct in pol.get("compile_time", {}).items():
-            prf["compile_time"][mp(x, ren)] = ct
+            prf["compile_time"][mp(x)] = ct
         if up := pol.get("upstream"):
             prf["upstream"]["imports"] = sorted({*prf["upstream"]["imports"], *up.get("imports", [])})
             for w, e in up.get("watch", {}).items():
