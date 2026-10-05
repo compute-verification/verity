@@ -11,9 +11,11 @@ import json
 import math
 import pickle
 import random
+import sys
 import types
 from collections import Counter
 from fractions import Fraction
+from pathlib import Path
 
 import pytest
 
@@ -28,9 +30,12 @@ from verity.protocols.accounting.work.pouw.protocol import Context, DomainError,
 from verity.protocols.accounting.work.pouw.schemes import get
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_c4 as F
-from benchmarks.pouw.pearl_c4 import replay as R
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as W
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
+
+# the device-run replay is a benchmark's (benchmarks/pouw/pearl_c4), imported by name so that its forkserver workers find it
+sys.path.insert(0, str(Path(__file__).resolve().parents[6] / "benchmarks" / "pouw" / "pearl_c4"))
+import replay as R  # noqa: E402
 
 K = 128
 AFTER = Q.LATEST
