@@ -320,6 +320,9 @@ def summarize_dirs(dirs: list[Path]) -> str:
     metrics = {"decode-heavy output tok/s": lambda r: r["throughput"]["output_tps"],
                "decode-heavy total tok/s": lambda r: r["throughput"]["total_tps"],
                "batch-1 TPOT ms": lambda r: r["batch1"]["tpot_ms"]}
+    # Overhead is extra time: control_tps / arm_tps - 1 for throughput, arm_tpot / control_tpot - 1 for TPOT. Bytes are those
+    # hashed per output token: for the decode-heavy workload every prompt token's bytes count too (all hashed over output
+    # tokens); for batch 1 a decode step processes one token, so it is the bytes of one token through every site.
     lines = ["| arm | metric | mean | min..max | overhead vs control (mean, min..max over rounds) | bytes hashed / output token | rounds |",
              "|---|---|---|---|---|---|---|"]
     for a in ARMS:
@@ -331,8 +334,10 @@ def summarize_dirs(dirs: list[Path]) -> str:
                 v, c = f(arms[a]), f(arms["control"])
                 vals.append(v)
                 ovh.append((v / c - 1) * 100 if "TPOT" in name else (c / v - 1) * 100)
-                w = arms[a]["batch1" if "TPOT" in name else "throughput"].get("commit") or {}
-                bpt.append(w.get("bytes_per_output_token", 0))
+                if "TPOT" in name:
+                    bpt.append((arms[a].get("layout") or {}).get("bytes_per_token_step", 0))
+                else:
+                    bpt.append((arms[a]["throughput"].get("commit") or {}).get("bytes_per_output_token", 0))
             if not vals:
                 continue
             lines.append(f"| {a} | {name} | {statistics.mean(vals):.1f} | {min(vals):.1f}..{max(vals):.1f} | "
