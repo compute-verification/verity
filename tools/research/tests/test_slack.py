@@ -1079,6 +1079,18 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 3                                             # a status line reaches the root's poster
 
 
+def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_dirs, capsys):
+    circuits, lean = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "lean")
+    root = fake.add(COORD, text="@circuits @lean the move starts at 7", username="top", bot_id=BOT)
+    assert run(capsys, "send", "--as", "top", "--thread", root["ts"], "--kind", "fyi", "--text", "shard 3/5 passed")[0] == 0
+    assert bells(fake, circuits) == [] and bells(fake, lean) == []                    # a progress note is for the digest
+    note = next(m for m in reversed(fake.messages[COORD]) if m.get("username") == "top" and m is not root)
+    assert slack.tags_of(note["text"]) == ["fyi", slack.QUIET]
+    assert run(capsys, "send", "--as", "top", "--thread", root["ts"], "--kind", "fyi", "--to", "@lean",
+               "--text", "your shard passed")[0] == 0
+    assert bells(fake, circuits) == [] and len(bells(fake, lean)) == 1
+
+
 def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
