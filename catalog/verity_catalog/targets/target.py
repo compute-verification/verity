@@ -3,7 +3,7 @@ the code's name for a subcircuit (``gemm_coordinate(K, semantics)`` with every p
 
 Every proof-system experiment in the campaign proves *this* relation until the target is deliberately re-versioned.
 Another engineer must be able to read this module and state the function without asking anyone; the test
-``tests/proofs/test_target.py`` pins every identity below against the recorded conformance vectors, so a
+``archive/sp1/tests/proofs/test_target.py`` pins every identity below against the recorded conformance vectors, so a
 silent change to the semantics, the family manifest or the program shape fails the suite.
 
 The function
