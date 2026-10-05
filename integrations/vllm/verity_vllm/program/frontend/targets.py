@@ -35,6 +35,7 @@ from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import value_inputs as VI
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import fp8, nvfp4
+from verity_vllm.program.registry import fp8_vocab
 from verity_vllm.program.registry import gemm_bias as GB
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
@@ -361,7 +362,7 @@ def scaled_mm_fp8_block_spec(profile, K: int, N: int, G: int, scale: str | None 
     """The registered Definition of the blockwise FP8 linear on one token row on the declared target, under the scale construction
     `scale` (default the target's `effective_fp8_scale_construction()`): `ScaledMmFp8BlockSharedScale_v1{K,N,G}` / `ScaledMmFp8Block_v1`
     on hopper, the version 3 forms `{K,N,G,DOT}` over the target's `fp8_block_dot` elsewhere; refused by name where there is none."""
-    return fp8.block_gemm(K, N, G, scale or profile.effective_fp8_scale_construction(), fp8_block_dot(profile))
+    return fp8_vocab.block_gemm(K, N, G, scale or profile.effective_fp8_scale_construction(), fp8_block_dot(profile))
 
 
 def _fp4_dot(profile):

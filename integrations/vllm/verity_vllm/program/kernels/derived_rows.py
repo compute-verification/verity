@@ -671,7 +671,7 @@ def fp8_group_quant_row(x: np.ndarray, *, G: int = 128) -> tuple[np.ndarray, np.
     bytes, sx (K/G,) f32 words).  Per group: `s = fmaxf-fold(eps=1e-10f, |f32(x_e)|) / 448.0f` (an exact max -- fmaxf drops a NaN
     operand -- then an IEEE div.rn.f32), `xq[e] = cvt.rn.satfinite.e4m3(fminf(fmaxf(f32(x[e]) / s, -448), 448))` (a true division; a NaN
     quotient is dropped by fmaxf -> -448 -> 0xFE, the kernel's word)."""
-    from verity_vllm.program.registry.fp8 import np_f32_to_e4m3_sat          # the Definition's own vectorised `cvt.rn.satfinite.e4m3` twin
+    from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat     # the Definition's own vectorised `cvt.rn.satfinite.e4m3` twin
     x = np.asarray(x, dtype=np.uint16).reshape(-1)
     K = x.size
     if K % G:
