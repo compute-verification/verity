@@ -167,8 +167,6 @@ from verity_catalog.silicon.models import (ADA_E4M3_M16N8K32, BLACKWELL_SM120_E4
                                   HOPPER_E4M3_K32, BlockScaledAlignAdd)
 from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16, Pipeline
 
-from verity_sp1.proofs.families import TC_AMPERE_BF16_NAME, TC_AMPERE_BF16_VERSION, TC_BF16_NAME_PREFIX, TC_BF16_VERSION
-
 __all__ = [
     "BF16_HOPPER",
     "DISCREPANCY_LOG",
@@ -185,9 +183,21 @@ __all__ = [
     "K1536_VECTOR",
     "NVFP4_SM120",
     "TARGETS",
+    "TC_AMPERE_BF16_NAME",
+    "TC_AMPERE_BF16_VERSION",
+    "TC_BF16_NAME_PREFIX",
+    "TC_BF16_VERSION",
     "TC_VECTORS",
     "Target",
 ]
+
+#: The tensor-core gate families' names and versions (the frozen SP1 backend's ``verity_sp1.proofs.families`` builds them).
+TC_AMPERE_BF16_NAME = "veritor.tc-ampere-bf16"
+#: ``veritor.tc-bf16.<pipeline>@1``: the same vocabulary on another BF16 pipeline.
+TC_BF16_NAME_PREFIX = "veritor.tc-bf16."
+TC_BF16_VERSION = "1"
+#: The version whose ``f32_to_bf16`` canonicalises NaN to ``0x7FC0``.
+TC_AMPERE_BF16_VERSION = "1"
 
 #: Repository-relative paths of the pinned source-close reference and of the discrepancy log.
 HAWKEYE_PIN = "catalog/verity_catalog/silicon/hawkeye/PIN.json"
