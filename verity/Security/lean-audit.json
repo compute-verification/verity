@@ -1,6 +1,9 @@
 {
  "roots": ["Definitions", "Specs"],
  "proved_in": ["Proofs"],
+ "exempt": {
+  "Specs.Flock.Guarantees.EndToEnd": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEnd` builds it, and its guarantee's record holds it (`meaning`), until those definitions move into `Definitions`"
+ },
  "assumptions": [
   "Specs.Core.Assumptions",
   "Specs.Nci.Assumptions",
@@ -52,7 +55,8 @@
   "Proofs.Flock.Verifier",
   "Flock",
   "Proofs.Flock.Level3",
-  "Proofs.Flock.Soundness"
+  "Proofs.Flock.Soundness",
+  "Specs.Flock.Guarantees.EndToEnd"
  ],
  "layers": {
   "Definitions.Core": {
@@ -226,7 +230,8 @@
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Specs.Flock.Guarantees.EndToEnd": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
   "Flock.HmNets.col_and": {
@@ -31304,6 +31309,9 @@
    ],
    "assumptions": [],
    "type_hash": "eea8fb0951714337a6bfb8a4028c2a641a8eca7dcd71f91f9cf039458a8286ee"
+  },
+  "Flock.SecurityProofs.EndToEnd": {
+   "owner": "@proofs"
   }
  },
  "reads": {
