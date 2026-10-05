@@ -4,7 +4,7 @@
         exit 0  every important package (verity, verity_vllm, hidden_gpu, research) resolves from ROOT
         exit 3  PRECHECK_FAIL_SOURCE_IDENTITY -- the first line of stderr names the class, the following lines each mismatch
 
-The tree of record is the VERITY REPO ROOT: the checkout (or the shipped `git archive`, <root>/src/<sha>/) holding `.`,
+The tree of record is the VERITY REPO ROOT: the checkout (or the shipped `git archive`, <root>/src/<sha>/) holding `verity`,
 `tools/research/src` and `integrations/vllm`.  It defaults to THIS FILE'S tree (never an environment default): the runner that imports this
 module IS the tree that must run.  `--tree` accepts the repo root or the integration root (`integrations/vllm`, what row_pod.sh passes) and
 normalises to the repo root.  `VERITY_TREE`, when set, must name the same tree (either form) -- a caller that exports another tree is the
@@ -56,7 +56,7 @@ SourceIdentityError = _sid.SourceIdentityError
 HIDDEN_GPU_CANDIDATES = ("integrations/vllm/out/gen/r9/cmt-hidden/src/hidden_gpu.py", "integrations/vllm/verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py")
 # package name -> (import name, the sys.path entry it must resolve from, relative to the repo root)
 PACKAGE_ROOTS = {
-    "verity": ("verity", "."),                       # core: verity.primitives.circuits, verity_catalog.silicon, verity_sp1.proofs
+    "verity": ("verity", "."),                       # core: verity.primitives, verity.protocols
     "verity_vllm": ("verity_vllm", "integrations/vllm"),
     "research": ("research", "tools/research/src"),                    # the runner/telemetry package of the tree of record
 }
