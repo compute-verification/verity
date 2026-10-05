@@ -117,9 +117,10 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-_VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity_catalog.silicon.silicon from the shipped tree
-if _VERITY_SRC.is_dir() and str(_VERITY_SRC) not in sys.path:
-    sys.path.insert(0, str(_VERITY_SRC))
+_VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity_catalog.silicon.silicon (and verity) from the shipped tree
+for _src in (_VERITY_SRC, _VERITY_SRC / "catalog"):
+    if _src.is_dir() and str(_src) not in sys.path:
+        sys.path.insert(0, str(_src))
 import k32  # noqa: E402
 import model5  # noqa: E402
 
