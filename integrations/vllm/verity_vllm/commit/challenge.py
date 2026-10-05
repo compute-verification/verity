@@ -1,8 +1,8 @@
-"""The integration's one challenge module: every draw over committed values, on `verity.randomness`.
+"""The integration's one challenge module: every draw over committed values, on `verity.primitives.randomness`.
 
 Today's derivations hash the run root, the prover's own commitment (Fiat-Shamir), and their outputs are recorded in
 verdicts.  They stay byte-identical while `LEGACY` is true; decision 42 retires them at the re-baseline epoch.  The
-non-legacy forms draw through `verity.randomness.derive` from a `source` that is a beacon round published after the
+non-legacy forms draw through `verity.primitives.randomness.derive` from a `source` that is a beacon round published after the
 run root was registered, or an auditor key, with the run root and the draw's other bindings as context:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
@@ -26,8 +26,8 @@ from typing import Any, TypeVar
 
 import numpy as np
 
-from verity.randomness import Key, derive
-from verity_sampled_proofs.law import ReplayUnit, Stage, TwoStageLaw, select_verification_units, vu_key
+from verity.primitives.randomness import Key, derive
+from verity_experimental.sampled_proofs.law import ReplayUnit, Stage, TwoStageLaw, select_verification_units, vu_key
 
 #: Every derivation's default until the re-baseline epoch (decision 42).
 LEGACY = True
