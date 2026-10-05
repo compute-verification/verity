@@ -615,6 +615,29 @@ def test_what_a_child_reads_outside_the_inputs_fails_the_suite_and_names_the_tes
     assert p.returncode == 0 and "cached  pkg" in p.stdout, p.stdout
 
 
+def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds_while_it_is_unchanged(tmp_path):
+    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `fixtures/artifacts.json` for
+    repo replicas: in the test's process or a child's, that read fails no suite, and the test's own read is watched."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    (root / "fixtures").mkdir()
+    (root / "fixtures" / "artifacts.json").write_text("{}\n")
+    (tests / "test_registry.py").write_text(
+        "import os, subprocess, sys\n\ndef test_registry():\n"
+        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'fixtures', 'artifacts.json')\n"
+        "    open(p).read()\n"
+        "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "registry")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
+    assert "cached  pkg" in _run_suite(root, tmp_path).stdout
+    (root / "fixtures" / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout
+
+
 def test_a_fork_a_collection_or_a_child_whose_tracer_fails_fails_the_suite_under_xdist(tmp_path):
     """In xdist workers too: a forked child's read (it ends through `os._exit`), one made while a module is collected, and a child
     Python whose tracer can't start, so that nothing vouches for what it read."""
