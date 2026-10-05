@@ -1,6 +1,8 @@
-import FlockSoundness.Protocol.Discharge.ZkHidden.View
+import FlockSoundness.Protocol.Discharge.FailClosed.Composed
+import FlockSoundness.Protocol.Discharge.FailClosed.ZkHidden
+import FlockSoundness.Protocol.Discharge.FailClosed.Exec
 import FlockSoundness.Protocol.Discharge.Canonical.Session
-import FlockSoundness.Protocol.Discharge.Canonical.Verifier
+import FlockSoundness.Discharge.Canonical.Verifier
 
 /-!
 # Soundness: one theorem over everything flock-verify accepts

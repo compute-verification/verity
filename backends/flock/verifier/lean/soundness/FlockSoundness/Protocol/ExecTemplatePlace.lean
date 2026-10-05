@@ -1,4 +1,4 @@
-import FlockSoundness.Protocol.ExecTyped
+import FlockSoundness.Protocol.ExecTemplate
 import FlockSoundness.Protocol.ComposePlace
 
 /-!
@@ -123,13 +123,121 @@ namespace Typed
 
 end Typed
 
+/-- With distinct rows, the entries at row `c` are the one `find?` returns. -/
+theorem filter_fst_eq_find? {β : Type} : ∀ {l : List (ℕ × β)}, (l.map (·.1)).Nodup → ∀ c,
+    l.filter (fun e => e.1 = c) = (l.find? (·.1 == c)).toList
+  | [], _, _ => rfl
+  | a :: l, hn, c => by
+    rw [List.map_cons, List.nodup_cons] at hn
+    by_cases ha : a.1 = c
+    · rw [List.filter_cons_of_pos (by simpa using ha), List.find?_cons_of_pos (by simpa using ha)]
+      rw [List.filter_eq_nil_iff.2 fun e he h => hn.1 (by
+        rw [List.mem_map]; exact ⟨e, he, by simpa [← ha] using h⟩)]
+      rfl
+    · rw [List.filter_cons_of_neg (by simpa using ha), List.find?_cons_of_neg (by simpa using ha)]
+      exact filter_fst_eq_find? hn.2 c
+
+theorem filter_filterMap_fst {β γ : Type} (l : List (ℕ × β)) (f : ℕ × β → Option (ℕ × γ))
+    (hf : ∀ e y, f e = some y → y.1 = e.1) (c : ℕ) :
+    (l.filterMap f).filter (fun y => y.1 = c) = (l.filter (fun e => e.1 = c)).filterMap f := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    rw [List.filterMap_cons, List.filter_cons]
+    cases hfa : f a with
+    | none =>
+      simp only
+      rw [ih]
+      split <;> simp [hfa]
+    | some y =>
+      have hy := hf a y hfa
+      simp only [List.filter_cons, hy]
+      split <;> simp [hfa, ih]
+
 /-! ## The typed tail's rows -/
+
+/-- The bound-input entries at unit column `c`, as the columns they read (`G` places them): its self entry and its
+source's. -/
+def bindCols (G : ℕ → ℕ) (u : D) (c : ℕ) : List ℕ :=
+  match u.delta.find? (·.1 == c) with
+  | some (_, some s) => G c :: s.map G
+  | _ => []
+
+theorem bind_at (G : ℕ → ℕ) (u : D) (hn : (u.delta.toList.map (·.1)).Nodup) (c : ℕ) :
+    (((u.delta.filterMap fun (r, src) => src.map (r, ·.toArray)).toList.filter fun e => e.1 = c).flatMap
+      fun rs => G rs.1 :: rs.2.toList.map G) = bindCols G u c := by
+  rw [Array.toList_filterMap, filter_filterMap_fst _ _ (fun e y h => by
+    obtain ⟨r, src⟩ := e
+    cases src with
+    | none => cases h
+    | some s => cases h; rfl), filter_fst_eq_find? hn, Array.find?_toList]
+  unfold bindCols
+  cases hf : u.delta.find? (·.1 == c) with
+  | none => rfl
+  | some e =>
+    obtain ⟨r, src⟩ := e
+    have hr : r = c := by simpa using Array.find?_some hf
+    subst hr
+    cases src with
+    | none => rfl
+    | some s => simp
 
 /-! ## A generated read's lookup reads what `readSide` reads -/
 
 /-! ## A part's placed net -/
 
+/-- **A part's placed net**: its callee's derived rows (`netOfD`), with no lookup and no read, or a generated read's
+lookup from the table the verifier holds for its read (`words`, its `u32` words). -/
+def PartNet (words : String → Option (Array ℕ)) (d : D) (net : Net) : Prop :=
+  (∃ nm, Typed.netOfD d nm = .ok { net with lookup := none }) ∧
+    ((net.lookup = none ∧ d.reads = #[]) ∨
+      ∃ r tb, d.reads.toList = [r] ∧ net.lookup = some ⟨tb, r.n, r.lo, r.k, r.prod0, r.loTop⟩ ∧
+        (words r.table).getD #[] = (Array.range (tb.size / 4)).map (fun i => rd32 tb (4 * i)) ∧
+        ((words r.table).getD #[]).size = 2 ^ r.n ∧ r.lo ≤ r.n)
+
 /-! ## The facts T3 reads -/
+
+/-- **The accepted template statement's layout, as T3 reads it**, for the class's unit `u`: the ranges (disjoint, in the
+block, of their nets' slots, `G · per_vu` slots each, one per net); the root (its net `Typed.rootOf u`'s, one slot per
+VU); each part `i` (its net that of its callee `done[u.parts[i].1]`, not the root's or the rows', at its slot `q_i` of
+that net's, no two parts at one slot); the rows' circuits (not the root); Δ (the flat entries, whose other rows are input
+bits of the rows' circuits, then the typed tail); the pin (a net slot's constant, whose row reads itself); and the
+block's size. -/
+structure TemplateLayout (st : Stmt) (tb : TypedBlock) (words : String → Option (Array ℕ)) (done : Array D) (u : D) :
+    Prop where
+  typed : st.c.typed = some tb
+  disj : st.c.ranges.toList.Pairwise Apart
+  bound : ∀ r ∈ st.c.ranges.toList, r.start + spanH r ≤ 2 ^ st.c.kLog
+  slotLog : ∀ r ∈ st.c.ranges.toList, ∀ i, r.kind = .net i → r.slotLog = (st.c.nets.getD i default).2.unitLog
+  count : ∀ r ∈ st.c.ranges.toList, ∀ n, r.kind = .net n → r.count = st.c.g * st.c.perVu.getD n 0
+  one_range : ∀ n < st.c.nets.size, (st.c.ranges.filter (·.kind == Kind.net n)).size = 1
+  fit : ∀ i, (st.c.nets.getD i default).2.constPos < 2 ^ (st.c.nets.getD i default).2.unitLog
+  unitNet : st.c.unitNet < st.c.nets.size
+  root_perVu : st.c.perVu.getD st.c.unitNet 0 = 1
+  root : ∃ nm, Typed.netOfD (Typed.rootOf u) nm = .ok st.c.unit
+  own : tb.own = u.size
+  inCols : tb.inCols = u.inCols
+  bind : tb.bind = u.delta.filterMap fun (r, src) => src.map (r, ·.toArray)
+  cross : tb.cross = Typed.crossOf u
+  /-- the unit reads no table in its own rows (`templateOf`) -/
+  reads_past : ∀ r ∈ u.reads.toList, u.size ≤ r.prod0
+  parts_size : tb.parts.size = u.parts.size
+  part : ∀ i (hi : i < tb.parts.size) (hu : i < u.parts.size), tb.parts[i].2.2 = u.parts[i].2 ∧
+    tb.parts[i].1 < st.c.nets.size ∧ tb.parts[i].1 ≠ st.c.unitNet ∧ tb.parts[i].1 ≠ st.c.shaNet ∧
+    tb.parts[i].1 ≠ st.c.hmNet ∧ tb.parts[i].2.1 < st.c.perVu.getD tb.parts[i].1 0 ∧
+    PartNet words (done.getD u.parts[i].1 default) (st.c.nets.getD tb.parts[i].1 default).2
+  part_inj : ∀ i (hi : i < tb.parts.size) k (hk : k < tb.parts.size), tb.parts[i].1 = tb.parts[k].1 →
+    tb.parts[i].2.1 = tb.parts[k].2.1 → i = k
+  shaNet : st.c.shaNet < st.c.nets.size ∧ st.c.shaNet ≠ st.c.unitNet
+  hmNet : st.c.hmNet < st.c.nets.size ∧ st.c.hmNet ≠ st.c.unitNet
+  delta : TailQ st.c st.pin tb (st.da, st.db)
+  deltaIn : ∀ x, DeltaIn st.c x → ∃ n, (n = st.c.shaNet ∨ n = st.c.hmNet) ∧
+    ∃ s off, AtSlot st.c n s off x ∧ off < (st.c.nets.getD n default).2.inWords * Flock.WORD
+  pin : ∃ rp ∈ st.c.ranges.toList, ∃ ip, rp.kind = .net ip ∧ 0 < rp.count ∧
+    st.pin = rp.start + (st.c.nets.getD ip default).2.constPos ∧ ConstRow (st.c.nets.getD ip default).2
+  kLog : st.c.kLog ≤ 32
+  kLog6 : 6 ≤ st.c.kLog
+  m : st.m = st.c.kLog + st.nbl
 
 /-- **The ranges' entry at a net slot's column**: the net's entry there, within the slot. -/
 theorem rangesEntry_at {st : Stmt} (hd : st.c.ranges.toList.Pairwise Apart) {n s off x : ℕ}
@@ -153,6 +261,16 @@ namespace TemplateLayout
 variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D} {st : Stmt} {tb : TypedBlock}
 
+set_option hygiene false in
+local notation "𝒖" => done.getD unit default
+
+theorem range (T : TemplateLayout st tb words done 𝒖) {n : ℕ} (hn : n < st.c.nets.size) :
+    st.c.rangeOf n ∈ st.c.ranges.toList ∧ (st.c.rangeOf n).kind = .net n ∧
+      (st.c.rangeOf n).count = st.c.g * st.c.perVu.getD n 0 ∧
+      (st.c.rangeOf n).slotLog = (st.c.nets.getD n default).2.unitLog := by
+  obtain ⟨hm, hk, -⟩ := rangeOf_spec (T.one_range n hn)
+  exact ⟨hm, hk, T.count _ hm _ hk, T.slotLog _ hm _ hk⟩
+
 /-! ## Where the typed tail writes -/
 
 /-! ## Δ at a unit column's row -/
@@ -168,6 +286,9 @@ namespace TemplateLayout
 
 variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D} {st : Stmt} {tb : TypedBlock}
+
+set_option hygiene false in
+local notation "𝒖" => done.getD unit default
 
 end TemplateLayout
 

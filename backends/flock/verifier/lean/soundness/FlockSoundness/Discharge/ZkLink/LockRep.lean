@@ -45,18 +45,6 @@ end Reindex
 /-! ## The index -/
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-theorem getZ_lev (r : ℕ) (i : IZ F D) (s : ℕ) : getZ r i (s + 4) = getRep r i.lev s := by
-  simp [getZ]
-
-omit [Field F] [Fintype F] [DecidableEq F] in
-theorem getZ_off (r : ℕ) (lev lev' : IRep F D) (p t : Option (Oracle F × Cap D)) (s : ℕ)
-    (hs : ∀ s', s' + 4 ≠ s) : getZ r ⟨lev, p, t⟩ s = getZ r ⟨lev', p, t⟩ s := by
-  have : s < 4 := by
-    by_contra h
-    exact hs (s - 4) (by omega)
-  simp [getZ, this]
-
-omit [Field F] [Fintype F] [DecidableEq F] in
 theorem getPair_empty_none (s : ℕ) :
     Lock.getPair (getZ 0) (getZ 1) ((IZ.empty, IZ.empty) : IZ F D × IZ F D) s = none := by
   simp [Lock.getPair, getZ, IZ.empty, getRep]

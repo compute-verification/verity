@@ -108,18 +108,6 @@ theorem eqAt_two_mul_add_one {R : Type} [CommRing R] {n : ℕ} (r : Fin (n + 1) 
   have := eqAt_two_mul_add r y 1 (by norm_num)
   simpa using this
 
-/-- Sums over `2^(n+1)` indices by pairs `(2y, 2y+1)`. -/
-theorem sum_range_pairs {M : Type} [AddCommMonoid M] (n : ℕ) (f : ℕ → M) :
-    ∑ x ∈ Finset.range (2 ^ (n + 1)), f x =
-      ∑ y ∈ Finset.range (2 ^ n), (f (2 * y) + f (2 * y + 1)) := by
-  rw [← Fin.sum_univ_eq_sum_range, ← Fin.sum_univ_eq_sum_range (fun y => f (2 * y) + f (2 * y + 1))]
-  have h : 2 ^ n * 2 = 2 ^ (n + 1) := (pow_succ 2 n).symm
-  rw [← (finCongr h).sum_comp, sum_fin_mul]
-  refine Finset.sum_congr rfl fun y _ => ?_
-  rw [Fin.sum_univ_two]
-  simp only [finCongr_apply, Fin.val_cast, finProdFinEquiv_apply_val, Fin.val_zero, Fin.val_one]
-  congr 2 <;> ring
-
 /-- Fold every bit, lowest first, by the coins `ρ`. -/
 def foldLoAll : {n : ℕ} → (Fin n → F) → (ℕ → F) → (ℕ → F)
   | 0, _, u => u
@@ -239,13 +227,6 @@ theorem value_residualRounds_coin_le : ∀ (n : ℕ) (req : Fin n → F) (claim 
       exact value_residualRounds_coin_le n _ _ (fun v => P (Fin.cons ρ v))
 
 /-! ## The nodes, and polynomials through them -/
-
-/-- The skip nodes `S` (§9). -/
-noncomputable def nodeS (A : Arith F K) (hA : A.Correct) : Fin 64 → F := hA.nodes.choose
-
-/-- The output coset `Λ` (§9.2). -/
-noncomputable def nodeΛ (A : Arith F K) (hA : A.Correct) : Fin 64 → F :=
-  hA.nodes.choose_spec.choose
 
 theorem nodes_spec (A : Arith F K) (hA : A.Correct) :
     Function.Injective (nodeS A hA) ∧ Function.Injective (nodeΛ A hA) ∧
@@ -520,14 +501,6 @@ theorem prCoin_zc3_le (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 13 
           ∑ x' : Fin (2 ^ (S.m - 13)), d x' * eqAt rs x'.val = 0) :=
         prCoin_mono fun rs h => by rw [← hsplit]; exact h s₀
     _ ≤ ((S.m - 13 : ℕ) : ℝ≥0∞) / Fintype.card F := prCoin_eqSum_le d x₀' hd
-
-/-- `Pc(z)` as the verifier computes it from `round1_c` (Z5). -/
-def pcOf (A : Arith F K) (msg : (Fin 64 → F) × (Fin 64 → F)) (z : F) : F :=
-  ∑ i, A.lagΛ z i * msg.2 i
-
-/-- The zerocheck's starting claim `Pcomb(z) + Pc(z)` (Z5). -/
-def claim0 (A : Arith F K) (msg : (Fin 64 → F) × (Fin 64 → F)) (z : F) : F :=
-  ∑ i, A.combW z i * (msg.1 i + msg.2 i) + pcOf A msg z
 
 /-- **Z5, the skip point.** If the error does not vanish at some skip node, then at a live `z`
 either the prover's `P_c` is off the true one or its `P_ab = Pcomb + P_c` is, since `Pcomb`

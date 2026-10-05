@@ -1,5 +1,7 @@
 import FlockSoundness.Discharge.HiddenExec.Placed
 import FlockSoundness.Protocol.Discharge.HiddenExec.Sites
+import FlockSoundness.Discharge.Hidden.Theorems
+import FlockSoundness.Discharge.HiddenExec.Statements
 
 /-!
 # The sites of a one-table hidden-output session

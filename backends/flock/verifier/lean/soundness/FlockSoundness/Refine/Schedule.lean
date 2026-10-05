@@ -1,6 +1,5 @@
-import FlockSoundness.Model.Compiled
 import Flock.Schedule
-import FlockSoundness.Protocol.Refine.Schedule
+import FlockSoundness.Protocol.Model.Compiled
 
 /-!
 # The executable's schedule, read as the model's
@@ -15,6 +14,14 @@ schedule.
 namespace FlockSoundness.Refine
 
 open Model Accounting
+
+/-- An executable level as the model's. -/
+def levelOf (lv : Flock.Level) : Accounting.Level :=
+  { logInvRate := lv.rate, queries := lv.q, logCols := lv.cols, lanes := lv.lanes }
+
+/-- An executable schedule as the model's. -/
+def schedOf (s : Flock.Schedule) : Accounting.Schedule :=
+  { m := s.m, k0 := s.k0, levels := s.levels.toList.map levelOf, ext := s.ext }
 
 /-- One level's executable quantities are the model's: the strata of its queries (`strata`), its cap depth
 (`capDepth`), its path length (`pathLen`), its consistency-coin count (`ceilLog2`), and its codeword length

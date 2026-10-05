@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.PlaysCoin.Statements
+import FlockSoundness.Protocol.Discharge.PlaysCoin.Statements
 
 /-!
 # A run's coin steps

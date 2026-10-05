@@ -35,32 +35,7 @@ namespace Game
 
 variable {α β γ : Type}
 
-@[simp] theorem bind_ret (a : α) (f : α → Game β) : (Game.ret a).bind f = f a := rfl
-
-@[simp] theorem bind_send (M : Type) (k : M → Game α) (f : α → Game β) :
-    (Game.send M k).bind f = .send M fun m => (k m).bind f := rfl
-
-@[simp] theorem bind_coin (C : Type) [Fintype C] [Nonempty C] (k : C → Game α)
-    (f : α → Game β) : (Game.coin C k).bind f = .coin C fun c => (k c).bind f := rfl
-
-@[simp] theorem pure_eq (a : α) : (pure a : Game α) = .ret a := rfl
-
-@[simp] theorem bind_eq (g : Game α) (f : α → Game β) : g >>= f = g.bind f := rfl
-
-theorem bind_ret_right (g : Game α) : g.bind .ret = g := by
-  induction g with
-  | ret a => rfl
-  | send M k ih => simp only [bind_send, ih]
-  | coin C k ih => simp only [bind_coin, ih]
-
 /-! ## Strategies and probabilities -/
-
-open Classical in
-/-- The same probability for an optimal, computationally unbounded prover. -/
-noncomputable def value (p : α → Prop) : Game α → ℝ≥0∞
-  | .ret a => if p a then 1 else 0
-  | .send _ k => ⨆ m, value p (k m)
-  | @Game.coin _ C iF _ k => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * value p (k c)
 
 /-- No strategy beats the optimal prover. -/
 theorem prob_le_value (p : α → Prop) : ∀ (g : Game α) (s : Strategy g), prob p g s ≤ value p g
@@ -120,14 +95,6 @@ theorem avg_add {C : Type} [Fintype C] (f g : C → ℝ≥0∞) :
 theorem avg_mul_const {C : Type} [Fintype C] (f : C → ℝ≥0∞) (x : ℝ≥0∞) :
     avg (fun c => f c * x) = avg f * x := by
   simp only [avg, ← mul_assoc, Finset.sum_mul]
-
-theorem prCoin_eq_card {C : Type} [Fintype C] (p : C → Prop) [DecidablePred p] :
-    prCoin p = ((Finset.univ.filter p).card : ℝ≥0∞) / Fintype.card C := by
-  classical
-  unfold prCoin avg
-  rw [ENNReal.div_eq_inv_mul, Finset.card_filter, Nat.cast_sum, Finset.mul_sum]
-  refine Finset.sum_congr rfl fun c _ => ?_
-  by_cases hc : p c <;> simp [hc]
 
 theorem prCoin_mono {C : Type} [Fintype C] {p q : C → Prop} (h : ∀ c, p c → q c) :
     prCoin p ≤ prCoin q := by

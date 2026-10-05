@@ -85,6 +85,4 @@ def fast100 : ℕ → Option Schedule
   | 35 => some (mk 35 6 [22, 19, 16, 13, 10, 7, 4] 4)
   | _ => none
 
-/-- The `d` column of §15, checked against the schedule. -/
-
 end FlockSoundness.Accounting

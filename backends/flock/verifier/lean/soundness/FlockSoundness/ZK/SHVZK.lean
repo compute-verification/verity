@@ -44,10 +44,6 @@ variable {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W S
 
 /-! ## The identity (★) -/
 
-theorem Wr_add (r : Fin 2) (a b a' b' : F) : T.Wr r (a + a') (b + b') = T.Wr r a b + T.Wr r a' b' := by
-  simp only [Wr, map_add]
-  ring
-
 theorem Winv_Wr {r : Fin 2} (hW : Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (a b : F) :
     T.Winv r (T.Wr r a b) = (a, b) :=
   Function.leftInverse_invFun hW.1 (a, b)

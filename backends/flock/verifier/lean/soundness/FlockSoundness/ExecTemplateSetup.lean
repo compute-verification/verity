@@ -1,4 +1,5 @@
 import FlockSoundness.ExecTemplatePlace
+import FlockSoundness.Protocol.ExecTemplateSetup
 
 /-!
 # A typed template's layout, from `Stmt.setupH` (1e for templates, T3)
@@ -675,17 +676,6 @@ theorem rows_netOK {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFa
   · omega
   · exact (netOK_built (parse_built hp)).1
   · exact (netOK_lookup hb).1
-
-theorem starts_size (c : Circuit) : (Typed.starts c).size = c.ports.size := by
-  unfold Typed.starts
-  rw [← Array.foldl_toList]
-  suffices h : ∀ (L : List Port) (acc : Array ℕ × ℕ),
-      (L.foldl (fun (acc : Array ℕ × ℕ) p => (acc.1.push acc.2, acc.2 + p.words)) acc).1.size = acc.1.size + L.length by
-    simpa using h c.ports.toList (#[], 0)
-  intro L
-  induction L with
-  | nil => intro acc; simp
-  | cons p L ih => intro acc; rw [List.foldl_cons, ih]; simp only [Array.size_push, List.length_cons]; omega
 
 /-- **The port a row word's leaf is in** (`copySrc`'s, as `HmRow.delta` finds it) is one of the file's ports, when it has
 one. -/

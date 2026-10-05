@@ -117,6 +117,28 @@ def batchAt : (pre post : List (Game A)) → Ctx fun g => batch (pre ++ g :: pos
 
 end Ctx
 
+theorem ofFn_update {A : Type*} {J : ℕ} (f : Fin J → A) (j : Fin J) (a : A) :
+    List.ofFn (Function.update f j a) = (List.ofFn f).take j ++ a :: (List.ofFn f).drop (j + 1) := by
+  apply List.ext_getElem
+  · simp only [List.length_ofFn, List.length_append, List.length_take, List.length_cons, List.length_drop]
+    omega
+  · intro i h₁ h₂
+    simp only [List.length_ofFn] at h₁
+    rw [List.getElem_ofFn]
+    rcases lt_trichotomy i j with hlt | rfl | hgt
+    · rw [List.getElem_append_left (by simp only [List.length_take, List.length_ofFn]; omega), List.getElem_take, List.getElem_ofFn,
+        Function.update_of_ne (Fin.ne_of_lt (by exact hlt))]
+    · rw [List.getElem_append_right (by simp only [List.length_take, List.length_ofFn]; omega)]
+      simp
+    · rw [List.getElem_append_right (by simp only [List.length_take, List.length_ofFn]; omega), Function.update_of_ne (Fin.ne_of_gt (by exact hgt))]
+      simp only [List.length_take, List.length_ofFn, List.getElem_cons, List.getElem_drop, List.getElem_ofFn]
+      split
+      · omega
+      congr 1
+      ext
+      simp only
+      omega
+
 /-- **A table of a batch over `Fin J`** is a context. -/
 def Ctx.batchFn {A : Type} {J : ℕ} (f : Fin J → Game A) (j : Fin J) :
     Ctx fun g => batch (List.ofFn (Function.update f j g)) :=

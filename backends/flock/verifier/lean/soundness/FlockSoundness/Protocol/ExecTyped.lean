@@ -91,8 +91,42 @@ theorem byteAt_none {p : Port} (hs : p.segs = none) (byte : ℕ) : HmRow.byteAt 
   unfold HmRow.byteAt
   rw [hs]
 
+/-- **A unit column's block position** in VU `g` (`HmRow.delta`'s `col`): the root's own columns in its slot, a part's
+in its layout's slot. -/
+def col (c : Circuit) (tb : TypedBlock) (g u : ℕ) : ℕ :=
+  if u < tb.own then c.slotCol c.unitNet g 0 + u
+  else match tb.parts.toList.reverse.find? (·.2.2 ≤ u) with
+    | some (n, q, b) => c.slotCol n g q + (u - b)
+    | none => 0
+
+/-- **The message bit input `w` of VU `g` copies**: bit `w % 16` of row word `w / 16`. -/
+def copySrc (c : Circuit) (g w : ℕ) : ℕ :=
+  let (leaf, bit) := (w / 16, w % 16)
+  let p := ((List.range (starts c).size).reverse.find? (fun q => (starts c)[q]! ≤ leaf)).getD 0
+  msgCol c g p (2 * (leaf - (starts c)[p]!) + bit / 8) (bit % 8)
+
+/-- VU `g`'s typed entries, in `A` (`side = true`) or `B`. -/
+def tailVU (c : Circuit) (tb : TypedBlock) (side : Bool) (g : ℕ) : List (ℕ × ℕ) :=
+  ((List.range tb.inCols.size).flatMap fun w =>
+      [(col c tb g tb.inCols[w]!, col c tb g tb.inCols[w]!), (col c tb g tb.inCols[w]!, copySrc c g w)]) ++
+    (tb.bind.toList.flatMap fun rs =>
+      (col c tb g rs.1, col c tb g rs.1) :: rs.2.toList.map fun x => (col c tb g rs.1, col c tb g x)) ++
+    tb.cross.toList.flatMap fun e => (if side then e.2.1 else e.2.2).toList.map fun x => (col c tb g e.1, col c tb g x)
+
+/-- **The typed tail**: every VU's typed entries, in `A` (`side = true`) or `B`. -/
+def tail (c : Circuit) (tb : TypedBlock) (side : Bool) : List (ℕ × ℕ) := (List.range c.g).flatMap (tailVU c tb side)
+
 end Typed
 
 /-! ## `HmRow.delta` for a typed template -/
+
+theorem run_bind_pair {P : Array (ℕ × ℕ) → Prop} {Q : Array (ℕ × ℕ) × Array (ℕ × ℕ) → Prop} {m : Id (Array (ℕ × ℕ))}
+    {k : Array (ℕ × ℕ) → Id (Array (ℕ × ℕ) × Array (ℕ × ℕ))} (hm : P (Id.run m))
+    (hk : ∀ d, P d → Q (Id.run (k d))) : Q (Id.run (m >>= k)) := hk _ hm
+
+/-- Δ's pair is the flat entries `d` (`delta_split`'s forms), then the typed tail on each side. -/
+def TailQ (c : Circuit) (pin : ℕ) (tb : TypedBlock) (r : Array (ℕ × ℕ) × Array (ℕ × ℕ)) : Prop :=
+  ∃ d : Array (ℕ × ℕ), ExtL (constPairs c pin) (DeltaIn c) d ∧
+    r.1.toList = d.toList ++ Typed.tail c tb true ∧ r.2.toList = d.toList ++ Typed.tail c tb false
 
 end FlockSoundness

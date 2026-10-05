@@ -60,6 +60,12 @@ end TabSpec
 
 /-! ## The session -/
 
+theorem ofFn_split {T₀ : Type*} {J : ℕ} (f : Fin J → T₀) (j : Fin J) :
+    List.ofFn f = (List.ofFn f).take j ++ f j :: (List.ofFn f).drop (j + 1) := by
+  have h := List.take_append_drop (j : ℕ) (List.ofFn f)
+  rw [List.drop_eq_getElem_cons (by simp), List.getElem_ofFn] at h
+  exact h.symm
+
 /-! ## Per table: the extractor's probabilities and the knowledge bound -/
 
 end FlockSoundness

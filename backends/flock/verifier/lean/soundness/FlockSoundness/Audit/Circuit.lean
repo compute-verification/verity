@@ -29,11 +29,6 @@ inputs (`Partition.Correct`): evaluate `u`'s gates in order, reading every other
 
 namespace FlockSoundness.Audit
 
-theorem xorSum_congr {ι : Type} {l : List ι} {v w : ι → Bool} (h : ∀ x ∈ l, v x = w x) :
-    xorSum l v = xorSum l w := by
-  unfold xorSum
-  rw [List.map_congr_left h]
-
 theorem xorSum_map {ι κ : Type} (l : List ι) (f : ι → κ) (v : κ → Bool) :
     xorSum (l.map f) v = xorSum l (v ∘ f) := by
   unfold xorSum
@@ -43,38 +38,11 @@ namespace Op
 
 variable {N : ℕ}
 
-theorem apply_congr (o : Op N) {v w : Fin N → Bool} (h : ∀ x ∈ o.args, v x = w x) :
-    o.apply v = o.apply w := by
-  cases o
-  case row a b =>
-    simp only [apply]
-    rw [xorSum_congr fun x hx => h x (List.mem_append_left _ hx),
-      xorSum_congr fun x hx => h x (List.mem_append_right _ hx)]
-  all_goals simp_all [args, apply]
-
 end Op
 
 namespace Circuit
 
 variable (C : Circuit)
-
-theorem run_eq (fix : Fin C.N → Option Bool) (g : Fin C.N) :
-    C.run fix g = match fix g with
-      | some b => b
-      | none => (C.op g).apply (C.run fix) := by
-  rw [run]
-  cases fix g with
-  | some b => rfl
-  | none =>
-      exact Op.apply_congr _ fun x hx => by simp [C.topo g x hx]
-
-theorem run_fixed {fix : Fin C.N → Option Bool} {g : Fin C.N} {b : Bool} (h : fix g = some b) :
-    C.run fix g = b := by
-  rw [run_eq, h]
-
-theorem run_free {fix : Fin C.N → Option Bool} {g : Fin C.N} (h : fix g = none) :
-    C.run fix g = (C.op g).apply (C.run fix) := by
-  rw [run_eq, h]
 
 /-- The circuit's evaluation on inputs `a`. -/
 def eval (a : Fin C.N → Bool) : Fin C.N → Bool :=
@@ -99,12 +67,6 @@ namespace Partition
 
 variable {C : Circuit} {n : ℕ} (P : Partition C n)
 
-theorem mem_committed_of_read {g h : Fin C.N} (hg : g ∈ (C.op h).args) (hne : P.unit h ≠ P.unit g) :
-    g ∈ P.committed := by
-  classical
-  simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and]
-  exact Or.inr (Or.inr ⟨h, hg, hne⟩)
-
 theorem mem_committed_of_output {g : Fin C.N} (hg : g ∈ C.outputs) : g ∈ P.committed := by
   classical
   simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and]
@@ -114,18 +76,6 @@ theorem mem_committed_of_input {g : Fin C.N} (hg : (C.op g).isInput = true) : g 
   classical
   simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and]
   exact Or.inl hg
-
-theorem localEval_of_mem (X : Fin C.N → Bool) {u : Fin n} {g : Fin C.N} (h : P.unit g = some u) :
-    P.localEval X u g = (C.op g).apply (P.localEval X u) :=
-  C.run_free (by simp [h])
-
-theorem localEval_of_not_mem (X : Fin C.N → Bool) {u : Fin n} {g : Fin C.N}
-    (h : P.unit g ≠ some u) : P.localEval X u g = X g :=
-  C.run_fixed (by simp [h])
-
-theorem mem_wrong {X : Fin C.N → Bool} {u : Fin n} : u ∈ P.wrong X ↔ ¬ P.Correct X u := by
-  classical
-  simp [wrong]
 
 open Classical in
 /-- The units holding an ancestor of some wire in `T`. -/
@@ -187,31 +137,6 @@ every committed wire carries its value in the circuit's evaluation. -/
 theorem compose (X a : Fin C.N → Bool) (hin : C.InputsAgree X a) (h : P.wrong X = ∅) :
     ∀ g ∈ P.committed, X g = C.eval a g :=
   fun g hg => P.compose_cone X a P.committed hin (by simp [h]) g hg hg
-
-theorem localEval_congr {X Y : Fin C.N → Bool} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g = Y g) :
-    ∀ m (g : Fin C.N), g.val = m → P.unit g = some u → P.localEval X u g = P.localEval Y u g := by
-  classical
-  intro m
-  induction m using Nat.strong_induction_on with
-  | _ m ih =>
-  intro g hgm hu
-  rw [P.localEval_of_mem X hu, P.localEval_of_mem Y hu]
-  refine Op.apply_congr _ fun x hx => ?_
-  by_cases hxu : P.unit x = some u
-  · exact ih x.val (hgm ▸ C.topo g x hx) x rfl hxu
-  · rw [P.localEval_of_not_mem X hxu, P.localEval_of_not_mem Y hxu]
-    refine hXY x ?_
-    simp only [io, Finset.mem_filter]
-    exact ⟨P.mem_committed_of_read hx (by rw [hu]; exact Ne.symm hxu), Or.inr ⟨g, hu, hx⟩⟩
-
-/-- A unit's correctness depends only on its committed inputs and outputs. -/
-theorem correct_congr {X Y : Fin C.N → Bool} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g = Y g)
-    (hY : P.Correct Y u) : P.Correct X u := by
-  classical
-  intro g hg hu
-  have hio : g ∈ P.io u := by simp only [io, Finset.mem_filter]; exact ⟨hg, Or.inl hu⟩
-  rw [hXY g hio, P.localEval_congr hXY g.val g rfl hu]
-  exact hY g hg hu
 
 /-! ## Refinement -/
 

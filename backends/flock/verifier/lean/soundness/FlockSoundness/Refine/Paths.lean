@@ -17,56 +17,9 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## SHA-512 digests -/
 
-theorem sha512_size (msg : ByteArray) : (Sha512.hash msg).size = 64 := by
-  unfold Sha512.hash
-  simp only [Id.run]
-  exact Array.size_ofFn
-
 /-! ## The word encoding is injective -/
 
-theorem rowBytes_data (row : Array F128) : (MerkleScheme.rowBytes row).data.toList = colBytes row.toList := by
-  unfold MerkleScheme.rowBytes
-  rw [← Array.foldl_toList]
-  have : ∀ (L : List F128) (out : ByteArray), (L.foldl F128.pushBytes out).data.toList =
-      out.data.toList ++ colBytes L := by
-    intro L
-    induction L with
-    | nil => intro out; simp [colBytes]
-    | cons a L ih =>
-        intro out
-        rw [List.foldl_cons, ih, F128.pushBytes, ByteArray.data_append, Array.toList_append]
-        simp [colBytes]
-  rw [this]
-  rfl
-
 /-! ## The model's hash and encodings -/
-
-theorem toDig_val {b : ByteArray} (h : b.size = 64) : (toDig b).1 = b := by simp [toDig, h]
-
-theorem bytes_of_list (b : ByteArray) : (⟨b.data.toList.toArray⟩ : ByteArray) = b := by
-  cases b; simp
-
-theorem H512_append (a b : Dig) : (H512 (enc512.dig a ++ enc512.dig b)).1 = Sha512.hash (a.1 ++ b.1) := by
-  simp only [H512, enc512]
-  congr 1
-
-/-- **One step up the tree** is the scheme's node hash. -/
-theorem walk_val (msId : String) : ∀ (sibs : List Dig) (idx : ℕ) (acc : Dig),
-    (Merkle.walk H512 enc512 idx acc sibs).1 = climb (MerkleScheme.sha512 msId) acc.1 idx (sibs.map (·.1))
-  | [], _, _ => rfl
-  | s :: rest, idx, acc => by
-      simp only [Merkle.walk, List.map_cons, climb]
-      rw [walk_val msId rest (idx / 2)]
-      congr 1
-      unfold Merkle.up
-      split_ifs <;> rw [H512_append] <;> rfl
-
-theorem climb_size (msId : String) : ∀ (sibs : List ByteArray) (idx : ℕ) (acc : ByteArray), acc.size = 64 →
-    (climb (MerkleScheme.sha512 msId) acc idx sibs).size = 64
-  | [], _, _, h => h
-  | s :: rest, idx, acc, _ => by
-      simp only [climb]
-      exact climb_size msId rest (idx / 2) _ (by split_ifs <;> exact sha512_size _)
 
 /-- **A passed Merkle check is the model's path check** (§14), for the unsalted SHA-512 scheme: every query's row has
 the lane count, and its path verifies against the cap. -/

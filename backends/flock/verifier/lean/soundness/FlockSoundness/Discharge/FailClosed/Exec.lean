@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.HdecCor.Headlines
 import FlockSoundness.Discharge.FailClosed.Scope
+import FlockSoundness.Protocol.Discharge.FailClosed.Exec
 
 /-!
 # The non-ZK headlines, over what flock-verify accepts
@@ -22,12 +23,6 @@ open FlockSoundness.Discharge.Exec
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
-
-theorem Scope.tagsOk {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = false) : DecodeZL.TagsOk I :=
-  ⟨hh, h.retainRounds, h.merkleLeaf, h.count⟩
-
-theorem Scope.tagsOkH {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = true) : HiddenDec.TagsOkH I :=
-  ⟨hh, h.retainRounds, h.merkleLeaf, h.count⟩
 
 section Public
 

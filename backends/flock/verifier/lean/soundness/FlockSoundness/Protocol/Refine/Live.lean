@@ -77,6 +77,8 @@ namespace FlockSoundness.Refine
 
 open Flock FlockLevel3 Game
 
+local notation "𝔽" => FlockLevel3.GF128
+
 /-- The round the server records for framed bytes `b` and their `n` coins: the coin count, the bytes' digest `dg b`, the
 coins, and the bytes themselves, which the unsalted path's server retains (PROTOCOL.md §6.2, §7.1). -/
 def roundOf (dg : ByteArray → ByteArray) (b : ByteArray) (n : ℕ) (c : Fin n → 𝔽) : Round :=
@@ -117,5 +119,17 @@ def liveTable (dg : ByteArray → ByteArray) (mPts N : ℕ) : Game (LiveOut mPts
   .coin (Fin 2 → Fin mPts → 𝔽) fun pts =>
   (liveRounds dg N ([], [])).bind fun rs =>
   .send (Array ByteArray) fun proofs => .ret ⟨rootB, pts, rs.1, rs.2, proofs⟩
+
+/-- A live run's streams extend the rounds they had. -/
+theorem liveRounds_out (dg : ByteArray → ByteArray) : ∀ (N : ℕ) (acc : List Round × List Round)
+    {rs : List Round × List Round}, Out (liveRounds dg N acc) rs → ∃ l₀ l₁, rs = (acc.1 ++ l₀, acc.2 ++ l₁)
+  | 0, acc, _, .ret _ => ⟨[], [], by simp⟩
+  | N + 1, acc, _, .send none (.ret _) => ⟨[], [], by simp⟩
+  | N + 1, acc, _, .send (some s) (.coin c h) => by
+      obtain ⟨l₀, l₁, rfl⟩ := liveRounds_out dg N _ h
+      unfold addRound
+      split_ifs
+      · exact ⟨roundOf dg s.bytes s.n c :: l₀, l₁, by simp⟩
+      · exact ⟨l₀, roundOf dg s.bytes s.n c :: l₁, by simp⟩
 
 end FlockSoundness.Refine

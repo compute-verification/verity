@@ -1,3 +1,4 @@
+import FlockSoundness.Protocol.Discharge.DecodeZL.Assemble
 import FlockSoundness.Protocol.Discharge.DecodeZL.OP
 import FlockSoundness.Protocol.Discharge.DecodeZL.LIG
 import FlockSoundness.Protocol.Discharge.Tables.Statements
@@ -28,6 +29,8 @@ namespace FlockSoundness.Discharge.DecodeZLJ
 open Flock Refine Exec Game Model Accounting Audit
 open FlockSoundness.Discharge.Tables FlockSoundness.Discharge.DecodeZL
 open Lean (Json)
+
+local notation "𝔽" => FlockLevel3.GF128
 
 /-- **Part `j` of the draw `d`**: `partDraw` at `d`'s population and units, the subset draw `Stmt.setupTables` sets
 table `j` of `count` up at, when `d` decodes. -/

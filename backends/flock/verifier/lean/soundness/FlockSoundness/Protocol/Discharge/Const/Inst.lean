@@ -25,12 +25,40 @@ section snoc
 variable {N₀ n₀ : ℕ} (p : FlockSoundness.Prog N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀) (one : Fin N₀)
   (hone : ∀ c, ins c ≠ one)
 
+theorem rows_last : (snoc p R ins one hone).rows (Fin.last n₀) = R := by
+  simp [FlockSoundness.Prog.rows]
+
+theorem rows_castSucc (v : Fin n₀) : (snoc p R ins one hone).rows v.castSucc = p.rows v := by
+  simp [FlockSoundness.Prog.rows, v.isLt]
+
+/-- A new unit's constant column is on the gate it is wired to. -/
+theorem colWire_one : colWire R ins one R.one = Fin.castAdd R.nComp one := by
+  apply Fin.ext
+  rw [colWire_val]
+  simp [Rows.one]
+
+/-- A new unit's input column is on the gate it is wired to. -/
+theorem colWire_input (c : Fin R.w) (hc : c.val < R.nIn) : colWire R ins one c = Fin.castAdd R.nComp (ins ⟨c.val, hc⟩) := by
+  apply Fin.ext
+  rw [colWire_val, dite_eq_left hc]
+  rfl
+
 end snoc
 
 /-- A program-level instance, carried along an equality of rows. -/
 def castW {N n : ℕ} {q : FlockSoundness.Prog N n} {u : Fin n} {R R' : Rows} (e : R = R') (W : q.RowsWire u R) :
     q.RowsWire u R' :=
   e ▸ W
+
+theorem castW_wire {N n : ℕ} {q : FlockSoundness.Prog N n} {u : Fin n} {R R' : Rows} (e : R = R')
+    (W : q.RowsWire u R) (c : Fin R'.w) : (castW e W).wire c = W.wire (Fin.cast (by rw [e]) c) := by
+  subst e
+  rfl
+
+theorem castW_wire_one {N n : ℕ} {q : FlockSoundness.Prog N n} {u : Fin n} {R R' : Rows} (e : R = R')
+    (W : q.RowsWire u R) : (castW e W).wire R'.one = W.wire R.one := by
+  subst e
+  rfl
 
 /-- **Unit `u`'s rows, wired as the program wires them**: the last unit's by `Prog.rowsWire_last`, an earlier one's
 lifted by `Prog.rowsWire_snoc`. -/
@@ -66,6 +94,28 @@ section snoc
 
 variable {N₀ n₀ : ℕ} (p : FlockSoundness.Prog N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀) (one : Fin N₀)
   (hone : ∀ c, ins c ≠ one)
+
+theorem rowsWireC_last : rowsWireC (snoc p R ins one hone) (Fin.last n₀) =
+    castW (rows_last p R ins one hone).symm (rowsWire_last p R ins one hone) := by
+  rw [rowsWireC, Fin.lastCases_last]
+
+theorem rowsWireC_castSucc (v : Fin n₀) : rowsWireC (snoc p R ins one hone) v.castSucc =
+    castW (rows_castSucc p R ins one hone v).symm (rowsWire_snoc p R ins one hone (rowsWireC p v)) := by
+  rw [rowsWireC, Fin.lastCases_castSucc]
+
+theorem oneAt_last : oneAt (snoc p R ins one hone) (Fin.last n₀) = Fin.castAdd R.nComp one := by
+  rw [oneAt, Fin.lastCases_last]
+
+theorem oneAt_castSucc (v : Fin n₀) : oneAt (snoc p R ins one hone) v.castSucc = Fin.castAdd R.nComp (oneAt p v) := by
+  rw [oneAt, Fin.lastCases_castSucc]
+
+theorem insAt_last (i : ℕ) (hi : i < R.nIn) :
+    insAt (snoc p R ins one hone) (Fin.last n₀) i = Fin.castAdd R.nComp (ins ⟨i, hi⟩) := by
+  rw [insAt, Fin.lastCases_last, dite_eq_left hi]
+
+theorem insAt_castSucc (v : Fin n₀) (i : ℕ) :
+    insAt (snoc p R ins one hone) v.castSucc i = Fin.castAdd R.nComp (insAt p v i) := by
+  rw [insAt, Fin.lastCases_castSucc]
 
 end snoc
 

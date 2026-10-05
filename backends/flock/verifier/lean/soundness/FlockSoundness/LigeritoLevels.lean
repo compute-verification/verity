@@ -1,4 +1,5 @@
 import FlockSoundness.LigeritoMCA
+import FlockSoundness.Protocol.LigeritoLevels
 
 /-!
 # Ligerito's levels meet the Johnson-range MCA bound (PROTOCOL.md §13, §15)
@@ -20,15 +21,6 @@ open CodingTheory CoreDefinitions
 open scoped ENNReal NNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
-
-/-- A level's evaluation points `ω_q`, in `K`. -/
-def domainK (A : Arith F K) (hA : A.Correct) (d : ℕ) (hd : d ≤ 64) : Fin (2 ^ d) ↪ K :=
-  (domainEmb A hA d hd).trans ⟨A.embed, A.embed.injective⟩
-
-/-- A level's Reed–Solomon code over `K`: the code its folds live in. -/
-noncomputable def codeK (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) :
-    Submodule K (Fin (2 ^ l.logLen) → K) :=
-  ReedSolomon.code (domainK A hA l.logLen hf.2) (2 ^ l.logCols)
 
 theorem rate_le_half (l : Level) (hl : l.Ok) : l.rate ≤ 1 / 2 := by
   unfold Level.rate

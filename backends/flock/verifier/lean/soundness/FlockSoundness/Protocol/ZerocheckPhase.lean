@@ -32,6 +32,18 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 
 /-! ## Folding the lowest bit, and the equality weights -/
 
+/-- Sums over `2^(n+1)` indices by pairs `(2y, 2y+1)`. -/
+theorem sum_range_pairs {M : Type} [AddCommMonoid M] (n : ℕ) (f : ℕ → M) :
+    ∑ x ∈ Finset.range (2 ^ (n + 1)), f x =
+      ∑ y ∈ Finset.range (2 ^ n), (f (2 * y) + f (2 * y + 1)) := by
+  rw [← Fin.sum_univ_eq_sum_range, ← Fin.sum_univ_eq_sum_range (fun y => f (2 * y) + f (2 * y + 1))]
+  have h : 2 ^ n * 2 = 2 ^ (n + 1) := (pow_succ 2 n).symm
+  rw [← (finCongr h).sum_comp, sum_fin_mul]
+  refine Finset.sum_congr rfl fun y _ => ?_
+  rw [Fin.sum_univ_two]
+  simp only [finCongr_apply, Fin.val_cast, finProdFinEquiv_apply_val, Fin.val_zero, Fin.val_one]
+  congr 2 <;> ring
+
 /-- Fold the lowest bit at `t`: `u'(y) = u(2y) + t·(u(2y+1) + u(2y))`. -/
 def foldLo (t : F) (u : ℕ → F) : ℕ → F := fun y => u (2 * y) + t * (u (2 * y + 1) + u (2 * y))
 
@@ -39,11 +51,26 @@ def foldLo (t : F) (u : ℕ → F) : ℕ → F := fun y => u (2 * y) + t * (u (2
 
 /-! ## The nodes, and polynomials through them -/
 
+/-- The skip nodes `S` (§9). -/
+noncomputable def nodeS (A : Arith F K) (hA : A.Correct) : Fin 64 → F := hA.nodes.choose
+
+/-- The output coset `Λ` (§9.2). -/
+noncomputable def nodeΛ (A : Arith F K) (hA : A.Correct) : Fin 64 → F :=
+  hA.nodes.choose_spec.choose
+
 /-! ## The witness by skip index -/
 
 /-! ## The true polynomials of the zerocheck -/
 
 /-! ## The three coin bounds -/
+
+/-- `Pc(z)` as the verifier computes it from `round1_c` (Z5). -/
+def pcOf (A : Arith F K) (msg : (Fin 64 → F) × (Fin 64 → F)) (z : F) : F :=
+  ∑ i, A.lagΛ z i * msg.2 i
+
+/-- The zerocheck's starting claim `Pcomb(z) + Pc(z)` (Z5). -/
+def claim0 (A : Arith F K) (msg : (Fin 64 → F) × (Fin 64 → F)) (z : F) : F :=
+  ∑ i, A.combW z i * (msg.1 i + msg.2 i) + pcOf A msg z
 
 /-! ## The game -/
 

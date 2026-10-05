@@ -1,5 +1,4 @@
-import FlockSoundness.Discharge.ZkExec.Statements
-import FlockSoundness.Discharge.Exec.Tables
+import FlockSoundness.Protocol.Discharge.ZkExec.Statements
 
 /-!
 # flock-verify `--zk` accepts, table by table and rep by rep

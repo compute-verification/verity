@@ -21,6 +21,8 @@ namespace FlockSoundness.Discharge.ZkHidden
 open Flock FlockLevel3 Game Model Refine Exec DecodeZL ZkSession ZkExec ZkLink HiddenExec
 open scoped ENNReal NNReal
 
+local notation "𝔽" => FlockLevel3.GF128
+
 variable {n : ℕ} (I : Inputs) (mPts : ℕ)
 
 /-- **A draw `verify --zk` sets up under hidden outputs**: `DrawSetupZK` with a `DrawSetupH` at `zkInputs I`

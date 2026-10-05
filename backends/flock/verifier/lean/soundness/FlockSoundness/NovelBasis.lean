@@ -1,4 +1,6 @@
 import FlockSoundness.LigeritoDecode
+import FlockSoundness.Protocol.NovelBasis
+import FlockSoundness.LigeritoRes
 
 /-!
 # The novel basis: `X̂_c` has degree at most `c`
@@ -32,25 +34,6 @@ theorem poly_eq_of_eval {p p' : F[X]} (hp : p.natDegree < Fintype.card F)
   have := Polynomial.eq_zero_of_natDegree_lt_card_of_eval_eq_zero (p - p') (f := id)
     Function.injective_id (fun ω => by simp [h ω]) ((natDegree_sub_le _ _).trans_lt (max_lt hp hp'))
   exact sub_eq_zero.1 this
-
-omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
-theorem Xhat_succ_low (A : Arith F K) (L c : ℕ) (hc : c < 2 ^ L) (ω : F) :
-    A.Xhat c (L + 1) ω = A.Xhat c L ω := by
-  unfold Arith.Xhat
-  rw [Fin.prod_univ_castSucc]
-  simp [Nat.testBit_eq_false_of_lt hc]
-
-omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
-theorem Xhat_succ_high (A : Arith F K) (L c : ℕ) (hc : c < 2 ^ L) (ω : F) :
-    A.Xhat (2 ^ L + c) (L + 1) ω = A.What L ω * A.Xhat c L ω := by
-  unfold Arith.Xhat
-  rw [Fin.prod_univ_castSucc]
-  have h1 : ∀ i : Fin L, (2 ^ L + c).testBit i = c.testBit i := fun i =>
-    Nat.testBit_two_pow_add_gt i.isLt c
-  have h2 : (2 ^ L + c).testBit L = true := by
-    rw [Nat.testBit_two_pow_add_eq, Nat.testBit_eq_false_of_lt hc]; rfl
-  simp only [Fin.coe_castSucc, Fin.val_last, h1, h2, if_true]
-  ring
 
 theorem two_pow_succ_eq (L : ℕ) : 2 ^ (L + 1) = 2 * 2 ^ L := by ring
 

@@ -1,3 +1,4 @@
+import FlockSoundness.Discharge.Hidden.Layout
 import FlockSoundness.Protocol.Discharge.Hidden.Committed
 
 /-!
@@ -18,5 +19,7 @@ The frozen statements of `Defs.lean`, one theorem each:
 namespace FlockSoundness.Discharge.Hidden
 
 theorem setupHidden_spec : SetupHiddenSpec := fun h => setupHidden_spec' h
+
+theorem hidden_layout : HiddenLayout := hidden_layout'
 
 end FlockSoundness.Discharge.Hidden

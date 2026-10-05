@@ -1,4 +1,4 @@
-import FlockSoundness.Protocol.Discharge.HiddenExec.Flat
+import FlockSoundness.Discharge.HiddenExec.Flat
 import FlockSoundness.Discharge.Zero.Uniform
 
 /-!

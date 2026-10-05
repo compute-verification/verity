@@ -1,8 +1,7 @@
-import FlockSoundness.Protocol.Refine.LiveSim
+import FlockSoundness.Protocol.Refine.LiveCompiled
 import FlockSoundness.Protocol.Discharge.Exec.FlockLinkL
 import FlockSoundness.Protocol.Discharge.Exec.StrictCRL
-import FlockSoundness.Protocol.Binding.Rows
-import FlockSoundness.Protocol.ExecDrawOS
+import FlockSoundness.Protocol.Headline
 import FlockSoundness.Protocol.Discharge.Exec.Event
 
 /-!
@@ -35,6 +34,8 @@ namespace FlockSoundness.Discharge.Exec
 
 open Game Model Accounting Refine Audit Audit.Partition
 open scoped ENNReal
+
+local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## Strategies through relabellings and casts -/
 
@@ -143,6 +144,15 @@ variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf
   (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap D)) (N : ℕ)
+
+/-- **The decoder is right on the sessions flock-verify accepts** (R11b, named): at every draw and registration, on
+every live outcome whose session directory flock-verify accepts, each rep's game runs on the tape decoded from its
+stream and its proof file, and the salted table's verdict on those runs, with the cap `root_B` decodes to and the
+openings and salts the proof files decode to, holds. -/
+def DecodesAll : Prop :=
+  ∀ S R, Decodes (fun (caps : Fin 1 → Cap D) pend os => tableOutL H E Lf (caps 0) pend os)
+    (fun o => Accepts I (wr S R o)) (·.accepted = true) (opn S R) (dec S R) (one S R) (fin S R) (capOf S R)
+    (repsOf (D := D) execArith (T S R))
 
 variable {L : Law n}
 

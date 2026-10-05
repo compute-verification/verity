@@ -58,21 +58,6 @@ end DrawSetupH
 
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
 
-/-- **The table is `stmtOf` of setupHidden's statement wherever setupHidden accepts**: at a draw with a `DrawSetupH` at
-`dj S`, the table is `DrawSetupH.table` of one with the same statement. -/
-theorem tableAtH_stmt {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) :
-    ∃ y : DrawSetupH I mPts S (dj S), y.st = x.st ∧ tableAtH dj x₀ S = y.table := by
-  refine ⟨Classical.choice ⟨x⟩, ?_, by unfold tableAtH; rw [dite_eq_left_of_eq_true (eq_true ⟨x⟩)]⟩
-  have e := (Classical.choice (⟨x⟩ : Nonempty (DrawSetupH I mPts S (dj S)))).h.symm.trans x.h
-  exact Except.ok.inj e
-
-theorem tableAtH_cases (S : Finset (Fin n)) :
-    (∃ x : DrawSetupH I mPts S (dj S), tableAtH dj x₀ S = x.table) ∨ tableAtH dj x₀ S = x₀.refused S := by
-  unfold tableAtH
-  split
-  · exact .inl ⟨_, rfl⟩
-  · exact .inr rfl
-
 variable {Reg : Type}
 
 end FlockSoundness.Discharge.HiddenExec

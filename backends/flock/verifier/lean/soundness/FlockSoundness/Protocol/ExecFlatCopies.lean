@@ -1,5 +1,5 @@
-import FlockSoundness.Protocol.ExecTemplatePlace
-import FlockSoundness.Protocol.E2E
+import FlockSoundness.Protocol.ExecTemplateSetup
+import FlockSoundness.Protocol.Types.Program
 
 /-!
 # A typed flat class's input copies and forced-zero rows (1e for flat classes)

@@ -19,6 +19,8 @@ namespace FlockSoundness.Discharge.ZkBind
 
 open Game Model Accounting Refine Audit ZkSession ZkLink Binding
 
+local notation "𝔽" => FlockLevel3.GF128
+
 /-! ## Witnesses along an equality of statements -/
 
 /-- An address of `T`'s witness as one of `T'`'s, along `T' = T`. -/
@@ -168,6 +170,16 @@ noncomputable def HmRowsZ.ofShadow : HmRowsZ (LayoutZ.ofShadow e lay hdec) where
   bcAt S R u p j t := adrOf (e S R u) (rs.bcAt S R u p j t)
   bc_registered := ofShadow_bc_registered e rs
   other_registered := ofShadow_other_registered e hdec rs
+
+/-- **`HmRowComputes` moves along**: the public rows' `HmRowComputes` gives the `--zk` rows'. -/
+theorem HmRowsZ.ofShadow_computes (hHm : rs.Computes) : (HmRowsZ.ofShadow e hdec rs).Computes := by
+  rintro ⟨S, R, u, M', g⟩ ⟨hu, hM', hg, hrow⟩
+  obtain ⟨M, hM, hS⟩ := shadow_msg e S R u M' hM'
+  obtain ⟨hr, hs⟩ := row_ofShadow e lay hdec S R u M' M hM (lay.pos g)
+  have h := hHm ⟨S, R, u, M, g⟩ ⟨hu, hS, hg, hrow⟩
+  simp only at h
+  rw [← hr, ← hs, hM] at h
+  exact h
 
 end Shadow
 

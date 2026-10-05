@@ -1,6 +1,8 @@
 import FlockSoundness.Discharge.ZkHidden.SoundBind
 import FlockSoundness.Discharge.ZkHidden.SoundRuns
 import FlockSoundness.Discharge.Composed.Defs
+import FlockSoundness.Discharge.ZkHidden.SoundDefs
+import FlockSoundness.Discharge.ZkHidden.Theorems
 
 /-!
 # The soundness of one hidden-output `--zk` sampled session

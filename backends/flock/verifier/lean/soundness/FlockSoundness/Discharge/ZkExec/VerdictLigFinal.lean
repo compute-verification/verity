@@ -1,5 +1,4 @@
 import FlockSoundness.Discharge.ZkExec.RunsLig
-import FlockSoundness.Refine.Final
 
 /-!
 # `--zk` Ligerito's final check is the model's

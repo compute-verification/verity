@@ -1,4 +1,4 @@
-import FlockSoundness.Protocol.Discharge.Hm.Bc
+import FlockSoundness.Discharge.Hm.Bc
 import FlockSoundness.Protocol.Discharge.Layout.Drawn
 
 /-!
@@ -101,5 +101,12 @@ def SetupHiddenSpec : Prop :=
 def HiddenDelta : Prop :=
   ∀ (c : Circuit) (pin : ℕ),
     HmOut.delta c pin = ((HmRow.delta c pin).1 ++ (outPairs c).toArray, (HmRow.delta c pin).2 ++ (outPairs c).toArray)
+
+/-- **`HiddenLayout`**: an untyped statement `Stmt.setupHidden` accepts has the layout the placement reads
+(`FlockSoundness.Layout`), so its block R1CS is `Layout.model`. -/
+def HiddenLayout : Prop :=
+  ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
+    tags.typed = false → Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st → Layout st
 
 end FlockSoundness.Discharge.Hidden

@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.DecodeZL.Statements
+import FlockSoundness.Protocol.Discharge.DecodeZL.Statements
 
 /-!
 # The lengths of a decoded proof

@@ -204,14 +204,6 @@ def xrowsK (A : Arith F K) (k0 e r d : ℕ) (C : Oracle F) : Fin e → Fin (2 ^ 
 
 /-! ## Decoding the padded column -/
 
-omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
-theorem Xhat_lift (A : Arith F K) (c cols : ℕ) (hc : c < 2 ^ cols) :
-    ∀ j ω, A.Xhat c (cols + j) ω = A.Xhat c cols ω
-  | 0, _ => rfl
-  | j + 1, ω => by
-      rw [← add_assoc, Xhat_succ_low A (cols + j) c
-        (lt_of_lt_of_le hc (Nat.pow_le_pow_right (by norm_num) (by omega))), Xhat_lift A c cols hc j ω]
-
 /-- A `K` combination of the first `k` monomials, with `ℕ`-indexed coefficients. -/
 def encKN (A : Arith F K) (d k : ℕ) (b : ℕ → K) (q : ℕ) : K :=
   ∑ c ∈ Finset.range k, b c * A.embed (A.Xhat c d (A.omega q))

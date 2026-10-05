@@ -1,5 +1,5 @@
 import FlockSoundness.Discharge.Exec.FramesLigerito
-import FlockSoundness.Refine.Table
+import FlockSoundness.Protocol.Refine.Table
 
 /-!
 # The PIOP's rounds, as the frames they emit (R11b)

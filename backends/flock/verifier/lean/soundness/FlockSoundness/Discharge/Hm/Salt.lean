@@ -5,7 +5,7 @@ prefix's midstate (`saltMid`), over the salt's 24 big-endian words and the fixed
 -/
 import Mathlib.Data.List.GetD
 import FlockSoundness.Discharge.Hm.Hash
-import FlockSoundness.Discharge.Hm.Hm96
+import FlockSoundness.Protocol.Discharge.Hm.Hm96
 
 namespace FlockSoundness.Discharge.Hm
 

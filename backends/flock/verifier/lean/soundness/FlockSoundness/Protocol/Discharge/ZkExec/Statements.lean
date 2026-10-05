@@ -1,6 +1,5 @@
 import FlockSoundness.Protocol.Discharge.ZkExec.Live
-import FlockSoundness.Protocol.Discharge.Exec.Setup
-import FlockSoundness.Protocol.Refine.Frames
+import FlockSoundness.Protocol.Discharge.Exec.Retained
 
 /-!
 # The target statements of flock-verify `--zk`'s acceptance and its refinement
@@ -38,13 +37,102 @@ open Lean (Json)
 open Game Audit Exec Refine Flock
 open scoped ENNReal
 
+local notation "𝔽" => FlockLevel3.GF128
+
 /-! ## Acceptance -/
+
+/-- **`Zk.verify` accepts, table by table**: the session's coins are the keyed coin tree, the record decodes, there is
+one statement per table and one proof file per rep stream, and every table `i` has its `--zk` schedule and both reps'
+checks accept with one cap, on the proof files `proofs[2i]` and `proofs[2i+1]`. -/
+def ZkVerifyOk : Prop :=
+  ∀ (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray),
+    Flock.Zk.verify spec tabs record proofs = .ok () →
+    spec.coinTree.isSome = true ∧ ∃ (sess : Session) (schs : Array (Flock.Schedule × ℕ)),
+      Record.decode spec record = .ok sess ∧ tabs.size = spec.tables.size ∧ 0 < tabs.size ∧
+      proofs.size = spec.repStreams.size ∧ schs.size = tabs.size ∧
+      ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs : i < schs.size) (c : ByteArray),
+        Flock.Zk.schedule tabs[i].m = .ok schs[i] ∧
+        Flock.Zk.verifyRep spec tabs[i] schs[i].1 schs[i].2 sess i 0 proofs[2 * i]! = .ok c ∧
+        Flock.Zk.verifyRep spec tabs[i] schs[i].1 schs[i].2 sess i 1 proofs[2 * i + 1]! = .ok c
+
+/-- The proof file's shape `Zk.verifyRep` decodes it at. -/
+def shapeZK (st : Setup) (sch : Flock.Schedule) (extras : Array Flock.Claim) : Shape :=
+  { m := st.m, kLog := st.kLog, claims := 2 + extras.size, sched := sch, hashLen := st.merkle.digestLen,
+    saltLen := if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes }
+
+/-- **Rep `r`'s transcript program**, as `Zk.verifyRep` runs it on the rep's stream: the masked replay, the two masked
+claims' ring-switch checks, level 0 with its hiding, and the inner proof on every constraint. -/
+def repProg (st : Setup) (sch : Flock.Schedule) (tPad r : ℕ) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof) :
+    Flock.Transcript.TM Unit := do
+  let p := zp.proof
+  let lay := Flock.Zk.PadLayout.new st.m st.kLog sch.k0
+  let rp ← Flock.Zk.replay st lay p zp.inner.root
+  let ab := rp.claims[0]!
+  let c := rp.claims[1]!
+  let ccAb := Flock.Zk.claimCheck ab p.ringSwitches[0]!
+  let ccC := Flock.Zk.claimCheck c p.ringSwitches[1]!
+  let (T, sws) ← Flock.ringSwitch st.m (#[{ ab with value := ccAb }, { c with value := ccC }] ++ extras) p.ringSwitches
+  let rec ← Flock.Zk.ligerito st.merkle sch T p.cap p.ligerito (Flock.basis sws) ⟨tPad, r, zp.level0⟩
+  let lg ← match Flock.Zk.ligeritoConstraints lay rec p.ligerito zp.level0 with
+    | .ok v => pure v
+    | .error e => throw e
+  Flock.Zk.verifyInner lay zp.inner p.zerocheck.finalC
+    (rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lg)
+
+/-- **A rep's `--zk` check accepts**: the rep's stream and its proof file decode, the proof's PCS parameters are the
+pinned ones and its pads' root has 64 bytes, `repProg` runs on the stream's rounds from the rep's domain and consumes
+every round, and the returned cap, the proof's flattened cap, is the table's `root_B`. -/
+def ZkRepOk : Prop :=
+  ∀ (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i r : ℕ)
+    (bytes cap : ByteArray),
+    Flock.Zk.verifyRep spec st sch tPad sess i r bytes = .ok cap →
+    ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof) (tr : Flock.Transcript),
+      sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
+      st.extra sess.points = .ok extras ∧ Flock.Zk.decode (shapeZK st sch extras) bytes = .ok zp ∧
+      (zp.proof.params != Flock.pcsParams st.merkle sch) = false ∧ zp.inner.root.size = 64 ∧
+      (repProg st sch tPad r extras zp).run
+        (Flock.Transcript.init stream.rounds (spec.domain spec.tables[i]! r).toUTF8) = .ok ((), tr) ∧
+      tr.k = stream.rounds.size ∧ cap = zp.proof.cap.foldl (· ++ ·) ByteArray.empty ∧ cap = sess.rootB[i]!
 
 /-- The inner code's length: the pads message (`len + K_PAD`) rounded up to a power of two, at rate `1/8`. -/
 def innerN (lay : Flock.Zk.PadLayout) : ℕ :=
   (lay.len + Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ Flock.Zk.INNER_LOG_INV_RATE
 
+/-- The inner proof's batched row: the `γ`-combination of the constraints and the sacrifice's three rows at `ε`. -/
+def innerRow (lay : Flock.Zk.PadLayout) (pr : Flock.Zk.InnerProof) (cons : Array (String × Flock.Zk.Lin))
+    (eps : F128) (gammas : Array F128) : Flock.Zk.Lin :=
+  Flock.Zk.Lin.combo gammas ((cons ++ Flock.Zk.triple lay eps pr.rho pr.sigma).map (·.2)) lay.len
+
+/-- **The inner proof accepts** (live/PROTOCOL.md §5): its sizes are the pinned ones, and at the coins `ε, γ, β` and the
+query words `w` it read, `β ≠ 0`, `τ` opens its `hm96-sha512/v1` commitment, `⟨c, Y⟩ = t + β·τ` for the batched row
+`(c, t)`, and at each of the `Q` queried columns `j = lo(w_k) mod N`, `Y`'s code at `j` is `a + β·b` for the opened pair
+`(a, b)`, and the pair's `hm96` leaf under its salt climbs a path of depth `log₂ N` to the pads' root. -/
+def ZkInnerOk : Prop :=
+  ∀ (lay : Flock.Zk.PadLayout) (pr : Flock.Zk.InnerProof) (finalC : F128) (cons : Array (String × Flock.Zk.Lin))
+    (t t' : Flock.Transcript),
+    Flock.Zk.verifyInner lay pr finalC cons t = .ok ((), t') →
+    pr.y.size = lay.len + Flock.Zk.K_PAD ∧ pr.opened.size = Flock.Zk.Q ∧ pr.salts.size = Flock.Zk.Q ∧
+    pr.paths.size = Flock.Zk.Q ∧ pr.root.size = 64 ∧ pr.tauCommit.size = 64 ∧
+    pr.tauSalt.size = Flock.Zk.TAU_SALT_BYTES ∧
+    ∃ (eps beta : F128) (gammas ws : Array F128),
+      beta.isZero = false ∧ Flock.Zk.tauCommitment pr.tau pr.tauSalt = pr.tauCommit ∧
+      Flock.dot (innerRow lay pr cons eps gammas).a pr.y = (innerRow lay pr cons eps gammas).c + beta * pr.tau ∧
+      ∀ k < Flock.Zk.Q,
+        Flock.Zk.codeAt pr.y ((ws[k]!).lo.toNat % innerN lay) = (pr.opened[k]!).1 + beta * (pr.opened[k]!).2 ∧
+        (pr.paths[k]!).size = Nat.log2 (innerN lay) ∧
+        Flock.climb MerkleScheme.hm96Sha512
+          (Hm96.Default512.leaf (Sha512.hash ((pr.opened[k]!).1.toBytes ++ (pr.opened[k]!).2.toBytes)) pr.salts[k]!)
+          ((ws[k]!).lo.toNat % innerN lay) (pr.paths[k]!).toList = pr.root
+
 /-! ## Acceptance and the statement -/
+
+/-- **A one-table `--zk` acceptance is one `setupH` statement's**: under the `--zk` tags and the coin tree at the
+record's draw, it passes the shape check, and `Zk.verify` ran on `#[Setup.ofCircuit st]` with the statement's spec. -/
+def AcceptsZKOne : Prop :=
+  ∀ (I : Inputs) (t : Exec.Transcript), I.tags.hiddenOutputs = false → I.count ≤ 1 → AcceptsZK I t →
+    ∃ st, Stmt.setupH (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (recordDraw t.record) I.partition
+        I.program = .ok st ∧ Flock.Zk.shapeOk st = .ok () ∧
+      Flock.Zk.verify st.spec #[Flock.Setup.ofCircuit st] t.record t.proofs = .ok ()
 
 /-! ## Refinement, one table -/
 

@@ -1,5 +1,4 @@
 import FlockSoundness.Discharge.Hidden.Wide.Upv
-import FlockSoundness.ExecSetup
 
 /-!
 # A VU per block, from acceptance

@@ -1,6 +1,9 @@
 import FlockSoundness.Discharge.HiddenExec.SiteH
 import FlockSoundness.Discharge.Hidden.Wide.Shared
 import FlockSoundness.Protocol.Discharge.Canonical.Shared
+import FlockSoundness.Discharge.Hidden.Theorems
+import FlockSoundness.Discharge.HiddenExec.Ret
+import FlockSoundness.Discharge.HiddenExec.Statements
 
 set_option Elab.async false
 

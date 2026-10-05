@@ -43,6 +43,10 @@ variable {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W S
 
 /-! ## The identity (★) -/
 
+theorem Wr_add (r : Fin 2) (a b a' b' : F) : T.Wr r (a + a') (b + b') = T.Wr r a b + T.Wr r a' b' := by
+  simp only [Wr, map_add]
+  ring
+
 /-! ## The view as a function of four masked components -/
 
 /-! ## The masks -/

@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.ZkExec.RunsStatements
+import FlockSoundness.Protocol.Discharge.ZkExec.RunsStatements
 
 /-!
 # The masked replay and the inner proof, as frames

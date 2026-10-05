@@ -12,11 +12,6 @@ namespace FlockSoundness.Discharge.Hm
 
 /-! ## Copies, counted -/
 
-theorem filter_map_none {β : Type} (l : List ℕ) (D : ℕ) (S : ℕ → β) (x : ℕ) (h : ∀ t ∈ l, D + t ≠ x) :
-    (l.map fun t => (D + t, S t)).filter (fun e => e.1 = x) = [] := by
-  rw [List.map_eq_flatMap]
-  exact filter_flatMap_none _ _ _ fun t ht => by simp [h t ht]
-
 theorem leafPairs_nil {c : Circuit} (h1 : c.leavesIn = #[#[]]) (h2 : c.upv = 1) : Flat.leafPairs c = [] := by
   simp [Flat.leafPairs, h1, h2]
 

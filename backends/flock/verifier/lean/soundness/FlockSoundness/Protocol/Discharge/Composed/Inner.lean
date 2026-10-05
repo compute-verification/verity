@@ -31,6 +31,9 @@ namespace FlockSoundness.Discharge.Composed
 
 open Flock Model ZkSession ZkView ZK Refine
 
+local notation "𝔽" => FlockLevel3.GF128
+local notation "𝕂" => FlockLevel3.GF256
+
 noncomputable section
 
 /-- **The inner proof's fields** of a `Coined` table over the witnesses `W` at the sizes `z` (`Coined`'s `lanes`, `vals`,

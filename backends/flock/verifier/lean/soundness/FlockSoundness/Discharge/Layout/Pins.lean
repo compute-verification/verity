@@ -1,6 +1,7 @@
 import FlockSoundness.Binding.Rows
 import FlockSoundness.Discharge.Layout.Readers
 import FlockSoundness.Protocol.Discharge.Layout.Pins
+import FlockSoundness.Audit.FlockLinked
 
 /-!
 # A layout and its rows from three pinning facts

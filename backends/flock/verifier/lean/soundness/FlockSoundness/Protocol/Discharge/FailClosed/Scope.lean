@@ -142,6 +142,10 @@ include h
 
 theorem typed : t.typed = false := (check_ok h).1.2.1
 
+theorem retainRounds : t.retainRounds = true := (check_ok h).1.2.2.1
+
+theorem merkleLeaf : t.merkleLeaf = "hm96-sha512/v1" := (check_ok h).1.2.2.2.1
+
 theorem circuit_ok : ProvedScope.circuitOf t I.circuitFile I.tables = .ok (circ t I) := by
   obtain ⟨c, -, hc, -⟩ := (check_ok h).2
   unfold circ
@@ -262,6 +266,12 @@ abbrev pubZ (I : Inputs) : Public := pubOf (zkTags I) I
 theorem ScopeZ.typed {I : Inputs} (h : ScopeZ I) : I.tags.typed = false := by
   rw [← zkTags_typed]; exact Checks.typed h
 
+theorem ScopeZ.retainRounds {I : Inputs} (h : ScopeZ I) : I.tags.retainRounds = true := by
+  rw [← zkTags_retainRounds]; exact Checks.retainRounds h
+
+theorem ScopeZ.merkleLeaf {I : Inputs} (h : ScopeZ I) : I.tags.merkleLeaf = "hm96-sha512/v1" := by
+  rw [← zkTags_merkleLeaf]; exact Checks.merkleLeaf h
+
 theorem ScopeZ.parse {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = false) :
     HmRow.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
   Checks.parse h (by rw [zkTags_hiddenOutputs]; exact hh)
@@ -288,6 +298,10 @@ theorem ScopeZ.scope {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = fa
 
 theorem Scope.typed {I : Inputs} (h : Scope I) : I.tags.typed = false := Checks.typed h
 
+theorem Scope.retainRounds {I : Inputs} (h : Scope I) : I.tags.retainRounds = true := Checks.retainRounds h
+
+theorem Scope.merkleLeaf {I : Inputs} (h : Scope I) : I.tags.merkleLeaf = "hm96-sha512/v1" := Checks.merkleLeaf h
+
 theorem Scope.parse {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = false) :
     HmRow.parse I.tags I.circuitFile I.tables = .ok (circS I) := Checks.parse h hh
 
@@ -305,6 +319,13 @@ theorem Scope.built {I : Inputs} (h : Scope I) : Built (circS I).unit := Checks.
 theorem Scope.tables {I : Inputs} (h : Scope I) : (pubS I).tables = none := Checks.tables h
 
 theorem Scope.scope {I : Inputs} (h : Scope I) : Layout.scopeOk (circS I) = true := Checks.scope h (Or.inl rfl)
+
+theorem Scope.outNet {I : Inputs} (h : Scope I) : (circS I).outNet = (circS I).unitNet := Checks.outNet h
+
+theorem Scope.count {I : Inputs} (h : Scope I) : I.count ≤ 1 := by
+  rcases (check_ok h).1.2.2.2.2 with h' | h'
+  · cases h'
+  · exact h'
 
 /-! ## A bound under the statement check -/
 

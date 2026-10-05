@@ -25,6 +25,8 @@ namespace FlockSoundness.Discharge.Composed.Zerocheck
 
 open Flock FlockLevel3 Polynomial
 
+local notation "𝔽" => FlockLevel3.GF128
+
 /-! ## The clear replay -/
 
 /-! ## The honest prover -/

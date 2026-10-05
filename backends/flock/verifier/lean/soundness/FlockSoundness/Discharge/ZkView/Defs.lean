@@ -4,6 +4,7 @@ import FlockProofs.Hash
 import Flock.Zk
 import FlockLevel3.ArithFacts
 import FlockSoundness.Protocol.Discharge.ZkView.Defs
+import FlockSoundness.Discharge.Hm.Slot
 
 /-!
 # The `--zk` tables at the executable's leaves, and the honest prover's pre-final messages

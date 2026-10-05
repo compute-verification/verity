@@ -45,21 +45,7 @@ variable (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTa
 variable (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
   (hpt : pub.tables = none)
 
-theorem rsShH_computes : (rsShH dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Computes :=
-  keyRowsH_computes (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) (fun _ => pub)
-    (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
-    (sitesShH_bcSite dj y₀ ht hc hscope hU hpub hpt)
-    (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).1
-      (Layout.scopeOk_spec hU hscope).2.2)
-
 /-! ## The `--zk` places, layout and rows -/
-
-/-- **`hHm` at the hidden-output `--zk` tables' rows** (`rsShH_computes`, moved along): in a satisfying witness of a
-drawn unit's `--zk` table, each row's `b ‖ c` at the unit's site, input or output, is the commit string of the row's
-bytes under the salt at its `hm96` slot. -/
-theorem rsZH_computes : (rsZH dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Computes :=
-  HmRowsZ.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) _
-    (rsShH_computes dj y₀ ht hc hscope hU hpub hpt)
 
 /-- **The compiled `--zk` count curve at the hidden-output `--zk` tables, its places and binding built**:
 `zk_flock_countC_execOS_crH` with `place := placeZH` and `vb := rsZH.bindingZ rsZH_computes`. Past the count curve's

@@ -1,7 +1,7 @@
-import FlockSoundness.Protocol.Discharge.Hidden.Flat
+import FlockSoundness.Discharge.Hidden.Flat
+import FlockSoundness.Discharge.Hm.Bc
+import FlockSoundness.Discharge.Hm.Site
 import FlockSoundness.Protocol.Discharge.Hidden.Public
-import FlockSoundness.Protocol.Discharge.Layout.Keyed
-import FlockSoundness.Discharge.Layout.Scope
 
 /-!
 # An output row's registered `b ‖ c` (`OutputsCommitted`)

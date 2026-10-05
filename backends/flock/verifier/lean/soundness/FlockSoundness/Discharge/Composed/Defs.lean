@@ -24,11 +24,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
 
 variable [Inhabited D] [Inhabited Sl]
 
-omit [Fintype K] in
-theorem sessionZC_planOf (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) :
-    ZkExec.sessionZC (Gz A Hs T) (outz Hs T) (accz T) = batchedSessionZC A Hs (planOf T) :=
-  funext fun S => funext fun R => batchedSessionZC_one A Hs T S R
-
 section On
 
 variable (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : Inputs)
@@ -85,12 +80,6 @@ theorem zk_headline_exec_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capO
   have hB' := (hc _ (sessionZC_planOf A Hs T)).symm.trans_le hB
   have h := exec_le_of_refines (execRefinesZK_on A Hs T I wr opn dg dec one fin capOf N hdec τ) Q hB'
   rwa [prob_eq_zero_of_out (fun _ _ h => h) τ, add_zero] at h
-
-omit [Fintype K] in
-/-- **The decoder at the law's draws from `RunsOnZC`** (`ZkExec.decodes_of_runsOnZC`, the coin step `true`). -/
-theorem decodesOnZK_of_runsOnZC (h : RunsOnZC A Hs T I wr opn dec fin capOf L) :
-    DecodesOnZK A Hs T I wr opn dec (fun _ _ _ => true) fin capOf L :=
-  fun ω R => decodes_of_runsOnZC A Hs T I wr opn dec fin capOf h ω R
 
 end On
 

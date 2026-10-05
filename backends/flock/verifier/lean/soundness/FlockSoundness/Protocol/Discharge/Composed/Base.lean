@@ -23,6 +23,8 @@ namespace FlockSoundness.Discharge.Composed
 
 open Flock Model ZkSession Refine
 
+local notation "𝔽" => FlockLevel3.GF128
+
 variable {mPts : ℕ}
 
 /-- **A table's coin vector**: each rep's inner-proof `β` (`Zk.verifyInner`) and Ligerito's `ρ` (`ZkLigerito`), the coins

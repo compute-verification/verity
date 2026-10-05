@@ -6,6 +6,7 @@ So the satisfying witness holds the `sha512x3` and `hm96` rows at every compress
 given the port's words fill its chunks and the block holds Δ's copies into the slots' `cv` and `pad` inputs.
 -/
 import FlockSoundness.Protocol.Discharge.Hm.Place
+import FlockSoundness.Protocol.ExecTemplateSetup
 
 open Flock FlockLevel3
 
@@ -79,6 +80,9 @@ section Slots
 
 variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D} {st : Stmt} {tb : TypedBlock}
+
+set_option hygiene false in
+local notation "𝒖" => done.getD unit default
 
 end Slots
 

@@ -457,6 +457,9 @@ theorem keyProg_bcPinned
   simp only [hu, ↓reduceDIte]
   exact this
 
+theorem zeroG_ne_oneG : zeroG (c := c) (hU := hU) (n := n) ≠ oneG := fun h =>
+  absurd (congrArg Fin.val h) (by simp [zeroG, oneG, Placed.zeroGate, Placed.oneGate])
+
 /-- **A single committed gate of a unit's own instance** is the zero, the constant, or one of the unit's computed gates,
 when every input a row reads has a row key (`KeysRow`). -/
 theorem single_gate (outs : Finset (Fin (keyN c hU n))) (hkeys : KeysRow c hU rowW) {u : Fin n}

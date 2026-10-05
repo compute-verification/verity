@@ -2,6 +2,7 @@ import FlockSoundness.Game.Poly
 import FlockSoundness.Model.Piop
 import FlockSoundness.Model.Ligerito
 import Mathlib.Algebra.CharP.Defs
+import FlockSoundness.Protocol.Rounds
 import FlockSoundness.Accounting.Bound
 import FlockSoundness.Model.Statement
 
@@ -26,13 +27,6 @@ open Polynomial Game Model
 open scoped ENNReal
 
 variable {F : Type} [Field F] [Fintype F] [DecidableEq F] [CharP F 2]
-
-omit [Fintype F] [DecidableEq F] in
-theorem two_eq_zero : (2 : F) = 0 := by exact_mod_cast CharP.cast_eq_zero F 2
-
-omit [Fintype F] [DecidableEq F] in
-theorem add_self (a : F) : a + a = 0 := by
-  rw [← two_mul, two_eq_zero, zero_mul]
 
 /-! ## The residual round of the zerocheck (Z6) -/
 

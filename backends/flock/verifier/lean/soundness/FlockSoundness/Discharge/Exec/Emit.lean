@@ -1,4 +1,4 @@
-import FlockSoundness.Refine.Frames
+import FlockSoundness.Protocol.Refine.Frames
 
 /-!
 # The frames a run emits (R11b)

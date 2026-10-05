@@ -1,6 +1,6 @@
-import FlockSoundness.Discharge.ZkHidden.SoundDefs
-import FlockSoundness.Discharge.ZkHidden.Theorems
-import FlockSoundness.Discharge.ZkExec.RunsLive
+import FlockSoundness.Protocol.Discharge.ZkHidden.SoundDefs
+import FlockSoundness.Protocol.Discharge.ZkHidden.Theorems
+import FlockSoundness.Protocol.Discharge.ZkExec.RunsLive
 
 /-!
 # `RunsZC` at the live hidden-output `--zk` tables, from `TablesAtZKHLive`

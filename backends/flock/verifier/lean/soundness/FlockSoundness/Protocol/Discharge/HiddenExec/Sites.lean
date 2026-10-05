@@ -1,4 +1,4 @@
-import FlockSoundness.Protocol.Discharge.HiddenExec.Placed
+import FlockSoundness.Discharge.HiddenExec.Placed
 
 /-!
 # The sites of a one-table hidden-output session

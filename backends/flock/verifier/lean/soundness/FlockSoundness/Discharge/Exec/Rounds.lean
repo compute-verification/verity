@@ -1,5 +1,5 @@
 import FlockSoundness.Discharge.Exec.FramesRep
-import FlockSoundness.Discharge.Exec.Retained
+import FlockSoundness.Protocol.Discharge.Exec.Retained
 
 /-!
 # flock-verify's acceptance, round by round (R11b, the executable side)

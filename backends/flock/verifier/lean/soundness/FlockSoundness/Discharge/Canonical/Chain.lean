@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.Hidden.Wide.RowCommit
+import FlockSoundness.Protocol.Discharge.Hidden.Wide.RowCommit
 
 set_option Elab.async false
 

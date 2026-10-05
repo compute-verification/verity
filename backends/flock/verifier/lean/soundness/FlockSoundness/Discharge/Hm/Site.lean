@@ -6,7 +6,8 @@ statement, the `b ‖ c` a satisfying witness holds at row port `p`'s `hm96` out
 `Layout.msgCol_lt_of_parse`), so the site's addresses read the block's bits (`bit_siteAddr`).
 -/
 import FlockSoundness.Discharge.Hm.Bc
-import FlockSoundness.Discharge.Layout
+import FlockSoundness.Protocol.Discharge.Layout.Keyed
+import FlockSoundness.Discharge.Layout.Scope
 
 open Flock FlockLevel3
 open Flock.HmNets hiding and

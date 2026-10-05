@@ -1,5 +1,8 @@
 import FlockSoundness.Discharge.Layout.HmRegion
 import FlockSoundness.Protocol.Discharge.Layout.Drawn
+import FlockSoundness.Binding.Layout
+import FlockSoundness.ExecSetup
+import FlockSoundness.Refine.Setup
 
 set_option Elab.async false
 

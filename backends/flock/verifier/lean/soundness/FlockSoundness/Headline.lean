@@ -1,5 +1,6 @@
 import FlockSoundness.Binding.E2E
 import FlockSoundness.ExecDrawOS
+import FlockSoundness.Protocol.Headline
 
 /-!
 # The headline: the program's rows, SHA-512 throughout, the live draw
@@ -36,9 +37,6 @@ namespace FlockSoundness.Audit
 
 open Game Model Accounting Extract LinkFinder Refine Partition
 open scoped ENNReal
-
-/-- SHA-512's digests are inhabited, as the session's tables ask of their digests. -/
-instance digInhabited : Inhabited Dig := ⟨H512 []⟩
 
 variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))

@@ -52,6 +52,17 @@ opened with larger probability. -/
 def IsPluralityE (g : Game α) (s : Strategy g) (vstar : P → V) : Prop :=
   ∀ p v, expect (ind fun a => op a p = some v) g s ≤ expect (ind fun a => op a p = some (vstar p)) g s
 
+/-- Every run distribution has a plurality table. -/
+theorem exists_pluralityE [Nonempty V] (g : Game α) (s : Strategy g) :
+    ∃ vstar : P → V, IsPluralityE op g s vstar := by
+  have h : ∀ p, ∃ v : V, ∀ w, expect (ind fun a => op a p = some w) g s ≤
+      expect (ind fun a => op a p = some v) g s := by
+    intro p
+    obtain ⟨v, -, hv⟩ := Finset.exists_max_image (univ : Finset V)
+      (fun w => expect (ind fun a => op a p = some w) g s) univ_nonempty
+    exact ⟨v, fun w => hv w (mem_univ w)⟩
+  exact ⟨fun p => (h p).choose, fun p => (h p).choose_spec⟩
+
 end Rewinding
 
 end FlockSoundness

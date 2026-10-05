@@ -1,5 +1,6 @@
-import FlockSoundness.Protocol.Refine.Frames
+import FlockSoundness.Discharge.Exec.Rounds
 import FlockSoundness.Protocol.Discharge.Exec.Verdict
+import FlockSoundness.Protocol.Discharge.Exec.Shape
 import FlockSoundness.Protocol.Discharge.Exec.Pts
 import FlockSoundness.Protocol.Discharge.Exec.LiveOn
 import FlockSoundness.Protocol.Discharge.Layout.Keyed
@@ -183,12 +184,28 @@ and otherwise the reference setup `x₀`'s refused table. -/
 noncomputable def tableAt (S : Finset (Fin n)) : Table mPts S :=
   if h : Nonempty (DrawSetup I mPts S (dj S)) then (Classical.choice h).table ht else x₀.refused ht S
 
+/-- **The table is setupH's statement wherever setupH accepts**: at a draw with a `DrawSetup` at `dj S`, the table's
+statement is `Layout.model` of setupH's statement at its regions, and its acceptance's draw is `dj S`. -/
+theorem tableAt_stmt {S : Finset (Fin n)} (x : DrawSetup I mPts S (dj S)) :
+    ∃ y : DrawSetup I mPts S (dj S), y.st = x.st ∧ tableAt ht dj x₀ S = y.table ht := by
+  refine ⟨Classical.choice ⟨x⟩, ?_, by unfold tableAt; rw [dite_eq_left_of_eq_true (eq_true ⟨x⟩)]⟩
+  have e := (Classical.choice (⟨x⟩ : Nonempty (DrawSetup I mPts S (dj S)))).h.symm.trans x.h
+  exact Except.ok.inj e
+
 theorem tableAt_cases (S : Finset (Fin n)) :
     (∃ x : DrawSetup I mPts S (dj S), tableAt ht dj x₀ S = x.table ht) ∨ tableAt ht dj x₀ S = x₀.refused ht S := by
   unfold tableAt
   split
   · exact .inl ⟨_, rfl⟩
   · exact .inr rfl
+
+/-- **A refused draw's table is unsatisfiable**: at a draw with no `DrawSetup`, no witness satisfies the table. -/
+theorem tableAt_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (DrawSetup I mPts S (dj S)))
+    (z : Witness (tableAt ht dj x₀ S).T.S.m) : ¬ (tableAt ht dj x₀ S).T.S.Satisfies z := by
+  revert z
+  unfold tableAt
+  rw [dite_eq_right_of_eq_false (eq_false hS)]
+  exact x₀.refused_unsat ht S
 
 theorem tableAt_inputs (S : Finset (Fin n)) :
     (tableAt ht dj x₀ S).acc.tags = I.tags ∧ (tableAt ht dj x₀ S).acc.cf = I.circuitFile ∧
@@ -252,5 +269,21 @@ theorem table_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (h
     {S : Finset (Fin n)} (x : DrawSetup I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     Layout.BcSite (x.table ht).acc pop ((x.table ht).o u h) ((x.table ht).vu u h) u.val :=
   table_bcSiteS ht dj hc ho hpop x h
+
+/-- **`BcSite` at every satisfiable site** of the one-table plan: at a draw flock-verify sets up by `table_bcSite`; at a
+refused draw no message satisfies the table (`refused_unsat`). -/
+theorem sitesAt_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
+    (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop) (hpt : pop.tables = none) :
+    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) (M : Binding.Msg (planAt ht dj x₀) (tabAt ht dj x₀) S R u),
+      Binding.Sat (planAt ht dj x₀) (tabAt ht dj x₀) S R u M →
+        Layout.BcSite ((sitesAt ht dj x₀).acc S R u h) pop ((sitesAt ht dj x₀).o S R u h)
+          ((sitesAt ht dj x₀).vu S R u h) u.val := by
+  intro S R u h M hM
+  show Layout.BcSite (tableAt ht dj x₀ S).acc pop ((tableAt ht dj x₀ S).o u h) ((tableAt ht dj x₀ S).vu u h) u.val
+  by_cases hS : Nonempty (DrawSetup I mPts S (dj S))
+  · have e : tableAt ht dj x₀ S = (Classical.choice hS).table ht := by unfold tableAt; rw [dite_eq_left_of_eq_true (eq_true hS)]
+    rw [e]
+    exact table_bcSite ht dj hc ho hpop hpt _ h
+  · exact absurd hM (tableAt_unsat ht dj x₀ hS _)
 
 end FlockSoundness.Discharge.Integrate

@@ -65,5 +65,7 @@ theorem zkTags_eq (I : Inputs) : zkTags I = Flock.Zk.tags I.tags (Flock.Zk.maskL
 
 theorem zkTags_typed (I : Inputs) : (zkTags I).typed = I.tags.typed := by rw [zkTags_eq]; rfl
 theorem zkTags_hiddenOutputs (I : Inputs) : (zkTags I).hiddenOutputs = I.tags.hiddenOutputs := by rw [zkTags_eq]; rfl
+theorem zkTags_retainRounds (I : Inputs) : (zkTags I).retainRounds = I.tags.retainRounds := by rw [zkTags_eq]; rfl
+theorem zkTags_merkleLeaf (I : Inputs) : (zkTags I).merkleLeaf = I.tags.merkleLeaf := by rw [zkTags_eq]; rfl
 
 end FlockSoundness.Discharge.ZkExec

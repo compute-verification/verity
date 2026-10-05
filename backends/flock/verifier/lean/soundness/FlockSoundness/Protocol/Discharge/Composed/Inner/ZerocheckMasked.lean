@@ -22,6 +22,8 @@ namespace FlockSoundness.Discharge.Composed.ZerocheckMasked
 open Flock Flock.Zk FlockLevel3
 open FlockSoundness.Discharge.Composed.Zerocheck
 
+local notation "𝔽" => FlockLevel3.GF128
+
 /-! ## The replay's zerocheck terms, at `s = lay.len` -/
 
 def r1c (lay : PadLayout) (zc : ZerocheckProof) : Array Lin :=

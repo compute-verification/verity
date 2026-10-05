@@ -1,6 +1,4 @@
-import FlockSoundness.Discharge.ZkExec.Statements
-import FlockSoundness.Refine.Exec
-import FlockSoundness.Refine.Table
+import FlockSoundness.Protocol.Discharge.ZkExec.Statements
 
 /-!
 # flock-verify `--zk`'s inner proof accepts (live/PROTOCOL.md §5)

@@ -1,5 +1,6 @@
+import FlockSoundness.Discharge.HiddenExec.KeyH
 import FlockSoundness.Discharge.Layout.Scope
-import FlockSoundness.Protocol.Discharge.HiddenExec.KeyH
+import FlockSoundness.Discharge.HiddenExec.Accepted
 import FlockSoundness.Protocol.Discharge.HiddenExec.Sites
 
 set_option Elab.async false
@@ -27,6 +28,8 @@ namespace FlockSoundness.Discharge.HiddenExec
 open Game Model Accounting Refine Audit Audit.Partition Flock
 open FlockSoundness.Discharge.Exec
 open scoped ENNReal
+
+local notation "𝔽" => FlockLevel3.GF128
 
 /-- `rs`'s scope gives `sitesAtH`'s rows: every port of a circuit in scope is a `sha512/row/v1` row. -/
 theorem v2_of_scope {c : Flock.Circuit} (hscope : Layout.scopeOk c = true) : ∀ p ∈ c.ports.toList, p.v2 = false :=
@@ -98,6 +101,16 @@ noncomputable abbrev layAtH :
 public file without shared-row tables (`hpt`). -/
 noncomputable abbrev rsAtH : Binding.HmRows (layAtH ht hc hscope dj x₀ hU (pub := pub) (Reg := Reg)) :=
   keyRowsH (sitesAtH_parse ht hc (v2_of_scope hscope) dj x₀) (Layout.outsOf c hU n) (fun _ => pub)
+    (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
+    (sitesAtH_bcSite ht hc hscope dj x₀ hU hpub hpt)
+    (Layout.keysRow_of_parse (parse_untyped ht hc).1 (Layout.scopeOk_spec hU hscope).1
+      (Layout.scopeOk_spec hU hscope).2.2)
+
+/-- **`hHm` at the hidden tables** (`keyRowsH_computes`): in a satisfying witness of a drawn unit's table, each row's
+`b ‖ c` at the unit's site, input or output, is the commit string of the row's bytes under the salt at its `hm96`
+slot. -/
+theorem rsAtH_computes : (rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).Computes :=
+  keyRowsH_computes (sitesAtH_parse ht hc (v2_of_scope hscope) dj x₀) (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
     (sitesAtH_bcSite ht hc hscope dj x₀ hU hpub hpt)
     (Layout.keysRow_of_parse (parse_untyped ht hc).1 (Layout.scopeOk_spec hU hscope).1

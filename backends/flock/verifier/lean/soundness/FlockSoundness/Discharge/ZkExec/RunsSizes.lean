@@ -1,5 +1,5 @@
-import FlockSoundness.Discharge.ZkExec.RunsStatements
 import FlockSoundness.Discharge.DecodeZL.Sizes
+import FlockSoundness.Protocol.Discharge.ZkExec.RunsStatements
 
 /-!
 # A decoded `--zk` proof's lengths

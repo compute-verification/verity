@@ -1,7 +1,6 @@
 import ArkLib.Data.CodingTheory.ProximityGap.BCIKS20.AffineLines.UniqueDecoding
 import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
-import FlockSoundness.Protocol.ZerocheckPhase
-import Mathlib.Analysis.MeanInequalities
+import FlockSoundness.Protocol.LigeritoQueries
 
 /-!
 # The `--zk` inner proof is sound (live/PROTOCOL.md §5)

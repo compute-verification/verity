@@ -128,17 +128,6 @@ variable {α : Type} {P V : Type} [Fintype P] [Fintype V] [DecidableEq V]
 
 variable (op : α → P → Option V)
 
-/-- Every run distribution has a plurality table. -/
-theorem exists_pluralityE [Nonempty V] (g : Game α) (s : Strategy g) :
-    ∃ vstar : P → V, IsPluralityE op g s vstar := by
-  have h : ∀ p, ∃ v : V, ∀ w, expect (ind fun a => op a p = some w) g s ≤
-      expect (ind fun a => op a p = some v) g s := by
-    intro p
-    obtain ⟨v, -, hv⟩ := Finset.exists_max_image (univ : Finset V)
-      (fun w => expect (ind fun a => op a p = some w) g s) univ_nonempty
-    exact ⟨v, fun w => hv w (mem_univ w)⟩
-  exact ⟨fun p => (h p).choose, fun p => (h p).choose_spec⟩
-
 omit [Fintype P] [Fintype V] [DecidableEq V] in
 open Classical in
 theorem ind_isSome_eq_sum [Fintype V] (p : P) (a : α) :

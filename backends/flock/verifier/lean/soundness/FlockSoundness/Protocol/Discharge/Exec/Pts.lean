@@ -1,7 +1,4 @@
-import FlockSoundness.Protocol.ExecTyped
-import FlockSoundness.Protocol.ExecSetup
-import FlockSoundness.Protocol.Discharge.Exec.Setup
-import FlockSoundness.Protocol.Discharge.Exec.SessionL
+import FlockSoundness.Protocol.Discharge.Exec.Merkle
 
 /-!
 # The link points' count of a `setupH` statement

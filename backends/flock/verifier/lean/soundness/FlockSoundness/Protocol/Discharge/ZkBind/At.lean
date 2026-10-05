@@ -28,6 +28,8 @@ open Flock FlockLevel3 Game Model Accounting Refine Audit ZkSession ZkLink ZkExe
 open FlockSoundness.Discharge.Exec (Inputs)
 open scoped ENNReal
 
+local notation "𝔽" => FlockLevel3.GF128
+
 /-- An acceptance whose statement is `T`, as one whose statement is `T' = T`. -/
 def recastAcc {T T' : Model.Statement} (a : Accepted T) (e : T = T') : Accepted T' := { a with hT := a.hT.trans e }
 
@@ -165,6 +167,15 @@ noncomputable abbrev rsZAt : HmRowsZ (layZAt (Reg := Reg) ht dj y₀ hc hU (pub 
   HmRowsZ.ofShadow (planZAt_S ht dj y₀) (decAgreeAt ht dj y₀ hc hU)
     (Layout.keyedRowsOuts (sitesSh_parse ht dj y₀ hc) Hm.saltCol hc (Layout.scopeOk_spec hU hscope).1
       (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
+      (sitesSh_bcSite ht dj y₀ hc hU hpub hpt hscope))
+
+/-- **`hHm` at the `--zk` tables' rows** (e2e-hm's `keyedRowsOuts_computes`, moved along): in a satisfying witness of a
+drawn unit's `--zk` table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under
+the salt at its `hm96` slot. -/
+theorem rsZAt_computes : (rsZAt (Reg := Reg) ht dj y₀ hc hU hpub hpt hscope).Computes :=
+  HmRowsZ.ofShadow_computes (planZAt_S ht dj y₀) (decAgreeAt ht dj y₀ hc hU) _
+    (Hm.keyedRowsOuts_computes (sitesSh_parse ht dj y₀ hc) hc (Layout.scopeOk_spec hU hscope).1
+      (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope)
       (sitesSh_bcSite ht dj y₀ hc hU hpub hpt hscope))
 
 end FlockSoundness.Discharge.ZkBind

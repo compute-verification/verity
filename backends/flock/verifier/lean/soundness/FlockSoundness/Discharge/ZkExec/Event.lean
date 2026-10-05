@@ -40,8 +40,6 @@ def LiveAcceptsZK (I : Inputs) (o : Reg × Finset (Fin n) × Transcript) : Prop 
 /-! ## The `--zk` tags change only the identity -/
 
 theorem zkTags_hm96Rows (I : Inputs) : (zkTags I).hm96Rows = I.tags.hm96Rows := by rw [zkTags_eq]; rfl
-theorem zkTags_retainRounds (I : Inputs) : (zkTags I).retainRounds = I.tags.retainRounds := by rw [zkTags_eq]; rfl
-theorem zkTags_merkleLeaf (I : Inputs) : (zkTags I).merkleLeaf = I.tags.merkleLeaf := by rw [zkTags_eq]; rfl
 theorem zkTags_manyTables (I : Inputs) : (zkTags I).manyTables = I.tags.manyTables := by rw [zkTags_eq]; rfl
 
 end FlockSoundness.Discharge.ZkExec

@@ -4,6 +4,9 @@ import FlockSoundness.Discharge.Hm.Bc
 import FlockSoundness.Discharge.Hm.Site
 import FlockSoundness.Discharge.Layout.Drawn
 import FlockSoundness.Protocol.Discharge.Hidden.Committed
+import FlockSoundness.Discharge.Hidden.Delta
+import FlockSoundness.Discharge.Hidden.Rows
+import FlockSoundness.Discharge.Layout
 
 /-!
 # An output row's registered `b ‖ c` (`OutputsCommitted`)

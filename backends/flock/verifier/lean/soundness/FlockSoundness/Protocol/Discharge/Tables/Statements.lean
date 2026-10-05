@@ -1,6 +1,6 @@
+import FlockSoundness.Discharge.Tables.Accepts
 import FlockSoundness.Protocol.Discharge.Tables.Sim
 import FlockSoundness.Protocol.Discharge.Exec.LiveOn
-import FlockSoundness.Protocol.Discharge.Exec.Setup
 
 /-!
 # Sessions of `J` tables: the statements
@@ -31,6 +31,8 @@ namespace FlockSoundness.Discharge.Tables
 
 open Game Model Accounting Refine Audit Audit.Partition Exec
 open scoped ENNReal
+
+local notation "𝔽" => FlockLevel3.GF128
 
 open Lean (Json) in
 /-- Part `j` of `count` equal consecutive parts of the session's units, as the subset draw of the population that

@@ -25,12 +25,6 @@ open Flock
 
 /-! ## The audit's `Rows` from ordered rows -/
 
-/-- A column a computed row reads is the constant or an earlier column, so below `constPos + 1`. -/
-theorem RowOrder.lt {inCols constPos : ℕ} {ra rb : Array (Array ℕ)} (h : RowOrder inCols constPos ra rb)
-    {r : ℕ} (hlo : inCols ≤ r) (hhi : r < constPos) {c : ℕ}
-    (hc : c ∈ (ra.getD r #[]).toList ++ (rb.getD r #[]).toList) : c = constPos ∨ c < r :=
-  (h r hlo hhi c hc).imp id And.left
-
 section ofOrdered
 
 variable {inCols constPos : ℕ} {ra rb : Array (Array ℕ)} {h : RowOrder inCols constPos ra rb}
@@ -65,8 +59,6 @@ theorem parse_rowOrder {lines : Array String} {net : Net} (h : Net.parse lines =
 
 /-! ## `Sparse.ofRows`, read back -/
 
-theorem le32_length (x : ℕ) : (le32 x).length = 4 := rfl
-
 /-! ## The audit's `Rows` for a built net -/
 
 section ofNet
@@ -83,33 +75,6 @@ end ofNet
 namespace Rows
 
 variable (R : Rows) (k : ℕ)
-
-theorem stackRow_topo (f : Fin R.nComp → List (Fin R.w))
-    (hf : ∀ j, ∀ c ∈ f j, c.val < R.nIn + j.val ∨ c.val = R.nIn + R.nComp)
-    (i : Fin (k * (R.nComp + 1))) (c : Fin (R.stackW k)) (hc : c ∈ R.stackRow k f i) :
-    c.val < k * R.nIn + i.val ∨ c.val = k * R.nIn + k * (R.nComp + 1) := by
-  have hdm := Nat.div_add_mod' i.val (R.nComp + 1)
-  have hmod := Nat.mod_lt i.val (show 0 < R.nComp + 1 by omega)
-  unfold stackRow at hc
-  split at hc
-  · simp only [List.mem_singleton] at hc
-    exact Or.inr (by rw [hc])
-  · rename_i hj
-    obtain ⟨c₀, hc₀, rfl⟩ := List.mem_map.1 hc
-    refine Or.inl ?_
-    have ht := hf _ c₀ hc₀
-    simp only at ht
-    unfold stackCol
-    split
-    · rename_i h1
-      have := mul_add_lt (R.stack_copy_lt k i.isLt) h1
-      simp only
-      omega
-    · split
-      · simp only
-        omega
-      · simp only
-        omega
 
 end Rows
 

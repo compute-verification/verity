@@ -173,6 +173,29 @@ def openingZK (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (a c : Claim F m) (extra 
   let c₁ : Claim F m := ⟨cc, c.skip, c.x⟩
   pure (opResult A hm (a₁ :: c₁ :: extra) ((a₁, ea.2) :: (c₁, ec.2) :: swE) γ, ca, cc)
 
+omit [Fintype F] in
+/-- The opening's verdict on two claims with values `va`, `vc`: their claim checks hold, and the opening with the
+claim checks as values accepts. -/
+theorem opResult_two (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (va vc : F) (a c : Claim F m)
+    (extra : List (Claim F m)) (ea ec : (Fin 128 → F) × (Fin 7 → F))
+    (swE : List (Claim F m × (Fin 128 → F) × (Fin 7 → F))) (γ : Fin (extra.length + 2) → F) :
+    opResult A hm (⟨va, a.skip, a.x⟩ :: ⟨vc, c.skip, c.x⟩ :: extra)
+        ((⟨va, a.skip, a.x⟩, ea) :: (⟨vc, c.skip, c.x⟩, ec) :: swE) γ =
+      if ∑ v, packedWeight a hm v * ea.1 v = va ∧ ∑ v, packedWeight c hm v * ec.1 v = vc then
+        opResult A hm (⟨∑ v, packedWeight a hm v * ea.1 v, a.skip, a.x⟩ ::
+            ⟨∑ v, packedWeight c hm v * ec.1 v, c.skip, c.x⟩ :: extra)
+          ((⟨∑ v, packedWeight a hm v * ea.1 v, a.skip, a.x⟩, ea) ::
+            (⟨∑ v, packedWeight c hm v * ec.1 v, c.skip, c.x⟩, ec) :: swE) γ
+      else none := by
+  have hpw : ∀ (v' : F) (c' : Claim F m), packedWeight (⟨v', c'.skip, c'.x⟩ : Claim F m) hm = packedWeight c' hm :=
+    fun _ _ => rfl
+  by_cases h1 : ∑ v, packedWeight a hm v * ea.1 v = va <;> by_cases h2 : ∑ v, packedWeight c hm v * ec.1 v = vc
+  · rw [ite_eq_left ⟨h1, h2⟩, h1, h2]
+  all_goals
+    rw [ite_eq_right (by tauto)]
+    simp only [opResult, List.all_cons, hpw, h1, h2, decide_false, Bool.false_and, Bool.and_false,
+      Bool.false_eq_true, ite_false]
+
 variable [Fintype K] [DecidableEq K]
 
 /-- **The rest of a masked rep**, after lincheck: the masked opening, level 0 masked (`ligeritoPadZK`), then

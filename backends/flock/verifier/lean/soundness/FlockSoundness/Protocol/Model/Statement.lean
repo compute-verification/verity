@@ -93,6 +93,13 @@ structure Claim (F : Type) (m : ℕ) where
   skip : Fin 64 → F
   x : Fin (m - 6) → F
 
+/-- The value a claim asserts: `Σ_s skip[s]·Σ_{x'} eq(x, x')·z[s + 64·x']`, the evaluation of
+the witness's extension that is multilinear in address bits 6… and has the given weights on the
+64 skip positions (the quirky extension for `ab` and `c`, the multilinear one for regions). -/
+def Claim.eval {m : ℕ} (c : Claim F m) (z : Witness m) : F :=
+  ∑ a : Fin (2 ^ m), c.skip ⟨a.val % 64, Nat.mod_lt _ (by norm_num)⟩ * eqAt c.x (a.val / 64)
+    * ((z a).val : F)
+
 /-! ## The committed values -/
 
 /-- A level-0 table: `2^k₀` lanes, `2^d₀` codeword positions (§13.1). -/

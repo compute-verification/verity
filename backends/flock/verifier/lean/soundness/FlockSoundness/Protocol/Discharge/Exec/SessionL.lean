@@ -67,6 +67,8 @@ noncomputable def sessionBL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.E
 def acceptedBL [Inhabited D] [Inhabited Sl] (ts : List (TabSpec mPts)) (outs : List (OutCL F D Sl)) : Prop :=
   ∀ i : Fin ts.length, (outs.getD i dfltOutL).accepted = true
 
+local notation "𝔽" => FlockLevel3.GF128
+
 open Classical in
 /-- **The batched session on a draw, under `Lf`**: `Audit.Partition.batchedSession` with salted openings. At
 `Refine.leaf512` it is the session flock-verify's hm96 statements run. -/

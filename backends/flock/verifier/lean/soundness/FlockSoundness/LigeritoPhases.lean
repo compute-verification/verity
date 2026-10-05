@@ -2,6 +2,7 @@ import FlockSoundness.LigeritoDecode
 import FlockSoundness.LigeritoFolds
 import FlockSoundness.LigeritoOOD
 import FlockSoundness.LigeritoQueries
+import FlockSoundness.LigeritoRes
 
 /-!
 # Ligerito level by level (PROTOCOL.md §13.3)

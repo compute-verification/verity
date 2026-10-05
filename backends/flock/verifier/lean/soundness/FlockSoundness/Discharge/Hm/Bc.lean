@@ -5,7 +5,6 @@ string of the row and salt its slots read. Δ's one copy at each `cv` and `pad` 
 forced-zero row (`zero_bit`).
 -/
 import FlockSoundness.Discharge.Hm.Flat
-import FlockSoundness.Protocol.Discharge.Hm.Bc
 
 open Flock FlockLevel3
 
@@ -123,6 +122,14 @@ theorem row_bc_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c
   · exact hmSlot_flat L F hz o hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _))
 
 end Bc
+
+/-- A unit that returns the outputs has a slot per VU at least: the check's power of two of unit slots. -/
+theorem upv_pos {c : Circuit} (C : CheckFacts c) (ho : c.outNet = c.unitNet) : 0 < c.upv := by
+  have h := C.unit_pow2 ho
+  rw [C.unit_range.2] at h
+  unfold isPow2 at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  exact Nat.pos_of_mul_pos_left h.1
 
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}

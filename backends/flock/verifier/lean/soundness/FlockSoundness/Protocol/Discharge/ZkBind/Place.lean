@@ -1,7 +1,4 @@
-import Mathlib.SetTheory.Cardinal.Finite
-import Mathlib.SetTheory.Cardinal.NatCard
-import Mathlib.Algebra.CharP.Two
-import FlockSoundness.Protocol.Discharge.ZkExec.LiveStatements
+import FlockSoundness.Protocol.Discharge.ZkExec.RunsLive
 
 /-!
 # `--zk` unit placements: each drawn unit's `UnitPlace` from setupH's accept

@@ -2,6 +2,7 @@ import FlockSoundness.ExecCircuit
 import FlockSoundness.ExecCheck
 import FlockSoundness.ExecTyped
 import FlockSoundness.ExecSetup
+import FlockSoundness.Protocol.ExecTemplate
 
 /-!
 # A typed template's statement, as `HmRow.parse` and `Stmt.setupH` accept it (1e for templates, T2)
@@ -323,25 +324,6 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
           leavesIn := (Except.ok.inj hleavesIn).symm
           wires := rfl
           leafCuts := hlc (hkeys "leaf_cuts" (by simp [HmRow.TEMPLATE_DERIVED])) }
-
-/-- **What `parseTyped` accepted** (#307): `Typed.read`'s class `k` and block, then `parse` on the block, a template's
-(`tmpl`) or a flat class's unit net (`pre`), with the class recorded as `cls`. -/
-theorem parseTyped_spec {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
-    (h : HmRow.parseTyped tags bytes tables = .ok c) :
-    ∃ k r, Typed.read tags bytes tables = .ok (k, r) ∧
-      ((∃ t c', r = .inr t ∧ HmRow.parse tags bytes tables (tmpl := some t) = .ok c' ∧ c = { c' with cls := some k }) ∨
-        ∃ net c', r = .inl net ∧ HmRow.parse tags bytes tables (pre := #[("unit", net)]) = .ok c' ∧
-          c = { c' with cls := some k }) := by
-  unfold HmRow.parseTyped at h
-  obtain ⟨⟨k, r⟩, hr, h⟩ := except_bind_ok h
-  refine ⟨k, r, hr, ?_⟩
-  cases r with
-  | inr t =>
-    obtain ⟨c', hc', h⟩ := except_bind_ok h
-    exact Or.inl ⟨t, c', rfl, hc', (Except.ok.inj h).symm⟩
-  | inl net =>
-    obtain ⟨c', hc', h⟩ := except_bind_ok h
-    exact Or.inr ⟨net, c', rfl, hc', (Except.ok.inj h).symm⟩
 
 /-- **What `Stmt.setupH` accepted, for a typed statement** (`tags.typed = true`): the circuit `parseTyped` accepted, the
 pin `HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 27`. -/

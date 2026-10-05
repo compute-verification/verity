@@ -15,6 +15,8 @@ namespace FlockSoundness.Discharge.Exec
 open Game Model Accounting Refine Audit Audit.Partition
 open scoped ENNReal
 
+local notation "𝔽" => FlockLevel3.GF128
+
 variable {D Sl : Type} [Nonempty D] [Inhabited D] [Inhabited Sl] {mPts n : ℕ} {Reg : Type}
 
 variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H)

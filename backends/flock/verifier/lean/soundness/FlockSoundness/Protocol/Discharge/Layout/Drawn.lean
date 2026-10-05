@@ -1,4 +1,4 @@
-import FlockSoundness.Protocol.Discharge.Layout.HmRegion
+import FlockSoundness.Discharge.Layout.HmRegion
 
 set_option Elab.async false
 

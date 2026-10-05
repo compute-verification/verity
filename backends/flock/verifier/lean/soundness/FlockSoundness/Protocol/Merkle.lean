@@ -50,6 +50,29 @@ def walk : ℕ → D → List D → D
   | _, acc, [] => acc
   | idx, acc, sib :: rest => walk (idx / 2) (up H E idx acc sib) rest
 
+theorem append_inj {a b a' b' : D} (h : E.dig a ++ E.dig b = E.dig a' ++ E.dig b') :
+    a = a' ∧ b = b' := by
+  have hl : (E.dig a).length = (E.dig a').length := E.dig_len a a'
+  obtain ⟨h1, h2⟩ := List.append_inj h hl
+  exact ⟨E.dig_inj h1, E.dig_inj h2⟩
+
+/-- Two walks from different nodes that meet give a collision. -/
+theorem walk_binding : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
+    sibs.length = sibs'.length → a ≠ a' → walk H E idx a sibs = walk H E idx a' sibs' →
+      Collision H
+  | [], [], _, a, a', _, hne, heq => absurd heq hne
+  | [], _ :: _, _, _, _, hlen, _, _ => by simp at hlen
+  | _ :: _, [], _, _, _, hlen, _, _ => by simp at hlen
+  | s :: rest, s' :: rest', idx, a, a', hlen, hne, heq => by
+      simp only [walk] at heq
+      by_cases hup : up H E idx a s = up H E idx a' s'
+      · -- the step itself collides: different inputs (the accumulators differ), equal hashes
+        unfold up at hup
+        split_ifs at hup with he
+        · refine ⟨_, _, fun h => hne (append_inj E h).1, hup⟩
+        · refine ⟨_, _, fun h => hne (append_inj E h).2, hup⟩
+      · exact walk_binding rest rest' (idx / 2) _ _ (by simpa using hlen) hup heq
+
 /-! ## Leaf schemes: salted leaves (hm96) -/
 
 /-- **A leaf scheme**: a column's leaf under a salt of type `S`, such that two columns with one leaf, under any salts,
@@ -118,5 +141,17 @@ def reachL (Lf : Leaf Col S D H) (pos : ℕ) (column : Col) (salt : S) (sibs : L
 `pos >> (d − c)`. -/
 def VerifiesL (Lf : Leaf Col S D H) (cap : ℕ → D) (depth pos : ℕ) (column : Col) (salt : S) (sibs : List D) : Prop :=
   sibs.length = depth ∧ reachL H E Lf pos column salt sibs = cap (pos / 2 ^ depth)
+
+/-- **Merkle binding, for any leaf scheme.** Two openings of one position that verify against one cap with different
+columns, under any salts, yield a collision of `H`. -/
+theorem opening_bindingL (Lf : Leaf Col S D H) (cap : ℕ → D) (depth pos : ℕ) (c c' : Col) (s s' : S)
+    (sibs sibs' : List D) (hc : c ≠ c') (h : VerifiesL H E Lf cap depth pos c s sibs)
+    (h' : VerifiesL H E Lf cap depth pos c' s' sibs') : Collision H := by
+  obtain ⟨hl, hr⟩ := h
+  obtain ⟨hl', hr'⟩ := h'
+  have heq : reachL H E Lf pos c s sibs = reachL H E Lf pos c' s' sibs' := hr.trans hr'.symm
+  by_cases hleaf : Lf.leaf c s = Lf.leaf c' s'
+  · exact Lf.bind c c' s s' hc hleaf
+  · exact walk_binding H E sibs sibs' pos _ _ (hl.trans hl'.symm) hleaf heq
 
 end FlockSoundness.Merkle

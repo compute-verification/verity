@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.HiddenExec.Accepted
+import FlockSoundness.Discharge.HiddenExec.Accepts
 
 /-!
 # The headline over hidden-output sessions, with every open guarantee named

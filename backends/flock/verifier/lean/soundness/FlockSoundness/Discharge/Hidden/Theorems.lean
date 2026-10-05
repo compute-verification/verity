@@ -24,8 +24,6 @@ namespace FlockSoundness.Discharge.Hidden
 
 theorem hidden_delta : HiddenDelta := hidden_delta'
 
-theorem hidden_layout : HiddenLayout := hidden_layout'
-
 theorem public_exposes : PublicExposes := public_exposes'
 
 theorem outputs_committed : OutputsCommitted := outputs_committed'

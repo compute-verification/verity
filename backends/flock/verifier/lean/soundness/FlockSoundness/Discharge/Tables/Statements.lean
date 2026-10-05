@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.Tables.Headline
 import FlockSoundness.Discharge.Tables.Accepts
 import FlockSoundness.Protocol.Discharge.Tables.Statements
+import FlockSoundness.Discharge.Exec.Setup
 
 /-!
 # Sessions of `J` tables: the statements

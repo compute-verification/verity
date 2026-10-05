@@ -1,6 +1,6 @@
 import FlockSoundness.ExecCircuit
+import FlockSoundness.ExecCheck
 import FlockSoundness.ExecLookup
-import FlockSoundness.Protocol.ExecCheck
 
 open Flock FlockLevel3
 

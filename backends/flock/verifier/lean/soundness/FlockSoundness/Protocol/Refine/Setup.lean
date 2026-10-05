@@ -57,6 +57,8 @@ theorem list_forIn_each {α σ : Type} (f : α → σ → V (ForInStep σ)) (P :
       · exact hP
       · exact list_forIn_each f P hf L s' v h b hb
 
+theorem throw_bind' {α β : Type} (e : String) (f : α → V β) : ((throw e : V α) >>= f) = throw e := rfl
+
 /-! ### Regions -/
 
 theorem mkRegion_wf {kl : ℕ} {name : String} {free : Array ℕ} {fixed : ℕ} {bytes : ℕ → ByteArray} {r : Region}

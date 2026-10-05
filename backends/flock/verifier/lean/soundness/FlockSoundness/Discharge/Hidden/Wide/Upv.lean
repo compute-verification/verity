@@ -1,5 +1,5 @@
-import FlockSoundness.Discharge.Hidden.Facts
 import FlockSoundness.Discharge.Layout.OutShape
+import FlockSoundness.Protocol.Discharge.Hidden.Facts
 
 /-!
 # A unit per VU, from acceptance

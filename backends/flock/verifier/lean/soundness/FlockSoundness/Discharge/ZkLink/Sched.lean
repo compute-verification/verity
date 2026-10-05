@@ -1,5 +1,5 @@
-import FlockSoundness.Discharge.ZkExec.Statements
-import FlockSoundness.Discharge.ZkSession.Session
+import FlockSoundness.Protocol.Discharge.ZkExec.Statements
+import FlockSoundness.Protocol.Discharge.ZkSession.Session
 
 /-!
 # `Zk.schedule` at every m it accepts

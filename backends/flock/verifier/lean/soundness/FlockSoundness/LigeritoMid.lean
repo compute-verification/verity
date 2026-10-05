@@ -1,4 +1,5 @@
 import FlockSoundness.LigeritoPhases
+import FlockSoundness.Protocol.LigeritoMid
 
 /-!
 # From one level to the next (PROTOCOL.md §13.3 steps 5–8)
@@ -320,10 +321,6 @@ open Classical in
 noncomputable def mismatch (A : Arith F K) (cols d : ℕ) (C : Oracle F) (ch : List K)
     (G : ℕ → K) : Finset ℕ :=
   (Finset.range (2 ^ d)).filter fun p => foldColumn A ch (fun ℓ => C ℓ p) ≠ encK A cols G p
-
-theorem positions_length (A : Arith F K) (Q d : ℕ) (w : Fin Q → F) :
-    (positions A Q d w).length = Q := by
-  rw [positions_eq]; simp
 
 open Classical in
 /-- **The queries and the consistency coins.** If at most one message has a zero difference `D`

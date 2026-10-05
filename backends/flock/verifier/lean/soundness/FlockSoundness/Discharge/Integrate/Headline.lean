@@ -2,6 +2,9 @@ import FlockSoundness.Discharge.Integrate.Accepted
 import FlockSoundness.Discharge.Hm.Site
 import FlockSoundness.Discharge.Layout.Scope
 import FlockSoundness.Protocol.Discharge.Integrate.Headline
+import FlockSoundness.Discharge.Aliased
+import FlockSoundness.Discharge.Hm.Copy
+import FlockSoundness.Discharge.Integrate.Sites
 
 /-!
 # The headline at the executable, with every open guarantee named
@@ -38,14 +41,6 @@ variable {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ} {I : Inputs} (ht : I.
   {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {pub : Public}
   (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
   (hscope : Layout.scopeOk c = true) {Reg : Type}
-
-/-- **`hHm` at the session's rows**: e2e-hm's `keyedRowsOuts_computes`. In a satisfying witness of a drawn unit's
-table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under the salt at its
-`hm96` slot. -/
-theorem rsAt_computes : (rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).Computes :=
-  Hm.keyedRowsOuts_computes (sitesAt_parse ht dj x₀ hc) hc (Layout.scopeOk_spec hU hscope).1
-    (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope)
-    (sitesAt_bcSite ht dj x₀ hc (Layout.scopeOk_spec hU hscope).2.1 hpub hpt)
 
 /-- **The headline at the executable.** Let `I` be a verify command's inputs (one table) whose one circuit file parses
 to an untyped circuit `c` (`hc`, `ht`) and whose public file loads to `pub` with no shared-row tables (`hpt`, as

@@ -159,37 +159,6 @@ variable {α₁ β₁ α₂ β₂ I₁ I₂ : Type} {get₁ : I₁ → ℕ → O
 
 variable [Inhabited T] [Inhabited D]
 
-theorem getPair_fresh₁ (hd : Disjoint get₁ get₂) {i₁ : I₁} {slot : ℕ} {upd : T → D → I₁}
-    (hf : get₁ i₁ slot = none) (hs : ∀ t d, get₁ (upd t d) slot = some (t, d)) (i₂ : I₂) :
-    getPair get₁ get₂ (i₁, i₂) slot = none := by
-  simp only [getPair, hf, Option.orElse_none]
-  exact hd.left (upd default default) i₂ slot (by rw [hs]; rfl)
-
-theorem getPair_set₁ {slot : ℕ} {upd : T → D → I₁} (hs : ∀ t d, get₁ (upd t d) slot = some (t, d))
-    (i₂ : I₂) (t : T) (d : D) : getPair get₁ get₂ (upd t d, i₂) slot = some (t, d) := by
-  simp only [getPair, hs t d]; rfl
-
-theorem getPair_keep₁ {i₁ : I₁} {slot : ℕ} {upd : T → D → I₁}
-    (hk : ∀ t d s, s ≠ slot → get₁ (upd t d) s = get₁ i₁ s) (i₂ : I₂) (t : T) (d : D) (s : ℕ)
-    (hs : s ≠ slot) : getPair get₁ get₂ (upd t d, i₂) s = getPair get₁ get₂ (i₁, i₂) s := by
-  simp only [getPair, hk t d s hs]
-
-theorem getPair_fresh₂ (hd : Disjoint get₁ get₂) {i₂ : I₂} {slot : ℕ} {upd : T → D → I₂}
-    (hf : get₂ i₂ slot = none) (hs : ∀ t d, get₂ (upd t d) slot = some (t, d)) (i₁ : I₁) :
-    getPair get₁ get₂ (i₁, i₂) slot = none := by
-  simp only [getPair, hd.right i₁ (upd default default) slot (by rw [hs]; rfl),
-    Option.orElse_none, hf]
-
-theorem getPair_set₂ (hd : Disjoint get₁ get₂) {slot : ℕ} {upd : T → D → I₂}
-    (hs : ∀ t d, get₂ (upd t d) slot = some (t, d)) (i₁ : I₁) (t : T) (d : D) :
-    getPair get₁ get₂ (i₁, upd t d) slot = some (t, d) := by
-  simp only [getPair, hd.right i₁ (upd t d) slot (by rw [hs]; rfl), Option.orElse_none, hs t d]
-
-theorem getPair_keep₂ {i₂ : I₂} {slot : ℕ} {upd : T → D → I₂}
-    (hk : ∀ t d s, s ≠ slot → get₂ (upd t d) s = get₂ i₂ s) (i₁ : I₁) (t : T) (d : D) (s : ℕ)
-    (hs : s ≠ slot) : getPair get₁ get₂ (i₁, upd t d) s = getPair get₁ get₂ (i₁, i₂) s := by
-  simp only [getPair, hk t d s hs]
-
 end Interleave
 
 /-! ## Rewinding at every table node -/

@@ -52,33 +52,6 @@ section Bc
 variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags st)
 include L F
 
-/-- **An input bit of a row net's slot holds its one copy**, in the untyped statement and for any rows. At a self row
-`x` of a `sha512x3` or `hm96` slot below the net's input rows, where the rows' copies and wires write exactly one
-`(x, src)`, every block of a satisfying witness holds at `x` what it holds at `src`. -/
-theorem inBit_copyAll (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {n s off x src : ℕ}
-    (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
-    (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
-    (hoff : off < (st.c.nets.getD n default).2.inWords * Flock.WORD)
-    (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off])
-    (hf : (rowCopiesAll st.c st.pin ++
-        wireCopiesOf st.c (HmRow.rowWires st.c.ports st.c.shaNet st.c.hmNet).toList).filter
-      (fun e => e.1 = x) = [(x, src)]) :
-    blockBit (L.model regs) z o x = blockBit (L.model regs) z o src := by
-  have R := RowRanges.ofL L F.parse F.check
-  have hF : ∀ j, (flatPairsAll st.c st.pin).count (x, j) = (if j = x then 1 else 0) + (if j = src then 1 else 0) :=
-    fun j => by
-      rw [flatAll_count L F hrw hn hat hl hoff, hf]
-      simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
-  have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
-      deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
-    intro j
-    rw [L.delta_b, deltaEntry_eq_count, hda, delta_flat_all _ _ F.parse.typed hu, hF]
-    exact ⟨rfl, rfl⟩
-  have hx : x < 2 ^ (L.model regs).kLog := hat.lt R.bound (R.range (R.rowNet_lt hn)).1
-  exact block_of_rows hz o hx fun j => inBit_rows R hn hat hl hself hx hδ j
-
 /-- **The four copies into VU `g`'s row `p`**, for a row of `16 · words` bits in `2 · words = 128 · chunks` bytes and a
 compression or more, in every block of a satisfying witness of the untyped statement: the first compression's `cv` is
 the row prefix's midstate (`HmRow.prefixOf`), each later compression's `cv` the previous one's output, the `hm96`

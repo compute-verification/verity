@@ -1,18 +1,14 @@
+import FlockSoundness.Discharge.Hm.Mask
 import FlockProofs.Hash
 import Flock.Zk
 import FlockLevel3.ArithFacts
-import FlockSoundness.Protocol.Binding.Rows
-import FlockSoundness.Protocol.StrictCR
-import FlockSoundness.Protocol.ExecDrawOS
-import Flock.Derive
-import Flock.DeriveCheck
+import FlockSoundness.Protocol.Headline
+import FlockSoundness.Protocol.Types.Program
 import FlockProofs.Registered
 import FlockSoundness.Protocol.CROnly.Hm96Defs
 import Mathlib.Algebra.BigOperators.Field
 import FlockSoundness.Protocol.ZK.SHVZK
 import FlockSoundness.Protocol.ZK.RealView
-import Mathlib.Data.List.GetD
-import FlockSoundness.Protocol.Discharge.Hm.Hash
 
 /-!
 # The `--zk` tables at the executable's leaves, and the honest prover's pre-final messages
@@ -40,6 +36,8 @@ a level-0 leaf is `MerkleScheme.hm96Sha512.leaf` of its row (68 lanes: the `2^kâ
 namespace FlockSoundness.Discharge.ZkView
 
 open Flock ZK
+
+local notation "ð”½" => FlockLevel3.GF128
 
 /-! ## Bits and hm96-sha512 -/
 

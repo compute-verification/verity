@@ -1,4 +1,8 @@
-import FlockSoundness.Discharge.Exec
+import FlockSoundness.Discharge.Exec.Rounds
+import FlockSoundness.Protocol.Discharge.Exec.Verdict
+import FlockSoundness.Protocol.Discharge.Exec.Shape
+import FlockSoundness.Protocol.Discharge.Exec.Pts
+import FlockSoundness.Protocol.Discharge.Exec.LiveOn
 
 /-!
 # The statement flock-verify sets up for one table, under either tag

@@ -3,7 +3,6 @@ SHA-512's compression (FIPS 180-4 §6.4.2) on 64-bit vectors, in the builder's s
 a time, the rounds from constant `t`, the feed-forward. `Compress` proves the builder's rows force it.
 -/
 import Flock.HmNets
-import FlockSoundness.Protocol.Discharge.Hm.Spec
 
 namespace FlockSoundness.Discharge.Hm
 
@@ -41,6 +40,9 @@ def roundsV (w : List (BitVec 64)) : Nat → Nat → Regs (BitVec 64) → Regs (
 /-- One SHA-512 compression of the 16 message words `msg` from the chaining value `cv`, with the feed-forward. -/
 def compressV (cv msg : List (BitVec 64)) : List (BitVec 64) :=
   List.zipWith (· + ·) cv (roundsV (scheduleV 64 msg) 80 0 (Regs.ofList cv)).toList
+
+/-- Bit `p` of a list of words in word order: bit `p % 64` of word `p / 64`. -/
+def wbit (ws : List (BitVec 64)) (p : Nat) : Bool := (ws.getD (p / 64) 0).getLsbD (p % 64)
 
 /-- Bit `i` of `M·y` for the salt's bits `y` (`Hm96.mask`): `⊕_{j < 1536} key_{i+j} · y_j`. -/
 def maskV (key : ByteArray) (y : Nat → Bool) (i : Nat) : Bool :=

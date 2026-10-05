@@ -2,7 +2,7 @@
 The executable's mask `Hm96.Default512.mask` (per-byte tables of `M`'s columns, built by loops) is `maskV`, bit for bit:
 bit `t < 512` of `M·y` is `⊕_{j < 1536} key_{t+j} · y_j`.
 -/
-import FlockSoundness.Discharge.Hm.Slot
+import FlockSoundness.Protocol.Discharge.Hm.Slot
 
 namespace FlockSoundness.Discharge.Hm
 

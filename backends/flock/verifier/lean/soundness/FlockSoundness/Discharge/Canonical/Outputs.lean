@@ -1,5 +1,6 @@
-import FlockSoundness.Protocol.Discharge.Canonical.OutCopy
-import FlockSoundness.Protocol.Discharge.HiddenExec.KeyH
+import FlockSoundness.Discharge.Canonical.OutCopy
+import FlockSoundness.Discharge.HiddenExec.KeyH
+import FlockSoundness.Protocol.Discharge.Canonical.Commit
 
 set_option Elab.async false
 

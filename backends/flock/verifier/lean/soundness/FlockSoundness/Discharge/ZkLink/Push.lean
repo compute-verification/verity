@@ -54,28 +54,9 @@ theorem expect_push {get : I → ℕ → Option (Cap D × D)} (f : α → ℝ) :
       · rw [hkeep _ _ _ hs] at h
         exact hi s' c d h
 
-theorem pushed_pair {I₁ I₂ : Type} {get₁ : I₁ → ℕ → Option (Cap D × D)} {get₂ : I₂ → ℕ → Option (Cap D × D)}
-    (hd : Lock.Disjoint get₁ get₂) {i : I₁ × I₂} (h : Pushed (Lock.getPair get₁ get₂) i) :
-    Pushed get₁ i.1 ∧ Pushed get₂ i.2 := by
-  refine ⟨fun s c d hs => h s c d (by simp [Lock.getPair, hs]), fun s c d hs => h s c d ?_⟩
-  have h0 := hd.right i.1 i.2 s (by rw [hs]; rfl)
-  simp [Lock.getPair, h0, hs]
-
 end Push
 
 /-! ## The primed table -/
-
-omit [Fintype K] in
-theorem sessAfterZC_split (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts))
-    (caps : Fin ts.length → Cap D) (j : Fin ts.length) :
-    sessAfterZC (gamesZC A Hs ts caps) =
-      sessAtZ ((gamesZC A Hs ts caps).take j) ((gamesZC A Hs ts caps).drop (j + 1))
-        (tabAfterZC A Hs (ts.get j) (caps j)) := by
-  have hs : gamesZC A Hs ts caps = (gamesZC A Hs ts caps).take j ++
-      tabAfterZC A Hs (ts.get j) (caps j) :: (gamesZC A Hs ts caps).drop (j + 1) :=
-    ofFn_split (fun i => tabAfterZC A Hs (ts.get i) (caps i)) j
-  conv_lhs => rw [hs]
-  simp only [sessAfterZC, sessAtZ, List.map_append, List.map_cons]
 
 omit [Fintype K] in
 theorem take_gamesZC_length (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts))

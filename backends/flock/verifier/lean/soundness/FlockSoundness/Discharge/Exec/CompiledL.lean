@@ -288,67 +288,6 @@ theorem bad_splitL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merk
 
 /-! ## Clashes and conflicts are collisions -/
 
-omit [Fintype F] [DecidableEq F] in
-open Classical in
-theorem opOfL_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {lanes depth d : ℕ} {xs : List (ℕ × List F × Sl × List D)} {cap : Cap D} {p : Fin (2 ^ d)}
-    (h : (opOfL H E Lf lanes depth d xs cap p).isSome) :
-    ∃ x ∈ xs, x.1 = p.val ∧ VerifiedL H E Lf cap lanes depth x ∧
-      opOfL H E Lf lanes depth d xs cap p = some (rowFin lanes x.2.1) := by
-  unfold opOfL at h ⊢
-  rw [Option.isSome_map] at h
-  obtain ⟨x, hx⟩ := Option.isSome_iff_exists.1 h
-  have hmem := List.mem_of_mem_head? hx
-  rw [List.mem_filter, decide_eq_true_eq] at hmem
-  exact ⟨x, hmem.1, hmem.2.1, hmem.2.2, by rw [hx]; rfl⟩
-
-omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A clash is a collision**, under any salts (`Merkle.opening_bindingL`). -/
-theorem ClashL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {cap : Cap D} {lanes depth : ℕ} {xs : List (ℕ × List F × Sl × List D)} (h : ClashL H E Lf cap lanes depth xs) :
-    Merkle.Collision H := by
-  obtain ⟨x, -, y, -, hxy, hx, hy, hne⟩ := h
-  exact Merkle.opening_bindingL H E Lf cap depth x.1 x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2 hne hx.2
-    (hxy ▸ hy.2)
-
-omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A self-clash is a collision.** -/
-theorem SelfClashL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {sch : Schedule} {out : OutCL F D Sl} (h : SelfClashL H E Lf sch out) : Merkle.Collision H := by
-  rcases h with h | ⟨_, _, _, _, _, _, h⟩
-  · exact h.collision
-  · exact h.collision
-
-omit [Fintype F] [DecidableEq F] in
-/-- Two runs that open a position to different rows under one cap give a collision. -/
-theorem opOfL_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
-    {Lf : Merkle.Leaf (List F) Sl D H} {lanes depth d : ℕ} {cap : Cap D} {xs xs' : List (ℕ × List F × Sl × List D)}
-    {p : Fin (2 ^ d)} (h1 : (opOfL H E Lf lanes depth d xs cap p).isSome)
-    (h2 : (opOfL H E Lf lanes depth d xs' cap p).isSome)
-    (hne : opOfL H E Lf lanes depth d xs cap p ≠ opOfL H E Lf lanes depth d xs' cap p) :
-    Merkle.Collision H := by
-  obtain ⟨x, -, hxp, hx, hox⟩ := opOfL_some h1
-  obtain ⟨y, -, hyp, hy, hoy⟩ := opOfL_some h2
-  refine Merkle.opening_bindingL H E Lf cap depth p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
-    (fun hxy => hne ?_) (hxp ▸ hx.2) (hyp ▸ hy.2)
-  rw [hox, hoy, hxy]
-
-omit [Fintype F] [DecidableEq F] in
-/-- **Every pair the level-0 collision finder counts is a collision.** -/
-theorem op₀L_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
-    {Lf : Merkle.Leaf (List F) Sl D H} {sch : Schedule} {cap : Cap D} {x : OutCL F D Sl × OutCL F D Sl}
-    {p : Fin (2 ^ (lvOf sch 0).logLen)} (h : Rewinding.ConflictAt (op₀L H E Lf sch cap) x p) :
-    Merkle.Collision H :=
-  opOfL_conflict_collision h.1 h.2.1 h.2.2
-
-omit [Fintype F] [DecidableEq F] in
-/-- **Every pair a rep's collision finder counts is a collision.** -/
-theorem opRL_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
-    {Lf : Merkle.Leaf (List F) Sl D H} {sch : Schedule} {r ℓ : ℕ} {cap : Cap D} {x : OutCL F D Sl × OutCL F D Sl}
-    {p : Fin (2 ^ (lvOf sch ℓ).logLen)} (h : Rewinding.ConflictAt (opRL H E Lf sch r ℓ cap) x p) :
-    Merkle.Collision H :=
-  opOfL_conflict_collision h.1 h.2.1 h.2.2
-
 /-! ## The plurality prover and the collision finders -/
 
 open Classical in

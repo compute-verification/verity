@@ -1,7 +1,7 @@
-import FlockSoundness.Refine.Exec
 -- `simp` over the range loops below needs `Std.Legacy.Range.mk.congr_simp`; LookupRows declares it, and the kernel
 -- replay rejects a second declaration.
 import FlockLevel3.LookupRows
+import FlockSoundness.Protocol.Refine.Exec
 
 /-!
 # Runs of the executable's Ligerito programs

@@ -1,5 +1,5 @@
+import FlockSoundness.Discharge.Layout.Readers
 import FlockSoundness.Protocol.Binding.Rows
-import FlockSoundness.Protocol.Discharge.Layout.Readers
 
 /-!
 # A layout and its rows from three pinning facts

@@ -26,6 +26,50 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
+/-- The level's evaluation points, as an embedding. -/
+def domainEmb (A : Arith F K) (hA : A.Correct) (d : ℕ) (hd : d ≤ 64) : Fin (2 ^ d) ↪ F :=
+  ⟨fun q => A.omega q.val, fun q q' h => Fin.ext (hA.omega_injective d hd q.isLt q'.isLt h)⟩
+
+theorem domainEmb_apply (A : Arith F K) (hA : A.Correct) (d : ℕ) (hd : d ≤ 64) (q : Fin (2 ^ d)) :
+    domainEmb A hA d hd q = A.omega q.val := rfl
+
+/-- A table read position first: an interleaved word. -/
+def tr {lanes d : ℕ} (T : Table F lanes d) : Fin (2 ^ d) → Fin (2 ^ lanes) → F := fun q ℓ => T ℓ q
+
+/-- The novel-basis polynomials of `Arith.Correct.xhat_poly`. -/
+noncomputable def xP (A : Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) :
+    Fin (2 ^ L) → Polynomial F :=
+  (hA.xhat_poly L hL).choose
+
+theorem xP_natDegree (A : Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) (c : Fin (2 ^ L)) :
+    (xP A hA L hL c).natDegree < 2 ^ L := (hA.xhat_poly L hL).choose_spec.1 c
+
+theorem xP_linearIndependent (A : Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) :
+    LinearIndependent F (xP A hA L hL) := (hA.xhat_poly L hL).choose_spec.2.1
+
+theorem xP_eval (A : Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) (c : Fin (2 ^ L)) (ω : F) :
+    A.Xhat c.val L ω = (xP A hA L hL c).eval ω := (hA.xhat_poly L hL).choose_spec.2.2 c ω
+
+/-- The polynomial of one message row. -/
+noncomputable def rowPoly (A : Arith F K) (hA : A.Correct) {L : ℕ} (hL : L ≤ 40)
+    (row : Fin (2 ^ L) → F) : Polynomial F :=
+  ∑ c, Polynomial.C (row c) * xP A hA L hL c
+
+theorem rowPoly_eval (A : Arith F K) (hA : A.Correct) {L : ℕ} (hL : L ≤ 40) (row : Fin (2 ^ L) → F)
+    (q : ℕ) : (rowPoly A hA hL row).eval (A.omega q) = A.encodeAt L row q := by
+  simp only [rowPoly, Polynomial.eval_finset_sum, Polynomial.eval_mul, Polynomial.eval_C,
+    Arith.encodeAt, xP_eval A hA L hL]
+
+theorem rowPoly_natDegree (A : Arith F K) (hA : A.Correct) {L : ℕ} (hL : L ≤ 40)
+    (row : Fin (2 ^ L) → F) : (rowPoly A hA hL row).natDegree < 2 ^ L := by
+  have h : (rowPoly A hA hL row).natDegree ≤ 2 ^ L - 1 := by
+    refine Polynomial.natDegree_sum_le_of_forall_le _ _ fun c _ => ?_
+    refine (Polynomial.natDegree_C_mul_le _ _).trans ?_
+    have := xP_natDegree A hA L hL c
+    omega
+  have : 0 < 2 ^ L := Nat.two_pow_pos L
+  omega
+
 
 /-! ## The list size -/
 

@@ -331,10 +331,6 @@ theorem prCoin_recombine_le (A : Arith F K) (hA : A.Correct) (s s' : Fin 128 →
 
 /-! ## The opening as a loop over claims, then a batch -/
 
-theorem opening_eq (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Claim F m)) :
-    opening A hm claims = (claims.mapM opStep).bind fun sw =>
-      (draw (Fin claims.length → F)).bind fun γ => .ret (opResult A hm claims sw γ) := rfl
-
 /-! ## One codeword -/
 
 /-- The witness a message packs, at address `128y + v`, is bit `v` of the packed element `y`. -/

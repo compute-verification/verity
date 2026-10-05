@@ -16,6 +16,8 @@ namespace FlockSoundness.Discharge.Composed
 open Game Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
 open scoped ENNReal
 
+local notation "𝔽" => FlockLevel3.GF128
+
 variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {Reg : Type}
 
 /-- The one-table plan at the draw's tables. -/
@@ -40,6 +42,11 @@ open Classical in
 noncomputable def accz (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) :
     ∀ (_ : Finset (Fin n)) (_ : Reg), List (OutZC 𝔽 D Sl) → Bool :=
   fun S R outs => decide (acceptedZC [T S R] outs)
+
+omit [Fintype K] in
+theorem sessionZC_planOf (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) :
+    ZkExec.sessionZC (Gz A Hs T) (outz Hs T) (accz T) = batchedSessionZC A Hs (planOf T) :=
+  funext fun S => funext fun R => batchedSessionZC_one A Hs T S R
 
 section On
 
@@ -78,6 +85,12 @@ noncomputable def simZ (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) : Strategy (audit L Reg (batchedSessionZC A Hs (planOf T))) :=
   cast (congrArg (fun g => Strategy (audit L Reg g)) (sessionZC_planOf A Hs T))
     (simAuditZKOn A Hs T I wr opn dg dec one fin capOf N hdec τ)
+
+omit [Fintype K] in
+/-- **The decoder at the law's draws from `RunsOnZC`** (`ZkExec.decodes_of_runsOnZC`, the coin step `true`). -/
+theorem decodesOnZK_of_runsOnZC (h : RunsOnZC A Hs T I wr opn dec fin capOf L) :
+    DecodesOnZK A Hs T I wr opn dec (fun _ _ _ => true) fin capOf L :=
+  fun ω R => decodes_of_runsOnZC A Hs T I wr opn dec fin capOf h ω R
 
 end On
 

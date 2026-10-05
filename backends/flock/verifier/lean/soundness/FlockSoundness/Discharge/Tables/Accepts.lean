@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.Exec.Setup
+import FlockSoundness.Protocol.Discharge.Exec.Setup
 
 /-!
 # flock-verify's tables at `count > 1`

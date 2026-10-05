@@ -1,6 +1,4 @@
-import FlockSoundness.LigeritoRes
-import FlockSoundness.LigeritoLevels
-import FlockSoundness.ListSize
+import FlockSoundness.Protocol.LigeritoRes
 
 /-!
 # Decoding a fold near a codeword (PROTOCOL.md §13.4, §13.5)

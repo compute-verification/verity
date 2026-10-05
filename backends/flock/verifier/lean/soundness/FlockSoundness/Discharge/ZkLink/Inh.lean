@@ -1,5 +1,5 @@
-import FlockSoundness.Discharge.ZkLink.Compiled
-import FlockSoundness.Refine.LiveCompiled
+import FlockSoundness.Protocol.Discharge.ZkLink.Compiled
+import FlockSoundness.Protocol.Refine.LiveCompiled
 
 /-!
 # Every message a compiled `--zk` rep receives has an inhabited type

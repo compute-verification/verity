@@ -1,7 +1,4 @@
-import FlockSoundness.Protocol.ZerocheckPhase
-import Mathlib.Analysis.MeanInequalities
-import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability
-import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+import FlockSoundness.Protocol.LigeritoMid
 
 /-!
 # Ligerito is sound (PROTOCOL.md §13)

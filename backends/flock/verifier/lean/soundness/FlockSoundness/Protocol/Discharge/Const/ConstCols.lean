@@ -1,6 +1,4 @@
-import FlockSoundness.Protocol.E2E
-import Flock.Derive
-import Flock.DeriveCheck
+import FlockSoundness.Protocol.Types.Program
 import FlockSoundness.Protocol.Discharge.Const.Inst
 
 /-!

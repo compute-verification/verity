@@ -1,5 +1,4 @@
 import FlockSoundness.Discharge.Exec.Emit
-import FlockSoundness.Refine.Final
 
 /-!
 # Ligerito's rounds, as frames (R11b; PROTOCOL.md §13.3)

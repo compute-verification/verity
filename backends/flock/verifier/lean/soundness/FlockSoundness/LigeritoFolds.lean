@@ -1,4 +1,5 @@
 import FlockSoundness.LigeritoOOD
+import FlockSoundness.Protocol.LigeritoFolds
 
 /-!
 # A level's folds against a list (PROTOCOL.md §13.2, §13.3 step 4)
@@ -18,11 +19,6 @@ open Game Model Accounting Polynomial
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
-
-/-- Fold the lowest variable by each challenge in turn (`foldRounds`' order). -/
-def foldLoL {L : Type} [Field L] : List L → (ℕ → L) → (ℕ → L)
-  | [], u => u
-  | r :: rs, u => foldLoL rs (foldLo r u)
 
 /-- The true quadratic of a round over `Σ_{x < 2^(n+1)} u(x)·v(x)`, lowest variable first. -/
 noncomputable def roundPolyLo {L : Type} [Field L] (n : ℕ) (u v : ℕ → L) : L[X] :=

@@ -6,7 +6,6 @@ every row of the builder holds under `v ∘ col` (`laid_rows`), and output `j`'s
 -/
 import FlockSoundness.Discharge.Hm.Fresh
 import FlockProofs.HmNets
-import FlockSoundness.Protocol.Discharge.Hm.Laid
 
 namespace FlockSoundness.Discharge.Hm
 
@@ -22,6 +21,24 @@ theorem xorRow_cols (v : ℕ → Bool) {nIn inRows constPos : ℕ} (hc : v const
   cases f.c <;> simp [hc]
 
 theorem xorRow_single (v : ℕ → Bool) (j : ℕ) : xorRow v #[j] = v j := by simp [xorRow]
+
+/-- A laid-out net's input rows: `groupWords nIn` words. -/
+abbrev inRowsOf (inBits : Array ℕ) : ℕ := groupWords (inBits.foldl (· + ·) 0) * Flock.WORD
+
+/-- A laid-out net's output group's rows. -/
+abbrev spanOf (outBits : Array ℕ) : ℕ := groupWords (outBits.foldl (· + ·) 0) * Flock.WORD
+
+/-- The column of a laid-out net's first output: past the input rows and the ANDs, aligned to the output group. -/
+def outStart (st : St) (inBits outBits : Array ℕ) : ℕ :=
+  (inRowsOf inBits + st.rows.length + spanOf outBits - 1) / spanOf outBits * spanOf outBits
+
+theorem layout_outGroups (st : St) (inBits outBits : Array ℕ) (outs : Array Lin) :
+    (layout st inBits outBits outs).outGroups =
+      #[⟨outStart st inBits outBits / Flock.WORD, groupWords (outBits.foldl (· + ·) 0), outBits⟩] := by
+  simp [layout, outStart, inRowsOf, spanOf]
+
+theorem layout_inGroups (st : St) (inBits outBits : Array ℕ) (outs : Array Lin) :
+    (layout st inBits outBits outs).inGroups = #[⟨0, groupWords (inBits.foldl (· + ·) 0), inBits⟩] := rfl
 
 theorem outStart_word (st : St) (inBits outBits : Array ℕ) :
     outStart st inBits outBits / Flock.WORD * Flock.WORD = outStart st inBits outBits := by

@@ -40,16 +40,6 @@ variable (lay : Binding.Layout P planS tabS decS) (hdec : DecAgree e (decZ := de
 
 variable {lay} (rs : Binding.HmRows lay)
 
-/-- **`HmRowComputes` moves along**: the public rows' `HmRowComputes` gives the `--zk` rows'. -/
-theorem HmRowsZ.ofShadow_computes (hHm : rs.Computes) : (HmRowsZ.ofShadow e hdec rs).Computes := by
-  rintro ⟨S, R, u, M', g⟩ ⟨hu, hM', hg, hrow⟩
-  obtain ⟨M, hM, hS⟩ := shadow_msg e S R u M' hM'
-  obtain ⟨hr, hs⟩ := row_ofShadow e lay hdec S R u M' M hM (lay.pos g)
-  have h := hHm ⟨S, R, u, M, g⟩ ⟨hu, hS, hg, hrow⟩
-  simp only at h
-  rw [← hr, ← hs, hM] at h
-  exact h
-
 end Shadow
 
 end FlockSoundness.Discharge.ZkBind

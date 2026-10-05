@@ -1,4 +1,4 @@
-import FlockSoundness.Protocol.Discharge.HiddenExec.SiteH
+import FlockSoundness.Discharge.HiddenExec.SiteH
 
 set_option Elab.async false
 

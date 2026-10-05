@@ -77,6 +77,14 @@ def Committed (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F) : 
 /-- The statement's shape, for the accounting. -/
 def Model.Statement.shape (S : Statement) (mPts : ℕ) : Stmt := ⟨S.kLog, S.regions.length, mPts⟩
 
+omit [Fintype F] [DecidableEq F] in
+theorem extraClaims_length (S : Statement) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → F) :
+    (extraClaims S ptLocal mPts pts).length = 2 * S.regions.length := by
+  unfold extraClaims
+  induction S.regions with
+  | nil => simp
+  | cons R rs ih => simp [List.flatMap_cons, ih]; ring
+
 /-! ## The witness's A-side and B-side, and the pin's extension -/
 
 theorem Model.Statement.block_index_lt (S : Statement) (a : Fin (2 ^ S.m)) :

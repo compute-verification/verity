@@ -1,6 +1,8 @@
 import FlockSoundness.Discharge.ZkHidden.Defs
 import FlockSoundness.Discharge.ZkLink.DrawOk
 import FlockSoundness.Discharge.HiddenExec.Setup
+import FlockSoundness.Discharge.Hidden.Theorems
+import FlockSoundness.Discharge.HiddenExec.Statements
 
 /-!
 # The coin server's draw at every draw of the live law, at hidden-output `--zk`

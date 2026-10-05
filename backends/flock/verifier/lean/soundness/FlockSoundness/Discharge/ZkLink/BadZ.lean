@@ -28,9 +28,6 @@ variable {D Sl : Type}
 
 /-! ## Level 0's wide rows -/
 
-/-- A row's first `w` lanes. -/
-def rowW (w : ℕ) (row : List F) : Fin w → F := fun lane => row.getD lane.val 0
-
 /-- An oracle's `w`-lane rows on a level's domain. -/
 def rowTW (w d : ℕ) (t : Oracle F) : Fin (2 ^ d) → Fin w → F := fun p lane => t lane.val p.val
 
@@ -38,12 +35,6 @@ omit [Fintype F] [DecidableEq F] in
 theorem rowTW_tabOfW (w d : ℕ) (v : Fin (2 ^ d) → Fin w → F) : rowTW w d (tabOfW w d v) = v := by
   funext p lane
   simp [rowTW, tabOfW, p.isLt, lane.isLt]
-
-open Classical in
-/-- The `w`-lane row a run opens at `p`: its first verifying opening there. -/
-noncomputable def opOfW (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (w depth d : ℕ) (xs : List (ℕ × List F × Sl × List D)) (cap : Cap D) (p : Fin (2 ^ d)) : Option (Fin w → F) :=
-  ((xs.filter fun x => decide (x.1 = p.val ∧ VerifiedZ H E Lf cap w depth x)).head?).map fun x => rowW w x.2.1
 
 theorem op₀Z_eq (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (T : TabZK F mPts) (cap : Cap D) (out : OutZC F D Sl) :
@@ -100,50 +91,6 @@ theorem off_or_clashW (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : M
   · right
     exact ⟨h, hmem.1, x, hx, hmem.2.1.trans hxp.symm, hmem.2.2, hv, hrow⟩
 
-omit [Fintype F] [DecidableEq F] in
-open Classical in
-theorem opOfW_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {w depth d : ℕ} {xs : List (ℕ × List F × Sl × List D)} {cap : Cap D} {p : Fin (2 ^ d)}
-    (h : (opOfW H E Lf w depth d xs cap p).isSome) :
-    ∃ x ∈ xs, x.1 = p.val ∧ VerifiedZ H E Lf cap w depth x ∧
-      opOfW H E Lf w depth d xs cap p = some (rowW w x.2.1) := by
-  unfold opOfW at h ⊢
-  rw [Option.isSome_map] at h
-  obtain ⟨x, hx⟩ := Option.isSome_iff_exists.1 h
-  have hmem := List.mem_of_mem_head? hx
-  rw [List.mem_filter, decide_eq_true_eq] at hmem
-  exact ⟨x, hmem.1, hmem.2.1, hmem.2.2, by rw [hx]; rfl⟩
-
-omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A clash is a collision**, under any salts (`Merkle.opening_bindingL`). -/
-theorem ClashW.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {cap : Cap D} {w depth : ℕ} {xs : List (ℕ × List F × Sl × List D)} (h : ClashW H E Lf cap w depth xs) :
-    Merkle.Collision H := by
-  obtain ⟨x, -, y, -, hxy, hx, hy, hne⟩ := h
-  exact Merkle.opening_bindingL H E Lf cap depth x.1 x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2 hne hx.2
-    (hxy ▸ hy.2)
-
-omit [Fintype F] [DecidableEq F] in
-/-- Two runs that open a position to different `w`-lane rows under one cap give a collision. -/
-theorem opOfW_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
-    {Lf : Merkle.Leaf (List F) Sl D H} {w depth d : ℕ} {cap : Cap D} {xs xs' : List (ℕ × List F × Sl × List D)}
-    {p : Fin (2 ^ d)} (h1 : (opOfW H E Lf w depth d xs cap p).isSome)
-    (h2 : (opOfW H E Lf w depth d xs' cap p).isSome)
-    (hne : opOfW H E Lf w depth d xs cap p ≠ opOfW H E Lf w depth d xs' cap p) :
-    Merkle.Collision H := by
-  obtain ⟨x, -, hxp, hx, hox⟩ := opOfW_some h1
-  obtain ⟨y, -, hyp, hy, hoy⟩ := opOfW_some h2
-  refine Merkle.opening_bindingL H E Lf cap depth p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
-    (fun hxy => hne ?_) (hxp ▸ hx.2) (hyp ▸ hy.2)
-  rw [hox, hoy, hxy]
-
-/-- **Every pair the witness cap's collision finder counts is a collision.** -/
-theorem op₀Z_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
-    {Lf : Merkle.Leaf (List F) Sl D H} {T : TabZK F mPts} {cap : Cap D} {x : OutZC F D Sl × OutZC F D Sl}
-    {p : Fin (2 ^ (lvOf T.sch 0).logLen)} (h : Rewinding.ConflictAt (op₀Z H E Lf T cap) x p) :
-    Merkle.Collision H :=
-  opOfW_conflict_collision h.1 h.2.1 h.2.2
-
 /-! ## The levels' caps -/
 
 omit [Field F] [Fintype F] [DecidableEq F] in
@@ -170,14 +117,6 @@ theorem mem_slotOpensZ {out : OutZC F D Sl} {r : ℕ} {req : Req}
   rw [List.getElem_zipIdx]
   simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj]
 
-omit [Fintype F] [DecidableEq F] in
-/-- **Every pair a rep's collision finder counts is a collision.** -/
-theorem opRZ_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
-    {Lf : Merkle.Leaf (List F) Sl D H} {sch : Schedule} {r ℓ : ℕ} {cap : Cap D} {x : OutZC F D Sl × OutZC F D Sl}
-    {p : Fin (2 ^ (lvOf sch ℓ).logLen)} (h : Rewinding.ConflictAt (opRZ H E Lf sch r ℓ cap) x p) :
-    Merkle.Collision H :=
-  Exec.opOfL_conflict_collision h.1 h.2.1 h.2.2
-
 /-! ## The pads roots -/
 
 /-- A pads oracle's pairs, lanes `0` and `1` at each position. -/
@@ -189,26 +128,6 @@ theorem rowPads_padsTab (N : ℕ) (v : Fin N → F × F) : rowPads N (padsTab N 
   simp [rowPads, padsTab, p.isLt]
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-theorem PadsClashZ.collision {Hs : Hashes F D Sl} {N q : ℕ} {out : OutZC F D Sl} (h : PadsClashZ Hs N q out) :
-    Merkle.Collision Hs.H := by
-  obtain ⟨_, _, root, jj, _, jj', _, p, h1, h2, hne⟩ := h
-  exact Merkle.opening_bindingL Hs.H Hs.Ep Hs.Lp (fun _ => root) (Nat.log 2 N) p.val _ _ _ _ _ _ hne h1 h2
-
-omit [Field F] [Fintype F] [DecidableEq F] in
-open Classical in
-theorem opPadsZ_some {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D} {out : OutZC F D Sl} {p : Fin N}
-    (h : (opPadsZ Hs N q r c out p).isSome) :
-    ∃ jj < q, Merkle.VerifiesL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val ((out.opens.inner r).pads jj).1
-        ((out.opens.inner r).pads jj).2.1 ((out.opens.inner r).pads jj).2.2 ∧
-      opPadsZ Hs N q r c out p = some ((out.opens.inner r).pads jj).1 := by
-  unfold opPadsZ at h ⊢
-  rw [Option.isSome_map] at h
-  obtain ⟨x, hx⟩ := Option.isSome_iff_exists.1 h
-  have hmem := List.mem_of_mem_head? hx
-  rw [List.mem_filter, decide_eq_true_eq, List.mem_range] at hmem
-  exact ⟨x, hmem.1, hmem.2, by rw [hx]; rfl⟩
-
-omit [Field F] [Fintype F] [DecidableEq F] in
 open Classical in
 theorem opPadsZ_isSome {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D} {out : OutZC F D Sl} {p : Fin N} {jj : ℕ}
     (hjj : jj < q)
@@ -218,17 +137,6 @@ theorem opPadsZ_isSome {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D} {out : Out
   unfold opPadsZ
   rw [Option.isSome_map, List.isSome_head?]
   exact List.ne_nil_of_mem (List.mem_filter.2 ⟨List.mem_range.2 hjj, decide_eq_true hv⟩)
-
-omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **Every pair a pads root's collision finder counts is a collision.** -/
-theorem opPadsZ_conflict_collision {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D}
-    {x : OutZC F D Sl × OutZC F D Sl} {p : Fin N} (h : Rewinding.ConflictAt (opPadsZ Hs N q r c) x p) :
-    Merkle.Collision Hs.H := by
-  obtain ⟨jj, -, h1, e1⟩ := opPadsZ_some h.1
-  obtain ⟨jj', -, h2, e2⟩ := opPadsZ_some h.2.1
-  refine Merkle.opening_bindingL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val _ _ _ _ _ _
-    (fun e => h.2.2 ?_) h1 h2
-  rw [e1, e2, e]
 
 omit [Field F] [Fintype F] [DecidableEq F] in
 /-- **A rep's disagreeing pads opening**: a pads clash within the run, or the run opens a pads position of the fixed
@@ -256,19 +164,6 @@ omit [Field F] [Fintype F] [DecidableEq F] in
 theorem rowTau_tauTab (v : Unit → F) : rowTau (tauTab v) = v := funext fun _ => rfl
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **Every pair a `τ` commitment's collision finder counts is a collision** (`Leaf.bind`). -/
-theorem opTauZ_conflict_collision {Hs : Hashes F D Sl} {r : ℕ} {c : Cap D} {x : OutZC F D Sl × OutZC F D Sl}
-    {p : Unit} (h : Rewinding.ConflictAt (opTauZ Hs r c) x p) : Merkle.Collision Hs.H := by
-  classical
-  obtain ⟨h1, h2, hne⟩ := h
-  by_cases ha : Hs.Lτ.leaf (x.1.opens.inner r).tau.1 (x.1.opens.inner r).tau.2 = c 0
-  · by_cases hb : Hs.Lτ.leaf (x.2.opens.inner r).tau.1 (x.2.opens.inner r).tau.2 = c 0
-    · simp only [opTauZ, ha, hb, ↓reduceIte, ne_eq, Option.some.injEq] at hne
-      exact Hs.Lτ.bind _ _ _ _ hne (ha.trans hb.symm)
-    · simp [opTauZ, hb] at h2
-  · simp [opTauZ, ha] at h1
-
-omit [Field F] [Fintype F] [DecidableEq F] in
 /-- **A rep's disagreeing `τ` opening**: the run opens the fixed `τ` oracle's commitment to another value. -/
 theorem tau_badZ (Hs : Hashes F D Sl) (r : ℕ) (j : IZ F D) (out : OutZC F D Sl)
     (hnot : ¬ TauAgree Hs j (out.opens.inner r)) :
@@ -284,14 +179,6 @@ theorem tau_badZ (Hs : Hashes F D Sl) (r : ℕ) (j : IZ F D) (out : OutZC F D Sl
   exact ⟨Oτ, cτ, htau, (), hoff⟩
 
 /-! ## Self-clashes -/
-
-/-- **A self-clash is a collision.** -/
-theorem SelfClashZ.collision {Hs : Hashes F D Sl} {T : TabZK F mPts} {out : OutZC F D Sl}
-    (h : SelfClashZ Hs T out) : Merkle.Collision Hs.H := by
-  rcases h with h | ⟨_, _, _, _, _, _, h⟩ | h
-  · exact h.collision
-  · exact h.collision
-  · exact h.collision
 
 /-! ## Where a bad run goes wrong -/
 

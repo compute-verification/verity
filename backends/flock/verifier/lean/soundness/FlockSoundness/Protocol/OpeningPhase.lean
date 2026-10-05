@@ -1,6 +1,7 @@
 import FlockSoundness.Protocol.Defs
 import Mathlib.Algebra.MvPolynomial.SchwartzZippel
 import Mathlib.Algebra.Polynomial.Roots
+import FlockSoundness.Protocol.Game.Union
 
 /-!
 # The opening phase: ring switching and batching (PROTOCOL.md §12)
@@ -76,6 +77,10 @@ def opResult (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Claim F m)
     let e := switched.getD k.val (claims.getD k.val ⟨0, 0, 0⟩, 0, 0)
     phi A e.2.2 (eqAt (fun j : Fin (m - 7) => e.1.x ⟨j.val + 1, by omega⟩) y)
   if ok then some ⟨T, b⟩ else none
+
+theorem opening_eq (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Claim F m)) :
+    opening A hm claims = (claims.mapM opStep).bind fun sw =>
+      (draw (Fin claims.length → F)).bind fun γ => .ret (opResult A hm claims sw γ) := rfl
 
 /-! ## One codeword -/
 

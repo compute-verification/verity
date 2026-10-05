@@ -65,16 +65,4 @@ theorem roundOf_coins (dg : ByteArray → ByteArray) (b : ByteArray) (c : Array 
   rw [getElem!_pos c i h₂]
   rfl
 
-/-- A live run's streams extend the rounds they had. -/
-theorem liveRounds_out (dg : ByteArray → ByteArray) : ∀ (N : ℕ) (acc : List Round × List Round)
-    {rs : List Round × List Round}, Out (liveRounds dg N acc) rs → ∃ l₀ l₁, rs = (acc.1 ++ l₀, acc.2 ++ l₁)
-  | 0, acc, _, .ret _ => ⟨[], [], by simp⟩
-  | N + 1, acc, _, .send none (.ret _) => ⟨[], [], by simp⟩
-  | N + 1, acc, _, .send (some s) (.coin c h) => by
-      obtain ⟨l₀, l₁, rfl⟩ := liveRounds_out dg N _ h
-      unfold addRound
-      split_ifs
-      · exact ⟨roundOf dg s.bytes s.n c :: l₀, l₁, by simp⟩
-      · exact ⟨l₀, roundOf dg s.bytes s.n c :: l₁, by simp⟩
-
 end FlockSoundness.Refine

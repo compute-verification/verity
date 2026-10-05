@@ -26,24 +26,6 @@ open FlockSoundness.Discharge.HiddenExec
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The verify command's tags under hidden outputs**: hidden outputs, retained rounds, `hm96-sha512/v1` leaves, one
-table. -/
-def TagsOkH (I : Inputs) : Prop :=
-  I.tags.hiddenOutputs = true ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "hm96-sha512/v1" ∧ I.count ≤ 1
-
 variable {n mPts : ℕ} {Reg : Type}
-
-/-- **The decoder is right at the hidden-output headline's draws** (R11b): given the tags, `wr` the coin server's
-record and the coin server's draws proving their units at `mPts` link points under setupHidden, `DecodesOn` holds at the
-hidden tables with the decoder `decAt` at DecodeZL's wires, single coins as field elements, no final messages and
-`capOfRoot`. -/
-def DecodesOnExecH : Prop :=
-  ∀ {c : Flock.Circuit} {n : ℕ} {I : Inputs} (_ht : I.tags.typed = false)
-    (_hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet) {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
-    TagsOkH I → RecordsLive I dj wr → (∀ ω, DrawOkH I dj mPts (L.draw ω)) →
-    DecodesOn H512 enc512 leaf512 (tablesAtH (Reg := Reg) dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj)
-      (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L
 
 end FlockSoundness.Discharge.HiddenDec

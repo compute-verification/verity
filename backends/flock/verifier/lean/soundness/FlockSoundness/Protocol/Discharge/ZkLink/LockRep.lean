@@ -1,4 +1,4 @@
-import FlockSoundness.Protocol.Discharge.ZkLink.LockLevel
+import FlockSoundness.Discharge.ZkLink.LockLevel
 
 /-!
 # The primed `--zk` table in lockstep with the compiled one, every committed object a table
@@ -67,6 +67,18 @@ def getZ (r : ℕ) (i : IZ F D) (s : ℕ) : Option (Oracle F × Cap D) :=
 
 /-- No table fixed. -/
 def IZ.empty : IZ F D := ⟨fun _ => none, none, none⟩
+
+omit [Field F] [Fintype F] [DecidableEq F] in
+theorem getZ_lev (r : ℕ) (i : IZ F D) (s : ℕ) : getZ r i (s + 4) = getRep r i.lev s := by
+  simp [getZ]
+
+omit [Field F] [Fintype F] [DecidableEq F] in
+theorem getZ_off (r : ℕ) (lev lev' : IRep F D) (p t : Option (Oracle F × Cap D)) (s : ℕ)
+    (hs : ∀ s', s' + 4 ≠ s) : getZ r ⟨lev, p, t⟩ s = getZ r ⟨lev', p, t⟩ s := by
+  have : s < 4 := by
+    by_contra h
+    exact hs (s - 4) (by omega)
+  simp [getZ, this]
 
 theorem disjoint_getZ : Lock.Disjoint (getZ 0 : IZ F D → ℕ → Option (Oracle F × Cap D)) (getZ 1) where
   left i₁ i₂ s h := by

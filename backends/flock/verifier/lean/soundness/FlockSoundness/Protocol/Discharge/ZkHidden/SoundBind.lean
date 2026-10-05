@@ -28,6 +28,8 @@ open Flock FlockLevel3 Game Model Accounting Refine Audit ZkSession ZkLink ZkExe
 open FlockSoundness.Discharge.Exec (Inputs)
 open scoped ENNReal
 
+local notation "𝔽" => FlockLevel3.GF128
+
 /-! ## A unit's place along an equality of statements -/
 
 /-- A unit's place in `T`, as one in `T' = T`. -/
@@ -132,6 +134,13 @@ noncomputable abbrev rsShH : Binding.HmRows (layShH dj y₀ ht hc hscope hU (pub
     (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).1
       (Layout.scopeOk_spec hU hscope).2.2)
 
+theorem rsShH_computes : (rsShH dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Computes :=
+  keyRowsH_computes (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) (fun _ => pub)
+    (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
+    (sitesShH_bcSite dj y₀ ht hc hscope hU hpub hpt)
+    (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).1
+      (Layout.scopeOk_spec hU hscope).2.2)
+
 /-! ## The `--zk` places, layout and rows -/
 
 /-- **Each drawn unit's place in its hidden-output `--zk` table**: `keyPlaceH`'s place in the public table, along
@@ -164,5 +173,12 @@ noncomputable abbrev layZH :
 /-- **`rs` at the hidden-output `--zk` tables**: `rsShH` moved along `planAtZKH_S`. -/
 noncomputable abbrev rsZH : HmRowsZ (layZH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
   HmRowsZ.ofShadow (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) (rsShH dj y₀ ht hc hscope hU hpub hpt)
+
+/-- **`hHm` at the hidden-output `--zk` tables' rows** (`rsShH_computes`, moved along): in a satisfying witness of a
+drawn unit's `--zk` table, each row's `b ‖ c` at the unit's site, input or output, is the commit string of the row's
+bytes under the salt at its `hm96` slot. -/
+theorem rsZH_computes : (rsZH dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Computes :=
+  HmRowsZ.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) _
+    (rsShH_computes dj y₀ ht hc hscope hU hpub hpt)
 
 end FlockSoundness.Discharge.ZkHidden

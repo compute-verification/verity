@@ -1,5 +1,8 @@
-import FlockSoundness.Discharge.ZkLink
-import FlockSoundness.Discharge.Exec.Shape
+import FlockSoundness.Discharge.ZkLink.Inh
+import FlockSoundness.Protocol.Discharge.ZkLink.One
+import FlockSoundness.Protocol.Discharge.ZkLink.StrictZ
+import FlockSoundness.Protocol.Discharge.ZkLink.DrawOk
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # The static shape of a compiled `--zk` rep

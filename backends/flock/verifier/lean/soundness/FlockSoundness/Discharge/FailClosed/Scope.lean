@@ -54,10 +54,6 @@ include h
 
 theorem hm96Rows : t.hm96Rows = true := (check_ok h).1.1
 
-theorem retainRounds : t.retainRounds = true := (check_ok h).1.2.2.1
-
-theorem merkleLeaf : t.merkleLeaf = "hm96-sha512/v1" := (check_ok h).1.2.2.2.1
-
 end Checks
 
 /-! ## What the verifier accepts -/
@@ -67,24 +63,7 @@ variable {n : ℕ} {Reg : Type}
 /-- `Verifies` at the live session's transcript. -/
 def LiveVerifies (I : Inputs) (o : Reg × Finset (Fin n) × Exec.Transcript) : Prop := Verifies I o.2.2
 
-theorem ScopeZ.retainRounds {I : Inputs} (h : ScopeZ I) : I.tags.retainRounds = true := by
-  rw [← zkTags_retainRounds]; exact Checks.retainRounds h
-
-theorem ScopeZ.merkleLeaf {I : Inputs} (h : ScopeZ I) : I.tags.merkleLeaf = "hm96-sha512/v1" := by
-  rw [← zkTags_merkleLeaf]; exact Checks.merkleLeaf h
-
 theorem ScopeZ.outNet {I : Inputs} (h : ScopeZ I) : (circZ I).outNet = (circZ I).unitNet := Checks.outNet h
-
-theorem Scope.retainRounds {I : Inputs} (h : Scope I) : I.tags.retainRounds = true := Checks.retainRounds h
-
-theorem Scope.merkleLeaf {I : Inputs} (h : Scope I) : I.tags.merkleLeaf = "hm96-sha512/v1" := Checks.merkleLeaf h
-
-theorem Scope.outNet {I : Inputs} (h : Scope I) : (circS I).outNet = (circS I).unitNet := Checks.outNet h
-
-theorem Scope.count {I : Inputs} (h : Scope I) : I.count ≤ 1 := by
-  rcases (check_ok h).1.2.2.2.2 with h' | h'
-  · cases h'
-  · exact h'
 
 /-! ## A bound under the statement check -/
 

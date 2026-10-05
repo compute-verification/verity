@@ -1,4 +1,4 @@
-import FlockSoundness.Protocol.Game.Interleave
+import FlockSoundness.Protocol.Game.Union
 
 /-!
 # Probabilities for a fixed prover strategy

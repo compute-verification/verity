@@ -1,4 +1,4 @@
-import FlockSoundness.Protocol.Discharge.Layout.HmRegion
+import FlockSoundness.Discharge.Layout.HmRegion
 
 /-!
 # The returned outputs that the statement pins at the unit slots' output columns

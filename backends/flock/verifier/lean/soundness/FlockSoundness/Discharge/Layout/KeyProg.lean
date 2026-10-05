@@ -86,9 +86,6 @@ theorem bcSite_keyProg (ho : c.outNet = c.unitNet) {S : Finset (Fin n)} {R : Reg
   · rw [hc]; exact vu_lt_pow2 (hparse S R u h) ho hv
   · rw [hc]; exact hu
 
-theorem zeroG_ne_oneG : zeroG (c := c) (hU := hU) (n := n) ≠ oneG := fun h =>
-  absurd (congrArg Fin.val h) (by simp [zeroG, oneG, Placed.zeroGate, Placed.oneGate])
-
 end places
 
 end FlockSoundness.Discharge.Layout

@@ -1,6 +1,5 @@
-import FlockSoundness.Discharge.HiddenExec.Statements
-import FlockSoundness.Discharge.Hidden.Theorems
-import FlockSoundness.Protocol.Discharge.HiddenExec.Setup
+import FlockSoundness.Protocol.Discharge.HiddenExec.Statements
+import FlockSoundness.Protocol.Discharge.Hidden.Theorems
 
 /-!
 # What `Stmt.setupHidden` returns, as this area reads it
@@ -57,11 +56,22 @@ theorem setupHidden_drawn {d : Json}
   obtain ⟨pop, hl, -, hd⟩ := (Hidden.setupHidden_spec h).pub
   exact ⟨pop, hl, hd d rfl⟩
 
+/-- `Spec.parse`: the statement's circuit is the one `HmOut.parse` accepts. -/
+theorem setupHidden_parseC (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    HmOut.parse tags cf tables = .ok st.c :=
+  (Hidden.setupHidden_spec h).parse
+
 /-- `Spec.n`, `Spec.blocksReal`, `Spec.nbl`: `n` is the (drawn) public file's, and `nbl = max 3 (log2ceil ⌈n / c.g⌉)`,
 as setupH's (`Integrate.setupH_n`). -/
 theorem setupHidden_n (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     st.n = st.pub.n ∧ st.nbl = max 3 (log2ceil (max ((st.n + st.c.g - 1) / st.c.g) 1)) := by
   have s := Hidden.setupHidden_spec h
   exact ⟨s.n, by rw [s.nbl, s.blocksReal]⟩
+
+/-- An untyped `HmOut.parse` is `HmRow.parse`'s circuit, then `HmOut.checkRows` ([wave2-hidden]'s
+`Hidden.parse_untyped`). -/
+theorem parse_untyped {c : Circuit} (ht : tags.typed = false) (h : HmOut.parse tags cf tables = .ok c) :
+    HmRow.parse tags cf tables = .ok c ∧ HmOut.checkRows c = .ok () :=
+  Hidden.parse_untyped ht h
 
 end FlockSoundness.Discharge.HiddenExec

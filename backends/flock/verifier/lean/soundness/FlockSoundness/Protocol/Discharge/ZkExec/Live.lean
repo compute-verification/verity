@@ -32,6 +32,8 @@ namespace FlockSoundness.Discharge.ZkExec
 
 open Game Audit Exec Refine Flock
 
+local notation "𝔽" => FlockLevel3.GF128
+
 variable {n : ℕ} {Reg : Type} {mPts : ℕ} {P Cp Op Out : Finset (Fin n) → Reg → Type}
   (G : ∀ S R, (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game (P S R))
   (out : ∀ S R, Cp S R → P S R × P S R → Op S R → Out S R) (acc : ∀ S R, Out S R → Bool)

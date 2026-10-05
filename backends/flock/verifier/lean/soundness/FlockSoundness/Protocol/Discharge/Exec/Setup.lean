@@ -64,9 +64,68 @@ theorem range_mapM_ok {β ε : Type} {f : ℕ → Except ε β} {k : ℕ} {ys : 
   have := hall j (by rw [Array.size_range]; omega) hj
   rwa [Array.getElem_range] at this
 
+theorem mPts_of_any {sts : Array Stmt} {m : ℕ} (h : ¬ (sts.any fun x => x.mPts != m) = true) :
+    ∀ (j : ℕ) (hj : j < sts.size), sts[j].mPts = m := by
+  intro j hj
+  by_contra hne
+  exact h (Array.any_eq_true.2 ⟨j, hj, by simpa using hne⟩)
+
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables : List (String × ByteArray)}
   {draw partition : Option Json} {program : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
+
+set_option maxHeartbeats 4000000 in
+/-- A plain table's setup, `setupH` followed by the refusal of a `public_inputs` meta key, returns `setupH`'s statement. -/
+theorem ok_of_refuse {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
+    (h : (do let st ← x; if p st = true then throw e else pure st) = .ok s) : x = .ok s := by
+  cases x with
+  | error => cases h
+  | ok a =>
+    by_cases hp : p a = true
+    · simp [bind, Except.bind, hp, throw, throwThe, MonadExceptOf.throw, Except.bind] at h
+    · simpa [bind, Except.bind, hp, pure, Except.pure] using h
+
+/-- **`setupTables` sets up each table with `setupH`** (§16.12) under a tag without hidden outputs (`hh`; with them
+it calls `setupHidden`). For one table, its statement is `setupH`'s at the session's draw, and the session's spec is
+the table's. For `count > 1`, there are `count` tables, and table `j` is `setupH`'s statement under
+`Tags.tableIdentity count j` at a subset draw of its part. -/
+theorem setupTables_ok (hh : tags.hiddenOutputs = false)
+    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
+      .ok (spec, sts)) :
+    (count ≤ 1 ∧ ∃ st, Stmt.setupH tags cf pf coins tables draw partition program = .ok st ∧ spec = st.spec ∧
+        sts = #[st]) ∨
+      (1 < count ∧ sts.size = count ∧ (∀ (j : ℕ) (hj : j < sts.size), ∃ d,
+        Stmt.setupH { tags with identity := tags.tableIdentity count j } cf pf coins tables (some d) partition
+          program = .ok sts[j]) ∧ (∀ (j : ℕ) (hj : j < sts.size), sts[j].mPts = spec.mPts) ∧ spec.points = 2) := by
+  unfold Stmt.setupTables at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
+  replace h : jp0 () = .ok (spec, sts) := by
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp0] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp1 at h
+  replace h : jp1 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp1] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
+  replace h : jp2 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp2] at h
+  dsimp only at h
+  have hn : ¬ tags.hiddenOutputs = true := by simp [hh]
+  simp only [throw_bind', pure_bind, ite_eq_right hn] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+  · exact Or.inl ⟨by assumption, _, ok_of_refuse (by assumption), rfl, rfl⟩
+  all_goals
+    obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
+    exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, ok_of_refuse (hall j hj)⟩, mPts_of_any (by assumption), rfl⟩
 
 /-- A table's tags in a session of `count` tables: the statement's for one, under `Tags.tableIdentity` for several. -/
 def tagsAt (tags : Tags) (count j : ℕ) : Tags :=
@@ -74,5 +133,46 @@ def tagsAt (tags : Tags) (count j : ℕ) : Tags :=
 
 theorem tagsAt_typed (tags : Tags) (count j : ℕ) : (tagsAt tags count j).typed = tags.typed := by
   unfold tagsAt; split_ifs <;> rfl
+
+/-- Every table `setupTables` returns is `setupH`'s statement, under the table's tags (`tagsAt`) and at some draw
+(the session's, for one table). -/
+theorem setupTables_setupH (hh : tags.hiddenOutputs = false)
+    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
+      .ok (spec, sts)) :
+    0 < sts.size ∧ ∀ (j : ℕ) (hj : j < sts.size), ∃ d,
+      Stmt.setupH (tagsAt tags count j) cf pf coins tables d partition program = .ok sts[j] ∧
+        (count ≤ 1 → d = draw) := by
+  rcases setupTables_ok hh h with ⟨hc, st, hst, -, rfl⟩ | ⟨hc, hsz, hall, -⟩
+  · refine ⟨by simp, fun j hj => ⟨draw, ?_, fun _ => rfl⟩⟩
+    have hj0 : j = 0 := by simpa using hj
+    subst hj0
+    simpa [tagsAt, hc] using hst
+  · refine ⟨by omega, fun j hj => ?_⟩
+    obtain ⟨d, hd⟩ := hall j hj
+    refine ⟨some d, ?_, fun h1 => absurd h1 (by omega)⟩
+    simpa [tagsAt, show ¬ count ≤ 1 by omega] using hd
+
+/-- The session's two link points have every table's length. -/
+theorem setupTables_points (hh : tags.hiddenOutputs = false)
+    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
+      .ok (spec, sts)) :
+    spec.points = 2 ∧ ∀ (j : ℕ) (hj : j < sts.size), sts[j].mPts = spec.mPts := by
+  rcases setupTables_ok hh h with ⟨-, st, -, rfl, rfl⟩ | ⟨-, -, -, hm, hp⟩
+  · exact ⟨rfl, fun j hj => by
+      have : j = 0 := by simpa using hj
+      subst this
+      rfl⟩
+  · exact ⟨hp, hm⟩
+
+/-- **A one-table acceptance is one `setupH` statement's**: the session's spec is the table's, and `Flock.verify` ran on
+`#[Setup.ofCircuit st]`, the form `verify_refines_ofCircuit_hm96` reads. -/
+theorem accepts_one {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false) (hc : I.count ≤ 1)
+    (h : Accepts I t) :
+    ∃ st, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (recordDraw t.record) I.partition I.program =
+        .ok st ∧ Flock.verify st.spec #[Setup.ofCircuit st] t.record t.proofs = .ok () := by
+  obtain ⟨spec, sts, hs, hv⟩ := h
+  rcases setupTables_ok hh hs with ⟨-, st, hst, rfl, rfl⟩ | ⟨hc', -⟩
+  · exact ⟨st, hst, by simpa using hv⟩
+  · omega
 
 end FlockSoundness.Discharge.Exec

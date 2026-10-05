@@ -3,6 +3,8 @@ import FlockSoundness.Discharge.HiddenExec.Headline
 import FlockSoundness.Discharge.HiddenExec.Sites
 import FlockSoundness.Discharge.Layout.Scope
 import FlockSoundness.Protocol.Discharge.HiddenExec.HeadlineExec
+import FlockSoundness.Discharge.Hidden.Wide.Shared
+import FlockSoundness.Discharge.HiddenExec.Ret
 
 set_option Elab.async false
 
@@ -36,16 +38,6 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Fl
   (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOk c = true)
   (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none) {Reg : Type}
-
-/-- **`hHm` at the hidden tables** (`keyRowsH_computes`): in a satisfying witness of a drawn unit's table, each row's
-`b ‖ c` at the unit's site, input or output, is the commit string of the row's bytes under the salt at its `hm96`
-slot. -/
-theorem rsAtH_computes : (rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).Computes :=
-  keyRowsH_computes (sitesAtH_parse ht hc (v2_of_scope hscope) dj x₀) (Layout.outsOf c hU n) (fun _ => pub)
-    (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
-    (sitesAtH_bcSite ht hc hscope dj x₀ hU hpub hpt)
-    (Layout.keysRow_of_parse (parse_untyped ht hc).1 (Layout.scopeOk_spec hU hscope).1
-      (Layout.scopeOk_spec hU hscope).2.2)
 
 /-- **The headline at the executable over hidden-output sessions.** Let `I` be a verify command's inputs (one table)
 under a tag with hidden outputs, whose one circuit file parses to an untyped circuit `c` (`hc`: `HmOut.parse`, which

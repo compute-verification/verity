@@ -1,6 +1,7 @@
 import FlockSoundness.Audit.TwoStage
 import Mathlib.Logic.Equiv.Fin.Basic
 import Mathlib.Tactic.FinCases
+import FlockSoundness.Protocol.Audit.Examples
 
 /-!
 # Tightness and insecurity: NOT chains
@@ -25,11 +26,6 @@ open Game
 open scoped ENNReal
 
 namespace Law
-
-/-- A law relabelled along an embedding of its units. -/
-def map {m n : ℕ} (L : Law m) (e : Fin m ↪ Fin n) : Law n where
-  Ω := L.Ω
-  draw ω := (L.draw ω).map e
 
 end Law
 

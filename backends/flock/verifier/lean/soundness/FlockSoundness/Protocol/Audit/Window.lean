@@ -80,8 +80,6 @@ section Audits
 variable {n m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ} {hk : ∀ s, k s ≤ (Law.stratum σ s).card}
   {cl : Fin n → Finset (Fin n)} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
-/-- At `η = 0`, `audit_window_of_le_slack` is `audit_window_of_le`. -/
-
 end Audits
 
 end FlockSoundness.Audit

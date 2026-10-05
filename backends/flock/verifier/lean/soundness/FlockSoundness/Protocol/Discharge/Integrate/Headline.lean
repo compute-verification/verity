@@ -1,6 +1,6 @@
+import FlockSoundness.Discharge.Integrate.Accepted
+import FlockSoundness.Discharge.Hm.Site
 import FlockSoundness.Discharge.Layout.Scope
-import FlockSoundness.Protocol.Discharge.Integrate.Bridge
-import FlockSoundness.Protocol.Discharge.Hm.Bc
 
 /-!
 # The headline at the executable, with every open guarantee named
@@ -30,6 +30,8 @@ open Game Model Accounting Refine Audit Audit.Partition Flock
 open FlockSoundness.Discharge.Exec
 open scoped ENNReal
 
+local notation "𝔽" => FlockLevel3.GF128
+
 variable {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
   (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
   {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {pub : Public}
@@ -52,6 +54,14 @@ noncomputable abbrev layAt :
 noncomputable abbrev rsAt : Binding.HmRows (layAt hU ht hc dj x₀ (pub := pub) (Reg := Reg)) :=
   Layout.keyedRowsOuts (sitesAt_parse ht dj x₀ hc) Hm.saltCol hc (Layout.scopeOk_spec hU hscope).1
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
+    (sitesAt_bcSite ht dj x₀ hc (Layout.scopeOk_spec hU hscope).2.1 hpub hpt)
+
+/-- **`hHm` at the session's rows**: e2e-hm's `keyedRowsOuts_computes`. In a satisfying witness of a drawn unit's
+table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under the salt at its
+`hm96` slot. -/
+theorem rsAt_computes : (rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).Computes :=
+  Hm.keyedRowsOuts_computes (sitesAt_parse ht dj x₀ hc) hc (Layout.scopeOk_spec hU hscope).1
+    (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope)
     (sitesAt_bcSite ht dj x₀ hc (Layout.scopeOk_spec hU hscope).2.1 hpub hpt)
 
 /-- The one-table plan's tables, as `Prog.flock_headline_live_on` takes them. -/

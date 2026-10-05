@@ -32,8 +32,6 @@ theorem ite_throw_ok {α γ : Type} {c : Prop} [Decidable c] {e : String} {f : �
     intro h; cases h
   · simp only [hc, ite_false, not_false_eq_true, true_and]
 
-theorem throw_bind' {α β : Type} (e : String) (f : α → V β) : ((throw e : V α) >>= f) = throw e := rfl
-
 theorem ite_throw_ok' {α : Type} {c : Prop} [Decidable c] {e : String} {x : V α} {v : α} :
     ((if c then (throw e : V α) else x) = .ok v) ↔ (¬c ∧ x = .ok v) := by
   by_cases hc : c

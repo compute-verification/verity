@@ -61,4 +61,12 @@ def padWit {k0 e cols t : ℕ} (c₀ : F) (R : Fin (2 ^ k0 + e) → Fin (2 ^ col
 
 /-! ## Decoding the padded column -/
 
+omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
+theorem Xhat_lift (A : Arith F K) (c cols : ℕ) (hc : c < 2 ^ cols) :
+    ∀ j ω, A.Xhat c (cols + j) ω = A.Xhat c cols ω
+  | 0, _ => rfl
+  | j + 1, ω => by
+      rw [← add_assoc, Xhat_succ_low A (cols + j) c
+        (lt_of_lt_of_le hc (Nat.pow_le_pow_right (by norm_num) (by omega))), Xhat_lift A c cols hc j ω]
+
 end FlockSoundness

@@ -3,6 +3,7 @@ import FlockSoundness.Discharge.Composed.Custody
 import FlockSoundness.Discharge.Composed.CustodyJJson
 import FlockSoundness.Discharge.FailClosed.Scope
 import FlockSoundness.Discharge.FailClosed.Mask
+import FlockSoundness.Protocol.Discharge.FailClosed.Composed
 
 /-!
 # The public-output `--zk` headlines, over what flock-verify accepts
@@ -28,13 +29,6 @@ open Composed
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Discharge.DecodeZLJ (partJson)
 open scoped ENNReal
-
-theorem ScopeZ.tagsOk {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1) :
-    TagsOk I :=
-  ⟨hh, h.retainRounds, h.merkleLeaf, hn⟩
-
-theorem ScopeZ.tagsOkZJ {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = false) : TagsOkZJ I :=
-  ⟨hh, h.retainRounds, h.merkleLeaf⟩
 
 variable {mPts n : ℕ} {Reg : Type}
 

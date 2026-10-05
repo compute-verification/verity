@@ -56,17 +56,6 @@ namespace IsRowsUnit
 
 variable {P} {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R)
 
-/-- **Column values agreeing on shared gates**: the unit's input columns on one gate carry one value. -/
-def Agree (z : Fin R.w → Bool) : Prop :=
-  ∀ c c', I.wire c = I.wire c' → c.val < R.nIn → c'.val < R.nIn → z c = z c'
-
-theorem decode_wire {z : Fin R.w → Bool} (hz : I.Agree z) (c : Fin R.w) : I.decode z (I.wire c) = z c := by
-  have h : ∃ c', I.wire c' = I.wire c := ⟨c, rfl⟩
-  simp only [decode, dif_pos h]
-  rcases I.shared _ _ (Classical.choose_spec h) with he | ⟨h1, h2⟩
-  · rw [he]
-  · exact hz _ _ (Classical.choose_spec h) h1 h2
-
 /-- A column a row reads, outside the unit, is one of the unit's committed wires. -/
 theorem mem_io_of_read {i : Fin R.nComp} {c : Fin R.w} (hc : c ∈ R.a i ++ R.b i)
     (hout : P.unit (I.wire c) ≠ some u) : I.wire c ∈ P.io u := by
@@ -129,12 +118,6 @@ end Audit.Partition
 
 /-! ## Rows placed in a statement -/
 
-theorem bit_add (x y : ZMod 2) : bit (x + y) = Bool.xor (bit x) (bit y) := by
-  fin_cases x <;> fin_cases y <;> rfl
-
-theorem bit_mul (x y : ZMod 2) : bit (x * y) = (bit x && bit y) := by
-  fin_cases x <;> fin_cases y <;> rfl
-
 theorem bit_sum {ι : Type} (l : List ι) (f : ι → ZMod 2) :
     bit (l.map f).sum = xorSum l (bit ∘ f) := by
   induction l with
@@ -192,10 +175,6 @@ namespace UnitPlace
 
 variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {S : Statement} {u : Fin n}
 
-theorem agree (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
-    pl.inst.Agree fun c => bit (S.block z pl.o (pl.col c)) :=
-  fun c c' h hc hc' => congrArg bit (pl.aliased c c' h hc hc' z hz)
-
 /-- **The compiled lowering for a placed unit**: every witness satisfying the table's statement
 decodes to a transcript on which the unit is correct. -/
 theorem correct (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
@@ -217,54 +196,12 @@ namespace Audit.Op
 
 variable {N M : ℕ}
 
-theorem args_lift (f : Fin N → Fin M) (o : Op N) : (o.lift f).args = o.args.map f := by
-  cases o <;> simp [lift, args]
-
-theorem isInput_lift (f : Fin N → Fin M) (o : Op N) : (o.lift f).isInput = o.isInput := by
-  cases o <;> rfl
-
 end Audit.Op
 
 namespace Prog
 
-theorem colWire_comp {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin N)
-    (i : Fin R.nComp) : colWire R ins one (R.comp i) = ⟨N + i.val, by omega⟩ := by
-  have h1 : ¬ (R.comp i).val < R.nIn := by simp [Rows.comp]
-  have h2 : (R.comp i).val < R.nIn + R.nComp := by simp [Rows.comp]
-  simp only [colWire, h1, h2, dif_neg, dif_pos, not_false_eq_true]
-  exact Fin.ext (by simp [Rows.comp])
-
-/-- An earlier gate or wired column stays below the new unit's gates. -/
-theorem colWire_lt_of_not_comp {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin N)
-    (c : Fin R.w) (hc : ∀ i, c ≠ R.comp i) : (colWire R ins one c).val < N := by
-  unfold colWire
-  split_ifs with h h'
-  · simp only [Fin.val_castAdd]; exact (ins _).isLt
-  · exact absurd (Fin.ext (by simp [Rows.comp]; omega) : c = R.comp ⟨c.val - R.nIn, by omega⟩)
-      (hc _)
-  · simp only [Fin.val_castAdd]; exact one.isLt
-
 variable {N₀ n₀ : ℕ} (p : Prog N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀) (one : Fin N₀)
   (hone : ∀ c, ins c ≠ one)
-
-theorem unit_castAdd (g : Fin N₀) :
-    (snoc p R ins one hone).unit (Fin.castAdd R.nComp g) = (p.unit g).map Fin.castSucc := by
-  simp [unit, g.isLt]
-
-theorem op_castAdd (g : Fin N₀) :
-    (snoc p R ins one hone).op (Fin.castAdd R.nComp g) = (p.op g).lift (Fin.castAdd R.nComp) := by
-  simp [op, g.isLt]
-
-theorem unit_new (i : Fin R.nComp) :
-    (snoc p R ins one hone).unit ⟨N₀ + i.val, by omega⟩ = some (Fin.last n₀) := by
-  simp [unit]
-
-theorem op_new (i : Fin R.nComp) :
-    (snoc p R ins one hone).op ⟨N₀ + i.val, by omega⟩ =
-      .row ((R.a i).map (colWire R ins one)) ((R.b i).map (colWire R ins one)) := by
-  have hx : (⟨N₀ + i.val - N₀, by omega⟩ : Fin R.nComp) = i := Fin.ext (by simp)
-  simp only [op]
-  rw [dif_neg (by simp), hx]
 
 omit p R ins one hone in
 /-- **Every unit of a program is an instance of its template's rows** (program level). -/

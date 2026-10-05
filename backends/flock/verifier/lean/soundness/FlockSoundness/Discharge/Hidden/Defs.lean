@@ -1,6 +1,8 @@
 import FlockSoundness.Discharge.Hm.Bc
 import FlockSoundness.Discharge.Layout.Drawn
 import FlockSoundness.Protocol.Discharge.Hidden.Defs
+import FlockSoundness.Discharge.Aliased
+import FlockSoundness.Discharge.Hm.Copy
 
 /-!
 # A hidden-output statement (`Stmt.setupHidden`): what it is, and its frozen statements
@@ -43,13 +45,6 @@ def commitPair (r y r' y' : List UInt8) : List UInt8 × List UInt8 :=
 /-! ## What `setupHidden` checked and produced -/
 
 /-! ## The frozen statements -/
-
-/-- **`HiddenLayout`**: an untyped statement `Stmt.setupHidden` accepts has the layout the placement reads
-(`FlockSoundness.Layout`), so its block R1CS is `Layout.model`. -/
-def HiddenLayout : Prop :=
-  ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st → Layout st
 
 /-- **`PublicExposes`**: what a statement `Stmt.setupHidden` accepts takes from the public file: no output word, and one
 region per row, region `p` ("digest p") every VU's `b ‖ c` of row `p` (`Layout.hmBytes`: an instance's public `b ‖ c`,

@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.ZkExec.Refines
 import FlockSoundness.Discharge.ZkLink
+import FlockSoundness.Protocol.Discharge.ZkExec.Compiled
 
 /-!
 # flock-verify `--zk`'s headline at the compiled `--zk` table
@@ -36,20 +37,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
 
 /-- The one-table plan: table `T S R` alone at each draw and registration. -/
 abbrev planOne : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts) := fun S R => [T S R]
-
-/-- The compiled `--zk` table's reps at each draw and registration (`Refine.modelTable`'s `G`). -/
-noncomputable def repZ (S : Finset (Fin n)) (R : Reg) : (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game (ZkLink.PendZ 𝔽 D Sl) :=
-  ZkLink.repZCAt A Hs (T S R)
-
-/-- The compiled `--zk` table's output: the one table's `outZC` at its level-0 cap. -/
-noncomputable def outZ (S : Finset (Fin n)) (R : Reg) (caps : Fin 1 → Cap D)
-    (pend : ZkLink.PendZ 𝔽 D Sl × ZkLink.PendZ 𝔽 D Sl) (os : ZkLink.OpensZ 𝔽 D Sl) : List (ZkLink.OutZC 𝔽 D Sl) :=
-  [ZkLink.outZC Hs (T S R) (caps 0) pend os]
-
-open Classical in
-/-- The compiled `--zk` table's verdict. -/
-noncomputable def accZ (S : Finset (Fin n)) (R : Reg) (outs : List (ZkLink.OutZC 𝔽 D Sl)) : Bool :=
-  decide (ZkLink.acceptedZC [T S R] outs)
 
 omit [Fintype K] in
 /-- **The compiled `--zk` table's game is the compiled audit's session at the one-table plan.** -/

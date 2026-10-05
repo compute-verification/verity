@@ -1,4 +1,5 @@
 import FlockSoundness.Game.Interleave
+import FlockSoundness.Protocol.Game.Union
 
 /-!
 # Union bounds and loops
@@ -19,14 +20,6 @@ namespace FlockSoundness.Game
 open scoped ENNReal
 
 variable {α β γ : Type}
-
-instance : LawfulMonad Game :=
-  LawfulMonad.mk' Game
-    (id_map := fun x => by
-      show x.bind (fun a => Game.ret (id a)) = x
-      exact bind_ret_right x)
-    (pure_bind := fun _ _ => rfl)
-    (bind_assoc := fun x f g => bind_assoc x f g)
 
 /-- A continuation bounded from every state bounds the composition. -/
 theorem value_bind_le_of_forall (g : Game α) (f : α → Game β) (p : β → Prop) (ε : ℝ≥0∞)

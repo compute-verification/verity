@@ -58,22 +58,6 @@ end DrawSetup
 
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
 
-/-- **The table is setupH's statement wherever setupH accepts**: at a draw with a `DrawSetup` at `dj S`, the table's
-statement is `Layout.model` of setupH's statement at its regions, and its acceptance's draw is `dj S`. -/
-theorem tableAt_stmt {S : Finset (Fin n)} (x : DrawSetup I mPts S (dj S)) :
-    ∃ y : DrawSetup I mPts S (dj S), y.st = x.st ∧ tableAt ht dj x₀ S = y.table ht := by
-  refine ⟨Classical.choice ⟨x⟩, ?_, by unfold tableAt; rw [dite_eq_left_of_eq_true (eq_true ⟨x⟩)]⟩
-  have e := (Classical.choice (⟨x⟩ : Nonempty (DrawSetup I mPts S (dj S)))).h.symm.trans x.h
-  exact Except.ok.inj e
-
-/-- **A refused draw's table is unsatisfiable**: at a draw with no `DrawSetup`, no witness satisfies the table. -/
-theorem tableAt_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (DrawSetup I mPts S (dj S)))
-    (z : Witness (tableAt ht dj x₀ S).T.S.m) : ¬ (tableAt ht dj x₀ S).T.S.Satisfies z := by
-  revert z
-  unfold tableAt
-  rw [dite_eq_right_of_eq_false (eq_false hS)]
-  exact x₀.refused_unsat ht S
-
 variable {Reg : Type}
 
 variable {c : Flock.Circuit}
@@ -92,21 +76,5 @@ theorem sitesAt_inj {S : Finset (Fin n)} (hS : Nonempty (DrawSetup I mPts S (dj 
   exact e'
 
 variable {pop : Public}
-
-/-- **`BcSite` at every satisfiable site** of the one-table plan: at a draw flock-verify sets up by `table_bcSite`; at a
-refused draw no message satisfies the table (`refused_unsat`). -/
-theorem sitesAt_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
-    (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop) (hpt : pop.tables = none) :
-    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) (M : Binding.Msg (planAt ht dj x₀) (tabAt ht dj x₀) S R u),
-      Binding.Sat (planAt ht dj x₀) (tabAt ht dj x₀) S R u M →
-        Layout.BcSite ((sitesAt ht dj x₀).acc S R u h) pop ((sitesAt ht dj x₀).o S R u h)
-          ((sitesAt ht dj x₀).vu S R u h) u.val := by
-  intro S R u h M hM
-  show Layout.BcSite (tableAt ht dj x₀ S).acc pop ((tableAt ht dj x₀ S).o u h) ((tableAt ht dj x₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetup I mPts S (dj S))
-  · have e : tableAt ht dj x₀ S = (Classical.choice hS).table ht := by unfold tableAt; rw [dite_eq_left_of_eq_true (eq_true hS)]
-    rw [e]
-    exact table_bcSite ht dj hc ho hpop hpt _ h
-  · exact absurd hM (tableAt_unsat ht dj x₀ hS _)
 
 end FlockSoundness.Discharge.Integrate

@@ -89,15 +89,6 @@ variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap D)) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify accepts** (R11b, named): at every draw and registration, on
-every live outcome whose session directory flock-verify accepts, each rep's game runs on the tape decoded from its
-stream and its proof file, and the salted table's verdict on those runs, with the cap `root_B` decodes to and the
-openings and salts the proof files decode to, holds. -/
-def DecodesAll : Prop :=
-  ∀ S R, Decodes (fun (caps : Fin 1 → Cap D) pend os => tableOutL H E Lf (caps 0) pend os)
-    (fun o => Accepts I (wr S R o)) (·.accepted = true) (opn S R) (dec S R) (one S R) (fin S R) (capOf S R)
-    (repsOf (D := D) execArith (T S R))
-
 variable {L : Law n}
 
 /-- **The simulated audit strategy**: the live prover's registration, and at each draw the simulated session

@@ -56,8 +56,26 @@ def recv (M : Type) : Game M := .send M .ret
 /-- The verifier draws a uniform coin from `C`. -/
 def draw (C : Type) [Fintype C] [Nonempty C] : Game C := .coin C .ret
 
+@[simp] theorem bind_ret (a : α) (f : α → Game β) : (Game.ret a).bind f = f a := rfl
+
+@[simp] theorem bind_send (M : Type) (k : M → Game α) (f : α → Game β) :
+    (Game.send M k).bind f = .send M fun m => (k m).bind f := rfl
+
+@[simp] theorem bind_coin (C : Type) [Fintype C] [Nonempty C] (k : C → Game α)
+    (f : α → Game β) : (Game.coin C k).bind f = .coin C fun c => (k c).bind f := rfl
+
+@[simp] theorem pure_eq (a : α) : (pure a : Game α) = .ret a := rfl
+
+@[simp] theorem bind_eq (g : Game α) (f : α → Game β) : g >>= f = g.bind f := rfl
+
 theorem bind_assoc (g : Game α) (f : α → Game β) (h : β → Game γ) :
     (g.bind f).bind h = g.bind fun a => (f a).bind h := by
+  induction g with
+  | ret a => rfl
+  | send M k ih => simp only [bind_send, ih]
+  | coin C k ih => simp only [bind_coin, ih]
+
+theorem bind_ret_right (g : Game α) : g.bind .ret = g := by
   induction g with
   | ret a => rfl
   | send M k ih => simp only [bind_send, ih]
@@ -84,6 +102,13 @@ noncomputable def prob (p : α → Prop) : (g : Game α) → Strategy g → ℝ�
   | .send _ k, s => prob p (k s.1) s.2
   | @Game.coin _ C iF _ k, s => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * prob p (k c) (s c)
 
+open Classical in
+/-- The same probability for an optimal, computationally unbounded prover. -/
+noncomputable def value (p : α → Prop) : Game α → ℝ≥0∞
+  | .ret a => if p a then 1 else 0
+  | .send _ k => ⨆ m, value p (k m)
+  | @Game.coin _ C iF _ k => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * value p (k c)
+
 /-- The uniform average over a finite type. -/
 noncomputable def avg {C : Type} [Fintype C] (f : C → ℝ≥0∞) : ℝ≥0∞ :=
   ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * f c
@@ -92,6 +117,14 @@ open Classical in
 /-- The probability that a uniform coin satisfies `p`, as an average of indicators. -/
 noncomputable def prCoin {C : Type} [Fintype C] (p : C → Prop) : ℝ≥0∞ :=
   avg fun c => if p c then 1 else 0
+
+theorem prCoin_eq_card {C : Type} [Fintype C] (p : C → Prop) [DecidablePred p] :
+    prCoin p = ((Finset.univ.filter p).card : ℝ≥0∞) / Fintype.card C := by
+  classical
+  unfold prCoin avg
+  rw [ENNReal.div_eq_inv_mul, Finset.card_filter, Nat.cast_sum, Finset.mul_sum]
+  refine Finset.sum_congr rfl fun c _ => ?_
+  by_cases hc : p c <;> simp [hc]
 
 /-! ## Composition -/
 

@@ -1,5 +1,6 @@
 import FlockSoundness.Types.Units
 import FlockSoundness.Lowering
+import FlockSoundness.Protocol.Types.Program
 
 /-!
 # A program of units over circuit types: its rows circuit, its Boolean circuit, and `RowsL1` between them (phase 1, S4c)
@@ -245,9 +246,6 @@ structure UnitSpec where
   F : ℕ
   hF : idx ≤ F
 
-theorem getD_of_lt {a : Array ℕ} {i : ℕ} (h : i < a.size) : a.getD i 0 = a[i] := by
-  simp [Array.getD, h]
-
 theorem Audit.Partition.mem_committed_iff {C : Audit.Circuit} {n : ℕ} (P : Partition C n) (g : Fin C.N) :
     g ∈ P.committed ↔ (C.op g).isInput = true ∨ g ∈ C.outputs ∨ ∃ h, g ∈ (C.op h).args ∧ P.unit h ≠ P.unit g := by
   classical
@@ -347,11 +345,6 @@ theorem out_inj {o o' : ℕ} (ho : o < s.t.outputs.size) (ho' : o' < s.t.outputs
 end UnitSpec
 
 /-! ## The program -/
-
-/-- Where a unit's input bit reads: program input `a`, or output `o` of unit `v`. -/
-inductive Src
-  | input (a : ℕ)
-  | out (v o : ℕ)
 
 /-- A source a unit may read: a program input other than the constant, or an output of one of the units `outs` lists by
 output count. -/

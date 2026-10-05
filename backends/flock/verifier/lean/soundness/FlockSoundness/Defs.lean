@@ -55,14 +55,6 @@ def RepDoomed (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
       ¬ ((∀ o i, (S.A₀.mulVec (S.block z o)) i * (S.B₀.mulVec (S.block z o)) i = S.block z o i)
           ∧ (∀ o, S.block z o S.pin = 1) ∧ ∀ c ∈ extra, c.Holds z)
 
-omit [Fintype F] [DecidableEq F] in
-theorem extraClaims_length (S : Statement) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → F) :
-    (extraClaims S ptLocal mPts pts).length = 2 * S.regions.length := by
-  unfold extraClaims
-  induction S.regions with
-  | nil => simp
-  | cons R rs ih => simp [List.flatMap_cons, ih]; ring
-
 /-! ## The witness's A-side and B-side, and the pin's extension -/
 
 /-- The pin column's multilinear extension over the blocks. The lincheck's constant-wire coin

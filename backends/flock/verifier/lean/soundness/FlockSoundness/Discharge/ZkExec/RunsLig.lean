@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.ZkExec.RunsStatements
+import FlockSoundness.Protocol.Discharge.ZkExec.RunsStatements
 
 /-!
 # Ligerito under `--zk`, as frames

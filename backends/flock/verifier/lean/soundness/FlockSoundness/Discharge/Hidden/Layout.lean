@@ -1,6 +1,5 @@
-import FlockSoundness.Discharge.Hidden.Rows
-import FlockSoundness.Discharge.Hidden.Delta
-import FlockSoundness.Discharge.Hm.Accept
+import FlockSoundness.Protocol.Discharge.Hidden.Rows
+import FlockSoundness.Protocol.Discharge.Hidden.Delta
 
 /-!
 # A hidden-output statement's layout (`HiddenLayout`)

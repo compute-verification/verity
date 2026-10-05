@@ -1,4 +1,4 @@
-import FlockSoundness.Protocol.Refine.Run
+import FlockSoundness.Refine.Run
 import FlockSoundness.Protocol.Game.Interleave
 
 /-!
@@ -17,6 +17,36 @@ variable {W F : Type} [Inhabited W] {ι : W → F}
 namespace Plays
 
 variable {α β : Type}
+
+/-- **Runs compose.** A run of `g` to `a`, then a run of `f a`, is a run of `g.bind f`. -/
+theorem bind {g : Game α} {f : α → Game β} {ms₁ ms₂ : List Msg} {cs₁ cs₂ : List (Array W)} {a : α} {b : β}
+    (h₁ : Plays ι g ms₁ cs₁ a) (h₂ : Plays ι (f a) ms₂ cs₂ b) : Plays ι (g.bind f) (ms₁ ++ ms₂) (cs₁ ++ cs₂) b := by
+  induction h₁ with
+  | ret a => exact h₂
+  | send m _ ih => exact .send m (ih h₂)
+  | coinVec c hc h1 _ ih => exact .coinVec c hc h1 (ih h₂)
+  | coinOne c hc _ ih => exact .coinOne c hc (ih h₂)
+
+/-- `bind` with the tapes given by their concatenations. -/
+theorem bind' {g : Game α} {f : α → Game β} {ms₁ ms₂ ms : List Msg} {cs₁ cs₂ cs : List (Array W)} {a : α} {b : β}
+    (h₁ : Plays ι g ms₁ cs₁ a) (h₂ : Plays ι (f a) ms₂ cs₂ b) (hms : ms = ms₁ ++ ms₂) (hcs : cs = cs₁ ++ cs₂) :
+    Plays ι (g >>= f) ms cs b := hms ▸ hcs ▸ bind h₁ h₂
+
+theorem pure (a : α) : Plays ι (Pure.pure a : Game α) [] [] a := .ret a
+
+theorem recv (M : Type) (m : M) : Plays ι (Game.recv M) [⟨M, m⟩] [] m := .send m (.ret m)
+
+theorem drawVec {n : ℕ} [Fintype (Fin n → F)] [Nonempty (Fin n → F)] (c : Array W) (hc : c.size = n)
+    (h1 : n ≠ 1) : Plays ι (Game.draw (Fin n → F)) [] [c] (fun i => ι c[i.val]!) := .coinVec c hc h1 (.ret _)
+
+theorem drawOne [Fintype F] [Nonempty F] (c : Array W) (hc : c.size = 1) :
+    Plays ι (Game.draw F) [] [c] (ι c[0]!) := .coinOne c hc (.ret _)
+
+/-- A run of `g` is a run of `g.map f`, to the image of its output. -/
+theorem map {g : Game α} {ms : List Msg} {cs : List (Array W)} {a : α} (f : α → β) (h : Plays ι g ms cs a) :
+    Plays ι (g.map f) ms cs (f a) := by
+  have := bind (f := fun a => Game.ret (f a)) h (Plays.ret (ι := ι) (f a))
+  simpa [Game.map] using this
 
 /-- `interleave` against a finished second interaction runs the first alone. -/
 theorem interleave_ret (g₁ : Game α) (b : β) : interleave g₁ (.ret b) = g₁.map fun a => (a, b) := by

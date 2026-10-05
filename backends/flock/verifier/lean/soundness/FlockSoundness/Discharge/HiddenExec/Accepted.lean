@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.HiddenExec.Accepts
+import FlockSoundness.Protocol.Discharge.HiddenExec.Accepts
 
 /-!
 # A draw flock-verify accepts under hidden outputs sets up

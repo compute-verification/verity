@@ -69,15 +69,6 @@ theorem sitesZAt_at {S : Finset (Fin n)} (y : DrawSetupZK I mPts S (dj S)) (R : 
 variable (hU : Built c.unit) {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub)
   (hpt : pub.tables = none) (hscope : Layout.scopeOk c = true)
 
-/-- **`hHm` at the `--zk` tables' rows** (e2e-hm's `keyedRowsOuts_computes`, moved along): in a satisfying witness of a
-drawn unit's `--zk` table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under
-the salt at its `hm96` slot. -/
-theorem rsZAt_computes : (rsZAt (Reg := Reg) ht dj y₀ hc hU hpub hpt hscope).Computes :=
-  HmRowsZ.ofShadow_computes (planZAt_S ht dj y₀) (decAgreeAt ht dj y₀ hc hU) _
-    (Hm.keyedRowsOuts_computes (sitesSh_parse ht dj y₀ hc) hc (Layout.scopeOk_spec hU hscope).1
-      (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope)
-      (sitesSh_bcSite ht dj y₀ hc hU hpub hpt hscope))
-
 /-- **The compiled `--zk` count curve at the `--zk` tables, its places and binding built.**
 `zk_flock_countC_execOS_keyProg` at item 3's tables (`tablesAtZK dj y₀`), with `si := sitesZAt`, `hparse :=
 sitesZAt_parse`, the program's outputs the returned outputs' bits (`Layout.outsOf`), `lay := layZAt`, `rs := rsZAt`

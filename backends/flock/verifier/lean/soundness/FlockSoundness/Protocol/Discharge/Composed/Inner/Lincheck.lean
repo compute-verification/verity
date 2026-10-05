@@ -1,7 +1,4 @@
-import FlockSoundness.Protocol.Discharge.ZkExec.VerdictStatements
-import Mathlib.SetTheory.Cardinal.Finite
-import Mathlib.SetTheory.Cardinal.NatCard
-import Mathlib.Algebra.CharP.Two
+import FlockSoundness.Protocol.Discharge.ZkExec.VerdictInner
 
 /-!
 # The lincheck is complete on the masked replay (live PROTOCOL.md §4, §10)
@@ -21,6 +18,8 @@ divides nor refuses.
 namespace FlockSoundness.Discharge.Composed.Lincheck
 
 open Flock FlockLevel3 Model Refine
+
+local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## Pads and affine forms -/
 

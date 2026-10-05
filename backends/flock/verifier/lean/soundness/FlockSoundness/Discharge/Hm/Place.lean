@@ -10,38 +10,13 @@ computed rows hold, and the constant column is 1 (its row is `pin · pin`, or th
 import FlockSoundness.Discharge.Hm.Nets
 import FlockSoundness.ExecTemplatePlace
 import FlockSoundness.Protocol.Discharge.Hm.Place
+import FlockSoundness.Discharge.Hm.Port
 
 open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Hm
 
 open Compose Flock.DeriveAll Types.Dag
-
-theorem sum_count_nat {k : ℕ} (L : List ℕ) (hL : ∀ y ∈ L, y < k) (v : Fin k → ZMod 2) :
-    ∑ j : Fin k, ((L.count j.val : ℕ) : ZMod 2) * v j = (L.map fun y => if h : y < k then v ⟨y, h⟩ else 0).sum := by
-  induction L with
-  | nil => simp
-  | cons c L ih =>
-      have hc : c < k := hL c List.mem_cons_self
-      simp only [List.count_cons, Nat.cast_add, add_mul, Finset.sum_add_distrib,
-        ih fun y hy => hL y (List.mem_cons_of_mem _ hy), List.map_cons, List.sum_cons, dite_eq_left hc]
-      rw [add_comm]
-      congr 1
-      rw [Finset.sum_eq_single ⟨c, hc⟩]
-      · simp
-      · intro j _ hj
-        have : (c == j.val) = false := by
-          simp only [beq_eq_false_iff_ne]
-          exact fun h => hj (Fin.ext h.symm)
-        simp [this]
-      · simp
-
-theorem bit_sum_row (f : ℕ → ZMod 2) (b : ℕ) (r : Array ℕ) :
-    FlockSoundness.bit ((r.toList.map (b + ·)).map f).sum = xorRow (fun j => FlockSoundness.bit (f (b + j))) r := by
-  unfold xorRow
-  induction r.toList with
-  | nil => rfl
-  | cons y l ih => simp only [List.map_cons, List.sum_cons, bit_add, ih, List.foldr_cons]
 
 section Slots
 
@@ -50,12 +25,6 @@ variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info
 
 set_option hygiene false in
 local notation "𝒖" => done.getD unit default
-
-theorem rowNet_lt (T : TemplateLayout st tb words done 𝒖) {n : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet) :
-    n < st.c.nets.size := by
-  rcases hn with rfl | rfl
-  · exact T.shaNet.1
-  · exact T.hmNet.1
 
 /-- **The block rows at a row net's row past its input rows**: the net's row, placed in the slot, and Δ's first-loop
 pairs there. -/
@@ -203,13 +172,6 @@ theorem laidRows_of_sat (hd : deriveChecked types ls info words unit = .ok done)
     refine Eq.trans ?_ h
     exact congrArg₂ (· && ·) (hmv l.ra (T.model regs).A₀ (hcols _ _ ha) fun j => (hE j.val).1).symm
       (hmv l.rb (T.model regs).B₀ (hcols _ _ hb) fun j => (hE j.val).2).symm
-
-theorem slot_lt_count (T : TemplateLayout st tb words done 𝒖) {n g i : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet)
-    (hg : g < st.c.g) (hi : i < st.c.perVu.getD n 0) : g * st.c.perVu.getD n 0 + i < (st.c.rangeOf n).count := by
-  rw [(T.range (rowNet_lt T hn)).2.2.1]
-  calc g * st.c.perVu.getD n 0 + i < g * st.c.perVu.getD n 0 + st.c.perVu.getD n 0 := by omega
-    _ = (g + 1) * st.c.perVu.getD n 0 := (Nat.succ_mul _ _).symm
-    _ ≤ st.c.g * st.c.perVu.getD n 0 := Nat.mul_le_mul_right _ hg
 
 /-- **VU `g`'s `sha512x3` slot `i` holds the verifier's `sha512x3` rows**, past its 8192 input rows, in every block of a
 satisfying witness of the accepted template statement whose circuit passed `HmNets.check`. -/

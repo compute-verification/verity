@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.ZkLink.LockLevel
+import FlockSoundness.Discharge.ZkLink.OracleP
 
 /-!
 # The masked level 0's locksteps for two level-0 tables are aligned

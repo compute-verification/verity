@@ -28,28 +28,6 @@ variable {Val : Type}
 
 /-! ## hm96-sha512 -/
 
-theorem commitString_split {r y r' y' : List UInt8} (h : commitString r y = commitString r' y') :
-    xorBytes (digBytes (H512 r)) (K512.mask y) = xorBytes (digBytes (H512 r')) (K512.mask y') ∧
-      digBytes (H512 (K512.saltPrefix ++ y)) = digBytes (H512 (K512.saltPrefix ++ y')) :=
-  List.append_inj h (by simp only [xorBytes, List.length_zipWith, digBytes, hL512, K512.mask_len])
-
-/-- **hm96's extractor outputs a SHA-512 collision** whenever two different rows' bytes have one leaf, under any salts:
-equal leaves collide in the outer hash when `b ‖ c` differ, in the salt digest when the salts differ, and in the row hash
-when the salts agree, since then the masks agree, so the row digests do. -/
-theorem hm96Pair_spec (r y r' y' : List UInt8) (hr : r ≠ r') (h : H512 (hm96Input r y) = H512 (hm96Input r' y')) :
-    Collides (hm96Pair r y r' y') := by
-  unfold Collides hm96Pair
-  split_ifs with ho hy
-  · have hcs : K512.leafPrefix ++ commitString r y = K512.leafPrefix ++ commitString r' y' := ho
-    have hb := (commitString_split (List.append_cancel_left hcs)).1
-    rw [hy] at hb
-    have hx := xorBytes_inj (by rw [hL512, K512.mask_len]) (by rw [hL512, K512.mask_len]) hb
-    exact ⟨hr, enc512.dig_inj hx⟩
-  · have hcs : K512.leafPrefix ++ commitString r y = K512.leafPrefix ++ commitString r' y' := ho
-    exact ⟨fun e => hy (List.append_cancel_left e),
-      enc512.dig_inj (commitString_split (List.append_cancel_left hcs)).2⟩
-  · exact ⟨ho, h⟩
-
 /-- hm96's leaf is the model's salted leaf `Merkle.hm96Leaf` at the executable's key, for the row encoding `enc`. -/
 theorem hm96_eq_hm96Leaf (enc : Val → List UInt8) (hinj : Function.Injective enc) (v : Val) (y : List UInt8) :
     (ExplicitLeaf.hm96 enc hinj).leaf v y =
