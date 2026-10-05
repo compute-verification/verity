@@ -23,7 +23,7 @@ from verity.commitments.leaves import (
 )
 from verity.errors import InvalidArtifact
 
-FIXTURES = Path(__file__).resolve().parents[4] / "fixtures" / "typed-obligation-v0"
+FIXTURES = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists()) / "fixtures" / "typed-obligation-v0"
 
 
 def _values(n: int) -> list[LeafValue]:

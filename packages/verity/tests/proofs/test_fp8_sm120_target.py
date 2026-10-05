@@ -13,7 +13,7 @@ from verity.proofs.families import make_tensor_core_gate_set
 from verity.proofs.programs import gemm_accumulator_fp8
 from verity.proofs.target import FP8_ADA_MMA, FP8_SM120_MMA, TARGETS, TC_VECTORS
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 T = FP8_SM120_MMA
 
 
