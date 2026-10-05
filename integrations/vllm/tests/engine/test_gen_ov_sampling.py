@@ -124,8 +124,8 @@ def _program_output_gate(P):
 
 
 def _evaluate_gumbel(V: int, seed: int, pos: int, words: list[int]) -> int:
-    from verity.ir import Program, bind
-    from verity.ir.evaluate import evaluate_region
+    from verity.primitives.circuits import Program, bind
+    from verity.primitives.circuits.evaluate import evaluate_region
     from verity_vllm.program.registry.quarantine.ov_sampling.gumbel import GumbelArgmaxBf16
     P = Program(bind(GumbelArgmaxBf16, V=V, SEED=seed, POS=pos))
     C = P.circuit
@@ -308,8 +308,8 @@ def test_tempered_row_is_gumbel_argmax_temp_over_the_bf16_source():
 def test_gumbel_argmax_temp_definition_matches_the_div_full_oracle():
     """div.full.f32 quotient (F32Mul(DivFullScaleA(x,T), DivFullRcp(T))) + noise, lowest-index argmax."""
     import numpy as np
-    from verity.ir import Program, bind
-    from verity.ir.evaluate import evaluate_region
+    from verity.primitives.circuits import Program, bind
+    from verity.primitives.circuits.evaluate import evaluate_region
     from verity_vllm.program.registry import prims as P
     from verity_vllm.program.registry.quarantine.ov_sampling.gumbel import GumbelArgmaxTempBf16
     from verity_vllm.program.kernels.libdevice_sampling import gumbel_noise_exact

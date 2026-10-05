@@ -8,16 +8,16 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ir import Program
+from verity.primitives.circuits import Program
 from verity_vllm.program import workload as W
-from verity.ir.codec import encode_program
-from verity.ir.defs import REGISTRY, bind
+from verity.primitives.circuits.codec import encode_program
+from verity.primitives.circuits.defs import REGISTRY, bind
 from verity_vllm.program.registry import b1, lifted as L
 from tests.program import test_lifted_mixed as PM
 from tests.program.test_lifted_mixed import BOUNDARY, CAP, EOS, LP, SMS, TINY, _inputs, _inputs_for, _prompt_b, _request_outs, _requests, _run
 from tests.program.test_lifted_tiny_padrev import padrev_live_ref
 from tests.program.test_serve3 import Y_RAW
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.types import Array, Value
 
 I32 = Value(32)
 
@@ -174,9 +174,9 @@ def test_t4_a_mixed_cap_population_composes_with_every_request_programmed_for_it
 # F-pad-19 CLOSED by pad 850393f65 (live_count_hook takes one cap PER REQUEST; a served-length out_r refused by name): strict xfail
 # flipped to PASS 07:08Z -- on the fixed hook the single-cap call below is REFUSED by name (the accepted outcome), see the per-request test after it
 def test_f_pad_19_the_hook_on_a_mixed_cap_population_takes_each_requests_own_cap_or_refuses_by_name(component, component_small):
-    from verity.ir.defs import Builder, composite
-    from verity.ir.refs import array_of, coll_concat, tuple_of
-    from verity.ir.types import Tuple
+    from verity.primitives.circuits.defs import Builder, composite
+    from verity.primitives.circuits.refs import array_of, coll_concat, tuple_of
+    from verity.primitives.circuits.types import Tuple
     reqs = _mixed_requests(component, component_small)
     wl = L.lifted_workload(reqs, EOS, lag=0, boundary_prefix=BOUNDARY)
     wl_u = W.WorkloadProgram(reqs, lag=0)
@@ -210,9 +210,9 @@ def test_f_pad_19_the_hook_on_a_mixed_cap_population_takes_each_requests_own_cap
 
 
 def _padrev_mixed_s2():
-    from verity.ir.defs import composite
-    from verity.ir.refs import array_of, coll_concat, tuple_of
-    from verity.ir.types import Tuple
+    from verity.primitives.circuits.defs import composite
+    from verity.primitives.circuits.refs import array_of, coll_concat, tuple_of
+    from verity.primitives.circuits.types import Tuple
 
     @composite("PadrevMixedS2", 1, ["WL", "EOS", "CAPS", "ARR", "LAG", "H"],
                lambda S: (S.WL.signature()[0], Tuple(S.WL.signature()[1], Array(S.H, Value(L.N_LIVE_BITS + 1)), Array(S.H, Value(L.SPLITS_BITS + 1)))),

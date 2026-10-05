@@ -5,12 +5,12 @@ release) while `verity_vllm` ran the release tree and versions.json named the re
 tree on sys.path ahead of the tree of record -- and require the precheck to fail BY NAME, plus the positive (one tree), the shipped-tree
 sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / canary.sh / hidden_gpu.py with a foreign $VERITY_TREE).
 
-Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from packages/verity/src, `verity_vllm` from integrations/vllm,
+Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from ., `verity_vllm` from integrations/vllm,
 `research` from tools/research/src.  REPO must be a git checkout: the positive precheck, the requested-sha mismatch and the
 `.git`-before-markers resolution read its commit.  A `research run --source` tree has no `.git`, so on a pod run the suite from a clone
 of the shipped commit (`git clone <root>/git/verity.git T && git -C T checkout $RESEARCH_SOURCE_SHA`), not from the shipped tree.
 
-    cd integrations/vllm && PYTHONPATH=.:../../packages/verity/src:../../tools/research/src python -m pytest -q tests/pipeline/test_source_identity.py
+    cd integrations/vllm && PYTHONPATH=.:../..:../../tools/research/src python -m pytest -q tests/pipeline/test_source_identity.py
 """
 from __future__ import annotations
 
