@@ -662,7 +662,8 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
     `_chain` wrote, whose second parent is the pinned head): N's head on ``remote`` is no longer that head, closed or not, or
     `pr:N@{head}` lacks `ready = true` asserted by someone other than `merge-queue` (the owner's word; who asserted it isn't matched
     to the PR's owner, which is mostly a Cursor agent id with no map to a lane) or a grant its change needs under the queue's rules
-    as HEAD has them (`Rules.needs`, every role, not only TRAIN_GRANTS), read after pulling the labels from the store's remote.
+    as HEAD has them (`Rules.needs`, every role, not only TRAIN_GRANTS) for what it adds onto the train below its merge (a PR stacked
+    on another in the train needs no grant for that one's change), read after pulling the labels from the store's remote.
     What can't be read refuses."""
     from .queue import QueueError, StoreGrants, grant_target
 
@@ -670,15 +671,15 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
     for line in _git(repo, "log", "--first-parent", "--format=%P%x00%s", f"HEAD..{commit}").stdout.splitlines():
         parents, _, subject = line.partition("\0")
         if m := MERGED_PR.fullmatch(subject):
-            sha = (parents.split() + ["", ""])[1]
+            onto, sha = (parents.split() + ["", ""])[:2]
             if sha.startswith(m[2]):
-                pins.append((int(m[1]), sha))
+                pins.append((int(m[1]), sha, onto))
             else:
                 out.append(f"#{m[1]}'s merge names {m[2]} but merges {sha[:12] or 'nothing'}")
     grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)))
     try:
         rules = queue_rules(repo, "HEAD") if pins else None
-        for n, sha in pins:
+        for n, sha, onto in pins:
             r = _git(repo, "fetch", "-q", remote, f"pull/{n}/head", check=False)
             head = None if r.returncode else _git(repo, "rev-parse", "FETCH_HEAD").stdout.strip()
             if head != sha:
@@ -692,7 +693,7 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
             elif not by:
                 out.append(f"#{n} is not marked ready at {sha[:12]} (`ready = true` on {grant_target(n, sha)}: `research queue "
                            f"ready {n} --by LANE`)")
-            need = rules.needs(repo, "HEAD", sha, lambda n=n, sha=sha: grants.reviews(n, sha)) if rules else set()
+            need = rules.needs(repo, onto, sha, lambda n=n, sha=sha: grants.reviews(n, sha)) if rules else set()
             if missing := need - grants(n, sha):
                 out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
     except QueueError as e:
