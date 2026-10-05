@@ -111,7 +111,7 @@ print(json.dumps({"family": fam, "count": len(full), "sha256": __import__("hashl
 
 def task_list(names: set[str]) -> dict:
     """``circuit-check --all``'s task list, built as the CLI builds it (a fresh process: its first `TG.suite()`): the family's
-    definition targets in target order, and the whole list's length and SHA-256."""
+    definition targets in target order, and the whole list's length and SHA-256. Recording only."""
     out = subprocess.run([sys.executable, "-c", _TASKS, json.dumps(sorted(names))], check=True, capture_output=True, text=True,
                          cwd=REPO / "tools/circuit_check")
     return json.loads(out.stdout.strip().splitlines()[-1])
@@ -144,12 +144,15 @@ def test_every_family_id_and_digest_is_unchanged():
     assert not changed, "ids or digests changed:\n" + "\n".join(f"{f}: {want[f]} -> {got[f]}" for f in changed)
 
 
-@pytest.mark.slow
 def test_the_family_slice_of_the_task_list_is_unchanged():
-    """About 70 s (a fresh process builds the whole `--all` list). It catches what the digests can't: a target the split adds
-    or drops (a moved module that registered a Definition, a binding that no longer resolves), and a cheaper in-process check
-    can't build the list the CLI builds, as a second `TG.suite()` in one process returns more targets."""
-    assert task_list(set(_fixture()["names"]))["family"] == _fixture()["tasks"]
+    """What the digests can't catch: a target the split adds or drops (a moved module that registered a Definition, a binding
+    that no longer resolves). `circuit-check --all`'s definition targets are its process's first `TG.suite()`, in order
+    (`cli._tasks`); a second call in one process returns more, so this reads `test_circuit_check.SUITE`, that module's first
+    call, rather than building the suite again (minutes, when this module runs alone)."""
+    import test_circuit_check as TCC
+
+    names = set(_fixture()["names"])
+    assert [["definition", fid] for fid in TCC.SUITE if _stem(fid) in names] == _fixture()["tasks"]
 
 
 # --- recording ------------------------------------------------------------------------------------------------------------
