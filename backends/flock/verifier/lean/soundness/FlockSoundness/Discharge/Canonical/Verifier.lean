@@ -63,11 +63,9 @@ theorem cut_of_covered {c : Circuit} (h : ProvedScope.cutsCovered c = true) {k p
     have hf' := Option.some.inj hf
     refine ⟨e, he, ?_, ?_⟩
     · have := congrArg (· / (portCols c.unit.inGroups).size) hf'
-      simp only at this
       rwa [Nat.mul_comm e.1, Nat.mul_comm k, Nat.mul_add_div (by omega), Nat.mul_add_div (by omega),
         Nat.div_eq_of_lt hlt, Nat.div_eq_of_lt hp, Nat.add_zero, Nat.add_zero] at this
     · have := congrArg (· % (portCols c.unit.inGroups).size) hf'
-      simp only at this
       rwa [Nat.mul_comm e.1, Nat.mul_comm k, Nat.mul_add_mod, Nat.mul_add_mod, Nat.mod_eq_of_lt hlt,
         Nat.mod_eq_of_lt hp] at this
   · cases hf
