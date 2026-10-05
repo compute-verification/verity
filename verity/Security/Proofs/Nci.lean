@@ -2,6 +2,8 @@ import Specs.Nci.Guarantees
 import Proofs.Nci.Inequalities
 import Proofs.Nci.LoomisWhitney
 import Proofs.Core
+import Proofs.Nci.Chain
+import Proofs.Nci.Throttling
 
 /-!
 # Proofs of NCI's guarantees

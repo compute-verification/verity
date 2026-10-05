@@ -61,6 +61,15 @@
    "digest": "c86a84bed584d07dde045f113c2e8937b7d5887fb9cda37aebe771db55960a14"
   }
  },
+ "layers": {
+  "Proofs.Pouw.Dimension.Lifting": {
+   "imports": [
+    "Mathlib"
+   ],
+   "except": [],
+   "why": "the lifting worker's grid-density and slice lemmas (L2, L3) stand alone on Mathlib"
+  }
+ },
  "upstream": {
   "imports": [
    "ArkLib",
@@ -272,6 +281,14 @@
      "IO.FS.writeFile"
     ],
     "ack": []
+   }
+  },
+  "scan": {
+   "Arklib": {
+    "baseline": "scripts/axiom_baseline.json",
+    "sources": [
+     "ArkLib"
+    ]
    }
   }
  },

@@ -192,13 +192,6 @@
    "except": [],
    "why": "Pearl-C's Π, definitions only, over Fp8Atom's definitions: the game and the named assumption read it"
   },
-  "Proofs.Pouw.Dimension.Lifting": {
-   "imports": [
-    "Mathlib"
-   ],
-   "except": [],
-   "why": "the lifting worker's grid-density and slice lemmas (L2, L3) stand alone on Mathlib"
-  },
   "Specs.Pous.Assumptions": {
    "imports": [
     "Mathlib",
@@ -320,28 +313,6 @@
   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
-  "Flock.CircuitType.check_ok": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.CircuitType.check_ok {callee : String → Option Flock.CircuitType} {t : Flock.CircuitType}",
-    "  (h : Eq (Flock.CircuitType.check callee t) (Except.ok Unit.unit)) : Flock.CircuitType.WellFormed callee t"
-   ],
-   "assumptions": [],
-   "type_hash": "8b51a2bc209063b9a70f8ff3a37cb03145aa863e76568467c9d23b3c58b9ff2d"
-  },
-  "Flock.HmNets.check_ok": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.HmNets.check_ok {c : Flock.Circuit} (h : Eq (Flock.HmNets.check c) (Except.ok Unit.unit)) :",
-    "  And",
-    "    (Exists fun g =>",
-    "      And (Eq Flock.HmNets.sha512x3Net.get (Except.ok g)) (Eq (c.nets.getD c.shaNet instInhabitedProd.default).snd g))",
-    "    (Exists fun g =>",
-    "      And (Eq Flock.HmNets.hm96Net.get (Except.ok g)) (Eq (c.nets.getD c.hmNet instInhabitedProd.default).snd g))"
-   ],
-   "assumptions": [],
-   "type_hash": "03d5e27d14955f30047137fbfdb5c307097c72857f4eb221dc6536d9625fd7c2"
-  },
   "Flock.HmNets.col_and": {
    "owner": "@proofs",
    "signature": [
@@ -358,14 +329,6 @@
    ],
    "assumptions": [],
    "type_hash": "189d25100894b6ac613555467904d8552d16af5e7b33d5baecb9c464ab0a0aa9"
-  },
-  "Flock.HmNets.hm96Net_get": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.HmNets.hm96Net_get : Eq Flock.HmNets.hm96Net.get (Flock.HmNets.netOf \"hm96\" (Flock.HmNets.hmLaid Unit.unit))"
-   ],
-   "assumptions": [],
-   "type_hash": "0cac01b8696ba5f8014eb99582ad41bc1b2973ff17e2d454cb7a5ace1f262b8d"
   },
   "Flock.HmNets.hmLaid_eq": {
    "owner": "@proofs",
@@ -413,15 +376,6 @@
    "assumptions": [],
    "type_hash": "4a5a5bea339829446975cfab3e8a3fe9b19adb93cd4fdac1bc81205e8de03526"
   },
-  "Flock.HmNets.sha512x3Net_get": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.HmNets.sha512x3Net_get :",
-    "  Eq Flock.HmNets.sha512x3Net.get (Flock.HmNets.netOf \"sha512x3\" (Flock.HmNets.shaLaid Unit.unit))"
-   ],
-   "assumptions": [],
-   "type_hash": "0c628df07c540b65ae6cdc08f30aadd0c5f747ac43282f01665915dd149ee1c4"
-  },
   "Flock.HmNets.shaLaid_eq": {
    "owner": "@proofs",
    "signature": [
@@ -432,16 +386,6 @@
    ],
    "assumptions": [],
    "type_hash": "1cffead6921b5582ab47953ba77ae11432ec982c007a7a6fd92bd7b9a7ce2a7c"
-  },
-  "Flock.Layout.check_ok": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.Layout.check_ok {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout} {unit : Nat}",
-    "  {info : String → Option Flock.TableInfo} {sizes : Array Nat}",
-    "  (h : Eq (Flock.Layout.check types ls unit info) (Except.ok sizes)) : Flock.Layout.WellFormed types ls unit info"
-   ],
-   "assumptions": [],
-   "type_hash": "7bf153a0141e760b9af939f67f66f0fc1cb0d35adc767800cff8afa74f08a4e5"
   },
   "Flock.MerklePair.hm96_inputs": {
    "owner": "@proofs",
@@ -534,16 +478,6 @@
    "assumptions": [],
    "type_hash": "4b10575d6fa12090cf49fb2eede5f242b10132a3464dd77f0b13f8351d9abd08"
   },
-  "Flock.checkInRange_ok": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.checkInRange_ok (kLog nRegions mPts : Nat) :",
-    "  Iff (Eq (Flock.checkInRange kLog nRegions mPts) (Except.ok Unit.unit))",
-    "    (And (instLENat.le kLog 27) (And (instLENat.le nRegions 1024) (instLENat.le mPts 64)))"
-   ],
-   "assumptions": [],
-   "type_hash": "7f9f16bbfe2b5a1faaa5eac26c8bedd237ea33f613a35a11f9aa76b84b8b94b0"
-  },
   "Flock.climb_binding": {
    "owner": "@proofs",
    "signature": [
@@ -589,18 +523,6 @@
    ],
    "assumptions": [],
    "type_hash": "b23c3c4ac70c56ec607d083d09839ccb40abfaf94e5b0be09b2dd3a86182f021"
-  },
-  "Flock.mkRegion_ok": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.mkRegion_ok {kl : Nat} {name : String} {free : Array Nat} {fixed : Nat} {bytes : Nat → ByteArray}",
-    "  {r : Flock.Region} (h : Eq (Flock.mkRegion kl name free fixed bytes) (Except.ok r)) :",
-    "  And (Eq r.free free)",
-    "    (And free.toList.Nodup",
-    "      (And (instLENat.le free.size Flock.PT_LOCAL) (∀ (b : Nat), Array.instMembership.mem free b → instLTNat.lt b kl)))"
-   ],
-   "assumptions": [],
-   "type_hash": "994e7782a72c6f8d37d11529a043d12da2b3aa7384bfb8686c64fcf36809e9e5"
   },
   "Flock.opens_binding": {
    "owner": "@proofs",
@@ -32526,13 +32448,6 @@
     "Nci.SecurityProofs.other_positions"
    ]
   },
-  "Definitions.Pous.Accounting.EraseMeets": {
-   "digest": "6c5d0a62e2cad38786ca153fe3f00541c79ff8d277b1bd5ac7599dc7315bc298",
-   "definitions": {
-    "Pous.EraseMeets": "2fae65625d879d92a291808f8bb16943defd93eaf769067963c05004937eab3d"
-   },
-   "guarantees": []
-  },
   "Definitions.Pous.Accounting.GradedMeets": {
    "digest": "4af4e7e25629ec16f9bfab71b839349841691b42f7e8ac3a56849edb1457d745",
    "definitions": {
@@ -33112,16 +33027,6 @@
     "Pous.SecurityProofs.TagInjective14"
    ]
   },
-  "Definitions.Pous.Model.Digest": {
-   "digest": "6eb9d5dfd6ce5877101ed95ed359dfb8e58f9e8e04d2aff35a6eab1ea0f17961",
-   "definitions": {
-    "Pous.Digest.Blk": "e55d6eececeaee5d4f81b36982a20bef9ba9343b296e38dfa52818a9c243c78d",
-    "Pous.Digest.Key": "bdceba8e6568839894c255455e97b897163366539261811a68ec70ac607bfd09",
-    "Pous.Digest.blockHash": "943b3e29897664ceaca76e45b21fee437d7958d2d40d629d08e08bceda0d78e5",
-    "Pous.Digest.digest": "712eed3458c39093e84c682b165839cb6910f01f7f098d09e61d9d8d5f555db4"
-   },
-   "guarantees": []
-  },
   "Definitions.Pous.Model.Graded": {
    "digest": "38e7bf0cb50ea843538dcb97e0c7ed9a3d4f43824e0b765dddb537b6ea4414f2",
    "definitions": {
@@ -33558,20 +33463,6 @@
     "PousP2p.family_k85_fails",
     "PousP2p.not_meets_m1p_b19_k85"
    ]
-  },
-  "Definitions.Pous.Model.SecureErasure": {
-   "digest": "9d76e48e63589732564cddd4cf0e63c8cb8b661dbb8934be01b78621a17629a3",
-   "definitions": {
-    "Pous.EraseOutcome": "9ef1d096f7647dacf2f6ab6e49eabadf4d141dfe92e34f0097adb416af3c5bf6",
-    "Pous.EraseProver": "708524cdc2da87d40b81a11b61f530f795a1fce34045c77340cb72ce530c41c5",
-    "Pous.EraseProver.fill": "baf057fd38bf4719d7ada4c0ab86b30cdde703e6f964baf9a0f914a5b93297c2",
-    "Pous.EraseProver.keep": "4128d68c4e3c56f1a20bb61a34c8915ce5259840bfb8ddc3c6f63a4a84798ce2",
-    "Pous.EraseProver.read": "961833129734b2e9ebd675d6325d2954da83bbbe43ff53e3b790020bcba3c8b2",
-    "Pous.EraseSecure": "e4df3f196cc8f5645d2cd444f84d755d03b84af6a089670035a4ab230221ef9d",
-    "Pous.eraseAnswers": "28b84d7fa384e3172e691aea4e96b8cfaaab9333b03bfc0c2699004f5c52aab9",
-    "Pous.eraseWins": "573c0c8e8d2b98d8fb54e8c78a63f382647bdc5efa538225d46435d9526f7955"
-   },
-   "guarantees": []
   },
   "Definitions.Pous.Model.SegLift": {
    "digest": "a15e23b70da91809dc27f2c5bd9fd390739b36a9cdc4072b5453cec91e9e4026",
@@ -43288,19 +43179,14 @@
     "_private.Flock.Bytes.0.Flock.hexDigit": "242ae26c46d2dc228fe0433d3eaba3116be00c18226f89bb07d3bb80ff51768a"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
-    "Flock.HmNets.hm96Net_get",
     "Flock.HmNets.hmLaid_eq",
-    "Flock.HmNets.sha512x3Net_get",
     "Flock.MerklePair.hm96_inputs",
     "Flock.MerkleScheme.all_sized",
     "Flock.MerkleScheme.collision_hash",
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
-    "Flock.checkInRange_ok",
     "Flock.merkleCheck_opens",
     "Flock.merkle_binding",
-    "Flock.mkRegion_ok",
     "Flock.squeeze_answers",
     "Flock.squeeze_retained",
     "FlockLevel3.build_computes",
@@ -44024,7 +43910,6 @@
     "Flock.instInhabitedWire.default": "e9f25bc5c2c2da965cfb4d19d740bd50159c32e1c96797e9df4c8ec6e7b0f5a7"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
     "Flock.Registered.check_ok",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
@@ -44353,9 +44238,6 @@
     "_private.Flock.CircuitType.0.Flock.CircuitType.portsOfJson": "85a1e80d9ab12ab9944d8f9e4ae23e0c8e42bf3a119a63e3d3a46be5c46ee99f"
    },
    "guarantees": [
-    "Flock.CircuitType.check_ok",
-    "Flock.HmNets.check_ok",
-    "Flock.Layout.check_ok",
     "Flock.Registered.check_ok",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
@@ -44917,9 +44799,6 @@
     "Flock.pushLe64": "e9cb64184e2055152d7d7733c64cd6038c1be7bd3c9e83ce36c1f5c70ec19c46"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
-    "Flock.HmNets.hm96Net_get",
-    "Flock.HmNets.sha512x3Net_get",
     "Flock.Registered.check_ok",
     "FlockLevel3.baseOf_get",
     "FlockLevel3.build_computes",
@@ -45231,7 +45110,6 @@
     "Flock.Derive.splitOk": "5111b41c7e018f13def61281e21c32c0396ff66529e7d6ee21f460d81c473fe6"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
     "Flock.Registered.check_ok",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
@@ -45596,7 +45474,6 @@
     "Flock.DeriveAll.D.own": "ed525a9f7bc885fb3584ad10727f15dee8e8351ec200084adc948ba05072689e"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
     "Flock.Registered.check_ok",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
@@ -45924,7 +45801,6 @@
     "Flock.DeriveAll.walk": "61369559eae0ff16ddc99593e9a40f1132aafe6eede1c393c7aa0e951be6ae0c"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
     "Flock.Registered.check_ok",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
@@ -47295,10 +47171,7 @@
     "Flock.Sha512.rotr": "c2cd7489ff2877fb65640d82519ba0815a2815bf1dfd3106f95568aeed0b3ec1"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
-    "Flock.HmNets.hm96Net_get",
     "Flock.HmNets.hmLaid_eq",
-    "Flock.HmNets.sha512x3Net_get",
     "Flock.HmNets.shaLaid_eq",
     "Flock.MerklePair.hm96_inputs",
     "Flock.MerklePair.sha256_inputs",
@@ -47671,8 +47544,6 @@
     "_private.Flock.Hm96.0.Flock.Hm96.tag": "824dbcae40eb3817e77d8bdc91e1a12f0b1fe7ccbebc0be5d3097e7c4fc436eb"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
-    "Flock.HmNets.hm96Net_get",
     "Flock.HmNets.hmLaid_eq",
     "Flock.MerklePair.hm96_inputs",
     "Flock.MerkleScheme.all_sized",
@@ -48073,13 +47944,10 @@
     "Flock.HmNets.Row.out": "23eac9e8a9c8300a24160183c93d1b41001bdfe2cbedaaeaa73c14f326e18efd"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
     "Flock.HmNets.col_and",
     "Flock.HmNets.col_input",
-    "Flock.HmNets.hm96Net_get",
     "Flock.HmNets.hmLaid_eq",
     "Flock.HmNets.layout_rows",
-    "Flock.HmNets.sha512x3Net_get",
     "Flock.HmNets.shaLaid_eq",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
@@ -48769,8 +48637,6 @@
     "_private.Flock.Layout.0.Flock.Layout.natArr": "1908b58b2178b82233146f7d2ab2142db10b35eee48f9b7ff6721ce79d97aaba"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
-    "Flock.Layout.check_ok",
     "Flock.Registered.check_ok",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
@@ -49072,9 +48938,6 @@
     "Flock.LibraryTable.name": "fe78aac1a4881faaedf59319c44f0ee2bfcd9a2abcfef0c30410934323561eb4"
    },
    "guarantees": [
-    "Flock.CircuitType.check_ok",
-    "Flock.HmNets.check_ok",
-    "Flock.Layout.check_ok",
     "Flock.Registered.check_ok",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
@@ -50125,11 +49988,8 @@
     "_private.Flock.Net.0.Flock.Net.groups": "9d322d1d29d62b3935ff57fe84b010abd49a28eebeaac86596ff95c8fa86aed9"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
-    "Flock.HmNets.hm96Net_get",
     "Flock.HmNets.hmLaid_eq",
     "Flock.HmNets.layout_rows",
-    "Flock.HmNets.sha512x3Net_get",
     "Flock.HmNets.shaLaid_eq",
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
@@ -52552,24 +52412,23 @@
   "Flock.RowLeaf": {
    "digest": "0372306d6183f8c8836c91216ab7de23fd805c12cd3a0a4b6aff24f1734c3551",
    "definitions": {
-    "Flock.PT_LOCAL": "ad83b62968db4f61bd2911e661ec32907deacbc4fbcfda50b24fe3736d9bd2f4",
     "Flock.Region": "b34f0026ca9e6d678b44ef05de84ce7f85af8e45ecb56218993d1f78a0f3f67f",
-    "Flock.Region.free": "c7bec1a51d6bdeaf562b5a71bc0e281028a4fe7a282cedff3d99aefa7af20225",
-    "Flock.mkRegion": "5f114dc12db36808d8d8d876a67e06d165ba81c44eb0ca2cd345fdadd66b5188",
     "Flock.RowLeaf": "133bcea163da0944fe825296376d96ef64c1a3064ef305ea86c1fef4e84bcbda",
     "Flock.RowLeaf.comp": "5f6b54d50e5a6b591ca3063fe784a7ee0896a4b6b60df7539eb2616ca29ad0e6",
     "Flock.Circuit.instOf": "ef7de74b2bb73c3e80265e9850cfab667d35fa7b8fb6a93e4db3b88c706fe10e",
+    "Flock.PT_LOCAL": "ad83b62968db4f61bd2911e661ec32907deacbc4fbcfda50b24fe3736d9bd2f4",
     "Flock.Region.bytes": "0fdf1d3621cd95ab9927b35184c91142576d390254d468b595d17217009cff63",
     "Flock.Region.fixed": "84b73dc354dc0189512b8468ae8a709c687d54566869ad62991e8fde4f3fcb20",
+    "Flock.Region.free": "c7bec1a51d6bdeaf562b5a71bc0e281028a4fe7a282cedff3d99aefa7af20225",
     "Flock.Region.mask": "cc2b56825b82503b7e7832f3c6f01442254dd7234544cf67034fca0256fd6c4f",
     "Flock.Region.name": "5b4ba66122d484db437638ce90c5ea88a91e6e109375f6d7140a2a70a7a4ede3",
     "Flock.instInhabitedRegion": "594662df38bd27f459ba9e9bc1cc4fc87dfaad8102006647383a71a06cf681ae",
     "Flock.instInhabitedRegion.default": "7d400f821c302d43652986e1fb42981ffe8208b9f9807d9b325d00ce4974546d",
     "Flock.instInhabitedRowLeaf": "73fd982fbf571d679aa31c17cc720ffe2eedf9af62a9892f9113f5a82766cd06",
-    "Flock.instInhabitedRowLeaf.default": "29d8c8945950459b64ff38022650578c9dc1e279536d9a8125b73844fa618ab0"
+    "Flock.instInhabitedRowLeaf.default": "29d8c8945950459b64ff38022650578c9dc1e279536d9a8125b73844fa618ab0",
+    "Flock.mkRegion": "5f114dc12db36808d8d8d876a67e06d165ba81c44eb0ca2cd345fdadd66b5188"
    },
    "guarantees": [
-    "Flock.mkRegion_ok",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -52964,7 +52823,6 @@
   "Flock.Statement": {
    "digest": "2a6afe269bd0e6c5908e0f01f3c7bdec9212f0eb05bae4ccafa770a2ee028e0f",
    "definitions": {
-    "Flock.checkInRange": "af916f3d8a80fd126a8ab2c23e640312ee6e2805bf9c39038e26b57296a5ef41",
     "Flock.Circuit.pin": "f2d231c141f285a0d2dc13f76ddd8d7e482374f416077f14fe8aa7df2108c786",
     "Flock.Stmt": "9d247673d89c92a5b699b6fbc5af37e3b2b2f4c3978c62fae984a36e2b29a25d",
     "Flock.Stmt.addDelta": "5e7f3690c19545d2c6c5a5c041c5f0ec296774248d700695f7c71111490b4eb7",
@@ -53011,6 +52869,7 @@
     "Flock.Stmt.spec": "53396d42ac91a6dbbef7909aba995f1861643ef5ecab4f56967f996e3e248686",
     "Flock.Stmt.tags": "b8cee97e26824b528e345715ee408cac6df0fb9a291f93f309abe862ab6cf906",
     "Flock.Tags.withCoins": "546dae129daaa437695a301e033f04e6d4f0621ab539a764b65009e89d86f63b",
+    "Flock.checkInRange": "af916f3d8a80fd126a8ab2c23e640312ee6e2805bf9c39038e26b57296a5ef41",
     "Flock.helloOf": "cc5bfd4b18bb49b382b0aae5cb74875effb598946aa8405d714f808eee835700",
     "Flock.instBEqCoins": "437d448d5f0a5d790fe77116d7da4d798db2b015b4fbf5a47f4911a60bdc5960",
     "Flock.instBEqCoins.beq": "3dc5fe9e7342f281283408d94e2fbbf95e68a7fc3b463188d7faec4f9b15903d",
@@ -53018,7 +52877,6 @@
     "Flock.instInhabitedStmt.default": "2cc8a24a64bf8126a8f5ba4bbc778b1917a99776b220735bfaa7cd4f041eba7d"
    },
    "guarantees": [
-    "Flock.checkInRange_ok",
     "FlockLevel3.addDelta_get",
     "FlockLevel3.baseOf_get",
     "FlockLevel3.foldRanges_get",
@@ -54007,7 +53865,6 @@
     "_private.Flock.Typed.0.Flock.Typed.ctx": "35fd1c8fb7bc6ab93cf2e1f04c60788cdda858e75b8e305bb3d35a34ee42c844"
    },
    "guarantees": [
-    "Flock.HmNets.check_ok",
     "Flock.Registered.check_ok",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
@@ -75230,16 +75087,6 @@
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyUncond"
    ]
-  },
-  "Specs.Pous.Guarantees.SecureErasure": {
-   "digest": "ec30ce907e08b71deb32f98e407693dc4472955e2d41e9b2d867bee15c3a3fbf",
-   "definitions": {
-    "Pous.Guarantees.DigestAU": "f2dca1ee7bd8a59880524e262e950372ea045861ac7167f32f1c38442b4ea6b9",
-    "Pous.Guarantees.SecureErasureMeets": "2faa0d9defe7f171f3a8c5ca9840b32dd25bba54b244e55aa2981b69cc475c47",
-    "Pous.Guarantees.SecureErasureMeets96GiB": "ca68a0c6604d5c0c755518406baab7700a1835c3c3d7a056cf14b7af3a16fa69",
-    "Pous.Guarantees.SecureErasureMeetsFamily": "ace733db06755c57c72d92866b146d677574c14c95f9cb7430838de7e05127ca"
-   },
-   "guarantees": []
   },
   "Specs.Pouw.Assumptions.Deadline": {
    "digest": "efde32e6e0055ddbe420d8f4b410840f185cbf92a03b58e3e2e3c54dcbf0cd03",

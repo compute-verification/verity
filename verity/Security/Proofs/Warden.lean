@@ -6,6 +6,7 @@ import Proofs.Warden.Ingress
 import Proofs.Warden.Schedule
 import Proofs.Warden.PerWindow
 import Proofs.Warden.Sanity
+import Proofs.Warden.Difftest
 
 /-!
 # Proofs of the network warden's guarantees
