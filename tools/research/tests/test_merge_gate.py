@@ -257,6 +257,28 @@ def test_prepare_refuses_a_moved_head_a_conflict_and_a_failing_lint_and_pushes_n
     assert _git(origin, "for-each-ref", "refs/heads/train-prep") == "" and "research-train" not in _git(main, "worktree", "list")
 
 
+def test_prepare_refuses_a_train_the_gate_would_refuse_for_a_stacked_base_it_does_not_pin(tmp_path, monkeypatch, capsys):
+    """The lander's 15:41Z refusal (5 Oct): `--prepare` pushed a train holding #1204, stacked on #1203's open head, which only the
+    landing gate then refused.  Pinning the base below it builds the train."""
+    main, _feat, _tip = _repos(tmp_path)
+    origin, heads = _origin_with(tmp_path, main, {"base.txt": "base\n"}, {8: {"e.txt": "8\n"}})
+    _git(main, "checkout", "-q", "-b", "pr9", "pr8")
+    (main / "n.txt").write_text("9\n")
+    _git(main, "add", "n.txt")
+    _git(main, "commit", "-q", "-m", "9 on 8")
+    heads[9] = _git(main, "rev-parse", "HEAD")
+    _git(main, "checkout", "-q", "main")
+    _git(main, "push", "-q", "origin", "pr9:refs/pull/9/head")
+    monkeypatch.chdir(main)
+    assert merge_main(["--train", "--prepare", "train-prep/s", f"9@{heads[9][:9]}", "--lint", "true"]) == 3
+    err = capsys.readouterr().err
+    assert f"#9 at {heads[9][:12]} is stacked on #8 at {heads[8][:12]}, which is neither on main nor pinned below" in err
+    assert "the merge gate would refuse the train" in err and _git(origin, "for-each-ref", "refs/heads/train-prep") == ""
+    pins = [f"8@{heads[8][:9]}", f"9@{heads[9][:9]}"]
+    assert merge_main(["--train", "--prepare", "train-prep/s", *pins, "--lint", "true"]) == 0, capsys.readouterr().err
+    assert _git(origin, "rev-parse", "train-prep/s^2") == heads[9]
+
+
 def test_keep_both_imports_takes_ours_then_the_lines_theirs_adds():
     from research.merge import keep_both_imports
 
@@ -453,15 +475,16 @@ def test_a_pr_stacked_on_another_in_the_tip_needs_grants_only_for_what_it_adds(t
     store.add_label(f"pr:30@{heads[30]}", "grant", "red-team", "red-team")
     assert merge_main(["train-prep/s", "--dry-run"]) == 0, capsys.readouterr().err
 
-    # #31 alone: its base #30 is neither on main nor pinned in the tip, refused by name even with a grant at #31's head
-    assert merge_main(["--train", "--prepare", "train-prep/u", f"31@{heads[31][:9]}", "--lint", "true"]) == 0
-    _git(main, "fetch", "-q", "origin", "train-prep/u:train-prep/u")
-    _git(main, "worktree", "add", "-q", str(tmp_path / "tip-u"), _git(main, "rev-parse", "train-prep/u"))
+    # #31 alone: its base #30 is neither on main nor pinned in the tip, refused by name even with a grant at #31's head; `--prepare`
+    # refuses to build it, so the tip is merged by hand
+    assert merge_main(["--train", "--prepare", "train-prep/u", f"31@{heads[31][:9]}", "--lint", "true"]) == 3
+    _git(main, "worktree", "add", "-q", "--detach", str(tmp_path / "tip-u"), "main")
+    _git(tmp_path / "tip-u", "merge", "-q", "--no-ff", "-m", f"Merge #31 ({heads[31][:8]})", heads[31])
     assert _record(tmp_path, tmp_path / "tip-u", monkeypatch, *CHECKED) == 0
     monkeypatch.chdir(main)
     store.add_label(f"pr:31@{heads[31]}", "grant", "red-team", "red-team")
     capsys.readouterr()
-    assert merge_main(["train-prep/u", "--dry-run"]) == 3
+    assert merge_main([_git(tmp_path / "tip-u", "rev-parse", "HEAD"), "--dry-run"]) == 3
     assert f"#31 at {heads[31][:12]} is stacked on #30 at {heads[30][:12]}" in capsys.readouterr().err
 
 
