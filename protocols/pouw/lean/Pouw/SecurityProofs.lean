@@ -131,6 +131,7 @@ import Pouw.SecurityProofs.PearlC.RowStats
 import Pouw.SecurityProofs.PearlC.PeelExists
 import Pouw.SecurityProofs.PearlC.PeelExists4
 import Pouw.SecurityProofs.PearlC.TileCheckWords
+import Pouw.SecurityProofs.PearlC.CoreOps
 import Pouw.SecurityProofs.Prob
 import Pouw.SecurityProofs.QTree
 import Pouw.SecurityProofs.Reduction
