@@ -11,7 +11,7 @@ honest answer is more than the stored block.  Everything else is written once, h
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
 4. **Serve.** `decode` of a segment, and `decode_tensor` of one tensor of a `layout.Layout`.
 5. **Audit.** `Verifier` reveals `k` indices one at a time.  Each answer must arrive within `Δ + RTT` and match `vk`.
-   The verifier refuses any `k` or deadline the scheme's certificate does not cover.  An accepted audit gives a
+   The verifier refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit gives a
    `StorageProfile`: what the certificate says about the server, and what that rests on.
 
 Every coin is drawn here through `verity.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
@@ -51,10 +51,14 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
           "Perfect isolation"),
     Entry("sequential-step-floor", "assumption",
           "No call of the scheme's permutation completes faster than the certificate's call time on a CPU or GPU core "
-          "(ASICs out of scope)", "Step floor", "conjectured"),
+          "(ASICs out of scope); it bounds an adversary only in the ideal-permutation model, since at the reference "
+          "Feistel-SHAKE256 permutation a prover answers from kept round states without completing any call",
+          "Step floor", "conjectured"),
     Entry("feistel-indifferentiability", "assumption",
-          "A 10-round Feistel network over SHAKE256 in place of the ideal permutation keeps the storage bound "
-          "(indifferentiability is not known to compose in storage games)", "Feistel-SHAKE256 as ideal", "conjectured"),
+          "REFUTED: a 10-round Feistel network over SHAKE256 in place of the ideal permutation keeps the storage bound. "
+          "It does not: a prover keeps five 200-byte post-absorb round states per 64 KiB block (1.53% of C) and "
+          "rebuilds any label in 481 sequential Keccak-f (red team, 4 Oct 2026, art:7617c8017e80)",
+          "Feistel-SHAKE256 as ideal (refuted)", "conjectured"),
     Entry("m1-ideal-permutations", "model",
           "Model M1: independent forward-only ideal permutations, one per block, each block the inverse image of its "
           "data", "M1"),
@@ -83,7 +87,8 @@ class Certificate:
 
     A server that holds fewer than `⌊rho · |C|⌋` bits when the challenges arrive, and answers each within `rounds`
     sequential calls of at least `call_ns` each using at most `work` calls, passes `k` challenges with probability at
-    most `delta + 2^eps_log2`.  This is `theorem`, given the open named `hypotheses`, under `claims`.
+    most `delta + 2^eps_log2`.  This is `theorem`, given the open named `hypotheses`, under `claims`; where a claim is
+    refuted (`feistel-indifferentiability` at the reference `Π₂`), it holds only in the model the others name.
 
     `cliff` is the most rounds the structure tolerates at any `k`, or None when security degrades gracefully past
     `rounds`.  The band has its cliff at its in-degree `d`.  `segments` is the number of segments of `W` the theorem is
@@ -144,8 +149,8 @@ class Scheme(ABC):
     Like `verity.commitments.scheme.CommitmentScheme`, it is a named, versioned format behind a small interface, looked
     up by name (`schemes.get`), with its conformance vectors pinned under the name (`tests/fixtures/schemes/`).  A
     subclass sets `name` (its byte-format version string), `backend` (the reference primitives for its parameters) and
-    `certificate`.  It implements `encode_segment` and `decode_segment`, and `respond` only when an honest answer is
-    more than the stored block.
+    `certificate` (and `certificates`, when it has several).  It implements `encode_segment` and `decode_segment`, and
+    `respond` only when an honest answer is more than the stored block.
 
     **Segment `s` must be keyed injectively in `s`**, across every segment of `W`: `tag_s = salt ‖ u64 s`
     (`labels.tag`), or one salt with global indices.  With a shared domain, identical segments get identical labels,
@@ -166,6 +171,13 @@ class Scheme(ABC):
     def certificate(self) -> Certificate | None:
         """The certificate at these parameters; None when no theorem covers them."""
         return None
+
+    @property
+    def certificates(self) -> tuple[Certificate, ...]:
+        """Every certificate at these parameters, the default (`certificate`, when there is one) first.  A scheme with
+        guarantees at several round budgets lists them all; the verifier audits under the first that covers its `k` and
+        deadline."""
+        return () if self.certificate is None else (self.certificate,)
 
     @abstractmethod
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
@@ -314,10 +326,12 @@ class Verifier:
     """The timed audit of a scheme: `audit.TimedVerifier` at the certificate's `k`, with sequential reveal and a strict
     deadline per answer.
 
-    It refuses any `k` or deadline outside the scheme's certificate, and a scheme with no certificate at its
-    parameters.  `research=True` runs such an audit anyway, and its profile lists the refusals as gaps.  An experimental
-    scheme is refused unless `experimental=True`.  The band's
-    cliff is refused regardless (`band.check_deployment`); the attack past it is replayed with `audit.simulate`."""
+    It audits under the first of the scheme's `certificates` that covers `k` and the deadline (with `k` unset, each at
+    its own `k`), so the default `k` is the first certificate's: the band's `k = 111` at `D = 5`, and `k = 97` at
+    `D = 2` or `k = 93` at `D = 1` only when asked for.  It refuses an audit that none covers, and a scheme with no
+    certificate at its parameters.  `research=True` runs such an audit anyway, and its profile lists the first
+    certificate's refusals as gaps.  An experimental scheme is refused unless `experimental=True`.  The band's cliff is
+    refused regardless (`band.check_deployment`); the attack past it is replayed with `audit.simulate`."""
 
     def __init__(self, scheme: Scheme, vk: VerifierKey, key: Key, *, k: int | None = None,
                  deadline_ns: int = audit.DEADLINE_NS, rtt_allowance_ns: int = audit.RTT_ALLOWANCE_NS,
@@ -327,7 +341,8 @@ class Verifier:
             raise ValueError("vk was built for other parameters than the scheme's")
         if scheme.experimental and not experimental:
             raise ValueError(f"{scheme.name} is experimental ({scheme.experimental}): pass experimental=True to audit it")
-        cert, limit = scheme.certificate, deadline_ns + rtt_allowance_ns
+        certs, limit = scheme.certificates, deadline_ns + rtt_allowance_ns
+        cert = next((c for c in certs if not c.refusals(c.k if k is None else k, limit)), certs[0] if certs else None)
         uncovered: tuple[str, ...] = ()
         if cert is None:
             if k is None:
@@ -339,7 +354,9 @@ class Verifier:
             if cert.segments is not None and scheme.params.segments != cert.segments:
                 uncovered = (f"W has {scheme.params.segments} segments; {cert.theorem} is about {cert.segments}",)
         if refused and not research:
-            raise ValueError(f"the audit is outside the certificate: {'; '.join(refused)} (research=True runs it anyway)")
+            others = "".join(f"; under {c.theorem}: {'; '.join(c.refusals(k, limit))}" for c in certs if c is not cert)
+            raise ValueError(f"the audit is outside the certificate: {'; '.join(refused)}{others} "
+                             "(research=True runs it anyway)")
         self.scheme, self.certificate, self.gaps = scheme, cert, refused + uncovered
         self.timed = audit.TimedVerifier(vk, key, k, deadline_ns, rtt_allowance_ns, clock, root_only=root_only)
 

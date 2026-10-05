@@ -4,9 +4,11 @@ when its manifest names the tap's family (`pipeline.row_records.applicable_taps`
 the manifest names them: the blockwise FP8 GEMM's scale products (`scale_products_source`; the single-rank Commit only).  One entry point
 for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank workers of a TP Commit: `pipeline.tp.commit` hands
 `for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
-merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  The single-rank
+merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  Each rank also
+attaches the route source (`route_source`) when a capture map describes its model, and every rank must have.  The single-rank
 `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the manifest names `call_boundaries` identities;
-`attached` names what it attaches for a row's manifest, constructing nothing (the CPU gate's `call-boundaries`, `acquire.gate`)."""
+`attached` names what it attaches for a row's manifest, constructing nothing (the CPU gate's `call-boundaries`, `acquire.gate`).  Both
+`attach` and every rank's `attach_rank` arm a derived-S Program's prescribed split count (`prescribe_idle_splits`), taps or none."""
 from __future__ import annotations
 
 import json
@@ -15,7 +17,8 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity_vllm.acquire.sources import call_boundary_source, norm_scale_source, router_softmax_source, scale_products_source, vocab_range_source
+from verity_vllm.acquire.sources import (call_boundary_source, norm_scale_source, route_source, router_softmax_source, scale_products_source,
+                                         vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
 from verity_vllm.program.registry.topp_split import splits_for_v1
@@ -60,9 +63,18 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple
                                                          plan=call_boundary_plan)
     required_classes, _src = scale_products_source.attach(com, bool(SP.manifest_sites(manifest)), manifest, required_classes,
                                                           explicit_classes=explicit_classes, model=model)
-    if hasattr(com, "prescribe_idle_splits") and int(((manifest or {}).get("populations") or {}).get("by_family", {}).get("sampler_splits", 0) or 0):
-        com.prescribe_idle_splits = splits_for_v1            # a derived-S Program: a step vLLM ran without top-p binds its prescribed S
+    prescribe_idle_splits(com, manifest)
     return required_classes
+
+
+def prescribe_idle_splits(com: Any, manifest: Mapping[str, Any] | None) -> bool:
+    """For a derived-S Program (its manifest names `sampler_splits`), a sampling step on which vLLM ran no split kernel (every row at
+    top_p 1) binds the prescribed S `SplitsFor_v1(rows, num_SMs)` (`commit.committer.topp_splits.step_splits`); True when armed.  A
+    manifest without the family (greedy, or B1's constant S) arms nothing, and a step whose split kernels ran binds their S either way."""
+    if hasattr(com, "prescribe_idle_splits") and int(((manifest or {}).get("populations") or {}).get("by_family", {}).get("sampler_splits", 0) or 0):
+        com.prescribe_idle_splits = splits_for_v1
+        return True
+    return False
 
 
 def warmup(com: Any, on: bool) -> None:
@@ -88,10 +100,12 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
 
 
 def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **given: Any) -> dict[str, Any]:
-    """A TP rank's side: attach each tap that is on with the rank's rows of the merged manifest; per source its stats, or its refusal."""
+    """A TP rank's side: attach each tap that is on with the rank's rows of the merged manifest, and the route source when a capture
+    map describes the rank's model (`route_source`, absent when none does), per source its stats, or its refusal; and arm the
+    prescribed split count as `attach` does (`prescribe_idle_splits`: "SplitsFor_v1" when armed)."""
     man = json.loads(Path(manifest_path).read_text()) if manifest_path else {}
     mine = dict(man, identities=[r for r in man.get("identities") or [] if int(r.get("rank", 0)) == int(rank)])
-    out: dict[str, Any] = {}
+    out: dict[str, Any] = {"prescribe_idle_splits": "SplitsFor_v1"} if prescribe_idle_splits(com, mine) else {}
     for f, key, mod, _fam, _cls in SOURCES:
         if not given.get(f):
             continue
@@ -100,18 +114,32 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **gi
             out[key] = {"stats": dict(src.stats)}
         except (SystemExit, ValueError, RuntimeError) as e:
             out[key] = {"error": repr(e)[:200]}
+    try:
+        rsrc = route_source.attach(com, model, rank)
+        if rsrc is not None:
+            out["route_source"] = {"stats": dict(rsrc.stats)}
+    except (ValueError, RuntimeError, AttributeError) as e:
+        out["route_source"] = {"error": repr(e)[:200]}
     return out
 
 
 def for_ranks(taps: TapSources) -> Any:
-    """What `tp2_commit_make` calls on every rank (`attach_rank` with the taps bound; picklable), or None when no tap is on."""
-    return partial(attach_rank, **taps.given()) if taps.given() else None
+    """What `tp2_commit_make` calls on every rank: `attach_rank` with the taps that are on bound (picklable), also when none is, since
+    every rank arms the prescribed split count and attaches the route source."""
+    return partial(attach_rank, **taps.given())
 
 
 def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[str, ...], versions: dict[str, Any], taps: TapSources, *,
                           explicit_classes: bool) -> tuple[str, ...]:
     """The TP driver's side, once every rank made its committer: every tap that is on attached on every rank (else SystemExit, fail
-    closed), its family added to the required classes unless they were given, and each rank's state recorded in `versions`."""
+    closed), its family added to the required classes unless they were given, and each rank's state recorded in `versions`; the route
+    source, when any rank's model has a capture map, attached on every rank (else SystemExit)."""
+    routes = {int(m["rank"]): (m.get("tap_sources") or {}).get("route_source") for m in made}
+    if any(routes.values()):
+        bad = sorted(r for r, v in routes.items() if not v or v.get("error"))
+        if bad:
+            raise SystemExit(f"fail-closed: the route source did not attach on ranks {bad} of {len(made)}: {[routes[r] for r in bad][:2]}")
+        versions["route_source"] = routes
     for f, key, _mod, fam, _cls in SOURCES:
         if not getattr(taps, f):
             continue
@@ -127,4 +155,4 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     return required_classes
 
 
-__all__ = ["SOURCES", "TapSources", "attach", "warmup", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]
+__all__ = ["SOURCES", "TapSources", "attach", "prescribe_idle_splits", "warmup", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]

@@ -4,7 +4,10 @@ import Verity.Protocol.Declaration
 import Verity.Protocol.Boolean
 import Verity.Protocol.Game
 import Verity.Protocol.Game.Decisive
+import Verity.Protocol.Scalar
+import Verity.Protocol.Prims
 import Verity.Protocol.TC
+import Verity.Protocol.Fp32
 
 /-!
 # Core's protocol: the model every protocol states its guarantees in

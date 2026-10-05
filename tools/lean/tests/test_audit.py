@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -26,7 +27,7 @@ def sha(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
 
-def pin(signature="P.t (h : P.Hyp) (n : Nat) : P.f n = n", hyps=None, reads=None, axioms=STD, kind="theorem", h="00000000000000aa"):
+def fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n = n", hyps=None, reads=None, axioms=STD, kind="theorem", h="00000000000000aa"):
     reads = reads if reads is not None else [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
                                              {"name": "P.f.match_1", "module": "P.Defs", "kind": "def", "hash": "2" * 32},
                                              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}]
@@ -40,12 +41,12 @@ def facts(**over):
     f = {"lean": "4.34.0", "modules": ["P", "P.Assumptions", "P.Defs", "P.Thms"],
          "imports": {"P": ["Init", "P.Thms"], "P.Assumptions": ["Init"], "P.Defs": ["Init"], "P.Thms": ["P.Assumptions", "P.Defs"]},
          "declarations": {"theorem": 1, "def": 3}, "axioms": STD, "offenders": [], "declared_axioms": [], "escapes": [],
-         "pins": {"P.t": pin()}}
+         "pins": {"P.t": fact()}}
     return f | over
 
 
 FILES = {"P": "P.lean", "P.Assumptions": "P/Assumptions.lean", "P.Defs": "P/Defs.lean", "P.Thms": "P/Thms.lean"}
-POLICY = {"roots": ["P"], "assumptions": ["P.Assumptions"], "pins": {"P.t": {}}}
+POLICY = {"roots": ["P"], "assumptions": ["P.Assumptions"], "guarantees": {"P.t": {}}}
 
 
 def recorded(f=None):
@@ -56,23 +57,23 @@ def recorded(f=None):
 
 def test_a_recorded_package_passes_and_its_record_is_the_statement():
     pol = recorded()
-    assert pol["pins"]["P.t"] == {"signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"], "assumptions": ["P.Hyp"],
-                                  "type_hash": sha("00000000000000aa")}
+    assert pol["guarantees"]["P.t"] == {"signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"], "assumptions": ["P.Hyp"],
+                                        "type_hash": sha("00000000000000aa")}
     assert len(pol["reads"]["P.Defs"]["digest"]) == 64 and len(pol["reads"]["P.Defs"]["definitions"]["P.f"]) == 64
-    assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["pins"] == ["P.t"]
+    assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["guarantees"] == ["P.t"]
     assert all(g["digest"] == A.module_digest(g["definitions"]) for g in pol["reads"].values())
     assert A.judge(pol, facts(), FILES) == ([], pol)
-    assert A.judge(POLICY, facts(), FILES)[0] == ["pins: P.t has no record; run `audit.py --update` and commit the record"]
+    assert A.judge(POLICY, facts(), FILES)[0] == ["guarantees: P.t has no record; run `audit.py --update` and commit the record"]
 
 
 def test_every_field_of_a_reads_record_is_checked():
     pol = recorded()
     group = pol["reads"]["P.Defs"]
     stale = pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64}}}
-    assert A.judge(stale, facts(), FILES)[0] == ["pins: the digest recorded for P.Defs is not the SHA-256 of its definitions; "
+    assert A.judge(stale, facts(), FILES)[0] == ["guarantees: the digest recorded for P.Defs is not the SHA-256 of its definitions; "
                                                  "`python tools/lean/merge.py --normalize` recomputes it"]
-    readers = pol | {"reads": pol["reads"] | {"P.Defs": group | {"pins": ["P.t", "P.u"]}}}
-    assert A.judge(readers, facts(), FILES)[0] == ["pins: the pins that read P.Defs are P.t; the record lists "
+    readers = pol | {"reads": pol["reads"] | {"P.Defs": group | {"guarantees": ["P.t", "P.u"]}}}
+    assert A.judge(readers, facts(), FILES)[0] == ["guarantees: those that read P.Defs are P.t; the record lists "
                                                    "P.t, P.u; run `audit.py --update`"]
 
 
@@ -115,32 +116,32 @@ def test_layers_hold_on_direct_imports():
 
 def test_a_changed_statement_or_meaning_fails_until_updated():
     pol = recorded()
-    fails = A.judge(pol, facts(pins={"P.t": pin(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")}), FILES)[0]
-    assert len(fails) == 1 and fails[0].startswith("pins: P.t's signature changed:") and "+P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n" in fails[0]
-    moved = pin(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "9" * 32},
+    fails = A.judge(pol, facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")}), FILES)[0]
+    assert len(fails) == 1 and fails[0].startswith("guarantees: P.t's signature changed:") and "+P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n" in fails[0]
+    moved = fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "9" * 32},
                        {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}])
-    assert A.judge(pol, facts(pins={"P.t": moved}), FILES)[0] == ["pins: definitions in P.Defs that P.t read changed (changed: P.f)"]
-    grown = pin(reads=pin()["reads"] + [{"name": "P.g", "module": "P.More", "kind": "def", "hash": "4" * 32}])
-    assert A.judge(pol, facts(pins={"P.t": grown}), FILES)[0] == ["pins: the pins now read definitions in P.More (P.t)"]
+    assert A.judge(pol, facts(pins={"P.t": moved}), FILES)[0] == ["guarantees: definitions in P.Defs that P.t read changed (changed: P.f)"]
+    grown = fact(reads=fact()["reads"] + [{"name": "P.g", "module": "P.More", "kind": "def", "hash": "4" * 32}])
+    assert A.judge(pol, facts(pins={"P.t": grown}), FILES)[0] == ["guarantees: they now read definitions in P.More (P.t)"]
 
 
 def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
     new = recorded()
-    old = new | {"pins": {"P.t": new["pins"]["P.t"] | {"type_hash": "00000000000000aa"}},
-                 "reads": A.read_groups(A.pinned_reads(facts()), old=True)}
+    old = new | {"guarantees": {"P.t": new["guarantees"]["P.t"] | {"type_hash": "00000000000000aa"}},
+                 "reads": A.read_groups(A.guarantee_reads(facts()), old=True)}
     assert len(old["reads"]["P.Defs"]["definitions"]["P.f"]) == 16 and A.old_group(old["reads"]["P.Defs"])
     assert old["reads"]["P.Defs"]["digest"] == A.module_digest(old["reads"]["P.Defs"]["definitions"])
     assert A.judge(old, facts(), FILES)[0] == []
-    fails = A.judge(old, facts(pins={"P.t": pin(h="00000000000000bb")}), FILES)[0]
-    assert fails == ["pins: P.t's type hash changed:\n00000000000000aa -> 00000000000000bb"]
+    fails = A.judge(old, facts(pins={"P.t": fact(h="00000000000000bb")}), FILES)[0]
+    assert fails == ["guarantees: P.t's type hash changed:\n00000000000000aa -> 00000000000000bb"]
     fails, rehashed = A.judge(old, facts(), FILES, update=True)
     assert fails == [] and rehashed == new
     text = A.review(old, rehashed, facts(), {})
-    assert text == [f"pin P.t: {A.REHASHED}", f"reads: 2 {A.REGROUPED}"] and A.statement_changes(text) == []
-    moved = facts(pins={"P.t": pin(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "9" * 32},
+    assert text == [f"guarantee P.t: {A.REHASHED}", f"reads: 2 {A.REGROUPED}"] and A.statement_changes(text) == []
+    moved = facts(pins={"P.t": fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "9" * 32},
                                           {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}])})
     text = A.review(old, A.judge(old, moved, FILES, update=True)[1], moved, {})
-    assert text == [f"pin P.t: {A.REHASHED}", "definition P.f (P.Defs), read by P.t: changed", f"reads: 1 {A.REGROUPED}"]
+    assert text == [f"guarantee P.t: {A.REHASHED}", "definition P.f (P.Defs), read by P.t: changed", f"reads: 1 {A.REGROUPED}"]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -152,16 +153,16 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
         "theorem c {x : Nat} : x + 0 = x := rfl\ntheorem d (x : Nat) : 0 + x = x := Nat.zero_add x\nend Control\n")
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Alpha\n")
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    f = A.facts_of(pkg, {"roots": ["Control"], "pins": {f"Control.{n}": {} for n in "abcd"}}, tmp_path)
+    f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": {f"Control.{n}": {} for n in "abcd"}}, tmp_path)
     got = {n: f["pins"][f"Control.{n}"]["type_sha256"] for n in "abcd"}
     assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
-    """`Facts.lean`'s renaming and unfolding on a real build: a pin restated as a `Prop` definition (its old theorem kept as
+    """`Facts.lean`'s renaming and unfolding on a real build: a guarantee restated as a `Prop` definition (its old theorem kept as
     the lemma that proves it), one whose statement holds a proof Lean abstracts out of a definition (`_proof_1`), and a
-    pin renamed, all the same statement, a definition renamed with its content and one renamed with a new body; then a
+    guarantee renamed, all the same statement, a definition renamed with its content and one renamed with a new body; then a
     statement that reads a moved definition beside one that has its old name, which the audit refuses."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
@@ -171,12 +172,20 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     moves.write_text("namespace Control\ndef f (n : Nat) : Nat := n + 0\ndef g (n : Nat) : Nat := n\n"
                      "theorem a (n : Nat) : f n = n := rfl\ntheorem b (n : Nat) : g n = n := rfl\n"
                      f"theorem c (n : Nat) : {fin} := rfl\nend Control\n")
-    A.dump(pkg, A.load(pkg) | {"pins": {"Control.main_thm": {}, "Control.a": {}, "Control.b": {}, "Control.c": {}}})
+    A.dump(pkg, A.load(pkg) | {"guarantees": {"Control.main_thm": {}, "Control.a": {}, "Control.b": {}, "Control.c": {}}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda **kw: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None, **kw)
     build()
     assert audit()["failures"] == []
     before = (pkg / A.POLICY).read_text()
+    record = tmp_path / "out" / "audit-control" / A.POLICY
+    assert record.read_text() == before, "the record beside the reports, where a recorded run publishes it"
+    record.unlink()
+    assert audit()["failures"] == [] and (pkg / A.POLICY).read_text() == before
+    assert record.read_text() == before, "an update that changes nothing writes it all the same"
+    (pkg / A.POLICY).write_text(before.replace('"guarantees"', '"pins"'))
+    rep = audit()
+    assert rep["failures"] == [] and "review" not in rep and (pkg / A.POLICY).read_text() == before, "renamed, not reviewed"
     moved = {"Control.a": "Control.SecurityProofs.a", "Control.b": "Control.SecurityProofs.b",
              "Control.c": "Control.SecurityProofs.c", "Control.f": "Control.Protocol.f", "Control.g": "Control.Protocol.g"}
     after = ("def Control.Protocol.f (n : Nat) : Nat := n + 0\ndef Control.Protocol.g (n : Nat) : Nat := 0 + n\n"
@@ -190,12 +199,12 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     build()
     rep = audit(moved=moved)
     assert rep["failures"] == []
-    assert rep["before"] == {k: json.loads(before)[k] for k in ("pins", "reads")} and rep["pins"] == A.load(pkg)["pins"]
+    assert rep["before"] == {k: json.loads(before)[k] for k in ("guarantees", "reads")} and rep["guarantees"] == A.load(pkg)["guarantees"]
     must = A.statement_changes(rep["review"])
     assert set(rep["review"]) - set(must) == {
-        f"pin Control.SecurityProofs.a: moved from Control.a, restated as Control.Guarantees.A: {A.MOVED}",
-        f"pin Control.SecurityProofs.c: moved from Control.c, restated as Control.Guarantees.C: {A.MOVED}",
-        f"pin Control.SecurityProofs.b: moved from Control.b: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"}
+        f"guarantee Control.SecurityProofs.a: moved from Control.a, restated as Control.Guarantees.A: {A.MOVED}",
+        f"guarantee Control.SecurityProofs.c: moved from Control.c, restated as Control.Guarantees.C: {A.MOVED}",
+        f"guarantee Control.SecurityProofs.b: moved from Control.b: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"}
     assert must[0] == ("definition Control.Protocol.g (Control.Moves), was Control.g (Control.Moves), read by "
                        "Control.SecurityProofs.b: changed") and must[-1] == "    def Control.Protocol.g (n : Nat) : Nat := 0 + n"
     (pkg / A.POLICY).write_text(before)
@@ -210,28 +219,28 @@ def test_generated_constants_belong_to_their_declaration():
         "P.f", "P.walk", "P.Enc", "P.instDecidableFits", "mk"]
 
 
-def test_update_prints_what_a_statement_reviewer_reads(tmp_path):
+def test_update_prints_each_changed_guarantee_and_definition(tmp_path):
     (tmp_path / "Defs.lean").write_text("namespace P\n\ndef f (n : Nat) : Nat := n\n\nend P\n")
     old = recorded()
     reads = [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "9" * 32, "lines": [3, 3]},
              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32, "lines": None}]
-    now = facts(pins={"P.t": pin(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb", reads=reads)})
+    now = facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb", reads=reads)})
     fails, new = A.judge(old, now, FILES, update=True)
     assert fails == []
     text = A.review(old, new, now, {"P.Defs": tmp_path / "Defs.lean"})
-    assert text[:5] == ["pin P.t: changed", "  before:", "    P.t (h : P.Hyp) (n : Nat) : P.f n = n", "  after:",
+    assert text[:5] == ["guarantee P.t: changed", "  before:", "    P.t (h : P.Hyp) (n : Nat) : P.f n = n", "  after:",
                         "    P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n"]
     assert text[5] == "definition P.f (P.Defs), read by P.t: changed" and text[-1] == "    def f (n : Nat) : Nat := n"
     assert A.statement_changes(text) == text
     assert A.review(new, new, now, {}) == []
-    reprinted = dict(new["pins"]["P.t"], signature=["P.t (h : P.Hyp) (n : Nat) : LE.le (P.f n) n"])
-    text = A.review(new, dict(new, pins={"P.t": reprinted}), now, {})
-    assert text == [f"pin P.t: {A.REPRINTED}"] and A.statement_changes(text) == []
+    reprinted = dict(new["guarantees"]["P.t"], signature=["P.t (h : P.Hyp) (n : Nat) : LE.le (P.f n) n"])
+    text = A.review(new, dict(new, guarantees={"P.t": reprinted}), now, {})
+    assert text == [f"guarantee P.t: {A.REPRINTED}"] and A.statement_changes(text) == []
 
 
-def moved_pin(name="Q.t", was="P.t", h="00000000000000cc", as_was="00000000000000aa", head=None, f="1" * 32, f_was="1" * 32,
+def moved_fact(name="Q.t", was="P.t", h="00000000000000cc", as_was="00000000000000aa", head=None, f="1" * 32, f_was="1" * 32,
               extra=()):
-    """A pin ``was`` renamed to ``name``, reading `P.f` renamed to `Q.f` (in `Q.Defs`), as `Facts.lean` reports it after
+    """A guarantee ``was`` renamed to ``name``, reading `P.f` renamed to `Q.f` (in `Q.Defs`), as `Facts.lean` reports it after
     `--moved`: its statement's text under the old names hashes like ``as_was``, `Q.f`'s like ``f_was``; with ``head``,
     its type is that `Prop` definition, whose value under the old names hashes like ``as_was``."""
     reads = [{"name": "Q.f", "module": "Q.Defs", "kind": "def", "hash": f, "moved": {"as": "P.f", "sha256": sha(f_was)}},
@@ -240,7 +249,7 @@ def moved_pin(name="Q.t", was="P.t", h="00000000000000cc", as_was="0000000000000
              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32,
               "moved": {"as": "P.Hyp", "sha256": sha("3" * 32)}}, *extra]
     signature = f"{name} : {head}" if head else f"{name} (h : P.Hyp) (n : Nat) : Q.f n = n"
-    p = pin(signature=signature, h=h, reads=[{k: v for k, v in r.items() if k != "moved"} for r in reads],
+    p = fact(signature=signature, h=h, reads=[{k: v for k, v in r.items() if k != "moved"} for r in reads],
             hyps=[] if head else None)
     for r, m in zip(p["reads"], reads):
         r["moved"] = m["moved"]
@@ -250,57 +259,57 @@ def moved_pin(name="Q.t", was="P.t", h="00000000000000cc", as_was="0000000000000
 
 def test_a_definition_read_in_another_module_is_the_same_definition():
     old = recorded()
-    rehomed = facts(pins={"P.t": pin(reads=[r | {"module": "P.Model"} if r["name"].startswith("P.f") else r
-                                            for r in pin()["reads"]])})
+    rehomed = facts(pins={"P.t": fact(reads=[r | {"module": "P.Model"} if r["name"].startswith("P.f") else r
+                                            for r in fact()["reads"]])})
     new = A.judge(old, rehomed, FILES, update=True)[1]
     assert set(new["reads"]) == {"P.Assumptions", "P.Model"}
     text = A.review(old, new, rehomed, {})
     assert text == [f"reads: 1 {A.MOVED_READS}"] and A.statement_changes(text) == []
 
 
-def test_a_moved_pin_and_its_definitions_are_compared_with_their_old_records(tmp_path):
+def test_a_moved_guarantee_and_its_definitions_are_compared_with_their_old_records(tmp_path):
     old = recorded()
-    current = {**POLICY, "pins": {"Q.t": old["pins"]["P.t"]}}
-    now = facts(pins={"Q.t": moved_pin()})
+    current = {**POLICY, "guarantees": {"Q.t": old["guarantees"]["P.t"]}}
+    now = facts(pins={"Q.t": moved_fact()})
     new = A.judge(current, now, FILES, update=True)[1]
     text = A.review(old, new, now, {})
-    assert text == [f"pin Q.t: moved from P.t: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"] and A.statement_changes(text) == []
+    assert text == [f"guarantee Q.t: moved from P.t: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"] and A.statement_changes(text) == []
     (tmp_path / "Defs.lean").write_text("namespace Q\n\ndef f (n : Nat) : Nat := n * 1\n\nend Q\n")
-    now = facts(pins={"Q.t": moved_pin(f="9" * 32, f_was="9" * 32)})
+    now = facts(pins={"Q.t": moved_fact(f="9" * 32, f_was="9" * 32)})
     now["pins"]["Q.t"]["reads"][0]["lines"] = [3, 3]
     text = A.review(old, A.judge(current, now, FILES, update=True)[1], now, {"Q.Defs": tmp_path / "Defs.lean"})
-    assert text == [f"pin Q.t: moved from P.t: {A.MOVED}", "definition Q.f (Q.Defs), was P.f (P.Defs), read by Q.t: changed",
+    assert text == [f"guarantee Q.t: moved from P.t: {A.MOVED}", "definition Q.f (Q.Defs), was P.f (P.Defs), read by Q.t: changed",
                     f"  now ({os.path.relpath(tmp_path / 'Defs.lean')}:3-3):",
                     "    def f (n : Nat) : Nat := n * 1"]
     assert A.statement_changes(text) == text[1:]
-    now = facts(pins={"Q.t": moved_pin(as_was="00000000000000bb")})
+    now = facts(pins={"Q.t": moved_fact(as_was="00000000000000bb")})
     text = A.review(old, A.judge(current, now, FILES, update=True)[1], now, {})
-    assert text[:2] == ["pin Q.t: changed (moved from P.t)", "  before:"] and A.statement_changes(text) == text[:-1]
+    assert text[:2] == ["guarantee Q.t: changed (moved from P.t)", "  before:"] and A.statement_changes(text) == text[:-1]
 
 
 def test_a_statement_restated_as_a_prop_definition_is_the_same_statement():
     old = recorded()
-    current = {**POLICY, "pins": {"Q.t": old["pins"]["P.t"]}}
+    current = {**POLICY, "guarantees": {"Q.t": old["guarantees"]["P.t"]}}
     head = {"name": "Q.T", "module": "Q.Guarantees", "kind": "def", "hash": "5" * 32, "moved": {"as": "Q.T", "sha256": sha("5" * 32)}}
-    now = facts(pins={"Q.t": moved_pin(head="Q.T", extra=[head])})
+    now = facts(pins={"Q.t": moved_fact(head="Q.T", extra=[head])})
     new = A.judge(current, now, FILES, update=True)[1]
-    assert new["pins"]["Q.t"]["signature"] == ["Q.t : Q.T"] and "Q.Guarantees" in new["reads"]
+    assert new["guarantees"]["Q.t"]["signature"] == ["Q.t : Q.T"] and "Q.Guarantees" in new["reads"]
     text = A.review(old, new, now, {})
-    assert text == [f"pin Q.t: moved from P.t, restated as Q.T: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"]
-    now = facts(pins={"Q.t": moved_pin(head="Q.T", extra=[head], as_was="00000000000000bb")})
+    assert text == [f"guarantee Q.t: moved from P.t, restated as Q.T: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"]
+    now = facts(pins={"Q.t": moved_fact(head="Q.T", extra=[head], as_was="00000000000000bb")})
     text = A.review(old, A.judge(current, now, FILES, update=True)[1], now, {})
-    assert text[0] == "pin Q.t: changed (moved from P.t)" and "definition Q.T (Q.Guarantees), read by Q.t: new" in text
+    assert text[0] == "guarantee Q.t: changed (moved from P.t)" and "definition Q.T (Q.Guarantees), read by Q.t: new" in text
 
 
 def test_a_map_that_cannot_tell_declarations_apart_compares_nothing_under_the_old_names():
     old = recorded()
-    current = {**POLICY, "pins": {"Q.t": old["pins"]["P.t"]}}
+    current = {**POLICY, "guarantees": {"Q.t": old["guarantees"]["P.t"]}}
     clash = [{"name": "Q.f", "as": "P.f", "with": "P.f"}]
-    now = facts(pins={"Q.t": moved_pin()}, moved_conflicts=clash)
+    now = facts(pins={"Q.t": moved_fact()}, moved_conflicts=clash)
     fails, new = A.judge(current, now, FILES, update=True)
     assert fails == ["moved: under the old names, Q.f would be P.f, and so would P.f: the map cannot tell them apart, so the "
                      "review compares nothing under the old names; map only the declarations that moved"]
-    assert A.review(old, new, now, {})[:2] == ["pin P.t: removed", "  before:"]
+    assert A.review(old, new, now, {})[:2] == ["guarantee P.t: removed", "  before:"]
 
 
 def test_a_move_map_renames_by_its_longest_prefix_and_must_map_back():
@@ -315,18 +324,18 @@ def test_a_move_map_renames_by_its_longest_prefix_and_must_map_back():
 def test_a_closed_hypothesis_must_be_a_named_assumption():
     inline = [{"binder": "h", "type": "∀ (m : Nat), m + 0 = m", "closed": True, "named": None, "module": None},
               {"binder": "hn", "type": "n ≠ 0", "closed": False, "named": None, "module": None}]
-    fails, _ = A.judge(POLICY, facts(pins={"P.t": pin(hyps=inline)}), FILES, update=True)
-    assert fails == ["pins: P.t assumes (h : ∀ (m : Nat), m + 0 = m), a closed Prop that is not a named assumption (a Prop "
+    fails, _ = A.judge(POLICY, facts(pins={"P.t": fact(hyps=inline)}), FILES, update=True)
+    assert fails == ["guarantees: P.t assumes (h : ∀ (m : Nat), m + 0 = m), a closed Prop that is not a named assumption (a Prop "
                      "constant of P.Assumptions)"]
     elsewhere = [{"binder": "h", "type": "Q.Hyp", "closed": True, "named": "Q.Hyp", "module": "Q.Stuff"}]
-    assert A.judge(POLICY, facts(pins={"P.t": pin(hyps=elsewhere)}), FILES, update=True)[0][0].startswith("pins: P.t assumes (h : Q.Hyp)")
+    assert A.judge(POLICY, facts(pins={"P.t": fact(hyps=elsewhere)}), FILES, update=True)[0][0].startswith("guarantees: P.t assumes (h : Q.Hyp)")
 
 
-def test_a_pin_must_be_a_theorem_with_allowed_axioms():
-    assert A.judge(POLICY, facts(pins={"P.t": {"kind": "missing"}}), FILES, update=True)[0] == ["pins: P.t is missing"]
-    assert A.judge(POLICY, facts(pins={"P.t": pin(kind="def")}), FILES, update=True)[0] == ["pins: P.t is a def, not a theorem"]
-    fails = A.judge(recorded(), facts(pins={"P.t": pin(axioms=STD + ["sorryAx"])}), FILES)[0]
-    assert fails == ["pins: P.t uses sorryAx"]
+def test_a_guarantee_must_be_a_theorem_with_allowed_axioms():
+    assert A.judge(POLICY, facts(pins={"P.t": {"kind": "missing"}}), FILES, update=True)[0] == ["guarantees: P.t is missing"]
+    assert A.judge(POLICY, facts(pins={"P.t": fact(kind="def")}), FILES, update=True)[0] == ["guarantees: P.t is a def, not a theorem"]
+    fails = A.judge(recorded(), facts(pins={"P.t": fact(axioms=STD + ["sorryAx"])}), FILES)[0]
+    assert fails == ["guarantees: P.t uses sorryAx"]
 
 
 def test_the_source_scan_refuses_kernel_bypasses_but_not_prose(tmp_path):
@@ -378,29 +387,29 @@ def test_code_run_while_compiling_is_refused_unless_listed(tmp_path):
     assert A.scans(tmp_path, {}, {})[0].startswith("compile-time: lakefile.lean runs code")
 
 
-def test_a_compile_time_listing_is_tied_to_its_file_and_kept_out_of_what_pins_read(tmp_path):
+def test_a_compile_time_listing_is_tied_to_its_file_and_kept_out_of_what_guarantees_read(tmp_path):
     (tmp_path / "P").mkdir()
     (tmp_path / "P" / "Tac.lean").write_text('elab "t" : tactic => pure ()\n')
     (tmp_path / "P" / "Defs.lean").write_text('macro "m" : term => `(1)\ndef f := 1\n')
     files = A.lean_modules(tmp_path)
-    pins = {"pins": {"P.t": {"module": "P.Thms", "reads": [{"name": "P.f", "module": "P.Defs"}]}}}
+    cited = {"pins": {"P.t": {"module": "P.Thms", "reads": [{"name": "P.f", "module": "P.Defs"}]}}}
     listed = {"P.Tac": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Tac.lean")}}
-    fails, now, notes = A.listings(tmp_path, files, {"compile_time": {"P.Tac": "why"}}, pins)
+    fails, now, notes = A.listings(tmp_path, files, {"compile_time": {"P.Tac": "why"}}, cited)
     assert [f.split(":")[1] for f in fails] == [" the listing of P.Tac records no digest of P/Tac.lean"]
     assert now == listed and notes[0].startswith("compile_time P.Tac (P/Tac.lean): listed; a reviewer reads")
-    assert A.listings(tmp_path, files, {"compile_time": {"P.Tac": "why"}}, pins, update=True)[0] == []
-    assert A.listings(tmp_path, files, {"compile_time": listed}, pins) == ([], listed, [])
+    assert A.listings(tmp_path, files, {"compile_time": {"P.Tac": "why"}}, cited, update=True)[0] == []
+    assert A.listings(tmp_path, files, {"compile_time": listed}, cited) == ([], listed, [])
     (tmp_path / "P" / "Tac.lean").write_text('elab "t" : tactic => do IO.println "now it does IO"\n')
-    fails, _, notes = A.listings(tmp_path, files, {"compile_time": listed}, pins)
+    fails, _, notes = A.listings(tmp_path, files, {"compile_time": listed}, cited)
     assert fails[0].startswith("compile-time: the listing of P.Tac was reviewed against another version of P/Tac.lean")
     assert notes[0].startswith("compile_time P.Tac (P/Tac.lean): the file changed since its listing was reviewed")
     read = {"P.Defs": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Defs.lean")}}
-    assert A.listings(tmp_path, files, {"compile_time": read}, pins)[0][0].startswith(
-        "compile-time: P.Defs is listed under `compile_time`, and pins are declared or read there (P.t)")
+    assert A.listings(tmp_path, files, {"compile_time": read}, cited)[0][0].startswith(
+        "compile-time: P.Defs is listed under `compile_time`, and guarantees are declared or read there (P.t)")
     declared = {"pins": {"P.t": {"module": "P.Tac", "reads": []}}}
     tac = {"P.Tac": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Tac.lean")}}
     assert "(P.t)" in A.listings(tmp_path, files, {"compile_time": tac}, declared)[0][0]
-    assert A.listings(tmp_path, files, {"compile_time": {"P": "a prefix"}}, pins)[0] == [
+    assert A.listings(tmp_path, files, {"compile_time": {"P": "a prefix"}}, cited)[0] == [
         "compile-time: `compile_time` lists P, which is not a module of the package; list modules one by one"]
 
 
@@ -411,7 +420,24 @@ def test_a_package_without_a_policy_gets_a_template(tmp_path):
     assert A.packages(tmp_path) == [pkg]
     rep = A.audit(pkg, tmp_path / "out")
     assert rep["failures"][0].startswith(f"policy: {pkg} has no lean-audit.json")
-    assert rep["failures"][0].endswith('{"roots": ["Alpha", "Beta"], "pins": {}}')
+    assert rep["failures"][0].endswith('{"roots": ["Alpha", "Beta"], "guarantees": {}}')
+
+
+def test_a_record_from_before_the_rename_is_read_as_guarantees_and_one_holding_both_is_refused(tmp_path):
+    pol = recorded()
+    old = {("pins" if k == "guarantees" else k): v for k, v in pol.items()}
+    old["reads"] = {m: {("pins" if k == "guarantees" else k): v for k, v in g.items()} for m, g in pol["reads"].items()}
+    assert A.as_guarantees(json.loads(json.dumps(old))) == pol
+    assert A.judge(A.as_guarantees(old), facts(), FILES) == ([], pol)
+    with pytest.raises(ValueError, match=r"the record holds both `pins` and `guarantees`"):
+        A.as_guarantees(pol | {"pins": {"P.u": {}}})
+    with pytest.raises(ValueError, match=r"reads\[P.Defs\] holds both"):
+        A.as_guarantees(pol | {"reads": {"P.Defs": pol["reads"]["P.Defs"] | {"pins": ["P.u"]}}})
+    pkg = tmp_path / "p"
+    pkg.mkdir()
+    (pkg / A.POLICY).write_text(A.text(pol | {"pins": {"P.u": {}}}))
+    rep = A.audit(pkg, tmp_path / "out")
+    assert len(rep["failures"]) == 1 and rep["failures"][0].startswith(f"policy: {pkg}/{A.POLICY}: the record holds both")
 
 
 def test_dependency_digests_cover_every_part_of_the_imported_modules_only(tmp_path):
@@ -460,6 +486,25 @@ def test_a_file_changed_during_the_run_is_reported(tmp_path):
     late.write_text("y")
     assert A.tampered(seals, [late]) == [str(tool), str(late)]
     assert A.killed(-9) and A.killed(137) and not A.killed(1)
+
+
+def test_lean_runs_on_the_cpus_the_audit_may_use_unless_told_otherwise(monkeypatch):
+    monkeypatch.delenv("LEAN_NUM_THREADS", raising=False)
+    assert A.lake_env()["LEAN_NUM_THREADS"] == str(A.cores())
+    monkeypatch.setenv("LEAN_NUM_THREADS", "3")
+    assert A.lake_env()["LEAN_NUM_THREADS"] == "3"
+
+
+@pytest.mark.skipif(not hasattr(os, "sched_setaffinity"), reason="no CPU affinity on this platform")
+def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
+    """Lean's own default is every CPU of the machine, however few the job's cpuset holds."""
+    monkeypatch.delenv("LEAN_NUM_THREADS", raising=False)
+    cpu = min(os.sched_getaffinity(0))
+    code = (f"import importlib.util, os\nos.sched_setaffinity(0, {{{cpu}}})\n"
+            f"spec = importlib.util.spec_from_file_location('lean_audit', {str(HERE.parent / 'audit.py')!r})\n"
+            "A = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(A)\nprint(A.lake_env()['LEAN_NUM_THREADS'])\n")
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert r.stdout.strip() == "1"
 
 
 def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_requires(tmp_path, monkeypatch):

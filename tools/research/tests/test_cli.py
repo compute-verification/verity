@@ -76,6 +76,55 @@ def test_machine_side_records_the_requests_env(tmp_path):
     assert _request_env(json.dumps({"request": str(tmp_path / "absent.json")})) == {}
 
 
+def _local_run(tmp_path, *opts):
+    return main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", *opts, "--",
+                 sys.executable, "-c", "open('ran', 'w')"])
+
+
+def test_a_local_run_whose_store_has_no_remote_refuses_before_it_starts(tmp_path, monkeypatch, capsys):
+    """Without a remote a local run used to publish its attempt into this disk's store and stop: on 2-3 Oct a night of TP8 and
+    Qwen3-235B runs on vy-nebius-2 sat there until a push loop took them. Every way of having no usable remote refuses, a remote
+    that fails to load included."""
+    monkeypatch.delenv("RESEARCH_LOCAL_ONLY")
+    assert _local_run(tmp_path) == 3
+    err = capsys.readouterr().err
+    assert "refused" in err and "absent-store.toml, which does not exist" in err and "--on MACHINE" in err and "--local-only" in err
+    cfg = tmp_path / "store.toml"
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    for text, why in (("", "has no [remote] table"),
+                      ('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://e"\naccess_key_id_env = "AWS_ACCESS_KEY_ID"\n'
+                       'secret_access_key_env = "AWS_SECRET_ACCESS_KEY"\n', "credentials env vars AWS_ACCESS_KEY_ID"),
+                      ("[remote\n", "ConfigError")):
+        cfg.write_text(text)
+        assert _local_run(tmp_path) == 3
+        assert why in capsys.readouterr().err
+    assert not (tmp_path / "runs").exists() or not list((tmp_path / "runs").iterdir()), "no run dir, no workload"
+
+
+def test_local_only_runs_without_a_remote_and_records_why(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("RESEARCH_LOCAL_ONLY")
+    assert _local_run(tmp_path, "--local-only", "n2_commit.sh takes it to node 1") == 0
+    run_dir = next((tmp_path / "runs").iterdir())
+    assert (run_dir / "ran").exists()
+    rec = json.loads((run_dir / "job.json").read_text())["store"]["local_only"]
+    assert rec["reason"] == "n2_commit.sh takes it to node 1" and "absent-store.toml" in rec["no_remote"]
+    err = capsys.readouterr().err
+    assert "--local-only: n2_commit.sh takes it to node 1" in err and "local only" in err
+    monkeypatch.setenv("RESEARCH_LOCAL_ONLY", "from the environment")
+    assert _local_run(tmp_path) == 0
+
+
+def test_a_local_run_with_a_remote_needs_no_reason_and_is_preserved(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("RESEARCH_LOCAL_ONLY")
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    assert _local_run(tmp_path) == 0
+    run_dir = next((tmp_path / "runs").iterdir())
+    assert "local_only" not in json.loads((run_dir / "job.json").read_text())["store"]
+    assert "PRESERVED on the remote" in capsys.readouterr().err
+
+
 def test_run_requires_separator_and_command(tmp_path):
     assert main(["run", "--runs-dir", str(tmp_path), "echo", "x"]) == 2
     assert main(["run", "--runs-dir", str(tmp_path), "--"]) == 2
@@ -213,6 +262,54 @@ def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
     (pkg / "remote.py").write_text("def tool_identity(): pass\n")
     assert remote.knows_queue(None) and remote.knows_queue(Path(remote.__file__).parent)
     assert not remote.knows_queue(pkg) and not remote.knows_queue(tmp_path / "nope")
+
+
+def test_pss_flags_for_a_source_tree_that_predates_them_are_refused_before_placement(tmp_path, monkeypatch, capsys):
+    """On a research package before --pss-max-rss-gb, `--pss-every 0` is a PSS round every round (a 100 GB process's smaps_rollup
+    read each second) and the bound fails the run on the machine; `research run --on/--queue` refuses both before anything moves."""
+    from research import remote
+
+    def tree(name, sample_py):
+        pkg = tmp_path / name / "tools" / "research" / "src" / "research"
+        (pkg / "telemetry").mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        (pkg / "telemetry" / "sample.py").write_text(sample_py)
+        return tmp_path / name, pkg
+
+    old, old_pkg = tree("old", "ap.add_argument('--pss-every', type=float, default=5.0)\n")
+    new, _ = tree("new", Path(remote.__file__).with_name("telemetry").joinpath("sample.py").read_text())
+    assert remote.knows_pss_bound(None) and remote.knows_pss_bound(Path(remote.__file__).parent)
+    assert not remote.knows_pss_bound(old_pkg) and not remote.knows_pss_bound(tmp_path / "nope")
+
+    launched, placed = [], []
+
+    def launch(**kw):
+        launched.append(kw["harness_args"])
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+
+    def place(*a):
+        placed.append(a)
+        raise remote.Refused("placement reached")
+
+    monkeypatch.setattr(remote, "launch", launch)
+    monkeypatch.setattr(remote, "queue_placement", place)
+    runs = str(tmp_path / "runs")
+    on = lambda src, *flags: main(["run", "--runs-dir", runs, "--on", "m", "--project", "p", "--source", str(src), "--no-custody-r2", *flags,
+                                   "--", "true"])
+    queue = lambda src, *flags: main(["run", "--runs-dir", runs, "--queue", "--project", "p", "--source", str(src), "--max-min", "1", *flags,
+                                      "--", "true"])
+    for flags, asked in ((["--pss-every", "0"], "--pss-every 0"), (["--pss-every=-1"], "--pss-every -1"),
+                         (["--pss-max-rss-gb", "4"], "--pss-max-rss-gb 4"),
+                         (["--pss-max-rss-gb=4", "--pss-every", "0"], "--pss-every 0 and --pss-max-rss-gb 4")):
+        for go in (on, queue):
+            assert go(old, *flags) == 3
+            err = capsys.readouterr().err
+            assert err.startswith(f"research run: refused: {asked}: the research package in {old} predates them"), err
+            assert "every round, about once a second" in err and "Rebase the --source tree onto main" in err
+    assert launched == [] and placed == [] and not (tmp_path / "runs").exists()
+    assert on(old, "--pss-every", "5") == 0 and on(new, "--pss-every", "0", "--pss-max-rss-gb=4") == 0
+    assert [remote.flag_value(a, "--pss-every") for a in launched] == ["5", "0"] and "--pss-max-rss-gb=4" in launched[1]
+    assert queue(new, "--pss-every", "0") == 3 and len(placed) == 1 and "placement reached" in capsys.readouterr().err
 
 
 def test_an_unknown_command_says_how_old_the_checkout_is(tmp_path, capsys, monkeypatch):

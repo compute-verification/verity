@@ -120,6 +120,11 @@ class GemmTarget:
     #: batch-invariant dispatch swaps (ScaleA = s_w) for the B1 shapes, and its FP8 program binds ScaledMmFp8_v1 in its own composites.
     fp8_dot: str | None = None
     fp8_scale_order: str | None = None
+    #: the blockwise FP8 linear (`CutlassFp8BlockScaledMMKernel`: `_C.cutlass_scaled_mm` over [.., K/G] x [K/G, cdiv(N, G)] scales), as
+    #: measured: its e4m3 k32 step (`targets.FP8_DOTS`; `targets.scaled_mm_fp8_block_spec` binds the GEMM over it).  hopper's is the step
+    #: `ScaledMmFp8Block_v1` and its shared-scale form hard-code, pinned on the H100 (their conformance, `registry.fp8`); None = that
+    #: kernel has no registered Definition on this target, and the blockwise FP8 linear is refused by name.
+    fp8_block_dot: str | None = None
     #: the NVFP4 (W4A4) linear (`CutlassNvFp4LinearKernel`: `cvt_fp16_to_fp4` then the block-scaled GEMM), as measured (`evidence`):
     #: its k64 block-scaled step (`targets.FP4_DOTS`); None = not recorded on this target.
     fp4_dot: str | None = None
@@ -178,7 +183,7 @@ REGISTERED: dict[str, GemmTarget] = {
     # statics-lifted `Gemm_v2{K,N,DOT}` (`verity_vllm.program.registry.targets.gemm_spec`), not `Gemm_v1`.  vLLM family "hopper": the tuned table above.
     "hopper": GemmTarget(
         key="hopper", compute_capabilities=((9, 0),), vllm_arch_family="hopper", dot="HopperBF16WgmmaDot16", tuned_table=HOPPER_TUNED_GEMM,
-        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}",
+        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_block_dot="HopperE4m3QgmmaDot32",
         evidence=("lane HP CONF-b1-hopper (Qwen2.5-1.5B on an H100: GemmHopper = Gemm with DOT=HopperBF16WgmmaDot16 exact on every GEMM leaf); "
                   "R13 lane hopper: verity_vllm/program/kernels/gemm_target_correspondence.py on cp-h100a (cc 9.0, 132 SMs, family 'hopper': the "
                   "(2048,2048) tuned rows BLOCK_SIZE_M 16 / BLOCK_SIZE_K 128 at M<=16 and the default tiling elsewhere, Triton PTX sm_90 wgmma) — "
