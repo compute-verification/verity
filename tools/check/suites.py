@@ -216,17 +216,59 @@ _ORIGINS = ("import importlib.util as u, json, sys; "
             "print(json.dumps({n: getattr(u.find_spec(n), 'origin', None) for n in sys.argv[1:]}))")
 
 
-def foreign(pkgs: dict[str, str], env: dict[str, str], python: str = sys.executable) -> str | None:
-    """The members' `verity*` packages that `python` under `env` would import from outside this tree, each with where from, or
-    None. A virtualenv installed from another checkout runs this tree's tests against that checkout's code."""
-    names = sorted({p.parent.name for d in pkgs.values() for g in ("verity*/__init__.py", "*/verity*/__init__.py")
-                    for p in (ROOT / d).glob(g)})
-    if not names:
+def _declared(path: str, data: dict) -> list[str] | None:
+    """The package directories (relative to the member) that the member's build configuration ships, or None when it is a
+    virtual member, which installs nothing. Hatch's `packages`, uv_build's module, setuptools' packages, else hatch's default
+    (`src/<name>` or `<name>`)."""
+    tool, project = data.get("tool", {}), data.get("project", {})
+    if tool.get("uv", {}).get("package") is False or not project or "build-system" not in data:
         return None
-    r = subprocess.run([python, "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
-    if r.returncode:
-        return f"{python} can't say where it imports them from: {r.stderr.strip()[-300:]}"
-    away = {n: o for n, o in json.loads(r.stdout.splitlines()[-1]).items() if o and not Path(o).resolve().is_relative_to(ROOT)}
+    if (wheel := tool.get("hatch", {}).get("build", {}).get("targets", {}).get("wheel", {})).get("packages"):
+        return list(wheel["packages"])
+    module = _norm(project["name"]).replace("-", "_")
+    if (ub := tool.get("uv", {}).get("build-backend")) is not None:
+        names = ub.get("module-name", module)
+        return [f"{ub.get('module-root', 'src')}/{n.replace('.', '/')}" for n in ([names] if isinstance(names, str) else names)]
+    if (st := tool.get("setuptools")) is not None:
+        listed, where = st.get("packages"), ["."]
+        if isinstance(listed, list):
+            base = st.get("package-dir", {}).get("", ".")
+            return [f"{base}/{p}" for p in listed if "." not in p]
+        if isinstance(listed, dict):
+            where = listed.get("find", {}).get("where", ["."])
+        return [str(p.parent.relative_to(ROOT / path)) for w in where for p in sorted((ROOT / path / w).glob("*/__init__.py"))]
+    return [p for p in (f"src/{module}", module) if (ROOT / path / p / "__init__.py").is_file()][:1]
+
+
+def importable(pkgs: dict[str, str]) -> dict[str, str]:
+    """The members' importable top-level packages, as their build configurations declare them: {import name: member directory}.
+    A member that builds but whose packages can't be found maps "" to its directory."""
+    out = {}
+    for d in pkgs.values():
+        found = _declared(d, _pyproject(d))
+        if found is None:
+            continue
+        names = {Path(p).name.removesuffix(".py") for p in found if not Path(p).is_absolute()}
+        for n in names or {""}:
+            out.setdefault(n, d)
+    return dict(sorted(out.items()))
+
+
+def foreign(pkgs: dict[str, str], env: dict[str, str], python: str = sys.executable) -> str | None:
+    """The members' packages that `python` under `env` would import from outside this tree, or can't import at all, each with
+    where from, or None. A virtualenv installed from another checkout runs this tree's tests against that checkout's code; one
+    that lacks a member's package can't say which code it would run."""
+    names = importable(pkgs)
+    away = {f"{d}'s package": "nowhere (its build configuration declares none)" for n, d in names.items() if not n}
+    if names := sorted(n for n in names if n):
+        r = subprocess.run([python, "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
+        if r.returncode:
+            return f"{python} can't say where it imports them from: {r.stderr.strip()[-300:]}"
+        for n, o in json.loads(r.stdout.splitlines()[-1]).items():
+            if not o:
+                away[n] = "nowhere (not importable)"
+            elif not Path(o).resolve().is_relative_to(ROOT):
+                away[n] = o
     return ", ".join(f"{n} from {o}" for n, o in sorted(away.items())) or None
 
 
