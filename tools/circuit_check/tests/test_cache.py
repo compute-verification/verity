@@ -513,6 +513,18 @@ def test_a_sidecar_whose_module_is_gone_is_an_error(tmp_path, monkeypatch):
         SC.discover.cache_clear()
 
 
+def test_every_package_that_defines_a_definition_is_one_sidecars_are_found_in():
+    """`sidecars.PACKAGES` holds the top-level package of every module that defines a registered Definition: a sidecar in any
+    other package is never read, so its bindings would leave the task list without an error."""
+    from circuit_check import sidecars as SC
+    from circuit_check import targets as TG
+    from verity.primitives.circuits.defs import REGISTRY
+
+    TG.load_registries()
+    tops = {m.partition(".")[0] for d in REGISTRY.defs.values() if TG._authored(d) and (m := SC.owner(d))}
+    assert tops <= set(SC.PACKAGES), sorted(tops - set(SC.PACKAGES))
+
+
 def test_a_target_that_would_reuse_a_memoized_result_reruns_when_its_dependency_changes(tmp_path):
     """`syn.h` is run by the first target whose check misses the memo; under a shared memo the second would reuse its value and
     never read `syn/h.py`.  Each traced check has a memo of its own, so both hold it."""
