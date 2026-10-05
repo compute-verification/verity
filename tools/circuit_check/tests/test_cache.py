@@ -452,7 +452,8 @@ def _move(root: Path, src: str, dst: str, *rewrites: tuple[str, str, str]) -> No
 
 def test_a_pure_move_of_a_registry_module_reuses_every_target(tmp_path):
     """`syn/top.py` (SynTop's module, which `load_registries` enumerates) moves to a new package `syn/fam/`, and the one import
-    that names it is rewritten, split from the import it shared: no module's content changes, nor any binding unit, and the
+    that names it is rewritten, split from the import it shared and put first (as an import sorter orders them): no module's
+    content changes, nor any binding unit, and the
     moved module is imported anyway (by the core binding), so every target is reused, SynTop's included.  The checks' `inspect`
     lookups probed `syn/top.py`, which is held as the module, not the path.  Each reused entry is stored again where its modules
     are now, so a later edit of the moved module reruns SynTop alone, not every target that held the enumeration."""
@@ -460,7 +461,7 @@ def test_a_pure_move_of_a_registry_module_reuses_every_target(tmp_path):
     _run(root)
     assert any("syn.top" in _entry(root, t)["reads"]["present"] for t in ("SynOther_v1", "SynTop_v1"))
     _move(root, "syn/top.py", "syn/fam/top.py",
-          ("syn/catalog.py", "from syn import extra, top", "from syn import extra\n    from syn.fam import top"))
+          ("syn/catalog.py", "from syn import extra, top", "from syn.fam import top\n    from syn import extra"))
     out = _run(root)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 0
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
@@ -567,6 +568,23 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     edited = CC._units_of(src.replace('("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16))',
                                       '("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=32))', 1))[0]
     assert {u for u in units if edited.get(u) != units[u]} == {"_model_roots:ResidualAdd_v1"}
+
+
+def test_a_run_of_imports_is_held_by_the_names_it_binds_not_their_order():
+    """`cache._commuted`: a run of consecutive imports ordered otherwise digests alike, with its sites; two that bind one name,
+    a statement between two, or an ``import *`` among them keep their order."""
+    import ast
+
+    from circuit_check import cache as CC
+
+    def norm(src: str) -> tuple:
+        return CC._normalized(ast.parse(src))[:2]
+
+    assert norm("from a import x, y\nimport b.c\nfrom d import z as w\n") == \
+        norm("from d import z as w\nimport b.c\nfrom a import y\nfrom a import x\n")
+    assert norm("from a import f\nfrom b import f\n") != norm("from b import f\nfrom a import f\n")
+    assert norm("from a import x\nX = 1\nfrom b import y\n") != norm("from b import y\nX = 1\nfrom a import x\n")
+    assert norm("from a import *\nfrom b import y\n") != norm("from b import y\nfrom a import *\n")
 
 
 def test_each_enumerator_only_imports_what_it_lists():

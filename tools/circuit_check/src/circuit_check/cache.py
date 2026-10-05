@@ -29,8 +29,8 @@ the task list's build, nor an earlier target's check):
   target holds that.
 
 A module is held by its name and its content, not its path (`_modrec`): the digest of its AST with every ``from`` import and
-every ``import M as N`` cut to the names it binds (`_Norm`: comments, formatting and how import statements are split are no
-input), and, for each import site, the module it resolves to (by the path-based finder over the in-tree ``sys.path`` entries,
+every ``import M as N`` cut to the names it binds (`_Norm`: comments, formatting, how import statements are split and how a run
+of them binding different names is ordered are no input, `_commuted`), and, for each import site, the module it resolves to (by the path-based finder over the in-tree ``sys.path`` entries,
 `_resolve`).  A module that reads its own path or name (``__file__``, ``__name__``, ``__spec__`` and the like) is held at its
 path too.  `targets.py` and `pins.json` are not files of any target: a target holds the parts of `targets.py` it depends on (its
 binding units and the rest of the module with every binding unit cut out, ``common``, each its AST digested as a module's is,
@@ -69,8 +69,9 @@ what a binding ran that changes, keeping its id, what a Definition it did not ma
 descriptor: a value it computed (from a module only it imported) and left in a module's state, or closed over, where an
 evaluator reads it; behaviour that depends on a module's name or path through another object (an object's ``__module__``, a code
 object's ``co_filename``, ``inspect.getfile``: a moved module's objects report their new name; `targets._authored` reads
-``__module__`` for the task list only), and on the order in which modules were imported before the check (a moved registry
-module is imported by its importer rather than by the enumeration); report text that names a module or a path is the text of the
+``__module__`` for the task list only), and on the order in which modules are first imported (a moved registry module is
+imported by its importer rather than by the enumeration, and consecutive imports are taken in the order of the names they
+bind); report text that names a module or a path is the text of the
 run that stored it; and a source edited without changing its size within the second its bytecode was written, which Python runs
 as the old bytecode.  A new non-empty module in a package the registries enumerate, or one moved where nothing imports it,
 reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``, ``os.system``, ``exec``, ``posix_spawn``, a
@@ -653,13 +654,41 @@ class _Norm(ast.NodeTransformer):
         return node
 
 
+def _bound(s: ast.Import | ast.ImportFrom) -> str:
+    a = s.names[0]
+    return a.asname or (a.name if isinstance(s, ast.ImportFrom) else a.name.partition(".")[0])
+
+
+def _commuted(tree: ast.AST) -> ast.AST:
+    """``tree`` with each run of consecutive import statements split one name each and ordered by the name each binds, stably
+    (of two that bind one name the later still wins; ``import *`` ends a run): imports of different names commute but for the
+    order modules are first imported in, which no key holds."""
+    for node in ast.walk(tree):
+        for field, body in ast.iter_fields(node):
+            if not (isinstance(body, list) and body and all(isinstance(s, ast.stmt) for s in body)):
+                continue
+            out: list[ast.stmt] = []
+            run: list[ast.Import | ast.ImportFrom] = []
+            for s in [*body, None]:
+                if isinstance(s, (ast.Import, ast.ImportFrom)) and all(a.name != "*" for a in s.names):
+                    run += [ast.ImportFrom(module=s.module, names=[a], level=s.level) if isinstance(s, ast.ImportFrom)
+                            else ast.Import(names=[a]) for a in s.names]
+                    continue
+                out += sorted(run, key=_bound)
+                run = []
+                if s is not None:
+                    out.append(s)
+            setattr(node, field, out)
+    return tree
+
+
 def _normalized(node: ast.AST) -> tuple[str, list[tuple[int, str, str | None]], bool]:
-    """(digest of ``node`` with its imports cut to the names they bind, the imports' sites, whether it reads its own path or
-    name).  ``node`` is copied, not changed."""
+    """(digest of ``node`` with its imports cut to the names they bind and each run of them ordered by those names, `_commuted`,
+    the imports' sites, whether it reads its own path or name).  ``node`` is copied, not changed."""
     import copy
 
     n = _Norm()
-    out = n.visit(copy.deepcopy(node))
+    out = n.visit(_commuted(copy.deepcopy(node)))
     return hashlib.sha256(ast.dump(out, include_attributes=False).encode()).hexdigest(), n.sites, n.anchored
 
 
