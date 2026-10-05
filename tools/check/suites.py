@@ -204,15 +204,13 @@ _ORIGINS = ("import importlib.util as u, json, sys; "
 
 def _declared(path: str, data: dict) -> list[str] | None:
     """The package directories (relative to the member) that the member's build configuration ships, or None when it is a
-    virtual member, which installs nothing. Hatch's `packages`, the regular packages in hatch's `dev-mode-dirs`, uv_build's module,
-    setuptools' packages, else hatch's default (`src/<name>` or `<name>`)."""
+    virtual member, which installs nothing. Hatch's `packages`, uv_build's module, setuptools' packages, else hatch's default
+    (`src/<name>` or `<name>`)."""
     tool, project = data.get("tool", {}), data.get("project", {})
     if tool.get("uv", {}).get("package") is False or not project or "build-system" not in data:
         return None
     if (wheel := tool.get("hatch", {}).get("build", {}).get("targets", {}).get("wheel", {})).get("packages"):
         return list(wheel["packages"])
-    if dev := tool.get("hatch", {}).get("build", {}).get("dev-mode-dirs"):     # an editable install of these directories
-        return [f"{d}/{p.parent.name}" for d in dev for p in sorted((ROOT / path / d).glob("*/__init__.py"))]
     module = _norm(project["name"]).replace("-", "_")
     if (ub := tool.get("uv", {}).get("build-backend")) is not None:
         names = ub.get("module-name", module)
@@ -298,8 +296,7 @@ def artifact_ids(suite: Suite) -> dict[str, str]:
 
 
 def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
-    """Directories of the workspace packages `suite` depends on, directly or through another, with the packages they ship from
-    outside their own directory (`dev-mode-dirs`)."""
+    """Directories of the workspace packages `suite` depends on, directly or through another."""
     seen: dict[str, str] = {}
     todo = [r for r in suite.requires if r in pkgs]
     while todo:
@@ -309,9 +306,7 @@ def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
         seen[name] = pkgs[name]
         data = _pyproject(pkgs[name])
         todo += [r for r in _requires(data["project"], data) if r in pkgs]
-    shipped = {os.path.normpath(f"{d}/{p}") for d in seen.values() for p in _declared(d, _pyproject(d)) or ()
-               if p.startswith("../")}               # packages an editable install ships from outside its member
-    return sorted(p for p in {*seen.values(), *shipped} if p != suite.path)
+    return sorted(p for p in seen.values() if p != suite.path)
 
 
 def worktree() -> str:

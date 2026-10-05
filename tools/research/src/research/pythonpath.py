@@ -42,12 +42,9 @@ def _member_roots(read: Reader, is_dir: Callable[[str], bool], member: str) -> l
     tool = doc.get("tool") or {}
     if (tool.get("uv") or {}).get("package") is False:      # a virtual member: no import packages, nothing for PYTHONPATH
         return []
-    build = (tool.get("hatch") or {}).get("build") or {}
-    pkgs = (build.get("targets") or {}).get("wheel", {}).get("packages")
+    pkgs = (((tool.get("hatch") or {}).get("build") or {}).get("targets") or {}).get("wheel", {}).get("packages")
     if pkgs:
         return [posixpath.normpath(posixpath.join(member, posixpath.dirname(p.rstrip("/")) or ".")) for p in pkgs]
-    if build.get("dev-mode-dirs"):                          # what an editable install puts on sys.path
-        return [posixpath.normpath(posixpath.join(member, d)) for d in build["dev-mode-dirs"]]
     st = tool.get("setuptools") or {}
     if isinstance(st.get("package-dir"), dict) and "" in st["package-dir"]:
         return [posixpath.normpath(posixpath.join(member, st["package-dir"][""]))]
