@@ -36,6 +36,7 @@
  },
  "guarantees": {
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate : NetTiming.Guarantees.EncardDecodableLeConstantRate"
    ],
@@ -43,6 +44,7 @@
    "type_hash": "39a3ef7e0a076cb6b30cd12c203a8efb190a4e1e7092c69f1647bbc6dbd6289b"
   },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow :",
     "  NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow"
@@ -51,6 +53,7 @@
    "type_hash": "2b88be87e58fe0688ef1e94ad5860bf98c293951ab6fe4bafc6f32b45c155816"
   },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe : NetTiming.Guarantees.EncardIngressObsDecodableLe"
    ],
@@ -58,6 +61,7 @@
    "type_hash": "2ca793f68266f5d8b633599df98d5a44b14180caa908bc4ed29f780257ee184a"
   },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow :",
     "  NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow"

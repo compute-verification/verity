@@ -3,6 +3,7 @@
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...`: build a train and push it as BRANCH for its check (`prepare`).
 `research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed and delete their branches
 (`sweep`).
+`research merge --mirror [SHA]`: push SHA (default main's tip) to node 1's bare repository's main, as --push does (`push_mirror`).
 `research merge --canary [--tool check] [--json]`: the gates' self-test, run daily: attempts the merge gate, the push guard and the
 train gate must refuse and a control they must admit, in scratch stores (`canary`).
 
@@ -32,10 +33,14 @@ head that landed (GitHub's "delete head branch" fires only on merges made on Git
 The remote's branch, fetched first, is the truth, never the checkout. With --push, a merge that lands is pushed to the remote
 (never forced), what the tool's declaration runs after a landing (`Tool.after_land`) is started, detached, on the landed commit,
 and then it is swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
-`research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct).
+`research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct). Once origin has main, the
+same commit goes to vy-nebius-1's bare repository, whose main node 1's builds check out (`vy-lean-sandbox checkout`): a plain
+push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
+it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
-from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`).
+from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`); the gate
+reads each again when the tip lands, with its ready mark and grants (`unready`).
 A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
 both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
 that doesn't parse (`_merge`).  Before a train is built, each ref whose change needs a TRAIN_GRANTS grant under
@@ -48,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -212,8 +218,9 @@ def tree_identical(repo: Path, commit: str) -> bool:
     return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
 
 
-def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print) -> tuple[str, str]:
-    """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise."""
+def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print, remote: str = "origin") -> tuple[str, str]:
+    """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise, including a pull request it
+    merges whose head on ``remote`` moved or that lacks its ready mark or a grant (`unready`)."""
     commit = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
     head = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
     if head != into:
@@ -233,6 +240,8 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
     if old := maps.old_history(repo, commit, "HEAD"):
         raise Refused(f"{commit[:12]} holds {len(old)} commit(s) a history rewrite replaced (e.g. {old[0][:12]}): merging it would bring the "
                       f"old history back; move the branch onto the rewritten one with `research git remap` and push that")
+    if why := unready(repo, commit, store, remote, log):
+        raise Refused("; ".join(why))
     tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
     kinds, command = produced(repo, tool), declared_command(repo, tool)
     ids = passing(store, commit, tool, kinds=kinds, command=command, tree=tree, maps=maps)
@@ -607,18 +616,18 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
     none when it has no rules file) can't go in: pull request N lacks the `grant` label on `pr:N@SHA` at its pinned head (and,
     for a lean-audit.json change, a `lean_review` that printed it whole as the same statements: `research.queue.reviewed`), or
     the ref isn't a pinned pull request, which is all a grant can be on."""
-    from .queue import RULES, RULES_BEFORE_MOVE, QueueError, Rules, StoreGrants, grant_target
+    from .queue import QueueError, StoreGrants, grant_target
 
-    for path in (RULES, RULES_BEFORE_MOVE):
-        r = _git(repo, "show", f"{base}:{path}", check=False)
-        if r.returncode == 0:
-            break
-    else:
+    try:
+        rules = queue_rules(repo, base)
+    except QueueError as e:
+        raise Refused(f"the queue's rules: {e}") from e
+    if rules is None:
         return []
+    path = rules.source
     grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)))
     out = []
     try:
-        rules = Rules.parse(r.stdout, path)
         lean = {g.role for g in rules.grants if g.lean_audit}
         for label, sha in pins:
             pr = int(label[1:]) if label.startswith("#") else None
@@ -635,6 +644,64 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
                             f"label {target} lean_review ART --by LANE`" if g in lean else "") for g in missing]
     except QueueError as e:
         raise Refused(f"the queue's rules ({path}): {e}") from e
+    return out
+
+
+def queue_rules(repo: Path, base: str):
+    """`research queue`'s rules as ``base`` has them (`RULES`, else `RULES_BEFORE_MOVE`), or None when it has no rules file."""
+    from .queue import RULES, RULES_BEFORE_MOVE, Rules
+
+    for path in (RULES, RULES_BEFORE_MOVE):
+        r = _git(repo, "show", f"{base}:{path}", check=False)
+        if r.returncode == 0:
+            return Rules.parse(r.stdout, path)
+    return None
+
+
+#: the subject `_chain` gives a pinned pull request's merge onto a train
+MERGED_PR = re.compile(r"Merge #(\d+) \(([0-9a-f]{7,40})\)")
+
+
+def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]:
+    """Why ``commit`` can't land for a pull request it merges above the checkout's HEAD (a first-parent `Merge #N (SHA)` commit
+    `_chain` wrote, whose second parent is the pinned head): N's head on ``remote`` is no longer that head, closed or not, or
+    `pr:N@{head}` lacks `ready = true` asserted by someone other than `merge-queue` (the owner's word; who asserted it isn't matched
+    to the PR's owner, which is mostly a Cursor agent id with no map to a lane) or a grant its change needs under the queue's rules
+    as HEAD has them (`Rules.needs`, every role, not only TRAIN_GRANTS), read after pulling the labels from the store's remote.
+    What can't be read refuses."""
+    from .queue import QueueError, StoreGrants, grant_target
+
+    out, pins = [], []
+    for line in _git(repo, "log", "--first-parent", "--format=%P%x00%s", f"HEAD..{commit}").stdout.splitlines():
+        parents, _, subject = line.partition("\0")
+        if m := MERGED_PR.fullmatch(subject):
+            sha = (parents.split() + ["", ""])[1]
+            if sha.startswith(m[2]):
+                pins.append((int(m[1]), sha))
+            else:
+                out.append(f"#{m[1]}'s merge names {m[2]} but merges {sha[:12] or 'nothing'}")
+    grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)))
+    try:
+        rules = queue_rules(repo, "HEAD") if pins else None
+        for n, sha in pins:
+            r = _git(repo, "fetch", "-q", remote, f"pull/{n}/head", check=False)
+            head = None if r.returncode else _git(repo, "rev-parse", "FETCH_HEAD").stdout.strip()
+            if head != sha:
+                out.append(f"#{n} was merged at {sha[:12]}, but its head on {remote} " + (
+                    f"is now {head[:12]}: rebuild the train on the new head and check that" if head else
+                    f"can't be read ({(r.stderr or r.stdout).strip()[-200:]})"))
+                continue
+            if (by := grants.readied_by(n, sha)) == {"merge-queue"}:
+                out.append(f"#{n}'s ready at {sha[:12]} is by merge-queue, not its owner: the owner relabels it (research data "
+                           f"label {grant_target(n, sha)} ready true --by LANE)")
+            elif not by:
+                out.append(f"#{n} is not marked ready at {sha[:12]} (`ready = true` on {grant_target(n, sha)}: `research queue "
+                           f"ready {n} --by LANE`)")
+            need = rules.needs(repo, "HEAD", sha, lambda n=n, sha=sha: grants.reviews(n, sha)) if rules else set()
+            if missing := need - grants(n, sha):
+                out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
+    except QueueError as e:
+        raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {e}") from e
     return out
 
 
@@ -701,6 +768,8 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
     _git(repo, "worktree", "add", "-q", "-b", branch, str(tree), "HEAD")
     try:
         chain = _chain(tree, pins, stamp)
+        if why := unready(repo, chain[-1], store, remote, log):
+            raise Refused("; ".join(why) + "; nothing was checked")
         need = required_steps(repo, "HEAD", chain[-1], tool)
         if need and on and not sends:
             raise Refused(f"the train changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must run "
@@ -711,7 +780,7 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
             _git(tree, "checkout", "-q", "--detach", chain[k - 1])
             _record(tree, spec or tool, command, on, project, log, sends)
             try:
-                gate(repo, chain[k - 1], into, store, tool, log=lambda *_: None)
+                gate(repo, chain[k - 1], into, store, tool, log=lambda *_: None, remote=remote)
                 ok = True
             except Refused as e:
                 ok = False
@@ -727,7 +796,7 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
             bad = refs[hi - 1]
         land = chain[hi - 1] if bad is None else (chain[lo - 1] if lo else None)
         if land is not None:
-            gate(repo, land, into, store, tool, log)
+            gate(repo, land, into, store, tool, log, remote)
             _git(repo, "merge", "--ff-only", "-q", land)
         return land, bad
     finally:
@@ -820,6 +889,45 @@ def _sweep_after(repo: Path, into: str, remote: str) -> None:
               file=sys.stderr)
 
 
+MIRROR, MIRROR_ENV, MIRROR_TIMEOUT_S = "vy-nebius-1", "RESEARCH_MERGE_MIRROR", 120
+
+
+def mirror_name() -> str | None:
+    name = os.environ.get(MIRROR_ENV, MIRROR).strip()
+    return None if name.lower() in ("", "none", "off") else name
+
+
+def _mirror_target(name: str) -> tuple[list[str], str]:
+    """``name``'s ssh argv, as `research deploy` and `research run --on` reach it, and its bare repository."""
+    from . import remote
+
+    m = remote.resolve_machine(name, "verity")
+    t = remote.ssh_host_target(m)
+    return remote.ssh_argv(t["host"], t["port"], user=t["user"]), f"{m['root']}/{remote.POD_GIT_REPO}"
+
+
+def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run) -> bool:
+    """``sha`` to the main of ``name``'s bare repository: a plain push, so only a fast-forward. False, after one line naming the
+    failure and the command that reruns it, when it doesn't land."""
+    from .remote import git_push_url
+
+    rerun = f"cd {shlex.quote(str(repo))} && research merge --mirror {sha}"
+    try:
+        ssh, bare = (target or _mirror_target)(name)
+        r = run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, bare), f"{sha}:refs/heads/main"],
+                cwd=repo, capture_output=True, text=True, timeout=MIRROR_TIMEOUT_S)
+        why = None if r.returncode == 0 else f"git push exited {r.returncode}: {' '.join((r.stderr or r.stdout).split())[-300:]}"
+    except subprocess.TimeoutExpired:
+        why = f"no answer within {MIRROR_TIMEOUT_S} s"
+    except Exception as e:                                      # noqa: BLE001: a machine that can't be reached fails only this push
+        why = f"{type(e).__name__}: {e}"
+    if why:
+        print(f"research merge: main ({sha[:12]}) not pushed to {name} ({why}); rerun: {rerun}", file=sys.stderr)
+        return False
+    print(f"research merge: pushed main ({sha[:12]}) to {name}:{bare}")
+    return True
+
+
 def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen) -> list[str] | None:
     """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
@@ -849,7 +957,8 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = 
     """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), DM Daniel the spec change it
     landed on main (`spec_alert`), start what ``tool`` runs after a landing (`after_land`) and sweep, since the sweep closes only
     what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
-    says so, and `research merge --sweep` after the push does it."""
+    says so, and `research merge --sweep` after the push does it. Main on origin goes to the mirror too, before `after_land`
+    starts, and the mirror can fail without failing the merge."""
     if push:
         from .spec_alert import alert, remote_head
 
@@ -866,6 +975,8 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = 
             else:
                 print(f"research merge: no {remote}/{into} before the push to compare with; no spec change was looked for, "
                       f"so read this push's lean-audit.json changes yourself", file=sys.stderr)
+        if into == "main" and remote == "origin" and (name := mirror_name()):
+            push_mirror(repo, _git(repo, "rev-parse", f"refs/heads/{into}").stdout.strip(), name)
         after_land(repo, tool, _git(repo, "rev-parse", "HEAD").stdout.strip())
     _sweep_after(repo, into, remote)
     return 0
@@ -896,6 +1007,8 @@ def main(argv: list[str]) -> int:
                     "without it the sweep runs before the push and can close nothing the merge landed")
     ap.add_argument("--tool", default="check", help="the tool whose passing attempt the merge requires (default check)")
     ap.add_argument("-m", "--message", default=None, help="the merge commit's message (default `Merge REF (sha)`)")
+    ap.add_argument("--mirror", action="store_true", help=f"merge nothing: push REF (default --into's tip) to the main of "
+                    f"${MIRROR_ENV}'s bare repository (default {MIRROR}'s), as --push does after the remote")
     ap.add_argument("--dry-run", action="store_true", help="check the gate, merge nothing")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--guard-push", action="store_true", help="the pre-push hook `research merge` installs: read git's pre-push "
@@ -913,7 +1026,7 @@ def main(argv: list[str]) -> int:
     if a.json and not a.canary:
         ap.error("--json goes with --canary")
     if a.canary:
-        if a.ref or a.train or a.sweep or a.guard_push:
+        if a.ref or a.train or a.sweep or a.guard_push or a.mirror:
             ap.error("--canary takes no refs and no other mode")
         try:
             report = canary(repo, a.tool)
@@ -939,6 +1052,17 @@ def main(argv: list[str]) -> int:
         return REFUSED if bad else OK
     if not a.sweep and not a.dry_run and (hook := install_push_guard(repo, a.into, a.tool)):
         print(f"research merge: installed the push guard {hook}", file=sys.stderr)
+    if a.mirror:
+        if len(a.ref) > 1 or a.train or a.sweep:
+            ap.error("--mirror takes at most one ref")
+        if not (name := mirror_name()):
+            print(f"research merge: ${MIRROR_ENV} turns the mirror off", file=sys.stderr)
+            return 1
+        r = _git(repo, "rev-parse", "--verify", f"{a.ref[0] if a.ref else 'refs/heads/' + a.into}^{{commit}}", check=False)
+        if r.returncode:
+            print(f"research merge: no commit {a.ref[0] if a.ref else a.into}", file=sys.stderr)
+            return 1
+        return 0 if push_mirror(repo, r.stdout.strip(), name) else 1
     if a.sweep:
         if a.ref or a.train:
             ap.error("--sweep takes no refs")
@@ -982,7 +1106,7 @@ def main(argv: list[str]) -> int:
         ap.error("several refs need --train")
     a.ref = a.ref[0]
     try:
-        commit, attempt = gate(repo, a.ref, a.into, LocalStore(a.store), a.tool)
+        commit, attempt = gate(repo, a.ref, a.into, LocalStore(a.store), a.tool, remote=a.remote)
     except Refused as e:
         return refuse(PROG, str(e))
     if a.dry_run:
