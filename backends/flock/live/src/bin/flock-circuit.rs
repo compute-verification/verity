@@ -2925,6 +2925,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_verifier_coin_off_its_commitment", false, false),
     ("zk_verifier_commits_beta_zero", false, false),
     ("zk_verifier_commits_outer_coin_one", false, false),
+    ("zk_failing_witness_stops_before_tau", false, false),
     ("zk_session_relations_vary_with_the_seed", true, false),
     ("zk_audit_attributes_the_inner_proof", true, false),
     ("zk_dummy_witness_passes_the_region_claims", false, true),
@@ -3244,6 +3245,27 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let inner_only = reps.len() == 2 && reps.iter().all(|r| r["ok"] == false && r["why"].as_str().is_some_and(|w| w.starts_with("zk inner")));
         return json!({"case": name, "gpu": gpu, "expect": "rejected by the inner proof alone (the region claims pass)", "accepted": v["accepted"],
                       "pass": v["accepted"] != true && inner_only, "reps_ok": reps.iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect::<Vec<_>>()});
+    }
+    #[cfg(feature = "seed-injection")]
+    if name == "zk_failing_witness_stops_before_tau" {
+        // the prover checks before it speaks: an honest plan's prover on a witness with a flipped unit bit fails its batched
+        // constraint and stops after the batching coins, so rep 0's stream ends with the round that opens them (its message
+        // `[ρ, σ]`, after the inner proof's label) and no τ commitment, β or proof goes out
+        let v = VStar::new(st, inst, Strategy::Honest, [7; 32]);
+        let view = v.view.clone();
+        let (r, _) = session(st, inst, shared(v), &Plan { gpu, unit_flip: true, ..Plan::default() }, ProverSeed::from_os());
+        let (view, rep0) = (view.lock().unwrap_or_else(PoisonError::into_inner), rep_stream(TABLE, 0));
+        let rounds: Vec<&Vec<u8>> = view.iter()
+            .filter_map(|(q, _)| match q { Req::Round { stream, content, .. } if *stream == rep0 => Some(content), _ => None }).collect();
+        let gamma_last = rounds.last().and_then(|c| parse_items(c).ok())
+            .is_some_and(|it| matches!(it.as_slice(), [Item::Obs(v), Item::Framing(16), Item::Framing(16)] if v.len() == 2));
+        let after_label = rounds.len() >= 2 && rounds[rounds.len() - 2].windows(zkv::LABEL_INNER.len()).any(|w| w == zkv::LABEL_INNER);
+        let stopped = r["prover_stopped"].as_str().is_some_and(|x| x.contains("PROVER-STOPPED: the batched constraint fails"));
+        let (no_tau, no_proof) = (beta_round(&view, &rep0).is_none(), !complete(&view));
+        return json!({"case": name, "gpu": gpu, "expect": "the prover stops after the batching coins", "accepted": r["accepted"],
+                      "pass": stopped && r["accepted"] != true && gamma_last && after_label && no_tau && no_proof,
+                      "prover_stopped": r["prover_stopped"], "rep0_rounds": rounds.len(), "last_round_opens_the_batching_coins": gamma_last && after_label,
+                      "no_tau_commitment": no_tau, "no_proof": no_proof});
     }
     #[cfg(feature = "seed-injection")]
     if name == "zk_session_relations_vary_with_the_seed" {
