@@ -1736,6 +1736,7 @@ dependencies = [
     { name = "verity" },
     { name = "verity-catalog" },
     { name = "verity-experimental" },
+    { name = "verity-vllm" },
 ]
 
 [package.metadata]
@@ -1743,6 +1744,7 @@ requires-dist = [
     { name = "verity", editable = "." },
     { name = "verity-catalog", editable = "catalog" },
     { name = "verity-experimental", editable = "experimental" },
+    { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
 [[package]]
