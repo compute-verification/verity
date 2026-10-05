@@ -10,6 +10,8 @@ A package's verdict is reused while everything its audit reads is unchanged, whe
 each file under its path relative to its package (a module's is its name), never the package's own path:
 - the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them), its
   `lean-toolchain`, `lake-manifest.json` and `lean-audit.json` among them;
+- each package its `proved_in` names (`provers`), whose build the audit reads its guarantees from, by its content (which
+  names the packages it requires by theirs), under its path;
 - the same for each package it requires by path (`audit.path_deps`), under the name its manifest gives it. Where the
   lakefile's `require ... path = "P"` and the manifest's `"dir": "P"` name such a package, the key reads P as that
   package's own content key (`content_key`), so moving it and rewriting the paths to it keeps every key. A path spelled
@@ -28,7 +30,8 @@ When one package misses, the audit runs on a scratch tree holding only the misse
 (the counterpart of `suites.py`'s read guard). Only the missed packages are audited. A package one of them requires by path is
 in the tree and built as far as it imports it, but not audited again: what vouches for its modules is its own pass, under its
 own key, and the run passes only when every package has one. The dependent's axiom walk follows its declarations into those
-modules, but its replay and its record's `dependencies` (fetched packages and the toolchain) don't cover them. The controls
+modules, but its replay and its record's `dependencies` (fetched packages and the toolchain) don't cover them. A spec and a
+package its `proved_in` names, which requires it, read the same files, so they miss together and are audited together. The controls
 don't run here: they test
 the auditor, so the `tools/lean` suite runs them, cached on `tools/lean/`, not again on every package's miss. Each pass is
 stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
@@ -118,6 +121,16 @@ def path_deps(pkg: str) -> list[str]:
     return sorted(set(out))
 
 
+def provers(pkg: str) -> list[str]:
+    """The packages ``pkg``'s `lean-audit.json` names under `proved_in` (`audit.provers`): the audit reads their builds."""
+    p = ROOT / pkg / "lean-audit.json"
+    try:
+        named = json.loads(p.read_text()).get("proved_in", []) if p.is_file() else []
+    except (OSError, ValueError, AttributeError):
+        return []                                       # the audit fails the policy
+    return sorted({os.path.relpath(os.path.normpath(ROOT / pkg / d), ROOT) for d in named if isinstance(d, str)})
+
+
 #: How the audit runs, and so part of every key
 FLAGS = ["--build"]
 
@@ -130,7 +143,8 @@ def tool_files(files: list[str]) -> list[str]:
 
 def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read."""
-    own = [f for p in (pkg, *path_deps(pkg)) for f in own_files(p, files)]
+    pkgs = [pkg, *path_deps(pkg), *(d for q in provers(pkg) for d in (q, *path_deps(q)))]
+    own = [f for p in dict.fromkeys(pkgs) for f in own_files(p, files)]
     return sorted({*own, *tool_files(files)})
 
 
@@ -222,18 +236,21 @@ def _lake_name(pkg: str, dep: str) -> str:
 
 def components(pkg: str, files: list[str], flags: list[str]) -> dict:
     """What a package's key hashes, none of it a path of the package: the schema, the audit's flags, the package's `content`,
-    that of each package it requires by path (under the name its manifest gives it), and each of the auditor's files at its
+    that of each package it requires by path (under the name its manifest gives it), that of each package its `proved_in`
+    names (under its path, which the policy already holds), and each of the auditor's files at its
     path in the repository. A pass keeps them beside it, so `--explain` can say what a miss changed."""
     memo: dict = {}
     return {"schema": SCHEMA, "flags": flags, "files": content(pkg, files, memo),
             "requires": {_lake_name(pkg, d): content(d, files, memo) for d in path_deps(pkg)},
+            "proved_in": {q: content(q, files, memo) for q in provers(pkg)},
             "tool": {f: (_sha(ROOT / f) if (ROOT / f).is_file() else "-") for f in tool_files(files)}}
 
 
 def key_of(c: dict) -> str:
     return hashlib.sha256(json.dumps([c["schema"], c["flags"], sorted(c["files"].items()),
                                       sorted((n, sorted(m.items())) for n, m in c["requires"].items()),
-                                      sorted(c["tool"].items())]).encode()).hexdigest()
+                                      sorted(c["tool"].items()),
+                                      sorted((q, sorted(m.items())) for q, m in c.get("proved_in", {}).items())]).encode()).hexdigest()
 
 
 def key(pkg: str, files: list[str], flags: list[str]) -> str:
@@ -269,7 +286,8 @@ def explain(name: str, cache: Path) -> tuple[int, list[str]]:
     def flat(c: dict) -> dict[str, str]:
         """Each input under its path now: the package's files under ``pkg``, a required package's under where it is now."""
         return {**{f"{pkg}/{r}": d for r, d in c["files"].items()}, **c["tool"],
-                **{f"{where.get(n, n + ' (required by path)')}/{r}": d for n, m in c["requires"].items() for r, d in m.items()}}
+                **{f"{where.get(n, n + ' (required by path)')}/{r}": d for n, m in c["requires"].items() for r, d in m.items()},
+                **{f"{q}/{r}": d for q, m in c.get("proved_in", {}).items() for r, d in m.items()}}
 
     def diff(was: dict) -> list[str]:
         a, b = flat(was), flat(now)
