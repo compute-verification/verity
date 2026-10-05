@@ -30,11 +30,13 @@ def test_registered_is_what_the_import_name_rule_gave():
     from verity.ir.defs import REGISTRY
 
     TG.load_registries()
-    old = sorted(i for i, d in REGISTRY.defs.items()
+    defs = dict(REGISTRY.defs)          # by now the session's other tests may have made lazy family members and registered their own
+    old = sorted(i for i, d in defs.items()
                  if getattr(getattr(d, "evaluate", None) or getattr(d, "body", None), "__module__", "").partition(".")[0]
                  in ("verity", "verity_vllm", "verity_pouw"))
     assert len(TG.REGISTERED) > 200
-    assert TG.REGISTERED == old
+    assert sorted(i for i, d in defs.items() if TG._authored(d)) == old
+    assert set(TG.REGISTERED) <= set(old)
 
 
 def test_a_definition_is_the_trees_by_its_modules_file(monkeypatch):
