@@ -11,7 +11,7 @@ each is timed from the challenge's send to its answer's last byte, correct when 
 within the limit, and the audit stops at the first failure. `k` is 105, the deployment's.
 
 The limit, the calibration, the clocks and the record are the band verifier's (`band_gpu/live.py`): `--calibrate-only` fixes
-`Δ + allowance` before any load, `--limit-ns` judges every audit against it, the allowance is a loopback one (option A caps it
+`Δ + allowance` before any load, `--limit-ns` judges every audit against it, the allowance is a loopback one (spec v1.1 caps it
 at 0.35 ms), and every audit's secret source and every answer's time are kept.
 
 The transport is the harness's responder wire, not `p2-audit-wire/v1`'s frames: a v1 RESPONSE also carries the block's

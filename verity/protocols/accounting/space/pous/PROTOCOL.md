@@ -262,28 +262,20 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     the SMS-to-M1 instantiation assumption is not accepted (the spec's decision 8).
   - SeqRoot sets `call_ns` (`ROOT_CALL_NS` = 854 µs), half the fastest 16,448-bit root with 8 cores of one chiplet
     cooperating, which the spec allows. No root may fit within twice `Δ + RTT`. v1's 1 ms RTT allowance
-    (`Δ + RTT = 1.5 ms`) does not keep that margin: it keeps 1.14×. The window and w are **pending Daniel's ruling**.
-    The proposed spec v1.1 (`p2/PROTOCOL.md` §12,
-    art:a85d1672cf9d06014223c3bdf55f02e17f6d43d7150a7f2d01a550d100b9c8b5) states the options, and this code
-    implements option A:
-    - **Option A** (implemented): keep w = 16,448 and cap the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 350 µs, so
-      `Δ + RTT ≤ 850 µs`.
-      - The single-core floor is the timing red team's Zen 5 core at 5.7 GHz with full-rate IFMA and its best
-        Toom-4/Karatsuba plan: τ_F = 361.55 ns per squaring (`regate.py` at w = 16,448).
-      - A root is 16,446 squarings plus about 20 multiplications (40 squaring-equivalents), so
-        16,486 × 361.55 ns = 5,960.5 µs. The note's 5.97 ms rounds τ_F to 362 ns first.
-      - The cooperation speedup is the measured 8-core one, 2,716.7 / 778.5 = 3.490× per squaring on one Zen 4 chiplet
-        (run `r20260929-060834-0ec4`, art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).
-      - The cooperating root is 5,960.5 / 3.490 = 1,708.1 µs, and half of it is 854.0 µs. 854.0 − 500 = 354.0 µs,
-        rounded down to the 350 µs cap.
-      - The certificate admits `Δ + RTT` up to 853,999 ns, 4 µs past the cap. §12 leaves that as an open choice.
-    - **Option A′**: cap the RTT allowance at 0.1 ms instead (the review's suggestion), which gives 2.85×.
-    - **Option B**: keep v1's 1 ms and widen w to 20,992, the smallest multiple of 64 that keeps 2×, at 2.001×.
-      - It costs about 1.38× in encode and 1.08–1.27× in decode per payload byte.
-      - It needs a new prime, ECPP, a revised wire format and new Lean pins: every `P2*Uncond` pin and its row lemmas
-        are stated at w = 16,448.
-    - **The modelled speedup:** the red team's sync model (t_sync = 20–40 ns per squaring, `coop.log`) gives 4.24–5.55×
-      at 8 cores. Under it, A and B both fall to 1.26–1.65×. The options rest on the measured speedup.
+    (`Δ + RTT = 1.5 ms`) kept only 1.14× of that margin, so spec v1.1 (`p2/PROTOCOL.md` §12), Daniel's ruling of
+    2026-10-04, keeps w = 16,448 and caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 350 µs, so
+    `Δ + RTT ≤ 850 µs`.
+    - The single-core floor is the timing red team's Zen 5 core at 5.7 GHz with full-rate IFMA and its best
+      Toom-4/Karatsuba plan: τ_F = 361.55 ns per squaring (`regate.py` at w = 16,448).
+    - A root is 16,446 squarings plus about 20 multiplications (40 squaring-equivalents), so
+      16,486 × 361.55 ns = 5,960.5 µs. The note's 5.97 ms rounds τ_F to 362 ns first.
+    - The cooperation speedup is the measured 8-core one, 2,716.7 / 778.5 = 3.490× per squaring on one Zen 4 chiplet
+      (run `r20260929-060834-0ec4`, art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).
+    - The cooperating root is 5,960.5 / 3.490 = 1,708.1 µs, and half of it is 854.0 µs. 854.0 − 500 = 354.0 µs,
+      rounded down to the 350 µs cap. The certificate admits `Δ + RTT` up to 853,999 ns, 4 µs past the cap.
+    - **Caveats** (§12): the 3.490× was measured on an untuned Zen 4 kernel and is applied to a modelled floor. The red
+      team's sync model (t_sync = 20–40 ns per squaring, `coop.log`) gives 4.24× and 5.55× at 8 cores, and under it
+      the margin at the cap is 1.65× and 1.26×. The cap rests on the measured speedup.
     - **Sources:** `note:20261004T2102Z-report-relay-p2-redteam-timing`, with its scripts and logs in
       art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57. The review that found v1's cap unsafe is
       art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c.

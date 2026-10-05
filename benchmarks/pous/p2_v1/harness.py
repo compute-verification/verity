@@ -15,7 +15,7 @@ the two compare side by side.
 3. **The synthetic loop.** As the band's: a POUS forward expands every block's keys, decodes all of `C`, takes the payload
    bytes as `W` and runs the weight set's GEMMs on them; plain reads `W`. Both are timed from a CUDA graph where the path is
    capturable, every rep kept. Decode overhead is POUS over plain, minus one.
-4. **The limit and the audits.** The limit is fixed before any load (`Δ = 0.5 ms` plus the loopback allowance, which option A
+4. **The limit and the audits.** The limit is fixed before any load (`Δ = 0.5 ms` plus the loopback allowance, which spec v1.1
    caps at 0.35 ms); `p2_v1/live.py` audits at k = 105 against it: the honest audit under POUS forwards, then the value control
    (one block in ten zeroed), the late control (one answer in ten held past the limit; the only answers held) and the
    recompute control (one block in ten of all of `C` dropped, each challenged dropped block re-encoded on the device from its

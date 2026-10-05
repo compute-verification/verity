@@ -1,8 +1,7 @@
 """P2, **experimental**: the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
 `internal/efficient-crypto/p2-verdict.md`; its spec is the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
-v1 of 29 Sep 2026, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, and a proposed v1.1 of 4 Oct
-2026, pending Daniel's ruling, in `../p2/PROTOCOL.md`, whose option A this module implements).  Every block is
-independent, and its decode is two big-integer squarings.  Two codecs differ only in how a block's keys are expanded:
+v1 of 29 Sep 2026, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, amended to v1.1 by Daniel's
+ruling of 4 Oct 2026 in `../p2/PROTOCOL.md`, which this module implements).  Every block is independent, and its decode is two big-integer squarings.  Two codecs differ only in how a block's keys are expanded:
 
 - `p2-16448/v3`: SHAKE256 with the spec's v1 framing, the expander its setup assumption P2-EXP-IO names (decision F4).
 - `p2-16448/v2`: ChaCha8 from a SHAKE256 seed per segment.  It is **nonconforming** to F4, which adds a reduced-round
@@ -108,12 +107,11 @@ timing red team's Zen 5 at 5.7 GHz with full-rate IFMA, 361.55 ns per squaring (
 squaring-equivalents, 5,960.5 µs; the measured 8-core speedup on one Zen 4 chiplet is 2,716.7 / 778.5 = 3.490× per
 squaring (run r20260929-060834-0ec4, art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).  So the
 cooperating root is 1,708.1 µs and half of it 854.0 µs (`note:20261004T2102Z-report-relay-p2-redteam-timing`,
-art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57; proposed spec v1.1, `p2/PROTOCOL.md` §12)."""
+art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57; spec v1.1, `p2/PROTOCOL.md` §12)."""
 
 RTT_ALLOWANCE_CAP_NS = 350_000
-"""The cap on the measured RTT allowance in option A of the proposed spec v1.1, pending Daniel's ruling
-(`p2/PROTOCOL.md` §12): 854.0 µs − Δ = 354.0 µs, rounded down, so `Δ + RTT ≤ 850 µs`, inside `ROOT_CALL_NS`.
-Option B would keep v1's 1 ms and widen w to 20,992 instead."""
+"""The cap on the measured RTT allowance in spec v1.1, Daniel's ruling of 4 Oct 2026 (`p2/PROTOCOL.md` §12):
+854.0 µs − Δ = 354.0 µs, rounded down, so `Δ + RTT ≤ 850 µs`, inside `ROOT_CALL_NS`."""
 
 
 @dataclass(frozen=True, slots=True)
