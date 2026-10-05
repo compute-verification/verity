@@ -125,7 +125,7 @@ coins.
 - **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
   coins from `/dev/urandom` when it has no seed. A3 is about Lean's `IO.getRandomBytes`, so it doesn't cover these bytes.
 - **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
-  `live/src/coin_seed.rs`, through `verity.randomness.derive`). Those sessions also rest on `prf/sha-256` (A4's claim)
+  `live/src/coin_seed.rs`, through `verity.primitives.randomness.derive`). Those sessions also rest on `prf/sha-256` (A4's claim)
   and on the seed commitment's hiding, and no headline covers them. Under `FC_COINS=os` the server draws every round's
   coins as above (The headline, its coins).
 - **Tree coins (`--zk`).** Under `--zk` the coins are committed, not drawn round by round (`coin-tree/hm96-sha512/v2`,
@@ -285,15 +285,15 @@ malicious-verifier claim rests on beyond the theorems.
 - `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding
   (`Binding.HmRows.binding`) and `flock_e2e_*_hm96` take as `hHm`.
 
-**A4. `verity.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
+**A4. `verity.primitives.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
 (`prf/sha-256`), for the PoUW window's keyed draw. The red team would grant it as a named hypothesis
 (`lanes/pous/20260929T1724Z-redteam-a4-keyed-streams.md`).
 
 - **Statement.** A secret of `S` uniform bytes (A5) gives the key `Randomness.derive`. For a test `E` of the key's
   streams at indices whose framings (`Randomness.frames`) are pairwise distinct, each read to `L i` bytes
   (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
-  `η`. `Randomness.lean` is the Lean spec of `verity.randomness` v1: it reproduces
-  `packages/verity/tests/randomness/vectors.json`, and Python matches its vectors
+  `η`. `Randomness.lean` is the Lean spec of `verity.primitives.randomness` v1: it reproduces
+  `verity/primitives/randomness/tests/vectors.json`, and Python matches its vectors
   (`backends/flock/tests/test_randomness_spec.py`).
 - **Per test, as `SHA512CRExpected` is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
   most that many stream tuples. `keyedWindow_escape_le` takes A4 for one test per set `B` (`windowTest`: the window draw
@@ -460,9 +460,9 @@ docs site, a `verity.claims` id or code reading its result relies on it as prove
 - The table theorems Table 1 cites: `table_sound`, the proximity cell it counts as machine-checked, and
   `table_sound_fast100` and `table_sound_fast100_34_35`, 2^-205 per table at `η = 1/200`.
 - The audit bounds the code reads. `Audit.audit_profile` is the profile core's `Stratified` law states
-  (`verity.proofs.profile`), and `Law.stratified_miss_eq_greedy` is its `miss`. `Partition.audit_exfiltration` and
+  (`verity.protocols.profile`), and `Law.stratified_miss_eq_greedy` is its `miss`. `Partition.audit_exfiltration` and
   `Partition.card_admissible_le` are sampled proofs' `exfiltration_bound` and `location_bits`. `Law.work_escape_le` is the
-  work law's bound (`one_stage.draw`, `record_k`). The PoUW plan (`verity_pouw.circuit.plan`) relies on
+  work law's bound (`one_stage.draw`, `record_k`). The PoUW plan (`verity.protocols.accounting.work.pouw.circuit.plan`) relies on
   `Law.record_sizing`, `Law.record_sizing_one_fewer`, `Law.covers_window`, `Law.harm_le_unsoundWork`,
   `Law.closure_escape`, `audit_work_whole_stratum`, `audit_work_floor` and `audit_window_split_of_record`.
 - Compute accounting's `Audit.Partitioning` theorems (`SecurityProofs`, `Witness`).
