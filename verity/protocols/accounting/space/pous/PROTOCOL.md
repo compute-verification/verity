@@ -260,22 +260,23 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     its `λ = 128` row, for every block count from 2^8 to 2^23 and every payload width in range, `p2-2054B`'s among
     them, with no hypothesis; the certified store is 2^19 blocks (8 segments of 2^16). It is an abstract-M1 result, and
     the SMS-to-M1 instantiation assumption is not accepted (the spec's decision 8).
-  - SeqRoot sets `call_ns` (`ROOT_CALL_NS` = 854 µs), half the fastest 16,448-bit root with 8 cores of one chiplet
+  - SeqRoot sets `call_ns` (`ROOT_CALL_NS` = 854,029 ns), half the fastest 16,448-bit root with 8 cores of one chiplet
     cooperating, which the spec allows. No root may fit within twice `Δ + RTT`. v1's 1 ms RTT allowance
     (`Δ + RTT = 1.5 ms`) kept only 1.14× of that margin, so spec v1.1 (`p2/PROTOCOL.md` §12), Daniel's ruling of
-    2026-10-04, keeps w = 16,448 and caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 350 µs, so
-    `Δ + RTT ≤ 850 µs`.
+    2026-10-04, keeps w = 16,448 and caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 354 µs, so
+    `Δ + RTT ≤ 854 µs`.
     - The single-core floor is the timing red team's Zen 5 core at 5.7 GHz with full-rate IFMA and its best
       Toom-4/Karatsuba plan: τ_F = 361.55 ns per squaring (`regate.py` at w = 16,448).
     - A root is 16,446 squarings plus about 20 multiplications (40 squaring-equivalents), so
       16,486 × 361.55 ns = 5,960.5 µs. The note's 5.97 ms rounds τ_F to 362 ns first.
     - The cooperation speedup is the measured 8-core one, 2,716.7 / 778.5 = 3.490× per squaring on one Zen 4 chiplet
       (run `r20260929-060834-0ec4`, art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).
-    - The cooperating root is 5,960.5 / 3.490 = 1,708.1 µs, and half of it is 854.0 µs. 854.0 − 500 = 354.0 µs,
-      rounded down to the 350 µs cap. The certificate admits `Δ + RTT` up to 853,999 ns, 4 µs past the cap.
+    - The cooperating root is 5,960.5 / 3.490 = 1,708.1 µs, and half of it is 854,029.18 ns, rounded down to
+      `ROOT_CALL_NS`. The cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`: 500 + 354 = 854 µs. The
+      verifier accepts it and refuses 355 µs and v1's 1 ms, and the margin at the cap is 2.0001×.
     - **Caveats** (§12): the 3.490× was measured on an untuned Zen 4 kernel and is applied to a modelled floor. The red
       team's sync model (t_sync = 20–40 ns per squaring, `coop.log`) gives 4.24× and 5.55× at 8 cores, and under it
-      the margin at the cap is 1.65× and 1.26×. The cap rests on the measured speedup.
+      the margin at the cap is 1.64× and 1.26×. The cap rests on the measured speedup.
     - **Sources:** `note:20261004T2102Z-report-relay-p2-redteam-timing`, with its scripts and logs in
       art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57. The review that found v1's cap unsafe is
       art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c.

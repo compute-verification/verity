@@ -18,7 +18,8 @@ from verity.protocols.accounting.space.pous import band, dense, primitives, prot
 from verity.protocols.accounting.space.pous.codec import Geometry
 from verity.protocols.accounting.space.pous.layout import Layout
 from verity.protocols.accounting.space.pous.params import Params
-from verity.protocols.accounting.space.pous.schemes.p2 import CHACHA8, CHACHA8_NONCONFORMING, EXPERIMENTAL, RTT_ALLOWANCE_CAP_NS, P2Params
+from verity.protocols.accounting.space.pous.schemes.p2 import CHACHA8, CHACHA8_NONCONFORMING, EXPERIMENTAL, P2Params
+from verity.protocols.accounting.space.pous.schemes.p2 import ROOT_CALL_NS, RTT_ALLOWANCE_CAP_NS
 from verity.protocols.accounting.space.pous.verifier import VerifierKey
 
 SALT = bytes(range(24))
@@ -508,8 +509,9 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
 def test_p2_is_experimental_and_says_so():
     """P2 (`p2-16448/v3`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the verifier refuses it
     unless asked, never makes it the default, and its profile states why.  The certificate is the pinned
-    `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile.  Its call is half the
-    fastest cooperating root, 854 µs: spec v1.1's cap, `Δ + RTT ≤ 850 µs`, is inside it, and v1's 1 ms is not."""
+    `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile.  Its call is
+    `ROOT_CALL_NS`, half the fastest cooperating root: the verifier accepts spec v1.1's cap, `Δ + RTT = 854 µs`, and
+    refuses a µs more, and v1's 1 ms."""
     for name in ("p2-16448/v3", "p2-16448/v2"):
         sch = schemes.get(name, segments=8)
         v2 = name.endswith("v2")
@@ -518,7 +520,7 @@ def test_p2_is_experimental_and_says_so():
         assert ("expander" in sch.params.manifest()) is not v2
         cert = sch.certificate
         assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.call_ns, cert.segments, cert.hypotheses) == (
-            "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, 854_000, 8, ())
+            "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, ROOT_CALL_NS, 8, ())
         assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root"} <= set(cert.claims)
         one = schemes.get(name)
         vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
@@ -528,10 +530,9 @@ def test_p2_is_experimental_and_says_so():
         v = protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
         assert v.k == 105 and v.gaps == ("W has 1 segments; Pous.SecurityProofs.P2SlackFamilyUncond is about 8",)
         capped = protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
-        assert capped.limit_ns == 850_000
-        assert protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=353_999).k == 105
-        for rtt in (354_000, 1_000_000):
-            with pytest.raises(ValueError, match="covers 0, so Δ \\+ RTT must stay under 854000 ns"):
+        assert capped.limit_ns == 854_000 and capped.k == 105 and capped.certificate == cert
+        for rtt in (RTT_ALLOWANCE_CAP_NS + 1_000, 1_000_000):
+            with pytest.raises(ValueError, match="covers 0, so Δ \\+ RTT must stay under 854029 ns"):
                 protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=rtt)
         p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 105, 536_800, cert,
                                     experimental=sch.experimental)
@@ -568,6 +569,30 @@ def test_p2_arithmetic(expander):
     with pytest.raises(ValueError, match="codeword"):
         sch.decode_segment(SALT, 1, [bytes([7]) + bytes(15)] + c[1:])
     assert sch.decode_segment(SALT, 1, c) == w_seg
+
+
+def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_under_it():
+    """Spec v1.1 (§12, Daniel's ruling of 4 Oct 2026): `ROOT_CALL_NS` is half the cooperating root in ns, rounded down,
+    from the sources' own numbers: the red team's floor of 2,060.845 cycles at 5.7 GHz per squaring (`regate.py` at
+    w = 16,448), 16,486 squaring-equivalents per root, and the measured 8-core speedup 2,716.7 / 778.5 (run
+    r20260929-060834-0ec4).  The RTT cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`, so the certificate
+    admits the cap and refuses every whole µs past it; what it admits past the cap is under 1 µs."""
+    from fractions import Fraction
+
+    half = Fraction(16_486) * Fraction("2060.845") / Fraction("5.7") * Fraction("778.5") / Fraction("2716.7") / 2
+    assert ROOT_CALL_NS == int(half) == 854_029
+    delta = 500_000
+    assert RTT_ALLOWANCE_CAP_NS == max(us * 1_000 for us in range(1_000) if delta + us * 1_000 < ROOT_CALL_NS) == 354_000
+    one = schemes.get("p2-16448/v3")
+    vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
+    key = protocol.challenge_key(b"\x00" * 32, vk)
+    edge = ROOT_CALL_NS - 1 - delta
+    assert edge - RTT_ALLOWANCE_CAP_NS == 28
+    assert protocol.Verifier(one, vk, key, deadline_ns=delta, experimental=True, rtt_allowance_ns=edge).k == 105
+    with pytest.raises(ValueError, match="must stay under 854029 ns"):
+        protocol.Verifier(one, vk, key, deadline_ns=delta, experimental=True, rtt_allowance_ns=edge + 1)
+    cooperating_root = 2 * half
+    assert cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS) >= 2 > cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS + 1_000)
 
 
 def test_p2_v3_keys_are_the_specs():
