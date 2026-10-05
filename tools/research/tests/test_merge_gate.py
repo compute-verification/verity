@@ -364,6 +364,79 @@ def test_a_guarantee_change_goes_into_a_train_only_with_the_statement_reviewer_g
     assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 0, capsys.readouterr().err
 
 
+def _pr_train(tmp_path: Path, monkeypatch, rules: str | None = None) -> tuple[Path, Path, str, str]:
+    """A store remote; main, with ``rules`` as its queue rules; origin, with A as pull request 7's head; and origin's train-prep/t
+    merging #7 at that head, fetched here as a branch, with a passing check of its tip: (main, origin, A, the tip)."""
+    _store_remote(tmp_path, monkeypatch)
+    main, _feat, _tip = _repos(tmp_path)
+    if rules:
+        (main / "tools" / "check" / "queue.toml").write_text(rules)
+        _git(main, "add", "-A")
+        _git(main, "commit", "-q", "-m", "queue rules")
+    origin = _remote(tmp_path, main)
+    a = _git(main, "rev-parse", "A")
+    monkeypatch.chdir(main)
+    assert merge_main(["--train", "--prepare", "train-prep/t", f"7@{a[:9]}", "--lint", "true"]) == 0
+    _git(main, "fetch", "-q", "origin", "train-prep/t:train-prep/t")
+    tip = _git(main, "rev-parse", "train-prep/t")
+    _git(main, "worktree", "add", "-q", str(tmp_path / "tip"), tip)
+    assert _record(tmp_path, tmp_path / "tip", monkeypatch, *CHECKED) == 0
+    monkeypatch.chdir(main)
+    return main, origin, a, tip
+
+
+def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head_marked_ready_with_its_grants(tmp_path, monkeypatch, capsys):
+    """A tip merging `Merge #1126 (83c25a27b)` would have landed after #1126 moved to a head that fixed two red-team findings
+    against that one (the lander, 4 Oct): pins and grants were read at `--prepare` only.  The gate reads them again at landing:
+    #7's head on origin must still be the merged one, and `pr:7@{head}` must hold `ready = true` and every grant the queue's
+    rules say its change needs; a check of the tip doesn't stand in for either."""
+    from research.store.local import LocalStore
+
+    main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch, '[[grant]]\nrole = "red-team"\npaths = ["a2.txt"]\n')
+    assert merge_main(["train-prep/t", "--dry-run"]) == 3
+    assert f"#7 is not marked ready at {a[:12]} (`ready = true` on pr:7@{a}: `research queue ready 7`)" in capsys.readouterr().err
+    store = LocalStore()
+    store.add_label(f"pr:7@{a}", "ready", True, "lane-7")
+    assert merge_main(["train-prep/t", "--dry-run"]) == 3
+    err = capsys.readouterr().err
+    assert f"#7 lacks the red-team grant at {a[:12]}" in err and f"research data label pr:7@{a} grant ROLE" in err
+    assert "not marked ready" not in err
+    store.add_label(f"pr:7@{a}", "grant", "red-team", "red-team")
+    assert merge_main(["train-prep/t", "--dry-run"]) == 0, capsys.readouterr().err
+    before = _git(main, "rev-parse", "main")
+    _git(main, "checkout", "-q", "A")
+    (main / "a2.txt").write_text("A, after the review\n")
+    _git(main, "commit", "-q", "-am", "A fixes the findings")
+    moved = _git(main, "rev-parse", "HEAD")
+    _git(main, "push", "-q", "origin", "HEAD:refs/pull/7/head")
+    _git(main, "checkout", "-q", "main")
+    assert merge_main(["train-prep/t", "--dry-run"]) == 3
+    assert f"#7 was merged at {a[:12]}, but its head on origin is now {moved[:12]}: rebuild the train" in capsys.readouterr().err
+    assert merge_main(["train-prep/t"]) == 3 and _git(main, "rev-parse", "HEAD") == before
+
+
+def test_a_tip_whose_pr_heads_or_labels_cant_be_read_is_refused(tmp_path, monkeypatch, capsys):
+    """The gate fails closed: with origin unreadable it can't tell #7's head, and with no store remote its labels may be stale
+    (`StoreGrants` raises STALE), so it refuses either way, saying why.  `--train` refuses before recording anything."""
+    from research.store.local import LocalStore
+
+    main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch)
+    LocalStore().add_label(f"pr:7@{a}", "ready", True, "lane-7")
+    assert merge_main(["train-prep/t", "--dry-run"]) == 0, capsys.readouterr().err
+    url = _git(main, "remote", "get-url", "origin")
+    _git(main, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
+    assert merge_main(["train-prep/t", "--dry-run"]) == 3
+    assert f"#7 was merged at {a[:12]}, but its head on origin can't be read (" in capsys.readouterr().err
+    _git(main, "remote", "set-url", "origin", url)
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
+    assert merge_main(["train-prep/t", "--dry-run"]) == 3
+    assert "the pull requests" in (err := capsys.readouterr().err) and "can't be judged: STALE" in err
+    monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
+    assert merge_main(["--train", f"7@{a[:9]}", "--tool", "mytools.decl_check:T", "--command", shlex.join(CHECKED)]) == 3
+    out, err = capsys.readouterr()
+    assert "can't be judged: STALE" in err and "recorded as" not in out
+
+
 def test_a_move_audit_py_prints_as_the_same_statements_needs_no_grant_and_a_changed_statement_still_does(tmp_path, monkeypatch, capsys):
     """Daniel's ruling (#736, AGENTS.md "Lean"): a guarantee that only moved needs no statement reviewer when `audit.py --update
     --moved` prints it as the same statement under its old names, though the record's hashes change with the names.  The train

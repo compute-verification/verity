@@ -130,7 +130,8 @@ and fast-forwards to the longest prefix that passed.
 worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
 refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the markdown caps
 among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
-`tools/check/train.sh BRANCH MACHINE` checks it, and `research merge BRANCH` lands it.
+`tools/check/train.sh BRANCH MACHINE` checks it, and `research merge BRANCH` lands it, refused while a `Merge #N (SHA)` in it
+names a head PR N has moved from, or one lacking `ready` or a grant the queue's rules need (`unready`).
 
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
 it). From the remote's copy of the target, the truth rather than the checkout, it closes each open pull request whose head is on
