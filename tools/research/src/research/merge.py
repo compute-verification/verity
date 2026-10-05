@@ -1,6 +1,8 @@
 """`research merge REF [--into BRANCH] [--tool check] [-m MESSAGE] [--push] [--dry-run]`: the merge gate.
 `research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]`: several refs as one checked candidate (`train`).
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...`: build a train and push it as BRANCH for its check (`prepare`).
+A train (built either way) is refused when it loses lines from its base that no ref removes in a commit of its own, as a merge
+in a ref's history that dropped them would make it (`reverted`), but for the paths of `--allow-removal PATH`.
 `research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed and delete their branches
 (`sweep`).
 `research merge --mirror [SHA]`: push SHA (default main's tip) to node 1's bare repository's main, as --push does (`push_mirror`).
@@ -66,6 +68,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 from pathlib import Path
 
 from .gates import FINDING, OK, REFUSED, git_env, refuse
@@ -898,10 +901,58 @@ def preflight_argv() -> list[str]:
     return [uv, "run", "--locked", "python", *PREFLIGHT]
 
 
-def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str], store) -> tuple[str, str]:
+def _removals(text: str) -> dict[str, Counter]:
+    """The lines a `git diff -U0 --no-renames` (or `git log -p` of the same form) removes, by the path they're removed from;
+    blank lines left out."""
+    out: dict[str, Counter] = {}
+    path = None
+    for line in text.splitlines():
+        if line.startswith("diff --git "):
+            path = None
+        elif line.startswith("--- "):
+            path = line[6:] if line.startswith("--- a/") else None
+        elif line.startswith("-") and path is not None and line[1:].strip():
+            out.setdefault(path, Counter())[line[1:]] += 1
+    return out
+
+
+def reverted(repo: Path, base: str, tip: str, pins: list[tuple[str, str]], allow: tuple[str, ...] = ()) -> list[str]:
+    """What the train ``tip`` removes from ``base`` that no ref of ``pins`` removes in a commit of its own (a non-merge commit
+    of ``base..SHA``; a layout move's restack commit, trailer `Restack-move`, counts as none): a line a merge in a ref's history
+    dropped, as #1142's merge of main dropped #1012's lines and its train `25157eb17` silently undid #1012. Lines match by
+    content, wherever a ref's commit removed them, so a removal survives a move of its file. One line per path, none for a
+    path in ``allow``."""
+    own: Counter = Counter()
+    for _label, sha in pins:
+        log = _git(repo, "log", "--no-merges", "-p", "-U0", "--no-renames", "--no-color", "--format=%x00%(trailers:key=Restack-move,valueonly)",
+                   f"{base}..{sha}").stdout
+        for commit in log.split("\x00")[1:]:
+            trailer, _, patch = commit.partition("\n")
+            if not trailer.strip():
+                for lines in _removals(patch).values():
+                    own += lines
+    out = []
+    for path, lines in sorted(_removals(_git(repo, "diff", "-U0", "--no-renames", "--no-color", base, tip).stdout).items()):
+        extra = lines - own
+        own -= lines
+        if extra and path not in allow:
+            first = next(iter(extra)).strip()
+            out.append(f"{path} loses {sum(extra.values())} line(s) no train pull request removes in a commit of its own "
+                       f"(e.g. {first[:80]!r})")
+    return out
+
+
+#: how a train that `reverted` refuses goes in
+REVERTED_HINT = (". A merge in a ref's history dropped them: merge the target into it again, keeping both sides, or pass "
+                 "--allow-removal PATH for a removal the train means")
+
+
+def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str], store,
+            allow_removal: tuple[str, ...] = ()) -> tuple[str, str]:
     """Build a train for its check without recording or landing anything: ``refs`` (`pinned`), refused while one lacks a grant
     (`ungranted`), merged in order onto ``onto`` as ``remote`` has it (the target, or the prep branch of a train ahead, to stack
-    on it) in a scratch worktree, refused at the first that doesn't merge; ``lint`` run on the result there; its tip pushed to
+    on it) in a scratch worktree, refused at the first that doesn't merge or when the result loses lines no ref removes itself
+    (`reverted`, but for the paths of ``allow_removal``); ``lint`` run on the result there; its tip pushed to
     ``remote`` as ``branch``, never forced, and read back.  Every step names the scratch worktree or ``repo``'s object store,
     never its checkout.  Returns (the tip, its tree)."""
     r = _git(repo, "fetch", "-q", remote, onto, check=False)
@@ -914,6 +965,8 @@ def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, li
     _git(repo, "worktree", "add", "-q", "--detach", str(tree), base)
     try:
         tip = _chain(tree, pins, stamp)[-1]
+        if lost := reverted(repo, base, tip, pins, allow_removal):
+            raise Refused(f"the train {tip[:12]} would revert what landed: " + "; ".join(lost) + REVERTED_HINT + "; nothing was pushed")
         if subprocess.run(lint, cwd=tree).returncode:
             raise Refused(f"`{shlex.join(lint)}` failed on the train ({tip[:12]}); nothing was pushed")
         _git(repo, "push", "-q", remote, f"{tip}:refs/heads/{branch}")
@@ -927,7 +980,7 @@ def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, li
 
 def train(repo: Path, refs: list[str], into: str, store, tool: str, command: list[str], on: str | None = None,
           project: str | None = None, log=print, spec: str | None = None, sends: list[str] = (),
-          remote: str = "origin") -> tuple[str | None, str | None]:
+          remote: str = "origin", allow_removal: tuple[str, ...] = ()) -> tuple[str | None, str | None]:
     """Merge ``refs`` in order onto ``into``'s tip as one candidate (a chain of `--no-ff` merges in a scratch worktree), record
     `tool` on it once and fast-forward ``into`` to it when it passes: the tree that lands is the one checked.  When it fails,
     bisect the chain's prefixes (each an exact commit, checked the same way) to the first ref whose merge makes it fail, and
@@ -945,6 +998,8 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
     _git(repo, "worktree", "add", "-q", "-b", branch, str(tree), "HEAD")
     try:
         chain = _chain(tree, pins, stamp)
+        if lost := reverted(repo, "HEAD", chain[-1], pins, allow_removal):
+            raise Refused(f"the train {chain[-1][:12]} would revert what landed: " + "; ".join(lost) + REVERTED_HINT + "; nothing was checked")
         if why := unready(repo, chain[-1], store, remote, log):
             raise Refused("; ".join(why) + "; nothing was checked")
         need = required_steps(repo, "HEAD", chain[-1], tool)
@@ -1178,6 +1233,8 @@ def main(argv: list[str]) -> int:
                     "from (default --into; a train ahead's prep branch stacks this one on it)")
     ap.add_argument("--lint", default=None, metavar="CMD", help="--prepare: what must pass on the train before it's pushed "
                     "(default `python tools/check/check.py --preflight`: under this interpreter when it has pytest, else `uv run --locked`)")
+    ap.add_argument("--allow-removal", action="append", default=[], metavar="PATH", help="--train: a path where the train may "
+                    "lose lines none of its refs removes in a commit of its own (`reverted`; by default the train is refused)")
     ap.add_argument("--into", default="main", help="the branch checked out here that receives the merge (default main)")
     ap.add_argument("--push", action="store_true", help="once the merge lands, push --into to --remote (never forced), then sweep; "
                     "without it the sweep runs before the push and can close nothing the merge landed")
@@ -1256,7 +1313,7 @@ def main(argv: list[str]) -> int:
         onto = a.onto or a.into
         lint = shlex.split(a.lint) if a.lint else preflight_argv()
         try:
-            tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint, LocalStore(a.store))
+            tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint, LocalStore(a.store), tuple(a.allow_removal))
         except Refused as e:
             return refuse(PROG, str(e))
         print(f"research merge: train {' '.join(a.ref)} on {onto}: pushed {a.remote}/{a.prepare} = {tip[:12]} (tree {tree[:12]}); "
@@ -1271,7 +1328,7 @@ def main(argv: list[str]) -> int:
             return refuse(PROG, f"the train's check would pass no gate: {why}; nothing was checked")
         try:
             land, bad = train(repo, a.ref, a.into, LocalStore(a.store), decl.name, command, a.on, a.project, spec=a.tool, sends=a.send,
-                              remote=a.remote)
+                              remote=a.remote, allow_removal=tuple(a.allow_removal))
         except Refused as e:
             return refuse(PROG, str(e))
         moved = f"{a.into} fast-forwarded to {land[:12]}" if land else f"{a.into} unchanged"
