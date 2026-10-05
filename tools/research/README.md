@@ -607,15 +607,11 @@ research notes approaches render | check                                        
 
 ## Not yet built, in order
 
-1. `research compare <a> <b>`: descriptive diff of two run records
-   (source, fingerprints expected/observed, environment, measurements with
-   ratios labeled as treatment/baseline, validation, preservation). It shows
-   differences; the workload's contract decides which ones matter.
-2. `research status` reading the project's budget ledger with its
+1. `research status` reading the project's budget ledger with its
    observation time (no second spend counter).
-3. Reconcile the final `lane/r17-mprof` telemetry revision against
+2. Reconcile the final `lane/r17-mprof` telemetry revision against
    `df7fbea3d` once the r17 campaign is frozen; port, do not overwrite.
-4. Milestone: one real SP1 case through `--on`, then the seven-stage
+3. Milestone: one real SP1 case through `--on`, then the seven-stage
    `campaign_h100.sh` replaced end to end: the stage sequence stays a
    benchmark-owned script; `paired_run.py` writes `result.json`; `research`
    supplies targeting, shipping, identity, telemetry, retrieval. No SP1
