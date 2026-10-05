@@ -140,6 +140,53 @@ def import_roots_git(git_dir: Path | str, rev: str) -> dict:
     return import_roots(read, lambda rel: rel in ("", ".") or rel in tree_dirs, lambda: sorted(tree_dirs))
 
 
+def workspace_root(path: Path | str) -> Path:
+    """The tree `path` belongs to: the nearest directory at or above it holding a uv.lock and a pyproject.toml that declares
+    `[tool.uv.workspace]`, found by what the tree declares rather than by `path`'s depth in it.  Raises LookupError when there is
+    none.  Only a directory with a uv.lock has its pyproject.toml opened, so a suite's read guard sees no file outside it."""
+    p = Path(path).resolve()
+    for d in (p, *p.parents):
+        if not (d / "uv.lock").is_file():
+            continue
+        try:
+            doc = tomllib.loads((d / "pyproject.toml").read_text())
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if "workspace" in ((doc.get("tool") or {}).get("uv") or {}):
+            return d
+    raise LookupError(f"no pyproject.toml declaring [tool.uv.workspace] at or above {p}")
+
+
+def package_dirs(tree: Path | str, name: str) -> list[str]:
+    """Where `tree` ships the import package `name`, relative to the tree: the package itself when it sits at the workspace root
+    (a `shim` entry), then `<root>/<name>` for each workspace import root that holds it, in member order.  One directory for a
+    regular package, one per member for a namespace split across members.  A closure, a dirty check or a source identity over a
+    package names these, so a member that moves or splits stays covered.  Raises LookupError when no root holds `name`, so a
+    caller never gets a list over nothing."""
+    t = Path(tree)
+    derived = import_roots_dir(t)
+    dirs = [p for p in derived["shim"] if posixpath.basename(p) == name and (t / p).is_dir()]
+    dirs += [posixpath.join(r, name) for r in derived["roots"] if (t / r / name).is_dir()]
+    if not dirs:
+        raise LookupError(f"no workspace import root of {t} holds a package {name!r}")
+    return dirs
+
+
+def package_paths(tree: Path | str, name: str, *rels: str) -> list[str]:
+    """Paths or globs under the package `name` (``"ml/tc/**"``, ``"errors.py"``, ``"**"``) as tree-relative globs, each in whichever
+    of its `package_dirs` holds it: a Tool's closure over part of a package that a split may move to another member.  Raises
+    LookupError for one that none holds."""
+    t = Path(tree)
+    dirs = package_dirs(t, name)
+    out: list[str] = []
+    for rel in rels:
+        hits = [posixpath.join(d, rel) for d in dirs if (t / d / rel.removesuffix("**")).exists()]
+        if not hits:
+            raise LookupError(f"no directory of {name!r} in {t} ({', '.join(dirs)}) holds {rel!r}")
+        out += hits
+    return out
+
+
 #: where `shim_dir` keeps one shim per tree when the caller names no other place
 SHIM_BASE = Path.home() / ".research" / "cache" / "pyshim"
 
