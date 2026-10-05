@@ -1,17 +1,5 @@
 {
  "deps": {
-  "1317e14549f183f4d23024e6b5b93abca4dfcf061ee355ed7f6127940b31fc02": {
-   "bytes": 701909680,
-   "package": "verity/protocols/accounting/work/pouw/lean",
-   "run": "r20261003-152421-a7fe",
-   "sha256": "78ebf43752e745c04c962d52f132fb063ea3a0ede75eb2973afabdc5ebd57120"
-  },
-  "1a8ace22c6830951c2cce0343b8451ded20d72e6c52e9fe252d27687f63a653b": {
-   "bytes": 701550733,
-   "package": "verity/protocols/compliance/nci/lean",
-   "run": "r20261002-013330-8cff",
-   "sha256": "8a3e532f4f17d138d528e5281bba5a294dd2a66b2692234700073f6ab92ea827"
-  },
   "32c884ee1ea441eab1e6cfd146bc53d281c2e1411f03abd7d55bce6f4d88a985": {
    "bytes": 700275204,
    "package": "backends/flock/verifier/lean/level3",
@@ -41,6 +29,18 @@
    "package": "backends/flock/verifier/lean/soundness",
    "run": "r20260929-032531-8f07",
    "sha256": "ab583debd99442d229191651497f784b71050bb57dd0384fb528bc74e24c75d8"
+  },
+  "861b3533bef1a315145d44dd7dc6df8f3819870c8df838b332a269bcaf44205f": {
+   "bytes": 701550733,
+   "package": "verity/protocols/compliance/nci/lean",
+   "run": "r20261002-013330-8cff",
+   "sha256": "8a3e532f4f17d138d528e5281bba5a294dd2a66b2692234700073f6ab92ea827"
+  },
+  "dff7908e4748db3ca42d183ed1332244a0cd44bb6cbcbfa03d46dafe0a444277": {
+   "bytes": 701909680,
+   "package": "verity/protocols/accounting/work/pouw/lean",
+   "run": "r20261003-152421-a7fe",
+   "sha256": "78ebf43752e745c04c962d52f132fb063ea3a0ede75eb2973afabdc5ebd57120"
   }
  },
  "schema": "lean-deps-pin/v1"
