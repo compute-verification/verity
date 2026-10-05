@@ -17,3 +17,4 @@ path = "../../../packages/verity/lean"
 # core's circuits and declarations under the four names (`Protocol`, `Assumptions`, `Guarantees`, `SecurityProofs`).
 [[lean_lib]]
 name = "Nci"
+roots = ["Nci.Assumptions", "Nci.Guarantees", "Nci.Protocol"]

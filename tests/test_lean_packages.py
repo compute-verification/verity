@@ -86,7 +86,8 @@ def test_core_package_requires_only_mathlib():
 
 def test_protocol_packages_require_core_and_protocols_only():
     """A protocol's Lean package may require core's and other protocols' packages (the ruling of Oct 1 in
-    `.agents/skills/lean-proofs/SKILL.md`), never a backend's: backends instantiate protocols, not the reverse."""
+    `.agents/skills/lean-proofs/SKILL.md`), and the proofs split out of them into `security_proofs/` (`tools/lean/split.py`),
+    never a backend's: backends instantiate protocols, not the reverse."""
     protocols = [pkg for pkg in lake_packages() if pkg.relative_to(ROOT).parts[0] == "protocols"]
     names = {tomllib.loads((pkg / "lakefile.toml").read_text())["name"] for pkg in protocols}
     assert PROTOCOL_PACKAGES <= names, f"the protocols' Lake packages aren't under protocols/: {PROTOCOL_PACKAGES - names}"
@@ -95,6 +96,16 @@ def test_protocol_packages_require_core_and_protocols_only():
         for r in _requires(pkg):
             if "path" in r:
                 target = (pkg / r["path"]).resolve()
-                if target != CORE and target.relative_to(ROOT).parts[0] != "protocols":
+                if target != CORE and target.relative_to(ROOT).parts[0] not in ("protocols", "security_proofs"):
                     bad.append(f"{pkg.relative_to(ROOT)} requires {target.relative_to(ROOT)}")
+    assert not bad, bad
+
+
+def test_a_spec_requires_no_proofs():
+    """A package that a `security_proofs/` package requires is a spec, trusted text, and requires no `security_proofs/`
+    package: untrusted proofs never sit under what the lock trusts."""
+    proofs = [p for p in lake_packages() if p.relative_to(ROOT).parts[0] == "security_proofs"]
+    specs = {(p / r["path"]).resolve() for p in proofs for r in _requires(p) if "path" in r} - {p.resolve() for p in proofs}
+    bad = [f"{s.relative_to(ROOT)} requires {(s / r['path']).resolve().relative_to(ROOT)}" for s in sorted(specs)
+           for r in _requires(s) if "path" in r and (s / r["path"]).resolve().relative_to(ROOT).parts[0] == "security_proofs"]
     assert not bad, bad

@@ -1,0 +1,21 @@
+name = "security_proofs_pous"
+defaultTargets = ["PousProofs"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "5ed2965256430c3649e86755f9576b54eca72435"
+
+[[require]]
+name = "pous"
+path = "../../protocols/pous/lean"
+
+# The proofs of `protocols/pous/lean`'s guarantees and every lemma behind them, untrusted: the spec's lock says
+# what they prove.
+[[lean_lib]]
+name = "PousProofs"
+roots = ["PousProofs"]
