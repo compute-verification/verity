@@ -11,9 +11,10 @@ For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an up
   (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;
 - runs `agree.py` on all of them, with `--lean-refuses` for a set marked `lean_refuses` (D12: a statement form the soundness
-  proof does not cover, which the Lean verifier refuses whatever the session), `--lean-refuses-drawn` for one marked
-  `lean_refuses_drawn` (D12 at its drawn sessions' law, which no soundness claim draws by), and `--lean-refuses-drawless`
-  for one marked `lean_refuses_drawless` (D12 at its sessions without a draw, refused once every check has passed).
+  proof does not cover, which the Lean verifier refuses whatever the session, once every check has passed),
+  `--lean-refuses-drawn` for one marked `lean_refuses_drawn` (D12 at its drawn sessions' law, which no soundness claim draws
+  by, refused at setup), and `--lean-refuses-drawless` for one marked `lean_refuses_drawless` (D12 at its sessions without
+  a draw, refused once every check has passed). A session refused last, and for nothing else, passed every check.
 
 `--live` runs `live.sets` instead: sets with no upstream binary, whose upstream verdicts are the live server's in each
 case's `case.json` (`agree.py --upstream live`).
@@ -200,14 +201,14 @@ def main():
                                      "sets": [r["set"] for r in ran]},
             "validation": {"status": "failed" if bad else "passed", "checker": "backends/flock/verifier/agree.py",
                            "detail": "; ".join(f"set {r['set']} ({r['pr83']}): {r['agree']}/{r['sessions']} agree, "
-                                               f"{r['accepted']} accepted, {r.get('passed_without_draw', 0)} passed without a draw"
+                                               f"{r['accepted']} accepted, {r['passed_every_check']} passed every check"
                                                for r in ran),
                            "evidence": ["ci/sets.json"]},
             "measurements": [{"name": "sessions", "value": sum(r["sessions"] for r in ran), "unit": "count"},
                              {"name": "agree", "value": sum(r["agree"] for r in ran), "unit": "count"},
                              {"name": "disagree", "value": sum(len(r["disagree"]) for r in ran), "unit": "count"},
                              {"name": "accepted", "value": sum(r["accepted"] for r in ran), "unit": "count"},
-                             {"name": "passed_without_draw", "value": sum(r.get("passed_without_draw", 0) for r in ran),
+                             {"name": "passed_every_check", "value": sum(r["passed_every_check"] for r in ran),
                               "unit": "count"}],
             "measurement_files": ["ci/sets.json"],
             "artifacts": ["ci/"],

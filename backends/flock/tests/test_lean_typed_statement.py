@@ -129,7 +129,8 @@ RUST_SESSIONS = "art:48f286b4"
 
 def test_it_refuses_the_rust_provers_sessions(tmp_path):
     """A typed statement is a form the soundness proof does not cover (§16.15): on `flock-circuit`'s own recorded sessions
-    for a flat class, the statement sets up and the verifier refuses every case with that reason, the 3 honest ones too."""
+    for a flat class, the statement sets up and the verifier refuses every case, the 3 honest ones for that reason, once
+    every check has passed, and every other case for the check that catches it."""
     import sys  # noqa: PLC0415
 
     sys.path.insert(0, str(LEAN.parent))
@@ -150,5 +151,6 @@ def test_it_refuses_the_rust_provers_sessions(tmp_path):
     got = {Path(v["session"]).name: v for v in (json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT "))}
     want = {s.name: json.loads((s / "case.json").read_text())["expect"] == "accept" for s in sessions}
     refused = f"refused: {statement}, a typed statement: a statement form the soundness proof does not cover"
-    assert {n: (got[n]["accepted"], got[n]["why"]) for n in want} == {n: (False, refused) for n in want}
+    assert not any(got[n]["accepted"] for n in want)
+    assert {n: got[n]["why"] == refused for n in want} == want, {n: got[n]["why"] for n in want}
     assert sum(want.values()) == 3 and len(want) == 19

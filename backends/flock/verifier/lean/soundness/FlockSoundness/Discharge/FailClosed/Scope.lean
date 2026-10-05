@@ -8,8 +8,9 @@ import Flock.ProvedScope
 # What the verifier accepts: `Accepts` and its statement check
 
 `flock-verify verify` refuses every session of a statement whose form the soundness proof does not cover:
-`Main.verifyCmd` runs `Flock.ProvedScope.check` on the statement and turns every session's verdict into the check's
-refusal when it fails. So what the verifier accepts is `Verifies` (under `--zk`, `VerifiesZK`): the setup and verdict
+`Main.verifyCmd` runs `Flock.ProvedScope.check` on the statement in every session's verdict, after every other check but
+the draw-less session's refusal, and refuses the session when it fails. So what the verifier accepts is `Verifies`
+(under `--zk`, `VerifiesZK`): the setup and verdict
 `Accepts` models, and the check. Every condition on the statement's form that the headlines took as a hypothesis follows
 from the check: an untyped statement (`Checks.typed`), retained rounds and `hm96-sha512/v1` leaves, at most one table
 without `--zk`, the circuit and public file as the headlines read them (`circ`, `pubOf`), no shared-row public file
@@ -24,7 +25,7 @@ bytes `verifyCmd` sets the session up from, and `count` is `--session-tables`. T
 `--public-inputs` the check refuses every session, and without it `buildSession` passes `setupTables` no public input
 words, the setup `Accepts` models. A session's verdict is `verifyCmd`'s `setupOf` at the record's `recordDraw` (the check
 requires `hm96Rows`): `setupTables`, under `--zk` `Zk.shapeOk` on every table, then `ProvedScope.drawLaw` on a drawn
-session's draw, the check, `verify` or `Zk.verify`, and last `ProvedScope.drawLaw` on a session without a draw. So a session
+session's draw, `verify` or `Zk.verify`, the check, and last `ProvedScope.drawLaw` on a session without a draw. So a session
 `verifyCmd` accepts satisfies `Verifies` (under `--zk`, `VerifiesZK`). `verifyCmd` refuses more, which only shrinks the
 event: a draw by a law no soundness claim draws by (`ProvedScope.drawLaw`: a bernoulli or work draw, or a subset draw
 without `--zk`), a session without a draw (every claim's record hypothesis reads the record's draw), registered reads (`checkRegistered`:

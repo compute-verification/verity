@@ -2,7 +2,7 @@
 the verifier's own `--identifier F` in RFC 8785 form, or the Lean verifier refuses the statement; a header with one and no
 `F`, and `F` with a header that names none, refuse too. The public digest binds the header, so Σ binds the identifier, and a
 session's verdict reports it. The fixture's public input ports are a form the soundness proof does not cover (§16.15), so
-`verify` refuses its sessions once they set up.
+`verify` refuses its sessions, for that once every check has passed.
 
 The statement is `test_lean_public_inputs.py`'s fetched fixture (RoPE x4, its recorded CPU selftest sessions), with the
 identifier added to its public file's header. It catches what `test_circuit.py` can't: the executable verifier's own
@@ -84,13 +84,14 @@ def test_the_verifiers_own_identifier_is_accepted_in_any_json_form_and_bound_by_
 
 
 def test_the_verdict_reports_the_identifier(store, tmp_path):
-    """The prover's honest session, over the header without an identifier and with one: both set up, and `verify` refuses
-    both for their form (public input ports, §16.15), the second with the identifier in its verdict. That Σ binds the
-    identifier is the test above's, on the statement."""
+    """The prover's honest session, over the header without an identifier and with one: both set up. Over the header it was
+    proved against, the session passes every check and `verify` refuses it for its form (public input ports, §16.15); over
+    the header with the identifier its Hello's Σ is not the statement's (S2: Σ binds the identifier, as the test above shows
+    on the statement), and the verdict reports the identifier."""
     plain = _verdict(store, store / "stage" / "pub-4.bin", None, tmp_path)
     assert (plain["accepted"], plain["why"]) == (False, FORM_REFUSAL) and "identifier" not in plain, plain["why"]
     v = _verdict(store, _pub(store, tmp_path, IDENTIFIER), _own(tmp_path, json.dumps(IDENTIFIER)), tmp_path)
-    assert (v["accepted"], v["why"]) == (False, FORM_REFUSAL) and v["identifier"] == IDENTIFIER, v["why"]
+    assert not v["accepted"] and v["why"].startswith("S2/R7") and v["identifier"] == IDENTIFIER, v["why"]
 
 
 #: each refusal: the header's identifier (None: no key), F's text (None: no flag), and the setup refusal
