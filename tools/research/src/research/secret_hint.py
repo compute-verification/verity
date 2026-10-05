@@ -7,6 +7,7 @@ import os
 import subprocess
 
 FRESH_SHELL = "rerun from a fresh tmux login shell"
+RECOVERED: list[str] = []          # every name `recover` set in this process (`research doctor` names them)
 
 
 def _injected() -> list[str]:
@@ -29,6 +30,7 @@ def recover() -> list[str]:
         if p.returncode == 0 and p.stdout.startswith(f"{n}=") and (v := p.stdout[len(n) + 1:].removesuffix("\n")):
             os.environ[n] = v
             got.append(n)
+    RECOVERED.extend(got)
     return got
 
 

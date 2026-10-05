@@ -184,6 +184,13 @@ theorem e2m1Word_examples :
     [e2m1Word 0x3F800000, e2m1Word 0xC0C00000, e2m1Word 0x40E00000, e2m1Word 0x80000000] = [2, 15, 7, 8] := by
   decide +kernel
 
+/-- A block of `−0`, `1.0`, thirteen `+0` and `−0` (`test_nvfp4_blocks_keep_the_sign_of_minus_zero`): scale `0x23`, and
+the `−0` words keep their sign (`0x8`) where the `+0` words give `0x0`. -/
+theorem nvf4Block_signedZero :
+    nvf4Block ([0x80000000, 0x3F800000] ++ List.replicate 13 0 ++ [0x80000000]) =
+      ([8, 7] ++ List.replicate 13 0 ++ [8], 0x23) := by
+  decide +kernel
+
 /-- Under an accumulator of `2⁴⁰` the firing's grid is `2⁵`. A block at the scale floor `2⁻⁹` on both operands is then
 sub-grid (its largest dot is `2304·2⁻²⁰`), and a block at scale `1.0` is not (`576 ≥ 2⁵`). -/
 theorem subgridAt_examples :

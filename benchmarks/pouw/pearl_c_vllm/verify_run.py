@@ -1,7 +1,7 @@
 """The reference replay on a vLLM pass's transcript (``pouw_pearl_c_device``'s retained pass): #449's work law
 (`pearl_c_work`), over the pass's whole workload, with the prover's openings read from the pass's files.
 
-  python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json [--draws T] [--jobs J] [--commit SHA]
+  python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json [--draws T] [--jobs J] [--commit SHA] [--fast]
 
 - **The epoch** is re-started from the manifest's beacon and every weight's root, and the salt must be the manifest's.
 - **The records** (each matmul's real rows, width and excluded rows; each weight's excluded rows) are the manifest's.
@@ -11,7 +11,8 @@
   B's rows and tree levels per weight, the tile tree.  Each is checked against the published roots.
 - **The tiles** are `pearl_c_work.audit`'s: its t work-weighted draws (`draw`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
-  processes, since each costs about 11 s of CPU per 1,024 of k.  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s
+  processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
+  forms, with every ``--cross-check``-th tile id replayed on the scalar reference too).  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s
   own verdict.
 
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
@@ -36,6 +37,9 @@ from verity_pouw.audit import Epoch, TileOpening, Transcript, Verifier, Workload
 from verity_pouw.protocol import Context, Matmul, Shape
 from verity_pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fast_tile as FT  # noqa: E402
 
 DRAWS = 3
 
@@ -102,7 +106,22 @@ class Opened:
 _JOB: dict = {}
 
 
-def check(pick: tuple[int, int]) -> tuple[int, bool, str | None]:
+def check(pick: tuple[int, int]) -> tuple[int, bool, str | None, bool | None]:
+    """One tile's verdict and, on `--fast`, for every `--cross-check`-th tile id whether the scalar reference's verdict is the
+    same one (None where it was not replayed twice)."""
+    tid, ok, reason = _check(pick)
+    every, undo = _JOB.get("cross_check", 0), _JOB.get("undo")
+    if undo is None or not every or tid % every:
+        return tid, ok, reason, None
+    undo()
+    try:
+        same = _check(pick) == (tid, ok, reason)
+    finally:
+        _JOB["undo"] = FT.install(_JOB["scheme"])
+    return tid, ok, reason, same
+
+
+def _check(pick: tuple[int, int]) -> tuple[int, bool, str | None]:
     """One tile, as `pearl_c_work.audit` checks it: the openings and digest (`Verifier.check_tile`), then the tile rule."""
     j = _JOB
     scheme, epoch, transcript, prover, records, verifier = (j[x] for x in ("scheme", "epoch", "transcript", "prover", "records",
@@ -120,11 +139,16 @@ def check(pick: tuple[int, int]) -> tuple[int, bool, str | None]:
     return tid, reason is None, reason
 
 
-def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None = None) -> dict:
+def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None = None, fast: bool = False,
+           cross_check: int = 0) -> dict:
+    """The pass's verdict.  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
+    promoted device; otherwise the scalar reference, ``replay``), and every `cross_check`-th tile id on the scalar reference
+    too: any verdict that differs is ``cross_check_failed``, and the pass is not accepted."""
     raw = path.read_bytes()
     man, digest = json.loads(raw), hashlib.sha256(raw).hexdigest()
     named = f"{man.get('run')}:{path} sha256:{digest}"
-    out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": draws}
+    out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": draws,
+           "replay": "batch" if fast else "scalar"}
     try:
         if man.get("schema") != PD.MANIFEST_SCHEMA:
             raise ValueError(f"schema {man.get('schema')!r}, not {PD.MANIFEST_SCHEMA}")
@@ -154,26 +178,41 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         picks = PW.draw(scheme, records, beacon, transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt, draws)
         picks += PW.exclusion_tiles(scheme, records)
         todo = [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in picks]
+        if fast and (scheme.forming != "v1" or scheme.device.g is None):
+            fast, out["replay"] = False, "scalar"
+        _JOB.clear()
         _JOB.update(scheme=scheme, epoch=epoch, transcript=transcript, records=records, verifier=verifier,
-                    prover=Opened(man, Files(path.parent), verifier.refs))
-        if jobs > 1 and len(todo) > 1:
-            # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
-            with multiprocessing.get_context("fork").Pool(min(jobs, len(todo))) as pool:
-                verdicts = pool.map(check, todo, chunksize=1)
-        else:
-            verdicts = [check(p) for p in todo]
-        ok = all(v[1] for v in verdicts)
+                    prover=Opened(man, Files(path.parent), verifier.refs), cross_check=cross_check,
+                    undo=FT.install(scheme) if fast else None)
+        try:
+            if jobs > 1 and len(todo) > 1:
+                # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
+                with multiprocessing.get_context("fork").Pool(min(jobs, len(todo))) as pool:
+                    verdicts = pool.map(check, todo, chunksize=1)
+            else:
+                verdicts = [check(p) for p in todo]
+        finally:
+            if _JOB.get("undo") is not None:
+                _JOB.pop("undo")()
+        differ = [t for t, _, _, same in verdicts if same is False]
+        ok = all(v[1] for v in verdicts) and not differ
         w_ref, credit = PW.work(scheme, records)
-        bad = "; ".join(f"tile {t}: {r}" for t, good, r in verdicts if not good)
+        bad = "; ".join(f"tile {t}: {r}" for t, good, r, _ in verdicts if not good)
+        if differ:
+            bad = "; ".join(filter(None, [bad, f"the batch replay's verdict is not the scalar one's on tiles {differ}"]))
+            out["cross_check_failed"] = differ
+        if fast:
+            out["cross_checked"] = [t for t, _, _, same in verdicts if same is not None]
         at = PW.draw_wref(scheme)
-        out.update(accepted=ok, scheme=scheme.name, source=source.hex(), tiles=[t for t, _, _ in verdicts],
+        out.update(accepted=ok, scheme=scheme.name, source=source.hex(), tiles=[t for t, *_ in verdicts],
                    draw_wref=at.statement if at else "wref",
-                   drawn=draws, exclusion_tiles=len(todo) - draws, verdicts=[{"tile": t, "ok": g, "reason": r} for t, g, r in verdicts],
-                   w_ref=str(w_ref), credit=str(credit))
+                   drawn=draws, exclusion_tiles=len(todo) - draws,
+                   verdicts=[{"tile": t, "ok": g, "reason": r} for t, g, r, _ in verdicts], w_ref=str(w_ref), credit=str(credit))
         out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: pearl_c_work's tiles ({draws} drawn, "
                        f"{len(todo) - draws} for excluded rows) of {c['count']} over {len(matmuls)} matmuls"
                        f"{'' if ok else ' (' + bad + ')'}; transcript root {c['root'][:16]}, records {man['records_root'][:16]}, "
-                       f"source {source.hex()[:16]}; transcript {named}; verifier {commit}")
+                       f"source {source.hex()[:16]}; transcript {named}; verifier {commit}"
+                       f"{'; batch replay, ' + str(len(out['cross_checked'])) + ' tiles cross-checked' if fast else ''}")
     except Exception as ex:  # noqa: BLE001 - a transcript that can't be checked is rejected, with the reason
         out.update(accepted=False, error=f"{type(ex).__name__}: {ex}",
                    line=f"REJECT {man.get('scheme')} {man.get('entry')}: {type(ex).__name__}: {ex}; transcript {named}; verifier {commit}")
@@ -187,10 +226,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
     p.add_argument("--expect-reject", action="store_true", help="the pass is a negative control: exit 0 only if it is rejected")
+    p.add_argument("--fast", action="store_true", help="replay the tiles on fast_tile's batch forms (the scalar reference's verdicts)")
+    p.add_argument("--cross-check", type=int, default=64, metavar="N",
+                   help="with --fast, replay every tile whose id is a multiple of N on the scalar reference too; any verdict "
+                        "that differs rejects the pass and exits 2 (0: none)")
     a = p.parse_args(argv)
-    r = verify(a.manifest, a.draws, a.jobs, a.commit)
+    r = verify(a.manifest, a.draws, a.jobs, a.commit, fast=a.fast, cross_check=a.cross_check)
     print(r["line"], flush=True)
     (a.manifest.parent / "verify.json").write_text(json.dumps(r, indent=1) + "\n")
+    if r.get("cross_check_failed"):
+        return 2
     return 0 if r["accepted"] != a.expect_reject else 1
 
 
