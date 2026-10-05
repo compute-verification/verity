@@ -41,14 +41,16 @@ Each layer may depend on the layers below it:
 ~~~text
 integrations/vllm, benchmarks/
 ---------------------------------------------------------------------------
-protocols/                    backends/
-  sampled_proofs                flock                    C-Flock and its Lean verifier
-  pous                          gkr, direct, sp1, vole   frozen
-  pouw
-  network_warden
+backends/                     archive/                 kernels/, experimental/
+  flock                         gkr, direct, sp1, vole   (untrusted)
+  C-Flock and its Lean verifier frozen
+---------------------------------------------------------------------------
+catalog/: silicon semantics, Definitions, targets, the census
 ---------------------------------------------------------------------------
 verity, the core library:
-  ir, ml, evaluation, commitments, randomness, proofs, claims
+  protocols: profile, sampled_proofs, pous, pouw, warden, nci
+  primitives: circuits (with evaluation), commitments, crypto, randomness
+  claims
 ~~~
 
 `tools/research` sits outside the layers: it runs and records the work, and depends on none of them.
@@ -72,11 +74,11 @@ The commitment establishes the first, and a backend's proof the second. A proof 
 
 ### Proofs
 
-`verity_sp1.proofs` defines backend-independent statements, how a backend's proof of them is judged, and the integrity profile, which records what an accepted audit established. A proof counts only when it verifies against the intended statement and an approved backend identity; a verifier that accepts some self-consistent statement is not enough.
+`verity.protocols.profile` defines the integrity profile, which records what an accepted audit established; the frozen SP1 backend's `verity_sp1.proofs` keeps the backend-independent statements it proved and how a proof of them is judged. A proof counts only when it verifies against the intended statement and an approved backend identity; a verifier that accepts some self-consistent statement is not enough.
 
 ### Protocols
 
-Which parts of a circuit are checked, how they are sampled and what must be committed before a challenge are protocol questions, and none of them changes the circuit. Each protocol under `protocols/` is its own distribution and imports only the standard library, `verity`, itself and the protocols it builds on (PoUW builds on sampled proofs).
+Which parts of a circuit are checked, how they are sampled and what must be committed before a challenge are protocol questions, and none of them changes the circuit. Each protocol is a package under `verity.protocols` and imports only the standard library, the primitives it is allowed, itself and the protocols it builds on (PoUW builds on sampled proofs, and reads the catalog's silicon semantics).
 
 ### Backends
 
@@ -88,9 +90,9 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 
 ## Repository structure
 
-- [`verity/`](verity/README.md): the core library: `verity.primitives.circuits`, the [circuit format](verity/primitives/circuits/PROTOCOL.md), and `verity_catalog.definitions`, exact hardware semantics
-- `verity.primitives.commitments` and `verity_sp1.proofs`, also in [`verity/`](verity/README.md): commitments to the records, the statements a backend proves, and the integrity profile an audit returns
-- [`backends/flock/`](backends/flock/README.md): C-Flock, the proof backend in active development; the frozen backends are listed in [`backends/`](archive/README.md)
+- [`verity/`](verity/README.md): the core library: `verity.primitives.circuits` and the [circuit format](verity/primitives/circuits/PROTOCOL.md), `verity.primitives.commitments` (commitments to the records), and `verity.protocols` (the protocols and the integrity profile an audit returns)
+- `catalog/`: `verity_catalog`, exact hardware semantics (`silicon`), the primitive circuits' Definitions and the targets; `kernels/` (`verity_kernels`) holds the fast code checked against them, and `experimental/` (`verity_experimental`) what is under development or kept for study
+- [`backends/flock/`](backends/flock/README.md): C-Flock, the proof backend in active development; the frozen backends are in [`archive/`](archive/README.md)
 - [`backends/flock/verifier/`](backends/flock/verifier/README.md): the verifier of record, written in Lean
 - [`verity/protocols/verification/sampled_proofs/`](verity/protocols/verification/sampled_proofs/README.md): sampled proofs, as the one-stage audit and the two-stage law
 - [`verity/protocols/accounting/space/pous/`](verity/protocols/accounting/space/pous/README.md): proofs of useful space
@@ -139,16 +141,15 @@ query(program.circuit, "//GemmCoordinate")    # its 8 output coordinates, each w
 
 ## Development
 
-Dependencies point inward: integrations, backends, protocols and benchmarks depend on the core, and the core's modules depend on each other in one direction:
+Dependencies point inward: integrations, backends, benchmarks, the catalog, the kernels and experimental depend on the core, the core imports no other distribution (PoUW's reading of the catalog aside), and the core's modules depend on each other in one direction:
 
 ~~~text
-ir  <-  evaluation  <-  ml
-ir  <-  commitments
-ir + ml + commitments  <-  proofs
-randomness, claims: import no other core module
+primitives.circuits  <-  primitives.commitments  ->  primitives.crypto
+primitives.circuits  <-  protocols.profile  <-  the protocols
+primitives.randomness, primitives.crypto, claims: import no other core module
 ~~~
 
-`verity/tests/test_boundaries.py` and `tests/test_protocol_boundaries.py` enforce these rules. Import each object from the module that owns it (`from verity.primitives.circuits import Program`); `verity` itself re-exports nothing.
+`verity/tests/test_boundaries.py` enforces these rules. Import each object from the module that owns it (`from verity.primitives.circuits import Program`); `verity` itself re-exports nothing.
 
 There is no GitHub Actions CI. `check` is the one check, and a merge into `main` goes through `research merge`, which refuses without a passing `check` of that exact commit. [AGENTS.md](AGENTS.md) has the full rules for contributors and agents: commands, circuits, checking and merging, Lean, and where writing goes.
 
