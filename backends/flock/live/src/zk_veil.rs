@@ -1293,7 +1293,8 @@ mod tests {
 
     /// SHA-512 of the honest inner proof's bincode in [`the_prover_stops_before_tau_on_a_failing_row`], from `prove_inner`
     /// before the self-check existed (main at 5049de02f).
-    const HONEST_INNER_PROOF_SHA512: &str = "TODO";
+    const HONEST_INNER_PROOF_SHA512: &str =
+        "a817dca1ba04991788bf6b362c6d15a80dc1fc68bba6a66cdf2bfaf0977bb45e7c8ad12b43c554e04501990345833130dfa6e9625e48d89f1bc112c13108e35f";
 
     /// The prover stops at a zerocheck outer coin `r_j = 1` as the coin opens, drawn as one vector or one at a time, and at
     /// no other coin equal to 1 (a skip coin, a later one).
