@@ -371,7 +371,7 @@
    "pins": ["Flock.Registered.check_ok"]
   },
   "Flock.Circuit": {
-   "digest": "80c87381817c6ad3b0bb2dfca40aeec965fb79f4551fccda2a55238e23425f63",
+   "digest": "a6eb06b9b9b03d597c2d2bac7381be0769605d079656690bad6fbbdad3d181fa",
    "definitions": {
     "Flock.Circuit": "c857293e3edc24f9d4631e64d4bb35c1aa2ce94e525378926b1196ddd4ebf5f1",
     "Flock.Circuit.hmNet": "0d61799e40eee7d4c6650f055b1b93252c7522fe048127f5e1e8a9bee0bc3b0e",
@@ -384,6 +384,8 @@
     "Flock.Kind.net": "ac6c22e781a7abec2083631c6e89e995d53d254c3141dc14f3dad16434d95143",
     "Flock.Port": "566ccec6b23fee8c9cfaac4d0eb037b9074e270c9903928a8a2b4ae8c91d5ba4",
     "Flock.Port.name": "af41bae38c908cdc63b0021d77c2aaa0f730da201575d248e63c7159c3b3c268",
+    "Flock.Port.segs": "369f23f986f7b3ded4ad5489053d99137d77ab9dc380dc3095dfcc67f673179b",
+    "Flock.Port.v2": "8564adf5934a284c85b747f2ad5a3657ee7c253792587cf0c9cfca3df8d2d8c8",
     "Flock.Port.words": "5981040a4c808891ecefad04414ebe1002a6d0e9cbdad349931b8b354609d60c",
     "Flock.Range": "558d65b6b5476afe0abcbe44240c1eb4d16b550a32d9a9ae81bd9a335da770dc",
     "Flock.Role": "9262ec294897daf6b69bf652cbc6c0796a0ec937d6c07411bcb82c03b8d93f36",
@@ -805,9 +807,11 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "baa408e236e1014ec9111ecd6fdbf869cafe35ddffc99dd6e50d9bf27302b494",
+   "digest": "49eff94437049c6e019d0b0d052cecccec8653ec5434782a126b1864c45044bf",
    "definitions": {
-    "Flock.HmRow.ROW_SCHEMA": "6a5911c584300aa6570e0ec64598331e39b38924e817743835be7cf6cc465047"
+    "Flock.HmRow.ROW_SCHEMA": "6a5911c584300aa6570e0ec64598331e39b38924e817743835be7cf6cc465047",
+    "Flock.HmRow.ROW_SCHEMA_SEG": "6db64657e5bbbe4a31f3de267bfa666018c91a08ef5ce79602392ddce59cbe4a",
+    "Flock.HmRow.ROW_SCHEMA_V2": "cfe82a5bc7e3883c307918ec91d6eb64043d76c39908450f944ab3e435e76318"
    },
    "pins": ["Flock.Registered.check_ok", "Flock.Registered.opensLeaf_binding"]
   },
@@ -933,7 +937,7 @@
    ]
   },
   "Flock.Net": {
-   "digest": "d9747afc0d4ea799a46f85e8e350ebbfefac792088c605e523525d04bca51c8f",
+   "digest": "0d8411a748d8e3920349c4eae778afda557fec63030e1a403eb1a2db3a7b9720",
    "definitions": {
     "Flock.Group": "68462ee6c67749c67839adbcf041ebcd1a6d0fce2b8e2d719557c533b9a2d540",
     "Flock.Group.bits": "5dfe45faac9951c1393b030ed28c79b4f07fbd8e8025c8f8d1ca786771ac2c88",
@@ -948,7 +952,7 @@
     "Flock.Net.inGroups": "7fc5057389f731ad4c05c99e6664f8d223e1c35a9f3b94dc5b83a6d527d9b035",
     "Flock.Net.inputsOk": "83db13d1ae54f8e4401c056d45f435fb0e8669fa9e3d740dea46a32dc8961a56",
     "Flock.Net.name": "d760a24deec4bfae8a60719a270f05b1110390aafadb7bedc9018ff1d0eb1a13",
-    "Flock.Net.ofRows": "bbc38718665cc9879f3e72a4591d924392ca31a25447c66e0bf792cf11ff089d",
+    "Flock.Net.ofRows": "4ca21b277761f048db0db608fed2bc9b8cc1454ff736784435905ffce9b543e7",
     "Flock.Net.outGroups": "835dc2cf48f9ec0bde02d1618d57ac41953ee5148dca13fb69c4f631c9e2d13c",
     "Flock.Net.useful": "ad02b8864f21fd38b0449cbc0b3f8d562c0b1d9444bc67a3340c33d3b41fd71b",
     "Flock.WORD": "26146b40d9d5b492977bdd568f2380b3efcff0b0a9ad130490d5bad5e6e5de42",
@@ -993,7 +997,7 @@
    "pins": ["Flock.Registered.check_ok", "Flock.Registered.opensLeaf_binding"]
   },
   "Flock.Registered": {
-   "digest": "4fa9efbeec757d859a1925ec2e59a453afa0c2ad9d8b499fcda0b627b6c53f0d",
+   "digest": "e98fe9615367e8931d84ab5292719159277236ec9f2e1026e5b0d4499362f234",
    "definitions": {
     "Flock.Registered.Port": "aade65f635f88322beebf73b54575522406e962788786d682837b0c542626389",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
@@ -1008,7 +1012,7 @@
     "Flock.Registered.badInstance": "03932f62b94f8fdcdc0c2b285ed7e2c1eab64c21ef5edd38e49948a21faf7e66",
     "Flock.Registered.badRow": "c702aa7a7cdef880a0d0811966e322facce83d1237b04bf8749c4ae9112249d1",
     "Flock.Registered.check": "4b228ade32bb7e63505ba499fc5023ce7c1ad20c174e074192993e5297df771b",
-    "Flock.Registered.checkPort": "012528371c5394748a6b8317cf18acc05b1dd837d043cdf15f20d39751d67beb",
+    "Flock.Registered.checkPort": "51ad65cfc8c1319588b238ccf0bc4a6e32ac3b7b2bc0f44daf2ac368cbe6a2fb",
     "Flock.Registered.climb": "409e735c27b6bbb1fbec2014a3beb48e70858eeff6e95502f99f10f95e6f56f3",
     "Flock.Registered.climbL": "deeb59c4c0ff09253eaf700ca259e36c92c5c09b5fc142a81d3f076bfe62ff73",
     "Flock.Registered.entry": "33679b79172b2252c0e954b11fd386a06a136aa56539287c7e076683f87af733",

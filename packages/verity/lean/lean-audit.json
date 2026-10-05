@@ -34,7 +34,7 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   }
  },
- "pins": {
+ "guarantees": {
   "Verity.SecurityProofs.AdaEqAmpere": {
    "signature": ["Verity.SecurityProofs.AdaEqAmpere : Verity.Guarantees.AdaEqAmpere"],
    "assumptions": [],
@@ -140,6 +140,11 @@
    "assumptions": [],
    "type_hash": "4c3bae588a8b15087f0b98c7fee1a916e24956b95df6fd0453546703c7f048e0"
   },
+  "Verity.SecurityProofs.ProbBatchInduced": {
+   "signature": ["Verity.SecurityProofs.ProbBatchInduced : Verity.Guarantees.ProbBatchInduced"],
+   "assumptions": [],
+   "type_hash": "d3b33f0f68f5f726e9e6807f5420faa852ef8afba25cb45c5842e42815cdb713"
+  },
   "Verity.SecurityProofs.RangeGadget": {
    "signature": ["Verity.SecurityProofs.RangeGadget : Verity.Guarantees.RangeGadget"],
    "assumptions": [],
@@ -184,7 +189,7 @@
     "Verity.Assumptions.GemmHopperStep": "8c5e183ae15ce48fd0744893ce9708c38d0c9d88fd0d109ffb68ec4226ff323e",
     "Verity.Assumptions.StepInputs": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
     "Verity.SecurityProofs.AmpereStepIff",
@@ -204,7 +209,7 @@
     "Verity.Guarantees.CorrectOfOpening": "10386484b8cce510b55f28b3072a425e8555580988de08bb25db00b3b0b7b699",
     "Verity.Guarantees.RefineWrong": "f6dc61dd64bff7f68d19f350d308a0ab2ed7577db10138d290703268254a469c"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.ContainsImplements",
@@ -213,15 +218,17 @@
    ]
   },
   "Verity.Guarantees.Game": {
-   "digest": "b90ebaf68edabc62c09575e8aa5a885d542f8f3916f2b7d58bca9fb813886681",
+   "digest": "ecc7ed75a024d948af30f5c1fe65ee26298c9a426911af3c1ef7e90ae13b029a",
    "definitions": {
+    "Verity.Guarantees.ProbBatchInduced": "b7429a669651d1a8c24f8f946f3b2ca83f7c5c29279f7bb1d335fd63fb5bf7b2",
     "Verity.Guarantees.SoundAnd": "40437eeb1f6ccb9c4b5644af7f9b966c5e4aabe6ea59140bdcc75972988d1f5b",
     "Verity.Guarantees.SoundBatch": "c9beedbe57744d07208470011d76aa1d4ca58b593726a94f5133b5c0eafef363",
     "Verity.Guarantees.SoundBind": "6f75427202914962a6f46d107ec588a1fdb637f11ad0ceb7c2ffebbb7eccd0f2",
     "Verity.Guarantees.SoundInterleave": "1b9db975c11cf9eee08008fa88f0ac0b461a6ec2cb6b432974525cf50705d3ed",
     "Verity.Guarantees.SoundMono": "fa86a98c87341208789aaed40edf38ef88f68a7c4e2c23a1a19738acbc0771df"
    },
-   "pins": [
+   "guarantees": [
+    "Verity.SecurityProofs.ProbBatchInduced",
     "Verity.SecurityProofs.SoundAnd",
     "Verity.SecurityProofs.SoundBatch",
     "Verity.SecurityProofs.SoundBind",
@@ -251,7 +258,7 @@
     "Verity.Guarantees.PackSoundComplete": "95e287c6c5b67e69c4cca2ba0e7de569f217442359cffe9a4a3943dbbd31695c",
     "Verity.Guarantees.RangeGadget": "276657bf0d6d4e6da870b4002959224bf0bfffe7843d048573a6139168bf9d13"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.AdaEqAmpere",
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
@@ -294,7 +301,7 @@
     "Verity.Implementation": "c144286a7ea1ac466678724b49cdff938962d7a3b1e86cc04ea6968c3ee0a529",
     "Verity.Implementation.inp": "997e0ba3c6cf816c20ad7aecf22ecb9aef93d68ebcf8cec1ed8c071b89d64202"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.ContainsImplements",
@@ -311,13 +318,19 @@
     "Verity.Declaration.Implements": "0b973c0f940a9a9bf3bd04e3124fe027e62d041007816a4834a681c1c53e3aa1",
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
-   "pins": ["Verity.SecurityProofs.ContainsImplements"]
+   "guarantees": ["Verity.SecurityProofs.ContainsImplements"]
   },
   "Verity.Protocol.Game": {
-   "digest": "79f23e03fb630f66432e1fbacbc556bde2d1d07fcc9164ee43fbd1ef5d97a34f",
+   "digest": "c3a8196d1e9e6903cfd0374e5b087e6377800253e09d265e24fef1ae2fab24fc",
    "definitions": {
     "Verity.Game": "34c713229a1259c2d5972e7184a6879ce0f3e67dbb8dc0fe4219cf7aad78bf16",
-    "Verity.Game.Strategy": "9ea6ffb37eaa47c603e7c09054af31e4c5edf402cec2c9c48052197adae2fb22",
+    "Verity.Game.InducedAt": "0c3e058da3fbda23c861e5e706c916599bc4b893d399efbe4535390b4d0c448f",
+    "Verity.Game.InducedL": "2e988db571b2eca62bf3bc9f21d1946a714a461777ff82353bf47d90ea0d8375",
+    "Verity.Game.InducedR": "c2243672779ceb6e2c4a3275bd22bf9b9a1003f2d01d3efe2c98f097d61ad3e4",
+    "Verity.Game.InducedWithL": "1617ed74f91a304eeb40c85829416d3a2f77e738a4395f95e1f8b14062485ccc",
+    "Verity.Game.InducedWithR": "8c9816d39502ef1f763da132e2211aa59ae1de4a5042e579bea165391dc4a16c",
+    "Verity.Game.Strategy": "adbb9d9cc6b114fa6a9ebfb3c8d43406b9c2272e136d74953736875e7054817b",
+    "Verity.Game.Strategy.ofMap": "6ea46533e626d971f430730846cec8e1f8c38af21feab3a98d39f5184155ee22",
     "Verity.Game.batch": "ab402840c5a36246c2bab7a131339b316ed204cbed98d862272ade83db9139cd",
     "Verity.Game.bind": "57f9bfd5a89f6841f4aa91aa534c194d08183e997fc3cf6e41d2459a37c717ce",
     "Verity.Game.brecOn.go": "b26b92002b61ca899c176b5358f3905100497203a1e6a329d813643c08759cd4",
@@ -325,12 +338,14 @@
     "Verity.Game.interleave": "8cc579f2e14080866cf44bdf92a1ad8006e6594e7f085ec58b2d64b67e3c5164",
     "Verity.Game.interleaveWith": "397c914cdff84b1aea6f1f1d28a609d6dc69b580a3d1564ffc6a7e0202beefd9",
     "Verity.Game.map": "6cd5468a1f484fdc57f7e452b1201fa4960f461c800d5cf222c0ccf5b1b9580a",
+    "Verity.Game.prob": "123c931b895fd86ca8afa118e08bd86e8000707f80332932138acb82d630574c",
     "Verity.Game.ret": "36d51e203dc27816f87118662a944dfd4726229a8d44c08551ba14dd7fc69649",
     "Verity.Game.send": "8d24c747132730510c15eb71bd4e887838687cee9b7d9e59f46a29a712c01efc",
     "Verity.Game.value": "2b85019b6d4066405668df2c794c89d1fb80e777c12864c3e6cc71a57de83258",
     "Verity.Sound": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7"
    },
-   "pins": [
+   "guarantees": [
+    "Verity.SecurityProofs.ProbBatchInduced",
     "Verity.SecurityProofs.SoundAnd",
     "Verity.SecurityProofs.SoundBatch",
     "Verity.SecurityProofs.SoundBind",
@@ -351,7 +366,7 @@
     "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9",
     "Verity.Partition.wrong": "f743923e389a5a0fa4441ad0d02a28e57d61973f65e0a9b998dc6df6445139f8"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.CorrectOfOpening",
@@ -364,7 +379,7 @@
     "Verity.TC.Proofs.Admissible": "c56ebb69cf9ebbd664b0ae72ccb5b21dc3fe2761f4cc8e64e7f663b6e71ca25e",
     "Verity.TC.Proofs.stateOf": "f7ef12fd0fd00f94be4bea32348cdfa796fc51941d5a628987e2187c11ec1177"
    },
-   "pins": ["Verity.SecurityProofs.PackSoundComplete"]
+   "guarantees": ["Verity.SecurityProofs.PackSoundComplete"]
   },
   "Verity.Protocol.TC.Gadgets": {
    "digest": "2c13e0555fc412274d2d0ab43e78262600d61d148e82207bee614f7e4a9727c1",
@@ -374,7 +389,7 @@
     "Verity.TC.Gadgets.isZeroWidths": "51b86a56686596236cdebb9470177a8b3e1ed79f42ecb6ce7cd7ec20409a575d",
     "Verity.TC.Gadgets.rangeWidths": "915f7c5c531a47ce9790cc92ec02be1f06103cf94596144c6fef95e8352c01f9"
    },
-   "pins": ["Verity.SecurityProofs.IsZeroGadget", "Verity.SecurityProofs.RangeGadget"]
+   "guarantees": ["Verity.SecurityProofs.IsZeroGadget", "Verity.SecurityProofs.RangeGadget"]
   },
   "Verity.Protocol.TC.Pipeline": {
    "digest": "ac541b047f90ce7cf9efd3f8d0d55ee156cf5796062c2d01baa3d11730190b4e",
@@ -389,7 +404,7 @@
     "Verity.TC.Pipeline.zeroExponent": "05a7b0bf44a0131d7f07e6b126f9807a026ebc49ad63e3488cbc5d69f85aa24e",
     "Verity.TC.bitLength": "ccbed7043eb20211951e7bec1eed8b5bb0e5627b258ee4d913d1737c2fbf4162"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.AdaEqAmpere",
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
@@ -552,7 +567,7 @@
     "Verity.TC.Relation.terms": "8674f2f845831cef9227de4e22ab4c1519d350977b2207004edde6ebbe427ccf",
     "Verity.TC.Relation.zeroState": "76f5f56483cad8dcffb6d6f0e63076b8477410fb251112e4da877e10771f2af4"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
     "Verity.SecurityProofs.AmpereStepIff",
@@ -611,7 +626,7 @@
     "Verity.TC.Spec.tcDotChainTotal": "d623703b721fe61125e932a17c39e6b5433254ed6ddb7953e456e02d61249a2e",
     "Verity.TC.Spec.tcDotTotal": "b02bfff4370bb8591d9bb4589ab8f204ae2b2d79ea79448a2db58940865e061b"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.AmpereStepHw",
     "Verity.SecurityProofs.AmpereStepIff",
     "Verity.SecurityProofs.AmpereStepSound",

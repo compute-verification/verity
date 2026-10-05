@@ -94,7 +94,7 @@
     },
     {
       "handle": "ci",
-      "holder": "the CI lead (bc-7ff3de9e-dd31-5d7f-9e53-265bfba177d0)",
+      "holder": "the CI lead (bc-81ff5c35-39a9-5232-a6b5-8e933b944292)",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": null
@@ -102,7 +102,7 @@
     {
       "handle": "lean",
       "holder": "the lean agent (bc-19c498a8-628e-5c04-8f61-fe785a24741b)",
-      "remit": "Lean: reviews every audit-flagged change to a pinned Lean guarantee.",
+      "remit": "Lean: the Lean audit and its tooling; a change to a Lean guarantee DMs Daniel when it lands.",
       "charter": "Daniel, 2026-10-01 10:18 AM PDT",
       "usergroup": null
     },
