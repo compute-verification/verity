@@ -9,11 +9,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.evaluation import evaluate
-from verity.evaluation.reference import standalone_call
-from verity.ir import codec
-from verity.ir.defs import bind
-from verity.ir.program import Program
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits import codec
+from verity.primitives.circuits.defs import bind
+from verity.primitives.circuits.program import Program
 from verity_vllm.program.registry import moe
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as R

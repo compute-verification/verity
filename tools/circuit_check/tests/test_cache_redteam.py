@@ -16,7 +16,7 @@ from test_cache import FILES, HARNESS, REPO, _edit, _entry
 CHECK_CORR = """
 def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     from circuit_check import checks as CK
-    from verity.evaluation.reference import resolve
+    from verity.primitives.circuits.evaluation.reference import resolve
 
     F = CK.Findings()
     corr, _arrays, _ref = CK.correspondence(resolve(fn), opts, F)
@@ -28,7 +28,7 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
 KERN = """
 import numpy as np
 
-from verity.evaluation import register_kernel
+from verity.primitives.circuits.evaluation import register_kernel
 
 register_kernel("SynAdd_v1", lambda a, b: ((a.astype(np.uint64) + b) & 0xFFFF, None))
 """
@@ -106,7 +106,7 @@ def test_an_edit_to_either_of_two_same_label_entries_changes_a_unit():
 
 #: a Definition whose body depends on what the binding passed, not on its id (`make(swap)`), over a primitive that does not commute
 MINUS = """
-from verity.ir import Value, composite, primitive
+from verity.primitives.circuits import Value, composite, primitive
 
 V = Value(16)
 
@@ -126,7 +126,7 @@ def make(swap):
 #: the catalog's `_model_roots`, two entries labelled alike, run by the harness as `targets.catalog` runs them
 DUP_CATALOG_TARGETS = """
 def _model_roots():
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.defs import bind
     from syn import minus, other
     return [
         ("Dup_v1", lambda: bind(minus.make(False))),
@@ -136,7 +136,7 @@ def _model_roots():
 
 CHECK_EVAL = """
 def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
-    from verity.evaluation import evaluate
+    from verity.primitives.circuits.evaluation import evaluate
     return {"failures": [], "warnings": [], "value": list(evaluate(fn, 5, 3))}
 """
 
