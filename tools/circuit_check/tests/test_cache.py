@@ -287,10 +287,10 @@ def _tree(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _run(root: Path) -> dict:
+def _run(root: Path, harness: str = HARNESS) -> dict:
     # no bytecode: an edit that keeps a file's size within the second its bytecode was written would run the old code
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    r = subprocess.run([sys.executable, "-c", HARNESS, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO, env=env)
+    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO, env=env)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout.strip().splitlines()[-1])
     assert not out["stats"]["untraced"] and not out["stats"]["errors"] and not out["stats"]["changed"], out
@@ -505,6 +505,48 @@ def test_an_evaluator_or_a_module_constant_it_reads_reruns_its_target(tmp_path):
     _edit(root, "syn/consts.py", "MASK = 0xFFFF", "MASK = 0x00FF")
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
     assert [(3 ^ 0x0105) & 0xFF] in _values(root, "SynX_v1")
+
+
+#: a kernel module imported, as `verity_vllm.program.kernels` imports its rows, by a registry module the catalog enumerates
+KERNEL_FILES = {
+    "syn/rows.py": """
+import numpy as np
+
+from verity.evaluation import register_kernel
+
+register_kernel("SynTop_v1", lambda a, b: ((a.astype(np.uint64) + b) & 0xFFFF, None))
+""",
+    "syn/kernels.py": "from syn import rows\n",
+    "syn/corr.py": """
+def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
+    from circuit_check import checks as CK
+    from verity.evaluation.reference import resolve
+
+    F = CK.Findings()
+    CK.correspondence(resolve(fn), opts, F)
+    return {"failures": F.failures, "warnings": F.warnings}
+""",
+}
+
+
+def test_a_pure_move_of_a_kernel_module_reuses_its_target_and_a_kernel_edit_reruns_it(tmp_path):
+    """SynTop's check looks up its kernel, registered in `syn/rows.py`: the lookup is held by where the kernel is defined in
+    the module's content, not by its path, so moving `syn/rows.py` to `syn/fam/rows.py` (its one import rewritten) reuses
+    SynTop's entry, and a wrong kernel there afterwards reruns it, which fails `correspondence/kernel-mismatch`."""
+    root = _tree(tmp_path)
+    for rel, text in KERNEL_FILES.items():
+        (root / rel).write_text(text.lstrip("\n"))
+    harness = HARNESS.replace("from syn import catalog, check\n", "from syn import catalog\nfrom syn import corr as check\n")
+    assert _run(root, harness)["hits"] == []
+    assert list(_entry(root, "SynTop_v1")["reads"]["kernels"]) == ["SynTop_v1"]
+    _move(root, "syn/rows.py", "syn/fam/rows.py", ("syn/kernels.py", "from syn import rows", "from syn.fam import rows"))
+    assert _run(root, harness)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "syn/fam/rows.py", "+ b) & 0xFFFF", "- b) & 0xFFFF")
+    assert _run(root, harness)["hits"] == ["SynOther_v1"]
+    codes = {tuple(sorted(f"{f['check']}/{f['code']}" for f in e["report"]["failures"]))
+             for p in (root / "cache").glob("*/*/*.json")
+             if (e := json.loads(p.read_text()))["key"]["request"]["target"][1] == "SynTop_v1"}
+    assert codes == {(), ("correspondence/kernel-mismatch",)}
 
 
 def test_the_catalogs_units_are_its_root_functions_and_entries():
