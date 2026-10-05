@@ -79,7 +79,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     Other modules are created when code lands, not before.
   - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
- stdlib, `verity` and itself (`tests/test_protocol_boundaries.py`).
+ stdlib, `verity`, itself and the protocols Daniel has allowed it (PoUW imports sampled proofs;
+ `EDGES` in `tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the one-stage
  audit (`one_stage`: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile), the two-stage law, its draws from the verifier's own
@@ -114,9 +115,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).
-- `tools/cluster/`: `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger. Stdlib
- only, imports neither `verity` nor `research`. On vy-nebius-2 its agent runs in shadow mode (read-only, beside
- `gpu-lease`); nothing it decides is carried out yet (its `README.md`).
+- `tools/cluster/`: `cluster`, the shared machines' description and policy (`cluster policy diff` names live drift), a pure
+ per-node planner and the allocation ledger. Stdlib only, imports neither `verity` nor `research`. On vy-nebius-2 its agent
+ runs live (`vy-cluster-agent.service`, its `README.md`).
 - `backends/`, `frontends/`, `integrations/`, `benchmarks/`: created when a
   component has real code; there is no `frontends/` yet. `backends/flock`
   (`verity_flock`) is C-Flock, the backend in active development; its verifier
@@ -174,9 +175,17 @@ alone, and skipped by name elsewhere): record it with
 `uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
 `check` reuses a pass (a test suite, a circuit-check target, a Lean package's audit) only while every input it read is
 unchanged, and keeps each pod's Lean dependencies warm under their manifest and toolchain.
+A pure move goes through the same `check`, but once `uv run python tools/check/move_check.py BASE HEAD` certifies it (only
+byte-identical renames, edits that rewrite moved paths or imports in path-bearing files, and a Lean split's new
+package copied from its source) the lander may schedule it
+first in a quiet window, alone in its train (Daniel, 4 Oct).
 
 ## Lean
 
+- Soundness is one theorem over everything the compiled Lean verifier accepts, for arbitrary Boolean circuits, with no
+  hypothesis on the circuit file or the statement's form. The verifier refuses any form the proof doesn't cover, and gains
+  no new form ahead of its proof. Circuit inputs and outputs use one canonical format proved in general, so a new workload
+  needs no verifier or proof change (ruling 2026-10-04, `.agents/skills/friction/SKILL.md`).
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
   about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
   `protocols/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
@@ -189,21 +198,19 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   protocols' packages, never a backend's. All packages share one toolchain and
   one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
 - Core's and NCI's packages are laid out under four names: `Protocol` (definitions), `Assumptions` (named `Prop`s) and
-  `Guarantees` (each a `def G : Prop`) are the trusted text, importing only one another, core's trusted text and
+  `Guarantees` (each a `def G : Prop`) are the spec (README "Glossary"), importing only one another, core's spec and
   Mathlib (`layers` in `lean-audit.json`); `SecurityProofs` holds every proof and lemma, with `SecurityProofs.G : G` for
   each guarantee proved. The other packages move to this layout one at a time.
 - Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
   `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
   `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
   is replayed through the kernel.
-- A guarantee (README "Glossary"), the theorem a ledger, a table or a PR cites as proved, is pinned in `lean-audit.json`.
-  `audit.py --update` records it. A changed record means the guarantee now says something else (its statement, or a
-  definition the statement reads).
-  No axiom check can catch a weakened definition, so a changed record needs a named statement reviewer, who reads what
-  `--update` prints (each changed signature before and after, each changed definition as it is now), and the PR
-  description names them. A guarantee that only moved to another module or name needs no reviewer when `--update
-  --moved MOVES.json` (old names to new) prints it as the same statement under its old names: its statement and every
-  definition it reads match their records.
+- A guarantee (README "Glossary"), a theorem something outside Lean relies on as proved, is listed in `lean-audit.json`,
+  and `audit.py --update` records what it says in the lock: its statement and every definition the statement reads. No axiom check
+  can catch a weakened definition, so when a change to those records lands on `main`, Daniel gets a DM showing it (each
+  changed statement before and after, each changed definition as it is now). Nobody signs off and nothing waits on it.
+  A guarantee that only moved to another module or name sends nothing when `--update --moved MOVES.json` (old names to
+  new) prints it as the same statement under its old names.
 - A named assumption or hand-proved lemma that a pinned dependency could prove, because its statement can be written in
   that dependency's constants, has an entry in the package's `upstream` watch list. The audit fails when the pinned
   dependency proves a theorem about it that nobody has acknowledged (`tools/lean/upstream.py`). One stated over the
@@ -262,6 +269,11 @@ rather than accumulating them.
 
 - This repo: code, tests, small fixtures, and maintained current-truth docs only (`README.md`, `AGENTS.md`, `PROTOCOL.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`).
 - Lane reports, checkpoints, findings, drafts, friction notes: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|finding|draft|friction`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`. Notes are records, never messages: a handoff, an order or an ask goes on Slack (below), or to your own Cursor workers as a follow-up.
+- Qualitative writing that anyone else may need goes in the research notes, where it can be shared, and data goes in the
+  evidence store (Daniel, 4 Oct). A Cursor agent store is its agent's scratch: nothing another agent or a person needs
+  lives only there, and nothing cites a `store:` path, which no other VM can read. Copy such a file into the notes or the
+  store and cite its `note:` or `art:` id. `research notes sync --path lanes/<lane>` publishes notes to the notes' `main`
+  from any VM with `RESEARCH_NOTES_TOKEN` set.
 - Evidence and generated output (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports): the evidence store only, never Git, neither this repo nor the notes. `research run` publishes a run's outputs; anything else goes in with `research data put --kind K --file|--tree P --preserve`; cite it as `art:<id>`. Tables and reports are rendered on demand from code plus the store. An old `notes-asset:<path>` resolves through the notes README.
 - Architecture decisions: Notion (the coordinator publishes); no `docs/adr/` in the repo.
 - Evidence goes through `research run --tool … --campaign …`: every completed or failed run is auto-published as an Attempt in the evidence store (`~/.research/store`, `research data …`; contract in `tools/research/src/research/store/README.md`).

@@ -166,8 +166,8 @@ class _DeviceArena:
         return blk
 
     # P0 (R13) backpressure: the ring never grows past its preallocation while a fitting block is merely BUSY; the serving thread waits for
-    # the worker to release one (the engine stalls instead of the collector OOMing).  Growth is allowed only when NO block of the ring can
-    # ever fit the request (a step larger than every block), or when VERITY_ARENA_GROW=1 restores the R12 behaviour.
+    # the worker to release one (the engine stalls instead of the collector OOMing).  Growth only when NO block of the ring can ever fit (a
+    # step larger than every block), with VERITY_ARENA_GROW=1 (R12), or `wait=False`: the worker, the only releaser, must not wait on itself.
     GROW = os.environ.get("VERITY_ARENA_GROW", "0").strip() in ("1", "true", "yes")
     WAIT_TIMEOUT_S = float(os.environ.get("VERITY_ARENA_WAIT_S", "600"))
 
@@ -178,14 +178,13 @@ class _DeviceArena:
                 best = i
         return best
 
-    def take(self, min_bytes: int = 0) -> Any:
+    def take(self, min_bytes: int = 0, *, wait: bool = True) -> Any:
         # best fit: the SMALLEST free block that holds the step (X-02: decode steps must not consume the prefill-sized block)
         with self._cv:
             best = self._best_free(min_bytes)
             if best >= 0:
                 return self.free.pop(best)
-            fits_any = any(b.numel() >= min_bytes for b in self.all)
-            if fits_any and not self.GROW:
+            if wait and not self.GROW and any(b.numel() >= min_bytes for b in self.all):
                 t0 = time.perf_counter()
                 while best < 0:
                     if not self._cv.wait(timeout=1.0):
@@ -1095,6 +1094,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             if dummy or getattr(scheduler_output, "total_num_scheduled_tokens", 0) == 0:
                 return orig_exec(scheduler_output, *a, **kw)
             me._end_step()                       # a step whose sample() we never saw
+            me._step_min_bytes = 0 if me.arena_explicit else me.step_min_bytes(   # X-02 as native_collect; an explicit ring is one size
+                int(scheduler_output.total_num_scheduled_tokens), len(getattr(scheduler_output, "num_scheduled_tokens", ()) or ()))
             me._begin_step()
             return orig_exec(scheduler_output, *a, **kw)
 
@@ -1166,8 +1167,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             src.on_step_begin()
         if self.arena is not None:
             t0 = time.perf_counter()
-            self._cur.arena = self.arena.take()
-            self._cur.cursor = 0
+            self._cur.arena = self.arena.take(int(getattr(self, "_step_min_bytes", 0) or 0))
             self.spans.add("acquisition", time.perf_counter() - t0, step=self._cur.step)
         if self.footprint is not None:
             self.footprint.event("begin_step", step=self._cur.step, arena_block_bytes=int(self._cur.arena.numel()) if self._cur.arena is not None else None,
@@ -1258,7 +1258,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             blocks = job.overflow + [(job.arena, job.cursor)]
             if len(blocks) > 1:                                   # overflow: concatenate the used parts into one block (rare; counted)
                 total = sum(u for _b, u in blocks)
-                cat = self.arena.take(total)
+                cat = self.arena.take(total, wait=False)          # the block that fits may be one this step holds
                 base = 0
                 for blk, used in blocks:
                     if used:
@@ -1273,15 +1273,14 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             used = job.cursor
             padded = -(-used // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES
             if padded > job.arena.numel():
-                big = self.arena.take(padded)
+                big = self.arena.take(padded, wait=False)
                 big[:used].copy_(job.arena[:used])
                 self.arena.release(job.arena)
                 job.arena = big
             if padded > used:
                 job.arena[used:padded].zero_()
-            for m in job.metas:
-                m.stream_off = m.dev_off
-                m.dev_block = None
+            for m in () if hasattr(job.metas, "scan") else job.metas:     # a cached plan's record (plan_cache) is placed already
+                m.stream_off, m.dev_block = m.dev_off, None
             stream_i32 = job.arena[:padded].view(torch.int32)
             ev = [torch.cuda.Event(enable_timing=True) for _ in range(3)]
             ev[0].record(side)
@@ -1307,7 +1306,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self._gpu_t["tree_ms"] += ev[1].elapsed_time(ev[2])
         t1 = time.perf_counter()
         n = int(leaves.shape[0])
-        nbytes = sum(m.nbytes for m in job.metas)
+        nbytes = job.metas.nbytes if hasattr(job.metas, "scan") else sum(m.nbytes for m in job.metas)
         layout_dig = self.layout_digest(job.metas)
         root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
@@ -1887,7 +1886,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.spans.add("root_finalisation", t2 - t1)
         last_end = max((s.t_step_end for s in steps), default=t0)
         persistent = sum(32 * len(lv) for lvls in self._levels.values() for lv in lvls) + 32 * len(steps) + sum(map(len, self._salts.values())) + sum(
-            len(json.dumps([[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas])) for metas in self._layouts.values())
+            len(json.dumps(metas.summary() if hasattr(metas, "scan") else [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas])) for metas in self._layouts.values())
         return RunCommitment(run_root=run_root, steps=steps, spans=self.spans.snapshot(), root_ready_delay_s=t2 - last_end,
                              t_finalize_s=t2 - t0, persistent_bytes=persistent, temporary_bytes_peak=self.pool.bytes_in_use,
                              weight_registration=self.weights,
@@ -1922,7 +1921,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         out = []
         for s in steps:
             metas = self._layouts.get(s.step) or []
-            names = [m.name for m in metas]
+            names = metas.names if hasattr(metas, "scan") else [m.name for m in metas]
             fa2 = next((n for n in names if n.startswith(HIDDEN_M1_PREFIXES)), None)
             out.append({"step": s.step, "root": s.root[:8].hex(), "tensors": s.n_tensors, "bytes": s.n_bytes, "leaves": s.n_leaves,
                         "layout": s.layout_digest[:8].hex(), "fa2": fa2})
@@ -2008,18 +2007,19 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
 
         for step in sorted(self._layouts):
             metas_all = self._layouts[step]
+            cols = metas_all.names if hasattr(metas_all, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
             ps = self._padding.get(step) if padded_run else None
             # a padding meta: the step has a PaddingStep, the meta sits in the padding block of the step stream (`stream_off >= stream_base`;
             # an executed arena meta reads -1, an executed packed meta < stream_base) and carries the padding name (fix (c))
             is_pad = (lambda m: m.name.endswith("/bot") and m.stream_off >= ps.stream_base) if ps is not None else (lambda m: False)
-            pad_metas = [m for m in metas_all if is_pad(m)]
-            metas = [m for m in metas_all if not is_pad(m)]
+            pad_metas = [m for m in metas_all if is_pad(m)] if cols is None else []
+            metas = [m for m in metas_all if not is_pad(m)] if cols is None else metas_all
             padding_only = bool(pad_metas) and not metas
             padding_tensors_n += len(pad_metas)
             if padding_only:
                 padding_only_steps.append(int(step))
-            names_all = Counter(m.name for m in metas_all)                # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
-            names = Counter(m.name for m in metas)
+            names_all = Counter(m.name for m in metas_all) if cols is None else Counter(cols)   # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
+            names = Counter(m.name for m in metas) if cols is None else names_all
             mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n)})
             pad_ident = Counter(_identity_of_padding(m.name) for m in pad_metas)
             pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n)})
@@ -2049,7 +2049,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             fa2_bad: dict[int, int] = {}
             fa2_detail: dict[str, Any] = {}
             if man["fa2_hidden_per_layer"]:
-                seqs = (FP.StepSequences(()) if padding_only else self._step_sequences(step, metas)) if decls else None
+                seqs = (FP.StepSequences(()) if padding_only else self._step_sequences(step, metas if cols is None else metas.scan())) if decls else None
                 if seqs is not None:
                     # [F-r19-int-22] each layer's class is DERIVED from the Program's attention Call statics x the step's active-sequence set
                     # (fa2_plane_classes.plane_class): a windowed layer's decode launch is un-swapped (6 planes x sequences) while a global GQA

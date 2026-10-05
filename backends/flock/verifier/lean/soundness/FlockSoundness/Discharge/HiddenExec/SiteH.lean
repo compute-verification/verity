@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.HiddenExec.Placed
 import FlockSoundness.Discharge.HiddenExec.Ret
 import FlockSoundness.Discharge.Hidden.Committed
+import FlockSoundness.Discharge.Hidden.Wide.Shared
 import FlockSoundness.Discharge.Layout.OutPin
 
 set_option Elab.async false
@@ -12,7 +13,7 @@ set_option Elab.async false
 
 * `siteAddrH a o x`: in-block column `x` of block `o`, as an address of `T`;
 * `bc_site_ofH`: in a satisfying witness, the 128 bytes at row `p`'s `hm96` output are the population's `b ‖ c` of the
-  proved unit at rank `o · c.g + g`, for every row, input or output (`Hidden.bc_drawnH`);
+  proved unit at rank `o · c.g + g`, for every row, input or output (`Hidden.bc_drawnW`);
   `BcSiteH` bundles what it reads;
 * `copy_siteH`: a stacked unit input whose Δ key is message bit `bit` of byte `byte` of row `q` holds the witness's bit
   at that message column (`copyPos_blockH`, `Aliased.copyPos_key` at the flat twin);
@@ -88,27 +89,27 @@ theorem bytesAt_siteH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) 
 
 /-- **What `bc_site_ofH` reads at a site**: block `o` and VU `g` of an accepted statement whose draw `d` decodes to `D`,
 whose proved units are in its population; whose block R1CS's regions (`a.regs`) contain the executable's; whose
-public file `HmOut.loadPublic` loads to `pop`, without shared rows; with `g` below `2^⌊log₂ c.g⌋`; and whose proved
+public file `HmOut.loadPublic` loads to `pop`, with or without shared rows; with `g` below `2^⌊log₂ c.g⌋`; and whose proved
 unit at rank `o · c.g + g` is `u`. -/
 def BcSiteH (a : AcceptedH T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) : Prop :=
   ∃ d D, a.draw = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧ (∀ v ∈ D.proved, v < D.population) ∧
     (∀ r ∈ a.st.regions.toList, Refine.regionOf a.st.c.kLog (a.st.m - a.st.c.kLog) r ∈ a.regs) ∧
-    HmOut.loadPublic a.tags a.st.c a.pf = .ok pop ∧ pop.tables = none ∧ g < 2 ^ a.st.c.g.log2 ∧
+    HmOut.loadPublic a.tags a.st.c a.pf = .ok pop ∧ g < 2 ^ a.st.c.g.log2 ∧
     D.proved[o.val * a.st.c.g + g]? = some u
 
-/-- **The `b ‖ c` at a drawn unit's site is the population's** (`Hidden.bc_drawnH`), at a `BcSiteH`, for every row
+/-- **The `b ‖ c` at a drawn unit's site is the population's** (`Hidden.bc_drawnW`), at a `BcSiteH`, for every row
 `p`. -/
 theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSiteH a pop o g u)
     {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrH a o (Layout.bcAddr a.st.c g p j.val t.val)) =
       (pop.digest u p a.st.c.ports.size).data.toList := by
-  obtain ⟨d, D, hd, hD, hlt, hregs, hpop, hpt, hg2, hu⟩ := hs
+  obtain ⟨d, D, hd, hD, hlt, hregs, hpop, hg2, hu⟩ := hs
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
   subst hT
   dsimp only at hd hregs hpop hu hg hg2 hp ⊢
   subst hd
   obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
-  exact Hidden.bc_drawnH h hpop hpt hD hlt L regs hregs hz o hg hg2 hp hr
+  exact Hidden.bc_drawnW h hpop hD hlt L regs hregs hz o hg hg2 hp hr
 
 /-! ## Copies at a site -/
 
@@ -194,7 +195,7 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
     (fun u hu o' ho' => by rw [hget u hu] at ho'; exact (hlo u hu).2 o' ho')
     h16 (fun u hu => by rw [hget u hu]; exact (hlo u hu).1) hpv g hu' hj
   have hkw : k < (st.c.ports.getD (HmOut.nIn st.c + jo) default).words :=
-    lt_of_lt_of_le hk (checkRows_words hcr hrows.2.1 hrows.1 hjo)
+    lt_of_lt_of_le hk (checkRows_words hcr hrows.2.1 hrows.1 (fun p hp => (hv1 p hp).1) hjo)
   have hsrc : Hidden.outSrc st.c g jo k t = st.c.unitRange.slot (g * st.c.upv + u') + Layout.outCol st.c j t := by
     unfold Hidden.outSrc
     rw [Hidden.outGroup_single hrows.2.1 hjo]
@@ -207,14 +208,10 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
   obtain ⟨hp, hw2⟩ := hrows.2.2 jo hjo
   have hb : (16 * k + t) / 8 = 2 * k + t / 8 := by omega
   have hb8 : (16 * k + t) % 8 = t % 8 := by omega
-  have hks : (HmRow.byteAt (st.c.ports.getD (HmOut.nIn st.c + jo) default) (2 * k + t / 8)).1 <
-      ((HmRow.rowSlots st.c.ports).2[HmOut.nIn st.c + jo]!).size := by
-    rw [Typed.byteAt_none (Hidden.segs_getD hrows.1 hp), Hm.rowSlots_size hp, Hidden.getElem!_eq_getD']
-    omega
   have hin := Layout.msgCol_lt_of_parse hpa hg hp (2 * k + t / 8) (t % 8) (Nat.mod_lt _ (by norm_num))
   refine bit_inj _ _ ?_
   rw [hb, hb8, bit_siteAddrH ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht', h, L, hR, regs, rfl⟩
-    z o hin, Hidden.msgCol_delta hks, hmc, hsrc, ← hcol, blockBit_of_lt _ z o (Fin.isLt _)]
+    z o hin, Hidden.msgCol_delta st.c g (HmOut.nIn st.c + jo) (2 * k + t / 8) (t % 8), hmc, hsrc, ← hcol, blockBit_of_lt _ z o (Fin.isLt _)]
 
 /-! ## The rows' `b ‖ c` at a site -/
 

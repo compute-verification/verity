@@ -31,11 +31,11 @@ import numpy as np
 
 from verity.ir.defs import bind
 from verity_vllm.program.registry import act as _ACT
+from verity_vllm.program.registry import boolean_rope as _BROPE
 from verity_vllm.program.registry import cublas_f32 as _CUB
 from verity_vllm.program.registry import dense as _DN
 from verity_vllm.program.registry import mla_word as _MLAW
 from verity_vllm.program.registry import moe as _MOE
-from verity_vllm.program.registry import ref_prims as _RP
 from verity_vllm.program.registry import targets as T
 
 from verity_vllm.observe.events import ViewDesc
@@ -502,7 +502,7 @@ class RotaryGptJ:
                 v = ViewDesc(v.alloc, v.offset, (v.shape[0], v.shape[1] // D, D), (v.strides[0], D, 1), v.dtype, v.device)
             if v.rank != 3 or v.shape[0] != M or v.shape[2] != D or v.strides[2] != 1 or (v.shape[1] > 1 and v.strides[1] < D):
                 return unsupported(node, f"{which} view is not [M, NHEADS, D] rows", view=repr(v), D=D, M=M)
-            parts.append(Compute(bind(_RP.RoPEGptJV2, NHEADS=v.shape[1], D=D), M, (PerRow(v), Gather(cs, positions)), (PerRow(v),),
+            parts.append(Compute(bind(_BROPE.RoPEGptJV2, NHEADS=v.shape[1], D=D), M, (PerRow(v), Gather(cs, positions)), (PerRow(v),),
                                  (node.id,) if not parts else (), hint=hint_of(node, f"rope.{which}"), kernels=("rotary_embedding_kernel",),
                                  attribution=attribution_for(ctx, M, node.phase), pattern=self.name))
         if not parts:

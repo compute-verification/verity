@@ -14,7 +14,7 @@ from __future__ import annotations
 from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.refs import tuple_of
 from verity.ir.types import Array, Tuple
-from verity_vllm.program.registry import ref_prims
+from verity_vllm.program.registry import boolean_rope
 from verity_vllm.program.registry.prims import BF16
 
 SEMANTIC_ID = "ref_prims/RoPEGptJ@v2"
@@ -48,8 +48,8 @@ def production(statics: dict, inputs: list) -> list:
 
 def _difftest_body(B, S, q, k, cs):
     """The query's and the key's `RoPEGptJ_v2` on the one cache row: the two outputs `_C.rotary_embedding` writes in place."""
-    return tuple_of(B.call(bind(ref_prims.RoPEGptJV2, NHEADS=S.NH, D=S.D), q, cs),
-                    B.call(bind(ref_prims.RoPEGptJV2, NHEADS=S.KVH, D=S.D), k, cs))
+    return tuple_of(B.call(bind(boolean_rope.RoPEGptJV2, NHEADS=S.NH, D=S.D), q, cs),
+                    B.call(bind(boolean_rope.RoPEGptJV2, NHEADS=S.KVH, D=S.D), k, cs))
 
 
 RoPEGptJDifftest = CompositeDefinition(

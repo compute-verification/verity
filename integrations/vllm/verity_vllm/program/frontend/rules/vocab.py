@@ -14,6 +14,7 @@ from typing import Callable
 from verity.ir.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
+from verity_vllm.program.registry import boolean_rope as _brope
 from verity_vllm.program.registry import cublas_f32 as _cub
 from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
@@ -21,6 +22,7 @@ from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import mla_word as _mlaw
 from verity_vllm.program.registry import moe as _moe
 from verity_vllm.program.registry import pouw_rows as _pouw_rows
+from verity_vllm.program.registry import targets as _targets
 from verity_vllm.program.registry import value_inputs as _vi
 from verity_vllm.program.frontend.rules import ref_kinds as R
 
@@ -71,7 +73,7 @@ def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
 # the registered `values` parameter (`Ctx.supplied`); the rules ask for them instead of the constant-holding kinds under the switch
 _VALUE_KINDS = {
     "rmsnorm_value": lambda N: ir_bind(_vi.RMSNormTritonV3, N=N),
-    "rmsnorm_fused_value": lambda N: ir_bind(_vi.RMSNormFusedCudaV4, N=N),
+    "rmsnorm_fused_value": lambda N, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, eps_input=True),
     "attention_value": lambda T, NH, KVH, D: ir_bind(_vi.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
     "attention_dot_value": _attention_dot_value,
     "attention_dot_plain_value": lambda T, NH, KVH, D, BN, DOT, INV: ir_bind(_vi.AttentionV12, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV),
@@ -99,7 +101,9 @@ PROFILE_B1_EAGER = Vocabulary(
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "gemm_bias": lambda K, N: ir_bind(_gemm_bias.GemmBias, K=K, N=N),
         "rmsnorm": lambda N, EPS: ir_bind(b1.RMSNormTriton, N=N, EPS=EPS),
-        "rmsnorm_fused": lambda N, EPS: ir_bind(b1.RMSNormFusedCuda, N=N, EPS=EPS),
+        # `_C.fused_add_rms_norm` by the declared target (`registry.targets.rmsnorm_fused_spec`, which the fold calls too): the rule
+        # states `TARGET`, and without it the role has no kind
+        "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
         "attention": lambda T, NH, KVH, D: ir_bind(b1.Attention, T=T, NH=NH, KVH=KVH, D=D),
         "silu_mul": lambda I: ir_bind(b1.SiluMul, I=I),
@@ -200,7 +204,7 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
         "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "rmsnorm": _norm_v2("L0"),
-        "rmsnorm_fused": _norm_v2("FUSED"),
+        "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
         "attention": lambda T, NH, KVH, D: ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, **b1.ATTENTION_FA2),
         "silu_mul": lambda I: ir_bind(b1.SiluMul, I=I),
@@ -315,7 +319,6 @@ def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
 # this head dim, D54/D57). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
 _PAD_KINDS = {k: PROFILE_B1_EAGER_V2.kinds[k] for k in ("const", "i32_eq", "bit_not", "bit_and", "select_i32", "select_bf16")}
 _PAD_NOTES = {k: PROFILE_B1_EAGER_V2.notes[k] for k in _PAD_KINDS}
-_FP8_SCALE = {"per-coordinate": _fp8.ScaledMmFp8Block, "shared-per-block": _fp8.SHARED_SCALE[_fp8.ScaledMmFp8Block.id]}
 
 PROFILE_B1_EAGER_V3 = Vocabulary(
     "b1-eager-v3", "profile", "b1-eager-v3",
@@ -360,7 +363,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # the f32 router gate (`nn.Linear(dtype=float32)` on the widened hidden): cuBLAS's kernel family for M is TREE
            # (`rules/vllm_bindings/f32_linear.py`)
            "f32_linear_cublas": lambda K, N, TREE: ir_bind(_cub.CublasF32LinearWord, K=K, N=N, TREE=TREE),
-           "rope_gptj": lambda NHEADS, D: ir_bind(RP.RoPEGptJV2, NHEADS=NHEADS, D=D),
+           "rope_gptj": lambda NHEADS, D: ir_bind(_brope.RoPEGptJV2, NHEADS=NHEADS, D=D),
            # MLA (`rules/vllm_bindings/mla_attention.py`): the absorb / V-up bmms and Triton's one-split MLA decode, the word twins of
            # `registry.mla`'s Boolean Definitions
            "mla_bmm": lambda NHEADS, K, N, DOT: ir_bind(_mlaw.MlaBmmWord, NHEADS=NHEADS, K=K, N=N, DOT=DOT),
@@ -394,9 +397,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # [R15 fp8] the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
-           # SCALE is `TargetProfile.effective_fp8_scale_construction()`.
+           # SCALE is `TargetProfile.effective_fp8_scale_construction()`; FP8_DOT, given on a target whose blockwise step is not Hopper's
+           # (`registry.targets.fp8_block_dot`), binds the version 3 forms over it (the role and its note stay as they were).
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
-           "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G),
+           "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8.block_gemm(K, N, G, SCALE, FP8_DOT),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
            # (quarantine lane cov-ln, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),

@@ -1,7 +1,7 @@
 """Word-for-word checks of the MLA captures (`mla_capture`) against numpy models of the kernels as they compile on sm_120
 (Triton 3.7.1, vLLM d9105ea80), the arithmetic `mla.TritonMlaDecode`, `mla.MlaBmm` and `mla.MoeSharedCombine` compute:
 
-    python -m verity_vllm.program.registry.mla_capture check --dir DIR [--out REPORT.json]
+    verity-vllm mla-capture check --dir DIR [--out REPORT.json]
 
 `decode_rows` is `_fwd_grouped_kernel_stage1` per (request, head, split) and `_fwd_kernel_stage2`, read from their PTX and SASS:
 
@@ -34,7 +34,6 @@ from verity.ml.tc.total import HOPPER_BF16_WGMMA_K16
 from verity_vllm.program.kernels import dense_rows as DRW
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels.libdevice_sampling import nv_logf
-from verity_vllm.program.registry import mla_capture as MC
 
 U32 = np.uint32
 LOG2E = U32(0x3FB8AA3B)
@@ -43,6 +42,7 @@ HALF = U32(0x3F000000)
 ONE = U32(0x3F800000)
 QNAN = U32(0x7FFFFFFF)
 BLOCK = 32
+DL = 512
 HOPPER = "HopperBF16WgmmaDot16_v1"
 
 
@@ -160,7 +160,7 @@ def split_ranges(T: int, S: int) -> list[tuple[int, int]]:
     return [(s * per, min(s * per + per, T)) for s in range(S)]
 
 
-def stage1(qk: np.ndarray, kv: np.ndarray, lo: int, hi: int, DL: int = MC.DL) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def stage1(qk: np.ndarray, kv: np.ndarray, lo: int, hi: int, DL: int = DL) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """One split of one request for every head: qk (H, T) scaled scores, kv (T, DL + DR) -> (tv (H, DL), e_max (H,),
     e_sum (H,))."""
     H = qk.shape[0]
@@ -185,7 +185,7 @@ def stage1(qk: np.ndarray, kv: np.ndarray, lo: int, hi: int, DL: int = MC.DL) ->
     return div_full(acc, e_sum[:, None]), e_max, e_sum
 
 
-def decode_rows(q: np.ndarray, kv: np.ndarray, splits: int, scale: int = 0x3D800000, DL: int = MC.DL) -> dict:
+def decode_rows(q: np.ndarray, kv: np.ndarray, splits: int, scale: int = 0x3D800000, DL: int = DL) -> dict:
     """One request: q (H, DL + DR) and kv (T, DL + DR) bf16 words -> o (H, DL) and lse (H,) bf16 words, logits (H, S, DL + 1)
     f32 words (zero for an empty split, which the kernel leaves unwritten)."""
     H, T = q.shape[0], kv.shape[0]
@@ -240,8 +240,8 @@ def _words_equal(got, want, f32_words: bool = False):
     return got == want
 
 
-def check_decode(case: dict, out: dict) -> dict:
-    q, kvs = MC.case_inputs(case)
+def check_decode(case: dict, out: dict, inputs) -> dict:
+    q, kvs = inputs
     S = int(case["splits"])
     rows = bad_rows = words_bad = logits_bad = lse_bad = 0
     first: list = []
@@ -264,22 +264,22 @@ def check_decode(case: dict, out: dict) -> dict:
             "lse_bad": lse_bad, "first": first[:6]}
 
 
-def check_bmm(case: dict, out: dict) -> dict:
-    a, b = MC.bmm_inputs(case)
+def check_bmm(case: dict, out: dict, inputs) -> dict:
+    a, b = inputs
     m = bmm_rows(a, b)
     bad = out["c"] != m
     return {"rows": int(a.shape[0] * a.shape[1]), "o_words_bad": int(bad.sum()),
             "mismatched_rows": int(bad.any(axis=2).sum()), "first": _first(out["c"], m, bad)}
 
 
-def check_combine(case: dict, out: dict) -> dict:
-    routed, shared = MC.combine_inputs(case)
-    rep = {}
-    for nan in (0x7FFF, 0x7FC0):
-        m = combine_rows(routed, shared, case["rsf"], nan)
-        bad = out["out"] != m
-        rep[hex(nan)] = {"words_bad": int(bad.sum()), "rows_bad": int(bad.any(axis=1).sum()), "first": _first(out["out"], m, bad)}
-    return {"rows": int(routed.shape[0]), "by_nan": rep}
+def check_combine(case: dict, out: dict, inputs) -> dict:
+    """ATen's bf16 combine with NaN 0x7FFF (F2FP), the word sm_120 writes; 0x7FC0's count is reported beside it."""
+    routed, shared = inputs
+    m = combine_rows(routed, shared, case["rsf"], 0x7FFF)
+    bad = out["out"] != m
+    other = int((out["out"] != combine_rows(routed, shared, case["rsf"], 0x7FC0)).any(axis=1).sum())
+    return {"rows": int(routed.shape[0]), "words_bad": int(bad.sum()), "mismatched_rows": int(bad.any(axis=1).sum()),
+            "first": _first(out["out"], m, bad), "rows_bad_at_nan_0x7fc0": other}
 
 
 def check_mufu(d: Path) -> dict:
@@ -297,9 +297,10 @@ def check_mufu(d: Path) -> dict:
 CHECK = {"decode": check_decode, "bmm": check_bmm, "combine": check_combine}
 
 
-def check(d: Path, only: list[int] | None = None) -> dict:
-    """Every case of the capture directory d against its model; `summary.mismatched_rows` counts output rows (an attention row is
-    one head of one request; a bmm row one head's output row; a combine row one token) with any differing word."""
+def check(d: Path, inputs: dict, only: list[int] | None = None) -> dict:
+    """Every case of the capture directory d against its model, `inputs[op](case)` rebuilding a case's inputs
+    (`mla_capture.INPUTS`); `summary.mismatched_rows` counts output rows (an attention row is one head of one request; a bmm
+    row one head's output row; a combine row one token) with any differing word."""
     man = json.loads((d / "manifest.json").read_text())
     rep: dict = {"suite": man["suite"], "device": man["device"], "vllm": man["vllm"], "triton": man["triton"], "cases": []}
     if man["suite"] == "mufu":
@@ -313,10 +314,7 @@ def check(d: Path, only: list[int] | None = None) -> dict:
             continue
         op = case.get("op", "decode")
         out = dict(np.load(d / f"case_{i}.npz"))
-        r = CHECK[op](case, out)
-        if op == "combine":
-            best = min(r["by_nan"].values(), key=lambda v: v["rows_bad"])
-            r["mismatched_rows"] = best["rows_bad"]
+        r = CHECK[op](case, out, inputs[op](case))
         rows += r["rows"]
         mismatched += r["mismatched_rows"]
         rep["cases"].append({"case": i, **{k: v for k, v in case.items() if k != "seqlens"},

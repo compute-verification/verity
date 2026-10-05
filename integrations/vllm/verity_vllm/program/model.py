@@ -56,8 +56,18 @@ FAMILY_RULES: dict[str, dict[str, Any]] = {
 FP8_BLOCK_QUANT = {"quant_method": "fp8", "fmt": "e4m3", "activation_scheme": "dynamic"}
 
 
-def quant_refusal(qc: dict[str, Any] | None) -> str | None:
-    """None when `qc` is absent (bf16 checkpoint) or exactly the block-scaled dynamic FP8 scheme; else why it is not served."""
+def _moe_routers(cfg: dict[str, Any] | None) -> set[str]:
+    """The router module of every layer of a fused-MoE configuration (`mlp.gate`, the bf16 `gate_w` of `moe_layer_weights_type`); empty
+    for a dense configuration or none."""
+    cfg = cfg or {}
+    if not any(cfg.get(k) for k in ("num_experts", "num_local_experts", "n_routed_experts")):
+        return set()
+    return {f"model.layers.{n}.mlp.gate" for n in range(int(cfg.get("num_hidden_layers") or 0))}
+
+
+def quant_refusal(qc: dict[str, Any] | None, cfg: dict[str, Any] | None = None) -> str | None:
+    """None when `qc` is absent (bf16 checkpoint) or exactly the block-scaled dynamic FP8 scheme; else why it is not served.  `cfg` is
+    the checkpoint's config.json: a fused-MoE one serves FP8 experts with bf16 routers, so it must list every layer's router."""
     if not qc:
         return None
     for k, v in FP8_BLOCK_QUANT.items():
@@ -67,10 +77,17 @@ def quant_refusal(qc: dict[str, Any] | None) -> str | None:
     if not (isinstance(bs, (list, tuple)) and len(bs) == 2 and bs[0] == bs[1] and int(bs[0]) > 0 and int(bs[0]) % 32 == 0):
         return f"quantization_config.weight_block_size={bs!r} is not a square block [G, G] with G a multiple of 32"
     # `modules_to_not_convert` may only name modules that are no linear projection anyway (the tied `lm_head`, the RMSNorms -- Qwen3-4B-FP8
-    # lists exactly those); a LINEAR left in bf16 would make the layer mixed-precision, which is not modelled
-    mixed = [m for m in (qc.get("modules_to_not_convert") or ()) if not (m == "lm_head" or m.endswith("norm"))]
+    # lists exactly those) or, on a MoE, the routers the MoE weights type keeps bf16; any other LINEAR left in bf16 would make the layer
+    # mixed-precision, which is not modelled
+    kept = list(qc.get("modules_to_not_convert") or ())
+    routers = _moe_routers(cfg)
+    mixed = [m for m in kept if not (m == "lm_head" or m.endswith("norm") or m in routers)]
     if mixed:
         return f"quantization_config.modules_to_not_convert names linears kept in bf16 {mixed[:4]!r}: mixed-precision layers are not modelled"
+    fp8_routers = sorted(routers - set(kept), key=lambda m: int(m.split(".")[2]))
+    if fp8_routers:
+        return (f"quantization_config quantizes the MoE routers {fp8_routers[:4]!r} ({len(fp8_routers)} of {len(routers)} layers not in "
+                f"modules_to_not_convert): the MoE weights type keeps every router bf16, an FP8 router is not modelled")
     return None
 
 
@@ -149,7 +166,7 @@ def config_of(hf_config: str | Path | dict, *, model: str | None = None, revisio
     # [R15 fp8] checkpoint quantization: block-scaled dynamic e4m3 FP8 (`C["FP8_BLOCK"] = G`) or none; anything else refuses here
     qc = cfg.get("quantization_config")
     if qc:
-        why = quant_refusal(qc)
+        why = quant_refusal(qc, cfg)
         if why:
             raise ValueError(why)
         C["FP8_BLOCK"], prov["FP8_BLOCK"] = int(qc["weight_block_size"][0]), "hf-config"
@@ -164,7 +181,8 @@ def moe_layer_weights_type(C: dict[str, Any]) -> Record:
     dense MLP (`gate_up_w`, `down_w`) replaced by the router and the expert stacks, plus the qk-norm weights when the family
     applies them (`C["QK_NORM"]`, a "hand" fact of vLLM's `OlmoeAttention`).  Shapes are vLLM d9105ea80's parameters:
     `mlp.gate.weight [E][H]`, `mlp.experts.routed_experts.w13_weight [E][2I][H]` (gate|up fused), `w2_weight [E][H][I]`.
-    Field order = parameter order in the checkpoint's layer (b1's order for the shared fields)."""
+    Field order = parameter order in the checkpoint's layer (b1's order for the shared fields).  With `C["FP8_BLOCK"]` the linears but
+    the router are e4m3, each followed by its block scales (`_fp8_fields`)."""
     H, QKV, E, I = C["H"], C["QKV"], C["NUM_EXPERTS"], C["I"]
     fields: list[tuple[str, Any]] = [("ln1", Array(H, BF16)), ("qkv_w", Array(QKV, Array(H, BF16)))]
     if C.get("BIAS", True):
@@ -182,7 +200,51 @@ def moe_layer_weights_type(C: dict[str, Any]) -> Record:
                ("gate_w", Array(E, Array(H, BF16))),
                ("w13", Array(E, Array(2 * I, Array(H, BF16)))),
                ("w2", Array(E, Array(H, Array(I, BF16))))]
-    return Record(*fields)
+    G = int(C.get("FP8_BLOCK") or 0)
+    return Record(*(_fp8_fields(fields, G, fp8_moe_block(G, I, H)) if G else fields))
+
+
+def fp8_moe_block(G: int, I_r: int, H: int) -> int:
+    """The block of a rank's FP8 expert scales, vLLM d9105ea80 `refine_fp8_moe_block_shape` (fused_moe/oracle/fp8.py:272): the
+    checkpoint's `G` when the rank's expert width `I_r` is a multiple of it, else `g = gcd(G, I_r, H)` when g >= 32 -- the loader then
+    copies each checkpoint scale onto (G/g)^2 cells of a g-block grid, losslessly.  Any other width vLLM refuses
+    (`Fp8MoEMethod.create_weights`: "not divisible by weight quantization block_n"), so this raises."""
+    if I_r % G == 0:
+        return G
+    g = math.gcd(G, I_r, H)
+    if g < 32:
+        raise ValueError(f"FP8 MoE: the rank's expert width {I_r} is not a multiple of the block {G} and gcd({G}, {I_r}, H={H}) = {g} < 32: "
+                         f"vLLM refines no scale grid for it and refuses the checkpoint")
+    return g
+
+
+def _fp8_fields(fields: list[tuple[str, Any]], G: int, g: int) -> list[tuple[str, Any]]:
+    """A layer's fields under a block-FP8 checkpoint: each linear of `FP8_LINEAR_FIELDS` is e4m3 `Value<8>` followed by its f32 block
+    scales on the checkpoint's G-block grid; a fused-MoE layer's expert stacks `w13`, `w2` likewise, their scales `w13_ws [E][2·cdiv(I,
+    g)][cdiv(H, g)]` and `w2_ws [E][cdiv(H, g)][cdiv(I, g)]` on the rank's g-block grid (`fp8_moe_block`): the shapes vLLM's
+    `Fp8MoEMethod.create_weights` gives `w13_weight_scale_inv` / `w2_weight_scale_inv`.  The router `gate_w` and the norms stay bf16
+    (`quant_refusal` admits the router only in `modules_to_not_convert`)."""
+    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
+    from verity_vllm.program.registry.prims import F32
+
+    def cdiv(a: int, b: int) -> int:
+        return -(-a // b)
+
+    scale_of = dict(FP8_LINEAR_FIELDS)
+    out: list[tuple[str, Any]] = []
+    for n, t in fields:
+        if n in scale_of:
+            N, K = t.n, t.elem.n
+            if K % G:
+                raise ValueError(f"{n}: [{N}][{K}]: K is not a multiple of the FP8 block {G}")
+            out += [(n, Array(N, Array(K, E4M3))), (scale_of[n], Array(weight_blocks(N, G), Array(K // G, F32)))]
+        elif isinstance(t, Array) and isinstance(t.elem, Array) and isinstance(t.elem.elem, Array):     # an expert stack [E][N][K]
+            # g divides I (fp8_moe_block), so w13's cdiv(2I, g) rows are vLLM's 2·cdiv(I, g)
+            E, N, K = t.n, t.elem.n, t.elem.elem.n
+            out += [(n, Array(E, Array(N, Array(K, E4M3)))), (f"{n}_ws", Array(E, Array(cdiv(N, g), Array(cdiv(K, g), F32))))]
+        else:
+            out.append((n, t))
+    return out
 
 
 def layernorm_layer_weights_type(C: dict[str, Any]) -> Record:
@@ -211,7 +273,7 @@ def rotary_dim(C: dict[str, Any]) -> int:
     return int(C.get("ROT") or C["D"])
 
 
-#: [R15 fp8] the block-scaled FP8 linears of a dense layer: base weight field -> (vLLM parameter suffix, scale field).  The scale
+#: [R15 fp8] the block-scaled FP8 linears of a layer (a MoE layer has the first two): base weight field -> (vLLM parameter suffix, scale field).  The scale
 #: field `<w>s` is f32 `[cdiv(N, G)][K/G]` (`weight_scale_inv`, one scale per GxG weight block, the last one partial when N ends
 #: mid-block; vLLM's `process_fp8_weight_block_strategy` only re-lays it out) and follows its weight field so every earlier leaf
 #: interval of the layer Record is unchanged.
@@ -225,8 +287,6 @@ def dense_layer_weights_type(C: dict[str, Any]) -> Record:
     * `C["FP8_BLOCK"] == G`: every linear's weight is e4m3 `[N][K]` (`Value<8>` words, the checkpoint's stored bytes) followed by its
       f32 block-scale field `[cdiv(N, G)][K/G]` (`FP8_LINEAR_FIELDS`).  The norms stay bf16 (vLLM keeps them unquantised).
     Configurations without these facts get exactly `b1.layer_weights_type(C)`."""
-    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
-    from verity_vllm.program.registry.prims import F32
     base = b1.layer_weights_type(C)
     fields: list[tuple[str, Any]] = list(base.fields)
     if C.get("QK_NORM") == "head":
@@ -234,20 +294,7 @@ def dense_layer_weights_type(C: dict[str, Any]) -> Record:
         i = names.index("qkv_b") if "qkv_b" in names else names.index("qkv_w")
         fields[i + 1:i + 1] = [("q_norm", Array(C["D"], BF16)), ("k_norm", Array(C["D"], BF16))]
     G = int(C.get("FP8_BLOCK") or 0)
-    if G:
-        out: list[tuple[str, Any]] = []
-        scale_of = dict(FP8_LINEAR_FIELDS)
-        for n, t in fields:
-            if n in scale_of:
-                N, K = t.n, t.elem.n
-                if K % G:
-                    raise ValueError(f"{n}: [{N}][{K}]: K is not a multiple of the FP8 block {G}")
-                out.append((n, Array(N, Array(K, E4M3))))
-                out.append((scale_of[n], Array(weight_blocks(N, G), Array(K // G, F32))))
-            else:
-                out.append((n, t))
-        fields = out
-    return Record(*fields)
+    return Record(*(_fp8_fields(fields, G, G) if G else fields))
 
 
 def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
@@ -289,13 +336,14 @@ def weights_type(C: dict[str, Any]) -> Record:
     `layernorm_layer_weights_type(C)` as its `layers` element, a `norm_b` `[H]` field (the final LayerNorm's bias) after
     `norm`, and a `cos_sin` table of width `rotary_dim(C)` (partial rotary); RMSNorm configurations are unchanged.
     [R15 fp8] `C["QK_NORM"] == "head"` (Qwen3) and/or `C["FP8_BLOCK"]` (block-scaled FP8 checkpoint) get
-    `dense_layer_weights_type(C)` as the `layers` element (per-head norm weights; e4m3 weights + f32 block scales).
+    `dense_layer_weights_type(C)` as the `layers` element (per-head norm weights; e4m3 weights + f32 block scales); a fused-MoE one
+    takes `moe_layer_weights_type(C)`, which states both itself.
     A configuration with `KV_LORA` (multi-head latent attention) gets `mla_weights_type(C)`."""
     if C.get("KV_LORA"):
         return mla_weights_type(C)
     base = b1.weights_type(C)
     fields = list(base.fields)
-    if C.get("QK_NORM") == "head" or C.get("FP8_BLOCK"):
+    if not C.get("NUM_EXPERTS") and (C.get("QK_NORM") == "head" or C.get("FP8_BLOCK")):
         fields = [(n, Array(C["NL"], dense_layer_weights_type(C))) if n == "layers" else (n, t) for n, t in fields]
     if C.get("NORM") == "layernorm":
         fields = [(n, Array(C["NL"], layernorm_layer_weights_type(C))) if n == "layers" else (n, t) for n, t in fields]

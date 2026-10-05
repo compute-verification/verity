@@ -1,28 +1,32 @@
 """Captures of vLLM d9105ea80's Triton MLA decode (`TritonMLAImpl.forward_mqa` -> `decode_attention_fwd`, grouped kernel,
 `is_mla=True`) at GLM-4.7-Flash's shapes, for `mla.TritonMlaDecode`:
 
-    # node, torch venv:  python -m verity_vllm.program.registry.mla_capture produce --out DIR [--suite NAME]
-    # verity venv:       python -m verity_vllm.program.registry.mla_capture check --dir DIR [--out REPORT.json]
-    #                    python -m verity_vllm.program.registry.mla_capture check-bits --dir DIR [--tmax T] [--worker I --workers N] [--out R.json]
+    # node, torch venv:  verity-vllm mla-capture produce --out DIR [--suite NAME] [--triton-cache DIR]
+    # verity venv:       verity-vllm mla-capture check --dir DIR [--out REPORT.json]
+    #                    verity-vllm mla-capture check-bits --dir DIR [--tmin T] [--tmax T]
+    #                        [--worker I --workers N] [--skip EARLIER.json ...] [--fresh] [--out R.json]
 
-`check` holds the numpy models (`mla_check`) to every captured word; `check-bits` evaluates the Boolean
-`mla.TritonMlaDecodeHead` itself on the one-split decode rows.
+`check` holds the numpy models (`mla_check`) to every captured word; `check-bits` evaluates the Boolean Definitions
+themselves: `mla.TritonMlaDecodeHead` on the one-split decode rows, `mla.MlaBmm` and `mla.MoeSharedCombine` on every case.
 
 The inputs are counter-based (`words`: splitmix64 of the case seed and the word index), so the check rebuilds them from the
 manifest and only the kernel's outputs are stored: `o` (bf16 words `[B, H, 512]`), `lse` (bf16 `[B, H]`) and the stage-1
 scratch `attn_logits` (f32 words `[B, H, SPLITS, 513]`: each split's `acc / e_sum` and `e_max + log(e_sum)`). `produce` calls
 `decode_attention_fwd` exactly as forward_mqa does: q `[B, H, 576]`, the paged cache `[pages, PAGE, 1, 576]` and its first 512
 columns as the value buffer, a shuffled block table, `k_scale = v_scale = 1.0`. With `TRITON_CACHE_DIR` set the compiled
-kernels' TTGIR, LLIR, PTX and cubin land there; `produce` writes each cubin's SASS beside it.
+kernels' TTGIR, LLIR, PTX and cubin land there; `produce` writes each cubin's SASS beside it (`--triton-cache`, which defaults
+to that variable).
 """
 from __future__ import annotations
 
-import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+
+from verity_vllm.config import option
 
 DL, DR = 512, 64
 D = DL + DR
@@ -152,6 +156,10 @@ def bmm_inputs(case: dict) -> tuple[np.ndarray, np.ndarray]:
 def combine_inputs(case: dict) -> tuple[np.ndarray, np.ndarray]:
     T, HD = case["T"], case["HD"]
     return operand_words(case, 0, T * HD, "x").reshape(T, HD), operand_words(case, 1, T * HD, "x").reshape(T, HD)
+
+
+#: op -> its case's inputs, rebuilt from the manifest (`mla_check.check`)
+INPUTS = {"decode": case_inputs, "bmm": bmm_inputs, "combine": combine_inputs}
 
 
 # --- produce (node, torch venv) -----------------------------------------------------------------------------------------
@@ -288,9 +296,7 @@ def _sass(cache_dir: Path) -> list[str]:
 RUN = {"decode": _run_case, "bmm": _run_bmm, "combine": _run_combine}
 
 
-def produce(out: Path, suite_name: str, device: str = "cuda") -> dict:
-    import os
-
+def produce(out: Path, suite_name: str, device: str = "cuda", triton_cache: Path | None = None) -> dict:
     import torch
     import triton
     import vllm
@@ -308,103 +314,180 @@ def produce(out: Path, suite_name: str, device: str = "cuda") -> dict:
     for i, case in enumerate(cases):
         np.savez_compressed(out / f"case_{i}.npz", **RUN[case.get("op", "decode")](case, device))
         print(f"[mla-capture] case {i}: {json.dumps(case)[:160]}", file=sys.stderr, flush=True)
-    cache = os.environ.get("TRITON_CACHE_DIR")
-    if cache:
-        man["sass"] = _sass(Path(cache))
+    if triton_cache is not None:
+        man["sass"] = _sass(triton_cache)
     (out / "manifest.json").write_text(json.dumps(man, indent=1) + "\n")
     return man
 
 
-def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int = 1, out: Path | None = None) -> dict:
-    """`mla.TritonMlaDecodeHead` on bits (`verity.evaluation.bits`) at GLM-4.7-Flash's statics against the captured `o` of
-    every one-split decode row (one head of one request) with T <= tmax: one evaluation per distinct T, that T's rows its
-    instances. The T values are dealt to `workers` shares by key count (largest first) and this call takes share `worker`;
-    each finished T is written to `out` at once, so a stopped worker keeps what it checked."""
-    import time
+def _bits_groups(d: Path, man: dict, tmin: int | None, tmax: int | None) -> dict:
+    """{key: (cost, run)} of a capture directory: `run()` evaluates one Boolean Definition on bits over its instances and
+    returns (got, want, where), word arrays `[rows, words]` and `where(row)` naming a row. A decode key is one T (its one-split
+    rows, one head of one request each, with tmin <= T <= tmax); a bmm key one case (a row is one head of one token, an
+    instance one token); a combine key one case (a row and an instance are one token)."""
     from collections import defaultdict
 
     from verity.evaluation import bits as BS
     from verity.ir.defs import bind
     from verity_vllm.program.registry import mla as M
 
-    man = json.loads((d / "manifest.json").read_text())
     G = M.GLM47_FLASH
-    rows: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    groups: dict = {}
+    by_t: dict[int, list[tuple[int, int]]] = defaultdict(list)
     for i, case in enumerate(man["cases"]):
-        if case.get("op", "decode") == "decode" and case["splits"] == 1:
+        op = case.get("op", "decode")
+        if op == "decode" and case["splits"] == 1:
             for b, T in enumerate(case["seqlens"]):
-                if tmax is None or T <= tmax:
-                    rows[T].append((i, b))
+                if (tmin is None or T >= tmin) and (tmax is None or T <= tmax):
+                    by_t[T].append((i, b))
+        elif op == "bmm":
+            def run(i=i, case=case):
+                x, w = bmm_inputs(case)
+                NH, Mt, K, N = x.shape[0], x.shape[1], x.shape[2], w.shape[2]
+                f = bind(M.MlaBmm, NHEADS=NH, K=K, N=N, DOT=G["DOT"])
+                xs = x.transpose(1, 0, 2)
+                ws = np.broadcast_to(w.transpose(0, 2, 1), (Mt, NH, N, K))
+                got = np.asarray(BS.evaluate_words(f, xs, ws)).reshape(Mt * NH, N)
+                want = np.load(d / f"case_{i}.npz")["c"].transpose(1, 0, 2).reshape(Mt * NH, N)
+                return got, want, lambda r: {"case": i, "token": r // NH, "head": r % NH}
+            groups[f"case={i}"] = (case["NH"] * case["K"] * case["N"], run)
+        elif op == "combine":
+            def run(i=i, case=case):
+                routed, shared = combine_inputs(case)
+                f = bind(M.MoeSharedCombine, H=routed.shape[1], RSF=int(np.float32(case["rsf"]).view(np.uint32)))
+                got = np.asarray(BS.evaluate_words(f, routed, shared))
+                return got, np.load(d / f"case_{i}.npz")["out"], lambda r: {"case": i, "token": r}
+            groups[f"case={i}"] = (case["HD"], run)
+    for T, rows in by_t.items():
+        def run(T=T, rows=rows):
+            qs, kvs, want = [], [], []
+            for i, b in rows:
+                case = man["cases"][i]
+                seed, kind = int(case["seed"]), case["kind"]
+                qs.append(words(seed, 0, len(case["seqlens"]) * H * D, kind, "q").reshape(-1, H, D)[b])
+                kvs.append(np.broadcast_to(words(seed, 1 + b, T * D, kind, "kv").reshape(T, D), (H, T, D)))
+                want.append(np.load(d / f"case_{i}.npz")["o"][b])
+            head = bind(M.TritonMlaDecodeHead, T=T, DL=G["DL"], DR=G["DR"], BN=G["BN"], SPLITS=1, SCALE=G["SCALE"],
+                        DOT=G["DOT"])
+            got = np.asarray(BS.evaluate_words(head, np.concatenate(qs), np.concatenate(kvs)))
+            where = lambda r: {"case": rows[r // H][0], "request": rows[r // H][1], "T": T, "head": r % H}  # noqa: E731
+            return got, np.concatenate(want), where
+        groups[f"T={T}"] = (T + 64, run)
+    return groups
+
+
+def done_keys(reports: list[Path]) -> set[str]:
+    """The keys earlier `check-bits` reports finished (`by_key`, or a decode-only report's `by_T`)."""
+    keys: set[str] = set()
+    for p in reports:
+        r = json.loads(p.read_text())
+        keys |= set(r.get("by_key", {})) | {f"T={t}" for t in r.get("by_T", {})}
+    return keys
+
+
+def _check_key(d: Path, key: str, tmin: int | None, tmax: int | None) -> tuple[int, int, int, dict | None]:
+    """One key of `check_bits`: (rows, mismatched rows, differing words, the first differing word or None)."""
+    man = json.loads((d / "manifest.json").read_text())
+    got, want, where = _bits_groups(d, man, tmin, tmax)[key][1]()
+    got, want = got.astype(np.uint16), want.astype(np.uint16)
+    bad = got != want
+    first = None
+    if bad.any():
+        r, c = (int(v) for v in np.argwhere(bad)[0])
+        first = {**where(r), "column": c, "got": int(got[r, c]), "want": int(want[r, c])}
+    return bad.shape[0], int(bad.any(axis=1).sum()), int(bad.sum()), first
+
+
+def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int = 1, out: Path | None = None,
+               tmin: int | None = None, skip: set[str] = frozenset(), fresh: bool = False) -> dict:
+    """The Boolean Definitions on bits (`verity.evaluation.bits`) at GLM-4.7-Flash's statics against the captured words:
+    `mla.TritonMlaDecodeHead` against `o` of every one-split decode row with tmin <= T <= tmax (one evaluation per distinct
+    T), `mla.MlaBmm` against `c` and `mla.MoeSharedCombine` against `out` (one evaluation per case). The keys not in `skip`
+    are dealt to `workers` shares by cost (largest first) and this call takes share `worker`; each finished key is written
+    to `out` at once, so a stopped worker keeps what it checked and a rerun skips it (`done_keys`). With `fresh` each key
+    runs in a new process: a worker's memory is then one key's, where in one process it grows with every T it has bound."""
+    import time
+    from concurrent.futures import ProcessPoolExecutor
+
+    man = json.loads((d / "manifest.json").read_text())
+    groups = {k: g for k, g in _bits_groups(d, man, tmin, tmax).items() if k not in skip}
     load, mine = [0] * workers, []
-    for T in sorted(rows, reverse=True):
+    for key in sorted(groups, key=lambda k: (-groups[k][0], k)):
         w = load.index(min(load))
-        load[w] += T + 64
+        load[w] += groups[key][0]
         if w == worker:
-            mine.append(T)
-    rep: dict = {"dir": str(d), "worker": worker, "workers": workers, "tmax": tmax, "rows": 0, "mismatched_rows": 0,
-                 "words_bad": 0, "first_mismatch": None, "by_T": {}}
-    for T in sorted(mine):
+            mine.append(key)
+    rep: dict = {"dir": str(d), "suite": man["suite"], "worker": worker, "workers": workers, "tmin": tmin, "tmax": tmax,
+                 "rows": 0, "mismatched_rows": 0, "words_bad": 0, "first_mismatch": None, "by_key": {}}
+    for key in sorted(mine, key=lambda k: (groups[k][0], k)):
         t0 = time.time()
-        qs, kvs, want = [], [], []
-        for i, b in rows[T]:
-            case = man["cases"][i]
-            seed, kind = int(case["seed"]), case["kind"]
-            q = words(seed, 0, len(case["seqlens"]) * H * D, kind, "q").reshape(-1, H, D)[b]
-            kv = words(seed, 1 + b, T * D, kind, "kv").reshape(T, D)
-            qs.append(q)
-            kvs.append(np.broadcast_to(kv, (H, T, D)))
-            want.append(np.load(d / f"case_{i}.npz")["o"][b])
-        head = bind(M.TritonMlaDecodeHead, T=T, DL=G["DL"], DR=G["DR"], BN=G["BN"], SPLITS=1, SCALE=G["SCALE"], DOT=G["DOT"])
-        got = np.asarray(BS.evaluate_words(head, np.concatenate(qs), np.concatenate(kvs))).astype(np.uint16)
-        bad = got != np.concatenate(want).astype(np.uint16)
-        n, nb = bad.shape[0], int(bad.any(axis=1).sum())
+        if fresh:
+            with ProcessPoolExecutor(1, max_tasks_per_child=1) as pool:
+                n, nb, nw, first = pool.submit(_check_key, d, key, tmin, tmax).result()
+        else:
+            n, nb, nw, first = _check_key(d, key, tmin, tmax)
         if nb and rep["first_mismatch"] is None:
-            r, c = (int(v) for v in np.argwhere(bad)[0])
-            i, b = rows[T][r // H]
-            rep["first_mismatch"] = {"case": i, "request": b, "T": T, "head": r % H, "column": c,
-                                     "got": int(got[r, c]), "want": int(np.concatenate(want)[r, c])}
+            rep["first_mismatch"] = first
         rep["rows"] += n
         rep["mismatched_rows"] += nb
-        rep["words_bad"] += int(bad.sum())
-        rep["by_T"][T] = {"rows": n, "mismatched_rows": nb, "seconds": round(time.time() - t0, 1)}
-        print(f"T={T} rows={n} bad_rows={nb} {time.time() - t0:.1f}s", flush=True)
+        rep["words_bad"] += nw
+        rep["by_key"][key] = {"rows": n, "mismatched_rows": nb, "seconds": round(time.time() - t0, 1)}
+        print(f"{key} rows={n} bad_rows={nb} {time.time() - t0:.1f}s", flush=True)
         if out:
             out.write_text(json.dumps(rep, indent=1) + "\n")
     return rep
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="mla_capture")
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("produce")
-    p.add_argument("--out", required=True)
-    p.add_argument("--suite", default="decode-v1")
-    p.add_argument("--device", default="cuda")
-    c = sub.add_parser("check")
-    c.add_argument("--dir", required=True)
-    c.add_argument("--out")
-    cb = sub.add_parser("check-bits")
-    cb.add_argument("--dir", required=True)
-    cb.add_argument("--out")
-    cb.add_argument("--tmax", type=int)
-    cb.add_argument("--worker", type=int, default=0)
-    cb.add_argument("--workers", type=int, default=1)
-    a = ap.parse_args(argv)
-    if a.cmd == "produce":
-        produce(Path(a.out), a.suite, a.device)
+@dataclass(frozen=True, kw_only=True)
+class ProduceOptions:
+    """Capture a suite's cases on the GPU (node, torch venv)."""
+
+    out: str = option("--out")
+    suite: str = option("--suite", default="decode-v1")
+    device: str = option("--device", default="cuda")
+    triton_cache: str | None = option("--triton-cache", env="TRITON_CACHE_DIR", default=None,
+                                      help="the Triton cache the run compiles into, whose cubins' SASS the manifest records")
+
+
+@dataclass(frozen=True, kw_only=True)
+class CheckOptions:
+    """The numpy models (`mla_check`) against every captured word."""
+
+    dir: str = option("--dir")
+    out: str | None = option("--out", default=None)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CheckBitsOptions:
+    """The Boolean Definitions on bits against the captures."""
+
+    dir: str = option("--dir")
+    out: str | None = option("--out", default=None)
+    tmin: int | None = option("--tmin", type=int, default=None)
+    tmax: int | None = option("--tmax", type=int, default=None)
+    worker: int = option("--worker", type=int, default=0)
+    workers: int = option("--workers", type=int, default=1)
+    skip: list[str] = option("--skip", nargs="*", default=[], help="earlier check-bits reports: their finished keys are not rerun")
+    fresh: bool = option("--fresh", action="store_true", default=False,
+                         help="each key in a new process (a worker's memory is one key's)")
+
+
+COMMANDS = {"produce": ProduceOptions, "check": CheckOptions, "check-bits": CheckBitsOptions}
+
+
+def main(a: ProduceOptions | CheckOptions | CheckBitsOptions) -> int:
+    if isinstance(a, ProduceOptions):
+        produce(Path(a.out), a.suite, a.device, Path(a.triton_cache) if a.triton_cache else None)
         return 0
-    if a.cmd == "check-bits":
-        rep = check_bits(Path(a.dir), a.tmax, a.worker, a.workers, Path(a.out) if a.out else None)
+    if isinstance(a, CheckBitsOptions):
+        rep = check_bits(Path(a.dir), a.tmax, a.worker, a.workers, Path(a.out) if a.out else None, a.tmin,
+                         done_keys([Path(p) for p in a.skip]), a.fresh)
         print(json.dumps({k: rep[k] for k in ("rows", "mismatched_rows", "words_bad", "first_mismatch")}), file=sys.stderr)
         return 0 if rep["mismatched_rows"] == 0 else 1
     from verity_vllm.program.registry import mla_check
 
-    rep = mla_check.check(Path(a.dir))
+    rep = mla_check.check(Path(a.dir), INPUTS)
     if a.out:
         Path(a.out).write_text(json.dumps(rep, indent=1) + "\n")
     print(json.dumps(rep["summary"]), file=sys.stderr)
     return 0 if rep["summary"]["mismatched_rows"] == 0 else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
