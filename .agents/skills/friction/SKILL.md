@@ -97,6 +97,13 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-05 (1:27 PM PDT): a coordinator never loses contact with a worker it launched. A running cloud agent can't take a
+  `Task` resume, and the Lean move lead went 85 minutes without a word. So every brief names the worker's lane, so
+  `research notes status` flags it STALE, and the worker checkpoints at least every 20 minutes (contract §3). At each
+  checkpoint it reads its follow-up queue (`cursor-cloud` `get-message-queue`). When something is queued, it ends its
+  turn soon, leaving long runs going on their pods, so the message is delivered. A launcher that can't queue a
+  follow-up itself asks its coordinator to (`SendToAgent`) as soon as a worker is STALE, and doesn't start a parallel
+  lane until that gets no answer.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
   piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
   critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
