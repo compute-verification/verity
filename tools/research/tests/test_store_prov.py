@@ -385,7 +385,7 @@ def test_attempt_build_from_fixture_run_dir(tmp_path):
     assert m["conditions"]["hw.family"] == "h100" and set(E.KEYS) <= set(m["conditions"])
     assert m["source"] == {"commit": "0123456789abcdef0123456789abcdef01234567", "tree": "89abcdef0123456789abcdef0123456789abcdef", "dirty": False,
                            "dirty_digest": None, "lockfiles": {"uv.lock": "4" * 64}}
-    assert m["closure"] == {"archive/direct/ligero/run.py": "3" * 64}
+    assert m["closure"] == {"backends/direct/ligero/run.py": "3" * 64}
     ex = m["execution"]
     assert ex["start_utc"] == "2026-09-22T12:00:01.000Z" and ex["end_utc"] == "2026-09-22T12:00:13.300Z" and ex["wall_s"] == 12.3
     assert ex["exclusive"] is True and ex["host"] == "vy-g5" and ex["project"] == "verity" and ex["campaign"] == "r21-fixture"
