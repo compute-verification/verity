@@ -1,12 +1,14 @@
 import Pouw.SecurityProofs.PearlC.RowStats
 import Pouw.SecurityProofs.PearlC.FreezePPure
+import Verity.SecurityProofs.Fp32.Round
+import Verity.SecurityProofs.Prims.Round
 
 /-!
 # Core's primitives at `pc8`'s and `pc4`'s rows (proofs)
 
 `Pc8OpsAgree` and `Pc4OpsAgree` name what the row units need of their primitives. At core's instance `coreOps` they
-follow from core's definitions (`Verity.Protocol.Fp32`, `.Scalar`, `.Prims`) under one named hypothesis,
-`CoreRoundAgree` (`pc8OpsAgree_coreOps`, `pc4OpsAgree_coreOps`).
+follow from core's definitions (`Verity.Protocol.Fp32`, `.Scalar`, `.Prims`) and nothing else (`pc8OpsAgree_coreOps`,
+`pc4OpsAgree_coreOps`).
 
 From the definitions alone: `F32Neg` flips and `F32Fabs` clears the sign bit, `SelectI32` reads its condition's low bit,
 the BF16 narrowing of a finite word is `rnBf16?`'s rounding, the E4M3 widening of every code is its value's word (by
@@ -17,10 +19,12 @@ NaN or an infinity. `order` is the value order of finite words (`order_cmp`), wh
 `E2M1_UP` boundaries are the words of `e2m1Mids`, so `F32ToE2m1Sat`'s count of the boundaries a magnitude passes is
 `e2m1Mag`'s count of the midpoints its value passes (`count_eq`).
 
-`CoreRoundAgree` holds the rest: `roundRn` of a positive magnitude (`n / d` units of `2⁻¹⁴⁹`) is `f32Word` of its value,
-and `F32ToE4m3Sat` of a word is `e4m3Word`'s code. With the first, the multiply, divide and FMA rows follow, the FMA's
-`roundSum` and its signed zeros included (`roundSum_eq`). Each is a statement about one core definition against one
-protocol word function; core's package proves neither beyond its pinned vectors.
+The rest is core's rounding and E4M3 cast against the protocol's: `roundRn` of a positive magnitude (`n / d` units of
+`2⁻¹⁴⁹`) is `f32Word` of its value (`roundRn_f32Word`), and `F32ToE4m3Sat` of a word is `e4m3Word`'s code
+(`cast_e4m3Word`). Core's package gives each as its integer round's grid and nearest-even rounding
+(`Verity.Fp32.Round.roundRn_eq`, `Verity.Prims.Round.f32ToE4m3Sat_fin`), which here read as `binade` and `roundEven` of
+the value (`roundEven_eq`). With the first, the multiply, divide and FMA rows follow, the FMA's `roundSum` and its
+signed zeros included (`roundSum_eq`).
 -/
 
 namespace Pouw.PearlC.CoreOps
@@ -220,19 +224,160 @@ theorem gpuNan_eq {w : ℕ} (h : Verity.Scalar.f32IsNan w = false) : Verity.Fp32
   have h' : Verity.Fp32.f32IsNan w = false := h
   unfold Verity.Fp32.f32GpuNan; rw [h']; exact ite_eq_right (by decide)
 
-/-! ## The named row -/
+/-! ## Core's rounding and E4M3 cast are the protocol's -/
 
-/-- **Core's rounding and E4M3 cast are the protocol's**: `roundRn s n d`, the word of the value `(-1)^s · n / d` units
-of `2⁻¹⁴⁹` with `n, d > 0`, is `f32Word` of that value (nearest even, subnormals below `2⁻¹²⁶`, `±inf` once the
-rounded magnitude reaches `2¹²⁸`, the zero of the sign below half the least subnormal); and `F32ToE4m3Sat` of a word is
-`e4m3Word`'s code. Facts about IEEE binary32 and OCP E4M3 that core's package states only at its pinned vectors. -/
-structure CoreRoundAgree : Prop where
-  roundRn : ∀ (s : Bool) (n d : ℕ), 0 < n → 0 < d →
-    Verity.Fp32.roundRn s n d = f32Word ((if s = true then -1 else 1) * ((n : ℚ) / d / 2 ^ 149))
-  cast : ∀ u < 2 ^ 32, Verity.Prims.f32ToE4m3Sat u = (e4m3Word u).val
+/-- Core's rounding to nearest even is `roundEven`. -/
+theorem roundEven_eq {x : ℚ} {q : ℕ} (h : Verity.Round.RoundsEven x q) : roundEven x = q := by
+  by_cases ht : 2 * |(q : ℚ) - x| = 1
+  · have he := h.tie ht
+    rcases (abs_eq (by norm_num : (0 : ℚ) ≤ 1 / 2)).1 (by linarith : |(q : ℚ) - x| = 1 / 2) with h1 | h1
+    · have hx : x = (((q : ℤ) - 1 : ℤ) : ℚ) + 1 / 2 := by push_cast; linarith
+      rw [hx, Freeze.roundEven_half_odd (by omega)]
+      omega
+    · have hx : x = ((q : ℤ) : ℚ) + 1 / 2 := by push_cast; linarith
+      rw [hx, Freeze.roundEven_half_even (by omega)]
+  · apply Proofs.roundEven_near
+    have h2 : 2 * |(q : ℚ) - x| < 1 := lt_of_le_of_ne h.near ht
+    rw [Int.cast_natCast, abs_sub_comm]
+    linarith
 
-theorem roundRn_zero (s : Bool) {d : ℕ} (hd : 0 < d) : Verity.Fp32.roundRn s 0 d = Verity.Fp32.zeroWord s := by
-  simp [Verity.Fp32.roundRn, hd.ne, Nat.log2_zero]
+theorem binade_div_pow {x : ℚ} (hx : 0 < x) (k : ℕ) : binade (x / 2 ^ k) = binade x - k := by
+  obtain ⟨h1, h2⟩ := Proofs.binade_spec hx
+  have hk : (0 : ℚ) < 2 ^ k := by positivity
+  apply Proofs.binade_unique (div_pos hx hk)
+  · rw [le_div_iff₀ hk, ← zpow_natCast, ← zpow_add₀ two_ne_zero, sub_add_cancel]; exact h1
+  · rw [div_lt_iff₀ hk, ← zpow_natCast, ← zpow_add₀ two_ne_zero, show binade x - k + 1 + k = binade x + 1 by ring]
+    exact h2
+
+/-- **`roundRn` is `f32Word`**: the word core rounds `(-1)^s · n / d` units of `2⁻¹⁴⁹` to, `n, d > 0`, is `f32Word` of
+that value (`Verity.Fp32.Round.roundRn_eq`: the same binade exponent, clamped at the subnormals, and the same
+significand rounded to nearest even). -/
+theorem roundRn_f32Word (s : Bool) {n d : ℕ} (hn : 0 < n) (hd : 0 < d) :
+    Verity.Fp32.roundRn s n d = f32Word ((if s = true then -1 else 1) * ((n : ℚ) / d / 2 ^ 149)) := by
+  obtain ⟨j, q, hj, hlt, hq, heq⟩ := Verity.Fp32.Round.roundRn_eq s n hd
+  have hd' : (0 : ℚ) < d := by exact_mod_cast hd
+  have hnd : (0 : ℚ) < n / d := div_pos (by exact_mod_cast hn) hd'
+  have ha : (0 : ℚ) < n / d / 2 ^ 149 := div_pos hnd (by norm_num)
+  obtain ⟨hb1, hb2⟩ := Proofs.binade_spec hnd
+  have hup : (n : ℚ) / d < 2 ^ ((j + 24 : ℕ) : ℤ) := by
+    rw [zpow_natCast, div_lt_iff₀ hd']; exact_mod_cast hlt
+  have hbu : binade ((n : ℚ) / d) < ((j + 24 : ℕ) : ℤ) := by
+    by_contra h
+    have := zpow_le_zpow_right₀ (one_le_two : (1 : ℚ) ≤ 2) (not_lt.1 h)
+    linarith
+  have hbl : j = 0 ∨ ((j + 23 : ℕ) : ℤ) ≤ binade ((n : ℚ) / d) := by
+    refine hj.imp id fun hj => ?_
+    have hlo : (2 : ℚ) ^ ((j + 23 : ℕ) : ℤ) ≤ n / d := by
+      rw [zpow_natCast, le_div_iff₀ hd']; exact_mod_cast hj
+    by_contra h
+    have := zpow_le_zpow_right₀ (one_le_two : (1 : ℚ) ≤ 2)
+      (show binade ((n : ℚ) / d) + 1 ≤ ((j + 23 : ℕ) : ℤ) by omega)
+    linarith
+  have hE : max (binade ((n : ℚ) / d / 2 ^ 149)) (-126) = (j : ℤ) - 126 := by
+    rw [binade_div_pow hnd 149]; omega
+  have hP : (0 : ℚ) < d * 2 ^ j := mul_pos hd' (by positivity)
+  have hdiv : (n : ℚ) / d / 2 ^ 149 / 2 ^ ((j : ℤ) - 126 - 23) = n / (d * 2 ^ j) := by
+    rw [show (j : ℤ) - 126 - 23 = (j : ℤ) - (149 : ℕ) by omega, zpow_sub₀ two_ne_zero, zpow_natCast, zpow_natCast]
+    field_simp
+  have hq24 : q ≤ 2 ^ 24 := hq.le (by
+    rw [div_lt_iff₀ hP]
+    have : ((n : ℕ) : ℚ) < ((2 ^ (j + 24) * d : ℕ) : ℚ) := by exact_mod_cast hlt
+    push_cast at this ⊢; rw [pow_add] at this; linarith)
+  have hq23 : j = 0 ∨ 2 ^ 23 ≤ q := hj.imp id fun hj => hq.ge (by
+    rw [lt_div_iff₀ hP]
+    have : ((2 ^ (j + 23) * d : ℕ) : ℚ) ≤ ((n : ℕ) : ℚ) := by exact_mod_cast hj
+    push_cast at this ⊢; rw [pow_add] at this; linarith)
+  have hr : (roundEven ((n : ℚ) / d / 2 ^ 149 / 2 ^ ((j : ℤ) - 126 - 23))).toNat = q := by
+    rw [hdiv, roundEven_eq hq, Int.toNat_natCast]
+  have habs : |(if s = true then (-1 : ℚ) else 1) * ((n : ℚ) / d / 2 ^ 149)| = (n : ℚ) / d / 2 ^ 149 := by
+    cases s
+    · rw [ite_eq_right Bool.false_ne_true, one_mul, abs_of_pos ha]
+    · rw [ite_eq_left rfl, neg_one_mul, abs_neg, abs_of_pos ha]
+  have hneg : ((if s = true then (-1 : ℚ) else 1) * ((n : ℚ) / d / 2 ^ 149) < 0) = (s = true) := by
+    apply propext
+    cases s
+    · rw [ite_eq_right Bool.false_ne_true, one_mul]
+      exact ⟨fun h => absurd h (not_lt.2 ha.le), fun h => absurd h Bool.false_ne_true⟩
+    · rw [ite_eq_left rfl, neg_one_mul, neg_lt_zero]
+      exact ⟨fun _ => rfl, fun _ => ha⟩
+  rw [heq, Verity.Fp32.Round.zeroWord_or s (by split_ifs <;> omega)]
+  simp only [f32Word, habs, hneg, ha.ne', ↓reduceIte, hE, hr]
+  split_ifs <;> omega
+
+/-- `e4m3Mag` of `M > 0` units of `2⁻¹⁴⁹` below 464: `8 · (max(⌊log₂ M⌋, 143) - 143) + q`, `q` the magnitude on the
+grid `2^(max(⌊log₂ M⌋, 143) - 3)` units rounded to nearest even. -/
+theorem e4m3Mag_units {M q : ℕ} (hM : 0 < M) (hlt : M < 464 * 2 ^ 149)
+    (hq : Verity.Round.RoundsEven ((M : ℚ) / 2 ^ (max M.log2 143 - 3)) q) :
+    e4m3Mag ((M : ℚ) / 2 ^ 149) = 8 * (max M.log2 143 - 143) + q := by
+  have ht : (M : ℚ) / 2 ^ 149 = (M : ℚ) * 2 ^ (-149 : ℤ) := by rw [zpow_neg, zpow_ofNat, div_eq_mul_inv]
+  have h0 : (M : ℚ) / 2 ^ 149 ≠ 0 := (div_pos (by exact_mod_cast hM) (by norm_num)).ne'
+  have h464 : ¬ (464 : ℚ) ≤ (M : ℚ) / 2 ^ 149 := by
+    rw [not_le, div_lt_iff₀ (by norm_num)]; exact_mod_cast hlt
+  have hb : binade ((M : ℚ) / 2 ^ 149) = (M.log2 : ℤ) - 149 := by
+    rw [ht, H1T.Proofs.binade_nat_mul hM.ne']; omega
+  have hdiv : (M : ℚ) / 2 ^ 149 / 2 ^ (max ((M.log2 : ℤ) - 149) (-6) - 3) = (M : ℚ) / 2 ^ (max M.log2 143 - 3) := by
+    rw [show max ((M.log2 : ℤ) - 149) (-6) - 3 = ((max M.log2 143 - 3 : ℕ) : ℤ) - (149 : ℕ) by omega,
+      zpow_sub₀ two_ne_zero, zpow_natCast, zpow_natCast]
+    field_simp
+  unfold e4m3Mag
+  rw [ite_eq_right h0, ite_eq_right h464]
+  dsimp only
+  rw [hb, hdiv, roundEven_eq hq]
+  omega
+
+theorem sign_ite (u : ℕ) : (if signBit u = true then 0x80 else 0) = (if (u >>> 31) % 2 = 1 then 128 else 0) := by
+  unfold signBit; rcases Nat.mod_two_eq_zero_or_one (u >>> 31) with h | h <;> rw [h] <;> decide
+
+/-- **`F32ToE4m3Sat` is `e4m3Word`**: core's cast of a 32-bit word is the protocol's code (`Verity.Prims.Round`: NaN to
+`0x7F`, `±inf` and every magnitude from 464 to `±0x7E`, and below it the code of the magnitude rounded to nearest even
+on the E4M3 grid). -/
+theorem cast_e4m3Word {u : ℕ} (hu : u < 2 ^ 32) : Verity.Prims.f32ToE4m3Sat u = (e4m3Word u).val := by
+  have hS' : (if signBit u = true then 0x80 else 0) = 0 ∨ (if signBit u = true then 0x80 else 0) = 0x80 := by
+    cases signBit u; exacts [.inl rfl, .inr rfl]
+  have hT := sign_ite u
+  cases hw : wordQ u with
+  | none =>
+    have he := wordQ_none_exp hw
+    have hE : (e4m3Word u).val = if u % 2 ^ 23 = 0 then ((if (u >>> 31) % 2 = 1 then 128 else 0) + 126) % 256
+        else 127 := by
+      unfold e4m3Word; rw [hw]; dsimp only; split_ifs <;> rfl
+    rw [hE]
+    rcases decode_nonfin he with hn | ⟨s, hs⟩
+    · have hm : u % 2 ^ 23 ≠ 0 := fun hm => by
+        rw [decode_fields, ite_eq_left he, ite_eq_left hm] at hn; cases hn
+      rw [Verity.Prims.Round.f32ToE4m3Sat_nan hu hn, ite_eq_right hm]
+      rfl
+    · have hm : u % 2 ^ 23 = 0 := by
+        by_contra hm; rw [decode_fields, ite_eq_left he, ite_eq_right hm] at hs; cases hs
+      have hs' : s = signBit u := by
+        rw [decode_fields, ite_eq_left he, ite_eq_left hm] at hs; exact (Verity.Fp32.Decoded.inf.inj hs).symm
+      subst hs'
+      rw [Verity.Prims.Round.f32ToE4m3Sat_inf hu hs, Verity.Prims.Round.or_small hS' (by norm_num), ite_eq_left hm]
+      rcases hS' with h | h <;> omega
+  | some x =>
+    obtain ⟨M, hd, rfl⟩ := decode_fin hw
+    have habs : |(if signBit u = true then (-1 : ℚ) else 1) * ((M : ℚ) / 2 ^ 149)| = (M : ℚ) / 2 ^ 149 := by
+      cases signBit u
+      · rw [ite_eq_right Bool.false_ne_true, one_mul, abs_of_nonneg (by positivity)]
+      · rw [ite_eq_left rfl, neg_one_mul, abs_neg, abs_of_nonneg (by positivity)]
+    have hE : (e4m3Word u).val = ((if (u >>> 31) % 2 = 1 then 128 else 0) + e4m3Mag ((M : ℚ) / 2 ^ 149)) % 256 := by
+      unfold e4m3Word; rw [hw]; dsimp only; rw [habs]
+    rw [hE]
+    rcases Nat.eq_zero_or_pos M with rfl | hM
+    · rw [Verity.Prims.Round.cast_zero hu hd, Nat.cast_zero, zero_div, show e4m3Mag 0 = 0 by simp [e4m3Mag]]
+      rcases hS' with h | h <;> omega
+    · by_cases hsat : M < 464 * 2 ^ 149
+      · obtain ⟨q, hq, -, -, hv, he⟩ := Verity.Prims.Round.f32ToE4m3Sat_fin hu hd hsat
+        rw [he, e4m3Mag_units hM hsat hq]
+        rcases hS' with h | h <;> omega
+      · have he := Verity.Prims.Round.f32ToE4m3Sat_sat hu hd (by omega)
+        have h464 : (464 : ℚ) ≤ (M : ℚ) / 2 ^ 149 := by
+          rw [le_div_iff₀ (by norm_num)]; exact_mod_cast (show 464 * 2 ^ 149 ≤ M by omega)
+        have h126 : e4m3Mag ((M : ℚ) / 2 ^ 149) = 126 := by
+          unfold e4m3Mag
+          rw [ite_eq_right (div_pos (by exact_mod_cast hM) (by norm_num)).ne', ite_eq_left h464]
+        rw [he, Verity.Prims.Round.or_small hS' (by norm_num), h126]
+        rcases hS' with h | h <;> omega
 
 theorem rnWord_of_ne {v : ℚ} {b : Bool} (hv : v ≠ 0) : rnWord v b = f32Word v := by
   unfold rnWord; exact ite_eq_right hv
@@ -255,20 +400,20 @@ theorem rnWord_cancel (s : Bool) (n d : ℕ) (b : Bool) (hb : b = false) :
       (if (!s) = true then -1 else 1) * ((n : ℚ) / d / 2 ^ 149) = 0 := by rw [sgn_not]; ring
   rw [hb]; unfold rnWord; rw [ite_eq_left hv]; rfl
 
-theorem rnWord_round (h : CoreRoundAgree) (s : Bool) (n : ℕ) {d : ℕ} (hd : 0 < d) :
+theorem rnWord_round (s : Bool) (n : ℕ) {d : ℕ} (hd : 0 < d) :
     Verity.Fp32.roundRn s n d = rnWord ((if s = true then -1 else 1) * ((n : ℚ) / d / 2 ^ 149)) s := by
   rcases Nat.eq_zero_or_pos n with rfl | hn
-  · rw [roundRn_zero s hd]; cases s <;> simp [rnWord, Verity.Fp32.zeroWord]
-  · rw [h.roundRn s n d hn hd, rnWord_of_ne (val_ne_zero s hn hd)]
+  · rw [Verity.Fp32.Round.roundRn_zero s hd]; cases s <;> simp [rnWord, Verity.Fp32.zeroWord]
+  · rw [roundRn_f32Word s hn hd, rnWord_of_ne (val_ne_zero s hn hd)]
 
 /-- `roundSum` is one rounding of the exact sum, an exact zero being `−0` only when both addends are zeros of negative
 sign. -/
-theorem roundSum_eq (h : CoreRoundAgree) (s₁ s₂ : Bool) (n₁ n₂ : ℕ) {d : ℕ} (hd : 0 < d) :
+theorem roundSum_eq (s₁ s₂ : Bool) (n₁ n₂ : ℕ) {d : ℕ} (hd : 0 < d) :
     Verity.Fp32.roundSum s₁ n₁ s₂ n₂ d = rnWord ((if s₁ = true then -1 else 1) * ((n₁ : ℚ) / d / 2 ^ 149) +
       (if s₂ = true then -1 else 1) * ((n₂ : ℚ) / d / 2 ^ 149)) (decide (n₁ = 0) && decide (n₂ = 0) && s₁ && s₂) := by
   unfold Verity.Fp32.roundSum
   by_cases hs : s₁ = s₂
-  · rw [ite_eq_left hs, ← hs, rnWord_round h _ _ hd]
+  · rw [ite_eq_left hs, ← hs, rnWord_round _ _ hd]
     apply rnWord_congr
     · push_cast; ring
     · intro h0
@@ -281,13 +426,13 @@ theorem roundSum_eq (h : CoreRoundAgree) (s₁ s₂ : Bool) (n₁ n₂ : ℕ) {d
     have hs2 : s₂ = !s₁ := by revert hs; cases s₁ <;> cases s₂ <;> decide
     subst hs2
     by_cases h12 : n₁ > n₂
-    · rw [ite_eq_left h12, rnWord_round h _ _ hd]
+    · rw [ite_eq_left h12, rnWord_round _ _ hd]
       apply rnWord_congr
       · rw [Nat.cast_sub h12.le, sgn_not]; ring
       · intro h0; exact absurd h0 (val_ne_zero s₁ (by omega) hd)
     · rw [ite_eq_right h12]
       by_cases h21 : n₂ > n₁
-      · rw [ite_eq_left h21, rnWord_round h _ _ hd]
+      · rw [ite_eq_left h21, rnWord_round _ _ hd]
         apply rnWord_congr
         · rw [Nat.cast_sub h21.le, sgn_not]; ring
         · intro h0; exact absurd h0 (val_ne_zero _ (by omega) hd)
@@ -396,13 +541,13 @@ theorem coreOps_fmaSq0 : ∀ c < 2 ^ 32, coreOps.f32FmaV2 0x80000000 0x80000000 
     Verity.Fp32.f32GpuNan (Verity.Fp32.f32FmaBits 0 0 c)
   rw [fmaBits_congr (a := 0x80000000) (b := 0x80000000) (a' := 0) (b' := 0) (c := c) rfl]
 
-theorem coreOps_mul (h : CoreRoundAgree) : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x →
+theorem coreOps_mul : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x →
     wordQ b = some y → (x * y = 0 → signBit a = signBit b) → coreOps.f32MulV2 a b % 2 ^ 32 = f32Word (x * y) := by
   intro a b x y _ _ hx hy hz
   obtain ⟨ma, hda, rfl⟩ := decode_fin hx
   obtain ⟨mb, hdb, rfl⟩ := decode_fin hy
   show Verity.Fp32.f32MulV2 a b % 2 ^ 32 = _
-  rw [mulV2_eq hda hdb, Nat.one_shiftLeft, rnWord_round h _ _ (Nat.two_pow_pos 149), rnWord_f32,
+  rw [mulV2_eq hda hdb, Nat.one_shiftLeft, rnWord_round _ _ (Nat.two_pow_pos 149), rnWord_f32,
     Nat.mod_eq_of_lt (f32Word_lt _)]
   · congr 1; rw [sgn_xor]; push_cast; ring
   · intro h0
@@ -416,17 +561,17 @@ theorem coreOps_mulZero : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 3
   obtain ⟨ma, hda, rfl⟩ := decode_fin hx
   obtain ⟨mb, hdb, rfl⟩ := decode_fin hy
   show Verity.Fp32.f32MulV2 a b % 2 ^ 32 = _
-  rw [mulV2_eq hda hdb, prod_eq_zero.1 hz, Nat.one_shiftLeft, roundRn_zero _ (Nat.two_pow_pos 149),
+  rw [mulV2_eq hda hdb, prod_eq_zero.1 hz, Nat.one_shiftLeft, Verity.Fp32.Round.roundRn_zero _ (Nat.two_pow_pos 149),
     xor_of_ne hs]; rfl
 
-theorem coreOps_div (h : CoreRoundAgree) : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x →
+theorem coreOps_div : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x →
     wordQ b = some y → y ≠ 0 → (x = 0 → signBit a = signBit b) → coreOps.f32DivV2 a b % 2 ^ 32 = f32Word (x / y) := by
   intro a b x y _ _ hx hy hy0 hz
   obtain ⟨ma, hda, rfl⟩ := decode_fin hx
   obtain ⟨mb, hdb, rfl⟩ := decode_fin hy
   have hmb : mb ≠ 0 := fun h0 => hy0 ((val_eq_zero _ _).2 h0)
   show Verity.Fp32.f32DivV2 a b % 2 ^ 32 = _
-  rw [divV2_eq hda hdb hmb, rnWord_round h _ _ (Nat.pos_of_ne_zero hmb), rnWord_f32, Nat.mod_eq_of_lt (f32Word_lt _)]
+  rw [divV2_eq hda hdb hmb, rnWord_round _ _ (Nat.pos_of_ne_zero hmb), rnWord_f32, Nat.mod_eq_of_lt (f32Word_lt _)]
   · congr 1; exact div_val _ _ _ _
   · intro h0
     have hma : ma = 0 := by
@@ -468,7 +613,7 @@ theorem coreOps_divNonfin : ∀ a b : ℕ, a < 2 ^ 32 → wordQ a = none → (wo
   · rw [hda]; exact wordQ_nanPtx
   · rw [hda]; exact wordQ_infWord _
 
-theorem coreOps_fma (h : CoreRoundAgree) : ∀ a b c w : ℕ, a < 2 ^ 32 → b < 2 ^ 32 → c < 2 ^ 32 →
+theorem coreOps_fma : ∀ a b c w : ℕ, a < 2 ^ 32 → b < 2 ^ 32 → c < 2 ^ 32 →
     fmaWord? a b c = some w → coreOps.f32FmaV2 a b c % 2 ^ 32 = w := by
   intro a b c w _ _ _ hw
   obtain ⟨x, y, z, hx, hy, hz⟩ := PeelExactProofs.fmaWord_some hw
@@ -479,14 +624,14 @@ theorem coreOps_fma (h : CoreRoundAgree) : ∀ a b c w : ℕ, a < 2 ^ 32 → b <
   obtain ⟨mb, hdb, rfl⟩ := decode_fin hy
   obtain ⟨mc, hdc, rfl⟩ := decode_fin hz
   show Verity.Fp32.f32GpuNan (Verity.Fp32.f32FmaBits a b c) % 2 ^ 32 = _
-  rw [fmaBits_eq hda hdb hdc, Nat.one_shiftLeft, roundSum_eq h _ _ _ _ (Nat.two_pow_pos 149)]
+  rw [fmaBits_eq hda hdb hdc, Nat.one_shiftLeft, roundSum_eq _ _ _ _ (Nat.two_pow_pos 149)]
   apply gpu_mod_eq
   · rw [sgn_xor, Nat.shiftLeft_eq]; push_cast; ring
   · have hsh : mc <<< 149 = 0 ↔ mc = 0 := by rw [Nat.shiftLeft_eq]; omega
     exact fun _ => flag_eq prod_eq_zero.symm (hsh.trans (val_eq_zero _ _).symm) _ _ _
   · exact fun he => absurd he (wordQ_exp hv)
 
-theorem coreOps_fmaOvf (h : CoreRoundAgree) : ∀ a b c : ℕ, ∀ x y z : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → c < 2 ^ 32 →
+theorem coreOps_fmaOvf : ∀ a b c : ℕ, ∀ x y z : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → c < 2 ^ 32 →
     wordQ a = some x → wordQ b = some y → wordQ c = some z → wordQ (f32Word (x * y + z)) = none →
     coreOps.f32FmaV2 a b c % 2 ^ 32 = f32Word (x * y + z) := by
   intro a b c x y z _ _ _ hx hy hz hn
@@ -496,7 +641,7 @@ theorem coreOps_fmaOvf (h : CoreRoundAgree) : ∀ a b c : ℕ, ∀ x y z : ℚ, 
   obtain ⟨mb, hdb, rfl⟩ := decode_fin hy
   obtain ⟨mc, hdc, rfl⟩ := decode_fin hz
   show Verity.Fp32.f32GpuNan (Verity.Fp32.f32FmaBits a b c) % 2 ^ 32 = _
-  rw [fmaBits_eq hda hdb hdc, Nat.one_shiftLeft, roundSum_eq h _ _ _ _ (Nat.two_pow_pos 149),
+  rw [fmaBits_eq hda hdb hdc, Nat.one_shiftLeft, roundSum_eq _ _ _ _ (Nat.two_pow_pos 149),
     ← rnWord_of_ne (b := false) hv0]
   apply gpu_mod_eq
   · rw [sgn_xor, Nat.shiftLeft_eq]; push_cast; ring
@@ -514,10 +659,10 @@ theorem e4m3Word_mod (u : ℕ) : e4m3Word (u % 2 ^ 32) = e4m3Word u :=
   e4m3Word_congr (WholeCircuit.shr31_mod32 u) (WholeCircuit.wordQ_mod32 u)
     (Nat.mod_mod_of_dvd u (pow_dvd_pow 2 (by norm_num)))
 
-theorem coreOps_cast (h : CoreRoundAgree) : ∀ u, coreOps.f32ToE4m3Sat u = (e4m3Word u).val := by
+theorem coreOps_cast : ∀ u, coreOps.f32ToE4m3Sat u = (e4m3Word u).val := by
   intro u
   show Verity.Prims.f32ToE4m3Sat u = _
-  rw [cast_mod, h.cast _ (Nat.mod_lt _ (by norm_num)), e4m3Word_mod]
+  rw [cast_mod, cast_e4m3Word (Nat.mod_lt _ (by norm_num)), e4m3Word_mod]
 
 /-! ## `order` and `F32Fmaxf` -/
 
@@ -747,17 +892,17 @@ theorem coreOps_fmaxf : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 
 
 /-! ## The agreements -/
 
-/-- **Core's instance agrees with `pc8`'s rows** under `CoreRoundAgree`. -/
-theorem pc8OpsAgree_coreOps (h : CoreRoundAgree) : WholeCircuit.Pc8OpsAgree coreOps :=
-  { cast := coreOps_cast h, widen := coreOps_widen, mul := coreOps_mul h, mulZero := coreOps_mulZero,
-    fma := coreOps_fma h, neg := coreOps_neg, bf16 := coreOps_bf16, widenNeg0 := coreOps_widenNeg0,
-    fabs := coreOps_fabs, fmaSq0 := coreOps_fmaSq0, div := coreOps_div h, divInf := coreOps_divInf,
-    mulNonfin := coreOps_mulNonfin, fmaxfAny := coreOps_fmaxfAny, sel := coreOps_sel, fmaOvf := coreOps_fmaOvf h,
+/-- **Core's instance agrees with `pc8`'s rows.** -/
+theorem pc8OpsAgree_coreOps : WholeCircuit.Pc8OpsAgree coreOps :=
+  { cast := coreOps_cast, widen := coreOps_widen, mul := coreOps_mul, mulZero := coreOps_mulZero,
+    fma := coreOps_fma, neg := coreOps_neg, bf16 := coreOps_bf16, widenNeg0 := coreOps_widenNeg0,
+    fabs := coreOps_fabs, fmaSq0 := coreOps_fmaSq0, div := coreOps_div, divInf := coreOps_divInf,
+    mulNonfin := coreOps_mulNonfin, fmaxfAny := coreOps_fmaxfAny, sel := coreOps_sel, fmaOvf := coreOps_fmaOvf,
     divNonfin := coreOps_divNonfin }
 
-/-- **Core's instance agrees with `pc4`'s rows** under `CoreRoundAgree`. -/
-theorem pc4OpsAgree_coreOps (h : CoreRoundAgree) : RowCircuit.Pc4OpsAgree coreOps :=
-  { pc8OpsAgree_coreOps h with
+/-- **Core's instance agrees with `pc4`'s rows.** -/
+theorem pc4OpsAgree_coreOps : RowCircuit.Pc4OpsAgree coreOps :=
+  { pc8OpsAgree_coreOps with
     fmaxf := coreOps_fmaxf, e2m1 := coreOps_e2m1, bf16w := coreOps_bf16w, le := coreOps_le }
 
 end Pouw.PearlC.CoreOps

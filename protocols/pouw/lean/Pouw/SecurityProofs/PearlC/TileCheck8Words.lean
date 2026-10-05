@@ -10,8 +10,7 @@ protocol's word functions agree only conditionally:
 
 * `Pc8OpsAgree ops`: core's primitives (`F32ToE4m3Sat`, `E4m3ToF32`, `F32Mul`, `F32Fma`, `F32Div`, `F32Fmaxf`,
   `F32Neg`, `F2fpBf16`, `F32Fabs`, `SelectI32`) agree with the protocol's word functions where both are defined. At
-  core's instance `coreOps` they follow from core's definitions under one named row on core's rounding and E4M3 cast
-  (`CoreOps.CoreRoundAgree`, `CoreOps.pc8OpsAgree_coreOps`);
+  core's instance `coreOps` they follow from core's definitions (`CoreOps.pc8OpsAgree_coreOps`);
 * `Row8OK`: a row's words are finite and its `α` and `β` step words, with `β > 0` (`Stats8OK`). It is no hypothesis
   of L3: a credited row's follows from `PearlCSem.RowOK`, and a weight's from the check's own `weightOK`
   (`TileCheck.Accepts`), by magnitudes (`RowStats`, `TileCheckWords`). The table reads a `−0` word, and a word's bits
@@ -166,7 +165,7 @@ zero of its sign; a product whose first factor is not finite is not finite; `F32
 is the larger, a NaN losing; `SelectI32` selects on its condition's low bit; an FMA of finite words whose exact value
 overflows writes its `f32Word` (`±inf`); and a quotient of a non-finite word by a finite one is not finite. Each is a
 fact about IEEE binary32 (round to nearest even, gradual underflow) or core's integer primitives. At core's instance
-`coreOps` all of them follow from core's definitions under `CoreOps.CoreRoundAgree` (`CoreOps.pc8OpsAgree_coreOps`). -/
+`coreOps` all of them follow from core's definitions (`CoreOps.pc8OpsAgree_coreOps`). -/
 structure Pc8OpsAgree (ops : RowOps) : Prop where
   cast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val
   widen : ∀ c : Code, c.isNaN = false → c.val ≠ 0x80 → ops.e4m3ToF32 c.val % 2 ^ 32 = f32Word (codeVal c)

@@ -237,7 +237,7 @@ finite words with the sign bit clear is the one of larger value, `a` at equal va
 a word that is not NaN is `e2m1Word`'s code (it saturates `±inf` to `±6`, as `e2m1Word` does reading them at `±480`);
 `Bf16ToF32` widens by a 16-bit shift; and `I32Le` (signed 32-bit `a ≤ b`) of two words with bit 31 clear is their
 order, which the running max `s` reads. At core's instance `coreOps` the last two hold by their definitions
-(`coreOps_bf16w`, `coreOps_le`), and all of them under `CoreOps.CoreRoundAgree` (`CoreOps.pc4OpsAgree_coreOps`). -/
+(`coreOps_bf16w`, `coreOps_le`), and all of them from core's definitions (`CoreOps.pc4OpsAgree_coreOps`). -/
 structure Pc4OpsAgree (ops : RowOps) : Prop extends WholeCircuit.Pc8OpsAgree ops where
   fmaxf : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y →
     signBit a = false → signBit b = false → ops.f32Fmaxf a b % 2 ^ 32 = if x < y then b else a

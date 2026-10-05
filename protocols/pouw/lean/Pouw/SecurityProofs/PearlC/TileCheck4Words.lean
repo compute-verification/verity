@@ -11,8 +11,7 @@ protocol's word functions agree only conditionally:
 
 * `Pc4OpsAgree ops`: core's primitives agree with the protocol's word functions where both are defined. At core's
   instance `coreOps`, `Bf16ToF32`'s and `I32Le`'s hold by their definitions (`coreOps_bf16w`, `coreOps_le`), and all
-  of them under one named row on core's rounding and E4M3 cast (`CoreOps.CoreRoundAgree`,
-  `CoreOps.pc4OpsAgree_coreOps`);
+  of them follow from core's definitions (`CoreOps.pc4OpsAgree_coreOps`);
 * `Row4OK`: a row's BF16 words widen to step words of its values, and its `α` (positive) and `β` are step words. It
   is no hypothesis of L3: the widening follows from the rules' word clause (every word a finite widened BF16 word,
   `widen_of_word`), and `α` and `β` from `RowAdmit4` by magnitudes (`RowStats`, `TileCheckWords`), at a credited row
