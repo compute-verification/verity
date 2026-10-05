@@ -21,6 +21,7 @@ import pytest
 
 from verity_vllm.commit.committer import native_collect as NC
 from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay import fork as FK
 
 # the sampled-replay world / helpers of test_sampled_replay (one fixture set, not a copy)
 from tests.check import test_sampled_replay as TSR
@@ -103,8 +104,8 @@ def test_a_worker_killed_mid_task_is_reported_by_name_not_waited_out(monkeypatch
     """A SIGKILLed worker (the cgroup's OOM killer) loses its task: the pool says so, OOM-killed when memory.events counted it, at once
     rather than after its timeout."""
     counts = iter([ooms[0], *[ooms[1]] * 10**6])
-    monkeypatch.setattr(SR, "_oom_kills", lambda: next(counts))
-    monkeypatch.setattr(SR, "POOL_POLL_S", 0.01)
+    monkeypatch.setattr(FK, "oom_kills", lambda: next(counts))
+    monkeypatch.setattr(FK, "POOL_POLL_S", 0.01)
     picked = [{"i": i} for i in range(4)]
     with pytest.raises(SR.WorkerDied, match=why.replace("(", r"\(")):
         SR._parallel_replay(_killed_child, picked, workers=2)

@@ -42,6 +42,7 @@ from typing import Any, Iterable
 import numpy as np
 
 from verity.ir.defs import bind
+from verity_vllm.check.checkpoint_words import MLA_LAYER_FIELD, load_safetensors_words, mla_field_words, mla_moe_sources
 from verity.ir.evaluate import evaluate_call
 from verity_vllm.config import option
 from verity_vllm.program.frontend.rules.family import _field_intervals, expand_leaves, match_program, node_leaf_id
@@ -281,32 +282,6 @@ def _moe_layer_fields(weights_type: Type) -> dict[str, tuple[str, list[str]]]:
     return out
 
 
-def _load_safetensors_words(paths: Iterable[Path]) -> tuple[dict[str, np.ndarray], dict[str, str]]:
-    """[SHARED-CODE lane cov-ln] `correspondence.load_safetensors` for checkpoints that are not bf16: memory-mapped raw uint16
-    views of every BF16 / F16 tensor across the shards plus the stored dtype per tensor (Pythia's checkpoint is F16; vLLM loads
-    it into bf16 parameters, see `_f16_words_to_bf16`).  Tensors of any other dtype are listed in the dtype map but get no words
-    view: Pythia's checkpoint also carries the HF-era buffers `attention.bias` (U8 causal mask), `attention.masked_bias` and
-    `rotary_emb.inv_freq` (F32), which vLLM's `load_weights` skips and no Record field names (asking for one raises KeyError)."""
-    import json as _json
-    out: dict[str, np.ndarray] = {}
-    dtypes: dict[str, str] = {}
-    for p in paths:
-        with open(p, "rb") as f:
-            n = int.from_bytes(f.read(8), "little")
-            header = _json.loads(f.read(n))
-        base = 8 + n
-        mm = np.memmap(p, dtype=np.uint8, mode="r")
-        for k, v in header.items():
-            if k == "__metadata__":
-                continue
-            dtypes[k] = v["dtype"]
-            if v["dtype"] not in ("BF16", "F16"):
-                continue                                    # no words view (see the docstring); the name stays known
-            a, b = v["data_offsets"]
-            out[k] = mm[base + a:base + b].view(np.uint16).reshape(v["shape"])
-    return out, dtypes
-
-
 def _f16_words_to_bf16(w: np.ndarray) -> np.ndarray:
     """[SHARED-CODE lane cov-ln] the bf16 word vLLM's loader produces from an fp16 checkpoint word: `param.data.copy_(loaded)`
     into a bf16 parameter on the GPU is `__float2bfloat16((float)half)` — fp16 -> f32 exact, f32 -> bf16 round-to-nearest-even
@@ -365,7 +340,7 @@ class WeightSource:
                  repo: str | None = None, config: dict | None = None) -> None:
         from verity_vllm.correspondence.capture_identities import _LAYER_FIELDS, _WEIGHT_FIELDS
         paths = list(safetensors) if safetensors else [Path(p) for p in sorted(glob.glob(hf_safetensors_glob(repo)))]
-        self.tensors, self.tensor_dtypes = _load_safetensors_words(paths) if paths else ({}, {})
+        self.tensors, self.tensor_dtypes = load_safetensors_words(paths) if paths else ({}, {})
         self.paths = paths
         self.cos_sin_path = Path(cos_sin) if cos_sin else DEFAULT_COS_SIN
         self.weights_type = weights_type
@@ -378,6 +353,7 @@ class WeightSource:
         fam = _layernorm_family_fields(self.config)                                   # [SHARED-CODE lane cov-ln] GPT-NeoX names
         if fam is not None:
             self._weight_fields, self._layer_fields = dict(fam[0]), dict(fam[1])
+        self._mla = mla_moe_sources(weights_type)                                     # [ADAPTER lane glm47-flash] dense_layers + layers
         self._cache: dict[str, np.ndarray] = {}
 
     def available(self) -> bool:
@@ -409,6 +385,8 @@ class WeightSource:
             w = np.array([analytic.normalizer_word(int(H))], dtype=np.uint16)
         elif name in self._weight_fields:
             w = np.concatenate([self._tensor_words(t, name) for t in self._weight_fields[name][1]])
+        elif self._mla is not None and MLA_LAYER_FIELD.match(name):
+            w = mla_field_words(self._mla, name, self._tensor_words)
         elif name.startswith("layers["):
             L = int(name[len("layers["):name.index("]")])
             f = name.split(".", 1)[1]

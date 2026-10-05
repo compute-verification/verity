@@ -563,6 +563,7 @@ def test_rm_deletes_with_the_owners_yes_leaves_the_covering_record_and_logs_who(
     assert (line["action"], line["by"], line["bytes"], line["files"]) == ("delete", BY, UNIT, 1)
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a read-only directory")
 def test_rm_refuses_unowned_keep_another_owner_beneath_in_use_read_only_and_non_data(tmp_path):
     root = tmp_path / "ws"
     data(root, "cache/uv")
@@ -594,6 +595,7 @@ def test_rm_refuses_unowned_keep_another_owner_beneath_in_use_read_only_and_non_
     assert plan["actions"][0]["reason"].startswith("research/old/r1 is kept by @y"), "an implicit record beneath counts, its lane as @y"
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a read-only directory")
 def test_rm_apply_needs_who_and_a_writable_log_and_rereads_the_records(tmp_path):
     root = tmp_path / "ws"
     p0, _ = passes(root)
