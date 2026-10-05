@@ -54,8 +54,10 @@
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
-  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...]   # what runs on the Nebius nodes
-                                                 # (pods/nebius/deploy.toml) against main, and installs from a pushed commit (research/deploy.py)
+  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
+                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (research/deploy.py)
+  research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
+                                                 # incident once and its clear once; the relay posts them (research/monitors.py)
   research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
                                                  # GPU-h held, busy and useful per node and UTC hour, and the holdings that held GPUs
                                                  # idle: `cluster usage` (tools/cluster usage.py) over the console's record on vy-nebius-1
@@ -1335,6 +1337,10 @@ def main(argv: list[str] | None = None) -> int:
         from .deploy import main as deploy_main
 
         return deploy_main(rest)
+    if cmd == "monitors":
+        from .monitors import main as monitors_main
+
+        return monitors_main(rest)
     if cmd == "notes":
         from .notes import main as notes_main
 
