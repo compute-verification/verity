@@ -69,12 +69,15 @@ those changes: Daniel gets a DM with them when they land on `main` (`research me
 statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
 one line, and so does a definition read in another module with the same content.  `--update` keeps each entry's `owner`
 and writes a new entry only with one, from `--owner`; an owner changed by hand gets one line, since it changes who answers
-for the statement, not what it says.  `--moved FILE` (a JSON object of old
-names to new ones, each a declaration or a namespace) renames the record's guarantees and compares the build with the
-records under the old names: a guarantee moved or restated as a `Prop` definition (`theorem t : G`) that says what its
-record says, and the definitions the same under their old names, get one line each.  `--all` first runs the controls
-(`controls`): a fixture package built with each audited toolchain (which `--build` installs first), which must pass clean
-and fail each check once a violation is added.
+for the statement, not what it says.  So does a guarantee lifted into a
+definition of a `Guarantees` module (`theorem t (xs) : G as` for `theorem t (xs) : e`): certified when its type, with `G`
+unfolded once (its value at the type's universe levels, its leading `fun`s instantiated by `as`, nothing else reduced),
+hashes to the record's type hash and its named assumptions are the record's (`lifted_into`); `G` then needs no reading of
+its own, and any other lift is a change of meaning.  `--moved FILE` (a JSON object of old names to new ones, each a
+declaration or a namespace) renames the record's guarantees and compares the build with the records under the old names: a
+guarantee moved or lifted that says what its record says, and the definitions the same under their old names, get one
+line each.  `--all` first runs the controls (`controls`): a fixture package built with each audited toolchain (which
+`--build` installs first), which must pass clean and fail each check once a violation is added.
 Each package's report lists, without failing, the spec definitions that no guarantee reads, neither its own nor one of a
 package that requires it by path (`unread_spec`): a definition of the trusted text that nothing cites.
 The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
@@ -383,9 +386,11 @@ def dependency_scans(pkg: Path, oleans: list[str], policy: dict) -> tuple[list[s
 
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
-    runs): the facts document it writes.  With ``moved`` ({old name: new name}), each guarantee and read definition also
-    gets `moved`: its name before the move (`as`) and the SHA-256 of its text under the old names, and a guarantee whose type is a
-    `Prop` definition (`head`) that of its type with the definition unfolded (`unfolded_sha256`)."""
+    runs): the facts document it writes.  A guarantee whose type is a definition under `meaning`, applied under binders, gets
+    `lift`: that definition (`head`), its module, and the SHA-256 of its type with the definition unfolded once
+    (`unfolded_sha256`, `Facts.lean`'s `liftOf`).  With ``moved`` ({old name: new name}), each guarantee and read definition
+    also gets `moved`: its name before the move (`as`) and the SHA-256 of its text under the old names, and a guarantee with a
+    `lift` (`head`) that of its unfolded type under the old names (`unfolded_sha256`)."""
     out, canon = work / "facts.json", work / "canon.jsonl"
     out.unlink(missing_ok=True)
     canon.unlink(missing_ok=True)
@@ -399,7 +404,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     if rc or not out.exists():
         raise RuntimeError(f"`Facts.lean` failed (exit {rc}; a root that was not built?):\n{text[-3000:]}")
     facts = json.loads(out.read_text())
-    hashes, renamed_as = {}, {}
+    hashes, renamed_as, lifts = {}, {}, {}
     with canon.open() as f:
         for line in f:
             rec = json.loads(line)
@@ -407,9 +412,13 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
             if "as" in rec:
                 renamed_as[rec["id"]] = {"as": rec["as"]} | ({"head": rec["head"], "unfolded_sha256": hashlib.sha256(
                     rec["unfolded"].encode()).hexdigest()} if "head" in rec else {})
+            elif rec["id"].startswith("lift:"):
+                lifts[rec["id"][5:]] = {"head": rec["head"], "module": rec["module"], "unfolded_sha256": hashes[rec["id"]]}
     canon.unlink()
     for name, p in facts["pins"].items():
         p["type_sha256"] = hashes.get(f"pin:{name}", "")
+        if name in lifts:
+            p["lift"] = lifts[name]
         if (m := f"moved-pin:{name}") in hashes:
             p["moved"] = renamed_as[m] | {"sha256": hashes[m]}
         for r in p.get("reads", []):
@@ -741,25 +750,47 @@ REPRINTED = "printed differently: the same statement (type hash and named assump
 REHASHED = "rehashed with SHA-256: the same statement (its 32-bit hash matched)"
 REGROUPED = "read groups rehashed with SHA-256: the same definitions (their 32-bit hashes matched)"
 MOVED = "the same statement under its old names"
+LIFTED = "the same statement, its definition unfolded once"
 MOVED_READS = "definitions read in another module or under another name: the same under their old names"
 OWNED = "who answers for it, not what it says"
 
 
-def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[str]:
+def spec_module(module: str) -> bool:
+    """Whether a guarantee may be lifted into a definition of ``module``: a module named `Guarantees` or under one
+    (`Pous.Guarantees`, `Pous.Guarantees.P2`)."""
+    return "Guarantees" in module.split(".")
+
+
+def lifted_into(a: dict, b: dict, fact: dict, mv: dict, renames: dict[str, str] | None = None) -> str | None:
+    """The definition a guarantee was lifted into, when the audit certifies the lift: its record was ``a`` and is now ``b``,
+    its type (``fact``) is a definition of a spec module (`spec_module`) applied under binders, and with that definition
+    unfolded once (`Facts.lean`'s `liftOf`) its type hashes to ``a``'s type hash (after `--moved`, ``mv``: its text under
+    the old names), and its named assumptions are ``a``'s (renamed by ``renames``).  None when it is not certified, and then
+    the change is a change of meaning."""
+    lift = fact.get("lift")
+    if not (a and b and lift and spec_module(lift.get("module") or "")):
+        return None
+    unfolded = mv.get("unfolded_sha256") if mv else lift["unfolded_sha256"]
+    assumptions = sorted({renamed(x, renames or {}) for x in a.get("assumptions", [])})
+    return lift["head"] if a.get("type_hash") == unfolded and assumptions == b.get("assumptions") else None
+
+
+def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames: dict[str, str] | None = None) -> list[str]:
     """What an `--update` changed: each changed guarantee's signature before and after, and each changed definition a
     guarantee reads, with the guarantees that read it and its source as it is now.  A guarantee whose statement is the same
     but prints differently (a toolchain's printer, notation) gets one line, and so does one whose 32-bit record is rewritten
     with SHA-256 while the 32-bit hash still matches; read groups rewritten that way are counted on one line.
-    Definitions are compared by name, whichever module reads them.  After `--moved` (`facts_of`), a guarantee and a
-    definition are compared with the record of their old names, by their texts under the old names: a guarantee that says
-    what its record says gets one line (moved from its old name, restated as the `Prop` definition its type now names, whose
-    definition then needs no reading of its own), and the definitions that are the same are counted on one line."""
+    Definitions are compared by name, whichever module reads them.  A guarantee lifted into a `Guarantees` definition that
+    says what its record says (`lifted_into`) gets one line, and the definition, new and read by nothing else, needs no
+    reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
+    record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
+    (moved from its old name, lifted), and the definitions that are the same are counted on one line."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
     moved = {n: f["moved"] for n, f in facts["pins"].items() if moves and f.get("moved")}
     was = {n: moved[n]["as"] if n in moved and moved[n]["as"] in op else n for n in np}
-    covered = set()
+    lifts: dict[str, set[str]] = {}
     for name in sorted(set(np) | (set(op) - set(was.values()))):
         o = was.get(name, name)
         a, b = op.get(o) or {}, np.get(name) or {}
@@ -776,11 +807,12 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
                 out.append(f"guarantee {name}: {REHASHED if rehashed else REPRINTED}")
                 continue
         mv, th = moved.get(name, {}), a.get("type_hash")
-        if a and b and th and th in (mv.get("sha256"), mv.get("unfolded_sha256")):
-            restated = th != mv["sha256"]
-            covered |= {mv["head"]} if restated else set()
-            how = ", ".join([f"moved from {o}"] * (o != name) + [f"restated as {mv.get('head')}"] * restated)
-            out.append(f"guarantee {name}: {how + ': ' if how else ''}{MOVED}")
+        head = None if th == mv.get("sha256") else lifted_into(a, b, facts["pins"].get(name, {}), mv, renames if moves else None)
+        if a and b and th and (th == mv.get("sha256") or head):
+            if head:
+                lifts.setdefault(head, set()).add(name)
+            how = ", ".join([f"moved from {o}"] * (o != name) + [f"lifted into {head}"] * bool(head))
+            out.append(f"guarantee {name}: {how + ': ' if how else ''}{MOVED if mv else LIFTED}")
             continue
         out.append(f"guarantee {name}: {'new' if not a else 'removed' if not b else 'changed'}" + (f" (moved from {o})" if o != name else ""))
         out += ["  before:", *(f"    {s}" for s in a.get("signature", []))] if a else []
@@ -811,7 +843,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
         if x and y and x["hash"] is not None and x["hash"] == y["hash" if len(x["hash"]) == OLD else "sha256"]:
             elsewhere += away and len(x["hash"]) != OLD
             continue
-        if y and not x and y["name"] in covered:
+        if y and not x and set(y["guarantees"]) <= lifts.get(y["name"], set()):
             continue
         state = "new" if not x else "gone" if not y else "changed" if x["hash"] is not None else "in a changed module"
         z = y or x
@@ -830,9 +862,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
 
 def statement_changes(notes: list[str]) -> list[str]:
     """The lines of a review that change what a guarantee says: all but the guarantees and read groups whose statements and
-    definitions are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, or moved), and
-    a changed owner."""
-    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, MOVED, MOVED_READS, OWNED))]
+    definitions are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, moved or
+    lifted), and a changed owner."""
+    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, MOVED, LIFTED, MOVED_READS, OWNED))]
 
 
 def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
@@ -1114,14 +1146,14 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         dump(work, new)
     if update and new != policy:
         dump(pkg, new)
-        notes = review(policy, new, facts, module_files(pkg)) + lnotes
+        notes = review(policy, new, facts, module_files(pkg), moved) + lnotes
         (work / "review.txt").write_text("\n".join(notes) + "\n")
         rep["review"] = notes
         must = statement_changes(notes)
         rep["statement_changes"] = bool(must)
         rep["before"] = {k: policy.get(k, {}) for k in ("guarantees", "reads")}   # the record the review compared with
         log(f"audit: {pkg}/{POLICY}: guarantees and reads rewritten from the build" + (
-            f"; {len(notes) - len(must)} lines say the same statements, printed differently, rehashed or moved"
+            f"; {len(notes) - len(must)} lines say the same statements, printed differently, rehashed, moved or lifted"
             if len(notes) > len(must) else "") + (
             "; these change what a guarantee says, and Daniel is shown them when they land:\n" + "\n".join(f"  {s}" for s in must)
             if must else ""))
