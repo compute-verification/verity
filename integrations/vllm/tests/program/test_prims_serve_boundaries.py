@@ -18,6 +18,8 @@ FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "t
 #: the other families' Definition modules this family reads (each family's own split judges its modules)
 OTHER_FAMILIES = {"dense", "fa2_softcap", "fa3_check_inf", "sampling", "topp_geometry", "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
+#: the catalog, where the layout move put core's Definitions and silicon models
+CATALOG = "verity_catalog"
 #: (module, what it imports outside the rule) -> why it stays
 EXCEPTIONS = {("pouw_rows", "verity.protocols.accounting.work.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition, which the row binds"}
 
@@ -46,7 +48,7 @@ def _allowed(mod: str) -> bool:
     top = mod.split(".")[0]
     if top == "verity" or top in sys.stdlib_module_names or top == "__future__" or top in THIRD_PARTY:
         return True
-    if mod == REG:
+    if mod == REG or mod == CATALOG or mod.startswith(CATALOG + "."):
         return True
     if mod.startswith(REG + "."):
         return mod[len(REG) + 1:].split(".")[0] in set(FAMILY) | OTHER_FAMILIES

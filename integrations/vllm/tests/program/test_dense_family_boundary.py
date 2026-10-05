@@ -18,6 +18,8 @@ FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms"
 #: other families' Definition modules the family reads: the primitives, the b1 composites, and `sampling.bit_at` (`UnpackF32_v1`)
 READS = ("prims", "b1", "sampling")
 THIRD_PARTY = ("numpy",)
+#: the catalog, where the layout move put core's Definitions and silicon models
+CATALOG = "verity_catalog"
 MOVED = {"rope_difftest": "verity_vllm.properties.difftests", "rope_gptj_difftest": "verity_vllm.properties.difftests",
          "rmsnorm_fused_sweep": "verity_vllm.program.kernels", "gemm_targets": "verity_vllm.program.frontend"}
 
@@ -37,7 +39,7 @@ def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:
 
 def _foreign(mod: str, names: tuple[str, ...]) -> list[str]:
     top = mod.partition(".")[0]
-    if top in sys.stdlib_module_names or top in THIRD_PARTY or top == "verity":
+    if top in sys.stdlib_module_names or top in THIRD_PARTY or top == "verity" or mod == CATALOG or mod.startswith(CATALOG + "."):
         return []
     allowed = set(FAMILY) | set(READS)
     if mod == REGISTRY:

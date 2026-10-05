@@ -26,6 +26,8 @@ REG = VLLM / "verity_vllm" / "program" / "registry"
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
 TASKS = REPO / "tools" / "circuit_check" / "tests" / "data" / "sampling_split_tasks.json"
 PKG = "verity_vllm.program.registry"
+#: the catalog, where the layout move put core's Definitions and silicon models
+CATALOG = "verity_catalog"
 
 DEFINITION_MODULES = ("sampling", "sampling_boolean", "gumbel_boolean", "topp_word_gates", "topp_keep_builder", "topp_words", "topp_geometry")
 TWIN_MODULES = ("sampling_rows", "sampling_topp_difftest", "topp_split", "sampling_twins")
@@ -214,7 +216,8 @@ def test_a_definition_module_imports_only_verity_and_definition_modules(module):
     path = REG / f"{module}.py"
     assert path.exists(), f"{module}: no such module (has the split been applied? tools/migrate/split_sampling.py)"
     bad = sorted({f"{module}.py:{line}: imports {mod}" for mod, line, fn in _imports(path)
-                  if not (_is_stdlib(mod) or mod.split(".")[0] in ("numpy", "verity") or mod in allowed or (module, fn, mod) in EXCEPTIONS)})
+                  if not (_is_stdlib(mod) or mod.split(".")[0] in ("numpy", "verity") or mod in allowed or mod == CATALOG
+                          or mod.startswith(CATALOG + ".") or (module, fn, mod) in EXCEPTIONS)})
     assert not bad, "\n".join(bad)
 
 

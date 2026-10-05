@@ -21,6 +21,8 @@ FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "boolean_fp8", "boo
 #: (`boolean_attention._Bits`)
 OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "lifted", "boolean_attention")
 ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES}
+#: the catalog, where the layout move put core's Definitions and silicon models
+CATALOG = "verity_catalog"
 
 
 def _imports(name: str) -> list[tuple[str, int]]:
@@ -42,7 +44,8 @@ def _imports(name: str) -> list[tuple[str, int]]:
 
 def _allowed(module: str) -> bool:
     top = module.split(".")[0]
-    return (top in sys.stdlib_module_names and top != "__main__") or top == "verity" or module in ALLOWED
+    return ((top in sys.stdlib_module_names and top != "__main__") or top == "verity" or module in ALLOWED
+            or module == CATALOG or module.startswith(CATALOG + "."))
 
 
 @pytest.mark.parametrize("name", FAMILY)
