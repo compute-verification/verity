@@ -69,7 +69,9 @@ def CostModel.Queries {Q R S : Type} (CM : CostModel Q R S) : Prop :=
     ∀ H : Q → R, CM.run prog H U act σ s = t.eval H ∧ CM.calls prog H U act σ s = t.calls H
 
 /-- An output-ticket protocol: the FP32 values of its reference ticket and useful words (`none` for a non-finite word),
-its domain rules on committed activations and on weights, and its costs.
+its domain rules on committed activations and on each weight row, and its costs.
+- `weightOK sh w j`: row `j` of the weight `w` of a unit of shape `sh` passes the rules. A tile's check asks it of the
+  tile's columns, on the weight rows it opens (`TileCheck.Accepts`).
 - `credit H s U u act`: what the named assumption credits for unit `u`. The reference computes it from the committed
   activations `act`, the weights and the realized noise `(H, s)`, by the same replay that checks the unit; it never reads
   the transcript's claimed ticket or useful words.
@@ -82,16 +84,18 @@ structure Protocol (Q R S : Type) where
   ticket : (Q → R) → S → Workload → ℕ → Codes → ℕ → ℕ → Option ℚ
   useful : (Q → R) → S → Workload → ℕ → Codes → ℕ → ℕ → Option ℚ
   actOK : Shape → Codes → Prop
-  weightOK : Shape → Codes → Prop
+  weightOK : Shape → Codes → ℕ → Prop
   credit : (Q → R) → S → Workload → ℕ → Codes → ℝ
   capOK : (Q → R) → S → Workload → ℕ → Codes → Prop
   Wref : Layout → ℕ → ℝ
 
 variable {Q R S : Type}
 
-/-- A workload is in the domain `D`: at most `2^64` units, `D` holds of its layout, and its weights pass the rules. -/
+/-- A workload is in the domain `D`: at most `2^64` units, `D` holds of its layout, and every row of its weights passes
+the rules. -/
 def Workload.InDomain (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) : Prop :=
-  U.layout.N ≤ 2 ^ 64 ∧ D U.layout ∧ ∀ u < U.layout.N, P.weightOK (U.layout.shape u) (U.weight (U.layout.wid u))
+  U.layout.N ≤ 2 ^ 64 ∧ D U.layout ∧
+    ∀ u < U.layout.N, ∀ j < (U.layout.shape u).n, P.weightOK (U.layout.shape u) (U.weight (U.layout.wid u)) j
 
 /-- A correct unit: admissible activations, its replayed debit within the cap, and every ticket and useful word on its
 `m × n` entries has the reference FP32 value (bit for bit up to the sign of zero). -/

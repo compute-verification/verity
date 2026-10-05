@@ -16,11 +16,12 @@ specifies it (`docs/pouw/cheap-binding.md`). This file holds the parts of Π tha
   round to nearest even, the word an FMUL writes) are pinned the same way.
 * **The row statistic** (`Stat`, `Stat.rms`, `Stat.every8`): the statistic in use for the noise scale, as `ρ²`. The
   liveness rule `LiveRow` and the noise scale `betaOf` take it; `LiveRow` defaults to `Stat.rms`.
-* **The noise and the forming** (`Noise`, `rowScale`, `FormChain`, `FormChain.quant`): `A′ = e4m3(v)` per element, where
-  `v = FormChain.value α x β e f` is the number the cast reads. Three chains: `FormChain.exact` (`α·x + β·n`, with
-  `n = E_A·F_Aᵀ` exact), `FormChain.bf16` (#311's BF16 chain) and `FormChain.atomMix` (§5's forming: the noise and
-  `α·x` in one `HOPPER_E4M3_K32` step, then one cast). `castLines` and `Noise.atomLines` are §5's noise lines `E′` as
-  the peel reuses them.
+* **The noise and the forming** (`Noise`, `rowScale`, `FormChain`, `FormChain.quant`): the noise factors are E4M3
+  codes, as Pearl's lines are. `A′ = e4m3(v)` per element, where `v = FormChain.value α x β e f` is the number the cast
+  reads. Three chains: `FormChain.exact` (`α·x + β·n`, with `n = E_A·F_Aᵀ` exact), `FormChain.bf16` (#311's BF16 chain)
+  and `FormChain.atomMix` (§5's forming: the noise and `α·x` in one `HOPPER_E4M3_K32` step, then one cast).
+  `lineCodes` is §5's `E′ = e4m3(β·e)` on the codes (`mulCode`, the FMUL with a zero product's sign), and `castLines`
+  and `Noise.atomLines` are `E′` as the peel reuses it.
 * **The promoted product chain** (`groupWord`, `promote`, `total`, `chain`, `ctChain`): `hopperStep` groups of `G`
   atoms, each from `+0`, each group's word promoted into an FP32 total by `rnAdd`.
 * **U's two forms** (`peelLeft`, `peelRight`, `peelU`, `rawU`) as exact rational matrices, beside `ctExact`, the
@@ -153,23 +154,24 @@ def F32Vec.holds (v : F32Vec) : Bool :=
 
 /-! ## The noise and the forming -/
 
-/-- One unit's noise factors: `E_A` (`m × r`), `F_A` (`k × r`), `E_B` (`n × r`) and `F_B` (`k × r`). -/
+/-- One unit's noise factors as E4M3 codes, as Pearl's lines are (`sample_line`): `E_A` (`m × r`), `F_A` (`k × r`),
+`E_B` (`n × r`) and `F_B` (`k × r`). -/
 structure Noise (m n k r : Nat) where
-  EA : Matrix (Fin m) (Fin r) ℚ
-  FA : Matrix (Fin k) (Fin r) ℚ
-  EB : Matrix (Fin n) (Fin r) ℚ
-  FB : Matrix (Fin k) (Fin r) ℚ
+  EA : Matrix (Fin m) (Fin r) Code
+  FA : Matrix (Fin k) (Fin r) Code
+  EB : Matrix (Fin n) (Fin r) Code
+  FB : Matrix (Fin k) (Fin r) Code
 
 variable {m n k r : Nat}
 
-/-- A's noise `N_A = E_A·F_Aᵀ` (`m × k`). -/
-def Noise.NA (z : Noise m n k r) : Matrix (Fin m) (Fin k) ℚ := z.EA * z.FAᵀ
+/-- A's noise `N_A = E_A·F_Aᵀ` (`m × k`), on the codes' values. -/
+def Noise.NA (z : Noise m n k r) : Matrix (Fin m) (Fin k) ℚ := vals z.EA * (vals z.FA)ᵀ
 
-/-- B's noise `N_B = E_B·F_Bᵀ` (`n × k`). -/
-def Noise.NB (z : Noise m n k r) : Matrix (Fin n) (Fin k) ℚ := z.EB * z.FBᵀ
+/-- B's noise `N_B = E_B·F_Bᵀ` (`n × k`), on the codes' values. -/
+def Noise.NB (z : Noise m n k r) : Matrix (Fin n) (Fin k) ℚ := vals z.EB * (vals z.FB)ᵀ
 
 /-- The `r × r` Gram factor `F_Bᵀ·F_A`, through which the Gram order forms `N_B·F_A = E_B·(F_Bᵀ·F_A)`. -/
-def Noise.gram (z : Noise m n k r) : Matrix (Fin r) (Fin r) ℚ := z.FBᵀ * z.FA
+def Noise.gram (z : Noise m n k r) : Matrix (Fin r) (Fin r) ℚ := (vals z.FB)ᵀ * vals z.FA
 
 /-- `β ⊙ M`: row `i` of `M` scaled by `β i` (#311's `β⊙`). -/
 def rowScale {p q : Nat} (β : Fin p → ℚ) (M : Matrix (Fin p) (Fin q) ℚ) : Matrix (Fin p) (Fin q) ℚ := diagonal β * M
@@ -204,37 +206,44 @@ def betaOf (st : Stat) (root : ℚ → ℚ) (δ α : ℚ) (x : Fin k → ℚ) : 
 /-! ## The forming chains -/
 
 /-- The forming's chain before the cast: `value α x β e f` is the number the cast reads for one element, from the row's
-scale `α`, the element `x`, the row's noise scale `β` and the element's noise rows `e` (of `E`) and `f` (of `F`). -/
+scale `α`, the element `x`, the row's noise scale `β` and the element's noise rows `e` (of `E`) and `f` (of `F`), as
+E4M3 codes. -/
 structure FormChain (r : Nat) where
-  value : (α x β : ℚ) → (e f : Fin r → ℚ) → ℚ
+  value : (α x β : ℚ) → (e f : Fin r → Code) → ℚ
 
-/-- **The exact chain**: `α·x + β·(e·f)`, so the forming is `e4m3(α·x + β·n)` with `n = E·Fᵀ` exact. -/
-def FormChain.exact (r : Nat) : FormChain r := ⟨fun α x β e f => α * x + β * ∑ t, e t * f t⟩
+/-- **The exact chain**: `α·x + β·(e·f)` on the codes' values, so the forming is `e4m3(α·x + β·n)` with `n = E·Fᵀ`
+exact. -/
+def FormChain.exact (r : Nat) : FormChain r := ⟨fun α x β e f => α * x + β * ∑ t, codeVal (e t) * codeVal (f t)⟩
 
-/-- **#311's BF16 chain**: the noise wgmma over the noise lines `β·e` and `f`, whose FP32 value is `noise` (its
-accumulation order is not pinned, so it is a parameter), one f32→bf16 conversion of it, and one HFMA2
+/-- **#311's BF16 chain**: the noise wgmma over the noise lines `β·e` and `f` (on the codes' values), whose FP32 value
+is `noise` (its accumulation order is not pinned, so it is a parameter), one f32→bf16 conversion of it, and one HFMA2
 `fma(α, x, bf16(n))` rounded to BF16, which the cast reads. `α` and `x` are the HFMA2's BF16 operands. §1's step list
 fixes the conversion and the HFMA2 but not where `β` enters; here it scales the noise lines, as in §5. -/
 def FormChain.bf16 (r : Nat) (noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ) : FormChain r :=
-  ⟨fun α x β e f => bf16Rn (α * x + bf16Rn (noise (fun t => β * e t) f))⟩
+  ⟨fun α x β e f => bf16Rn (α * x + bf16Rn (noise (fun t => β * codeVal (e t)) (fun t => codeVal (f t))))⟩
 
-/-- §5's noise line of one row: `E′ = e4m3(β·e)`, the FP32 product `β·e_t` (an FMUL) cast by
-`cvt.rn.satfinite.e4m3`. -/
-def lineCodes (β : ℚ) (e : Fin r → ℚ) : Fin r → Code := fun t => e4m3Word (f32Word (β * e t))
+/-- The FP32 word an FMUL writes for `β` times an E4M3 code's value (`fp32.mul(β, E4m3ToF32(c))`): `f32Word` of the
+product, and where the product is zero, the zero whose sign is the XOR of `β`'s and the code's, so `β > 0` times `−0`
+(`0x80`) is `−0` and `+0` times a negative code is `−0`. -/
+def mulCode (β : ℚ) (c : Code) : Nat :=
+  if β * codeVal c = 0 then (if decide (β < 0) != c.sign then 0x80000000 else 0) else f32Word (β * codeVal c)
+
+/-- §5's noise line of one row: `E′ = e4m3(β·e)` on the noise codes `e`, the FP32 product `β·e_t` (an FMUL, `mulCode`)
+cast by `cvt.rn.satfinite.e4m3`, as `pearl_c.eprime`. A `−0` code keeps its sign. -/
+def lineCodes (β : ℚ) (e : Fin r → Code) : Fin r → Code := fun t => e4m3Word (mulCode β (e t))
 
 /-- **§5's atom-mix chain** (`r = 32`): one `HOPPER_E4M3_K32` step `D = step(C, E′, F)`, whose accumulator input is
 `C = f32(α·x)`, the glue value plain FP8 would cast, and whose operands are the noise line `E′ = lineCodes β e` and the
-`F` row's E4M3 codes (`F`'s entries are E4M3 values, so `e4m3` reads them exactly). The cast reads `D`. The chain is
-specified for finite `C`, which domain D gives (`|α·x| ≤ 448`). -/
+`F` row's codes. The cast reads `D`. The chain is specified for finite `C`, which domain D gives (`|α·x| ≤ 448`). -/
 def FormChain.atomMix : FormChain 32 :=
-  ⟨fun α x β e f => wordVal (hopperStep (f32Word (α * x)) (lineCodes β e) (fun t => e4m3 (f t)))⟩
+  ⟨fun α x β e f => wordVal (hopperStep (f32Word (α * x)) (lineCodes β e) f)⟩
 
 /-- The noisy quantize of one element: `e4m3` of the chain's value for `α`, `x`, `β` and the element's noise rows `e`, `f`. -/
-def FormChain.elem (fc : FormChain r) (α x β : ℚ) (e f : Fin r → ℚ) : Code := e4m3 (fc.value α x β e f)
+def FormChain.elem (fc : FormChain r) (α x β : ℚ) (e f : Fin r → Code) : Code := e4m3 (fc.value α x β e f)
 
 /-- The noisy quantize of a `p × k` operand with per-row `α`, `β` and noise factors `E`, `F`: element `(i, l)` reads `X i l`, `E i` and `F l`. -/
 def FormChain.quant {p : Nat} (fc : FormChain r) (α β : Fin p → ℚ) (X : Matrix (Fin p) (Fin k) ℚ)
-    (E : Matrix (Fin p) (Fin r) ℚ) (F : Matrix (Fin k) (Fin r) ℚ) : Matrix (Fin p) (Fin k) Code :=
+    (E : Matrix (Fin p) (Fin r) Code) (F : Matrix (Fin k) (Fin r) Code) : Matrix (Fin p) (Fin k) Code :=
   fun i l => fc.elem (α i) (X i l) (β i) (E i) (F l)
 
 /-- `A′`: A's noisy quantize, which reads `x`, `E_A` and `F_A` only. -/
@@ -245,10 +254,9 @@ def FormChain.quantA (fc : FormChain r) (α β : Fin m → ℚ) (X : Matrix (Fin
 def FormChain.quantB (fc : FormChain r) (α β : Fin n → ℚ) (B : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) :
     Matrix (Fin n) (Fin k) Code := fc.quant α β B z.EB z.FB
 
-/-- §5's noise lines of a `p`-row operand as values: row `i` is `E′_i = lineCodes (β i) (E i)`, the codes the atom-mix
-reads. -/
-def castLines {p : Nat} (β : Fin p → ℚ) (E : Matrix (Fin p) (Fin r) ℚ) : Matrix (Fin p) (Fin r) ℚ :=
-  fun i t => codeVal (lineCodes (β i) (E i) t)
+/-- §5's noise lines of a `p`-row operand: row `i` is `E′_i = lineCodes (β i) (E i)`, the codes the atom-mix reads. -/
+def castLines {p : Nat} (β : Fin p → ℚ) (E : Matrix (Fin p) (Fin r) Code) : Matrix (Fin p) (Fin r) Code :=
+  fun i => lineCodes (β i) (E i)
 
 /-- The noise as §5's peel reuses it: `E_A` and `E_B` replaced by their noise lines `E′_A` and `E′_B`, `F_A` and `F_B`
 unchanged, so at unit `β` the peel's `N_A` is `E′_A·F_Aᵀ`, the noise the atom-mix added up to its accumulator's rounding. -/
@@ -265,12 +273,14 @@ structure MixVec where
   f : Nat
   c : Nat
 
-/-- An atom-mix vector holds: `α`, `x` and `β` are finite, and `FormChain.atomMix.elem` gives the code `c`. -/
+/-- An atom-mix vector holds: `α`, `x` and `β` are finite, and the atom-mix's step and cast give the code `c` on the `E`
+row's FP32 values, `E′_t = e4m3Word (f32Word (β·e_t))` (`lineCodes` where `e_t` is a nonzero code's value), and the
+`F` row's codes. -/
 def MixVec.holds (v : MixVec) : Bool :=
   match wordQ v.α, wordQ v.x, wordQ v.β with
   | some α, some x, some β =>
-    (FormChain.atomMix.elem α x β (fun t => wordVal ((v.e >>> (32 * t.val)) % 2 ^ 32))
-      (fun t => codeVal (codes v.f t))).val == v.c
+    (e4m3 (wordVal (hopperStep (f32Word (α * x))
+      (fun t => e4m3Word (f32Word (β * wordVal ((v.e >>> (32 * t.val)) % 2 ^ 32)))) (codes v.f)))).val == v.c
   | _, _, _ => false
 
 /-! ## The promoted product chain -/
@@ -311,11 +321,11 @@ def ctExact (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code
 
 /-- #311's left factor `[β·E_A ‖ A′·F_B]` (`m × 2r`); `A'` is `A′`'s values. -/
 def peelLeft (βA : Fin m → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k r) : Matrix (Fin m) (Fin r ⊕ Fin r) ℚ :=
-  fromCols (rowScale βA z.EA) (A' * z.FB)
+  fromCols (rowScale βA (vals z.EA)) (A' * vals z.FB)
 
 /-- #311's right factor `[(β·N_B − B̃)·F_A ‖ −β·E_B]` (`n × 2r`); `B'` is `B̃`'s values. -/
 def peelRight (βB : Fin n → ℚ) (B' : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) : Matrix (Fin n) (Fin r ⊕ Fin r) ℚ :=
-  fromCols ((rowScale βB z.NB - B') * z.FA) (-rowScale βB z.EB)
+  fromCols ((rowScale βB z.NB - B') * vals z.FA) (-rowScale βB (vals z.EB))
 
 /-- #311's form of U: `C̃ + [β·E_A ‖ A′·F_B]·[(β·N_B − B̃)·F_A ‖ −β·E_B]ᵀ`. -/
 def peelU (Ct : Matrix (Fin m) (Fin n) ℚ) (βA : Fin m → ℚ) (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ)

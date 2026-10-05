@@ -157,16 +157,23 @@ def _at(words: list[int], updates: dict[int, int]) -> list[int]:
     return [updates.get(t, w) for t, w in enumerate(words)]
 
 
+MINUS_ZERO_AT = (0, 1, 5, 8, 16, 33, 64, 127)
+
+
 def _rows() -> dict[str, list[int]]:
-    """Honest rows and rows the scheme refuses: non-finite words at sampled (0, 8, …) and unsampled positions, a spike
-    that makes a_E subnormal (D-NF), one that only screens its block, a zero row, rows of tiny and of huge words."""
+    """Honest rows and rows the scheme refuses: non-finite words at sampled (0, 8, …) and unsampled positions, finite
+    words whose sampled squares overflow (ρ and β not finite: `pc4Sem_squaresOverflow`), a spike that makes a_E
+    subnormal (D-NF), one that only screens its block, a zero row, an all-(−0) row, rows of tiny and of huge words, and
+    an honest row with eight −0 words at sampled and unsampled positions."""
     base = [V.row_codes("pc4-circuit", "A", i, K) for i in range(3)]
     spike = lambda v: _at(base[0], {1: P.f32_to_bf16(v)})  # noqa: E731
     return {"honest-0": base[0], "honest-1": base[1], "negated": [w ^ 0x8000 for w in base[2]],
             "inf-unsampled": _at(base[0], {1: 0x7F80}), "minus-inf-sampled": _at(base[0], {0: 0xFF80}),
             "nan-unsampled": _at(base[0], {3: 0x7FC0}), "minus-nan-sampled": _at(base[0], {8: 0xFFC1}),
+            "squares-overflow": _at(base[0], {p: 0x7E80 for p in range(0, K, 8)}),
             "spike-2^16": spike(2.0 ** 16), "spike-256": spike(256.0), "max-unsampled": _at(base[0], {1: 0x7F7F}),
-            "zero": [0] * K, "tiny": [0x0001] * K, "huge": [0x7F7F] * K}
+            "zero": [0] * K, "minus-zero": [0x8000] * K, "tiny": [0x0001] * K, "huge": [0x7F7F] * K,
+            "mixed-zero": _at(base[0], {p: 0x8000 for p in MINUS_ZERO_AT})}
 
 
 @pytest.mark.parametrize("side", ["row_a", "row_b"])
@@ -192,7 +199,25 @@ def test_the_row_units_admission_is_row_passes_and_their_outputs_the_schemes(sid
         peel = (F.peel_factors_a if side == "row_a" else F.peel_factors_b)(F.NVFP4, formed, [e], SEED_B, K)[0]
         assert list(out[:K]) == formed.codes[0] and list(out[K:K + K // 16]) == formed.scales[0], name
         assert list(out[K + K // 16:-1]) == peel, name
-    assert {n for n, v in verdicts.items() if v} == {"honest-0", "honest-1", "negated", "spike-256"}
+    assert {n for n, v in verdicts.items() if v} == {"honest-0", "honest-1", "negated", "spike-256", "mixed-zero"}
+
+
+@pytest.mark.parametrize("side", ["row_a", "row_b"])
+def test_a_row_unit_reads_minus_zero_as_zero(side):
+    """A row unit's outputs on a row with −0 words (BF16 0x8000) are its outputs with +0 in their place, as the Lean's
+    `pc4Sem` reads a row by value (`formRow_table` on `ZeroSign16` words: the table registers each word's high half,
+    `rows4`), and the scheme's (the admission test above): an admitted honest row with eight −0 words, and the all-(−0)
+    row, refused as the all-zero row is."""
+    fa, fb = F.basis(SEED_B, F.ROLE_FA, K), F.basis(SEED_B, F.ROLE_FB, K)
+    own, other = (fa, fb) if side == "row_a" else (fb, fa)
+    extra = [] if side == "row_a" else [_flat(F.gram(F.NVFP4, SEED_B, K))]
+    fn, e = pc4.templates(K)[side], F.line(SEED_B, F.ROLE_EA if side == "row_a" else F.ROLE_EB, 0)
+    run = lambda w: evaluate(fn, w, e, _flat(own), _flat(other), *extra)  # noqa: E731
+    rows = _rows()
+    plus = lambda w: [0 if x == 0x8000 else x for x in w]  # noqa: E731
+    assert sum(w == 0x8000 for w in rows["mixed-zero"]) == len(MINUS_ZERO_AT)
+    assert run(rows["mixed-zero"]) == run(plus(rows["mixed-zero"])) and run(rows["mixed-zero"])[-1] == 1
+    assert run(rows["minus-zero"]) == run(rows["zero"]) and run(rows["minus-zero"])[-1] == 0
 
 
 # ---- the partition ----------------------------------------------------------------------------------------------------

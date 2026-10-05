@@ -209,6 +209,8 @@ theorem witness_sum_le (P : Protocol Unit Unit Unit) (U : Workload) (H : Unit �
 
 theorem wordQ_one : wordQ 1065353216 = some 1 := by decide +kernel
 
+theorem codeVal_zero : codeVal 0 = 0 := by decide +kernel
+
 /-- One in-domain workload: one unit of shape `1 × 1 × 128`, every word `1.0`. -/
 def witnessWorkload : Workload := ⟨⟨1, fun _ => ⟨1, 1, 128⟩, fun _ => 0⟩, fun _ _ _ => 1065353216⟩
 
@@ -223,13 +225,13 @@ theorem witness_rowA (H : Unit → Unit) (s : Unit) (i : Fin (witnessWorkload.la
     (witnessSem.unitChain H s witnessWorkload 0 (witnessAct 0)).1 i = fun _ => e4m3 1 := by
   funext l
   simp [PearlCSem.unitChain, witnessSem, FormChain.quantA, FormChain.quant, FormChain.elem, FormChain.exact, wordsVal,
-    witnessAct, witnessWorkload, wordQ_one]
+    witnessAct, witnessWorkload, wordQ_one, codeVal_zero]
 
 theorem witness_rowB (H : Unit → Unit) (s : Unit) (j : Fin (witnessWorkload.layout.shape 0).n) :
     (witnessSem.unitChain H s witnessWorkload 0 (witnessAct 0)).2 j = fun _ => e4m3 1 := by
   funext l
   simp [PearlCSem.unitChain, witnessSem, FormChain.quantB, FormChain.quant, FormChain.elem, FormChain.exact, wordsVal,
-    witnessWorkload, wordQ_one]
+    witnessWorkload, wordQ_one, codeVal_zero]
 
 /-- No atom of the witness's word is flagged. -/
 theorem witness_unitFlags (H : Unit → Unit) (s : Unit) (i : Fin (witnessWorkload.layout.shape 0).m)
@@ -360,7 +362,8 @@ theorem ttOutPearlCWitness :
         nlinarith
       unfold Adversary.transcript at hx
       linarith
-  · refine ⟨by norm_num [witnessWorkload], ?_, fun u _ => witness_operandOK 1⟩
+  · refine ⟨by norm_num [witnessWorkload], ?_, fun u _ j hj =>
+      ⟨fun l hl => (witness_operandOK 1).1 j hj l hl, fun hj' => (witness_operandOK 1).2 ⟨j, hj'⟩⟩⟩
     intro u _
     refine ⟨by norm_num [witnessWorkload], by norm_num [witnessWorkload], by norm_num [witnessWorkload], ?_,
       by norm_num [witnessWorkload], rfl⟩

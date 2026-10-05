@@ -9,10 +9,10 @@ import Pouw.SecurityProofs.PearlC.TileCheck8Words
 `e2m1(d·(1/scale))` (`code4W`). `DeviceFp4.nvf4Block` reads them on values: `max(e4m3(f32(amax·sixth)), 0x01)` of the
 largest magnitude and `e2m1Word(f32(D_t·nvf4Recip s))`. Here they agree, under one named hypothesis on `ops`:
 
-* `Pc4OpsAgree ops`: `Pc8OpsAgree`'s agreements, and `F32Fabs` clears the sign bit, `F32Fmaxf` of two finite words
-  with the sign bit clear is the one of larger value (`a` at equal values), `F32Div` is `f32Word` of the quotient by
-  a nonzero divisor, `F32ToE2m1Sat` of a word that is not NaN is `e2m1Word`'s code, and `Bf16ToF32` of a BF16 word
-  is the word shifted left by 16.
+* `Pc4OpsAgree ops`: `Pc8OpsAgree`'s agreements (among them `F32Fabs` clears the sign bit and `F32Div` is `f32Word`
+  of the quotient by a nonzero divisor), and `F32Fmaxf` of two finite words with the sign bit clear is the one of
+  larger value (`a` at equal values), `F32ToE2m1Sat` of a word that is not NaN is `e2m1Word`'s code, `Bf16ToF32`
+  of a BF16 word is the word shifted left by 16, and `I32Le` of two words below `2³¹` is their order.
 
 The floors differ in order: the table floors the FP32 value at `2⁻⁹` and then casts, the protocol casts and then
 floors the code at `0x01`. On a non-negative value the two agree (`e4m3_floor`), since `e4m3` is at least `0x01` from
@@ -24,7 +24,10 @@ A formed word is `nvf4NoiseElem`'s (`form4_sem`): the accumulator is `f32Word(α
 are `noiseOperand`'s and `noiseScales`'. Every word a firing writes is a step word (`step_stepWord`,
 `toF32RZ_stepWord`), so `formRow`'s noise atoms are (`noiseElem_stepWord`). So a row unit's codes and scale bytes are
 `formRow`'s at `pc4Sem`'s `α` and `β` (`formRow_table`, `row4A_form`, `row4B_form`), under `Row4OK` (the row's BF16
-words widen to step words of its values, `α > 0` and `β` are step words).
+words widen to step words of its values, `α > 0` and `β` are step words). The unit's row words are `pc4Sem`'s BF16
+words or `−0` (`0x8000`) where those are `+0` (`ZeroSign16`), which no output reads: `α` and `β` read a word through
+`|·|` and `fma(x, x, ·)` of its widening (`alpha4_zeroSign16`, `beta4_zeroSign16`), and the forming through the
+accumulator `α·x`, `±0` either way, which the firing reads only as a value (`nvf4Word_negZero`, `form4_zeroSign16`).
 
 On those codes and scale bytes, RowA's `Ẽ` and `P_A` outputs are `peelFp4`'s `P_A` row, `paRow?` of the line's
 `eTilde` at `e4m3(β)` and the chain words against `F_B`'s columns (`row4A_paWords`), and RowB's `P_B` and `−Ẽ`
@@ -228,19 +231,18 @@ theorem recip_facts : ∀ c : Code, 1 ≤ c.val → c.val ≤ 126 →
 
 /-! ## The agreement -/
 
-/-- **Core's primitives agree with the values `pc4`'s blocks read**, beyond `Pc8OpsAgree`'s: `F32Fabs` clears the
-sign bit; `F32Fmaxf` of two finite words with the sign bit clear is the one of larger value, `a` at equal values
-(PTX `max.f32`); `F32Div` of finite words by a nonzero divisor is `f32Word` of the quotient, an exact zero signed as
-`F32Mul`'s; `F32ToE2m1Sat` of a word that is not NaN is `e2m1Word`'s code (it saturates `±inf` to `±6`, as `e2m1Word`
-does reading them at `±480`). Core's Lean semantics will discharge them. -/
+/-- **Core's primitives agree with the values `pc4`'s blocks read**, beyond `Pc8OpsAgree`'s (which has `F32Fabs`
+clearing the sign bit and `F32Div` of finite words by a nonzero divisor as `f32Word` of the quotient): `F32Fmaxf` of two
+finite words with the sign bit clear is the one of larger value, `a` at equal values (PTX `max.f32`); `F32ToE2m1Sat` of
+a word that is not NaN is `e2m1Word`'s code (it saturates `±inf` to `±6`, as `e2m1Word` does reading them at `±480`);
+`Bf16ToF32` widens by a 16-bit shift; and `I32Le` (signed 32-bit `a ≤ b`) of two words with bit 31 clear is their
+order, which the running max `s` reads. Core's Lean semantics will discharge them. -/
 structure Pc4OpsAgree (ops : RowOps) : Prop extends WholeCircuit.Pc8OpsAgree ops where
-  fabs : ∀ w, ops.f32Fabs w = w % 2 ^ 31
   fmaxf : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y →
     signBit a = false → signBit b = false → ops.f32Fmaxf a b % 2 ^ 32 = if x < y then b else a
-  div : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y → y ≠ 0 →
-    (x = 0 → signBit a = signBit b) → ops.f32DivV2 a b % 2 ^ 32 = f32Word (x / y)
   e2m1 : ∀ w < 2 ^ 32, ((w >>> 23) % 256 = 255 → w % 2 ^ 23 = 0) → ops.f32ToE2m1Sat w % 2 ^ 4 = (e2m1Word w).val
   bf16w : ∀ w < 2 ^ 16, ops.bf16ToF32 w = w <<< 16
+  le : ∀ a b : ℕ, a < 2 ^ 31 → b < 2 ^ 31 → ops.i32Le a b % 2 = if a ≤ b then 1 else 0
 
 /-! ## A block -/
 
@@ -558,6 +560,86 @@ theorem noiseElem_stepWord {α x β : ℚ} {e f : Fin 32 → Nib} {w : ℕ} (h :
   unfold nvf4NoiseElem noiseAtom at h
   exact step_stepWord _ h
 
+/-! ## `−0` in a row -/
+
+/-- A BF16 row word `v` the table reads against the word `u` `pc4Sem` reads for its value (`encRow16`): the same word,
+or `−0` (`0x8000`) where `pc4Sem` writes `+0`. -/
+def ZeroSign16 (v u : ℕ) : Prop := v = u ∨ (v = 0x8000 ∧ u = 0)
+
+section ZeroSign16
+
+variable {ops : RowOps} (hA : Pc4OpsAgree ops)
+include hA
+
+theorem bf16_zeroSign16 {v u : ℕ} (h : ZeroSign16 v u) :
+    WholeCircuit.ZeroSign (ops.bf16ToF32 v) (ops.bf16ToF32 u) := by
+  rcases h with rfl | ⟨rfl, rfl⟩
+  · exact Or.inl rfl
+  · exact Or.inr ⟨by rw [hA.bf16w _ (by norm_num)]; rfl, by rw [hA.bf16w _ (by norm_num)]; rfl⟩
+
+/-- **`α` reads no row word's sign of zero**: both wirings widen `−0` to FP32's `−0`, and `|−0| = |+0|`,
+`fma(−0, −0, ·) = fma(+0, +0, ·)`. -/
+theorem alpha4_zeroSign16 {K : ℕ} (hK : 8 ≤ K) {V U : ℕ → ℕ} (h : ∀ l < K, ZeroSign16 (V l) (U l)) :
+    alpha4 ops V K = alpha4 ops U K := by
+  unfold alpha4 drho4
+  rw [WholeCircuit.rowRho_congrW (w := .bf16) (x := V) (y := U) hK fun l hl _ hc =>
+      WholeCircuit.fmaSq_zeroSign hA.toPc8OpsAgree (bf16_zeroSign16 hA (h l hl)) hc,
+    WholeCircuit.rowMax_congrW (ab := .bf16Fabs) (x := V) (y := U) (K - 1) fun l hl =>
+      WholeCircuit.fabs_zeroSign hA.toPc8OpsAgree (bf16_zeroSign16 hA (h l (by omega)))]
+
+theorem beta4_zeroSign16 {K : ℕ} (hK : 8 ≤ K) {V U : ℕ → ℕ} (h : ∀ l < K, ZeroSign16 (V l) (U l)) :
+    beta4 ops V K = beta4 ops U K := by
+  unfold beta4 drho4
+  rw [WholeCircuit.rowRho_congrW (w := .bf16) (x := V) (y := U) hK fun l hl _ hc =>
+      WholeCircuit.fmaSq_zeroSign hA.toPc8OpsAgree (bf16_zeroSign16 hA (h l hl)) hc, alpha4_zeroSign16 hA hK h]
+
+omit hA in
+/-- An NVF4 firing reads its accumulator only as a value: `−0` fires as `+0`. -/
+theorem nvf4Word_negZero (a b : List Nib) (sa sb : List (Fin 256)) :
+    nvf4Word 0x80000000 a b sa sb = nvf4Word 0 a b sa sb := by
+  have hv : fp32Value 0x80000000 = fp32Value 0 := rfl
+  have h1 : ¬ ((0x80000000 : ℕ) >>> 23) % 256 = 255 := by decide
+  have h0 : ¬ ((0 : ℕ) >>> 23) % 256 = 255 := by decide
+  unfold nvf4Word Fp4Atom.step
+  simp only [h1, h0, ↓reduceIte, hv]
+
+/-- `α·(±0)`, `α` a step word, is `+0` or `−0` (`mul`, `mulZero`). -/
+theorem mul_zero4 {a v : ℕ} (ha : AccumProofs.StepWord a) (hv : v = 0 ∨ v = 0x80000000) :
+    Prim.eval ops .mul [a, v] = 0 ∨ Prim.eval ops .mul [a, v] = 0x80000000 := by
+  have hqa := WholeCircuit.stepWord_wordQ ha
+  have hqv : wordQ v = some 0 := by
+    rcases hv with rfl | rfl
+    · exact Freeze.wordQ_zero
+    · exact PeelExactProofs.wordQ_negZero
+  have hvl : v < 2 ^ 32 := by rcases hv with rfl | rfl <;> norm_num
+  simp only [Prim.eval, Prim.w, List.getD_cons_zero, List.getD_cons_succ]
+  by_cases hs : signBit a = signBit v
+  · left
+    rw [hA.mul _ _ _ _ ha.1 hvl hqa hqv fun _ => hs, mul_zero]
+    simp [f32Word]
+  · exact Or.inr (hA.mulZero _ _ _ _ ha.1 hvl hqa hqv (mul_zero _) hs)
+
+omit hA in
+theorem atom4_zeroAcc {m : ℕ} (hm : m = 0 ∨ m = 0x80000000) (L : List ℕ) :
+    Prim.eval ops .atom4 (m :: L) = Prim.eval ops .atom4 (0 :: L) := by
+  rcases hm with rfl | rfl
+  · rfl
+  · simp only [Prim.eval, atom4F, Bool.false_eq_true, ↓reduceIte, List.headD_cons, List.tail_cons,
+      nvf4Word_negZero]
+
+/-- **The forming reads no row word's sign of zero**: the firing reads `α·(−0)` and `α·(+0)` alike. -/
+theorem form4_zeroSign16 {a v u aE : ℕ} (ha : AccumProofs.StepWord a) (h : ZeroSign16 v u) (e f : ℕ → ℕ) :
+    form4 ops a v aE e f = form4 ops a u aE e f := by
+  rcases h with rfl | ⟨rfl, rfl⟩
+  · rfl
+  · unfold form4
+    have h8 : ops.bf16ToF32 0x8000 = 0x80000000 := by rw [hA.bf16w _ (by norm_num)]; rfl
+    have h0 : ops.bf16ToF32 0 = 0 := by rw [hA.bf16w _ (by norm_num)]; rfl
+    simp only [List.cons_append, h8, h0]
+    rw [atom4_zeroAcc (mul_zero4 hA ha (Or.inr rfl)), atom4_zeroAcc (mul_zero4 hA ha (Or.inl rfl))]
+
+end ZeroSign16
+
 /-- The named conditions on a row `X` of `k` values under which the row units compute `formRow`'s codes and scale
 bytes: each value's BF16 word widens to a step word of that value, and `α` (positive) and `β` are step words. -/
 structure Row4OK (ops : RowOps) (k : ℕ) (X : Fin k → ℚ) : Prop where
@@ -576,7 +658,7 @@ on a row unit's inputs `x` holding `X`'s BF16 words, `e`'s codes and the form ba
 `formRow`'s and position `t`'s code is `formRow`'s. -/
 theorem formRow_table (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣ K) {X : Fin K → ℚ}
     {e : Fin 32 → Nib} {F : Fin K → Fin 32 → Nib} {x : ℕ → ℕ} (hR : Row4OK ops K X)
-    (hx : ∀ l < K, x l = encRow16 K X l) (he : ∀ l : Fin 32, x (K + l) = (e l).val)
+    (hx : ∀ l < K, ZeroSign16 (x l) (encRow16 K X l)) (he : ∀ l : Fin 32, x (K + l) = (e l).val)
     (hf : ∀ (t : Fin K) (l : Fin 32), x (K + 32 + 32 * t + l) = (F t l).val) {r : Row4}
     (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r) :
     (∀ q < K / 16, scale4V ops x K q = (r.2.getD q 0).val) ∧ ∀ t < K, code4V ops x K t = (r.1.getD t 0).val := by
@@ -589,9 +671,9 @@ theorem formRow_table (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 
         (wordVal (ops.bf16ToF32 (bf16WordOf (X ⟨t, ht⟩)))) (wordVal (beta4 ops (encRow16 K X) K)) e (F ⟨t, ht⟩) =
         some (ds.getD t 0) := by
       rw [(hR.widen ⟨t, ht⟩).2]; exact hds' ⟨t, ht⟩
-    have hxt : x t = bf16WordOf (X ⟨t, ht⟩) := by rw [hx t ht, encRow16, dite_eq_left ht]
+    have hxt : encRow16 K X t = bf16WordOf (X ⟨t, ht⟩) := by rw [encRow16, dite_eq_left ht]
     unfold d4W
-    rw [alpha4_congr hK hx, beta4_congr hK hx, hxt]
+    rw [alpha4_zeroSign16 hA hK hx, beta4_zeroSign16 hA hK hx, form4_zeroSign16 hA hR.alpha (hx t ht), hxt]
     exact form4_sem hA.toPc8OpsAgree hR.alpha hR.alpha_pos hR.beta (hR.widen ⟨t, ht⟩).1 he (hf ⟨t, ht⟩) hw
   have h16' : 16 ∣ ds.length := by rw [hlen]; exact h16
   have hc : (ds.toChunks 16).length = K / 16 := by rw [Freeze.length_toChunks_of_dvd (by omega) h16', hlen]
@@ -627,7 +709,7 @@ row's BF16 words, `E_A`'s codes and `F_A`'s (`row4A_code`, `row4A_scale`, `formR
 theorem row4A_form (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣ K)
     (T : ((row4A K).spec ops).toCircuit.Transcript) (hT : ((row4A K).spec ops).part.Correct T 0)
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F : Fin K → Fin 32 → Nib} (hR : Row4OK ops K X)
-    (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
+    (hx : ∀ l < K, ZeroSign16 (val T l) (encRow16 K X l)) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
     (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val) {r : Row4}
     (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r) :
     (∀ q < K / 16, val T (scale4 K (rowIn K false) q) = (r.2.getD q 0).val) ∧
@@ -640,7 +722,7 @@ theorem row4A_form (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣
 theorem row4B_form (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣ K)
     (T : ((row4B K).spec ops).toCircuit.Transcript) (hT : ((row4B K).spec ops).part.Correct T 0)
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F : Fin K → Fin 32 → Nib} (hR : Row4OK ops K X)
-    (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
+    (hx : ∀ l < K, ZeroSign16 (val T l) (encRow16 K X l)) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
     (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val) {r : Row4}
     (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r) :
     (∀ q < K / 16, val T (scale4 K (rowIn K true) q) = (r.2.getD q 0).val) ∧
@@ -713,7 +795,7 @@ words `af` of `r` against `F_B`'s columns, wherever they exist (`peelFp4`'s `P_A
 theorem row4A_paWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
     (T : ((row4A K).spec ops).toCircuit.Transcript) (hT : ((row4A K).spec ops).part.Correct T 0)
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F FB : Matrix (Fin K) (Fin 32) Nib} (hR : Row4OK ops K X)
-    (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
+    (hx : ∀ l < K, ZeroSign16 (val T l) (encRow16 K X l)) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
     (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)
     (hb : ∀ (t : Fin K) (q : Fin 32), val T (33 * K + 32 + 32 * t + q) = (FB t q).val) {r : Row4}
     (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r)
@@ -732,7 +814,7 @@ theorem row4A_paWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K
   intro q hq
   refine ⟨?_, ?_⟩
   · have he' : val T (K + q) = (e ⟨q, hq⟩).val := he ⟨q, hq⟩
-    rw [row4A_et h8 T hT hq, he', beta4_congr h8 hx, toE4m3_step hA.toPc8OpsAgree hR.beta,
+    rw [row4A_et h8 T hT hq, he', beta4_zeroSign16 hA h8 hx, toE4m3_step hA.toPc8OpsAgree hR.beta,
       eTilde_prim ops e _ (e4m3_notNaN _) ⟨q, hq⟩, hpa1 q hq, WholeCircuit.getD_ofFn32 _ hq]
   · obtain ⟨c, hc1, hc2⟩ := Option.bind_eq_some_iff.1 (hafq ⟨q, hq⟩)
     have hcw : c = af.getD q 0 := by
@@ -757,7 +839,7 @@ wherever they exist (`peelFp4`'s `P_B,j`). -/
 theorem row4B_pbWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
     (T : ((row4B K).spec ops).toCircuit.Transcript) (hT : ((row4B K).spec ops).part.Correct T 0)
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F FA : Matrix (Fin K) (Fin 32) Nib} (hR : Row4OK ops K X)
-    (hx : ∀ l < K, val T l = encRow16 K X l) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
+    (hx : ∀ l < K, ZeroSign16 (val T l) (encRow16 K X l)) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
     (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)
     (hb : ∀ (t : Fin K) (q : Fin 32), val T (33 * K + 32 + 32 * t + q) = (FA t q).val) {r : Row4}
     (hr : formRow (wordVal (alpha4 ops (encRow16 K X) K)) (wordVal (beta4 ops (encRow16 K X) K)) X e F = some r)
@@ -779,7 +861,7 @@ theorem row4B_pbWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K
       eTilde e (e4m3 (wordVal (beta4 ops (encRow16 K X) K))) ⟨s, hs⟩ := by
     intro s hs
     have he' : val T (K + s) = (e ⟨s, hs⟩).val := he ⟨s, hs⟩
-    rw [he', beta4_congr h8 hx, toE4m3_step hA.toPc8OpsAgree hR.beta, eTilde_prim ops e _ (e4m3_notNaN _) ⟨s, hs⟩]
+    rw [he', beta4_zeroSign16 hA h8 hx, toE4m3_step hA.toPc8OpsAgree hR.beta, eTilde_prim ops e _ (e4m3_notNaN _) ⟨s, hs⟩]
   intro q hq
   refine ⟨?_, ?_⟩
   · obtain ⟨acc, s, hacc, hs, hrn⟩ := hpb1 q hq
