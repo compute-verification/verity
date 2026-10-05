@@ -244,6 +244,7 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
             levels = sorted({lv for _, lv, _ in keys})
             res["forged_row"] = p_last + 1
             chain = forge_chain(chain, p_last + 1)
+            res["forged_acc_root"] = chain.reg.root.hex()
         else:
             levels = []
     want = None if levels is None else set(levels)
