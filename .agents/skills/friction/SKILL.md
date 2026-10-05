@@ -120,8 +120,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-03 (the coordinator's): data you don't own on a node is deleted only with `research retention gc` or `research
   retention rm --approved-by @OWNER`, which refuses unless every retention record on the path names that owner; never a bare
   `rm`, and never on another lane's word about who owns it.
-- 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`EDGES` in
-  `tests/test_protocol_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
+- 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`ALLOWED` in
+  `verity/tests/test_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
   edges stay acyclic. The layout that follows (lean with compute-accounting): a protocol guarantee that needs a proof
   system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
   registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves

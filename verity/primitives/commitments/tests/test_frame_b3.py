@@ -6,8 +6,14 @@ from __future__ import annotations
 
 import pytest
 
-from verity.primitives.commitments import (CommitmentDomain, MerkleTree, RangeIndexedDomain, VerificationLimits, multiproof,
-                                verify_multiproof, verify_opening)
+from verity.primitives.commitments import (
+    CommitmentDomain,
+    MerkleTree,
+    RangeIndexedDomain,
+    VerificationLimits,
+    verify_opening,
+)
+from verity_experimental.commitments.multiproof import multiproof, verify_multiproof
 from verity.primitives.crypto.blake3 import BLOCK_LEN, blake3, keyed
 from verity.primitives.commitments.merkle import _FRAME, _uint
 
