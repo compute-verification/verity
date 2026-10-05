@@ -1,17 +1,20 @@
-"""`verity_flock.rec_residuals`, V*'s algebra statement: the M0 unit's leaf-summed products against `gf2k.residuals`, and one
-rep of a real session (rec-algebra's fixture) holding with the whole comb as witness and failing at a changed coin."""
+"""`verity_flock.rec_residuals`, V*'s algebra statement: ``InnerRepCheck`` (its M0 unit, with the leaf-summed products, and its
+Definition) against `gf2k.residuals` on a small S; its ports on rec-algebra's fixture session (the messages by round, the
+running sums, the verifier's v with the comb), holding on both reps and failing at a changed comb or running sum; and the
+statement's files, every row port a registered read, under Lean's `statement`."""
 from __future__ import annotations
 
 import json
 import random
-import shutil
 import subprocess
 from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.primitives.commitments import hm96
 from verity_catalog.definitions.boolean import gf2k as G
 from verity_flock import rec_algebra as A
+from verity_flock import rec_live as RL
 from verity_flock import rec_residuals as RR
 
 HERE = Path(__file__).resolve().parent
@@ -24,58 +27,110 @@ INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
 SMALL = {"nw": 130, "nv": 3, "ops": [[["w", 0]], [["wt", 1, 3], ["v", 0]], [["v", 1]], [["w", 129], ["w", 0]]],
          "res": [{"mul": [[0, 1], [2, 3], [1, 3]], "add": [["v", 2]]}, {"mul": [], "add": [["w", 129]]},
                  {"mul": [[2, 0]], "add": []}]}
+#: w as three row ports: an element alone, the transposed block, an element alone
+S_SMALL = {"gf": SMALL, "ports": [["m0", 1], ["m1", 128], ["m2", 1]]}
+
+
+def _rows(g: random.Random, w: list[int], noise: bool = False) -> list[list[int]]:
+    """w's elements as S_SMALL's row ports' words, the words after each port's elements random with ``noise``."""
+    out, at = [], 0
+    for _, n in S_SMALL["ports"]:
+        r = RR.words(w[at:at + n], RR.port_words(n))
+        if noise:
+            r[8 * n:] = [g.getrandbits(16) for _ in r[8 * n:]]
+        out.append(r)
+        at += n
+    return out
+
+
+def _cases(g: random.Random, k: int) -> list[tuple[list[list[int]], list[int], list[int]]]:
+    """``k`` random port sets (rows with noise after their elements, v) and their reference outputs."""
+    out = []
+    for _ in range(k):
+        w = [g.getrandbits(128) for _ in range(SMALL["nw"])]
+        v = [g.getrandbits(128) for _ in range(SMALL["nv"])]
+        rows = _rows(g, w, noise=True)
+        want = RR.words(G.residuals(SMALL, w, v), RR.OUT_WORDS)
+        assert RR.residual_words(S_SMALL, rows, v) == want
+        out.append((rows, v, want))
+    return out
 
 
 @pytest.mark.slow
 def test_the_unit_sums_each_residuals_products_leaf_by_leaf():
-    """The unit (through its M0 layout) equals the reference on random ports: one Karatsuba (2,187 ANDs) a product, and one
-    copy row a leaf for the residual of several products."""
-    g = random.Random(7)
-    low = RR.lowering(SMALL, "rec-residuals/small")
-    ands = sum(1 for k in low.circuit.kind if k == "and")
-    assert ands == 4 * RR.LEAVES + RR.LEAVES
-    rows = []
-    for _ in range(3):
-        w = [g.getrandbits(128) for _ in range(SMALL["nw"])]
-        v = [g.getrandbits(128) for _ in range(SMALL["nv"])]
-        rows.append((RR.words(w, RR.w_words(SMALL)) + RR.words(v, RR.v_words(SMALL)), RR.residual_words(SMALL, w, v)))
-    got, _cut, ok = low.evaluate(np.array([r for r, _ in rows], np.uint64))
+    """The unit (through its M0 layout) equals the reference on random ports, the words after each port's elements unread: one
+    Karatsuba (2,187 ANDs) a product, and one copy row a leaf for the residual of several products."""
+    low = RR.lowering(S_SMALL, "rec-residuals/small")
+    assert sum(1 for k in low.circuit.kind if k == "and") == 4 * RR.LEAVES + RR.LEAVES
+    cases = _cases(random.Random(7), 3)
+    flat = [sum(rows, []) + RR.words(v, RR.v_words(S_SMALL)) for rows, v, _ in cases]
+    got, _cut, ok = low.evaluate(np.array(flat, np.uint64))
     assert int(ok) == 0b111
-    assert [got[i].astype(np.uint16).tolist() for i in range(3)] == [want for _, want in rows]
-    assert any(rows[0][1][:8]) and not any(rows[0][1][24:])
+    assert [got[i].astype(np.uint16).tolist() for i in range(3)] == [want for _, _, want in cases]
+    assert any(cases[0][2][:8]) and not any(cases[0][2][24:])
 
 
-def _inner(tmp: Path) -> Path:
+@pytest.mark.slow
+def test_the_definition_computes_the_reference():
+    """``InnerRepCheck{S_SMALL}`` evaluated bit-sliced from its descriptor, on the unit's cases."""
+    from verity.primitives.circuits.evaluation import evaluate_batch
+
+    cases = _cases(random.Random(7), 3)
+    bits = lambda ws: np.array([[(w >> j) & 1 for j in range(16)] for w in ws], dtype=np.uint8)
+    ports = [np.array([bits(rows[i]) for rows, _, _ in cases]) for i in range(3)]
+    ports.append(np.array([bits(RR.words(v, RR.v_words(S_SMALL))) for _, v, _ in cases]))
+    res = np.asarray(evaluate_batch(RR.definition(S_SMALL), *ports)).reshape(3, RR.OUT_WORDS, 16)
+    word = lambda w: int(sum(int(b) << j for j, b in enumerate(w)))
+    assert [[word(w) for w in res[t]] for t in range(3)] == [want for _, _, want in cases]
+
+
+@pytest.fixture(scope="module")
+def reps():
     assert (SET / "stage" / "circuit.txt").is_file(), (
         f"{SET} is not fetched: `uv run research data fetch-fixtures backends/flock/tests/fixtures/hidden-outputs`")
-    (tmp / "session").mkdir(parents=True)
     record = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]
-    (tmp / "session" / "session.json").write_text(json.dumps(record))
-    for r in range(2):
-        shutil.copy(SET / "records-cpu" / f"honest.rep{r}.proof", tmp / "session" / f"circuit.rep{r}.bin")
-    return tmp
+    out = []
+    for r, d in enumerate(INNER["reps"]):
+        sh = A.Shape(INNER["m"], INNER["k_log"], 2 + len(d["extras"]))
+        p = A.decode(sh, (SET / "records-cpu" / f"honest.rep{r}.proof").read_bytes())
+        rounds = A.rep_rounds(record, d["stream"])
+        extras = [A.Claim(G.of_hex(e["value"]), tuple(map(G.of_hex, e["skip"])), tuple(map(G.of_hex, e["x"]))) for e in d["extras"]]
+        v, info = A.verifier_rows(sh, rounds, extras, [G.of_hex(x) for x in d["comb"]])
+        [st] = [s for s in record["streams"] if s["stream"] == d["stream"]]
+        frees = [f for f in (RL.split_round(bytes.fromhex(rd["msg"]), k == 0).free for k, rd in enumerate(st["rounds"])) if f]
+        acc0 = [0x1234 + r, 0x5678 + r]
+        cs = A.consistency(sh, p, info)
+        rows = [RL.message_rows(f)[0] for f in frees] + [RR.words(acc0, 64), RR.words([acc0[0] ^ cs[0], acc0[1] ^ cs[1]], 64)]
+        out.append((sh, rows, v))
+    return out
 
 
-def test_a_real_rep_holds_with_the_comb_as_witness_and_fails_at_a_changed_coin(tmp_path):
-    """Both reps of the fixture's honest session: every residual zero with the whole comb in w and none in v (the stub); the
-    verifier's v at a changed coin of rep 0's round 1 (the zerocheck's point; round 0's six coins are pinned out, §9.2) makes
-    the zerocheck's residual and Ligerito's final check nonzero."""
-    inner = _inner(tmp_path / "honest")
-    sh = A.Shape(INNER["m"], INNER["k_log"], 2 + len(INNER["reps"][0]["extras"]))
-    S, _ = A.structure(sh)
-    for r in range(2):
-        w, v = RR.rep_inputs(inner, INNER, r, sh)
-        assert len(w) == S["nw"] and len(v) == S["nv"] and v[-64:] == [0] * 64
-        assert G.residuals(S, w, v) == [0] * len(S["res"])
-    forged = _inner(tmp_path / "forged")
-    rec = json.loads((forged / "session" / "session.json").read_text())
-    c = rec["streams"][0]["rounds"][1]["coins"]
-    c[0] = G.hex128(G.of_hex(c[0]) ^ 1)
-    (forged / "session" / "session.json").write_text(json.dumps(rec))
-    w, _ = RR.rep_inputs(inner, INNER, 0, sh)
-    _, v = RR.rep_inputs(forged, INNER, 0, sh)
-    out = G.residuals(S, w, v)
-    assert [i for i, x in enumerate(out) if x] == [0, len(out) - 2, len(out) - 1]
+def test_the_ports_are_the_rounds_and_the_running_sums(reps):
+    """`spec`'s row ports are the rep's absorbing rounds (`rec_live.message_rows`' rows, as ``c_k`` commits them) and the
+    running sums, and S.gf is the algebra's structure."""
+    sh, rows, _ = reps[0]
+    S = RR.spec(sh)
+    assert S["gf"] == A.structure(sh)[0]
+    assert [nm for nm, _ in S["ports"]] == [f"m{i}" for i in range(len(A.rounds(sh)))] + ["acc0", "acc1"]
+    assert [n for _, n in S["ports"]] == [len(r) for r in A.rounds(sh)] + [2, 2]
+    assert [len(r) for r in rows] == [RR.port_words(n) for _, n in S["ports"]]
+
+
+def test_a_real_rep_holds_and_fails_at_a_changed_comb_or_running_sum(reps):
+    """Both reps of the fixture's honest session: every residual zero on the rounds' rows, the running sums and the verifier's
+    v; the comb changed in v moves the lincheck alone, and the last running sum changed moves Ligerito's final check alone."""
+    for sh, rows, v in reps:
+        S = RR.spec(sh)
+        assert RR.residual_words(S, rows, v) == [0] * RR.OUT_WORDS
+    sh, rows, v = reps[0]
+    S = RR.spec(sh)
+    nz = lambda out: [i for i in range(len(S["gf"]["res"])) if any(out[8 * i:8 * i + 8])]
+    v2 = list(v)
+    v2[-64] ^= 1
+    assert nz(RR.residual_words(S, rows, v2)) == [1]
+    rows2 = [list(r) for r in rows]
+    rows2[-1][0] ^= 1
+    assert nz(RR.residual_words(S, rows2, v)) == [2 + sh.claims]
 
 
 def _holding(g: random.Random) -> tuple[list[int], list[int]]:
@@ -89,26 +144,38 @@ def _holding(g: random.Random) -> tuple[list[int], list[int]]:
 
 
 @pytest.mark.slow
-def test_the_statement_reads_v_as_public_words_and_registers_its_outputs_as_zero(tmp_path):
-    """Two instances, one holding and one whose first residual is not zero (v's added constant changed): the files the
-    verifier reads (the circuit's public input port v, its own recomputation of v, the zero output rows' registration) and,
-    when Lean is built, its `statement` under them."""
+def test_the_statement_reads_every_row_from_a_registration_and_v_as_public_words(tmp_path):
+    """Two instances, one holding and one whose first residual is not zero (v's added constant changed). Each row port reads
+    row i of a two-row registration in instance i, the verifier's own entry built from the rows' ``b || c`` alone
+    (`commits_entry`), as V* builds a round's from its two ``c_k``; the files the verifier reads (the circuit's public input
+    port v, its own recomputation of v, its reads file) and, when Lean is built, its `statement` under them."""
+    from verity.protocols.verification.sampled_proofs.one_stage import registered as RG
+
     g = random.Random(11)
     (w0, v0), (w1, v1) = _holding(g), _holding(g)
     v1[2] ^= 1
-    s = RR.write_statement(RR.statement(SMALL, "rec-residuals/small", 2), [w0, w1], [v0, v1], tmp_path)
+    program = "ab" * 64
+    rows0, rows1 = _rows(g, w0), _rows(g, w1)
+    regs, own = {}, {}
+    for i, (nm, _) in enumerate(S_SMALL["ports"]):
+        salts = [hm96.SHA512.fresh_salt() for _ in range(2)]
+        regs[nm] = (RG.Registered.commit(program, f"rec-c{i}", [rows0[i], rows1[i]], salts), [0, 1])
+        bcs = RL.commit_rows([rows0[i], rows1[i]], salts)
+        own[nm] = RR.commits_entry(program, f"rec-c{i}", RR.port_words(S_SMALL["ports"][i][1]), bcs)
+        assert own[nm] == regs[nm][0].entry()
+    st = RR.statement(S_SMALL, "rec-residuals/small", 2)
+    s = RR.write(st, regs, [v0, v1], tmp_path, own=own)
     assert s["holds"] == [True, False] and s["nonzero_residuals"] == [[], [0]] and s["unit_agrees"] == [True, True]
     meta = json.loads((tmp_path / "circuit.txt").read_text().split("\n", 2)[1][5:])
-    assert [p[0] for p in meta["ports"]] == ["w", "out"]
+    assert [p[0] for p in meta["ports"]] == ["m0", "m1", "m2", "out"]
     [pin] = meta["public_inputs"]
-    assert pin["port"] == "v" and pin["words"] == RR.v_words(SMALL) and pin["derivation"] == RR.DERIVATION
+    assert pin["port"] == "v" and pin["words"] == RR.v_words(S_SMALL) and pin["derivation"] == RR.DERIVATION
     head, body = (tmp_path / "public-inputs.bin").read_bytes().split(b"\n", 1)
     assert json.loads(head)["instances"] == 2 and json.loads(head)["ports"] == [pin]
-    assert len(body) == 2 * 2 * RR.v_words(SMALL) and (tmp_path / "pub.bin").read_bytes().endswith(body)
-    own = json.loads((tmp_path / "registered.json").read_text())["ports"]
-    assert list(own) == ["out"] and own["out"]["reads"] == [0, 1] and own["out"]["root"] == s["registered_root"]
-    pub_head = json.loads((tmp_path / "pub.bin").read_bytes().split(b"\n", 1)[0])
-    assert pub_head["registered"]["out"]["value"] == "rec-residuals-zero" and pub_head["public_inputs"] == [pin]
+    assert len(body) == 2 * 2 * RR.v_words(S_SMALL) and (tmp_path / "pub.bin").read_bytes().endswith(body)
+    reads = json.loads((tmp_path / "registered.json").read_text())["ports"]
+    assert list(reads) == ["m0", "m1", "m2", "out"] and all(reads[nm]["reads"] == [0, 1] for nm in reads)
+    assert reads["out"]["root"] == s["zero_root"] and all(reads[nm]["root"] == own[nm]["root"] for nm in own)
     if not BIN.exists():
         pytest.skip("the Lean verifier is not built")
     p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(tmp_path / "circuit.txt"),
@@ -117,4 +184,4 @@ def test_the_statement_reads_v_as_public_words_and_registers_its_outputs_as_zero
                         "--registered", str(tmp_path / "registered.json")], capture_output=True, text=True, check=False)
     assert p.returncode == 0, p.stdout + p.stderr
     line = json.loads(p.stdout.splitlines()[0])
-    assert line["registered"] == {"out": {"value": "rec-residuals-zero", "root": s["registered_root"]}}
+    assert line["registered"] == {nm: {"value": e["value"], "root": e["root"]} for nm, e in reads.items()}
