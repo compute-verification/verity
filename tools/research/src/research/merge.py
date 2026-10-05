@@ -41,6 +41,9 @@ and then it is swept; without it the sweep runs before anyone pushes, finds noth
 same commit goes to vy-nebius-1's bare repository, whose main node 1's builds check out (`vy-lean-sandbox checkout`): a plain
 push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
 it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
+These after-landing steps (the spec DM, the mirror, `after_land`) follow the remote's main, not the push: AFTER_LAND_REF on the
+remote is the main they last ran for, and every `research merge` that can change something (all but --dry-run, --mirror,
+--canary and --guard-push) catches them up, once, for whatever landed past it since, however it was pushed (`caught_up`).
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
 from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`); the gate
@@ -1119,14 +1122,61 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
     return argv
 
 
+#: the remote's ref holding the main commit the after-landing steps last ran for
+AFTER_LAND_REF = "refs/research/after-land"
+
+
+def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log=print) -> str | None:
+    """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
+    the caller's own push, when the remote has no marker yet): DM Daniel the spec change over that range (`spec_alert`), push main's
+    tip to node 1's mirror, start ``tool``'s `after_land` on the tip (a later landing's `post_train.py` tests the ones before it
+    too), then move the marker to the tip, leased on the one read so two landers don't both advance it.  Without a marker or
+    ``since`` it only sets the marker.  Nothing raises, since a landing that happened stands.  Returns the tip the steps ran for."""
+    from .spec_alert import alert
+
+    r = _git(repo, "ls-remote", remote, "refs/heads/main", AFTER_LAND_REF, check=False)
+    if r.returncode:
+        log(f"research merge: {remote}'s main can't be read ({(r.stderr or r.stdout).strip()[-200:]}); the steps after a landing "
+            "wait for the next `research merge`")
+        return None
+    refs = {ref: sha for sha, ref in (line.split() for line in r.stdout.splitlines())}
+    tip, mark = refs.get("refs/heads/main", ""), refs.get(AFTER_LAND_REF, "")
+    if not tip or tip == mark:
+        return None
+    start = mark or since
+    lease = f"--force-with-lease={AFTER_LAND_REF}:{mark}"
+    if start:
+        fetched = _git(repo, "fetch", "-q", remote, "refs/heads/main", *([AFTER_LAND_REF] if mark else []), check=False)
+        if fetched.returncode or _git(repo, "merge-base", "--is-ancestor", start, tip, check=False).returncode:
+            why = "can't be fetched" if fetched.returncode else f"isn't in {remote}'s main ({tip[:12]})"
+            log(f"research merge: the steps after a landing last ran for {start[:12]}, which {why}; nothing ran: run them by "
+                f"hand, then `git push {remote} {tip}:{AFTER_LAND_REF}`")
+            return None
+        if mark and mark != since:
+            n = len(_git(repo, "rev-list", "--first-parent", f"{mark}..{tip}").stdout.split())
+            log(f"research merge: the steps after a landing last ran for {mark[:12]}; catching up {n} commit(s) of main to {tip[:12]}")
+        alert(repo, start, tip, remote=remote, log=log)
+        if remote == "origin" and (name := mirror_name()):
+            push_mirror(repo, tip, name)
+        after_land(repo, tool, tip, log=log)
+    p = _git(repo, "push", "-q", lease, remote, f"{tip}:{AFTER_LAND_REF}", check=False)
+    if p.returncode:
+        log(f"research merge: {remote}'s {AFTER_LAND_REF} wasn't moved to {tip[:12]} ({(p.stderr or p.stdout).strip()[-200:]}); "
+            "another lander may have caught up first")
+    elif not start:
+        log(f"research merge: {remote} had no {AFTER_LAND_REF}; set it to main ({tip[:12]}): the steps after a landing are "
+            "caught up from here, and nothing before it was looked at")
+    return tip if start else None
+
+
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
     """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), DM Daniel the spec change it
     landed on main (`spec_alert`), start what ``tool`` runs after a landing (`after_land`) and sweep, since the sweep closes only
     what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
-    says so, and `research merge --sweep` after the push does it. Main on origin goes to the mirror too, before `after_land`
-    starts, and the mirror can fail without failing the merge."""
+    says so, and `research merge --sweep` after the push does it. On main the steps are `caught_up`'s, from the marker (or main
+    before the push), so they cover a landing pushed another way too; the mirror can fail without failing the merge."""
     if push:
-        from .spec_alert import alert, remote_head
+        from .spec_alert import remote_head
 
         was = remote_head(repo, remote, into) if into == "main" else ""
         r = _git(repo, "push", "-q", remote, f"refs/heads/{into}:refs/heads/{into}", check=False)
@@ -1135,15 +1185,11 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = 
                   file=sys.stderr)
             return 1
         print(f"research merge: pushed {into} to {remote}")
-        if into == "main":
-            if was:
-                alert(repo, was, _git(repo, "rev-parse", f"refs/heads/{into}").stdout.strip(), remote=remote)
-            else:
-                print(f"research merge: no {remote}/{into} before the push to compare with; no spec change was looked for, "
-                      f"so read this push's lean-audit.json changes yourself", file=sys.stderr)
-        if into == "main" and remote == "origin" and (name := mirror_name()):
-            push_mirror(repo, _git(repo, "rev-parse", f"refs/heads/{into}").stdout.strip(), name)
-        after_land(repo, tool, _git(repo, "rev-parse", "HEAD").stdout.strip())
+        if into != "main":
+            after_land(repo, tool, _git(repo, "rev-parse", "HEAD").stdout.strip())
+        elif not caught_up(repo, remote, tool, since=was) and not was:
+            print(f"research merge: no {remote}/{into} before the push to compare with; no spec change was looked for, "
+                  f"so read this push's lean-audit.json changes yourself", file=sys.stderr)
     _sweep_after(repo, into, remote)
     return 0
 
@@ -1229,6 +1275,9 @@ def main(argv: list[str]) -> int:
             print(f"research merge: no commit {a.ref[0] if a.ref else a.into}", file=sys.stderr)
             return 1
         return 0 if push_mirror(repo, r.stdout.strip(), name) else 1
+    if (a.into == "main" and not a.dry_run and (a.sweep or a.ref)
+            and _git(repo, "remote", "get-url", a.remote, check=False).returncode == 0):
+        caught_up(repo, a.remote, a.tool)
     if a.sweep:
         if a.ref or a.train:
             ap.error("--sweep takes no refs")
