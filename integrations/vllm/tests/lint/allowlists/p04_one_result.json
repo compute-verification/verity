@@ -40,7 +40,7 @@
     {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "check_requests", "detail": "G3", "count": 2},
     {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "check_requests", "detail": "G4", "count": 2},
     {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "check_requests", "detail": "G5", "count": 2},
-    {"file": "verity_vllm/check/replay/replay.py", "kind": "reason-prefix", "symbol": "_reason_class", "detail": "'...' in reason", "count": 3},
+    {"file": "verity_vllm/check/replay/tier_a_pool.py", "kind": "reason-prefix", "symbol": "_reason_class", "detail": "'...' in reason", "count": 3},
     {"file": "verity_vllm/check/replay/replay_codes.py", "kind": "reason-prefix", "symbol": "not_evaluable_codes", "detail": "why.startswith"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "reason-prefix", "symbol": "_fork_worker", "detail": "why.startswith"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "reason-prefix", "symbol": "recompute_run", "detail": "'...' in str(r.get('why'))"},

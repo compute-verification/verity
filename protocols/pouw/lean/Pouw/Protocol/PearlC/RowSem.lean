@@ -25,7 +25,7 @@ On a row of `K` FP32 words `x_0, …, x_{K−1}` (`pc4`: BF16 words, widened):
 A `PearlCSem` reads a row as values (`wordsVal`), so these formulas run on the row's words re-encoded (`f32Word`; `pc4`'s
 `bf16WordOf`), and read their results back with `wordVal`. `pc8Sem`'s forming value is `D_t`'s, so `FormChain.elem`'s
 `e4m3` of it is `F32ToE4m3Sat(D_t)` wherever the cast agrees with `e4m3Word` and `D_t` is not NaN. The noise
-(`noise`, `lines`) stays a parameter.
+(`noise`, `lines`) stays a parameter, of codes in both: `pc8`'s noise codes are the words the Program reads.
 -/
 
 namespace Pouw.PearlC.RowCircuit
@@ -109,8 +109,8 @@ def encRow (k : ℕ) (X : Fin k → ℚ) (l : ℕ) : ℕ := if h : l < k then f3
 /-- A row of values as BF16 words, `0` past its end. -/
 def encRow16 (k : ℕ) (X : Fin k → ℚ) (l : ℕ) : ℕ := if h : l < k then bf16WordOf (X ⟨l, h⟩) else 0
 
-/-- A noise line's entries as E4M3 codes, `0` past its end. -/
-def encCodes {r : ℕ} (e : Fin r → ℚ) (l : ℕ) : ℕ := if h : l < r then (e4m3 (e ⟨l, h⟩)).val else 0
+/-- A noise line's codes as words, `0` past its end. -/
+def encCodes {r : ℕ} (e : Fin r → Code) (l : ℕ) : ℕ := if h : l < r then (e ⟨l, h⟩).val else 0
 
 /-- **`pc8`'s forming chain**: the formed word `form8` at `α`, `x` and `β`'s words and the noise' and basis' codes,
 read as a value. -/
@@ -120,7 +120,9 @@ def pc8Form (p : Pipeline) : FormChain Params.pi.r :=
 
 /-- **Pearl-C's semantics at `pc8`'s row arithmetic**, on the step `p`: `α`, `β` and the floor from the row's words
 (`alpha8`, `beta8`, `floor8 + 1`, so the floor rule `1 ≤ floor` is `ρ·α − 1 ≥ 0`), the forming `pc8Form`, and the noise
-as given. -/
+as given. The floor is `0`, so the row is refused, where `ρ`'s word is not finite (NaN or ±inf): Python's `s5_stats`
+refuses such a row (`_check_finite` on the partials, which are non-negative sums) and the circuit's flag asks
+`ρ ≤ F32_MAX`. -/
 def pc8Sem {Q R S : Type} (p : Pipeline)
     (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r) : PearlCSem Q R S where
@@ -128,15 +130,18 @@ def pc8Sem {Q R S : Type} (p : Pipeline)
   fc := pc8Form ops p
   alpha := fun k X => wordVal (alpha8 ops (encRow k X) k)
   beta := fun k X => wordVal (beta8 ops (encRow k X) k)
-  floor := fun k X => wordVal (floor8 ops (encRow k X) k) + 1
+  floor := fun k X =>
+    if (wordQ (rowRho ops .id (encRow k X) k)).isSome then wordVal (floor8 ops (encRow k X) k) + 1 else 0
 
 /-- **Pearl-C4's semantics at `pc4`'s row arithmetic**: `α` and `β` from the row's BF16 words (`alpha4`, `beta4`), and
-the noise lines as given. -/
+the noise lines as given. `β` is `0`, so `RowAdmit4` refuses the row, where `β`'s word is not finite (NaN or ±inf), as
+Python refuses it (`s5_stats`' `_check_finite`, `pearl_c4.stats`' `_finite`) and the circuit's flag asks
+`β ≤ F32_MAX`. -/
 def pc4Sem {Q R S : Type}
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k) : Fp4Sem Q R S where
   lines := lines
   alpha := fun k X => wordVal (alpha4 ops (encRow16 k X) k)
-  beta := fun k X => wordVal (beta4 ops (encRow16 k X) k)
+  beta := fun k X => if (wordQ (beta4 ops (encRow16 k X) k)).isSome then wordVal (beta4 ops (encRow16 k X) k) else 0
 
 end Pouw.PearlC.RowCircuit

@@ -43,8 +43,9 @@ an ask or an alert, which has one owner, the owner's `pickup`, `done` and `decli
 or `❌ declined — ...`), with no reaction: every handle posts through one bot, which can place each reaction only once.
 `roster` reads those lines.
 
-`registry.json` (beside this file) names every handle (holder, remit, charter, user-group id), the channels and the named
-humans; `research slack handles` prints it. The tool is `research slack` (`tools/research/src/research/slack.py`); every
+`registry.json` (beside this file) names every handle (holder, remit, charter, user-group id, the paths it `owns`), the
+channels and the named humans; `research slack handles` prints it. `research msg owners PATH...` names who owns each path (the
+longest `owns` prefix wins), so a question about a file goes to its owner; a PR that moves files updates its owners' entries. The tool is `research slack` (`tools/research/src/research/slack.py`); every
 subcommand takes `--dry-run`, which sends nothing and prints each request it would make.
 
 ## Setup
