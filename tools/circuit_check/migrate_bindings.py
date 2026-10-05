@@ -42,14 +42,14 @@ REPO = HERE.parents[1]
 TARGETS = HERE / "src" / "circuit_check" / "targets.py"
 PINS = HERE / "src" / "circuit_check" / "pins.json"
 #: the source roots this tree's packages import from, ahead of any installed copy
-PATHS = ("tools/circuit_check/src", ".", "integrations/vllm", "verity/protocols/accounting/work/pouw", "benchmarks/numerical/python",
-         "backends/flock/python", "verity/protocols/verification/sampled_proofs", "verity/protocols/accounting/space/pous")
+PATHS = ("tools/circuit_check/src", ".", "catalog", "kernels", "experimental", "integrations/vllm", "benchmarks/numerical/python",
+         "backends/flock/python")
 #: `targets.py`'s own: what no one module owns (every kernel's and vocabulary kind's self-check bindings)
 SHARED = ("_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots")
 #: split by hand (`POUW`)
 BY_HAND = ("_pouw_roots",)
 #: packages whose sidecars may import only the core and themselves (`test_boundaries.py`, `test_protocol_boundaries.py`)
-NO_CHECKER = ("verity", "verity.protocols.accounting.work.pouw")
+NO_CHECKER = ("verity",)
 
 _R = "verity_vllm.program.registry."
 #: a root function's docstring split by module, each part one paragraph (`_docstring` wraps it), with the digest of the
