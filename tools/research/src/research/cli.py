@@ -18,6 +18,10 @@
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
                                                  # each ssh machine, and its records fetched here (remote.adopt)
+  research keeper set NAME --on NODE --project P --n N --until UTC [--gpus G] [--max-min M] [--source GITDIR] [...] -- CMD... {seed}
+  research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
+                                                 # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
+                                                 # until UTC (<= 48 h), preemptible; no VM stays awake (research/keeper.py)
   research compare <original>... <replay> [--expect E] [--json]
                                                  # the replay's verdict from the store (same | within-band | differs | expected-change);
                                                  # --dirs: two run dirs' differences and ratios, which the workload contract judges
@@ -1338,6 +1342,10 @@ def main(argv: list[str] | None = None) -> int:
         from .retention import main as retention_main
 
         return retention_main(rest)
+    if cmd == "keeper":
+        from .keeper import main as keeper_main
+
+        return keeper_main(rest)
     if cmd == "pods":
         from .pods.part import main as pods_main
 
