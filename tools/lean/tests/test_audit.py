@@ -152,6 +152,28 @@ def test_homes_give_each_module_its_package_s_spec(tmp_path):
     assert A.read_by_dependents(core, tmp_path / "pkg") == set() == A.read_by_dependents(A.FIXTURES / "pass", A.ROOT)
 
 
+def test_a_guarantee_reading_its_prover_s_path_dependency_outside_its_spec_fails(tmp_path):
+    """`s` names `p` under `proved_in`; `p` requires `s` and `v` (no `layers`, so no spec) by path. A guarantee of `s` that
+    reads `V.Bytes` fails the reads check unless `reads_exempt` covers it, and `p`'s own modules are no spec of `s`: the
+    check does not take `v`'s modules for a pinned dependency's (red-team B3, the verifier's `Flock.*` under Security)."""
+    s, p, v = tmp_path / "s", tmp_path / "p", tmp_path / "v"
+    for d, rel in ((s, "S/Defs.lean"), (p, "SP/Main.lean"), (v, "V/Bytes.lean")):
+        (d / rel).parent.mkdir(parents=True, exist_ok=True)
+        (d / rel).write_text("")
+    (v / A.POLICY).write_text(json.dumps({"roots": ["V"]}))
+    (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": n, "dir": f"../{n}"}
+                                                                  for n in ("s", "v")]}))
+    pol = {"roots": ["S"], "proved_in": ["../p"], "layers": {"S.Defs": {"imports": []}}, "meaning": ["S", "V"]}
+    home = A.reads_home(s, pol)
+    assert home == {"S.Defs": ["S.Defs"], "SP.Main": [], "V.Bytes": []}
+    reads = lambda m: {"pins": {"S.t": {"kind": "theorem", "outside": [], "reads": [{"name": f"{m}.x", "module": m}]}}}
+    assert A.spec_reads(pol, reads("V.Bytes"), home)[0].startswith(
+        "reads: S.t read V.Bytes.x in V.Bytes, outside the spec (none: no `layers`)")
+    assert A.spec_reads(pol | {"reads_exempt": {"V": "until its spec is extracted"}}, reads("V.Bytes"), home) == []
+    assert A.spec_reads(pol, reads("SP.Main"), home)[0].startswith("reads: S.t read SP.Main.x in SP.Main, outside the spec")
+    assert A.spec_reads(pol, reads("V.Bytes"), A.homes(s, pol)) == [], "without the prover's path dependencies it passes"
+
+
 def test_sorry_native_decide_and_other_axioms_are_named():
     off = [{"name": "P.bad", "module": "P.Thms", "axioms": ["sorryAx"]},
            {"name": "P.big", "module": "P.Thms", "axioms": ["P.big._native.native_decide.ax_1_1"]},

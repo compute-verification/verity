@@ -1,10 +1,10 @@
-"""Vectors for `Pouw.Protocol.PearlC.RowPrims`: PoUW's primitives in the row units, computed by
+"""Vectors for `Definitions.Pouw.PearlC.RowPrims`: PoUW's primitives in the row units, computed by
 `verity.protocols.accounting.work.pouw.circuit.words`, as Lean data.
 
     python scripts/row_prims_vectors.py [--out DIR]
 
-Writes `Pouw/Protocol/PearlC/RowPrimVectors.lean` (the vectors, `(operands…, word)`) and
-`Pouw/SecurityProofs/PearlC/RowPrimChecks.lean` (one `decide +kernel` theorem per part) under DIR (default: the Lean
+Writes `Definitions/Pouw/PearlC/RowPrimVectors.lean` (the vectors, `(operands…, word)`) and
+`Proofs/Pouw/PearlC/RowPrimChecks.lean` (one `decide +kernel` theorem per part) under DIR (default: the Lean
 package). `PouwETilde_v1` is exhaustive on its domain (16 codes × 256 bytes); the others reach every branch:
 * `PouwF32SqrtRn_v1`: ±0, ±inf, NaNs, negative words, subnormals, one word per exponent field, exact squares, and
   random words;
@@ -141,14 +141,14 @@ def render(vectors: dict[str, list[tuple[int, ...]]]) -> tuple[str, str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[1])
+    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[6] / "Security")
     args = ap.parse_args()
     rng = random.Random(SEED)
     vectors = {"sqrt": sqrt_vectors(rng), "sqacc": sqacc_vectors(rng), "sqceil": sqceil_vectors(rng),
                "sqge": sqge_vectors(rng), "etilde": etilde_vectors(), "bf16neg": bf16neg_vectors(rng)}
     data, checks = render(vectors)
-    for rel, text in (("Pouw/Protocol/PearlC/RowPrimVectors.lean", data),
-                      ("Pouw/SecurityProofs/PearlC/RowPrimChecks.lean", checks)):
+    for rel, text in (("Definitions/Pouw/PearlC/RowPrimVectors.lean", data),
+                      ("Proofs/Pouw/PearlC/RowPrimChecks.lean", checks)):
         path = args.out / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".lean.tmp")

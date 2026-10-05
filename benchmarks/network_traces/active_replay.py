@@ -11,7 +11,7 @@ Each configuration is one run of three processes on the host's monotonic clock, 
   frame k as one server-sent event written in the middle of bucket R + d_k − 1, where d_k is the frame's
   `ready − anchor` in the trace. An event's `id:` is its position in the canonical order (ready, anchor, session, k).
 
-**The honest prover** declares `calibration.choose_syncs` over the run the model predicts: each request released by the
+**The honest prover** declares (`--syncs model`) `calibration.choose_syncs` over the run the model predicts: each request released by the
 ingress warden's rule, its frame k ready d_k buckets after its release. The replay keeps every bucket the warden sees and
 leaves half a bucket of margin around each write; a write later than that moves its bucket.
 
@@ -32,10 +32,14 @@ OpenAI endpoint behind a shim inside the boundary (`LiveServer`). The peer sends
 `record.py` sent it (its session names the workload's request: prompt token ids, `max_tokens`, `ignore_eos`), padded to
 whole link frames. The shim forwards it to vLLM and writes vLLM's stream back cut at `\\n\\n`, each event with `id:` its
 position in write order, and logs every event it wrote; it writes nothing from 1.5 buckets before the horizon on. The
-audit's Program is that log. A live prover can't choose syncs on frames it hasn't seen, so it declares one value for
-every window (`--syncs envelope`): the largest δ and the smallest ρ the calibration's honest prover declared, met by
-every window any declared value meets. The audit also counts the windows the trace's model syncs and a hindsight
-prover (`choose_syncs` on the frames as read) would have met.
+audit's Program is that log. A live prover can't choose syncs on frames it hasn't seen, so by default it declares one
+value for every window (`--syncs envelope`): the largest δ and the smallest ρ the calibration's honest prover declared,
+met by every window any declared value meets. Under an online rule (`--syncs cover-K-M`, `online`) the proxy's own
+prover declares each window's sync at its first tick from the frames it has read, the audit checks the syncs the
+proxy logged, and `declared_are_planned` says whether they are what the rule declares on the model's run. The sender's
+write times then move the declarations, so an adversarial strategy's wire differs from honest's from the second window
+on, within the log2 #Σ_sync bits per window the bound charges. The audit also counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
+have met.
 
     python active_replay.py --calibration REPORT.json --out DIR [--windows 60] [--config-windows 4:10] TRACE.json ...
     python active_replay.py --vllm MODEL --calibration REPORT.json --out DIR --config NAME ... TRACE.json ...
@@ -70,6 +74,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import replay
+from verity.protocols.accounting.communication.warden import online
 from verity.protocols.accounting.communication.warden.active import (
     DATA,
     HEADER,
@@ -277,20 +282,26 @@ class Setup(replay.Setup):
         e, i = self.egress[self.egress_link], self.ingress[self.ingress_link]
         self.egress_params = GridParams(e.buckets, e.allocation, g["frame_bytes"], e.bucket_ms, e.queue_capacity)
         self.ingress_params = GridParams(i.buckets, i.allocation, g["frame_bytes"], i.bucket_ms, i.queue_capacity)
-        declared = report["clock_sync"].get("declared")
-        self.envelope = ClockSync(max(declared["delta"]), min(Fraction(r) for r in declared["rho"])) if declared else None
 
 
-SYNC_POLICIES = ("model", "envelope")
+SYNC_POLICIES = ("model", "envelope", "an online rule (last, cover-K-M[-fallback])")
+
+
+def parse_sync_policy(name: str) -> str:
+    """`model`, `envelope`, or an online rule (`online.rule`), which the proxy declares window by window."""
+    if name not in ("model", "envelope"):
+        online.rule(name)
+    return name
 
 
 def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, syncs: str = "model") -> dict:
     """The run of one configuration: its sessions (rank = list order, stream id, d_k per frame), its requests (stream,
     session, frames, the trace's send time and the peer's), the model's release of each request and the prover's
-    syncs: `model`, chosen over the model's run, or `envelope`, the calibration's envelope in every window. With
-    `live_model`, a request takes the frames of its live body when they are more than the trace's."""
-    if syncs not in SYNC_POLICIES:
-        raise ValueError(f"syncs is one of {SYNC_POLICIES}, not {syncs!r}")
+    syncs: `model`, chosen over the model's run; `envelope`, the calibration's envelope in every window; or an online
+    rule, which the proxy declares at each window's first tick from what it has read (`sync_rule`), and `syncs` holds
+    what it declares on the model's run. With `live_model`, a request takes the frames of its live body when they are
+    more than the trace's."""
+    parse_sync_policy(syncs)
     e, i = setup.egress_params, setup.ingress_params
     T, windows = e.buckets, replay.config_windows(cfg, e.buckets)
     if len(cfg["egress"]) != 1 or len(cfg["ingress"]) != 1:
@@ -347,12 +358,19 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
     chosen, _, misses = choose_syncs([(frames, ready)], sync_set, T)
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
     chosen = (list(chosen) + [eager] * windows)[:windows]
-    declared = chosen if syncs == "model" else [setup.envelope] * windows
+    if syncs == "model":
+        declared = chosen
+    elif syncs == "envelope":
+        declared = [setup.envelope] * windows
+    else:
+        declared, _ = online.declare([(frames, ready)], sync_set, T, online.rule(syncs), windows, setup.envelope)
     out = {"name": cfg.get("name"), "windows": windows, "sessions": sessions, "requests": peer,
            "model_release": {str(k): v for k, v in release.items()}, "model_misses": misses,
            "unmatched_sessions": unmatched, "ingress_only_requests": len(extra),
            "syncs": [[s.delta, str(s.rho)] for s in declared], "sync_policy": syncs,
            "model_syncs": [[s.delta, str(s.rho)] for s in chosen]}
+    if syncs not in ("model", "envelope"):
+        out["sync_rule"] = syncs
     if live_model is not None:
         out["live_model"] = live_model
     return out
@@ -723,6 +741,7 @@ class Publisher:
 
 def proxy_log(proxy: Proxy) -> dict:
     return {"lateness_ms": {k: [round(x * 1000, 3) for x in v] for k, v in proxy.lateness.items()},
+            "syncs": [[s.delta, str(s.rho)] for s in proxy.shaper.syncs],
             "frames": proxy.frames, "hands": proxy.shaper.hands, "link_frames_read": proxy.link_frames_read,
             "streams": len(proxy.streams), "slack_ms": proxy.slack * 1000} | _usage()
 
@@ -756,14 +775,74 @@ async def _server(plan: dict, params: dict, conn, out: Path) -> None:
     write_logs(out, server=server)
 
 
-def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], conn, out: str) -> None:
+def prover_args(plan: dict, setup: Setup) -> dict:
+    """The proxy's advice: the plan's syncs, or, under an online rule, its own prover's over the plan's windows."""
+    if "sync_rule" not in plan:
+        return {"syncs": [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]}
+    prover = online.Prover(setup.sync_set, setup.egress_params.buckets, online.rule(plan["sync_rule"]), setup.envelope)
+    return {"syncs": [], "prover": prover, "windows": plan["windows"]}
+
+
+class Stalls(asyncio.Event):
+    """Test-only (`--stall`): the proxy's change event, which pauses the proxy right after an ingress tick has released
+    a request and before the proxy writes it upstream, once for each (bucket, seconds): at the first such tick at or
+    after the bucket whose egress tick has already run, so the pause falls between two ticks. `pause(seconds)` stops
+    the proxy; `done` lists each stall with how long the proxy's clock saw it last."""
+
+    def __init__(self, proxy: Proxy, stalls: Sequence[tuple[int, float]], pause) -> None:
+        super().__init__()
+        self.proxy, self.todo, self.pause = proxy, sorted(stalls), pause
+        self.released, self.done = 0, []
+
+    def set(self) -> None:
+        p = self.proxy
+        if self.todo and p.requests_released > self.released:
+            t = len(p.lateness["ingress"]) - 1
+            if t >= self.todo[0][0] and len(p.lateness["egress"]) > t:
+                bucket, seconds = self.todo.pop(0)
+                start = p.clock()
+                self.pause(seconds)
+                self.done.append({"bucket": bucket, "tick": t, "ms": seconds * 1000,
+                                  "at_ms": round((start - p.origin) * 1000, 3),
+                                  "paused_ms": round((p.clock() - start) * 1000, 3)})
+        self.released = p.requests_released
+        super().set()
+
+
+def _stopper():
+    """A pause of the whole process: it stops itself (SIGSTOP), and a child forked now, before any thread starts, sends
+    SIGCONT the pause after it has stopped, from the core the process was on."""
+    r, w = os.pipe()
+    parent = os.getpid()
+    if os.fork() == 0:
+        os.close(w)
+        while len(b := os.read(r, 8)) == 8:
+            os.sched_setaffinity(0, os.sched_getaffinity(parent))
+            while Path(f"/proc/{parent}/stat").read_text().rsplit(") ", 1)[1][0] != "T":
+                pass
+            time.sleep(struct.unpack("d", b)[0])
+            os.kill(parent, signal.SIGCONT)
+        os._exit(0)
+    os.close(r)
+
+    def pause(seconds: float) -> None:
+        os.write(w, struct.pack("d", seconds))
+        os.kill(parent, signal.SIGSTOP)
+
+    return pause
+
+
+def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], conn, out: str,
+                  stalls: Sequence[tuple[int, float]] = ()) -> None:
     _quiet_runtime()
-    asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out)))
+    pause = _stopper() if stalls else None
+    asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out), stalls, pause))
 
 
-async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out: Path) -> None:
+async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out: Path,
+                 stalls: Sequence[tuple[int, float]] = (), pause=None) -> None:
     publish = Publisher(out, setup)
-    syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
+    advice = prover_args(plan, setup)
     done = asyncio.get_running_loop().create_future()
     holder: dict = {}
 
@@ -774,13 +853,17 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
     listening = await asyncio.start_server(on_link, "127.0.0.1", 0)
     conn.send(listening.sockets[0].getsockname()[1])
     origin = conn.recv()
-    proxy = holder["proxy"] = Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs,
-                                    origin=origin, publish=publish, egress_link=setup.egress_link,
-                                    ingress_link=setup.ingress_link)
+    proxy = holder["proxy"] = Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set,
+                                    advice.pop("syncs"), origin=origin, publish=publish, egress_link=setup.egress_link,
+                                    ingress_link=setup.ingress_link, **advice)
+    if stalls:
+        proxy._changed = Stalls(proxy, stalls, pause)
     await done
     listening.close()
     publish.close()
     write_logs(out, proxy=proxy)
+    if stalls:
+        (out / "stalls.json").write_text(json.dumps(proxy._changed.done))
 
 
 def peer_process(plan: dict, params: dict, link_port: int, conn, out: str) -> None:
@@ -810,16 +893,17 @@ class Evicted(Exception):
 
 
 def run_configuration(plan: dict, report: dict, out: Path, nice: int | None = None,
-                      upstream: tuple[str, int] | None = None, cpus: Sequence[int] | None = None) -> dict:
+                      upstream: tuple[str, int] | None = None, cpus: Sequence[int] | None = None,
+                      stalls: Sequence[tuple[int, float]] = ()) -> dict:
     """One configuration in real time: the server, then the proxy, then the peer, released together at one origin.
     With `nice`, every thread of the three runs at that niceness (`renice`, through sudo); with `cpus`, the server's,
     the proxy's and the peer's threads each run on one core of their own. Threads they start later inherit both. With
-    `upstream`, the server is `LiveServer` in front of the endpoint there. On `Evicted` the three are terminated and it
-    is raised again."""
+    `upstream`, the server is `LiveServer` in front of the endpoint there. With `stalls` (test-only), the proxy stops
+    itself as `Stalls` says. On `Evicted` the three are terminated and it is raised again."""
     params = wire_params(Setup(report)) | ({"upstream": list(upstream)} if upstream else {})
     started: list = []
     try:
-        return _run_configuration(plan, report, out, nice, cpus, params, started)
+        return _run_configuration(plan, report, out, nice, cpus, params, started, stalls)
     except Evicted:
         for proc in started:
             proc.terminate()
@@ -827,7 +911,7 @@ def run_configuration(plan: dict, report: dict, out: Path, nice: int | None = No
 
 
 def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, cpus: Sequence[int] | None,
-                       params: dict, started: list) -> dict:
+                       params: dict, started: list, stalls: Sequence[tuple[int, float]] = ()) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     ctx = multiprocessing.get_context("spawn")
     (s, s_child), (p, p_child), (q, q_child) = ctx.Pipe(), ctx.Pipe(), ctx.Pipe()
@@ -835,7 +919,7 @@ def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, cp
     started.append(server)
     server.start()
     port = s.recv()
-    proxy = ctx.Process(target=proxy_process, args=(plan, report, ("127.0.0.1", port), p_child, str(out)))
+    proxy = ctx.Process(target=proxy_process, args=(plan, report, ("127.0.0.1", port), p_child, str(out), stalls))
     started.append(proxy)
     proxy.start()
     link = p.recv()
@@ -863,23 +947,26 @@ def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, cp
     return codes
 
 
-def run_virtual(plan: dict, report: dict, out: Path, upstream: tuple[str, int] | None = None) -> dict:
+def run_virtual(plan: dict, report: dict, out: Path, upstream: tuple[str, int] | None = None,
+                stalls: Sequence[tuple[int, float]] = ()) -> dict:
     """One configuration on an injected clock: the same sockets, proxy, server and peer in one event loop, the clock
     moved to each instant something is due (a tick, a server batch, a send) once everything due before it is done.
-    With `upstream`, the server is `LiveServer` in front of an endpoint that answers without the clock moving."""
+    With `upstream`, the server is `LiveServer` in front of an endpoint that answers without the clock moving. A stall
+    (`stalls`, test-only) moves the clock past the pause at once, before anything else runs."""
     out.mkdir(parents=True, exist_ok=True)
-    asyncio.run(_virtual(plan, Setup(report), out, upstream))
+    asyncio.run(_virtual(plan, Setup(report), out, upstream, stalls))
     (out / "processes.json").write_text(json.dumps({"exit": {"server": 0, "proxy": 0, "peer": 0}, "origin": 0.0,
                                                     "clock": "virtual"}))
     return {"server": 0, "proxy": 0, "peer": 0}
 
 
-def virtual_process(plan: dict, report: dict, out: Path) -> None:
+def virtual_process(plan: dict, report: dict, out: Path, stalls: Sequence[tuple[int, float]] = ()) -> None:
     _quiet_runtime()
-    run_virtual(plan, report, out)
+    run_virtual(plan, report, out, stalls=stalls)
 
 
-async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int] | None = None) -> None:
+async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int] | None = None,
+                   stalls: Sequence[tuple[int, float]] = ()) -> None:
     e, i = setup.egress_params, setup.ingress_params
     params = wire_params(setup) | ({"upstream": list(upstream)} if upstream else {})
     clock = VirtualClock(-1.0)
@@ -892,10 +979,12 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     peer = Peer(plan, params, clock, clock.sleep, notify)
     listening = await asyncio.start_server(server.handle, "127.0.0.1", 0)
     publish = Publisher(out, setup, threaded=False)
-    syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
-    proxy = holder["proxy"] = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0,
-                                    clock=clock, sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,
-                                    ingress_link=setup.ingress_link)
+    advice = prover_args(plan, setup)
+    proxy = holder["proxy"] = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, advice.pop("syncs"),
+                                    origin=0.0, clock=clock, sleep=clock.sleep, publish=publish,
+                                    egress_link=setup.egress_link, ingress_link=setup.ingress_link, **advice)
+    if stalls:
+        proxy._changed = Stalls(proxy, stalls, lambda seconds: clock.advance(clock.now + seconds))
     accepted: asyncio.Future = asyncio.get_running_loop().create_future()
     link = await asyncio.start_server(lambda r, w: accepted.set_result(asyncio.create_task(proxy.run(r, w))),
                                       "127.0.0.1", 0)
@@ -935,6 +1024,8 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     server.close()
     publish.close()
     write_logs(out, proxy, server, peer)
+    if stalls:
+        (out / "stalls.json").write_text(json.dumps(proxy._changed.done))
 
 
 # The audit.
@@ -999,7 +1090,10 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
     e, i = setup.egress_params, setup.ingress_params
     T, windows = e.buckets, plan["windows"]
     horizon = windows * T
-    syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
+    with gzip.open(run / "proxy.json.gz", "rt") as fh:
+        log = json.load(fh)
+    declared = log["syncs"] if "sync_rule" in plan else plan["syncs"]
+    syncs = [ClockSync(d, Fraction(r)) for d, r in declared]
     in_records = [unpack_record(b, i.frame_bytes) for b in read_blobs(run / "requests.records")]
     release, in_frames = ingress_releases(in_records, i, e)
     live = "live_model" in plan
@@ -1018,8 +1112,6 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
              "direction": "egress" if a.link == setup.egress_link else "ingress",
              "raw": a.violation, "committed": b.violation} for a, b in zip(*verdicts, strict=True)]
 
-    with gzip.open(run / "proxy.json.gz", "rt") as fh:
-        log = json.load(fh)
     seen = {p: (stream, k, anchor, ready) for p, stream, k, anchor, ready in log["frames"]}
     ready = [seen[p][3] if p in seen else horizon for p in range(len(frames))]
     ref = run_shaper(frames, ready, syncs, Warden(setup.egress_link, e))
@@ -1042,6 +1134,7 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
         "releases_off_model": sum(1 for s, r in release.items() if model_release.get(s) != r)
             + sum(1 for s in model_release if s not in release),
         "model_misses": plan["model_misses"],
+        "declared_are_planned": declared == plan["syncs"],
     }
     if live:
         comparisons |= live_comparisons(plan, setup, frames, ready)
@@ -1180,6 +1273,8 @@ def summarize(results: Sequence[dict], models: Sequence[dict]) -> dict:
     out["comparisons"] |= {k: sum(r["comparisons"][k] for r in results)
                            for k in ("ready_off_meant", "releases_off_model", "model_misses",
                                      "released_not_the_programs")}
+    out["comparisons"]["declared_are_planned"] = all(r["comparisons"].get("declared_are_planned", True)
+                                                     for r in results)
     if any("hindsight" in r["comparisons"] for r in results):
         out["live"] = {
             "model_syncs_met_windows": sum(r["comparisons"]["model_syncs_met_windows"] for r in results),
@@ -1241,7 +1336,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--vllm", metavar="MODEL", help="start a vLLM server for MODEL as record.py does, and use it live")
     ap.add_argument("--vllm-cpus", help="with --vllm: its CPUs (taskset -c); the harness takes the rest of its own")
     ap.add_argument("--served-model", default="served", help="the live endpoint's model name")
-    ap.add_argument("--syncs", choices=SYNC_POLICIES, help="the prover's syncs (default: envelope live, else model)")
+    ap.add_argument("--syncs", type=parse_sync_policy,
+                    help=f"the prover's syncs: {', '.join(SYNC_POLICIES)} (default: envelope live, else model)")
+    ap.add_argument("--stall", dest="stalls", action="append", default=[], metavar="BUCKET:MS",
+                    type=lambda s: (int(s.split(":")[0]), float(s.split(":")[1]) / 1000),
+                    help="test-only: stop the proxy for MS right after the first ingress tick at or after BUCKET that "
+                         "releases a request, in every configuration (`Stalls`)")
     ap.add_argument("--max-minutes", type=float,
                     help="start no configuration that would end later than this from the start")
     args = ap.parse_args(argv)
@@ -1349,7 +1449,7 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
                 stopped = f"{name}: would end after --max-minutes"
                 print(stopped, flush=True)
                 break
-            mrows, mtally = replay.replay_configuration(cfg, replay.Setup(report))
+            mrows, mtally, _ = replay.replay_configuration(cfg, replay.Setup(report), plan.get("sync_rule", "hindsight"))
             del cfg
             for strategy in strategies:
                 run = runs / slug(name) / strategy
@@ -1366,14 +1466,14 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
                         json.dump(mine, fh)
                     t0 = time.monotonic()
                     if args.clock == "virtual":
-                        job = ctx.Process(target=virtual_process, args=(mine, report, run))
+                        job = ctx.Process(target=virtual_process, args=(mine, report, run, args.stalls))
                         job.start()
                         job.join()
                         if job.exitcode:
                             return 1
                     else:
                         try:
-                            run_configuration(mine, report, run, args.nice, upstream, args.cpus)
+                            run_configuration(mine, report, run, args.nice, upstream, args.cpus, args.stalls)
                         except Evicted:
                             stopped = f"evicted in {name}"
                             print(stopped, flush=True)

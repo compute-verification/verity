@@ -22,7 +22,9 @@
   research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
                                                  # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
                                                  # until UTC (<= 48 h), preemptible; no VM stays awake (research/keeper.py)
-  research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
+  research compare <original>... <replay> [--expect E] [--json]
+                                                 # the replay's verdict from the store (same | within-band | differs | expected-change);
+                                                 # --dirs: two run dirs' differences and ratios, which the workload contract judges
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
   research keep PATH --owner @LANE --expires DATE|never --priority low|normal|high|keep [--regenerate CMD] [--art ART | --preserve] [--why T]
@@ -180,7 +182,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--mem-gb", type=float, default=None, metavar="N",
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
-                         "and reserve them for the run; else MemoryNotAvailable (research.mem)")
+                         "and reserve them for the run; else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
+                         "(its scope's MemoryMax=), required unless --kind names a registered kind, whose shape gives it")
     ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S", help="with --mem-gb: wait up to S seconds for the memory instead of refusing")
     ap.add_argument("--preflight", default=None, metavar="TOOL",
                     help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
@@ -1050,15 +1053,59 @@ def cmd_cancel(argv: list[str]) -> int:
 
 
 def cmd_compare(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="research compare")
-    ap.add_argument("baseline")
-    ap.add_argument("candidate")
+    ap = argparse.ArgumentParser(
+        prog="research compare", formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="ORIGINAL... REPLAY: the replay's verdict against the originals, read from the evidence store by run id (local, "
+                    "else its remote), so the run dirs need not exist here. Exit 0 for same, within-band and expected-change, 1 for "
+                    "differs. --dirs (or a run the store lacks): the descriptive diff of two run dirs under --runs-dir.",
+        epilog=C.__doc__)
+    ap.add_argument("runs", nargs="+", metavar="RUN", help="run ids: one or more originals, then the replay")
+    ap.add_argument("--expect", default=None, help="a replay_expect value (`refused: FORM`, `blocked: GATE`); default: the latest "
+                                                   "replay_expect label on the first original, if any")
+    ap.add_argument("--no-expect", action="store_true", help="ignore the originals' replay_expect labels")
+    ap.add_argument("--store", default=None, help="store root (default $RESEARCH_STORE or ~/.research/store)")
+    ap.add_argument("--dirs", action="store_true", help="the descriptive diff of two run directories (BASELINE CANDIDATE)")
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
+    if len(ns.runs) < 2:
+        ap.error("needs at least one original and the replay")
+    if not ns.dirs:
+        from .store import ids as store_ids
+        from .store.local import LocalStore, StoreError
+
+        st = LocalStore(ns.store)
+        try:
+            bad = [r for r in ns.runs if not store_ids.is_run_id(r)]
+            if bad:
+                raise LookupError(f"{bad[0]}: not a full run id")
+            atts = [C.load(st, r) for r in ns.runs]
+            expect = None if ns.no_expect else ns.expect
+            if expect is None and not ns.no_expect:
+                labels = st.labels(ns.runs[0], key=C.EXPECT_KEY)
+                expect = str(labels[-1].value) if labels else None
+            v = C.verdict(atts[:-1], atts[-1], expect)
+        except LookupError as e:
+            if len(ns.runs) != 2:
+                print(f"research compare: {e}", file=sys.stderr)
+                return 1
+            print(f"research compare: {e}; comparing the run dirs instead", file=sys.stderr)
+        except StoreError as e:
+            print(f"research compare: {e}", file=sys.stderr)
+            return 1
+        except ValueError as e:
+            print(f"research compare: {e}", file=sys.stderr)
+            return 2
+        else:
+            print(json.dumps(v.to_doc(), indent=2, sort_keys=True) if ns.json else C.render_verdict(v))
+            return 1 if v.verdict == C.DIFFERS else 0
+        finally:
+            st.close()
+    if len(ns.runs) != 2:
+        ap.error("--dirs compares exactly two run dirs")
     root = R.runs_root(ns.runs_dir)
     try:
-        b, c = R.resolve(root, ns.baseline), R.resolve(root, ns.candidate)
+        b, c = R.resolve(root, ns.runs[0]), R.resolve(root, ns.runs[1])
     except (FileNotFoundError, LookupError) as e:
         print(f"research compare: {e}", file=sys.stderr)
         return 1
