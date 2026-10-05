@@ -32,6 +32,7 @@ from verity.ir.defs import bind
 from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
+from verity_vllm.program.registry import attention_vocab
 from verity_vllm.program.registry import value_inputs as VI
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import fp8, nvfp4
@@ -213,7 +214,7 @@ def fa3_masked_from(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, r
     """`MASKED_FROM` of an `Attention_v4` row: the FA3 tile's `n_block_min_causal_local_mask` for query row `row` of its sequence (its
     index among the sequence's query rows in the launch; `seqlen_q` = the launch's max_seqlen_q, which picks the tile)."""
     g = max(1, int(NH) // max(1, int(KVH)))
-    return F3.fa3_masked_from(T, fa3_kblock_n(D, seqlen_q, g), row, fa3_tile_m(D, seqlen_q, g), g)
+    return attention_vocab.fa3_masked_from(T, fa3_kblock_n(D, seqlen_q, g), row, fa3_tile_m(D, seqlen_q, g), g)
 
 
 def fa2_check_inf(profile) -> bool:
@@ -228,7 +229,7 @@ def fa2_masked_from(profile, T: int, D: int, seqlen_q: int, row: int, own_rows: 
     """`MASKED_FROM` of an `Attention_v5` row: the lowest key block FA2's kernel guards for query row `row` of its sequence (its index among
     the sequence's `own_rows` query rows in the launch; the sequence's key count is the last row's, `T - 1 - row + own_rows`).  The launch's
     max_seqlen_q (`seqlen_q`) decides causality: `varlen_fwd` runs a launch of one query row per sequence non-causal."""
-    return F2.fa2_masked_from(int(T) - 1 - int(row) + int(own_rows), own_rows, row, b1.fa2_kblock_n(D), int(seqlen_q) > 1)
+    return attention_vocab.fa2_masked_from(int(T) - 1 - int(row) + int(own_rows), own_rows, row, b1.fa2_kblock_n(D), int(seqlen_q) > 1)
 
 
 class LaunchContextConflict(ValueError):

@@ -156,6 +156,7 @@ def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, 
     from verity.ir.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.registry import fa3_check_inf as F3
+    from verity_vllm.program.registry import attention_vocab
     from verity_vllm.program.registry import hopper
 
     q, k, v, o = _words(t["q"]), _words(t["k"]), _words(t["v"]), _words(out)
@@ -171,7 +172,7 @@ def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, 
         kseq, vseq = k[bt[seq, keys // PAGE], keys % PAGE], v[bt[seq, keys // PAGE], keys % PAGE]      # (sk, Hk, D)
         for r in range(sq):
             T = r + 1 + sk - sq
-            mf = F3.fa3_masked_from(T, BN, r, kBM, g)
+            mf = attention_vocab.fa3_masked_from(T, BN, r, kBM, g)
             kk = np.ascontiguousarray(np.transpose(kseq[:T], (1, 0, 2))[kvh])                            # (H, T, D)
             vv = np.ascontiguousarray(np.transpose(vseq[:T], (1, 0, 2))[kvh])
             st = DR.attention_head_states(q[tok + r], kk, vv, BN, dot16=dot16, inv=inv, masked_from=mf)
