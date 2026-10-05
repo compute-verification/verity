@@ -12,10 +12,9 @@ from verity.primitives.commitments import (
     MerkleTree,
     RangeIndexedDomain,
     VerificationLimits,
-    verify_multiproof,
     verify_opening,
 )
-from experimental.commitments import multiproof
+from experimental.commitments.multiproof import multiproof, verify_multiproof
 from verity.primitives.crypto.blake3 import keyed
 from verity.primitives.commitments.merkle import (B3S_SEGMENT, _FRAME, _uint, b3s_level_key, b3s_levels, b3s_segment_key,
                                        blake3_node_key)

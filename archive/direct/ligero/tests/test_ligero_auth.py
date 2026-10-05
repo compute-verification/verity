@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from verity.primitives.commitments import MerkleTree, verify_multiproof
-from experimental.commitments import multiproof
+from experimental.commitments.multiproof import multiproof, verify_multiproof
+from verity.primitives.commitments import MerkleTree
 
 from archive.direct.ligero import auth
 

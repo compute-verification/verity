@@ -48,8 +48,8 @@ from verity.primitives.commitments import (
     VerificationLimits,
     identity_digest,
     merkle_depth,
-    verify_multiproof,
 )
+from experimental.commitments.multiproof import verify_multiproof
 from verity.primitives.commitments.merkle import (  # the pad-leaf frame has no public wrapper; pinned by tests
     _FRAME,
     _LEAF,
