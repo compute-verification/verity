@@ -5,29 +5,33 @@
 #   STEP=build   (CPU) the GPU prover (60-circuit.sh's build, keyed by its sources as 70-class-sweep.sh keys it), Lean's
 #                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
 #                --definitions DEFS --stage-only, BATCH=fixed N) into data/$TAG/stage
-#   STEP=inner   (GPU) the inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy (verity_flock.rec_live,
+#   STEP=inner   (GPU leases) the inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy (verity_flock.rec_live,
 #                WARM + RUNS sessions), upstream's replay of the last one and V*'s hashing reference (rec_vstar) over it; then
 #                (INNER_LOOPBACK=1) the same statement on loopback, M0 and --zk, WARM + RUNS sessions each (today's numbers)
 #   STEP=vstage  (CPU) V*'s statements over the inner's last proxied session (verity_flock.rec_vstage) into data/$TAG/v: the
 #                verifier's fold points (rec_vstage points), its extra claims and comb (InnerFold.lean as an executable,
 #                cached by its sources), then each level's RecOpen, the algebra's InnerRepCheck and the forgeries (FORGE=
 #                "message sum comb", each under forged-<kind>/), JOBS at once
-#   STEP=oprove  (GPU) each staged statement proved with --zk on loopback, WARM + RUNS sessions (a forgery's: one, by a
+#   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions (a forgery's: one, by a
 #                prover that sends its proofs though the witness fails, FC_ZK_SELF_CHECK=skip), and upstream's replay --zk
 #                of the last
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
 #                --coins os; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
-# out/summary-$STEP.json.
+# out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
+# --gpus (a CPU phase): staging, serve, replay and Lean never hold one.
 # env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (the Gemm_v2 contraction: DEFS is Gemm_v2{K,N=4096})  N=2048
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
 #      FORGE="message sum comb" (vstage)  JOBS=4 (vstage, lean)  INNER_LOOPBACK=1 (inner)
+#      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
+#      GPU_LEASE= (the lease command; default the queue's for this node)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|vstage|oprove|lean}
+[ -z "${GPU_LEASE_UUID:-}" ] || { echo "REFUSED: the job holds a GPU lease (launched with --gpus): launch it without, each prove leases its own"; exit 2; }
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/rec-reprice-job}/out; mkdir -p $O
 FW=${FLOCK_WORK:-/workspace/jobs/rec-reprice}; W=$FW/flock-circuit; L=$FW/cache; TAG=${TAG:-k4096}; DD=$FW/data/$TAG
 mkdir -p $W $L $DD || exit 1
@@ -86,19 +90,56 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm:$REPO/tools/circuit_check/src
 export FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
-GI=${CUDA_VISIBLE_DEVICES:-0}; GI=${GI%%,*}
+# the lease command: GPU_LEASE, else the queue's own for this node (tools/cluster's submit.wrappers: node 1's pool where its tool
+# and pool file are, else gpu-lease's default)
+if [ -n "${GPU_LEASE:-}" ]; then read -ra LEASE <<< "$GPU_LEASE"; else mapfile -t LEASE < <(python3 - <<'EOF'
+import os, sys
+sys.path.insert(0, "tools/cluster/src")
+from cluster.submit import GPU_LEASE, GPU_LEASE_N1, N1_LEASE_ENV
+pool = dict(e.split("=", 1) for e in N1_LEASE_ENV)["GPU_LEASE_ALLOWED_FILE"]
+print(*(["env", *N1_LEASE_ENV, GPU_LEASE_N1] if os.access(GPU_LEASE_N1, os.X_OK) and os.path.exists(pool) else [GPU_LEASE]), sep="\n")
+EOF
+); fi
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 # want NAME: NAME is in LEVELS (comma-separated names; empty: every one)
 want() { [ -z "${LEVELS:-}" ] || [[ ",$LEVELS," == *",$1,"* || ",$LEVELS," == *",${1%-p[0-9]*},"* ]]; }
 # stamp: each line of stdin with the time it arrived (a session's LIVE line is printed when its verdict is in)
 stamp() { while IFS= read -r l; do printf '%s\t%s\n' "$(date +%s.%N)" "$l"; done; }
-# gpu_sample FILE: the job's GPU's memory in use (MiB), every half second, until FILE.stop exists
-gpu_sample() { rm -f $1.stop; while [ ! -e $1.stop ]; do nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i $GI 2>/dev/null; sleep 0.5; done > $1; }
 wait_serving() { for i in $(seq 3600); do grep -q SERVING $1 && return 0; kill -0 $2 2>/dev/null || return 1; sleep 1; done; return 1; }
 
-# prove_live NAME VERIFIER_ADDR INST CIRCUIT [--zk]: WARM + RUNS sessions of the GPU prover on the prover's cores, into
-# $O/$STEP/NAME (prove.tsv: stamped stdout, time-prove.txt, gpu-mib.txt)
+# on_gpu DIR CMD...: CMD with one GPU leased for it alone, the only place this script holds a GPU (--wait; at most GPU_MAX_MIN
+# minutes and GPU_MEM_GB of host memory; preemptible unless GPU_PREEMPTIBLE is empty: a waiter may stop it, CMD then exits 143
+# and `again` runs its step afresh). CMD's stdout passes through; its stderr and the lease's own lines (`gpu-lease: ...`) go to
+# DIR/prove.err, and the leased GPU's memory in use (MiB) to DIR/gpu-mib.txt every half second while CMD runs.
+on_gpu() {
+  local d=$1 pre=${GPU_PREEMPTIBLE-1}; shift
+  : > $d/prove.err
+  gpu_mib $d & local s=$!
+  "${LEASE[@]}" 1 --wait --max-min ${GPU_MAX_MIN:-10} --mem-gb ${GPU_MEM_GB:-32} ${pre:+--preemptible} -- "$@" 2> $d/prove.err
+  local rc=$?
+  kill $s; wait $s 2>/dev/null
+  return $rc
+}
+gpu_mib() {
+  set +x; local i=
+  while [ -z "$i" ]; do sleep 0.5; i=$(sed -n 's/^gpu-lease: GPUs \([0-9]*\).*/\1/p' $1/prove.err); done
+  while :; do nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i $i; sleep 0.5; done > $1/gpu-mib.txt 2>/dev/null
+}
+
+# again FN ARGS: FN (loopback, proxied: each starts its verifier afresh), again while a waiter preempted its lease (143), at most
+# GPU_TRIES times
+again() {
+  local t rc
+  for t in $(seq ${GPU_TRIES:-3}); do
+    "$@"; rc=$?; [ $rc = 143 ] || return $rc
+    echo "$1 $2: lease preempted, try $t" | tee -a $O/preempted.txt
+  done
+  return $rc
+}
+
+# prove_live NAME VERIFIER_ADDR INST CIRCUIT [--zk]: WARM + RUNS sessions of the GPU prover on the prover's cores, under a lease
+# of its own, into $O/$STEP/NAME (prove.tsv: stamped stdout, prove.err, time-prove.txt, gpu-mib.txt); the prover's status
 prove_live() {
   local d=$O/$STEP/$1 addr=$2 inst=$3 circ=$4 zk=${5:-}
   mkdir -p $d; echo $WARM > $d/warm.txt
@@ -112,15 +153,15 @@ a = snap(); time.sleep(2); b = snap()
 busy = [1 - (b[c][3] + b[c][4] - a[c][3] - a[c][4]) / max(1, sum(b[c]) - sum(a[c])) for c in sorted(a)]
 print(round(sum(busy) / len(busy), 3))
 EOF
-  gpu_sample $d/gpu-mib.txt & local GS=$!
-  FC_VERIFY_AHEAD=$NS FC_ZK_SELF_CHECK=${SELF_CHECK:-stop} taskset -c $PCPU /usr/bin/time -v -o $d/time-prove.txt $B prove $zk --gpu --verifier $addr --instances $inst \
-    --circuit $circ --warm $WARM --runs $RUNS 2> $d/prove.err | stamp > $d/prove.tsv
-  touch $d/gpu-mib.txt.stop; wait $GS
+  on_gpu $d env FC_VERIFY_AHEAD=$NS FC_ZK_SELF_CHECK=${SELF_CHECK:-stop} taskset -c $PCPU /usr/bin/time -v -o $d/time-prove.txt \
+    $B prove $zk --gpu --verifier $addr --instances $inst --circuit $circ --warm $WARM --runs $RUNS | stamp > $d/prove.tsv
+  local rc=${PIPESTATUS[0]}
   grep -h panicked $d/prove.err | head -3
+  return $rc
 }
 
 # loopback NAME PUB INST CIRCUIT [--zk]: a verifier process (serve, on the verifier's cores, every session at once) and
-# prove_live against it; the sessions under $DD/$STEP-NAME/sessions
+# prove_live against it; the sessions under $DD/$STEP-NAME/sessions; the prover's status
 loopback() {
   local name=$1 pub=$2 inst=$3 circ=$4 zk=${5:-} s=$DD/$STEP-$1 PORT=$(free_port) PIN=$(sha512sum $4 | cut -d' ' -f1)
   rm -rf $s; mkdir -p $s $O/$STEP/$name
@@ -128,9 +169,22 @@ loopback() {
     --operator loopback --concurrency $((NS + 1)) > $O/$STEP/$name/serve.log 2>&1 &
   local SP=$!
   wait_serving $O/$STEP/$name/serve.log $SP || { tail -20 $O/$STEP/$name/serve.log; return 1; }
-  prove_live $name 127.0.0.1:$PORT $inst $circ $zk
+  prove_live $name 127.0.0.1:$PORT $inst $circ $zk; local rc=$?
   kill $SP; wait $SP 2>/dev/null
   LAST=$(find $s/sessions -name session.json -printf '%T@ %h\n' | sort -n | tail -1 | cut -d' ' -f2)
+  return $rc
+}
+
+# proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>) and prove_live against it; the prover's status
+proxied() {
+  rm -rf $DD/inner
+  taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS > $O/inner/proxy/proxy.log 2>&1 &
+  local PP=$!
+  wait_serving $O/inner/proxy/proxy.log $PP || { cat $O/inner/proxy/proxy.log; return 1; }
+  prove_live proxy $(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log) $D/inst-$N.bin $D/circuit.txt; local rc=$?
+  [ $rc = 0 ] || kill $PP 2>/dev/null
+  wait $PP; echo "proxy exit $?"
+  return $rc
 }
 
 summary() {
@@ -186,6 +240,7 @@ def live(d):
             "verify_s": med(lambda v: v.get("verify_s") or 0) if any(v.get("verify_s") for _, v in timed) else None,
             "statement_digest": rows[0][1].get("statement_digest"), "prover_peak_gb": gb(d / "time-prove.txt"),
             "gpu_peak_mib": max(mib) if mib else None, "gpu_idle_mib": min(mib) if mib else None,
+            "lease": [l for l in text(d / "prove.err").splitlines() if l.startswith("gpu-lease:")],
             "buckets": [{k: x for k, x in b.items() if k.startswith("t.") or k in ("device_witness", "native_sha")} for b in (timed[-1][1].get("buckets") or [])]
             if timed else None}
 
@@ -303,13 +358,7 @@ inner)
   # INNER_PROXY=0: only today's numbers again (the proxied sessions V*'s statements were staged from stay as they are)
   if [ "${INNER_PROXY:-1}" = 1 ]; then
   # M0 against the rec proxy: WARM + RUNS sessions, each written to $DD/inner/s<k>
-  rm -rf $DD/inner
-  taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS > $O/inner/proxy/proxy.log 2>&1 &
-  PP=$!
-  wait_serving $O/inner/proxy/proxy.log $PP || { cat $O/inner/proxy/proxy.log; exit 1; }
-  ADDR=$(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log)
-  prove_live proxy $ADDR $D/inst-$N.bin $D/circuit.txt
-  wait $PP; echo "proxy exit $?"
+  again proxied
   SESS=$DD/inner/s$((NS - 1))
   [ -f $SESS/session/session.json ] || { tail -20 $O/inner/proxy/proxy.log $O/inner/proxy/prove.err; exit 1; }
   taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-proxy.txt $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt \
@@ -320,8 +369,8 @@ inner)
   fi
   # today's numbers on this node and build: M0 and --zk on loopback, the verifier on its own cores, every verdict ahead
   if [ "${INNER_LOOPBACK:-1}" = 1 ]; then
-  loopback m0 $D/pub-$N.bin $D/inst-$N.bin $D/circuit.txt
-  loopback zk $D/pub-$N.bin $D/inst-$N.bin $D/circuit.txt --zk
+  again loopback m0 $D/pub-$N.bin $D/inst-$N.bin $D/circuit.txt
+  again loopback zk $D/pub-$N.bin $D/inst-$N.bin $D/circuit.txt --zk
   [ -n "${LAST:-}" ] && taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-zk.txt $B replay --zk --instances $D/pub-$N.bin \
     --circuit $D/circuit.txt --sessions $LAST > $O/inner/replay-zk.txt 2>&1
   fi
@@ -399,7 +448,7 @@ oprove)
   for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
     l=${C//\//-}; want $l || continue
     case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS)); LAST=
-    loopback $l $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
+    again loopback $l $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
     du -sb $V/$C/inst.bin $V/$C/pub.bin $V/$C/circuit.txt ${LAST:+$LAST/*.bin} > $O/oprove/$l/sizes.txt
     [ -n "${LAST:-}" ] || { echo "$l: no session"; continue; }
     taskset -c $VCPU /usr/bin/time -v -o $O/oprove/$l/time-replay.txt $B replay --zk --instances $V/$C/pub.bin \
