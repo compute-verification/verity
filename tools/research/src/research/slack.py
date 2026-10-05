@@ -1469,7 +1469,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             continue                                                 # a renamed name forwards into its successor's inbox
         counted.add(r["inbox_ts"])
         bells = [m for m in api.paged("conversations.replies", "messages", channel=r.get("channel") or ch, ts=r["inbox_ts"],
-                                      oldest=f"{since:.6f}") if m.get("ts") != r["inbox_ts"]]
+                                      oldest=f"{since:.6f}") if m.get("ts") != r["inbox_ts"] and m.get("username") == "router"]
         hours: dict[int, int] = {}
         for m in bells:
             hours[int(float(m["ts"]) // 3600)] = hours.get(int(float(m["ts"]) // 3600), 0) + 1
