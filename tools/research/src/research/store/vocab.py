@@ -68,6 +68,8 @@ STAGE = "stage"
 SOURCE = "source"
 SUPERSEDED_BY = "superseded_by"
 ABANDONED = "abandoned"
+REPLAY_SET = "replay_set"
+REPLAY_EXPECT = "replay_expect"
 INTERACTION_ATTEMPT_OF = "interaction_attempt_of"
 HASH = "hash"
 SHARING = "sharing"
@@ -225,16 +227,19 @@ class Key:
     doc: str
     values: tuple[str, ...] = ()
     status: str = CURRENT
+    pattern: str = ""
 
     def check(self, value: Any) -> str | None:
-        """Why `value` is outside this key's declared set, as one line, or None (free forms are never checked)."""
+        """Why `value` is outside this key's declared set or `pattern`, as one line, or None (other free forms are never checked)."""
         if self.values and scalar_text(value) not in self.values:
             return f"{self.name}={scalar_text(value)!r} is not one of {', '.join(self.values)}"
+        if self.pattern and not re.fullmatch(self.pattern, scalar_text(value)):
+            return f"{self.name}={scalar_text(value)!r} does not match {self.pattern}"
         return None
 
 
-def _k(name: str, group: str, form: str, doc: str, values: tuple[str, ...] = (), status: str = CURRENT) -> Key:
-    return Key(name, group, form, doc, TRUE_FALSE if form == BOOL else values, status)
+def _k(name: str, group: str, form: str, doc: str, values: tuple[str, ...] = (), status: str = CURRENT, pattern: str = "") -> Key:
+    return Key(name, group, form, doc, TRUE_FALSE if form == BOOL else values, status, pattern)
 
 
 VOCAB: dict[str, Key] = {k.name: k for k in (
@@ -270,6 +275,12 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(SOURCE, GROUP_RESULT, TEXT, "branch@commit the result was produced from, for an artifact no Attempt records; old spellings `tree`, `release`"),
     _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store); on an "
        "approach record, the <campaign>/<slug> that replaces it"),
+    _k(REPLAY_SET, GROUP_RESULT, TEXT, "the replay set a run or artifact belongs to, as AREA/TIER: TIER re-verify (its preserved records "
+       "checked again at a new commit, bit for bit) or re-run (our code's timed result run again); one label per area that cites it "
+       "(`research data select --label replay_set=warden/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
+    _k(REPLAY_EXPECT, GROUP_RESULT, TEXT, "the change a replay at current main should show instead of the recorded verdict, with --ref "
+       "naming the ruling: `refused: FORM` (the verifier of record now refuses that form) or `blocked: GATE` (fail-closed refuses the "
+       "session kind until GATE, e.g. V3)", pattern=r"(refused|blocked): \S.*"),
     _k(ABANDONED, GROUP_RESULT, TEXT, "the line of work this evidence belongs to was given up, in a few words; --ref names the note that says why "
                                       "(note:<lane>/<file name without .md>), so nobody builds on it unawares"),
     _k(INTERACTION_ATTEMPT_OF, GROUP_RESULT, TEXT, "on an interaction attempt that is not the cell's figure (refused, or run on an earlier pair): the art: id of "

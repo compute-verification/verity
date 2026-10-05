@@ -475,8 +475,11 @@ def dnf(beta: int) -> bool:
 
 
 def row_passes(fmt: Fmt, x: Sequence[int]) -> bool:
-    """Admission, per row and salt-free: D-NF (`dnf`).  A row's screened blocks are charged in its tiles' debit
+    """Admission, per row and salt-free: every word a finite widened BF16 word (its low 16 bits zero, as `parse_row`
+    writes them; Lean's `Fp4Sem.RowOK`), and D-NF (`dnf`).  A row's screened blocks are charged in its tiles' debit
     (`tile_debit`), and the tile's cap rejects them."""
+    if any(w & 0xFFFF or (w >> 23) & 0xFF == 0xFF for w in x):
+        return False
     try:
         beta = stats(fmt, x)[3]
     except P.Reject:
