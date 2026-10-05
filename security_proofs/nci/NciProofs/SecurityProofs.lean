@@ -1,6 +1,6 @@
 import Nci.Guarantees
-import Nci.SecurityProofs.Inequalities
-import Nci.SecurityProofs.LoomisWhitney
+import NciProofs.SecurityProofs.Inequalities
+import NciProofs.SecurityProofs.LoomisWhitney
 import VerityProofs.SecurityProofs
 
 /-!

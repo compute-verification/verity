@@ -1,6 +1,6 @@
-import Nci.SecurityProofs.Chain
-import Nci.SecurityProofs.Inequalities
-import Nci.SecurityProofs.LoomisWhitney
+import NciProofs.SecurityProofs.Chain
+import NciProofs.SecurityProofs.Inequalities
+import NciProofs.SecurityProofs.LoomisWhitney
 
 /-!
 # Updated matrix multiplications are throttled
