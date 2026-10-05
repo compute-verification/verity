@@ -96,6 +96,16 @@ wait_serving() { for i in $(seq 3600); do grep -q SERVING $1 && return 0; kill -
 prove_live() {
   local d=$O/$STEP/$1 addr=$2 inst=$3 circ=$4 zk=${5:-}
   mkdir -p $d
+  # other work on the prover's cores just before it starts (queue jobs naming no pool share 96-127): busy share over 2 s
+  python3 - $PCPU > $d/bgload.txt <<'EOF'
+import sys, time
+cpus = {f"cpu{c}" for c in sys.argv[1].split(",")}
+def snap():
+    return {f[0]: list(map(int, f[1:])) for f in (l.split() for l in open("/proc/stat")) if f[0] in cpus}
+a = snap(); time.sleep(2); b = snap()
+busy = [1 - (b[c][3] + b[c][4] - a[c][3] - a[c][4]) / max(1, sum(b[c]) - sum(a[c])) for c in sorted(a)]
+print(round(sum(busy) / len(busy), 3))
+EOF
   gpu_sample $d/gpu-mib.txt & local GS=$!
   FC_VERIFY_AHEAD=$NS taskset -c $PCPU /usr/bin/time -v -o $d/time-prove.txt $B prove $zk --gpu --verifier $addr --instances $inst \
     --circuit $circ --warm $WARM --runs $RUNS 2> $d/prove.err | stamp > $d/prove.tsv
@@ -153,6 +163,7 @@ def live(d):
     per = len(ranks) // len(rows) if ranks and len(ranks) % len(rows) == 0 else 0
     rank_s = [sum(ranks[i * per:(i + 1) * per]) for i in range(len(rows))][warm:] if per else []
     return {"sessions": len(rows), "timed": len(timed), "accepted": [v.get("accepted") for _, v in rows],
+            "prover_cores_busy_before": float(text(d / "bgload.txt").strip() or "nan"),
             "serve_verify_s": statistics.median([v["verify_s"] for v in served[warm:]]) if len(served) > warm else None,
             "serve_verify_all_s": [v.get("verify_s") for v in served], "serve_accepted": [v.get("accepted") for v in served],
             "zkrank_s": statistics.median(rank_s) if rank_s else None, "zkrank_all_s": ranks,
@@ -274,6 +285,8 @@ build)
 inner)
   D=$DD/stage; [ -f $D/inst-$N.bin ] && [ -x $B ] || { echo "run STEP=build first"; exit 1; }
   mkdir -p $O/inner/proxy
+  # INNER_PROXY=0: only today's numbers again (the proxied sessions V*'s statements were staged from stay as they are)
+  if [ "${INNER_PROXY:-1}" = 1 ]; then
   # M0 against the rec proxy: WARM + RUNS sessions, each written to $DD/inner/s<k>
   rm -rf $DD/inner
   taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS > $O/inner/proxy/proxy.log 2>&1 &
@@ -289,6 +302,7 @@ inner)
   taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-vstar.txt python3 -m verity_flock.rec_vstar $SESS > $O/inner/vstar.json 2> $O/inner/vstar.err
   echo "vstar exit $?"
   mkdir -p $O/inner/session && cp -r $SESS/session $SESS/public.json $O/inner/session/ && du -sb $SESS/* > $O/inner/session/sizes.txt
+  fi
   # today's numbers on this node and build: M0 and --zk on loopback, the verifier on its own cores, every verdict ahead
   loopback m0 $D/pub-$N.bin $D/inst-$N.bin $D/circuit.txt
   loopback zk $D/pub-$N.bin $D/inst-$N.bin $D/circuit.txt --zk
