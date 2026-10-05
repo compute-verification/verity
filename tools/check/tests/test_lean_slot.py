@@ -150,6 +150,8 @@ def test_a_request_inside_a_slot_takes_no_second_one(slots, monkeypatch):
 def test_a_pool_the_file_doesn_t_list_takes_from_any_or_is_refused_by_name(slots, monkeypatch, capsys):
     LS.SLOTS.write_text("any 1\n")
     assert LS.resolve(LS.parse(LS.SLOTS.read_text()), "audit") == ("any", 1)
+    with pytest.raises(LS.Refused, match="lists no pool 'build', the only one this request takes; the steward adds `build N`"):
+        LS.hold("build", or_any=False)
     LS.SLOTS.write_text("check 2\n")
     with pytest.raises(LS.Refused, match="lists neither pool 'audit' nor 'any'; the steward adds `audit N`"):
         LS.hold("audit")
@@ -237,7 +239,7 @@ def test_check_s_lean_audit_takes_a_slot_only_when_it_will_audit_a_package(tmp_p
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path))
     (tmp_path / "lean-audit").mkdir()
     (tmp_path / "lean-audit" / "kp.json").write_text("{}")
-    cmd = [sys.executable, "tools/check/lean_audit.py", "--out", "o"]
+    cmd = [sys.executable, "tools/lean/lean_audit.py", "--out", "o"]
     assert check.lean_slot(cmd)[:len(check.LEAN_SLOT_WRAP)] == check.LEAN_SLOT_WRAP           # q misses
     assert check.LEAN_SLOT_WRAP[1].endswith("tools/check/lean_slot.py") and check.LEAN_SLOT_WRAP[2:4] == ["--pool", "check"]
     (tmp_path / "lean-audit" / "kq.json").write_text("{}")

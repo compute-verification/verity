@@ -33,7 +33,7 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
   `RoPEInterleavedRef{D,DT}` (GPT-J pairing), `EagerAttentionHeadRef{T,D,DT,SCALE_OP}` / `EagerAttentionRef{T,NH,KVH,D,DT,SCALE_OP}`,
   `EmbeddingRef{V,H,DT}`, `AddRef{N,DT}`, `MulRef{N,DT}`, `ReluRef{N,DT}`, `ArgmaxStepF32` / `ArgmaxRef{V,DT}`.
   Profile-mode additions at DERIVE's request, NOT in the reference digest: `RoPEHeadGptJ{D}` / `RoPEGptJ{NHEADS,D}` (vLLM
-  `rotary_embedding(is_neox=False)`, one bf16 rounding, proof-supported through the `RopeOut`/`RopeOutAdd` twins).
+  `rotary_embedding(is_neox=False)`, proof-supported through the `RopeOut`/`RopeOutAdd` twins; superseded by `boolean_rope`'s v2).
 
 **Loader note.**  Decoding a descriptor that names a reference kind requires `import verity_vllm.program.registry.ref_prims` first
 (as for `hopper`/`fp8`).  `GatherF32x{V}_v1` is an on-demand family like `GatherBf16x{V}`; the codec's lazy-family table
@@ -675,10 +675,10 @@ def RoPEInterleavedRef(B, S, x, cos, sin):
 # --- profile-mode addition requested by DERIVE (R3): vLLM's GPT-J rotary kernel, built only from exact-model-tested
 #     primitives that have Rust twins (RRopeOut/RRopeOutAdd) — so it is proof-supported, unlike the reference kinds. ---
 
-_GPTJ_CONF = ("model-untested; a pairing permutation of RoPEHead_v1 (exact-model-tested): the same RopeOut_v1/RopeOutAdd_v1 "
-              "gates with (2i, 2i+1) in place of (i, i+D/2), read from vLLM `apply_token_rotary_embedding<IS_NEOX=false>`; "
-              "test_ref_prims.py checks RoPEHeadGptJ(x) == unpermute(RoPEHead(permute(x))) gate-for-gate; no CUDA run of "
-              "`rotary_embedding(is_neox=False)` was made (lane NUMERIC, 2026-09-09)")
+_GPTJ_CONF = ("superseded by RoPEHeadGptJ_v2 / RoPEGptJ_v2: a pairing permutation of RoPEHead_v1, the same RopeOut_v1/"
+              "RopeOutAdd_v1 gates with (2i, 2i+1) in place of (i, i+D/2); vLLM d9105ea80's `rotary_embedding(is_neox=False)` "
+              "(bf16, run r20261004-060203-ba52) differs in 513 words of 17 of 60 difftest cases, every one an odd output "
+              "whose products overflow f32: the kernel rounds y*cos and fuses x*sin, where NeoX's instantiation rounds x*sin")
 
 
 @composite("RoPEHeadGptJ", 1, ["D"], lambda S: ((("x", Array(S.D, BF16)), ("cs", Array(S.D, BF16))), Array(S.D, BF16)),
