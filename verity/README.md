@@ -22,6 +22,6 @@ of numpy.
 uv run pytest verity/tests            # in `check`
 ~~~
 
-The byte formats are pinned by vector files beside the tests: `tests/ir/format_vectors.json` (the program format),
-`tests/ir/partition_vectors.json` and `template_instance_vectors.json` (partitions), `tests/randomness/vectors.json`
+The byte formats are pinned by vector files beside the tests: `verity/primitives/circuits/tests/format_vectors.json` (the program format),
+`verity/primitives/circuits/tests/partition_vectors.json` and `template_instance_vectors.json` (partitions), `verity/primitives/randomness/tests/vectors.json`
 (the challenge derivation).

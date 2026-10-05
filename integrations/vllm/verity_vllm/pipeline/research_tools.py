@@ -48,10 +48,9 @@ _SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # the shell runners 
 
 #: Each directory of this file's tree that ships Verity core, relative to the repository root.
 CORE_DIRS = package_dirs(workspace_root(__file__), "verity")
-CLOSURE = [
-    "integrations/vllm/**",
-    *(f"{d}/**" for d in CORE_DIRS),
-]
+#: The code the integration imports besides its own: core, and the catalog, the kernels and experimental beside it.
+CODE_DIRS = [*CORE_DIRS, "catalog", "kernels", "experimental"]
+CLOSURE = ["integrations/vllm/**", *(f"{d}/**" for d in CODE_DIRS)]
 
 # Row id grammar (see verity_vllm/ops/README):
 #   <model>__<dtype>__<hw>__tp<N>__b<N>__i<N>__o<N>__<arrivals>__<sampling>__<exec>

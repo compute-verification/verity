@@ -34,6 +34,7 @@ from collections.abc import Callable
 
 from verity_catalog.silicon.cast import bf16_to_f32_word, f32_to_bf16_hw_word, f32_to_bf16_word
 from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16, Pipeline, tc_dot
+from verity_catalog.targets.target import TC_AMPERE_BF16_NAME, TC_AMPERE_BF16_VERSION, TC_BF16_NAME_PREFIX, TC_BF16_VERSION
 
 from .gateset import INPUT_SOURCE, WEIGHT_SOURCE, Gate, GateSet
 
@@ -50,12 +51,6 @@ __all__ = [
     "tensor_core_gates",
 ]
 
-TC_AMPERE_BF16_NAME = "veritor.tc-ampere-bf16"
-#: ``veritor.tc-bf16.<pipeline>@1``: the same vocabulary on another BF16 pipeline (:func:`make_tc_bf16_gate_set`).
-TC_BF16_NAME_PREFIX = "veritor.tc-bf16."
-TC_BF16_VERSION = "1"
-#: The version whose ``f32_to_bf16`` canonicalises NaN to ``0x7FC0``.
-TC_AMPERE_BF16_VERSION = "1"
 #: The version whose ``f32_to_bf16`` is the hardware ``cvt.rn.bf16.f32`` (NaN -> ``0x7FFF``).
 TC_AMPERE_BF16_HW_VERSION = "2"
 TC_AMPERE_BF16_VERSIONS = (TC_AMPERE_BF16_VERSION, TC_AMPERE_BF16_HW_VERSION)
