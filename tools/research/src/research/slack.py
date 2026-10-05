@@ -455,7 +455,10 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
     out = api.call("chat.postMessage", channel=ch, thread_ts=thread, username=handle, text=text,
                    unfurl_links="false", unfurl_media="false")
     ts = out.get("ts") or "DRY-RUN"
-    link = api.call("chat.getPermalink", channel=ch, message_ts=ts).get("permalink") or "-"
+    try:
+        link = api.call("chat.getPermalink", channel=ch, message_ts=ts).get("permalink") or "-"
+    except SlackError:                                   # the post went out: a caller that retries on a raise would post it twice
+        link = "-"
     print(f"{ts} {link}")
     if route and route[1] is not None and not api.dry_run:
         msg = {"text": text, "ts": ts, "thread_ts": thread, "bot_id": "self", "username": handle}
