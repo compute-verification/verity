@@ -523,80 +523,121 @@ class Run:
 
     # Python anchors and joins -----------------------------------------------------------------------------------------
 
-    _ANCHOR = re.compile(r"Path\(__file__\)(?P<r>\.resolve\(\)|\.absolute\(\))?(?:\.parents\[(?P<n>\d+)\]|(?P<p>(?:\.parent)+))"
-                         r"(?P<chain>(?:\s*/\s*(?P<q>[\"'])[\w.\-]+(?P=q))*)")
+    _ANCHOR = re.compile(r"(?P<head>Path\((?:__file__|(?P<mod>[A-Za-z_][\w.]*)\.__file__)\))(?P<r>\.resolve\(\)|\.absolute\(\))?"
+                         r"(?:\.parents\[(?P<n>\d+)\]|(?P<p>(?:\.parent)+))(?P<chain>(?:\s*/\s*(?P<q>[\"'])[\w.\-]+(?P=q))*)")
+
+    def _module_file(self, name: str) -> str | None:
+        """The old path of module `name`'s file, when it is a file of this tree."""
+        for root, d in sorted(self.L.old_roots.items(), key=lambda kv: -len(kv[1])):
+            if name == root or name.startswith(root + "."):
+                base = d + name[len(root):].replace(".", "/")
+                break
+        else:
+            base = name.replace(".", "/")
+        return next((f for f in (base + ".py", base + "/__init__.py") if f in self.tracked_old), None)
+
+    def _aliases(self, old: str, text: str) -> dict[str, str]:
+        """The names this file binds to modules by importing them: {local name: old module name}."""
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            return {}
+        me, pkg, out = module_name(old, self.L.old_roots), old.endswith("__init__.py"), {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for a in node.names:
+                    out[a.asname or a.name.split(".")[0]] = a.name if a.asname else a.name.split(".")[0]
+            elif isinstance(node, ast.ImportFrom):
+                base = self._resolve_relative(me, pkg, node.level, node.module) if node.level else node.module
+                for a in node.names:
+                    if base and self._module_file(f"{base}.{a.name}"):
+                        out[a.asname or a.name] = f"{base}.{a.name}"
+        return out
 
     def _anchors(self, path: str, old: str, text: str) -> str:
-        """`Path(__file__).parents[N] / "a" / "b"` in a file that moved: the directory it names, from the file's new place."""
-        if not hasattr(self, "_seen_anchor"):
-            self._seen_anchor = set()
+        """`Path(__file__).parents[N] / "a" / "b"` in a file that moved, or `Path(m.__file__)...` for a module m that moved:
+        the path it names, from the anchor file's new place."""
+        aliases = None
 
         def fix(m: re.Match) -> str:
-            # how many directories the anchor climbs above the file's own: parents[n] climbs n, .parent x k climbs k - 1
-            up = int(m.group("n")) if m.group("n") is not None else m.group("p").count(".parent") - 1
-            old_dirs = old.split("/")[:-1]
-            if up > len(old_dirs):
-                return m.group(0)
-            anchor = "/".join(old_dirs[: len(old_dirs) - up])
-            segs = re.findall(r"""["']([\w.\-]+)["']""", m.group("chain"))
-            target = posixpath.normpath(posixpath.join(anchor, *segs)) if segs else anchor
-            target = "" if target == "." else target
-            if target and self.L.kept(target):
-                return m.group(0)
-            if target and (target in self.tracked_old or target in self.old_dirs):
-                new_target = self.L.file(target) if target in self.tracked_old else None
-                if new_target is None:
-                    new_target, approx = self.L.directory(target)
-                    if new_target is None:
-                        new_target = target
-                        if approx and segs:
-                            self.note("anchors to a directory that splits", f"{path}: {m.group(0)} (was {target})")
-            elif not segs:
-                new_target = self.L.directory(anchor)[0] or anchor if anchor else ""
-            else:
-                return self._anchor_only(m, path, old, anchor, up)
-            if path == old and new_target == target:
-                return m.group(0)
-            new_dirs = path.split("/")[:-1]
-            tparts = new_target.split("/") if new_target else []
-            common = 0
-            while common < min(len(new_dirs), len(tparts)) and new_dirs[common] == tparts[common]:
-                common += 1
-            if not segs:
-                if common < len(tparts):
-                    self.note("anchors not recomputed", f"{path}: {m.group(0)} (was {anchor or 'the root'})")
+            nonlocal aliases
+            if m.group("mod"):
+                if aliases is None:
+                    aliases = self._aliases(old, text)
+                name = aliases.get(m.group("mod"))
+                file_old = self._module_file(name) if name else None
+                if file_old is None:
                     return m.group(0)
-                common = len(tparts)
-            new_up = len(new_dirs) - common
-            rest = tparts[common:]
-            r = m.group("r") or ""
-            base = f"Path(__file__){r}.parents[{new_up}]" if m.group("n") is not None else \
-                f"Path(__file__){r}" + ".parent" * (new_up + 1)
-            q = m.group("q") or '"'
-            out = base + "".join(f" / {q}{s}{q}" for s in rest)
-            if out == m.group(0) or (new_up == up and rest == segs):
-                return m.group(0)
-            self._count(path, "anchors")
-            return out
+                return self._anchor(m, path, self.L.file(file_old) or file_old, file_old)
+            return self._anchor(m, path, path, old)
 
         return self._ANCHOR.sub(fix, text)
 
-    def _anchor_only(self, m: re.Match, path: str, old: str, anchor: str, up: int) -> str:
+    def _anchor(self, m: re.Match, where: str, path: str, old: str) -> str:
+        """Anchor `m` (in file `where`) at the file `old`, which is at `path` after the move."""
+        # how many directories the anchor climbs above the file's own: parents[n] climbs n, .parent x k climbs k - 1
+        up = int(m.group("n")) if m.group("n") is not None else m.group("p").count(".parent") - 1
+        old_dirs = old.split("/")[:-1]
+        if up > len(old_dirs):
+            return m.group(0)
+        anchor = "/".join(old_dirs[: len(old_dirs) - up])
+        segs = re.findall(r"""["']([\w.\-]+)["']""", m.group("chain"))
+        target = posixpath.normpath(posixpath.join(anchor, *segs)) if segs else anchor
+        target = "" if target == "." else target
+        if target and self.L.kept(target):
+            return m.group(0)
+        if target and (target in self.tracked_old or target in self.old_dirs):
+            new_target = self.L.file(target) if target in self.tracked_old else None
+            if new_target is None:
+                new_target, approx = self.L.directory(target)
+                if new_target is None:
+                    new_target = target
+                    if approx and segs:
+                        self.note("anchors to a directory that splits", f"{where}: {m.group(0)} (was {target})")
+        elif not segs:
+            new_target = self.L.directory(anchor)[0] or anchor if anchor else ""
+        else:
+            return self._anchor_only(m, where, path, old, anchor, up)
+        if path == old and new_target == target:
+            return m.group(0)
+        new_dirs = path.split("/")[:-1]
+        tparts = new_target.split("/") if new_target else []
+        common = 0
+        while common < min(len(new_dirs), len(tparts)) and new_dirs[common] == tparts[common]:
+            common += 1
+        if not segs:
+            if common < len(tparts):
+                self.note("anchors not recomputed", f"{where}: {m.group(0)} (was {anchor or 'the root'})")
+                return m.group(0)
+            common = len(tparts)
+        new_up = len(new_dirs) - common
+        rest = tparts[common:]
+        r = m.group("r") or ""
+        base = f"{m.group('head')}{r}.parents[{new_up}]" if m.group("n") is not None else \
+            f"{m.group('head')}{r}" + ".parent" * (new_up + 1)
+        q = m.group("q") or '"'
+        out = base + "".join(f" / {q}{s}{q}" for s in rest)
+        if out == m.group(0) or (new_up == up and rest == segs):
+            return m.group(0)
+        self._count(where, "anchors")
+        return out
+
+    def _anchor_only(self, m: re.Match, where: str, path: str, old: str, anchor: str, up: int) -> str:
         """An anchor whose joined path isn't in the tree: keep the directory it names."""
         if path == old:
             return m.group(0)
         new_anchor = (self.L.directory(anchor)[0] or anchor) if anchor else ""
         new_dirs = path.split("/")[:-1]
         if new_anchor and not path.startswith(new_anchor + "/"):
-            self.note("anchors not recomputed", f"{path}: {m.group(0)} (was {anchor or 'the root'})")
+            self.note("anchors not recomputed", f"{where}: {m.group(0)} (was {anchor or 'the root'})")
             return m.group(0)
         new_up = len(new_dirs) - (len(new_anchor.split("/")) if new_anchor else 0)
         if new_up == up:
             return m.group(0)
-        self._count(path, "anchors")
+        self._count(where, "anchors")
         r = m.group("r") or ""
-        base = f"Path(__file__){r}.parents[{new_up}]" if m.group("n") is not None else \
-            f"Path(__file__){r}" + ".parent" * (new_up + 1)
+        base = f"{m.group('head')}{r}.parents[{new_up}]" if m.group("n") is not None else \
+            f"{m.group('head')}{r}" + ".parent" * (new_up + 1)
         return base + m.group("chain")
 
     _JOIN = re.compile(r"""(?P<chain>(?:(?P<q>["'])[\w.\-]+(?P=q)\s*/\s*)*(?P<q2>["'])[\w.\-]+(?P=q2))""")

@@ -205,7 +205,7 @@ def _template_vectors():
         import verity
     except ImportError:
         return None
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "template_instance_vectors.json"
+    v = Path(verity.__file__).resolve().parents[0] / "tests" / "circuits" / "template_instance_vectors.json"
     return v if v.exists() else None
 
 
@@ -588,7 +588,7 @@ def _qword_vector_file():
         from verity.primitives.circuits.codec import decode_program  # noqa: F401
     except ImportError:
         return None
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "qword_vectors.json"
+    v = Path(verity.__file__).resolve().parents[0] / "tests" / "circuits" / "qword_vectors.json"
     return v if v.exists() else None
 
 
@@ -614,7 +614,7 @@ def _qword_vectors():
     except ImportError:
         return None
     import verity
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "partition_vectors.json"
+    v = Path(verity.__file__).resolve().parents[0] / "tests" / "circuits" / "partition_vectors.json"
     return v if v.exists() else None
 
 
@@ -631,7 +631,7 @@ def _format_vectors():
         import verity
     except ImportError:
         return None
-    ir = Path(verity.__file__).resolve().parents[2] / "tests" / "ir"
+    ir = Path(verity.__file__).resolve().parents[0] / "tests" / "circuits"
     need = [ir / "format_vectors.json", ir / "partition_vectors.json", ir / "test_format_spec.py"]
     return ir if all(p.exists() for p in need) else None
 

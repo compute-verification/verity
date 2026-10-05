@@ -16,7 +16,7 @@ from catalog.silicon.silicon import Pipeline
 __all__ = ["GOLDEN", "Case", "golden_cases", "structured_cases", "words"]
 
 Case = tuple[str, tuple[int, tuple[int, ...], tuple[int, ...]]]
-GOLDEN = Path(verity.__file__).parents[2] / "tests" / "ml" / "fixtures" / "golden" / "ada_bf16_m16n8k16.json"
+GOLDEN = Path(verity.__file__).parents[1] / "catalog" / "tests" / "fixtures" / "golden" / "ada_bf16_m16n8k16.json"
 
 
 def words(packed: str) -> tuple[int, ...]:

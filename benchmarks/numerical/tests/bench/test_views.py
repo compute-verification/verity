@@ -1144,7 +1144,7 @@ def test_blake3_xob_commits_keyed_blake3_bytes_so_it_is_a_circuit_of_one_scheme(
     import pathlib
     import re as _re
 
-    src = (pathlib.Path(V.__file__).resolve().parents[4] / "ligero-verify" / "src" / "leaf.rs").read_text(encoding="utf-8")
+    src = (pathlib.Path(V.__file__).resolve().parents[5] / "archive" / "ligero-verify" / "src" / "leaf.rs").read_text(encoding="utf-8")
     leaf = {m[0]: (m[1], m[2]) for m in _re.findall(r'name: "([^"]+)",\n(?:.*\n)*?    schema: "([^"]+)",\n    params_sha256: "([0-9a-f]+)"', src)}
     assert leaf["blake3-xob"] == leaf["blake3"]
     ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="x", commit="x")
