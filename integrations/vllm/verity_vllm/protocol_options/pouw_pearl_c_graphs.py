@@ -24,8 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity_pouw.protocol import Matmul, Shape
-from verity_pouw.schemes import pearl_c_work as PW
+from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
+from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
 
 from .pouw_pearl_c_host import _bytes, _write, _zeros, torch_uint8
 from .pouw_pearl_c_screen import excluded, scatter_into
