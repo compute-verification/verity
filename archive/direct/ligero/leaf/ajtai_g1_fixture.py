@@ -4,7 +4,7 @@ rows (``ajtai_key_test._patch_zero_key``), and a proof that satisfies it (2 VUs,
 digest in the statement is 0.  The Rust verifier must refuse it pinned AND under ``--allow-any-system``
 (``tests/relations.rs::ajtai_g1_decoy_fixture_is_refused``); the Python verifier refuses it (``ajtai_key_test``).
 
-    PYTHONPATH=.:. python -m archive.direct.ligero.leaf.ajtai_g1_fixture [OUT]"""
+    PYTHONPATH=. python -m archive.direct.ligero.leaf.ajtai_g1_fixture [OUT]"""
 from __future__ import annotations
 
 import json
