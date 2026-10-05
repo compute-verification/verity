@@ -993,14 +993,16 @@ def _tile_fits(cc, P: int, C: int) -> bool:
 
 def _source_digest() -> str:
     """The staging code's digest: every Python file of the packages a staged statement is a function of (with the program, the
-    shape, the batch parameters and the seed)."""
+    shape, the batch parameters and the seed).  A namespace package's portions are hashed as one tree, by path under the package,
+    and only those holding a module, so neither sys.path order nor a directory that joined the namespace from the cwd moves it."""
     import importlib.util
+    import pkgutil
     h = hashlib.sha256()
     for name in ("verity", "verity_flock", "circuit_check", "verity_vllm", "verity_pouw"):
         spec = importlib.util.find_spec(name)
-        for root in (spec.submodule_search_locations or []) if spec else []:
-            for f in sorted(Path(root).rglob("*.py")):
-                h.update(f"{name}/{f.relative_to(root).as_posix()}\0".encode() + hashlib.sha256(f.read_bytes()).digest())
+        roots = [Path(r) for r in (spec.submodule_search_locations or []) if any(pkgutil.iter_modules([r]))] if spec else []
+        for rel, f in sorted((f.relative_to(root), f) for root in roots for f in root.rglob("*.py")):
+            h.update(f"{name}/{rel.as_posix()}\0".encode() + hashlib.sha256(f.read_bytes()).digest())
     return h.hexdigest()
 
 
