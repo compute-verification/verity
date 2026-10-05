@@ -12,7 +12,16 @@
                                                             --priority takes the next free slot ahead of waiting lane checks;
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
-                                                            a warning first when the commit can't land on REF as it is
+                                                            a warning first when the commit can't land on REF as it is;
+                                                            --on auto (AUTO: vy-nebius-1, vy-nebius-2) or --on M1,M2 picks M
+                                                            from `--slots` (`choose`): the first where a check slot no window
+                                                            blocks and a Lean `check` slot are free, else the one with the
+                                                            fewest waiters ahead (priority ones only, with --priority), and
+                                                            refuses when no machine's slots can be read
+    uv run python tools/check/check.py --slots [M ...]      each machine's check slots (holders, blocking and upcoming
+                                                            windows), check line, and Lean audit slots and their waiters, read
+                                                            over ssh by this tree's slot.py and lean_slot.py (`--status --json`);
+                                                            then the machine --on auto would take; --json, the documents
     uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     python tools/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
@@ -67,8 +76,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
     pytest          `suites.py`'s own: a suite's pass is reused while its declared inputs are unchanged (`--no-cache` passes
                     `--fresh`)
     circuit-check   `circuit-check --cache`, per target: a target's result is reused when every file, directory listing,
-                    existence probe and loaded library its process read is unchanged, with the checker's own version; one after
-                    a read the tracer cannot see (a program it starts) is not stored (`circuit_check.cache`)
+                    existence probe and loaded library its own check read or resolved (the Definitions it reached, their builds
+                    and modules' import closures, its `targets.py` bindings and its pins) is unchanged, with the checker's own
+                    version; one after a read the tracer cannot see (a program it starts) is not stored (`circuit_check.cache`)
     lean-audit      per package (`lean_audit.py`): a pass is reused while the package, its path dependencies, `tools/lean/`
                     and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
                     read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain,
@@ -212,9 +222,210 @@ def slot_wrap(priority: bool = False) -> list[str]:
     return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []), *(["--by", by] if by else []), SLOT_WRAP[-1]]
 
 
+#: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots
+AUTO = ("vy-nebius-1", "vy-nebius-2")
+#: how long reading one machine's slots may take, ssh included
+SLOTS_TIMEOUT_S = 60
+#: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
+#: each `{"error": ...}` when it can't be read there
+SLOTS_PROGRAM = '''
+import json, sys, types
+from datetime import datetime, timezone
+
+
+def load(name, src, file):
+    m = types.ModuleType(name)
+    m.__file__ = file
+    sys.modules[name] = m
+    exec(compile(src, file, "exec"), m.__dict__)
+    return m
+
+
+def doc(f):
+    try:
+        return f()
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
+now = datetime.now(timezone.utc)
+slot = load("check_slot_for_lean_slot", SLOT_SRC, "tools/check/slot.py")
+lean = load("check_lean_slot", LEAN_SRC, "tools/check/lean_slot.py")
+print(json.dumps({"check": doc(lambda: slot.status_doc(now)), "lean": doc(lambda: lean.status_doc(now))}))
+'''
+SLOT = _load("slot")
+
+
+def slots_payload() -> bytes:
+    """`SLOTS_PROGRAM` with this tree's slot.py and lean_slot.py (both stdlib only) inlined, so neither need be on the machine;
+    lean_slot.py takes the slot.py loaded before it (`SLOT_MODULE`)."""
+    here = Path(__file__).resolve().parent
+    return (f"SLOT_SRC = {(here / 'slot.py').read_text()!r}\nLEAN_SRC = {(here / 'lean_slot.py').read_text()!r}\n"
+            + SLOTS_PROGRAM).encode()
+
+
+def reach(name: str, machines: dict | None = None) -> list[str]:
+    """The argv that runs `python3 -` on machine ``name`` as `research run --on` reaches it: its registry entry, bound to project
+    verity, and its ssh target (`research.remote`)."""
+    from research import remote
+
+    t = remote.pod_target(remote.resolve_machine(name, "verity", machines))
+    return [*remote.ssh_argv(t["host"], t["port"], user=t["user"]), "python3 -"]
+
+
+def _ssh(argv: list[str], payload: bytes) -> subprocess.CompletedProcess:
+    return subprocess.run(argv, input=payload, capture_output=True, timeout=SLOTS_TIMEOUT_S)
+
+
+def read_slots(names: list[str], reach=reach, run=_ssh) -> dict[str, dict | str]:
+    """Each machine's `--status --json` documents (`SLOTS_PROGRAM`), read at once, or why they couldn't be: not a machine this
+    project may use, ssh failing or silent for SLOTS_TIMEOUT_S, an answer that isn't JSON."""
+    payload = slots_payload()
+
+    def one(name: str) -> dict | str:
+        try:
+            r = run(reach(name), payload)
+        except subprocess.TimeoutExpired:
+            return f"no answer in {SLOTS_TIMEOUT_S} s"
+        except Exception as e:                                  # not listed, another project's, its pod gone: never chosen
+            return str(e) or type(e).__name__
+        if r.returncode:
+            err = r.stderr.decode(errors="replace").strip().splitlines()
+            return f"exit {r.returncode}: {err[-1] if err else 'no output'}"
+        try:
+            doc = json.loads(r.stdout)
+        except ValueError:
+            return f"its answer is not JSON: {r.stdout[:120]!r}"
+        return doc if isinstance(doc, dict) else f"its answer is not a JSON object: {r.stdout[:120]!r}"
+
+    with ThreadPoolExecutor(max_workers=max(1, len(names))) as ex:
+        return dict(zip(names, ex.map(one, names)))
+
+
+def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
+    """A check's prospects on a machine whose `read_slots` documents are ``doc``: whether a check slot and a Lean `check` slot
+    are free for it (more free than live waiters ahead of it), how many live waiters are ahead of it in the check line (with
+    ``priority``, a train check's, only the priority ones), and the state in a few words. ValueError when no check can run
+    there: a document has an error, the slots file lists no slot, or the Lean slots file grants check's lean-audit step none."""
+    check, lean = doc["check"], doc["lean"]
+    for d, what in ((check, "check slots"), (lean, "Lean audit slots")):
+        if "error" in d:
+            raise ValueError(f"its {what} can't be read: {d['error']}")
+    ahead = len([w for w in check["waiters"] if w["priority"] or not priority])
+    waiting = f"{ahead} waiting ahead" + (" with priority" if priority else "")
+    if check["slots"] is None:
+        room, why = True, f"no check slots ({check['file']}): a check runs unpinned at once"
+    elif not check["slots"]:
+        raise ValueError(f"{check['file']} lists no slots")
+    else:
+        free = [s for s in check["slots"] if s["holder"] is None and not s["blocked"]]
+        room = len(free) > ahead
+        why = "check slots: " + ", ".join(f"{s['name']} " + ("held" if s["holder"] else "blocked" if s["blocked"] else "free")
+                                          for s in check["slots"]) + f"; {waiting}"
+    if lean["pools"] is None:
+        return room, ahead, f"{why}; no Lean audit cap"
+    pool = next((p for p in ("check", "any") if p in lean["pools"]), None)
+    if pool is None:
+        raise ValueError(f"{lean['file']} lists neither pool check nor any, so check's Lean audit would be refused")
+    p = lean["pools"][pool]
+    free_lean = len([s for s in p["slots"] if s["holder"] is None and not s["past_n"]])
+    why += f"; Lean {pool}: {free_lean} of {p['n']} free" + (f", {len(p['waiters'])} waiting" if p["waiters"] else "")
+    return room and free_lean > len(p["waiters"]), ahead, why
+
+
+def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False) -> tuple[str | None, str, list[str]]:
+    """`--on auto`'s machine among ``names``, its reason, and each machine skipped with why. The first machine where a check slot
+    with no window blocking it and a Lean `check` slot are free for this request (`placement`); else the one with the fewest
+    live waiters ahead of it, the first listed among those tied. A machine whose documents can't be read is skipped; with none
+    left, no machine (the caller refuses: a guess could put a check into a timed window)."""
+    ranked, skipped = [], []
+    for i, name in enumerate(names):
+        doc = docs.get(name)
+        try:
+            if not isinstance(doc, dict):
+                raise ValueError(doc or "not read")
+            room, ahead, why = placement(doc, priority)
+        except ValueError as e:
+            skipped.append(f"{name}: {e}")
+            continue
+        except (KeyError, TypeError, AttributeError) as e:
+            skipped.append(f"{name}: its slots documents are malformed ({type(e).__name__}: {e})")
+            continue
+        ranked.append(((0, 0, i) if room else (1, ahead, i), name, room, why))
+    if not ranked:
+        return None, "no machine's slots could be read", skipped
+    _, name, room, why = min(ranked)
+    lead = ("a check slot and a Lean check slot are free" if room else
+            "the fewest waiting ahead, as no machine has a check slot and a Lean check slot free")
+    return name, f"{lead} ({why})", skipped
+
+
+def _who(h: dict) -> str:
+    """A holder or waiter in a few words: since when, its run, its tree (a commit's, shortened) and who asked (a URL's last part)."""
+    parts = [f"since {h['since']} ({h['minutes']} min)" if h.get("since") else f"pid {h['pid']}"]
+    parts += [f"run {h['run']}"] if h.get("run") else []
+    tree = Path(h["tree"]).name if h.get("tree") else ""
+    parts += [f"tree {tree[:12] if re.fullmatch(r'[0-9a-f]{40}', tree) else tree}"] if tree and tree != h.get("run") else []
+    parts += [f"by {h['by'].rstrip('/').rsplit('/', 1)[-1]}"] if h.get("by") else []
+    return ", ".join(parts if len(parts) > 1 or not h.get("cmd") else [*parts, h["cmd"][:60]])
+
+
+def slots_block(name: str, doc: dict | str) -> list[str]:
+    """One machine's lines in `--slots`: each check slot (free, or its holder) with what blocks it and its windows ahead, the check
+    line's waiters, and each Lean pool's free slots, holders and waiters."""
+    if not isinstance(doc, dict):
+        return [f"{name}: can't be read: {doc}"]
+    check, lean = doc.get("check") or {}, doc.get("lean") or {}
+    out = [f"{name} (at {check.get('now') or lean.get('now') or '?'})"]
+    if "error" in check:
+        out.append(f"  check slots: can't be read: {check['error']}")
+    elif check.get("slots") is None:
+        out.append(f"  no check slots ({check.get('file')}): a check runs unpinned at once")
+    else:
+        for s in check["slots"]:
+            out.append(f"  check {s['name']}  cores {s['cpus']}  " + (f"held {_who(s['holder'])}" if s["holder"] else "free")
+                       + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
+            out += [f"    {SLOT.window_text(w)}" for w in s["upcoming"]]
+        ws = check["waiters"]
+        pri = len([w for w in ws if w["priority"]])
+        out.append("  check line: " + (f"{len(ws)} waiting" + (f" ({pri} with priority)" if pri else "") + ": "
+                                       + "; ".join(_who(w) + (", priority" if w["priority"] else "") for w in ws) if ws else "nobody waiting"))
+    if "error" in lean:
+        out.append(f"  Lean audit slots: can't be read: {lean['error']}")
+    elif lean.get("pools") is None:
+        out.append(f"  Lean audit slots: no cap ({lean.get('file')}): audits run unslotted")
+    else:
+        for pool, p in lean["pools"].items():
+            free = len([s for s in p["slots"] if s["holder"] is None and not s["past_n"]])
+            held = [f"{pool}/{s['index']} {_who(s['holder'])}" for s in p["slots"] if s["holder"]]
+            out.append(f"  Lean {pool}: {free} of {p['n']} free" + "".join(f"; {h}" for h in held)
+                       + (f"; {len(p['waiters'])} waiting: " + "; ".join(map(_who, p["waiters"])) if p["waiters"] else ""))
+    return out
+
+
+def slots_view(argv: list[str], read=None) -> int:
+    """`--slots [--json] [--priority] [MACHINE ...]`: `slots_block` for each machine (default AUTO), then the machine
+    `--on auto` (or `--on M1,M2`) would take now; --json, the documents themselves. 1 when no machine could be read."""
+    names = [a for a in argv if a not in ("--json", "--priority")] or list(AUTO)
+    if any(a.startswith("-") for a in names):
+        print("usage: check.py --slots [--json] [--priority] [MACHINE ...]", file=sys.stderr)
+        return 2
+    docs = (read or read_slots)(names)
+    if "--json" in argv:
+        print(json.dumps(docs, indent=1))
+    else:
+        for name in names:
+            print("\n".join(slots_block(name, docs[name])))
+        got, why, _ = choose(names, docs, "--priority" in argv)
+        on = "auto" if names == list(AUTO) else ",".join(names)
+        print(f"--on {on}{' --priority' if '--priority' in argv else ''} would " + (f"take {got}: {why}" if got else f"refuse: {why}"))
+    return 0 if any(isinstance(d, dict) for d in docs.values()) else 1
+
+
 def take_lean_deps_urls(out: Path) -> Path | None:
-    """The presigned URLs sent with the run, moved out of the run directory before any step starts: each grants a read until it
-    expires, and the run's record keeps every file left there."""
+    """The presigned URLs sent with the run, moved out of the run directory, where the steps write, before any step starts: each
+    grants a read until it expires. Custody deletes one left there before it takes the run's record
+    (`research.store.custody.CREDENTIALS`)."""
     sent = out / "inputs" / LEAN_DEPS_URLS
     if not sent.is_file():
         return Path(os.environ[LEAN_DEPS_URLS_ENV]) if os.environ.get(LEAN_DEPS_URLS_ENV) else None
@@ -457,10 +668,10 @@ def landable(base: str) -> bool:
 
 
 def record(argv: list[str]) -> int:
-    """`--record [--on MACHINE] [--base REF] [--agreement]`: `research run --tool check` on this clean commit, with the pinned
-    upstream build and inputs (fetched from the store) when the commit changes a path `tools/check/tool.py` names against REF
-    (default origin/main, fetched first), or whenever --agreement is given. A commit that can't land on REF as it is
-    (`landable`) gets a warning and is checked anyway."""
+    """`--record [--on MACHINE|auto|M1,M2] [--base REF] [--agreement]`: `research run --tool check` on this clean commit, with the
+    pinned upstream build and inputs (fetched from the store) when the commit changes a path `tools/check/tool.py` names against
+    REF (default origin/main, fetched first), or whenever --agreement is given. A commit that can't land on REF as it is
+    (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all."""
     on = base = None
     agreement = priority = False
     rest = []
@@ -476,6 +687,16 @@ def record(argv: list[str]) -> int:
             priority = True
         else:
             rest.append(x)
+    if on == "auto" or (on and "," in on):
+        names = list(AUTO) if on == "auto" else on.split(",")
+        got, why, skipped = choose(names, read_slots(names), priority)
+        for s in skipped:
+            print(f"check: --on {on}: skipping {s}", flush=True)
+        if got is None:
+            print(f"check: --on {on} refused: {why} ({', '.join(names)}); nothing launched", file=sys.stderr, flush=True)
+            return 2
+        print(f"check: --on {on}: {got}: {why}", flush=True)
+        on = got
     spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
@@ -962,6 +1183,8 @@ def main(argv: list[str]) -> int:
         os.execv(cmd[0], cmd)
     if argv == ["--preflight"]:
         return preflight_only()
+    if argv[:1] == ["--slots"]:
+        return slots_view(argv[1:])
     if "--record" in argv:
         if os.environ.get("RESEARCH_RUN_ID"):
             print("check: --record inside a recorded run", file=sys.stderr)

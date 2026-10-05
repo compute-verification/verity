@@ -6,8 +6,8 @@ and the cap's boundary).  Codes are finite E4M3: the atom has no NaN operand (`v
 the replay.  A row's salt-dead counts are its elements whose code has one value over a sample of P3's support, by the
 scheme's own forming, and its other outputs `Pc8RowA`'s.  The split (`pc8.Shape.cap`) composes to the one-unit cap, its
 h0 is `PearlTileDigest`'s on honest and edge tiles, its units' rows are their ports' words, it computes every value in
-one unit, no unit of a deployed tile has more rows than C-Flock's block holds, and a drawn tile's closure holds its strip,
-every word, its rows' digests and sums and its tally."""
+one unit, no unit of a deployed tile has more rows than C-Flock's block holds, a drawn tile's closure holds its strip,
+every word, its rows' digests and sums and its tally, and a short last tile row is refused."""
 from __future__ import annotations
 
 import random
@@ -635,3 +635,15 @@ def test_the_cap_flag_is_off_by_default_and_refuses_shapes_outside_the_split():
         for build in (pc8.check, pc8.weight, pc8.call):
             with pytest.raises(DomainError):
                 build(shape)
+
+
+def test_the_cap_refuses_a_short_tile_row():
+    """The cap takes whole tiles only (as the row cut does): 80 rows and decode's 32 at 64-row tiles, admitted by the
+    hiding Programs without it, are refused with it by every root and by the tile layout, and 64 rows are admitted with it."""
+    pc8.Shape(64, 256, 64, hidden=True, cap=True).check()
+    for m in (80, 32):
+        pc8.Shape(m, 256, 64, hidden=True).check()
+        shape = pc8.Shape(m, 256, 64, hidden=True, cap=True)
+        for refused in (pc8.check, pc8.weight, pc8.call, lambda s: plan.tile_layout(s, 4096)):
+            with pytest.raises(DomainError, match="cap takes whole tiles only"):
+                refused(shape)
