@@ -88,11 +88,6 @@ def verdict : Except String Unit → String
   | .ok () => "ok"
   | .error e => e
 
-def canonicalAt (path : String) (zk : Bool) : IO Bool := do
-  let b ← IO.FS.readBinFile path
-  let t := Tags.circuit.withCoins (if zk then Coins.tree (Zk.coinSpec (Tags.circuit.tableNames 1)) else Coins.seed)
-  pure (ProvedScope.canonicalAt (if zk then Zk.tags t (Zk.maskLogOf b) 1 else t) zk b [])
-
 def stratified := law "{\"law\":\"stratified\",\"population\":4,\"k\":2,\"strata\":[{\"template\":\"t\",\"units\":[[0,4]],\"k\":2}],\"units\":[1,3]}"
 def subset := law "{\"law\":\"subset\",\"population\":4,\"k\":2,\"units\":[1,3]}"
 
@@ -102,18 +97,12 @@ def subset := law "{\"law\":\"subset\",\"population\":4,\"k\":2,\"units\":[1,3]}
 
 
 def test_a_stratified_draw_at_a_canonical_statement_is_refused(tmp_path):
-    """`canonicalAt` holds of a canonical statement under `--zk` alone, and of none outside the format; where it holds a
-    stratified draw is refused, and a subset draw, or none, passes on. No toy sets up a stratified draw (its unit cover
-    names no strata), so the law is run on its own."""
-    _seg_writer_toy([16], tmp_path / "canonical", seg=False)
-    _bit_row_toy([1024, 512], tmp_path / "padded")
+    """Where `canonicalAt` holds a stratified draw is refused, and a subset draw, or none, passes on. No toy sets up a
+    stratified draw (its unit cover names no strata), so the law is run on its own; `canonicalAt` is `!scopeOk &&
+    canonicalOk`, which the form tests above pin at each toy (a canonical one passes under `--zk` alone)."""
     f = tmp_path / "CanonicalLaw.lean"
-    at = [(tmp_path / "canonical", True), (tmp_path / "canonical", False), (tmp_path / "padded", True)]
-    f.write_text(CANONICAL_LAW + "".join(f'#eval do IO.println (← canonicalAt "{d / "circuit.txt"}" {str(zk).lower()})\n'
-                                         for d, zk in at))
+    f.write_text(CANONICAL_LAW)
     p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
-    laws, *ats = p.stdout.splitlines()
-    assert json.loads(laws) == ["refused: a stratified draw at a canonical statement: no soundness claim draws by this law",
-                                "ok", "ok", "ok"]
-    assert ats == ["true", "false", "false"]
+    assert json.loads(p.stdout) == ["refused: a stratified draw at a canonical statement: no soundness claim draws by this law",
+                                    "ok", "ok", "ok"]
