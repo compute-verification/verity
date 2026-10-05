@@ -52,9 +52,6 @@ KINDS: dict[str, str] = {
     "lean-fast/v1": "a Lean fast-path run's result.json (tools/lean/lean_changed.py --records): one package's records audited without "
                     "the kernel replay or the tests; meta {validation, workload_fingerprint {package, update}}; `research merge` refuses "
                     "an attempt with this result whatever its tool (research.merge.REFUSED_KINDS)",
-    "lean-review/v1": "an `audit.py --update` run's audit.json (tools/lean): per package its review, statement_changes, and the guarantees "
-                      "and reads it compared with (before) beside those it wrote; a `lean_review` label on pr:<n>@<head> names it "
-                      "(research.queue.reviewed)",
     "flock-upstream-build/v1": "upstream Flock's verifier builds for the agreement job (backends/flock/verifier/upstream-build.sh): "
                                "a tar.gz of upstream-<PR #83 commit> binaries and BUILD.json; meta {flock, rustc, host, bundle_sha256, "
                                "binaries}, pinned by backends/flock/verifier/upstream.json",

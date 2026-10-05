@@ -176,8 +176,7 @@ When the change lands on `main` (`research merge --push`, `research queue land`)
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
 of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one
-read from another module with the same content is counted on one line. A grant in `tools/check/queue.toml`
-(`lean_audit = ["guarantees", "reads"]`) would make such a change wait for a reviewer again.
+read from another module with the same content is counted on one line.
 
 **A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with
 `def G (ys) : Prop := e'` in a `Guarantees` module, changes its record's signature and type hash. `audit.py --update`

@@ -333,37 +333,6 @@ def _store_remote(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
 
 
-def test_a_guarantee_change_goes_into_a_train_only_with_the_statement_reviewer_grant_at_its_head(tmp_path, monkeypatch, capsys):
-    """old-circuits-and-proofs held #828 and #858-#866 out of trains by hand on 2 Oct: each changed a guarantee's record with no
-    statement reviewer named.  The queue's rule for it refuses such a ref before its train is built (`--prepare`) or checked
-    (`--train`), until the `grant` label is on the pull request's pinned head; a change to another section needs none."""
-    from research.store.local import LocalStore
-
-    _store_remote(tmp_path, monkeypatch)
-    main, _feat, _tip = _repos(tmp_path)
-    audit = {"roots": ["P"], "guarantees": {"P.t": {"type_hash": "1"}}, "reads": {}}
-    _origin, heads = _origin_with(tmp_path, main, {
-        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["guarantees", "reads"]\n',
-        "lean-audit.json": json.dumps(audit, indent=1)}, {
-        20: {"lean-audit.json": json.dumps({**audit, "guarantees": {"P.t": {"type_hash": "2"}}}, indent=1)},
-        21: {"lean-audit.json": json.dumps({**audit, "roots": ["P", "Q"]}, indent=1)}})
-    _git(main, "push", "-q", "origin", "pr20:refs/heads/side")
-    monkeypatch.chdir(main)
-    pins, lint = [f"20@{heads[20][:9]}", f"21@{heads[21][:9]}"], ["--lint", "true"]
-    assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 3
-    err = capsys.readouterr().err
-    assert f"#20 needs the statement-reviewer grant at {heads[20][:12]} (tools/check/queue.toml: a named reviewer read" in err
-    assert f"`research data label pr:20@{heads[20]} grant statement-reviewer --by REVIEWER`" in err and "#21" not in err
-    assert merge_main(["--train", "--prepare", "train-prep/g", f"side@{heads[20][:9]}", *lint]) == 3
-    assert "side needs the statement-reviewer grant (tools/check/queue.toml), which only a pull request's pinned head can hold" \
-        in capsys.readouterr().err
-    assert merge_main(["--train", "pr20", "--tool", "mytools.decl_check:T", "--command", shlex.join(CHECKED)]) == 3
-    out, err = capsys.readouterr()
-    assert "pr20 needs the statement-reviewer grant" in err and "nothing was checked" in err and "recorded as" not in out
-    LocalStore().add_label(f"pr:20@{heads[20]}", "grant", "statement-reviewer", "red-team")
-    assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 0, capsys.readouterr().err
-
-
 def _pr_train(tmp_path: Path, monkeypatch, rules: str | None = None) -> tuple[Path, Path, str, str]:
     """A store remote; main, with ``rules`` as its queue rules; origin, with A as pull request 7's head; and origin's train-prep/t
     merging #7 at that head, fetched here as a branch, with a passing check of its tip: (main, origin, A, the tip)."""
@@ -485,48 +454,6 @@ def test_a_tip_whose_pr_heads_or_labels_cant_be_read_is_refused(tmp_path, monkey
     assert merge_main(["--train", f"7@{a[:9]}", "--tool", "mytools.decl_check:T", "--command", shlex.join(CHECKED)]) == 3
     out, err = capsys.readouterr()
     assert "can't be judged: STALE" in err and "recorded as" not in out
-
-
-def test_a_move_audit_py_prints_as_the_same_statements_needs_no_grant_and_a_changed_statement_still_does(tmp_path, monkeypatch, capsys):
-    """Daniel's ruling (#736, AGENTS.md "Lean"): a guarantee that only moved needs no statement reviewer when `audit.py --update
-    --moved` prints it as the same statement under its old names, though the record's hashes change with the names.  The train
-    takes that verdict from the run's audit.json, which a `lean_review` label on the pinned head names: a move it printed whole as
-    the same statements goes in without the grant; a moved record whose statement also changed refuses, and so does the move's
-    report on a head whose record changed after it ran."""
-    from research.store.local import LocalStore
-
-    _store_remote(tmp_path, monkeypatch)
-    main, _feat, _tip = _repos(tmp_path)
-    base = {"roots": ["P"], "guarantees": {"P.t": {"type_hash": "1"}}, "reads": {"P.Defs": {"hash": "d"}}}
-    moved = {**base, "guarantees": {"Q.t": {"type_hash": "1q"}}, "reads": {"Q.Defs": {"hash": "dq"}}}
-    restated = {**moved, "guarantees": {"Q.t": {"type_hash": "2q"}}}
-    (main / "lean").mkdir()
-    _origin, heads = _origin_with(tmp_path, main, {
-        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["guarantees", "reads"]\n',
-        "lean/lean-audit.json": json.dumps(base, indent=1)}, {
-        22: {"lean/lean-audit.json": json.dumps(moved, indent=1)},
-        23: {"lean/lean-audit.json": json.dumps(restated, indent=1)}})
-    store = LocalStore()
-
-    def review(n: int, after: dict, changes: bool) -> None:
-        f = tmp_path / f"audit-{n}-{changes}.json"
-        f.write_text(json.dumps({"passed": True, "failed": [], "packages": [{
-            "package": "/w/verity/lean", "review": [], "statement_changes": changes,
-            "before": {k: base[k] for k in ("guarantees", "reads")}, "guarantees": after["guarantees"], "reads": after["reads"]}]}))
-        store.add_label(f"pr:{n}@{heads[n]}", "lean_review", store.put_artifact("lean-review/v1", {}, file=f), "lean")
-
-    monkeypatch.chdir(main)
-    lint = ["--lint", "true"]
-    review(22, moved, False)
-    assert merge_main(["--train", "--prepare", "train-prep/m", f"22@{heads[22][:9]}", *lint]) == 0, capsys.readouterr().err
-    review(23, restated, True)                       # it printed `guarantee Q.t: changed (moved from P.t)` for a reviewer
-    assert merge_main(["--train", "--prepare", "train-prep/n", f"23@{heads[23][:9]}", *lint]) == 3
-    err = capsys.readouterr().err
-    assert f"#23 needs the statement-reviewer grant at {heads[23][:12]}" in err
-    assert f"`research data label pr:23@{heads[23]} lean_review ART --by LANE`" in err
-    review(23, moved, False)                         # the move's own report: it never saw the record #23's head holds
-    assert merge_main(["--train", "--prepare", "train-prep/n", f"23@{heads[23][:9]}", *lint]) == 3
-    assert "#23 needs the statement-reviewer grant" in capsys.readouterr().err
 
 
 def test_merge_refuses_an_attempt_whose_result_is_the_lean_fast_paths_whatever_tool_recorded_it(tmp_path, monkeypatch, capsys):

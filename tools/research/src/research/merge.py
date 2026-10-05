@@ -47,8 +47,7 @@ from the remote and refused unless its head there is still SHA, so what merges i
 reads each again when the tip lands, with its ready mark and grants (`unready`).
 A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
 both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
-that doesn't parse (`_merge`).  Before a train is built, each ref whose change needs a TRAIN_GRANTS grant under
-`research queue`'s rules is refused until pull request N holds it at that head (`ungranted`).
+that doesn't parse (`_merge`).
 
 A push that lands a change to what a guarantee says (a `lean-audit.json`'s guarantees or the definitions they read) DMs Daniel
 what changed, and nothing waits on him (`spec_alert`; his ruling, 3 Oct). A DM that fails is printed and goes to #agent-alerts.
@@ -755,48 +754,6 @@ def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
     return chain
 
 
-#: the grants of `research queue`'s rules (role: what it attests) a train's pull request must hold at its pinned head before its
-#: check is spent; the lander applies the rules' other grants by hand
-TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed guarantees "
-                                      "and the definitions they read (lane contract §5)"}
-
-
-def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=print) -> list[str]:
-    """Why each train ref whose change from ``base`` needs a TRAIN_GRANTS grant under the queue's rules (as ``base`` has them;
-    none when it has no rules file) can't go in: pull request N lacks the `grant` label on `pr:N@SHA` at its pinned head (and,
-    for a lean-audit.json change, a `lean_review` that printed it whole as the same statements: `research.queue.reviewed`), or
-    the ref isn't a pinned pull request, which is all a grant can be on."""
-    from .queue import QueueError, StoreGrants, grant_target
-
-    try:
-        rules = queue_rules(repo, base)
-    except QueueError as e:
-        raise Refused(f"the queue's rules: {e}") from e
-    if rules is None:
-        return []
-    path = rules.source
-    grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)))
-    out = []
-    try:
-        lean = {g.role for g in rules.grants if g.lean_audit}
-        for label, sha in pins:
-            pr = int(label[1:]) if label.startswith("#") else None
-            need = sorted(rules.needs(repo, base, sha, (lambda: grants.reviews(pr, sha)) if pr else list) & set(TRAIN_GRANTS))
-            if need and pr is None:
-                out.append(f"{label} needs the {', '.join(need)} grant ({path}), which only a pull request's pinned head can hold: "
-                           f"name it as N@SHA")
-            elif missing := [g for g in need if g not in grants(pr, sha)]:
-                target = grant_target(pr, sha)
-                out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: {TRAIN_GRANTS[g]}); once it has it, "
-                        f"`research data label {target} grant {g} --by REVIEWER` (a new push needs a new one)" + (
-                            f". A change `audit.py --update` (`--moved MOVES.json` for a move) prints only as the same statements "
-                            f"needs none: `research data put --kind lean-review/v1 --file OUT/audit.json`, then `research data "
-                            f"label {target} lean_review ART --by LANE`" if g in lean else "") for g in missing]
-    except QueueError as e:
-        raise Refused(f"the queue's rules ({path}): {e}") from e
-    return out
-
-
 def queue_rules(repo: Path, base: str):
     """`research queue`'s rules as ``base`` has them (`RULES`, else `RULES_BEFORE_MOVE`), or None when it has no rules file."""
     from .queue import RULES, RULES_BEFORE_MOVE, Rules
@@ -817,7 +774,7 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
     `_chain` wrote, whose second parent is the pinned head): N's head on ``remote`` is no longer that head, closed or not, or
     `pr:N@{head}` lacks `ready = true` asserted by someone other than `merge-queue` (the owner's word; who asserted it isn't matched
     to the PR's owner, which is mostly a Cursor agent id with no map to a lane) or a grant its change needs under the queue's rules
-    as HEAD has them (`Rules.needs`, every role, not only TRAIN_GRANTS) for what it adds onto the train below its merge (a PR stacked
+    as HEAD has them (`Rules.needs`, every role) for what it adds onto the train below its merge (a PR stacked
     on another in the train needs no grant for that one's change), read after pulling the labels from the store's remote; or N is
     stacked on another pull request whose head on ``remote`` is in what N adds, so neither on main nor pinned below N at that
     head (a grant at N's head covers N's own change, not its base's).  What can't be read refuses."""
@@ -864,7 +821,7 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
             elif not by:
                 out.append(f"#{n} is not marked ready at {sha[:12]} (`ready = true` on {grant_target(n, sha)}: `research queue "
                            f"ready {n} --by LANE`)")
-            need = rules.needs(repo, onto, sha, lambda n=n, sha=sha: grants.reviews(n, sha)) if rules else set()
+            need = rules.needs(repo, onto, sha) if rules else set()
             if missing := need - grants(n, sha):
                 out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
     except QueueError as e:
@@ -888,17 +845,14 @@ def preflight_argv() -> list[str]:
     return [uv, "run", "--locked", "python", *PREFLIGHT]
 
 
-def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str], store) -> tuple[str, str]:
-    """Build a train for its check without recording or landing anything: ``refs`` (`pinned`), refused while one lacks a grant
-    (`ungranted`), merged in order onto ``onto`` as ``remote`` has it (the target, or the prep branch of a train ahead, to stack
+def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str]) -> tuple[str, str]:
+    """Build a train for its check without recording or landing anything: ``refs`` (`pinned`), merged in order onto ``onto`` as ``remote`` has it (the target, or the prep branch of a train ahead, to stack
     on it) in a scratch worktree, refused at the first that doesn't merge; ``lint`` run on the result there; its tip pushed to
     ``remote`` as ``branch``, never forced, and read back.  Every step names the scratch worktree or ``repo``'s object store,
     never its checkout.  Returns (the tip, its tree)."""
     r = _git(repo, "fetch", "-q", remote, onto, check=False)
     base = _git(repo, "rev-parse", "--verify", f"{'FETCH_HEAD' if r.returncode == 0 else onto}^{{commit}}").stdout.strip()
     pins = [pinned(repo, ref, remote) for ref in refs]
-    if why := ungranted(repo, pins, base, store):
-        raise Refused("; ".join(why) + "; nothing was built")
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     tree = Path(tempfile.mkdtemp(prefix="research-train-"))
     _git(repo, "worktree", "add", "-q", "--detach", str(tree), base)
@@ -927,8 +881,6 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
     if head != into or _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
         raise Refused(f"the checkout must be a clean {into}")
     pins = [pinned(repo, ref, remote) for ref in refs]
-    if why := ungranted(repo, pins, "HEAD", store, log):
-        raise Refused("; ".join(why) + "; nothing was checked")
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     tree = Path(tempfile.mkdtemp(prefix="research-train-"))
     branch = f"research-train/{stamp}"
@@ -1246,7 +1198,7 @@ def main(argv: list[str]) -> int:
         onto = a.onto or a.into
         lint = shlex.split(a.lint) if a.lint else preflight_argv()
         try:
-            tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint, LocalStore(a.store))
+            tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint)
         except Refused as e:
             return refuse(PROG, str(e))
         print(f"research merge: train {' '.join(a.ref)} on {onto}: pushed {a.remote}/{a.prepare} = {tip[:12]} (tree {tree[:12]}); "

@@ -31,10 +31,6 @@ hold_label = "hold"
 role = "vllm-coordinator"
 paths = ["integrations/vllm/"]
 by = "the vLLM coordinator"
-
-[[grant]]
-role = "statement-reviewer"
-lean_audit = ["guarantees", "reads"]
 """
 AGENT = "bc-605d7c89-ca73-5a32-a582-ee77c49e762a"
 
@@ -181,17 +177,14 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     assert [m.pr for m in members] == [5, 4]
 
 
-def test_grants_follow_paths_and_lean_audit_sections_at_the_exact_head(world):
+def test_grants_follow_paths_at_the_exact_head_and_a_guarantee_change_waits_on_nobody(world):
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
     world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 1\n"}))
     world.gh.put(2, world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}))
-    world.gh.put(3, world.change({"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})}))
     q = world.queue()
     _, entries = q.sync()
     assert entries[1].why.startswith("waiting for the vllm-coordinator grant")
-    assert entries[2].why.startswith("waiting for the statement-reviewer grant")
-    assert "statement-reviewer (no `by` in ci/queue.toml)" in entries[2].why
-    assert entries[3].state == "queued"                         # a dependency digest isn't a statement
+    assert entries[2].state == "queued"
     world.grants[(1, world.gh.prs[1].head)] = {"vllm-coordinator"}
     assert 1 in [m.pr for m in q.sync()[0]]
     world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 2\n"}))
@@ -211,23 +204,6 @@ def test_a_file_renamed_out_of_a_grants_paths_needs_the_grant(tmp_path):
     _git(tmp_path, "mv", "integrations/vllm/x.py", "x.py")
     _git(tmp_path, "commit", "-q", "-m", "move")
     assert Rules.parse(RULES).needs(tmp_path, base, _git(tmp_path, "rev-parse", "HEAD")) == {"vllm-coordinator"}
-
-
-def test_a_lean_review_covers_only_the_change_it_printed_as_the_same_statements():
-    """`reviewed`: an `audit.py --update` report stands in for the statement reviewer only on its own package, only when it printed
-    nothing a reviewer must read, and only for entries it saw change: one another PR changed on `main` meanwhile isn't covered."""
-    from research.queue import reviewed
-
-    old, new = {"guarantees": {"P.t": "1", "P.u": "5"}, "reads": None}, {"guarantees": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
-    rep = {"package": "lean", "statement_changes": False, "before": {"guarantees": {"P.t": "1", "P.u": "5"}, "reads": {}},
-           "guarantees": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
-    assert reviewed("lean/lean-audit.json", old, new, rep)
-    assert reviewed("lean/lean-audit.json", old, new, rep | {"package": "/w/verity/lean/"})
-    assert not reviewed("other/lean/lean-audit.json", old, new, rep) and not reviewed("lean-audit.json", old, new, rep)
-    assert not reviewed("lean/lean-audit.json", old, new, rep | {"statement_changes": True})
-    assert not reviewed("lean/lean-audit.json", old, new, {k: v for k, v in rep.items() if k != "before"})
-    assert not reviewed("lean/lean-audit.json", {**old, "guarantees": {"P.t": "1", "P.u": "6"}}, new, rep), "P.u changed on main since"
-    assert not reviewed("lean/lean-audit.json", old, {**new, "reads": "{not json"}, rep)
 
 
 def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
@@ -472,8 +448,9 @@ def test_grants_read_through_to_the_remote_and_without_that_pull_the_queue_refus
 
 
 def test_rules_refuse_what_they_cannot_place():
-    assert [r.role for r in Rules.parse(RULES).grants] == ["vllm-coordinator", "statement-reviewer"]
-    for bad in ('[[grant]]\nrole = "whoever"\npaths = ["x/"]\n', '[[grant]]\nrole = "review"\n', 'colour = "red"\n',
+    assert [r.role for r in Rules.parse(RULES).grants] == ["vllm-coordinator"]
+    for bad in ('[[grant]]\nrole = "statement-reviewer"\npaths = ["x/"]\n', '[[grant]]\nrole = "review"\nlean_audit = ["guarantees"]\n',
+                '[[grant]]\nrole = "whoever"\npaths = ["x/"]\n', '[[grant]]\nrole = "review"\n', 'colour = "red"\n',
                 '[[grant]]\nrole = "review"\npaths = ["x/"]\nwhen = "always"\n'):
         with pytest.raises(QueueError):
             Rules.parse(bad)
