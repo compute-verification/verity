@@ -204,9 +204,12 @@ fi
 # check's Lean packages into a tree's .lake/packages, and a failed audit never gives them back; the next run on the tree drops
 # them before its own take. Only .lake/packages of the verifier's three Lake packages goes, only in a tree nothing live names
 # (REFS_PY, by sha); each is renamed aside, the tree checked once more, put back if named, and deleted.
-LK="backends/flock/verifier/lean backends/flock/verifier/lean/level3 backends/flock/verifier/lean/soundness"
-[ $LAKE = 1 ] && [ $DRY = 0 ] && for p in $SRC/*/backends/flock/verifier/lean{,/level3,/soundness}/.lake/packages.rs-trash-*; do
-  [ -d "$p" ] && gone "$p" $(age_h "$p") "$p (left by an interrupted sweep)"; done
+# Trees from before and after the 5 Oct layout move sit side by side, so both layouts' paths are listed; the move leaves LK_OLD.
+LK_OLD="backends/flock/verifier/lean backends/flock/verifier/lean/level3 backends/flock/verifier/lean/soundness"
+LK_NEW="verity/protocols/verification/flock/lean security_proofs/flock/level3 security_proofs/flock/soundness"
+LK="$LK_OLD $LK_NEW"
+[ $LAKE = 1 ] && [ $DRY = 0 ] && for k in $LK; do for p in $SRC/*/$k/.lake/packages.rs-trash-*; do
+  [ -d "$p" ] && gone "$p" $(age_h "$p") "$p (left by an interrupted sweep)"; done; done
 : > $T/lk
 [ $LAKE = 1 ] && for d in $SRC/*/; do d=${d%/}; s=${d##*/}
   [[ $s =~ ^[0-9a-f]{40}$ ]] || continue
