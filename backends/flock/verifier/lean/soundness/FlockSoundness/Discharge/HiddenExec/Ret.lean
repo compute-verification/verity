@@ -297,24 +297,23 @@ theorem outPortOf_spec (c : Circuit) {o : ℕ} (ho : o < c.outWords) :
 
 /-! ## An output row's words -/
 
-/-- **Each output row's words hold its port's** (`HmOut.checkRows`: they are the port's, zero-padded to whole SHA-512
-blocks). -/
-theorem checkRows_words {c : Circuit} (h : HmOut.checkRows c = .ok ()) {j : ℕ} (hj : j < c.outPorts.size) :
+/-- **Each output row's words hold its port's** (`HmOut.checkRows`: a `sha512/row/v1` row's are the port's, zero-padded
+to whole SHA-512 blocks). -/
+theorem checkRows_words {c : Circuit} (h : HmOut.checkRows c = .ok ())
+    (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) (hu : ∀ p ∈ c.ports.toList, p.segs = none)
+    (hv : ∀ p ∈ c.ports.toList, p.v2 = false) {j : ℕ} (hj : j < c.outPorts.size) :
     (c.outPorts.getD j default).2 ≤ (c.ports.getD (HmOut.nIn c + j) default).words := by
-  unfold HmOut.checkRows at h
-  obtain ⟨k, -, h⟩ := except_bind_ok h
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) names jp at h
-  obtain ⟨hbad, -⟩ := ite_throw_ok' h
-  simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, List.any_eq_true, List.mem_range, not_exists,
-    not_and] at hbad
-  obtain ⟨⟨hk, -⟩, hrow⟩ := hbad
-  have hk' : HmOut.nIn c = k := by unfold HmOut.nIn; omega
-  have := hrow j hj
-  rw [hk', ← Hidden.getElem!_eq_getD']
-  generalize c.outPorts[j]! = e at this
-  obtain ⟨nm, w⟩ := e
-  simp only [Decidable.not_not] at this
-  rw [this.1.2]
+  have hj' : j < c.outRowPorts.size := by rw [hr, Array.size_replicate]; exact hj
+  obtain ⟨hlt, hrow⟩ := Hidden.checkRows_out h hj'
+  have hmem : c.ports.getD (HmOut.nIn c + j) default ∈ c.ports.toList := by
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
+    exact Array.getElem_mem_toList hlt
+  have := hrow.elim (fun h => h.2.1) fun ⟨hs, _⟩ => by
+    rw [hu _ hmem, hv _ hmem] at hs
+    simp at hs
+  rw [Hidden.outGroup_single hr hj] at this
+  rw [this]
+  dsimp only
   omega
 
 end FlockSoundness.Discharge.HiddenExec

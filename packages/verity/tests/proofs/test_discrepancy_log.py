@@ -8,12 +8,13 @@ decided and pointing at evidence that exists -- never merely by changing the ref
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
 
 from verity.ml.tc.instructions import INSTRUCTIONS
 from verity.proofs.target import DISCREPANCY_LOG, FIRST, HAWKEYE_PIN, TARGETS
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 REQUIRED = ("id", "profile", "class", "issue", "hawkeye_paper", "hawkeye_simulator", "verity_reference",
             "hardware_evidence", "status", "resolution", "evidence_refs", "owner")
 STATUSES = ("open", "resolved", "excluded")
@@ -70,6 +71,19 @@ def test_leaving_open_requires_a_resolution_and_evidence_that_exists() -> None:
         else:
             assert isinstance(entry["resolution"], str) and entry["resolution"].strip(), f"{entry['id']} left open without a resolution"
             assert refs, f"{entry['id']} left open without evidence"
+
+
+def test_every_evidence_path_is_an_input_of_this_suite() -> None:
+    """The test above checks that each evidence path exists, which the suite's guard can't see: a path outside this suite's
+    inputs could be deleted without moving its key, and the check would pass from the cache. List it under
+    [tool.verity.tests] inputs in packages/verity/pyproject.toml."""
+    pkg = Path(__file__).resolve().parents[2]
+    declared = tomllib.loads((pkg / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
+    covered = [pkg.relative_to(ROOT).as_posix(), *declared]
+    uncovered = [f"{e['id']}: {ref}" for e in load()["entries"] for ref in e["evidence_refs"]
+                 if not ref.startswith(("r2026", "r2027", "http"))
+                 and not any(ref == p or ref.startswith(p.rstrip("/") + "/") for p in covered)]
+    assert not uncovered, f"evidence outside packages/verity's [tool.verity.tests] inputs: {uncovered}"
 
 
 def test_the_hawkeye_pin_is_the_one_the_target_names() -> None:

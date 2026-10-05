@@ -16,6 +16,8 @@ import pytest
 import pearl_c_vectors as CV
 import pearl_vectors as PV
 from verity.commitments.turboshake import turboshake128
+from verity.ml.fp32 import F32DivV2, F32FmaV2, F32MulV2
+from verity.ml.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
 from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16
 from verity_pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity_pouw.schemes import get
@@ -188,7 +190,8 @@ def test_registry_and_domain():
         with pytest.raises(DomainError):
             s.check(Matmul(0, bad, 1))
     sh = Shape(128, 2048, 256)
-    assert s.wref(sh) == 128 * 256 * (2048 + 32 * 16) + 128 * 2048 * 32 + 2 * 64 * 128 * 256 + 320 * 128 * 2048
+    assert s.wref(sh) == 128 * 256 * (2048 + 32 * 15) + 128 * 2048 * 32 + 2 * 64 * 128 * 256 + 320 * 128 * 2048
+    assert s.first_adds(sh) == 32 * 128 * 256
 
 
 @pytest.mark.parametrize("case", [c["case"] for c in PINNED["cases"]])
@@ -295,6 +298,133 @@ def test_v1_peel_uses_e_prime_exactly():
         assert ops.pb[i][C.R:] == [P.f32_to_bf16(P.fp8_to_f32(c)) ^ 0x8000 for c in ops.b.ep[i]]
 
 
+def test_bf16_of_code_keeps_the_sign_of_minus_zero():
+    """`bf16(E′)` widens `−0` (0x80) to `0x8000`, with its sign. The Lean's `codeBf16` pins the same words
+    (`WholeCircuit.codeBf16_examples`)."""
+    assert [C._bf16_of_code(c) for c in (0x80, 0x00, 0x38, 0xFE)] == [0x8000, 0x0000, 0x3F80, 0xC3E0]
+
+
+def test_eprime_keeps_the_sign_of_a_zero_noise_code():
+    """`E′ = e4m3(fp32.mul(β, e))` on a noise code: `fp32.mul(β, −0)` is `−0` for `β > 0`, so the `−0` code (0x80)
+    gives 0x80, and every zero product takes the XOR of the signs, `β = +0` and `β < 0` included. The NaN codes are
+    refused. The Lean's `lineCodes` pins the same codes (`WholeCircuit.lineCodes_examples`)."""
+    betas = (0x3F800000, 0x3AB504F3, 0xBF800000, 0x00000000, 0x40400000)
+    codes = (0x00, 0x80, 0x01, 0x81, 0x38, 0xB8, 0x7E, 0xFE, 0x08, 0x88)
+    assert [C.eprime(b, codes) for b in betas] == [
+        [0x00, 0x80, 0x01, 0x81, 0x38, 0xB8, 0x7E, 0xFE, 0x08, 0x88],
+        [0x00, 0x80, 0x00, 0x80, 0x01, 0x81, 0x32, 0xB2, 0x00, 0x80],
+        [0x80, 0x00, 0x81, 0x01, 0xB8, 0x38, 0xFE, 0x7E, 0x88, 0x08],
+        [0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80],
+        [0x00, 0x80, 0x03, 0x83, 0x44, 0xC4, 0x7E, 0xFE, 0x14, 0x94]]
+    for c in (0x7F, 0xFF):
+        with pytest.raises(P.Reject):
+            C.eprime(0x3F800000, [c])
+
+
+def test_f32_mul_signs_a_zero_product():
+    """`F32Mul_v2` writes a zero product of opposite signs as `−0` and of equal signs as `+0`, as the Lean's
+    `Pc8OpsAgree.mulZero` and `.mul` state."""
+    pairs = ((0, 0xBF800000), (0x80000000, 0x3F800000), (1, 0x80000000), (0x80000000, 0xBF800000), (0, 0x3F800000))
+    assert [F32MulV2.evaluate(a, b) for a, b in pairs] == [0x80000000] * 3 + [0, 0]
+
+
+def test_a_row_words_sign_of_zero_reaches_neither_its_magnitude_nor_its_square():
+    """`F32Fabs_v1` clears the sign bit, and `F32Fma_v2(−0, −0, c)` is `F32Fma_v2(+0, +0, c)` on every word `c`, the
+    infinities and NaNs included, as the Lean's `Pc8OpsAgree.fabs` and `.fmaSq0` state: a row's `−0` words give its
+    `+0` words' `s` and `ρ`."""
+    rng = random.Random(7)
+    specials = [0, 0x80000000, 1, 0x80000001, 0x7F7FFFFF, 0xFF7FFFFF, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00001,
+                0x7F800001, 0x3F800000, 0xBF800000]
+    words = specials + [rng.getrandbits(32) for _ in range(4000)]
+    assert all(F32Fabs.evaluate(w) == w & 0x7FFFFFFF for w in words)
+    assert all(F32FmaV2.evaluate(0x80000000, 0x80000000, c) == F32FmaV2.evaluate(0, 0, c) for c in words)
+
+
+def f32_word(q: Fraction) -> int:
+    """The Lean's `f32Word`: one nearest-even rounding of `q` to FP32, with gradual underflow and overflow to `±inf`;
+    an exact zero is `+0`."""
+    if q == 0:
+        return 0
+    s, a = (0x80000000 if q < 0 else 0), abs(q)
+    e = a.numerator.bit_length() - a.denominator.bit_length()
+    e += (Fraction(2) ** (e + 1) <= a) - (Fraction(2) ** e > a)
+    big_e = max(e, -126)
+    n = round(a / Fraction(2) ** (big_e - 23))
+    if n == 2 ** 24:
+        big_e, n = big_e + 1, 2 ** 23
+    if big_e > 127:
+        return s | 0x7F800000
+    return s | n if n < 2 ** 23 else s | (big_e + 127) << 23 | (n - 2 ** 23)
+
+
+def test_f32_div_fmaxf_and_select_as_the_lean_states():
+    """`F32Div_v2` rounds finite words' exact quotient by a nonzero word as `f32Word` (a zero quotient of equal signs
+    `+0`) and writes a finite word over `+inf` as the zero of its sign; `F32Mul_v2` of a non-finite first factor by a
+    finite word is not finite; `F32Fmaxf` against a finite nonzero word is the first operand where it is `+inf` or
+    larger, else the second (a NaN, `−inf` or a smaller value); and `SelectI32` selects on its condition's low bit. These
+    are the Lean's `Pc8OpsAgree.div`, `.divInf`, `.mulNonfin`, `.fmaxfAny` and `.sel`."""
+    rng = random.Random(11)
+    specials = [0, 0x80000000, 1, 0x80000001, 0x007FFFFF, 0x00800000, 0x7F7FFFFF, 0xFF7FFFFF, 0x7F800000, 0xFF800000,
+                0x7FC00000, 0xFFFFFFFF, 0x7F800001, 0x3F800000, 0xBF800000, 0x2F800000, 0x43E00000, 0x45280000]
+    words = specials + [rng.getrandbits(32) for _ in range(1500)]
+    finite = {w for w in words if (w >> 23) & 0xFF != 0xFF}
+    nonfinite = set(words) - finite
+
+    def val(w: int) -> Fraction:
+        return Fraction(P.f32_of_bits(w))
+
+    pairs = [(a, b) for a in specials for b in specials] + [(rng.choice(words), rng.choice(words)) for _ in range(4000)]
+    divs = [(a, b) for a, b in pairs if a in finite and b in finite and val(b) != 0 and (val(a) != 0 or a >> 31 == b >> 31)]
+    assert len(divs) > 2000
+    assert all(F32DivV2.evaluate(a, b) == f32_word(val(a) / val(b)) for a, b in divs)
+    assert all(F32DivV2.evaluate(a, 0x7F800000) == a & 0x80000000 for a in finite)
+    assert all((F32MulV2.evaluate(a, b) >> 23) & 0xFF == 0xFF for a in nonfinite for b in specials + words[-200:]
+               if b in finite)
+    maxes = [(a, b) for a, b in pairs if b in finite and val(b) != 0]
+    assert all(F32Fmaxf.evaluate(a, b) == (a if a == 0x7F800000 or (a in finite and val(b) < val(a)) else b)
+               for a, b in maxes)
+    assert all(SelectI32.evaluate(c, a, b) == (a if c % 2 == 1 else b) for c in range(4) for a, b in pairs[:500])
+
+
+def test_i32_le_of_words_with_bit_31_clear_is_their_order_as_the_lean_states():
+    """`I32Le_v1` (signed 32-bit `a ≤ b`) of two words below `2³¹` is their order, as the Lean's `Pc4OpsAgree.le`
+    states: `pc4`'s running max `s` compares `F32Fabs_v1` words, whose sign bit is clear."""
+    rng = random.Random(13)
+    specials = [0, 1, 0x007FFFFF, 0x00800000, 0x3F800000, 0x3F800001, 0x7F7FFFFF, 0x7F800000, 0x7FC00000, 0x7FFFFFFF]
+    words = specials + [rng.getrandbits(31) for _ in range(1500)]
+    pairs = [(a, b) for a in specials for b in specials] + [(rng.choice(words), rng.choice(words)) for _ in range(4000)]
+    assert all(I32Le.evaluate(a, b) == (1 if a <= b else 0) for a, b in pairs)
+
+
+def test_f32_fma_overflow_and_div_of_a_nonfinite_word_as_the_lean_states():
+    """`F32Fma_v2` of finite words whose exact `x·y + z` overflows writes `f32Word` of it (`±inf`), as the squares-overflow
+    row's `fma(2¹²⁶, 2¹²⁶, +0)` does; and `F32Div_v2` of a non-finite word by a finite one (zero included) is not finite.
+    These are the Lean's `Pc8OpsAgree.fmaOvf` and `.divNonfin`."""
+    rng = random.Random(12)
+
+    def val(w: int) -> Fraction:
+        return Fraction(P.f32_of_bits(w))
+
+    def big() -> int:
+        return rng.getrandbits(1) << 31 | rng.randrange(0xC0, 0xFF) << 23 | rng.getrandbits(23)
+
+    def finite_word() -> int:
+        w = rng.getrandbits(32)
+        return w if (w >> 23) & 0xFF != 0xFF else w & 0xFF7FFFFF
+
+    triples = [(0x7E800000, 0x7E800000, 0), (0x7F7FFFFF, 0x7F7FFFFF, 0xFF7FFFFF), (0x7F7FFFFF, 0x3F800000, 0x73800000),
+               (0xFF7FFFFF, 0x3F800000, 0xF3800000)]
+    triples += [(big(), big(), rng.choice([finite_word(), big(), 0, 0x80000000])) for _ in range(6000)]
+    ovf = [(a, b, c) for a, b, c in triples
+           if (f32_word(val(a) * val(b) + val(c)) >> 23) & 0xFF == 0xFF]
+    assert len(ovf) > 1000 and (0x7E800000, 0x7E800000, 0) in ovf
+    assert all(F32FmaV2.evaluate(a, b, c) == f32_word(val(a) * val(b) + val(c)) for a, b, c in ovf)
+    nonfinite = [0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00000, 0x7F800001, 0xFFFFFFFF, 0x7FFFFFFF]
+    nonfinite += [rng.getrandbits(1) << 31 | 0xFF << 23 | rng.getrandbits(23) for _ in range(200)]
+    finite = [0, 0x80000000, 1, 0x3F800000, 0x41800000, 0x7F7FFFFF, 0xFF7FFFFF] + [finite_word() for _ in range(200)]
+    assert all((F32DivV2.evaluate(a, b) >> 23) & 0xFF == 0xFF for a in nonfinite for b in finite)
+
+
 def test_v1_registry_and_cost():
     s = get("pearl-c-h100-v1")
     assert s.name == "pearl-c-h100-v1" and dict(s.certificate.parameters)["forming"] == "v1"
@@ -309,10 +439,11 @@ def test_v1_registry_and_cost():
 
 
 def wref_of(m: int, k: int, n: int, fs: int = 64, qa: int = 4, add: int = 32, bf16: int = 2) -> Fraction:
-    """`Game.lean`'s `wrefOf Params.pi Costs.adopted` (r = 32, G = 4), `creditOf` + qa·m·k; at other prices the device
-    statement's `wrefDev`: mkn + mkn·add/(32·G) + m·k·r + 2·bf16·r·m·n + fs·m·k + qa·m·k."""
+    """`DeviceRev1.lean`'s `wrefOfRev1 Params.pi Costs.adopted` (r = 32, G = 4), `creditOfRev1` + qa·m·k; at other prices
+    the device statement's `wrefDevRev1`: mkn + mkn·add/(32·G) − add·m·n + m·k·r + 2·bf16·r·m·n + fs·m·k + qa·m·k, the
+    promotion adds less the first of every word (`firstAddDev`)."""
     mkn = Fraction(m * k * n)
-    return mkn + mkn * add / 128 + m * k * 32 + 2 * bf16 * 32 * m * n + fs * m * k + qa * m * k
+    return mkn + mkn * add / 128 - add * m * n + m * k * 32 + 2 * bf16 * 32 * m * n + fs * m * k + qa * m * k
 
 
 #: sm_120's measured W1 rates (node 2, locked 2,100 MHz; `r20260930-063213-c94a`, `r20260930-061717-3e84`; research store
@@ -326,8 +457,8 @@ SM120_MEASURED = {"fp8_mac": 1023.98, "fadd_loop": 122.26, "fadd_alone": 128, "f
 def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
     """sm_90's prices are the H100's (`Prices.h100`); sm_120's are the device statement's `Prices.sm120`, each step at its
     cheapest bit-exact form on the card, and none above what the card measures in the loop.  Crediting sm_120 at the
-    H100's FADD of 32 (and forming of 64 + 4) overstates the credit; at sm_120's prices the scheme is `wrefDev`, and the
-    debit per flagged atom-word and element follows the same record."""
+    H100's FADD of 32 (and forming of 64 + 4) overstates the credit; at sm_120's prices the scheme is `wrefDevRev1`, and
+    the debit per flagged atom-word, element and later +0 promotion follows the same record."""
     h, s, m = C.PRICES["sm_90"], C.PRICES["sm_120"], SM120_MEASURED
     assert (h, s) == (C.H100_PRICES, C.SM120_PRICES)
     assert (h.fadd, h.bf16_mac, h.forming_credited, h.forming_a_only) == (32, 2, 64, 4)
@@ -342,7 +473,9 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
     for sh in (Shape(32, 1024, 64), Shape(2048, 3584, 18944), Shape(8192, 8192, 8192)):
         assert sm120.wref(sh) == wref_of(sh.m, sh.k, sh.n, fs=40, qa=1, add=8, bf16=2)
         assert sm120.credit_of(sh) == sm120.wref(sh) - sh.m * sh.k < get("pearl-c-h100-v1").credit_of(sh)
-    assert D.debit_units(1, 0, s) == 34 and D.debit_units(0, 1, s) == 40 and D.debit_units(1, 1) == 40 + 64
+    assert D.debit_units(1, 0, s, zeros=0) == 34 and D.debit_units(0, 1, s, zeros=0) == 40
+    assert D.debit_units(1, 1, zeros=0) == 40 + 64 and D.debit_units(0, 0, s, zeros=1) == 8
+    assert D.debit_units(0, 0, zeros=1) == 32
     with pytest.raises(ValueError):
         C.PearlC(forming="v0", prices=s)
 
@@ -350,8 +483,8 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
 @pytest.mark.parametrize("m", [1, 32, 128, 2048])
 @pytest.mark.parametrize("k,n", [(128, 128), (1024, 64), (3584, 4608), (3584, 37888), (18944, 3584), (65536, 16)])
 def test_wref_is_leans_wref_of(m, k, n):
-    """Red team F2: W_ref is Lean's `wrefOf` on every unit shape, and the credit its `creditOf`; the weight side is not in
-    either, at any m."""
+    """Red team F2: W_ref is Lean's `wrefOfRev1` on every unit shape, and the credit its `creditOfRev1`; the weight side
+    is not in either, at any m."""
     s = get("pearl-c-h100-v1")
     sh = Shape(m, k, n)
     assert s.wref(sh) == wref_of(m, k, n) and s.credit_of(sh) == wref_of(m, k, n) - 4 * m * k
@@ -359,7 +492,7 @@ def test_wref_is_leans_wref_of(m, k, n):
 
 
 def test_lifecycle_work_has_no_weight_side():
-    """Red team F2: two calls on one weight give W = the two units' `wrefOf`; the weight side is `job_cost`, apart."""
+    """Red team F2: two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
     from verity_pouw.audit import Epoch, Prover, Verifier, Workload
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
@@ -502,6 +635,50 @@ def test_v1_liveness_is_per_row_on_the_exact_statistic():
     ops = s.encode(ctx, noise, rows_a, rows_b, Tile(tuple(range(16)), tuple(range(16))))
     assert sum(1 for row in ops.a.x for w in row if P.f32_of_bits(w) >= 8.0) * 64 <= 16 * k
     assert not s.admissible(ctx, ops)
+
+
+def tolerant_kernel(scheme, ctx, noise, a, b, tiles):
+    """`reference_kernel`, with a zero digest for a tile the scheme does not encode, so a weight with a refused row
+    still commits."""
+    out = []
+    for t in tiles:
+        ops = scheme.encode(ctx, noise, [a[i] for i in t.rows], [b[j] for j in t.cols], t)
+        if ops is None:
+            out.append((bytes(32), [[0.0] * len(t.cols) for _ in t.rows]))
+            continue
+        c = scheme.checked(ctx, ops)
+        out.append((scheme.digest(ctx, noise, c), scheme.useful(ctx, noise, ops, c)))
+    return out
+
+
+@pytest.mark.parametrize("clause", [None, "finite", "live", "floor"])
+def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
+    """`check_tile` refuses a tile one of whose weight rows fails a clause of `OperandOK`, as Lean's `TileCheck.Accepts`
+    asks each of the tile's weight rows to pass the protocol's `weightOK` (`PearlCSem.RowOK`). One row per clause: a
+    non-finite word (Lean's `rowOK8_nonFinite`), three of 128 words `8.0` among `1.0`s (`rowOK8_notLive`), and every 8th
+    word `2¹²⁶`, so ρ is not finite and the floor is 0 (`pc8Sem_squaresOverflow`). The tile beside it, whose weight rows
+    pass, is accepted, and so are both on the honest weight."""
+    from verity_pouw.audit import Epoch, Prover, Verifier, Workload
+
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
+    rows_a, rows_b = CV.rows_f32("weight-rule", "A", 16, k), CV.rows_f32("weight-rule", "B", 32, k)
+    row = list(C.parse_f32_row(rows_b[0], k))
+    if clause == "finite":
+        row[1] = 0x7F800000
+    elif clause == "live":
+        row = [f32w(8.0) if t in (1, 2, 3) else f32w(1.0) for t in range(k)]
+    elif clause == "floor":
+        row = [0x7E800000 if t % 8 == 0 else w for t, w in enumerate(row)]
+    rows_b[0] = C.f32_row(row)
+    work = Workload((Matmul(3, Shape(16, k, 32), 9),))
+    prover = Prover(s, {9: rows_b}, tolerant_kernel)
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    v = Verifier(s, epoch)
+    assert [0 in r.tile.cols for r in v.refs] == [True, False]
+    verdicts = [v.check_tile(tr, prover.open(epoch, r.id)) for r in v.refs]
+    assert [(x.ok, x.reason) for x in verdicts] == [(clause is None, "" if clause is None else "inadmissible inputs"),
+                                                    (True, "")]
 
 
 def test_domain_needs_whole_promotion_groups():

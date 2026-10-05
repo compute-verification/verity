@@ -17,6 +17,11 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
   a **window's** budget: a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units, and its y cells at the
   floor ⌈K_y·n_c/N⌉ of the window's N, K_y = K (`window_laws`, root's option B on X-SPC-105).
 
+**The tile checks' layout** (`tile_layout`, `pc4` and `pc8`) is beside it: a drawn tile's closure is its rows' units
+in the call (`RowA`, or `rowk`'s pieces; TM rows, or `pc8`'s short last tile row's r), and its TN rows' units in the
+weight's Program (``b_rows``), each once per plan (`Plan.proved_b`); its W_ref is the caller's (the tile's cells' share of the scheme's).  It opens
+nothing: its rows are C-Flock-committed ports.
+
 **Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
 unit opens exactly the rows it reads.
 
@@ -29,7 +34,7 @@ the unsound work at δ (Lean `audit_closure`, `accountable_compute`).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from decimal import ROUND_CEILING, Decimal, localcontext
 from typing import Mapping, Protocol, Sequence
@@ -206,9 +211,13 @@ class Layout:
     strata: tuple[StratumSpec, ...]
     closure: Mapping[int, tuple[int, ...]]              # tile unit -> the call's units proved with it (itself first)
     y_strip: Mapping[int, int] = None                   # tile unit -> the weight Program's Y unit it reads (column strip)
+    b_rows: Mapping[int, tuple[int, ...]] = None        # tile unit -> the weight Program's row units it reads (`tile_layout`)
+    w_ref: int | None = None                            # one tile's W_ref, where the scheme's is given (`tile_layout`)
 
     def tile_work(self) -> int:
-        """One tile's W_ref: its cells' share of the call's (`schemes.ncp.NCP.wref`)."""
+        """One tile's W_ref: ``w_ref``, else its cells' share of the call's (`schemes.ncp.NCP.wref`)."""
+        if self.w_ref is not None:
+            return self.w_ref
         s = self.shape
         return (3 * s.m * s.k * s.n + FORM_UNITS * s.m * s.k) * D * D // (s.m * s.n)
 
@@ -258,6 +267,38 @@ def layout(shape: Shape, kind: str = "shift24") -> Layout:
     return Layout(shape, us, template_strata(us, Layout(shape, us, (), {}).tile_work()), closure, y_strip)
 
 
+def tile_layout(shape, w_ref: int) -> Layout:
+    """A tile check's layout (`pc4.Shape` or `pc8.Shape`), from the shape alone: the call's units and strata, each tile's
+    closure (itself, then its rows of A's units: TM, or a short last tile row's r) and its TN rows of B's units in the
+    weight's Program, at W_ref ``w_ref`` a whole tile.  A row's units are its `RowA` (`RowB`) unit, or with ``row_k`` its
+    head, forms and tail (`rowk`).  A short tile is its own template's stratum at its rows' share of that, w_ref·r/TM, which
+    must be whole; a call with whole and short tiles is then two tile strata, which the work law refuses
+    (`check_work_strata`)."""
+    from . import pc4, pc8
+
+    mod = pc8 if isinstance(shape, pc8.Shape) else pc4
+    us, ws = mod.units(mod.call(shape)), mod.units(mod.weight(shape))
+    tm, tn = shape.tile
+    row_a: dict[int, list[int]] = {}
+    row_b: dict[int, list[int]] = {}
+    for rows, side, units_ in ((row_a, "row_a", us), (row_b, "row_b", ws)):
+        for u in units_:
+            if u.role.startswith(side):
+                rows.setdefault(u.where[0], []).append(u.index)
+    closure, b_rows = {}, {}
+    for t in (u for u in us if u.role == "tile"):
+        rs, cs = t.where
+        closure[t.index] = (t.index, *(a for i in range(rs * tm, min(shape.m, (rs + 1) * tm)) for a in row_a[i]))
+        b_rows[t.index] = tuple(b for j in range(tn) for b in row_b[cs * tn + j])
+    strata, r = template_strata(us, w_ref), shape.m % tm
+    if r:
+        if w_ref * r % tm:
+            raise DomainError(f"a short tile's W_ref is {r}/{tm} of a whole tile's, {w_ref}: not an integer")
+        short = {u.template for u in us if u.role == "tile" and u.where[0] == shape.m // tm}
+        strata = tuple(replace(s, work=w_ref * r // tm * len(s.units)) if s.name in short else s for s in strata)
+    return Layout(shape, us, strata, closure, None, b_rows, w_ref)
+
+
 def template_strata(us: Sequence[Unit], per_tile: int) -> tuple[StratumSpec, ...]:
     """The verifier's strata (`Draw.strataOf`): one per template, in the order of its first unit, the tile's with W_ref
     ``per_tile`` a unit and every other's with none."""
@@ -276,6 +317,7 @@ class Plan:
     proved: tuple[int, ...]                  # the drawn units and every drawn tile's closure, ascending, each once
     openings: tuple[tuple[str, int], ...]    # the leaves the plan opens: ("a", row), ("b", weight row), ("y", column strip)
     proved_y: tuple[int, ...] = ()           # the weight Program's Y units the drawn tiles read (column strips), each once
+    proved_b: tuple[int, ...] = ()           # a tile check's: the weight Program's row units the drawn tiles read, each once
 
 
 def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
@@ -292,9 +334,11 @@ def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
         drawn += [s.units[i] for i in key.subset(sizes[s.name], len(s.units), context)]
     proved = set(drawn)
     ys = {lay.y_strip[u] for u in drawn if lay.y_strip and u in lay.y_strip}
+    bs = {b for u in drawn if lay.b_rows and u in lay.b_rows for b in lay.b_rows[u]}
     for u in drawn:
         proved.update(lay.closure.get(u, ()))
-    return Plan(law.name, sizes, tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)))
+    return Plan(law.name, sizes, tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)),
+                tuple(sorted(bs)))
 
 
 def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int]]:
@@ -335,11 +379,12 @@ def profile(lay: Layout, sizes: Mapping[str, int]) -> Stratified:
 
 
 def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> float:
-    """`harm_bound` over the tile strata at harm W_ref per tile: except with probability δ (plus the proofs' error), an
-    accepted plan leaves at most this much work in unsound tiles."""
-    return profile(lay, sizes).harm_bound({s.name: float(lay.tile_work()) for s in lay.strata if s.role == "tile"}, delta)
+    """`harm_bound` over the tile strata at harm W_ref per tile (its stratum's): except with probability δ (plus the
+    proofs' error), an accepted plan leaves at most this much work in unsound tiles."""
+    return profile(lay, sizes).harm_bound({s.name: s.work / len(s.units) for s in lay.strata if s.role == "tile"}, delta)
 
 
 __all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "check_work_strata",
            "draw", "law_object",
-           "layout", "openings", "profile", "record_k", "template_strata", "unsound_work_bound", "window_laws", "work_table"]
+           "layout", "openings", "profile", "record_k", "template_strata", "tile_layout", "unsound_work_bound", "window_laws",
+           "work_table"]

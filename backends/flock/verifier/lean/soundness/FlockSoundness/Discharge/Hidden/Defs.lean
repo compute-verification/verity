@@ -25,22 +25,28 @@ namespace FlockSoundness.Discharge.Hidden
 def outAt (c : Circuit) (j : ℕ) : ℕ := ((c.outPorts.toList.take j).map (·.2)).sum
 
 /-- **The column `HmOut.delta` copies into output row `j`'s word `k`, bit `t`, at VU `g`**: bit `t` of the VU's output
-word `outAt c j + k` where the circuit computes it (`HmOut.outCol`), below the port's words; the unit range's first
-slot's forced-zero row past them. -/
+word `at_ + k` where the circuit computes it (`HmOut.outCol`), `at_` the first output word of the row's run of output ports
+(`HmOut.outGroup`), below the run's words; the unit range's first slot's forced-zero row past them. -/
 def outSrc (c : Circuit) (g j k t : ℕ) : ℕ :=
-  if k < (c.outPorts.getD j default).2 then HmOut.outCol c g (outAt c j + k) + t else Hm.zeroCol c
+  if k < (HmOut.outGroup c j).2.2.2 then HmOut.outCol c g ((HmOut.outGroup c j).2.2.1 + k) + t else Hm.zeroCol c
 
 /-- Row `p`'s message bit `t` of byte `byte` at VU `g`, as `HmOut.delta` writes it: in the row's chain's `sha512x3`
-slot for block `byte / 128`. -/
+slot for the byte's compression (`HmRow.byteAt`; block `byte / 128` of an unsegmented row), or, past the row's
+compressions, in its `hm96` slot's `pad` (an exact-length row's last block). -/
 def deltaMsgCol (c : Circuit) (g p byte t : ℕ) : ℕ :=
-  let sl := ((HmRow.rowSlots c.ports).2[p]!)[byte / 128]!
-  c.slotCol c.shaNet g sl.1 + (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sl.2 + 1]!.1 +
-    64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + t
+  let ko := HmRow.byteAt (c.ports.getD p default) byte
+  if ko.1 < ((HmRow.rowSlots c.ports).2[p]!).size then
+    let sl := ((HmRow.rowSlots c.ports).2[p]!)[ko.1]!
+    c.slotCol c.shaNet g sl.1 + (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sl.2 + 1]!.1 +
+      64 * (ko.2 / 8) + 56 - 8 * (ko.2 % 8) + t
+  else c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!.1 +
+      64 * (ko.2 / 8) + 56 - 8 * (ko.2 % 8) + t
 
-/-- **Δ's pairs past `HmRow.delta`'s** (`HmOut.delta`): per VU `g`, output port `j`, row word `k` and bit `t < 16`, the
-message column `i` of output row `nIn + j`'s byte `2k + t / 8`, bit `t % 8`, gets `(i, i)` and `(i, outSrc c g j k t)`. -/
+/-- **Δ's pairs past `HmRow.delta`'s** (`HmOut.delta`): per VU `g`, output row `j` (one per run of output ports,
+`outRowPorts`), row word `k` and bit `t < 16`, the message column `i` of row `nIn + j`'s byte `2k + t / 8`, bit `t % 8`,
+gets `(i, i)` and `(i, outSrc c g j k t)`. -/
 def outPairs (c : Circuit) : List (ℕ × ℕ) :=
-  (List.range c.g).flatMap fun g => (List.range c.outPorts.size).flatMap fun j =>
+  (List.range c.g).flatMap fun g => (List.range c.outRowPorts.size).flatMap fun j =>
     (List.range (c.ports.getD (HmOut.nIn c + j) default).words).flatMap fun k =>
       (List.range 16).flatMap fun t =>
         [(deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8),

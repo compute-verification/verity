@@ -109,7 +109,8 @@ def namespaces(text: str, pos: int) -> list[str]:
 
 
 def git(repo: Path, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True,
+                          errors="surrogateescape").stdout
 
 
 def manifested(pkg: Path, name: str) -> dict:
@@ -144,7 +145,8 @@ def scan(repo: Path, rev: str, scanned: dict, watch: dict) -> dict[str, list[dic
     words = {w: [re.compile(r"(?<![\w.])(?:[\w.]*\.)?%s(?![\w'])" % re.escape(c.split(".")[-1])) for c in e["mentions"]]
              for w, e in watch.items()}
     hits: dict[str, list[dict]] = {w: [] for w in watch}
-    files = [f for f in git(repo, "ls-tree", "-r", "--name-only", rev, "--", *scanned["sources"]).split() if f.endswith(".lean")]
+    files = [f for f in git(repo, "ls-tree", "-r", "-z", "--name-only", rev, "--", *scanned["sources"]).split("\0")
+             if f.endswith(".lean")]
     for f in files:
         text = strip_comments(git(repo, "show", f"{rev}:{f}"))
         for m in THEOREM.finditer(text):

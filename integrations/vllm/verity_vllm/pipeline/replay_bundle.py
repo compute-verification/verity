@@ -44,16 +44,18 @@ MANIFEST = "MANIFEST.json"
 #: the context's (unwritten) key for the sha256 of the files `write_store` hashed as it wrote them
 HASHED = "_hashed"
 ARGS = ("program_dir", "programs_root", "program_digest", "required_manifest", "replay_per_stratum", "replay_max", "replay_target", "replay_k",
-        "replay_workers", "replay_seed", "replay_challenge", "window_mb", "window_slots", "retain", "label", "serving_rows", "openings",
+        "replay_draw", "replay_workers", "replay_seed", "replay_challenge", "window_mb", "window_slots", "retain", "label", "serving_rows", "openings",
         "checkpoints", "workload", "weights_of_record", "checkpoint_dir")
 
 
-def path(out: str | os.PathLike, pair: int) -> Path:
-    return Path(out) / f"replay_bundle_p{pair}"
+def path(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> Path:
+    """The bundle of instrumented run ``pair``; a TP Commit's has one per rank (`pipeline.tp.commit_replay`)."""
+    return Path(out) / (f"replay_bundle_p{pair}" + (f"_rank{rank}" if rank is not None else ""))
 
 
-def partial(out: str | os.PathLike, pair: int) -> Path:
-    return Path(out) / f"replay_bundle_p{pair}.partial"
+def partial(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> Path:
+    p = path(out, pair, rank=rank)
+    return p.with_name(p.name + ".partial")
 
 
 def deferred_records(bundle: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -275,11 +277,11 @@ def weights_extra(com: Any, rc: Any, extra_names: set[str] | None = None) -> tup
 
 def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_names: set[str] | None = None,
                 digests: dict[str, str] | None = None, touched: SD.Touched | None = None,
-                extras: tuple[dict[str, Any], list[tuple[int, str, Any]]] | None = None) -> Path:
+                extras: tuple[dict[str, Any], list[tuple[int, str, Any]]] | None = None, rank: int | None = None) -> Path:
     """The bundle's store and weights, written into its partial dir (the rest follows at `seal`).  `extras`: `weights_extra`'s
     answer, read before (default: read here, with `extra_names`).  ``digests`` receives the sha256 of the store's step files as they
     were written (by their path in the bundle)."""
-    p = partial(out, pair)
+    p = partial(out, pair, rank=rank)
     if p.exists():
         shutil.rmtree(p)
     dumped: dict[str, str] = {}
@@ -303,12 +305,14 @@ def _sha256(p: Path) -> str:
     return h.hexdigest()
 
 
-def seal(out: str | os.PathLike, pair: int, context: dict[str, Any], binding_map: str | os.PathLike, *,
-         hashed: dict[str, str] | None = None) -> dict[str, Any]:
+def seal(out: str | os.PathLike, pair: int, context: dict[str, Any], binding_map: str | os.PathLike | None, *,
+         hashed: dict[str, str] | None = None, rank: int | None = None) -> dict[str, Any]:
     """Writes the context and the binding map into the partial bundle, then its manifest, and renames it into place.  ``hashed``: the
-    sha256 of files taken as they were written (`write_store`); every other file is read and hashed here."""
-    p, final = partial(out, pair), path(out, pair)
-    shutil.copyfile(binding_map, p / "binding_map.json")
+    sha256 of files taken as they were written (`write_store`); every other file is read and hashed here.  ``binding_map`` None: the
+    partial holds it already (a TP rank writes its own)."""
+    p, final = partial(out, pair, rank=rank), path(out, pair, rank=rank)
+    if binding_map is not None:
+        shutil.copyfile(binding_map, p / "binding_map.json")
     (p / "context.json").write_text(json.dumps({"schema": SCHEMA, **context}, default=str, separators=(",", ":")) + "\n")
     rels = sorted(x.relative_to(p).as_posix() for x in p.rglob("*") if x.is_file())
     with ThreadPoolExecutor(8) as pool:
@@ -323,8 +327,8 @@ def seal(out: str | os.PathLike, pair: int, context: dict[str, Any], binding_map
     return man | {"path": str(final), "sha256": _sha256(final / MANIFEST)}
 
 
-def discard(out: str | os.PathLike, pair: int) -> None:
-    shutil.rmtree(partial(out, pair), ignore_errors=True)
+def discard(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> None:
+    shutil.rmtree(partial(out, pair, rank=rank), ignore_errors=True)
 
 
 def open_bundle(bundle: str | os.PathLike) -> dict[str, Any]:

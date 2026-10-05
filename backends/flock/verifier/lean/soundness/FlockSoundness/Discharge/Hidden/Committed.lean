@@ -142,10 +142,9 @@ theorem bc_drawnH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : Li
   rw [← hchunk g hr]
   exact bc_pinned' L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
 
-/-- A row's message column (`Typed.msgCol`) in one of the row's compressions is `HmOut.delta`'s (`deltaMsgCol`). -/
-theorem msgCol_delta {c : Circuit} {g p b t : ℕ} (hk : b / 128 < ((HmRow.rowSlots c.ports).2[p]!).size) :
-    Typed.msgCol c g p b t = deltaMsgCol c g p b t := by
-  simp only [Typed.msgCol, deltaMsgCol, hk, ↓reduceIte]
+/-- A row's message column (`Typed.msgCol`, `HmRow.delta`'s) is `HmOut.delta`'s (`deltaMsgCol`). -/
+theorem msgCol_delta (c : Circuit) (g p b t : ℕ) : Typed.msgCol c g p b t = deltaMsgCol c g p b t := by
+  simp only [Typed.msgCol, deltaMsgCol, getElem!_eq_getD']
 
 section Msg
 
@@ -164,14 +163,11 @@ theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
     bytesOf (blockBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
         (Typed.msgCol st.c g (HmOut.nIn st.c + j)) =
       outBytes (blockBit (L.model regs) z o) st.c g j := by
-  obtain ⟨hp, hw⟩ := hrows j hj
+  have hG := outGroup_single hrows.2.1 hj
   unfold bytesOf outBytes
   congr 1
   funext b
   have hb := b.isLt
-  have hks : b.val / 128 < ((HmRow.rowSlots st.c.ports).2[HmOut.nIn st.c + j]!).size := by
-    rw [rowSlots_size hp, getElem!_eq_getD']
-    omega
   have hcopy : ∀ t : Fin 8,
       blockBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val) =
         blockBit (L.model regs) z o (outSrc st.c g j (b.val / 2) (8 * (b.val % 2) + t.val)) := fun t => by
@@ -181,19 +177,19 @@ theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
     have := msg_copy L L0 F0 hv1 hda hrows hz o hg hj (k := b.val / 2) (t := 8 * (b.val % 2) + t.val) (by omega)
       (by omega)
     rw [e1, e2] at this
-    rw [msgCol_delta hks]
+    rw [msgCol_delta]
     exact this
   by_cases hk : b.val / 2 < (st.c.outPorts.getD j default).2
   · simp only [hk, ↓reduceIte]
     congr 1
     funext t
-    rw [hcopy t, outSrc]
+    rw [hcopy t, outSrc, hG]
     simp only [hk, ↓reduceIte, Nat.add_assoc]
   · simp only [hk, ↓reduceIte]
     have h0 : (fun t : Fin 8 => blockBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val)) =
         fun _ => false := by
       funext t
-      rw [hcopy t, outSrc]
+      rw [hcopy t, outSrc, hG]
       simp only [hk, ↓reduceIte, hzero]
     rw [h0]
     simp [Binding.byteOf]
@@ -210,11 +206,11 @@ theorem outputs_committed' : OutputsCommitted := by
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by rw [s.da, hidden_delta']
-  have hrows : OutRows st.c := fun j hj => out_chunks hp hcr hj
+  have hrows : OutRows st.c := out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
   have hz0 := sat_flat L L0 F0 hv1 hda hrows hz
   have hupv := upv_pos F0.check ho
   have hzero : blockBit (L.model regs) z o (zeroCol st.c) = false := zero_bit L0 F0 hupv (show 0 < st.c.g by omega) hz0 o
-  obtain ⟨hpl, -⟩ := hrows j hj
+  obtain ⟨hpl, -⟩ := hrows.2.2 j hj
   have hbc : bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g (HmOut.nIn st.c + j)) =
       Binding.commitString
         ((HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words).data.toList ++

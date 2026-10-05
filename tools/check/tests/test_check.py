@@ -5,6 +5,8 @@ import importlib.util
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
@@ -15,8 +17,8 @@ def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/check/suites.py"), "--json", str(tmp_path / "suites.json")])
-    assert names[1] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[2] == ("flock-circuit-build", [str(ROOT / "backends" / "flock" / "check_build.sh")])
+    assert names[1] == ("flock-circuit-build", [str(ROOT / "backends" / "flock" / "check_build.sh")])
+    assert names[2] == ("circuit-check", ["-m", "circuit_check", "--all"])
     assert names[3] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
     assert names[4] == ("lean", "skipped: backends/flock/verifier/lean is not on this tree")
 
@@ -45,8 +47,9 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
 
 
 def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolchain_only(tmp_path, monkeypatch):
+    assert CHECK.rust_toolchain(), "check_build.sh pins its toolchain: an agent VM's default (1.83) can't build upstream"
     flock = tmp_path / "backends" / "flock"
-    files = {"backends/flock/check_build.sh": "x", "backends/flock/flock-sha512-b684b12.patch": "p",
+    files = {"backends/flock/check_build.sh": "set -e\n", "backends/flock/flock-sha512-b684b12.patch": "p",
              "backends/flock/live/src/lib.rs": "fn a() {}", "backends/flock/verifier/ci.py": "", "backends/flock/README.md": ""}
     for f, text in files.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
@@ -57,11 +60,18 @@ def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolcha
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "tracked_files", lambda: list(files))
     e = {"HOME": str(home), "PATH": "/nonexistent"}
-    assert CHECK.rust_tests_key(e) is None, "no rustc yet: the script installs one, and that run stores nothing"
     rustc.parent.mkdir(parents=True)
-    rustc.write_text("#!/bin/sh\necho 'rustc 1.98.1'\n")
+    rustc.write_text('#!/bin/sh\n[ "$RUSTUP_TOOLCHAIN" = 1.98.1 ] && [ "$RUSTUP_AUTO_INSTALL" = 0 ] || exit 1\necho "rustc $RUSTUP_TOOLCHAIN"\n')
     rustc.chmod(0o755)
+    assert CHECK.rust_tests_key(e) is None, "a script that pins no toolchain: what it runs is the machine's to decide"
+    (flock / "check_build.sh").write_text("set -e\nRUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.97.0}\n")
+    assert CHECK.rust_tests_key(e) is None, "the pin isn't installed yet: the script installs it, and that run stores nothing"
+    (flock / "check_build.sh").write_text("set -e\nRUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}\n")
+    rustc.rename(home / "rustc")
+    assert CHECK.rust_tests_key(e) is None, "no rustc yet: the script installs one, and that run stores nothing"
+    (home / "rustc").rename(rustc)
     key = CHECK.rust_tests_key(e)
+    assert key, "the key's rustc runs under the script's pin, and never installs it"
     (flock / "verifier" / "ci.py").write_text("changed")
     (flock / "README.md").write_text("changed")
     assert CHECK.rust_tests_key(e) == key
@@ -123,7 +133,8 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert (build, unit, audit, agree) == ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement")
     assert lake[-1].endswith("lake build")
     assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/flock-verify")
-    assert lean_audit[1].endswith("tools/check/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
+    assert lean_audit[1].endswith("tools/check/check.py") and lean_audit[2] == "--lean-slot"
+    assert lean_audit[4].endswith("tools/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
@@ -148,6 +159,13 @@ def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_pa
         got.unlink()
     monkeypatch.setenv(CHECK.LEAN_DEPS_URLS_ENV, "/somewhere/urls.json")                  # a local recorded run's launcher
     assert CHECK.take_lean_deps_urls(tmp_path) == Path("/somewhere/urls.json")
+
+
+def test_custody_deletes_the_lean_dependency_urls_wherever_a_run_leaves_them():
+    """A run of anything else, or a check that ends before `check.py` starts, leaves them in inputs/ for custody to delete."""
+    from research.store.custody import CREDENTIALS
+
+    assert f"inputs/{CHECK.LEAN_DEPS_URLS}" in CREDENTIALS
 
 
 def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch):
@@ -239,13 +257,14 @@ def test_a_recorded_runs_steps_require_the_store_and_get_its_custody_dir(tmp_pat
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     env = CHECK.env()
     assert env[CHECK.STORE_REQUIRED_ENV] == "1" and CHECK.CUSTODY_ENV not in env, "no key staged: required, nothing to pass"
+    assert env[CHECK.REGRESSION_ENV] == "1", "a recorded check blocks on the vLLM reference regression's T0 tier"
     (custody / "store.toml").write_text("[remote]\n")
     (custody / "cred.json").write_text("{}")
     env = CHECK.env()
     assert env[CHECK.CUSTODY_ENV] == str(custody.resolve()) and not any(k.startswith("RESEARCH_") for k in env)
     assert CHECK.CUSTODY_ENV not in CHECK._env_key(env), "the per-run path must not change what a pass is keyed on"
     monkeypatch.delenv("RESEARCH_RUN_ID")
-    assert CHECK.STORE_REQUIRED_ENV not in CHECK.env() and CHECK.CUSTODY_ENV not in CHECK.env()
+    assert not {CHECK.STORE_REQUIRED_ENV, CHECK.CUSTODY_ENV, CHECK.REGRESSION_ENV} & set(CHECK.env())
 
 
 def _repo(root: Path):
@@ -310,6 +329,68 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
         launched.clear()
 
 
+def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
+    """git reports a rename by its destination alone unless asked not to, which would leave out the step the file's old path
+    requires."""
+    import json
+    import subprocess
+    import sys
+    import tempfile
+
+    import research.store.local
+
+    def git(*args):
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tmp_path,
+                       check=True, capture_output=True)
+
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "check" / "tool.py").write_text(
+        "from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', command=['true'], "
+        "merge_requires={'lean-agreement': ['backends/flock/', '!README.md']})\n")
+    (tmp_path / "backends" / "flock").mkdir(parents=True)
+    (tmp_path / "backends" / "flock" / "verify.rs").write_text("fn main() {}\n")
+    git("init", "-q", "-b", "main")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    git("mv", "backends/flock/verify.rs", "verify.rs")
+    git("commit", "-q", "-m", "move")
+    (tmp_path / "upstream.json").write_text(json.dumps({"upstream": {"art": "art:u"}, "inputs": {"art": "art:i"}}))
+
+    class Store:
+        def fetch(self, art):
+            (tmp_path / art[4:]).write_text("")
+            return tmp_path / art[4:]
+
+    real, launched = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECK, "UPSTREAM_PIN", tmp_path / "upstream.json")
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(research.store.local, "LocalStore", Store)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(subprocess, "run", run)
+    assert CHECK.record(["--base", "HEAD^"]) == 0
+    [cmd] = launched
+    assert "flock_upstream=art:u" in cmd and "sending the pinned upstream build" in capsys.readouterr().out
+
+
+def test_check_refuses_a_python_that_imports_the_trees_packages_from_elsewhere(monkeypatch, capsys):
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    monkeypatch.setenv("PYTHONPATH", f"/tmp/s1350/packages/verity/src:{ROOT / 'tools/research/src'}")
+    probed = []
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda pkgs, env: probed.append(env.get("PYTHONPATH")) or "verity from /tmp/s1350/x.py")
+    monkeypatch.setattr(CHECK, "run", lambda *a: pytest.fail("a step ran"))
+    assert CHECK.main([]) == 2
+    assert "against another checkout's code (verity from /tmp/s1350/x.py)" in capsys.readouterr().err
+    assert probed == [str(ROOT / "tools/research/src")]
+
+
 def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setenv("VERITY_SKIP_STORE", "1")
@@ -317,7 +398,7 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
 
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
-    (pt,), (cc, build, rust), (lean,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("backends/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
@@ -327,15 +408,22 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
 
 
-def test_the_suites_that_use_lean_run_after_the_lean_steps_have_built_everything(tmp_path, monkeypatch):
+def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the_audit(tmp_path, monkeypatch):
     """Not beside `lake build`: whether their tests run or skip, and what `lake` finds built, must not depend on how far the
-    concurrent Lean group has got (verity-flock passed or failed on build order, r20260929-015410-5a20)."""
+    concurrent Lean group has got (verity-flock passed or failed on build order, r20260929-015410-5a20). The audit builds only
+    in scratch trees of its own, so it is a group of its own and nothing in the Lean group waits on it (r20261004-024819-11bc:
+    the audit's 3,238 s, then the suites' 979 s and the agreement's 515 s, one after another). The suites need only the
+    verifier lean-build built, so they wait on it alone and run beside the agreement (r20261004-150518-b201: 1,254 s, then
+    1,222 s)."""
     out, _ = _pinned(tmp_path, monkeypatch)
-    (_, pytest, _), = CHECK.groups(out, 8)[0]
-    lean = CHECK.groups(out, 8)[2]
-    assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-audit", "lean-suites", "lean-agreement"]
+    gs = CHECK.groups(out, 8)
+    (_, pytest, _), = gs[0]
+    lean = gs[2]
+    assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-agreement"]
+    assert [n for n, _, _ in gs[3]] == ["lean-audit"] and gs[3][0][1][4].endswith("tools/lean/lean_audit.py")
+    assert [n for n, _, _ in gs[5]] == ["lean-suites"] and CHECK.AFTER["lean-suites"] == "lean-build"
     assert all(pytest[pytest.index(s) - 1] == "--skip" for s in CHECK.AFTER_LEAN)
-    argv = lean[3][1]
+    argv = gs[5][0][1]
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
 
@@ -498,9 +586,33 @@ def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going
     assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: lean-changed failed"
 
 
+def test_a_rust_crate_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
+    """flock-circuit-build fails, with cargo's line, only once `slow` is running (the FIFO): under --keep-going `slow` stops."""
+    import os
+
+    gate = tmp_path / "gate"
+    os.mkfifo(gate)
+    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
+    build = _py("import sys\nopen(sys.argv[1]).read()\nprint('error: could not compile `flock-circuit` (lib)')\nsys.exit(101)", gate)
+    _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("flock-circuit-build", build, tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
+    by = {s["step"]: s for s in done}
+    assert not passed and by["flock-circuit-build"]["status"] == "failed" and by["flock-circuit-build"]["halts"]
+    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: flock-circuit-build failed"
+
+
+def test_a_build_that_fails_without_compiling_does_not_halt(tmp_path, monkeypatch):
+    """A failed clone or toolchain download: no `halts`, so (the Steps test below) the other groups keep their verdicts."""
+    build = _py("print('fatal: unable to access https://github.com/...')\nraise SystemExit(128)")
+    _fake_run(monkeypatch, [[("flock-circuit-build", build, tmp_path)]])
+    passed, (rec,) = CHECK.run(tmp_path, 1, keep_going=True)
+    assert not passed and rec["status"] == "failed" and "halts" not in rec
+
+
 def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
     steps = CHECK.Steps(tmp_path, keep_going=True)
     steps.end({"step": "pytest", "status": "failed"})
+    steps.end({"step": "flock-circuit-build", "status": "failed"})
     assert not steps.stopping
     steps.end({"step": "lean-changed", "status": "failed"})
     assert steps.stopping and steps.halted == "lean-changed"
@@ -509,15 +621,46 @@ def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_
     assert steps.stopping and steps.halted == "pytest"
 
 
+def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
+    """A lean-audit step that exits 0 passes only on an `audit.json` whose every package had the full audit: one with the kernel
+    replay. A fast-path result (`lean_changed.py --records`, of kind `FAST_KIND`, or any pass without the replay) fails it, and
+    so does an `audit.json` that can't be read."""
+    import json
+
+    kind = CHECK._load("lean_changed", CHECK.LEAN_JOBS).FAST_KIND
+    write = "import pathlib, sys\np = pathlib.Path(sys.argv[1])\np.parent.mkdir(exist_ok=True)\np.write_text(sys.argv[2])"
+    full = {"package": "a", "failures": [], "seconds": {"build": 1.0, "audit": 1.0, "replay": 1.0}}
+
+    def step(doc: dict | None) -> dict:
+        (tmp_path / "lean-audit" / "audit.json").unlink(missing_ok=True)
+        argv = _py(write, tmp_path / "lean-audit" / "audit.json", json.dumps(doc)) if doc is not None else _py("pass")
+        return CHECK._step("lean-audit", argv, tmp_path, tmp_path, True, CHECK.Steps(tmp_path, keep_going=True))
+
+    assert step({"passed": True, "failed": [], "packages": [full]})["status"] == "passed"
+    for b in ({"package": "b", "failures": [], "seconds": {"build": 1.0, "audit": 1.0}},
+              {**full, "package": "b", "kind": kind}):
+        rec = step({"passed": True, "failed": [], "packages": [full, b]})
+        assert rec["status"] == "failed" and rec["rc"] == 0 and rec["detail"].startswith(f"refused: b: a {kind} result"), rec
+    rec = step({"passed": True, "failed": [], "kind": kind, "packages": []})
+    assert rec["status"] == "failed" and f"a {kind} result" in rec["detail"]
+    rec = step(None)
+    assert rec["status"] == "failed" and rec["detail"].startswith("refused: no readable")
+    for bad in ([], {"packages": {"a": full}}, {"packages": ["a"]}):     # JSON, not an audit's report: it crashed check (#966)
+        rec = step(bad)
+        assert rec["status"] == "failed" and "is not an audit's report" in rec["detail"], rec
+    rec = step({"passed": True, "failed": [], "packages": [{**full, "seconds": ["replay"]}]})
+    assert rec["status"] == "failed" and rec["detail"].startswith(f"refused: a: a {kind} result"), rec
+
+
 def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
-    assert len(gs) == 4 and [n for n, _, _ in gs[3]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
-    argv = gs[3][0][1]
-    assert argv[1].endswith("tools/check/lean_changed.py")
-    assert argv[argv.index("--cache") + 1] == gs[2][2][1][gs[2][2][1].index("--cache") + 1], "the audit's own passes"
-    assert argv[argv.index("--deps") + 1] == gs[2][2][1][gs[2][2][1].index("--deps") + 1], "and its kept dependencies"
-    assert CHECK.groups(out, 8, cache=False)[3][0][1].startswith("skipped: --no-cache")
+    assert len(gs) == 6 and [n for n, _, _ in gs[4]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
+    argv, audit = gs[4][0][1], gs[3][0][1]
+    assert argv[1].endswith("tools/lean/lean_changed.py")
+    assert argv[argv.index("--cache") + 1] == audit[audit.index("--cache") + 1], "the audit's own passes"
+    assert argv[argv.index("--deps") + 1] == audit[audit.index("--deps") + 1], "and its kept dependencies"
+    assert CHECK.groups(out, 8, cache=False)[4][0][1].startswith("skipped: --no-cache")
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "no-verifier")
     assert len(CHECK.groups(out, 8)) == 3
 
@@ -532,6 +675,18 @@ def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_pa
     assert done[1]["detail"] == "not started: preflight-lock failed" and not marker.exists()
     _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
     assert CHECK.run(tmp_path, 2)[0] and marker.exists()
+
+
+def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, monkeypatch):
+    """Every train's check runs with --keep-going: a failed preflight must still end it in seconds, not hold its slot."""
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    for failing in ("preflight-lock", "preflight-lints"):
+        pre = [(n, _py("raise SystemExit(1)") if n == failing else _py("pass"), tmp_path) for n in ("preflight-lock", "preflight-lints")]
+        _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=pre)
+        ok, done = CHECK.run(tmp_path, 2, keep_going=True)
+        assert not ok and "pytest" not in {s["step"] for s in done} and not marker.exists(), failing
+        assert {s["step"]: s["status"] for s in done}[failing] == "failed"
 
 
 def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
@@ -575,3 +730,51 @@ def test_a_contradicted_cached_pass_is_named_in_the_result(tmp_path, monkeypatch
     r = RES.check(tmp_path, "r20260929-010000-abcd")
     assert r.valid, r.errors
     assert r.doc["cache_contradictions"] == bad and r.doc["nondeterministic"] == flaky
+
+
+def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_path, monkeypatch, capsys):
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"backends/flock/\\303\\251.py"`), which no prefix of the
+    agreement's rule matched, so `--record` checked such a change without sending the agreement's pinned build."""
+    import shutil
+    import subprocess
+    import sys
+    import tempfile
+
+    from research.store import local
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tmp_path,
+                       check=True, capture_output=True)
+
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    shutil.copy(ROOT / "tools" / "check" / "tool.py", tmp_path / "tools" / "check" / "tool.py")
+    git("init", "-q", "-b", "main")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    (tmp_path / "backends" / "flock").mkdir(parents=True)
+    (tmp_path / "backends" / "flock" / "é.py").write_text("x = 1\n")
+    git("checkout", "-q", "-b", "pr")
+    git("add", "-A")
+    git("commit", "-q", "-m", "é")
+
+    class Store:
+        def fetch(self, art: str) -> Path:
+            return tmp_path / art.replace(":", "_")
+
+    real, launched = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(local, "LocalStore", Store)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(subprocess, "run", run)
+    assert CHECK.record(["--base", "main"]) == 0
+    assert "check: changes under backends/flock/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
+    [cmd] = launched
+    assert any(x.startswith("flock_upstream=art:") for x in cmd)

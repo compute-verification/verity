@@ -11,8 +11,8 @@ import Pouw.SecurityProofs.PearlC.PeelExactProofs
 words' error left as a parameter.
 
 **(a) The noise cancels exactly.** The exact counterpart in the pinned order (`uQ4`: every chain, FMA, add, `RN_bf16` and
-K16 step exact) is `(A′ − E_A·F_Aᵀ)·(B̃ − E_B·F_Bᵀ)ᵀ` on any values (`uQ4_cancel`, by `Peel.peelU_cancel`). On the served
-operands (`opVal`: code value times block scale; `basisVal`; the peel's noise rows `beVal`), with Pearl-C4's rows
+K16 step exact) is `(A′ − E_A·F_Aᵀ)·(B̃ − E_B·F_Bᵀ)ᵀ` on any values (`uQ4_cancel`, by
+`PeelExactProofs.peelUQ_cancel`). On the served operands (`opVal`: code value times block scale; `basisVal`; the peel's noise rows `beVal`), with Pearl-C4's rows
 `Ẽ = eTilde E a_E`, each row entry is `E·a_E/16` exactly (`bfVal_eTilde`, all 16 codes × 128 scale bytes by the kernel),
 so the noise the peel cancels is the noise atom's, `E′ = E·a_E·2⁻⁴` against `F` (`uQ4_cancel_served`).
 
@@ -103,11 +103,11 @@ theorem uQ4_eq_sum (i : Fin m) (j : Fin n) :
     uQ4 A' B' FA FB EA EB i j = cQ4 A' B' i j + ∑ t, paQ4 A' FB EA i t * pbQ4 B' FA FB EB j t := by
   unfold uQ4; exact foldl_k16Q _ _ _
 
-/-- The exact counterpart is #311's U with unit `β`, `C̃ = A′·B̃ᵀ` and the noise `⟨E_A, F_A, E_B, F_B⟩`. -/
-theorem uQ4_eq_peelU (i : Fin m) (j : Fin n) :
-    uQ4 A' B' FA FB EA EB i j = peelU (A' * B'ᵀ) (fun _ => 1) (fun _ => 1) A' B' ⟨EA, FA, EB, FB⟩ i j := by
+/-- The exact counterpart is #311's U with unit `β`, `C̃ = A′·B̃ᵀ` and the noise `E_A, F_A, E_B, F_B` (`peelUQ`). -/
+theorem uQ4_eq_peelUQ (i : Fin m) (j : Fin n) :
+    uQ4 A' B' FA FB EA EB i j = peelUQ (A' * B'ᵀ) A' B' EA FA EB FB i j := by
   rw [uQ4_eq_sum]
-  simp only [peelU, Matrix.add_apply, Matrix.mul_apply, transpose_apply]
+  simp only [peelUQ, Matrix.add_apply, Matrix.mul_apply, transpose_apply]
   congr 1
   refine (Fintype.sum_equiv (finSumFinEquiv : Fin 32 ⊕ Fin 32 ≃ Fin 64) _ _ ?_).symm
   rintro (t | t)
@@ -116,9 +116,9 @@ theorem uQ4_eq_peelU (i : Fin m) (j : Fin n) :
     have e2 : pbQ4 B' FA FB EB j (finSumFinEquiv (m := 32) (n := 32) (Sum.inl t)) =
         accQ4 FA FB EB j t - bfQ4 B' FA j t := by simp [pbQ4, hv]
     rw [e1, e2]
-    simp only [peelLeft, peelRight, fromCols_apply_inl, rowScale_one]
+    simp only [fromCols_apply_inl]
     congr 1
-    simp only [accQ4, gQ4, bfQ4, Matrix.mul_apply, Matrix.sub_apply, Noise.NB, transpose_apply]
+    simp only [accQ4, gQ4, bfQ4, Matrix.mul_apply, Matrix.sub_apply, transpose_apply]
     simp only [Finset.sum_mul, Finset.mul_sum, sub_mul, Finset.sum_sub_distrib]
     rw [Finset.sum_comm]
     simp only [mul_assoc]
@@ -128,14 +128,12 @@ theorem uQ4_eq_peelU (i : Fin m) (j : Fin n) :
     have e2 : pbQ4 B' FA FB EB j (finSumFinEquiv (m := 32) (n := 32) (Sum.inr t)) = -EB j t := by
       simp [pbQ4, hv]
     rw [e1, e2]
-    simp only [peelLeft, peelRight, fromCols_apply_inr, rowScale_one, afQ4, Matrix.mul_apply, Matrix.neg_apply,
-      mul_neg]
+    simp only [fromCols_apply_inr, afQ4, Matrix.mul_apply, Matrix.neg_apply, mul_neg]
 
 /-- **(a) The noise cancels exactly**: U's exact counterpart in the pinned order is `(A′ − E_A·F_Aᵀ)·(B̃ − E_B·F_Bᵀ)ᵀ`. -/
 theorem uQ4_cancel (i : Fin m) (j : Fin n) :
     uQ4 A' B' FA FB EA EB i j = ((A' - EA * FAᵀ) * (B' - EB * FBᵀ)ᵀ) i j := by
-  rw [uQ4_eq_peelU, Peel.peelU_cancel, rowScale_one, rowScale_one]
-  rfl
+  rw [uQ4_eq_peelUQ, peelUQ_cancel]
 
 end Exact
 

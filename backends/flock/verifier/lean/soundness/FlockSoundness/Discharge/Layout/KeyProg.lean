@@ -77,6 +77,9 @@ theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Str
   have hall := rowSlots_all c.ports
   have hpv := C.perVu_sha
   unfold Typed.msgCol
+  rw [show HmRow.byteAt c.ports[p]! byte = ((HmRow.byteAt c.ports[p]! byte).1, byte % 128) from
+    Prod.ext rfl (Typed.byteAt_snd _ _)]
+  generalize (HmRow.byteAt c.ports[p]! byte).1 = kk
   generalize hrs : HmRow.rowSlots c.ports = rs at hws hall hpv
   obtain ⟨nSha, where_⟩ := rs
   simp only at hws hall hpv ⊢
@@ -111,14 +114,14 @@ theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Str
         omega
     exact hat.lt (fun r hr => (C.bound_slotLog r hr).1) hm
   rename_i hkw
-  have hent : (where_[p]!)[byte / 128]!.1 < nSha ∧ (where_[p]!)[byte / 128]!.2 < 3 :=
+  have hent : (where_[p]!)[kk]!.1 < nSha ∧ (where_[p]!)[kk]!.2 < 3 :=
     hall _ (getElem_mem_toList' (by rw [hws]; exact hp)) _ (getElem_mem_toList' hkw)
   obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range _ P.shaNet)
   have hc := C.count _ hm _ hk
   have hsl := ((C.bound_slotLog _ hm).2 _ hk).symm
   obtain ⟨-, hW, hports⟩ := (nets_ok P c.shaNet).1
   obtain ⟨hsz, hsin⟩ := C.sha_in
-  generalize hE : (where_[p]!)[byte / 128]! = e at hent ⊢
+  generalize hE : (where_[p]!)[kk]! = e at hent ⊢
   obtain ⟨slot, sub⟩ := e
   simp only at hent ⊢
   have hsub : 2 * sub + 1 < 6 := by omega
@@ -455,6 +458,7 @@ theorem keyProg_bcPinned
   exact this
 
 include hparse in
+set_option linter.unusedVariables false in
 /-- **`BcSite` at a site of `keyProg`'s places** in a circuit whose unit returns the outputs: the VU is below
 `2^⌊log₂ c.g⌋` by the parse (`vu_lt_pow2`), the proved units are in the population by the draw's decoding
 (`proved_lt_population`), and the other conditions are `BcSite`'s. -/
@@ -470,7 +474,7 @@ theorem bcSite_keyProg (ho : c.outNet = c.unitNet) {S : Finset (Fin n)} {R : Reg
   have hc := (si.acc S R u h).c_eq (hparse S R u h)
   have hv := si.hvu S R u h
   rw [hc] at hv
-  refine ⟨d, D, hd, hD, proved_lt_population hD, hregs, hpop, hpt, ?_, ?_⟩
+  refine ⟨d, D, hd, hD, proved_lt_population hD, hregs, hpop, ?_, ?_⟩
   · rw [hc]; exact vu_lt_pow2 (hparse S R u h) ho hv
   · rw [hc]; exact hu
 

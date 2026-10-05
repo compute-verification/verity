@@ -314,6 +314,9 @@ EOF
 )"
   eval "ITEM_ARGS=($(submit_args "$1"))"
   research=(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research)
+  # node 2's store has no remote, so `research run` refuses without this (an environment variable: older job trees' research has
+  # no --local-only); home() is the fast path
+  export RESEARCH_LOCAL_ONLY="node 2's n2-custody timer (n2_custody.sh) takes every ended run under /workspace/jobs/runs to node 1's store and R2"
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules
   [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
 }
@@ -621,7 +624,7 @@ print(int(max(0, min(nom + bl - use, max(nom - use, idle)))))
 
 # move each held Commit on a staged checkpoint to node 2 (node 2 first: top-level, 1 Oct 12:14 AM PDT, with node 2's GPUs idle and
 # its disk at 38%; VY_N2_FIRST=0 restores circuits' 30 Sep 7:24 PM rule, only while n1_free prints 0) while node 2 has fewer than
-# VY_N2_MAX_COMMITS Verity Commits queued; `offload --loop` repeats every VY_OFFLOAD_EVERY_S (tmux `n2-commit-offload` on node 1,
+# VY_N2_MAX_COMMITS Verity Commits queued; `offload --loop` repeats every VY_OFFLOAD_EVERY_S (unit vy-n2-commit-offload on node 1,
 # as research)
 offload() {
   case "${1:-}" in

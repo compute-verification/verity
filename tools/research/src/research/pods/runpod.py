@@ -36,6 +36,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import tomllib
 import urllib.error
@@ -99,7 +100,7 @@ def ssh_key() -> Path:
     except OSError:
         pass
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{threading.get_ident()}")     # threads of one process resolve it at once
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
         os.fchmod(fd, 0o600)
