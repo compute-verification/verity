@@ -1,0 +1,19 @@
+name = "run_model"
+version = "0.1.0"
+defaultTargets = ["run-model"]
+
+[leanOptions]
+autoImplicit = false
+
+# Only `Flock.Hash` is imported (SHA-512, no imports of its own): a party program composes other components'
+# dependency-free executables, and the package still needs nothing but the Lean toolchain.
+[[require]]
+name = "flock_verifier"
+path = "../../../backends/flock/verifier/lean"
+
+[[lean_lib]]
+name = "RunModel"
+
+[[lean_exe]]
+name = "run-model"
+root = "Main"
