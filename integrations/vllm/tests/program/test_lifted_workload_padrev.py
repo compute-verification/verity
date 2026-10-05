@@ -253,7 +253,7 @@ def test_f_pad_19_per_request_caps_the_hook_equals_the_independent_reference_on_
     want = [sum(ref[rid][t - a] for rid, a, c in zip(("A", "B"), arrivals, caps) if 0 <= t - a < c) for t in range(H)]
     assert [L.payload(L.N_LIVE_BITS, x) for x in n_live] == want and all(L.is_active(L.N_LIVE_BITS, x) for x in n_live)
     assert max(want) == 2 and 0 in want   # both live somewhere; A's window outlives both its stop and B's cap, so some step has no live request
-    from verity_vllm.program.registry.topp_split import splits_for
+    from verity_vllm.program.registry.topp_geometry import splits_for
     for t in range(H):
         if want[t] == 0:
             assert L.is_bot(L.SPLITS_BITS, S_t[t]), t

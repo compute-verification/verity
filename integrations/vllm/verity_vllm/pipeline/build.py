@@ -196,7 +196,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     assumption about the schedule.  Its Program takes S as a per-event CONSTANT (`sampling["splits"]` = that int; `Const32[S]` the
     select's 6th operand, computed here from the target's SM count, never hard-coded) and has no `splits` input; the circuit then
     anchors S itself.  A workload of several requests keeps the derived input above."""
-    from verity_vllm.program.registry.topp_split import SPLIT_MAX_BATCH, splits_for, splits_for_v1
+    from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for, splits_for_v1
     kind = sampling.get("kind")
     if kind != "stochastic":
         return None

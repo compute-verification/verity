@@ -745,7 +745,7 @@ class ContinuationChain:
 
 # --- CANDIDATE PAD-04 (F-pad-11; stoch M-0093; padrev M-0102): the S-migration operand -----------------------------------------
 
-SPLITS_MAX_BATCH = 64  # `topp_split.SPLIT_MAX_BATCH`: above it vLLM serves the sampler batch by the sort path (no `_apply_topp_split`)
+SPLITS_MAX_BATCH = 64  # `topp_geometry.SPLIT_MAX_BATCH`: above it vLLM serves the sampler batch by the sort path (no `_apply_topp_split`)
 N_LIVE_BITS = 7  # the unlifted count `n_live_t ∈ [0, 64]` as a `Value<7>` (a CANDIDATE width — PAD-04)
 SPLITS_BITS = 6  # stoch's `SPLITS_FOR_V1_WIDTH`: S ∈ {1, 2, 4, 8, 16, 32}
 _SPLITS_FOR: dict[int, PrimitiveDefinition] = {}
@@ -753,19 +753,19 @@ _L_SPLITS_FOR: dict[int, PrimitiveDefinition] = {}
 
 
 def _splits_for_v1(n_live: int, num_sms: int) -> int:
-    """stoch's `SplitsFor_v1` (lane/r16-stoch c1ec0aea4 `topp_split.splits_for_v1`) when the tree has it; otherwise the same
+    """stoch's `SplitsFor_v1` (lane/r16-stoch c1ec0aea4 `topp_geometry.splits_for_v1`) when the tree has it; otherwise the same
     domain rule (verbatim) over the base tree's `splits_for` loop.  Refuses by name outside `1 ≤ n_live ≤ 64`, `num_SMs ≥ 1`."""
-    from verity_vllm.program.registry import topp_split as TS
-    f = getattr(TS, "splits_for_v1", None)
+    from verity_vllm.program.registry import topp_geometry
+    f = getattr(topp_geometry, "splits_for_v1", None)
     if f is not None:
         return int(f(n_live, num_sms))
     n, m = int(n_live), int(num_sms)
-    if n < 1 or n > TS.SPLIT_MAX_BATCH:
-        raise ValueError(f"SplitsFor_v1: n_live={n} outside the domain 1..{TS.SPLIT_MAX_BATCH} (0 = no sampling event; > {TS.SPLIT_MAX_BATCH} = not the split pipeline)")
+    if n < 1 or n > topp_geometry.SPLIT_MAX_BATCH:
+        raise ValueError(f"SplitsFor_v1: n_live={n} outside the domain 1..{topp_geometry.SPLIT_MAX_BATCH} (0 = no sampling event; > {topp_geometry.SPLIT_MAX_BATCH} = not the split pipeline)")
     if m < 1:
         raise ValueError(f"SplitsFor_v1: num_SMs={m} is not a target profile")
-    s = TS.splits_for(n, m)
-    assert 1 <= s <= TS.SPLIT_MAX_SPLITS and s & (s - 1) == 0 and s < (1 << SPLITS_BITS)
+    s = topp_geometry.splits_for(n, m)
+    assert 1 <= s <= topp_geometry.SPLIT_MAX_SPLITS and s & (s - 1) == 0 and s < (1 << SPLITS_BITS)
     return s
 
 

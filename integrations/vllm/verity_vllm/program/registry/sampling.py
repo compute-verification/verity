@@ -35,12 +35,12 @@ import struct
 
 from verity.ir.defs import PrimitiveDefinition, bind, composite
 from verity.ir.refs import tuple_of
-from verity.ml.scalar import BitNot, BitOr, F32Eq
-from verity_vllm.program.registry import prims as P
+from verity.ml.scalar import BF16, BIT, BitNot, BitOr, F32, F32Eq, I32, I32Add, SelectF32, SelectI32
 from verity_vllm.program.registry import ref_prims as RP
-from verity_vllm.program.registry.b1 import const
-from verity_vllm.program.registry.prims import BF16, BIT, F32, I32
 from verity.ir.types import Array, Tuple, Value
+from verity.ml.fp32 import F32AddFtz, F32Mul
+from verity.ml.mufu import DivFullRcp, DivFullScaleA
+from verity.ml.prims import Bf16ToF32, const
 
 SEMANTIC_ID = "sampling/GumbelTokenSelect@v1"
 
@@ -140,32 +140,6 @@ def add_ftz(a: int, b: int) -> int:
     return _ftz(_round_exact(s, e))
 
 
-def add_rz_ftz_v1_model(a: int, b: int) -> int:
-    """[F-stoch-r17-01 WITNESS -- not an evaluator] the `add.rz.ftz.f32` model that `nv_log1pf` used up to R17 (stoch M-0581 / revb
-    M-0603), kept word for word so the finding stays reproducible: it is round-to-NEAREST, not toward zero -- both toward-zero branches
-    step the fp32 value `rf` with `math.nextafter(rf, 0.0)` (one DOUBLE ulp) and `_u` rounds that straight back to `rf`'s word, so
-    add_rz_ftz_v1_model(a, b) == ftz(RN32(a + b)) on every input (0 differences on 300,000 random pairs; a true RZ differs on 21.5 %).
-
-    Its only caller was `nv_log1pf` (`__fadd_rz(a, 1.0f)`), where the sum feeds ONLY the binade selector `e`; the exhaustive scan of all
-    2^32 words (test_sampling_rows, opt-in) shows nv_log1pf under this model and under the true RZ (`add_rz_ftz`) differ on exactly ONE
-    word, a = 0x3EFFFFFF (+0.49999997, a positive input the Gumbel lane never forms: it feeds -u, u in [2^-31', 1)).  GumbelNoiseLane_v1's
-    word map is therefore the same function under either add; the registered evaluator now uses the true RZ (`nv_log1pf`) and this
-    model is referenced by the tests alone."""
-    fa, fb = _f(_ftz(a)), _f(_ftz(b))
-    s = fa + fb
-    if s == 0.0 or math.isinf(s) or math.isnan(s):
-        return _ftz(_u(s))
-    bb = s - fa
-    e = (fa - (s - bb)) + (fb - bb)
-    r = _u(s)
-    rf = _f(r)
-    if abs(rf) > abs(s):
-        r = _u(math.nextafter(rf, 0.0))          # dead: a double ulp below rf rounds back to rf (F-stoch-r17-01)
-    elif rf == s and e != 0.0 and (e < 0) == (s > 0):
-        r = _u(math.nextafter(rf, 0.0))          # dead, the same way
-    return _ftz(r)
-
-
 def add_rz_ftz(a: int, b: int) -> int:
     """`add.rz.ftz.f32`: a + b rounded TOWARD ZERO in fp32 (libdevice `__fadd_rz`) -- the v2 evaluator (F-stoch-r17-01 fix).
 
@@ -242,12 +216,6 @@ def nv_logf_gpu(a: int) -> int:
 def nv_log1pf_gpu(a: int) -> int:
     """`nv_log1pf` with every NaN result `LOG_NAN`, the GPU's; every other word is `nv_log1pf`'s."""
     return _gpu_nan(nv_log1pf(a))
-
-
-def nv_log1pf_v1_model(a: int) -> int:
-    """[F-stoch-r17-01 WITNESS] `nv_log1pf` as it evaluated up to R17: `__fadd_rz` modelled RN (`add_rz_ftz_v1_model`).  Test-only:
-    the exhaustive comparison with `nv_log1pf` is the proof that the registered lane did not move."""
-    return _log1pf_from_sum(a & M32, add_rz_ftz_v1_model(a & M32, ONE_BITS))
 
 
 def _log1pf_from_sum(a: int, s: int) -> int:
@@ -359,9 +327,9 @@ GumbelNoiseLaneV2 = PrimitiveDefinition(
 def TemperatureLane(B, S, x, temp, rcp, skip):
     """One lane of `_temperature_kernel` on the fp32 widening of a bf16 logit: `div.full.f32(f32(x), T)` =
     F32Mul(DivFullScaleA(f32(x), T), DivFullRcp(T)); the widening alone when the kernel early-returns (T in {0, 1})."""
-    xf = B.call(P.Bf16ToF32, x)
-    q = B.call(P.F32Mul, B.call(P.DivFullScaleA, xf, temp), rcp)
-    return B.call(P.SelectF32, skip, xf, q)
+    xf = B.call(Bf16ToF32, x)
+    q = B.call(F32Mul, B.call(DivFullScaleA, xf, temp), rcp)
+    return B.call(SelectF32, skip, xf, q)
 
 
 @composite("TemperatureScale", 1, ["V"], lambda S: ((("logits", Array(S.V, BF16)), ("temp", F32)), Array(S.V, F32)),
@@ -369,7 +337,7 @@ def TemperatureLane(B, S, x, temp, rcp, skip):
 def TemperatureScale(B, S, logits, temp):
     """`Sampler.apply_sampling_params`: `logits32 = f32(logits)`; `_temperature_kernel`: `logits32 /= T` in place unless T in {0, 1}
     (the kernel's early return).  Triton fp32 `/` is `div.full.f32` (registry model, bit-exact on the B1 temp07 capture)."""
-    rcp = B.call(P.DivFullRcp, temp)
+    rcp = B.call(DivFullRcp, temp)
     skip = B.call(BitOr, B.call(F32Eq, temp, B.call(const(32, 0))), B.call(F32Eq, temp, B.call(const(32, ONE_BITS))))
     return B.batch(TemperatureLane, logits, temp, rcp, skip, axes=(0, None, None, None))
 
@@ -381,11 +349,11 @@ def GumbelSelectStep(B, S, carry, x, key, noisy):
     first maximum wins; NaN never wins); i += 1."""
     best, best_i, i = carry[0], carry[1], carry[2]
     g = B.call(GumbelNoiseLane, key, i)
-    y = B.call(P.SelectF32, noisy, B.call(P.F32AddFtz, x, g), x)
+    y = B.call(SelectF32, noisy, B.call(F32AddFtz, x, g), x)
     gt = B.call(RP.F32GtStrict, y, best)
-    nb = B.call(P.SelectF32, gt, y, best)
-    ni = B.call(P.SelectI32, gt, i, best_i)
-    nxt = B.call(P.I32Add, i, B.call(const(32, 1)))
+    nb = B.call(SelectF32, gt, y, best)
+    ni = B.call(SelectI32, gt, i, best_i)
+    nxt = B.call(I32Add, i, B.call(const(32, 1)))
     return tuple_of(tuple_of(nb, ni, nxt), ni)
 
 
@@ -399,7 +367,7 @@ def GumbelSelectF32(B, S, logits, seed, pos, temp):
     key = B.call(GumbelStreamKey, seed, pos)
     noisy = B.call(BitNot, B.call(F32Eq, temp, B.call(const(32, 0))))
     zero = B.call(const(32, 0))
-    y0 = B.call(P.SelectF32, noisy, B.call(P.F32AddFtz, logits[0], B.call(GumbelNoiseLane, key, zero)), logits[0])
+    y0 = B.call(SelectF32, noisy, B.call(F32AddFtz, logits[0], B.call(GumbelNoiseLane, key, zero)), logits[0])
     init = tuple_of(y0, zero, B.call(const(32, 1)))
     step = B.scan(GumbelSelectStep, init, xs=(logits[1:S.V],), shared=(key, noisy))
     return step[0][1]
@@ -420,14 +388,14 @@ def GumbelTokenSelect(B, S, logits, seed, pos, temp):
 # ---------------------------------------------------------------------------------------------------------
 #
 # The pipeline masks a row IN PLACE to -inf outside the nucleus; its keep predicate per lane is a function of the whole fp32 row,
-# p, and S (the split count = f(sampler batch size, SM count), `topp_split.splits_for`).  A primitive returns exactly one Value and
+# p, and S (the split count = f(sampler batch size, SM count), `topp_geometry.splits_for`).  A primitive returns exactly one Value and
 # a per-lane Array-input primitive would cost V^2 operand references, so the row-level result is ONE `Value<V>` keep word
 # (`TopPMaskWordx{V}`, reference = `topp_split.topp_keep_row`, bit-exact on 63 captured + 368 random rows over 11 V and on the R16 GPU
 # fixture at every S) and `TopPMask_v1{V}` applies it lane by lane (`SelectF32(BitAt(keep, i), x, -inf)`) so the masked row IS an
 # Array Program value the Gumbel select composes into.
 #
 # [R16 stoch, coord M-0169 / global M-0189 (1)] S is an OPERAND (i32), not a static: the split count is the launch geometry
-# S_t = SplitsFor_v1(|live(t)|, num_SMs) (`topp_split.splits_for_v1`), a WORKLOAD-level derived value -- the request Program reads it
+# S_t = SplitsFor_v1(|live(t)|, num_SMs) (`topp_geometry.splits_for_v1`), a WORKLOAD-level derived value -- the request Program reads it
 # from its request-owned `splits` Input per sampling event, the fold carries the split kernels' constexpr S as a `Const32[S]` operand,
 # and the Match checks the relation per engine step (GM-01 G6 'sampler geometry').  The keep word is TOTAL over the i32 operand:
 # an S outside {1, 2, 4, 8, 16, 32} keeps no lane (`topp_keep`), a word no launched S produces; it never defaults to a split count.
@@ -506,8 +474,8 @@ def bit_at(width: int) -> PrimitiveDefinition:
            conformance="exact-model-tested")
 def TopPMaskStep(B, S, i, x, keep):
     """One lane of `_topp_sb_mask_kernel`'s store: `tl.where(keep, x, -inf)`; i += 1."""
-    y = B.call(P.SelectF32, B.call(bit_at(S.V), keep, i), x, B.call(const(32, NEG_INF_BITS)))
-    return tuple_of(B.call(P.I32Add, i, B.call(const(32, 1))), y)
+    y = B.call(SelectF32, B.call(bit_at(S.V), keep, i), x, B.call(const(32, NEG_INF_BITS)))
+    return tuple_of(B.call(I32Add, i, B.call(const(32, 1))), y)
 
 
 @composite("TopPMask", 1, ["V"], lambda S: ((("logits", Array(S.V, F32)), ("top_p", F32), ("splits", I32)), Array(S.V, F32)),
@@ -547,7 +515,7 @@ def GumbelTopPTokenSelect(B, S, logits, top_p, seed, pos, temp, splits):
            conformance="exact-model-tested")
 def TemperatureScaleGivenGreedy(B, S, logits, temp, greedy):
     """`TemperatureScale_v1{V}` with `greedy` = (temp == 0) read, not computed: the early return is greedy | (temp == 1)."""
-    rcp = B.call(P.DivFullRcp, temp)
+    rcp = B.call(DivFullRcp, temp)
     skip = B.call(BitOr, greedy, B.call(F32Eq, temp, B.call(const(32, ONE_BITS))))
     return B.batch(TemperatureLane, logits, temp, rcp, skip, axes=(0, None, None, None))
 
@@ -559,7 +527,7 @@ def GumbelSelectF32GivenGreedy(B, S, logits, seed, pos, greedy):
     key = B.call(GumbelStreamKey, seed, pos)
     noisy = B.call(BitNot, greedy)
     zero = B.call(const(32, 0))
-    y0 = B.call(P.SelectF32, noisy, B.call(P.F32AddFtz, logits[0], B.call(GumbelNoiseLane, key, zero)), logits[0])
+    y0 = B.call(SelectF32, noisy, B.call(F32AddFtz, logits[0], B.call(GumbelNoiseLane, key, zero)), logits[0])
     init = tuple_of(y0, zero, B.call(const(32, 1)))
     step = B.scan(GumbelSelectStep, init, xs=(logits[1:S.V],), shared=(key, noisy))
     return step[0][1]
@@ -585,16 +553,6 @@ def GumbelTopPTokenSelectSharedGreedy(B, S, logits, top_p, seed, pos, temp, spli
     return B.call(bind(GumbelSelectF32GivenGreedy, V=S.V), masked, seed, pos, greedy)
 
 
-#: each restated select by the Definition it restates (bound under `TargetProfile.sampler_construction = "shared-greedy"`, the default)
-SHARED_GREEDY = {"GumbelTokenSelect_v1": GumbelTokenSelectSharedGreedy, "GumbelTopPTokenSelect_v1": GumbelTopPTokenSelectSharedGreedy}
-
-
-def select_for(select, construction: str):
-    """The stochastic select a `sampler_construction` binds for `select` (a `SHARED_GREEDY` key): its `SHARED_GREEDY` entry under
-    `shared-greedy`, `select` itself under `greedy-check-per-stage`."""
-    return SHARED_GREEDY[select.id] if construction == "shared-greedy" else select
-
-
 def f32_bits(x: float) -> int:
     return struct.unpack("<I", struct.pack("<f", float(x)))[0]
 
@@ -602,6 +560,4 @@ def f32_bits(x: float) -> int:
 __all__ = ["SEMANTIC_ID", "GumbelStreamKey", "GumbelNoiseLane", "F32Eq", "BitOr", "BitNot", "TemperatureLane", "TemperatureScale",
            "GumbelSelectStep", "GumbelSelectF32", "GumbelTokenSelect", "stream_key", "noise_lane", "nv_logf", "nv_log1pf", "fma_ftz",
            "add_rz_ftz", "f32_bits", "topp_mask_word", "bit_at", "TopPMaskStep", "TopPMask", "GumbelTopPTokenSelect", "NEG_INF_BITS",
-           "SPLIT_COUNTS", "LOG_NAN", "GumbelNoiseLaneV2", "nv_logf_gpu", "nv_log1pf_gpu", "noise_lane_gpu",
-           # F-stoch-r17-01 witnesses (test-only, not evaluators)
-           "add_rz_ftz_v1_model", "nv_log1pf_v1_model"]
+           "SPLIT_COUNTS", "LOG_NAN", "GumbelNoiseLaneV2", "nv_logf_gpu", "nv_log1pf_gpu", "noise_lane_gpu"]
