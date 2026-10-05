@@ -1044,7 +1044,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
             body = body[m.end():]                                    # `--to @ci` with a body that starts `@ci` names it once
         text = " ".join([*(tag(t) for t in to), body])
     ch = channel_id(ns, reg, FRONT_DOOR) if not ns.thread else channel_id(ns, reg)
-    tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if ns.quiet else "") if t)
+    quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
+    tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if quiet else "") if t)
     _post(client(ns), ch, h["handle"], text, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent, tags=tags)
     return 0
 
@@ -1824,7 +1825,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
-                   help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; fyi; ...)")
+                   help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; "
+                        "fyi, which implies --quiet; ...)")
     p.add_argument("--verify", default=None, metavar="CMD", help="announce: a required action, and the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="announce: code it runs, pinned")
     p.add_argument("--quiet", action="store_true", help="wake only the names it starts with: no reply needed (digests still get it)")
