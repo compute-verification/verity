@@ -34,148 +34,177 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   }
  },
- "pins": {
+ "guarantees": {
   "Verity.SecurityProofs.AdaEqAmpere": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.AdaEqAmpere : Verity.Guarantees.AdaEqAmpere"],
    "assumptions": [],
    "type_hash": "4ef7acbed8eccd0f5171a7763ffc7cbff36880f51912d34b3bfe1659ff7ab177"
   },
   "Verity.SecurityProofs.AmpereStepComplete": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.AmpereStepComplete : Verity.Guarantees.AmpereStepComplete"],
    "assumptions": [],
    "type_hash": "4faf8d07c32dd325668f647d2117ee51e6798de430cf86a272451f996839e028"
   },
   "Verity.SecurityProofs.AmpereStepHw": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.AmpereStepHw : Verity.Guarantees.AmpereStepHw"],
    "assumptions": [],
    "type_hash": "5266aec3cc904fefc52e1f1798f6d95b43817da9faecf1e2a7bd07bfdc8f0624"
   },
   "Verity.SecurityProofs.AmpereStepIff": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.AmpereStepIff : Verity.Guarantees.AmpereStepIff"],
    "assumptions": [],
    "type_hash": "f7bf3bc7345da650b05e97c0aba43be11680cbba65c1e0c3376cd6b21cfed7ab"
   },
   "Verity.SecurityProofs.AmpereStepSound": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.AmpereStepSound : Verity.Guarantees.AmpereStepSound"],
    "assumptions": [],
    "type_hash": "0192fd75b60eaebfc2a12b03b5a6bc38bcae9adb7f495e7f039f9781bb18b9e2"
   },
   "Verity.SecurityProofs.AmpereUnitBf16": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.AmpereUnitBf16 : Verity.Guarantees.AmpereUnitBf16"],
    "assumptions": [],
    "type_hash": "b358390ebc06a84715ef19d9b9a70ae7717e7f5cea1d794e2c2ced0265f674a3"
   },
   "Verity.SecurityProofs.AmpereUnitSound": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.AmpereUnitSound : Verity.Guarantees.AmpereUnitSound"],
    "assumptions": [],
    "type_hash": "ae5939be57fde5a396f851a991509c3d86cdd02853fa4bdd2e29f38fb9a2eb4d"
   },
   "Verity.SecurityProofs.AmpereUnitSoundZero": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.AmpereUnitSoundZero : Verity.Guarantees.AmpereUnitSoundZero"],
    "assumptions": [],
    "type_hash": "cf6ae741ac5e875201f2ca2733ffda1969bd047946b299c8af7546edd595eaf8"
   },
   "Verity.SecurityProofs.Compose": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.Compose : Verity.Guarantees.Compose"],
    "assumptions": [],
    "type_hash": "373f87b7017211341c69f6976f0a1a750d9b31b593dbc0cbb6787f490229aefd"
   },
   "Verity.SecurityProofs.ComposeCone": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.ComposeCone : Verity.Guarantees.ComposeCone"],
    "assumptions": [],
    "type_hash": "f565132f61eb73cde2ed8d766ee1d4344bfd8d8939ae9d2120bb9790bcd6f6f7"
   },
   "Verity.SecurityProofs.ContainsImplements": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.ContainsImplements : Verity.Guarantees.ContainsImplements"],
    "assumptions": [],
    "type_hash": "5261423f61f77d1a20b962eb0ad2ac11cfafad117764f583efcd5a3bf5906992"
   },
   "Verity.SecurityProofs.CorrectOfOpening": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.CorrectOfOpening : Verity.Guarantees.CorrectOfOpening"],
    "assumptions": [],
    "type_hash": "d31e6511bb4fdd3d42e665caac936737a4de4cc765e689f6eb61e9543ede9762"
   },
   "Verity.SecurityProofs.HopperStepComplete": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.HopperStepComplete : Verity.Guarantees.HopperStepComplete"],
    "assumptions": [],
    "type_hash": "fe2fae45be22b37a93be72003ffbbf012d3fd12e40a55b50728c78645e1c931c"
   },
   "Verity.SecurityProofs.HopperStepHw": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.HopperStepHw : Verity.Guarantees.HopperStepHw"],
    "assumptions": [],
    "type_hash": "cb161164edc01610f469f2d6476ff00b379a3e8409fbace7d8ec575c96e50bf2"
   },
   "Verity.SecurityProofs.HopperStepIff": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.HopperStepIff : Verity.Guarantees.HopperStepIff"],
    "assumptions": [],
    "type_hash": "2b26f76665dd6b3d22c0baa9455693f096b3e0ef592712d5349089e08ac3b8bf"
   },
   "Verity.SecurityProofs.HopperStepSound": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.HopperStepSound : Verity.Guarantees.HopperStepSound"],
    "assumptions": [],
    "type_hash": "e7dc0feb2531a118d4b15b496514252f78f99499197f4b0e150bf4de46b4816b"
   },
   "Verity.SecurityProofs.HopperUnitBf16": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.HopperUnitBf16 : Verity.Guarantees.HopperUnitBf16"],
    "assumptions": [],
    "type_hash": "bd4150b936a955da951c9e9e5383d3cbf12c48a5ae5c03661e5bdbc7b5261e32"
   },
   "Verity.SecurityProofs.HopperUnitSound": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.HopperUnitSound : Verity.Guarantees.HopperUnitSound"],
    "assumptions": [],
    "type_hash": "05cf0649042eb55dbe2001339ac9d71132bb96e734c2f95169e3def1a4d1ffed"
   },
   "Verity.SecurityProofs.HopperUnitSoundZero": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.HopperUnitSoundZero : Verity.Guarantees.HopperUnitSoundZero"],
    "assumptions": [],
    "type_hash": "099ec51d6318715f2ad10a572ec517c8b04942179a3218ff45042c279759f7a0"
   },
   "Verity.SecurityProofs.IsZeroGadget": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.IsZeroGadget : Verity.Guarantees.IsZeroGadget"],
    "assumptions": [],
    "type_hash": "4712837458217893fee3236ecf7855de0efd4d66a8b99532fddbcfb670bdb42b"
   },
   "Verity.SecurityProofs.PackSoundComplete": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.PackSoundComplete : Verity.Guarantees.PackSoundComplete"],
    "assumptions": [],
    "type_hash": "4c3bae588a8b15087f0b98c7fee1a916e24956b95df6fd0453546703c7f048e0"
   },
   "Verity.SecurityProofs.ProbBatchInduced": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.ProbBatchInduced : Verity.Guarantees.ProbBatchInduced"],
    "assumptions": [],
    "type_hash": "d3b33f0f68f5f726e9e6807f5420faa852ef8afba25cb45c5842e42815cdb713"
   },
   "Verity.SecurityProofs.RangeGadget": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.RangeGadget : Verity.Guarantees.RangeGadget"],
    "assumptions": [],
    "type_hash": "f7ed21cd74c37de74d55e3d3d2ff32de391af49d7eb759acfd46292de7e2acea"
   },
   "Verity.SecurityProofs.RefineWrong": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.RefineWrong : Verity.Guarantees.RefineWrong"],
    "assumptions": [],
    "type_hash": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6"
   },
   "Verity.SecurityProofs.SoundAnd": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.SoundAnd : Verity.Guarantees.SoundAnd"],
    "assumptions": [],
    "type_hash": "07d767263893e3e34dfcaa91ddfaeb66541ca48d53c262036875f1aa2eaf0375"
   },
   "Verity.SecurityProofs.SoundBatch": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.SoundBatch : Verity.Guarantees.SoundBatch"],
    "assumptions": [],
    "type_hash": "b548cdc5c7d5cd5ad1104cc009d23a23edb34a30407f6e74c1f2560c2bbaccd6"
   },
   "Verity.SecurityProofs.SoundBind": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.SoundBind : Verity.Guarantees.SoundBind"],
    "assumptions": [],
    "type_hash": "a3c833c307c6c399101dfc1c2d95543aaea6d7e38b65abfd9b9f60ee6f24de51"
   },
   "Verity.SecurityProofs.SoundInterleave": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.SoundInterleave : Verity.Guarantees.SoundInterleave"],
    "assumptions": [],
    "type_hash": "adf712ce631c832feb40854afd840d17d22c7ea31ccc9cb75ce23a17f5049405"
   },
   "Verity.SecurityProofs.SoundMono": {
+   "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.SoundMono : Verity.Guarantees.SoundMono"],
    "assumptions": [],
    "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
@@ -189,7 +218,7 @@
     "Verity.Assumptions.GemmHopperStep": "8c5e183ae15ce48fd0744893ce9708c38d0c9d88fd0d109ffb68ec4226ff323e",
     "Verity.Assumptions.StepInputs": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
     "Verity.SecurityProofs.AmpereStepIff",
@@ -209,7 +238,7 @@
     "Verity.Guarantees.CorrectOfOpening": "10386484b8cce510b55f28b3072a425e8555580988de08bb25db00b3b0b7b699",
     "Verity.Guarantees.RefineWrong": "f6dc61dd64bff7f68d19f350d308a0ab2ed7577db10138d290703268254a469c"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.ContainsImplements",
@@ -227,7 +256,7 @@
     "Verity.Guarantees.SoundInterleave": "1b9db975c11cf9eee08008fa88f0ac0b461a6ec2cb6b432974525cf50705d3ed",
     "Verity.Guarantees.SoundMono": "fa86a98c87341208789aaed40edf38ef88f68a7c4e2c23a1a19738acbc0771df"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.ProbBatchInduced",
     "Verity.SecurityProofs.SoundAnd",
     "Verity.SecurityProofs.SoundBatch",
@@ -258,7 +287,7 @@
     "Verity.Guarantees.PackSoundComplete": "95e287c6c5b67e69c4cca2ba0e7de569f217442359cffe9a4a3943dbbd31695c",
     "Verity.Guarantees.RangeGadget": "276657bf0d6d4e6da870b4002959224bf0bfffe7843d048573a6139168bf9d13"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.AdaEqAmpere",
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
@@ -301,7 +330,7 @@
     "Verity.Implementation": "c144286a7ea1ac466678724b49cdff938962d7a3b1e86cc04ea6968c3ee0a529",
     "Verity.Implementation.inp": "997e0ba3c6cf816c20ad7aecf22ecb9aef93d68ebcf8cec1ed8c071b89d64202"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.ContainsImplements",
@@ -318,7 +347,7 @@
     "Verity.Declaration.Implements": "0b973c0f940a9a9bf3bd04e3124fe027e62d041007816a4834a681c1c53e3aa1",
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
-   "pins": ["Verity.SecurityProofs.ContainsImplements"]
+   "guarantees": ["Verity.SecurityProofs.ContainsImplements"]
   },
   "Verity.Protocol.Game": {
    "digest": "c3a8196d1e9e6903cfd0374e5b087e6377800253e09d265e24fef1ae2fab24fc",
@@ -344,7 +373,7 @@
     "Verity.Game.value": "2b85019b6d4066405668df2c794c89d1fb80e777c12864c3e6cc71a57de83258",
     "Verity.Sound": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.ProbBatchInduced",
     "Verity.SecurityProofs.SoundAnd",
     "Verity.SecurityProofs.SoundBatch",
@@ -366,7 +395,7 @@
     "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9",
     "Verity.Partition.wrong": "f743923e389a5a0fa4441ad0d02a28e57d61973f65e0a9b998dc6df6445139f8"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.CorrectOfOpening",
@@ -379,7 +408,7 @@
     "Verity.TC.Proofs.Admissible": "c56ebb69cf9ebbd664b0ae72ccb5b21dc3fe2761f4cc8e64e7f663b6e71ca25e",
     "Verity.TC.Proofs.stateOf": "f7ef12fd0fd00f94be4bea32348cdfa796fc51941d5a628987e2187c11ec1177"
    },
-   "pins": ["Verity.SecurityProofs.PackSoundComplete"]
+   "guarantees": ["Verity.SecurityProofs.PackSoundComplete"]
   },
   "Verity.Protocol.TC.Gadgets": {
    "digest": "2c13e0555fc412274d2d0ab43e78262600d61d148e82207bee614f7e4a9727c1",
@@ -389,7 +418,7 @@
     "Verity.TC.Gadgets.isZeroWidths": "51b86a56686596236cdebb9470177a8b3e1ed79f42ecb6ce7cd7ec20409a575d",
     "Verity.TC.Gadgets.rangeWidths": "915f7c5c531a47ce9790cc92ec02be1f06103cf94596144c6fef95e8352c01f9"
    },
-   "pins": ["Verity.SecurityProofs.IsZeroGadget", "Verity.SecurityProofs.RangeGadget"]
+   "guarantees": ["Verity.SecurityProofs.IsZeroGadget", "Verity.SecurityProofs.RangeGadget"]
   },
   "Verity.Protocol.TC.Pipeline": {
    "digest": "ac541b047f90ce7cf9efd3f8d0d55ee156cf5796062c2d01baa3d11730190b4e",
@@ -404,7 +433,7 @@
     "Verity.TC.Pipeline.zeroExponent": "05a7b0bf44a0131d7f07e6b126f9807a026ebc49ad63e3488cbc5d69f85aa24e",
     "Verity.TC.bitLength": "ccbed7043eb20211951e7bec1eed8b5bb0e5627b258ee4d913d1737c2fbf4162"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.AdaEqAmpere",
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
@@ -567,7 +596,7 @@
     "Verity.TC.Relation.terms": "8674f2f845831cef9227de4e22ab4c1519d350977b2207004edde6ebbe427ccf",
     "Verity.TC.Relation.zeroState": "76f5f56483cad8dcffb6d6f0e63076b8477410fb251112e4da877e10771f2af4"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
     "Verity.SecurityProofs.AmpereStepIff",
@@ -626,7 +655,7 @@
     "Verity.TC.Spec.tcDotChainTotal": "d623703b721fe61125e932a17c39e6b5433254ed6ddb7953e456e02d61249a2e",
     "Verity.TC.Spec.tcDotTotal": "b02bfff4370bb8591d9bb4589ab8f204ae2b2d79ea79448a2db58940865e061b"
    },
-   "pins": [
+   "guarantees": [
     "Verity.SecurityProofs.AmpereStepHw",
     "Verity.SecurityProofs.AmpereStepIff",
     "Verity.SecurityProofs.AmpereStepSound",

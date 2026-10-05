@@ -5,6 +5,7 @@ import FlockSoundness.Discharge.Layout.HmRegion
 import FlockSoundness.Discharge.Layout.OutRegion
 import FlockSoundness.Discharge.Layout.Pins
 import FlockSoundness.Discharge.Layout.Drawn
+import FlockSoundness.Discharge.Layout.SharedRows
 import FlockSoundness.Discharge.Layout.QSort
 import FlockSoundness.Discharge.Layout.Site
 import FlockSoundness.Discharge.Layout.OutSite
@@ -36,6 +37,7 @@ from the decoder's places and the executable's regions:
   (`Readers.Copies`), the rows' pinned `b ‖ c` (`Readers.BcPinned`) and the other pinned values (`Readers.ValPinned`);
 * `Drawn`: at a drawn statement, the pinned `b ‖ c` of a proved unit's `hm96` slot is the unit's in the registered
   population's public file (`bc_drawn`);
+* `SharedRows`: the same with or without shared rows (`bc_drawnS`), from the shared-row population's row pieces;
 * `QSort`: every proved unit of a draw is in the population, with or without a closure (`proved_lt_population`, by
   `all_qsort`: `Array.qsort` keeps a property of every element);
 * `Site`: at a drawn unit's site in its table's accepted statement, the population's `b ‖ c` at port `p`'s `hm96` output
@@ -66,7 +68,7 @@ from the decoder's places and the executable's regions:
 * `Keyed`: `lay` and `rs` at the production program's places (`keyedLayout`, `keyedRows`, `keyedRowsOfParse`,
   `keyedRowsOuts` at `outs := outsOf`), with [e2e-const]'s and [e2e-zero]'s constant and zero gates; `rs.Computes`
   there is [e2e-hm]'s `Discharge.Hm.keyedRowsOuts_computes`;
-* `Tables`: a population without shared rows (`pop.tables = none`, which `bc_drawn` and `BcSite` read) under any tag
+* `Tables`: a population without shared rows (`pop.tables = none`, which `bc_drawn` reads) under any tag
   without shared-row files (`loadPublic_tables`);
 * `Scope`: `rs`'s circuit conditions (`h1`, `ho`, `PortReads`) as one check on the parsed circuit that runs
   (`scopeOk`, `scopeOk_spec`).

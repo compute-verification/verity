@@ -546,10 +546,10 @@ from its record. A failure whose key had expired says so in the marker's `error`
 (no `run_record`).
 
 - The pod guard accepts a valid `.custody` like a valid `.fetched`: every file listed, none changed at or after `verified_from`.
-- `research data custody RUN [--publish]` checks the same predicate from any machine (and rewrites the marker); `--publish` puts a
-  local run dir on the remote first. `research data custody --triage [--verify]` sorts a runs root into `fetched`, `r2`,
-  `attempt-no-record`, `attempt-unpreserved`, `no-custody`, `running`, `never-ran`, `waived`; a waiver or never-ran verdict is a
-  label: `research data label RUN custody waived|never-ran --by WHO`.
+- `research data custody RUN [--publish [--force [--runner-gone]]]` checks the same predicate from any machine (and rewrites the
+  marker); `--publish` puts a local run dir on the remote first. `--triage [--verify] [--older-min N]` sorts runs roots by
+  `custody.triage_row`; waived and never-ran are labels (`research data label RUN custody waived|never-ran|needed --by WHO`).
+  Its `needs_action` (exit 1) is the monitors' invariant, per node.
 - `research pods drain|unpreserved --custody-r2` and `research notes watch --reap --custody-r2` (`pods.drain.pod_custody`) refresh
   the catalog from the remote, require every attempt tied to the pod to be preserved, and read the pod guard's state for its run
   dirs: without a guard state younger than 10 min, custody is unknown and nothing is terminated.

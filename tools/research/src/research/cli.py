@@ -9,13 +9,19 @@
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
+  research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
-  research cancel <run-id> --reason TEXT [--by WHO]   # SIGTERM to the run's workload process group, recorded as a manual cancel;
-                                                 # never the runner, never SIGKILL, so it still records the exit and publishes custody
+  research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group, recorded as a manual
+                                                 # cancel; never the runner, never SIGKILL, so it still records the exit and publishes
+                                                 # custody.  From any VM: a run another VM launched is found as `inspect` finds it
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
                                                  # each ssh machine, and its records fetched here (remote.adopt)
+  research keeper set NAME --on NODE --project P --n N --until UTC [--gpus G] [--max-min M] [--source GITDIR] [...] -- CMD... {seed}
+  research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
+                                                 # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
+                                                 # until UTC (<= 48 h), preemptible; no VM stays awake (research/keeper.py)
   research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
@@ -29,7 +35,7 @@
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
-  research queue status|sync|land|eject|ready [--shadow] [--dry-run]    # the merge queue: ready PRs on `next`, `main` fast-forwarded to
+  research queue status|sync|land|eject|ready|judge [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `main` fast-forwarded to
                                                  # the newest commit on it with a passing check (research/queue.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
@@ -46,6 +52,8 @@
   research pods guard [--budgets NOTES|FILE] [--dry-run] [--detach]   # the one budgets guard: every line of budgets.toml, re-read each poll
   research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
+  research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
+                                                 # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
   research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...]   # what runs on the Nebius nodes
                                                  # (pods/nebius/deploy.toml) against main, and installs from a pushed commit (research/deploy.py)
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
@@ -172,6 +180,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--preflight", default=None, metavar="TOOL",
                     help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
                          "run does, and refuse the run when it fails")
+    ap.add_argument("--job-user", default=None, metavar="USER",
+                    help="run the workload as USER (an unprivileged system user) in a transient system unit, with no sudo, no home and "
+                         "a clean environment; the runner keeps its records as itself (research.jobuser)")
     q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (tools/cluster) places and runs the job; "
                                    "--on then pins its node, and --mem-gb is its memory")
     q.add_argument("--queue", action="store_true", help="hand the job to the queue instead of running it on a named machine (needs --source)")
@@ -287,6 +298,16 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     run_dir = root / run_id
     if ns.on:
         return _run_remote(ns, run_id, run_dir, harness_opts, command)
+    job_pw = job_dir = None
+    if ns.job_user:
+        from . import jobuser
+
+        try:
+            job_pw = jobuser.check_user(ns.job_user)
+            job_dir = jobuser.check_run_dir(run_dir, run_id)
+        except jobuser.Refused as e:
+            print(f"research run: refused: {e}", file=sys.stderr)
+            return 3
     # a claimed run's custody was settled by its launcher (--custody-r2, or --no-custody-r2 and `research fetch --all`)
     no_remote = None if ns.claimed else _no_usable_remote()
     if no_remote and not ns.local_only:
@@ -341,6 +362,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             return _refuse(ns, run_dir, run_id, str(e), type(e).__name__, mem_reservation)
     job = record.extend_job(build_job_from(a, command), run_id=run_id, runs_root=root, expected_fingerprint=_parse_expect(ns.expect),
                             cost=cost, remote=remote_info, store=prep["section"], cwd={"path": a.cwd, "basis": cwd_basis})
+    if ns.job_user:
+        job["run"]["job_user"] = ns.job_user
     if clone_rec:
         job["run"]["cwd_clone"] = clone_rec
     try:                                                          # which build each installed binary is (binprov.py); never stops a run
@@ -362,10 +385,23 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     apply_env = {**clone_env, **apply_env}
     saved_env = {k: os.environ.get(k) for k in apply_env}
     os.environ.update(apply_env)
+    spawn, mode, unsafe = command, None, []
+    if ns.job_user:
+        # inside a queued GPU phase's lease (the request's workload wrap), so gpu-lease and its bookkeeping stay the runner's
+        wrap = list(_request(ns.remote_json).get(remote.QUEUE_WORKLOAD_WRAP) or []) if ns.claimed else []
+        n = len(wrap) if wrap and command[: len(wrap)] == wrap else 0
+        spawn = [*command[:n], *jobuser.spawn_argv(command[n:], ns.job_user, jobuser.unit_name(run_id), list({**clone_env, **env_map}))]
     print(f"research: run {run_id} -> {run_dir}" + (f"  cwd={a.cwd}" if a.cwd else ""), file=sys.stderr)
     try:
-        rc = harness_run(a, command)
+        if ns.job_user:
+            mode = jobuser.prepare(job_dir)
+        rc = harness_run(a, spawn)
     finally:
+        if mode is not None:            # before anything reads the run dir
+            removed, unsafe = jobuser.finish(job_dir, jobuser.unit_name(run_id), ns.job_user, job_pw.pw_uid, mode)
+            if removed:
+                print(f"research: --job-user: deleted {len(removed)} entr{'y' if len(removed) == 1 else 'ies'} the job left that "
+                      f"{'is' if len(removed) == 1 else 'are'} neither a file nor a directory: {', '.join(removed[:10])}", file=sys.stderr)
         for k, v in saved_env.items():
             if v is None:
                 os.environ.pop(k, None)
@@ -378,6 +414,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
 
             release(mem_reservation, run_id)
         _drop_clone(clones, run_dir)
+    if unsafe:
+        print(f"research: --job-user: refused to publish: {len(unsafe)} entr{'y' if len(unsafe) == 1 else 'ies'} in {run_dir} still "
+              f"belong to {ns.job_user} ({', '.join(unsafe[:10])}), so nothing here reads the run dir; its records "
+              f"stay on this machine", file=sys.stderr)
+        return rc or 3
     if not ns.custody_dir:
         _publish_attempt(run_dir, prep, run_record=ns.run_record)
     s = R.summarize(run_dir)
@@ -459,7 +500,7 @@ def _survive_stray_signals() -> None:
 
     def note(signum: int, _frame: object) -> None:
         print(f"research: runner got {signal.Signals(signum).name} at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}, ignored: it records "
-              f"and publishes the run when the workload exits; stop the workload with `research cancel RUN` from the launcher, or "
+              f"and publishes the run when the workload exits; stop the workload with `research cancel RUN` from any VM, or "
               f"`kill -TERM -<pgid>` (status.json) here, and never SIGKILL the runner", file=sys.stderr, flush=True)
 
     for s in (signal.SIGTERM, signal.SIGHUP):
@@ -616,13 +657,21 @@ def _parse_env(items: list[str]) -> dict[str, str] | None:
     return env
 
 
+def _request(remote_json: str | None) -> dict:
+    """Machine side: the launch request (request.json) that --remote-json names; {} when unreadable."""
+    try:
+        req = json.loads(Path(json.loads(remote_json or "{}")["request"]).read_text())
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+    return req if isinstance(req, dict) else {}
+
+
 def _request_env(remote_json: str | None) -> dict[str, str]:
     """Machine side: the `env` launch-request applied to this process, read back from the request.json that --remote-json names, so the
     attempt records it as params.env like a local --env (the values never travel on a command line); {} when unreadable."""
     try:
-        req = json.loads(Path(json.loads(remote_json or "{}")["request"]).read_text())
-        return {str(k): str(v) for k, v in (req.get("env") or {}).items()}
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return {str(k): str(v) for k, v in (_request(remote_json).get("env") or {}).items()}
+    except AttributeError:
         return {}
 
 
@@ -884,7 +933,8 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
-                            custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue)
+                            custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue,
+                            job_user=ns.job_user)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
@@ -898,18 +948,23 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     return 0
 
 
-def _run_dir(root: Path, ref: str, on: str | None) -> Path:
+def _run_dir(root: Path, ref: str, on: str | None, *, unique: bool = False) -> Path:
     """`ref` under the local runs root, else, for a full run id, the run another VM launched, adopted from the machine that holds
-    it (`remote.adopt`).  FileNotFoundError names each machine's answer, and the store's attempt when it has one."""
+    it (`remote.adopt`; `unique`: refused when two machines hold it).  FileNotFoundError names each machine's answer, and the store's
+    attempt when it has one; LookupError when `on` names another machine than the local run dir's."""
     try:
-        return R.resolve(root, ref)
+        d = R.resolve(root, ref)
     except FileNotFoundError:
         from .store import ids
 
         if not ids.is_run_id(ref):
             raise
+    else:
+        if on and (held := (remote._read_json(d / "remote.json") or {}).get("machine")) != on:
+            raise LookupError(f"{d.name} is {f'on {held}' if held else 'a local run'} (its local run dir), not on {on}")
+        return d
     try:
-        return remote.adopt(root, ref, on=on)
+        return remote.adopt(root, ref, on=on, unique=unique)
     except remote.Refused as e:
         raise FileNotFoundError(f"no run {ref!r} under {root}, and {e}{_attempt_hint(ref)}") from None
 
@@ -962,13 +1017,14 @@ def cmd_fetch(argv: list[str]) -> int:
 def cmd_cancel(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research cancel", description="stop a remote run the one way that keeps its custody: SIGTERM to its "
                                                                      "workload's process group, recorded as a manual cancel (remote.cancel)")
-    ap.add_argument("ref")
+    ap.add_argument("ref", help="a run id or prefix under the runs root; a full run id another VM launched is found on its machine")
     ap.add_argument("--reason", required=True)
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
     ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ns = ap.parse_args(argv)
     try:
-        run_dir = R.resolve(R.runs_root(ns.runs_dir), ns.ref)
+        run_dir = _run_dir(R.runs_root(ns.runs_dir), ns.ref, ns.on, unique=True)
         out = remote.cancel(run_dir, reason=ns.reason, by=ns.by)
     except (FileNotFoundError, LookupError, remote.Refused) as e:
         print(f"research cancel: {e}", file=sys.stderr)
@@ -1210,10 +1266,18 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_launch_request(rest)
     if cmd == "env":
         return cmd_env(rest)
+    if cmd == "doctor":
+        from .doctor import main as doctor_main
+
+        return doctor_main(rest)
     if cmd == "disk-hold":
         from .disk import main as disk_main
 
         return disk_main(rest)
+    if cmd == "job-exec":
+        from .jobuser import main as job_exec_main
+
+        return job_exec_main(rest)
     if cmd == "mem":
         from .mem import main as mem_main
 
@@ -1234,6 +1298,10 @@ def main(argv: list[str] | None = None) -> int:
         from .retention import main as retention_main
 
         return retention_main(rest)
+    if cmd == "keeper":
+        from .keeper import main as keeper_main
+
+        return keeper_main(rest)
     if cmd == "pods":
         from .pods.part import main as pods_main
 
