@@ -31,24 +31,28 @@ the task list's build, nor an earlier target's check):
 
 A module is held by its name and its content, not its path (`_modrec`): the digest of its AST with every ``from`` import and
 every ``import M as N`` cut to the names it binds (`_Norm`: comments, formatting, how import statements are split and how a run
-of them binding different names is ordered are no input, `_commuted`), and, for each import site, the module it resolves to (by the path-based finder over the in-tree ``sys.path`` entries,
-`_resolve`).  A module that reads its own path or name (``__file__``, ``__name__``, ``__spec__`` and the like) is held at its
-path too.  `targets.py` and `pins.json` are not files of any target: a target holds the parts of `targets.py` it depends on (its
-binding units and the rest of the module with every binding unit cut out, ``common``, each its AST digested as a module's is,
-with its import sites; any `targets.py` code its check ran, by the unit that holds it) and the entries of `pins.json` its check
-looked up (`recorded_pins`), each by its value, or absent.  Likewise each Definition whose kernels its check looked up in
-`verity.evaluation.batch._KERNELS` (`_RecordedKernels`), by what is registered for it now (each kernel's name, domain, version
-and which function and sampler it is, `_where`: by its module's content and its own definition, not its path), or none: the
-module that registers a kernel is imported with the registries, and no check of a target without one runs any of it.  A package
-an enumerator listed (`targets.load_registries`, the vLLM registry's ``catalog.load`` and ``boolean._load``, `_ENUMERATORS`:
-each imports every module it lists and names any that fails, nothing else) is held by the modules it lists, each by its content
-(`_children`), rather than by its listing, and the modules it imported are not pinned to their names.  A module whose source
-`inspect` looked for is held by its name and content (``present``).  The checker's own version is the digest of this package's
-sources less those two.  Beside them the key holds the interpreter, the platform, the installed distributions, ``sys.path``
-(in-tree entries relative to the tree), the request (the target, its options, whether the partition invariant applies to it, as
-the catalog resolved it, and for a Definition the digest of every primitive and specialization it reaches, each by its
-descriptor id and canonical descriptor entry, `descriptor`) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment. Each
-target's check runs with a memo of its own, so no result an earlier target computed stands in for its reads.
+of them binding different names is ordered are no input, `_commuted`, but not inside a ``try`` or ``with`` body nor across a
+``__future__`` import), and, for each import site (each dotted prefix of a plain ``import a.b`` among them), the module it
+resolves to (by the path-based finder over the in-tree ``sys.path`` entries, `_resolve`).  A module that reads its own path or
+name (``__file__``, ``__name__``, ``__spec__`` and the like) is held at its path too.  `targets.py` and `pins.json` are not
+files of any target: a target holds the parts of `targets.py` it depends on (its binding units and the rest of the module with
+every binding unit cut out, ``common``, each its AST digested as a module's is, with its import sites; any `targets.py` code its
+check ran, by the unit that holds it) and the entries of `pins.json` its check looked up (`recorded_pins`), each by its value,
+or absent.  Likewise each Definition whose kernels its check looked up in `verity.evaluation.batch._KERNELS`
+(`_RecordedKernels`), by what is registered for it now (each kernel's name, domain, version and which function and sampler it
+is, `_where`: by its module's content and its own definition, not its path), or none, and by each in-tree module whose import
+registered it, as a module it ran (so a wrapper's `_where` hides no change of what it wraps): the module that registers a kernel
+is imported with the registries, and no check of a target without one runs any of it.  A package an enumerator listed
+(`targets.load_registries`, the vLLM registry's ``catalog.load`` and ``boolean._load``, `_ENUMERATORS`: each imports every
+module it lists and names any that fails, nothing else) is held by its listing, the modules it lists by their names, each
+module's content used only to follow a move (`_children`), and the modules it imported are not pinned to their names.  A module
+whose source `inspect` looked for is held by its name and content (``present``).  The checker's own version is the digest of
+this package's sources less those two.  Beside them the key holds the interpreter and its optimization level, the platform, the
+installed distributions, ``sys.path`` (in-tree entries relative to the tree), the request (the target, its options, whether the
+partition invariant applies to it, as the catalog resolved it, and for a Definition the digest of every primitive and
+specialization it reaches, each by its descriptor id and canonical descriptor entry, `descriptor`) and the ``VERITY_*`` /
+``CIRCUIT_CHECK_*`` environment. Each target's check runs with a memo of its own, so no result an earlier target computed stands
+in for its reads.
 
 A hit means every file, listing, probe, library, pin and kernel registration this target's check read is unchanged (the tree as
 git has it, `visible`: a file git does not track, bytecode, a build or a fetched file inside the tree, counts as absent, so a
@@ -68,16 +72,19 @@ call another target's check made, beyond the function's own module and its closu
 the target, even if it changes which object of the same id the catalog builds (the registry refuses two Definitions of one id);
 what a binding ran that changes, keeping its id, what a Definition it did not make does at check time without changing its
 descriptor: a value it computed (from a module only it imported) and left in a module's state, or closed over, where an
-evaluator reads it; behaviour that depends on a module's name or path through another object (an object's ``__module__``, a code
-object's ``co_filename``, ``inspect.getfile``: a moved module's objects report their new name; `targets._authored` reads
+evaluator reads it; a value a module only the registries import leaves in another module's state at import, other than a kernel
+registration or a Definition (an enumerated module is held by its name in the listing, not by its content); a module edited
+after this process imported it and before the check ran (the process runs the old code, while the reads digested after the check
+see the new source); behaviour that depends on a module's name or path through another object (an object's ``__module__``, a
+code object's ``co_filename``, ``inspect.getfile``: a moved module's objects report their new name; `targets._authored` reads
 ``__module__`` for the task list only), and on the order in which modules are first imported (a moved registry module is
-imported by its importer rather than by the enumeration, and consecutive imports are taken in the order of the names they
-bind); and report text that names a module or a path is the text of the run that stored it.  What runs of a module is what its
-source compiles to, not its cached bytecode, which Python takes when its header matches the source's mtime in whole seconds and
-its size: a module imported while tracing is compiled from its source, and one imported before from bytecode its source does not
+imported by its importer rather than by the enumeration, and consecutive imports are taken in the order of the names they bind);
+and report text that names a module or a path is the text of the run that stored it.  What runs of a module is what its source
+compiles to, not its cached bytecode, which Python takes when its header matches the source's mtime in whole seconds and its
+size: a module imported while tracing is compiled from its source, and one imported before from bytecode its source does not
 compile to makes the process uncacheable (`_stale_bytecode`).  A new non-empty module in a package the registries enumerate, or
-one moved where nothing imports it, reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``, ``os.system``, ``exec``, ``posix_spawn``, a
-``fork``) makes the process's later results uncacheable (`untraced`).
+one moved where nothing imports it, reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``,
+``os.system``, ``exec``, ``posix_spawn``, a ``fork``) makes the process's later results uncacheable (`untraced`).
 
 Only a verdict is stored, of the tree its check read: not a check that raised (an ImportError says the environment was broken,
 not what the target is), nor one whose reads, digested again by the process that ran it right after, differ from the digests
@@ -695,6 +702,8 @@ class _Norm(ast.NodeTransformer):
                 self.sites.append((-1, a.name, None))
                 out.append(ast.Expr(ast.Constant(f"<import as {a.asname}>")))
             else:
+                parts = a.name.split(".")
+                self.sites += [(-1, ".".join(parts[:i]), None) for i in range(1, len(parts) + 1)]
                 out.append(ast.Import(names=[ast.alias(name=a.name)]))
         return out
 
@@ -724,10 +733,13 @@ def _commuted(tree: ast.AST) -> ast.AST:
         for field, body in ast.iter_fields(node):
             if not (isinstance(body, list) and body and all(isinstance(s, ast.stmt) for s in body)):
                 continue
+            if field == "body" and isinstance(node, (ast.Try, ast.TryStar, ast.With, ast.AsyncWith)):
+                continue
             out: list[ast.stmt] = []
             run: list[ast.Import | ast.ImportFrom] = []
             for s in [*body, None]:
-                if isinstance(s, (ast.Import, ast.ImportFrom)) and all(a.name != "*" for a in s.names):
+                if (isinstance(s, (ast.Import, ast.ImportFrom)) and all(a.name != "*" for a in s.names)
+                        and not (isinstance(s, ast.ImportFrom) and s.module == "__future__")):
                     run += [ast.ImportFrom(module=s.module, names=[a], level=s.level) if isinstance(s, ast.ImportFrom)
                             else ast.Import(names=[a]) for a in s.names]
                     continue
@@ -921,11 +933,27 @@ def _loaded(root: Path) -> dict[str, list[str]]:
 
 class _RecordedKernels(dict):
     """`verity.evaluation.batch._KERNELS`, noting in the open recording each Definition whose kernels are looked up (a lookup
-    that finds none included), and all of them on any enumeration.  Registering (``setdefault``) is no lookup."""
+    that finds none included), and all of them on any enumeration.  Registering (``setdefault``) is no lookup; it notes the
+    in-tree module whose import registered each key (`by`), which a lookup of that key adds to the code the recording ran."""
+
+    def __init__(self, *a: Any) -> None:
+        super().__init__(*a)
+        self.by: dict[str, set[str]] = {}
+
+    def setdefault(self, key, default=None):
+        f = sys._getframe(1)
+        while f is not None and not (f.f_code.co_name == "<module>" and _rel(f.f_code.co_filename) is not None):
+            f = f.f_back
+        if f is not None:
+            self.by.setdefault(str(key), set()).add(f.f_code.co_filename)
+        return dict.setdefault(self, key, default)
 
     def _note(self, key: Any) -> None:
         if len(_FRAMES) > 1 and not _INTERNAL:
             _FRAMES[-1].kernels.add(str(key))
+            for k, files in self.by.items():
+                if key in ("*", k):
+                    _FRAMES[-1].code.update(files)
 
     def get(self, key, default=None):
         self._note(key)
@@ -1372,7 +1400,8 @@ def key(request: dict) -> dict:
     finally:
         _INTERNAL.pop()
     dists = sorted(f"{d.metadata['Name']}=={d.version}" for d in metadata.distributions())
-    return {"schema": SCHEMA, "version": version(), "request": request, "python": sys.version, "platform": plat,
+    return {"schema": SCHEMA, "version": version(), "request": request, "python": sys.version, "optimize": sys.flags.optimize,
+            "platform": plat,
             "distributions": hashlib.sha256("\n".join(dists).encode()).hexdigest(),
             "path": _path_entries(_ROOT[0]) if _ROOT else list(sys.path),
             "environment": {k: v for k, v in sorted(os.environ.items()) if k.startswith(("VERITY_", "CIRCUIT_CHECK_"))}}
@@ -1642,6 +1671,8 @@ def lookup(cache: Path, k: dict, root: Path) -> tuple[dict, str] | None:
             _INTERNAL.pop()
         if hit:
             got = {r: [renamed.get(n, n) for n in v] if r in _RENAMED else list(v) for r, v in rec.items()}
+            got["modules"] = sorted({*got.get("modules", ()), *(n2.rsplit(".", i)[0] for n, n2 in renamed.items() if n2 != n
+                                                                for i in range(1, n2.count(".") + 1))})
             return e["report"], store(cache, k, root, got, e["report"]) or p.stem
     return None
 
