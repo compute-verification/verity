@@ -54,19 +54,19 @@ def ofGame {α : Type} : Game α → FlockSpec.Game α
   | @Game.coin _ C iF iN k => @FlockSpec.Game.coin _ C iF iN fun c => ofGame (k c)
 
 /-- A proofs' strategy as the spec's, at `ofGame`. -/
-def ofStrategy {α : Type} : (g : Game α) → Strategy g → FlockSpec.Strategy (ofGame g)
+def ofStrategy {α : Type} : (g : Game α) → Game.Strategy g → FlockSpec.Strategy (ofGame g)
   | .ret _, _ => PUnit.unit
   | .send _ k, s => ⟨s.1, ofStrategy (k s.1) s.2⟩
   | @Game.coin _ _ _ _ k, s => fun c => ofStrategy (k c) (s c)
 
 theorem prob_ofGame {α : Type} (p : α → Prop) :
-    ∀ (g : Game α) (s : Strategy g), FlockSpec.prob p (ofGame g) (ofStrategy g s) = Game.prob p g s
+    ∀ (g : Game α) (s : Game.Strategy g), FlockSpec.prob p (ofGame g) (ofStrategy g s) = Game.prob p g s
   | .ret _, _ => rfl
   | .send _ k, s => prob_ofGame p (k s.1) s.2
   | @Game.coin _ _ _ _ k, s => Finset.sum_congr rfl fun c _ => congrArg _ (prob_ofGame p (k c) (s c))
 
 theorem expect_ofGame {α : Type} (f : α → ℝ) :
-    ∀ (g : Game α) (s : Strategy g), FlockSpec.expect f (ofGame g) (ofStrategy g s) = Game.expect f g s
+    ∀ (g : Game α) (s : Game.Strategy g), FlockSpec.expect f (ofGame g) (ofStrategy g s) = Game.expect f g s
   | .ret _, _ => rfl
   | .send _ k, s => expect_ofGame f (k s.1) s.2
   | @Game.coin _ _ _ _ k, s =>
@@ -76,13 +76,13 @@ theorem prCoin_eq {C : Type} [Fintype C] (p : C → Prop) : FlockSpec.prCoin p =
 
 /-! ## Named assumptions -/
 
-theorem sha512CRStrict_iff {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Strategy g)
+theorem sha512CRStrict_iff {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Game.Strategy g)
     (out : β → Option (List UInt8 × List UInt8)) (cost : β → ℝ) (q : ℝ) :
     FlockSpec.SHA512CRStrict H (ofGame g) (ofStrategy g s) out cost q ↔ Assumptions.SHA512CRStrict H g s out cost q := by
   unfold FlockSpec.SHA512CRStrict Assumptions.SHA512CRStrict
   rw [prob_ofGame]
 
-theorem sha512CRExpected_iff {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Strategy g)
+theorem sha512CRExpected_iff {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Game.Strategy g)
     (out : β → Option (List UInt8 × List UInt8)) (cost : β → ℝ) :
     FlockSpec.SHA512CRExpected H (ofGame g) (ofStrategy g s) out cost ↔ Assumptions.SHA512CRExpected H g s out cost := by
   unfold FlockSpec.SHA512CRExpected Assumptions.SHA512CRExpected
@@ -97,10 +97,10 @@ theorem hmRowComputes_iff {W : Type} (H : List UInt8 → List UInt8) (saltPrefix
     FlockSpec.HmRowComputes H saltPrefix mask sat row salt bc ↔
       Assumptions.HmRowComputes H saltPrefix mask sat row salt bc := Iff.rfl
 
-theorem hm96Hiding_iff {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) (δ₁ : ENNReal) :
+theorem hm96Hiding_iff {Sa Bi Co : Type} [Fintype Sa] [Fintype Bi] (My : Sa → Bi) (c : Sa → Co) (δ₁ : ENNReal) :
     FlockSpec.Hm96Hiding My c δ₁ ↔ Assumptions.Hm96Hiding My c δ₁ := Iff.rfl
 
-theorem hashDerivedKey_iff {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) :
+theorem hashDerivedKey_iff {Sa Bi Co : Type} [Fintype Sa] [Fintype Bi] (My : Sa → Bi) (c : Sa → Co) :
     FlockSpec.HashDerivedKey My c ↔ Assumptions.HashDerivedKey My c := Iff.rfl
 
 theorem keyedHash_eq : FlockSpec.keyedHash = ZkView.My := rfl
