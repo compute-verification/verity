@@ -12,6 +12,6 @@
   "verity_vllm.linear": "the linear-site interface, ahead of its first consumer (the MVP's install, migration step 3 of the research store's docs/pouw/vllm-integration-api.md); tests/linear",
   "verity_vllm.linear.api": "see verity_vllm.linear",
   "verity_vllm.linear.vllm_site": "see verity_vllm.linear; benchmarks/pouw's e2e.py, profile_decode.py and vllm_bench.py attach through it",
-  "verity_vllm.program.registry.quarantine.ln.layer_norm_aten_difftest": "properties-admission adapter of LayerNormAten_v1, loaded by --adapter name"
+  "verity_vllm.program.registry.quarantine": "the admission home of the quarantine lanes core binds, empty while none is pending; quarantine_lint's ROOT, protected.py, verify_lane.sh and P8's HOMES name it"
  }
 }

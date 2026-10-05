@@ -15,7 +15,7 @@ no penalties / logit bias / min_p):
                                                                    # then `torch.argmax(local_max)` (tie -> first): the FIRST global maximum
 
 Definitions (this module; the exact fp32 helpers, Philox and the libdevice transcriptions are the ones validated bit-exact on the
-RTX 4090 in `registry/quarantine/ov_sampling/gumbel.py`, 64/64 G4 cases, which now imports them from here):
+RTX 4090 by the static-seed composites below, 64/64 G4 cases):
 
   * `TemperatureScale_v1{V}(logits: Array<V, bf16>, temp: f32) -> Array<V, f32>` — the widening + `_temperature_kernel` with its
     T in {0, 1} early return (`SelectF32`), `div.full.f32` as the registry's `F32Mul(DivFullScaleA(x, T), DivFullRcp(T))` model.
@@ -24,6 +24,11 @@ RTX 4090 in `registry/quarantine/ov_sampling/gumbel.py`, 64/64 G4 cases, which n
     `TopPMask_v1{V}` composes into.  `temp` enters only through `temp != 0` (noise or not).
   * `GumbelTokenSelect_v1{V}(logits: Array<V, bf16>, seed: i64, pos: i64, temp: f32) -> i32` — the two chained: the served token of a
     request WITHOUT top-k/top-p.  At temp == 0 it is the registered greedy `TokenSelect_v1{V}` (first maximum).
+  * `GumbelArgmaxBf16_v1{V, SEED, POS}(logits: Array<V, bf16>) -> i32` and `GumbelArgmaxTempBf16_v1{V, SEED, POS, T}` (steps
+    `GumbelArgmaxStep_v1`, `GumbelArgmaxTempStep_v1{T}`) — the same selection at temperature 1 and at a T not in {0, 1}, with
+    seed, position and T as STATICS: the forms checked bit-exact against vLLM's kernels on the RTX 4090, which the sampled-row
+    profiles bind (`engine/profiles/gen_ov_sampling_patterns.py`).  They came from the quarantine lane `ov-sampling`
+    (`SEMANTIC_ID` "ov-sampling/GumbelArgmaxBf16@v1") with their bodies verbatim, so their ids are the lane's.
 
 NOT defined here (fail-closed in Bet A's `SAMPLERS_BOUND`): top-p / top-k masking (`_topp_sb_{stats,step,mask}_kernel`,
 `_topk_topp_kernel`) — see the lane's failure record F-dense-02 for what an exact model needs.
@@ -599,9 +604,74 @@ def f32_bits(x: float) -> int:
     return struct.unpack("<I", struct.pack("<f", float(x)))[0]
 
 
+@composite("GumbelArgmaxStep", 1, [], lambda S: ((("carry", Tuple(F32, I32, I32)), ("x", BF16), ("key", U32)),
+                                                  Tuple(Tuple(F32, I32, I32), I32)), conformance="model-untested")
+def GumbelArgmaxStep(B, S, carry, x, key):
+    """One vocabulary lane: y = f32(x) + g(key)[i] (add.ftz.f32); take (y, i) iff y > best (strict: first index wins,
+    NaN never wins); i += 1."""
+    best, best_i, i = carry[0], carry[1], carry[2]
+    g = B.call(GumbelNoiseLane, key, i)
+    y = B.call(P.F32AddFtz, B.call(P.Bf16ToF32, x), g)
+    gt = B.call(RP.F32GtStrict, y, best)
+    nb = B.call(P.SelectF32, gt, y, best)
+    ni = B.call(P.SelectI32, gt, i, best_i)
+    nxt = B.call(P.I32Add, i, B.call(const(32, 1)))
+    return tuple_of(tuple_of(nb, ni, nxt), ni)
+
+
+@composite("GumbelArgmaxBf16", 1, ["V", "SEED", "POS"], lambda S: ((("logits", Array(S.V, BF16)),), I32), conformance="model-untested")
+def GumbelArgmaxBf16(B, S, logits):
+    """Gumbel-max token selection at temperature 1: argmax_v(f32(logits[v]) + g(SEED, POS)[v]), lowest index on ties."""
+    key = B.call(GumbelStreamKey, B.call(const(64, int(S.SEED) & M64)), B.call(const(64, int(S.POS) & M64)))
+    zero = B.call(const(32, 0))
+    y0 = B.call(P.F32AddFtz, B.call(P.Bf16ToF32, logits[0]), B.call(GumbelNoiseLane, key, zero))
+    init = tuple_of(y0, zero, B.call(const(32, 1)))
+    step = B.scan(GumbelArgmaxStep, init, xs=(logits[1:S.V],), shared=(key,))
+    return step[0][1]
+
+
+def _tempered(B, x, t_bits: int, rcp):
+    """`_temperature_kernel`: `f32(x) / T` with Triton's fp32 `/` = `div.full.f32` (registry model, b1.RMSNormTriton):
+    F32Mul(DivFullScaleA(f32(x), T), DivFullRcp(T)).  Verified bit-exact on 16 x 151936 lanes of the B1 temp07 capture
+    (REPORT.md: IEEE division reproduces only ~90.7% of the lanes)."""
+    xf = B.call(P.Bf16ToF32, x)
+    return B.call(P.F32Mul, B.call(P.DivFullScaleA, xf, B.call(const(32, t_bits))), rcp)
+
+
+@composite("GumbelArgmaxTempStep", 1, ["T"], lambda S: ((("carry", Tuple(F32, I32, I32)), ("x", BF16), ("key", U32), ("rcp", F32)),
+                                                          Tuple(Tuple(F32, I32, I32), I32)), conformance="model-untested")
+def GumbelArgmaxTempStep(B, S, carry, x, key, rcp):
+    """One vocabulary lane at temperature T: y = div.full(f32(x), T) + g(key)[i]; take (y, i) iff y > best; i += 1."""
+    best, best_i, i = carry[0], carry[1], carry[2]
+    g = B.call(GumbelNoiseLane, key, i)
+    y = B.call(P.F32AddFtz, _tempered(B, x, int(S.T) & M32, rcp), g)
+    gt = B.call(RP.F32GtStrict, y, best)
+    nb = B.call(P.SelectF32, gt, y, best)
+    ni = B.call(P.SelectI32, gt, i, best_i)
+    nxt = B.call(P.I32Add, i, B.call(const(32, 1)))
+    return tuple_of(tuple_of(nb, ni, nxt), ni)
+
+
+@composite("GumbelArgmaxTempBf16", 1, ["V", "SEED", "POS", "T"], lambda S: ((("logits", Array(S.V, BF16)),), I32), conformance="model-untested")
+def GumbelArgmaxTempBf16(B, S, logits):
+    """Gumbel-max token selection at temperature T (static, fp32 bits, T not in {0, 1}):
+    argmax_v(div.full(f32(logits[v]), T) + g(SEED, POS)[v]), lowest index on ties.  vLLM: `_temperature_kernel` (in place,
+    div.full.f32) then `_gumbel_sample_kernel` (APPLY_TEMPERATURE=False)."""
+    t_bits = int(S.T) & M32
+    key = B.call(GumbelStreamKey, B.call(const(64, int(S.SEED) & M64)), B.call(const(64, int(S.POS) & M64)))
+    rcp = B.call(P.DivFullRcp, B.call(const(32, t_bits)))
+    zero = B.call(const(32, 0))
+    y0 = B.call(P.F32AddFtz, _tempered(B, logits[0], t_bits, rcp), B.call(GumbelNoiseLane, key, zero))
+    init = tuple_of(y0, zero, B.call(const(32, 1)))
+    step = B.scan(bind(GumbelArgmaxTempStep, T=t_bits), init, xs=(logits[1:S.V],), shared=(key, rcp))
+    return step[0][1]
+
+
 __all__ = ["SEMANTIC_ID", "GumbelStreamKey", "GumbelNoiseLane", "F32Eq", "BitOr", "BitNot", "TemperatureLane", "TemperatureScale",
            "GumbelSelectStep", "GumbelSelectF32", "GumbelTokenSelect", "stream_key", "noise_lane", "nv_logf", "nv_log1pf", "fma_ftz",
            "add_rz_ftz", "f32_bits", "topp_mask_word", "bit_at", "TopPMaskStep", "TopPMask", "GumbelTopPTokenSelect", "NEG_INF_BITS",
            "SPLIT_COUNTS", "LOG_NAN", "GumbelNoiseLaneV2", "nv_logf_gpu", "nv_log1pf_gpu", "noise_lane_gpu",
            # F-stoch-r17-01 witnesses (test-only, not evaluators)
-           "add_rz_ftz_v1_model", "nv_log1pf_v1_model"]
+           "add_rz_ftz_v1_model", "nv_log1pf_v1_model",
+           # the static-seed forms
+           "GumbelArgmaxStep", "GumbelArgmaxBf16", "GumbelArgmaxTempStep", "GumbelArgmaxTempBf16"]

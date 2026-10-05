@@ -1,8 +1,8 @@
 """difftest adapter for `ln/LayerNormAten@v1`: production = `torch.nn.functional.layer_norm` on one bf16 row with bf16 weight and bias,
 which dispatches `aten.layer_norm` -> `vectorized_layer_norm_kernel<c10::BFloat16, float>` for N a multiple of 4 (torch 2.13).
 
-    verity-vllm properties-admission produce --adapter verity_vllm.program.registry.quarantine.ln.layer_norm_aten_difftest --n 60 --seed 7 --out DIR
-    verity-vllm properties-admission check   --adapter verity_vllm.program.registry.quarantine.ln.layer_norm_aten_difftest --dir DIR --out quarantine.json
+    verity-vllm properties-admission produce --adapter verity_vllm.program.registry.layer_norm_difftest --n 60 --seed 7 --out DIR
+    verity-vllm properties-admission check   --adapter verity_vllm.program.registry.layer_norm_difftest --dir DIR --out quarantine.json
 
 The row's kind cycles through every edge kind; weight and bias are random except every seventh case, where they take the row's kind
 too.  N covers GPT-NeoX's hidden sizes (Pythia 160M 768, 410M 1024, 1B 2048, 2.8B 2560), a size where some of the 128 threads hold
@@ -36,6 +36,6 @@ def production(statics: dict, inputs: list) -> list:
 
 def spec(statics: dict):
     from verity.ir.defs import bind
-    from verity_vllm.program.registry.quarantine.ln.layer_norm_aten import LayerNormAten
+    from verity_vllm.program.registry.layer_norm import LayerNormAten
 
     return bind(LayerNormAten, N=int(statics["N"]), EPS=float(statics["EPS"]))

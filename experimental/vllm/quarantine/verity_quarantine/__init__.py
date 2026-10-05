@@ -1,6 +1,6 @@
 """verity_quarantine — the vLLM registry's quarantine lanes that core does not bind, moved out of
 `verity_vllm.program.registry.quarantine` (note:20261004T2058Z-draft-repo-organization-principles): `act`, `collective`, `dense`, `ov_moe`.
-The lanes core still binds (`ln`, `ov_sampling`) stay in core's quarantine.
+The lanes core bound (`ln`, `ov_sampling`) were promoted into `verity_vllm.program.registry`.
 
 Each lane is a sub-package of provisional numerical Definitions pending admission, or of re-exports of Definitions already promoted
 to `verity_vllm.program.registry`, with a `*_difftest.py` adapter for `verity-vllm properties-admission` beside each. Admission

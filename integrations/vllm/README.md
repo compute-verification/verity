@@ -56,8 +56,9 @@ primitive families through `verity.ir.codec.register_lazy_family`), lowering (`f
 lifted / padded Programs (`lifting/`), `workload.py` / `compact.py`, `model.py` (specified computations such as bf16(sqrt(H))),
 and `kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
 their tables).  Entrypoints: `program.frontend.derive`, `program.registry`.  Never: module paths as identity, hook sets,
-proof-unit policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks; the lanes core does not bind
-are `verity_quarantine` under `experimental/vllm/quarantine`).  `registry/fa3_check_inf.py` is FA3's
+proof-unit policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks; it holds no lane: those core
+binds were promoted into `registry/`, the rest are `verity_quarantine` under `experimental/vllm/quarantine`).
+`registry/fa3_check_inf.py` is FA3's
 per-iteration `Check_inf` chain (`Attention_v4`), bound under `TargetProfile.fa3_construction = "check-inf-per-iteration"` (the default).
 
 **`query/`** implements the *verification query*: `word.py` (`Q_word_v1{X=16,W=32}`, the query of record: every Call's circuit cut

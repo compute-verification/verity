@@ -1,6 +1,6 @@
 """The remaining chains with their program values as inputs: `Attention_v12` / `v13` (the scale; the target-keyed chain without FA2's
 per-iteration Check_inf, and FA3's), `AttentionSoftcap_v4` / `v5` (the softcap's two words) and the elementwise scalars
-(`Bf16DivScalar_v3`, `Bf16MulScalar_v3`, `AddScalarF32_v3`, `AddScalarBf16_v3`), and the reference and quarantine norms' epsilon
+(`Bf16DivScalar_v3`, `Bf16MulScalar_v3`, `AddScalarF32_v3`, `AddScalarBf16_v3`), and the reference and aten norms' epsilon
 (`RMSNormRef_v2`, `LayerNormRef_v2`, `LayerNormAten_v2`). Each computes what its constant-holding twin computes and holds none of its
 values as a constant."""
 
@@ -17,7 +17,7 @@ from verity.ir.program import Program
 from verity_vllm.program.registry import b1, dense as DN, fa2_softcap as F2S, fa3_check_inf as F3, hopper
 from verity_vllm.program.registry import prims as P, ref_prims as RP
 from verity_vllm.program.registry import value_inputs as VI
-from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as LN
+from verity_vllm.program.registry import layer_norm as LN
 
 HOP = dict(DOT=hopper.HopperBF16WgmmaDot16)
 
