@@ -9,7 +9,7 @@ set -euo pipefail
 OUT=${RESEARCH_RUN_DIR:?}/out
 PY=${TIMING_PY:-/workspace/jobs/venv312/bin/python}
 GPUS=${TIMING_GPUS:-4,5,6}
-export PATH=$HOME/.elan/bin:$PATH
+export PATH=$HOME/.elan/bin:$(dirname "$PY"):$PATH
 export CUDA_HOME=${CUDA_HOME:-/workspace/jobs/cuda-12.9}
 export GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting:timing-loop}
 SRC=$(pwd)
