@@ -48,7 +48,9 @@ reads each again when the tip lands, with its ready mark and grants (`unready`).
 A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
 both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
 that doesn't parse (`_merge`).  Before a train is built, each ref whose change needs a TRAIN_GRANTS grant under
-`research queue`'s rules is refused until pull request N holds it at that head (`ungranted`).
+`research queue`'s rules is refused until pull request N holds it at that head, or at an earlier
+head whose change against the train's base this one repeats file for file and byte for byte (a restack or a merge of `main`:
+`research.queue.carry`, which prints the head it carried from) (`ungranted`).
 
 A push that lands a change to what a guarantee says (a `lean-audit.json`'s guarantees or the definitions they read) DMs Daniel
 what changed, and nothing waits on him (`spec_alert`; his ruling, 3 Oct). A DM that fails is printed and goes to #agent-alerts.
@@ -763,9 +765,10 @@ TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/au
 
 def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=print) -> list[str]:
     """Why each train ref whose change from ``base`` needs a TRAIN_GRANTS grant under the queue's rules (as ``base`` has them;
-    none when it has no rules file) can't go in: pull request N lacks the `grant` label on `pr:N@SHA` at its pinned head (and,
-    for a lean-audit.json change, a `lean_review` that printed it whole as the same statements: `research.queue.reviewed`), or
-    the ref isn't a pinned pull request, which is all a grant can be on."""
+    none when it has no rules file) can't go in: pull request N lacks the `grant` label on `pr:N@SHA` at its pinned head, or on
+    an earlier head it only restacks or merges ``base`` into (`research.queue.carry`, printed as it carries), and, for a
+    lean-audit.json change, a `lean_review` on either that printed it whole as the same statements (`research.queue.reviewed`);
+    or the ref isn't a pinned pull request, which is all a grant can be on."""
     from .queue import QueueError, StoreGrants, grant_target
 
     try:
@@ -775,25 +778,32 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
     if rules is None:
         return []
     path = rules.source
-    grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)))
+
+    def say(s: str) -> None:
+        log(s.replace("research queue:", "research merge:", 1))
+
+    grants = StoreGrants(store, say, repo=repo, base=base)
     out = []
     try:
         lean = {g.role for g in rules.grants if g.lean_audit}
         for label, sha in pins:
             pr = int(label[1:]) if label.startswith("#") else None
-            need = sorted(rules.needs(repo, base, sha, (lambda: grants.reviews(pr, sha)) if pr else list) & set(TRAIN_GRANTS))
+            need = sorted(rules.needs(repo, base, sha, (lambda: grants.reviews(pr, sha)) if pr else list, log=say) & set(TRAIN_GRANTS))
             if need and pr is None:
                 out.append(f"{label} needs the {', '.join(need)} grant ({path}), which only a pull request's pinned head can hold: "
                            f"name it as N@SHA")
-            elif missing := [g for g in need if g not in grants(pr, sha)]:
+                continue
+            lacking = set(need) - grants(pr, sha) if need else set()
+            if missing := sorted(lacking - grants.carried(pr, sha, lacking)):
                 target = grant_target(pr, sha)
                 out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: {TRAIN_GRANTS[g]}); once it has it, "
-                        f"`research data label {target} grant {g} --by REVIEWER` (a new push needs a new one)" + (
+                        f"`research data label {target} grant {g} --by REVIEWER` (one on an earlier head counts only when this "
+                        f"head just restacks it or merges main into it: `research.queue.carry`)" + (
                             f". A change `audit.py --update` (`--moved MOVES.json` for a move) prints only as the same statements "
                             f"needs none: `research data put --kind lean-review/v1 --file OUT/audit.json`, then `research data "
                             f"label {target} lean_review ART --by LANE`" if g in lean else "") for g in missing]
-    except QueueError as e:
-        raise Refused(f"the queue's rules ({path}): {e}") from e
+    except QueueError as e:                             # a store or git that can't answer (STALE), not the rules
+        raise Refused(str(e)) from e
     return out
 
 
