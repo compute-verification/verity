@@ -192,43 +192,21 @@ def test_every_registered_tool_is_declared_in_this_tree():
 _PATH = re.compile(r"^[\w.-]+(/[\w.@+-]+)+/?$")
 
 
-def _anchor(node: ast.AST, here: str, names: dict[str, str]) -> str | None:
-    """The repository path a `Path(__file__)…` expression (or a name bound to one) evaluates to, `..` where it leaves the
-    tree; None for anything else."""
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "Path" and len(node.args) == 1 \
-            and isinstance(node.args[0], ast.Name) and node.args[0].id == "__file__":
-        return here
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in ("resolve", "absolute"):
-        return _anchor(node.func.value, here, names)
-    if isinstance(node, ast.Attribute) and node.attr == "parent":
-        a = _anchor(node.value, here, names)
-        return None if a is None else (a.rpartition("/")[0] if "/" in a else ("" if a else ".."))
-    if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute) and node.value.attr == "parents" \
-            and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
-        a = _anchor(node.value.value, here, names)
-        for _ in range(node.slice.value + 1):
-            if a is None:
-                return None
-            a = a.rpartition("/")[0] if "/" in a else ("" if a else "..")
-        return a
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div) and isinstance(node.right, ast.Constant) \
-            and isinstance(node.right.value, str):
-        a = _anchor(node.left, here, names)
-        return None if a is None or a.startswith("..") else "/".join(p for p in (a, node.right.value) if p)
-    if isinstance(node, ast.Name):
-        return names.get(node.id)
-    return None
+@functools.cache
+def _anchors():
+    return _module("gate_paths_anchors", ROOT / "tools" / "check" / "anchors.py")
 
 
 def path_constants(rel: str, text: str, tops: frozenset[str]) -> list[tuple[int, str, str]]:
     """(line, the path, how it's written) for each repository path a module-level assignment of ``rel`` names: a string
-    whose first segment is one of ``tops``, or a join anchored on `__file__`."""
+    whose first segment is one of ``tops``, or a join anchored on `__file__` (`tools/check/anchors.py` evaluates it)."""
+    anchor = _anchors().anchor
     out, names = [], {}
     for node in ast.parse(text).body:
         if not isinstance(node, (ast.Assign, ast.AnnAssign)) or node.value is None:
             continue
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-        if (a := _anchor(node.value, rel, names)) is not None:
+        if (a := anchor(node.value, rel, names)) is not None:
             for t in targets:
                 if isinstance(t, ast.Name):
                     names[t.id] = a
@@ -238,7 +216,7 @@ def path_constants(rel: str, text: str, tops: frozenset[str]) -> list[tuple[int,
             if isinstance(sub, ast.Constant) and isinstance(sub.value, str) and _PATH.match(sub.value) \
                     and sub.value.split("/")[0] in tops:
                 out.append((sub.lineno, sub.value, "string"))
-            elif isinstance(sub, ast.BinOp) and (a := _anchor(sub, rel, names)) is not None:
+            elif isinstance(sub, ast.BinOp) and (a := anchor(sub, rel, names)) is not None:
                 if "/" in a:
                     out.append((sub.lineno, a, "join"))
             else:
