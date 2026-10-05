@@ -2,7 +2,7 @@
 `tools/move/layout_map.toml` to the tree, idempotently.
 
 The map has `[paths]` (a file or directory, old = new), `[modules]` (a dotted import name, old = new) and `[create]` (a file and
-its text, written when missing). Every tracked or untracked file under an old path moves; then every text file outside
+its text, written when missing). Like the real one, it refuses a dirty checkout. Every tracked or untracked file under an old path moves; then every text file outside
 `tools/move/` and `skip` (suffixes) has each old module name and old path replaced where it stands as a whole name. A file
 named `LAYOUT_FAIL` at the root makes it fail (exit 1), for tests of a script that fails.
 """
@@ -15,6 +15,8 @@ from pathlib import Path
 
 if Path("LAYOUT_FAIL").exists():
     sys.exit("layout: LAYOUT_FAIL is present")
+if subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True).stdout.strip():
+    sys.exit("layout: the worktree isn't clean")
 MAP = tomllib.loads(Path("tools/move/layout_map.toml").read_text())
 
 

@@ -98,9 +98,10 @@ def move_base(move: str, cwd: str | None) -> str:
     return parents[0]
 
 
-def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[str, list[str]]:
+def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[str, list[str], list[str]]:
     """Check `merged` out in a scratch worktree, run `base`'s layout script at its root, and return the tree it leaves (every
-    change staged, ignored files left out) and the `tools/move/` paths whose branch copy was put back."""
+    change staged, ignored files left out), the `tools/move/` paths whose branch copy was put back, and the tail of the
+    script's output."""
     script, mine = blobs_under(base, SCRIPT_DIR, cwd), blobs_under(merged, SCRIPT_DIR, cwd)
     if SCRIPT not in script:
         raise SystemExit(f"the move's base {base[:12]} has no {SCRIPT}")
@@ -110,18 +111,21 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
         git("worktree", "add", "--detach", "--quiet", wt, merged, cwd=cwd)
         try:
             if restored:
+                # committed, so that the script sees a clean checkout (layout.py refuses a dirty one)
                 git("checkout", base, "--", SCRIPT_DIR, cwd=wt)
+                overlay = commit_tree(out("write-tree", cwd=wt), [merged], f"restack: {SCRIPT_DIR}/ as at {base}\n", wt)
+                git("reset", "-q", "--soft", overlay, cwd=wt)
             p = subprocess.run([python, SCRIPT], cwd=wt, capture_output=True)
+            output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
             if p.returncode:
-                tail = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
-                raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(tail))
+                raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
             git("add", "-A", cwd=wt)
             for path in restored:
                 if path in mine:
                     git("checkout", merged, "--", path, cwd=wt)
                 else:
                     git("rm", "-q", "-f", "--ignore-unmatch", "--", path, cwd=wt)
-            return out("write-tree", cwd=wt), restored
+            return out("write-tree", cwd=wt), restored, output
         finally:
             git("worktree", "remove", "--force", wt, cwd=cwd, ok=(0, 128))
             git("worktree", "prune", cwd=cwd)
@@ -149,7 +153,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             tip = commit_tree(tree, [head, base], f"Merge {base[:12]}, the layout move's base, into {branch}\n", cwd)
             r["steps"].append({"step": "base", "commit": tip})
         try:
-            tree, restored = run_script(tip, base, python, cwd)
+            tree, restored, output = run_script(tip, base, python, cwd)
         except ScriptFailed as e:
             return {**r, "status": "script-failed", "step": "script", "error": str(e)}
         ran = True
@@ -158,7 +162,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
                    f"The layout move's codemod, run at the root of this tree as {move[:12]} was made from {base[:12]}.\n\n"
                    f"{TRAILER_MOVE}: {move}\n{TRAILER_OF}: {head}\n")
             tip = commit_tree(tree, [tip], msg, cwd)
-            r["steps"].append({"step": "script", "commit": tip, "restored": restored})
+            r["steps"].append({"step": "script", "commit": tip, "restored": restored, "output": output})
     if contains(onto, tip, cwd):
         return {**r, "status": "clean", "result": tip}
     tree, conflicts = merge_trees(tip, onto, cwd, base=move if ran else None)
