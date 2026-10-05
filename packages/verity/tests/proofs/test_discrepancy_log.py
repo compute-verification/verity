@@ -14,7 +14,7 @@ from pathlib import Path
 from verity.ml.tc.instructions import INSTRUCTIONS
 from verity.proofs.target import DISCREPANCY_LOG, FIRST, HAWKEYE_PIN, TARGETS
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 REQUIRED = ("id", "profile", "class", "issue", "hawkeye_paper", "hawkeye_simulator", "verity_reference",
             "hardware_evidence", "status", "resolution", "evidence_refs", "owner")
 STATUSES = ("open", "resolved", "excluded")

@@ -160,11 +160,6 @@ def GγSampledU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMo
 
 /-! ## Pearl-C's tiles -/
 
-/-- Row `i` of a committed operand of `p` rows and `q` columns passes Π's rules: `PearlCSem.OperandOK`, one row. -/
-def PearlCSem.RowOK (sem : PearlCSem Q R S) (p q : ℕ) (W : Codes) (i : ℕ) : Prop :=
-  (∀ l < q, (wordQ (W i l)).isSome) ∧ ∀ h : i < p,
-    LiveRow Params.pi.δ (wordsVal p q W ⟨i, h⟩) Stat.every8 ∧ 1 ≤ sem.floor q (wordsVal p q W ⟨i, h⟩)
-
 open Classical in
 /-- A tile's credited rows: those whose activation row passes Π's rules. An excluded row stays in its unit, computed and
 bound, and earns no credit. -/

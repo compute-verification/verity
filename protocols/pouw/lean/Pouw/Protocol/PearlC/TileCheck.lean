@@ -24,6 +24,10 @@ by a `Verity.Partition`), with
   plain Program, whose checked words are registered wires. The hiding Program registers a tile by its TurboSHAKE128 leaf
   (`pouw/tile-h0/v1`), so there it is the circuit's words differing from `c`'s under the same leaf.
 
+The check also asks each of the tile's weight rows to pass the protocol's `weightOK`, as `check_tile`'s `admissible`
+does. It decides that on the rows it opens against the weight's root, which are `U`'s, so no prover supplies it, and L3
+reads the weights' admission from there, not from the domain.
+
 The cap, `TileGood`'s first conjunct, reads only the committed activations; the words read the circuit's outputs. So
 L3 is the two (`TileCheck.Computes`, `TileCheck.ComputesCap`, `TileCheck.ComputesWords`). L3 is exact: the Program
 recomputes A′, B̃, P_A, P_B, C̃ and U from the anchors and checks no projection, so the tile check has no soundness error
@@ -62,13 +66,17 @@ def TileCheck.valueAt (TC : TileCheck Q R S) (U : Workload) (τ : Transcript) (u
   | none => fun _ => 0
 
 /-- **Tile `g`'s check accepts `X`** for the commitment `c` of its unit: every unit of the cone of the tile's checked
-wires is correct in `X`, and `X` holds the anchors on the public wires and `c`'s values on the registered ones. -/
-def TileCheck.Accepts (TC : TileCheck Q R S) (TR : TileRules Q R S) (H : Q → R) (s : S) (U : Workload) (g : ℕ)
-    (c : Commit) (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).Transcript) : Prop :=
+wires is correct in `X`, `X` holds the anchors on the public wires and `c`'s values on the registered ones, and each of
+the tile's weight rows passes the rules (`P.weightOK`). The check decides that last from the weight rows it opens, which
+are `U`'s, never from `X`. -/
+def TileCheck.Accepts (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (H : Q → R) (s : S)
+    (U : Workload) (g : ℕ) (c : Commit) (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).Transcript) : Prop :=
   (∀ v ∈ (TC.part _).cone (TC.out _ ((TR.tiling U.layout).rows g) ((TR.tiling U.layout).cols g)),
       (TC.part _).Correct X v) ∧
     (∀ w ∈ TC.pub _, X w = TC.anchorsOf H s U ((TR.tiling U.layout).unit g) c.act w) ∧
-    ∀ w ∈ TC.reg _, X w = TC.rowsOf U ((TR.tiling U.layout).unit g) c w
+    (∀ w ∈ TC.reg _, X w = TC.rowsOf U ((TR.tiling U.layout).unit g) c w) ∧
+    ∀ j ∈ (TR.tiling U.layout).cols g,
+      P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g)) (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j
 
 /-- The words of a good tile: each ticket and useful word of a credited row has the reference value. `TileGood` is the
 cap and these. -/
@@ -85,7 +93,7 @@ registered values fail to bind the circuit's words (`Collides`). On a transcript
 g` is `c`, `g` is then in `goodTiles`; a tile of a blank unit is in `blankTiles` whatever the witness. -/
 def TileCheck.Computes (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S) (g : ℕ), g < (TR.tiling U.layout).NT → ∀ (c : Commit) X,
-    TC.Accepts TR H s U g c X →
+    TC.Accepts P TR H s U g c X →
       TileGood P TR U H s g c ∨
         TC.Collides U ((TR.tiling U.layout).unit g) ((TR.tiling U.layout).rows g) ((TR.tiling U.layout).cols g) c X
 
@@ -96,14 +104,14 @@ the activations. -/
 def TileCheck.ComputesCap (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) :
     Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S) (g : ℕ), g < (TR.tiling U.layout).NT → ∀ (c : Commit) X,
-    TC.Accepts TR H s U g c X → TR.capOK H s U g c.act
+    TC.Accepts P TR H s U g c X → TR.capOK H s U g c.act
 
 /-- **L3's words**: an accepted tile's checked words have the reference values on its credited rows, unless the
 registered values fail to bind the circuit's words. -/
 def TileCheck.ComputesWords (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) :
     Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S) (g : ℕ), g < (TR.tiling U.layout).NT → ∀ (c : Commit) X,
-    TC.Accepts TR H s U g c X →
+    TC.Accepts P TR H s U g c X →
       TileWordsGood P TR U H s g c ∨
         TC.Collides U ((TR.tiling U.layout).unit g) ((TR.tiling U.layout).rows g) ((TR.tiling U.layout).cols g) c X
 
