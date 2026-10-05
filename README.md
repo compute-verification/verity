@@ -148,7 +148,7 @@ ir + ml + commitments  <-  proofs
 randomness, claims: import no other core module
 ~~~
 
-`verity/tests/test_boundaries.py` and `tests/test_protocol_boundaries.py` enforce these rules. Import each object from the module that owns it (`from verity.primitives.circuits import Program`); `verity` itself re-exports nothing.
+`verity/tests/test_boundaries.py` enforces these rules. Import each object from the module that owns it (`from verity.primitives.circuits import Program`); `verity` itself re-exports nothing.
 
 There is no GitHub Actions CI. `check` is the one check, and a merge into `main` goes through `research merge`, which refuses without a passing `check` of that exact commit. [AGENTS.md](AGENTS.md) has the full rules for contributors and agents: commands, circuits, checking and merging, Lean, and where writing goes.
 
