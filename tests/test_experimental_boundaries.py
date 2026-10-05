@@ -20,18 +20,19 @@ EXPERIMENTAL = frozenset(Path(p).name for pyproject in sorted((ROOT / "experimen
                          for p in tomllib.loads(pyproject.read_text())["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 
-#: Every core test file that imports an experimental package, with each module it imports.  Move the test into the experimental
-#: package's own suite (or drop the use) and delete its line.  A library file never belongs here.
+#: Every core test file that imports an experimental package, with each module it imports, named within its package ("" for the
+#: package itself), so the list holds however the package is named.  Move the test into the experimental package's own suite (or
+#: drop the use) and delete its line.  A library file never belongs here.
 KNOWN = {
-    ("integrations/vllm/tests/collectives/collective_link.py", "verity_quarantine.collective.allreduce"),
-    ("integrations/vllm/tests/collectives/test_tp_collective.py", "verity_quarantine"),
-    ("integrations/vllm/tests/collectives/test_tp_collective.py", "verity_quarantine.collective"),
-    ("integrations/vllm/tests/engine/test_gen_dense_gemma2_patterns.py", "verity_quarantine.dense"),
-    ("integrations/vllm/tests/engine/test_gen_dense_softcap.py", "verity_quarantine.dense"),
-    ("integrations/vllm/tests/engine/test_gen_ov_moe.py", "verity_quarantine.ov_moe"),
-    ("integrations/vllm/tests/program/test_norm_chain.py", "verity_quarantine.dense"),
-    ("integrations/vllm/tests/program/test_scalar_tensor_mul.py", "verity_quarantine.dense"),
-    ("integrations/vllm/tests/program/test_silu_mul_v2.py", "verity_quarantine.act"),
+    ("integrations/vllm/tests/collectives/collective_link.py", "collective.allreduce"),
+    ("integrations/vllm/tests/collectives/test_tp_collective.py", ""),
+    ("integrations/vllm/tests/collectives/test_tp_collective.py", "collective"),
+    ("integrations/vllm/tests/engine/test_gen_dense_gemma2_patterns.py", "dense"),
+    ("integrations/vllm/tests/engine/test_gen_dense_softcap.py", "dense"),
+    ("integrations/vllm/tests/engine/test_gen_ov_moe.py", "ov_moe"),
+    ("integrations/vllm/tests/program/test_norm_chain.py", "dense"),
+    ("integrations/vllm/tests/program/test_scalar_tensor_mul.py", "dense"),
+    ("integrations/vllm/tests/program/test_silu_mul_v2.py", "act"),
 }
 
 
@@ -45,7 +46,7 @@ def _modules(path: Path, text: str) -> set[str]:
         elif (isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)
               and (node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", None)) in IMPORT_CALLS):
             out.add(node.args[0].value)
-    return {m for m in out if m.split(".")[0] in EXPERIMENTAL}
+    return {m.partition(".")[2] for m in out if m.split(".")[0] in EXPERIMENTAL}
 
 
 @functools.cache
@@ -64,7 +65,7 @@ def _sites() -> frozenset[tuple[str, str]]:
 
 
 def test_the_experimental_packages_are_found():
-    assert "verity_quarantine" in EXPERIMENTAL
+    assert EXPERIMENTAL and all(name.isidentifier() for name in EXPERIMENTAL)
 
 
 def test_nothing_outside_experimental_imports_it_except_known_tests():
