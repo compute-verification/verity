@@ -15,8 +15,9 @@ units', with
   against `F_A`'s column `q` at scale `1.0`, the words `peelFp4` reads as `G` (`gram4`). That the verifier's public
   inputs are these is L8;
 * `reg sh`: the activation rows `a`, the weight rows `b` and every entry's `C̃` and `U`. The rows are BF16 in the
-  Program, so `a`'s and `b`'s gates hold the BF16 words of the commitment's values (`bf16WordOf`, the words `pc4Sem`'s
-  `encRow16` reads), and `C̃` and `U` the ticket and useful words, each as the gate's low 32 bits (`rows4`);
+  Program, so `a`'s and `b`'s gates hold the commitment's words shifted right by 16, each as the gate's low 16 bits:
+  a widened BF16 word's BF16 word, `−0` included (`Fp4Sem.OperandOK` asks that every word be one), and `C̃` and `U`
+  the ticket and useful words, each as the gate's low 32 bits (`rows4`);
 * `Collides`: `False`, since the checked words are registered wires.
 
 The Program needs whole tiles and `64 ∣ k` (`pc4.Shape.check`); at another shape the table is still defined, and L3 is
@@ -42,12 +43,12 @@ def entry4 (M N K TM TN : ℕ) (tk us : Codes) (g : ℕ) : ℕ :=
     if b % block4Len K = K / 64 - 1 then tk i j
     else if b % block4Len K = block4Len K - 1 then us i j else 0
 
-/-- The registered values on gate `g`: the BF16 word of activation `(i, t)`'s value on `a`'s gates, of weight `(j, t)`'s
-on `b`'s, the ticket and useful words on the tiles' `C̃` and `U` gates, `0` elsewhere. -/
+/-- The registered values on gate `g`: activation word `(i, t)`'s high half (its BF16 word) on `a`'s gates, weight word
+`(j, t)`'s on `b`'s, the ticket and useful words on the tiles' `C̃` and `U` gates, `0` elsewhere. -/
 def rows4 (M N K TM TN : ℕ) (act wt tk us : Codes) (g : ℕ) : ℕ :=
-  if g < eaAt M K then bf16WordOf ((wordQ (act (g / K) (g % K))).getD 0)
+  if g < eaAt M K then act (g / K) (g % K) / 2 ^ 16
   else if g < bAt M K then 0
-  else if g < ebAt M N K then bf16WordOf ((wordQ (wt ((g - bAt M K) / K) ((g - bAt M K) % K))).getD 0)
+  else if g < ebAt M N K then wt ((g - bAt M K) / K) ((g - bAt M K) % K) / 2 ^ 16
   else entry4 M N K TM TN tk us g
 
 /-- A line's E2M1 codes, `0` past its end. -/

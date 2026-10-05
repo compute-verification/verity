@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import posixpath
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -27,7 +28,8 @@ from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import option
 from verity_vllm.properties.record import seal
 
-#: Frozen.  Paths a lane may not touch at all (any diff status).  Globs are repo-relative; fnmatch `*` crosses `/`.
+#: Frozen.  Paths a lane may not touch at all (any diff status).  Every glob and path in this module is relative to the package
+#: root (`integrations/vllm`, `config.ROOT`), as `diff` names them; fnmatch `*` crosses `/`.
 PROTECTED: tuple[str, ...] = (
     # what counts as evidence
     "verity_vllm/check/gates.py", "verity_vllm/pipeline/report.py", "verity_vllm/check/root_policy.py", "verity_vllm/properties/golden.py",
@@ -69,7 +71,7 @@ def _git(*args: str, cwd: Path = REPO) -> str:
 
 
 def classify(changed: list[tuple[str, str]]) -> dict[str, Any]:
-    """`changed`: [(status, path)] from `git diff --name-status`.  Returns the provenance rows."""
+    """`changed`: [(status, path)] from `diff`, paths relative to the package root.  Returns the provenance rows."""
     prot, prims, allow, golden, roots = [], [], [], [], []
     for st, path in changed:
         if _match(path, WRITABLE_EXCEPTIONS):
@@ -93,12 +95,16 @@ def classify(changed: list[tuple[str, str]]) -> dict[str, Any]:
 
 
 def diff(base: str, head: str, cwd: Path = REPO) -> list[tuple[str, str]]:
-    out = _git("diff", "--name-status", f"{base}...{head}", cwd=cwd)
+    """[(status, path)] of `base...head`, each path relative to the package root `cwd` (one outside it starts with `../`).
+    git names them from the repository root whatever its working directory, and the globs name them from the package root.
+    A rename is its deletion and its addition, so moving a protected file out of its path counts."""
+    prefix = _git("rev-parse", "--show-prefix", cwd=cwd).strip() or "."
+    out = _git("diff", "--name-status", "--no-renames", f"{base}...{head}", cwd=cwd)
     rows = []
     for line in out.splitlines():
         parts = line.split("\t")
         if len(parts) >= 2:
-            rows.append((parts[0][0], parts[-1]))
+            rows.append((parts[0][0], posixpath.relpath(parts[-1], prefix)))
     return rows
 
 
@@ -140,7 +146,7 @@ def new_definitions(changed: list[tuple[str, str]], head: str, cwd: Path = REPO)
     for st, path in changed:
         if path.startswith("verity_vllm/program/registry/quarantine/") and path.endswith(".py"):
             try:
-                src = _git("show", f"{head}:{path}", cwd=cwd)
+                src = _git("show", f"{head}:./{path}", cwd=cwd)
             except subprocess.CalledProcessError:
                 continue
             for m in re.finditer(r"^\s*(?:@(?:composite|primitive)\b.*\n\s*def\s+(\w+)|(\w+)\s*=\s*(?:Primitive|Composite)Definition\()", src, re.M):
@@ -151,8 +157,8 @@ def new_definitions(changed: list[tuple[str, str]], head: str, cwd: Path = REPO)
 def manifest_frozen_entries_changed(base: str, head: str, cwd: Path = REPO) -> list[str]:
     """Entries of the checkpoint manifest present at `base` whose content differs at `head` (appending is fine)."""
     try:
-        b = json.loads(_git("show", f"{base}:{MANIFEST}", cwd=cwd))
-        h = json.loads(_git("show", f"{head}:{MANIFEST}", cwd=cwd))
+        b = json.loads(_git("show", f"{base}:./{MANIFEST}", cwd=cwd))
+        h = json.loads(_git("show", f"{head}:./{MANIFEST}", cwd=cwd))
     except subprocess.CalledProcessError:
         return []
     # Append-only: the base entries must be a position-wise prefix of the head entries.  (Keyed comparison on
