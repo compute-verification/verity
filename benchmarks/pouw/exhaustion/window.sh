@@ -13,7 +13,8 @@
 # Writes under OUT (default $RESEARCH_RUN_DIR/out): ship.sha256; bench-before/card<g>/ (bench.py with the Pearl-C arm: the
 # baselines' and the arm's times, its gates and transcript); <schedule>/ (window.py's OUT and audit.json); bench-after/card<g>/
 # (the baselines alone); verify-before/card<g>.json; mpstat-<segment>.txt.  Exit: the first window's audit's, else the first failure
-# (with AUDIT=0, the lease's).
+# (with AUDIT=0, the lease's).  With AUDIT=0 the bench transcripts' rows stay in the scratch dir, which OUT/kept-rows names, until
+# audit.sh on this machine verifies and releases them; each start sweeps scratch dirs older than ROWS_KEEP_HOURS (rows.sh).
 set -uo pipefail
 exec < /dev/null
 mode=${1:?rehearsal|timed}; ship_tar=${2:?SHIP_TAR}; build=${3:?HARNESS_BUILD}
@@ -26,8 +27,10 @@ case $mode in
   timed) LEASE=(gpu-lease 8 --wait --timed --max-min "$MAX_MIN" --mem-gb "${MEM_GB:-160}") ;;
   *) echo "MODE $mode: rehearsal or timed" >&2; exit 2 ;;
 esac
+. "$HERE/rows.sh"
+rows_sweep "${SCRATCH_ROOT:-/tmp}"
 SCR=$(mktemp -d -p "${SCRATCH_ROOT:-/tmp}" exhaustion.XXXXXX)
-trap 'rm -rf "$SCR"' EXIT
+trap 'rows_exit "$SCR" "$OUT"' EXIT
 mkdir -p "$OUT"
 tar -xf "$ship_tar" -C "$SCR" || exit 1
 export PEARLC_SHIP=$SCR/ship PEARLC_ROWS=$SCR/rows POUW_SASS_GATE_CACHE=${POUW_SASS_GATE_CACHE:-$SCR/sass-gate-cache}

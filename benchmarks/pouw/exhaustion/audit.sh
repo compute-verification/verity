@@ -5,6 +5,8 @@
 #     SRC is window.sh's OUT, or a tar of its contents (unpacked into OUT, default $RESEARCH_RUN_DIR/out, and audited there).
 #   env: PY (default python3; needs numpy), JOBS (audit.py's processes, default nproc).
 # Writes <schedule>/audit.json beside each window and verify-before/card<g>.json.  Exit: the first window's audit's, else 1.
+# The verify reads the bench transcripts' rows from window.sh's scratch on the window's machine (rows.sh): with AUDIT=0 they are
+# kept there until this script, run on that machine, has verified them, and then released; elsewhere the verify is skipped.
 set -uo pipefail
 exec < /dev/null
 src=${1:?SRC}
@@ -17,6 +19,9 @@ else
   OUT=${2:-$RESEARCH_RUN_DIR/out}
   mkdir -p "$OUT" && tar -xf "$src" -C "$OUT" || exit 1
 fi
+. "$HERE/rows.sh"
+rows_claim "$OUT"
+kept=$(cat "$OUT/kept-rows" 2>/dev/null) && rows_sweep "$(dirname "$kept")"
 rc=
 for start in "$OUT"/*/start.json; do
   [ -f "$start" ] || continue
@@ -25,10 +30,17 @@ for start in "$OUT"/*/start.json; do
   a=$?; echo "audit $(basename "$w") rc=$a"; rc=${rc:-$a}
 done
 mkdir -p "$OUT/verify-before"
+rows_claim "$OUT"
+rows_check "$OUT"; rows=$?
 for b in "$OUT"/bench-before/card*/bench.json; do
   [ -f "$b" ] || continue
   g=$(basename "$(dirname "$b")")
+  if [ "$rows" != 0 ]; then
+    echo "verify $g skipped: its transcript's rows are not on this machine (window.sh with AUDIT=0 keeps them on its own)"
+    continue
+  fi
   "$PY" "$ROOT/benchmarks/pouw/harness/verify.py" "$b" --out "$OUT/verify-before/$g.json" --no-ledger > "$OUT/verify-before/$g.log" 2>&1 < /dev/null
   echo "verify $g rc=$?"
 done
+rows_release "$OUT"
 exit "${rc:-1}"
