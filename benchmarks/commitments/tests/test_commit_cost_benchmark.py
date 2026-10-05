@@ -75,3 +75,10 @@ def test_commit_cost_tool_is_registered() -> None:
     assert key == {"scheme": "vllm-v1", "leaves": 1024, "leaf_bytes": 256}
     _, key = tool.resolve_params(["--scheme", "vllm-v1", "--leaves", "1024", "--impl", "gpu"], ROOT)
     assert key == {"scheme": "vllm-v1", "leaves": 1024, "leaf_bytes": 256, "impl": "gpu"}
+
+
+def test_vllm_pu_commit_tool_is_registered() -> None:
+    tool = tools_registry.load("vllm_pu_commit", ROOT)
+    argv = ["python", "benchmarks/commitments/vllm_pu/pu_bench.py", "run", "--micro", "--rounds", "0,1"]
+    _, key = tool.resolve_params(argv, ROOT)
+    assert key["mode"] == "run" and key["micro"] and key["rounds"] == "0,1" and key["arms"] == "control,coarse,fine,retain"

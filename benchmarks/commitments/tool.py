@@ -3,9 +3,11 @@
     research run --tool commit_cost --project verity -- python benchmarks/commitments/commit_cost.py --scheme all --leaves 1048576
     research run --tool hiding_leaf_cost --campaign salted-leaves -- python benchmarks/commitments/hiding_leaf_cost.py
     research run --tool serving_commit_cost --campaign C -- python benchmarks/commitments/serving_commit_cost.py --input-set DIR --n 1024
+    research run --queue --gpus 1 --tool vllm_pu_commit --campaign C -- python benchmarks/commitments/vllm_pu/pu_bench.py run --micro
 
 Key params: for commit_cost the schemes, the leaf count and the leaf size; for hiding_leaf_cost the row sizes and the row
-count; for serving_commit_cost the input set, the instance count and the workers.  ``--reps`` and ``--out`` say how often and where, and do not enter the derivation.  Imports nothing but
+count; for serving_commit_cost the input set, the instance count and the workers; for vllm_pu_commit the arms, rounds and
+workload.  ``--reps`` and ``--out`` say how often and where, and do not enter the derivation.  Imports nothing but
 ``research.store.tool``.
 """
 
@@ -93,4 +95,33 @@ SERVING_COMMIT_COST = Tool(
     key_params=["input_set", "n", "workers"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse_serving,
+)
+
+
+def parse_vllm_pu(argv: list[str]) -> dict:
+    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    ap.add_argument("mode", nargs="?", default="run")
+    ap.add_argument("--model", default="unsloth/Meta-Llama-3.1-8B-Instruct")
+    ap.add_argument("--arms", default="control,coarse,fine,retain")
+    ap.add_argument("--rounds", default="0")
+    ap.add_argument("--max-num-seqs", type=int, default=256)
+    ap.add_argument("--input-len", type=int, default=1024)
+    ap.add_argument("--output-len", type=int, default=256)
+    ap.add_argument("--num-prompts", type=int, default=1000)
+    ap.add_argument("--lat-reqs", type=int, default=5)
+    ap.add_argument("--micro", action="store_true")
+    ap.add_argument("--verify", action="store_true")
+    ns, _ = ap.parse_known_args([a for a in argv if not a.endswith(("python", "python3", "pu_bench.py"))])
+    return vars(ns)
+
+
+VLLM_PU_COMMIT = Tool(
+    name="vllm_pu_commit",
+    version="1",
+    command=["python", "benchmarks/commitments/vllm_pu/pu_bench.py"],
+    closure=["benchmarks/commitments/vllm_pu/**"],
+    key_params=["mode", "model", "arms", "rounds", "max_num_seqs", "input_len", "output_len", "num_prompts", "lat_reqs", "micro",
+                "verify"],
+    produces=["bench-result/v1", "run-files/v1"],
+    parse=parse_vllm_pu,
 )

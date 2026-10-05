@@ -33,6 +33,7 @@ REGISTRY: dict[str, str] = {
     "pouw_e2e": "benchmarks.pouw.tool:POUW_E2E",
     "pouw_pearl_cal": "benchmarks.pouw.tool:POUW_PEARL_CAL",
     "serving_commit_cost": "benchmarks.commitments.tool:SERVING_COMMIT_COST",
+    "vllm_pu_commit": "benchmarks.commitments.tool:VLLM_PU_COMMIT",
     "flock_pure": "backends.flock.tool:FLOCK_PURE",
     "flock_agreement": "backends.flock.verifier.tool:FLOCK_AGREEMENT",
     "flock_class_sweep": "backends.flock.tool:FLOCK_CLASS_SWEEP",
