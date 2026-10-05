@@ -11,7 +11,7 @@ implementation (the Lean port of `Q_word` first). It describes the bytes the cod
   `python verity/primitives/circuits/tests/test_format_spec.py --write`.
 - Conformance: `verity/primitives/circuits/tests/test_format_spec.py` checks the reference against every vector, and restates
   canonical JSON (as RFC 8785), leaf order, reference sequences and the interning order independently of it. Each section
-  names its vector keys. `tests/ir/partition_vectors.json` pins `Q_word` v1 on top of this format.
+  names its vector keys. `verity/primitives/circuits/tests/partition_vectors.json` pins `Q_word` v1 on top of this format.
 - Scope: schema v1. `verity-ir/descriptor/v0` (every body verbatim, types inline, no alias) still decodes; it is not
   specified here.
 
@@ -380,7 +380,7 @@ changing any of them is a new version of the query.
   This is v1 behaviour, not a property of the circuit, and should go when the query is next revised. `cut.WIDE_FAN_IN` is the
   query's own constant, not the layout's lazy-operand threshold (`layout.WIDE_FAN_IN`, which has no effect on operands).
 
-`WIRING` and `WIDE_FAN_IN` are pinned as data in `tests/ir/qword_vectors.json`, with vectors for every step of the algorithm, every
+`WIRING` and `WIDE_FAN_IN` are pinned as data in `verity/primitives/circuits/tests/qword_vectors.json`, with vectors for every step of the algorithm, every
 refusal and a seeded random corpus.
 
 Vectors: `forward_reference` (a root node reading a later node decodes, gate 11 reading gate 39, and `evaluate` refuses it; a
@@ -415,7 +415,7 @@ significant first), or a `Value<1>` that is not inside one. `elements(T)` lists 
 `word_type`: the signature of the word Definition it computes. A port's number format is an annotation, outside every digest;
 the word view does not read it.
 
-Vectors (`tests/ir/boolean_vectors.json`, written by `python verity/primitives/circuits/tests/test_boolean.py --write`): `gates` (id,
+Vectors (`verity/primitives/circuits/tests/boolean_vectors.json`, written by `python verity/primitives/circuits/tests/test_boolean.py --write`): `gates` (id,
 kind, parameters, return type, truth table), `constants`, `word_view` (type, element widths, word type), and `program`: a 2-bit
 adder built from two full-adder calls, a batch of `Xor2_v1` over axis 1, a constant, a `Not_v1` and an `Xor3_v1`, with its
 descriptor, digest, gate table and truth table on words.
