@@ -16,18 +16,18 @@ import zlib
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation.batch import type_shape
-from verity.evaluation.reference import standalone_call
-from verity.ir import boolean as BL
-from verity.ir import codec
-from verity.ir.defs import PrimitiveDefinition, bind
-from verity.ir.parts import n_members
-from verity.ml.boolean import elementwise as EW
-from verity.ml.boolean import fp
-from verity.ml.boolean import mufu as MU
-from verity.ml.boolean import trace as TR
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation.batch import type_shape
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits import boolean as BL
+from verity.primitives.circuits import codec
+from verity.primitives.circuits.defs import PrimitiveDefinition, bind
+from verity.primitives.circuits.parts import n_members
+from verity_catalog.definitions.boolean import elementwise as EW
+from verity_catalog.silicon import fp
+from verity_catalog.definitions.boolean import mufu as MU
+from verity.primitives.circuits.boolean import trace as TR
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import boolean_norms as BN
 from verity_vllm.program.registry import prims as P
@@ -293,7 +293,7 @@ def _special_rows(rng, N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return tuple(np.stack([row[k] for row in rows]) for k in range(3))
 
 
-#: the MUFU statics as proofs' Boolean Definitions (`verity.ml.boolean.mufu`), which the switch binds
+#: the MUFU statics as proofs' Boolean Definitions (`verity_catalog.definitions.boolean.mufu`), which the switch binds
 CUDA_BITS = {"RSQRT": bind(MU.RsqrtApprox)}
 TRITON_BITS = {"SQRT": bind(MU.MufuSqrtFtz), "SCALEA": bind(MU.DivFullScaleA), "RCP": bind(MU.DivFullRcp)}
 
@@ -429,7 +429,7 @@ def _reached(fn) -> set[str]:
 
 @pytest.mark.parametrize("which", ["cuda", "triton"])
 def test_only_the_mufu_sub_calls_are_word_ids(which) -> None:
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.defs import REGISTRY
     top = _top(which, 1536, 1e-6)
     prims = {i for i in _reached(top) if isinstance(REGISTRY.defs.get(i), PrimitiveDefinition)}
     assert prims <= {"And2_v1", "Xor2_v1", "Not_v1", "Const1[0x0]_v1", "Const1[0x1]_v1"}, prims
