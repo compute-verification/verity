@@ -99,6 +99,18 @@ def test_the_dm_names_the_package_the_pull_requests_and_the_compare_link(tmp_pat
     assert "*pkg/lean*\n• changed guarantee `P.t`" in text
 
 
+def test_a_record_that_moved_with_its_package_is_compared_at_its_old_path(tmp_path):
+    repo = _repo(tmp_path)
+    doc = _doc({"P.t": _g("P.t : A", H1), "P.u": _g("P.u : B", H2)})
+    old = _commit(repo, "protocols/p/lean/lean-audit.json", doc, "base")
+    subprocess.run(["git", "-C", str(repo), "mv", "protocols/p", "p"], check=True)
+    moved = _commit(repo, "p/lean/lean-audit.json", doc, "Layout move (#9)")
+    assert spec.message(repo, old, moved) is None
+    edited = _commit(repo, "p/lean/lean-audit.json", _doc({"P.t": _g("P.t : C", H3), "P.u": _g("P.u : B", H2)}), "m")
+    text = spec.message(repo, old, edited)
+    assert "*p/lean*\n• changed guarantee `P.t`" in text and "new guarantee" not in text and "P.u" not in text
+
+
 def test_a_long_dm_ends_with_the_compare_link_and_closes_its_code_block(tmp_path, monkeypatch):
     repo = _repo(tmp_path)
     monkeypatch.setattr(spec, "LIMIT", 400)
