@@ -80,19 +80,19 @@ def _member(root: Path, path: str, name: str, packages: list[str] | None, build:
 def test_a_python_that_imports_the_trees_packages_from_another_checkout_is_named(tmp_path, monkeypatch):
     tree, other = tmp_path / "tree", tmp_path / "other"
     for root in (tree, other):
-        _member(root, "verity/protocols/accounting/space/pous", "verity-pous", ["verity.protocols.accounting.space.pous"])
+        _member(root, "protocols/pous", "verity-pous", ["verity_pous"])
         _member(root, "tools/check", "check", None, build=False)
     S = _suites(monkeypatch, tree)
-    pkgs = {"verity-pous": "verity/protocols/accounting/space/pous", "check": "tools/check"}
-    env = dict(os.environ, PYTHONPATH=str(other / "verity" / "protocols" / "accounting" / "space" / "pous"))
-    assert S.foreign(pkgs, env) == f"verity.protocols.accounting.space.pous from {other / 'verity' / 'protocols' / 'accounting' / 'space' / 'pous' / '__init__.py'}"
-    env["PYTHONPATH"] = str(tree / "verity" / "protocols" / "accounting" / "space" / "pous")
+    pkgs = {"verity-pous": "protocols/pous", "check": "tools/check"}
+    env = dict(os.environ, PYTHONPATH=str(other / "protocols" / "pous"))
+    assert S.foreign(pkgs, env) == f"verity_pous from {other / 'protocols' / 'pous' / 'verity_pous' / '__init__.py'}"
+    env["PYTHONPATH"] = str(tree / "protocols" / "pous")
     assert S.foreign(pkgs, env) is None
 
 
 def test_every_declared_package_is_probed_whatever_its_name_and_one_that_wont_import_is_named(tmp_path, monkeypatch):
     """The names come from each member's build configuration, not a `verity` prefix: a package moved to `catalog/` is probed like
-    `verity.protocols.accounting.space.pous`, and one the Python can't find at all is named rather than passed over."""
+    `verity_pous`, and one the Python can't find at all is named rather than passed over."""
     tree, other = tmp_path / "tree", tmp_path / "other"
     for root in (tree, other):
         _member(root, "catalog", "catalog", ["src/catalog"])
@@ -123,9 +123,9 @@ def test_suites_refuse_a_python_that_imports_the_trees_packages_from_elsewhere(t
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setenv("PYTHONPATH", f"/tmp/explorer/a{os.pathsep}{tmp_path / 'pkg'}")
     probed = []
-    monkeypatch.setattr(S, "foreign", lambda pkgs, env: probed.append(env["PYTHONPATH"]) or "verity.protocols.accounting.space.pous from /tmp/s1350/x.py")
+    monkeypatch.setattr(S, "foreign", lambda pkgs, env: probed.append(env["PYTHONPATH"]) or "verity_pous from /tmp/s1350/x.py")
     assert S.main([]) == 2
-    assert "against another checkout's code (verity.protocols.accounting.space.pous from /tmp/s1350/x.py)" in capsys.readouterr().err
+    assert "against another checkout's code (verity_pous from /tmp/s1350/x.py)" in capsys.readouterr().err
     assert probed == [os.pathsep.join([str(S.CHILD), str(tmp_path / "pkg")])]
     assert S.main(["--list"]) == 0 and len(probed) == 1
 
