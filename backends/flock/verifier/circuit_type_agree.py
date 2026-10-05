@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from verity.ml import library
+from verity.primitives.circuits import library
 from verity_flock import circuit_types as CT
 
 VECTORS = Path(__file__).resolve().parents[1] / "tests" / "circuit_type_vectors.json"

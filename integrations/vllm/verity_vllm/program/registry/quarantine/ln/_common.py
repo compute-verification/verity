@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.b1 import ZERO32, const, f32c
-from verity.ir.types import Array, Tuple, Value
+from verity.primitives.circuits.types import Array, Tuple, Value
 
 BF16, F32 = Value(16), Value(32)
 
