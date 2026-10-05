@@ -1,0 +1,7 @@
+[Unit]
+Description=infra node 1 watch every 15 min (read by infra's duty pass; needs no agent VM)
+[Timer]
+OnCalendar=*:00/15
+Persistent=true
+[Install]
+WantedBy=timers.target
