@@ -122,5 +122,9 @@
  "run_not_exempt": {
   "policy": {"exempt": {"Scratch": "a scratch file, built by nobody"}},
   "fails": "runs: RunOk is not under `exempt`"
+ },
+ "assumption_changed": {
+  "replace": {"Control/Assumptions.lean": ["n + 0 = n", "0 + n = n"]},
+  "fails": "assumptions: Control.Hyp's definition in Control.Assumptions changed"
  }
 }

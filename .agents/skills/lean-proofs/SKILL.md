@@ -108,8 +108,10 @@ simp with that.
 
 ## Assumptions and guarantees
 
-- **An assumption is a named `Prop`** in the package's assumptions module (`FlockSoundness.Assumptions`), taken as a
-  hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`). Its docstring opens with its
+- **An assumption is a named `Prop`** in the package's spec (`FlockSoundness.Assumptions`), taken as a hypothesis by
+  each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`) or read inside a guarantee's statement, and
+  listed by name under `assumptions` in `lean-audit.json`. A new one is an entry you add by hand (`"owner": "@lane"`);
+  `--update` writes its digest, and the audit fails on a hypothesis no entry lists. Its docstring opens with its
   claim id (`uniform/io-getrandombytes`, from `verity.claims`) and gives its rationale. Lean is the source of truth for
   what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on
   `main`, never `native_decide`, never an option that skips the kernel. A statement you can't prove yet is an

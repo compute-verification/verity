@@ -208,9 +208,10 @@ first in a quiet window, alone in its train (Daniel, 4 Oct).
   Mathlib (`layers` in `lean-audit.json`); `SecurityProofs` holds every proof and lemma, with `SecurityProofs.G : G` for
   each guarantee proved. The other packages move to this layout one at a time.
 - Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
-  `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
-  `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
-  is replayed through the kernel.
+  `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a
+  definition of the spec stated as a `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name
+  under `assumptions` in `lean-audit.json` with its own record (its owner and its definition's digest); every `.lean`
+  file is built, and every declaration is replayed through the kernel.
 - A guarantee (README "Glossary"), a theorem something outside Lean relies on as proved, is listed in `lean-audit.json`,
   and `audit.py --update` records what it says in the lock: its statement and every definition the statement reads. No axiom check
   can catch a weakened definition, so when a change to those records lands on `main`, Daniel gets a DM showing it (each

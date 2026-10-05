@@ -14,32 +14,400 @@
    "generate": ["python3", "scripts/fp8atom_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
- "assumptions": [
-  "Pouw.Assumptions.Game",
-  "Pouw.Assumptions.NCP.Assumptions",
-  "Pouw.Assumptions.Dimension.Assumptions",
-  "Pouw.Assumptions.Dimension.PipeAssumptions",
-  "Pouw.Assumptions.NCP.RouteUAssumptions",
-  "Pouw.Assumptions.Dimension.RouteUPipeAssumptions",
-  "Pouw.Assumptions.Dimension.EmbedAssumptions",
-  "Pouw.Assumptions.Dimension.H100Assumptions",
-  "Pouw.Assumptions.Fp8Atom.H1TAssumptions",
-  "Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions",
-  "Pouw.Assumptions.Fp8Atom.H1TTileAssumptions",
-  "Pouw.Assumptions.PearlC.TTOut",
-  "Pouw.Assumptions.PearlC.TTOutRev1",
-  "Pouw.Assumptions.PearlC.TTOutUOnly",
-  "Pouw.Assumptions.PearlC.TTOutTileUOnly",
-  "Pouw.Assumptions.PearlC.DeviceChainCap",
-  "Pouw.Assumptions.PearlC.TTOutChainOnly",
-  "Pouw.Assumptions.PearlC.RowSeedAssumptions",
-  "Pouw.Assumptions.PearlC.TTOutFp4",
-  "Pouw.Assumptions.PearlC.TTOutFp4ChainOnly",
-  "Pouw.Assumptions.PearlC.HiddenTile",
-  "Pouw.Assumptions.PearlC.HonestCap",
-  "Pouw.Assumptions.Deadline",
-  "Pouw.Assumptions.PearlC.Deadline"
- ],
+ "assumptions": {
+  "Pouw.Assumptions.HonestClock": {
+   "owner": "@compute-accounting",
+   "digest": "b834a5b2456ac78c2c5b98a872a1ee0d833cfb9b8f26a63e562596e7ff5bbd1a"
+  },
+  "Pouw.Assumptions.TT": {
+   "owner": "@compute-accounting",
+   "digest": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
+  },
+  "Pouw.Dimension.A1CostOnU": {
+   "owner": "@compute-accounting",
+   "digest": "ae9e3fc02398feaa9c4723907ec50c235c8f03102a4f16e15a80a7d6b6c3868b"
+  },
+  "Pouw.Dimension.A1_cost": {
+   "owner": "@compute-accounting",
+   "digest": "d405b41c3efc8c990ae7253869ca6ffa36c46669896fc47004a6d6b052461fff"
+  },
+  "Pouw.Dimension.A1_cost_U": {
+   "owner": "@compute-accounting",
+   "digest": "dba2848bc90272354391306793612aabe3313628918d5d2d1dc5d106146428c1"
+  },
+  "Pouw.Dimension.A1_cost_quad": {
+   "owner": "@compute-accounting",
+   "digest": "19aefba814f8fe843dbdeb153368cc4d1d62188e43e4fe37fdb05ee2bca8aee2"
+  },
+  "Pouw.Dimension.A1_cost_quad_U": {
+   "owner": "@compute-accounting",
+   "digest": "2cf108c868c110da0e1ddc1c66f2922797e7263597242ed83e70607129315c38"
+  },
+  "Pouw.Dimension.A1_nonquad": {
+   "owner": "@compute-accounting",
+   "digest": "a5d6e3b161d0931fec8cb9f27fb29c932ccc97a01167c3e0152e01d8465cc72b"
+  },
+  "Pouw.Dimension.Assumptions.A1_W1": {
+   "owner": "@compute-accounting",
+   "digest": "0910d61caa5bce35a507890a917b82ce1a51289172d9721c77a3831b66bd2497"
+  },
+  "Pouw.Dimension.Assumptions.A1_multiplicative": {
+   "owner": "@compute-accounting",
+   "digest": "6523aaede37e3fc6359a972e70ae872b983d2f3ab883b33e24873e355d3e5379"
+  },
+  "Pouw.Dimension.Assumptions.A2_algebraicSufficiency": {
+   "owner": "@compute-accounting",
+   "digest": "77cb4679685587ebd6af4727445ca9120b0bf16352ea0bb5d5f150d118d1012b"
+  },
+  "Pouw.Dimension.Assumptions.Machine": {
+   "owner": "@compute-accounting",
+   "digest": "1040c472bb55b25a013332576c079e958494a3b43c36090622c0ba80dfedb489"
+  },
+  "Pouw.Dimension.Assumptions.Machine.Prog": {
+   "owner": "@compute-accounting",
+   "digest": "cd526932525f4d43cae007defaaedc6129020884ddfb1cf7c9adc98b7240dab7"
+  },
+  "Pouw.Dimension.Assumptions.Machine.cost": {
+   "owner": "@compute-accounting",
+   "digest": "6fae264b81e491d108ef52e3b6ba63a77c5959827b98d6d1891a756d260f5114"
+  },
+  "Pouw.Dimension.Assumptions.Machine.outputs": {
+   "owner": "@compute-accounting",
+   "digest": "f8154b0bddff0450052b35cdad21fe57868946e7b7254dcdae9ef7ee8a9d761e"
+  },
+  "Pouw.Dimension.Assumptions.ProdFree": {
+   "owner": "@compute-accounting",
+   "digest": "1238a17678a657132f4f9e66bceaac45bdacf0260e3da94b826c575c5d297528"
+  },
+  "Pouw.Dimension.Assumptions.targetSpan": {
+   "owner": "@compute-accounting",
+   "digest": "8370b7702857c1809ca4f3f74dca7913670bf323ce984f5582b4aa53df39442f"
+  },
+  "Pouw.Dimension.Assumptions.wordSet": {
+   "owner": "@compute-accounting",
+   "digest": "eb91440586d6aa9ea8e63cd68c85bd3a2b323e91e039bca6aa8ecaaa710e53fc"
+  },
+  "Pouw.Dimension.Embed.A1fp": {
+   "owner": "@compute-accounting",
+   "digest": "187823809f7e826bbe3428037f74869c097d1fe80ec03a7df9f35147d29de367"
+  },
+  "Pouw.Dimension.Embed.A1fpOn": {
+   "owner": "@compute-accounting",
+   "digest": "5eac9076811537dec9e01566f1657a342a9263693dcfa258421ed78101c38aa8"
+  },
+  "Pouw.Dimension.Embed.CanonicalNaN": {
+   "owner": "@compute-accounting",
+   "digest": "69bef3783dbc54bb79a23c7afd1562b81e28f0df91b3312e43e6c87da8f0af40"
+  },
+  "Pouw.Dimension.Embed.FpOK": {
+   "owner": "@compute-accounting",
+   "digest": "8e11ee11ea64c2ebf77459683d37a974f3f475446ab1b5c328921c66977b3fb6"
+  },
+  "Pouw.Dimension.Embed.FpOpnd": {
+   "owner": "@compute-accounting",
+   "digest": "e48b377cbf92ac011c88196b273df6bf29ad62523ca6cb5c61c69e19fc467a92"
+  },
+  "Pouw.Dimension.Embed.FpPipe": {
+   "owner": "@compute-accounting",
+   "digest": "b08c3839b6fe4e2cb71f83762118bd4cd435c1f15c577904c44e28d5f93973f7"
+  },
+  "Pouw.Dimension.Embed.FpStep": {
+   "owner": "@compute-accounting",
+   "digest": "44fbc672e57e3e3b866bf532ef002f6e9bb29ee286c3d41bef9972834295e294"
+  },
+  "Pouw.Dimension.Embed.NaNGap": {
+   "owner": "@compute-accounting",
+   "digest": "0619e7f882f3533aff501a309d487dc7f7e92765b7f41afeab01be1c5d6dc96b"
+  },
+  "Pouw.Dimension.Embed.faddSem": {
+   "owner": "@compute-accounting",
+   "digest": "97d4f263f518c91bf00d291b6369a91c976916ebc10dd4aade0a42afe205c295"
+  },
+  "Pouw.Dimension.Embed.fpExact": {
+   "owner": "@compute-accounting",
+   "digest": "250b3203698acfaeaa6bdb923e2a7893a2cc0957eca5ff8d1368a28b793b213e"
+  },
+  "Pouw.Dimension.H100.Floor": {
+   "owner": "@compute-accounting",
+   "digest": "779a343c115e76cc39a4b1831f5a2b17c3bb6ef6f059acd29ab10065873e414c"
+  },
+  "Pouw.Dimension.H100.FloorTc": {
+   "owner": "@compute-accounting",
+   "digest": "956bf03434f5a0e53771b00ebac4b46a20176064bc5f90b4b3598b2e45380dcb"
+  },
+  "Pouw.Dimension.H100.FragLanes": {
+   "owner": "@compute-accounting",
+   "digest": "b7d500f2a5cad303cd4be964630c3615782396b912e7b74e1493cacb2a65c9ec"
+  },
+  "Pouw.Dimension.H100.H32": {
+   "owner": "@compute-accounting",
+   "digest": "c2b063f5d0a4f801815e77964f44ec4871e50a6cf6ac5a43b5425829af301801"
+  },
+  "Pouw.Dimension.H100.Prices100": {
+   "owner": "@compute-accounting",
+   "digest": "94878351c1125b48801a9fc4e3913641ce51d29ea406f804d6128838f9fc28bd"
+  },
+  "Pouw.Dimension.H100.Prices100.ffma": {
+   "owner": "@compute-accounting",
+   "digest": "7b6f7de7fd0910975560d68cc162189c884e62d6dcad67e0d6c9b960635358c0"
+  },
+  "Pouw.Dimension.H100.Prices100.fp64": {
+   "owner": "@compute-accounting",
+   "digest": "3edc127168679ebf9f3d64c4f429eccd28913aad3dd50ab02c54562d6041de7a"
+  },
+  "Pouw.Dimension.H100.Prices100.int32": {
+   "owner": "@compute-accounting",
+   "digest": "7b83ee8bbb4fa0b367f2581b8884e98832038790c2abcaa542ecd4aae4e546e1"
+  },
+  "Pouw.Dimension.H100.Prices100.mac": {
+   "owner": "@compute-accounting",
+   "digest": "7a1f237b36197b33b2a8d2cd63b22083e92383efa4d0edfd98c30c8e0ea51c51"
+  },
+  "Pouw.Dimension.H100.Prices100.other": {
+   "owner": "@compute-accounting",
+   "digest": "b4173eaf9a1c0ee01ea3b0fa6b851c06bf6b0e10e830bbb8d4dad2d7cb9f874d"
+  },
+  "Pouw.Dimension.H100.Prices100.tc": {
+   "owner": "@compute-accounting",
+   "digest": "18475e855be590bfbac8063ea1da9450bec00dc9fa6d7c6748c893dfbebd9aab"
+  },
+  "Pouw.Dimension.H100.Shape100": {
+   "owner": "@compute-accounting",
+   "digest": "f8160581d1806f256d83d1f170e77aef5da4325f33acc5c9d0187d60c94b3f0e"
+  },
+  "Pouw.Dimension.H100.Shape100.bf16F32": {
+   "owner": "@compute-accounting",
+   "digest": "07ba58b5580c98ce586710c3f975690bf8794e80bff9982455658a5d34a26470"
+  },
+  "Pouw.Dimension.H100.Shape100.e4m3F16": {
+   "owner": "@compute-accounting",
+   "digest": "839ff4a2ec17e024020945004a0d921b02237291381f7ce683cf15b265dc34e9"
+  },
+  "Pouw.Dimension.H100.Shape100.e4m3F32": {
+   "owner": "@compute-accounting",
+   "digest": "a0f24fe7a0fa641bc154de369d1e521655c587234636f6f61ba148e8a979f72a"
+  },
+  "Pouw.Dimension.H100.Shape100.e5m2F16": {
+   "owner": "@compute-accounting",
+   "digest": "44dbcf58c9d3d4a18842dcf590d1bbaccf1c7ec2a69f0b0c360c23bc2a6222a7"
+  },
+  "Pouw.Dimension.H100.Shape100.e5m2F32": {
+   "owner": "@compute-accounting",
+   "digest": "8dc3f41355ec260b1200e0753764e1f77e0f81dec5165de006b01a3c62b439ea"
+  },
+  "Pouw.Dimension.H100.Shape100.elems": {
+   "owner": "@compute-accounting",
+   "digest": "96b66a4b135dde32444443ad4bc9866a5a8b9ed018b9abde3809d925e261d026"
+  },
+  "Pouw.Dimension.H100.Shape100.f16F16": {
+   "owner": "@compute-accounting",
+   "digest": "584f4496bf91de815375187475468fac613ffe594a9384823f22a9d44f5755b1"
+  },
+  "Pouw.Dimension.H100.Shape100.f16F32": {
+   "owner": "@compute-accounting",
+   "digest": "c61773b009d9790f819d9ce59298d3c77fe7d7e398c0f4d358b4331918c92827"
+  },
+  "Pouw.Dimension.H100.Shape100.k": {
+   "owner": "@compute-accounting",
+   "digest": "666163e4a07fed2f41a68b93e5aaa5a00a98f39f04772497883ad56d64ec0ac3"
+  },
+  "Pouw.Dimension.H100.Shape100.regPrice": {
+   "owner": "@compute-accounting",
+   "digest": "79bfca032692c212a4adfad8ae9ec9243b19969a43d8ea311aee47fdec672a18"
+  },
+  "Pouw.Dimension.H100.Shape100.s8": {
+   "owner": "@compute-accounting",
+   "digest": "857c848cfcf3d79aa250471866372aac5b0e8faf039f728f055de7990a189e63"
+  },
+  "Pouw.Dimension.H100.Shape100.tf32": {
+   "owner": "@compute-accounting",
+   "digest": "9547cbb0091bc626bc7c9b32c7296888f5669a20e966f1eedf3e04b0a44599f2"
+  },
+  "Pouw.Dimension.H100.h100Nominal": {
+   "owner": "@compute-accounting",
+   "digest": "3420f1eb7fb4aab404a23aa5b864dd31e17033ae285f43e18d61f1731ce83607"
+  },
+  "Pouw.Dimension.H100.nominalMac": {
+   "owner": "@compute-accounting",
+   "digest": "ff0014d94244d94d379487b71d43cce7fb17cc4f341402b2d2b8c32d1843eb46"
+  },
+  "Pouw.Dimension.LiftMinRank": {
+   "owner": "@compute-accounting",
+   "digest": "80c4d03881b99a08890e0fa0d86705ba63777147d219baa992af1437f58dad80"
+  },
+  "Pouw.Fp8Atom.H1T.DistinctLiveH1T": {
+   "owner": "@compute-accounting",
+   "digest": "ef3e5acc5423c8a6eab3ad67be8ddc3fa6c5ae38afe8f5784630ea198756c785"
+  },
+  "Pouw.Fp8Atom.H1T.H1TRunningWords": {
+   "owner": "@compute-accounting",
+   "digest": "eafb0e80c67ef3aa501104844165034cbfa916d13ac5b3361cae5e15fbe989ff"
+  },
+  "Pouw.Fp8Atom.H1T.TTH1T": {
+   "owner": "@compute-accounting",
+   "digest": "e95d21a549b51492c150df5251d7a30dd415cf75a611c98ce751eebe3b4afa34"
+  },
+  "Pouw.NCP.Assumptions.TTNCP": {
+   "owner": "@compute-accounting",
+   "digest": "f57ea45f32f4773a7572663c546adeb5c05461712de223326efd3afb73a813fb"
+  },
+  "Pouw.NCP.Assumptions.TTNCP_U": {
+   "owner": "@compute-accounting",
+   "digest": "8a747ab5b169a0aebbead909c55f11867690c76654bffe5a2a0125164a2a1305"
+  },
+  "Pouw.PearlC.Assumptions.FragDraw": {
+   "owner": "@compute-accounting",
+   "digest": "1e7679106dac7fcb7fa8b2cd5b55a82cbb02eb71faed86f18b4880a535d49c00"
+  },
+  "Pouw.PearlC.Assumptions.HonestClock": {
+   "owner": "@compute-accounting",
+   "digest": "1a8887962f5cb3a27b40e5ac7e29aea164b786ecaaeb358379f617e50b3be2ba"
+  },
+  "Pouw.PearlC.Assumptions.HonestTileCapRate": {
+   "owner": "@compute-accounting",
+   "digest": "cc40b5d910a6fbc1c45a1064daa4fd019ce6b37cccbf32de412027b4a294a191"
+  },
+  "Pouw.PearlC.Assumptions.TTOut": {
+   "owner": "@compute-accounting",
+   "digest": "fef0ec214c341b8aa3468e439242705188f1284696deb430b5c6510b498cb48a"
+  },
+  "Pouw.PearlC.Assumptions.TTOutFp4": {
+   "owner": "@compute-accounting",
+   "digest": "f90848879d325c0e59d9256d8bdf59d1720a8b90ce09808665c25b3c97402e44"
+  },
+  "Pouw.PearlC.Assumptions.TTOutFp4ChainOnly": {
+   "owner": "@compute-accounting",
+   "digest": "bd82f9e49c43f6e50701daa05d8d3ab3095cc8efaaad77797c2c63a3a489dccd"
+  },
+  "Pouw.PearlC.Assumptions.TTOutFp4Sm120": {
+   "owner": "@compute-accounting",
+   "digest": "96dea3f6b5f0cc46e55936c6af3a6229d890637b0889102ba08a484c41dad081"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlC": {
+   "owner": "@compute-accounting",
+   "digest": "b631641af566bca1bac82b4ef24702b24ed6a7276e013b35872d8ab89afbaa24"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDev": {
+   "owner": "@compute-accounting",
+   "digest": "d4aca48a31e0ae534c5d272aa18a85a7e7c9af6aeaba490f01546d6059ee5a93"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap": {
+   "owner": "@compute-accounting",
+   "digest": "b55a88e3f3be9a980861d2a1244b219f3b72854f49272ee148c7efd169ce636d"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly": {
+   "owner": "@compute-accounting",
+   "digest": "96cbcffa2dd79ef186ad3b81562d208b86e8c02e0ca3621312f964d61e6044f2"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1": {
+   "owner": "@compute-accounting",
+   "digest": "55403e10d07aa1c93855ae008a8d009efe16daa715b460bfe7504ca04158c295"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly": {
+   "owner": "@compute-accounting",
+   "digest": "c0403faf7a90ffd6979dd16c4ff4d6d676e6e40daa6f43e63929936de3067657"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly": {
+   "owner": "@compute-accounting",
+   "digest": "1ee654da67496d20a07fd1cb1e56995d9cc84d373d2081b1cf4e0d393c985409"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCH100Rev1": {
+   "owner": "@compute-accounting",
+   "digest": "d843abac1c6f318b8184d1ee0181f39bd8690261b6e59b8d683fe2a42093a244"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTile": {
+   "owner": "@compute-accounting",
+   "digest": "953f75b038ef12f1ca8e035102cd694d2a82f97ea079f1ebbd54fa365fefab88"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTileFp4": {
+   "owner": "@compute-accounting",
+   "digest": "3f01d35b25c96efdd63d869ad744d72cc5d76ed13172b7e1122171ff50bc1832"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTileFp4ChainOnly": {
+   "owner": "@compute-accounting",
+   "digest": "c5c1fb6eba1ec0bc55195176ac51d28ca16f5aba7e99fa198758535793a9758b"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTileFp4Sm120": {
+   "owner": "@compute-accounting",
+   "digest": "410262a867ac04e096d90bdb8406bdc13624af07dbdd3214940169548662e033"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlC": {
+   "owner": "@compute-accounting",
+   "digest": "eae8b884f1f2b56447c5018e0ca88fc6befbdbf52aaed93a9bf4799a45a38f6f"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDev": {
+   "owner": "@compute-accounting",
+   "digest": "6b1bff5df662d00b6d187db3143e77905fa46edcd5773bc5535eda66ff500ce2"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap": {
+   "owner": "@compute-accounting",
+   "digest": "20cfd44bf0a2df63d67e2390dba4ca9352eddedc0e7da56e716fcd352f2ba5be"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly": {
+   "owner": "@compute-accounting",
+   "digest": "ef9cb1faadc1de8b8faa3dee8d9d6e2d47854390d99b2317472e486c81252c09"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1": {
+   "owner": "@compute-accounting",
+   "digest": "986751020ed75289c24caeb2cd903f4ecba561c9c00de96fd5d500df1d945046"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly": {
+   "owner": "@compute-accounting",
+   "digest": "6220ec31c41c87a8b13032a91ddd14b41e0fd0151057a879d4ec864aaed0cc17"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly": {
+   "owner": "@compute-accounting",
+   "digest": "655665c7723f071c841c91abb9c0140009171a428349ba09640ab72f9bdf05bc"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1": {
+   "owner": "@compute-accounting",
+   "digest": "3c0b6df708354f428a46f68dd5d38dfa7d4a22ddb5e35a3047fe915fd1d56103"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTileU": {
+   "owner": "@compute-accounting",
+   "digest": "1ae3980037e952185e774acfbbc04d17bf7cc7a24e3397de650369696d33933c"
+  },
+  "Pouw.PearlC.Assumptions.TTOutU": {
+   "owner": "@compute-accounting",
+   "digest": "7a543d8cfb0ef693a1c889f901a9946bceaa170cab43447d4897ed7e92da385f"
+  },
+  "Pouw.PearlC.Assumptions.TileProofSound": {
+   "owner": "@compute-accounting",
+   "digest": "639f98447f6c6c587e14a0d6086e06a990570d57a3bd22beac2ff989bf2f0040"
+  },
+  "Pouw.PearlC.Assumptions.TileProofSoundAll": {
+   "owner": "@compute-accounting",
+   "digest": "68fa374e6e32105f7e0fb6ac933a3494270054495536d060d6015fc6a3e4a6d5"
+  },
+  "Pouw.PearlC.CorrectU": {
+   "owner": "@compute-accounting",
+   "digest": "eccf2e13d1c25db9ef07d24a44bb71203be87e9164ff30754bc00e14650234e3"
+  },
+  "Pouw.PearlC.GγU": {
+   "owner": "@compute-accounting",
+   "digest": "1deb508aa34e8e69400b9c7081082f29536f378222faaa3808787383dd6c7d59"
+  },
+  "Pouw.PearlC.WinsU": {
+   "owner": "@compute-accounting",
+   "digest": "2d6a53fb682ba4e3aae06aa2223195b8414c5864167c317a09b9d6931436462c"
+  },
+  "Pouw.PearlC.chainCreditDev": {
+   "owner": "@compute-accounting",
+   "digest": "6e4d7c50189df577e5e4a060c20f50516332d4dda5d497288e0d52b91a58e362"
+  },
+  "Pouw.PearlC.correctSetU": {
+   "owner": "@compute-accounting",
+   "digest": "19ce334a79474ff6821aff36d3e0ee5d39495fad9f2f73827aea74cfc2e3ecb8"
+  },
+  "Pouw.PearlC.pearlCProtocolDevChainCap": {
+   "owner": "@compute-accounting",
+   "digest": "693866e02c5d1ba3a3156bdd97c55c599ccc7e22210d39e9eaef0ec3b9b49083"
+  },
+  "Pouw.PearlC.pearlCTilesDevChainCap": {
+   "owner": "@compute-accounting",
+   "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  }
+ },
  "meaning": ["Pouw.Protocol", "Pouw.Assumptions", "Pouw.Guarantees", "Verity.Protocol"],
  "layers": {
   "Pouw.Assumptions": {

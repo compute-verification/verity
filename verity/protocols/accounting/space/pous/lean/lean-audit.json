@@ -6,7 +6,16 @@
   "Grader": "the grader executable, which imports only Lean",
   "submissions": "graded one file at a time by grade.sh"
  },
- "assumptions": ["Pous.Assumptions", "Pous.Assumptions.P2"],
+ "assumptions": {
+  "Pous.Assumptions.LemmaA": {
+   "owner": "@memory-accounting",
+   "digest": "443085b332aa09cadfa71231d70da316fb946789f2a8eefc024e04651911d8e6"
+  },
+  "Pous.P2.Assumptions.PrimeP16448": {
+   "owner": "@memory-accounting",
+   "digest": "88582f4a680fa4e016b25a000b822b465fd7754100edbea9718994503e8d20fe"
+  }
+ },
  "meaning": ["Pous.Protocol", "Pous.Assumptions", "Pous.Guarantees"],
  "layers": {
   "Pous.Assumptions": {
@@ -1006,7 +1015,7 @@
     "Pous.Guarantees.SecureErasureMeets96GiB": "ca68a0c6604d5c0c755518406baab7700a1835c3c3d7a056cf14b7af3a16fa69",
     "Pous.Guarantees.SecureErasureMeetsFamily": "ace733db06755c57c72d92866b146d677574c14c95f9cb7430838de7e05127ca"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.DigestAU",
     "Pous.SecurityProofs.SecureErasureMeets",
     "Pous.SecurityProofs.SecureErasureMeets96GiB",
@@ -1018,7 +1027,7 @@
    "definitions": {
     "Pous.EraseMeets": "2fae65625d879d92a291808f8bb16943defd93eaf769067963c05004937eab3d"
    },
-   "pins": ["Pous.SecurityProofs.SecureErasureMeets96GiB", "Pous.SecurityProofs.SecureErasureMeetsFamily"]
+   "guarantees": ["Pous.SecurityProofs.SecureErasureMeets96GiB", "Pous.SecurityProofs.SecureErasureMeetsFamily"]
   },
   "Pous.Protocol.Accounting.GradedMeets": {
    "digest": "4af4e7e25629ec16f9bfab71b839349841691b42f7e8ac3a56849edb1457d745",
@@ -1602,7 +1611,7 @@
     "Pous.Digest.blockHash": "943b3e29897664ceaca76e45b21fee437d7958d2d40d629d08e08bceda0d78e5",
     "Pous.Digest.digest": "712eed3458c39093e84c682b165839cb6910f01f7f098d09e61d9d8d5f555db4"
    },
-   "pins": ["Pous.SecurityProofs.DigestAU"]
+   "guarantees": ["Pous.SecurityProofs.DigestAU"]
   },
   "Pous.Protocol.Model.Graded": {
    "digest": "38e7bf0cb50ea843538dcb97e0c7ed9a3d4f43824e0b765dddb537b6ea4414f2",
@@ -2046,7 +2055,7 @@
     "Pous.eraseAnswers": "28b84d7fa384e3172e691aea4e96b8cfaaab9333b03bfc0c2699004f5c52aab9",
     "Pous.eraseWins": "573c0c8e8d2b98d8fb54e8c78a63f382647bdc5efa538225d46435d9526f7955"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.SecureErasureMeets",
     "Pous.SecurityProofs.SecureErasureMeets96GiB",
     "Pous.SecurityProofs.SecureErasureMeetsFamily"

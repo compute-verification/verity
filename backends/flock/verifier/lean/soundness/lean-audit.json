@@ -1,6 +1,55 @@
 {
  "roots": ["FlockSoundness"],
- "assumptions": ["FlockSoundness.Assumptions"],
+ "assumptions": {
+  "FlockSoundness.Assumptions.HashDerivedKey": {
+   "owner": "@proofs",
+   "digest": "10b377712f6ad0a85f088a3d07b4c2a5f2ef4e1622cf7b1e4413c1feded5a5c0"
+  },
+  "FlockSoundness.Assumptions.Hm96Hiding": {
+   "owner": "@proofs",
+   "digest": "f5897a66b00fd47ffb0e33815f8dbfc8bb1b5a85b643491e8b7466e8a33765b9"
+  },
+  "FlockSoundness.Assumptions.HmRowComputes": {
+   "owner": "@proofs",
+   "digest": "0b64a2e9af86b5a7be94d3229fdcb5b8fe890a71414e0ec3d840ad7b6134ebae"
+  },
+  "FlockSoundness.Assumptions.KeyedStreamsUniform": {
+   "owner": "@proofs",
+   "digest": "210fb5b853611d99b9092c0f3c4dd6baafc81c2eb6b09c716e7fd6c274020393"
+  },
+  "FlockSoundness.Assumptions.PadNonvanishing": {
+   "owner": "@proofs",
+   "digest": "4234998697b290fdb7f81d7a140161fd40d8954c21acaed06257db9f3763bee0"
+  },
+  "FlockSoundness.Assumptions.SHA512CRExpected": {
+   "owner": "@proofs",
+   "digest": "cc74806f2a9d7c607d51ff5d06ac12d9f6b7c02c115f3393ef78c692014dbd64"
+  },
+  "FlockSoundness.Assumptions.SHA512CRStrict": {
+   "owner": "@proofs",
+   "digest": "23148408aa91625eb6d49ddd90e118326fcdee28e72e5a719a34c28cc9114562"
+  },
+  "FlockSoundness.Assumptions.UniformRandomBytes": {
+   "owner": "@proofs",
+   "digest": "f1093a52c3a1f70ccfd20362bda6eca853c1be02ab43b7260f78ef5df8720b39"
+  },
+  "FlockSoundness.Assumptions.UniformSecret": {
+   "owner": "@proofs",
+   "digest": "788911cfe5fe1875e4d77931fdbd301dd515958c25e73fd855e9892e24b843c9"
+  },
+  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": {
+   "owner": "@proofs",
+   "digest": "ff4f8f0ffda4d6bbc622adca36f997c60f66dbe90c654a3f9441bb22c98739c4"
+  },
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZK": {
+   "owner": "@proofs",
+   "digest": "2e0bf4d9d5faf00058b89619d736c802946990d5c49f4b3c3d8f6603544c9eb1"
+  },
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ": {
+   "owner": "@proofs",
+   "digest": "167287a3a7f1c1def8a44226e55431613ce209de3d6f812bd506108d9fd257e4"
+  }
+ },
  "meaning": ["FlockSoundness", "FlockLevel3", "Flock"],
  "compile_time": {
   "FlockSoundness.Refine.Walk": {

@@ -1,6 +1,6 @@
 {
  "roots": ["Verity"],
- "assumptions": ["Verity.Assumptions"],
+ "assumptions": {},
  "meaning": ["Verity.Protocol", "Verity.Assumptions", "Verity.Guarantees"],
  "layers": {
   "Verity.Protocol": {

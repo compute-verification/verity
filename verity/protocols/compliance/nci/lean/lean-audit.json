@@ -1,6 +1,15 @@
 {
  "roots": ["Nci"],
- "assumptions": ["Nci.Assumptions", "Verity.Assumptions"],
+ "assumptions": {
+  "Nci.Assumptions.ActivationsIncompressible": {
+   "owner": "@lean",
+   "digest": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a"
+  },
+  "Nci.Assumptions.PartialSumsIncompressible": {
+   "owner": "@lean",
+   "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
+  }
+ },
  "meaning": [
   "Nci.Protocol",
   "Nci.Assumptions",
