@@ -756,9 +756,10 @@ def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
 
 
 #: the grants of `research queue`'s rules (role: what it attests) a train's pull request must hold at its pinned head before its
-#: check is spent; the lander applies the rules' other grants by hand
+#: check is spent; the lander applies the rules' other grants by hand.  `tools/check/queue.toml` names no statement-reviewer rule
+#: since Daniel's 4 Oct ruling (a guarantee change waits on nobody; he gets a DM, AGENTS.md "Lean"), so this applies only where one does
 TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed guarantees "
-                                      "and the definitions they read (lane contract §5)"}
+                                      "and the definitions they read"}
 
 
 def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=print) -> list[str]:
