@@ -948,6 +948,9 @@ class Run:
         text = self._dot_re.sub(fix, text)
         if self._single_re is not None:
             def one(m: re.Match) -> str:
+                at = m.start()
+                if any(text.startswith(d, at) and not re.match(r"\w", text[at + len(d):at + len(d) + 1]) for d in self.L.keep_dotted):
+                    return m.group(1)
                 self._count(path, "dotted names")
                 return self.L.module(m.group(1))
             text = self._single_re.sub(one, text)
