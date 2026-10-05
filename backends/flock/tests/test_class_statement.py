@@ -421,7 +421,7 @@ def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache
 
     assert not cached("first") and built == [1]
     assert cached("again") and built == [1]                            # a cache hit composes nothing
-    sha = src["verity"] / "ml" / "boolean" / "sha512.py"
+    sha = src["verity"] / "primitives" / "commitments" / "gates" / "sha512.py"
     assert "CARRY_EVERY = 5" in sha.read_text()
     sha.write_text(sha.read_text().replace("CARRY_EVERY = 5", "CARRY_EVERY = 4"))
     assert not cached("sha512-parameter") and built == [1, 1]          # a SHA-512 parameter is in the key
