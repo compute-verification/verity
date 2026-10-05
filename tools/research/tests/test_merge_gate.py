@@ -419,8 +419,54 @@ def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head_marked_r
     assert merge_main(["train-prep/t"]) == 3 and _git(main, "rev-parse", "HEAD") == before
 
 
+def test_a_pr_stacked_on_another_in_the_tip_needs_grants_only_for_what_it_adds(tmp_path, monkeypatch, capsys):
+    """Lean's #1141 and #1144 stack on #1150, whose C-Flock lock change has red-team's grant: judged from main, each would need
+    that grant too.  The gate judges each pull request by what it adds onto the train below its merge, so a base that is neither
+    on main nor pinned in the tip at its head is refused, by name, whatever the stacked one's grants (root's condition, 5 Oct),
+    and a base pinned without its grant is refused for itself."""
+    from research.store.local import LocalStore
+
+    _store_remote(tmp_path, monkeypatch)
+    main, _feat, _tip = _repos(tmp_path)
+    origin, heads = _origin_with(tmp_path, main, {"tools/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["f.txt"]\n'},
+                                 {30: {"f.txt": "the lock\n"}})
+    _git(main, "checkout", "-q", "pr30")
+    (main / "g.txt").write_text("on top\n")
+    _git(main, "add", "g.txt")
+    _git(main, "commit", "-q", "-m", "stacked")
+    heads[31] = _git(main, "rev-parse", "HEAD")
+    _git(main, "push", "-q", "origin", "HEAD:refs/pull/31/head")
+    _git(main, "checkout", "-q", "main")
+    monkeypatch.chdir(main)
+    assert merge_main(["--train", "--prepare", "train-prep/s", f"30@{heads[30][:9]}", f"31@{heads[31][:9]}", "--lint", "true"]) == 0
+    _git(main, "fetch", "-q", "origin", "train-prep/s:train-prep/s")
+    _git(main, "worktree", "add", "-q", str(tmp_path / "tip"), _git(main, "rev-parse", "train-prep/s"))
+    assert _record(tmp_path, tmp_path / "tip", monkeypatch, *CHECKED) == 0
+    monkeypatch.chdir(main)
+    store = LocalStore()
+    for n in (30, 31):
+        store.add_label(f"pr:{n}@{heads[n]}", "ready", True, "lane-7")
+    capsys.readouterr()
+    assert merge_main(["train-prep/s", "--dry-run"]) == 3
+    err = capsys.readouterr().err
+    assert f"#30 lacks the red-team grant at {heads[30][:12]}" in err and "#31" not in err
+    store.add_label(f"pr:30@{heads[30]}", "grant", "red-team", "red-team")
+    assert merge_main(["train-prep/s", "--dry-run"]) == 0, capsys.readouterr().err
+
+    # #31 alone: its base #30 is neither on main nor pinned in the tip, refused by name even with a grant at #31's head
+    assert merge_main(["--train", "--prepare", "train-prep/u", f"31@{heads[31][:9]}", "--lint", "true"]) == 0
+    _git(main, "fetch", "-q", "origin", "train-prep/u:train-prep/u")
+    _git(main, "worktree", "add", "-q", str(tmp_path / "tip-u"), _git(main, "rev-parse", "train-prep/u"))
+    assert _record(tmp_path, tmp_path / "tip-u", monkeypatch, *CHECKED) == 0
+    monkeypatch.chdir(main)
+    store.add_label(f"pr:31@{heads[31]}", "grant", "red-team", "red-team")
+    capsys.readouterr()
+    assert merge_main(["train-prep/u", "--dry-run"]) == 3
+    assert f"#31 at {heads[31][:12]} is stacked on #30 at {heads[30][:12]}" in capsys.readouterr().err
+
+
 def test_a_tip_whose_pr_heads_or_labels_cant_be_read_is_refused(tmp_path, monkeypatch, capsys):
-    """The gate fails closed: with origin unreadable it can't tell #7's head, and with no store remote its labels may be stale
+    """The gate fails closed: with origin unreadable it can't tell the pull requests' heads, and with no store remote its labels may be stale
     (`StoreGrants` raises STALE), so it refuses either way, saying why.  `--train` refuses before recording anything."""
     from research.store.local import LocalStore
 
@@ -430,7 +476,7 @@ def test_a_tip_whose_pr_heads_or_labels_cant_be_read_is_refused(tmp_path, monkey
     url = _git(main, "remote", "get-url", "origin")
     _git(main, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
     assert merge_main(["train-prep/t", "--dry-run"]) == 3
-    assert f"#7 was merged at {a[:12]}, but its head on origin can't be read (" in capsys.readouterr().err
+    assert "origin's pull request heads can't be read (" in capsys.readouterr().err
     _git(main, "remote", "set-url", "origin", url)
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
     assert merge_main(["train-prep/t", "--dry-run"]) == 3

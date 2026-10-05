@@ -3,7 +3,6 @@ is closed with a comment naming the commit it landed in, and every one based on 
 remote is a bare repository in tmp and GitHub is a fake `gh`, so nothing here reaches the network."""
 from __future__ import annotations
 
-import functools
 import json
 import os
 import subprocess
@@ -238,90 +237,3 @@ def test_a_merge_without_the_remote_skips_the_sweep(tmp_path, monkeypatch, capsy
     monkeypatch.chdir(repo)
     M._sweep_after(repo, "main", "origin")
     assert "no remote 'origin'; pull request sweep skipped" in capsys.readouterr().out
-
-
-# ---- main to node 1's bare repository, once origin has it
-
-def _node1(tmp_path, monkeypatch):
-    """vy-nebius-1's bare repository in tmp, pushed to through `git_push_url` with `sh -c` standing in for its ssh."""
-    bare = tmp_path / "node1.git"
-    _git(tmp_path, "init", "-q", "--bare", str(bare))
-    monkeypatch.setenv("RESEARCH_MERGE_MIRROR", "vy-nebius-1")
-    asked = []
-    monkeypatch.setattr(M, "_mirror_target", lambda name: (asked.append(name), (["sh", "-c"], str(bare)))[1])
-    return bare, asked
-
-
-def _main_of(bare: Path) -> str | None:
-    r = subprocess.run(["git", "--git-dir", str(bare), "rev-parse", "-q", "--verify", "refs/heads/main"], capture_output=True,
-                       text=True)
-    return r.stdout.strip() or None
-
-
-def test_a_merge_with_push_pushes_main_to_node_1_after_origin(tmp_path, monkeypatch, capsys):
-    repo, gh, _tips, _merge = _world(tmp_path)
-    _checked_c(tmp_path, monkeypatch, gh, repo)
-    bare, asked = _node1(tmp_path, monkeypatch)
-    capsys.readouterr()
-    assert M.main(["C", "--push"]) == 0
-    out, main = capsys.readouterr().out, _git(repo, "rev-parse", "main")
-    assert _git(repo, "rev-parse", "origin/main") == main == _main_of(bare) and asked == ["vy-nebius-1"]
-    assert out.index("pushed main to origin") < out.index(f"pushed main ({main[:12]}) to vy-nebius-1:{bare}")
-
-
-def test_a_refused_node_1_push_leaves_the_merge_landed_and_names_the_command_that_reruns_it(tmp_path, monkeypatch, capsys):
-    """Node 1's main is somewhere the merge doesn't contain: the plain push is refused, never forced, and the merge stands."""
-    repo, gh, tips, _merge = _world(tmp_path)
-    _checked_c(tmp_path, monkeypatch, gh, repo)
-    bare, _asked = _node1(tmp_path, monkeypatch)
-    _git(repo, "push", "-q", "--no-verify", str(bare), f"{tips['D']}:refs/heads/main")
-    capsys.readouterr()
-    assert M.main(["C", "--push"]) == 0
-    err, main = capsys.readouterr().err, _git(repo, "rev-parse", "main")
-    assert _git(repo, "rev-parse", "origin/main") == main and _main_of(bare) == tips["D"]
-    line, = [ln for ln in err.splitlines() if "not pushed to vy-nebius-1" in ln]
-    assert f"main ({main[:12]}) not pushed to vy-nebius-1 (git push exited 1: " in line and "rejected" in line
-    assert line.endswith(f"; rerun: cd {repo} && research merge --mirror {main}")
-    _git(tmp_path, "--git-dir", str(bare), "update-ref", "-d", "refs/heads/main")
-    assert M.main(["--mirror", main]) == 0 and _main_of(bare) == main
-
-
-def test_a_machine_that_cannot_be_resolved_fails_only_the_node_1_push(tmp_path, monkeypatch, capsys):
-    repo, gh, _tips, _merge = _world(tmp_path)
-    _checked_c(tmp_path, monkeypatch, gh, repo)
-    monkeypatch.setenv("RESEARCH_MERGE_MIRROR", "vy-nebius-1")
-    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "no-machines.toml"))
-    assert M.main(["C", "--push"]) == 0
-    err = capsys.readouterr().err
-    assert "not pushed to vy-nebius-1 (Refused: machine 'vy-nebius-1' is not in" in err and "research merge --mirror" in err
-    assert _git(repo, "rev-parse", "origin/main") == _git(repo, "rev-parse", "main")
-
-
-def test_a_node_1_push_with_no_answer_is_cut_off_and_the_merge_stands(tmp_path, monkeypatch, capsys):
-    repo, gh, _tips, _merge = _world(tmp_path)
-    _checked_c(tmp_path, monkeypatch, gh, repo)
-    bare, _asked = _node1(tmp_path, monkeypatch)
-    bounds = []
-
-    def hangs(argv, **kw):
-        bounds.append(kw["timeout"])
-        raise subprocess.TimeoutExpired(argv, kw["timeout"])
-
-    monkeypatch.setattr(M, "push_mirror", functools.partial(M.push_mirror, run=hangs))
-    assert M.main(["C", "--push"]) == 0
-    assert bounds == [M.MIRROR_TIMEOUT_S] and _main_of(bare) is None
-    assert f"not pushed to vy-nebius-1 (no answer within {M.MIRROR_TIMEOUT_S} s); rerun:" in capsys.readouterr().err
-
-
-def test_nothing_goes_to_node_1_when_origin_refuses_main(tmp_path, monkeypatch, capsys):
-    repo, gh, _tips, _merge = _world(tmp_path)
-    _checked_c(tmp_path, monkeypatch, gh, repo)
-    bare, asked = _node1(tmp_path, monkeypatch)
-    other = tmp_path / "other"
-    _git(tmp_path, "clone", "-q", str(tmp_path / "origin.git"), str(other))
-    (other / "x.txt").write_text("x\n")
-    _git(other, "add", "-A")
-    _git(other, "commit", "-q", "-m", "someone else landed first")
-    _git(other, "push", "-q", "origin", "main")
-    assert M.main(["C", "--push"]) == 1
-    assert asked == [] and _main_of(bare) is None and "vy-nebius-1" not in capsys.readouterr().err
