@@ -63,17 +63,56 @@ def test_the_tests_get_the_callers_pythonpath_entries_inside_the_tree_only(tmp_p
     assert S.tests_pythonpath() == str(S.CHILD)
 
 
+_HATCH = '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n'
+
+
+def _member(root: Path, path: str, name: str, packages: list[str] | None, build: bool = True) -> None:
+    (root / path).mkdir(parents=True, exist_ok=True)
+    text = f'[project]\nname = "{name}"\n' + (_HATCH if build else '')
+    if packages is not None:
+        text += f"\n[tool.hatch.build.targets.wheel]\npackages = {packages!r}\n".replace("'", '"')
+    (root / path / "pyproject.toml").write_text(text)
+    for p in packages or []:
+        (root / path / p).mkdir(parents=True)
+        (root / path / p / "__init__.py").write_text("")
+
+
 def test_a_python_that_imports_the_trees_packages_from_another_checkout_is_named(tmp_path, monkeypatch):
     tree, other = tmp_path / "tree", tmp_path / "other"
     for root in (tree, other):
-        (root / "protocols" / "pous" / "verity_pous").mkdir(parents=True)
-        (root / "protocols" / "pous" / "verity_pous" / "__init__.py").write_text("")
+        _member(root, "protocols/pous", "verity-pous", ["verity_pous"])
+        _member(root, "tools/check", "check", None, build=False)
     S = _suites(monkeypatch, tree)
-    pkgs = {"verity-pous": "protocols/pous", "research": "tools/research"}
+    pkgs = {"verity-pous": "protocols/pous", "check": "tools/check"}
     env = dict(os.environ, PYTHONPATH=str(other / "protocols" / "pous"))
     assert S.foreign(pkgs, env) == f"verity_pous from {other / 'protocols' / 'pous' / 'verity_pous' / '__init__.py'}"
     env["PYTHONPATH"] = str(tree / "protocols" / "pous")
     assert S.foreign(pkgs, env) is None
+
+
+def test_every_declared_package_is_probed_whatever_its_name_and_one_that_wont_import_is_named(tmp_path, monkeypatch):
+    """The names come from each member's build configuration, not a `verity` prefix: a package moved to `catalog/` is probed like
+    `verity_pous`, and one the Python can't find at all is named rather than passed over."""
+    tree, other = tmp_path / "tree", tmp_path / "other"
+    for root in (tree, other):
+        _member(root, "catalog", "catalog", ["src/catalog"])
+        _member(root, "archive", "archive", ["python/archive_old"])
+    S = _suites(monkeypatch, tree)
+    pkgs = {"catalog": "catalog", "archive": "archive"}
+    assert S.importable(pkgs) == {"archive_old": "archive", "catalog": "catalog"}
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(other / "catalog" / "src"), str(tree / "archive" / "python")]))
+    assert S.foreign(pkgs, env) == f"catalog from {other / 'catalog' / 'src' / 'catalog' / '__init__.py'}"
+    env["PYTHONPATH"] = str(tree / "catalog" / "src")
+    assert S.foreign(pkgs, env) == "archive_old from nowhere (not importable)"
+
+
+def test_a_member_that_builds_but_declares_no_package_is_named(tmp_path, monkeypatch):
+    _member(tmp_path, "odd", "odd", None)
+    S = _suites(monkeypatch, tmp_path)
+    assert S.foreign({"odd": "odd"}, dict(os.environ)) == "odd's package from nowhere (its build configuration declares none)"
+    (tmp_path / "odd" / "src" / "odd").mkdir(parents=True)
+    (tmp_path / "odd" / "src" / "odd" / "__init__.py").write_text("")       # hatch's default layout
+    assert S.importable({"odd": "odd"}) == {"odd": "odd"}
 
 
 def test_suites_refuse_a_python_that_imports_the_trees_packages_from_elsewhere(tmp_path, monkeypatch, capsys):
@@ -695,6 +734,29 @@ def test_what_a_child_reads_outside_the_inputs_fails_the_suite_and_names_the_tes
     assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "cached  pkg" in p.stdout, p.stdout
+
+
+def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds_while_it_is_unchanged(tmp_path):
+    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `fixtures/artifacts.json` for
+    repo replicas: in the test's process or a child's, that read fails no suite, and the test's own read is watched."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    (root / "fixtures").mkdir()
+    (root / "fixtures" / "artifacts.json").write_text("{}\n")
+    (tests / "test_registry.py").write_text(
+        "import os, subprocess, sys\n\ndef test_registry():\n"
+        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'fixtures', 'artifacts.json')\n"
+        "    open(p).read()\n"
+        "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "registry")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
+    assert "cached  pkg" in _run_suite(root, tmp_path).stdout
+    (root / "fixtures" / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout
 
 
 def test_a_fork_a_collection_or_a_child_whose_tracer_fails_fails_the_suite_under_xdist(tmp_path):
