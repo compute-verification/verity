@@ -47,6 +47,8 @@ SERVED_V = (32000, 49152, 128256, 151936, 152064, 154880, 256000)
 SERVED_VS = ((128256, 16), (128256, 32))
 #: Boolean Definitions whose served sizes take seconds each to trace: pinned at one served V
 ONE_SERVED_V = ("GumbelSelectF32_v2",)
+#: a Boolean Definition that takes over 5 s to trace at circuit-check's statics (the lane's rounds 8-9, the uniform and the logs)
+SLOW_TRACE = ("GumbelLaneTail_v1",)
 
 
 # --- the family's Definitions ------------------------------------------------------------------------------------------------
@@ -154,7 +156,7 @@ def _served(key: str) -> bool:
 def _params():
     if not FIXTURE.exists():
         return []
-    return [pytest.param(k, marks=pytest.mark.slow) if _served(k) else k for k in _load()["pins"]]
+    return [pytest.param(k, marks=pytest.mark.slow) if _served(k) or k in SLOW_TRACE else k for k in _load()["pins"]]
 
 
 @pytest.fixture(scope="module")
@@ -168,7 +170,7 @@ def test_each_definition_is_constructed_where_it_was(defs):
 
 @pytest.mark.parametrize("key", _params())
 def test_the_definition_id_and_digest_are_unchanged(key, defs):
-    """A served size traces a Boolean Definition's body for seconds, so those keys are slow; the circuit-check sizes stay quick."""
+    """A served size traces a Boolean Definition's body for seconds, so those keys are slow (with `SLOW_TRACE`); the rest stay quick."""
     assert pin(key, defs) == _load()["pins"][key]
 
 
