@@ -24,7 +24,9 @@ that computes the outputs, among others). Those statements still parse and set u
 Σ), and the agreement check expects the refusal of them (D12, `vectors.json`'s `lean_refuses`). A session drawn by a law
 no soundness claim draws by is refused too, with `refused: <why>: no soundness claim draws by this law`
 (`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with or without a closure, and a subset draw without `--zk`
-(`lean_refuses_drawn`).
+(`lean_refuses_drawn`). So is a session without a draw, with `refused: a session without a draw: every soundness claim is
+about a drawn session (D12)`, but only once every check has passed, so a session that fails a check keeps that check's
+reason (`lean_refuses_drawless`).
 
 ## Build and run
 
@@ -186,7 +188,8 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   and the agreement is between Lean and this repository's Rust prover, not upstream's verifier. `vectors.json`
   `live.sets` 2 to 5 are M0's selftest records at `455a01049` (flat and typed, RoPE and the GEMM coordinate;
   `ci.py --live`: 20/20, 21/21, 20/20, 21/21, reproduced by red-team-proofs-554 in `art:bc6367e3`). On flat RoPE the honest
-  sessions are accepted, so digest and Σ are the prover's, and every negative refused, `output_row_committed_false` (an
+  sessions pass every check, so digest and Σ are the prover's (they have no draw, so their verdict is that refusal, D12),
+  and every negative is refused by its check, `output_row_committed_false` (an
   output row's `b ‖ c` not the circuit's outputs) included; flat GEMM (a unit reading two input groups) and both typed
   sets are D12 (§16.15), every session refused for its form. `test_lean_hidden_outputs.py` verifies four of each set's
   cases (the honest session and the three false statements) from a fetched fixture

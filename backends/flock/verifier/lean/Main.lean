@@ -314,7 +314,8 @@ a public file whose header names an identifier its own `--identifier F` (§16.10
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
 A statement whose form the soundness proof does not cover is refused (`ProvedScope.check`, §16.15), each session with
 the reason, and so is a session whose draw is by a law no soundness claim draws by (`ProvedScope.drawLaw`: a bernoulli or
-work draw, whatever flags it holds, or a subset draw without `--zk`). Exit 0 iff every session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
+work draw, whatever flags it holds, or a subset draw without `--zk`), and a session without a draw, after every check has
+passed (so the reason is the refusal only when nothing else fails). Exit 0 iff every session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
@@ -378,7 +379,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
           registered publicInputs (identifier.map Prod.snd)
         if zk then r.2.forM Zk.shapeOk
         pure r) with
-    | .ok (spec, sts) => (ProvedScope.drawLaw zk draw).bind fun () => scope.map fun () =>
+    | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).bind fun () => scope.map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
@@ -418,6 +419,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
       let (spec, tabs, _) ← st
       if zk then Zk.verify spec tabs record proofs else verify spec tabs record proofs
+      -- last, so a session without a draw that fails a check keeps that check's reason
+      if draw.isNone then ProvedScope.drawLaw zk draw
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok

@@ -2,7 +2,7 @@
 
     python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] [--partition F] [--program F] \
         --public F [--registered F] [--tables DIR] [--zk] [--session-tables J] [--expect FILE]... [--lean-refuses WHY] \
-        [--lean-refuses-drawn WHY] [--jobs J] --out DIR --sessions DIR...
+        [--lean-refuses-drawn WHY] [--lean-refuses-drawless WHY] [--jobs J] --out DIR --sessions DIR...
 
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
@@ -14,7 +14,9 @@ verifier must reject every session, a session expected accepted with a reason st
 `WHY` or its expected reason (a statement that does not set up is refused for that first), and upstream must return each
 session's expected verdict; a session with none (a fuzz case) only needs the refusal. `--lean-refuses-drawn WHY` is D12 at a
 draw law no soundness claim draws by: the same, for every session whose record carries a unit draw, which may meet either
-refusal when a set has both. A session directory may carry its own public file (`pub.bin`, a forgery's false
+refusal when a set has both. `--lean-refuses-drawless WHY` is D12 at a session without a draw, which the Lean verifier
+refuses last, once every check has passed: a session without a draw (and no other refusal) refused with `WHY` is compared
+as accepted, any other verdict as it is, and the Lean verifier must accept none of them. A session directory may carry its own public file (`pub.bin`, a forgery's false
 statement), the verifier's own registered reads (`registered.json`, in place of `--registered`; null for none; upstream
 reads none) and its expected verdict (`case.json`, from the vectors patch's `forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
 their digests (PROTOCOL.md §16.8); upstream reads the paths. Writes DIR/agreement.tsv, the two
@@ -195,6 +197,8 @@ def main(argv=None, slots=None, quiet=False):
                     help="D12: the Lean verifier refuses every session with this reason; upstream gives each its expected verdict")
     ap.add_argument("--lean-refuses-drawn", default=None, metavar="WHY",
                     help="D12 at a draw law: the same, for every session whose record carries a unit draw")
+    ap.add_argument("--lean-refuses-drawless", default=None, metavar="WHY",
+                    help="D12 at a session without a draw: refused with WHY once every check has passed, compared as accepted")
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--sessions", nargs="+", required=True)
     ap.add_argument("--jobs", type=int, default=1, help="verifier processes at once (each builds its own statement)")
@@ -208,11 +212,19 @@ def main(argv=None, slots=None, quiet=False):
         if case.exists():
             expect.setdefault(Path(s).name, {"accepted": json.loads(case.read_text())["expect"] == "accept", "why": ""})
     lean, up = verdicts(a, slots)
-    rows, bad = ["session\texpect\tlean\tupstream\tok\tlean_why\tupstream_why"], []
+    rows, bad, passed = ["session\texpect\tlean\tupstream\tok\tlean_why\tupstream_why"], [], 0
     for s in a.sessions:
         name = Path(s).name
         L, U, e = lean.get(s), up.get(s), expect.get(name)
+        shown = L
         refuses = [w for w, on in ((a.lean_refuses, True), (a.lean_refuses_drawn, drawn(s))) if w is not None and on]
+        drawless = a.lean_refuses_drawless is not None and not refuses and not drawn(s)
+        if drawless and L is not None:
+            if L["accepted"]:
+                bad.append(name)
+            elif L["why"].startswith(a.lean_refuses_drawless):
+                # refused last, once every check has passed: for the comparison, the Lean verifier's checks accept it
+                L, passed = {"accepted": True, "why": ""}, passed + 1
         if refuses and e is not None:
             # a refusal replaces every verdict of a statement that sets up; one that doesn't keeps its setup's reason
             e = {"accepted": False, "whys": refuses + ([] if e["accepted"] else [e["why"]]),
@@ -224,13 +236,14 @@ def main(argv=None, slots=None, quiet=False):
             ok = L is not None and U is not None and not L["accepted"] and L["why"].startswith(tuple(refuses))
         if e is not None:
             ok = ok and L["accepted"] == e["accepted"] and any(L["why"].startswith(w) for w in e.get("whys") or [e["why"]])
-        if not ok:
+        if not ok and name not in bad:
             bad.append(name)
         av = lambda v: "-" if v is None else "A" if v["accepted"] else "R"
-        rows.append("\t".join([name, av(e), av(L), av(U), "yes" if ok else "NO", (L or {}).get("why", ""), (U or {}).get("why", "")]))
+        rows.append("\t".join([name, av(e), av(shown), av(U), "yes" if name not in bad else "NO", (shown or {}).get("why", ""),
+                               (U or {}).get("why", "")]))
     (a.out / "agreement.tsv").write_text("\n".join(rows) + "\n")
     result = {"statement": a.statement, "sessions": len(a.sessions), "agree": len(a.sessions) - len(bad), "disagree": bad,
-              "accepted": sum(1 for s in a.sessions if (lean.get(s) or {}).get("accepted"))}
+              "accepted": sum(1 for s in a.sessions if (lean.get(s) or {}).get("accepted")), "passed_without_draw": passed}
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
     if not quiet:
         print(json.dumps(result))

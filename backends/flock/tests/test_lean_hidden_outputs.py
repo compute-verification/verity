@@ -3,7 +3,8 @@
 returns its output), flat GEMM (a tail stage returns it, one BF16 word in a 64-word row), typed RoPE (a flat class) and typed
 GEMM (a template). Each public file holds only roots, hiding leaves and structure. Flat GEMM (its unit reads two input
 groups) and both typed sets are forms the soundness proof does not cover (§16.15): their statements set up and the verifier
-refuses every case of them for that.
+refuses every case of them for that. No session has a draw, which `verify` refuses after every check has passed (D12), so on
+flat RoPE the honest session gets that refusal (`DRAWLESS`) and each false statement the check that catches it.
 
 It is the one test in `check` of the default statements against the prover's sessions: check's agreement step replays only
 upstream's pinned builds, none of which has hidden outputs. So it catches a verifier that disagrees with the prover on the
@@ -36,6 +37,7 @@ SETS = {("flat", "rope-head"): "verity/flock-circuit+seed-injection",
         ("typed", "rope-head"): "verity/flock-circuit/types+seed-injection",
         ("typed", "gemm-coordinate"): "verity/flock-circuit/types+seed-injection"}
 CASES = {"honest": True, "output_claim_false": False, "output_row_committed_false": False, "digest_claim_false": False}
+DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 #: the sets whose form the soundness proof does not cover, and the reason the verifier refuses each of their cases for
 REFUSED = {("flat", "gemm-coordinate"): "a unit reading 2 input groups",
            ("typed", "rope-head"): "verity/flock-circuit/types+seed-injection, a typed statement",
@@ -83,7 +85,8 @@ def test_it_gives_the_provers_sessions_their_verdicts(store, form, name, tmp_pat
         why = f"refused: {REFUSED[form, name]}: a statement form the soundness proof does not cover"
         assert {c: (v["accepted"], v["why"]) for c, v in got.items()} == {c: (False, why) for c in CASES}
         return
-    assert {c: v["accepted"] for c, v in got.items()} == CASES, {c: v["why"] for c, v in got.items()}
+    assert not any(v["accepted"] for v in got.values())
+    assert {c: v["why"] == DRAWLESS for c, v in got.items()} == CASES, {c: v["why"] for c, v in got.items()}
     # each false statement is refused by the proof against its own public file, not by the session parameters
     assert all(not v["why"].startswith("S2") for c, v in got.items() if c != "honest"), {c: v["why"] for c, v in got.items()}
 

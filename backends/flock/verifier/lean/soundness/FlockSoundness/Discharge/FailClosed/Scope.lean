@@ -23,10 +23,11 @@ at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). Th
 bytes `verifyCmd` sets the session up from, and `count` is `--session-tables`. The flag is `false`: with
 `--public-inputs` the check refuses every session, and without it `buildSession` passes `setupTables` no public input
 words, the setup `Accepts` models. A session's verdict is `verifyCmd`'s `setupOf` at the record's `recordDraw` (the check
-requires `hm96Rows`): `setupTables`, under `--zk` `Zk.shapeOk` on every table, then `ProvedScope.drawLaw` on that draw,
-the check, and then `verify` or `Zk.verify`. So a session `verifyCmd` accepts satisfies `Verifies` (under `--zk`,
-`VerifiesZK`). `verifyCmd` refuses more, which only shrinks the event: a draw by a law no soundness claim draws by
-(`ProvedScope.drawLaw`: a bernoulli or work draw, or a subset draw without `--zk`), registered reads (`checkRegistered`:
+requires `hm96Rows`): `setupTables`, under `--zk` `Zk.shapeOk` on every table, then `ProvedScope.drawLaw` on a drawn
+session's draw, the check, `verify` or `Zk.verify`, and last `ProvedScope.drawLaw` on a session without a draw. So a session
+`verifyCmd` accepts satisfies `Verifies` (under `--zk`, `VerifiesZK`). `verifyCmd` refuses more, which only shrinks the
+event: a draw by a law no soundness claim draws by (`ProvedScope.drawLaw`: a bernoulli or work draw, or a subset draw
+without `--zk`), a session without a draw (every claim's record hypothesis reads the record's draw), registered reads (`checkRegistered`:
 a header naming registered values without `--registered`; with it, `Registered.check` needs a shared-row public file,
 which the check refuses), a coin-tree key an earlier session of the run used, and a session file it cannot read. A later session of a run whose draw has an earlier
 one's canonical form is verified against that earlier setup; `canon` takes integers only, so the two draws hold the same

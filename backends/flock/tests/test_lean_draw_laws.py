@@ -1,6 +1,7 @@
 """Draw laws (PROTOCOL.md §16.15, D12): `verify` refuses a session drawn by a law no soundness claim draws by (a bernoulli
 draw, a work draw with or without a closure, a subset draw without `--zk`) whatever flags it holds, and passes a stratified
-draw, and under `--zk` a subset draw, on to the statement-form check. The sessions are the registered-reads set's honest
+draw, and under `--zk` a subset draw, on to the statement-form check. A session without a draw is refused too, but only after
+every check has passed, so here it meets the form check. The sessions are the registered-reads set's honest
 session (`FIXTURE`, vectors.json's set 16) with its record's draw replaced: its statement is the corpus's one whose program
 and partition a work draw's law derives from, so a work draw sets up there, where any other statement refuses it at setup
 before its law is read. Its public file has shared rows, which the form check refuses, so a draw that passes the law check
@@ -59,7 +60,7 @@ def verdicts(tmp_path_factory):
     draws = {"work": {**draw(*work), "units": [2, 6]}, "closure": widened,
              "bernoulli": {"law": "bernoulli", "population": 8, "p": "1/2", "units": [1, 6]},
              "subset": {"law": "subset", "population": 8, "k": 2, "units": [1, 6]},
-             "stratified": draw("--stratified", "2")}
+             "stratified": draw("--stratified", "2"), "none": None}
     sessions = {}
     for name, law in draws.items():
         s = shutil.copytree(root / "vectors" / "honest", d / name)
@@ -79,7 +80,7 @@ def verdicts(tmp_path_factory):
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         plain = ex.submit(verify, False, list(draws))
-        zk = ex.submit(verify, True, ["work", "closure", "bernoulli", "subset"])
+        zk = ex.submit(verify, True, ["work", "closure", "bernoulli", "subset", "none"])
         return {False: plain.result(), True: zk.result()}
 
 
@@ -99,3 +100,11 @@ def test_a_subset_draw_needs_zk(verdicts):
     assert verdicts[False]["subset"]["why"] == _law("a subset draw without --zk")
     assert verdicts[True]["subset"]["why"] == SHARED
     assert verdicts[False]["stratified"]["why"] == SHARED
+
+
+def test_a_session_without_a_draw_is_refused_after_every_check(verdicts):
+    """No soundness claim covers a session without a draw (D12), and `verify` refuses one last, after every check has
+    passed, so a session that fails a check keeps that check's reason: here, in either mode, the statement's form. Its own
+    refusal shows on the statements whose form is covered (`test_lean_zk.py`, `test_lean_live_os.py`,
+    `test_lean_hidden_outputs.py`)."""
+    assert verdicts[False]["none"]["why"] == SHARED and verdicts[True]["none"]["why"] == SHARED
