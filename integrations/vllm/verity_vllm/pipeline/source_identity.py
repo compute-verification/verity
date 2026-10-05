@@ -135,7 +135,7 @@ def resolve(tree: str | os.PathLike[str] | None = None, *, sha: str | None = Non
             rec = _sid.resolve_module(import_name, ROOT_MARKERS)
             rec["package"] = name
             rec["import_name"] = import_name
-            rec["expected_sys_path_entry"] = os.path.join(root, rel)
+            rec["expected_sys_path_entry"] = os.path.normpath(os.path.join(root, rel))
             if rec.get("resolved_path"):
                 # <entry>/<import_name>/__init__.py -> the sys.path entry that resolved it
                 rec["sys_path_entry"] = str(Path(rec["resolved_path"]).parent.parent)
