@@ -14,7 +14,8 @@ window's hindsight choice on what it showed. A window with no history declares t
 
 The bound doesn't depend on the rule: the audit charges log2 #Σ_sync bits per window whatever chose the value
 (`SecurityProofs.EncardAccSeqsLeSync` counts every advice sequence). The rule sets liveness, since a window its
-declared sync doesn't meet is a violation (fail-closed), and the shaping latency.
+declared sync doesn't meet is a violation (fail-closed), and the shaping latency. Since the prover reads the frames'
+ready buckets, a sender that times its writes steers the declarations: those charged bits become ones it can use.
 """
 
 from __future__ import annotations

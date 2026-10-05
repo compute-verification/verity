@@ -36,8 +36,9 @@ audit's Program is that log. A live prover can't choose syncs on frames it hasn'
 value for every window (`--syncs envelope`): the largest δ and the smallest ρ the calibration's honest prover declared,
 met by every window any declared value meets. Under an online rule (`--syncs cover-K-M`, `online`) the proxy's own
 prover declares each window's sync at its first tick from the frames it has read, the audit checks the syncs the
-proxy logged, and `declared_are_planned` says whether they are what the rule declares on the model's run. The audit
-also counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
+proxy logged, and `declared_are_planned` says whether they are what the rule declares on the model's run. The sender's
+write times then move the declarations, so an adversarial strategy's wire differs from honest's from the second window
+on, within the log2 #Σ_sync bits per window the bound charges. The audit also counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
 have met.
 
     python active_replay.py --calibration REPORT.json --out DIR [--windows 60] [--config-windows 4:10] TRACE.json ...

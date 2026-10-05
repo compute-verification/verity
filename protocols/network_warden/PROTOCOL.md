@@ -212,8 +212,11 @@ docstring) and sizes:
   ρ, `-fallback` declares the envelope (the largest δ and smallest ρ the calibration's prover declared) while one of
   them was late under its own declaration, and `last` is `cover-1-0`. A window with no history declares the envelope.
   A configuration cut from one run at a dropped window may start from the previous one's history
-  (`Prover(prior=…)`). The rule sets liveness and latency only: the bound charges log2 #Σ_sync bits per window
-  whatever chose the value.
+  (`Prover(prior=…)`). The bound charges log2 #Σ_sync bits per window whatever chose the value, so it holds under
+  any rule. What changes is who can use those bits: a sync chosen before the run, or from the trace's model, doesn't
+  depend on the sender, but an online prover reads the sender's timing, so the sender steers every declaration after
+  its first (in the injected-clock replay, the burst, spread and bits senders each move the declared δ, and the wire
+  differs from honest's in every window but the first).
 - **The honest miss rate:** a window that no value meets on every egress link is a miss, which is a violation. A
   larger δ or a smaller ρ only raises hand times, so a window misses exactly when the most lenient value misses on some
   link. A window is the configuration's, so the rate is the configurations' missed windows over their windows
