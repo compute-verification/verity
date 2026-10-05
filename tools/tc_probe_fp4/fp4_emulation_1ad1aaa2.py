@@ -34,7 +34,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+sys.path[:0] = [str(ROOT), str(ROOT / "catalog")]
 
 from verity_catalog.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16  # noqa: E402
 
