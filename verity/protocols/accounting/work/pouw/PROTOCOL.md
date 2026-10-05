@@ -3,7 +3,8 @@
 Certifies that a declared workload of integer or FP8 matmuls was computed with at least a stated fraction of the honest
 work, by sampled recomputation of committed checked values. The setting and the cost model (W1 on an RTX 4090) are the
 PoUW problem statement's; the guarantee is Lean's `Pouw.SecurityProofs.EndToEnd` instantiated with a scheme's
-conjecture. The Lean package is `lean/`, and every theorem this document cites is pinned in its `lean-audit.json`.
+conjecture. Its Lean is under `verity/Security/` (`Definitions/Pouw`, `Specs/Pouw`, `Proofs/Pouw`), and every theorem this document
+cites is pinned in `verity/Security/lean-audit.json`.
 
 ## The interface
 
@@ -918,7 +919,7 @@ scales and codes by the following primitive calls, in this order. Each result is
    and `β = F32Mul_v2(F32Mul_v2(δρ, α), 0x3EA920A7)` (`k_β`).
 
 The Lean names are `rowMax`, `rowRho`, `alpha8`, `beta8`, `floor8`, `eTilde8`, `code8W`, `alpha4` and `beta4`
-(`Pouw/Protocol/PearlC/RowSem.lean`, namespace `PearlC.RowCircuit`). Pearl-C's and Pearl-C4's semantics at them are `pc8Sem` and
+(`verity/Security/Definitions/Pouw/PearlC/RowSem.lean`, namespace `PearlC.RowCircuit`). Pearl-C's and Pearl-C4's semantics at them are `pc8Sem` and
 `pc4Sem`, on the row's words re-encoded (`f32Word`; `pc4`: `bf16WordOf`). Their `α` and `β` are those words read back as
 values. `pc4`'s rules ask finite widened BF16 words, so `bf16WordOf` of a word's value is the word's high half with `−0`
 written `+0`. The `pc4` table registers the high half itself (`rows4`), and a row unit reads `−0` as `+0`
