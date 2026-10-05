@@ -453,6 +453,9 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
 # paths (`verity_numerical.bench.frozen`), and labels cite them.
 keep = ["backends/numerical/reports", "backends/numerical/reports/*", "backends/*/results", "backends/*/results/*",
         "backends/*/results_*", "backends/*/results.*"]
+# Kept only in the files a glob matches: vLLM's `census/` is a run directory's census phase (census/census.json, traces/),
+# never the repository's census data, which no file of the integration names.
+keep_in = {"integrations/vllm/**" = ["census", "census/*"]}
 # Rewritten although excluded above: data keyed by repository path (their pinned digests must not change).
 include = ["fixtures/artifacts.json", "backends/flock/tests/fixtures/randomness_lean.json",
            "experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json",

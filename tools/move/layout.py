@@ -79,6 +79,7 @@ class Layout:
         rw = data.get("rewrite", {})
         self.exclude, self.include = rw.get("exclude", []), rw.get("include", [])
         self.keep = rw.get("keep", [])
+        self.keep_in = rw.get("keep_in", {})
         self.merged = set(data.get("distributions", {}).get("merged", []))
 
     # paths
@@ -133,10 +134,12 @@ class Layout:
                 return i
         return 0
 
-    def kept(self, p: str) -> bool:
-        """Whether old path `p` is a key that outlives the tree (a path inside a store artifact), never rewritten."""
+    def kept(self, p: str, where: str = "") -> bool:
+        """Whether old path `p` is a key that outlives the tree (a path inside a store artifact), never rewritten; in file
+        `where`, also a path that `keep_in` keeps for the files its glob matches (a run directory's own `census/`)."""
         p = p.strip("/")
-        return any(fnmatch.fnmatchcase(p, pat) for pat in self.keep)
+        pats = [*self.keep, *(q for g, qs in self.keep_in.items() if where and fnmatch.fnmatchcase(where, g) for q in qs)]
+        return any(fnmatch.fnmatchcase(p, pat) for pat in pats)
 
     def excluded(self, *paths: str) -> bool:
         def hit(pats, p):
@@ -462,7 +465,7 @@ class Run:
             token = m.group("p")
             name, _, rest = token.partition("/")
             full = f"{self.L.old_roots[name]}/{rest}".rstrip("/")
-            if self.L.kept(full) or not (full in self.known_old or full in self.old_dirs):
+            if self.L.kept(full, path) or not (full in self.known_old or full in self.old_dirs):
                 return token
             new, approx = self.L.path(full, full in self.old_dirs)
             if new is None:
@@ -503,7 +506,7 @@ class Run:
     def _map_token(self, token: str, path: str) -> str | None:
         slash = token.endswith("/")
         t = token.rstrip("/")
-        if self.L.kept(t):
+        if self.L.kept(t, path):
             return None
         if any(c in t for c in "*{},"):
             parts = t.split("/")
@@ -545,7 +548,7 @@ class Run:
             alt = posixpath.normpath(posixpath.join(member, t))
             if alt in self.known_old or alt in self.old_dirs:
                 target, base_new = alt, self.L.directory(member)[0] or member
-        if target.startswith("..") or target == "." or self.L.kept(target):
+        if target.startswith("..") or target == "." or self.L.kept(target, path):
             return None
         is_dir = target in self.old_dirs
         if not (target in self.known_old or is_dir):
@@ -659,7 +662,7 @@ class Run:
         segs = re.findall(r"""["']([\w.\-]+)["']""", m.group("chain"))
         target = posixpath.normpath(posixpath.join(anchor, *segs)) if segs else anchor
         target = "" if target == "." else target
-        if target and self.L.kept(target):
+        if target and self.L.kept(target, where):
             return m.group(0)
         if target and (target in self.known_old or target in self.old_dirs):
             new_target = self.L.file(target) if target in self.known_old else None
@@ -744,7 +747,27 @@ class Run:
                 return _ROOT_JOIN                       # the repository root: the join itself goes
             return " / ".join(f"{q}{s}{q}" for s in new.strip("/").split("/"))
 
+        def fix_path(m: re.Match) -> str:
+            segs = [m.group("first"), *re.findall(r"""["']([\w.\-]+)["']""", m.group("rest"))]
+            joined = "/".join(segs)
+            if len(segs) == 1 or not (joined in self.known_old or joined in self.old_dirs or joined in self.L.files
+                                      or joined in dict(self.L.dirs) or joined in self.L.tokens):
+                return m.group(0)
+            new = self._map_token(joined, path)
+            if new is None or new == joined or new.strip("/") == ".":
+                return m.group(0)
+            q = m.group("q")
+            self._count(path, "path joins")
+            self.note("path joins rewritten", f"{path}: {joined} -> {new}")
+            first, *rest = new.strip("/").split("/")
+            return f"{m.group('head')}{q}{first}{q})" + "".join(f" / {q}{s}{q}" for s in rest)
+
+        text = self._PATH_JOIN.sub(fix_path, text)
         return re.sub(r"\s*/\s*" + _ROOT_JOIN, "", self._JOIN.sub(fix, text))
+
+    #: `Path("packages") / "verity" / "src"`: a join whose first segment is a Path of one string
+    _PATH_JOIN = re.compile(r"""(?P<head>(?<![\w.])(?:Pure(?:Posix)?)?Path\()(?P<q>["'])(?P<first>[\w.\-]+)(?P=q)\)"""
+                            r"""(?P<rest>(?:\s*/\s*(?P<q3>["'])[\w.\-]+(?P=q3))*)""")
 
     # imports ----------------------------------------------------------------------------------------------------------
 
