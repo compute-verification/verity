@@ -190,6 +190,29 @@ def test_a_replay_stage_publishes_the_config_record_it_decided(tmp_path):
         raise AssertionError("a PASS replay without its config record published")
 
 
+def test_a_tp_replay_stage_decides_in_the_folded_commit_summary_unless_a_config_run(tmp_path):
+    d = _tp_dir(tmp_path, world=2)
+    with open(d / "stages.txt", "a") as f:
+        f.write("commit PENDING 2026-09-30T00:00:01Z rc=0\nreplay PASS 2026-09-30T00:00:02Z rc=0\n")
+    _w(d / "commit" / "summary.json", {"pass": True, "tokens_equal": True, "pairs": 1})
+    _w(d / "commit" / "replay_bundle_p0_rank1" / "MANIFEST.json", {})
+    doc = ro.build_outputs(d, ROW, "replay", tmp_path / "run", {})
+    v = next(e for e in doc["outputs"] if e["name"] == "verdict")
+    assert (v["meta"]["decision_record"], v["meta"]["tp_pass"], v["meta"]["pairs"]) == ("commit/summary.json", True, 1)
+    assert (tmp_path / "run" / "outputs" / "verdict" / "commit" / "summary.json").is_file()
+    assert not [x for x in (tmp_path / "run").rglob("*") if "replay_bundle_p" in x.as_posix()]
+    (d / "commit" / "summary.json").unlink()
+    try:
+        ro.build_outputs(d, ROW, "replay", tmp_path / "run2", {})
+    except ValueError as e:
+        assert "commit/summary.json" in str(e)
+    else:
+        raise AssertionError("a PASS TP replay without its folded summary published")
+    _config_commit(d)
+    v = next(e for e in ro.build_outputs(d, ROW, "replay", tmp_path / "run3", {})["outputs"] if e["name"] == "verdict")
+    assert (v["meta"]["decision_record"], v["meta"]["outcome"]) == ("config_record.json", "PASS")
+
+
 def test_a_replay_stage_publishes_its_slim_keep_whole_and_never_the_bundle(tmp_path, monkeypatch):
     monkeypatch.setattr(ro, "MAX_FILE", 16)
     row = "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"

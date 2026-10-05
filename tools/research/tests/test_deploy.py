@@ -165,6 +165,12 @@ def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically
     assert deploy.main(["install", "n", str(node / "bin" / "c.py"), "--ref", "origin/main", "--by", "lane-x", "--no-fetch"],
                        run=local, manifest=world["manifest"], repo=repo) == 0
     assert "installed     " in capsys.readouterr().out and (node / "bin" / "c.py").read_text() == "c1\n"
+    assert deploy.main(["install", "n", "--by", "lane-x", "--ref", "origin/fix", str(node / "bin" / "c.py"), "--no-fetch"],
+                       run=local, manifest=world["manifest"], repo=repo) == 0
+    assert (node / "bin" / "c.py").read_text() == "c-fix\n"
+    with pytest.raises(SystemExit):
+        deploy.main(["install", "n", "--by", "lane-x", str(node / "bin" / "c.py"), "--bogus", "--no-fetch"],
+                    run=local, manifest=world["manifest"], repo=repo)
     with pytest.raises(RuntimeError, match="not in deploy.toml for n: nope"):
         deploy.install(n, "origin/main", "lane-x", ["nope"], local, repo=repo)
 

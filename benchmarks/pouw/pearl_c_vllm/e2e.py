@@ -713,16 +713,20 @@ def smoke(args) -> None:
 
 def wikitext_windows(model: str, limit: int | None) -> list[list[int]]:
     """WikiText-2's test split (`WIKITEXT`, from the Hugging Face cache) joined with blank lines, tokenized, and cut into
-    non-overlapping windows of BOS and `WINDOW` − 1 tokens; the last partial window is dropped, and `limit` keeps the first."""
+    non-overlapping windows of BOS and `WINDOW` − 1 tokens; the last partial window is dropped, and `limit` keeps the first.
+    BOS is the tokenizer's, else the model config's `bos_token_id` (Qwen3's tokenizer names none; its config 151643)."""
     import pyarrow.parquet as pq
     from huggingface_hub import hf_hub_download
-    from transformers import AutoTokenizer
+    from transformers import AutoConfig, AutoTokenizer
     repo, rev, name = WIKITEXT
     text = "\n\n".join(pq.read_table(hf_hub_download(repo, name, repo_type="dataset", revision=rev)).column("text").to_pylist())
     tok = AutoTokenizer.from_pretrained(model)
+    bos = tok.bos_token_id if tok.bos_token_id is not None else AutoConfig.from_pretrained(model).bos_token_id
+    if bos is None:
+        raise ValueError(f"{model}: neither its tokenizer nor its config names a BOS token")
     ids = tok(text, add_special_tokens=False)["input_ids"]
     body = WINDOW - 1
-    out = [[tok.bos_token_id, *ids[i:i + body]] for i in range(0, len(ids) - body + 1, body)]
+    out = [[bos, *ids[i:i + body]] for i in range(0, len(ids) - body + 1, body)]
     return out[:limit] if limit else out
 
 

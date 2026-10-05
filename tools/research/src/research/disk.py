@@ -4,7 +4,8 @@
 (80) of its size with N more GB used, and otherwise holds it until that falls to RELEASE_PCT (75), the thresholds node 1's
 `vy-disk-guard` uses; then it execs CMD in its own process, so the run's pid is unchanged. The launch doesn't wait: the hold
 happens in the detached process the machine starts, and its lines go to the run's launcher.log. Requests other runs have
-declared but not yet used aren't counted (a follow-up).
+declared but not yet used aren't counted (a follow-up). A machine whose guard holds at another level sets
+RESEARCH_DISK_HOLD_PCT in the run's environment.
 """
 from __future__ import annotations
 
@@ -41,7 +42,8 @@ def hold(gb: float, path: Path, *, hold_pct: float = HOLD_PCT, release_pct: floa
         sleep(poll_s)
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str], *, usage: Callable[[Path], tuple[int, int, int]] = shutil.disk_usage,
+         sleep: Callable[[float], None] = time.sleep, execvp: Callable[[str, list[str]], None] = os.execvp) -> int:
     ap = argparse.ArgumentParser(prog="research disk-hold")
     ap.add_argument("--gb", type=float, required=True)
     ap.add_argument("--path", required=True)
@@ -51,8 +53,9 @@ def main(argv: list[str]) -> int:
     if not cmd:
         print("research disk-hold: give the command after --", file=sys.stderr)
         return 2
-    hold(ns.gb, Path(ns.path))
-    os.execvp(cmd[0], cmd)
+    pct = float(os.environ.get("RESEARCH_DISK_HOLD_PCT", HOLD_PCT))
+    hold(ns.gb, Path(ns.path), hold_pct=pct, release_pct=min(RELEASE_PCT, pct), usage=usage, sleep=sleep)
+    execvp(cmd[0], cmd)
     return 127
 
 
