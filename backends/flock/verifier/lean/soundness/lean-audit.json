@@ -17274,14 +17274,83 @@
    "assumptions": [],
    "type_hash": "c01354d83dcca47255a0c822b1c7ecb57e0cfaafcc971e6bc8b34245409dd1da"
   },
-  "FlockSoundness.SpecBridge.accepts_iff": {},
-  "FlockSoundness.SpecBridge.hashDerivedKeyHm96_iff": {},
-  "FlockSoundness.SpecBridge.hashDerivedKey_iff": {},
-  "FlockSoundness.SpecBridge.hm96Hiding_iff": {},
-  "FlockSoundness.SpecBridge.hmRowComputes_iff": {},
-  "FlockSoundness.SpecBridge.sha512CRExpected_iff": {},
-  "FlockSoundness.SpecBridge.sha512CRStrict_iff": {},
-  "FlockSoundness.SpecBridge.uniformRandomBytes_iff": {},
+  "FlockSoundness.SpecBridge.accepts_iff": {
+   "signature": [
+    "FlockSoundness.SpecBridge.accepts_iff (zk : Bool) (I : FlockSoundness.Discharge.Exec.Inputs)",
+    "  (t : FlockSoundness.Discharge.Exec.Transcript) :",
+    "  Iff (FlockSpec.Accepts zk (FlockSoundness.SpecBridge.ofExec I) { record := t.record, proofs := t.proofs })",
+    "    (FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts zk I t)"
+   ],
+   "assumptions": [],
+   "type_hash": "08f641766fd66cedfafff9c1f798056af348c41a9ef1174a944b79eb1815dd9a"
+  },
+  "FlockSoundness.SpecBridge.hashDerivedKeyHm96_iff": {
+   "signature": [
+    "FlockSoundness.SpecBridge.hashDerivedKeyHm96_iff :",
+    "  Iff FlockSpec.HashDerivedKeyHm96 FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"
+   ],
+   "assumptions": [],
+   "type_hash": "144c351712bcb4bc0cb492be90136e8844429926da70b04090265bd21b72c159"
+  },
+  "FlockSoundness.SpecBridge.hashDerivedKey_iff": {
+   "signature": [
+    "FlockSoundness.SpecBridge.hashDerivedKey_iff {Sa Bi Co : Type} [Fintype Sa] [Fintype Bi] (My : Sa → Bi) (c : Sa → Co) :",
+    "  Iff (FlockSpec.HashDerivedKey My c) (FlockSoundness.Assumptions.HashDerivedKey My c)"
+   ],
+   "assumptions": [],
+   "type_hash": "e9a06511091c7657c115b1d75214645e34afa6f6e0b2f462da9eab608317c3c6"
+  },
+  "FlockSoundness.SpecBridge.hm96Hiding_iff": {
+   "signature": [
+    "FlockSoundness.SpecBridge.hm96Hiding_iff {Sa Bi Co : Type} [Fintype Sa] [Fintype Bi] (My : Sa → Bi) (c : Sa → Co)",
+    "  (δ₁ : ENNReal) : Iff (FlockSpec.Hm96Hiding My c δ₁) (FlockSoundness.Assumptions.Hm96Hiding My c δ₁)"
+   ],
+   "assumptions": [],
+   "type_hash": "c856ed601d05cae66ab9aace77fe76750f86d98ac3ec7b72944f7c0240792b43"
+  },
+  "FlockSoundness.SpecBridge.hmRowComputes_iff": {
+   "signature": [
+    "FlockSoundness.SpecBridge.hmRowComputes_iff {W : Type} (H : List UInt8 → List UInt8) (saltPrefix : List UInt8)",
+    "  (mask : List UInt8 → List UInt8) (sat : W → Prop) (row salt bc : W → List UInt8) :",
+    "  Iff (FlockSpec.HmRowComputes H saltPrefix mask sat row salt bc)",
+    "    (FlockSoundness.Assumptions.HmRowComputes H saltPrefix mask sat row salt bc)"
+   ],
+   "assumptions": [],
+   "type_hash": "b49454db374417bd946a5e65ec2354beda38e8e9347584f917245ed63ef5a148"
+  },
+  "FlockSoundness.SpecBridge.sha512CRExpected_iff": {
+   "signature": [
+    "FlockSoundness.SpecBridge.sha512CRExpected_iff {D β : Type} (H : List UInt8 → D) (g : FlockSoundness.Game β)",
+    "  (s : g.Strategy) (out : β → Option (Prod (List UInt8) (List UInt8))) (cost : β → Real) :",
+    "  Iff",
+    "    (FlockSpec.SHA512CRExpected H (FlockSoundness.SpecBridge.ofGame g) (FlockSoundness.SpecBridge.ofStrategy g s) out",
+    "      cost)",
+    "    (FlockSoundness.Assumptions.SHA512CRExpected H g s out cost)"
+   ],
+   "assumptions": [],
+   "type_hash": "26a012fc1f785f67c9231cb81cdcba74b971464967c790b348875912fd2c61ce"
+  },
+  "FlockSoundness.SpecBridge.sha512CRStrict_iff": {
+   "signature": [
+    "FlockSoundness.SpecBridge.sha512CRStrict_iff {D β : Type} (H : List UInt8 → D) (g : FlockSoundness.Game β)",
+    "  (s : g.Strategy) (out : β → Option (Prod (List UInt8) (List UInt8))) (cost : β → Real) (q : Real) :",
+    "  Iff",
+    "    (FlockSpec.SHA512CRStrict H (FlockSoundness.SpecBridge.ofGame g) (FlockSoundness.SpecBridge.ofStrategy g s) out cost",
+    "      q)",
+    "    (FlockSoundness.Assumptions.SHA512CRStrict H g s out cost q)"
+   ],
+   "assumptions": [],
+   "type_hash": "da67567f8730cf2cc390127f72398c55e0ef0c0bfee5a11469f8423f641d35f8"
+  },
+  "FlockSoundness.SpecBridge.uniformRandomBytes_iff": {
+   "signature": [
+    "FlockSoundness.SpecBridge.uniformRandomBytes_iff {Ω : Type} [Fintype Ω] {m : Nat} (L : Fin m → Nat)",
+    "  (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) :",
+    "  Iff (FlockSpec.UniformRandomBytes L t) (FlockSoundness.Assumptions.UniformRandomBytes L t)"
+   ],
+   "assumptions": [],
+   "type_hash": "09c36fd540e2b7d6866c145f43d7f47903df9c4bd4336b764b6e39421326122a"
+  },
   "FlockSoundness.StrictCR.TreeRewind.le": {
    "signature": [
     "FlockSoundness.StrictCR.TreeRewind.le {D : Type} {H : List UInt8 → D} {β : Type} {G : FlockSoundness.Game β}",
@@ -49525,6 +49594,86 @@
     "FlockSoundness.Discharge.ZkSession.zk_flock_count_execOS",
     "FlockSoundness.Discharge.ZkSession.zk_flock_count_execOS_m1",
     "FlockSoundness.Discharge.ZkSession.zk_knowledgeSound"
+   ]
+  },
+  "FlockSoundness.Spec.Assumptions": {
+   "digest": "9c9b8c43148ebe608b795a3af0cccedd7893a5399e9656a0d06d3ffc70026205",
+   "definitions": {
+    "FlockSpec.HashDerivedKey": "0bde495ca65ffa0c6aea001e2c8fad0a599ed07b673dd55fc561f7d3140f1019",
+    "FlockSpec.HashDerivedKeyHm96": "8d47b2b8c4354525d71af0c39fe1b74b0140d243063d9d74f9c766fba9e427bd",
+    "FlockSpec.Hm96Hiding": "7307790e11f2ec1a4400a1741c3ee893e15f630b8d4529f2dd9384f256c62f43",
+    "FlockSpec.HmRowComputes": "697cbb54785e8acc26bc286e2bb63e293bb194492092351f51105c1de421a903",
+    "FlockSpec.SHA512CRExpected": "8278b51f8deec288d4726ffc05fdcf060ddc2217baa13d7bfec74f524bd67076",
+    "FlockSpec.SHA512CRStrict": "2581e5929a704104eb5b16a5e35c1ae4887af19ebe517ada37125479ddacee3e",
+    "FlockSpec.UniformRandomBytes": "22a722e4d928c8d7fe0affafafb35c27516a6992dba5d505f213f8976f344493",
+    "FlockSpec.byteOf": "6e9c37e3e5ed7765e26f6382af425ad7ada183dce47251593429bba0efb2fe58",
+    "FlockSpec.keyedHash": "094b1475c3aed1ac904272e3fd06b24226bd49fd965979794c8b95625ae211a7",
+    "FlockSpec.saltBytes": "f1e7a4e99c02e34b7f9aefa21fa595d489e85b64f85afd98278d437ceb0438ac",
+    "FlockSpec.saltHash": "883f640940060e61b3761f8a35bde4801d968dfef77858eba7efb29a0c9bdb17"
+   },
+   "pins": [
+    "FlockSoundness.SpecBridge.hashDerivedKeyHm96_iff",
+    "FlockSoundness.SpecBridge.hashDerivedKey_iff",
+    "FlockSoundness.SpecBridge.hm96Hiding_iff",
+    "FlockSoundness.SpecBridge.hmRowComputes_iff",
+    "FlockSoundness.SpecBridge.sha512CRExpected_iff",
+    "FlockSoundness.SpecBridge.sha512CRStrict_iff",
+    "FlockSoundness.SpecBridge.uniformRandomBytes_iff"
+   ]
+  },
+  "FlockSoundness.Spec.Protocol": {
+   "digest": "37e2bbe0cf8524a69f62c17fa6c805cbebd2d2d612d28214f67ae40f3c191a41",
+   "definitions": {
+    "FlockSpec.Accepts": "adeb142913f8823a25054b748ed1c9e544f4e2a08e7eff64aa60301c569c2e4b",
+    "FlockSpec.Game": "825df9bdf2b9f6669157438244a222bc95cfe3a830ddf5e55a5e936191dd0158",
+    "FlockSpec.Game.brecOn.go": "4fa7563b2075a10066cc92184705d608299e408516ca9d26906af5343e93e035",
+    "FlockSpec.Game.coin": "01d842569fded471fd2ec07473df7757bcd19d687984c5bdc329a4641304ddea",
+    "FlockSpec.Game.ret": "f7e78ae7b9f83d845d04e507933ca49af3b92fdb4dea2326a02900563178a633",
+    "FlockSpec.Game.send": "68933059a1bd2ca7eebb8b300ed7733e13c2dcd2dc3f8831d73fe4820e85f097",
+    "FlockSpec.Inputs": "2c36dcc0fb2e10471c2aae8c0a8ea2e6fd21946d54302d43170de72c23892aab",
+    "FlockSpec.Inputs.circuitFile": "8ee557442c54713d4828440252adfb823cefa72f53c65659c7ed5fc0e55806f6",
+    "FlockSpec.Inputs.closure": "b901662fe18c7d20159e681edd7fc11e0b4ad1fce2d45e8dc650d74308d1473e",
+    "FlockSpec.Inputs.coins": "02231c3a433083392b9f90d51d45d7a05861c3524b86c942cb9a0ce5a034c42b",
+    "FlockSpec.Inputs.count": "35b00f210851227e0aa67ecc33460198bd938e7b3aa70276839314d4f562f400",
+    "FlockSpec.Inputs.partition": "31bad2ff5e2731506730be6b13bef92bd8bd8bdb5b4f14631d8ed9238c5e41cf",
+    "FlockSpec.Inputs.program": "422e675905ad00999b8d27a3e96bcf5b1a10aa9d82255524a41d6aa6d3ca64ed",
+    "FlockSpec.Inputs.publicFile": "f9b2bad806dafbd969cd7cd0a292c678b8f93a6b93d4c5836649bbd3753c8e43",
+    "FlockSpec.Inputs.stratified": "57cbc4d8b23d7ad1ccea13b079ada8af549276d22f0af4cf7c68f7587bbd863b",
+    "FlockSpec.Inputs.tables": "578b6448a8b53dc37758ce963c54f2204684fdacfb8e167c2335a800575ab4c8",
+    "FlockSpec.Inputs.tags": "1815be1363886f646f955b42641bf8278ec857106f90fb669b18967cff5b32bc",
+    "FlockSpec.Inputs.work": "04b837de439391fa87a993c0841b6166923e292ccdd4490d3849c9d43fe8d444",
+    "FlockSpec.Strategy": "94a853d162d86bfb73c102d22d051a0fe8196f5637f37695eee5356ad6c850e8",
+    "FlockSpec.Transcript": "1ba22a61cd02b0ea941c015cbb57a0145bfc109ba9084ba597d484e99300fb34",
+    "FlockSpec.Transcript.proofs": "365f4021870372c284f641ab4c58b7c0d1ee93f8b7b42c2048a74cac6f6c2516",
+    "FlockSpec.Transcript.record": "6f6ef86083762ca83918a65d8f18a9294a5d53cc7065f598fa5cc0be8b3cc81d",
+    "FlockSpec.coinsOf": "d0c0b8b477417267bd7cbbaec0dc51c5a62ec2d3a528dd02c27589cec94af660",
+    "FlockSpec.expect": "be0b8dc55600d46ffe6553cb03ed30a144be7f746868d40561b27147275e79ea",
+    "FlockSpec.prCoin": "f36db995cf116cdaf62d2d6f599b67e5ae656aad1792d32547e9db92476a4fac",
+    "FlockSpec.prob": "3fcd942ec33d35d34094679a8b44d91b39983d1d486c6c7a4a2f3052d8e671f6",
+    "FlockSpec.recordDraw": "aaddffa4e7f3448f987fa3c9ed04d79d4cc3f39c223296b5cc1c8efe96c36ff8",
+    "FlockSpec.tagsOf": "f13af5c724000caa41eda4b480a78b5e706a375d5030668e3beb457e0ec87bc0"
+   },
+   "pins": [
+    "FlockSoundness.SpecBridge.accepts_iff",
+    "FlockSoundness.SpecBridge.hashDerivedKeyHm96_iff",
+    "FlockSoundness.SpecBridge.hashDerivedKey_iff",
+    "FlockSoundness.SpecBridge.hm96Hiding_iff",
+    "FlockSoundness.SpecBridge.sha512CRExpected_iff",
+    "FlockSoundness.SpecBridge.sha512CRStrict_iff",
+    "FlockSoundness.SpecBridge.uniformRandomBytes_iff"
+   ]
+  },
+  "FlockSoundness.SpecBridge": {
+   "digest": "b4a93cdd41b083c15d500f9099b9966a8a9e014d38505d8503e1f12bdf8acb6c",
+   "definitions": {
+    "FlockSoundness.SpecBridge.ofExec": "20941f297b2453ef4a5536a90c320e971a92846f975b0a0dbcc17259edda2cb1",
+    "FlockSoundness.SpecBridge.ofGame": "b2dbbc67d46550c875787bb27bfd3776f1a67d7f04487a875589d0846c7f96d4",
+    "FlockSoundness.SpecBridge.ofStrategy": "4504263d9ed169e30d4286c44c4548e16d12b38c4cc01c892520b8dfb5cf1747"
+   },
+   "pins": [
+    "FlockSoundness.SpecBridge.accepts_iff",
+    "FlockSoundness.SpecBridge.sha512CRExpected_iff",
+    "FlockSoundness.SpecBridge.sha512CRStrict_iff"
    ]
   },
   "FlockSoundness.StrictCR": {
