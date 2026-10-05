@@ -3113,7 +3113,7 @@ impl Stmt {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
@@ -3497,9 +3497,51 @@ mod tests {
         assert!(Composite::parse(&text, None).is_ok());
     }
 
+    /// A flat statement of bit rows whose unit returns the outputs: an input row x of 1024 bits (`segmented`: a
+    /// `sha512/row-seg/v1` row, else `sha512/row/v2`), y's `sha512/row/v2` output row of `y_bits` bits, and a unit reading
+    /// one leaf of x and returning y's one word, with circuits of their ports' shapes only. At `y_bits = 16`, y's row is
+    /// exactly its port's word.
+    pub(crate) fn flat_v2_statement(y_bits: usize, segmented: bool) -> String {
+        let zeros = "0".repeat(128);
+        let bit_row = |name: &str, bits: usize, seg: bool| {
+            let segs = seg.then(|| seg_shape(bits));
+            let comps = match &segs {
+                Some((s, o)) => s.iter().map(|x| x.1).sum::<usize>() + o - 1,
+                None => (bits.div_ceil(8) + 17).div_ceil(128) - 1,
+            };
+            Port { name: name.into(), words: bits.div_ceil(16), comps, bits, v2: !seg, segs: segs.map(|x| x.0) }
+        };
+        let ports = [bit_row("x", 1024, segmented), bit_row("y", y_bits, false)];
+        let name = |n: usize| ["unit", SHA_NET, HM_NET][n];
+        let wires: Vec<Value> = row_wires(&ports, 1, 2).iter()
+            .map(|w| json!([name(w.dst.0), w.dst.1, w.dst.2, name(w.src.0), w.src.1, w.src.2])).collect();
+        let rows: Vec<Value> = ports.iter().map(|p| {
+            let r = row_consts(p);
+            json!({"prefix": crate::hex(&r.prefix), "midstate": r.midstate.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>(),
+                   "pad": crate::hex(&r.tail)})
+        }).collect();
+        let meta = json!({"format": FORMAT, "statement": STATEMENT, "program_sha512": zeros,
+            "partition": {"rule": PARTITION_V1, "digest": zeros}, "scheme": SCHEME,
+            "row_schemas": ports.iter().map(|p| json!([if p.segs.is_some() { ROW_SCHEMA_SEG } else { ROW_SCHEMA_V2 }, p.bits]))
+                .collect::<Vec<_>>(),
+            "ports": ports.iter().map(|p| json!([p.name, p.words, p.comps])).collect::<Vec<_>>(), "input_ports": 1, "rows": rows,
+            "row_key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key())), "vus_per_block": 2, "k_log": 17,
+            "units_per_vu": 1, "leaves_in": [[0]], "leaves_out": [[0]], "leaf_cuts": [], "wires": wires,
+            "ranges": [{"type": "unit", "net": SHA_NET, "slot_log": 14, "pos0": 0, "count": 2, "packed": true},
+                       {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 4, "count": 4},
+                       {"type": "unit", "net": "unit", "slot_log": 9, "pos0": 128, "count": 2},
+                       {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 66, "count": 1}],
+            "per_vu": {SHA_NET: 1, HM_NET: 2},
+            "dummy": {"bc": [crate::hex(&[0u8; BC_BYTES]), crate::hex(&[0u8; BC_BYTES])], "outputs": [0]}, "out_ports": [["y", 1]],
+            "leaf_scheme": leaf_scheme()});
+        format!("{FORMAT} t\nMETA {}\n{}{}{}", serde_json::to_string(&meta).unwrap(), section("unit", &[16], 1, &[16], 1),
+                section(SHA_NET, &[512, 1024, 512, 1024, 512, 1024], 64, &[512, 512, 512], 16),
+                section(HM_NET, &[512, 1024, 8 * SALT_BYTES], 32, &[8 * BC_BYTES], 8))
+    }
+
     /// A flat statement whose tail returns the outputs: an input row x and y's output row (one word), a unit reading one
     /// leaf of x, and a stage reading the unit's output and returning y's word, with circuits of their ports' shapes only.
-    fn flat_tail_statement() -> String {
+    pub(crate) fn flat_tail_statement() -> String {
         let zeros = "0".repeat(128);
         let ports = [Port { name: "x".into(), words: 64, comps: 1, bits: 1024, v2: false, segs: None },
                      Port { name: "y".into(), words: 64, comps: 1, bits: 1024, v2: false, segs: None }];

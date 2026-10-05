@@ -13,9 +13,13 @@ refusal when it fails. So what the verifier accepts is `Verifies` (under `--zk`,
 `Accepts` models, and the check. Every condition on the statement's form that the headlines took as a hypothesis follows
 from the check: an untyped statement (`Checks.typed`), retained rounds and `hm96-sha512/v1` leaves, at most one table
 without `--zk`, the circuit and public file as the headlines read them (`circ`, `pubOf`), no shared-row public file
-(`Checks.tables`) and `Layout.scopeOk` (`Checks.scope`, by `scopeOk_eq`: the executable's `ProvedScope.scopeOk` is
-`Layout.scopeOk`, its port bits a mask). The unconditional headlines (`FailClosed.Composed`, `FailClosed.ZkHidden`,
-`FailClosed.Exec`) are over `Verifies`, with no hypothesis on the statement's form.
+(`Checks.tables`), and a circuit `Layout.scopeOk` accepts or, at a `--zk` statement with hidden outputs, one in the
+canonical format (`Checks.covered`: the executable's `ProvedScope.scopeOk` is `Layout.scopeOk`, its port bits a mask,
+`scopeOk_eq`; `ProvedScope.canonicalOk` is `Canonical.formatOk` and the unit returning the outputs,
+`Canonical.parse_formatOk`). So outside `--zk` statements with hidden outputs the circuit is in `Layout.scopeOk`
+(`Checks.scope`), and outside `Layout.scopeOk` it is canonical (`Checks.canonical`). The unconditional headlines
+(`FailClosed.Composed`, `FailClosed.ZkHidden`, `FailClosed.Exec`, `Canonical.Headline`) are over `Verifies`, with no
+hypothesis on the statement's form.
 
 `Checks` is `verifyCmd`'s call `ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome` argument for
 argument. `tags` is `Inputs.tags` without `--zk` and `zkTags` under it (`--statement`'s, after `withCoins`, then `Zk.tags`
@@ -61,6 +65,14 @@ theorem portMask_getD (gs : Array Group) {n x : ℕ} (hx : x < n) :
   rw [h0, Bool.false_or]
   exact decide_eq_decide.2 Iff.rfl
 
+/-- **`maskOf`'s entries are membership** below its size. -/
+theorem maskOf_getD (xs : List ℕ) {n x : ℕ} (hx : x < n) :
+    (ProvedScope.maskOf xs n).getD x false = decide (x ∈ xs) := by
+  unfold ProvedScope.maskOf
+  rw [foldl_mask x _ _ (by simpa using hx)]
+  have h0 : (Array.replicate n false).getD x false = false := by simp [Array.getD_eq_getD_getElem?, hx]
+  rw [h0, Bool.false_or]
+
 theorem portReadsB_eq (net : Net) : ProvedScope.portReadsB net = Layout.portReadsB net := by
   simp only [ProvedScope.portReadsB, Layout.portReadsB]
   congr 1; funext i; congr 1; funext x
@@ -96,7 +108,7 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
     (t.hm96Rows = true ∧ t.typed = false ∧ t.retainRounds = true ∧ t.merkleLeaf = "hm96-sha512/v1" ∧
       (zk = true ∨ count ≤ 1)) ∧
     ∃ c pub, ProvedScope.circuitOf t cf tables = .ok c ∧ ProvedScope.publicOf t c pf = .ok pub ∧ pub.tables = none ∧
-      ProvedScope.scopeOk c = true := by
+      (ProvedScope.scopeOk c = true ∨ ProvedScope.canonicalOk t zk c = true) := by
   unfold ProvedScope.check at h
   split at h
   · cases h
@@ -121,7 +133,7 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
   rename_i ht
   split at h
   · rename_i hs
-    exact ⟨c, pub, hc, hp, by simpa using ht, hs⟩
+    exact ⟨c, pub, hc, hp, by simpa using ht, (Bool.or_eq_true _ _).mp hs⟩
   · cases h
 
 namespace Checks
@@ -154,10 +166,39 @@ theorem tables : (pubOf t I).tables = none := by
   have hpub : pubOf t I = pub := by unfold pubOf; rw [this, hp]
   rw [hpub, ht]
 
-theorem scope : Layout.scopeOk (circ t I) = true := by
+/-- **The circuit is in a form a soundness claim covers**: `Layout.scopeOk`'s, or the canonical format at a `--zk`
+statement with hidden outputs (`ProvedScope.canonicalOk`). -/
+theorem covered : ProvedScope.scopeOk (circ t I) = true ∨ ProvedScope.canonicalOk t zk (circ t I) = true := by
   obtain ⟨c, -, hc, -, -, hs⟩ := (check_ok h).2
   have : circ t I = c := by unfold circ; rw [hc]
-  rw [this, ← scopeOk_eq, hs]
+  rw [this]; exact hs
+
+omit h in
+private theorem canonicalOk_and {c : Circuit} (hs : ProvedScope.canonicalOk t zk c = true) :
+    zk = true ∧ t.hiddenOutputs = true ∧ c.outNet = c.unitNet ∧ ProvedScope.formatOk c = true := by
+  simp only [ProvedScope.canonicalOk, Bool.and_eq_true, beq_iff_eq] at hs
+  exact ⟨hs.1.1.1, hs.1.1.2, hs.1.2, hs.2⟩
+
+/-- **`Layout.scopeOk`, outside `--zk` statements with hidden outputs**: the canonical format is accepted only there. -/
+theorem scope (hv : zk = false ∨ t.hiddenOutputs = false) : Layout.scopeOk (circ t I) = true := by
+  rcases h.covered with hs | hs
+  · rw [← scopeOk_eq]; exact hs
+  · obtain ⟨hz, hh, -⟩ := canonicalOk_and hs
+    rcases hv with hv | hv
+    · rw [hv] at hz; cases hz
+    · rw [hv] at hh; cases hh
+
+/-- **The canonical format, at a circuit outside `Layout.scopeOk`.** -/
+theorem canonical (hv : Layout.scopeOk (circ t I) = false) : ProvedScope.canonicalOk t zk (circ t I) = true := by
+  rcases h.covered with hs | hs
+  · rw [scopeOk_eq, hv] at hs; cases hs
+  · exact hs
+
+/-- A circuit outside `Layout.scopeOk` is at a `--zk` statement with hidden outputs, in the canonical format. -/
+theorem canonical_spec (hv : Layout.scopeOk (circ t I) = false) :
+    zk = true ∧ t.hiddenOutputs = true ∧ (circ t I).outNet = (circ t I).unitNet ∧
+      ProvedScope.formatOk (circ t I) = true :=
+  canonicalOk_and (h.canonical hv)
 
 theorem parse (hh : t.hiddenOutputs = false) : HmRow.parse t I.circuitFile I.tables = .ok (circ t I) := by
   have := h.circuit_ok
@@ -187,7 +228,10 @@ theorem built : Built (circ t I).unit := by
   obtain ⟨ls, hls⟩ := P.check
   exact unit_built P (check_facts P.typed hls)
 
-theorem outNet : (circ t I).outNet = (circ t I).unitNet := (Layout.scopeOk_spec h.built h.scope).2.1
+theorem outNet : (circ t I).outNet = (circ t I).unitNet := by
+  rcases h.covered with hs | hs
+  · exact (Layout.scopeOk_spec h.built (by rw [← scopeOk_eq]; exact hs)).2.1
+  · exact (canonicalOk_and hs).2.2.1
 
 end Checks
 
@@ -254,7 +298,11 @@ theorem ScopeZ.built {I : Inputs} (h : ScopeZ I) : Built (circZ I).unit := Check
 
 theorem ScopeZ.tables {I : Inputs} (h : ScopeZ I) : (pubZ I).tables = none := Checks.tables h
 
-theorem ScopeZ.scope {I : Inputs} (h : ScopeZ I) : Layout.scopeOk (circZ I) = true := Checks.scope h
+theorem ScopeZ.scope {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = false) :
+    Layout.scopeOk (circZ I) = true :=
+  Checks.scope h (Or.inr (by rw [zkTags_hiddenOutputs]; exact hh))
+
+theorem ScopeZ.outNet {I : Inputs} (h : ScopeZ I) : (circZ I).outNet = (circZ I).unitNet := Checks.outNet h
 
 theorem Scope.typed {I : Inputs} (h : Scope I) : I.tags.typed = false := Checks.typed h
 
@@ -278,7 +326,7 @@ theorem Scope.built {I : Inputs} (h : Scope I) : Built (circS I).unit := Checks.
 
 theorem Scope.tables {I : Inputs} (h : Scope I) : (pubS I).tables = none := Checks.tables h
 
-theorem Scope.scope {I : Inputs} (h : Scope I) : Layout.scopeOk (circS I) = true := Checks.scope h
+theorem Scope.scope {I : Inputs} (h : Scope I) : Layout.scopeOk (circS I) = true := Checks.scope h (Or.inl rfl)
 
 theorem Scope.outNet {I : Inputs} (h : Scope I) : (circS I).outNet = (circS I).unitNet := Checks.outNet h
 

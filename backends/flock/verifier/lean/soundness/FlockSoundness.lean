@@ -173,6 +173,8 @@ import FlockSoundness.Discharge.Composed
 import FlockSoundness.Discharge.ZkReg
 import FlockSoundness.Discharge.ZkEveryCoin
 import FlockSoundness.Discharge.FailClosed
+import FlockSoundness.Discharge.Canonical.Headline
+import FlockSoundness.Discharge.Canonical.Statements
 import FlockSoundness.ZK.PadNonvanishing40
 import FlockSoundness.Spec
 import FlockSoundness.SpecBridge
