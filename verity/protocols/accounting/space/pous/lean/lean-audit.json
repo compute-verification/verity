@@ -6,6 +6,9 @@
  "exempt": {
   "submissions": "graded one file at a time by grade.sh"
  },
+ "escapes": {
+  "setMaxMemory": "@[extern] opaque: Lean's resident-memory limit (`lean -M`, the runtime's lean_internal_set_max_memory), which the grader sets from POUS_GRADE_MEMORY_MB before elaborating a submission; no proof is about it"
+ },
  "dependencies": {
   "toolchain": "b8447e3c3284903832b19df647c0de94cae577066dd373fbc877ed2a52bbccc7"
  }

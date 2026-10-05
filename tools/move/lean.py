@@ -38,6 +38,9 @@ import layout as L  # noqa: E402
 
 POLICY = "lean-audit.json"
 PKG_FILES = ("lakefile.toml", "lake-manifest.json", "lean-toolchain", POLICY, ".gitignore")
+#: the PoUS grader was exempt from its package's audit; as a code package of its own it is audited, and its one escape is this
+GRADER_ESCAPE = ("@[extern] opaque: Lean's resident-memory limit (`lean -M`, the runtime's lean_internal_set_max_memory), "
+                 "which the grader sets from POUS_GRADE_MEMORY_MB before elaborating a submission; no proof is about it")
 AREAS = ("Core", "Nci", "Pous", "Pouw", "Warden", "Flock")
 IMPORT = re.compile(r"^(\s*(?:public\s+|private\s+|meta\s+)*import\s+)(.*)$")
 
@@ -428,7 +431,8 @@ def merge_locks(m: Map, root: Path, locks: dict, dry: bool):
            "upstream": {"imports": [], "watch": {}}, "dependencies": {}}
     code = {"verifier": {"roots": ["Flock", "FlockVerify"], "exempt": {}, "meaning": ["Flock"], "escapes": {},
                          "dependencies": {}},
-            "pous": {"roots": ["Grader.Registry", "Grader.Main"], "exempt": {}, "dependencies": {}}}
+            "pous": {"roots": ["Grader.Registry", "Grader.Main"], "exempt": {}, "escapes": {"setMaxMemory": GRADER_ESCAPE},
+                     "dependencies": {}}}
     conflicts: list[str] = []
     gen = {"pouw": "verity/protocols/accounting/work/pouw/lean", "warden": "verity/protocols/accounting/communication/warden/lean"}
     for k, pol in locks.items():
