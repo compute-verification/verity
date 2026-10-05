@@ -197,11 +197,21 @@ def _requires(project: dict, data: dict) -> tuple[str, ...]:
 
 
 def members() -> dict[str, str]:
-    """The workspace packages: {distribution name: directory}."""
-    out = {}
-    for path in _pyproject(".").get("tool", {}).get("uv", {}).get("workspace", {}).get("members", []):
+    """The workspace packages: {distribution name: directory}, the root's own distribution under "." when it builds one (uv makes
+    it a member)."""
+    root = _pyproject(".")
+    out = {_norm(root["project"]["name"]): "."} if _declared(".", root) is not None else {}
+    for path in root.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", []):
         out[_norm(_pyproject(path)["project"]["name"])] = path
     return out
+
+
+def shipped(path: str) -> list[str]:
+    """The directories a workspace package's dependents key on: its directory, or for the root, which holds the whole tree, the
+    packages its wheel ships."""
+    if path != ".":
+        return [path]
+    return list(_pyproject(".")["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
 
 
 def tests_pythonpath() -> str:
@@ -261,7 +271,7 @@ def foreign(pkgs: dict[str, str], env: dict[str, str], python: str = sys.executa
     names = importable(pkgs)
     away = {f"{d}'s package": "nowhere (its build configuration declares none)" for n, d in names.items() if not n}
     if names := sorted(n for n in names if n):
-        r = subprocess.run([python, "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
+        r = subprocess.run([python, "-P", "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
         if r.returncode:
             return f"{python} can't say where it imports them from: {r.stderr.strip()[-300:]}"
         for n, o in json.loads(r.stdout.splitlines()[-1]).items():
@@ -320,7 +330,7 @@ def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
         seen[name] = pkgs[name]
         data = _pyproject(pkgs[name])
         todo += [r for r in _requires(data["project"], data) if r in pkgs]
-    return sorted(p for p in seen.values() if p != suite.path)
+    return sorted(s for p in seen.values() if p != suite.path for s in shipped(p))
 
 
 def worktree() -> str:
@@ -1132,7 +1142,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
     start = time.monotonic()
     with log.open("w") as out:
-        rc = subprocess.run([sys.executable, "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
+        rc = subprocess.run([sys.executable, "-P", "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
                              *spread, *args], cwd=ROOT / suite.path, env=env, stdout=out, stderr=subprocess.STDOUT).returncode
     seconds = time.monotonic() - start
     rep = json.loads(report.read_text()) if report.exists() else None
