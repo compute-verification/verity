@@ -257,6 +257,48 @@ def test_prepare_refuses_a_moved_head_a_conflict_and_a_failing_lint_and_pushes_n
     assert _git(origin, "for-each-ref", "refs/heads/train-prep") == "" and "research-train" not in _git(main, "worktree", "list")
 
 
+def test_a_train_that_would_revert_a_landed_change_is_refused_unless_its_path_is_allowed(tmp_path, monkeypatch, capsys):
+    """ci's #1142 train (`25157eb17`) undid #1012: #1142's merge of main dropped #1012's lines, and merging #1142 then removed
+    them from main without a word. A line the train loses must be one a ref removes in a commit of its own."""
+    from research.merge import reverted
+
+    main, _feat, _tip = _repos(tmp_path)
+    origin = _remote(tmp_path, main)
+    (main / "w.txt").write_text("old\nx1\nx2\nx3\nkeep\n")
+    _git(main, "add", "w.txt")
+    _git(main, "commit", "-q", "-m", "w")
+    _git(main, "checkout", "-q", "-b", "P", "main")
+    (main / "p.txt").write_text("P\n")
+    _git(main, "add", "p.txt")
+    _git(main, "commit", "-q", "-m", "P's own change")
+    _git(main, "checkout", "-q", "-b", "Q", "main")
+    (main / "w.txt").write_text("x1\nx2\nx3\nkeep\n")
+    _git(main, "commit", "-q", "-am", "Q removes old itself")
+    _git(main, "checkout", "-q", "main")
+    (main / "w.txt").write_text("old\nx1\nx2\nx3\nkeep\nlanded\n")
+    _git(main, "commit", "-q", "-am", "a landed change")
+    _git(main, "checkout", "-q", "P")
+    _git(main, "merge", "-q", "-s", "ours", "-m", "merge main, dropping what it gained", "main")
+    _git(main, "checkout", "-q", "main")
+    _git(main, "push", "-q", "origin", "main", "P", "Q")
+    p, q, base = _git(main, "rev-parse", "P"), _git(main, "rev-parse", "Q"), _git(main, "rev-parse", "main")
+
+    def onto_base(sha: str) -> str:
+        return _git(main, "commit-tree", _git(main, "merge-tree", "--write-tree", base, sha), "-p", base, "-p", sha, "-m", "t")
+
+    assert reverted(main, base, onto_base(q), [("Q", q)]) == []
+    lost = reverted(main, base, onto_base(p), [("P", p)])
+    assert len(lost) == 1 and lost[0].startswith("w.txt loses 1 line(s)") and "'landed'" in lost[0]
+    monkeypatch.chdir(main)
+    lint = ["--lint", "true"]
+    assert merge_main(["--train", "--prepare", "train-prep/r", f"P@{p[:9]}", *lint]) == 3
+    err = capsys.readouterr().err
+    assert "would revert what landed: w.txt loses 1 line(s)" in err and "--allow-removal PATH" in err
+    assert _git(origin, "for-each-ref", "refs/heads/train-prep") == ""
+    assert merge_main(["--train", "--prepare", "train-prep/r", f"P@{p[:9]}", "--allow-removal", "w.txt", *lint]) == 0
+    assert merge_main(["--train", "--prepare", "train-prep/q", f"Q@{q[:9]}", *lint]) == 0, capsys.readouterr().err
+
+
 def test_keep_both_imports_takes_ours_then_the_lines_theirs_adds():
     from research.merge import keep_both_imports
 
