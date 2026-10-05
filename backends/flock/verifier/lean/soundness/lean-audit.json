@@ -1483,7 +1483,7 @@
    "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
   },
   "Flock.HmRow": {
-   "digest": "b7c3f21a0c3e678dc2a5861dfcd341cb4950ff82904d53747a92ff6964ed6af3",
+   "digest": "bf2ce1f6aabc9c7f8ad19e07ed831966eb3d1054a4282a39f5cc5258ecff6fa6",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -1507,7 +1507,7 @@
     "Flock.HmLinks.parse": "a936083203913e55d63a842e5f7b3985b9a00e382024ce0fda33afd6aa83d64a",
     "Flock.HmLinks.units": "2183e2c819d868883dcac2198a85a462e54dcb5025f9a13ec2d3e65b9b6dc142",
     "Flock.HmOut.checkPublic": "2adeefd817818e4305440a2fe4b13fac2f3b0809948a4944f110a07052092c0c",
-    "Flock.HmOut.checkRows": "88fe6cc8a0c1c154efabfb6f918a7b147e0ce1a7149a168e01bf9321ffed9afe",
+    "Flock.HmOut.checkRows": "66116601538bfc709a97b7cc437f16383bf01a120a406e7a1379e3fb666753fb",
     "Flock.HmOut.delta": "875f7d33ec778bc4cdec670c5a910ba9ae6450a52dbb3a265d059ba4aec8eb8a",
     "Flock.HmOut.dummyRow": "fb417c608f6f03de5cd4dee79b93927fe47f0aff47dcc20c063d1ba5cc7a0131",
     "Flock.HmOut.inWords": "5d9dc416126e0e8455ec2f4e1ee19bcac4a5189cd1f273791034a6b62fb0fe34",
