@@ -141,3 +141,13 @@ def test_code_never_requires_the_security_analysis():
     bad = [f"{pkg.relative_to(ROOT)} requires {(pkg / r['path']).resolve().relative_to(ROOT)}"
            for pkg in code for r in _requires(pkg) if "path" in r and (pkg / r["path"]).resolve().is_relative_to(SECURITY)]
     assert not bad, bad
+
+
+def test_every_upstream_watch_is_scanned():
+    """The audit's upstream pass reads only a lock's `scan` packages, so a `watch` list with nothing to scan checks none of
+    its entries and passes (red-team's B1 on the Lean move: the proofs' lock lost soundness's ArkLib scan). Each lock that
+    watches a dependency for its assumptions scans one, and the proofs' lock scans ArkLib."""
+    bare = [str(p.relative_to(ROOT)) for p in sorted(ROOT.rglob("lean-audit.json")) if ".lake" not in p.parts
+            and (up := json.loads(p.read_text()).get("upstream", {})).get("watch") and not up.get("scan")]
+    assert not bare, bare
+    assert "Arklib" in json.loads((PROOFS / "lean-audit.json").read_text())["upstream"]["scan"]
