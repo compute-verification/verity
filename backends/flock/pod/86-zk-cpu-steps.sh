@@ -137,6 +137,7 @@ def live(d):
     rank_s = per_session(ranks, len(rows))
     l0 = [v["s"] for v in tagged(d / "prove.err", "ZKL0")]
     l0_s = per_session(l0, len(rows))
+    pre_s = per_session([v["s"] for v in tagged(d / "prove.err", "ZKPRE")], len(rows))
     wait0 = lambda v: v["prove_s"][0] - v["buckets"][0]["t.prove"] if v.get("prove_s") and "t.prove" in (v.get("buckets") or [{}])[0] else None
     return {"sessions": len(rows), "timed": len(timed), "accepted": [v.get("accepted") for _, v in rows],
             "prover_cores_busy_before": float(text(d / "bgload.txt").strip() or "nan"),
@@ -144,6 +145,7 @@ def live(d):
             "serve_verify_all_s": [v.get("verify_s") for v in served], "serve_accepted": [v.get("accepted") for v in served],
             "zkrank_s": statistics.median(rank_s) if rank_s else None, "zkrank_all_s": ranks,
             "zkl0_s": statistics.median(l0_s) if l0_s else None, "zkl0_all_s": l0, "zkl0": (tagged(d / "prove.err", "ZKL0") or [None])[0],
+            "zkpre_s": statistics.median(pre_s) if pre_s else None,
             "level0_wait_s": med(wait0) if timed and wait0(timed[0][1]) is not None else None,
             "level0_wait_all_s": [wait0(v) for _, v in rows],
             "prove_total_s": med(lambda v: v.get("prove_total_s")), "prove_total_all_s": [v.get("prove_total_s") for _, v in rows],
