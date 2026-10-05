@@ -26,7 +26,7 @@ import cast  # noqa: E402
 import f1_rates as F1  # noqa: E402
 import f2_strassen as F2  # noqa: E402
 import f3_lut as F3  # noqa: E402
-import fp4_emulation_1ad1aaa2 as E  # noqa: E402
+from emulation import E  # noqa: E402
 import k32  # noqa: E402
 import lean_vectors as LV  # noqa: E402
 import meta_rule as MR  # noqa: E402

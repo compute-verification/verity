@@ -257,14 +257,15 @@ def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
 
 
 def test_former_modules_map_a_module_back_through_each_move():
-    moves = [{"backends/flock/verifier/tool.py": "tools/lean_agreement/tool.py", "archive/gkr": "archive/gkr"},
+    moves = [{"backends/flock/verifier/tool.py": "tools/lean_agreement/tool.py", "old/gkr": "attic/gkr"},
              {"tools/lean_agreement/": "tools/agree/"}]
     assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "backends.flock.verifier.tool"]
-    assert tools_registry.former_modules("archive.gkr.gpu.tool", moves) == ["archive.gkr.gpu.tool"]
-    assert tools_registry.former_modules("archive.gkrx.tool", moves) == []
+    assert tools_registry.former_modules("attic.gkr.gpu.tool", moves) == ["old.gkr.gpu.tool"]
+    assert tools_registry.former_modules("attic.gkrx.tool", moves) == []
     assert tools_registry.former_modules("tools.check.tool", moves) == []
     shipped = json.loads(tools_registry.MOVES.read_text())["moves"]
     assert all(isinstance(m["paths"], dict) for m in shipped)
+    assert tools_registry.former_modules("archive.gkr.gpu.tool") == ["backends.gkr.gpu.tool"]
 
 
 def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_path, monkeypatch):
@@ -415,7 +416,7 @@ def test_attempt_build_from_fixture_run_dir(tmp_path):
     assert m["conditions"]["hw.family"] == "h100" and set(E.KEYS) <= set(m["conditions"])
     assert m["source"] == {"commit": "0123456789abcdef0123456789abcdef01234567", "tree": "89abcdef0123456789abcdef0123456789abcdef", "dirty": False,
                            "dirty_digest": None, "lockfiles": {"uv.lock": "4" * 64}}
-    assert m["closure"] == {"archive/direct/ligero/run.py": "3" * 64}
+    assert m["closure"] == {"backends/direct/ligero/run.py": "3" * 64}
     ex = m["execution"]
     assert ex["start_utc"] == "2026-09-22T12:00:01.000Z" and ex["end_utc"] == "2026-09-22T12:00:13.300Z" and ex["wall_s"] == 12.3
     assert ex["exclusive"] is True and ex["host"] == "vy-g5" and ex["project"] == "verity" and ex["campaign"] == "r21-fixture"
