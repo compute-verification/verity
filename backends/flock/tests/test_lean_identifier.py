@@ -1,8 +1,8 @@
 """A statement's identifier (PROTOCOL.md §16.10): the public header's `identifier`, a JSON object C-Flock does not read, must be
 the verifier's own `--identifier F` in RFC 8785 form, or the Lean verifier refuses the statement; a header with one and no
-`F`, and `F` with a header that names none, refuse too. The public digest binds the header, so Σ binds the identifier: the
-prover's honest session over the header without one is rejected at `Hello` once the header carries one, past setup, and its
-verdict reports the identifier.
+`F`, and `F` with a header that names none, refuse too. The public digest binds the header, so Σ binds the identifier, and a
+session's verdict reports it. The fixture's public input ports are a form the soundness proof does not cover (§16.15), so
+`verify` refuses its sessions once they set up.
 
 The statement is `test_lean_public_inputs.py`'s fetched fixture (RoPE x4, its recorded CPU selftest sessions), with the
 identifier added to its public file's header. It catches what `test_circuit.py` can't: the executable verifier's own
@@ -26,6 +26,7 @@ STATEMENT = "verity/flock-circuit+seed-injection"
 IDENTIFIER = {"scheme": "test/identifier/v0", "H": "ab" * 32, "s": 7, "U": [3, 1, 2], "nested": {"b": None, "a": True}}
 
 OUTSIDE = "identifier: --identifier F is outside canonical JSON's RFC 8785 domain: "
+FORM_REFUSAL = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
 
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
@@ -82,13 +83,14 @@ def test_the_verifiers_own_identifier_is_accepted_in_any_json_form_and_bound_by_
     assert st["public_sha512"] != plain["public_sha512"] and st["sigma"] != plain["sigma"]
 
 
-def test_the_verdict_reports_the_identifier_and_sigma_binds_it(store, tmp_path):
-    """The prover's honest session, over the header without an identifier: accepted as it is, and rejected at `Hello` (S2, Σ)
-    once the header carries one, past setup, with the identifier in its verdict."""
+def test_the_verdict_reports_the_identifier(store, tmp_path):
+    """The prover's honest session, over the header without an identifier and with one: both set up, and `verify` refuses
+    both for their form (public input ports, §16.15), the second with the identifier in its verdict. That Σ binds the
+    identifier is the test above's, on the statement."""
     plain = _verdict(store, store / "stage" / "pub-4.bin", None, tmp_path)
-    assert plain["accepted"] and "identifier" not in plain, plain["why"]
+    assert (plain["accepted"], plain["why"]) == (False, FORM_REFUSAL) and "identifier" not in plain, plain["why"]
     v = _verdict(store, _pub(store, tmp_path, IDENTIFIER), _own(tmp_path, json.dumps(IDENTIFIER)), tmp_path)
-    assert not v["accepted"] and v["why"].startswith("S2") and v["identifier"] == IDENTIFIER, v["why"]
+    assert (v["accepted"], v["why"]) == (False, FORM_REFUSAL) and v["identifier"] == IDENTIFIER, v["why"]
 
 
 #: each refusal: the header's identifier (None: no key), F's text (None: no flag), and the setup refusal
