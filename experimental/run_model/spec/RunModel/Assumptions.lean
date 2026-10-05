@@ -24,6 +24,12 @@ def Sha512CR {β : Type} (g : Verity.Game β) (s : Verity.Game.Strategy g) (out 
     (Verity.Game.prob (fun b => ∃ x y, out b = some (x, y) ∧ x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) g
       s).toReal ≤ q ^ 2 / (2 : ℝ) ^ 513
 
+/-- `cr/sha-512` for a `Finder`. -/
+def FinderCR (f : Finder) (q : ℝ) : Prop := Sha512CR f.game f.strat f.out f.cost q
+
+/-- What `cr/sha-512` charges for `n` finders at budget `q` each. -/
+noncomputable def collisions (n : ℕ) (q : ℝ) : ℝ≥0∞ := n * ENNReal.ofReal (q ^ 2 / (2 : ℝ) ^ 513)
+
 /-- The salt's own hash, `c = H(pad(SALT_TAG) ‖ y)`. -/
 def saltHash (y : ByteArray) : ByteArray := Flock.Sha512.hash (Flock.Hm96.Default512.saltPrefix ++ y)
 

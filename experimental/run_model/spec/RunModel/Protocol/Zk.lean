@@ -11,6 +11,11 @@ developer's data, or the boundary's fresh bytes.
 
 The leak is what zero knowledge concedes: the rack chooses when it sends, and a message the send gate refuses shows as
 a frame that never leaves. It is a timing and abort channel, the network warden's to bound, not this model's.
+
+A simulator that rewinds the auditor (C-Flock's Goldreich–Kahan, `ZK.GK.gk`) fails where the auditor opens a committed
+coin two ways; that is a SHA-512 collision for a finder built from the auditor's code (`gk_simulate_coins_keyed`). A
+`Simulation` names both, and as with an `Extraction` its definition is trusted text: a finder that hard-codes a
+collision makes the statement vacuous.
 -/
 
 namespace RunModel
@@ -25,6 +30,11 @@ abbrev View := List (ℕ × Frame)
 abbrev Leak := List (ℕ × Node × ℕ × String)
 
 abbrev Simulator := ℕ → Adversary → Leak → PMF View
+
+structure Simulation (A : Agreement) where
+  sim : Simulator
+  /-- the finders built from the auditor's code that a conflicting coin opening reduces to -/
+  finders : ℕ → Adversary → List Finder
 
 /-- The auditor's view with the leak, in the real run of `fuel` ticks. -/
 noncomputable def real (A : Agreement) (fuel : ℕ) (net gpu : Adversary) : PMF (View × Leak) :=

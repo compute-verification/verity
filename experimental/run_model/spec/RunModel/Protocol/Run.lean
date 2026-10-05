@@ -43,6 +43,15 @@ noncomputable def fresh (n : ℕ) : PMF ByteArray := (PMF.uniformOfFintype (Byte
 /-- An adversary: its next event as a function of what it has seen. -/
 abbrev Adversary := List (ℕ × Frame) → Event
 
+/-- A collision finder: a game of core's played by a fixed strategy, the pair it outputs on each outcome, and how many
+SHA-512 evaluations it made there. A statement takes `cr/sha-512` for the finders it builds from an adversary. -/
+structure Finder where
+  β : Type
+  game : Verity.Game β
+  strat : Verity.Game.Strategy game
+  out : β → Option (ByteArray × ByteArray)
+  cost : β → ℝ
+
 /-- The soundness run of `fuel` events from `w`. -/
 noncomputable def soundRun (A : Agreement) (dev : Adversary) :
     ℕ → World (Setting.sound A) → PMF (World (Setting.sound A))
