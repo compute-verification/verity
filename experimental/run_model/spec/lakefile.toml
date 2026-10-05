@@ -1,0 +1,19 @@
+name = "run_model"
+version = "0.0.0"
+defaultTargets = ["RunModel"]
+
+[leanOptions]
+autoImplicit = false
+
+# Core's model (games, circuits, partitions) and Mathlib's PMF, at core's Mathlib revision.
+[[require]]
+name = "verity"
+path = "../../../packages/verity/lean"
+
+# The parties, the world and the rules: the statements are about the code that runs.
+[[require]]
+name = "run_model_exec"
+path = "../exec"
+
+[[lean_lib]]
+name = "RunModel"
