@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import itertools
 import json
 import os
 import tomllib
@@ -54,6 +55,46 @@ def test_the_randomness_assumption_cites_this_toolchain():
         assert f"Lean {version}'s runtime" in (soundness / doc).read_text(), doc
 
 
+def _module_roots(pkg: Path):
+    """(source directory, root module) for each library and executable of `pkg`, as Lake resolves them."""
+    cfg = tomllib.loads((pkg / "lakefile.toml").read_text())
+    src = pkg / cfg.get("srcDir", ".")
+    for lib in cfg.get("lean_lib", []):
+        for r in lib.get("roots", [lib["name"]]) + [g.rstrip("+*").rstrip(".") for g in lib.get("globs", [])]:
+            yield (src / lib.get("srcDir", ".")).resolve(), r
+    for exe in cfg.get("lean_exe", []):
+        yield (src / exe.get("srcDir", ".")).resolve(), exe.get("root", exe["name"])
+
+
+def test_lean_module_roots_are_disjoint():
+    """No module name is claimed from two source directories, by two packages or by one. Lake resolves an import by name
+    across every library in the workspace and doesn't report a duplicate: a library whose roots overlap another's builds
+    the other's module from its own directory, without a warning. Within one package, roots in different source
+    directories may share a namespace but not nest (`Pouw.Protocol` and `Pouw.Guarantees` may; `Pouw` and
+    `Pouw.Guarantees` may not). Across packages they may not even share a first component: with `Pk.A` in one package
+    and `Pk.B` in another, `lake build` passes but `lake env lean` looks for every `Pk.*` under the first package's
+    build directory and fails to find `Pk.B`."""
+    claims = []
+    for pkg in lake_packages():
+        assert (pkg / "lakefile.toml").exists(), f"{pkg.relative_to(ROOT)}: only a lakefile.toml can be read here"
+        claims += [(pkg, src, root) for src, root in _module_roots(pkg)]
+
+    def nested(a: str, b: str) -> bool:
+        a, b = a.split("."), b.split(".")
+        return a[: len(b)] == b or b[: len(a)] == a
+
+    def clash(x, y) -> bool:
+        if x[0] != y[0]:
+            return x[2].split(".")[0] == y[2].split(".")[0]
+        return x[1] != y[1] and nested(x[2], y[2])
+
+    clashes = [f"{x[2]} ({x[0].relative_to(ROOT)}, {x[1].relative_to(ROOT)}) and "
+               f"{y[2]} ({y[0].relative_to(ROOT)}, {y[1].relative_to(ROOT)})"
+               for x, y in itertools.combinations(claims, 2) if clash(x, y)]
+    assert len(claims) >= 10
+    assert not clashes, clashes
+
+
 def test_every_record_merges_with_the_driver():
     """`.gitattributes` sends every `lean-audit.json` to `tools/lean/merge.py`, and each record's `reads` digests are the ones
     the driver recomputes from their definitions."""
@@ -87,14 +128,14 @@ def test_core_package_requires_only_mathlib():
 def test_protocol_packages_require_core_and_protocols_only():
     """A protocol's Lean package may require core's and other protocols' packages (the ruling of Oct 1 in
     `.agents/skills/lean-proofs/SKILL.md`), never a backend's: backends instantiate protocols, not the reverse."""
-    protocols = [pkg for pkg in lake_packages() if pkg.relative_to(ROOT).parts[0] == "protocols"]
+    protocols = [pkg for pkg in lake_packages() if pkg.relative_to(ROOT).parts[:2] == ("verity", "protocols")]
     names = {tomllib.loads((pkg / "lakefile.toml").read_text())["name"] for pkg in protocols}
-    assert PROTOCOL_PACKAGES <= names, f"the protocols' Lake packages aren't under protocols/: {PROTOCOL_PACKAGES - names}"
+    assert PROTOCOL_PACKAGES <= names, f"the protocols' Lake packages aren't under verity/protocols/: {PROTOCOL_PACKAGES - names}"
     bad = []
     for pkg in protocols:
         for r in _requires(pkg):
             if "path" in r:
                 target = (pkg / r["path"]).resolve()
-                if target != CORE and target.relative_to(ROOT).parts[0] != "protocols":
+                if target != CORE and target.relative_to(ROOT).parts[:2] != ("verity", "protocols"):
                     bad.append(f"{pkg.relative_to(ROOT)} requires {target.relative_to(ROOT)}")
     assert not bad, bad

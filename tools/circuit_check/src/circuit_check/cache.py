@@ -862,8 +862,23 @@ def _roots(root: Path) -> list[str]:
     return out
 
 
+def _redirected(root: Path) -> dict[str, str]:
+    """The top-level packages an exact-mode editable install serves from the tree, each by its source file relative to ``root``:
+    `editables`' finder, which hatch's `dev-mode-exact` puts on ``sys.meta_path`` after the path-based one, maps each name to a
+    file, so no ``sys.path`` entry finds them (the tree's root, where core's `verity` is, never is one)."""
+    out: dict[str, str] = {}
+    for finder in sys.meta_path:
+        if isinstance(red := getattr(finder, "_redirections", None), dict):
+            for name, p in red.items():
+                rel = os.path.relpath(os.path.realpath(p), root) if isinstance(p, str) else ".."
+                if not rel.startswith("..") and rel.split(os.sep)[0] != ".venv":
+                    out.setdefault(name, rel)
+    return out
+
+
 def _path_entries(root: Path) -> list[str]:
-    """``sys.path`` as the key holds it: in-tree entries relative to the tree, the interpreter's own relative to its prefix."""
+    """``sys.path`` as the key holds it: in-tree entries relative to the tree, the interpreter's own relative to its prefix;
+    then each in-tree editable redirect (`_redirected`)."""
     out = []
     for e in sys.path:
         p = os.path.realpath(e or os.getcwd())
@@ -877,17 +892,18 @@ def _path_entries(root: Path) -> list[str]:
                 break
         else:
             out.append(p)
-    return out
+    return out + [f"<redirect>{name}=<tree>/{rel}" for name, rel in sorted(_redirected(root).items())]
 
 
 def _resolve(root: Path, name: str) -> Path | None:
     """The tree's source file module ``name`` imports from (a package's ``__init__.py``), as the path-based finder searches
     the in-tree import path: a regular package or a module in the first entry that has one, else a namespace package's
-    portions; None when it resolves to no visible file (absent, a namespace package, or outside the tree)."""
+    portions, else, for a top-level name, the file an editable redirect (`_redirected`) maps it to; None when it resolves to
+    no visible file (absent, a namespace package, or outside the tree)."""
     v = visible(root)
     isfile = (lambda r: r in v[0] and (root / r).is_file()) if v is not None else (lambda r: (root / r).is_file())
     isdir = (lambda r: r in v[1] and (root / r).is_dir()) if v is not None else (lambda r: (root / r).is_dir())
-    paths, found = _roots(root), None
+    paths, found, top = _roots(root), None, True
     for part in name.split("."):
         if not part.isidentifier():
             return None
@@ -902,11 +918,13 @@ def _resolve(root: Path, name: str) -> Path | None:
                 break
             if isdir(pk):
                 portions.append(pk)
+        if found is None and not portions and top and isfile(r := _redirected(root).get(part, "")):
+            found, nxt = r, [os.path.dirname(r)] if os.path.basename(r) == "__init__.py" else []
         if found is None:
             if not portions:
                 return None
             nxt = portions
-        paths = nxt
+        paths, top = nxt, False
     return root / found if found is not None and (root / found).is_file() else None
 
 

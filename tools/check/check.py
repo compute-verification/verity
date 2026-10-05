@@ -231,6 +231,9 @@ def agreement_files(out: Path) -> dict[str, Path]:
 #: variable for a local one
 LEAN_DEPS_URLS = "lean-deps-urls.json"
 LEAN_DEPS_URLS_ENV = "CHECK_LEAN_DEPS_URLS"
+#: the parts a recorded shard runs (none for a combine), among its inputs: the preflight asks only for the Lean dependencies of
+#: the packages it audits, since it carries URLs for no others
+SHARD_PARTS = "check-shard-parts.json"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
 SLOT_WRAP = ["python3", "tools/check/slot.py", "--"]
 
@@ -770,6 +773,9 @@ def record(argv: list[str]) -> int:
             cmd += ["--send", str(urls)]
         else:
             env[LEAN_DEPS_URLS_ENV] = str(urls)
+    if on and (combining or parts is not None):
+        (d / SHARD_PARTS).write_text(json.dumps(parts or []))
+        cmd += ["--send", str(d / SHARD_PARTS)]
     if on:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/

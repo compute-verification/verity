@@ -42,7 +42,8 @@ Everything else is the protocol's (`audit`), the same for every scheme.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
    recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf. It refuses
    a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
-   `TileCheck.Accepts` asks the same of the tile's weight rows (the protocol's `weightOK`).
+   `TileCheck.Accepts` asks the same of the tile's weight rows (the protocol's `weightOK`), and a good tile
+   (`TileGood`) has every one passing.
 The row and tile trees are framed SHA-256 unless the scheme names another frame hash (`commitment_hash`). `"blake3"` is
 `frame-b3` (`verity.primitives.commitments.merkle`), BLAKE3 keyed by the domain id. A leaf's header fills one 64-byte block, so a row
 leaf streams through BLAKE3's chunk tree, for rows that must be committed within a decode step. A node is one compression
@@ -439,7 +440,7 @@ useful    U/(α_A·α_B), glue
     salt and the draw's `derive` (`prf/sha-256`) are unchanged.
 - **Hashing format -h2** (`pearl-c-h100-v1-h2`, `hashing="h2"`) is -h1 with every tree `frame-b3s`. It is P1 of research
   store `internal/pouw/rtx-pro/a-commit-latency.md`, which the theory sign-off there rules sound under four format
-  conditions. `tests/commitments/test_frame_b3s.py` tests each condition.
+  conditions. `verity/primitives/commitments/tests/test_frame_b3s.py` tests each condition.
   - A 32 KB row's leaf is 1 + 4 + 7 serial compressions (segment key, segment, segment tree) in place of -h1's 17 + 6, with
     1.41× -h1's compressions (767 against 545).
   - Only the trees change: its vectors are the -h1 cases' inputs, digests and leaves, with A's `frame-b3s` root and row
@@ -466,6 +467,11 @@ useful    U/(α_A·α_B), glue
     and its excluded rows. `records_root` binds the records and the splits.
   - One exclusion rule, per row: a row that fails the per-row rules stays in the unit, bound as any other, and its cells
     earn no credit. Tiles with credited cells stay drawable, and the audit also opens one tile per excluded row.
+    - A known difference from Lean: the work law excludes a failing weight row and accepts its tiles, while Lean's good
+      tile (`TileGood`) and correct unit (`Correct`) never exclude one, so `TileCheck.Accepts` refuses the tile as
+      `check_tile` does. The work law stays credit-sound there only while an excluded column earns nothing
+      (`test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted`); approaches registry
+      `pouw/work-law-weight-row-exclusion`.
   - **Voluntary rows (V-EX;** research store `theory-pearl-c4-domain.md` §6.13, the assessor's B at 17:32Z**):** the
     record may also give up up to ⌈m/64⌉ A rows (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`,
     the same in every unit of the weight).
@@ -522,8 +528,8 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     unit is credited (1 − 1/1,000)·`credit_of`. `volunteer` reads the same cap. The certificate states TT_OUT(1/1000) and
     names the cap among its parameters.
   - γ at the headline record (FP32 at 8.376, the packed cast at 8.72, rev1's credit) is 0.36949% at 8,192³ and 0.35973%
-    at 16,384³, per unit and per audit tile (Lean `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192`, `_16384` and their
-    `pearlCSampled…` twins). Per unit it follows from rev1 at 1/400 alone (`…Cap1000_8192_of_cap400`); per tile, TT_OUT
+    at 16,384³, per unit and per audit tile (Lean `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192`,
+    which is `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192`; its `_16384` and their `pearlCSampled…` twins). Per unit it follows from rev1 at 1/400 alone (`…Cap1000_8192_of_cap400`); per tile, TT_OUT
     at 1/1,000 is the assumption. At the issue-bound FP32 add (8.00) it is 0.36901% and 0.35949%
     (`pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192`, `_16384` and their `pearlCSampled…` twins, from TT_OUT at 1/1,000);
     the ledger publishes the larger of the two prices, the in-loop add's.
