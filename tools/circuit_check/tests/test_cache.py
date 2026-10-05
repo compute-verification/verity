@@ -622,14 +622,28 @@ def test_a_sidecars_units_move_with_its_module_where_the_target_does_not_hold_th
     """SynAdd, which both of the sidecar's entries reach, holds their units but not `syn.other`, which only SynOther's check
     reads (as every gate a model reaches holds the bindings of that model's Definitions).  The move finds the module where the
     units' import sites of it lead now, the one imported module with the content they recorded, so SynAdd is reused too; it is
-    stored again there, so a later edit of an entry it holds reruns it."""
+    stored again there, so a later edit of an entry it holds reruns it.  The module starts in a package with code of its own,
+    `syn.models.attn`, which SynAdd does not hold either (no enumeration lists it) and which the module is imported through
+    before the move as after."""
     root = _tree(tmp_path)
     _sidecar(root)
     _edit(root, "syn/catalog.py", 'FAMILIES = ["SynOther_v1"', 'FAMILIES = ["SynAdd_v1", "SynOther_v1"')
+    was, pkg = "syn/models/attn", "syn.models.attn"
+    _move(root, "syn/other.py", f"{was}/other.py", ("syn/catalog.py", "from syn import other", f"from {pkg} import other"))
+    (root / "syn/models/__init__.py").write_text('"""Models."""\n')
+    (root / f"{was}/__init__.py").write_text("NAME = 'attn'\n")
+    for ext in (".py", ".json"):
+        (root / f"syn/other.circuit-check{ext}").rename(root / f"{was}/other.circuit-check{ext}")
+    _edit(root, f"{was}/other.circuit-check.py", "from syn import idle, other", f"from {pkg} import other\n    from syn import idle")
     _run(root)
     add = _entry(root, "SynAdd_v1")["reads"]
-    assert "syn.other.circuit-check#_model_roots:SynIdle_v1" in add["units"] and "syn.other" not in add["modules"]
-    side = _move_other(root)
+    assert f"{pkg}.other.circuit-check#_model_roots:SynIdle_v1" in add["units"]
+    assert not {pkg, f"{pkg}.other"} & set(add["modules"])
+    _move(root, f"{was}/other.py", f"{was}/fam/other.py", ("syn/catalog.py", f"from {pkg} import other", f"from {pkg}.fam import other"))
+    for ext in (".py", ".json"):
+        (root / f"{was}/other.circuit-check{ext}").rename(root / f"{was}/fam/other.circuit-check{ext}")
+    side = f"{was}/fam/other.circuit-check.py"
+    _edit(root, side, f"from {pkg} import other", f"from {pkg}.fam import other")
     out = _run(root)
     assert out["hits"] == ["SynAdd_v1", "SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 0
     _edit(root, side, '("SynIdle_v1", lambda: bind(idle.SynIdle))', '("SynIdle_v1", lambda: bind(idle.SynIdle, **{}))')

@@ -1673,7 +1673,7 @@ def _moved(root: Path, rec: dict, now: dict, renamed: dict[str, str] | None = No
     A module stays at its name when it reads its own path or name, was imported by a name computed at run time, or an import
     of it failed (``named``, ``missing``).  One no site leads to is found among what this process imported before any check,
     when exactly one has its content.  Every package a found module now imports through is one recorded, or empty or a
-    docstring alone.  A package an enumerator listed lists the same modules, or each it no longer lists is imported anyway and
+    docstring alone, or, for a sidecar's module the entry does not hold, one it was imported through at its name as well.  A package an enumerator listed lists the same modules, or each it no longer lists is imported anyway and
     each it lists anew was listed under another name or is empty.  A module whose source `inspect` looked for (``present``)
     still resolves by its name, or was found where it moved, or is the one imported module with its content."""
     if any(now.get(k) != rec.get(k) for k in _EXACT):
@@ -1776,9 +1776,11 @@ def _moved(root: Path, rec: dict, now: dict, renamed: dict[str, str] | None = No
         if n2 == n:
             continue
         parts = n2.split(".")
+        # a followed module's packages it was imported through at its name as well: held before the move no more than after
+        through = set() if n in mods else {".".join(n.split(".")[:i]) for i in range(1, n.count(".") + 1)}
         for i in range(1, len(parts)):
             p = ".".join(parts[:i])
-            if p not in image and (f := _resolve(root, p)) is not None and not _parsed(f)[3]:
+            if p not in image and p not in through and (f := _resolve(root, p)) is not None and not _parsed(f)[3]:
                 return False
     found: dict[str, str] = {}
     for n, d in rec.get("present", {}).items():
