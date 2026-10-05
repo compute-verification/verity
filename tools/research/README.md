@@ -202,25 +202,21 @@ needs no credentials), `teardown.sh` stops or deletes it, `check.py` is its boot
 cache from `weights.tsv`, and its lease is `sh/lease.sh` with `LEASE_MACHINE_ID` and a stop command in place of RunPod's key.
 Its runs share its GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: one flock per GPU, `CUDA_VISIBLE_DEVICES` set).
 
-What runs on the Nebius nodes outside a run (infra's loops, timers and services, and the files they read) is listed in
-`pods/nebius/deploy.toml`, each with the repository file it comes from and its owner (a Slack handle), and goes there only
-through `research deploy install NODE --by WHO [PATH ...] --apply` (without `--apply`, a dry run) from a commit an origin
-branch holds (`main`, or a PR's head for a hotfix). Each loop is a systemd unit
-(`pods/nebius/units/`), never a tmux session, with its settings in an environment file from git (`pods/nebius/env/`, installed
-to `/etc/vy/env/`): `install` reloads systemd after a unit changes, and restarts a running service when its unit or
-environment file changed or it still runs a replaced file, once the node's `quiet` test passes, each restart
-recorded. An entry with a `hold` (node 2's ops loops, for now) is reported, never installed.
+What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `pods/nebius/deploy.toml`,
+each with its repository file and owner (a Slack handle), and goes there only through `research deploy install NODE --by WHO
+[PATH ...] --apply` (else a dry run) from a pushed commit (`main`, or a PR's head for a hotfix). Each loop is a systemd unit
+(`pods/nebius/units/`, settings in `pods/nebius/env/`), never tmux; `install` restarts a running service whose unit, env file
+or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
 `research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
-`missing`), every process still running a file installed after it started (`restart`), and every file in a managed directory
+`missing`), every process running a file replaced since it started (`restart`), and every file in a managed directory
 that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`research/deploy.py`). A new
 loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
 `.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
 --by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
 A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
-A monitor (`research/monitors.py`: id, owner, severity, a check, the action) is what wakes someone: `research monitors
-list|check [ID]|run --by WHO`. Node 1's `vy-monitors.timer` writes one alert note per incident and one per clear (node 2 only
-while its fill says `timed False`); `research monitors relay` posts them in `#agent-alerts`.
+Monitors (`research monitors list|check|run|relay`, `research/monitors.py`) wake their owners: node 1's `vy-monitors.timer`
+writes an alert note per incident and per clear, and the relay posts them in `#agent-alerts`.
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
