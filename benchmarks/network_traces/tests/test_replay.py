@@ -9,6 +9,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 from verity_network_warden import calibration
 
 HERE = Path(__file__).resolve().parents[1]
@@ -46,11 +47,12 @@ def canonical(frames: list[dict]) -> list[dict]:
     return sorted(frames, key=lambda f: (f["ready"], f["anchor"], f["session"], f["index"]))
 
 
-def run(tmp_path: Path, doc: dict, report: dict) -> tuple[dict, list[dict]]:
+def run(tmp_path: Path, doc: dict, report: dict, *flags: str) -> tuple[dict, list[dict]]:
     (tmp_path / "trace.json").write_text(json.dumps(doc))
     (tmp_path / "cal.json").write_text(json.dumps(report))
     out = tmp_path / "out"
-    assert rep.main([str(tmp_path / "trace.json"), "--calibration", str(tmp_path / "cal.json"), "--out", str(out)]) == 0
+    assert rep.main([str(tmp_path / "trace.json"), "--calibration", str(tmp_path / "cal.json"), "--out", str(out),
+                     *flags]) == 0
     rows = [json.loads(line) for line in (out / "verdicts.jsonl").read_text().splitlines()]
     return json.loads((out / "summary.json").read_text()), rows
 
@@ -120,3 +122,22 @@ def test_a_session_late_past_every_sync_is_a_mismatch(tmp_path: Path) -> None:
     assert e["accepted"] == {"raw": 1, "committed": 1} and e["violations_by_cause"] == {"miss": 1, "carried": 1}
     assert e["calibrator_misses"] == 1 and e["rejected_without_own_late_frame"] == 1
     assert summary["committed_agrees"] and summary["runs_accepted"] == {"raw": 0, "committed": 0}
+
+
+def test_an_online_prover_declares_from_what_it_has_seen_and_carries_a_runs_history(tmp_path: Path) -> None:
+    """Under `--syncs cover-2-1` an honest run is accepted: the first window has no history and declares the
+    calibration's envelope (δ = 3), and each later one δ = 4, a bucket past what the earlier windows needed. A second
+    configuration of the same run starts from the first one's history unless `--fresh`."""
+    doc = trace()
+    report = calibration.calibrate(doc)
+    second = copy.deepcopy(doc["configurations"][0]) | {"name": "synthetic-2"}
+    second["labels"] = {"run": "r0", "windows": [4, 7]}
+    doc["configurations"].append(second)
+    for flags, first in (((), 4), (("--fresh",), 3)):
+        summary, rows = run(tmp_path, doc, report, "--syncs", "cover-2-1", *flags)
+        assert summary["sync_policy"] == "cover-2-1" and summary["fresh"] == bool(flags)
+        assert summary["runs_accepted"] == {"raw": 2, "committed": 2} and summary["egress"]["calibrator_misses"] is None
+        assert [r["sync"][0] for r in rows if r["direction"] == "egress"] == [3, 4, 4, first, 4, 4]
+    with pytest.raises(SystemExit):
+        rep.main([str(tmp_path / "trace.json"), "--calibration", str(tmp_path / "cal.json"), "--out",
+                  str(tmp_path / "bad"), "--syncs", "cover-2"])
