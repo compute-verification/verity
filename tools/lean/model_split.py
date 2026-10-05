@@ -260,8 +260,11 @@ def wrap(head: str, parts: list[str], width: int = 120) -> str:
 
 
 def open_items(cmd: str) -> tuple[list[str], str]:
-    """An `open` command's namespaces, and the form (`scoped `/plain, explicit names and `hiding` aside)."""
+    """An `open` command's namespaces, and the form (`scoped `/plain, explicit names and `hiding` aside). Batteries'
+    `open private … from M` opens none."""
     body = re.sub(r"\s+in\s*$", "", cmd.strip())[len("open"):].strip()
+    if body.startswith("private "):
+        return [], ""
     scoped = body.startswith("scoped ")
     if scoped:
         body = body[len("scoped "):]

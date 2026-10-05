@@ -170,3 +170,9 @@ def test_a_module_under_a_spec_name_that_holds_a_proof_is_refused(tmp_path):
         {"n": "P.f_eq", "k": "theorem", "r": [3, 0, 3, 31], "u": ["P.f"]}]}}, "imports": {"P.Protocol": ["Init"]}}
     with pytest.raises(S.Refused, match="P.Protocol is the spec's by its name but holds 1 proof"):
         S.plan(pkg, facts, [])
+
+
+def test_an_open_reads_its_namespaces_and_batteries_open_private_opens_none():
+    assert S.open_items("open scoped Nat Hid in") == (["Nat", "Hid"], "scoped ")
+    assert S.open_items("open Nat (succ) hiding pred") == (["Nat"], "")
+    assert S.open_items("open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic") == ([], "")
