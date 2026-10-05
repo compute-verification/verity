@@ -296,11 +296,13 @@ def test_spec_lock_proved_in_that_names_no_package_is_refused(tmp_path):
     assert "`proved_in` entry" in f["reason"]
 
 
+#: the numerical bench's lowerings, a registry move-check reads wherever the tree keeps it
+LOWERINGS = next(p for p in MC.PY_PATH_FILES if p.endswith("/bench/lowerings.py"))
 REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n    "pouw_gemm": "benchmarks.pouw.tool:POUW_GEMM",\n}\n'
 REGISTRY_FILES = {"backends/flock/tool.py": "FLOCK_PURE = 1\n", "backends/flock/prove.py": "",
                   "benchmarks/pouw/tool.py": "POUW_GEMM = 1\n",
                   "tools/research/src/research/store/tools_registry.py": REGISTRY,
-                  "backends/numerical/python/verity_numerical/bench/lowerings.py":
+                  LOWERINGS:
                       'DIRECTORIES = {\n    "C-Flock": REPO / "backends" / "flock" / "templates",\n}\n',
                   "tools/research/src/research/store/parity.py":
                       'argv = [sys.executable, "-m", f"backends.flock.{mod}", "--root", str(root)]\n'}
@@ -310,14 +312,14 @@ def test_tools_registry_dotted_rewrite_is_certified(tmp_path):
     repo, base = _repo(tmp_path, REGISTRY_FILES)
     _move(repo, "backends/flock", "catalog/flock")
     _write(repo, {"tools/research/src/research/store/tools_registry.py": REGISTRY.replace("backends.flock", "catalog.flock"),
-                  "backends/numerical/python/verity_numerical/bench/lowerings.py":
+                  LOWERINGS:
                       'DIRECTORIES = {\n    "C-Flock": REPO / "catalog" / "flock" / "templates",\n}\n',
                   "tools/research/src/research/store/parity.py":
                       'argv = [sys.executable, "-m", f"catalog.flock.{mod}", "--root", str(root)]\n'})
     r = _check(repo, base)
     assert r["certified"], r["refusals"]
     assert {e["path"] for e in r["edits"]} == {"tools/research/src/research/store/tools_registry.py",
-                                               "backends/numerical/python/verity_numerical/bench/lowerings.py",
+                                               LOWERINGS,
                                                "tools/research/src/research/store/parity.py"}
 
 

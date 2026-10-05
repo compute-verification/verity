@@ -5,7 +5,7 @@ The algorithm, as a verifier re-implements it (`partition_object.evaluate`; any 
 
 **Input.**  The program's descriptor, `codec.canonical_json(codec.encode_program(program))` minus `annotations` (schema
 `verity-ir/descriptor/v1`), decoded by `codec.decode_program`.  The format, the canonical layout and reference resolution are
-specified in `verity/primitives/circuits/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`); its §8 restates the wide-gate rule of step 3.
+specified in `verity/primitives/circuits/PROTOCOL.md` (pinned by `verity/primitives/circuits/tests/format_vectors.json`); its §8 restates the wide-gate rule of step 3.
 
 0. **Applicability.**  Q_word v1 applies to a program that is topological -- every node of every body names only its body's
    parameters and earlier nodes, a body's `ret` any of its nodes (`partition_object.order_violation`, checked for every query) -- and
@@ -51,7 +51,7 @@ specified in `verity/primitives/circuits/PROTOCOL.md` (pinned by `tests/ir/forma
    What serving commits, when given, is held to the derived set (`committed-unread`, `read-uncommitted`, `output-uncommitted`).
 
 **Constants of the version.**  `WIRING` and `WIDE_FAN_IN` are part of Q_word v1, like the algorithm: changing either is a new version.
-`tests/ir/qword_vectors.json` pins both as data, beside vectors for every step above and a seeded random corpus.
+`verity/primitives/circuits/tests/qword_vectors.json` pins both as data, beside vectors for every step above and a seeded random corpus.
 
 **Q_word v2** is v1 with one change, in step 6: a recomputed pair `(j, f)` whose gates lie in two units is not a failure.  Steps 0-5,
 `WIRING`, `WIDE_FAN_IN` and the width rule are v1's, so v2's Calls, units, owners, committed sets and widths are v1's on every program
