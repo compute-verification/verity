@@ -6,7 +6,7 @@
   "art:c94fae7b8f1c37950b8bb13e76221948057b0bfa4d616ca0a7644ca74a39d3df": "fixtures/bench-instances/v1/vu-k1536.index.json",
   "art:9e977c565a9468b46936120b1d09495786ffaf308963409a350f565426cc9169": "fixtures/bench-instances/v1/vu-k1536-neg.index.json",
   "art:19f80a238753239044f5f850e9907259a53938522512eed40a53ea1f5fd7fd53": "fixtures/bench-instances/v1/tu-k16.index.json",
-  "art:9ea8114d17bfad729de762a292b304b781a6bc987608193804454a3fb2260238": "catalog/verity_catalog/silicon/discrepancy_log.json",
+  "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887": "catalog/verity_catalog/silicon/discrepancy_log.json",
   "art:ad3eaa3e52972a08384ee2de612b657a52efc4cc8dcc15d37fb94ad78c6cee55": "integrations/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
   "art:18e719e6f770a09a551c6aec3bf0d3594db446bfb984a521c81641540f3559b3": "archive/direct/fixtures/crosscheck_units.json",
   "art:42deda5cb9bc36241c8fddd742be71353a5699de8efa413f2b5033a60794be31": "archive/gkr/fixtures/babybear-transcripts/transcript_vu4.json",
@@ -111,17 +111,19 @@
   "art:4274bdf17e6fe0cbb00d0605644a955182a0f4fbe4c84d2f0263d0e26f838260": "backends/flock/tests/fixtures/public-inputs",
   "art:73260dcd0a485e06024b588ddc499bbe904c599cae142960e980148f13ebcdeb": "backends/flock/tests/fixtures/public-inputs-blocks",
   "previous": {
-    "art:9ea8114d17bfad729de762a292b304b781a6bc987608193804454a3fb2260238": [
-      "art:aac898b703462ecb19c5d7460baf4690980d8e121a8b40e1745a4759a05d8fe6",
-      "art:e960ec04a528595710d77cf274c57edc1a0b9be2d475b64a4a27ef0b93a68a8a",
-      "art:5bf4b57b082bd187fe07849babf4db172843c5c71efd2ffbb0ee65b3bbd9105f",
-      "art:cba3df59a2100c154fcdcf532b86a97adef04e4dbe3690cb751ad39f61f5813d"
-    ],
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
     ],
     "art:44aca97047b4caa2a39334546d40877f48ef64dd70f67f4bd3b941b11abf9f75": [
       "art:d68968cee842d0199f1e12aa7efb6a8ee90e1d0ea1123e4946afdd4f7ceb7f5b"
+    ],
+    "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887": [
+      "art:aac898b703462ecb19c5d7460baf4690980d8e121a8b40e1745a4759a05d8fe6",
+      "art:e960ec04a528595710d77cf274c57edc1a0b9be2d475b64a4a27ef0b93a68a8a",
+      "art:5bf4b57b082bd187fe07849babf4db172843c5c71efd2ffbb0ee65b3bbd9105f",
+      "art:cba3df59a2100c154fcdcf532b86a97adef04e4dbe3690cb751ad39f61f5813d",
+      "art:9ea8114d17bfad729de762a292b304b781a6bc987608193804454a3fb2260238",
+      "art:b238706278bd3f122ae084fbd6d9e01b9369779d4208b67eaab547e102e99364"
     ]
   }
 }
