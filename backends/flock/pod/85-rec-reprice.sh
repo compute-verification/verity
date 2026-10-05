@@ -339,9 +339,26 @@ alg)
     fi
   ) > $O/build-claims.log 2>&1 || { tail -30 $O/build-claims.log; exit 1; }
   mkdir -p $O/alg
-  /usr/bin/time -v -o $O/alg/time-claims.txt $CLAIMS_BIN verity/flock-circuit $DD/stage/circuit.txt $DD/stage/pub-$N.bin \
-    $INNER/session os > $INNER/claims.json 2> $O/alg/claims.err
-  echo "claims exit $?"
+  # the verifier's copy of the partition object the inner circuit binds: q-word over the build step's one-Call program
+  python3 - $K $DD/stage/partition.json $DD/stage/circuit.txt <<'EOF' || exit 1
+import json, sys
+from verity.ir import partition_object as PO
+from verity_flock import class_statement as CS, partition_units as PU
+defs = {'Gemm_v2{K=%s,N=4096,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % sys.argv[1]: 1151}
+program, _calls, _prov = CS.distinct_calls(None, None, defs, None)
+units = PU.partition_units(program, "q-word")
+obj = PO.build(units.program, units.query)
+with open(sys.argv[3]) as f:
+    f.readline()
+    meta = json.loads(f.readline()[5:])
+assert (meta["partition"]["digest"], meta["program_sha512"]) == (PO.digest(obj), obj["program"]), "not the circuit's partition"
+open(sys.argv[2], "w").write(json.dumps(obj, sort_keys=True))
+print("partition", PO.digest(obj), "program", obj["program"])
+EOF
+  cp $DD/stage/partition.json $O/alg/
+  /usr/bin/time -v -o $O/alg/time-claims.txt $CLAIMS_BIN --partition $DD/stage/partition.json verity/flock-circuit \
+    $DD/stage/circuit.txt $DD/stage/pub-$N.bin $INNER/session os > $INNER/claims.json 2> $O/alg/claims.err
+  rc=$?; echo "claims exit $rc"; [ $rc = 0 ] || { tail -5 $O/alg/claims.err; exit 1; }
   cp $INNER/claims.json $O/alg/
   rm -rf $DD/alg
   /usr/bin/time -v -o $O/alg/time-stage.txt python3 -m verity_flock.rec_residuals $INNER $DD/alg > $O/alg/stage.json 2> $O/alg/stage.err
@@ -373,7 +390,7 @@ lean)
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   if [ "${INNER_LEAN:-0}" = 1 ]; then
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit --circuit $DD/stage/circuit.txt \
-      --public $DD/stage/pub-$N.bin --coins os --session $DD/inner/s$((NS - 1))/session > $O/lean/inner.log 2>&1
+      --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --coins os --session $DD/inner/s$((NS - 1))/session > $O/lean/inner.log 2>&1
     echo "inner lean exit $?"
   fi
   ;;
