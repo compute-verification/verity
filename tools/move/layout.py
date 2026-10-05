@@ -38,6 +38,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+_ROOT_JOIN = "\x00root\x00"
 IDENT = re.compile(r"[A-Za-z_]\w*\Z")
 TEXT_LIMIT = 4 << 20
 #: old top-level paths that the move empties; a tracked file left under one has no row in the map
@@ -223,7 +224,7 @@ class Run:
         if dup:
             raise SystemExit("two files would land at one path:\n  " + "\n  ".join(sorted(set(dup))[:50]))
         self.old_dirs = {posixpath.dirname(p) for p in tracked}
-        self.old_dirs |= {d for p in tracked for d in _ancestors(p)}
+        self.old_dirs |= {d for p in (*tracked, *fetched) for d in _ancestors(p)}
         return moves
 
     def move(self, moves: list[tuple[str, str]]):
@@ -379,9 +380,10 @@ class Run:
     def _paths(self, path: str, old: str, text: str) -> str:
         if not hasattr(self, "_path_re"):
             alts = "|".join(re.escape(p) for p in self.L.prefixes())
-            self._path_re = re.compile(rf"(?P<pre>[}})]/|\$\{{?\w+\}}?/|~/(?:verity/)?|/workspace/)?(?P<p>{alts})(?![\w\-]|\.\w)"
+            self._path_re = re.compile(rf"(?P<pre>[}})>]/|\$\{{?\w+\}}?/|~/(?:verity/)?|/workspace/)?(?P<p>{alts})(?![\w\-]|\.\w)"
                                        rf"(?P<rest>(?:/[\w.\-*{{}},]*)*)")
-            self._rel_re = re.compile(r"(?<![\w.\-/$}])(?P<p>(?:\.\.?/)+[\w.\-]+(?:/[\w.\-]+)*/?)")
+            self._rel_re = re.compile(r"(?<![\w.\-/$}])(?P<v>)(?P<p>(?:\.\.?/)+[\w.\-]+(?:/[\w.\-]+)*/?)"
+                                      r"|(?P<v2>\$\{?\w+\}?/)(?P<p2>(?:\.\./)+[\w.\-]+(?:/[\w.\-]+)*/?)")
             roots = "|".join(re.escape(n) for n in sorted(self.L.old_roots, key=len, reverse=True))
             self._short_re = re.compile(rf"(?<![\w.\-/])(?P<p>(?:{roots})/[\w.\-]+(?:/[\w.\-]+)*/?)")
             self._plain_re = re.compile(r"(?<![\w.\-/$}])(?P<p>[\w\-][\w.\-]*(?:/[\w.\-]+)+/?)")
@@ -398,24 +400,26 @@ class Run:
                 token, trail = token[:-1], token[-1] + trail
             if "/" not in token:
                 after = text[m.end("p"):m.end("p") + 1]
-                if not (before in "\"'" and after == before):
-                    return m.group(0)
+                if not (before in "\"'" and after == before) or path.endswith(".py"):
+                    return m.group(0)                   # in Python a lone quoted word is a name ("census": a key); joins are `_joins`'s
             new = self._map_token(token, path)
             if new is None or new == token:
                 return m.group(0)
             self._count(path, "paths")
+            if new.rstrip("/") == "." and pre.endswith("/"):
+                return pre[:-1] + trail                 # `$REPO/packages/verity/src` is `$REPO` now
             return pre + new + trail
 
         text = self._path_re.sub(root_relative, text)
 
         def relative(m: re.Match) -> str:
-            token = m.group("p")
-            new = self._map_relative(token, path, old)
+            var, token = (m.group("v"), m.group("p")) if m.group("p") is not None else (m.group("v2"), m.group("p2"))
+            new = self._map_relative(token, path, old, from_member=bool(var))
             if new is None or new == token:
-                return token
+                return m.group(0)
             self._count(path, "relative paths")
-            self.note("relative paths rewritten", f"{path}: {token} -> {new}")
-            return new
+            self.note("relative paths rewritten", f"{path}: {var}{token} -> {var}{new}")
+            return var + new
 
         text = self._rel_re.sub(relative, text)
 
@@ -490,11 +494,22 @@ class Run:
             self.note("approximate directory paths", f"{path}: {token} -> {new}")
         return new + ("/" if slash else "")
 
-    def _map_relative(self, token: str, path: str, old: str, plain: bool = False) -> str | None:
+    def _map_relative(self, token: str, path: str, old: str, plain: bool = False, from_member: bool = False) -> str | None:
         slash = token.endswith("/")
         t = token.rstrip("/")
-        base_old = posixpath.dirname(old)
-        target = posixpath.normpath(posixpath.join(base_old, t))
+        dot = t.endswith("/.") and t != "."
+        if dot:
+            t = t[:-2]                                  # `v1/.` (copy the contents): normpath would drop it
+        base_new = posixpath.dirname(path)
+        target = posixpath.normpath(posixpath.join(posixpath.dirname(old), t))
+        if from_member:
+            target = ".."                               # `$SP1_SRC/../..`: a variable names a directory, not this file's
+        if not (target in self.known_old or target in self.old_dirs) and (member := self._member_of(old)):
+            # relative to the distribution's directory, where its commands run (`../../packages/verity/src` in vLLM's pod
+            # scripts and `cwd=` calls)
+            alt = posixpath.normpath(posixpath.join(member, t))
+            if alt in self.known_old or alt in self.old_dirs:
+                target, base_new = alt, self.L.directory(member)[0] or member
         if target.startswith("..") or target == "." or self.L.kept(target):
             return None
         is_dir = target in self.old_dirs
@@ -512,12 +527,21 @@ class Run:
             new_target = self.L.file(target) or target
         if path == old and new_target == target:
             return None                                 # neither end moved: the token stays as written
-        rel = posixpath.relpath(new_target, posixpath.dirname(path) or ".")
+        rel = posixpath.relpath(new_target, base_new or ".")
         if t.startswith("./") and not rel.startswith("."):
             rel = "./" + rel
         if plain and rel.startswith(".."):
             self.note("relative paths that now leave their directory", f"{path}: {t} -> {rel}")
-        return rel + ("/" if slash else "")
+        return rel + ("/." if dot else "") + ("/" if slash else "")
+
+    def _member_of(self, old: str) -> str | None:
+        """The directory of the distribution (a pyproject.toml below the root) that file `old` belongs to."""
+        d = posixpath.dirname(old)
+        while d:
+            if f"{d}/pyproject.toml" in self.tracked_old:
+                return d
+            d = posixpath.dirname(d)
+        return None
 
     def _gitignore(self, path: str, text: str) -> str:
         if posixpath.dirname(path):
@@ -665,12 +689,13 @@ class Run:
             before = text[: m.start()].rstrip()
             if not before.endswith("/") or before.endswith("//"):
                 return chain
-            if re.search(r"(?:\.parents\[\d+\]|\.parent|__file__\)(?:\.resolve\(\)|\.absolute\(\))?)\s*$", before[:-1].rstrip()):
+            if re.search(r"Path\((?:__file__|[A-Za-z_][\w.]*\.__file__)\)(?:\.resolve\(\)|\.absolute\(\))?"
+                         r"(?:\.parents\[\d+\]|(?:\.parent)+)?\s*$", before[:-1].rstrip()):
                 return chain                            # an anchor's own chain, which `_anchors` resolves from the file
             segs = re.findall(r"""["']([\w.\-]+)["']""", chain)
             joined = "/".join(segs)
-            if len(segs) == 1 and joined not in self.L.files and joined not in dict(self.L.dirs) and joined not in self.L.tokens:
-                return chain
+            if len(segs) == 1:
+                return chain                            # `run / "census"`: one word names a run's own directory as often as ours
             if not (joined in self.known_old or joined in self.old_dirs or joined in self.L.files
                     or joined in dict(self.L.dirs) or joined in self.L.tokens):
                 return chain
@@ -680,9 +705,11 @@ class Run:
             q = m.group("q2")
             self._count(path, "path joins")
             self.note("path joins rewritten", f"{path}: {joined} -> {new}")
+            if new.strip("/") == ".":
+                return _ROOT_JOIN                       # the repository root: the join itself goes
             return " / ".join(f"{q}{s}{q}" for s in new.strip("/").split("/"))
 
-        return self._JOIN.sub(fix, text)
+        return re.sub(r"\s*/\s*" + _ROOT_JOIN, "", self._JOIN.sub(fix, text))
 
     # imports ----------------------------------------------------------------------------------------------------------
 

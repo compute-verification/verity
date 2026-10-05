@@ -122,32 +122,10 @@ new = { verity = "verity", verity_catalog = "catalog/verity_catalog", verity_ker
 # --- numerical references and the table renderer: benchmarks/
 "backends/numerical/" = "benchmarks/numerical/"
 
-# --- this branch's first layout (catalog/, kernels/ and experimental/ as import names, core's tests in one verity/tests/), carried
-# to the one above; no path on main starts with these, so a run there never matches them
-"catalog/__init__.py" = "catalog/verity_catalog/__init__.py"
-"catalog/silicon/" = "catalog/verity_catalog/silicon/"
-"catalog/definitions/" = "catalog/verity_catalog/definitions/"
-"catalog/targets/" = "catalog/verity_catalog/targets/"
-"kernels/__init__.py" = "kernels/verity_kernels/__init__.py"
-"kernels/tc.py" = "kernels/verity_kernels/tc.py"
-"experimental/__init__.py" = "experimental/verity_experimental/__init__.py"
-"experimental/commitments/" = "experimental/verity_experimental/commitments/"
-"experimental/commitments/tests/" = "experimental/tests/commitments/"
-"experimental/private_circuits/" = "experimental/verity_experimental/private_circuits/"
-"experimental/private_circuits/tests/" = "experimental/tests/private_circuits/"
-"experimental/sampled_proofs/" = "experimental/verity_experimental/sampled_proofs/"
-"experimental/sampled_proofs/tests/" = "experimental/tests/sampled_proofs/"
-"verity/tests/circuits/" = "verity/primitives/circuits/tests/"
-"verity/tests/evaluation/" = "verity/primitives/circuits/tests/evaluation/"
-"verity/tests/randomness/" = "verity/primitives/randomness/tests/"
-"verity/tests/claims/" = "verity/claims/tests/"
-"verity/tests/commitments/" = "verity/primitives/commitments/tests/"
-"verity/tests/protocols/" = "verity/protocols/tests/"
-
 [tokens]
 # directories that no row moves whole, as they read in text after the move (each rewrite is reported as approximate)
 "packages/verity" = "verity"
-"packages/verity/src" = "verity"
+"packages/verity/src" = "."                  # the directory that holds the package `verity`: the repository's root now
 "packages/verity/src/verity" = "verity"
 "packages/verity/tests" = "verity/tests"
 "backends/shared" = "kernels"
@@ -222,22 +200,9 @@ dev = ["editables>=0.5", "jsonschema>=4.26", "pytest>=8", "pytest-xdist>=3.6", "
 "backends.vole" = "archive.vole"
 "benchmarks.dot_product" = "archive.sp1.benchmarks.dot_product"
 "benchmarks.ir_call" = "archive.sp1.benchmarks.ir_call"
-"catalog" = "verity_catalog"
-"catalog.definitions" = "verity_catalog.definitions"
-"catalog.silicon" = "verity_catalog.silicon"
-"catalog.targets" = "verity_catalog.targets"
 "census" = "catalog.census"
-"experimental" = "verity_experimental"
-"experimental.commitments" = "verity_experimental.commitments"
-"experimental.commitments.tests" = "experimental.tests.commitments"
-"experimental.private_circuits" = "verity_experimental.private_circuits"
-"experimental.private_circuits.tests" = "experimental.tests.private_circuits"
-"experimental.sampled_proofs" = "verity_experimental.sampled_proofs"
-"experimental.sampled_proofs.tests" = "experimental.tests.sampled_proofs"
 "fixtures.hawkeye" = "verity_catalog.silicon.hawkeye"
 "fixtures.tc" = "verity_catalog.silicon.captures"
-"kernels" = "verity_kernels"
-"kernels.tc" = "verity_kernels.tc"
 "packages.verity.lean" = "verity.lean"
 "packages.verity.tests.claims" = "verity.claims.tests"
 "packages.verity.tests.commitments" = "verity.primitives.commitments.tests"
@@ -298,12 +263,6 @@ dev = ["editables>=0.5", "jsonschema>=4.26", "pytest>=8", "pytest-xdist>=3.6", "
 "verity.proofs.query" = "verity_vllm.query.units"
 "verity.proofs.target" = "verity_catalog.targets.target"
 "verity.randomness" = "verity.primitives.randomness"
-"verity.tests.circuits" = "verity.primitives.circuits.tests"
-"verity.tests.claims" = "verity.claims.tests"
-"verity.tests.commitments" = "verity.primitives.commitments.tests"
-"verity.tests.evaluation" = "verity.primitives.circuits.tests.evaluation"
-"verity.tests.protocols" = "verity.protocols.tests"
-"verity.tests.randomness" = "verity.primitives.randomness.tests"
 "verity_network_warden" = "verity.protocols.accounting.communication.warden"
 "verity_pous" = "verity.protocols.accounting.space.pous"
 "verity_pouw" = "verity.protocols.accounting.work.pouw"
@@ -485,8 +444,8 @@ parallel = true
 exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock",
            "backends/numerical/reports/**", "benchmarks/numerical/reports/**",
+           "backends/numerical/tests/bench/data/**", "benchmarks/numerical/tests/bench/data/**",
            "**/price_twins.json", "tools/move/**",
-           "catalog/silicon/captures/**", "catalog/silicon/hawkeye/**",
            "catalog/verity_catalog/silicon/captures/**", "catalog/verity_catalog/silicon/hawkeye/**",
            "tools/check/tests/test_suites.py"]                   # its synthetic trees borrow the old names
 # Old paths that are keys outside the tree, never rewritten: the frozen evidence artifact is laid out at its former repository
@@ -495,7 +454,6 @@ keep = ["backends/numerical/reports", "backends/numerical/reports/*", "backends/
         "backends/*/results_*", "backends/*/results.*"]
 # Rewritten although excluded above: data keyed by repository path (their pinned digests must not change).
 include = ["fixtures/artifacts.json", "backends/flock/tests/fixtures/randomness_lean.json",
-           "experimental/sampled_proofs/tests/fixtures/exfiltration_lean.json",
            "experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json",
-           "**/lake-manifest.json", "fixtures/tc/README.md", "catalog/silicon/captures/README.md", "catalog/verity_catalog/silicon/captures/README.md",
+           "**/lake-manifest.json", "fixtures/tc/README.md", "catalog/verity_catalog/silicon/captures/README.md",
            "fixtures/discrepancy_log.json"]
