@@ -961,6 +961,13 @@ class Run:
                 out = _drop_table_entry(out, "tool.uv.sources", n)
             new = self.L.data.get("distributions", {}).get("new", {})
             out = _add_table_entries(out, "tool.uv.sources", {n: "{ workspace = true }" for n in new}, before="dependency-groups")
+            # the members the workspace root depended on, which `uv run` installed with it, become the default group's: the
+            # root is now `verity`, which they depend on
+            was = [_requirement(r) for r in data.get("project", {}).get("dependencies", [])]
+            members = [n for n in was if n != "verity" and n not in merged] + [n for n in new if n not in was]
+            if members:
+                out = _add_group_items(out, "dev", members)
+                self._count(path, "members in the default dependency group", len(members))
             return self._members(out, list(new.values()))
         if '"verity"' in out and "[tool.uv.sources]" in out and not re.search(r"^verity\s*=", out, re.M):
             out = out.replace("[tool.uv.sources]\n", "[tool.uv.sources]\nverity = { workspace = true }\n", 1)
@@ -1164,6 +1171,22 @@ def _drop_table_entry(text: str, header: str, key: str) -> str:
         return text
     body = next(b for h, b in secs if h == header)
     return text.replace(body, re.sub(rf"^{re.escape(key)}\s*=.*\n", "", body, count=1, flags=re.M), 1)
+
+
+def _add_group_items(text: str, group: str, add: list[str]) -> str:
+    """`add` appended to [dependency-groups] `group`, where it isn't there already."""
+    secs = _sections(text)
+    body = next((b for h, b in secs if h == "dependency-groups"), None)
+    m = re.search(rf"^{re.escape(group)}\s*=\s*\[(?P<items>[^\]]*)\]", body or "", re.M)
+    if m is None:
+        return _add_table_entries(text, "dependency-groups", {group: json.dumps(add)}, before="tool.pytest.ini_options")
+    have = {_requirement(x) for x in re.findall(r'"([^"]+)"', m.group("items"))}
+    missing = [a for a in add if a not in have]
+    if not missing:
+        return text
+    old = m.group("items")
+    new_items = (old.rstrip().rstrip(",") + ", " if old.strip() else "") + ", ".join(json.dumps(a) for a in missing)
+    return text.replace(body, body[: m.start("items")] + new_items + body[m.end("items"):], 1)
 
 
 def _add_dependencies(text: str, add: list[str]) -> str:
