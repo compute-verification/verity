@@ -31,6 +31,7 @@
   "Specs.Pous.Assumptions",
   "Specs.Pous.Assumptions.P2",
   "Specs.Warden.Assumptions",
+  "Specs.Flock.Assumptions",
   "Proofs.Flock.Soundness.Assumptions"
  ],
  "meaning": [
@@ -49,6 +50,9 @@
   "Definitions.Warden",
   "Specs.Warden.Assumptions",
   "Specs.Warden.Guarantees",
+  "Definitions.Flock",
+  "Specs.Flock.Assumptions",
+  "Specs.Flock.Guarantees",
   "Proofs.Flock.Verifier",
   "Flock",
   "Proofs.Flock.Level3",
@@ -212,6 +216,28 @@
   },
   "Specs.Warden.Guarantees": {
    "imports": ["Mathlib", "Definitions.Warden", "Specs.Warden.Assumptions", "Specs.Warden.Guarantees"],
+   "except": [],
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
+  },
+  "Definitions.Flock": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Flock"],
+   "except": [],
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Specs.Flock.Assumptions": {
+   "imports": ["Mathlib", "Definitions.Core", "Specs.Core.Assumptions", "Definitions.Flock", "Specs.Flock.Assumptions"],
+   "except": [],
+   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof"
+  },
+  "Specs.Flock.Guarantees": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Specs.Core.Assumptions",
+    "Definitions.Flock",
+    "Specs.Flock.Assumptions",
+    "Specs.Flock.Guarantees"
+   ],
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   }

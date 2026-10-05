@@ -1,5 +1,7 @@
 import Specs.Core.Assumptions
 import Specs.Core.Guarantees
+import Specs.Flock.Assumptions
+import Specs.Flock.Guarantees
 import Specs.Nci.Assumptions
 import Specs.Nci.Guarantees
 import Specs.Pous.Assumptions
