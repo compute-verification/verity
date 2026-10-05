@@ -40,9 +40,9 @@ def _rewrite(src: Path, dst: Path, relation: str, scheme: str, change: str) -> N
         y[0] = out[0] if h["epilogue"] else out[0] >> 10
     h.update({k: v for k, v in st.items() if k != "y"})
     if change == "output":
-        from verity.commitments.frame_v3 import FrameV3, Port, WordLeaf
-        from verity.commitments.indexed import RangeIndexedDomain
-        from verity.commitments.merkle import CommitmentDomain
+        from verity.primitives.commitments.frame_v3 import FrameV3, Port, WordLeaf
+        from verity.primitives.commitments.indexed import RangeIndexedDomain
+        from verity.primitives.commitments.merkle import CommitmentDomain
         dom = CommitmentDomain(bytes.fromhex(st["bindings"]["y"]), st["owners"]["y"], RangeIndexedDomain(0, n))
         fv = FrameV3({"y": Port(dom, WordLeaf(st["schemas"]["y"], st["y_bytes"]))})
         leaves = [fv.tree_leaf("y", r, fv.leaf_layout("y", r).digest(int(v).to_bytes(st["y_bytes"], "big"))) for r, v in enumerate(y)]

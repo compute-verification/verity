@@ -7,9 +7,9 @@ import struct
 
 import numpy as np
 
-from verity.commitments import hm96
+from verity.primitives.commitments import hm96
 from verity_flock import circuit as FC
-from verity_sampled_proofs.one_stage import registered as G
+from verity.protocols.verification.sampled_proofs.one_stage import registered as G
 
 PROGRAM = "ab" * 64
 #: RMSNorm's eps (1e-5) as the f32 its Definition holds
