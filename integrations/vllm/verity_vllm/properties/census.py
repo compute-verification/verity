@@ -499,7 +499,7 @@ def reconciliation_markdown(rep: dict) -> str:
     steps = [s for s in rep["steps"] if "error" not in s]
     if steps:
         names = sorted({k for s in steps for k in s["counts"]})
-        L.append("| declared | " + " | ".join(f"step {s['step']} catalog/census/events/parts" for s in steps[:2]) + " | decode steps 2.. census (set) | patterns |")
+        L.append("| declared | " + " | ".join(f"step {s['step']} census/events/parts" for s in steps[:2]) + " | decode steps 2.. census (set) | patterns |")
         L.append("| --- | " + " | ".join("---" for _ in steps[:2]) + " | --- | --- |")
         for k in names:
             cells = []

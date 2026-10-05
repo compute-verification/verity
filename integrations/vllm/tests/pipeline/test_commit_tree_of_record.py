@@ -7,7 +7,7 @@ from pathlib import Path
 from verity_vllm.pipeline import research_tools, source_identity
 from verity_vllm.pipeline.tp import commit as tp_commit
 
-CORE = Path("packages") / "verity" / "src" / "verity"
+CORE = Path("verity")
 
 
 def _repo(tmp_path: Path) -> Path:
