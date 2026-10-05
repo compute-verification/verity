@@ -135,14 +135,16 @@ def stand_in(set_dir: str) -> dict:
             "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
 
 
-def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None) -> tuple[dict | None, dict | None]:
+def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
+            zk: bool = False) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the draw, coins, the verdict) and `prove`.
-    `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one."""
+    `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: the
+    masked protocol on the keyed coin tree (`--zk` on both sides)."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
     tables = d / "tables"
     serve_log = open(out / "serve.log", "w")
-    serve = subprocess.Popen([bin_, "serve", "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
+    serve = subprocess.Popen([bin_, "serve", *(["--zk"] if zk else []), "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
                               *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1"],
@@ -152,7 +154,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
             if "SERVING" in (out / "serve.log").read_text() or serve.poll() is not None:
                 break
             time.sleep(0.5)
-        p = run([bin_, "prove", "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
+        p = run([bin_, "prove", *(["--zk"] if zk else []), "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
                  "--circuit", str(d / "circuit.txt"), "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log")
         live = next((json.loads(line[5:]) for line in p.stdout.splitlines() if line.startswith("LIVE\t")), None)
         if live is None:

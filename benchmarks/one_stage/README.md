@@ -5,6 +5,8 @@ draw, C-Flock's circuit prover (M0) and the Lean verifier, to the audit record w
 negatives.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
+- `a0_lean.py`: A0 with the auditor's Lean program (`flock-audit`) driving: it draws the unit draw itself, and the
+  developer, the serving side and the audit are workers that answer it.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside M0's tree (its `verity_flock`).
 - `pod.sh`: the entry point on a CPU pod.
 
