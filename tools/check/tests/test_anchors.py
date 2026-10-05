@@ -120,6 +120,31 @@ def test_a_directory_reference_follows_its_files_and_a_split_one_may_go_either_w
         "pkg/src/lib.py:3 (now pkg/src/lib.py): reached t2, which went to t3; no join there reaches it"]
 
 
+SH = '''#!/usr/bin/env bash
+HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd)   # pkg/src -> the root
+python3 "$(dirname "$0")/lib.py"
+cat "${ROOT}/data/table.json" "$HERE/fixtures/a.json"  # "$ROOT/not/read"
+cd "$ROOT" && git -C "$HERE" status
+'''
+
+
+def test_a_shell_script_reaches_from_its_directory(tmp_path):
+    assert A.shell_joins("pkg/src/run.sh", SH) == [(3, "pkg/src/lib.py"), (4, "data/table.json"),
+                                                  (4, "pkg/src/fixtures/a.json"), (5, ""), (5, "pkg/src")]
+    assert A.shell_joins("d/x.sh", 'here=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)\n"$here/a"\n') == [(2, "a")]
+    root = _repo(tmp_path)
+    (root / "pkg/src/run.sh").write_text(SH)
+    _git(root, "add", "-A")
+    _git(root, "commit", "-qm", "a script")
+    assert _move(root, ("pkg/src", "pkg/bin")) == []
+    assert _move(root, ("pkg/bin/run.sh", "run.sh")) == [
+        "pkg/bin/run.sh:3 (now run.sh): reached pkg/bin/lib.py, which went to pkg/bin/lib.py; no join there reaches it",
+        "pkg/bin/run.sh:4 (now run.sh): reached data/table.json, which went to data/table.json; no join there reaches it",
+        "pkg/bin/run.sh:4 (now run.sh): reached pkg/bin/fixtures/a.json, which went to pkg/bin/fixtures/a.json; no join there "
+        "reaches it",
+        "pkg/bin/run.sh:5 (now run.sh): reached pkg/bin, which went to pkg/bin; no join there reaches it"]
+
+
 def test_the_cli_exits_one_on_a_listed_join(tmp_path, capsys, monkeypatch):
     root = _repo(tmp_path)
     _move(root, ("pkg/src/lib.py", "pkg/lib.py"))

@@ -1,4 +1,4 @@
-"""`anchors`: every repository path a Python file reaches from `__file__` still reaches it after a move.
+"""`anchors`: every repository path a Python or shell file reaches from its own place still reaches it after a move.
 
     uv run python tools/check/anchors.py BASE HEAD [--json]
 
@@ -11,8 +11,10 @@ fetched fixture) unchanged below it. A join that left the tree or reached nothin
 change that drops a reference on purpose is listed too, so run it on the move commit alone. Exit 0 when every target is
 still reached, 1 listing those that aren't, 2 on a git error.
 
-Anchored means a chain on `Path(__file__)`: `.resolve()`, `.absolute()`, `.parent`, `.parents[N]`, `/ "lit"`,
-`.joinpath("lit", ...)`, `.with_name("lit")`, and names bound to one. `os.path` arithmetic on `__file__` isn't read.
+Anchored means, in Python, a chain on `Path(__file__)`: `.resolve()`, `.absolute()`, `.parent`, `.parents[N]`, `/ "lit"`,
+`.joinpath("lit", ...)`, `.with_name("lit")`, and names bound to one (`os.path` arithmetic on `__file__` isn't read); in a
+`*.sh`, `$(dirname "$0")/path` or `${BASH_SOURCE[0]}`'s, and `"$VAR/path"` for a `VAR=$(cd "<one of those>/.." && pwd)`
+(a relative path after a bare `cd "$(dirname "$0")"` isn't read).
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ import ast
 import bisect
 import functools
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -28,6 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 #: what `_up` returns for a path above the repository root
 OUTSIDE = ".."
+SOURCES = (".py", ".sh")
 
 
 def _up(path: str, n: int = 1) -> str:
@@ -123,6 +127,42 @@ def joins(here: str, text: str) -> list[tuple[int, str]]:
     return [(line, a) for line, _, a in sorted(out)]
 
 
+_SH_DIR = r'\$\(\s*dirname\s+"?\$(?:0|\{BASH_SOURCE\[0\]\}|\{BASH_SOURCE\}|BASH_SOURCE)"?\s*\)'
+_SH_BASE = rf'(?:{_SH_DIR}|\$\{{?(?P<var>\w+)\}}?)'
+_SH_REL = r'(?P<rel>(?:/[\w.@+-]+)*)'
+#: `VAR=$(cd "$(dirname "$0")/.." && pwd)`, `VAR="$(cd "$HERE/../.." && pwd)"`
+_SH_ASSIGN = re.compile(rf'(?:^|[;\s(])(?:local\s+|export\s+|readonly\s+)?(?P<name>\w+)="?\$\(\s*cd\s+"?{_SH_BASE}{_SH_REL}"?\s*'
+                        rf'(?:&>\s*/dev/null\s*|>\s*/dev/null\s*)?&&\s*pwd(?:\s+-P)?\s*\)"?')
+#: `$HERE/x/y`, `"${ROOT}/x"`, `$(dirname "$0")/x`
+_SH_REF = re.compile(rf'{_SH_BASE}{_SH_REL}')
+
+
+def shell_joins(here: str, text: str) -> list[tuple[int, str]]:
+    """(line, reached path) for each path a shell script names from its own directory: `$(dirname "$0")` or
+    `${BASH_SOURCE[0]}`, and variables `cd`-assigned from one."""
+    if "dirname" not in text:
+        return []
+    names: dict[str, str] = {}
+    out = []
+    for n, line in enumerate(text.splitlines(), 1):
+        code = line.split(" #")[0] if not line.lstrip().startswith("#") else ""
+        assigns = list(_SH_ASSIGN.finditer(code))
+        refs = [m for m in _SH_REF.finditer(code) if not any(a.start() <= m.start() < a.end() for a in assigns)]
+        for m in sorted(assigns + refs, key=lambda m: m.start()):
+            base = names.get(m["var"]) if m["var"] else _up(here)
+            if base is None:
+                continue
+            if m.re is _SH_ASSIGN:
+                names[m["name"]] = _join(base, m["rel"])
+            elif m["rel"] or m["var"]:
+                out.append((n, _join(base, m["rel"])))
+    return out
+
+
+def reaches(here: str, text: str) -> list[tuple[int, str]]:
+    return shell_joins(here, text) if here.endswith(".sh") else joins(here, text)
+
+
 class Tree:
     """The tracked files of one revision."""
 
@@ -165,23 +205,23 @@ def destinations(prefix: str, base: Tree, moved: dict[str, str]) -> set[str]:
 
 
 def check(base_files: frozenset[str], moved: dict[str, str], read_base, read_head) -> list[str]:
-    """What each anchored join of a Python file at BASE fails to reach at HEAD. ``moved`` maps each BASE file HEAD still has
+    """What each anchored join of a Python or shell file at BASE fails to reach at HEAD. ``moved`` maps each BASE file HEAD still has
     to its HEAD path; ``read_base`` and ``read_head`` return a file's text at each."""
     base, problems = Tree(base_files), []
-    for old in sorted(f for f in base_files if f.endswith(".py") and f in moved):
+    for old in sorted(f for f in base_files if f.endswith(SOURCES) and f in moved):
         new = moved[old]
-        before = [(line, was, prefix) for line, was in joins(old, read_base(old))
+        before = [(line, was, prefix) for line, was in reaches(old, read_base(old))
                   if (prefix := base.tracked_prefix(was)) is not None]
         if not before:
             continue
-        reached = {now for _, now in joins(new, read_head(new))}
+        reached = {now for _, now in reaches(new, read_head(new))}
         for line, was, prefix in before:
             rest = was[len(prefix):].lstrip("/")
             want = {_join(d, rest) for d in destinations(prefix, base, moved)}
             if not want & reached:
                 where = " or ".join(sorted(w or "." for w in want)) if want else "nowhere (HEAD has none of its files)"
                 problems.append(f"{old}:{line} (now {new}): reached {was or '.'}, which went to {where}; no join there reaches it")
-    return problems
+    return list(dict.fromkeys(problems))
 
 
 def _git(*args: str, cwd: Path = ROOT) -> str:
@@ -219,7 +259,7 @@ def texts(rev: str, paths: list[str], cwd: Path = ROOT) -> dict[str, str]:
 
 def run(base: str, head: str, cwd: Path = ROOT) -> list[str]:
     base_files, moved = renames(base, head, cwd)
-    olds = sorted(f for f in base_files if f.endswith(".py") and f in moved)
+    olds = sorted(f for f in base_files if f.endswith(SOURCES) and f in moved)
     before, after = texts(base, olds, cwd), texts(head, [moved[f] for f in olds], cwd)
     return check(base_files, moved, before.__getitem__, after.__getitem__)
 
