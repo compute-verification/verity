@@ -84,7 +84,18 @@ def _descriptor_digest(fn) -> str:
     return codec.program_digest(codec.encode_program(Program(bind(shell))))
 
 
-@pytest.mark.parametrize("pinned", sorted((Path(__file__).parent / "fixtures" / "split").glob("*.json")), ids=lambda p: p.stem)
+SPLIT = Path(__file__).parent / "fixtures" / "split"
+#: split fixtures another test reads, in that split script's own format
+SPLIT_READERS = {"prims_serve": "test_split_prims_serve.py"}
+
+
+def test_every_split_fixture_another_test_reads_is_read():
+    for stem, reader in SPLIT_READERS.items():
+        assert (SPLIT / f"{stem}.json").exists(), stem
+        assert f"{stem}.json" in (Path(__file__).parent / reader).read_text(), (stem, reader)
+
+
+@pytest.mark.parametrize("pinned", sorted(p for p in SPLIT.glob("*.json") if p.stem not in SPLIT_READERS), ids=lambda p: p.stem)
 def test_a_split_family_keeps_its_targets_and_digests(pinned):
     """`fixtures/split/<family>.json` was written before that family's registry modules were split into Definitions, twins and
     vocabulary (`integrations/vllm/tools/migrate/split_<family>.py pin`). Every target it lists is still checked, at the same
