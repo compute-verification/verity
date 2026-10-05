@@ -601,6 +601,7 @@ def test_a_chunks_runner_sees_only_the_keepers_env_and_pythonpath_and_runs_the_l
         pid = 4242
 
     monkeypatch.setattr(remote.subprocess, "Popen", lambda argv, **kw: seen.append((argv, kw["env"])) or Proc())
+    monkeypatch.setattr(remote, "await_first_record", lambda proc, fd: remote.FIRST_RECORD)     # the fake runner never acknowledges
     assert remote._launch_request(k.ROOT / "requests" / run_of(sd.started[0][0]) / "request.json")["started"]
     (argv, env), = seen
     assert argv[:4] == ["python3", "-m", "research", "run"]

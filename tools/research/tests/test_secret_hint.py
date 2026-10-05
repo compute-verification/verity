@@ -82,6 +82,32 @@ def test_a_label_or_put_in_a_shell_that_lost_the_store_secrets_fails_with_the_hi
         load_remote(cfg)
 
 
+def test_a_label_or_put_in_a_store_that_has_used_the_remote_fails_when_the_shell_also_lost_the_injected_list(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("RESEARCH_STORE_CONFIG")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+    f = tmp_path / "a.bin"
+    f.write_bytes(b"a")
+    st = LocalStore()
+    art = st.put_artifact("fixture/v1", {"n": 1}, file=f)
+    assert main(["label", art, "note", "x", "--by", "x", "--off-vocab"]) == 0       # a store that never had a remote: local, as before
+    assert "local only (write-through off)" in capsys.readouterr().err
+    st.index.set_replica(art, "remote", "2026-10-04T00:00:00Z", "s3://bucket")
+    assert main(["label", art, "note", "y", "--by", "x", "--off-vocab"]) == 1
+    err = capsys.readouterr().err
+    assert "NOT preserved (R2_ENDPOINT and R2_BUCKET are not in this shell, but this store has used the remote" in err and HINT in err
+    assert main(["put", "--kind", "fixture/v1", "--meta", '{"n": 2}', "--file", str(f)]) == 1
+    assert HINT in capsys.readouterr().err
+    with pytest.raises(StoreError, match="this store has used the remote"):
+        LocalStore()._require_remote()
+    monkeypatch.setenv("RESEARCH_WRITE_THROUGH", "0")                                # said so on purpose
+    assert main(["label", art, "note", "z", "--by", "x", "--off-vocab"]) == 0
+    assert "local only (write-through off)" in capsys.readouterr().err
+    monkeypatch.delenv("RESEARCH_WRITE_THROUGH")
+    (tmp_path / "home" / ".research").mkdir(parents=True)
+    (tmp_path / "home" / ".research" / "store.toml").write_text("")                  # a laptop whose store.toml names no remote
+    assert main(["label", art, "note", "w", "--by", "x", "--off-vocab"]) == 0
+
+
 def test_node_ssh_in_a_shell_that_lost_the_key_fails_with_the_hint(tmp_path, monkeypatch):
     monkeypatch.setattr(runpod, "SSH_KEY", tmp_path / "absent-key")
     assert runpod.ssh_key() == runpod.SSH_KEY
