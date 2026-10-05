@@ -1,5 +1,6 @@
 import FlockSoundness.Game.Basic
 import Flock.Transcript
+import FlockSoundness.Protocol.Refine.Run
 
 /-!
 # A run of a game, and the rounds a run of the executable consumes
@@ -19,9 +20,6 @@ On the executable's side, `consumed rs k k'` is the coins of rounds `k, …, k' 
 -/
 
 namespace FlockSoundness.Game
-
-/-- A message: its type and its value. -/
-abbrev Msg := Σ M : Type, M
 
 variable {W F : Type} [Inhabited W] (ι : W → F)
 

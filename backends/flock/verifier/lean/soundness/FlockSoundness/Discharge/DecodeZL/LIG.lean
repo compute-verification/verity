@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.DecodeZL.ZL
 import FlockSoundness.Discharge.DecodeZL.Sizes
+import FlockSoundness.Protocol.Discharge.DecodeZL.LIG
 
 /-!
 # Ligerito's rounds carry its messages (R11b)
@@ -239,10 +240,6 @@ theorem carriesP_fold' (lp : LigeritoProof) {W : List (List Wire)} {P : List Boo
       (kMsg lp.messages[a]! :: (kMsgs lp (a + 1) k ++ (ms₁ ++ ms₂))) [] :=
   carriesP_fold lp k a (by simpa only [List.append_assoc, List.cons_append] using h)
 
-/-- The wires of a level's two out-of-domain rounds (the second point's coins carry nothing), its two query rounds and
-its query message. -/
-def wMid : List (List Wire) := [[.f, .kk], [], [.f, .kk], [], [], [.kk]]
-
 /-- `wMid`'s coin pattern. -/
 def pMid : List Bool := [false, false, true, true, false, false, true, true, true, false, true]
 
@@ -267,14 +264,6 @@ theorem carriesP_mid (lp : LigeritoProof) (dim o₁ o₂ x₁ x₂ x₃ c₁ c�
     (by simp [closes]) (by simp [wf_le64]) (by simp [closes]) (wf_sq _ (by norm_num))
   have := h₁.append (h₂.append (h₃.append (h₄.append (h₅.append h₆))))
   simpa [wMid, pMid, introFr, queryFr, List.append_assoc] using this
-
-/-- **The level loop's wires**, `j` levels left: the first fold coin's round carries nothing, three fold rounds their
-message, the last fold round its message and the next level's cap, then `wMid`; at the last level, the last fold round's
-message and `yr`, then the two query rounds and the batching coin's carry nothing. -/
-noncomputable def wLev (ext : ℕ) : ℕ → List (List Wire)
-  | 0 => []
-  | 1 => [[]] ++ (List.replicate 3 [.kk] ++ ([[.kk, .v (2 ^ (ext + 1))]] ++ ([[]] ++ [[]])))
-  | j + 2 => [[]] ++ (List.replicate 3 [.kk] ++ ([[.kk, .cap]] ++ (wMid ++ wLev ext (j + 1))))
 
 /-- `wLev`'s coin pattern. -/
 def pLev : ℕ → List Bool
@@ -381,11 +370,6 @@ theorem isCoin_rec (F K D : Type) (ext : ℕ) : ∀ lvs : List Accounting.Level,
       have ih := isCoin_rec F K D ext (lv' :: rest) (fun x hx => h x (List.mem_cons_of_mem _ hx))
       simp only [recShape, List.map_append, List.map_cons, isCoin_fold, h4, qbShape, oodShape, isCoin, List.map_nil, ih]
       rfl
-
-/-- **The Ligerito wires**: the start's round carries nothing, the first out-of-domain round its value, the `k0` fold
-rounds their messages, the last one also the level-1 cap, then level 0's `wMid` and the level loop's `wLev`. -/
-noncomputable def wLIG (s : Accounting.Schedule) : List (List Wire) :=
-  [[]] ++ ([[.f]] ++ (List.replicate s.k0 [.kk] ++ ([[.kk, .cap]] ++ (wMid ++ wLev s.ext (s.levels.length - 1)))))
 
 theorem lig_carries : LIGCarries wLIG := by
   intro st sch nExtra bytes p T hf h64 hp

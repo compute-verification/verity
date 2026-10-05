@@ -1,6 +1,7 @@
 import FlockSoundness.Defs
 import FlockSoundness.Game.Poly
 import FlockSoundness.Game.Union
+import FlockSoundness.Protocol.OpeningPhase
 
 /-!
 # The opening phase: ring switching and batching (PROTOCOL.md §12)
@@ -155,10 +156,6 @@ theorem prCoin_batch_le {n : ℕ} (d : Fin n → F) (k₀ : Fin n) (hd : d k₀ 
 
 
 /-! ## The honest ring-switching message -/
-
-/-- The point beyond the packed seven address bits: `x[1 … m−7]`. -/
-def Model.Claim.tail {m : ℕ} (c : Claim F m) (hm : 7 ≤ m) : Fin (m - 7) → F :=
-  fun j => c.x ⟨j.val + 1, by omega⟩
 
 theorem two_pow_eq_mul {m : ℕ} (hm : 7 ≤ m) : 2 ^ m = 2 ^ (m - 7) * 128 := by
   rw [show (128 : ℕ) = 2 ^ 7 by norm_num, ← pow_add, Nat.sub_add_cancel hm]
@@ -333,25 +330,6 @@ theorem prCoin_recombine_le (A : Arith F K) (hA : A.Correct) (s s' : Fin 128 →
 
 
 /-! ## The opening as a loop over claims, then a batch -/
-
-/-- One claim's ring switch (O3, O5): the prover's message, then seven coins. -/
-def opStep {m : ℕ} (c : Claim F m) : Game (Claim F m × (Fin 128 → F) × (Fin 7 → F)) := do
-  let s ← recv (Fin 128 → F)
-  let r'' ← draw (Fin 7 → F)
-  pure (c, s, r'')
-
-/-- The opening's verdict from the switched claims and the batching coins (O6). -/
-def opResult (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Claim F m))
-    (switched : List (Claim F m × (Fin 128 → F) × (Fin 7 → F))) (γ : Fin claims.length → F) :
-    Option (OpenOut F) :=
-  let ok := switched.all fun (c, s, _) => decide ((∑ v, packedWeight c hm v * s v) = c.value)
-  let T := ∑ k : Fin claims.length, γ k *
-    recombine A (switched.getD k.val (claims.getD k.val ⟨0, 0, 0⟩, 0, 0)).2.1
-      (switched.getD k.val (claims.getD k.val ⟨0, 0, 0⟩, 0, 0)).2.2
-  let b : ℕ → F := fun y => ∑ k : Fin claims.length, γ k *
-    let e := switched.getD k.val (claims.getD k.val ⟨0, 0, 0⟩, 0, 0)
-    phi A e.2.2 (eqAt (fun j : Fin (m - 7) => e.1.x ⟨j.val + 1, by omega⟩) y)
-  if ok then some ⟨T, b⟩ else none
 
 theorem opening_eq (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Claim F m)) :
     opening A hm claims = (claims.mapM opStep).bind fun sw =>

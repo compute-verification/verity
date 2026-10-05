@@ -1,4 +1,4 @@
-import FlockSoundness.Binding.Layout
+import FlockSoundness.Protocol.Binding.Layout
 
 /-!
 # Bytes from their bits

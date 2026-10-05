@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.ZkSession.Level0
 import FlockSoundness.OpeningPhase
 import FlockSoundness.Game.Union
+import FlockSoundness.Protocol.Discharge.ZkSession.Algebraic
 
 /-!
 # M1's masked algebraic phase (live/PROTOCOL.md §1, §2, §4)
@@ -34,9 +35,6 @@ variable {F K : Type} [Field F] [Field K]
 
 /-! ## Forms over `F` -/
 
-/-- An affine form in the pads `h : Fin np → F`, `Σ_i coef_i·h_i + const`, as a vector space. -/
-abbrev LinF (F : Type) (np : ℕ) := (Fin np → F) × F
-
 /-- The form's value at the pads `h`. -/
 def LinF.eval {np : ℕ} (h : Fin np → F) : LinF F np →ₗ[F] F where
   toFun ℓ := ∑ i, ℓ.1 i * h i + ℓ.2
@@ -47,19 +45,7 @@ def LinF.eval {np : ℕ} (h : Fin np → F) : LinF F np →ₗ[F] F where
     simp only [Prod.smul_fst, Prod.smul_snd, Pi.smul_apply, smul_eq_mul, RingHom.id_apply, mul_add,
       Finset.mul_sum, mul_assoc]
 
-/-- The row a form is. -/
-def LinF.toLin {np : ℕ} (ℓ : LinF F np) : Lin F np := ⟨ℓ.1, ℓ.2⟩
-
 theorem LinF.eval_toLin {np : ℕ} (ℓ : LinF F np) (h : Fin np → F) : ℓ.toLin.eval h = LinF.eval h ℓ := rfl
-
-/-- A constant form. -/
-def cF {np : ℕ} (x : F) : LinF F np := (0, x)
-
-/-- Pad `i`. -/
-def pF {np : ℕ} (i : Fin np) : LinF F np := (Pi.single i 1, 0)
-
-/-- A sent value `v'` unmasked by pad `i`: `v' + h_i`. -/
-def mskF {np : ℕ} (i : Fin np) (v : F) : LinF F np := cF v + pF i
 
 section Eval
 
@@ -85,10 +71,6 @@ theorem add_eq_zero_iff_c2 [CharP F 2] (x y : F) : x + y = 0 ↔ x = y := by
 
 /-! ## Rows -/
 
-/-- A phase's rows with a row in front. -/
-def consRow {np n : ℕ} (row : Lin F np) (o : (Fin n → Lin F np) × Bool) : (Fin (n + 1) → Lin F np) × Bool :=
-  (Fin.cons row o.1, o.2)
-
 /-- The event the coupling bounds: a true verdict and every row vanishing at `h`. -/
 def Vanish {np n : ℕ} (h : Fin np → F) (o : (Fin n → Lin F np) × Bool) : Prop :=
   o.2 = true ∧ ∀ k, (o.1 k).eval h = 0
@@ -108,22 +90,7 @@ theorem value_consRow {np n : ℕ} (h : Fin np → F) (row : Lin F np) (g : Game
   · rw [value_congr (q := fun _ => False) (fun o => by rw [vanish_consRow]; exact ⟨fun h' => hr h'.1, False.elim⟩),
       value_false]
 
-/-- The pads of the algebraic phase (§2): `round1_ab`, `round1_c`, residual round `j`'s `G(1), G(∞)`, `final_c`,
-lincheck round `j`'s `q(1), q(∞)` and `z_partial`. `final_a`, `final_b` and `h_ab` are the triple's `fa`, `fb`, `ab`.
-Soundness holds for any placement. -/
-structure PadsA (np : ℕ) where
-  r1ab : Fin 64 → Fin np
-  r1c : Fin 64 → Fin np
-  ml : ℕ → Fin 2 → Fin np
-  fc : Fin np
-  lc : ℕ → Fin 2 → Fin np
-  zp : Fin 64 → Fin np
-
 /-! ## Zerocheck -/
-
-/-- `residualStep` on forms. -/
-def residualStepL {np : ℕ} (req ρ : F) (claim g₁ gInf : LinF F np) : LinF F np :=
-  ((1 + req)⁻¹ * (1 + ρ)) • (claim + req • g₁) + ρ • g₁ + (ρ * (1 + ρ)) • gInf
 
 theorem eval_residualStepL {np : ℕ} (h : Fin np → F) (req ρ : F) (claim g₁ gInf : LinF F np) :
     LinF.eval h (residualStepL req ρ claim g₁ gInf) =
@@ -132,17 +99,6 @@ theorem eval_residualStepL {np : ℕ} (h : Fin np → F) (req ρ : F) (claim g�
   ring
 
 variable [Fintype F] [DecidableEq F]
-
-/-- The masked residual rounds (Z6): round `j`'s message is unmasked by its pads. -/
-def residualRoundsZK {np : ℕ} (P : PadsA np) :
-    (n : ℕ) → ℕ → (Fin n → F) → LinF F np → Game ((Fin n → F) × LinF F np)
-  | 0, _, _, claim => pure (Fin.elim0, claim)
-  | n + 1, j, req, claim => do
-      let g ← recv (F × F)
-      let ρ ← draw F
-      let (ρs, c) ← residualRoundsZK P n (j + 1) (Fin.tail req)
-        (residualStepL (req 0) ρ claim (mskF (P.ml j 0) g.1) (mskF (P.ml j 1) g.2))
-      pure (Fin.cons ρ ρs, c)
 
 omit [DecidableEq F] in
 theorem residual_couple {np : ℕ} (P : PadsA np) (h : Fin np → F) {α β : Type} (p : α → Prop) (p' : β → Prop) :
@@ -161,34 +117,9 @@ theorem residual_couple {np : ℕ} (P : PadsA np) (h : Fin np → F) {α β : Ty
       refine residual_couple P h p p' n (j + 1) _ _ _ _ _ ?_ fun ρs cl' => hf _ _
       rw [eval_residualStepL, hc, eval_mskF, eval_mskF]
 
-/-- The masked zerocheck's outputs: the coins, as in `ZcOut`, and `final_a`, `final_b`, `Pc(z)` as forms. -/
-structure ZcZK (F : Type) (np m : ℕ) where
-  z : F
-  ρ : Fin (m - 6) → F
-  r : Fin (m - 6) → F
-  va : LinF F np
-  vb : LinF F np
-  vc : LinF F np
-
 /-- The clear outputs at the pads `h`. -/
 def ZcZK.at {np m : ℕ} (h : Fin np → F) (zc : ZcZK F np m) : ZcOut F m :=
   ⟨zc.z, zc.ρ, zc.r, LinF.eval h zc.va, LinF.eval h zc.vb, LinF.eval h zc.vc⟩
-
-/-- **The masked zerocheck** (§1, §4): `Model.zerocheck` on masked messages. Its check `G_final = a·b` becomes the row
-`G_final + a'b' + a'·h_fb + b'·h_fa + h_ab` (§4's zerocheck final a·b), which it returns. -/
-def zerocheckZK (A : Arith F K) (m : ℕ) {np : ℕ} (P : PadsA np) (tr : Triple np) :
-    Game (ZcZK F np m × LinF F np) := do
-  let _rSkip ← draw (Fin 6 → F)
-  let rs ← draw (Fin (m - 13) → F)
-  let r := zcVector A rs
-  let msg ← recv ((Fin 64 → F) × (Fin 64 → F))
-  let z ← draw F
-  let pc : LinF F np := ∑ i, A.lagΛ z i • mskF (P.r1c i) (msg.2 i)
-  let claim₀ := ∑ i, A.combW z i • (mskF (P.r1ab i) (msg.1 i) + mskF (P.r1c i) (msg.2 i)) + pc
-  let (ρ, claim) ← residualRoundsZK P (m - 6) 0 r claim₀
-  let v ← recv (F × F)
-  let row := claim + (cF (v.1 * v.2) + v.1 • pF tr.fb + v.2 • pF tr.fa + pF tr.ab)
-  pure (⟨z, ρ, r, mskF tr.fa v.1, mskF tr.fb v.2, pc⟩, row)
 
 /-- **Zerocheck couples**: at pads with `h_ab = h_fa·h_fb`, the masked zerocheck followed by any masked continuation
 that puts the row in front is bounded by the clear zerocheck followed by the clear continuation at the unmasked
@@ -225,19 +156,6 @@ theorem zerocheckZK_couple [CharP F 2] (A : Arith F K) (m : ℕ) {np : ℕ} (P :
 
 /-! ## Lincheck -/
 
-/-- The masked lincheck rounds (L3): round `j`'s message is unmasked by its pads. -/
-def lincheckRoundsZK {np : ℕ} (P : PadsA np) : (n : ℕ) → ℕ → LinF F np → Game ((Fin n → F) × LinF F np)
-  | 0, _, claim => pure (Fin.elim0, claim)
-  | n + 1, j, claim => do
-      let q ← recv (F × F)
-      let t ← draw F
-      let q₁ := mskF (P.lc j 0) q.1
-      let q₂ := mskF (P.lc j 1) q.2
-      let e₀ := claim + q₁
-      let c₁ := e₀ + q₁ + q₂
-      let (ts, c) ← lincheckRoundsZK P n (j + 1) ((t ^ 2) • q₂ + t • c₁ + e₀)
-      pure (Fin.cons t ts, c)
-
 omit [DecidableEq F] in
 theorem lincheckRounds_couple {np : ℕ} (P : PadsA np) (h : Fin np → F) {α β : Type} (p : α → Prop)
     (p' : β → Prop) :
@@ -256,35 +174,8 @@ theorem lincheckRounds_couple {np : ℕ} (P : PadsA np) (h : Fin np → F) {α �
       simp only [map_add, map_smul, smul_eq_mul, eval_mskF, hc]
       ring
 
-/-- A claim whose value is a form: the masked lincheck's `ab` claim. -/
-structure ClaimZK (F : Type) (np m : ℕ) where
-  value : LinF F np
-  skip : Fin 64 → F
-  x : Fin (m - 6) → F
-
-/-- The claim's point, its value left out (the opening reads only the point). -/
-def ClaimZK.pub {np m : ℕ} (c : ClaimZK F np m) : Claim F m := ⟨0, c.skip, c.x⟩
-
 /-- The clear claim at the pads `h`. -/
 def ClaimZK.at {np m : ℕ} (h : Fin np → F) (c : ClaimZK F np m) : Claim F m := ⟨LinF.eval h c.value, c.skip, c.x⟩
-
-/-- **The masked lincheck** (§1, §4): `Model.lincheck` on masked messages, from the masked zerocheck's forms. Its check
-becomes the row `running + Σ_i comb_i·(z_partial'_i + h_zp(i))` (§4's lincheck final), which it returns with the `ab`
-claim, whose value is a form. -/
-def lincheckZK (A : Arith F K) (S : Statement) {np : ℕ} (P : PadsA np) (zc : ZcZK F np S.m) :
-    Game (ClaimZK F np S.m × LinF F np) := do
-  let α ← draw F
-  let β ← draw F
-  let n := S.kLog - 6
-  let (ts, claim) ← lincheckRoundsZK P n 0 (α • zc.va + zc.vb + cF β)
-  let zPartial ← recv (Fin 64 → F)
-  let r' ← draw F
-  let ρIn : Fin n → F := fun j => zc.ρ ⟨j.val, by have := S.hk; omega⟩
-  let folded := foldAll (List.ofFn ts) (2 ^ S.kLog) (comb A S zc.z α β ρIn)
-  let zp : Fin 64 → LinF F np := fun s => mskF (P.zp s) (zPartial s)
-  let x : Fin (S.m - 6) → F := fun i =>
-    if h : i.val < n then ts ⟨n - 1 - i.val, by omega⟩ else zc.ρ i
-  pure (⟨∑ s : Fin 64, A.lagS r' s • zp s, A.lagS r', x⟩, claim + ∑ s : Fin 64, folded s • zp s)
 
 /-- **Lincheck couples**: the masked lincheck followed by any masked continuation that puts the row in front is bounded
 by the clear lincheck on the unmasked zerocheck outputs, followed by the clear continuation at the unmasked claim. -/
@@ -315,21 +206,6 @@ theorem lincheckZK_couple [CharP F 2] (A : Arith F K) (S : Statement) {np : ℕ}
 
 /-! ## The opening -/
 
-/-- **The masked opening** (§4): `Model.opening` with the `ab` and `c` claims' values replaced by their claim checks
-`Σ_v w_v·s_hat_v[v]` on the prover's `s_hat_v`, as the live verifier calls it (their own values are masked). Returns the
-two claim checks, for the ring-switch rows. Only the two claims' points are read. -/
-def openingZK (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (a c : Claim F m) (extra : List (Claim F m)) :
-    Game (Option (OpenOut F) × F × F) := do
-  let ea ← opStep a
-  let ec ← opStep c
-  let swE ← extra.mapM opStep
-  let γ ← draw (Fin (a :: c :: extra).length → F)
-  let ca := ∑ v, packedWeight a hm v * ea.2.1 v
-  let cc := ∑ v, packedWeight c hm v * ec.2.1 v
-  let a₁ : Claim F m := ⟨ca, a.skip, a.x⟩
-  let c₁ : Claim F m := ⟨cc, c.skip, c.x⟩
-  pure (opResult A hm (a₁ :: c₁ :: extra) ((a₁, ea.2) :: (c₁, ec.2) :: swE) γ, ca, cc)
-
 omit [Fintype F] in
 /-- The opening's verdict on two claims with values `va`, `vc`: their claim checks hold, and the opening with the
 claim checks as values accepts. -/
@@ -354,21 +230,6 @@ theorem opResult_two (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (va vc : F) (a c :
       Bool.false_eq_true, ite_false]
 
 variable [Fintype K] [DecidableEq K]
-
-/-- **The rest of a masked rep**, after lincheck: the masked opening, level 0 masked (`ligeritoPadZK`), then
-`final_c'`, received before the inner proof. Returns §4's ring switch ab, zerocheck c_eval and ring switch c rows, and
-level 0's two lane-phase rows. -/
-noncomputable def restZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (S : Statement)
-    (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F) (extra : List (Claim F S.m))
-    (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) : Game ((Fin 5 → Lin F np) × Bool) := do
-  let o ← openingZK A (by omega) ab.pub ⟨0, A.lagS zc.z, zc.r⟩ extra
-  match o.1 with
-  | none => pure (fun _ => ⟨0, 0⟩, false)
-  | some op => do
-      let lv ← ligeritoPadZK A P₀ sch t c₀ r op.T op.b C₀
-      let fc ← recv F
-      pure (![(ab.value + cF o.2.1).toLin, (zc.vc + mskF PA.fc fc).toLin, (mskF PA.fc fc + cF o.2.2).toLin,
-        limbRows A lv.1 0, limbRows A lv.1 1], lv.2)
 
 /-- **The rest couples**: at every pad vector `h`, the rest of the masked rep ends with a true verdict and its rows
 vanishing at `h` with probability at most the clear opening's on the unmasked claims, followed by the clear level 0. -/
@@ -422,21 +283,6 @@ theorem restZK_couple (A : Arith F K) (hA : A.Correct) {np e : ℕ} (P₀ : Pads
     exact hc ⟨r0.symm, r2 ▸ r1.symm⟩
 
 /-! ## The masked rep -/
-
-/-- A masked rep after zerocheck: the masked lincheck, its row in front of the rest's. -/
-noncomputable def afterZcZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (S : Statement)
-    (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F) (extra : List (Claim F S.m))
-    (zc : ZcZK F np S.m) : Game ((Fin 6 → Lin F np) × Bool) :=
-  (lincheckZK A S PA zc).bind fun o => (restZK A P₀ PA S sch hm t c₀ r C₀ extra zc o.1).map (consRow o.2.toLin)
-
-/-- **A masked rep** (M1's algebraic phase, then level 0 masked): the masked zerocheck, lincheck and opening, level 0
-(`ligeritoPadZK`) and `final_c'`. Returns its verdict and its seven rows, in order zerocheck final a·b, lincheck final,
-ring switch ab, zerocheck c_eval, ring switch c, and level 0's two lane-phase rows. -/
-noncomputable def repMaskedZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (tr : Triple np)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F)
-    (extra : List (Claim F S.m)) : Game ((Fin 7 → Lin F np) × Bool) :=
-  (zerocheckZK A S.m PA tr).bind fun o =>
-    (afterZcZK A P₀ PA S sch hm t c₀ r C₀ extra o.1).map (consRow o.2.toLin)
 
 /-- **The masked rep couples** (VEIL Lemma 4.3): at every pad vector `h` whose product pad is the product, the masked
 rep ends with a true verdict and its seven rows vanishing at `h` with probability at most the clear rep's

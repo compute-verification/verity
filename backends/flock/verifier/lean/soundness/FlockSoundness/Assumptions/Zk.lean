@@ -1,7 +1,6 @@
-import FlockSoundness.Discharge.Composed.Coined
-import FlockSoundness.ZK.Complete
-import FlockSoundness.Discharge.ZkLink.DrawOk
-import FlockSoundness.Discharge.Composed.DefsJ
+import FlockSoundness.Protocol.Discharge.Composed.Coined
+import Mathlib.GroupTheory.Index
+import FlockSoundness.Protocol.Discharge.Composed.DefsJ
 
 /-!
 # The `--zk` session's assumptions

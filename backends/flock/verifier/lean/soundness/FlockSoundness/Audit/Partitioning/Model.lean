@@ -1,6 +1,6 @@
-import FlockSoundness.Audit.Harm
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Analysis.SpecialFunctions.Log.Base
+import FlockSoundness.Protocol.Audit.Harm
 
 /-!
 # Optimal partitioning: the model

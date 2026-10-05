@@ -2,6 +2,7 @@ import FlockSoundness.LincheckPhase
 import FlockSoundness.OpeningPhase
 import FlockSoundness.ListSize
 import Mathlib.Data.Nat.BitIndices
+import FlockSoundness.Protocol.LinkSound
 
 /-!
 # The link points (PROTOCOL.md §16.2)
@@ -24,11 +25,6 @@ open Game Model Accounting
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
-
-/-- The layout of the link points (§16.2): each region's free bits are distinct and read link
-coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` fit inside the point. -/
-def Model.Statement.LinkLayout (S : Statement) (ptLocal mPts : ℕ) : Prop :=
-  (∀ R ∈ S.regions, R.free.Nodup ∧ R.free.length ≤ ptLocal) ∧ ptLocal + S.nbl ≤ mPts
 
 /-! ## The bits of a region address -/
 

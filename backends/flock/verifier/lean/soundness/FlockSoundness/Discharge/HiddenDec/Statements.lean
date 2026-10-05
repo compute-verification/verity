@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.DecodeZL.OP
 import FlockSoundness.Discharge.DecodeZL.LIG
 import FlockSoundness.Discharge.HiddenExec.Tables
+import FlockSoundness.Protocol.Discharge.HiddenDec.Statements
 
 /-!
 # The decoder at the hidden-output headline's draws: statements
@@ -31,23 +32,6 @@ def TagsOkH (I : Inputs) : Prop :=
   I.tags.hiddenOutputs = true ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "hm96-sha512/v1" ∧ I.count ≤ 1
 
 variable {n mPts : ℕ} {Reg : Type}
-
-/-- **The coin server's draw at `S`, under hidden outputs**: it proves `S`, and setupHidden sets up at it with `mPts`
-link points. -/
-def DrawOkH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
-  (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧
-    ∀ st, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program =
-      .ok st → st.mPts = mPts
-
-/-- **The openings at draw `S`, under hidden outputs**: `opnOf` at the statement setupHidden sets up at the record's
-draw `dj S` and its `fast100` schedule, on the first two proof files. -/
-noncomputable def opnAtH (T : Finset (Fin n) → Reg → TabSpec mPts) (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
-    (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray) : Opens 𝔽 Dig × Salts (List UInt8) :=
-  match Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program with
-  | .ok st => match Flock.fast100 st.m with
-    | some sch => opnOf (Setup.ofCircuit st) sch (nX T S R) #[proofs[0]!, proofs[1]!]
-    | none => default
-  | .error _ => default
 
 /-- **The decoder is right at the hidden-output headline's draws** (R11b): given the tags, `wr` the coin server's
 record and the coin server's draws proving their units at `mPts` link points under setupHidden, `DecodesOn` holds at the

@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.Exec.Setup
+import FlockSoundness.Protocol.Discharge.Exec.Setup
 
 /-!
 # Table `j`'s tags: the identity alone differs, which the circuit and public parses do not read

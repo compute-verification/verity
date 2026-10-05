@@ -1,5 +1,6 @@
 import FlockSoundness.ZK.Table
 import Mathlib.Tactic.FieldSimp
+import FlockSoundness.Protocol.ZK.SHVZK
 
 /-!
 # Zero knowledge of one masked table: Lemmas A and B, and `table_shvzk`
@@ -115,25 +116,6 @@ noncomputable def psi (c : T.Core) : T.View :=
     leavesP := fun r => (fun k => T.leafP (ch r k, cm r k) (s.2.2.2.1 r k), fun k => T.ideal (s.2.2.2.2.2.1 r k)) }
 
 /-! ## The masks -/
-
-/-- Rows (ii) and (iii)'s mask: the paddings at the opened positions, `W^r` of the extra lanes, and `ȳ^r`. -/
-def mask1 : ((Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad) →+
-    ((Fin T.nS → Fin T.nL → F) × (Fin 2 → Fin T.L → K) × (Fin 2 → Fin T.tpad → K)) where
-  toFun b := (fun q l => ∑ j, b.1 l j * T.Gp q j, fun r c => T.Wr r (b.2.1 r 0 c) (b.2.1 r 1 c),
-    fun r j => ∑ l, T.rbar r l * T.embed (b.1 l j) + T.Wr r (b.2.2 r 0 j) (b.2.2 r 1 j))
-  map_zero' := by
-    simp only [Prod.fst_zero, Prod.snd_zero, Pi.zero_apply, zero_mul, Finset.sum_const_zero, map_zero, mul_zero,
-      Wr, add_zero]
-    rfl
-  map_add' b b' := by
-    refine Prod.ext ?_ (Prod.ext ?_ ?_)
-    · funext q l
-      simp only [Prod.fst_add, Pi.add_apply, add_mul, Finset.sum_add_distrib]
-    · funext r c
-      simp only [Prod.fst_add, Prod.snd_add, Pi.add_apply, Wr_add]
-    · funext r j
-      simp only [Prod.fst_add, Prod.snd_add, Pi.add_apply, Wr_add, map_add, mul_add, Finset.sum_add_distrib]
-      ring
 
 /-- Rows (vi) and (vii)'s mask: each exposed pad, and `ρ_in`, `σ_in` through `h_tx`, `h_ty`. -/
 def mask2 : (Fin 2 → (Fin T.nE → F) × F × F) →+ (Fin 2 → (Fin T.nE → F) × F × F) where
@@ -404,13 +386,10 @@ variable [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] 
   [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
 
 instance : DecidableEq T.Seeds := inferInstance
-instance : Fintype T.Seeds := inferInstance
 instance : DecidableEq T.Core := inferInstance
 instance : Fintype T.Core := inferInstance
 instance : DecidableEq T.Rand := inferInstance
-instance : Fintype T.Rand := inferInstance
 instance : DecidableEq T.SimRand := inferInstance
-instance : Fintype T.SimRand := inferInstance
 
 omit [Fintype K] in
 /-- **Lemma B's rows (i)–(iii) and (vi)–(x)**: the prover's view takes every value of its components equally often. -/

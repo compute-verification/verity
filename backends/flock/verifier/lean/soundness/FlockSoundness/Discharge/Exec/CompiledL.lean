@@ -1,4 +1,5 @@
 import FlockSoundness.CompiledSound
+import FlockSoundness.Protocol.Discharge.Exec.CompiledL
 
 /-!
 # Compiled soundness of one table under a leaf scheme (README.md §1.2, PROTOCOL.md §14)
@@ -65,16 +66,6 @@ theorem tableCL_send (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (Lis
     tableCL A H E Lf S sch hm ptLocal mPts = Game.send (Cap D) (tableCmpL A H E Lf S sch hm ptLocal mPts) :=
   rfl
 
-/-- **The salted table's leaf relation** below the level-0 cap. -/
-def TopRelL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (sch : Schedule)
-    (C₀ : Oracle F) (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F) (out : OutCL F D Sl) : Prop :=
-  a.2 = C₀ ∧ out.cap₀ = cap₀ ∧
-    (out.accepted = true → AgreeRep 0 C₀ i.1 out.pend.1.reqs out.opens →
-      AgreeRep 1 C₀ i.2 out.pend.2.reqs out.opens → a.1 = true) ∧
-    (out.accepted = true →
-      OpensOKL H E Lf cap₀ 0 out.pend.1 out.opens out.salts ∧ OpensOKL H E Lf cap₀ 1 out.pend.2 out.opens out.salts) ∧
-    RecStruct sch i.1 out.pend.1 ∧ RecStruct sch i.2 out.pend.2
-
 /-- **The salted table in lockstep** below the level-0 cap: the link points, both reps interleaved, the openings and
 their salts. -/
 noncomputable def lockTableL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
@@ -102,14 +93,6 @@ noncomputable def lockTableL [Inhabited D] (A : Arith F K) (H : List UInt8 → D
 
 /-! ## Salted openings -/
 
-/-- The salted openings of rep `r`'s first level-`ℓ` request, `(position, row, salt, path)` for its first `Q`
-queries. -/
-def slotOpensL (out : OutCL F D Sl) (r ℓ Q : ℕ) : List (ℕ × List F × Sl × List D) :=
-  match ((if r = 0 then out.pend.1 else out.pend.2).reqs.find? fun req => req.level == ℓ) with
-  | none => []
-  | some req => ((req.positions.take Q).zipIdx).map fun pj =>
-      (pj.1, (out.opens r ℓ pj.2).1, out.salts r ℓ pj.2, (out.opens r ℓ pj.2).2)
-
 omit [Field F] [Fintype F] [DecidableEq F] in
 theorem slotOpensL_length (out : OutCL F D Sl) (r ℓ Q : ℕ) : (slotOpensL out r ℓ Q).length ≤ Q := by
   unfold slotOpensL
@@ -117,26 +100,6 @@ theorem slotOpensL_length (out : OutCL F D Sl) (r ℓ Q : ℕ) : (slotOpensL out
   · simp
   · simp only [List.length_map, List.length_zipIdx, List.length_take]
     exact min_le_left _ _
-
-/-- A salted opening verifies against `cap`: a row of `2^lanes` elements whose path verifies from its leaf under its
-salt. -/
-def VerifiedL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cap : Cap D)
-    (lanes depth : ℕ) (x : ℕ × List F × Sl × List D) : Prop :=
-  x.2.1.length = 2 ^ lanes ∧ Merkle.VerifiesL H E Lf cap depth x.1 x.2.1 x.2.2.1 x.2.2.2
-
-open Classical in
-/-- The row a run opens at `p`: its first verifying opening there. -/
-noncomputable def opOfL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (lanes depth d : ℕ) (xs : List (ℕ × List F × Sl × List D)) (cap : Cap D) (p : Fin (2 ^ d)) :
-    Option (Fin (2 ^ lanes) → F) :=
-  ((xs.filter fun x => decide (x.1 = p.val ∧ VerifiedL H E Lf cap lanes depth x)).head?).map
-    fun x => rowFin lanes x.2.1
-
-/-- Two verifying openings of one position to different rows, under any salts. -/
-def ClashL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cap : Cap D)
-    (lanes depth : ℕ) (xs : List (ℕ × List F × Sl × List D)) : Prop :=
-  ∃ x ∈ xs, ∃ y ∈ xs, x.1 = y.1 ∧ VerifiedL H E Lf cap lanes depth x ∧
-    VerifiedL H E Lf cap lanes depth y ∧ x.2.1 ≠ y.2.1
 
 omit [Fintype F] [DecidableEq F] in
 open Classical in
@@ -188,33 +151,6 @@ theorem off_or_clashL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : M
     exact ⟨h, hmem.1, x, hx, hmem.2.1.trans hxp.symm, hmem.2.2, hv, hrow⟩
 
 /-! ## Per-cap openings -/
-
-/-- Both reps' level-0 salted openings. -/
-def opens₀L (sch : Schedule) (out : OutCL F D Sl) : List (ℕ × List F × Sl × List D) :=
-  slotOpensL out 0 0 (lvOf sch 0).queries ++ slotOpensL out 1 0 (lvOf sch 0).queries
-
-/-- The level-0 cap's openings, by position. -/
-noncomputable def op₀L (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (sch : Schedule) (cap : Cap D) (out : OutCL F D Sl) :
-    Fin (2 ^ (lvOf sch 0).logLen) → Option (Fin (2 ^ (lvOf sch 0).lanes) → F) :=
-  opOfL H E Lf (lvOf sch 0).lanes (pathLen (lvOf sch 0)) (lvOf sch 0).logLen (opens₀L sch out) cap
-
-/-- Rep `r`'s level-`ℓ` cap's openings, by position. -/
-noncomputable def opRL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (sch : Schedule) (r ℓ : ℕ) (cap : Cap D) (out : OutCL F D Sl) :
-    Fin (2 ^ (lvOf sch ℓ).logLen) → Option (Fin (2 ^ (lvOf sch ℓ).lanes) → F) :=
-  opOfL H E Lf (lvOf sch ℓ).lanes (pathLen (lvOf sch ℓ)) (lvOf sch ℓ).logLen
-    (slotOpensL out r ℓ (lvOf sch ℓ).queries) cap
-
-/-- **A self-clash**: within one run, two verifying openings of a position to different rows, at the level-0 cap or
-at a rep's recorded cap. -/
-def SelfClashL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (sch : Schedule) (out : OutCL F D Sl) : Prop :=
-  ClashL H E Lf out.cap₀ (lvOf sch 0).lanes (pathLen (lvOf sch 0)) (opens₀L sch out) ∨
-    ∃ r < 2, ∃ ℓ, 1 ≤ ℓ ∧ ∃ cap,
-      (if r = 0 then out.pend.1 else out.pend.2).caps[ℓ - 1]? = some cap ∧
-        ClashL H E Lf cap (lvOf sch ℓ).lanes (pathLen (lvOf sch ℓ))
-          (slotOpensL out r ℓ (lvOf sch ℓ).queries)
 
 /-! ## Where a bad run goes wrong -/
 

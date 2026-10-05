@@ -9,16 +9,13 @@ computed rows hold, and the constant column is 1 (its row is `pin · pin`, or th
 -/
 import FlockSoundness.Discharge.Hm.Nets
 import FlockSoundness.ExecTemplatePlace
+import FlockSoundness.Protocol.Discharge.Hm.Place
 
 open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Hm
 
 open Compose Flock.DeriveAll Types.Dag
-
-/-- The block's bit at column `y` of block `o` (0 past the block). -/
-def blockBit (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2 ^ S.nbl)) (y : ℕ) : Bool :=
-  FlockSoundness.bit (if h : y < 2 ^ S.kLog then S.block z o ⟨y, h⟩ else 0)
 
 theorem sum_count_nat {k : ℕ} (L : List ℕ) (hL : ∀ y ∈ L, y < k) (v : Fin k → ZMod 2) :
     ∑ j : Fin k, ((L.count j.val : ℕ) : ZMod 2) * v j = (L.map fun y => if h : y < k then v ⟨y, h⟩ else 0).sum := by
@@ -45,30 +42,6 @@ theorem bit_sum_row (f : ℕ → ZMod 2) (b : ℕ) (r : Array ℕ) :
   induction r.toList with
   | nil => rfl
   | cons y l ih => simp only [List.map_cons, List.sum_cons, bit_add, ih, List.foldr_cons]
-
-/-- A row of `Sparse.ofRows`'s rows, its columns below the width. -/
-theorem ofRows_cols_lt {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sparse.ofRows rows width = .ok m)
-    (i : ℕ) : ∀ y ∈ (rows.getD i #[]).toList, y < width := by
-  intro y hy
-  by_cases hi : i < rows.size
-  · have hri : rows.getD i #[] = rows[i] := by simp [Array.getD_eq_getD_getElem?, hi]
-    rw [hri] at hy
-    exact (ofRows_spec h).2.2.2 _ (Array.getElem_mem_toList hi) y hy
-  · have hri : rows.getD i #[] = #[] := by simp [Array.getD_eq_getD_getElem?, hi]
-    rw [hri] at hy
-    cases hy
-
-theorem shaNet_inRows {c : Circuit} (h : Flock.HmNets.check c = .ok ()) :
-    (c.nets.getD c.shaNet default).2.inWords * Flock.WORD = 8192 := by
-  obtain ⟨-, -, -, -, -, hi, -, -, -, -, -, -, -, hw, -⟩ := Net.ofRows_ok (shaNet_ofRows h)
-  rw [hw, ← hi, (shaNet_groups h).1]
-  decide
-
-theorem hmNet_inRows {c : Circuit} (h : Flock.HmNets.check c = .ok ()) :
-    (c.nets.getD c.hmNet default).2.inWords * Flock.WORD = 4096 := by
-  obtain ⟨-, -, -, -, -, hi, -, -, -, -, -, -, -, hw, -⟩ := Net.ofRows_ok (hmNet_ofRows h)
-  rw [hw, ← hi, (hmNet_groups h).1]
-  decide
 
 section Slots
 

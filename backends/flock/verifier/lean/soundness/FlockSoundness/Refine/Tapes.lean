@@ -1,6 +1,7 @@
 import FlockSoundness.Refine.Run
 import FlockSoundness.Instance
 import Flock.Verify
+import FlockSoundness.Protocol.Refine.Tapes
 
 /-!
 # The model's messages, read off a decoded proof
@@ -18,15 +19,6 @@ open Flock Game
 
 /-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
-
-/-- A word of the proof as a model field element. -/
-abbrev fOf (a : F128) : 𝔽 := FlockLevel3.GF128.of a
-
-/-- An array of words as a model vector of length `n`. -/
-def vecOf (n : ℕ) (a : Array F128) : Fin n → 𝔽 := fun i => fOf a[i.val]!
-
-/-- A pair of words as a pair of model field elements. -/
-def pairOf (p : F128 × F128) : 𝔽 × 𝔽 := (fOf p.1, fOf p.2)
 
 /-- **The zerocheck's messages** (PROTOCOL.md §9.2), in the model's order: `(round1_ab, round1_c)` (Z4), the `m − 6`
 residual rounds' `(G(1), G(∞))` (Z6), then `(final_a_eval, final_b_eval)` (Z7). -/

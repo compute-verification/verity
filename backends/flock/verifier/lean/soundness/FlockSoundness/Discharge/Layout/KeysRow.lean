@@ -1,5 +1,5 @@
 import FlockSoundness.Discharge.Layout.OutShape
-import FlockSoundness.Discharge.Layout.KeyProg
+import FlockSoundness.Protocol.Discharge.Layout.KeyProg
 
 set_option Elab.async false
 

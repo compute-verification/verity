@@ -1,6 +1,6 @@
-import FlockSoundness.Discharge.Hidden.Defs
-import FlockSoundness.Discharge.Exec.Setup
-import FlockSoundness.Discharge.Exec.Merkle
+import FlockSoundness.Protocol.Discharge.Hidden.Defs
+import FlockSoundness.Protocol.Discharge.Exec.Setup
+import FlockSoundness.Protocol.Discharge.Exec.SessionL
 
 /-!
 # What `Stmt.setupHidden` checked and produced (`Spec`)

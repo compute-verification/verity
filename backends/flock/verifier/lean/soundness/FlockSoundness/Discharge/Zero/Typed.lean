@@ -3,6 +3,10 @@ import FlockSoundness.Discharge.Zero.Flat
 import FlockSoundness.Discharge.Zero.Uniform
 import FlockSoundness.Discharge.Placed.Typed
 import FlockSoundness.Types.ProgramE2E
+import FlockSoundness.Discharge.Aliased.Keys
+import FlockSoundness.Discharge.Const.Inst
+import FlockSoundness.Discharge.Placed.Wiring
+import FlockSoundness.Discharge.Zero.Stack
 
 /-!
 # `hZero` on the typed path (e2e, typed flat classes)

@@ -3,6 +3,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Basic.ENNReal.BigOperators
 import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Order.CompleteLattice.Basic
+import FlockSoundness.Protocol.Game.Basic
 
 /-!
 # Public-coin interactions with live coins
@@ -30,31 +31,9 @@ namespace FlockSoundness
 
 open scoped ENNReal
 
-/-- The verifier's side of a public-coin interaction with live coins. -/
-inductive Game (α : Type) : Type 1 where
-  | ret : α → Game α
-  | send (M : Type) : (M → Game α) → Game α
-  | coin (C : Type) [Fintype C] [Nonempty C] : (C → Game α) → Game α
-
 namespace Game
 
 variable {α β γ : Type}
-
-/-- Sequencing: run `g`, then continue with `f` applied to its output. -/
-def bind : Game α → (α → Game β) → Game β
-  | .ret a, f => f a
-  | .send M k, f => .send M fun m => bind (k m) f
-  | @Game.coin _ C iF iN k, f => @Game.coin _ C iF iN fun c => bind (k c) f
-
-instance : Monad Game where
-  pure := .ret
-  bind := bind
-
-/-- The prover sends a message of type `M`. -/
-def recv (M : Type) : Game M := .send M .ret
-
-/-- The verifier draws a uniform coin from `C`. -/
-def draw (C : Type) [Fintype C] [Nonempty C] : Game C := .coin C .ret
 
 @[simp] theorem bind_ret (a : α) (f : α → Game β) : (Game.ret a).bind f = f a := rfl
 
@@ -68,39 +47,13 @@ def draw (C : Type) [Fintype C] [Nonempty C] : Game C := .coin C .ret
 
 @[simp] theorem bind_eq (g : Game α) (f : α → Game β) : g >>= f = g.bind f := rfl
 
-theorem bind_assoc (g : Game α) (f : α → Game β) (h : β → Game γ) :
-    (g.bind f).bind h = g.bind fun a => (f a).bind h := by
-  induction g with
-  | ret a => rfl
-  | send M k ih => simp only [bind_send, ih]
-  | coin C k ih => simp only [bind_coin, ih]
-
 theorem bind_ret_right (g : Game α) : g.bind .ret = g := by
   induction g with
   | ret a => rfl
   | send M k ih => simp only [bind_send, ih]
   | coin C k ih => simp only [bind_coin, ih]
 
-/-- Relabel the output. -/
-def map (f : α → β) (g : Game α) : Game β := g.bind fun a => .ret (f a)
-
 /-! ## Strategies and probabilities -/
-
-/-- A deterministic prover strategy: a message at every `send` node, for every history (the
-history is encoded by the position in the tree, so a strategy is simply a choice at each node,
-and after a coin it may depend on that coin). -/
-def Strategy : Game α → Type
-  | .ret _ => PUnit
-  | .send _ k => (m : _) × Strategy (k m)
-  | @Game.coin _ C _ _ k => (c : C) → Strategy (k c)
-
-open Classical in
-/-- The exact probability, over the verifier's independent uniform coins, that the interaction
-between the verifier `g` and the prover strategy `s` ends with an output satisfying `p`. -/
-noncomputable def prob (p : α → Prop) : (g : Game α) → Strategy g → ℝ≥0∞
-  | .ret a, _ => if p a then 1 else 0
-  | .send _ k, s => prob p (k s.1) s.2
-  | @Game.coin _ C iF _ k, s => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * prob p (k c) (s c)
 
 open Classical in
 /-- The same probability for an optimal, computationally unbounded prover. -/
@@ -151,10 +104,6 @@ theorem value_mono {p q : α → Prop} (h : ∀ a, p a → q a) : ∀ g : Game �
   | .send _ k => iSup_mono fun m => value_mono h (k m)
   | @Game.coin _ C _ _ k => Finset.sum_le_sum fun c _ => mul_le_mul_right (value_mono h (k c)) _
 
-/-- The uniform average over a finite type. -/
-noncomputable def avg {C : Type} [Fintype C] (f : C → ℝ≥0∞) : ℝ≥0∞ :=
-  ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * f c
-
 theorem avg_const {C : Type} [Fintype C] [Nonempty C] (x : ℝ≥0∞) : avg (fun _ : C => x) = x := by
   simp only [avg, Finset.sum_const, Finset.card_univ, nsmul_eq_mul, ← mul_assoc]
   rw [ENNReal.mul_inv_cancel (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _),
@@ -171,11 +120,6 @@ theorem avg_add {C : Type} [Fintype C] (f g : C → ℝ≥0∞) :
 theorem avg_mul_const {C : Type} [Fintype C] (f : C → ℝ≥0∞) (x : ℝ≥0∞) :
     avg (fun c => f c * x) = avg f * x := by
   simp only [avg, ← mul_assoc, Finset.sum_mul]
-
-open Classical in
-/-- The probability that a uniform coin satisfies `p`, as an average of indicators. -/
-noncomputable def prCoin {C : Type} [Fintype C] (p : C → Prop) : ℝ≥0∞ :=
-  avg fun c => if p c then 1 else 0
 
 theorem prCoin_eq_card {C : Type} [Fintype C] (p : C → Prop) [DecidablePred p] :
     prCoin p = ((Finset.univ.filter p).card : ℝ≥0∞) / Fintype.card C := by

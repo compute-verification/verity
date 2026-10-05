@@ -1,6 +1,7 @@
 import FlockSoundness.ZK.GK.Sim
 import FlockSoundness.ZK.Masking
 import FlockSoundness.Assumptions
+import FlockSoundness.Randomness
 
 /-!
 # Zero knowledge: Theorem GK, the simulator's output is close to `V*`'s real view

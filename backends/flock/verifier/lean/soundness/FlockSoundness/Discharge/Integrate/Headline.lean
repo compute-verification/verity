@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.Integrate.Accepted
 import FlockSoundness.Discharge.Hm.Site
 import FlockSoundness.Discharge.Layout.Scope
+import FlockSoundness.Protocol.Discharge.Integrate.Headline
 
 /-!
 # The headline at the executable, with every open guarantee named
@@ -38,24 +39,6 @@ variable {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ} {I : Inputs} (ht : I.
   (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
   (hscope : Layout.scopeOk c = true) {Reg : Type}
 
-/-- **`lay` at the session's tables**: e2e-layout's `keyedLayout` at `sitesAt`, the program's outputs the returned
-outputs' bits, the rows' salts at the `hm96` slots' salt columns, the registration's bits the population's returned
-outputs. -/
-noncomputable abbrev layAt :
-    Binding.Layout ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (planAt (Reg := Reg) ht dj x₀)
-      (tabAt ht dj x₀)
-      (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).placeDecoder (planAt ht dj x₀) (tabAt ht dj x₀)
-        (Layout.keyPlace (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))) :=
-  Layout.keyedLayout (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n) Hm.saltCol fun _ => pub
-
-/-- **`rs` at the session's tables**: e2e-layout's `keyedRowsOuts` at `sitesAt`, its circuit conditions from
-`scopeOk` (`Layout.scopeOk_spec`), with `hsite` from `sitesAt_bcSite` at a public file without shared-row tables
-(`hpt`). -/
-noncomputable abbrev rsAt : Binding.HmRows (layAt hU ht hc dj x₀ (pub := pub) (Reg := Reg)) :=
-  Layout.keyedRowsOuts (sitesAt_parse ht dj x₀ hc) Hm.saltCol hc (Layout.scopeOk_spec hU hscope).1
-    (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
-    (sitesAt_bcSite ht dj x₀ hc (Layout.scopeOk_spec hU hscope).2.1 hpub hpt)
-
 /-- **`hHm` at the session's rows**: e2e-hm's `keyedRowsOuts_computes`. In a satisfying witness of a drawn unit's
 table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under the salt at its
 `hm96` slot. -/
@@ -63,9 +46,6 @@ theorem rsAt_computes : (rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).Com
   Hm.keyedRowsOuts_computes (sitesAt_parse ht dj x₀ hc) hc (Layout.scopeOk_spec hU hscope).1
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope)
     (sitesAt_bcSite ht dj x₀ hc (Layout.scopeOk_spec hU hscope).2.1 hpub hpt)
-
-/-- The one-table plan's tables, as `Prog.flock_headline_live_on` takes them. -/
-noncomputable abbrev tablesAt : Finset (Fin n) → Reg → TabSpec mPts := fun S _ => (tableAt ht dj x₀ S).T
 
 /-- **The headline at the executable.** Let `I` be a verify command's inputs (one table) whose one circuit file parses
 to an untyped circuit `c` (`hc`, `ht`) and whose public file loads to `pub` with no shared-row tables (`hpt`, as

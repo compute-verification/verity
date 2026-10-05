@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Exec.Merkle
 import FlockSoundness.Discharge.Exec.Setup
+import FlockSoundness.Protocol.Discharge.Exec.Pts
 
 /-!
 # The link points' count of a `setupH` statement
@@ -18,9 +19,6 @@ namespace FlockSoundness.Discharge.Exec
 
 open Flock Refine
 open Lean (Json)
-
-/-- `m_pts` for `n` proved units of a circuit with `g` units per block: `PT_LOCAL + nbl`, `nbl` as `setupH` computes it. -/
-def mPtsOf (g n : ℕ) : ℕ := PT_LOCAL + max 3 (log2ceil (max ((n + g - 1) / g) 1))
 
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}

@@ -1,5 +1,6 @@
 import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.LinkFinder
+import FlockSoundness.Protocol.Audit.FlockLink
 
 /-!
 # The link theorem: `δ_link` under expected-time collision resistance (DESIGN.md §3)
@@ -54,51 +55,6 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [In
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- **The binding of wires to registered commit strings** (named hypothesis): the statement's
-Halevi–Micali checks, for each drawn unit's table. Each wire is held by a commit string (`pos`). A
-message that satisfies a drawn unit's table opens the commit string of each of the unit's wires:
-the opening's commitment is the string registered at `R` (`cs`), and its value's bit on the wire is
-the decoded one. Two openings of one string with different values give a collision of `Hc`
-(`collide`), as Halevi–Micali binding reduces to SHA-512 collision resistance. -/
-structure ValueBinding (decode : DecoderB (C := C) (Reg := Reg) plan tab) {Dh : Type}
-    (Hc : List UInt8 → Dh) where
-  /-- The commit strings: the leaves under the serving roots. -/
-  Pos : Type
-  [finPos : Fintype Pos]
-  [decPos : DecidableEq Pos]
-  /-- The value behind a commit string. -/
-  Val : Type
-  [finVal : Fintype Val]
-  [decVal : DecidableEq Val]
-  [inhVal : Inhabited Val]
-  /-- The commit string that holds each wire. -/
-  pos : Fin C.N → Pos
-  /-- A value's bit on each wire its string holds. -/
-  bit : Val → Fin C.N → Bool
-  /-- An opening of a commit string, and its commitment. -/
-  Opening : Type
-  [inhOp : Inhabited Opening]
-  Com : Type
-  val : Opening → Val
-  com : Opening → Com
-  /-- The commit string registered at each position. -/
-  cs : Reg → Pos → Com
-  /-- The opening a drawn unit's table's message gives at a commit string. -/
-  opening : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) →
-    Message 𝔽 (tabOf plan tab S R u).sch.k0 (tabOf plan tab S R u).sch.level₀.logCols → Pos → Opening
-  opening_spec : ∀ S R u, u ∈ S → ∀ M, (tabOf plan tab S R u).S.Satisfies
-      (witnessOf execArith (tabOf plan tab S R u).S.m (tabOf plan tab S R u).sch.k0
-        (tabOf plan tab S R u).sch.level₀.logCols M) →
-      ∀ g ∈ P.io u, com (opening S R u M (pos g)) = cs R (pos g) ∧
-        bit (val (opening S R u M (pos g))) g = decode S R u M g
-  /-- Two openings of one string with different values give a collision. -/
-  collide : Opening → Opening → List UInt8 × List UInt8
-  collide_spec : ∀ o o', com o = com o' → val o ≠ val o' →
-    (collide o o').1 ≠ (collide o o').2 ∧ Hc (collide o o').1 = Hc (collide o o').2
-
-attribute [instance] ValueBinding.finPos ValueBinding.decPos ValueBinding.finVal
-  ValueBinding.decVal ValueBinding.inhVal ValueBinding.inhOp
-
 variable {L : Law n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : P.ValueBinding plan tab decode Hc)
   (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R)
@@ -128,12 +84,6 @@ noncomputable def cand (ω : L.Ω) (u : Fin n) (bs : List (List (OutC 𝔽 D))) 
   if h : Committed execArith (tabOf plan tab (L.draw ω) R u).S (tabOf plan tab (L.draw ω) R u).sch
       (tabExt H E plan tab R τ ω u bs) then some (Classical.choose h) else none
 
-/-- Drawn unit `u` reads commit string `c`. -/
-def Reads (u : Fin n) (c : vb.Pos) : Prop := ∃ g ∈ P.io u, vb.pos g = c
-
-/-- A draw reads commit string `c`. -/
-def ReadsDraw (c : vb.Pos) (ω : L.Ω) : Prop := ∃ u ∈ L.draw ω, P.Reads plan tab vb u c
-
 /-- An extraction opens `c` to value `v`, with the opening `o`: a drawn unit that reads `c` opens it
 so from the message its table settles on. -/
 def OpensAt (ω : L.Ω) (bs : List (List (OutC 𝔽 D))) (c : vb.Pos) (v : vb.Val) (o : vb.Opening) :
@@ -145,13 +95,6 @@ open Classical in
 /-- **The readings of commit string `c`** after an extraction from the reruns `bs`. -/
 noncomputable def readsAt (ω : L.Ω) (bs : List (List (OutC 𝔽 D))) (c : vb.Pos) : Finset vb.Val :=
   Finset.univ.filter fun v => ∃ o, P.OpensAt H E plan tab vb R τ ω bs c v o
-
-/-- The draws that read `c`. -/
-abbrev Ωc (L : Law n) (c : vb.Pos) : Type := {ω : L.Ω // P.ReadsDraw plan tab vb c ω}
-
-open Classical in
-noncomputable instance (L : Law n) (c : vb.Pos) : Fintype (P.Ωc plan tab vb L c) :=
-  Subtype.fintype _
 
 /-- A trial's outcome: the draw, the fresh run, and the waits' runs. -/
 abbrev TrialOut (L : Law n) (D : Type) := L.Ω × List (OutC 𝔽 D) × List (List (List (OutC 𝔽 D)))

@@ -1,5 +1,7 @@
 import FlockSoundness.Discharge.Composed.SoundJ
 import FlockSoundness.Assumptions.Zk
+import FlockSoundness.Discharge.Composed.Coined
+import FlockSoundness.ZK.Complete
 
 /-!
 # `zk_session_soundJ` at the coin server's custody

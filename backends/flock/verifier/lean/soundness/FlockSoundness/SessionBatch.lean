@@ -1,5 +1,6 @@
 import FlockSoundness.Session
 import FlockSoundness.Game.Prob
+import FlockSoundness.Protocol.SessionBatch
 
 /-!
 # Several tables in one batched session (PROTOCOL.md §5)
@@ -32,27 +33,9 @@ open Game Model Accounting
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D : Type}
 
-/-- A table of a batched session: a statement, its `fast100` schedule by levels, and its link
-layout for the session's `m_pts`. -/
-structure TabSpec (mPts : ℕ) where
-  S : Statement
-  m : ℕ
-  k0 : ℕ
-  l₀ : Level
-  l₁ : Level
-  rest : List Level
-  ext : ℕ
-  hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
-  hm : 13 ≤ S.m
-  ptLocal : ℕ
-  hlay : S.LinkLayout ptLocal mPts
-
 variable {mPts : ℕ}
 
 namespace TabSpec
-
-/-- The table's schedule. -/
-abbrev sch (T : TabSpec mPts) : Schedule := ⟨T.m, T.k0, T.l₀ :: T.l₁ :: T.rest, T.ext⟩
 
 /-- The table's run after the link points, with level-0 cap `cap₀`. -/
 noncomputable def after (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)

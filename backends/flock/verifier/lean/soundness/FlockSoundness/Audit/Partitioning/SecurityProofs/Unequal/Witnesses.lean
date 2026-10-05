@@ -1,4 +1,5 @@
 import FlockSoundness.Audit.Partitioning.Model
+import FlockSoundness.Audit.Harm
 
 /-!
 # Proofs of three of `Partitioning.Witness`'s instances

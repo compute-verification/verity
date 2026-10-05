@@ -1,5 +1,6 @@
 import FlockSoundness.Refine.LiveSim
 import FlockSoundness.Discharge.Exec.Tables
+import FlockSoundness.Protocol.Discharge.Exec.Decode
 
 /-!
 # Pieces of `DecodesAll`: the aligned tape and the cap
@@ -85,14 +86,6 @@ theorem entries_eq_of_foldl {a b : Array ByteArray} (ha : ∀ x ∈ a.toList, x.
     rw [flat_length _ ha, flat_length _ hb] at this
     omega
   exact Array.ext' (entries_eq_of_flat _ _ ha hb hlen e)
-
-open Classical in
-/-- **The cap read off `root_B`**: the `capDig` of the array of 64-byte entries whose concatenation is `root_B`, when
-there is one. -/
-noncomputable def capOfRoot (rootB : ByteArray) : Cap Dig :=
-  if h : ∃ c : Array ByteArray, (∀ x ∈ c.toList, x.size = 64) ∧ c.foldl (· ++ ·) ByteArray.empty = rootB then
-    capDig (Classical.choose h)
-  else capDig #[]
 
 /-- **`capOfRoot` is the cap `root_B` concatenates**: at any array of 64-byte entries whose concatenation is `root_B`. -/
 theorem capOfRoot_eq {c : Array ByteArray} {rootB : ByteArray} (hc : ∀ x ∈ c.toList, x.size = 64)

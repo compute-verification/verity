@@ -1,9 +1,6 @@
-import FlockSoundness.Discharge.Zero.Cols
-import FlockSoundness.Discharge.Zero.Stack
-import FlockSoundness.Discharge.Aliased.Keys
-import FlockSoundness.Discharge.Placed.Wiring
 import FlockSoundness.Discharge.Placed.Keyed
-import FlockSoundness.Discharge.Const.Inst
+import FlockSoundness.Protocol.Discharge.Zero.Cols
+import FlockSoundness.Protocol.Discharge.Zero.Stack
 
 /-!
 # `hZero` at the circuit's program (e2e, untyped statements)

@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.ZkLink.BadZ
 import FlockSoundness.Discharge.ZkLink.Analysis
 import FlockSoundness.SessionBatchAcc
+import FlockSoundness.Protocol.Discharge.ZkLink.SessionZ
 
 /-!
 # Knowledge soundness of a compiled `--zk` table in the session, from accepted reruns
@@ -96,22 +97,6 @@ theorem bad_pointwise_ofZ [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T :
   · exact Or.inl (le_of_eq (ind_eq_zeroZ hB))
 
 /-! ## Rewinding in the session -/
-
-open Classical in
-/-- **The tables `P̃` sends in the session**: at each committed object of the table at position `n`, the plurality of
-the table's openings there: rep `s`'s pads at slot `s < 2`, rep `s - 2`'s `τ` at `s < 4`, and rep `(s - 4) % 2`'s level
-`(s - 4) / 2` above. -/
-noncomputable def plurSZ [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T : TabZK F mPts) (n : ℕ) :
-    Lock.Chooser (Oracle F) (Cap D) (List (OutZC F D Sl)) :=
-  fun s d g σ =>
-    if s < 2 then padsTab T.N (Classical.choose (Rewinding.exists_pluralityE
-      (fun outs : List (OutZC F D Sl) => opPadsZ Hs T.N T.q s d (outs.getD n dfltOutZC)) g σ))
-    else if s < 4 then tauTab (Classical.choose (Rewinding.exists_pluralityE
-      (fun outs : List (OutZC F D Sl) => opTauZ Hs (s - 2) d (outs.getD n dfltOutZC)) g σ))
-    else tabOf (lvOf T.sch ((s - 4) / 2)).lanes (lvOf T.sch ((s - 4) / 2)).logLen
-      (Classical.choose (Rewinding.exists_pluralityE
-        (fun outs : List (OutZC F D Sl) => opRZ Hs.H Hs.E Hs.Lf T.sch ((s - 4) % 2) ((s - 4) / 2) d
-          (outs.getD n dfltOutZC)) g σ))
 
 theorem plurSZ_pads [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T : TabZK F mPts) (n r : ℕ) (hr : r < 2)
     (d : Cap D) (g : Game (List (OutZC F D Sl))) (σ : Strategy g) :
@@ -455,12 +440,6 @@ theorem session_knowledge_sound_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K
 section Batch
 
 variable [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts))
-
-/-- Table `j`'s strategy in the session, read at its position. -/
-noncomputable def stratZ (j : Fin ts.length) (τ : Strategy (sessionZC A Hs ts)) :
-    Strategy (sessAtZ ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1))
-      (tabAfterZC A Hs (ts.get j) (τ.1 j))) :=
-  cast (congrArg Strategy (sessAfterZC_split A Hs ts τ.1 j)) τ.2
 
 /-- **Table `j`'s knowledge bound from accepted reruns**, without its relative term: `ε_c⁻ + √(k·adv₀)`, every term the
 table's own, computed in the session. -/

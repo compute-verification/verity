@@ -1,6 +1,7 @@
 import FlockSoundness.PadCode
 import FlockSoundness.LigeritoPhase
 import FlockSoundness.Model.LigeritoPad
+import FlockSoundness.Protocol.LigeritoPadLevel0
 
 /-!
 # The padded level 0: lane rounds, extra lanes, and decoding
@@ -184,30 +185,6 @@ theorem value_drawKs_extras_le (A : Arith F K) (hA : A.Correct) {ι : Type} [Fin
       · rw [Nat.cast_succ, add_mul, one_mul, add_comm]
 
 /-! ## Rep `r`'s list -/
-
-/-- Rep `r`'s lanes: the witness lanes, then its extra lanes. -/
-def padLane (k0 e r : ℕ) : Fin (2 ^ k0 + e) → ℕ :=
-  Fin.addCases (fun ℓ : Fin (2 ^ k0) => ℓ.val) (extraLane k0 e r)
-
-/-- Rep `r`'s rows of the committed table. -/
-def padRows (k0 e r d : ℕ) (C : Oracle F) : Fin (2 ^ k0 + e) → Fin (2 ^ d) → F :=
-  fun ℓ q => C (padLane k0 e r ℓ) q.val
-
-open Classical in
-/-- **Rep `r`'s list**: the row families within the padded radius of the rep's rows. -/
-noncomputable def padList (A : Arith F K) (l : Level) (t k0 e r : ℕ) (C : Oracle F) :
-    Finset (Fin (2 ^ k0 + e) → Fin (2 ^ l.logCols + t) → F) :=
-  Finset.univ.filter fun R => CloseRows A l.logLen (2 ^ l.logCols + t) (l.padRadius t)
-    (padRows k0 e r l.logLen C) R
-
-/-- A padded lane's message: its first `2^cols` coefficients less `c₀` times its padding. -/
-def padMsgAt {cols t : ℕ} (c₀ : F) (a : Fin (2 ^ cols + t) → F) (x : Fin (2 ^ cols)) : F :=
-  a (Fin.castAdd t x) - if h : x.val < t then c₀ * a ⟨2 ^ cols + x.val, by omega⟩ else 0
-
-/-- A row family's witness lanes' messages. -/
-def padWit {k0 e cols t : ℕ} (c₀ : F) (R : Fin (2 ^ k0 + e) → Fin (2 ^ cols + t) → F) :
-    Message F k0 cols :=
-  fun ℓ => padMsgAt c₀ (R (Fin.castAdd e ℓ))
 
 /-- **A row family's next-level message**: its witness lanes' messages folded by `ch`, plus its
 extra lanes' weighted by `ρ`. -/

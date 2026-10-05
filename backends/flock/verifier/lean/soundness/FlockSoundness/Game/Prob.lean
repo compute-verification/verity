@@ -1,4 +1,5 @@
 import FlockSoundness.Game.Union
+import FlockSoundness.Protocol.Game.Prob
 
 /-!
 # Probabilities for a fixed prover strategy
@@ -118,12 +119,6 @@ theorem prCoin_pi_forall {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → 
         refine Finset.prod_congr rfl fun i hi => ?_
         simp only [hi, ite_true]
         exact avg_ite_eq_prCoin _
-
-/-- A strategy for the relabelled game is a strategy for the game. -/
-def Strategy.ofMap (f : α → β) : (g : Game α) → Strategy (g.map f) → Strategy g
-  | .ret _, _ => PUnit.unit
-  | .send _ k, s => ⟨s.1, Strategy.ofMap f (k s.1) s.2⟩
-  | @Game.coin _ _ _ _ k, s => fun c => Strategy.ofMap f (k c) (s c)
 
 /-- Relabelling the output relabels the event. -/
 theorem prob_map (p : β → Prop) (f : α → β) :

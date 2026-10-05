@@ -1,4 +1,5 @@
 import FlockSoundness.Refine.Ligerito
+import FlockSoundness.Protocol.Refine.LigeritoRun
 
 /-!
 # A run of the executable's Ligerito is a run of the model's (PROTOCOL.md §13.3)
@@ -104,13 +105,6 @@ def ligMsgs (p : LigeritoProof) (capD : Array ByteArray → Cap D) (sch : Flock.
 /-- Level `ℓ`'s cap in the executable: the table's at level 0, the proof's `(ℓ − 1)`-th recursive cap above. -/
 def capAt (cap : Array ByteArray) (p : LigeritoProof) (ℓ : ℕ) : Array ByteArray :=
   if ℓ = 0 then cap else p.recursiveCaps[ℓ - 1]!
-
-/-- Level `ℓ`'s opened rows, siblings and salts in the proof, `R` the last level. -/
-def openAt (p : LigeritoProof) (R ℓ : ℕ) : Array (Array F128) × Array ByteArray × Array ByteArray :=
-  if ℓ = 0 then (p.initialProof.rows, p.initialProof.siblings, p.initialProof.salts)
-  else if ℓ < R then
-    ((p.recursiveProofs[ℓ - 1]!).rows, (p.recursiveProofs[ℓ - 1]!).siblings, (p.recursiveProofs[ℓ - 1]!).salts)
-  else (p.finalProof.rows, p.finalProof.siblings, p.finalProof.salts)
 
 /-- A model request whose Merkle check the executable passed (§14): the request is level `ℓ`'s queries, it folds the
 level's lanes, its paths have the level's length, and the rows the proof opens there verify against the level's cap. -/

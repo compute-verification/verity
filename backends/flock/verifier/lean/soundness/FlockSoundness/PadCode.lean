@@ -1,6 +1,7 @@
 import FlockSoundness.NovelBasis
 import FlockSoundness.LigeritoLevels
 import FlockSoundness.Accounting.Padded
+import FlockSoundness.Protocol.PadCode
 
 /-!
 # The padded level-0 code: `RS[2^d, k]` on the first `k` novel-basis monomials
@@ -25,10 +26,6 @@ open CodingTheory CoreDefinitions
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
-
-/-- A lane of `k` coefficients on the first `k` monomials of the novel basis at `d` bits. -/
-def encAt (A : Arith F K) (d k : ℕ) (a : Fin k → F) (q : ℕ) : F :=
-  ∑ c, a c * A.Xhat c.val d (A.omega q)
 
 /-- The same over `K`. -/
 def encKAt (A : Arith F K) (d k : ℕ) (b : Fin k → K) (q : ℕ) : K :=
@@ -158,13 +155,6 @@ theorem exists_encAt_of_agree (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk 
   rfl
 
 /-! ## The list size -/
-
-/-- `γ`-close rows: the table's rows agree with the rows' encodings on a common `1 − γ` fraction
-of the positions. -/
-def CloseRows (d k : ℕ) (γ : ℝ) {s : ℕ} (T : Fin s → Fin (2 ^ d) → F) (R : Fin s → Fin k → F) :
-    Prop :=
-  ((Finset.univ.filter fun q : Fin (2 ^ d) => ∀ ℓ, T ℓ q = encAt A d k (R ℓ) q.val).card : ℝ) ≥
-    (1 - γ) * 2 ^ d
 
 include hA in
 theorem encAt_injective (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤ 2 ^ d) :

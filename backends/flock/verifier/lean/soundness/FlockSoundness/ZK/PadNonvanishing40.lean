@@ -1,4 +1,7 @@
 import FlockSoundness.Assumptions.Zk
+import FlockSoundness.Discharge.Composed.Coined
+import FlockSoundness.Discharge.Composed.DefsJ
+import FlockSoundness.ZK.Complete
 
 /-!
 # `PadNonvanishing40`, proved

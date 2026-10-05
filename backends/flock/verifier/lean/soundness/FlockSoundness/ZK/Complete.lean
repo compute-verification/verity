@@ -2,6 +2,8 @@ import FlockSoundness.ZK.SHVZK
 import FlockSoundness.ZK.Masking
 import FlockSoundness.Assumptions
 import FlockSoundness.Model.LigeritoPad
+import FlockSoundness.Game.Expect
+import FlockSoundness.Randomness
 
 /-!
 # Zero knowledge: the reference prover is complete, and M1's level-0 padding is onto

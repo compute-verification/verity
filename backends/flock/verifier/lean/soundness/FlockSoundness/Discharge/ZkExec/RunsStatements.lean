@@ -2,6 +2,7 @@ import FlockSoundness.Discharge.ZkExec.Coin
 import FlockSoundness.Discharge.DecodeZL.LIG
 import FlockSoundness.Discharge.DecodeZL.OP
 import FlockSoundness.Discharge.DecodeZL.Runs
+import FlockSoundness.Protocol.Discharge.ZkExec.RunsStatements
 
 /-!
 # `RunsZC`'s decoder half: the `--zk` rep's frames and the messages they carry (statements)
@@ -124,42 +125,6 @@ def repMsgsZ (st : Setup) (sch : Flock.Schedule) (n t : ℕ) (zp : Zk.ZkProof) :
   ⟨Dig, toDig zp.inner.root⟩ :: restMsgsZ st sch n t zp
 
 /-! ## The wires and the decoder -/
-
-/-- The pair's sums `e`, from their four values. -/
-def wEv : DecodeZL.Wire := .vals (Fin 2 → 𝕂) 4 fun vs => ![gOf ⟨vs[0]!, vs[1]!⟩, gOf ⟨vs[2]!, vs[3]!⟩]
-
-/-- An element of `K`, from its two values. -/
-def wK : DecodeZL.Wire := .vals 𝕂 2 fun vs => gOf ⟨vs[0]!, vs[1]!⟩
-
-/-- `t` elements of `K`, from `2t` values. -/
-def wY (t : ℕ) : DecodeZL.Wire := .vals (Fin t → 𝕂) (2 * t) fun vs i => gOf ⟨vs[2 * i.val]!, vs[2 * i.val + 1]!⟩
-
-/-- A 64-byte digest, from one byte string. -/
-def wDig : DecodeZL.Wire := .bytes Dig toDig
-
-/-- **The `--zk` Ligerito wires**: M0's (`wLIG`) with the last lane round's coin followed by the pair's sums' round,
-the second `ρ` coin's empty round, and a round that carries `T'` and `ybar` before the round's message and the level-1
-cap. -/
-noncomputable def wLIGZ (s : Accounting.Schedule) (t : ℕ) : List (List DecodeZL.Wire) :=
-  [[]] ++ ([[.f]] ++ (List.replicate s.k0 [.kk] ++ ([[wEv], [], [wK, wY t, .kk, .cap]] ++
-    (wMid ++ wLev s.ext (s.levels.length - 1)))))
-
-/-- The inner proof's wires: `final_c'`'s round, `[ρ, σ]`'s, `τ`'s commitment's and `Y`'s (`nY` words). -/
-def wInner (nY : ℕ) : List (List DecodeZL.Wire) := [[.f], [.ff], [wDig], [.v nY]]
-
-/-- **The wires of a `--zk` rep's rounds after round 0**: M0's zerocheck's and lincheck's after round 0, the opening's
-of `n` claims, Ligerito's with level 0's hiding (`ybar` of `t` elements), and the inner proof's on `np` pads. -/
-noncomputable def wRestZ (m kLog n : ℕ) (s : Accounting.Schedule) (t np : ℕ) : List (List DecodeZL.Wire) :=
-  (wZL m kLog).tail ++ (wOP n ++ (wLIGZ s t ++ wInner (np + Zk.K_PAD)))
-
-/-- **The pads root in round 0's bytes**: the 64 bytes before the closing squeeze's 16-byte header, after the root's
-own 16-byte header (a 64-byte string needs no padding). -/
-def rootOf (B : ByteArray) : ByteArray := B.extract (B.size - 80) (B.size - 16)
-
-/-- **The `--zk` decoder**: round 0 carries the pads root, and round `j + 1` is read by `W`'s `j`-th wires. -/
-noncomputable def decZ (W : List (List DecodeZL.Wire)) : ℕ → ByteArray → List Msg
-  | 0, B => [⟨Dig, toDig (rootOf B)⟩]
-  | j + 1, B => decOf W j B
 
 /-- **A compiled `--zk` rep's shape at the executable's dimensions** (`repShapeZ` with `e = 2` pair sums, `Q` inner
 queries and `K_PAD` padding symbols): the pads root, the masked zerocheck's, lincheck's and `n` claims' opening's

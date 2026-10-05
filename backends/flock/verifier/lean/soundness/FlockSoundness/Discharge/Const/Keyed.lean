@@ -1,6 +1,6 @@
 import FlockSoundness.Discharge.Placed.Keyed
 import FlockSoundness.Discharge.Zero.Uniform
-import FlockSoundness.Discharge.Const.ConstCols
+import FlockSoundness.Protocol.Discharge.Const.ConstCols
 
 /-!
 # `hConst` at the production program's places

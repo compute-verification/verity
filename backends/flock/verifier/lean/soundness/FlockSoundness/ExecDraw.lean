@@ -1,5 +1,6 @@
 import FlockSoundness.Audit.Law
 import Flock.Draw
+import FlockSoundness.Protocol.ExecDraw
 
 /-!
 # The executable draw escapes no more often than the model's
@@ -21,9 +22,6 @@ bytes, it returns a draw that misses `B` with probability at most `(Law.subset n
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
 namespace FlockSoundness.Audit.Law
-
-/-- The byte stream of `L` bytes `f`, as `Flock.Draw` reads it. -/
-def streamOf {L : ℕ} (f : Fin L → Fin 256) : ByteArray := ⟨Array.ofFn fun i => UInt8.ofFin (f i)⟩
 
 end FlockSoundness.Audit.Law
 
@@ -709,4 +707,3 @@ theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) 
     _ = (subset n k hk).escape B := by rw [subset_escape, hcard, Nat.sub_zero]
 
 end FlockSoundness.Audit.Law
-

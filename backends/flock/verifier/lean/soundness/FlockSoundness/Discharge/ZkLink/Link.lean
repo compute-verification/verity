@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.ZkSession.Numbers
 import FlockSoundness.Audit.FlockLink
+import FlockSoundness.Protocol.Discharge.ZkLink.Link
 
 /-!
 # `δ_link` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
@@ -86,52 +87,12 @@ variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- **The binding of wires to registered commit strings for `--zk` tables** (`Audit.Partition.ValueBinding`'s form,
-over `TabZK` plans). Each wire is held by a commit string (`pos`). A message that packs a witness satisfying drawn unit
-`u`'s table's statement opens the commit string of each of `u`'s wires: the opening's commitment is the string registered
-at `R` (`cs`), and its value's bit on the wire is the decoded one. Two openings of one string with different values give
-a collision of `Hc` (`collide`). -/
-structure ValueBindingZ (decode : DecoderZK (C := C) planZ tab) {Dh : Type} (Hc : List UInt8 → Dh) where
-  Pos : Type
-  [finPos : Fintype Pos]
-  [decPos : DecidableEq Pos]
-  Val : Type
-  [finVal : Fintype Val]
-  [decVal : DecidableEq Val]
-  [inhVal : Inhabited Val]
-  pos : Fin C.N → Pos
-  bit : Val → Fin C.N → Bool
-  Opening : Type
-  [inhOp : Inhabited Opening]
-  Com : Type
-  val : Opening → Val
-  com : Opening → Com
-  cs : Reg → Pos → Com
-  opening : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) →
-    Message F (tabOfZ planZ tab S R u).sch.k0 (tabOfZ planZ tab S R u).sch.level₀.logCols → Pos → Opening
-  opening_spec : ∀ S R u, u ∈ S → ∀ M, (tabOfZ planZ tab S R u).S.Satisfies
-      (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M) →
-    ∀ g ∈ P.io u, com (opening S R u M (pos g)) = cs R (pos g) ∧
-      bit (val (opening S R u M (pos g))) g = decode S R u M g
-  collide : Opening → Opening → List UInt8 × List UInt8
-  collide_spec : ∀ o o', com o = com o' → val o ≠ val o' →
-    (collide o o').1 ≠ (collide o o').2 ∧ Hc (collide o o').1 = Hc (collide o o').2
-
-attribute [instance] ValueBindingZ.finPos ValueBindingZ.decPos ValueBindingZ.finVal ValueBindingZ.decVal
-  ValueBindingZ.inhVal ValueBindingZ.inhOp
-
 variable {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc) (R : Reg) (τ : Cont L Reg (batchedSessionZK A planZ) R)
 
 /-- The level-0 oracles the prover's `Commit` sends on draw `ω`. -/
 noncomputable abbrev oraclesω (ω : L.Ω) : Fin (planZ (L.draw ω) R).length → Oracle F :=
   (zkStrat A planZ (τ ω)).1
-
-/-- Drawn unit `u` reads commit string `c`. -/
-def ReadsZ (u : Fin n) (c : vb.Pos) : Prop := ∃ g ∈ P.io u, vb.pos g = c
-
-/-- A draw reads commit string `c`. -/
-def ReadsDrawZ (c : vb.Pos) (ω : L.Ω) : Prop := ∃ u ∈ L.draw ω, ReadsZ A P planZ tab vb u c
 
 /-- **On draw `ω`, commit string `c` opens to `v` by the opening `o`**: a drawn unit that reads `c` opens it so from a
 padded witness near its table's oracle that satisfies the statement. -/
@@ -147,12 +108,6 @@ open Classical in
 /-- **The readings of commit string `c`** on draw `ω`. -/
 noncomputable def readsZ (ω : L.Ω) (c : vb.Pos) : Finset vb.Val :=
   Finset.univ.filter fun v => ∃ o, OpensAtZ A P planZ tab vb R τ ω c v o
-
-/-- The draws that read `c`. -/
-abbrev ΩcZ (L : Law n) (c : vb.Pos) : Type := {ω : L.Ω // ReadsDrawZ A P planZ tab vb c ω}
-
-open Classical in
-noncomputable instance (L : Law n) (c : vb.Pos) : Fintype (ΩcZ A P planZ tab vb L c) := Subtype.fintype _
 
 /-- **The trial for commit string `c`**: a draw that reads `c`, uniform among such draws. -/
 noncomputable abbrev trialZ (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] : Game (ΩcZ A P planZ tab vb L c) :=

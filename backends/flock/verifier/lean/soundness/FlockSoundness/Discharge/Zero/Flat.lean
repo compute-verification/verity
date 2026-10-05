@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.Zero.Delta
+import FlockSoundness.ExecFlatCopies
 
 /-!
 # A typed flat class's inputs that read the zero carry 0 (`hZero`, e2e)

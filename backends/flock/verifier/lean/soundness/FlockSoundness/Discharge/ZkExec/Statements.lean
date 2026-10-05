@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.ZkExec.Live
 import FlockSoundness.Discharge.Exec.Setup
 import FlockSoundness.Discharge.Exec.Retained
+import FlockSoundness.Protocol.Discharge.ZkExec.Statements
 
 /-!
 # The target statements of flock-verify `--zk`'s acceptance and its refinement
@@ -94,10 +95,6 @@ def ZkRepOk : Prop :=
       (repProg st sch tPad r extras zp).run
         (Flock.Transcript.init stream.rounds (spec.domain spec.tables[i]! r).toUTF8) = .ok ((), tr) ∧
       tr.k = stream.rounds.size ∧ cap = zp.proof.cap.foldl (· ++ ·) ByteArray.empty ∧ cap = sess.rootB[i]!
-
-/-- The inner code's length: the pads message (`len + K_PAD`) rounded up to a power of two, at rate `1/8`. -/
-def innerN (lay : Flock.Zk.PadLayout) : ℕ :=
-  (lay.len + Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ Flock.Zk.INNER_LOG_INV_RATE
 
 /-- The inner proof's batched row: the `γ`-combination of the constraints and the sacrifice's three rows at `ε`. -/
 def innerRow (lay : Flock.Zk.PadLayout) (pr : Flock.Zk.InnerProof) (cons : Array (String × Flock.Zk.Lin))

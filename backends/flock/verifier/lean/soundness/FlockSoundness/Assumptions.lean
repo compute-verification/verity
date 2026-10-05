@@ -1,7 +1,7 @@
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import FlockSoundness.Game.Expect
-import FlockSoundness.Randomness
 import FlockSoundness.Model.Basic
+import FlockSoundness.Protocol.Game.Expect
+import FlockSoundness.Protocol.Randomness
 
 /-!
 # Named assumptions

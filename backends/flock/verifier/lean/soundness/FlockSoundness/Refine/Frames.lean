@@ -1,6 +1,7 @@
 import FlockSoundness.Refine.Paths
 import FlockSoundness.Refine.Exec
 import FlockProofs.Transcript
+import FlockSoundness.Protocol.Refine.Frames
 
 /-!
 # The transcript's frames (R11b, framing)
@@ -56,41 +57,7 @@ theorem padded_data (b : ByteArray) :
   congr 2
   omega
 
-/-- **A frame** of the replay transcript (PROTOCOL.md §6.1): the bytes one domain, label, absorb or zero-coin squeeze
-appends to the pending bytes, or the header a squeeze answers. -/
-inductive Frame where
-  | dom (b : ByteArray)
-  | label (b : ByteArray)
-  | one (v : F128)
-  | vec (vs : List F128)
-  | bytes (b : ByteArray)
-  | sq (kind : UInt8) (n : ℕ)
-
 namespace Frame
-
-def op : Frame → UInt8
-  | .dom _ => 1 | .label _ => 2 | .one _ => 3 | .vec _ => 3 | .bytes _ => 5 | .sq _ _ => 4
-
-def kind : Frame → UInt8
-  | .dom _ => 0 | .label _ => 0 | .one _ => 1 | .vec _ => 2 | .bytes _ => 0 | .sq k _ => k
-
-def len : Frame → ℕ
-  | .dom b => b.size | .label b => b.size | .one _ => 1 | .vec vs => vs.length | .bytes b => b.size | .sq _ n => n
-
-/-- The payload after the header. -/
-def pay : Frame → List UInt8
-  | .dom b => (Transcript.padded b).data.toList
-  | .label b => (Transcript.padded b).data.toList
-  | .one v => v.toBytes.data.toList
-  | .vec vs => colBytes vs
-  | .bytes b => (Transcript.padded b).data.toList
-  | .sq _ _ => []
-
-/-- A frame's bytes, as the executable writes them: its 16-byte header, then its payload. -/
-def enc (f : Frame) : List UInt8 := (Transcript.header f.op f.kind f.len).data.toList ++ f.pay
-
-/-- A frame's length fits its header's eight bytes. -/
-def WF (f : Frame) : Prop := f.len < 2 ^ 64
 
 def payLen : Frame → ℕ
   | .dom b => b.size + (16 - b.size % 16) % 16
@@ -184,9 +151,6 @@ theorem enc_append_inj {f f' : Frame} {r r' : List UInt8} (hw : f.WF) (hw' : f'.
   exact ⟨eq_of_enc hw hw' he, hr⟩
 
 end Frame
-
-/-- The bytes of a list of frames. -/
-def encs (fs : List Frame) : List UInt8 := fs.flatMap Frame.enc
 
 /-- **Frames are recoverable from their bytes.** -/
 theorem encs_inj : ∀ {fs fs' : List Frame}, (∀ f ∈ fs, f.WF) → (∀ f ∈ fs', f.WF) → encs fs = encs fs' → fs = fs'

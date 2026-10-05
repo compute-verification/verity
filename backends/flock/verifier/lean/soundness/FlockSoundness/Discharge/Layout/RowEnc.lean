@@ -1,4 +1,6 @@
 import FlockSoundness.Discharge.Layout.OutPin
+import FlockSoundness.Protocol.Discharge.Layout.RowEnc
+import FlockSoundness.Discharge.Layout.KeyProg
 
 set_option Elab.async false
 
@@ -90,29 +92,6 @@ theorem rowPrefix_length (w : ℕ) : (HmRow.rowPrefix w).data.toList.length = 12
 /-! ## The encoding -/
 
 variable {W : ℕ}
-
-/-- Bit `i` of a value, `false` past `W`. -/
-def BitVal.get (v : BitVal W) (i : ℕ) : Bool := if h : i < W then v.2 ⟨i, h⟩ else false
-
-/-- **A row's value**: a width of `16 w` bits (`w` u16 words), and no bit set past it. -/
-def RowShaped (v : BitVal W) : Prop := v.1.val % 16 = 0 ∧ ∀ i : Fin W, v.1.val ≤ i.val → v.2 i = false
-
-instance : DecidablePred (RowShaped (W := W)) := fun _ => inferInstanceAs (Decidable (_ ∧ _))
-
-/-- One byte per width and per bit: a code of fixed length `2 W + 1`. -/
-def bitCode (v : BitVal W) : List UInt8 :=
-  List.ofFn (fun i : Fin (W + 1) => if i = v.1 then (1 : UInt8) else 0) ++
-    List.ofFn (fun i : Fin W => if v.2 i then (1 : UInt8) else 0)
-
-/-- The `2 w` bytes of a row of `w` words: byte `j`'s bit `t` is bit `8 j + t`. -/
-def rowBytes (v : BitVal W) : List UInt8 :=
-  List.ofFn fun j : Fin (2 * (v.1.val / 16)) => byteOf fun t => v.get (8 * j.val + t.val)
-
-/-- **The bytes `sha512/row/v1` hashes for a value**: a row of `w` words is `rowPrefix w` and its `2 w` bytes, as the
-circuit's `sha512x3` slots hash it; any other value is `128 + W` zero bytes and `bitCode`, longer than every row. -/
-def rowEnc (v : BitVal W) : List UInt8 :=
-  if RowShaped v then (HmRow.rowPrefix (v.1.val / 16)).data.toList ++ rowBytes v
-  else List.replicate (128 + W) 0 ++ bitCode v
 
 theorem bitCode_length (v : BitVal W) : (bitCode v).length = 2 * W + 1 := by
   simp only [bitCode, List.length_append, List.length_ofFn]
@@ -236,21 +215,6 @@ theorem keyRow_enc (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8) {S 
   have ht : (8 * j + t.val) % 8 = t.val := by omega
   show bit (Binding.wit plan tab S R u M (keyRowAddr si S R u q (8 * j + t.val))) = _
   simp only [keyRowAddr, hu, ↓reduceDIte, hj, ht]
-
-variable {outs popOf} (rowW) in
-/-- **`rs` at `keyProg`'s places, with the row bytes `sha512/row/v1` hashes**: `keyRowsOut` with `enc := rowEnc`
-(`keyRow_enc`) and `bitCode` for the other commit strings. -/
-noncomputable def keyRowsEnc (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
-      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
-    (hkeys : KeysRow c hU rowW) (houts : OutsOut c hU n outs)
-    (hc1 : ((keyProg c hU n).partition outs).ConstCols plan tab (keyPlace hparse outs)
-      {oneG (c := c) (hU := hU) (n := n)})
-    (hz1 : ((keyProg c hU n).partition outs).ZeroCols plan tab (keyPlace hparse outs)
-      {zeroG (c := c) (hU := hU) (n := n)}) :
-    Binding.HmRows (keyLayout rowW hparse outs saltCol popOf (outBitOf c hU n outs popOf) bitCode) :=
-  keyRowsOut (outs := outs) (popOf := popOf) (hparse := hparse) (rowW := rowW) (saltCol := saltCol) rowEnc
-    rowEnc_inj bitCode bitCode_inj ho hsite hkeys houts hc1 hz1
 
 /-- `keyRowsEnc`'s `enc` is `rowEnc`. -/
 theorem keyRowsEnc_enc (ho : c.outNet = c.unitNet)

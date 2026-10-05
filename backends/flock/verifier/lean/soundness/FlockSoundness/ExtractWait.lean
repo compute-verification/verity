@@ -1,5 +1,6 @@
 import FlockSoundness.ExtractAcc
 import FlockSoundness.Game.Seq
+import FlockSoundness.Protocol.ExtractWait
 
 /-!
 # The expected-time extractor as an algorithm: waits of at most `R` runs
@@ -70,12 +71,6 @@ theorem expectN_find [DecidablePred acc] (F : Option α → ℝ) : ∀ R : ℕ,
       ring
 
 open Classical in
-/-- **The accepted runs of `k` waits**, if each found one. -/
-noncomputable def firsts : List (List α) → Option (List α)
-  | [] => some []
-  | b :: bl => (b.find? fun x => decide (acc x)).bind fun x => (firsts bl).map (x :: ·)
-
-open Classical in
 /-- **`k` waits of at most `R` runs**: when all find an accepted run, the runs they find are `k`
 independent accepted runs, weighted by `geom ε R ^ k`. -/
 theorem expectN_firsts (R : ℕ) : ∀ (k : ℕ) (Φ : List α → ℝ),
@@ -117,12 +112,6 @@ theorem expectN_firsts (R : ℕ) : ∀ (k : ℕ) (Φ : List α → ℝ),
           ring,
         expect_const_mul, pow_succ]
       ring
-
-open Classical in
-/-- **The runs a wait plays**: up to and including the first accepted one, or all of them. -/
-noncomputable def waitCost : List α → ℝ
-  | [] => 0
-  | b :: bs => 1 + if acc b then 0 else waitCost bs
 
 theorem waitCost_nonneg : ∀ bs : List α, 0 ≤ waitCost acc bs
   | [] => le_rfl

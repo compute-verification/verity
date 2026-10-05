@@ -3,6 +3,7 @@ import FlockSoundness.Defs
 import FlockSoundness.Game.Union
 import FlockSoundness.Game.Interleave
 import Mathlib.LinearAlgebra.Lagrange
+import FlockSoundness.Protocol.LincheckPhase
 
 /-!
 # The lincheck phase (PROTOCOL.md §10)
@@ -211,12 +212,6 @@ theorem value_lincheckRounds_le [CharP F 2] : ∀ (n : ℕ) (u v : ℕ → F) (c
         exact le_rfl
 
 /-! ## The witness through the lincheck's eyes -/
-
-/-- The witness's block-folded columns: `h[c] = Σ_o eq(ρ_out, o)·ω[o·2^k_log + c]`. -/
-def hcol (S : Statement) (ρOut : Fin S.nbl → F) (ω : Witness S.m) : ℕ → F := fun c =>
-  if hc : c < 2 ^ S.kLog then
-    ∑ o : Fin (2 ^ S.nbl), eqAt ρOut o.val * ((ω (S.addr o ⟨c, hc⟩)).val : F)
-  else 0
 
 theorem two_pow_kLog (S : Statement) : 2 ^ S.kLog = 2 ^ (S.kLog - 6) * 64 := by
   rw [show (64 : ℕ) = 2 ^ 6 by norm_num, ← pow_add, Nat.sub_add_cancel S.hk6]

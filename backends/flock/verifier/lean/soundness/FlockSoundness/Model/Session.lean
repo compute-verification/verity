@@ -1,5 +1,5 @@
 import FlockSoundness.Model.Ligerito
-import FlockSoundness.Game.Interleave
+import FlockSoundness.Protocol.Game.Interleave
 
 /-!
 # One rep, and one table's session

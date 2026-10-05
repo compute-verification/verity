@@ -1,4 +1,5 @@
 import FlockSoundness.Audit.Partitioning.Guarantees
+import FlockSoundness.Audit.Harm
 
 /-!
 # Two-stage detection risk: the proofs

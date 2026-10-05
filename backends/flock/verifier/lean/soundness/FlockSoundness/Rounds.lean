@@ -2,6 +2,8 @@ import FlockSoundness.Game.Poly
 import FlockSoundness.Model.Piop
 import FlockSoundness.Model.Ligerito
 import Mathlib.Algebra.CharP.Defs
+import FlockSoundness.Accounting.Bound
+import FlockSoundness.Model.Statement
 
 /-!
 # One sumcheck round

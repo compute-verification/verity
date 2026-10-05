@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Tables.Headline
 import FlockSoundness.Discharge.Tables.Accepts
+import FlockSoundness.Protocol.Discharge.Tables.Statements
 
 /-!
 # Sessions of `J` tables: the statements
@@ -171,15 +172,6 @@ theorem headline_tables_subset : HeadlineTablesSubset := by
     hρ hr t' ht K hK I wr opn dg dec one fin capOf N hdec τ σ hCR qF qS hKS
   exact p.flock_headline_live_tables_subset outs kd hkd Lb src hA3 plan tab pp ones hConst zeros hZero lay rs hHm hk
     hRw hM hρ hr ht K hK I wr opn dg dec one fin capOf N hdec τ hCR hKS
-
-open Lean (Json) in
-/-- Part `j` of `count` equal consecutive parts of the session's units, as the subset draw of the population that
-`Stmt.setupTables` sets table `j` up at. -/
-def partDraw (population : ℕ) (units : Array ℕ) (count j : ℕ) : Json :=
-  Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson population),
-    ("k", Lean.toJson (units.size / count)),
-    ("units", Json.arr ((units.extract (j * (units.size / count)) (j * (units.size / count) + units.size / count)).map
-      Lean.toJson))]
 
 /-- **flock-verify's acceptance at more than one table.** When `Accepts I t` at `count > 1` under a tag without hidden
 outputs: the tag allows several tables and `count ≤ 64`; the record's draw, when there is one, is a subset draw, whose

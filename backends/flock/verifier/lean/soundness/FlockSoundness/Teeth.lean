@@ -1,5 +1,7 @@
 import FlockSoundness.Assumptions
 import FlockSoundness.Game.Prob
+import FlockSoundness.Game.Expect
+import FlockSoundness.Randomness
 
 /-!
 # The collision-resistance assumptions have teeth

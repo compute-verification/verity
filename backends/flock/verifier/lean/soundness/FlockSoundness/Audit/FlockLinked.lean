@@ -1,4 +1,5 @@
 import FlockSoundness.Audit.FlockLink
+import FlockSoundness.Protocol.Audit.FlockLinked
 
 /-!
 # The compiled-layer audit with `δ_link` discharged
@@ -36,11 +37,6 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [In
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : Law n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : P.ValueBinding plan tab decode Hc)
-
-/-- **The link term the link theorem gives**: `Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`. -/
-noncomputable def linkBoundE (k Rw M : ℕ) (ρ t' : ℝ) : ℝ≥0∞ :=
-  ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (P.Ωc plan tab vb L c) : ℝ) / Fintype.card L.Ω) *
-    (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 /-- At a prover whose link finders satisfy A2, the prover-by-prover link bound is `linkBoundE`. -/
 theorem linkBoundCR_eq {k Rw M : ℕ} {ρ t' : ℝ} {R : Reg} {τ : Cont L Reg (batchedSession H E plan) R}
@@ -90,14 +86,6 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [In
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : Law n}
-
-/-- The decoder that reads each drawn unit from its place in its table (`loweringSoundB_of_place`). -/
-noncomputable def placeDecoder (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) :
-    DecoderB (C := C) (Reg := Reg) plan tab := fun S R u M =>
-  if h : u ∈ S then (place S R u h).decode
-    (witnessOf execArith (tabOf plan tab S R u).S.m (tabOf plan tab S R u).sch.k0
-      (tabOf plan tab S R u).sch.level₀.logCols M)
-  else fun _ => false
 
 /-- **The compiled-layer count curve from the drawn units' places**: `flock_batched_count_linked` with the lowering
 discharged by each drawn unit's place in its table (`UnitPlace`: the row placement). What remains named is A2, `ValueBinding` and the places. -/

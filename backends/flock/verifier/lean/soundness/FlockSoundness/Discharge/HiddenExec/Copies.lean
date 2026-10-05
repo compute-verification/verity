@@ -1,5 +1,5 @@
-import FlockSoundness.Discharge.HiddenExec.Flat
-import FlockSoundness.Discharge.Zero
+import FlockSoundness.Protocol.Discharge.HiddenExec.Flat
+import FlockSoundness.Discharge.Zero.Uniform
 
 /-!
 # `Layout.Aliased` at a hidden-output statement, from its flat twin's copy positions

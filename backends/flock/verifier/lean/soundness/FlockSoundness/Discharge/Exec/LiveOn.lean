@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.Exec.Live
+import FlockSoundness.Protocol.Discharge.Exec.LiveOn
 
 /-!
 # R11 for one-table sessions, with the decoder right at the law's draws only
@@ -26,30 +27,12 @@ variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap D)) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify accepts, at the law's draws** (R11b): `DecodesAll` at the
-draws `L.draw ω` only. -/
-def DecodesOn (L : Law n) : Prop :=
-  ∀ ω R, Decodes (fun (caps : Fin 1 → Cap D) pend os => tableOutL H E Lf (caps 0) pend os)
-    (fun o => Accepts I (wr (L.draw ω) R o)) (·.accepted = true) (opn (L.draw ω) R) (dec (L.draw ω) R)
-    (one (L.draw ω) R) (fin (L.draw ω) R) (capOf (L.draw ω) R) (repsOf (D := D) execArith (T (L.draw ω) R))
-
 omit [Nonempty D] [Inhabited D] [Inhabited Sl] in
 theorem decodesOn_of_all (L : Law n) (h : DecodesAll H E Lf T I wr opn dec one fin capOf) :
     DecodesOn H E Lf T I wr opn dec one fin capOf L :=
   fun ω R => h (L.draw ω) R
 
 variable {L : Law n}
-
-/-- **The simulated audit strategy**, from the decoder at the law's draws: the live prover's registration, and at each
-draw the simulated session strategy against its live session. -/
-noncomputable def simAuditOn (hdec : DecodesOn H E Lf T I wr opn dec one fin capOf L)
-    (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
-    Strategy (audit L Reg (batchedSessionL H E Lf fun S R => [T S R])) :=
-  ⟨τ.1, fun ω => Strategy.map (fun ok => (ok, L.draw ω)) _ (Strategy.map _ _
-    (simSessL execArith H E Lf (T (L.draw ω) τ.1) (fun o => Accepts I (wr (L.draw ω) τ.1 o)) (opn (L.draw ω) τ.1) dg
-      (dec (L.draw ω) τ.1) (one (L.draw ω) τ.1) (fin (L.draw ω) τ.1) (capOf (L.draw ω) τ.1) N (hdec ω τ.1)
-      (Strategy.ofMap (wr (L.draw ω) τ.1) _
-        (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
 /-- **R11 for one-table sessions.** Against any live prover `τ` of the live audit whose session is `liveTable` written
 out by `wr`, flock-verify's acceptance is no likelier than the salted audit's acceptance against the simulated prover

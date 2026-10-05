@@ -7,6 +7,7 @@ row prefix's midstate, each later `cv` the previous output, the `hm96` slot's `c
 padding block (`row_copies_of_sat`), the constant bits read from the pin and the forced-zero row.
 -/
 import FlockSoundness.Discharge.Hm.Copies
+import FlockSoundness.Protocol.Discharge.Hm.Copy
 
 open Flock FlockLevel3
 
@@ -14,148 +15,7 @@ namespace FlockSoundness.Discharge.Hm
 
 open Compose Flock.DeriveAll Types.Dag
 
-theorem atOf_succ {ports : Array Port} {p : ℕ} (hp : p < ports.size) :
-    atOf ports (p + 1) = atOf ports p + ports[p]!.chunks := by
-  unfold atOf
-  rw [List.take_add_one, List.getElem?_eq_getElem (by simpa using hp), List.map_append, List.sum_append]
-  simp [getElem!_pos ports p hp]
-
-theorem atOf_mono {ports : Array Port} {p q : ℕ} (hpq : p ≤ q) (hq : q ≤ ports.size) :
-    atOf ports p ≤ atOf ports q := by
-  induction q with
-  | zero => rw [Nat.le_zero.1 hpq]
-  | succ q ih =>
-      rcases Nat.lt_or_eq_of_le hpq with h | h
-      · rw [atOf_succ (by omega)]
-        exact le_trans (ih (by omega) (by omega)) (Nat.le_add_right _ _)
-      · rw [h]
-
-/-- Distinct compressions of the row are at distinct places `at_p + k`. -/
-theorem at_inj {ports : Array Port} {p p' k k' : ℕ} (hp : p < ports.size) (hp' : p' < ports.size)
-    (hk : k < ports[p]!.chunks) (hk' : k' < ports[p']!.chunks) (h : atOf ports p + k = atOf ports p' + k') :
-    p = p' ∧ k = k' := by
-  rcases lt_trichotomy p p' with hlt | rfl | hlt
-  · have h1 := atOf_succ hp
-    have h2 := atOf_mono (ports := ports) (show p + 1 ≤ p' by omega) hp'.le
-    omega
-  · exact ⟨rfl, by omega⟩
-  · have h1 := atOf_succ hp'
-    have h2 := atOf_mono (ports := ports) (show p' + 1 ≤ p by omega) hp.le
-    omega
-
-theorem slot_inj {m a b i j : ℕ} (hi : i < m) (hj : j < m) (h : a * m + i = b * m + j) : a = b ∧ i = j := by
-  have hm : 0 < m := by omega
-  have h1 : (a * m + i) / m = a := by rw [Nat.mul_comm, Nat.mul_add_div hm, Nat.div_eq_of_lt hi, Nat.add_zero]
-  have h2 : (b * m + j) / m = b := by rw [Nat.mul_comm, Nat.mul_add_div hm, Nat.div_eq_of_lt hj, Nat.add_zero]
-  have hab : a = b := by rw [← h1, h, h2]
-  subst hab
-  exact ⟨rfl, by omega⟩
-
-theorem filter_flatMap2_single {β : Type} (G N : ℕ) (F : ℕ → ℕ → List (ℕ × β)) (x g₀ p₀ : ℕ) (hg : g₀ < G)
-    (hp : p₀ < N) (hne : ∀ g < G, ∀ p < N, ¬ (g = g₀ ∧ p = p₀) → ∀ e ∈ F g p, e.1 ≠ x) :
-    ((List.range G).flatMap fun g => (List.range N).flatMap fun p => F g p).filter (fun e => e.1 = x) =
-      (F g₀ p₀).filter (fun e => e.1 = x) := by
-  have hnil : ∀ g < G, ∀ p < N, ¬ (g = g₀ ∧ p = p₀) → (F g p).filter (fun e => e.1 = x) = [] :=
-    fun g hg' p hp' hne' => List.filter_eq_nil_iff.2 fun e he => by simpa using hne g hg' p hp' hne' e he
-  rw [filter_flatMap_single _ List.nodup_range _ _ g₀ (List.mem_range.2 hg) fun g hg' hne' =>
-    filter_flatMap_none _ _ _ fun p hp' => hnil g (List.mem_range.1 hg') p (List.mem_range.1 hp') fun h => hne' h.1]
-  exact filter_flatMap_single _ List.nodup_range _ _ p₀ (List.mem_range.2 hp) fun p hp' hne' =>
-    hnil g₀ hg p (List.mem_range.1 hp') fun h => hne' h.2
-
-theorem filter_flatMap2_none {β : Type} (G N : ℕ) (F : ℕ → ℕ → List (ℕ × β)) (x : ℕ)
-    (hne : ∀ g < G, ∀ p < N, ∀ e ∈ F g p, e.1 ≠ x) :
-    ((List.range G).flatMap fun g => (List.range N).flatMap fun p => F g p).filter (fun e => e.1 = x) = [] :=
-  List.filter_eq_nil_iff.2 fun e he => by
-    simp only [List.mem_flatMap, List.mem_range] at he
-    obtain ⟨g, hg, p, hp, he⟩ := he
-    simpa using hne g hg p hp e he
-
-theorem filter_nil_of {β : Type} (L : List (ℕ × β)) (x : ℕ) (h : ∀ e ∈ L, e.1 ≠ x) :
-    L.filter (fun e => e.1 = x) = [] :=
-  List.filter_eq_nil_iff.2 fun e he => by simpa using h e he
-
 /-! ## The rows' nets' inputs -/
-
-theorem shaIn_cols {c : Circuit} (h : HmNets.check c = .ok ()) {s : ℕ} (hs : s < 3) :
-    (portCols (c.nets.getD c.shaNet default).2.inGroups).getD (2 * s) default = (1536 * s, 512) ∧
-      (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * s]! = (1536 * s, 512) := by
-  rw [(shaNet_groups h).1]
-  obtain _ | _ | _ | s := s
-  · decide
-  · decide
-  · decide
-  · omega
-
-theorem hmIn_cols {c : Circuit} (h : HmNets.check c = .ok ()) :
-    (portCols (c.nets.getD c.hmNet default).2.inGroups).getD 0 default = (0, 512) ∧
-      (portCols (c.nets.getD c.hmNet default).2.inGroups)[1]! = (512, 1024) := by
-  rw [(hmNet_groups h).1]
-  decide
-
-theorem sha_ne_hm {c : Circuit} (h : HmNets.check c = .ok ()) : c.shaNet ≠ c.hmNet := by
-  intro he
-  have h1 := shaNet_inRows h
-  rw [he, hmNet_inRows h] at h1
-  exact absurd h1 (by decide)
-
-/-- The `sha512x3` net's input bits are self rows. -/
-theorem shaLaid_self {off : ℕ} (ho : off < 4608) :
-    (HmNets.shaLaid ()).ra.getD off #[] = #[off] ∧ (HmNets.shaLaid ()).rb.getD off #[] = #[off] := by
-  rw [HmNets.shaLaid_eq]
-  exact (HmNets.layout_rows _ _ _ _).2.1 off (by rw [sum_SHA_IN]; exact ho)
-
-/-- The `hm96` net's input bits are self rows. -/
-theorem hmLaid_self {off : ℕ} (ho : off < 3072) :
-    (HmNets.hmLaid ()).ra.getD off #[] = #[off] ∧ (HmNets.hmLaid ()).rb.getD off #[] = #[off] := by
-  rw [HmNets.hmLaid_eq]
-  exact (HmNets.layout_rows _ _ _ _).2.1 off (by rw [sum_HM_IN]; exact ho)
-
-theorem padCol_eq {c : Circuit} (h : HmNets.check c = .ok ()) (g p : ℕ) :
-    padCol c g p = c.slotCol c.hmNet g p + 512 := by
-  unfold padCol
-  rw [(hmIn_cols h).2]
-
-theorem chainDst_eq {c : Circuit} (h : HmNets.check c = .ok ()) {g p k : ℕ} (hk : shaSub c p k < 3) :
-    Flat.wireDst c g (chainWire c.ports c.shaNet p k) = shaBase c g p k + shaIn c (2 * shaSub c p k) := by
-  unfold Flat.wireDst chainWire shaBase shaIn shaSub at *
-  simp only
-  rw [(shaIn_cols h hk).1, (shaIn_cols h hk).2]
-
-theorem chainWidth_eq {c : Circuit} (h : HmNets.check c = .ok ()) {p k : ℕ} (hk : shaSub c p k < 3) :
-    Flat.wireWidth c (chainWire c.ports c.shaNet p k) = 512 := by
-  unfold Flat.wireWidth chainWire shaSub at *
-  simp only
-  rw [(shaIn_cols h hk).1]
-
-theorem hmWidth_eq {c : Circuit} (h : HmNets.check c = .ok ()) (p : ℕ) :
-    Flat.wireWidth c (hmWire c.ports c.shaNet c.hmNet p) = 512 := by
-  unfold Flat.wireWidth hmWire
-  simp only
-  rw [(hmIn_cols h).1]
-
-theorem rowF_mem {c : Circuit} {pin g p : ℕ} {e : ℕ × ℕ}
-    (he : e ∈ (List.range 512).map (fun t => (cvCol c g p + t, constSrc c pin (HmRow.midstate c.ports[p]!.words) t)) ++
-      (List.range 1024).map fun t => (padCol c g p + t, constSrc c pin (HmRow.padWords c.ports[p]!.words) t)) :
-    (∃ t < 512, e.1 = cvCol c g p + t) ∨ ∃ t < 1024, e.1 = padCol c g p + t := by
-  simp only [List.mem_append, List.mem_map, List.mem_range] at he
-  rcases he with ⟨t, ht, rfl⟩ | ⟨t, ht, rfl⟩
-  · exact Or.inl ⟨t, ht, rfl⟩
-  · exact Or.inr ⟨t, ht, rfl⟩
-
-/-- The `hm96` wire's destination column. -/
-def hmWireDst (c : Circuit) (g p : ℕ) : ℕ := Flat.wireDst c g (hmWire c.ports c.shaNet c.hmNet p)
-
-theorem hmWireDst_eq {c : Circuit} (h : HmNets.check c = .ok ()) (g p : ℕ) :
-    hmWireDst c g p = c.slotCol c.hmNet g p := by
-  unfold hmWireDst Flat.wireDst hmWire
-  simp only
-  rw [(hmIn_cols h).1, Nat.add_zero]
-
-/-- The wires' copies, VU by VU and port by port. -/
-def wireF (c : Circuit) (g p : ℕ) : List (ℕ × ℕ) :=
-  ((List.range' 1 (((HmRow.rowSlots c.ports).2[p]!).size - 1)).map (chainWire c.ports c.shaNet p) ++
-    [hmWire c.ports c.shaNet c.hmNet p]).flatMap fun w =>
-      (List.range (Flat.wireWidth c w)).map fun t => (Flat.wireDst c g w + t, Flat.wireSrc c g w + t)
 
 theorem wireCopies_eq {c : Circuit} (hw : c.wires = HmRow.rowWires c.ports c.shaNet c.hmNet)
     (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks)
@@ -166,109 +26,16 @@ theorem wireCopies_eq {c : Circuit} (hw : c.wires = HmRow.rowWires c.ports c.sha
   rw [hw, rowWires_eq _ _ _ hpos hs]
   simp only [List.flatMap_assoc]
 
-/-- Δ's copies along wires `ws`. -/
-def wireCopiesOf (c : Circuit) (ws : List Wire) : List (ℕ × ℕ) :=
-  (List.range c.g).flatMap fun g => ws.flatMap fun w =>
-    (List.range (Flat.wireWidth c w)).map fun t => (Flat.wireDst c g w + t, Flat.wireSrc c g w + t)
-
-theorem wireCopiesOf_rows (c : Circuit) (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks)
-    (hs : ∀ q < c.ports.size, c.ports[q]!.segs = none) :
-    wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList = (List.range c.g).flatMap fun g =>
-      (List.range (HmRow.rowSlots c.ports).2.size).flatMap fun p => wireF c g p := by
-  unfold wireCopiesOf wireF
-  rw [rowWires_eq _ _ _ hpos hs]
-  simp only [List.flatMap_assoc]
-
-theorem rowSlots_size' (ports : Array Port) : (HmRow.rowSlots ports).2.size = ports.size := by
-  rw [← Array.length_toList, rowSlots_eq, List.length_map, List.length_range]
-
-theorem wireF_mem {c : Circuit} {g p : ℕ} {e : ℕ × ℕ} (he : e ∈ wireF c g p) :
-    (∃ k, 1 ≤ k ∧ k < ((HmRow.rowSlots c.ports).2[p]!).size ∧
-      ∃ t < Flat.wireWidth c (chainWire c.ports c.shaNet p k),
-        e.1 = Flat.wireDst c g (chainWire c.ports c.shaNet p k) + t) ∨
-      ∃ t < Flat.wireWidth c (hmWire c.ports c.shaNet c.hmNet p),
-        e.1 = Flat.wireDst c g (hmWire c.ports c.shaNet c.hmNet p) + t := by
-  unfold wireF at he
-  simp only [List.flatMap_append, List.flatMap_map, List.mem_append, List.mem_flatMap, List.mem_range',
-    List.mem_map, List.mem_range, List.flatMap_cons, List.flatMap_nil, List.append_nil] at he
-  rcases he with ⟨k, ⟨i, hi, rfl⟩, t, ht, rfl⟩ | ⟨t, ht, rfl⟩
-  · exact Or.inl ⟨1 + 1 * i, by omega, by omega, t, ht, rfl⟩
-  · exact Or.inr ⟨t, ht, rfl⟩
-
-/-- What the rows' slots need of an accepted statement's circuit, a typed template's (`ofT`) or an untyped one's
-(`ofL`): its ranges (disjoint, in the block, of their nets' slots, `G · per_vu` slots each, one per net), its nets'
-constants inside their slots, the rows' nets (the verifier's, `HmNets.check`) and their `per_vu`. -/
-structure RowRanges (c : Circuit) : Prop where
-  disj : c.ranges.toList.Pairwise Apart
-  bound : ∀ r ∈ c.ranges.toList, r.start + spanH r ≤ 2 ^ c.kLog
-  slotLog : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → r.slotLog = (c.nets.getD i default).2.unitLog
-  count : ∀ r ∈ c.ranges.toList, ∀ n, r.kind = .net n → r.count = c.g * c.perVu.getD n 0
-  one_range : ∀ n < c.nets.size, (c.ranges.filter (·.kind == Kind.net n)).size = 1
-  fit : ∀ i, (c.nets.getD i default).2.constPos < 2 ^ (c.nets.getD i default).2.unitLog
-  shaNet : c.shaNet < c.nets.size
-  hmNet : c.hmNet < c.nets.size
-  perVu_sha : c.perVu.getD c.shaNet 0 = (HmRow.rowSlots c.ports).1
-  perVu_hm : c.perVu.getD c.hmNet 0 = nextPow2 c.ports.size
-  rowNets : HmNets.check c = .ok ()
-  kLog : c.kLog ≤ 32
-
 theorem RowRanges.ofT {st : Stmt} {tb : TypedBlock} {words : String → Option (Array ℕ)} {done : Array D} {u : D}
     {tags : Tags} {t : Typed.Template} (T : TemplateLayout st tb words done u) (C : CheckFactsT st.c tb)
     (P : ParseFactsT tags t st.c) : RowRanges st.c :=
   ⟨T.disj, T.bound, T.slotLog, T.count, T.one_range, T.fit, T.shaNet.1, T.hmNet.1, C.perVu_sha, C.perVu_hm, P.rowNets,
     T.kLog⟩
 
-theorem RowRanges.ofL {st : Stmt} {tags : Tags} (L : Layout st) (P : ParseFacts tags st.c) (C : CheckFacts st.c) :
-    RowRanges st.c :=
-  ⟨L.disj, L.bound, L.slotLog, C.count, C.one_range, fun i => (L.fit i).1, P.shaNet, P.hmNet, C.perVu_sha, C.perVu_hm,
-    P.rowNets, L.kLog⟩
-
 namespace RowRanges
 
 variable {c : Circuit} (R : RowRanges c)
 include R
-
-theorem range {n : ℕ} (hn : n < c.nets.size) :
-    c.rangeOf n ∈ c.ranges.toList ∧ (c.rangeOf n).kind = .net n ∧ (c.rangeOf n).count = c.g * c.perVu.getD n 0 ∧
-      (c.rangeOf n).slotLog = (c.nets.getD n default).2.unitLog := by
-  obtain ⟨hm, hk, -⟩ := rangeOf_spec (R.one_range n hn)
-  exact ⟨hm, hk, R.count _ hm _ hk, R.slotLog _ hm _ hk⟩
-
-theorem rowNet_lt {n : ℕ} (hn : n = c.shaNet ∨ n = c.hmNet) : n < c.nets.size := by
-  rcases hn with rfl | rfl
-  · exact R.shaNet
-  · exact R.hmNet
-
-theorem slot_lt_count {n g i : ℕ} (hn : n = c.shaNet ∨ n = c.hmNet) (hg : g < c.g) (hi : i < c.perVu.getD n 0) :
-    g * c.perVu.getD n 0 + i < (c.rangeOf n).count := by
-  rw [(R.range (R.rowNet_lt hn)).2.2.1]
-  calc g * c.perVu.getD n 0 + i < g * c.perVu.getD n 0 + c.perVu.getD n 0 := by omega
-    _ = (g + 1) * c.perVu.getD n 0 := (Nat.succ_mul _ _).symm
-    _ ≤ c.g * c.perVu.getD n 0 := Nat.mul_le_mul_right _ hg
-
-theorem net_off_lt {n : ℕ} (hn : n = c.shaNet ∨ n = c.hmNet) {l : Flock.HmNets.Laid} {name : String}
-    (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (c.nets.getD n default).2)
-    {off : ℕ} (ho : off < (c.nets.getD n default).2.inWords * Flock.WORD) : off < 2 ^ (c.rangeOf n).slotLog := by
-  obtain ⟨-, -, -, -, hcp, -, -, hin, -⟩ := Net.ofRows_ok hl
-  rw [(R.range (R.rowNet_lt hn)).2.2.2]
-  have := R.fit n
-  omega
-
-/-- Bit `t` of port `p`'s compression `k`'s `cv` input, at VU `g`: in the `sha512x3` slot `(at_p + k) / 3`, at
-`1536 · ((at_p + k) % 3) + t`. -/
-theorem shaIn_at {g p k t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : k < c.ports[p]!.chunks) (ht : t < 512) :
-    AtSlot c c.shaNet (g * c.perVu.getD c.shaNet 0 + ((HmRow.rowSlots c.ports).2[p]!)[k]!.1)
-      (1536 * shaSub c p k + t) (shaBase c g p k + shaIn c (2 * shaSub c p k) + t) := by
-  have hs := rowSlot_lt hp hk
-  refine ⟨R.slot_lt_count (Or.inl rfl) hg (by rw [R.perVu_sha]; exact hs.1),
-    R.net_off_lt (Or.inl rfl) (shaNet_ofRows R.rowNets) (by rw [shaNet_inRows R.rowNets]; unfold shaSub; omega), ?_⟩
-  rw [(shaIn_eq R.rowNets (shaSub c p k) hs.2).1, shaBase, Circuit.slotCol, Nat.add_assoc]
-
-/-- Bit `off` of port `p`'s `hm96` slot's inputs, at VU `g`. -/
-theorem hmIn_at {g p off : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ho : off < 4096) :
-    AtSlot c c.hmNet (g * c.perVu.getD c.hmNet 0 + p) off (c.slotCol c.hmNet g p + off) :=
-  ⟨R.slot_lt_count (Or.inr rfl) hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _)),
-    R.net_off_lt (Or.inr rfl) (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; exact ho), rfl⟩
 
 theorem sha_dec {g p k t g' p' k' t' : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : k < c.ports[p]!.chunks)
     (ht : t < 512) (hg' : g' < c.g) (hp' : p' < c.ports.size) (hk' : k' < c.ports[p']!.chunks) (ht' : t' < 512)
@@ -286,17 +53,6 @@ theorem sha_dec {g p k t g' p' k' t' : ℕ} (hg : g < c.g) (hp : p < c.ports.siz
   have : atOf c.ports p + k = atOf c.ports p' + k' := by omega
   obtain ⟨rfl, rfl⟩ := at_inj hp hp' hk hk' this
   exact ⟨rfl, rfl, rfl, by omega⟩
-
-theorem hm_dec {g p off g' p' off' : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ho : off < 4096) (hg' : g' < c.g)
-    (hp' : p' < c.ports.size) (ho' : off' < 4096) (h : c.slotCol c.hmNet g p + off = c.slotCol c.hmNet g' p' + off') :
-    g = g' ∧ p = p' ∧ off = off' := by
-  have hn := R.range R.hmNet
-  obtain ⟨-, hs, rfl⟩ := (R.hmIn_at hg hp ho).inj R.disj hn.1 hn.2.1 hn.1 hn.2.1
-    (by rw [h]; exact R.hmIn_at hg' hp' ho')
-  have hpv : ∀ q, q < c.ports.size → q < c.perVu.getD c.hmNet 0 := fun q hq => by
-    rw [R.perVu_hm]; exact lt_of_lt_of_le hq (le_nextPow2 _)
-  obtain ⟨rfl, rfl⟩ := slot_inj (hpv p hp) (hpv p' hp') hs
-  exact ⟨rfl, rfl, rfl⟩
 
 theorem sha_ne_hm_col {g p k t g' p' off' : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : k < c.ports[p]!.chunks)
     (ht : t < 512) (hg' : g' < c.g) (hp' : p' < c.ports.size) (ho' : off' < 4096) :
@@ -510,81 +266,6 @@ theorem pad_filter (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks)
   rw [hr, List.filter_append, hcv, List.nil_append, filter_map_single _ _ _ _ ht₀]
 
 end RowRanges
-
-theorem blockBit_of_lt (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2 ^ S.nbl)) {y : ℕ}
-    (hy : y < 2 ^ S.kLog) : blockBit S z o y = FlockSoundness.bit (S.block z o ⟨y, hy⟩) := by
-  unfold blockBit
-  split
-  · rfl
-  · exact absurd hy ‹_›
-
-/-- **The block rows at an input bit of a row net's slot** with one copy `(x, src)`: at a self row `x` of a
-`sha512x3` or `hm96` slot below the net's input rows, where Δ_A and Δ_B write `(x, x)` and `(x, src)` and nothing else,
-the level-0 rows are `[src]`, in A and in B (zero when `src` is past the block). -/
-theorem inBit_rows {st : Stmt} (R : RowRanges st.c) {n s off x src : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet)
-    (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
-    (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
-    (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off]) (hx : x < 2 ^ st.c.kLog)
-    (hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
-      deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2))
-    (j : Fin (2 ^ st.c.kLog)) :
-    placedA st ⟨x, hx⟩ j = (if j.val = src then 1 else 0) ∧ placedB st ⟨x, hx⟩ j = (if j.val = src then 1 else 0) := by
-  have hnn := R.rowNet_lt hn
-  obtain ⟨hm, hk, -, hsl⟩ := R.range hnn
-  have h32 : (st.c.nets.getD n default).2.unitLog ≤ 32 := by
-    rw [← hsl]; exact le_trans (hat.slotLog_le R.bound hm) R.kLog
-  have hw : 2 ^ (st.c.nets.getD n default).2.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by norm_num) h32
-  obtain ⟨-, ha, hb, -, -, -, -, -, -, -, -, -, hlk, -⟩ := Net.ofRows_ok hl
-  have hxe := hat.2.2
-  have hE : ∀ j, rangesEntry st (slotEntryA st) x j + deltaEntry st.da x j =
-        (([x].count j + ((if j = x then 1 else 0) + (if j = src then 1 else 0)) : ℕ) : ZMod 2) ∧
-      rangesEntry st (slotEntryB st) x j + deltaEntry st.db x j =
-        (([x].count j + ((if j = x then 1 else 0) + (if j = src then 1 else 0)) : ℕ) : ZMod 2) := by
-    intro j
-    have hre := fun e => rangesEntry_at R.disj hm hk hat e j
-    have hla := ofRows_cols_lt ha off
-    have hlb := ofRows_cols_lt hb off
-    have hxa : [x] = (l.ra.getD off #[]).toList.map ((st.c.rangeOf n).slot s + ·) := by rw [hself.1, hxe]; rfl
-    have hxb : [x] = (l.rb.getD off #[]).toList.map ((st.c.rangeOf n).slot s + ·) := by rw [hself.2, hxe]; rfl
-    refine ⟨?_, ?_⟩
-    · rw [hre, (hδ j).1, hxa]
-      show (if _ then sparseEntry (st.c.nets.getD n default).2.a off _ else 0) + _ = _
-      rw [sparseEntry_ofRows ha, ofRows_row ha hw, count_slot _ (by rw [hsl]; exact hla) j]
-      push_cast; ring
-    · rw [hre, (hδ j).2, hxb]
-      show (if _ then sparseEntry (st.c.nets.getD n default).2.b off _ +
-        lookupEntry (st.c.nets.getD n default).2.lookup off _ else 0) + _ = _
-      rw [hlk]
-      show (if _ then sparseEntry (st.c.nets.getD n default).2.b off _ + 0 else 0) + _ = _
-      rw [add_zero, sparseEntry_ofRows hb, ofRows_row hb hw, count_slot _ (by rw [hsl]; exact hlb) j]
-      push_cast; ring
-  have hval : (([x].count j.val + ((if j.val = x then 1 else 0) + (if j.val = src then 1 else 0)) : ℕ) : ZMod 2) =
-      if j.val = src then 1 else 0 := by
-    by_cases h1 : j.val = x <;> by_cases h2 : j.val = src
-    · rw [ite_eq_left h1, ite_eq_left h2, ite_eq_left h2, h1, List.count_singleton_self]; decide
-    · rw [ite_eq_left h1, ite_eq_right h2, ite_eq_right h2, h1, List.count_singleton_self]; decide
-    · rw [ite_eq_right h1, ite_eq_left h2, ite_eq_left h2, List.count_eq_zero.2 (by simpa using h1)]; decide
-    · rw [ite_eq_right h1, ite_eq_right h2, ite_eq_right h2, List.count_eq_zero.2 (by simpa using h1)]; decide
-  exact ⟨(hE j.val).1.trans hval, (hE j.val).2.trans hval⟩
-
-/-- A row `[src]` in A and in B (zero when `src` is past the block) holds what `src` holds, in every block of a
-satisfying witness. -/
-theorem block_of_rows {S : Model.Statement} {z : Model.Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl))
-    {x src : ℕ} (hx : x < 2 ^ S.kLog)
-    (h : ∀ j : Fin (2 ^ S.kLog), S.A₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0) ∧
-      S.B₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0)) :
-    blockBit S z o x = blockBit S z o src := by
-  by_cases hsrc : src < 2 ^ S.kLog
-  · have he : ∀ j : Fin (2 ^ S.kLog), (if j.val = src then (1 : ZMod 2) else 0) =
-        if j = (⟨src, hsrc⟩ : Fin (2 ^ S.kLog)) then 1 else 0 := fun j => by simp [Fin.ext_iff]
-    have hcopy : CopyRow S ⟨x, hx⟩ ⟨src, hsrc⟩ := ⟨fun j => (h j).1.trans (he j), fun j => (h j).2.trans (he j)⟩
-    rw [blockBit_of_lt _ z o hx, blockBit_of_lt _ z o hsrc, hcopy.block_eq hz o]
-  · have hne : ∀ j : Fin (2 ^ S.kLog), (if j.val = src then (1 : ZMod 2) else 0) = 0 :=
-      fun j => ite_eq_right fun (e : j.val = src) => hsrc (e ▸ j.isLt)
-    have hzr : ZeroRow S ⟨x, hx⟩ := ⟨fun j => (h j).1.trans (hne j), fun j => (h j).2.trans (hne j)⟩
-    rw [blockBit_of_lt _ z o hx, hzr.block_eq hz o]
-    unfold blockBit
-    simp only [hsrc, dite_false]
 
 theorem blockBit_constSrc {S : Model.Statement} {z : Model.Witness S.m} {o : Fin (2 ^ S.nbl)} {c : Circuit}
     {pin : ℕ} (ws : Array UInt64) (t : ℕ) (hpin : blockBit S z o pin = true)

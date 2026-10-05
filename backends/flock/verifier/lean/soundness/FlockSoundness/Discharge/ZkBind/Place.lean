@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.Placed
 import FlockSoundness.Discharge.ZkExec
 import FlockSoundness.Discharge.ZkSession.Session
+import FlockSoundness.Protocol.Discharge.ZkBind.Place
 
 /-!
 # `--zk` unit placements: each drawn unit's `UnitPlace` from setupH's accept
@@ -54,66 +55,10 @@ variable {F : Type} [Field F] [Fintype F] [DecidableEq F] {n : ℕ} {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- **Each drawn unit's site in its `--zk` table**: the acceptance whose statement is the statement of the `--zk` table
-unit `u` is drawn into (`acc`), and the unit's VU (`vu`, below the statement's `vus_per_block`) and block (`o`). -/
-structure SitesZ where
-  acc : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → Accepted (tabOfZ planZ tab S R u).S
-  vu : ∀ (S : Finset (Fin n)) (_ : Reg) (u : Fin n), u ∈ S → ℕ
-  hvu : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), vu S R u h < (acc S R u h).st.c.g
-  o : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → Fin (2 ^ (tabOfZ planZ tab S R u).S.nbl)
-
 variable {planZ tab} {c : Flock.Circuit} (hU : Built c.unit) (si : SitesZ planZ tab)
   (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
   (outs : Finset (Fin (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n)))
-
-include hparse in
-/-- **W6 at the `--zk` sites, from the parse**: each drawn unit's rows in `keyProg` are the VU rows its table's
-acceptance placed. -/
-theorem SitesZ.rowsOf_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
-    (keyProg c hU n).rows u = (si.acc S R u h).rows := by
-  exact (rows_circuitProg c hU n _ _ u).trans ((si.acc S R u h).rows_eq (hparse S R u h) hU).symm
-
-/-- A drawn unit's columns in its `--zk` table's block: its VU's (`Accepted.col`). -/
-noncomputable def SitesZ.colKey (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
-    Fin ((keyProg c hU n).rows u).w → Fin (2 ^ (tabOfZ planZ tab S R u).S.kLog) :=
-  fun x => (si.acc S R u h).col (si.hvu S R u h) (Fin.cast (congrArg Rows.w (si.rowsOf_keyProg hU hparse S R u h)) x)
-
-/-- **The `--zk` table's statement places the program's unit at its VU** (`Accepted.placement`). -/
-theorem SitesZ.placed_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
-    Placement (tabOfZ planZ tab S R u).S ((keyProg c hU n).rows u) (si.colKey hU hparse S R u h) := by
-  exact placement_rows (si.rowsOf_keyProg hU hparse S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
-
-/-- **The program's own instance is aliased as Δ copies** at each drawn unit's site in its `--zk` table
-(`Aliased.setupH_aliased_of_key`). -/
-theorem SitesZ.aliased_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
-    ∀ x x', (Const.Prog.instC (keyProg c hU n) outs u).wire x = (Const.Prog.instC (keyProg c hU n) outs u).wire x' →
-      x.val < ((keyProg c hU n).rows u).nIn → x'.val < ((keyProg c hU n).rows u).nIn →
-      ∀ z : Model.Witness (tabOfZ planZ tab S R u).S.m, (tabOfZ planZ tab S R u).S.Satisfies z →
-        (tabOfZ planZ tab S R u).S.block z (si.o S R u h) (si.colKey hU hparse S R u h x) =
-          (tabOfZ planZ tab S R u).S.block z (si.o S R u h) (si.colKey hU hparse S R u h x') := by
-  refine (si.acc S R u h).aliased_of_layout (si.rowsOf_keyProg hU hparse S R u h)
-    (Const.Prog.instC (keyProg c hU n) outs u) (si.o S R u h) (si.hvu S R u h) ?_
-  have hc := (si.acc S R u h).c_eq (hparse S R u h)
-  have e := congrArg Rows.nIn (si.rowsOf_keyProg hU hparse S R u h)
-  refine Aliased.setupH_aliased_of_key (si.acc S R u h).ht (si.acc S R u h).h (si.acc S R u h).regs _ _
-    (si.hvu S R u h) ?_
-  intro x x' hw hx hx'
-  have hw' := ((wire_cast (si.rowsOf_keyProg hU hparse S R u h) (Const.Prog.instC (keyProg c hU n) outs u) x).symm.trans
-    hw).trans (wire_cast (si.rowsOf_keyProg hU hparse S R u h) (Const.Prog.instC (keyProg c hU n) outs u) x')
-  have hk := keyProg_wire_key hU outs u _ _ (lt_of_lt_of_eq hx e.symm) (lt_of_lt_of_eq hx' e.symm) hw'
-  exact (congrArg (fun d => Aliased.srcKey d x.val = Aliased.srcKey d x'.val) hc).mpr hk
-
-/-- **Each drawn unit's place in its `--zk` table, for the circuit's program on Δ's source keys**: at its VU and block
-in its table's accepted statement, from the sites and the parse alone. -/
-noncomputable def SitesZ.placeKey (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
-    UnitPlace ((keyProg c hU n).partition outs) (tabOfZ planZ tab S R u).S u where
-  R := (keyProg c hU n).rows u
-  inst := Const.Prog.instC (keyProg c hU n) outs u
-  o := si.o S R u h
-  col := si.colKey hU hparse S R u h
-  placed := si.placed_keyProg hU hparse S R u h
-  aliased := si.aliased_keyProg hU hparse outs S R u h
 
 /-- **`placeKey` is the program's unit at its site**: its rows are the program's, its instance the program's own
 (`Const.Prog.instC`), its block the site's. -/

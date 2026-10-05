@@ -2,6 +2,7 @@ import FlockSoundness.Game.Prob
 import Mathlib.Data.Fintype.Powerset
 import Mathlib.Data.Nat.Choose.Basic
 import Mathlib.Data.Fintype.Fin
+import FlockSoundness.Protocol.Audit.Law
 
 /-!
 # Draw laws
@@ -26,30 +27,9 @@ namespace FlockSoundness.Audit
 open Game
 open scoped ENNReal
 
-/-- A draw law over `n` units: the verifier's uniform coins, and the unit set each draws. -/
-structure Law (n : ℕ) where
-  Ω : Type
-  [fintype : Fintype Ω]
-  [nonempty : Nonempty Ω]
-  draw : Ω → Finset (Fin n)
-
-attribute [instance] Law.fintype Law.nonempty
-
 namespace Law
 
 variable {n : ℕ}
-
-/-- The probability that a draw misses every unit of `B`. -/
-noncomputable def escape (L : Law n) (B : Finset (Fin n)) : ℝ≥0∞ :=
-  prCoin fun ω => Disjoint (L.draw ω) B
-
-/-- The count curve's sampling term: the largest escape over sets of at least `K` units. -/
-noncomputable def miss (L : Law n) (K : ℕ) : ℝ≥0∞ :=
-  ⨆ (B : Finset (Fin n)) (_ : K ≤ B.card), L.escape B
-
-/-- The inclusion probability of a unit. -/
-noncomputable def incl (L : Law n) (u : Fin n) : ℝ≥0∞ :=
-  prCoin fun ω => u ∈ L.draw ω
 
 theorem prCoin_not {C : Type} [Fintype C] [Nonempty C] (p : C → Prop) :
     prCoin (fun c => ¬ p c) = 1 - prCoin p := by
@@ -100,15 +80,6 @@ theorem miss_anti (L : Law n) {K K' : ℕ} (h : K ≤ K') : L.miss K' ≤ L.miss
   iSup₂_le fun _ hB => L.escape_le_miss (h.trans hB)
 
 /-! ## The uniform `k`-subset -/
-
-/-- The uniform `k`-subset of `n` units. -/
-def subset (n k : ℕ) (hk : k ≤ n) : Law n where
-  Ω := {S : Finset (Fin n) // S.card = k}
-  nonempty := by
-    obtain ⟨S, -, hS⟩ := Finset.exists_subset_card_eq (s := (Finset.univ : Finset (Fin n)))
-      (by simpa using hk)
-    exact ⟨⟨S, hS⟩⟩
-  draw := Subtype.val
 
 theorem card_disjoint_subsets (k : ℕ) (B : Finset (Fin n)) :
     (Finset.univ.filter fun S : {S : Finset (Fin n) // S.card = k} => Disjoint S.1 B).card =
@@ -214,11 +185,6 @@ theorem demo_count_590 : (subset 1024 16 (by norm_num)).miss 590 ≤ ((2 : ℝ�
   exact_mod_cast h
 
 /-! ## Bernoulli draws -/
-
-/-- Each unit drawn independently with probability `num / den`. -/
-abbrev bernoulli (n num den : ℕ) [NeZero den] : Law n where
-  Ω := Fin n → Fin den
-  draw ω := Finset.univ.filter fun u => (ω u).val < num
 
 /-- One Bernoulli coordinate's average of `a` when drawn and `1` when not. -/
 noncomputable def bernFactor (num den : ℕ) (a : ℝ≥0∞) : ℝ≥0∞ :=

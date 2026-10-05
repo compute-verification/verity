@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.DecodeZL
 import FlockSoundness.Discharge.Tables
+import FlockSoundness.Protocol.Discharge.DecodeZLJ.Statements
 
 /-!
 # The decoder at `J` tables: statements
@@ -29,13 +30,6 @@ open FlockSoundness.Discharge.Tables FlockSoundness.Discharge.DecodeZL
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-- **Part `j` of the draw `d`**: `partDraw` at `d`'s population and units, the subset draw `Stmt.setupTables` sets
-table `j` of `count` up at, when `d` decodes. -/
-def partJson (d : Json) (count j : ℕ) : Json :=
-  match Draw.UnitDraw.ofJson d with
-  | .ok u => partDraw u.population u.units count j
-  | .error _ => d
 
 theorem tagsAt_typed (tags : Tags) (count j : ℕ) : (tagsAt tags count j).typed = tags.typed := by
   unfold tagsAt

@@ -1,5 +1,8 @@
 import FlockSoundness.Discharge.Composed.Sound
 import FlockSoundness.Assumptions.Zk
+import FlockSoundness.Discharge.Composed.Coined
+import FlockSoundness.Discharge.Composed.DefsJ
+import FlockSoundness.ZK.Complete
 
 /-!
 # One `--zk` sampled session is sound, under the record's custody

@@ -1,5 +1,7 @@
 import FlockSoundness.Game.Basic
 import FlockSoundness.Assumptions
+import FlockSoundness.Game.Expect
+import FlockSoundness.Randomness
 
 /-!
 # Interactions with committed coins (live/PROTOCOL.md §9, M2)

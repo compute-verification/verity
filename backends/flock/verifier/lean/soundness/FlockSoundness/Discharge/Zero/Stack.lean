@@ -1,4 +1,6 @@
 import FlockSoundness.Discharge.Zero.Delta
+import FlockSoundness.Protocol.Discharge.Zero.Stack
+import FlockSoundness.ExecFlatCopies
 
 /-!
 # A VU's stacked inputs that read the zero (`hZero`, e2e, untyped statements)
@@ -21,40 +23,9 @@ open Flock
 
 namespace FlockSoundness.Discharge.Zero
 
-/-- **Slot offset `off` is a bit of one of the unit's input ports**, not an input padding row. -/
-def InPort (c : Circuit) (off : ℕ) : Prop := off ∈ portBits c.unit.inGroups
-
-/-- **Stacked input `x` of a VU reads the zero**: copy `x / W` of the unit, at slot offset `x % W`
-(`W = inWords · WORD`), is a port bit that reads the zero. -/
-def ZeroIn (c : Circuit) (x : ℕ) : Prop :=
-  InPort c (x % (c.unit.inWords * WORD)) ∧ ZeroAt c (x / (c.unit.inWords * WORD)) (x % (c.unit.inWords * WORD))
-
 instance (c : Circuit) : DecidablePred (ZeroIn c) := fun _ => by
   unfold ZeroIn InPort ZeroAt ZeroPort
   infer_instance
-
-/-- `ZeroAt` reads a slot only through its copy index. -/
-theorem zeroAt_mod (c : Circuit) (s₀ off : ℕ) : ZeroAt c (s₀ % c.upv) off ↔ ZeroAt c s₀ off := by
-  simp only [ZeroAt, ZeroPort, Nat.mod_mod]
-
-/-- **`ZeroAt` is the same at every VU**: at slot `g · upv + i` as at `i`. -/
-theorem zeroAt_vu (c : Circuit) (g i off : ℕ) : ZeroAt c (g * c.upv + i) off ↔ ZeroAt c i off := by
-  rw [← zeroAt_mod c (g * c.upv + i), ← zeroAt_mod c i, Nat.add_comm, Nat.add_mul_mod_self_right]
-
-/-- **At VU `g`, a stacked input that reads the zero is a port bit of its copy's slot that reads the zero.** -/
-theorem zeroIn_vu {c : Circuit} {x : ℕ} (h : ZeroIn c x) (g : ℕ) :
-    InPort c (x % (c.unit.inWords * WORD)) ∧
-      ZeroAt c (g * c.upv + x / (c.unit.inWords * WORD)) (x % (c.unit.inWords * WORD)) :=
-  ⟨h.1, (zeroAt_vu c g _ _).2 h.2⟩
-
-/-- **Δ copies a forced-zero row into a stacked input that reads the zero**, at every VU `g`: the input's own slot's
-(a zero leaf) or the first slot's (a cut bit past 16). -/
-theorem flatSrcAt_zeroIn {c : Circuit} {x : ℕ} (h : ZeroIn c x) (g : ℕ) :
-    flatSrcAt c (g * c.upv + x / (c.unit.inWords * WORD)) (x % (c.unit.inWords * WORD)) =
-        c.unitRange.slot (g * c.upv + x / (c.unit.inWords * WORD)) + c.unit.useful ∨
-      flatSrcAt c (g * c.upv + x / (c.unit.inWords * WORD)) (x % (c.unit.inWords * WORD)) =
-        c.unitRange.slot 0 + c.unit.useful :=
-  flatSrcAt_zero (zeroIn_vu h g).2
 
 /-- **A wiring of the units' stacked inputs with the zero clause**: an input that reads the zero goes to the gate `zer`,
 any other as `rest` wires it. -/

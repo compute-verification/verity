@@ -1,5 +1,6 @@
 import FlockSoundness.Refine.Run
 import FlockSoundness.Game.Interleave
+import FlockSoundness.Protocol.Refine.Plays
 
 /-!
 # Runs compose
@@ -47,10 +48,6 @@ theorem map {g : Game α} {ms : List Msg} {cs : List (Array W)} {a : α} (f : α
     Plays ι (g.map f) ms cs (f a) := by
   have := bind (f := fun a => Game.ret (f a)) h (Plays.ret (ι := ι) (f a))
   simpa [Game.map] using this
-
-/-- `interleave` against a finished second interaction runs the first alone. -/
-theorem interleave_ret (g₁ : Game α) (b : β) : interleave g₁ (.ret b) = g₁.map fun a => (a, b) := by
-  cases g₁ <;> rfl
 
 /-- **The first interaction first.** When the second interaction has not finished, `interleave` can run the first one to
 its end, with the prover choosing it at every step, and then the second one. The coins are the first's, then the

@@ -3,6 +3,7 @@ import Mathlib.Combinatorics.Enumerative.DoubleCounting
 import Mathlib.Data.Fintype.Prod
 import Mathlib.Analysis.Real.Sqrt
 import Mathlib.Order.ConditionallyCompleteLattice.Finset
+import FlockSoundness.Protocol.Rewinding
 
 /-!
 # The rewinding lemma: openings off the plurality table cost collisions
@@ -46,13 +47,6 @@ def opened (p : P) : Finset Ω := univ.filter fun ω => (op ω p).isSome
 
 /-- `vstar` is a plurality table: at each position no value is opened in more runs. -/
 def IsPlurality (vstar : P → V) : Prop := ∀ p v, #(openedTo op p v) ≤ #(openedTo op p (vstar p))
-
-/-- The run opens `p` to a value other than `vstar p`. -/
-abbrev Off (vstar : P → V) (ω : Ω) (p : P) : Prop := (op ω p).isSome ∧ op ω p ≠ some (vstar p)
-
-/-- The two runs open `p` to different values. -/
-abbrev ConflictAt (x : Ω × Ω) (p : P) : Prop :=
-  (op x.1 p).isSome ∧ (op x.2 p).isSome ∧ op x.1 p ≠ op x.2 p
 
 omit [DecidableEq Ω] in
 /-- Every assignment of runs to openings has a plurality table. -/

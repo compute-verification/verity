@@ -1,4 +1,5 @@
 import FlockSoundness.Audit.FlockPublic
+import FlockSoundness.Protocol.E2E
 
 /-!
 # The end-to-end theorem: a skeleton, every gap a named hypothesis
@@ -57,12 +58,6 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [In
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : Law n}
-
-/-- **Each drawn unit's place in its table, for the rows the verifier derives** (named: 1d, 1e, S4). `unitRows u` is
-unit `u`'s rows as the verifier derives them: `Rows.compose` of `derive` on its types (1d). -/
-structure DerivedPlaces (unitRows : Fin n → FlockSoundness.Rows) where
-  place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u
-  rows : ∀ S R u (h : u ∈ S), (place S R u h).R = unitRows u
 
 /-- **A program of units' Boolean circuit refines to its rows**: at values that carry 1 on `ones`, the gates the units'
 constants read, every unit wrong on the program's Boolean circuit `CB` (partition `PB`, the same units) is wrong on its
@@ -127,31 +122,7 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- **Each drawn unit's place in its table, for the program's circuit** (named). Unit `u` is an instance of its rows
-`p.rows u` (`inst`; `Prog.isRowsUnit` gives one), and the statement of the table it is drawn into holds those rows in
-block `o` at the columns `col`:
-* `placed`: the statement's level-0 matrices hold `p.rows u` there. From the executable's accept step,
-  `placement_of_setupH` gives it for the rows `Rows.ofNet` reads off setupH's net; that those rows are the program's
-  unit's (W6) is open;
-* `aliased`: the unit's input columns on one gate carry one value in every satisfying witness (`Layout.Aliased`, which
-  `unitPlace_of_setupH` takes as a hypothesis too). -/
-structure ProgPlaces where
-  inst : ∀ u, (p.partition outs).IsRowsUnit u (p.rows u)
-  o : ∀ S R u, u ∈ S → Fin (2 ^ (Partition.tabOf plan tab S R u).S.nbl)
-  col : ∀ S R u, u ∈ S → Fin (p.rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)
-  placed : ∀ S R u (h : u ∈ S), Placement (Partition.tabOf plan tab S R u).S (p.rows u) (col S R u h)
-  aliased : ∀ S R u (h : u ∈ S), ∀ c c', (inst u).wire c = (inst u).wire c' → c.val < (p.rows u).nIn →
-    c'.val < (p.rows u).nIn → ∀ z : Witness (Partition.tabOf plan tab S R u).S.m,
-      (Partition.tabOf plan tab S R u).S.Satisfies z →
-      (Partition.tabOf plan tab S R u).S.block z (o S R u h) (col S R u h c) =
-        (Partition.tabOf plan tab S R u).S.block z (o S R u h) (col S R u h c')
-
 variable {p outs plan tab}
-
-/-- The places, as `DerivedPlaces` for the program's rows. -/
-def ProgPlaces.derived (pp : ProgPlaces p outs plan tab) : (p.partition outs).DerivedPlaces plan tab p.rows where
-  place S R u h := ⟨p.rows u, pp.inst u, pp.o S R u h, pp.col S R u h, pp.placed S R u h, pp.aliased S R u h⟩
-  rows _ _ _ _ := rfl
 
 variable (p outs plan tab) {D : Type} [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {L : Law n}
 

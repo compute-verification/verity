@@ -1,5 +1,6 @@
 import FlockSoundness.CompiledLock
 import FlockSoundness.Soundness
+import FlockSoundness.Protocol.CompiledSound
 
 /-!
 # Compiled soundness under collision resistance (README.md §1.2)
@@ -20,9 +21,6 @@ open Game Model Accounting
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D : Type}
 
-/-- A level's parameters. -/
-abbrev lvOf (sch : Schedule) (ℓ : ℕ) : Level := sch.levels.getD ℓ default
-
 /-- The openings of rep `r`'s first level-`ℓ` request, `(position, row, path)` for its first `Q`
 queries. -/
 def slotOpens (out : OutC F D) (r ℓ Q : ℕ) : List (ℕ × List F × List D) :=
@@ -42,9 +40,6 @@ theorem slotOpens_length (out : OutC F D) (r ℓ Q : ℕ) : (slotOpens out r ℓ
 def Verified (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap : Cap D) (lanes depth : ℕ)
     (x : ℕ × List F × List D) : Prop :=
   x.2.1.length = 2 ^ lanes ∧ Merkle.Verifies H E cap depth x.1 x.2.1 x.2.2
-
-/-- A row as a function of its lanes. -/
-def rowFin (lanes : ℕ) (row : List F) : Fin (2 ^ lanes) → F := fun lane => row.getD lane.val 0
 
 open Classical in
 /-- The row a run opens at `p`: its first verifying opening there. -/
@@ -140,10 +135,6 @@ noncomputable def opR (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : 
 /-- A table's rows on a level's domain. -/
 def rowT (lanes d : ℕ) (t : Oracle F) : Fin (2 ^ d) → Fin (2 ^ lanes) → F :=
   fun p lane => t lane.val p.val
-
-/-- The table with the given rows on a level's domain. -/
-def tabOf (lanes d : ℕ) (v : Fin (2 ^ d) → Fin (2 ^ lanes) → F) : Oracle F :=
-  fun lane q => if h : q < 2 ^ d ∧ lane < 2 ^ lanes then v ⟨q, h.1⟩ ⟨lane, h.2⟩ else 0
 
 theorem rowT_tabOf (lanes d : ℕ) (v : Fin (2 ^ d) → Fin (2 ^ lanes) → F) :
     rowT lanes d (tabOf lanes d v) = v := by

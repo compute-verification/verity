@@ -1,5 +1,6 @@
 import FlockSoundness.Refine.Basis
 import Flock.Verify
+import FlockSoundness.Protocol.Refine.Rep
 
 /-!
 # One rep refines the model's (PROTOCOL.md §9–§14)
@@ -23,11 +24,6 @@ open Flock FlockLevel3 Game Transcript Model Accounting
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- The shape `verifyRep` decodes a proof with (§8.3), `nExtra` the statement's extra claims. -/
-def shapeOf (st : Setup) (sch : Flock.Schedule) (nExtra : ℕ) : Shape :=
-  { m := st.m, kLog := st.kLog, claims := 2 + nExtra, sched := sch, hashLen := st.merkle.digestLen,
-    saltLen := if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes }
-
 /-- The statement's extra claims at the link points `points` are the model's `extra`, claim by claim. -/
 def ExtraRealizes (st : Setup) (S : Model.Statement) (points : Array (Array F128))
     (extra : List (Model.Claim 𝔽 S.m)) : Prop :=
@@ -39,12 +35,6 @@ Ligerito's. -/
 def repMsgs {D : Type} (st : Setup) (sch : Flock.Schedule) (nClaims : ℕ) (p : Proof)
     (capD : Array ByteArray → Cap D) : List Msg :=
   zcMsgs st.m p.zerocheck ++ lcMsgs st.kLog p.lincheck ++ opMsgs nClaims p.ringSwitches ++ ligMsgs p.ligerito capD sch
-
-theorem ebind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
-    ∃ a, x = .ok a ∧ f a = .ok b := by
-  cases hx : x with
-  | error e => rw [hx] at h; cases h
-  | ok a => rw [hx] at h; exact ⟨a, rfl, h⟩
 
 theorem consumed_all (rs : Array Round) : consumed rs 0 rs.size = rs.toList.map (·.coins) := by
   unfold consumed

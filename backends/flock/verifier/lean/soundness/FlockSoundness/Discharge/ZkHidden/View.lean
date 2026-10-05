@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Composed.Headline
 import FlockSoundness.Discharge.ZkHidden.SoundJ
+import FlockSoundness.Protocol.Discharge.ZkHidden.View
 
 /-!
 # Zero knowledge of production's `--zk` session: hidden outputs, `J` tables
@@ -62,25 +63,6 @@ theorem planZHJ_get_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : 
   simp only [planZHJ, List.get_ofFn, Fin.cast_cast, Fin.cast_eq_self]
   rw [tableZHJ, dif_pos ⟨y⟩]
   exact DrawSetupZHJ.table_eq _ _
-
-/-- **Zero knowledge at `J` `CoinedSetup`s, at `δ₁` per hidden leaf** (`ZkViewAt` at `J` tables): at any coin vector of
-each table that the honest prover doesn't refuse (`CoinedSetup.Admits`), for any encoding `enc` of the joint view and any
-event `E`, the real joint view at valid witnesses `w j` whose registered values are the public ones and the simulators' at
-any `w0 j`, each table's prover randomness independent, are within `Σ_j 2·|Hid_j|·δ₁`, both ways. -/
-def ZkViewAtJ {J : ℕ} (C : Fin J → CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
-  ∀ (c : ∀ j, CoinsZK (C j).Rest), (∀ j, (C j).Admits (c j)) → ∀ {Out : Type}
-    (enc : (∀ j, ((C j).T (c j)).tab.View) → Out) (w w0 : ∀ j, Witness (C j).S.m), (∀ j, (C j).Valid (w j)) →
-    ∀ (_hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg) (E : Out → Prop),
-    Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
-        E (enc fun j => ((C j).T (c j)).viewExe (w j) (p j).1 (p j).2))
-        ≤ Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.SimRand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
-            E (enc fun j => ((C j).T (c j)).simExe (w0 j) (p j).1 (p j).2))
-          + ∑ j, 2 * Fintype.card ((C j).T (c j)).tab.Hid * δ₁
-      ∧ Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.SimRand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
-          E (enc fun j => ((C j).T (c j)).simExe (w0 j) (p j).1 (p j).2))
-        ≤ Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
-            E (enc fun j => ((C j).T (c j)).viewExe (w j) (p j).1 (p j).2))
-          + ∑ j, 2 * Fintype.card ((C j).T (c j)).tab.Hid * δ₁
 
 section Nonempty
 

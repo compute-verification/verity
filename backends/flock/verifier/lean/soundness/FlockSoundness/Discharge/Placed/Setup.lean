@@ -1,5 +1,5 @@
-import FlockSoundness.ExecSetup
-import FlockSoundness.E2E
+import FlockSoundness.Protocol.ExecSetup
+import FlockSoundness.Protocol.E2E
 
 /-!
 # `ProgPlaces` from `Stmt.setupH`'s accept

@@ -1,5 +1,6 @@
 import FlockSoundness.SessionBatch
 import FlockSoundness.SessionAcc
+import FlockSoundness.Protocol.SessionBatchAcc
 
 /-!
 # Several tables in one batched session, from accepted reruns (DESIGN.md §3)
@@ -62,10 +63,6 @@ noncomputable def ksBoundAccB [Inhabited D] (A : Arith F K) (H : List UInt8 → 
     Real.sqrt (k * adv₀S A H E (ts.get j).S (ts.get j).sch (ts.get j).hm (ts.get j).ptLocal mPts
       ((gamesB A H E ts τ.1).take j) ((gamesB A H E ts τ.1).drop (j + 1)) (τ.1 j)
       (stratB A H E ts j τ))
-
-/-- **The rate of table `j`'s relative term**, `N₀/(ek)`. -/
-noncomputable def rateB (ts : List (TabSpec mPts)) (j : Fin ts.length) (k : ℕ) : ℝ :=
-  2 ^ (ts.get j).l₀.logLen / (Real.exp 1 * k)
 
 omit [Fintype K] in
 theorem extractProbAccB_nonneg [Inhabited D] (A : Arith F K) (H : List UInt8 → D)

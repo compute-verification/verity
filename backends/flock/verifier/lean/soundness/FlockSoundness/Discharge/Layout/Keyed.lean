@@ -3,6 +3,7 @@ import FlockSoundness.Discharge.Layout.KeysRow
 import FlockSoundness.Discharge.Layout.Outs
 import FlockSoundness.Discharge.Const
 import FlockSoundness.Discharge.Zero
+import FlockSoundness.Protocol.Discharge.Layout.Keyed
 
 set_option Elab.async false
 
@@ -34,52 +35,11 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {Reg : Type} {mPts : 
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
   (outs : Finset (Fin (keyN c hU n))) (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ) (popOf : Reg → Public)
 
-/-- **`lay` at the production program's places**: `keyLayout` at row widths `16 · words`, with the population's
-returned outputs for the registration's bit. -/
-noncomputable abbrev keyedLayout :
-    Binding.Layout ((keyProg c hU n).partition outs) plan tab
-      (((keyProg c hU n).partition outs).placeDecoder plan tab (keyPlace hparse outs)) :=
-  keyLayout (portRowW c) hparse outs saltCol popOf (outBitOf c hU n outs popOf) bitCode
-
-variable {outs popOf} in
-/-- **`rs` at the production program's places**: `keyRowsEnc` at row widths `16 · words`, with the constant's and the
-zero's gates from [e2e-const] and [e2e-zero]. -/
-noncomputable def keyedRows (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
-      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
-    (houts : OutsOut c hU n outs) (hkeys : KeysRow c hU (portRowW c)) :
-    Binding.HmRows (keyedLayout hparse outs saltCol popOf) :=
-  keyRowsEnc (rowW := portRowW c) (hparse := hparse) (saltCol := saltCol) ho hsite hkeys houts
-    (Const.constCols_keyProg hU hparse outs) (Zero.zeroCols_keyProg hU hparse outs)
-
 /-- `keyedRows`' `enc` is `rowEnc`. -/
 theorem keyedRows_enc (ho : c.outNet = c.unitNet)
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (houts : OutsOut c hU n outs) (hkeys : KeysRow c hU (portRowW c)) :
     (keyedRows hparse saltCol ho hsite houts hkeys).enc = rowEnc := rfl
-
-variable {outs popOf} in
-/-- **`rs` at the production program's places, with `KeysRow` from the parse** (`keysRow_of_parse`): the circuit's unit
-has only its leaf group, and every input a unit row reads is a port bit (`PortReads`). -/
-noncomputable def keyedRowsOfParse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    (hc : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU)
-    (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
-      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
-    (houts : OutsOut c hU n outs) :
-    Binding.HmRows (keyedLayout hparse outs saltCol popOf) :=
-  keyedRows hparse saltCol ho hsite houts (keysRow_of_parse hc h1 hpr)
-
-variable {popOf} in
-/-- **`rs` at the production program's places, with the returned outputs' bits for the program's outputs**
-(`outs := outsOf`, `outsOut_outsOf`): `keyedRowsOfParse` without `OutsOut`. -/
-noncomputable def keyedRowsOuts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    (hc : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU)
-    (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
-      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
-    Binding.HmRows (keyedLayout hparse (outsOf c hU n) saltCol popOf) :=
-  keyedRowsOfParse hparse saltCol hc h1 hpr ho hsite (outsOut_outsOf c hU n)
 
 end FlockSoundness.Discharge.Layout

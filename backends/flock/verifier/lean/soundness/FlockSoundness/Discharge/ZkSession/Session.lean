@@ -3,6 +3,7 @@ import FlockSoundness.SessionBatch
 import FlockSoundness.Audit.Extraction
 import FlockSoundness.Lowering
 import FlockSoundness.ExecDrawOS
+import FlockSoundness.Protocol.Discharge.ZkSession.Session
 
 /-!
 # A batched `--zk` session and its audit (live/PROTOCOL.md §1–§7, PROTOCOL.md §5)
@@ -59,38 +60,6 @@ namespace FlockSoundness.Discharge.ZkSession
 open Game Model Accounting Audit
 open scoped ENNReal NNReal
 
-/-- **A `--zk` table of a batched session**: the statement and its schedule, the padded level 0 (`t` padding columns,
-`c₀`, `e` extra lanes), the link layout for the session's `m_pts`, and the inner proof's layout: the pads (level 0's
-`pads`, the algebraic phase's `padsA`, the triple's `tr`), the pads code `RS[F, dom, np + nP]` read at `q` positions
-`pos`, and a radius `δ` within its unique-decoding radius. -/
-structure TabZK (F : Type) [Field F] [Fintype F] [DecidableEq F] (mPts : ℕ) where
-  S : Statement
-  sch : Schedule
-  hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
-    sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧ levelsChained sch.levels sch.ext = true
-  hmsch : sch.m = S.m
-  hm : 13 ≤ S.m
-  t : ℕ
-  hpad : PadOK sch.level₀ t
-  c₀ : F
-  e : ℕ
-  ptLocal : ℕ
-  hlay : S.LinkLayout ptLocal mPts
-  np : ℕ
-  pads : Pads0 np e
-  padsA : PadsA np
-  tr : Triple np
-  N : ℕ
-  dom : Fin N ↪ F
-  nP : ℕ
-  q : ℕ
-  hnP : NeZero (np + nP)
-  pos : F → Fin N
-  hpos : ∀ D : Finset (Fin N), prCoin (fun x => pos x ∈ D) ≤ (D.card : ℝ≥0∞) / N
-  δ : ℝ≥0
-  hL : np + nP ≤ N
-  hδ : δ ≤ Code.relativeUniqueDecodingRadius (ReedSolomon.code dom (np + nP) : Set (Fin N → F))
-
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 
 namespace TabZK
@@ -99,15 +68,6 @@ namespace TabZK
 noncomputable def after (A : Arith F K) (T : TabZK F mPts) (C₀ : Oracle F) (pts : Fin 2 → Fin mPts → F) :
     Game (Bool × Oracle F) :=
   tableAfterZK A T.pads T.padsA T.tr T.dom T.nP T.q T.pos T.S T.sch T.hm T.t T.c₀ T.ptLocal mPts C₀ pts
-
-/-- The table's committed values satisfy its statement (padded level 0). -/
-def Committed (A : Arith F K) (T : TabZK F mPts) (C : Oracle F) : Prop :=
-  CommittedPad A T.S T.sch T.t T.c₀ C
-
-/-- The table's soundness error: `padLinkError + (padRepError + εInner)²`. -/
-noncomputable def bound (T : TabZK F mPts) : ℝ≥0∞ :=
-  ENNReal.ofReal (padLinkError T.sch (T.S.shape mPts) T.t) +
-    (ENNReal.ofReal (padRepError T.sch (T.S.shape mPts) T.t T.e) + εInner T.N F T.q T.δ) ^ 2
 
 /-- **A table after its commitment** accepts an oracle that is not `CommittedPad` with probability at most its
 bound (`tableAfterZK_sound`). -/
@@ -191,9 +151,6 @@ variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- The table of the plan that carries drawn unit `u`. -/
-abbrev tabOfZ (S : Finset (Fin n)) (R : Reg) (u : Fin n) : TabZK F mPts := (planZ S R).get (tab S R u)
-
 open Classical in
 /-- **The batched `--zk` session on a draw**: the plan's tables in one session; it accepts when every table accepts. -/
 noncomputable def batchedSessionZK (S : Finset (Fin n)) (R : Reg) : Game Bool :=
@@ -214,10 +171,6 @@ theorem prob_batchedSessionZK (S : Finset (Fin n)) (R : Reg) (τ : Strategy (bat
   funext outs
   exact propext decide_eq_true_iff
 
-/-- A decoder: for each drawn unit, the values a level-0 message of its table packs for it. -/
-abbrev DecoderZK := (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) →
-  Message F (tabOfZ planZ tab S R u).sch.k0 (tabOfZ planZ tab S R u).sch.level₀.logCols → (Fin C.N → Bool)
-
 /-- **The lowering, per `--zk` table** (`Audit.Partition.LoweringSoundB`'s form): a message packing a witness that
 satisfies the statement of drawn unit `u`'s table decodes to values on which `u` is correct. -/
 def LoweringSoundZK (decode : DecoderZK (C := C) planZ tab) : Prop :=
@@ -232,13 +185,6 @@ def LinkEvZK (decode : DecoderZK (C := C) planZ tab) (S : Finset (Fin n)) (R : R
     ∀ M ∈ padWits A (tabOfZ planZ tab S R u).sch (tabOfZ planZ tab S R u).t (tabOfZ planZ tab S R u).c₀ C₀,
       (tabOfZ planZ tab S R u).S.Satisfies (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M) →
         ∃ g ∈ P.io u, decode S R u M g ≠ Xc g
-
-/-- The decoder of the drawn units' places: each unit is read from its block of the witness. -/
-noncomputable def decodeOfPlace (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u) :
-    DecoderZK (C := C) planZ tab :=
-  fun S R u M => if h : u ∈ S then
-    (place S R u h).decode (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M)
-  else fun _ => false
 
 omit [Fintype K] [DecidableEq K] in
 /-- **The lowering from the drawn units' places** (`Lowering.lean`), as `loweringSoundB_of_place` at M0. -/

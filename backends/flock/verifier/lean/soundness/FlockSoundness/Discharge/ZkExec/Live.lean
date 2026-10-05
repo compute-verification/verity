@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.ZkExec.Event
 import FlockSoundness.Discharge.Exec.Live
+import FlockSoundness.Protocol.Discharge.ZkExec.Live
 
 /-!
 # The live `--zk` audit, and the compiled `--zk` table it is simulated in
@@ -37,10 +38,6 @@ local notation "𝔽" => FlockLevel3.GF128
 variable {n : ℕ} {Reg : Type} {mPts : ℕ} {P Cp Op Out : Finset (Fin n) → Reg → Type}
   (G : ∀ S R, (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game (P S R))
   (out : ∀ S R, Cp S R → P S R × P S R → Op S R → Out S R) (acc : ∀ S R, Out S R → Bool)
-
-/-- **The compiled `--zk` table's game at a draw**: the level-0 cap, the link points, the two reps concurrently, the
-openings, and the table's verdict. -/
-def sessionZC (S : Finset (Fin n)) (R : Reg) : Game Bool := (modelTable (G S R) (out S R)).map (acc S R)
 
 variable [∀ S R, Nonempty (Op S R)] (I : Inputs) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
   (opn : ∀ S R, Array ByteArray → Op S R) (dg : ByteArray → ByteArray)

@@ -1,5 +1,6 @@
 import FlockSoundness.Game.Runs
 import Mathlib.Analysis.SpecialFunctions.Exp
+import FlockSoundness.Protocol.Extract
 
 /-!
 # Extraction by filling: the extractor's own table
@@ -24,11 +25,6 @@ namespace Extract
 open Game Rewinding
 
 variable {β P V : Type} [Fintype P] [DecidableEq V]
-
-/-- **The extractor's table** from runs `bs`: at each position, the first opening a run made there;
-`z₀` where none did. -/
-def firstTable (op : β → P → Option V) (z₀ : P → V) (bs : List β) (p : P) : V :=
-  (bs.findSome? fun b => op b p).getD (z₀ p)
 
 theorem conflictAt_comm (op : β → P → Option V) (a b : β) (p : P) :
     ConflictAt op (a, b) p ↔ ConflictAt op (b, a) p :=

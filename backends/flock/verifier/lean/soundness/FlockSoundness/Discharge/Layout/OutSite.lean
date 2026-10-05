@@ -1,5 +1,5 @@
 import FlockSoundness.Discharge.Layout.OutRegion
-import FlockSoundness.Discharge.Layout.Site
+import FlockSoundness.Protocol.Discharge.Layout.Site
 
 set_option Elab.async false
 

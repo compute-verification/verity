@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.DecodeZL.ZL
 import FlockSoundness.Discharge.DecodeZL.Sizes
+import FlockSoundness.Protocol.Discharge.DecodeZL.OP
 
 /-!
 # The opening's rounds carry its messages (R11b)
@@ -14,9 +15,6 @@ namespace FlockSoundness.Discharge.DecodeZL
 open Flock Refine Exec Game Model
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-- **The opening's wires**: each ring switch's round its 128 values, the batching coin's round nothing. -/
-def wOP (n : ℕ) : List (List Wire) := List.replicate n [.v 128] ++ [[]]
 
 theorem readAll_v {fs : List Frame} {a : Array F128} {n : ℕ} (ha : a.size = n) (hv : valsOf fs = a.toList) :
     readAll [.v n] (valsOf fs) (bytesOf fs) = [⟨Fin n → 𝔽, vecOf n a⟩] := by

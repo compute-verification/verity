@@ -1,5 +1,7 @@
 import FlockSoundness.ExtractWait
 import FlockSoundness.Assumptions
+import FlockSoundness.Protocol.LinkFinder
+import FlockSoundness.Randomness
 
 /-!
 # The link finder: a trial, then further trials until one reads the same string
@@ -31,13 +33,6 @@ open Game Extract
 variable {τ Val : Type} [Fintype Val] [DecidableEq Val] (T : Game τ) (sT : Strategy T)
   (rd : τ → Finset Val)
 
-/-- **The finder**: a trial, then `M` more. -/
-def finderG (M : ℕ) : Game (τ × List τ) := T.bind fun e => (runsG T M).map fun aux => (e, aux)
-
-/-- `sT` in every trial. -/
-def finderStrat (M : ℕ) : Strategy (finderG T M) :=
-  Strategy.bind T _ sT fun _ => Strategy.map _ _ (runsStrat T sT M)
-
 theorem expect_finderG (M : ℕ) (F : τ × List τ → ℝ) :
     expect F (finderG T M) (finderStrat T sT M) =
       expect (fun e => expectN T sT M fun aux => F (e, aux)) T sT := by
@@ -47,29 +42,10 @@ theorem expect_finderG (M : ℕ) (F : τ × List τ → ℝ) :
   rw [expect_map, expect_runsG]
 
 open Classical in
-/-- The first further trial that reads anything. -/
-noncomputable def nextRead (aux : List τ) : Option τ := aux.find? fun e => decide (rd e).Nonempty
-
-open Classical in
 /-- **The finder succeeds**: its first trial reads two values, or it reads one and the first
 further trial that reads anything reads another. -/
 def Succ (x : τ × List τ) : Prop :=
   2 ≤ (rd x.1).card ∨ ∃ v, rd x.1 = {v} ∧ ∃ e', nextRead rd x.2 = some e' ∧ rd e' ≠ {v}
-
-open Classical in
-/-- The further trials' cost, up to and including the first that reads anything. -/
-noncomputable def loopCost (c : τ → ℝ) : List τ → ℝ
-  | [] => 0
-  | e :: es => c e + if (rd e).Nonempty then 0 else loopCost c es
-
-open Classical in
-/-- **The finder's cost**: its first trial's, and when that read one value, the further trials' up
-to the first that reads anything. -/
-noncomputable def finderCost (c : τ → ℝ) (x : τ × List τ) : ℝ :=
-  c x.1 + if (rd x.1).card = 1 then loopCost rd c x.2 else 0
-
-/-- The probability that a trial reads exactly `v`. -/
-noncomputable def pRd (v : Val) : ℝ := expect (ind fun e => rd e = {v}) T sT
 
 /-- The probability that a trial reads two or more values. -/
 noncomputable def sRd : ℝ := expect (ind fun e => 2 ≤ (rd e).card) T sT

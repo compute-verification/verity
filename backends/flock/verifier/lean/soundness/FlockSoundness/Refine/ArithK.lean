@@ -1,4 +1,5 @@
 import FlockSoundness.Refine.Opening
+import FlockSoundness.Protocol.Refine.ArithK
 
 /-!
 # Element seams over `K = GF(2^256)` (PROTOCOL.md §2.4, §13)
@@ -19,9 +20,6 @@ open Flock FlockLevel3
 
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
-
-/-- A word of `K` as a model field element. -/
-abbrev gOf (a : F256) : 𝕂 := GF256.of a
 
 theorem gOf_add (a b : F256) : gOf (a + b) = gOf a + gOf b := (GF256.add_eq a b).symm
 theorem gOf_mul (a b : F256) : gOf (a * b) = gOf a * gOf b := (GF256.mul_eq a b).symm

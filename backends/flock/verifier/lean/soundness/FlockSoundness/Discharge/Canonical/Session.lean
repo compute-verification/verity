@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.Canonical.Rows
 import FlockSoundness.Discharge.Canonical.Sites
 import FlockSoundness.Discharge.ZkHidden.CustodyJJson
+import FlockSoundness.Protocol.Discharge.Canonical.Session
 
 set_option Elab.async false
 
@@ -76,55 +77,10 @@ variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)
   (hfmt : formatOk c = true) (hU : Built c.unit) {pub : Public}
   (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
-/-- **`lay` at the public plan**: `keyLayoutC` at `sitesShC`. -/
-noncomputable abbrev layShC :
-    Binding.Layout ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj y₀)
-      (((keyProg c hU n).partition (Layout.outsOf c hU n)).placeDecoder (planShHJ dj y₀) (tabShHJ dj y₀)
-        (keyPlaceH (sitesShC_parse dj y₀ ht hc hfmt) (Layout.outsOf c hU n))) :=
-  keyLayoutC (sitesShC_parse dj y₀ ht hc hfmt) (Layout.outsOf c hU n) (fun _ => pub) hfmt
-    (Layout.outsOut_outsOf c hU n)
-
-/-- **`rs` at the public plan**: `keyRowsC` at `sitesShC`, with `hsite` from `sitesShC_bcSite` and the keys from
-`keysRowC_of_parse`. -/
-noncomputable abbrev rsShC : Binding.HmRows (layShC dj y₀ ht hc hfmt hU (pub := pub) (Reg := Reg)) :=
-  keyRowsC (sitesShC_parse dj y₀ ht hc hfmt) (Layout.outsOf c hU n) (fun _ => pub) hfmt
-    (Layout.outsOut_outsOf c hU n) (sitesShC_bcSite dj y₀ ht hc hfmt hpub)
-    (keysRowC_of_parse hU (HiddenExec.parse_untyped (zkTyped ht) hc).1 hfmt)
-
 theorem rsShC_computes : (rsShC dj y₀ ht hc hfmt hU hpub (Reg := Reg)).Computes :=
   keyRowsC_computes (sitesShC_parse dj y₀ ht hc hfmt) (Layout.outsOf c hU n) (fun _ => pub) hfmt
     (Layout.outsOut_outsOf c hU n) (sitesShC_bcSite dj y₀ ht hc hfmt hpub)
     (keysRowC_of_parse hU (HiddenExec.parse_untyped (zkTyped ht) hc).1 hfmt)
-
-/-- **Each drawn unit's place in its canonical `--zk` table** (`placeZHJ` at `sitesShC`). -/
-noncomputable def placeZC (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
-    UnitPlace ((keyProg c hU n).partition (Layout.outsOf c hU n))
-      (tabOfZ (planZHJ dj y₀) (tabZHJ dj y₀) S R u).S u :=
-  placeCast (planZHJ_S dj y₀ S R u)
-    (keyPlaceH (sitesShC_parse dj y₀ ht hc hfmt) (Layout.outsOf c hU n) S R u h)
-
-/-- **The decoders agree** (`decAgreeHJ`). -/
-theorem decAgreeC :
-    DecAgree (P := (keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ_S (Reg := Reg) dj y₀)
-      (decZ := decodeOfPlace execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀)
-        (tabZHJ dj y₀) (placeZC dj y₀ ht hc hfmt hU))
-      (decS := ((keyProg c hU n).partition (Layout.outsOf c hU n)).placeDecoder (planShHJ dj y₀) (tabShHJ dj y₀)
-        (keyPlaceH (sitesShC_parse dj y₀ ht hc hfmt) (Layout.outsOf c hU n))) := by
-  intro S R u hu M' M hM _ g _
-  simp only [decodeOfPlace, Partition.placeDecoder, hu, ↓reduceDIte, placeZC, decode_placeCast]
-  exact congrArg (fun z => UnitPlace.decode _ z g) hM.symm
-
-/-- **`lay` at the canonical `--zk` tables** (`layZHJ`). -/
-noncomputable abbrev layZC :
-    LayoutZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ (Reg := Reg) dj y₀)
-      (tabZHJ dj y₀)
-      (decodeOfPlace execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
-        (placeZC dj y₀ ht hc hfmt hU)) :=
-  LayoutZ.ofShadow (planZHJ_S dj y₀) (layShC dj y₀ ht hc hfmt hU (pub := pub)) (decAgreeC dj y₀ ht hc hfmt hU)
-
-/-- **`rs` at the canonical `--zk` tables** (`rsZHJ`). -/
-noncomputable abbrev rsZC : HmRowsZ (layZC dj y₀ ht hc hfmt hU (pub := pub) (Reg := Reg)) :=
-  HmRowsZ.ofShadow (planZHJ_S dj y₀) (decAgreeC dj y₀ ht hc hfmt hU) (rsShC dj y₀ ht hc hfmt hU hpub)
 
 /-- **`hHm` at the canonical `--zk` tables' rows** (`rsZHJ_computes`). -/
 theorem rsZC_computes : (rsZC dj y₀ ht hc hfmt hU hpub (Reg := Reg)).Computes :=

@@ -1,4 +1,4 @@
-import FlockSoundness.ExecFlatCopies
+import FlockSoundness.Protocol.ExecFlatCopies
 
 /-!
 # The unit net's rows at its input port bits and past its useful rows

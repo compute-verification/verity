@@ -1,4 +1,5 @@
 import FlockSoundness.Refine.Rep
+import FlockSoundness.Protocol.Refine.Walk
 
 /-!
 # A tactic that walks a successful executable computation
@@ -13,8 +14,6 @@ The kernel checks every proof it builds, as it does every other proof in the pac
 namespace FlockSoundness.Refine
 
 open Flock
-
-theorem throw_ne_ok {α : Type} (e : String) (a : α) : (throw e : V α) ≠ .ok a := fun h => by cases h
 
 open Lean Elab Tactic Meta in
 /-- One step through `h : x = .ok v`, by `x`'s head (see the module docstring). -/

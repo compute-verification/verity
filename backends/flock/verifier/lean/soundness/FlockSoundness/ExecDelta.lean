@@ -1,5 +1,6 @@
 import FlockSoundness.ExecRows
 import Flock.HmRow
+import FlockSoundness.Protocol.ExecDelta
 
 /-!
 # The rows Δ writes (`HmRow.delta`)
@@ -22,31 +23,6 @@ plan's W3).
 open Flock
 namespace FlockSoundness
 
-/-- A loop in `Id` whose body always continues and preserves `P` keeps `P`. -/
-theorem forIn_id_inv {α β : Type} (P : β → Prop) {l : List α} {f : α → β → Id (ForInStep β)}
-    (hf : ∀ a ∈ l, ∀ b, P b → ∃ b', f a b = ForInStep.yield b' ∧ P b') {b : β} (hb : P b) :
-    P (forIn l b f) := by
-  induction l generalizing b with
-  | nil => exact hb
-  | cons a l ih =>
-    rw [List.forIn_cons]
-    obtain ⟨b', hab, hb'⟩ := hf a (List.mem_cons_self) b hb
-    rw [hab]
-    exact ih (fun a ha b hb => hf a (List.mem_cons_of_mem _ ha) b hb) hb'
-
-theorem forIn_id_inv_range {β : Type} (P : β → Prop) {lo hi : ℕ} {f : ℕ → β → Id (ForInStep β)}
-    (hf : ∀ a, lo ≤ a → a < hi → ∀ b, P b → ∃ b', f a b = ForInStep.yield b' ∧ P b') {b : β} (hb : P b) :
-    P (forIn [lo:hi] b f) := by
-  rw [Std.Legacy.Range.forIn_eq_forIn_range']
-  refine forIn_id_inv P (fun a ha b hb => hf a ?_ ?_ b hb) hb <;>
-  · simp only [Std.Legacy.Range.size, List.mem_range'_1] at ha; omega
-
-theorem forIn_id_inv_array {α β : Type} (P : β → Prop) {xs : Array α} {f : α → β → Id (ForInStep β)}
-    (hf : ∀ a ∈ xs.toList, ∀ b, P b → ∃ b', f a b = ForInStep.yield b' ∧ P b') {b : β} (hb : P b) :
-    P (forIn xs b f) := by
-  rw [← Array.forIn_toList]
-  exact forIn_id_inv P hf hb
-
 /-- Every pair's row satisfies `Q`. -/
 def RowsIn (Q : ℕ → Prop) (d : Array (ℕ × ℕ)) : Prop := ∀ p ∈ d.toList, Q p.1
 
@@ -61,19 +37,6 @@ theorem RowsIn.push2 {Q : ℕ → Prop} {d : Array (ℕ × ℕ)} (h : RowsIn Q d
 
 theorem RowsIn.mono {Q Q' : ℕ → Prop} {d : Array (ℕ × ℕ)} (h : RowsIn Q d) (hQ : ∀ x, Q x → Q' x) :
     RowsIn Q' d := fun p hp => hQ _ (h p hp)
-
-/-- **A bit of a row's chain**: in VU `g`, input `i` (`0` its `cv`, 512 bits; `1` its message, 1024) of row `p`'s `k`-th
-`sha512x3` slot. -/
-def ShaRowBit (c : Circuit) (x : ℕ) : Prop :=
-  ∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ k < ((HmRow.rowSlots c.ports).2[p]!).size, ∃ i < 2,
-    ∃ t < 512 * (i + 1), x = c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[k]!.1 +
-      (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * ((HmRow.rowSlots c.ports).2[p]!)[k]!.2 + i]!.1 + t
-
-/-- **A bit of a row's hm96 slot**: in VU `g`, input `i` (`0` its `cv`, 512 bits; `1` its `pad`, 1024) of row `p`'s
-`hm96` slot. -/
-def HmRowBit (c : Circuit) (x : ℕ) : Prop :=
-  ∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ i < 2, ∃ t < 512 * (i + 1),
-    x = c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[i]!.1 + t
 
 /-- **The rows Δ writes**, one form per loop of `HmRow.delta`: a slot's constant (not the pin), a
 bit of a row's chain, a bit of a row's hm96 slot, a unit's leaf bit, a unit's leaf-cut bit, or a
@@ -181,4 +144,3 @@ theorem delta_rows (c : Circuit) (pin : ℕ) (ht : c.typed = none) : RowsIn (Del
   exact hd
 
 end FlockSoundness
-

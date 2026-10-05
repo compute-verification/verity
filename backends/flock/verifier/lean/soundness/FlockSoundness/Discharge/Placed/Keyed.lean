@@ -1,6 +1,6 @@
-import FlockSoundness.Discharge.Placed.Wiring
-import FlockSoundness.Discharge.Aliased.Keys
-import FlockSoundness.Discharge.Const.Inst
+import FlockSoundness.Protocol.Discharge.Placed.Wiring
+import FlockSoundness.Protocol.Discharge.Aliased.Keys
+import FlockSoundness.Protocol.Discharge.Const.Inst
 
 /-!
 # `ProgPlaces` for the circuit's program on Δ's source keys

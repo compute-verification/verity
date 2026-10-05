@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.Layout.Drawn
+import FlockSoundness.Protocol.Discharge.Layout.Drawn
 
 set_option Elab.async false
 

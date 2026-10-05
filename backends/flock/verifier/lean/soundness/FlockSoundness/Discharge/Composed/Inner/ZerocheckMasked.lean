@@ -1,5 +1,6 @@
 import Flock.Zk
 import FlockSoundness.Discharge.Composed.Inner.Zerocheck
+import FlockSoundness.Protocol.Discharge.Composed.Inner.ZerocheckMasked
 
 /-!
 # The masked zerocheck's forms evaluate to the clear replay
@@ -28,42 +29,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- The value of the affine form `l` at the pads `h`: `c + Σ a_i h_i`. -/
 def evalL (l : Lin) (h : Array F128) : F128 := l.c + dot l.a h
-
-def r1c (lay : PadLayout) (zc : ZerocheckProof) : Array Lin :=
-  (Array.range 64).map fun i => Lin.masked zc.round1c[i]! (lay.r1c i) lay.len
-
-def r1ab (lay : PadLayout) (zc : ZerocheckProof) : Array Lin :=
-  (Array.range 64).map fun i => Lin.masked zc.round1ab[i]! (lay.r1ab i) lay.len
-
-def computedC (lay : PadLayout) (zc : ZerocheckProof) (z : F128) : Lin :=
-  Lin.combo (lagrange nodesL den6Inv z) (r1c lay zc) lay.len
-
-def fcL (lay : PadLayout) (zc : ZerocheckProof) : Lin := Lin.masked zc.finalC lay.fc lay.len
-
-/-- The running form before the residual rounds. -/
-def running0 (lay : PadLayout) (zc : ZerocheckProof) (z : F128) : Lin :=
-  (Lin.combo (combWeights z) ((Array.range 64).map fun i => (r1ab lay zc)[i]!.add (r1c lay zc)[i]!) lay.len).add
-    (computedC lay zc z)
-
-/-- Residual round `j`'s update of the running form, at `r_eq = r[j]` and the round's coin `rho[j]`. -/
-def roundL (lay : PadLayout) (zc : ZerocheckProof) (r rho : Array F128) (j : ℕ) (running : Lin) : Lin :=
-  let (m1, minf) := zc.rounds[j]!
-  let req := r[j]!
-  let g1 := Lin.masked m1 (lay.ml j 0) lay.len
-  let ginf := Lin.masked minf (lay.ml j 1) lay.len
-  let g0 := (running.add (g1.scale req)).scale (1 + req).inv
-  let rr := rho[j]!
-  ((g0.scale (1 + rr)).add (g1.scale rr)).add (ginf.scale (rr * (1 + rr)))
-
-/-- The running form after `j` residual rounds. -/
-def running (lay : PadLayout) (zc : ZerocheckProof) (r rho : Array F128) (z : F128) : ℕ → Lin
-  | 0 => running0 lay zc z
-  | j + 1 => roundL lay zc r rho j (running lay zc r rho z j)
-
-/-- `a·b = a'b' + a'·h_b + b'·h_a + h_ab` on the masked `a' = final_a`, `b' = final_b`. -/
-def prodL (lay : PadLayout) (zc : ZerocheckProof) : Lin :=
-  ⟨zc.finalA * zc.finalB,
-    (((Array.replicate lay.len 0).set! lay.fb zc.finalA).set! lay.fa zc.finalB).set! lay.hab 1⟩
 
 /-- `zc'` is the clear `zc` masked by the pads `h` at `lay`'s indices, on its first `n` residual rounds. -/
 structure Masks (lay : PadLayout) (h : Array F128) (zc zc' : ZerocheckProof) (n : ℕ) : Prop where

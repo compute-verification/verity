@@ -1,4 +1,6 @@
 import FlockSoundness.Assumptions
+import FlockSoundness.Game.Expect
+import FlockSoundness.Randomness
 
 /-!
 # Zero knowledge: T1, an hm96 leaf swapped for an ideal one

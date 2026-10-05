@@ -1,6 +1,9 @@
 import FlockSoundness.Discharge.ZkHidden.Sound
 import FlockSoundness.Discharge.ZkHidden.SoundDrawOk
 import FlockSoundness.Assumptions.Zk
+import FlockSoundness.Discharge.Composed.Coined
+import FlockSoundness.Discharge.Composed.DefsJ
+import FlockSoundness.ZK.Complete
 
 /-!
 # One hidden-output `--zk` sampled session is sound, under the record's custody

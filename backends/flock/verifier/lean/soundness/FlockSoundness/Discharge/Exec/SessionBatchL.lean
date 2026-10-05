@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Exec.SessionSoundL
 import FlockSoundness.SessionBatch
+import FlockSoundness.Protocol.Discharge.Exec.SessionBatchL
 
 /-!
 # Several salted tables in one batched session
@@ -43,13 +44,6 @@ theorem take_gamesB_lengthL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.E
     (ts : List (TabSpec mPts)) (caps : Fin ts.length → Cap D) (j : Fin ts.length) :
     ((gamesBL A H E Lf ts caps).take j).length = j := by
   simp [gamesBL, j.isLt.le]
-
-/-- The session strategy after `Commit`, seen with table `j` at its position. -/
-noncomputable def stratBL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (ts : List (TabSpec mPts)) (j : Fin ts.length) (τ : Strategy (sessionBL A H E Lf ts)) :
-    Strategy (sessAfterL A H E Lf (ts.get j).S (ts.get j).sch (ts.get j).hm (ts.get j).ptLocal mPts
-      ((gamesBL A H E Lf ts τ.1).take j) ((gamesBL A H E Lf ts τ.1).drop (j + 1)) (τ.1 j)) :=
-  cast (congrArg Strategy (sessAfterB_gamesBL A H E Lf ts τ.1 j)) τ.2
 
 /-! ## Per table: the extractor's probabilities and the knowledge bound -/
 

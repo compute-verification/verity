@@ -1,6 +1,7 @@
 import FlockSoundness.Refine.Paths
 import FlockSoundness.Refine.Seam
 import FlockSoundness.Session
+import FlockSoundness.Protocol.Refine.Table
 
 /-!
 # The verifier refines the model's table (PROTOCOL.md §3, §5)
@@ -206,10 +207,6 @@ theorem verify_one_ok {spec : SessionSpec} {st : Setup} {record : String} {proof
     · rfl
   rw [bytes_eq_of_beq hb] at h0
   exact ⟨sess, sch, c1', hsess, hf, h0, h1⟩
-
-/-- The proof files' openings (§14): rep `r`'s opened rows and siblings, level by level. -/
-def opensOf (p₀ p₁ : Proof) (sch : Flock.Schedule) : Opens 𝔽 Dig :=
-  fun r ℓ j => if r = 0 then openRow p₀.ligerito sch ℓ j else openRow p₁.ligerito sch ℓ j
 
 /-- **The verifier refines the model's table** (§3, §5, §9–§14). When `Flock.verify` accepts a one-table session record
 and its two proof files under the unsalted SHA-512 scheme, on a statement whose `m`, `k_log`, circuit fold and extra claims are

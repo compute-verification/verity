@@ -1,4 +1,5 @@
 import FlockSoundness.Audit.FlockLinked
+import FlockSoundness.Protocol.Audit.FlockPublic
 
 /-!
 # Public wires: the constant and the zero are the statement's, not the prover's
@@ -31,12 +32,6 @@ open scoped ENNReal
 
 /-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
-
-open Classical in
-/-- **The committed transcript with its public wires**: 1 on `ones` (the gates the units' constants read), 0 on `zeros`
-(the statement's zero) and `vals` elsewhere. -/
-noncomputable def Xpub {N : ℕ} (ones zeros : Finset (Fin N)) (vals : Fin N → Bool) : Fin N → Bool :=
-  fun g => if g ∈ ones then true else if g ∈ zeros then false else vals g
 
 theorem Xpub_of_mem_ones {N : ℕ} {ones zeros : Finset (Fin N)} {vals : Fin N → Bool} {g : Fin N} (h : g ∈ ones) :
     Xpub ones zeros vals g = true := by
@@ -193,32 +188,6 @@ theorem flock_batched_drawn_public (ones zeros : Finset (Fin C.N)) (hpub : P.Pub
     (by rw [P.linkBoundCR_eq H E plan tab vb hCR])
 
 /-! ## The public wires from the drawn units' places -/
-
-/-- **Only a unit's constant column sits on a gate of `ones`**, at every drawn unit's place: no input column of a unit
-reads a constant, and a unit's constant is outside it. A fact of the circuit's wiring. -/
-def ConstCols (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) (ones : Finset (Fin C.N)) : Prop :=
-  ∀ S R u (h : u ∈ S) (c : Fin (place S R u h).R.w), (place S R u h).inst.wire c ∈ ones →
-    c = (place S R u h).R.one
-
-/-- **`ConstCols` for one constant gate**: when every drawn unit's constant column sits on the gate `one`, no other column
-does, since an instance shares a gate only between input columns. -/
-theorem constCols_singleton (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) (one : Fin C.N)
-    (h : ∀ S R u (hu : u ∈ S), (place S R u hu).inst.wire (place S R u hu).R.one = one) :
-    P.ConstCols plan tab place {one} := by
-  intro S R u hu c hc
-  rw [Finset.mem_singleton, ← h S R u hu] at hc
-  rcases (place S R u hu).inst.shared _ _ hc with he | ⟨_, h2⟩
-  · exact he
-  · simp only [Rows.one] at h2
-    omega
-
-/-- **The zero's columns carry 0**, at every drawn unit's place: a column on a gate of `zeros` carries 0 in every witness
-satisfying the table's statement. These are the forced-zero rows, which the verifier's Δ copies to the slot inputs that
-read the zero. -/
-def ZeroCols (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) (zeros : Finset (Fin C.N)) : Prop :=
-  ∀ S R u (h : u ∈ S) (c : Fin (place S R u h).R.w), (place S R u h).inst.wire c ∈ zeros →
-    ∀ z : Witness (tabOf plan tab S R u).S.m, (tabOf plan tab S R u).S.Satisfies z →
-      (tabOf plan tab S R u).S.block z (place S R u h).o ((place S R u h).col c) = 0
 
 /-- **The public wires decode to their values from the drawn units' places**: a committed wire of a drawn unit is one of
 its columns; on a gate of `ones` that column is the constant's, which a satisfying witness holds at 1, and on a gate of

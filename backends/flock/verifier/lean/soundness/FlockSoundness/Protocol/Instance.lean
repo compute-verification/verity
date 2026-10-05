@@ -1,0 +1,56 @@
+import FlockLevel3
+import FlockSoundness.Protocol.LigeritoPhase
+import FlockSoundness.Protocol.LinkSound
+
+/-!
+# The executable's arithmetic satisfies `Arith.Correct`
+
+`execArith` is the arithmetic the executable verifier computes with (lane `flock-verifier`,
+package `level3`): `F = GF(2^128)` in GHASH form, `K = GF(2^256)`, the Lagrange weights of the
+univariate-skip nodes, the pinned zerocheck coordinates, the packing basis `x^v`, the embedding
+`F ⊂ K` and `u`, the Reed–Solomon domain `ω_q` and novel basis `Ŵ_i`, and `lo`. Every field of
+`Arith.Correct` is a theorem of `FlockLevel3` about those functions (`execArith_correct`), so
+the soundness theorems hold for the executable's arithmetic with no arithmetic hypothesis
+(`table_sound_exec`).
+-/
+
+namespace FlockSoundness
+
+open Model Accounting
+
+/-- **The executable's arithmetic.** -/
+noncomputable def execArith : Arith FlockLevel3.GF128 FlockLevel3.GF256 where
+  lagS := FlockLevel3.lagS
+  lagΛ := FlockLevel3.lagΛ
+  combW := FlockLevel3.combW
+  pinned := FlockLevel3.pinnedF
+  pack := FlockLevel3.pack
+  unpack := FlockLevel3.unpack
+  embed := FlockLevel3.embed
+  u := FlockLevel3.u
+  omega := FlockLevel3.omega
+  What := FlockLevel3.What
+  lo := FlockLevel3.lo
+
+theorem eqAt_pinned (b : ℕ) : eqAt execArith.pinned b = FlockLevel3.eqAtPinned b := by
+  unfold FlockLevel3.eqAtPinned eqAt
+  rfl
+
+/-- **`Arith.Correct` holds for the executable's arithmetic.** -/
+theorem execArith_correct : execArith.Correct where
+  card_F := FlockLevel3.card_F
+  card_K := FlockLevel3.card_K
+  charTwo := FlockLevel3.charTwo
+  charTwoK := FlockLevel3.charTwoK
+  unpack_pack := FlockLevel3.unpack_pack
+  pack_unpack := FlockLevel3.pack_unpack
+  unpack_add := FlockLevel3.unpack_add
+  nodes := FlockLevel3.nodes
+  pinned_indep c h := FlockLevel3.pinned_indep c (by simpa only [eqAt_pinned] using h)
+  pinned_ne_one := FlockLevel3.pinned_ne_one
+  omega_injective := FlockLevel3.omega_injective
+  xhat_poly := FlockLevel3.xhat_poly
+  ofLimbs_bijective := FlockLevel3.ofLimbs_bijective
+  lo_balanced := FlockLevel3.lo_balanced
+
+end FlockSoundness

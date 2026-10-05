@@ -1,4 +1,5 @@
 import FlockLevel3
+import FlockSoundness.Protocol.Discharge.Composed.Inner.Zerocheck
 
 /-!
 # The clear zerocheck is complete at every coin with `r_j ≠ 1`
@@ -48,55 +49,9 @@ def claim (zc : ZerocheckProof) (r rho : Array F128) (z : F128) : ℕ → F128
 
 /-! ## The honest prover -/
 
-/-- `eq(r_{k…k+len−1}, x)` over the low `len` bits of `x`. -/
-noncomputable def eqR (r : ℕ → 𝔽) (k len x : ℕ) : 𝔽 :=
-  ∏ j ∈ Finset.range len, if x.testBit j then r (k + j) else 1 + r (k + j)
-
-/-- A table's skip row at `Y = ζ`: `t̂(ζ, x) = Σ_s L_s(ζ)·t[s + 64·x]`. -/
-noncomputable def skipAt (t : ℕ → 𝔽) (ζ : 𝔽) (x : ℕ) : 𝔽 :=
-  ∑ s : Fin 64, lagS ζ s * t (s.val + 64 * x)
-
-/-- The output-coset node `φ8(64 + i)`. -/
-def nodeL (i : ℕ) : 𝔽 := GF128.of (phi8 (64 + i))
-
-/-- Bind the lowest variable at `t`. -/
-noncomputable def foldLo (t : 𝔽) (u : ℕ → 𝔽) : ℕ → 𝔽 := fun y => u (2 * y) + t * (u (2 * y + 1) + u (2 * y))
-
-/-- Bind the lowest `j` variables at `ρ_0 … ρ_{j−1}`, lowest first. -/
-noncomputable def foldN (ρ : ℕ → 𝔽) : ℕ → (ℕ → 𝔽) → ℕ → 𝔽
-  | 0, u => u
-  | j + 1, u => foldLo (ρ j) (foldN ρ j u)
-
 /-- The honest claim after `j` of `n` rounds: `Σ_{x < 2^{n−j}} eq(r_{j…n−1}, x)·U_j(x)·V_j(x)`. -/
 noncomputable def sumAt (n : ℕ) (r ρ u v : ℕ → 𝔽) (j : ℕ) : 𝔽 :=
   ∑ x ∈ Finset.range (2 ^ (n - j)), eqR r j (n - j) x * foldN ρ j u x * foldN ρ j v x
-
-/-- Round `j`'s honest message `(G(1), G(∞))` of `G(t) = Σ_y eq(r_{j+1…}, y)·U_j(2y + t)·V_j(2y + t)` (multilinear in
-`t`): `G(1)` and the coefficient of `t²`. -/
-noncomputable def roundMsg (n : ℕ) (r ρ u v : ℕ → 𝔽) (j : ℕ) : 𝔽 × 𝔽 :=
-  (∑ y ∈ Finset.range (2 ^ (n - j - 1)), eqR r (j + 1) (n - j - 1) y * foldN ρ j u (2 * y + 1) * foldN ρ j v (2 * y + 1),
-   ∑ y ∈ Finset.range (2 ^ (n - j - 1)), eqR r (j + 1) (n - j - 1) y *
-     (foldN ρ j u (2 * y + 1) + foldN ρ j u (2 * y)) * (foldN ρ j v (2 * y + 1) + foldN ρ j v (2 * y)))
-
-/-- A coin array as field elements. -/
-def coin (r : Array F128) (k : ℕ) : 𝔽 := GF128.of r[k]!
-
-/-- **The honest prover's clear zerocheck messages** over `n = m − 6` residual variables, for the tables `a`, `b`, `c`
-(value at address `s + 64·x`), the zerocheck vector `r`, the residual coins `rho` and the skip coin `z`:
-`round1_ab[i] = Σ_x eq(r, x)·â(λ_i, x)·b̂(λ_i, x)`, `round1_c[i] = Σ_x eq(r, x)·ĉ(λ_i, x)` at `λ_i = φ8(64 + i)`, the
-residual rounds of `Σ_x eq(r, x)·â(z, x)·b̂(z, x)`, `final_a`, `final_b` the skip rows at `z` folded at `rho`, and
-`final_c = Σ_x eq(r, x)·ĉ(z, x)`. -/
-noncomputable def honest (n : ℕ) (a b c : ℕ → 𝔽) (r rho : Array F128) (z : F128) : ZerocheckProof where
-  round1ab := (Array.range 64).map fun i =>
-    (∑ x ∈ Finset.range (2 ^ n), eqR (coin r) 0 n x * skipAt a (nodeL i) x * skipAt b (nodeL i) x).val
-  round1c := (Array.range 64).map fun i =>
-    (∑ x ∈ Finset.range (2 ^ n), eqR (coin r) 0 n x * skipAt c (nodeL i) x).val
-  rounds := (Array.range n).map fun j =>
-    let g := roundMsg n (coin r) (coin rho) (skipAt a (GF128.of z)) (skipAt b (GF128.of z)) j
-    (g.1.val, g.2.val)
-  finalA := (foldN (coin rho) n (skipAt a (GF128.of z)) 0).val
-  finalB := (foldN (coin rho) n (skipAt b (GF128.of z)) 0).val
-  finalC := (∑ x ∈ Finset.range (2 ^ n), eqR (coin r) 0 n x * skipAt c (GF128.of z) x).val
 
 /-! ## The executable's arithmetic as the field's -/
 

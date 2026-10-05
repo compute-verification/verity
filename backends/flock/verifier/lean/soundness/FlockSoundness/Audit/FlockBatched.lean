@@ -2,6 +2,7 @@ import FlockSoundness.Audit.Extraction
 import FlockSoundness.Audit.Flock
 import FlockSoundness.SessionBatch
 import FlockSoundness.Lowering
+import FlockSoundness.Protocol.Audit.FlockBatched
 
 /-!
 # The Flock audit at the compiled layer, several tables per session
@@ -49,9 +50,6 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [In
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- The table of the plan that carries drawn unit `u`. -/
-abbrev tabOf (S : Finset (Fin n)) (R : Reg) (u : Fin n) : TabSpec mPts := (plan S R).get (tab S R u)
-
 open Classical in
 /-- **The batched session on a draw**: the plan's tables in one session; it accepts when every
 table accepts. -/
@@ -72,10 +70,6 @@ theorem prob_batchedSession (S : Finset (Fin n)) (R : Reg)
   congr 1
   funext outs
   exact propext decide_eq_true_iff
-
-/-- A decoder: for each drawn unit, the values a level-0 message of its table packs for it. -/
-abbrev DecoderB := (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) →
-  Message 𝔽 (tabOf plan tab S R u).sch.k0 (tabOf plan tab S R u).sch.level₀.logCols → (Fin C.N → Bool)
 
 /-- **The lowering, compiled, per table** (named hypothesis): a message packing a witness that
 satisfies the statement of drawn unit `u`'s table decodes to values on which `u` is correct. -/

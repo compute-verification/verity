@@ -1,4 +1,4 @@
-import FlockSoundness.ExecPlacement
+import FlockSoundness.Protocol.ExecPlacement
 
 /-!
 # What the parsers accepted, and Δ's first loop

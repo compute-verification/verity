@@ -1,7 +1,7 @@
-import FlockSoundness.ExecPlacement
 -- level3 already realizes `Lookup.row`'s and `Lookup.decode`'s equation lemmas, so this file reuses them rather than
 -- declaring them a second time, which the audit's kernel replay refuses
 import FlockLevel3.LookupRows
+import FlockSoundness.Protocol.ExecPlacement
 
 /-!
 # What `Lookup.build` builds

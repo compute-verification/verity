@@ -1,4 +1,7 @@
 import FlockSoundness.Assumptions
+import FlockSoundness.Protocol.CROnly.Hm96Defs
+import FlockSoundness.Game.Expect
+import FlockSoundness.Randomness
 
 /-!
 # hm96 hiding from the universal hash: the definitions
@@ -24,11 +27,5 @@ noncomputable def hidingGap {Y B C : Type} [Fintype Y] [Fintype B] [DecidableEq 
 keys. -/
 def Universal {K Y B : Type} [Fintype K] [Fintype B] [DecidableEq B] (M : K → Y → B) : Prop :=
   ∀ y y', y ≠ y' → #{k | M k y = M k y'} * Fintype.card B ≤ Fintype.card K
-
-/-- **hm96's keyed hash** (`verity/commitments/hm96/PROTOCOL.md` §2): the Hankel matrix of a key `κ` of `n + l − 1`
-symbols applied to a salt of `l`, `(M(κ)·y)_i = Σ_j κ_{i+j}·y_j`. hm96 takes the symbols in GF(2), with `n = 512` and
-`l = 1536` for `hm96-sha512`. -/
-def hankel {F : Type} [Field F] {n l : ℕ} (κ : Fin (n + l - 1) → F) (y : Fin l → F) (i : Fin n) : F :=
-  ∑ j : Fin l, κ ⟨i.val + j.val, by have := i.isLt; have := j.isLt; omega⟩ * y j
 
 end FlockSoundness.CROnly

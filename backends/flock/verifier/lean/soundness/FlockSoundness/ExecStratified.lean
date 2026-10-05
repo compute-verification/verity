@@ -1,6 +1,7 @@
 import FlockSoundness.ExecDraw
 import FlockSoundness.Audit.Stratified
 import FlockSoundness.E2E
+import FlockSoundness.Protocol.ExecStratified
 
 /-!
 # The executable stratified draw, and the e2e theorems at its law
@@ -33,12 +34,6 @@ open scoped ENNReal
 namespace Law
 
 variable {n m : ℕ}
-
-/-- The executable strata `S` describe `σ`'s: stratum `s` draws `k s` of its units, has `σ`'s stratum's size, and its
-`j`-th unit, for `j` below that size, runs over `σ`'s stratum `s`. -/
-def ExecStrata (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m → Flock.Draw.Stratum) : Prop :=
-  ∀ s, (S s).k = k s ∧ (S s).size = (stratum σ s).card ∧
-    (range (S s).size).image (S s).unit = (stratum σ s).map Fin.valEmbedding
 
 /-- The verifier's executable stratified draw as a law: stratum `s`'s stream is `L s` uniform bytes (A3), and a draw
 whose stream runs out draws every unit. The live draw extends such a stream and reruns instead: `execOS`

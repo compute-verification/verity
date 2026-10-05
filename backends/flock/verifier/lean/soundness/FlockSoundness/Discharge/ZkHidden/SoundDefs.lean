@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.ZkHidden.Statements
 import FlockSoundness.Discharge.ZkExec.LiveStatements
 import FlockSoundness.Discharge.HiddenDec.Statements
+import FlockSoundness.Protocol.Discharge.ZkHidden.SoundDefs
 
 /-!
 # `RunsZC` at the hidden-output `--zk` tables (statement)
@@ -25,18 +26,6 @@ local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
-
-/-- **The `--zk` openings at draw `S` under hidden outputs** (`opnAtZ` with `setupHidden` for `setupH`): `opnZ` at the
-statement setupHidden sets up at the record's draw `dj S` under the `--zk` tags and coin tree, and its `--zk` schedule,
-on the first two proof files. -/
-noncomputable def opnAtZH (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
-    (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray) : ZkLink.OpensZ 𝔽 Dig (List UInt8) :=
-  match Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-      I.program with
-  | .ok st => match Zk.schedule st.m with
-    | .ok (sch, _) => opnZ (Setup.ofCircuit st) sch (nXZ T S R) #[proofs[0]!, proofs[1]!]
-    | .error _ => default
-  | .error _ => default
 
 /-- **`RunsZC` at the live hidden-output `--zk` tables, at the law's draws** (`RunsZCLive` under hidden outputs). Given
 that wherever flock-verify accepts a hidden-output session the `--zk` table is the executable's (`TablesAtZKHLive`), on

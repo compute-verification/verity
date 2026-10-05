@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.ZkLink.TablesAt
 import FlockSoundness.Discharge.Exec.LawDraw
+import FlockSoundness.Protocol.Discharge.ZkLink.DrawOk
 
 /-!
 # The coin server's draw at every draw of the live law, at `--zk`
@@ -114,16 +115,6 @@ theorem ofJson_count {j : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJs
 
 
 variable {n : ℕ}
-
-/-- **The verifier's own draw of `S`** under `law` over `[0, pop)`, as `UnitDraw.ofJson` decodes it: `S`'s units,
-ascending, and no closure. -/
-def drawOf (law : Draw.Law) (pop : ℕ) (S : Finset (Fin n)) : Draw.UnitDraw :=
-  { law, population := pop, units := ((S.image Fin.val).sort (· ≤ ·)).toArray }
-
-/-- **The record's draw file is the verifier's draw** (custody of the record's `unit_draw`): at every draw `S`, a draw
-file `dj S` that `UnitDraw.ofJson` decodes decodes to the verifier's own draw of `S` under `law` over `[0, pop)`. -/
-def DrawFileZK (dj : Finset (Fin n) → Lean.Json) (law : Draw.Law) (pop : ℕ) : Prop :=
-  ∀ S D, Draw.UnitDraw.ofJson (dj S) = .ok D → D = drawOf law pop S
 
 theorem drawOf_proved (law : Draw.Law) (pop : ℕ) (S : Finset (Fin n)) :
     (drawOf law pop S).proved = (drawOf law pop S).units := by

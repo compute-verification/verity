@@ -1,5 +1,6 @@
 import Mathlib.Data.Fintype.Card
 import Mathlib.Data.Finset.Card
+import FlockSoundness.Protocol.Audit.Circuit
 
 /-!
 # Circuits, partitions, and the correctness of a unit
@@ -28,9 +29,6 @@ inputs (`Partition.Correct`): evaluate `u`'s gates in order, reading every other
 
 namespace FlockSoundness.Audit
 
-/-- The XOR of the values at a list of places. -/
-def xorSum {ι : Type} (l : List ι) (v : ι → Bool) : Bool := (l.map v).foldr Bool.xor false
-
 theorem xorSum_congr {ι : Type} {l : List ι} {v w : ι → Bool} (h : ∀ x ∈ l, v x = w x) :
     xorSum l v = xorSum l w := by
   unfold xorSum
@@ -41,38 +39,9 @@ theorem xorSum_map {ι κ : Type} (l : List ι) (f : ι → κ) (v : κ → Bool
   unfold xorSum
   rw [List.map_map]
 
-/-- A gate. -/
-inductive Op (N : ℕ) where
-  | input
-  | and (a b : Fin N)
-  | xor (a b : Fin N)
-  | not (a : Fin N)
-  /-- A row: `(⊕_{x ∈ a} x) ∧ (⊕_{x ∈ b} x)`. -/
-  | row (a b : List (Fin N))
-
 namespace Op
 
 variable {N : ℕ}
-
-/-- The gates an operation reads. -/
-def args : Op N → List (Fin N)
-  | input => []
-  | and a b => [a, b]
-  | xor a b => [a, b]
-  | not a => [a]
-  | row a b => a ++ b
-
-def isInput : Op N → Bool
-  | input => true
-  | _ => false
-
-/-- The operation applied to the values of its arguments (an input gate has no operation). -/
-def apply : Op N → (Fin N → Bool) → Bool
-  | input, _ => false
-  | and a b, v => v a && v b
-  | xor a b, v => Bool.xor (v a) (v b)
-  | not a, v => !v a
-  | row a b, v => xorSum a v && xorSum b v
 
 theorem apply_congr (o : Op N) {v w : Fin N → Bool} (h : ∀ x ∈ o.args, v x = w x) :
     o.apply v = o.apply w := by
@@ -85,25 +54,9 @@ theorem apply_congr (o : Op N) {v w : Fin N → Bool} (h : ∀ x ∈ o.args, v x
 
 end Op
 
-/-- A Boolean circuit, its gates in topological order. -/
-structure Circuit where
-  N : ℕ
-  op : Fin N → Op N
-  topo : ∀ g, ∀ a ∈ (op g).args, a < g
-  outputs : Finset (Fin N)
-
 namespace Circuit
 
 variable (C : Circuit)
-
-/-- Evaluation with some gates fixed: a fixed gate takes its given value, and every other gate
-applies its operation to its arguments' values. -/
-def run (fix : Fin C.N → Option Bool) (g : Fin C.N) : Bool :=
-  match fix g with
-  | some b => b
-  | none => (C.op g).apply fun x => if _h : x < g then run fix x else false
-termination_by g.val
-decreasing_by all_goals assumption
 
 theorem run_eq (fix : Fin C.N → Option Bool) (g : Fin C.N) :
     C.run fix g = match fix g with
@@ -135,10 +88,6 @@ theorem eval_op (a : Fin C.N → Bool) {g : Fin C.N} (h : (C.op g).isInput = fal
     C.eval a g = (C.op g).apply (C.eval a) :=
   C.run_free (by simp [h])
 
-/-- The input unit: the committed inputs are the anchors' values. -/
-def InputsAgree (X a : Fin C.N → Bool) : Prop :=
-  ∀ g, (C.op g).isInput = true → X g = a g
-
 /-- `g` feeds `t`: `g = t`, or `g` is an argument of a gate that feeds `t`. -/
 inductive Feeds : Fin C.N → Fin C.N → Prop
   | refl (t : Fin C.N) : Feeds t t
@@ -146,21 +95,9 @@ inductive Feeds : Fin C.N → Fin C.N → Prop
 
 end Circuit
 
-/-- A partition of a circuit's computed gates into `n` units; the input gates are the input unit
-(`none`). -/
-structure Partition (C : Circuit) (n : ℕ) where
-  unit : Fin C.N → Option (Fin n)
-  input_iff : ∀ g, unit g = none ↔ (C.op g).isInput = true
-
 namespace Partition
 
 variable {C : Circuit} {n : ℕ} (P : Partition C n)
-
-open Classical in
-/-- The committed wires: inputs, outputs, and every gate that a gate of another unit reads. -/
-noncomputable def committed : Finset (Fin C.N) :=
-  Finset.univ.filter fun g => (C.op g).isInput = true ∨ g ∈ C.outputs ∨
-    ∃ h, g ∈ (C.op h).args ∧ P.unit h ≠ P.unit g
 
 theorem mem_committed_of_read {g h : Fin C.N} (hg : g ∈ (C.op h).args) (hne : P.unit h ≠ P.unit g) :
     g ∈ P.committed := by
@@ -178,10 +115,6 @@ theorem mem_committed_of_input {g : Fin C.N} (hg : (C.op g).isInput = true) : g 
   simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and]
   exact Or.inl hg
 
-/-- `u`'s gates computed in order, every other gate read from `X`. -/
-def localEval (X : Fin C.N → Bool) (u : Fin n) : Fin C.N → Bool :=
-  C.run fun g => if P.unit g = some u then none else some (X g)
-
 theorem localEval_of_mem (X : Fin C.N → Bool) {u : Fin n} {g : Fin C.N} (h : P.unit g = some u) :
     P.localEval X u g = (C.op g).apply (P.localEval X u) :=
   C.run_free (by simp [h])
@@ -189,15 +122,6 @@ theorem localEval_of_mem (X : Fin C.N → Bool) {u : Fin n} {g : Fin C.N} (h : P
 theorem localEval_of_not_mem (X : Fin C.N → Bool) {u : Fin n} {g : Fin C.N}
     (h : P.unit g ≠ some u) : P.localEval X u g = X g :=
   C.run_fixed (by simp [h])
-
-/-- **Correctness of a unit**: its committed outputs are its gates applied to its committed inputs. -/
-def Correct (X : Fin C.N → Bool) (u : Fin n) : Prop :=
-  ∀ g ∈ P.committed, P.unit g = some u → X g = P.localEval X u g
-
-open Classical in
-/-- The wrong units of a transcript. -/
-noncomputable def wrong (X : Fin C.N → Bool) : Finset (Fin n) :=
-  Finset.univ.filter fun u => ¬ P.Correct X u
 
 theorem mem_wrong {X : Fin C.N → Bool} {u : Fin n} : u ∈ P.wrong X ↔ ¬ P.Correct X u := by
   classical
@@ -263,11 +187,6 @@ every committed wire carries its value in the circuit's evaluation. -/
 theorem compose (X a : Fin C.N → Bool) (hin : C.InputsAgree X a) (h : P.wrong X = ∅) :
     ∀ g ∈ P.committed, X g = C.eval a g :=
   fun g hg => P.compose_cone X a P.committed hin (by simp [h]) g hg hg
-
-open Classical in
-/-- `u`'s committed inputs and outputs. -/
-noncomputable def io (u : Fin n) : Finset (Fin C.N) :=
-  P.committed.filter fun g => P.unit g = some u ∨ ∃ h, P.unit h = some u ∧ g ∈ (C.op h).args
 
 theorem localEval_congr {X Y : Fin C.N → Bool} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g = Y g) :
     ∀ m (g : Fin C.N), g.val = m → P.unit g = some u → P.localEval X u g = P.localEval Y u g := by

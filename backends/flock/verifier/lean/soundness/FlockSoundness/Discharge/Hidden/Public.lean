@@ -1,5 +1,7 @@
 import FlockSoundness.Discharge.Hidden.Facts
 import FlockSoundness.Discharge.Layout.OutSite
+import FlockSoundness.Protocol.Discharge.Hidden.Public
+import FlockSoundness.Discharge.Layout.Site
 
 /-!
 # What a hidden-output statement takes from the public file (`PublicExposes`)
@@ -16,18 +18,6 @@ open Flock FlockLevel3
 namespace FlockSoundness.Discharge.Hidden
 
 open Refine
-
-/-- `HmOut.loadPublic` is `HmRow.loadPublic` on the circuit without output ports, then checks. -/
-theorem loadPublic_nil {tags : Tags} {c : Circuit} {pf : ByteArray} {pop : Public}
-    (h : HmOut.loadPublic tags c pf = .ok pop) : HmRow.loadPublic tags { c with outPorts := #[] } pf = .ok pop := by
-  unfold HmOut.loadPublic at h
-  dsimp only at h
-  simp only [throw_bind'] at h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    assumption
 
 /-- A hidden-output population holds no output word. -/
 theorem loadPublic_outputs_nil {tags : Tags} {c : Circuit} {pf : ByteArray} {pop : Public}
@@ -53,14 +43,6 @@ theorem drawn_outputs_nil {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : 
   obtain ⟨D, -, hout⟩ := Layout.drawn_outputs h
   rw [hout]
   exact foldl_extract_zero _ _ rfl _
-
-/-- **`HmOut.regions`** is one region per row, region `p` as `HmRow.regions`' region "digest p": `mkRegion` of
-`Layout.hmFree`, `Layout.hmFixed` and `Layout.hmBytes`. -/
-theorem regions_get {c : Circuit} {pub : Public} {regs : Array Region} (h : HmOut.regions c pub = .ok regs) :
-    regs.size = c.ports.size ∧ ∀ (p : ℕ) (hp : p < regs.size),
-      mkRegion c.kLog s!"digest {p}" (Layout.hmFree c) (Layout.hmFixed c p) (Layout.hmBytes c pub p) = .ok regs[p] := by
-  unfold HmOut.regions at h
-  exact Exec.range_mapM_ok h
 
 theorem public_exposes' : PublicExposes := by
   intro tags cf pf coins tables draw partition program st h

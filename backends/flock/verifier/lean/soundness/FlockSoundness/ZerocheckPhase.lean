@@ -1,6 +1,7 @@
 import FlockSoundness.LincheckPhase
 import FlockSoundness.ListSize
 import FlockSoundness.OpeningPhase
+import FlockSoundness.Protocol.ZerocheckPhase
 
 /-!
 # The zerocheck phase (PROTOCOL.md §9.2)
@@ -118,9 +119,6 @@ theorem sum_range_pairs {M : Type} [AddCommMonoid M] (n : ℕ) (f : ℕ → M) :
   rw [Fin.sum_univ_two]
   simp only [finCongr_apply, Fin.val_cast, finProdFinEquiv_apply_val, Fin.val_zero, Fin.val_one]
   congr 2 <;> ring
-
-/-- Fold the lowest bit at `t`: `u'(y) = u(2y) + t·(u(2y+1) + u(2y))`. -/
-def foldLo (t : F) (u : ℕ → F) : ℕ → F := fun y => u (2 * y) + t * (u (2 * y + 1) + u (2 * y))
 
 /-- Fold every bit, lowest first, by the coins `ρ`. -/
 def foldLoAll : {n : ℕ} → (Fin n → F) → (ℕ → F) → (ℕ → F)

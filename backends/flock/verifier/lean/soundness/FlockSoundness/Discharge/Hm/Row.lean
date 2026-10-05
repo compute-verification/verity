@@ -8,6 +8,7 @@ string (`row_commit`).
 -/
 import Flock.HmRow
 import FlockSoundness.Discharge.Hm.Commit
+import FlockSoundness.Protocol.Discharge.Hm.Row
 
 namespace FlockSoundness.Discharge.Hm
 
@@ -118,12 +119,6 @@ theorem blockV_row {words n : ℕ} {data : List UInt8} (hd : data.length = 128 *
   rw [rowMsg_pad hd, getD_rowPad_data hd (by omega) (by nlinarith),
     show 128 * (k + 1) + 8 * i + j - 128 = 128 * k + 8 * i + j by omega]
 
-theorem wordsBE_getElem! {b : ByteArray} {i : ℕ} (hi : i < 16) :
-    (HmRow.wordsBE b 16)[i]! = wordL b.data.toList 0 i := by
-  rw [HmRow.wordsBE, getElem!_pos _ i (by simpa using hi), Array.getElem_map, Array.getElem_range, wordL]
-  refine List.foldl_ext _ _ _ fun x j _ => ?_
-  rw [get!_eq_getD, Nat.zero_add]
-
 theorem padBlock_data (total : ℕ) :
     (HmRow.padBlock total).data.toList = [128] ++ List.replicate 111 0 ++ lenBytes total := by
   simp only [HmRow.padBlock, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl, pure_bind,
@@ -145,27 +140,6 @@ theorem blockV_row_last {words n : ℕ} (hw : 2 * words = 128 * n) {data : List 
     show 128 * (n + 1) + 8 * i + j - (128 + 128 * n) = 0 + 8 * i + j by ring_nf; omega]
 
 /-! ## Δ's bits -/
-
-/-- Bit `q` of a word array as Δ reads a constant: bit `q % 64` of word `q / 64` (`HmRow.delta`). -/
-def wordsBit (w : Array UInt64) (q : ℕ) : Bool := (w[q / 64]! >>> (q % 64).toUInt64) &&& 1 == 1
-
-theorem wordsBit_eq (w : Array UInt64) {n q : ℕ} (hq : q < 64 * n) :
-    wordsBit w q = wbit ((List.range n).map fun i => w[i]!.toBitVec) q := by
-  rw [wordsBit, wbit, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range (by omega), Option.map_some,
-    Option.getD_some]
-  have h1 : (q % 64).toUInt64.toNat % 64 = q % 64 := by
-    rw [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)]
-  have : ∀ x : UInt64, (x &&& 1 == 1) = x.toNat.testBit 0 := by
-    intro x
-    have hx : (x &&& 1).toNat = x.toNat % 2 := by rw [UInt64.toNat_and]; exact Nat.and_one_is_mod _
-    rw [Nat.testBit_zero]
-    by_cases h : x.toNat % 2 = 1
-    · have : x &&& 1 = 1 := UInt64.toNat_inj.mp (by rw [hx, h]; rfl)
-      simp [this, h]
-    · have : x &&& 1 ≠ 1 := fun e => h (by rw [← hx, e]; rfl)
-      simp [this, h]
-  rw [this, UInt64.toNat_shiftRight, Nat.testBit_shiftRight, h1, Nat.add_zero]
-  rfl
 
 /-! ## The row -/
 

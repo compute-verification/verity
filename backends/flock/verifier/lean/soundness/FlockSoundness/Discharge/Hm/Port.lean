@@ -8,6 +8,7 @@ the padding block), the bytes at `bcCol` are the commit string of the row and sa
 import FlockSoundness.Discharge.Hm.Row
 import FlockSoundness.ExecTyped
 import FlockSoundness.Binding.Layout
+import FlockSoundness.Protocol.Discharge.Hm.Port
 
 namespace FlockSoundness.Discharge.Hm
 
@@ -69,26 +70,11 @@ theorem bytesAt_eq_bytesOf {m N : ℕ} (z : Model.Witness m) (A : ℕ → Fin (2
 
 /-! ## The row's columns -/
 
-/-- Compression `k` of port `p`'s row: its `sha512x3` slot at VU `g`, its first column. -/
-def shaBase (c : Circuit) (g p k : ℕ) : ℕ := c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[k]!.1
-
-/-- Compression `k` of port `p`'s row: its place in its slot (`sub < 3`). -/
-def shaSub (c : Circuit) (p k : ℕ) : ℕ := ((HmRow.rowSlots c.ports).2[p]!)[k]!.2
-
-/-- The `sha512x3` net's input port `i`'s first column in a slot (`cv_k`, `msg_k` at `2k`, `2k + 1`). -/
-def shaIn (c : Circuit) (i : ℕ) : ℕ := (portCols (c.nets.getD c.shaNet default).2.inGroups)[i]!.1
-
 /-- The `sha512x3` net's output port `j`'s first column in a slot (`out_j`). -/
 def shaOut (c : Circuit) (j : ℕ) : ℕ := ((portCols (c.nets.getD c.shaNet default).2.outGroups).getD j default).1
 
-/-- The `hm96` net's input port `i`'s first column in a slot (`cv`, `pad`, `y`). -/
-def hmIn (c : Circuit) (i : ℕ) : ℕ := ((portCols (c.nets.getD c.hmNet default).2.inGroups).getD i default).1
-
 /-- The `hm96` net's output's first column in a slot (`b ‖ c`). -/
 def hmOut (c : Circuit) : ℕ := ((portCols (c.nets.getD c.hmNet default).2.outGroups).getD 0 default).1
-
-/-- **Salt byte `j`, bit `t`** of port `p`'s row at VU `g`: its `hm96` slot's input `y`, bit `8 j + t`. -/
-def saltCol (c : Circuit) (g p j t : ℕ) : ℕ := c.slotCol c.hmNet g p + hmIn c 2 + 8 * j + t
 
 /-- **`b ‖ c` byte `j`, bit `t`** of port `p`'s row at VU `g`: its `hm96` slot's output bit `8 j + t`, the address
 `HmRow.regions` pins. -/

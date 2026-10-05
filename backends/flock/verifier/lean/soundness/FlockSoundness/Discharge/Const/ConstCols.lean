@@ -1,6 +1,7 @@
 import FlockSoundness.E2E
 import FlockSoundness.Types.ProgramPlaces
 import FlockSoundness.Discharge.Const.Inst
+import FlockSoundness.Protocol.Discharge.Const.ConstCols
 
 /-!
 # `hConst`: only a unit's constant column sits on the constant's gate
@@ -29,27 +30,6 @@ section places
 variable {N n : ℕ} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-
-/-- **`hConst` at a program's places, for one constant gate**: when each unit's instance wires its constant column to
-`one`, only a unit's constant column sits on `one`. -/
-theorem constCols_of_oneWire (pp : ProgPlaces p outs plan tab) (one : Fin N)
-    (h : ∀ u, (pp.inst u).wire (p.rows u).one = one) :
-    (p.partition outs).ConstCols plan tab pp.derived.place {one} :=
-  (p.partition outs).constCols_singleton plan tab _ one fun _ _ u _ => h u
-
-/-- **`hConst` at a program's places, from the program**: when every unit's constant is on `one` and the places'
-instances wire each unit's constant where the program does. -/
-theorem constCols_of_oneGate (pp : ProgPlaces p outs plan tab) {one : Fin N} (hp : Prog.OneGate p one)
-    (hi : ∀ u, (pp.inst u).wire (p.rows u).one = Prog.oneAt p u) :
-    (p.partition outs).ConstCols plan tab pp.derived.place {one} :=
-  constCols_of_oneWire pp one fun u => (hi u).trans (hp u)
-
-/-- **`hConst` at a program's places, with the program's own instances**: when every unit's constant is on `one` and
-the places carry `Prog.instC`. -/
-theorem constCols_of_instC (pp : ProgPlaces p outs plan tab) {one : Fin N} (hp : Prog.OneGate p one)
-    (hinst : ∀ u, pp.inst u = Prog.instC p outs u) :
-    (p.partition outs).ConstCols plan tab pp.derived.place {one} :=
-  constCols_of_oneGate pp hp fun u => by rw [hinst u]; exact Prog.instC_wire_one p outs u
 
 /-- **`{one}` is the set of gates the units' constants read**, for a program with a unit. -/
 theorem image_oneWire (pp : ProgPlaces p outs plan tab) {one : Fin N}

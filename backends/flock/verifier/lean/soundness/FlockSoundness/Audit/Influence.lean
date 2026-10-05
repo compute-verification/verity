@@ -1,5 +1,6 @@
 import FlockSoundness.Audit.TwoStage
 import FlockSoundness.Audit.Harm
+import FlockSoundness.Protocol.Audit.Influence
 
 /-!
 # Influence through a separator
@@ -38,11 +39,6 @@ namespace Circuit
 
 variable (C : Circuit)
 
-/-- `g` feeds `t` along a path none of whose gates is in `K`, both ends included. -/
-inductive FeedsAvoiding (K : Finset (Fin C.N)) : Fin C.N → Fin C.N → Prop
-  | refl {t : Fin C.N} : t ∉ K → FeedsAvoiding K t t
-  | step {g h t : Fin C.N} : g ∉ K → g ∈ (C.op h).args → FeedsAvoiding K h t → FeedsAvoiding K g t
-
 end Circuit
 
 theorem Circuit.FeedsAvoiding.not_mem {C : Circuit} {K : Finset (Fin C.N)} {g t : Fin C.N}
@@ -63,11 +59,6 @@ theorem card_guess_le {M O : Type} [Fintype M] [DecidableEq M] [DecidableEq O] (
 namespace Partition
 
 variable {C : Circuit} {n : ℕ} (P : Partition C n)
-
-/-- **A separator of the units `B` from the delivered wires `D`** (a downstream cut): every path from a gate of a unit
-of `B` to a wire of `D` meets `K`. -/
-def Separates (K : Finset (Fin C.N)) (B : Finset (Fin n)) (D : Finset (Fin C.N)) : Prop :=
-  ∀ g t u, P.unit g = some u → u ∈ B → t ∈ D → ¬ C.FeedsAvoiding K g t
 
 variable {P}
 
@@ -160,9 +151,6 @@ theorem outputs_eq_of_separates {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D :
   by_cases htK : t ∈ K
   · exact hXY t htK
   · exact (P.separator_induction hK hsep hX hY hwX hwY hXY t.val t rfl ⟨t, ht, .refl htK⟩).2 (hD ht)
-
-/-- What a transcript delivers on the wires `D`. -/
-def out (D : Finset (Fin C.N)) (X : Fin C.N → Bool) : D → Bool := fun t => X t
 
 open Classical in
 /-- What the transcripts with the anchors' inputs whose wrong units lie in `B` deliver on `D`. -/

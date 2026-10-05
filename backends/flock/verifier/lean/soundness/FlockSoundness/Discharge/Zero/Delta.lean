@@ -1,4 +1,4 @@
-import FlockSoundness.ExecFlatCopies
+import FlockSoundness.Protocol.ExecFlatCopies
 
 /-!
 # The zero as Δ writes it (`hZero`, e2e)

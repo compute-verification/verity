@@ -1,6 +1,7 @@
 import FlockSoundness.ExecStratified
 import FlockSoundness.Assumptions
 import Init.Internal.Order.While
+import FlockSoundness.Protocol.ExecDrawOS
 
 /-!
 # The live draw: `drawOS`, extend-and-rerun included, escapes no more often than the model's
@@ -128,13 +129,6 @@ theorem loop_inv {σ β : Type} (f : Unit → β → StateT σ Option (ForInStep
       | yield b' =>
         obtain ⟨hI', hμ'⟩ := hy b s hI _ _ hb
         exact ih b' s₁ (by omega) hI' r s' h
-
-
-/-- The model's byte source: stream `i` reads the tape `T i` in order, from its position in the state; a read past the
-tape's end fails. -/
-def tapeGet (T : ℕ → ByteArray) (i need : ℕ) : StateT (ℕ → ℕ) Option ByteArray := fun pos =>
-  if pos i + need ≤ (T i).size then some ((T i).extract (pos i) (pos i + need), Function.update pos i (pos i + need))
-  else none
 
 /-- A tape splits at any point up to its end. -/
 theorem extract_split (a : ByteArray) (j : ℕ) (hj : j ≤ a.size) : a = a.extract 0 j ++ a.extract j a.size := by
@@ -389,18 +383,6 @@ theorem drawWith_subset_run (get : ℕ → ℕ → StateT (ℕ → ℕ) Option B
   rw [StateT.run_bind]
   cases (Flock.Draw.onWith (get 0) (2 * k * Flock.Draw.width pop + 64) (Flock.Draw.subset k pop)).run s <;> rfl
 
-/-- A source's streams as tapes, stream `i` the bytes `f i`, as `Flock.Draw.stratified` reads its streams. -/
-def tapesOf {m : ℕ} {L : Fin m → ℕ} (f : (i : Fin m) → Fin (L i) → Fin 256) : ℕ → ByteArray :=
-  fun i => (Array.ofFn fun s => streamOf (f s)).getD i ByteArray.empty
-
-/-- **The live draw on given bytes**: `Flock.Draw.drawOS`'s `drawWith`, each stream `i` reading the bytes `f i`; `none`
-when it would read past them. -/
-def runOS {m : ℕ} {L : Fin m → ℕ} (f : (i : Fin m) → Fin (L i) → Fin 256) (law : Flock.Draw.Law) (pop : ℕ) :
-    Option Flock.Draw.UnitDraw :=
-  match (Flock.Draw.drawWith (tapeGet (tapesOf f)) law pop).run fun _ => 0 with
-  | some (some d, _) => some d
-  | _ => none
-
 theorem runOS_strata {m : ℕ} {L : Fin m → ℕ} (f : (i : Fin m) → Fin (L i) → Fin 256) (strata : Array Flock.Draw.Stratum)
     (law : Flock.Draw.Law) (pop : ℕ) (d : Flock.Draw.UnitDraw)
     (hlaw : ∀ (get : ℕ → ℕ → StateT (ℕ → ℕ) Option ByteArray) (s : ℕ → ℕ), ∃ g : Array ℕ → Flock.Draw.UnitDraw,
@@ -484,16 +466,6 @@ theorem drawOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype 
     _ ≤ (subset n k hk).escape B := by
         rw [Fin.prod_univ_one]
         exact subset_exec_escape_le n k (L 0) hk B
-
-
-/-- **The live draw as a law**: `Flock.Draw.drawOS`'s draw on a byte source `t` over `Ω`, reading each stream's first `L i`
-bytes; a run that would read past them draws every unit. -/
-def execOS {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} {L : Fin m → ℕ} (t : Ω → (i : Fin m) → Fin (L i) → Fin 256)
-    (law : Flock.Draw.Law) (pop : ℕ) : Law n where
-  Ω := Ω
-  draw ω := match runOS (t ω) law pop with
-    | some d => univ.filter fun u => u.val ∈ d.units
-    | none => univ
 
 theorem execOS_escape_le_of {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} {L : Fin m → ℕ}
     (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (law : Flock.Draw.Law) (pop : ℕ) (B : Finset (Fin n)) (e : ℝ≥0∞)

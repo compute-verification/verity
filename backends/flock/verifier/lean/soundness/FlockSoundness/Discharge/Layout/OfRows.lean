@@ -1,5 +1,5 @@
-import FlockSoundness.Discharge.Layout.Pins
-import FlockSoundness.Audit.FlockPublic
+import FlockSoundness.Protocol.Discharge.Layout.Pins
+import FlockSoundness.Protocol.Audit.FlockPublic
 
 /-!
 # Readers of rows and single gates

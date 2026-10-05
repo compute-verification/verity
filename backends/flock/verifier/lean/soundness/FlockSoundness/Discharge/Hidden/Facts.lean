@@ -1,4 +1,7 @@
 import FlockSoundness.Discharge.Hidden.Spec
+import FlockSoundness.Protocol.Discharge.Hidden.Facts
+import FlockSoundness.Discharge.Exec.Merkle
+import FlockSoundness.Discharge.Hidden.Defs
 
 /-!
 # The facts read off `Spec`
@@ -55,17 +58,6 @@ theorem parse_cases {c : Circuit} (h : HmOut.parse tags cf tables = .ok c) :
         simp only [pure, Except.pure, Except.ok.injEq] at h
         subst h
         exact ⟨hu, .inr (.inr ⟨k, unit, c', hc', rfl⟩)⟩
-
-/-- **`parse_untyped`**: an untyped `HmOut.parse` is `HmRow.parse`'s circuit, then `HmOut.checkRows`. -/
-theorem parse_untyped {c : Circuit} (ht : tags.typed = false) (h : HmOut.parse tags cf tables = .ok c) :
-    HmRow.parse tags cf tables = .ok c ∧ HmOut.checkRows c = .ok () := by
-  unfold HmOut.parse at h
-  simp only [ht, Bool.not_false, ↓reduceIte] at h
-  obtain ⟨c₀, hc₀, h⟩ := ebind_ok h
-  obtain ⟨u, hu, h⟩ := ebind_ok h
-  simp only [pure, Except.pure, Except.ok.injEq] at h
-  subst h
-  exact ⟨hc₀, hu⟩
 
 /-- An `HmOut.parse` circuit has the tags' leaf scheme. -/
 theorem parse_leafScheme {c : Circuit} (h : HmOut.parse tags cf tables = .ok c) : c.leafScheme = tags.merkleLeaf := by

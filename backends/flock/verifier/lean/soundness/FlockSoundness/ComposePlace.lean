@@ -1,5 +1,6 @@
 import FlockSoundness.ComposeDag
 import FlockSoundness.ExecSetup
+import FlockSoundness.Protocol.ComposePlace
 
 /-!
 # Composed rows, placed: what 1d and 1e hand to a table's class (`dp`)
@@ -179,26 +180,6 @@ open Compose
 
 /-! ## A flat statement's unit slots realize the rows of its unit net -/
 
-/-- Shifting a list below `W` by `B·W`, counted at `j`: the count at `j mod W` when `j` is in block `B`, else 0. -/
-theorem count_map_add_ite {W B : ℕ} (hW : 0 < W) (l : List ℕ) (hl : ∀ x ∈ l, x < W) (j : ℕ) :
-    (((l.map (B * W + ·)).count j : ℕ) : ZMod 2) = if j / W = B then ((l.count (j % W) : ℕ) : ZMod 2) else 0 := by
-  by_cases hq : j / W = B
-  · rw [ite_eq_left hq]
-    have hj : j = B * W + j % W := by
-      have := Nat.div_add_mod j W
-      rw [hq, Nat.mul_comm] at this
-      exact this.symm
-    have : (l.map (B * W + ·)).count j = l.count (j % W) := by
-      conv_lhs => rw [hj]
-      exact List.count_map_of_injective _ _ (fun a b hab => by simpa using hab) _
-    rw [this]
-  · rw [ite_eq_right hq, List.count_eq_zero.2]
-    · rfl
-    intro hm
-    obtain ⟨x, hx, rfl⟩ := List.mem_map.1 hm
-    apply hq
-    rw [show B * W + x = x + W * B by ring, Nat.add_mul_div_left _ _ hW, Nat.div_eq_of_lt (hl x hx), zero_add]
-
 namespace Layout
 
 variable {st : Stmt} (L : Layout st)
@@ -222,9 +203,6 @@ theorem unit_row_lt {c : ℕ} (hlo : st.c.unit.inWords * WORD ≤ c) (hhi : c < 
   · rw [← hi, ← L.unitRows_b hu i] at hx
     obtain ⟨y, -, rfl⟩ := List.mem_map.1 hx
     exact lt_of_lt_of_le y.isLt hw
-
-theorem slot_eq {s₀ : ℕ} : st.c.unitRange.slot s₀ = (st.c.unitRange.pos0 + s₀) * 2 ^ st.c.unit.unitLog := by
-  unfold Range.slot; rw [L.unit_slotLog]
 
 /-- **The block's `A` at a unit slot's computed row**: the unit net's row, shifted to the slot. -/
 theorem placedA_comp {s₀ c : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ c)

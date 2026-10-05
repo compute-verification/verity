@@ -1,5 +1,5 @@
-import FlockSoundness.Refine.Setup
 import FlockSoundness.Discharge.Layout.Bytes
+import FlockSoundness.Protocol.Refine.Setup
 
 /-!
 # What a region pins in a satisfying witness

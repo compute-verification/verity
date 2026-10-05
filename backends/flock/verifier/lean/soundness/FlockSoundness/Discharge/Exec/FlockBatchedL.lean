@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Exec.SessionBatchL
 import FlockSoundness.Audit.FlockBatched
+import FlockSoundness.Protocol.Discharge.Exec.FlockBatchedL
 
 /-!
 # The Flock audit at the compiled layer, several tables per session
@@ -45,11 +46,6 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} 
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-
-/-- The strategy in the protocol's session inside a verdict strategy. -/
-noncomputable def batchStratL {S : Finset (Fin n)} {R : Reg} (τ : Strategy (batchedSessionL H E Lf plan S R)) :
-    Strategy (sessionBL execArith H E Lf (plan S R)) :=
-  Strategy.ofMap _ _ τ
 
 theorem prob_batchedSessionL (S : Finset (Fin n)) (R : Reg)
     (τ : Strategy (batchedSessionL H E Lf plan S R)) :
