@@ -61,7 +61,9 @@ the tmux server's global environment, where that login shell gets them
 (`secret_hint.recover`); one run under a test doesn't, so a secret the test
 unset stays unset. If one is still missing, the store, `research queue
 ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
-login shell` (`secret_hint.py`).
+login shell` (`secret_hint.py`). A shell can lose that list too, so a store
+that has used the remote and now finds none configured fails `research data
+label` and `put` the same way (`LocalStore.remote_lost`).
 
 `research doctor [--role lane|coordinator|infra] [--json]` says whether this
 VM can do its job before a run finds out: the role's secret names

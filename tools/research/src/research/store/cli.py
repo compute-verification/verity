@@ -183,7 +183,7 @@ def cmd_put(argv: list[str]) -> int:
         except Exception as e:  # noqa: BLE001
             why = str(e)
     else:
-        gone = lost("R2_ENDPOINT", "R2_BUCKET")
+        gone = lost("R2_ENDPOINT", "R2_BUCKET") or st.remote_lost()
         why = gone or "write-through off"
     if ns.json:
         _dump({"id": art, "preserve": rep, **({"pending": why} if why or (rep and not rep["preserved"]) else {})})
@@ -516,7 +516,7 @@ def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:
 
     pending = "pending: `research data push --pending` uploads it"
     if not st.write_through:
-        if hint := lost("R2_ENDPOINT", "R2_BUCKET"):
+        if hint := lost("R2_ENDPOINT", "R2_BUCKET") or st.remote_lost():
             return f"NOT preserved ({hint}); {pending}", True
         return f"local only (write-through off); {pending}", False
     if st.remote is None:
