@@ -26,7 +26,7 @@ moved: a `..` left (after the paths above) in its lakefile, manifest, toolchain 
 puts the package's path back into its key.
 
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
-`tools/lean`. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
+`tools/lean` (named by its creator's pid; an audit first removes every scratch tree no audit holds, `sweep`). So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
 (the counterpart of `suites.py`'s read guard). Only the missed packages are audited. A package one of them requires by path is
 in the tree and built as far as it imports it, but not audited again: what vouches for its modules is its own pass, under its
 own key, and the run passes only when every package has one. The dependent's axiom walk follows its declarations into those
@@ -537,6 +537,61 @@ def scratch_tree(dest: Path, files: list[str]) -> None:
             shutil.copy2(s, d)
 
 
+SCRATCH = "lean-audit-scratch-"
+#: how long a scratch tree without its creator's pid in its name is kept unheld: an older check's, which may be filling it
+SCRATCH_GRACE_S = 3600
+
+
+def _links(proc: Path) -> tuple[list[str], bool]:
+    """(every cwd, root and open file of the processes under ``proc``, whether some process's could not be read)."""
+    out, blind = [], False
+    for p in proc.iterdir():
+        if not p.name.isdigit():
+            continue
+        try:
+            names = [p / "cwd", p / "root", *(p / "fd").iterdir()]
+        except FileNotFoundError:
+            continue
+        except OSError:
+            blind = True
+            continue
+        for n in names:
+            try:
+                out.append(os.readlink(n))
+            except FileNotFoundError:
+                pass
+            except OSError:
+                blind = True
+    return out, blind
+
+
+def sweep(base: Path, log=print, proc: Path = Path("/proc"), now: float | None = None) -> list[str]:
+    """Remove each ``lean-audit-scratch-*`` under ``base`` that no audit holds: one an audit left when it was killed before its
+    ``finally``.  A tree is held while a live process has its cwd, root or an open file inside it, while the pid its name holds
+    is alive, or, for a name without one, while some process can't be read or the tree changed within ``SCRATCH_GRACE_S``."""
+    trees = [d for d in base.glob(SCRATCH + "*") if d.is_dir() and not d.is_symlink()] if base.is_dir() else []
+    if not trees:
+        return []
+    links, blind = _links(proc)
+    now = time.time() if now is None else now
+    gone = []
+    for d in trees:
+        top = str(d.resolve())
+        if any(t == top or t.startswith(top + os.sep) for t in links):
+            continue
+        pid = d.name[len(SCRATCH):].split("-", 1)[0]
+        if pid.isdigit() and "-" in d.name[len(SCRATCH):]:
+            if (proc / pid).exists():
+                continue
+        elif blind or now - d.stat().st_mtime < SCRATCH_GRACE_S:
+            continue
+        shutil.rmtree(d, ignore_errors=True)
+        gone.append(d.name)
+    if gone:
+        log(f"lean-audit: removed {len(gone)} scratch tree(s) no audit holds: {', '.join(sorted(gone))}")
+    return gone
+
+
 #: a dependency fetch that failed for a reason outside the audit (GitHub throttles anonymous clones from a busy address)
 TRANSIENT = ("could not read Username for 'https://github.com'", "Could not resolve host", "expected flush after ref listing",
              "Failed to connect to", "The requested URL returned error: 429", "The requested URL returned error: 5")
@@ -556,7 +611,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because audit.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
-    work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent)).resolve()
+    sweep(deps.parent, log)
+    work = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-", dir=deps.parent)).resolve()
     warm = WarmDeps(deps, urls)
     builds = WarmBuilds(deps.parent / "lean-builds")
     passed: set[Path] = set()
