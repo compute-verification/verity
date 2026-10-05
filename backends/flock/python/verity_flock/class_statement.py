@@ -996,7 +996,8 @@ def _source_digest() -> str:
     shape, the batch parameters and the seed)."""
     import importlib.util
     h = hashlib.sha256()
-    for name in ("verity", "verity_flock", "circuit_check", "verity_vllm", "verity.protocols.accounting.work.pouw"):
+    for name in ("verity", "verity_catalog", "verity_kernels", "verity_experimental", "verity_flock", "circuit_check",
+                 "verity_vllm"):
         spec = importlib.util.find_spec(name)
         for root in (spec.submodule_search_locations or []) if spec else []:
             for f in sorted(Path(root).rglob("*.py")):
