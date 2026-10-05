@@ -117,6 +117,13 @@ def test_the_partition(tmp_path):
     assert list(p["lock_spec"]["layers"]) == ["P.Protocol"] and list(p["lock_proofs"]["layers"]) == ["PProofs.SecurityProofs.Lemma"]
 
 
+def test_a_reads_exemption_of_moved_proofs_names_their_new_modules(tmp_path):
+    root = checkout(tmp_path)
+    A.dump(root / PKG, A.load(root / PKG) | {"reads_exempt": {"P.SecurityProofs.Lemma": "witnesses", "Other": "theirs"}})
+    p = S.plan(root / PKG, "p", [], root)
+    assert p["lock_spec"]["reads_exempt"] == {"PProofs.SecurityProofs.Lemma": "witnesses", "Other": "theirs"}
+
+
 def test_a_layer_that_allows_proofs_allows_them_under_their_new_root():
     spec, proofs = {"P.Protocol", "P.Guarantees"}, {"P", "P.SecurityProofs", "P.SecurityProofs.Lemma"}
     assert S.renamed_prefixes(["Mathlib", "P.Protocol", "P.SecurityProofs", "P", "Q"], proofs, spec, {"P"}) == \

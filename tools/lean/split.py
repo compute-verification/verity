@@ -157,6 +157,9 @@ def plan(pkg: Path, area: str, keep: list[str], root: Path = ROOT) -> dict:
     lock_spec, lock_proofs = dict(policy), {"roots": proof_roots}
     lock_spec["roots"] = spec_roots
     lock_spec["proved_in"] = [rel(pkg, dest)]
+    if "reads_exempt" in policy:
+        lock_spec["reads_exempt"] = {q: why for k, why in policy["reads_exempt"].items()
+                                     for q in renamed_prefixes([k], proofs, spec_side, spec_tops)}
     for key in ("exempt", "runs", "compile_time"):
         mine, theirs = {}, {}
         for k, v in policy.get(key, {}).items():
