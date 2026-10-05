@@ -43,7 +43,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import fp4_emulation_1ad1aaa2 as E
+from emulation import E
 import numpy as np
 import probe as P
 import sparse as S
