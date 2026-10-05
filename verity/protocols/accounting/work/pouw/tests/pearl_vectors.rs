@@ -111,7 +111,7 @@ fn verity_vectors() {
         json!({"out": f32s_hex(&res), "partials": parts.iter().map(|p| f32s_hex(p)).collect::<Vec<_>>(), "h100": h})
     }).collect()));
 
-    out.insert("catalog/census".into(), Value::Array(input["catalog/census"].as_array().unwrap().iter().map(|c| {
+    out.insert("census".into(), Value::Array(input["census"].as_array().unwrap().iter().map(|c| {
         let dev = if c["device"].as_u64().unwrap() == 0 { Device::H100 } else { Device::B200 };
         let l = lambda(dev, c["alpha"].as_u64().unwrap() as u16, c["x"].as_u64().unwrap() as u16, c["l2"].as_u64().unwrap() as u16);
         let g = grid_exponent(dev, c["z"].as_f64().unwrap(), c["m"].as_f64().unwrap());
