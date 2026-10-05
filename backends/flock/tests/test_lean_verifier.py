@@ -202,9 +202,9 @@ def test_unit_draw_check(tmp_path):
 
 
 def _ir_tests() -> Path:
-    """Core's `tests/ir`, beside the `verity.primitives.circuits` the import system finds (whichever member ships it): the vectors the Lean verifier
-    agrees with.  Located, never checked for here: one that is missing fails `test_the_reference_vectors_exist`, not a skip."""
-    return Path(importlib.util.find_spec("verity.primitives.circuits").origin).resolve().parents[3] / "tests" / "ir"
+    """The circuits' `tests`, inside the `verity.primitives.circuits` the import system finds (whichever member ships it): the vectors the
+    Lean verifier agrees with.  Located, never checked for here: one that is missing fails `test_the_reference_vectors_exist`, not a skip."""
+    return Path(importlib.util.find_spec("verity.primitives.circuits").origin).resolve().parent / "tests"
 
 
 def _template_vectors():

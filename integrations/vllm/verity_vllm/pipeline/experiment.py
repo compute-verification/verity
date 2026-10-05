@@ -93,8 +93,8 @@ def code_version(repo: Path) -> dict:
             pass
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, timeout=10).stdout.strip()
-        core = [f":/{d}" for d in research_tools.CORE_DIRS]
-        dirty = subprocess.run(["git", "status", "--porcelain", "--", "verity_vllm", *core], cwd=repo,
+        code = [f":/{d}" for d in research_tools.CODE_DIRS]
+        dirty = subprocess.run(["git", "status", "--porcelain", "--", "verity_vllm", *code], cwd=repo,
                                capture_output=True, text=True, timeout=20).stdout.strip()
         return {"source": "git", "commit": sha or None, "dirty": bool(dirty)}
     except Exception:  # noqa: BLE001
