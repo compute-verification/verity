@@ -137,6 +137,13 @@ about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bound
 The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of `K = 9.12e7` bits.
 
+`lean-audit.json` lists as guarantees only the four whose bounds `calibration.calibrate` reports: egress over a horizon
+(`capacity.egress_bits_per_day_one_clock`, `SecurityProofs.EncardDecodableLeConstantRate`) and per window
+(`clock_sync.bits_per_window`, `SecurityProofs.EncardDecodableLeConstantRatePerWindow`), and ingress over a horizon (the
+K charge, `k_charge.share_of_k_by_span` from each link's `rate_bps`, `SecurityProofs.EncardIngressObsDecodableLe`) and
+per link-window (`envelope_bits_per_window`, `SecurityProofs.EncardIngressObsDecodableLePerWindow`, whose interaction
+is any link's). The table's other statements are lemmas: proved and audited, with no record.
+
 The shipped schedule's egress bounds are proved in Lean for `constantRate`, the Program of `schedule`, with no
 dataflow hypothesis: for every frame function, sync set and operator, over a horizon within the W windows with advice
 (n ≤ W·T), since those are the windows the audit checks. The clock-sync bound is 7 bits per window at 16 × 8 sync
@@ -283,10 +290,11 @@ replays recorded traces through the proxy in real time, and on an injected clock
 ## Tests
 
 `uv run tools/check/suites.py verity-network-warden`. The tests enumerate small horizons, so they check the Lean
-statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 51 guarantees, each
-`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and its three proved lemmas without a record:
+statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 35 statements
+`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, none of them among its four guarantees (`lean-audit.json`'s
+`guarantees`), and three more proved lemmas:
 - **`test_network_warden_grid.py`:**
-  - Proposition 2's ten guarantees, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
+  - Proposition 2's ten statements, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
     `SecurityProofs.FillInjective`, `SecurityProofs.ExistsFillOfLeftPacked`, `SecurityProofs.CardCountsEqLe`,
     `SecurityProofs.CardCountsLeLe`, `SecurityProofs.ReleasedSelf`, `SecurityProofs.SumReleasedLe`,
     `SecurityProofs.EncardFifoGrids` and `SecurityProofs.EncardFifoGridsLeOfAvailable`;
@@ -322,7 +330,7 @@ statements on examples and prove nothing. By name, they mirror 19 of the Lean pa
   - a late tick, an overrun, a refused stream, a request forwarded a bucket late, a fault that drops a carried queue
     and out-of-set advice each fail closed;
 
-No test mirrors the other eight guarantees of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
+No test mirrors the other eight statements of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,
 `SecurityProofs.EncardAccSeqsLeAdvice`, `SecurityProofs.EncardAccSeqsLeBlocksCounts`,
 `SecurityProofs.EncardDecodableLeBlocks`, `SecurityProofs.EncardDecodableLeConstantRate`), nor the ingress bound's four

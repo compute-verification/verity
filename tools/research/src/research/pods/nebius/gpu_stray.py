@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """vy-nebius-1's stray-GPU probe: a process on a GPU that neither Kubernetes nor a lease gave it blocks its lease pool.
 
-    gpu_stray.py loop [--every 60]   as research on node 1 (tmux `gpu-stray`); reads other users' /proc/PID/environ with sudo -n
+    gpu_stray.py loop [--every 60]   as research on node 1 (unit vy-gpu-stray); reads other users' /proc/PID/environ with sudo -n
     gpu_stray.py check               one pass, printed as JSON
 
 A leased pod sees every GPU (`NVIDIA_VISIBLE_DEVICES=all`) and keeps to its lease by honouring CUDA_VISIBLE_DEVICES, so this
