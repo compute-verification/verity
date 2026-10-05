@@ -287,7 +287,7 @@ parallel = true
 exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock",
            "backends/numerical/reports/**", "benchmarks/numerical/reports/**",
-           "**/price_twins.json", "**/discrepancy_log.json", "tools/move/**",
+           "**/price_twins.json", "tools/move/**",
            "catalog/silicon/captures/**", "catalog/silicon/hawkeye/**",
            "tools/check/tests/test_suites.py"]                   # its synthetic trees borrow the old names
 # Old paths that are keys outside the tree, never rewritten: the frozen evidence artifact is laid out at its former repository
