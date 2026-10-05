@@ -161,6 +161,39 @@ def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(
     assert json.loads((tmp_path / "public.json").read_text())["kind"] == RL.KIND
 
 
+def test_serve_writes_each_of_several_sessions_to_its_own_directory(tmp_path):
+    import socket
+    import threading
+
+    class Wire:
+        """`_session`'s proxy, as a client of the served proxy over one connection."""
+
+        def __init__(self, addr):
+            host, port = addr.rsplit(":", 1)
+            self.sock = socket.create_connection((host, int(port)))
+            self.rf, self.wf = self.sock.makefile("rb"), self.sock.makefile("wb")
+
+        def handle(self, req):
+            RL.write_frame(self.wf, req)
+            return RL.read_frame(self.rf)
+
+    bound, got = threading.Event(), {}
+    t = threading.Thread(target=lambda: got.update(res=RL.serve("127.0.0.1:0", tmp_path, _counter_rand(), sessions=2,
+                                                                    ready=lambda a: (got.update(addr=a), bound.set()))))
+    t.start()
+    bound.wait()
+    for _ in range(2):
+        w = Wire(got["addr"])
+        assert _session(w)[-1][0] == RL.RESP_VERDICT
+        w.sock.close()
+    t.join()
+    assert [r["session"] for r in got["res"]] == [str(tmp_path / f"s{k}" / "session") for k in range(2)]
+    for k in range(2):
+        assert (tmp_path / f"s{k}" / "session" / "circuit.rep0.bin").read_bytes() == b"the proof"
+        assert json.loads((tmp_path / f"s{k}" / "public.json").read_text())["message_rows"] == 1
+    assert not (tmp_path / "session").exists()
+
+
 def test_coins_follow_the_link_exchange():
     proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts())
     hello = json.dumps({"profile": "fast100", "reps": 2, "flavor": "rs", "tables": ["circuit"], "link": {"sigma": "00", "m": 2, "points": 2}})

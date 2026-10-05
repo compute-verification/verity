@@ -481,16 +481,20 @@ class Proxy:
         return sess
 
 
-def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None) -> dict:
-    """Accept connections on ``listen`` until one carries a whole session (``Finish``), then write it (`Proxy.write`) and
-    return a summary. ``ready`` is called with the bound address."""
+def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None,
+          sessions: int = 1, done: Callable[[dict], None] | None = None) -> list[dict]:
+    """Accept connections on ``listen`` until ``sessions`` of them have each carried a whole session (``Finish``), write each
+    (`Proxy.write`: into ``out``, or ``out/s<k>`` when there are several, a prover's ``--warm`` and ``--runs`` sessions, one
+    connection each) and return their summaries, each also passed to ``done`` as it finishes. ``ready`` is called with the
+    bound address."""
     host, port = listen.rsplit(":", 1)
+    res: list[dict] = []
     with socket.create_server((host, int(port))) as srv:
         h, p = srv.getsockname()[:2]
         addr = f"{h}:{p}"
         if ready:
             ready(addr)
-        while True:
+        while len(res) < sessions:
             conn, _ = srv.accept()
             proxy = Proxy(CoinServer(rand))
             with conn, conn.makefile("rb") as rf, conn.makefile("wb") as wf:
@@ -499,11 +503,14 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                     if proxy.verdict is not None:
                         break
             if proxy.verdict is not None:
-                sess = proxy.write(out)
+                sess = proxy.write(out if sessions == 1 else Path(out) / f"s{len(res)}")
                 rec = proxy.coins.record()
-                return {"session": str(sess), "rounds": len(rec["rounds"]), "message_rows": rec["message_rows"],
-                        "coins": sum(r["n"] for r in rec["rounds"]), "caps": sum(len(r["caps"]) for r in rec["rounds"]),
-                        "proof_bytes": {f"{t}/rep{r}": len(b) for (t, r), b in proxy.proofs.items()}}
+                res.append({"session": str(sess), "rounds": len(rec["rounds"]), "message_rows": rec["message_rows"],
+                            "coins": sum(r["n"] for r in rec["rounds"]), "caps": sum(len(r["caps"]) for r in rec["rounds"]),
+                            "proof_bytes": {f"{t}/rep{r}": len(b) for (t, r), b in proxy.proofs.items()}})
+                if done:
+                    done(res[-1])
+    return res
 
 
 def main(argv=None) -> int:
@@ -513,9 +520,10 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--listen", default="127.0.0.1:0")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--sessions", type=int, default=1, help="sessions to serve, one connection each (several: out/s<k>/)")
     a = ap.parse_args(argv)
-    res = serve(a.listen, Path(a.out), ready=lambda addr: print(f"SERVING {addr}", flush=True))
-    print("REC_INNER\t" + json.dumps(res), flush=True)
+    serve(a.listen, Path(a.out), ready=lambda addr: print(f"SERVING {addr}", flush=True), sessions=a.sessions,
+          done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True))
     sys.stdout.flush()
     return 0
 
