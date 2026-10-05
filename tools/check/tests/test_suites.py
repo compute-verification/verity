@@ -360,6 +360,24 @@ def test_a_declared_package_is_its_directory_without_its_dependencies(tmp_path, 
     assert touched() == ["a", "b", "c"]
 
 
+def test_the_roots_own_distribution_is_a_member_and_its_dependents_key_on_the_packages_it_ships(tmp_path, monkeypatch):
+    """The root's pyproject.toml builds `core`, so uv makes it a member; a suite that depends on it keys on `core/`, not on the
+    whole tree its directory holds."""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "core"\n' + _HATCH + '\n[tool.hatch.build.targets.wheel]\n'
+                                             'packages = ["core"]\n\n[tool.uv.workspace]\nmembers = ["p"]\n')
+    (tmp_path / "core").mkdir()
+    (tmp_path / "core" / "__init__.py").write_text("")
+    (tmp_path / "p" / "tests").mkdir(parents=True)
+    (tmp_path / "p" / "pyproject.toml").write_text('[project]\nname = "p"\ndependencies = ["core"]\n\n[tool.uv.sources]\n'
+                                                   'core = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs = S.members()
+    assert pkgs == {"core": ".", "p": "p"} and S.importable(pkgs) == {"core": "."}
+    assert S.inputs_of({s.name: s for s in S.discover()}["p"], pkgs) == ["core", "p"]
+
+
 def test_a_pass_is_reused_only_while_what_it_used_beside_its_key_holds(tmp_path, monkeypatch):
     _workspace(tmp_path)
     S = _suites(monkeypatch, tmp_path)
