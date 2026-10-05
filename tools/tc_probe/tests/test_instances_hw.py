@@ -1,7 +1,7 @@
 """``tools/tc_probe/instances_hw.py``: the frozen-instance replay harness, exercised without a GPU through a model-backed fake
 probe (``tc_dot_total`` for BF16, ``tc_dot`` for FP8, one word per tile position exactly as the kernels return them) -- so the
 loaders, the chaining, the per-step compare, the epilogue, the domain check and the negative-tier verdicts are tested on the
-laptop -- plus the store declaration, the FP8 recipe against ``archive.direct.ligero.fp8.chain`` (needs torch: skipped without it)
+laptop -- plus the store declaration, the FP8 recipe against ``backends.direct.ligero.fp8.chain`` (needs torch: skipped without it)
 and, on a machine with nvcc and a GPU, the real thing on a handful of instances."""
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ class FakeProbe:
 
     def __init__(self, ins: P.Instruction):
         self.ins = ins
-        from verity_catalog.silicon.total import tc_dot_total
+        from verity.ml.tc.total import tc_dot_total
 
         pipe = ins.models[0].pipeline
         self.step = (lambda c, a, b: tc_dot_total(pipe, c, a, b)) if ins.fmt is P.BF16 else (lambda c, a, b: S.tc_dot(pipe, c, a, b))
@@ -91,7 +91,7 @@ def test_store_declaration_registered_and_parses_flags():
     assert "out" not in key and "procs" not in key and "instruction" not in key
     assert key["manifest"].startswith("sha256:")  # content, never the pathname
     # the remote form: a shell string
-    shell = ["bash", "-c", ('export PYTHONPATH=verity PATH=/usr/local/cuda/bin:$PATH; nvidia-smi -L; /workspace/venv-ihw/bin/python '
+    shell = ["bash", "-c", ('export PYTHONPATH=packages/verity/src PATH=/usr/local/cuda/bin:$PATH; nvidia-smi -L; /workspace/venv-ihw/bin/python '
                             'tools/tc_probe/instances_hw.py --instances fp8-ada-synthetic/vu-k1536-fp8 --out "$RESEARCH_RUN_DIR" --sass-check --repeat 2; echo done')]
     _, key = tool.resolve_params(shell, ROOT)
     assert key == {"instances": "fp8-ada-synthetic/vu-k1536-fp8", "repeat": 2, "sass_check": True}
@@ -108,9 +108,9 @@ def test_fp8_digest_is_the_recipe_digest():
 def test_fp8_recipe_matches_the_ligero_chain_generator():
     pytest.importorskip("torch")
     pytest.importorskip("blake3")
-    if str(ROOT) not in sys.path:  # B-Ligero is the namespace package `archive.direct`, imported from the repository root
+    if str(ROOT) not in sys.path:  # B-Ligero is the namespace package `backends.direct`, imported from the repository root
         sys.path.insert(0, str(ROOT))
-    from archive.direct.ligero.fp8 import chain
+    from backends.direct.ligero.fp8 import chain
 
     ours = [IH.fp8_instance(i) for i in range(3)]
     theirs = chain.instances_fp8(3)
@@ -156,7 +156,7 @@ def test_fp8_replay_reproduces_every_word_and_locates_an_injected_mismatch():
     assert rep["mismatches"] == {"intermediate": 0, "final": 1, "epilogue": 0, "total": 1} and rep["first_mismatches"][0]["step"] == 47
 
 
-# --- the Hopper synthetic sets (lane b-hopper: archive.direct.ligero.relchain / relations) ------------------------------------------------
+# --- the Hopper synthetic sets (lane b-hopper: backends.direct.ligero.relchain / relations) ------------------------------------------------
 
 
 def test_hopper_sets_are_declared_with_their_targets_and_digests():
@@ -199,9 +199,9 @@ def test_hopper_fp8_set_replays_through_the_wgmma_shape():
 def test_hopper_recipes_match_the_relation_registry():
     pytest.importorskip("torch")
     try:
-        from archive.direct.ligero import relations, relchain
+        from backends.direct.ligero import relations, relchain
     except ImportError:
-        pytest.skip("B-Ligero's relation registry (archive.direct.ligero.relations) does not import here")
+        pytest.skip("B-Ligero's relation registry (backends.direct.ligero.relations) does not import here")
     for syn, name in ((IH.BF16_HOPPER_SYNTHETIC, "bf16-hopper"), (IH.FP8_HOPPER_SYNTHETIC, "fp8-hopper"), (IH.FP8_ADA_SYNTHETIC, "fp8-ada")):
         rel = relations.relation(name)
         assert (syn.dataset, syn.tier, syn.target) == (rel.instances_dataset, rel.instances_tier, rel.target.name)
@@ -264,7 +264,7 @@ def test_negative_tier_every_claimed_word_is_detected():
 
 
 def test_epilogue_words_are_the_targets_cast():
-    from verity_catalog.silicon.cast import f32_to_bf16_word
+    from verity.ml.tc.cast import f32_to_bf16_word
 
     acc = np.array([0x3F800000, 0x3F808000, 0x3F818000, 0x7F7FFFFF, 0xFF800000, 0x7FC00001, 0x80000000, 0x00000001], np.uint32)
     y = IH.epilogue_words("f32_to_bf16", acc)

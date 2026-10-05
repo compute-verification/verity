@@ -48,8 +48,8 @@ import math
 
 import torch
 
-from verity.primitives.circuits.refs import Coll
-from verity.primitives.circuits.types import Array
+from verity.ir.refs import Coll
+from verity.ir.types import Array
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule

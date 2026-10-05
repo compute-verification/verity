@@ -273,7 +273,7 @@ TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_smal
 LEAF_TILES = 32                                  # hash_leaf_p's most tiles a CTA (its shared memory's)
 #: hashing formats: -h1 (frame-b3 trees) and -h2 (frame-b3s: each leaf a tree over its value's 256-byte segments)
 HASHINGS = ("h1", "h2")
-#: `verity.protocols.accounting.work.pouw.audit`'s leaf schemas, which -h2's segment keys bind; hash_rows_b3s's segments a row (a thread each)
+#: `verity_pouw.audit`'s leaf schemas, which -h2's segment keys bind; hash_rows_b3s's segments a row (a thread each)
 ROW_SCHEMA, TILE_SCHEMA = "verity/pouw/row/v1", "verity/pouw/tile/v1"
 B3S_SEG, B3S_MAX_SEGS = 256, 512
 #: A's row-leaf forms: `w`, the format's own kernel (-h1 hash_rows_w, -h2 hash_rows_b3s), then forming's stats_a; `s`, -h2's

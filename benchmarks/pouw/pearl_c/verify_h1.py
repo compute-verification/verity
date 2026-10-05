@@ -1,10 +1,10 @@
 """The reference verifier on h1_bench.py's transcripts: -h1's or -h2's hashing (the header's ``hashing``) recomputed from
 the run's own A, C~ and U with the verifier's code, each result held to what the kernels wrote.
 
-  PYTHONPATH=verity:verity/protocols/accounting/work/pouw python3 benchmarks/pouw/pearl_c/verify_h1.py [--jobs J] RUN_ID TRANSCRIPT...
+  PYTHONPATH=packages/verity/src:protocols/pouw python3 benchmarks/pouw/pearl_c/verify_h1.py [--jobs J] RUN_ID TRANSCRIPT...
 
 Standard library only. For each transcript:
-- A's commitment: `verity.primitives.commitments`' `MerkleTree` over the transcript's rows (frame-b3 under -h1, frame-b3s under -h2),
+- A's commitment: `verity.commitments`' `MerkleTree` over the transcript's rows (frame-b3 under -h1, frame-b3s under -h2),
   under the domain its header names (binding, owner, the row count): every level of it (`tree_levels`) against the tree the
   kernels wrote.  A header with ``a_rows_tag`` (prefill's A) carries no rows: row r is SHAKE128 of the tag with r filled in,
   regenerated here, its leaves computed by J processes;
@@ -30,9 +30,9 @@ import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
-from verity.primitives.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
-from verity.primitives.commitments.merkle import tree_levels
-from verity.protocols.accounting.work.pouw.schemes import pearl_c
+from verity.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
+from verity.commitments.merkle import tree_levels
+from verity_pouw.schemes import pearl_c
 
 ROW, TILE = "verity/pouw/row/v1", "verity/pouw/tile/v1"
 

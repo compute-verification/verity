@@ -68,7 +68,7 @@ def test_every_record_merges_with_the_driver():
                        f"FILE` recomputes them): {stale}")
 
 
-CORE = ROOT / "verity" / "lean"
+CORE = ROOT / "packages" / "verity" / "lean"
 
 
 def _requires(pkg: Path) -> list[dict]:
@@ -76,7 +76,7 @@ def _requires(pkg: Path) -> list[dict]:
 
 
 def test_core_package_requires_only_mathlib():
-    """Core's Lean (`verity/lean`) is the model every protocol states its guarantees in, so it requires nothing of
+    """Core's Lean (`packages/verity/lean`) is the model every protocol states its guarantees in, so it requires nothing of
     the repository: a path dependency here would put a protocol or a backend under every guarantee."""
     assert CORE in lake_packages()
     assert [r["name"] for r in _requires(CORE)] == ["mathlib"]

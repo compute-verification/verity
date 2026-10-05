@@ -10,7 +10,7 @@ every x word is read by C coordinates and every w word by P. This splits the ste
   sm_120 step uses) reading those fields,
 
 and checks that decode + step equals ``fp.tc_dot16`` bit for bit (bit-sliced, on random words with NaN, Inf, zero and subnormal
-operands) and the core reference ``verity_catalog.silicon.total.tc_dot_total`` on HOPPER_BF16_WGMMA_K16. The census says whether one step fits a
+operands) and the core reference ``verity.ml.tc.total.tc_dot_total`` on HOPPER_BF16_WGMMA_K16. The census says whether one step fits a
 2^13-row slot (inputs, ANDs, output copies and the constant row), which halves the GEMM half of every GEMM statement's bits.
 
     python step_template.py [--T 8192] [--ref 400] [--json out.json]
@@ -191,7 +191,7 @@ def build_decode():
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--T", type=int, default=8192, help="bit-sliced random vectors")
-    ap.add_argument("--ref", type=int, default=400, help="vectors also checked against verity_catalog.silicon.total")
+    ap.add_argument("--ref", type=int, default=400, help="vectors also checked against verity.ml.tc.total")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--json")
     a = ap.parse_args(argv)
@@ -207,8 +207,8 @@ def main(argv=None) -> int:
     (ro, rf), (so, sf) = R.evaluate(inp, a.T), S.evaluate(inp, a.T)
     ref_out, split_out = unpack(ro["o"], a.T), unpack(so["o"], a.T)
     mism = sum(1 for x, y in zip(ref_out, split_out) if x != y)
-    from verity_catalog.silicon.models import HOPPER_BF16_WGMMA_K16
-    from verity_catalog.silicon.total import tc_dot_total
+    from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16
+    from verity.ml.tc.total import tc_dot_total
     core_mism = sum(1 for t in range(min(a.ref, a.T)) if tc_dot_total(HOPPER_BF16_WGMMA_K16, accs[t], xs[t], ws[t]) != split_out[t])
     n_special = sum(1 for t in range(a.T) if (split_out[t] & 0x7F800000) == 0x7F800000)
     cr, cs, cd = R.counts(), T1.counts(), D.counts()

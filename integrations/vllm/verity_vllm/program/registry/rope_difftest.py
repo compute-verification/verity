@@ -9,9 +9,9 @@ in place with it, and each is one `RoPE_v1` call on that row.  Head dims 64 / 96
 the query, key and cache words cycle through the edge kinds."""
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.refs import tuple_of
-from verity.primitives.circuits.types import Array, Tuple
+from verity.ir.defs import CompositeDefinition, bind
+from verity.ir.refs import tuple_of
+from verity.ir.types import Array, Tuple
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry.prims import BF16
 

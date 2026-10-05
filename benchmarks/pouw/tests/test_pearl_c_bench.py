@@ -33,11 +33,11 @@ B = _load("pearl_c_bench", HERE / "bench.py")
 import fixture as F  # noqa: E402
 import twin as W  # noqa: E402
 from test_pearl_c_kernel import kernel_names, needs, small_fixture, threads, within  # noqa: E402, F401
-from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, activation_binding, commit_rows, rows_domain  # noqa: E402
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Tile  # noqa: E402
-from verity.protocols.accounting.work.pouw.protocol import Shape as MShape  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity_pouw.audit import ROW_SCHEMA, activation_binding, commit_rows, rows_domain  # noqa: E402
+from verity_pouw.protocol import Context, Matmul, Tile  # noqa: E402
+from verity_pouw.protocol import Shape as MShape  # noqa: E402
+from verity_pouw.schemes import pearl_c as C  # noqa: E402
+from verity_pouw.schemes import pearl_kw as P  # noqa: E402
 
 SOURCE = (HERE / "pearl_c.cu").read_text() + (HERE / "hash.cuh").read_text()
 SMALL = W.Shape("small", 96, 128, 256)          # two tile rows, the second half filler
@@ -94,7 +94,7 @@ def small_tiles():
 
 def test_twin_tile_is_the_scheme(small_tiles):
     """Two tiles, one all real rows and one half filler, through `pearl_c` itself (hashing -h1); the baseline through the
-    fixture's functions; row r0's leaf as `verity.protocols.accounting.work.pouw.audit` commits A's rows."""
+    fixture's functions; row r0's leaf as `verity_pouw.audit` commits A's rows."""
     jb, tiles = small_tiles
     s = C.PearlC(k_min=32, tile=(64, 64), forming="v1", hashing="h1")
     noise = C.Noise(jb.seeds["seed_a"], jb.seeds["seed_b"])

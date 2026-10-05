@@ -18,7 +18,7 @@ Rules encoded here (Phase 5a of the v2 plan):
   workload interpreter (``$PY``, default ``/workspace/venv312/bin/python``),
   probed via ``importlib.metadata`` so nothing heavy is imported.
 * ``closure`` is the integration's import closure: ``integrations/vllm/**``
-  plus Verity core (``verity``).
+  plus Verity core (``packages/verity/src/verity``).
   ``source_identity.code_identity`` is the one code identity over it (the
   hot Commit worker's key, the TP Commit's tree of record).
 
@@ -46,10 +46,7 @@ _SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # the shell runners 
 
 CLOSURE = [
     "integrations/vllm/**",
-    "verity/**",
-    "catalog/**",
-    "kernels/**",
-    "experimental/**",
+    "packages/verity/src/verity/**",
 ]
 
 # Row id grammar (see verity_vllm/ops/README):

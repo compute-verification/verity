@@ -151,8 +151,8 @@ REGISTRY_UNAVAILABLE_EXIT = 3                                                   
 
 
 class RegistryUnavailable(ImportError):
-    """The core `verity` package (verity.primitives.circuits.defs REGISTRY) is not importable where the manifest is being built.  An ENVIRONMENT fault
-    (infra / precondition: PYTHONPATH, the shipped tree's verity, an incomplete venv), never a semantic result: without the
+    """The core `verity` package (verity.ir.defs REGISTRY) is not importable where the manifest is being built.  An ENVIRONMENT fault
+    (infra / precondition: PYTHONPATH, the shipped tree's packages/verity/src, an incomplete venv), never a semantic result: without the
     registry no Definition's signature can be derived, so a manifest built here would misreport every promoted family as `unmodelled`
     (complete: false) -- the wire lane saw exactly that on #57 (163052 rows complete:false vs 163484 complete:true).  Raised instead of
     building; the CLI exits REGISTRY_UNAVAILABLE_EXIT naming REGISTRY_UNAVAILABLE_FAIL_CLASS."""
@@ -161,9 +161,9 @@ class RegistryUnavailable(ImportError):
     kind = "infra/precondition"
 
     def __init__(self, cause: BaseException):
-        super().__init__(f"{REGISTRY_UNAVAILABLE_FAIL_CLASS}: the core verity package is not importable here (verity.primitives.circuits.defs: "
+        super().__init__(f"{REGISTRY_UNAVAILABLE_FAIL_CLASS}: the core verity package is not importable here (verity.ir.defs: "
                          f"{type(cause).__name__}: {cause}); the required-value manifest cannot be built without the registry "
-                         f"(sys.path lacks verity? an incomplete venv?) -- an environment fault, not a manifest result")
+                         f"(sys.path lacks packages/verity/src? an incomplete venv?) -- an environment fault, not a manifest result")
         self.cause = cause
 
 #: [R19 int-20, F-r19-int-20] the bytes per element of a promoted member's manifest dtype (PROMOTED_DTYPES)

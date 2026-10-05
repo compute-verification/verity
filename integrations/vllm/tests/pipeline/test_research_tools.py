@@ -10,6 +10,6 @@ from verity_vllm.pipeline.source_identity import TREE
 
 def test_closure_covers_every_core_file():
     pats = [glob_re(p) for p in research_tools.CLOSURE]
-    core = [p for p in list_source_files(TREE) if p.startswith("verity/")]
+    core = [p for p in list_source_files(TREE) if p.startswith("packages/verity/src/verity/")]
     outside = [p for p in core if not any(rx.match(p) for rx in pats)]
     assert core and not outside, f"core files outside research_tools.CLOSURE: {outside}"

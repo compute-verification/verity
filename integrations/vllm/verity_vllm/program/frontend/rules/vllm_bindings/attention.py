@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import torch
 
-from verity.primitives.circuits.refs import Coll, array_of
-from verity.primitives.circuits.types import Array, Value
+from verity.ir.refs import Coll, array_of
+from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule

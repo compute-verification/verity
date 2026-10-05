@@ -1,5 +1,5 @@
 """The verifier process of the harness's timed audit: a client of the responder (`pous_native.cu`'s wire format, or the
-harness's `ControlResponder`) and `verity.protocols.accounting.space.pous.protocol.Verifier`'s audits against it.
+harness's `ControlResponder`) and `verity_pous.protocol.Verifier`'s audits against it.
 
     python benchmarks/pous/band_gpu/live.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--audits N] [--pings N]
         [--k K] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
@@ -62,8 +62,8 @@ class LogicalClock:
 def params_of(name: str, manifest: dict[str, Any]) -> Any:
     """The scheme's geometry from its manifest (every geometry's manifest is its fields, plus the scheme's name); a name that
     is not registered is the band at another in-degree."""
-    from verity.protocols.accounting.space.pous import schemes
-    from verity.protocols.accounting.space.pous.band import BandParams
+    from verity_pous import schemes
+    from verity_pous.band import BandParams
 
     fields = {k: v for k, v in manifest.items() if k != "scheme"}
     return type(schemes.get(name).params)(**fields) if name in schemes.REGISTRY else BandParams(**fields)
@@ -72,8 +72,8 @@ def params_of(name: str, manifest: dict[str, Any]) -> Any:
 def scheme_of(name: str, params: Any) -> Any:
     """The scheme `name` at `params`: a registered one, or the band at another in-degree `d` (`band-chain/d{d}/v1`): the
     registered band's class at those parameters, its codec the band's at `d`, with no byte-format name registered for it."""
-    from verity.protocols.accounting.space.pous import schemes
-    from verity.protocols.accounting.space.pous.band import BandParams
+    from verity_pous import schemes
+    from verity_pous.band import BandParams
 
     if name in schemes.REGISTRY:
         return schemes.get(name, params=params)
@@ -157,8 +157,8 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
     """Run `audits` audits (the first is the audit of record) against the limit `limit_ns`, or `Δ` plus a calibration of
     this connection when none is given; pings before and after are kept either way.  The timed part runs with the garbage
     collector frozen and off, on core `cpu` when given, since the verifier's own stalls count against the server."""
-    from verity.protocols.accounting.space.pous import audit as pous_audit
-    from verity.protocols.accounting.space.pous import protocol
+    from verity_pous import audit as pous_audit
+    from verity_pous import protocol
 
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
@@ -221,9 +221,9 @@ def calibrate_only(host: str, port: int, block_bytes: int, *, pings: int, cpu: i
 
 
 def main(argv: list[str] | None = None) -> int:
-    from verity.protocols.accounting.space.pous import audit as pous_audit
-    from verity.protocols.accounting.space.pous import schemes
-    from verity.protocols.accounting.space.pous.verifier import VerifierKey
+    from verity_pous import audit as pous_audit
+    from verity_pous import schemes
+    from verity_pous.verifier import VerifierKey
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ready", required=True)

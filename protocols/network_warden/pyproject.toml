@@ -1,0 +1,22 @@
+[project]
+name = "verity-network-warden"
+version = "0.1.0"
+description = "Network transparency: the bucketed warden's grid semantics, the clock-sync advice, the exact audit and the calibration of honest runs, as a spec-level reference for the Lean package network-timing."
+requires-python = ">=3.12"
+dependencies = ["verity"]
+
+[project.scripts]
+network-warden-calibrate = "verity_network_warden.calibration:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["verity_network_warden"]
+
+[tool.uv.sources]
+verity = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

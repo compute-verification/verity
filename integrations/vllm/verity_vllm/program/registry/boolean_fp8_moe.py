@@ -6,7 +6,7 @@ one's word view is its `_v1` composite at the same statics (`elementwise.on_bits
 
     SiluMulFp8BlockQuantResult_v2, SiluMulFp8BlockQuantGroup_v2{G}, SiluMulFp8BlockQuant_v2{I,G}
 
-The callees are `verity_catalog.definitions.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` and `F2fpBf16_v2`, `verity_catalog.definitions.boolean.scalar`'s FP32 pieces,
+The callees are `verity.ml.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` and `F2fpBf16_v2`, `verity.ml.boolean.scalar`'s FP32 pieces,
 `boolean_moe.NvExpf_v2` and `boolean_fp8.Fp8RowScale_v2`; the constant words are constant bits and `-g` is one NOT gate on g's sign bit
 (`F32Neg_v1`).  Each callee is its word Definition on every word, NaN payloads included.  No table or lookup gate.
 """
@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.refs import Coll, concat, tuple_of
-from verity.primitives.circuits.types import Array, Tuple
-from verity_catalog.definitions.boolean import elementwise as EW
-from verity_catalog.definitions.boolean import gemm as BG
-from verity_catalog.definitions.boolean import scalar as SC
+from verity.ir import boolean as BL
+from verity.ir.defs import bind
+from verity.ir.refs import Coll, concat, tuple_of
+from verity.ir.types import Array, Tuple
+from verity.ml.boolean import elementwise as EW
+from verity.ml.boolean import gemm as BG
+from verity.ml.boolean import scalar as SC
 from verity_vllm.program.registry import boolean_moe as BMOE
 from verity_vllm.program.registry import fp8_moe as M
 from verity_vllm.program.registry.boolean_attention import _Bits

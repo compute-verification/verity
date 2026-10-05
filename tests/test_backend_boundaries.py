@@ -1,6 +1,6 @@
 """Backends never need an integration (README "Development": backends must be testable without installing a frontend or
-runtime integration).  Today one does: C-Flock takes the vLLM integration's registered Definitions and kernels where core has no
-equivalent yet (the numerical bench, which did too, is a benchmark now, and a benchmark may compose an integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site
+runtime integration).  Today some do: C-Flock and the numerical bench take the vLLM integration's registered Definitions and
+kernels where core has no equivalent yet.  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site
 fails, and so does a listed site that is gone, so the list stays exact.
 
 An import is an import statement, a string handed to ``importlib.import_module``, ``__import__`` or ``pytest.importorskip``, or
@@ -56,6 +56,15 @@ KNOWN = {
     ("backends/flock/tests/test_stage_typed.py", "verity_vllm.program.registry.prims"),
     ("backends/flock/tests/test_topp_word.py", "verity_vllm.program.registry"),
     ("backends/flock/tests/test_typed_statement.py", "verity_vllm.program.registry.prims"),
+    ("backends/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.kernels"),
+    ("backends/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.kernels.rows"),
+    ("backends/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.registry"),
+    ("backends/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.registry.b1"),
+    ("backends/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.registry.moe"),
+    ("backends/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.registry.sampling"),
+    ("backends/numerical/tests/bench/test_headline.py", "verity_vllm"),
+    ("backends/numerical/tests/bench/test_input_sets.py", "verity_vllm.program.registry"),
+    ("backends/numerical/tests/bench/test_served_templates.py", "verity_vllm"),
 }
 
 

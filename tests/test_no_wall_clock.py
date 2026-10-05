@@ -35,7 +35,7 @@ NOW = {"now", "utcnow", "today"}
 SLEEP_IN_SOURCE = re.compile(r"\bsleep\(")
 
 ALLOWED: dict[str, str] = {
-    "benchmarks/numerical/tests/reference/exhaustive_driver.py": "the WP1 pod driver (a recorded run, not a test) reports its steps' wall time",
+    "backends/numerical/tests/reference/exhaustive_driver.py": "the WP1 pod driver (a recorded run, not a test) reports its steps' wall time",
     "integrations/vllm/tests/check/adversarial.py::run_checkers": "the mutation harness reports each run's seconds; no test reads them",
     "integrations/vllm/tests/check/adversarial.py::run_one": "the mutation harness reports each fold's seconds; no test reads them",
     "integrations/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":

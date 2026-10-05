@@ -1,5 +1,5 @@
 """A shipped tree's PYTHONPATH comes from its workspace declaration (research.pythonpath), never a hand list: two silent failures came
-from a hand list that left out core's source directory."""
+from a list that left out packages/verity/src."""
 from __future__ import annotations
 
 import json
@@ -18,15 +18,14 @@ from waits import wait_runner
 REPO = Path(__file__).resolve().parents[3]
 SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
-REAL_ROOTS = [".", "tools/research/src", "tools/cluster/src", "archive/sp1/python", "benchmarks/numerical/python", "integrations/vllm",
-              "backends/flock/python", "tools/circuit_check/src", "catalog", "kernels", "experimental"]
+REAL_ROOTS = ["tools/research/src", "tools/cluster/src", "packages/verity/src", "backends/sp1/python", "backends/numerical/python", "integrations/vllm",
+              "protocols/sampled_proofs", "protocols/pous", "protocols/network_warden", "protocols/pouw", "backends/flock/python", "tools/circuit_check/src"]
 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):
     d = P.import_roots_dir(REPO)
     assert d["roots"] == REAL_ROOTS and d["missing"] == [] and d["source"] == "pyproject.toml [tool.uv.workspace]"
-    names = ["research", "cluster", "verity", "verity.protocols.verification.sampled_proofs", "verity_vllm", "verity_sp1",
-             "verity_numerical", "verity_flock", "circuit_check", "verity_catalog", "verity_kernels", "verity_experimental"]
+    names = ["research", "cluster", "verity", "verity_vllm", "verity_sp1", "verity_numerical", "verity_sampled_proofs", "verity_pous", "verity_network_warden", "verity_pouw", "verity_flock", "circuit_check"]
     probe = "import importlib.util as u, sys; [print(n, u.find_spec(n).origin) for n in sys.argv[1:]]"
     # -S: no site-packages, so an editable install elsewhere cannot answer; find_spec locates without importing (no torch)
     r = subprocess.run([PY, "-S", "-c", probe, *names], cwd=tmp_path, env={"PYTHONPATH": P.pythonpath(str(REPO), d)}, capture_output=True, text=True)

@@ -8,15 +8,15 @@ import json
 import random
 from pathlib import Path
 
-from verity.primitives.circuits.defs import PrimitiveDefinition, bind
-from verity_catalog.definitions import gemm as G
-from verity_catalog.definitions import prims as P
-from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16
-from verity_catalog.silicon.total import tc_dot_total
+from verity.ir.defs import PrimitiveDefinition, bind
+from verity.ml import gemm as G
+from verity.ml import prims as P
+from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16
+from verity.ml.tc.total import tc_dot_total
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
 
-CAPTURES = Path(__file__).resolve().parents[3] / "catalog" / "tests" / "fixtures" / "tc-total-2026-09-07"
+CAPTURES = Path(__file__).resolve().parents[3] / "packages" / "verity" / "tests" / "ml" / "fixtures" / "tc-total-2026-09-07"
 #: the vLLM registry's _v1 (verity_vllm.program.registry.prims) restated as its body is, so this backend test needs no integration
 V1 = PrimitiveDefinition("AmpereBF16TcDot16", 1, P.AmpereBF16TcDot16.params, P.F32,
                          lambda acc, *ab: tc_dot_total(AMPERE_BF16_M16N8K16, acc, tuple(ab[:16]), tuple(ab[16:32])), register=False)

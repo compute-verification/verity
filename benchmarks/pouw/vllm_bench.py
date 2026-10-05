@@ -160,7 +160,7 @@ def install(model, mode: str, committer=None):
     count = {"forward": 0, "rows": 0}
     ext = None
     if mode in ("ncp", "pearl"):
-        from verity_kernels import load
+        from kernels import load
         ext = load()
     sites = vllm_site.discover(model)
     stats["layers"] = len(sites)
@@ -189,7 +189,7 @@ def install(model, mode: str, committer=None):
             st["Wt"] = Wq.contiguous()
             if mode == "ncp":
                 if k not in perms:
-                    from verity.protocols.accounting.work.pouw.schemes.ncp import word_perm
+                    from verity_pouw.schemes.ncp import word_perm
                     perms[k] = torch.tensor(word_perm(k)[0], device="cuda", dtype=torch.long)
                 st["pi"] = perms[k]
             layer.weight.data = torch.empty(0, dtype=W.dtype, device=W.device)

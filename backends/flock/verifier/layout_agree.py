@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from circuit_type_agree import flat, toy_table, tree, _width  # noqa: E402
 
-from verity.primitives.circuits import library  # noqa: E402
+from verity.ml import library  # noqa: E402
 from verity_flock import circuit_types as CT  # noqa: E402
 from verity_flock import layouts as LY  # noqa: E402
 
@@ -209,7 +209,7 @@ def shape_cases():
 
 
 def _canon(r):
-    from verity.primitives.circuits.codec import canonical_json
+    from verity.ir.codec import canonical_json
     return canonical_json(r)
 
 

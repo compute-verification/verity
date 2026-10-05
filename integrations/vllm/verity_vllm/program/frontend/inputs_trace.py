@@ -9,7 +9,7 @@ import sys
 import threading
 
 _FORBIDDEN_MARKERS = ("program.json", "instances.jsonl", "experimental/aot/build.py", "experimental/aot/",
-                      os.path.join(__package__.split(".")[0], "predict", ""), "/vol/corpus", "catalog/census/B0-", "log.jsonl")
+                      os.path.join(__package__.split(".")[0], "predict", ""), "/vol/corpus", "census/B0-", "log.jsonl")
 
 
 class InputsTrace:

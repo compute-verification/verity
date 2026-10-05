@@ -17,7 +17,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_lean_verifier import LEAN, _bit_row_toy  # noqa: E402
 
-from verity.primitives.circuits.codec import canonical_json
+from verity.ir.codec import canonical_json
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

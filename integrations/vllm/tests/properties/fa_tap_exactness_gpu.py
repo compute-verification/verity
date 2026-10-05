@@ -152,8 +152,8 @@ def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, 
     its row sees (paged K/V gathered through the block table), block b guarded iff b >= the row's tile's `n_block_min_causal_local_mask`.
     The twin (`derived_rows.attention_head_states`) evaluates the heads it covers; a head with a non-finite operand or accumulator goes to
     the reference evaluator (`AttentionHead_v4`, gate by gate)."""
-    from verity.primitives.circuits.evaluation.reference import evaluate
-    from verity.primitives.circuits.defs import bind
+    from verity.evaluation.reference import evaluate
+    from verity.ir.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.registry import fa3_check_inf as F3
     from verity_vllm.program.registry import hopper

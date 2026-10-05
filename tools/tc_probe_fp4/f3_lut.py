@@ -3,7 +3,7 @@
 A cheaper-computation search: with the weights fixed, the partial dots of G consecutive weights of C columns against every one
 of the 16^G activation-code tuples can be tabulated in advance, so one table lookup replaces G x C E2M1 products.  This tool
 prices that route against the tensor core's dense NVFP4 tile (``mma.sync kind::mxf4nvf4 4X ue4m3 m16n8k64``, F1's unit) on the
-words the atom produces (``verity_catalog.silicon.models.BLACKWELL_SM120_NVF4``), bit for bit:
+words the atom produces (``verity.ml.tc.models.BLACKWELL_SM120_NVF4``), bit for bit:
 
     python tools/tc_probe_fp4/f3_lut.py build --out DIR                          # the library and its SASS gate
     python tools/tc_probe_fp4/f3_lut.py run --build DIR --width g1c2 --out DIR2 --expect-uuid GPU-... --locked-mhz 2100
@@ -52,7 +52,7 @@ import f1_rates as F1  # noqa: E402
 import fp4_emulation_1ad1aaa2 as E  # noqa: E402
 import probe as P  # noqa: E402
 
-from verity_catalog.silicon import models as M  # noqa: E402
+from verity.ml.tc import models as M  # noqa: E402
 
 ARCH = "sm_120a"
 SCHEMA = "pouw-rtxpro/f3-lut-sm120/v1"

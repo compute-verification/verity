@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
-for candidate, module in ((REPO / "verity", "verity"), (REPO / "benchmarks" / "numerical" / "python", "verity_numerical")):
+for candidate, module in ((REPO / "packages" / "verity" / "src", "verity"), (REPO / "backends" / "numerical" / "python", "verity_numerical")):
     try:
         __import__(module)
     except ImportError:

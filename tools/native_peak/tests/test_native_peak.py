@@ -137,9 +137,9 @@ def test_measure_bf16_small_on_cuda(tmp_path, monkeypatch):
 
 
 def test_spec_peaks_agree_with_every_census_line():
-    """The pod-side table stays standalone (nothing to read on a pod); it must quote catalog/census/hardware.json's peak for every line."""
+    """The pod-side table stays standalone (nothing to read on a pod); it must quote census/hardware.json's peak for every line."""
     m = _measure()
-    hardware = json.loads((REPO / "catalog/census" / "hardware.json").read_text(encoding="utf-8"))
+    hardware = json.loads((REPO / "census" / "hardware.json").read_text(encoding="utf-8"))
     smi = {"NVIDIA A100 SXM4 80GB": "NVIDIA A100-SXM4-80GB", "NVIDIA H100 SXM5 80GB": "NVIDIA H100 80GB HBM3", "NVIDIA L40S 48GB": "NVIDIA L40S"}
     dtype = {"bf16": "bf16", "e4m3": "e4m3", "e2m1": "nvfp4"}
     for h in hardware:

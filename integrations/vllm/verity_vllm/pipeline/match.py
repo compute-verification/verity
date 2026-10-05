@@ -76,12 +76,12 @@ LAPTOP_MAX_ARG_LEAVES = 4_000_000
 LAPTOP_MAX_RSS_GB = 1.5
 LAPTOP_STAGE_TIMEOUT_S = 180.0
 
-GPU_STAGES = ("capture", "control", "catalog/census", "nonint")
+GPU_STAGES = ("capture", "control", "census", "nonint")
 CPU_STAGES = ("resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "fold_other", "root_policy", "golden",
               "wiring", "replay_a", "replay_chain", "replay_b", "replay_c", "gates")
 SKIP_GROUPS = {
     "replay": {"replay_a", "replay_chain", "replay_b", "replay_c"},
-    "catalog/census": {"catalog/census", "census_reconcile"},
+    "census": {"census", "census_reconcile"},
     "nonint": {"nonint", "nonint_compare"},
     "fold": {"fold", "fold_2", "fold_other"},
 }
@@ -126,7 +126,7 @@ class Plan:
         self.log = Path(a.log).resolve() if a.log else self.capture_dir / "log.jsonl.gz"
         self.snapshots = Path(a.snapshots).resolve() if a.snapshots else (self.log.parent if a.log else self.capture_dir)
         self.control_dir = self.run / "control"
-        self.census_dir = self.run / "catalog/census"
+        self.census_dir = self.run / "census"
         self.nonint_dir = self.run / "nonint"
         self.skip = self._skip_set(a.skip)
         self.laptop = bool(a.laptop)
@@ -196,15 +196,15 @@ class Plan:
                    (["--snapshot-max-bytes-op", str(a.snapshot_max_bytes_op)] if a.snapshot_max_bytes_op is not None else [])   # D87
         if stage == "control":
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "m1-capture", *common_gpu, "--out", str(self.control_dir), "--no-observer"]
-        if stage == "catalog/census":
-            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "catalog/census", *common_gpu, "--out", str(self.census_dir)] + ([] if a.keep_traces else ["--no-traces"])
+        if stage == "census":
+            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "census", *common_gpu, "--out", str(self.census_dir)] + ([] if a.keep_traces else ["--no-traces"])
         if stage == "nonint":
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "noninterference", *common_gpu, "--out", str(self.nonint_dir), "--python", self.py_gpu,
                     "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "resolve":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "resolve-log", str(self.log), "--profile", a.profile, "--out", str(run / "resolution"), "--quiet"]
         if stage == "census_reconcile":
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "catalog/census", "--reconcile", str(self.census_dir / "census.json"), "--log", str(self.log),
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "census", "--reconcile", str(self.census_dir / "census.json"), "--log", str(self.log),
                     "--profile", a.profile, "--report", str(run / "census_reconcile")]
         if stage == "nonint_compare":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "noninterference", "--compare", "--out", str(self.nonint_dir), "--workload", a.workload,
@@ -1034,7 +1034,7 @@ def instances_form() -> str:
 
 
 def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: str | Path) -> dict:
-    """D85: freeze the candidate.  `program.json` is the Verity Program through the existing codec (`verity.primitives.circuits.codec`,
+    """D85: freeze the candidate.  `program.json` is the Verity Program through the existing codec (`verity.ir.codec`,
     digest == `fold_summary.digest`); `instances.jsonl` is the runtime-correspondence record the fold already holds in
     memory -- one line per Compute instance (step, root event id, pattern, spec id, rows, operand/output `ViewDesc`s, and
     the operand `Refs` as runs) -- and `accesses.jsonl.gz` the full memory-access journal (alloc / root / read / write /
@@ -1044,8 +1044,8 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     import gzip
 
     from verity_vllm.observe.events import ViewDesc
-    from verity.primitives.circuits import codec
-    from verity.primitives.circuits.refs import runs
+    from verity.ir import codec
+    from verity.ir.refs import runs
 
     # [R17 mfast, COORD R17-39 (a) fold/persist] the writer converts by SHAPE, not by a generic walk: a ViewDesc is six known fields (the
     # same dict, in field order, that dataclasses.asdict + _jsonable produced), an operand_refs item is a list of a str and ints already

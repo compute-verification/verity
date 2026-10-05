@@ -31,7 +31,7 @@ goes to stderr and the job exits, rather than holding its GPU to the lease's end
   GPU and of the job's CPUs, the GPU's utilisation, clocks and compute processes, and the longest stall of a 10 ms
   heartbeat thread and of the client's event loop (the monitor's own, in the offline modes);
 - `meta.json`: host, GPU, CPUs, versions, model, server arguments, the mix and t0;
-- `server.log`, and at the end `trace.json` (the calibration format, `verity.protocols.accounting.communication.warden.calibration`) and
+- `server.log`, and at the end `trace.json` (the calibration format, `verity_network_warden.calibration`) and
   `summary.json`.
 
 **Exit status.** 0 when the chunk ran to its deadline. A SIGTERM (an eviction: the lease reclaimed the GPU) stops it;

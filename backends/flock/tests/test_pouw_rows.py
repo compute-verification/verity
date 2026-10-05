@@ -1,5 +1,5 @@
-"""PoUW's tile-check rows (`verity.protocols.accounting.work.pouw.circuit.leaves`) are C-Flock's rows byte for byte: every vector of
-``verity/protocols/accounting/work/pouw/tests/vectors/pouw_rows.json``, recomputed from its case's words and salt through the port C-Flock stages
+"""PoUW's tile-check rows (`verity_pouw.circuit.leaves`) are C-Flock's rows byte for byte: every vector of
+``protocols/pouw/tests/vectors/pouw_rows.json``, recomputed from its case's words and salt through the port C-Flock stages
 for the row (`circuit._port`: ``n_words`` u16 leaves, a `sha512/row/v1` row of whole blocks under ``hm96-sha512/row/v1`` or
 a bit row of ``16 n_words`` bits under ``hm96-sha512/row/v2``), gives the pinned row bytes, digest, commit string
 (`circuit._commit_strings`) and tree leaf; and one vector of each row version and a tile's give the same commit string and
@@ -15,12 +15,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.primitives.commitments import hm96
-from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2
+from verity.commitments import hm96
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2
 from verity_flock import circuit as FC
-from verity.protocols.accounting.work.pouw.circuit import leaves as L
+from verity_pouw.circuit import leaves as L
 
-POUW_TESTS = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "work" / "pouw" / "tests"
+POUW_TESTS = Path(__file__).resolve().parents[3] / "protocols" / "pouw" / "tests"
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 _spec = importlib.util.spec_from_file_location("pouw_rows_vectors", POUW_TESTS / "pouw_rows_vectors.py")
 V = importlib.util.module_from_spec(_spec)

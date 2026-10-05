@@ -28,8 +28,8 @@ import os
 import numpy as np
 import pytest
 import torch
-from verity.protocols.accounting.work.pouw.circuit import plan as CPL
-from verity.protocols.accounting.work.pouw.circuit import reference as CR
+from verity_pouw.circuit import plan as CPL
+from verity_pouw.circuit import reference as CR
 
 from verity_vllm import protocol_options as PO
 from verity_vllm.check.replay import driver as SR
@@ -303,8 +303,8 @@ def test_the_build_lowers_only_the_pouw_site():
 def test_the_rows_native_evaluation_is_the_registered_definition():
     """`NcpLinearRow_v1` (`program.registry.pouw_rows`) evaluated by the IR reference is what the replay computes natively, on rows at
     three scales, a row of subnormals and a zero row."""
-    from verity.primitives.circuits.evaluation import evaluate
-    from verity.primitives.circuits.defs import bind
+    from verity.evaluation import evaluate
+    from verity.ir.defs import bind
     from verity_vllm.program.registry import pouw_rows
     rng = np.random.default_rng(1)
     d = bind(pouw_rows.NcpLinearRow, K=H, N=NU)

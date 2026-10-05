@@ -29,7 +29,7 @@ pub const KEY_BYTES: usize = 256;
 pub const NONCE_BYTES: usize = 32;
 /// The session's own stream: round 0 is the link points drawn at `Commit`.
 pub const SESSION: &str = "session";
-// hm96-sha512/v1's prefixes (verity/primitives/commitments/hm96/PROTOCOL.md §2), zero-padded to 128 bytes
+// hm96-sha512/v1's prefixes (verity/commitments/hm96/PROTOCOL.md §2), zero-padded to 128 bytes
 const SALT_TAG: &[u8] = b"verity/hm96-sha512/salt/v1\0";
 const LEAF_TAG: &[u8] = b"verity/hm96-sha512/leaf/v1\0";
 

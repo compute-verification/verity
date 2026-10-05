@@ -20,7 +20,7 @@
 //!   the coins included) and the number of BabyBear^6 challenges; the server answers with OS-drawn words below p. Prime
 //!   rounds need `Hello`; at least one must precede `Commit` (root_F); none is issued between `Commit` and y. The
 //!   record keeps every round (state, count, words) and the round count before `Commit`; the prime verifier replays
-//!   its transcript against them (`archive/gkr/verifier/src/transcript.rs`).
+//!   its transcript against them (`backends/gkr/verifier/src/transcript.rs`).
 //! * [`Server::from_record`] rebuilds a finished session from its record alone (G2: the record keeps root_F, every
 //!   root_B and the committed public words), so [`Server::finish`] re-verifies the Flock side offline.
 
@@ -174,7 +174,7 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
 }
 
 /// The unit draw (the Lean verifier's PROTOCOL.md §7.3): the verifier draws the units to prove in the clear from its OS
-/// randomness, after registration and before the statement is fixed, with `verity.primitives.randomness`'s exact samplers read straight
+/// randomness, after registration and before the statement is fixed, with `verity.randomness`'s exact samplers read straight
 /// from OS bytes (no derivation). The draw is the object `{"law": "subset", "population": N, "k": K, "units": [...]}` or
 /// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}`, units ascending.
 pub mod unit_draw {
@@ -229,7 +229,7 @@ pub mod unit_draw {
                 if k > population {
                     return Err(format!("subset: k = {k} > population {population}"));
                 }
-                // the partial Fisher-Yates of verity.primitives.randomness's Key.subset
+                // the partial Fisher-Yates of verity.randomness's Key.subset
                 let mut swapped: std::collections::BTreeMap<u64, u64> = std::collections::BTreeMap::new();
                 let at = |m: &std::collections::BTreeMap<u64, u64>, i: u64| *m.get(&i).unwrap_or(&i);
                 let mut out = Vec::new();

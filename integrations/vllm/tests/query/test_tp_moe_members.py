@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from tests.query.test_module_body import W, _call
-from verity_vllm.query.units import ValueRef
+from verity.proofs.query import ValueRef
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.compose import merge_ranks
 from verity_vllm.query.program_view import InputView, Port, ProgramView

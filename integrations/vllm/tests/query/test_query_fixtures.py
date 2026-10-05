@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.primitives.circuits.defs import PrimitiveDefinition
-from verity.primitives.circuits.parts import Part, n_members
+from verity.ir.defs import PrimitiveDefinition
+from verity.ir.parts import Part, n_members
 from tests.program import fixtures_query as FX
 
 

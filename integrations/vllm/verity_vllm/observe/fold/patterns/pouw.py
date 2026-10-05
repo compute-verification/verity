@@ -1,7 +1,7 @@
 """PoUW's executed linears: the host executor's own record of each call, never a device launch.
 
 Under ``pouw:ncp-v2`` each linear layer's ``apply`` is PoUW's executor. It computes the call on the host and returns its served
-y as one dispatcher op, ``verity.protocols.accounting.work.pouw.ncp_linear(x, weight, bias, entry, w)`` (`protocol_options.pouw.ncp_linear_op`), so an
+y as one dispatcher op, ``verity_pouw.ncp_linear(x, weight, bias, entry, w)`` (`protocol_options.pouw.ncp_linear_op`), so an
 observer records the op with its operands and output and nothing of the host work inside it. `PouwLinear` folds that record
 into the call's served rows, the Definitions the Build binds the same linear to under the same target (`TritonGemmRule`). Every
 other GEMM stays the Triton launch's (`gemm.GemmLaunch`). `with_protocols` adds the pattern to a run's profile when its capture
@@ -13,7 +13,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any
 
-from verity.primitives.circuits.defs import bind
+from verity.ir.defs import bind
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
 from verity_vllm.observe.fold.patterns.ops import base_op
@@ -22,12 +22,12 @@ from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Resoluti
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.registry import pouw_rows
 
-OP = "verity.protocols.accounting.work.pouw.ncp_linear"
+OP = "verity_pouw.ncp_linear"
 
 
 @dataclass
 class PouwLinear:
-    """``verity.protocols.accounting.work.pouw.ncp_linear(x[M,K], W[N,K], b[N] | None, entry, w) -> y[M,N]`` -> `Compute(NcpLinearRow_v1{K,N}, rows=M,
+    """``verity_pouw.ncp_linear(x[M,K], W[N,K], b[N] | None, entry, w) -> y[M,N]`` -> `Compute(NcpLinearRow_v1{K,N}, rows=M,
     (PerRow(x), Shared(W)), (PerRow(y),))`, or `NcpLinearRowBias_v1{K,N}` with `Shared(b)` when the call carries its bias.
     x, W, b and y are bf16 row-major; W and b are parameters."""
 

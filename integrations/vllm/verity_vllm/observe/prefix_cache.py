@@ -444,7 +444,7 @@ def evidence(warm_dir: Path, cold_dir: Path | None, *, out: Path | None = None) 
         ent["realized"] = {r["request_id"]: {k: r.get(k) for k in ("arrive_step", "arrive_step_realized", "first_step", "finish_step", "finish_reason", "n_generated")}
                            for r in (tokens or {}).get("requests") or []}
         ent["engine_kwargs_prefix_caching"] = ((_jload(rd / "capture" / "versions.json") or {}).get("engine_kwargs") or {}).get("enable_prefix_caching")
-        census = _jload(rd / "catalog/census" / "census.json")
+        census = _jload(rd / "census" / "census.json")
         warm_first = next((v["step"] for v in ent.get("first_step_per_request", {}).values() if v.get("step", 0) > 0), None)
         ent["census_at_warm_admission_step"] = census_row_witness(census, warm_first) if warm_first is not None else {"error": "no late arrival"}
         ent["census_at_step0"] = census_row_witness(census, 0)

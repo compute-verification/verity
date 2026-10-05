@@ -1,5 +1,5 @@
 // Pearl-C's hashing kernels, arch-neutral (no wgmma, no bulk copies): BLAKE3's compression, hashing format -h1 (the message
-// digests, the tile leaves and the frame-b3 trees of A's rows and of the tile leaves, as `verity.protocols.accounting.work.pouw.audit` commits them), the
+// digests, the tile leaves and the frame-b3 trees of A's rows and of the tile leaves, as `verity_pouw.audit` commits them), the
 // unit's seed_A over A's root and its subkeys, and Pearl's lottery tickets.  pearl_c.cu includes it for sm_90a; hash.cu builds it
 // alone for sm_120a.
 #pragma once
@@ -44,7 +44,7 @@ DEV void blake3_block(const uint32_t* key, const uint32_t* msg, uint32_t* out) {
 
 
 // ---------------------------------------------------------------- hashing, format -h1: BLAKE3 throughout
-// The trees are `verity.primitives.commitments.merkle`'s frame-b3 (hash="blake3"), keyed by each tree's domain id, which the host
+// The trees are `verity.commitments.merkle`'s frame-b3 (hash="blake3"), keyed by each tree's domain id, which the host
 // supplies: leaf H ‖ value with H = 0x01 ‖ u64 rank ‖ u64 position ‖ u16 len(schema) ‖ schema zero-padded to one 64-byte
 // block; pad 0x03 ‖ u64 rank; a level-l node left ‖ right (one block) under the level's key keyed(domain id, 0x02 ‖ u8 l).
 // Integers little-endian.  A tree's levels sit one after another in one buffer (level 0 at offset 0, padded to a power of

@@ -37,14 +37,14 @@ from typing import Any, Callable, NoReturn, Sequence
 
 import torch
 
-from verity.primitives.circuits.codec import _spec_id, canonical_json, encode_program, program_digest
-from verity.primitives.circuits.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
-from verity.primitives.circuits.defs import bind as ir_bind
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.refs import Affine, Coll
-from verity.primitives.circuits.refs import runs as _refs_runs
-from verity.primitives.circuits.liveness import DeadGateReport, dead_gates as _dead_gates
-from verity.primitives.circuits.types import Array, Record, Tuple as TupleT, Type, Value
+from verity.ir.codec import _spec_id, canonical_json, encode_program, program_digest
+from verity.ir.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+from verity.ir.defs import bind as ir_bind
+from verity.ir.program import Program
+from verity.ir.refs import Affine, Coll
+from verity.ir.refs import runs as _refs_runs
+from verity.ir.liveness import DeadGateReport, dead_gates as _dead_gates
+from verity.ir.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import Registration
@@ -114,7 +114,7 @@ class WeightLeaf:
 # ---------------------------------------------------------------------------------------------------------
 
 
-_runs = _refs_runs  # `verity.primitives.circuits.refs.runs` (pure; moved there so `rules.family.match_program` imports without torch)
+_runs = _refs_runs  # `verity.ir.refs.runs` (pure; moved there so `rules.family.match_program` imports without torch)
 
 
 def _runs_intersect(a: list[tuple[str, int, int, int]], b: list[tuple[str, int, int, int]]) -> bool:
@@ -788,7 +788,7 @@ def _translate(ctx: Ctx) -> Coll:
 
 
 def _concat_refs(parts):
-    from verity.primitives.circuits.refs import concat
+    from verity.ir.refs import concat
     return concat(list(parts))
 
 

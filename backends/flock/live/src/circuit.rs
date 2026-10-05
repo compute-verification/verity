@@ -74,9 +74,9 @@ pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
 pub const SCHEME: &str = "frame-v3-sha512/hm96-sha512";
 pub const ROW_SCHEMA: &str = "hm96-sha512/row/v1";
-/// a bit row's leaf (`sha512/row/v2`; `verity.primitives.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_V2`)
+/// a bit row's leaf (`sha512/row/v2`; `verity.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_V2`)
 pub const ROW_SCHEMA_V2: &str = "hm96-sha512/row/v2";
-/// a segmented bit row's leaf (`sha512/row-seg/v1`; `verity.primitives.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_SEG`)
+/// a segmented bit row's leaf (`sha512/row-seg/v1`; `verity.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_SEG`)
 pub const ROW_SCHEMA_SEG: &str = "hm96-sha512/row-seg/v1";
 /// a statement's identity `row_leaf_in_circuit` when a port is a segmented row
 pub const ROW_LEAF_SEG_IDENTITY: &str = "hm96-sha512/row/v2 over sha512/row/v2, hm96-sha512/row-seg/v1 over sha512/row-seg/v1, per port";
@@ -535,7 +535,7 @@ pub fn compress(cv: &mut [u64; 8], block: &[u8]) {
     }
 }
 
-/// `sha512/row/v1`'s first block for an x row of `words` u16 words (`verity.primitives.commitments.rowleaf.sha512_row_prefix`).
+/// `sha512/row/v1`'s first block for an x row of `words` u16 words (`verity.commitments.rowleaf.sha512_row_prefix`).
 pub fn row_prefix(words: usize) -> Vec<u8> {
     let mut v = SHA512_ROW_TAG.to_vec();
     v.extend([ROLE_X, 16]);
@@ -545,7 +545,7 @@ pub fn row_prefix(words: usize) -> Vec<u8> {
 }
 
 /// `sha512/row/v2`'s first block `P(bits)`: `"verity/sha512-row/v2\0" || u64be bits`, zero padded
-/// (`verity.primitives.commitments.rowleaf.sha512_row_v2_prefix`).
+/// (`verity.commitments.rowleaf.sha512_row_v2_prefix`).
 pub fn row_prefix_v2(bits: u64) -> Vec<u8> {
     let mut v = SHA512_ROW_V2_TAG.to_vec();
     v.extend(bits.to_be_bytes());
@@ -554,7 +554,7 @@ pub fn row_prefix_v2(bits: u64) -> Vec<u8> {
 }
 
 /// `sha512/row-seg/v1`'s outer first block `Q(bits)`: `"verity/sha512-row-seg/v1\0" || u64be bits || u64be s || u32be 1024`,
-/// zero padded (`verity.primitives.commitments.rowleaf.sha512_row_seg_prefix`).
+/// zero padded (`verity.commitments.rowleaf.sha512_row_seg_prefix`).
 pub fn row_prefix_seg(bits: u64) -> Vec<u8> {
     let mut v = SHA512_ROW_SEG_TAG.to_vec();
     v.extend(bits.to_be_bytes());
@@ -565,7 +565,7 @@ pub fn row_prefix_seg(bits: u64) -> Vec<u8> {
 }
 
 /// Segment `j` of `s`'s first block `S(j, s, m)`, `m` its bits: `"verity/sha512-row-seg/v1/segment\0" || u64be j || u64be s ||
-/// u64be m`, zero padded (`verity.primitives.commitments.rowleaf.sha512_row_seg_segment_prefix`).
+/// u64be m`, zero padded (`verity.commitments.rowleaf.sha512_row_seg_segment_prefix`).
 pub fn segment_prefix(j: usize, s: usize, m: usize) -> Vec<u8> {
     let mut v = SHA512_ROW_SEG_SEGMENT_TAG.to_vec();
     for x in [j, s, m] {
@@ -603,7 +603,7 @@ pub fn row_consts(p: &Port) -> RowConsts {
     }
 }
 
-/// `sha512/row-seg/v1`'s digest of a row of `bits` bits, its bytes `row` (`verity.primitives.commitments.rowleaf.sha512_row_seg_digest`).
+/// `sha512/row-seg/v1`'s digest of a row of `bits` bits, its bytes `row` (`verity.commitments.rowleaf.sha512_row_seg_digest`).
 pub fn row_seg_digest(bits: usize, row: &[u8]) -> [u8; 64] {
     let (segs, _) = seg_shape(bits);
     let mut h = Sha512::new();
@@ -3560,19 +3560,19 @@ mod tests {
 
     #[test]
     fn hm96_sha512_default_key_is_core_s() {
-        // hashlib.sha512(verity.primitives.commitments.hm96.SHA512.default_key).hexdigest() (PR #93)
+        // hashlib.sha512(verity.commitments.hm96.SHA512.default_key).hexdigest() (PR #93)
         assert_eq!(super::leaf_scheme()["key_sha512"],
                    "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22");
     }
 
-    /// flock_merkle::hm96 (verity's Flock patch) against core's verity.primitives.commitments.hm96 vectors_sha512.json: the key, both
+    /// flock_merkle::hm96 (verity's Flock patch) against core's verity.commitments.hm96 vectors_sha512.json: the key, both
     /// prefixes, the default-key masks and the leaves over given inner digests.
     #[cfg(feature = "sha512")]
     #[test]
     fn hm96_leaves_match_core_vectors() {
         use flock_merkle::hm96;
         let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().unwrap().join("../../..");
-        let Ok(text) = std::fs::read_to_string(repo.join("verity/primitives/commitments/hm96/vectors_sha512.json")) else {
+        let Ok(text) = std::fs::read_to_string(repo.join("packages/verity/src/verity/commitments/hm96/vectors_sha512.json")) else {
             return;
         };
         let v: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -3638,7 +3638,7 @@ mod tests {
     fn segmented_row_constants_complete_its_digest() {
         let mut s = 0x9e37_79b9_7f4a_7c15u64;
         assert_eq!(crate::hex(&row_seg_digest(0, &[])), crate::hex(&Sha512::digest(row_prefix_seg(0))));
-        // core's (`verity.primitives.commitments.rowleaf.sha512_row_seg_digest`) of the row of bytes i mod 251 (the last masked to its bits)
+        // core's (`verity.commitments.rowleaf.sha512_row_seg_digest`) of the row of bytes i mod 251 (the last masked to its bits)
         for (bits, want) in [(8193usize, "1009029f51a63cb64c57e4ac641244ecdb437314b19141530f556dc92bf013d2df4479bebd45d7c13c0938ea5e9a8199cf8241638860509ad92986cc0033799e"),
                              (65536, "4269023781ae746c3e03aaac5fc2330ea43cabddc04ea554e6f570ab271605f9d3bec541863e4190e5f87a3cef4a65906c95041588dfcf92c7928bd93193ac43")] {
             let mut row: Vec<u8> = (0..bits.div_ceil(8)).map(|i| (i % 251) as u8).collect();

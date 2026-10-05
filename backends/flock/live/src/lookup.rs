@@ -18,7 +18,7 @@ use sha2::{Digest, Sha256, Sha512};
 
 use crate::ir_block::{Group, IrUnitNet};
 
-/// The library (core's `verity.primitives.circuits.library`, the verifier's `Flock/Library.lean`): name, SHA-512 of the raw u32 LE words,
+/// The library (core's `verity.ml.library`, the verifier's `Flock/Library.lean`): name, SHA-512 of the raw u32 LE words,
 /// index bits, value bits. A table is `library` exactly when its SHA-512 is listed, and `program` otherwise.
 pub const LIBRARY: [(&str, &str, usize, usize); 5] = [
     ("rsq", "39f7b912bc25b913618d926725a18974af9eb246f6f36ce06ef63ffdb293d80bc222623c6d182d2c23e16f5ada2b8db9e7e6a53b3e42046763f7794ac3cef378", 24, 31),

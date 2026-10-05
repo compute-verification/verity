@@ -5,7 +5,7 @@ release) while `verity_vllm` ran the release tree and versions.json named the re
 tree on sys.path ahead of the tree of record -- and require the precheck to fail BY NAME, plus the positive (one tree), the shipped-tree
 sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / canary.sh / hidden_gpu.py with a foreign $VERITY_TREE).
 
-Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from verity, `verity_vllm` from integrations/vllm,
+Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from packages/verity/src, `verity_vllm` from integrations/vllm,
 `research` from tools/research/src.  REPO must be a git checkout: the positive precheck, the requested-sha mismatch and the
 `.git`-before-markers resolution read its commit.  A `research run --source` tree has no `.git`, so on a pod run the suite from a clone
 of the shipped commit (`git clone <root>/git/verity.git T && git -C T checkout $RESEARCH_SOURCE_SHA`), not from the shipped tree.
@@ -32,7 +32,7 @@ from verity_vllm.pipeline import source_identity as sid
 INTEGRATION = Path(__file__).resolve().parents[2]  # <repo>/integrations/vllm
 REPO = INTEGRATION.parents[1]  # <repo>
 PY = sys.executable
-PP = os.pathsep.join([str(INTEGRATION), str(REPO / "verity"), str(REPO / "tools" / "research" / "src")])
+PP = os.pathsep.join([str(INTEGRATION), str(REPO / "packages" / "verity" / "src"), str(REPO / "tools" / "research" / "src")])
 
 
 def _env(**extra: str) -> dict[str, str]:
@@ -86,7 +86,7 @@ def test_precheck_passes_from_one_tree(tmp_path, tree_arg):
         assert p["resolved_path"].startswith(os.path.realpath(REPO)), name
         assert p["git_sha"] == doc["requested"]["git_sha"], name
         assert p["sys_path_entry"] == p["expected_sys_path_entry"], name
-    assert doc["packages"]["verity"]["sys_path_entry"] == os.path.realpath(REPO / "verity")
+    assert doc["packages"]["verity"]["sys_path_entry"] == os.path.realpath(REPO / "packages" / "verity" / "src")
     assert doc["packages"]["research"]["sys_path_entry"] == os.path.realpath(REPO / "tools" / "research" / "src")
     hg = doc["packages"]["hidden_gpu"]
     assert hg["resolved_path"].endswith("hidden_gpu.py") and hg["repo_root"] == os.path.realpath(REPO) and len(hg["file_sha256"]) == 64
@@ -176,7 +176,7 @@ def test_negative_verity_tree_naming_another_tree_is_refused(tmp_path):
 def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
     """No sys.path hack for `research`: without tools/research/src on the path the import fails with a message naming the fix."""
     r = subprocess.run([PY, "-c", "import verity_vllm.pipeline.source_identity"], cwd=INTEGRATION,
-                       env=_env(PYTHONPATH=f"{INTEGRATION}{os.pathsep}{REPO / 'verity'}"), capture_output=True, text=True)
+                       env=_env(PYTHONPATH=f"{INTEGRATION}{os.pathsep}{REPO / 'packages' / 'verity' / 'src'}"), capture_output=True, text=True)
     if r.returncode == 0:
         pytest.skip("`research` is importable from site-packages in this interpreter; the missing-package path cannot be exercised here")
     assert "tools/research/src" in r.stderr and "verity-vllm row" in r.stderr, r.stderr
@@ -249,7 +249,7 @@ def _shipped_tree(tmp_path: Path) -> Path:
     source_identity modules (generic + project, with the verity_vllm.config it locates the tree through, and the CLI) so the precheck under test runs
     from the shipped tree itself."""
     t = tmp_path / "src" / ("f" * 40)
-    for rel in ("verity", "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline",
+    for rel in ("packages/verity/src/verity", "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline",
                 "tools/research/src/research/telemetry"):
         (t / rel).mkdir(parents=True)
         (t / rel / "__init__.py").write_text("")
@@ -264,7 +264,7 @@ def _shipped_tree(tmp_path: Path) -> Path:
 
 
 def _shipped_pp(t: Path) -> str:
-    return os.pathsep.join([str(t / "integrations" / "vllm"), str(t / "verity"), str(t / "tools" / "research" / "src")])
+    return os.pathsep.join([str(t / "integrations" / "vllm"), str(t / "packages" / "verity" / "src"), str(t / "tools" / "research" / "src")])
 
 
 def test_shipped_tree_takes_its_sha_from_research_source_sha(tmp_path):
@@ -303,7 +303,7 @@ def test_shipped_tree_still_refuses_a_foreign_package(tmp_path):
     """A shipped tree with the sha declared: a `verity` that resolves from a checkout elsewhere (here: THIS repo) is refused by name."""
     t = _shipped_tree(tmp_path)
     integ = t / "integrations" / "vllm"
-    pp = os.pathsep.join([str(REPO / "verity"), _shipped_pp(t)])
+    pp = os.pathsep.join([str(REPO / "packages" / "verity" / "src"), _shipped_pp(t)])
     r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ)], cwd=integ,
                        env=_env(PYTHONPATH=pp, RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)
     assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "verity:" in r.stderr and os.path.realpath(REPO) in r.stderr, r.stderr

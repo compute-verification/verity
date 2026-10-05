@@ -38,8 +38,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.primitives.circuits.defs import composite
-from verity.primitives.circuits.refs import Coll, concat
+from verity.ir.defs import composite
+from verity.ir.refs import Coll, concat
 
 from verity_vllm.program.registry.quarantine.ln._common import BF16, F32, ZERO32, Array, P, f32c
 

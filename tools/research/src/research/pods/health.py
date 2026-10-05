@@ -1,8 +1,8 @@
 """`research pods health <pod> [--json] [--no-bench] [--seconds S] [--record]`: is the pod fit to measure on?
 
-Runs `archive/direct/ligero/pod_health.py` on the pod, over ssh, in the synced tree with the bootstrap's env.sh: the cgroup CPU
+Runs `backends/direct/ligero/pod_health.py` on the pod, over ssh, in the synced tree with the bootstrap's env.sh: the cgroup CPU
 quota vs nproc, GPU clocks / power limit / PCIe / persistence, other GPU processes, disk, and a ~20 s encode + matmul
-microbenchmark against the SKU's entry in `archive/direct/ligero/pod_health_ref.json`.  Exit 3 = DEGRADED: replace the pod.
+microbenchmark against the SKU's entry in `backends/direct/ligero/pod_health_ref.json`.  Exit 3 = DEGRADED: replace the pod.
 
 `--record` folds this pod's numbers into the worktree's `pod_health_ref.json` (per metric, the entry stays unless this pod beats
 it: the reference is the best pod seen); commit the file.
@@ -21,7 +21,7 @@ from typing import Any
 from .. import remote
 from . import connect
 
-REF = Path("archive/direct/ligero/pod_health_ref.json")
+REF = Path("backends/direct/ligero/pod_health_ref.json")
 BETTER = {"encode_ms": min, "matmul_tflops": max}
 
 
@@ -55,7 +55,7 @@ def main(argv: list[str]) -> int:
         print(f"research pods health: {e}", file=sys.stderr)
         return 1
     flags = ["--json"] * (ns.json or ns.record) + ["--no-bench"] * ns.no_bench + (["--seconds", str(ns.seconds)] if ns.seconds else [])
-    script = (f'. /workspace/env.sh 2>/dev/null; cd {shlex.quote(ns.src)} && "${{PY:-python3}}" -m archive.direct.ligero.pod_health '
+    script = (f'. /workspace/env.sh 2>/dev/null; cd {shlex.quote(ns.src)} && "${{PY:-python3}}" -m backends.direct.ligero.pod_health '
               + shlex.join(flags))
     if not ns.record:
         return subprocess.run([*base, script], check=False).returncode

@@ -30,8 +30,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.primitives.commitments import hm96
-from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_layout
+from verity.commitments import hm96
+from verity.commitments.rowleaf import ROLE_X, sha512_row_layout
 from verity_numerical.bench.input_sets import InputSet
 from verity_vllm.commit import serving_rows as SR
 

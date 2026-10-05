@@ -1,6 +1,6 @@
 """Serving rows: the opt-in ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a run's units in M0's serving row leaf format
 (``verity_flock.circuit``'s statement rows, PR #83), with the registration, M0's public and prover files and the unit index the
-one-stage audit reads (``verity.protocols.verification.sampled_proofs.one_stage``).  Off by default: ``vllm-v1`` stays the record, and this commits beside it without
+one-stage audit reads (``verity_sampled_proofs.one_stage``).  Off by default: ``vllm-v1`` stays the record, and this commits beside it without
 touching any root of record, until the re-baseline switches the record.
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, each with its row ports and
@@ -39,12 +39,12 @@ from typing import Any
 
 import numpy as np
 
-from verity.primitives.commitments import hm96
-from verity.primitives.commitments.identity import identity_digest
-from verity.primitives.commitments.indexed import RangeIndexedDomain
-from verity.primitives.commitments.merkle import CommitmentDomain
-from verity.primitives.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, sha512_row_prefix
-from verity.primitives.circuits.codec import canonical_json
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, sha512_row_prefix
+from verity.ir.codec import canonical_json
 
 from .hiding import HidingLeaves
 

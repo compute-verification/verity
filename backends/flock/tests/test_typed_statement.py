@@ -127,7 +127,7 @@ def test_gemm_is_one_instance_type(tmp_path):
 def test_attention_is_one_instance_type(tmp_path):
     """Attention's instance type (its tensor-core units as calls, its softmax stages' gates as its own rows, its ex2 and rcp
     reads of the measured tables) computes the set's outputs."""
-    from verity.primitives.circuits import library
+    from verity.ml import library
     from verity_flock import gf2
     from verity_flock import tail as TL
 

@@ -1,6 +1,6 @@
 """Circuits for the primitives a template's units leave outside: attention's softmax (MUFU.EX2, FA2's inverse sum, and the FTZ
-f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity_catalog.definitions.boolean.softmax`; PTX max / min, the E4M3 cast, the E4M3 widening
-and the E2M1 cast from `verity_catalog.definitions.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
+f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.boolean.softmax`; PTX max / min, the E4M3 cast, the E4M3 widening
+and the E2M1 cast from `verity.ml.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
 numerator scaling) and the sampler lane's compare, selects, bit AND and integer add. Each is its IR primitive bit for bit
 (``ir_lower.PIECES``; the piece test and circuit-check compare them).
 
@@ -12,8 +12,8 @@ FA2's inverse sum follow ``fa2_model.cpp``.
 """
 from __future__ import annotations
 
-from verity_catalog.definitions.boolean.scalar import e4m3_to_f32, f32_to_e2m1_sat, f32_to_e4m3_sat, fmaxmin as _fmaxmin
-from verity_catalog.definitions.boolean.softmax import (_eq_const, _is_nan, f32_add_ftz, f32_fma_ftz, f32_fma_sub_ftz, f32_gt, f32_max, f32_mul_ftz,
+from verity.ml.boolean.scalar import e4m3_to_f32, f32_to_e2m1_sat, f32_to_e4m3_sat, fmaxmin as _fmaxmin
+from verity.ml.boolean.softmax import (_eq_const, _is_nan, f32_add_ftz, f32_fma_ftz, f32_fma_sub_ftz, f32_gt, f32_max, f32_mul_ftz,
                                        f32_sub, f32_sub_ftz, ftz, guard_neg_inf_zero)
 
 from . import fp
@@ -55,7 +55,7 @@ def _load_table(name: str):
     if name in TABLE_SHA256:
         arr = np.ascontiguousarray(_DERIVED[name](), dtype="<u4")
     else:
-        from verity_catalog.definitions import mufu
+        from verity.ml import mufu
         arr = np.ascontiguousarray(mufu.table(name), dtype="<u4")
     if hashlib.sha256(arr.tobytes()).hexdigest() != table_sha256(name):
         raise ValueError(f"the {name} table is not the pinned one ({table_sha256(name)})")
@@ -63,7 +63,7 @@ def _load_table(name: str):
 
 
 #: [identity below, saturated from) on |x| of each tanh table: the words its table holds. MUFU.TANH's are the IR's measured rules
-#: (``verity_catalog.definitions.mufu.MUFU_TANH_RULES``); RN32(math.tanh)'s come from evaluating it on every word below 10.0 of both signs: x
+#: (``verity.ml.mufu.MUFU_TANH_RULES``); RN32(math.tanh)'s come from evaluating it on every word below 10.0 of both signs: x
 #: itself below 0x39B89BA3, 1.0 from 0x41102CB4, odd everywhere
 TANH_BOUNDS = {"tanh_mufu": (0x3B800001, 0x41000000), "tanh_rn": (0x39B89BA3, 0x41102CB4)}
 
@@ -73,10 +73,10 @@ def _tanh_index(lo: int, hi: int):
 
 
 def _mufu_tanh_table():
-    """``MufuTanh_v1``'s measured table (``verity_catalog.definitions.mufu.mufu_tanh_shards``) at every positive word of [identity_below,
+    """``MufuTanh_v1``'s measured table (``verity.ml.mufu.mufu_tanh_shards``) at every positive word of [identity_below,
     saturate_from), by the word's low 27 bits."""
     import numpy as np
-    from verity_catalog.definitions import mufu
+    from verity.ml import mufu
 
     lo, hi = TANH_BOUNDS["tanh_mufu"]
     assert (lo, hi) == (mufu.MUFU_TANH_RULES["identity_below"], mufu.MUFU_TANH_RULES["saturate_from"])
@@ -147,7 +147,7 @@ def _word(C, cases, default):
     return out
 
 
-# --- attention's softmax (the FTZ f32 ops, F32Max and GuardNegInfZero are `verity_catalog.definitions.boolean.softmax`'s) ---------------------
+# --- attention's softmax (the FTZ f32 ops, F32Max and GuardNegInfZero are `verity.ml.boolean.softmax`'s) ---------------------
 
 def mufu_ex2(C, x):
     """``MufuEx2Ftz_v1`` (``fa2_model.cpp`` mufu_ex2_bits): x as a signed fixed-point value with 23 fraction bits; the table at

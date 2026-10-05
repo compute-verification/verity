@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.primitives.circuits import library
+from verity.ml import library
 from verity_flock import circuit_types as CT
 from verity_flock import gf2
 

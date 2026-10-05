@@ -48,7 +48,7 @@ def scale_calls(P: Any, literals: frozenset[int] = frozenset()) -> list[Any]:
 
 @lru_cache(maxsize=None)
 def _population_class() -> type:
-    from verity_vllm.query.units import Policy, RequiredValues, ValueRef
+    from verity.proofs.query import Policy, RequiredValues, ValueRef
     from verity_vllm.query.required import DTYPE_OF_WIDTH, CallMember, Population, Residual
 
     residual = Residual("*", "<norm scale>", MEMBER, "a norm's scale is the one f32 per row its rsqrt produces inside the norm's module "

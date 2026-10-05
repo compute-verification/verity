@@ -29,7 +29,7 @@ from pathlib import Path
 import pytest
 
 import verity_vllm
-from verity.primitives.circuits.defs import CompositeDefinition, SpecializedDefinition
+from verity.ir.defs import CompositeDefinition, SpecializedDefinition
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import b1

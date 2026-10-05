@@ -67,21 +67,21 @@
     {
       "handle": "compute-accounting",
       "holder": "the compute-accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
-      "remit": "Proof of useful work: verity/protocols/accounting/work/pouw, its schemes and their runs.",
+      "remit": "Proof of useful work: protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5U3Q04JD"
     },
     {
       "handle": "memory-accounting",
       "holder": "the memory-accounting coordinator (bc-15ada664-f325-5371-a473-65d408be3cf5)",
-      "remit": "Proof of useful space: verity/protocols/accounting/space/pous, its Lean package and its runs.",
+      "remit": "Proof of useful space: protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5VRGBZFE"
     },
     {
       "handle": "network-accounting",
       "holder": "the network-accounting coordinator (bc-ecea50f6-c509-5918-b17a-d2148d57728f)",
-      "remit": "Network accounting: the network warden (verity/protocols/accounting/communication/warden) and its timing-channel proofs.",
+      "remit": "Network accounting: the network warden (protocols/network_warden) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L"
     },

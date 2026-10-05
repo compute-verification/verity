@@ -12,7 +12,7 @@ import pytest
 import torch
 from torch import nn
 
-from verity.primitives.circuits.defs import bind
+from verity.ir.defs import bind
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.resolver import StepContext, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events

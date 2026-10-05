@@ -1,10 +1,10 @@
 """Hardware probe for one tensor-core instruction: one ``mma.sync`` (or ``wgmma``) per tile, arbitrary accumulators, captures in
-the golden-record format, compared bit for bit against the pinned ``verity_catalog.silicon.silicon`` model of that instruction.
+the golden-record format, compared bit for bit against the pinned ``verity.ml.tc.silicon`` model of that instruction.
 
 Provenance: ported for lane WP1 from veritor ``gpu/tensor-core-semantics/`` (``mma_tiles.cu``, ``tcs_gpu.py``,
 ``validate_tiles.py``: the BF16 kernel, encodings, finite-sweep families, per-element records, multiprocess model comparison,
 golden sampling) and extended for lane tc-probe-fp8 with the E4M3 kernel half and encodings of the same files, the FP8-specific
-families (the Ada zero-product accumulator truncation: discrepancy-log entry D10 and ``verity_catalog.silicon.models.ADA_E4M3_M16N8K32``;
+families (the Ada zero-product accumulator truncation: discrepancy-log entry D10 and ``verity.ml.tc.models.ADA_E4M3_M16N8K32``;
 Hawkeye's adder-width probe of ``characterize.py``; the special-value classes of ``gpu/tc-fp8/campaign.py``) and the Hopper
 ``wgmma`` path with the SASS confirmation of ``gpu/tc-fp8/wgmma_fp8_probe.py`` (exactly one MMA-class instruction per tile
 kernel).  Only the GPU host runs this; it needs numpy and nvcc (``cuobjdump`` for ``--sass-check``).
@@ -29,7 +29,7 @@ Instructions (``--instruction``; ``--arch`` is derived from the entry and may be
 
 A pinned model's mismatches fail ``validation``; a HYPOTHESIS model only yields agreement counts (validation ``not_run`` when no
 pinned model is compared) and the raw capture is recorded regardless.  The E5M2 product (``_e5m2_product``) is a local
-HYPOTHESIS pending the canonical one in ``verity_catalog.silicon``.  Kernels: ``mma_tiles.cu`` (``mma.sync``, sm_80+/sm_89+) and
+HYPOTHESIS pending the canonical one in ``verity.ml.tc``.  Kernels: ``mma_tiles.cu`` (``mma.sync``, sm_80+/sm_89+) and
 ``wgmma_tiles.cu`` (``wgmma.mma_async``, sm_90a; B through a shared-memory descriptor, A from registers -- or, for BF16, from a
 second descriptor, the SS form GEMM mainloops issue).
 
@@ -44,7 +44,7 @@ instruction on Hopper, so those two ids are not single-instruction probes.  The 
 lowering around Hopper's K=16 HMMA pipeline with exact FP8 products (``SM90_FP8_MMA_LOWERING``).
 
     python tools/tc_probe/tc_probe.py --instruction sm89.mma.m16n8k16.bf16 --out $RESEARCH_RUN_DIR \\
-        --replay-golden catalog/tests/fixtures/golden/ada_bf16_m16n8k16.json --sweep --n-random 100000
+        --replay-golden packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json --sweep --n-random 100000
     python tools/tc_probe/tc_probe.py --instruction sm89.mma.m16n8k32.e4m3 --out $RESEARCH_RUN_DIR --sweep --sass-check
     python tools/tc_probe/tc_probe.py --instruction sm90.wgmma.m64n8k32.e4m3,sm90.mma.m16n8k32.e4m3 --out DIR --compile-only
 
@@ -103,9 +103,9 @@ from pathlib import Path
 
 import numpy as np
 
-from verity_catalog.silicon import models as TCM
-from verity_catalog.silicon import silicon as S
-from verity_catalog.silicon import total as T
+from verity.ml.tc import models as TCM
+from verity.ml.tc import silicon as S
+from verity.ml.tc import total as T
 
 HERE = Path(__file__).resolve().parent
 N = 8  # every shape here has 8 output columns
@@ -328,7 +328,7 @@ class Model:
     """A model the capture is compared with.  ``product`` names an entry of :data:`PRODUCTS` (None: the pipeline's own product,
     evaluated by :func:`silicon.tc_dot` exactly as pinned).  ``lowering`` names a multi-instruction lowering the pipeline is
     embedded in (:data:`SM90_FP8_MMA_LOWERING`).  ``total`` evaluates the pipeline's total semantics
-    (:func:`verity_catalog.silicon.total.tc_dot_total`: NaN, infinities and saturation included), so the ``specials`` family is asserted
+    (:func:`verity.ml.tc.total.tc_dot_total`: NaN, infinities and saturation included), so the ``specials`` family is asserted
     too.  ``declared`` models fail validation on any mismatch; the others are HYPOTHESES whose agreement counts are reported."""
 
     pipeline: S.Pipeline
@@ -1327,7 +1327,7 @@ def replay_instances(probe: Probe, root: Path, manifest_path: Path | None = None
     epilogue is not a tensor-core operation), with ``vu-k1536.y.u16``.  Before anything runs, every array's sha256 is checked
     against ``manifest_path`` (default ``<root>/manifest.json``): a replay of arrays other than the pinned ones is refused."""
 
-    from verity_catalog.silicon.cast import f32_to_bf16_word
+    from verity.ml.tc.cast import f32_to_bf16_word
     from verity_numerical.bench import instances as I
 
     if probe.ins.fmt is not BF16 or probe.ins.m != 16:
@@ -1687,7 +1687,7 @@ def main() -> int:
     ap.add_argument("--replay-capture", default=None, metavar="JSON.GZ", help="tc-hopper-2026-09-07/special.reduced.json.gz: every record (all 14 "
                     "families, non-finite included) against its recorded word and the declared model")
     ap.add_argument("--also-model", action="append", default=[], metavar="NAME[:total]",
-                    help="compare a further verity_catalog.silicon.models model as a HYPOTHESIS (':total': its total semantics, which also asserts the "
+                    help="compare a further verity.ml.tc.models model as a HYPOTHESIS (':total': its total semantics, which also asserts the "
                          "specials family and serves --replay-capture); repeatable")
     ap.add_argument("--a-source", default=None, choices=("smem", "registers"), help="the A operand path where the instruction has both (BF16 wgmma: "
                     "smem = SS, the GEMM form, default; registers = RS, FA3's P.V form)")
@@ -1734,7 +1734,7 @@ def main() -> int:
         for spec in args.also_model:
             name, _, mode = spec.partition(":")
             if name not in TCM.MODELS or mode not in ("", "total"):
-                ap.error(f"--also-model {spec!r}: a verity_catalog.silicon.models name, optionally ':total'")
+                ap.error(f"--also-model {spec!r}: a verity.ml.tc.models name, optionally ':total'")
             extra.append(Model(TCM.MODELS[name], declared=False, total=mode == "total"))
         ins = dataclasses.replace(ins, models=ins.models + tuple(extra))
 

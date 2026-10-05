@@ -20,8 +20,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.defs import bind
+from verity.evaluation import evaluate
+from verity.ir.defs import bind
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
@@ -300,7 +300,7 @@ def test_a_family_whose_record_lacks_gemm_bias_dot_keeps_gemm_v2_then_bias_add(o
 def _qwen2_qkv_program(one_call: bool, rows: int = 2, layers: int = 2):
     """Qwen2's biased `qkv_proj` per layer and token row, named as a cc 12.0 Build names it, read by `o_proj`: one `GemmBias_v2`
     Call (`qkv_proj/add[r]`), or `Gemm_v2` (`qkv_proj/triton_launch_1[r]`) then `BiasAdd_v1` (`qkv_proj/add[r]/bias`) in one body."""
-    from verity_vllm.query.units import ValueRef as R
+    from verity.proofs.query import ValueRef as R
     from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
     pre = "model.model.layers"
     names = [f"{pre}.{i}.self_attn.{p}" for i in range(layers) for p in ("qkv_proj.weight", "qkv_proj.bias", "o_proj.weight")]

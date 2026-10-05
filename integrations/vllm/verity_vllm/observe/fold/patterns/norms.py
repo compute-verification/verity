@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.primitives.circuits.defs import bind
+from verity.ir.defs import bind
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import value_inputs as VI

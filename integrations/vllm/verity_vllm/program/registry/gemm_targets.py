@@ -165,7 +165,7 @@ REGISTERED: dict[str, GemmTarget] = {
         key="ada", compute_capabilities=((8, 9),), vllm_arch_family="ada", dot="AmpereBF16TcDot16", tuned_table=ADA_TUNED_GEMM,
         evidence=("R10/R11 Tier A: LLAMA32_1B / SMOLLM2 / QWEN05 eager captures on the RTX 4090 and L40S (sm_89), every GEMM launch "
                   "(default tiling and the (2048,2048) table buckets M<=1 / M<=32) bit-exact against Gemm_v1{K,N} — tests/observe/test_gen_llama.py, "
-                  "the numerics lane (mma.AMPERE_BF16: Ada's bf16 mma.sync is parameter-identical to Ampere's, verity_catalog.silicon.models.ADA_BF16_M16N8K16)",
+                  "the numerics lane (mma.AMPERE_BF16: Ada's bf16 mma.sync is parameter-identical to Ampere's, verity.ml.tc.models.ADA_BF16_M16N8K16)",
                   # [R15 moe GEMM-ADA-TABLE] the four Qwen3-class rows of the table were registered without their own launches until R15
                   "R15 lane moe: verity_vllm/program/kernels/gemm_target_correspondence.py --model ada-tuned-table on cp-moe3 (L40S, cc 8.9, 142 SMs, "
                   "vLLM d9105ea80 family 'ada'): ALL five tuned (N,K) rows x M in {1,2,4,5,8,9,16,17,32,33,64,65,256,257,512,513,1024,1033,2048,2049} "
@@ -192,14 +192,14 @@ REGISTERED: dict[str, GemmTarget] = {
     # The pinned vLLM installs the aten override on cc 8.x only, but its linear layers call `linear_batch_invariant` (the Triton
     # `matmul_kernel_persistent`, then `output + bias` in bf16) on every CUDA target; the other bf16 matmuls stay on cuBLASLt with
     # split-K disabled (VLLM_BATCH_INVARIANT=1).  Both equal the ascending chain of the target's k16 step without a bias.  sm_120
-    # has no wgmma: that step is `mma.sync.m16n8k16`, whose pinned model on sm_120 (core `verity_catalog.silicon.instructions`, measured on an RTX
+    # has no wgmma: that step is `mma.sync.m16n8k16`, whose pinned model on sm_120 (core `verity.ml.tc.instructions`, measured on an RTX
     # 5090) is HOPPER_BF16_M16N8K16, not the Ampere/Ada pipeline.  `HopperBF16WgmmaDot16_v1` evaluates HOPPER_BF16_WGMMA_K16, the same
     # parameters.  vLLM family None: a Triton launch would take the default tiling for every shape.
     "blackwell_consumer": GemmTarget(
         key="blackwell_consumer", compute_capabilities=((12, 0),), vllm_arch_family=None, dot="HopperBF16WgmmaDot16", tuned_table={},
         kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_dot="BlackwellE4m3QmmaDot32", fp8_scale_order="no_swap",
         fp4_dot="BlackwellNvf4OmmaDot64",
-        evidence=("core verity_catalog.silicon.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
+        evidence=("core verity.ml.tc.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
                   "HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; dossier art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2, "
                   "run r20260922-182911-1f10: 204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them)",
                   "the cc 12.0 port's GEMM lane: verity_vllm/program/kernels/gemm_target_correspondence.py on an RTX PRO 6000 (188 SMs, driver "

@@ -1,4 +1,4 @@
-"""`verity.primitives.randomness` against its Lean spec (`verifier/lean/soundness/FlockSoundness/Randomness.lean`), which the keyed-draw
+"""`verity.randomness` against its Lean spec (`verifier/lean/soundness/FlockSoundness/Randomness.lean`), which the keyed-draw
 theorems read (`KeyedDraw.lean`), through vectors the spec generates (`fixtures/randomness_lean.json`, `lean/generate.sh`)."""
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.primitives.randomness import derive
+from verity.randomness import derive
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "randomness_lean.json").read_text())
@@ -22,9 +22,9 @@ def _key(v):
 
 
 def test_the_lean_spec_reproduces_the_pinned_vectors():
-    """The spec, run on `verity/primitives/randomness/tests/vectors.json`'s inputs, returns every frame, key, stream, shard
+    """The spec, run on `packages/verity/tests/randomness/vectors.json`'s inputs, returns every frame, key, stream, shard
     key, uniform value, Bernoulli bit and subset the file pins."""
-    assert FIXTURE["kat"] == json.loads((ROOT / "verity/primitives/randomness/tests/vectors.json").read_text())
+    assert FIXTURE["kat"] == json.loads((ROOT / "packages/verity/tests/randomness/vectors.json").read_text())
 
 
 def test_python_matches_every_lean_vector():
@@ -46,7 +46,7 @@ def test_python_matches_every_lean_vector():
 def test_the_window_draw_is_plan_draw_per_call_under_one_key():
     """`PlanDraw.window`: each call's `plan.draw` loop (each stratum's `Key.subset(k, len(units), context)` mapped through
     its units), the calls in order under the one key, and a window with a repeated call index refused. Restated here from
-    #364's `plan.draw`; the test against `verity.protocols.accounting.work.pouw.circuit.plan` itself lands with #364 and its admission fix."""
+    #364's `plan.draw`; the test against `verity_pouw.circuit.plan` itself lands with #364 and its admission fix."""
     for w in FIXTURE["window"]:
         key, seen, drawn = _key(w), set(), []
         for c in w["calls"]:

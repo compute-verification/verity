@@ -388,7 +388,7 @@ def main() -> None:
     save("host_gate", host_gate())
     if not args.dry_run:
         import torch
-        from verity_kernels import load
+        from kernels import load
 
         save("device", torch.cuda.get_device_name())
         if args.fused_only:

@@ -2,7 +2,7 @@
 `out[j] = GeluErfBf16(x[j])`, one element per word (see `gelu_erf_bf16.py`)."""
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import composite
+from verity.ir.defs import composite
 
 from verity_vllm.program.registry.quarantine.ln._common import BF16, Array
 from verity_vllm.program.registry.quarantine.ln.gelu_erf_bf16 import GeluErfBf16

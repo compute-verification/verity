@@ -1,6 +1,6 @@
 """Conformance of the Lean verifier's `Q_word` v1 over programs (`flock-verify qword-program`: `Flock.Program` decodes
 #120's `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.Qword` cuts it) with core's
-(`verity.primitives.circuits.codec.decode_program`, `verity.primitives.circuits.cut`, `verity.primitives.circuits.partition_object`).
+(`verity.ir.codec.decode_program`, `verity.ir.cut`, `verity.ir.partition_object`).
 
     python qword_program_agree.py --lean BIN --out DIR [--vectors partition_vectors.json] [--format format_vectors.json]
         [--program DESCRIPTOR]... [--registry MODULE]
@@ -38,7 +38,7 @@ def graph_dict(g):
 
 
 def sha512(x):
-    from verity.primitives.circuits.codec import canonical_json
+    from verity.ir.codec import canonical_json
     return hashlib.sha512(canonical_json(x)).hexdigest()
 
 
@@ -223,7 +223,7 @@ def check_vector_cuts(a, v, out, bad):
     """Every descriptor of `qword_vectors.json` at each of `CUT_LIMITS`: the Calls whose cut fails and, per Definition, its
     codes and too-wide units (`qword-program --cuts`), against core's `partition_object.verify` (its programs decoded with
     the vectors' registry of test primitives, `test_qword_vectors.registry`). None when that module can't be imported."""
-    from verity.primitives.circuits import codec, partition_object as po
+    from verity.ir import codec, partition_object as po
     sys.path.insert(0, str(Path(a.qword_vectors).resolve().parent))
     try:
         import test_qword_vectors as TQ
@@ -259,10 +259,10 @@ def check_vector_cuts(a, v, out, bad):
 
 
 def check_program(a, path, out, bad):
-    from verity.primitives.circuits import partition_object as po
-    from verity.primitives.circuits.codec import _spec_id, decode_program
-    from verity.primitives.circuits.cut import CallGraph
-    from verity.primitives.circuits.defs import REGISTRY
+    from verity.ir import partition_object as po
+    from verity.ir.codec import _spec_id, decode_program
+    from verity.ir.cut import CallGraph
+    from verity.ir.defs import REGISTRY
     raw = gzip.open(path).read() if str(path).endswith(".gz") else Path(path).read_bytes()
     (out / "program.json").write_bytes(raw)
     got = lean(a, out / "program.json", "16", "--digests")
@@ -296,8 +296,8 @@ def check_program_cuts(a, P, part, out, bad):
     against core's `cut.check_cut` on `Partition.graph` and `owner`, as `verify` runs it: the codes, the too-wide units, and
     the graph's computing gates, recomputed pairs, derived committed set, widest boundary and boundary gates. Definitions
     named by `--core-skip` (too large for core here) are checked by Lean only, and listed."""
-    from verity.primitives.circuits.codec import _spec_id
-    from verity.primitives.circuits.cut import boundary_widths, check_cut, derived_committed
+    from verity.ir.codec import _spec_id
+    from verity.ir.cut import boundary_widths, check_cut, derived_committed
     lean_runs = {W: lean(a, out / "program.json", "16", str(W), "--digests", "--cuts") for W in (32, 16)}
     compared, lean_only, done = [], [], set()
     for p, (_k, c) in enumerate(part.calls):

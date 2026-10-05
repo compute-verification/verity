@@ -6,7 +6,7 @@ Standard library only; the driver API through `run.py`'s `Dev`. The GPU is the o
 against `cuDeviceGetUuid`); NVML reads that UUID's clocks.
 
 **Gates, all before any timing** (a difference exits 4 with nothing timed). Each kernel form against `h1_vectors.json`, which
-`h1_vectors.py` writes from `verity.primitives.commitments`' frame-b3 and Pearl-C's h1 digests:
+`h1_vectors.py` writes from `verity.commitments`' frame-b3 and Pearl-C's h1 digests:
 - the row leaves of `hash_rows` (as pushed) and `hash_rows_w` (tuned), at every chunk count 1 … 258: rows of 1,024c − 64
   bytes (exactly c chunks with the one-block header), 1,024c − 27 (37 bytes past a chunk boundary) and 1,024c, rows 0 and 1;
 - A's tree at m = 32 (FP32 rows at k = 8,192, as `-h1` commits them, and BF16), `hash_nodes` level by level and

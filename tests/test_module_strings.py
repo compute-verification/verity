@@ -227,10 +227,10 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     assert dangling("attr", "research.cli", "main") is None
     assert dangling("attr", "tools.tc_probe.tool", "TC_PROBE") is None
     assert dangling("main", "research", None) is None
-    assert dangling("import", "verity_catalog.definitions.boolean.gemm", None) is None
-    assert dangling("import", "verity_catalog.definitions.no_such_module", None) == "no such module"
+    assert dangling("import", "verity.ml.boolean.gemm", None) is None
+    assert dangling("import", "verity.ml.no_such_module", None) == "no such module"
     assert dangling("attr", "research.cli", "no_such_attr") == "tools/research/src/research/cli.py binds no no_such_attr"
-    assert dangling("main", "verity_catalog.definitions", None) == "a package without __main__.py"
+    assert dangling("main", "verity.ml", None) == "a package without __main__.py"
     assert dangling("import", "numpy.linalg", None) is None
     text = ('importlib.import_module("verity.gone")\n"python -m verity_vllm.gone"\n[sys.executable, "-m", "research.gone"]\n'
             'x = "circuit_check.gone:main"\n')
@@ -242,5 +242,5 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     assert {(registry, "attr", "tools.check.tool:CHECK"), ("tools/research/pyproject.toml", "attr", "research.cli:main"),
             ("integrations/vllm/tests/ops/test_epoch_row.py", "main", "verity_vllm.pipeline.cli"),
             ("integrations/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.engine.profiles.derived_B0_ovs"),
-            ("benchmarks/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity_flock.register"),
-            ("archive/direct/ligero/cell.sh", "main", "archive.direct.ligero.live")} <= seen
+            ("backends/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity_flock.register"),
+            ("backends/direct/ligero/cell.sh", "main", "backends.direct.ligero.live")} <= seen

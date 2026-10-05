@@ -1,6 +1,6 @@
 """A frozen instance set's range as the Flock prover and verifier read it, with its frame-v3 statement commitments.
 
-The instances are B-Ligero's synthetic sets (``archive/direct/ligero/relations.py``: the recipe the frozen
+The instances are B-Ligero's synthetic sets (``backends/direct/ligero/relations.py``: the recipe the frozen
 ``bench-instances-bf16-hopper/v1``, ``bench-instances-fp8-ada/v1`` and ``bench-instances-fp8-hopper/v1`` tiers name),
 drawn exactly as ``relchain._instance_np`` draws them, with the model-recorded accumulators. The statement commits them
 as B-Ligero's ``+blake3`` configuration does: tree ``a`` over the x rows and ``b`` over the W columns
@@ -26,7 +26,7 @@ from .lowering import PIPES
 
 FORMAT = "flock-pure-instances/v1"
 K = 1536
-_DIRECT = Path(__file__).resolve().parents[4] / "archive" / "direct"
+_DIRECT = Path(__file__).resolve().parents[3] / "direct"
 
 
 def _ligero():
@@ -77,7 +77,7 @@ def _e4m3_operands(rng: np.random.Generator, shape) -> np.ndarray:
 
 def _draw(args):
     name, seed, lo, hi = args
-    from verity_catalog.silicon.silicon import tc_dot
+    from verity.ml.tc.silicon import tc_dot
     relation, _, _ = _ligero()
     rel = relation(name)
     operands = _e4m3_operands if rel.word_dtype == "<u1" else rel.operands
@@ -139,10 +139,10 @@ SCHEMES = {"blake3": "blake3-keyed/row/v2", "sha256": "sha256/row/v1"}
 def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, leaf: str = "blake3") -> dict:
     """The three frame-v3 roots (and their domains) over the set's VUs ``[lo, lo + len(x))`` of a ``total``-VU batch (one
     sub-batch's trees, bound to that range)."""
-    from verity.primitives.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
-    from verity.primitives.commitments.indexed import RangeIndexedDomain
-    from verity.primitives.commitments.merkle import CommitmentDomain
-    from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X, blake3_row_digest, sha256_row_digest
+    from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X, blake3_row_digest, sha256_row_digest
 
     relation, hashauth, auth = _ligero()
     rel = relation(name)
@@ -166,7 +166,7 @@ def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, leaf
         import blake3
 
         def digest(row, role):
-            from verity.primitives.commitments.rowleaf import blake3_row_key, row_bytes
+            from verity.commitments.rowleaf import blake3_row_key, row_bytes
             return blake3.blake3(row_bytes(row, word_bits), key=blake3_row_key(role)).digest()
       except ImportError:
         def digest(row, role):
@@ -186,7 +186,7 @@ def statement_vllm_v1(name: str, x, w, accs, total: int | None = None, lo: int =
     columns and the output words' ``y_bytes`` little-endian bytes, each root the step-root binding of its port's
     ``StepDomain`` (PROTOCOL.md §4, §5). The domains are B-Ligero's (``ligero.vllm_tree``: ctx = the set and range per
     port), so a Flock cell and a B-Ligero ``+vllm-v1`` cell on the same line bind the same three roots."""
-    from verity.primitives.commitments import vllm_v1 as core
+    from verity.commitments import vllm_v1 as core
 
     relation, _, _ = _ligero()
     from ligero import vllm_tree
@@ -218,7 +218,7 @@ def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | 
     file; returns the header. A sub-batch's instance reference keeps the whole batch's manifest and names its own range.
     ``scheme`` is the commitment scheme the header's roots are under: ``frame-v3`` or ``vllm-v1``. ``fp4-nvf4`` reads the frozen
     NVFP4 set (:func:`write_fp4`); a spine input set is :func:`write_set`."""
-    from verity_catalog.silicon.cast import f32_to_bf16_word
+    from verity.ml.tc.cast import f32_to_bf16_word
 
     if name == "fp4-nvf4":
         if scheme != "frame-v3":
@@ -250,9 +250,9 @@ def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | 
 def _frame_v3(dataset: str, tier: str, manifest: str, lo: int, K_: int, schema_row: str, digests_a, digests_b, y, y_bits: int) -> dict:
     """frame-v3 roots over given row digests and output words, bound like :func:`statement` (``hashauth.binding_digest`` of the
     set, range, K, tree and schema)."""
-    from verity.primitives.commitments.frame_v3 import FrameV3, Port, WordLeaf
-    from verity.primitives.commitments.indexed import RangeIndexedDomain
-    from verity.primitives.commitments.merkle import CommitmentDomain, tree_levels
+    from verity.commitments.frame_v3 import FrameV3, Port, WordLeaf
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain, tree_levels
 
     _, hashauth, auth = _ligero()
     n = len(y)
@@ -282,7 +282,7 @@ def _write_file(path, header: dict, row_x: bytes, row_w: bytes, accs, out, y) ->
 
 
 def _row_digests(rows_bytes: list[bytes], leaf: str, role: int) -> list[bytes]:
-    from verity.primitives.commitments.rowleaf import blake3_row_key
+    from verity.commitments.rowleaf import blake3_row_key
     if leaf == "sha256":
         raise ValueError("sha256 row digests need the row's word width: use _row_digests_words")
     import blake3
@@ -301,8 +301,8 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
     was captured on other silicon, so y is the relation's own chain output (a distinct tier; the reference counts the words
     that differ from the set's recorded y)."""
     from concurrent.futures import ProcessPoolExecutor
-    from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW, sha256_row_digest
-    from verity_catalog.silicon.cast import f32_to_bf16_word
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW, sha256_row_digest
+    from verity.ml.tc.cast import f32_to_bf16_word
 
     d = Path(set_dir)
     man = json.loads((d / "manifest.json").read_text())
@@ -363,7 +363,7 @@ def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf
     :func:`_draw`) for an 8-bit relation with no spine input set, chained with its unit model. The manifest names the
     recipe, not a count, so every sub-batch of a batch binds the same one."""
     from concurrent.futures import ProcessPoolExecutor
-    from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW
 
     if leaf != "blake3":
         raise ValueError("the chunked 8-bit layouts commit keyed-BLAKE3 rows")
@@ -400,7 +400,7 @@ def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf
 
 def _chain_rows(args):
     relation, x, w = args
-    from verity_catalog.silicon.silicon import tc_dot
+    from verity.ml.tc.silicon import tc_dot
     from .lowering import _model
     pipe = PIPES[relation]
     model, k = _model(pipe.model), pipe.k
@@ -422,7 +422,7 @@ def write_fp4(path: str | Path, total: int, lo: int = 0, hi: int | None = None, 
     sys.modules.setdefault("torch", types.ModuleType("torch"))
     _ligero()
     from ligero.fp4.chain import INSTANCE_SEED, instances_digest as fp4_digest, instances_fp4
-    from verity.primitives.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW_NVFP4, SCHEMA_SHA256_ROW_NVFP4, blake3_row_nvfp4_digest,
+    from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW_NVFP4, SCHEMA_SHA256_ROW_NVFP4, blake3_row_nvfp4_digest,
                                             nvfp4_row_bytes, sha256_row_nvfp4_digest)
     from verity_numerical.bench import contract
 

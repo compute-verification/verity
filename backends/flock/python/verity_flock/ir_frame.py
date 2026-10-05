@@ -236,11 +236,11 @@ def statement(pl: Plan, input_set, lo: int, hi: int, rows: dict[str, np.ndarray]
     port (instance-major words), each under a domain bound to the set, the range, the port and its schema. Returns the
     header's ``frame_v3`` entry and the row digests (port -> (n, 32) uint8)."""
     import blake3
-    from verity.primitives.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
-    from verity.primitives.commitments.identity import identity_digest
-    from verity.primitives.commitments.indexed import RangeIndexedDomain
-    from verity.primitives.commitments.merkle import CommitmentDomain
-    from verity.primitives.commitments.rowleaf import ROLE_X, SCHEMA_BLAKE3_ROW, blake3_row_key
+    from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
+    from verity.commitments.identity import identity_digest
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
+    from verity.commitments.rowleaf import ROLE_X, SCHEMA_BLAKE3_ROW, blake3_row_key
 
     n = hi - lo
     schemas = {**{nm: SCHEMA_BLAKE3_ROW for nm, _ in pl.in_ports}, **{nm: "u16" for nm, _ in pl.out_ports}}

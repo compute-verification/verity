@@ -1,7 +1,7 @@
 """Lane PAD-IMPL: the flag/select primitives of the padded serving circuit (PAD-SPEC v1 §9) --
 `verity_vllm/program/registry/pad_prims.py` (`BitAnd_v1`/`BitNot_v1` new; the selects and `I32Eq_v1` reused from
 `prims.py`).  The `veritor.pad-serve@1` gate set itself, its digest and its out-of-width rejections are pinned by the SP1
-statement table's own tests (`archive/sp1/common/src/gateset.rs`: `pad_serve_manifest_matches_the_python_family`,
+statement table's own tests (`backends/sp1/common/src/gateset.rs`: `pad_serve_manifest_matches_the_python_family`,
 `pad_serve_gates_evaluate_and_reject_out_of_width_words`)."""
 
 from __future__ import annotations

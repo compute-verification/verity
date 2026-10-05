@@ -67,7 +67,7 @@ const CHUNK_END: u32 = 2;
 const PARENT: u32 = 4;
 const ROOT: u32 = 8;
 const KEYED_HASH: u32 = 16;
-/// The core row leaf `blake3-keyed/row/v2` (`verity.primitives.commitments.rowleaf`): `BLAKE3(row bytes, key = "verity/blake3-leaf/v1/"
+/// The core row leaf `blake3-keyed/row/v2` (`verity.commitments.rowleaf`): `BLAKE3(row bytes, key = "verity/blake3-leaf/v1/"
 /// + "x" | "w", zero padded to 32 bytes)`.
 const SCHEME: &str = "blake3-keyed/row/v2";
 const KEY_PREFIX: &[u8] = b"verity/blake3-leaf/v1/";
@@ -256,7 +256,7 @@ impl Chain {
 
     /// Σ's preimage (`sigma.txt`): the scheme, Λ on both sides, N, m, the point choice (P2), the Flock statement, the
     /// prime statement (the SHA-256 of its `commitment.txt`) and the leaf digests (x rows, then W columns). The prime
-    /// verifier (`archive/gkr/verifier/src/link.rs`) checks every line it can derive from its own statement.
+    /// verifier (`backends/gkr/verifier/src/link.rs`) checks every line it can derive from its own statement.
     fn sigma_text(&self, digests: &[[u8; 32]], prime_commitment: &str) -> String {
         let cat: Vec<u8> = digests.iter().flatten().copied().collect();
         format!(
@@ -582,7 +582,7 @@ struct Plan {
     /// The cell: the real prime prover's rounds, through `cell-prove --prime-sock`.
     proxy: Option<Arc<PrimeProxy>>,
     /// The selftest's stand-in prime prover (states are arbitrary: only the server's order is exercised here; the
-    /// prime verifier's replay is tested in archive/gkr).
+    /// prime verifier's replay is tested in backends/gkr).
     prime: PrimeSim,
     /// Override the server's `prime_live` (default: the plan's).
     server_prime: Option<bool>,
@@ -1043,7 +1043,7 @@ fn selftest(ch: Arc<Chain>) {
     let (st, _, _) = instance(&ch, 0xA, &h());
     let (_, other) = session(&ch, inproc(&ch, &st, false).0, 0xA, &h());
     t("cross_session_replay_both_reps", "link neg 15", Plan { substitute: Some(other), ..h() }, false);
-    // live prime coins: the server's order (the prime verifier's replay of the rounds is archive/gkr's tests)
+    // live prime coins: the server's order (the prime verifier's replay of the rounds is backends/gkr's tests)
     let prime = |p: PrimeSim| Plan { prime: p, ..h() };
     let (ok, prec, pproofs) = neg_proofs(&ch, "prime_live_honest", "P-live honest", &prime(PrimeSim::Honest), true);
     all.set(all.get() && ok);

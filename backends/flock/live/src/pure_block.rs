@@ -174,7 +174,7 @@ impl Layout {
     }
 }
 
-/// `sha256/row/v1`: the 64-byte prefix block (`verity.primitives.commitments.rowleaf.sha256_row_prefix`).
+/// `sha256/row/v1`: the 64-byte prefix block (`verity.commitments.rowleaf.sha256_row_prefix`).
 pub fn sha_prefix(role: usize, word_bits: usize, n_words: usize) -> [u8; 64] {
     let mut p = [0u8; 64];
     let tag = b"verity/sha256-row/v1\0";
@@ -189,7 +189,7 @@ pub fn be_words16(b: &[u8]) -> [u32; 16] {
     from_fn(|i| u32::from_be_bytes(b[4 * i..4 * i + 4].try_into().unwrap()))
 }
 
-/// `sha256/row-nvfp4/v1`: the 64-byte prefix block (`verity.primitives.commitments.rowleaf.sha256_row_nvfp4_prefix`).
+/// `sha256/row-nvfp4/v1`: the 64-byte prefix block (`verity.commitments.rowleaf.sha256_row_nvfp4_prefix`).
 pub fn sha_prefix_nvfp4(role: usize, k: usize) -> [u8; 64] {
     let mut p = [0u8; 64];
     let tag = b"verity/sha256-row-nvfp4/v1\0";

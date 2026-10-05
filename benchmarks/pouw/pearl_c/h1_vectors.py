@@ -1,4 +1,4 @@
-"""The device gates of h1_bench.py, from the verifier's reference: `verity.primitives.commitments`' frame-b3 and Pearl-C's h1 keys.
+"""The device gates of h1_bench.py, from the verifier's reference: `verity.commitments`' frame-b3 and Pearl-C's h1 keys.
 
   uv run python benchmarks/pouw/pearl_c/h1_vectors.py OUT.json
 
@@ -15,12 +15,12 @@ from pathlib import Path
 
 import blake3
 
-from verity.primitives.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
-from verity.primitives.commitments.merkle import b3s_level_key
+from verity.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
+from verity.commitments.merkle import b3s_level_key
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "verity" / "protocols" / "accounting" / "work" / "pouw"))
-from verity.protocols.accounting.work.pouw.schemes.pearl_c import H1_KEYS  # noqa: E402
+sys.path.insert(0, str(ROOT / "protocols" / "pouw"))
+from verity_pouw.schemes.pearl_c import H1_KEYS  # noqa: E402
 
 ROW, TILE, M, N = "verity/pouw/row/v1", "verity/pouw/tile/v1", 32, 8192
 BINDING = bytes(range(32))
@@ -126,7 +126,7 @@ def seg_cases(blk: dict) -> dict:
 
 
 def h2_cases(tile: dict) -> dict:
-    """Format -h2 (frame-b3s, `verity.primitives.commitments.merkle`'s own leaf): two rows at each length at ranks 3 and 4 (short last
+    """Format -h2 (frame-b3s, `verity.commitments.merkle`'s own leaf): two rows at each length at ranks 3 and 4 (short last
     segments, odd levels, a length that isn't a multiple of 16), A's m = 32 tree over FP32 rows, and the m = 32 tile tree
     over tile_case's leaves."""
     d = CommitmentDomain(BINDING, 3, RangeIndexedDomain(8), hash="blake3-s256")
@@ -147,8 +147,8 @@ def h2_cases(tile: dict) -> dict:
 
 def lat_chain_case(n: int = 512) -> dict:
     """lat_chain's last chaining value after n dependent keyed compressions (h1_bench's latency count), from
-    `verity.primitives.crypto.blake3.compress`."""
-    from verity.primitives.crypto.blake3 import IV, compress
+    `verity.commitments.blake3.compress`."""
+    from verity.commitments.blake3 import IV, compress
     cv, m = tuple(IV), [(0x9E3779B9 * (i + 1)) & 0xFFFFFFFF for i in range(16)]
     for k in range(n):
         cv = tuple(compress(cv, b"".join(w.to_bytes(4, "little") for w in m), k, 64, 16)[:8])
@@ -171,7 +171,7 @@ def decode_domains() -> dict:
 
 def main() -> None:
     blk, tile = blk_case(), tile_case(M)
-    out = {"source": "frame-b3 (verity.primitives.commitments.merkle, hash='blake3') and pearl_c.H1_KEYS",
+    out = {"source": "frame-b3 (verity.commitments.merkle, hash='blake3') and pearl_c.H1_KEYS",
            "rows": rows_cases(),
            "trees": {"A m=32 fp32 rows": tree_case("gate tree fp32", 4 * N), "A m=32 bf16 rows": tree_case("gate tree bf16", 2 * N)},
            "tiles": {"m32": tile}, "blk": blk, "seg": seg_cases(blk), "h2": h2_cases(tile), "lat_chain": lat_chain_case(),

@@ -27,8 +27,8 @@ import struct
 
 import torch
 
-from verity.primitives.circuits.refs import Coll
-from verity.primitives.circuits.types import Array, Value
+from verity.ir.refs import Coll
+from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, rows_of, shape
@@ -139,7 +139,7 @@ class GumbelTopPTokenSelectRule(OpRule):
             temp_c = ctx.call(ctx.kind("const", node, W=32, BITS=tbits), node=node, rule=self, name=f"{hint}/temperature")
             s_c = splits_c if splits_c is not None else ctx.call(ctx.kind("const", node, W=32, BITS=int(S)), node=node, rule=self, name=f"{hint}/splits")
             outs.append(ctx.call(fn, r, topp_c, seed_c, pos_c, temp_c, s_c, node=node, rule=self, name=f"{hint}[{i}]"))
-        from verity.primitives.circuits.refs import array_of
+        from verity.ir.refs import array_of
         out = array_of(outs).reshape(_tensor_type(lead, 32)) if lead else outs[0]
         ctx.define(node, out)
         S_rec = ("Program input (derived: SplitsFor_v1(|live(t)|, num_SMs), the request's `splits` entry for this event)" if splits_c is not None

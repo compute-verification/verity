@@ -1,4 +1,4 @@
-"""C-Flock over an arbitrary partition: every unit class (`verity.primitives.circuits.units`) lowered once to AND/XOR/NOT with C-Flock's pieces,
+"""C-Flock over an arbitrary partition: every unit class (`verity.ir.units`) lowered once to AND/XOR/NOT with C-Flock's pieces,
 and checked against the reference evaluator on synthetic inputs lifted through the unit's flat Definition.
 
     uv run python -m verity_flock.partition_units --model tiny [--partition q-word|blocks:64|scatter:8]
@@ -28,11 +28,11 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
-from verity.primitives.circuits import partition_object as PO
-from verity.primitives.circuits.cut import CallGraph, check_cut
-from verity.primitives.circuits.program import input_id
-from verity.primitives.circuits.units import Activation, PartitionUnits, UnitCircuit
-from verity.primitives.randomness import derive
+from verity.ir import partition_object as PO
+from verity.ir.cut import CallGraph, check_cut
+from verity.ir.program import input_id
+from verity.ir.units import Activation, PartitionUnits, UnitCircuit
+from verity.randomness import derive
 
 from . import gf2
 from . import ir_lower as IL
@@ -217,8 +217,8 @@ def check(units: PartitionUnits, T: int = 16, seed: int = 0, max_gates: int = 1 
 
 def one_call(fn: Any) -> Any:
     """A Program whose one Call is ``fn`` over Input gates."""
-    from verity.primitives.circuits.defs import CompositeDefinition
-    from verity.primitives.circuits.program import Program
+    from verity.ir.defs import CompositeDefinition
+    from verity.ir.program import Program
 
     params, ret = fn.signature()
     shell = CompositeDefinition(f"OneCall[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *x: B.call(fn, *x),
@@ -227,8 +227,8 @@ def one_call(fn: Any) -> Any:
 
 
 def _program(a: argparse.Namespace) -> Any:
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.program import Program
+    from verity.ir.defs import bind
+    from verity.ir.program import Program
 
     from circuit_check import targets as TG
 

@@ -8,7 +8,7 @@ description: >
   of what we assume (tools/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
   directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
   them). Use when adding or changing Lean proofs, definitions or packages (backends/flock/verifier/lean, level3,
-  soundness, verity/lean, verity/protocols/accounting/space/pous/lean, verity/protocols/accounting/communication/warden/lean), when a Lean build or proof is
+  soundness, packages/verity/lean, protocols/pous/lean, protocols/network_warden/lean), when a Lean build or proof is
   slow, editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
@@ -22,8 +22,8 @@ The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/READ
   prover runs: `backends/flock/verifier/lean/` (no dependencies). Facts about the executable's definitions:
   `level3/` (Mathlib). C-Flock's guarantees (soundness, knowledge soundness, zero knowledge, audits): `soundness/`
   (ArkLib).
-  Proofs about core's own definitions (`verity_catalog.silicon` and the like), and the model every protocol states its guarantees
-  in (circuits, partitions, declarations, games): `verity/lean/` (Mathlib only), since core depends on no
+  Proofs about core's own definitions (`verity.ml.tc` and the like), and the model every protocol states its guarantees
+  in (circuits, partitions, declarations, games): `packages/verity/lean/` (Mathlib only), since core depends on no
   backend. A protocol's guarantees: its own package under `protocols/<name>/lean/`, which may require core's and other
   protocols' packages. A new package only when the dependencies differ; give it a `lean-audit.json` and the shared `lean-toolchain`.
 - **Own a subdirectory and namespace** (`FlockSoundness/Knowledge/`, `FlockSoundness.Knowledge`), with one aggregator

@@ -23,11 +23,11 @@ sys.path.insert(0, str(HERE))
 
 import fixture as F  # noqa: E402
 import run as R  # noqa: E402
-from verity.primitives.commitments import MerkleTree  # noqa: E402
-from verity.primitives.crypto.blake3 import blake3  # noqa: E402
-from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, TILE_SCHEMA, rows_domain  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.commitments import MerkleTree  # noqa: E402
+from verity.commitments.blake3 import blake3  # noqa: E402
+from verity_pouw.audit import ROW_SCHEMA, TILE_SCHEMA, rows_domain  # noqa: E402
+from verity_pouw.schemes import pearl_c as C  # noqa: E402
+from verity_pouw.schemes import pearl_kw as P  # noqa: E402
 
 
 class Host:

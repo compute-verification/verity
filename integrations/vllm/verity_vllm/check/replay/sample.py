@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.primitives.randomness import Key
+from verity.randomness import Key
 
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.commit import challenge as CH

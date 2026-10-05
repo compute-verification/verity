@@ -1,4 +1,4 @@
-"""The reference replay on pearlc_arm's transcripts: `verity.protocols.accounting.work.pouw.audit.Verifier(scheme, epoch).audit(prover, transcript,
+"""The reference replay on pearlc_arm's transcripts: `verity_pouw.audit.Verifier(scheme, epoch).audit(prover, transcript,
 Sampled(t), source)`, #449's `pearl_c` audit, unchanged.  The epoch is re-started from the transcript's beacon and weight root
 (the salt is the verifier's own); the transcript is A's root and the tile tree's commitment; the draw's source is
 `os.urandom(32)`, drawn here, after the transcript is fixed.  The prover only opens: each opening's value and path are read
@@ -28,11 +28,11 @@ import sys
 import multiprocessing
 from pathlib import Path
 
-from verity.primitives.commitments import Commitment, Opening
-from verity.protocols.accounting.work.pouw.audit import Epoch, Sampled, TileOpening, Transcript, Verifier, Workload
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import DEVICES
+from verity.commitments import Commitment, Opening
+from verity_pouw.audit import Epoch, Sampled, TileOpening, Transcript, Verifier, Workload
+from verity_pouw.protocol import Matmul, Shape
+from verity_pouw.schemes import pearl_c as C
+from verity_pouw.schemes.pearl_c_device import DEVICES
 
 SCHEMA = "verity-pouw/pearl-c-sm120-transcript/v1"
 DRAWS = 3
@@ -54,7 +54,7 @@ def opening(tree: bytes, count: int, pos: int, value: bytes) -> Opening:
 
 
 class Opened:
-    """The prover's side of the audit from a transcript's files: `digest` and `open`, as `verity.protocols.accounting.work.pouw.audit.Prover` has them."""
+    """The prover's side of the audit from a transcript's files: `digest` and `open`, as `verity_pouw.audit.Prover` has them."""
 
     def __init__(self, files: dict, verifier: Verifier, matmul: Matmul, count: int):
         self.f, self.refs, self.mm, self.count = files, verifier.refs, matmul, count
@@ -114,7 +114,7 @@ def verify(path: Path, draws: int, commit: str, run: str = "") -> dict:
                    profile=audit.profile.to_json() if audit.profile else None)
         tiles = ", ".join(str(t) for t in audit.selected)
         bad = "; ".join(f"tile {v.tile}: {v.reason}" for v in audit.verdicts if not v.ok)
-        out["line"] = (f"{'ACCEPT' if audit.accepted else 'REJECT'} {tag}{scheme.name} {s['label']}: verity.protocols.accounting.work.pouw.audit.Verifier, "
+        out["line"] = (f"{'ACCEPT' if audit.accepted else 'REJECT'} {tag}{scheme.name} {s['label']}: verity_pouw.audit.Verifier, "
                        f"Sampled({draws}) drew tiles {tiles} of {c['count']}{'' if audit.accepted else ' (' + bad + ')'}; "
                        f"root_A {man['activation_root'][:16]}, tile root {c['root'][:16]}, source {source.hex()[:16]}{tail}")
     except Exception as ex:  # noqa: BLE001 - a transcript that can't be checked is rejected, with the reason

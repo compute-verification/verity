@@ -102,8 +102,8 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     src = tmp_path / "readiness.py"
     src.write_text(_readiness_source())
     out = tmp_path / "readiness.json"
-    root, core, research = VLLM, TREE / "verity", TREE / "tools" / "research" / "src"
-    sampled = TREE / "verity" / "protocols" / "verification" / "sampled_proofs"
+    root, core, research = VLLM, TREE / "packages" / "verity" / "src", TREE / "tools" / "research" / "src"
+    sampled = TREE / "protocols" / "sampled_proofs"
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research, sampled)),
                https_proxy="http://127.0.0.1:9", HTTPS_PROXY="http://127.0.0.1:9")   # the network probe fails fast, recorded as an error
     r = subprocess.run([sys.executable, str(src), str(root), str(core), str(out), "", "", str(research), "cpu", str(sampled)],
@@ -135,8 +135,8 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
 
 
 def test_bootstrap_writes_the_sampled_proofs_pth_and_readiness_checks_it() -> None:
-    """Gate and row scripts set their own PYTHONPATH: the venv's site-packages carries a .pth for verity/protocols/verification/sampled_proofs, and
-    readiness imports verity.protocols.verification.sampled_proofs with PYTHONPATH removed."""
+    """Gate and row scripts set their own PYTHONPATH: the venv's site-packages carries a .pth for protocols/sampled_proofs, and
+    readiness imports verity_sampled_proofs with PYTHONPATH removed."""
     text = SCRIPT.read_text()
     assert 'echo "$SAMPLED" > "$SITE/verity-sampled-proofs.pth"' in text
     assert text.index("verity-sampled-proofs.pth") < text.index("# ---- 5. readiness")
@@ -145,7 +145,7 @@ def test_bootstrap_writes_the_sampled_proofs_pth_and_readiness_checks_it() -> No
 
 def test_the_pth_check_passes_on_a_fresh_venv_and_fails_without_the_pth(tmp_path: Path) -> None:
     """A fresh Python 3.12 venv as bootstrap leaves it: verity-sampled-proofs.pth in site-packages and a PYTHONPATH (core, research,
-    the integration) that omits verity/protocols/verification/sampled_proofs.  The readiness check's function imports verity.protocols.verification.sampled_proofs from the
+    the integration) that omits protocols/sampled_proofs.  The readiness check's function imports verity_sampled_proofs from the
     tree through the .pth -- its dependency verity from PYTHONPATH -- and fails once the .pth is removed."""
     uv = shutil.which("uv") or shutil.which(os.path.expanduser("~/.local/bin/uv"))
     if not uv:
@@ -154,7 +154,7 @@ def test_the_pth_check_passes_on_a_fresh_venv_and_fails_without_the_pth(tmp_path
     if subprocess.run([uv, "venv", "-q", "-p", "3.12", str(venv)], capture_output=True).returncode != 0:
         pytest.skip("no Python 3.12 for uv venv")
     py, site = venv / "bin" / "python", venv / "lib" / "python3.12" / "site-packages"
-    sampled, core, research = TREE / "verity" / "protocols" / "verification" / "sampled_proofs", TREE / "verity", TREE / "tools" / "research" / "src"
+    sampled, core, research = TREE / "protocols" / "sampled_proofs", TREE / "packages" / "verity" / "src", TREE / "tools" / "research" / "src"
     src = _readiness_source()
     fn = src[src.index("def sampled_without_pythonpath():"):src.index('check("sampled_proofs_via_pth"')]
     probe = tmp_path / "probe.py"
@@ -165,7 +165,7 @@ def test_the_pth_check_passes_on_a_fresh_venv_and_fails_without_the_pth(tmp_path
     assert ok.returncode == 0 and ok.stdout.strip().startswith(str(sampled.resolve())), ok.stdout + ok.stderr
     (site / "verity-sampled-proofs.pth").unlink()
     bad = subprocess.run([str(py), str(probe), str(sampled)], capture_output=True, text=True, env=env)
-    assert bad.returncode != 0 and "without verity/protocols/verification/sampled_proofs on PYTHONPATH" in bad.stderr
+    assert bad.returncode != 0 and "without protocols/sampled_proofs on PYTHONPATH" in bad.stderr
 
 
 def test_bootstrap_writes_a_pth_for_every_other_protocol(tmp_path: Path) -> None:
@@ -175,7 +175,7 @@ def test_bootstrap_writes_a_pth_for_every_other_protocol(tmp_path: Path) -> None
     start = text.index('for P in "$ROOT"/../../protocols/*/pyproject.toml; do')
     loop = text[start:text.index("\ndone\n", start) + len("\ndone")]
     assert start < text.index("# ---- 5. readiness")
-    sampled = (TREE / "verity" / "protocols" / "verification" / "sampled_proofs").resolve()
+    sampled = (TREE / "protocols" / "sampled_proofs").resolve()
     script = f'fail() {{ echo "FAIL $*"; exit 3; }}\nROOT={VLLM.resolve()}; SAMPLED={sampled}; SITE={tmp_path}\n{loop}\n'
     r = subprocess.run([BASH, "-c", script], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr

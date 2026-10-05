@@ -51,7 +51,7 @@ def partition_of_record(man: dict[str, Any], programs: set[str] | None = None) -
     `by_component` / `by_rank` of them).  Each object must be a valid `verity/partition/v1` object of Q_word v1 {X: 16, W: 32} with that
     digest and, when the Commit holds the Builds' records (`programs`: their SHA-512s), name one of those Programs.  Refused by name
     (SystemExit) before any engine; returns what it checked, which the binding map records."""
-    from verity.primitives.circuits import partition_object as PO
+    from verity.ir import partition_object as PO
     from verity_vllm.query.required import Q_WORD_ID
     q = man.get("query") or {}
     if q.get("query_id") != Q_WORD_ID:

@@ -1373,7 +1373,7 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
                  run: Callable[[list[str], dict, Path, float], tuple[int | None, str, str]] = _render_run,
                  timeout_s: float = RENDER_TIMEOUT_S) -> list[str]:
     """Scheduled renders, from `[[render]]` entries of <root>/steward.toml (re-read every pass): `at` (HH:MMZ, daily), `source` (a tree
-    with benchmarks/numerical and tools/research), `out` (a directory outside the notes: absolute, or relative to :func:`renders_root`;
+    with backends/numerical and tools/research), `out` (a directory outside the notes: absolute, or relative to :func:`renders_root`;
     one inside the notes is an invalid entry, since renders never go to Git), `store` (default ~/.research/store).  Once per UTC day
     at or after `at`, `python -m verity_numerical.bench.tables` and `.drilldown --root STORE --format md` run with the source tree's
     workspace import roots and root on PYTHONPATH (`research env --source`, `pythonpath.tree_pythonpath`) into <out>/<stamp>-tables.md / -drilldowns.md: `RENDERED <path>`, or `RENDER-FAILED <entry>: <stderr tail>` (both

@@ -158,9 +158,9 @@ FINE = np.arange(int(1.002e5 / H_US) + 1) * H_US
 
 
 def call_ns(block_bytes: int) -> int:
-    """The fastest whole `Π₂` call on `block_bytes` labels (`verity.protocols.accounting.space.pous.primitives.pi2_call_ns`, in bits): the
+    """The fastest whole `Π₂` call on `block_bytes` labels (`verity_pous.primitives.pi2_call_ns`, in bits): the
     ideal-permutation model's unit, not the adversary's floor at the reference Feistel-SHAKE256 `Π₂`."""
-    from verity.protocols.accounting.space.pous.primitives import pi2_call_ns
+    from verity_pous.primitives import pi2_call_ns
 
     return pi2_call_ns(8 * block_bytes)
 

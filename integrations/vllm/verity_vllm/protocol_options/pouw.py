@@ -1,10 +1,10 @@
-"""PoUW as a protocol option: every linear layer's GEMM computed as a `verity.protocols.accounting.work.pouw` scheme's honest work.
+"""PoUW as a protocol option: every linear layer's GEMM computed as a `verity_pouw` scheme's honest work.
 
 The executor at each linear layer's ``quant_method.apply`` (``EXECUTES``; innermost, `protocol_options.SITES`).  In the
 composition's weight phase, with the model untouched and no beacon read, `commit_weights` finds the linear layers by
-type (vLLM's ``LinearBase``, `linear_types`) and commits every layer's int7 weight rows (`verity.protocols.accounting.work.pouw.audit.commit_rows`).
+type (vLLM's ``LinearBase``, `linear_types`) and commits every layer's int7 weight rows (`verity_pouw.audit.commit_rows`).
 `install` then derives the epoch salt from those roots and the operator's beacon bytes, unverified
-(`verity.protocols.accounting.work.pouw.audit.Epoch.unverified`), and replaces each ``apply`` through the composition's tagged `Hooks`.  Each
+(`verity_pouw.audit.Epoch.unverified`), and replaces each ``apply`` through the composition's tagged `Hooks`.  Each
 call of a replaced ``apply(layer, x, bias)`` is one unit of the run's workload:
 
 1. quantize x's rows to int7 per row (`quantize`), and prepare the weight operands (`weight_operands`: the int7 weight per
@@ -16,8 +16,8 @@ call of a replaced ``apply(layer, x, bias)`` is one unit of the run's workload:
 
 Its commitment to the weights of record is made first, in the composition's weight phase (`commit_weights`: every
 layer's weight root); `commitment` is the scheme, the salt, the weights root the salt is derived from and, once closed,
-the transcript root with its unit and tile counts.  The audit (drawing tiles, opening them) is `verity.protocols.accounting.work.pouw.audit`'s,
-after the run.  Beside sampled proofs the composition asks `verity.protocols.accounting.work.pouw.circuit` (`protocol_options.CIRCUITS`), and only
+the transcript root with its unit and tile counts.  The audit (drawing tiles, opening them) is `verity_pouw.audit`'s,
+after the run.  Beside sampled proofs the composition asks `verity_pouw.circuit` (`protocol_options.CIRCUITS`), and only
 ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay draws each call's units under
@@ -37,10 +37,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.primitives.commitments import MerkleTree
-from verity.protocols.accounting.work.pouw import circuit as pouw_circuit
-from verity.protocols.accounting.work.pouw import schemes as pouw_schemes
-from verity.protocols.accounting.work.pouw.audit import (
+from verity.commitments import MerkleTree
+from verity_pouw import circuit as pouw_circuit
+from verity_pouw import schemes as pouw_schemes
+from verity_pouw.audit import (
     TILE_SCHEMA,
     Epoch,
     Workload,
@@ -50,9 +50,9 @@ from verity.protocols.accounting.work.pouw.audit import (
     weight_binding,
     weights_root,
 )
-from verity.protocols.accounting.work.pouw.protocol import Context as UnitContext
-from verity.protocols.accounting.work.pouw.protocol import DomainError, Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import ncp
+from verity_pouw.protocol import Context as UnitContext
+from verity_pouw.protocol import DomainError, Matmul, Shape
+from verity_pouw.schemes import ncp
 
 from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_device as PD
@@ -64,7 +64,7 @@ NAME = "pouw"
 DEFAULT_SCHEME = "ncp-v1"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
 EXECUTES = ("LinearBase.quant_method.apply",)
-#: The schemes this adapter's executor computes. ``ncp-v2`` is NCP-INT as a circuit (`verity.protocols.accounting.work.pouw.circuit`): each call is its
+#: The schemes this adapter's executor computes. ``ncp-v2`` is NCP-INT as a circuit (`verity_pouw.circuit`): each call is its
 #: own `NcpLinear_v1` Program call, reading its weight's `NcpWeight_v1` call (`pouw_circuit`).  Pearl-C on sm_120
 #: (`pouw_pearl_c_device.SCHEMES`) runs on the device only, through GPU 1's kernel pipeline (settings ``kernel``, ``cubin``).
 EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", *PPD.SCHEMES)
@@ -116,7 +116,7 @@ class Settings:
     #: Pearl-C on sm_120: the kernel directory (the run tree's ``benchmarks/pouw/pearl_c_sm120``) and build.sh's cubin
     kernel: str | None = None
     cubin: str | None = None
-    #: Pearl-C on sm_120: the schedule each pass runs under (`verity.protocols.accounting.work.pouw.serving.SCHEDULES`), serial by default
+    #: Pearl-C on sm_120: the schedule each pass runs under (`verity_pouw.serving.SCHEDULES`), serial by default
     schedule: str = "serial"
 
     @classmethod
@@ -151,7 +151,7 @@ class Settings:
         paths = [raw.get(key) for key in ("kernel", "cubin")]
         if any(p is not None and not isinstance(p, str) for p in paths):
             raise ValueError("pouw settings 'kernel' and 'cubin' are path strings")
-        from verity.protocols.accounting.work.pouw.serving import SCHEDULES
+        from verity_pouw.serving import SCHEDULES
         schedule = raw.get("schedule", "serial")
         if schedule not in SCHEDULES:
             raise ValueError(f"pouw setting 'schedule' is one of {', '.join(SCHEDULES)}")
@@ -409,7 +409,7 @@ class _CircuitRun:
             "calls_root": None, "calls": 0}
         self.details: dict[str, Any] = {
             "scheme": scheme, "quantizer": QUANTIZER, "basis": "none", "layers": len(weight_roots),
-            "circuit": "verity.protocols.accounting.work.pouw.circuit: each weight's side is its own NcpWeight_v1 Program call, once per run, and each "
+            "circuit": "verity_pouw.circuit: each weight's side is its own NcpWeight_v1 Program call, once per run, and each "
                        "call its own NcpLinear_v1 Program call reading it, their units computed natively and committed a leaf "
                        "per unit; y served, credited words committed",
             "permutation": PC.kind_of(scheme),
@@ -494,12 +494,12 @@ def _sites(model: Any, layers: list[Any]) -> dict[str, int]:
 
 @cache
 def ncp_linear_op() -> Any:
-    """``verity.protocols.accounting.work.pouw::ncp_linear(x, weight, bias, entry, w) -> y``: one `ncp-v2` call as one dispatcher op, whose body is the
+    """``verity_pouw::ncp_linear(x, weight, bias, entry, w) -> y``: one `ncp-v2` call as one dispatcher op, whose body is the
     live run's `gemm`. It is the executor's own record of the call: an observer records the op with its operands and its
     served y, and nothing of the host work inside it (`observe.fold.patterns.pouw`)."""
     import torch
 
-    @torch.library.custom_op("verity.protocols.accounting.work.pouw::ncp_linear", mutates_args=(), schema="(Tensor x, Tensor weight, Tensor? bias, str entry, int w) -> Tensor")
+    @torch.library.custom_op("verity_pouw::ncp_linear", mutates_args=(), schema="(Tensor x, Tensor weight, Tensor? bias, str entry, int w) -> Tensor")
     def ncp_linear(x, weight, bias, entry, w):
         return _CIRCUIT_RUNS[entry][0].gemm(w, x, weight, bias)
 
@@ -566,7 +566,7 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
 
 def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     """The composition's first phase, with the model untouched and no beacon read: every linear layer's int7 weight rows
-    committed (`verity.protocols.accounting.work.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``."""
+    committed (`verity_pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``."""
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))

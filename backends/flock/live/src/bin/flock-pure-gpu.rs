@@ -61,7 +61,7 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
     PcsParams { m, log_inv_rate: 1, log_batch_size: embedded_initial_k_or_default(m, lig), profile: lig, num_lanes: None, merkle_hash: HashKind::Sha256 }
 }
 
-// frame-v3 (flock-backend's flock-pure.rs, `verity.primitives.commitments.merkle`)
+// frame-v3 (flock-backend's flock-pure.rs, `verity.commitments.merkle`)
 fn fv3_hash(tag: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     let mut h = Sha256::new();
     h.update(FRAME);

@@ -100,7 +100,7 @@ def word_record(r: dict[str, Any], *, strict: bool, max_gates: str | None = None
 
 
 def program_sha512(program_dir: str, res: dict[str, Any]) -> str | None:
-    """The Program's SHA-512 (`verity.primitives.circuits.partition_object.program_sha512`): the Build's record (`result.json` program.sha512), else
+    """The Program's SHA-512 (`verity.ir.partition_object.program_sha512`): the Build's record (`result.json` program.sha512), else
     recomputed from its `descriptor.json.gz`; None when the Build has neither."""
     s = (res.get("program") or {}).get("sha512")
     if s:
@@ -109,7 +109,7 @@ def program_sha512(program_dir: str, res: dict[str, Any]) -> str | None:
     if not os.path.exists(p):
         return None
     import gzip
-    from verity.primitives.circuits.partition_object import program_sha512 as sha512_of
+    from verity.ir.partition_object import program_sha512 as sha512_of
     with gzip.open(p, "rt") as f:
         return sha512_of(json.load(f))
 

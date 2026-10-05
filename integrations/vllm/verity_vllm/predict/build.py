@@ -33,11 +33,11 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from verity.primitives.circuits.codec import canonical_json, encode_program, program_digest
-from verity.primitives.circuits.defs import Builder, CompositeDefinition, bind
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.refs import Affine, Coll, concat
-from verity.primitives.circuits.types import Array, Record, Type, Value
+from verity.ir.codec import canonical_json, encode_program, program_digest
+from verity.ir.defs import Builder, CompositeDefinition, bind
+from verity.ir.program import Program
+from verity.ir.refs import Affine, Coll, concat
+from verity.ir.types import Array, Record, Type, Value
 
 from .phi import Phi
 
@@ -727,7 +727,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     timings = {"body_s": round(t_body - t0, 3), "program_s": round(time.time() - t_body, 3)}
     desc = digest = sha512 = None
     if with_desc:
-        from verity.primitives.circuits.partition_object import program_sha512
+        from verity.ir.partition_object import program_sha512
         t2 = time.time()
         desc = encode_program(program)
         digest = program_digest(desc)

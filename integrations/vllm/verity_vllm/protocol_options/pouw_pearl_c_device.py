@@ -39,7 +39,7 @@ the keys by native BLAKE3 (`_Keys`, byte for byte `call_keys`), their upload thr
 screen as one fused kernel (`screen_into`, Triton; `screen` where Triton can't run), A's roots copied into a pass buffer,
 and the stream read from torch's raw accessor.
 
-The schedule (`verity.protocols.accounting.work.pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2, bc-b139c29c's) places each
+The schedule (`verity_pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2, bc-b139c29c's) places each
 call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile hashing (`SIDE_IO`: the
 message digests and the tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
 calls go on, and the rest of the call runs on a main lane of the run's own at the greatest priority, joined to the caller's
@@ -64,12 +64,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.accounting.work.pouw.audit import Epoch, Workload, rows_domain, transcript_domain
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
-from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
-from verity.protocols.accounting.work.pouw.serving import (
+from verity_pouw.audit import Epoch, Workload, rows_domain, transcript_domain
+from verity_pouw.protocol import Matmul, Shape
+from verity_pouw.schemes import pearl_c as C
+from verity_pouw.schemes import pearl_c_work as PW
+from verity_pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity_pouw.serving import (
     SCHEDULES,
     SERIAL,
     Schedule,
@@ -99,11 +99,11 @@ from .pouw_pearl_c_screen import (
     screen_into,
 )
 
-#: the Pearl-C schemes this device path runs, by name (`verity.protocols.accounting.work.pouw.serving.SchemeId`: forming, device record, hashing format);
+#: the Pearl-C schemes this device path runs, by name (`verity_pouw.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
 #: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it).  The format is a
 #: switch: -h1 commits with frame-b3 trees, -h2 with frame-b3s (GPU 1's pipeline, `run.Pipeline`'s ``hashing``); which one
-#: serves is Daniel's call.  Its keys and tree hash come from `verity.protocols.accounting.work.pouw.serving.HASH_FORMATS`, the one table, through the
+#: serves is Daniel's call.  Its keys and tree hash come from `verity_pouw.serving.HASH_FORMATS`, the one table, through the
 #: scheme.
 SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing=h).name for d, h in ((SM120, "h1"), (SM120_UNPROMOTED, "h1"), (SM120, "h2")))
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
@@ -123,7 +123,7 @@ JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b"
 CALL_STEPS = ("pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa",
               "gemm_pearlc", "hash_msg", "hash_leaf")
 HASH_STEPS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "hash_msg", "hash_leaf"})
-#: each call step's group (`verity.protocols.accounting.work.pouw.serving.GROUPS`), which a schedule places on a lane
+#: each call step's group (`verity_pouw.serving.GROUPS`), which a schedule places on a lane
 STEP_GROUPS = {"pad_a": "a_tree", "node_keys_a": "a_tree", "hash_rows_a": "a_tree", "tree_a": "a_tree", "seed_a": "a_tree",
                "lines_ea": "forming", "stats_a": "forming", "eprime_a": "forming", "form_a": "forming",
                "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_msg": "tile_hash", "hash_leaf": "tile_hash"}
@@ -141,7 +141,7 @@ def rotated(schedule: Schedule) -> tuple[str, ...]:
 
 
 def schedule_of(name: str | Schedule, scheme: C.PearlC) -> Schedule:
-    """`name`'s schedule (`verity.protocols.accounting.work.pouw.serving.SCHEDULES`), refused where the scheme's format or this path can't run it."""
+    """`name`'s schedule (`verity_pouw.serving.SCHEDULES`), refused where the scheme's format or this path can't run it."""
     s = SCHEDULES[name] if isinstance(name, str) else name
     bad = schedule_refusals(hash_format(scheme), s)
     if set(s.side) - SIDE_GROUPS:
@@ -154,7 +154,7 @@ def schedule_of(name: str | Schedule, scheme: C.PearlC) -> Schedule:
 
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
     """The scheme `name` names (`SCHEMES`); `instance` (``k_min``, ``tile``) makes a test instance."""
-    from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import DEVICES
+    from verity_pouw.schemes.pearl_c_device import DEVICES
     if name not in SCHEMES:
         raise KeyError(f"{name!r}: this device path runs {', '.join(SCHEMES)}")
     sid = SchemeId.parse(name)
@@ -294,7 +294,7 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[
 
 
 def _weight_binding(w: int) -> bytes:
-    from verity.protocols.accounting.work.pouw.audit import weight_binding
+    from verity_pouw.audit import weight_binding
     return weight_binding(w)
 
 

@@ -1,5 +1,5 @@
 """Conformance of the Lean `check_cut` (`flock-verify cut-check`, PROTOCOL.md §16.7) with the reference,
-`verity.primitives.circuits.cut.check_cut` (PR #111): the partition invariant on one Call's cut against its graph, and the width rule.
+`verity.ir.cut.check_cut` (PR #111): the partition invariant on one Call's cut against its graph, and the width rule.
 
     python cut_check_agree.py --lean BIN --out DIR [--seed S] [--n N]
 
@@ -13,7 +13,7 @@ import argparse, json, random, subprocess, sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from verity.primitives.circuits.cut import WIDTH_RULE, check_cut, derived_committed
+from verity.ir.cut import WIDTH_RULE, check_cut, derived_committed
 
 
 def case(rng):

@@ -9,8 +9,8 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile
-from verity.protocols.accounting.work.pouw.schemes import ncp
+from verity_pouw.protocol import Context, Matmul, Shape, Tile
+from verity_pouw.schemes import ncp
 
 spec = importlib.util.spec_from_file_location("pouw_kernels", Path(__file__).parents[1] / "kernels" / "__init__.py")
 K = importlib.util.module_from_spec(spec)

@@ -81,7 +81,7 @@ CYCLE = ("fp8", "pearlc", "fp8", "pearlc-nohash", "fp8", "bf16")
 #: the fallback's engine lifetimes: base, arm, base, arm, each timing its share of the reps
 BLOCKS = 4
 PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
-#: the served y's bound against the float product (the scheme's tested bound, verity/protocols/accounting/work/pouw's sm120 useful-output test)
+#: the served y's bound against the float product (the scheme's tested bound, protocols/pouw's sm120 useful-output test)
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
 CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
@@ -125,8 +125,8 @@ def install(model, args, beacon: bytes):
     """Every LinearBase layer's apply, found by type (`verity_vllm.linear.vllm_site`), through one `Stack` whose executor is a
     `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  Returns the run, the weights by id and
     the stack; the stack starts inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
-    from verity.protocols.accounting.work.pouw.audit import Epoch, Workload
-    from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
+    from verity_pouw.audit import Epoch, Workload
+    from verity_pouw.protocol import Matmul, Shape
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.linear import vllm_site
     from verity_vllm.linear.api import Stack
@@ -797,7 +797,7 @@ def agree(a, b) -> float:
 
 
 def main() -> None:
-    from verity.protocols.accounting.work.pouw.serving import SCHEDULES
+    from verity_pouw.serving import SCHEDULES
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)

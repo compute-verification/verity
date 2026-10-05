@@ -150,9 +150,9 @@ def test_decode_spreads_its_row_and_tile_leaves_and_prefill_does_not():
 
 
 def test_kernel_constants_match_the_reference():
-    from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-    from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
-    from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+    from verity_pouw.schemes import pearl_c as C
+    from verity_pouw.schemes import pearl_kw as P
+    from verity_pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
     assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)
@@ -161,7 +161,7 @@ def test_kernel_constants_match_the_reference():
     assert int(n256, 16) == P.f32_to_bf16(P.NOISE_NORM * 32) and int(n16, 16) == P.f32_to_bf16(C.LINE_NORM_V1 * 32)
     label = re.search(r"LINE_LABEL\[(\d+)\] = \{([^}]*)\}", SOURCE)
     assert bytes(ord(c) for c in re.findall(r"'(.)'", label.group(2))) == P.LABELS["noise-line"] and int(label.group(1)) == 23
-    from verity.primitives.crypto.blake3 import blake3
+    from verity.commitments.blake3 import blake3
     assert F.unit_block(b"s" * 32, b"b" * 32, 7)[72:] == blake3(C.LABELS["seed-A"]) == blake3(b"pearl-c/v0/seed-A")
     variants = dict(re.findall(r'"([\w-]+)": (\d)', re.search(r"VARIANT_G = \{[^}]*\}", run).group(0)))
     assert {k: int(v) for k, v in variants.items()} == {SM120.name: SM120.g, SM120_UNPROMOTED.name: 0}
@@ -217,10 +217,10 @@ def test_the_sm120a_build_passes_the_gate(tmp_path):
 def test_twin_tile_is_the_scheme_on_the_record(device):
     """#449's twin on each sm_120 record, the bench arm's gate: a tile half of filler rows, and one on rows the caller
     passes, through `pearl_c` itself."""
-    from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Tile
-    from verity.protocols.accounting.work.pouw.protocol import Shape as MShape
-    from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-    from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import DEVICES
+    from verity_pouw.protocol import Context, Matmul, Tile
+    from verity_pouw.protocol import Shape as MShape
+    from verity_pouw.schemes import pearl_c as C
+    from verity_pouw.schemes.pearl_c_device import DEVICES
 
     dev, small = DEVICES[device], W.Shape("small", 96, 128, 256)
     jb = W.job(small, dev)
@@ -646,8 +646,8 @@ def test_arm_accounting_is_the_schemes(A):
     formula) at SM120_PRICES, the record's cap ρ = 1/1,000 and TT_OUT's γ0 = 1/400 (the Lean's at every cap); the unpromoted
     record credits no promotion adds, so its γ is its own.  The hashed bytes are
     -h1's: A's rows and B's under their domains, the message digests, the tile leaves and both trees' nodes."""
-    from verity.protocols.accounting.work.pouw.protocol import Shape as MShape
-    from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
+    from verity_pouw.protocol import Shape as MShape
+    from verity_pouw.schemes import pearl_c as C
 
     sys.path.insert(0, str(H100_DIR))
     try:
@@ -823,7 +823,7 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
     y and the digests, no C̃ or U: the twin reads the second (unfused) launch's C̃ and U, and one message digest flipped in the
     last sampled tile's row fails the gate against the second launch's hash_msg_v (on the stand-in, which computes no tile
     leaf, there alone).  Restored, it passes again and freeing the call writes the transcript, which the reference verifier
-    (verify.py, `verity.protocols.accounting.work.pouw.audit.Verifier`) accepts, and its negative control, whose trees and leaves are all poison (the
+    (verify.py, `verity_pouw.audit.Verifier`) accepts, and its negative control, whose trees and leaves are all poison (the
     stand-in writes nothing) and which the verifier rejects."""
     first, flipped, restored = driver(A, ship, arm_dir, tmp_path, cls, "accept", str(small_fixture / "check.json"))
     arm = getattr(A, cls)()
@@ -847,7 +847,7 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
     assert r.returncode == 0, r.stdout + r.stderr
     line, control = r.stdout.splitlines()
     sha, neg_sha = (hashlib.sha256(p.read_bytes()).hexdigest() for p in (path, neg_path))
-    assert line.startswith(f"ACCEPT {arm.name} fixture: verity.protocols.accounting.work.pouw.audit.Verifier, Sampled(1) drew tiles ")
+    assert line.startswith(f"ACCEPT {arm.name} fixture: verity_pouw.audit.Verifier, Sampled(1) drew tiles ")
     assert line.endswith(f"; transcript sha256:{sha}; verifier test; run r-test")
     assert control.startswith(f"REJECT negative control {arm.name} fixture: ")
     assert control.endswith(f"; transcript sha256:{neg_sha}; verifier test; run r-test")

@@ -252,7 +252,7 @@ fn hexb(s: &str) -> Result<Vec<u8>, String> {
     (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).map_err(|e| e.to_string())).collect()
 }
 
-// --- frame-v3 (verity.primitives.commitments.merkle), natively ---------------------------------------------------------------------
+// --- frame-v3 (verity.commitments.merkle), natively ---------------------------------------------------------------------
 
 fn fv3_hash(tag: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     let mut h = Sha256::new();

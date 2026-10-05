@@ -16,15 +16,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
-from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.primitives.circuits.layout import Scope, GateSelection
-from verity.primitives.circuits.parts import Part, Unsupported, n_members
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.refs import tuple_of
+from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ir.layout import Scope, GateSelection
+from verity.ir.parts import Part, Unsupported, n_members
+from verity.ir.program import Program
+from verity.ir.refs import tuple_of
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16, F32
-from verity.primitives.circuits.types import Array, Tuple, Value
+from verity.ir.types import Array, Tuple, Value
 
 
 # ---------------------------------------------------------------------------------------------------------

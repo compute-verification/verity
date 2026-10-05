@@ -59,7 +59,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity.primitives.randomness import Key
+from verity.randomness import Key
 
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class

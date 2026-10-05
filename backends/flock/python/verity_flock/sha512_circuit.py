@@ -1,8 +1,8 @@
 """SHA-512 in Flock's circuit model, for ``verity/flock-circuit``'s serving rows on ``frame-v3-sha512`` with ``hm96-sha512/v1``
-leaves (``verity.primitives.commitments.hm96`` §5, ``frame_v3`` PROTOCOL.md §6).
+leaves (``verity.commitments.hm96`` §5, ``frame_v3`` PROTOCOL.md §6).
 
 * :func:`compression`: one SHA-512 compression, ``out = F(cv, msg)`` with the feed-forward: core's
-  ``verity.primitives.commitments.gates.sha512.compress_gadget`` (58,120 ANDs), whose reference, constants and padding this module re-exports.
+  ``verity.ml.boolean.sha512.compress_gadget`` (58,120 ANDs), whose reference, constants and padding this module re-exports.
 * :func:`compression3`: three independent compressions (a 2^18 slot, 99% full).
 * :func:`hm96_row`: a row's hiding commit string from its chaining value after the last row block and its salt ``y``: the
   padding block's compression gives the inner digest ``x`` (``sha512/row/v1``), ``c = SHA-512(salt_prefix || y)`` (two
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import hashlib
 
-from verity.primitives.commitments.gates.sha512 import IV, compress_gadget, compress_ref, midstate, pad_tail, words_be  # noqa: F401
+from verity.ml.boolean.sha512 import IV, compress_gadget, compress_ref, midstate, pad_tail, words_be  # noqa: F401
 
 from .gf2 import Circuit, const_bits
 
@@ -47,7 +47,7 @@ def word_bit(t: int) -> int:
 def hm96_row(key: bytes | None = None) -> Circuit:
     """Inputs ``cv`` (the chaining value after the row's last block, 8 words), ``pad`` (the padding block, 16 message words)
     and ``y`` (the salt, 1536 bits in byte-string order); output ``bc`` (``b || c``, 1024 bits in byte-string order)."""
-    from verity.primitives.commitments import hm96
+    from verity.commitments import hm96
 
     inst = hm96.SHA512
     key = inst.default_key if key is None else key
@@ -81,9 +81,9 @@ def hm96_row(key: bytes | None = None) -> Circuit:
 
 
 def sha512_row_prefix(n_words: int) -> bytes:
-    """``sha512/row/v1``'s first block for an x row of ``n_words`` u16 words (``verity.primitives.commitments.rowleaf``)."""
-    from verity.primitives.commitments.rowleaf import ROLE_X
-    from verity.primitives.commitments.rowleaf import sha512_row_prefix as core
+    """``sha512/row/v1``'s first block for an x row of ``n_words`` u16 words (``verity.commitments.rowleaf``)."""
+    from verity.commitments.rowleaf import ROLE_X
+    from verity.commitments.rowleaf import sha512_row_prefix as core
 
     return core(ROLE_X, 16, n_words)
 

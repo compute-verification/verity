@@ -43,11 +43,11 @@ from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.pipeline import global_program as gp
 from verity_vllm.program import workload as W
-from verity.primitives.circuits.codec import canonical_json, encode_program, program_digest
-from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.refs import coll_concat, runs
-from verity.primitives.circuits.types import Array, Record, Value
+from verity.ir.codec import canonical_json, encode_program, program_digest
+from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.ir.program import Program
+from verity.ir.refs import coll_concat, runs
+from verity.ir.types import Array, Record, Value
 
 # ------------------------------------------------------------------------------------------------------------------ toy definitions
 # distinct ids from test_workload_program's toys (both may be imported into one process; REGISTRY refuses a second body under one id)

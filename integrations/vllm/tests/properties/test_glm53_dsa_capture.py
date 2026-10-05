@@ -14,8 +14,8 @@ import pytest
 import torch
 
 from tests.properties import glm53_dsa_capture_gpu as X
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.defs import bind
+from verity.evaluation import evaluate
+from verity.ir.defs import bind
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import dsa
 from verity_vllm.program.registry import ref_prims as RP

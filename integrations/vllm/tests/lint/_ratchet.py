@@ -29,7 +29,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]                     # integrations/vllm
 PKG = ROOT / "verity_vllm"
-CORE_PKG = ROOT.parents[1] / "verity"
+CORE_PKG = ROOT.parents[1] / "packages" / "verity" / "src" / "verity"
 ALLOWLISTS = HERE / "allowlists"
 SKIP_DIRS = frozenset({"__pycache__", "tests"})
 
@@ -153,7 +153,7 @@ def is_str(node: ast.AST | None) -> bool:
 
 
 class Aliases:
-    """Where the names bound by a file's imports come from: ``np`` -> ``numpy``, ``defs`` -> ``verity.primitives.circuits.defs``.
+    """Where the names bound by a file's imports come from: ``np`` -> ``numpy``, ``defs`` -> ``verity.ir.defs``.
 
     Also records ``name = importlib.import_module("pkg.mod")``, ``name = sys.modules["pkg.mod"]`` and
     ``name = __import__("pkg.mod", ...)`` with literal module names.  Scope-insensitive: one map per file.

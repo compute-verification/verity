@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import get
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_debit as D
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as W
-from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity_pouw.protocol import Matmul, Shape
+from verity_pouw.schemes import get
+from verity_pouw.schemes import pearl_c as C
+from verity_pouw.schemes import pearl_c_debit as D
+from verity_pouw.schemes import pearl_c_work as W
+from verity_pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 

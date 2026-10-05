@@ -217,7 +217,7 @@ def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
             st, rest = ln[1:].split("]", 1)
             cmds[st] = shlex.split(rest) if not rest.strip().startswith(("SKIP", "in-process", "write")) else [rest.strip()]
     assert "snapshot_steps=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]" in out
-    for st in ("capture", "control", "catalog/census", "nonint"):
+    for st in ("capture", "control", "census", "nonint"):
         c = cmds[st]
         assert c[c.index("--case") + 1] == "B7" and "--engine-arg=gpu_memory_utilization=0.95" in c, (st, c)
     assert "--verify-weights" in cmds["capture"]

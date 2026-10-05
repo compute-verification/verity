@@ -1,5 +1,5 @@
 """The PoUW adapter (`protocol_options.pouw`): refusals, weights committed before any wrapper, the int7 linear served
-exactly, the executor's tiles equal to `verity.protocols.accounting.work.pouw`'s reference bit for bit, the weight read from the layer it is handed
+exactly, the executor's tiles equal to `verity_pouw`'s reference bit for bit, the weight read from the layer it is handed
 (so POUS's decoded weight is what the GEMM uses), and an uninstall that leaves the model as it was.
 
 CPU only, on numpy stand-ins for a linear layer; the hook site is the same ``quant_method.apply`` vLLM's ``LinearBase``
@@ -13,10 +13,10 @@ import types
 
 import numpy as np
 import pytest
-from verity.protocols.accounting.work.pouw.audit import Epoch, Workload, activation_binding, commit_rows, weight_binding, weights_root
-from verity.protocols.accounting.work.pouw.protocol import Context as UnitContext
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape, Tile
-from verity.protocols.accounting.work.pouw.schemes import SCHEMES, get
+from verity_pouw.audit import Epoch, Workload, activation_binding, commit_rows, weight_binding, weights_root
+from verity_pouw.protocol import Context as UnitContext
+from verity_pouw.protocol import Matmul, Shape, Tile
+from verity_pouw.schemes import SCHEMES, get
 from verity_vllm import protocol_options as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocol_options import pouw
@@ -70,7 +70,7 @@ def _int7_linear(x, w, bias=None):
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
 def test_schemes_are_the_protocol_packages_and_only_ncp_and_pearl_c_sm120_are_executed():
-    from verity.protocols.accounting.work.pouw import circuit
+    from verity_pouw import circuit
     assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES})) and "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter

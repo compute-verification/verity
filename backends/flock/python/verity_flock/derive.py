@@ -36,7 +36,7 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
-from verity.primitives.circuits import library
+from verity.ml import library
 
 from . import circuit_types as CT
 from . import layouts as LY

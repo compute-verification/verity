@@ -42,7 +42,7 @@ thread a worker (``--jobs`` defaults to the CPUs this process may use)::
   research run --on vy-nebius-2 --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
       --project verity --campaign pouw --question Q --declared-output 'out/*' -- bash -c \\
       'export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \\
-         PYTHONPATH=$PWD/verity:$PWD/verity/protocols/accounting/work/pouw:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+         PYTHONPATH=$PWD/packages/verity/src:$PWD/protocols/pouw:$PWD/integrations/vllm:$PWD/benchmarks/pouw
        P=/workspace/pouw/mvp-e2e/passes/RUN_ID
        exec nice -n 19 /workspace/pouw/mvp-e2e/venv312/bin/python -u benchmarks/pouw/pearl_c_vllm/served_debit.py \\
          $P/decode/manifest.json $P/prefill/manifest.json --tiles 64 128 --out $RESEARCH_RUN_DIR/out'
@@ -75,13 +75,13 @@ sys.path.insert(0, str(HERE.parent))
 import fast_tile as FT  # noqa: E402
 import run_result  # noqa: E402
 import verify_run as VR  # noqa: E402
-from verity.primitives.commitments import Commitment  # noqa: E402
-from verity.primitives.commitments import verify_opening  # noqa: E402
-from verity.primitives.randomness import derive  # noqa: E402
-from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, Epoch, Transcript, Verifier, Workload, activation_binding, commitment_hash,  # noqa: E402
+from verity.commitments import Commitment  # noqa: E402
+from verity.commitments import verify_opening  # noqa: E402
+from verity.randomness import derive  # noqa: E402
+from verity_pouw.audit import (ROW_SCHEMA, Epoch, Transcript, Verifier, Workload, activation_binding, commitment_hash,  # noqa: E402
                                rows_domain, weight_binding)
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW  # noqa: E402
+from verity_pouw.protocol import Context, Matmul, Shape  # noqa: E402
+from verity_pouw.schemes import pearl_c_work as PW  # noqa: E402
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
 
 CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
@@ -469,7 +469,7 @@ def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: i
         for pos in sorted(rng.choice(groups[kn], size=min(per_linear, len(groups[kn])), replace=False).tolist()):
             ids, area = job["tile"].of(pos)
             if len(ids) <= census_max:
-                method, drawn = "catalog/census", list(ids)
+                method, drawn = "census", list(ids)
             else:
                 method = "sampled"
                 drawn = [ids[i] for i in rng.choice(len(ids), size=draws, replace=True, p=np.array(area) / sum(area))]
@@ -541,10 +541,10 @@ def input_bound(row: dict, delta: float) -> tuple[float, str]:
         return clopper_pearson_upper(row["failures"], row["drawn"], delta), "fresh-salt draws, Clopper–Pearson"
     a = row["w_max"] / row["W"]
     if row["failures"] == 0:
-        if row["method"] == "catalog/census":
+        if row["method"] == "census":
             return min(1.0, math.log(1 / delta) * a), "census, rule of three (work-weighted)"
         return min(1.0, math.log(1 / delta) * a / -math.expm1(-row["drawn"] * a)), "sampled, rule of three (work-weighted draws)"
-    if row["method"] == "catalog/census":
+    if row["method"] == "census":
         return _bernstein_upper(row["failures_weighted"], row["w_max"], row["W"], delta), "census, Bernstein"
     return 1.0, "sampled with failures: measure this input in full"
 
@@ -570,7 +570,7 @@ def measure_inputs(path: Path, per_linear: int, census_max: int, draws: int, see
     rows = []
     for row in inputs:
         seen = [got[_item_key(x)] for x in row["drawn"] if _item_key(x) in got]
-        if row["method"] == "catalog/census" and len(seen) < len(row["drawn"]):
+        if row["method"] == "census" and len(seen) < len(row["drawn"]):
             raise ValueError(f"{label}: census input {row['matmul']} has {len(row['drawn']) - len(seen)} tiles unmeasured")
         fail = [t for t in seen if t["openings_ok"] and not t["ok"]]
         rows.append({k: v for k, v in row.items() if k not in ("area", "drawn")} | {
@@ -597,7 +597,7 @@ def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_d
                            "points of its own)", "inputs": rows}
     if fresh:
         doc |= fresh | {"independence": "each trial is a work-weighted draw of the input's tiles under a salt of its own, both "
-                                        "derived from fresh_source after the pass (verity.primitives.randomness.derive, " + FRESH + "): "
+                                        "derived from fresh_source after the pass (verity.randomness.derive, " + FRESH + "): "
                                         "independent Bernoulli trials of the input's rate, the activations fixed"}
     path = out_dir / "inputs.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")

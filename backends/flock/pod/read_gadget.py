@@ -2,12 +2,12 @@
 statement with R hidden-index Merkle reads of depth D per VU, as ``verity/flock-circuit`` statements for C-Flock's CPU prover
 (``76-read-gadget.sh``).
 
-    python read_gadget.py check                                       a level slot against `verity.primitives.commitments.gates.merkle.root_ref`
+    python read_gadget.py check                                       a level slot against `verity.ml.boolean.merkle.root_ref`
     python read_gadget.py stage --k K --reads none|A:D:L:R --n N --sets DIR --out DIR
                                                                       circuit.txt, tables/, inst-N.bin, pub-N.bin; prints the
                                                                       statement's shape (JSON)
 
-A read is `verity.primitives.commitments.gates.merkle`'s circuit cut into slots of L levels each (a slot type ``merkle<A>x<L>``, like
+A read is `verity.ml.boolean.merkle`'s circuit cut into slots of L levels each (a slot type ``merkle<A>x<L>``, like
 ``sha512x3``): a slot takes the current digest (16 ports of 32 bits), L (A - 1) sibling digests and a 32-bit port whose low
 L log2(A) bits are the L digits, and gives the digest L levels up (16 ports of 32 bits); the D / L slots of a read are chained
 by wires, the last one's output the root. A read's position, path and leaf are its slots' inputs, which here are wired from the
@@ -24,8 +24,8 @@ import random
 import sys
 from pathlib import Path
 
-from verity.primitives.commitments.gates import merkle as M
-from verity.primitives.circuits.boolean.forms import Circuit
+from verity.ml.boolean import merkle as M
+from verity.ml.boolean.forms import Circuit
 
 from verity_flock import circuit as FC
 from verity_flock import ir_lower as IL

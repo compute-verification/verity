@@ -5,7 +5,7 @@ A twin is one pinned theorem: the Gγ statement of a device record at a cast (FP
 function (v1-hot, v2-hot, Pearl-C4 v1 and v2). Its key is
 
   statement   the panel line and version it is γ for, hashing format aside: pearl-c-sm120/v2, pearl-c-fp4/v1, ...
-  path        the priced path, as `verity.protocols.accounting.work.pouw.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
+  path        the priced path, as `verity_pouw.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
               statement's), cast-8.72, cast-16, cast-32, cast-32.06; lut256 or rcpApprox for Pearl-C4's block scale
   fadd        the FP32 add's W1 price: 8 (the cheapest bit-exact FADD) or 1047/125 (the measured in-loop one)
   reading     forming-credited, chain-only or chain-cap
@@ -42,8 +42,8 @@ FADD_PRICES = (Fraction(8), Fraction(1047, 125))
 #: staged with a red-team GO (price-twins-lean/README.md)
 LEAN_STORE = "lean/submissions/pouw/lean-audit.json"
 #: the repository's PoUW Lean audit, where pins land now; read after the store's files, so a pin they hold keeps its row
-REPO_AUDIT = HERE.parents[2] / "verity" / "protocols" / "accounting" / "work" / "pouw" / "lean" / "lean-audit.json"
-REPO_SOURCE = "verity/protocols/accounting/work/pouw/lean/lean-audit.json"
+REPO_AUDIT = HERE.parents[2] / "protocols" / "pouw" / "lean" / "lean-audit.json"
+REPO_SOURCE = "protocols/pouw/lean/lean-audit.json"
 STAGED = ("internal/pouw/price-twins-lean/proposed-pins.json", "internal/pouw/price-twins-lean/v2-hot/v2-hot-pins.json",
           "internal/pouw/price-twins-lean/v1-hot/v1-hot-pins.json", "internal/pouw/price-twins-lean/fp4-delta/fp4-delta-pins.json")
 CASTS = {"8": "cast-8", "8p72": "cast-8.72", "16": "cast-16", "32": "cast-32", "32p06": "cast-32.06"}

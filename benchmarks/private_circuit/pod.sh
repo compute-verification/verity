@@ -39,7 +39,7 @@ sha256sum $B $L | tee $O/binaries.sha256
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export RAYON_NUM_THREADS=$(nproc)
-export PYTHONPATH=$REPO/verity:$REPO/benchmarks/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm:$REPO/tools/circuit_check/src
+export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm:$REPO/tools/circuit_check/src
 ARGS=(); for c in ${CLS:-16,16,8 64,64,32}; do ARGS+=(--cls "$c"); done
 [ -n "${WIRED:-}" ] && ARGS+=(--wired)
 $W/py/bin/python benchmarks/private_circuit/universal.py "${ARGS[@]}" --n ${N:-64} --warm ${WARM:-1} --runs ${RUNS:-3} --seed ${SEED:-0} \
