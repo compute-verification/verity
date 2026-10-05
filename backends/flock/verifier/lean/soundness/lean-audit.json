@@ -1,7 +1,7 @@
 {
  "roots": ["FlockSoundness"],
  "exempt": {
-  "FlockSoundness.Discharge.Canonical.Gaps": "open targets: the statements the canonical headline's gaps need (a tail's outputs, public inputs, registered reads), sorry until they land; lake build FlockSoundness.Discharge.Canonical.All builds them",
+  "FlockSoundness.Discharge.Canonical.Gaps": "open targets: the statements the canonical headline's gaps need (a tail's outputs, registered reads; the session at public inputs in words), sorry until they land; lake build FlockSoundness.Discharge.Canonical.All builds them",
   "FlockSoundness.Discharge.Canonical.All": "imports Gaps.lean, whose open targets are sorry; every other canonical module is under the root"
  },
  "assumptions": ["FlockSoundness.Assumptions"],
@@ -4552,6 +4552,7 @@
    "assumptions": [],
    "type_hash": "f2bb57ebbd6170d689a332b5a25c3f594ded6744ce002ad3a2868356e66d99ed"
   },
+  "FlockSoundness.Discharge.Canonical.public_pinnedC": {},
   "FlockSoundness.Discharge.Canonical.zk_session_soundC_verifies": {
    "signature": [
     "FlockSoundness.Discharge.Canonical.zk_session_soundC_verifies {mPts n : Nat} {Reg : Type}",
