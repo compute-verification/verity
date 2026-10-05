@@ -14,9 +14,6 @@ rev = "5ed2965256430c3649e86755f9576b54eca72435"
 name = "verity"
 path = "../../../packages/verity/lean"
 
-[[require]]
-name = "security_proofs_core"
-path = "../../../security_proofs/core"
-
 [[lean_lib]]
 name = "Pouw"
+roots = ["Pouw.Assumptions", "Pouw.Guarantees", "Pouw.Protocol", "Pouw.SecurityProofs.Dimension.Lifting"]

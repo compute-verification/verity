@@ -1,0 +1,25 @@
+name = "security_proofs_pouw"
+defaultTargets = ["PouwProofs"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "5ed2965256430c3649e86755f9576b54eca72435"
+
+[[require]]
+name = "pouw"
+path = "../../protocols/pouw/lean"
+
+[[require]]
+name = "security_proofs_core"
+path = "../core"
+
+# The proofs of `protocols/pouw/lean`'s guarantees and every lemma behind them, untrusted: the spec's lock says
+# what they prove.
+[[lean_lib]]
+name = "PouwProofs"
+roots = ["PouwProofs"]
