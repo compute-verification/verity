@@ -169,7 +169,9 @@ against `verity.ir`, the Lean audit, and the verifier's cross-check against upst
 CPU pod, with caches that hit only on identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into `main`
 only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence store, or
 when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on one `check`
-of the merged tree. The lander checks a train-prep commit with `tools/check/train.sh COMMIT POD` (`--agreement` for a pinned
+of the merged tree. One commit's `check` can run on N pods at once (`check.py --record --shard K/N --on POD` for each K, then
+`check.py --record --combine RUN...`; the plans are in `tools/check/ci.toml`), and the gate takes the combined Attempt only
+after re-reading every shard. The lander checks a train-prep commit with `tools/check/train.sh COMMIT POD` (`--agreement` for a pinned
 guarantee changed outside `backends/flock/`). A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
 (`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`; not for a `README.md` or `PROTOCOL.md`
 alone, and skipped by name elsewhere): record it with

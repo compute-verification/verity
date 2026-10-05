@@ -163,7 +163,7 @@ def test_a_migrated_targets_py_has_nothing_to_move(tmp_path, monkeypatch):
 def test_the_task_lists_differences_ignore_which_file_names_a_unit():
     t = {"definitions": [{"id": "A_v1", "as_call": False, "gates": 3, "units": ["_core_roots"]}], "templates": [],
          "root_errors": [], "pins": {"pieces": {"A_v1": {"and": 1}}}}
-    moved = {**t, "definitions": [{**t["definitions"][0], "units": ["verity/ml/gemm.circuit-check.py#_core_roots"]}]}
+    moved = {**t, "definitions": [{**t["definitions"][0], "units": ["verity.ml.gemm.circuit-check#_core_roots"]}]}
     assert MB.differences(t, moved) == []
     regated = {**t, "definitions": [{**t["definitions"][0], "gates": 4}]}
     assert MB.differences(t, regated) == [f"definitions: A_v1: {t['definitions'][0]} became {regated['definitions'][0]}"]

@@ -29,7 +29,7 @@ from . import cache as CC
 REPO = Path(__file__).resolve().parents[4]
 #: the packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`) and the templates'
 PACKAGES = ("verity", "verity_vllm", "verity_pouw", "verity_numerical")
-SUFFIX = ".circuit-check"
+SUFFIX = CC.SUFFIX
 #: the pins of a Definition no module defines
 SHARED_PINS = Path(__file__).with_name("pins.json")
 PIN_KINDS = ("definitions", "pieces", "units")

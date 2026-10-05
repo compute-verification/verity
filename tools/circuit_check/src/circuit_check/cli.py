@@ -78,8 +78,12 @@ def _work(i: int) -> tuple[int, dict, dict | None, list[str], dict | None]:
     return i, r, *_observe(r, got)
 
 
-def target_key(kind: str, label: str, opts: CK.Options, as_call: bool | None) -> dict:
-    return CC.key({"target": [kind, label], "as_call": as_call, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}})
+def target_key(kind: str, label: str, opts: CK.Options, as_call: bool | None, roots: tuple = ()) -> dict:
+    """A target's key: its request, and for a Definition the digest of what it reaches as descriptors (`cache.descriptor`)."""
+    request = {"target": [kind, label], "as_call": as_call, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}}
+    if roots:
+        request["descriptor"] = CC.descriptor(roots[0])
+    return CC.key(request)
 
 
 def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None) -> list[tuple]:
@@ -123,6 +127,18 @@ def _init(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | 
     _TASKS[:] = _tasks(specs, opts, everything, as_call)
 
 
+def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None = None, initargs: tuple = ()):
+    """``fn`` of each item in up to ``jobs`` forkserver workers, yielded as each finishes. A worker that dies (the OOM killer)
+    raises ``BrokenProcessPool``: ``multiprocessing.Pool`` would wait for its task forever."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    with ProcessPoolExecutor(min(jobs, len(items)), mp_context=mp.get_context("forkserver"), initializer=initializer,
+                             initargs=initargs) as pool:
+        for f in as_completed([pool.submit(fn, x) for x in items]):
+            yield f.result()
+
+
 def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
         cache: Path | None = None) -> dict:
     """Every target's checks, in target order; ``jobs`` > 1 runs them in that many worker processes, each started from a fresh
@@ -137,7 +153,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     tracing = cache is not None and CC.tracing()
     tasks = _tasks(specs, opts, everything, as_call)
     out: list[dict | None] = [None] * len(tasks)
-    keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call)) for t in tasks] if tracing else []
+    keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks] \
+        if tracing else []
     stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
@@ -169,12 +186,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             else:
                 todo.append(i)
     if jobs > 1 and len(todo) > 1:
-        import multiprocessing as mp
-
         init = (specs, opts, everything, as_call, tracing)
-        with mp.get_context("forkserver").Pool(min(jobs, len(todo)), initializer=_init, initargs=init) as pool:
-            for i, r, got, untraced, worker in pool.imap_unordered(_work, todo, chunksize=1):
-                done(i, r, got, untraced, worker)
+        for i, r, got, untraced, worker in parallel(_work, todo, jobs, _init, init):
+            done(i, r, got, untraced, worker)
     else:
         for i in todo:
             r, got = _checked(tasks[i]) if tracing else (_one(*tasks[i][:3]), None)

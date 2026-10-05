@@ -195,7 +195,8 @@ ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_un
 
 
 def binding_files() -> list[tuple[str, dict[str, Any]]]:
-    """(unit prefix, namespace) of each binding file: this module (its units by name) and each sidecar, by module (``<file>#``).
+    """(unit prefix, namespace) of each binding file: this module (its units by name) and each sidecar, by its module's name
+    (``<module>.circuit-check#``, `cache.SUFFIX`), so a unit's name moves with its module.
     A sidecar binding function this module does not run is an error."""
     from . import sidecars as SC
 
@@ -206,7 +207,7 @@ def binding_files() -> list[tuple[str, dict[str, Any]]]:
         known = {*ROOT_FUNCTIONS, *(n.replace("_roots", "_bindings") for n in ROOT_FUNCTIONS), "_model_roots"}
         if stray := sorted(n for n in ns if CC._is_binding(n) and n not in known):
             raise ValueError(f"{m.__file__}: {', '.join(stray)} is no binding circuit-check runs (`targets.ROOT_FUNCTIONS`)")
-        out.append((f"{SC.rel(m.__file__)}#", ns))
+        out.append((f"{m.__name__}#", ns))
     return out
 
 
