@@ -394,8 +394,12 @@ def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head_marked_r
 
     main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch, '[[grant]]\nrole = "red-team"\npaths = ["a2.txt"]\n')
     assert merge_main(["train-prep/t", "--dry-run"]) == 3
-    assert f"#7 is not marked ready at {a[:12]} (`ready = true` on pr:7@{a}: `research queue ready 7`)" in capsys.readouterr().err
+    assert f"#7 is not marked ready at {a[:12]} (`ready = true` on pr:7@{a}: `research queue ready 7 --by LANE`)" in capsys.readouterr().err
     store = LocalStore()
+    store.add_label(f"pr:7@{a}", "ready", True, "merge-queue")            # the queue's old default author: no one's word
+    assert merge_main(["train-prep/t", "--dry-run"]) == 3
+    assert (f"#7's ready at {a[:12]} is by merge-queue, not its owner: the owner relabels it (research data label pr:7@{a} ready "
+            "true --by LANE)") in capsys.readouterr().err
     store.add_label(f"pr:7@{a}", "ready", True, "lane-7")
     assert merge_main(["train-prep/t", "--dry-run"]) == 3
     err = capsys.readouterr().err

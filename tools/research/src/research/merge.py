@@ -660,8 +660,10 @@ MERGED_PR = re.compile(r"Merge #(\d+) \(([0-9a-f]{7,40})\)")
 def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]:
     """Why ``commit`` can't land for a pull request it merges above the checkout's HEAD (a first-parent `Merge #N (SHA)` commit
     `_chain` wrote, whose second parent is the pinned head): N's head on ``remote`` is no longer that head, closed or not, or
-    `pr:N@{head}` lacks `ready = true` or a grant its change needs under the queue's rules as HEAD has them (`Rules.needs`, every
-    role, not only TRAIN_GRANTS), read after pulling the labels from the store's remote.  What can't be read refuses."""
+    `pr:N@{head}` lacks `ready = true` asserted by someone other than `merge-queue` (the owner's word; who asserted it isn't matched
+    to the PR's owner, which is mostly a Cursor agent id with no map to a lane) or a grant its change needs under the queue's rules
+    as HEAD has them (`Rules.needs`, every role, not only TRAIN_GRANTS), read after pulling the labels from the store's remote.
+    What can't be read refuses."""
     from .queue import QueueError, StoreGrants, grant_target
 
     out, pins = [], []
@@ -684,9 +686,12 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
                     f"is now {head[:12]}: rebuild the train on the new head and check that" if head else
                     f"can't be read ({(r.stderr or r.stdout).strip()[-200:]})"))
                 continue
-            if not grants.ready(n, sha):
+            if (by := grants.readied_by(n, sha)) == {"merge-queue"}:
+                out.append(f"#{n}'s ready at {sha[:12]} is by merge-queue, not its owner: the owner relabels it (research data "
+                           f"label {grant_target(n, sha)} ready true --by LANE)")
+            elif not by:
                 out.append(f"#{n} is not marked ready at {sha[:12]} (`ready = true` on {grant_target(n, sha)}: `research queue "
-                           f"ready {n}`)")
+                           f"ready {n} --by LANE`)")
             need = rules.needs(repo, "HEAD", sha, lambda n=n, sha=sha: grants.reviews(n, sha)) if rules else set()
             if missing := need - grants(n, sha):
                 out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
