@@ -1,6 +1,6 @@
 """Conformance vectors for `Pouw.Protocol.Fp8Atom.H1T`: H-1T's forming map, salt fields and checked chain, as Lean data.
 
-    PYTHONPATH=<verity>/packages/verity/src python scripts/h1t_vectors.py <copy of internal/pouw/hardness> [--out DIR]
+    PYTHONPATH=<verity>/packages/verity/src python scripts/h1t_vectors.py <copy of internal/pouw/hardness> [--out DIR] [--proofs-out DIR]
 
 The expected values come from an exact transcription of `docs/pouw/hardness-shaped-matrices.md` §3.1 over fractions,
 with the atom from `verity.ml.tc` (`tc_dot_total_e4m3` on `HOPPER_E4M3_K32`) and the chain in numpy float32. Before
@@ -13,7 +13,7 @@ anything is written, three other computations must agree with it:
 * `HOPPER_E4M3_K32.step` on every atom.
 
 Kernel-pinned, as Lean data (`Pouw/Protocol/Fp8Atom/H1TVectors.lean`, checks in
-`Pouw/SecurityProofs/Fp8Atom/H1TChecks.lean`):
+`security_proofs/pouw/PouwProofs/SecurityProofs/Fp8Atom/H1TChecks.lean`):
 * `formTable`: `formReal` on every finite code, both signs and every `F` in {1/4, 1/2, 1, 2, 4} (2,540 lanes);
 * `tagTable`: every tag value, its code and its negation's (80);
 * `saltVectors`: raw XOF words and the fields `extract` reads;
@@ -317,13 +317,16 @@ def parts(name: str, typ: str, items: list[str], doc: str, size: int = PART):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("h1_dir")
-    ap.add_argument("--out", default=str(Path(__file__).resolve().parents[1]))
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--proofs-out", default=None)
     args = ap.parse_args()
     sys.path.insert(0, args.h1_dir)
     import h1_tagged as h1t  # noqa: E402
 
     rng = random.Random(SEED)
-    out = Path(args.out)
+    here = Path(__file__).resolve().parents[1]
+    out = Path(args.out) if args.out else here
+    proofs = Path(args.proofs_out or args.out or here.parents[2] / "security_proofs" / "pouw")
     cov: dict = {"seed": SEED}
 
     # the per-lane table, against Track H's enc and the kernel's f16 path
@@ -427,7 +430,8 @@ def main() -> None:
         checks.append(f"/-- Every vector of `{whole}` holds. -/\n"
                       f"theorem {whole}_all : {whole}.all {holds} = true := by\n  simp only [{', '.join(lemmas)}]\n")
     checks.append("end Pouw.Fp8Atom.H1T.Checks\n")
-    (out / "Pouw/SecurityProofs/Fp8Atom/H1TChecks.lean").write_text("\n".join(checks))
+    (proofs / "PouwProofs/SecurityProofs/Fp8Atom").mkdir(parents=True, exist_ok=True)
+    (proofs / "PouwProofs/SecurityProofs/Fp8Atom/H1TChecks.lean").write_text("\n".join(checks))
     (out / "Pouw/Protocol/Fp8Atom/H1TCoverage.json").write_text(json.dumps(cov, indent=1) + "\n")
     print(json.dumps(cov, indent=1))
 
