@@ -1,7 +1,7 @@
 """The core dependency rules (README "Development") as import-boundary checks over ``verity/``.
 
     primitives.circuits <- primitives.commitments -> primitives.crypto;  primitives.circuits <- protocols.profile;
-    each protocol imports the primitives and the profile it names in ``ALLOWED``;  claims, randomness and crypto import no
+    each protocol imports the primitives, the profile and the protocols it names in ``ALLOWED``, and no third-party package;  claims, randomness and crypto import no
     core unit;  a primitive never imports a protocol, and no unit imports another distribution of the workspace (the
     catalog, the kernels, experimental, a backend, an integration, a benchmark, a tool) or an external runtime: core
     imports the standard library, its declared dependencies and itself.
@@ -38,8 +38,9 @@ ALLOWED = {
     "protocols.profile": {"primitives.circuits"},
     "protocols.verification.sampled_proofs": {"primitives.circuits", "primitives.commitments", "protocols.profile"},
     "protocols.accounting.space.pous": {"claims", "primitives.commitments", "primitives.randomness"},
+    # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.
     "protocols.accounting.work.pouw": {"primitives.circuits", "primitives.commitments", "primitives.crypto",
-                                       "primitives.randomness", "protocols.profile"},
+                                       "primitives.randomness", "protocols.profile", "protocols.verification.sampled_proofs"},
     "protocols.accounting.communication.warden": {"primitives.commitments"},
 }
 #: Import names core never imports or names as a string: the other workspace distributions, external runtimes, and the
@@ -52,7 +53,8 @@ FORBIDDEN_EXTERNAL = ("verity_catalog", "verity_kernels", "verity_experimental",
 #: tensor-core steps, FP32 and the casts its verifier recomputes), which live in the catalog by ruling, while the scheme
 #: stays in core.  Nothing else in core imports the catalog.
 EXCEPTIONS = {"protocols.accounting.work.pouw": {"verity_catalog"}}
-#: Core's third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or ``verity``.
+#: Core's third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or ``verity``.  A
+#: protocol imports none: it is the standard library and core, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("primitives/circuits", "primitives/randomness", "claims")
@@ -119,7 +121,8 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
         for name, line, imported in _imports(path):
             parts = name.split(".")
             target = _unit(".".join(parts[1:])) if parts[0] == "verity" and len(parts) > 1 else None
-            if (_external(name, imported, DEPENDENCIES | EXCEPTIONS.get(unit, set()))
+            third_party = set() if unit.startswith("protocols.") else DEPENDENCIES
+            if (_external(name, imported, third_party | EXCEPTIONS.get(unit, set()))
                     or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))):
                 offenders.append(f"{path.relative_to(SRC)}:{line}: {name}")
     assert not offenders, "\n".join(offenders)
