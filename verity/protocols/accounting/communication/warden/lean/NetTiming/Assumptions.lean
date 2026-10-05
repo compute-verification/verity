@@ -1,4 +1,6 @@
 import NetTiming.Protocol
+import Mathlib.Data.Nat.Notation
+import Mathlib.Data.Set.Defs
 
 /-!
 # The trusted layer: the warden assumptions and the Program's dataflow conditions
@@ -15,9 +17,17 @@ W2 for what enters X, `Packed` and `Allocated` are W4 for the rows the ingress l
 structure (`winEnd`), the frame length `B`, the jitter bound `D` and the emission map `view` are arguments fixed before
 any run. The `Warden` type has no input for the secret, and `view` reads only the step and the observation. So nothing
 in the model can make them depend on the secret or on traffic. A reviewer checks this by reading `NetTiming.Protocol`.
+
+**`AccSeqs`**, the accepted observation sequences Theorem 3 counts, is model text too: a `Set`, which the Program's
+Lean-core modules don't have.
 -/
 
 namespace NetTiming
+
+/-- The accepted observation sequences of length `n` whose jitter classes are below `D`: what T3 counts. -/
+def AccSeqs {L K S : ℕ} {In Adv : Type} (P : Program L S In Adv) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
+    Set (List (Obs L K S)) :=
+  {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ AcceptedUpTo P op n o}
 
 variable {L K S : ℕ} {In Act Wire : Type}
 

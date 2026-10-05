@@ -20,7 +20,7 @@ variable {L K S : ℕ} {Z Msg In Act Wire : Type}
 
 /-- `Σ_sync` is never empty: its δs and its ρs both are not. -/
 theorem SyncSet.size_pos (ss : SyncSet) : 0 < ss.size :=
-  Nat.mul_pos (Finset.card_pos.mpr ss.deltas_nonempty) (Finset.card_pos.mpr ss.rhos_nonempty)
+  Nat.mul_pos (List.length_pos_iff.mpr ss.deltas_nonempty) (List.length_pos_iff.mpr ss.rhos_nonempty)
 
 /-- The windows bound at `n = m·T`, read per window. -/
 theorem windows_bound_le_perWindow (a s D T W m : ℕ) (hs : 0 < s) :

@@ -1,4 +1,5 @@
 import NetTiming.Guarantees
+import NetTiming.SecurityProofs.Reference
 import NetTiming.SecurityProofs.Occupancy
 import NetTiming.SecurityProofs.Counting
 import NetTiming.SecurityProofs.Advice
@@ -13,7 +14,8 @@ import NetTiming.SecurityProofs.Sanity
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee, each the theorem of the same statement
 in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3), `Schedule` (Theorem 3 for the
 constant-rate Program), `Ingress` (the ingress bound) or `PerWindow` (the last two over whole windows), and every lemma
-behind them. `Sanity` shows every named assumption satisfiable.
+behind them. `Reference` proves the Program's `List` definitions equal to the `Finset` forms the proofs use. `Sanity`
+shows every named assumption satisfiable.
 -/
 
 namespace NetTiming.SecurityProofs

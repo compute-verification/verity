@@ -8,17 +8,19 @@ content and order. Conventions follow POUS's package (`verity/protocols/accounti
 ~~~text
 NetTiming/Protocol/Grid.lean   trusted: rows, grids, occupancy, left-packing, fill, and the FIFO warden (queue, released, fifoGrid)
 NetTiming/Protocol/Run.lean    trusted: statuses, observations, the warden, the interaction (trace, obsRun, wireRun), the
-                               Program, acceptance (Accepted, AcceptedUpTo) and accepted observation sequences (AccSeqs)
+                               Program and acceptance (Accepted, AcceptedUpTo)
 NetTiming/Protocol/Ingress.lean  trusted: the interaction read inward, a link's frames with the timing erased (rowFrames,
                                linkFrames), and acceptance as it bears on ingress (StatusComplete)
 NetTiming/Protocol/Schedule.lean trusted: the Program's logical schedule as `schedule.py` defines it (ClockSync, SyncSet,
                                LogicalFrame, eligible, handingBuckets, enqueued, expectedRow) and the constant-rate
                                Program it gives (constantRate)
-NetTiming/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them), J, and Theorem 3's two
-                               dataflow conditions
+NetTiming/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them), J, Theorem 3's two
+                               dataflow conditions, and the accepted observation sequences it counts (AccSeqs)
 NetTiming/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 1(b), Theorem 3,
                                Theorem 3 for the constant-rate Program, the ingress bound)
 NetTiming/SecurityProofs.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee, from the lemmas below
+NetTiming/SecurityProofs/Reference.lean  the `Finset` reference forms of the Program's `List` definitions (rowCount,
+                                         offset, SyncSet and its size), each proved to agree with it
 NetTiming/SecurityProofs/Occupancy.lean  Proposition 2 (the occupancy counts, fill, and the FIFO warden's tightness)
 NetTiming/SecurityProofs/Counting.lean   Theorem 1(b) (the tree lemma on accepted runs, zero error, W6 on accepted runs)
 NetTiming/SecurityProofs/Advice.lean     Theorem 3 (the 2^A cap, one clock-sync value per window, the fixed clock, the
@@ -56,7 +58,8 @@ as `docs/…` and `internal/…` name the network-transparency project store, wh
 
 **The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
-`NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
+`NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof, and the Program's
+`NetTiming.Protocol` imports only itself and Lean core), the dependency
 record, a kernel replay, and the 4 guarantees' records, whose meaning it follows through those three (`meaning`). It then
 runs the difftest (`runs`): on 10,000 random instances, the definitions give what the Python audit gives.
 When a changed record lands on `main`, Daniel gets a DM showing it (Verity's `AGENTS.md`).

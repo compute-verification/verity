@@ -12,6 +12,8 @@ the interaction read inward, a link's frames with the timing erased, and accepta
 the Program's logical schedule and clock-sync advice, and the constant-rate Program they define.
 
 This module, `Assumptions` and `Guarantees` are the trusted text: they import only one another and Mathlib, so their
-diff is everything a statement reviewer reads. `SecurityProofs` holds the proofs and every lemma, which nobody reviews
+diff is everything a statement reviewer reads. This module is the Program and imports only Lean core (the audit's
+`layers`): its counts and sums run over `List`, and `SecurityProofs.Reference` proves them equal to their `Finset`
+forms. `SecurityProofs` holds the proofs and every lemma, which nobody reviews
 for meaning.
 -/

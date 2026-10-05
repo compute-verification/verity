@@ -19,10 +19,6 @@ open Finset
 
 variable {L K S : ℕ} {Z In Act Wire : Type}
 
-/-- `#Σ_sync` is the number of values of the set. -/
-theorem SyncSet.card_elem (ss : SyncSet) : Fintype.card ss.Elem = ss.size := by
-  simp only [SyncSet.Elem, SyncSet.size, Fintype.card_prod, Fintype.card_coe]
-
 theorem encard_accSeqs_le_constantRate {Ac : Type} [Fintype Ac] (T W : ℕ) (ss : SyncSet)
     (frames : List In → Ac → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
     (AccSeqs (constantRate (S := S) T W ss frames) op n D).encard ≤
@@ -169,7 +165,7 @@ theorem encard_accSeqs_le_constantRate_windows {Ac : Type} [Fintype Ac] (T W : �
         exact jitterCode_mem o ho.1 ho.2.1
     _ = ((Fintype.card Ac * ss.size ^ min W m * D ^ n : ℕ) : ℕ∞) := by
         rw [card_product, Fintype.card_piFinset]
-        simp [SyncSet.size]
+        simp [← SyncSet.card_elem]
 
 theorem encard_decodable_le_constantRate {Ac : Type} [Fintype Ac]
     (I : Interaction L K S Z In Act Wire) (T W : ℕ) (ss : SyncSet)
@@ -194,11 +190,13 @@ theorem encard_decodable_le_constantRate {Ac : Type} [Fintype Ac]
 
 /-- Two sync values, `δ ∈ {0, 1}` and `ρ = 1`. -/
 def twoSyncs : SyncSet where
-  deltas := {0, 1}
-  rhos := {1}
-  deltas_nonempty := ⟨0, by simp⟩
-  rhos_nonempty := ⟨1, by simp⟩
-  rhos_pos := by simp only [Finset.mem_singleton, forall_eq]; decide
+  deltas := [0, 1]
+  rhos := [1]
+  deltas_nonempty := by simp
+  rhos_nonempty := by simp
+  rhos_pos := by simp only [List.mem_singleton, forall_eq]; decide
+  deltas_nodup := by decide
+  rhos_nodup := by simp
 
 /-- The value `(δ, 1)` of `twoSyncs`, with `δ = 1` if `b` and `δ = 0` otherwise. -/
 def twoSyncs.v (b : Bool) : twoSyncs.Elem :=

@@ -102,17 +102,17 @@
    ]
   },
   "NetTiming.Protocol.Grid": {
-   "digest": "884daa56cf5ead0fe447aff6cef4a144be0c168a36c510d9ce0789e4dd01cfae",
+   "digest": "fb700c470bcc4444772dea978dc3a957c786876be91a06d69ef517d39ded2a40",
    "definitions": {
     "NetTiming.Grid": "ffd16cd09146b02e4292cb44d8dce042a44bb60ebf1fd3cb63d668fa528af350",
     "NetTiming.Row": "ae6048b36e04cb61d4c26bd3d4ad5abf37420c03cea3b6f1c4bb89feeaf6f370",
     "NetTiming.RowLeftPacked": "e88ad2e420d43d14085e57523cee6175bb20aeedc42045cb9e9ebde38703ce1c",
     "NetTiming.fifoGrid": "8f8019b57fafeb6dc051337cb56ad7245efc4ebb94f87f0ccfe325612212fc47",
     "NetTiming.fill": "904f8f7344585631d73f9cfb680ce471134fb2a52faeab7e1ffa90ccf76f3270",
-    "NetTiming.offset": "c377eb41551b36727e25c9b036e55dae5f80335600104b299d2acaefef174047",
+    "NetTiming.offset": "7f917ed691bcdd29cda11f87998f0969f622cc3d02d4502bad2b50d3376ceb85",
     "NetTiming.queue": "b9f8bc87219599771624bc8bc675cb63dff16f09e1f33e941911dba6138e3b9e",
     "NetTiming.released": "5dbceb6ee682c7d972fb16f08ec0c1dfb84ba70b492ba1bb9055d217c9d0a3db",
-    "NetTiming.rowCount": "95cee3532364711f79cb77b0ba21751b405644470a935c9f92c99eda351ab005"
+    "NetTiming.rowCount": "b8d53d4f454856cfbc099a790b6d006975002b97fc6019f64fb4adc6b239a244"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
@@ -174,7 +174,7 @@
    ]
   },
   "NetTiming.Protocol.Schedule": {
-   "digest": "7a2f8e4d2926bb4eda2b5fa8fff327d0feb7c3d96e804634c51e0925afa72fc2",
+   "digest": "fa1e3047aa83b5d787498f7d6c5ff1072af7f790c28c59d9953ef483be0bd930",
    "definitions": {
     "NetTiming.ClockSync": "c1303c6db001a581bc8b9860dc2702e35895c754014c79665de6aad2a53189de",
     "NetTiming.ClockSync.delta": "386473e534351b83f1afd51bf5bd78c093664a5bf912974c1003b0b39339c633",
@@ -183,12 +183,12 @@
     "NetTiming.LogicalFrame.anchor": "0d5824643aa62c95879f99f4768acc3eeaf58d2c022051a57fbfa921f11bf552",
     "NetTiming.LogicalFrame.index": "cf836226b36cc8a37ffa53c86b1f6c449c2a9656b276ce921b61767750b52f62",
     "NetTiming.LogicalFrame.payload": "0dd2fa88cf933d5efcd80d9b76c8b90192c0cb46d7ec222182be100f3fa153e1",
-    "NetTiming.SyncSet": "fb60974bd64e44bc221128ddb6d0576d958a68030e84ce97ce6a31aca781b50b",
-    "NetTiming.SyncSet.Elem": "b2d00ee7d62bfde48d43ebdfa5154ff15f5c24ffd55d935ac8393952c14111cb",
-    "NetTiming.SyncSet.deltas": "dcbbb26e3cb0c7571a5733999f38b9c2e6266acc0acda614d91b905a81e48711",
-    "NetTiming.SyncSet.rhos": "9f8a68565714e6f01b9a98d2b50415c8823b6c079dd53a16c98e9edf9d777414",
-    "NetTiming.SyncSet.size": "47c4c2093304fe315dc0866a8d927d07724c3b162da446641c79a3ca44d64087",
-    "NetTiming.SyncSet.sync": "0c9293bea888935fcc58b9fce5bf093de740da9da33051e8a9c01236a5b4e891",
+    "NetTiming.SyncSet": "3cffa919fffdab882e7eff358ca6e2372bae03ba4064252f05eeb07012b51519",
+    "NetTiming.SyncSet.Elem": "51a4ee9eed999bb299a8c483ac039f738ff0f4bc0c060cbdd5bf264a53b8f2f1",
+    "NetTiming.SyncSet.deltas": "78dfed60be89159eff33524a0237a766b621c22e0d9e868d1f27e40f69abe94b",
+    "NetTiming.SyncSet.rhos": "8a3f465347e811e269d23db56e2dd7c2f2dce1664bd8e3b4354e79cfcc31f7ae",
+    "NetTiming.SyncSet.size": "43b527328da9d0b31c66f136b3aae6d4eb8e709e2bb43c4723cb0ade21f5dd09",
+    "NetTiming.SyncSet.sync": "bacc91008870c71f4961b91734cce00833c3d281b7f2d3fe891160b32f8b41ef",
     "NetTiming.constantRate": "19ed7628056194464d909d589ba36698f283a4e7eb8e21a263111eb07df59273",
     "NetTiming.eligible": "67ce9ddb22533ead1670f1b87dc02ef4188f4c6bb874c8e9dc03de125a885856",
     "NetTiming.enqueued": "a9121ee81e7d32bd20e08fb70c800deedfe3aeeea525e56223263b0dce4ad3ff",

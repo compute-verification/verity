@@ -109,7 +109,7 @@ def witnessProgram (n : ℕ) : Program 1 2 Unit (Bool × ((β : Fin n) → Fin 3
 theorem witnessProgram_rowCount (n : ℕ) (t : ℕ) (ins : List Unit) (a : Bool × ((β : Fin n) → Fin 3)) (ℓ : Fin 1) :
     (rowCount ((witnessProgram n).rows t ins a ℓ) : ℕ) = if h : t < n then (a.2 ⟨t, h⟩ : ℕ) else 0 := by
   by_cases ht : t < n
-  · simp only [rowCount, witnessProgram, ht, ↓reduceDIte]
+  · simp only [val_rowCount, witnessProgram, ht, ↓reduceDIte]
     have : (univ.filter fun s : Fin 2 => (if (s : ℕ) < (a.2 ⟨t, ht⟩ : ℕ) then some [a.1] else none).isSome) =
         univ.filter fun s : Fin 2 => (s : ℕ) < (a.2 ⟨t, ht⟩ : ℕ) := by
       ext s; by_cases hs : (s : ℕ) < (a.2 ⟨t, ht⟩ : ℕ) <;> simp [hs]
@@ -203,7 +203,7 @@ theorem zP_constOp_accepts_one :
 theorem rP_rowCount (n t : ℕ) (ins : List (Fin 3)) (a : Unit × ((β : Fin n) → Fin 3)) (ℓ : Fin 1) :
     (rowCount ((rP n).rows t ins a ℓ) : ℕ) = if h : t < n then ((a.2 ⟨t, h⟩ + ins.getD t 0 : Fin 3) : ℕ) else 0 := by
   by_cases ht : t < n
-  · simp only [rowCount, rP, ht, ↓reduceDIte]
+  · simp only [val_rowCount, rP, ht, ↓reduceDIte]
     have : (univ.filter fun s : Fin 2 =>
           (if (s : ℕ) < ((a.2 ⟨t, ht⟩ + ins.getD t 0 : Fin 3) : ℕ) then some [true] else none).isSome) =
         univ.filter fun s : Fin 2 => (s : ℕ) < ((a.2 ⟨t, ht⟩ + ins.getD t 0 : Fin 3) : ℕ) := by
@@ -340,7 +340,8 @@ theorem allocated_witness :
       simp only [hs, ↓reduceIte, Option.isSome_some]
     · simp at h
   · intro k xs as ℓ
-    show (univ.filter fun s => ((aWarden.obs k xs as).rows ℓ s).isSome).card ≤ 1
+    show (rowCount ((aWarden.obs k xs as).rows ℓ) : ℕ) ≤ 1
+    rw [val_rowCount]
     calc _ ≤ ({0} : Finset (Fin 2)).card := by
           apply card_le_card
           intro s hs

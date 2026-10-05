@@ -1,4 +1,4 @@
-import NetTiming.Protocol.Grid
+import NetTiming.SecurityProofs.Reference
 import Mathlib.Data.Sym.Card
 import Mathlib.Data.Set.Card
 import Mathlib.Order.Interval.Finset.Fin
@@ -103,7 +103,7 @@ theorem fill_injective (f : ℕ → F) : Function.Injective (fill (T := T) (S :=
 /-- `offset` is strictly increasing across buckets: bucket `t`'s frames all come before bucket `t'`'s. -/
 theorem offset_add_le (n : Fin T → Fin (S + 1)) {t t' : Fin T} (h : t < t') :
     offset n t + (n t : ℕ) ≤ offset n t' := by
-  unfold offset
+  rw [offset_eq_reference, offset_eq_reference, Reference.offset, Reference.offset]
   have hsub : insert t (univ.filter fun u => u < t) ⊆ univ.filter fun u => u < t' := by
     intro u hu; simp only [mem_insert, mem_filter, mem_univ, true_and] at hu ⊢
     rcases hu with rfl | hu

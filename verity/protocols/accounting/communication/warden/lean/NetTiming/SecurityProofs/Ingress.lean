@@ -55,8 +55,9 @@ theorem length_rowFrames_congr {F : Type} {R R' : Row S F}
 
 theorem occ_eq_of_rowCount {F : Type} {R R' : Row S F} (h : RowLeftPacked fun s => (R s).isSome)
     (h' : RowLeftPacked fun s => (R' s).isSome) (hc : (rowCount R : ℕ) = rowCount R') :
-    (fun s => (R s).isSome) = fun s => (R' s).isSome :=
-  (eq_prefixRow_of_rowLeftPacked _ h).trans ((congrArg (prefixRow S) hc).trans (eq_prefixRow_of_rowLeftPacked _ h').symm)
+    (fun s => (R s).isSome) = fun s => (R' s).isSome := by
+  rw [val_rowCount, val_rowCount] at hc
+  exact (eq_prefixRow_of_rowLeftPacked _ h).trans ((congrArg (prefixRow S) hc).trans (eq_prefixRow_of_rowLeftPacked _ h').symm)
 
 /-! ### Frames over a prefix -/
 
