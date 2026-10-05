@@ -104,9 +104,12 @@ def _sha256_file(p: str) -> str | None:
 
 def resolve_module(name: str, root_markers: Iterable[str] = (), path: list[str] | None = None) -> dict[str, Any]:
     """Where `name` WOULD be imported from on `path` (default sys.path) -- find_spec only, the module is not executed.  A module already
-    in sys.modules is reported from its __file__ (that IS what runs) with `loaded: true`."""
+    in sys.modules is reported from its __file__ (that IS what runs) with `loaded: true`.  A namespace package (PEP 420) is every
+    directory it spans: `portions` lists each with its repo_root, `resolved_path` is the first, and `repo_root` is their one tree, or
+    None when they come from more than one."""
     rec: dict[str, Any] = {"package": name, "resolved_path": None, "repo_root": None, "loaded": False, "reason": None}
     origin: str | None = None
+    portions: list[str] = []
     mod = sys.modules.get(name)
     if mod is not None and getattr(mod, "__file__", None):
         origin = mod.__file__
@@ -122,13 +125,19 @@ def resolve_module(name: str, root_markers: Iterable[str] = (), path: list[str] 
             return rec
         origin = spec.origin
         if (origin is None or origin == "namespace") and spec.submodule_search_locations:
-            origin = list(spec.submodule_search_locations)[0]
+            portions = [_realpath(p) for p in spec.submodule_search_locations]
+            origin = portions[0]
     if not origin or origin in ("built-in", "frozen"):
         rec["reason"] = f"no file origin ({origin})"
         return rec
     rp = _realpath(origin)
     rec["resolved_path"] = rp
     root = repo_root_of(rp, root_markers)
+    if portions:
+        rec["portions"] = [{"path": p, "repo_root": repo_root_of(p, root_markers)} for p in portions]
+        if len({p["repo_root"] for p in rec["portions"]}) > 1:
+            root = None
+            rec["reason"] = "namespace portions from more than one tree"
     rec["repo_root"] = root
     rec.update(tree_identity(root))
     if os.path.isfile(rp) and not os.path.basename(rp) == "__init__.py":
@@ -179,6 +188,10 @@ def check(identities: dict[str, dict[str, Any]], requested_root: str, *, request
             if name in opt:
                 continue
             out.append({**rec, "why": f"not resolvable ({rec.get('reason')})"})
+            continue
+        foreign = [p["path"] for p in rec.get("portions") or () if not _same_tree(p["repo_root"], req)]
+        if foreign:
+            out.append({**rec, "why": f"namespace portion(s) outside the requested tree {req}: {', '.join(foreign)}"})
             continue
         if not _same_tree(rec.get("repo_root"), req):
             out.append({**rec, "why": f"repo_root != requested tree {req}"})

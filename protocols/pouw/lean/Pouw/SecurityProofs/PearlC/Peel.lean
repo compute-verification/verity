@@ -81,12 +81,12 @@ theorem peelU_cancel_codes (βA : Fin m → ℚ) (βB : Fin n → ℚ) (Aq : Mat
   peelU_cancel βA βB (vals Aq) (vals Bq) z
 
 /-- The atom-mix and the peel read the same noise lines: `A′`'s atom takes the codes `lineCodes (β_A i) (E_A i)`, and
-`Noise.atomLines` holds their values. -/
+`Noise.atomLines` holds them. -/
 theorem atomMix_lines (αA βA : Fin m → ℚ) (βB : Fin n → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k 32)
     (i : Fin m) (l : Fin k) :
     FormChain.atomMix.quantA αA βA X z i l =
-        e4m3 (wordVal (hopperStep (f32Word (αA i * X i l)) (lineCodes (βA i) (z.EA i)) fun t => e4m3 (z.FA l t))) ∧
-      ∀ t, (z.atomLines βA βB).EA i t = codeVal (lineCodes (βA i) (z.EA i) t) :=
+        e4m3 (wordVal (hopperStep (f32Word (αA i * X i l)) (lineCodes (βA i) (z.EA i)) (z.FA l))) ∧
+      ∀ t, (z.atomLines βA βB).EA i t = lineCodes (βA i) (z.EA i) t :=
   ⟨rfl, fun _ => rfl⟩
 
 /-- **§5's cancellation identity**: with the atom-mix forming, the peel reuses the noise lines `E′` exactly (unit `β`
@@ -96,14 +96,14 @@ theorem peelU_cancel_atomMix (αA βA : Fin m → ℚ) (αB βB : Fin n → ℚ)
     peelU (ctExact (FormChain.atomMix.quantA αA βA X z) (FormChain.atomMix.quantB αB βB B z)) (fun _ => 1)
         (fun _ => 1) (vals (FormChain.atomMix.quantA αA βA X z)) (vals (FormChain.atomMix.quantB αB βB B z))
         (z.atomLines βA βB) =
-      (vals (FormChain.atomMix.quantA αA βA X z) - castLines βA z.EA * z.FAᵀ) *
-        (vals (FormChain.atomMix.quantB αB βB B z) - castLines βB z.EB * z.FBᵀ)ᵀ := by
+      (vals (FormChain.atomMix.quantA αA βA X z) - vals (castLines βA z.EA) * (vals z.FA)ᵀ) *
+        (vals (FormChain.atomMix.quantB αB βB B z) - vals (castLines βB z.EB) * (vals z.FB)ᵀ)ᵀ := by
   rw [peelU_cancel_codes]
   simp only [rowScale, Noise.NA, Noise.NB, Noise.atomLines, diagonal_one, Matrix.one_mul]
 
 /-- The Gram order: the right factor's first block `(β·N_B − B̃)·F_A` is `β·E_B·(F_Bᵀ·F_A) − B̃·F_A`. -/
 theorem peelRight_gram (βB : Fin n → ℚ) (B' : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) :
-    (rowScale βB z.NB - B') * z.FA = rowScale βB (z.EB * z.gram) - B' * z.FA := by
+    (rowScale βB z.NB - B') * vals z.FA = rowScale βB (vals z.EB * z.gram) - B' * vals z.FA := by
   simp only [rowScale, Noise.NB, Noise.gram, Matrix.sub_mul, Matrix.mul_assoc]
 
 /-- **The raw-A form's identity**: `C̃ − A·N_Bᵀ − N_A·Bᵀ − N_A·N_Bᵀ = A·Bᵀ + (C̃ − (A + N_A)·(B + N_B)ᵀ)`. -/
@@ -535,20 +535,37 @@ theorem peel_error_pinned {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε : 0 
 /-- #311's `E_A` clean-up term, `(β·E_A)·((β·N_B − B̃)·F_A)ᵀ`. -/
 def cleanE (βA : Fin m → ℚ) (βB : Fin n → ℚ) (B' : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) :
     Matrix (Fin m) (Fin n) ℚ :=
-  rowScale βA z.EA * ((rowScale βB z.NB - B') * z.FA)ᵀ
+  rowScale βA (vals z.EA) * ((rowScale βB z.NB - B') * vals z.FA)ᵀ
 
 /-- #311's `F_B` clean-up term, `(A′·F_B)·(−β·E_B)ᵀ`. -/
 def cleanF (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k r) : Matrix (Fin m) (Fin n) ℚ :=
-  (A' * z.FB) * (-rowScale βB z.EB)ᵀ
+  (A' * vals z.FB) * (-rowScale βB (vals z.EB))ᵀ
 
 /-- #311's clean-up is the sum of its `E_A` term and its `F_B` term. -/
 theorem peel_split (βA : Fin m → ℚ) (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (B' : Matrix (Fin n) (Fin k) ℚ)
     (z : Noise m n k r) : peelLeft βA A' z * (peelRight βB B' z)ᵀ = cleanE βA βB B' z + cleanF βB A' z := by
   simp only [peelLeft, peelRight, cleanE, cleanF, transpose_fromCols, fromCols_mul_fromRows]
 
-/-- A factor with entry `(a, b)`'s sign flipped: another salt's factor, in any sign-symmetric noise support. -/
+/-- A matrix with entry `(a, b)`'s sign flipped. -/
 def flip {p q : Nat} (M : Matrix (Fin p) (Fin q) ℚ) (a : Fin p) (b : Fin q) : Matrix (Fin p) (Fin q) ℚ :=
   fun i j => if i = a ∧ j = b then -M i j else M i j
+
+/-- The code with the other sign bit. -/
+def negCode (c : Code) : Code := ⟨(c.val + 128) % 256, Nat.mod_lt _ (by decide)⟩
+
+theorem codeVal_negCode : ∀ c : Code, codeVal (negCode c) = -codeVal c := by decide +kernel
+
+/-- A factor with entry `(a, b)`'s sign bit flipped: another salt's factor, in any sign-symmetric noise support. -/
+def flipC {p q : Nat} (M : Matrix (Fin p) (Fin q) Code) (a : Fin p) (b : Fin q) : Matrix (Fin p) (Fin q) Code :=
+  fun i j => if i = a ∧ j = b then negCode (M i j) else M i j
+
+theorem vals_flipC {p q : Nat} (M : Matrix (Fin p) (Fin q) Code) (a : Fin p) (b : Fin q) :
+    vals (flipC M a b) = flip (vals M) a b := by
+  ext i j
+  simp only [vals, flipC, flip, Matrix.map_apply]
+  split_ifs
+  · exact codeVal_negCode _
+  · rfl
 
 theorem sum_flip {q : Nat} (f g : Fin q → ℚ) (t : Fin q) (h : ∀ s, g s = if s = t then -f s else f s) :
     ∑ s, g s = ∑ s, f s - 2 * f t := by
@@ -568,67 +585,75 @@ theorem rowScale_apply {p q : Nat} (β : Fin p → ℚ) (M : Matrix (Fin p) (Fin
 
 theorem cleanE_apply (βA : Fin m → ℚ) (βB : Fin n → ℚ) (B' : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r)
     (i : Fin m) (j : Fin n) :
-    cleanE βA βB B' z i j = ∑ s, βA i * z.EA i s * ((rowScale βB z.NB - B') * z.FA) j s := by
+    cleanE βA βB B' z i j = ∑ s, βA i * codeVal (z.EA i s) * ((rowScale βB z.NB - B') * vals z.FA) j s := by
   rw [cleanE, Matrix.mul_apply]; simp only [rowScale_apply, transpose_apply]
+  rfl
 
 theorem cleanF_apply (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k r) (i : Fin m) (j : Fin n) :
-    cleanF βB A' z i j = ∑ s, (A' * z.FB) i s * -(βB j * z.EB j s) := by
-  rw [cleanF, Matrix.mul_apply (M := A' * z.FB)]; simp only [transpose_apply, Matrix.neg_apply, rowScale_apply]
+    cleanF βB A' z i j = ∑ s, (A' * vals z.FB) i s * -(βB j * codeVal (z.EB j s)) := by
+  rw [cleanF, Matrix.mul_apply (M := A' * vals z.FB)]; simp only [transpose_apply, Matrix.neg_apply, rowScale_apply]
+  rfl
 
 variable (fc : FormChain r)
 
 /-- **The fused columns `A′·F_B` are live**: flipping one entry `F_B l t` changes `(A′·F_B) i t` when `A′ i l ≠ 0` (`A′` reads no `F_B`). -/
 theorem fused_live (αA βA : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k r) (i : Fin m) (l : Fin k)
-    (t : Fin r) (hA : vals (fc.quantA αA βA X z) i l ≠ 0) (hF : z.FB l t ≠ 0) :
+    (t : Fin r) (hA : vals (fc.quantA αA βA X z) i l ≠ 0) (hF : codeVal (z.FB l t) ≠ 0) :
     ∃ z' : Noise m n k r, z'.EA = z.EA ∧ z'.FA = z.FA ∧ z'.EB = z.EB ∧
-      (vals (fc.quantA αA βA X z') * z'.FB) i t ≠ (vals (fc.quantA αA βA X z) * z.FB) i t := by
-  refine ⟨{ z with FB := flip z.FB l t }, rfl, rfl, rfl, ?_⟩
-  have hq : fc.quantA αA βA X { z with FB := flip z.FB l t } = fc.quantA αA βA X z := rfl
-  rw [hq, Matrix.mul_apply, Matrix.mul_apply]
+      (vals (fc.quantA αA βA X z') * vals z'.FB) i t ≠ (vals (fc.quantA αA βA X z) * vals z.FB) i t := by
+  refine ⟨{ z with FB := flipC z.FB l t }, rfl, rfl, rfl, ?_⟩
+  have hq : fc.quantA αA βA X { z with FB := flipC z.FB l t } = fc.quantA αA βA X z := rfl
+  have hv : vals ({ z with FB := flipC z.FB l t } : Noise m n k r).FB = flip (vals z.FB) l t := vals_flipC _ _ _
+  rw [hq, hv, Matrix.mul_apply, Matrix.mul_apply]
   refine flip_ne (t := l) (fun s => ?_) (mul_ne_zero hA hF)
   simp only [flip, and_true]
   split_ifs <;> ring
 
 /-- **The Gram columns `(β·N_B − B̃)·F_A` are live**: flipping `F_A l t` changes entry `(j, t)` when the residual `(β·N_B − B̃) j l ≠ 0` (`N_B`, `B̃` read no `F_A`). -/
 theorem gramCols_live (αB βB : Fin n → ℚ) (B : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) (j : Fin n) (l : Fin k)
-    (t : Fin r) (hR : (rowScale βB z.NB - vals (fc.quantB αB βB B z)) j l ≠ 0) (hF : z.FA l t ≠ 0) :
+    (t : Fin r) (hR : (rowScale βB z.NB - vals (fc.quantB αB βB B z)) j l ≠ 0) (hF : codeVal (z.FA l t) ≠ 0) :
     ∃ z' : Noise m n k r, z'.EA = z.EA ∧ z'.EB = z.EB ∧ z'.FB = z.FB ∧
-      ((rowScale βB z'.NB - vals (fc.quantB αB βB B z')) * z'.FA) j t ≠
-        ((rowScale βB z.NB - vals (fc.quantB αB βB B z)) * z.FA) j t := by
-  refine ⟨{ z with FA := flip z.FA l t }, rfl, rfl, rfl, ?_⟩
-  have hq : fc.quantB αB βB B { z with FA := flip z.FA l t } = fc.quantB αB βB B z := rfl
-  have hn : ({ z with FA := flip z.FA l t } : Noise m n k r).NB = z.NB := rfl
-  rw [hq, hn, Matrix.mul_apply, Matrix.mul_apply]
+      ((rowScale βB z'.NB - vals (fc.quantB αB βB B z')) * vals z'.FA) j t ≠
+        ((rowScale βB z.NB - vals (fc.quantB αB βB B z)) * vals z.FA) j t := by
+  refine ⟨{ z with FA := flipC z.FA l t }, rfl, rfl, rfl, ?_⟩
+  have hq : fc.quantB αB βB B { z with FA := flipC z.FA l t } = fc.quantB αB βB B z := rfl
+  have hn : ({ z with FA := flipC z.FA l t } : Noise m n k r).NB = z.NB := rfl
+  have hv : vals ({ z with FA := flipC z.FA l t } : Noise m n k r).FA = flip (vals z.FA) l t := vals_flipC _ _ _
+  rw [hq, hn, hv, Matrix.mul_apply, Matrix.mul_apply]
   refine flip_ne (t := l) (fun s => ?_) (mul_ne_zero hR hF)
   simp only [flip, and_true]
   split_ifs <;> ring
 
 /-- **The `E_A` term is live**: flipping `E_A i t` changes `cleanE i j` when `β_A i ≠ 0` and `((β·N_B − B̃)·F_A) j t ≠ 0` (`B̃` reads no `E_A`). -/
 theorem cleanE_live (βA : Fin m → ℚ) (αB βB : Fin n → ℚ) (B : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r)
-    (i : Fin m) (j : Fin n) (t : Fin r) (hβ : βA i ≠ 0) (hE : z.EA i t ≠ 0)
-    (hR : ((rowScale βB z.NB - vals (fc.quantB αB βB B z)) * z.FA) j t ≠ 0) :
+    (i : Fin m) (j : Fin n) (t : Fin r) (hβ : βA i ≠ 0) (hE : codeVal (z.EA i t) ≠ 0)
+    (hR : ((rowScale βB z.NB - vals (fc.quantB αB βB B z)) * vals z.FA) j t ≠ 0) :
     ∃ z' : Noise m n k r, z'.FA = z.FA ∧ z'.EB = z.EB ∧ z'.FB = z.FB ∧
       cleanE βA βB (vals (fc.quantB αB βB B z')) z' i j ≠ cleanE βA βB (vals (fc.quantB αB βB B z)) z i j := by
-  refine ⟨{ z with EA := flip z.EA i t }, rfl, rfl, rfl, ?_⟩
-  have hq : fc.quantB αB βB B { z with EA := flip z.EA i t } = fc.quantB αB βB B z := rfl
-  have hn : ({ z with EA := flip z.EA i t } : Noise m n k r).NB = z.NB := rfl
+  refine ⟨{ z with EA := flipC z.EA i t }, rfl, rfl, rfl, ?_⟩
+  have hq : fc.quantB αB βB B { z with EA := flipC z.EA i t } = fc.quantB αB βB B z := rfl
+  have hn : ({ z with EA := flipC z.EA i t } : Noise m n k r).NB = z.NB := rfl
   rw [hq, cleanE_apply, cleanE_apply, hn]
   refine flip_ne (t := t) (fun s => ?_) (mul_ne_zero (mul_ne_zero hβ hE) hR)
-  simp only [flip, true_and]
-  split_ifs <;> ring
+  simp only [flipC, true_and]
+  split_ifs
+  · rw [codeVal_negCode]; ring
+  · rfl
 
 /-- **The `F_B` term is live**: flipping `E_B j t` changes `cleanF i j` when `β_B j ≠ 0` and `(A′·F_B) i t ≠ 0` (`A′` reads no `E_B`). -/
 theorem cleanF_live (αA βA : Fin m → ℚ) (βB : Fin n → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k r)
-    (i : Fin m) (j : Fin n) (t : Fin r) (hβ : βB j ≠ 0) (hE : z.EB j t ≠ 0)
-    (hL : (vals (fc.quantA αA βA X z) * z.FB) i t ≠ 0) :
+    (i : Fin m) (j : Fin n) (t : Fin r) (hβ : βB j ≠ 0) (hE : codeVal (z.EB j t) ≠ 0)
+    (hL : (vals (fc.quantA αA βA X z) * vals z.FB) i t ≠ 0) :
     ∃ z' : Noise m n k r, z'.EA = z.EA ∧ z'.FA = z.FA ∧ z'.FB = z.FB ∧
       cleanF βB (vals (fc.quantA αA βA X z')) z' i j ≠ cleanF βB (vals (fc.quantA αA βA X z)) z i j := by
-  refine ⟨{ z with EB := flip z.EB j t }, rfl, rfl, rfl, ?_⟩
-  have hq : fc.quantA αA βA X { z with EB := flip z.EB j t } = fc.quantA αA βA X z := rfl
+  refine ⟨{ z with EB := flipC z.EB j t }, rfl, rfl, rfl, ?_⟩
+  have hq : fc.quantA αA βA X { z with EB := flipC z.EB j t } = fc.quantA αA βA X z := rfl
   rw [hq, cleanF_apply, cleanF_apply]
   refine flip_ne (t := t) (fun s => ?_) (mul_ne_zero hL (neg_ne_zero.2 (mul_ne_zero hβ hE)))
-  simp only [flip, true_and]
-  split_ifs <;> ring
+  simp only [flipC, true_and]
+  split_ifs
+  · rw [codeVal_negCode]; ring
+  · rfl
 
 /-- The raw-A form's correction columns `A·F_B` are `0` at `A = 0` for every noise. -/
 theorem raw_cols_zero (FB : Matrix (Fin k) (Fin r) ℚ) : (0 : Matrix (Fin m) (Fin k) ℚ) * FB = 0 := Matrix.zero_mul _
@@ -644,8 +669,8 @@ theorem rawU_zero_inputs (Ct : Matrix (Fin m) (Fin n) ℚ) (NA : Matrix (Fin m) 
     rawU Ct 0 0 NA NB = Ct - NA * NBᵀ := by
   simp [rawU]
 
-/-- The noise of the witness: every factor entry `1` (shape `1 × 1`, rank 1). -/
-def oneNoise : Noise 1 1 1 1 := ⟨fun _ _ => 1, fun _ _ => 1, fun _ _ => 1, fun _ _ => 1⟩
+/-- The noise of the witness: every factor entry the code of `1` (shape `1 × 1`, rank 1). -/
+def oneNoise : Noise 1 1 1 1 := ⟨fun _ _ => e4m3 1, fun _ _ => e4m3 1, fun _ _ => e4m3 1, fun _ _ => e4m3 1⟩
 
 /-- **The hypotheses are satisfiable at `B = 0` with `B`'s floor `σ = 1/3`, and at `x = 0` with the floor's `σ = 1`**,
 with the exact chain and the real encoder, all factor entries `1`. Then `A′ = e4m3(1) = 1`, `B̃ = e4m3(1/3) = 11/32`,
@@ -653,16 +678,17 @@ and the residual is `−1/96`. -/
 theorem live_witness :
     let A' := vals ((FormChain.exact 1).quantA (fun _ => 1) (fun _ => 1) 0 oneNoise)
     let B' := vals ((FormChain.exact 1).quantB (fun _ => 1) (fun _ => 1 / 3) 0 oneNoise)
-    A' 0 0 ≠ 0 ∧ (A' * oneNoise.FB) 0 0 ≠ 0 ∧ (rowScale (fun _ => 1 / 3) oneNoise.NB - B') 0 0 ≠ 0 ∧
-      ((rowScale (fun _ => 1 / 3) oneNoise.NB - B') * oneNoise.FA) 0 0 ≠ 0 ∧
-      oneNoise.EA 0 0 ≠ 0 ∧ oneNoise.FA 0 0 ≠ 0 ∧ oneNoise.EB 0 0 ≠ 0 ∧ oneNoise.FB 0 0 ≠ 0 := by
+    A' 0 0 ≠ 0 ∧ (A' * vals oneNoise.FB) 0 0 ≠ 0 ∧ (rowScale (fun _ => 1 / 3) oneNoise.NB - B') 0 0 ≠ 0 ∧
+      ((rowScale (fun _ => 1 / 3) oneNoise.NB - B') * vals oneNoise.FA) 0 0 ≠ 0 ∧
+      codeVal (oneNoise.EA 0 0) ≠ 0 ∧ codeVal (oneNoise.FA 0 0) ≠ 0 ∧ codeVal (oneNoise.EB 0 0) ≠ 0 ∧
+      codeVal (oneNoise.FB 0 0) ≠ 0 := by
   decide +kernel
 
 /-- The sparse row of the second witness: `x₀ = 1` and 63 zeros (`k = 64`). -/
 def sparseRow : Matrix (Fin 1) (Fin 64) ℚ := fun _ l => if l.val = 0 then 1 else 0
 
-/-- The second witness's noise: every factor entry `1` (`m = n = 1`, `k = 64`, rank 1). -/
-def oneNoise64 : Noise 1 1 64 1 := ⟨fun _ _ => 1, fun _ _ => 1, fun _ _ => 1, fun _ _ => 1⟩
+/-- The second witness's noise: every factor entry the code of `1` (`m = n = 1`, `k = 64`, rank 1). -/
+def oneNoise64 : Noise 1 1 64 1 := ⟨fun _ _ => e4m3 1, fun _ _ => e4m3 1, fun _ _ => e4m3 1, fun _ _ => e4m3 1⟩
 
 /-- The sparse row's noise scale at `δ = α = 1` under `Stat.rms` is `1/8`, for any square root with `√(1/64) = 1/8`. -/
 theorem sparse_beta (root : ℚ → ℚ) (hroot : root (1 / 64) = 1 / 8) :
@@ -677,7 +703,8 @@ its `rms` is `1/8`, and with `α = 1` and `β = 1/8` (the row's `betaOf`, `spars
 theorem live_witness_sparse :
     let A' := vals ((FormChain.exact 1).quantA (fun _ => 1) (fun _ => 1 / 8) sparseRow oneNoise64)
     LiveRow 1 (sparseRow 0) ∧ meanSq (sparseRow 0) = (1 / 8) ^ 2 ∧
-      A' 0 0 ≠ 0 ∧ (A' * oneNoise64.FB) 0 0 ≠ 0 ∧ oneNoise64.EA 0 0 ≠ 0 ∧ oneNoise64.FB 0 0 ≠ 0 := by
+      A' 0 0 ≠ 0 ∧ (A' * vals oneNoise64.FB) 0 0 ≠ 0 ∧ codeVal (oneNoise64.EA 0 0) ≠ 0 ∧
+      codeVal (oneNoise64.FB 0 0) ≠ 0 := by
   intro A'
   refine ⟨?_, ?_⟩
   · unfold LiveRow; decide +kernel
