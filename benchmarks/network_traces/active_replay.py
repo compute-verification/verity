@@ -363,7 +363,7 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
     elif syncs == "envelope":
         declared = [setup.envelope] * windows
     else:
-        declared, _ = online.declare([(frames, ready)], sync_set, T, online.rule(syncs), windows, setup.envelope)
+        declared, _, _ = online.declare([(frames, ready)], sync_set, T, online.rule(syncs), windows, setup.envelope)
     out = {"name": cfg.get("name"), "windows": windows, "sessions": sessions, "requests": peer,
            "model_release": {str(k): v for k, v in release.items()}, "model_misses": misses,
            "unmatched_sessions": unmatched, "ingress_only_requests": len(extra),

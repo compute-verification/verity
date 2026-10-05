@@ -125,7 +125,7 @@ def test_a_shaper_with_an_online_prover_declares_what_it_declares_offline(name):
         frames, ready = [frames[j] for j in order], [ready[j] for j in order]
         prover = online.Prover(sync_set, P.buckets, online.rule(name), envelope)
         shaper, records, _ = feed_shaper(frames, ready, [], P, sync_set, prover=prover, windows=4)
-        want, _ = online.declare([(frames, ready)], sync_set, P.buckets, online.rule(name), 4, envelope)
+        want, _, _ = online.declare([(frames, ready)], sync_set, P.buckets, online.rule(name), 4, envelope)
         assert shaper.syncs == want
         assert records == run_shaper(frames, ready, want, Warden("responses", P))
 
