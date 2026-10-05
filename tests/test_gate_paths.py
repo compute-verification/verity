@@ -108,7 +108,7 @@ def test_every_suite_input_and_artifact_is_in_this_tree():
     """A suite's inputs key its pass cache: one that isn't there keys nothing, and a test that skips on a missing file then
     passes with nothing checked. An artifact is a Lake build's output, so its package must be here."""
     tables = _suite_tables()
-    assert "packages/verity/pyproject.toml" in tables
+    assert "verity/pyproject.toml" in tables
     bad = [(f, i) for f, t in tables.items() for i in t.get("inputs", []) if (f, i) not in EXEMPT and not resolves(i)]
     bad += [(f, a) for f, t in tables.items() for a in t.get("artifacts", [])
             if not (ROOT / a.split("/.lake/")[0] / "lakefile.toml").is_file()]
@@ -274,9 +274,9 @@ def test_each_check_catches_a_dangling_path():
     assert tool_problems("t", tool, files) == ["closure glob 'verity/**' matches no tracked file",
                                                "command names 'backends/flock/run.sh', which isn't tracked",
                                                "merge_requires['s'] prefixes ['verity/flock/'] match no tracked file"]
-    gkr = frozenset({"backends/gkr/gpu/tool.py", "backends/gkr/gpu/run.py"})
-    tool = Tool(name="g", command=["python", "-m", "gpu.run"], closure=["backends/gkr/gpu/**"])
-    tool.spec = "backends.gkr.gpu.tool:G"
+    gkr = frozenset({"archive/gkr/gpu/tool.py", "archive/gkr/gpu/run.py"})
+    tool = Tool(name="g", command=["python", "-m", "gpu.run"], closure=["archive/gkr/gpu/**"])
+    tool.spec = "archive.gkr.gpu.tool:G"
     assert tool_problems("g", tool, gkr) == []
     tool.spec = "archive.gkr.gpu.tool:G"
     assert tool_problems("g", tool, gkr) == ["command runs -m gpu.run, which isn't a module here"]

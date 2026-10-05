@@ -19,7 +19,7 @@ Rules encoded here (Phase 5a of the v2 plan):
   probed via ``importlib.metadata`` so nothing heavy is imported.
 * ``closure`` is the integration's import closure: ``integrations/vllm/**``
   plus every directory that ships Verity core (``research.pythonpath.package_dirs``:
-  ``packages/verity/src/verity``, or each member's part of the namespace).
+  ``verity``, or each member's part of the namespace).
   ``source_identity.code_identity`` is the one code identity over it (the
   hot Commit worker's key, the TP Commit's tree of record).
 
