@@ -538,3 +538,83 @@ goes out).
     (p = 1.0), against 1 rewind on a reused dummy. late-gated: 16 real and 24 fresh (p = 0.12), against 40 reused.
 - **Review.** A red team on §5, §7 and this section, then the Lean reference prover and its differential test, before any
   `COMPLETE_*` class.
+
+## 10. The gateway's send check: nothing leaves the GPU that the gateway did not fix
+
+In a recursive session the developer runs a **gateway** it trusts between its GPU workers, which nobody trusts, and the
+auditor (the coin server and the verifier). The workers may run any kernel; the question is what they can make leave. A
+**free choice** is any bit a worker can vary that reaches the auditor, or the proof bytes, without the gateway having either
+computed it itself or held it to a relation that leaves the worker nothing to choose. The send check is the rule, per
+message kind, by which the gateway removes every free choice.
+
+Where the boundary runs:
+- **Inner phase** (`rec/inner-transcript/v0`, ZK off): the whole M0 prover is the worker, and `verity_flock.rec_live`'s
+  proxy is the gateway. The coin server receives only the public schedule and salted hashes (§10.3).
+- **Outer phase** (`flock-circuit prove --zk --gpu`): the device (`flock_cuda_prove_circuit`) is the worker; the host side
+  of `flock-circuit` (the masking challenger, the live stream, `zk_finish`, and the gate between them) is the gateway. The
+  device reaches the gateway through three channels: each round's frames (`rounds(content, n)`, at its squeeze), the
+  level-0 root (`hook(root)`, at the session's `Commit`), and the returned `(R1csProofLigerito, Commitment)`. The gate
+  checks all three. The device holds the witness, the level-0 hiding (`Level0Zk`: padding and extra lanes) and the level-0
+  salts, but never the pads `h`, `mu` or the inner proof's randomness.
+
+### 10.1 The rule, outer phase (one rep, in §1's order)
+
+Five kinds of answer: **constant** (the gate holds the only allowed value), **recomputed** (the gate computes the value
+from the host witness, its own randomness and the coins, and refuses any other), **masked** (the gate adds a pad the device
+never sees), **the gateway's own** (the device never touches it), and **relation** (a check that fixes nothing by itself,
+kept as an early tripwire).
+
+| item (§1) | rule | why the device has no free choice |
+|---|---|---|
+| the frame skeleton: domain, every label, each item's op, kind and length, every round's coin count | constant | a function of the statement's shape; the gate refuses any other label or item |
+| statement digest (`bind_statement`) | constant | the digest of the statement the gateway loaded |
+| witness cap: `Commit`'s root, `bind_statement`'s cap, Ligerito level 0's `bytes cap` | recomputed | the level-0 recheck (§10.2): `commit_zk` of the host witness under the session's level-0 salts and hiding |
+| pads label and root | the gateway's own | the masking challenger inserts them |
+| masked algebraic values: `round1_ab'`, `round1_c'`, `G_j`, `final_a'`, `final_b'`, `q_j`, `z_partial'` | masked | the wire carries `v + h` with `h` uniform and host-only, so it is uniform whatever `v` is. `v` enters the view only through §4's rows, which the self-check holds before anything that depends on them leaves (§5); a `v` that breaks a row stops the session |
+| `final_c'` | the gateway's own | the inner proof sends it, from the host |
+| `s_hat_v` of the masked claims (ab, c) | recomputed | `Σ_x eq(p_w, x) z[128x + v]` over the host witness (§6); the claim points are coins |
+| `s_hat_v` of the region claims | recomputed | `Stmt::region_s_hat_v`, from public data |
+| Ligerito's `target` | recomputed | a function of the `s_hat_v` and the opening's coins (`r''`, `γ`) |
+| level 0's OOD value `y'`, lane messages `msg_j'`, `e^r'` | masked | as the algebraic values (`lg_ood`, `lg_msg`, `lg_e`) |
+| every grinding nonce | constant `0` | live coins need no grinding (the device's live challenger absorbs nonce 0) |
+| `T'^r` | recomputed | `T'^r = ⟨w^r, y_1'^r⟩ = ⟨w^r, y_1^r⟩ + ρ^r_0 e^r_0 + ρ^r_1 e^r_1` with the honest `e^r = ⟨w^r, R^r⟩`: `w^r` from the coins and claims, `y_1^r` the fold of the host witness's lanes, `R^r` the host's extra lanes. The lane-phase relation alone (`claim_k + ρe + T'`, on the device's unmasked values) does not fix it: a device that shifts `e` by `δ` and `T'` by `ρδ` keeps the relation and sends 256 bits of its choice |
+| `ybar^r` | recomputed | `zk::ybar` from the session's level-0 padding (host), `w^r` and `ρ^r` |
+| levels 1+: the code-switch message, every cap, OOD value, sumcheck message and nonce | recomputed | functions of `y_1'^r`, the coins and the salts the host expands for trees `1..R` |
+| the inner proof: `[ρ, σ]`, `τ`'s commitment, `Y`, its openings | the gateway's own | `zk_finish`, from the pads on the host |
+| the proof bytes | recomputed | every transcript field equals what the gate passed; level 0's rows and paths are the recheck tree's at the queries the coins fix; levels 1+'s are the recomputed trees' |
+
+So the rule is: **the gateway masks the algebraic phase and level 0's lane rounds, and recomputes the polynomial
+commitment's outputs** (the level-0 commitment, the opening's `s_hat_v` and `target`, and everything from `T'` on). It
+does not recompute the zerocheck or the lincheck, the bulk of the device's arithmetic. What it recomputes is a CPU
+Ligerito: the commitment over the whole witness, and the opening's basis fold `w^r`, which `T'`, `ybar` and levels 1+ all
+read.
+
+**What a refusal costs.** A refusal stops the session, which the auditor sees: one event per session, at a round the
+device can move (about `log₂ 100` bits a rep). A gateway that refuses is evidence against its rack. Timing (when a message
+leaves) is not in this rule; the network warden covers it.
+
+### 10.2 The level-0 recheck
+
+Before the session's `Commit` the gateway recomputes the level-0 commitment itself: `commit_zk(z, params, level0)` over the
+host witness (`FC_HOST_WITNESS=1`: the witness is assembled on the host, untrusted work whose cost is the prover's), under
+`hm96::begin` with the session's level-0 salts (`LeafSalts::level0_id`), with the `Level0Zk` the host drew. It refuses
+`GATE-REFUSED: level-0 root` when the device's root differs, before anything leaves. It keeps the tree, so the proof's
+level-0 rows and paths are checked against it at the end. Its cost is reported per statement as `GATE` lines
+(`t.gate_recheck`, CPU seconds), beside the device's `t.encoding_commitment`.
+
+### 10.3 The rule, inner phase (`rec_live`)
+
+| item | rule | why the M0 prover has no free choice |
+|---|---|---|
+| `Hello` | constant | the gateway forwards its public part (no Σ) only when it equals the pinned schedule's (`--schedule`) |
+| `Commit`'s level-0 roots | salted | the coin server receives `hm96-sha512` commitments of each root under a fresh 192-byte salt; the roots and salts stay in `private.json` |
+| a round's caps (its `BYTES` frames that commit a tree) | salted | as the roots, one fresh salt each |
+| a round's free message | salted | `c_k`, its rows committed under fresh salts (as before) |
+| statement digest, labels, domain, nonces | dropped | public constants or functions of the hidden statement; never forwarded |
+| `Link`'s `y` | constant `0` | the prover sends zeros; the gateway refuses anything else |
+| stream names, `Open`'s parent and position, each round's coin count and the counts of its caps and message rows | constant | the pinned schedule's; the gateway refuses any other |
+
+A salted top's opening (top and salt) is the prover's. V*'s inputs read the tops from `private.json` and refuse
+`GATE-REFUSED: tree top` when one does not open its commitment in `public.json`. The outer circuit does not yet climb to the
+committed tops: that needs rec-step2's openings to end at each salted commitment instead of at the clear top, an hm96 leaf
+(one more SHA-512 row over the top and its salt) per tree.
