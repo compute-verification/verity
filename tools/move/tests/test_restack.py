@@ -213,6 +213,29 @@ def test_a_branch_that_already_has_the_move_merges_without_rerunning_the_script(
     assert r["status"] == "clean" and [s["step"] for s in r["steps"]] == ["moved"]
 
 
+def test_a_branch_stacked_on_one_restacked_before_it(repo):
+    """`y` is stacked on `pr`, and `--onto` holds `pr` restacked (and main moving on). Against the move commit both sides carry
+    `pr`'s edit and only `y` changes it again, so they conflict; against `pr`'s history moved, only `y` changes it."""
+    x = on(repo, "pr", ("x", {"app/util.py": edit(UTIL, "return 3", "return 30")}))
+    rx = RS.restack("pr", "move", cwd=str(repo))
+    assert rx["status"] == "clean", rx
+    git(repo, "branch", "y", x)
+    on(repo, "y", ("y", {"app/util.py": edit(UTIL, "return 3", "return 300")}))
+    git(repo, "checkout", "-q", "-b", "moved-main", rx["result"])
+    onto = commit(repo, "main moves on", {"NOTES.md": "notes 2\n"})
+    git(repo, "checkout", "-q", "main")
+    r = RS.restack("y", "move", onto=onto, cwd=str(repo))
+    assert r["status"] == "clean", r
+    assert show(repo, r["result"], "app/core/util.py") == edit(UTIL, "return 3", "return 300")
+    assert show(repo, r["result"], "NOTES.md") == "notes 2\n"
+    assert RS.tree_of(r["moved_base"], str(repo)) == RS.tree_of(rx["steps"][1]["commit"], str(repo))
+    # A branch that shares nothing with `--onto` past the move's base still merges on the move commit.
+    git(repo, "branch", "z", f"{x}~1")
+    on(repo, "z", ("z", {"app/util.py": edit(UTIL, "return 6", "return 60")}))
+    rz = RS.restack("z", "move", onto=onto, cwd=str(repo))
+    assert rz["status"] == "clean" and rz["moved_base"] == RS.rev("move", str(repo)), rz
+
+
 def test_the_move_bases_script_runs_and_the_branchs_copy_is_kept(repo):
     """A branch that edited the script itself: the move's copy does the migration, and the branch's edit survives it."""
     git(repo, "checkout", "-q", "-b", "edits-script", "base")

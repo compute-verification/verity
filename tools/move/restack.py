@@ -14,7 +14,9 @@ same script rather than by rename detection:
 3. merge `--onto` (default M; the moved main once M has landed, which must contain M), with M as the merge base. M is the
    script run on B, so against it the branch's side holds only the branch's own changes, in moved paths and names, and the
    other side only what landed after the move: what conflicts here is real content. (Against B instead, a line the script
-   rewrote next to one the branch edited would conflict.)
+   rewrote next to one the branch edited would conflict.) When the branch and `--onto` share history B lacks (a branch
+   stacked on one that `--onto` holds restacked), the base is that history merged with B and moved by the script, for the
+   same reason: both sides carry it. The result's `moved_base` names the base used.
 
 A branch that already contains M skips to step 3. The branch, its ref and the caller's checkout are never changed: the
 commits go to the object store, and the scratch worktree is removed. Each branch's outcome is `clean` (with the result's
@@ -148,6 +150,26 @@ def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
                          "generated, and a later commit on the move's branch as --onto")
 
 
+def moved_base(head: str, onto: str, move: str, base: str, python: str, cwd: str | None) -> str:
+    """The third merge's base: M, unless the branch and `--onto` share history that B lacks (a branch stacked on one `--onto`
+    holds restacked). Then it is that history merged with B and moved by the script, which both sides carry; against M, both
+    would add it and the branch's edits beside it would conflict. M again when that merge conflicts or the script fails."""
+    shared = git("merge-base", "--all", head, onto, cwd=cwd, ok=(0, 1)).stdout.decode().split()
+    tip = base
+    for c in (c for c in shared if not contains(c, tip, cwd)):
+        tree, conflicts = merge_trees(tip, c, cwd)
+        if conflicts:
+            return move
+        tip = commit_tree(tree, [tip, c], f"restack: {c[:12]}, which --onto holds too, merged with {base[:12]}\n", cwd)
+    if tip == base:
+        return move
+    try:
+        tree = run_script(tip, base, python, cwd)[0]
+    except ScriptFailed:
+        return move
+    return commit_tree(tree, [tip], f"restack: {SCRIPT} from {move[:12]} on the history --onto shares\n", cwd)
+
+
 def restack(branch: str, move: str, onto: str | None = None, base: str | None = None, python: str = sys.executable,
             cwd: str | None = None) -> dict:
     head, move = rev(branch, cwd), rev(move, cwd)
@@ -183,7 +205,9 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             r["steps"].append({"step": "script", "commit": tip, "restored": restored, "output": output})
     if contains(onto, tip, cwd):
         return {**r, "status": "clean", "result": tip}
-    tree, conflicts = merge_trees(tip, onto, cwd, base=move if ran else None)
+    if ran:
+        r["moved_base"] = moved_base(head, onto, move, base, python, cwd)
+    tree, conflicts = merge_trees(tip, onto, cwd, base=r.get("moved_base"))
     if conflicts:
         return {**r, "status": "conflicted", "step": "moved", "files": conflicts}
     result = commit_tree(tree, [tip, onto], f"Merge {onto[:12]} (the layout move) into {branch}, restacked\n", cwd)
