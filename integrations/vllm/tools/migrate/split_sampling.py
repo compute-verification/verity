@@ -99,7 +99,7 @@ EXCEPTIONS = {
                                                     "div.full tables of `program.kernels`); the keep word is that model's output",
 }
 #: where a Value type re-exported as another module's own (`prims.F32`, equal to core's but a distinct object) is taken from
-CORE_TYPES = "verity.ml.scalar"
+CORE_TYPES = "verity_catalog.definitions.scalar"
 
 #: rewrites no AST rule makes, each anchored on its exact text: (file, old, new, occurrences)
 PATCHES = (
@@ -483,7 +483,7 @@ def target_of(module: str, name: str) -> tuple[str, str]:
         if getattr(importlib.import_module(own), oname) is not obj:
             raise SplitError(f"{module}.{name} is not the object {own}.{oname}")
         return own, oname
-    from verity.ir.types import Array, Tuple, Value
+    from verity.primitives.circuits.types import Array, Tuple, Value
     if isinstance(obj, (Value, Array, Tuple)) and getattr(importlib.import_module(CORE_TYPES), name, None) == obj:
         return CORE_TYPES, name
     raise SplitError(f"{module}.{name} is {own}'s own; a Definition module may not import it from there")

@@ -48,7 +48,7 @@ POLICY_TEXT = ("scale products: per token row of " + ", ".join(sorted(SHARED)) +
 def slots(K: int, N: int, G: int) -> tuple[int, ...]:
     """The shared-scale Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i
     of a row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.defs import bind
     from verity_vllm.query import word as W
 
     g = W.Graph(bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G))

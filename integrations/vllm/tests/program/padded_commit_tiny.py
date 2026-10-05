@@ -47,12 +47,12 @@ from typing import Any
 
 import numpy as np
 
-from verity.ir import Program, bind
-from verity.ir import boundary as BD
-from verity.ir import query_ast as GS
-from verity.ir import partition as PT
-from verity.ir.codec import encode_program, program_digest
-from verity.ir.evaluate import evaluate_region
+from verity.primitives.circuits import Program, bind
+from verity.primitives.circuits import boundary as BD
+from verity.primitives.circuits import query_ast as GS
+from verity.primitives.circuits import partition as PT
+from verity.primitives.circuits.codec import encode_program, program_digest
+from verity.primitives.circuits.evaluate import evaluate_region
 from verity_vllm.program.registry import b1, lifted as L
 from verity_vllm.program.kernels import serve3_reference as ref
 from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs

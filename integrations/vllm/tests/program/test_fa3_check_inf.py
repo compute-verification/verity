@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.evaluation.reference import evaluate
-from verity.ir.defs import bind
+from verity.primitives.circuits.evaluation.reference import evaluate
+from verity.primitives.circuits.defs import bind
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import b1, hopper

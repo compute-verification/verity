@@ -65,4 +65,4 @@ def test_the_boundary_names_a_foreign_import():
     assert _foreign(REGISTRY, ("b1", "moe_difftest")) == [f"{REGISTRY}.moe_difftest"]
     assert _foreign(f"{REGISTRY}.gemm_targets", ("GemmTarget",)) == [f"{REGISTRY}.gemm_targets"]
     assert _foreign("torch", ()) == ["torch"]
-    assert _foreign(f"{REGISTRY}.prims", ("BF16",)) == [] and _foreign("verity.ir.defs", ("bind",)) == []
+    assert _foreign(f"{REGISTRY}.prims", ("BF16",)) == [] and _foreign("verity.primitives.circuits.defs", ("bind",)) == []

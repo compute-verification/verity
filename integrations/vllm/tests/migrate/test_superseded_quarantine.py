@@ -46,15 +46,15 @@ def _synthetic_promotion(monkeypatch):
 
 
 FILES = {
-    "pyproject.toml": '[project]\nname = "w"\ndependencies = ["verity"]\n\n[tool.uv.workspace]\nmembers = ["packages/verity", '
+    "pyproject.toml": '[project]\nname = "w"\ndependencies = ["verity"]\n\n[tool.uv.workspace]\nmembers = ["verity", '
                       '"integrations/vllm"]\n\n[tool.uv.sources]\nverity = { workspace = true }\ntorch = { index = "cpu" }\n',
     "integrations/vllm/pyproject.toml": '[project]\nname = "verity-vllm"\n\n[tool.verity.tests]\n# Test-only: fixtures.\n'
                                         'inputs = ["fixtures/artifacts.json",\n          ".gitignore"]\n',
     f"{REG}/__init__.py": "",
-    f"{REG}/b1.py": ('from verity.ir.defs import composite\n\n\n@composite("Old", 1, ["N"], None)\ndef OldV1(S, x):\n    return x\n\n\n'
+    f"{REG}/b1.py": ('from verity.primitives.circuits.defs import composite\n\n\n@composite("Old", 1, ["N"], None)\ndef OldV1(S, x):\n    return x\n\n\n'
                      '@composite("Old", 2, ["N"], None)\ndef Old(S, x):\n    return x\n'),
     f"{REG}/vocab.py": f"from {Q}.ln import norm as LN\n",
-    f"{REG}/act.py": "from verity.ir.defs import composite\n\nBF16 = 16\n\n\ndef silu(x):\n    return x\n",
+    f"{REG}/act.py": "from verity.primitives.circuits.defs import composite\n\nBF16 = 16\n\n\ndef silu(x):\n    return x\n",
     f"{QDIR}/__init__.py": '"""the old quarantine"""\n',
     f"{QDIR}/act/__init__.py": f"from {Q}.act import silu_mul  # noqa: F401\n",
     f"{QDIR}/act/silu_mul.py": 'SEMANTIC_ID = "act/SiluMul@v2"\n',
@@ -63,9 +63,9 @@ FILES = {
     f"{QDIR}/ov_moe/__init__.py": "",
     f"{QDIR}/ln/__init__.py": f"from {Q}.ln import gelu, norm  # noqa: F401\n\nALL = [norm.Norm, gelu.Gelu]\n",
     f"{QDIR}/ln/_common.py": "BF16 = 16\n",
-    f"{QDIR}/ln/norm.py": (f'"""the norm"""\nfrom verity.ir.defs import composite\nfrom {Q}.ln._common import BF16\n\n'
+    f"{QDIR}/ln/norm.py": (f'"""the norm"""\nfrom verity.primitives.circuits.defs import composite\nfrom {Q}.ln._common import BF16\n\n'
                            'SEMANTIC_ID = "ln/Norm@v1"\n\n\n@composite("Norm", 1, ["N"], None)\ndef Norm(B, S, x):\n    return BF16\n'),
-    f"{QDIR}/ln/gelu.py": (f'"""the erf GELU"""\nfrom verity.ir.defs import composite\nfrom {Q}.ln._common import BF16\n\n'
+    f"{QDIR}/ln/gelu.py": (f'"""the erf GELU"""\nfrom verity.primitives.circuits.defs import composite\nfrom {Q}.ln._common import BF16\n\n'
                            'SEMANTIC_ID = "ln/Gelu@v1"\n\n\n# one word\n@composite("Gelu", 1, [], None)\ndef Gelu(B, S, x):\n'
                            '    return BF16\n\n\n__all__ = ["Gelu"]\n'),
     "integrations/vllm/tests/test_lanes.py": (f"from {Q}.act import silu_mul as S\nfrom {Q} import collective as QC\n"
@@ -138,8 +138,8 @@ def test_promote_only_promotes_and_moves_no_lane(tmp_path, capsys):
 
 
 def test_promote_only_reads_the_unqualified_names_the_destination_binds(tmp_path, monkeypatch, capsys):
-    gelu = FILES[f"{QDIR}/ln/gelu.py"].replace("from verity.ir.defs import composite\n",
-                                                "from verity.ir.defs import composite\nimport prims as P\n")
+    gelu = FILES[f"{QDIR}/ln/gelu.py"].replace("from verity.primitives.circuits.defs import composite\n",
+                                                "from verity.primitives.circuits.defs import composite\nimport prims as P\n")
     gelu = gelu.replace("    return BF16\n\n\n__all__", "    return P.BF16\n\n\n__all__")
     monkeypatch.setattr(M, "PROMOTE", (PROMOTE[0], M.Promotion("ln/gelu.py", "act.py", unqualify=("P",))))
     root = _tree(tmp_path, {f"{QDIR}/ln/gelu.py": gelu})
@@ -253,8 +253,8 @@ def test_apply_refuses_an_import_of_moved_and_other_lanes_together(tmp_path, cap
     ({f"{QDIR}/ln/extra.py": "X = 1\n"}, EDITS, f"lane ln keeps {QDIR}/ln/extra.py, which is not promoted"),
     ({"integrations/vllm/README.md": "see `registry/quarantine/ln/norm.py`\n"}, EDITS,
      "would still name a promoted lane:\n  integrations/vllm/README.md:1: see `registry/quarantine/ln/norm.py`"),
-    ({f"{REG}/act.py": "from verity.ir.defs import composite\nBF16 = 16\nGelu = None\n"}, EDITS, "Gelu already bound in act.py"),
-    ({f"{REG}/act.py": "from verity.ir.defs import composite\n"}, EDITS, "act.py does not bind BF16"),
+    ({f"{REG}/act.py": "from verity.primitives.circuits.defs import composite\nBF16 = 16\nGelu = None\n"}, EDITS, "Gelu already bound in act.py"),
+    ({f"{REG}/act.py": "from verity.primitives.circuits.defs import composite\n"}, EDITS, "act.py does not bind BF16"),
     ({}, (("integrations/vllm/tests/test_ln.py", "no such text", ""),), "expected one 'no such text', found 0"),
 ])
 def test_apply_refuses_a_promotion_that_would_leave_a_name_behind_or_clash(tmp_path, monkeypatch, capsys, extra, edits, says):

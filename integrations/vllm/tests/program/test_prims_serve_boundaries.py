@@ -19,7 +19,7 @@ FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "t
 OTHER_FAMILIES = {"dense", "fa2_softcap", "fa3_check_inf", "sampling", "topp_geometry", "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
 #: (module, what it imports outside the rule) -> why it stays
-EXCEPTIONS = {("pouw_rows", "verity_pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition, which the row binds"}
+EXCEPTIONS = {("pouw_rows", "verity.protocols.accounting.work.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition, which the row binds"}
 
 
 def _imports(name: str) -> list[tuple[int, str]]:

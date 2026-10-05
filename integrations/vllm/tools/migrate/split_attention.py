@@ -590,7 +590,7 @@ def family_definitions(repo: Path) -> dict[str, str]:
     """``id -> module`` for every Definition a fact module binds at top level itself (not one it imports)."""
     import importlib
 
-    from verity.ir.defs import FunctionDefinition, SpecializedDefinition
+    from verity.primitives.circuits.defs import FunctionDefinition, SpecializedDefinition
 
     out = {}
     for m in fact_modules(repo):
@@ -604,10 +604,10 @@ def family_definitions(repo: Path) -> dict[str, str]:
 
 
 def digest(fn) -> str:
-    """The canonical descriptor digest of ``fn``: its Program's (`verity.ir.codec.program_digest`), a primitive's entry's."""
-    from verity.ir.codec import canonical_json, definition_entry, program_digest
-    from verity.ir.defs import PrimitiveDefinition
-    from verity.ir.program import Program
+    """The canonical descriptor digest of ``fn``: its Program's (`verity.primitives.circuits.codec.program_digest`), a primitive's entry's."""
+    from verity.primitives.circuits.codec import canonical_json, definition_entry, program_digest
+    from verity.primitives.circuits.defs import PrimitiveDefinition
+    from verity.primitives.circuits.program import Program
 
     if isinstance(fn, PrimitiveDefinition):
         return hashlib.sha256(canonical_json(definition_entry(fn))).hexdigest()
@@ -649,7 +649,7 @@ def facts(repo: Path, suite: dict | None = None, pins: dict | None = None) -> di
     `circuit_check.checks.load_pins()` when the caller has them already (about a minute to build)."""
     from circuit_check import checks as CK
     from circuit_check import targets as TG
-    from verity.ir.codec import descriptor_id
+    from verity.primitives.circuits.codec import descriptor_id
 
     TG.load_registries()
     fam = family_definitions(repo)

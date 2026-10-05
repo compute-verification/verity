@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.defs import bind
 from verity_vllm.program.registry import b1
 import numpy as np
 

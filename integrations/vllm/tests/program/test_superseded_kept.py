@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.ir.codec import canonical_json, definition_entry, program_digest
-from verity.ir.defs import bind
-from verity.ir.program import Program
+from verity.primitives.circuits.codec import canonical_json, definition_entry, program_digest
+from verity.primitives.circuits.defs import bind
+from verity.primitives.circuits.program import Program
 from verity_vllm.program.registry import b1, prims as P, serve3
 from verity_vllm.program.registry import boolean_silu as BS
 

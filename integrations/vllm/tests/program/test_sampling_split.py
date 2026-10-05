@@ -55,7 +55,7 @@ SLOW_TRACE = ("GumbelLaneTail_v1",)
 
 def defining_module(fn) -> str | None:
     """The module whose code a Definition runs: a primitive's evaluator's, a composite's body's, a traced Boolean one's build's."""
-    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
 
     d = fn.defn if isinstance(fn, SpecializedDefinition) else fn
     f = d.evaluate if isinstance(d, PrimitiveDefinition) else getattr(d, "build", d.body) if isinstance(d, CompositeDefinition) else None
@@ -67,7 +67,7 @@ def family_definitions() -> dict[str, object]:
     registered on first use, so whether the registry holds one depends on what ran before)."""
     import importlib
 
-    from verity.ir.defs import FunctionDefinition
+    from verity.primitives.circuits.defs import FunctionDefinition
     from verity_vllm.program.registry.catalog import load
 
     load()

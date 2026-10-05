@@ -15,10 +15,10 @@ from functools import cache
 
 import numpy as np
 
-from verity.ir.defs import PrimitiveDefinition
-from verity.ml.scalar import BIT, BitAnd, BitNot, BitOr, F32, F32Eq, F32Fabs, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
-from verity.ml.fp32 import F32Add, F32Fma, F32Mul
-from verity.ml.mufu import DivFullRcp, DivFullScaleA, MufuEx2Ftz
+from verity.primitives.circuits.defs import PrimitiveDefinition
+from verity_catalog.definitions.scalar import BIT, BitAnd, BitNot, BitOr, F32, F32Eq, F32Fabs, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity_catalog.definitions.fp32 import F32Add, F32Fma, F32Mul
+from verity_catalog.definitions.mufu import DivFullRcp, DivFullScaleA, MufuEx2Ftz
 from verity_vllm.program.registry.ref_prims import F32GtStrict, F32Sub
 
 #: bits of a count word inside the builder (a lane count; V < 2^(CW - 1)); a count gate reads it as an i32

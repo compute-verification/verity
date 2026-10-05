@@ -38,10 +38,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ir.defs import composite
-from verity.ir.refs import Coll, concat
+from verity.primitives.circuits.defs import composite
+from verity.primitives.circuits.refs import Coll, concat
 
-from verity.ir.types import Array
+from verity.primitives.circuits.types import Array
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.b1 import ZERO32, f32c
 from verity_vllm.program.registry.prims import BF16, F32

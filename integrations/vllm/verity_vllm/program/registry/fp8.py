@@ -30,7 +30,7 @@ words and cross-checked against a CPU re-quantisation of the checkpoint; fp8.md 
 and the e4m3 activations are **computed** by `Fp8ActQuant` from the norm output — never Inputs.
 
 Registered functions (all `Name_v1`):
-  primitives  core's: F32Fabs, F32Fmaxf, F32Fminf (`verity.ml.scalar`), F32ToE4m3Sat, HopperE4m3QgmmaDot32 (`verity.ml.prims`)
+  primitives  core's: F32Fabs, F32Fmaxf, F32Fminf (`verity_catalog.definitions.scalar`), F32ToE4m3Sat, HopperE4m3QgmmaDot32 (`verity_catalog.definitions.prims`)
   composites  Fp8RowAbsMax{K}, Fp8RowScale, Fp8ActQuant{K}, DotE4m3{K}, ScaledMmFp8Coordinate{K,BIAS},
               ScaledMmFp8{K,N,BIAS} (the cutlass GEMM over the quantised row), QuantLinearFp8{K,N,BIAS} (= Fp8ActQuant
               + ScaledMmFp8, the linear as one function), LayerPreFp8{C,L0}, LayerPostFp8{C}, ServeFp8{C,LP,STEPS};
@@ -44,11 +44,11 @@ from __future__ import annotations
 
 import types
 
-from verity.ir.defs import CompositeDefinition, bind, composite
-from verity.ir.refs import Coll as _Coll, concat, tuple_of
-from verity.ir.types import Array, Record, Tuple, Value
-from verity.ml.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
-from verity.ml.scalar import F32Fabs, F32Fmaxf, F32Fminf
+from verity.primitives.circuits.defs import CompositeDefinition, bind, composite
+from verity.primitives.circuits.refs import Coll as _Coll, concat, tuple_of
+from verity.primitives.circuits.types import Array, Record, Tuple, Value
+from verity_catalog.definitions.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
+from verity_catalog.definitions.scalar import F32Fabs, F32Fmaxf, F32Fminf
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import hopper as H
 from verity_vllm.program.registry import prims as P

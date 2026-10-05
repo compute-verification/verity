@@ -13,7 +13,7 @@ from contextlib import contextmanager
 
 import numpy as np
 
-from verity.ml.scalar import BitAnd, BitOr, SelectF32, SelectI32
+from verity_catalog.definitions.scalar import BitAnd, BitOr, SelectF32, SelectI32
 from verity_vllm.program.registry.topp_geometry import spt_for, z_group
 from verity_vllm.program.registry.topp_word_gates import CW, GATES, SIG, WIDTH, BitXor, SelectBit, U32Xor, f32_word, numeric
 

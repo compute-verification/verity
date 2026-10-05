@@ -62,7 +62,7 @@ FIXTURE = "tools/circuit_check/tests/fixtures/split/prims_serve.json"
 DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths",
                       "b1", "b1_tp2", "serve3", "spec", "pouw_rows")
 #: a Definition module's import of a Definition module outside the registry, with the reason it stays
-BOUNDARY_EXCEPTIONS = {("pouw_rows", "verity_pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition (`verity_pouw`), which this "
+BOUNDARY_EXCEPTIONS = {("pouw_rows", "verity.protocols.accounting.work.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition (`verity.protocols.accounting.work.pouw`), which this "
                        "row binds; the catalog will import it from PoUW, not from the integration"}
 
 
@@ -1361,10 +1361,10 @@ def apply(root: Path = REPO, log=print) -> dict:
 def _digest(fn) -> str | None:
     """The descriptor digest of a circuit-check target: a specialization's Program digest; a primitive's descriptor entry inside
     a one-Call wrapper (which is not registered)."""
-    from verity.ir import codec
-    from verity.ir.annotations import definition_digest
-    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-    from verity.ir.program import Program
+    from verity.primitives.circuits import codec
+    from verity.primitives.circuits.annotations import definition_digest
+    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+    from verity.primitives.circuits.program import Program
 
     if isinstance(fn, SpecializedDefinition):
         return codec.program_digest(codec.encode_program(Program(fn)))
@@ -1379,7 +1379,7 @@ def family_ids() -> dict[str, str]:
     """Each Definition family (`Name_vN`) a family Definition module defines (not one it imports), by that module."""
     import importlib
 
-    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition
 
     out: dict[str, str] = {}
     for name in DEFINITION_MODULES:
@@ -1439,8 +1439,8 @@ def _tree_path(tree: Path) -> list[str]:
     """This interpreter's workspace source directories, read in ``tree`` instead (each workspace member's import root)."""
     here = None
     for p in sys.path:
-        if p.endswith("packages/verity/src"):
-            here = p[: -len("packages/verity/src")].rstrip("/")
+        if p.endswith("."):
+            here = p[: -len(".")].rstrip("/")
     if here is None:
         raise SplitError("this interpreter has no workspace on its path (run it with the workspace's environment)")
     out = [str(tree / p[len(here) + 1:]) for p in sys.path if p.startswith(here + "/")]
@@ -1505,7 +1505,7 @@ def inventory(root: Path = REPO) -> str:
     and every `verity_vllm` import of a Definition module with where it points."""
     import importlib
 
-    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
 
     rows = []
     moved = {(p.src, n): p for p in PARTS for n in p.names}
@@ -1543,7 +1543,7 @@ def inventory(root: Path = REPO) -> str:
                 if isinstance(n, (ast.Import, ast.ImportFrom)):
                     mods = [a.name for a in n.names] if isinstance(n, ast.Import) else [_absolute(n, REG)]
                     for m in mods:
-                        if m.startswith(PKG) or m.startswith("verity_pouw"):
+                        if m.startswith(PKG) or m.startswith("verity.protocols.accounting.work.pouw"):
                             where = next((f"{p.kind}, moves to `{p.dst[len(PKG) + 1:]}`" for p in PARTS if p.src == name
                                           and any(n.lineno >= s.lineno and n.end_lineno <= s.end_lineno for s in tree.body
                                                   if _defined(s) & set(p.names))), None)

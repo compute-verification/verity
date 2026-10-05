@@ -51,7 +51,7 @@ step observer and run header; `pinned.py` its host buffers), `run_facts.py` (pro
 constructor + a facts table).  Never: commit, decide what is required.
 
 **`program/`** implements *Program*: Definitions (`registry/`, the registered library; importing it registers the on-demand
-primitive families through `verity.ir.codec.register_lazy_family`), lowering (`frontend/`: the torch frontend, `derive`, `rules/`
+primitive families through `verity.primitives.circuits.codec.register_lazy_family`), lowering (`frontend/`: the torch frontend, `derive`, `rules/`
 = lowering rules, the vLLM meta export, `target_profile`, the correspondence emitter `emit.py`, the collective export ops),
 lifted / padded Programs (`lifting/`), `workload.py` / `compact.py`, `model.py` (specified computations such as bf16(sqrt(H))),
 and `kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
@@ -62,14 +62,14 @@ binds were promoted into `registry/`).
 per-iteration `Check_inf` chain (`Attention_v4`), bound under `TargetProfile.fa3_construction = "check-inf-per-iteration"` (the default).
 
 **`query/`** implements the *verification query*: `word.py` (`Q_word_v1{X=16,W=32}`, the query of record: every Call's circuit cut
-into proof units of bounded committed width, on core's `verity.ir.cut`; `verity/partition/v1` names the partition; its unit rules are
+into proof units of bounded committed width, on core's `verity.primitives.circuits.cut`; `verity/partition/v1` names the partition; its unit rules are
 shared across processes and runs through `manifest build --unit-rule-cache DIR`, env `VERITY_UNIT_RULE_CACHE`), `module_body.py`
 (Q_module_body_v1, for A/B), `cross_call.py` (the opt-in cross-Call recompute check, `manifest build --cross-call-check`),
 `program_view.py`, `manifest/` (the
 required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebuild-and-compare check of record),
 `query_artifact.py` (query artifact identities), `compare.py` (a v2 manifest against a v1 one), `required.py` (v1
-`IDENTITY_KEY` rows).  Boundary values, proof-unit partitions and dead gates are core's `verity.ir.boundary`, `verity.ir.partition`
-and `verity.ir.liveness`.  Never: execution data, hooks, model names, anything read from a run.
+`IDENTITY_KEY` rows).  Boundary values, proof-unit partitions and dead gates are core's `verity.primitives.circuits.boundary`, `verity.primitives.circuits.partition`
+and `verity.primitives.circuits.liveness`.  Never: execution data, hooks, model names, anything read from a run.
 
 **`correspondence/`** implements *runtime correspondence* as data: `runtime.py` (runtime-correspondence/v1),
 `reader_for_query.py` / `reader_for_acquire.py`; and *occurrence resolution*: `resolve.py`, `resolve_decomp.py`.  Never:
@@ -97,7 +97,7 @@ range bits per token, from the fused embedding's ids, no kernel change).  `ops/p
 Never: decide what is required; never a model-name list.
 
 **`commit/`** implements *commitment*: `merkle.py` (trees over canonical ids, `path_shape` / `fold_path`, openings), `hashing.py`
-(`H(tag, *parts)`), `identity.py`, `binding.py` (binding map + coverage), `padding_steps.py`, `hidden_stream.py`, `scheme.py` (the commitment scheme `vllm-v1`: every leaf and root rule, over `verity.commitments.vllm_v1`), and `committer/`, the GPU committer (`native_host.py`, the collector of record;
+(`H(tag, *parts)`), `identity.py`, `binding.py` (binding map + coverage), `padding_steps.py`, `hidden_stream.py`, `scheme.py` (the commitment scheme `vllm-v1`: every leaf and root rule, over `verity.primitives.commitments.vllm_v1`), and `committer/`, the GPU committer (`native_host.py`, the collector of record;
 `native_collect.py` + `native_*.cu` / `.cpp`, `native_jit.py`, `leafhash.py`, `flush_points.py`, `hidden_gpu_src/`).  Never:
 runtime metadata in the identity tuple.
 
@@ -120,8 +120,8 @@ and the embedding shard layout (`embedding_shard.py`).
 above would import.
 
 The stdlib-only core of `verity_ir` (`types refs defs program layout evaluate query codec parts query_codec`, `gateset`
-as `query_ast`) is `verity.ir` in `packages/verity`, and its `plan` is `verity_sampled_proofs.plan` in `protocols/sampled_proofs`; the on-demand primitive families
-veritor hardcoded in `codec.py` are registered by `verity_vllm/program/registry/__init__.py` through `verity.ir.codec.register_lazy_family`.
+as `query_ast`) is `verity.primitives.circuits` in `verity`, and its `plan` is `verity_experimental.sampled_proofs.plan` in `verity/protocols/verification/sampled_proofs`; the on-demand primitive families
+veritor hardcoded in `codec.py` are registered by `verity_vllm/program/registry/__init__.py` through `verity.primitives.circuits.codec.register_lazy_family`.
 
 ## Vocabulary (frozen; Notion "vLLM integration v2 — Draft 3" §12)
 
@@ -129,7 +129,7 @@ Prose, docstrings and Notion use these words.  Serialized field names (`member`,
 `weights_pin`, ...) are not renamed: a header string inside a digested document changes its digest.  Subcircuit template,
 subcircuit, backend family and backend mean what the root README's Glossary says.
 
-Core (Verity semantics, `packages/verity`):
+Core (Verity semantics, `verity`):
 
 - **Definition** — a registered function with a total evaluator on encodings (`verity_vllm.program.registry`).
 - **Call** — one application of a Definition inside a Program (retires "Program row", "instance" in prose; `instances.json.gz` stores Calls).
@@ -230,7 +230,7 @@ alone, the Commit as it has always run), `run_row` refuses a set it cannot run b
 the others once its committers registered the weights of record (the replay reads live weights through what an option
 released: `protocol_options.weights_view`).  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
 weights they read, sampled proofs commits what the model computed) and uninstall in reverse, every patch and service through
-`engine/hooks.py` tagged with its option.  The protocol logic is `verity_pouw`, `verity_pous` and `verity_sampled_proofs`';
+`engine/hooks.py` tagged with its option.  The protocol logic is `verity.protocols.accounting.work.pouw`, `verity.protocols.accounting.space.pous` and `verity.protocols.verification.sampled_proofs`';
 the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit admits only options its Program describes (POUS's
 bit-identical decode; an executor whose scheme has a circuit in its protocol package, `protocol_options.CIRCUITS` and
 `traced_as`: PoUW's `ncp-v2`), so its verdict is of record as usual and carries the set

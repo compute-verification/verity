@@ -2,7 +2,7 @@
 mapping's call names of the FP8 serving port, and the fused-MoE config under batch invariance (`registry.fp8_moe`)."""
 from __future__ import annotations
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.defs import bind
 from verity_vllm.program.registry import hopper as H
 from verity_vllm.program.registry.fp8 import (
     ScaledMmFp8Block, ScaledMmFp8BlockSharedScale, ScaledMmFp8BlockSharedScaleV3, ScaledMmFp8BlockV3,

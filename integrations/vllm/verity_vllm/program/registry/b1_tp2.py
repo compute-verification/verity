@@ -25,9 +25,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ir.defs import bind, composite
-from verity.ir.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.ir.types import Array, Tuple
+from verity.primitives.circuits.defs import bind, composite
+from verity.primitives.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.primitives.circuits.types import Array, Tuple
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16, I32
 from verity_vllm.program.registry.b1 import (

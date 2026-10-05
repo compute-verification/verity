@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.defs import bind
 from verity_vllm.check.match import split_selects
 from verity_vllm.observe.fold.patterns.sampling import SCRATCH_TOPP_SELECT, TokenSelectGumbelTopP, with_sampler_construction
 from verity_vllm.observe.fold.resolver import Profile

@@ -147,7 +147,7 @@ def test_gelu_table_is_measured_and_satisfies_the_kernel_facts():
 
 
 def test_layer_norm_and_gelu_erf_are_registry_definitions():
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.defs import REGISTRY
     fns = (layer_norm.LayerNormAten, layer_norm.LayerNormAtenV2, act.GeluErf, act.GeluErfBf16)
     assert [f.id for f in fns] == ["LayerNormAten_v1", "LayerNormAten_v2", "GeluErf_v1", "GeluErfBf16_v1"]
     assert all(REGISTRY[f.id] is f for f in fns)
@@ -156,7 +156,7 @@ def test_layer_norm_and_gelu_erf_are_registry_definitions():
 
 def test_layer_norm_body_matches_a_float64_layer_norm_within_bf16_rounding():
     from verity_vllm.properties.admission import evaluate_spec
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.defs import bind
     N = 64
     rng = np.random.default_rng(0)
     x, w, b = (rng.standard_normal(N).astype(np.float32).view(np.uint32) >> 16 for _ in range(3))

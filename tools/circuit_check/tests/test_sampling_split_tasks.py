@@ -23,8 +23,8 @@ FAMILY_MODULES = ("sampling", "sampling_boolean", "gumbel_boolean", "topp_word_g
 
 def defining_module(fn) -> str | None:
     """The module whose code a Definition runs: a primitive's evaluator's, a composite's body's, a traced Boolean one's build's
-    (`verity.ml.boolean.trace.definition`)."""
-    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+    (`verity.primitives.circuits.boolean.trace.definition`)."""
+    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
 
     d = fn.defn if isinstance(fn, SpecializedDefinition) else fn
     f = d.evaluate if isinstance(d, PrimitiveDefinition) else getattr(d, "build", d.body) if isinstance(d, CompositeDefinition) else None
@@ -42,7 +42,7 @@ def _static(v):
 def family_tasks() -> dict:
     """The family's entries of `circuit-check --all`'s task list (`cli._tasks`), each with its pin, and the pins of every family
     Definition those targets call."""
-    from verity.ir.defs import REGISTRY, PrimitiveDefinition
+    from verity.primitives.circuits.defs import REGISTRY, PrimitiveDefinition
 
     from circuit_check import checks as CK
     from circuit_check import cli

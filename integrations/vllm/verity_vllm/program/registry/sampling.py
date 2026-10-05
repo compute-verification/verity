@@ -38,14 +38,14 @@ from __future__ import annotations
 import math
 import struct
 
-from verity.ir.defs import PrimitiveDefinition, bind, composite
-from verity.ir.refs import tuple_of
-from verity.ml.scalar import BF16, BIT, BitNot, BitOr, F32, F32Eq, I32, I32Add, SelectF32, SelectI32
+from verity.primitives.circuits.defs import PrimitiveDefinition, bind, composite
+from verity.primitives.circuits.refs import tuple_of
+from verity_catalog.definitions.scalar import BF16, BIT, BitNot, BitOr, F32, F32Eq, I32, I32Add, SelectF32, SelectI32
 from verity_vllm.program.registry import ref_prims as RP
-from verity.ir.types import Array, Tuple, Value
-from verity.ml.fp32 import F32AddFtz, F32Mul
-from verity.ml.mufu import DivFullRcp, DivFullScaleA
-from verity.ml.prims import Bf16ToF32, const
+from verity.primitives.circuits.types import Array, Tuple, Value
+from verity_catalog.definitions.fp32 import F32AddFtz, F32Mul
+from verity_catalog.definitions.mufu import DivFullRcp, DivFullScaleA
+from verity_catalog.definitions.prims import Bf16ToF32, const
 
 SEMANTIC_ID = "sampling/GumbelTokenSelect@v1"
 

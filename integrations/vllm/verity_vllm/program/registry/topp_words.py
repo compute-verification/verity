@@ -21,11 +21,11 @@ import hashlib
 
 import numpy as np
 
-from verity.ir.defs import PrimitiveDefinition, bind, composite
-from verity.ir.refs import Affine, Coll, Explicit, Strided, concat
-from verity.ir.types import Array, Value
-from verity.ml.scalar import BF16, BIT, BitAnd, F32, I32, I32Eq, SelectF32
-from verity.ml.prims import const
+from verity.primitives.circuits.defs import PrimitiveDefinition, bind, composite
+from verity.primitives.circuits.refs import Affine, Coll, Explicit, Strided, concat
+from verity.primitives.circuits.types import Array, Value
+from verity_catalog.definitions.scalar import BF16, BIT, BitAnd, F32, I32, I32Eq, SelectF32
+from verity_catalog.definitions.prims import const
 from verity_vllm.program.registry.topp_keep_builder import NEG_INF, SPLIT_COUNTS, Engine, Vec, keep_word
 from verity_vllm.program.registry.topp_word_gates import CW, GATES, M32, SIG
 

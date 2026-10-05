@@ -52,8 +52,8 @@ def test_sm120_is_the_default_tiling_on_the_hopper_k16_step():
     """cc 12.0 (the RTX PRO 6000): vLLM has no tuned family for it, so a Triton launch takes the default tiling (the pinned vLLM keeps
     the bf16 linear on cuBLASLt there), and the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is core's HOPPER_BF16_M16N8K16: the
     Definition is Hopper's `Gemm_v2`."""
-    from verity.ml.tc.instructions import INSTRUCTIONS
-    from verity.ml.tc.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16
+    from verity_catalog.silicon.instructions import INSTRUCTIONS
+    from verity_catalog.silicon.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16
 
     bw = GT.REGISTERED["blackwell_consumer"]
     assert bw.compute_capabilities == ((12, 0),) and bw.vllm_arch_family is None and GT.vllm_tuned_gemm_arch_family((12, 0)) is None

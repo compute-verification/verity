@@ -58,10 +58,10 @@ from functools import lru_cache
 
 import numpy as np
 
-from verity.ir.codec import register_lazy_family
-from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
-from verity.ir.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
-from verity.ir.types import Array, Tuple, Value
+from verity.primitives.circuits.codec import register_lazy_family
+from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
+from verity.primitives.circuits.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
+from verity.primitives.circuits.types import Array, Tuple, Value
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16, BIT, F32, I32, F32_NAN, bits_of, f32_is_nan, f32_of

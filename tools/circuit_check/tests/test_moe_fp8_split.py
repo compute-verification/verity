@@ -4,7 +4,7 @@ target as it was.
 `fixtures/moe_fp8_split.json` was written by ``python tests/test_moe_fp8_split.py --write`` on the tree before the split and is never
 rewritten after it.  It holds
 
-* ``digests``: descriptor id -> SHA-256 of the canonical descriptor entry (`verity.ir.codec.definition_entry`, callees by id) of every
+* ``digests``: descriptor id -> SHA-256 of the canonical descriptor entry (`verity.primitives.circuits.codec.definition_entry`, callees by id) of every
   Definition defined in, or named by, one of the family's registry modules (`FAMILY`) that circuit-check's catalog reaches, and of
   every other binding of those Definitions that a tracked pin, fixture, record or capture map names (``extra``);
 * ``tasks``: circuit-check's task list restricted to the family (kind, target id with its statics, and the pins of that id).
@@ -50,7 +50,7 @@ def _owned(fn) -> bool:
 
 
 def _digest(fn) -> str:
-    from verity.ir.codec import canonical_json, definition_entry
+    from verity.primitives.circuits.codec import canonical_json, definition_entry
     return hashlib.sha256(canonical_json(definition_entry(fn))).hexdigest()
 
 
@@ -58,12 +58,12 @@ def _digest(fn) -> str:
 def _found() -> dict:
     """Every Definition circuit-check's catalog reaches, by descriptor id (scalar references have no descriptor)."""
     from circuit_check import targets as TG
-    from verity.ir.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.primitives.circuits.defs import PrimitiveDefinition, SpecializedDefinition
     return {fn_id(fn): fn for fn in TG.reachable(TG.catalog()).values() if isinstance(fn, (PrimitiveDefinition, SpecializedDefinition))}
 
 
 def fn_id(fn) -> str:
-    from verity.ir.codec import descriptor_id
+    from verity.primitives.circuits.codec import descriptor_id
     return descriptor_id(fn)
 
 

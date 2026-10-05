@@ -6,7 +6,7 @@ import sys
 
 import torch
 
-from verity.ir.refs import Coll
+from verity.primitives.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
@@ -226,9 +226,9 @@ def module_type(cls) -> type | None:
 
 def _pouw_scheme(node) -> str | None:
     """The PoUW scheme a launch is lowered under: the active target's ``pouw:<scheme>`` when that scheme has a circuit
-    (`verity_pouw.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
+    (`verity.protocols.accounting.work.pouw.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
     module in the node's module stack)."""
-    from verity_pouw import circuit
+    from verity.protocols.accounting.work.pouw import circuit
 
     entries = dict(e.split(":", 1) for e in (active_target_profile().protocols or ()))
     scheme = entries.get("pouw")

@@ -294,11 +294,11 @@ def apply(root: Path = REPO, log=print) -> dict:
 # --- the invariants ---------------------------------------------------------------------------------------------------------
 
 def _digest(fn) -> str | None:
-    """A circuit-check target's canonical descriptor digest: `verity.ir.codec.program_digest` of the one-call Program at its
+    """A circuit-check target's canonical descriptor digest: `verity.primitives.circuits.codec.program_digest` of the one-call Program at its
     statics (the shell `pipeline.program_graph._encoded` builds), for a primitive and a specialization alike."""
-    from verity.ir import codec
-    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-    from verity.ir.program import Program
+    from verity.primitives.circuits import codec
+    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+    from verity.primitives.circuits.program import Program
 
     if not isinstance(fn, (SpecializedDefinition, PrimitiveDefinition)):
         return None
@@ -312,7 +312,7 @@ def family_ids() -> dict[str, str]:
     """Each Definition family (`Name_vN`) a family module defines (not one it imports), by the module that defines it."""
     import importlib
 
-    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition
 
     out = {}
     for name in DEFINITION_MODULES:

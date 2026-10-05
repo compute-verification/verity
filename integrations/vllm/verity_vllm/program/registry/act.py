@@ -45,8 +45,8 @@ from __future__ import annotations
 
 import math
 
-from verity.ir.defs import composite, primitive
-from verity.ir.types import Array
+from verity.primitives.circuits.defs import composite, primitive
+from verity.primitives.circuits.types import Array
 
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.gelu_erf_table import TABLE_WORDS
