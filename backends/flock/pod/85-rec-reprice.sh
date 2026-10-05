@@ -141,7 +141,17 @@ def live(d):
     med = lambda f: statistics.median([f(v) for _, v in timed]) if timed else None
     t0 = warmed[-1][0] if warmed else None
     mib = [int(x) for x in text(d / "gpu-mib.txt").split() if x.strip().isdigit()]
+    # the verifier's own seconds per session (serve's SESSION records, by session name), and --zk's mask-rank check
+    # (ZKRANK, one per rep, in order), each summed per session; both over the timed sessions only
+    served = sorted((json.loads(l.split("\t", 1)[1]) for l in text(d / "serve.log").splitlines() if l.startswith("SESSION\t")),
+                    key=lambda v: v.get("session", ""))
+    ranks = [json.loads(l.split("\t", 1)[1])["s"] for l in text(d / "prove.err").splitlines() if l.startswith("ZKRANK\t")]
+    per = len(ranks) // len(rows) if ranks and len(ranks) % len(rows) == 0 else 0
+    rank_s = [sum(ranks[i * per:(i + 1) * per]) for i in range(len(rows))][warm:] if per else []
     return {"sessions": len(rows), "timed": len(timed), "accepted": [v.get("accepted") for _, v in rows],
+            "serve_verify_s": statistics.median([v["verify_s"] for v in served[warm:]]) if len(served) > warm else None,
+            "serve_verify_all_s": [v.get("verify_s") for v in served], "serve_accepted": [v.get("accepted") for v in served],
+            "zkrank_s": statistics.median(rank_s) if rank_s else None, "zkrank_all_s": ranks,
             "prove_total_s": med(lambda v: v.get("prove_total_s")), "prove_s": timed[-1][1].get("prove_s") if timed else None,
             "e2e_s": med(lambda v: v.get("e2e_s")), "witness_prebuilt_s": med(lambda v: v.get("witness_prebuilt_s") or 0),
             "session_s": (timed[-1][0] - t0) / len(timed) if t0 and timed else None,
