@@ -1,8 +1,8 @@
 """Sessions of several tables (PROTOCOL.md §16.12, #306's `--session-tables J`, N4): the Lean verifier builds each table's
 statement from its part of the session's draw (without one, of the population's units), never from anything in the record.
 The sessions are #306's live ones on RoPE, all accepted by its server, and none is `--zk`: several tables without `--zk` are a
-form the soundness proof does not cover (§16.15), so the verifier refuses every session whose statements set up, before any
-of its checks, a drawn one for its subset draw without `--zk` first, and a draw it sets no statement up from keeps its
+form the soundness proof does not cover (§16.15), so the verifier refuses every session, for that once every check has
+passed: a drawn one for its subset draw without `--zk` at setup first, and a draw it sets no statement up from keeps its
 setup's reason."""
 from __future__ import annotations
 

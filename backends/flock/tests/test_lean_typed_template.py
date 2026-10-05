@@ -2,7 +2,8 @@
 Rust prover splits it: the instance type's root one slot per VU and each placed layout's slots its parts, with rows only
 through `deriveChecked`, the row wiring derived, and Δ in the prover's order (the flat entries, then per VU the inputs'
 copies, the parts' bound rows and the root's cross entries). A typed statement is a form the soundness proof does not
-cover (§16.15), so on the prover's recorded sessions the statement sets up and every case is refused for its form."""
+cover (§16.15), so on the prover's recorded sessions the statement sets up and every case is refused: the honest ones for
+its form, once every check has passed, and every other case for the check that catches it."""
 from __future__ import annotations
 
 import hashlib
@@ -79,7 +80,8 @@ def test_it_refuses_the_rust_provers_sessions(gemm, tmp_path):
     got = {Path(v["session"]).name: v for v in (json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT "))}
     want = {s.name: json.loads((s / "case.json").read_text())["expect"] == "accept" for s in sessions}
     refused = f"refused: {STATEMENT}, a typed statement: a statement form the soundness proof does not cover"
-    assert {n: (got[n]["accepted"], got[n]["why"]) for n in want} == {n: (False, refused) for n in want}
+    assert not any(got[n]["accepted"] for n in want)
+    assert {n: got[n]["why"] == refused for n in want} == want, {n: got[n]["why"] for n in want}
     assert sum(want.values()) == 3 and len(want) == 20
 
 

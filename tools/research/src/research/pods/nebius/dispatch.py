@@ -2,7 +2,7 @@
 
     dispatch.py submit TEMPLATE KEY --tree PATH [--queue Q] [--priority P] [--class C] [--env K=V ...]   one item, now
     dispatch.py tick [--dry-run]      one pass: advance chains, requeue exit 99, top every queue up from the ready files
-    dispatch.py loop [--every 60]     tick forever, each tick a fresh `loop --once` process (tmux `node1-dispatch`, as research)
+    dispatch.py loop [--every 60]     tick forever, each tick a fresh `loop --once` process (unit vy-node1-dispatch, as research)
     dispatch.py status                queues, this dispatcher's jobs, GPU-busy and CPU-busy (DCGM / node-exporter, 10 and 60 min)
     dispatch.py pack-stops | pack-lift MODEL --by circuits --why TEXT    models stopped from packing; lift one (circuits only)
 
@@ -124,12 +124,14 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import time
 import tomllib
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -1502,6 +1504,38 @@ def status() -> None:
     print(json.dumps(busy()))
 
 
+class _Stop(Exception):
+    pass
+
+
+def run_loop(tick: Callable[[], int], every: float, sleep: Callable[[float], None] | None = None) -> int:
+    """`loop`: a tick (its exit status) every `every` s. SIGTERM, the unit's stop (KillMode=mixed sends it to this process
+    alone), lets the tick in flight finish and then ends the loop; between ticks it ends it at once."""
+    busy = stop = False
+
+    def term(signum, frame) -> None:
+        nonlocal stop
+        stop = True
+        if not busy:
+            raise _Stop
+
+    prev = signal.signal(signal.SIGTERM, term)
+    try:
+        while not stop:
+            busy = True
+            rc = tick()
+            busy = False
+            if rc not in (0, TICK_FAILED):    # it died before saying so (an import error in a redeployed copy, a kill)
+                print(f"{now_utc()} tick failed: exit {rc}", file=sys.stderr, flush=True)
+            if not stop:
+                (sleep or time.sleep)(every)
+    except _Stop:
+        pass
+    finally:
+        signal.signal(signal.SIGTERM, prev)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1576,11 +1610,8 @@ def main(argv: list[str]) -> int:
             return TICK_FAILED
         print(f"{now_utc()} tick {json.dumps(busy())}", flush=True)
     elif ns.cmd == "loop":
-        while True:
-            rc = subprocess.run([sys.executable, str(Path(__file__).resolve()), "loop", "--once"], env=CALLER_ENV).returncode
-            if rc not in (0, TICK_FAILED):    # it died before saying so (an import error in a redeployed copy, a kill)
-                print(f"{now_utc()} tick failed: exit {rc}", file=sys.stderr, flush=True)
-            time.sleep(ns.every)
+        return run_loop(lambda: subprocess.run([sys.executable, str(Path(__file__).resolve()), "loop", "--once"],
+                                               env=CALLER_ENV).returncode, ns.every)
     else:
         status()
     return 0
