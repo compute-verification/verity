@@ -352,8 +352,9 @@ class MlaAttentionScope:
             if any(s >= kv_rows.shape[0] for ss in slots for s in ss):
                 return unsupported(node, "a KV slot is outside the latent cache", T=Tn, cache_slots=kv_rows.shape[0])
             spec = bind(_MLAW.TritonMlaDecodeWord, H=NH, T=Tn, DL=L, DR=DR, BN=_MLAW.BLOCK_N, SPLITS=1, SCALE=SCALE, DOT=dot)
+            # dated at stage2, the launch `o` is bound to: an instance's output snapshot is looked up at its event (`min(consumed)`)
             parts.append((st1.id, Compute(spec, len(rows), (rows_operand(qcat, rows), GatherMany(kv_rows, slots)), (rows_operand(o, rows),),
-                                          (st1.id, st2.id), hint=f"{hint}[t={Tn - 1}]", kernels=(K_STAGE1, K_STAGE2),
+                                          (st2.id,), hint=f"{hint}[t={Tn - 1}]", kernels=(K_STAGE1, K_STAGE2),
                                           attribution=tuple(ctx.start.rows[i] for i in rows), pattern=self.name)))
         # the v-up bmm against W_UV
         DV = out.shape[1] // NH if out.rank == 2 else None
