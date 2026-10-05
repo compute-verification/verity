@@ -1,0 +1,14 @@
+name = "timing_loop"
+version = "0.1.0"
+defaultTargets = ["timing-loop"]
+
+[leanOptions]
+autoImplicit = false
+
+# PoUS's timing loop with Lean holding the clock, for the measurement in `../bench.py`; it needs nothing but the toolchain.
+[[lean_lib]]
+name = "TimingLoop"
+
+[[lean_exe]]
+name = "timing-loop"
+root = "Main"
