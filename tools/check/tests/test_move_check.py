@@ -54,7 +54,7 @@ def _check(repo: Path, base: str, extra: dict[str, str] | None = None) -> dict:
 BASE_FILES = {
     "protocols/pous/src/verity_pous/__init__.py": "",
     "protocols/pous/src/verity_pous/codec.py": "def encode(x):\n    return x + 1\n",
-    "protocols/pous/lean/Pous.lean": "theorem t : 1 = 1 := rfl\n",
+    "security_proofs/pous/PousProofs.lean": "theorem t : 1 = 1 := rfl\n",
     "protocols/pous/lean/lean-audit.json": '{"guarantees": {"Pous.t": "abc"}}\n',
     "protocols/pouw/src/verity_pouw/x.py": "X = 1\n",
     "tests/test_pous.py": "from verity_pous.codec import encode\nimport verity_pous.codec as c\n\n\ndef test():\n    assert encode(1) == 2\n",
@@ -175,7 +175,7 @@ def test_lean_audit_pin_change_is_refused(tmp_path):
 
 
 def test_explicit_map_and_cli(tmp_path, capsys, monkeypatch):
-    repo, base = _repo(tmp_path, {**BASE_FILES, "AGENTS.md": "See `protocols/pous/lean/Pous.lean`.\n"})
+    repo, base = _repo(tmp_path, {**BASE_FILES, "AGENTS.md": "See `security_proofs/pous/PousProofs.lean`.\n"})
     _write(repo, {"AGENTS.md": "See `elsewhere/Pous.lean`.\n"})
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "doc")
