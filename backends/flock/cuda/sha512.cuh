@@ -162,7 +162,7 @@ __global__ void sha512_merkle_level(uint8_t* tree, long long read_start, long lo
     s512_out(st, tree + (write_start + j) * 64);
 }
 
-// ---- hm96-sha512/v1 leaves (verity.commitments.hm96, PROTOCOL.md section 7) --------------------------------------------
+// ---- hm96-sha512/v1 leaves (verity.primitives.commitments.hm96, PROTOCOL.md section 7) --------------------------------------------
 //   x = the SHA-512 leaf above; y = the leaf's 192-byte salt; c = SHA-512(salt_prefix || y); b = x XOR M(key) y;
 //   leaf = SHA-512(leaf_prefix || b || c). Salts are ChaCha20 (zk_hooks::LeafSalts): leaf i of a tree with nonce id is blocks
 //   3i, 3i+1, 3i+2 under the proof's salt key; the device expands them where it finishes the leaves, the host only an opening's.

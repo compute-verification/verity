@@ -1,4 +1,4 @@
-"""Registered reads (PROTOCOL.md §16.10, `protocols/sampled_proofs/README.md` "Registered values"): a statement whose port reads
+"""Registered reads (PROTOCOL.md §16.10, `verity/protocols/verification/sampled_proofs/README.md` "Registered values"): a statement whose port reads
 rows of a registered value (RoPE's `cs`, rows of the program's `cs_table`, committed once at registration) opens every
 table row against the verifier's own registered root, at the position the verifier's own program reads, with the units
 derived from that program, or the Lean verifier refuses it. The statements are staged here over a hidden-output RoPE d64
@@ -6,7 +6,7 @@ circuit (§16.13, the default `verity/flock-circuit`) composed for the `Register
 v0 partition; the reads come from `reads` on that program (`statement`: setup, no proof; `verify`: setup of each table,
 with no proofs). Upstream's proved session over the public-output statement (`FIXTURE`, vectors.json's registered-reads
 set) is held to the same reads. Composing the 56 MB circuit takes about 30 s and each call sets it up (about 8 s), so the
-module is slow; it catches what the Python reference (`protocols/sampled_proofs/tests/test_registered.py`) can't: the
+module is slow; it catches what the Python reference (`verity/protocols/verification/sampled_proofs/tests/test_registered.py`) can't: the
 executable verifier's own refusals, on both statements' setup paths."""
 from __future__ import annotations
 
@@ -20,14 +20,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.commitments import hm96
-from verity.ir.codec import canonical_json, encode_program
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.program import Program
-from verity.ir.refs import coll_concat
-from verity.ir.types import Array
+from verity.primitives.commitments import hm96
+from verity.primitives.circuits.codec import canonical_json, encode_program
+from verity.primitives.circuits.defs import CompositeDefinition, bind
+from verity.primitives.circuits.program import Program
+from verity.primitives.circuits.refs import coll_concat
+from verity.primitives.circuits.types import Array
 from verity_flock import circuit as FC
-from verity_sampled_proofs.one_stage import partition as P, registered as G
+from verity.protocols.verification.sampled_proofs.one_stage import partition as P, registered as G
 
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 VERIFIER = LEAN.parent

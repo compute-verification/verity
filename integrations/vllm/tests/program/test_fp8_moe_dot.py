@@ -18,15 +18,15 @@ import dataclasses
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation import evaluate
-from verity.ir import boolean as BL
-from verity.ir.defs import bind
-from verity.ml.boolean import gemm as BG
-from verity.ml.boolean import trace as TR
-from verity.ml.prims import BlackwellE4m3QmmaDot32 as BW
-from verity.ml.prims import HopperE4m3QgmmaDot32 as HP
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits import boolean as BL
+from verity.primitives.circuits.defs import bind
+from verity_catalog.definitions.boolean import gemm as BG
+from verity.primitives.circuits.boolean import trace as TR
+from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32 as BW
+from verity_catalog.definitions.prims import HopperE4m3QgmmaDot32 as HP
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import fp8_moe_rows as MR
