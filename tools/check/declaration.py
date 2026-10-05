@@ -17,9 +17,9 @@ duplicate name, or an owner the registry doesn't know. Reading the file runs non
 A `[[plan]]` is one way to split a check over several machines (`check.py --shard K/N`): `shards`, a list of N lists of
 selectors, shard K the K-th. A selector is a job's name, or for a job in `SPLIT`, `JOB:PART` (one part: for `lean-audit`, a
 Lake package with a `lean-audit.json`) or `JOB:*` (its parts no other selector of the plan names). Every job is in exactly one
-shard, whole or, for a split job, as named parts plus exactly one `*`; a shard holds what each of its jobs `needs` or runs `after`; no two plans
-have the same N (`plans`). `resolve` turns a plan into each shard's parts for a tree's parts (`parts_of`), and refuses a named
-part the tree lacks, so a stale plan stops the shard instead of leaving something out.
+shard, whole or, for a split job, as named parts plus exactly one `*`; a shard holds what each of its jobs `needs` or runs
+`after`; no two plans have the same N (`plans`). `resolve` turns a plan into each shard's parts for a tree's parts
+(`parts_of`), and refuses a named part the tree lacks, so a stale plan stops the shard instead of leaving something out.
 """
 from __future__ import annotations
 

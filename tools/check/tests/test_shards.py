@@ -23,7 +23,7 @@ def _module(name: str, path: Path):
 
 CHECK = _module("repo_check_for_shards", ROOT / "tools" / "check" / "check.py")
 D = CHECK.DECLARATION
-LA = _module("repo_lean_audit_for_shards", ROOT / "tools" / "check" / "lean_audit.py")
+LA = _module("repo_lean_audit_for_shards", ROOT / "tools" / "lean" / "lean_audit.py")
 PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
 SOUNDNESS = "lean-audit:backends/flock/verifier/lean/soundness"
 
@@ -98,6 +98,16 @@ def test_a_plan_that_could_leave_a_part_out_or_run_it_twice_is_refused(shards, w
         _plans(shards)
 
 
+def test_a_shard_holds_the_job_its_job_runs_after():
+    """lean-suites runs `after` lean-build, in another group, on the verifier lean-build built: a shard without it would run
+    the suites on no verifier, so the plan is refused."""
+    jobs = [*JOBS, D.Job("d", "ci", 4, after="a")]
+    plan = 'schema = "ci/v0"\n[[plan]]\nshards = {}\n'
+    assert D.parse_plans(plan.format('[["a", "b", "d", "lean-audit:*"], ["c"]]'), jobs)
+    with pytest.raises(D.DeclarationError, match="shard 2 runs d, which needs a in the same shard"):
+        D.parse_plans(plan.format('[["a", "b", "lean-audit:*"], ["c", "d"]]'), jobs)
+
+
 def test_two_plans_of_one_size_and_a_need_outside_its_group_are_refused():
     plan = '[[plan]]\nshards = [["a", "b", "lean-audit:*"], ["c"]]\n'
     with pytest.raises(D.DeclarationError, match="another plan has 2 shards"):
@@ -109,8 +119,8 @@ def test_two_plans_of_one_size_and_a_need_outside_its_group_are_refused():
 
 def test_the_jobs_that_read_lean_builds_or_the_rust_builds_output_need_it():
     assert {j.name: j.needs for j in CHECK.JOBS if j.needs} == {
-        "flock-rust-tests": ("flock-circuit-build",), "lean-unit-cut": ("lean-build",), "lean-suites": ("lean-build",),
-        "lean-agreement": ("lean-build",)}
+        "flock-rust-tests": ("flock-circuit-build",), "lean-unit-cut": ("lean-build",), "lean-agreement": ("lean-build",)}
+    assert {j.name: j.after for j in CHECK.JOBS if j.after} == {"lean-suites": "lean-build"}
 
 
 @pytest.mark.parametrize("spec", ["0/3", "4/3", "1/2", "1/3/4", "x", "3"])
