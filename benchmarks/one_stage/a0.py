@@ -69,6 +69,13 @@ def stage(set_dir: str, ns: list[int], out: Path, m0_path: str, tampered: bool =
     return {"dir": out, "meta": meta, "pin": hashlib.sha512(text.encode()).hexdigest()}
 
 
+def hold_bound(st: dict, program, query) -> None:
+    """The verifier's own partition object and program beside a bound stage, which the Lean verifier then reads by content."""
+    (st["dir"] / "partition.json").write_text(json.dumps(P.partition(program, query), sort_keys=True))
+    (st["dir"] / "program.json").write_bytes(canonical_json(encode_program(program)))
+    st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
+
+
 def unit_class(set_dir: str, m0_path: str, out: Path) -> str:
     """The class of every instance, from the verifier's own composition of the circuit (M0's `--class-only`)."""
     p = run([sys.executable, "-m", "verity_flock.circuit", "--input-set", set_dir, "--class-only"], out / "class.log", {"PYTHONPATH": m0_path})
@@ -323,9 +330,7 @@ def main() -> int:
     t = time.time()
     st = stage(a.set, [4, n], out / "stage", a.m0_pythonpath, bind=bind)
     if a.bind:
-        (st["dir"] / "partition.json").write_text(json.dumps(P.partition(program, query), sort_keys=True))
-        (st["dir"] / "program.json").write_bytes(canonical_json(encode_program(program)))
-        st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
+        hold_bound(st, program, query)
     header = public_header(st["dir"], n)
     summary["stage_s"] = round(time.time() - t, 1)
     summary["template_program"] = {"statement": st["meta"]["program_digests"],
@@ -420,6 +425,8 @@ def main() -> int:
     tpart = P.partition(tprog, query)
     tbind = {"partition": P.digest(tpart), "program": tpart["program"], "indices": list(range(tn))} if a.bind else None
     tst = stage(a.set, [tn], out / "stage-tampered", a.m0_pythonpath, tampered=True, bind=tbind)
+    if a.bind:
+        hold_bound(tst, tprog, query)
     theader = public_header(tst["dir"], tn)
     tlaw = D.parse_law("subset:2")
     twant = {p: {"leaves": c, "domain": theader["frame_v3"]["domain_ids"][p]} for p, (_, c) in ports(tst["meta"], tn).items()}
