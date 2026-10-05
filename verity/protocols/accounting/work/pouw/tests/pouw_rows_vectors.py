@@ -6,8 +6,9 @@ a row schema and needs a reason in the PR.
 Inputs are derived, not stored: part ``p`` of case ``c`` is the first bytes of SHAKE256("verity/pouw/rows-vectors/v1", c, p),
 read as the schema's elements (16-, 32- and 64-bit words little-endian, codes one per byte masked to their width), and the salt
 is its 192 bytes of part "salt".  A tile case's C̃ and U are TM x TN 32-bit words, hashed by `pearl_c.leaf`.  Each case's
-leaf is the row C-Flock commits from its words and salt (`leaves.ROW_SCHEMA`); a case's name says which tree (x or w) the
-row sits in, which its registration domain binds and its leaf does not."""
+leaf is the row C-Flock commits from its words and salt under the schema of its row and its tree's role (x or w,
+`leaves.ROW_SCHEMA`), which its registration domain binds and its leaf does not; a `sha512/row-seg/v1` row's case also
+gives each segment's length in bits and digest d_j."""
 
 from __future__ import annotations
 
@@ -16,24 +17,24 @@ import json
 import types
 from pathlib import Path
 
-from verity.primitives.commitments.rowleaf import row_bytes
+from verity.primitives.commitments.rowleaf import (ROLE_W, ROLE_X, ROW_SEG_BYTES, SCHEMA_HM96_SHA512_ROW_SEG, row_bytes,
+                                        sha512_row_seg_segment_prefix, sha512_row_seg_segments)
 from verity.protocols.accounting.work.pouw.circuit import leaves as L
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 
 OUT = Path(__file__).with_name("vectors") / "pouw_rows.json"
-#: (case, row, k or (TM, TN))
-CASES = (("bf16-x-64", "bf16", 64), ("bf16-w-4096", "bf16", 4096),
-         ("fp32-x-64", "fp32", 64), ("fp32-w-4096", "fp32", 4096),
-         ("nvfp4-p-x-64", "nvfp4-p", 64), ("nvfp4-p-w-4096", "nvfp4-p", 4096),
-         ("fp8-p-x-64", "fp8-p", 64), ("fp8-p-w-4096", "fp8-p", 4096),
-         ("tile-2x33", "tile", (2, 33)), ("tile-64x64", "tile", (64, 64)),
-         ("ok-x", "ok", 64), ("ok-w", "ok", 4096),
-         ("pc8-head-x", "pc8-head", 2048), ("pc8-head-w", "pc8-head", 2048),
-         ("pc8-carry-x", "pc8-carry", 2048), ("pc8-carry-w", "pc8-carry", 2048),
-         ("fp8-codes-x-64", "fp8-codes", 64), ("fp8-codes-w-2048", "fp8-codes", 2048),
-         ("pc4-head-x", "pc4-head", 2048), ("pc4-head-w", "pc4-head", 2048),
-         ("pc4-carry-x", "pc4-carry", 2048), ("pc4-carry-w", "pc4-carry", 2048),
-         ("nvfp4-codes-x-64", "nvfp4-codes", 64), ("nvfp4-codes-w-2048", "nvfp4-codes", 2048))
+ROLES = {"x": ROLE_X, "w": ROLE_W}
+#: (case, row, role, k or (TM, TN)): the four element rows in both trees at k = 64 and 4,096 (in role X a row-seg row of
+#: one short segment and of several), the tile digests, the ok rows, and the row_k cut's six rows in both trees
+CASES = tuple((f"{row}-{role}-{k}", row, role, k) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p")
+              for role in ("x", "w") for k in (64, 4096)) + (
+    ("tile-2x33", "tile", "x", (2, 33)), ("tile-64x64", "tile", "x", (64, 64)), ("ok-x", "ok", "x", 64), ("ok-w", "ok", "w", 4096),
+    ("pc8-head-x", "pc8-head", "x", 2048), ("pc8-head-w", "pc8-head", "w", 2048),
+    ("pc8-carry-x", "pc8-carry", "x", 2048), ("pc8-carry-w", "pc8-carry", "w", 2048),
+    ("fp8-codes-x-64", "fp8-codes", "x", 64), ("fp8-codes-w-2048", "fp8-codes", "w", 2048),
+    ("pc4-head-x", "pc4-head", "x", 2048), ("pc4-head-w", "pc4-head", "w", 2048),
+    ("pc4-carry-x", "pc4-carry", "x", 2048), ("pc4-carry-w", "pc4-carry", "w", 2048),
+    ("nvfp4-codes-x-64", "nvfp4-codes", "x", 64), ("nvfp4-codes-w-2048", "nvfp4-codes", "w", 2048))
 
 
 def shake(case: str, part: str, n: int) -> bytes:
@@ -114,12 +115,23 @@ def sha(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
-def case_vector(case: str, row: str, k) -> dict:
+def segments(w: list[int]) -> list[dict]:
+    """A row-seg row's segments: each one's length in bits and d_j = SHA-512(S(j, s, m_j) ‖ segment j)."""
+    raw, ms = row_bytes(w, 16), sha512_row_seg_segments(16 * len(w))
+    return [{"n_bits": m, "digest": hashlib.sha512(sha512_row_seg_segment_prefix(j, len(ms), m)
+                                                   + raw[j * ROW_SEG_BYTES:j * ROW_SEG_BYTES + m // 8]).hexdigest()}
+            for j, m in enumerate(ms)]
+
+
+def case_vector(case: str, row: str, role: str, k) -> dict:
     w, salt = words(row, inputs(case, row, k)), shake(case, "salt", L.INST.salt_bytes)
-    bc = L.commit(row, w, salt)
-    out = {"case": case, "row": row, "schema": L.SCHEMAS[row], "row_schema": L.ROW_SCHEMA[row],
+    bc = L.commit(row, ROLES[role], w, salt)
+    out = {"case": case, "row": row, "role": role, "schema": L.SCHEMAS[row], "row_schema": L.ROW_SCHEMA[row, ROLES[role]],
            "k": list(k) if row == "tile" else k, "n_words": len(w), "row_bytes_sha256": sha(row_bytes(w, 16)),
-           "x": L.row_digest(row, w).hex(), "salt_sha256": sha(salt), "bc": bc.hex(), "tree_leaf": L.tree_leaf(bc).hex()}
+           "x": L.row_digest(row, ROLES[role], w).hex(), "salt_sha256": sha(salt), "bc": bc.hex(),
+           "tree_leaf": L.tree_leaf(bc).hex()}
+    if out["row_schema"] == SCHEMA_HM96_SHA512_ROW_SEG:
+        out["segments"] = segments(w)
     if row == "tile":
         out["tile_digest"] = bytes(v for x in w for v in x.to_bytes(2, "little")).hex()
     else:
