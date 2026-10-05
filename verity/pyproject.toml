@@ -23,15 +23,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: tests/proofs/test_tc_probe_families.py imports the tensor-core probe's tile generation (tools/tc_probe/tc_probe.py),
-# and the tests read the repository's fixtures and census. tests/proofs/test_discrepancy_log.py checks that each evidence ref in
-# catalog/silicon/discrepancy_log.json exists, which the guard can't see, so every ref outside the paths above is listed here (its
-# test_every_evidence_path_is_an_input_of_this_suite fails on one that isn't).
-inputs = ["catalog/census", "catalog/silicon/discrepancy_log.json", "catalog/silicon/hawkeye", "catalog/silicon/captures", "fixtures/typed-obligation-v0", "tools/tc_probe",
-          "benchmarks/numerical/python/verity_numerical/reference/hawkeye_close.py",
-          "benchmarks/numerical/tests/checker/test_fp8.py",
-          "benchmarks/numerical/tests/reference/hawkeye_harness.cpp",
-          "benchmarks/numerical/tests/reference/test_hawkeye_close.py",
-          "benchmarks/numerical/tests/reference/test_normalisation_d3.py",
-          "tools/tc_probe_fp4/probe.py", "catalog", "kernels", "experimental/commitments/multiproof.py"]
+# Test-only: tests/commitments/test_leaves.py reads the typed-obligation fixtures. The tests also import the catalog and the
+# kernels (a Definition's kernel is checked against it), and tests/commitments' frame tests run experimental's multiproof.
+inputs = ["catalog", "kernels", "experimental/commitments/multiproof.py", "fixtures/typed-obligation-v0"]
 parallel = true
