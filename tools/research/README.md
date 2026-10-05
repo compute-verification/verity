@@ -438,9 +438,8 @@ is written for it, and a sidecar wins.
 ~~~text
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
 research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
-research retention report [--root /workspace] [--depth 2] [--node NAME] [--ask-gib 10] [--json] [--out FILE]
-research retention gc [--root /workspace] [--node NAME] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--out FILE]
-                      [--apply --by WHO [--log FILE]]
+research retention report [--root R] [--depth 2] [--node N] [--ask-gib 10] [--json] [--out F]
+research retention gc [--root R] [--node N] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--out F] [--apply --by WHO]
 research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
@@ -448,16 +447,10 @@ research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root 
 a failed push records nothing. The report walks with `os.scandir` and `lstat`, never into a recorded path. It lists every recorded
 path and every area in the top `--depth` levels with no record beneath it (`unowned`): unowned and expired first, then totals.
 
-First, whatever the disk, gc applies the default rules (`src/research/retention_rules.py`, the resource steward's "delete without
-asking" list): source trees under `research/src` 6 h old, Lean dependencies of trees going nowhere (node 1), job trees no live pod
-reads (node 1), check scratch untouched 2 h, and what an interrupted pass left. Each path a rule matches has an implicit record
-(owner, rule, age); a sidecar or custody record covering it wins. Nothing goes that live work names: a process (cwd, root, open
-files, maps, argv, environment), an open request, a live pod or Kueue workload, or a fill job. Each one is renamed aside, checked
-again, then deleted, or put back. When that can't be established (a process gc can't read, a failing `k3s kubectl`) gc deletes
-nothing and exits 3, as it does while node 2's fill status doesn't say `timed False`. `--apply` takes `/run/lock/vy-retention-gc.lock`
-(and the steward's sweep lock) and appends every decision to `<root>/research/retention/deletions.jsonl`
-(`research/retention-log/v1`). The report also lists each unowned area of `--ask-gib` or more with the owner to ask, and exits 1
-when there is one. The units `vy-retention-gc@.timer` (apply, every 6 h) and `vy-retention-dry-run@.timer` (daily) run it on each node.
+First, whatever the disk, gc applies the default rules (`retention_rules.py`, the steward's "delete without asking" list), each
+match an implicit record a sidecar or custody record overrides. Nothing live work names goes; when gc can't tell, or node 2 may
+be timed, it deletes nothing and exits 3. `--apply` logs each decision to the deletion log below, and `vy-retention-gc@.timer`
+(6 h) and `vy-retention-dry-run@.timer` (daily) run it (the rest: `retention.py`'s docstring).
 
 Policy `default` (`default/v1`) then acts only over `--high-pct` (vy-disk-guard's 80%) or with `--force`. It deletes the lowest priority,
 then the oldest expiry, until the filesystem is under `--low-pct` (75%). A path qualifies only when its record is valid, of this node,
@@ -466,8 +459,7 @@ expired, `low` or `normal`, and preserved or regenerable, it holds no nested rec
 read again. A preserved path also needs its artifact to hold every file now under it at its size, so files custody trimmed never
 count as preserved, and `preserved.check` in head mode must find the artifact PRESERVED. An implicit record's marker must still vouch
 for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
-no remote; either way it prints every deletion and every skip with its reason. Its named failure: on 1 Oct node 2 held 737 GiB of
-unowned, unpreserved bitsets that nobody could decide to delete.
+no remote; either way it prints every deletion and every skip with its reason.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
