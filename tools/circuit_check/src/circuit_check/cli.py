@@ -31,7 +31,13 @@ def _options(a: argparse.Namespace) -> CK.Options:
     return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras)
 
 
-_TASKS: list[tuple[str, str, Callable[[], dict]]] = []
+_TASKS: list[tuple] = []
+
+
+def _info(task: tuple) -> dict:
+    """A task's ``(kind, label, check[, info])``: info has ``as_call`` (in its key), ``units`` (its bindings, `targets.BINDINGS`)
+    and ``roots`` (the objects it checks, built before its check)."""
+    return task[3] if len(task) > 3 else {}
 
 
 def _one(kind: str, label: str, fn: Callable[[], dict]) -> dict:
@@ -49,44 +55,64 @@ def _errored(r: dict) -> bool:
     return any(f.get("code") == "error" for f in r.get("failures", []))
 
 
-def _observe(r: dict) -> tuple[dict, list[str], dict | None]:
+def _checked(task: tuple) -> tuple[dict, dict | None]:
+    """A task's result, and with tracing what its check read or resolved (`cache.attributed`), recorded from its start."""
+    kind, label, fn = task[:3]
+    if not CC.tracing():
+        return _one(kind, label, fn), None
+    info = _info(task)
+    with CC.recording() as fr:
+        r = _one(kind, label, fn)
+    return r, CC.attributed(fr, info.get("units", ()), info.get("roots", ()))
+
+
+def _observe(r: dict, got: dict | None) -> tuple[dict | None, list[str], dict | None]:
     """What a result read, what the tracer missed, and the reads as this process sees them right after the check."""
-    got, untraced = CC.reads(), CC.untraced()
-    return got, untraced, (CC.seen(REPO, got) if CC.tracing() and not untraced and not _errored(r) else None)
+    untraced = CC.untraced()
+    return got, untraced, (CC.seen(REPO, got) if got is not None and not untraced and not _errored(r) else None)
 
 
-def _work(i: int) -> tuple[int, dict, dict, list[str], dict | None]:
-    kind, label, fn = _TASKS[i]
-    r = _one(kind, label, fn)
-    return i, r, *_observe(r)
+def _work(i: int) -> tuple[int, dict, dict | None, list[str], dict | None]:
+    r, got = _checked(_TASKS[i])
+    return i, r, *_observe(r, got)
 
 
 def target_key(kind: str, label: str, opts: CK.Options, as_call: bool | None) -> dict:
     return CC.key({"target": [kind, label], "as_call": as_call, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}})
 
 
-def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None) -> list[tuple[str, str, Callable[[], dict]]]:
-    """The targets' checks in target order (deterministic: a worker rebuilds the same list and runs entries by index)."""
+def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None) -> list[tuple]:
+    """The targets' checks in target order (deterministic: a worker rebuilds the same list and runs entries by index).  Traced
+    (`cache.tracing`), each check gets a memo of its own, so its result never rests on what an earlier target's check computed,
+    and the pins it looks up are recorded (`cache.recorded_pins`); a suite Definition's ``as_call`` is resolved here (the catalog's
+    `targets.call_families`), so it is in the target's key rather than a read of its check."""
+    from verity.evaluation.reference import resolve
+
     TG.load_registries()
-    memo: dict = {}
-    pins = CK.load_pins()
-    tasks: list[tuple[str, str, Callable[[], dict]]] = []
+    fresh = CC.tracing()
+    shared: dict = {}
+    memo = (lambda: {}) if fresh else (lambda: shared)
+    pins = CC.recorded_pins(CK.load_pins()) if fresh else CK.load_pins()
+    tasks: list[tuple] = []
     if everything:
         for fid, fn in TG.suite().items():
-            tasks.append(("definition", fid, lambda fn=fn: CK.check_definition(fn, opts, memo=memo, pins=pins)))
+            call = TG.family(resolve(fn)) in TG.call_families()
+            tasks.append(("definition", fid, lambda fn=fn, call=call: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=call),
+                          {"as_call": call, "units": sorted(TG.BINDINGS.get(fid, ())), "roots": [fn]}))
         for label, sub, sts in TG.templates():
-            tasks.append(("template", label, lambda sub=sub, sts=sts: CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo, pins=pins)))
+            tasks.append(("template", label, lambda sub=sub, sts=sts: CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins),
+                          {"units": sorted(TG.BINDINGS.get(label, ()))}))
     for s in specs:
         kind = TG.kind_of(s)
         if kind == "row":
-            tasks.append(("row", s, lambda s=s: CK.check_row(s, opts, memo=memo, pins=pins)))
+            tasks.append(("row", s, lambda s=s: CK.check_row(s, opts, memo=memo(), pins=pins)))
         elif kind == "template":
             def tpl(s=s):
                 sub, sts = TG.subcircuit(s)
-                return CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo, pins=pins)
+                return CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins)
             tasks.append(("template", s, tpl))
         else:
-            tasks.append(("definition", s, lambda s=s: CK.check_definition(TG.definition(s), opts, memo=memo, pins=pins, as_call=as_call)))
+            tasks.append(("definition", s, lambda s=s: CK.check_definition(TG.definition(s), opts, memo=memo(), pins=pins, as_call=as_call)))
     return tasks
 
 
@@ -102,15 +128,15 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     forkserver (never a fork of this possibly multi-threaded process: under pytest-xdist that deadlocked) and rebuilding the
     task list with its own memo, so a worker may repeat a Definition another checked: the results are the same.
 
-    With ``cache`` each target's result is reused while everything its check read is unchanged (`circuit_check.cache`). A
-    result is stored with every read its process made up to it (the task list, the modules it imported, the earlier targets
-    whose memoized results it may use), and not at all once that process did something the tracer cannot see, nor when the
-    check raised (no verdict), nor when the reads as that process sees them right after its check differ from what would be
-    recorded (the tree changed during the run)."""
+    With ``cache`` each target's result is reused while everything its check read or resolved is unchanged
+    (`circuit_check.cache`): what was read and run from the start of its check, the builds of the Definitions it reached, its
+    own bindings and pins, and those modules' import closures; not what the task list's build or another target read.  A result
+    is not stored once its process did something the tracer cannot see, nor when the check raised (no verdict), nor when the
+    reads as that process sees them right after its check differ from what would be recorded (the tree changed during the run)."""
     tracing = cache is not None and CC.tracing()
     tasks = _tasks(specs, opts, everything, as_call)
     out: list[dict | None] = [None] * len(tasks)
-    keys = [target_key(kind, label, opts, as_call) for kind, label, _ in tasks] if tracing else []
+    keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call)) for t in tasks] if tracing else []
     stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
@@ -150,9 +176,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                 done(i, r, got, untraced, worker)
     else:
         for i in todo:
-            kind, label, fn = tasks[i]
-            r = _one(kind, label, fn)
-            done(i, r, *(_observe(r) if tracing else (None, None, None)))
+            r, got = _checked(tasks[i]) if tracing else (_one(*tasks[i][:3]), None)
+            done(i, r, *(_observe(r, got) if tracing else (None, None, None)))
     rep = CK.report([r for r in out if r is not None], opts)
     if tracing:
         rep["cache"] = stats
@@ -206,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
     rep = run(a.targets, opts, everything=a.all, as_call=True if a.as_call else None,
               log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=a.cache if a.cache and not a.update_pins else None)
     if c := rep.get("cache"):
-        print(f"circuit-check: {c['hits']} of {len(rep['targets'])} targets reused (every file, listing and probe their checks read is "
+        print(f"circuit-check: {c['hits']} of {len(rep['targets'])} targets reused (every file, listing, probe, catalog unit and pin their checks read or resolved is "
               f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "
               f"{len(c['errors'])} not stored because the check raised, {len(c['changed'])} because the tree changed while they ran")
     if a.update_pins:
