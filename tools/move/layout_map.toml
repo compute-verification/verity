@@ -448,6 +448,7 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
            "**/price_twins.json", "tools/move/**",
            "catalog/verity_catalog/silicon/captures/**", "catalog/verity_catalog/silicon/hawkeye/**",
            "tools/check/tests/test_suites.py",                   # its synthetic trees borrow the old names
+           "tools/check/tests/test_move_check.py",               # so do its synthetic moves
            "tools/tc_probe_fp4/fp4_emulation_1ad1aaa2.py"]       # verbatim at 1ad1aaa2: t1_merged.emulation_gate pins its bytes
 # Old paths that are keys outside the tree, never rewritten: the frozen evidence artifact is laid out at its former repository
 # paths (`verity_numerical.bench.frozen`), and labels cite them.
@@ -456,6 +457,9 @@ keep = ["backends/numerical/reports", "backends/numerical/reports/*", "backends/
 # Kept only in the files a glob matches: vLLM's `census/` is a run directory's census phase (census/census.json, traces/),
 # never the repository's census data, which no file of the integration names.
 keep_in = {"integrations/vllm/**" = ["census", "census/*"]}
+# Dotted names that are no module, never rewritten, nor anything below them: PoUW's torch op (`verity_pouw.ncp_linear.default`)
+# is in the library namespace `verity_pouw`, which its registration names.
+keep_dotted = ["verity_pouw.ncp_linear"]
 # Rewritten although excluded above: data keyed by repository path (their pinned digests must not change).
 include = ["fixtures/artifacts.json", "backends/flock/tests/fixtures/randomness_lean.json",
            "experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json",

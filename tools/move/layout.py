@@ -19,7 +19,8 @@ What it rewrites, in every tracked text file the map doesn't exclude:
   longer resolves), `from M import n` in strings, and every dotted name (`-m`, `import_module`, `module:attr`, docs);
 - pyprojects: the distributions folded into `verity` ([distributions]), the workspace members, the suites' inputs.
 A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. An
-old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten.
+old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
+and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
 """
 from __future__ import annotations
 
@@ -80,6 +81,7 @@ class Layout:
         self.exclude, self.include = rw.get("exclude", []), rw.get("include", [])
         self.keep = rw.get("keep", [])
         self.keep_in = rw.get("keep_in", {})
+        self.keep_dotted = tuple(rw.get("keep_dotted", []))
         self.merged = set(data.get("distributions", {}).get("merged", []))
 
     # paths
@@ -928,6 +930,8 @@ class Run:
         def fix(m: re.Match) -> str:
             name = m.group(1)
             if name.rpartition(".")[2] in FILE_SUFFIXES and name not in self.L.modules:
+                return name
+            if any(name == d or name.startswith(d + ".") for d in self.L.keep_dotted):
                 return name
             k = self.L.renamed_prefix(name)
             if k == 0:
