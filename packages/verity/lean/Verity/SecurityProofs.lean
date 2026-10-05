@@ -16,7 +16,9 @@ import Verity.SecurityProofs.Game.Rewinding
 import Verity.SecurityProofs.Scalar.Vectors
 import Verity.SecurityProofs.Prims.Vectors
 import Verity.SecurityProofs.TC
+import Verity.SecurityProofs.Round
 import Verity.SecurityProofs.Fp32
+import Verity.SecurityProofs.Prims.Round
 
 /-!
 # Proofs of core's guarantees
