@@ -170,7 +170,8 @@ def test_101s_build_declares_the_plain_construction_and_its_select_folds_as_it_c
 
 def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_path):
     """#101's fourth Match, replayed on CPU from its records: the preserved capture folded under the construction its Build declares, then
-    the Match's own comparison (`program-compare`, as the row runs it) against the Build's request Program: canonical-equal.  The records
+    the Match's own comparison (`program-compare`, as the row runs it) against the Build's request Program: every family's count equal
+    but the dense SiLU's version (the Build predates SiluMul_v2), the selects among them.  The records
     tree holds `match/` (the capture log among it) but not the row-level `match_compare.json`; that file, the failing comparison, is
     checked only where a tree carries it.  A store that lists or fetches nothing skips by name."""
     store = _store()
@@ -208,7 +209,8 @@ def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_p
                           "--b", str(run), "--out", str(tmp_path / "match_compare.json")], cwd=VLLM_DIR, env=env, capture_output=True, text=True)
     assert cmp.returncode == 0, cmp.stderr[-3000:]
     res = json.load(open(tmp_path / "match_compare.json"))
-    assert res["histogram_diff_T_normalised"] == {} and res["compare"]["canonical_sha256"]["equal"] is True, res["histogram_diff_T_normalised"]
+    # #101's Build predates SiluMul_v2 (#820) and binds SiluMul_v1; the fold binds the record target's vocabulary's silu_mul (v2)
+    assert res["histogram_diff_T_normalised"] == {"SiluMul_v1{I=8192}": [4592, 0], "SiluMul_v2{I=8192}": [0, 4592]}, res["histogram_diff_T_normalised"]
 
 
 def _profile_of_101() -> str:

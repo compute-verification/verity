@@ -9,10 +9,13 @@ every `N` from 1 to `2^64`, which is every segment count `BandParams` allows. It
 challenges uniform over all its blocks, the state bound of the whole store, one permutation. At one segment it is also
 `BandChainMeets64`, and at 448 (14 GB) `BandMultiMeets14`.
 
-The same statement at fewer rounds (`FAMILY_ROUNDS`) gives two more certificates, with a smaller `k` under a tighter
-deadline: `BandMultiMeetsFamilyD2`, `k = 97` at `D = 2` (`Δ + RTT < 724.5 µs`) for every `d ≥ 2`, and
-`BandMultiMeetsFamilyD1`, `k = 93` at `D = 1` (`Δ + RTT < 483 µs`) for every `d ≥ 1`. The verifier audits under them
-only when asked for that `k` (`protocol.Verifier`); a band with `d < 5` has no `D = 5` certificate but has these.
+The same statement at fewer rounds (`FAMILY_ROUNDS`) gives three more certificates, with a smaller `k` under a tighter
+deadline: `BandMultiMeetsFamilyD2`, `k = 97` at `D = 2` (`Δ + RTT < 724.5 µs`) for every `d ≥ 2`,
+`BandMultiMeetsFamilyD1`, `k = 93` at `D = 1` (`Δ + RTT < 483 µs`) for every `d ≥ 1`, and `BandMultiMeetsFamilyD0`,
+`k = 89` at `D = 0` (`Δ + RTT < 241.5 µs`) for every `d` (at `D = 0` the responder makes no `Π₂` call, so the band
+needs no bound on its in-degree). The verifier audits under them only when asked for that `k` (`protocol.Verifier`); a
+band with `d < 5` has no `D = 5` certificate but has these.  Each deadline-to-`D` conversion here counts whole `Π₂` calls
+and holds in the ideal-permutation model only (`CHAIN_CLAIMS`).
 
 It needs the segment tags injective across segments (`segDom_inj`; `2^64` is where `u64 s` stops being injective); with
 a shared domain, identical segments get identical labels and the audit accepts with probability 1
@@ -31,9 +34,12 @@ from ..protocol import Certificate, Scheme
 CHAIN_CLAIMS = ("ideal-permutation", "random-oracle", "feistel-indifferentiability", "sequential-step-floor",
                 "perfect-isolation", "cr/sha-256", "live-verifier", "designated-verifier")
 """What the overwrite-chain certificates rest on: the ideal-permutation model for `Π₂`, instantiated by Feistel10 over
-SHAKE256 (its round functions random oracles, the composition a named heuristic); the step floor of at least
-241.5 µs per 64 KiB `Π₂` call in a chain (`primitives.pi2_keccak_f`); perfect isolation; SHA-256 collision resistance
-for the commitment to `W` and for `vk`; and a live, designated verifier."""
+SHAKE256 (its round functions random oracles, the composition a named heuristic, now refuted:
+`feistel-indifferentiability`); the step floor of at least 241.5 µs per 64 KiB `Π₂` call in a chain
+(`primitives.pi2_keccak_f`), which bounds an adversary only in the ideal-permutation model; perfect isolation; SHA-256
+collision resistance for the commitment to `W` and for `vk`; and a live, designated verifier.  At the reference
+Feistel-SHAKE256 `Π₂` the certificates do not hold: a prover rebuilds a label from 1.53% of `C` in 481 Keccak-f, about
+24 µs, with no chain call (red team, 4 Oct 2026, art:7617c8017e80)."""
 
 POINT = (512, 524_288)
 """`B` and `ℓ` (bits) of the certified point: 32 MiB segments of 64 KiB blocks."""
@@ -45,7 +51,8 @@ FAMILY_SEGMENTS = 1 << 64
 
 FAMILY_ROUNDS = {5: (111, "Pous.SecurityProofs.BandMultiMeetsFamily"),
                  2: (97, "Pous.SecurityProofs.BandMultiMeetsFamilyD2"),
-                 1: (93, "Pous.SecurityProofs.BandMultiMeetsFamilyD1")}
+                 1: (93, "Pous.SecurityProofs.BandMultiMeetsFamilyD1"),
+                 0: (89, "Pous.SecurityProofs.BandMultiMeetsFamilyD0")}
 """The band's certificates at `POINT` by round budget `D`: `k` and the family pin, each for every `d ≥ D` and every
 segment count from 1 to `2^64`. An audit at `D` needs `Δ + RTT < (D + 1)·call_ns`."""
 

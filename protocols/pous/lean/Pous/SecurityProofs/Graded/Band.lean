@@ -46,14 +46,22 @@ takes `min(v mod 2^9, d) + 1` sequential `Π₂` calls even with every parent he
   `D_late = d + 1` the gap attack rebuilds, within one late round, every dropped block whose parents are held. With
   `D_late ≤ d` a late round, like an on-time one, rebuilds no block at a segment position `≥ d`. At the deployed
   `d = 12` it is `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`, the bound `band.check_deployment` already puts on `Δ`.
-- `D_late ≤ 12` caps a late round at the deployed in-degree whatever `d` is, so grace adds at most `3·12 = 36`
-  sequential calls to any window. Without it, `D_late ≤ d` alone would let one late round re-encode a whole segment
+- `D_late ≤ 12` caps a late round at the deployed in-degree whatever `d` is, so a row's late rounds last under
+  `3·13 = 39` call-times. Without it, `D_late ≤ d` alone would let one late round re-encode a whole segment
   when `d ≥ 2^9 − 1`, where the band is the complete DAG (`R = 2^9·(2^9 + 1)/2 = 131,328` calls). A deployment that
   wants a larger `D_late` re-pins with its own number.
-- With both, the window of every row of the table, `k − t` rounds of `D = 5` and `t` of `D_late`, is at most
-  `240·5 + 3·12 = 1,236 < 3,057 ≤ R(d)` sequential calls, for every `d ≥ 5`: too short to re-encode a segment from
-  `W`.
+- With both, the rounds of every row of the table, `k − t` of `D = 5` and `t` of `D_late`, last under
+  `240·6 + 3·13 = 1,479` call-times: a round answered at its deadline takes just under `D + 1`. The verifier's gaps
+  between rounds add to the window, so it is bounded by the verifier's limit on the audit's duration, `1,505` call-times
+  (`Pous.Guarantees.BackgroundRebuildExcluded`), below `3,057 ≤ R(d)` for every `d ≥ 5`: too short to re-encode a
+  whole segment from `W` alone.
 - `Q_late` is any work bound at least `Q`: re-encoding is limited by its depth, not its width.
+
+**This rationale holds in the ideal-permutation model only.** Every count above is of whole `Π₂` calls, and the
+conversions to wall-clock time take a call to be at least 241.5 µs. At the reference Feistel-SHAKE256 `Π₂` this does
+not hold: a prover rebuilds a label from 1.53% of `C` in 481 Keccak-f, less than one call, by keeping five 200-byte
+round states per block, so it never re-encodes a segment (red team, 4 Oct 2026, art:7617c8017e80). The theorem is
+about the ideal model and is unaffected.
 -/
 
 namespace PousGraded
