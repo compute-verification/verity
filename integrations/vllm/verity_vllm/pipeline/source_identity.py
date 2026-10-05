@@ -142,7 +142,7 @@ def resolve(tree: str | os.PathLike[str] | None = None, *, sha: str | None = Non
             rec = _sid.resolve_module(import_name, ROOT_MARKERS)
             rec["package"] = name
             rec["import_name"] = import_name
-            rec["expected_sys_path_entry"] = os.pathsep.join(os.path.join(root, rel) for rel in rels)
+            rec["expected_sys_path_entry"] = os.pathsep.join(os.path.normpath(os.path.join(root, rel)) for rel in rels)
             if rec.get("resolved_path"):
                 # <entry>/<import_name>/__init__.py, or each portion <entry>/<import_name> of a namespace -> the sys.path entries that resolved it
                 portions = [p["path"] for p in rec.get("portions") or ()]
