@@ -25,10 +25,17 @@ whatever the table's number. How the rate is measured and cited (lean's rulings 
   - `n` work-weighted draws, no failure: `ln(1/δ)·a/(1 − e^(−n·a))`. Clopper–Pearson on the draws is not used: it bounds
     the realized pass's fraction `X`, not the rate `p`;
   - a census with failures: Bernstein's bound for a weighted sum of independent Bernoullis;
-  - draws with failures: no bound. Such an input is measured in full.
+  - draws with failures: no bound. Such an input is measured in full;
+  - N fresh trials, each with its own salt and work-weighted draw and with `act` fixed, and k failures: the
+    Clopper–Pearson upper limit at δ = 0.05/m; at k = 0, 1 − δ^(1/N).
 
-  Every one of these bounds holds only if **the input's tiles fail independently**, which they do when each tile's noise
-  is the oracle at points of its own.
+  The census and draw bounds hold only if **the input's tiles fail independently**, which they do when each tile's
+  noise is the oracle at points of its own. The fresh trials are independent because their salts and draws are:
+  each is derived from recorded OS randomness drawn after the pass's activations are fixed, under a domain naming the
+  table and the input, with `N`, `m`, the inputs and the source fixed before the run, and the cited limit uses every
+  trial run for the input. With the deployed hash fixed, the trials bound the rate at that hash, while the assumption
+  averages over oracles: the same random-oracle step as the rest of PoUW. Unlike draws with failures, they bound an
+  input with failures too (Clopper–Pearson at k).
 - **`Served` carries the meaning.** The assumption is that *every* member of `Served` is within `ε`, not only the
   measured sample, and that each member's activations are fixed independently of the oracle and the salt. `Served` is
   the population the measured requests were drawn from: their prompt source and how it was sampled, on the model's
@@ -37,7 +44,8 @@ whatever the table's number. How the rate is measured and cited (lean's rulings 
   rules (all NaN, say) no row is credited, every tile's debit and cap are both 0, and the completeness that follows is
   of an audit that credits nothing.
 - **The counted event** is `pearlCTilesDevRev1K`'s `capOK`, through the Python check that #865's L5 test ties to it.
-- **The measurement** is `benchmarks/pouw/pearl_c_vllm/served_debit.py --per-input` (at `f96f5b780`). Its `inputs.json`
+- **The measurement** is `benchmarks/pouw/pearl_c_vllm/served_debit.py --per-input` (at `f96f5b780`; the fresh trials
+  are its `--fresh-draws N --fresh-source HEX`). Its `inputs.json`
   holds each input's failures, `W`, `w_max` and upper limit, and their maximum `cited_upper`; `ε` is `cited_upper`
   rounded up (Llama-3.1-8B and Qwen3-8B, `art:<pending: FP8 served table>`).
 
@@ -66,7 +74,7 @@ independently of the oracle and the salt. It is the population the measured requ
 source and how it was sampled) on the model's pinned weights. The counted event is `pearlCTilesDevRev1K`'s `capOK`,
 through the Python check that #865's L5 test ties to it. The measurement is `served_debit.py --per-input`
 (`inputs.json`'s `cited_upper`), `art:<pending: FP8 served table>`; the module docstring gives the bounds for an input
-with failures. -/
+with failures and for fresh trials. -/
 def HonestTileCapRate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
     (D : Layout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes, Served U act →
