@@ -1,4 +1,4 @@
-import NetTiming
+import NetTimingProofs
 open NetTiming
 
 -- The 35 statements' proofs (four of them `lean-audit.json`'s `guarantees`), then the 16 witnesses.

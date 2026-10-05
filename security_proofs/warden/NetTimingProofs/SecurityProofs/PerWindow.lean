@@ -1,5 +1,5 @@
-import NetTiming.SecurityProofs.Schedule
-import NetTiming.SecurityProofs.Ingress
+import NetTimingProofs.SecurityProofs.Schedule
+import NetTimingProofs.SecurityProofs.Ingress
 
 /-!
 # Per window: the windows the accounting charges

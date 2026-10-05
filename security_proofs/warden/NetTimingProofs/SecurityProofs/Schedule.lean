@@ -1,4 +1,4 @@
-import NetTiming.SecurityProofs.Advice
+import NetTimingProofs.SecurityProofs.Advice
 
 /-!
 # Theorem 3 for the shipped schedule: the constant-rate Program
