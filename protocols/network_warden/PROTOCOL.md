@@ -220,9 +220,9 @@ docstring) and sizes:
   them was late under its own declaration, `-rhoR` declares the chosen δ at the ρ R steps slower, and `last` is
   `cover-1-0`. `sticky-K-M-N` declares `cover-K-M` only in windows 0, 1, 1+N, ...; in between it keeps its value while
   that still has M buckets to spare, and otherwise escalates to a value fixed by the kept one. A window with no
-  history declares the envelope. A configuration cut from one run at a dropped window may start from the previous one's history
-  (`Prover(prior=…)`). The bound charges log2 #Σ_sync bits per window whatever chose the value, so it holds under
-  any rule. What changes is who can use those bits: a sync chosen before the run, or from the trace's model, doesn't
+  history declares the envelope. A configuration cut from one run at a dropped window may start from the previous
+  one's history (`Prover(prior=…)`). The bound charges log2 #Σ_sync bits per window whatever chose the value, so it
+  holds under any rule. What changes is who can use those bits: a sync chosen before the run, or from the trace's model, doesn't
   depend on the sender, but an online prover reads the sender's timing, so the sender steers every declaration after
   its first (in the injected-clock replay, the burst, spread and bits senders each move the declared δ, and the wire
   differs from honest's in every window but the first). `Rule.choices` bounds how many values a sender could make a
