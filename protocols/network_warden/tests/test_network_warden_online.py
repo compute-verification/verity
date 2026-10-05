@@ -177,14 +177,15 @@ def test_a_rho_margin_declares_a_slower_rho():
     assert online.rule("cover-1-0").choices([], SIGMA, ENVELOPE) == 1
 
 
-def test_sticky_keeps_its_declaration_between_free_windows():
-    """`sticky-K-M-N` declares cover-K-M in windows 0, 1, 1+N, ...; in the others it keeps the previous value while
-    that has M buckets of δ to spare over the last K windows' frontier at its ρ, and otherwise escalates to a value
-    fixed by the previous one alone: the next δ up, or past the largest the next slower ρ. So a sender chooses
-    between at most two values there."""
+@pytest.mark.parametrize("name, free_rule", [("sticky-2-1-3", "cover-2-1"), ("sticky-2-1-3-rho1", "cover-2-1-rho1")])
+def test_sticky_keeps_its_declaration_between_free_windows(name, free_rule):
+    """`sticky-K-M-N[-rhoR]` declares cover-K-M[-rhoR] in windows 0, 1, 1+N, ...; in the others it keeps the
+    previous value while that has M buckets of δ to spare over the last K windows' frontier at its ρ, and otherwise
+    escalates to a value fixed by the previous one alone: the next δ up, or past the largest the next slower ρ. So a
+    sender chooses between at most two values there."""
     rng = random.Random(6)
     k, margin, every = 2, 1, 3
-    sticky, base = online.rule(f"sticky-{k}-{margin}-{every}"), online.rule(f"cover-{k}-{margin}")
+    sticky, base = online.rule(name), online.rule(free_rule)
     rhos, top = sorted(SIGMA.rhos), max(SIGMA.deltas)
     kept = escalated = 0
     for _ in range(60):
@@ -220,8 +221,10 @@ def test_sticky_keeps_its_declaration_between_free_windows():
 def test_rule_names():
     assert online.rule("last").depth == 1 and online.rule("cover-4-1-fallback").name == "cover-4-1-fallback"
     assert online.rule("cover-3-3-rho1").name == "cover-3-3-rho1" and online.rule("sticky-3-2-8").depth == 3
+    assert online.rule("sticky-3-2-8-rho1").name == "sticky-3-2-8-rho1"
     for bad in ("cover", "cover-0-1", "cover-2-x", "cover-2-1-later", "first", "sticky-3-2", "sticky-3-2-0",
-                "cover-3-2-rho", "cover-3-2-fallback-rho1", "sticky-3-2-8-fallback"):
+                "cover-3-2-rho", "cover-3-2-fallback-rho1", "sticky-3-2-8-fallback", "sticky-3-2-rho1",
+                "sticky-3-2-8-rho1-fallback"):
         with pytest.raises(ValueError):
             online.rule(bad)
     with pytest.raises(ValueError, match="after its anchor"):

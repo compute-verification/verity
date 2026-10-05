@@ -10,9 +10,9 @@ only, and the frames it sees are the contiguous canonical prefix ready by w·T, 
 The rules (`rule`) build on `cover-K-M`: the tightest value of Σ_sync that would have met each of the last K
 windows' seen frames, with M buckets of δ to spare, at the least estimated hand time. `-fallback` declares the envelope
 instead while one of the last K windows was late under its own declaration, and `-rhoR` declares the chosen δ at a
-ρ R steps slower. `last` is `cover-1-0`: the previous window's hindsight choice on what it showed. `sticky-K-M-N`
-(`sticky`) declares `cover-K-M` only every N windows and otherwise keeps or escalates its previous value. A window
-with no history declares the envelope.
+ρ R steps slower. `last` is `cover-1-0`: the previous window's hindsight choice on what it showed.
+`sticky-K-M-N[-rhoR]` (`sticky`) declares `cover-K-M[-rhoR]` only every N windows and otherwise keeps or escalates
+its previous value. A window with no history declares the envelope.
 
 The bound doesn't depend on the rule: the audit charges log2 #Σ_sync bits per window whatever chose the value
 (`SecurityProofs.EncardAccSeqsLeSync` counts every advice sequence). The rule sets liveness, since a window its
@@ -110,15 +110,15 @@ def cover(k: int, margin: int = 0, fallback: bool = False, rho_margin: int = 0) 
     return Rule(name, k, choose, choices)
 
 
-def sticky(k: int, margin: int, every: int) -> Rule:
-    """`sticky-K-M-N`: `cover-K-M` declares only in the run's first two windows and every N windows after (w ≡ 1 mod
-    N), each a free window. In the others the previous declaration p stays while it has M buckets of δ to spare over
-    each of the last K windows' frontier at its ρ; otherwise the rule escalates to a value fixed by p alone: δ at least
-    p's plus max(M, 1), or past the largest δ, the largest δ at the next slower ρ. So outside a free window the sender
-    chooses only between p and its escalation, one bit."""
+def sticky(k: int, margin: int, every: int, rho_margin: int = 0) -> Rule:
+    """`sticky-K-M-N[-rhoR]`: `cover-K-M[-rhoR]` declares only in the run's first two windows and every N windows
+    after (w ≡ 1 mod N), each a free window. In the others the previous declaration p stays while it has M buckets
+    of δ to spare over each of the last K windows' frontier at its ρ; otherwise the rule escalates to a value fixed
+    by p alone: δ at least p's plus max(M, 1), or past the largest δ, the largest δ at the next slower ρ. So outside
+    a free window the sender chooses only between p and its escalation, one bit."""
     if every < 1:
         raise ValueError("sticky needs N ≥ 1")
-    base = cover(k, margin)
+    base = cover(k, margin, rho_margin=rho_margin)
 
     def escalate(p: ClockSync, sync_set: SyncSet) -> ClockSync:
         deltas, rhos = sorted(sync_set.deltas), sorted(sync_set.rhos)
@@ -150,11 +150,11 @@ def sticky(k: int, margin: int, every: int) -> Rule:
             return base.choices(past, sync_set, envelope, declared)
         return len({declared[-1], escalate(declared[-1], sync_set)})
 
-    return Rule(f"sticky-{k}-{margin}-{every}", k, choose, choices)
+    return Rule(f"sticky-{k}-{margin}-{every}" + (f"-rho{rho_margin}" if rho_margin else ""), k, choose, choices)
 
 
 def rule(name: str) -> Rule:
-    """A rule by name: `last`, `cover-K-M` with an optional `-rhoR` and `-fallback`, or `sticky-K-M-N`."""
+    """A rule by name: `last`, `cover-K-M` with an optional `-rhoR` and `-fallback`, or `sticky-K-M-N[-rhoR]`."""
     if name == "last":
         c = cover(1)
         return Rule("last", 1, c.choose, c.choices)
@@ -163,15 +163,17 @@ def rule(name: str) -> Rule:
     if len(parts) >= 3 and all(x.isdigit() for x in nums):
         k, m = int(parts[1]), int(parts[2])
         rest = parts[3:]
-        if parts[0] == "sticky" and len(rest) == 1 and rest[0].isdigit():
-            return sticky(k, m, int(rest[0]))
-        if parts[0] == "cover":
-            rho = 0
-            if rest and rest[0].startswith("rho") and rest[0][3:].isdigit():
-                rho, rest = int(rest[0][3:]), rest[1:]
-            if rest in ([], ["fallback"]):
-                return cover(k, m, bool(rest), rho)
-    raise ValueError(f"no sync rule {name!r}: last, cover-K-M[-rhoR][-fallback] or sticky-K-M-N")
+        n = None
+        if parts[0] == "sticky" and rest and rest[0].isdigit():
+            n, rest = int(rest[0]), rest[1:]
+        rho = 0
+        if rest and rest[0].startswith("rho") and rest[0][3:].isdigit():
+            rho, rest = int(rest[0][3:]), rest[1:]
+        if n is not None and not rest:
+            return sticky(k, m, n, rho)
+        if parts[0] == "cover" and rest in ([], ["fallback"]):
+            return cover(k, m, bool(rest), rho)
+    raise ValueError(f"no sync rule {name!r}: last, cover-K-M[-rhoR][-fallback] or sticky-K-M-N[-rhoR]")
 
 
 class _Link:

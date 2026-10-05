@@ -7,9 +7,9 @@ unit, so it gets its own `audit.Audit` and one clock:
 - **the honest prover** declares one sync per window for all the configuration's egress links (`--syncs`): by default
   in hindsight, met on every one, with `calibration.choose_syncs` over the report's Σ_sync; `envelope`, the
   calibration's envelope in every window; or an online rule of `online` (`last`, `cover-K-M[-rhoR][-fallback]`,
-  `sticky-K-M-N`), declared at each window's first bucket from the frames ready by then, with its history carried
-  across a run's configurations (`--fresh` starts each with none). An online rule's egress rows carry `choices`, the
-  values a sender timing its writes could have made it declare in the window (`online.Rule.choices`);
+  `sticky-K-M-N[-rhoR]`), declared at each window's first bucket from the frames ready by then, with its history
+  carried across a run's configurations (`--fresh` starts each with none). An online rule's egress rows carry
+  `choices`, the values a sender timing its writes could have made it declare in the window (`online.Rule.choices`);
 - **the honest sender** is `schedule.run_shaper`, driving a `grid.Warden` at the report's egress r. A late frame goes
   when ready, so a window that no sync meets deviates from the Program's grid;
 - **the ingress warden** is a `grid.Warden` at the report's r_in and τ_in. A frame is enqueued at the first ingress
@@ -394,7 +394,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--jobs", type=int, default=1, help="trace files replayed in parallel")
     ap.add_argument("--syncs", type=parse_sync_policy, default="hindsight",
                     help="the prover's syncs: hindsight, envelope, or an online rule "
-                         "(last, cover-K-M[-rhoR][-fallback], sticky-K-M-N)")
+                         "(last, cover-K-M[-rhoR][-fallback], sticky-K-M-N[-rhoR])")
     ap.add_argument("--fresh", action="store_true",
                     help="an online rule starts every configuration with no history, even within one run")
     args = ap.parse_args(argv)
