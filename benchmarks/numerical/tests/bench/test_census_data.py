@@ -183,7 +183,7 @@ def test_workloads_are_the_regression_rows_template_mix() -> None:
     import collections
     import pathlib
 
-    repo = pathlib.Path(census.ROOT).parent
+    repo = pathlib.Path(census.ROOT).parents[1]
     assert census.WORKLOADS, "no workloads"
     for w in census.WORKLOADS.values():
         x = json.loads((repo / w.source.expected).read_text(encoding="utf-8"))
