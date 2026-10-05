@@ -28,4 +28,6 @@ inputs = ["archive/direct", "catalog/census", "verity/primitives/randomness/test
 parallel = true
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
 artifacts = ["backends/flock/verifier/lean/.lake/build/bin/flock-verify",
+             "backends/flock/verifier/lean/.lake/build/bin/flock-audit",
+             "backends/flock/verifier/lean/.lake/build/bin/flock-audit-tape",
              "backends/flock/verifier/lean/level3/.lake/packages/mathlib/.lake/build"]
