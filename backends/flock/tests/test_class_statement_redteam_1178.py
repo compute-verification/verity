@@ -68,7 +68,7 @@ def test_portions_that_overlap_never_share_a_digest_across_orders(monkeypatch, t
 def test_todays_digest_is_the_one_portion_walk():
     """On today's layout every package has one portion, and the digest is the old per-portion walk, byte for byte."""
     h = hashlib.sha256()
-    for name in ("verity", "verity_flock", "circuit_check", "verity_vllm", "verity_pouw"):
+    for name in ("verity", "verity_flock", "circuit_check", "verity_vllm", "verity.protocols.accounting.work.pouw"):
         spec = importlib.util.find_spec(name)
         assert spec is None or len(spec.submodule_search_locations or []) <= 1, (name, spec.submodule_search_locations)
         for root in (spec.submodule_search_locations or []) if spec else []:

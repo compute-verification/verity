@@ -2,7 +2,7 @@
 kernels as the honest prover of `pearl-c-sm120-v1-h1` on the harness's FP32 operands, on the device record
 `pearl_c_device.SM120` (G = 4, the panel's `pearl-c-sm120` v1-h1) or `SM120_UNPROMOTED` (v2-h1).
 
-Each operand set is a one-unit epoch as `verity_pouw.audit` starts it, in hashing format -h1: B's frame-b3 row tree on the
+Each operand set is a one-unit epoch as `verity.protocols.accounting.work.pouw.audit` starts it, in hashing format -h1: B's frame-b3 row tree on the
 device, its root read back, the salt from that root and a beacon of `os.urandom(32)` drawn at `prepare`, seed_B, and the
 domain ids and unit block the kernels read (run.Pipeline's `keys`).  `weight_side` is the per-(weight, epoch) work: B's row
 tree, the pads and level keys of A's tree and of the tile tree, E_B's, F_A's and F_B's lines, B's statistics, E′ and forming,
@@ -39,7 +39,7 @@ in the run's directory (the scheme, the matmul, the beacon, the salt, the weight
 and every file with its SHA-256), the levels of A's, B's and the tile tree and the tile leaves beside it, and the harness's
 A and B rows (up to 512 MB at 8,192²) under PEARLC_ROWS (default: a temporary directory).  Then the negative control, the
 same dump into `negative/<arm>/<shape>/` after the buffers are poisoned again and the call runs without its commitment or
-the weight side (`NEGATIVE`).  `verify.py` runs `verity_pouw.audit.Verifier` on both after the lease, and passes only if it
+the weight side (`NEGATIVE`).  `verify.py` runs `verity.protocols.accounting.work.pouw.audit.Verifier` on both after the lease, and passes only if it
 accepts the transcript and rejects its negative control.
 
 Shortcuts, flagged: m is padded to 64 rows (decode's m = 32 issues 2x its tensor work on 64 x 64 tiles, and `work` counts
@@ -49,7 +49,7 @@ the credit and γ are Derived at those.
   python bench.py --arm-path <this directory> --arm pearlc_arm:PearlCSm120 [--arm pearlc_arm:PearlCSm120Unpromoted] ...
 
 PEARLC_SHIP names build.sh's output (pearl_c_sm120.cubin, sass.json, toolchain.txt, source.txt; default this directory).
-Needs Python >= 3.12 with numpy, and `verity` and `verity_pouw` importable (the twin, the epoch).
+Needs Python >= 3.12 with numpy, and `verity` and `verity.protocols.accounting.work.pouw` importable (the twin, the epoch).
 """
 
 from __future__ import annotations
@@ -82,13 +82,13 @@ R = _load("pearl_c_sm120_run", HERE / "run.py")
 F = _load("pearl_c_sm120_fixture", HERE / "fixture.py")
 W = F.W
 
-from verity_pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commitment_hash,  # noqa: E402
+from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commitment_hash,  # noqa: E402
                                rows_domain, transcript_domain, weight_binding)
-from verity_pouw.protocol import Context, DomainError, Matmul  # noqa: E402
-from verity_pouw.protocol import Shape as MShape  # noqa: E402
-from verity_pouw.schemes import pearl_c as C  # noqa: E402
-from verity_pouw.schemes import pearl_kw as P  # noqa: E402
-from verity_pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
+from verity.protocols.accounting.work.pouw.protocol import Context, DomainError, Matmul  # noqa: E402
+from verity.protocols.accounting.work.pouw.protocol import Shape as MShape  # noqa: E402
+from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
 
 T = W.T
 KEYS = R.TIMING_KEYS
@@ -425,7 +425,7 @@ class PearlCSm120:
                        "digests hashed from registers (C~, U never stored), gemm_pearlc_s y alone without hashing; else "
                        "gemm_pearlc(_d) stores C~, U, y and hash_msg_v digests them",
                "epoch": "per operand set: B's frame-b3 row tree on the device, the salt from its root and os.urandom(32) as "
-                        "the beacon (verity_pouw.audit.Epoch.unverified), matmul index 0 on the set's weight",
+                        "the beacon (verity.protocols.accounting.work.pouw.audit.Epoch.unverified), matmul index 0 on the set's weight",
                "gate": f"all: a second, unfused launch word for word (A's tree and seed_A, gemm_ct, gemm_pearlc on {REF_GRID} "
                        "CTAs storing C~ and U, hash_msg_v over them and the other hashes), so fused digests are held to "
                        "hash_msg_v's; gemm_ct's C~ against the call's or, unstored, the second launch's; seed_A and E_A's line "
