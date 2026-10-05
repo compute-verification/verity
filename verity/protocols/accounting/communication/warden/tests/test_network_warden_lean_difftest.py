@@ -24,7 +24,7 @@ import pytest
 from verity.protocols.accounting.communication.warden.grid import released
 from verity.protocols.accounting.communication.warden.schedule import ClockSync, LogicalFrame, handing_buckets
 
-LEAN = Path(__file__).resolve().parents[1] / "lean"
+LEAN = Path(__file__).resolve().parents[5] / "Security"
 _spec = importlib.util.spec_from_file_location("difftest_vectors", LEAN / "scripts" / "difftest_vectors.py")
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)

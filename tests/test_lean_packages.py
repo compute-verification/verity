@@ -48,7 +48,7 @@ def test_the_randomness_assumption_cites_this_toolchain():
     """A3 (`soundness/ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads for
     `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and updates
     the citation."""
-    soundness = ROOT / "backends/flock/verifier/lean/soundness"
+    soundness = ROOT / "verity/Security/Proofs"
     version = (soundness / "lean-toolchain").read_text().strip().rpartition(":")[2]
     for doc in ("ASSUMPTIONS.md", "FlockSoundness/Assumptions.lean"):
         assert f"Lean {version}'s runtime" in (soundness / doc).read_text(), doc
@@ -68,7 +68,7 @@ def test_every_record_merges_with_the_driver():
                        f"FILE` recomputes them): {stale}")
 
 
-CORE = ROOT / "verity" / "lean"
+CORE = ROOT / "verity" / "Security"
 #: the Lake names of the protocols' packages, so the rule below can't go vacuous when they move
 PROTOCOL_PACKAGES = {"nci", "networktiming", "pous", "pouw"}
 
@@ -78,7 +78,7 @@ def _requires(pkg: Path) -> list[dict]:
 
 
 def test_core_package_requires_only_mathlib():
-    """Core's Lean (`verity/lean`) is the model every protocol states its guarantees in, so it requires nothing of
+    """Core's Lean (`verity/Security`) is the model every protocol states its guarantees in, so it requires nothing of
     the repository: a path dependency here would put a protocol or a backend under every guarantee."""
     assert CORE in lake_packages()
     assert [r["name"] for r in _requires(CORE)] == ["mathlib"]
