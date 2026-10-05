@@ -17,7 +17,7 @@ from verity.ml.tc import silicon as S
 from verity.ml.tc.models import group_sum
 from verity.ml.tc.term import Term, e4m3_product, fp32_term
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 SEED = 20260902
 N_RANDOM = 64
 

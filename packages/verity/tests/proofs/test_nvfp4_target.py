@@ -20,7 +20,7 @@ from verity.proofs.families import make_tensor_core_gate_set
 from verity.proofs.programs import gemm_accumulator_nvfp4
 from verity.proofs.target import FP8_ADA_MMA, NVFP4_SM120, TARGETS, TC_VECTORS
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 
 
 def vector(name: str) -> dict:

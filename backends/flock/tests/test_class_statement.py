@@ -430,6 +430,28 @@ def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache
     assert not cached("code") and built == [1, 1, 1]                   # and so is the code's version
 
 
+def test_the_stage_keys_code_digest_is_one_tree_over_a_namespaces_portions(monkeypatch, tmp_path: Path):
+    """Walking `verity`'s portions in path order made the digest depend on sys.path order and on a cwd directory that joined the
+    namespace; it is the same over any order, and moves with an edit or a portion that joins."""
+    for rel in ("upper/verity/ml/__init__.py", "upper/verity/ml/gemm.py", "lower/verity/ir/__init__.py", "lower/verity/ir/defs.py",
+                "cwd/verity/primitives/circuits/src/verity/ir/defs.py"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(f"# {rel}\n")
+    find_spec = importlib.util.find_spec
+
+    def digest(*portions: str) -> str:
+        locs = [str(tmp_path / p / "verity") for p in portions]
+        monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: SimpleNamespace(submodule_search_locations=locs)
+                            if name == "verity" else find_spec(name, *a))
+        return CS._source_digest()
+
+    a = digest("upper", "lower")
+    assert digest("lower", "upper") == a
+    assert digest("cwd", "upper", "lower") != a                         # a directory joining from the cwd is a miss, never a hit
+    (tmp_path / "lower" / "verity" / "ir" / "defs.py").write_text("# edited\n")
+    assert digest("upper", "lower") != a
+
+
 def test_selftest_jobs_runs_the_case_processes_at_once_and_keeps_their_records_in_case_order(monkeypatch, tmp_path: Path):
     cases = ["gpu_paths_agree", "gpu_proofs_match_cpu", "verify_ahead_matches_serial"]
     mib = dict(zip(cases, (4000, 4500, 4700)))

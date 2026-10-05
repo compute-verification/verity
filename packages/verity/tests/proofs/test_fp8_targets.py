@@ -21,7 +21,7 @@ from verity.proofs.families import make_tensor_core_gate_set
 from verity.proofs.programs import gemm_accumulator_fp8
 from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS, TC_VECTORS, Target
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 DRAFTS = (FP8_HOPPER_WGMMA, FP8_ADA_MMA)
 
 
