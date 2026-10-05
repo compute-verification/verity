@@ -19,10 +19,10 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.commitments import MerkleTree
-from verity.commitments.blake3 import keyed
-from verity.commitments.merkle import tree_levels
-from verity_pouw.audit import (
+from verity.primitives.commitments import MerkleTree
+from verity.primitives.crypto.blake3 import keyed
+from verity.primitives.commitments.merkle import tree_levels
+from verity.protocols.accounting.work.pouw.audit import (
     ROW_SCHEMA,
     TILE_SCHEMA,
     Epoch,
@@ -35,10 +35,10 @@ from verity_pouw.audit import (
     transcript_domain,
     weight_binding,
 )
-from verity_pouw.protocol import Context, Matmul, Shape
-from verity_pouw.schemes import pearl_c as C
-from verity_pouw.schemes import pearl_c_work as PW
-from verity_pouw.schemes import pearl_kw as P
+from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
+from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
+from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
@@ -521,7 +521,7 @@ def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_pa
         ids = [r.id for r in refs if r.matmul == row["matmul"]]
         area = [len(refs[t].tile.rows) * len(refs[t].tile.cols) for t in ids]
         assert (row["NT"], row["W"], row["w_max"]) == (len(ids), sum(area), max(area))
-        assert row["drawn"] == (len(ids) if row["method"] == "census" else 3) and row["openings_failed"] == 0
+        assert row["drawn"] == (len(ids) if row["method"] == "catalog/census" else 3) and row["openings_failed"] == 0
         assert 0 < row["upper"] <= 1 and (row["k"], row["n"]) == (records[row["matmul"]].matmul.shape.k, records[row["matmul"]].matmul.shape.n)
     assert doc["cited_upper"] == max(r["upper"] for r in doc["inputs"])
     lines = (out / f"{path.parent.name}.input-tiles.jsonl").read_text().splitlines()
@@ -531,7 +531,7 @@ def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_pa
     args = [str(path), "--per-input", "1", "--census-max", "4", "--draws", "3", "--jobs", "1", "--resumed-only"]
     assert SD.main([*args, "--out", str(again), "--resume", str(out / f"{path.parent.name}.input-tiles.jsonl")]) == 0
     assert json.loads((again / "inputs.json").read_text())["inputs"] == doc["inputs"]
-    census = next(r for r in doc["inputs"] if r["method"] == "census")
+    census = next(r for r in doc["inputs"] if r["method"] == "catalog/census")
     drop = next(x for x in lines if json.loads(x)["matmul"] == census["matmul"])
     (tmp_path / "short.jsonl").write_text("\n".join(x for x in lines if x != drop) + "\n")
     with pytest.raises(ValueError, match="unmeasured"):
@@ -577,7 +577,7 @@ def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tm
     """Lean's conditions on the fresh-trial ε: draw d is `key.uniform(W, d)` over the input's cumulative credited cells
     (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
     and the source is given in the command, never drawn inside the run."""
-    from verity.randomness import derive
+    from verity.primitives.randomness import derive
 
     src, job, row = bytes(range(32)), {"sha256": "ab" * 32}, {"matmul": 7, "area": {40: 64 * 64, 41: 64 * 64, 42: 32 * 64}}
     got = SD.fresh_trials(job, row, 50, src)
@@ -596,7 +596,7 @@ ST = load("pearl_c_vllm_served_table", KERNEL.parent / "pearl_c_vllm" / "served_
 def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cannot_cite(tmp_path):
     """Every input is re-bounded at δ = 0.05/m, m every input the table measures: both models' and a model's fresh trials."""
     row = lambda run, i, nt, fails=0: {"pass": "decode", "run": run, "manifest_sha256": "ab", "matmul": i, "k": 4096, "n": 4096,
-                                       "NT": nt, "W": nt * 4096, "w_max": 4096, "method": "census", "drawn": nt,
+                                       "NT": nt, "W": nt * 4096, "w_max": 4096, "method": "catalog/census", "drawn": nt,
                                        "openings_failed": 0, "failures": fails, "share_max": 5e-5}
     doc = lambda run, nts: {"m": len(nts), "inputs": [row(run, i, nt) for i, nt in enumerate(nts)]}
     verify = lambda run, label, ok: {"manifest": f"/p/{run}/{label}/manifest.json", "accepted": ok, "transcript": f"{run}:/p sha256:00",
@@ -663,7 +663,7 @@ def test_forming_headroom_on_a_recorded_line(tmp_path):
     assert doc["tiles"] == 2 and doc["unit_rows_covered_by_rho_D"] and doc["inputs"][0]["worst_tile"] == 1
     inputs = tmp_path / "inputs.json"
     inputs.write_text(json.dumps({"m": 1, "inputs": [{"pass": "decode", "run": "rq", "manifest_sha256": "ab", "matmul": 7179,
-                                                     "k": 12288, "n": 4096, "NT": 64, "W": 64, "w_max": 1, "method": "census",
+                                                     "k": 12288, "n": 4096, "NT": 64, "W": 64, "w_max": 1, "method": "catalog/census",
                                                      "drawn": 64, "openings_failed": 0, "failures": 0, "share_max": 5e-5}]}))
     assert ST.main(["--model", "qwen", str(inputs), "--forming", "qwen", str(out), "--out", str(tmp_path / "t")]) == 0
     assert json.loads((tmp_path / "t" / "table.json").read_text())["models"][0]["forming"]["tiles"] == 2
@@ -752,7 +752,7 @@ def test_clopper_pearson_upper():
 def test_served_debit_input_bounds():
     """The per-input limits (lean's rulings on #923): the work-weighted rule of three for a census and for n draws at no
     failure, Bernstein no tighter than the observed rate, and no bound for a sampled input with failures."""
-    row = {"method": "census", "failures": 0, "failures_weighted": 0, "W": 64 * 4096, "w_max": 4096}
+    row = {"method": "catalog/census", "failures": 0, "failures_weighted": 0, "W": 64 * 4096, "w_max": 4096}
     assert SD.input_bound(row, 0.05)[0] == pytest.approx(math.log(20) / 64)
     a = 4096 / (2048 * 4096)
     drawn = {"method": "sampled", "failures": 0, "W": 2048 * 4096, "w_max": 4096, "drawn": 64}
@@ -770,7 +770,7 @@ def test_served_debit_rebound_recomputes_an_inputs_json(tmp_path):
     rows = [{"pass": "decode", "run": "r", "manifest_sha256": "0", "matmul": i, "weight": i, "m": 1, "k": 4096, "n": 4096,
              "NT": nt, "W": nt * 4096, "w_max": 4096, "method": method, "drawn": drawn, "openings_failed": 0, "failures": 0,
              "failures_weighted": 0, "share_max": None, "reasons": [], "upper": 0.0, "bound_method": "old"}
-            for i, (nt, method, drawn) in enumerate([(64, "census", 64), (2048, "sampled", 64)])]
+            for i, (nt, method, drawn) in enumerate([(64, "catalog/census", 64), (2048, "sampled", 64)])]
     src = tmp_path / "inputs.json"
     src.write_text(json.dumps({"seed": 7, "census_max": 128, "draws": 64, "inputs": rows}))
     assert SD.main(["--rebound", str(src), "--out", str(tmp_path / "out")]) == 0
@@ -1234,9 +1234,9 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
 
 def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     """The message and leaf keys the kernels read and every tree's hash are the scheme's format's
-    (`verity_pouw.serving.HASH_FORMATS`), not literals, and -h1's bytes are what they were."""
-    from verity.commitments.blake3 import blake3
-    from verity_pouw.serving import HASH_FORMATS, SchemeId, hash_format
+    (`verity.protocols.accounting.work.pouw.serving.HASH_FORMATS`), not literals, and -h1's bytes are what they were."""
+    from verity.primitives.crypto.blake3 import blake3
+    from verity.protocols.accounting.work.pouw.serving import HASH_FORMATS, SchemeId, hash_format
 
     make, *_ = device_run
     run = make()
@@ -1255,7 +1255,7 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
 
 def test_a_schedule_this_path_or_the_format_cannot_run_is_refused():
     """-h1's forming reads seed_A from A's root, so A's tree stays on the main lane; and this path moves only the tile hashing."""
-    from verity_pouw.serving import Schedule
+    from verity.protocols.accounting.work.pouw.serving import Schedule
     s = PPD.scheme_of(SCHEME)
     with pytest.raises(ValueError, match="a_tree can't leave the main lane under h1"):
         PPD.schedule_of(Schedule("early-a", frozenset({"a_tree", "tile_hash"}), ring=2), s)

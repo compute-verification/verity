@@ -36,7 +36,7 @@ def dry(*extra: str) -> dict[str, list[str]]:
 
 def test_dry_run_gpu_phase():
     c = dry("--phase", "gpu")
-    assert list(c) == ["capture", "control", "census", "nonint", "gpu_done"]
+    assert list(c) == ["capture", "control", "catalog/census", "nonint", "gpu_done"]
     cap = c["capture"]
     assert cap[:4] == ["/pod/py311", "-m", "verity_vllm.pipeline.cli", "m1-capture"]
     assert cap[cap.index("--snapshot-steps") + 1] == "0,1,2,3"        # default, contiguous from 0
@@ -44,8 +44,8 @@ def test_dry_run_gpu_phase():
     assert cap[cap.index("--max-num-seqs") + 1] == "8" and "--workload" in cap
     ctl = c["control"]
     assert "--no-observer" in ctl and ctl[ctl.index("--out") + 1] == "/r/RUN/control" and "--snapshot-steps" not in ctl
-    cen = c["census"]
-    assert cen[1:4] == ["-m", "verity_vllm.pipeline.cli", "census"] and cen[cen.index("--out") + 1] == "/r/RUN/census" and "--no-traces" in cen
+    cen = c["catalog/census"]
+    assert cen[1:4] == ["-m", "verity_vllm.pipeline.cli", "catalog/census"] and cen[cen.index("--out") + 1] == "/r/RUN/census" and "--no-traces" in cen
     ni = c["nonint"]
     assert ni[1:4] == ["-m", "verity_vllm.pipeline.cli", "noninterference"] and ni[ni.index("--out") + 1] == "/r/RUN/nonint"
     assert ni[ni.index("--case") + 1] == "B1"                        # expected_layers resolves from the case
@@ -113,7 +113,7 @@ def test_the_sampled_replay_stages_need_a_seed_and_the_others_do_not():
 
 def test_dry_run_all_and_snapshot_steps():
     c = dry("--phase", "all", "--snapshot-steps", "0,1,2", "--seed", "7")
-    assert list(c)[:4] == ["capture", "control", "census", "nonint"]
+    assert list(c)[:4] == ["capture", "control", "catalog/census", "nonint"]
     assert c["capture"][c["capture"].index("--snapshot-steps") + 1] == "0,1,2"
     assert "wiring" in c and "replay_chain" in c and not any(k.startswith("replay_b_step") for k in c)
     c = dry("--phase", "all", "--snapshot-steps", "0,1,2", "--full-replay", "--seed", "7")
@@ -133,7 +133,7 @@ def test_dry_run_snapshot_caps_reach_the_capture_only():
     c = dry("--phase", "gpu", "--snapshot-max-bytes", str(256 << 20), "--snapshot-max-bytes-op", str(48 << 20))
     cap = c["capture"]
     assert cap[cap.index("--snapshot-max-bytes") + 1] == str(256 << 20) and cap[cap.index("--snapshot-max-bytes-op") + 1] == str(48 << 20)
-    assert all("--snapshot-max-bytes" not in c[st] for st in ("control", "census", "nonint"))
+    assert all("--snapshot-max-bytes" not in c[st] for st in ("control", "catalog/census", "nonint"))
 
 
 def test_dry_run_existing_capture_paths():

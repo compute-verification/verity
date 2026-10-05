@@ -20,13 +20,13 @@ from pathlib import Path
 
 import pytest
 
-from verity.ir import partition_object as PO
-from verity.ir.codec import canonical_json, descriptor_id, encode_program
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.program import Program
-from verity.ir.refs import array_of, coll_concat
-from verity.ir.types import Array
-from verity.ml.boolean import universal as U
+from verity.primitives.circuits import partition_object as PO
+from verity.primitives.circuits.codec import canonical_json, descriptor_id, encode_program
+from verity.primitives.circuits.defs import CompositeDefinition, bind
+from verity.primitives.circuits.program import Program
+from verity.primitives.circuits.refs import array_of, coll_concat
+from verity.primitives.circuits.types import Array
+from experimental.private_circuits import universal as U
 
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU

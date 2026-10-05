@@ -1,5 +1,5 @@
-"""C-Flock lowers the Boolean BF16 Definitions (`verity.ml.boolean.gemm`) and NVFP4 quantization's casts and the bit AND
-(`verity.ml.boolean.scalar`) gate by gate, with no piece substituted for them: each step and cast and the AND lower to exactly
+"""C-Flock lowers the Boolean BF16 Definitions (`catalog.definitions.boolean.gemm`) and NVFP4 quantization's casts and the bit AND
+(`catalog.definitions.boolean.scalar`) gate by gate, with no piece substituted for them: each step and cast and the AND lower to exactly
 the circuit of the piece their word primitive lowers to (the same ANDs and the same nonzeros of the AND rows), and the
 coordinate evaluates to `GemmCoordinate_v2`'s words.
 
@@ -12,14 +12,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.ir.defs import bind
-from verity.ml import gemm as G
-from verity.ml import kernels as K
-from verity.ml import prims as P
-from verity.ml import scalar as S
-from verity.ml.boolean import gemm as BG
-from verity.ml.boolean import scalar as BSC
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.defs import bind
+from catalog.definitions import gemm as G
+from kernels import tc as K
+from catalog.definitions import prims as P
+from catalog.definitions import scalar as S
+from catalog.definitions.boolean import gemm as BG
+from catalog.definitions.boolean import scalar as BSC
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
 
@@ -78,7 +78,7 @@ def test_the_lowered_coordinate_computes_gemm_coordinate_v2() -> None:
 
 @pytest.mark.parametrize("n", [2, 3, 8, 33])
 def test_an_n_input_gate_lowers_to_n_minus_1_ands_or_none(n) -> None:
-    from verity.ir import boolean as BL
+    from verity.primitives.circuits import boolean as BL
 
     T = 64
     bits = np.random.default_rng(n).integers(0, 2, size=(T, n), dtype=np.uint64)

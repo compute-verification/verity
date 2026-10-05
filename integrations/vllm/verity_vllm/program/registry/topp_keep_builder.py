@@ -14,7 +14,7 @@ from functools import cache
 
 import numpy as np
 
-from verity.ml.scalar import BitAnd, BitOr, SelectF32, SelectI32
+from catalog.definitions.scalar import BitAnd, BitOr, SelectF32, SelectI32
 from verity_vllm.program.registry.topp_word_gates import CW, GATES, SIG, WIDTH, BitXor, SelectBit, U32Xor, f32_word, numeric
 
 SPLIT_COUNTS = (1, 2, 4, 8, 16, 32)

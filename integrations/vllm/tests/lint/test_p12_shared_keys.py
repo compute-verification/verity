@@ -7,7 +7,7 @@ Checked today, against ``allowlists/p12_shared_keys.json``:
 * ``row-id-split``: splitting a string on ``"__"`` (``split``/``rsplit``/``partition``/``rpartition``), the other way
   the row id gets parsed.
 * ``root-list``: a hand-written list, tuple or set of string literals naming code roots (``verity_vllm``, ``verity``,
-  ``research``, ``integrations/vllm``, ``packages/verity/...``, ``tools/research/...`` or paths under them), which is
+  ``research``, ``integrations/vllm``, ``verity/...``, ``tools/research/...`` or paths under them), which is
   how code identity gets defined outside the one ``code_identity()``.
 
 The owners, ``config.py`` (row-id grammar) and ``pipeline/identity.py`` (code identity), do not exist yet; the modules
@@ -28,7 +28,7 @@ RULE = "P12 (each shared key has one owner)"
 OWNERS = frozenset({"verity_vllm/config.py", "verity_vllm/pipeline/identity.py", "verity_vllm/target_family.py",
                     "verity_vllm/pipeline/source_identity.py", "verity_vllm/pipeline/release_json.py"})
 ROW_REGEX = re.compile(r"__\(?(?:\?:)?(?:tp|bi|b|i|o|c)?\(?\\d|__\[\^_\]|\[\^_\]\+__")
-CODE_ROOT = re.compile(r"^(?:\.\./)*(verity_vllm|verity|research|integrations/vllm|packages/verity|tools/research)(?:/|$)")
+CODE_ROOT = re.compile(r"^(?:\.\./)*(verity_vllm|verity|research|integrations/vllm|verity|tools/research)(?:/|$)")
 
 
 def file_violations(src: str, rel: str) -> list[R.Violation]:

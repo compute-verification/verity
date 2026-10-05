@@ -1,0 +1,78 @@
+{
+ "content_digest": "49d7658f823ab777347ec1ca160821828d1e8ced70e6c3d6673edd0200458a70",
+ "content_digest_rule": "sha256 of the canonical JSON of {schema, set, relation, n, ports, files without index.json}",
+ "files": {
+  "index.json": {
+   "bytes": 605335,
+   "sha256": "97c4f7f938dc5b8da52ff85b9cf22230e129b4ed238584425e45d272647f8e0e"
+  },
+  "w.u16": {
+   "bytes": 25690112,
+   "sha256": "2a2477c910c21ee01b5de8663e3537357e780603ddfbe08a36ef2f69e88c90bc"
+  },
+  "x.u16": {
+   "bytes": 25690112,
+   "sha256": "806b990e6e01024c92889c6e4f986024b6cfaa340a52d5654d4092ea1b837c06"
+  },
+  "y.u16": {
+   "bytes": 12544,
+   "sha256": "e96af8e1eb836a40f8ad9afa3df3718c9ac52e5d95cd750098c4a650443d6ac5"
+  }
+ },
+ "n": 6272,
+ "ports": {
+  "w": {
+   "dtype": "u16",
+   "file": "w.u16",
+   "words": 2048
+  },
+  "x": {
+   "dtype": "u16",
+   "file": "x.u16",
+   "words": 2048
+  },
+  "y": {
+   "dtype": "u16",
+   "file": "y.u16",
+   "words": 1
+  }
+ },
+ "provenance": {
+  "manifest_digest": "90f8186879d5035af027259151b4ac465bf6c3dcf08c1e6d62dab9b680bfeaac",
+  "model": "unsloth/Llama-3.2-1B",
+  "pair": 0,
+  "program_digests": {
+   "r0": "ccc213475e7c4eed04b3b0d3717e2144012be65f41d900a018dbd09d1e400c6b"
+  },
+  "research_run": "r20260925-233347-8515",
+  "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+  "row": 101,
+  "row_key": "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager",
+  "run_root": "7adcef49184525329814d62364be7cb2b2c45003cad96dbca1434b11f5b1dec5",
+  "selection": "verity.primitives.randomness.derive(b'verity-vllm benchmark selection', 'verity/vllm-vu-export/select/v1', {run_root}); per family key.shard(('family', family)) through challenge.stratum_picks; sub-indices key.subset(k, n, ('row', request, i, evaluation))",
+  "versions": {
+   "cuda": "12.9",
+   "declared_execution": "bi-eager",
+   "enforce_eager": true,
+   "flashinfer": "0.6.18",
+   "numpy": "2.3.5",
+   "python": "3.12.14",
+   "torch": "2.13.0+cu129",
+   "transformers": "5.17.0",
+   "triton": "3.7.1",
+   "vllm": "0.28.1rc1.dev472+gd9105ea80",
+   "weights_hash": "host"
+  }
+ },
+ "relation": {
+  "definition": "Gemm_v1",
+  "dot": "AmpereBF16TcDot16_v1",
+  "rule": "y = f2fp_bf16(ascending k16 chain of DOT over (x, w) from +0)",
+  "statics": {
+   "K": 2048
+  },
+  "subcircuit": "GemmCoordinate<2048>"
+ },
+ "schema": "vllm-vu-set/v1",
+ "set": "gemm-coordinate-ampere-bf16-k2048"
+}

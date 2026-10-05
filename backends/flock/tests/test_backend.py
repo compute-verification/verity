@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120
+from catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120
 
 from verity_flock import instances, lowering
 from verity_flock.backend import FLOCK_FRAME_V3_BLAKE3 as FLOCK, GemmSub, Supported, Unavailable, Unsupported
@@ -99,7 +99,7 @@ def test_register_adds_the_union_bound_and_the_verifier(tmp_path):
 
 
 def test_vllm_v1_instance_roots_are_step_roots_under_b_ligeros_domains(tmp_path):
-    from verity.commitments import vllm_v1 as core
+    from verity.primitives.commitments import vllm_v1 as core
 
     instances._ligero()
     from ligero import vllm_tree

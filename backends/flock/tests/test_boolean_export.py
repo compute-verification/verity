@@ -38,7 +38,7 @@ READ_ROWS = {"rcp": 27073, "ex2": 27193, "rsq": 36958, "sqrt": 37183}
 def test_a_table_read_is_the_provers_inline_read():
     """A read costs the prover's inline read's gates: its ANDs and its copy rows are the prover's rows; in a traced piece it is
     one read item naming its table by SHA-512 (the library's pin)."""
-    from verity.ml import library
+    from verity.primitives.circuits import library
 
     for t, rows in READ_ROWS.items():
         g = BX.table_gates(t)
@@ -105,7 +105,7 @@ def test_a_helper_is_one_type_wherever_it_is_called():
 
 
 def test_names_are_metadata_and_labels_follow_the_library():
-    from verity.ml import library
+    from verity.primitives.circuits import library
 
     reg, a = _types(_piece_build("F32Add_v1", [32, 32]), "one name")
     _, b = _types(_piece_build("F32Add_v1", [32, 32]), "another")
@@ -157,7 +157,7 @@ def test_a_constant_sub_circuit_is_folded():
     """Gemma's ``x + 1.0``: the constant reaches F32Add through a Bf16ToF32, which is itself constant, so F32Add reads it."""
     from types import SimpleNamespace as G
 
-    import verity.ml.prims as MP
+    import catalog.definitions.prims as MP
 
     cvt = next(v for v in vars(MP).values() if getattr(v, "id", None) == "Bf16ToF32_v1")
     gates = [G(index=0, prim=G(family="Input"), operands=()), G(index=1, prim=MP.const(16, 0x3F80), operands=()),

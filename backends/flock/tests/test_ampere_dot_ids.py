@@ -8,11 +8,11 @@ import json
 import random
 from pathlib import Path
 
-from verity.ir.defs import PrimitiveDefinition, bind
-from verity.ml import gemm as G
-from verity.ml import prims as P
-from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16
-from verity.ml.tc.total import tc_dot_total
+from verity.primitives.circuits.defs import PrimitiveDefinition, bind
+from catalog.definitions import gemm as G
+from catalog.definitions import prims as P
+from catalog.silicon.silicon import AMPERE_BF16_M16N8K16
+from catalog.silicon.total import tc_dot_total
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
 

@@ -139,7 +139,7 @@ class Row:
             raise Stop(3)
         core, research = Path(self.tree, "../../packages/verity/src"), Path(self.tree, "../../tools/research/src")
         if not core.is_dir():
-            print(f"PRECHECK_FAIL_SOURCE_IDENTITY: no packages/verity/src beside {self.tree} (not a shipped Verity tree)", file=sys.stderr)
+            print(f"PRECHECK_FAIL_SOURCE_IDENTITY: no verity beside {self.tree} (not a shipped Verity tree)", file=sys.stderr)
             raise Stop(3)
         if not research.is_dir():
             print(f"PRECHECK_FAIL_SOURCE_IDENTITY: no tools/research/src beside {self.tree}", file=sys.stderr)

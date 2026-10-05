@@ -124,7 +124,7 @@ def main(args: Options) -> None:
     with_extension = observer or args.census
     if with_extension:
         kw["worker_extension_cls"] = EXTENSION
-    mode = "control" if args.no_observer else ("census" if args.census else "capture")
+    mode = "control" if args.no_observer else ("catalog/census" if args.census else "capture")
     print(f"[tp2] mode={mode} tp={args.tp} case={case} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
     t0 = time.perf_counter()
     llm = LLM(**kw)

@@ -18,11 +18,11 @@ import math
 
 import numpy as np
 
-from verity.ir.defs import Coll, CompositeDefinition, PrimitiveDefinition, bind, composite
-from verity.ir.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.ir.types import Array, Record, Tuple
-from verity.ml.gemm import DotBf16 as DotBf16V2, Gemm as GemmV2, GemmCoordinate as GemmCoordinateV2
-from verity.ml.prims import ZERO32, const
+from verity.primitives.circuits.defs import Coll, CompositeDefinition, PrimitiveDefinition, bind, composite
+from verity.primitives.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.primitives.circuits.types import Array, Record, Tuple
+from catalog.definitions.gemm import DotBf16 as DotBf16V2, Gemm as GemmV2, GemmCoordinate as GemmCoordinateV2
+from catalog.definitions.prims import ZERO32, const
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import A16, BF16, BIT, F32, I32
 

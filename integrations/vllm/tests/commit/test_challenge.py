@@ -1,5 +1,5 @@
 """The one challenge module: legacy derivations stay byte-identical to the outputs recorded before they moved onto it, and
-the non-legacy forms draw through `verity.randomness.derive` from a beacon or keyed source (decision 42)."""
+the non-legacy forms draw through `verity.primitives.randomness.derive` from a beacon or keyed source (decision 42)."""
 from __future__ import annotations
 
 import hashlib
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_sampled_proofs.law import vu_key
+from experimental.sampled_proofs.law import vu_key
 from verity_vllm.check.replay import sample as SR
 from verity_vllm.commit import binding as B
 from verity_vllm.commit import challenge as CH

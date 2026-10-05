@@ -1,9 +1,9 @@
 """Pearl-C's sm_120 GPU check fixture, built off the card (needs verity and numpy): inputs at a small shape and every buffer
 pearl_c_sm120.cu's kernels write, in its row-major layout (A' and B~'s codes and the transposed F lines in K32 order along k,
 `k32`; every product over k is the unpermuted operands'), for forming v1 on `pearl_c_device.SM120` (G = 4) and
-`SM120_UNPROMOTED`.  Forming, lines and hashes come from `verity_pouw.schemes.pearl_c` on the device record; the products
+`SM120_UNPROMOTED`.  Forming, lines and hashes come from `verity.protocols.accounting.work.pouw.schemes.pearl_c` on the device record; the products
 over every cell are batched in numpy (the chains by the twin, `benchmarks/pouw/pearl_c/twin.py`, the peel with
-`verity.ml.kernels.group_sum_total_batch` on the record's peel step; the H100 fixture's helpers,
+`kernels.tc.group_sum_total_batch` on the record's peel step; the H100 fixture's helpers,
 `benchmarks/pouw/pearl_c/fixture.py`, do the rest), and one whole 64 x 64 tile per variant is
 recomputed by the scheme (`encode`, `checked`, `digest`) and must agree.  Pearl's tickets are not part of
 `pearl-c-sm120` (no PoUW check reads them), so nothing here computes them.  run.py compares the device's buffers
@@ -11,7 +11,7 @@ with these bytes before it times anything.
 
   uv run python benchmarks/pouw/pearl_c_sm120/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
 
-The instance is a one-unit epoch as `verity_pouw.audit` starts it, hashing format -h1: B's frame-b3 row tree, the salt from
+The instance is a one-unit epoch as `verity.protocols.accounting.work.pouw.audit` starts it, hashing format -h1: B's frame-b3 row tree, the salt from
 the beacon and B's root, A's frame-b3 row tree, and the noise from A's committed root (so E_A's line key is an output the
 device derives, `line_a`).  Writes OUT_DIR/check.json (the shape, keys, seeds, and per buffer its file, dtype and SHA-256)
 and the buffers as raw little-endian files: `common` (both row trees, seed_A and E_A's line key, lines, inputs, forming, the
@@ -43,14 +43,14 @@ def _load(name: str, path: Path):
 H = _load("pearl_c_h100_fixture", HERE.parent / "pearl_c" / "fixture.py")
 W = _load("pearl_c_twin", HERE.parent / "pearl_c" / "twin.py")
 
-from verity.commitments.blake3 import blake3  # noqa: E402
-from verity.ml.kernels import group_sum_total_batch  # noqa: E402
-from verity_pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
+from verity.primitives.crypto.blake3 import blake3  # noqa: E402
+from kernels.tc import group_sum_total_batch  # noqa: E402
+from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
                                rows_domain, transcript_domain, weight_binding)
-from verity_pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
-from verity_pouw.schemes import pearl_c as C  # noqa: E402
-from verity_pouw.schemes import pearl_kw as P  # noqa: E402
-from verity_pouw.schemes.pearl_c_device import (  # noqa: E402
+from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
+from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import (  # noqa: E402
     DEVICES,
     SM120,
     SM120_UNPROMOTED,
@@ -68,7 +68,7 @@ def unit_block(salt: bytes, root_b: bytes, index: int) -> bytes:
 
 
 def epoch_of(matmul: Matmul, b_rows: list[bytes], beacon: bytes, hash: str) -> tuple[Epoch, bytes, bytes]:
-    """A one-unit epoch on B's rows as `verity_pouw.audit` starts it: (epoch, B's tree bytes under tree hash `hash`, its
+    """A one-unit epoch on B's rows as `verity.protocols.accounting.work.pouw.audit` starts it: (epoch, B's tree bytes under tree hash `hash`, its
     root)."""
     dom_b = rows_domain(weight_binding(matmul.weight), -2, len(b_rows), hash)
     tree_b = H.tree_bytes(dom_b, b_rows, ROW_SCHEMA)

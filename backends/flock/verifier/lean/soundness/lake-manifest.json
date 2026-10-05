@@ -13,7 +13,7 @@
    "name": "flock_verifier",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../level3/..",
+   "dir": "..",
    "configFile": "lakefile.toml"},
   {"url": "https://github.com/Verified-zkEVM/ArkLib",
    "type": "git",

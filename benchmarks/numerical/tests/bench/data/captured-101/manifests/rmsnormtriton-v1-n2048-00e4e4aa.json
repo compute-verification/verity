@@ -1,0 +1,78 @@
+{
+ "content_digest": "3555cf645d180c601d8ba48d61bd94e025317ccc0646ed1a06515fc2f38e5aa9",
+ "content_digest_rule": "sha256 of the canonical JSON of {schema, set, relation, n, ports, files without index.json}",
+ "files": {
+  "in0.u16": {
+   "bytes": 1048576,
+   "sha256": "cbf35701c94f1bba012253e317ab575d2b8f6f9a6a32d27537624940f0e2609b"
+  },
+  "in1.u16": {
+   "bytes": 1048576,
+   "sha256": "bdbeb2d2442c9d043aaf10b909d21ebf954e2bb16195ecaf43064bb6ba4f634c"
+  },
+  "index.json": {
+   "bytes": 20074,
+   "sha256": "39676e2ac54c1e5074b49bd037ea6f4bee608dd2569a61395ce5e0c897034dea"
+  },
+  "out.out.u16": {
+   "bytes": 1048576,
+   "sha256": "9d16f8f1a90a9a08b30d4a29855d00ccdf897a7fb780fef4148152cf63938e97"
+  }
+ },
+ "n": 256,
+ "ports": {
+  "in0": {
+   "dtype": "u16",
+   "file": "in0.u16",
+   "words": 2048
+  },
+  "in1": {
+   "dtype": "u16",
+   "file": "in1.u16",
+   "words": 2048
+  },
+  "out.out": {
+   "dtype": "u16",
+   "file": "out.out.u16",
+   "words": 2048
+  }
+ },
+ "provenance": {
+  "manifest_digest": "90f8186879d5035af027259151b4ac465bf6c3dcf08c1e6d62dab9b680bfeaac",
+  "model": "unsloth/Llama-3.2-1B",
+  "pair": 0,
+  "program_digests": {
+   "r0": "ccc213475e7c4eed04b3b0d3717e2144012be65f41d900a018dbd09d1e400c6b"
+  },
+  "research_run": "r20260925-233347-8515",
+  "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+  "row": 101,
+  "row_key": "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager",
+  "run_root": "7adcef49184525329814d62364be7cb2b2c45003cad96dbca1434b11f5b1dec5",
+  "selection": "verity.primitives.randomness.derive(b'verity-vllm benchmark selection', 'verity/vllm-vu-export/select/v1', {run_root}); per family key.shard(('family', family)) through challenge.stratum_picks; sub-indices key.subset(k, n, ('row', request, i, evaluation))",
+  "versions": {
+   "cuda": "12.9",
+   "declared_execution": "bi-eager",
+   "enforce_eager": true,
+   "flashinfer": "0.6.18",
+   "numpy": "2.3.5",
+   "python": "3.12.14",
+   "torch": "2.13.0+cu129",
+   "transformers": "5.17.0",
+   "triton": "3.7.1",
+   "vllm": "0.28.1rc1.dev472+gd9105ea80",
+   "weights_hash": "host"
+  }
+ },
+ "relation": {
+  "definition": "RMSNormTriton_v1",
+  "rule": "the registered row kernel of RMSNormTriton_v1 (verity_vllm.program.kernels.rows)",
+  "statics": {
+   "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}",
+   "N": 2048
+  },
+  "subcircuit": "RMSNormTriton_v1"
+ },
+ "schema": "vllm-vu-set/v1",
+ "set": "rmsnormtriton-v1-n2048-00e4e4aa"
+}

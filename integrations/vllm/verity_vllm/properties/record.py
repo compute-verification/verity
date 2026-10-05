@@ -70,7 +70,7 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
     Property("noninterference", "verity-vllm/noninterference/v2",
              "At the record's tensor-parallel world, the observed engine generated the bare engine's tokens for every request (and, "
              "where boundary hashes were taken, every compared boundary value is bit-identical)."),
-    Property("census", "verity-capture/census-reconciliation/v1",
+    Property("catalog/census", "verity-capture/census-reconciliation/v1",
              "Every device kernel the bare engine launched is claimed by a kernel the Match resolution declares or by the frozen "
              "kernel allowlist, at every step."),
     Property("golden", "verity-gen/golden-check/v1",

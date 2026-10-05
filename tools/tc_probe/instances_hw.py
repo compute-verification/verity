@@ -17,7 +17,7 @@ to run the same words through another architecture's instruction of the same sha
     bench-instances/v1/vu-k1536-neg    FIRST                             52 claimed-WRONG or out-of-domain (reject) inputs: the harness must
                                                                          detect every one (hardware word != claimed, or the domain check)
     fp8-ada-synthetic/vu-k1536-fp8     FP8_ADA_MMA (sm89.mma.m16n8k32.e4m3)  4,096 inputs x 48 steps of uniform finite E4M3 bytes from
-                                                                       seed 20260922 (backends.direct.ligero.fp8.chain.instances_fp8,
+                                                                       seed 20260922 (archive.direct.ligero.fp8.chain.instances_fp8,
                                                                        regenerated here from the same recipe), accumulators recorded
                                                                        by ADA_E4M3_M16N8K32, no epilogue (the bare FP32 word)
     bench-instances-bf16-hopper/v1/vu-k1536-bf16-hopper   BF16_HOPPER (sm90.mma.m16n8k16.bf16)  4,096 inputs x 96 steps of random_finite_bf16
@@ -35,7 +35,7 @@ One instance per tile at position ``(r % M, (r // M) % 8)`` with the rest of the
 other output word must come back ``+0`` (``other_positions_nonzero``).  Step ``s`` of every instance is one launch; the hardware's own
 D of step ``s`` is the C of step ``s + 1`` -- a mismatch propagates, as it would in a real chain, and is located at its first step.
 
-Domain check (``verity.proofs.target``: finite operands and finite accumulators at every step; a saturation *inside the last*
+Domain check (``catalog.targets.target``: finite operands and finite accumulators at every step; a saturation *inside the last*
 transition is a valid output, D8): instances with a non-finite operand word or a non-finite hardware accumulator before the last step
 are ``out of domain``.  Positive tiers must have none; the negative tier's ``reject`` rows must trip it (its ``wrong`` rows must
 have ``hardware != claimed`` and ``hardware == correct``).
@@ -71,15 +71,15 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
-from verity.ml.tc import silicon as S
-from verity.ml.tc.cast import f32_to_bf16_word
-from verity.proofs import target as T
+from catalog.silicon import silicon as S
+from catalog.silicon.cast import f32_to_bf16_word
+from catalog.targets import target as T
 
 N = P.N
 FIRST_MISMATCHES = 20
 BENCH_INSTANCES = "bench-instances/v1"
 FP8_ADA_DATASET_ID = "fp8-ada-synthetic"
-#: exactly the ``instances.dataset`` string ``backends.direct.ligero.fp8.chain.bench_vu_fp8`` records in its fingerprint
+#: exactly the ``instances.dataset`` string ``archive.direct.ligero.fp8.chain.bench_vu_fp8`` records in its fingerprint
 FP8_ADA_DATASET = "fp8-ada synthetic (uniform finite E4M3 bytes, model-recorded accumulators)"
 FP8_ADA_TIER = "vu-k1536-fp8"
 SYNTHETIC_SEED = 20260922  # every seeded synthetic set of the ligero chain runners (fp8-ada, bf16-hopper, fp8-hopper)
@@ -206,7 +206,7 @@ def load_bench_instances(tier: str, root: Path | None, manifest_path: Path, lo: 
 
 
 def fp8_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
-    """Uniform E4M3 bytes without the NaN codes (``backends.direct.ligero.fp8.witness.random_finite_operands``, verbatim)."""
+    """Uniform E4M3 bytes without the NaN codes (``archive.direct.ligero.fp8.witness.random_finite_operands``, verbatim)."""
 
     w = rng.integers(0, 256, size=shape, dtype=np.int64)
     nan = (w & 0x7F) == 0x7F
@@ -216,7 +216,7 @@ def fp8_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
 
 def bf16_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
     """Finite BF16 words with exponent fields in [96, 160), one in ten a signed zero, one in ten a subnormal
-    (``backends.direct.ligero.relations.random_finite_bf16`` of lane b-hopper, verbatim)."""
+    (``archive.direct.ligero.relations.random_finite_bf16`` of lane b-hopper, verbatim)."""
 
     sign = rng.integers(0, 2, size=shape, dtype=np.int64) << 15
     t = rng.integers(96, 160, size=shape, dtype=np.int64)
@@ -230,7 +230,7 @@ def bf16_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
 
 @dataclass(frozen=True)
 class Synthetic:
-    """A seeded synthetic set of a ligero chain relation (``backends.direct.ligero.relchain.instances`` / ``instances_digest``,
+    """A seeded synthetic set of a ligero chain relation (``archive.direct.ligero.relchain.instances`` / ``instances_digest``,
     and before it ``fp8.chain.instances_fp8``): input ``i`` draws ``rng = default_rng([seed, i])``, ``a`` then ``b`` (``K_VU`` words
     each) with ``operands``, and records ``tc_dot(model)`` chained from ``+0`` after every step.  The set has no files: its
     ``manifest_sha256`` is ``sha256("<relation> synthetic|seed=<seed>|n=<n>|K=1536")``."""
@@ -241,7 +241,7 @@ class Synthetic:
     relation: str          # the digest prefix
     target: str
     instruction: str
-    model: object          # verity.ml.tc.models.GroupSum
+    model: object          # catalog.silicon.models.GroupSum
     operands: object       # (rng, shape) -> int64 words
     dtype: object          # the operand word dtype
     epilogue: str | None
@@ -284,19 +284,19 @@ FP8_ADA_SYNTHETIC = Synthetic(
     target=T.FP8_ADA_MMA.name, instruction=T.FP8_ADA_MMA.instruction, model=S.ADA_E4M3_M16N8K32,
     operands=fp8_random_finite_operands, dtype=np.uint8, epilogue=None,
     recipe="a, b = uniform finite E4M3 bytes (NaN codes -> 0x77 | sign); accs = tc_dot(ADA_E4M3_M16N8K32) chained from +0 "
-           "(backends.direct.ligero.fp8.chain.instances_fp8)")
+           "(archive.direct.ligero.fp8.chain.instances_fp8)")
 BF16_HOPPER_SYNTHETIC = Synthetic(
     dataset_id="bench-instances-bf16-hopper/v1", dataset="bench-instances-bf16-hopper/v1", tier="vu-k1536-bf16-hopper", relation="bf16-hopper",
     target=BF16_HOPPER_TARGET, instruction=BF16_HOPPER_INSTRUCTION, model=S.HOPPER_BF16_M16N8K16,
     operands=bf16_random_finite_operands, dtype=np.uint16, epilogue=EPILOGUE_BF16,
     recipe="a, b = random_finite_bf16 (exponent fields [96, 160), 1/10 signed zeros, 1/10 subnormals); accs = tc_dot(HOPPER_BF16_M16N8K16) "
-           "chained from +0 (backends.direct.ligero.relchain.instances, relation bf16-hopper, lane b-hopper dc3c141)")
+           "chained from +0 (archive.direct.ligero.relchain.instances, relation bf16-hopper, lane b-hopper dc3c141)")
 FP8_HOPPER_SYNTHETIC = Synthetic(
     dataset_id="bench-instances-fp8-hopper/v1", dataset="bench-instances-fp8-hopper/v1", tier="vu-k1536-fp8-hopper", relation="fp8-hopper",
     target=T.FP8_HOPPER_WGMMA.name, instruction=T.FP8_HOPPER_WGMMA.instruction, model=S.HOPPER_E4M3_K32,
     operands=fp8_random_finite_operands, dtype=np.uint8, epilogue=None,
     recipe="a, b = uniform finite E4M3 bytes (NaN codes -> 0x77 | sign); accs = tc_dot(HOPPER_E4M3_K32) chained from +0 "
-           "(backends.direct.ligero.relchain.instances, relation fp8-hopper, lane b-hopper dc3c141)")
+           "(archive.direct.ligero.relchain.instances, relation fp8-hopper, lane b-hopper dc3c141)")
 SYNTHETIC = {s.spec: s for s in (FP8_ADA_SYNTHETIC, BF16_HOPPER_SYNTHETIC, FP8_HOPPER_SYNTHETIC)}
 
 
@@ -307,7 +307,7 @@ def fp8_instance(i: int, seed: int = FP8_ADA_SEED) -> tuple[np.ndarray, np.ndarr
 
 
 def fp8_instances_digest(n: int, seed: int = FP8_ADA_SEED) -> str:
-    """``backends.direct.ligero.fp8.chain.instances_digest``: a digest of the recipe (the set has no files)."""
+    """``archive.direct.ligero.fp8.chain.instances_digest``: a digest of the recipe (the set has no files)."""
 
     return FP8_ADA_SYNTHETIC.digest(n, seed)
 

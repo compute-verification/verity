@@ -220,8 +220,8 @@ def _run_dir(root: Path, events: list, *, gen: dict[str, list[int]], census_step
     (root / "control" / "tokens.json").write_text(json.dumps({"requests": reqs}))
     (cap / "versions.json").write_text(json.dumps({"engine_kwargs": {"enable_prefix_caching": pc}}))
     if census_steps is not None:
-        (root / "census").mkdir()
-        (root / "census" / "census.json").write_text(json.dumps({"steps": census_steps}))
+        (root / "catalog/census").mkdir()
+        (root / "catalog/census" / "census.json").write_text(json.dumps({"steps": census_steps}))
     (root / "gates.json").write_text(json.dumps({"verdict": "ACCEPTED", "gates": {"G1": {"status": "pass", "reason": None}}}))
     return root
 

@@ -1331,7 +1331,7 @@
  ],
  "inputs": {
   "backends/flock/tests/lean/RandomnessVectors.lean": "c9630f114f7ebbea08c5c8a7953709c41dbf04ac1c1a70fe009ab635320b7580",
-  "packages/verity/tests/randomness/vectors.json": "1718bb52122a00e24b497a3b98e4e17aef38321e5e61d07f478bc34ac536d405",
+  "verity/tests/randomness/vectors.json": "1718bb52122a00e24b497a3b98e4e17aef38321e5e61d07f478bc34ac536d405",
   "backends/flock/verifier/lean/soundness/FlockSoundness/Randomness.lean": "3aedf278e6294a45b31eff51dd66826635fbb9a87972ff2da39df315a28c2113",
   "backends/flock/verifier/lean/soundness/FlockSoundness/PlanDraw.lean": "0f9b7993ea96647d7be0c2f61ae401705a10f904d52dc75fa752719b8797ad1b",
   "backends/flock/verifier/lean/soundness/lake-manifest.json": "1c0503095d2bc70a324d7fe2931b512caaea5c6a49e02df44caf09fe2525129b",

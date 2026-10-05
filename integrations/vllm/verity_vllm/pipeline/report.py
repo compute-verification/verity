@@ -224,7 +224,7 @@ def engine_args_of(run: RunArtifacts) -> dict:
         out["env_flags"] = prof.get("engine_flags")
         out["vllm_commit"] = (prof.get("vllm") or {}).get("commit")
         src.append("capture log header")
-    census = run.json("census")
+    census = run.json("catalog/census")
     if isinstance(census, dict):
         kw = census.get("engine_kwargs") or {}
         for k in ("dtype", "seed", "max_model_len", "gpu_memory_utilization", "enforce_eager", "enable_prefix_caching", "max_num_seqs",
@@ -256,7 +256,7 @@ def kappa_of(run: RunArtifacts, hdr: dict | None) -> dict:
     v = run.json("versions")
     if isinstance(v, dict) and v:
         return v
-    census = run.json("census")
+    census = run.json("catalog/census")
     if isinstance(census, dict) and isinstance(census.get("versions"), dict):
         return dict(census["versions"], source="census.json")
     if not hdr:
@@ -441,8 +441,8 @@ def build_card(run_dir: str | Path, results: list[GateResult] | None = None, *, 
     prov = run.json("provenance")
     unsealed = not isinstance(prov, dict)
     kernels = [k.get("kernel") for k in (cr.get("kernels") or []) if isinstance(k, dict)]
-    if not kernels and isinstance(run.json("census"), dict):
-        kernels = list((run.json("census").get("run_histogram") or {}).keys())
+    if not kernels and isinstance(run.json("catalog/census"), dict):
+        kernels = list((run.json("catalog/census").get("run_histogram") or {}).keys())
     missing = []
     seen = set()
     for u in res.get("unsupported_examples") or []:

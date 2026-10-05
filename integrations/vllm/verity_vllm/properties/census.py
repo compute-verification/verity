@@ -280,7 +280,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
         warm = va.throwaway_requests(eng, wl["requests"])
         profiled_run(warm, "warmup")      # profiler + CUPTI warm-up too; discarded
         torch.cuda.synchronize()
-    steps, tokens = profiled_run(wl["requests"], "census")
+    steps, tokens = profiled_run(wl["requests"], "catalog/census")
 
     # number the steps that launched device work (= the M1 log's steps: execute_model with scheduled tokens)
     numbered = []
@@ -426,7 +426,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
     rep = {
         "schema": "verity-capture/census-reconciliation/v1",
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "census": {"utc": census.get("utc"), "workload_sha256": (census.get("workload") or {}).get("sha256"),
+        "catalog/census": {"utc": census.get("utc"), "workload_sha256": (census.get("workload") or {}).get("sha256"),
                    "engine_steps": census.get("engine_steps"), "steps_with_device_work": len(census_steps),
                    "tokens_equal_accepted": census.get("tokens_equal_accepted"), "method": census.get("method"),
                    "versions": {k: (census.get("versions") or {}).get(k) for k in ("torch", "triton", "vllm", "cuda", "gpu")}},
@@ -452,14 +452,14 @@ def reconciliation_markdown(rep: dict) -> str:
     L: list[str] = []
     L.append(f"# Kernel census × resolution: `{Path(rep['log']).name}` × profile `{rep['profile']}`")
     L.append("")
-    L.append(f"- reconciled {rep['utc']}; census taken {rep['census']['utc']} (torch {rep['census']['versions'].get('torch')}, "
-             f"triton {rep['census']['versions'].get('triton')}, vLLM {rep['census']['versions'].get('vllm')}, GPU "
-             f"{(rep['census']['versions'].get('gpu') or {}).get('name') if isinstance(rep['census']['versions'].get('gpu'), dict) else rep['census']['versions'].get('gpu')})")
-    L.append(f"- method: {rep['census']['method']}")
+    L.append(f"- reconciled {rep['utc']}; census taken {rep['catalog/census']['utc']} (torch {rep['catalog/census']['versions'].get('torch')}, "
+             f"triton {rep['catalog/census']['versions'].get('triton')}, vLLM {rep['catalog/census']['versions'].get('vllm')}, GPU "
+             f"{(rep['catalog/census']['versions'].get('gpu') or {}).get('name') if isinstance(rep['catalog/census']['versions'].get('gpu'), dict) else rep['catalog/census']['versions'].get('gpu')})")
+    L.append(f"- method: {rep['catalog/census']['method']}")
     t = rep["totals"]
-    L.append(f"- census: {rep['census_steps']} steps with device work ({rep['census']['engine_steps']} engine steps), "
+    L.append(f"- census: {rep['census_steps']} steps with device work ({rep['catalog/census']['engine_steps']} engine steps), "
              f"{t['census_kernels']} device kernels, {t['distinct_kernel_names']} distinct names; tokens == accepted record: "
-             f"{rep['census']['tokens_equal_accepted']}")
+             f"{rep['catalog/census']['tokens_equal_accepted']}")
     L.append(f"- log: {rep['log_steps']} steps (profile_id `{rep['log_profile_id']}`), Unsupported {t['log_unsupported']}; steps aligned: {rep['steps_aligned']}")
     L.append(f"- **residue: {t['residue_kernels']} kernels** ({', '.join(f'`{n}`' for n in t['residue_names']) or 'none'}); "
              f"ambiguous compute claims: {t['ambiguous']}  →  **residue_zero = {rep['residue_zero']}**")
@@ -499,7 +499,7 @@ def reconciliation_markdown(rep: dict) -> str:
     steps = [s for s in rep["steps"] if "error" not in s]
     if steps:
         names = sorted({k for s in steps for k in s["counts"]})
-        L.append("| declared | " + " | ".join(f"step {s['step']} census/events/parts" for s in steps[:2]) + " | decode steps 2.. census (set) | patterns |")
+        L.append("| declared | " + " | ".join(f"step {s['step']} catalog/census/events/parts" for s in steps[:2]) + " | decode steps 2.. census (set) | patterns |")
         L.append("| --- | " + " | ".join("---" for _ in steps[:2]) + " | --- | --- |")
         for k in names:
             cells = []

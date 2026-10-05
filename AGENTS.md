@@ -8,13 +8,13 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 
 ## Map and commands
 
-- `packages/verity/`: the core, one ordinary distribution `verity`. Import
-  from the owning module (`from verity.ir import Program`), never a
+- `verity/`: the core, one ordinary distribution `verity`. Import
+  from the owning module (`from verity.primitives.circuits import Program`), never a
   convenience re-export at `verity`.
-  - `verity.ir`: types, definitions, canonical layout, evaluator, descriptor
+  - `verity.primitives.circuits`: types, definitions, canonical layout, evaluator, descriptor
     codec. Stdlib only; imports no other core module. The program format
     (descriptor v1, canonical JSON = RFC 8785, layout, scope resolution) is
-    specified in `verity/ir/PROTOCOL.md`, every rule pinned by
+    specified in `verity/primitives/circuits/PROTOCOL.md`, every rule pinned by
     `tests/ir/format_vectors.json`. The partition checker's
     references live here: `cut` (the query `Q_word` v1's canonical evaluator:
     each Call's computing graph, the cut, the width rule in bits; the algorithm
@@ -31,7 +31,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `boolean` is the Boolean profile of descriptor v1 (PROTOCOL §9): the gates
     `And<n>_v1`, `Xor<n>_v1` (any n >= 2), `Not_v1`, the constant bits,
     `is_boolean` and the word view (`word_type`, `bit_type`).
-  - `verity.evaluation`: the one evaluator. The plain-integer reference
+  - `verity.primitives.circuits.evaluation`: the one evaluator. The plain-integer reference
     (`evaluate`, the IR oracle, which also takes a table held in a registered
     input lazily, as a `RegisteredTable`), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed
@@ -39,15 +39,15 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `bits` evaluates Boolean Definitions bit-sliced (`evaluate_bits`, and
     `evaluate_words` through the word view); `evaluate_batch` uses it for one
     without a kernel.
-  - `verity.ml`: exact hardware semantics of the tensor-core accumulator step
-    (`verity.ml.tc`, stdlib only) and their IR registrations (`prims`,
+  - `catalog.definitions`: exact hardware semantics of the tensor-core accumulator step
+    (`catalog.silicon`, stdlib only) and their IR registrations (`prims`,
     `gemm`), the other IR primitives (`scalar`: integer, bit, select and
     comparison operations; `fp32`: FP32 add, mul, FMA and divide, their
     flush-to-zero forms, and BF16 element-wise arithmetic), the library of
     hardware and protocol objects core owns (`library`), the pinned list of
     operations with the guard that a program holds no data (`operations`), and numpy kernels
-    beside them (`kernels`; numpy is a core dependency, kept out of `verity.ir`
-    and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.boolean` is
+    beside them (`kernels`; numpy is a core dependency, kept out of `verity.primitives.circuits`
+    and `catalog.silicon` by `tests/test_boundaries.py`). `catalog.definitions.boolean` is
     the word library as Boolean Definitions: C-Flock's linear-form builder and
     pieces (`forms`, `fp`, `tc_step`, `softmax`, `fp4`), the multiplexer tree (`gather`),
     `trace.definition` (a builder traced into And/Xor/Not gates, with `word_of`
@@ -57,50 +57,50 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `GemmCoordinateMxf4_v2`), attention's softmax operations and inverse sum on bits
     (`attention`), the element-wise FP32, BF16 and I32 operations on bits
     (`elementwise`), the bf16 widening on bits (`cast`), and the bf16 comparator,
-    the selects, PTX max / min and the E4M3 cast on bits (`scalar`). `verity.ml.tc.relation`
+    the selects, PTX max / min and the E4M3 cast on bits (`scalar`). `catalog.silicon.relation`
     restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
     README for provenance).
-  - `verity.randomness`: `derive(source, domain, context) -> Key`, the one
+  - `verity.primitives.randomness`: `derive(source, domain, context) -> Key`, the one
     challenge derivation, with exact samplers (`uniform`, `bernoulli`, `subset`)
     over counter-mode streams. Stdlib only, and it imports no other core module.
     Its byte formats are pinned by `tests/randomness/vectors.json`.
-  - `verity.proofs`: single statements and how a backend is judged on them,
+  - `verity_sp1.proofs`: single statements and how a backend is judged on them,
     plus `proofs.profile.IntegrityProfile`, which records what verification
     established: the exhaustive facts, a verifier's law over named levels of a
-    partition hierarchy (`verity.ir.partition.Level`) and δ. Consumers read
+    partition hierarchy (`verity.primitives.circuits.partition.Level`) and δ. Consumers read
     it with their own utilities; their readers stay out of core. Its tests live
     in `tests/proofs/`.
-  - `verity.commitments`: see its module docstring.
+  - `verity.primitives.commitments`: see its module docstring.
   - `verity.claims`: the ids of security claims (guarantees, assumptions as `property/instance`
     such as `cr/sha-512`, models, setup) that Table 1 cites; the docs site imports them from the
     entities render. Stdlib only; imports no other core module.
     Other modules are created when code lands, not before.
-  - Tests live in `packages/verity/tests/<module>/`.
+  - Tests live in `verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
  stdlib, `verity`, itself and the protocols Daniel has allowed it (PoUW imports sampled proofs;
  `EDGES` in `tests/test_protocol_boundaries.py`).
- The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the one-stage
+ The first is `verity/protocols/verification/sampled_proofs` (`verity.protocols.verification.sampled_proofs`): the one-stage
  audit (`one_stage`: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile), the two-stage law, its draws from the verifier's own
  randomness, and verification plans. The Lean states it; its `README.md` signposts that
  Lean and lists what it does not state yet. `benchmarks/one_stage` runs the one-stage audit end to end with
  C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
  that `--m0-pythonpath` names, not from the checkout) and the Lean
- verifier. `protocols/pous` (`verity_pous`) is proof of useful space: the reference
+ verifier. `verity/protocols/accounting/space/pous` (`verity.protocols.accounting.space.pous`) is proof of useful space: the reference
  codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`: the
- statements of its guarantees, their proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
+ statements of its guarantees, their proofs and a submission grader). `verity/protocols/accounting/work/pouw` (`verity.protocols.accounting.work.pouw`)
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
  pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
  package (`lean/`, whose `Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
- `protocols/network_warden` (`verity_network_warden`) is network transparency's timing
+ `verity/protocols/accounting/communication/warden` (`verity.protocols.accounting.communication.warden`) is network transparency's timing
  channel: the warden, its audit and calibration, and its Lean package (`lean/`).
- `protocols/nci` is novel communication intensity, the policy that throttles frontier training
+ `verity/protocols/compliance/nci` is novel communication intensity, the policy that throttles frontier training
  and leaves inference alone; so far only its Lean package (`lean/`).
  Applications (vLLM) compose protocols.
-- `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
+- `catalog/census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
  read it with `verity_numerical.bench.census` (a few lines), the docs site reads the same files, and
@@ -122,11 +122,11 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   component has real code; there is no `frontends/` yet. `backends/flock`
   (`verity_flock`) is C-Flock, the backend in active development; its verifier
   of record is the Lean one under `backends/flock/verifier/` (see Lean below).
-  A-GKR (`backends/gkr`), B-Ligero (`backends/direct`, `backends/ligero-verify`,
-  `backends/ligerito-verify`) and D-SP1 (`backends/sp1`) are frozen: kept, and
+  A-GKR (`archive/gkr`), B-Ligero (`archive/direct`, `archive/ligero-verify`,
+  `archive/ligerito-verify`) and D-SP1 (`archive/sp1`) are frozen: kept, and
   still in the benchmark tables, but not developed; so is the VOLE research
-  backend (`backends/vole`). `backends/numerical` holds the numerical references
-  and the benchmark tooling that renders the tables. `backends/sp1/README.md` is
+  backend (`archive/vole`). `benchmarks/numerical` holds the numerical references
+  and the benchmark tooling that renders the tables. `archive/sp1/README.md` is
   D-SP1's how-to (build, identity, Python API, tests, recorded pod runs).
   **SP1 proving never runs on a laptop or the control pod**: use
   `research run --on vy-sp1 ...` (`~/.research/machines.toml`).
@@ -135,7 +135,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 Dependency direction (README "Development"): `ir <- evaluation <- ml`,
 `ir <- commitments`, `ir + ml + commitments <- proofs`; `randomness` and
 `claims` import no core module; everything else depends inward on the core
-(`packages/verity/tests/test_boundaries.py`). Backends must be testable
+(`verity/tests/test_boundaries.py`). Backends must be testable
 without a frontend or runtime integration.
 
 ~~~text
@@ -164,7 +164,7 @@ small binding in `circuit_check.targets`, which the suite enforces.
 
 There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: every test suite (`tools/check/suites.py`),
 `circuit-check --all`, C-Flock's Rust build and tests on its patched checkout, the Lean verifier's build and its partition check
-against `verity.ir`, the Lean audit, and the verifier's cross-check against upstream's Rust verifier, at once on a multi-core
+against `verity.primitives.circuits`, the Lean audit, and the verifier's cross-check against upstream's Rust verifier, at once on a multi-core
 CPU pod, with caches that hit only on identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into `main`
 only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence store, or
 when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on one `check`
@@ -184,11 +184,11 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   needs no verifier or proof change (ruling 2026-10-04, `.agents/skills/friction/SKILL.md`).
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
   about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
-  `protocols/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
-  named assumptions and the proofs behind its γ, Mathlib and core's), `protocols/network_warden/lean/` (the network
-  warden's timing-channel guarantees and their proofs, Mathlib), `protocols/nci/lean/` (NCI's policy and guarantees, on
-  core's), and `packages/verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
-  declarations and games; and core's own proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation;
+  `verity/protocols/accounting/space/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `verity/protocols/accounting/work/pouw/lean/` (PoUW's games,
+  named assumptions and the proofs behind its γ, Mathlib and core's), `verity/protocols/accounting/communication/warden/lean/` (the network
+  warden's timing-channel guarantees and their proofs, Mathlib), `verity/protocols/compliance/nci/lean/` (NCI's policy and guarantees, on
+  core's), and `verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
+  declarations and games; and core's own proofs about `verity`'s definitions, such as `catalog.silicon`'s step relation;
   Mathlib only). New Lean goes into the package whose dependencies it needs, in a subdirectory and namespace of its own;
   a core-only proof goes into core's package, never a backend's. A protocol's package may require core's and other
   protocols' packages, never a backend's. All packages share one toolchain and

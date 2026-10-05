@@ -1,0 +1,13 @@
+# The catalog's suite: its tests run in the workspace's environment, against `verity` (an editable install of the root).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+inputs = ["verity", "kernels", "archive/sp1/python/verity_sp1", "tools/tc_probe", "tools/tc_probe_fp4/probe.py",
+          "benchmarks/numerical/python/verity_numerical/reference/hawkeye_close.py",
+          "benchmarks/numerical/tests/checker/test_fp8.py",
+          "benchmarks/numerical/tests/reference/hawkeye_harness.cpp",
+          "benchmarks/numerical/tests/reference/test_hawkeye_close.py",
+          "benchmarks/numerical/tests/reference/test_normalisation_d3.py"]
+parallel = true

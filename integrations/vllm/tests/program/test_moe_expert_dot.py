@@ -9,11 +9,11 @@ import json
 import numpy as np
 import pytest
 
-from verity.evaluation import evaluate
-from verity.ir.defs import bind
-from verity.ml.kernels import f2fp_bf16_batch, group_sum_total_batch
-from verity.ml.prims import HopperBF16WgmmaDot16
-from verity.ml.tc.models import HOPPER_BF16_M16N8K16
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.defs import bind
+from kernels.tc import f2fp_bf16_batch, group_sum_total_batch
+from catalog.definitions.prims import HopperBF16WgmmaDot16
+from catalog.silicon.models import HOPPER_BF16_M16N8K16
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import moe as M

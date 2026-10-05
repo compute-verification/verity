@@ -26,9 +26,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from verity.ml.tc.errors import InvalidArtifact
-from verity.ml.tc import models as M
-from verity.ml.tc.term import FORMATS, FP32_MAX_EXPONENT, PRODUCT_WIDTH, ZERO, Term, fp32_term, pack_fp32
+from catalog.silicon.errors import InvalidArtifact
+from catalog.silicon import models as M
+from catalog.silicon.term import FORMATS, FP32_MAX_EXPONENT, PRODUCT_WIDTH, ZERO, Term, fp32_term, pack_fp32
 
 E2M1_VALUE = np.array([0, 0.5, 1, 1.5, 2, 3, 4, 6, -0.0, -0.5, -1, -1.5, -2, -3, -4, -6], dtype=np.float64)
 #: E2M1 code -> the E4M3 byte of the same value (every E2M1 value is an E4M3 normal or zero)

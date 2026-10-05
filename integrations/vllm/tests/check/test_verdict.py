@@ -17,7 +17,7 @@ import json
 
 import pytest
 
-from verity.proofs.codes import VerificationCode as VC
+from verity_vllm.check.codes import VerificationCode as VC
 
 from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check import verdict as V
@@ -456,13 +456,13 @@ def test_from_record_cites_property_records_by_digest(tmp_path):
     bare = V.from_record(d, rc=0, stage_ok="PASS")
     assert bare.properties == [] and "properties" not in json.loads(bare.dumps())
     held = PropertyRecord(seal({"schema": REGISTRY["noninterference"].schema, "world": 1, "run": "row"}, True))
-    broke = PropertyRecord(seal({"schema": REGISTRY["census"].schema, "steps": 3}, False))
+    broke = PropertyRecord(seal({"schema": REGISTRY["catalog/census"].schema, "steps": 3}, False))
     held.write(d)
     broke.write(d)
     v = V.from_record(d, rc=0, stage_ok="PASS")
     assert v.outcome == bare.outcome == V.PASS
     assert [(c["name"], c["digest"], c["ok"], c["source"], c["problems"]) for c in v.properties] == [
-        ("census", broke.digest, False, "properties/census.json", []), ("noninterference", held.digest, True, "properties/noninterference.json", [])]
+        ("catalog/census", broke.digest, False, "properties/census.json", []), ("noninterference", held.digest, True, "properties/noninterference.json", [])]
     for c in v.properties:
         assert c["name"] in REGISTRY and c["schema"] == REGISTRY[c["name"]].schema
         assert digest_of(json.loads((d / c["source"]).read_text())) == c["digest"]

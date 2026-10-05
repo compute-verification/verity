@@ -85,7 +85,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from verity.proofs.codes import VerificationCode as VC
+from verity_vllm.check.codes import VerificationCode as VC
 from verity_vllm.check.result import MISSING_INPUT, CheckResult
 from verity_vllm.check.verdict import match_verdict
 
@@ -156,7 +156,7 @@ ARTIFACTS: dict[str, str] = {
     "fold_summary": "fold_summary.json",
     "fold_summary_2": "fold_summary_2.json",
     "fold_summary_other": "fold_summary_other.json",
-    "census": "census/census.json",
+    "catalog/census": "catalog/census/census.json",
     "census_reconcile": "census_reconcile.json",
     "noninterference": "nonint/noninterference.json",
     "compare": "compare.json",
@@ -182,7 +182,7 @@ ARTIFACTS: dict[str, str] = {
 ARTIFACT_STAGE: dict[str, str] = {
     "log": "capture", "snapshots": "capture", "tokens": "capture", "versions": "capture", "stats": "capture",
     "cos_sin": "capture", "control_tokens": "control", "resolution": "resolve", "fold_summary": "fold",
-    "fold_summary_2": "fold_2", "census": "census", "census_reconcile": "census_reconcile",
+    "fold_summary_2": "fold_2", "catalog/census": "catalog/census", "census_reconcile": "census_reconcile",
     "noninterference": "nonint_compare", "compare": "compare", "replay_a": "replay_a", "replay_c": "replay_c",
     "root_policy": "root_policy", "golden": "golden",
 }
@@ -578,7 +578,7 @@ def gate_G1(run: RunArtifacts) -> GateResult:
     step_errors = [s for s in (cr.get("steps") or []) if isinstance(s, dict) and "error" in s]
     if step_errors:
         problems.append(f"{len(step_errors)} census steps without a resolved log step")
-    detail["census"] = {"census_kernels": t.get("census_kernels"), "distinct_kernel_names": t.get("distinct_kernel_names"),
+    detail["catalog/census"] = {"census_kernels": t.get("census_kernels"), "distinct_kernel_names": t.get("distinct_kernel_names"),
                         "residue_kernels": residue, "residue_names": t.get("residue_names"), "ambiguous": ambiguous,
                         "steps_aligned": cr.get("steps_aligned"), "residue_zero": cr.get("residue_zero")}
     return _result(problems, ev, detail)

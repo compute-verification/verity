@@ -1,5 +1,5 @@
 """The -h1 kernels tuned for sm_120 (`hash_sm120.cuh`: hash_rows_w, hash_tree_small, hash_leaf_p, hash_msg_v) commit the
-verifier's bytes: each against `verity.commitments`' frame-b3 (one-block leaf headers, one-compression nodes under level keys)
+verifier's bytes: each against `verity.primitives.commitments`' frame-b3 (one-block leaf headers, one-compression nodes under level keys)
 and Pearl-C's h1 digests, and against `hash.cuh`'s kernels, through a thread-for-thread host build."""
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
-from verity.commitments.blake3 import keyed
+from verity.primitives.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
+from verity.primitives.crypto.blake3 import keyed
 
 HERE = Path(__file__).parents[1] / "pearl_c"
 spec = importlib.util.spec_from_file_location("simt_twin", HERE / "simt_twin.py")
@@ -20,8 +20,8 @@ T = importlib.util.module_from_spec(spec)
 sys.modules["simt_twin"] = T
 spec.loader.exec_module(T)
 
-sys.path.insert(0, str(Path(__file__).parents[3] / "protocols" / "pouw"))
-from verity_pouw.schemes.pearl_c import H1_KEYS, TREE_HASH  # noqa: E402
+sys.path.insert(0, str(Path(__file__).parents[3] / "verity" / "protocols" / "accounting" / "work" / "pouw"))
+from verity.protocols.accounting.work.pouw.schemes.pearl_c import H1_KEYS, TREE_HASH  # noqa: E402
 
 ROW, TILE = "verity/pouw/row/v1", "verity/pouw/tile/v1"
 BINDING = bytes(range(32))
@@ -127,8 +127,8 @@ def test_the_tile_tree_in_one_launch():
 
 def test_the_four_lane_compression_is_b3cs():
     """lat_chain's chain of 40 compressions, on one thread (b3c) and on four lanes (b3c4), both equal to BLAKE3's compression
-    in `verity.commitments.blake3` chained the same way."""
-    from verity.commitments.blake3 import IV, compress
+    in `verity.primitives.crypto.blake3` chained the same way."""
+    from verity.primitives.crypto.blake3 import IV, compress
     n, cv, m = 40, tuple(IV), [(0x9E3779B9 * (i + 1)) & 0xFFFFFFFF for i in range(16)]
     for k in range(n):
         cv = tuple(compress(cv, b"".join(w.to_bytes(4, "little") for w in m), k, 64, 16)[:8])
@@ -160,7 +160,7 @@ def test_rows_and_tree_in_one_launch_are_merkle_trees(m, rb):
 
 def verifier(path, *extra) -> "subprocess.CompletedProcess":
     import subprocess
-    env = {"PYTHONPATH": f"{Path(__file__).parents[3] / 'packages/verity/src'}:{Path(__file__).parents[3] / 'protocols/pouw'}",
+    env = {"PYTHONPATH": f"{Path(__file__).parents[3] / 'verity'}:{Path(__file__).parents[3] / 'verity/protocols/accounting/work/pouw'}",
            "PATH": "/usr/bin:/bin"}
     return subprocess.run([sys.executable, str(HERE / "verify_h1.py"), *extra, "test", str(path)], capture_output=True, text=True,
                           env=env)
@@ -173,7 +173,7 @@ def test_the_verifier_accepts_the_references_transcript_and_rejects_a_flipped_by
     the digests or the tile tree, and with its format relabelled."""
     import json as J
 
-    from verity.commitments.merkle import tree_levels
+    from verity.primitives.commitments.merkle import tree_levels
     m, rb, n = 32, 256, 128
     rows = data("verify rows", m * rb)
     c, u = data("verify c", 4 * m * n), data("verify u", 4 * m * n)
@@ -224,7 +224,7 @@ def test_the_verifier_regenerates_a_tagged_a_and_checks_its_h2_tree(tmp_path):
     split over processes, rejected with one byte of a leaf or of the root flipped."""
     import json as J
 
-    from verity.commitments.merkle import tree_levels
+    from verity.primitives.commitments.merkle import tree_levels
     m, rb, tag = 16, 1000, "test tagged A {r}"
     binding = hashlib.sha256(b"verify tagged").digest()
     d = CommitmentDomain(binding, 0, RangeIndexedDomain(m), hash="blake3-s256")
@@ -258,7 +258,7 @@ def segment_roots(rows: bytes, rb: int, s: int, key: bytes, levels: list[bytes])
 @pytest.mark.parametrize("rb,s", [(32768, 256), (32768, 64), (16384, 256), (4096, 1024), (1024, 1024)])
 def test_the_segment_layout_prototype_is_keyed_blake3_over_segments(rb, s):
     """hash_rows_seg (P1's prototype, not -h1): each s-byte segment's standard keyed BLAKE3 under the row-leaf key, then
-    one-block nodes under the level keys, equal to `verity.commitments.blake3.keyed` composed the same way."""
+    one-block nodes under the level keys, equal to `verity.primitives.crypto.blake3.keyed` composed the same way."""
     rows, key = data(f"seg rows {rb} {s}", 2 * rb), data("seg key", 32)
     levels = [data(f"seg level {l}", 32) for l in range(9)]
     out = T.buffer(64)

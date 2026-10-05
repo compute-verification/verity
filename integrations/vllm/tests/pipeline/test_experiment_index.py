@@ -86,7 +86,7 @@ def test_realized_consistency_names_the_phase_that_ignored_the_arrivals(tmp_path
     import json
     from verity_vllm.pipeline import experiment as EXP
     run = tmp_path / "run"
-    (run / "capture").mkdir(parents=True); (run / "control").mkdir(); (run / "census").mkdir(); (run / "nonint" / "c_bare").mkdir(parents=True)
+    (run / "capture").mkdir(parents=True); (run / "control").mkdir(); (run / "catalog/census").mkdir(); (run / "nonint" / "c_bare").mkdir(parents=True)
     reqs = {"r0": {"first_step": 0, "finish_step": 12, "n_generated": 13, "arrive_step_realized": 0},
             "r1": {"first_step": 3, "finish_step": 21, "n_generated": 19, "arrive_step_realized": 3}}
     cap = {"timing": {"engine_steps": 38, "requests": reqs}}
@@ -95,13 +95,13 @@ def test_realized_consistency_names_the_phase_that_ignored_the_arrivals(tmp_path
     (run / "nonint" / "c_bare" / "tokens.json").write_text(json.dumps(cap))
     # a census that admitted everything at step 0 (the pre-a9a13179f behaviour): 24 forwards, r1 prefilled at forward 0
     bad = {"engine_steps": 24, "requests": {"r0": dict(reqs["r0"]), "r1": {**reqs["r1"], "first_step": 0, "finish_step": 18, "arrive_step_realized": 0}}}
-    (run / "census" / "census.json").write_text(json.dumps({"steps": [{} for _ in range(24)], "realized": bad}))
+    (run / "catalog/census" / "census.json").write_text(json.dumps({"steps": [{} for _ in range(24)], "realized": bad}))
     rc = EXP.realized_consistency(run)
     assert rc["status"] == "inconsistent" and rc["capture_engine_steps"] == 38
     assert "census: engine_steps 24 != capture 38" in rc["problems"]
     assert any(p.startswith("census: request r1 first_step 0 != capture 3") for p in rc["problems"])
     assert all(not p.startswith(("control", "nonint")) for p in rc["problems"])
-    assert set(rc["phases_compared"]) == {"control", "nonint/c_bare", "census"} and "nonint/a_observer" in rc["phases_missing"]
+    assert set(rc["phases_compared"]) == {"control", "nonint/c_bare", "catalog/census"} and "nonint/a_observer" in rc["phases_missing"]
     # the same census, fixed: consistent
-    (run / "census" / "census.json").write_text(json.dumps({"steps": [{} for _ in range(38)], "realized": {"engine_steps": 38, "requests": reqs}}))
+    (run / "catalog/census" / "census.json").write_text(json.dumps({"steps": [{} for _ in range(38)], "realized": {"engine_steps": 38, "requests": reqs}}))
     assert EXP.realized_consistency(run)["status"] == "consistent"

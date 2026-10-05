@@ -8,7 +8,7 @@ import os
 import numpy as np
 import pytest
 
-from verity.ml import mufu
+from catalog.definitions import mufu
 from verity_vllm.program.kernels import fa2_model as FA
 from verity_vllm.program.kernels import fa2_relation, rms_relation
 from verity_vllm.program.kernels import rms_triton_model as RM
@@ -51,7 +51,7 @@ def test_a_table_that_is_not_the_pinned_one_does_not_load(monkeypatch):
 
 def test_the_decoded_tables_are_core_library_tables():
     """Each measured MUFU table, decoded as raw little-endian u32 words, has the SHA-256 and SHA-512 core's library lists."""
-    from verity.ml import library as L
+    from verity.primitives.circuits import library as L
 
     t, fa2 = rms_relation.tables("cuda"), fa2_relation.tables()
     for name in ("rsq", "sqrt", "rcp", "ex2"):

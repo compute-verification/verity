@@ -16,11 +16,11 @@ discipline).
 """
 from __future__ import annotations
 
-from verity.ir.defs import bind, composite
-from verity.ir.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.ir.types import Array, Tuple
-from verity.ml.gemm import DotBf16 as DotBf16V2
-from verity.ml.prims import ZERO32, const
+from verity.primitives.circuits.defs import bind, composite
+from verity.primitives.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.primitives.circuits.types import Array, Tuple
+from catalog.definitions.gemm import DotBf16 as DotBf16V2
+from catalog.definitions.prims import ZERO32, const
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.b1 import ZERO16, _lane, _scale_log2_bits
 from verity_vllm.program.registry.prims import A16, BF16, F32

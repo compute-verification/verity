@@ -2,7 +2,7 @@
 
     Experiment
         specification    what we intended to run -- known BEFORE execution        spec.json (+ capture/spec_tokens.json)
-        execution        what actually happened                                   capture/, control/, census/, nonint/, run.json#realized
+        execution        what actually happened                                   capture/, control/, catalog/census/, nonint/, run.json#realized
         representation   the Verity Program and how it was pinned to the run     program.json, instances.jsonl, accesses.jsonl.gz, wiring,
                                                                                   provenance, resolution, prescribed inputs, transcript values
         checks           what we tested and what it said                         gates.json, replay_*.json, compare.json, …, stages.json (cost)
@@ -209,14 +209,14 @@ def _phase_realized(run: Path) -> dict[str, dict | None]:
     out["control"] = from_tokens("control/tokens.json")
     for v in ("a_observer", "b_hooks", "c_bare"):
         out[f"nonint/{v}"] = from_tokens(f"nonint/{v}/tokens.json")
-    c = _load(run, "census/census.json")
+    c = _load(run, "catalog/census/census.json")
     if c:
         r = c.get("realized")
-        out["census"] = ({"engine_steps": r.get("engine_steps"),
+        out["catalog/census"] = ({"engine_steps": r.get("engine_steps"),
                           "requests": {rid: {k: q.get(k) for k in ("first_step", "finish_step", "n_generated", "arrive_step_realized")} for rid, q in (r.get("requests") or {}).items()}}
                          if r else {"engine_steps": len(c.get("steps") or []), "requests": None, "note": "census without a realized block (pre-a9a13179f)"})
     else:
-        out["census"] = None
+        out["catalog/census"] = None
     return out
 
 
@@ -302,11 +302,11 @@ def build_experiment(run: Path, *, repo: Path | None = None, spec_note: dict | N
             "observation_log": _ref(run, "capture/log.jsonl.gz", sha=False),
             "tokens": _ref(run, "capture/tokens.json"), "versions": _ref(run, "capture/versions.json"), "stats": _ref(run, "capture/stats.json"),
             "control_tokens": _ref(run, "control/tokens.json"),
-            "census": _ref(run, "census/census.json"), "census_traces": _ref(run, "census/traces"),
+            "catalog/census": _ref(run, "catalog/census/census.json"), "census_traces": _ref(run, "catalog/census/traces"),
             "noninterference": _ref(run, "nonint/noninterference.json"),
             "realized": realized,                      # per-request prompt/generated lengths, arrival/first/finish steps, engine steps (run.json)
             "realized_consistency": realized_consistency(run),   # every phase's own realized arrivals vs the capture's (spec §5)
-            "observed_vs_interpreted": "capture/log.jsonl.gz, tokens.json, census/ are runtime facts; resolution.json onward is interpretation",
+            "observed_vs_interpreted": "capture/log.jsonl.gz, tokens.json, catalog/census/ are runtime facts; resolution.json onward is interpretation",
         },
         "representation": {
             "program": prog_ref, "program_digest": fold.get("digest") or fold.get("program_digest"),

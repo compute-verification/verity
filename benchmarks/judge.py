@@ -9,7 +9,7 @@
 ``research compare`` shows every recorded difference between two runs and leaves to the workload whether a difference
 invalidates the comparison.  This script is that judgment for the proof campaign.  Two results are comparable only
 when they agree on the contract's identity fields -- ``proof_class``, ``authentication``, ``profile``, ``domain``,
-``K`` (``verity_numerical.bench.contract.IDENTITY_FIELDS``; ``backends/AGENTS.md``: never compare across
+``K`` (``verity_numerical.bench.contract.IDENTITY_FIELDS``; ``archive/AGENTS.md``: never compare across
 ``proof_class``).  A field either result lacks counts as a disagreement.  On disagreement the judge REFUSES (exit 2)
 and prints nothing that looks like a ratio.  ``--allow K`` (repeatable) lets a named identity field differ when that
 difference *is* the experiment (a scaling curve); the output then labels it.  Exit 0: judged; 1: a run could not be read.
@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
-for candidate, module in ((REPO / "packages" / "verity" / "src", "verity"), (REPO / "backends" / "numerical" / "python", "verity_numerical")):
+for candidate, module in ((REPO / "verity", "verity"), (REPO / "benchmarks" / "numerical" / "python", "verity_numerical")):
     try:
         __import__(module)
     except ImportError:
@@ -80,7 +80,7 @@ def load(run_dir: Path) -> dict[str, Any]:
 
 
 def _vector_run():
-    spec = importlib.util.spec_from_file_location("vector_run", REPO / "benchmarks" / "dot_product" / "vector_run.py")
+    spec = importlib.util.spec_from_file_location("vector_run", REPO / "archive" / "sp1" / "benchmarks" / "dot_product" / "vector_run.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

@@ -48,9 +48,9 @@ R9_REFERENCE_MANIFESTS = [  # other construction hosts, same profile (pre-fix ma
     REPO / "out/gen/r9/cb-a/request_8_4/construction_manifest.json",                          # cp-cba (4090), cuda_available true
     REPO / "out/gen/r10/cb-test/repro_base/sens/base/construction_manifest.json",             # cp-cb8 (L40S hidden), owner 9
 ]
-SOURCE_ROOTS = ("verity.ir", "verity_vllm", "EXPORT.json", "pyproject.toml")  # what a build needs (A's driver imports only these)
+SOURCE_ROOTS = ("verity.primitives.circuits", "verity_vllm", "EXPORT.json", "pyproject.toml")  # what a build needs (A's driver imports only these)
 #: core `verity` is not copied into the build trees (only the integration is mutated); the builds import it from the repo
-CORE_SRC = REPO.parents[1] / "packages" / "verity" / "src"
+CORE_SRC = REPO.parents[1] / "verity"
 
 
 def _pythonpath(tree: pathlib.Path) -> str:

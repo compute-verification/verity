@@ -14,7 +14,7 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID FLASHINFER_CUDA_ARCH_LIST=${FLASHINFER_CUDA_
 : "${CUDA_VISIBLE_DEVICES:?run this under a GPU lease}"
 case "${MODE:-plaintext}" in
   plaintext) ;;
-  *) export PYTHONPATH=$PWD/integrations/vllm:$PWD/packages/verity/src:$PWD/tools/research/src${PYTHONPATH:+:$PYTHONPATH} ;;
+  *) export PYTHONPATH=$PWD/integrations/vllm:$PWD/verity:$PWD/tools/research/src${PYTHONPATH:+:$PYTHONPATH} ;;
 esac
 nvidia-smi -q -i "${CUDA_VISIBLE_DEVICES%%,*}" > "$OUT/nvidia-smi.txt" 2>&1 || true
 exec "$VENV/bin/python" benchmarks/network_traces/record.py run --out "$OUT" --model "${MODEL:-unsloth/Llama-3.2-1B}" \

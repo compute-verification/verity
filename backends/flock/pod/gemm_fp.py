@@ -11,14 +11,14 @@ from __future__ import annotations
 
 import re
 
-#: dtype -> (coordinate composite, binding record) in verity.ml.gemm
+#: dtype -> (coordinate composite, binding record) in catalog.definitions.gemm
 DTYPES = {"e4m3": ("GemmCoordinateE4m3", "GEMM_SM120_E4M3"), "nvf4": ("GemmCoordinateNvf4", "GEMM_SM120_NVF4"),
           "mxf4": ("GemmCoordinateMxf4", "GEMM_SM120_MXF4")}
 
 
 def coordinate(dtype: str, K: int):
-    from verity.ir.defs import bind
-    from verity.ml import gemm as G
+    from verity.primitives.circuits.defs import bind
+    from catalog.definitions import gemm as G
 
     comp, rec = DTYPES[dtype]
     return bind(getattr(G, comp), K=K, **getattr(G, rec))
@@ -27,8 +27,8 @@ def coordinate(dtype: str, K: int):
 def program(dtype: str, K: int, N: int):
     """A Program whose one Call is N coordinates over one activation row: the activation (and its scales) broadcast, the weight rows
     (and theirs) one per coordinate."""
-    from verity.ir.defs import CompositeDefinition
-    from verity.ir.types import Array
+    from verity.primitives.circuits.defs import CompositeDefinition
+    from verity.primitives.circuits.types import Array
     from verity_flock.partition_units import one_call
 
     fn = coordinate(dtype, K)
@@ -37,7 +37,7 @@ def program(dtype: str, K: int, N: int):
     row_params = tuple((name, t if ax is None else Array(N, t)) for (name, t), ax in zip(params, axes))
     row = CompositeDefinition(f"GemmRow[{fn.id}]{{N={N}}}", 1, (), lambda S: (row_params, Array(N, ret)),
                               lambda B, S, *xs: B.batch(fn, *xs, axes=axes), register=False)
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.defs import bind
     return one_call(bind(row))
 
 

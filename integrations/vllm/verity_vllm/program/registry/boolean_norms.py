@@ -23,7 +23,7 @@ Each is the word body's dataflow, in the word body's operand order, over these p
     RMSNormOutRowTriton_v1{N}      bf16_rn((inv * f32(x_j)) * f32(w_j))   (`RMSNormOutTriton_v1`)
 
 The leaf pieces are traced from `fp`'s builders, so the bf16 operands' 16 constant-zero bits and the constants N, 1 / N and EPS
-specialize them. The f32 adds, divide, multiply and FMA between them are `verity.ml.boolean.elementwise`'s Calls. The lanes,
+specialize them. The f32 adds, divide, multiply and FMA between them are `catalog.definitions.boolean.elementwise`'s Calls. The lanes,
 warps and output rows are separable (each node reads only parameters and every leaf it makes is returned), so `Q_word` cuts them
 member by member; the norm itself is not, so a served Program calls the parts at its root (the two emitters above), never the
 whole norm, whose flat circuit is millions of gates at a served width.
@@ -54,18 +54,18 @@ from typing import Callable
 
 import numpy as np
 
-from verity.evaluation import evaluate
-from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind, composite
-from verity.ir.refs import Coll, Explicit, array_of, coll_concat, tuple_of
-from verity.ir.types import Array, Tuple, Value
-from verity.ml import fp32 as W
-from verity.ml.boolean import elementwise as EW
-from verity.ml.boolean import fp
-from verity.ml.boolean import trace as TR
-from verity.ml.boolean.forms import NOT, ONE, ZERO
-from verity.ml.boolean.trace import word_of
-from verity.ml.prims import const
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits import boolean as BL
+from verity.primitives.circuits.defs import CompositeDefinition, bind, composite
+from verity.primitives.circuits.refs import Coll, Explicit, array_of, coll_concat, tuple_of
+from verity.primitives.circuits.types import Array, Tuple, Value
+from catalog.definitions import fp32 as W
+from catalog.definitions.boolean import elementwise as EW
+from catalog.silicon import fp
+from verity.primitives.circuits.boolean import trace as TR
+from verity.primitives.circuits.boolean.forms import NOT, ONE, ZERO
+from verity.primitives.circuits.boolean.trace import word_of
+from catalog.definitions.prims import const
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.sampling import bit_at

@@ -9,13 +9,13 @@ contrast, not a protocol candidate).
 The prover is dev.py's `Pipeline` on BF16 A and B: per call, A's commitment as the verifier checks it (`audit.commit_rows`,
 SHA-256 whole-row leaves) and seed_a from its root, A's forming with E_A's lines, A′F_B, the chain with the peel and the
 fused digests, the tile leaves; per (weight, epoch), `weight_side` (B's commitment and seed_b first).  The host supplies the
-operands, the salt and the two domain ids (verity.commitments', public before A exists).  The salt is the verifier's
+operands, the salt and the two domain ids (verity.primitives.commitments', public before A exists).  The salt is the verifier's
 (`audit.Epoch.start` over B's root, committed on the host, and an epoch beacon that is a label of the operand set: a
 shortcut for a public round).  The harness makes each shape's transcript after the timed items (`bench.poison_dump`):
 it fills every buffer of the hash call's ``transcript_buffers`` with 0xA5, runs the weight side and the call, and has
 `dump` read them back into ``transcripts/<arm>/<shape>/``; then it poisons them again, launches nothing, and has `dump`
 write the no-write control into ``negative/<arm>/<shape>/``.  The build record names the reference replay (``verifier``)
-that proves and checks both after timing: `verity_pouw.schemes.pearl_c4_replay`'s ``prove`` and ``verify``, whose ACCEPT
+that proves and checks both after timing: `benchmarks.pouw.pearl_c4.replay`'s ``prove`` and ``verify``, whose ACCEPT
 line names the transcript's sha256, and which must reject the control.  That ACCEPT is replay-verified (development
 shortcut; the protocol's check is a ZK proof, PROTOCOL.md).  The build record's ``binaries`` is the cubin
 (loaded with ``cuModuleLoadData``, so never mapped).
@@ -54,7 +54,7 @@ from arm import Buffer, Gate, Shape, Work
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-for _p in (HERE, ROOT / "packages" / "verity" / "src", ROOT / "protocols" / "pouw"):
+for _p in (HERE, ROOT / "verity", ROOT / "verity" / "protocols" / "accounting" / "work" / "pouw"):
     if str(_p) not in sys.path:
         sys.path.append(str(_p))
 
@@ -68,8 +68,8 @@ LINE_IN = 37                           # seed ‖ role ‖ index u32
 
 def _ref():
     import twin as T
-    from verity_pouw import audit
-    from verity_pouw.schemes import pearl_c4 as F
+    from verity.protocols.accounting.work.pouw import audit
+    from verity.protocols.accounting.work.pouw.schemes import pearl_c4 as F
     return T, F, audit
 
 
@@ -167,7 +167,7 @@ class _Call:
     def write_dump(self, path: Path) -> None:
         """The call's transcript as the timed code emits it (`pearl_c4_replay.write_dump`): A's and B's rows, both roots,
         the tile leaves and the formed scale bytes, read from the device as they stand.  It computes nothing."""
-        from verity_pouw.schemes import pearl_c4_replay as R
+        from benchmarks.pouw.pearl_c4 import replay as R
         d, b, s = self.d, self.pl.buf, self.shape
         call = {"scheme": self.arm.name, "shape": [self.m_pad, s.k, s.n], "index": 0, "weight": self.weight,
                 "real_rows": s.m, "epoch_beacon": self.beacon.hex(), "label": s.label, "device": d.uuid,
@@ -216,9 +216,9 @@ class _PearlC4:
         (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md).  The harness's dump is under
         ``transcripts/{arm}/{shape}/``, so verify.py runs the same commands on the no-write control under ``negative/``,
         which they must reject; ``--path`` names whichever of the two it is."""
-        r = ["{python}", "-m", "verity_pouw.schemes.pearl_c4_replay"]
+        r = ["{python}", "-m", "benchmarks.pouw.pearl_c4.replay"]
         w = ["--workers", os.environ.get("PEARLC4_VERIFY_WORKERS", "16")]
-        return {"name": "verity_pouw.schemes.pearl_c4_replay", "transcript": "transcripts/{arm}/{shape}/transcript.json",
+        return {"name": "benchmarks.pouw.pearl_c4.replay", "transcript": "transcripts/{arm}/{shape}/transcript.json",
                 "commands": [r + ["prove", "{dir}", "--run", "{run_id}", "--out", "{transcript}"] + w,
                              r + ["verify", "{transcript}", "--out", "{dir}/verify.json",
                                   "--path", "{run_id}:{transcript}", "--commit", "{commit}"] + w]}
@@ -234,7 +234,7 @@ class _PearlC4:
 
     def work(self, shape: Shape) -> Work:
         _, F, _ = _ref()
-        from verity_pouw.protocol import Shape as PShape
+        from verity.protocols.accounting.work.pouw.protocol import Shape as PShape
         m, k, n = shape.m, shape.k, shape.n
         mp = -(-m // TILE) * TILE
         s, ps = F.PearlC4(self.fmt), PShape(m, k, n)
@@ -254,8 +254,8 @@ class _PearlC4:
         key = (shape.label, operands.index, operands.seed, operands.b.ptr, weight)
         if key not in self._epochs:
             _, _, au = _ref()
-            from verity_pouw.protocol import Matmul
-            from verity_pouw.protocol import Shape as PShape
+            from verity.protocols.accounting.work.pouw.protocol import Matmul
+            from verity.protocols.accounting.work.pouw.protocol import Shape as PShape
             m_pad, k, n = -(-shape.m // TILE) * TILE, shape.k, shape.n
             beacon = hashlib.sha256(f"verity/pouw/pearl-c4-arm/beacon/{shape.label}/{operands.seed}/{operands.index}"
                                     .encode()).digest()
@@ -339,8 +339,8 @@ class _PearlC4:
         roles other than ``hash`` commit nothing per call, so there only B's are checked (A's are those `prepare` primed,
         of the operands before a dependent chain rewrote them)."""
         _, F, au = _ref()
-        from verity_pouw.protocol import Context, Matmul
-        from verity_pouw.protocol import Shape as PShape
+        from verity.protocols.accounting.work.pouw.protocol import Context, Matmul
+        from verity.protocols.accounting.work.pouw.protocol import Shape as PShape
         d, pl, k = self.d, call.pl, shape.k
         ta = self._commit_rows(shape, au.activation_binding(call.salt, 0), 0, pl.buf["xa"], call.m_pad, k)
         tb = self._commit_rows(shape, au.weight_binding(call.weight), -2, pl.buf["xb"], shape.n, k)

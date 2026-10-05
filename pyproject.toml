@@ -3,7 +3,7 @@ name = "verity-workspace"
 version = "0.0.0"
 description = "Verity monorepo root; a uv workspace, not a package."
 requires-python = ">=3.12"
-dependencies = ["research", "cluster", "verity", "verity-sp1", "verity-numerical", "verity-vllm", "verity-sampled-proofs", "verity-pous", "verity-network-warden", "verity-pouw", "verity-flock", "verity-circuit-check"]
+dependencies = ["research", "cluster", "verity", "verity-sp1", "verity-numerical", "verity-vllm", "verity-flock", "verity-circuit-check"]
 
 [project.optional-dependencies]
 # torch from the PyTorch CPU index, for CPU machines and `check`: about 0.2 GB, where the members' `torch` extras take PyPI's
@@ -25,7 +25,7 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.workspace]
-members = ["tools/research", "tools/cluster", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pous", "protocols/network_warden", "protocols/pouw", "backends/flock", "tools/circuit_check", "tools/check", "tools/lean", "tools/native_peak", "tools/tc_probe", "tools/tc_probe_fp4", "benchmarks/commitments", "backends/gkr", "backends/direct", "benchmarks/pouw", "benchmarks/network_traces"]
+members = ["tools/research", "tools/cluster", "verity", "archive/sp1", "benchmarks/numerical", "integrations/vllm", "backends/flock", "tools/circuit_check", "tools/check", "tools/lean", "tools/native_peak", "tools/tc_probe", "tools/tc_probe_fp4", "benchmarks/commitments", "archive/gkr", "archive/direct", "benchmarks/pouw", "benchmarks/network_traces"]
 
 [tool.uv.sources]
 research = { workspace = true }
@@ -34,10 +34,6 @@ verity = { workspace = true }
 verity-sp1 = { workspace = true }
 verity-numerical = { workspace = true }
 verity-vllm = { workspace = true }
-verity-sampled-proofs = { workspace = true }
-verity-pous = { workspace = true }
-verity-network-warden = { workspace = true }
-verity-pouw = { workspace = true }
 verity-flock = { workspace = true }
 verity-circuit-check = { workspace = true }
 torch = { index = "pytorch-cpu", extra = "torch-cpu" }
@@ -55,6 +51,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 inputs = ["."]
-testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests", "backends/gkr/tests", "backends/flock/tests", "tools/circuit_check/tests", "tools/lean/tests", "protocols", "benchmarks/pouw/tests"]
+testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "verity/tests", "archive/sp1/tests", "benchmarks/numerical/tests", "archive/gkr/tests", "backends/flock/tests", "tools/circuit_check/tests", "tools/lean/tests", "verity/protocols", "catalog/tests", "experimental", "benchmarks/pouw/tests"]
 markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`",
            "circuit_suite: one circuit-check target per test (tools/circuit_check); `check` runs these as `circuit-check --all`"]

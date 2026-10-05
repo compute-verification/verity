@@ -1,4 +1,4 @@
-"""The repository's `verity/annotations/v0` files (`verity.ir.annotations`): core's `verity/ml/annotations.json` and the vLLM
+"""The repository's `verity/annotations/v0` files (`verity.primitives.circuits.annotations`): core's `catalog/definitions/annotations.json` and the vLLM
 registry's `annotations.json`. Every entry is well formed; every Definition key resolves, and no guard is stale, in a program
 calling each specialization the circuit-check catalog reaches of that Definition; and each entry sits in its owner's file.
 
@@ -14,15 +14,15 @@ from pathlib import Path
 import pytest
 
 from circuit_check import targets as T
-from verity.ir import annotations as A
-from verity.ir import codec
-from verity.ir import partition_object as PO
-from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ir.program import Program
+from verity.primitives.circuits import annotations as A
+from verity.primitives.circuits import codec
+from verity.primitives.circuits import partition_object as PO
+from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+from verity.primitives.circuits.program import Program
 
 ROOT = Path(__file__).resolve().parents[3]
 FILES = {
-    "core": ROOT / "packages" / "verity" / "src" / "verity" / "ml" / "annotations.json",
+    "core": ROOT / "catalog" / "definitions" / "annotations.json",
     "vllm": ROOT / "integrations" / "vllm" / "verity_vllm" / "program" / "registry" / "annotations.json",
 }
 _TARGET = re.compile(r"^(def|node|wire|port):([^/]+)")
@@ -58,7 +58,7 @@ def _calling(fn) -> dict:
 
 def _owner(stem: str) -> str:
     """Core's or the vLLM registry's: the module of the registered Definition's body (a specialization's body is built in
-    `verity.ir`), or of a primitive's evaluator."""
+    `verity.primitives.circuits`), or of a primitive's evaluator."""
     d = REGISTRY.defs.get(stem)
     impl = getattr(d, "evaluate", None) or getattr(d, "body", None)
     return "vllm" if getattr(impl, "__module__", "").startswith("verity_vllm") else "core"

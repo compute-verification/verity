@@ -35,7 +35,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "canonical-profiles": ("verity_vllm.engine.profiles.canonical", "check or rewrite the canonical profile pins"),
     "capture-identities": ("verity_vllm.correspondence.capture_identities", "capture identities vs the canonical B1 circuit"),
     "capture-map": ("verity_vllm.check.capture_map", "a capture map against a module inventory (check), its tap counts and value ids"),
-    "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
+    "catalog/census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
     "commit-group": ("verity_vllm.pipeline.commit_group", "the Commits of several rows of one engine, in one process under one GPU lease"),
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),

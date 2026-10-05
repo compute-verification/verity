@@ -36,11 +36,11 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity.ir.defs import bind, composite
-from verity.ir.refs import Coll as _Coll, concat
+from verity.primitives.circuits.defs import bind, composite
+from verity.primitives.circuits.refs import Coll as _Coll, concat
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
-from verity.ir.types import Array
+from verity.primitives.circuits.types import Array
 
 from verity_vllm.check import operand_provenance as provenance
 from verity_vllm.check.replay import replay
@@ -405,7 +405,7 @@ def run_checkers(result: FoldResult, *, store, weights, log_path=None, seed: int
     if root_policy_fn is not None:
         out["root_policy"] = root_policy_fn()
     if census_fn is not None:
-        out["census"] = census_fn()
+        out["catalog/census"] = census_fn()
     out["seconds"] = round(time.time() - t0, 2)
     return out
 
@@ -431,9 +431,9 @@ def summarize(rep: dict) -> dict:
     r = rep.get("root_policy")
     if r:
         s["root_policy"] = {"status": r["status"], "first_failures": r.get("first_failures", [])[:3], "problems": r.get("problems", [])[:3]}
-    ce = rep.get("census")
+    ce = rep.get("catalog/census")
     if ce:
-        s["census"] = {"residue_zero": ce.get("residue_zero"), "residue_names": (ce.get("totals") or {}).get("residue_names")}
+        s["catalog/census"] = {"residue_zero": ce.get("residue_zero"), "residue_names": (ce.get("totals") or {}).get("residue_names")}
     return s
 
 
@@ -508,7 +508,7 @@ class ToyRecord:
                 BAKED[int(m["event"])] = tuple(int(w) for w in call_outs)
 
     def _returns(self, node: int):
-        from verity.ir.layout import FunctionCall
+        from verity.primitives.circuits.layout import FunctionCall
         circuit = self.genuine.program.circuit
         n_in = len(self.genuine.program.root.body.nodes) - len(self.genuine.body.nodes)
         return FunctionCall(circuit, circuit.root_scope, n_in + node).returns
@@ -622,7 +622,7 @@ def miss_probability(S: int, n: int, k: int) -> float:
 def run_one(record, mut: Mutation, *, k: int, seed: int, max_arg_leaves: int, chain_n: int = 3, log_path=None,
             census: bool = False, tier_a_steps=None) -> dict:
     prof, state = mutate_profile(record.profile, mut.target, mut.rewrite, weight_field=mut.weight_field)
-    census_fn = record.census(prof) if census and hasattr(record, "census") else None
+    census_fn = record.census(prof) if census and hasattr(record, "catalog/census") else None
     t0 = time.time()
     try:
         result = record.fold(prof)

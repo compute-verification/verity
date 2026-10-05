@@ -13,7 +13,7 @@ mkdir -p "$OUT"
 VENV=${VENV:-/workspace/jobs/venv312}
 export PATH=$VENV/bin:$PATH HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 export CUDA_DEVICE_ORDER=PCI_BUS_ID FLASHINFER_CUDA_ARCH_LIST=${FLASHINFER_CUDA_ARCH_LIST:-12.0f}
-export PYTHONPATH=$PWD/protocols/network_warden:$PWD/packages/verity/src${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$PWD/verity/protocols/accounting/communication/warden:$PWD/verity${PYTHONPATH:+:$PYTHONPATH}
 : "${CUDA_VISIBLE_DEVICES:?run this under a GPU lease}"
 nvidia-smi -q -i "${CUDA_VISIBLE_DEVICES%%,*}" > "$OUT/nvidia-smi.txt" 2>&1 || true
 exec "$VENV/bin/python" benchmarks/network_traces/active_replay.py --vllm "${MODEL:-unsloth/Meta-Llama-3.1-8B-Instruct}" \
