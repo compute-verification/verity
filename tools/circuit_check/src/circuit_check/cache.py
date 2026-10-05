@@ -24,7 +24,8 @@ the task list's build, nor an earlier target's check):
   not what a binding ran when it made none of what the target reaches (a registry module a root function imports is no input
   of a primitive it returns);
 - each of those modules with its import closure: the in-tree modules its top-level ``import`` statements name (and its parent
-  packages), recursively, and what was read and run while it was first imported in this process (a loader hook);
+  packages), recursively, and what was read and run while it was first imported in this process (a loader hook, which compiles
+  each from its source);
 - what the process read outside every recording (``pkgutil`` enumerating the registries, the files their imports read): every
   target holds that.
 
@@ -71,10 +72,11 @@ evaluator reads it; behaviour that depends on a module's name or path through an
 object's ``co_filename``, ``inspect.getfile``: a moved module's objects report their new name; `targets._authored` reads
 ``__module__`` for the task list only), and on the order in which modules are first imported (a moved registry module is
 imported by its importer rather than by the enumeration, and consecutive imports are taken in the order of the names they
-bind); report text that names a module or a path is the text of the
-run that stored it; and a source edited without changing its size within the second its bytecode was written, which Python runs
-as the old bytecode.  A new non-empty module in a package the registries enumerate, or one moved where nothing imports it,
-reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``, ``os.system``, ``exec``, ``posix_spawn``, a
+bind); and report text that names a module or a path is the text of the run that stored it.  What runs of a module is what its
+source compiles to, not its cached bytecode, which Python takes when its header matches the source's mtime in whole seconds and
+its size: a module imported while tracing is compiled from its source, and one imported before from bytecode its source does not
+compile to makes the process uncacheable (`_stale_bytecode`).  A new non-empty module in a package the registries enumerate, or
+one moved where nothing imports it, reruns everything.  What the tracer cannot see (a program it starts: ``subprocess``, ``os.system``, ``exec``, ``posix_spawn``, a
 ``fork``) makes the process's later results uncacheable (`untraced`).
 
 Only a verdict is stored, of the tree its check read: not a check that raised (an ImportError says the environment was broken,
@@ -393,7 +395,12 @@ def _instrument() -> None:
 
     def exec_module(self, module):
         with recording() as fr:
-            exec0(self, module)
+            path = getattr(module, "__file__", None)
+            if isinstance(path, str) and _rel(path) is not None:
+                # compiled from the source the key digests, not its cached bytecode (`_stale_bytecode`)
+                exec(self.source_to_code(self.get_data(path), path), module.__dict__)
+            else:
+                exec0(self, module)
         _MODULES[module.__name__] = fr
 
     M.SourceFileLoader.exec_module = exec_module
@@ -508,7 +515,57 @@ def trace(root: Path) -> None:
                 break
         else:
             _UNTRACED.append("sys.monitoring: no tool id is free, so the code a check runs cannot be recorded")
+        _UNTRACED.extend(f"{rel}: imported before tracing from bytecode that is not its source's" for rel in _stale_bytecode())
         _instrument()
+
+
+def _stale_bytecode() -> list[str]:
+    """The tree's modules imported before tracing from cached bytecode that is not what their source compiles to.  Python takes
+    a module's bytecode when its header matches the source's mtime, in whole seconds, and its size (`_taken`), so an edit of the
+    same size within the second the bytecode was written runs the old code while the key digests the new source; bytecode whose
+    header does not match was not run, and a module imported while tracing is compiled from its source (`_instrument`)."""
+    import marshal
+
+    out = []
+    _INTERNAL.append(True)
+    try:
+        for m in list(sys.modules.values()):
+            spec = getattr(m, "__spec__", None)
+            path, cached = getattr(spec, "origin", None), getattr(spec, "cached", None)
+            if not (isinstance(path, str) and path.endswith(".py") and cached and (rel := _rel(path)) is not None):
+                continue
+            try:
+                with open(cached, "rb") as fh:
+                    head, body = fh.read(16), fh.read()
+                with open(path, "rb") as fh:
+                    st, source = os.fstat(fh.fileno()), fh.read()
+                if not _taken(head, st, source):
+                    continue                           # Python compiled this one from its source
+                code = marshal.loads(body)
+            except (OSError, EOFError, ValueError, TypeError):
+                continue                               # none, or one Python would not take either
+            if code != compile(source, path, "exec", dont_inherit=True):
+                out.append(rel)
+    finally:
+        _INTERNAL.pop()
+    return out
+
+
+def _taken(head: bytes, st: os.stat_result, source: bytes) -> bool:
+    """Whether the import system takes bytecode with this header for this source (`importlib._bootstrap_external`'s rule)."""
+    import _imp
+    import importlib.util
+
+    if len(head) < 16 or head[:4] != importlib.util.MAGIC_NUMBER:
+        return False
+    flags = int.from_bytes(head[4:8], "little")
+    if not flags & 1:
+        return (head[8:12] == (int(st.st_mtime) & 0xFFFFFFFF).to_bytes(4, "little")
+                and head[12:16] == (st.st_size & 0xFFFFFFFF).to_bytes(4, "little"))
+    mode = _imp.check_hash_based_pycs
+    if mode == "never" or (mode == "default" and not flags & 2):
+        return True
+    return head[8:16] == importlib.util.source_hash(source)
 
 
 def tracing() -> bool:

@@ -508,6 +508,47 @@ def test_an_evaluator_or_a_module_constant_it_reads_reruns_its_target(tmp_path):
     assert [(3 ^ 0x0105) & 0xFF] in _values(root, "SynX_v1")
 
 
+def test_what_runs_of_a_module_is_its_source_not_bytecode_of_another_version(tmp_path):
+    """Python takes a module's cached bytecode when its header matches the source's mtime, in whole seconds, and its size: an
+    edit of the same size within the second the bytecode was written (here the source's mtime set back to the old one) runs the
+    old code, while the key digests the new source.  A module the cache imports while tracing is compiled from its source, so
+    SynX's verdict after such an edit of its evaluator is the new one; one imported before tracing from such bytecode makes the
+    process uncacheable, and stale bytecode Python did not take (its header no longer matches) does not."""
+    import importlib.util
+    import py_compile
+
+    root = _tree(tmp_path)
+    _bindings(root, '(("_xor_roots",), xor)', families=("SynX_v1",))
+    assert _run(root)["hits"] == []
+    p = root / "syn/xkern.py"
+    py_compile.compile(str(p), doraise=True)
+    before = f"""
+import sys
+from pathlib import Path
+sys.path.insert(0, {str(root)!r})
+import syn.xkern
+from circuit_check import cache as CC
+CC.trace(Path({str(root)!r}))
+print(CC.untraced())
+"""
+    pre = subprocess.run([sys.executable, "-c", before], capture_output=True, text=True, cwd=REPO, check=True)
+    assert pre.stdout.strip() == "[]"
+    st = p.stat()
+    _edit(root, "syn/xkern.py", "return (a ^ b) & MASK", "return (a | b) & MASK")
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns))
+    head = Path(importlib.util.cache_from_source(str(p))).read_bytes()[:16]
+    assert int.from_bytes(head[8:12], "little") == int(p.stat().st_mtime) and int.from_bytes(head[12:16], "little") == st.st_size
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    assert [3 | 0x0105] in _values(root, "SynX_v1")
+    post = subprocess.run([sys.executable, "-c", before], capture_output=True, text=True, cwd=REPO, check=True)
+    assert "syn/xkern.py: imported before tracing from bytecode that is not its source's" in post.stdout
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    later = subprocess.run([sys.executable, "-c", before], capture_output=True, text=True, cwd=REPO, check=True, env=env)
+    assert Path(importlib.util.cache_from_source(str(p))).read_bytes()[:16] == head
+    assert later.stdout.strip() == "[]"                # the old bytecode is still there, but its header no longer matches
+
+
 #: a kernel module imported, as `verity_vllm.program.kernels` imports its rows, by a registry module the catalog enumerates
 KERNEL_FILES = {
     "syn/rows.py": """
