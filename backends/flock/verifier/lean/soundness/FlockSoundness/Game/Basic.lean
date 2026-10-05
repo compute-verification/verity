@@ -1,11 +1,11 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.ENNReal.BigOperators
-import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Order.CompleteLattice.Basic
+import Verity.Protocol.Game
 
 /-!
 # Public-coin interactions with live coins
+
+C-Flock's games are core's (`Verity.Game`, `Verity/Protocol/Game.lean`): `FlockSoundness.Game` names core's type, and
+its constructors and basic operations (`bind`, `recv`, `draw`, `map`, `Strategy`, `prob`, `value`) keep their names here
+(`export`). This file proves what the soundness proof uses about them.
 
 A `Game α` is the verifier's side of a public-coin interaction, written as a program:
 
@@ -30,31 +30,13 @@ namespace FlockSoundness
 
 open scoped ENNReal
 
-/-- The verifier's side of a public-coin interaction with live coins. -/
-inductive Game (α : Type) : Type 1 where
-  | ret : α → Game α
-  | send (M : Type) : (M → Game α) → Game α
-  | coin (C : Type) [Fintype C] [Nonempty C] : (C → Game α) → Game α
+export Verity (Game)
 
 namespace Game
 
+export Verity.Game (ret send coin bind recv draw map Strategy prob value)
+
 variable {α β γ : Type}
-
-/-- Sequencing: run `g`, then continue with `f` applied to its output. -/
-def bind : Game α → (α → Game β) → Game β
-  | .ret a, f => f a
-  | .send M k, f => .send M fun m => bind (k m) f
-  | @Game.coin _ C iF iN k, f => @Game.coin _ C iF iN fun c => bind (k c) f
-
-instance : Monad Game where
-  pure := .ret
-  bind := bind
-
-/-- The prover sends a message of type `M`. -/
-def recv (M : Type) : Game M := .send M .ret
-
-/-- The verifier draws a uniform coin from `C`. -/
-def draw (C : Type) [Fintype C] [Nonempty C] : Game C := .coin C .ret
 
 @[simp] theorem bind_ret (a : α) (f : α → Game β) : (Game.ret a).bind f = f a := rfl
 
@@ -81,33 +63,7 @@ theorem bind_ret_right (g : Game α) : g.bind .ret = g := by
   | send M k ih => simp only [bind_send, ih]
   | coin C k ih => simp only [bind_coin, ih]
 
-/-- Relabel the output. -/
-def map (f : α → β) (g : Game α) : Game β := g.bind fun a => .ret (f a)
-
 /-! ## Strategies and probabilities -/
-
-/-- A deterministic prover strategy: a message at every `send` node, for every history (the
-history is encoded by the position in the tree, so a strategy is simply a choice at each node,
-and after a coin it may depend on that coin). -/
-def Strategy : Game α → Type
-  | .ret _ => PUnit
-  | .send _ k => (m : _) × Strategy (k m)
-  | @Game.coin _ C _ _ k => (c : C) → Strategy (k c)
-
-open Classical in
-/-- The exact probability, over the verifier's independent uniform coins, that the interaction
-between the verifier `g` and the prover strategy `s` ends with an output satisfying `p`. -/
-noncomputable def prob (p : α → Prop) : (g : Game α) → Strategy g → ℝ≥0∞
-  | .ret a, _ => if p a then 1 else 0
-  | .send _ k, s => prob p (k s.1) s.2
-  | @Game.coin _ C iF _ k, s => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * prob p (k c) (s c)
-
-open Classical in
-/-- The same probability for an optimal, computationally unbounded prover. -/
-noncomputable def value (p : α → Prop) : Game α → ℝ≥0∞
-  | .ret a => if p a then 1 else 0
-  | .send _ k => ⨆ m, value p (k m)
-  | @Game.coin _ C iF _ k => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * value p (k c)
 
 /-- No strategy beats the optimal prover. -/
 theorem prob_le_value (p : α → Prop) : ∀ (g : Game α) (s : Strategy g), prob p g s ≤ value p g

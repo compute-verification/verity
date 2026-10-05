@@ -1,7 +1,7 @@
 {
  "roots": ["FlockSoundness"],
  "assumptions": ["FlockSoundness.Assumptions"],
- "meaning": ["FlockSoundness", "FlockLevel3", "Flock"],
+ "meaning": ["FlockSoundness", "FlockLevel3", "Flock", "Verity.Protocol"],
  "compile_time": {
   "FlockSoundness.Refine.Walk": {
    "why": "walk_step, the tactic that steps through a successful computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",

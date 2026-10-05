@@ -5,6 +5,11 @@ defaultTargets = ["FlockSoundness"]
 autoImplicit = false
 relaxedAutoImplicit = false
 
+# Verity core's Lean: C-Flock's games are core's (`Verity.Game`, `Game/Basic.lean`).
+[[require]]
+name = "verity"
+path = "../../../../../verity/lean"
+
 # ArkLib at a pinned commit; VCVio, CompPoly, PolyFun and Mathlib come in at the revisions
 # ArkLib's own lake-manifest pins (recorded in this package's lake-manifest.json).
 [[require]]

@@ -3,7 +3,7 @@ import FlockSoundness.Game.Lock
 /-!
 # One lockstep among identical games
 
-A batched session runs many tables concurrently, the prover choosing the schedule (`batch`). To
+A batched session runs many tables concurrently, the prover choosing the schedule (`batch`, core's). To
 compile one table while every other game stays as it is, that table's lockstep runs beside the
 same game on both sides: `leftSame` and `rightSame` for `interleave`, and `batchLock` for a batch
 with the table at position `pre.length`. The index stays the table's, so its slots and choosers
@@ -17,12 +17,9 @@ namespace FlockSoundness
 
 namespace Game
 
-variable {α β γ : Type}
+export Verity.Game (batch)
 
-/-- Interactions run concurrently, the prover choosing the schedule; the outputs in order. -/
-def batch : List (Game α) → Game (List α)
-  | [] => .ret []
-  | g :: gs => (g.interleave (batch gs)).map fun x => x.1 :: x.2
+variable {α β γ : Type}
 
 /-- **One position of a batch.** An event of one position's output is at most as likely, for an
 optimal prover, as the same event in that position's game alone. -/
