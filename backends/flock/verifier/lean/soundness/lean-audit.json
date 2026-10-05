@@ -9,7 +9,7 @@
  "compile_time": {
   "FlockSoundness.Refine.Walk": {
    "why": "walk_step, the tactic that steps through a successful computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "c86a84bed584d07dde045f113c2e8937b7d5887fb9cda37aebe771db55960a14"
+   "digest": "ae7e96d872cd5d1d3dec4bcf53f3b6ae6fb720b620262f6255a30b4b7d1ef80e"
   }
  },
  "layers": {
