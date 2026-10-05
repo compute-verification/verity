@@ -735,8 +735,11 @@ def unread_spec(facts: dict, elsewhere: set[str] = frozenset()) -> dict[str, lis
 
 
 def read_by_dependents(pkg: Path, root: Path = ROOT) -> set[str]:
-    """The definitions that the records of the other packages under ``root`` requiring ``pkg`` by path list under `reads`."""
+    """The definitions that the records of the other packages under ``root`` requiring ``pkg`` by path list under `reads`:
+    none for a package outside ``root`` or among the controls' fixtures, whose dependents' records are not ``root``'s."""
     out: set[str] = set()
+    if not pkg.resolve().is_relative_to(root.resolve()) or pkg.resolve().is_relative_to(FIXTURES):
+        return out
     for d in packages(root):
         if d.resolve() == pkg.resolve() or pkg.resolve() not in path_deps(d) or not (d / POLICY).exists():
             continue

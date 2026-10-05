@@ -149,6 +149,7 @@ def test_homes_give_each_module_its_package_s_spec(tmp_path):
     assert A.homes(pkg, pol) == {"P.Defs": ["P.Defs"], "P.Thms": ["P.Defs"], "Q.Spec": ["Q.Spec"], "Q.Math": ["Q.Spec"]}
     (pkg / A.POLICY).write_text(json.dumps(pol | {"guarantees": {}, "reads": {"Q.Spec": {"definitions": {"Q.g": "1" * 64}}}}))
     assert A.read_by_dependents(core, tmp_path) == {"Q.g"} and A.read_by_dependents(pkg, tmp_path) == set()
+    assert A.read_by_dependents(core, tmp_path / "pkg") == set() == A.read_by_dependents(A.FIXTURES / "pass", A.ROOT)
 
 
 def test_sorry_native_decide_and_other_axioms_are_named():
