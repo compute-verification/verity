@@ -97,12 +97,15 @@ def fetch (what key : String) : Step ByteArray := do
   let some b ← fetch? key | throw s!"{what}: the content store does not hold {key}"
   return b
 
-/-- The registered population: the public file's instances under the circuit, read as `Stmt.setupTables` reads it. -/
-def populationOf (tags : Tags) (circuitB pubB : ByteArray) (tables : List (String × ByteArray)) : V Nat :=
-  if tags.hiddenOutputs then do
-    let c ← HmOut.parse tags circuitB tables
-    pure (← HmIn.loadPublic tags c (← HmIn.parse c) pubB).n
-  else do pure (← HmRow.loadPublic tags (← HmRow.parse tags circuitB tables) pubB).n
+/-- The registered population: the public file's `instances`, the header field its loader reads as `n`. Nothing else of
+the file is read before the draw, and the file is fixed by its key; `Stmt.setupTables` reads the rest and refuses a draw
+over another population than the file's (`HmRow.drawn`). -/
+def populationOf (pubB : ByteArray) : V Nat := do
+  let some nl := findByte pubB 10 | throw "public file: no header line"
+  let some text := String.fromUTF8? (pubB.extract 0 nl) | throw "public file: header is not UTF-8"
+  match Json.parse text with
+  | .ok header => J.nat header "instances" "public file"
+  | .error e => throw s!"public file: header: {e}"
 
 /-- `flock-verify verify`'s checks of a table's statement without the verifier's registered reads or identifier: a
 statement that reads registered values, or whose header names an identifier, is refused. -/
@@ -132,7 +135,7 @@ def register (own : Own) : Step Held := do
     if let some b ← fetch? t.sha512 then tables := tables ++ [(t.name, b)]
   let coins := Coins.tree (Zk.coinSpec (own.tags.tableNames own.count))
   let tags := Zk.tags (own.tags.withCoins coins) (Zk.maskLogOf circuitB) own.count
-  let population ← liftV (populationOf tags circuitB pubB tables)
+  let population ← liftV (populationOf pubB)
   if own.k > population then throw s!"law: k = {own.k} is over the registered population of {population}"
   return { tags, coins, circuitB, pubB, publicKey, tables, population }
 

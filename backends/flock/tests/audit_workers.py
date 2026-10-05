@@ -10,7 +10,7 @@ import json
 import sys
 from pathlib import Path
 
-TAMPER = ("redraw", "draw", "hash", "proof", "canon", "long", "exit")
+TAMPER = ("redraw", "draw", "hash", "proof", "canon", "long", "exit", "population")
 
 
 def canon(obj) -> bytes:
@@ -63,7 +63,13 @@ def main() -> int:
     ap.add_argument("--log", type=Path, required=True)
     ap.add_argument("--tamper", choices=TAMPER)
     a = ap.parse_args()
-    public = put(a.archive, a.public.read_bytes())
+    pub = a.public.read_bytes()
+    if a.tamper == "population":
+        line, rest = pub.split(b"\n", 1)
+        header = json.loads(line)
+        header["instances"] *= 2
+        pub = json.dumps(header).encode() + b"\n" + rest
+    public = put(a.archive, pub)
     inp, out = sys.stdin.buffer, sys.stdout.buffer
     while (req := read_frame(inp)) is not None:
         ask = json.loads(req)

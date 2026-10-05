@@ -177,13 +177,16 @@ TAMPERED = {
     "canon": "developer: the answer is not canonical JSON",
     "long": "run: frame: 1099511627776 bytes, over the request's bound of 1048576",
     "exit": "run: frame: the stream ended after 0 of 8 bytes",
+    "population": "public file: length",
 }
 
 
 @pytest.mark.parametrize("tamper", [pytest.param(t, marks=[] if t == "canon" else [pytest.mark.slow]) for t in TAMPERED])
 def test_a_tampered_answer_is_refused(zk, tmp_path, tamper):
     """A record at another draw, an object that is not the one its key names, a flipped proof, a non-canonical answer, a
-    frame over its request's bound (refused before its body is read) and a worker that exits: each refused by name."""
+    frame over its request's bound (refused before its body is read), a worker that exits, and a registered public file
+    whose header states twice its population (the one field the program reads before the draw; setup reads the file): each
+    refused by name."""
     v, _ = _run(zk, tmp_path, tamper)
     assert not v["accepted"] and v["why"].startswith(TAMPERED[tamper]), v["why"]
     assert (v["draw"] is None) == (tamper in ("canon", "long", "exit")), v
