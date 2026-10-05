@@ -193,6 +193,15 @@ class Run:
     def plan(self) -> list[tuple[str, str]]:
         tracked = [p for p in git(self.root, "ls-files", "-z").split("\0") if p]
         self.tracked_old = set(tracked)
+        self.binds = {}                             # old package -> names its __init__ binds to something not its submodule
+        for p in tracked:
+            if p.endswith("/__init__.py") and (pkg := module_name(p, self.L.old_roots)) and self.L.renamed_prefix(pkg):
+                try:
+                    body = ast.parse((self.root / p).read_text()).body
+                except (OSError, SyntaxError, UnicodeDecodeError):
+                    continue
+                self.binds[pkg] = {a.asname or a.name for n in body if isinstance(n, ast.ImportFrom) and n.module
+                                   for a in n.names} | {n.name for n in body if isinstance(n, (ast.FunctionDef, ast.ClassDef))}
         moves, left = [], []
         for p in tracked:
             new = self.L.file(p)
@@ -696,7 +705,7 @@ class Run:
                 continue
             full = f"{m_old}.{a.name}"
             nf = self.L.module(full)
-            if nf != full and nf in self.new_modules:
+            if nf != full and nf in self.new_modules and a.name not in self.binds.get(m_old, ()):
                 parent, _, leaf = nf.rpartition(".")
                 asname = a.asname or (a.name if leaf != a.name else None)
                 if not parent:
