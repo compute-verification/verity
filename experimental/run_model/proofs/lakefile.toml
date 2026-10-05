@@ -1,0 +1,20 @@
+name = "run_model_proofs"
+version = "0.0.0"
+defaultTargets = ["RunModelProofs"]
+
+[leanOptions]
+autoImplicit = false
+
+# Not built in the draft: it needs ArkLib through C-Flock's soundness package (with `cursor/rec-sound-95d4`'s
+# `Discharge.Recursion`), and its signatures are a plan. They typecheck against `run_model` with the
+# `FlockSoundness` imports removed, since C-Flock's names appear only in docstrings so far.
+[[require]]
+name = "FlockSoundness"
+path = "../../../backends/flock/verifier/lean/soundness"
+
+[[require]]
+name = "run_model"
+path = "../spec"
+
+[[lean_lib]]
+name = "RunModelProofs"
