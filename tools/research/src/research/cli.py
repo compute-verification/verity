@@ -54,8 +54,13 @@
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
-  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...]   # what runs on the Nebius nodes
-                                                 # (pods/nebius/deploy.toml) against main, and installs from a pushed commit (research/deploy.py)
+  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
+                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (research/deploy.py)
+  research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
+                                                 # incident once and its clear once; the relay posts them (research/monitors.py)
+  research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
+                                                 # GPU-h held, busy and useful per node and UTC hour, and the holdings that held GPUs
+                                                 # idle: `cluster usage` (tools/cluster usage.py) over the console's record on vy-nebius-1
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -375,6 +380,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     from .telemetry.run import run as harness_run
 
     write_json_atomic(run_dir / "job.json", job)
+    if ns.claimed and remote_info and remote_info.get("request"):
+        remote.ack_launch(Path(remote_info["request"]).parent / remote.LAUNCH_ACK, remote.FIRST_RECORD)
     os.environ.update(result.env_for(run_id, run_dir, source_sha=getattr(a, "tree_sha", None)))
     os.environ.update(prep["env"])
     # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
@@ -941,6 +948,11 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         print(f"research: run {run_id} refused on {ns.on} ({launch.get('fault') or 'Refused'}): {launch.get('refused')}  (recorded in {run_dir})", file=sys.stderr)
         return 3
     print(f"research: run {run_id} launched on {ns.on} ({rec['pod_id']}) pid={launch.get('runner_pid')} -> {rec['remote_run_dir']}", file=sys.stderr)
+    if launch.get("unconfirmed"):
+        print(f"research: {ns.on} could not confirm its runner is up ({launch['unconfirmed']}); `research fetch {run_id}` says how it went",
+              file=sys.stderr)
+    if launch.get("first_record") == "disk-hold":
+        print(f"research: {ns.on} holds it for disk before its runner starts (research disk-hold, in its launcher.log)", file=sys.stderr)
     print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
     print(f"research: observe with `research fetch {run_id}`; the workload does not depend on this session staying alive", file=sys.stderr)
     return 0
@@ -1234,6 +1246,23 @@ def cmd_inspect(argv: list[str]) -> int:
     return 0
 
 
+CLUSTER_SRC = Path(__file__).resolve().parents[3] / "cluster" / "src"
+
+
+def cmd_usage(argv: list[str]) -> int:
+    """`research usage ...` is `cluster usage ...`, run from this tree's tools/cluster (research never imports cluster), with
+    its output and exit code: 0, 1 on a finding (the record unread, stale or short of hours), 2 on bad arguments or with no
+    tools/cluster here."""
+    import subprocess
+
+    if not (CLUSTER_SRC / "cluster" / "usage.py").is_file():
+        print(f"research usage: no tools/cluster beside this research package ({CLUSTER_SRC})", file=sys.stderr)
+        return 2
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(CLUSTER_SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    return subprocess.run([sys.executable, "-m", "cluster", "usage", *argv], env=env).returncode
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
@@ -1308,6 +1337,10 @@ def main(argv: list[str] | None = None) -> int:
         from .deploy import main as deploy_main
 
         return deploy_main(rest)
+    if cmd == "monitors":
+        from .monitors import main as monitors_main
+
+        return monitors_main(rest)
     if cmd == "notes":
         from .notes import main as notes_main
 
@@ -1336,6 +1369,8 @@ def main(argv: list[str] | None = None) -> int:
         from .slack import main as slack_main
 
         return slack_main(rest, prog=f"research {cmd}")
+    if cmd == "usage":
+        return cmd_usage(rest)
     age = checkout_age()
     print(f"research: unknown command {cmd!r}" + (f". {age} If {cmd!r} is newer than that, update the checkout "
                                                   "(`git pull`) and retry." if age else "") + f"\n\n{__doc__.strip()}",
