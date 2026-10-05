@@ -384,7 +384,11 @@ class StoreGrants:
         return {str(lab.value) for lab in self._labels(pr, head, vocab.GRANT)}
 
     def ready(self, pr: int, head: str) -> bool:
-        return any(str(lab.value).lower() == "true" for lab in self._labels(pr, head, vocab.READY))
+        return bool(self.readied_by(pr, head))
+
+    def readied_by(self, pr: int, head: str) -> set[str]:
+        """Who asserted `ready = true` on `pr:{n}@{head}`."""
+        return {lab.by for lab in self._labels(pr, head, vocab.READY) if str(lab.value).lower() == "true"}
 
     def carried(self, pr: int, head: str, roles: set[str]) -> set[str]:
         """Which of ``roles`` a `grant` on another head of pull request ``pr`` gives ``head`` (`carry`)."""
@@ -1053,8 +1057,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge"])
     ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
-    ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or "merge-queue",
-                    help="eject, ready, judge: who ejects it or says it's ready")
+    ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
+                    help="eject, ready, judge: who ejects it (default merge-queue) or says it's ready (no default: the owner's lane), "
+                         "default $RESEARCH_LANE")
     ap.add_argument("--shadow", action="store_true", help=f"build `{SHADOW_BRANCH}`, never push `main`, send no notices")
     ap.add_argument("--dry-run", action="store_true", help="sync/land: decide and report, push nothing, tell no one")
     ap.add_argument("--workdir", type=Path, default=Path.home() / ".research" / "queue" / "verity", help="the queue's own clone")
@@ -1071,6 +1076,9 @@ def main(argv: list[str]) -> int:
         ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot) and --local (here)")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
+    if a.command in ("ready", "judge") and not a.by:
+        ap.error(f"{a.command} writes the owner's ready mark: pass --by <lane> (or set $RESEARCH_LANE)")
+    a.by = a.by or "merge-queue"
     if a.command != "judge" and a.pr is not None:
         if not a.pr.isdigit():
             ap.error(f"{a.command}: {a.pr!r} is not a PR number")

@@ -1233,6 +1233,17 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and why in capsys.readouterr().err
 
 
+def test_research_queue_ready_and_judge_name_a_lane_never_merge_queue(world, monkeypatch, capsys):
+    """Ready is the owner's word, and the merge gate refuses one by `merge-queue`: with no --by and no $RESEARCH_LANE, `ready`
+    and `judge` refuse before writing anything; `eject` still defaults to merge-queue."""
+    monkeypatch.chdir(world.dev)
+    monkeypatch.delenv("RESEARCH_LANE", raising=False)
+    for argv in (["queue", "ready", "1", "--local"], ["queue", "judge", "r20261004-160000-abcd"]):
+        with pytest.raises(SystemExit) as e:
+            research_main(argv)
+        assert e.value.code == 2 and "writes the owner's ready mark: pass --by <lane>" in capsys.readouterr().err
+
+
 def test_quick_tier_py_refuses_a_call_it_cannot_place(tmp_path, monkeypatch):
     from research import quick_tier
 

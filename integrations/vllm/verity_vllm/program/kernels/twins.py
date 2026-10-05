@@ -861,7 +861,7 @@ def check_spec(spec: SpecializedDefinition, rng: np.random.Generator, *, n_rando
 
 
 def _skip_class(e: Exception) -> str:
-    """Short class of a missing-evidence reason (as `replay._reason_class`), without the node-specific text."""
+    """Short class of a missing-evidence reason (as `tier_a_pool._reason_class`), without the node-specific text."""
     msg = str(e)
     if "no snapshot" in msg:
         return "operand/output not snapshotted"

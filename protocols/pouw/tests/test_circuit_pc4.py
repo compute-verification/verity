@@ -157,16 +157,23 @@ def _at(words: list[int], updates: dict[int, int]) -> list[int]:
     return [updates.get(t, w) for t, w in enumerate(words)]
 
 
+MINUS_ZERO_AT = (0, 1, 5, 8, 16, 33, 64, 127)
+
+
 def _rows() -> dict[str, list[int]]:
-    """Honest rows and rows the scheme refuses: non-finite words at sampled (0, 8, …) and unsampled positions, a spike
-    that makes a_E subnormal (D-NF), one that only screens its block, a zero row, rows of tiny and of huge words."""
+    """Honest rows and rows the scheme refuses: non-finite words at sampled (0, 8, …) and unsampled positions, finite
+    words whose sampled squares overflow (ρ and β not finite: `pc4Sem_squaresOverflow`), a spike that makes a_E
+    subnormal (D-NF), one that only screens its block, a zero row, an all-(−0) row, rows of tiny and of huge words, and
+    an honest row with eight −0 words at sampled and unsampled positions."""
     base = [V.row_codes("pc4-circuit", "A", i, K) for i in range(3)]
     spike = lambda v: _at(base[0], {1: P.f32_to_bf16(v)})  # noqa: E731
     return {"honest-0": base[0], "honest-1": base[1], "negated": [w ^ 0x8000 for w in base[2]],
             "inf-unsampled": _at(base[0], {1: 0x7F80}), "minus-inf-sampled": _at(base[0], {0: 0xFF80}),
             "nan-unsampled": _at(base[0], {3: 0x7FC0}), "minus-nan-sampled": _at(base[0], {8: 0xFFC1}),
+            "squares-overflow": _at(base[0], {p: 0x7E80 for p in range(0, K, 8)}),
             "spike-2^16": spike(2.0 ** 16), "spike-256": spike(256.0), "max-unsampled": _at(base[0], {1: 0x7F7F}),
-            "zero": [0] * K, "tiny": [0x0001] * K, "huge": [0x7F7F] * K}
+            "zero": [0] * K, "minus-zero": [0x8000] * K, "tiny": [0x0001] * K, "huge": [0x7F7F] * K,
+            "mixed-zero": _at(base[0], {p: 0x8000 for p in MINUS_ZERO_AT})}
 
 
 @pytest.mark.parametrize("side", ["row_a", "row_b"])
@@ -192,7 +199,25 @@ def test_the_row_units_admission_is_row_passes_and_their_outputs_the_schemes(sid
         peel = (F.peel_factors_a if side == "row_a" else F.peel_factors_b)(F.NVFP4, formed, [e], SEED_B, K)[0]
         assert list(out[:K]) == formed.codes[0] and list(out[K:K + K // 16]) == formed.scales[0], name
         assert list(out[K + K // 16:-1]) == peel, name
-    assert {n for n, v in verdicts.items() if v} == {"honest-0", "honest-1", "negated", "spike-256"}
+    assert {n for n, v in verdicts.items() if v} == {"honest-0", "honest-1", "negated", "spike-256", "mixed-zero"}
+
+
+@pytest.mark.parametrize("side", ["row_a", "row_b"])
+def test_a_row_unit_reads_minus_zero_as_zero(side):
+    """A row unit's outputs on a row with −0 words (BF16 0x8000) are its outputs with +0 in their place, as the Lean's
+    `pc4Sem` reads a row by value (`formRow_table` on `ZeroSign16` words: the table registers each word's high half,
+    `rows4`), and the scheme's (the admission test above): an admitted honest row with eight −0 words, and the all-(−0)
+    row, refused as the all-zero row is."""
+    fa, fb = F.basis(SEED_B, F.ROLE_FA, K), F.basis(SEED_B, F.ROLE_FB, K)
+    own, other = (fa, fb) if side == "row_a" else (fb, fa)
+    extra = [] if side == "row_a" else [_flat(F.gram(F.NVFP4, SEED_B, K))]
+    fn, e = pc4.templates(K)[side], F.line(SEED_B, F.ROLE_EA if side == "row_a" else F.ROLE_EB, 0)
+    run = lambda w: evaluate(fn, w, e, _flat(own), _flat(other), *extra)  # noqa: E731
+    rows = _rows()
+    plus = lambda w: [0 if x == 0x8000 else x for x in w]  # noqa: E731
+    assert sum(w == 0x8000 for w in rows["mixed-zero"]) == len(MINUS_ZERO_AT)
+    assert run(rows["mixed-zero"]) == run(plus(rows["mixed-zero"])) and run(rows["mixed-zero"])[-1] == 1
+    assert run(rows["minus-zero"]) == run(rows["zero"]) and run(rows["minus-zero"])[-1] == 0
 
 
 # ---- the partition ----------------------------------------------------------------------------------------------------
@@ -315,6 +340,34 @@ def test_the_tile_layout_proves_each_drawn_tile_with_its_rows():
         assert set(p.proved) == set(p.drawn) | {i for t in drawn for i in lay.closure[t]}
         assert p.proved_b == tuple(sorted({j for t in drawn for j in lay.b_rows[t]}))
     assert plan.tile_layout(replace(HIDDEN, hidden=False), 1000).closure == lay.closure
+
+
+#: `CF.layout_sha` of each layout, pinned: Pearl-C4's tiles are whole, so `tile_layout`'s short tile row (`pc8`'s) never
+#: applies to them, at the test shapes and at the scheme's 64 × 64 tile, with the row cut (``row_k``) or without
+LAYOUTS = {
+    (pc4.Shape(4, 64, 6, tile=(2, 3)), 1000): "7626b8af4961b45fcc15a0a55748f0ff869200ca9488edfb7a929c2202bfe0fd",
+    (pc4.Shape(4, 64, 6, tile=(2, 3), hidden=True), 1000): "a2e3a223aa2512b710dec2565d59b55426096a95276b5c96efb0e312239c07e0",
+    (pc4.Shape(1, 64, 1, tile=(1, 1)), 1): "0be929ac9e7a8ec589e7f67a6909b52692e96845c50363c48db3fb1d44107992",
+    (pc4.Shape(1, 64, 1, tile=(1, 1), hidden=True), 1): "ce457562807539cf6461ac2d342702a73cb81ba23b0dd7efe07182b72c172654",
+    (pc4.Shape(16, 64, 16, tile=(4, 8)), 7): "9ede0fdb0436350a5fce48f557f873df6238b1750d68134b14f3c548b261f014",
+    (pc4.Shape(64, 64, 64, hidden=True), 4096): "9af149f7bb00e68b3bc89b01cc5cf5de79546d5ebe8f2bcd47657299de59d188",
+    (pc4.Shape(128, 64, 192), 4096): "738d302c72a565ccb98e17494dbed82d5652c3a4aebe1e4a70fe67ccb86e7df1",
+    (pc4.Shape(128, 64, 192, hidden=True), 4096): "04f82c2ed78e2c034d4ef66bb90b9c7b8ee49f326e02238a8d5c38a9aac8f8b2",
+    (pc4.Shape(2, 256, 2, tile=(1, 1), row_k=64), 1): "c2b79019d69d8e8ae9f180288cf28a50d8fde3db667b08da01fe21e9282be9da",
+    (pc4.Shape(2, 256, 2, tile=(1, 1), hidden=True, row_k=64), 1):
+        "2292dec28f55deadf8617ba5cebea6b7a7457720b5130ff55ddbc92cf950dee6",
+    (pc4.Shape(4, 256, 6, tile=(2, 3), row_k=64), 1000): "10f710a8a147066dbd4679f5f577cf7c7d0e4dffd6069c0131af68e4b87d436f",
+    (pc4.Shape(4, 256, 6, tile=(2, 3), hidden=True, row_k=64), 1000):
+        "6dd9a12615328cd675a363d01ed926338d81b8c1d874fd9b8b1ace6b0f035a7f",
+}
+
+
+@pytest.mark.parametrize("shape, w_ref", list(LAYOUTS),
+                         ids=[f"{s.m}x{s.n}-tile{s.tile[0]}x{s.tile[1]}{'-hidden' * s.hidden}"
+                              f"{f'-rowk{s.row_k}' * (s.row_k is not None)}" for s, _w in LAYOUTS])
+def test_the_tile_layouts_are_pinned(shape, w_ref):
+    """Every unit, stratum, closure, B row and W_ref of `plan.tile_layout` on Pearl-C4's shapes is the pinned one."""
+    assert CF.layout_sha(plan.tile_layout(shape, w_ref)) == LAYOUTS[shape, w_ref]
 
 
 def test_shapes_outside_the_circuit_are_refused():

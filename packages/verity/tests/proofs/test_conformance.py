@@ -17,7 +17,7 @@ import pytest
 from verity.proofs.conformance import interpret
 from verity.proofs.typed_obligation import SUPPORTED_FAMILIES
 
-FIXTURES = Path(__file__).resolve().parents[4] / "fixtures" / "typed-obligation-v0"
+FIXTURES = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists()) / "fixtures" / "typed-obligation-v0"
 
 
 def fixture_files() -> list[Path]:
