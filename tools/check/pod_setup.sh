@@ -7,8 +7,8 @@
 # A suite's key records whether `lake`, `cargo` and `nvidia-smi` are on the PATH (`suites.py`), so a pod that gains `lake` at its
 # first Lean step would key its later runs differently from its first. This puts the same tools on every pod before its first
 # check: git that has `merge-tree --write-tree`, the locale LC_ALL names, uv (UV_VERSION), elan with the Lean toolchain every Lake
-# package pins, and a minimal Rust toolchain. It changes nothing already in place, and it prints what it found last, one line per
-# tool, so two pods can be compared.
+# package pins, a minimal Rust toolchain, and one check slot over the pod's CPUs. It changes nothing already in place, and it
+# prints what it found last, one line per tool, so two pods can be compared.
 #
 # It reports its setup done by writing POD_SETUP_MARKER (default ~/.research/pod-setup.json) last, and removes it first, so a
 # pod reports done only once all of this has succeeded. `research run` returns once a run launches, so a chain that starts a
@@ -53,11 +53,27 @@ fi
 for bin in /usr/local/bin "$HOME/.elan/bin" "$HOME/.cargo/bin"; do             # non-login shells (research run's) see them too
   for t in "$bin"/*; do [ -x "$t" ] && [ ! -e "/usr/local/bin/$(basename "$t")" ] && ln -s "$t" /usr/local/bin/ || true; done
 done
+# One check slot over the pod's CPUs, so `slot.py` runs one check at a time: with no slots file it runs each check as it comes,
+# and two circuit-checks side by side OOM-killed a 256 GB pod (the layout move's shard 5, 5 Oct). A slots file in place is kept.
+SLOTS=${CHECK_SLOTS:-/workspace/research/locks/slots}
+if [ ! -e "$SLOTS" ]; then
+  mkdir -p "$(dirname "$SLOTS")"
+  python3 -c 'import os, sys
+cpus, runs = sorted(os.sched_getaffinity(0)), []
+for c in cpus:
+    if runs and c == runs[-1][1] + 1:
+        runs[-1][1] = c
+    else:
+        runs.append([c, c])
+with open(sys.argv[1], "w") as f:
+    f.write("# NAME CPUS: one check at a time on this pod (tools/check/pod_setup.sh)\na " + ",".join(f"{a}-{b}" if a != b else f"{a}" for a, b in runs) + "\n")' "$SLOTS"
+fi
 echo "git $(git --version | cut -d' ' -f3)"
 echo "uv $(uv --version | cut -d' ' -f2)"
 echo "lake $(lake --version | head -1)"
 echo "cargo $(cargo --version)"
 echo "nvidia-smi $(command -v nvidia-smi >/dev/null && echo present || echo absent)"
+echo "slots $(grep -v '^#' "$SLOTS" | tr '\n' ' ')"
 python3 -c 'import datetime, json, os, sys
 doc = {"done_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "uv": sys.argv[2], "lake": sys.argv[3],
        "cargo": sys.argv[4], "toolchain": sys.argv[5]}
