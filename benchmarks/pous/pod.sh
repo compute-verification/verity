@@ -124,7 +124,7 @@ smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm --format=csv,nohead
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null || true
 command -v uv >/dev/null || { python3 -m pip install -q uv || exit 3; }
 export PATH=$HOME/.local/bin:$PATH
-export PYTHONPATH=$REPO:$REPO/verity/protocols/accounting/space/pous:$REPO/tools/research/src
+export PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/tools/research/src
 if [ "$IMPL" = vllm-gpu ]; then
   [ -f "$I/impl.tar" ] || { echo "vllm-gpu needs --send impl.tar"; exit 2; }
   SHA=$(sha256sum "$I/impl.tar" | cut -c1-16)
