@@ -57,6 +57,12 @@ open NetTiming
 #print axioms constantRate_not_windowBlocks
 #print axioms constantRate_joint_witness
 
+-- The warden program agrees with these definitions (`Code`, four guarantees in `lean-audit.json`).
+#print axioms SecurityProofs.CodeExpectedRow
+#print axioms SecurityProofs.CodeAcceptedConstantRate
+#print axioms SecurityProofs.CodeStatusComplete
+#print axioms SecurityProofs.CodeSyncSet
+
 -- Proved and audited, not guarantees: no record in `lean-audit.json`, so not citable as guarantees.
 #print axioms occ_fill
 #print axioms leftPacked_occ_fill

@@ -6,6 +6,7 @@ import Proofs.Warden.Ingress
 import Proofs.Warden.Schedule
 import Proofs.Warden.PerWindow
 import Proofs.Warden.Sanity
+import Proofs.Warden.Code
 
 /-!
 # Proofs of the network warden's guarantees
@@ -13,7 +14,8 @@ import Proofs.Warden.Sanity
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee, each the theorem of the same statement
 in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3), `Schedule` (Theorem 3 for the
 constant-rate Program), `Ingress` (the ingress bound) or `PerWindow` (the last two over whole windows), and every lemma
-behind them. `Sanity` shows every named assumption satisfiable.
+behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the warden's program (`warden_program`,
+`NetTiming.Code`), which the difftest runs against the Python audit, equal to these definitions.
 -/
 
 namespace NetTiming.SecurityProofs
