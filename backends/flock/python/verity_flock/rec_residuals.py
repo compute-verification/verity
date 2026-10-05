@@ -30,13 +30,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from verity.commitments import hm96
-from verity.ir.codec import canonical_json, encode_program, program_digest
-from verity.ir.defs import bind
-from verity.ir.program import Program
-from verity.ml.boolean import gf2k as G
-from verity.ml.boolean.forms import ZERO, Circuit, L
-from verity.ml.boolean.sha512 import commit
+from verity.primitives.commitments import hm96
+from verity.primitives.circuits.codec import canonical_json, encode_program, program_digest
+from verity.primitives.circuits.defs import bind
+from verity.primitives.circuits.program import Program
+from verity_catalog.definitions.boolean import gf2k as G
+from verity.primitives.circuits.boolean.forms import ZERO, Circuit, L
+from verity.primitives.commitments.gates.sha512 import commit
 
 from . import circuit as FC
 from . import ir_lower as IL
@@ -206,7 +206,7 @@ def stage(inner: Path, claims: dict, out_dir: Path, forged: Path | None = None, 
 def statement(S: dict, name: str, n: int) -> SimpleNamespace:
     """``GfResiduals_v1{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n`` and ``S``
     decide."""
-    from verity_sampled_proofs.one_stage import partition as P
+    from verity.protocols.verification.sampled_proofs.one_stage import partition as P
 
     t0 = time.perf_counter()
     defn = bind(G.GfResiduals, S=S)
@@ -225,8 +225,8 @@ def write_statement(st: SimpleNamespace, ws: list[list[int]], vs: list[list[int]
     """The statement (:func:`statement`) on one instance per (w, v), its outputs registered as zero, written to ``out_dir``: the
     circuit, the prover's ``inst.bin``, the verifier's ``pub.bin``, ``public-inputs.bin`` (v), ``program.json``,
     ``partition.json`` and the reads file ``registered.json``."""
-    from verity_sampled_proofs.one_stage import partition as P
-    from verity_sampled_proofs.one_stage import registered as RG
+    from verity.protocols.verification.sampled_proofs.one_stage import partition as P
+    from verity.protocols.verification.sampled_proofs.one_stage import registered as RG
 
     S, n, low, sub, text, prog, program, part = st.S, st.n, st.low, st.sub, st.text, st.prog, st.program, st.part
     if len(ws) != n or len(vs) != n:

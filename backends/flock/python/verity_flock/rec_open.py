@@ -4,7 +4,7 @@ names, as a Boolean Definition, the M0 unit that proves it, and their plain-inte
     RecOpen_v1{LANES, H}(row: Array<8 LANES, Array<16, Value<1>>>, aux: Array<A(H), Array<16, Value<1>>>)
         -> Array<64, Array<16, Value<1>>>
 
-Every port is u16 words (a Boolean element of 16 bits, `verity.ir.boolean`'s word view): a word's bits LSB first, a byte
+Every port is u16 words (a Boolean element of 16 bits, `verity.primitives.circuits.boolean`'s word view): a word's bits LSB first, a byte
 string's bytes two to a word, little-endian, so leaf ``t`` of a port is bit ``t & 7`` of its byte string's byte ``t >> 3``.
 
 * ``row``: the opened row's LANES elements of GF(2^128), each 16 bytes ``lo`` LE then ``hi`` LE (8 words): the row's bytes as
@@ -34,14 +34,14 @@ from collections.abc import Sequence
 from functools import cache, reduce
 from types import SimpleNamespace
 
-from verity.commitments import hm96
-from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.refs import Coll
-from verity.ir.types import Array
-from verity.ml.boolean import trace as TR
-from verity.ml.boolean.forms import ONE, ZERO
-from verity.ml.boolean.sha512 import IV, commit, compress_gadget, midstate, pad_tail
+from verity.primitives.commitments import hm96
+from verity.primitives.circuits import boolean as BL
+from verity.primitives.circuits.defs import CompositeDefinition, bind
+from verity.primitives.circuits.refs import Coll
+from verity.primitives.circuits.types import Array
+from verity.primitives.circuits.boolean import trace as TR
+from verity.primitives.circuits.boolean.forms import ONE, ZERO
+from verity.primitives.commitments.gates.sha512 import IV, commit, compress_gadget, midstate, pad_tail
 
 from .sha512_circuit import word_bit
 
@@ -246,7 +246,7 @@ RecOpen = CompositeDefinition(
 
 def unit_circuit(LANES: int, H: int):
     """The unit over `forms`: inputs ``in0 ..`` (``row``'s words, then ``aux``'s, 16 bits each), outputs ``out0 .. out63``."""
-    from verity.ml.boolean.forms import Circuit
+    from verity.primitives.circuits.boolean.forms import Circuit
 
     _check(LANES, H)
     C = Circuit()

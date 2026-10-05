@@ -17,7 +17,7 @@ sorts them: the domain and labels are public constants and are dropped; a ``BYTE
 proof-of-work nonce (8 bytes, dropped: with live coins grinding buys nothing) or, in a rep's first round, the statement digest
 (dropped: it is a function of the hidden statement); the observed field elements are the free message ``F_k``. ``F_k`` is
 laid out as rows of :data:`ROW_WORDS` u16 words (each element 8 words, its 16 bytes lo LE then hi LE; the last row
-zero-padded) and each row is committed as a registered row is (``verity_sampled_proofs.one_stage.registered``:
+zero-padded) and each row is committed as a registered row is (``verity.protocols.verification.sampled_proofs.one_stage.registered``:
 ``hm96-sha512/row/v1`` under its own fresh 192-byte salt), so ``c_k`` is the list of the rows' ``b || c``. A round with no free
 message has an empty ``c_k``. The rows and salts are the prover's: V*'s units open them against the registered value the
 verifier builds from every ``c_k`` it received (`message_rows`, `commit_rows`).
@@ -38,7 +38,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from verity.commitments import hm96
+from verity.primitives.commitments import hm96
 
 KIND = "rec/inner-transcript/v0"
 SESSION_KIND = "flock-live-session/v1"
@@ -281,7 +281,7 @@ def row_elements(row: list[int]) -> list[int]:
 
 def commit_rows(rows: list[list[int]], salts: list[bytes]) -> list[bytes]:
     """Each row's ``b || c`` as a registered row's (``hm96-sha512/row/v1`` over ``sha512/row/v1``, role x)."""
-    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+    from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_digest
 
     inst = hm96.SHA512
     return [inst.commit_string(inst.default_key, sha512_row_digest(r, 16, ROLE_X), s) for r, s in zip(rows, salts, strict=True)]

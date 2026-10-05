@@ -6,10 +6,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.evaluation import evaluate
-from verity.ir.constants import program_data
-from verity.ir.defs import bind
-from verity.ir.program import Program
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.constants import program_data
+from verity.primitives.circuits.defs import bind
+from verity.primitives.circuits.program import Program
 from verity_vllm.program.registry import b1, hopper
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import prims as P

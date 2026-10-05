@@ -80,7 +80,7 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm:$REPO/tools/circuit_check/src:$REPO/protocols/sampled_proofs:$REPO/protocols/one_stage:$REPO/protocols/pouw
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm:$REPO/tools/circuit_check/src:$REPO/verity/protocols/verification/sampled_proofs:$REPO/protocols/one_stage:$REPO/verity/protocols/accounting/work/pouw
 export FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 GI=${CUDA_VISIBLE_DEVICES:-0}; GI=${GI%%,*}
 
@@ -345,7 +345,7 @@ alg)
   # the verifier's copy of the partition object the inner circuit binds: q-word over the build step's one-Call program
   python3 - $K $DD/stage/partition.json $DD/stage/circuit.txt <<'EOF' || exit 1
 import json, sys
-from verity.ir import partition_object as PO
+from verity.primitives.circuits import partition_object as PO
 from verity_flock import class_statement as CS, partition_units as PU
 defs = {'Gemm_v2{K=%s,N=4096,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % sys.argv[1]: 1151}
 program, _calls, _prov = CS.distinct_calls(None, None, defs, None)

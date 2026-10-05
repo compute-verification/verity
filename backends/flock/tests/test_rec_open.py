@@ -87,7 +87,7 @@ def test_the_m0_unit_computes_the_reference():
 @pytest.mark.slow
 def test_the_definition_computes_the_reference():
     """`RecOpen{8, 1}` evaluated bit-sliced from its descriptor, on the same cases as the unit."""
-    from verity.evaluation import evaluate_batch
+    from verity.primitives.circuits.evaluation import evaluate_batch
 
     cases = _cases()
     d = R.definition(8, 1)

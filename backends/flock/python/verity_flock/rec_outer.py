@@ -11,7 +11,7 @@ The verifier knows what each output must be: the cap node at the opening's posit
 (`rec_open.expected`), both from the inner session's public record (its caps and the query coins it drew). It registers
 those rows as the value ``rec-L<level>`` under salts it derives itself (`expected_salts`: the rows are public, the salts only
 keep each row's ``b || c`` its own), and its reads file puts instance ``i``'s output at row ``i`` (PROTOCOL.md §16.13
-"Registered reads", `verity_sampled_proofs.one_stage.registered`). An instance is satisfiable only if its private rows open
+"Registered reads", `verity.protocols.verification.sampled_proofs.one_stage.registered`). An instance is satisfiable only if its private rows open
 to that registered row, so the statement holds only if every opening climbs to the cap node its coin names.
 
 With ``link_rows``, the opened rows are not fresh: the prover registers them first, as the value ``rec-rows-L<level>`` under
@@ -32,9 +32,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from verity.commitments import hm96
-from verity.ir.codec import canonical_json, encode_program, program_digest
-from verity.ir.program import Program
+from verity.primitives.commitments import hm96
+from verity.primitives.circuits.codec import canonical_json, encode_program, program_digest
+from verity.primitives.circuits.program import Program
 
 from . import circuit as FC
 from . import ir_lower as IL
@@ -86,8 +86,8 @@ def expected_salts(value: str, n: int) -> list[bytes]:
 
 def stage(level: dict, out_dir: Path, link_rows: bool = False) -> dict:
     """One level's statement, the verifier's own files beside the prover's (``out_dir``), and what it costs."""
-    from verity_sampled_proofs.one_stage import partition as P
-    from verity_sampled_proofs.one_stage import registered as G
+    from verity.protocols.verification.sampled_proofs.one_stage import partition as P
+    from verity.protocols.verification.sampled_proofs.one_stage import registered as G
 
     LANES, H, qs = level["LANES"], level["H"], level["queries"]
     n = len(qs)

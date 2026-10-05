@@ -17,7 +17,7 @@ device D buffer is filled with 0xA5 bytes before its launch.
 Gates, before a selected word is recorded: the device UUID; the operands hold each vector where it was placed; both kernels agree
 on every word, and both placements on every vector's word; no word reads the poison 0xA5A5A5A5; every background lane (outside the
 vector's row and column) reproduces ``BLACKWELL_SM120_NVF4``; the controls, the other entries of ``--vector-list`` and
-``nvf4Chains`` that carry a predicted word and no bit-7 byte, reproduce the file's words (``verity.ml.tc`` generated them); and a
+``nvf4Chains`` that carry a predicted word and no bit-7 byte, reproduce the file's words (``verity_catalog.silicon`` generated them); and a
 no-write control, the first tiles run again with every launch skipped, reads back nothing but the poison and fails the background
 gate on every lane.  So a layout error or a kernel that wrote nothing fails the run instead of reading as a finding.  The finding:
 each selected word against the file's ``d``, against its twin's device word, against the low-7-bit decode (the pinned model on the

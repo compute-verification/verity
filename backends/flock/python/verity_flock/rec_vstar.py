@@ -26,7 +26,7 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.commitments import hm96
+from verity.primitives.commitments import hm96
 
 from . import rec_live as RL
 
