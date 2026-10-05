@@ -262,6 +262,7 @@ def test_an_importer_grown_past_its_size_cap_joins_its_imports():
         S.fit_size(rel, before, after, {"verity_vllm/x.py": 3})
 
 
+@pytest.mark.slow
 def test_this_tree_has_the_split_applied():
     """Every moved name is in its new module and not in its old one, every moved module is gone from the registry, and no
     import in the integration reaches a moved name through its old module (what `--check` would rewrite; the suite reads
