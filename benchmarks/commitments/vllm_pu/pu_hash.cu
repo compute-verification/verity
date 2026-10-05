@@ -88,24 +88,9 @@ __device__ __forceinline__ void node(const uint32_t (&l)[8], const uint32_t (&r)
     for (int i = 0; i < 8; ++i) out[i] = s.h[i];
 }
 
-// one thread per chunk; ctr[0] = the step's first digest-ring slot, ctr[1] = its first retention-ring chunk
-__global__ void leaf_kernel(const uint4 *__restrict__ x, long n_chunks, uint32_t site, long offset, const int64_t *__restrict__ ctr,
-                            uint8_t *__restrict__ ring, long R, uint4 *__restrict__ keep, long RH) {
-    const long c0 = (long)blockIdx.x * blockDim.x;
-    if (keep) {
-        // Block-cooperative copy so consecutive threads store consecutive 16 B to mapped host memory.
-        const long span = min((long)blockDim.x, n_chunks - c0) * (CHUNK / 16);
-        const long kb = ctr[1] + offset + c0;
-        for (long e = threadIdx.x; e < span; e += blockDim.x) {
-            const long c = e / (CHUNK / 16);
-            keep[((kb + c) % RH) * (CHUNK / 16) + e % (CHUNK / 16)] = x[(c0 + c) * (CHUNK / 16) + e % (CHUNK / 16)];
-        }
-    }
-    const long ci = c0 + threadIdx.x;
-    if (ci >= n_chunks) return;
+__device__ __forceinline__ void leaf_digest(const uint4 *src, uint32_t site, long ci, long n_chunks, uint32_t (&h)[8]) {
     Sha s; s.init();
     uint32_t m[16];
-    const uint4 *src = x + ci * (CHUNK / 16);
     #pragma unroll
     for (int blk = 0; blk < CHUNK / 64; ++blk) {
         #pragma unroll
@@ -121,7 +106,47 @@ __global__ void leaf_kernel(const uint4 *__restrict__ x, long n_chunks, uint32_t
     for (int i = 7; i < 15; ++i) m[i] = 0u;
     m[15] = (CHUNK + 24) * 8;
     s.compress(m);
-    store_digest(ring + ((ctr[0] + offset + ci) % R) * 32, s.h);
+    #pragma unroll
+    for (int i = 0; i < 8; ++i) h[i] = s.h[i];
+}
+
+// one thread per chunk; ctr[0] = the step's first digest-ring slot, ctr[1] = its first retention-ring chunk
+__global__ void leaf_kernel(const uint4 *__restrict__ x, long n_chunks, uint32_t site, long offset, const int64_t *__restrict__ ctr,
+                            uint8_t *__restrict__ ring, long R, uint4 *__restrict__ keep, long RH) {
+    const long c0 = (long)blockIdx.x * blockDim.x;
+    if (keep) {
+        // Block-cooperative copy so consecutive threads store consecutive 16 B to mapped host memory.
+        const long span = min((long)blockDim.x, n_chunks - c0) * (CHUNK / 16);
+        const long kb = ctr[1] + offset + c0;
+        for (long e = threadIdx.x; e < span; e += blockDim.x) {
+            const long c = e / (CHUNK / 16);
+            keep[((kb + c) % RH) * (CHUNK / 16) + e % (CHUNK / 16)] = x[(c0 + c) * (CHUNK / 16) + e % (CHUNK / 16)];
+        }
+    }
+    const long ci = c0 + threadIdx.x;
+    if (ci >= n_chunks) return;
+    uint32_t h[8];
+    leaf_digest(x + ci * (CHUNK / 16), site, ci, n_chunks, h);
+    store_digest(ring + ((ctr[0] + offset + ci) % R) * 32, h);
+}
+
+// the staged sites of a step of T tokens, from the staging buffer that holds the step's chunks at their leaf positions:
+// site (l, k) spans per-token chunks [off[k], off[k + 1]) of layer l, and is staged iff its T * width chunks < direct_min
+struct SiteOffsets { int64_t off[17]; };
+
+__global__ void stage_kernel(const uint4 *__restrict__ stage, long T, SiteOffsets so, int K, long n, long direct_min,
+                             const int64_t *__restrict__ ctr, uint8_t *__restrict__ ring, long R) {
+    const long gi = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (gi >= n) return;
+    const long per_layer = T * so.off[K];
+    const long l = gi / per_layer, r = gi - l * per_layer;
+    int k = 0;
+    while (k + 1 < K && T * so.off[k + 1] <= r) ++k;
+    const long cnt = T * (so.off[k + 1] - so.off[k]);
+    if (cnt >= direct_min) return;
+    uint32_t h[8];
+    leaf_digest(stage + gi * (CHUNK / 16), (uint32_t)(l * K + k), r - T * so.off[k], cnt, h);
+    store_digest(ring + ((ctr[0] + gi) % R) * 32, h);
 }
 
 // folds up to nine levels in shared memory: block b turns nodes [512b, 512b + 512) of a level of n nodes into node b of the level
@@ -220,6 +245,22 @@ void leaf_hash(const at::Tensor &x, int64_t site, int64_t offset, const at::Tens
     AT_CUDA_CHECK(cudaGetLastError());
 }
 
+// hashes the staged sites of a step of T tokens; offsets: the K + 1 per-token chunk offsets of a layer's sites
+void stage_hash(const at::Tensor &stage, int64_t T, const std::vector<int64_t> &offsets, int64_t layers, int64_t direct_min,
+                const at::Tensor &ctr, const at::Tensor &ring) {
+    const int K = (int)offsets.size() - 1;
+    TORCH_CHECK(K >= 1 && K <= 16, "stage_hash: 1..16 sites per layer");
+    SiteOffsets so{};
+    for (int i = 0; i <= K; ++i) so.off[i] = offsets[i];
+    const long n = (long)T * so.off[K] * layers;
+    TORCH_CHECK(stage.is_cuda() && stage.numel() >= n * CHUNK, "stage_hash: staging buffer too small");
+    const int threads = 64;
+    stage_kernel<<<(n + threads - 1) / threads, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
+        reinterpret_cast<const uint4 *>(stage.data_ptr()), T, so, K, n, direct_min, ctr.data_ptr<int64_t>(),
+        ring.data_ptr<uint8_t>(), ring.numel() / 32);
+    AT_CUDA_CHECK(cudaGetLastError());
+}
+
 // folds the step's n leaves to its root, writes the step record (rec: device address of N pinned 64-byte records) and advances
 // the counters (mirror: device address of 5 pinned int64); scratch: [2, cap, 32] uint8
 void finalize(int64_t n, int64_t nbytes, const at::Tensor &ctr, const at::Tensor &ring, const at::Tensor &scratch, int64_t RH,
@@ -252,5 +293,6 @@ void finalize(int64_t n, int64_t nbytes, const at::Tensor &ctr, const at::Tensor
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("device_pointer", &device_pointer, "device address of pinned host memory");
     m.def("leaf_hash", &leaf_hash, "SHA-256 leaves of x's 256-byte chunks into the digest ring at the step's offset");
+    m.def("stage_hash", &stage_hash, "SHA-256 leaves of a step's staged sites from the staging buffer");
     m.def("finalize", &finalize, "fold the step's leaves to its root, record it host-side and advance the counters");
 }

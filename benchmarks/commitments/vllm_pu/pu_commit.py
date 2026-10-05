@@ -7,7 +7,11 @@ pinned host memory (``pu_hash.cu`` has the formats).  Both are ``torch.library``
 1-element token tensor; the rings live behind the op, so torch.compile sees a tiny mutation and CUDA graphs capture the
 kernels, whose ring positions come from device counters.  The ``retain`` arm's leaf kernel also writes every hashed
 byte into a pinned host ring (mapped stores from the same kernel: a graph-captured memcpy has frozen addresses, and a
-side stream would have to rejoin inside each piecewise graph).
+side stream would have to rejoin inside each piecewise graph).  The ``staged`` arm commits the same leaves and roots as
+``fine``, but a site of fewer than ``DIRECT_MIN`` chunks in a step of at most ``STAGE_TOKENS`` tokens is only copied (in
+stream) to its leaf positions in a staging buffer, and the step's staged sites are hashed in one launch before the fold: a
+leaf costs five dependent SHA-256 compressions in one thread, so a small site's launch is latency-bound (~9 us) however
+few bytes it has, and a decode step has 288 of them.
 
 ``install(arm)`` patches ``LlamaDecoderLayer``, ``LlamaAttention`` and ``LlamaMLP`` before the engine builds its
 model (``pu_ext`` runs it in the engine's worker).  ``fold`` and ``leaf`` are the hashlib reference ``verify`` uses.
@@ -24,9 +28,11 @@ import torch
 
 CHUNK = 256
 FINE = ("in_norm", "qkv", "attn", "o_proj", "resid_post", "post_norm", "gate_up", "act", "down")
-ARMS = {"control": (), "coarse": ("resid_in",), "fine": FINE, "retain": FINE}
+ARMS = {"control": (), "coarse": ("resid_in",), "fine": FINE, "retain": FINE, "staged": FINE}
 KEEP_BYTES = int(os.environ.get("VLLM_PU_KEEP_GB", "16")) << 30
 STEP_RECORDS = 1 << 20
+STAGE_TOKENS = int(os.environ.get("VLLM_PU_STAGE_TOKENS", "512"))
+DIRECT_MIN = int(os.environ.get("VLLM_PU_DIRECT_MIN", "8192"))
 
 _EXT = None
 _STATE = None
@@ -74,6 +80,7 @@ class Layout:
         assert all(w % (CHUNK // 2) == 0 for w in self.widths), "every site must be whole 256-byte chunks per token"
         self.per_layer = sum(self.widths)
         self.chunks_per_token = self.per_layer * layers // (CHUNK // 2)
+        self.site_chunks = tuple(w // (CHUNK // 2) for w in self.widths)
         self.chunk_offset = tuple(tuple((l * self.per_layer + sum(self.widths[:k])) // (CHUNK // 2) for k in range(len(names)))
                                   for l in range(layers))
 
@@ -85,7 +92,7 @@ class Layout:
 class State:
     """The device digest ring (sized for the largest step), the tree scratch, the counters and the pinned host records."""
 
-    def __init__(self, ring_leaves: int, keep_bytes: int):
+    def __init__(self, ring_leaves: int, keep_bytes: int, stage: "Layout | None" = None):
         e = ext()
         dev = torch.device("cuda", torch.cuda.current_device())
         self.ring = torch.zeros(ring_leaves * 32, dtype=torch.uint8, device=dev)
@@ -98,13 +105,29 @@ class State:
         self.rec_ptr, self.mirror_ptr = e.device_pointer(self.rec), e.device_pointer(self.mirror)
         self.keep_ptr = e.device_pointer(self.keep) if keep_bytes else 0
         self.leaf_calls = self.finalize_calls = 0
+        self.stage_layout = stage
+        self.stage = (torch.empty(STAGE_TOKENS * stage.chunks_per_token * CHUNK, dtype=torch.uint8, device=dev)
+                      if stage else None)
+        self.stage_offsets = [sum(stage.site_chunks[:k]) for k in range(len(stage.names) + 1)] if stage else []
+
+    def staged(self, tokens: int, n_chunks: int) -> bool:
+        return self.stage is not None and tokens <= STAGE_TOKENS and n_chunks < DIRECT_MIN
 
     def leaf(self, x: torch.Tensor, site: int, offset: int) -> None:
         self.leaf_calls += 1
+        nbytes = x.numel() * x.element_size()
+        if self.staged(x.shape[0], nbytes // CHUNK):
+            self.stage.narrow(0, offset * CHUNK, nbytes).copy_(x.reshape(-1).view(torch.uint8))
+            return
         ext().leaf_hash(x, site, offset, self.ctr, self.ring, self.keep_ptr, self.RH)
 
     def finalize(self, n: int, nbytes: int) -> None:
         self.finalize_calls += 1
+        if self.stage is not None:
+            lay = self.stage_layout
+            tokens = n // lay.chunks_per_token
+            if tokens <= STAGE_TOKENS:
+                ext().stage_hash(self.stage, tokens, self.stage_offsets, lay.layers, DIRECT_MIN, self.ctr, self.ring)
         ext().finalize(n, nbytes, self.ctr, self.ring, self.scratch, self.RH, self.rec_ptr, STEP_RECORDS, self.mirror_ptr)
 
     def record(self, step: int) -> tuple[bytes, int, int, int, int]:
@@ -115,8 +138,9 @@ class State:
 def state() -> State:
     global _STATE
     if _STATE is None:
-        keep = KEEP_BYTES if os.environ.get("VLLM_PU_ARM") == "retain" else 0
-        _STATE = State(LAYOUT.max_tokens * LAYOUT.chunks_per_token + (1 << 20), keep)
+        arm = os.environ.get("VLLM_PU_ARM")
+        _STATE = State(LAYOUT.max_tokens * LAYOUT.chunks_per_token + (1 << 20), KEEP_BYTES if arm == "retain" else 0,
+                       LAYOUT if arm == "staged" else None)
     return _STATE
 
 
@@ -260,9 +284,23 @@ def verify(step: int) -> dict:
     leaves = [leaves_b[i * 32:(i + 1) * 32] for i in range(n)]
     out = {"step": step, "n_leaves": n, "tokens": n // LAYOUT.chunks_per_token, "root": root.hex(),
            "root_from_device_leaves_matches": fold(leaves) == root, "nonzero_leaves": sum(l != bytes(32) for l in leaves)}
+    t = n // LAYOUT.chunks_per_token
+    if st.stage is not None and step == int(st.mirror[2]) - 1:
+        # the staging buffer still holds the last step: recompute its staged sites' leaves
+        data = st.stage[:n * CHUNK].cpu().numpy().tobytes()
+        done = bad = 0
+        for layer in range(LAYOUT.layers):
+            for k, c in enumerate(LAYOUT.site_chunks):
+                site, off, cnt = layer * len(LAYOUT.names) + k, t * LAYOUT.chunk_offset[layer][k], t * c
+                if not st.staged(t, cnt):
+                    continue
+                for ci in range(cnt):
+                    done += 1
+                    bad += leaf(site, ci, cnt, data[(off + ci) * CHUNK:(off + ci + 1) * CHUNK]) != leaves[off + ci]
+        out.update(staged_leaves_recomputed=done, staged_leaves_mismatched=bad,
+                   root_from_staged_bytes_matches=done == n and bad == 0 and out["root_from_device_leaves_matches"])
     if st.keep is None:
         return out
-    t = n // LAYOUT.chunks_per_token
     data = _ring_slice(st.keep, hbase, n, CHUNK)
     bad = 0
     for layer in range(LAYOUT.layers):

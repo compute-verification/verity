@@ -2,12 +2,13 @@
 vLLM's production defaults (torch.compile + CUDA graphs, no batch invariance, prefix caching on), ``max_num_seqs=256``.
 
 Arms (``pu_commit.ARMS``): ``control`` (no op), ``coarse`` (each layer's residual stream), ``fine`` (every linear and
-op output of each layer) and ``retain`` (fine, plus every hashed byte stored to a pinned host ring).  Each arm runs in
+op output of each layer), ``retain`` (fine, plus every hashed byte stored to a pinned host ring) and ``staged`` (fine's
+commitment, small sites copied in stream and hashed once per step: ``pu_commit``'s docstring).  Each arm runs in
 its own engine process; a round runs every arm once, in a rotated order, on one GPU.
 
     python pu_bench.py run [--rounds 0,1] [--micro] [--verify]   # everything below, in order, into $RESEARCH_RUN_DIR/out
     python pu_bench.py micro --out OUT                  # hash kernel GB/s, tree fold, D2H/H2D pinned GB/s, per-site latency
-    python pu_bench.py verify --out OUT                 # retain arm: a step's digests and root against hashlib
+    python pu_bench.py verify --out OUT [--arm retain]  # a prefill and a decode step's leaves and root against hashlib
     python pu_bench.py arm --arm A --round R --out OUT  # one engine: throughput workload, then batch-1 latency
     python pu_bench.py summarize OUT... > summary.md    # arm x workload table over every round found
 
@@ -30,7 +31,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 MODEL = "unsloth/Meta-Llama-3.1-8B-Instruct"
-ARMS = ("control", "coarse", "fine", "retain")
+ARMS = ("control", "coarse", "fine", "retain", "staged")
 
 
 def _write(path: Path, obj) -> None:
@@ -86,7 +87,9 @@ def micro(args) -> int:
     pinned = torch.empty(1 << 30, dtype=torch.uint8, pin_memory=True)
     t_d2h = _cuda_time(lambda: pinned.copy_(src, non_blocking=True))
     t_h2d = _cuda_time(lambda: src.copy_(pinned, non_blocking=True))
-    out = {"self_check": check, "gpu": gpu_info(), "versions": _versions(), "sm_count": torch.cuda.get_device_properties(0).multi_processor_count,
+    check_staged = _self_check_staged(P, dev)
+    check["ok"] = check["ok"] and check_staged["ok"]
+    out = {"self_check": check, "self_check_staged": check_staged, "gpu": gpu_info(), "versions": _versions(), "sm_count": torch.cuda.get_device_properties(0).multi_processor_count,
            "hash_leaves": {"bytes": big, "seconds": t_leaf, "GBps": big / t_leaf / 1e9},
            "tree_fold": {"leaves": n, "seconds": t_fold, "leaves_per_s": n / t_fold},
            "hash_and_fold_GBps": big / (t_leaf + t_fold) / 1e9,
@@ -112,9 +115,77 @@ def micro(args) -> int:
         fold_n = 288 * cnt
         per_site[label]["fold_step_ms"] = _cuda_time(lambda: st.finalize(fold_n, fold_n * P.CHUNK)) * 1e3
     out["graph_per_site"] = per_site
+    out["graph_step"] = _graph_step(P, dev)
     _write(Path(args.out) / "micro.json", out)
     print(json.dumps(out, indent=1))
     return 0 if check["ok"] else 1
+
+
+def _llama8b_layout(P, tokens: int):
+    from types import SimpleNamespace
+    hf = SimpleNamespace(hidden_size=4096, num_attention_heads=32, num_key_value_heads=8, head_dim=128,
+                         intermediate_size=14336, num_hidden_layers=32)
+    return P.Layout(P.FINE, P.site_widths(hf), hf.num_hidden_layers, tokens)
+
+
+def _graph_step(P, dev) -> dict:
+    """One decode step's commitment alone, captured in a CUDA graph: Llama-8B's 288 fine sites at their real sizes, then
+    the fold, for fine's per-site hashing and for staged's copies + one hash."""
+    import torch
+    out = {}
+    for tokens in (1, 256):
+        lay = _llama8b_layout(P, tokens)
+        xs = [[torch.randn(tokens, w, device=dev, dtype=torch.bfloat16) for w in lay.widths] for _ in range(lay.layers)]
+        n = tokens * lay.chunks_per_token
+        for arm, st in (("fine", P.State(n + 1024, 0)), ("staged", P.State(n + 1024, 0, lay))):
+            def step():
+                for l in range(lay.layers):
+                    for k in range(len(lay.names)):
+                        st.leaf(xs[l][k], l * len(lay.names) + k, tokens * lay.chunk_offset[l][k])
+                st.finalize(n, n * P.CHUNK)
+            g = torch.cuda.CUDAGraph()
+            s = torch.cuda.Stream()
+            s.wait_stream(torch.cuda.current_stream())
+            with torch.cuda.stream(s):
+                step()
+            torch.cuda.current_stream().wait_stream(s)
+            with torch.cuda.graph(g):
+                step()
+            out[f"{arm}_b{tokens}_ms"] = _cuda_time(g.replay, reps=20) * 1e3
+            del g, st
+    return out
+
+
+def _self_check_staged(P, dev) -> dict:
+    """The staged path (one site staged, one hashed directly) against hashlib."""
+    import torch
+    keep_min = P.DIRECT_MIN
+    P.DIRECT_MIN = 10
+    try:
+        lay = P.Layout(("a", "b"), {"a": 128, "b": 384}, 2, 8)
+        T = 5
+        n = T * lay.chunks_per_token
+        st = P.State(60, 0, lay)
+        st.ctr[0] = 41
+        xs = {}
+        for l in range(lay.layers):
+            for k in range(2):
+                x = torch.randint(-(1 << 15), 1 << 15, (T, lay.widths[k]), dtype=torch.int16, device=dev).view(torch.bfloat16)
+                xs[l, k] = x
+                st.leaf(x, l * 2 + k, T * lay.chunk_offset[l][k])
+        st.finalize(n, n * P.CHUNK)
+        torch.cuda.synchronize()
+        leaves = []
+        for l in range(lay.layers):
+            for k in range(2):
+                b = xs[l, k].cpu().view(torch.int16).numpy().tobytes()
+                cnt = len(b) // P.CHUNK
+                leaves += [P.leaf(l * 2 + k, ci, cnt, b[ci * P.CHUNK:(ci + 1) * P.CHUNK]) for ci in range(cnt)]
+        root = st.record(0)[0]
+        return {"ok": root == P.fold(leaves), "root": root.hex(), "leaves": n, "staged_sites": "a (5 chunks)",
+                "direct_sites": "b (15 chunks)"}
+    finally:
+        P.DIRECT_MIN = keep_min
 
 
 def _self_check(P, dev) -> dict:
@@ -219,8 +290,9 @@ def arm(args) -> int:
 
 
 def verify(args) -> int:
-    """The retain arm in the production-compiled engine: a few requests whose prefill (400 tokens, a piecewise graph) and
-    decode (a full graph) steps are recomputed with hashlib from the retained bytes."""
+    """The retain (or staged) arm in the production-compiled engine: a few requests whose prefill (400 tokens, a piecewise
+    graph) and decode (a full graph) steps are recomputed with hashlib from the retained bytes (staged: the last step's,
+    from the staging buffer)."""
     from vllm import SamplingParams
     llm = _llm(args)
     rpc = lambda m, *a: llm.collective_rpc(m, args=a)[0]  # noqa: E731
@@ -232,8 +304,13 @@ def verify(args) -> int:
     res = {"gpu": gpu_info(), "versions": _versions(), "engine": _engine(llm, s0), "window": _window(s0, s1),
            "output_tokens": sum(len(o.outputs[0].token_ids) for o in outs),
            "first_step": rpc("pu_verify", s0["steps"]), "last_step": rpc("pu_verify", s1["steps"] - 1)}
-    res["pass"] = all(res[k].get("root_from_retained_bytes_matches") and res[k]["nonzero_leaves"] == res[k]["n_leaves"]
-                      for k in ("first_step", "last_step"))
+    if args.arm == "staged":
+        res["pass"] = (res["last_step"].get("root_from_staged_bytes_matches") is True and
+                       all(res[k]["root_from_device_leaves_matches"] and res[k]["nonzero_leaves"] == res[k]["n_leaves"]
+                           for k in ("first_step", "last_step")))
+    else:
+        res["pass"] = all(res[k].get("root_from_retained_bytes_matches") and res[k]["nonzero_leaves"] == res[k]["n_leaves"]
+                          for k in ("first_step", "last_step"))
     # what Inductor made of the ops: their call lines, and two whole output-code files to read for copies of the token
     cache = Path(os.environ.get("VLLM_CACHE_ROOT", "~/.cache/vllm")).expanduser()
     lines, kept = [], 0
@@ -245,11 +322,11 @@ def verify(args) -> int:
         if "verity_pu" in text:
             lines += [f"{f.relative_to(cache)}: {ln.strip()}" for ln in text.splitlines() if "verity_pu" in ln]
             if kept < 2:
-                (Path(args.out) / f"inductor_{kept}_{f.name}").write_text(text)
+                (Path(args.out) / f"inductor-{args.arm}_{kept}_{f.name}").write_text(text)
                 kept += 1
-    (Path(args.out) / "inductor_verity_pu_lines.txt").write_text("\n".join(lines) + "\n")
+    (Path(args.out) / f"inductor-{args.arm}_verity_pu_lines.txt").write_text("\n".join(lines) + "\n")
     res["inductor_lines_with_verity_pu"] = len(lines)
-    _write(Path(args.out) / "verify.json", res)
+    _write(Path(args.out) / f"verify-{args.arm}.json", res)
     print(json.dumps(res, indent=1, default=str))
     return 0 if res["pass"] else 1
 
@@ -278,7 +355,8 @@ def run(args) -> int:
     if args.micro:
         rc |= _child(args, ["micro"], "control", out / "logs" / "micro.log")
     if args.verify:
-        rc |= _child(args, ["verify"], "retain", out / "logs" / "verify.log")
+        for a in args.verify_arms.split(","):
+            rc |= _child(args, ["verify", "--arm", a], a, out / "logs" / f"verify-{a}.log")
     arms = args.arms.split(",")
     for r in args.rounds:
         k = r % len(arms)
@@ -293,7 +371,8 @@ def run(args) -> int:
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     if run_dir:
         rows = [json.loads(p.read_text()) for p in sorted(out.glob("arm-r*.json"))]
-        ver = json.loads((out / "verify.json").read_text()) if (out / "verify.json").exists() else None
+        vers = {p.stem: json.loads(p.read_text())["pass"] for p in sorted(out.glob("verify-*.json"))}
+        ver = {"pass": all(vers.values()), "arms": vers} if vers else None
         result = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "kind": "bench-result/v1",
                   "workload_fingerprint": {"workload": "vllm_pu_commit", "model": args.model, "arms": args.arms, "rounds": args.rounds,
                                            "input_len": args.input_len, "output_len": args.output_len,
@@ -301,7 +380,7 @@ def run(args) -> int:
                   "validation": {"status": "passed" if rc == 0 and (ver is None or ver["pass"]) else "failed",
                                  "checker": "every engine process exited 0" + ("; verify: a prefill and a decode step's leaves and "
                                                                                "root recomputed with hashlib" if ver else ""),
-                                 "detail": f"rc={rc}" + (f", verify pass={ver['pass']}" if ver else ""), "evidence": []},
+                                 "detail": f"rc={rc}" + (f", verify {ver['arms']}" if ver else ""), "evidence": []},
                   "measurements": [m for r in rows for m in (
                       {"name": f"r{r['round']}.{r['arm']}.output_tps", "value": r["throughput"]["output_tps"], "unit": "tok/s"},
                       {"name": f"r{r['round']}.{r['arm']}.total_tps", "value": r["throughput"]["total_tps"], "unit": "tok/s"},
@@ -355,6 +434,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--model", default=MODEL)
     ap.add_argument("--arm", choices=ARMS, default="control")
     ap.add_argument("--arms", default=",".join(ARMS))
+    ap.add_argument("--verify-arms", default="retain,staged")
     ap.add_argument("--round", type=int, default=0)
     ap.add_argument("--rounds", type=lambda s: [int(x) for x in s.split(",")], default=[0])
     ap.add_argument("--max-num-seqs", type=int, default=256)
