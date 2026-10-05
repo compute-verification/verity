@@ -48,6 +48,10 @@ NOTATION = re.compile(r"^(?:@\[[^\]]*\]\s*)?(?:(local|scoped)\s+)?(syntax|macro|
 IDENT = re.compile(r"[^\s()\[\]{},:]+")
 _ID = r"[^\W\d][\w'!?\u2080-\u209c\u1d62-\u1d6a]*"
 NAME = re.compile(rf"@?{_ID}(?:\.{_ID})*")
+SIMP_ATTR = re.compile(r"@\[[^\]]*\bsimp\b[^\]]*\]")
+RFL_PROOF = re.compile(r":=\s*(?:by\s+(?:exact\s+)?)?\(?\s*(?:rfl|Iff\.rfl|HEq\.rfl|Eq\.refl\s*_?)\s*\)?\s*$")
+SIMP_SET = re.compile(r"(?<![\w.'])(?:simp|simp_all|simpa|dsimp|simp_arith|norm_num|field_simp|aesop|grind)[?!]?(?![\w'])"
+                      r"(?!\s+only\b)")
 
 
 def _audit():
@@ -313,6 +317,29 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
                     memo_names[key] = frozenset(got)
                 named[(m, i)] |= memo_names[key]
             deps[(m, i)] |= {where[n] for n in named[(m, i)]} - {(m, i)}
+    # An rfl `@[simp]` theorem is in no term `simp` builds, nor named when `simp` runs on its default set: a command that
+    # does depends on each one it sees, earlier in its module or in a package module it imports.
+    kinds = {d["n"]: d["k"] for mod in mods.values() for d in mod.decls}
+    simp_rfl: dict[str, list[tuple[int, tuple[str, int]]]] = defaultdict(list)
+    for m, mod in mods.items():
+        for i, c in enumerate(mod.cmds):
+            s, e = mod.spans[i]
+            text = " ".join(x.strip() for x in mod.code[s:e + 1])
+            if any(kinds.get(n) == "theorem" for n in c["names"]) and SIMP_ATTR.search(text) and RFL_PROOF.search(text):
+                simp_rfl[m].append((s, (m, i)))
+    pmemo: dict[str, frozenset] = {}
+
+    def package_closure(m: str) -> frozenset:
+        if m not in pmemo:
+            pmemo[m] = frozenset()
+            pmemo[m] = frozenset(x for i in mods[m].imports if i in mods for x in ({i} | package_closure(i)))
+        return pmemo[m]
+
+    for m, mod in mods.items():
+        seen = {c for q in package_closure(m) for _, c in simp_rfl.get(q, ())}
+        for i, (s, e) in enumerate(mod.spans):
+            if SIMP_SET.search("\n".join(mod.code[s:e + 1])):
+                deps[(m, i)] |= (seen | {c for k, c in simp_rfl.get(m, ()) if k < s}) - {(m, i)}
     by_parent: dict[str, set] = defaultdict(set)
     for n, c in where.items():
         by_parent[A.parent(n)].add(c)
@@ -324,7 +351,6 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
             if not by_parent.get(n):
                 raise Refused(f"the lock reads {n} in {m}, which the decls facts do not declare: are they from this tree's build?")
             seeds |= by_parent[n]
-    kinds = {d["n"]: d["k"] for mod in mods.values() for d in mod.decls}
     for m, mod in mods.items():
         if A.under(spec_pre, m):
             seeds |= {(m, i) for i, c in enumerate(mod.cmds) if any(kinds[n] != "theorem" for n in c["names"])}
@@ -336,7 +362,8 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
                     private_users[where[u]].add((m, i))
     # A notation, macro or syntax: a local one is copied into both halves of its module (its constants are the module's
     # own), any other goes with the spec of a module that has some.
-    syntax_cmd = {(m, i): NOTATION.match(mod.code[c["start"][0] - 1]) for m, mod in mods.items() for i, c in enumerate(mod.cmds)}
+    syntax_cmd = {(m, i): NOTATION.match(next((x for x in mod.code[c["start"][0] - 1:c["end"][0]] if x.strip()), ""))
+                  for m, mod in mods.items() for i, c in enumerate(mod.cmds)}
     syntax_cmd = {c: mt.group(1) == "local" for c, mt in syntax_cmd.items() if mt}
     spec: set = set()
     todo = sorted(seeds)

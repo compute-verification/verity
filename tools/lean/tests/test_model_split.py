@@ -28,6 +28,13 @@ def f (n : Nat) : Nat := n
 
 theorem f_id (n : Nat) : f n = n := rfl
 
+@[simp] theorem f_five : f 5 = 5 := rfl
+
+/-- `simp` uses the rfl lemma `f_five` from its default set: neither the term nor the text names it. -/
+theorem five_eq : f 5 + 0 = 5 := by simp
+
+def five : {n : Nat // n = 5} := ⟨f 5 + 0, five_eq⟩
+
 private theorem two_pos : 0 < 2 := by decide
 
 /-- Its value names a private lemma, which moves with it. -/
@@ -51,6 +58,7 @@ theorem four_eq : f 4 = 4 := by simp only [f_four]
 
 def four : {n : Nat // n = 4} := ⟨f 4, four_eq⟩
 
+/-- One. -/
 local notation "𝟙" => f 1
 
 def one : Nat := 𝟙
@@ -73,7 +81,7 @@ FILES = {
 LOCK = {"roots": ["P"], "assumptions": ["P.Assumptions"],
         "pins": {"P.t": {"signature": ["P.t : Eq P.g 1"], "assumptions": [], "type_hash": "aa"}},
         "reads": {"P.Defs": {"digest": "d", "definitions": {"P.f": "1", "P.g": "2", "P.two": "3", "P.three": "4", "P.four": "5",
-                                                            "P.one": "6"}}}}
+                                                            "P.five": "6", "P.one": "7"}}}}
 
 
 def package(tmp: Path) -> Path:
@@ -108,7 +116,7 @@ def test_a_mixed_module_splits_into_a_spec_half_and_its_proofs_and_still_builds(
     pkg = package(tmp_path)
     before = decls(pkg)
     uses = {x["n"]: x["u"] for x in before["modules"]["P.Defs"]["decls"]}
-    assert "P.lt3" not in uses["P.three"] and "P.f_four" not in uses["P.four_eq"]
+    assert "P.lt3" not in uses["P.three"] and "P.f_four" not in uses["P.four_eq"] and "P.f_five" not in uses["P.five_eq"]
     p = S.plan(pkg, before, [])
     assert p["side"] == {"P": "proofs", "P.Assumptions": "spec", "P.Base": "proofs", "P.Defs": "mixed", "P.Thms": "proofs"}
     assert p["protocol"] == {"P.Defs": "P.Protocol.Defs"} and p["new_imports"]["P.Protocol.Defs"] == []
@@ -117,11 +125,11 @@ def test_a_mixed_module_splits_into_a_spec_half_and_its_proofs_and_still_builds(
     spec_half, proofs = (pkg / "P/Protocol/Defs.lean").read_text(), (pkg / "P/Defs.lean").read_text()
     assert "import" not in spec_half and "/-- `f`, the identity. -/\ndef f" in spec_half
     assert "-- `g` is `f 1`.\nopen Nat in\ndef g" in spec_half and "two_pos" in spec_half
-    assert all(f"theorem {x} " in spec_half for x in ("lt3", "f_four", "four_eq"))
+    assert all(f"theorem {x} " in spec_half for x in ("lt3", "f_four", "four_eq", "f_five", "five_eq"))
     assert not any(x in spec_half for x in ("f_id", "g_eq", "one_eq", "example"))
     assert proofs.startswith("import P.Base\nimport P.Protocol.Defs\n")
     assert all(x in proofs for x in ("theorem f_id", "@[simp] theorem g_eq", "theorem one_eq", "/-- An example. -/\nexample"))
-    assert "def " not in proofs and all(x.count('local notation "𝟙"') == 1 for x in (spec_half, proofs))
+    assert "def " not in proofs and all(x.count('/-- One. -/\nlocal notation "𝟙"') == 1 for x in (spec_half, proofs))
     after = decls(pkg)
     assert names(after) == names(before)
     lock = A.load(pkg)
