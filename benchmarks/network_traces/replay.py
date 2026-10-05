@@ -50,12 +50,12 @@ from collections.abc import Iterable, Sequence
 from fractions import Fraction
 from pathlib import Path
 
-from verity_network_warden import online
-from verity_network_warden.audit import Audit
-from verity_network_warden.calibration import choose_syncs
-from verity_network_warden.commitment import commit
-from verity_network_warden.grid import GridParams, Record, Warden
-from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
+from verity.protocols.accounting.communication.warden import online
+from verity.protocols.accounting.communication.warden.audit import Audit
+from verity.protocols.accounting.communication.warden.calibration import choose_syncs
+from verity.protocols.accounting.communication.warden.commitment import commit
+from verity.protocols.accounting.communication.warden.grid import GridParams, Record, Warden
+from verity.protocols.accounting.communication.warden.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
 
 REPLAY_FRAME_BYTES = 8
 PERCENTILES = (50, 99, 99.9)

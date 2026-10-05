@@ -1,4 +1,4 @@
-"""The active warden on recorded traces, in real time: `verity_network_warden.active` serving a replay of honest traces'
+"""The active warden on recorded traces, in real time: `verity.protocols.accounting.communication.warden.active` serving a replay of honest traces'
 configurations over localhost, then the audit of the records it published.
 
 Each configuration is one run of three processes on the host's monotonic clock, from an origin they share:
@@ -74,8 +74,8 @@ from fractions import Fraction
 from pathlib import Path
 
 import replay
-from verity_network_warden import online
-from verity_network_warden.active import (
+from verity.protocols.accounting.communication.warden import online
+from verity.protocols.accounting.communication.warden.active import (
     DATA,
     HEADER,
     LAST,
@@ -85,10 +85,10 @@ from verity_network_warden.active import (
     decode_frame,
     encode_frame,
 )
-from verity_network_warden.audit import Audit
-from verity_network_warden.calibration import choose_syncs
-from verity_network_warden.commitment import CommittedRecord, commit
-from verity_network_warden.grid import (
+from verity.protocols.accounting.communication.warden.audit import Audit
+from verity.protocols.accounting.communication.warden.calibration import choose_syncs
+from verity.protocols.accounting.communication.warden.commitment import CommittedRecord, commit
+from verity.protocols.accounting.communication.warden.grid import (
     COMPLETE,
     GridParams,
     Reason,
@@ -97,7 +97,7 @@ from verity_network_warden.grid import (
     Warden,
     row_count,
 )
-from verity_network_warden.schedule import (
+from verity.protocols.accounting.communication.warden.schedule import (
     ClockSync,
     LogicalFrame,
     SyncSet,
@@ -262,7 +262,7 @@ def committed_line(record: CommittedRecord) -> str:
 
 
 def read_committed(path: Path) -> list[CommittedRecord]:
-    from verity.commitments.identity import Digest
+    from verity.primitives.commitments.identity import Digest
 
     out = []
     for line in path.read_text().splitlines() if path.exists() else []:
