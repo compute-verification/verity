@@ -306,7 +306,10 @@ class Run:
         pins_before = {p: re.findall(r"\b[0-9a-f]{64}\b", self._read(p) or "")
                        for p in self.new_files if self.L.excluded(self.old_of.get(p, p)) is False
                        and any(fnmatch.fnmatchcase(p, pat) for pat in self.L.include)}
-        for p in sorted(self.new_files):
+        created = set(self.L.data.get("create", {}))
+        for p in sorted(self.new_files - created, key=lambda p: (p == "pyproject.toml", p)):   # the root's members read the rest
+            if p == "pyproject.toml":
+                self._dependents()
             old = self.old_of.get(p, p)
             if self.L.excluded(old, p):
                 continue
@@ -662,6 +665,8 @@ class Run:
             before = text[: m.start()].rstrip()
             if not before.endswith("/") or before.endswith("//"):
                 return chain
+            if re.search(r"(?:\.parents\[\d+\]|\.parent|__file__\)(?:\.resolve\(\)|\.absolute\(\))?)\s*$", before[:-1].rstrip()):
+                return chain                            # an anchor's own chain, which `_anchors` resolves from the file
             segs = re.findall(r"""["']([\w.\-]+)["']""", chain)
             joined = "/".join(segs)
             if len(segs) == 1 and joined not in self.L.files and joined not in dict(self.L.dirs) and joined not in self.L.tokens:
@@ -889,11 +894,58 @@ class Run:
             src = re.compile(r"^" + re.escape(n) + r"\s*=\s*\{[^}]*\}\s*\n", re.M)
             out = src.sub("", out)
         out = _dedupe_quoted_in_arrays(out, "verity")
+        if path == "pyproject.toml":
+            for n in conf.get("sources_drop", []):
+                out = _drop_table_entry(out, "tool.uv.sources", n)
+            new = self.L.data.get("distributions", {}).get("new", {})
+            out = _add_table_entries(out, "tool.uv.sources", {n: "{ workspace = true }" for n in new}, before="dependency-groups")
+            return self._members(out, list(new.values()))
         if '"verity"' in out and "[tool.uv.sources]" in out and not re.search(r"^verity\s*=", out, re.M):
             out = out.replace("[tool.uv.sources]\n", "[tool.uv.sources]\nverity = { workspace = true }\n", 1)
-        if path == "pyproject.toml":
-            out = self._members(out)
         return out
+
+    def _dependents(self):
+        """A pyproject whose directory holds Python that imports a new distribution's package depends on it ([distributions]
+        new), or, a suite-only one, takes its directory as an input. [create]'s pyprojects are the map's own, so one that lacks
+        a distribution it imports is reported instead."""
+        new = self.L.data.get("distributions", {}).get("new", {})
+        names = {imp: dist for dist, d in new.items() for imp, r in self.L.new_roots.items() if r.startswith(d + "/")}
+        if not names:
+            return
+        pat = re.compile(r"^\s*(?:from|import)\s+(" + "|".join(map(re.escape, sorted(names))) + r")\b", re.M)
+        files = self.new_files | set(self.texts)
+        owners = sorted((posixpath.dirname(p) for p in files if posixpath.basename(p) == "pyproject.toml"), key=len, reverse=True)
+        need: dict[str, set[str]] = defaultdict(set)
+        for f in sorted(files):
+            if not f.endswith(".py") or not (text := self._read(f)) or not (hits := pat.findall(text)):
+                continue
+            owner = next((o for o in owners if o and f.startswith(o + "/")), "")
+            need[owner] |= {names[h] for h in hits}
+        created = self.L.data.get("create", {})
+        for owner, dists in sorted(need.items()):
+            if not owner:
+                continue                                # the repository's own suite reads the whole tree
+            path = f"{owner}/pyproject.toml"
+            text = self._read(path) or ""
+            data = tomllib.loads(text)
+            project, tests = data.get("project", {}), data.get("tool", {}).get("verity", {}).get("tests", {})
+            have = {_requirement(r) for r in project.get("dependencies", [])} | set(tests.get("inputs", []))
+            lacking = sorted(x for x in dists if x != project.get("name") and new[x] != owner and x not in have
+                             and new[x] not in have)
+            if not lacking:
+                continue
+            if path in created:
+                self.note("[create] pyprojects that import a distribution they don't name", f"{path}: {', '.join(lacking)}")
+                continue
+            if project:
+                out = _add_dependencies(text, lacking)
+            elif "pytest" in data.get("tool", {}):
+                out = _add_inputs(text, [new[x] for x in lacking])
+            else:
+                continue
+            if out != text:
+                self.texts[path] = out
+                self._count(path, "dependencies on a new distribution", len(lacking))
 
     def _suite_only(self, path: str, text: str) -> str:
         keep = []
@@ -905,11 +957,13 @@ class Run:
             out.lstrip("\n")
         return _add_inputs(out, ["verity"], first=True)
 
-    def _members(self, text: str) -> str:
+    def _members(self, text: str, add: list[str] = ()) -> str:
         m = re.search(r"(^\s*members\s*=\s*\[)(?P<body>[^\]]*)(\])", text, re.M)
         if not m:
             return text
         items = re.findall(r'"([^"]+)"', m.group("body"))
+        items_in = list(items)
+        items += [a for a in add if a not in items]
         keep = []
         for it in items:
             pp = f"{it}/pyproject.toml"
@@ -922,9 +976,9 @@ class Run:
                 proj = {}
             if proj and proj.get("name") not in self.L.merged:
                 keep.append(it)
-        if keep == items:
+        if keep == items_in:
             return text
-        self._count("pyproject.toml", "workspace members", len(items) - len(keep))
+        self._count("pyproject.toml", "workspace members", len(set(items_in) ^ set(keep)))
         body = ", ".join(f'"{k}"' for k in keep)
         return text[: m.start("body")] + body + text[m.end("body"):]
 
@@ -1034,6 +1088,32 @@ def _replace_list_item(text: str, key: str, old: str, new: list[str]) -> str:
             return m.group(0)
         return m.group("head") + m.group("items").replace(f'"{old}"', ", ".join(json.dumps(n) for n in new), 1) + "]"
     return re.sub(rf"^(?P<head>{key}\s*=\s*\[)(?P<items>[^\]]*)\]", fix, text, flags=re.M)
+
+
+def _requirement(r: str) -> str:
+    return re.split(r"[\s\[<>=!~;@]", r.strip(), maxsplit=1)[0]
+
+
+def _drop_table_entry(text: str, header: str, key: str) -> str:
+    secs = _sections(text)
+    if not any(h == header for h, _ in secs):
+        return text
+    body = next(b for h, b in secs if h == header)
+    return text.replace(body, re.sub(rf"^{re.escape(key)}\s*=.*\n", "", body, count=1, flags=re.M), 1)
+
+
+def _add_dependencies(text: str, add: list[str]) -> str:
+    """`add` appended to [project] dependencies (the key made when it has none)."""
+    secs = _sections(text)
+    body = next(b for h, b in secs if h == "project")
+    items = ", ".join(json.dumps(a) for a in add)
+    m = re.search(r"^dependencies\s*=\s*\[(?P<items>[^\]]*)\]", body, re.M)
+    if m is None:
+        new_body = body.rstrip("\n") + f"\ndependencies = [{items}]\n" + body[len(body.rstrip("\n")) + 1:]
+    else:
+        old = m.group("items")
+        new_body = body[: m.start("items")] + (old.rstrip() + ", " if old.strip() else "") + items + body[m.end("items"):]
+    return text.replace(body, new_body, 1)
 
 
 def _dedupe_quoted_in_arrays(text: str, name: str) -> str:
