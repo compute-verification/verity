@@ -18,10 +18,11 @@ import FlockSoundness.Discharge.Canonical.Gaps
 * `Verifier`: `parse_formatOk`, what verifier change V1's statement check gives (`ProvedScope.canonicalOk`);
 * `Headline`: `zk_session_sound_canonical`, over what flock-verify accepts;
 * `Statements`: `RowsCommittedC`, `OutputsCommittedC`, `OutputsBindingC` at the statement level, tails included;
-* `Gaps`: what the headline does not yet cover. Tails' outputs (`OutputsComputedC`, after V2), public inputs
-  (`PublicPinnedC`) and registered reads (`RegisteredRowC`, after V3).
+* `PubIn`: a public leaf holds the verifier's own word at a statement set up with its public inputs (`public_pinnedC`);
+* `Gaps`: what the headline does not yet cover. Tails' outputs (`OutputsComputedC`, after V2), the session at public
+  inputs (in words) and registered reads (`RegisteredRowC`, after V3).
 
-Every declaration is proved but three, all `sorry` and all in `Gaps`: `parse_outputsComputed` (V2), `public_pinnedC`
-and `registered_rowC`. So `FlockSoundness.lean` imports every module here but `Gaps` and this one, since `check`'s
-audit admits no `sorry`.
+Every declaration is proved but two, both `sorry` and both in `Gaps`: `parse_outputsComputed` (V2) and
+`registered_rowC`. So `FlockSoundness.lean` imports every module here but `Gaps` and this one, since `check`'s audit
+admits no `sorry`.
 -/

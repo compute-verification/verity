@@ -24,8 +24,8 @@ word. Main's checks are the ones it reads: the `in` regions (`HmIn.regions`) and
 * own words: at a public leaf of a proved unit's slot the value is the drawn statement's public word of the slot's
   instance (`inVal_pub`), which is the population's word of the proved unit, the verifier's own (`drawn_own`).
 
-The lemmas are those of `ZkPubIn/InPin.lean` and `ZkPubIn/Spec.lean` on `cursor/zk-pubin-95d4` (#1049), at the
-canonical statement's block columns.
+#1049's `ZkPubIn/InPin.lean` and `ZkPubIn/Spec.lean` prove the same lemmas at `Layout.scopeOk`'s statements; when it
+lands, the two files share one copy. The session at public inputs is frozen in `Gaps.lean`.
 -/
 
 open Flock FlockLevel3

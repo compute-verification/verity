@@ -1537,7 +1537,8 @@ It narrows §16.10 and §16.13. V1 (below) is in §16.15's statement check: at a
 circuit outside `Layout.scopeOk` is accepted exactly when it is in this format and its unit returns the outputs. The
 soundness package states its binding and the session headline at this format (`FlockSoundness/Discharge/Canonical/`),
 all of it under the root import but `Gaps.lean`. The headline (`zk_session_sound_canonical`, and `SoundZHJC` in
-`FailClosed.flock_verify_sound`) is proved from V1 (`parse_formatOk`); the three statements of `Gaps.lean` are `sorry`.
+`FailClosed.flock_verify_sound`) is proved from V1 (`parse_formatOk`); the two statements of `Gaps.lean` are `sorry`,
+and it states the third, the session at public inputs, in words.
 
 - **Rows.** Every row, input or output, is §16.10's bit row (`hm96-sha512/row/v2`) at its own `ℓ < 2^64`:
   `x = SHA-512(P(ℓ) ‖ bytes)`, `B = ⌈ℓ/8⌉` bytes, bits low first, fill bits zero, then SHA-512's own padding
@@ -1554,7 +1555,8 @@ all of it under the root import but `Gaps.lean`. The headline (`zk_session_sound
   zero-padded output row.
 - **Shared rows** (§16.10 `shared_rows`) are tables of rows in this form, and nothing changes for them. The headline covers
   them (`Canonical/Shared.lean`); the check still refuses a shared-row public file (§16.15 rule 6). Public input ports are
-  in the format (a public leaf is a zero leaf of `leaves_in`), but the session headline doesn't cover them yet. Registered
+  in the format (a public leaf is a zero leaf of `leaves_in`), and a public leaf holds the verifier's own word
+  (`Canonical.public_pinnedC`), but the session headline doesn't cover them yet (§16.15 rule 5 refuses them). Registered
   reads (§16.10) require `v1` rows until V3. `Canonical/Gaps.lean` states what each of these needs, and what a tail's
   outputs need.
 - **VUs.** `vus_per_block` is a power of two for every circuit (D9, §16.10; `formatOk`'s `vusPow2` restates it).

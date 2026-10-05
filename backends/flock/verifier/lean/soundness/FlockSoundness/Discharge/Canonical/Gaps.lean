@@ -43,11 +43,29 @@ The unit's own case is `formatOk`'s `portReadsB c.unit`.
 
 **Public inputs.** `formatOk` admits them: a public leaf is a zero leaf of `leaves_in`, so `readsRows` sees `.zero`. The
 headline's `Inputs` has no `publicInputs`, so `Stmt.setupHidden` runs with `none`, and `HmIn.checkOwn` refuses every
-circuit that names public input ports. Three changes are needed. `Inputs` gains `publicInputs`, which the session passes
-to `setupHidden`. `Aliased.srcKey` gains a key for a public leaf, the verifier's own word, so that `keyProg` stops
-reading the leaf as zero (`Layout`). And `PublicPinnedC` holds: in every satisfying witness, a public leaf's bits are the
-verifier's own recomputation of that word, through the `in` regions (`HmIn.regions`) and `checkOwn`. No verifier change
-is needed: main's checks are the ones `PublicPinnedC` reads.
+circuit that names public input ports. With the verifier's own words (`some own`) such a statement sets up, and the
+statement check refuses it (`statementRules`' `public input ports (--public-inputs)`, the live server's
+`proved_scope::statement_why` too). The composer makes none yet: `compose` puts no public input beside a bit row.
+
+The binding fact is proved: `public_pinnedC` (`PubIn.lean`) says that in every satisfying witness of a drawn statement
+`setupHidden` accepts with `own`, a public leaf's bits are the verifier's own word (`ownWord`), through the `in` regions
+(`HmIn.regions`) and `checkOwn`. What is left is the session statement at `own`. Its definitions are #1049's
+(`Discharge/ZkPubIn`, not on this branch), so it is frozen here in words:
+
+* `zk_session_sound_canonicalP`: `zk_session_sound_canonical` at the event `LiveVerifiesZKP I own` (`AcceptsZK` with
+  every table's `setupHidden` at `some own`, and `ProvedScope.check` with `publicInputs` true). The units are those of
+  the key program with a gate per public leaf bit (`keyProgP`: `keyProg`'s gates, and a public leaf's bit on a gate of
+  its own), and the extraction is `Xpub pubOnes pubZeros XplurZC` (each public gate at the bit of the verifier's own
+  word). The law, the parameters and the bound are unchanged.
+
+The route is #1049's, which proves the same at `Layout.scopeOk` (`zk_session_soundHP`). Its events (`setupOfP`,
+`AcceptsZKP`) and its key program (`keyProgP`) do not read the circuit's form. Its rows, sites and binding at
+`keyProgP` are proved at `scopeOk`'s rows and are re-proved here at the canonical ones: `rsZC` and `layShC` at
+`keyProgP`, whose rows are `keyProg`'s, with a public gate a single gate whose registered bit `public_pinnedC` gives.
+The count and the session then follow at `Xpub`. Sibling events
+and a sibling key program take the place of a `publicInputs` field in `Inputs` and a public key in `Aliased.srcKey`,
+which would change every headline's record. The verifier change goes in with the headline: `statementRules` drops
+`!publicInputs` at a statement `canonicalOk` passes, and `proved_scope::statement_why` drops `public_inputs` there.
 
 **Registered reads.** `Flock.Registered.checkPort` refuses every `v2` row (registered rows are `hm96-sha512/row/v1`,
 padded to `Port.fits`' words), so under `formatOk` a statement that names registered reads is refused. The soundness
@@ -62,9 +80,9 @@ side is mostly ready: `Registered.Reads` and `registered_weights` take any `HmRo
   collides, explicitly. It composes `rows_committedC` with `check_ok`. At main it is vacuous under `formatOk`, since
   `checkPort` refuses the `v2` row; after V3 it says something.
 
-**Proof work.** `block_determined` and `outputs_determinedC` are proved. `parse_outputsComputed` waits for V2, and
-`public_pinnedC` and `registered_rowC` are frozen targets: `sorry`. This file (and `All.lean`, which imports it) is the
-only one under `Canonical/` outside the root import.
+**Proof work.** `block_determined` and `outputs_determinedC` are proved, and so is `public_pinnedC` (in `PubIn.lean`).
+`parse_outputsComputed` waits for V2, and `registered_rowC` is a frozen target: `sorry`. This file (and `All.lean`,
+which imports it) is the only one under `Canonical/` outside the root import.
 -/
 
 namespace FlockSoundness.Discharge.Canonical
