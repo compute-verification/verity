@@ -257,14 +257,15 @@ def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
 
 
 def test_former_modules_map_a_module_back_through_each_move():
-    moves = [{"backends/flock/verifier/tool.py": "tools/lean_agreement/tool.py", "archive/gkr": "archive/gkr"},
+    moves = [{"backends/flock/verifier/tool.py": "tools/lean_agreement/tool.py", "old/gkr": "attic/gkr"},
              {"tools/lean_agreement/": "tools/agree/"}]
     assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "backends.flock.verifier.tool"]
-    assert tools_registry.former_modules("archive.gkr.gpu.tool", moves) == ["archive.gkr.gpu.tool"]
-    assert tools_registry.former_modules("archive.gkrx.tool", moves) == []
+    assert tools_registry.former_modules("attic.gkr.gpu.tool", moves) == ["old.gkr.gpu.tool"]
+    assert tools_registry.former_modules("attic.gkrx.tool", moves) == []
     assert tools_registry.former_modules("tools.check.tool", moves) == []
     shipped = json.loads(tools_registry.MOVES.read_text())["moves"]
     assert all(isinstance(m["paths"], dict) for m in shipped)
+    assert tools_registry.former_modules("archive.gkr.gpu.tool") == ["backends.gkr.gpu.tool"]
 
 
 def test_a_tree_from_before_a_move_still_declares_its_tools(tmp_path, monkeypatch):
