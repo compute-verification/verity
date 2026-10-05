@@ -205,7 +205,7 @@ fi
 # them before its own take. Only .lake/packages of the verifier's three Lake packages goes, only in a tree nothing live names
 # (REFS_PY, by sha); each is renamed aside, the tree checked once more, put back if named, and deleted.
 # Trees from before and after the 5 Oct layout move sit side by side, so both layouts' paths are listed; the move leaves LK_OLD.
-LK_OLD="backends/flock/verifier/lean backends/flock/verifier/lean/level3 backends/flock/verifier/lean/soundness"
+LK_OLD="backends/flock/verifier/lean verity/Security/Proofs verity/Security/Proofs"
 LK_NEW="verity/protocols/verification/flock/lean security_proofs/flock/level3 security_proofs/flock/soundness"
 LK="$LK_OLD $LK_NEW"
 [ $LAKE = 1 ] && [ $DRY = 0 ] && for k in $LK; do for p in $SRC/*/$k/.lake/packages.rs-trash-*; do
