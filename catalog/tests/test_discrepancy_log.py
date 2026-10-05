@@ -76,14 +76,14 @@ def test_leaving_open_requires_a_resolution_and_evidence_that_exists() -> None:
 def test_every_evidence_path_is_an_input_of_this_suite() -> None:
     """The test above checks that each evidence path exists, which the suite's guard can't see: a path outside this suite's
     inputs could be deleted without moving its key, and the check would pass from the cache. List it under
-    [tool.verity.tests] inputs in verity/pyproject.toml."""
-    pkg = Path(__file__).resolve().parents[2]
+    [tool.verity.tests] inputs in catalog/pyproject.toml."""
+    pkg = Path(__file__).resolve().parents[1]
     declared = tomllib.loads((pkg / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
     covered = [pkg.relative_to(ROOT).as_posix(), *declared]
     uncovered = [f"{e['id']}: {ref}" for e in load()["entries"] for ref in e["evidence_refs"]
                  if not ref.startswith(("r2026", "r2027", "http"))
                  and not any(ref == p or ref.startswith(p.rstrip("/") + "/") for p in covered)]
-    assert not uncovered, f"evidence outside verity's [tool.verity.tests] inputs: {uncovered}"
+    assert not uncovered, f"evidence outside the catalog's [tool.verity.tests] inputs: {uncovered}"
 
 
 def test_the_hawkeye_pin_is_the_one_the_target_names() -> None:
