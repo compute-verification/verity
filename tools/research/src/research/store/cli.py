@@ -3,10 +3,11 @@
   research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
   research data show ART|ATTEMPT|DRV [--json]      manifest / attempt / attempts with that derivation
   research data where ART [--json]                 replicas: local / repo / remote (+ verified_utc)
-  research data push [ART|RUN ...] [--pending] [--no-labels] [--jobs N] [--verify head|readback]
+  research data push [ART|RUN ...] [--pending] [--skip-record-less] [--no-labels] [--jobs N] [--verify head|readback]
                                                    preserve on the remote: blobs uploaded concurrently and verified, then the manifest (PRESERVED);
                                                    a run pushes its attempt + outputs + the assertions about them (attempt, derivation, outputs);
-                                                   --pending pushes everything local the remote lacks, assertions included
+                                                   --pending pushes everything local the remote lacks, assertions included;
+                                                   --skip-record-less pushes no attempt that names no run record
   research data labels-sync [--push-only|--pull-only|--from-backup ART|--from-dir DIR] [--jobs N] [--json]
                                                    union labels/ with the remote's labels/<target>/<content sha256>.json (nothing overwritten, ever);
                                                    --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/
@@ -183,7 +184,7 @@ def cmd_put(argv: list[str]) -> int:
         except Exception as e:  # noqa: BLE001
             why = str(e)
     else:
-        gone = lost("R2_ENDPOINT", "R2_BUCKET")
+        gone = lost("R2_ENDPOINT", "R2_BUCKET") or st.remote_lost()
         why = gone or "write-through off"
     if ns.json:
         _dump({"id": art, "preserve": rep, **({"pending": why} if why or (rep and not rep["preserved"]) else {})})
@@ -516,7 +517,7 @@ def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:
 
     pending = "pending: `research data push --pending` uploads it"
     if not st.write_through:
-        if hint := lost("R2_ENDPOINT", "R2_BUCKET"):
+        if hint := lost("R2_ENDPOINT", "R2_BUCKET") or st.remote_lost():
             return f"NOT preserved ({hint}); {pending}", True
         return f"local only (write-through off); {pending}", False
     if st.remote is None:
@@ -796,6 +797,8 @@ def cmd_push(argv: list[str]) -> int:
     ap.add_argument("--verify", choices=["head", "readback"], default="head",
                     help="per-object check: head = Content-Length + single-part ETag == MD5 (default); readback = download + sha256")
     ap.add_argument("--no-labels", action="store_true", help="do not push assertions (a run's: about it, its derivation and its outputs; --pending: all local ones)")
+    ap.add_argument("--skip-record-less", action="store_true",
+                    help="push no attempt that names no run record (--pending: one the remote lacks keeps its logs only here)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if ns.jobs < 1:
@@ -813,6 +816,7 @@ def cmd_push(argv: list[str]) -> int:
         arts += queue["artifacts"]
         runs += queue["attempts"]
     reports: list[dict] = []
+    record_less: list[str] = []
     label_targets: dict[str, list[str]] = {}                       # report id -> the label targets its durability covers
     from . import labels_sync as LS  # noqa: PLC0415
 
@@ -822,6 +826,9 @@ def cmd_push(argv: list[str]) -> int:
         doc = st.get_attempt(rid)
         if doc is None:
             raise StoreError(f"attempt {rid} is not in the store")
+        if ns.skip_record_less and not (doc.get("outputs") or {}).get("run_record"):
+            record_less.append(rid)
+            continue
         arts += _attempt_artifacts(doc)
         label_targets[rid] = LS.attempt_targets(doc)
         try:                                                       # one bad upload must not abandon the batch: record, continue
@@ -829,6 +836,9 @@ def cmd_push(argv: list[str]) -> int:
             reports.append({"id": rid, "kind": "attempt", "preserved": r.head(attempt_key(rid)) is not None})
         except Exception as e:  # noqa: BLE001
             reports.append({"id": rid, "kind": "attempt", "preserved": False, "errors": [f"{type(e).__name__}: {e}"]})
+    if record_less:
+        print(f"research data push: {len(record_less)} attempt(s) without a run record not pushed (--skip-record-less): "
+              + " ".join(record_less[:5]) + (" …" if len(record_less) > 5 else ""), file=sys.stderr)
     for a in arts:                                                 # an artifact's own assertions count against it as well (explicit or via a run)
         label_targets.setdefault(a, [a])
     def heartbeat(p: dict) -> None:                                # long artifacts (10^5 objects): a running count on stderr, no --json noise

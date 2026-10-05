@@ -37,6 +37,7 @@ from verity_vllm.config import ROOT as INTEGRATION
 from verity_vllm.config import option
 
 try:
+    from research.pythonpath import package_dirs as _package_dirs
     from research.telemetry import source_identity as _sid
 except ImportError as _e:  # pragma: no cover - environment defect, reported by name
     raise ImportError("verity_vllm.pipeline.source_identity needs the `research` package of the tree of record on sys.path "
@@ -46,7 +47,7 @@ except ImportError as _e:  # pragma: no cover - environment defect, reported by 
 INTEGRATION_REL = Path("integrations") / "vllm"
 # INTEGRATION is <repo>/integrations/vllm; the repo root is derived from the package location, never from env
 TREE = INTEGRATION.parent.parent
-ROOT_MARKERS = ("pyproject.toml", "packages/verity/src/verity/__init__.py", "integrations/vllm/verity_vllm/__init__.py")
+ROOT_MARKERS = ("pyproject.toml", "uv.lock", "integrations/vllm/verity_vllm/__init__.py")
 
 FAIL_CLASS = _sid.FAIL_CLASS
 SourceIdentityError = _sid.SourceIdentityError
@@ -54,11 +55,11 @@ SourceIdentityError = _sid.SourceIdentityError
 # hidden_gpu is imported by native_host._gpu_ext_load from <integration>/out/gen/r9/cmt-hidden/src (materialised by pod_hidden_gpu.sh from
 # the shipped copy verity_vllm/commit/committer/hidden_gpu_src); both are candidates, the r9 path first because that is what native_host inserts
 HIDDEN_GPU_CANDIDATES = ("integrations/vllm/out/gen/r9/cmt-hidden/src/hidden_gpu.py", "integrations/vllm/verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py")
-# package name -> (import name, the sys.path entry it must resolve from, relative to the repo root)
+# package name -> (import name, the sys.path entries it must resolve from, relative to the repo root); core's are the requested tree's
+# workspace roots that ship it (research.pythonpath.package_dirs)
 PACKAGE_ROOTS = {
-    "verity": ("verity", "packages/verity/src"),                       # core: verity.ir, verity.ml.tc, verity.proofs
-    "verity_vllm": ("verity_vllm", "integrations/vllm"),
-    "research": ("research", "tools/research/src"),                    # the runner/telemetry package of the tree of record
+    "verity_vllm": ("verity_vllm", ("integrations/vllm",)),
+    "research": ("research", ("tools/research/src",)),                 # the runner/telemetry package of the tree of record
 }
 PACKAGES = ("verity", "verity_vllm", "hidden_gpu", "research")
 ENV_SOURCE_SHA = "RESEARCH_SOURCE_SHA"
@@ -81,11 +82,12 @@ def code_identity(root: str | os.PathLike[str]) -> dict[str, Any]:
     """The code the integration executes, by content: the canonical sha256 of the manifest {repo path: sha256} of the repository at
     `root` over `research_tools.CLOSURE` (the integration plus Verity core), the files the store records as the research Tools' closure.
     The one code identity: the hot Commit worker's key and the TP Commit's tree of record.  Raises FileNotFoundError when `root` holds
-    no integration or no core file (not a repository root: an empty manifest would be a constant key)."""
+    no file under one of the closure's directories, the integration or a directory of core (not a repository root: a manifest
+    missing one would be a key that ignores it)."""
     from verity_vllm.pipeline.research_tools import VLLM_BUILD
 
     files = VLLM_BUILD.closure_manifest(root)
-    for part in ("integrations/vllm/", "packages/verity/src/verity/"):
+    for part in (g.removesuffix("**") for g in VLLM_BUILD.closure):
         if not any(p.startswith(part) for p in files):
             raise FileNotFoundError(f"code identity: no {part} file under {os.fspath(root)!r} (not a repository root)")
     canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode()
@@ -125,20 +127,27 @@ def resolve(tree: str | os.PathLike[str] | None = None, *, sha: str | None = Non
     """Identity of every package in PACKAGES as the CURRENT interpreter resolves it (sys.modules first, then find_spec on sys.path).
     `sha` is the caller's explicit declaration (--sha); absent, $RESEARCH_SOURCE_SHA is the fallback."""
     root = normalise_tree(tree)
+    try:
+        core = tuple(os.path.dirname(d) for d in _package_dirs(root, "verity"))
+    except LookupError:
+        core = ()                   # not a workspace: no entry to expect (the verdict is check()'s, on repo_root)
+    roots = {"verity": ("verity", core), **PACKAGE_ROOTS}           # core: verity.ir, verity.ml.tc, verity.proofs
     sha, sha_src = declared_sha(sha)
     ids: dict[str, dict[str, Any]] = {}
     for name in PACKAGES:
         if name == "hidden_gpu":
             rec = _sid.resolve_file("hidden_gpu", [os.path.join(root, c) for c in HIDDEN_GPU_CANDIDATES], ROOT_MARKERS)
         else:
-            import_name, rel = PACKAGE_ROOTS[name]
+            import_name, rels = roots[name]
             rec = _sid.resolve_module(import_name, ROOT_MARKERS)
             rec["package"] = name
             rec["import_name"] = import_name
-            rec["expected_sys_path_entry"] = os.path.join(root, rel)
+            rec["expected_sys_path_entry"] = os.pathsep.join(os.path.join(root, rel) for rel in rels)
             if rec.get("resolved_path"):
-                # <entry>/<import_name>/__init__.py -> the sys.path entry that resolved it
-                rec["sys_path_entry"] = str(Path(rec["resolved_path"]).parent.parent)
+                # <entry>/<import_name>/__init__.py, or each portion <entry>/<import_name> of a namespace -> the sys.path entries that resolved it
+                portions = [p["path"] for p in rec.get("portions") or ()]
+                rec["sys_path_entry"] = (os.pathsep.join(str(Path(p).parent) for p in portions) if portions
+                                         else str(Path(rec["resolved_path"]).parent.parent))
         _fill_sha(rec, root, sha, sha_src)
         ids[name] = rec
     return ids

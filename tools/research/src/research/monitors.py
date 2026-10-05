@@ -1,0 +1,1466 @@
+"""Monitors: invariants in code, each with an owner, a severity, a threshold and an action (the infra vision's Signals surface).
+One registry (MONITORS) and one runner. Node 1's service (`vy-monitors.timer`, pods/nebius/monitoring/) runs the node-side
+monitors and writes each incident once when it opens and once when it clears; the relay on infra's VM runs the relay-side ones
+(they need GitHub, the evidence store or Slack) and posts both sets to #agent-alerts.
+
+    research monitors list [--where node|relay] [--json]
+    research monitors check [ID ...] [--where node|relay] [--json]     evaluate now and write nothing
+    research monitors run --by WHO [--where node|relay] [--state PATH] [--alerts DIR] [--only ID ...] [--json]
+    research monitors relay --by WHO [--node1 HOST] [--node-alerts DIR] [--every 60] [--once] [--dry-run]
+
+**A monitor** has an id, an owner handle, a severity (`warn`, or `page` when work stops), where it runs, how often, a check that
+returns findings, and the action its owner takes. A finding's `key` is stable while the incident lasts: the runner opens an
+incident once a key has been found for `for_s`, and clears it once the key has been gone for `clear_s`. An `events` monitor's
+findings are posted once each and never cleared; its first pass only remembers what is already there. A check that raises
+`Skip` (node 2 in a timed window) changes nothing; one refused by node 2 is unread meanwhile, so its next failure counts from
+its last read. One that fails otherwise keeps its incidents open, and once it has failed for `unread_s` it opens
+`<id>|unreadable` for infra.
+
+**Sinks.** Each open and clear is a line of `<alerts>/monitors.jsonl` (`research/monitors-event/v1`), and each open also a note
+in `<alerts>/outbox/` in alert_sink.py's format, so one relay posts these and Grafana's alike. A write there that fails opens or
+clears nothing, so the next pass tries again. A node pass ends by PASS_S, inside the unit's timeout: a check still due then is
+Late and runs next pass. The state is saved after each monitor, and an event monitors.jsonl already has (a pass killed before
+it saved) isn't written again. With `$VY_MONITORS_SLACK_WEBHOOK` set (an incoming webhook; its URL is never
+logged), the runner also posts each event there, retrying on later passes until Slack takes it, and the relay leaves those
+events alone.
+
+**Node 2** is read from node 1 over ssh (`$VY_N2`, default `vy-n2`: the vy-cluster key), in one login per pass, and the guard
+runs first in it: unless node 2's fill status says `timed False, window waiting False` and is at most FILL_GO_S old on node 2's
+clock (not from the future), it prints the status and nothing else runs, and each node-2 check is a Skip. Past the guard, one
+python, bounded by `timeout` and niced there, reads every part the pass's due checks need, checking the status again before each.
+While a window booked in node 2's fill/windows runs (as the last session read it), a pass doesn't log in at all. Refused for
+UNWATCHED_S past the end of any booked window, fill-status-n2 opens `unwatched`: a timed window that long is the incident.
+
+`relay` runs the relay-side monitors into a local alert dir, then posts every new event of node 1's alert dir (over ssh) and the
+local one to #agent-alerts as `vy-monitors`, tagging the owners; each clear is a reply in its alert's thread (a post of its
+own when that thread is gone). An owner other than infra also gets a pointer in #agent-coordination, where its doorbell rings
+(#agent-alerts rings only infra). Grafana's notes in node 1's outbox are posted too. On its first pass over an alert dir it
+posts only the incidents still open. A post that fails stops only its own source, until the next pass; one Slack refuses for
+good, or that has failed for RELAY_GIVE_UP_S, is dropped with a log line.
+
+Exit codes: 0 `check` found nothing, or `run` finished its pass (what is open is in the state and the alert dir); 1 `check` found
+something or a check failed, or `run` couldn't write the alert dir (a crash is 1 too: vy-monitors.service fails on both); 2
+usage; 3 refused (another runner holds the state's lock).
+"""
+from __future__ import annotations
+
+import argparse
+import calendar
+import fcntl
+import hashlib
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable
+
+SCHEMA = "research/monitors-{}/v1"
+STAMP = "%Y-%m-%dT%H:%M:%SZ"
+ALERTS = "/workspace/monitoring/alerts"
+STATE = "/workspace/monitoring/monitors/state.json"
+LOCAL = Path.home() / ".research" / "monitors"
+WEBHOOK_ENV = "VY_MONITORS_SLACK_WEBHOOK"
+POSTER = "vy-monitors"
+SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+NICE = ["nice", "-n", "19", "ionice", "-c3"]
+SKIPPED = "vy-monitors: skipped:"
+FILL_STATUS = "/workspace/pouw/fill/status.txt"
+WINDOWS = "/workspace/pouw/fill/windows"
+QUIET = "timed False, window waiting False"      # what every node-2 guard on main requires (dispatch.n2_room, write_probe)
+FILL_GO_S = 60                                   # the guard's limit; fill_runner rewrites its status every 10 s (POLL_S)
+FILL_FRESH_S = 300                               # fill-status-n2's: older, the fill runner has stopped
+UNWATCHED_S = 2 * 3600                           # node 2 refusing that long past any booked window: fill-status-n2's `unwatched`
+# The status's first field must be a time, at most FILL_GO_S old on node 2's clock; a refusal prints `SKIPPED <node 2's now>
+# <age, or - without a time> <status>` and exits.
+N2_GUARD = (f'ok=0; s=$(head -n 1 {FILL_STATUS} 2>/dev/null); n=$(date +%s); t=${{s%% *}}; a=-; '
+            'case "$t" in 20[0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]Z) '
+            'a=$(( n - $(date -d "$t" +%s 2>/dev/null || echo 0) ));; esac; '
+            f'case "$a" in -*) ;; *) case "$s" in *"{QUIET}"*) [ "$a" -gt {FILL_GO_S} ] || ok=1;; esac;; esac; '
+            f'[ "$ok" = 1 ] || {{ printf "%s %s %s %s\\n" "{SKIPPED}" "$n" "$a" "$s"; exit 0; }}; ')
+N2_S = 90                                        # node 2's one session per pass, local; node 2's `timeout` ends it 10 s sooner
+PASS_S = 180                                     # a node pass's deadline, well inside vy-monitors.service's TimeoutStartSec
+HANDLES = ("infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console")
+EVENTS_KEEP_S = 14 * 86400
+RETRY_KEEP_S = 86400
+
+
+class Skip(Exception):
+    """The check can't look now, by design (node 2 in a timed window): nothing opens or clears. `unread`: the skip isn't a read
+    (node 2 refused it), so the monitor's input stays as late as its last read."""
+
+    def __init__(self, why: str = "", *, unread: bool = False):
+        super().__init__(why)
+        self.unread = unread
+
+
+class Late(Skip):
+    """The pass's deadline came first: the check is still due, and runs next pass."""
+
+
+class Refused(Skip):
+    """Node 2's guard refused: its fill status `status`, `age` s old on node 2's clock `now` (None: it has no time)."""
+
+    def __init__(self, status: str, now: float, age: float | None):
+        super().__init__(refusal(status, age), unread=True)
+        self.status, self.now, self.age = status, now, age
+
+
+def refusal(status: str, age: float | None) -> str:
+    if not status:
+        return "node 2 has no fill status"
+    if QUIET not in status:
+        return f"node 2 isn't quiet: {status[:160]}"
+    if age is None:
+        return f"node 2's fill status has no time: {status[:160]}"
+    return f"node 2's fill status is {-age:.0f} s ahead of its clock" if age < 0 else f"node 2's fill status is {age:.0f} s old"
+
+
+@dataclass(frozen=True)
+class Finding:
+    key: str
+    text: str
+    owners: tuple[str, ...] = ()        # default: the monitor's owner
+    severity: str | None = None         # default: the monitor's
+    cleared: str | None = None          # what its clear says (default: "Cleared:" and the alert's first line)
+    for_s: float | None = None          # default: the monitor's
+
+
+@dataclass(frozen=True)
+class Monitor:
+    id: str
+    owner: str
+    severity: str
+    where: str
+    check: Callable[["Ctx"], list[Finding]]
+    action: str
+    every_s: float = 60
+    for_s: float = 0
+    clear_s: float = 0
+    events: bool = False
+    unread_s: float = 1800
+    n2: str | None = None               # the part of node 2's session it reads (n2_parts)
+
+    @property
+    def doc(self) -> str:
+        return " ".join((self.check.__doc__ or "").split())
+
+
+@dataclass
+class N2Read:
+    """A pass's session on node 2: the fill status it found, node 2's clock, and each part's result (`rc`, `out`, `err`, or
+    `error`). `refused`: the guard refused, and nothing ran; `stopped`: the status a part found instead of a quiet one."""
+    status: str
+    now: float
+    parts: dict = field(default_factory=dict)
+    refused: Refused | None = None
+    stopped: str | None = None
+
+
+@dataclass
+class Pass:
+    """What one pass's checks share: the node-2 parts its due checks read, node 2's state kept between passes (`read_t`, the
+    booked `windows`), its one session on node 2 (an N2Read, or what opening it raised), and its deadline on `clock`."""
+    n2_parts: frozenset[str] = frozenset()
+    n2_state: dict = field(default_factory=dict)
+    n2: N2Read | Exception | None = None
+    deadline: float = float("inf")
+    clock: Callable[[], float] = time.monotonic
+
+    def left(self) -> float:
+        return self.deadline - self.clock()
+
+
+@dataclass
+class Ctx:
+    """What a check reads through: the clock, its own memo (kept in the state between passes), what its pass shares, commands,
+    and files under `root`."""
+    now: float
+    memo: dict = field(default_factory=dict)
+    run: Callable[..., subprocess.CompletedProcess] = subprocess.run
+    root: Path = Path("/")
+    n2_host: str = "vy-n2"
+    node1: str = "n1"
+    node_state: str = STATE
+    machines: tuple[str, ...] = ("vy-nebius-1", "vy-nebius-2")
+    research: tuple[str, ...] = (sys.executable, "-m", "research")
+    pass_: Pass = field(default_factory=Pass)
+
+    def path(self, p: str) -> Path:
+        return self.root / p.lstrip("/")
+
+    def bound(self, timeout: float) -> float:
+        """`timeout`, cut to what is left of the pass; Late when that is under 5 s."""
+        left = self.pass_.left()
+        if left < 5:
+            raise Late("the pass's deadline came first")
+        return min(timeout, left)
+
+    def sh(self, argv: list[str], *, input: str | None = None, timeout: float = 60, ok: tuple[int, ...] = (0,)) -> str:
+        r = self.run(argv, input=input, capture_output=True, text=True, timeout=self.bound(timeout))
+        if r.returncode not in ok:
+            what = argv[-1] if argv[0] == "ssh" else " ".join(argv[:4])
+            raise RuntimeError(f"`{what[-120:]}` exited {r.returncode}: {(r.stderr or r.stdout or '').strip()[-300:]}")
+        return r.stdout
+
+    def n2(self, script: str, *, input: str | None = None, timeout: float = N2_S) -> str:
+        """`script` on node 2 behind N2_GUARD in the same ssh call, under `timeout` and niced there too; Refused when the guard
+        refuses."""
+        timeout = self.bound(timeout)
+        bound = f"timeout -k 5 {max(5, int(timeout) - 10)} {' '.join(NICE)} sh -c {shlex.quote(script)}"
+        out = self.sh([*SSH, self.n2_host, N2_GUARD + bound], input=input, timeout=timeout)
+        if out.startswith(SKIPPED):
+            raise refused(out, self.now)
+        return out
+
+    def node2(self, *want: str) -> N2Read:
+        """This pass's one session on node 2. The first check that asks opens it, reading every part the pass's due checks
+        need (and `want`); the others reuse it. A Skip, and no login, while a window booked on node 2 runs."""
+        p = self.pass_
+        if p.n2 is None:
+            try:
+                p.n2 = self._session(p.n2_parts | set(want))
+            except Exception as e:  # noqa: BLE001  (each node-2 check gets it)
+                p.n2 = e
+        if isinstance(p.n2, Exception):
+            raise p.n2
+        return p.n2
+
+    def _session(self, names: set[str]) -> N2Read:
+        st = self.pass_.n2_state
+        for start, end, who in st.get("windows") or []:
+            if start <= self.now < end:
+                raise Skip(f"node 2 is in a booked window until {iso(end)[11:16]}Z ({who or 'no name'}): no login until it ends")
+        t = self.bound(N2_S)
+        if t < 30:
+            raise Late(f"{t:.0f} s of the pass is left, too little for node 2's session")
+        try:
+            out = self.n2("python3 -", input=n2_driver(n2_parts(names), t - 25), timeout=t)
+        except Refused as e:
+            return N2Read(e.status, e.now, refused=e)
+        try:
+            r = json.loads(out)
+        except ValueError:
+            raise RuntimeError(f"node 2's session printed no reading: {out.strip()[-200:]!r}") from None
+        st.update(read_t=self.now, windows=[w for w in booked(r.get("windows") or "") if w[1] > self.now])
+        return N2Read(r.get("status") or "", float(r.get("now") or self.now), r.get("parts") or {}, stopped=r.get("stopped"))
+
+    def n2_part(self, name: str) -> str:
+        """The output of part `name` of this pass's node-2 session: a Skip when the session didn't get to run it."""
+        r = self.node2(name)
+        if r.refused:
+            raise r.refused
+        got = r.parts.get(name)
+        if got is None and r.stopped is not None:
+            raise Skip(f"node 2 stopped being quiet during the session: {r.stopped[:160]}", unread=True)
+        if got is None:
+            raise RuntimeError(f"node 2's session didn't read `{name}`: its monitor doesn't name it (Monitor.n2)")
+        if "error" in got:
+            raise RuntimeError(f"node 2's {name}: {got['error']}")
+        if got.get("rc"):
+            raise RuntimeError(f"node 2's {name} exited {got['rc']}: {(got.get('err') or got.get('out') or '').strip()[-300:]}")
+        return got.get("out") or ""
+
+
+def refused(out: str, now: float) -> Refused:
+    """N2_GUARD's refusal line (`now` and the age from the status's own time, when the line doesn't carry node 2's)."""
+    line = out.strip().splitlines()[0]
+    if m := re.match(rf"{re.escape(SKIPPED)} (\d+) (-?\d+|-) ?(.*)", line):
+        return Refused(m[3], float(m[1]), None if m[2] == "-" else float(m[2]))
+    status = line[len(SKIPPED):].strip()
+    try:
+        return Refused(status, now, now - epoch(status.split()[0]))
+    except (IndexError, ValueError):
+        return Refused(status, now, None)
+
+
+def booked(text: str) -> list[list]:
+    """The windows booked in node 2's fill/windows (`2026-10-01T10:00Z 30 # who`, read as dispatch.booked does): [start, end,
+    who], epoch seconds."""
+    out = []
+    for line in text.splitlines():
+        body, _, who = line.partition("#")
+        f = body.split()
+        try:
+            s = datetime.fromisoformat(f[0])
+            s = (s if s.tzinfo else s.replace(tzinfo=timezone.utc)).timestamp()
+            out.append([s, s + 60 * float(f[1] if len(f) > 1 else 30), who.strip()[:80]])
+        except (IndexError, ValueError):
+            continue
+    return out
+
+
+# Node 2's session, after the guard: `python3 -` runs this, with __ARGS__ the parts to read ({name: [argv, stdin]}) and its limits.
+N2_DRIVER = r'''
+import calendar, json, subprocess, time
+A = json.loads(__ARGS__)
+END = time.time() + A["budget"]
+
+
+def quiet():
+    """The fill status, and whether it still lets a read run (the guard's rule, again before each part)."""
+    try:
+        with open(A["status"], errors="replace") as f:
+            s = f.readline().strip()
+    except OSError:
+        return "", False
+    try:
+        age = time.time() - calendar.timegm(time.strptime(s.split()[0], "%Y-%m-%dT%H:%M:%SZ"))
+    except (IndexError, ValueError):
+        return s, False
+    return s, A["quiet"] in s and 0 <= age <= A["go_s"]
+
+
+out = {"status": quiet()[0], "now": time.time(), "parts": {}}
+try:
+    with open(A["windows"], errors="replace") as f:
+        out["windows"] = f.read()[-16384:]
+except OSError:
+    out["windows"] = None
+for name, (argv, stdin) in A["parts"].items():
+    s, ok = quiet()
+    if not ok:
+        out["stopped"] = s
+        break
+    left = END - time.time()
+    if left < 1:
+        out["parts"][name] = {"error": "the session ran out of time first"}
+        continue
+    try:
+        r = subprocess.run(argv, input=stdin, capture_output=True, text=True, timeout=left)
+        out["parts"][name] = {"rc": r.returncode, "out": r.stdout, "err": r.stderr[-300:]}
+    except subprocess.TimeoutExpired:
+        out["parts"][name] = {"error": "timed out after %.0f s" % left}
+print(json.dumps(out))
+'''
+
+
+def n2_driver(parts: dict, budget: float, *, status: str = FILL_STATUS, windows: str = WINDOWS, go_s: float = FILL_GO_S) -> str:
+    args = {"parts": parts, "budget": budget, "status": status, "windows": windows, "quiet": QUIET, "go_s": go_s}
+    return N2_DRIVER.replace("__ARGS__", repr(json.dumps(args)))
+
+
+def iso(t: float) -> str:
+    return time.strftime(STAMP, time.gmtime(t))
+
+
+def epoch(s: str) -> float:
+    return float(calendar.timegm(time.strptime(s, STAMP)))
+
+
+def fields(line: str) -> dict[str, str]:
+    """gpu-lease's owner and wait lines: `k=v ...`, then `cmd=` to the end."""
+    head = line.split(" cmd=", 1)
+    f = dict(kv.split("=", 1) for kv in head[0].split() if "=" in kv)
+    if len(head) == 2:
+        f["cmd"] = head[1]
+    return f
+
+
+def tail(path: Path, nbytes: int = 1 << 18) -> list[str]:
+    with open(path, "rb") as f:
+        f.seek(0, 2)
+        size = f.tell()
+        f.seek(max(0, size - nbytes))
+        lines = f.read().decode(errors="replace").splitlines()
+    return lines[1:] if size > nbytes else lines
+
+
+def gpu_list(spec: str) -> set[int]:
+    out: set[int] = set()
+    for part in spec.split(","):
+        a, _, b = part.strip().partition("-")
+        if a.isdigit():
+            out.update(range(int(a), int(b) + 1) if b.isdigit() else {int(a)})
+    return out
+
+
+# ---- the watermarks (the resource steward's probe, pods/nebius/resource_probe.py) ----------------------------------------------
+
+def _probe():
+    from .pods.nebius import resource_probe
+
+    return resource_probe
+
+
+def norm(line: str) -> str:
+    """The resource steward's dedupe key for a breach line (its tick.sh): numbers become `#`, a GPU's index stays, and the
+    custody backlog's `(oldest <run ids>)` goes, so the backlog keeps its key while its oldest runs change."""
+    line = re.sub(r"\s*\(oldest [^)]*\)$", "", line)
+    return re.sub(r"(^|[^<0-9])[0-9][0-9.,]*", r"\1#", re.sub(r"GPU ([0-9]+)", r"GPU<\1>", line))
+
+
+def watermarks(node: str) -> Callable[[Ctx], list[Finding]]:
+    name = {"n1": "Node 1", "n2": "Node 2"}[node]
+
+    def check(ctx: Ctx) -> list[Finding]:
+        rp = _probe()
+        if node == "n1":
+            out = ctx.sh([*NICE, sys.executable, rp.__file__, "--node", "n1", "--reading"], timeout=150)
+        else:
+            out = ctx.n2_part("probe")
+        r = json.loads(out)
+        lim = {**rp.COMMON, **rp.LIMITS[node]}
+        base = ctx.memo.get("rate_base")
+        lines = rp.evaluate(r, base, lim)
+        ctx.memo["rate_base"] = rp.next_base(r, base, lim)
+        found = [Finding(norm(ln), f"*{name}: {ln}*", severity="page" if ln.startswith("HARD") else None) for ln in lines]
+        return found + [Finding("error:" + e.split(":")[0], f"*{name}'s resource probe can't read {e.split(':')[0]}*: {e}",
+                                for_s=1200) for e in r.get("errors") or []]
+
+    check.__doc__ = (f"{name}'s disk, inode, RAM, replay-RAM, idle-GPU-memory and custody-backlog watermarks (resource_probe.py "
+                     "--reading; the inode rate's base reading kept between passes). A HARD line pages.")
+    return check
+
+
+# ---- node 1's lease pools and dispatcher (pods/nebius/n1_alerts.py) -------------------------------------------------------------
+
+def stalls_n1(ctx: Ctx) -> list[Finding]:
+    """Node 1's lease pool blocked, or its dispatcher failing its last 3 ticks or not ticking for 10 minutes (n1_alerts.py's
+    incidents, each to its owner)."""
+    from .pods.nebius import n1_alerts
+
+    snap = json.loads(ctx.sh([sys.executable, "-"], input=n1_alerts.REMOTE, timeout=60))
+    return [Finding(k, text, owners=tuple(who), cleared=cleared) for k, (who, text, cleared) in n1_alerts.incidents(snap).items()]
+
+
+# ---- the held-idle panel (node 1's held-idle-hourly.jsonl, which verity-console.service writes) ---------------------------------
+
+HELD_IDLE = "/workspace/usage/held-idle-hourly.jsonl"
+HELD_IDLE_RECENT_S = 86400      # well inside EVENTS_KEEP_S, so an hour the state has forgotten is never posted again
+
+
+def _hour_end(r: dict) -> float | None:
+    if not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:00Z", str(r.get("hour"))):
+        return None
+    return calendar.timegm(time.strptime(r["hour"], "%Y-%m-%dT%H:00Z")) + 3600
+
+
+def _held_rows(ctx: Ctx) -> list[dict]:
+    try:
+        lines = tail(ctx.path(HELD_IDLE))[-400:]
+    except FileNotFoundError:
+        return []
+    rows = []
+    for ln in lines:
+        try:
+            r = json.loads(ln)
+        except ValueError:
+            continue
+        if isinstance(r, dict) and r.get("hour"):
+            rows.append(r)
+    return rows
+
+
+def held_idle(ctx: Ctx) -> list[Finding]:
+    """A lane above its held-idle target whose share fell by less than 5 points from the hour before: once per hour completed
+    in the last day, node and lane, to that lane."""
+    out = []
+    for r in _held_rows(ctx):
+        t, pct, ch, end = r.get("target_pct"), r.get("held_idle_pct"), r.get("change_pts"), _hour_end(r)
+        if end is None or ctx.now - end > HELD_IDLE_RECENT_S:
+            continue
+        if t is None or pct is None or pct <= t or (ch is not None and ch <= -5):
+            continue
+        lane = r.get("lane") or "?"
+        moved = "no reading for the hour before" if ch is None else f"{'+' if ch > 0 else ''}{ch} points from the hour before"
+        p = r.get("phases_gpu_h")
+        phases = (f"\nWhere the held time went, in GPU-hours: {p.get('leases')} Commit leases spent {p.get('engine.build')} in "
+                  f"engine.build, {p.get('prep.warmup_instrumented')} in prep.warmup_instrumented, "
+                  f"{p.get('validate.weights_of_record_digests')} in validate.weights_of_record_digests, {p.get('work')} in work "
+                  f"and {p.get('other')} elsewhere in the lease. {p.get('outside_leases')} was held outside any Commit lease."
+                  ) if isinstance(p, dict) else ""
+        out.append(Finding(f"{r['hour']}|{r.get('node')}|{lane}",
+                           f"*Held-idle alert, {r.get('node')}, {lane}, the {r['hour'][11:16]}Z hour:* {pct}% of "
+                           f"{r.get('held_gpu_h')} held GPU-hours were idle, against a target of {t}%. That's {moved}; above "
+                           f"the target, the rule is a drop of at least 5 points an hour.{phases}",
+                           owners=(lane,) if lane in HANDLES else ("infra",)))
+    return out
+
+
+def held_idle_stale(ctx: Ctx) -> list[Finding]:
+    """No completed hour in node 1's held-idle-hourly.jsonl for 70 minutes: the held-idle panel has stopped."""
+    ends = [e for e in map(_hour_end, _held_rows(ctx)) if e is not None]
+    late = ctx.now - max(ends, default=3600)
+    if late <= 70 * 60:
+        return []
+    last = f"the newest completed hour in it is {iso(max(ends) - 3600)[11:16]}Z" if ends else "it has no hour at all"
+    return [Finding("stale", f"*Held-idle panel: no reading for {late / 60:.0f} minutes*: {last} (node 1's `{HELD_IDLE}`).",
+                    cleared="*Cleared:* the held-idle panel has a new hour.")]
+
+
+# ---- a GPU idle while a waiter waits ----------------------------------------------------------------------------------------------
+
+POOLS = {"/run/gpu-lease": "proofs", "/run/gpu-lease-circuits": "circuits"}     # n1_alerts.POOLS
+POOL_DOC = "/workspace/usage/infra-pool-n1.json"
+LEASE_FRESH_S = 120
+KUEUE_HOLD = ((12, 10), (13, 30))                                               # dispatch.PACK_HOLD
+MIN_WAIT_S = 60
+
+
+def held_back(waiters: list[dict], usable: Callable[[dict], int], now: float) -> tuple[dict, float] | None:
+    """The oldest waiter, waiting at least MIN_WAIT_S, that the idle GPUs could serve now: (its wait record, seconds waited)."""
+    for w in waiters:
+        try:
+            waited = now - epoch(w["since"])
+        except (KeyError, ValueError):
+            continue
+        if waited >= MIN_WAIT_S and int(w.get("n") or 1) <= usable(w):
+            return w, waited
+    return None
+
+
+def idle_while_waiting_n1(ctx: Ctx) -> list[Finding]:
+    """A lease waiter on node 1 waits while GPUs it could take sit idle: free in its pool (a holder, no lease), or held by
+    nobody (class `free` in infra-pool-n1.json, so the pool could grow onto them). Opens after 5 minutes of that; not in the
+    daily Kueue hold (12:10-13:30Z), nor for a blocked pool (stalls-n1 has that)."""
+    g = time.gmtime(ctx.now)
+    if KUEUE_HOLD[0] <= (g.tm_hour, g.tm_min) < KUEUE_HOLD[1]:
+        raise Skip("node 1's daily Kueue hold")
+    unheld: list[int] = []
+    try:
+        doc = json.loads(ctx.path(POOL_DOC).read_text())
+        if ctx.now - epoch(doc["generated_at"]) <= 900:
+            unheld = sorted(x["index"] for x in doc["nodes"]["n1"]["gpus"] if x.get("class") == "free" and not x.get("holder"))
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    out = []
+    for d in POOLS:
+        p = ctx.path(d) / "n1-lease.json"
+        if not p.exists():
+            continue
+        s = json.loads(p.read_text())
+        name = s.get("pool_name") or d
+        age = ctx.now - epoch(s["t"])
+        if age > LEASE_FRESH_S:
+            out.append(Finding(f"{name}:stale", f"*Node 1's lease pool `{name}` (`{d}`) hasn't ticked for {age / 60:.0f} minutes*: "
+                               f"`{d}/n1-lease.json` is from {s['t']}, so its waiters get no new GPU.", for_s=300))
+            continue
+        if s.get("blocked"):
+            continue
+        pool_free = sorted(x["index"] for x in s.get("gpus") or [] if x.get("holder") and not x.get("lease") and not x.get("fence_pids"))
+        idle = sorted({*pool_free, *unheld})
+
+        def usable(w: dict) -> int:
+            return len(idle) if not w.get("on") else len(gpu_list(w["on"]) & set(idle))
+
+        hit = held_back(s.get("waiting") or [], usable, ctx.now)
+        if hit:
+            w, waited = hit
+            out.append(Finding(name, f"*Node 1: GPU{'s' if len(idle) > 1 else ''} {', '.join(map(str, idle))} idle while "
+                               f"{len(s.get('waiting') or [])} lease waiter(s) wait in pool `{name}`*: the oldest it could serve, "
+                               f"{w.get('who')} ({w.get('run') or 'no run'}, {w.get('n')} GPU), has waited {waited / 60:.0f} min. "
+                               f"Free in the pool: {pool_free or 'none'}; held by nobody: {unheld or 'none'}; pool of "
+                               f"{s.get('pool')}, mode {s.get('mode')}.", for_s=300))
+    return out
+
+
+N2_WAITERS = r'''
+import fcntl, glob, json, os
+out = []
+for f in sorted(glob.glob("/run/gpu-lease/wait.*")):
+    try:
+        fd = os.open(f, os.O_RDONLY)
+    except OSError:
+        continue
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            continue
+        except BlockingIOError:
+            pass
+        out.append(os.read(fd, 4096).decode(errors="replace").strip())
+    finally:
+        os.close(fd)
+print(json.dumps(out))
+'''
+
+
+def idle_while_waiting_n2(ctx: Ctx) -> list[Finding]:
+    """A gpu-lease waiter on node 2 waits while at least as many GPUs as it asks for are free (the fill runner's free count, in
+    the quiet status the session ran under; a dead waiter's file, which nobody holds locked, isn't a waiter). Opens after 5
+    minutes of that. A waiter pinned to some GPUs (`on=`) counts only when every GPU is free: the status says how many are free,
+    not which."""
+    waiters = [fields(w) for w in json.loads(ctx.n2_part("waiters"))]
+    st = ctx.node2().status
+    m = re.search(r"free GPUs (\d+)/(\d+)", st)
+    if not m:
+        raise RuntimeError(f"node 2's fill status has no free count: {st[:160]}")
+    free, n = int(m[1]), int(m[2])
+    hit = held_back(waiters, lambda w: free if not w.get("on") or free == n else 0, ctx.now)
+    if not hit:
+        return []
+    w, waited = hit
+    return [Finding("idle", f"*Node 2: {free} of {n} GPUs free while {len(waiters)} gpu-lease waiter(s) wait*: the oldest they "
+                    f"could serve, {w.get('who')} (pid {w.get('pid')}, {w.get('n')} GPU), has waited {waited / 60:.0f} min.",
+                    for_s=300)]
+
+
+def fill_status_n2(ctx: Ctx) -> list[Finding]:
+    """Node 2's fill status (as this pass's session found it, refused or not, on node 2's clock) is over 5 minutes old: its fill
+    runner has stopped, and no other monitor reads node 2 meanwhile (the guard needs a quiet status at most a minute old). Or
+    node 2 has refused every read for over 2 hours past the end of any window booked on it: a timed lease never released."""
+    r = ctx.node2()
+    if r.refused is None:
+        ctx.memo.pop("refused_since", None)
+    since = ctx.memo.setdefault("refused_since", ctx.now) if r.refused else None
+    line = r.status
+    try:
+        age = r.now - epoch(line.split()[0])
+    except (IndexError, ValueError):
+        raise RuntimeError(f"node 2's fill status doesn't start with its time: {line[:120]!r}") from None
+    if age > FILL_FRESH_S:
+        return [Finding("stale", f"*Node 2's fill status is {age / 60:.0f} minutes old* ({FILL_STATUS}: `{line[:160]}`), so the "
+                        "fill runner isn't ticking, and the node-2 monitors are skipped until it does.", for_s=300)]
+    ended = [end for _, end, _ in ctx.pass_.n2_state.get("windows") or [] if end <= ctx.now]
+    if since is None or ctx.now - max([since, *ended]) <= UNWATCHED_S:
+        return []
+    blind = ", ".join(m.id for m in MONITORS if m.n2)
+    return [Finding("unwatched", f"*Node 2 has refused every read since {iso(since)[11:16]}Z*, "
+                    f"{(ctx.now - since) / 3600:.1f} hours: {r.refused}. No window booked in {WINDOWS} covers the last "
+                    f"{UNWATCHED_S / 3600:.0f}, so {blind} see nothing; a timed window that long is itself the incident.",
+                    cleared="*Cleared:* node 2 lets the monitors read it again.")]
+
+
+# ---- a lease preempted within 60 s of its grant (gpu-lease's preempted.log; the cluster agent's evictions log the same) ----------
+
+PREEMPT_RE = re.compile(r"^(\S+Z) (SIG\w+) GPU (\d+) for pid (\d+) \(n=(\d+), who=([^)]*)\): (.*)$")
+PREEMPT_WINDOW_S = 1800
+PREEMPT_WITHIN_S = 60
+
+
+def fast_preemptions(lines: list[str], now: float) -> list[dict]:
+    """Each lease the log shows preempted within PREEMPT_WITHIN_S of its grant, in the last PREEMPT_WINDOW_S (once per lease)."""
+    out, seen = [], set()
+    for ln in lines:
+        m = PREEMPT_RE.match(ln.strip())
+        if not m:
+            continue
+        v = fields(m[7])
+        try:
+            t, since = epoch(m[1]), epoch(v["since"])
+        except (KeyError, ValueError):
+            continue
+        if now - t > PREEMPT_WINDOW_S or not 0 <= t - since <= PREEMPT_WITHIN_S or (v.get("pid"), m[3]) in seen:
+            continue
+        seen.add((v.get("pid"), m[3]))
+        out.append({"t": m[1], "gpu": int(m[3]), "by_pid": m[4], "by": m[6], "pid": v.get("pid"), "who": v.get("who"),
+                    "run": v.get("run"), "after_s": int(t - since)})
+    return out
+
+
+def _fast_finding(key: str, where: str, fast: list[dict]) -> Finding:
+    x = fast[-1]
+    return Finding(key, f"*{where}: {len(fast)} lease{'s' if len(fast) > 1 else ''} preempted within {PREEMPT_WITHIN_S} s of "
+                   f"{'their' if len(fast) > 1 else 'its'} grant in the last {PREEMPT_WINDOW_S // 60} minutes*. The newest: GPU "
+                   f"{x['gpu']}, pid {x['pid']} ({x['who']}, run {x['run']}), {x['after_s']} s after its grant, for pid "
+                   f"{x['by_pid']} ({x['by']}) at {x['t']}.")
+
+
+def fast_preempt_n1(ctx: Ctx) -> list[Finding]:
+    """A lease on node 1 preempted within 60 s of its grant, in the last 30 minutes (each pool's preempted.log): a waiter that
+    preempts the leases its own queue was just granted restarts that queue forever."""
+    out = []
+    for d in POOLS:
+        p = ctx.path(d) / "preempted.log"
+        if p.exists() and (fast := fast_preemptions(tail(p, 1 << 16), ctx.now)):
+            out.append(_fast_finding(d, f"Node 1 (`{d}`)", fast))
+    return out
+
+
+def fast_preempt_n2(ctx: Ctx) -> list[Finding]:
+    """A lease on node 2 preempted within 60 s of its grant, in the last 30 minutes (/run/gpu-lease/preempted.log)."""
+    fast = fast_preemptions(ctx.n2_part("preempted").splitlines()[1:], ctx.now)
+    return [_fast_finding("/run/gpu-lease", "Node 2", fast)] if fast else []
+
+
+# ---- failed systemd units --------------------------------------------------------------------------------------------------------
+
+EXPECTED_FAILED = {
+    "nvidia-fabricmanager.service": "both nodes' GPUs are PCIe, with no NVSwitch to manage, so it fails at every boot",
+}
+UNITS = "systemctl --failed --no-legend --plain; echo ---; systemctl --user --failed --no-legend --plain"
+
+
+def failed_units(text: str) -> list[tuple[str, str]]:
+    """(scope, unit) for each failed unit in UNITS' output (`system` before the `---`, `user` after), less EXPECTED_FAILED."""
+    out, scope = [], "system"
+    for ln in text.splitlines():
+        if ln.strip() == "---":
+            scope = "user"
+        elif ln.split() and ln.split()[0].lstrip("●* ") not in EXPECTED_FAILED:
+            out.append((scope, ln.split()[0].lstrip("●* ")))
+    return out
+
+
+def units(node: str) -> Callable[[Ctx], list[Finding]]:
+    name = {"n1": "Node 1", "n2": "Node 2"}[node]
+
+    def check(ctx: Ctx) -> list[Finding]:
+        if node == "n2":
+            text = ctx.n2_part("units")
+        else:
+            text = ctx.sh(["systemctl", "--failed", "--no-legend", "--plain"])
+            env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
+            r = ctx.run(["systemctl", "--user", "--failed", "--no-legend", "--plain"], capture_output=True, text=True,
+                        timeout=ctx.bound(30), env=env)
+            if r.returncode and "connect to bus" not in (r.stderr or ""):
+                raise RuntimeError(f"systemctl --user exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
+            text += "---\n" + (r.stdout if r.returncode == 0 else "")
+        return [Finding(f"{scope}:{u}", f"*{name}: {'the user unit' if scope == 'user' else 'unit'} `{u}` has failed*")
+                for scope, u in failed_units(text)]
+
+    check.__doc__ = (f"A failed systemd unit on {name.lower()}, system or research's user manager (`systemctl --failed`), less "
+                     "EXPECTED_FAILED: units that fail on this hardware by design, each with its reason.")
+    return check
+
+
+def n2_parts(names: set[str] | frozenset[str]) -> dict[str, list]:
+    """What node 2's session runs for each part a node-2 check reads (Monitor.n2): {name: [argv, stdin]}."""
+    every: dict[str, Callable[[], list]] = {
+        "probe": lambda: [["python3", "-", "--node", "n2", "--reading"], Path(_probe().__file__).read_text()],
+        "waiters": lambda: [["python3", "-"], N2_WAITERS],
+        "preempted": lambda: [["sh", "-c", "tail -c 65536 /run/gpu-lease/preempted.log 2>/dev/null || true"], None],
+        "units": lambda: [["sh", "-c", UNITS], None]}
+    return {n: every[n]() for n in sorted(names)}
+
+
+# ---- relay-side: GitHub, the evidence store, Slack, and node 1 itself -------------------------------------------------------------
+
+def deploy_drift(ctx: Ctx) -> list[Finding]:
+    """Files on the nodes that aren't main's, still run old code, or stray (`research deploy drift --json`; it fetches origin,
+    which the nodes can't): one incident per node and kind."""
+    from .pods.nebius.preflight_probe import findings
+
+    reps = json.loads(ctx.sh([*ctx.research, "deploy", "drift", "--json"], ok=(0, 1), timeout=900))
+    if bad := sorted(n for n, r in reps.items() if "error" in r):
+        raise RuntimeError(f"deploy drift can't read {', '.join(bad)}: {str(reps[bad[0]]['error'])[:200]}")
+    groups: dict[tuple[str, str], list[str]] = {}
+    for line in findings(reps):
+        n, kind, path = line.split(" ", 2)
+        groups.setdefault((n, kind), []).append(path)
+    return [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
+                    + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".") for (n, kind), ps in sorted(groups.items())]
+
+
+def unpreserved(ctx: Ctx) -> list[Finding]:
+    """Runs that ended over 30 minutes ago and aren't preserved on the remote, per machine (`research pods unpreserved MACHINE
+    --older-min 30 --json`)."""
+    out = []
+    for mach in ctx.machines:
+        r = ctx.run([*ctx.research, "pods", "unpreserved", mach, "--older-min", "30", "--json"], capture_output=True, text=True,
+                    timeout=ctx.bound(900))
+        if r.returncode == 2 and "unrecognized arguments" in (r.stderr or ""):
+            raise RuntimeError("`research pods unpreserved` here has no --older-min (the custody lane's "
+                               "cursor/node-custody-unit-558b adds it)")
+        if r.returncode not in (0, 1):
+            raise RuntimeError(f"research pods unpreserved {mach} exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
+        ids = [x if isinstance(x, str) else str(x.get("id") or x.get("attempt") or x) for x in json.loads(r.stdout).get("unpreserved") or []]
+        if ids:
+            out.append(Finding(mach, f"*{mach}: {len(ids)} run{'s' if len(ids) > 1 else ''} ended over 30 minutes ago and "
+                               f"{'are' if len(ids) > 1 else 'is'} not preserved on the remote*: {', '.join(ids[:3])}"
+                               + (f" and {len(ids) - 3} more" if len(ids) > 3 else "") + "."))
+    return out
+
+
+def asks(ctx: Ctx) -> list[Finding]:
+    """An ask in #agent-coordination with no 👀, reply, ✅ or ❌ after 2 hours (`research slack traffic --json`), to its owner."""
+    rep = json.loads(ctx.sh([*ctx.research, "slack", "traffic", "--json", "--hours", "24", "--stale-h", "2"], timeout=300))
+    out = []
+    for a in rep.get("unanswered") or []:
+        to = tuple(a.get("to") or ())
+        out.append(Finding(str(a["ts"]), f"*An ask by @{a.get('by') or '?'} to {' '.join('@' + t for t in to) or 'nobody'} has "
+                           f"had no 👀, reply, ✅ or ❌ for over 2 hours* (ts {a['ts']} in #agent-coordination, from "
+                           f"{iso(float(a['ts']))}).", owners=to or ("infra",),
+                           cleared="*Cleared:* that ask was answered, or is now over 24 hours old."))
+    return out
+
+
+def node_heartbeat(ctx: Ctx) -> list[Finding]:
+    """Node 1's monitor service hasn't finished a pass for 10 minutes (its state's `last_pass`), so no node-side monitor runs; or
+    it can't write its alert dir (the state's `sink_error`), so nothing it finds reaches the relay."""
+    out = ctx.sh([*SSH, ctx.node1, f"python3 -c \"import json, os; p = '{ctx.node_state}'; "
+                  "s = json.load(open(p)) if os.path.exists(p) else None; print('missing' if s is None else s.get('last_pass', 0)); "
+                  "print(json.dumps((s or {}).get('sink_error')))\""]).splitlines()
+    last, sink = (out[0].strip() if out else ""), (json.loads(out[1]) if len(out) > 1 else None)
+    found = []
+    age = None if last == "missing" else ctx.now - float(last or 0)
+    if age is None or age > 600:
+        when = "have never finished a pass" if age is None else f"haven't run for {age / 60:.0f} minutes"
+        found.append(Finding("stale", f"*Node 1's monitors {when}* (`{ctx.node_state}`), so nothing watches node 1's or node 2's "
+                             "invariants.", cleared="*Cleared:* node 1's monitors run again."))
+    if sink:
+        found.append(Finding("sink", f"*Node 1's monitors can't write their alert dir*, so nothing they find reaches Slack: {sink}",
+                             cleared="*Cleared:* node 1's monitors write their alert dir again."))
+    return found
+
+
+# ---- the registry ---------------------------------------------------------------------------------------------------------------
+
+RETENTION = ("Free space by the retention policy: `research retention report` on the node lists what is recorded and what nobody "
+             "owns; `research retention gc --apply` deletes only what records allow; ask the owner about anything else. A HARD "
+             "line means no new check starts there.")
+FAST = ("Read the lines in preempted.log: a preemptible waiter that preempts leases its own queue was just granted (the same "
+        "`who`) restarts that queue forever. Hold its submitter, or run its jobs without --preemptible.")
+UNITS_ACTION = ("`systemctl status UNIT` and `journalctl -u UNIT -n 50` on the node (`--user` for a user unit); fix it and "
+                "`systemctl reset-failed UNIT`, or, if it fails on this hardware by design, add it to EXPECTED_FAILED in "
+                "research/monitors.py with the reason.")
+
+MONITORS: list[Monitor] = [
+    Monitor("disk-n1", "infra", "warn", "node", watermarks("n1"), RETENTION, every_s=600, clear_s=1800),
+    Monitor("disk-n2", "infra", "warn", "node", watermarks("n2"), RETENTION, every_s=600, clear_s=1800, n2="probe"),
+    Monitor("stalls-n1", "infra", "page", "node", stalls_n1,
+            "A blocked pool: stop the process its `blocked` file names (or have its owner stop it), then remove the file. A "
+            "dispatcher that fails or doesn't tick: read its pane and loop.log, fix the cause, restart it in tmux "
+            "`node1-dispatch`.", unread_s=600),
+    Monitor("idle-while-waiting-n1", "infra", "warn", "node", idle_while_waiting_n1,
+            "Why isn't the waiter granted? `cat /run/gpu-lease*/n1-lease.json` (mode, pool, waiting), the pool's cap "
+            "(VY_POOL_MAX) and its queue's quota (n1_lease.py's grow rule), and the cluster agent's grants when the brain is on. "
+            "A GPU nobody holds while lease waiters wait means the pool can't grow onto it: raise the cap or quota, or move the "
+            "waiters."),
+    Monitor("idle-while-waiting-n2", "infra", "warn", "node", idle_while_waiting_n2,
+            "Read node 2's fill status and the wait files in /run/gpu-lease; while the cluster agent holds agent.lock, it "
+            "grants: see its log. A waiter pinned (`on=`) to a busy GPU waits by design.", n2="waiters"),
+    Monitor("fill-status-n2", "infra", "warn", "node", fill_status_n2,
+            "Stale: restart node 2's fill runner (tmux `pouw-infra-fill`) after reading why it stopped; until its status is "
+            "fresh, no monitor reads node 2. Unwatched: find the lease holding `timed` (`/run/gpu-lease` on node 2) and the "
+            "window it belongs to; ask its owner to end it, or release it once it is dead."),
+    Monitor("fast-preempt-n1", "infra", "warn", "node", fast_preempt_n1, FAST),
+    Monitor("fast-preempt-n2", "infra", "warn", "node", fast_preempt_n2, FAST, n2="preempted"),
+    Monitor("units-n1", "infra", "warn", "node", units("n1"), UNITS_ACTION, every_s=300),
+    Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300, n2="units"),
+    Monitor("held-idle", "infra", "warn", "node", held_idle,
+            "Your held GPUs sat idle above your target: release GPUs between phases, or lease for less. The `held-idle-hourly` "
+            "panel on the live console says where the time went.", every_s=300, events=True),
+    Monitor("held-idle-stale", "infra", "warn", "node", held_idle_stale,
+            "Check `verity-console.service` and its timer on node 1 (`journalctl -u verity-console -n 50`).", every_s=300),
+    Monitor("drift", "infra", "warn", "relay", deploy_drift,
+            "`research deploy drift --node N` for the detail; install main's version (`research deploy install N --by WHO "
+            "PATH`), restart what runs old code, or move strays to the attic (`research deploy attic N PATH`).",
+            every_s=3600, unread_s=4 * 3600),
+    Monitor("unpreserved", "infra", "warn", "relay", unpreserved,
+            "`research pods unpreserved MACHINE` lists them and `research data preserved RUN` says why each isn't preserved: "
+            "push them, or fix the custody service that should have.", every_s=1800, unread_s=4 * 3600),
+    Monitor("asks", "infra", "warn", "relay", asks,
+            "Pick the ask up (👀), answer it, or decline it with a reason: `research slack pickup|done|decline --thread TS`.",
+            every_s=900, unread_s=3 * 3600),
+    Monitor("node-heartbeat", "infra", "page", "relay", node_heartbeat,
+            "`ssh n1 systemctl status vy-monitors.timer vy-monitors.service` and `ssh n1 journalctl -u vy-monitors -n 50`; for "
+            "an alert dir that takes no writes, its disk and owner (`df` and `ls -ld` on node 1).",
+            every_s=120, unread_s=600),
+]
+BY_ID = {m.id: m for m in MONITORS}
+
+
+# ---- sinks ------------------------------------------------------------------------------------------------------------------------
+
+def _slug(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")[:48] or "alert"
+
+
+def title(text: str) -> str:
+    return re.sub(r"[*_`<>]", "", text.splitlines()[0] if text else "")[:160]
+
+
+def esc(text: str) -> str:
+    """`text` for Slack: what a finding quotes (a lease's `who=<!channel>`) can't mention anyone or make a link."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def note(ev: dict, now: float) -> tuple[str, str]:
+    """An open as alert_sink.py's note: (file name, markdown), the lane contract's front matter plus the monitor's own fields."""
+    name = f"{time.strftime('%Y%m%dT%H%MZ', time.gmtime(now))}-alert-{_slug(ev['monitor'])}-{hashlib.sha256(ev['key'].encode()).hexdigest()[:8]}.md"
+    lines = ["---", f"id: {name[:-3]}", "campaign: nebius-monitoring", "lane: infra", "kind: finding", "status: open",
+             f"tags: [{ev['severity']}]", "repo: danielreuter/verity", f"origin: {ev['by']} (research monitors, research/monitors.py)",
+             f"monitor: {ev['monitor']}", f"key: {json.dumps(ev['key'])}", f"owners: [{', '.join(ev['owners'])}]",
+             f"severity: {ev['severity']}", "---", "", f"# {title(ev['text'])}", "", ev["text"], "", f"What to do: {ev['action']}", ""]
+    return name, "\n".join(lines)
+
+
+class AlertDir:
+    """An alert dir: monitors.jsonl, and the outbox's notes. A pass killed after writing an event but before saving its state
+    writes it again next pass, so `write` leaves out what monitors.jsonl's tail already has."""
+
+    def __init__(self, path: Path):
+        self.path = Path(path)
+
+    def check(self) -> None:
+        """OSError unless the alert dir takes writes."""
+        (self.path / "outbox").mkdir(parents=True, exist_ok=True)
+        open(self.path / "monitors.jsonl", "a").close()
+
+    def written(self, ev: dict) -> bool:
+        """Whether monitors.jsonl's tail has `ev` already: an open or clear as its key's last, or the event itself."""
+        try:
+            lines = tail(self.path / "monitors.jsonl")
+        except FileNotFoundError:
+            return False
+        mark, last = json.dumps(ev["key"]), None
+        for ln in lines:
+            if mark in ln and (e := _event(ln)).get("key") == ev["key"]:
+                if ev["event"] == e.get("event") == "event":
+                    return True
+                last = e.get("event")
+        return ev["event"] in ("open", "clear") and last == ev["event"]
+
+    def write(self, ev: dict, now: float) -> bool:
+        """Append `ev` (an open with its note); False when monitors.jsonl has it already."""
+        if self.written(ev):
+            return False
+        if ev["event"] != "clear":
+            name, text = note(ev, now)
+            out = self.path / "outbox" / name
+            out.parent.mkdir(parents=True, exist_ok=True)
+            tmp = out.with_name(out.name + ".tmp")
+            tmp.write_text(text)
+            tmp.replace(out)
+            ev["note"] = name
+        with open(self.path / "monitors.jsonl", "a") as f:
+            f.write(json.dumps(ev) + "\n")
+        return True
+
+
+def message(ev: dict, tag: Callable[[str], str] = lambda h: "@" + h) -> str:
+    """An event as one Slack post: the owners tagged, the alert, what to do (all but the tags escaped)."""
+    if ev["event"] == "clear":
+        return esc(ev["text"])
+    sev = "[page] " if ev["severity"] == "page" else ""
+    return (f"{' '.join(tag(o) for o in ev['owners'])} {sev}{esc(ev['text'])}\n_What to do:_ {esc(ev['action'])}\n"
+            f"_monitor `{esc(ev['monitor'])}`, {esc(ev['by'])}_")
+
+
+def webhook_post(url: str, text: str) -> None:
+    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(), headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        r.read()
+
+
+def _why(e: Exception) -> str:
+    """A webhook failure, without the URL a message might carry."""
+    return f"HTTP {e.code}" if isinstance(e, urllib.error.HTTPError) else type(e).__name__
+
+
+# ---- the runner -----------------------------------------------------------------------------------------------------------------
+
+def new_state() -> dict:
+    return {"schema": SCHEMA.format("state"), "open": {}, "pending": {}, "events": {}, "monitors": {}, "retry": [], "node2": {}}
+
+
+def step(state: dict, monitors: list[Monitor], ctx_for: Callable[[dict], Ctx], now: float, sink: AlertDir, *, by: str,
+         webhook: str | None = None, post: Callable[[str, str], None] = webhook_post, force: bool = False,
+         checkpoint: Callable[[], None] | None = None, pass_s: float | None = PASS_S,
+         clock: Callable[[], float] = time.monotonic) -> list[dict]:
+    """One pass: each due monitor's check, its incidents opened and cleared through `sink` (and `webhook`), `checkpoint()` after
+    each. A check still due at the pass's deadline (`pass_s` on `clock`) is Late and runs next pass. Returns the events."""
+    for k, v in new_state().items():
+        state.setdefault(k, v)
+    seen = state["events"]
+    emitted: list[dict] = []
+
+    def emit(m: Monitor, kind: str, key: str, f: Finding | None, o: dict | None = None) -> bool:
+        ev = {"schema": SCHEMA.format("event"), "event": kind, "t": iso(now), "monitor": m.id, "key": key, "by": by,
+              "owners": list(f.owners if f and f.owners else (o or {}).get("owners") or (m.owner,)),
+              "severity": (f.severity if f else None) or (o or {}).get("severity") or m.severity,
+              "text": f.text if f else o["cleared"], "action": m.action, "webhook": bool(webhook)}
+        if o:
+            ev["since"] = o["since"]
+        try:
+            fresh = sink.write(ev, now)
+        except OSError as e:
+            state["sink_error"] = f"{iso(now)} {type(e).__name__}: {e}"[:300]
+            return False
+        state.pop("sink_error", None)
+        if fresh and webhook:
+            state["retry"].append({"t": now, "text": message(ev)})
+        if fresh:
+            emitted.append(ev)
+        return True
+
+    try:
+        sink.check()
+        state.pop("sink_error", None)
+    except OSError as e:
+        state["sink_error"] = f"{iso(now)} {type(e).__name__}: {e}"[:300]
+    due = [m for m in monitors if force or now - state["monitors"].get(m.id, {}).get("last_run", 0) >= m.every_s - 5]
+    shared = Pass(n2_parts=frozenset(m.n2 for m in due if m.n2), n2_state=state["node2"], clock=clock,
+                  deadline=clock() + (pass_s if pass_s is not None else float("inf")))
+    for m in due:
+        judge(m, state, shared, ctx_for, now, emit)
+        if checkpoint:
+            checkpoint()
+    for k in [k for k, t in seen.items() if now - t > EVENTS_KEEP_S]:
+        del seen[k]
+    if webhook:
+        left = []
+        for i, r in enumerate(state["retry"]):
+            try:
+                post(webhook, r["text"])
+            except Exception as e:  # noqa: BLE001
+                state["webhook_error"] = f"{iso(now)} {_why(e)}"
+                left = [x for x in state["retry"][i:] if now - x["t"] < RETRY_KEEP_S]
+                break
+        else:
+            state.pop("webhook_error", None)
+        state["retry"] = left
+    state["last_pass"] = now
+    return emitted
+
+
+def judge(m: Monitor, state: dict, shared: Pass, ctx_for: Callable[[dict], Ctx], now: float,
+          emit: Callable[..., bool]) -> None:
+    """One monitor's part of a pass: run its check, then open, clear or post what it found."""
+    opened, pending, seen = state["open"], state["pending"], state["events"]
+    st = state["monitors"].setdefault(m.id, {"since": now})
+    ran = st.get("last_run")
+    st["last_run"] = now
+    try:
+        if shared.left() < 5:
+            raise Late("the pass's deadline came first")
+        ctx = ctx_for(st.setdefault("memo", {}))
+        ctx.pass_ = shared
+        found: dict[str, Finding | None] = {f.key: f for f in m.check(ctx)}
+        st.update(last_ok=now, error=None, skipped=None)
+        ok = True
+    except Late as e:
+        st["skipped"] = str(e)[:300]
+        if ran is None:
+            del st["last_run"]
+        else:
+            st["last_run"] = ran
+        return
+    except Skip as e:
+        st["skipped"] = str(e)[:300]
+        if not e.unread:
+            st["last_ok"] = now
+        return
+    except Exception as e:  # noqa: BLE001  (an input that can't be read is the monitor's own finding, in time)
+        st["error"] = f"{type(e).__name__}: {e}"[:500]
+        late = now - st.get("last_ok", st["since"])
+        if late < m.unread_s:
+            return
+        ok = False
+        found = {k.split("|", 1)[1]: None for k, o in opened.items() if o["monitor"] == m.id}
+        found["unreadable"] = Finding("unreadable", f"*Monitor `{m.id}` can't read its input, for {late / 60:.0f} minutes "
+                                      f"now*: {st['error']}", owners=("infra",), severity="warn", for_s=0,
+                                      cleared=f"*Cleared:* monitor `{m.id}` reads its input again.")
+    if m.events and ok:
+        new = [f for f in found.values() if f and f"{m.id}|{f.key}" not in seen]
+        if st.get("primed"):
+            for f in new:
+                if emit(m, "event", f"{m.id}|{f.key}", f):
+                    seen[f"{m.id}|{f.key}"] = now
+        else:
+            seen.update({f"{m.id}|{f.key}": now for f in new})
+            st["primed"] = True
+        found = {}
+    for k, f in found.items():
+        key = f"{m.id}|{k}"
+        if key in opened:
+            opened[key].pop("absent_since", None)
+            continue
+        if f is None:
+            continue
+        first = pending.setdefault(key, now)
+        if now - first >= (f.for_s if f.for_s is not None else m.for_s) and emit(m, "open", key, f):
+            opened[key] = {"monitor": m.id, "since": iso(now), "owners": list(f.owners or (m.owner,)),
+                           "severity": f.severity or m.severity, "text": f.text,
+                           "cleared": f.cleared or f"*Cleared:* {title(f.text)}"}
+            del pending[key]
+    for key in [k for k in pending if k.split("|", 1)[0] == m.id and k.split("|", 1)[1] not in found]:
+        del pending[key]
+    for key in [k for k, o in opened.items() if o["monitor"] == m.id and k.split("|", 1)[1] not in found]:
+        o = opened[key]
+        o.setdefault("absent_since", now)
+        if now - o["absent_since"] >= (0 if key.endswith("|unreadable") else m.clear_s) and emit(m, "clear", key, None, o):
+            del opened[key]
+
+
+def load(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError:
+        return new_state()
+
+
+def save(path: Path, state: dict) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(state, sort_keys=True))
+    tmp.replace(path)
+
+
+def lock(path: Path) -> int | None:
+    """An exclusive lock beside `path` (its fd), or None when another runner holds it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path.with_name(path.name + ".lock"), os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd)
+        return None
+    return fd
+
+
+def select(where: str | None, only: list[str] | None) -> list[Monitor]:
+    if unknown := [i for i in only or [] if i not in BY_ID]:
+        raise ValueError(f"unknown monitor {', '.join(unknown)}; `research monitors list` names them")
+    return [m for m in MONITORS if (not where or m.where == where) and (not only or m.id in only)]
+
+
+# ---- the relay (infra's VM: Slack) --------------------------------------------------------------------------------------------
+
+def still_open(events: list[dict]) -> list[dict]:
+    """The opens among `events` that no later clear ends, oldest first."""
+    live: dict[str, dict] = {}
+    for ev in events:
+        if ev.get("event") == "open":
+            live[ev["key"]] = ev
+        elif ev.get("event") == "clear":
+            live.pop(ev.get("key"), None)
+    return list(live.values())
+
+
+def front_matter(text: str) -> dict[str, str]:
+    m = re.match(r"---\n(.*?)\n---\n", text, re.S)
+    return dict(ln.split(": ", 1) for ln in m[1].splitlines() if ": " in ln) if m else {}
+
+
+class Source:
+    """An alert dir the relay reads: node 1's over ssh, or a local one. `lines(after)` -> (total, the lines after `after`);
+    `notes()` -> the outbox's names; `head(name)` -> a note's start."""
+
+    def __init__(self, name: str, path: str, host: str | None = None, run: Callable[..., subprocess.CompletedProcess] = subprocess.run):
+        self.name, self.path, self.host, self.run = name, path.rstrip("/"), host, run
+
+    def _sh(self, script: str) -> str:
+        argv = [*SSH, self.host, script] if self.host else ["sh", "-c", script]
+        r = self.run(argv, capture_output=True, text=True, timeout=60)
+        if r.returncode:
+            raise RuntimeError(f"{self.name}: exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
+        return r.stdout
+
+    def lines(self, after: int) -> tuple[int, list[str]] | None:
+        f = f"{shlex.quote(self.path)}/monitors.jsonl"
+        out = self._sh(f"[ -f {f} ] || {{ echo missing; exit 0; }}; wc -l < {f}; tail -n +{int(after) + 1} {f}").splitlines()
+        if not out or out[0].strip() == "missing":
+            return None
+        return int(out[0].strip() or 0), out[1:]
+
+    def notes(self) -> list[str]:
+        return sorted(n for n in self._sh(f"ls -1 {shlex.quote(self.path)}/outbox 2>/dev/null || true").split() if n.endswith(".md"))
+
+    def head(self, name: str) -> str:
+        return self._sh(f"head -c 4000 {shlex.quote(self.path)}/outbox/{shlex.quote(name)}")
+
+
+def _event(line: str) -> dict:
+    try:
+        ev = json.loads(line)
+    except ValueError:
+        return {}
+    return ev if isinstance(ev, dict) else {}
+
+
+RELAY_GIVE_UP_S = 3600
+# Slack's errors that no retry fixes: the relay drops the post (and logs it)
+FINAL = re.compile(r"thread_not_found|message_not_found|channel_not_found|is_archived|msg_too_long|not_in_channel|no_text|"
+                   r"invalid_auth|account_inactive")
+
+
+def relay_pass(rstate: dict, sources: list[Source], post: Callable[[dict, dict | None], dict], now: float, *,
+               log: Callable[[str], None] = print, checkpoint: Callable[[], None] | None = None) -> int:
+    """Post each source's new events and Grafana's new notes; returns how many. An open's thread (a dict `post` fills in as it
+    goes) is kept from its first attempt, so a pointer that fails doesn't post its alert again. A post that fails is logged:
+    Slack refusing it for good (FINAL), or its failing for RELAY_GIVE_UP_S, drops it; otherwise its source stops there until
+    the next pass, which tries it first. A source that can't be read is logged too, and the others go on. `checkpoint()`
+    after each post and each source."""
+    posted = 0
+    threads, failing = rstate.setdefault("threads", {}), rstate.setdefault("failing", {})
+
+    def one(src: Source, ev: dict) -> bool:
+        """Post `ev` once; False when it failed and is its source's first next pass."""
+        nonlocal posted
+        kind, tkey = ev.get("event"), f"{src.name}|{ev.get('key')}"
+        th = threads.get(tkey)
+        if not kind or ev.get("webhook") or (kind == "open" and (th or {}).get("done")) or (kind == "clear" and th is None):
+            return True
+        if kind == "open":
+            th = threads.setdefault(tkey, {"t": now})
+        ident = f"{src.name}|{kind}|{ev.get('key')}|{ev.get('t', '')}"
+        try:
+            got = post(ev, th if kind in ("open", "clear") else None)
+        except Exception as e:  # noqa: BLE001  (each post fails alone)
+            since = failing.setdefault(ident, now)
+            why = f"{type(e).__name__}: {e}"[:300]
+            if not FINAL.search(str(e)) and now - since < RELAY_GIVE_UP_S:
+                log(f"{ident} not posted, {src.name} stops here until the next pass: {why}")
+                return False
+            log(f"dropped {ident}: {why}")
+            got = None
+        else:
+            posted += 1
+        failing.pop(ident, None)
+        if kind == "open" and (got is not None or th.get("ts")):
+            th.update(got or {}, done=True)
+        elif kind in ("open", "clear"):
+            del threads[tkey]
+        if checkpoint:
+            checkpoint()
+        return True
+
+    def read(src: Source, s: dict) -> None:
+        first = "lines" not in s
+        got = src.lines(0 if first else s["lines"])
+        if got is not None:
+            total, lines = got
+            if total < s.get("lines", 0):
+                s["lines"] = 0                          # a new file: read from its start next pass
+            elif first:
+                if all(one(src, ev) for ev in still_open([_event(ln) for ln in lines[:total]])):
+                    s["lines"] = total
+            else:
+                for ln in lines[:total - s["lines"]]:
+                    if not one(src, _event(ln)):
+                        break
+                    s["lines"] += 1
+        names = src.notes()
+        if "notes" not in s:
+            s["notes"] = names
+            return
+        seen = set(s["notes"]) & set(names)
+        for n in names:
+            if n in seen:
+                continue
+            text = src.head(n)
+            fm = front_matter(text)
+            if "monitor" not in fm and not one(src, {
+                    "event": "note", "monitor": "grafana", "key": n, "owners": [fm.get("lane", "infra")], "severity": "warn",
+                    "text": text.split("\n---\n", 1)[-1].strip()[:2500], "action": f"read `{n}` in node 1's alert outbox",
+                    "by": fm.get("origin", "grafana")}):
+                break
+            seen.add(n)
+            s["notes"] = sorted(seen)
+        s["notes"] = sorted(seen)
+
+    for src in sources:
+        try:
+            read(src, rstate.setdefault("sources", {}).setdefault(src.name, {}))
+        except Exception as e:  # noqa: BLE001  (read again next pass)
+            log(f"{src.name} unread: {type(e).__name__}: {e}"[:400])
+        if checkpoint:
+            checkpoint()
+    for k in [k for k, v in threads.items() if now - v.get("t", now) > EVENTS_KEEP_S]:
+        del threads[k]
+    for k in [k for k, t in failing.items() if now - t > EVENTS_KEEP_S]:
+        del failing[k]
+    return posted
+
+
+def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
+    from . import slack
+
+    reg = slack.load_registry(slack.registry_path())
+    api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=dry)
+    alerts, front, routes = slack.channel_id_for(reg, "agent-alerts"), slack.channel_id_for(reg, slack.FRONT_DOOR), slack.Routes()
+
+    def tag(h: str) -> str:
+        try:
+            return slack.tag(slack.entry(reg, h))
+        except slack.SlackError:
+            return "@" + h
+
+    def reply(ch: str, text: str, ts: str) -> None:
+        try:
+            slack._post(api, ch, POSTER, text, ts)
+        except slack.SlackError as e:
+            if not re.search(r"thread_not_found|message_not_found", str(e)):
+                raise
+            print(f"{ch} {ts}: its thread is gone ({e}), so this reply is a post of its own", flush=True)
+            slack._post(api, ch, POSTER, text)
+
+    def post(ev: dict, thread: dict | None) -> dict:
+        """Post `ev`, recording each message in `thread` as soon as Slack has it, so a retry posts only what is still missing."""
+        th = {} if thread is None else thread
+        if ev["event"] == "clear":
+            done = th.setdefault("cleared", [])
+            for k, ch in (("ts", alerts), ("pointer", front)):
+                if th.get(k) and k not in done:
+                    reply(ch, message(ev), th[k])
+                    done.append(k)
+            return th
+        if not th.get("ts"):
+            th["ts"] = slack._post(api, alerts, POSTER, message(ev, tag))
+        if (others := [o for o in ev["owners"] if o != "infra"]) and not th.get("pointer"):
+            try:
+                link = api.call("chat.getPermalink", channel=alerts, message_ts=th["ts"]).get("permalink") or "#agent-alerts"
+            except slack.SlackError:
+                link = "#agent-alerts"
+            th["pointer"] = slack._post(api, front, POSTER, f"{' '.join(tag(o) for o in others)} {esc(title(ev['text']))} "
+                                        f"(alert: {link})", route=(reg, routes), tags=("alert",))
+        return th
+    return post
+
+
+# ---- the command line -----------------------------------------------------------------------------------------------------------
+
+def _ctx_for(ns: argparse.Namespace, now: float) -> Callable[[dict], Ctx]:
+    return lambda memo: Ctx(now=now, memo=memo, n2_host=os.environ.get("VY_N2", "vy-n2"), node1=getattr(ns, "node1", "n1"),
+                            node_state=getattr(ns, "node_state", STATE))
+
+
+def cmd_list(ns: argparse.Namespace) -> int:
+    ms = select(ns.where, None)
+    if ns.json:
+        print(json.dumps({"schema": SCHEMA.format("list"), "monitors": [
+            {"id": m.id, "owner": m.owner, "severity": m.severity, "where": m.where, "every_s": m.every_s, "for_s": m.for_s,
+             "clear_s": m.clear_s, "events": m.events, "unread_s": m.unread_s, "doc": m.doc, "action": m.action} for m in ms]},
+            indent=1))
+        return 0
+    for m in ms:
+        print(f"{m.id:<22} {m.where:<5} @{m.owner:<6} {m.severity:<4} every {m.every_s:.0f} s"
+              f"{f', for {m.for_s:.0f} s' if m.for_s else ''}{', events' if m.events else ''}\n    {m.doc}\n    action: {m.action}")
+    return 0
+
+
+def cmd_check(ns: argparse.Namespace) -> int:
+    now = time.time()
+    rows, bad = [], False
+    ms = select(ns.where, ns.ids)
+    shared = Pass(n2_parts=frozenset(m.n2 for m in ms if m.n2))
+    for m in ms:
+        row: dict[str, Any] = {"id": m.id, "findings": [], "error": None, "skipped": None}
+        try:
+            ctx = _ctx_for(ns, now)({})
+            ctx.pass_ = shared
+            row["findings"] = [{"key": f.key, "text": f.text, "owners": list(f.owners or (m.owner,)),
+                                "severity": f.severity or m.severity} for f in m.check(ctx)]
+        except Skip as e:
+            row["skipped"] = str(e)
+        except Exception as e:  # noqa: BLE001
+            row["error"] = f"{type(e).__name__}: {e}"
+        bad = bad or bool(row["findings"] or row["error"])
+        rows.append(row)
+    if ns.json:
+        print(json.dumps({"schema": SCHEMA.format("check"), "t": iso(now), "monitors": rows}, indent=1))
+    else:
+        for r in rows:
+            state = "error: " + r["error"] if r["error"] else "skipped: " + r["skipped"] if r["skipped"] else f"{len(r['findings'])} found"
+            print(f"{r['id']}: {state}")
+            for f in r["findings"]:
+                print(f"  [{f['severity']}] {f['key']}: {title(f['text'])}")
+    return 1 if bad else 0
+
+
+def run_once(ns: argparse.Namespace, where: str, state_path: Path, alerts: Path, now: float) -> tuple[dict, list[dict]] | None:
+    fd = lock(state_path)
+    if fd is None:
+        return None
+    try:
+        state = load(state_path)
+        evs = step(state, select(where, ns.only), _ctx_for(ns, now), now, AlertDir(alerts), by=ns.by,
+                   webhook=os.environ.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
+                   pass_s=PASS_S if where == "node" else None)
+        save(state_path, state)
+        return state, evs
+    finally:
+        os.close(fd)
+
+
+def cmd_run(ns: argparse.Namespace) -> int:
+    now = time.time()
+    got = run_once(ns, ns.where, Path(ns.state), Path(ns.alerts), now)
+    if got is None:
+        print(f"monitors: refused: another runner holds {ns.state}.lock", file=sys.stderr)
+        return 3
+    state, evs = got
+    if ns.json:
+        print(json.dumps({"schema": SCHEMA.format("run"), "t": iso(now), "by": ns.by, "events": evs, "open": sorted(state["open"]),
+                          "errors": {k: v["error"] for k, v in state["monitors"].items() if v.get("error")},
+                          "sink_error": state.get("sink_error")}, indent=1))
+    else:
+        for ev in evs:
+            print(f"{ev['event']} {ev['key']}: {title(ev['text'])}")
+        print(f"{iso(now)} open: {', '.join(sorted(state['open'])) or 'none'}")
+    if state.get("sink_error"):
+        print(f"monitors: the alert dir {ns.alerts} takes no writes: {state['sink_error']}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def cmd_relay(ns: argparse.Namespace) -> int:
+    posts = Path(ns.posts)
+    fd = lock(posts)
+    if fd is None:
+        print(f"monitors: refused: another relay holds {posts}.lock", file=sys.stderr)
+        return 3
+    post = slack_post(ns.dry_run)
+    sources = [Source("node1", ns.node_alerts, host=ns.node1), Source("relay", ns.alerts)]
+    rstate = json.loads(posts.read_text()) if posts.exists() else {"schema": SCHEMA.format("relay"), "by": ns.by}
+    while True:
+        now = time.time()
+        stamp = iso(now)[11:]
+        if run_once(ns, "relay", Path(ns.state), Path(ns.alerts), now) is None:
+            print(f"{stamp} relay-side monitors skipped: another runner holds {ns.state}.lock", flush=True)
+        checkpoint = None if ns.dry_run else (lambda: save(posts, rstate))
+        try:
+            n = relay_pass(rstate, sources, post, now, log=lambda s: print(f"{stamp} {s}", flush=True), checkpoint=checkpoint)
+            print(f"{stamp} posted {n}", flush=True)
+        except Exception as e:  # noqa: BLE001  (relay_pass catches each source and post; this is a bug, logged, not a stop)
+            print(f"{stamp} relay failed: {type(e).__name__}: {e}", flush=True)
+        if checkpoint:
+            checkpoint()
+        if ns.once:
+            return 0
+        time.sleep(ns.every)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="research monitors", description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("list", help="every monitor: owner, severity, where it runs, threshold, action")
+    p.add_argument("--where", choices=("node", "relay"))
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("check", help="evaluate now and write nothing: exit 1 on a finding or a failed check")
+    p.add_argument("ids", nargs="*", metavar="ID")
+    p.add_argument("--where", choices=("node", "relay"))
+    p.add_argument("--node1", default="n1", help="node 1's ssh host, for relay-side checks")
+    p.add_argument("--node-state", default=STATE)
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("run", help="one pass: open and clear incidents into the alert dir (node 1's service)")
+    p.add_argument("--by", required=True, help="who runs it, recorded in every event (vy-monitors@vy-nebius-1)")
+    p.add_argument("--where", choices=("node", "relay"), default="node")
+    p.add_argument("--state", default=STATE)
+    p.add_argument("--alerts", default=ALERTS)
+    p.add_argument("--only", nargs="+", metavar="ID")
+    p.add_argument("--node1", default="n1")
+    p.add_argument("--node-state", default=STATE)
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("relay", help="where Slack works: run the relay-side monitors, post every new event to #agent-alerts")
+    p.add_argument("--by", required=True, help="who runs it, recorded in the relay-side events")
+    p.add_argument("--node1", default="n1", help="node 1's ssh host")
+    p.add_argument("--node-alerts", default=ALERTS, help="node 1's alert dir")
+    p.add_argument("--node-state", default=STATE, help="node 1's monitor state (its heartbeat)")
+    p.add_argument("--alerts", default=str(LOCAL / "alerts"), help="the relay-side monitors' alert dir")
+    p.add_argument("--state", default=str(LOCAL / "relay-state.json"))
+    p.add_argument("--posts", default=str(LOCAL / "relay-posts.json"), help="what has been posted (one writer: the relay)")
+    p.add_argument("--only", nargs="+", metavar="ID")
+    p.add_argument("--every", type=float, default=60.0)
+    p.add_argument("--once", action="store_true")
+    p.add_argument("--dry-run", action="store_true", help="print the posts instead, and keep what was posted only in memory")
+    ns = ap.parse_args(argv)
+    try:
+        select(None, getattr(ns, "ids", None) or getattr(ns, "only", None))
+    except ValueError as e:
+        print(f"monitors: {e}", file=sys.stderr)
+        return 2
+    return {"list": cmd_list, "check": cmd_check, "run": cmd_run, "relay": cmd_relay}[ns.cmd](ns)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
