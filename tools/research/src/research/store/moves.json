@@ -1269,6 +1269,12 @@
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/PearlC/Cap/": "verity/Security/Proofs/Pouw/PearlC/Cap/",
         "verity/protocols/compliance/nci/lean/Nci/SecurityProofs/": "verity/Security/Proofs/Nci/"
       }
+    },
+    {
+      "paths": {
+        "verity/Security/Proofs/Warden/Difftest.lean": "verity/protocols/accounting/communication/warden/lean/Warden/Difftest.lean",
+        "verity/Security/Proofs/Warden/DifftestMain.lean": "verity/protocols/accounting/communication/warden/lean/Warden/DifftestMain.lean"
+      }
     }
   ]
 }
