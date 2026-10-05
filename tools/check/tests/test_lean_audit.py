@@ -1,4 +1,4 @@
-"""`tools/check/lean_audit.py`: audit verdicts reused only while every input is unchanged, the hermetic scratch tree as the read
+"""`tools/lean/lean_audit.py`: audit verdicts reused only while every input is unchanged, the hermetic scratch tree as the read
 guard, and dependencies kept warm across runs."""
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -17,28 +18,30 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-spec = importlib.util.spec_from_file_location("check_lean_audit", ROOT / "tools" / "check" / "lean_audit.py")
+spec = importlib.util.spec_from_file_location("check_lean_audit", ROOT / "tools" / "lean" / "lean_audit.py")
 LA = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LA)
 spec = importlib.util.spec_from_file_location("check_for_test_lean_audit", ROOT / "tools" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
-#: a stand-in for tools/lean/audit.py --all --build --root R --out O: each package fails when a file its policy names under
-#: "reads" is missing (an input the key would not cover), fetches its git dependencies into .lake/packages, and notes what ran
+#: a stand-in for tools/lean/audit.py --build PKG... --out O, run in the scratch tree: each named package fails when a file its
+#: policy names under "reads" is missing (an input the key would not cover) or a package it requires by path is not in the tree,
+#: fetches its git dependencies into .lake/packages, and notes what ran
 FAKE_AUDIT = r'''
 import json, sys
 from pathlib import Path
 a = sys.argv[1:]
-root, out = Path(a[a.index("--root") + 1]), Path(a[a.index("--out") + 1])
+root, out = Path.cwd(), Path(a[a.index("--out") + 1])
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo"))]
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 reps, failed = [], []
-for pol in sorted(root.rglob("lean-audit.json")):
-    pkg = pol.parent
-    if "tools/lean" in str(pkg):
-        continue
+for pkg in named:
+    pol = pkg / "lean-audit.json"
     missing = [r for r in json.loads(pol.read_text()).get("reads", []) if not (root / r).exists()]
+    missing += [d["dir"] for d in json.loads((pkg / "lake-manifest.json").read_text())["packages"]
+                if d["type"] == "path" and not (pkg / d["dir"] / "lean-audit.json").exists()]
     deps = pkg / ".lake" / "packages" / "dep"
     warm = (deps / "built").exists()
     if json.loads((pkg / "lake-manifest.json").read_text())["packages"]:
@@ -46,6 +49,12 @@ for pol in sorted(root.rglob("lean-audit.json")):
         (deps / "built").write_text("x")
     with open(out / "ran.txt", "a") as f:
         f.write(f"{pkg.relative_to(root)} {'warm' if warm else 'cold'}\n")
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+    with open(out / "builds.txt", "a") as f:
+        f.write(f"{pkg.relative_to(root)} {'warm' if lib.is_dir() else 'cold'}\n")
+    lib.mkdir(parents=True, exist_ok=True)
+    for src in pkg.glob("*.lean"):
+        (lib / (src.stem + ".olean")).write_text("built")
     reps.append({"package": str(pkg), "failures": [f"reads {m}" for m in missing]})
     if missing:
         failed.append(str(pkg))
@@ -57,8 +66,8 @@ sys.exit(1 if failed else 0)
 def _tree(tmp: Path, monkeypatch) -> Path:
     root = tmp / "repo"
     files = {
-        "tools/lean/audit.py": FAKE_AUDIT,
-        "tools/check/lean_audit.py": "", "tools/check/common.py": "", "tools/check/check.py": "",
+        "tools/lean/audit.py": FAKE_AUDIT, "tools/lean/README.md": "", "tools/lean/tests/fixtures/control.lean": "",
+        "tools/lean/lean_audit.py": "", "tools/check/common.py": "", "tools/check/check.py": "",
         "pkg/a/lakefile.toml": "", "pkg/a/lean-toolchain": "v1\n", "pkg/a/A.lean": "theorem a : True := trivial\n",
         "pkg/a/lake-manifest.json": json.dumps({"packages": [{"name": "dep", "type": "git", "rev": "abc"}]}),
         "pkg/a/lean-audit.json": "{}",
@@ -89,8 +98,8 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     rc, ran, doc = _run(tmp_path, 1)
     assert rc == 1 and sorted(ran) == ["pkg/a cold", "pkg/b cold"] and doc["failed"] == ["pkg/b"] and doc["cached"] == {}
     (root / "pkg/b/lean-audit.json").write_text("{}")
-    rc, ran, doc = _run(tmp_path, 2)                   # a reused; b (and a, its path dependency) audited, a's dependencies warm
-    assert rc == 0 and sorted(ran) == ["pkg/a warm", "pkg/b cold"] and list(doc["cached"]) == ["pkg/a"]
+    rc, ran, doc = _run(tmp_path, 2)                   # a reused; only b audited, with a, its path dependency, in its tree
+    assert rc == 0 and ran == ["pkg/b cold"] and list(doc["cached"]) == ["pkg/a"]
     rc, ran, doc = _run(tmp_path, 3)                   # nothing changed: nothing runs
     assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"] and doc["passed"]
     (root / "pkg/a/A.lean").write_text("theorem a : True := by trivial\n")
@@ -98,6 +107,45 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     assert rc == 0 and sorted(ran) == ["pkg/a warm", "pkg/b cold"] and doc["cached"] == {}
     (root / "tools/lean/audit.py").write_text(FAKE_AUDIT + "\n# the auditor changed\n")
     assert sorted(_run(tmp_path, 5)[1]) == ["pkg/a warm", "pkg/b cold"]     # the auditor is an input of every package
+
+
+def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
+    """b201 (r20261004-150518-b201) audited all 8 packages again, 69 min, partly on edits to `tools/lean/README.md` and
+    `tools/lean/tests/`, which no audit reads. They stay out of the scratch tree too, so an audit that read one would fail."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    assert _run(tmp_path, 1)[0] == 0
+    (root / "tools/lean/README.md").write_text("reworded\n")
+    (root / "tools/lean/tests/fixtures/control.lean").write_text("theorem c : True := trivial\n")
+    rc, ran, doc = _run(tmp_path, 2)
+    assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"]
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": ["tools/lean/tests/fixtures/control.lean"]}))
+    rc, _ran, doc = _run(tmp_path, 3)
+    assert rc == 1 and doc["failed"] == ["pkg/b"]
+
+
+def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
+    """b201 rebuilt all 561 of `soundness`'s modules (2,508 s) because the auditor changed, though no `.olean` depends on it."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    store = tmp_path / "cache" / "lean-builds"
+    builds = lambda n: sorted((tmp_path / f"out{n}" / "builds.txt").read_text().split("\n")[:-1])
+    assert _run(tmp_path, 1)[0] == 0 and builds(1) == ["pkg/a cold", "pkg/b cold"]
+    ka, kb = LA.build_key("pkg/a", root), LA.build_key("pkg/b", root)
+    assert (store / ka / "lib/lean/A.olean").is_file() and (store / kb / "lib/lean/B.olean").is_file()
+    (store / ka / "lib/lean/Gone.olean").write_text("its source was deleted")
+    (root / "tools/lean/audit.py").write_text(FAKE_AUDIT + "\n# the auditor changed\n")
+    assert _run(tmp_path, 2)[0] == 0 and builds(2) == ["pkg/a warm", "pkg/b warm"]
+    assert (store / ka / "lib/lean/A.olean").is_file() and not (store / ka / "lib/lean/Gone.olean").exists()
+    (root / "pkg/b/B.lean").write_text("-- b changed\n")
+    logged = []
+    rc = LA.run(tmp_path / "out3", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps", log=logged.append)
+    assert rc == 0 and builds(3) == ["pkg/b warm"]                    # a reused; its build copied in as b's path dependency
+    assert any(ln.startswith("lean-audit: pkg/a: build warm") and "a copy" in ln for ln in logged) and (store / ka).is_dir()
+    (root / "pkg/a/lean-audit.json").write_text(json.dumps({"reads": ["nowhere.txt"]}))
+    assert _run(tmp_path, 4)[0] == 1 and not (store / ka).exists()     # a failed: its build is dropped, not kept
+    (root / "pkg/a/lean-toolchain").write_text("v2\n")
+    assert LA.build_key("pkg/a", root) != ka
 
 
 def test_a_cache_reached_through_a_symlink_keeps_every_report(tmp_path, monkeypatch):
@@ -145,7 +193,7 @@ def test_a_stopped_audit_removes_its_scratch_tree(tmp_path, monkeypatch):
     root = _tree(tmp_path, monkeypatch)
     (root / "tools/lean/audit.py").write_text('import sys\nprint("auditing", flush=True)\nsys.stdin.read()\n')
     cache = tmp_path / "cache"
-    p = subprocess.Popen([sys.executable, "-c", DRIVER, str(ROOT / "tools/check/lean_audit.py"), str(root),
+    p = subprocess.Popen([sys.executable, "-c", DRIVER, str(ROOT / "tools/lean/lean_audit.py"), str(root),
                           json.dumps(LA.COMMON.tracked_files()), "--out", str(tmp_path / "out"),
                           "--cache", str(cache / "lean-audit"), "--deps", str(cache / "lean-deps")],
                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, text=True)
@@ -208,7 +256,7 @@ def test_every_file_the_step_loads_is_in_its_key():
 
     files = LA.COMMON.tracked_files()
     got = LA.inputs("backends/flock/verifier/lean/soundness", files)
-    loaded = re.findall(r'_module\(ROOT / "tools" / "check" / "([a-z_]+\.py)"', (ROOT / "tools/check/lean_audit.py").read_text())
+    loaded = re.findall(r'_module\(ROOT / "tools" / "check" / "([a-z_]+\.py)"', (ROOT / "tools/lean/lean_audit.py").read_text())
     assert loaded == ["common.py"] and all(f"tools/check/{m}" in got for m in loaded)
     assert "tools/check/check.py" not in got
     for node in ast.walk(ast.parse((ROOT / "tools/check/common.py").read_text())):
@@ -267,6 +315,8 @@ def test_the_real_packages_and_their_inputs():
     got = LA.inputs("backends/flock/verifier/lean/soundness", files)
     assert "backends/flock/verifier/lean/level3/lean-audit.json" in got and "backends/flock/verifier/lean/Main.lean" in got
     assert "tools/lean/audit.py" in got and not [f for f in got if f.startswith("backends/flock/verifier/lean/soundness/.lake")]
+    assert "tools/lean/Replay.lean" in got and "tools/lean/README.md" not in got
+    assert not [f for f in got if f.startswith("tools/lean/tests/")]
 
 
 def test_a_failed_dependency_fetch_is_no_verdict_and_is_retried():
@@ -338,6 +388,31 @@ def test_a_cold_machine_takes_the_pinned_bundle_from_the_store(tmp_path, monkeyp
     assert sorted((out / "ran.txt").read_text().split("\n")[:-1]) == ["pkg/a warm", "pkg/b cold"]
     listing = json.loads((tmp_path / "export" / "lean-deps.json").read_text())["deps"]
     assert list(listing) == [k] and listing[k]["package"] == "pkg/a" and (tmp_path / "export" / f"{k}.tar.gz").is_file()
+
+
+def test_setup_takes_a_cold_packages_pinned_bundle_from_the_store_and_replaces_nothing(tmp_path, monkeypatch):
+    """`--restore PKG` (`tools/lean/setup.sh`): the pinned bundle becomes PKG's `.lake/packages` when its bytes are the
+    pinned ones; dependencies already there, a manifest with no pin, or other bytes leave the package for lake to fetch."""
+    root = _tree(tmp_path, monkeypatch)
+    k = LA.deps_key(root / "pkg/a")
+    (tmp_path / "made" / "dep").mkdir(parents=True)
+    (tmp_path / "made" / "dep" / "built").write_text("x")
+    pin = LA.bundle(tmp_path / "made", tmp_path / f"{k}.tar.gz")
+    pins = lambda p: (root / LA.PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": p}))
+    pins({k: {"package": "pkg/a", **pin, "run": "r1"}})
+    monkeypatch.setattr(pytest.importorskip("research.store.remote"), "load_remote",
+                        lambda: types.SimpleNamespace(presign=lambda key, ttl: (tmp_path / f"{k}.tar.gz").as_uri()))
+    logs, deps = [], root / "pkg/a/.lake/packages"
+    assert LA.restore_into("pkg/a", logs.append) == 0
+    assert (deps / "dep" / "built").read_text() == "x" and sorted(p.name for p in deps.parent.iterdir()) == ["packages"]
+    (deps / "dep" / "built").write_text("mine")
+    assert LA.restore_into("pkg/a", logs.append) == 0 and (deps / "dep" / "built").read_text() == "mine"
+    shutil.rmtree(deps.parent)
+    pins({k: {"package": "pkg/a", **pin, "sha256": "0" * 64, "run": "r1"}})
+    assert LA.restore_into("pkg/a", logs.append) == 1 and not deps.exists() and "not the pinned bundle" in logs[-1]
+    pins({})
+    assert LA.restore_into("pkg/a", logs.append) == 0 and not deps.exists() and "no bundle is pinned" in logs[-1]
+    assert LA.restore_into("pkg/b", logs.append) == 0 and not (root / "pkg/b/.lake").exists()       # path dependencies only
 
 
 def test_pinning_takes_only_bundles_on_the_remote_for_this_trees_manifests(tmp_path, monkeypatch, capsys):

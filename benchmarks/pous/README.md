@@ -19,6 +19,10 @@ scheme's certified parameters.
     - `certificate`: the scheme's certificate covers the audit's k and deadline.
   - Each run reports the storage profile the certificate gives the accepted audit, gaps included.
 - `pod.sh` runs it on a pod as a research Attempt.
+- `explorer.py` builds the average-memory explorer's data file (`pous-explorer/v1`): the certified average-ε bound's
+  reference math, the honest-latency presets as survival curves, the schemes' serving overhead, ε_proof by in-degree, and
+  test vectors the console page reproduces. `--histograms` pools the vLLM e2e series' `verify-honest.json` histograms
+  into the `measured` preset. Publish with `research data put --kind pous-explorer/v1 --file F --preserve`.
 
 Implementations:
 
@@ -42,12 +46,16 @@ Implementations:
     block recomputed on the device from its kept parents, `W`'s block XORed in on the device, as an adversary would: the limit
     minus each recomputed answer's recorded device time is the measured margin, labelled `recompute_margin_kind`: an upper
     bound on attacker latency, from the honest kernel with per-step launches and a host sync, so it overstates the margin; the
-    gate fails when no challenge hit a dropped block);
-  - the `Π₂` step floor, the fastest honest kernel (an upper bound on an attacker's), with the SM clock sampled while it
-    runs, the floor scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it, against the
-    certificate's `call_ns`: 241.5 µs, the 4,830 sequential Keccak-f of a 64 KiB call in a chain at 50 ns each (the
-    rounds' absorbs stream behind the squeezes; `protocols/pous/PROTOCOL.md`), so `D = 5` covers `Δ + RTT < 1.449` ms
-    and the band's cliff at `d = 12` is about 3.14 ms;
+    gate fails when no challenge hit a dropped block; it bounds only an attacker that recomputes from kept parents, not one
+    that resumes kept round states, as under the step floor below);
+  - the `Π₂` step floor, the fastest honest kernel for a whole call, with the SM clock sampled while it runs, the floor
+    scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it, against the certificate's
+    `call_ns`: 241.5 µs, the 4,830 sequential Keccak-f of a 64 KiB call in a chain at 50 ns each (the rounds' absorbs
+    stream behind the squeezes; `protocols/pous/PROTOCOL.md`), so in the ideal-permutation model `D = 5` covers
+    `Δ + RTT < 1.449` ms and the band's cliff at `d = 12` is about 3.14 ms. It is not an upper bound on an attacker's
+    floor, and neither are the margins derived from it: at the reference Feistel-SHAKE256 `Π₂` an attacker completes no
+    call and rebuilds a label from 1.53% of `C` in one round's squeeze, 481 Keccak-f, about a tenth of a call (red team,
+    4 Oct 2026, art:7617c8017e80). A floor that bounds the attacker must time that resume, not a whole call;
   - optionally (`--nvme-dir`), one block's read latency from NVMe;
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
