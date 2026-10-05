@@ -265,6 +265,15 @@ def test_every_path_constant_in_the_gate_tooling_resolves():
     assert not (bad := dangling_constants(tracked())), "\n".join(bad)
 
 
+def test_the_latest_moves_new_paths_are_in_this_tree():
+    """research reads a tree from before a layout move through the paths `moves.json` says it renamed: the newest move's
+    new paths are this tree's, or that mapping is wrong."""
+    from research.store import tools_registry
+
+    moves = json.loads(tools_registry.MOVES.read_text())["moves"]
+    assert not (bad := [new for new in (moves[-1]["paths"].values() if moves else ()) if not resolves(new)]), bad
+
+
 def test_the_cluster_kinds_inputs_are_in_this_tree():
     kinds = sorted(p for p in tracked() if p.startswith("tools/cluster/kinds/") and p.endswith(".toml"))
     assert kinds
