@@ -815,3 +815,55 @@ nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-util"]
 owner = "compute-accounting"
 hold = "compute accounting's yes pending: node 2's freeze list"
+
+# ---- both nodes: what the resource stewards ran from agent VMs (the node 1 watch, node-sweep), now node timers; after
+# installing, `sudo systemctl enable --now vy-node-sweep.timer` (and on node 1 vy-steward-watch.timer)
+
+[[file]]
+path = "/usr/local/bin/vy-steward-watch"
+src = "tools/research/src/research/pods/nebius/vy-steward-watch"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-steward-watch.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-steward-watch.service"
+src = "tools/research/src/research/pods/nebius/vy-steward-watch.service"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-steward-watch.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-steward-watch.timer"
+src = "tools/research/src/research/pods/nebius/vy-steward-watch.timer"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-steward-watch.timer"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/bin/vy-node-sweep"
+src = "tools/research/src/research/pods/nebius/node_sweep.sh"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+run = ["systemd:vy-node-sweep.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-node-sweep.service"
+src = "tools/research/src/research/pods/nebius/vy-node-sweep-n1.service"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-node-sweep.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-node-sweep.service"
+src = "tools/research/src/research/pods/nebius/vy-node-sweep-n2.service"
+nodes = ["vy-nebius-2"]
+run = ["systemd:vy-node-sweep.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-node-sweep.timer"
+src = "tools/research/src/research/pods/nebius/vy-node-sweep.timer"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+run = ["systemd:vy-node-sweep.timer"]
+owner = "infra"
