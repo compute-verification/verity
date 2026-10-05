@@ -35,6 +35,15 @@
   "replace": {"Control/Defs.lean": ["/-! What", "import Control.Assumptions\n/-! What"]},
   "fails": "layers: Control.Defs imports Control.Assumptions"
  },
+ "reads_outside_spec": {
+  "replace": {"Control/Thms.lean": ["theorem main_thm (h : Control.Hyp) (n : Nat) : double n = n + n := by\n  unfold double",
+                                    "def twice (n : Nat) : Nat := n + n\n\ntheorem main_thm (h : Control.Hyp) (n : Nat) : double n = twice n := by\n  unfold double twice"]},
+  "fails": "reads: Control.main_thm read Control.twice in Control.Thms, outside the spec"
+ },
+ "reads_unlocked": {
+  "policy": {"meaning": ["Control.Assumptions"]},
+  "fails": "reads: Control.main_thm read Control.double in Control.Defs, a spec module outside `meaning`"
+ },
  "meaning": {
   "replace": {"Control/Defs.lean": ["2 * n", "n + n"]},
   "fails": "guarantees: definitions in Control.Defs that Control.main_thm read changed"

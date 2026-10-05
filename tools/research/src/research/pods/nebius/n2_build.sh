@@ -241,7 +241,7 @@ EOF
 }
 
 # move each held Build to node 2 (the Commit comes back under the dispatcher's own key), while node 2 has fewer than
-# VY_N2_MAX_QUEUED Verity Builds waiting; `offload --loop` repeats every minute (tmux `n2-offload` on node 1, as research)
+# VY_N2_MAX_QUEUED Verity Builds waiting; `offload --loop` repeats every minute (unit vy-n2-offload on node 1, as research)
 offload() {
   case "${1:-}" in
     --loop) while :; do offload || true; sleep "${VY_OFFLOAD_EVERY_S:-60}"; done ;;
