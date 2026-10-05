@@ -1,6 +1,6 @@
 """Which non-native paths reproduce Pearl-C4's sm_120 NVFP4 chain words bit for bit (CPU, on the pinned models).
 
-The work unit is ``NVFP4_SM120``'s atom (``verity.ml.tc.models.BLACKWELL_SM120_NVF4``): exact E2M1 x E2M1 group dots over
+The work unit is ``NVFP4_SM120``'s atom (``verity_catalog.silicon.models.BLACKWELL_SM120_NVF4``): exact E2M1 x E2M1 group dots over
 16, UE4M3 block scales, one five-way align-add truncating toward zero, RZ to binary32, chained over k/64 atoms.  A route
 reproduces a word when its binary32 output equals the atom chain's.  Routes:
 
@@ -34,9 +34,9 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "packages" / "verity" / "src"))
+sys.path.insert(0, str(ROOT))
 
-from verity.ml.tc.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16  # noqa: E402
+from verity_catalog.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16  # noqa: E402
 
 #: E2M1 codes 0..7 as integer halves (sign in bit 3).
 E2M1_HALVES = np.array([0, 1, 2, 3, 4, 6, 8, 12], dtype=np.int64)

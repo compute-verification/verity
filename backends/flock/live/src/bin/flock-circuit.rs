@@ -214,7 +214,7 @@ fn identity(c: &Composite) -> Value {
            "hashes": {"merkle": format!("{} (every Ligerito level)", MERKLE.as_str()),
                       "round_digest": "sha512 (framing: the coin server retains every round's bytes and the replay compares them)",
                       "statement_digest": "sha512", "sigma": "sha512", "coin_commitment": "sha512",
-                      "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
+                      "coin_derivation": "sha256 (verity.primitives.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
                       "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "hm96-sha512/row/v1 over sha512/row/v1"},
            "hooks": hooks});
     // only under FC_COINS=os: the statement digest pins the identity, and the default's must not move
@@ -3156,7 +3156,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
                     let host = st.slot_zab(ni, net, ins);
                     let same = host.len() == ins.len()
                         && host.par_iter().all(|(x, z, a, b)| plan.slot_zab(&ins[*x]) == (z.clone(), a.clone(), b.clone()));
-                    json!({"pass": same, "slots": host.len(), "rows": plan.rows.len(), "window": plan.window(), "census": plan.census(), "circuit_sha256": hex(&net.sha256)})
+                    json!({"pass": same, "slots": host.len(), "rows": plan.rows.len(), "window": plan.window(), "catalog/census": plan.census(), "circuit_sha256": hex(&net.sha256)})
                 }
             };
             pass &= v["pass"] == json!(true);

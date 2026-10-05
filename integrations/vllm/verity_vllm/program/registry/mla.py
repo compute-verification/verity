@@ -52,18 +52,18 @@ DOT is the k16 step: `HopperBF16WgmmaDot16_v2`, the sm_120 mma.sync.m16n8k16 bf1
 """
 from __future__ import annotations
 
-from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.refs import Coll, concat, strided_view, tuple_of
-from verity.ir.types import Array, Tuple
-from verity.ml.boolean import elementwise as EW
-from verity.ml.boolean import fp
-from verity.ml.boolean import gemm as BG
-from verity.ml.boolean import mufu as BM
-from verity.ml.boolean import scalar as BS
-from verity.ml.boolean.forms import NOT, and_reduce, mux, or_reduce, const_bits
-from verity.ml.boolean.softmax import f32_gt
-from verity.ml.boolean.trace import definition
+from verity.primitives.circuits import boolean as BL
+from verity.primitives.circuits.defs import CompositeDefinition, bind
+from verity.primitives.circuits.refs import Coll, concat, strided_view, tuple_of
+from verity.primitives.circuits.types import Array, Tuple
+from verity_catalog.definitions.boolean import elementwise as EW
+from verity_catalog.silicon import fp
+from verity_catalog.definitions.boolean import gemm as BG
+from verity_catalog.definitions.boolean import mufu as BM
+from verity_catalog.definitions.boolean import scalar as BS
+from verity.primitives.circuits.boolean.forms import NOT, and_reduce, mux, or_reduce, const_bits
+from verity_catalog.definitions.boolean.softmax import f32_gt
+from verity.primitives.circuits.boolean.trace import definition
 from verity_vllm.program.registry.boolean_attention import _Bits
 
 __all__ = ["F32MulConst", "MlaBmm", "MoeSharedCombine", "MoeSharedCombineElement", "TritonExpSub", "TritonMlaBlock",

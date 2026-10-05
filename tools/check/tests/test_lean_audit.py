@@ -164,7 +164,7 @@ def test_a_cache_reached_through_a_symlink_keeps_every_report(tmp_path, monkeypa
 
 
 def test_a_packages_test_generates_its_data_from_the_checkout_not_the_scratch_tree(tmp_path, monkeypatch):
-    """A test's `generate` (`runs`) reads fixtures that are no package's input (PoUW's reads `fixtures/tc/vectors`), so the
+    """A test's `generate` (`runs`) reads fixtures that are no package's input (PoUW's reads `catalog/verity_catalog/silicon/captures/vectors`), so the
     audit, run from the scratch tree, is told where the checkout is."""
     root = _tree(tmp_path, monkeypatch)
     _run(tmp_path, 1)

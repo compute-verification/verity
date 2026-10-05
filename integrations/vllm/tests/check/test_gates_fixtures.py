@@ -709,7 +709,7 @@ def test_card_top_section_sealed(tmp_path):
     arts["provenance.json"] = PROVENANCE
     arts["capture/versions.json"] = {"torch": "2.13.0+cu129", "cuda": "12.9", "triton": "3.7.1", "vllm": "0.28.1rc1.dev472+gd9105ea80",
                                      "gpu": {"name": "NVIDIA GeForce RTX 4090", "cc": "8.9"}, "host": {"clocksource": "tsc", "clock_read_us": 0.03}}
-    arts["census/census.json"] = {"engine_kwargs": {"dtype": "bfloat16", "max_num_seqs": 8, "enforce_eager": True, "enable_prefix_caching": False}}
+    arts["catalog/census/census.json"] = {"engine_kwargs": {"dtype": "bfloat16", "max_num_seqs": 8, "enforce_eager": True, "enable_prefix_caching": False}}
     card = _card(tmp_path, arts)
     assert card.unsealed is False and card.verdict == "ACCEPTED"
     top = CARD.top_section(card).splitlines()

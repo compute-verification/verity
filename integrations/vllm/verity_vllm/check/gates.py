@@ -85,7 +85,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from verity.proofs.codes import VerificationCode as VC
+from verity_vllm.check.codes import VerificationCode as VC
 from verity_vllm.check.result import MISSING_INPUT, CheckResult
 from verity_vllm.check.verdict import match_verdict
 
@@ -156,7 +156,7 @@ ARTIFACTS: dict[str, str] = {
     "fold_summary": "fold_summary.json",
     "fold_summary_2": "fold_summary_2.json",
     "fold_summary_other": "fold_summary_other.json",
-    "census": "census/census.json",
+    "census": "catalog/census/census.json",
     "census_reconcile": "census_reconcile.json",
     "noninterference": "nonint/noninterference.json",
     "compare": "compare.json",

@@ -76,7 +76,7 @@ bundle() {  # <run-name>: json reports + cards + logs + tokens (no values/, trac
   local n=$1
   [ -d "$OUT/$n" ] || { say "bundle $n: no run dir"; return 1; }
   (cd "$OUT" && tar czf "$BUNDLES/$n.small.tgz" \
-      --exclude="$n/capture/values" --exclude="$n/census/traces" --exclude="$n/nonint/*/values" --exclude="$n/control/values" \
+      --exclude="$n/capture/values" --exclude="$n/catalog/census/traces" --exclude="$n/nonint/*/values" --exclude="$n/control/values" \
       --exclude="$n/program.json" --exclude="$n/instances.jsonl" --exclude="$n/accesses.jsonl.gz" --exclude="$n/capture/*.npy" \
       --exclude="$n/*/cos_sin_cache.npy" --exclude="$n/capture/snapshots.json" "$n") \
     && say "bundle: $BUNDLES/$n.small.tgz ($(du -h "$BUNDLES/$n.small.tgz" | cut -f1))" || say "bundle $n FAILED"
