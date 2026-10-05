@@ -144,6 +144,21 @@ def package_dirs(tree: Path | str, name: str) -> list[str]:
     return dirs
 
 
+def package_paths(tree: Path | str, name: str, *rels: str) -> list[str]:
+    """Paths or globs under the package `name` (``"ml/tc/**"``, ``"errors.py"``, ``"**"``) as tree-relative globs, each in whichever
+    of its `package_dirs` holds it: a Tool's closure over part of a package that a split may move to another member.  Raises
+    LookupError for one that none holds."""
+    t = Path(tree)
+    dirs = package_dirs(t, name)
+    out: list[str] = []
+    for rel in rels:
+        hits = [posixpath.join(d, rel) for d in dirs if (t / d / rel.removesuffix("**")).exists()]
+        if not hits:
+            raise LookupError(f"no directory of {name!r} in {t} ({', '.join(dirs)}) holds {rel!r}")
+        out += hits
+    return out
+
+
 def pythonpath(root: str, derived: dict, extra: str | None = None) -> str:
     """`root`-absolute roots joined with ':', then `extra` (the user's own PYTHONPATH) appended."""
     parts = [posixpath.join(root, r) if r not in ("", ".") else root for r in derived["roots"]]

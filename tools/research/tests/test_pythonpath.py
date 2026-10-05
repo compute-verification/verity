@@ -89,6 +89,10 @@ def test_a_package_split_across_members_is_found_in_each_and_one_found_nowhere_r
     with pytest.raises(LookupError):
         P.package_dirs(tmp_path, "core")
     assert P.workspace_root(t / "lower" / "src" / "core" / "ir" / "__init__.py") == t.resolve()
+    assert P.package_paths(t, "core", "**", "ir/**", "ml/__init__.py") == ["upper/src/core/**", "lower/src/core/**", "lower/src/core/ir/**",
+                                                                          "upper/src/core/ml/__init__.py"]
+    with pytest.raises(LookupError, match="'tc/\\*\\*'"):
+        P.package_paths(t, "core", "ir/**", "tc/**")
     assert P.workspace_root(t / "upper") == t.resolve(), "a member's own pyproject.toml declares no workspace"
     with pytest.raises(LookupError):
         P.workspace_root(tmp_path)
