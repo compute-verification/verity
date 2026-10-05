@@ -1,6 +1,6 @@
 """A source tree's Python import roots, derived from its workspace declaration -- never a hand-written PYTHONPATH list.
 
-Hand lists for shipped trees failed silently twice (a missing `.`: `verity` not importable -> one lane crashed, and a
+Hand lists for shipped trees failed silently twice (a missing `packages/verity/src`: `verity` not importable -> one lane crashed, and a
 night earlier an incomplete manifest looked like a result).  The tree already says what its packages are:
 
     <tree>/pyproject.toml   [tool.uv.workspace] members = [...] (globs allowed), exclude = [...]
