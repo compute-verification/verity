@@ -65,6 +65,7 @@ def load_registries() -> None:
     import verity.ml.boolean.cast  # noqa: F401
     import verity.ml.boolean.elementwise  # noqa: F401
     import verity.ml.boolean.gemm  # noqa: F401
+    import verity.ml.boolean.gf2k  # noqa: F401
     import verity.ml.boolean.merkle  # noqa: F401
     import verity.ml.boolean.mufu  # noqa: F401
     import verity.ml.boolean.scalar  # noqa: F401
@@ -82,6 +83,7 @@ def load_registries() -> None:
     import verity_pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
     import verity_pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
     import verity_pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
+    import verity_flock.rec_open  # noqa: F401  (V*'s opening check: recursion's inner Ligerito openings)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -117,7 +119,8 @@ def _value(s: str) -> Any:
 
 def definition(spec: str) -> Any:
     """The registered Definition ``spec`` names, bound to the statics its id writes, or else the suite's target of that id: a
-    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers."""
+    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one
+    whose id writes a dict static as its digest, such as `gf2k.GfResiduals`'s schema."""
     from verity_vllm.query import word as W
 
     load_registries()
@@ -127,6 +130,8 @@ def definition(spec: str) -> Any:
     fam, body = m[1], m[2]
     statics = {k: _value(v) for k, v in _split(body).items()} if body else {}
     try:
+        if any(isinstance(v, str) and re.fullmatch(r"\{[0-9a-f]{12}\}", v) for v in statics.values()):
+            raise KeyError(spec)
         fn = W.specialization(fam, statics)
     except KeyError:
         fn = suite().get(spec.strip())
@@ -386,6 +391,17 @@ def _universal_roots() -> list[Any]:
     return [bind(UniversalUnit, G=16, N_IN=16, N_OUT=8), bind(UniversalUnit, G=64, N_IN=64, N_OUT=32)]
 
 
+def _gf2k_roots() -> list[Any]:
+    """GF(2^128) arithmetic (`verity.ml.boolean.gf2k`): Gf128Mul and Gf256Mul are static-free; GfScale at L = 2, and GfResiduals
+    on two residuals over 129 + 2 elements whose operands use every term kind (an element, a transposed block, a sum)."""
+    from verity.ir.defs import bind
+    from verity.ml.boolean import gf2k as G
+
+    S = {"nw": 129, "nv": 2, "ops": [[["w", 0]], [["wt", 1, 3], ["v", 0]]],
+         "res": [{"mul": [[0, 1]], "add": [["v", 1]]}, {"mul": [], "add": [["w", 0]]}]}
+    return [bind(G.GfScale, L=2), bind(G.GfResiduals, S=S)]
+
+
 def _merkle_roots() -> list[Any]:
     """The hidden-index Merkle read (`verity.ml.boolean.merkle`), binary and 4-ary, at one level (a level is two or three
     SHA-512 compressions: deeper reads repeat it). About two minutes each; the 4-ary one checks the slot multiplexers among
@@ -394,6 +410,14 @@ def _merkle_roots() -> list[Any]:
     from verity.ml.boolean.merkle import MerkleRead
 
     return [bind(MerkleRead, ARITY=2, D=1), bind(MerkleRead, ARITY=4, D=1)]
+
+
+def _rec_roots() -> list[Any]:
+    """V*'s opening check (`verity_flock.rec_open`) at its smallest shape: a row of 8 lanes (one SHA-512 block) and one level,
+    six compressions. Wider rows add message blocks and higher openings repeat the level, both at the same compression."""
+    from verity_flock.rec_open import definition
+
+    return [definition(8, 1)]
 
 
 def _kernel_roots() -> list[Any]:
@@ -681,8 +705,8 @@ def catalog(by_unit: list | None = None) -> list[Any]:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
     for units, make in ((("_core_roots",), _core_roots), (("_boolean_roots",), _boolean_roots),
-                        (("_boolean_gather_roots",), _boolean_gather_roots), (("_universal_roots",), _universal_roots),
-                        (("_merkle_roots",), _merkle_roots), (("_kernel_roots",), _kernel_roots),
+                        (("_boolean_gather_roots",), _boolean_gather_roots), (("_universal_roots",), _universal_roots), (("_gf2k_roots",), _gf2k_roots),
+                        (("_merkle_roots",), _merkle_roots), (("_rec_roots",), _rec_roots), (("_kernel_roots",), _kernel_roots),
                         (("_vocabulary_roots", "_vocabulary_bindings"), _vocabulary_roots), (("_pouw_roots",), _pouw_roots)):
         roots += _produce(units, make, by_unit)
     for label, make in _model_roots():
