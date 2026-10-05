@@ -57,7 +57,7 @@ def test_a_package_the_plan_doesnt_name_goes_to_the_shard_with_the_rest():
     new = [*PACKAGES, "protocols/new/lean"]
     for n in D.plans():
         [holder] = [s for s in _resolved(n, new) if "lean-audit:protocols/new/lean" in s]
-        assert "lean-audit:packages/verity/lean" in holder and SOUNDNESS not in holder
+        assert "lean-audit:verity/lean" in holder and SOUNDNESS not in holder
 
 
 def test_a_plan_naming_a_package_the_tree_lacks_stops_the_shard():
@@ -159,7 +159,7 @@ def test_a_shard_without_the_other_half_gets_every_core(tmp_path):
 
 def test_lean_audit_audits_only_the_packages_it_is_given():
     assert LA.select(PACKAGES, None) == PACKAGES
-    assert LA.select(PACKAGES, ["protocols/pous/lean", "packages/verity/lean"]) == ["packages/verity/lean", "protocols/pous/lean"]
+    assert LA.select(PACKAGES, ["verity/protocols/accounting/space/pous/lean", "verity/lean"]) == ["verity/lean", "verity/protocols/accounting/space/pous/lean"]
     with pytest.raises(ValueError, match="no audited package nowhere"):
         LA.select(PACKAGES, ["nowhere"])
 

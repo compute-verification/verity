@@ -21,11 +21,11 @@ def _bin(d: Path, name: str, data: bytes) -> Path:
 
 def test_record_reads_the_shipped_trees_ready_json_and_snapshot_tells_recorded_stale_missing(tmp_path):
     tree = tmp_path / "src" / "c0ffee"
-    (tree / "backends" / "sp1").mkdir(parents=True)
+    (tree / "archive" / "sp1").mkdir(parents=True)
     (tree / "READY.json").write_text(json.dumps({"identity": "c" * 40, "commit": "c" * 40, "tree": "t" * 40}))
     bins = tmp_path / "bin"
     host = _bin(bins, "veritor-zk-host-cuda", b"build of commit c")
-    doc = BP.record(host, tree / "backends" / "sp1")
+    doc = BP.record(host, tree / "archive" / "sp1")
     assert doc["source"] == {"commit": "c" * 40, "tree": "t" * 40, "dirty": False, "dir": str(tree.resolve()), "via": "READY.json"}
     assert json.loads((bins / "veritor-zk-host-cuda.provenance.json").read_text()) == doc
     other = _bin(bins, "ligero-verify", b"hand build")
