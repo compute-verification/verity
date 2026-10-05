@@ -654,8 +654,8 @@ grounds (`art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c`,
 **What the cap rests on.**
 - **The floor is a model, not a measurement.** No kernel reaches it: the campaign's best measured kernel is 3.38× slower
   at 5,504 bits. A core with twice the IFMA throughput halves the root, and so the cap.
-- **The cap is exact at 3.490× and nowhere else.** Rounding the speedup up to 3.5× leaves 1.994× at the cap; at 3.5× the
-  cap would be 351 µs.
+- **The cap has no slack above 3.490×.** Rounding the speedup up to 3.5× leaves 1.994× at the cap; at 3.5× the cap would
+  be 351 µs.
 - **The margin mixes a measurement with a model.** The 3.490× was measured on an untuned Zen 4 kernel, at 2,717 ns per
   squaring, and is applied to the modelled Zen 5 floor of 361.55 ns. If the exchange between cores costs a fixed number
   of ns, a kernel at the floor gains less from cooperation, so this composition favours the adversary; but it is not a
