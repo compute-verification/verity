@@ -445,6 +445,56 @@ def test_naming_the_anonymous_instances_keeps_their_names_and_the_record(tmp_pat
     assert facts() == names and (pkg / A.POLICY).read_text() == record
 
 
+def test_a_theorem_s_statement_is_read_from_its_source():
+    src = ("namespace P\n/-- twice -/\n@[simp] theorem t.{u} {α : Sort u} (f : α → α) -- a note\n    (h : ∀ x, f x = x) :\n"
+           "    ∀ x, f (f x) = x := by\n  intro x; simp [h]\n"
+           "theorem s : (fun (n : Nat) => n) 0 = 0\n  | _ => rfl\n")
+    assert A.statement(src, (2, 0)) == ("/-- twice -/", ".{u}", "{α : Sort u} (f : α → α) (h : ∀ x, f x = x)",
+                                         "∀ x, f (f x) = x")
+    assert A.statement(src, (7, 0)) == ("", "", "", "(fun (n : Nat) => n) 0 = 0")
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
+    """On a real build: `lift` writes `def G : Prop` (doc comment, universe parameters, binders across lines) into a
+    `Guarantees` module and `theorem X.SecurityProofs.G : X.Guarantees.G` beside the proof, which then imports it; after a
+    build, `--update --moved` with the moves it returns certifies each as the same statement under its old name, and the
+    record changes no statement."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Lifts\nimport Control.Guarantees\n")
+    (pkg / "Control" / "Guarantees.lean").write_text("import Control.Defs\n")
+    (pkg / "Control" / "Lifts.lean").write_text(
+        "import Control.Defs\nopen Nat\nnamespace Control.Sub\n"
+        "/-- Doubling is adding. -/\ntheorem twice {m : Nat} (n : Nat)\n    (h : m = n) :\n    double n = n + n := by\n"
+        "  subst h; unfold double; omega\n"
+        "theorem refl.{u} (α : Sort u) (a : α) : a = a := rfl\nend Control.Sub\n")
+    pol = A.load(pkg)
+    A.dump(pkg, pol | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.Sub.twice", "Control.Sub.refl")},
+                       "layers": pol["layers"] | {"Control.Guarantees": {"imports": ["Control.Defs"]}}})
+    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    audit = lambda **kw: A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
+    build()
+    assert audit(update=True)["failures"] == []
+    rep = audit(lifts={"Control.Sub.twice": {"as": "Control.Guarantees.Twice", "into": "Control.Guarantees"},
+                       "Control.Sub.refl": {"as": "Control.Guarantees.Refl", "into": "Control.Guarantees"}})
+    assert rep["failures"] == [] and rep["moved"] == {"Control.Sub.twice": "Control.SecurityProofs.Twice",
+                                                      "Control.Sub.refl": "Control.SecurityProofs.Refl"}
+    assert (pkg / "Control" / "Guarantees.lean").read_text() == (
+        "import Control.Defs\n\nnamespace Control.Sub\nopen Nat\n\ndef _root_.Control.Guarantees.Refl.{u} : Prop :=\n"
+        "  ∀ (α : Sort u) (a : α),\n    a = a\n\nend Control.Sub\n\n"
+        "namespace Control.Sub\nopen Nat\n\n/-- Doubling is adding. -/\ndef _root_.Control.Guarantees.Twice : Prop :=\n"
+        "  ∀ {m : Nat} (n : Nat) (h : m = n),\n    double n = n + n\n\nend Control.Sub\n")
+    lifts = (pkg / "Control" / "Lifts.lean").read_text()
+    assert lifts.startswith("import Control.Defs\nimport Control.Guarantees\nopen Nat\n") and lifts.endswith(
+        "\ntheorem Control.SecurityProofs.Twice : Control.Guarantees.Twice := @Control.Sub.twice\n")
+    assert "\ntheorem Control.SecurityProofs.Refl.{u} : Control.Guarantees.Refl.{u} := @Control.Sub.refl.{u}\n" in lifts
+    build()
+    rep = audit(update=True, moved=rep["moved"])
+    assert rep["failures"] == [] and A.statement_changes(rep["review"]) == []
+    assert set(A.load(pkg)["guarantees"]) == {"Control.main_thm", "Control.SecurityProofs.Twice", "Control.SecurityProofs.Refl"}
+
+
 def test_generated_constants_belong_to_their_declaration():
     assert [A.parent(n) for n in ("P.f.match_1", "P.walk._f", "P.Enc.mk", "P.instDecidableFits", "mk")] == [
         "P.f", "P.walk", "P.Enc", "P.instDecidableFits", "mk"]

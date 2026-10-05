@@ -28,6 +28,10 @@ python tools/lean/audit.py --update --owner @lane PKG...   the same, with @lane 
 python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
 python tools/lean/audit.py --name-instances PKG...  write each anonymous instance's name, the one Lean gave it, into its
                                                   declaration (no record changes)
+python tools/lean/audit.py --lift LIFTS.json PKG  write each guarantee {"X.t": {"as": "X.Guarantees.G", "into": MODULE}}
+                                                  as `def G : Prop` in MODULE and `theorem X.SecurityProofs.G :
+                                                  X.Guarantees.G := @X.t` beside its proof; then build and run
+                                                  `--update --moved LIFTS.json.moved.json PKG` (below)
 python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
@@ -197,6 +201,13 @@ statement reviewer for it. Any other lift prints in full: a `G` whose value diff
 (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
 theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
 lists a lifted guarantee as changed.
+
+`audit.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` with the theorem's doc comment,
+binders and type as its source writes them, in the theorem's namespace with its file's `open`s so that its names resolve
+as they did, and `theorem X.SecurityProofs.G : X.Guarantees.G := @X.t` beside the proof, whose module then imports the
+spec module. It writes the moves (`LIFTS.json.moved.json`, each `X.t` to `X.SecurityProofs.G`) for `--update --moved`,
+which certifies each lift or prints it; `X.t` stays as a lemma. A guarantee that takes a named assumption as a hypothesis
+moves it into `G`, which prints as a change.
 
 **A move is not a change.** When declarations move (guarantees renamed, the definitions they read renamed or moved to other
 namespaces), write the moves as a JSON object of old names to new ones, each a declaration or a namespace (the longest prefix
