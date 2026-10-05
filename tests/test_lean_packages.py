@@ -69,9 +69,11 @@ def _module_roots(pkg: Path):
 def test_lean_module_roots_are_disjoint():
     """No module name is claimed from two source directories, by two packages or by one. Lake resolves an import by name
     across every library in the workspace and doesn't report a duplicate: a library whose roots overlap another's builds
-    the other's module from its own directory, without a warning. So each library's roots stay under a namespace no
-    other library's roots share (`Pouw.Protocol` and `Pouw.Guarantees` may sit in different directories; `Pouw` and
-    `Pouw.Guarantees` may not)."""
+    the other's module from its own directory, without a warning. Within one package, roots in different source
+    directories may share a namespace but not nest (`Pouw.Protocol` and `Pouw.Guarantees` may; `Pouw` and
+    `Pouw.Guarantees` may not). Across packages they may not even share a first component: with `Pk.A` in one package
+    and `Pk.B` in another, `lake build` passes but `lake env lean` looks for every `Pk.*` under the first package's
+    build directory and fails to find `Pk.B`."""
     claims = []
     for pkg in lake_packages():
         assert (pkg / "lakefile.toml").exists(), f"{pkg.relative_to(ROOT)}: only a lakefile.toml can be read here"
@@ -81,9 +83,14 @@ def test_lean_module_roots_are_disjoint():
         a, b = a.split("."), b.split(".")
         return a[: len(b)] == b or b[: len(a)] == a
 
+    def clash(x, y) -> bool:
+        if x[0] != y[0]:
+            return x[2].split(".")[0] == y[2].split(".")[0]
+        return x[1] != y[1] and nested(x[2], y[2])
+
     clashes = [f"{x[2]} ({x[0].relative_to(ROOT)}, {x[1].relative_to(ROOT)}) and "
                f"{y[2]} ({y[0].relative_to(ROOT)}, {y[1].relative_to(ROOT)})"
-               for x, y in itertools.combinations(claims, 2) if x[:2] != y[:2] and nested(x[2], y[2])]
+               for x, y in itertools.combinations(claims, 2) if clash(x, y)]
     assert len(claims) >= 10
     assert not clashes, clashes
 
