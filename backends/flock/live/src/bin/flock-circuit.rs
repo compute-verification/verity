@@ -912,8 +912,14 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
     let sb = salts.lock().unwrap_or_else(PoisonError::into_inner).expand(id, n);
     let ic = zkv::InnerCommit::new(&pads, sb);
     let self_check = if plan.zero_witness { zkv::SelfCheck::Skip } else { plan.zk_self_check };
+    let t_commit = tz0.elapsed().as_secs_f64();
+    // each rep's copy of the extra lanes (4 · 2^22 words at m = 35) written on rayon's threads, not one
+    let level0 = flock_core::pcs::ligerito::zk::Level0Zk {
+        queries0: level0.queries0, t_pad: level0.t_pad, rep: if plan.zk_shared_pair { 0 } else { rep }, tamper: level0.tamper,
+        extra: std::array::from_fn(|i| { use rayon::prelude::*; level0.extra[i].par_iter().copied().collect() }), pads: level0.pads.clone(),
+    };
     ZkRep { lay, pads, ic, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, final_c_solved: plan.zk_final_c_solved, self_check,
-            t_commit: tz0.elapsed().as_secs_f64(), level0: Arc::new(flock_core::pcs::ligerito::zk::Level0Zk { rep: if plan.zk_shared_pair { 0 } else { rep }, ..level0.clone() }) }
+            t_commit, level0: Arc::new(level0) }
 }
 
 /// M1 on the device: level 0's hiding and both reps' pads with their commitments, drawn beside the witness build (they depend on
@@ -932,6 +938,7 @@ fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, sa
         let id = id0 + rep as u64 * (1 + trees);
         (make_zkrep(st, plan, &mut prng, &level0, points, rep, id, salts), id)
     });
+    eprintln!("ZKPRE\t{}", json!({"level0_s": t_level0, "s": tl0.elapsed().as_secs_f64()}));
     (t_level0, reps)
 }
 
