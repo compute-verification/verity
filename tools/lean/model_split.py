@@ -31,7 +31,7 @@ import json
 import re
 import subprocess
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -166,7 +166,8 @@ class Module:
             if not pat.match(line):
                 continue
             j = i + 1
-            while j < len(self.code) and (not self.code[j].strip() or self.code[j][0].isspace()):
+            while j < len(self.code) and (not self.code[j].strip() or self.code[j][0].isspace()) and \
+                    (not self.lines[j].strip() or self.lines[j][0].isspace()):
                 j += 1
             e = j - 1
             while e > i and not self.lines[e].strip():
@@ -203,6 +204,26 @@ def scopes(code: list[str]) -> list[tuple[list[str], list[str]]]:
             if stack:
                 stack[-1][2].extend(open_items(s)[0])
     return out
+
+
+def binders(body: str) -> tuple[list[str], list[str]]:
+    """A `variable` command's binder names, and the identifiers its binders' types name."""
+    names, refs, depth, start = [], [], 0, 0
+    for k, ch in enumerate(body):
+        if ch in "({[⦃":
+            if depth == 0:
+                start = k
+            depth += 1
+        elif ch in ")}]⦄" and depth:
+            depth -= 1
+            if depth == 0:
+                inner = body[start + 1:k]
+                head, sep, ty = inner.partition(" : ")
+                if not sep:
+                    head, ty = ("", inner) if body[start] == "[" else (inner, "")
+                names += head.split()
+                refs += IDENT.findall(ty)
+    return names, refs
 
 
 def open_items(cmd: str) -> tuple[list[str], str]:
@@ -252,33 +273,35 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
     for m, mod in mods.items():
         for i, c in enumerate(mod.cmds):
             deps[(m, i)] = set().union(*(resolve(u) for n in c["names"] for u in uses_of.get(n, []))) - {(m, i)}
+    by_parent: dict[str, set] = defaultdict(set)
+    for n, c in where.items():
+        by_parent[A.parent(n)].add(c)
     seeds = set()
     for m, rec in policy.get("reads", {}).items():
         if m not in mods:
             continue
         for n in rec.get("definitions", {}):
-            if n not in where:
+            if not by_parent.get(n):
                 raise Refused(f"the lock reads {n} in {m}, which the decls facts do not declare: are they from this tree's build?")
-            seeds.add(where[n])
+            seeds |= by_parent[n]
     kinds = {d["n"]: d["k"] for mod in mods.values() for d in mod.decls}
     for m, mod in mods.items():
         if A.under(spec_pre, m):
             seeds |= {(m, i) for i, c in enumerate(mod.cmds) if any(kinds[n] != "theorem" for n in c["names"])}
+    private_users: dict[tuple[str, int], set] = defaultdict(set)
+    for m, mod in mods.items():
+        for i, cmd in enumerate(mod.cmds):
+            for n in cmd["names"]:
+                for u in uses_of.get(n, []):
+                    if u.startswith("_private.") and u in where and where[u][0] == m and where[u] != (m, i):
+                        private_users[where[u]].add((m, i))
     spec: set = set()
     todo = sorted(seeds)
     while todo:
-        while todo:
-            c = todo.pop()
-            if c not in spec:
-                spec.add(c)
-                todo.extend(sorted(deps[c] - spec))
-        for m, mod in mods.items():
-            for i, cmd in enumerate(mod.cmds):
-                if (m, i) in spec:
-                    continue
-                own = {where[u] for n in cmd["names"] for u in uses_of.get(n, []) if u.startswith("_private.") and u in where}
-                if any(x[0] == m and x in spec for x in own):
-                    todo.append((m, i))
+        c = todo.pop()
+        if c not in spec:
+            spec.add(c)
+            todo.extend(sorted((deps[c] | private_users[c]) - spec))
     side = {}
     for m, mod in mods.items():
         s = {i for i in range(len(mod.cmds)) if (m, i) in spec}
@@ -324,55 +347,31 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
         if side[m] in ("spec", "tool", "mixed"):
             key = protocol.get(m, m)
             new_imports[key] = list(dict.fromkeys(x for i in mods[m].imports for x in f(i)))
-    cmemo: dict[str, frozenset] = {}
+    def closure_of(graph):
+        """The modules a package module reaches through `graph`, its dependencies' modules as leaves (never followed)."""
+        memo: dict[str, frozenset] = {}
 
-    def closure(m: str, graph) -> frozenset:
-        if m in cmemo:
-            return cmemo[m]
-        cmemo[m] = frozenset()
-        out = set()
-        for i in graph(m):
-            out |= {i} | closure(i, graph)
-        cmemo[m] = frozenset(out)
-        return cmemo[m]
+        def cl(m: str) -> frozenset:
+            if m not in memo:
+                memo[m] = frozenset()
+                memo[m] = frozenset(x for i in graph(m) for x in ({i} | cl(i)))
+            return memo[m]
+        return cl
 
-    def spec_graph(m: str) -> list[str]:
-        return new_imports.get(m) if m in new_imports else [i for i in ext_imports.get(m, []) if i != "Init"]
-
+    spec_closure = closure_of(lambda m: new_imports.get(m, []))
     for m in sorted(new_imports):
         orig = set(mods[m].imports) if m in mods else set(mods[next(k for k, v in protocol.items() if v == m)].imports)
         imps = new_imports[m]
-        new_imports[m] = [i for i in imps if i in orig or not any(i in closure(j, spec_graph) for j in imps if j != i)]
-    cmemo.clear()
+        new_imports[m] = [i for i in imps if i in orig or not any(i in spec_closure(j) for j in imps if j != i)]
+    spec_closure = closure_of(lambda m: new_imports.get(m, []))
     # Proof modules see what they saw: each import the split takes from a closure comes back directly.
     proof_imports = {m: list(mods[m].imports) + ([protocol[m]] if m in protocol else [])
                      for m in mods if side[m] in ("proofs", "mixed")}
-
-    def orig_graph(m: str) -> list[str]:
-        return mods[m].imports if m in mods else [i for i in ext_imports.get(m, []) if i != "Init"]
-
-    ocl: dict[str, frozenset] = {}
-
-    def oclosure(m: str) -> frozenset:
-        if m not in ocl:
-            ocl[m] = frozenset()
-            ocl[m] = frozenset(x for i in orig_graph(m) for x in {i, *oclosure(i)})
-        return ocl[m]
-
+    oclosure = closure_of(lambda m: mods[m].imports if m in mods else [])
     ncl: dict[str, frozenset] = {}
 
-    def ngraph(m: str) -> list[str]:
-        if m in proof_imports:
-            return proof_imports[m]
-        if m in new_imports:
-            return new_imports[m]
-        return [i for i in ext_imports.get(m, []) if i != "Init"]
-
-    def nclosure(m: str) -> frozenset:
-        if m not in ncl:
-            ncl[m] = frozenset()
-            ncl[m] = frozenset(x for i in ngraph(m) for x in {i, *nclosure(i)})
-        return ncl[m]
+    def reach(imps: list[str]) -> set:
+        return set().union(set(imps), *(ncl.get(i) or (spec_closure(i) if i in new_imports else frozenset()) for i in imps))
 
     order, seen = [], set()
 
@@ -391,13 +390,12 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
         if m not in proof_imports:
             continue
         want = {x for x in oclosure(m) if x in mods and side[x] in ("proofs", "mixed")}
-        ncl.clear()
-        miss = sorted(want - nclosure(m))
+        miss = sorted(want - reach(proof_imports[m]))
         top = [x for x in miss if not any(x in oclosure(y) for y in miss if y != x)]
         if top:
             added[m] = top
             proof_imports[m] = proof_imports[m] + top
-    ncl.clear()
+        ncl[m] = frozenset(reach(proof_imports[m]))
 
     # Commands by side, and the `open`s and `attribute`s a half can't keep.
     spec_consts = {n for m, mod in mods.items() for n, i in mod.of.items() if (m, i) in spec or side[m] in ("spec", "tool")}
@@ -420,6 +418,9 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
         if side[m] != "mixed":
             continue
         sc = scopes(mod.code)
+        local_names = {n for i, line in enumerate(mod.code) if line.startswith("variable")
+                       for n in binders(" ".join(x.strip() for x in mod.code[i:commands_of(mod.lines, mod.code, i) + 1]))[0]}
+        gone: set[str] = set()
         spec_drop, proof_drop = set(), set()
         for i, (s, e) in enumerate(mod.spans):
             (spec_drop if (m, i) not in spec else proof_drop).update(range(s, e + 1))
@@ -455,7 +456,8 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
                 keep = []
                 for it in items:
                     cands = [".".join(ns[:k] + [it]) for k in range(len(ns), -1, -1)]
-                    if not any(c in full_ns for c in cands) or any(c in spec_ns for c in cands):
+                    found = [c for c in cands if c in full_ns]
+                    if not found or any(c in spec_ns for c in cands) or not all(A.under([root], c) for c in found):
                         keep.append(it)
                 if len(keep) == len(items):
                     if "(" in body:
@@ -479,13 +481,28 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
                     spec_drop.update(range(i + 1, e + 1))
             elif line.startswith("variable") and not IN_END.search(line):
                 e = commands_of(mod.lines, mod.code, i)
-                body = " ".join(x.strip() for x in mod.code[i:e + 1])
+                names, refs = binders(" ".join(x.strip() for x in mod.code[i:e + 1])[len("variable"):])
                 ns, opens = sc[i]
-                for t in IDENT.findall(body):
-                    for c in [".".join(ns[:k] + [t]) for k in range(len(ns), -1, -1)]:
-                        if c in where and c not in spec_consts:
-                            warnings.append(f"{m}:{i + 1}: the spec half's `variable` names {c}, a proof declaration")
-                            break
+                bad = None
+                for t in (r.lstrip("@") for r in refs if r.lstrip("@") not in local_names):
+                    c = next((c for c in [".".join(ns[:k] + [t]) for k in range(len(ns), -1, -1)] +
+                              [f"{o}.{t}" for o in opens] if c in where), None)
+                    if c and c not in spec_consts:
+                        bad = c
+                        break
+                if bad:
+                    spec_drop.update(range(i, e + 1))
+                    gone |= set(names)
+                    warnings.append(f"{m}:{i + 1}: the spec half leaves out a `variable` whose type names {bad}, a proof's")
+            elif line.startswith("include ") and gone:
+                e = commands_of(mod.lines, mod.code, i)
+                names = " ".join(x.strip() for x in mod.code[i:e + 1]).split()[1:]
+                if keep := [n for n in names if n not in gone]:
+                    if len(keep) != len(names):
+                        edits[i] = "include " + " ".join(keep)
+                        spec_drop.update(range(i + 1, e + 1))
+                else:
+                    spec_drop.update(range(i, e + 1))
         halves[m] = {"spec_drop": sorted(spec_drop), "proof_drop": sorted(proof_drop), "spec_edits": edits}
     layers = {}
     deps_roots = sorted({i.split(".")[0] for m in spec_mods for i in new_imports.get(m, []) if i not in mods
@@ -538,13 +555,24 @@ def without(lines: list[str], drop: set[int], edits: dict[int, str]) -> list[str
 
 
 def with_imports(lines: list[str], code: list[str], imports: list[str]) -> list[str]:
+    """``lines`` with ``imports`` as its header: the imports it keeps where they were, with the comments between them, and
+    the others after them."""
     idx = header(code)
     head, rest = (lines[:idx[0]], lines[idx[-1] + 1:]) if idx else ([], lines)
-    if not imports and not any(x.strip() for x in head):
+    body, done = [], set()
+    for k in range(idx[0], idx[-1] + 1) if idx else ():
+        if k in idx:
+            mine = [i for i in IMPORT.match(code[k].strip()).group(1).split() if i in imports and i not in done]
+            body += [f"import {i}" for i in mine]
+            done |= set(mine)
+        elif lines[k].strip():
+            body.append(lines[k])
+    body += [f"import {i}" for i in imports if i not in done]
+    if not body and not any(x.strip() for x in head):
         while rest and not rest[0].strip():
             rest = rest[1:]
         return rest
-    return head + [f"import {i}" for i in imports] + rest
+    return head + body + rest
 
 
 def render(p: dict) -> dict[str, str]:
@@ -565,6 +593,11 @@ def render(p: dict) -> dict[str, str]:
             proof_lines = without(lines, set(h["proof_drop"]), {})
             proof_code = without(code, set(h["proof_drop"]), {})
             out[rel] = "\n".join(with_imports(proof_lines, proof_code, p["proof_imports"].get(m, imports_of(code))))
+            edited = {j for k in h["spec_edits"] for j in range(int(k), commands_of(lines, code, int(k)) + 1)}
+            lost = Counter(x for k, x in enumerate(lines) if k not in set(header(code)) | edited and x.strip()) - \
+                Counter(spec_lines + proof_lines)
+            if lost:
+                raise Refused(f"{m}: the split would lose {sum(lost.values())} line(s), such as {next(iter(lost))!r}")
         elif side in ("spec", "tool"):
             if p["new_imports"][m] != imports_of(code):
                 out[rel] = "\n".join(with_imports(lines, code, p["new_imports"][m]))
