@@ -460,3 +460,58 @@ def test_the_launcher_signs_only_this_trees_pinned_bundles(tmp_path, monkeypatch
     p = LA.url_file(tmp_path, ttl_s=60)
     assert json.loads(p.read_text()) == {k: f"https://r2/objects/sha256/{'ab' * 32}?sig"} and signed == [(f"objects/sha256/{'ab' * 32}", 60)]
     assert p.name == LA.URLS and p.stat().st_mode & 0o777 == 0o600
+
+
+def _proc(root: Path, pid: int, cwd: Path | None = None, fds: tuple[Path, ...] = (), blind: bool = False) -> None:
+    p = root / str(pid)
+    p.mkdir(parents=True)
+    (p / "cwd").symlink_to(cwd or root)
+    (p / "root").symlink_to("/")
+    if blind:
+        (p / "fd").write_text("")
+        return
+    (p / "fd").mkdir()
+    for i, f in enumerate(fds):
+        (p / "fd" / str(i)).symlink_to(f)
+
+
+def test_the_sweep_removes_only_the_scratch_trees_no_audit_holds(tmp_path):
+    """A tree an audit left when it was killed goes; one whose creator lives, or a live process is inside, stays, and so does a
+    tree without a pid in its name while it is young or some process can't be read."""
+    base, proc = tmp_path / "cache", tmp_path / "proc"
+    proc.mkdir()
+    t = {n: base / f"{LA.SCRATCH}{n}" for n in ("41-dead", "42-alive", "old", "old-cwd", "old-fd", "young")}
+    for d in t.values():
+        (d / "pkg").mkdir(parents=True)
+    for n in ("old", "old-cwd", "old-fd"):
+        os.utime(t[n], (0, 0))
+    now = LA.SCRATCH_GRACE_S + 10.0
+    os.utime(t["young"], (now - 5, now - 5))
+    _proc(proc, 42)
+    _proc(proc, 7, cwd=t["old-cwd"] / "pkg")
+    _proc(proc, 8, fds=(t["old-fd"] / "pkg" / "x.olean",))
+    (base / "lean-deps").mkdir()
+
+    gone = LA.sweep(base, log=lambda m: None, proc=proc, now=now)
+    assert sorted(gone) == [t["41-dead"].name, t["old"].name]
+    assert sorted(p.name for p in base.iterdir()) == sorted(["lean-deps", *(t[n].name for n in ("42-alive", "old-cwd", "old-fd", "young"))])
+
+    _proc(proc, 9, blind=True)
+    for n in ("43-dead", "old2"):
+        (base / f"{LA.SCRATCH}{n}").mkdir()
+    os.utime(base / f"{LA.SCRATCH}old2", (0, 0))
+    assert LA.sweep(base, log=lambda m: None, proc=proc, now=now) == [f"{LA.SCRATCH}43-dead"]
+    assert (base / f"{LA.SCRATCH}old2").is_dir()
+
+
+def test_an_audit_sweeps_before_it_makes_its_scratch_tree_named_by_its_pid(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(LA, "sweep", lambda base, log=print, **k: seen.append(base))
+    made = []
+    real = LA.tempfile.mkdtemp
+    monkeypatch.setattr(LA.tempfile, "mkdtemp", lambda prefix, dir: made.append(prefix) or real(prefix=prefix, dir=dir))
+    deps = tmp_path / "cache" / "lean-deps"
+    (tmp_path / "out").mkdir()
+    LA._audit([], [], {}, {}, tmp_path / "out", tmp_path / "cache" / "lean-audit", deps, True, lambda m: None)
+    assert seen == [deps.parent]
+    assert made == [f"{LA.SCRATCH}{os.getpid()}-"]
