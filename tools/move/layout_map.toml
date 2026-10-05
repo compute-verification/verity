@@ -1,0 +1,288 @@
+# The repository's layout move: what `tools/move/layout.py` moves, renames and rewrites.
+#
+# [paths] maps an old path prefix (a file, or a directory ending in "/") to its new one; the longest prefix that matches a
+# tracked file decides where it goes. Python module names follow from the paths and [roots] (`layout.py` derives every
+# rename); [modules] lists the renames at package level, and the script fails when what it derives disagrees with them.
+# [aliases] adds old names that no file in the tree carries any more, for readers of old data.
+
+[roots]
+# import name -> its package directory, before and after; a module outside every root is named by its path from the root
+# (`benchmarks.pouw.pearl_c4.replay`).
+old = { verity = "packages/verity/src/verity", verity_sampled_proofs = "protocols/sampled_proofs/verity_sampled_proofs", verity_pous = "protocols/pous/verity_pous", verity_pouw = "protocols/pouw/verity_pouw", verity_network_warden = "protocols/network_warden/verity_network_warden", verity_sp1 = "backends/sp1/python/verity_sp1", verity_numerical = "backends/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", verity_flock = "backends/flock/python/verity_flock", research = "tools/research/src/research", circuit_check = "tools/circuit_check/src/circuit_check", cluster = "tools/cluster/src/cluster" }
+new = { verity = "verity", catalog = "catalog", kernels = "kernels", experimental = "experimental", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", verity_flock = "backends/flock/python/verity_flock", research = "tools/research/src/research", circuit_check = "tools/circuit_check/src/circuit_check", cluster = "tools/cluster/src/cluster" }
+
+[paths]
+# --- core: the trusted computing base, verity/
+"packages/verity/pyproject.toml" = "verity/pyproject.toml"
+"packages/verity/README.md" = "verity/README.md"
+"packages/verity/lean/" = "verity/lean/"
+"packages/verity/src/verity/__init__.py" = "verity/__init__.py"
+"packages/verity/src/verity/errors.py" = "verity/errors.py"
+"packages/verity/src/verity/claims/" = "verity/claims/"
+"packages/verity/src/verity/ir/" = "verity/primitives/circuits/"
+"packages/verity/src/verity/ir/boolean.py" = "verity/primitives/circuits/boolean/__init__.py"
+"packages/verity/src/verity/evaluation/" = "verity/primitives/circuits/evaluation/"
+"packages/verity/src/verity/randomness/" = "verity/primitives/randomness/"
+"packages/verity/src/verity/commitments/" = "verity/primitives/commitments/"
+"packages/verity/src/verity/commitments/blake3.py" = "verity/primitives/crypto/blake3.py"
+"packages/verity/src/verity/commitments/turboshake.py" = "verity/primitives/crypto/turboshake.py"
+"packages/verity/src/verity/commitments/multiproof.py" = "experimental/commitments/multiproof.py"
+"packages/verity/src/verity/ml/library.py" = "verity/primitives/circuits/library.py"
+"packages/verity/src/verity/ml/operations.py" = "verity/primitives/circuits/operations.py"
+"packages/verity/src/verity/ml/boolean/forms.py" = "verity/primitives/circuits/boolean/forms.py"
+"packages/verity/src/verity/ml/boolean/gather.py" = "verity/primitives/circuits/boolean/gather.py"
+"packages/verity/src/verity/ml/boolean/trace.py" = "verity/primitives/circuits/boolean/trace.py"
+"packages/verity/src/verity/ml/boolean/merkle.py" = "verity/primitives/commitments/gates/merkle.py"
+"packages/verity/src/verity/ml/boolean/sha512.py" = "verity/primitives/commitments/gates/sha512.py"
+"packages/verity/src/verity/proofs/profile.py" = "verity/protocols/profile.py"
+
+# --- core: silicon semantics and Definitions, catalog/
+"packages/verity/src/verity/ml/tc/" = "catalog/silicon/"
+"packages/verity/src/verity/ml/boolean/fp.py" = "catalog/silicon/fp.py"
+"packages/verity/src/verity/ml/boolean/fp4.py" = "catalog/silicon/fp4.py"
+"packages/verity/src/verity/ml/boolean/tc_step.py" = "catalog/silicon/tc_step.py"
+"packages/verity/src/verity/ml/" = "catalog/definitions/"
+"packages/verity/src/verity/ml/boolean/" = "catalog/definitions/boolean/"
+"packages/verity/src/verity/ml/kernels.py" = "kernels/tc.py"
+"packages/verity/src/verity/ml/boolean/universal.py" = "experimental/private_circuits/universal.py"
+"packages/verity/src/verity/proofs/target.py" = "catalog/targets/target.py"
+"census/" = "catalog/census/"
+"fixtures/tc/" = "catalog/silicon/captures/"
+"fixtures/hawkeye/" = "catalog/silicon/hawkeye/"
+"fixtures/discrepancy_log.json" = "catalog/silicon/discrepancy_log.json"
+
+# --- core: what leaves for the integration and the archive
+"packages/verity/src/verity/proofs/" = "archive/sp1/python/verity_sp1/proofs/"
+"packages/verity/src/verity/proofs/codes.py" = "integrations/vllm/verity_vllm/check/codes.py"
+"packages/verity/src/verity/proofs/query.py" = "integrations/vllm/verity_vllm/query/units.py"
+
+# --- core's tests follow their modules
+"packages/verity/tests/test_boundaries.py" = "verity/tests/test_boundaries.py"
+"packages/verity/tests/ir/" = "verity/tests/circuits/"
+"packages/verity/tests/evaluation/" = "verity/tests/evaluation/"
+"packages/verity/tests/randomness/" = "verity/tests/randomness/"
+"packages/verity/tests/claims/" = "verity/tests/claims/"
+"packages/verity/tests/commitments/" = "verity/tests/commitments/"
+"packages/verity/tests/commitments/test_multiproof.py" = "experimental/commitments/tests/test_multiproof.py"
+"packages/verity/tests/ml/" = "catalog/tests/"
+"packages/verity/tests/ml/test_boolean_forms.py" = "verity/tests/circuits/test_boolean_forms.py"
+"packages/verity/tests/ml/test_library.py" = "verity/tests/circuits/test_library.py"
+"packages/verity/tests/ml/test_operations.py" = "verity/tests/circuits/test_operations.py"
+"packages/verity/tests/ml/test_boolean_merkle.py" = "verity/tests/commitments/test_boolean_merkle.py"
+"packages/verity/tests/ml/test_boolean_universal.py" = "experimental/private_circuits/tests/test_boolean_universal.py"
+"packages/verity/tests/proofs/" = "archive/sp1/tests/proofs/"
+"packages/verity/tests/proofs/test_profile.py" = "verity/tests/protocols/test_profile.py"
+"packages/verity/tests/proofs/test_query.py" = "integrations/vllm/tests/query/test_units.py"
+"packages/verity/tests/proofs/test_tc_probe_families.py" = "catalog/tests/test_tc_probe_families.py"
+"packages/verity/tests/proofs/test_discrepancy_log.py" = "catalog/tests/test_discrepancy_log.py"
+
+# --- protocols: verity/protocols/<kind>/... (moved whole; splits are each area's)
+"protocols/sampled_proofs/verity_sampled_proofs/" = "verity/protocols/verification/sampled_proofs/"
+"protocols/sampled_proofs/" = "verity/protocols/verification/sampled_proofs/"
+"protocols/sampled_proofs/verity_sampled_proofs/law.py" = "experimental/sampled_proofs/law.py"
+"protocols/sampled_proofs/verity_sampled_proofs/plan.py" = "experimental/sampled_proofs/plan.py"
+"protocols/sampled_proofs/verity_sampled_proofs/one_stage/consumers.py" = "experimental/sampled_proofs/consumers.py"
+"protocols/sampled_proofs/tests/test_consumers.py" = "experimental/sampled_proofs/tests/test_consumers.py"
+"protocols/sampled_proofs/tests/test_law.py" = "experimental/sampled_proofs/tests/test_law.py"
+"protocols/sampled_proofs/tests/test_plan.py" = "experimental/sampled_proofs/tests/test_plan.py"
+"protocols/sampled_proofs/tests/lean/" = "experimental/sampled_proofs/tests/lean/"
+"protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json" = "experimental/sampled_proofs/tests/fixtures/exfiltration_lean.json"
+"protocols/pous/verity_pous/" = "verity/protocols/accounting/space/pous/"
+"protocols/pous/" = "verity/protocols/accounting/space/pous/"
+"protocols/pouw/verity_pouw/" = "verity/protocols/accounting/work/pouw/"
+"protocols/pouw/" = "verity/protocols/accounting/work/pouw/"
+"protocols/pouw/verity_pouw/beacon.py" = "verity/primitives/crypto/beacon.py"
+"protocols/pouw/verity_pouw/bls12_381.py" = "verity/primitives/crypto/bls12_381.py"
+"protocols/pouw/verity_pouw/schemes/pearl_c4_replay.py" = "benchmarks/pouw/pearl_c4/replay.py"
+"protocols/network_warden/verity_network_warden/" = "verity/protocols/accounting/communication/warden/"
+"protocols/network_warden/" = "verity/protocols/accounting/communication/warden/"
+"protocols/nci/" = "verity/protocols/compliance/nci/"
+"tests/test_pous_bench.py" = "benchmarks/pous/tests/test_pous_bench.py"
+"tests/test_pous_explorer.py" = "benchmarks/pous/tests/test_pous_explorer.py"
+"tests/test_pous_harness.py" = "benchmarks/pous/tests/test_pous_harness.py"
+"tests/test_pous_p2v1.py" = "benchmarks/pous/tests/test_pous_p2v1.py"
+
+# --- frozen backends: archive/ (same depth, so their own relative paths hold)
+"backends/gkr/" = "archive/gkr/"
+"backends/direct/" = "archive/direct/"
+"backends/ligero-verify/" = "archive/ligero-verify/"
+"backends/ligerito-verify/" = "archive/ligerito-verify/"
+"backends/sp1/" = "archive/sp1/"
+"backends/vole/" = "archive/vole/"
+"backends/redteam/" = "archive/redteam/"
+"backends/shared/anchor_a100/" = "archive/shared/anchor_a100/"
+"backends/shared/hash_gpu/" = "kernels/hash_gpu/"
+"backends/README.md" = "archive/README.md"
+"backends/AGENTS.md" = "archive/AGENTS.md"
+"benchmarks/dot_product/" = "archive/sp1/benchmarks/dot_product/"
+"benchmarks/ir_call/" = "archive/sp1/benchmarks/ir_call/"
+
+# --- numerical references and the table renderer: benchmarks/
+"backends/numerical/" = "benchmarks/numerical/"
+
+[tokens]
+# directories that no row moves whole, as they read in text after the move (each rewrite is reported as approximate)
+"packages/verity" = "verity"
+"packages/verity/src" = "verity"
+"packages/verity/src/verity" = "verity"
+"packages/verity/tests" = "verity/tests"
+"backends/shared" = "kernels"
+
+[pyproject."pyproject.toml"]
+testpaths_replace = { protocols = ["verity/protocols", "catalog/tests", "experimental"] }
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`); every module under one follows it unless a longer entry
+# says otherwise
+"backends.direct" = "archive.direct"
+"backends.gkr" = "archive.gkr"
+"backends.numerical" = "benchmarks.numerical"
+"backends.redteam" = "archive.redteam"
+"backends.shared.anchor_a100" = "archive.shared.anchor_a100"
+"backends.shared.hash_gpu" = "kernels.hash_gpu"
+"backends.sp1" = "archive.sp1"
+"backends.vole" = "archive.vole"
+"benchmarks.dot_product" = "archive.sp1.benchmarks.dot_product"
+"benchmarks.ir_call" = "archive.sp1.benchmarks.ir_call"
+"census" = "catalog.census"
+"fixtures.hawkeye" = "catalog.silicon.hawkeye"
+"fixtures.tc" = "catalog.silicon.captures"
+"packages.verity.lean" = "verity.lean"
+"packages.verity.tests.claims" = "verity.tests.claims"
+"packages.verity.tests.commitments" = "verity.tests.commitments"
+"packages.verity.tests.commitments.test_multiproof" = "experimental.commitments.tests.test_multiproof"
+"packages.verity.tests.evaluation" = "verity.tests.evaluation"
+"packages.verity.tests.ir" = "verity.tests.circuits"
+"packages.verity.tests.ml" = "catalog.tests"
+"packages.verity.tests.ml.test_boolean_forms" = "verity.tests.circuits.test_boolean_forms"
+"packages.verity.tests.ml.test_boolean_merkle" = "verity.tests.commitments.test_boolean_merkle"
+"packages.verity.tests.ml.test_boolean_universal" = "experimental.private_circuits.tests.test_boolean_universal"
+"packages.verity.tests.ml.test_library" = "verity.tests.circuits.test_library"
+"packages.verity.tests.ml.test_operations" = "verity.tests.circuits.test_operations"
+"packages.verity.tests.proofs" = "archive.sp1.tests.proofs"
+"packages.verity.tests.proofs.test_discrepancy_log" = "catalog.tests.test_discrepancy_log"
+"packages.verity.tests.proofs.test_profile" = "verity.tests.protocols.test_profile"
+"packages.verity.tests.proofs.test_query" = "integrations.vllm.tests.query.test_units"
+"packages.verity.tests.proofs.test_tc_probe_families" = "catalog.tests.test_tc_probe_families"
+"packages.verity.tests.randomness" = "verity.tests.randomness"
+"packages.verity.tests.test_boundaries" = "verity.tests.test_boundaries"
+"protocols.nci" = "verity.protocols.compliance.nci"
+"protocols.network_warden" = "verity.protocols.accounting.communication.warden"
+"protocols.pous" = "verity.protocols.accounting.space.pous"
+"protocols.pouw" = "verity.protocols.accounting.work.pouw"
+"protocols.sampled_proofs" = "verity.protocols.verification.sampled_proofs"
+"protocols.sampled_proofs.tests.lean" = "experimental.sampled_proofs.tests.lean"
+"protocols.sampled_proofs.tests.test_consumers" = "experimental.sampled_proofs.tests.test_consumers"
+"protocols.sampled_proofs.tests.test_law" = "experimental.sampled_proofs.tests.test_law"
+"protocols.sampled_proofs.tests.test_plan" = "experimental.sampled_proofs.tests.test_plan"
+"tests.test_pous_bench" = "benchmarks.pous.tests.test_pous_bench"
+"tests.test_pous_explorer" = "benchmarks.pous.tests.test_pous_explorer"
+"tests.test_pous_harness" = "benchmarks.pous.tests.test_pous_harness"
+"tests.test_pous_p2v1" = "benchmarks.pous.tests.test_pous_p2v1"
+"verity.commitments" = "verity.primitives.commitments"
+"verity.commitments.blake3" = "verity.primitives.crypto.blake3"
+"verity.commitments.multiproof" = "experimental.commitments.multiproof"
+"verity.commitments.turboshake" = "verity.primitives.crypto.turboshake"
+"verity.evaluation" = "verity.primitives.circuits.evaluation"
+"verity.ir" = "verity.primitives.circuits"
+"verity.ir.boolean" = "verity.primitives.circuits.boolean"
+"verity.ml" = "catalog.definitions"
+"verity.ml.boolean" = "catalog.definitions.boolean"
+"verity.ml.boolean.forms" = "verity.primitives.circuits.boolean.forms"
+"verity.ml.boolean.fp" = "catalog.silicon.fp"
+"verity.ml.boolean.fp4" = "catalog.silicon.fp4"
+"verity.ml.boolean.gather" = "verity.primitives.circuits.boolean.gather"
+"verity.ml.boolean.merkle" = "verity.primitives.commitments.gates.merkle"
+"verity.ml.boolean.sha512" = "verity.primitives.commitments.gates.sha512"
+"verity.ml.boolean.tc_step" = "catalog.silicon.tc_step"
+"verity.ml.boolean.trace" = "verity.primitives.circuits.boolean.trace"
+"verity.ml.boolean.universal" = "experimental.private_circuits.universal"
+"verity.ml.kernels" = "kernels.tc"
+"verity.ml.library" = "verity.primitives.circuits.library"
+"verity.ml.operations" = "verity.primitives.circuits.operations"
+"verity.ml.tc" = "catalog.silicon"
+"verity.proofs" = "verity_sp1.proofs"
+"verity.proofs.codes" = "verity_vllm.check.codes"
+"verity.proofs.profile" = "verity.protocols.profile"
+"verity.proofs.query" = "verity_vllm.query.units"
+"verity.proofs.target" = "catalog.targets.target"
+"verity.randomness" = "verity.primitives.randomness"
+"verity_network_warden" = "verity.protocols.accounting.communication.warden"
+"verity_pous" = "verity.protocols.accounting.space.pous"
+"verity_pouw" = "verity.protocols.accounting.work.pouw"
+"verity_pouw.beacon" = "verity.primitives.crypto.beacon"
+"verity_pouw.bls12_381" = "verity.primitives.crypto.bls12_381"
+"verity_pouw.schemes.pearl_c4_replay" = "benchmarks.pouw.pearl_c4.replay"
+"verity_sampled_proofs" = "verity.protocols.verification.sampled_proofs"
+"verity_sampled_proofs.law" = "experimental.sampled_proofs.law"
+"verity_sampled_proofs.one_stage.consumers" = "experimental.sampled_proofs.consumers"
+"verity_sampled_proofs.plan" = "experimental.sampled_proofs.plan"
+
+[aliases]
+# old names that resolve at run time from recorded data, beyond the derived renames (written to module_aliases.json)
+
+[distributions]
+# distributions that the move folds into `verity`: their dependents depend on `verity`, their members leave the workspace,
+# and their pyprojects become suite-only (pytest and [tool.verity.tests], with `verity` among the inputs)
+merged = ["verity-sampled-proofs", "verity-pous", "verity-pouw", "verity-network-warden"]
+
+[pyproject."verity/pyproject.toml"]
+# the one `verity` distribution: its editable install puts the repository's root on sys.path, so `verity`, `catalog`,
+# `kernels` and `experimental` import by directory (regular packages, so the root's namespace-only `tests` never shadows one)
+replace = { "tool.hatch.build.targets.wheel" = "bypass-selection = true\n\n[tool.hatch.build]\ndev-mode-dirs = [\"..\"]" }
+scripts = { "network-warden-calibrate" = "verity.protocols.accounting.communication.warden.calibration:main" }
+add_inputs = ["catalog", "kernels", "experimental/commitments/multiproof.py"]
+
+[create]
+# new files: path = contents
+"catalog/__init__.py" = '"""Public data the trusted base reads by digest: silicon semantics, Definitions, targets and the census."""\n'
+"kernels/__init__.py" = '"""Registered fast code, by op and device (untrusted): each kernel is checked against its Definition."""\n'
+"experimental/__init__.py" = '"""Constructions, schemes and circuits under development or kept for study, by area (untrusted; `verity` never imports it)."""\n'
+"verity/primitives/__init__.py" = '"""The primitives every protocol is built from: circuits, randomness, commitments and crypto."""\n'
+"verity/protocols/__init__.py" = '"""The protocols: verification, accounting (work, space, communication) and compliance."""\n'
+"catalog/pyproject.toml" = '''# The catalog's suite: its tests run in the workspace's environment, against `verity` (an editable install of the root).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+inputs = ["verity", "kernels", "archive/sp1/python/verity_sp1", "tools/tc_probe", "tools/tc_probe_fp4/probe.py",
+          "benchmarks/numerical/python/verity_numerical/reference/hawkeye_close.py",
+          "benchmarks/numerical/tests/checker/test_fp8.py",
+          "benchmarks/numerical/tests/reference/hawkeye_harness.cpp",
+          "benchmarks/numerical/tests/reference/test_hawkeye_close.py",
+          "benchmarks/numerical/tests/reference/test_normalisation_d3.py"]
+parallel = true
+'''
+"experimental/pyproject.toml" = '''# Experimental code's suite: its tests run in the workspace's environment, against `verity` (an editable install of the root).
+[tool.pytest.ini_options]
+testpaths = ["sampled_proofs/tests", "commitments/tests", "private_circuits/tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: the Lean-evaluated exfiltration vectors record the sha256 of the soundness package's files they were generated
+# from (sampled_proofs/tests/lean/generate.sh), and a test compares them with the tree.
+inputs = ["verity", "catalog", "kernels",
+          "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Influence.lean",
+          "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Law.lean",
+          "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Stratified.lean",
+          "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/StratifiedMiss.lean",
+          "backends/flock/verifier/lean/soundness/lake-manifest.json",
+          "backends/flock/verifier/lean/soundness/lean-toolchain"]
+parallel = true
+'''
+
+[rewrite]
+# Never rewritten: records of what was, and files whose bytes a digest pins.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock",
+           "backends/numerical/reports/**", "benchmarks/numerical/reports/**",
+           "**/price_twins.json", "**/discrepancy_log.json", "tools/move/**"]
+# Old paths that are keys outside the tree, never rewritten: the frozen evidence artifact is laid out at its former repository
+# paths (`verity_numerical.bench.frozen`), and labels cite them.
+keep = ["backends/numerical/reports", "backends/numerical/reports/*", "backends/*/results", "backends/*/results/*",
+        "backends/*/results_*", "backends/*/results.*"]
+# Rewritten although excluded above: data keyed by repository path (their pinned digests must not change).
+include = ["fixtures/artifacts.json", "backends/flock/tests/fixtures/randomness_lean.json",
+           "experimental/sampled_proofs/tests/fixtures/exfiltration_lean.json",
+           "**/lake-manifest.json"]
