@@ -29,13 +29,13 @@ ALLOWED_EXTRA = (
     "archive/direct/V2_AIR.md",
     "archive/direct/encode/V2_SHAPE.md",
     "archive/vole/ASSUMPTIONS.md",
-    "backends/flock/verifier/lean/soundness/ASSUMPTIONS.md",
+    "verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
     "benchmarks/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
 #: One file per entry behind an index document, so that no one document outgrows its cap: the Flock soundness package's
 #: detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and ligero-verify's discrepancies
 #: (indexed by its ``DISCREPANCIES.md``).
-SPLIT_DOCUMENT_DIRS = ("backends/flock/verifier/lean/soundness/assumptions/", "archive/ligero-verify/discrepancies/")
+SPLIT_DOCUMENT_DIRS = ("verity/Security/Proofs/Flock/Soundness/assumptions/", "archive/ligero-verify/discrepancies/")
 #: The one evidence file left in the tree: not read by code, kept with the rest of fixtures/redteam until the red team rules
 #: on it.  The frozen campaign evidence that code reads (the overhead ledger, the run results the frozen backends' report
 #: scripts compare against) is in the evidence store (``verity_numerical.bench.frozen``).
@@ -156,7 +156,7 @@ def markdown_over_cap(path: str, size: int) -> str | None:
 
 
 def test_markdown_over_cap_says_by_how_much_and_where_detail_goes() -> None:
-    soundness = "backends/flock/verifier/lean/soundness/"
+    soundness = "verity/Security/Proofs/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")

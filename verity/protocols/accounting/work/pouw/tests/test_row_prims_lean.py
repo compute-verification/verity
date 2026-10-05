@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("verity.protocols.accounting.work.pouw.circuit.words", reason="the row primitives are `verity.protocols.accounting.work.pouw.circuit.words`'")
 
-LEAN = Path(__file__).resolve().parents[1] / "lean"
+LEAN = Path(__file__).resolve().parents[5] / "Security"
 SCRIPT = LEAN / "scripts" / "row_prims_vectors.py"
 FILES = ["Pouw/Protocol/PearlC/RowPrimVectors.lean", "Pouw/SecurityProofs/PearlC/RowPrimChecks.lean"]
 
