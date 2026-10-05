@@ -3,6 +3,7 @@ half, as a pure move: on a small package built with `lake`, every declaration ke
 the proofs still build, and the lock's `reads` change only in the module names they are keyed by."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -85,19 +86,23 @@ end
 
 end P
 """
+TAC = 'import P.Defs\n\n/-- `five!` is `f 5`. -/\nmacro "five!" : term => `(P.f 5)\n\ndef P.tac : Nat := five!\n'
 FILES = {
     "lakefile.toml": 'name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n',
-    "P.lean": "import P.Thms\nimport P.Assumptions\n",
+    "P.lean": "import P.Thms\nimport P.Assumptions\nimport P.Tac\n",
     "P/Base.lean": "theorem P.base_thm : True := trivial\n\ndef P.base : Nat := 0\n\nnamespace P.Hid\n\ndef hid : Nat := 0\n\n"
                    "end P.Hid\n",
     "P/Assumptions.lean": "def P.Hyp : Prop := True\n",
     "P/Defs.lean": DEFS,
     "P/Thms.lean": "import P.Defs\n\ntheorem P.t : P.g = 1 := P.g_eq\n\ntheorem P.u : P.base = 0 := rfl\n",
+    "P/Tac.lean": TAC,
 }
 LOCK = {"roots": ["P"], "assumptions": ["P.Assumptions"],
         "pins": {"P.t": {"signature": ["P.t : Eq P.g 1"], "assumptions": [], "type_hash": "aa"}},
         "reads": {"P.Defs": {"digest": "d", "definitions": {"P.f": "1", "P.g": "2", "P.two": "3", "P.three": "4", "P.four": "5",
-                                                            "P.five": "6", "P.one": "7", "P.addk": "8"}}}}
+                                                            "P.five": "6", "P.one": "7", "P.addk": "8"}},
+                  "P.Tac": {"digest": "e", "definitions": {"P.tac": "9"}}},
+        "compile_time": {"P.Tac": {"why": "the macro `five!`", "digest": hashlib.sha256(TAC.encode()).hexdigest()}}}
 
 
 def package(tmp: Path) -> Path:
@@ -135,7 +140,8 @@ def test_a_mixed_module_splits_into_a_spec_half_and_its_proofs_and_still_builds(
     assert "P.lt3" not in uses["P.three"] and "P.f_four" not in uses["P.four_eq"] and "P.f_five" not in uses["P.five_eq"]
     assert "P.Hid" in before["namespaces"]["P.Base"] and "Nat.Simproc" in {n for ns in before["namespaces"].values() for n in ns}
     p = S.plan(pkg, before, [])
-    assert p["side"] == {"P": "proofs", "P.Assumptions": "spec", "P.Base": "proofs", "P.Defs": "mixed", "P.Thms": "proofs"}
+    assert p["side"] == {"P": "proofs", "P.Assumptions": "spec", "P.Base": "proofs", "P.Defs": "mixed", "P.Tac": "spec",
+                         "P.Thms": "proofs"}
     assert p["protocol"] == {"P.Defs": "P.Protocol.Defs"} and p["new_imports"]["P.Protocol.Defs"] == []
     assert S.render(p) == S.render(S.plan(pkg, before, []))
     S.apply(p)
@@ -155,8 +161,12 @@ def test_a_mixed_module_splits_into_a_spec_half_and_its_proofs_and_still_builds(
     after = decls(pkg)
     assert names(after) == names(before)
     lock = A.load(pkg)
-    assert lock["reads"] == {"P.Protocol.Defs": LOCK["reads"]["P.Defs"]} and lock["pins"] == LOCK["pins"]
-    assert lock["layers"]["P.Protocol"]["imports"] == ["P.Assumptions", "P.Protocol"]
+    assert lock["reads"] == {"P.Protocol.Defs": LOCK["reads"]["P.Defs"], "P.Tac": LOCK["reads"]["P.Tac"]}
+    assert lock["pins"] == LOCK["pins"] and lock["layers"]["P.Protocol"]["imports"] == ["P.Assumptions", "P.Protocol", "P.Tac"]
+    tac, was = (pkg / "P/Tac.lean").read_text(), LOCK["compile_time"]["P.Tac"]["digest"]
+    assert tac == TAC.replace("import P.Defs", "import P.Protocol.Defs")
+    assert lock["compile_time"]["P.Tac"] == {"why": "the macro `five!`", "digest": A.sha256(pkg / "P/Tac.lean")}
+    assert p["compile_time"] == [f"P.Tac: only its imports change; digest {was[:12]}… -> {A.sha256(pkg / 'P/Tac.lean')[:12]}…"]
     assert set(after["modules"]["P.Protocol.Defs"]["imports"]) == {"Init"}
 
 

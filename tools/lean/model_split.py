@@ -16,7 +16,8 @@ the spec and dependency modules that proof module imports, followed through, and
 spec half. A proof module whose closure loses a module that way imports it directly, so every proof sees what it saw.
 A module that declares syntax (a tactic) and imports only the spec is the spec's tool. `example`s and `#` commands stay
 with the proofs. The lock gets a `layers` rule per spec module (outside `--spec`), which lets it import only the spec,
-the package's dependencies and the libraries, and its `reads` keyed by the new module names.
+the package's dependencies and the libraries, and its `reads` keyed by the new module names. A module under the lock's
+`compile_time` whose file changes only in its imports keeps its review, with the new file's digest.
 
 It refuses, printing why, when a declaration shares a line with another command, when ranges overlap, or when a module
 under a spec name holds proofs. Without `--apply` it prints the plan and changes nothing; with `--apply` it writes the
@@ -26,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import importlib.util
 import json
 import re
@@ -689,10 +691,35 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
                 counts[f"moved {'theorem' if kinds == {'theorem'} else 'definition'} commands"] += 1
                 counts["moved constants"] += len(c["names"])
     ext_spec = sorted({i for m in spec_mods for i in new_imports.get(m, []) if i not in mods and i not in protocol.values()})
-    return {"package": str(pkg), "root": root, "side": side, "protocol": protocol, "new_imports": new_imports,
-            "proof_imports": {m: v for m, v in proof_imports.items() if v != mods[m].imports}, "added": added,
-            "halves": halves, "whole_edits": whole_edits, "lock": lock, "layers": layers, "warnings": warnings, "counts": dict(sorted(counts.items())),
-            "spec_modules": spec_mods, "dependency_imports": ext_spec, "files": {m: files[m] for m in mods}}
+    p = {"package": str(pkg), "root": root, "side": side, "protocol": protocol, "new_imports": new_imports,
+         "proof_imports": {m: v for m, v in proof_imports.items() if v != mods[m].imports}, "added": added,
+         "halves": halves, "whole_edits": whole_edits, "lock": lock, "layers": layers, "warnings": warnings, "counts": dict(sorted(counts.items())),
+         "spec_modules": spec_mods, "dependency_imports": ext_spec, "files": {m: files[m] for m in mods}}
+    p["compile_time"] = carry_reviews(pkg, p)
+    return p
+
+
+def carry_reviews(pkg: Path, p: dict) -> list[str]:
+    """Each `compile_time` module whose file the split rewrites: when only its `import` lines change and its recorded digest
+    is its file's today, the plan's lock records the new file's digest, since the code reviewed is unchanged; otherwise the
+    recorded digest stays, and the audit asks for a review."""
+    texts, notes, listed = render(p), [], dict(p["lock"].get("compile_time", {}))
+    body = lambda text: [x for x in text.split("\n") if not IMPORT.match(x.strip())]
+    for m, entry in sorted(listed.items()):
+        rel = p["files"].get(m)
+        if rel not in texts:
+            continue
+        old, new = (pkg / rel).read_text(), texts[rel]
+        if p["side"][m] == "mixed" or body(old) != body(new) or not isinstance(entry, dict) or \
+                entry.get("digest") != A.sha256(pkg / rel):
+            notes.append(f"{m}: the split changes more than its imports, or its digest was not today's; its review stays")
+            continue
+        digest = hashlib.sha256(new.encode()).hexdigest()
+        listed[m] = {**entry, "digest": digest}
+        notes.append(f"{m}: only its imports change; digest {entry['digest'][:12]}… -> {digest[:12]}…")
+    if listed:
+        p["lock"]["compile_time"] = listed
+    return notes
 
 
 def without(lines: list[str], drop: set[int], edits: dict[int, str]) -> list[str]:
@@ -794,6 +821,7 @@ def describe(p: dict) -> str:
              f"  proof modules given imports their closure lost: {len(p['added'])}",
              f"  lock: reads keyed by {len(p['protocol'])} new module names; layers rules added: {', '.join(p['layers']) or 'none'}"]
     lines += [f"  warning: {w}" for w in p["warnings"]]
+    lines += [f"  compile_time {n}" for n in p["compile_time"]]
     lines += [f"  spec {m}: an `open` loses a namespace only the proofs register, line(s) " +
               ", ".join(str(k + 1) for k in sorted({int(k) for k in w["edits"]} | {k for k in w["drop"] if k - 1 not in w["drop"]}))
               for m, w in sorted(p["whole_edits"].items())]
