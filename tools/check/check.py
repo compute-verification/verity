@@ -80,13 +80,14 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     and modules' import closures, its bindings and its pins, in `targets.py` or a Definition module's sidecar) is
                     unchanged, with the checker's own version; one after a read the tracer cannot see (a program it starts) is
                     not stored (`circuit_check.cache`)
-    lean-audit      per package (`lean_audit.py`): a pass is reused while the package, its path dependencies, `tools/lean/`
-                    and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
-                    read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain,
-                    and a machine without them restores the bundle `lean-deps.json` pins from the store, not from GitHub; a
-                    step that audits any package first waits for one of the node's Lean audit slots (`lean_slot.py`). The
-                    step fails on a fast-path result in its `audit.json`, cached or not (`lean_fast`): no merge check
-                    accepts an audit without the kernel replay
+    lean-audit      per package (`lean_audit.py`): a pass is reused while the content of the package, its path dependencies,
+                    `tools/lean/` and its toolchain and manifest is unchanged, wherever the package is (a move is no miss, and
+                    its kept build follows it); a miss is audited on a scratch tree holding only those, so a read outside them
+                    fails there; fetched dependencies stay warm on the machine under manifest + toolchain, and a machine without
+                    them restores the bundle `lean-deps.json` pins from the store, not from GitHub; a step that audits any
+                    package first waits for one of the node's Lean audit slots (`lean_slot.py`). The step fails on a fast-path
+                    result in its `audit.json`, cached or not (`lean_fast`): no merge check accepts an audit without the kernel
+                    replay
     lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
                     what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s

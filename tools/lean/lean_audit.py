@@ -6,21 +6,32 @@ whose passes can't be reused, with dependencies kept warm.
     python tools/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
 
-A package's verdict is reused while everything its audit reads is unchanged. Its key hashes:
-- the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them);
-- the same for each package it requires by path (`audit.path_deps`);
-- `tools/lean/` (the auditor and this file) and `tools/check/common.py`, the helpers it imports: not `check.py`, which only
-  launches it, so an edit to `check.py` alone keeps every package's verdict. Nor `tools/lean/tests/` (the controls, which the
-  `tools/lean` suite runs) or its `*.md`, which the audit never reads: the scratch tree leaves them out too, so a read of one
-  would fail there;
-- the package's `lean-toolchain` and `lake-manifest.json`, which pin the toolchain and the fetched dependencies.
+A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
+each file under its path relative to its package (a module's is its name), never the package's own path:
+- the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them), its
+  `lean-toolchain`, `lake-manifest.json` and `lean-audit.json` among them;
+- each package its `proved_in` names (`provers`), whose build the audit reads its guarantees from, by its content (which
+  names the packages it requires by theirs), under its path;
+- the same for each package it requires by path (`audit.path_deps`), under the name its manifest gives it. Where the
+  lakefile's `require ... path = "P"` and the manifest's `"dir": "P"` name such a package, the key reads P as that
+  package's own content key (`content_key`), so moving it and rewriting the paths to it keeps every key. A path spelled
+  otherwise stays a path in the key;
+- `tools/lean/` (the auditor and this file) and `tools/check/common.py`, the helpers it imports, at their paths in the
+  repository: not `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict. Nor
+  `tools/lean/tests/` (the controls, which the `tools/lean` suite runs) or its `*.md`, which the audit never reads: the
+  scratch tree leaves them out too, so a read of one would fail there.
+A `git mv` of a package with its content unchanged is therefore no miss, and its kept pass answers at the new path. What the
+scratch tree can't guard is a package reading beyond its directory by a relative path, which would find other files once it
+moved: a `..` left (after the paths above) in its lakefile, manifest, toolchain or policy, or an `include_str` in a module,
+puts the package's path back into its key.
 
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
-`tools/lean`. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
+`tools/lean` (named by its creator's pid; an audit first removes every scratch tree no audit holds, `sweep`). So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
 (the counterpart of `suites.py`'s read guard). Only the missed packages are audited. A package one of them requires by path is
 in the tree and built as far as it imports it, but not audited again: what vouches for its modules is its own pass, under its
 own key, and the run passes only when every package has one. The dependent's axiom walk follows its declarations into those
-modules, but its replay and its record's `dependencies` (fetched packages and the toolchain) don't cover them. The controls
+modules, but its replay and its record's `dependencies` (fetched packages and the toolchain) don't cover them. A spec and a
+package its `proved_in` names, which requires it, read the same files, so they miss together and are audited together. The controls
 don't run here: they test
 the auditor, so the `tools/lean` suite runs them, cached on `tools/lean/`, not again on every package's miss. Each pass is
 stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
@@ -32,9 +43,11 @@ A package's fetched dependencies (`.lake/packages`: Mathlib's cache, ArkLib's bu
 `lake-manifest.json` plus `lean-toolchain`. They're moved into the scratch package's own `.lake` before its build (the only place
 its sandbox lets it write, never a shared symlink) and back afterwards only when that package's audit passed; after a failure
 they're dropped, so a run's compile-time code cannot leave the next run a cache it wrote. Lake rebuilds nothing it built in an
-earlier passing run. The audit's `dependencies` check still compares their `.olean` files with the
-package's record, and the kernel replay still covers the package's own modules. Lean gets this machine's CPUs
-(`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
+earlier passing run. The package's own `.lake/build` is kept the same way (`WarmBuilds`), under its toolchain, manifest and
+lakefile less the paths to what it requires (`build_key`), not under its path: Lake decides what is up to date by content
+hashes, not paths or mtimes, so a moved package rebuilds nothing. The audit's `dependencies` check still compares their
+`.olean` files with the package's record, and the kernel replay still covers the package's own modules. Lean gets this
+machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 
 A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
 throttles anonymous clones from shared addresses. `lean-deps.json` pins one bundle per `lake-manifest.json` + `lean-toolchain`
@@ -51,6 +64,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -58,13 +72,14 @@ import sys
 import tarfile
 import tempfile
 import time
+import tomllib
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 LEAN_TOOL = "tools/lean/"
-SCHEMA = "lean-audit-cache/v1"
+SCHEMA = "lean-audit-cache/v2"
 
 
 def _module(path: Path, name: str):
@@ -106,29 +121,136 @@ def path_deps(pkg: str) -> list[str]:
     return sorted(set(out))
 
 
+def provers(pkg: str) -> list[str]:
+    """The packages ``pkg``'s `lean-audit.json` names under `proved_in` (`audit.provers`): the audit reads their builds."""
+    p = ROOT / pkg / "lean-audit.json"
+    try:
+        named = json.loads(p.read_text()).get("proved_in", []) if p.is_file() else []
+    except (OSError, ValueError, AttributeError):
+        return []                                       # the audit fails the policy
+    return sorted({os.path.relpath(os.path.normpath(ROOT / pkg / d), ROOT) for d in named if isinstance(d, str)})
+
+
 #: How the audit runs, and so part of every key
 FLAGS = ["--build"]
 
 
+def tool_files(files: list[str]) -> list[str]:
+    """The auditor's files: `tools/lean/` less its tests and docs, and the helpers it imports."""
+    tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")]
+    return sorted({*tool, "tools/check/common.py"})
+
+
 def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read."""
-    own = [f for p in (pkg, *path_deps(pkg)) for f in own_files(p, files)]
-    tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")]
-    return sorted({*own, *tool, "tools/check/common.py"})
+    pkgs = [pkg, *path_deps(pkg), *(d for q in provers(pkg) for d in (q, *path_deps(q)))]
+    own = [f for p in dict.fromkeys(pkgs) for f in own_files(p, files)]
+    return sorted({*own, *tool_files(files)})
+
+
+def _required(pkg: str, files: list[str]) -> dict[str, str]:
+    """{a path as the package's lakefile or manifest spells it: the repository path of the Lake package there}, for each
+    `require ... path` and each path entry of the manifest that names a directory holding a tracked lakefile."""
+    spelled = []
+    m, lf = ROOT / pkg / "lake-manifest.json", ROOT / pkg / "lakefile.toml"
+    if m.is_file():
+        spelled += [d["dir"] for d in json.loads(m.read_text()).get("packages", []) if d.get("type") == "path" and "dir" in d]
+    if lf.is_file():
+        try:
+            reqs = tomllib.loads(lf.read_text()).get("require", [])
+        except (tomllib.TOMLDecodeError, UnicodeDecodeError):
+            reqs = []
+        spelled += [r["path"] for r in reqs if isinstance(r, dict) and isinstance(r.get("path"), str)]
+    out = {}
+    for s in spelled:
+        d = os.path.relpath(os.path.normpath(ROOT / pkg / s), ROOT)
+        if any(f"{d}/{n}" in files for n in ("lakefile.toml", "lakefile.lean")) and d != pkg:
+            out[s] = d
+    return out
+
+
+TOKEN = b"content:"
+
+
+def _spelled_as(text: bytes, name: str, spelled: dict[str, str], token) -> tuple[bytes, str]:
+    """``text`` (a lakefile.toml, ``name`` "path", or a manifest, ``name`` "dir") with each `name = "S"` or `"name": "S"` whose
+    S is in ``spelled`` written as ``token(spelled[S])``, and its digest, under a prefix of its own so that it is never a file's
+    own digest. A path spelled any other way stays as it is, and so does a file that already holds a token's prefix: the key
+    then covers the path."""
+    if TOKEN in text:
+        return text, hashlib.sha256(text).hexdigest()
+    for s, d in sorted(spelled.items()):
+        lit = re.escape(json.dumps(s).encode())
+        pat = rb'("dir"\s*:\s*)' + lit if name == "dir" else rb'(?m)^([ \t]*path[ \t]*=[ \t]*)' + lit
+        text = re.sub(pat, lambda m, d=d: m.group(1) + json.dumps(TOKEN.decode() + token(d)).encode(), text)
+    return text, hashlib.sha256(b"lean-audit/paths-as-content\0" + text).hexdigest()
+
+
+#: what stands for the package's path in its `content` when something Lake or the audit reads may name a path beyond it
+WHERE = "(where the package is)"
+#: the files of a package Lake or the audit read paths from
+CONFIG = ("lakefile.toml", "lakefile.lean", "lake-manifest.json", "lean-toolchain", "lean-audit.json")
+
+
+def content(pkg: str, files: list[str], _memo: dict | None = None) -> dict[str, str]:
+    """{path relative to the package: sha256} of its own files, so that the package moved to another directory with the same
+    content has the same map. Its lakefile and manifest name each package it requires by path by that package's own content
+    (`content_key`), not by where it is: moving the required package and rewriting the paths to it keeps the map too. A package
+    that may read beyond its directory by a relative path keeps its path in the map (`WHERE`): a `..` left in a file Lake or
+    the audit read paths from, or a module's `include_str`."""
+    memo = {} if _memo is None else _memo
+    spelled = _required(pkg, files)
+    out, escapes = {}, False
+    for f in own_files(pkg, files):
+        rel, p = f[len(pkg) + 1:], ROOT / f
+        if not p.is_file():
+            out[rel] = "-"
+            continue
+        text = p.read_bytes()
+        if rel in ("lakefile.toml", "lake-manifest.json") and spelled:
+            text, out[rel] = _spelled_as(text, "path" if rel == "lakefile.toml" else "dir", spelled,
+                                         lambda d: content_key(d, files, memo))
+        else:
+            out[rel] = hashlib.sha256(text).hexdigest()
+        escapes |= (b".." in text) if rel in CONFIG else rel.endswith(".lean") and b"include_str" in text
+    if escapes:
+        out[WHERE] = pkg
+    return out
+
+
+def content_key(pkg: str, files: list[str], _memo: dict | None = None) -> str:
+    memo = {} if _memo is None else _memo
+    if pkg not in memo:
+        memo[pkg] = hashlib.sha256(json.dumps(sorted(content(pkg, files, memo).items())).encode()).hexdigest()
+    return memo[pkg]
+
+
+def _lake_name(pkg: str, dep: str) -> str:
+    """The name ``pkg``'s manifest gives the package it requires at ``dep`` (its path when it has none)."""
+    m = ROOT / pkg / "lake-manifest.json"
+    for d in json.loads(m.read_text()).get("packages", []) if m.is_file() else ():
+        if d.get("type") == "path" and os.path.relpath(os.path.normpath(ROOT / pkg / d.get("dir", "")), ROOT) == dep:
+            return str(d.get("name", dep))
+    return dep
 
 
 def components(pkg: str, files: list[str], flags: list[str]) -> dict:
-    """What a package's key hashes: the schema, the package, the audit's flags, and each input's sha256 ("-" when absent). A pass
-    keeps them beside it, so `--explain` can say what a miss changed."""
-    return {"schema": SCHEMA, "package": pkg, "flags": flags,
-            "files": {f: (_sha(ROOT / f) if (ROOT / f).is_file() else "-") for f in inputs(pkg, files)}}
+    """What a package's key hashes, none of it a path of the package: the schema, the audit's flags, the package's `content`,
+    that of each package it requires by path (under the name its manifest gives it), that of each package its `proved_in`
+    names (under its path, which the policy already holds), and each of the auditor's files at its
+    path in the repository. A pass keeps them beside it, so `--explain` can say what a miss changed."""
+    memo: dict = {}
+    return {"schema": SCHEMA, "flags": flags, "files": content(pkg, files, memo),
+            "requires": {_lake_name(pkg, d): content(d, files, memo) for d in path_deps(pkg)},
+            "proved_in": {q: content(q, files, memo) for q in provers(pkg)},
+            "tool": {f: (_sha(ROOT / f) if (ROOT / f).is_file() else "-") for f in tool_files(files)}}
 
 
 def key_of(c: dict) -> str:
-    h = hashlib.sha256(json.dumps([c["schema"], c["package"], c["flags"]]).encode())
-    for f, d in sorted(c["files"].items()):
-        h.update(f.encode() + b"\0" + d.encode() + b"\0")
-    return h.hexdigest()
+    return hashlib.sha256(json.dumps([c["schema"], c["flags"], sorted(c["files"].items()),
+                                      sorted((n, sorted(m.items())) for n, m in c["requires"].items()),
+                                      sorted(c["tool"].items()),
+                                      sorted((q, sorted(m.items())) for q, m in c.get("proved_in", {}).items())]).encode()).hexdigest()
 
 
 def key(pkg: str, files: list[str], flags: list[str]) -> str:
@@ -154,20 +276,32 @@ def explain(name: str, cache: Path) -> tuple[int, list[str]]:
             e = json.loads(f.read_text())
         except (OSError, ValueError):
             continue
-        if e.get("package") == pkg and e.get("components"):
+        # a pass of this package, or of one audited where no package is now (it may be this one, before it moved)
+        if (e.get("components") or {}).get("schema") == SCHEMA and (e.get("package") == pkg or e.get("package") not in pkgs):
             kept.append(e)
     if not kept:
         return 0, [f"{pkg}: missed ({k[:12]}); no pass of it kept in {cache} records its inputs (passes kept before `--explain` don't)"]
+    where = {_lake_name(pkg, d): d for d in path_deps(pkg)}
+
+    def flat(c: dict) -> dict[str, str]:
+        """Each input under its path now: the package's files under ``pkg``, a required package's under where it is now."""
+        return {**{f"{pkg}/{r}": d for r, d in c["files"].items()}, **c["tool"],
+                **{f"{where.get(n, n + ' (required by path)')}/{r}": d for n, m in c["requires"].items() for r, d in m.items()},
+                **{f"{q}/{r}": d for q, m in c.get("proved_in", {}).items() for r, d in m.items()}}
 
     def diff(was: dict) -> list[str]:
-        a, b = was.get("files", {}), now["files"]
+        a, b = flat(was), flat(now)
+        named = {f"{pkg}/lakefile.toml", f"{pkg}/lake-manifest.json"}
         out = [f"{'changed' if f in a and f in b else 'new' if f in b else 'no longer an input'}: {f}"
+               + (" (it names each package it requires by path by that package's content)"
+                  if f in named and was["requires"] != now["requires"] else "")
                for f in sorted(set(a) | set(b)) if a.get(f) != b.get(f)]
         return out + [f"{x}: {was.get(x)} -> {now[x]}" for x in ("schema", "flags") if was.get(x) != now[x]]
 
-    best = min(kept, key=lambda e: len(diff(e["components"])))
+    best = min(kept, key=lambda e: (len(diff(e["components"])), e.get("package") != pkg))
     lines = diff(best["components"])
-    return 0, [f"{pkg}: missed ({k[:12]}); the nearest pass kept here ({best['key'][:12]}) differs in {len(lines)} input(s):",
+    at = "" if best.get("package") == pkg else f", audited at {best.get('package')}"
+    return 0, [f"{pkg}: missed ({k[:12]}); the nearest pass kept here ({best['key'][:12]}{at}) differs in {len(lines)} input(s):",
                *(f"  {line}" for line in lines)]
 
 
@@ -318,11 +452,17 @@ class WarmDeps:
 
 
 def build_key(pkg: str, root: Path) -> str:
-    """What a kept build is reused under: the package's path, its toolchain, its manifest and its lakefile. Within that, Lake's
-    own traces (each module's source and its imports' traces) decide what it rebuilds."""
-    h = hashlib.sha256(pkg.encode() + b"\0")
+    """What a kept build is reused under: the package's toolchain, its manifest and its lakefile, less the paths to the packages
+    it requires by path, and not where the package is: a moved package takes the build it left, which Lake reuses where it
+    is now. Within that, Lake's own traces (each module's source and its imports' traces) decide what it rebuilds."""
+    h = hashlib.sha256(b"lean-build/v2\0")
     for f in ("lean-toolchain", "lake-manifest.json", "lakefile.toml", "lakefile.lean"):
-        h.update(f.encode() + b"\0" + ((root / pkg / f).read_bytes() if (root / pkg / f).is_file() else b"-") + b"\0")
+        text = (root / pkg / f).read_bytes() if (root / pkg / f).is_file() else b"-"
+        if f == "lake-manifest.json":
+            text = re.sub(rb'"dir"\s*:\s*"[^"]*"', b'"dir": ""', text)
+        elif f == "lakefile.toml":
+            text = re.sub(rb'(?m)^([ \t]*path[ \t]*=).*$', rb"\1", text)
+        h.update(f.encode() + b"\0" + text + b"\0")
     return h.hexdigest()
 
 
@@ -397,6 +537,61 @@ def scratch_tree(dest: Path, files: list[str]) -> None:
             shutil.copy2(s, d)
 
 
+SCRATCH = "lean-audit-scratch-"
+#: how long a scratch tree without its creator's pid in its name is kept unheld: an older check's, which may be filling it
+SCRATCH_GRACE_S = 3600
+
+
+def _links(proc: Path) -> tuple[list[str], bool]:
+    """(every cwd, root and open file of the processes under ``proc``, whether some process's could not be read)."""
+    out, blind = [], False
+    for p in proc.iterdir():
+        if not p.name.isdigit():
+            continue
+        try:
+            names = [p / "cwd", p / "root", *(p / "fd").iterdir()]
+        except FileNotFoundError:
+            continue
+        except OSError:
+            blind = True
+            continue
+        for n in names:
+            try:
+                out.append(os.readlink(n))
+            except FileNotFoundError:
+                pass
+            except OSError:
+                blind = True
+    return out, blind
+
+
+def sweep(base: Path, log=print, proc: Path = Path("/proc"), now: float | None = None) -> list[str]:
+    """Remove each ``lean-audit-scratch-*`` under ``base`` that no audit holds: one an audit left when it was killed before its
+    ``finally``.  A tree is held while a live process has its cwd, root or an open file inside it, while the pid its name holds
+    is alive, or, for a name without one, while some process can't be read or the tree changed within ``SCRATCH_GRACE_S``."""
+    trees = [d for d in base.glob(SCRATCH + "*") if d.is_dir() and not d.is_symlink()] if base.is_dir() else []
+    if not trees:
+        return []
+    links, blind = _links(proc)
+    now = time.time() if now is None else now
+    gone = []
+    for d in trees:
+        top = str(d.resolve())
+        if any(t == top or t.startswith(top + os.sep) for t in links):
+            continue
+        pid = d.name[len(SCRATCH):].split("-", 1)[0]
+        if pid.isdigit() and "-" in d.name[len(SCRATCH):]:
+            if (proc / pid).exists():
+                continue
+        elif blind or now - d.stat().st_mtime < SCRATCH_GRACE_S:
+            continue
+        shutil.rmtree(d, ignore_errors=True)
+        gone.append(d.name)
+    if gone:
+        log(f"lean-audit: removed {len(gone)} scratch tree(s) no audit holds: {', '.join(sorted(gone))}")
+    return gone
+
+
 #: a dependency fetch that failed for a reason outside the audit (GitHub throttles anonymous clones from a busy address)
 TRANSIENT = ("could not read Username for 'https://github.com'", "Could not resolve host", "expected flush after ref listing",
              "Failed to connect to", "The requested URL returned error: 429", "The requested URL returned error: 5")
@@ -416,7 +611,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because audit.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
-    work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent)).resolve()
+    sweep(deps.parent, log)
+    work = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-", dir=deps.parent)).resolve()
     warm = WarmDeps(deps, urls)
     builds = WarmBuilds(deps.parent / "lean-builds")
     passed: set[Path] = set()
@@ -477,7 +673,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     for p, k in keys.items():
         entry = cache / f"{k}.json"
         if not fresh and entry.is_file():
-            reports[p] = json.loads(entry.read_text())["report"]
+            reports[p] = {**json.loads(entry.read_text())["report"], "package": p}      # it may have passed elsewhere, before a move
             cached[p] = k
             log(f"lean-audit: {p}: PASS reused ({k[:12]}): every file its audit reads is unchanged")
     todo, failed = [p for p in pkgs if p not in cached], []
