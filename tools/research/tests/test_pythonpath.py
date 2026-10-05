@@ -82,6 +82,8 @@ def test_a_package_split_across_members_is_found_in_each_and_one_found_nowhere_r
         _write(t, f"{member}/src/core/{module}/__init__.py", "")
     _write(t, "other/pyproject.toml", "[project]\nname='other'\n")
     _write(t, "other/src/other/__init__.py", "")
+    _write(t, "uv.lock", "")
+    _write(t, "upper/uv.lock", "")
     assert P.package_dirs(t, "core") == ["upper/src/core", "lower/src/core"]
     assert P.package_dirs(t, "other") == ["other/src/other"]
     with pytest.raises(LookupError, match="'gone'"):
@@ -93,7 +95,7 @@ def test_a_package_split_across_members_is_found_in_each_and_one_found_nowhere_r
                                                                           "upper/src/core/ml/__init__.py"]
     with pytest.raises(LookupError, match="'tc/\\*\\*'"):
         P.package_paths(t, "core", "ir/**", "tc/**")
-    assert P.workspace_root(t / "upper") == t.resolve(), "a member's own pyproject.toml declares no workspace"
+    assert P.workspace_root(t / "upper") == t.resolve(), "a member's own pyproject.toml declares no workspace, lock or not"
     with pytest.raises(LookupError):
         P.workspace_root(tmp_path)
 

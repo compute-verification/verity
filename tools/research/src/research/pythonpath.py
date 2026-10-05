@@ -119,10 +119,13 @@ def import_roots_git(git_dir: Path | str, rev: str) -> dict:
 
 
 def workspace_root(path: Path | str) -> Path:
-    """The tree `path` belongs to: the nearest directory at or above it whose pyproject.toml declares `[tool.uv.workspace]`, found by
-    what the tree declares rather than by `path`'s depth in it.  Raises LookupError when there is none."""
+    """The tree `path` belongs to: the nearest directory at or above it holding a uv.lock and a pyproject.toml that declares
+    `[tool.uv.workspace]`, found by what the tree declares rather than by `path`'s depth in it.  Raises LookupError when there is
+    none.  Only a directory with a uv.lock has its pyproject.toml opened, so a suite's read guard sees no file outside it."""
     p = Path(path).resolve()
     for d in (p, *p.parents):
+        if not (d / "uv.lock").is_file():
+            continue
         try:
             doc = tomllib.loads((d / "pyproject.toml").read_text())
         except (OSError, tomllib.TOMLDecodeError):
