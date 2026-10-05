@@ -9,8 +9,9 @@ import Proofs.Pouw.PearlC.TileGamma
 The row units' words read in the protocol's terms (`pc4Sem`), under the named hypotheses on which the table and the
 protocol's word functions agree only conditionally:
 
-* `Pc4OpsAgree ops`: core's primitives agree with the protocol's word functions where both are defined. Core's Lean
-  semantics will discharge them;
+* `Pc4OpsAgree ops`: core's primitives agree with the protocol's word functions where both are defined. At core's
+  instance `coreOps`, `Bf16ToF32`'s and `I32Le`'s hold by their definitions (`pc4OpsAgree_coreOps`); the others are
+  open;
 * `Row4OK`: a row's BF16 words widen to step words of its values, and its `α` (positive) and `β` are step words. It
   is no hypothesis of L3: the widening follows from the rules' word clause (every word a finite widened BF16 word,
   `widen_of_word`), and `α` and `β` from `RowAdmit4` by magnitudes (`RowStats`, `TileCheckWords`), at a credited row

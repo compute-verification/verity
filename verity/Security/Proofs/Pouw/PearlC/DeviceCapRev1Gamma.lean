@@ -70,7 +70,7 @@ theorem ttOutPearlCDevRev1_cap_anti [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
     (hle : ρ' ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDevRev1 CM d sem ρ) : TTOutPearlCDevRev1 CM d sem ρ' := by
   refine ⟨h.1, fun U hU T hT q hq A hA => le_trans (Pouw.pr_mono ?_) (h.2 U hU T hT q hq A hA)⟩
   intro x hx
-  exact lt_of_lt_of_le hx (cap_credit_sum_le_rev1 d sem ρ ρ' hadd hbf hle hρ1 U hU.2.1 x.1 x.2 _)
+  exact lt_of_lt_of_le hx (cap_credit_sum_le_rev1 d sem ρ ρ' hadd hbf hle hρ1 U hU.2 x.1 x.2 _)
 
 end
 

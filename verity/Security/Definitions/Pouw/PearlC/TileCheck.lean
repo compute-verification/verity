@@ -25,11 +25,12 @@ by a `Verity.Partition`), with
   (`pouw/tile-h0/v1`), so there it is the circuit's words differing from `c`'s under the same leaf.
 
 The check also asks each of the tile's weight rows to pass the protocol's `weightOK`, as `check_tile`'s `admissible`
-does. It decides that on the rows it opens against the weight's root, which are `U`'s, so no prover supplies it, and L3
-reads the weights' admission from there, not from the domain.
+does and as `TileGood` asks. It decides that on the rows it opens against the weight's root, which are `U`'s, so no
+prover supplies it.
 
-The cap, `TileGood`'s first conjunct, reads only the committed activations; the words read the circuit's outputs. So
-L3 is the two (`TileCheck.Computes`, `TileCheck.ComputesCap`, `TileCheck.ComputesWords`). L3 is exact: the Program
+The cap, `TileGood`'s first conjunct, reads only the committed activations; its weight rows, the second, are the check's
+own last conjunct; the words read the circuit's outputs. So L3 is the cap and the words (`TileCheck.Computes`,
+`TileCheck.ComputesCap`, `TileCheck.ComputesWords`). L3 is exact: the Program
 recomputes A′, B̃, P_A, P_B, C̃ and U from the anchors and checks no projection, so the tile check has no soundness error
 of its own (L7). `εPearlC` stays TT_OUT's, and a proof system's error stays in its `η`.
 
@@ -79,7 +80,7 @@ def TileCheck.Accepts (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRule
       P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g)) (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j
 
 /-- The words of a good tile: each ticket and useful word of a credited row has the reference value. `TileGood` is the
-cap and these. -/
+cap, the tile's weight rows and these. -/
 def TileWordsGood (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (g : ℕ) (c : Commit) :
     Prop :=
   ∀ i ∈ (TR.tiling U.layout).rows g, TR.rowOK (U.layout.shape ((TR.tiling U.layout).unit g)) c.act i →

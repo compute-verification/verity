@@ -15,8 +15,9 @@ team's F1, `internal/pouw/red-team-pearl-c-vllm.md`). This file states both; `Ti
   credited. A row that fails them (a massive activation the fixed `S_ℓ` doesn't cover) stays in its unit, computed and
   bound, and earns no credit: the plan's one per-row rule (`docs/pouw/pearl-c-vllm-plan.md` §13). The verifier checks
   that an excluded row fails the rules, which is what makes it uncredited here.
-- **A good tile** (`TileGood`): its replayed debit on its credited rows is within the cap, and each ticket and useful word
-  of its credited rows is correct. Each part reads only the tile's openings:
+- **A good tile** (`TileGood`): its replayed debit on its credited rows is within the cap, each of its weight rows
+  passes the rules (`weightOK`), and each ticket and useful word of its credited rows is correct. A weight row is never
+  excluded: a tile with a failing one is not good, and earns nothing. Each part reads only the tile's openings:
   - the rules are per row;
   - P1's flags of a word read only the word's two rows (`Skip.wordFlags`), so the chain debit, the flagged atoms summed
     over the words, is replayed from the openings;
@@ -73,12 +74,15 @@ structure TileRules (Q R S : Type) where
 
 variable {Q R S : Type}
 
-/-- A good tile of a committed unit: its replayed debit is within the cap, and each ticket and useful word of its credited
-rows (the rows that pass the rules) has the reference FP32 value. Excluded rows are bound but uncredited, so their words
-don't enter γ. -/
+/-- A good tile of a committed unit: its replayed debit is within the cap, each of its weight rows (its columns' rows of
+its unit's weight) passes the rules, and each ticket and useful word of its credited rows (the activation rows that
+pass the rules) has the reference FP32 value. Excluded rows are bound but uncredited, so their words don't enter γ. -/
 def TileGood (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (g : ℕ) (c : Commit) :
     Prop :=
   TR.capOK H s U g c.act ∧
+    (∀ j ∈ (TR.tiling U.layout).cols g,
+      P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g))
+        (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j) ∧
     ∀ i ∈ (TR.tiling U.layout).rows g, TR.rowOK (U.layout.shape ((TR.tiling U.layout).unit g)) c.act i →
       ∀ j ∈ (TR.tiling U.layout).cols g,
         wordQ (c.ticket i j) = P.ticket H s U ((TR.tiling U.layout).unit g) c.act i j ∧
@@ -92,11 +96,14 @@ noncomputable def goodTiles (P : Protocol Q R S) (TR : TileRules Q R S) (U : Wor
     ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ TileGood P TR U H s g c
 
 /-- A good tile under U-only binding (the `-h1` format's U-only messages): `TileGood` without its ticket conjunct. Its
-replayed debit is within the cap and each useful word of its credited rows has the reference FP32 value; its ticket words
-are not read. -/
+replayed debit is within the cap, each of its weight rows passes the rules and each useful word of its credited rows has
+the reference FP32 value; its ticket words are not read. -/
 def TileGoodU (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (g : ℕ) (c : Commit) :
     Prop :=
   TR.capOK H s U g c.act ∧
+    (∀ j ∈ (TR.tiling U.layout).cols g,
+      P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g))
+        (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j) ∧
     ∀ i ∈ (TR.tiling U.layout).rows g, TR.rowOK (U.layout.shape ((TR.tiling U.layout).unit g)) c.act i →
       ∀ j ∈ (TR.tiling U.layout).cols g,
         wordQ (c.useful i j) = P.useful H s U ((TR.tiling U.layout).unit g) c.act i j
@@ -124,7 +131,7 @@ def tileWrefTotal (TR : TileRules Q R S) (L : Layout) : ℝ := ∑ g ∈ range (
 /-- `AdmitsRef` with the reference's cost bounded tile by tile. -/
 def AdmitsRefTile (CM : CostModel Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop)
     (qref : Workload → ℕ) : Prop :=
-  ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → ∀ act : ℕ → Codes,
+  ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes,
     (∀ u < U.layout.N, P.actOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
       CM.run prog H U act [] s = honestTranscript P H s U act ∧
       CM.cost prog H U act [] s ≤ tileWrefTotal TR U.layout ∧
