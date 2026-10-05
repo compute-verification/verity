@@ -25,7 +25,7 @@ open Flock Flock.DeriveAll
 
 namespace FlockSoundness
 
-open Audit Types.Flatten Compose Audit.Partition
+open Audit Audit.Partition
 
 /-! ## `flatten`'s input gates are its first `inBits + 1` -/
 
@@ -42,8 +42,6 @@ theorem getD_of_lt {a : Array ℕ} {i : ℕ} (h : i < a.size) : a.getD i 0 = a[i
   simp [Array.getD, h]
 
 namespace UnitSpec
-
-variable (s : UnitSpec)
 
 end UnitSpec
 

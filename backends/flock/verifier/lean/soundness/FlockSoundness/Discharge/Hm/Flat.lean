@@ -14,7 +14,7 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Hm
 
-open Compose Flock.DeriveAll Types.Dag
+open Compose Flock.DeriveAll
 
 /-- **Δ without a typed template, pair by pair**: the slot constants' pairs, the rows' constant bits, the units' leaf
 and cut bits and the wires' bits (`flatPairs`). -/

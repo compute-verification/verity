@@ -88,7 +88,7 @@ attribute [instance] ValueBindingZ.finPos ValueBindingZ.decPos ValueBindingZ.fin
   ValueBindingZ.inhVal ValueBindingZ.inhOp
 
 variable {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
-  (vb : ValueBindingZ A P planZ tab decode Hc) (R : Reg) (τ : Cont L Reg (batchedSessionZK A planZ) R)
+  (vb : ValueBindingZ A P planZ tab decode Hc) (R : Reg)
 
 /-- Drawn unit `u` reads commit string `c`. -/
 def ReadsZ (u : Fin n) (c : vb.Pos) : Prop := ∃ g ∈ P.io u, vb.pos g = c

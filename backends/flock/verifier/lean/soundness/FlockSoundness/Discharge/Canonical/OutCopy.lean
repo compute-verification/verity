@@ -25,7 +25,7 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Canonical
 
-open FlockSoundness.Discharge.Hidden FlockSoundness.Discharge.Hm Compose Flock.DeriveAll Types.Dag
+open FlockSoundness.Discharge.Hidden FlockSoundness.Discharge.Hm Compose Flock.DeriveAll
 
 /-! ## A data bit's column -/
 

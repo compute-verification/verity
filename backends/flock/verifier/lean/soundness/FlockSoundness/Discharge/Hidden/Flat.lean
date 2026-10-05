@@ -17,7 +17,7 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Hidden
 
-open Hm Compose Flock.DeriveAll Types.Dag
+open Hm Compose Flock.DeriveAll
 
 /-- **The flat twin**: the statement with `HmRow.delta`'s Δ for its own. -/
 abbrev flatTwin (st : Stmt) : Stmt :=

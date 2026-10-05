@@ -10,7 +10,7 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Hm
 
-open Compose Flock.DeriveAll Types.Dag
+open Compose Flock.DeriveAll
 
 section Bc
 
