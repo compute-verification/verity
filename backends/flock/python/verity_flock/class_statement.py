@@ -994,14 +994,19 @@ def _tile_fits(cc, P: int, C: int) -> bool:
 def _source_digest() -> str:
     """The staging code's digest: every Python file of the packages a staged statement is a function of (with the program, the
     shape, the batch parameters and the seed).  A namespace package's portions are hashed as one tree, by path under the package,
-    and only those holding a module, so neither sys.path order nor a directory that joined the namespace from the cwd moves it."""
+    so sys.path order does not move it.  Every portion is hashed, since Python imports from one that holds only namespace
+    subpackages; two portions that define one module make the import depend on that order, and raise ValueError."""
     import importlib.util
-    import pkgutil
     h = hashlib.sha256()
     for name in ("verity", "verity_flock", "circuit_check", "verity_vllm", "verity_pouw"):
         spec = importlib.util.find_spec(name)
-        roots = [Path(r) for r in (spec.submodule_search_locations or []) if any(pkgutil.iter_modules([r]))] if spec else []
-        for rel, f in sorted((f.relative_to(root), f) for root in roots for f in root.rglob("*.py")):
+        roots = [Path(r) for r in (spec.submodule_search_locations or [])] if spec else []
+        owner: dict[tuple[str, ...], Path] = {}
+        for rel, f, root in sorted((f.relative_to(root), f, root) for root in roots for f in root.rglob("*.py")):
+            mod = rel.with_suffix("").parts
+            mod = mod[:-1] if mod[-1:] == ("__init__",) else mod
+            if owner.setdefault(mod, root) != root:
+                raise ValueError(f"{'.'.join((name, *mod))} is defined in two portions ({owner[mod]}, {root}): its import depends on sys.path order")
             h.update(f"{name}/{rel.as_posix()}\0".encode() + hashlib.sha256(f.read_bytes()).digest())
     return h.hexdigest()
 

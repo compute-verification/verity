@@ -432,7 +432,7 @@ def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache
 
 def test_the_stage_keys_code_digest_is_one_tree_over_a_namespaces_portions(monkeypatch, tmp_path: Path):
     """Walking `verity`'s portions in path order made the digest depend on sys.path order and on a cwd directory that joined the
-    namespace; it is the same over any order and any portion without a module, and moves with an edit."""
+    namespace; it is the same over any order, and moves with an edit or a portion that joins."""
     for rel in ("upper/verity/ml/__init__.py", "upper/verity/ml/gemm.py", "lower/verity/ir/__init__.py", "lower/verity/ir/defs.py",
                 "cwd/verity/primitives/circuits/src/verity/ir/defs.py"):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -446,7 +446,8 @@ def test_the_stage_keys_code_digest_is_one_tree_over_a_namespaces_portions(monke
         return CS._source_digest()
 
     a = digest("upper", "lower")
-    assert digest("lower", "upper") == digest("cwd", "upper", "lower") == a
+    assert digest("lower", "upper") == a
+    assert digest("cwd", "upper", "lower") != a                         # a directory joining from the cwd is a miss, never a hit
     (tmp_path / "lower" / "verity" / "ir" / "defs.py").write_text("# edited\n")
     assert digest("upper", "lower") != a
 
