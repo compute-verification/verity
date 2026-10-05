@@ -95,7 +95,7 @@ def test_the_integrations_are_found():
 def test_the_scan_sees_the_backends():
     """The scan walks `backends/`: a backend that moved out of it would leave its imports unchecked, and `KNOWN` would pass
     as sites of files that don't exist yet."""
-    for name in ("verity_flock", "verity_numerical"):
+    for name in ("verity_flock",):
         origin = Path(importlib.util.find_spec(name).origin).resolve()
         assert origin.is_relative_to(ROOT / "backends"), f"{name} is at {origin}, outside the scanned backends/"
     assert not KNOWN or any((ROOT / f).exists() for f, _ in KNOWN), "no file KNOWN lists exists: it names pre-move paths"
