@@ -981,6 +981,21 @@ def test_a_run_generates_its_data_and_fails_on_its_exit(tmp_path, monkeypatch):
     assert tests(policy={"exempt": {"U": "?"}, "runs": {"U": entry}})[0] == ["runs: U is not a module of the package"]
 
 
+def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):
+    pkg = tmp_path / "a" / "lean"
+    pkg.mkdir(parents=True)
+    runs = {"T": {"generate": ["python3", "../../b/gen.py", "{repo}", "--out", "{out}", "-c", "x = 1/2"],
+                  "args": ["{v.txt}", "data/v.txt", "/etc/v.txt"]},
+            "U": {"generate": ["python3", "{repo}/b/gen.py", "scripts/../gen.py", ".."]}}
+    assert A.run_paths(pkg, {"runs": runs}, tmp_path) == [
+        "runs: T's `generate` names ../../b/gen.py, outside the package: check's audit runs on a scratch tree, where it "
+        "finds nothing or another file; write {repo}/b/gen.py",
+        "runs: T's `args` names /etc/v.txt, outside the package: check's audit runs on a scratch tree, where it finds "
+        "nothing or another file; write a path under `{repo}`",
+        "runs: U's `generate` names .., outside the package: check's audit runs on a scratch tree, where it finds nothing "
+        "or another file; write {repo}/a"]
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_controls(tmp_path):
     toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()

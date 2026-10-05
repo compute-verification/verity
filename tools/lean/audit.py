@@ -56,7 +56,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  Mathlib and core included
     runs         a test under `runs` (an exempt module: compiled evaluation, not a proof), run after the replay by
                  `lake env lean --run` in the sandbox, exits nonzero, or a data file it reads (the package's own, or what
-                 its `generate` command writes) has a SHA-256 other than the record's (`--update` records it)
+                 its `generate` command writes) has a SHA-256 other than the record's (`--update` records it); or its
+                 `generate` or `args` names a path outside the package other than as `{repo}/...`, which check's scratch
+                 tree would not hold
     tamper       this tool's files, the toolchain's `lean`, `lake` or `leanchecker`, or the `.olean` files of a package
                  built earlier in the run changed during it; the Lean files are run from a copy taken before the first build
 
@@ -1142,6 +1144,25 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
     return fails, now
 
 
+def run_paths(pkg: Path, policy: dict, repo: Path) -> list[str]:
+    """The arguments of `runs` entries (`generate` and `args`) that name a path outside the package other than through
+    `{repo}`: an absolute one, or one that `..` takes out of it.  Check's audit runs on a scratch tree that holds only the
+    package and what its audit reads, where such a path finds nothing, or another file than here."""
+    fails, top = [], os.path.normpath(pkg.resolve())
+    for mod, entry in sorted(policy.get("runs", {}).items()):
+        for key in ("generate", "args"):
+            for a in entry.get(key, []):
+                if "{" in a or ("/" not in a and a != ".."):
+                    continue
+                path = os.path.normpath(os.path.join(top, a))
+                if os.path.isabs(a) or os.path.commonpath([top, path]) != top:
+                    inside = os.path.commonpath([str(repo.resolve()), path]) == str(repo.resolve())
+                    fix = f"{{repo}}/{os.path.relpath(path, repo.resolve())}" if inside else "a path under `{repo}`"
+                    fails.append(f"runs: {mod}'s `{key}` names {a}, outside the package: check's audit runs on a scratch "
+                                 f"tree, where it finds nothing or another file; write {fix}")
+    return fails
+
+
 def template(pkg: Path) -> dict:
     """A minimal policy for a package without one: its libraries as roots, no guarantee yet."""
     libs = []
@@ -1260,6 +1281,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             elif rc:
                 fails.append(f"fresh: the kernel rejected a declaration in the closure of {r} (exit {rc}):\n{text[-2000:]}")
         rep["seconds"]["fresh"] = round(time.monotonic() - s, 1)
+    fails += run_paths(pkg, policy, repo)
     if runs and policy.get("runs"):
         s = time.monotonic()
         rfails, ran = tests(pkg, policy, files, work, repo, update)
