@@ -33,6 +33,37 @@ def test_case_clashes():
     assert M.case_clashes(["d/Assumptions/X.lean", "d/ASSUMPTIONS.md", "d/assumption-notes/n.md"]) == []
 
 
+def test_theorems_are_named_through_namespaces():
+    text = """namespace Flock
+theorem top_ok : True := trivial
+namespace HmNets
+@[simp] theorem check_ok : True := trivial
+end HmNets
+section
+private theorem Layout.check_ok : True := trivial
+end
+theorem _root_.Other.x : True := trivial
+end Flock
+lemma loose : True := trivial
+"""
+    assert M.theorems(text) == {"Flock.top_ok", "Flock.HmNets.check_ok", "Flock.Layout.check_ok", "Other.x", "loose"}
+
+
+def test_a_dropped_root_keeps_its_imports_reachable(tmp_path):
+    m = M.Map(TOY, tmp_path)
+    proofs = tmp_path / "sec" / "Proofs"
+    (proofs / "A").mkdir(parents=True)
+    (proofs / "A.lean").write_text("import Proofs.A.Used\n\n/-! A's proofs -/\n")
+    for n in ("Used", "Only", "Under"):
+        (proofs / "A" / f"{n}.lean").write_text("import Proofs.A.Under\n" if n == "Only" else "")
+    ren = {"A.SecurityProofs": "Proofs.A", "A.SecurityProofs.Used": "Proofs.A.Used",
+           "A.SecurityProofs.Only": "Proofs.A.Only"}
+    dropped = {"A": ["A.SecurityProofs", "A.SecurityProofs.Only", "A.SecurityProofs.Used"]}
+    assert M.keep_reachable(m, tmp_path, ren, dropped, False) == ["Proofs.A imports Proofs.A.Only"]
+    assert (proofs / "A.lean").read_text().startswith("import Proofs.A.Used\nimport Proofs.A.Only\n\n")
+    assert M.keep_reachable(m, tmp_path, ren, dropped, False) == []
+
+
 def test_the_tree_is_moved():
     m = M.Map(tomllib.loads((HERE.parent / "lean_map.toml").read_text()), ROOT)
     files = M.tracked(ROOT)
