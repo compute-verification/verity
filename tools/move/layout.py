@@ -21,6 +21,7 @@ What it rewrites, in every tracked text file the map doesn't exclude:
 A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. An
 old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
 and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
+It appends [paths] to research's `moves.json` (once), whose recorded moves it never rewrites.
 """
 from __future__ import annotations
 
@@ -49,6 +50,7 @@ RETIRED = ("packages/", "protocols/", "census/", "backends/gkr/", "backends/dire
            "backends/numerical/", "backends/README.md", "backends/AGENTS.md", "benchmarks/dot_product/",
            "benchmarks/ir_call/")
 #: a dotted name ending in one of these is a file name (`verity_pouw.json`), not a module
+MOVES = "tools/research/src/research/store/moves.json"   # each layout move's [paths], for reading a tool from an older tree
 FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "cuh", "yaml", "yml", "gz", "jsonl", "npy", "html"}
 #: file types whose plain relative paths (`fixtures/x.json`, with no `./`) are resolved against the file's directory
 RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", ".yaml", ".yml", ".txt", ".cfg", ".lean"}
@@ -1084,6 +1086,18 @@ class Run:
         body = ", ".join(f'"{k}"' for k in keep)
         return text[: m.start("body")] + body + text[m.end("body"):]
 
+    def record(self):
+        """Append this move's [paths] to research's `moves.json` once, so `tools_registry` still finds a tool's declaration in a
+        tree from before it."""
+        path = self.L.file(MOVES) or MOVES
+        if (text := self._read(path)) is None:
+            raise SystemExit(f"{path}: research's record of the layout moves is missing")
+        doc, entry = json.loads(text), {"paths": dict(self.L.data["paths"])}
+        if entry not in doc["moves"]:
+            doc["moves"].append(entry)
+            self.texts[path] = json.dumps(doc, indent=2) + "\n"
+            self._count(path, "layout moves recorded")
+
     # ---------------------------------------------------------------------------------------------- writing
 
     def write(self):
@@ -1304,6 +1318,7 @@ def main(argv: list[str] | None = None) -> int:
     run.move(moves)
     run.create()
     run.rewrite_all()
+    run.record()
     run.write()
     renamed_modules = sum(1 for o, n in moves if o.endswith(".py") and (mo := module_name(o, layout.old_roots))
                           and mo != module_name(n, layout.new_roots))
