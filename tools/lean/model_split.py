@@ -43,7 +43,11 @@ IN_END = re.compile(r"(^|\s)in\s*$")
 SYNTAX = re.compile(r"^(?:@\[[^\]]*\]\s*)?(syntax|macro|elab|macro_rules|elab_rules|declare_syntax_cat|notation|infixl?|infixr|"
                     r"prefix|postfix)\b")
 PROOF_CMD = re.compile(r"^(?:@\[[^\]]*\]\s*)?(example\b|#[a-z_]+\b)")
+NOTATION = re.compile(r"^(?:@\[[^\]]*\]\s*)?(?:(local|scoped)\s+)?(syntax|macro|elab|macro_rules|elab_rules|notation3?|infixl?|"
+                      r"infixr|prefix|postfix)\b")
 IDENT = re.compile(r"[^\s()\[\]{},:]+")
+_ID = r"[^\W\d][\w'!?\u2080-\u209c\u1d62-\u1d6a]*"
+NAME = re.compile(rf"@?{_ID}(?:\.{_ID})*")
 
 
 def _audit():
@@ -160,7 +164,8 @@ class Module:
         return k, e
 
     def other_spans(self, pat: re.Pattern) -> list[tuple[int, int]]:
-        """The lines of each top-level command `pat` matches (an `example`, a `#` command), to the next command."""
+        """The lines of each top-level command `pat` matches (an `example`, a `#` command), from its doc comment to the
+        next command."""
         out = []
         for i, line in enumerate(self.code):
             if not pat.match(line):
@@ -172,7 +177,14 @@ class Module:
             e = j - 1
             while e > i and not self.lines[e].strip():
                 e -= 1
-            out.append((i, e))
+            b = i
+            if i > 0 and self.lines[i - 1].rstrip().endswith("-/") and not self.code[i - 1].strip():
+                k = i - 1
+                while k > 0 and not self.code[k].strip() and not self.lines[k].lstrip().startswith("/--"):
+                    k -= 1
+                if self.lines[k].lstrip().startswith("/--") and not self.code[k].strip():
+                    b = k
+            out.append((b, e))
         return out
 
 
@@ -269,10 +281,38 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
         memo[u] = r
         return r
 
+    members: dict[tuple[str, int], list[str]] = defaultdict(list)
+    for n, c in where.items():
+        members[c].append(n)
     deps: dict[tuple[str, int], set] = {}
     for m, mod in mods.items():
-        for i, c in enumerate(mod.cmds):
-            deps[(m, i)] = set().union(*(resolve(u) for n in c["names"] for u in uses_of.get(n, []))) - {(m, i)}
+        for i in range(len(mod.cmds)):
+            deps[(m, i)] = set().union(*(resolve(u) for n in members[(m, i)] for u in uses_of.get(n, []))) - {(m, i)}
+    # What a command's text names counts too: `simp` leaves an rfl lemma out of the term it builds, and a notation is gone
+    # once parsed. A name resolves as Lean would, through the command's namespaces and `open`s, a private one in its module.
+    by_user: dict[str, list[str]] = defaultdict(list)
+    for n in where:
+        by_user[user_name(n)].append(n)
+    named: dict[tuple[str, int], set] = defaultdict(set)
+    scopes_of = {m: scopes(mod.code) for m, mod in mods.items()}
+    for m, mod in mods.items():
+        memo_names: dict[tuple, frozenset] = {}
+        for i, (s, e) in enumerate(mod.spans):
+            ns, opens = scopes_of[m][s]
+            opens = opens + [it for k in range(s, e + 1) if mod.code[k].startswith("open ") and IN_END.search(mod.code[k].rstrip())
+                             for it in open_items(mod.code[k])[0]]
+            for t in set(NAME.findall("\n".join(mod.code[s:e + 1]))):
+                key = (tuple(ns), tuple(opens), t)
+                if key not in memo_names:
+                    parts = t.lstrip("@").split(".")
+                    got = set()
+                    for p in (".".join(parts[:k]) for k in range(len(parts), 0, -1)):
+                        cands = [p[len("_root_."):]] if p.startswith("_root_.") else \
+                            [".".join(ns[:k] + [o, p] if o else ns[:k] + [p]) for o in [""] + opens for k in range(len(ns), -1, -1)]
+                        got |= {n for c in cands for n in by_user.get(c, ()) if not n.startswith("_private.") or where[n][0] == m}
+                    memo_names[key] = frozenset(got)
+                named[(m, i)] |= memo_names[key]
+            deps[(m, i)] |= {where[n] for n in named[(m, i)]} - {(m, i)}
     by_parent: dict[str, set] = defaultdict(set)
     for n, c in where.items():
         by_parent[A.parent(n)].add(c)
@@ -290,18 +330,24 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
             seeds |= {(m, i) for i, c in enumerate(mod.cmds) if any(kinds[n] != "theorem" for n in c["names"])}
     private_users: dict[tuple[str, int], set] = defaultdict(set)
     for m, mod in mods.items():
-        for i, cmd in enumerate(mod.cmds):
-            for n in cmd["names"]:
-                for u in uses_of.get(n, []):
-                    if u.startswith("_private.") and u in where and where[u][0] == m and where[u] != (m, i):
-                        private_users[where[u]].add((m, i))
+        for i in range(len(mod.cmds)):
+            for u in {u for n in members[(m, i)] for u in uses_of.get(n, [])} | named[(m, i)]:
+                if u.startswith("_private.") and u in where and where[u][0] == m and where[u] != (m, i):
+                    private_users[where[u]].add((m, i))
+    # A notation, macro or syntax: a local one is copied into both halves of its module (its constants are the module's
+    # own), any other goes with the spec of a module that has some.
+    syntax_cmd = {(m, i): NOTATION.match(mod.code[c["start"][0] - 1]) for m, mod in mods.items() for i, c in enumerate(mod.cmds)}
+    syntax_cmd = {c: mt.group(1) == "local" for c, mt in syntax_cmd.items() if mt}
     spec: set = set()
     todo = sorted(seeds)
     while todo:
-        c = todo.pop()
-        if c not in spec:
-            spec.add(c)
-            todo.extend(sorted((deps[c] | private_users[c]) - spec))
+        while todo:
+            c = todo.pop()
+            if c not in spec:
+                spec.add(c)
+                todo.extend(sorted((deps[c] | private_users[c]) - spec))
+        has_spec = {m for m, _ in spec}
+        todo = sorted(c for c, local in syntax_cmd.items() if not local and c[0] in has_spec and c not in spec)
     side = {}
     for m, mod in mods.items():
         s = {i for i in range(len(mod.cmds)) if (m, i) in spec}
@@ -423,6 +469,8 @@ def plan(pkg: Path, decls: dict, spec_prefixes: list[str]) -> dict:
         gone: set[str] = set()
         spec_drop, proof_drop = set(), set()
         for i, (s, e) in enumerate(mod.spans):
+            if syntax_cmd.get((m, i)) and all(n in spec_consts for n in named[(m, i)] if where[n] != (m, i)):
+                continue
             (spec_drop if (m, i) not in spec else proof_drop).update(range(s, e + 1))
         for s, e in mod.proof_spans:
             spec_drop.update(range(s, e + 1))

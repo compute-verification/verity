@@ -39,6 +39,25 @@ def g : Nat := f 1
 
 @[simp] theorem g_eq : g = 1 := rfl
 
+theorem lt3 : 0 < 3 := by decide
+
+/-- Its value's proof names `lt3`, which only `three`'s auxiliary proof uses. -/
+def three : {n : Nat // 0 < n} := ⟨3, by exact Nat.lt_of_lt_of_le lt3 (Nat.le_refl 3)⟩
+
+theorem f_four : f 4 = 4 := rfl
+
+/-- `simp` leaves the rfl lemma `f_four` out of the term. -/
+theorem four_eq : f 4 = 4 := by simp only [f_four]
+
+def four : {n : Nat // n = 4} := ⟨f 4, four_eq⟩
+
+local notation "𝟙" => f 1
+
+def one : Nat := 𝟙
+
+theorem one_eq : 𝟙 = 1 := rfl
+
+/-- An example. -/
 example : g = 1 := rfl
 
 end P
@@ -53,7 +72,8 @@ FILES = {
 }
 LOCK = {"roots": ["P"], "assumptions": ["P.Assumptions"],
         "pins": {"P.t": {"signature": ["P.t : Eq P.g 1"], "assumptions": [], "type_hash": "aa"}},
-        "reads": {"P.Defs": {"digest": "d", "definitions": {"P.f": "1", "P.g": "2", "P.two": "3"}}}}
+        "reads": {"P.Defs": {"digest": "d", "definitions": {"P.f": "1", "P.g": "2", "P.two": "3", "P.three": "4", "P.four": "5",
+                                                            "P.one": "6"}}}}
 
 
 def package(tmp: Path) -> Path:
@@ -77,7 +97,9 @@ def decls(pkg: Path) -> dict:
 
 
 def names(d: dict) -> set[str]:
-    return {S.user_name(x["n"]) for m in d["modules"].values() for x in m["decls"]}
+    """Every declaration's name, but a local notation's macro and unexpander, which are named after their module."""
+    return {n for m in d["modules"].values() for x in m["decls"]
+            if not (n := S.user_name(x["n"])).split(".")[-1].lstrip("«").startswith("_aux_")}
 
 
 @pytest.mark.slow
@@ -85,6 +107,8 @@ def names(d: dict) -> set[str]:
 def test_a_mixed_module_splits_into_a_spec_half_and_its_proofs_and_still_builds(tmp_path):
     pkg = package(tmp_path)
     before = decls(pkg)
+    uses = {x["n"]: x["u"] for x in before["modules"]["P.Defs"]["decls"]}
+    assert "P.lt3" not in uses["P.three"] and "P.f_four" not in uses["P.four_eq"]
     p = S.plan(pkg, before, [])
     assert p["side"] == {"P": "proofs", "P.Assumptions": "spec", "P.Base": "proofs", "P.Defs": "mixed", "P.Thms": "proofs"}
     assert p["protocol"] == {"P.Defs": "P.Protocol.Defs"} and p["new_imports"]["P.Protocol.Defs"] == []
@@ -93,9 +117,11 @@ def test_a_mixed_module_splits_into_a_spec_half_and_its_proofs_and_still_builds(
     spec_half, proofs = (pkg / "P/Protocol/Defs.lean").read_text(), (pkg / "P/Defs.lean").read_text()
     assert "import" not in spec_half and "/-- `f`, the identity. -/\ndef f" in spec_half
     assert "-- `g` is `f 1`.\nopen Nat in\ndef g" in spec_half and "two_pos" in spec_half
-    assert not any(x in spec_half for x in ("f_id", "g_eq", "example"))
+    assert all(f"theorem {x} " in spec_half for x in ("lt3", "f_four", "four_eq"))
+    assert not any(x in spec_half for x in ("f_id", "g_eq", "one_eq", "example"))
     assert proofs.startswith("import P.Base\nimport P.Protocol.Defs\n")
-    assert all(x in proofs for x in ("theorem f_id", "@[simp] theorem g_eq", "example")) and "def " not in proofs
+    assert all(x in proofs for x in ("theorem f_id", "@[simp] theorem g_eq", "theorem one_eq", "/-- An example. -/\nexample"))
+    assert "def " not in proofs and all(x.count('local notation "𝟙"') == 1 for x in (spec_half, proofs))
     after = decls(pkg)
     assert names(after) == names(before)
     lock = A.load(pkg)
