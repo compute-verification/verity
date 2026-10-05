@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import ast
 import fnmatch
+import hashlib
 import json
 import os
 import posixpath
@@ -320,6 +321,7 @@ class Run:
             new = self.rewrite(p, old, text)
             if new != text:
                 self.texts[p] = new
+        self.rekey_lean_deps()
         for p, before in lean_before.items():
             if self._lean_records(self.texts.get(p) or self._read(p)) != before:
                 raise SystemExit(f"{p}: the rewrite would change a guarantee or reads record")
@@ -331,6 +333,39 @@ class Run:
         for p, before in pins_before.items():
             if re.findall(r"\b[0-9a-f]{64}\b", self.texts.get(p) or self._read(p) or "") != before:
                 raise SystemExit(f"{p}: the rewrite would change a pinned digest")
+
+    def rekey_lean_deps(self, pin: str = "tools/lean/lean-deps.json"):
+        """Each pinned dependency bundle is keyed by its package's manifest and toolchain (`lean_audit.deps_key`), and a moved
+        package's manifest names its path requirements' new directories. A bundle holds only the fetched packages, so when the
+        manifest changed in nothing else the same bundle is pinned under the new key."""
+        text = self._read(pin)
+        if text is None:
+            return
+        doc = json.loads(text)
+
+        def key(manifest: str, toolchain: str) -> str:
+            return hashlib.sha256(manifest.encode() + b"\0" + toolchain.encode()).hexdigest()
+
+        def fetched(manifest: str) -> list:
+            return [d for d in json.loads(manifest).get("packages", []) if d.get("type") != "path"]
+
+        deps = {}
+        for k, v in doc["deps"].items():
+            pkg = v["package"]
+            old_pkg = posixpath.dirname(self.old_of.get(f"{pkg}/lake-manifest.json", f"{pkg}/lake-manifest.json"))
+            old_m = git(self.root, "show", f"HEAD:{old_pkg}/lake-manifest.json", check=False)
+            new_m, tc = self._read(f"{pkg}/lake-manifest.json"), self._read(f"{pkg}/lean-toolchain")
+            if not old_m or new_m is None or tc is None or key(old_m, tc) != k or fetched(old_m) != fetched(new_m):
+                deps[k] = v
+                if new_m is None or tc is None or key(new_m, tc) != k:
+                    self.note("lean dependency bundles left under a stale key", f"{pkg} ({k[:12]})")
+                continue
+            deps[key(new_m, tc)] = v
+            if key(new_m, tc) != k:
+                self._count(pin, "lean dependency bundles rekeyed")
+        new = json.dumps({**doc, "deps": deps}, indent=1, sort_keys=True) + "\n"
+        if new != text:
+            self.texts[pin] = new
 
     @staticmethod
     def _lean_records(text):
