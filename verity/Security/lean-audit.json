@@ -307,7 +307,6 @@
   "Proofs.Pouw.Sanity": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
   "Proofs.Pous.Accounting.Numbers": "memory-accounting to move reportP₀ into Pous.Protocol (lean's recommendation), or drop report_k214 from the lock",
   "Proofs.Pous.Sanity": "non-vacuity witnesses; they leave the lock in @memory-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
