@@ -72,6 +72,7 @@ def micro(args) -> int:
     import torch
     import pu_commit as P
     dev = torch.device("cuda")
+    check = _self_check(P, dev)
     big = 2 << 30
     x = torch.randint(-(1 << 15), 1 << 15, (big // 2,), dtype=torch.int16, device=dev)
     n = big // P.CHUNK
@@ -85,7 +86,7 @@ def micro(args) -> int:
     pinned = torch.empty(1 << 30, dtype=torch.uint8, pin_memory=True)
     t_d2h = _cuda_time(lambda: pinned.copy_(src, non_blocking=True))
     t_h2d = _cuda_time(lambda: src.copy_(pinned, non_blocking=True))
-    out = {"gpu": gpu_info(), "versions": _versions(), "sm_count": torch.cuda.get_device_properties(0).multi_processor_count,
+    out = {"self_check": check, "gpu": gpu_info(), "versions": _versions(), "sm_count": torch.cuda.get_device_properties(0).multi_processor_count,
            "hash_leaves": {"bytes": big, "seconds": t_leaf, "GBps": big / t_leaf / 1e9},
            "tree_fold": {"leaves": n, "seconds": t_fold, "leaves_per_s": n / t_fold},
            "hash_and_fold_GBps": big / (t_leaf + t_fold) / 1e9,
@@ -113,7 +114,30 @@ def micro(args) -> int:
     out["graph_per_site"] = per_site
     _write(Path(args.out) / "micro.json", out)
     print(json.dumps(out, indent=1))
-    return 0
+    return 0 if check["ok"] else 1
+
+
+def _self_check(P, dev) -> dict:
+    """The kernel's step root and retained bytes against hashlib, on sites of odd chunk counts across a ring wrap."""
+    import torch
+    counts = (7, 1, 300)
+    st = P.State(ring_leaves=400, keep_bytes=500 * P.CHUNK)
+    st.ctr[0], st.ctr[1] = 350, 450
+    xs = [torch.randint(-(1 << 15), 1 << 15, (c * P.CHUNK // 2,), dtype=torch.int16, device=dev) for c in counts]
+    off = 0
+    for site, x in enumerate(xs):
+        st.leaf(x, site, off)
+        off += x.numel() * 2 // P.CHUNK
+    st.finalize(off, off * P.CHUNK)
+    torch.cuda.synchronize()
+    data = b"".join(x.cpu().numpy().tobytes() for x in xs)
+    leaves = [P.leaf(site, ci, c, x.cpu().numpy().tobytes()[ci * P.CHUNK:(ci + 1) * P.CHUNK])
+              for site, (c, x) in enumerate(zip(counts, xs)) for ci in range(c)]
+    root = st.record(0)[0]
+    keep = st.keep.numpy().tobytes()
+    kept = b"".join(keep[((450 + i) % 500) * P.CHUNK:][:P.CHUNK] for i in range(off))
+    ok = root == P.fold(leaves) and kept == data
+    return {"ok": ok, "root": root.hex(), "leaves": off, "counts": counts}
 
 
 def _llm(args):

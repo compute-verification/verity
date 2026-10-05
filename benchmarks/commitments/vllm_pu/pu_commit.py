@@ -45,7 +45,7 @@ def ext():
 
 
 def leaf(site: int, ci: int, n: int, chunk: bytes) -> bytes:
-    return hashlib.sha256(b"vcb1" + struct.pack(">IQQ", site, ci, n) + bytes(40) + chunk).digest()
+    return hashlib.sha256(chunk + b"vcb1" + struct.pack(">IQQ", site, ci, n)).digest()
 
 
 def fold(nodes: list[bytes]) -> bytes:

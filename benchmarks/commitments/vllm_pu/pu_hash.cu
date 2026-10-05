@@ -1,7 +1,7 @@
 // Proof-unit output commitment on the GPU, built to run inside vLLM's CUDA graphs: every launch reads its ring positions
 // from device counters, so a captured graph replays correctly step after step, and nothing here synchronises with the host.
 //
-//   leaf(site, ci)  = SHA-256(u8"vcb1" || u32be(site) || u64be(ci) || u64be(n_chunks) || 0^40 || chunk_ci)   (256-byte chunks)
+//   leaf(site, ci)  = SHA-256(chunk_ci || u8"vcb1" || u32be(site) || u64be(ci) || u64be(n_chunks))   (256-byte chunks, 5 compressions)
 //   node(l, r)      = SHA-256(l || r), r = 0^32 for the odd trailing node of a level; the step root folds every leaf of the step
 //
 // A step's leaves are contiguous in the digest ring from ctr[0]; each site writes its own static range [offset, offset + n).
@@ -91,30 +91,35 @@ __device__ __forceinline__ void node(const uint32_t (&l)[8], const uint32_t (&r)
 // one thread per chunk; ctr[0] = the step's first digest-ring slot, ctr[1] = its first retention-ring chunk
 __global__ void leaf_kernel(const uint4 *__restrict__ x, long n_chunks, uint32_t site, long offset, const int64_t *__restrict__ ctr,
                             uint8_t *__restrict__ ring, long R, uint4 *__restrict__ keep, long RH) {
-    const long ci = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    const long c0 = (long)blockIdx.x * blockDim.x;
+    if (keep) {
+        // Block-cooperative copy so consecutive threads store consecutive 16 B to mapped host memory.
+        const long span = min((long)blockDim.x, n_chunks - c0) * (CHUNK / 16);
+        const long kb = ctr[1] + offset + c0;
+        for (long e = threadIdx.x; e < span; e += blockDim.x) {
+            const long c = e / (CHUNK / 16);
+            keep[((kb + c) % RH) * (CHUNK / 16) + e % (CHUNK / 16)] = x[(c0 + c) * (CHUNK / 16) + e % (CHUNK / 16)];
+        }
+    }
+    const long ci = c0 + threadIdx.x;
     if (ci >= n_chunks) return;
     Sha s; s.init();
     uint32_t m[16];
-    m[0] = 0x76636231u; m[1] = site; m[2] = (uint32_t)((unsigned long)ci >> 32); m[3] = (uint32_t)ci;
-    m[4] = (uint32_t)((unsigned long)n_chunks >> 32); m[5] = (uint32_t)n_chunks;
-    #pragma unroll
-    for (int i = 6; i < 16; ++i) m[i] = 0u;
-    s.compress(m);
     const uint4 *src = x + ci * (CHUNK / 16);
-    uint4 *dst = keep ? keep + ((ctr[1] + offset + ci) % RH) * (CHUNK / 16) : nullptr;
     #pragma unroll
     for (int blk = 0; blk < CHUNK / 64; ++blk) {
         #pragma unroll
         for (int q = 0; q < 4; ++q) {
             const uint4 v = src[blk * 4 + q];
-            if (dst) dst[blk * 4 + q] = v;
             m[4 * q + 0] = bswap(v.x); m[4 * q + 1] = bswap(v.y); m[4 * q + 2] = bswap(v.z); m[4 * q + 3] = bswap(v.w);
         }
         s.compress(m);
     }
+    m[0] = 0x76636231u; m[1] = site; m[2] = (uint32_t)((unsigned long)ci >> 32); m[3] = (uint32_t)ci;
+    m[4] = (uint32_t)((unsigned long)n_chunks >> 32); m[5] = (uint32_t)n_chunks; m[6] = 0x80000000u;
     #pragma unroll
-    for (int i = 0; i < 16; ++i) m[i] = 0u;
-    m[0] = 0x80000000u; m[15] = (64 + CHUNK) * 8;
+    for (int i = 7; i < 15; ++i) m[i] = 0u;
+    m[15] = (CHUNK + 24) * 8;
     s.compress(m);
     store_digest(ring + ((ctr[0] + offset + ci) % R) * 32, s.h);
 }
@@ -208,7 +213,7 @@ void leaf_hash(const at::Tensor &x, int64_t site, int64_t offset, const at::Tens
     TORCH_CHECK(nbytes % CHUNK == 0 && reinterpret_cast<uintptr_t>(x.data_ptr()) % 16 == 0, "leaf_hash: 256-byte multiple, 16-byte aligned");
     const long n = nbytes / CHUNK;
     if (n == 0) return;
-    const int threads = 128;
+    const int threads = 64;
     leaf_kernel<<<(n + threads - 1) / threads, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
         reinterpret_cast<const uint4 *>(x.data_ptr()), n, (uint32_t)site, (long)offset, ctr.data_ptr<int64_t>(),
         ring.data_ptr<uint8_t>(), ring.numel() / 32, reinterpret_cast<uint4 *>(keep), RH);
