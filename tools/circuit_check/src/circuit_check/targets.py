@@ -411,7 +411,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_catalog.definitions.boolean import gemm as BG
     from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
     from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
-    from verity_vllm.program.registry import serve3, spec
+    from verity_vllm.program.registry import act, serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
     from verity_vllm.program.registry import boolean_attention, boolean_dsa, boolean_fp8, boolean_fp8_moe, boolean_rope
     from verity_vllm.program.registry import boolean_sparse_mla, dsa, sparse_mla, tables
@@ -539,6 +539,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("GumbelTokenSelect_v1", lambda: bind(sampling.GumbelTokenSelect, V=16)),
         ("GumbelTokenSelectSharedGreedy_v1", lambda: bind(sampling.GumbelTokenSelectSharedGreedy, V=16)),
         ("GumbelTopPTokenSelectSharedGreedy_v1", lambda: bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)),
+        # the static-seed Gumbel argmax (T = 0.7f) and the erf GELU; LayerNormAten is the b1-eager-v3 vocabulary's
+        ("GumbelArgmaxBf16_v1", lambda: bind(sampling.GumbelArgmaxBf16, V=16, SEED=12345, POS=3)),
+        ("GumbelArgmaxTempBf16_v1", lambda: bind(sampling.GumbelArgmaxTempBf16, V=16, SEED=12345, POS=3, T=0x3F333333)),
+        ("GeluErf_v1", lambda: bind(act.GeluErf, N=8)),
         ("EmbeddingShard_v1", lambda: bind(b1_tp2.EmbeddingShard, VS=16, H=16, START=16)),
         ("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16)),
         ("RoPEGptJ_v1", lambda: bind(ref_prims.RoPEGptJ, NHEADS=2, D=16)),
