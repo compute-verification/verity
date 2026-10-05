@@ -2,23 +2,23 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
-    "sys_platform != 'darwin' and extra != 'extra-10-verity-gkr-torch' and extra != 'extra-11-verity-vllm-torch' and extra != 'extra-13-verity-direct-torch' and extra == 'extra-16-verity-workspace-torch-cpu' and extra != 'extra-18-verity-native-peak-torch'",
-    "sys_platform == 'darwin' and extra != 'extra-10-verity-gkr-torch' and extra != 'extra-11-verity-vllm-torch' and extra != 'extra-13-verity-direct-torch' and extra == 'extra-16-verity-workspace-torch-cpu' and extra != 'extra-18-verity-native-peak-torch'",
-    "extra == 'extra-11-verity-vllm-torch' and extra != 'extra-16-verity-workspace-torch-cpu'",
-    "extra != 'extra-11-verity-vllm-torch' and extra != 'extra-16-verity-workspace-torch-cpu'",
+    "extra == 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
+    "sys_platform != 'darwin' and extra != 'extra-10-verity-gkr-torch' and extra != 'extra-11-verity-vllm-torch' and extra != 'extra-13-verity-direct-torch' and extra != 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu'",
+    "sys_platform == 'darwin' and extra != 'extra-10-verity-gkr-torch' and extra != 'extra-11-verity-vllm-torch' and extra != 'extra-13-verity-direct-torch' and extra != 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu'",
+    "extra != 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
 ]
 conflicts = [[
+    { package = "verity", extra = "torch-cpu" },
     { package = "verity-vllm", extra = "torch" },
-    { package = "verity-workspace", extra = "torch-cpu" },
 ], [
+    { package = "verity", extra = "torch-cpu" },
     { package = "verity-gkr", extra = "torch" },
-    { package = "verity-workspace", extra = "torch-cpu" },
 ], [
+    { package = "verity", extra = "torch-cpu" },
     { package = "verity-direct", extra = "torch" },
-    { package = "verity-workspace", extra = "torch-cpu" },
 ], [
+    { package = "verity", extra = "torch-cpu" },
     { package = "verity-native-peak", extra = "torch" },
-    { package = "verity-workspace", extra = "torch-cpu" },
 ]]
 
 [manifest]
@@ -26,26 +26,24 @@ members = [
     "cluster",
     "research",
     "verity",
+    "verity-catalog",
     "verity-check",
     "verity-circuit-check",
     "verity-commitments-benchmarks",
     "verity-direct",
+    "verity-experimental",
     "verity-flock",
     "verity-gkr",
+    "verity-kernels",
     "verity-lean-audit",
     "verity-native-peak",
     "verity-network-traces",
-    "verity-network-warden",
     "verity-numerical",
-    "verity-pous",
-    "verity-pouw",
     "verity-pouw-benchmarks",
-    "verity-sampled-proofs",
     "verity-sp1",
     "verity-tc-probe",
     "verity-tc-probe-fp4",
     "verity-vllm",
-    "verity-workspace",
 ]
 
 [[package]]
@@ -301,6 +299,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a9/95/a3dbbb5028f35eafb79008e7522a75244477d2838f38cbb722248dabc2a8/cycler-0.12.1.tar.gz", hash = "sha256:88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c", size = 7615, upload-time = "2023-10-07T05:32:18.335Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl", hash = "sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30", size = 8321, upload-time = "2023-10-07T05:32:16.783Z" },
+]
+
+[[package]]
+name = "editables"
+version = "0.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/82/f8/02a4e9a0cb961b0feeb431ac96b231c157ecdcbbeacafe9e2fdb4b1dde39/editables-0.6.tar.gz", hash = "sha256:1163834902381c4613787951c5914800fdf155ae08848a373b8ea5006780977c", size = 16763, upload-time = "2026-04-14T10:39:04.677Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cc/0e/d095533037fc9468f947b19f2da53f869804632b508808de41e86e801797/editables-0.6-py3-none-any.whl", hash = "sha256:d70e4698078a1d033e7786d9c64e5be070d058a67c21417024d38a58ac20aa43", size = 5438, upload-time = "2026-04-14T10:39:03.663Z" },
 ]
 
 [[package]]
@@ -1037,7 +1044,7 @@ name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-verity-gkr-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-13-verity-direct-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-16-verity-workspace-torch-cpu' and extra == 'extra-18-verity-native-peak-torch')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-verity-gkr-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-13-verity-direct-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
@@ -1126,7 +1133,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "rpds-py" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-verity-gkr-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-13-verity-direct-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-16-verity-workspace-torch-cpu' and extra == 'extra-18-verity-native-peak-torch')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-verity-gkr-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-13-verity-direct-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/22/f5/df4e9027acead3ecc63e50fe1e36aca1523e1719559c499951bb4b53188f/referencing-0.37.0.tar.gz", hash = "sha256:44aefc3142c5b842538163acb373e24cce6632bd54bdb01b21ad5863489f50d8", size = 78036, upload-time = "2025-10-13T15:30:48.871Z" }
 wheels = [
@@ -1295,7 +1302,7 @@ version = "2.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cuda-bindings", marker = "python_full_version < '3.15' and sys_platform == 'linux'" },
-    { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra == 'extra-10-verity-gkr-torch') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (sys_platform == 'linux' and extra == 'extra-13-verity-direct-torch') or (sys_platform == 'linux' and extra != 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-10-verity-gkr-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-13-verity-direct-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-16-verity-workspace-torch-cpu' and extra == 'extra-18-verity-native-peak-torch')" },
+    { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra == 'extra-10-verity-gkr-torch') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (sys_platform == 'linux' and extra == 'extra-13-verity-direct-torch') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (extra == 'extra-10-verity-gkr-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-13-verity-direct-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
     { name = "filelock" },
     { name = "fsspec" },
     { name = "jinja2" },
@@ -1398,13 +1405,76 @@ wheels = [
 [[package]]
 name = "verity"
 version = "0.1.0"
-source = { editable = "packages/verity" }
+source = { editable = "." }
 dependencies = [
     { name = "numpy" },
 ]
 
+[package.optional-dependencies]
+torch-cpu = [
+    { name = "torch", version = "2.14.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-10-verity-gkr-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-13-verity-direct-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "torch", version = "2.14.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-10-verity-gkr-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-13-verity-direct-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "cluster" },
+    { name = "editables" },
+    { name = "jsonschema" },
+    { name = "pytest" },
+    { name = "pytest-xdist" },
+    { name = "pyyaml" },
+    { name = "research" },
+    { name = "verity-catalog" },
+    { name = "verity-circuit-check" },
+    { name = "verity-experimental" },
+    { name = "verity-flock" },
+    { name = "verity-kernels" },
+    { name = "verity-numerical" },
+    { name = "verity-sp1" },
+    { name = "verity-vllm" },
+]
+
 [package.metadata]
-requires-dist = [{ name = "numpy", specifier = ">=1.26" }]
+requires-dist = [
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "torch", marker = "extra == 'torch-cpu'", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "verity", extra = "torch-cpu" } },
+]
+provides-extras = ["torch-cpu"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "cluster", editable = "tools/cluster" },
+    { name = "editables", specifier = ">=0.5" },
+    { name = "jsonschema", specifier = ">=4.26" },
+    { name = "pytest", specifier = ">=8" },
+    { name = "pytest-xdist", specifier = ">=3.6" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "research", editable = "tools/research" },
+    { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-circuit-check", editable = "tools/circuit_check" },
+    { name = "verity-experimental", editable = "experimental" },
+    { name = "verity-flock", editable = "backends/flock" },
+    { name = "verity-kernels", editable = "kernels" },
+    { name = "verity-numerical", editable = "benchmarks/numerical" },
+    { name = "verity-sp1", editable = "archive/sp1" },
+    { name = "verity-vllm", editable = "integrations/vllm" },
+]
+
+[[package]]
+name = "verity-catalog"
+version = "0.0.0"
+source = { editable = "catalog" }
+dependencies = [
+    { name = "numpy" },
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "verity", editable = "." },
+]
 
 [[package]]
 name = "verity-check"
@@ -1424,19 +1494,23 @@ source = { editable = "tools/circuit_check" }
 dependencies = [
     { name = "numpy" },
     { name = "verity" },
+    { name = "verity-catalog" },
+    { name = "verity-experimental" },
     { name = "verity-flock" },
+    { name = "verity-kernels" },
     { name = "verity-numerical" },
-    { name = "verity-pouw" },
     { name = "verity-vllm" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "numpy" },
-    { name = "verity", editable = "packages/verity" },
+    { name = "verity", editable = "." },
+    { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-experimental", editable = "experimental" },
     { name = "verity-flock", editable = "backends/flock" },
-    { name = "verity-numerical", editable = "backends/numerical" },
-    { name = "verity-pouw", editable = "protocols/pouw" },
+    { name = "verity-kernels", editable = "kernels" },
+    { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
@@ -1458,20 +1532,22 @@ requires-dist = [
     { name = "blake3", specifier = ">=1.0" },
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
-    { name = "verity", editable = "packages/verity" },
-    { name = "verity-numerical", editable = "backends/numerical" },
+    { name = "verity", editable = "." },
+    { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
 [[package]]
 name = "verity-direct"
 version = "0.0.0"
-source = { virtual = "backends/direct" }
+source = { virtual = "archive/direct" }
 dependencies = [
     { name = "blake3" },
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
+    { name = "verity-catalog" },
+    { name = "verity-kernels" },
     { name = "verity-numerical" },
 ]
 
@@ -1486,10 +1562,23 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
-    { name = "verity", editable = "packages/verity" },
-    { name = "verity-numerical", editable = "backends/numerical" },
+    { name = "verity", editable = "." },
+    { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-kernels", editable = "kernels" },
+    { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
 provides-extras = ["torch"]
+
+[[package]]
+name = "verity-experimental"
+version = "0.0.0"
+source = { editable = "experimental" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "." }]
 
 [[package]]
 name = "verity-flock"
@@ -1499,6 +1588,9 @@ dependencies = [
     { name = "blake3" },
     { name = "numpy" },
     { name = "verity" },
+    { name = "verity-catalog" },
+    { name = "verity-experimental" },
+    { name = "verity-kernels" },
     { name = "verity-numerical" },
     { name = "verity-vllm" },
 ]
@@ -1507,20 +1599,24 @@ dependencies = [
 requires-dist = [
     { name = "blake3", specifier = ">=1.0" },
     { name = "numpy" },
-    { name = "verity", editable = "packages/verity" },
-    { name = "verity-numerical", editable = "backends/numerical" },
+    { name = "verity", editable = "." },
+    { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-experimental", editable = "experimental" },
+    { name = "verity-kernels", editable = "kernels" },
+    { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
 [[package]]
 name = "verity-gkr"
 version = "0.0.0"
-source = { virtual = "backends/gkr" }
+source = { virtual = "archive/gkr" }
 dependencies = [
     { name = "blake3" },
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
+    { name = "verity-catalog" },
     { name = "verity-numerical" },
 ]
 
@@ -1535,10 +1631,28 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
-    { name = "verity", editable = "packages/verity" },
-    { name = "verity-numerical", editable = "backends/numerical" },
+    { name = "verity", editable = "." },
+    { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
 provides-extras = ["torch"]
+
+[[package]]
+name = "verity-kernels"
+version = "0.0.0"
+source = { editable = "kernels" }
+dependencies = [
+    { name = "numpy" },
+    { name = "verity" },
+    { name = "verity-catalog" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "verity", editable = "." },
+    { name = "verity-catalog", editable = "catalog" },
+]
 
 [[package]]
 name = "verity-lean-audit"
@@ -1578,31 +1692,22 @@ name = "verity-network-traces"
 version = "0.0.0"
 source = { virtual = "benchmarks/network_traces" }
 dependencies = [
-    { name = "verity-network-warden" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity-network-warden", editable = "protocols/network_warden" }]
-
-[[package]]
-name = "verity-network-warden"
-version = "0.1.0"
-source = { editable = "protocols/network_warden" }
-dependencies = [
     { name = "verity" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity", editable = "packages/verity" }]
+requires-dist = [{ name = "verity", editable = "." }]
 
 [[package]]
 name = "verity-numerical"
 version = "0.1.0"
-source = { editable = "backends/numerical" }
+source = { editable = "benchmarks/numerical" }
 dependencies = [
     { name = "matplotlib" },
     { name = "research" },
     { name = "verity" },
+    { name = "verity-catalog" },
+    { name = "verity-kernels" },
     { name = "verity-vllm" },
     { name = "z3-solver" },
 ]
@@ -1611,32 +1716,12 @@ dependencies = [
 requires-dist = [
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "research", editable = "tools/research" },
-    { name = "verity", editable = "packages/verity" },
+    { name = "verity", editable = "." },
+    { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-kernels", editable = "kernels" },
     { name = "verity-vllm", editable = "integrations/vllm" },
     { name = "z3-solver", specifier = ">=4.13" },
 ]
-
-[[package]]
-name = "verity-pous"
-version = "0.1.0"
-source = { editable = "protocols/pous" }
-dependencies = [
-    { name = "verity" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity", editable = "packages/verity" }]
-
-[[package]]
-name = "verity-pouw"
-version = "0.1.0"
-source = { editable = "protocols/pouw" }
-dependencies = [
-    { name = "verity" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity", editable = "packages/verity" }]
 
 [[package]]
 name = "verity-pouw-benchmarks"
@@ -1646,7 +1731,9 @@ dependencies = [
     { name = "blake3" },
     { name = "numpy" },
     { name = "research" },
-    { name = "verity-pouw" },
+    { name = "verity" },
+    { name = "verity-catalog" },
+    { name = "verity-kernels" },
     { name = "verity-vllm" },
 ]
 
@@ -1655,31 +1742,28 @@ requires-dist = [
     { name = "blake3", specifier = ">=1.0" },
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
-    { name = "verity-pouw", editable = "protocols/pouw" },
+    { name = "verity", editable = "." },
+    { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-kernels", editable = "kernels" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
 [[package]]
-name = "verity-sampled-proofs"
-version = "0.1.0"
-source = { editable = "protocols/sampled_proofs" }
-dependencies = [
-    { name = "verity" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity", editable = "packages/verity" }]
-
-[[package]]
 name = "verity-sp1"
 version = "0.1.0"
-source = { editable = "backends/sp1" }
+source = { editable = "archive/sp1" }
 dependencies = [
     { name = "verity" },
+    { name = "verity-catalog" },
+    { name = "verity-experimental" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity", editable = "packages/verity" }]
+requires-dist = [
+    { name = "verity", editable = "." },
+    { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-experimental", editable = "experimental" },
+]
 
 [[package]]
 name = "verity-tc-probe"
@@ -1689,6 +1773,7 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
+    { name = "verity-catalog" },
     { name = "verity-numerical" },
 ]
 
@@ -1696,8 +1781,9 @@ dependencies = [
 requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
-    { name = "verity", editable = "packages/verity" },
-    { name = "verity-numerical", editable = "backends/numerical" },
+    { name = "verity", editable = "." },
+    { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
 
 [[package]]
@@ -1708,13 +1794,15 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
+    { name = "verity-catalog" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
-    { name = "verity", editable = "packages/verity" },
+    { name = "verity", editable = "." },
+    { name = "verity-catalog", editable = "catalog" },
 ]
 
 [[package]]
@@ -1726,9 +1814,9 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
-    { name = "verity-pous" },
-    { name = "verity-pouw" },
-    { name = "verity-sampled-proofs" },
+    { name = "verity-catalog" },
+    { name = "verity-experimental" },
+    { name = "verity-kernels" },
 ]
 
 [package.optional-dependencies]
@@ -1742,71 +1830,12 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
-    { name = "verity", editable = "packages/verity" },
-    { name = "verity-pous", editable = "protocols/pous" },
-    { name = "verity-pouw", editable = "protocols/pouw" },
-    { name = "verity-sampled-proofs", editable = "protocols/sampled_proofs" },
+    { name = "verity", editable = "." },
+    { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-experimental", editable = "experimental" },
+    { name = "verity-kernels", editable = "kernels" },
 ]
 provides-extras = ["torch"]
-
-[[package]]
-name = "verity-workspace"
-version = "0.0.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "cluster" },
-    { name = "research" },
-    { name = "verity" },
-    { name = "verity-circuit-check" },
-    { name = "verity-flock" },
-    { name = "verity-network-warden" },
-    { name = "verity-numerical" },
-    { name = "verity-pous" },
-    { name = "verity-pouw" },
-    { name = "verity-sampled-proofs" },
-    { name = "verity-sp1" },
-    { name = "verity-vllm" },
-]
-
-[package.optional-dependencies]
-torch-cpu = [
-    { name = "torch", version = "2.14.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-10-verity-gkr-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-13-verity-direct-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-16-verity-workspace-torch-cpu' and extra == 'extra-18-verity-native-peak-torch')" },
-    { name = "torch", version = "2.14.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-10-verity-gkr-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-13-verity-direct-torch' and extra == 'extra-16-verity-workspace-torch-cpu') or (extra == 'extra-16-verity-workspace-torch-cpu' and extra == 'extra-18-verity-native-peak-torch')" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "jsonschema" },
-    { name = "pytest" },
-    { name = "pytest-xdist" },
-    { name = "pyyaml" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "cluster", editable = "tools/cluster" },
-    { name = "research", editable = "tools/research" },
-    { name = "torch", marker = "extra == 'torch-cpu'", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "verity-workspace", extra = "torch-cpu" } },
-    { name = "verity", editable = "packages/verity" },
-    { name = "verity-circuit-check", editable = "tools/circuit_check" },
-    { name = "verity-flock", editable = "backends/flock" },
-    { name = "verity-network-warden", editable = "protocols/network_warden" },
-    { name = "verity-numerical", editable = "backends/numerical" },
-    { name = "verity-pous", editable = "protocols/pous" },
-    { name = "verity-pouw", editable = "protocols/pouw" },
-    { name = "verity-sampled-proofs", editable = "protocols/sampled_proofs" },
-    { name = "verity-sp1", editable = "backends/sp1" },
-    { name = "verity-vllm", editable = "integrations/vllm" },
-]
-provides-extras = ["torch-cpu"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "jsonschema", specifier = ">=4.26" },
-    { name = "pytest", specifier = ">=8" },
-    { name = "pytest-xdist", specifier = ">=3.6" },
-    { name = "pyyaml", specifier = ">=6" },
-]
 
 [[package]]
 name = "z3-solver"
