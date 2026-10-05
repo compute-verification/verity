@@ -190,7 +190,7 @@ def test_sm120_coordinate_circuit_shapes() -> None:
 def test_nvfp4_coordinate_replays_every_recorded_rtx5090_vector() -> None:
     """The 1,601 autoproof dot statements (K = 64 / 128 / 256 from a zero accumulator), through the coordinate: the recorded
     accumulator, then `cvt.rn.bf16.f32`."""
-    root = Path(__file__).resolve().parents[4]
+    root = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
     cases = json.loads((root / "fixtures" / "tc" / "autoproof-probe-vectors.json").read_text())["nvfp4_m16n8k64"]["cases"]
     assert len(cases) == 1601
     for c in cases[::40]:

@@ -12,11 +12,12 @@ than on exact peel factors.
 replaced by the exact value: the chains `C̃_ij`, `A′·F_B`, `B̃·F_A` and `G = F_Bᵀ·F_A` (`chainQ`: `cQ`, `afQ`, `bfQ`,
 `gQ`), the rows `P_A,i = [be_A,i ‖ A′·F_B]` (`paQ`) and `P_B,j = [Σ_p be_B,jp·G_pq − B̃·F_A ‖ −be_B,j]` (`accQ`, `pbQ`),
 and U's four K16 steps from `C̃_ij` (`k16Q`, `uQ`). When `32 ∣ k`, `uQ` is #311's U with unit `β` on the served noise
-`servedNoise` (`uQ_eq_peelU`): `E_A`, `E_B` are the values of the peel's rows `beA`, `beB` and `F_A`, `F_B` the bases'
-values. So it is `(A′ − N_A)·(B̃ − N_B)ᵀ` with `N_A = be_A·F_Aᵀ`, `N_B = be_B·F_Bᵀ` (`uQ_cancel`, by
-`Peel.peelU_cancel_codes`). Which noise the rows hold: under v1 they are `bf16(E′)`, and `RN_bf16` of an E4M3 value is
-the value (`bf16_e4m3`, all 256 codes by the kernel), so the served noise is `Noise.atomLines` (`servedNoise_v1`) and
-`uQ` is §5's `(A′ − E′_A·F_Aᵀ)·(B̃ − E′_B·F_Bᵀ)ᵀ` (`uQ_cancel_v1`, by `Peel.peelU_cancel_atomMix`). Under v0 they are
+(`uQ_eq_peelUQ`, on rational factors since the rows are BF16 words, not codes: `peelUQ`): `E_A`, `E_B` are the values
+of the peel's rows `beA`, `beB` and `F_A`, `F_B` the bases' values. So it is `(A′ − N_A)·(B̃ − N_B)ᵀ` with
+`N_A = be_A·F_Aᵀ`, `N_B = be_B·F_Bᵀ` (`uQ_cancel`, by `peelUQ_cancel`). Which noise the rows hold: under v1 they are
+`bf16(E′)`, and `RN_bf16` of an E4M3 value is the value (`bf16_e4m3`, all 256 codes by the kernel), so the served rows'
+values are `Noise.atomLines`' noise lines (`bfVals_v1`) and `uQ` is §5's `(A′ − E′_A·F_Aᵀ)·(B̃ − E′_B·F_Bᵀ)ᵀ`
+(`uQ_cancel_v1`, as `Peel.peelU_cancel_atomMix`). Under v0 they are
 `bf16(β·bf16(E))`, each within `(2^−7 + 2^−16)·|β·e|` of `β·e` (`bf16_v0_err`), so the served `N_A` is within
 `(2^−7 + 2^−16)·Σ_t |β·e_t·f_t|` of `β·N_A` (`servedNA_v0_err`): under v0 the peel cancels the noise it is served, which
 is `β·N` up to those two BF16 roundings.
@@ -52,25 +53,21 @@ variable {m n k : Nat}
 /-- A BF16 word's value: the FP32 word `h <<< 16`'s, `0` where that is not finite. -/
 def bfVal (h : Nat) : ℚ := (wordQ (h <<< 16)).getD 0
 
-/-- The noise the served U cancels: `E_A` and `E_B` are the values of the peel's rows `beA` and `beB`, and `F_A` and
-`F_B` the bases' values. -/
-def servedNoise (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat)
-    (beB : Matrix (Fin n) (Fin 32) Nat) : Noise m n k 32 :=
-  ⟨fun i t => bfVal (beA i t), vals FA, fun j t => bfVal (beB j t), vals FB⟩
+/-- #311's U at unit `β` on rational factors: `C̃ + [E_A ‖ A′·F_B]·[(E_B·F_Bᵀ − B̃)·F_A ‖ −E_B]ᵀ`, `peelU`'s form for
+noise rows that are BF16 values rather than E4M3 codes, as the served rows are. -/
+def peelUQ (Ct : Matrix (Fin m) (Fin n) ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (B' : Matrix (Fin n) (Fin k) ℚ)
+    (EA : Matrix (Fin m) (Fin 32) ℚ) (FA : Matrix (Fin k) (Fin 32) ℚ) (EB : Matrix (Fin n) (Fin 32) ℚ)
+    (FB : Matrix (Fin k) (Fin 32) ℚ) : Matrix (Fin m) (Fin n) ℚ :=
+  Ct + fromCols EA (A' * FB) * (fromCols ((EB * FBᵀ - B') * FA) (-EB))ᵀ
 
-@[simp] theorem servedNoise_EA (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat)
-    (beB : Matrix (Fin n) (Fin 32) Nat) (i : Fin m) (t : Fin 32) :
-    (servedNoise FA FB beA beB).EA i t = bfVal (beA i t) := rfl
-
-@[simp] theorem servedNoise_EB (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat)
-    (beB : Matrix (Fin n) (Fin 32) Nat) (j : Fin n) (t : Fin 32) :
-    (servedNoise FA FB beA beB).EB j t = bfVal (beB j t) := rfl
-
-@[simp] theorem servedNoise_FA (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat)
-    (beB : Matrix (Fin n) (Fin 32) Nat) : (servedNoise FA FB beA beB).FA = vals FA := rfl
-
-@[simp] theorem servedNoise_FB (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat)
-    (beB : Matrix (Fin n) (Fin 32) Nat) : (servedNoise FA FB beA beB).FB = vals FB := rfl
+/-- `peelUQ`'s cancellation identity, `Peel.peelU_cancel`'s on rational factors: with `C̃ = A′·B̃ᵀ` exact, it is
+`(A′ − E_A·F_Aᵀ)·(B̃ − E_B·F_Bᵀ)ᵀ`. -/
+theorem peelUQ_cancel (A' : Matrix (Fin m) (Fin k) ℚ) (B' : Matrix (Fin n) (Fin k) ℚ) (EA : Matrix (Fin m) (Fin 32) ℚ)
+    (FA : Matrix (Fin k) (Fin 32) ℚ) (EB : Matrix (Fin n) (Fin 32) ℚ) (FB : Matrix (Fin k) (Fin 32) ℚ) :
+    peelUQ (A' * B'ᵀ) A' B' EA FA EB FB = (A' - EA * FAᵀ) * (B' - EB * FBᵀ)ᵀ := by
+  simp only [peelUQ, transpose_fromCols, fromCols_mul_fromRows, transpose_mul, transpose_sub, transpose_neg,
+    Matrix.mul_sub, Matrix.sub_mul, Matrix.mul_neg, Matrix.mul_assoc]
+  abel
 
 /-- One atom's dot product, exact. -/
 def atomQ (x : AtomIn) : ℚ := ∑ l, codeVal (x.1 l) * codeVal (x.2 l)
@@ -161,13 +158,13 @@ variable (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (
   (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat)
 
 /-- **The exact counterpart is #311's U on the served noise**: with unit `β`, `E_A`, `E_B` the values of `beA`, `beB`
-and `F_A`, `F_B` the bases' values (`servedNoise`). -/
-theorem uQ_eq_peelU (hk : 32 ∣ k) (i : Fin m) (j : Fin n) :
+and `F_A`, `F_B` the bases' values (`peelUQ`). -/
+theorem uQ_eq_peelUQ (hk : 32 ∣ k) (i : Fin m) (j : Fin n) :
     uQ Aq Bq FA FB beA beB i j =
-      peelU (ctExact Aq Bq) (fun _ => 1) (fun _ => 1) (vals Aq) (vals Bq) (servedNoise FA FB beA beB) i j := by
+      peelUQ (ctExact Aq Bq) (vals Aq) (vals Bq) (beA.map bfVal) (vals FA) (beB.map bfVal) (vals FB) i j := by
   unfold uQ
   rw [foldl_k16Q]
-  simp only [peelU, Matrix.add_apply, Matrix.mul_apply, transpose_apply]
+  simp only [peelUQ, Matrix.add_apply, Matrix.mul_apply, transpose_apply]
   congr 1
   · rw [cQ, chainQ_rowAtoms hk]; simp [ctExact, Matrix.mul_apply, vals]
   · refine (Fintype.sum_equiv (finSumFinEquiv : Fin 32 ⊕ Fin 32 ≃ Fin 64) _ _ ?_).symm
@@ -179,10 +176,10 @@ theorem uQ_eq_peelU (hk : 32 ∣ k) (i : Fin m) (j : Fin n) :
           accQ FA FB beB j t - bfQ Bq FA j t := by
         simp [pbQ, hv]
       rw [e1, e2]
-      simp only [peelLeft, peelRight, fromCols_apply_inl, rowScale_one, servedNoise_EA]
+      simp only [fromCols_apply_inl, Matrix.map_apply]
       congr 1
-      simp only [accQ, gQ, bfQ, chainQ_rowAtoms hk, Matrix.mul_apply, Matrix.sub_apply, Noise.NB, servedNoise_EB,
-        servedNoise_FA, servedNoise_FB, transpose_apply, vals, Matrix.map_apply]
+      simp only [accQ, gQ, bfQ, chainQ_rowAtoms hk, Matrix.mul_apply, Matrix.sub_apply, transpose_apply, vals,
+        Matrix.map_apply]
       simp only [Finset.sum_mul, Finset.mul_sum, sub_mul, Finset.sum_sub_distrib]
       rw [Finset.sum_comm]
       simp only [mul_assoc]
@@ -192,16 +189,16 @@ theorem uQ_eq_peelU (hk : 32 ∣ k) (i : Fin m) (j : Fin n) :
       have e2 : pbQ Bq FA FB beB j (finSumFinEquiv (m := 32) (n := 32) (Sum.inr t)) = -bfVal (beB j t) := by
         simp [pbQ, hv]
       rw [e1, e2]
-      simp only [peelLeft, peelRight, fromCols_apply_inr, rowScale_one]
-      simp only [afQ, chainQ_rowAtoms hk, Matrix.mul_apply, servedNoise_FB, servedNoise_EB, Matrix.neg_apply, vals,
-        Matrix.map_apply, transpose_apply, mul_neg]
+      simp only [fromCols_apply_inr]
+      simp only [afQ, chainQ_rowAtoms hk, Matrix.mul_apply, Matrix.neg_apply, vals, Matrix.map_apply, transpose_apply,
+        mul_neg]
 
 /-- **(a) The noise cancels exactly**: U's exact counterpart in the pinned order is `(A′ − N_A)·(B̃ − N_B)ᵀ` for the
 served noise `N_A = be_A·F_Aᵀ`, `N_B = be_B·F_Bᵀ` (on values). -/
 theorem uQ_cancel (hk : 32 ∣ k) (i : Fin m) (j : Fin n) :
     uQ Aq Bq FA FB beA beB i j =
-      ((vals Aq - (servedNoise FA FB beA beB).NA) * (vals Bq - (servedNoise FA FB beA beB).NB)ᵀ) i j := by
-  rw [uQ_eq_peelU Aq Bq FA FB beA beB hk, Peel.peelU_cancel_codes, rowScale_one, rowScale_one]
+      ((vals Aq - beA.map bfVal * (vals FA)ᵀ) * (vals Bq - beB.map bfVal * (vals FB)ᵀ)ᵀ) i j := by
+  rw [uQ_eq_peelUQ Aq Bq FA FB beA beB hk, ctExact, peelUQ_cancel]
 
 end Exact
 
@@ -211,37 +208,27 @@ end Exact
 E4M3 value has a 4-bit significand and an exponent in `[−9, 8]`, inside BF16's normal range). -/
 theorem bf16_e4m3 : ∀ c : Code, (rnBf16? (f32Word (codeVal c))).map bfVal = some (codeVal c) := by decide +kernel
 
-/-- **Under v1** the peel's rows are `bf16(E′)`, the noise lines' codes cast to BF16 (`hA`, `hB`): with the bases the
-lines' `F` (`hFA`, `hFB`), the served noise is `Noise.atomLines`, the noise the atom-mix added, with unit `β`. -/
-theorem servedNoise_v1 (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat)
-    (beB : Matrix (Fin n) (Fin 32) Nat) (βA : Fin m → ℚ) (βB : Fin n → ℚ) (z : Noise m n k 32)
-    (hA : ∀ i t, rnBf16? (f32Word (castLines βA z.EA i t)) = some (beA i t))
-    (hB : ∀ j t, rnBf16? (f32Word (castLines βB z.EB j t)) = some (beB j t))
-    (hFA : vals FA = z.FA) (hFB : vals FB = z.FB) :
-    servedNoise FA FB beA beB = z.atomLines βA βB := by
-  have h : ∀ {p : Nat} (β : Fin p → ℚ) (E : Matrix (Fin p) (Fin 32) ℚ) (be : Matrix (Fin p) (Fin 32) Nat),
-      (∀ i t, rnBf16? (f32Word (castLines β E i t)) = some (be i t)) → ∀ i t, bfVal (be i t) = castLines β E i t := by
-    intro p β E be hb i t
-    have e := bf16_e4m3 (lineCodes (β i) (E i) t)
-    rw [show codeVal (lineCodes (β i) (E i) t) = castLines β E i t from rfl, hb i t] at e
-    exact Option.some_injective _ e
-  unfold servedNoise Noise.atomLines
-  congr 1
-  · funext i t; exact h βA z.EA beA hA i t
-  · funext j t; exact h βB z.EB beB hB j t
+/-- **Under v1** the peel's rows are `bf16(E′)`, the noise lines' codes cast to BF16 (`hb`): their values are the
+lines' values, the noise lines of `Noise.atomLines`, which the atom-mix added. -/
+theorem bfVals_v1 {p : Nat} (β : Fin p → ℚ) (E : Matrix (Fin p) (Fin 32) Code) (be : Matrix (Fin p) (Fin 32) Nat)
+    (hb : ∀ i t, rnBf16? (f32Word (codeVal (castLines β E i t))) = some (be i t)) :
+    be.map bfVal = vals (castLines β E) := by
+  ext i t
+  have e := bf16_e4m3 (castLines β E i t)
+  rw [hb i t] at e
+  exact Option.some_injective _ e
 
 /-- **(a) under v1**: the exact counterpart of U on the atom-mix's operands, with the peel's rows `bf16(E′)` and the
-lines' bases, is `(A′ − E′_A·F_Aᵀ)·(B̃ − E′_B·F_Bᵀ)ᵀ`, §5's cancellation (`Peel.peelU_cancel_atomMix`). -/
-theorem uQ_cancel_v1 (hk : 32 ∣ k) (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat)
-    (beB : Matrix (Fin n) (Fin 32) Nat) (αA βA : Fin m → ℚ) (αB βB : Fin n → ℚ) (X : Matrix (Fin m) (Fin k) ℚ)
-    (B : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k 32)
-    (hA : ∀ i t, rnBf16? (f32Word (castLines βA z.EA i t)) = some (beA i t))
-    (hB : ∀ j t, rnBf16? (f32Word (castLines βB z.EB j t)) = some (beB j t))
-    (hFA : vals FA = z.FA) (hFB : vals FB = z.FB) (i : Fin m) (j : Fin n) :
-    uQ (FormChain.atomMix.quantA αA βA X z) (FormChain.atomMix.quantB αB βB B z) FA FB beA beB i j =
-      ((vals (FormChain.atomMix.quantA αA βA X z) - castLines βA z.EA * z.FAᵀ) *
-        (vals (FormChain.atomMix.quantB αB βB B z) - castLines βB z.EB * z.FBᵀ)ᵀ) i j := by
-  rw [uQ_eq_peelU _ _ _ _ _ _ hk, servedNoise_v1 FA FB beA beB βA βB z hA hB hFA hFB, Peel.peelU_cancel_atomMix]
+lines' bases, is `(A′ − E′_A·F_Aᵀ)·(B̃ − E′_B·F_Bᵀ)ᵀ`, §5's cancellation (as `Peel.peelU_cancel_atomMix`). -/
+theorem uQ_cancel_v1 (hk : 32 ∣ k) (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat)
+    (αA βA : Fin m → ℚ) (αB βB : Fin n → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) (B : Matrix (Fin n) (Fin k) ℚ)
+    (z : Noise m n k 32)
+    (hA : ∀ i t, rnBf16? (f32Word (codeVal (castLines βA z.EA i t))) = some (beA i t))
+    (hB : ∀ j t, rnBf16? (f32Word (codeVal (castLines βB z.EB j t))) = some (beB j t)) (i : Fin m) (j : Fin n) :
+    uQ (FormChain.atomMix.quantA αA βA X z) (FormChain.atomMix.quantB αB βB B z) z.FA z.FB beA beB i j =
+      ((vals (FormChain.atomMix.quantA αA βA X z) - vals (castLines βA z.EA) * (vals z.FA)ᵀ) *
+        (vals (FormChain.atomMix.quantB αB βB B z) - vals (castLines βB z.EB) * (vals z.FB)ᵀ)ᵀ) i j := by
+  rw [uQ_cancel _ _ _ _ _ _ hk, bfVals_v1 βA z.EA beA hA, bfVals_v1 βB z.EB beB hB]
 
 /-- **Under v0** the peel's rows are `bf16(β·bf16(E))`: each served entry is within `(2^−7 + 2^−16)·|β·e|` of `β·e`,
 so the served `N_A = be_A·F_Aᵀ` is within `(2^−7 + 2^−16)·Σ_t |β·e_t·f_t|` of `β·N_A` entry by entry. -/
@@ -258,13 +245,12 @@ theorem bf16_v0_err (β e : ℚ) : |bf16Rn (β * bf16Rn e) - β * e| ≤ (2 / 2 
     _ ≤ |β| * (|e| + |e| / 2 ^ 8) / 2 ^ 8 + |β| * (|e| / 2 ^ 8) := by gcongr
     _ = _ := by rw [abs_mul]; ring
 
-theorem servedNA_v0_err {FA FB : Matrix (Fin k) (Fin 32) Code} {beA : Matrix (Fin m) (Fin 32) Nat}
-    {beB : Matrix (Fin n) (Fin 32) Nat} (βA : Fin m → ℚ) (EA : Matrix (Fin m) (Fin 32) ℚ)
+theorem servedNA_v0_err {FA : Matrix (Fin k) (Fin 32) Code} {beA : Matrix (Fin m) (Fin 32) Nat}
+    (βA : Fin m → ℚ) (EA : Matrix (Fin m) (Fin 32) ℚ)
     (hA : ∀ i t, bfVal (beA i t) = bf16Rn (βA i * bf16Rn (EA i t))) (i : Fin m) (l : Fin k) :
-    |(servedNoise FA FB beA beB).NA i l - βA i * (EA * (vals FA)ᵀ) i l| ≤
+    |(beA.map bfVal * (vals FA)ᵀ) i l - βA i * (EA * (vals FA)ᵀ) i l| ≤
       (2 / 2 ^ 8 + 1 / 2 ^ 16) * ∑ t, |βA i * EA i t * codeVal (FA l t)| := by
-  simp only [Noise.NA, Matrix.mul_apply, servedNoise_EA, servedNoise_FA, transpose_apply, vals, Matrix.map_apply, hA,
-    Finset.mul_sum, ← Finset.sum_sub_distrib]
+  simp only [Matrix.mul_apply, transpose_apply, vals, Matrix.map_apply, hA, Finset.mul_sum, ← Finset.sum_sub_distrib]
   refine (Finset.abs_sum_le_sum_abs _ _).trans (Finset.sum_le_sum fun t _ => ?_)
   have := bf16_v0_err (βA i) (EA i t)
   rw [show bf16Rn (βA i * bf16Rn (EA i t)) * codeVal (FA l t) - βA i * (EA i t * codeVal (FA l t)) =
@@ -2101,15 +2087,16 @@ theorem peelExact_const (a b f g : Code) (beA : Matrix (Fin m) (Fin 32) Nat) (be
   simp only [hT, List.ofFn_const, mapM_id_replicate (show (32 : Nat) ≠ 0 by norm_num), Option.bind_eq_bind,
     Option.bind_map, Function.comp_def]
 
-/-- The witness noise (`m = n = 1`, `k = r = 32`): `E_A`'s row is `(a, 1, …, 1)`, `E_B`'s is `(b, 1, …, 1)`, and every
-`F` entry is `1`. -/
+/-- The witness noise (`m = n = 1`, `k = r = 32`), as codes: `E_A`'s row is `(a, 1, …, 1)`, `E_B`'s is `(b, 1, …, 1)`,
+and every `F` entry is `1`, each `e4m3` of its value. -/
 def wNoise (a b : ℚ) : Noise 1 1 32 32 :=
-  ⟨fun _ t => if t.val = 0 then a else 1, fun _ _ => 1, fun _ t => if t.val = 0 then b else 1, fun _ _ => 1⟩
+  ⟨fun _ t => e4m3 (if t.val = 0 then a else 1), fun _ _ => e4m3 1, fun _ t => e4m3 (if t.val = 0 then b else 1),
+    fun _ _ => e4m3 1⟩
 
 /-- v1's served noise words: each noise line `E′ = lineCodes β e` as a BF16 word, `RN_bf16` of its FP32 word (exact, as
 `E′` is an E4M3 value). -/
-def beV1 {p : Nat} (β : Fin p → ℚ) (E : Matrix (Fin p) (Fin 32) ℚ) : Matrix (Fin p) (Fin 32) Nat :=
-  fun i t => (rnBf16? (f32Word (castLines β E i t))).getD 0
+def beV1 {p : Nat} (β : Fin p → ℚ) (E : Matrix (Fin p) (Fin 32) Code) : Matrix (Fin p) (Fin 32) Nat :=
+  fun i t => (rnBf16? (f32Word (codeVal (castLines β E i t)))).getD 0
 
 /-- The witness's `A′`: `x = 0` with the floor's `β = 1` (`α = 1`), formed by the atom-mix. -/
 def wA (z : Noise 1 1 32 32) : Matrix (Fin 1) (Fin 32) Code := FormChain.atomMix.quantA (fun _ => 1) (fun _ => 1) 0 z
@@ -2121,12 +2108,12 @@ def wB (z : Noise 1 1 32 32) : Matrix (Fin 1) (Fin 32) Code :=
 /-- The served U's entry at the witness under the salt whose noise is `z`: `peelExactVal` on the atom-mix operands, the
 bases' codes and v1's noise words. -/
 def wServed (z : Noise 1 1 32 32) : Option ℚ :=
-  peelExactVal (wA z) (wB z) (fun l t => e4m3 (z.FA l t)) (fun l t => e4m3 (z.FB l t))
+  peelExactVal (wA z) (wB z) (fun l t => z.FA l t) (fun l t => z.FB l t)
     (beV1 (fun _ => 1) z.EA) (beV1 (fun _ => 1 / 3) z.EB) 0 0
 
 theorem wServed_eq (a b : ℚ) (cA cB : Code)
-    (hA : FormChain.atomMix.elem 1 0 1 ((wNoise a b).EA 0) (fun _ => 1) = cA)
-    (hB : FormChain.atomMix.elem 1 0 (1 / 3) ((wNoise a b).EB 0) (fun _ => 1) = cB) :
+    (hA : FormChain.atomMix.elem 1 0 1 ((wNoise a b).EA 0) (fun _ => e4m3 1) = cA)
+    (hB : FormChain.atomMix.elem 1 0 (1 / 3) ((wNoise a b).EB 0) (fun _ => e4m3 1) = cB) :
     wServed (wNoise a b) =
       (peelExact (k := 32) (fun _ _ => cA) (fun _ _ => cB) (fun _ _ => e4m3 1) (fun _ _ => e4m3 1)
         (beV1 (fun _ => 1) (wNoise a b).EA) (beV1 (fun _ => 1 / 3) (wNoise a b).EB) 0 0).bind wordQ := by

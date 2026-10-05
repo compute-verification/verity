@@ -1,11 +1,11 @@
 """`research deploy`: what runs on the Nebius nodes, installed from a pushed commit, and how far each node has drifted from `main`.
 
 pods/nebius/deploy.toml lists every file that infra's loops, timers and services run on a node, the file of this repository it
-comes from, and the patterns (`managed`) under which nothing else should live.
+comes from, who owns it (a Slack handle), and the patterns (`managed`) under which nothing else should live.
 
   research deploy drift [--node N ...] [--ref origin/main] [--json] [--no-fetch]
-  research deploy install NODE --by WHO [--ref REF] [PATH ...] [--dry-run] [--no-fetch]
-  research deploy attic NODE --by WHO [PATH ...] [--backups] [--ref REF] [--dry-run] [--no-fetch]
+  research deploy install NODE --by WHO [--ref REF] [PATH ...] [--apply] [--no-fetch]
+  research deploy attic NODE --by WHO [PATH ...] [--backups] [--ref REF] [--apply] [--no-fetch]
 
 `drift` reads each node over ssh, as `research run --on` reaches it, and gives each entry one state:
   ok        the installed file is REF's
@@ -15,6 +15,7 @@ comes from, and the patterns (`managed`) under which nothing else should live.
   unknown   no commit we know has it: edited in place, or a copy nobody committed
   missing   not there
   absent    the manifest lists it and REF lacks its source (a checkout's manifest ahead of REF)
+  held      the entry's `hold` says why it isn't deployed yet (its owner's yes is pending); install skips it
 and `restart` when a process running the file started before it was installed: it still runs the old code. A file that a
 `managed` pattern matches and no entry lists is a `stray`: a backup (`*.bak-*`, `*.prev-*`) or a script outside the repository.
 A file in a tree that REF lacks is `ahead` instead when a recent origin branch has it (a PR adding the file).
@@ -29,10 +30,14 @@ entry is ok and nothing strays, else 1.
 every installed byte is in a pushed commit. Each file is written beside the old one and renamed over it with the old one's owner
 and mode (a running script keeps its inode; a new file gets the entry's `mode`, else the repository's), and the old one is linked
 under `.deploy-prev/` in its directory. One line per changed file
-goes to the node's record (path, blob, commit, ref, who, when). When a process still runs the old version of a changed file, it
-prints the entry's `run` (else the path): restart those when it's safe, and `drift` says `restart` until you do. A changed unit
-under /etc/systemd/system/ is loaded with `systemctl daemon-reload`, which restarts nothing: a oneshot's next start runs it.
-`--dry-run` installs nothing and says which files would change.
+goes to the node's record (path, blob, commit, ref, who, when). A changed unit under /etc/systemd/system/ (or research's
+~/.config/systemd/user/) is loaded with `systemctl [--user] daemon-reload`. Then each service the entry's `run` names whose unit
+file deploy.toml installs from `src` is restarted with `try-restart`, so a stopped one stays stopped, when the changed file is its
+unit or an environment file (/etc/vy/env/), or a process of that service still runs the old file; a node's `quiet` command
+must succeed first (node 2's: no timed window runs or waits), else nothing restarts. Each restart is a line of the record. A
+timer, and a unit a setup script writes (`by`), is never restarted: whatever still runs the old file is printed (its service,
+else the path), to restart when it's safe, and `drift` says `restart` until then. Without `--apply`, `install` and `attic`
+change nothing and say what they would. Exit 3 is a refusal, before anything changed.
 """
 from __future__ import annotations
 
@@ -55,8 +60,11 @@ PROJECT = "verity"
 HISTORY = 400                  # REF's commits searched for a stale file's version
 AHEAD_DAYS = 21                # origin's branches searched for an unrecorded file's commit
 UNITS = "/etc/systemd/system/"  # a changed unit here takes effect only after `systemctl daemon-reload`
+USER_UNITS = "/home/research/.config/systemd/user/"     # ... after `systemctl --user daemon-reload`
+ENVS = "/etc/vy/env/"          # units' EnvironmentFile=, read only when the unit starts
 
-# Runs on the node (stdlib): each path's git blob, mtime and the oldest start of a process whose argv names it, the files the
+# Runs on the node (stdlib): each path's git blob, mtime, the oldest start of a process whose argv names it and every such
+# process's start and service (its cgroup's last component, `systemd:NAME` or `user-systemd:NAME`, else null), the files the
 # managed patterns and trees hold, and the record's last line per path.
 PROBE = r'''
 import glob, hashlib, json, os, sys
@@ -65,6 +73,15 @@ def blob(p):
     with open(p, "rb") as f:
         d = f.read()
     return hashlib.sha1(b"blob %d\0" % len(d) + d).hexdigest()
+def unit(pid):
+    try:
+        cg = next((ln[3:] for ln in open(f"/proc/{pid}/cgroup").read().splitlines() if ln.startswith("0::")), "")
+    except OSError:
+        return None
+    parts = cg.strip().split("/")
+    if not parts[-1].endswith(".service"):
+        return None
+    return ("user-systemd:" if any(c.startswith("user@") for c in parts[:-1]) else "systemd:") + parts[-1]
 files = {}
 for p in req["paths"]:
     try:
@@ -82,7 +99,7 @@ for t in req["trees"]:
         dirs[:] = [x for x in dirs if x not in ("__pycache__", ".deploy-prev")]
         found.update(os.path.join(d, n) for n in names if not n.endswith(".pyc"))
 btime = next(int(ln.split()[1]) for ln in open("/proc/stat") if ln.startswith("btime"))
-hz, want, procs = os.sysconf("SC_CLK_TCK"), set(req["paths"]), {}
+hz, want, procs, running = os.sysconf("SC_CLK_TCK"), set(req["paths"]), {}, {}
 for pid in filter(str.isdigit, os.listdir("/proc")):
     try:
         argv = [a.decode(errors="replace") for a in open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0") if a]
@@ -99,6 +116,7 @@ for pid in filter(str.isdigit, os.listdir("/proc")):
         p = os.path.normpath(os.path.join(cwd or "/", a))
         if p in want:
             procs[p] = min(procs.get(p, start), start)
+            running.setdefault(p, []).append([start, unit(pid)])
 record = {}
 try:
     for ln in open(req["record"]):
@@ -109,7 +127,7 @@ try:
             pass
 except OSError:
     pass
-print(json.dumps({"files": files, "found": sorted(found), "procs": procs, "record": record}))
+print(json.dumps({"files": files, "found": sorted(found), "procs": procs, "running": running, "record": record}))
 '''
 
 # On the node as root: append lines to the record, owned as the directory above the record's.
@@ -184,9 +202,21 @@ for p in req["paths"]:
 append(req["record"], [{"at": stamp, "path": p, "attic": d, "by": req["by"]} for p, d in zip(req["paths"], out)])
 print(json.dumps(out))
 '''
+
+# Runs on the node as root: append each of req["lines"] to the record, stamped.
+RECORD = APPEND + r'''
+req = json.load(sys.stdin)
+stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+append(req["record"], [{"at": stamp, **ln} for ln in req["lines"]])
+'''
 BACKUP = re.compile(r"\.(bak|prev|orig)([-.\d_]|$)")       # a hand deploy's copy: x.py.bak-20261001T0611Z, x.sh.prev, x.orig
+SUFFIX = re.compile(r"\.(service|timer|socket|path|target|mount|slice|scope)$")
 
 Runner = Callable[[str, list[str], "bytes | None"], subprocess.CompletedProcess]
+
+
+class Refused(RuntimeError):
+    """Nothing changed: the request breaks a rule (an unpushed commit, a held entry, a path deploy.toml lacks)."""
 
 
 @dataclass
@@ -197,6 +227,8 @@ class Entry:
     run: list[str] = field(default_factory=list)
     tree: bool = False
     mode: int | None = None            # else an installed file keeps its mode, and a new one gets the repository's
+    owner: str | None = None           # a Slack handle (.agents/skills/using-slack/registry.json)
+    hold: str | None = None            # why it isn't deployed yet: install skips it
     required: bool = False             # (a tree) what runs from it can't run without any of its files
 
 
@@ -206,15 +238,18 @@ class Node:
     record: str
     managed: list[str]
     entries: list[Entry]
+    quiet: str | None = None           # a shell test on the node: install restarts services only while it succeeds
 
 
 def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
     m = tomllib.loads(manifest.read_text() if text is None else text)
-    nodes = {n: Node(n, c["record"], list(c.get("managed", [])), []) for n, c in m.get("nodes", {}).items()}
+    nodes = {n: Node(n, c["record"], list(c.get("managed", [])), [], c.get("quiet")) for n, c in m.get("nodes", {}).items()}
     for kind in ("file", "tree"):
         for e in m.get(kind, []):
             if bool(e.get("src")) == bool(e.get("by")) or (kind == "tree" and not e.get("src")):
                 raise ValueError(f"deploy.toml: {e.get('path')!r} needs exactly one of src and by (a tree, src)")
+            if e.get("hold") and not e.get("src"):
+                raise ValueError(f"deploy.toml: {e['path']!r} is held, which only an entry install copies (src) can be")
             if "required" in e and (kind != "tree" or not isinstance(e["required"], bool)):
                 raise ValueError(f"deploy.toml: {e['path']!r}: `required` is a tree's, true or false (a file always is)")
             for n in e["nodes"]:
@@ -222,7 +257,7 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
                     raise ValueError(f"deploy.toml: {e['path']!r} names node {n!r}, which has no [nodes.{n}]")
                 mode = int(e["mode"], 8) if e.get("mode") else None
                 nodes[n].entries.append(Entry(e["path"], e.get("src"), e.get("by"), list(e.get("run", [])), kind == "tree", mode,
-                                              e.get("required", False)))
+                                              e.get("owner"), e.get("hold"), e.get("required", False)))
     for node in nodes.values():
         seen = set()
         for e in node.entries:
@@ -308,7 +343,7 @@ def probe(node: Node, paths: list[str], run: Runner) -> dict:
 
 
 def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
-    """One node's report: {"commit", "entries": [{path, src, state, detail, restart}], "strays": [...]}."""
+    """One node's report: {"commit", "entries": [{path, src, owner, state, detail, restart}], "strays": [...]}."""
     commit = git("rev-parse", f"{ref}^{{commit}}", repo=repo).strip()
     want = expected(node, commit, repo)
     generated = [e.path for e in node.entries if e.by]
@@ -322,11 +357,11 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
         if path in generated:
             e = next(x for x in node.entries if x.path == path)
             state, detail = ("ok", f"by {e.by}") if got and "blob" in got else ("missing", f"by {e.by}: re-run it")
-            entries.append({"path": path, "src": None, "state": state, "detail": detail, "restart": None})
+            entries.append({"path": path, "src": None, "owner": e.owner, "state": state, "detail": detail, "restart": None})
             continue
         rp, sha, _, e = want[path]
         if e.tree and got is None:
-            entries.append({"path": path, "src": rp, "state": "missing", "restart": None, "tree": e.path, **(
+            entries.append({"path": path, "src": rp, "owner": e.owner, "state": "missing", "restart": None, "tree": e.path, **(
                 {"detail": "in a required tree, not installed: install the tree", "required": True} if e.required else
                 {"detail": "in the tree, not installed"})})
             continue
@@ -354,12 +389,16 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
                 state, detail = "unknown", "no commit holds it: edited in place or never committed"
         restart = None
         started = seen["procs"].get(path)
-        if got and "mtime" in got and started is not None and started < got["mtime"] - 1:
+        if e.hold:
+            state, detail = "held", f"{e.hold} ({'not installed' if got is None else 'installed: ' + state})"
+        elif got and "mtime" in got and started is not None and started < got["mtime"] - 1:
             restart = (f"a process started {time.strftime('%m-%d %H:%MZ', time.gmtime(started))}, before the file "
                        f"({time.strftime('%m-%d %H:%MZ', time.gmtime(got['mtime']))})" + (f"; restart {', '.join(e.run)}" if e.run else ""))
-        entries.append({"path": path, "src": rp, "state": state, "detail": detail, "restart": restart, **({"tree": e.path} if e.tree else {})})
+        entries.append({"path": path, "src": rp, "owner": e.owner, "state": state, "detail": detail, "restart": restart,
+                        **({"tree": e.path} if e.tree else {})})
     for e in absent(node, want):
-        entries.append({"path": e.path, "src": e.src, "state": "absent", "detail": f"{ref} lacks {e.src}", "restart": None})
+        entries.append({"path": e.path, "src": e.src, "owner": e.owner, "state": "absent", "detail": f"{ref} lacks {e.src}",
+                        "restart": None})
     listed = {*want, *generated, *(e.path for e in absent(node, want))}
     strays = [p for p in seen["found"] if p not in listed and "/.deploy-prev/" not in p and "/__pycache__/" not in p]
     in_tree = {p: (t, f"{t.src}/{os.path.relpath(p, t.path)}") for p in strays
@@ -371,7 +410,7 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
             hit = recent.get((rp, (got.get(p) or {}).get("blob")))
             if hit:
                 strays.remove(p)
-                entries.append({"path": p, "src": rp, "state": "ahead", "restart": None, "tree": t.path, "detail":
+                entries.append({"path": p, "src": rp, "owner": t.owner, "state": "ahead", "restart": None, "tree": t.path, "detail":
                                 f"commit {hit[0][:12]} ({hit[1]}) on {', '.join(origin_branches(hit[0], repo)) or 'a branch'}, not in {ref}"})
     return {"commit": commit, "entries": entries, "strays": strays}
 
@@ -388,9 +427,10 @@ def render(node: str, ref: str, rep: dict) -> str:
     for e in es:
         if (e["state"] == "ok" and not e["restart"]) or _tree_missing(e):
             continue
-        lines.append(f"  {e['state']:8} {e['path']}" + (f"  ({e['detail']})" if e["detail"] else ""))
+        lines.append(f"  {e['state']:8} {e['path']}" + (f"  ({e['detail']})" if e["detail"] else "") +
+                     (f"  [{e['owner']}]" if e.get("owner") else ""))
         if e["restart"]:
-            lines.append(f"  restart  {e['path']}  ({e['restart']})")
+            lines.append(f"  restart  {e['path']}  ({e['restart']})" + (f"  [{e['owner']}]" if e.get("owner") else ""))
     for t, n in tree_missing.items():
         lines.append(f"  missing  {n} files of the tree {t} (an install of the tree adds them)")
     for p in rep["strays"]:
@@ -404,66 +444,152 @@ def _tree_missing(e: dict) -> bool:
 
 
 def clean(rep: dict) -> bool:
-    return not rep["strays"] and all(e["state"] == "ok" and not e["restart"] for e in rep["entries"] if not _tree_missing(e))
+    return not rep["strays"] and all(e["state"] in ("ok", "held") and not e["restart"] for e in rep["entries"] if not _tree_missing(e))
 
 
-def install(node: Node, ref: str, by: str, only: list[str], run: Runner, dry: bool = False, repo: Path = REPO) -> list[dict]:
-    """Install `node`'s entries (or those whose path or repo path is in `only`) from `ref`; returns [{path, src, changed, run}]."""
+def unit_name(run: str) -> str | None:
+    """`systemd:NAME` or `user-systemd:NAME` with NAME's suffix (`.service` when it has none); None for any other run."""
+    kind, _, name = run.partition(":")
+    if kind not in ("systemd", "user-systemd") or not name:
+        return None
+    return f"{kind}:{name if SUFFIX.search(name) else name + '.service'}"
+
+
+def unit_file(unit: str) -> str:
+    """Where a unit's file is installed: an instance's (`x@a.service`) is its template's (`x@.service`)."""
+    kind, _, name = unit.partition(":")
+    stem, at, rest = name.partition("@")
+    return (UNITS if kind == "systemd" else USER_UNITS) + (f"{stem}@{rest[rest.rindex('.'):]}" if at else name)
+
+
+def services(node: Node, e: Entry) -> list[str]:
+    """The services `e.run` names whose unit file this node's manifest installs (and doesn't hold): those install restarts."""
+    owned = {x.path for x in node.entries if x.src and not x.tree and not x.hold}
+    return [u for u in map(unit_name, e.run) if u and u.endswith(".service") and unit_file(u) in owned]
+
+
+def restarts(node: Node, changed: dict[str, Entry], old: dict[str, list]) -> dict[str, list[str]]:
+    """Service -> the changed files that restart it: its unit or an environment file its entry names, or a file one of its
+    processes runs the old version of (`old`: path -> the services of those processes)."""
+    out: dict[str, list[str]] = {}
+    for p, e in sorted(changed.items()):
+        for u in services(node, e):
+            if p.startswith((UNITS, USER_UNITS, ENVS)) or u in old.get(p, ()):
+                out.setdefault(u, []).append(p)
+    return out
+
+
+def systemctl(unit: str, *args: str) -> list[str]:
+    """`systemctl` on a unit: research's own manager for a user unit, else the system's, as root only to change it."""
+    kind, _, name = unit.partition(":")
+    if kind == "user-systemd":
+        return ["systemctl", "--user", *args, name]
+    return ["systemctl", *args, name] if args[0] == "is-active" else ["sudo", "-n", "systemctl", *args, name]
+
+
+def restart(node: Node, plan: dict[str, list[str]], run: Runner, apply: bool) -> list[dict]:
+    """`try-restart` each running service of `plan` once the node is quiet; [{unit, why, state}] (state: restarted, would
+    restart, not running, not quiet, or failed ...)."""
+    if plan and node.quiet and run(node.name, ["sh", "-c", node.quiet], None).returncode != 0:
+        return [{"unit": u, "why": why, "state": "not quiet"} for u, why in sorted(plan.items())]
+    out = []
+    for u, why in sorted(plan.items()):
+        if run(node.name, systemctl(u, "is-active", "--quiet"), None).returncode != 0:
+            out.append({"unit": u, "why": why, "state": "not running"})
+        elif not apply:
+            out.append({"unit": u, "why": why, "state": "would restart"})
+        else:
+            r = run(node.name, systemctl(u, "try-restart"), None)
+            out.append({"unit": u, "why": why, "state": "restarted" if r.returncode == 0 else
+                        f"failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-300:]}"})
+    return out
+
+
+def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: bool = False, repo: Path = REPO) -> dict:
+    """Install `node`'s entries (or those whose path or repo path is in `only`) from `ref` and restart what they name (the
+    docstring's rule); without `apply`, only say what would change. {"commit", "files": [{path, src, changed, run}], "restarts":
+    [{unit, why, state}]}: a file's `run` is what still runs its old version."""
     commit = git("rev-parse", f"{ref}^{{commit}}", repo=repo).strip()
     if not origin_branches(commit, repo, most=1):
-        raise RuntimeError(f"{ref} ({commit[:12]}) is on no origin branch: push it first, so what runs is in a pushed commit")
+        raise Refused(f"{ref} ({commit[:12]}) is on no origin branch: push it first, so what runs is in a pushed commit")
     want = expected(node, commit, repo)
     skipped = [] if only else [{"path": e.path, "src": e.src, "changed": "absent", "run": []} for e in absent(node, want)]
     gone = [o for o in only for e in absent(node, want) if o in (e.path, e.src)]
     if gone:
-        raise RuntimeError(f"{ref} ({commit[:12]}) lacks the source of {', '.join(gone)}")
+        raise Refused(f"{ref} ({commit[:12]}) lacks the source of {', '.join(gone)}")
     if only:
         picked = {p: v for p, v in want.items() if p in only or v[0] in only or v[3].path in only}
         missing = [o for o in only if not any(o in (p, v[0], v[3].path) for p, v in want.items())]
         if missing:
-            raise RuntimeError(f"not in deploy.toml for {node.name}: {', '.join(missing)}")
+            raise Refused(f"not in deploy.toml for {node.name}: {', '.join(missing)}")
+        if held := sorted({f"{v[3].path} ({v[3].hold})" for v in picked.values() if v[3].hold}):
+            raise Refused(f"held in deploy.toml: {'; '.join(held)}. A PR that drops its `hold` comes first")
         want = picked
+    else:
+        skipped += [{"path": p, "src": v[0], "changed": "held", "run": [], "hold": v[3].hold} for p, v in sorted(want.items()) if v[3].hold]
+        want = {p: v for p, v in want.items() if not v[3].hold}
     files = [{"path": p, "blob": sha, "mode": e.mode, "git_mode": mode,
               "data": base64.b64encode(subprocess.run(["git", "-C", str(repo), "cat-file", "blob", sha], capture_output=True,
                                                       check=True).stdout).decode()}
              for p, (_, sha, mode, e) in sorted(want.items())]
-    if dry:
-        seen = probe(node, [f["path"] for f in files], run)["files"]
-        return [{"path": f["path"], "src": want[f["path"]][0], "run": [],
-                 "changed": False if (seen.get(f["path"]) or {}).get("blob") == f["blob"] and f["mode"] is None else None}
-                for f in files] + skipped
+    if not apply:
+        seen = probe(node, [f["path"] for f in files], run)
+        same = {f["path"] for f in files if (seen["files"].get(f["path"]) or {}).get("blob") == f["blob"] and f["mode"] is None}
+        would = {p: want[p][3] for p in want if p not in same}
+        plan = restarts(node, would, {p: [u for _, u in seen["running"].get(p, [])] for p in would})
+        return {"commit": commit, "restarts": restart(node, plan, run, apply=False),
+                "files": [{"path": f["path"], "src": want[f["path"]][0], "run": [], "changed": False if f["path"] in same else None}
+                          for f in files] + skipped}
     req = {"files": files, "commit": commit, "ref": ref, "by": by, "record": node.record}
     r = run(node.name, ["sudo", "-n", "python3", "-c", INSTALL], json.dumps(req).encode())
     if r.returncode != 0:
         raise RuntimeError(f"{node.name}: install failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
     changed = json.loads(r.stdout)
     now = [f["path"] for f, c in zip(files, changed) if c]
-    if any(p.startswith(UNITS) for p in now):
-        r = run(node.name, ["sudo", "-n", "systemctl", "daemon-reload"], None)
+    for prefix, cmd in ((UNITS, ["systemctl", "daemon-reload"]), (USER_UNITS, ["systemctl", "--user", "daemon-reload"])):
+        if any(p.startswith(prefix) for p in now):
+            r = run(node.name, cmd if "--user" in cmd else ["sudo", "-n", *cmd], None)
+            if r.returncode != 0:
+                raise RuntimeError(f"{node.name}: installed {', '.join(p for p in now if p.startswith(prefix))}, but `{' '.join(cmd)}` "
+                                   f"failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
+
+    def old(after: dict) -> dict[str, list]:
+        """path -> the services (None outside one) of the processes that started before it was installed"""
+        return {p: [u for start, u in after["running"].get(p, []) if "mtime" in (after["files"].get(p) or {})
+                    and start < after["files"][p]["mtime"] - 1] for p in now}
+
+    after = probe(node, now, run) if now else {"files": {}, "running": {}}
+    done = restart(node, restarts(node, {p: want[p][3] for p in now}, old(after)), run, apply=True)
+    tried = [d for d in done if d["state"] == "restarted" or d["state"].startswith("failed")]
+    if tried:
+        lines = [{"unit": d["unit"], "restart": d["state"], "why": d["why"], "commit": commit, "ref": ref, "by": by} for d in tried]
+        r = run(node.name, ["sudo", "-n", "python3", "-c", RECORD], json.dumps({"record": node.record, "lines": lines}).encode())
         if r.returncode != 0:
-            raise RuntimeError(f"{node.name}: installed {', '.join(p for p in now if p.startswith(UNITS))}, but `systemctl daemon-reload` "
-                               f"failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
-    after = probe(node, now, run) if now else {"files": {}, "procs": {}}
+            raise RuntimeError(f"{node.name}: restarted {', '.join(d['unit'] for d in tried)}, but the record's append failed "
+                               f"(exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
+        after = probe(node, now, run)
+    still = old(after)
 
-    def old_code(p: str) -> bool:
-        got, started = after["files"].get(p) or {}, after["procs"].get(p)
-        return started is not None and "mtime" in got and started < got["mtime"] - 1
+    def stale(p: str) -> list[str]:
+        named = set(filter(None, map(unit_name, want[p][3].run)))
+        return sorted({u if u in named else p for u in still.get(p, [])})
 
-    return [{"path": f["path"], "src": want[f["path"]][0], "changed": c,
-             "run": (want[f["path"]][3].run or [f["path"]]) if c and old_code(f["path"]) else []}
-            for f, c in zip(files, changed)] + skipped
+    return {"commit": commit, "restarts": done,
+            "files": [{"path": f["path"], "src": want[f["path"]][0], "changed": c, "run": stale(f["path"]) if c else []}
+                      for f, c in zip(files, changed)] + skipped}
 
 
-def attic(node: Node, ref: str, by: str, paths: list[str], backups: bool, run: Runner, dry: bool = False,
+def attic(node: Node, ref: str, by: str, paths: list[str], backups: bool, run: Runner, apply: bool = False,
           repo: Path = REPO) -> list[tuple[str, str | None]]:
-    """Move strays of `node` (those in `paths`, and with `backups` every one named as a backup) into its attic; [(path, dest)]."""
+    """Move strays of `node` (those in `paths`, and with `backups` every one named as a backup) into its attic; [(path, dest)],
+    dest None when `apply` is false."""
     strays = set(drift(node, ref, run, repo)["strays"])
     pick = sorted({*paths, *(p for p in strays if backups and any(BACKUP.search(c) for c in Path(p).parts))})
     if bad := [p for p in pick if p not in strays]:
-        raise RuntimeError(f"not a stray of {node.name} against {ref} (an entry lists it, or nothing is there): {', '.join(bad)}")
+        raise Refused(f"not a stray of {node.name} against {ref} (an entry lists it, or nothing is there): {', '.join(bad)}")
     if pick and (running := probe(node, pick, run)["procs"]):
-        raise RuntimeError(f"a process runs {', '.join(sorted(running))}: stop it first")
-    if dry or not pick:
+        raise Refused(f"a process runs {', '.join(sorted(running))}: stop it first")
+    if not apply or not pick:
         return [(p, None) for p in pick]
     req = {"paths": pick, "record": node.record, "by": by, "backup": BACKUP.pattern}
     r = run(node.name, ["sudo", "-n", "python3", "-c", ATTIC], json.dumps(req).encode())
@@ -484,22 +610,22 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     i.add_argument("paths", nargs="*", help="installed paths or repository paths (default: every entry for the node)")
     i.add_argument("--ref", default="origin/main")
     i.add_argument("--by", required=True, help="who installs (a lane, an agent's URL): goes into the node's record")
-    i.add_argument("--dry-run", action="store_true")
+    i.add_argument("--apply", action="store_true", help="install and restart (else only say what would change)")
     a = sub.add_parser("attic", help="move a node's strays into its attic, beside the record")
     a.add_argument("node")
     a.add_argument("paths", nargs="*", help="strays `drift` lists")
     a.add_argument("--backups", action="store_true", help="every stray named as a backup, or under a directory that is (*.bak*, *.prev*, *.orig*)")
     a.add_argument("--ref", default="origin/main")
     a.add_argument("--by", required=True, help="who moves them: goes into the node's record")
-    a.add_argument("--dry-run", action="store_true")
+    a.add_argument("--apply", action="store_true", help="move them (else only say what would move)")
     for p in (d, i, a):
         p.add_argument("--no-fetch", action="store_true", help="don't `git fetch origin main` first")
-    # argparse ends a subcommand's positionals at its first option, so paths after --by or --ref come back unrecognized
-    ns, extra = ap.parse_known_args(argv)
-    if extra and ns.cmd != "drift" and not any(x.startswith("-") for x in extra):
-        ns.paths += extra
-    elif extra:
-        ap.error(f"unrecognized arguments: {' '.join(extra)}")
+    # argparse leaves a positional that follows an option unmatched, and subparsers rule out parse_intermixed_args
+    ns, rest = ap.parse_known_args(argv)
+    if rest and (ns.cmd == "drift" or any(r.startswith("-") for r in rest)):
+        ap.error(f"unrecognized arguments: {' '.join(rest)}")
+    if rest:
+        ns.paths += rest
     if not ns.no_fetch:
         subprocess.run(["git", "-C", str(repo), "fetch", "-q", "origin", "main"], capture_output=True)
     nodes = load(manifest, manifest_at(ns.ref, repo) if manifest == MANIFEST else None)
@@ -525,27 +651,43 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
         return 2
     if ns.cmd == "attic":
         try:
-            moved = attic(nodes[ns.node], ns.ref, ns.by, ns.paths, ns.backups, run, ns.dry_run, repo)
+            moved = attic(nodes[ns.node], ns.ref, ns.by, ns.paths, ns.backups, run, ns.apply, repo)
+        except Refused as e:
+            print(f"research deploy: {e}", file=sys.stderr)
+            return 3
         except (RuntimeError, ValueError) as e:
             print(f"research deploy: {e}", file=sys.stderr)
             return 1
         for p, dest in moved:
             print(f"would move  {p}" if dest is None else f"moved  {p}  -> {dest}")
-        if moved and not ns.dry_run:
+        if moved and ns.apply:
             print(f"restore one with `sudo mv DEST PATH`; {nodes[ns.node].record} lists every move")
+        elif moved:
+            print("nothing moved: --apply moves them")
         return 0
     try:
-        done = install(nodes[ns.node], ns.ref, ns.by, ns.paths, run, ns.dry_run, repo)
+        done = install(nodes[ns.node], ns.ref, ns.by, ns.paths, run, ns.apply, repo)
+    except Refused as e:
+        print(f"research deploy: {e}", file=sys.stderr)
+        return 3
     except (RuntimeError, ValueError) as e:
         print(f"research deploy: {e}", file=sys.stderr)
         return 1
-    for f in done:
-        mark = {None: "would install", True: "installed", False: "unchanged", "absent": f"skipped ({ns.ref} lacks it)"}[f["changed"]]
-        print(f"{mark:13} {f['path']}  <- {f['src']}")
-    runs = sorted({r for f in done for r in f["run"]})
+    for f in done["files"]:
+        mark = {None: "would install", True: "installed", False: "unchanged", "absent": f"skipped ({ns.ref} lacks it)",
+                "held": "held"}[f["changed"]]
+        print(f"{mark:13} {f['path']}  <- {f['src']}" + (f"  ({f['hold']})" if f.get("hold") else ""))
+    hint = {"not running": "; it stays stopped", "not quiet": f"; the node isn't quiet (`{nodes[ns.node].quiet}`): restart it once it is"}
+    for d in done["restarts"]:
+        failed = d["state"].startswith("failed")
+        print(f"{'failed' if failed else d['state']:13} {d['unit']}  ({', '.join(d['why'])} changed{hint.get(d['state'], '')})"
+              + (f": {d['state']}" if failed else ""))
+    runs = sorted({r for f in done["files"] for r in f["run"]})
     if runs:
         print(f"restart when safe: {', '.join(runs)} (`research deploy drift --node {ns.node}` says `restart` until then)")
-    return 0
+    if not ns.apply:
+        print("nothing changed: --apply installs and restarts")
+    return 1 if any(d["state"].startswith("failed") for d in done["restarts"]) else 0
 
 
 if __name__ == "__main__":

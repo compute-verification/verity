@@ -233,3 +233,10 @@ def test_the_lean_whole_table_at_the_deployed_tile():
     over 64 rows of A and B at K = 128 (about 300k gates)."""
     assert pc8.TILE == (64, 64)
     check_layout("sm120", 64, 128, 64, (64, 64))
+
+
+@pytest.mark.slow
+def test_the_lean_whole_table_at_decodes_tile():
+    """Catches a wiring gated on `TM = 64` that the small tiles don't exercise: decode's 32 x 64 tile, the audit grid's
+    at m = 32 and so the tile `tileCheck8` reads there (`tileSide`), over 32 rows of A and 64 of B at K = 128."""
+    check_layout("sm120", 32, 128, 64, (32, 64))
