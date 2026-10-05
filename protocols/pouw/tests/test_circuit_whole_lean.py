@@ -1,11 +1,12 @@
 """The Lean whole-Program table is `pc8`'s `Pc8Check`: its input gates and their widths, its units in `pc8.units`' order,
 each unit's computed gates a copy of its template's with every read relocated through the Lean port map, and its
 outputs. `lean_layout` restates `WholeCircuit.whole8` (`lean/Pouw/Protocol/PearlC/WholeCircuit.lean`): the input
-regions (`eaAt` … `in8`, `inW8`), the blocks (`row8B`, `row8A`, `tileSpec`) and their ports (`portB8`, `portA8`,
-`portT8`, with `code8`, `paOut8` and `pbOut8` naming the rows' outputs), and the outputs (`outs8`). Each template's reads
-are its own `CallGraph`'s, which `test_circuit_row_lean.py` and `test_circuit_tile_lean.py` tie to the Lean unit tables;
-this test ties the wiring between them, so it and the pinned descriptor digests are what tie `tileCheck8`'s circuit to
-the Program. No primitive is evaluated.
+regions (`eaAt` … `in8`, `inW8`), the blocks (`row8B`, `row8A`, `tileSpec` for the whole tiles and, where `TM ∤ M`, for
+the short last tile row at `M mod TM` rows) and their ports (`portB8`, `portA8`, `portT8` and `portS8` through
+`portTile8`, with `code8`, `paOut8` and `pbOut8` naming the rows' outputs), and the outputs (`outs8`). Each template's
+reads are its own `CallGraph`'s, which `test_circuit_row_lean.py` and `test_circuit_tile_lean.py` tie to the Lean unit
+tables; this test ties the wiring between them, so it and the pinned descriptor digests are what tie `tileCheck8`'s
+circuit to the Program. No primitive is evaluated.
 
 A `CallGraph` folds wiring into sorted read sets, so it can't tell a port map from one permuted within a gate's reads
 (16 P_A words read by one peel step); `bound_ports` reads each member's operands in the flat layout instead, where a
@@ -25,6 +26,8 @@ DIGESTS = {
     ("sm120", 2, 128, 3, (1, 1)): "987a100a20ddac7d0c3c001823363386f7e00ce3fab6b2bf6baca12dd0100621",
     ("sm120", 4, 128, 4, (2, 2)): "da4d18d5c67f12d385b0813e7b97cfd2f3aa4b72f556c58a81b3af82532c266e",
     ("h100", 2, 256, 2, (1, 2)): "781e32adf2b050e15e39d6d4aa7b8371692fed90769838d0ce8f08d318e50268",
+    ("sm120", 48, 128, 4, (32, 2)): "eb2f5d0bad585ed7d1f334992a1bc6aee422291c0b0f0e305b5bf21de3442ad2",
+    ("sm120", 16, 128, 2, (32, 1)): "773705f95c7d96ff454c9330d6fffcf4234aed07c527e1ffd867d80f1eb3928b",
 }
 
 
@@ -109,27 +112,37 @@ def lean_layout(m: int, k: int, n: int, tm: int, tn: int):
     row_b = lambda j, a: nin + j * lb + (a - row_in(k, True))                  # noqa: E731
     row_a = lambda i, a: nin + n * lb + i * la + (a - row_in(k, False))        # noqa: E731
     tiles = nin + n * lb + m * la
+    ms, ns, r = m // tm, n // tn, m % tm
+    ls = r * tn * block_len(k)
+    shorts = tiles + ms * ns * lt
 
-    def port_t(e, a):
-        rs, cs = e // (n // tn), e % (n // tn)
-        if a < tm * k:
-            return row_a(rs * tm + a // k, code8(k, row_in(k, False), a % k))
-        if a < (tm + tn) * k:
-            a -= tm * k
-            return row_b(cs * tn + a // k, code8(k, row_in(k, True), a % k))
-        a -= (tm + tn) * k
-        if a < 64 * tm:
-            return row_a(rs * tm + a // 64, pa_out8(k, a % 64))
-        a -= 64 * tm
-        return row_b(cs * tn + a // 64, pb_out8(k, a % 64))
+    def port_tile(th, i0, j0, a):
+        """`portTile8`: a `th` x `tn` tile at row `i0` and column `j0`."""
+        if a < th * k:
+            return row_a(i0 + a // k, code8(k, row_in(k, False), a % k))
+        if a < (th + tn) * k:
+            a -= th * k
+            return row_b(j0 + a // k, code8(k, row_in(k, True), a % k))
+        a -= (th + tn) * k
+        if a < 64 * th:
+            return row_a(i0 + a // 64, pa_out8(k, a % 64))
+        a -= 64 * th
+        return row_b(j0 + a // 64, pb_out8(k, a % 64))
+
+    port_t = lambda e, a: port_tile(tm, e // ns * tm, e % ns * tn, a)            # noqa: E731
+    port_s = lambda cs, a: port_tile(r, ms * tm, cs * tn, a)                     # noqa: E731
 
     blocks = [("row_b", n, row_in(k, True), lb, port_b), ("row_a", m, row_in(k, False), la, port_a),
-              ("tile", (m // tm) * (n // tn), tile_in(k, tm, tn), lt, port_t)]
+              ("tile", ms * ns, tile_in(k, tm, tn), lt, port_t)]
+    if r:
+        blocks.append(("tile", ns, tile_in(k, r, tn), ls, port_s, "short"))
 
     def entry(i, j, last):
-        e, ti, tj = i // tm * (n // tn) + j // tn, i % tm, j % tn
-        r = (ti * tn + tj) * block_len(k) + (block_len(k) - 1 if last else 5 * (k // 128) - 1)
-        return tiles + e * lt + r
+        ti, tj = i % tm, j % tn
+        g = (ti * tn + tj) * block_len(k) + (block_len(k) - 1 if last else 5 * (k // 128) - 1)
+        if i < ms * tm:
+            return tiles + (i // tm * ns + j // tn) * lt + g
+        return shorts + j // tn * ls + g
 
     nw = k // 128
     outs = ([entry(i, j, False) for i in range(m) for j in range(n)] + [entry(i, j, True) for i in range(m) for j in range(n)]
@@ -169,12 +182,14 @@ def bound_ports(fn, unit, template, tin: int) -> dict[int, int]:
     return bound
 
 
-CASES = [("sm120", 2, 128, 3, (1, 1)), ("sm120", 4, 128, 4, (2, 2)), ("h100", 2, 256, 2, (1, 2))]
+#: the last two with a short last tile row (16 of 32 rows), under one whole tile row and alone
+CASES = [("sm120", 2, 128, 3, (1, 1)), ("sm120", 4, 128, 4, (2, 2)), ("h100", 2, 256, 2, (1, 2)),
+         ("sm120", 48, 128, 4, (32, 2)), ("sm120", 16, 128, 2, (32, 1))]
 
 
 def check_whole(fn, unit_cut, units, tp, layout) -> None:
-    """`fn`, a Program of unit templates `tp` (by role) with `unit_cut` and `units` its scheme's, against a Lean
-    layout (`lean_layout`'s four parts)."""
+    """`fn`, a Program of unit templates `tp` (by role, or by a block's own key after its port) with `unit_cut` and
+    `units` its scheme's, against a Lean layout (`lean_layout`'s four parts)."""
     g, owner, verdict = unit_cut(fn)
     assert verdict.ok, verdict
     nin, widths, blocks, outs = layout
@@ -188,8 +203,9 @@ def check_whole(fn, unit_cut, units, tp, layout) -> None:
     us = units(fn)
     assert [u.role for u in us] == [r for r, cnt, *_ in blocks for _ in range(cnt)]
     at, unit = 0, 0
-    for role, cnt, tin, ln, port in blocks:
-        tg = CallGraph(tp[role])
+    for role, cnt, tin, ln, port, *key in blocks:
+        template = tp[key[0] if key else role]
+        tg = CallGraph(template)
         assert sorted(tg.input_ids) == list(range(tin))
         assert tg.n == ln
         tnames = {v: s for s, v in tg.prims.items()}
@@ -203,7 +219,7 @@ def check_whole(fn, unit_cut, units, tp, layout) -> None:
                 assert g.width[gc] == tg.width[r]
                 assert names[g.prim[gc]] == tnames[tg.prim[r]]
                 assert whole[gc] == {reloc(a) for a in local[r]}, (role, q, r)
-            bound = bound_ports(fn, us[unit + q], tp[role], tin)
+            bound = bound_ports(fn, us[unit + q], template, tin)
             assert sorted(bound) == list(range(tin))
             assert all(port(q, a) == (b if b < nin else compact[b - nin]) for a, b in bound.items()), (role, q)
         at += cnt * ln
@@ -213,8 +229,10 @@ def check_whole(fn, unit_cut, units, tp, layout) -> None:
 
 
 def check_layout(dev: str, m: int, k: int, n: int, tile: tuple[int, int]) -> None:
-    check_whole(pc8.check(pc8.Shape(m, k, n, tile, dev)), pc8.unit_cut, pc8.units, pc8.templates(k, tile, dev),
-                lean_layout(m, k, n, *tile))
+    tp = pc8.templates(k, tile, dev)
+    if m % tile[0]:
+        tp = tp | {"short": pc8.templates(k, (m % tile[0], tile[1]), dev)["tile"]}
+    check_whole(pc8.check(pc8.Shape(m, k, n, tile, dev)), pc8.unit_cut, pc8.units, tp, lean_layout(m, k, n, *tile))
 
 
 @pytest.mark.parametrize("dev,m,k,n,tile", CASES)
