@@ -17,7 +17,7 @@ from verity_vllm.pipeline import hot as hc
 from verity_vllm.pipeline import source_identity
 from verity_vllm.pipeline import timeline as tlm
 
-CORE = Path("packages") / "verity" / "src" / "verity"
+CORE = Path("verity")
 
 
 def _tree(tmp_path: Path) -> Path:

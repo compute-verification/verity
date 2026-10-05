@@ -19,10 +19,10 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.commitments import MerkleTree
-from verity.commitments.blake3 import keyed
-from verity.commitments.merkle import tree_levels
-from verity_pouw.audit import (
+from verity.primitives.commitments import MerkleTree
+from verity.primitives.crypto.blake3 import keyed
+from verity.primitives.commitments.merkle import tree_levels
+from verity.protocols.accounting.work.pouw.audit import (
     ROW_SCHEMA,
     TILE_SCHEMA,
     Epoch,
@@ -35,10 +35,10 @@ from verity_pouw.audit import (
     transcript_domain,
     weight_binding,
 )
-from verity_pouw.protocol import Context, Matmul, Shape
-from verity_pouw.schemes import pearl_c as C
-from verity_pouw.schemes import pearl_c_work as PW
-from verity_pouw.schemes import pearl_kw as P
+from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
+from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
+from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
@@ -577,7 +577,7 @@ def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tm
     """Lean's conditions on the fresh-trial ε: draw d is `key.uniform(W, d)` over the input's cumulative credited cells
     (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
     and the source is given in the command, never drawn inside the run."""
-    from verity.randomness import derive
+    from verity.primitives.randomness import derive
 
     src, job, row = bytes(range(32)), {"sha256": "ab" * 32}, {"matmul": 7, "area": {40: 64 * 64, 41: 64 * 64, 42: 32 * 64}}
     got = SD.fresh_trials(job, row, 50, src)
@@ -1234,9 +1234,9 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
 
 def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     """The message and leaf keys the kernels read and every tree's hash are the scheme's format's
-    (`verity_pouw.serving.HASH_FORMATS`), not literals, and -h1's bytes are what they were."""
-    from verity.commitments.blake3 import blake3
-    from verity_pouw.serving import HASH_FORMATS, SchemeId, hash_format
+    (`verity.protocols.accounting.work.pouw.serving.HASH_FORMATS`), not literals, and -h1's bytes are what they were."""
+    from verity.primitives.crypto.blake3 import blake3
+    from verity.protocols.accounting.work.pouw.serving import HASH_FORMATS, SchemeId, hash_format
 
     make, *_ = device_run
     run = make()
@@ -1255,7 +1255,7 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
 
 def test_a_schedule_this_path_or_the_format_cannot_run_is_refused():
     """-h1's forming reads seed_A from A's root, so A's tree stays on the main lane; and this path moves only the tile hashing."""
-    from verity_pouw.serving import Schedule
+    from verity.protocols.accounting.work.pouw.serving import Schedule
     s = PPD.scheme_of(SCHEME)
     with pytest.raises(ValueError, match="a_tree can't leave the main lane under h1"):
         PPD.schedule_of(Schedule("early-a", frozenset({"a_tree", "tile_hash"}), ring=2), s)

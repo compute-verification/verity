@@ -1,5 +1,5 @@
 """Every table a primitive reads by index is declared (`PrimitiveDefinition.tables`): the guard
-(`verity.ml.operations.program_data`) sees a table only through its primitive's declaration, so an undeclared one passes it.
+(`verity.primitives.circuits.operations.program_data`) sees a table only through its primitive's declaration, so an undeclared one passes it.
 
 A primitive reads a table when its evaluator reaches an indexable constant (one it closes over, or a global or module
 attribute of the code it calls) or a memoized loader that returns anything but a word, or when C-Flock's lowering of it reads
@@ -22,9 +22,9 @@ import numpy as np
 import pytest
 
 from circuit_check import targets as TG
-from verity.ir.defs import REGISTRY, PrimitiveDefinition
-from verity.ir.types import Array
-from verity.ml.prims import F32
+from verity.primitives.circuits.defs import REGISTRY, PrimitiveDefinition
+from verity.primitives.circuits.types import Array
+from verity_catalog.definitions.prims import F32
 from verity_flock import fp as FP
 from verity_flock import gf2
 from verity_flock import ir_lower as IL

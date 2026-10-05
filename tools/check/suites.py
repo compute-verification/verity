@@ -369,7 +369,7 @@ def locked(text: str | None = None) -> dict[str, dict]:
     return out
 
 
-#: Where uv.lock writes a workspace path: a source (`{ editable = "packages/verity" }`) and a requirement's (`requires-dist`).
+#: Where uv.lock writes a workspace path: a source (`{ editable = "verity" }`) and a requirement's (`requires-dist`).
 _LOCAL = frozenset({"editable", "virtual", "directory", "path"})
 #: How a key writes the suite's own directory, so that the same files in another directory key alike (`_rel`).
 SELF = "<suite>"

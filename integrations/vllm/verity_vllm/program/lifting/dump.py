@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Iterator, Mapping
 
 from verity_vllm.program.registry import lifted as L
-from verity.ir.types import Value
+from verity.primitives.circuits.types import Value
 
 
 def _lift_class(prim: Any) -> str:

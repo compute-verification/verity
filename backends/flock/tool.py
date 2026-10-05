@@ -23,8 +23,8 @@ def parse(argv: list[str]) -> dict:
 FLOCK_PURE = Tool(
     name="flock_pure", version="1",
     command=["bash", "backends/flock/pod/20-pure.sh"],
-    closure=["backends/flock/**", "backends/numerical/**", "backends/direct/ligero/relations.py", "backends/direct/ligero/hashauth.py",
-             "backends/direct/ligero/auth.py", "backends/direct/ligero/timing_guard.py", "packages/verity/src/verity/**"],
+    closure=["backends/flock/**", "benchmarks/numerical/**", "archive/direct/ligero/relations.py", "archive/direct/ligero/hashauth.py",
+             "archive/direct/ligero/auth.py", "archive/direct/ligero/timing_guard.py", "verity/**"],
     key_params=["REL", "MODE", "SELF_VUS", "START", "MAX", "RUNS", "VERIFIER", "SERVE_VUS"],
     key_conditions=["hw.family"],
     caches=[],
@@ -52,7 +52,7 @@ def parse_class_sweep(argv: list[str]) -> dict:
 FLOCK_CLASS_SWEEP = Tool(
     name="flock_class_sweep", version="1",
     command=["bash", "backends/flock/pod/70-class-sweep.sh"],
-    closure=["backends/flock/**", "backends/numerical/python/**", "packages/verity/src/verity/**", "integrations/vllm/verity_vllm/**",
+    closure=["backends/flock/**", "benchmarks/numerical/python/**", "verity/**", "integrations/vllm/verity_vllm/**",
              "tools/circuit_check/src/**"],
     key_params=list(CLASS_SWEEP_KEYS),
     param_artifacts=["GRAPH", "DEFS", "SHAPES"],
