@@ -35,8 +35,8 @@
   }
  },
  "reads_exempt": {
-  "NetTiming.SecurityProofs.Sanity": "non-vacuity witnesses; they leave the lock in @network-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
-  "NetTiming.SecurityProofs.Schedule": "non-vacuity witnesses; they leave the lock in @network-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)"
+  "NetTimingProofs.SecurityProofs.Sanity": "non-vacuity witnesses; they leave the lock in @network-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
+  "NetTimingProofs.SecurityProofs.Schedule": "non-vacuity witnesses; they leave the lock in @network-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)"
  },
  "guarantees": {
   "NetTiming.SecurityProofs.CardCountsEqLe": {
