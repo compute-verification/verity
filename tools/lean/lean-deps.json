@@ -18,17 +18,17 @@
    "run": "r20261002-013330-8cff",
    "sha256": "6ed219a253d9af409d3f8e06c4843e1f13f0081a9eac96048964d299b7c55836"
   },
-  "4f6b6fc1a8894ce7ae275d826fcf02c05ffc29cc5c7c6950b83cf08781f06347": {
-   "bytes": 706797442,
-   "package": "security_proofs/network_warden",
-   "run": "r20261002-013330-8cff",
-   "sha256": "6ed219a253d9af409d3f8e06c4843e1f13f0081a9eac96048964d299b7c55836"
-  },
   "5c2a23bf8634d77a7eb3d07c2d1d82b9a6ceda4eaa0205286857391ba83e863f": {
    "bytes": 700285760,
    "package": "protocols/pous/lean",
    "run": "r20261002-013330-8cff",
    "sha256": "c9a35455c168955a68a87fb6e8301e84114ef79c032ae4efdb14f3be669af603"
+  },
+  "5dced5d739a3026bfa70f4292502aec7beadcd473121be1427d75da466e1eb1a": {
+   "bytes": 706797442,
+   "package": "security_proofs/warden",
+   "run": "r20261002-013330-8cff",
+   "sha256": "6ed219a253d9af409d3f8e06c4843e1f13f0081a9eac96048964d299b7c55836"
   },
   "6066dd9328a3ca2e0c1b3a8c66dc92b1c9e513719e65e94aa38097a7851e397e": {
    "bytes": 701650941,

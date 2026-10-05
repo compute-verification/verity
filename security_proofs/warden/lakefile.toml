@@ -1,4 +1,4 @@
-name = "security_proofs_network_warden"
+name = "security_proofs_warden"
 defaultTargets = ["NetTimingProofs"]
 
 [leanOptions]

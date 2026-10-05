@@ -26,7 +26,7 @@ scripts/difftest_vectors.py    the difftest's data: 10,000 random instances and 
 lean-audit.json                the policy and guarantee records for tools/lean/audit.py
 ~~~
 
-The proofs are the package `security_proofs/network_warden/`, which requires this one by path. Its modules are under
+The proofs are the package `security_proofs/warden/`, which requires this one by path. Its modules are under
 `NetTimingProofs`, and their declarations keep the names the records hold (`NetTiming.SecurityProofs.G`):
 
 ~~~text
@@ -49,7 +49,7 @@ CheckAxioms.lean               one #print axioms line per guarantee, then the th
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # the spec (NetTiming, the default target)
 python3 ../../../tools/lean/audit.py .                      # Verity's Lean audit, of the spec and its proofs
-(cd ../../../security_proofs/network_warden && lake env lean CheckAxioms.lean)  # the axioms of the 51 guarantees and the 3 lemmas
+(cd ../../../security_proofs/warden && lake env lean CheckAxioms.lean)  # the axioms of the 51 guarantees and the 3 lemmas
 # the difftest, which the audit runs: its data from this checkout's Python audit, then the Lean side on it
 uv run python scripts/difftest_vectors.py ../../.. --out /tmp/dt
 lake env lean --run NetTimingDifftest.lean /tmp/dt/difftest/instances.jsonl /tmp/dt/difftest/python.jsonl 10000

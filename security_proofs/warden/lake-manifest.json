@@ -98,6 +98,6 @@
    "inputRev": "v4.34.0",
    "inherited": true,
    "configFile": "lakefile.toml"}],
- "name": "security_proofs_network_warden",
+ "name": "security_proofs_warden",
  "lakeDir": ".lake",
  "fixedToolchain": false}

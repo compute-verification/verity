@@ -1,6 +1,6 @@
 {
  "roots": ["NetTiming.Assumptions", "NetTiming.Difftest", "NetTiming.Guarantees", "NetTiming.Protocol"],
- "proved_in": ["../../../security_proofs/network_warden"],
+ "proved_in": ["../../../security_proofs/warden"],
  "exempt": {
   "NetTimingDifftest": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof"
  },
