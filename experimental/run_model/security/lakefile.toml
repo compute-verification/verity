@@ -1,0 +1,26 @@
+name = "run_model_security"
+version = "0.1.0"
+defaultTargets = ["RunModelSecurity"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "5ed2965256430c3649e86755f9576b54eca72435"
+
+# Core's model: `Verity.Game`, `Sound`, and the composition guarantees with their proofs.
+[[require]]
+name = "verity"
+path = "../../../packages/verity/lean"
+
+# The party programs, which need nothing but the Lean toolchain.
+[[require]]
+name = "run_model"
+path = "../exe"
+
+[[lean_lib]]
+name = "RunModelSecurity"
+roots = ["RunModelSecurity"]
