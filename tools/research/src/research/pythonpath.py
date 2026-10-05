@@ -10,6 +10,11 @@ night earlier an incomplete manifest looked like a result).  The tree already sa
                               setuptools  [tool.setuptools] package-dir = {"" = "src"}; [tool.setuptools.packages.find] where = ["src"]
                             with none of these: <member>/src when it exists, else <member> (flat layout)
 
+    <tree>/pyproject.toml   when it has a [build-system] (the workspace root is itself a package, as `verity` is after the layout
+                            move): its hatch packages too, but a package directly at the root is reached through a shim directory
+                            holding a symlink to it (`shim`), never the root itself: on PYTHONPATH the root would make every top-level
+                            directory importable (`kernels`, `tools`, `benchmarks`, ... are PyPI names; transformers imports `kernels`)
+
 `import_roots_dir(tree)` reads a directory; `import_roots_git(git_dir, rev)` reads a commit without checking it out (`research env
 --rev`).  Roots are relative to the tree, in member order, de-duplicated; a member or
 root that does not exist is reported in `missing`, never silently dropped.  `research env --source <tree>` prints the export line;
@@ -18,7 +23,11 @@ records it in job.json run.remote.pythonpath."""
 from __future__ import annotations
 
 import fnmatch
+import hashlib
+import os
 import posixpath
+import secrets
+import shutil
 import subprocess
 import tomllib
 from pathlib import Path
@@ -58,7 +67,8 @@ def _member_roots(read: Reader, is_dir: Callable[[str], bool], member: str) -> l
 def import_roots(read: Reader, is_dir: Callable[[str], bool], dirs: Callable[[], list[str]]) -> dict:
     """{"members": [...], "roots": [...], "missing": [...], "source": what declared them}.  `read(relpath)` -> text or None, `is_dir(relpath)`,
     `dirs()` -> every directory of the tree (relative; used only to expand member globs)."""
-    ws = ((_toml(read, "pyproject.toml").get("tool") or {}).get("uv") or {}).get("workspace") or {}
+    top = _toml(read, "pyproject.toml")
+    ws = ((top.get("tool") or {}).get("uv") or {}).get("workspace") or {}
     pats, excl = list(ws.get("members") or []), list(ws.get("exclude") or [])
     members: list[str] = []
     all_dirs: list[str] | None = None
@@ -73,6 +83,18 @@ def import_roots(read: Reader, is_dir: Callable[[str], bool], dirs: Callable[[],
                 members.append(h)
     roots: list[str] = []
     missing: list[str] = []
+    shim: list[str] = []
+    if "build-system" in top and ((top.get("tool") or {}).get("uv") or {}).get("package") is not False:
+        pkgs = (((top.get("tool") or {}).get("hatch") or {}).get("build") or {}).get("targets", {}).get("wheel", {}).get("packages")
+        if not pkgs:
+            missing.append(". (the workspace root is a package: name its packages in [tool.hatch.build.targets.wheel] packages)")
+        for p in (posixpath.normpath(p.rstrip("/")) for p in pkgs or []):
+            parent = posixpath.dirname(p)
+            target, into = (p, shim) if parent in ("", ".") else (parent, roots)
+            if not is_dir(target):
+                missing.append(target)
+            elif target not in into:
+                into.append(target)
     for m in members:
         if not is_dir(m):
             missing.append(m)
@@ -82,7 +104,7 @@ def import_roots(read: Reader, is_dir: Callable[[str], bool], dirs: Callable[[],
                 missing.append(r)
             elif r not in roots:
                 roots.append(r)
-    return {"members": members, "roots": roots, "missing": missing,
+    return {"members": members, "roots": roots, "missing": missing, "shim": shim,
             "source": "pyproject.toml [tool.uv.workspace]" if pats else "none (no [tool.uv.workspace] members in the tree's pyproject.toml)"}
 
 
@@ -136,12 +158,15 @@ def workspace_root(path: Path | str) -> Path:
 
 
 def package_dirs(tree: Path | str, name: str) -> list[str]:
-    """Where `tree` ships the import package `name`, relative to the tree: `<root>/<name>` for each workspace import root that holds
-    it, in member order.  One directory for a regular package, one per member for a namespace split across members.  A closure, a
-    dirty check or a source identity over a package names these, so a member that moves or splits stays covered.  Raises
-    LookupError when no root holds `name`, so a caller never gets a list over nothing."""
+    """Where `tree` ships the import package `name`, relative to the tree: the package itself when it sits at the workspace root
+    (a `shim` entry), then `<root>/<name>` for each workspace import root that holds it, in member order.  One directory for a
+    regular package, one per member for a namespace split across members.  A closure, a dirty check or a source identity over a
+    package names these, so a member that moves or splits stays covered.  Raises LookupError when no root holds `name`, so a
+    caller never gets a list over nothing."""
     t = Path(tree)
-    dirs = [posixpath.join(r, name) for r in import_roots_dir(t)["roots"] if (t / r / name).is_dir()]
+    derived = import_roots_dir(t)
+    dirs = [p for p in derived["shim"] if posixpath.basename(p) == name and (t / p).is_dir()]
+    dirs += [posixpath.join(r, name) for r in derived["roots"] if (t / r / name).is_dir()]
     if not dirs:
         raise LookupError(f"no workspace import root of {t} holds a package {name!r}")
     return dirs
@@ -162,9 +187,48 @@ def package_paths(tree: Path | str, name: str, *rels: str) -> list[str]:
     return out
 
 
-def pythonpath(root: str, derived: dict, extra: str | None = None) -> str:
-    """`root`-absolute roots joined with ':', then `extra` (the user's own PYTHONPATH) appended."""
-    parts = [posixpath.join(root, r) if r not in ("", ".") else root for r in derived["roots"]]
+#: where `shim_dir` keeps one shim per tree when the caller names no other place
+SHIM_BASE = Path.home() / ".research" / "cache" / "pyshim"
+
+
+def shim_dir(root: str | os.PathLike[str], packages: list[str], base: str | os.PathLike[str] | None = None) -> str:
+    """A directory holding one symlink per root-level package (`verity -> <root>/verity`), keyed by the tree's resolved path under
+    `base`: the import path to the workspace root's own packages that leaves the root's other top-level directories unimportable.
+    Built aside and renamed in, so runs of one tree share it, and rebuilt when its links no longer match."""
+    tree = Path(root).resolve()
+    want = {posixpath.basename(p): str(tree / p) for p in packages}
+    d = Path(base if base is not None else SHIM_BASE).expanduser() / hashlib.sha256(str(tree).encode()).hexdigest()[:16]
+
+    def matches() -> bool:
+        try:
+            return sorted(os.listdir(d)) == sorted(want) and all(os.readlink(d / n) == t for n, t in want.items())
+        except OSError:
+            return False
+
+    if matches():
+        return str(d)
+    tmp = d.with_name(f"{d.name}.tmp-{secrets.token_hex(4)}")
+    tmp.mkdir(parents=True)
+    for n, t in want.items():
+        (tmp / n).symlink_to(t, target_is_directory=True)
+    try:
+        if d.exists() or d.is_symlink():
+            old = d.with_name(f"{d.name}.old-{secrets.token_hex(4)}")
+            os.rename(d, old)
+            shutil.rmtree(old, ignore_errors=True)
+        os.rename(tmp, d)
+    except OSError:
+        shutil.rmtree(tmp, ignore_errors=True)
+        if not matches():                                       # another run's rename won the race; anything else is a real failure
+            raise
+    return str(d)
+
+
+def pythonpath(root: str, derived: dict, extra: str | None = None, shim_base: str | os.PathLike[str] | None = None) -> str:
+    """`root`-absolute roots joined with ':', then `extra` (the user's own PYTHONPATH) appended; the tree's shim (`shim_dir`, under
+    `shim_base`) first when the workspace root is itself a package."""
+    parts = [shim_dir(root, derived["shim"], shim_base)] if derived.get("shim") else []
+    parts += [posixpath.join(root, r) if r not in ("", ".") else root for r in derived["roots"]]
     if extra:
         parts += [p for p in extra.split(":") if p and p not in parts]
     return ":".join(parts)
@@ -172,8 +236,9 @@ def pythonpath(root: str, derived: dict, extra: str | None = None) -> str:
 
 def tree_pythonpath(tree: Path | str) -> str:
     """The PYTHONPATH a command run from a source tree needs: the tree's workspace import roots (what `research env --source` prints),
-    then the tree root itself (modules addressed from the top, `backends.direct...`).  The steward's render and the parity tool's
-    render both use it, so a new workspace member (`packages/verity/src`) reaches them without a hand-kept list."""
+    then, in a tree whose root is not a package, the tree root itself (modules addressed from the top, `backends.direct...`).  The
+    steward's render and the parity tool's render both use it, so a new workspace member reaches them without a hand-kept list."""
     root = str(Path(tree))
-    return pythonpath(root, import_roots_dir(root), extra=root)
+    derived = import_roots_dir(root)
+    return pythonpath(root, derived, extra=None if derived["shim"] else root)
 

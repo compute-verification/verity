@@ -1319,9 +1319,10 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
         from .pythonpath import import_roots_dir, pythonpath
 
         derived = import_roots_dir(src_dir)                 # the tree's own workspace declaration, not a hand list (pythonpath.py)
-        env["PYTHONPATH"] = pythonpath(src_dir, derived, extra=env.get("PYTHONPATH"))
+        env["PYTHONPATH"] = pythonpath(src_dir, derived, extra=env.get("PYTHONPATH"), shim_base=runs_root.parent / "cache" / "pyshim")
         remote["pythonpath"] = [p for p in env["PYTHONPATH"].split(":") if p]
-        remote["pythonpath_derived"] = {"roots": derived["roots"], "missing": derived["missing"], "source": derived["source"]}
+        remote["pythonpath_derived"] = {"roots": derived["roots"], "missing": derived["missing"], "source": derived["source"],
+                                        **({"shim": derived["shim"]} if derived["shim"] else {})}
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name

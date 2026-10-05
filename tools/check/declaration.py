@@ -6,7 +6,9 @@ A job is a `[[job]]` table:
 - `group`: check.py's group, numbered from 1; the groups run at once, and a group's jobs run in file order;
 - `halts`: optional, its failure stops the run;
 - `halts_on`: optional, a line in its output that stops the run;
-- `merge_requires`: optional, the changed paths for which `research merge` needs this job to have passed.
+- `merge_requires`: optional, the changed paths for which `research merge` needs this job to have passed;
+- `after`: optional, a job in another group that must end first: this one starts once it has passed or been skipped, and is
+  stopped if it fails. The job it names has no `after` of its own.
 
 The file also carries `schema = "ci/v0"`. Anything else is refused: an unknown key, a missing field, a wrong type, a
 duplicate name, or an owner the registry doesn't know. Reading the file runs none of the commit's code. Stdlib only.
@@ -22,7 +24,7 @@ SCHEMA = "ci/v0"
 ROOT = Path(__file__).resolve().parents[2]
 PATH = ROOT / "tools" / "check" / "ci.toml"
 REGISTRY = ROOT / ".agents" / "skills" / "using-slack" / "registry.json"
-FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list}
+FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list, "after": str}
 REQUIRED = ("name", "owner", "group")
 
 
@@ -38,6 +40,7 @@ class Job:
     halts: bool = False
     halts_on: str | None = None
     merge_requires: tuple[str, ...] = ()
+    after: str | None = None
 
 
 def parse(text: str, handles: set[str], source: str = "ci.toml") -> list[Job]:
@@ -70,9 +73,19 @@ def parse(text: str, handles: set[str], source: str = "ci.toml") -> list[Job]:
             raise DeclarationError(f"{where}: owner {t['owner']!r} isn't a handle in the registry ({', '.join(sorted(handles))})")
         seen.add(t["name"])
         jobs.append(Job(t["name"], t["owner"], t["group"], t.get("halts", False), t.get("halts_on"),
-                        tuple(t.get("merge_requires", ()))))
+                        tuple(t.get("merge_requires", ())), t.get("after")))
     if not jobs:
         raise DeclarationError(f"{source}: declares no job")
+    by = {j.name: j for j in jobs}
+    for j in jobs:
+        if j.after is None:
+            continue
+        if (a := by.get(j.after)) is None:
+            raise DeclarationError(f"{source}: job {j.name}: after {j.after!r}, which isn't declared")
+        if a.group == j.group:
+            raise DeclarationError(f"{source}: job {j.name}: after {j.after!r}, in its own group, whose order already runs it first")
+        if a.after is not None:
+            raise DeclarationError(f"{source}: job {j.name}: after {j.after!r}, which itself waits on {a.after!r}")
     return jobs
 
 
