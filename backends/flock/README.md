@@ -2,7 +2,7 @@
 
 The active backend family. C-Flock proves a committed relation, the commitment's hash leaves included, in one
 binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patched here). Where the frozen families are
-and what the merge gate runs per family: `../README.md`.
+and what the merge gate runs per family: `../../archive/README.md`.
 
 ## Layout
 
@@ -13,7 +13,7 @@ and what the merge gate runs per family: `../README.md`.
     `gf2.py`); `tail_pieces.py`: circuits for the primitives a template's units leave outside.
   - `templates/`: one lowering per subcircuit template; `ir_frame.py` (`verity/flock-ir-frame/v3`) and `ir_sampling.py`
     (`verity/flock-ir-sampling/v1`): their frame-v3 statements.
-  - `partition_units.py`: every unit class of an arbitrary partition (`verity.ir.units`) lowered and checked against the
+  - `partition_units.py`: every unit class of an arbitrary partition (`verity.primitives.circuits.units`) lowered and checked against the
     reference evaluator; `boolean_export.py`: a served row's leaf templates as Boolean circuits (a derived format, not a
     statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
     export, the docs site and the prover's layouts share.

@@ -4,7 +4,7 @@ A model's two linear layers, qkv with its bias and o without, have the shapes of
 `ncp-v2` executor installed as a Match capture installs it (`protocol_options.at_capture`: the target's executors, sampled proofs
 left out, nothing committed).
 
-- Under the real `Observer` each call is one `verity_pouw.ncp_linear` dispatch, with x, W, b and y as views and nothing of the
+- Under the real `Observer` each call is one `verity.protocols.accounting.work.pouw.ncp_linear` dispatch, with x, W, b and y as views and nothing of the
   host work inside it.
 - `resolve_step` with `PouwLinear` in the profile (`with_protocols`, from the capture's header) resolves each dispatch to the
   row the Build binds the same linear to on a real `torch.export` (`test_pouw_lowering`'s derive): `NcpLinearRowBias_v1` and

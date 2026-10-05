@@ -4,7 +4,7 @@
         exit 0  every important package (verity, verity_vllm, hidden_gpu, research) resolves from ROOT
         exit 3  PRECHECK_FAIL_SOURCE_IDENTITY -- the first line of stderr names the class, the following lines each mismatch
 
-The tree of record is the VERITY REPO ROOT: the checkout (or the shipped `git archive`, <root>/src/<sha>/) holding `packages/verity/src`,
+The tree of record is the VERITY REPO ROOT: the checkout (or the shipped `git archive`, <root>/src/<sha>/) holding `.`,
 `tools/research/src` and `integrations/vllm`.  It defaults to THIS FILE'S tree (never an environment default): the runner that imports this
 module IS the tree that must run.  `--tree` accepts the repo root or the integration root (`integrations/vllm`, what row_pod.sh passes) and
 normalises to the repo root.  `VERITY_TREE`, when set, must name the same tree (either form) -- a caller that exports another tree is the
@@ -20,7 +20,7 @@ native_host._gpu_ext_load after `import hidden_gpu` (the module that actually lo
 research.telemetry.source_identity.SourceIdentityError, whose message starts with PRECHECK_FAIL_SOURCE_IDENTITY.
 
 Import layout: the generic half is `research.telemetry.source_identity` and must be importable as such -- on a pod row_pod.sh exports
-PYTHONPATH=<integration root>:<repo>/packages/verity/src:<repo>/tools/research/src.  No sys.path is manipulated here: a `research` that
+PYTHONPATH=<integration root>:<repo>:<repo>/tools/research/src.  No sys.path is manipulated here: a `research` that
 cannot be imported is a broken environment and is reported as one, not repaired silently (that repair is how mixed trees happen).
 """
 from __future__ import annotations
@@ -46,7 +46,7 @@ except ImportError as _e:  # pragma: no cover - environment defect, reported by 
 INTEGRATION_REL = Path("integrations") / "vllm"
 # INTEGRATION is <repo>/integrations/vllm; the repo root is derived from the package location, never from env
 TREE = INTEGRATION.parent.parent
-ROOT_MARKERS = ("pyproject.toml", "packages/verity/src/verity/__init__.py", "integrations/vllm/verity_vllm/__init__.py")
+ROOT_MARKERS = ("pyproject.toml", "verity/__init__.py", "integrations/vllm/verity_vllm/__init__.py")
 
 FAIL_CLASS = _sid.FAIL_CLASS
 SourceIdentityError = _sid.SourceIdentityError
@@ -56,7 +56,7 @@ SourceIdentityError = _sid.SourceIdentityError
 HIDDEN_GPU_CANDIDATES = ("integrations/vllm/out/gen/r9/cmt-hidden/src/hidden_gpu.py", "integrations/vllm/verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py")
 # package name -> (import name, the sys.path entry it must resolve from, relative to the repo root)
 PACKAGE_ROOTS = {
-    "verity": ("verity", "packages/verity/src"),                       # core: verity.ir, verity.ml.tc, verity.proofs
+    "verity": ("verity", "."),                       # core: verity.primitives.circuits, verity_catalog.silicon, verity_sp1.proofs
     "verity_vllm": ("verity_vllm", "integrations/vllm"),
     "research": ("research", "tools/research/src"),                    # the runner/telemetry package of the tree of record
 }
@@ -85,7 +85,7 @@ def code_identity(root: str | os.PathLike[str]) -> dict[str, Any]:
     from verity_vllm.pipeline.research_tools import VLLM_BUILD
 
     files = VLLM_BUILD.closure_manifest(root)
-    for part in ("integrations/vllm/", "packages/verity/src/verity/"):
+    for part in ("integrations/vllm/", "verity/"):
         if not any(p.startswith(part) for p in files):
             raise FileNotFoundError(f"code identity: no {part} file under {os.fspath(root)!r} (not a repository root)")
     canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode()

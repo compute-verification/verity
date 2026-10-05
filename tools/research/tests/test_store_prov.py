@@ -257,10 +257,10 @@ def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
 
 
 def test_former_modules_map_a_module_back_through_each_move():
-    moves = [{"backends/flock/verifier/tool.py": "tools/lean_agreement/tool.py", "backends/gkr": "archive/gkr"},
+    moves = [{"backends/flock/verifier/tool.py": "tools/lean_agreement/tool.py", "archive/gkr": "archive/gkr"},
              {"tools/lean_agreement/": "tools/agree/"}]
     assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "backends.flock.verifier.tool"]
-    assert tools_registry.former_modules("archive.gkr.gpu.tool", moves) == ["backends.gkr.gpu.tool"]
+    assert tools_registry.former_modules("archive.gkr.gpu.tool", moves) == ["archive.gkr.gpu.tool"]
     assert tools_registry.former_modules("archive.gkrx.tool", moves) == []
     assert tools_registry.former_modules("tools.check.tool", moves) == []
     shipped = json.loads(tools_registry.MOVES.read_text())["moves"]
@@ -310,13 +310,13 @@ def test_tc_probe_declaration_parses_real_flags_and_optional_instruction():
     _, key2 = tc.resolve_params(argv + ["--instruction", "mma.sync.m16n8k16"], REPO)
     assert key2["instruction"] == "mma.sync.m16n8k16"
     assert D.derivation_id(tc, {}, key, {"hw.family": "rtx4090"}, tc.key_conditions) != D.derivation_id(tc, {}, key2, {"hw.family": "rtx4090"}, tc.key_conditions)
-    _, key3 = tc.resolve_params(argv + ["--replay-golden", "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json"], REPO)
+    _, key3 = tc.resolve_params(argv + ["--replay-golden", "catalog/tests/fixtures/golden/ada_bf16_m16n8k16.json"], REPO)
     assert key3["replay_golden"].startswith("sha256:")
 
 
 def test_bench_vu_declaration_resolves_dataset_root_by_content():
     bv = tools_registry.load("bench_vu", REPO)
-    argv = ["python", "-m", "backends.direct.ligero.run", "bench-vu", "--mode", "fiat-shamir", "--zk", "--total-vus", "1000", "--device", "cuda", "--out", "/x"]
+    argv = ["python", "-m", "archive.direct.ligero.run", "bench-vu", "--mode", "fiat-shamir", "--zk", "--total-vus", "1000", "--device", "cuda", "--out", "/x"]
     params, key = bv.resolve_params(argv, REPO)
     assert key["cmd"] == "bench-vu" and key["mode"] == "fiat-shamir" and key["zk"] is True and key["total_vus"] == 1000
     assert "device" not in key and "out" not in key and "vus" not in key
@@ -385,7 +385,7 @@ def test_attempt_build_from_fixture_run_dir(tmp_path):
     assert m["conditions"]["hw.family"] == "h100" and set(E.KEYS) <= set(m["conditions"])
     assert m["source"] == {"commit": "0123456789abcdef0123456789abcdef01234567", "tree": "89abcdef0123456789abcdef0123456789abcdef", "dirty": False,
                            "dirty_digest": None, "lockfiles": {"uv.lock": "4" * 64}}
-    assert m["closure"] == {"backends/direct/ligero/run.py": "3" * 64}
+    assert m["closure"] == {"archive/direct/ligero/run.py": "3" * 64}
     ex = m["execution"]
     assert ex["start_utc"] == "2026-09-22T12:00:01.000Z" and ex["end_utc"] == "2026-09-22T12:00:13.300Z" and ex["wall_s"] == 12.3
     assert ex["exclusive"] is True and ex["host"] == "vy-g5" and ex["project"] == "verity" and ex["campaign"] == "r21-fixture"
@@ -600,7 +600,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
 
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "tools/tc_probe", "packages/verity/src/verity/ml/tc", ".gitignore", "uv.lock"],
+    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "tools/tc_probe", "catalog/verity_catalog/silicon", ".gitignore", "uv.lock"],
                          cwd=REPO, capture_output=True, check=True).stdout
     subprocess.run(["tar", "-xf", "-", "-C", str(src_dir)], input=tar, check=True)
     assert (src_dir / "tools/tc_probe/tool.py").exists() and not (src_dir / ".git").exists()
@@ -620,7 +620,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     store = json.loads((root / "runs/r1/job.json").read_text())["store"]
     assert "error" not in store, store.get("error")
     assert store["tool"] == {"name": "tc_probe", "version": "1", "spec": "tools.tc_probe.tool:TC_PROBE"}
-    assert "tools/tc_probe/tc_probe.py" in store["closure"] and "packages/verity/src/verity/ml/tc/silicon.py" in store["closure"]
+    assert "tools/tc_probe/tc_probe.py" in store["closure"] and "catalog/verity_catalog/silicon/silicon.py" in store["closure"]
     assert store["key_params_resolved"]["arch"] == "sm_89" and store["key_params_resolved"]["instruction"] == "mma.x" and "out" not in store["key_params_resolved"]
     c = store["conditions"]
     assert (c["source.commit"], c["source.tree"], c["source.dirty"]) == ("c" * 40, "t" * 40, False), "the control side's hint fills what git cannot say in an archive"
