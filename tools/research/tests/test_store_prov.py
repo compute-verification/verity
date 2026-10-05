@@ -267,6 +267,36 @@ def test_former_modules_map_a_module_back_through_each_move():
     assert all(isinstance(m["paths"], dict) for m in shipped)
 
 
+def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_path, monkeypatch):
+    """Red-team 1171: `locate` read `moves.json` before looking at the current path, so a corrupt one made `merge.declaration`
+    none and `merge.required_steps` require nothing (a train sent no lean-agreement inputs)."""
+    from research import merge
+
+    moves = tmp_path / "moves.json"
+    moves.write_text("{not json")
+    monkeypatch.setattr(tools_registry, "MOVES", moves)
+    monkeypatch.setitem(tools_registry.REGISTRY, "agree", "tools.agree.tool:AGREE")
+    repo = tmp_path / "repo"
+    (repo / "tools/agree").mkdir(parents=True)
+    (repo / "tools/agree/tool.py").write_text("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', "
+                                              "command=['true'], merge_requires={'agreement': ['backends/flock/']})\n")
+    (repo / "backends/flock").mkdir(parents=True)
+    (repo / "backends/flock/a.py").write_text("x = 1\n")
+    git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)  # noqa: E731
+    git("init", "-q")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "change")
+
+    assert tools_registry.locate("agree", repo) == ("tools.agree.tool", "AGREE")
+    assert merge.declaration(repo, "agree").name == "agree"
+    assert merge.required_steps(repo, "HEAD~1", "HEAD", "agree") == {"agreement": ["backends/flock/"]}
+    (repo / "tools/agree/tool.py").unlink()
+    with pytest.raises(json.JSONDecodeError):
+        tools_registry.locate("agree", repo)
+    assert merge.declaration(repo, "agree") is None
+
+
 def test_a_tree_from_before_a_move_still_declares_its_tools(tmp_path, monkeypatch):
     """`research run --tool`, `research merge`'s reads of the target's declaration, `after_land` and a run's preflight read
     a tool's declaration from the tree they're given: one from before a layout move holds it under its old path."""
