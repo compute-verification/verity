@@ -59,7 +59,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity.randomness import Key
+from verity.primitives.randomness import Key
 
 from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay import replay_codes as RC
