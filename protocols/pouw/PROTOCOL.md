@@ -559,14 +559,25 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     module docstring).
   - The noise lines and G are verifier-derived public inputs, as in `pc4` (`anchors.TileAnchors`, G on the record's
     chain), and each is a public input region in a unit's proof (`pc8.DERIVATIONS`; one u16 word per E4M3 code).
-  - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance, and to the scheme on sm_120's records. Every
-    partition computes each value in exactly one unit.
+  - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance (and its decode-32 case's B̃, P_B, C̃ and U), and
+    to the scheme on sm_120's records, a short last tile row included. Every partition computes each value in exactly
+    one unit.
+  - **A short last tile row.** `Shape.check` is the scheme's domain down the rows (`Row tiles` above: whole 16-row
+    ticket subtiles), so where 64 ∤ m the last tile row is r = m mod 64 rows, its own batch of `Pc8Tile` (or
+    `Pc8TileHidden`) at r × 64, whose digest is the scheme's leaf over its real rows. So m = 80 is a 64-row tile row and
+    a 16-row one, and decode's m = 32 is one 32-row tile row at the default tile.
+    - `plan.tile_layout` proves a short tile with its r `Pc8RowA` units, in its own stratum at W_ref r/64 of a whole
+      tile's.
+    - A call with both whole and short tile rows is therefore two tile strata, which the work law refuses
+      (`plan.check_work_strata`, the window pin's `hone`). Under the work law such a call is not drawn yet; a call that is
+      all one tile row height is.
   - The hiding Programs are `pc4`'s (``Shape.hidden``; the rows and their vectors are under `circuit.pc4` below):
     `Pc8TileHidden` returns its tile digest in place of C̃ and U, the weight's Program is `Pc8Weight`, and the rows are
     C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
     `pouw/row-ok/v1` rows. A 64 × 64 tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile
     with its rows, as for `pc4`.
-  - The row cut along k (``Shape.row_k``, `circuit.rowk`) is `pc4`'s, below, on each of the three records.
+  - The row cut along k (``Shape.row_k``, `circuit.rowk`) is `pc4`'s, below, on each of the three records. It takes
+    whole tiles only: `Shape.check` refuses a short last tile row under the cut.
   - Not in it yet: the debit and the cap. Until they land, Pearl-C's runs are checked by its reference audit, a
     development shortcut that opens rows.
 

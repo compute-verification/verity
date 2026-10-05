@@ -126,7 +126,8 @@ and fast-forwards to the longest prefix that passed.
 worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
 refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the markdown caps
 among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
-`tools/check/train.sh BRANCH MACHINE` checks it, and `research merge BRANCH` lands it.
+`tools/check/train.sh BRANCH MACHINE` checks it (`auto`: the node
+`check.py --slots` picks), and `research merge BRANCH` lands it.
 
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
 it). From the remote's copy of the target, the truth rather than the checkout, it closes each open pull request whose head is on
@@ -207,8 +208,8 @@ through `research deploy install NODE --by WHO [PATH ...] --apply` (without `--a
 branch holds (`main`, or a PR's head for a hotfix). Each loop is a systemd unit
 (`pods/nebius/units/`), never a tmux session, with its settings in an environment file from git (`pods/nebius/env/`, installed
 to `/etc/vy/env/`): `install` reloads systemd after a unit changes, and restarts a running service when its unit or
-environment file changed or its process still runs a replaced file, once the node's `quiet` test passes, each restart
-recorded. An entry with a `hold` (node 2's ops loops, until compute accounting's yes) is reported, never installed.
+environment file changed or it still runs a replaced file, once the node's `quiet` test passes, each restart
+recorded. An entry with a `hold` (node 2's ops loops, for now) is reported, never installed.
 `research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process still running a file installed after it started (`restart`), and every file in a managed directory
 that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`research/deploy.py`). A new
