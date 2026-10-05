@@ -34,9 +34,9 @@ A = load("exhaustion_audit", HERE / "audit.py")
 W = A.W
 H = W.F.H
 
-from verity_pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Prover, activation_binding, rows_domain,  # noqa: E402
+from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Prover, activation_binding, rows_domain,  # noqa: E402
                                transcript_domain, weight_binding)
-from verity_pouw.protocol import tagged  # noqa: E402
+from verity.protocols.accounting.work.pouw.protocol import tagged  # noqa: E402
 
 SMALL = (64, 64, 1024)                       # (m, n, k): one 64 x 64 tile, the scheme's least k
 
