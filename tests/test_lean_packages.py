@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import itertools
 import json
 import os
 import tomllib
@@ -52,6 +53,39 @@ def test_the_randomness_assumption_cites_this_toolchain():
     version = (soundness / "lean-toolchain").read_text().strip().rpartition(":")[2]
     for doc in ("ASSUMPTIONS.md", "FlockSoundness/Assumptions.lean"):
         assert f"Lean {version}'s runtime" in (soundness / doc).read_text(), doc
+
+
+def _module_roots(pkg: Path):
+    """(source directory, root module) for each library and executable of `pkg`, as Lake resolves them."""
+    cfg = tomllib.loads((pkg / "lakefile.toml").read_text())
+    src = pkg / cfg.get("srcDir", ".")
+    for lib in cfg.get("lean_lib", []):
+        for r in lib.get("roots", [lib["name"]]) + [g.rstrip("+*").rstrip(".") for g in lib.get("globs", [])]:
+            yield (src / lib.get("srcDir", ".")).resolve(), r
+    for exe in cfg.get("lean_exe", []):
+        yield (src / exe.get("srcDir", ".")).resolve(), exe.get("root", exe["name"])
+
+
+def test_lean_module_roots_are_disjoint():
+    """No module name is claimed from two source directories, by two packages or by one. Lake resolves an import by name
+    across every library in the workspace and doesn't report a duplicate: a library whose roots overlap another's builds
+    the other's module from its own directory, without a warning. So each library's roots stay under a namespace no
+    other library's roots share (`Pouw.Protocol` and `Pouw.Guarantees` may sit in different directories; `Pouw` and
+    `Pouw.Guarantees` may not)."""
+    claims = []
+    for pkg in lake_packages():
+        assert (pkg / "lakefile.toml").exists(), f"{pkg.relative_to(ROOT)}: only a lakefile.toml can be read here"
+        claims += [(pkg, src, root) for src, root in _module_roots(pkg)]
+
+    def nested(a: str, b: str) -> bool:
+        a, b = a.split("."), b.split(".")
+        return a[: len(b)] == b or b[: len(a)] == a
+
+    clashes = [f"{x[2]} ({x[0].relative_to(ROOT)}, {x[1].relative_to(ROOT)}) and "
+               f"{y[2]} ({y[0].relative_to(ROOT)}, {y[1].relative_to(ROOT)})"
+               for x, y in itertools.combinations(claims, 2) if x[:2] != y[:2] and nested(x[2], y[2])]
+    assert len(claims) >= 10
+    assert not clashes, clashes
 
 
 def test_every_record_merges_with_the_driver():
