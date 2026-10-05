@@ -13,7 +13,7 @@ ROWS=${ROWS:-/workspace/rows}
 OUT=${OUT:-${RESEARCH_RUN_DIR:-out}/acquire_gate}
 SCRATCH=${SCRATCH:-/workspace/acquire_gate}
 # (the core `verity` package must be importable: the manifest build reads the registry)
-export PYTHONPATH=${PYTHONPATH:-.:$PWD/../../packages/verity/src} HF_HOME=${HF_HOME:-/workspace/hf}
+export PYTHONPATH=${PYTHONPATH:-.:$PWD/../..} HF_HOME=${HF_HOME:-/workspace/hf}
 mkdir -p "$OUT" "$SCRATCH"
 RC=0
 if [ $# -gt 0 ]; then ROWLIST=("$@"); else ROWLIST=(); for d in "$ROWS"/*/; do ROWLIST+=("$(basename "$d")"); done; fi
