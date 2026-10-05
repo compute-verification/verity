@@ -79,6 +79,12 @@
    "why": "the lifting worker's grid-density and slice lemmas (L2, L3) stand alone on Mathlib"
   }
  },
+ "reads_exempt": {
+  "Pouw.SecurityProofs.Dimension.Lifting": "read by guarantees PoUW's lock reduction drops (repo-organization plan item 1); leaves security_proofs at the split",
+  "Pouw.SecurityProofs.PearlC.Gamma": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
+  "Pouw.SecurityProofs.PearlC.TileGamma": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
+  "Pouw.SecurityProofs.Sanity": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)"
+ },
  "guarantees": {
   "Pouw.AlignedExact.card_block_le": {
    "owner": "@compute-accounting",
@@ -21146,11 +21152,5 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "b8447e3c3284903832b19df647c0de94cae577066dd373fbc877ed2a52bbccc7"
- },
- "reads_exempt": {
-  "Pouw.SecurityProofs.Dimension.Lifting": "read by guarantees PoUW's lock reduction drops (repo-organization plan item 1); leaves security_proofs at the split",
-  "Pouw.SecurityProofs.PearlC.Gamma": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
-  "Pouw.SecurityProofs.PearlC.TileGamma": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
-  "Pouw.SecurityProofs.Sanity": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)"
  }
 }
