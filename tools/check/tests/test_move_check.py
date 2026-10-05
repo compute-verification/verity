@@ -54,7 +54,7 @@ def _check(repo: Path, base: str, extra: dict[str, str] | None = None) -> dict:
 BASE_FILES = {
     "protocols/pous/src/verity_pous/__init__.py": "",
     "protocols/pous/src/verity_pous/codec.py": "def encode(x):\n    return x + 1\n",
-    "security_proofs/pous/PousProofs.lean": "theorem t : 1 = 1 := rfl\n",
+    "protocols/pous/lean/Pous.lean": "theorem t : 1 = 1 := rfl\n",
     "protocols/pous/lean/lean-audit.json": '{"guarantees": {"Pous.t": "abc"}}\n',
     "protocols/pouw/src/verity_pouw/x.py": "X = 1\n",
     "tests/test_pous.py": "from verity_pous.codec import encode\nimport verity_pous.codec as c\n\n\ndef test():\n    assert encode(1) == 2\n",
@@ -148,7 +148,7 @@ def test_names_with_spaces_and_odd_characters(tmp_path):
 
 
 def test_lean_package_move_with_relative_require(tmp_path):
-    files = {**BASE_FILES, "security_proofs/core/VerityProofs.lean": "def v := 1\n", "protocols/pous/lean/lakefile.toml": LAKEFILE}
+    files = {**BASE_FILES, "packages/verity/lean/Verity.lean": "def v := 1\n", "protocols/pous/lean/lakefile.toml": LAKEFILE}
     repo, base = _repo(tmp_path, files)
     _move(repo, "packages/verity/lean", "verity/lean")
     _move(repo, "protocols/pous/lean", "security_proofs/pous")
@@ -159,7 +159,7 @@ def test_lean_package_move_with_relative_require(tmp_path):
 
 
 def test_byte_identical_lakefile_whose_relative_require_broke_is_refused(tmp_path):
-    files = {**BASE_FILES, "security_proofs/core/VerityProofs.lean": "def v := 1\n", "protocols/pous/lean/lakefile.toml": LAKEFILE}
+    files = {**BASE_FILES, "packages/verity/lean/Verity.lean": "def v := 1\n", "protocols/pous/lean/lakefile.toml": LAKEFILE}
     repo, base = _repo(tmp_path, files)
     _move(repo, "protocols/pous/lean", "security_proofs/pous")
     [f] = _check(repo, base)["refusals"]
@@ -175,7 +175,7 @@ def test_lean_audit_pin_change_is_refused(tmp_path):
 
 
 def test_explicit_map_and_cli(tmp_path, capsys, monkeypatch):
-    repo, base = _repo(tmp_path, {**BASE_FILES, "AGENTS.md": "See `security_proofs/pous/PousProofs.lean`.\n"})
+    repo, base = _repo(tmp_path, {**BASE_FILES, "AGENTS.md": "See `protocols/pous/lean/Pous.lean`.\n"})
     _write(repo, {"AGENTS.md": "See `elsewhere/Pous.lean`.\n"})
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "doc")
