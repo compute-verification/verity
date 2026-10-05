@@ -570,6 +570,10 @@ def merge_locks(m: Map, root: Path, locks: dict, code_thms: dict, dry: bool):
                 if w in prf["upstream"]["watch"]:
                     raise SystemExit(f"upstream watch {w} in two locks")
                 prf["upstream"]["watch"][w] = e
+            for s, e in up.get("scan", {}).items():
+                if s in prf["upstream"].setdefault("scan", {}):
+                    raise SystemExit(f"upstream scan {s} in two locks")
+                prf["upstream"]["scan"][s] = e
         if k == "verifier":
             code["verifier"]["escapes"] = pol.get("escapes", {})
         for d, h in pol.get("dependencies", {}).items():
