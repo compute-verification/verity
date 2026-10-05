@@ -57,33 +57,33 @@ def _authored(d: Any) -> bool:
 
 
 def load_registries() -> None:
-    """Register every Definition and kernel: core's `verity.ml`, and each module of the vLLM registry and kernel registry."""
+    """Register every Definition and kernel: core's `verity_catalog.definitions`, and each module of the vLLM registry and kernel registry."""
     global _LOADED
     if _LOADED:
         return
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.defs import REGISTRY
 
-    import verity.ml.boolean.attention  # noqa: F401
-    import verity.ml.boolean.cast  # noqa: F401
-    import verity.ml.boolean.elementwise  # noqa: F401
-    import verity.ml.boolean.gemm  # noqa: F401
-    import verity.ml.boolean.merkle  # noqa: F401
-    import verity.ml.boolean.mufu  # noqa: F401
-    import verity.ml.boolean.scalar  # noqa: F401
-    import verity.ml.boolean.universal  # noqa: F401
-    import verity.ml.gemm  # noqa: F401
-    import verity.ml.kernels  # noqa: F401
-    import verity.ml.prims  # noqa: F401
+    import verity_catalog.definitions.boolean.attention  # noqa: F401
+    import verity_catalog.definitions.boolean.cast  # noqa: F401
+    import verity_catalog.definitions.boolean.elementwise  # noqa: F401
+    import verity_catalog.definitions.boolean.gemm  # noqa: F401
+    import verity.primitives.commitments.gates.merkle  # noqa: F401
+    import verity_catalog.definitions.boolean.mufu  # noqa: F401
+    import verity_catalog.definitions.boolean.scalar  # noqa: F401
+    import verity_experimental.private_circuits.universal  # noqa: F401
+    import verity_catalog.definitions.gemm  # noqa: F401
+    import verity_kernels.tc  # noqa: F401
+    import verity_catalog.definitions.prims  # noqa: F401
     import verity_vllm.program.registry as R
     for m in pkgutil.iter_modules(R.__path__):
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
-    import verity_pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits, the six `pc4` and `pc8` rows call)
-    import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
-    import verity_pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
-    import verity_pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
-    import verity_pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
+    import verity.protocols.accounting.work.pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits, the six `pc4` and `pc8` rows call)
+    import verity.protocols.accounting.work.pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
+    import verity.protocols.accounting.work.pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
+    import verity.protocols.accounting.work.pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
+    import verity.protocols.accounting.work.pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -304,7 +304,7 @@ ROOT_ERRORS: list[tuple[str, str]] = []
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics: (label, the bound
     Definition, or the error)."""
-    from verity.ml.prims import BlackwellE4m3QmmaDot32
+    from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.frontend.rules import vocab as V
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.registry import prims as P
@@ -372,8 +372,8 @@ def call_families() -> set[str]:
 def boolean_call_families(word_calls: set[str]) -> set[str]:
     """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
     switch's table of `word=` links) of each catalog specialization of a word Call family that has one."""
-    from verity.evaluation import ScalarReference
-    from verity.ir import boolean as BL
+    from verity.primitives.circuits.evaluation import ScalarReference
+    from verity.primitives.circuits import boolean as BL
     from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
 
     out: set[str] = set()
@@ -390,7 +390,7 @@ def boolean_call_families(word_calls: set[str]) -> set[str]:
 def catalog(by_unit: list | None = None) -> list[Any]:
     """The roots: every primitive, every static-free composite, and the bindings above; with ``by_unit``, each binding's
     (units, roots) appended to it."""
-    from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+    from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 
     load_registries()
     roots: list[Any] = []
@@ -421,8 +421,8 @@ def catalog(by_unit: list | None = None) -> list[Any]:
 
 def reachable(roots: Iterable[Any]) -> dict[str, Any]:
     """Every Definition (primitive, complete specialisation) or reference reachable from ``roots``, by id."""
-    from verity.evaluation import ScalarReference
-    from verity.ir.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.primitives.circuits.evaluation import ScalarReference
+    from verity.primitives.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 
     out: dict[str, Any] = {}
     stack = list(roots)
@@ -451,7 +451,7 @@ def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
     """The specialisations the suite checks: every one of at most ``max_gates`` gates, and a family's smallest otherwise, with its
     smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at its Boolean version, which
     the Program on bits calls)."""
-    from verity.ir import boolean as BL
+    from verity.primitives.circuits import boolean as BL
 
     by: dict[str, list[Any]] = {}
     for fn in found.values():

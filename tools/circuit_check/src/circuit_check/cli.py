@@ -91,7 +91,7 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     (`cache.tracing`), each check gets a memo of its own, so its result never rests on what an earlier target's check computed,
     and the pins it looks up are recorded (`cache.recorded_pins`); a suite Definition's ``as_call`` is resolved here (the catalog's
     `targets.call_families`), so it is in the target's key rather than a read of its check."""
-    from verity.evaluation.reference import resolve
+    from verity.primitives.circuits.evaluation.reference import resolve
 
     TG.load_registries()
     fresh = CC.tracing()

@@ -42,14 +42,14 @@ REPO = HERE.parents[1]
 TARGETS = HERE / "src" / "circuit_check" / "targets.py"
 PINS = HERE / "src" / "circuit_check" / "pins.json"
 #: the source roots this tree's packages import from, ahead of any installed copy
-PATHS = ("tools/circuit_check/src", "packages/verity/src", "integrations/vllm", "protocols/pouw", "backends/numerical/python",
-         "backends/flock/python", "protocols/sampled_proofs", "protocols/pous")
+PATHS = ("tools/circuit_check/src", ".", "integrations/vllm", "verity/protocols/accounting/work/pouw", "benchmarks/numerical/python",
+         "backends/flock/python", "verity/protocols/verification/sampled_proofs", "verity/protocols/accounting/space/pous")
 #: `targets.py`'s own: what no one module owns (every kernel's and vocabulary kind's self-check bindings)
 SHARED = ("_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots")
 #: split by hand (`POUW`)
 BY_HAND = ("_pouw_roots",)
 #: packages whose sidecars may import only the core and themselves (`test_boundaries.py`, `test_protocol_boundaries.py`)
-NO_CHECKER = ("verity", "verity_pouw")
+NO_CHECKER = ("verity", "verity.protocols.accounting.work.pouw")
 
 _R = "verity_vllm.program.registry."
 #: a root function's docstring split by module, each part one paragraph (`_docstring` wraps it), with the digest of the
@@ -57,7 +57,7 @@ _R = "verity_vllm.program.registry."
 #: `targets.catalog`) is left out
 DOCS: dict[str, tuple[str, dict[str, str]]] = {
     "_boolean_roots": ("12c4223fdfc84cb3", {
-        "verity.ml.boolean.gemm": "The Boolean BF16 coordinate and dot on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3 "
+        "verity_catalog.definitions.boolean.gemm": "The Boolean BF16 coordinate and dot on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3 "
                                   "coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128.",
         _R + "boolean_silu": "`silu_and_mul`'s rows at I = 8: `SiluMul_v3` and `SiluMul_v4` (v4's word view is the served "
                              "`SiluMul_v2` of `registry.act`); `SiluMulBf16_v3` is static-free.",
@@ -98,12 +98,12 @@ DOCS: dict[str, tuple[str, dict[str, str]]] = {
 #: `_pouw_roots` split by module: the digest of the function it splits (`_digest`) and each module's function.  The suite
 #: checks every binding file's `_pouw_roots` whatever their size (`targets.suite`)
 POUW: tuple[str, dict[str, str]] = ("67f21ef8157ed78a", {
-    "verity_pouw.circuit.ncp2": '''
+    "verity.protocols.accounting.work.pouw.circuit.ncp2": '''
 def _pouw_roots() -> list[Any]:
     """`ncp-v2`'s unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on it, for
     both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); the package's own tests check their template partitions and the Z
     separator."""
-    from verity_pouw.circuit import ncp2
+    from verity.protocols.accounting.work.pouw.circuit import ncp2
 
     shape = ncp2.Shape(16, 64, 16)
     out = []
@@ -112,15 +112,15 @@ def _pouw_roots() -> list[Any]:
         out += [ncp2.linear(shape, kind), ncp2.weight(shape, kind), ncp2.window(shape, 2, kind)]
     return out
 ''',
-    "verity_pouw.circuit.pc4": '''
+    "verity.protocols.accounting.work.pouw.circuit.pc4": '''
 def _pouw_roots() -> list[Any]:
     """Pearl-C4's tile check: its unit templates at k = 64 with a one-word tile (small enough to lower whole), and its weight
     side, call side and whole check at one row a side; its hiding tiles and roots (``hidden``: the tile digest,
-    `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes; and its roots with the row units cut
-    along k (`verity_pouw.circuit.rowk`, ``Shape.row_k``) in two segments at k = 128, plain and hiding."""
+    `verity.protocols.accounting.work.pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes; and its roots with the row units cut
+    along k (`verity.protocols.accounting.work.pouw.circuit.rowk`, ``Shape.row_k``) in two segments at k = 128, plain and hiding."""
     from dataclasses import replace
 
-    from verity_pouw.circuit import pc4
+    from verity.protocols.accounting.work.pouw.circuit import pc4
 
     tile = pc4.Shape(1, 64, 1, tile=(1, 1))
     out = [*pc4.templates(64, tile.tile).values(), pc4.weight(tile), pc4.call(tile), pc4.check(tile)]
@@ -131,14 +131,14 @@ def _pouw_roots() -> list[Any]:
     seen = {t.id for t in out}
     return out + [t for t in cut if t.id not in seen and not seen.add(t.id)]
 ''',
-    "verity_pouw.circuit.pc8": '''
+    "verity.protocols.accounting.work.pouw.circuit.pc8": '''
 def _pouw_roots() -> list[Any]:
     """Pearl-C's tile check as Pearl-C4's at k = 128 (one promotion window): its templates on the H100's and sm_120's
     records and its roots on sm_120's; its hiding templates and roots on sm_120's; and its roots with the row units cut along
-    k (`verity_pouw.circuit.rowk`, ``Shape.row_k``) in two segments at k = 256 on sm_120's, plain and hiding."""
+    k (`verity.protocols.accounting.work.pouw.circuit.rowk`, ``Shape.row_k``) in two segments at k = 256 on sm_120's, plain and hiding."""
     from dataclasses import replace
 
-    from verity_pouw.circuit import pc8
+    from verity.protocols.accounting.work.pouw.circuit import pc8
 
     tile8 = pc8.Shape(1, 128, 1, tile=(1, 1), dev="sm120")
     out = [*pc8.templates(128, tile8.tile, "h100").values(), *pc8.templates(128, tile8.tile, "sm120").values(),
@@ -151,11 +151,11 @@ def _pouw_roots() -> list[Any]:
     seen = {t.id for t in out}
     return out + [t for t in cut if t.id not in seen and not seen.add(t.id)]
 ''',
-    "verity_pouw.circuit.rowk": '''
+    "verity.protocols.accounting.work.pouw.circuit.rowk": '''
 def _pouw_roots() -> list[Any]:
     """Both tile checks' row units cut along k (``Shape.row_k``) in two segments: Pearl-C4's pieces at k = 128, and Pearl-C's
     at k = 256 on the H100's and sm_120's records and at k = 64 unpromoted."""
-    from verity_pouw.circuit import rowk
+    from verity.protocols.accounting.work.pouw.circuit import rowk
 
     cut = [p for side in ("a", "b") for pieces in (rowk.pieces4(128, 64, side), rowk.pieces8(256, 128, "h100", side),
                                                     rowk.pieces8(256, 128, "sm120", side),
@@ -167,7 +167,7 @@ def _pouw_roots() -> list[Any]:
     _R + "pouw_rows": '''
 def _pouw_roots() -> list[Any]:
     """The model Program's rows at a PoUW site, without and with the bias."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.defs import bind
     from verity_vllm.program.registry import pouw_rows
 
     return [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
@@ -306,7 +306,7 @@ def _module_of_import(st: ast.stmt, a: ast.alias) -> tuple[Any, str]:
 
 def owner(fn: Fn, e: ast.expr) -> str | None:
     """The module whose sidecar holds the binding with head ``e`` (`head`), or None."""
-    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
 
     from circuit_check import sidecars as SC
 
@@ -656,7 +656,7 @@ def migrate(dry_run: bool = False) -> dict[str, Any]:
 TASK_LIST = """
 import json, sys
 from circuit_check import checks as CK, targets as TG
-from verity.evaluation.reference import resolve
+from verity.primitives.circuits.evaluation.reference import resolve
 
 TG.load_registries()
 out = {"definitions": [], "templates": []}

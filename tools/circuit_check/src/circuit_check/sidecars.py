@@ -28,7 +28,7 @@ from . import cache as CC
 
 REPO = Path(__file__).resolve().parents[4]
 #: the packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`) and the templates'
-PACKAGES = ("verity", "verity_vllm", "verity_pouw", "verity_numerical")
+PACKAGES = ("verity", "verity_vllm", "verity.protocols.accounting.work.pouw", "verity_numerical")
 SUFFIX = CC.SUFFIX
 #: the pins of a Definition no module defines
 SHARED_PINS = Path(__file__).with_name("pins.json")
@@ -184,11 +184,11 @@ _NAMED: dict[str, Any] = {}
 
 def named(fid: str) -> Any | None:
     """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else one an
-    on-demand family makes from it (`verity.ir.codec.lookup_primitive` with nothing registered, so the family's own factory
+    on-demand family makes from it (`verity.primitives.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory
     whoever asked for it first).  None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by
     nothing, built in this process or not."""
-    from verity.ir.codec import lookup_primitive
-    from verity.ir.defs import Registry
+    from verity.primitives.circuits.codec import lookup_primitive
+    from verity.primitives.circuits.defs import Registry
 
     if not _NAMED:
         _NAMED.update({v.id: v for v, _mod in _index().values()})
@@ -243,7 +243,7 @@ _INDEX: dict[int, tuple[Any, str]] = {}
 def _index() -> dict[int, tuple[Any, str]]:
     """{id(Definition): (it, module)} for every Definition a loaded module of `PACKAGES` binds at its top level other than by
     import; where two do, the one its functions are defined in, else the first by name."""
-    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition
 
     from . import targets
 

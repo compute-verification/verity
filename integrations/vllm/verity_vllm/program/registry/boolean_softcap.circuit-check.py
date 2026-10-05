@@ -8,10 +8,10 @@ from typing import Any
 def _boolean_roots() -> list[Any]:
     """FA2 with logit soft-capping on bits at one head of 17 keys, two blocks (a full one and a partial one) with Check_inf
     in both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks."""
-    from verity.ir.defs import bind
-    from verity.ml.boolean import attention as BAT
-    from verity.ml.boolean import gemm as BG
-    from verity.ml.boolean import mufu as BM
+    from verity.primitives.circuits.defs import bind
+    from verity_catalog.definitions.boolean import attention as BAT
+    from verity_catalog.definitions.boolean import gemm as BG
+    from verity_catalog.definitions.boolean import mufu as BM
     from verity_vllm.program.registry import boolean_softcap as BSC
 
     return [

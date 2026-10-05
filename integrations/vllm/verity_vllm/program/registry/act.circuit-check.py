@@ -7,7 +7,7 @@ from typing import Any
 
 def _boolean_roots() -> list[Any]:
     """`silu_and_mul`'s served row, `SiluMul_v2`, at I = 8: the word view of `boolean_silu`'s `SiluMul_v4`."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.defs import bind
     from verity_vllm.program.registry import act
 
     return [

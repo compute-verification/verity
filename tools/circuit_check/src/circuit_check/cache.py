@@ -14,7 +14,7 @@ the task list's build, nor an earlier target's check):
   at import decides a lookup that runs none of its code); a module imported by a name computed at run time (``import_module``,
   ``__import__`` called rather than an ``import`` statement), and every name an import of which failed;
 - what the Definitions the check reached were built from: each specialization whose body it read (and every one reachable from
-  its target through body nodes) brings the recording of its body's build (`verity.ir.defs._build_body`: the code that ran and
+  its target through body nodes) brings the recording of its body's build (`verity.primitives.circuits.defs._build_body`: the code that ran and
   the files read while it was traced, wherever in the process that happened, its nested builds included), and each primitive
   the module of its evaluator;
 - what made the Definitions it reached: the recording of each catalog root function, `_model_roots` entry or `TEMPLATE_PARAMS`
@@ -42,7 +42,7 @@ Python imports it; any binding code its check ran, by the unit that holds it) an
 (`recorded_pins`), each in the file that holds it (one no file holds, where it would be added, `sidecars.pin_reads`), by its
 value, or absent.  `targets.py` and `pins.json` are named by their paths, a sidecar by its module's name (``<module>`` and
 `SUFFIX`, `_side`), so it moves with its module.  Likewise each Definition whose kernels its check looked up in
-`verity.evaluation.batch._KERNELS` (`_RecordedKernels`), by what is registered for it now (each kernel's name, domain, version
+`verity.primitives.circuits.evaluation.batch._KERNELS` (`_RecordedKernels`), by what is registered for it now (each kernel's name, domain, version
 and which function and sampler it is, `_where`: by its module's content and its own definition, not its path), or none, and by
 each in-tree module whose import registered it, as a module it ran (so a wrapper's `_where` hides no change of what it wraps):
 the module that registers a kernel is imported with the registries, and no check of a target without one runs any of it.  A
@@ -69,7 +69,7 @@ each it lists no longer is imported anyway and each new one it lists is a rename
 `inspect` looked for still resolves by its name (its content may differ: only where it is was asked), or is the one imported
 module of its content.  Not covered: a file a C extension reads with its own I/O (none here); anything outside the repository,
 which the interpreter, platform, distribution list and ``sys.path`` stand for; a file a module read while it was imported before
-tracing began (the checker's own imports, ``verity.ir`` and ``verity.evaluation`` among them: their sources are inputs, data
+tracing began (the checker's own imports, ``verity.primitives.circuits`` and ``verity.primitives.circuits.evaluation`` among them: their sources are inputs, data
 they opened at import is not); what a function read or imported in its body when it did not run in the recording (a value a
 process-wide cache, ``functools.cache`` and the like, holds from a call another target's check made, beyond the function's own
 module and its closure); an edit to a binding that does not reach the target, or a new sidecar, even if it changes which object
@@ -513,11 +513,11 @@ def _instrument() -> None:
 
     builtins.__import__, importlib.import_module = __import__, import_module
     try:
-        from verity.ir import defs as D
+        from verity.primitives.circuits import defs as D
     except ImportError:
         return
     try:
-        from verity.evaluation import batch
+        from verity.primitives.circuits.evaluation import batch
     except ImportError:
         batch = None
     if batch is not None and not isinstance(batch._KERNELS, _RecordedKernels):
@@ -1004,7 +1004,7 @@ def _loaded(root: Path) -> dict[str, list[str]]:
 # --- the kernels a check looked up ------------------------------------------------------------------------------------------
 
 class _RecordedKernels(dict):
-    """`verity.evaluation.batch._KERNELS`, noting in the open recording each Definition whose kernels are looked up (a lookup
+    """`verity.primitives.circuits.evaluation.batch._KERNELS`, noting in the open recording each Definition whose kernels are looked up (a lookup
     that finds none included), and all of them on any enumeration.  Registering (``setdefault``) is no lookup; it notes the
     in-tree module whose import registered each key (`by`), which a lookup of that key adds to the code the recording ran."""
 
@@ -1107,7 +1107,7 @@ def _defined_at(p: Path, line: int) -> str:
 def _kernels_now(key: str) -> str | None:
     """What is registered now for ``key`` (``*``: for every Definition), digested; None when nothing is."""
     try:
-        from verity.evaluation import batch
+        from verity.primitives.circuits.evaluation import batch
     except ImportError:
         return None
     reg = batch._KERNELS
@@ -1533,10 +1533,10 @@ _OWN: dict[int, tuple[Any, str]] = {}
 
 def descriptor(fn: Any) -> str:
     """The digest of every primitive and specialization ``fn`` reaches (through body nodes and function statics), each by its
-    descriptor id and the digest of its canonical descriptor entry (`verity.ir.codec`): what the target is, whatever module or
+    descriptor id and the digest of its canonical descriptor entry (`verity.primitives.circuits.codec`): what the target is, whatever module or
     path it was written in.  A body that cannot be built gives the error's type, so no stored entry matches."""
-    from verity.ir import codec as C
-    from verity.ir.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.primitives.circuits import codec as C
+    from verity.primitives.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
 
     def statics(v: Any) -> Iterator[Any]:
         if isinstance(v, FunctionDefinition):

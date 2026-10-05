@@ -8,7 +8,7 @@ from typing import Any, Callable
 def _boolean_roots() -> list[Any]:
     """vLLM's Boolean RoPE at the kernel rows' `RoPE_v1` binding, which reaches its head and halves, and vLLM's GPT-J RoPE on
     bits at two heads of 8."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.defs import bind
     from verity_vllm.program.registry import boolean_rope
 
     return [
@@ -20,7 +20,7 @@ def _boolean_roots() -> list[Any]:
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.defs import bind
     from verity_vllm.program.registry import boolean_rope
 
     return [

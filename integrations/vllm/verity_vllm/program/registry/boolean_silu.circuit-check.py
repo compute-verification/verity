@@ -8,7 +8,7 @@ from typing import Any
 def _boolean_roots() -> list[Any]:
     """`silu_and_mul`'s rows at I = 8: `SiluMul_v3` and `SiluMul_v4` (v4's word view is the served `SiluMul_v2` of
     `registry.act`); `SiluMulBf16_v3` is static-free."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.defs import bind
     from verity_vllm.program.registry import boolean_silu as BSL
 
     return [

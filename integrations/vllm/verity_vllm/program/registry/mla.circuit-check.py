@@ -9,8 +9,8 @@ def _boolean_roots() -> list[Any]:
     """MLA: Triton's one-split decode at one head of two keys over a 16 + 16 latent (a partial block, so its masked columns),
     which reaches the head, the block, the score and every element; the absorb bmm at two heads, K = 32, N = 3; the
     shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor."""
-    from verity.ir.defs import bind
-    from verity.ml.boolean import gemm as BG
+    from verity.primitives.circuits.defs import bind
+    from verity_catalog.definitions.boolean import gemm as BG
     from verity_vllm.program.registry import mla
 
     HOP = BG.HopperBF16WgmmaDot16
