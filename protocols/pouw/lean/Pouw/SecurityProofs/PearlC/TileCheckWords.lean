@@ -1,6 +1,7 @@
 import Pouw.SecurityProofs.PearlC.PeelExists
 import Pouw.SecurityProofs.PearlC.PeelExists4
 import Pouw.SecurityProofs.PearlC.TileCheck4Words
+import Pouw.SecurityProofs.PearlC.CoreOps
 
 /-!
 # The plain `pc8` and `pc4` tile checks compute the words (proofs)
@@ -24,6 +25,10 @@ and `_domain` on `D_dev`'s layouts of `pc8` shapes and on D₄. At a step `⟨[3
 `D_dev`'s `k ≤ 2^16` and `Noise8OK` give `Pc8EntryOK` (`PeelExists`), so `tileCheck8_computesWords_wide` names no
 hypothesis at an entry. `pc4` names none at an entry: the two rows' `Row4OK` and `k ≤ 2^16` give `Pc4EntryOK`
 (`PeelExists.pc4EntryOK_of_rows`), and D₄'s shapes have `k ≤ 2^16`.
+
+At core's instance `coreOps` both agreements follow from core's definitions under one named row, `CoreRoundAgree`
+(core's `roundRn` is `f32Word` of its value, and its `F32ToE4m3Sat` is `e4m3Word`; `CoreOps`), so
+`tileCheck8_computesWords_core` names it and `Noise8OK`, and `tileCheck4_computesWords_core` names it alone.
 -/
 
 namespace Pouw.PearlC.WholeCircuit
@@ -235,5 +240,30 @@ theorem tileCheck4_computesWords_domain {ops : RowOps} (hops : Pc4OpsAgree ops) 
       (pearlCTilesFp4 devFp4Sm120 (pc4Sem ops lines) ρ) (pearlCDomainFp4 (pc4Sem ops lines)) :=
   tileCheck4_computesWords_pearlC hops ρ lines _ (fun _ hL u hu => shape4_of_pearlCShapeFp4 (hL.2 u hu))
     fun _ hL u hu => (hL.2 u hu).2.2.2.2.2.2.2.1
+
+/-! ## At core's instance -/
+
+/-- **L3's words for the plain `pc8` Program at core's instance** (`coreOps`), at a step `⟨[32], w, z⟩` with `w ≥ 24`
+on `D_dev`'s layouts of `pc8` shapes: `tileCheck8_computesWords_wide` with `Pc8OpsAgree` from core's definitions
+under `CoreOps.CoreRoundAgree` (`CoreOps.pc8OpsAgree_coreOps`). -/
+theorem tileCheck8_computesWords_core (h : CoreOps.CoreRoundAgree) {w : ℕ} (hw : 24 ≤ w) (zf : ℤ) (pr : Prices)
+    (c : Costs) (ρ : ℚ) (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
+      Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
+    (hnoise : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes), Noise8OK (noise H s U u act)) :
+    (tileCheck8 coreOps ⟨[32], w, zf⟩ noise).ComputesWords
+      (pearlCProtocolDev (devAt ⟨[32], w, zf⟩ 4 pr) (pc8Sem coreOps ⟨[32], w, zf⟩ noise) ρ)
+      (pearlCTiles (pc8Sem coreOps ⟨[32], w, zf⟩ noise) c ρ) (fun L => pearlCDomainDev (devAt ⟨[32], w, zf⟩ 4 pr) L ∧
+        ∀ u < L.N, min (L.shape u).m 16 ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
+  tileCheck8_computesWords_wide (CoreOps.pc8OpsAgree_coreOps h) hw zf pr c ρ noise hnoise
+
+/-- **L3's words for the plain `pc4` Program at core's instance** (`coreOps`) on D₄ and the audit's tiles:
+`tileCheck4_computesWords_domain` with `Pc4OpsAgree` from core's definitions under `CoreOps.CoreRoundAgree`
+(`CoreOps.pc4OpsAgree_coreOps`). -/
+theorem tileCheck4_computesWords_core (h : CoreOps.CoreRoundAgree) (ρ : ℚ)
+    (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
+      Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k) :
+    (tileCheck4 coreOps lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem coreOps lines) ρ)
+      (pearlCTilesFp4 devFp4Sm120 (pc4Sem coreOps lines) ρ) (pearlCDomainFp4 (pc4Sem coreOps lines)) :=
+  tileCheck4_computesWords_domain (CoreOps.pc4OpsAgree_coreOps h) ρ lines
 
 end Pouw.PearlC.WholeCircuit
