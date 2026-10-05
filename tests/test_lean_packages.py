@@ -2,10 +2,13 @@
 `lean-audit` step reads), and all of them build with one toolchain and one Mathlib, so a bump is one change to all of them."""
 from __future__ import annotations
 
+import functools
 import importlib.util
 import itertools
 import json
 import os
+import re
+import textwrap
 import tomllib
 from pathlib import Path
 
@@ -151,3 +154,137 @@ def test_every_upstream_watch_is_scanned():
             and (up := json.loads(p.read_text()).get("upstream", {})).get("watch") and not up.get("scan")]
     assert not bare, bare
     assert "Arklib" in json.loads((PROOFS / "lean-audit.json").read_text())["upstream"]["scan"]
+
+
+#: Libraries only proofs may use: the trusted text (a guarantee's statement, a named assumption) and the zero-knowledge
+#: simulator and extractor build on Mathlib alone, so what they say doesn't rest on a proof library's definitions.
+PROOF_ONLY = ("ArkLib", "VCVio", "CompPoly")
+SOUNDNESS = "Proofs.Flock.Soundness"
+
+#: C-Flock soundness modules that hold trusted text and reach a proof-only library today, without the
+#: `Proofs.Flock.Soundness.` prefix. C-Flock's spec is not yet extracted (the record's `reads_exempt`), so its guarantees
+#: still read definitions that sit beside ArkLib-based proofs. The list only shrinks: a module that no longer reaches one, or
+#: holds no trusted text, fails until its entry goes.
+ARKLIB_PENDING = frozenset("""
+Assumptions.Zk Audit.Flock Audit.FlockBatched Audit.FlockBatchedAcc Audit.FlockLink Audit.FlockLinked
+Audit.FlockPublic Audit.TwoStageExfil Binding.Layout Binding.Leaf Binding.Rows CROnly.Defs CompiledLock
+CompiledSound CompiledTable Discharge.Aliased.Copies Discharge.Aliased.Keys Discharge.Composed.Base
+Discharge.Composed.Coined Discharge.Composed.Defs Discharge.Composed.DefsJ Discharge.Composed.Inner
+Discharge.Composed.Inner.Lincheck Discharge.Composed.Inner.LincheckReplay Discharge.DecodeZL.LIG
+Discharge.DecodeZL.OP Discharge.DecodeZL.Statements Discharge.DecodeZL.Wire Discharge.DecodeZLJ.Statements
+Discharge.DrawWords.Statements Discharge.Exec.CompiledL Discharge.Exec.Decode Discharge.Exec.Emit
+Discharge.Exec.FlockBatchedAccL Discharge.Exec.FlockBatchedL Discharge.Exec.FlockLinkL Discharge.Exec.FramesLigerito
+Discharge.Exec.FramesRep Discharge.Exec.Live Discharge.Exec.LiveOn Discharge.Exec.Pts Discharge.Exec.Rounds
+Discharge.Exec.SessionBatchAccL Discharge.Exec.SessionBatchL Discharge.Exec.SessionL Discharge.Exec.SessionLDecisive
+Discharge.Exec.SessionSoundL Discharge.Exec.Setup Discharge.Exec.Shape Discharge.Exec.StrictCRL
+Discharge.Exec.Verdict Discharge.Hidden.Defs Discharge.Hidden.Flat Discharge.Hidden.Wide.Checked
+Discharge.Hidden.Wide.Defs Discharge.HiddenDec.Statements Discharge.HiddenExec.Defs Discharge.HiddenExec.Flat
+Discharge.HiddenExec.HeadlineExec Discharge.HiddenExec.KeyH Discharge.HiddenExec.Placed Discharge.HiddenExec.Ret
+Discharge.HiddenExec.SiteH Discharge.HiddenExec.Sites Discharge.HiddenExec.Statements Discharge.HiddenExec.Tables
+Discharge.Hm.Delta Discharge.Hm.Place Discharge.Hm.Port Discharge.Hm.Row Discharge.Integrate.Headline
+Discharge.Integrate.Sites Discharge.Layout.HmRegion Discharge.Layout.KeyProg Discharge.Layout.Keyed
+Discharge.Layout.KeysRow Discharge.Layout.OfRows Discharge.Layout.OutPin Discharge.Layout.OutRegion
+Discharge.Layout.OutShape Discharge.Layout.Outs Discharge.Layout.Pins Discharge.Layout.Readers
+Discharge.Layout.RowEnc Discharge.Layout.Scope Discharge.Layout.Site Discharge.Placed.Keyed Discharge.Placed.Setup
+Discharge.Placed.Typed Discharge.Placed.Wiring Discharge.PlaysCoin.Statements Discharge.PrivateCircuit.Defs
+Discharge.PrivateCircuit.Statements Discharge.Tables.Session Discharge.Tables.Sim Discharge.Tables.Statements
+Discharge.Tables.Steps Discharge.Zero.Delta Discharge.Zero.Stack Discharge.ZkBind.At Discharge.ZkBind.Bind
+Discharge.ZkBind.Place Discharge.ZkBind.Shadow Discharge.ZkCoins.SessionDefs Discharge.ZkCoins.Statements
+Discharge.ZkEveryCoin.Defs Discharge.ZkExec.Coin Discharge.ZkExec.Compiled Discharge.ZkExec.Live
+Discharge.ZkExec.LiveStatements Discharge.ZkExec.PlaysStatements Discharge.ZkExec.RunsStatements
+Discharge.ZkExec.Shape Discharge.ZkExec.Statements Discharge.ZkExec.VerdictLig Discharge.ZkExec.VerdictStatements
+Discharge.ZkHidden.Defs Discharge.ZkHidden.DefsJ Discharge.ZkHidden.SoundBind Discharge.ZkHidden.SoundDefs
+Discharge.ZkHidden.Statements Discharge.ZkHidden.View Discharge.ZkLink.Analysis Discharge.ZkLink.BadZ
+Discharge.ZkLink.Compiled Discharge.ZkLink.CompiledLink Discharge.ZkLink.DrawOk Discharge.ZkLink.Link
+Discharge.ZkLink.LockLevel Discharge.ZkLink.LockRep Discharge.ZkLink.OracleP Discharge.ZkLink.Push
+Discharge.ZkLink.SessionZ Discharge.ZkLink.StrictZ Discharge.ZkLink.TablesAt Discharge.ZkReg.Bind
+Discharge.ZkReg.BindH Discharge.ZkReg.BindHJ Discharge.ZkReg.Defs Discharge.ZkReg.DefsH Discharge.ZkReg.DefsHJ
+Discharge.ZkSession.Algebraic Discharge.ZkSession.Compose Discharge.ZkSession.Inner Discharge.ZkSession.Level0
+Discharge.ZkSession.Numbers Discharge.ZkSession.Session Discharge.ZkSession.Table Discharge.ZkView.Defs
+Discharge.ZkView.Statements E2E ExecDrawOS ExecFlatCopies ExecStratified Headline Instance KeyedDraw Knowledge
+LigeritoPadLevel0 LigeritoPhase LinkSound ListSize PadCode Refine.ArithK Refine.Final Refine.Frames Refine.Ligerito
+Refine.LigeritoRun Refine.Live Refine.LiveCompiled Refine.LiveSim Refine.Paths Refine.Realizes Refine.Regions
+Refine.Rep Refine.Salted Refine.StmtOf Refine.Table Refine.Tapes Registered.Defs Session SessionBatch
+SessionBatchAcc SoundnessPad StrictCR Types.Program Types.ProgramPlaces Types.Units ZK.Masking ZerocheckPhase
+""".split())
+
+_IMPORT = re.compile(r"(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?(\S+)")
+_DEFINES = re.compile(r"^(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable|partial)\s+)*"
+                      r"(?:def|abbrev|structure|inductive|class|instance|opaque)\b", re.M)
+
+
+@functools.cache
+def _claims() -> tuple[tuple[Path, str], ...]:
+    return tuple(c for pkg in lake_packages() for c in _module_roots(pkg))
+
+
+def _source(module: str) -> Path | None:
+    for src, root in _claims():
+        if module == root or module.startswith(root + "."):
+            if (path := src / (module.replace(".", "/") + ".lean")).exists():
+                return path
+    return None
+
+
+def _modules_under(prefix: str) -> list[str]:
+    out = {prefix} if _source(prefix) else set()
+    for src, root in _claims():
+        if (d := src / prefix.replace(".", "/")).is_dir() and (prefix.startswith(root + ".") or prefix == root):
+            out |= {".".join(p.relative_to(src).with_suffix("").parts) for p in d.rglob("*.lean")}
+    return sorted(out)
+
+
+@functools.cache
+def _imports(module: str) -> tuple[str, ...]:
+    path = _source(module)
+    if path is None:
+        return ()
+    out = []
+    for line in re.sub(r"/-.*?-/", "", path.read_text(), flags=re.S).splitlines():
+        if not (s := line.strip()) or s.startswith("--") or s in ("module", "prelude"):
+            continue
+        if not (m := _IMPORT.fullmatch(s)):
+            break
+        out.append(m.group(1))
+    return tuple(out)
+
+
+@functools.cache
+def _proof_only_chain(module: str) -> tuple[str, ...] | None:
+    """An import chain from `module` to a proof-only library, read from the `.lean` imports (no build), or None."""
+    if module.split(".")[0] in PROOF_ONLY:
+        return (module,)
+    for i in _imports(module):
+        if (chain := _proof_only_chain(i)) is not None:
+            return (module, *chain)
+    return None
+
+
+def _chains(modules) -> list[str]:
+    return [f"{m}: " + " <- ".join(reversed(_proof_only_chain(m))) for m in sorted(modules)]
+
+
+def test_zk_simulator_and_extractor_build_on_mathlib():
+    """The Goldreich–Kahan simulator, its extractor and the model Theorem GK reads (`ZK/GK/`): every module there that
+    declares a definition reaches no proof-only library. The bound's proof (`GK/Theorem.lean`) may."""
+    gk = [m for m in _modules_under(f"{SOUNDNESS}.ZK.GK") if _DEFINES.search(_source(m).read_text())]
+    assert {f"{SOUNDNESS}.ZK.GK.{m}" for m in ("Rand", "Extract", "Sim", "Model")} <= set(gk), gk
+    reach = [m for m in gk if _proof_only_chain(m)]
+    assert not reach, "ZK/GK definitions that reach a proof-only library:\n" + "\n".join(_chains(reach))
+
+
+def test_trusted_text_builds_on_mathlib():
+    """Every module whose definitions a guarantee's statement reads (the record's `reads`) or that states a named
+    assumption (under its `assumptions`) reaches no proof-only library, but for `ARKLIB_PENDING`, which only shrinks."""
+    record = json.loads((SECURITY / "lean-audit.json").read_text())
+    trusted = set(record["reads"]) | {m for p in record["assumptions"] for m in _modules_under(p)}
+    missing = sorted(m for m in trusted if _source(m) is None)
+    assert not missing, f"trusted modules with no source in the tree: {missing}"
+    reach = {m for m in trusted if _proof_only_chain(m)}
+    pending = {f"{SOUNDNESS}.{m}" for m in ARKLIB_PENDING}
+    new = reach - pending
+    assert not new, ("trusted text that reaches a proof-only library; move the definitions it reads into a module that "
+                     "builds on Mathlib alone (as `ZK/GK/Model.lean` holds Theorem GK's):\n" + "\n".join(_chains(new)))
+    stale = sorted(m.removeprefix(SOUNDNESS + ".") for m in pending - reach)
+    assert not stale, ("ARKLIB_PENDING entries that no longer reach a proof-only library or hold no trusted text; remove "
+                       "them:\n" + textwrap.fill(" ".join(stale), 116))
