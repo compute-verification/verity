@@ -40,7 +40,8 @@ Implementations (`IMPLS`), each adding one class:
   (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
   encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable),
   the limit fixed before any load, timed audits under that loop with value, late and recompute controls, the `Π₂` step
-  floor (an upper bound on an attacker's), and optionally one block's read latency from NVMe.
+  floor (an upper bound on a whole call, not on an attacker's answer: `band_gpu/harness.py`, step 6), and optionally one
+  block's read latency from NVMe.
 """
 
 from __future__ import annotations

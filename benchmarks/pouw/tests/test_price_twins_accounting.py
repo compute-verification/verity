@@ -108,7 +108,7 @@ def test_credit_and_cap_are_the_pinned_twins(twin):
 @pytest.mark.parametrize("pin,n", H100_PINS.items(), ids=list(H100_PINS))
 def test_h100_gamma_is_rev1s_pin(pin, n):
     """`pearl-c-h100-v1`'s γ at the cap is `DeviceRev1Gamma.lean`'s, read off the repository's pin."""
-    sig = " ".join(" ".join(json.loads(P.REPO_AUDIT.read_text())["pins"][pin]["signature"]).split())
+    sig = " ".join(" ".join(P.guarantees(json.loads(P.REPO_AUDIT.read_text()))[pin]["signature"]).split())
     lit = P._GAMMA_LITERAL.search(sig)
     s = get("pearl-c-h100-v1")
     assert gamma(s, n, Fraction(0), "forming-credited", "unit") == Fraction(int(lit[1]), int(lit[2]))
