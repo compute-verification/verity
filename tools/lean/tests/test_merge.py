@@ -42,7 +42,7 @@ def record(deps: dict | None = None, **guarantees: dict) -> dict:
     facts = {"lean": "4.34.0", "modules": list(FILES), "imports": {}, "declarations": {}, "axioms": STD, "offenders": [],
              "declared_axioms": [], "escapes": [], "pins": {f"P.{n}": f for n, f in guarantees.items()}}
     fails, pol = A.judge({"roots": ["P"], "meaning": ["P"], "guarantees": {f"P.{n}": {} for n in guarantees}}, facts, FILES,
-                         update=True)
+                         update=True, owner="@lean")
     assert fails == []
     return pol | {"dependencies": deps or {"mathlib": "a" * 64, "toolchain": "c" * 64}}
 
@@ -92,6 +92,16 @@ def test_a_key_both_sides_changed_refuses():
     assert bumped == ["dependencies[mathlib]: changed on both sides, differently"]
     added = M.merge(base, record(t=thm([F]), u=u), record(t=thm([F]), u=thm([F], "P.f n = 0 + n", "00000000000000ff")))[1]
     assert added == ["guarantees[P.u]: added on both sides, differently"]
+
+
+def test_an_owner_merges_apart_from_the_statement():
+    base = record(t=thm([F]))
+    unowned = {**base, "guarantees": {"P.t": A.unowned(base["guarantees"]["P.t"])}}
+    restated = record(t=thm([F], "P.f n ≤ n", "00000000000000dd"))
+    merged, why = M.merge(unowned, base, {**restated, "guarantees": {"P.t": A.unowned(restated["guarantees"]["P.t"])}})
+    assert why == [] and merged["guarantees"] == restated["guarantees"], "one side's owner, the other's restatement"
+    other = {**base, "guarantees": {"P.t": base["guarantees"]["P.t"] | {"owner": "@proofs"}}}
+    assert M.merge(unowned, base, other)[1] == ["guarantees[P.t].owner: added on both sides, differently"]
 
 
 def test_a_definition_one_side_stops_reading_refuses_when_the_other_side_changed_its_module():
