@@ -283,6 +283,25 @@ def test_attic_moves_only_strays_none_a_process_runs_and_records_where_each_went
     assert deploy.clean(deploy.drift(n, "origin/main", local, world["repo"]))
 
 
+def test_a_missing_file_of_a_required_tree_is_drift(world):
+    # red team T: the console imports cluster.usage from its tree, and drift called a console without it clean
+    node = world["node"]
+    deploy.install(world["nodes"]["n"], "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
+    (node / "bin" / "unit.service").write_text("[Unit]\n")
+    (node / "tree" / "x.yaml").unlink()
+    assert deploy.clean(deploy.drift(world["nodes"]["n"], "origin/main", local, world["repo"]))
+    text = world["manifest"].read_text().replace('src = "src/t"\n', 'src = "src/t"\nrequired = true\n')
+    rep = deploy.drift(deploy.load(text=text)["n"], "origin/main", local, world["repo"])
+    assert not deploy.clean(rep)
+    assert f"  missing  {node}/tree/x.yaml  (in a required tree, not installed: install the tree)" in deploy.render(
+        "n", "origin/main", rep).splitlines()
+    for bad in (text.replace("required = true", 'required = "yes"'), text.replace('src = "src/c.py"\n', 'src = "src/c.py"\nrequired = true\n')):
+        with pytest.raises(ValueError, match="`required` is a tree's"):
+            deploy.load(text=bad)
+    shipped = deploy.load()["vy-nebius-1"].entries
+    assert next(e for e in shipped if e.path == "/workspace/research/console/cluster").required
+
+
 def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsys):
     node, n = world["node"], world["nodes"]["n"]
     deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
