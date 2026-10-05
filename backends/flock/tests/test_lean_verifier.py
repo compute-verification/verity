@@ -60,7 +60,7 @@ def test_audit_layer_is_abstract():
 
 def _has_unit_cut():
     try:
-        from verity.ir.partition import validate_unit_cut  # noqa: F401
+        from verity.primitives.circuits.partition import validate_unit_cut  # noqa: F401
     except ImportError:
         return False
     return True
@@ -97,8 +97,8 @@ def test_layout_agrees_with_the_reference(tmp_path):
 
 
 def _stream_uniform(n, stream, pos):
-    """`verity.randomness`'s exact reduction on a raw stream: (value, next position), or None when it runs out."""
-    from verity.randomness import uniform_from_words
+    """`verity.primitives.randomness`'s exact reduction on a raw stream: (value, next position), or None when it runs out."""
+    from verity.primitives.randomness import uniform_from_words
     w = (n.bit_length() + 64 + 7) // 8
     at = [pos]
 
@@ -202,9 +202,9 @@ def test_unit_draw_check(tmp_path):
 
 
 def _ir_tests() -> Path:
-    """Core's `tests/ir`, beside the `verity.ir` the import system finds (whichever member ships it): the vectors the Lean verifier
+    """Core's `tests/ir`, beside the `verity.primitives.circuits` the import system finds (whichever member ships it): the vectors the Lean verifier
     agrees with.  Located, never checked for here: one that is missing fails `test_the_reference_vectors_exist`, not a skip."""
-    return Path(importlib.util.find_spec("verity.ir").origin).resolve().parents[3] / "tests" / "ir"
+    return Path(importlib.util.find_spec("verity.primitives.circuits").origin).resolve().parents[3] / "tests" / "ir"
 
 
 def _template_vectors():
@@ -549,7 +549,7 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
 
 def _one_stage_draw():
     try:
-        from verity_sampled_proofs.one_stage import draw
+        from verity.protocols.verification.sampled_proofs.one_stage import draw
     except ImportError:
         return None
     return draw if hasattr(draw, "derive") else None
@@ -573,13 +573,13 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
 
 def _has_check_cut():
     try:
-        from verity.ir.cut import check_cut  # noqa: F401
+        from verity.primitives.circuits.cut import check_cut  # noqa: F401
     except ImportError:
         return False
     return True
 
 
-@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ir.cut (PR #111)")
+@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.primitives.circuits.cut (PR #111)")
 def test_check_cut_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(LEAN.parent / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
@@ -590,7 +590,7 @@ def test_check_cut_agrees_with_the_reference(tmp_path):
 
 def _qword_vector_file():
     try:
-        from verity.ir.codec import decode_program  # noqa: F401
+        from verity.primitives.circuits.codec import decode_program  # noqa: F401
     except ImportError:
         return None
     return _ir_tests() / "qword_vectors.json"
@@ -613,8 +613,8 @@ def test_qword_cuts_agree_with_core_verify(tmp_path):
 
 def _qword_vectors():
     try:
-        import verity.ir.partition_object  # noqa: F401
-        from verity.ir.cut import cut_word  # noqa: F401
+        import verity.primitives.circuits.partition_object  # noqa: F401
+        from verity.primitives.circuits.cut import cut_word  # noqa: F401
     except ImportError:
         return None
     return _ir_tests() / "partition_vectors.json"
@@ -843,8 +843,8 @@ def test_bit_row_constants_complete_core_s_v2_commit_strings(tmp_path):
     ``sha512_row_v2_digest`` at every residue of the length."""
     import random
 
-    from verity.commitments import hm96
-    from verity.commitments.rowleaf import sha512_row_v2_digest
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.rowleaf import sha512_row_v2_digest
 
     rng, cases = random.Random(20261001), []
     for n_bits in BIT_ROW_LENGTHS:
@@ -930,7 +930,7 @@ def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True,
 
     import numpy as np
 
-    from verity.ir.types import Array, Tuple, Value
+    from verity.primitives.circuits.types import Array, Tuple, Value
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
     from verity_flock import gf2
@@ -996,8 +996,8 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
     (its prefix, or its words and compressions), a length of 2^64 or one past `MAX_COMPS`, a v1 prefix and midstate under v2,
     a changed padding, both row-schema keys, a v1 schema in `row_schemas`, a schema missing, no row with a compression, and a
     pinned dummy ``b || c`` that is not the padding instance's row of the port's bits (here, a v1 row's of its words)."""
-    from verity.commitments import hm96
-    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_digest
     from verity_flock import circuit as FC
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -1146,8 +1146,8 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
     that the statement can't link is refused with the Rust verifier's message: runs that don't cover the output ports once or
     don't match the row's length, no runs (one row per port), a row named after another port, a later port of its run named
     after an input row, and its length or schema changed. The composer refuses a run that isn't consecutive output ports."""
-    from verity.commitments import hm96
-    from verity.commitments.rowleaf import sha512_row_seg_word_digest
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.rowleaf import sha512_row_seg_word_digest
     from verity_flock import circuit as FC
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -1242,8 +1242,8 @@ def test_an_exact_v2_output_row_of_one_or_several_ports_is_the_row_its_reader_co
     commitment ``b || c`` and hm96 tree leaf; each side's statement digest is the one `flock-circuit statement` gives it,
     seeded and under `FC_COINS=os`. A run written as a v1 row, or at a length other than its words, is refused."""
     import numpy as np
-    from verity.commitments import hm96
-    from verity.commitments.rowleaf import sha512_row_v2_digest
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.rowleaf import sha512_row_v2_digest
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     inst = hm96.SHA512
