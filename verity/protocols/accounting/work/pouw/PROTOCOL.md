@@ -528,8 +528,8 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     unit is credited (1 − 1/1,000)·`credit_of`. `volunteer` reads the same cap. The certificate states TT_OUT(1/1000) and
     names the cap among its parameters.
   - γ at the headline record (FP32 at 8.376, the packed cast at 8.72, rev1's credit) is 0.36949% at 8,192³ and 0.35973%
-    at 16,384³, per unit and per audit tile (Lean `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192`, `_16384` and their
-    `pearlCSampled…` twins). Per unit it follows from rev1 at 1/400 alone (`…Cap1000_8192_of_cap400`); per tile, TT_OUT
+    at 16,384³, per unit and per audit tile (Lean `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192`,
+    which is `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192`; its `_16384` and their `pearlCSampled…` twins). Per unit it follows from rev1 at 1/400 alone (`…Cap1000_8192_of_cap400`); per tile, TT_OUT
     at 1/1,000 is the assumption. At the issue-bound FP32 add (8.00) it is 0.36901% and 0.35949%
     (`pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192`, `_16384` and their `pearlCSampled…` twins, from TT_OUT at 1/1,000);
     the ledger publishes the larger of the two prices, the in-loop add's.
