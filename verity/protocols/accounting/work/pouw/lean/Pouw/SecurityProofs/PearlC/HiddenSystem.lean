@@ -21,8 +21,8 @@ of its own tiles' proof games are equal on different values and its batch reads 
 `gammaHidden_of_registeredSound` is both: `GγHidden` from `GγSampled`, and the honest prover in its class.
 
 `HiddenSystem.checksGood_ofTileCheck`: a tile check's L3 (`TileCheck.Computes`) is L3 on its hidden system, when its
-registered values bind the circuit's words (no `Collides`), its public and registered wires are apart, and its proof
-systems register both. `gammaHidden_of_tileCheck` is `gammaHidden_of_registeredSound` on it.
+registered values bind the circuit's words (no `Collides`), its public and registered wires are apart, its tiles lie in
+their units and its proof systems register both. `gammaHidden_of_tileCheck` is `gammaHidden_of_registeredSound` on it.
 -/
 
 namespace Pouw.PearlC
@@ -196,12 +196,15 @@ theorem gammaHidden_of_registeredSound [Fintype Q] [DecidableEq Q] [Fintype R] [
     fun U τ salts w t q hD hU => HS.honestProver_bounded hHon TR U τ salts w t q hD hU⟩
 
 /-- **A tile check's L3 is L3 on its hidden system**, when its registered values bind the circuit's words (no
-`Collides`: the plain Program), its public and registered wires are apart, and every proof system registers both. -/
+`Collides`: the plain Program), its public and registered wires are apart, every proof system registers both, and each
+tile lies in its unit (`hunit`, `hcols`), so that the domain's weight clause gives the check's weight rows. -/
 theorem HiddenSystem.checksGood_ofTileCheck [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (TC : TileCheck Q R S) (O Rt : Type)
     (sys : (k : Shape × Finset ℕ × Finset ℕ) → System (TC.C k.1) (TC.n k.1) (TC.part k.1) O Rt)
     (hL3 : TC.Computes P TR D) (hcol : ∀ U u rows cols c X, ¬ TC.Collides U u rows cols c X)
-    (hdis : ∀ sh, Disjoint (TC.pub sh) (TC.reg sh)) (hreg : ∀ k, TC.pub k.1 ∪ TC.reg k.1 ⊆ (sys k).registered) :
+    (hdis : ∀ sh, Disjoint (TC.pub sh) (TC.reg sh)) (hreg : ∀ k, TC.pub k.1 ∪ TC.reg k.1 ⊆ (sys k).registered)
+    (hunit : ∀ L, ∀ g < (TR.tiling L).NT, (TR.tiling L).unit g < L.N)
+    (hcols : ∀ L g, ∀ j ∈ (TR.tiling L).cols g, j < (L.shape ((TR.tiling L).unit g)).n) :
     (HiddenSystem.ofTileCheck TC TR O Rt sys).ChecksGood P TR D := by
   intro U hU H s τ t ht X hcone hX
   cases hc : τ ((TR.tiling U.layout).unit t) with
@@ -211,8 +214,8 @@ theorem HiddenSystem.checksGood_ofTileCheck [Fintype Q] [DecidableEq Q] [Fintype
         if w ∈ TC.pub _ then TC.anchorsOf H s U ((TR.tiling U.layout).unit t) c.act w
         else TC.rowsOf U ((TR.tiling U.layout).unit t) c w := fun w => by
       simp only [TileCheck.registeredAt, hc]
-    have hacc : TC.Accepts TR H s U t c X := by
-      refine ⟨hcone, fun w hw => ?_, fun w hw => ?_⟩
+    have hacc : TC.Accepts P TR H s U t c X := by
+      refine ⟨hcone, fun w hw => ?_, fun w hw => ?_, fun j hj => hU.2.2 _ (hunit _ t ht) j (hcols _ t j hj)⟩
       · exact (hX w (hreg _ (Finset.mem_union_left _ hw))).trans
           ((hval w).trans (ite_eq_left_of_eq_true _ _ (eq_true hw)))
       · have hnp : w ∉ TC.pub _ := Finset.disjoint_right.mp (hdis _) hw
@@ -224,8 +227,9 @@ theorem HiddenSystem.checksGood_ofTileCheck [Fintype Q] [DecidableEq Q] [Fintype
 
 /-- **`GγHidden` for a tile check.** `gammaHidden_of_registeredSound` on the hidden system of a tile check meeting L3
 (`TileCheck.Computes`), whose registered values bind the circuit's words, whose public and registered wires are apart,
-and whose proof systems register both, are sound against registered values up to an error at most `ηzk`, draw the cone
-of a tile's words on an accepted proof, and have their honest provers in their classes. -/
+whose tiles lie in their units, and whose proof systems register both, are sound against registered values up to an
+error at most `ηzk`, draw the cone of a tile's words on an accepted proof, and have their honest provers in their
+classes. -/
 theorem gammaHidden_of_tileCheck [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (TC : TileCheck Q R S) (O Rt : Type)
     (sys : (k : Shape × Finset ℕ × Finset ℕ) → System (TC.C k.1) (TC.n k.1) (TC.part k.1) O Rt) (γ : ℝ)
@@ -235,7 +239,9 @@ theorem gammaHidden_of_tileCheck [Fintype Q] [DecidableEq Q] [Fintype R] [Fintyp
     (hcov : ∀ k (x : (sys k).Out), (sys k).accept x = true →
       (TC.part k.1).cone (TC.out k.1 k.2.1 k.2.2) ⊆ (sys k).drawn x)
     (hL3 : TC.Computes P TR D) (hcol : ∀ U u rows cols c X, ¬ TC.Collides U u rows cols c X)
-    (hdis : ∀ sh, Disjoint (TC.pub sh) (TC.reg sh)) (hreg : ∀ k, TC.pub k.1 ∪ TC.reg k.1 ⊆ (sys k).registered) :
+    (hdis : ∀ sh, Disjoint (TC.pub sh) (TC.reg sh)) (hreg : ∀ k, TC.pub k.1 ∪ TC.reg k.1 ⊆ (sys k).registered)
+    (hunit : ∀ L, ∀ g < (TR.tiling L).NT, (TR.tiling L).unit g < L.N)
+    (hcols : ∀ L g, ∀ j ∈ (TR.tiling L).cols g, j < (L.shape ((TR.tiling L).unit g)).n) :
     GγHidden CM P TR D (HiddenAudit.ofSystem (HiddenSystem.ofTileCheck TC TR O Rt sys)) γ η ηzk ∧
       ∀ (U : Workload) (τ : (Q → R) → S → Transcript) (salts : (Q → R) → S → ℕ → O) (w : ℕ → ℕ) (t q : ℕ),
         (∀ H s, (HiddenSystem.ofTileCheck TC TR O Rt sys).Distinct U H s (τ H s)
@@ -248,6 +254,6 @@ theorem gammaHidden_of_tileCheck [Fintype Q] [DecidableEq Q] [Fintype R] [Fintyp
         (HiddenAudit.ofSystem (HiddenSystem.ofTileCheck TC TR O Rt sys)).ProverBounded
           ((HiddenSystem.ofTileCheck TC TR O Rt sys).honestProver TR U τ salts w t) q :=
   gammaHidden_of_registeredSound CM P TR D (HiddenSystem.ofTileCheck TC TR O Rt sys) γ η ηrs ηzk h0 hS hRS hη hHon
-    hcov (HiddenSystem.checksGood_ofTileCheck P TR D TC O Rt sys hL3 hcol hdis hreg)
+    hcov (HiddenSystem.checksGood_ofTileCheck P TR D TC O Rt sys hL3 hcol hdis hreg hunit hcols)
 
 end Pouw.PearlC
