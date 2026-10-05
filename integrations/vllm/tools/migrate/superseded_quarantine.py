@@ -17,7 +17,9 @@ import name is the one constant `PACKAGE`, and its distribution's name is derive
 and the lint and dead-code lists that name them, and registers the new workspace member. Before that it promotes the lanes core
 binds into the registry as ordinary Definitions (`PROMOTE`, under top's ruling of 5 Oct 2026, Slack 1791150333.889129): each
 module's Definitions keep their bodies verbatim, so every id and descriptor digest stays what it was; the code that imports them
-imports the registry module instead, the lists keyed by them follow them or drop them, and an emptied lane package goes. Every
+imports the registry module instead, the lists keyed by them follow them or drop them, the target facts they carry out of P8's
+home are allowlisted where they now live (`P08_ADDED`), and an emptied lane package goes; core's quarantine package stays, the
+admission home of any later lane, kept by name in the dead-code list. Every
 edit is planned, and refused if it would leave a name of a promoted lane behind, before anything is written. Running it again
 changes nothing.
 
@@ -141,6 +143,12 @@ PROMOTED_IDS = ("LayerNormAten_v1", "LayerNormAten_v2", "GeluErfBf16_v1", "GeluE
 PROMOTED_LANES = tuple(dict.fromkeys(p.src.split("/")[0] for p in PROMOTE))
 #: A lane package's own files, deleted with it once every other module of the lane is promoted (its lists and shared imports).
 LANE_FILES = ("__init__.py", "_common.py")
+P08 = f"{VLLM}/tests/lint/allowlists/p08_facts.json"
+#: The target facts the promoted conformance strings and the GELU table's provenance carry out of P8's home
+#: (`program/registry/quarantine/`), allowlisted where they now live, as the promoted `dense` lane's are.
+P08_ADDED = tuple({"file": f"verity_vllm/program/registry/{f}", "kind": k, "symbol": s, "detail": d} for f, k, s, d in (
+    ("act.py", "sm-arch", "GeluErf", "sm_89"), ("act.py", "sm-arch", "GeluErfBf16", "sm_89"),
+    ("gelu_erf_table.py", "gpu", "<module>", "rtx4090"), ("layer_norm.py", "sm-arch", "LayerNormAten", "sm_89")))
 
 def redirects(dest: str) -> tuple[tuple[str, str, str], ...]:
     """Lines of core tests that name a moved lane by where it was: a use of a re-export of a promoted Definition imports the
@@ -485,6 +493,11 @@ def promote_edits(dest: str) -> tuple[tuple[str, str, str], ...]:
          "layer_norm_aten\n",
          "from verity_vllm.program.registry import act, gelu_erf_table, layer_norm\n"),
         ("tests/engine/test_gen_ln.py", "g = gelu_erf_bf16.gelu_erf_bf16_bits", "g = act.gelu_erf_bf16_bits"),
+        ("tests/dead_code_keep.json",
+         '"verity_vllm.program.registry.quarantine.ln.layer_norm_aten_difftest": "properties-admission adapter of LayerNormAten_v1, '
+         'loaded by --adapter name"',
+         '"verity_vllm.program.registry.quarantine": "the admission home of the quarantine lanes core binds, empty while none is '
+         'pending; quarantine_lint\'s ROOT, protected.py, verify_lane.sh and P8\'s HOMES name it"'),
         ("tests/engine/test_gen_ln.py",
          "def test_lane_registry_lists_the_three_definitions():\n"
          '    assert [d.name for d in ALL_DEFINITIONS] == ["LayerNormAten", "GeluErf"] and [p.name for p in ALL_PRIMITIVES] == '
@@ -494,7 +507,7 @@ def promote_edits(dest: str) -> tuple[tuple[str, str, str], ...]:
          "    from verity.ir.defs import REGISTRY\n"
          "    fns = (layer_norm.LayerNormAten, layer_norm.LayerNormAtenV2, act.GeluErf, act.GeluErfBf16)\n"
          '    assert [f.id for f in fns] == ["LayerNormAten_v1", "LayerNormAten_v2", "GeluErf_v1", "GeluErfBf16_v1"]\n'
-         "    assert all(REGISTRY.get(f.id) is f for f in fns)\n"
+         "    assert all(REGISTRY[f.id] is f for f in fns)\n"
          '    assert layer_norm.VEC == 4 and layer_norm.NTHREADS == 128 and layer_norm.MEAN_FMA_ORDER == "A"\n'),
         ("tests/engine/test_gen_ln.py", "bind(layer_norm_aten.LayerNormAten,", "bind(layer_norm.LayerNormAten,"),
         ("tests/engine/test_gen_ov_sampling.py", "# quarantine Definition `GumbelArgmaxBf16_v1`", "# registry Definition `GumbelArgmaxBf16_v1`"),
@@ -715,8 +728,27 @@ def plan_promotions(root: Path, dest: str) -> PromotionPlan:
         residue += _residue(rel, new)
     if residue:
         raise Refused("would still name a promoted lane:\n  " + "\n  ".join(residue))
+    if (root / P08).is_file():
+        texts[P08] = _add_entries(read(P08), P08_ADDED, P08)
     plan.writes = texts
     return plan
+
+
+def _add_entries(text: str, add, rel: str) -> str:
+    """An allowlist's text (one sorted entry per line under `entries`) with the entries of ``add`` it lacks, in their places."""
+    data = json.loads(text)
+    lines = text.splitlines(keepends=True)
+    at = [i for i, line in enumerate(lines) if line.lstrip().startswith('{"file"')]
+    key = lambda e: (e["file"], e["kind"], e["symbol"], e["detail"])  # noqa: E731
+    if (not at or at != list(range(at[0], at[-1] + 1)) or [lines[i].strip().rstrip(",") for i in at] != [json.dumps(e) for e in data["entries"]]
+            or data["entries"] != sorted(data["entries"], key=key)):
+        raise Refused(f"{rel}: not one sorted entry per line; add {[key(e) for e in add]} by hand")
+    entries = sorted(data["entries"] + [e for e in add if e not in data["entries"]], key=key)
+    indent = lines[at[0]][:len(lines[at[0]]) - len(lines[at[0]].lstrip())]
+    body = [f"{indent}{json.dumps(e)}{',' if j < len(entries) - 1 else ''}\n" for j, e in enumerate(entries)]
+    out = "".join(lines[:at[0]] + body + lines[at[-1] + 1:])
+    json.loads(out)
+    return out
 
 
 def _rekey(text: str, rekey: dict[str, str]) -> str:
