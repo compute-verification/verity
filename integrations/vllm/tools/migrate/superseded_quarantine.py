@@ -1,6 +1,6 @@
 """Retire superseded catalog Definition versions, and move the vLLM registry's quarantine to `experimental/`.
 
-    uv run python integrations/vllm/tools/migrate/superseded_quarantine.py apply [--only ID ...]
+    uv run python integrations/vllm/tools/migrate/superseded_quarantine.py apply [--only ID ...] [--dest DIR]
     uv run python integrations/vllm/tools/migrate/superseded_quarantine.py commands
     uv run python integrations/vllm/tools/migrate/superseded_quarantine.py snapshot OUT.json
     uv run python integrations/vllm/tools/migrate/superseded_quarantine.py verify BEFORE.json AFTER.json
@@ -12,9 +12,10 @@ that old records replay. A superseded version that no kept Program or record nam
 
 `apply` deletes exactly the versions in `DELETE`, with their circuit-check bindings (`_model_roots`) and lowering pins
 (`pins.json`), and refuses any other id, any id in `KEPT`, and any deletion that would leave a reference behind. It then moves
-the quarantine lanes in `MOVE` to `experimental/vllm/quarantine/verity_quarantine/<lane>` (the distribution `verity-quarantine`),
-rewrites their imports, test paths and the lint and dead-code lists that name them, and registers the new workspace member.
-The lanes in `STAY` remain in the core quarantine, since core binds them. Running it again changes nothing.
+the quarantine lanes in `MOVE` to `<DEST>/<PACKAGE>/<lane>` (`--dest`, by default `experimental/vllm/quarantine`; the package's
+import name is the one constant `PACKAGE`, and its distribution's name is derived from it), rewrites their imports, test paths
+and the lint and dead-code lists that name them, and registers the new workspace member. The lanes in `STAY` remain in the core
+quarantine, since core binds them. Running it again changes nothing.
 
 `snapshot` records circuit-check's task list and every registered Definition, each with its descriptor digest (sha256 of the
 canonical JSON of its definition entry). `verify` compares two snapshots: the task list may lose only the deleted versions'
@@ -34,16 +35,19 @@ import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 REPO = Path(__file__).resolve().parents[4]
 VLLM = "integrations/vllm"
 REGISTRY_DIR = f"{VLLM}/verity_vllm/program/registry"
 QUARANTINE = f"{REGISTRY_DIR}/quarantine"
 QUARANTINE_MODULE = "verity_vllm.program.registry.quarantine"
-EXPERIMENTAL = "experimental/vllm/quarantine"
+#: Where `apply` puts the experimental package unless `--dest` names another directory.
+DEST = "experimental/vllm/quarantine"
+#: The experimental package's import name. Everything else that names it (its distribution, its docs, the rewritten imports of
+#: the moved lanes, the lists keyed by them) is derived from this one constant.
 PACKAGE = "verity_quarantine"
-DISTRIBUTION = "verity-quarantine"
+DISTRIBUTION = PACKAGE.replace("_", "-")
 TARGETS = "tools/circuit_check/src/circuit_check/targets.py"
 PINS = "tools/circuit_check/src/circuit_check/pins.json"
 #: Where Definitions are registered: a version is deleted from one of these.
@@ -104,10 +108,10 @@ STAY = {
                    "(verity_vllm/engine/profiles/gen_ov_sampling_patterns.py:31)",
 }
 
-#: Lines of core tests that name a moved lane by where it was: a use of a re-export of a promoted Definition imports the registry
-#: module that owns it, and a lint of the lane's directory lints the experimental package.
-REDIRECTS: tuple[tuple[str, str, str], ...] = tuple(
-    (f"{VLLM}/tests/{f}", old, new) for f, old, new in (
+def redirects(dest: str) -> tuple[tuple[str, str, str], ...]:
+    """Lines of core tests that name a moved lane by where it was: a use of a re-export of a promoted Definition imports the
+    registry module that owns it, and a lint of the lane's directory lints the experimental package."""
+    return tuple((f"{VLLM}/tests/{f}", old, new) for f, old, new in (
         ("program/fixtures_query.py", "from verity_vllm.program.registry.quarantine.ov_moe import moe as Q",
          "from verity_vllm.program.registry import moe as Q"),
         ("program/_wout_prototype_20260917.py", "from verity_vllm.program.registry.quarantine.ov_moe import moe as Q",
@@ -119,10 +123,11 @@ REDIRECTS: tuple[tuple[str, str, str], ...] = tuple(
         ("collectives/test_tp_collective.py", 'rep = lint(REPO / "verity_vllm" / "program" / "registry" / "quarantine")',
          "rep = lint(Path(QC.__file__).resolve().parents[1])"),
     )) + (
-    # the shipped PYTHONPATH's roots follow the root's dependencies, which now include the experimental member
-    ("tools/research/tests/test_pythonpath.py", '"backends/flock/python", "tools/circuit_check/src"]',
-     f'"backends/flock/python", "tools/circuit_check/src",\n              "{EXPERIMENTAL}"]'),
-)
+        # the shipped PYTHONPATH's roots follow the root's dependencies, which now include the experimental member
+        ("tools/research/tests/test_pythonpath.py", '"backends/flock/python", "tools/circuit_check/src"]',
+         f'"backends/flock/python", "tools/circuit_check/src",\n              "{dest}"]'),
+    )
+
 
 PYPROJECT = f'''[project]
 name = "{DISTRIBUTION}"
@@ -147,9 +152,13 @@ testpaths = ["tests"]
 addopts = "-q -p no:cacheprovider"
 '''
 
+def _lanes(lanes) -> str:
+    return ", ".join(f"`{m}`" for m in lanes)
+
+
 PACKAGE_DOC = f'''"""{PACKAGE} — the vLLM registry's quarantine lanes that core does not bind, moved out of
-`{QUARANTINE_MODULE}` (note:20261004T2058Z-draft-repo-organization-principles): {", ".join(f"`{m}`" for m in MOVE)}.
-The lanes core still binds ({", ".join(f"`{m}`" for m in STAY)}) stay in core's quarantine.
+`{QUARANTINE_MODULE}` (note:20261004T2058Z-draft-repo-organization-principles): {_lanes(MOVE)}.
+The lanes core still binds ({_lanes(STAY)}) stay in core's quarantine.
 
 Each lane is a sub-package of provisional numerical Definitions pending admission, or of re-exports of Definitions already promoted
 to `verity_vllm.program.registry`, with a `*_difftest.py` adapter for `verity-vllm properties-admission` beside each. Admission
@@ -159,8 +168,9 @@ version, and promotion into the registry is an integrator move. Nothing in core 
 """
 '''
 
-CORE_DOC = f'''"""{QUARANTINE_MODULE} — provisional numerical Definitions that core binds, one sub-package per lane, pending
-admission: {", ".join(f"`{m}`" for m in STAY)}. Existing registered bodies (`b1.py`, `prims.py`, ...) are immutable; a lane that
+def core_doc(dest: str) -> str:
+    return f'''"""{QUARANTINE_MODULE} — provisional numerical Definitions that core binds, one sub-package per lane, pending
+admission: {_lanes(STAY)}. Existing registered bodies (`b1.py`, `prims.py`, ...) are immutable; a lane that
 needs different exact semantics adds a NEW versioned Definition and never edits an old one.
 
 Admission (gate G4 + `verity_vllm.properties.quarantine_lint` + `verity_vllm.properties.admission`): the body is a function of its
@@ -168,8 +178,8 @@ operands and statics only; `SEMANTIC_ID = "<lane>/<Definition>@v<k>"` at module 
 recognizer tests; `difftest produce` + `difftest check` are bit-exact on randomized and edge inputs; every specialization the run
 uses is replayed. Promotion into `registry` is an integrator move.
 
-The lanes core does not bind ({", ".join(f"`{m}`" for m in MOVE)}) are the experimental package `{PACKAGE}`
-(`{EXPERIMENTAL}`).
+The lanes core does not bind ({_lanes(MOVE)}) are the experimental package `{PACKAGE}`
+(`{dest}`).
 """
 '''
 
@@ -422,18 +432,35 @@ def _add_to_array(text: str, key: str, value: str, section: str | None = None) -
     return text[:end] + (", " if body.strip() else "") + f'"{value}"' + text[end:]
 
 
-def move_quarantine(root: Path) -> list[str]:
+def check_dest(root: Path, dest: str) -> str:
+    """``dest`` as a repository-relative directory, refused when it is not one or when `PACKAGE` already lives elsewhere (a
+    relocation is a move of that directory, not a second copy)."""
+    p = PurePosixPath(dest)
+    if p.is_absolute() or not p.parts or ".." in p.parts or p.as_posix() != dest.rstrip("/"):
+        raise Refused(f"--dest {dest!r}: give a normalized directory relative to the repository root")
+    dest = p.as_posix()
+    if dest == VLLM or dest.startswith((f"{VLLM}/", "packages/")):
+        raise Refused(f"--dest {dest}: the experimental package lives outside core's distributions")
+    elsewhere = sorted({rel.removesuffix(f"/{PACKAGE}/__init__.py") for rel in tracked(root)
+                        if rel.endswith(f"/{PACKAGE}/__init__.py")} - {dest})
+    if elsewhere:
+        raise Refused(f"{PACKAGE} already lives in {', '.join(elsewhere)}, not {dest}: move that directory instead")
+    return dest
+
+
+def move_quarantine(root: Path, dest: str = DEST) -> list[str]:
     changed: list[str] = []
+    dest = check_dest(root, dest)
     pending = [m for m in MOVE if (root / QUARANTINE / m).is_dir()]
     if pending:
         importers = library_importers(root, tuple(f"{QUARANTINE_MODULE}.{m}" for m in MOVE))
         importers += [f"{rel}: from {QUARANTINE_MODULE} import ..." for rel in _from_quarantine_importers(root)]
         if importers:
             raise Refused("core library code imports a lane that would move:\n  " + "\n  ".join(importers))
-    for _rel, text in _scoped(root):
+    for _rel, text in _scoped(root, dest):
         _rewrite(text)
-    _member_texts(root)
-    dst_pkg = f"{EXPERIMENTAL}/{PACKAGE}"
+    _member_texts(root, dest)
+    dst_pkg = f"{dest}/{PACKAGE}"
     for lane in pending:
         if (root / dst_pkg / lane).exists():
             raise Refused(f"{lane}: both {QUARANTINE}/{lane} and {dst_pkg}/{lane} exist")
@@ -443,15 +470,15 @@ def move_quarantine(root: Path) -> list[str]:
             cache.rmdir()
         _move_path(root, f"{QUARANTINE}/{lane}", f"{dst_pkg}/{lane}")
         changed.append(f"{QUARANTINE}/{lane} -> {dst_pkg}/{lane}")
-    for rel, text in ((f"{dst_pkg}/__init__.py", PACKAGE_DOC), (f"{QUARANTINE}/__init__.py", CORE_DOC),
-                      (f"{EXPERIMENTAL}/pyproject.toml", PYPROJECT)):
+    for rel, text in ((f"{dst_pkg}/__init__.py", PACKAGE_DOC), (f"{QUARANTINE}/__init__.py", core_doc(dest)),
+                      (f"{dest}/pyproject.toml", PYPROJECT)):
         p = root / rel
         if not p.is_file() or p.read_text(encoding="utf-8") != text:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(text, encoding="utf-8")
             changed.append(rel)
-    changed += _register_member(root)
-    changed += _rewrite_tree(root)
+    changed += _register_member(root, dest)
+    changed += _rewrite_tree(root, dest)
     importers = library_importers(root, (PACKAGE,))
     if importers:
         raise Refused("core library code imports the experimental package:\n  " + "\n  ".join(importers))
@@ -471,11 +498,11 @@ def _from_quarantine_importers(root: Path) -> list[str]:
     return out
 
 
-def _member_texts(root: Path) -> dict[str, str]:
+def _member_texts(root: Path, dest: str) -> dict[str, str]:
     """{pyproject: its text with the experimental member registered}: the workspace's members, the root's dependencies and
     sources, and the vLLM suite's inputs (its tests import the moved lanes)."""
     text = (root / "pyproject.toml").read_text(encoding="utf-8")
-    new = _add_to_array(text, "members", EXPERIMENTAL, "tool.uv.workspace")
+    new = _add_to_array(text, "members", dest, "tool.uv.workspace")
     new = _add_to_array(new, "dependencies", DISTRIBUTION, "project")
     if not re.search(rf"^{re.escape(DISTRIBUTION)} = ", new, re.M):
         lines = new.splitlines(keepends=True)
@@ -489,8 +516,8 @@ def _member_texts(root: Path) -> dict[str, str]:
         new = "".join(lines)
     out = {"pyproject.toml": new}
     text = (root / VLLM / "pyproject.toml").read_text(encoding="utf-8")
-    new = _add_to_array(text, "inputs", EXPERIMENTAL, "tool.verity.tests")
-    note = f"# Test-only: tests that check a quarantine lane's re-exports, adapters or collective import `{PACKAGE}` ({EXPERIMENTAL}).\n"
+    new = _add_to_array(text, "inputs", dest, "tool.verity.tests")
+    note = f"# Test-only: tests that check a quarantine lane's re-exports, adapters or collective import `{PACKAGE}` ({dest}).\n"
     if new != text and note not in new:
         m = re.search(r"^\[tool\.verity\.tests\]\s*\n", new, re.M)
         new = new[:m.end()] + note + new[m.end():]
@@ -500,9 +527,9 @@ def _member_texts(root: Path) -> dict[str, str]:
     return out
 
 
-def _register_member(root: Path) -> list[str]:
+def _register_member(root: Path, dest: str) -> list[str]:
     changed = []
-    for rel, new in _member_texts(root).items():
+    for rel, new in _member_texts(root, dest).items():
         p = root / rel
         if p.read_text(encoding="utf-8") != new:
             p.write_text(new, encoding="utf-8")
@@ -510,10 +537,10 @@ def _register_member(root: Path) -> list[str]:
     return changed
 
 
-def _scoped(root: Path):
+def _scoped(root: Path, dest: str):
     """(path, text) of each tracked text file the module rewrite applies to: the vLLM integration and the experimental package."""
     for rel in tracked(root):
-        if not rel.startswith((f"{VLLM}/", f"{EXPERIMENTAL}/")) or rel.startswith(UNTOUCHED) or rel in KEYED_LISTS:
+        if not rel.startswith((f"{VLLM}/", f"{dest}/")) or rel.startswith(UNTOUCHED) or rel in KEYED_LISTS:
             continue
         try:
             yield rel, (root / rel).read_text(encoding="utf-8")
@@ -521,7 +548,7 @@ def _scoped(root: Path):
             continue
 
 
-def _rewrite_tree(root: Path) -> list[str]:
+def _rewrite_tree(root: Path, dest: str) -> list[str]:
     changed = []
     for rel in KEYED_LISTS:
         p = root / rel
@@ -533,12 +560,12 @@ def _rewrite_tree(root: Path) -> list[str]:
             json.loads(new)
             p.write_text(new, encoding="utf-8")
             changed.append(rel)
-    for rel, old, new_line in REDIRECTS:
+    for rel, old, new_line in redirects(dest):
         p = root / rel
         if p.is_file() and old in (text := p.read_text(encoding="utf-8")):
             p.write_text(text.replace(old, new_line), encoding="utf-8")
             changed.append(rel)
-    for rel, text in list(_scoped(root)):
+    for rel, text in list(_scoped(root, dest)):
         new = _rewrite(text)
         if new != text:
             (root / rel).write_text(new, encoding="utf-8")
@@ -608,6 +635,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("apply", help="delete the DELETE versions and move the MOVE lanes")
     a.add_argument("--only", nargs="+", metavar="ID", help="delete only these versions (each must be in DELETE)")
+    a.add_argument("--dest", default=DEST, metavar="DIR",
+                   help=f"the directory, relative to the repository root, that gets the experimental package {PACKAGE} (default {DEST})")
     a.add_argument("--root", type=Path, default=REPO, help=argparse.SUPPRESS)
     sub.add_parser("commands", help="print the approach entries each deletion needs recorded first")
     s = sub.add_parser("snapshot", help="record circuit-check's task list and the registry, with digests")
@@ -619,7 +648,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd == "apply":
             ids = list(DELETE) if args.only is None else args.only
-            changed = delete_versions(args.root, ids) + move_quarantine(args.root)
+            changed = delete_versions(args.root, ids) + move_quarantine(args.root, args.dest)
             print("\n".join(changed) if changed else "nothing to do")
         elif args.cmd == "commands":
             print("\n".join(commands()) if DELETE else "no deletions: no approach entries needed")
