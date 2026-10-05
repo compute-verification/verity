@@ -1,11 +1,11 @@
 """Vectors for `Pouw.Protocol.PearlC.RowPrims`: PoUW's primitives in the row units, computed by
 `verity_pouw.circuit.words`, as Lean data.
 
-    python scripts/row_prims_vectors.py [--out DIR]
+    python scripts/row_prims_vectors.py [--out DIR] [--proofs-out DIR]
 
-Writes `Pouw/Protocol/PearlC/RowPrimVectors.lean` (the vectors, `(operands…, word)`) and
-`Pouw/SecurityProofs/PearlC/RowPrimChecks.lean` (one `decide +kernel` theorem per part) under DIR (default: the Lean
-package). `PouwETilde_v1` is exhaustive on its domain (16 codes × 256 bytes); the others reach every branch:
+Writes `Pouw/Protocol/PearlC/RowPrimVectors.lean` (the vectors, `(operands…, word)`) under DIR (default: the Lean
+package) and `PouwProofs/SecurityProofs/PearlC/RowPrimChecks.lean` (one `decide +kernel` theorem per part) under the
+proofs' DIR (default: DIR if given, else `security_proofs/pouw`). `PouwETilde_v1` is exhaustive on its domain (16 codes × 256 bytes); the others reach every branch:
 * `PouwF32SqrtRn_v1`: ±0, ±inf, NaNs, negative words, subnormals, one word per exponent field, exact squares, and
   random words;
 * `PouwSqAcc_v1`: every exponent edge of `sq300` and accumulators up to and past `2^576`;
@@ -141,15 +141,18 @@ def render(vectors: dict[str, list[tuple[int, ...]]]) -> tuple[str, str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[1])
+    ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument("--proofs-out", type=Path, default=None)
     args = ap.parse_args()
+    here = Path(__file__).resolve().parents[1]
+    proofs = args.proofs_out or args.out or here.parents[2] / "security_proofs" / "pouw"
+    spec = args.out or here
     rng = random.Random(SEED)
     vectors = {"sqrt": sqrt_vectors(rng), "sqacc": sqacc_vectors(rng), "sqceil": sqceil_vectors(rng),
                "sqge": sqge_vectors(rng), "etilde": etilde_vectors(), "bf16neg": bf16neg_vectors(rng)}
     data, checks = render(vectors)
-    for rel, text in (("Pouw/Protocol/PearlC/RowPrimVectors.lean", data),
-                      ("Pouw/SecurityProofs/PearlC/RowPrimChecks.lean", checks)):
-        path = args.out / rel
+    for path, text in ((spec / "Pouw/Protocol/PearlC/RowPrimVectors.lean", data),
+                       (proofs / "PouwProofs/SecurityProofs/PearlC/RowPrimChecks.lean", checks)):
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".lean.tmp")
         tmp.write_text(text)

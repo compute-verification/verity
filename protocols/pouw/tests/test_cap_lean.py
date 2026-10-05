@@ -15,7 +15,7 @@ from verity_pouw.protocol import DomainError, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes.pearl_c_device import DEVICES
 
-CAP = Path(__file__).resolve().parents[1] / "lean" / "Pouw" / "SecurityProofs" / "PearlC" / "Cap"
+CAP = Path(__file__).resolve().parents[3] / "security_proofs" / "pouw" / "PouwProofs" / "SecurityProofs" / "PearlC" / "Cap"
 INT_FORM = (CAP / "IntForm.lean").read_text()
 PINS = (CAP / "Pins.lean").read_text()
 SHAPE = r"IntPrices\.(\w+) (\d+) (\d+) (\d+) (\d+) (\d+) (\d+)"

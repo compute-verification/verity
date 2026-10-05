@@ -18,6 +18,7 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 LEAN = HERE / "lean"
 ROOT = HERE.parents[1]
+PROOFS = ROOT / "security_proofs" / "pouw"
 SCRIPT = LEAN / "scripts" / "fp8atom_vectors.py"
 POLICY = json.loads((LEAN / "lean-audit.json").read_text())
 
@@ -36,19 +37,22 @@ def test_cited_theorems_are_guarantees() -> None:
 @pytest.fixture(scope="module")
 def generated(tmp_path_factory) -> Path:
     out = tmp_path_factory.mktemp("fp8atom")
-    subprocess.run([sys.executable, str(SCRIPT), str(ROOT), "--out", str(out)], check=True, capture_output=True)
+    subprocess.run([sys.executable, str(SCRIPT), str(ROOT), "--out", str(out / "spec"), "--proofs-out", str(out / "proofs")],
+                   check=True, capture_output=True)
     return out
 
 
 @pytest.mark.slow
 def test_kernel_pinned_vectors_are_regenerated(generated: Path) -> None:
-    made = sorted(p for p in (q.relative_to(generated) for q in generated.rglob("*") if q.is_file()) if p.parts[0] != "conformance")
+    made = [(generated / half, pkg, p) for half, pkg in (("spec", LEAN), ("proofs", PROOFS))
+            for p in sorted(q.relative_to(generated / half) for q in (generated / half).rglob("*") if q.is_file())
+            if p.parts[0] != "conformance"]
     assert len(made) >= 10, made
-    assert [str(p) for p in made if (generated / p).read_bytes() != (LEAN / p).read_bytes()] == []
+    assert [str(p) for out, pkg, p in made if (out / p).read_bytes() != (pkg / p).read_bytes()] == []
 
 
 @pytest.mark.slow
 def test_bulk_is_what_the_audit_pins(generated: Path) -> None:
     pinned = POLICY["runs"]["PouwBulk"]["data"]
-    made = {n: hashlib.sha256(gzip.decompress((generated / f"{n}.gz").read_bytes())).hexdigest() for n in pinned}
+    made = {n: hashlib.sha256(gzip.decompress((generated / "spec" / f"{n}.gz").read_bytes())).hexdigest() for n in pinned}
     assert made == pinned
