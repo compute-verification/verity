@@ -22,7 +22,7 @@ import struct
 import numpy as np
 import pytest
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.defs import bind
 from verity_vllm.program.registry import sampling as SM
 from verity_vllm.program.registry import sampling_topp_difftest as D
 from verity_vllm.program.registry import topp_split as TS
@@ -168,7 +168,7 @@ def test_fstoch01_record_rows_are_bit_exact_through_the_operand_form(key):
 
 
 def test_codec_materialises_the_operand_form_by_name():
-    from verity.ir import codec
+    from verity.primitives.circuits import codec
     fams = getattr(codec, "_LAZY_PRIMITIVE_FAMILIES")
     hits = [(rx, mk) for rx, mk in fams if rx.match("TopPMaskWordx128256_v1")]
     assert len(hits) == 1
