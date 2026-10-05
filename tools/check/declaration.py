@@ -8,6 +8,8 @@ A job is a `[[job]]` table:
 - `halts_on`: optional, a line in its output that stops the run;
 - `merge_requires`: optional, the changed paths for which `research merge` needs this job to have passed;
 - `needs`: optional, the earlier jobs of its group whose output it reads in the checkout, so a shard that runs it runs them.
+- `after`: optional, a job in another group that must end first: this one starts once it has passed or been skipped, and is
+  stopped if it fails. The job it names has no `after` of its own.
 
 The file also carries `schema = "ci/v0"`. Anything else is refused: an unknown key, a missing field, a wrong type, a
 duplicate name, or an owner the registry doesn't know. Reading the file runs none of the commit's code. Stdlib only.
@@ -15,7 +17,7 @@ duplicate name, or an owner the registry doesn't know. Reading the file runs non
 A `[[plan]]` is one way to split a check over several machines (`check.py --shard K/N`): `shards`, a list of N lists of
 selectors, shard K the K-th. A selector is a job's name, or for a job in `SPLIT`, `JOB:PART` (one part: for `lean-audit`, a
 Lake package with a `lean-audit.json`) or `JOB:*` (its parts no other selector of the plan names). Every job is in exactly one
-shard, whole or, for a split job, as named parts plus exactly one `*`; a shard holds what each of its jobs `needs`; no two plans
+shard, whole or, for a split job, as named parts plus exactly one `*`; a shard holds what each of its jobs `needs` or runs `after`; no two plans
 have the same N (`plans`). `resolve` turns a plan into each shard's parts for a tree's parts (`parts_of`), and refuses a named
 part the tree lacks, so a stale plan stops the shard instead of leaving something out.
 """
@@ -30,7 +32,8 @@ SCHEMA = "ci/v0"
 ROOT = Path(__file__).resolve().parents[2]
 PATH = ROOT / "tools" / "check" / "ci.toml"
 REGISTRY = ROOT / ".agents" / "skills" / "using-slack" / "registry.json"
-FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list, "needs": list}
+FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list, "needs": list,
+          "after": str}
 REQUIRED = ("name", "owner", "group")
 #: the jobs a plan may split, and what their parts are
 SPLIT = {"lean-audit": "the Lake packages with a lean-audit.json"}
@@ -49,6 +52,7 @@ class Job:
     halts_on: str | None = None
     merge_requires: tuple[str, ...] = ()
     needs: tuple[str, ...] = ()
+    after: str | None = None
 
 
 def _toml(text: str, source: str) -> dict:
@@ -89,9 +93,19 @@ def parse(text: str, handles: set[str], source: str = "ci.toml") -> list[Job]:
             raise DeclarationError(f"{where}: needs {bad}, which aren't earlier jobs of its group")
         seen.add(t["name"])
         jobs.append(Job(t["name"], t["owner"], t["group"], t.get("halts", False), t.get("halts_on"),
-                        tuple(t.get("merge_requires", ())), tuple(t.get("needs", ()))))
+                        tuple(t.get("merge_requires", ())), tuple(t.get("needs", ())), t.get("after")))
     if not jobs:
         raise DeclarationError(f"{source}: declares no job")
+    by = {j.name: j for j in jobs}
+    for j in jobs:
+        if j.after is None:
+            continue
+        if (a := by.get(j.after)) is None:
+            raise DeclarationError(f"{source}: job {j.name}: after {j.after!r}, which isn't declared")
+        if a.group == j.group:
+            raise DeclarationError(f"{source}: job {j.name}: after {j.after!r}, in its own group, whose order already runs it first")
+        if a.after is not None:
+            raise DeclarationError(f"{source}: job {j.name}: after {j.after!r}, which itself waits on {a.after!r}")
     return jobs
 
 
@@ -142,7 +156,7 @@ def parse_plans(text: str, jobs: list[Job], source: str = "ci.toml") -> dict[int
         for k, shard in enumerate(shards, 1):
             held = {s.partition(":")[0] for s in shard}
             for j in jobs:
-                if j.name in held and (missing := [n for n in j.needs if whole.get(n) != [k]]):
+                if j.name in held and (missing := [n for n in (*j.needs, *[j.after] * bool(j.after)) if whole.get(n) != [k]]):
                     raise DeclarationError(f"{where}: shard {k} runs {j.name}, which needs {', '.join(missing)} in the same shard")
         out[len(shards)] = tuple(tuple(s) for s in shards)
     return out
