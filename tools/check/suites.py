@@ -39,7 +39,8 @@ adds the ids of those under its inputs, since git's tree ids leave ignored files
 fails without running.
 
 Every run loads `guard/verity_suite_guard.py`, which fails the suite if its tests open a repository file outside its inputs,
-so a cached pass never hides a change to something the tests read. It also records what the key leaves out but the tests
+so a cached pass never hides a change to something the tests read; the workspace metadata, and what a store fetch reads
+(`STORE_READS`), every suite may read. It also records what the key leaves out but the tests
 used: the workspace metadata files they opened, the installed distributions they imported outside their resolved
 dependencies, and the imports that found nothing. A pass is reused only while each of those is as it was. A Python a test
 starts, or a Python started by a program it starts, traces its own opens while it keeps the suite's PYTHONPATH and environment
@@ -123,6 +124,10 @@ UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
 UNKEYED_PREFIX = "VERITY_SUITE_"
 QUICK = ["-m", "not slow"]
 REGISTRY = "fixtures/artifacts.json"
+#: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
+#: remote's manifest on an empty local store), and the bucket pin, when the remote is the environment's (`R2_*`). Neither changes
+#: what a fetch returns, which is checked against its id whichever replica or remote serves it.
+STORE_READS = (REGISTRY, "tools/research/store.pod.toml")
 
 
 def _norm(name: str) -> str:
@@ -1262,7 +1267,7 @@ def main(argv: list[str] | None = None) -> int:
     needed = {p: art for p, art in fixtures.items() if any(_under(p, [x for x in ps if x != "."]) for ps in inputs.values())}
     unfetched = set() if a.list or a.explain else fetch_fixtures(needed, logs)
     plan, ids_of = [], {}
-    meta, lock, provided = metadata(), locked(), set(importlib.metadata.packages_distributions())
+    meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
         paths = inputs[s]
         ids = object_ids(tree, sorted(set(paths) | set(RUNNER)))

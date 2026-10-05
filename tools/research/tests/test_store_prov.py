@@ -256,6 +256,51 @@ def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
     assert t.name == "mine" and t.spec == "mytools.decl:T"
 
 
+def test_former_modules_map_a_module_back_through_each_move():
+    moves = [{"backends/flock/verifier/tool.py": "tools/lean_agreement/tool.py", "backends/gkr": "archive/gkr"},
+             {"tools/lean_agreement/": "tools/agree/"}]
+    assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "backends.flock.verifier.tool"]
+    assert tools_registry.former_modules("archive.gkr.gpu.tool", moves) == ["backends.gkr.gpu.tool"]
+    assert tools_registry.former_modules("archive.gkrx.tool", moves) == []
+    assert tools_registry.former_modules("tools.check.tool", moves) == []
+    shipped = json.loads(tools_registry.MOVES.read_text())["moves"]
+    assert all(isinstance(m["paths"], dict) for m in shipped)
+
+
+def test_a_tree_from_before_a_move_still_declares_its_tools(tmp_path, monkeypatch):
+    """`research run --tool`, `research merge`'s reads of the target's declaration, `after_land` and a run's preflight read
+    a tool's declaration from the tree they're given: one from before a layout move holds it under its old path."""
+    from research import merge, remote
+
+    moves = tmp_path / "moves.json"
+    moves.write_text(json.dumps({"moves": [{"paths": {"backends/flock/verifier/tool.py": "tools/agree/tool.py"}}]}))
+    monkeypatch.setattr(tools_registry, "MOVES", moves)
+    monkeypatch.setitem(tools_registry.REGISTRY, "agree", "tools.agree.tool:AGREE")
+    decl = ("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', command=['true'], "
+            "preflight=['echo', '{tag}'], after_land=['echo', 'landed'])\n")
+    for tree, rel in (("old", "backends/flock/verifier/tool.py"), ("new", "tools/agree/tool.py")):
+        (tmp_path / tree / rel).parent.mkdir(parents=True)
+        (tmp_path / tree / rel).write_text(decl.replace("{tag}", tree))
+    (tmp_path / "none").mkdir()
+
+    old, new, none = tmp_path / "old", tmp_path / "new", tmp_path / "none"
+    assert tools_registry.locate("agree", new) == ("tools.agree.tool", "AGREE")
+    assert tools_registry.locate("agree", old) == ("backends.flock.verifier.tool", "AGREE")
+    assert tools_registry.locate("agree", none) is None
+    assert tools_registry.load("agree", old).name == "agree" and tools_registry.load("agree", old).spec == "tools.agree.tool:AGREE"
+    assert remote.tool_preflight(["--tool", "agree"], old) == ["echo", "old"]
+    assert remote.tool_preflight(["--tool", "agree"], new) == ["echo", "new"]
+    assert merge.declaration(old, "agree").name == "agree"
+    assert merge.after_land(old, "agree", "c0ffee", log=lambda *a: None, spawn=lambda argv, **kw: None) == ["echo", "landed", "c0ffee"]
+
+    with pytest.raises(ImportError, match="declares no such tool"):
+        tools_registry.from_tree("agree", none)
+    assert merge.declaration(none, "agree") is None
+    assert remote.tool_preflight(["--tool", "agree"], none) is None
+    with pytest.raises(remote.PreflightFailed, match="does not declare"):
+        remote.tool_preflight([], none, asked="agree")
+
+
 def test_tc_probe_declaration_parses_real_flags_and_optional_instruction():
     tc = tools_registry.load("tc_probe", REPO)
     argv = ["python", "tools/tc_probe/tc_probe.py", "--arch", "sm_89", "--out", "/run/dir", "--sweep", "--n-random", "1000", "--families", "random,subnormal"]
