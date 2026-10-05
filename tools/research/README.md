@@ -138,10 +138,9 @@ it). From the remote's copy of the target, the truth rather than the checkout, i
 it, naming the commit, retargets each whose base branch's tip is on it (stacks GitHub never closes), and deletes a closed one's
 head branch unless an open one uses it. With `--push`, which whoever lands a train passes (Daniel, 1 Oct), a merge that lands is
 pushed, never forced, before the sweep, and a refused push sweeps nothing and exits 1; without it, run `research merge --sweep`
-after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Once origin has `main`, the commit also
-goes to node 1's bare repository (`vy-lean-sandbox checkout` builds from its `main`), a plain push over ssh cut off after 120 s;
-a failure logs the `research merge --mirror SHA` that reruns it, and the merge stands (`RESEARCH_MERGE_MIRROR` names another
-machine; empty skips it).
+after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Once origin has `main`, the commit is
+pushed over ssh to node 1's bare repository (`vy-lean-sandbox checkout` builds from it), cut off after 120 s; a failure logs the
+`research merge --mirror SHA` that reruns it, and the merge stands (`RESEARCH_MERGE_MIRROR`: another machine, or empty to skip).
 
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
