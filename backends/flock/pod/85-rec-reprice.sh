@@ -366,9 +366,9 @@ EOF
   du -sb $DD/alg/honest/* > $O/alg/sizes.txt
   ;;
 oprove)
-  [ -d $DD/outer ] || { echo "run STEP=ostage first"; exit 1; }
+  [ -d $DD/outer ] || [ "${LEVELS:-}" = alg ] || { echo "run STEP=ostage first"; exit 1; }
   # every level's RecOpen statement, then the algebra's (STEP=alg) when it is staged; LEVELS=0,1,alg picks some
-  for C in $(ls -d $DD/outer/L* | sort -V) $( [ -f $DD/alg/honest/inst.bin ] && echo $DD/alg/honest); do
+  for C in $(ls -d $DD/outer/L* 2>/dev/null | sort -V) $( [ -f $DD/alg/honest/inst.bin ] && echo $DD/alg/honest); do
     l=$(basename $C); [ $l = honest ] && l=alg
     [ -n "${LEVELS:-}" ] && [[ ",$LEVELS," != *",${l#L},"* ]] && continue
     loopback $l $C/pub.bin $C/inst.bin $C/circuit.txt --zk
