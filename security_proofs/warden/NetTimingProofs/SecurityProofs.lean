@@ -1,11 +1,11 @@
 import NetTiming.Guarantees
-import NetTiming.SecurityProofs.Occupancy
-import NetTiming.SecurityProofs.Counting
-import NetTiming.SecurityProofs.Advice
-import NetTiming.SecurityProofs.Ingress
-import NetTiming.SecurityProofs.Schedule
-import NetTiming.SecurityProofs.PerWindow
-import NetTiming.SecurityProofs.Sanity
+import NetTimingProofs.SecurityProofs.Occupancy
+import NetTimingProofs.SecurityProofs.Counting
+import NetTimingProofs.SecurityProofs.Advice
+import NetTimingProofs.SecurityProofs.Ingress
+import NetTimingProofs.SecurityProofs.Schedule
+import NetTimingProofs.SecurityProofs.PerWindow
+import NetTimingProofs.SecurityProofs.Sanity
 
 /-!
 # Proofs of the network warden's guarantees

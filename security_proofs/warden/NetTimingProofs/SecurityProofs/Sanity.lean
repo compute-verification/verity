@@ -1,4 +1,4 @@
-import NetTiming.SecurityProofs.Advice
+import NetTimingProofs.SecurityProofs.Advice
 
 /-!
 # Satisfiability witnesses (the project's rule: no named hypothesis without one)

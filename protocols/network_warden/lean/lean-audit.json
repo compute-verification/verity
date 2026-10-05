@@ -1,7 +1,7 @@
 {
- "roots": ["NetTiming"],
+ "roots": ["NetTiming.Assumptions", "NetTiming.Difftest", "NetTiming.Guarantees", "NetTiming.Protocol"],
+ "proved_in": ["../../../security_proofs/warden"],
  "exempt": {
-  "CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)",
   "NetTimingDifftest": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof"
  },
  "runs": {
@@ -35,8 +35,8 @@
   }
  },
  "reads_exempt": {
-  "NetTiming.SecurityProofs.Sanity": "non-vacuity witnesses; they leave the lock in @network-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
-  "NetTiming.SecurityProofs.Schedule": "non-vacuity witnesses; they leave the lock in @network-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)"
+  "NetTimingProofs.SecurityProofs.Sanity": "non-vacuity witnesses; they leave the lock in @network-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
+  "NetTimingProofs.SecurityProofs.Schedule": "non-vacuity witnesses; they leave the lock in @network-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)"
  },
  "guarantees": {
   "NetTiming.SecurityProofs.CardCountsEqLe": {

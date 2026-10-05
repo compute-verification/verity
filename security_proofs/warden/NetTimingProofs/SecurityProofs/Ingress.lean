@@ -1,4 +1,4 @@
-import NetTiming.SecurityProofs.Advice
+import NetTimingProofs.SecurityProofs.Advice
 
 /-!
 # The ingress timing bound

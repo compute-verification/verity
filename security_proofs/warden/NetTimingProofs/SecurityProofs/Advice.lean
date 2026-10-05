@@ -1,5 +1,5 @@
-import NetTiming.SecurityProofs.Counting
-import NetTiming.SecurityProofs.Occupancy
+import NetTimingProofs.SecurityProofs.Counting
+import NetTimingProofs.SecurityProofs.Occupancy
 
 /-!
 # Theorem 3: the advice caps
