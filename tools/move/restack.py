@@ -107,7 +107,7 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
         raise SystemExit(f"the move's base {base[:12]} has no {SCRIPT}")
     restored = sorted(p for p in script.keys() | mine.keys() if script.get(p) != mine.get(p))
     with tempfile.TemporaryDirectory(prefix="restack-") as tmp:
-        wt = os.path.join(tmp, "tree")
+        wt = os.path.join(tmp, os.path.basename(tmp))  # a unique worktree name, so restacks can run side by side
         git("worktree", "add", "--detach", "--quiet", wt, merged, cwd=cwd)
         try:
             if restored:
