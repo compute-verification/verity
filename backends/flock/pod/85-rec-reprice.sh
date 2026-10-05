@@ -12,8 +12,9 @@
 #                verifier's fold points (rec_vstage points), its extra claims and comb (InnerFold.lean as an executable,
 #                cached by its sources), then each level's RecOpen, the algebra's InnerRepCheck and the forgeries (FORGE=
 #                "message sum comb", each under forged-<kind>/), JOBS at once
-#   STEP=oprove  (GPU) each staged statement proved with --zk on loopback, WARM + RUNS sessions (a forgery's: one), and
-#                upstream's replay --zk of the last
+#   STEP=oprove  (GPU) each staged statement proved with --zk on loopback, WARM + RUNS sessions (a forgery's: one, by a
+#                prover that sends its proofs though the witness fails, FC_ZK_SELF_CHECK=skip), and upstream's replay --zk
+#                of the last
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
 #                --coins os; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
@@ -111,7 +112,7 @@ busy = [1 - (b[c][3] + b[c][4] - a[c][3] - a[c][4]) / max(1, sum(b[c]) - sum(a[c
 print(round(sum(busy) / len(busy), 3))
 EOF
   gpu_sample $d/gpu-mib.txt & local GS=$!
-  FC_VERIFY_AHEAD=$NS taskset -c $PCPU /usr/bin/time -v -o $d/time-prove.txt $B prove $zk --gpu --verifier $addr --instances $inst \
+  FC_VERIFY_AHEAD=$NS FC_ZK_SELF_CHECK=${SELF_CHECK:-stop} taskset -c $PCPU /usr/bin/time -v -o $d/time-prove.txt $B prove $zk --gpu --verifier $addr --instances $inst \
     --circuit $circ --warm $WARM --runs $RUNS 2> $d/prove.err | stamp > $d/prove.tsv
   touch $d/gpu-mib.txt.stop; wait $GS
   grep -h panicked $d/prove.err | head -3
@@ -159,7 +160,9 @@ def live(d):
     warm = int(text(d / "warm.txt").strip() or sys.argv[3])
     timed = [(t, v) for t, v in rows if not v.get("warm")]
     warmed = [(t, v) for t, v in rows if v.get("warm")]
-    med = lambda f: statistics.median([f(v) for _, v in timed]) if timed else None
+    def med(f, vs=None):
+        xs = [x for x in (f(v) for v in (vs if vs is not None else [v for _, v in timed])) if x is not None]
+        return statistics.median(xs) if xs else None
     t0 = warmed[-1][0] if warmed else None
     mib = [int(x) for x in text(d / "gpu-mib.txt").split() if x.strip().isdigit()]
     # the verifier's own seconds per session (serve's SESSION records, by session name), and --zk's mask-rank check
@@ -171,7 +174,7 @@ def live(d):
             "why": [v.get("why") for _, v in rows if v.get("accepted") is not True],
             "serve_why": [v.get("why") for v in served if v.get("accepted") is not True],
             "prover_cores_busy_before": float(text(d / "bgload.txt").strip() or "nan"),
-            "serve_verify_s": statistics.median([v["verify_s"] for v in served[warm:]]) if len(served) > warm else None,
+            "serve_verify_s": med(lambda v: v.get("verify_s"), served[warm:]),
             "serve_verify_all_s": [v.get("verify_s") for v in served], "serve_accepted": [v.get("accepted") for v in served],
             "zkrank_s": statistics.median(rank_s) if rank_s else None, "zkrank_all_s": ranks,
             "prove_total_s": med(lambda v: v.get("prove_total_s")), "prove_s": timed[-1][1].get("prove_s") if timed else None,
@@ -394,7 +397,7 @@ oprove)
   W0=$WARM R0=$RUNS
   for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
     l=${C//\//-}; want $l || continue
-    case $l in forged-*) WARM=0 RUNS=1 ;; *) WARM=$W0 RUNS=$R0 ;; esac; NS=$((WARM + RUNS)); LAST=
+    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS)); LAST=
     loopback $l $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
     du -sb $V/$C/inst.bin $V/$C/pub.bin $V/$C/circuit.txt ${LAST:+$LAST/*.bin} > $O/oprove/$l/sizes.txt
     [ -n "${LAST:-}" ] || { echo "$l: no session"; continue; }

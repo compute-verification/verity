@@ -4239,7 +4239,13 @@ fn main() {
             let warm: usize = arg("--warm", "0").parse().unwrap();
             let dump = arg("--dump", "");
             let split = (tables > 1).then(|| session_tables(&st, &inst, None, tables).ok()).flatten();
-            let base = Plan { gpu: flag("--gpu"), tables, split, ..Plan::default() };
+            // FC_ZK_SELF_CHECK=skip: a negative control's prover, which sends its inner proofs when the witness fails
+            let zk_self_check = match std::env::var("FC_ZK_SELF_CHECK").as_deref() {
+                Err(_) | Ok("stop") => zkv::SelfCheck::Stop,
+                Ok("skip") => zkv::SelfCheck::Skip,
+                Ok(v) => refuse(format!("FC_ZK_SELF_CHECK={v}: stop or skip")),
+            };
+            let base = Plan { gpu: flag("--gpu"), tables, split, zk_self_check, ..Plan::default() };
             let seeds: Vec<ProverSeed> = (0..warm + runs).map(|_| ProverSeed::from_os()).collect();
             let verify_ahead = std::env::var("FC_VERIFY_AHEAD").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
             prove_sessions(&st, &inst, &base, &seeds, warm, &arg("--verifier", "127.0.0.1:7500"), verify_ahead, &mut |run, v, proofs| {
