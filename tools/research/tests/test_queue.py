@@ -213,6 +213,36 @@ def test_a_file_renamed_out_of_a_grants_paths_needs_the_grant(tmp_path):
     assert Rules.parse(RULES).needs(tmp_path, base, _git(tmp_path, "rev-parse", "HEAD")) == {"vllm-coordinator"}
 
 
+def test_a_head_with_two_merge_bases_needs_only_what_merging_it_onto_main_changes(tmp_path):
+    """A head that merged two PRs main merged separately has both as merge bases with main, and the diff from either carries the
+    other's change: here a vLLM file the head never touched (#1169, #1171)."""
+    def commit(files: dict[str, str], msg: str) -> str:
+        for p, text in files.items():
+            (tmp_path / p).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / p).write_text(text)
+        _git(tmp_path, "add", "-A")
+        _git(tmp_path, "commit", "-q", "-m", msg)
+        return _git(tmp_path, "rev-parse", "HEAD")
+
+    _git(tmp_path, "init", "-q", "-b", "main")
+    base = commit({"a.txt": "a\n"}, "base")
+    _git(tmp_path, "checkout", "-q", "-b", "x", base)
+    x = commit({"integrations/vllm/x.py": "x = 1\n"}, "x")
+    _git(tmp_path, "checkout", "-q", "-b", "y", base)
+    y = commit({"integrations/vllm/y.py": "y = 1\n"}, "y")
+    _git(tmp_path, "checkout", "-q", "main")
+    _git(tmp_path, "merge", "-q", "--no-ff", "-m", "x lands", x)
+    _git(tmp_path, "merge", "-q", "--no-ff", "-m", "y lands", y)
+    main = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-q", "-b", "pr", y)
+    _git(tmp_path, "merge", "-q", "--no-ff", "-m", "the PR takes x", x)
+    head = commit({"a.txt": "b\n"}, "the PR's own change")
+    assert len(_git(tmp_path, "merge-base", "--all", main, head).split()) == 2
+    rules = Rules.parse(RULES)
+    assert rules.needs(tmp_path, main, head) == set()
+    assert rules.needs(tmp_path, main, commit({"integrations/vllm/x.py": "x = 2\n"}, "and a vLLM change")) == {"vllm-coordinator"}
+
+
 def test_a_lean_review_covers_only_the_change_it_printed_as_the_same_statements():
     """`reviewed`: an `audit.py --update` report stands in for the statement reviewer only on its own package, only when it printed
     nothing a reviewer must read, and only for entries it saw change: one another PR changed on `main` meanwhile isn't covered."""

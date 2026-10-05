@@ -214,23 +214,30 @@ class Rules:
         return f"{who}; granted with `research data label {grant_target(pr, head)} grant ROLE --by LANE` ({self.source})"
 
     def needs(self, repo: Path, base: str, head: str, reviews: Callable[[], list[dict]] = list) -> set[str]:
-        """The roles whose grants the change `base`...`head` (from their merge base) needs.  A `lean_audit` role isn't needed for a
-        lean-audit.json whose change one of the `audit.py --update` reports from `reviews()` printed whole as the same statements
-        (`reviewed`): Daniel's ruling (AGENTS.md "Lean") that a guarantee that only moved needs no statement reviewer."""
+        """The roles whose grants merging `head` onto `base` needs: what `git merge-tree --write-tree base head` changes against
+        `base`.  A diff from their merge base would do for one merge base, but a head with two (it merged PRs main also merged)
+        carries main's own history from the one git picks.  Only when git can't write that merge at all does the merge-base diff
+        stand in, which can only ask for more.  A `lean_audit` role isn't needed for a lean-audit.json whose change one of the
+        `audit.py --update` reports from `reviews()` printed whole as the same statements (`reviewed`): Daniel's ruling (AGENTS.md
+        "Lean") that a guarantee that only moved needs no statement reviewer."""
         from .merge import rule_touches
 
-        mb = _out(repo, "merge-base", base, head)
-        changed = [p for p in _out(repo, "diff", "--no-renames", "--name-only", mb, head).splitlines() if p]   # a rename's source too
+        r = _git(repo, "merge-tree", "--write-tree", base, head, check=False)
+        if r.returncode in (0, 1) and r.stdout.strip():                  # 1: conflicts, whose paths the tree still holds
+            mb, new = base, r.stdout.split("\n", 1)[0].strip()
+        else:
+            mb, new = _out(repo, "merge-base", base, head), head
+        changed = [p for p in _out(repo, "diff", "--no-renames", "--name-only", mb, new).splitlines() if p]   # a rename's source too
         roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
         reports = None
         for r in (r for r in self.grants if r.lean_audit and r.role not in roles):
             for p in audits:
-                old, new = ({s: _section(repo, rev, p, s) for s in r.lean_audit} for rev in (mb, head))
-                if old == new:
+                before, after = ({s: _section(repo, rev, p, s) for s in r.lean_audit} for rev in (mb, new))
+                if before == after:
                     continue
                 reports = reviews() if reports is None else reports
-                if not any(reviewed(p, old, new, rep) for rep in reports):
+                if not any(reviewed(p, before, after, rep) for rep in reports):
                     roles.add(r.role)
                     break
         return roles
