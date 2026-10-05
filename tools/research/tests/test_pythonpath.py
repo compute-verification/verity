@@ -74,6 +74,20 @@ def test_layouts_globs_exclude_and_missing(tmp_path):
     assert P.import_roots_dir(tmp_path)["roots"] == [] and P.import_roots_dir(tmp_path)["source"].startswith("none")
 
 
+def test_the_roots_own_distribution_is_a_member_and_a_virtual_root_is_not(tmp_path):
+    t = tmp_path / "tree"
+    _write(t, "pyproject.toml", '[project]\nname = "core"\n\n[build-system]\nrequires = ["hatchling"]\n\n[tool.hatch.build.targets.wheel]\npackages = ["core"]\n\n'
+                                '[tool.uv.workspace]\nmembers = ["libs/a"]\n')
+    _write(t, "core/__init__.py", "")
+    _write(t, "libs/a/pyproject.toml", "[project]\nname='a'\n")
+    _write(t, "libs/a/src/a/__init__.py", "")
+    d = P.import_roots_dir(t)
+    assert d["members"] == [".", "libs/a"] and d["roots"] == [".", "libs/a/src"] and d["missing"] == []
+    assert P.pythonpath("/w", d) == "/w:/w/libs/a/src"
+    _write(t, "pyproject.toml", '[project]\nname = "ws"\n\n[tool.uv]\npackage = false\n\n[tool.uv.workspace]\nmembers = ["libs/a"]\n')
+    assert P.import_roots_dir(t)["roots"] == ["libs/a/src"]
+
+
 def test_launch_request_sets_the_trees_pythonpath_appends_the_users_and_records_it(tmp_path):
     root = tmp_path / "root"
     sha = "d" * 40

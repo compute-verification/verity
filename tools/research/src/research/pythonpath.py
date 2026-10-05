@@ -3,7 +3,8 @@
 Hand lists for shipped trees failed silently twice (a missing `verity`: `verity` not importable -> one lane crashed, and a
 night earlier an incomplete manifest looked like a result).  The tree already says what its packages are:
 
-    <tree>/pyproject.toml   [tool.uv.workspace] members = [...] (globs allowed), exclude = [...]
+    <tree>/pyproject.toml   [tool.uv.workspace] members = [...] (globs allowed), exclude = [...]; a [project] here is a member
+                            too ("."), which uv makes of the root's own distribution (`verity`, whose package is <tree>/verity)
     <member>/pyproject.toml the member's build config names where its import packages live:
                               hatch       [tool.hatch.build.targets.wheel] packages = ["src/research", "python/verity_sp1", "verity_vllm"]
                                           -> the parent of each package path (src/, python/, the member itself)
@@ -58,9 +59,11 @@ def _member_roots(read: Reader, is_dir: Callable[[str], bool], member: str) -> l
 def import_roots(read: Reader, is_dir: Callable[[str], bool], dirs: Callable[[], list[str]]) -> dict:
     """{"members": [...], "roots": [...], "missing": [...], "source": what declared them}.  `read(relpath)` -> text or None, `is_dir(relpath)`,
     `dirs()` -> every directory of the tree (relative; used only to expand member globs)."""
-    ws = ((_toml(read, "pyproject.toml").get("tool") or {}).get("uv") or {}).get("workspace") or {}
+    top = _toml(read, "pyproject.toml")
+    ws = ((top.get("tool") or {}).get("uv") or {}).get("workspace") or {}
     pats, excl = list(ws.get("members") or []), list(ws.get("exclude") or [])
-    members: list[str] = []
+    builds = top.get("project") and "build-system" in top and ((top.get("tool") or {}).get("uv") or {}).get("package") is not False
+    members: list[str] = ["."] if builds and pats else []      # the root's own distribution (uv makes it a member)
     all_dirs: list[str] | None = None
     for pat in pats:
         if any(c in pat for c in "*?["):
