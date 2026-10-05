@@ -277,7 +277,7 @@ def iI (n : ℕ) : Interaction 1 1 2 (Fin n → Fin 3) (Fin 3) WAct (Obs 1 1 2) 
   op := rOp
   snd z k _ := ⟨if h : k < n then z ⟨k, h⟩ else 0, 0, false⟩
 
-instance {L K S : ℕ} (k : ℕ) (o : List (Obs L K S)) : Decidable (StatusComplete k o) := by
+instance instDecidableStatusComplete {L K S : ℕ} (k : ℕ) (o : List (Obs L K S)) : Decidable (StatusComplete k o) := by
   unfold StatusComplete; infer_instance
 
 theorem ingress_witness :
