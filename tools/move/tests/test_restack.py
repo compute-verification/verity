@@ -177,6 +177,18 @@ def test_a_conflict_with_the_tree_before_the_move(repo):
     assert (r["status"], r["step"], r["files"], r["base"]) == ("conflicted", "base", ["README.md"], base)
 
 
+def test_a_move_commit_the_script_did_not_write_is_refused(repo):
+    """The move branch's head, with a hand fixup after the generated commit, would make the last merge undo the fixup."""
+    on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    git(repo, "checkout", "-q", "-b", "move-branch", "move")
+    fixed = commit(repo, "a hand fixup", {"app/core/util.py": edit(UTIL, "return 3", "return 31")})
+    with pytest.raises(SystemExit, match="isn't what tools/move/layout.py writes"):
+        RS.restack("pr", fixed, cwd=str(repo))
+    r = RS.restack("pr", "move", onto=fixed, cwd=str(repo))
+    assert r["status"] == "clean" and show(repo, r["result"], "app/core/util.py") == edit(UTIL, "return 3", "return 31").replace(
+        "return 5", "return 50")
+
+
 def test_restacking_is_idempotent(repo):
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}),
        ("add extra", {"app/extra.py": "import app.util\n"}))

@@ -131,6 +131,23 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
             git("worktree", "prune", cwd=cwd)
 
 
+_GENERATED: dict[tuple[str, str, str], str] = {}
+
+
+def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
+    """Refuse a `move` whose tree isn't what `base`'s layout script writes: a later commit (the move branch's head, with its hand
+    fixups) taken as the move would make the third merge undo them, while every branch still reported clean."""
+    key = (move, base, python)
+    if key not in _GENERATED:
+        try:
+            _GENERATED[key] = run_script(base, base, python, cwd)[0]
+        except ScriptFailed as e:
+            raise SystemExit(f"{SCRIPT} fails on the move's base {base[:12]}: {e}") from None
+    if _GENERATED[key] != tree_of(move, cwd):
+        raise SystemExit(f"--move-commit {move[:12]} isn't what {SCRIPT} writes on {base[:12]}: pass the commit the script "
+                         "generated, and a later commit on the move's branch as --onto")
+
+
 def restack(branch: str, move: str, onto: str | None = None, base: str | None = None, python: str = sys.executable,
             cwd: str | None = None) -> dict:
     head, move = rev(branch, cwd), rev(move, cwd)
@@ -138,6 +155,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
     onto = rev(onto, cwd) if onto else move
     if not contains(move, onto, cwd):
         raise SystemExit(f"--onto {onto[:12]} doesn't contain the move {move[:12]}")
+    check_generated(move, base, python, cwd)
     r = {"branch": branch, "head": head, "move": move, "base": base, "onto": onto, "steps": []}
     _, plain = merge_trees(head, onto, cwd)
     r["plain"] = {"status": "conflicted" if plain else "clean", "files": plain}
