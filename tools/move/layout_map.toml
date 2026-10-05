@@ -287,7 +287,8 @@ parallel = true
 exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock",
            "backends/numerical/reports/**", "benchmarks/numerical/reports/**",
-           "**/price_twins.json", "**/discrepancy_log.json", "tools/move/**"]
+           "**/price_twins.json", "**/discrepancy_log.json", "tools/move/**",
+           "catalog/silicon/captures/**", "catalog/silicon/hawkeye/**"]
 # Old paths that are keys outside the tree, never rewritten: the frozen evidence artifact is laid out at its former repository
 # paths (`verity_numerical.bench.frozen`), and labels cite them.
 keep = ["backends/numerical/reports", "backends/numerical/reports/*", "backends/*/results", "backends/*/results/*",
@@ -295,4 +296,4 @@ keep = ["backends/numerical/reports", "backends/numerical/reports/*", "backends/
 # Rewritten although excluded above: data keyed by repository path (their pinned digests must not change).
 include = ["fixtures/artifacts.json", "backends/flock/tests/fixtures/randomness_lean.json",
            "experimental/sampled_proofs/tests/fixtures/exfiltration_lean.json",
-           "**/lake-manifest.json"]
+           "**/lake-manifest.json", "fixtures/tc/README.md", "catalog/silicon/captures/README.md"]
