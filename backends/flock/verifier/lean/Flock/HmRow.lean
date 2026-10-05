@@ -1338,12 +1338,13 @@ def outGroup (c : Circuit) (j : Nat) : Nat × Nat × Nat × Nat :=
   (first, k, (c.outPorts.extract 0 first).foldl (· + ·.2) 0, (c.outPorts.extract first (first + k)).foldl (· + ·.2) 0)
 
 /-- What makes the rows inputs then outputs: META `input_ports` is the rows before one output row per output port, each
-named after its port with its words zero-padded to whole SHA-512 blocks (a bit row of all their bits), or per run of output
-ports (META `out_row_ports`) a `sha512/row-seg/v1` row of exactly their words named after its first, every row's name once;
-a unit's leaves and leaf cuts read input rows only. -/
+named after its port with its words zero-padded to whole SHA-512 blocks (a bit row of all their bits; a `sha512/row/v2`
+row may instead be exactly its port's words), or per run of output ports (META `out_row_ports`) a `sha512/row-seg/v1` row
+of exactly their words named after its first, every input row's and output port's name once (so every row's: an output
+row is named after its run's first port); a unit's leaves and leaf cuts read input rows only. -/
 def checkRows (c : Circuit) : V Unit := do
   let k ← J.nat c.metaJ "input_ports" "circuit META"
-  let names := (c.ports.map (·.name)).qsort (· < ·)
+  let names := ((c.ports.extract 0 k).map (·.name) ++ c.outPorts.map (·.1)).qsort (· < ·)
   if k + c.outRowPorts.size != c.ports.size || (List.range (names.size - 1)).any (fun i => names[i]! == names[i + 1]!)
       || (List.range c.outRowPorts.size).any (fun j =>
         let (first, n, _, w) := outGroup c j
