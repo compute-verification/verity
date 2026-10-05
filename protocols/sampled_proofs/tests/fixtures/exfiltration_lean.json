@@ -3,10 +3,14 @@
  "statement": "FlockSoundness.Audit.Partition.audit_exfiltration",
  "inputs": {
   "protocols/sampled_proofs/tests/lean/ExfiltrationVectors.lean": "ad6ac96e87a84bd5dd1580c00581f9a0e6ed83c57a91689d76cd8e4f4fad8409",
-  "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Influence.lean": "ae7a432ea29a44932dc63272e60def5e560557a33ed40a0e353d7c3f8f618c7e",
-  "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Law.lean": "335f8f760b29addd5738cff190d56955508686b083e9a180d752b9037b1188a2",
-  "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Stratified.lean": "2f082213f11c8512655af91c04511ad054b53eeac8f60e446f21faad40790a4f",
-  "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/StratifiedMiss.lean": "87d52b8cabf82091d7e243bad579f0af88dd310fe290cda4f3131d116a63d5d7",
+  "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Influence.lean": "35266d2e1965f63965a3b0a41aed815d0cb5022bb8b3386339fa5cafeb8b3541",
+  "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Law.lean": "0a88e14abd0960598accc8fa83e2e467d8f0e7b24949ecb886c7046ae0bcc191",
+  "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Stratified.lean": "4da36d33179944fbc6749f62de713412cad8df5dfbc11a03061cd090f046ab09",
+  "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/StratifiedMiss.lean": "778093e4a4a967642c679cf9ca3ab0cab712bcd13fdddf8bda6141c5fdfe88be",
+  "backends/flock/verifier/lean/soundness/FlockSoundness/Protocol/Audit/Influence.lean": "880fd8d778d3c9945813b7e52018b1a0f7c5153f3ca80a210799b6c58203795f",
+  "backends/flock/verifier/lean/soundness/FlockSoundness/Protocol/Audit/Law.lean": "50cd82940d1d76295a2bbcf4e837e9ae979e7022952f174168e7fad8f6386019",
+  "backends/flock/verifier/lean/soundness/FlockSoundness/Protocol/Audit/Stratified.lean": "d4b92fa01a15d130269e59e50665080583c88e943ef5326cb9dd7ee92d6559d8",
+  "backends/flock/verifier/lean/soundness/FlockSoundness/Protocol/Audit/StratifiedMiss.lean": "cc38ed90ace196ccae6c7732ac7fc126970d17530585dc039e6e100895ccbbae",
   "backends/flock/verifier/lean/soundness/lake-manifest.json": "1c0503095d2bc70a324d7fe2931b512caaea5c6a49e02df44caf09fe2525129b",
   "backends/flock/verifier/lean/soundness/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632"
  },
