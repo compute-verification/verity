@@ -663,8 +663,9 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
     `pr:N@{head}` lacks `ready = true` asserted by someone other than `merge-queue` (the owner's word; who asserted it isn't matched
     to the PR's owner, which is mostly a Cursor agent id with no map to a lane) or a grant its change needs under the queue's rules
     as HEAD has them (`Rules.needs`, every role, not only TRAIN_GRANTS) for what it adds onto the train below its merge (a PR stacked
-    on another in the train needs no grant for that one's change), read after pulling the labels from the store's remote.
-    What can't be read refuses."""
+    on another in the train needs no grant for that one's change), read after pulling the labels from the store's remote; or N is
+    stacked on another pull request whose head on ``remote`` is in what N adds, so neither on main nor pinned below N at that
+    head (a grant at N's head covers N's own change, not its base's).  What can't be read refuses."""
     from .queue import QueueError, StoreGrants, grant_target
 
     out, pins = [], []
@@ -677,6 +678,15 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
             else:
                 out.append(f"#{m[1]}'s merge names {m[2]} but merges {sha[:12] or 'nothing'}")
     grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)))
+    prs: dict[str, list[int]] = {}
+    if pins:
+        r = _git(repo, "ls-remote", remote, "refs/pull/*/head", check=False)
+        if r.returncode:
+            raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {remote}'s pull request heads can't be "
+                          f"read ({(r.stderr or r.stdout).strip()[-200:]})")
+        for line in r.stdout.splitlines():
+            h, _, ref = line.partition("\t")
+            prs.setdefault(h, []).append(int(ref.split("/")[2]))
     try:
         rules = queue_rules(repo, "HEAD") if pins else None
         for n, sha, onto in pins:
@@ -687,6 +697,12 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
                     f"is now {head[:12]}: rebuild the train on the new head and check that" if head else
                     f"can't be read ({(r.stderr or r.stdout).strip()[-200:]})"))
                 continue
+            for h in _git(repo, "rev-list", f"{onto}..{sha}").stdout.split():
+                for m in prs.get(h, []):
+                    # rev-list's walk can stop early on skewed commit dates and list a commit `onto` has
+                    if m != n and _git(repo, "merge-base", "--is-ancestor", h, onto, check=False).returncode:
+                        out.append(f"#{n} at {sha[:12]} is stacked on #{m} at {h[:12]}, which is neither on main nor pinned below "
+                                   f"it in the tip at that head: pin {m}@{h[:9]} before it, or rebase #{n} off it")
             if (by := grants.readied_by(n, sha)) == {"merge-queue"}:
                 out.append(f"#{n}'s ready at {sha[:12]} is by merge-queue, not its owner: the owner relabels it (research data "
                            f"label {grant_target(n, sha)} ready true --by LANE)")
