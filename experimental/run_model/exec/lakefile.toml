@@ -1,0 +1,15 @@
+name = "run_model_exec"
+version = "0.0.0"
+defaultTargets = ["Run"]
+
+[leanOptions]
+autoImplicit = false
+
+# The executable verifier: its hashes, hm96 leaves, Merkle schemes, draw, coin tree and `Zk.verify` are the parties'
+# byte layer. No other dependency: this package is what runs, on both sides.
+[[require]]
+name = "flock_verifier"
+path = "../../../backends/flock/verifier/lean"
+
+[[lean_lib]]
+name = "Run"
