@@ -1,6 +1,7 @@
 """V*'s statements over one inner session (hiding model architectures, lane rec-v0): each Ligerito level's `RecOpen`
 statement (`verity_flock.rec_outer`) and the algebra's `InnerRepCheck` (`verity_flock.rec_residuals`), staged from the inner
-session's directory (`verity_flock.rec_live.Proxy.write`: ``public.json``, ``private.json``, ``session/``).
+session's directory (`verity_flock.rec_live.Proxy.write`: ``public.json``, ``private.json``, ``session/``). The algebra is
+staged as its parts (`rec_residuals.parts`, ``alg/p<j>/``), each within --zk's coin schedule, and holds when every part does.
 
     python -m verity_flock.rec_vstage points INNER CIRCUIT PUBLIC > points.json
     inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json os > fold.json    (tests/lean/InnerFold.lean)
@@ -23,12 +24,12 @@ rep r's) under `rec_outer.session_program` of ``public.json``, which the chain s
 
 * ``message``: the prover opens rep 0's first message round to another row (one bit of its first word), under the salt and
   the ``c_k`` it committed: the verifier's ``pub.bin`` holds the honest ``c_k``, the prover's ``inst.bin`` the other row
-  (``alg/``).
+  (the part that reads ``m0``).
 * ``sum``: the prover's running sum after rep 0's last opening changed (one bit of its first word), the rows either side of
   it honest: the openings that read it (rep 0's last as ``acc_out``, rep 1's first as ``acc``: ``L<level>/``) and the
-  algebra (rep 0's ``acc1``, rep 1's ``acc0``: ``alg/``).
+  algebra (rep 0's ``acc1``, rep 1's ``acc0``: the part that reads them).
 * ``comb``: the verifier's comb for rep 0 one bit off the inner circuit's fold, as if the inner proof were of another circuit
-  (``alg/``).
+  (the part whose v holds it).
 """
 from __future__ import annotations
 
@@ -260,20 +261,23 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
         mrs = message_rounds(public, private, sh)
         regs, own = messages(program, mrs)
         t["entries_s"] = round(time.perf_counter() - t0, 2)
-        S = RR.spec(sh)
-        st = RR.statement(S, f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}", 2)
         a0, a1 = zip(*(chain.rep_ends(r) for r in range(2)))
         reads = {nm: (regs[nm], [0, 1]) for nm in regs}
         reads["acc0"], reads["acc1"] = (chain.reg, list(a0)), (chain.reg, list(a1))
         vs = [list(r.v) for r in vf.reps]
         if forge == "comb":
             vs[0][-64] ^= 1
-        d = out / "alg"
-        s = RR.write(st, reads, vs, d, evaluate=evaluate, own=own)
-        if forge == "message":
-            forge_row(d / "inst.bin", st.text, "m0", 0, 0, mrs[0]["rows"][0][0])
-            res["forged_message"] = {"port": "m0", "rep": 0, "word": 0, "bit": 0}
-        res["algebra"] = s
+        res["algebra"] = []
+        for j, p in enumerate(RR.parts(RR.spec(sh))):
+            st = RR.statement(p.S, f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}", 2)
+            names = [nm for nm, _ in p.S["ports"]]
+            d = out / "alg" / f"p{j}"
+            s = RR.write(st, {nm: reads[nm] for nm in names}, [[v[i] for i in p.v] for v in vs], d, evaluate=evaluate,
+                         own={nm: own[nm] for nm in names if nm in own})
+            if forge == "message" and "m0" in names:
+                forge_row(d / "inst.bin", st.text, "m0", 0, 0, mrs[0]["rows"][0][0])
+                res["forged_message"] = {"part": j, "port": "m0", "rep": 0, "word": 0, "bit": 0}
+            res["algebra"].append({**s, "part": j, "of_residuals": p.res, "regions": RR.regions(p.S["ports"], p.S["gf"]["nv"])})
     return res
 
 
@@ -310,13 +314,13 @@ def main(argv=None) -> int:
     res = stage(Path(a.inner), json.loads(Path(a.fold).read_text()), Path(a.out), levels, not a.no_algebra, a.forge,
                 not a.no_evaluate, pts, a.salts)
     print(json.dumps(res, sort_keys=True), flush=True)
-    alg = res.get("algebra")
-    if alg is not None and alg["unit_agrees"] not in (None, [True] * alg["instances"]):
+    alg = res.get("algebra", [])
+    if any(p["unit_agrees"] not in (None, [True] * p["instances"]) for p in alg):
         return 1
     if a.forge is not None:
         return 0
     held = all(not s["not_opened"] and not s["not_summed"] for s in res["levels"].values())
-    return 0 if held and (alg is None or all(alg["holds"])) else 1
+    return 0 if held and all(all(p["holds"]) for p in alg) else 1
 
 
 if __name__ == "__main__":

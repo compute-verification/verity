@@ -133,6 +133,31 @@ def test_a_real_rep_holds_and_fails_at_a_changed_comb_or_running_sum(reps):
     assert nz(RR.residual_words(S, rows2, v)) == [2 + sh.claims]
 
 
+def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
+    """`parts` cuts the algebra into statements of at most MAX_REGIONS regions that each read their residuals' row ports and v
+    elements: each part's residuals are the whole's on the fixture's reps (zero on the honest ones, the changed comb moving
+    the part of the lincheck alone), and at K = 4096's m = 35 the whole has the 125 regions the live prover counted."""
+    for sh, rows, v in reps:
+        S = RR.spec(sh)
+        whole = RR.residual_words(S, rows, v)
+        by = dict(zip([nm for nm, _ in S["ports"]], rows))
+        ps = RR.parts(S)
+        assert sorted(i for p in ps for i in p.res) == list(range(len(S["gf"]["res"])))
+        for p in ps:
+            assert RR.regions(p.S["ports"], p.S["gf"]["nv"]) <= RR.MAX_REGIONS
+            got = RR.residual_words(p.S, [by[nm] for nm, _ in p.S["ports"]], [v[i] for i in p.v])
+            assert got[:8 * len(p.res)] == [x for i in p.res for x in whole[8 * i:8 * i + 8]] == [0] * (8 * len(p.res))
+    sh, rows, v = reps[0]
+    S = RR.spec(sh)
+    by = dict(zip([nm for nm, _ in S["ports"]], rows))
+    v2 = list(v)
+    v2[-64] ^= 1
+    moved = [p.res for p in RR.parts(S) if any(RR.residual_words(p.S, [by[nm] for nm, _ in p.S["ports"]], [v2[i] for i in p.v]))]
+    assert len(moved) == 1 and 1 in moved[0]
+    big = RR.spec(A.Shape(35, 24, 8))
+    assert RR.regions(big["ports"], big["gf"]["nv"]) == 125 and len(RR.parts(big)) > 1
+
+
 def _holding(g: random.Random) -> tuple[list[int], list[int]]:
     """Ports on which SMALL's residuals are zero: the added terms set to the residuals they cancel."""
     w = [g.getrandbits(128) for _ in range(SMALL["nw"])]

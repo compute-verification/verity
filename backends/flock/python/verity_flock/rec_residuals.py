@@ -32,6 +32,7 @@ recombined once. A residual's output forms are then one product's, about 75K non
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
 import time
@@ -56,7 +57,8 @@ from . import circuit as FC
 from . import ir_lower as IL
 from .class_statement import ClassDefinition
 
-__all__ = ["InnerRepCheck", "OUT_WORDS", "commits_entry", "definition", "port_words", "residual_forms", "residual_words", "spec",
+__all__ = ["InnerRepCheck", "MAX_REGIONS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions", "residual_forms",
+           "residual_words", "spec",
            "statement", "unit_circuit", "write"]
 
 U16 = Array(16, BL.BIT)
@@ -67,6 +69,9 @@ LEAVES = 3 ** 7
 ZERO_SALT = b"verity/rec-v0/zero-residual-salt/v0"
 DERIVATION = "verity/rec-v0/inner-rep-check/coefficients/v1"
 ZERO_VALUE = "rec-residuals-zero"
+# a part's regions, at most: each region is two claims, each claim a round of the rep's coin stream, and a rep's other rounds
+# (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 256 (`coin_spec_of`)
+MAX_REGIONS = 64
 
 
 def port_words(n: int) -> int:
@@ -89,6 +94,80 @@ def spec(sh) -> dict:
     if lay.w[-4:] != A.ACC_NAMES:
         raise AssertionError("w does not end with the running sums")
     return S
+
+
+def regions(ports: list, nv: int) -> int:
+    """The statement's public regions (live `circuit.rs`, `Stmt::regions`): a digest region per row port and one for ``out``,
+    and v's words, which follow the row ports' words, in aligned power-of-two blocks."""
+    a = sum(port_words(n) for _, n in ports)
+    b, blocks = a + F_WORDS * nv, 0
+    while a < b:
+        e = (b - a).bit_length() - 1
+        while a % (1 << e):
+            e -= 1
+        a, blocks = a + (1 << e), blocks + 1
+    return len(ports) + 1 + blocks
+
+
+def parts(S: dict, max_regions: int = MAX_REGIONS) -> list[SimpleNamespace]:
+    """S's residuals cut into InnerRepCheck S's of at most ``max_regions`` public regions each (`regions`), each residual in
+    the first part it fits, in S's order. A part reads the row ports its residuals touch (in S's order, under their names)
+    and the v elements they touch (in v's order), w and v renumbered; ``res`` and ``v`` are their indices in S. Every
+    residual of S is one of a part's, so the algebra holds exactly when every part does."""
+    _check(S)
+    gf = S["gf"]
+    starts = [0]
+    for _, n in S["ports"]:
+        starts.append(starts[-1] + n)
+
+    def touched(r):
+        w, v = set(), set()
+        for t in list(r["add"]) + [t for pair in r["mul"] for k in pair for t in gf["ops"][k]]:
+            if t[0] == "w":
+                w.add(t[1])
+            elif t[0] == "wt":
+                w.update(range(t[1], t[1] + 128))
+            elif t[0] == "v":
+                v.add(t[1])
+            else:
+                raise ValueError(f"unknown term {t!r}")
+        return {bisect.bisect_right(starts, i) - 1 for i in w}, v
+
+    groups: list[tuple[list, set, set]] = []
+    for i, (P, V) in enumerate(map(touched, gf["res"])):
+        fit = lambda g: regions([S["ports"][p] for p in g[1] | P], len(g[2] | V)) <= max_regions
+        g = next((g for g in groups if fit(g)), None)
+        if g is None:
+            g = ([], set(), set())
+            if not fit(g):
+                raise ValueError(f"residual {i} alone reads more than {max_regions} regions")
+            groups.append(g)
+        g[0].append(i)
+        g[1].update(P)
+        g[2].update(V)
+    out = []
+    for R, P, V in groups:
+        wmap = {i: j for j, i in enumerate(i for p in sorted(P) for i in range(starts[p], starts[p + 1]))}
+        vmap = {i: j for j, i in enumerate(sorted(V))}
+
+        def term(t):
+            if t[0] == "w":
+                return ["w", wmap[t[1]]]
+            if t[0] == "v":
+                return ["v", vmap[t[1]]]
+            if any(wmap.get(t[1] + j) != wmap[t[1]] + j for j in range(128)):
+                raise ValueError(f"{t!r}: a transposed block over row ports the part does not read in a run")
+            return ["wt", wmap[t[1]], t[2]]
+
+        used = sorted({k for r in R for pair in gf["res"][r]["mul"] for k in pair})
+        op = {k: j for j, k in enumerate(used)}
+        g = {"nw": len(wmap), "nv": len(vmap), "ops": [[term(t) for t in gf["ops"][k]] for k in used],
+             "res": [{"mul": [[op[a], op[b]] for a, b in gf["res"][r]["mul"]], "add": [term(t) for t in gf["res"][r]["add"]]}
+                     for r in R]}
+        part = {"gf": g, "ports": [list(S["ports"][p]) for p in sorted(P)]}
+        _check(part)
+        out.append(SimpleNamespace(S=part, res=R, v=sorted(V)))
+    return out
 
 
 def _check(S: dict) -> None:

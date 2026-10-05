@@ -21,7 +21,8 @@
 # out/summary-$STEP.json.
 # env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (the Gemm_v2 contraction: DEFS is Gemm_v2{K,N=4096})  N=2048
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
-#      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, ..)
+#      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
+#              ..; a name without its part, alg, names every part)
 #      FORGE="message sum comb" (vstage)  JOBS=4 (vstage, lean)  INNER_LOOPBACK=1 (inner)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -89,7 +90,7 @@ GI=${CUDA_VISIBLE_DEVICES:-0}; GI=${GI%%,*}
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 # want NAME: NAME is in LEVELS (comma-separated names; empty: every one)
-want() { [ -z "${LEVELS:-}" ] || [[ ",$LEVELS," == *",$1,"* ]]; }
+want() { [ -z "${LEVELS:-}" ] || [[ ",$LEVELS," == *",$1,"* || ",$LEVELS," == *",${1%-p[0-9]*},"* ]]; }
 # stamp: each line of stdin with the time it arrived (a session's LIVE line is printed when its verdict is in)
 stamp() { while IFS= read -r l; do printf '%s\t%s\n' "$(date +%s.%N)" "$l"; done; }
 # gpu_sample FILE: the job's GPU's memory in use (MiB), every half second, until FILE.stop exists
@@ -390,7 +391,7 @@ pub, _, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) for l
   ;;
 oprove)
   V=$DD/v; [ -f $V/acc-salts.bin ] || { echo "run STEP=vstage first"; exit 1; }
-  # every staged statement (each level's, the algebra's, each forgery's: L3, alg, forged-sum-L6, ..), proved with --zk on
+  # every staged statement (each level's, each of the algebra's parts, each forgery's: L3, alg-p0, forged-sum-L6, ..), proved with --zk on
   # loopback, a forgery's once; upstream's replay --zk of the last session, which (accepted or not) is kept under $DD/v-sess
   # beside the statement directory Lean reads it with
   mkdir -p $DD/v-sess
