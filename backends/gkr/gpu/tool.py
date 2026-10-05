@@ -20,7 +20,10 @@ from __future__ import annotations
 import argparse
 import os
 
+from research.pythonpath import package_paths, workspace_root
 from research.store.tool import Tool
+
+TREE = workspace_root(__file__)
 
 DEFAULT_FIELD = "babybear6"
 
@@ -88,7 +91,7 @@ A_GPU_PROVE = Tool(
     command=["python", "-m", "gpu.run"],
     closure=["backends/gkr/gpu/**", "backends/gkr/packed/**", "backends/gkr/bench_result.py", "backends/gkr/soundness.py",
              "backends/direct/encode/**", "backends/direct/ligero/**", "backends/numerical/python/verity_numerical/**",
-             "packages/verity/src/verity/**"],
+             *package_paths(TREE, "verity", "**")],
     key_params=["dir", "vus", "checker", "path", "field", "clear", "tier", "lo", "relation"],
     key_conditions=["hw.family"],
     param_artifacts=["dir"],

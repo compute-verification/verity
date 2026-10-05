@@ -39,7 +39,7 @@ from verity.ml.tc.models import (
 )
 from verity.ml.tc.term import Term, e2m1_product, e5m2_product
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 VECTORS = ROOT / "fixtures" / "tc" / "autoproof-probe-vectors.json"
 K32_E2M1_CAPTURE = Path(__file__).parent / "fixtures" / "tc-sm120-k32-e2m1-2026-09-30" / "records.json"
 

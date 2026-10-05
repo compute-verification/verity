@@ -74,6 +74,32 @@ def test_layouts_globs_exclude_and_missing(tmp_path):
     assert P.import_roots_dir(tmp_path)["roots"] == [] and P.import_roots_dir(tmp_path)["source"].startswith("none")
 
 
+def test_a_package_split_across_members_is_found_in_each_and_one_found_nowhere_raises(tmp_path):
+    t = tmp_path / "tree"
+    _write(t, "pyproject.toml", '[tool.uv.workspace]\nmembers = ["upper", "lower", "other"]\n')
+    for member, module in (("upper", "ml"), ("lower", "ir")):
+        _write(t, f"{member}/pyproject.toml", '[tool.hatch.build.targets.wheel]\npackages = ["src/core"]\n')
+        _write(t, f"{member}/src/core/{module}/__init__.py", "")
+    _write(t, "other/pyproject.toml", "[project]\nname='other'\n")
+    _write(t, "other/src/other/__init__.py", "")
+    _write(t, "uv.lock", "")
+    _write(t, "upper/uv.lock", "")
+    assert P.package_dirs(t, "core") == ["upper/src/core", "lower/src/core"]
+    assert P.package_dirs(t, "other") == ["other/src/other"]
+    with pytest.raises(LookupError, match="'gone'"):
+        P.package_dirs(t, "gone")
+    with pytest.raises(LookupError):
+        P.package_dirs(tmp_path, "core")
+    assert P.workspace_root(t / "lower" / "src" / "core" / "ir" / "__init__.py") == t.resolve()
+    assert P.package_paths(t, "core", "**", "ir/**", "ml/__init__.py") == ["upper/src/core/**", "lower/src/core/**", "lower/src/core/ir/**",
+                                                                          "upper/src/core/ml/__init__.py"]
+    with pytest.raises(LookupError, match="'tc/\\*\\*'"):
+        P.package_paths(t, "core", "ir/**", "tc/**")
+    assert P.workspace_root(t / "upper") == t.resolve(), "a member's own pyproject.toml declares no workspace, lock or not"
+    with pytest.raises(LookupError):
+        P.workspace_root(tmp_path)
+
+
 def test_a_workspace_root_that_is_a_package_is_reached_through_a_shim_never_the_root(tmp_path, monkeypatch):
     monkeypatch.setattr(P, "SHIM_BASE", tmp_path / "shims")
     t = tmp_path / "tree"
@@ -87,6 +113,7 @@ def test_a_workspace_root_that_is_a_package_is_reached_through_a_shim_never_the_
     _write(t, "tools/one/one/__init__.py", "")
     d = P.import_roots_dir(t)
     assert (d["shim"], d["roots"], d["missing"]) == (["core"], ["src", "tools/one"], [])
+    assert P.package_dirs(t, "core") == ["core"] and P.package_dirs(t, "one") == ["tools/one/one"]
     path = P.pythonpath(str(t), d, extra="/mine", shim_base=tmp_path / "shims").split(":")
     shim = Path(path[0])
     assert path[1:] == [str(t / "src"), str(t / "tools/one"), "/mine"] and str(t) not in path

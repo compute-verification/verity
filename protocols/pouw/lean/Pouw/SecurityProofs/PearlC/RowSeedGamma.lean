@@ -203,7 +203,7 @@ theorem MatEq.useful (d : PearlCDevice) {m n k m' n' k' : ℕ} {A : Matrix (Fin 
   exact MatEq.refl _
 
 theorem FormChain.elem_congr {r : ℕ} {fc fc' : FormChain r} (hfc : fc = fc') {a a' x x' b b' : ℚ}
-    {e e' f f' : Fin r → ℚ} (ha : a = a') (hx : x = x') (hb : b = b') (he : e = e') (hf : f = f') :
+    {e e' f f' : Fin r → Code} (ha : a = a') (hx : x = x') (hb : b = b') (he : e = e') (hf : f = f') :
     fc.elem a x b e f = fc'.elem a' x' b' e' f' := by
   subst hfc ha hx hb he hf; rfl
 
@@ -233,7 +233,7 @@ theorem unitChain_snd_apply (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : W
         ((sem.noise H s U u act).EB b) ((sem.noise H s U u act).FB l) := rfl
 
 /-- The peel's BF16 noise row of one operand row, `bf16(E′)` with `E′ = lineCodes β e`, as `unitUsefulDev` reads it. -/
-def beRow (β : ℚ) (e : Fin Params.pi.r → ℚ) : Fin 32 → ℕ := fun p => bf16WordOf (codeVal (lineCodes β e p))
+def beRow (β : ℚ) (e : Fin Params.pi.r → Code) : Fin 32 → ℕ := fun p => codeBf16 (lineCodes β e p)
 
 theorem atNat_ticket_row {d : PearlCDevice} (hd : d.RowLocal) {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code)
     (B : Matrix (Fin n) (Fin k) Code) {i : ℕ} (hi : i < m) (j : ℕ) :
@@ -259,7 +259,7 @@ theorem useful_row {d : PearlCDevice} (hd : d.RowLocal) (sem : PearlCSem Q R S) 
     (u : ℕ) (act : Codes) {i : ℕ} (hi : i < (U.layout.shape u).m) (j : ℕ) :
     atNat (sem.unitUsefulDev d H s U u act) i j =
       atNat (d.useful (fun _ : Fin 1 => (sem.unitChain H s U u act).1 ⟨i, hi⟩) (sem.unitChain H s U u act).2
-        (fun l p => e4m3 ((sem.noise H s U u act).FA l p)) (fun l p => e4m3 ((sem.noise H s U u act).FB l p))
+        (fun l p => (sem.noise H s U u act).FA l p) (fun l p => (sem.noise H s U u act).FB l p)
         (fun _ : Fin 1 => beRow (sem.beta (U.layout.shape u).k
           (wordsVal (U.layout.shape u).m (U.layout.shape u).k act ⟨i, hi⟩)) ((sem.noise H s U u act).EA ⟨i, hi⟩))
         (fun b => beRow (sem.beta (U.layout.shape u).k
@@ -331,8 +331,8 @@ theorem split_useful {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem
   have hk := (splitShape_k hu hi).symm
   refine congrFun (congrFun (MatEq.atNat_eq (MatEq.useful d (matEq_row (splitRow_fst hN H s hu hi act))
     (splitRow_snd hN H s hu hi act) ?_ ?_ ?_ ?_)) 0) j
-  · exact ⟨hk, rfl, fun l p hl hp hl' _ => congrArg e4m3 ((hz.2.1 l hl hl' ⟨p, hp⟩).1)⟩
-  · exact ⟨hk, rfl, fun l p hl hp hl' _ => congrArg e4m3 ((hz.2.1 l hl hl' ⟨p, hp⟩).2)⟩
+  · exact ⟨hk, rfl, fun l p hl hp hl' _ => (hz.2.1 l hl hl' ⟨p, hp⟩).1⟩
+  · exact ⟨hk, rfl, fun l p hl hp hl' _ => (hz.2.1 l hl hl' ⟨p, hp⟩).2⟩
   · exact matEq_row (VecEq.of_eq (congrArg₂ beRow (finFun_congr hN.2.2.1 hk fun _ _ _ => rfl) (funext hz.1)))
   · refine ⟨(splitShape_n hu hi).symm, rfl, fun b p hb hp hb' _ => ?_⟩
     exact congrFun (congrArg₂ beRow
@@ -495,9 +495,9 @@ section Reduction
 
 variable {Q R S : Type} {sem sem' : PearlCSem Q R S}
 
-theorem operandOK_of_floor (h : sem'.floor = sem.floor) {p q : ℕ} {W : Codes} (hW : sem'.OperandOK p q W) :
-    sem.OperandOK p q W :=
-  ⟨hW.1, fun i => ⟨(hW.2 i).1, h ▸ (hW.2 i).2⟩⟩
+theorem rowOK_of_floor (h : sem'.floor = sem.floor) {p q i : ℕ} {W : Codes} (hW : sem'.RowOK p q W i) :
+    sem.RowOK p q W i :=
+  ⟨hW.1, fun hi => ⟨(hW.2 hi).1, h ▸ (hW.2 hi).2⟩⟩
 
 /-- A row of admissible activations is admissible as its own unit. -/
 theorem split_actOK (hN : RowSeedNoise sem sem') {U : Workload} {u i : ℕ} (hu : u < U.layout.N)
@@ -648,7 +648,7 @@ theorem ttOutRowSeed_of_ttOut [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S
     ⟨(hrun H (A.pre.eval H) s).2.1.trans (hA H s).1,
       le_trans (Nat.add_le_add_left (hrun H (A.pre.eval H) s).2.2 _) (hA H s).2⟩
   have hU' : (splitWorkload U).InDomain (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) :=
-    ⟨hR, pearlCDomainDev_split hU.2.1, fun v hv => operandOK_of_floor hN.2.2.2.1 (hU.2.2 _ (unitOfRow_lt hv))⟩
+    ⟨hR, pearlCDomainDev_split hU.2.1, fun v hv j hj => rowOK_of_floor hN.2.2.2.1 (hU.2.2 _ (unitOfRow_lt hv) j hj)⟩
   refine le_trans (Pouw.pr_mono fun x hx => lt_of_lt_of_le hx ?_)
     (hTT.2 (splitWorkload U) hU' T hT q hq ⟨A.pre, prog', act'⟩ hA')
   have htr : (⟨A.pre, prog', act'⟩ : Adversary CM).transcript (splitWorkload U) x.1 x.2 =
@@ -1024,7 +1024,7 @@ theorem ttOutTileRowSeed_of_ttOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [F
     ⟨(hrun H (A.pre.eval H) s).2.1.trans (hA H s).1,
       le_trans (Nat.add_le_add_left (hrun H (A.pre.eval H) s).2.2 _) (hA H s).2⟩
   have hU' : (splitWorkload U).InDomain (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) :=
-    ⟨hR, pearlCDomainDev_split hU.2.1, fun v hv => operandOK_of_floor hN.2.2.2.1 (hU.2.2 _ (unitOfRow_lt hv))⟩
+    ⟨hR, pearlCDomainDev_split hU.2.1, fun v hv j hj => rowOK_of_floor hN.2.2.2.1 (hU.2.2 _ (unitOfRow_lt hv) j hj)⟩
   refine le_trans (Pouw.pr_mono fun x hx => lt_of_lt_of_le hx ?_)
     (hTT.2 (splitWorkload U) hU' T hT q hq ⟨A.pre, prog', act'⟩ hA')
   have htr : (⟨A.pre, prog', act'⟩ : Adversary CM).transcript (splitWorkload U) x.1 x.2 =
