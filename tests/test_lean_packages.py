@@ -88,15 +88,16 @@ def test_protocol_packages_require_core_and_protocols_only():
     """A protocol's Lean package may require core's and other protocols' packages (the ruling of Oct 1 in
     `.agents/skills/lean-proofs/SKILL.md`), and the proofs split out of them into `security_proofs/` (`tools/lean/split.py`),
     never a backend's: backends instantiate protocols, not the reverse."""
-    protocols = [pkg for pkg in lake_packages() if pkg.relative_to(ROOT).parts[0] == "protocols"]
+    protocols = [pkg for pkg in lake_packages() if pkg.relative_to(ROOT).parts[:2] == ("verity", "protocols")]
     names = {tomllib.loads((pkg / "lakefile.toml").read_text())["name"] for pkg in protocols}
-    assert PROTOCOL_PACKAGES <= names, f"the protocols' Lake packages aren't under protocols/: {PROTOCOL_PACKAGES - names}"
+    assert PROTOCOL_PACKAGES <= names, f"the protocols' Lake packages aren't under verity/protocols/: {PROTOCOL_PACKAGES - names}"
     bad = []
     for pkg in protocols:
         for r in _requires(pkg):
             if "path" in r:
                 target = (pkg / r["path"]).resolve()
-                if target != CORE and target.relative_to(ROOT).parts[0] not in ("protocols", "security_proofs"):
+                rel = target.relative_to(ROOT).parts
+                if target != CORE and rel[:2] != ("verity", "protocols") and rel[0] != "security_proofs":
                     bad.append(f"{pkg.relative_to(ROOT)} requires {target.relative_to(ROOT)}")
     assert not bad, bad
 
