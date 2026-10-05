@@ -9,7 +9,7 @@ internal linear layer ``1 + Diag(V)`` with ``V = [-2, 1, 2, 1/2, 3, 4, -1/2, -3,
 (``field_type=1, alpha=7, n=31, t=24, R_F=8, R_P=21``; ``BABYBEAR_POSEIDON2_RC_24_*``, canonical values).  The permutation
 order is Plonky3's: one external linear layer first, then the 4 initial external rounds (add constants, S-box on every
 lane, external layer), the 21 internal rounds (constant on lane 0, S-box on lane 0, internal layer), the 4 terminal
-external rounds.  ``KAT_24`` is Plonky3's ``test_default_babybear_poseidon2_width_24`` vector; ``tests/commitments/test_poseidon2.py``
+external rounds.  ``KAT_24`` is Plonky3's ``test_default_babybear_poseidon2_width_24`` vector; ``verity/primitives/commitments/tests/test_poseidon2.py``
 checks the scalar, numpy and ring evaluations against it.
 
 Sponge (``hash_row``): padding-free overwrite-mode sponge of rate 16 / capacity 8 -- Plonky3's ``PaddingFreeSponge``

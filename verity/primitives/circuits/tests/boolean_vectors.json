@@ -1,5 +1,5 @@
 {
- "about": "verity/ir/PROTOCOL.md \u00a79: written by test_boolean.py --write",
+ "about": "verity/primitives/circuits/PROTOCOL.md \u00a79: written by test_boolean.py --write",
  "gates": [
   [
    "And2_v1",
