@@ -6,8 +6,9 @@ import Pouw.Protocol.PearlC.PeelExactP
 /-!
 # `pc8`'s tile check (definitions only)
 
-The plain `pc8` Program as a `TileCheck`: at each unit shape `(m, k, n)` the circuit is `Pc8Check{m, k, n, 64, 64}`'s
-table (`WholeCircuit.whole8`, the deployed tile `pc8.TILE`) and its partition the units', with
+The plain `pc8` Program as a `TileCheck`: at each unit shape `(m, k, n)` the circuit is `Pc8Check{m, k, n, TM, TN}`'s
+table (`WholeCircuit.whole8`) at the audit grid's tile at that shape (`tileSide`): `TM = min(m, 64)` and
+`TN = min(n, 64)`, so `pc8.TILE`'s `64 × 64`, or decode's `32 × 64`. Its partition is the units', with
 
 * `out sh rows cols`: the `C̃` and `U` gates of the entries in `rows × cols`;
 * `pub sh`: the noise lines `ea` and `eb`, the bases `fa` and `fb`, and `G`. Their anchors (`anchors8`) are the unit's
@@ -18,8 +19,9 @@ table (`WholeCircuit.whole8`, the deployed tile `pc8.TILE`) and its partition th
   activations, its unit's weights, and its ticket and useful words (`rows8`), each as the gate's low 32 bits;
 * `Collides`: `False`, since the checked words are registered wires.
 
-The Program needs whole tiles (`pc8.Shape.check`: `64 ∣ m`, `64 ∣ n`); at another shape the table is still defined,
-and L3 is stated on whole-tile layouts.
+The Program needs whole tiles (`pc8.Shape.check`: `TM ∣ m`, `TN ∣ n`), so a shape whose last tile is narrower than
+the others (`m = 80`: a 64-row tile and a 16-row one) is outside it. There the table is still defined, and L3 is
+stated on shapes whose tile divides them.
 -/
 
 namespace Pouw.PearlC.WholeCircuit
@@ -27,6 +29,10 @@ namespace Pouw.PearlC.WholeCircuit
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit Pouw.PearlC.RowCircuit Pouw.PearlC.PeelExactP
 
 variable {Q R S : Type}
+
+/-- The side of the audit grid's tile along a dimension of `d` (`grid_tiles(shape, 64, 64)`): `64`, or `d` itself
+below it. -/
+def tileSide (d : ℕ) : ℕ := min d 64
 
 /-- The first gate of the tiles, after the row units. -/
 def tiles8 (p : Pipeline) (M N K : ℕ) : ℕ :=
@@ -57,7 +63,7 @@ def rows8 (p : Pipeline) (M N K TM TN : ℕ) (act wt tk us : Codes) (g : ℕ) : 
 fails. -/
 def gram8 (p : Pipeline) {m n k : ℕ} (z : Noise m n k Params.pi.r) (s q : ℕ) : ℕ :=
   if h : s < 32 ∧ q < 32 then
-    (chainWordP? p 4 (rowAtoms (fun l => e4m3 (z.FB l ⟨s, h.1⟩)) (fun l => e4m3 (z.FA l ⟨q, h.2⟩)))).getD 0
+    (chainWordP? p 4 (rowAtoms (fun l => z.FB l ⟨s, h.1⟩) (fun l => z.FA l ⟨q, h.2⟩))).getD 0
   else 0
 
 /-- The anchors on gate `g` from the unit's noise `z`: line `i`'s codes on `ea` and line `j`'s on `eb`, the bases' codes
@@ -80,20 +86,22 @@ def anchors8 (p : Pipeline) {m n k : ℕ} (z : Noise m n k Params.pi.r) (g : ℕ
 def tileCheck8 (ops : RowOps) (p : Pipeline)
     (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r) : TileCheck Q R S where
-  C sh := (whole8 ops p sh.m sh.k sh.n 64 64).spec.toCircuit
-  n sh := unitCount (whole8 ops p sh.m sh.k sh.n 64 64).blocks
-  part sh := (whole8 ops p sh.m sh.k sh.n 64 64).part
+  C sh := (whole8 ops p sh.m sh.k sh.n (tileSide sh.m) (tileSide sh.n)).spec.toCircuit
+  n sh := unitCount (whole8 ops p sh.m sh.k sh.n (tileSide sh.m) (tileSide sh.n)).blocks
+  part sh := (whole8 ops p sh.m sh.k sh.n (tileSide sh.m) (tileSide sh.n)).part
   out sh rows cols := Finset.univ.filter fun g => ∃ i ∈ rows, ∃ j ∈ cols, i < sh.m ∧ j < sh.n ∧
-    (g.val = cGlob8 p sh.m sh.n sh.k 64 64 i j ∨ g.val = uGlob8 p sh.m sh.n sh.k 64 64 i j)
+    (g.val = cGlob8 p sh.m sh.n sh.k (tileSide sh.m) (tileSide sh.n) i j ∨
+      g.val = uGlob8 p sh.m sh.n sh.k (tileSide sh.m) (tileSide sh.n) i j)
   pub sh := Finset.univ.filter fun g => (eaAt sh.m sh.k ≤ g.val ∧ g.val < bAt sh.m sh.k) ∨
     (ebAt sh.m sh.n sh.k ≤ g.val ∧ g.val < in8 sh.m sh.n sh.k)
   reg sh := Finset.univ.filter fun g => g.val < eaAt sh.m sh.k ∨
     (bAt sh.m sh.k ≤ g.val ∧ g.val < ebAt sh.m sh.n sh.k) ∨
-    ∃ i < sh.m, ∃ j < sh.n, g.val = cGlob8 p sh.m sh.n sh.k 64 64 i j ∨ g.val = uGlob8 p sh.m sh.n sh.k 64 64 i j
+    ∃ i < sh.m, ∃ j < sh.n, g.val = cGlob8 p sh.m sh.n sh.k (tileSide sh.m) (tileSide sh.n) i j ∨
+      g.val = uGlob8 p sh.m sh.n sh.k (tileSide sh.m) (tileSide sh.n) i j
   anchorsOf H s U u act := fun g => BitVec.ofNat _ (anchors8 p (noise H s U u act) g.val)
   rowsOf U u c := fun g => BitVec.ofNat _
-    (rows8 p (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k 64 64 c.act (U.weight (U.layout.wid u))
-      c.ticket c.useful g.val)
+    (rows8 p (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k (tileSide (U.layout.shape u).m)
+      (tileSide (U.layout.shape u).n) c.act (U.weight (U.layout.wid u)) c.ticket c.useful g.val)
   Collides _ _ _ _ _ _ := False
 
 end Pouw.PearlC.WholeCircuit

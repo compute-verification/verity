@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from research.pythonpath import package_dirs
 from research.store import attempt as A
 from research.store import derivation as D
 from research.store import preserved as P
@@ -43,7 +44,7 @@ def test_vllm_tools_are_registered_and_loadable_by_name():
         assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"
         assert t.command == [*CMD, stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
-        assert t.closure == ["integrations/vllm/**", "packages/verity/src/verity/**"]
+        assert t.closure == ["integrations/vllm/**", *(f"{d}/**" for d in package_dirs(REPO, "verity"))]
         for k in t.produces:
             assert k in KINDS, k
         assert "execution-evidence/v1" in t.produces and "run-files/v1" in t.produces
