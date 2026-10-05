@@ -1,8 +1,14 @@
 {
- "roots": ["Pous"],
+ "roots": [
+  "Pous.Assumptions",
+  "Pous.Guarantees",
+  "Pous.Protocol",
+  "Pous.SecurityProofs.Accounting.Numbers",
+  "Pous.SecurityProofs.Sanity"
+ ],
+ "proved_in": ["../../../security_proofs/pous"],
  "exempt": {
   "PousTargets": "open targets: every pinned statement as a sorry stub",
-  "CheckAxioms": "the headline #print axioms list (`lake env lean CheckAxioms.lean`)",
   "Grader": "the grader executable, which imports only Lean",
   "submissions": "graded one file at a time by grade.sh"
  },
