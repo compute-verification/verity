@@ -19,9 +19,9 @@
  "meaning": ["NetTiming.Protocol", "NetTiming.Assumptions", "NetTiming.Guarantees"],
  "layers": {
   "NetTiming.Protocol": {
-   "imports": ["Mathlib", "NetTiming.Protocol"],
+   "imports": ["NetTiming.Protocol"],
    "except": [],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+   "why": "the protocol's definitions are the Program, trusted text and Lean core only: they import no Mathlib, assumption, guarantee or proof"
   },
   "NetTiming.Assumptions": {
    "imports": ["Mathlib", "NetTiming.Protocol", "NetTiming.Assumptions"],
