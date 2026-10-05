@@ -178,19 +178,32 @@ of notation) gets one line, "printed differently", and is left out of the DM. De
 read from another module with the same content is counted on one line. A grant in `tools/check/queue.toml`
 (`lean_audit = ["guarantees", "reads"]`) would make such a change wait for a reviewer again.
 
+**A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with
+`def G (ys) : Prop := e'` in a `Guarantees` module, changes its record's signature and type hash. `audit.py --update`
+certifies the lift as the same statement when the type, with `G` unfolded once, hashes to the record's type hash and the
+named assumptions are the record's (`lifted_into`). `Facts.lean` (`liftOf`) unfolds by delta alone: the binders `xs` as they
+are, and in place of `G as` the value of `G` at the type's universe levels with its leading `fun`s instantiated by `as` (as
+`Meta.unfoldDefinition?` unfolds an applied constant), the proofs Lean abstracts out of a definition (its `G._proof_<n>`
+theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
+type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
+read by no other guarantee, needs no reading of its own; the review then holds no statement change, so the merge needs no
+statement reviewer for it. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+(binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
+theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
+lists a lifted guarantee as changed.
+
 **A move is not a change.** When declarations move (guarantees renamed, the definitions they read renamed or moved to other
-namespaces, a statement restated as a `def G : Prop` that a theorem `t : G` proves), write the moves as a JSON object of
-old names to new ones, each a declaration or a namespace (the longest prefix applies), and run
-`audit.py --update --moved MOVES.json PKG` on the record as it was before the move. The record's guarantees are renamed, and
-`Facts.lean` writes each guarantee's statement and each definition it reads once more with the build's names mapped back to
-the old ones, a statement whose type is a `Prop` definition under `meaning` also with that definition unfolded (and the
-proofs Lean abstracts out of a definition, its `G._proof_<n>` theorems, put back in place, as a theorem's type keeps them).
-The review compares those texts with the records of the old names: a guarantee that says what its record says gets one line, "the
-same statement under its old names" (moved from its old name, or restated as `G`, which then needs no reading of its own),
-and the definitions the same under their old names are counted on one line; neither is in Daniel's DM. Everything else
-prints as without the map. A map whose new names nest differently from its old ones is refused, and so is one under which two
-constants of those texts (or two guarantees) would have one old name, since the comparison could not tell them apart; an old
-theorem kept under its old name as the lemma behind a new guarantee is no conflict.
+namespaces), write the moves as a JSON object of old names to new ones, each a declaration or a namespace (the longest prefix
+applies), and run `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. The record's guarantees
+are renamed, and `Facts.lean` writes each guarantee's statement and each definition it reads once more with the build's names
+mapped back to the old ones, a lifted statement also with its definition unfolded. The review compares those texts with the
+records of the old names: a guarantee that says what its record says gets one line, "the same statement under its old
+names" (moved from its old name, lifted as above, or both), and the definitions the same under their old names are counted
+on one line. Daniel's DM, which reads only the records, leaves out a guarantee renamed with its type hash unchanged and a
+definition moved with its content. Everything else prints as without the map. A map whose new names nest differently
+from its old ones is refused, and so is one under which two constants of those texts (or two guarantees) would have one old
+name, since the comparison could not tell them apart; an old theorem kept under its old name as the lemma behind a new
+guarantee is no conflict.
 
 ## Merging records: `merge.py`
 
