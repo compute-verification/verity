@@ -242,12 +242,13 @@ class Run:
             while d and (d == root or d.startswith(root + "/")):
                 made.setdefault(f"{d}/__init__.py", "")
                 d = posixpath.dirname(d)
+        given = self.L.data.get("create", {})
         for path, text in sorted(made.items()):
-            if self._exists_new(path):
+            if self._exists_new(path) and (path not in given or self._read(path) == text):
                 continue
+            self.changes["files created" if not self._exists_new(path) else "files written again from [create]"] += 1
             self.texts[path] = text
             self.moved.setdefault(path, path)
-            self.changes["files created"] += 1
             if not self.dry:
                 (self.root / path).parent.mkdir(parents=True, exist_ok=True)
                 (self.root / path).write_text(text)
@@ -275,6 +276,9 @@ class Run:
 
     def old_module_of(self, new_path: str) -> str | None:
         old = self.old_of.get(new_path, new_path)
+        if old == new_path and (here := module_name(new_path, self.L.new_roots)) is not None and \
+                any(new_path.startswith(d + "/") for d in self.L.new_roots.values()):
+            return here                            # already at its new place (a rerun): its name doesn't change
         return module_name(old, self.L.old_roots)
 
     # ------------------------------------------------------------------------------------------------ rewriting

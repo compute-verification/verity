@@ -234,12 +234,22 @@ scripts = { "network-warden-calibrate" = "verity.protocols.accounting.communicat
 add_inputs = ["catalog", "kernels", "experimental/commitments/multiproof.py"]
 
 [create]
-# new files: path = contents
-"catalog/__init__.py" = '"""Public data the trusted base reads by digest: silicon semantics, Definitions, targets and the census."""\n'
-"kernels/__init__.py" = '"""Registered fast code, by op and device (untrusted): each kernel is checked against its Definition."""\n'
-"experimental/__init__.py" = '"""Constructions, schemes and circuits under development or kept for study, by area (untrusted; `verity` never imports it)."""\n'
-"verity/primitives/__init__.py" = '"""The primitives every protocol is built from: circuits, randomness, commitments and crypto."""\n'
-"verity/protocols/__init__.py" = '"""The protocols: verification, accounting (work, space, communication) and compliance."""\n'
+# new files: path = contents (the map is their source: a rerun writes them again when they differ)
+"catalog/__init__.py" = '''
+"""Public data the trusted base reads by digest: silicon semantics, Definitions, targets and the census."""
+'''
+"kernels/__init__.py" = '''
+"""Registered fast code, by op and device (untrusted): each kernel is checked against its Definition."""
+'''
+"experimental/__init__.py" = '''
+"""Constructions, schemes and circuits under development or kept for study, by area (untrusted; `verity` never imports it)."""
+'''
+"verity/primitives/__init__.py" = '''
+"""The primitives every protocol is built from: circuits, randomness, commitments and crypto."""
+'''
+"verity/protocols/__init__.py" = '''
+"""The protocols: verification, accounting (work, space, communication) and compliance."""
+'''
 "catalog/pyproject.toml" = '''# The catalog's suite: its tests run in the workspace's environment, against `verity` (an editable install of the root).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
