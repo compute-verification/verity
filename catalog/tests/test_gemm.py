@@ -191,7 +191,7 @@ def test_nvfp4_coordinate_replays_every_recorded_rtx5090_vector() -> None:
     """The 1,601 autoproof dot statements (K = 64 / 128 / 256 from a zero accumulator), through the coordinate: the recorded
     accumulator, then `cvt.rn.bf16.f32`."""
     root = Path(__file__).resolve().parents[2]
-    cases = json.loads((root / "fixtures" / "tc" / "autoproof-probe-vectors.json").read_text())["nvfp4_m16n8k64"]["cases"]
+    cases = json.loads((root / "catalog" / "silicon" / "captures" / "autoproof-probe-vectors.json").read_text())["nvfp4_m16n8k64"]["cases"]
     assert len(cases) == 1601
     for c in cases[::40]:
         ops = ([int(ch, 16) for ch in c["a"]], [int(ch, 16) for ch in c["b"]], list(bytes.fromhex(c["sa"])), list(bytes.fromhex(c["sb"])))

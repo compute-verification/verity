@@ -193,6 +193,12 @@ class Run:
     def plan(self) -> list[tuple[str, str]]:
         tracked = [p for p in git(self.root, "ls-files", "-z").split("\0") if p]
         self.tracked_old = set(tracked)
+        try:                                        # fetched fixtures: files of the tree that git ignores
+            fetched = {v for k, v in json.loads((self.root / "fixtures" / "artifacts.json").read_text()).items()
+                       if k.startswith("art:") and isinstance(v, str)}
+        except (OSError, ValueError):
+            fetched = set()
+        self.known_old = self.tracked_old | fetched
         self.binds = {}                             # old package -> names its __init__ binds to something not its submodule
         for p in tracked:
             if p.endswith("/__init__.py") and (pkg := module_name(p, self.L.old_roots)) and self.L.renamed_prefix(pkg):
@@ -313,6 +319,11 @@ class Run:
         for p, before in lean_before.items():
             if self._lean_records(self.texts.get(p) or self._read(p)) != before:
                 raise SystemExit(f"{p}: the rewrite would change a guarantee or reads record")
+        registered = {v for k, v in json.loads(self._read("fixtures/artifacts.json") or "{}").items()
+                      if k.startswith("art:") and isinstance(v, str)}
+        for p in sorted(registered & set(self.texts)):
+            if p in self.new_files:
+                self.note("registered fixtures rewritten (`research data refresh-fixtures --preserve` re-registers them)", p)
         for p, before in pins_before.items():
             if re.findall(r"\b[0-9a-f]{64}\b", self.texts.get(p) or self._read(p) or "") != before:
                 raise SystemExit(f"{p}: the rewrite would change a pinned digest")
@@ -409,7 +420,7 @@ class Run:
             token = m.group("p")
             name, _, rest = token.partition("/")
             full = f"{self.L.old_roots[name]}/{rest}".rstrip("/")
-            if self.L.kept(full) or not (full in self.tracked_old or full in self.old_dirs):
+            if self.L.kept(full) or not (full in self.known_old or full in self.old_dirs):
                 return token
             new, approx = self.L.path(full, full in self.old_dirs)
             if new is None:
@@ -466,7 +477,7 @@ class Run:
             if approx or "{" in tail:
                 self.note("approximate directory paths", f"{path}: {token} -> {new}/{tail}")
             return f"{new}/{tail}" + ("/" if slash else "")
-        is_dir = t in self.old_dirs or slash or (t not in self.tracked_old and self.L.file(t) is None)
+        is_dir = t in self.old_dirs or slash or (t not in self.known_old and self.L.file(t) is None)
         new, approx = self.L.path(t, is_dir)
         if new is None:
             if approx:
@@ -484,7 +495,7 @@ class Run:
         if target.startswith("..") or target == "." or self.L.kept(target):
             return None
         is_dir = target in self.old_dirs
-        if not (target in self.tracked_old or is_dir):
+        if not (target in self.known_old or is_dir):
             return None
         if is_dir:
             new_target, approx = self.L.directory(target)
@@ -586,8 +597,8 @@ class Run:
         target = "" if target == "." else target
         if target and self.L.kept(target):
             return m.group(0)
-        if target and (target in self.tracked_old or target in self.old_dirs):
-            new_target = self.L.file(target) if target in self.tracked_old else None
+        if target and (target in self.known_old or target in self.old_dirs):
+            new_target = self.L.file(target) if target in self.known_old else None
             if new_target is None:
                 new_target, approx = self.L.directory(target)
                 if new_target is None:
@@ -653,7 +664,7 @@ class Run:
             joined = "/".join(segs)
             if len(segs) == 1 and joined not in self.L.files and joined not in dict(self.L.dirs) and joined not in self.L.tokens:
                 return chain
-            if not (joined in self.tracked_old or joined in self.old_dirs or joined in self.L.files
+            if not (joined in self.known_old or joined in self.old_dirs or joined in self.L.files
                     or joined in dict(self.L.dirs) or joined in self.L.tokens):
                 return chain
             new = self._map_token(joined, path)

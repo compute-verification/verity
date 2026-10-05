@@ -313,4 +313,5 @@ keep = ["backends/numerical/reports", "backends/numerical/reports/*", "backends/
 # Rewritten although excluded above: data keyed by repository path (their pinned digests must not change).
 include = ["fixtures/artifacts.json", "backends/flock/tests/fixtures/randomness_lean.json",
            "experimental/sampled_proofs/tests/fixtures/exfiltration_lean.json",
-           "**/lake-manifest.json", "fixtures/tc/README.md", "catalog/silicon/captures/README.md"]
+           "**/lake-manifest.json", "fixtures/tc/README.md", "catalog/silicon/captures/README.md",
+           "fixtures/discrepancy_log.json"]

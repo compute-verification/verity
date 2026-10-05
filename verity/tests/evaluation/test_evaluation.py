@@ -270,7 +270,7 @@ def test_hopper_step_replays_the_h100_record() -> None:
 
 
 def test_nvfp4_dot_replays_every_recorded_rtx5090_vector() -> None:
-    cases = json.loads((ROOT / "fixtures" / "tc" / "autoproof-probe-vectors.json").read_text())["nvfp4_m16n8k64"]["cases"]
+    cases = json.loads((ROOT / "catalog" / "silicon" / "captures" / "autoproof-probe-vectors.json").read_text())["nvfp4_m16n8k64"]["cases"]
     by_k: dict[int, list] = {}
     for c in cases:
         by_k.setdefault(len(c["a"]), []).append(c)
