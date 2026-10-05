@@ -1,6 +1,6 @@
 """`audit.py`: the Lean audit, one run over every Lake package that carries a `lean-audit.json`.
 
-    python tools/lean/audit.py [--build] [--update [--moved FILE]] [--out DIR] PACKAGE_DIR...
+    python tools/lean/audit.py [--build] [--update [--owner @LANE] [--moved FILE]] [--out DIR] PACKAGE_DIR...
     python tools/lean/audit.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
 
 For each package it reads the facts from the roots' `.olean` files as data (`Facts.lean`: initializers disabled and no
@@ -33,7 +33,12 @@ environment extension loaded, so none of the package's code runs), and replays t
                  read, the guarantees that read them and the digest of those definitions; the hashes are SHA-256 over a
                  canonical form of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are
                  checked as they are until `--update` rewrites them); a record written before guarantees were called
-                 that holds them as `pins`, and is read so (`as_guarantees`)
+                 that holds them as `pins`, and is read so (`as_guarantees`); or an entry has no `owner`, the handle
+                 (`@lane`) of the lane that answers for it
+    reads        a definition a guarantee's statement reads lies outside the spec (the `layers` prefixes) of its package
+                 and of the packages it requires by path, and outside a pinned dependency, unless a `reads_exempt`
+                 prefix lists its module with a reason (an entry that exempts nothing fails too); or it lies in a spec
+                 module outside `meaning`, which the record therefore does not hold
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside, one declaration per task on Lean's threads
                  (`LEAN_NUM_THREADS`, by default the CPUs the audit may use): a declaration that skipped the kernel shows
@@ -62,12 +67,16 @@ publishes), and prints what changed: each changed guarantee's signature before a
 guarantee reads with its source now.  A weakened definition passes every axiom check and the replay, so a person has to see
 those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  A guarantee whose
 statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
-one line, and so does a definition read in another module with the same content.  `--moved FILE` (a JSON object of old
+one line, and so does a definition read in another module with the same content.  `--update` keeps each entry's `owner`
+and writes a new entry only with one, from `--owner`; an owner changed by hand gets one line, since it changes who answers
+for the statement, not what it says.  `--moved FILE` (a JSON object of old
 names to new ones, each a declaration or a namespace) renames the record's guarantees and compares the build with the
 records under the old names: a guarantee moved or restated as a `Prop` definition (`theorem t : G`) that says what its
 record says, and the definitions the same under their old names, get one line each.  `--all` first runs the controls
 (`controls`): a fixture package built with each audited toolchain (which `--build` installs first), which must pass clean
 and fail each check once a violation is added.
+Each package's report lists, without failing, the spec definitions that no guarantee reads, neither its own nor one of a
+package that requires it by path (`unread_spec`): a definition of the trusted text that nothing cites.
 The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
 package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
 too; its reading and replay run beside the builds that follow.
@@ -129,7 +138,9 @@ FIXTURES = HERE / "tests" / "fixtures"
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
-         "upstream", "guarantees", "reads", "dependencies")
+         "reads_exempt", "upstream", "guarantees", "reads", "dependencies")
+#: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
+OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
 
 def sibling(name: str):
@@ -381,6 +392,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     config = work / "facts-config.json"
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
+                                  "spec": spec_of(policy),
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
     rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Facts.lean"), str(config)], pkg, work / "facts.log")
@@ -494,9 +506,11 @@ def definitions(record: dict) -> dict:
     return d if isinstance(d, dict) else dict.fromkeys(d)
 
 
-def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False) -> tuple[list[str], dict]:
+def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False, owner: str | None = None
+          ) -> tuple[list[str], dict]:
     """(failures, the policy with guarantees and reads as the build has them).  A pure function of the facts: the tests run
-    it."""
+    it.  Each guarantee keeps its `owner`; ``owner`` (`--update --owner`) is that of one without, and an update writes no
+    record for a guarantee that has none."""
     fails = []
     allowed = set(policy.get("axioms", STANDARD))
     by_axiom: dict[str, list[str]] = {}
@@ -549,6 +563,15 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                      f"nothing under the old names; map only the declarations that moved")
     kept = {}
     for name, rec in sorted(policy.get("guarantees", {}).items()):
+        who = (rec or {}).get("owner") or owner
+        if not who:
+            fails.append(f"guarantees: {name} has no owner: write \"owner\": \"@lane\" in its entry, the handle of the lane "
+                         f"that answers for it, or run `audit.py --update --owner @lane`")
+            if update:
+                kept[name] = rec
+                continue
+        elif not OWNER.fullmatch(who):
+            fails.append(f"guarantees: {name}'s owner {who!r} is not a handle such as @proofs")
         f = facts["pins"].get(name, {"kind": "missing"})
         if f["kind"] != "theorem":
             fails.append(f"guarantees: {name} is {'missing' if f['kind'] == 'missing' else 'a ' + f['kind'] + ', not a theorem'}")
@@ -566,10 +589,10 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                 fails.append(f"guarantees: {name} assumes ({h['binder']} : {h['type']}), a closed Prop that is not a named assumption "
                              f"(a Prop constant of {', '.join(policy.get('assumptions', [])) or 'an `assumptions` module'})")
         now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]}
-        kept[name] = now
+        kept[name] = ({"owner": who} if who else {}) | now
         if update:
             continue
-        if not rec:
+        if not unowned(rec):
             fails.append(f"guarantees: {name} has no record; run `audit.py --update` and commit the record")
             continue
         for k in ("signature", "assumptions", "type_hash"):
@@ -581,7 +604,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                 break
     reads = guarantee_reads(facts)
     now_reads, old_reads = read_groups(reads), read_groups(reads, old=True)
-    if not update and ("reads" in policy or any(policy.get("guarantees", {}).values())):
+    if not update and ("reads" in policy or any(map(unowned, policy.get("guarantees", {}).values()))):
         old = policy.get("reads", {})
         for m in sorted(set(old) | set(now_reads)):
             a = old.get(m)
@@ -608,6 +631,104 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     return fails, out
 
 
+def unowned(rec: dict | None) -> dict:
+    """A guarantee's record without its `owner`: what the build writes and the audit compares."""
+    return {k: v for k, v in (rec or {}).items() if k != "owner"}
+
+
+def spec_of(policy: dict) -> list[str]:
+    """A package's spec: the module prefixes its `layers` rule (the trusted modules, whose imports are ruled there)."""
+    return sorted(policy.get("layers", {}))
+
+
+def homes(pkg: Path, policy: dict) -> dict[str, list[str]]:
+    """{module: the spec of the repository package that declares it} for ``pkg`` and the packages it requires by path (a
+    package without a readable `lean-audit.json` declares none); a module not here is a pinned dependency's (the toolchain's,
+    Mathlib's, ArkLib's...)."""
+    out = dict.fromkeys(lean_modules(pkg), spec_of(policy))
+    for d in path_deps(pkg):
+        try:
+            spec = spec_of(load(d)) if (d / POLICY).exists() else []
+        except ValueError:
+            spec = []
+        for m in lean_modules(d):
+            out.setdefault(m, spec)
+    return out
+
+
+def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[str]:
+    """The reads check: every definition a guarantee's statement reads (`reads` under `meaning`, and `outside` it where the
+    walk stops) lies in a spec module of its package or of a package it requires by path (``home``, `homes`), and the record
+    holds it (its module is under `meaning`), or it is a pinned dependency's.  Theorems are not read: a statement means
+    what it means whatever proves the propositions inside it.  A module under a `reads_exempt` prefix is exempt, with the
+    reason; an entry that exempts nothing fails."""
+    exempt, meaning = policy.get("reads_exempt", {}), policy.get("meaning", policy["roots"])
+    bad: dict[tuple[str, str], tuple[set[str], set[str]]] = {}
+    used: set[str] = set()
+    for g, f in sorted(facts["pins"].items()):
+        if f.get("kind") != "theorem":
+            continue
+        for name, m in [*((r["name"], r["module"]) for r in f.get("reads", [])), *map(tuple, f.get("outside", []))]:
+            if m not in home:
+                continue
+            if hit := {p for p in exempt if under([p], m)}:
+                used |= hit
+                continue
+            why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
+            if why:
+                defs, by = bad.setdefault((m, why), (set(), set()))
+                defs.add(parent(name))
+                by.add(g)
+
+    def few(xs: set[str]) -> str:
+        xs = sorted(xs)
+        return ", ".join(xs[:4]) + (f" and {len(xs) - 4} more" if len(xs) > 4 else "")
+
+    fails = []
+    for (m, why), (defs, by) in sorted(bad.items()):
+        if why == "spec":
+            spec = ", ".join(home[m]) or "none: no `layers`"
+            fails.append(f"reads: {few(by)} read {few(defs)} in {m}, outside the spec ({spec}): a guarantee's statement reads "
+                         f"only the spec of its package and of the packages it requires by path, and pinned dependencies; "
+                         f"move the definitions into the spec, or list {m} under `reads_exempt` with the reason")
+        else:
+            fails.append(f"reads: {few(by)} read {few(defs)} in {m}, a spec module outside `meaning`, so the record holds "
+                         f"nothing of them: add {m} to `meaning` and run `audit.py --update`")
+    for p in sorted(set(exempt) - used):
+        fails.append(f"reads: `reads_exempt` lists {p}, under which no guarantee reads outside the spec; remove the entry")
+    return fails
+
+
+def unread_spec(facts: dict, elsewhere: set[str] = frozenset()) -> dict[str, list[str]]:
+    """{module: its definitions} of the spec's definitions (`spec_definitions`) that no guarantee reads, here or in
+    ``elsewhere`` (the definitions other packages' records read): candidates to move out of the spec.  A generated
+    constant goes with its declaration."""
+    read = set(elsewhere)
+    for f in facts["pins"].values():
+        read |= {parent(r["name"]) for r in f.get("reads", [])} | {parent(n) for n, _ in f.get("outside", [])}
+    out: dict[str, list[str]] = {}
+    for d in facts.get("spec_definitions", []):
+        if parent(d["name"]) == d["name"] and d["name"] not in read:
+            out.setdefault(d["module"], []).append(d["name"])
+    return {m: sorted(ds) for m, ds in sorted(out.items())}
+
+
+def read_by_dependents(pkg: Path, root: Path = ROOT) -> set[str]:
+    """The definitions that the records of the other packages under ``root`` requiring ``pkg`` by path list under `reads`:
+    none for a package outside ``root`` or among the controls' fixtures, whose dependents' records are not ``root``'s."""
+    out: set[str] = set()
+    if not pkg.resolve().is_relative_to(root.resolve()) or pkg.resolve().is_relative_to(FIXTURES):
+        return out
+    for d in packages(root):
+        if d.resolve() == pkg.resolve() or pkg.resolve() not in path_deps(d) or not (d / POLICY).exists():
+            continue
+        try:
+            out |= {n for g in load(d).get("reads", {}).values() for n in definitions(g)}
+        except ValueError:
+            continue
+    return out
+
+
 def module_files(pkg: Path) -> dict[str, Path]:
     """{module: source file} for the package and the packages it requires by path, whose definitions a guarantee may read."""
     manifest = pkg / "lake-manifest.json"
@@ -621,6 +742,7 @@ REHASHED = "rehashed with SHA-256: the same statement (its 32-bit hash matched)"
 REGROUPED = "read groups rehashed with SHA-256: the same definitions (their 32-bit hashes matched)"
 MOVED = "the same statement under its old names"
 MOVED_READS = "definitions read in another module or under another name: the same under their old names"
+OWNED = "who answers for it, not what it says"
 
 
 def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[str]:
@@ -641,6 +763,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
     for name in sorted(set(np) | (set(op) - set(was.values()))):
         o = was.get(name, name)
         a, b = op.get(o) or {}, np.get(name) or {}
+        if a and b and a.get("owner") != b.get("owner"):
+            out.append(f"guarantee {name}: owner {a.get('owner') or 'none'} -> {b.get('owner') or 'none'}: {OWNED}")
+        a, b = unowned(a), unowned(b)
         if a == b and o == name:
             continue
         if o == name:
@@ -705,8 +830,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
 
 def statement_changes(notes: list[str]) -> list[str]:
     """The lines of a review that change what a guarantee says: all but the guarantees and read groups whose statements and
-    definitions are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, or moved)."""
-    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, MOVED, MOVED_READS))]
+    definitions are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, or moved), and
+    a changed owner."""
+    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, MOVED, MOVED_READS, OWNED))]
 
 
 def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
@@ -869,16 +995,19 @@ def template(pkg: Path) -> dict:
 
 
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
-          log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None) -> dict:
+          log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
+          owner: str | None = None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it. ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
     the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
-    guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote."""
+    guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote.
+    ``owner`` (with ``update``) is the owner of a guarantee whose entry names none.  The report lists the spec's definitions
+    that no guarantee reads (`unread_spec`)."""
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
         rep["failures"].append(f"policy: {pkg} has no {POLICY}. Start from this one, list the theorems your documents cite "
-                               f"(\"name\": {{}} under \"guarantees\"), and run `audit.py --update {pkg}`:\n"
+                               f"(\"name\": {{\"owner\": \"@lane\"}} under \"guarantees\"), and run `audit.py --update {pkg}`:\n"
                                f"{json.dumps(template(pkg))}")
         return rep
     try:
@@ -920,7 +1049,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         return rep
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
     files = lean_modules(pkg)
-    fails, new = judge(current, facts, files, update)
+    fails, new = judge(current, facts, files, update, owner)
+    fails += spec_reads(current, facts, homes(pkg, current))
+    rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     s = time.monotonic()
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
     rep["seconds"]["dependency-sources"] = round(time.monotonic() - s, 1)
@@ -1002,6 +1133,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if weak and not update:
         rep["notes"] = [f"{weak} guarantee and read records use Lean's 32-bit hashes, checked as they are; `audit.py --update` "
                         f"rewrites them with SHA-256, without review where the 32-bit hash still matches"]
+    if unread := sorted(d for ds in rep["unread_spec"].values() for d in ds):
+        more = f" and {len(unread) - 8} more" if len(unread) > 8 else ""
+        rep.setdefault("notes", []).append(
+            f"{len(unread)} definitions of the spec ({', '.join(spec_of(policy))}) are read by no guarantee, candidates to "
+            f"move out of it: {', '.join(unread[:8])}{more} (`unread_spec` in its report.json)")
     rep |= {"lean": facts["lean"], "modules": len(facts["modules"]), "declarations": facts["declarations"],
             "axioms": facts["axioms"], "escapes": facts["escapes"], "guarantees": new.get("guarantees", {}), "reads": new.get("reads", {}),
             "failures": fails}
@@ -1120,6 +1256,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--moved", type=Path, metavar="FILE", help="with --update: a JSON object {old name: new name} of the "
                     "declarations and namespaces moved since the record (the longest prefix applies); the record's guarantees are "
                     "renamed, and the review compares the build with the records under the old names")
+    ap.add_argument("--owner", metavar="@LANE", help="with --update: the owner of each guarantee whose entry names none")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
@@ -1143,6 +1280,8 @@ def main(argv: list[str]) -> int:
             ap.error(f"{a.moved}: a JSON object of old names to new names")
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
+    if a.owner is not None and not (a.update and OWNER.fullmatch(a.owner)):
+        ap.error("--owner goes with --update, and names a handle such as @proofs")
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     out = a.out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-audit-")))
     out.mkdir(parents=True, exist_ok=True)
@@ -1184,7 +1323,7 @@ def main(argv: list[str]) -> int:
             built[d].wait()
         try:
             rep = audit(pkg, out, a.build, a.update, not a.no_replay, a.fresh, built=lambda: seal(pkg), runs=not a.no_runs,
-                        repo=a.repo.resolve(), moved=moved)
+                        repo=a.repo.resolve(), moved=moved, owner=a.owner)
         finally:
             if not built[pkg].is_set():
                 seal(pkg)
