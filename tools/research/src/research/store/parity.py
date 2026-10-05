@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import ids
-from ..pythonpath import tree_pythonpath
+from ..pythonpath import numerical_module, tree_pythonpath
 from . import labels_sync as LS
 from .local import LocalStore, attempt_key, manifest_key, object_key
 from .model import ArtifactManifest
@@ -165,7 +165,7 @@ def _render(root: Path, timeout: float, source: Path | None = None) -> tuple[str
     parts = []
     for mod, suffix in RENDER_MODULES:
         try:
-            out = subprocess.run([sys.executable, "-m", f"verity_numerical.bench.{mod}", "--root", str(root), "--format", "md"],
+            out = subprocess.run([sys.executable, "-m", numerical_module(src, mod), "--root", str(root), "--format", "md"],
                                  capture_output=True, text=True, timeout=timeout, env=env, cwd=src)
         except (OSError, subprocess.SubprocessError) as e:
             return None, f"{mod}: {type(e).__name__}: {e}"

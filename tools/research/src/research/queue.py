@@ -662,8 +662,14 @@ def _render(entries: dict[int, Entry]) -> str:
 SUITES = quick_tier.SUITES
 QUICK_TIER = ["uv", "run", "--locked", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
-#: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
-LEAN_BUILDS = ("backends/flock/verifier/lean",)
+#: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing).
+#: Each lists one package's paths before and after the layout move (the move map's row); a tree builds the one it has.
+LEAN_BUILDS = (("backends/flock/verifier/lean", "verity/protocols/verification/flock/lean"),)
+
+
+def lean_builds(tree: Path) -> list[str]:
+    """Each of `LEAN_BUILDS` at the path ``tree`` has; the first listed when it has none, so that build refuses as before."""
+    return [next((p for p in paths if (Path(tree) / p).is_dir()), paths[0]) for paths in LEAN_BUILDS]
 
 
 class QuickTier:
@@ -688,7 +694,7 @@ class QuickTier:
             if base is None:
                 return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
             out = self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
-            return quick_tier.judge(quick_tier.tier(wt, out, pr.head, base, QUICK_TIER, LEAN_BUILDS), pr.head)
+            return quick_tier.judge(quick_tier.tier(wt, out, pr.head, base, QUICK_TIER, lean_builds(wt)), pr.head)
 
     @contextlib.contextmanager
     def _checkout(self, pr: PR):
@@ -710,7 +716,7 @@ class QuickTier:
                 _git(self.repo, "worktree", "add", "-q", "--detach", "--force", str(wt), pr.head)
             else:
                 _git(wt, "checkout", "-q", "--detach", "--force", pr.head)
-            _git(wt, "clean", "-qffdx", "-e", "/.venv", *(x for d in LEAN_BUILDS for x in ("-e", f"/{d}/.lake")))
+            _git(wt, "clean", "-qffdx", "-e", "/.venv", *(x for ds in LEAN_BUILDS for d in ds for x in ("-e", f"/{d}/.lake")))
             yield wt, _out(self.repo, "merge-base", "refs/queue/ready/main", pr.head)
 
 
@@ -756,7 +762,7 @@ class RemoteQuickTier(QuickTier):
         with self._checkout(pr) as (wt, base):
             if base is None:
                 return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
-            args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", pr.head, "--base", base, "--", *QUICK_TIER]
+            args = [*(x for d in lean_builds(wt) for x in ("--lean", d)), "--head", pr.head, "--base", base, "--", *QUICK_TIER]
             script = (f'i="$RESEARCH_RUN_DIR/inputs"; exec python3 "$i/{self.slot.name}" {shlex.join(["--by", self.by] if self.by else [])} '
                       f'-- python3 "$i/{job.name}" {shlex.join(args)}')
             r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", self.on, "--project", self.project,

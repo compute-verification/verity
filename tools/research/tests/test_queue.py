@@ -578,6 +578,18 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     assert json.loads(seen.read_text())["argv"][:2] == ["--quick", "--json"]     # a runner from before --changed: every suite
 
 
+def test_the_quick_tier_builds_each_lean_package_where_the_trees_layout_has_it(tmp_path):
+    """`LEAN_BUILDS` names each package before and after the layout move; a head from either side builds the one it has."""
+    from research import queue as Q
+
+    old, new = Q.LEAN_BUILDS[0]
+    assert Q.lean_builds(tmp_path) == [old], "neither: the first, so the build refuses as before"
+    (tmp_path / new).mkdir(parents=True)
+    assert Q.lean_builds(tmp_path) == [new]
+    (tmp_path / old).mkdir(parents=True)
+    assert Q.lean_builds(tmp_path) == [old]
+
+
 def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that_build_warm(world, monkeypatch):
     """The flock suite's workers each run `lake build` in the verifier; from the cold checkout `git clean` leaves, they collided."""
     from research import queue as Q

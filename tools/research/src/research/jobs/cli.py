@@ -107,7 +107,8 @@ def lean_key(commit: str, packages: list[str], cwd: Path | None = None) -> str:
 
 #: preflight.py's AVX512 (#440), for a tree from before it
 AVX512_BEFORE_PREFLIGHT = r"target-cpu=(native|x86-64-v4)\b|avx512"
-UPSTREAM = "backends/flock/verifier/upstream.json"
+#: the Lean agreement's upstream pin, at its path before the layout move and at the move map's path after it; a tree has one
+UPSTREAM = ("backends/flock/verifier/upstream.json", "tools/lean_agreement/upstream.json")
 
 
 def _show(commit: str, path: str, cwd: Path | None = None) -> str | None:
@@ -130,7 +131,7 @@ def _literal(source: str | None, name: str):
 
 def needs_avx512(commit: str, base: str, cwd: Path | None = None) -> bool:
     """Whether a check of `commit` against `base` runs the Lean agreement with an upstream build that needs AVX-512."""
-    pin = _show(commit, UPSTREAM, cwd)
+    pin = next((t for t in (_show(commit, p, cwd) for p in UPSTREAM) if t is not None), None)
     if pin is None:
         return False
     flags = json.loads(pin)["upstream"].get("rustflags") or "target-cpu=native"

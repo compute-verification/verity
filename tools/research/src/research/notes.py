@@ -108,7 +108,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import remote
-from .pythonpath import tree_pythonpath
+from .pythonpath import numerical_module, tree_pythonpath
 from .pods import POD_SUFFIXES, strip_pod_suffix
 from .runs import new_run_id
 from .timefmt import both
@@ -1428,7 +1428,7 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
                 [("views", "tables-preview", [], "md")] if e.get("preview") is True else [])
         for mod, suffix, extra, fmt in mods:
             left = deadline - time.monotonic()
-            cmd = [sys.executable, "-m", f"verity_numerical.bench.{mod}", "--root", str(store), "--format", fmt, *extra]
+            cmd = [sys.executable, "-m", numerical_module(src, mod), "--root", str(store), "--format", fmt, *extra]
             rc, stdout, stderr = run(cmd, env, src, left) if left > 0 else (None, "", f"timeout after {timeout_s:.0f}s")
             if rc == 0:
                 f = dest / f"{now:%Y%m%dT%H%MZ}-{suffix}.{'md' if fmt == 'md' else 'json'}"

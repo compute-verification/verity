@@ -1036,6 +1036,20 @@ def test_scheduled_renders_run_once_per_utc_day_at_or_after_their_time(tmp_path,
     assert notes.render_lines(tmp_path / "nowhere", NOW, {}, run=run) == []
 
 
+def test_a_render_of_a_tree_after_the_layout_move_runs_its_benchmarks_numerical_modules(tmp_path, renders):
+    src = tmp_path / "src"
+    (src / "benchmarks" / "numerical").mkdir(parents=True)
+    (tmp_path / "steward.toml").write_text(f'[[render]]\nat = "20:30Z"\nsource = "{src}"\nout = "r"\nstore = "/tmp/store"\n')
+    calls = []
+
+    def run(cmd, env, cwd, timeout):
+        calls.append(cmd[2])
+        return 0, "# x\n", ""
+
+    notes.render_lines(tmp_path, NOW, {}, run=run)
+    assert calls == ["research", "benchmarks.numerical.tables", "benchmarks.numerical.drilldown"]
+
+
 def test_a_render_entry_opts_into_the_tables_preview(tmp_path, renders):
     (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "r"\npreview = true\n\n'
                                            '[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "plain"\npreview = "yes"\n')

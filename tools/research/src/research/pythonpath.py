@@ -133,3 +133,12 @@ def tree_pythonpath(tree: Path | str) -> str:
     root = str(Path(tree))
     return pythonpath(root, import_roots_dir(root), extra=root)
 
+
+#: the numerical bench's package as a tree imports it: before the layout move, and after it (the move map's `benchmarks/numerical/`)
+NUMERICAL = ("verity_numerical.bench", "benchmarks.numerical")
+
+
+def numerical_module(tree: Path | str, mod: str) -> str:
+    """The bench module ``mod`` as the source tree ``tree`` names it: `benchmarks.numerical.{mod}` once the tree has
+    `benchmarks/numerical/`, else `verity_numerical.bench.{mod}`, so a render of a tree from either side of the move runs."""
+    return f"{NUMERICAL[1] if (Path(tree) / 'benchmarks' / 'numerical').is_dir() else NUMERICAL[0]}.{mod}"

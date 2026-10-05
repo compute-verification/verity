@@ -645,6 +645,18 @@ def test_a_check_asks_for_avx512_for_a_file_renamed_out_of_the_agreements_paths(
     assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
 
 
+def test_a_tree_after_the_layout_move_reads_the_upstream_pin_at_its_new_path(tmp_path):
+    """The pin is read at a commit, so a tree from either side of the move must find it."""
+    from research.jobs.cli import UPSTREAM, needs_avx512
+
+    repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
+    (repo / UPSTREAM[1]).parent.mkdir(parents=True)
+    _git(repo, "mv", UPSTREAM[0], UPSTREAM[1])
+    _git(repo, "commit", "-qm", "move")
+    commit, base = _change(repo, "backends/flock/src.rs")
+    assert needs_avx512(commit, base, repo) is True
+
+
 def test_audit_main_is_a_cold_check_of_mains_tip_with_every_path_changed(tmp_path, monkeypatch, capsys):
     from research.jobs.cli import needs_avx512
 
