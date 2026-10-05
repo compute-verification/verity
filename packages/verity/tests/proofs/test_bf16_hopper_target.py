@@ -21,7 +21,7 @@ from verity.proofs.families import make_tc_ampere_bf16_gate_set, make_tc_bf16_ga
 from verity.proofs.programs import gemm_coordinate
 from verity.proofs.target import BF16_HOPPER, FIRST, TARGETS, TC_VECTORS
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 
 
 def vector(name: str) -> dict:

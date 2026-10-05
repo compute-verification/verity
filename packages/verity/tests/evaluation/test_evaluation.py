@@ -28,7 +28,7 @@ from verity.ml.tc.models import AMPERE_BF16_M16N8K16, GroupSum
 from verity.ml.tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 
 FIXTURES = Path(__file__).resolve().parents[1] / "ml" / "fixtures"
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 
 #: (target, instances) for every registered kernel; composites and bindable references at representative statics.
 SELF_CHECKED = [
