@@ -150,9 +150,9 @@ two (`Completeness`).
 
 The draft of sampled proofs' trusted text that `HiddenSystem` reads (`SampledProofs`: a proof system's data, its
 soundness against registered values and the honest prover's membership in its class), held until lean's sampled-proofs
-package lands, a batch played one game after another (`BatchSeq`), core-only, held until it moves to core, and
-decisive games (`Decisive`: every message type inhabited, two runs ending differently), whose batches read as no other
-list, core-only too.
+package lands, and a batch played one game after another (`BatchSeq`), core-only, held until it moves to core. Decisive
+games are core's (`Verity.Protocol.Game.Decisive`); that their batches read as no other list is
+`SecurityProofs.Draft.Unambiguous`.
 
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 
