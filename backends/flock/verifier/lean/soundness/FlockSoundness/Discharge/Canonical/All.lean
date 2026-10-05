@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Canonical.Headline
 import FlockSoundness.Discharge.Canonical.Statements
+import FlockSoundness.Discharge.Canonical.PubIn
 import FlockSoundness.Discharge.Canonical.Gaps
 
 /-!

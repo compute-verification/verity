@@ -173,39 +173,6 @@ theorem outputs_determinedC {S : Model.Statement} {c : Circuit} {g : ℕ} {D : �
     rw [hall ⟨_, hlt⟩ (hout _ ⟨j, hj, i.val, i.isLt, rfl⟩)]
   · rfl
 
-/-! ## Public inputs: a public leaf is the verifier's own word -/
-
-/-- **Word `q` of population member `i`'s public words in the verifier's own recomputation** (`--public-inputs`, as
-`HmIn.checkOwn` reads it): u16 little-endian after the header line, instance-major, `pw` words per instance. -/
-def ownWord (own : ByteArray) (pw i q : ℕ) : ℕ :=
-  let body := own.extract ((Flock.findByte own 10).getD 0 + 1) own.size
-  (body.get! (2 * (i * pw + q))).toNat + 256 * (body.get! (2 * (i * pw + q) + 1)).toNat
-
-/-- **`PublicPinnedC`**: in a drawn statement `Stmt.setupHidden` accepts with the verifier's own public input words
-`own`, on a canonical circuit, in every satisfying witness of its block R1CS at regions containing the executable's, at
-block `o` and VU `g`, bit `t` of unit `u`'s leaf `j`, a public leaf naming public word `q`, is bit `t` of word `q` of the
-VU's population member in `own`. -/
-def PublicPinnedC : Prop :=
-  ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
-    {partition : Option Lean.Json} {program : Option ByteArray} {own : ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program (some own) = .ok st →
-    ∀ {pi : HmIn.Ports}, HmIn.parse st.c = .ok pi →
-    ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
-    formatOk st.c = true →
-    ∀ (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
-    (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
-    ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
-    ∀ (o : Fin (2 ^ (L.model regs).nbl)) {g u j q t : ℕ}, g < st.c.g → u < st.c.upv →
-    g * st.c.upv + u < st.c.unitRange.count → (pi.leaves.getD u #[]).getD j (-1) = (q : ℤ) → t < 16 →
-    ∀ (hr : o.val * st.c.g + g < D.proved.size),
-    Hm.blockBit (L.model regs) z o (st.c.unitRange.slot (g * st.c.upv + u) +
-        (st.c.unit.inGroups.getD 0 default).col * 128 + 16 * j + t) =
-      (ownWord own pi.words D.proved[o.val * st.c.g + g] q).testBit t
-
-/-- **A public leaf holds the verifier's own word** (frozen; main's `in` regions and `checkOwn` are what it reads). -/
-theorem public_pinnedC : PublicPinnedC := by
-  sorry
-
 /-! ## Registered reads: a read is the registrant's row -/
 
 /-- **A registrant's leaf for row `p`**: hm96's tree leaf of the commit string of `P(ℓ_p) ‖ packBits(wv)` under salt

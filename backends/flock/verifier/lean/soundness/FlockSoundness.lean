@@ -175,4 +175,5 @@ import FlockSoundness.Discharge.ZkEveryCoin
 import FlockSoundness.Discharge.FailClosed
 import FlockSoundness.Discharge.Canonical.Headline
 import FlockSoundness.Discharge.Canonical.Statements
+import FlockSoundness.Discharge.Canonical.PubIn
 import FlockSoundness.ZK.PadNonvanishing40
