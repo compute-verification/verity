@@ -334,6 +334,29 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
     assert set(top["enums"]) == {"syn"} and {"top", "other", "idle"} <= set(top["enums"]["syn"])   # `load_registries` listed it
 
 
+#: the harness with `syn` served as hatch's `dev-mode-exact` serves core's `verity`: by `editables`' finder, after the path-based
+#: one, with the tree's root on no `sys.path` entry
+EXACT = HARNESS.replace("sys.path.insert(0, str(root))",
+                        "from editables.redirector import RedirectingFinder\n"
+                        "RedirectingFinder.install()\n"
+                        "RedirectingFinder.map_module('syn', str(root / 'syn' / '__init__.py'))")
+
+
+def test_a_package_an_exact_editable_install_serves_is_held_like_one_on_the_path(tmp_path):
+    """Its modules are the tree's, held by name, the redirect is in the key, and an edit to one a target resolved reruns that
+    target (held by none, as before this, every target would be reused after any edit to core)."""
+    assert EXACT != HARNESS
+    root = _tree(tmp_path)
+    assert _run(root, EXACT)["hits"] == []
+    assert _run(root, EXACT)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    top = _entry(root, "SynTop_v1")
+    assert {"syn.top", "syn.sub", "syn.prims", "syn.check", "syn.h"} <= set(top["reads"]["modules"])
+    assert "<redirect>syn=<tree>/syn/__init__.py" in top["key"]["path"]
+    _edit(root, "syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)")
+    out = _run(root, EXACT)
+    assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
+
+
 def test_editing_a_registry_module_no_target_resolves_reuses_every_target(tmp_path):
     root = _tree(tmp_path)
     _run(root)
