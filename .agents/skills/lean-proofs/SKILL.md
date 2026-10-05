@@ -151,8 +151,12 @@ your modules.
 - **A move is not a change.** When you rename guarantees or move what they read (a package moving to the four names), write
   the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
   `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A guarantee that says what its
-  record says, renamed or restated as a `Guarantees` definition, and the definitions the same under their old names, each
-  get one line and send no DM; the rest prints in full. Moving a definition to another module needs no map.
+  record says, renamed or lifted, and the definitions the same under their old names, each get one line; the rest prints
+  in full. Moving a definition to another module needs no map.
+- **A lift needs no map.** `theorem X (xs) : e` becoming `theorem X (xs) : G as`, with `def G (ys) : Prop := e` in a
+  `Guarantees` module, prints as "lifted into G" on a plain `--update` when `G` unfolded once is `e` (the same type hash)
+  and the theorem keeps its named assumptions as binders (tools/lean/README.md, "A lift is not a change"). It needs no
+  statement reviewer, but Daniel's DM still lists the changed record.
 
 ## Before the PR
 
