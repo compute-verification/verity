@@ -30,7 +30,7 @@ words and cross-checked against a CPU re-quantisation of the checkpoint; fp8.md 
 and the e4m3 activations are **computed** by `Fp8ActQuant` from the norm output — never Inputs.
 
 Registered functions (all `Name_v1`):
-  primitives  core's: F32Fabs, F32Fmaxf, F32Fminf (`verity.ml.scalar`), F32ToE4m3Sat, HopperE4m3QgmmaDot32 (`verity.ml.prims`)
+  primitives  core's: F32Fabs, F32Fmaxf, F32Fminf (`verity_catalog.definitions.scalar`), F32ToE4m3Sat, HopperE4m3QgmmaDot32 (`verity_catalog.definitions.prims`)
   composites  Fp8RowAbsMax{K}, Fp8RowScale, Fp8ActQuant{K}, DotE4m3{K}, ScaledMmFp8Coordinate{K,BIAS},
               ScaledMmFp8{K,N,BIAS} (the cutlass GEMM over the quantised row), QuantLinearFp8{K,N,BIAS} (= Fp8ActQuant
               + ScaledMmFp8, the linear as one function), LayerPreFp8{C,L0}, LayerPostFp8{C}, ServeFp8{C,LP,STEPS};
@@ -46,11 +46,11 @@ import types
 
 import numpy as np
 
-from verity.ir.defs import CompositeDefinition, bind, composite
-from verity.ir.refs import Coll as _Coll, concat, tuple_of
-from verity.ir.types import Array, Record, Tuple, Value
-from verity.ml.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
-from verity.ml.scalar import F32Fabs, F32Fmaxf, F32Fminf
+from verity.primitives.circuits.defs import CompositeDefinition, bind, composite
+from verity.primitives.circuits.refs import Coll as _Coll, concat, tuple_of
+from verity.primitives.circuits.types import Array, Record, Tuple, Value
+from verity_catalog.definitions.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
+from verity_catalog.definitions.scalar import F32Fabs, F32Fmaxf, F32Fminf
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import hopper as H
 from verity_vllm.program.registry import prims as P
@@ -504,7 +504,7 @@ def scale_products(x_s: np.ndarray, w_s: np.ndarray) -> np.ndarray:
     token row's K/G activation scales ([K/G], or [R, K/G] for R rows) and `w_s` the checkpoint's [N/G, K/G] block scales, both as u32
     words; returns [N/G, K/G] (or [R, N/G, K/G]) u32 words.  numpy's array multiply is `F32Mul_v1` on every product but a NaN, whose
     payload it takes from the other operand: those lanes go through the IR's evaluator."""
-    from verity.evaluation import evaluate_batch
+    from verity.primitives.circuits.evaluation import evaluate_batch
     xs = np.asarray(x_s, dtype=np.uint32)
     ws = np.asarray(w_s, dtype=np.uint32)
     if ws.ndim != 2 or xs.ndim not in (1, 2) or xs.shape[-1] != ws.shape[1]:

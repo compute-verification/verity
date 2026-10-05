@@ -12,9 +12,9 @@ rev = "5ed2965256430c3649e86755f9576b54eca72435"
 
 [[require]]
 name = "networktiming"
-path = "../../protocols/network_warden/lean"
+path = "../../verity/protocols/accounting/communication/warden/lean"
 
-# The proofs of `protocols/network_warden/lean`'s guarantees and every lemma behind them, untrusted: the spec's lock says
+# The proofs of `verity/protocols/accounting/communication/warden/lean`'s guarantees and every lemma behind them, untrusted: the spec's lock says
 # what they prove.
 [[lean_lib]]
 name = "NetTimingProofs"

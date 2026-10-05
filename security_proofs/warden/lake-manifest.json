@@ -6,7 +6,7 @@
    "name": "networktiming",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../protocols/network_warden/lean",
+   "dir": "../../verity/protocols/accounting/communication/warden/lean",
    "configFile": "lakefile.toml"},
   {"url": "https://github.com/leanprover-community/mathlib4",
    "type": "git",

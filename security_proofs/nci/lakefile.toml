@@ -11,13 +11,13 @@ rev = "5ed2965256430c3649e86755f9576b54eca72435"
 
 [[require]]
 name = "nci"
-path = "../../protocols/nci/lean"
+path = "../../verity/protocols/compliance/nci/lean"
 
 [[require]]
 name = "security_proofs_core"
 path = "../core"
 
-# The proofs of `protocols/nci/lean`'s guarantees and every lemma behind them, untrusted: the spec's lock says
+# The proofs of `verity/protocols/compliance/nci/lean`'s guarantees and every lemma behind them, untrusted: the spec's lock says
 # what they prove.
 [[lean_lib]]
 name = "NciProofs"
