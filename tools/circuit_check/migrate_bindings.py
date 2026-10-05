@@ -43,7 +43,7 @@ TARGETS = HERE / "src" / "circuit_check" / "targets.py"
 PINS = HERE / "src" / "circuit_check" / "pins.json"
 #: the source roots this tree's packages import from, ahead of any installed copy
 PATHS = ("tools/circuit_check/src", "packages/verity/src", "integrations/vllm", "protocols/pouw", "backends/numerical/python",
-         "backends/flock/python", "protocols/sampled_proofs", "protocols/one_stage", "protocols/pous")
+         "backends/flock/python", "protocols/sampled_proofs", "protocols/pous")
 #: `targets.py`'s own: what no one module owns (every kernel's and vocabulary kind's self-check bindings)
 SHARED = ("_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots")
 #: split by hand (`POUW`)
