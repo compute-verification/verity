@@ -98,8 +98,17 @@ def unit_circuit(S: dict):
     nw = w_words(S)
     ins = [C.input(f"in{j}", 16) for j in range(nw + v_words(S))]
     flat = [b for wd in ins for b in wd]
-    W, V = flat[:16 * nw], flat[16 * nw:]
+    bits = residual_forms(C, S, flat[:16 * nw], flat[16 * nw:])
+    bits += [ZERO] * (16 * OUT_WORDS - len(bits))
+    outs = [f"out{j}" for j in range(OUT_WORDS)]
+    for j, nm in enumerate(outs):
+        C.output(nm, bits[16 * j:16 * j + 16])
+    return C, [f"in{j}" for j in range(len(ins))], outs
 
+
+def residual_forms(C, S: dict, W: list, V: list) -> list:
+    """S's residuals over `forms` (128 bits each, in order) from w's and v's element bits (element ``i`` is bits ``128 i ..``),
+    each residual's products summed leaf by leaf."""
     def term(t):
         if t[0] == "w":
             return W[128 * t[1]:128 * t[1] + 128]
@@ -141,11 +150,7 @@ def unit_circuit(S: dict):
                     c ^= leaf[i].c
                 acc[k] = L(frozenset(s), c)
         bits += acc
-    bits += [ZERO] * (16 * OUT_WORDS - len(bits))
-    outs = [f"out{j}" for j in range(OUT_WORDS)]
-    for j, nm in enumerate(outs):
-        C.output(nm, bits[16 * j:16 * j + 16])
-    return C, [f"in{j}" for j in range(len(ins))], outs
+    return bits
 
 
 def residual_words(S: dict, w: list[int], v: list[int]) -> list[int]:

@@ -414,7 +414,8 @@ def _merkle_roots() -> list[Any]:
 
 def _rec_roots() -> list[Any]:
     """V*'s opening check (`verity_flock.rec_open`) at its smallest shape: a row of 8 lanes (one SHA-512 block) and one level,
-    six compressions. Wider rows add message blocks and higher openings repeat the level, both at the same compression."""
+    six compressions and the consistency term's 16 products. Wider rows add message blocks and products, and higher openings
+    repeat the level."""
     from verity_flock.rec_open import definition
 
     return [definition(8, 1)]
