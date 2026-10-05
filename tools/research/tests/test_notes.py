@@ -1143,8 +1143,8 @@ def test_the_render_imports_every_workspace_package_of_its_source_tree(tmp_path,
     notes.render_lines(tmp_path, NOW, {}, run=run)
     parts = envs[0].split(":")
     assert envs and all(e == envs[0] for e in envs)
-    assert str(repo / "verity") in parts and str(repo / "benchmarks" / "numerical" / "python") in parts
-    assert str(repo / "tools" / "research" / "src") in parts and parts[-1] == str(repo)
+    assert parts[0] == str(repo) and str(repo / "benchmarks" / "numerical" / "python") in parts
+    assert str(repo / "tools" / "research" / "src") in parts and parts.count(str(repo)) == 1
     assert envs[0] == pythonpath(str(repo), import_roots_dir(repo), extra=str(repo))
 
 
