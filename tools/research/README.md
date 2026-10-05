@@ -102,7 +102,7 @@ research merge --sweep [--into main] [--remote origin] [--dry-run]       # close
 research merge --mirror [SHA]                                           # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
-research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
+research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, for a tier run its caller left (`--detach`) or died in
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~

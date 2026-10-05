@@ -753,13 +753,26 @@ class RemoteQuickTier(QuickTier):
     def __call__(self, pr: PR) -> str | None:
         from . import runs as R
 
+        rid, why = self.start(pr)
+        if why:
+            return why
+        print(f"research queue: the quick tier runs as {rid} on {self.on}, in a check slot; waiting for it to end "
+              f"(`research inspect {rid}`)", flush=True)
+        d = R.runs_root() / rid
+        status, why = self._wait(d)
+        return why or judge_run(d, rid, self.on, pr.head, status)
+
+    def start(self, pr: PR) -> tuple[str, str | None]:
+        """Launch the tier's run at ``pr``'s head without waiting for it: its id, and why it didn't launch (None when it did)."""
+        from . import runs as R
+
         if not self.slot.is_file():
-            return f"{self.slot} isn't there to take a check slot on {self.on} with (run it from a checkout of the repository)"
+            return "", f"{self.slot} isn't there to take a check slot on {self.on} with (run it from a checkout of the repository)"
         job = Path(quick_tier.__file__)
         rid = R.new_run_id()
         with self._checkout(pr) as (wt, base):
             if base is None:
-                return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
+                return "", f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
             args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", pr.head, "--base", base, "--", *QUICK_TIER]
             script = (f'i="$RESEARCH_RUN_DIR/inputs"; exec python3 "$i/{self.slot.name}" {shlex.join(["--by", self.by] if self.by else [])} '
                       f'-- python3 "$i/{job.name}" {shlex.join(args)}')
@@ -767,12 +780,8 @@ class RemoteQuickTier(QuickTier):
                              "--source", str(wt), "--cwd", "source", "--send", str(job), "--send", str(self.slot), "--require-result",
                              "--timeout", f"{self.timeout_s:g}", "--declared-output", "out/*", "--", "sh", "-c", script], wt)
         if r.returncode:
-            return f"`research run --on {self.on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
-        print(f"research queue: the quick tier runs as {rid} on {self.on}, in a check slot; waiting for it to end "
-              f"(`research inspect {rid}`)", flush=True)
-        d = R.runs_root() / rid
-        status, why = self._wait(d)
-        return why or judge_run(d, rid, self.on, pr.head, status)
+            return rid, f"`research run --on {self.on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
+        return rid, None
 
     def _wait(self, d: Path) -> tuple[dict, str | None]:
         """The run's status.json once it says the run ended, from its records fetched every `poll_s` until the wait's deadline; or why
@@ -838,14 +847,25 @@ def _json_file(p: Path) -> dict:
     return doc if isinstance(doc, dict) else {}
 
 
-def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None]) -> int:
+def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], detach: bool = False) -> int:
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
-    it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote."""
+    it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  With ``detach`` (a `RemoteQuickTier`
+    only), launch its run and return: `research queue judge RUN` writes the mark once the run has ended, so no caller waits an hour
+    for it (and a suspended VM loses nothing)."""
     pr = next((p for p in github.open_prs() if p.number == number), None) if number is not None else None
     if pr is None:
         print(f"research queue ready: {'#' + str(number) if number is not None else 'a PR number'} is not an open PR", file=sys.stderr)
         return 2
     print(f"research queue: the quick tier at #{pr.number}'s head {pr.head[:12]}: `suites.py --quick` on the suites it changes", flush=True)
+    if detach:
+        rid, why = tier.start(pr)
+        if why:
+            print(f"research queue ready: #{pr.number}'s quick tier didn't launch: {why}", file=sys.stderr)
+            return 1
+        print(f"research queue: the quick tier runs as {rid} on {tier.on}, in a check slot; once it ends, "
+              f"`research queue judge {rid} --by {by}` marks #{pr.number} ready at {pr.head[:12]} if it passed", flush=True)
+        print(f"RUN {rid}", flush=True)
+        return 0
     return _mark(store, pr, by, tier(pr), "ready")
 
 
@@ -918,9 +938,13 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--on", metavar="MACHINE", help="ready: run the quick tier as a `research run` there, in a check slot; judge: look "
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
+    ap.add_argument("--detach", action="store_true",
+                    help="ready --on: launch the run, print its id and return; `research queue judge RUN` marks the PR once it ends")
     a = ap.parse_args(argv)
     if a.command == "ready" and bool(a.on) == a.local:
         ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot) and --local (here)")
+    if a.detach and not (a.command == "ready" and a.on):
+        ap.error("--detach is for `ready --on MACHINE`: a local tier is the caller's own process")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
     if a.command in ("ready", "judge") and not a.by:
@@ -943,7 +967,7 @@ def main(argv: list[str]) -> int:
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
-            return ready(GitHub(repo), store, a.pr, a.by, tier)
+            return ready(GitHub(repo), store, a.pr, a.by, tier, detach=a.detach)
         labels = StoreGrants(store)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), grants=labels, ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None, reviews=labels.reviews,

@@ -854,6 +854,35 @@ def test_judge_marks_a_pr_ready_from_its_quick_tiers_run_once_it_ended_without_i
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
 
 
+def test_ready_detach_launches_the_tier_and_returns_and_judge_marks_the_pr_once_the_run_ended(world, monkeypatch, capsys):
+    """`ready --on` holds its caller for the whole tier (about an hour), so a lane kept a tmux session per PR, and a suspended VM
+    left a passed tier unmarked (proofs, round 28); `--detach` returns once the run is launched, and `judge` writes the mark."""
+    from research import queue as Q
+
+    machine = Machine(world.tmp, outcome=_reports())
+    tier, sleeps = _remote_tier(world, monkeypatch, machine)
+    tier.fetch = lambda d: pytest.fail("a detached ready waited for its run")
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier, detach=True) == 0
+    [argv] = machine.launched
+    rid = argv[argv.index("--id") + 1]
+    out = capsys.readouterr().out
+    assert f"`research queue judge {rid} --by lane-1` marks #1 ready at {h1[:12]}" in out and f"RUN {rid}\n" in out
+    assert sleeps == [] and Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 0
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
+
+
+def test_ready_detach_says_why_a_tier_did_not_launch(world, monkeypatch, capsys):
+    from research import queue as Q
+
+    tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp))
+    tier.slot = world.tmp / "absent" / "slot.py"
+    world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier, detach=True) == 1
+    assert "#1's quick tier didn't launch: " in capsys.readouterr().err
+
+
 JUDGE_REFUSALS = {
     "a run that hasn't ended": ({"status": {"state": "running"}}, r"run (\S+) hasn't ended \(last seen running\): `research inspect \1`"),
     "not a quick tier": ({"result": lambda d: {**d, "kind": "check/v1"}}, r"run \S+'s result is a check/v1, not a quick-tier/v1 report"),
@@ -993,7 +1022,8 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
             research_main(argv)
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
-                      (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number")):
+                      (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
+                      (["queue", "ready", "1", "--local", "--detach"], "--detach is for `ready --on MACHINE`")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
