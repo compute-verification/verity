@@ -439,7 +439,7 @@ useful    U/(α_A·α_B), glue
     salt and the draw's `derive` (`prf/sha-256`) are unchanged.
 - **Hashing format -h2** (`pearl-c-h100-v1-h2`, `hashing="h2"`) is -h1 with every tree `frame-b3s`. It is P1 of research
   store `internal/pouw/rtx-pro/a-commit-latency.md`, which the theory sign-off there rules sound under four format
-  conditions. `tests/commitments/test_frame_b3s.py` tests each condition.
+  conditions. `verity/primitives/commitments/tests/test_frame_b3s.py` tests each condition.
   - A 32 KB row's leaf is 1 + 4 + 7 serial compressions (segment key, segment, segment tree) in place of -h1's 17 + 6, with
     1.41× -h1's compressions (767 against 545).
   - Only the trees change: its vectors are the -h1 cases' inputs, digests and leaves, with A's `frame-b3s` root and row
