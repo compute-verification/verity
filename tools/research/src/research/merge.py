@@ -268,9 +268,8 @@ def declaration(repo: Path, tool: str):
     checkout has none."""
     from .store import tools_registry
 
-    module, _, attr = tools_registry.REGISTRY.get(tool, tool).rpartition(":")
     try:
-        return tools_registry._from_file(module, attr, repo)
+        return tools_registry.from_tree(tool, repo)
     except Exception:  # noqa: BLE001  (a declaration that can't be read is none)
         return None
 
@@ -474,7 +473,8 @@ def canary(repo: Path, tool: str = "check") -> dict:
     from .store import tools_registry
     from .store.local import LocalStore
 
-    rel = Path(*tools_registry.REGISTRY.get(tool, tool).rpartition(":")[0].split(".")).with_suffix(".py")
+    module = (tools_registry.locate(tool, repo) or tools_registry.REGISTRY.get(tool, tool).rpartition(":"))[0]
+    rel = Path(*module.split(".")).with_suffix(".py")
     if not (repo / rel).is_file():
         raise Refused(f"this checkout has no {rel}, its declaration of `{tool}`: run the canary in the target's checkout")
     kinds = sorted(produced(repo, tool))
@@ -1101,9 +1101,8 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
     does changes the merge's result.  Returns the argv started, None when the declaration names none."""
     from .store import tools_registry
 
-    module, _, attr = tools_registry.REGISTRY.get(tool, tool).rpartition(":")
     try:
-        argv = [*tools_registry._from_file(module, attr, repo).after_land]
+        argv = [*tools_registry.from_tree(tool, repo).after_land]
     except Exception:  # noqa: BLE001  (a tool the checkout does not declare runs nothing after a landing)
         return None
     if not argv:
