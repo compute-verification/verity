@@ -185,10 +185,10 @@ def test_tc_dot16_matches_prim():
 
 
 def _veritor_silicon():
-    """`(catalog.silicon.silicon, catalog.silicon.total)` -- veritor's `core.silicon` / `core.silicon_total` promoted verbatim into Verity's
+    """`(verity_catalog.silicon.silicon, verity_catalog.silicon.total)` -- veritor's `core.silicon` / `core.silicon_total` promoted verbatim into Verity's
     core; the registered tensor-core primitives are held to them word for word on every encoding.  (Until R19 the reference was
     `src/veritor`, importable only on 3.12; the Verity runtime is 3.12 everywhere, so the oracle always imports.)"""
-    from catalog.silicon import silicon, total
+    from verity_catalog.silicon import silicon, total
     return silicon, total
 
 
@@ -242,7 +242,7 @@ def test_hopper_wgmma_port_equals_silicon_total_on_every_encoding():
 
 
 def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation():
-    """The registered HopperBF16WgmmaDot16 evaluates from Verity's core alone (`catalog.silicon.total`; no `veritor`, no numpy) and
+    """The registered HopperBF16WgmmaDot16 evaluates from Verity's core alone (`verity_catalog.silicon.total`; no `veritor`, no numpy) and
     follows the total rules of the step by construction -- any NaN operand / acc -> 0x7FFFFFFF; inf * 0 -> NaN; infinities
     of both signs -> NaN, of one sign -> that infinity (finite terms ignored); finite overflow -> the sticky infinity; an all-zero
     group -> +0 (never -0); a subnormal result is encoded as a subnormal; the 26-bit adder rounds by truncation."""

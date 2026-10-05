@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from experimental.commitments.multiproof import verify_multiproof
+from verity_experimental.commitments.multiproof import verify_multiproof
 from verity.primitives.commitments import identity_digest
 from verity.primitives.commitments.rowleaf import SCHEMA_ROW
 

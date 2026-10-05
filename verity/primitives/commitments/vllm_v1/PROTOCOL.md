@@ -10,7 +10,7 @@ of the roots serving emits.
   tree rule.
 - Vectors: `vectors.json`, written by `python -m verity.primitives.commitments.vllm_v1.vectors`. `--check` exits
   nonzero if the file is stale.
-- Conformance: `verity/tests/commitments/test_vllm_v1.py` checks the reference against the
+- Conformance: `verity/primitives/commitments/tests/test_vllm_v1.py` checks the reference against the
   vectors. `integrations/vllm/tests/commit/test_production_vectors.py` checks vLLM's Python code against them.
 
 All hashes are SHA-256; §10 specifies `vllm-v1-sha512`, the same framing through SHA-512. `u32be`/`u64be` are big-endian unsigned integers of 4 and 8 bytes; `u32le` is little-endian;

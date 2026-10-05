@@ -11,9 +11,9 @@ import pytest
 
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits.defs import bind
-from kernels.tc import f2fp_bf16_batch, group_sum_total_batch
-from catalog.definitions.prims import HopperBF16WgmmaDot16
-from catalog.silicon.models import HOPPER_BF16_M16N8K16
+from verity_kernels.tc import f2fp_bf16_batch, group_sum_total_batch
+from verity_catalog.definitions.prims import HopperBF16WgmmaDot16
+from verity_catalog.silicon.models import HOPPER_BF16_M16N8K16
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import moe as M

@@ -23,9 +23,9 @@ import struct
 from verity.primitives.circuits.defs import bind, composite, primitive
 from verity.primitives.circuits.refs import array_of
 from verity.primitives.circuits.types import Array, Value
-from catalog.definitions import fp32 as F
-from catalog.definitions import prims as P
-from catalog.definitions import scalar as SC
+from verity_catalog.definitions import fp32 as F
+from verity_catalog.definitions import prims as P
+from verity_catalog.definitions import scalar as SC
 from verity.protocols.accounting.work.pouw.circuit.ncp2 import NcpDequant
 
 BF16, F32, U32, I7, BIT = Value(16), Value(32), Value(32), Value(7), Value(1)

@@ -8,6 +8,9 @@ dependencies = [
     "verity",
     "numpy>=1.26",
     "blake3>=1.0",
+    "verity-catalog",
+    "verity-experimental",
+    "verity-kernels",
 ]
 
 [project.scripts]
@@ -45,6 +48,6 @@ markers = [
 [tool.verity.tests]
 # Test-only: tests/pipeline checks the fixtures this package registers; tests/program/test_fp8_moe.py replays the Hopper e4m3
 # k32 step's pinned vectors through the block-scaled GEMMs.
-inputs = ["fixtures/artifacts.json", ".gitignore", "catalog/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json",
-          "catalog/silicon/captures/vectors/fp8-hopper-wgmma-k32.json"]
+inputs = ["fixtures/artifacts.json", ".gitignore", "catalog/verity_catalog/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json",
+          "catalog/verity_catalog/silicon/captures/vectors/fp8-hopper-wgmma-k32.json"]
 parallel = true

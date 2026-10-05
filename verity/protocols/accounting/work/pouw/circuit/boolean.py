@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.types import Array
-from catalog.silicon import fp
+from verity_catalog.silicon import fp
 from verity.primitives.circuits.boolean.forms import (NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
                                      or_reduce, shl_window, sub)
 from verity.primitives.circuits.boolean.trace import definition

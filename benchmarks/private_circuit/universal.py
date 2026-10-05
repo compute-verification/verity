@@ -55,7 +55,7 @@ from verity.primitives.circuits import partition_object as PO
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.types import Array
 from verity.primitives.circuits.boolean import trace as TR
-from experimental.private_circuits import universal as U
+from verity_experimental.private_circuits import universal as U
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU

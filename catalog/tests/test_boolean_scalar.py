@@ -1,4 +1,4 @@
-"""`catalog.definitions.boolean.scalar`: the bf16 comparator, the selects and the bit AND agree with their word primitives on every input
+"""`verity_catalog.definitions.boolean.scalar`: the bf16 comparator, the selects and the bit AND agree with their word primitives on every input
 (the comparator on all 2^32 pairs of words, each select over its whole truth table); the f32 arithmetic, max / min and casts
 agree with theirs (`trace.word_of`) on every tuple of special words and on random words (the bf16 and E4M3 widenings on every
 word, the E4M3 cast on every exponent around its range, the E2M1 cast on every boundary of its grid and on all 2^32 words);
@@ -19,12 +19,12 @@ from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import REGISTRY, bind
 from verity.primitives.circuits.types import Array
-from catalog.definitions import prims as P
-from catalog.definitions import scalar as S
-from catalog.definitions.boolean import scalar as BSC
+from verity_catalog.definitions import prims as P
+from verity_catalog.definitions import scalar as S
+from verity_catalog.definitions.boolean import scalar as BSC
 from verity.primitives.circuits.boolean import trace as TR
 from verity.primitives.circuits.boolean.forms import Circuit
-from catalog.silicon.cast import E2M1_UP
+from verity_catalog.silicon.cast import E2M1_UP
 
 DEFS = [BSC.Bf16GtStrict, BSC.SelectBf16, BSC.SelectI32, BSC.F32Add, BSC.F32Mul, BSC.F32Fma, BSC.F32Div, BSC.F32Fabs, BSC.F32Fmaxf,
         BSC.F32Fminf, BSC.Bf16ToF32, BSC.F32ToE4m3Sat, BSC.E4m3ToF32, BSC.F32ToE2m1Sat, BSC.BitAnd]

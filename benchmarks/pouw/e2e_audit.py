@@ -25,7 +25,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kernels import load  # noqa: E402
+from verity_kernels import load  # noqa: E402
 from verity.protocols.accounting.work.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload, reference_kernel  # noqa: E402
 from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import get  # noqa: E402

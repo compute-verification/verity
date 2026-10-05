@@ -116,7 +116,7 @@ archive/sp1/common/tests/reduce_vectors.json
 archive/sp1/common/tests/vectors.json
 fixtures/lean-vectors
 fixtures/redteam-v2/gkr
-catalog/silicon/captures/autoproof-probe-vectors.json
+catalog/verity_catalog/silicon/captures/autoproof-probe-vectors.json
 fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
 integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/in_qkv.npy
 integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/out_q.npy

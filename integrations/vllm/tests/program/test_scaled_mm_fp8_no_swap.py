@@ -8,7 +8,7 @@ import pytest
 
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits.defs import bind
-from catalog.definitions.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import fp8
 from verity_vllm.program.registry import prims as P

@@ -2,7 +2,7 @@
 
 Its one scheme, ``vllm-v1``, is the Commit path as it runs today: the commitment scheme `verity_vllm.commit.scheme`
 (`verity.primitives.commitments.vllm_v1`) over the required values of the row's Program, and the replay's draw, the two-stage law
-of `experimental.sampled_proofs.law` with every stratum a replay unit at p = 1 (`commit.challenge.stratum_picks`).  Its hooks
+of `verity_experimental.sampled_proofs.law` with every stratum a replay unit at p = 1 (`commit.challenge.stratum_picks`).  Its hooks
 are the Commit's committer and taps, which the Commit installs exactly as before; this option adds none.  A row whose
 target declares no protocols never reaches this module: `protocol_options.commit_context` returns None first.
 
@@ -17,7 +17,7 @@ from verity_vllm.protocol_options.interface import Context, Option, Target
 
 NAME = "sampled-proofs"
 DEFAULT_SCHEME = commitment_scheme.NAME
-LAW = ("experimental.sampled_proofs.law.TwoStageLaw with every replay stratum a replay unit at p = 1 and k = the Commit's "
+LAW = ("verity_experimental.sampled_proofs.law.TwoStageLaw with every replay stratum a replay unit at p = 1 and k = the Commit's "
        "--replay-per-stratum (commit.challenge.stratum_picks)")
 
 

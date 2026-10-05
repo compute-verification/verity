@@ -3,7 +3,7 @@ name = "verity-tc-probe"
 version = "0.0.0"
 description = "GPU probes that compare tensor-core instructions bit for bit with the primitive circuits' models."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-numerical", "numpy"]
+dependencies = ["research", "verity", "verity-numerical", "numpy", "verity-catalog"]
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
 [tool.uv]
@@ -19,5 +19,5 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# catalog/silicon/discrepancy_log.json: trust.py's dossiers cite the discrepancy log's entries, and tests/test_trust.py reads it.
-inputs = ["archive/direct", "catalog/census", "fixtures/bench-instances", "catalog/silicon/discrepancy_log.json"]
+# catalog/verity_catalog/silicon/discrepancy_log.json: trust.py's dossiers cite the discrepancy log's entries, and tests/test_trust.py reads it.
+inputs = ["archive/direct", "catalog/census", "fixtures/bench-instances", "catalog/verity_catalog/silicon/discrepancy_log.json"]

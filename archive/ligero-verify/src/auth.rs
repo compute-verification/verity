@@ -328,7 +328,7 @@ enum Src {
     Sibling(usize),
 }
 
-/// Fold a canonical multiproof (`experimental.commitments.multiproof`): level by level the known nodes are visited in
+/// Fold a canonical multiproof (`verity_experimental.commitments.multiproof`): level by level the known nodes are visited in
 /// ascending index order; an even node whose right neighbour is known is hashed with it, any other node with the
 /// next proof sibling; after `merkle_depth(count)` levels one node is left and the proof must be consumed exactly.
 /// `leaves` must be strictly ascending by rank, every rank `< count`.  The pairing plan of a level is fixed by the
@@ -506,7 +506,7 @@ mod tests {
         // the pad leaf (rank 5) and level 1 node 0
         assert_eq!(hex(&pad(&dom, 5)), "8be67fa2ecf6b0a6886509e55a8332fb8b08436e4fa910e5deba8c8595bb6ce8");
         assert_eq!(hex(&node(&dom, 0, 0, &h(want[0]), &h(want[1]))), "516dbaaf3502018e6e7d0f4591fb0f7e2ace0ffff2cc23be3ce8a7f76512a169");
-        // full multiproof of ranks {1, 3} as experimental.commitments.multiproof emits it
+        // full multiproof of ranks {1, 3} as verity_experimental.commitments.multiproof emits it
         let sibs = [
             h("53c94bb782bf50fbb1b994d1a456cf6a5e29f4d1bed63050f60e05d6082d213b"),
             h("bad8e6963d4f80157eaa33bd844fefbd60e2b8f549c870ada02b4b38a8396c23"),

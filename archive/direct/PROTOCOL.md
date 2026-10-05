@@ -45,7 +45,7 @@ Same public data as `archive/gkr/PROTOCOL.md` section 1 (profile, \(K\), \(B\), 
 
 **Census source.** The counts come from the WP2 checker contracts (`verity_numerical.security.census`; Candidate
 A section 1 gives the conventions, the per-width range table, the layered shape, the diff against
-`catalog.silicon.relation.vu_census` — +212 `mul`, +33 `lin`, +134 lookups per unit — and the two unit variants).
+`verity_catalog.silicon.relation.vu_census` — +212 `mul`, +33 `lin`, +134 lookups per unit — and the two unit variants).
 For B-Ligero the relevant difference between the transition unit and the VU is nil (\(<0.01\%\): `step.py`
 decodes and packs the word in every unit).
 

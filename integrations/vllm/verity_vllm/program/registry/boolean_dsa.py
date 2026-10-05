@@ -7,7 +7,7 @@ Definitions (the bodies are `dsa`'s, written once over `dsa.Ops`), so each one's
     DsaMqaLogit_v2{H,D}, DsaMqaLogits_v2{N,H,D}
     DsaTopKShortRow_v2{TOPK}                            traced at its TOPK: slot i's bits are i's, each one bit `len <= i`
 
-The callees are core's Boolean FP32 pieces (`catalog.definitions.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
+The callees are core's Boolean FP32 pieces (`verity_catalog.definitions.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
 its word Definition on every word, NaN payloads included.  No table or lookup gate.
 
@@ -24,13 +24,13 @@ from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.defs import CompositeDefinition, bind
 from verity.primitives.circuits.refs import Coll, concat
 from verity.primitives.circuits.types import Array, Tuple
-from catalog.definitions.boolean import attention as BA
-from catalog.definitions.boolean import cast as BC
-from catalog.definitions.boolean import elementwise as EW
-from catalog.silicon import fp as FP
-from catalog.definitions.boolean import gemm as BG
-from catalog.definitions.boolean import mufu as BM
-from catalog.definitions.boolean import scalar as SC
+from verity_catalog.definitions.boolean import attention as BA
+from verity_catalog.definitions.boolean import cast as BC
+from verity_catalog.definitions.boolean import elementwise as EW
+from verity_catalog.silicon import fp as FP
+from verity_catalog.definitions.boolean import gemm as BG
+from verity_catalog.definitions.boolean import mufu as BM
+from verity_catalog.definitions.boolean import scalar as SC
 from verity.primitives.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.primitives.circuits.boolean.trace import definition
 from verity_vllm.program.registry import dsa as D

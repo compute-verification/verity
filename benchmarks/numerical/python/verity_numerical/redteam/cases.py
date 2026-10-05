@@ -11,7 +11,7 @@ import random
 from pathlib import Path
 
 import verity
-from catalog.silicon.silicon import Pipeline
+from verity_catalog.silicon.silicon import Pipeline
 
 __all__ = ["GOLDEN", "Case", "golden_cases", "structured_cases", "words"]
 

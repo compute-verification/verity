@@ -39,15 +39,15 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `bits` evaluates Boolean Definitions bit-sliced (`evaluate_bits`, and
     `evaluate_words` through the word view); `evaluate_batch` uses it for one
     without a kernel.
-  - `catalog.definitions`: exact hardware semantics of the tensor-core accumulator step
-    (`catalog.silicon`, stdlib only) and their IR registrations (`prims`,
+  - `verity_catalog.definitions`: exact hardware semantics of the tensor-core accumulator step
+    (`verity_catalog.silicon`, stdlib only) and their IR registrations (`prims`,
     `gemm`), the other IR primitives (`scalar`: integer, bit, select and
     comparison operations; `fp32`: FP32 add, mul, FMA and divide, their
     flush-to-zero forms, and BF16 element-wise arithmetic), the library of
     hardware and protocol objects core owns (`library`), the pinned list of
     operations with the guard that a program holds no data (`operations`), and numpy kernels
     beside them (`kernels`; numpy is a core dependency, kept out of `verity.primitives.circuits`
-    and `catalog.silicon` by `tests/test_boundaries.py`). `catalog.definitions.boolean` is
+    and `verity_catalog.silicon` by `tests/test_boundaries.py`). `verity_catalog.definitions.boolean` is
     the word library as Boolean Definitions: C-Flock's linear-form builder and
     pieces (`forms`, `fp`, `tc_step`, `softmax`, `fp4`), the multiplexer tree (`gather`),
     `trace.definition` (a builder traced into And/Xor/Not gates, with `word_of`
@@ -57,7 +57,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `GemmCoordinateMxf4_v2`), attention's softmax operations and inverse sum on bits
     (`attention`), the element-wise FP32, BF16 and I32 operations on bits
     (`elementwise`), the bf16 widening on bits (`cast`), and the bf16 comparator,
-    the selects, PTX max / min and the E4M3 cast on bits (`scalar`). `catalog.silicon.relation`
+    the selects, PTX max / min and the E4M3 cast on bits (`scalar`). `verity_catalog.silicon.relation`
     restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
@@ -188,7 +188,7 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   named assumptions and the proofs behind its γ, Mathlib and core's), `verity/protocols/accounting/communication/warden/lean/` (the network
   warden's timing-channel guarantees and their proofs, Mathlib), `verity/protocols/compliance/nci/lean/` (NCI's policy and guarantees, on
   core's), and `verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
-  declarations and games; and core's own proofs about `verity`'s definitions, such as `catalog.silicon`'s step relation;
+  declarations and games; and core's own proofs about `verity`'s definitions, such as `verity_catalog.silicon`'s step relation;
   Mathlib only). New Lean goes into the package whose dependencies it needs, in a subdirectory and namespace of its own;
   a core-only proof goes into core's package, never a backend's. A protocol's package may require core's and other
   protocols' packages, never a backend's. All packages share one toolchain and

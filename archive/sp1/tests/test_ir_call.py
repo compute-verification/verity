@@ -12,7 +12,7 @@ import pytest
 from verity.primitives.circuits.defs import CompositeDefinition, bind
 from verity.primitives.circuits.refs import tuple_of
 from verity.primitives.circuits.types import Array, Tuple
-from catalog.definitions.prims import BF16, Bf16ToF32, F2fpBf16, const
+from verity_catalog.definitions.prims import BF16, Bf16ToF32, F2fpBf16, const
 from verity_sp1.proofs.lowering import check_relations
 from verity_sp1.proofs.packed import check_packed_openings, decode_packed_witness
 from verity_sp1.proofs.typed_obligation import validate

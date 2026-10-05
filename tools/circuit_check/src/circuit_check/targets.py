@@ -53,23 +53,23 @@ def _authored(d: Any) -> bool:
 
 
 def load_registries() -> None:
-    """Register every Definition and kernel: core's `catalog.definitions`, and each module of the vLLM registry and kernel registry."""
+    """Register every Definition and kernel: core's `verity_catalog.definitions`, and each module of the vLLM registry and kernel registry."""
     global _LOADED
     if _LOADED:
         return
     from verity.primitives.circuits.defs import REGISTRY
 
-    import catalog.definitions.boolean.attention  # noqa: F401
-    import catalog.definitions.boolean.cast  # noqa: F401
-    import catalog.definitions.boolean.elementwise  # noqa: F401
-    import catalog.definitions.boolean.gemm  # noqa: F401
+    import verity_catalog.definitions.boolean.attention  # noqa: F401
+    import verity_catalog.definitions.boolean.cast  # noqa: F401
+    import verity_catalog.definitions.boolean.elementwise  # noqa: F401
+    import verity_catalog.definitions.boolean.gemm  # noqa: F401
     import verity.primitives.commitments.gates.merkle  # noqa: F401
-    import catalog.definitions.boolean.mufu  # noqa: F401
-    import catalog.definitions.boolean.scalar  # noqa: F401
-    import experimental.private_circuits.universal  # noqa: F401
-    import catalog.definitions.gemm  # noqa: F401
-    import kernels.tc  # noqa: F401
-    import catalog.definitions.prims  # noqa: F401
+    import verity_catalog.definitions.boolean.mufu  # noqa: F401
+    import verity_catalog.definitions.boolean.scalar  # noqa: F401
+    import verity_experimental.private_circuits.universal  # noqa: F401
+    import verity_catalog.definitions.gemm  # noqa: F401
+    import verity_kernels.tc  # noqa: F401
+    import verity_catalog.definitions.prims  # noqa: F401
     import verity_vllm.program.registry as R
     for m in pkgutil.iter_modules(R.__path__):
         if m.name != "quarantine":
@@ -259,9 +259,9 @@ def _pouw_roots() -> list[Any]:
 
 def _core_roots() -> list[Any]:
     from verity.primitives.circuits.defs import bind
-    from catalog.definitions import gemm as G
-    from kernels import tc as K
-    from catalog.definitions import prims as P
+    from verity_catalog.definitions import gemm as G
+    from verity_kernels import tc as K
+    from verity_catalog.definitions import prims as P
 
     A, H = P.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16
     return [bind(G.DotBf16, K=64, DOT=A), bind(G.DotBf16, K=48, DOT=H), bind(G.GemmCoordinate, K=64, DOT=A),
@@ -273,16 +273,16 @@ def _core_roots() -> list[Any]:
 
 
 def _boolean_roots() -> list[Any]:
-    """The Boolean BF16 coordinate and dot (`catalog.definitions.boolean.gemm`) on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3
+    """The Boolean BF16 coordinate and dot (`verity_catalog.definitions.boolean.gemm`) on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3
     coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128; `silu_and_mul`'s rows at I = 8
     (`verity_vllm.program.registry.boolean_silu`: `SiluMul_v3` and `SiluMul_v4`, and v4's word view, the served
     `SiluMul_v2` of `registry.act`), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
     `registry.dense`'s rows on bits at 8 elements with Gemma-2's constants (`boolean_dense`: `gelu_tanh_and_mul` at I = 8, the
     RMSNorm chain's and the logit softcap's element-wise rows at N = 8), and OLMoE's routed sum at TOPK = 8 over 8 columns
     and its router at 8 experts, 2 slots, 4 values per thread (`boolean_moe`), and GLM-5.3's sigmoid `noaux_tc` router at 8
-    experts, 2 slots, on both of its kernels, on bits and its word view (`registry.moe.MoeRouterSigmoidBias_v1`); the steps, the cast, attention's softmax operations (`catalog.definitions.boolean.attention`), the element-wise
-    operations (`catalog.definitions.boolean.elementwise`), the MUFU operations (`catalog.definitions.boolean.mufu`), the comparator, selects, max /
-    min and E4M3 cast (`catalog.definitions.boolean.scalar`), the argmax step, `SiluMulBf16_v3` and the rows' static-free elements are
+    experts, 2 slots, on both of its kernels, on bits and its word view (`registry.moe.MoeRouterSigmoidBias_v1`); the steps, the cast, attention's softmax operations (`verity_catalog.definitions.boolean.attention`), the element-wise
+    operations (`verity_catalog.definitions.boolean.elementwise`), the MUFU operations (`verity_catalog.definitions.boolean.mufu`), the comparator, selects, max /
+    min and E4M3 cast (`verity_catalog.definitions.boolean.scalar`), the argmax step, `SiluMulBf16_v3` and the rows' static-free elements are
     static-free. vLLM's Boolean RoPE (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which
     reaches its head and halves; greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of its
     tree, which reach every stage, leaf and merge shape (a full group, a remainder, the first group, the root group). The served
@@ -299,9 +299,9 @@ def _boolean_roots() -> list[Any]:
     block, so its masked columns), which reaches the head, the block, the score and every element; the absorb bmm at two heads,
     K = 32, N = 3; the shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor."""
     from verity.primitives.circuits.defs import bind
-    from catalog.definitions.boolean import attention as BAT
-    from catalog.definitions.boolean import gemm as BG
-    from catalog.definitions.boolean import mufu as BM
+    from verity_catalog.definitions.boolean import attention as BAT
+    from verity_catalog.definitions.boolean import gemm as BG
+    from verity_catalog.definitions.boolean import mufu as BM
     from verity_vllm.program.registry import act
     from verity_vllm.program.registry import boolean_activation as BA
     from verity_vllm.program.registry import boolean_dense as BDN
@@ -352,7 +352,7 @@ def _boolean_roots() -> list[Any]:
 
 def _boolean_gather_roots() -> list[Any]:
     """The Boolean embedding (`verity_vllm.program.registry.boolean_gather`) over gathers traced whole (V = 64), and a gather
-    that is a tree of Calls with a partial last chunk (V = 1100); the bf16 widening (`catalog.definitions.boolean.cast`) is static-free."""
+    that is a tree of Calls with a partial last chunk (V = 1100); the bf16 widening (`verity_catalog.definitions.boolean.cast`) is static-free."""
     from verity.primitives.circuits.defs import bind
     from verity_vllm.program.registry import boolean_gather as BGA
 
@@ -360,10 +360,10 @@ def _boolean_gather_roots() -> list[Any]:
 
 
 def _universal_roots() -> list[Any]:
-    """Protocol 2's universal unit (`experimental.private_circuits.universal`) at two size classes: G = 16 gates over 16 inputs (W = 32 wires)
+    """Protocol 2's universal unit (`verity_experimental.private_circuits.universal`) at two size classes: G = 16 gates over 16 inputs (W = 32 wires)
     with 8 outputs, and G = 64 over 64 (W = 128) with 32."""
     from verity.primitives.circuits.defs import bind
-    from experimental.private_circuits.universal import UniversalUnit
+    from verity_experimental.private_circuits.universal import UniversalUnit
 
     return [bind(UniversalUnit, G=16, N_IN=16, N_OUT=8), bind(UniversalUnit, G=64, N_IN=64, N_OUT=32)]
 
@@ -390,8 +390,8 @@ def _kernel_roots() -> list[Any]:
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Tiny whole-model configurations (the vLLM tests' `TINY`) and the leaf families they do not reach."""
     from verity.primitives.circuits.defs import bind
-    from catalog.definitions.boolean import gemm as BG
-    from catalog.definitions.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
+    from verity_catalog.definitions.boolean import gemm as BG
+    from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
     from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
     from verity_vllm.program.registry import serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
@@ -566,7 +566,7 @@ ROOT_ERRORS: list[tuple[str, str]] = []
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics: (label, the bound
     Definition, or the error)."""
-    from catalog.definitions.prims import BlackwellE4m3QmmaDot32
+    from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.frontend.rules import vocab as V
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.registry import prims as P

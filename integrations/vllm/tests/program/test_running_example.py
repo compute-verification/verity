@@ -258,7 +258,7 @@ def test_intrinsic_summary():
 
 def test_plan_input_gates_are_sampled_gates():
     from fractions import Fraction
-    from experimental.sampled_proofs.plan import weight_binding_plan, Obligation
+    from verity_experimental.sampled_proofs.plan import weight_binding_plan, Obligation
     P = make_program()
     C = P.circuit
     # W (param 1) at p = 1 = WB's model binding; everything else sampled at 1/4

@@ -74,8 +74,8 @@ from __future__ import annotations
 from verity.primitives.circuits.defs import bind, composite
 from verity.primitives.circuits.refs import Coll, concat, tuple_of
 from verity.primitives.circuits.types import Array, Tuple
-from catalog.definitions.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
-from catalog.definitions.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg
+from verity_catalog.definitions.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
+from verity_catalog.definitions.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.fp8 import C448, C_NEG448, E4M3, Fp8RowScale, weight_blocks

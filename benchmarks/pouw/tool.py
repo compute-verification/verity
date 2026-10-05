@@ -16,7 +16,7 @@ import argparse
 from research.store.tool import Tool
 
 CLOSURE = ["benchmarks/pouw/**", "verity/protocols/accounting/work/pouw/**", "verity/primitives/randomness/**",
-           "verity/primitives/commitments/**", "catalog/silicon/**", "verity/errors.py"]
+           "verity/primitives/commitments/**", "catalog/verity_catalog/silicon/**", "verity/errors.py"]
 
 
 def _parser() -> argparse.ArgumentParser:

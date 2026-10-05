@@ -24,8 +24,8 @@ from verity.primitives.circuits.evaluation import RegisteredTable
 from verity.primitives.circuits.codec import register_lazy_family
 from verity.primitives.circuits.defs import PrimitiveDefinition, composite
 from verity.primitives.circuits.types import Array, Value
-from catalog.definitions import scalar as SC
-from catalog.definitions.prims import const
+from verity_catalog.definitions import scalar as SC
+from verity_catalog.definitions.prims import const
 from verity_vllm.program.registry import dense
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16

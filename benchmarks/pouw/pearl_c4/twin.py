@@ -1,7 +1,7 @@
 """Pearl-C4's numpy twin (``pearl-c-nvfp4-v0``, ``pearl-c-mxfp4-v0``): one 64 x 64 tile as the sm_120 kernels compute it,
 from its 64 A rows and 64 B rows (BF16 words) and the job's seeds.
 
-The per-element and per-word work is batched over `kernels.tc`' bit-exact steps: the noise atoms, the noisy block
+The per-element and per-word work is batched over `verity_kernels.tc`' bit-exact steps: the noise atoms, the noisy block
 scales and the E2M1 cast, the chain, the fused A′·F_B and B̃·F_A, and the peel.  The per-row statistics, the lines and
 P_B's FP32 FMA chain come from the scalar reference (`verity.protocols.accounting.work.pouw.schemes.pearl_c4`).  The FP4 bench arm's gate compares
 the device's sampled tiles with `tile`; benchmarks/pouw/tests/test_pearl_c4_twin.py holds it to the scalar reference.
@@ -12,9 +12,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from kernels.tc import block_scaled_batch, group_sum_total_batch
-from catalog.silicon import fp32
-from catalog.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16
+from verity_kernels.tc import block_scaled_batch, group_sum_total_batch
+from verity_catalog.silicon import fp32
+from verity_catalog.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_c4 as F
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P

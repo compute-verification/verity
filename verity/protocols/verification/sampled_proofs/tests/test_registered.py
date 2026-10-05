@@ -6,7 +6,7 @@ import hashlib
 
 import pytest
 
-import catalog.definitions.scalar  # noqa: F401
+import verity_catalog.definitions.scalar  # noqa: F401
 from verity.primitives.commitments import hm96
 from verity.primitives.commitments.merkle import merkle_depth
 from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_digest

@@ -11,14 +11,14 @@ from __future__ import annotations
 
 import re
 
-#: dtype -> (coordinate composite, binding record) in catalog.definitions.gemm
+#: dtype -> (coordinate composite, binding record) in verity_catalog.definitions.gemm
 DTYPES = {"e4m3": ("GemmCoordinateE4m3", "GEMM_SM120_E4M3"), "nvf4": ("GemmCoordinateNvf4", "GEMM_SM120_NVF4"),
           "mxf4": ("GemmCoordinateMxf4", "GEMM_SM120_MXF4")}
 
 
 def coordinate(dtype: str, K: int):
     from verity.primitives.circuits.defs import bind
-    from catalog.definitions import gemm as G
+    from verity_catalog.definitions import gemm as G
 
     comp, rec = DTYPES[dtype]
     return bind(getattr(G, comp), K=K, **getattr(G, rec))

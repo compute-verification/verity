@@ -33,8 +33,8 @@ import numpy as np
 from verity.primitives.circuits.defs import bind, composite
 from verity.primitives.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.primitives.circuits.types import Array, Tuple
-from catalog.definitions.gemm import DotBf16 as DotBf16V2
-from catalog.definitions.prims import const
+from verity_catalog.definitions.gemm import DotBf16 as DotBf16V2
+from verity_catalog.definitions.prims import const
 from verity_vllm.program.registry import hopper
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.b1 import _lane

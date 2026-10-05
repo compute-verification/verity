@@ -77,7 +77,7 @@ def _e4m3_operands(rng: np.random.Generator, shape) -> np.ndarray:
 
 def _draw(args):
     name, seed, lo, hi = args
-    from catalog.silicon.silicon import tc_dot
+    from verity_catalog.silicon.silicon import tc_dot
     relation, _, _ = _ligero()
     rel = relation(name)
     operands = _e4m3_operands if rel.word_dtype == "<u1" else rel.operands
@@ -218,7 +218,7 @@ def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | 
     file; returns the header. A sub-batch's instance reference keeps the whole batch's manifest and names its own range.
     ``scheme`` is the commitment scheme the header's roots are under: ``frame-v3`` or ``vllm-v1``. ``fp4-nvf4`` reads the frozen
     NVFP4 set (:func:`write_fp4`); a spine input set is :func:`write_set`."""
-    from catalog.silicon.cast import f32_to_bf16_word
+    from verity_catalog.silicon.cast import f32_to_bf16_word
 
     if name == "fp4-nvf4":
         if scheme != "frame-v3":
@@ -302,7 +302,7 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
     that differ from the set's recorded y)."""
     from concurrent.futures import ProcessPoolExecutor
     from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW, sha256_row_digest
-    from catalog.silicon.cast import f32_to_bf16_word
+    from verity_catalog.silicon.cast import f32_to_bf16_word
 
     d = Path(set_dir)
     man = json.loads((d / "manifest.json").read_text())
@@ -400,7 +400,7 @@ def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf
 
 def _chain_rows(args):
     relation, x, w = args
-    from catalog.silicon.silicon import tc_dot
+    from verity_catalog.silicon.silicon import tc_dot
     from .lowering import _model
     pipe = PIPES[relation]
     model, k = _model(pipe.model), pipe.k

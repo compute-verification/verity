@@ -18,7 +18,7 @@ import struct
 
 import numpy as np
 
-from . import blake3_cuda, sha256_cuda
+from verity_kernels.hash_gpu import blake3_cuda, sha256_cuda
 
 try:
     import cupy as cp

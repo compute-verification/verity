@@ -20,7 +20,7 @@ import pytest
 
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits.defs import bind
-from catalog.definitions.prims import HopperE4m3QgmmaDot32 as DOT
+from verity_catalog.definitions.prims import HopperE4m3QgmmaDot32 as DOT
 from verity_vllm.program.registry import dsa as D
 from verity_vllm.program.registry import prims as P
 from tests.program.test_fp8_moe import _ffma, _fmul, _q, _rn

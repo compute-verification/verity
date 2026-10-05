@@ -23,7 +23,7 @@ weights and activations, and produced *these committed* outputs" -- by
      these leaf indices under these roots".
 
   3. having the prover ship one Merkle *multiproof* per tree (shared authentication paths, canonical order of
-     :func:`experimental.commitments.multiproof`) and having *both* verifiers recompute the leaf digests from the published
+     :func:`verity_experimental.commitments.multiproof`) and having *both* verifiers recompute the leaf digests from the published
      words and fold them to the root before accepting.  This is the verifier-side-openings option of the
      ``auth-integration`` lane: the Ligero proof is unchanged; the authentication cost lands in the verifier's time
      and in the transcript bytes.
@@ -49,7 +49,7 @@ from verity.primitives.commitments import (
     identity_digest,
     merkle_depth,
 )
-from experimental.commitments.multiproof import verify_multiproof
+from verity_experimental.commitments.multiproof import verify_multiproof
 from verity.primitives.commitments.merkle import (  # the pad-leaf frame has no public wrapper; pinned by tests
     _FRAME,
     _LEAF,
@@ -391,7 +391,7 @@ def _merge(runs: list[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 def multiproof_siblings(tree: WordTree, ranks: np.ndarray) -> list[bytes]:
-    """The canonical multiproof of :mod:`experimental.commitments.multiproof` for ``ranks`` (a set): per level, ascending,
+    """The canonical multiproof of :mod:`verity_experimental.commitments.multiproof` for ``ranks`` (a set): per level, ascending,
     the sibling of every known node whose sibling is not itself known.
 
     Computed on the *runs* of known nodes rather than node by node: inside a run every sibling is known, so a run

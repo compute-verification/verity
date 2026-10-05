@@ -16,7 +16,7 @@ from functools import cache
 import numpy as np
 
 from verity.primitives.circuits.defs import PrimitiveDefinition
-from catalog.definitions.scalar import BitAnd, BitNot, BitOr, F32Eq, F32Fabs, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity_catalog.definitions.scalar import BitAnd, BitNot, BitOr, F32Eq, F32Fabs, I32Add, I32Eq, I32Le, SelectF32, SelectI32
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.moe import F32GtStrict, F32Sub
 from verity_vllm.program.registry.prims import BIT, F32, I32

@@ -26,8 +26,8 @@ from __future__ import annotations
 from verity.primitives.circuits.defs import bind, composite
 from verity.primitives.circuits.refs import Coll as _Coll, concat, tuple_of
 from verity.primitives.circuits.types import Array, Tuple, Value
-from catalog.definitions.prims import E4m3ToF32, F32ToE2m1Sat, F32ToE4m3Sat
-from catalog.definitions.scalar import F32Eq, F32Fabs, F32Fmaxf, SelectF32
+from verity_catalog.definitions.prims import E4m3ToF32, F32ToE2m1Sat, F32ToE4m3Sat
+from verity_catalog.definitions.scalar import F32Eq, F32Fabs, F32Fmaxf, SelectF32
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16, F32

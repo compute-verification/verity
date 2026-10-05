@@ -1,9 +1,9 @@
-"""The Hopper FP8 total step (`catalog.silicon.total_fp8`), promoted from veritor `core/silicon_total_fp8.py`.
+"""The Hopper FP8 total step (`verity_catalog.silicon.total_fp8`), promoted from veritor `core/silicon_total_fp8.py`.
 
 On finite operands the total step is the finite model (`silicon.tc_dot` on the same pipeline); the special encodings follow
 the rules of the BF16 total step restricted to what E4M3 encodes (NaN bytes, no infinities).  The pinned pipeline parameters
 are the ones lane QZ measured (veritor's `docs/data/tc-fp8-2026-09-08/`, replicated as
-`catalog/silicon/captures/veritor-tc-fp8-2026-09-08.json`): one group of 32, 14-bit adder, floor -139.
+`catalog/verity_catalog/silicon/captures/veritor-tc-fp8-2026-09-08.json`): one group of 32, 14-bit adder, floor -139.
 """
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ import struct
 
 import pytest
 
-from catalog.silicon.errors import InvalidArtifact
-from catalog.silicon.silicon import HOPPER_E4M3_K32, tc_dot
-from catalog.silicon.total import FP32_CANONICAL_NAN, HOPPER_BF16_WGMMA_K16
-from catalog.silicon.total_fp8 import (
+from verity_catalog.silicon.errors import InvalidArtifact
+from verity_catalog.silicon.silicon import HOPPER_E4M3_K32, tc_dot
+from verity_catalog.silicon.total import FP32_CANONICAL_NAN, HOPPER_BF16_WGMMA_K16
+from verity_catalog.silicon.total_fp8 import (
     HOPPER_E4M3_FAMILY_VERSION,
     HOPPER_E4M3_WGMMA_K32,
     e4m3_class,

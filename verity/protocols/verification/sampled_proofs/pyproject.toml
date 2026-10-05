@@ -11,4 +11,4 @@ inputs = ["verity", "backends/flock/verifier/lean/soundness/FlockSoundness/Audit
           "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Stratified.lean",
           "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/StratifiedMiss.lean",
           "backends/flock/verifier/lean/soundness/lake-manifest.json",
-          "backends/flock/verifier/lean/soundness/lean-toolchain"]
+          "backends/flock/verifier/lean/soundness/lean-toolchain", "catalog"]

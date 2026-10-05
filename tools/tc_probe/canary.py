@@ -49,7 +49,7 @@ from trust import REGRESSION_TILES, _load_discrepancies, subjects  # noqa: E402
 CANARY_SEED = 20260922
 CANARY_N_RANDOM = 64      # families() n_random for the canary draws: every family then has >= CANARY_TILES tiles
 CANARY_TILES = 4          # tiles kept per family (M x 8 elements each: 512 for mma, 2048 for wgmma)
-REPLAY_ROOTS = ("catalog/tests/fixtures/golden", "catalog/tests/fixtures/tc-total-2026-09-07", "catalog/silicon/captures")
+REPLAY_ROOTS = ("catalog/tests/fixtures/golden", "catalog/tests/fixtures/tc-total-2026-09-07", "catalog/verity_catalog/silicon/captures")
 
 
 @dataclass(frozen=True)
@@ -75,7 +75,7 @@ class CanaryPlan:
 def _repo_root(start: Path | None = None) -> Path | None:
     here = (start or HERE).resolve()
     for p in [here, *here.parents]:
-        if (p / "catalog" / "silicon" / "discrepancy_log.json").is_file():
+        if (p / "catalog" / "verity_catalog" / "silicon" / "discrepancy_log.json").is_file():
             return p
     return None
 

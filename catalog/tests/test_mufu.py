@@ -1,4 +1,4 @@
-"""The MUFU primitives of `catalog.definitions.mufu`: ids, descriptor digests, outputs, and the tables they read.
+"""The MUFU primitives of `verity_catalog.definitions.mufu`: ids, descriptor digests, outputs, and the tables they read.
 
 These primitives were registered by the vLLM integration (`verity_vllm.program.registry.prims`) under the same ids, and its
 stored Programs cite them. `PINNED` holds, per primitive, the digests recorded from that registration: the Definition's
@@ -21,7 +21,7 @@ from verity.primitives.circuits.codec import encode_program, program_digest
 from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits import library as L
-from catalog.definitions import mufu as M
+from verity_catalog.definitions import mufu as M
 from verity_sp1.proofs import reduce_mufu as R
 
 PINNED = {  # id: (definition digest, one-call program digest, outputs fingerprint)

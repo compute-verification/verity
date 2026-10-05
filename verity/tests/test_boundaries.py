@@ -9,8 +9,8 @@ An import is an import statement (a relative one resolved against its package), 
 time: a module named as data is still a dependency.
 
 numpy is a core dependency (architecture decision: `verity.primitives.circuits.evaluation` batches over numpy arrays and kernels sit beside
-their Definitions in `catalog.definitions`).  The plain-integer references stay numpy-free on purpose, because they are the
-specification the Rust guest, the Lean vectors and the probes are checked against: `verity.primitives.circuits` and `catalog.silicon`.
+their Definitions in `verity_catalog.definitions`).  The plain-integer references stay numpy-free on purpose, because they are the
+specification the Rust guest, the Lean vectors and the probes are checked against: `verity.primitives.circuits` and `verity_catalog.silicon`.
 `verity.primitives.randomness` is exact stdlib arithmetic too.
 """
 

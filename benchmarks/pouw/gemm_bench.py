@@ -32,7 +32,7 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kernels import load  # noqa: E402
+from verity_kernels import load  # noqa: E402
 
 SHAKE_GBPS = 650.0
 R = 32

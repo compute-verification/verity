@@ -1,4 +1,4 @@
-"""`catalog.definitions.boolean.elementwise`: the Boolean element-wise operations agree with their word primitives (`trace.word_of`) on
+"""`verity_catalog.definitions.boolean.elementwise`: the Boolean element-wise operations agree with their word primitives (`trace.word_of`) on
 every pair (triple) of special words, on random words and on words chosen to land in the subnormal range (a bf16 operation also
 on every word against a few specials, and a product at f32's subnormal and overflow ends), carry exactly their
 builders' live ANDs, and are pinned by gate count and program digest. Bf16AddF2fp_v2 is checked on every pair of words when
@@ -21,9 +21,9 @@ from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
 from verity.primitives.circuits.types import Array
-from catalog.definitions import fp32 as W
-from kernels import tc as K
-from catalog.definitions.boolean import elementwise as EW
+from verity_catalog.definitions import fp32 as W
+from verity_kernels import tc as K
+from verity_catalog.definitions.boolean import elementwise as EW
 from verity.primitives.circuits.boolean import trace as TR
 from verity.primitives.circuits.boolean.forms import Circuit, const_bits
 

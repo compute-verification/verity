@@ -1098,7 +1098,7 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
 
 def test_every_lift_of_a_primitive_declares_its_tables():
     """The data guard sees a table only through its primitive's declaration, and a lift runs its base's evaluator."""
-    from catalog.definitions.mufu import MufuEx2Ftz
+    from verity_catalog.definitions.mufu import MufuEx2Ftz
     lp = L.lifted_prim(MufuEx2Ftz)
     assert MufuEx2Ftz.tables == (("ex2", "library"),)
     assert L.lifted_prim_v1(MufuEx2Ftz).tables == lp.tables == L.with_ordinary(lp, 1).tables == MufuEx2Ftz.tables

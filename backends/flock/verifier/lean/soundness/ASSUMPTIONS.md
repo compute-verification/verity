@@ -293,7 +293,7 @@ malicious-verifier claim rests on beyond the theorems.
   streams at indices whose framings (`Randomness.frames`) are pairwise distinct, each read to `L i` bytes
   (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
   `η`. `Randomness.lean` is the Lean spec of `verity.primitives.randomness` v1: it reproduces
-  `verity/tests/randomness/vectors.json`, and Python matches its vectors
+  `verity/primitives/randomness/tests/vectors.json`, and Python matches its vectors
   (`backends/flock/tests/test_randomness_spec.py`).
 - **Per test, as `SHA512CRExpected` is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
   most that many stream tuples. `keyedWindow_escape_le` takes A4 for one test per set `B` (`windowTest`: the window draw

@@ -56,13 +56,13 @@ from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.defs import CompositeDefinition, bind
 from verity.primitives.circuits.refs import Coll, concat, strided_view, tuple_of
 from verity.primitives.circuits.types import Array, Tuple
-from catalog.definitions.boolean import elementwise as EW
-from catalog.silicon import fp
-from catalog.definitions.boolean import gemm as BG
-from catalog.definitions.boolean import mufu as BM
-from catalog.definitions.boolean import scalar as BS
+from verity_catalog.definitions.boolean import elementwise as EW
+from verity_catalog.silicon import fp
+from verity_catalog.definitions.boolean import gemm as BG
+from verity_catalog.definitions.boolean import mufu as BM
+from verity_catalog.definitions.boolean import scalar as BS
 from verity.primitives.circuits.boolean.forms import NOT, and_reduce, mux, or_reduce, const_bits
-from catalog.definitions.boolean.softmax import f32_gt
+from verity_catalog.definitions.boolean.softmax import f32_gt
 from verity.primitives.circuits.boolean.trace import definition
 from verity_vllm.program.registry.boolean_attention import _Bits
 

@@ -12,7 +12,7 @@ Checked today, against ``allowlists/p01_core_abstractions.json``:
   that another file, in the integration or in core, also registers.  One entry per integration file and id.
 
 Not checked here: ids built at run time, such as the ``Const<w>[0x..]`` family (``tests/program/
-test_registry_one_process.py`` loads ``catalog.definitions`` and every integration registry module into one process, where
+test_registry_one_process.py`` loads ``verity_catalog.definitions`` and every integration registry module into one process, where
 core's Definition registry refuses a second object under an id); one id computing two functions, which only
 evaluation can see; and verifying a production opening with core alone.
 """

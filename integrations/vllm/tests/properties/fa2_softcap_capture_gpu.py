@@ -60,7 +60,7 @@ FINITE_SAMPLE = 2
 # ------------------------------------------------------------------------------------------------------------------------ tanh
 def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
     """`MufuTanh_v1`'s table words over its shard, decoded from the in-tree blocks: (words, lo, the shard's record)."""
-    from catalog.definitions import mufu
+    from verity_catalog.definitions import mufu
 
     (s,) = mufu.mufu_tanh_shards()
     words = np.concatenate([s.block(k) for k in range(len(s.header["blocks"]))]).astype("<u4")
@@ -70,7 +70,7 @@ def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
 
 
 def tanh_probe(work: Path, outdir: Path, ref: Path, lo: int, hi: int, sm: str) -> dict[str, Any]:
-    from catalog.definitions import mufu
+    from verity_catalog.definitions import mufu
 
     R = mufu.MUFU_TANH_RULES
     exe = work / "tanh_probe_jit_compute_80"

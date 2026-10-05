@@ -35,7 +35,7 @@ import struct
 
 from verity.primitives.circuits.defs import PrimitiveDefinition, bind, composite
 from verity.primitives.circuits.refs import tuple_of
-from catalog.definitions.scalar import BitNot, BitOr, F32Eq
+from verity_catalog.definitions.scalar import BitNot, BitOr, F32Eq
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as RP
 from verity_vllm.program.registry.b1 import const

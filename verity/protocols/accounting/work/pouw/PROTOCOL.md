@@ -174,7 +174,7 @@ docstring states every parameter.
   - on whole 16 × 16 tiles at k = 1,024: the FP10 norms, the noise, the quantized codes and the per-row scales, the
     accumulator, the extract, J, and the jackpot policy's verdict (one tile approved, one rejected for dead entries).
 - **The RTX 4090.** Pearl's whitelist has no Ada device, so `ada` is ours: Verity's pinned `sm89.mma.m16n8k32.e4m3`
-  atom (`catalog.silicon`), with H100's structure (a fresh accumulator every 128 products, promoted by one FP32 add), δ = 1
+  atom (`verity_catalog.silicon`), with H100's structure (a fresh accumulator every 128 products, promoted by one FP32 add), δ = 1
   and W = 13. With plain chained `mma.sync` instead, the 14-bit adder anchored at the running sum fails Pearl's
   unpredictable-summands census on honest inputs.
 - **What the protocol replaces.** The chain headers become the salt. The activation and weight roots stand in for
@@ -702,7 +702,7 @@ useful    U/(α_A·α_B), glue
       review.
     - Four of those rows are NaN accumulators whose scale bytes set bit 7. They are valid scales under the hardware
       decode, and outside the model through the accumulator (a test); the card writes 0x7FFFFFFF.
-    - The pinned model (`catalog.silicon.models._scale_dyadic`) reads the low 7 bits too. GPU 4 replayed all 17 bit-7
+    - The pinned model (`verity_catalog.silicon.models._scale_dyadic`) reads the low 7 bits too. GPU 4 replayed all 17 bit-7
       vectors on the RTX PRO 6000 (run `r20260930-161935-83a8`), and every word matched.
   - A drawn tile is rejected when its debit exceeds ρ = 1/400 of its credited cells' share of creditOf.
 - **Accounting** in FP4 units (placeholder W1 prices: a BF16 MAC 4, an FP32 instruction 16):

@@ -25,7 +25,7 @@ from functools import lru_cache
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.defs import CompositeDefinition, bind
 from verity.primitives.circuits.types import Array
-from catalog.silicon import fp
+from verity_catalog.silicon import fp
 from verity.primitives.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, or_reduce, sub
 from verity.primitives.circuits.boolean.trace import definition
 from verity_vllm.program.registry import dense as D

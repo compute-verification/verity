@@ -210,7 +210,7 @@ def test_the_other_rows_pieces_match_the_ir_primitives(name):
 
 
 def _e2m1_vectors(rng: random.Random) -> list[list[int]]:
-    from catalog.silicon.cast import E2M1_UP
+    from verity_catalog.silicon.cast import E2M1_UP
     words = [b + d for b, _ in E2M1_UP for d in range(-4, 5)] + [b | 1 << i for b, _ in E2M1_UP for i in range(21)]
     words += [0, 1, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x7F800000] + [0x7F800000 | 1 << i for i in range(23)]
     words += [e << 23 | rng.getrandbits(3) << 20 | rng.choice([0, 1, rng.getrandbits(20)]) for e in range(118, 134) for _ in range(16)]
@@ -229,8 +229,8 @@ def test_the_nvfp4_cast_and_bit_and_pieces_match_the_ir_primitives(name, widths,
     """Exact bits: the E4M3 widening on every byte (NaN 0x7FFFE000), the AND on every pair of bits, and the E2M1 cast on each
     boundary of its grid (the six ties and 5, where saturation begins) within 4 ulps and with each of its low 21 bits set, on
     ±0, subnormals, ±inf and a NaN per payload bit, across the exponents around the grid and on random words, both signs."""
-    import catalog.definitions.prims  # noqa: F401  (registers the casts)
-    import catalog.definitions.scalar  # noqa: F401  (registers BitAnd_v1)
+    import verity_catalog.definitions.prims  # noqa: F401  (registers the casts)
+    import verity_catalog.definitions.scalar  # noqa: F401  (registers BitAnd_v1)
 
     vecs = gen(random.Random(name))
     ref = REGISTRY[name].evaluate
@@ -242,7 +242,7 @@ def test_the_fp8_tensor_core_step_matches_the_ir_on_every_encoding(name):
     """``fp.tc_dot_e4m3`` = ``HopperE4m3QgmmaDot32`` and sm_120's ``BlackwellE4m3QmmaDot32`` (the total models): E4M3 NaNs (0x7F,
     0xFF), zeros, subnormals, the largest magnitudes, accumulators of every class (Hopper's 14-bit adder truncates them too, sm_120's
     26-bit one does not), bit for bit."""
-    import catalog.definitions.prims  # noqa: F401  (registers the steps)
+    import verity_catalog.definitions.prims  # noqa: F401  (registers the steps)
 
     Q = REGISTRY[name]
 
@@ -290,7 +290,7 @@ def test_the_nvf4_step_matches_the_ir_on_every_encoding():
     """``unit_fp4.step_total`` = ``BlackwellNvf4OmmaDot64``: NaN scale bytes (low seven bits 0x7F, either bit 7), bit 7 set on
     ordinary scales (ignored), zero and subnormal scale mantissas, the top exponent field, NaN and infinite accumulators, cancelling
     groups, bit for bit."""
-    from catalog.definitions.prims import BlackwellNvf4OmmaDot64 as Q
+    from verity_catalog.definitions.prims import BlackwellNvf4OmmaDot64 as Q
 
     def scale(rng, fam):
         def one():
@@ -311,7 +311,7 @@ def test_the_mxf4_step_matches_the_ir_on_every_encoding():
         lo, hi = {3: (0, 20), 4: (230, 254), 5: (100, 150)}.get(fam, (0, 254))
         return [0xFF if rng.random() < 0.03 else rng.randint(lo, hi) for _ in range(4)]
 
-    from catalog.definitions.prims import BlackwellMxf4OmmaDot64 as Q
+    from verity_catalog.definitions.prims import BlackwellMxf4OmmaDot64 as Q
 
     vecs = _fp4_vectors(random.Random(14), 3500, scale)
     got = run_piece(IL.PIECES["BlackwellMxf4OmmaDot64_v1"], [32] + [4] * 128 + [8] * 4, 32, vecs)
@@ -1028,7 +1028,7 @@ def test_hopper_wgmma_piece_is_the_ir_primitive():
     primitive on special-heavy vectors (NaN payloads, both infinities, subnormals, cancellation)."""
     import random
 
-    from catalog.definitions.prims import HopperBF16WgmmaDot16 as P
+    from verity_catalog.definitions.prims import HopperBF16WgmmaDot16 as P
 
     rng = random.Random(7)
     spec16 = [0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F81, 0x0001, 0x8001, 0x7F7F, 0xFF7F, 0x3F80]

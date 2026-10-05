@@ -22,9 +22,9 @@ def _key(v):
 
 
 def test_the_lean_spec_reproduces_the_pinned_vectors():
-    """The spec, run on `verity/tests/randomness/vectors.json`'s inputs, returns every frame, key, stream, shard
+    """The spec, run on `verity/primitives/randomness/tests/vectors.json`'s inputs, returns every frame, key, stream, shard
     key, uniform value, Bernoulli bit and subset the file pins."""
-    assert FIXTURE["kat"] == json.loads((ROOT / "verity/tests/randomness/vectors.json").read_text())
+    assert FIXTURE["kat"] == json.loads((ROOT / "verity/primitives/randomness/tests/vectors.json").read_text())
 
 
 def test_python_matches_every_lean_vector():

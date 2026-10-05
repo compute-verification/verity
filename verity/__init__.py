@@ -1,1 +1,1 @@
-"""Verity core. Import from the module that owns the object (``verity.primitives.circuits``, ``catalog.definitions``, ...); nothing is re-exported here."""
+"""Verity core. Import from the module that owns the object (``verity.primitives.circuits``, ``verity_catalog.definitions``, ...); nothing is re-exported here."""

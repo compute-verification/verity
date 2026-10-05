@@ -47,7 +47,7 @@ def test_odd_partitions(rope, spec):
 def test_a_registered_input_is_an_input():
     from verity.primitives.circuits.defs import CompositeDefinition
     from verity.primitives.circuits.types import Value
-    from catalog.definitions.scalar import I32Add
+    from verity_catalog.definitions.scalar import I32Add
 
     I32 = Value(32)
     top = CompositeDefinition("PuRegistered", 1, (), lambda S: ((("x", I32), ("eps", I32)), I32),

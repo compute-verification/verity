@@ -1,4 +1,4 @@
-"""`catalog.definitions.boolean.gemm`: the Boolean BF16 steps, cast, dot and coordinate agree with their word Definitions (`word_of`) on
+"""`verity_catalog.definitions.boolean.gemm`: the Boolean BF16 steps, cast, dot and coordinate agree with their word Definitions (`word_of`) on
 sampled and special words and on every hardware capture the word Definitions replay, carry exactly their builders' live ANDs,
 and are pinned by gate count and program digest."""
 from __future__ import annotations
@@ -16,9 +16,9 @@ from verity.primitives.circuits.evaluation.reference import standalone_call
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import REGISTRY, bind
-from kernels import tc as K
-from catalog.definitions import prims as P
-from catalog.definitions.boolean import gemm as BG
+from verity_kernels import tc as K
+from verity_catalog.definitions import prims as P
+from verity_catalog.definitions.boolean import gemm as BG
 from verity.primitives.circuits.boolean import trace as TR
 from verity.primitives.circuits.boolean.forms import Circuit
 

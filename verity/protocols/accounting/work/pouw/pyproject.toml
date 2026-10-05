@@ -2,8 +2,8 @@
 [tool.verity.tests]
 # Test-only: the Lean package's FP8 vector generator (lean/scripts/fp8atom_vectors.py, which test_lean_package.py runs)
 # reads the HOPPER wgmma model replays and the RTX 4090 captures.
-inputs = ["verity", "catalog/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json", "catalog/silicon/captures/vectors/fp8-hopper-wgmma-k32.json",
-          "catalog/tests/fixtures/golden/ada_e4m3_m16n8k32.json"]
+inputs = ["verity", "catalog/verity_catalog/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json", "catalog/verity_catalog/silicon/captures/vectors/fp8-hopper-wgmma-k32.json",
+          "catalog/tests/fixtures/golden/ada_e4m3_m16n8k32.json", "catalog"]
 parallel = true
 
 [tool.pytest.ini_options]

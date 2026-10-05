@@ -6,7 +6,7 @@ import hashlib
 
 import numpy as np
 
-from . import poseidon2_ref as p2
+from verity_kernels.hash_gpu import poseidon2_ref as p2
 
 CHUNK_ROWS = 256
 

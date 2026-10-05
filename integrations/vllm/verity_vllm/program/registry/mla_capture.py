@@ -213,11 +213,11 @@ def _mufu(op: str, x):
 
 
 def mufu_probe(out: Path, device: str) -> dict:
-    """MUFU.EX2 and MUFU.RCP on this GPU against core's sm_89 tables (`catalog.definitions.mufu`): ex2 on [0, 1) at every 2^-23 step and
+    """MUFU.EX2 and MUFU.RCP on this GPU against core's sm_89 tables (`verity_catalog.definitions.mufu`): ex2 on [0, 1) at every 2^-23 step and
     rcp on every mantissa of [1, 2), plus ex2 / lg2 (ftz and not) on a sweep of 2^20 words; the words are stored."""
     import torch
 
-    from catalog.definitions import mufu as MU
+    from verity_catalog.definitions import mufu as MU
 
     rep = {}
     j = np.arange(1 << 23, dtype=np.uint32)

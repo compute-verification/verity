@@ -35,8 +35,8 @@ import sys
 import time
 from pathlib import Path
 
-from catalog.definitions.boolean import scalar as SC
-from catalog.definitions.boolean import softmax as SM
+from verity_catalog.definitions.boolean import scalar as SC
+from verity_catalog.definitions.boolean import softmax as SM
 
 from . import fp, gf2, ir_lower as IL, tail_pieces as TP, topp_word as TW, unit as U
 from . import circuit_types as CT
@@ -386,7 +386,7 @@ _PRIMS: dict | None = None
 
 
 def prims() -> dict:
-    """Every registered PrimitiveDefinition by id (catalog.definitions and the vLLM registry modules)."""
+    """Every registered PrimitiveDefinition by id (verity_catalog.definitions and the vLLM registry modules)."""
     global _PRIMS
     if _PRIMS is None:
         import importlib
@@ -394,7 +394,7 @@ def prims() -> dict:
 
         from verity.primitives.circuits.defs import PrimitiveDefinition
 
-        mods = ["catalog.definitions.prims"]
+        mods = ["verity_catalog.definitions.prims"]
         import verity_vllm.program.registry as R
         mods += [f"{R.__name__}.{m.name}" for m in pkgutil.iter_modules(R.__path__) if not m.name.startswith(("quarantine",))]
         _PRIMS = {}

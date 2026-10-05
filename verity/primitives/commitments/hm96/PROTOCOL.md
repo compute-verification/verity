@@ -11,7 +11,7 @@ instances have the same hiding bound.
   `Hm96Sha512(base)` over a `vllm-v1` or `vllm-v1-sha512` configuration. The module-level names are `hm96-sha256/v1`'s.
 - **Vectors.** `vectors.json` (`hm96-sha256/v1`) and `vectors_sha512.json` (`hm96-sha512/v1`), written by
   `python -m verity.primitives.commitments.hm96.vectors`. `--check` exits nonzero if either is stale.
-- **Conformance.** `verity/tests/commitments/test_hm96.py` checks the reference against the vectors and a bit-level matrix
+- **Conformance.** `verity/primitives/commitments/tests/test_hm96.py` checks the reference against the vectors and a bit-level matrix
   product; `integrations/vllm/tests/commit/test_hiding.py` checks the host committer's batch path against both.
 - **Source.** Halevi and Micali, "Practical and Provably-Secure Commitment Schemes from Collision-Free Hashing", CRYPTO 1996 (HM96):
   their first scheme, with the affine universal family below, applied to a digest of the value (their O(k) variant). The hiding bound

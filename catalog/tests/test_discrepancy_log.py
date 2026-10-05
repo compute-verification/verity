@@ -1,4 +1,4 @@
-"""``catalog/silicon/discrepancy_log.json`` is well formed, and nothing leaves ``open`` without a resolution and evidence.
+"""``catalog/verity_catalog/silicon/discrepancy_log.json`` is well formed, and nothing leaves ``open`` without a resolution and evidence.
 
 The log records where the paper, the pinned simulator, Verity's reference and the hardware disagree about the
 frozen target.  The rule it enforces: an entry becomes ``resolved`` or ``excluded`` only by writing down what was
@@ -11,8 +11,8 @@ import json
 import tomllib
 from pathlib import Path
 
-from catalog.silicon.instructions import INSTRUCTIONS
-from catalog.targets.target import DISCREPANCY_LOG, FIRST, HAWKEYE_PIN, TARGETS
+from verity_catalog.silicon.instructions import INSTRUCTIONS
+from verity_catalog.targets.target import DISCREPANCY_LOG, FIRST, HAWKEYE_PIN, TARGETS
 
 ROOT = Path(__file__).resolve().parents[2]
 REQUIRED = ("id", "profile", "class", "issue", "hawkeye_paper", "hawkeye_simulator", "verity_reference",

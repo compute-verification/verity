@@ -11,7 +11,7 @@ relation and ports.  :func:`identify` maps a set's ``relation`` back to its subc
 
 The templates of row #101 (Llama-3.2-1B) and their Definitions:
 
-  gemm-coordinate            GemmCoordinate_v2{K, DOT}          x[K], w[K] -> y            (``catalog.definitions.gemm``)
+  gemm-coordinate            GemmCoordinate_v2{K, DOT}          x[K], w[K] -> y            (``verity_catalog.definitions.gemm``)
   attention-head             AttentionHead_v3{T, D, BN}         q[D], k[T*D], v[T*D] -> out  (FA2; T varies per instance)
   rope-head                  RoPEHead_v1{D}                     x[D], cs[D] -> out
   rmsnorm-fused-cuda         RMSNormFusedCuda_v2{N, EPS}        in0 x, in1 res, in2 w -> out.0, out.1
@@ -70,7 +70,7 @@ class Draw:
 
 
 class NotEvaluable(ValueError):
-    """The subcircuit has no IR Definition in this tree (its semantics are only a ``catalog.silicon`` model)."""
+    """The subcircuit has no IR Definition in this tree (its semantics are only a ``verity_catalog.silicon`` model)."""
 
 
 # --- word samplers ------------------------------------------------------------------------------------------------------------
@@ -294,7 +294,7 @@ class _GemmSemantics:
     dot: str                     # the one a synthetic set's relation names (the exporter's)
     definition: str              # the row family the exporter names
     set_slug: str
-    step: str                    # core step primitive attribute (catalog.definitions.prims)
+    step: str                    # core step primitive attribute (verity_catalog.definitions.prims)
 
 
 GEMM_SEMANTICS = {s.semantics: s for s in (
@@ -308,9 +308,9 @@ class _Fp8Semantics:
     semantics: str
     slug: str
     display: str
-    reference: str               # the ScalarReference in kernels.tc: K/32 E4M3 steps from +0
+    reference: str               # the ScalarReference in verity_kernels.tc: K/32 E4M3 steps from +0
     set_slug: str
-    model: str                   # its catalog.silicon.models GroupSum (what backends chain with)
+    model: str                   # its verity_catalog.silicon.models GroupSum (what backends chain with)
 
 
 #: FP8 lines: the output is the FP32 accumulator word itself (no epilogue), as the backends' fp8 relations take it.
@@ -321,13 +321,13 @@ GEMM_FP8 = {s.semantics: s for s in (
 )}
 FP8_DEFINITION = "GemmAccumulatorE4m3"
 FP8_RULE = "y = the FP32 accumulator of K/32 ascending DOT steps over (x, w) from +0 (no epilogue)"
-#: Census GEMM semantics with a ``catalog.silicon`` model but no IR target here: a subcircuit binds, it cannot be generated.
+#: Census GEMM semantics with a ``verity_catalog.silicon`` model but no IR target here: a subcircuit binds, it cannot be generated.
 GEMM_MODEL_ONLY = {
     "sm90.mma.m16n8k16.bf16": ("sm90-mma-bf16", "sm90 mma · BF16", "bf16"),
     "sm120.mma.m16n8k32.e4m3": ("sm120-mma-e4m3", "sm120 mma · FP8 (E4M3)", "e4m3"),
 }
 #: NVFP4 on sm_120 (RTX 5090): E2M1 codes with UE4M3 scales per block of 16; y the FP32 accumulator of
-#: ``kernels.tc.SM120_NVF4_DOT`` (``models.BLACKWELL_SM120_NVF4``, K/64 steps from +0), no epilogue.
+#: ``verity_kernels.tc.SM120_NVF4_DOT`` (``models.BLACKWELL_SM120_NVF4``, K/64 steps from +0), no epilogue.
 NVFP4_SEMANTICS = "sm120.mma.m16n8k64.e2m1.nvf4"
 NVFP4_DEFINITION = "GemmAccumulatorNvfp4"
 NVFP4_BLOCK = 16
@@ -371,7 +371,7 @@ def _fp8_coordinate(K: int, s: _Fp8Semantics, tile: int) -> Subcircuit:
         raise ValueError(f"gemm-coordinate {s.semantics}: K = {K} is not a multiple of 32")
 
     def target(**_st: int) -> Any:
-        from kernels import tc as kernels
+        from verity_kernels import tc as kernels
 
         return getattr(kernels, s.reference).bind(K=K)
 
@@ -397,7 +397,7 @@ def _nvfp4_coordinate(K: int, tile: int) -> Subcircuit:
         raise ValueError(f"gemm-coordinate {NVFP4_SEMANTICS}: K = {K} is not a multiple of 64")
 
     def target(**_st: int) -> Any:
-        from kernels import tc as kernels
+        from verity_kernels import tc as kernels
 
         return kernels.SM120_NVF4_DOT.bind(K=K)
 
@@ -429,7 +429,7 @@ def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype:
         slug, disp, dt = GEMM_MODEL_ONLY[semantics]
 
         def none(**_st: int) -> Any:
-            raise NotEvaluable(f"gemm-coordinate {semantics}: a catalog.silicon model, no IR Definition to evaluate or generate with")
+            raise NotEvaluable(f"gemm-coordinate {semantics}: a verity_catalog.silicon model, no IR Definition to evaluate or generate with")
 
         return Subcircuit(TEMPLATES["gemm-coordinate"], {"K": K, "datatype": dt, "semantics": semantics}, f"gemm-coordinate/k{K}/{slug}",
                           f"GemmCoordinate<{K}> · {disp}", f"gemm-coordinate-{slug}-k{K}", {}, ports_in, ports_out, none, none)
@@ -442,7 +442,7 @@ def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype:
 
     def target(**_st: int) -> Any:
         from verity.primitives.circuits.defs import bind
-        from catalog.definitions import gemm, prims
+        from verity_catalog.definitions import gemm, prims
 
         return bind(gemm.GemmCoordinate, K=K, DOT=getattr(prims, s.step))
 

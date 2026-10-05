@@ -26,7 +26,7 @@ _BLOCKS: dict[int, np.ndarray] = {}
 def mufu_tanh(x: np.ndarray, table: np.ndarray | None = None, lo: int | None = None) -> np.ndarray:
     """`MufuTanh_v1` on every word of `x`: NaN -> nan_out, |x| >= saturate_from -> +-1, |x| < identity_below -> x, else the measured
     table at |x| with the sign of x.  `table` (the shard's words from `lo`) replaces the lazily decoded blocks."""
-    from catalog.definitions import mufu
+    from verity_catalog.definitions import mufu
 
     rules = mufu.MUFU_TANH_RULES
     u = np.asarray(x, dtype=np.uint32)

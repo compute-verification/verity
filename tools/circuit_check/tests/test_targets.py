@@ -38,8 +38,8 @@ def test_registered_is_what_the_import_name_rule_gave():
 
 
 def test_a_definition_is_the_trees_by_its_modules_file(monkeypatch):
-    _module(monkeypatch, "catalog.silicon", TG.REPO / "catalog" / "src" / "catalog" / "silicon.py")
-    assert TG._authored(_definition("catalog.silicon"))
+    _module(monkeypatch, "verity_catalog.silicon", TG.REPO / "catalog" / "src" / "catalog" / "silicon.py")
+    assert TG._authored(_definition("verity_catalog.silicon"))
     _module(monkeypatch, "tests.test_probe", TG.REPO / "catalog" / "tests" / "test_probe.py")
     assert not TG._authored(_definition("tests.test_probe"))
     _module(monkeypatch, "conftest", TG.REPO / "catalog" / "conftest.py")

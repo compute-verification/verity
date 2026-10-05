@@ -14,7 +14,7 @@ import pouw_rows_vectors as V
 from verity.primitives.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, bit_row, nvfp4_row_bytes, row_bytes, sha512_row_digest,
                                         sha512_row_v2_digest)
 from verity.primitives.circuits.evaluation import evaluate
-from catalog.definitions.scalar import BitAnd, SelectBf16
+from verity_catalog.definitions.scalar import BitAnd, SelectBf16
 
 from verity.protocols.accounting.work.pouw.circuit import leaves as L
 from verity.protocols.accounting.work.pouw.circuit import pc4, pc8

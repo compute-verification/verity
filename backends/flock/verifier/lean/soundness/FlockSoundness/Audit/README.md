@@ -174,7 +174,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   at most $2^H \sum_{j \le K} \binom{n}{j} / |M| + \delta + \varepsilon_{ks} + \delta_{link} + \delta_{in}$; with
   $|M| = 2^\ell$, the first term is $2^{H + \log_2 \sum_{j \le K} \binom{n}{j} - \ell}$. `card_guess_le` is its counting
   step and `audit_exfiltration_influenceSet` its form over $|\mathrm{influenceSet}|$. Core's reading is
-  `experimental.sampled_proofs.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
+  `verity_experimental.sampled_proofs.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
 - **Not vacuous** (`Audit/InfluenceWitness.lean`, the statement reviewer's witness): on a four-gate circuit,
   `W.lemma47` applies the influence cap to two different transcripts that both have a wrong unit, with a separator
   narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`

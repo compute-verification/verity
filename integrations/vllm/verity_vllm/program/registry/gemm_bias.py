@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from verity.primitives.circuits.defs import bind, composite
 from verity.primitives.circuits.types import Array
-from catalog.definitions.gemm import GemmCoordinate as GemmCoordinateV2
+from verity_catalog.definitions.gemm import GemmCoordinate as GemmCoordinateV2
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16

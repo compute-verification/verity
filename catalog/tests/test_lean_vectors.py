@@ -6,8 +6,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from catalog.silicon.silicon import AMPERE_BF16_M16N8K16 as AMP
-from catalog.silicon.total import HOPPER_BF16_WGMMA_K16 as HOP, cvt_rn_bf16_f32, tc_dot_total
+from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16 as AMP
+from verity_catalog.silicon.total import HOPPER_BF16_WGMMA_K16 as HOP, cvt_rn_bf16_f32, tc_dot_total
 
 VECTORS = Path(__file__).resolve().parents[2] / "verity" / "lean" / "Verity" / "SecurityProofs" / "TC" / "Vectors.lean"
 PIPES = {"HOPPER_BF16_WGMMA_K16": HOP, "AMPERE_BF16_M16N8K16": AMP}

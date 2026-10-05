@@ -1,29 +1,8 @@
-[project]
-name = "verity"
-version = "0.1.0"
-description = "Verity core: IR (programs, partitions), the evaluator, exact tensor-core semantics, challenge randomness, single statements and integrity profiles, commitment schemes, claim ids."
-requires-python = ">=3.12"
-dependencies = ["numpy>=1.26"]
-
-[project.scripts]
-network-warden-calibrate = "verity.protocols.accounting.communication.warden.calibration:main"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-bypass-selection = true
-
-[tool.hatch.build]
-dev-mode-dirs = [".."]
-
+# The suite of verity/tests: invariants of the whole of `verity` (what it may import, a package in every directory). The root's
+# pyproject.toml is the `verity` distribution; each directory under verity/ with tests is a suite of its own.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: tests/commitments/test_leaves.py reads the typed-obligation fixtures. The tests also import the catalog and the
-# kernels (a Definition's kernel is checked against it), and tests/commitments' frame tests run experimental's multiproof.
-inputs = ["catalog", "kernels", "experimental/commitments/multiproof.py", "fixtures/typed-obligation-v0"]
 parallel = true

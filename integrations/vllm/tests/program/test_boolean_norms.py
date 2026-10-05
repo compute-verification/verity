@@ -24,9 +24,9 @@ from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import PrimitiveDefinition, bind
 from verity.primitives.circuits.parts import n_members
-from catalog.definitions.boolean import elementwise as EW
-from catalog.silicon import fp
-from catalog.definitions.boolean import mufu as MU
+from verity_catalog.definitions.boolean import elementwise as EW
+from verity_catalog.silicon import fp
+from verity_catalog.definitions.boolean import mufu as MU
 from verity.primitives.circuits.boolean import trace as TR
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import boolean_norms as BN
@@ -293,7 +293,7 @@ def _special_rows(rng, N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return tuple(np.stack([row[k] for row in rows]) for k in range(3))
 
 
-#: the MUFU statics as proofs' Boolean Definitions (`catalog.definitions.boolean.mufu`), which the switch binds
+#: the MUFU statics as proofs' Boolean Definitions (`verity_catalog.definitions.boolean.mufu`), which the switch binds
 CUDA_BITS = {"RSQRT": bind(MU.RsqrtApprox)}
 TRITON_BITS = {"SQRT": bind(MU.MufuSqrtFtz), "SCALEA": bind(MU.DivFullScaleA), "RCP": bind(MU.DivFullRcp)}
 

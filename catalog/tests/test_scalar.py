@@ -1,4 +1,4 @@
-"""The scalar primitives of `catalog.definitions.scalar`: registered ids, and the comparisons and instruction models against host
+"""The scalar primitives of `verity_catalog.definitions.scalar`: registered ids, and the comparisons and instruction models against host
 IEEE comparisons (Python floats, which hold every f32 value exactly) on special and random encodings."""
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import random
 import struct
 
 from verity.primitives.circuits.defs import REGISTRY
-from catalog.definitions import scalar as S
+from verity_catalog.definitions import scalar as S
 
 NAN32, PINF32, NINF32, ONE32, NEG0 = 0x7FC00000, 0x7F800000, 0xFF800000, 0x3F800000, 0x80000000
 SPECIAL32 = [0, NEG0, 1, 0x80000001, 0x007FFFFF, 0x807FFFFF, 0x00800000, 0x80800000, ONE32, 0xBF800000, 0x3F7FFFFF,

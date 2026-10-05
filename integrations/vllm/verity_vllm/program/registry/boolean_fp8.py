@@ -15,8 +15,8 @@ statics (`elementwise.on_bits`; a `DOT` static, a Boolean e4m3 step, read as its
                                                                     the same over the step DOT (the word versions 3)
 
 Every word is its bits (`verity.primitives.circuits.boolean.word_type`): bf16 `Array<16, Value<1>>`, f32 `Array<32, Value<1>>`, e4m3
-`Array<8, Value<1>>`. The callees are the Boolean versions of the word bodies': `catalog.definitions.boolean.scalar`'s f32 arithmetic,
-max / min and casts, `catalog.definitions.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` (or `DOT`, such as `BlackwellE4m3QmmaDot32_v2`) and
+`Array<8, Value<1>>`. The callees are the Boolean versions of the word bodies': `verity_catalog.definitions.boolean.scalar`'s f32 arithmetic,
+max / min and casts, `verity_catalog.definitions.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` (or `DOT`, such as `BlackwellE4m3QmmaDot32_v2`) and
 `F2fpBf16_v2`; the word constants (+0, 448, -448, the minimum scale, the group quantiser's eps) are written with the constant
 bits.
 """
@@ -28,9 +28,9 @@ from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.refs import Coll, concat, tuple_of
 from verity.primitives.circuits.types import Array, Tuple
-from catalog.definitions.boolean import elementwise as EW
-from catalog.definitions.boolean import gemm as BG
-from catalog.definitions.boolean import scalar as SC
+from verity_catalog.definitions.boolean import elementwise as EW
+from verity_catalog.definitions.boolean import gemm as BG
+from verity_catalog.definitions.boolean import scalar as SC
 from verity_vllm.program.registry import fp8 as F8
 from verity_vllm.program.registry.boolean_attention import _Bits
 from verity_vllm.program.registry.prims import bits_of

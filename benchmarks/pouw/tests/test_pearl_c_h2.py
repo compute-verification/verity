@@ -15,7 +15,7 @@ import pytest
 
 from verity.primitives.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.primitives.commitments.merkle import b3s_level_key
-from catalog.silicon import fp32
+from verity_catalog.silicon import fp32
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c"

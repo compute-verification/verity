@@ -157,7 +157,7 @@ def test_a_constant_sub_circuit_is_folded():
     """Gemma's ``x + 1.0``: the constant reaches F32Add through a Bf16ToF32, which is itself constant, so F32Add reads it."""
     from types import SimpleNamespace as G
 
-    import catalog.definitions.prims as MP
+    import verity_catalog.definitions.prims as MP
 
     cvt = next(v for v in vars(MP).values() if getattr(v, "id", None) == "Bf16ToF32_v1")
     gates = [G(index=0, prim=G(family="Input"), operands=()), G(index=1, prim=MP.const(16, 0x3F80), operands=()),

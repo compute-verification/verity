@@ -9,10 +9,10 @@ import gzip
 import json
 from pathlib import Path
 
-from catalog.silicon.instructions import INSTRUCTIONS
-from catalog.silicon.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16, MODELS, tc_dot_chain
-from catalog.silicon.silicon import AMPERE_BF16_M16N8K16
-from catalog.silicon.total import tc_dot_total
+from verity_catalog.silicon.instructions import INSTRUCTIONS
+from verity_catalog.silicon.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16, MODELS, tc_dot_chain
+from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16
+from verity_catalog.silicon.total import tc_dot_total
 
 CAPTURE = Path(__file__).parent / "fixtures" / "tc-hopper-wgmma-bf16-2026-09-26" / "records.json.gz"
 DOC = json.loads(gzip.open(CAPTURE, "rt").read())

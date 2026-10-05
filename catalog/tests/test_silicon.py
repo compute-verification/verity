@@ -1,4 +1,4 @@
-"""The finite-domain step (`catalog.silicon.silicon`) against the RTX 4090 golden records and known answers.
+"""The finite-domain step (`verity_catalog.silicon.silicon`) against the RTX 4090 golden records and known answers.
 
 Ported from veritor ``tests/veritor/core/test_silicon.py`` lines 1-208 (the gate-set and Hawkeye-C++ tests were left behind).
 The golden vectors under ``fixtures/golden/`` were measured on an RTX 4090 (sm_89), one ``mma.sync`` per record.
@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from catalog.silicon.errors import InvalidArtifact
-from catalog.silicon.silicon import (
+from verity_catalog.silicon.errors import InvalidArtifact
+from verity_catalog.silicon.silicon import (
     ADA_BF16_M16N8K16,
     ADA_E4M3_M16N8K32,
     AMPERE_BF16_M16N8K16,
@@ -124,7 +124,7 @@ def test_ada_fp8_has_two_groups_where_hopper_has_one() -> None:
     truncated away; on Ada it lands in the second group after the cancellation.
     Measured on the RTX 4090: Hawkeye's Hopper FP8 simulator disagreed with the
     hardware on 17.6% of random-tile outputs (the evidence of ``sm89.mma.m16n8k32.e4m3`` in
-    ``catalog.silicon.instructions``).
+    ``verity_catalog.silicon.instructions``).
     """
 
     a = [0x78, 0x78] + [0] * 14 + [0x38] + [0] * 15  # 256, 256, ..., 1.0 at k = 16

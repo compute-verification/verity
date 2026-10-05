@@ -67,7 +67,7 @@ TABLES: tuple[Table, ...] = (
           "f83e87737a231de2ec109f5a7ea9f8dac78089ef9978ac19ce540c03cefd356ce542948ba8ffb11952b68a2d0f63fe4c6e2e84d218739a262a9b4bb07dd66985"),
 )
 
-#: The IR primitives whose circuits are library types: the tensor-core steps and the casts `catalog.definitions.prims` registers.
+#: The IR primitives whose circuits are library types: the tensor-core steps and the casts `verity_catalog.definitions.prims` registers.
 DEFINITIONS: frozenset[str] = frozenset({
     "AmpereBF16TcDot16_v2", "HopperBF16WgmmaDot16_v1", "HopperE4m3QgmmaDot32_v1",
     "Bf16ToF32_v1", "F32ToBf16Rn_v1", "F2fpBf16_v1", "F32ToE4m3Sat_v1",

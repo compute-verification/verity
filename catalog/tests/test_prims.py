@@ -1,4 +1,4 @@
-"""The IR-registered primitives of `catalog.definitions.prims` are exactly the `catalog.silicon` functions, under their registered ids."""
+"""The IR-registered primitives of `verity_catalog.definitions.prims` are exactly the `verity_catalog.silicon` functions, under their registered ids."""
 from __future__ import annotations
 
 import random
@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 
 from verity.primitives.circuits.defs import REGISTRY
-from catalog.definitions import prims as P
-from catalog.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word, f32_to_e4m3_sat_word
-from catalog.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
-from catalog.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
-from catalog.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
+from verity_catalog.definitions import prims as P
+from verity_catalog.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word, f32_to_e4m3_sat_word
+from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
+from verity_catalog.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
+from verity_catalog.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
 
 NAN32, PINF32, NINF32, ONE32 = 0x7FC00000, 0x7F800000, 0xFF800000, 0x3F800000
 NAN16, PINF16, NINF16, ONE16, MAX16 = 0x7FC0, 0x7F80, 0xFF80, 0x3F80, 0x7F7F
@@ -114,7 +114,7 @@ def test_fp8_primitives_are_the_tc_functions() -> None:
 
 
 def test_the_sm120_fp8_step_is_the_total_function_of_its_pinned_model() -> None:
-    from catalog.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32 as SM120
+    from verity_catalog.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32 as SM120
 
     step = P.BlackwellE4m3QmmaDot32
     assert step.id == "BlackwellE4m3QmmaDot32_v1" and REGISTRY["BlackwellE4m3QmmaDot32_v1"] is step
@@ -140,7 +140,7 @@ E5M2_PINF, E5M2_NINF, E5M2_NAN, E5M2_ONE, E5M2_MAX = 0x7C, 0xFC, 0x7D, 0x3C, 0x7
 
 
 def test_the_sm120_e5m2_step_is_the_e4m3_pipeline_with_e5m2_products_on_every_encoding() -> None:
-    from catalog.silicon.models import BLACKWELL_SM120_E5M2_M16N8K32 as SM120
+    from verity_catalog.silicon.models import BLACKWELL_SM120_E5M2_M16N8K32 as SM120
 
     step = P.BlackwellE5m2QmmaDot32
     assert step.id == "BlackwellE5m2QmmaDot32_v1" and REGISTRY[step.id] is step
@@ -178,8 +178,8 @@ def test_the_sm120_e5m2_step_reproduces_the_pro_6000_capture_on_every_encoding()
     but did not assert."""
     import numpy as np
 
-    from kernels.tc import group_sum_total_batch
-    from catalog.silicon.models import BLACKWELL_SM120_E5M2_M16N8K32 as SM120
+    from verity_kernels.tc import group_sum_total_batch
+    from verity_catalog.silicon.models import BLACKWELL_SM120_E5M2_M16N8K32 as SM120
 
     root = Path(__file__).parent / "fixtures" / "tc-sm120-e5m2-2026-09-30"
     for name, words in (("tiles_specials", 6144), ("tiles_signed_zero", 32768)):
@@ -197,8 +197,8 @@ def test_the_sm120_e5m2_step_reproduces_the_pro_6000_capture_on_every_encoding()
 
 
 def test_the_sm120_nvfp4_step_is_the_pinned_block_scaled_model() -> None:
-    from catalog.silicon.errors import InvalidArtifact
-    from catalog.silicon.models import BLACKWELL_SM120_NVF4 as NVF4
+    from verity_catalog.silicon.errors import InvalidArtifact
+    from verity_catalog.silicon.models import BLACKWELL_SM120_NVF4 as NVF4
 
     step = P.BlackwellNvf4OmmaDot64
     assert step.id == "BlackwellNvf4OmmaDot64_v1" and REGISTRY[step.id] is step
@@ -241,8 +241,8 @@ def test_the_sm120_nvfp4_step_is_total_as_measured_outside_ue4m3() -> None:
 
 
 def test_the_sm120_mxfp4_step_is_the_pinned_block_scaled_model() -> None:
-    from catalog.silicon.errors import InvalidArtifact
-    from catalog.silicon.models import BLACKWELL_SM120_MXF4 as MXF4
+    from verity_catalog.silicon.errors import InvalidArtifact
+    from verity_catalog.silicon.models import BLACKWELL_SM120_MXF4 as MXF4
 
     step = P.BlackwellMxf4OmmaDot64
     assert step.id == "BlackwellMxf4OmmaDot64_v1" and REGISTRY[step.id] is step

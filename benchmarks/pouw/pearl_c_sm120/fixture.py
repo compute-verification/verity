@@ -3,7 +3,7 @@ pearl_c_sm120.cu's kernels write, in its row-major layout (A' and B~'s codes and
 `k32`; every product over k is the unpermuted operands'), for forming v1 on `pearl_c_device.SM120` (G = 4) and
 `SM120_UNPROMOTED`.  Forming, lines and hashes come from `verity.protocols.accounting.work.pouw.schemes.pearl_c` on the device record; the products
 over every cell are batched in numpy (the chains by the twin, `benchmarks/pouw/pearl_c/twin.py`, the peel with
-`kernels.tc.group_sum_total_batch` on the record's peel step; the H100 fixture's helpers,
+`verity_kernels.tc.group_sum_total_batch` on the record's peel step; the H100 fixture's helpers,
 `benchmarks/pouw/pearl_c/fixture.py`, do the rest), and one whole 64 x 64 tile per variant is
 recomputed by the scheme (`encode`, `checked`, `digest`) and must agree.  Pearl's tickets are not part of
 `pearl-c-sm120` (no PoUW check reads them), so nothing here computes them.  run.py compares the device's buffers
@@ -44,7 +44,7 @@ H = _load("pearl_c_h100_fixture", HERE.parent / "pearl_c" / "fixture.py")
 W = _load("pearl_c_twin", HERE.parent / "pearl_c" / "twin.py")
 
 from verity.primitives.crypto.blake3 import blake3  # noqa: E402
-from kernels.tc import group_sum_total_batch  # noqa: E402
+from verity_kernels.tc import group_sum_total_batch  # noqa: E402
 from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
                                rows_domain, transcript_domain, weight_binding)
 from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402

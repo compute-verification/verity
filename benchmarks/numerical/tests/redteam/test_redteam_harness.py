@@ -6,8 +6,8 @@ import pytest
 import json
 import random
 
-from catalog.silicon import relation as R
-from catalog.silicon.silicon import AMPERE_BF16_M16N8K16 as AMP
+from verity_catalog.silicon import relation as R
+from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16 as AMP
 from verity_numerical.redteam import cases as C
 from verity_numerical.redteam import harness as H
 from verity_numerical.redteam import relation_target as RT

@@ -13,9 +13,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from catalog.silicon import silicon as S
-from catalog.silicon.models import group_sum
-from catalog.silicon.term import Term, e4m3_product, fp32_term
+from verity_catalog.silicon import silicon as S
+from verity_catalog.silicon.models import group_sum
+from verity_catalog.silicon.term import Term, e4m3_product, fp32_term
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEED = 20260902

@@ -46,9 +46,9 @@ from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.primitives.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.primitives.circuits.refs import array_of, tuple_of
 from verity.primitives.circuits.types import Array, Tuple, Value
-from catalog.definitions.fp32 import F32AddV2, F32FmaV2
-from catalog.definitions.prims import Bf16ToF32, E4m3ToF32, F2fpBf16
-from catalog.definitions.scalar import BitAnd, F32Neg, I32Le
+from verity_catalog.definitions.fp32 import F32AddV2, F32FmaV2
+from verity_catalog.definitions.prims import Bf16ToF32, E4m3ToF32, F2fpBf16
+from verity_catalog.definitions.scalar import BitAnd, F32Neg, I32Le
 
 from ..protocol import DomainError
 from ..schemes.pearl_c_device import DEVICES

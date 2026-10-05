@@ -89,11 +89,11 @@ PIECES: dict[str, Callable] = {
     "RopeOutAdd_v1": _rope_out_add,
     "SiluMulBf16_v1": _silu_mul,
     "AmpereBF16TcDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:])),
-    # catalog.silicon.models.HOPPER_BF16_WGMMA_K16: one group of 16, 26-bit adder, exponent floor -133 (the same total rules)
+    # verity_catalog.silicon.models.HOPPER_BF16_WGMMA_K16: one group of 16, 26-bit adder, exponent floor -133 (the same total rules)
     "HopperBF16WgmmaDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:]), groups=(16,), W=26, F=-133),
 }
 PIECES.update(tail_pieces.PIECES)
-PIECES["AmpereBF16TcDot16_v2"] = PIECES["AmpereBF16TcDot16_v1"]  # core's id (catalog.definitions.prims) for the same total function
+PIECES["AmpereBF16TcDot16_v2"] = PIECES["AmpereBF16TcDot16_v1"]  # core's id (verity_catalog.definitions.prims) for the same total function
 # the Boolean core's gates (verity.primitives.circuits.boolean): an n-input And is n - 1 ANDs, Xor and Not are free
 PIECES["Not_v1"] = lambda C, a: [a[0].inv()]
 GATE_FAMILIES = {r"And(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [fp.and_reduce(C, [b[0] for b in x])],
@@ -390,10 +390,10 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
     return Units(target, in_widths, [width[g] for g in ret_gates], ins, outs, sigs[0], first, arg_gates, ret_gates, K, tail)
 
 
-#: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): catalog.silicon.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
-#: The Ampere step has two ids, the vLLM registry's _v1 and core's _v2 (catalog.definitions.prims): one measured total function.
+#: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity_catalog.silicon.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
+#: The Ampere step has two ids, the vLLM registry's _v1 and core's _v2 (verity_catalog.definitions.prims): one measured total function.
 TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "AmpereBF16TcDot16_v2": ((8, 8), 25, -132), "HopperBF16WgmmaDot16_v1": ((16,), 26, -133)}
-#: the FP8 steps -> fp.tc_dot_e4m3's (groups, W, F): catalog.silicon.total_fp8 HOPPER_E4M3_WGMMA_K32 and models.BLACKWELL_SM120_E4M3_M16N8K32
+#: the FP8 steps -> fp.tc_dot_e4m3's (groups, W, F): verity_catalog.silicon.total_fp8 HOPPER_E4M3_WGMMA_K32 and models.BLACKWELL_SM120_E4M3_M16N8K32
 #: (a GEMM's FP8 coordinate is walked, not unit-lowered)
 TC_STEPS_FP8 = {"HopperE4m3QgmmaDot32_v1": ((32,), 14, -139), "BlackwellE4m3QmmaDot32_v1": ((32,), 26, -133)}
 

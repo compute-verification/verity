@@ -10,7 +10,7 @@ changes no root.
   are in `verity.primitives.commitments.rowleaf`, and a plain-Python BLAKE3 is in `verity.primitives.crypto.blake3`.
 - **Vectors.** `vectors.json`, written by `python -m verity.primitives.commitments.frame_v3.vectors`. `--check` exits nonzero
   if the file is stale.
-- **Conformance.** `verity/tests/commitments/test_frame_v3.py` checks the reference against the vectors,
+- **Conformance.** `verity/primitives/commitments/tests/test_frame_v3.py` checks the reference against the vectors,
   and against the `blake3` package when that is installed.
 
 ## 1. The frame-v3 leaf
@@ -262,7 +262,7 @@ Integers are little-endian. The value starts block-aligned, so a row streams thr
 33 chunks hashed in parallel under 6 parent levels. The tree's shape is fixed by the count the domain id absorbs, so a node
 hashes no index, and a leaf (its own tag) and a node (its level's key) cannot collide.
 
-- **Vectors and conformance.** `verity/tests/commitments/test_frame_b3.py` rebuilds each message from this layout,
+- **Vectors and conformance.** `verity/primitives/commitments/tests/test_frame_b3.py` rebuilds each message from this layout,
   pins a domain id, leaf, node, pad, empty root and root, and rebuilds the root with the `blake3` package when that is
   installed. `verity.primitives.crypto.blake3` itself matches that package on `vectors.json`'s BLAKE3 cases, hash and keyed
   (`test_frame_v3.py`). Pearl-C's device kernels

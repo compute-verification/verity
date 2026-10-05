@@ -73,7 +73,7 @@ def dlog(did: str, status: str, **over) -> dict:
 
 def write_log(root: Path, entries: list[dict]) -> None:
     (root / "fixtures").mkdir(exist_ok=True)
-    (root / "catalog" / "silicon" / "discrepancy_log.json").write_text(json.dumps({"schema": "verity/discrepancy-log/v0", "entries": entries}))
+    (root / "catalog" / "verity_catalog" / "silicon" / "discrepancy_log.json").write_text(json.dumps({"schema": "verity/discrepancy-log/v0", "entries": entries}))
 
 
 @pytest.fixture
@@ -366,8 +366,8 @@ def test_registry_ahead_of_evidence_is_noted(store, repo):
 def test_registry_status_values_are_trust_ladder_members_and_never_above_pinned():
     """No store: the registry may assert at most PINNED (TRUSTED and above are computed), every status is a ladder level, and a
     dossier reference, when set, is a store artifact id."""
-    from catalog.silicon.instructions import INSTRUCTIONS
-    from catalog.targets.target import TARGETS
+    from verity_catalog.silicon.instructions import INSTRUCTIONS
+    from verity_catalog.targets.target import TARGETS
 
     for ins in INSTRUCTIONS.values():
         assert ins.status.upper() in Level.__members__, f"{ins.id}: status {ins.status!r} is not a trust-ladder level"
@@ -530,7 +530,7 @@ def test_subject_resolution_covers_constants_names_and_instructions():
 
 
 def test_the_real_discrepancy_log_has_a_regression_tile_decision_for_every_entry():
-    log = json.loads((REPO_ROOT / "catalog" / "silicon" / "discrepancy_log.json").read_text())
+    log = json.loads((REPO_ROOT / "catalog" / "verity_catalog" / "silicon" / "discrepancy_log.json").read_text())
     for e in log["entries"]:
         assert e["id"] in REGRESSION_TILES, f"{e['id']}: decide its regression tiles (possibly none) in REGRESSION_TILES"
         if e["status"] == "resolved" and e["id"] not in ("D3",):
@@ -658,7 +658,7 @@ def test_the_sm120_fp8_steps_are_anchored_on_the_pro_6000_and_the_arch_default_i
     """The target names its conformance device, and trust matches evidence to it by SKU family, whether asked by target or by
     instruction id.  The e5m2 id has no target: its registry entry names the device, and the sm_120 default anchor (the RTX
     5090) stays for every other sm_120 instruction."""
-    from catalog.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
+    from verity_catalog.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
 
     for name in ("fp8-sm120-mma-draft/2026-09-30", "sm120.mma.m16n8k32.e4m3"):
         s = trust.subjects(name)

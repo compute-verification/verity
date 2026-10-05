@@ -4,7 +4,7 @@ BLOCK_SIZE_K 32) and its Boolean versions (`boolean_fp8_moe`), and `fp8`'s block
 
 * the plain-integer reference (`verity.primitives.circuits.evaluation.evaluate`) against a model written here from the kernels: core's k32 step
   (`HopperE4m3QgmmaDot32`), FMUL and FFMA each rounded once from the exact rational, and `cvt.rn.bf16.f32`;
-* the step's pinned vectors (`catalog/silicon/captures/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
+* the step's pinned vectors (`catalog/verity_catalog/silicon/captures/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
   coordinates;
 * operands on which the per-tile promotion, SWAP_AB and CUTLASS's per-block promotion give different words;
 * the numpy twins in `derived_rows` and `fp8_moe_rows` that the H200 capture compares the kernels with, against the Definitions;
@@ -30,8 +30,8 @@ from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.boolean import trace as TR
-from catalog.definitions.prims import F32ToE4m3Sat
-from catalog.definitions.prims import HopperE4m3QgmmaDot32 as DOT
+from verity_catalog.definitions.prims import F32ToE4m3Sat
+from verity_catalog.definitions.prims import HopperE4m3QgmmaDot32 as DOT
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels import fp8_moe_rows as MR
@@ -43,7 +43,7 @@ from verity_vllm.program.registry import fp8_moe as M
 from verity_vllm.program.registry.moe import nv_expf_bits
 from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 
-VECTORS = Path(__file__).resolve().parents[4] / "catalog" / "silicon" / "captures" / "vectors"
+VECTORS = Path(__file__).resolve().parents[4] / "catalog" / "verity_catalog" / "silicon" / "captures" / "vectors"
 SIGN, ONE = 1 << 31, 0x3F800000
 
 

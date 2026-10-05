@@ -1,4 +1,4 @@
-"""The Lean FP32 arithmetic (`verity/lean/Verity/Protocol/Fp32.lean`) is held to `catalog.definitions.fp32` by vectors:
+"""The Lean FP32 arithmetic (`verity/lean/Verity/Protocol/Fp32.lean`) is held to `verity_catalog.definitions.fp32` by vectors:
 `Verity/SecurityProofs/Fp32/Vectors.lean` states each one as a theorem the kernel checks against the Lean, and this test
 checks the same vectors against the Python, and that they reach every case the Python distinguishes. A change to either
 side's semantics then fails a build.
@@ -13,7 +13,7 @@ import re
 from fractions import Fraction
 from pathlib import Path
 
-from catalog.definitions import fp32 as F
+from verity_catalog.definitions import fp32 as F
 
 LEAN = Path(__file__).resolve().parents[2] / "verity" / "lean"
 VECTORS = LEAN / "Verity" / "SecurityProofs" / "Fp32" / "Vectors.lean"
@@ -129,7 +129,7 @@ def _exact(op: str, words: list[int]) -> Fraction | None:
 
 
 def kinds(name: str, args: tuple[int, ...]) -> set[str]:
-    """The cases of `catalog.definitions.fp32` that a vector reaches: its operands' and result's classes, and how its exact
+    """The cases of `verity_catalog.definitions.fp32` that a vector reaches: its operands' and result's classes, and how its exact
     result rounds."""
     prim, op, _ = PRIMS[name]
     bf16 = BF16_ARGS.get(name, ())
@@ -348,9 +348,9 @@ def render(vectors: list[tuple[str, tuple[int, ...]]]) -> str:
         "import Verity.Protocol.Fp32",
         "",
         "/-!",
-        "# Vectors: `catalog.definitions.fp32`'s primitives",
+        "# Vectors: `verity_catalog.definitions.fp32`'s primitives",
         "",
-        "Each theorem is one input of a primitive of `catalog.definitions.fp32` and the word its Python evaluator returns,",
+        "Each theorem is one input of a primitive of `verity_catalog.definitions.fp32` and the word its Python evaluator returns,",
         "checked by the kernel against the definition of the same name in `Verity.Fp32`.",
         "`catalog/tests/test_lean_fp32_vectors.py` checks the same vectors against the Python, and that",
         "they reach every case the Python distinguishes, so a change on either side fails a build: the definitions",

@@ -28,9 +28,9 @@ from pathlib import Path
 
 import numpy as np
 
-from kernels import tc as CK
-from catalog.definitions import mufu as MU
-from catalog.silicon.total import HOPPER_BF16_WGMMA_K16
+from verity_kernels import tc as CK
+from verity_catalog.definitions import mufu as MU
+from verity_catalog.silicon.total import HOPPER_BF16_WGMMA_K16
 from verity_vllm.program.kernels import dense_rows as DRW
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels.libdevice_sampling import nv_logf

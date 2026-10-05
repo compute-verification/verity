@@ -24,7 +24,7 @@ import pytest
 from circuit_check import targets as TG
 from verity.primitives.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.primitives.circuits.types import Array
-from catalog.definitions.prims import F32
+from verity_catalog.definitions.prims import F32
 from verity_flock import fp as FP
 from verity_flock import gf2
 from verity_flock import ir_lower as IL

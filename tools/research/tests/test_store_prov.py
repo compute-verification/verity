@@ -555,7 +555,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
 
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "tools/tc_probe", "catalog/silicon", ".gitignore", "uv.lock"],
+    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "tools/tc_probe", "catalog/verity_catalog/silicon", ".gitignore", "uv.lock"],
                          cwd=REPO, capture_output=True, check=True).stdout
     subprocess.run(["tar", "-xf", "-", "-C", str(src_dir)], input=tar, check=True)
     assert (src_dir / "tools/tc_probe/tool.py").exists() and not (src_dir / ".git").exists()
@@ -575,7 +575,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     store = json.loads((root / "runs/r1/job.json").read_text())["store"]
     assert "error" not in store, store.get("error")
     assert store["tool"] == {"name": "tc_probe", "version": "1", "spec": "tools.tc_probe.tool:TC_PROBE"}
-    assert "tools/tc_probe/tc_probe.py" in store["closure"] and "catalog/silicon/silicon.py" in store["closure"]
+    assert "tools/tc_probe/tc_probe.py" in store["closure"] and "catalog/verity_catalog/silicon/silicon.py" in store["closure"]
     assert store["key_params_resolved"]["arch"] == "sm_89" and store["key_params_resolved"]["instruction"] == "mma.x" and "out" not in store["key_params_resolved"]
     c = store["conditions"]
     assert (c["source.commit"], c["source.tree"], c["source.dirty"]) == ("c" * 40, "t" * 40, False), "the control side's hint fills what git cannot say in an archive"

@@ -1,4 +1,4 @@
-"""Core's `catalog.definitions` Definitions and every integration registry module load into one process, in either order, and
+"""Core's `verity_catalog.definitions` Definitions and every integration registry module load into one process, in either order, and
 the integration's names for the core Definitions are core's objects (the registry refuses a second object under an id)."""
 
 from __future__ import annotations
@@ -12,14 +12,14 @@ import pytest
 
 import verity_vllm.program.registry as registry
 
-CORE = ("catalog.definitions.prims", "catalog.definitions.scalar", "catalog.definitions.fp32", "catalog.definitions.mufu", "catalog.definitions.gemm", "kernels.tc")
+CORE = ("verity_catalog.definitions.prims", "verity_catalog.definitions.scalar", "verity_catalog.definitions.fp32", "verity_catalog.definitions.mufu", "verity_catalog.definitions.gemm", "verity_kernels.tc")
 
 CHECK = """
 import importlib, sys
 for m in sys.argv[1:]:
     importlib.import_module(m)
 from verity.primitives.circuits.defs import REGISTRY
-from catalog.definitions import fp32 as F, gemm as G, mufu as M, prims as C, scalar as S
+from verity_catalog.definitions import fp32 as F, gemm as G, mufu as M, prims as C, scalar as S
 from verity_vllm.program.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM, targets as T
 from verity.primitives.circuits.defs import PrimitiveDefinition
 core = [C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16, C.HopperBF16WgmmaDot16, C.AmpereBF16TcDot16, C.F32ToE4m3Sat,

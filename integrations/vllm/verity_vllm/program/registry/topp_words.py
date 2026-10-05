@@ -24,7 +24,7 @@ import numpy as np
 from verity.primitives.circuits.defs import PrimitiveDefinition, bind, composite
 from verity.primitives.circuits.refs import Affine, Coll, Explicit, Strided, concat
 from verity.primitives.circuits.types import Array, Value
-from catalog.definitions.scalar import BitAnd, I32Eq, SelectF32
+from verity_catalog.definitions.scalar import BitAnd, I32Eq, SelectF32
 from verity_vllm.program.registry.b1 import const
 from verity_vllm.program.registry.prims import BF16, BIT, F32, I32
 from verity_vllm.program.registry.topp_keep_builder import NEG_INF, SPLIT_COUNTS, Engine, Vec, keep_word

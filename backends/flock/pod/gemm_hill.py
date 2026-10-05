@@ -70,7 +70,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gemm_slowdown as GS  # noqa: E402
 
 #: dtype -> the coordinate Definition, its dot, the census line of its dense peak at FP32 accumulate, and the campaign target
-#: (catalog.targets.target) whose operands and accumulator these are: MXFP4 has none, so its result.json names none
+#: (verity_catalog.targets.target) whose operands and accumulator these are: MXFP4 has none, so its result.json names none
 DTYPES = {"bf16": ("GemmCoordinate_v2", "HopperBF16WgmmaDot16_v1", "rtx-pro-6000-server/bf16", "bf16-hopper-mma-draft/2026-09-22"),
           "e4m3": ("GemmCoordinateE4m3_v1", "BlackwellE4m3QmmaDot32_v1", "rtx-pro-6000-server/e4m3", "fp8-sm120-mma-draft/2026-09-30"),
           "nvf4": ("GemmCoordinateNvf4_v1", "BlackwellNvf4OmmaDot64_v1", "rtx-pro-6000-server/e2m1", "nvfp4-sm120-mma-draft/2026-09-22"),
@@ -598,7 +598,7 @@ def _bare_result(a, out: dict, g: dict, status: str, lv: dict, peak: dict) -> di
     pre = "" if a.points == 1 else f"p{a.point}/"
     return {"schema": "research/result/v0.1", "run_id": out["run_id"] or "local", "workload_fingerprint": fp,
             "validation": {"status": status, "checker": "byte identity at B = 16: " + ", ".join(GS.PREFLIGHT_CASES),
-                           "detail": f"{a.dtype}: no catalog.targets.target, so no contract fingerprint; "
+                           "detail": f"{a.dtype}: no verity_catalog.targets.target, so no contract fingerprint; "
                                      + (g.get("why") or json.dumps(g.get("shapes")))[:700],
                            "evidence": ["out/preflight/classes/results.jsonl"]},
             "measurements": _hill(out, lv, peak) if status == "passed" and out.get("statement_s") else [],

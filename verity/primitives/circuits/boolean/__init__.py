@@ -109,7 +109,7 @@ def _constant_bit(b: int) -> PrimitiveDefinition:
     return p
 
 
-#: the constants 0 and 1: the `Const` family's 1-bit members (`catalog.definitions.prims.const(1, b)` returns these objects)
+#: the constants 0 and 1: the `Const` family's 1-bit members (`verity_catalog.definitions.prims.const(1, b)` returns these objects)
 CONSTANTS: tuple[PrimitiveDefinition, PrimitiveDefinition] = (_constant_bit(0), _constant_bit(1))
 _CONSTANT_ID = re.compile(r"^Const1\[0x([01])\]_v1$")
 

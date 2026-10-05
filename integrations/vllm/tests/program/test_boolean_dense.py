@@ -21,8 +21,8 @@ from verity.primitives.circuits import partition_object as PO
 from verity.primitives.circuits.defs import REGISTRY, bind
 from verity.primitives.circuits.boolean import trace as TR
 from verity.primitives.circuits.boolean.forms import Circuit
-from catalog.definitions.boolean import elementwise as EW
-from catalog.silicon import fp
+from verity_catalog.definitions.boolean import elementwise as EW
+from verity_catalog.silicon import fp
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import boolean_dense as BD
 from verity_vllm.program.registry import dense as D

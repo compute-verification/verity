@@ -4,16 +4,16 @@ Frozen: kept, still in the tables, not developed. The exception is the bench spi
 contract, workloads, lowerings, the tables and their views), which C-Flock, `circuit-check` and the table renderers read.
 What the merge gate runs here: `../../archive/README.md`.
 
-Campaign-side numerical work for `catalog.targets.target.FIRST` (rules: `archive/AGENTS.md`). `verity_numerical.reference`
+Campaign-side numerical work for `verity_catalog.targets.target.FIRST` (rules: `archive/AGENTS.md`). `verity_numerical.reference`
 is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2. `security` is the soundness
 calculator for A-GKR and B-Ligero (`accounting`, `census`), `gkr_export` A-GKR's circuit exporter, `explore` cost-model
 explorations and `redteam` the red team's forgeries against the checkers.
 
 ## WP1: independence audit of the existing columns
 
-The target names three executable columns of the finite-domain step: Python `catalog.silicon.silicon`, Rust
+The target names three executable columns of the finite-domain step: Python `verity_catalog.silicon.silicon`, Rust
 `archive/sp1/common/src/tc.rs`, Lean `veritor/lean/VeritorSpec/TC.lean` in the `veritor` repository (reused unchanged by `TCB.lean`, which only adds the
-casts). Reading them against Hawkeye's pinned simulator (`catalog/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
+casts). Reading them against Hawkeye's pinned simulator (`catalog/verity_catalog/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
 `utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`):
 
 - `silicon.py` states it is "a bit-exact pure-Python port of the reference simulator" at that commit. `silicon.group_sum` is the
@@ -113,7 +113,7 @@ record returns to a finite value). Log entry D8.
 `verity_numerical.checker` was BF16-only by construction: `Params` asserted an adder at least as wide as the accumulator's
 significand (`width >= acc_sig`, 25 >= 24), and one exponent width served operands and accumulator alike. Hopper/Ada E4M3
 break both -- the FP8 adders are 14 bits wide and truncate the incoming FP32 accumulator's 24-bit significand to 14 before
-the grouped add (`catalog.silicon.models.GroupSum.step`; a group of zero products is therefore not a no-op, log entry D10), and
+the grouped add (`verity_catalog.silicon.models.GroupSum.step`; a group of zero products is therefore not a no-op, log entry D10), and
 E4M3 has a 4-bit exponent with its own NaN rule (`0x7F`/`0xFF` are the NaNs, `0x7E` = 448 is finite, there are no infinities).
 
 What changed (`python/verity_numerical/checker/`):
@@ -137,6 +137,6 @@ What changed (`python/verity_numerical/checker/`):
   the zero-product truncation of D10, the E4M3 NaN words, rescale-hint mutations rejected, the E5M2 hypotheses through the same
   `Params`, and an exhaustive slice of `TOY_LOSSY`.
 
-The FP8 drafts these serve are `catalog.targets.target.FP8_HOPPER_WGMMA` / `FP8_ADA_MMA` (`status="draft"`, no guest bound);
-their instructions and evidence are in `catalog.silicon.instructions`, the replicas in `catalog/silicon/captures/`, the open hardware questions
-in `catalog/silicon/discrepancy_log.json` D13-D15.
+The FP8 drafts these serve are `verity_catalog.targets.target.FP8_HOPPER_WGMMA` / `FP8_ADA_MMA` (`status="draft"`, no guest bound);
+their instructions and evidence are in `verity_catalog.silicon.instructions`, the replicas in `catalog/verity_catalog/silicon/captures/`, the open hardware questions
+in `catalog/verity_catalog/silicon/discrepancy_log.json` D13-D15.

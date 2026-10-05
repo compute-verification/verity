@@ -1,4 +1,4 @@
-"""`catalog.definitions.boolean.attention`: the Boolean softmax operations agree with their word primitives (`trace.word_of`) on every
+"""`verity_catalog.definitions.boolean.attention`: the Boolean softmax operations agree with their word primitives (`trace.word_of`) on every
 pair of special words and on random words (the inverse sum also on every mantissa), carry exactly their builders' live ANDs, and are pinned by gate count and program
 digest."""
 from __future__ import annotations
@@ -16,7 +16,7 @@ from verity.primitives.circuits.evaluation.reference import standalone_call
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import REGISTRY, bind
-from catalog.definitions.boolean import attention as BA
+from verity_catalog.definitions.boolean import attention as BA
 from verity.primitives.circuits.boolean import trace as TR
 from verity.primitives.circuits.boolean.forms import Circuit
 

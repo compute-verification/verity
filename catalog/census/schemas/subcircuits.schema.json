@@ -124,7 +124,7 @@
             "legacy_target": {
               "type": "string",
               "minLength": 1,
-              "description": "the catalog.targets.target name it was known by"
+              "description": "the verity_catalog.targets.target name it was known by"
             },
             "stood_for_by": {
               "type": "object",

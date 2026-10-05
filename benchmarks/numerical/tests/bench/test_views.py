@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS
+from verity_catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS
 from verity_numerical.bench import census, contract
 from verity_numerical.bench import tables as T
 from verity_numerical.bench import views as V

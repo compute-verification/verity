@@ -9,10 +9,10 @@ import random
 from pathlib import Path
 
 from verity.primitives.circuits.defs import PrimitiveDefinition, bind
-from catalog.definitions import gemm as G
-from catalog.definitions import prims as P
-from catalog.silicon.silicon import AMPERE_BF16_M16N8K16
-from catalog.silicon.total import tc_dot_total
+from verity_catalog.definitions import gemm as G
+from verity_catalog.definitions import prims as P
+from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16
+from verity_catalog.silicon.total import tc_dot_total
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
 

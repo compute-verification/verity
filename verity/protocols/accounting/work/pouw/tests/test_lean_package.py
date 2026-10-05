@@ -1,8 +1,8 @@
 """The PoUW Lean package (`lean/`) and what the rest of this directory says about it: every Lean theorem `PROTOCOL.md` cites is
-a guarantee in its `lean-audit.json`, and its FP8 conformance data is what `catalog.silicon` computes.
+a guarantee in its `lean-audit.json`, and its FP8 conformance data is what `verity_catalog.silicon` computes.
 `lean/scripts/fp8atom_vectors.py`, run again, writes the kernel-pinned vectors in `lean/Pouw/Protocol/Fp8Atom/` and their
 checks in `lean/Pouw/SecurityProofs/Fp8Atom/` byte for byte, and the bulk whose SHA-256 the record holds for `PouwBulk`. The
-Lean audit runs `PouwBulk` on that bulk (`runs`); this is the half that says the data is still `catalog.silicon`'s."""
+Lean audit runs `PouwBulk` on that bulk (`runs`); this is the half that says the data is still `verity_catalog.silicon`'s."""
 from __future__ import annotations
 
 import gzip

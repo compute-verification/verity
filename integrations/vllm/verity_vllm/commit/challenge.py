@@ -27,7 +27,7 @@ from typing import Any, TypeVar
 import numpy as np
 
 from verity.primitives.randomness import Key, derive
-from experimental.sampled_proofs.law import ReplayUnit, Stage, TwoStageLaw, select_verification_units, vu_key
+from verity_experimental.sampled_proofs.law import ReplayUnit, Stage, TwoStageLaw, select_verification_units, vu_key
 
 #: Every derivation's default until the re-baseline epoch (decision 42).
 LEGACY = True

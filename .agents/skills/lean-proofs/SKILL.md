@@ -22,7 +22,7 @@ The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/READ
   prover runs: `backends/flock/verifier/lean/` (no dependencies). Facts about the executable's definitions:
   `level3/` (Mathlib). C-Flock's guarantees (soundness, knowledge soundness, zero knowledge, audits): `soundness/`
   (ArkLib).
-  Proofs about core's own definitions (`catalog.silicon` and the like), and the model every protocol states its guarantees
+  Proofs about core's own definitions (`verity_catalog.silicon` and the like), and the model every protocol states its guarantees
   in (circuits, partitions, declarations, games): `verity/lean/` (Mathlib only), since core depends on no
   backend. A protocol's guarantees: its own package under `protocols/<name>/lean/`, which may require core's and other
   protocols' packages. A new package only when the dependencies differ; give it a `lean-audit.json` and the shared `lean-toolchain`.

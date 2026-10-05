@@ -44,10 +44,10 @@ from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.defs import CompositeDefinition, bind
 from verity.primitives.circuits.refs import Coll, Explicit, concat
 from verity.primitives.circuits.types import Array, Tuple
-from catalog.silicon import fp
+from verity_catalog.silicon import fp
 from verity.primitives.circuits.boolean.forms import NOT, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
-from catalog.definitions.boolean.scalar import gt_u, select
-from catalog.definitions.boolean.softmax import f32_add_ftz, f32_fma_ftz, f32_mul_ftz, ftz
+from verity_catalog.definitions.boolean.scalar import gt_u, select
+from verity_catalog.definitions.boolean.softmax import f32_add_ftz, f32_fma_ftz, f32_mul_ftz, ftz
 from verity.primitives.circuits.boolean.trace import definition
 from verity_vllm.program.registry import sampling as SM
 from verity_vllm.program.registry import topp_word_gates as TG

@@ -23,7 +23,7 @@ from verity.primitives.circuits.evaluation.reference import standalone_call
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import PrimitiveDefinition, bind
-from catalog.definitions.boolean import mufu as MU
+from verity_catalog.definitions.boolean import mufu as MU
 from verity.primitives.circuits.boolean import trace as TR
 from verity_vllm.program.boolean import boolean_version
 from verity_vllm.program.registry import boolean_dense as BD

@@ -1,7 +1,7 @@
 """Application-level commitments: binding Verity values and authenticating their openings.
 
 Two commitment schemes, both wire-pinned by the SP1 kernel: transparent SHA-256 Merkle trees over
-verifier-derived position domains, one word per leaf (``merkle``; ``experimental.commitments.multiproof`` opens many
+verifier-derived position domains, one word per leaf (``merkle``; ``verity_experimental.commitments.multiproof`` opens many
 leaves of one tree at once), and trees over whole runtime tensor leaves under the ``verity-vllm/leaf/v1`` framing (``leaves``),
 the scheme the packed-word obligations of the serving path authenticate against.  ``indexed`` holds the domains,
 ``identity`` the canonical-manifest digests every identity here is built from, ``limits`` the verifier's limits.

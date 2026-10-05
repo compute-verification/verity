@@ -10,7 +10,7 @@ root=$(cd "$here/../../../.." && pwd)
 pkg=$(cd "${1:-$here/../../verifier/lean/soundness}" && pwd)
 out=$(mktemp)
 (cd "$pkg" && lake build FlockSoundness.PlanDraw >&2 &&
-  lake env lean --run "$here/RandomnessVectors.lean" "$root/verity/tests/randomness/vectors.json") > "$out"
+  lake env lean --run "$here/RandomnessVectors.lean" "$root/verity/primitives/randomness/tests/vectors.json") > "$out"
 python3 - "$out" "$here" "$pkg" "$root" <<'PY'
 import hashlib, json, sys
 from pathlib import Path
@@ -20,7 +20,7 @@ sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 verifier = pkg.parent
 data["inputs"] = {
     "backends/flock/tests/lean/RandomnessVectors.lean": sha(here / "RandomnessVectors.lean"),
-    "verity/tests/randomness/vectors.json": sha(root / "verity/tests/randomness/vectors.json"),
+    "verity/primitives/randomness/tests/vectors.json": sha(root / "verity/primitives/randomness/tests/vectors.json"),
     **{"backends/flock/verifier/lean/soundness/" + f: sha(pkg / f) for f in (
         "FlockSoundness/Randomness.lean", "FlockSoundness/PlanDraw.lean", "lake-manifest.json", "lean-toolchain")},
     **{"backends/flock/verifier/lean/" + f: sha(verifier / f) for f in ("Flock/Hash.lean", "Flock/Draw.lean")}}

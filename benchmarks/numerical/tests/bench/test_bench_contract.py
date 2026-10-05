@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from conftest import REPO, VECTOR_RUN, conforming_result
 
-from catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, FP8_SM120_MMA, K16_VECTOR, NVFP4_SM120
+from verity_catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, FP8_SM120_MMA, K16_VECTOR, NVFP4_SM120
 from verity_numerical.bench import census, contract
 
 FIXTURES = REPO / "fixtures" / "typed-obligation-v0"
@@ -56,8 +56,8 @@ def test_envelope_problems_are_reported(conforming: dict) -> None:
 @pytest.mark.parametrize(
     ("field", "value", "fragment"),
     [
-        ("profile", "another-target", "profile must be a target of catalog.targets.target"),
-        ("profile", None, "profile must be a target of catalog.targets.target"),
+        ("profile", "another-target", "profile must be a target of verity_catalog.targets.target"),
+        ("profile", None, "profile must be a target of verity_catalog.targets.target"),
         ("domain", "", "domain must be one of"),
         ("domain", "exact", "domain must be one of"),
         ("K", 24, "K must be a positive multiple of 16"),
@@ -364,7 +364,7 @@ def test_every_target_is_a_valid_profile_and_an_unknown_one_is_not(conforming: d
     fp8 = contract.fingerprint(**{**{k: fp[k] for k in contract.REQUIRED_FIELDS}, "profile": FP8_ADA_MMA.name})
     assert fp8["profile"] == FP8_ADA_MMA.name and contract.validate_fingerprint(fp8) == []
     problems = contract.validate({**conforming, "workload_fingerprint": {**fp, "profile": "fp8-ada-mma-draft/2099-01-01"}})
-    assert len(problems) == 1 and problems[0].startswith("profile must be a target of catalog.targets.target, one of (") and "fp8-ada-mma-draft/2099-01-01" in problems[0]
+    assert len(problems) == 1 and problems[0].startswith("profile must be a target of verity_catalog.targets.target, one of (") and "fp8-ada-mma-draft/2099-01-01" in problems[0]
     with pytest.raises(ValueError, match="profile must be a target"):
         contract.fingerprint(**{**{k: fp[k] for k in contract.REQUIRED_FIELDS}, "profile": "another-target"})
 

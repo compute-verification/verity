@@ -21,9 +21,9 @@ from verity.primitives.circuits.evaluation import bits as BS
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.defs import bind
-from catalog.definitions.boolean import gemm as BG
+from verity_catalog.definitions.boolean import gemm as BG
 from verity.primitives.circuits.boolean import trace as TR
-from catalog.definitions.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, spec_label
 from verity_vllm.program import boolean as SW

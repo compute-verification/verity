@@ -5,7 +5,7 @@ A Definition is Boolean (`verity.primitives.circuits.boolean.is_boolean`) when i
 only, through every sub-Call.  A Boolean Definition names the word Definition it computes (`verity.primitives.circuits.boolean.trace.word_of`: its
 ``word``, a Definition, or for one with statics a function of its bindings, in which case it carries its word's name).  Those
 links are the one table this module reads: `boolean_version(fn)` is the registered Boolean Definition whose word is ``fn``,
-looked up among every module of `catalog.definitions.boolean` and of `verity_vllm.program.registry` (`registry.catalog`), and
+looked up among every module of `verity_catalog.definitions.boolean` and of `verity_vllm.program.registry` (`registry.catalog`), and
 `NoBooleanVersion` names each Definition it finds none for.  A function-valued static is bound to its own Boolean version; a
 static the word has no counterpart for, to the Boolean version of the word Definition the Boolean Definition's ``word_statics``
 names for it.
@@ -77,12 +77,12 @@ def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
     from verity_vllm.program.registry.catalog import load as load_registry
     _, errors = load_registry()
     errors = list(errors)
-    core = importlib.import_module("catalog.definitions.boolean")
+    core = importlib.import_module("verity_catalog.definitions.boolean")
     for m in sorted(pkgutil.iter_modules(core.__path__), key=lambda m: m.name):
         try:
-            importlib.import_module(f"catalog.definitions.boolean.{m.name}")
+            importlib.import_module(f"verity_catalog.definitions.boolean.{m.name}")
         except Exception as e:  # noqa: BLE001  (named in every gap: a module that fails to import serves nothing)
-            errors.append(f"catalog.definitions.boolean.{m.name}: {type(e).__name__}: {e}")
+            errors.append(f"verity_catalog.definitions.boolean.{m.name}: {type(e).__name__}: {e}")
     exact: dict[str, list] = {}
     by_name: dict[str, list] = {}
     for d in list(REGISTRY.defs.values()):

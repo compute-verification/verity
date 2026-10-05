@@ -146,7 +146,7 @@ def test_evaluation_targets_equal_the_definitions():
     kernel."""
     from verity.primitives.circuits.evaluation import evaluate_batch
     from verity.primitives.circuits.defs import REGISTRY, bind
-    from catalog.definitions import gemm
+    from verity_catalog.definitions import gemm
 
     key = G.key_for(TM.subcircuit("attention-head", D=16, BN=16), 0)
     for sub, n in ((TM.subcircuit("attention-head", D=16, BN=16, T="17:40"), 4), (TM.subcircuit("rope-head", D=8), 16)):
@@ -190,9 +190,9 @@ FP8 = sorted(TM.GEMM_FP8)
 
 @pytest.mark.parametrize("sem", FP8)
 def test_fp8_sets_hold_the_backends_accumulators(tmp_path, sem):
-    """An FP8 set's y is the FP32 accumulator word of K/32 steps of the catalog.silicon model the backends chain with (ADA_E4M3_M16N8K32,
-    HOPPER_E4M3_K32), from the IR reference (kernels.tc ADA_E4M3_DOT / HOPPER_E4M3_DOT); every operand byte is finite."""
-    from catalog.silicon import models
+    """An FP8 set's y is the FP32 accumulator word of K/32 steps of the verity_catalog.silicon model the backends chain with (ADA_E4M3_M16N8K32,
+    HOPPER_E4M3_K32), from the IR reference (verity_kernels.tc ADA_E4M3_DOT / HOPPER_E4M3_DOT); every operand byte is finite."""
+    from verity_catalog.silicon import models
 
     sub = TM.subcircuit("gemm-coordinate", K=64, semantics=sem, tile=4)
     s = IS.InputSet.open(G.generate(sub, 12, 5, tmp_path)["path"])
@@ -214,8 +214,8 @@ def test_fp8_sets_hold_the_backends_accumulators(tmp_path, sem):
 
 def test_nvfp4_sets_hold_the_models_accumulator(tmp_path):
     """NVFP4 (sm120): y is models.BLACKWELL_SM120_NVF4's chain over the E2M1 codes and UE4M3 block-16 scales, from the IR reference
-    kernels.tc.SM120_NVF4_DOT; codes span 0..15, scales the valid 0x00..0x7E."""
-    from catalog.silicon.models import BLACKWELL_SM120_NVF4 as M
+    verity_kernels.tc.SM120_NVF4_DOT; codes span 0..15, scales the valid 0x00..0x7E."""
+    from verity_catalog.silicon.models import BLACKWELL_SM120_NVF4 as M
 
     sid = "gemm-coordinate/k1536/sm120-mma-e2m1-nvf4"
     sub = TM.parse_subcircuit_id(sid)

@@ -8,8 +8,8 @@ import re
 
 import pytest
 
-from catalog.silicon.instructions import INSTRUCTIONS
-from catalog.targets.target import FP8_HOPPER_WGMMA, TARGETS
+from verity_catalog.silicon.instructions import INSTRUCTIONS
+from verity_catalog.targets.target import FP8_HOPPER_WGMMA, TARGETS
 from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
@@ -280,7 +280,7 @@ def _ops(expr: str, env: dict) -> int:
 
 
 def test_every_template_carries_a_work_model_the_tables_n_agrees_with() -> None:
-    from catalog.targets.target import FIRST
+    from verity_catalog.targets.target import FIRST
     from verity_numerical.bench import views
 
     version = views.WORK_MODEL.split(":")[0]

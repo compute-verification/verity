@@ -1,11 +1,11 @@
-"""``catalog.silicon.instructions``: the registry has exactly the agreed ids, and every status is backed the way it claims."""
+"""``verity_catalog.silicon.instructions``: the registry has exactly the agreed ids, and every status is backed the way it claims."""
 from __future__ import annotations
 
 import pytest
 
-from catalog.silicon import instructions
-from catalog.silicon.instructions import INSTRUCTIONS, Instruction, instructions_for
-from catalog.silicon.models import (
+from verity_catalog.silicon import instructions
+from verity_catalog.silicon.instructions import INSTRUCTIONS, Instruction, instructions_for
+from verity_catalog.silicon.models import (
     ADA_BF16_M16N8K16,
     ADA_E4M3_M16N8K32,
     AMPERE_BF16_M16N8K16,

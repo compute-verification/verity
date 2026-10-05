@@ -16,7 +16,7 @@ import pytest
 import pearl_c_vectors as CV
 import pearl_vectors as PV
 from verity.primitives.crypto.turboshake import turboshake128
-from catalog.silicon.models import HOPPER_BF16_WGMMA_K16
+from verity_catalog.silicon.models import HOPPER_BF16_WGMMA_K16
 from verity.protocols.accounting.work.pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity.protocols.accounting.work.pouw.schemes import get
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C

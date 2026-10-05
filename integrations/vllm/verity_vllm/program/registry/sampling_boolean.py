@@ -34,7 +34,7 @@ from verity.primitives.circuits.refs import Coll, concat
 from verity.primitives.circuits.types import Array, Tuple
 from verity.primitives.circuits.boolean import trace as TR
 from verity.primitives.circuits.boolean.forms import ONE, OR, ZERO, NOT, add
-from catalog.definitions.boolean.scalar import bf16_gt_strict, bf16_key, f32_key, gt_u, select
+from verity_catalog.definitions.boolean.scalar import bf16_gt_strict, bf16_key, f32_key, gt_u, select
 from verity_vllm.program.registry import b1
 
 __all__ = ["ArgmaxLeaf", "ArgmaxMerge", "ArgmaxStep", "F32ArgmaxLeaf", "F32ArgmaxMerge", "F32ArgmaxStage", "G", "GB", "TokenSelect",

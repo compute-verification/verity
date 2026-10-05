@@ -1,4 +1,4 @@
-"""`catalog.definitions.boolean.mufu`: the Boolean MUFU operations agree with their word Definitions (`trace.word_of`) on special and random
+"""`verity_catalog.definitions.boolean.mufu`: the Boolean MUFU operations agree with their word Definitions (`trace.word_of`) on special and random
 words and, through every table index, on whole binades; each table's interpolator reproduces the measured words; and every
 Definition is pinned by gate count and program digest."""
 from __future__ import annotations
@@ -17,8 +17,8 @@ from verity.primitives.circuits.evaluation.reference import standalone_call
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import REGISTRY, bind
-from catalog.definitions import mufu as M
-from catalog.definitions.boolean import mufu as BM
+from verity_catalog.definitions import mufu as M
+from verity_catalog.definitions.boolean import mufu as BM
 from verity.primitives.circuits.boolean import trace as TR
 from verity.primitives.circuits.boolean.forms import Circuit
 

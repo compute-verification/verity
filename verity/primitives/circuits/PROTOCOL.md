@@ -7,9 +7,9 @@ implementation (the Lean port of `Q_word` first). It describes the bytes the cod
 - Reference: `verity.primitives.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`),
   with `types`, `refs`, `defs` (`Node`, `Body`, `Builder`), `program` (the root, `INPUT_ID`), `layout` (`Circuit`, `resolve`),
   `parts.n_members`, for §8, §10 and §11 `cut` and `partition_object`, and for §9 `boolean`.
-- Vectors: `verity/tests/circuits/format_vectors.json`, written by
-  `python verity/tests/circuits/test_format_spec.py --write`.
-- Conformance: `verity/tests/circuits/test_format_spec.py` checks the reference against every vector, and restates
+- Vectors: `verity/primitives/circuits/tests/format_vectors.json`, written by
+  `python verity/primitives/circuits/tests/test_format_spec.py --write`.
+- Conformance: `verity/primitives/circuits/tests/test_format_spec.py` checks the reference against every vector, and restates
   canonical JSON (as RFC 8785), leaf order, reference sequences and the interning order independently of it. Each section
   names its vector keys. `tests/ir/partition_vectors.json` pins `Q_word` v1 on top of this format.
 - Scope: schema v1. `verity-ir/descriptor/v0` (every body verbatim, types inline, no alias) still decodes; it is not
@@ -415,7 +415,7 @@ significant first), or a `Value<1>` that is not inside one. `elements(T)` lists 
 `word_type`: the signature of the word Definition it computes. A port's number format is an annotation, outside every digest;
 the word view does not read it.
 
-Vectors (`tests/ir/boolean_vectors.json`, written by `python verity/tests/circuits/test_boolean.py --write`): `gates` (id,
+Vectors (`tests/ir/boolean_vectors.json`, written by `python verity/primitives/circuits/tests/test_boolean.py --write`): `gates` (id,
 kind, parameters, return type, truth table), `constants`, `word_view` (type, element widths, word type), and `program`: a 2-bit
 adder built from two full-adder calls, a batch of `Xor2_v1` over axis 1, a constant, a `Not_v1` and an `Xor3_v1`, with its
 descriptor, digest, gate table and truth table on words.
@@ -495,7 +495,7 @@ Rules the IR left open, pinned here:
 - **A unit with no outputs** (a dead gate) is still a unit: every computing gate is in exactly one.
 - **An unread parameter leaf** is in the input unit and is not committed.
 
-Vectors: `qcall_vectors.json`, written by `python verity/tests/circuits/test_qcall_vectors.py --write`. They cover a word
+Vectors: `qcall_vectors.json`, written by `python verity/primitives/circuits/tests/test_qcall_vectors.py --write`. They cover a word
 program and a Boolean program at two values of X. The word program has a Call that fits; one that splits into sub-Calls two levels
 down; a batch of a composite and of a primitive; a scan with a chained carry and one with a passed-through carry; pass-through
 outputs; a constant read by two units; a constant-derived gate committed across units; a 64-bit input and constant; a recompute

@@ -36,7 +36,7 @@ from fractions import Fraction
 from verity.primitives.circuits.defs import bind, composite, primitive
 from verity.primitives.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.primitives.circuits.types import Array, Tuple
-from catalog.definitions.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
+from verity_catalog.definitions.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as R

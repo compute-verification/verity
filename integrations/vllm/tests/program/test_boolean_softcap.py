@@ -1,5 +1,5 @@
 """`boolean_softcap`: `AttnBlockSoftcap_v3` / `AttentionHeadSoftcap_v3` / `AttentionSoftcap_v3` with ``TANH`` = `MufuTanh_v2` and
-``EX2`` = `MufuEx2Ftz_v2` (`catalog.definitions.boolean.mufu`) are Boolean, agree with their word views (`fa2_softcap`'s v2 chain at the
+``EX2`` = `MufuEx2Ftz_v2` (`verity_catalog.definitions.boolean.mufu`) are Boolean, agree with their word views (`fa2_softcap`'s v2 chain at the
 same statics, over `MufuTanh_v1` and `MufuEx2Ftz_v1`), Call their blocks and heads as the word chain does, and are pinned by gate
 count and program digest.
 
@@ -21,9 +21,9 @@ from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.types import Array
-from catalog.definitions.boolean import attention as BA
-from catalog.definitions.boolean import gemm as BG
-from catalog.definitions.boolean import mufu as BM
+from verity_catalog.definitions.boolean import attention as BA
+from verity_catalog.definitions.boolean import gemm as BG
+from verity_catalog.definitions.boolean import mufu as BM
 from verity.primitives.circuits.boolean import trace as TR
 from verity.primitives.circuits.boolean.forms import NOT, const_bits, sub
 from verity_vllm.program.registry import boolean_softcap as BSC

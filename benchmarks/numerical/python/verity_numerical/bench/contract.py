@@ -20,7 +20,7 @@ Envelope (``research/result/v0.1``, ``tools/research/src/research/result.py``)::
 
 Fingerprint fields (all required; a sub-field whose value is not known is ``null``, never a guess)::
 
-    profile         the name of the target actually proved (one of :data:`PROFILES`, ``catalog.targets.target.TARGETS``);
+    profile         the name of the target actually proved (one of :data:`PROFILES`, ``verity_catalog.targets.target.TARGETS``);
                     the campaign target is FIRST.name (:data:`PROFILE`); results of different profiles are never compared
     domain          the operand domain the proved statement covers, one of :data:`DOMAINS` (the vocab key ``domain``): ``total``
                     (every encoding) or ``finite-only`` (non-finite operands asserted away), from the statement, never assumed
@@ -84,8 +84,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from catalog.silicon.instructions import INSTRUCTIONS
-from catalog.targets.target import FIRST, TARGETS, Target
+from verity_catalog.silicon.instructions import INSTRUCTIONS
+from verity_catalog.targets.target import FIRST, TARGETS, Target
 from verity_numerical.bench import census
 
 __all__ = [
@@ -164,7 +164,7 @@ DOMAIN = "finite-only"
 DOMAINS = ("total", "finite-only")
 #: What results registered before 2026-09-27 wrote: every writer hardcoded ``finite``, whatever its statement's domain.
 LEGACY_DOMAINS = {"finite": "finite-only"}
-#: Every profile a result may name: the targets of ``catalog.targets.target.TARGETS`` (FIRST and the FP8 drafts).
+#: Every profile a result may name: the targets of ``verity_catalog.targets.target.TARGETS`` (FIRST and the FP8 drafts).
 #: ``profile`` is an identity field, so a result of one profile is never compared with a result of another.
 PROFILES = tuple(TARGETS)
 
@@ -294,7 +294,7 @@ RATE_TOLERANCE = 1e-6
 def native_reference(profile: str = PROFILE) -> Any:
     """The native peak the headline overhead of a ``profile`` divides by: :func:`native_peak_of` its target -- the
     datasheet dense tensor-core peak of the instruction's conformance anchor for the target's operand dtype at FP32
-    accumulate, no sparsity (``catalog.targets.target``, "Native peak"; the census line).  A GemmCoordinate<K> is K MACs = 2K FLOP,
+    accumulate, no sparsity (``verity_catalog.targets.target``, "Native peak"; the census line).  A GemmCoordinate<K> is K MACs = 2K FLOP,
     so the native time of one VU at peak is 2K / rate: 9.85 ps at K=1536 for FIRST (A100 BF16, ~1.0e11 VU/s).  Peak is
     the conservative choice (a real decode step runs below peak, so the true overhead is *lower* than this number); it
     is also the only reference every result can share without a runtime capture.  The prover's own hardware is in the
@@ -534,7 +534,7 @@ def validate_fingerprint(fp: Any) -> list[str]:
             present.pop(field, None)
 
     if "profile" in present and present["profile"] not in PROFILES:
-        p.append(f"profile must be a target of catalog.targets.target, one of {PROFILES} (the campaign target is {PROFILE!r}), got {present['profile']!r}")
+        p.append(f"profile must be a target of verity_catalog.targets.target, one of {PROFILES} (the campaign target is {PROFILE!r}), got {present['profile']!r}")
     if "domain" in present and present["domain"] not in (*DOMAINS, *LEGACY_DOMAINS):
         p.append(f"domain must be one of {DOMAINS} (the statement's operand domain), got {present['domain']!r}")
     if "K" in present and not (_is_int(present["K"]) and present["K"] > 0 and present["K"] % 16 == 0):

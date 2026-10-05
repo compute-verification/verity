@@ -44,7 +44,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from catalog.definitions import mufu as MU
+from verity_catalog.definitions import mufu as MU
 from verity_vllm.program.kernels import derived_rows as DR
 
 SCHEMA = "verity-vllm/sigmoid-router-capture/v1"

@@ -17,8 +17,8 @@ from verity.primitives.circuits.evaluation.reference import standalone_call
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import bind
-from catalog.definitions import mufu as MU
-from catalog.definitions.boolean import gemm as BG
+from verity_catalog.definitions import mufu as MU
+from verity_catalog.definitions.boolean import gemm as BG
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import mla as M
 from verity_vllm.program.registry import mla_capture as MC

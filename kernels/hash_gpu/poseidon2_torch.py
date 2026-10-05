@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import torch
 
-from .poseidon2_ref import INTERNAL_DIAG, P, Poseidon2, external_matrix, instance
+from verity_kernels.hash_gpu.poseidon2_ref import INTERNAL_DIAG, P, Poseidon2, external_matrix, instance
 
 DIGEST = 8
 

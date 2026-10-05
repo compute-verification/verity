@@ -1,4 +1,4 @@
-"""The word casts of `catalog.silicon.cast` against the measured `cvt.rn.bf16.f32` campaign and an exhaustive NaN sweep, and
+"""The word casts of `verity_catalog.silicon.cast` against the measured `cvt.rn.bf16.f32` campaign and an exhaustive NaN sweep, and
 the E4M3 cast on its grid and midpoints.
 
 Ported from veritor ``tests/veritor/core/test_tc_nan.py`` (139-181) and ``verity.ir/tests/test_nan_conversion.py`` (41-64);
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from catalog.silicon.cast import (
+from verity_catalog.silicon.cast import (
     BF16_NAN_HARDWARE,
     BF16_NAN_SOFTWARE,
     bf16_is_nan,
@@ -25,7 +25,7 @@ from catalog.silicon.cast import (
     f32_to_bf16_word,
     f32_to_e4m3_sat_word,
 )
-from catalog.silicon.total import cvt_rn_bf16_f32
+from verity_catalog.silicon.total import cvt_rn_bf16_f32
 
 MEASURED = sorted((Path(__file__).parent / "fixtures" / "tc-total-2026-09-07").glob("*/cvt_special.json"))
 

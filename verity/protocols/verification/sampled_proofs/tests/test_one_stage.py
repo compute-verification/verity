@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-import catalog.definitions.prims  # noqa: F401  (with catalog.definitions.scalar, the primitives partition_vectors.json's descriptor names)
-import catalog.definitions.scalar  # noqa: F401
+import verity_catalog.definitions.prims  # noqa: F401  (with verity_catalog.definitions.scalar, the primitives partition_vectors.json's descriptor names)
+import verity_catalog.definitions.scalar  # noqa: F401
 from verity.primitives.circuits import codec, partition_object as PO
 from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.primitives.circuits.program import Program
@@ -442,7 +442,7 @@ def test_a4_under_the_stratified_rule():
 
 # ---- the partition is core's `verity/partition/v1` (`verity.primitives.circuits.partition_object`), byte for byte ------------------------
 
-CORE_VECTORS = Path(__file__).resolve().parents[4] / "tests" / "circuits"
+CORE_VECTORS = Path(__file__).resolve().parents[4] / "primitives" / "circuits" / "tests"
 QWORD = json.loads((CORE_VECTORS / "partition_vectors.json").read_text())
 TEMPLATE = json.loads((CORE_VECTORS / "template_instance_vectors.json").read_text())
 V32 = Value(32)

@@ -8,7 +8,7 @@ import os
 import numpy as np
 import pytest
 
-from catalog.definitions import mufu
+from verity_catalog.definitions import mufu
 from verity_vllm.program.kernels import fa2_model as FA
 from verity_vllm.program.kernels import fa2_relation, rms_relation
 from verity_vllm.program.kernels import rms_triton_model as RM

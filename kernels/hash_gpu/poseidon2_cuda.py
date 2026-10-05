@@ -18,7 +18,7 @@ try:
 except ImportError:            # pragma: no cover
     cp = None
 
-from .poseidon2_ref import INTERNAL_DIAG, P, Poseidon2, instance
+from verity_kernels.hash_gpu.poseidon2_ref import INTERNAL_DIAG, P, Poseidon2, instance
 
 DIGEST = 8
 

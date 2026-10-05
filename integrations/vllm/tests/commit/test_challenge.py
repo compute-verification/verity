@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from experimental.sampled_proofs.law import vu_key
+from verity_experimental.sampled_proofs.law import vu_key
 from verity_vllm.check.replay import sample as SR
 from verity_vllm.commit import binding as B
 from verity_vllm.commit import challenge as CH

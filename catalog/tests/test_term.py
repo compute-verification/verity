@@ -1,4 +1,4 @@
-"""``catalog.silicon.term``: the exact decoders and products agree with Python floats wherever floats represent the value.
+"""``verity_catalog.silicon.term``: the exact decoders and products agree with Python floats wherever floats represent the value.
 
 Every finite BF16 / E4M3 / E5M2 / E2M1 encoding is a dyadic rational far inside double range, so the decoders and the
 products are checked against ``struct`` / ``Fraction`` on every code (every pair, for the 8- and 4-bit formats); the
@@ -14,7 +14,7 @@ from fractions import Fraction
 import pytest
 
 from verity.errors import InvalidArtifact
-from catalog.silicon.term import (
+from verity_catalog.silicon.term import (
     BF16,
     E2M1,
     E4M3,

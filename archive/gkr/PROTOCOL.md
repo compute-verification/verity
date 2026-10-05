@@ -37,7 +37,7 @@ simulator of section 5.5 is written out so that the argument does not rest on th
 
 | symbol | value / meaning | public? |
 |---|---|---|
-| profile | `AMPERE_BF16_M16N8K16`, align `div` (`catalog.silicon.silicon`) | yes |
+| profile | `AMPERE_BF16_M16N8K16`, align `div` (`verity_catalog.silicon.silicon`) | yes |
 | \(K\) | dot-product length; decision workload \(K=1536\) | yes |
 | \(B\) | instances per proof (padded batch; real count also public); `N_subbatches` independently committed sub-batches → union bound (`union_over_proofs`) | yes |
 | \(U=B\cdot K/16\) | transition units (one 16-product update each); \(K=1536\): \(U=96B\) | yes |
@@ -50,7 +50,7 @@ simulator of section 5.5 is written out so that the argument does not rest on th
 
 **Census source (2026-09-21).** The counts are taken from the WP2 checker (`verity_numerical.checker`: `step.py`'s
 composed unit executed once on symbolic values through the five predicates `rng`/`eq`/`boolean`/`lookup`/`lt_pow`,
-hint widths from every gadget's `contract()`), **not** from `catalog.silicon.relation.census`, which is forgeable as
+hint widths from every gadget's `contract()`), **not** from `verity_catalog.silicon.relation.census`, which is forgeable as
 written (red team: `magW` never range-checked; WP2 F1/F2: remainders and quotient bounds) and counts none of the
 repairs. Conventions (`security.census` docstring): a product of two non-constant expressions is one `mul`;
 `boolean` is one `mul`; a \(w\)-bit range check is \(\lceil w/16\rceil\) lookups into the one 16-bit table (a

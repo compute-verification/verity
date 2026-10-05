@@ -1631,7 +1631,7 @@ def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step
     `HOPPER_WGMMA_FAMILY_VERSION`, restated by `registry.tc_total`) of the k16 step it replays through, so two Definitions of one
     name with different non-finite content are told apart on the record itself.  The strings are literals (EVALUATORS must import
     without verity.primitives.circuits); this test holds them equal to the constants the step is evaluated with."""
-    from catalog.silicon import total as TC   # the step's definition of record; the record literal keeps its historical `registry.tc_total` prefix
+    from verity_catalog.silicon import total as TC   # the step's definition of record; the record literal keeps its historical `registry.tc_total` prefix
 
     ampere = f"registry.tc_total {TC.AMPERE_BF16_DOT16_TOTAL.name} total family v{TC.TOTAL_FAMILY_VERSION}"
     hopper = f"registry.tc_total {TC.HOPPER_BF16_WGMMA_K16.name} family v{TC.HOPPER_WGMMA_FAMILY_VERSION}"

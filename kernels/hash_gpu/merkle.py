@@ -82,20 +82,20 @@ def leaves(matrix, hash: str, **kw):
     m = _as_cupy_u32(matrix)
     R, N = m.shape
     if hash == "sha256":
-        from . import sha256_cuda as sha
+        from verity_kernels.hash_gpu import sha256_cuda as sha
 
         return sha.hash_strided(m, 1, 0, N, R, N, 1, bswap=True)
     if hash == "sha256-chunked":
         return _sha256_chunked_leaves(m)
     if hash == "blake3":
-        from . import blake3_cuda as b3
+        from verity_kernels.hash_gpu import blake3_cuda as b3
 
         return b3.hash_strided(m, 1, CHUNK_ROWS * N, N, R, N, workspace=kw.get("workspace"))
     raise ValueError(hash)
 
 
 def _sha256_chunked_leaves(m):
-    from . import sha256_cuda as sha
+    from verity_kernels.hash_gpu import sha256_cuda as sha
 
     R, N = m.shape
     full, tail = divmod(R, CHUNK_ROWS)
@@ -128,14 +128,14 @@ def _sha256_chunked_leaves(m):
 
 def poseidon2_engine(hash: str, backend: str = "cuda", mds: str = "blocks"):
     """``backend`` ``cuda`` (fused kernel, the fast path) or ``torch`` (elementwise; ``mds`` selects its MDS route)."""
-    from .poseidon2_ref import instance
+    from verity_kernels.hash_gpu.poseidon2_ref import instance
 
     width = int(hash.split("-")[1])
     if backend == "cuda":
-        from .poseidon2_cuda import Poseidon2Cuda
+        from verity_kernels.hash_gpu.poseidon2_cuda import Poseidon2Cuda
 
         return Poseidon2Cuda(instance(width))
-    from .poseidon2_torch import Poseidon2Torch
+    from verity_kernels.hash_gpu.poseidon2_torch import Poseidon2Torch
 
     return Poseidon2Torch(instance(width), mds=mds)
 
@@ -159,11 +159,11 @@ def node_level(level, hash: str, **kw):
     count = level.shape[0]
     npairs = count // 2
     if hash in ("sha256", "sha256-chunked"):
-        from . import sha256_cuda as sha
+        from verity_kernels.hash_gpu import sha256_cuda as sha
 
         out = sha.hash_strided(level.reshape(-1), 16, 0, 1, 16, npairs, 1, bswap=False)
     elif hash == "blake3":
-        from . import blake3_cuda as b3
+        from verity_kernels.hash_gpu import blake3_cuda as b3
 
         out = b3.hash_strided(level.reshape(-1), 16, 0, 1, 16, npairs)
     else:

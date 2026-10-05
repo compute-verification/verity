@@ -1,4 +1,4 @@
-"""IEEE binary32 round-to-nearest-even on words (`catalog.silicon.fp32`): bit for bit against numpy's float32 (an IEEE
+"""IEEE binary32 round-to-nearest-even on words (`verity_catalog.silicon.fp32`): bit for bit against numpy's float32 (an IEEE
 implementation without flush-to-zero) for add, mul, div and sqrt, and against an exact rational rounding for fma."""
 
 from __future__ import annotations
@@ -9,8 +9,8 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from catalog.silicon import fp32
-from catalog.silicon.errors import InvalidArtifact
+from verity_catalog.silicon import fp32
+from verity_catalog.silicon.errors import InvalidArtifact
 
 INF = 0x7F80_0000
 

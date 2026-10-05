@@ -3,7 +3,7 @@ name = "verity-gkr"
 version = "0.0.0"
 description = "A-GKR, frozen: its Python drivers and tests."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-numerical", "numpy", "blake3>=1.0"]
+dependencies = ["research", "verity", "verity-numerical", "numpy", "blake3>=1.0", "verity-catalog"]
 
 [project.optional-dependencies]
 torch = ["torch>=2.4"]

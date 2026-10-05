@@ -1,5 +1,5 @@
-"""The Lean transcriptions of `catalog.definitions.scalar`'s primitives (`verity/lean/Verity/Protocol/Scalar.lean`) and
-`catalog.definitions.prims`' casts (`Verity/Protocol/Prims.lean`) are held to the Python by vectors: `Verity/SecurityProofs/Scalar/
+"""The Lean transcriptions of `verity_catalog.definitions.scalar`'s primitives (`verity/lean/Verity/Protocol/Scalar.lean`) and
+`verity_catalog.definitions.prims`' casts (`Verity/Protocol/Prims.lean`) are held to the Python by vectors: `Verity/SecurityProofs/Scalar/
 Vectors.lean` and `Verity/SecurityProofs/Prims/Vectors.lean` state each one as a theorem the kernel checks against the
 Lean, and this test checks the same vectors against the Python: each primitive's evaluator, and `evaluate_batch` (its numpy
 kernel, where one is registered). A change to either side's semantics then fails a build."""
@@ -13,9 +13,9 @@ from pathlib import Path
 import numpy as np
 
 from verity.primitives.circuits.evaluation import evaluate_batch
-from catalog.definitions import prims as P
-from catalog.definitions import scalar as S
-from catalog.silicon.cast import E2M1_UP
+from verity_catalog.definitions import prims as P
+from verity_catalog.definitions import scalar as S
+from verity_catalog.silicon.cast import E2M1_UP
 
 LEAN = Path(__file__).resolve().parents[2] / "verity" / "lean" / "Verity" / "SecurityProofs"
 FILES = (LEAN / "Scalar" / "Vectors.lean", LEAN / "Prims" / "Vectors.lean")

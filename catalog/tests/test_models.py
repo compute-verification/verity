@@ -1,6 +1,6 @@
-"""``catalog.silicon.models``: the ``Model`` protocol, ``GroupSum`` (= ``Pipeline``) and ``BlockScaledAlignAdd``.
+"""``verity_catalog.silicon.models``: the ``Model`` protocol, ``GroupSum`` (= ``Pipeline``) and ``BlockScaledAlignAdd``.
 
-The block-scaled model is replayed on every RTX 5090 vector autoproof recorded (``catalog/silicon/captures/autoproof-probe-vectors.json``:
+The block-scaled model is replayed on every RTX 5090 vector autoproof recorded (``catalog/verity_catalog/silicon/captures/autoproof-probe-vectors.json``:
 1,601 nvfp4 ascending-K chains and 1,400 unscaled-FP4 dots) and must agree bit-for-bit; the refuted single-window
 hypothesis (W=26) must *disagree* somewhere, or the fixture would not discriminate.  The accumulator rules that the
 zero-accumulator vectors cannot see (sign of zero, the scale-exponent anchor, the accumulator window) are checked on
@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 
 from verity.errors import InvalidArtifact
-from catalog.silicon import models, silicon
-from catalog.silicon.models import (
+from verity_catalog.silicon import models, silicon
+from verity_catalog.silicon.models import (
     ADA_E4M3_M16N8K32,
     ADA_E5M2_M16N8K32,
     AMPERE_BF16_M16N8K16,
@@ -37,10 +37,10 @@ from catalog.silicon.models import (
     tc_dot,
     tc_dot_chain,
 )
-from catalog.silicon.term import Term, e2m1_product, e5m2_product
+from verity_catalog.silicon.term import Term, e2m1_product, e5m2_product
 
 ROOT = Path(__file__).resolve().parents[2]
-VECTORS = ROOT / "catalog" / "silicon" / "captures" / "autoproof-probe-vectors.json"
+VECTORS = ROOT / "catalog" / "verity_catalog" / "silicon" / "captures" / "autoproof-probe-vectors.json"
 K32_E2M1_CAPTURE = Path(__file__).parent / "fixtures" / "tc-sm120-k32-e2m1-2026-09-30" / "records.json"
 
 

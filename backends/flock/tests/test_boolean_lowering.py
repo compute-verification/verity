@@ -1,5 +1,5 @@
-"""C-Flock lowers the Boolean BF16 Definitions (`catalog.definitions.boolean.gemm`) and NVFP4 quantization's casts and the bit AND
-(`catalog.definitions.boolean.scalar`) gate by gate, with no piece substituted for them: each step and cast and the AND lower to exactly
+"""C-Flock lowers the Boolean BF16 Definitions (`verity_catalog.definitions.boolean.gemm`) and NVFP4 quantization's casts and the bit AND
+(`verity_catalog.definitions.boolean.scalar`) gate by gate, with no piece substituted for them: each step and cast and the AND lower to exactly
 the circuit of the piece their word primitive lowers to (the same ANDs and the same nonzeros of the AND rows), and the
 coordinate evaluates to `GemmCoordinate_v2`'s words.
 
@@ -14,12 +14,12 @@ import pytest
 
 from verity.primitives.circuits import evaluation as E
 from verity.primitives.circuits.defs import bind
-from catalog.definitions import gemm as G
-from kernels import tc as K
-from catalog.definitions import prims as P
-from catalog.definitions import scalar as S
-from catalog.definitions.boolean import gemm as BG
-from catalog.definitions.boolean import scalar as BSC
+from verity_catalog.definitions import gemm as G
+from verity_kernels import tc as K
+from verity_catalog.definitions import prims as P
+from verity_catalog.definitions import scalar as S
+from verity_catalog.definitions.boolean import gemm as BG
+from verity_catalog.definitions.boolean import scalar as BSC
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
 

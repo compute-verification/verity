@@ -1,4 +1,4 @@
-"""The predicates of ``catalog.silicon.relation`` transcribed for z3, over the integers or over a prime field F_p.
+"""The predicates of ``verity_catalog.silicon.relation`` transcribed for z3, over the integers or over a prime field F_p.
 
 Transcription rules (faithful to ``check_step``, nothing added):
 
@@ -22,8 +22,8 @@ from typing import Any
 
 import z3
 
-from catalog.silicon import relation as R
-from catalog.silicon.silicon import Pipeline
+from verity_catalog.silicon import relation as R
+from verity_catalog.silicon.silicon import Pipeline
 
 from .harness import z3_query
 

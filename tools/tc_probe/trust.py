@@ -1,8 +1,8 @@
 """Trust: when we trust a silicon circuit.  Computed from evidence, never asserted.
 
-A *subject* is one exact tensor-core relation on one architecture: a :class:`~catalog.targets.target.Target` (its
+A *subject* is one exact tensor-core relation on one architecture: a :class:`~verity_catalog.targets.target.Target` (its
 ``instruction`` and ``pipeline`` model) or, for instructions no target wraps yet, a registry
-:class:`~catalog.silicon.instructions.Instruction` with its model.  Its trust **level** is the highest of
+:class:`~verity_catalog.silicon.instructions.Instruction` with its model.  Its trust **level** is the highest of
 
     UNPROBED        no hardware evidence for the instruction on the anchor SKU and nothing to inherit
     HYPOTHESIS      a model exists and agrees somewhere (any SKU), or is inherited from a sibling instruction
@@ -11,7 +11,7 @@ A *subject* is one exact tensor-core relation on one architecture: a :class:`~ca
     TRUSTED_STABLE  TRUSTED on >= 2 physical devices or >= 2 driver/ptxas versions with identical words
 
 whose criteria *all* pass, where every criterion is a predicate over store evidence (artifact ids and labels, attempt
-conditions) and repository fixtures (``catalog/silicon/discrepancy_log.json``, dataset manifests, reference replicas).  Nothing
+conditions) and repository fixtures (``catalog/verity_catalog/silicon/discrepancy_log.json``, dataset manifests, reference replicas).  Nothing
 here reads a hand-set ``status`` field: ``Instruction.status`` is reported next to the computed level so that the two
 can disagree visibly.
 
@@ -50,11 +50,11 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any, Iterable
 
-from catalog.silicon import models as _models
-from catalog.silicon.instructions import INSTRUCTIONS, Instruction
-from catalog.silicon.models import Model
-from catalog.targets import target as _target
-from catalog.targets.target import TARGETS, Target
+from verity_catalog.silicon import models as _models
+from verity_catalog.silicon.instructions import INSTRUCTIONS, Instruction
+from verity_catalog.silicon.models import Model
+from verity_catalog.targets import target as _target
+from verity_catalog.targets.target import TARGETS, Target
 
 __all__ = [
     "ANCHOR_SKU", "CANONICAL_FAMILIES", "Criterion", "DOSSIER_KIND", "EvidenceRef", "HONEST_MIN", "INDEPENDENT_REFERENCES",
@@ -172,7 +172,7 @@ MODEL_ALIASES: dict[str, tuple[str, ...]] = {
     "ada_e5m2_m16n8k32": ("ada_e4m3_m16n8k32+e5m2_product",),
     "hopper_e5m2_wgmma_k32": ("hopper_e4m3_wgmma_k32+e5m2_product",),
     # lane tcgen05 tested the sm_120 models as the hypothesis on the B200 and labelled its captures with the sm_120 names; the
-    # sm_100 registry models are those parameters under an sm_100 name (catalog.silicon.models).
+    # sm_100 registry models are those parameters under an sm_100 name (verity_catalog.silicon.models).
     "blackwell_sm100_tcgen05_nvf4": ("blackwell_sm120_nvf4_m16n8k64", "blackwell_sm120_nvf4"),
     "blackwell_sm100_tcgen05_mxf4": ("blackwell_sm120_mxf4_m16n8k64", "blackwell_sm120_mxf4"),
 }
@@ -193,7 +193,7 @@ class IndependentReference:
     note: str = ""
 
 
-_HAWKEYE = ("catalog/silicon/hawkeye/PIN.json", "benchmarks/numerical/python/verity_numerical/reference/hawkeye_close.py",
+_HAWKEYE = ("catalog/verity_catalog/silicon/hawkeye/PIN.json", "benchmarks/numerical/python/verity_numerical/reference/hawkeye_close.py",
             "benchmarks/numerical/tests/reference/test_hawkeye_close.py")
 INDEPENDENT_REFERENCES: dict[str, tuple[IndependentReference, ...]] = {
     "sm80.mma.m16n8k16.bf16": (
@@ -224,14 +224,14 @@ INDEPENDENT_REFERENCES: dict[str, tuple[IndependentReference, ...]] = {
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye's Hopper FP8 simulator does not describe Ada (D10)"),
     ),
     "sm90.wgmma.m64n8k32.e4m3": (
-        IndependentReference("veritor-h100-wgmma-fp8", "second-compiled-path", ("catalog/silicon/captures/veritor-tc-fp8-2026-09-08.json",),
-                             replica="catalog/silicon/captures/veritor-tc-fp8-2026-09-08.json",
+        IndependentReference("veritor-h100-wgmma-fp8", "second-compiled-path", ("catalog/verity_catalog/silicon/captures/veritor-tc-fp8-2026-09-08.json",),
+                             replica="catalog/verity_catalog/silicon/captures/veritor-tc-fp8-2026-09-08.json",
                              note="veritor lane QZ: Triton tl.dot -> wgmma m64n64k32, 144,543,744 words"),
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye (H100 FP8, zero accumulator only): groups (32,), width 14, floor -139"),
     ),
     "sm120.mma.m16n8k64.e2m1.nvf4": (
         IndependentReference("autoproof-model5", "second-harness",
-                             ("catalog/silicon/captures/autoproof-SEMANTICS.lock.v1.json", "catalog/silicon/captures/autoproof-probe-vectors.json"),
+                             ("catalog/verity_catalog/silicon/captures/autoproof-SEMANTICS.lock.v1.json", "catalog/verity_catalog/silicon/captures/autoproof-probe-vectors.json"),
                              replay="probe3", note="autoproof's RTX 5090 probe vectors (1,601 of 1,574,998 dots) replayed by tc_probe_fp4"),
     ),
 }
@@ -245,7 +245,7 @@ INVALIDATION_TRIGGERS: tuple[dict[str, str], ...] = (
     {"id": "verifier-rejected-honest", "event": "an independent verifier rejects an honest run of the relation",
      "label": "trust_downgrade=verifier-rejected-honest", "detects": "relation != model, or a prover/verifier defect"},
     {"id": "new-d-entry", "event": "a new discrepancy-log entry names the target or its instruction",
-     "label": "catalog/silicon/discrepancy_log.json entry with status open (read directly)", "detects": "any disagreement between paper, simulator, reference and hardware"},
+     "label": "catalog/verity_catalog/silicon/discrepancy_log.json entry with status open (read directly)", "detects": "any disagreement between paper, simulator, reference and hardware"},
     {"id": "redteam-downgrade", "event": "a red team records a finding against the relation or its checker",
      "label": "trust_downgrade=redteam-downgrade", "detects": "a forgery, an unsound contract or a checker gap"},
 )
@@ -257,7 +257,7 @@ RELITIGATION_PROCEDURE: tuple[str, ...] = (
     "environment, re-run the canary; trust is unchanged only if the canary passes.",
     "2. Bisect model vs relation vs prover with the stored tiles: (a) hardware word vs Model.step -> model or silicon; (b) Model.step "
     "vs the prover's checker on the same words -> relation; (c) checker accepts but the verifier rejects -> prover/verifier.",
-    "3. Open a D-entry in catalog/silicon/discrepancy_log.json naming the target (profile), the hardware evidence (run ids, artifact ids) "
+    "3. Open a D-entry in catalog/verity_catalog/silicon/discrepancy_log.json naming the target (profile), the hardware evidence (run ids, artifact ids) "
     "and the owner; status open.",
     "4. The level downgrades automatically: an open D-entry blocks TRUSTED, a mismatch on the anchor blocks PINNED, a "
     "trust_downgrade label blocks TRUSTED; nobody edits a level.  Re-publish the dossier so the downgrade is frozen with its evidence.",
@@ -296,7 +296,7 @@ def _norm_model(name: str) -> str:
 
 
 def _model_names(model: Model | None) -> set[str]:
-    """Every name a producer may have used for this model: its ``name``, its constant name in ``catalog.silicon.models``, aliases."""
+    """Every name a producer may have used for this model: its ``name``, its constant name in ``verity_catalog.silicon.models``, aliases."""
     if model is None:
         return set()
     names = {model.name.lower()}
@@ -319,14 +319,14 @@ def _as_int(v: Any) -> int | None:
 
 
 def _find_repo(start: Path | None = None) -> Path | None:
-    """The repository root: the nearest ancestor with ``catalog/silicon/discrepancy_log.json``."""
+    """The repository root: the nearest ancestor with ``catalog/verity_catalog/silicon/discrepancy_log.json``."""
     here = (start or Path(__file__)).resolve()
     for p in [here, *here.parents]:
-        if (p / "catalog" / "silicon" / "discrepancy_log.json").is_file():
+        if (p / "catalog" / "verity_catalog" / "silicon" / "discrepancy_log.json").is_file():
             return p
     cwd = Path.cwd().resolve()
     for p in [cwd, *cwd.parents]:
-        if (p / "catalog" / "silicon" / "discrepancy_log.json").is_file():
+        if (p / "catalog" / "verity_catalog" / "silicon" / "discrepancy_log.json").is_file():
             return p
     return None
 
@@ -858,7 +858,7 @@ class Evidence:
 def _load_discrepancies(repo: Path | None) -> list[dict]:
     if repo is None:
         return []
-    p = repo / "catalog" / "silicon" / "discrepancy_log.json"
+    p = repo / "catalog" / "verity_catalog" / "silicon" / "discrepancy_log.json"
     if not p.is_file():
         return []
     doc = json.loads(p.read_text())

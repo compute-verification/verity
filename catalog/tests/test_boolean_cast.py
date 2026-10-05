@@ -1,4 +1,4 @@
-"""`catalog.definitions.boolean.cast` and `verity.primitives.circuits.boolean.gather`: the Boolean bf16 widening agrees with `Bf16ToF32_v1` on every bf16
+"""`verity_catalog.definitions.boolean.cast` and `verity.primitives.circuits.boolean.gather`: the Boolean bf16 widening agrees with `Bf16ToF32_v1` on every bf16
 and is pinned by gate count and program digest; the f32 -> bf16 rounding (`gemm.F2fpBf16_v2`) agrees with `F2fpBf16_v1` on every
 f32 word of its special chunks, and on all 2^32 when ``VERITY_ML_BOOLEAN_EXHAUSTIVE`` is set; the multiplexer tree selects
 ``words[idx]``, else its fill, at every index of its width and costs the ANDs its docstring states; and a Boolean Program's
@@ -19,9 +19,9 @@ from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.primitives.circuits.program import Program, is_input
 from verity.primitives.circuits.types import Array
-from catalog.definitions import prims as P
-from catalog.definitions.boolean import cast as BC
-from catalog.definitions.boolean import gemm as BG
+from verity_catalog.definitions import prims as P
+from verity_catalog.definitions.boolean import cast as BC
+from verity_catalog.definitions.boolean import gemm as BG
 from verity.primitives.circuits.boolean import trace as TR
 from verity.primitives.circuits.boolean.forms import Circuit, const_bits
 from verity.primitives.circuits.boolean.gather import gather

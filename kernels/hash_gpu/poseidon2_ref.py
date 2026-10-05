@@ -179,7 +179,7 @@ def rng_constants(width: int, seed: int = 1) -> Poseidon2:
 
 
 def grain_constants(width: int) -> Poseidon2:
-    from . import poseidon2_grain as g
+    from verity_kernels.hash_gpu import poseidon2_grain as g
 
     ei = getattr(g, f"GRAIN_EXT_INIT_{width}")
     ef = getattr(g, f"GRAIN_EXT_FINAL_{width}")
