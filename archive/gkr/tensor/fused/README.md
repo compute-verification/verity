@@ -78,7 +78,7 @@ cd /workspace/afused/backends/gkr && TC_DEVICE=cuda /workspace/tc/venv/bin/pytho
 /workspace/tc/venv/bin/python -m tensor.fused.bench --out results/fused.json
 /workspace/tc/venv/bin/python -m tensor.fused.bench_logup --out results/fused_logup.json
 # laptop: re-price A
-cd benchmarks/numerical && uv run python tensor/fused/reprice.py
+cd benchmarks/numerical && uv run python ../../archive/gkr/tensor/fused/reprice.py
 ~~~
 
 Triton notes: module-level Python ints must be wrapped as `tl.constexpr` inside `@triton.jit` bodies; `tl.dot` int8 on
