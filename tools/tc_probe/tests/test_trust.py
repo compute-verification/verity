@@ -72,8 +72,9 @@ def dlog(did: str, status: str, **over) -> dict:
 
 
 def write_log(root: Path, entries: list[dict]) -> None:
-    (root / "fixtures").mkdir(exist_ok=True)
-    (root / "catalog" / "verity_catalog" / "silicon" / "discrepancy_log.json").write_text(json.dumps({"schema": "verity/discrepancy-log/v0", "entries": entries}))
+    log = root / "catalog" / "verity_catalog" / "silicon" / "discrepancy_log.json"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text(json.dumps({"schema": "verity/discrepancy-log/v0", "entries": entries}))
 
 
 @pytest.fixture
