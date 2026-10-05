@@ -1667,8 +1667,8 @@ def _moved(root: Path, rec: dict, now: dict, renamed: dict[str, str] | None = No
     ``renamed``, when one is given and it holds): each recorded module found, with
     the same content, at the name the recorded import sites resolve to now, starting from the binding units and the
     modules that still resolve by name, and propagating along each found module's own sites.  A sidecar's units and pins are
-    read where its module was found (one not held, at its name), its units' sites propagating in turn; `pins.json`'s are
-    equal.
+    read where its module was found (one not held that left its name, where its units' import sites of it lead; else at its
+    name), its units' sites propagating in turn; `pins.json`'s are equal.
 
     A module stays at its name when it reads its own path or name, was imported by a name computed at run time, or an import
     of it failed (``named``, ``missing``).  One no site leads to is found among what this process imported before any check,
@@ -1720,6 +1720,16 @@ def _moved(root: Path, rec: dict, now: dict, renamed: dict[str, str] | None = No
             todo.append((r["sites"], c["sites"]))
         return True
 
+    def follow(m: str) -> None:
+        """Where module ``m``, not held, went when it left its name: where its sidecar's units' import sites of it lead, the one
+        imported module with the content they recorded."""
+        if _resolve(root, m) is not None:
+            return
+        ds = {d for u, r in side.items() if _side(u) == m and isinstance(r, dict) for t, d in r["sites"] if t == m}
+        if len(ds) == 1 and (d := ds.pop()) is not None and len(names := _loaded(root).get(d, [])) == 1:
+            if _side(names[0]) is None and names[0] not in phi.values():
+                phi[m] = names[0]
+
     side: dict[str, Any] = {}                          # a sidecar's units, read once its module is found
     for u, r in rec.get("units", {}).items():
         if _side(u) is not None:
@@ -1743,6 +1753,8 @@ def _moved(root: Path, rec: dict, now: dict, renamed: dict[str, str] | None = No
         while todo:
             if not pair(*todo.pop()):
                 return False
+        for m in {_side(u) for u in side} - phi.keys() - mods.keys():
+            follow(m)
         if ready := [u for u in side if (m := _side(u)) in phi or mods.get(m) is None]:
             for u in ready:
                 if not unit(side.pop(u), where(u, "units", _unit)):

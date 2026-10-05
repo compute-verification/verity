@@ -595,11 +595,7 @@ def test_a_pure_move_of_a_definition_module_with_a_sidecar_reuses_its_targets(tm
     _sidecar(root)
     _run(root)
     assert "syn.other" in _entry(root, "SynOther_v1")["reads"]["modules"]
-    _move(root, "syn/other.py", "syn/fam/other.py", ("syn/catalog.py", "from syn import other", "from syn.fam import other"))
-    for ext in (".py", ".json"):
-        (root / f"syn/other.circuit-check{ext}").rename(root / f"syn/fam/other.circuit-check{ext}")
-    side = "syn/fam/other.circuit-check.py"
-    _edit(root, side, "from syn import idle, other", "from syn.fam import other\n    from syn import idle")
+    side = _move_other(root)
     out = _run(root)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 0
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
@@ -609,6 +605,35 @@ def test_a_pure_move_of_a_definition_module_with_a_sidecar_reuses_its_targets(tm
     assert _run(root)["hits"] == ["SynTop_v1"]
     (root / "syn/fam/other.circuit-check.json").write_text(json.dumps({"pieces": {"SynOther_v1": {"and": 6}}}))
     assert _run(root)["hits"] == ["SynTop_v1"]
+
+
+def _move_other(root: Path) -> str:
+    """`syn/other.py` moved to `syn/fam/` with both its sidecar files, and every import line that names it rewritten (the
+    sidecar's own split and put first); the moved binding file's path."""
+    _move(root, "syn/other.py", "syn/fam/other.py", ("syn/catalog.py", "from syn import other", "from syn.fam import other"))
+    for ext in (".py", ".json"):
+        (root / f"syn/other.circuit-check{ext}").rename(root / f"syn/fam/other.circuit-check{ext}")
+    side = "syn/fam/other.circuit-check.py"
+    _edit(root, side, "from syn import idle, other", "from syn.fam import other\n    from syn import idle")
+    return side
+
+
+def test_a_sidecars_units_move_with_its_module_where_the_target_does_not_hold_the_module(tmp_path):
+    """SynAdd, which both of the sidecar's entries reach, holds their units but not `syn.other`, which only SynOther's check
+    reads (as every gate a model reaches holds the bindings of that model's Definitions).  The move finds the module where the
+    units' import sites of it lead now, the one imported module with the content they recorded, so SynAdd is reused too; it is
+    stored again there, so a later edit of an entry it holds reruns it."""
+    root = _tree(tmp_path)
+    _sidecar(root)
+    _edit(root, "syn/catalog.py", 'FAMILIES = ["SynOther_v1"', 'FAMILIES = ["SynAdd_v1", "SynOther_v1"')
+    _run(root)
+    add = _entry(root, "SynAdd_v1")["reads"]
+    assert "syn.other.circuit-check#_model_roots:SynIdle_v1" in add["units"] and "syn.other" not in add["modules"]
+    side = _move_other(root)
+    out = _run(root)
+    assert out["hits"] == ["SynAdd_v1", "SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 0
+    _edit(root, side, '("SynIdle_v1", lambda: bind(idle.SynIdle))', '("SynIdle_v1", lambda: bind(idle.SynIdle, **{}))')
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
 
 
 def test_a_move_that_is_not_pure_reruns_what_it_changes(tmp_path):
