@@ -100,6 +100,9 @@ structure ValueBinding (decode : DecoderB (C := C) (Reg := Reg) plan tab) {Dh : 
 attribute [instance] ValueBinding.finPos ValueBinding.decPos ValueBinding.finVal
   ValueBinding.decVal ValueBinding.inhVal ValueBinding.inhOp
 
+variable {L : Law n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type} {Hc : List UInt8 → Dh}
+  (vb : P.ValueBinding plan tab decode Hc) (R : Reg)
+
 /-- Drawn unit `u` reads commit string `c`. -/
 def Reads (u : Fin n) (c : vb.Pos) : Prop := ∃ g ∈ P.io u, vb.pos g = c
 

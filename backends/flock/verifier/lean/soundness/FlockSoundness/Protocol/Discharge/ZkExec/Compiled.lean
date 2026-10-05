@@ -57,4 +57,6 @@ variable (I : Inputs) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Tra
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → Cap D) (N : ℕ) {L : Law n}
 
+variable {C : Circuit} (P : Partition C n) {Dh : Type} {Hc : List UInt8 → Dh}
+
 end FlockSoundness.Discharge.ZkExec

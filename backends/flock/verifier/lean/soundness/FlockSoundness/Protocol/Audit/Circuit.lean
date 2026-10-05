@@ -205,6 +205,8 @@ theorem correct_congr {X Y : Fin C.N → Bool} {u : Fin n} (hXY : ∀ g ∈ P.io
 
 namespace Refines
 
+variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc}
+
 end Refines
 
 end Partition

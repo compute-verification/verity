@@ -58,6 +58,8 @@ namespace UProg
 
 variable {k one : ℕ} (hk : one < k)
 
+variable {outs : List ℕ} {Reg : Type} {mPts : ℕ}
+
 end UProg
 
 end FlockSoundness.Discharge.Const
