@@ -1,9 +1,11 @@
 {
- "roots": ["Flock", "FlockProofs", "Main"],
+ "roots": ["Flock", "FlockProofs", "Main", "FlockAudit"],
  "exempt": {
-  "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock"
+  "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock",
+  "AuditMain": "the flock-audit executable's entry point, one line; its command is FlockAudit.Cli.cmd, audited under FlockAudit",
+  "AuditTape": "flock-audit-tape's entry point, a test harness (test_lean_audit.py): FlockAudit.Cli.run, audited under FlockAudit, with every coin node's bytes from a file"
  },
- "meaning": ["FlockProofs", "Flock"],
+ "meaning": ["FlockProofs", "Flock", "FlockAudit"],
  "escapes": {
   "Flock.canon": "partial def: canonical JSON of the statement's objects (PROTOCOL.md 16.8); no proof is about it, and the agreement tests (17.1) cover it",
   "Flock.TemplateQuery.Desc.gates": "partial def: a descriptor definition's gate count, recursing through its callees (the template query, PROTOCOL.md 16.10); no proof is about it, and template_query_agree.py covers it",
@@ -29,11 +31,13 @@
   "_private.Flock.Program.0.Flock.Program.composite": "partial def: a composite definition's body, decoding its callees first (descriptor §4); no proof is about it, and qword_program_agree.py covers it",
   "_private.Flock.Program.0.Flock.Program.staticFns": "partial def: static_of, decoding the functions a static value names (descriptor §4); no proof is about it, and qword_program_agree.py covers it",
   "_private.Flock.Program.0.Flock.Program.gateIn": "partial def: a gate's inputs in an activation, resolving references through scopes (descriptor §6, §7); no proof is about it, and qword_program_agree.py covers it",
-  "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it"
+  "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it",
+  "FlockAudit.Frame.readExact": "partial def: reads a pipe until it holds n bytes or ends; host IO under flock-audit, outside the program (FlockAudit.Prog), and no proof is about it"
  },
  "reads_exempt": {
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "FlockProofs": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "FlockProofs": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "FlockAudit": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
   "Flock.CircuitType.check_ok": {
@@ -357,6 +361,43 @@
    ],
    "assumptions": [],
    "type_hash": "6b3dd42ffdbddebb046cdd24cf590105e5b232aa055b44ca3cb70a77ccbe11bb"
+  },
+  "FlockAudit.Talk.noCoin_lift": {
+   "owner": "@proofs",
+   "signature": ["FlockAudit.Talk.noCoin_lift {α : Type} (t : FlockAudit.Talk α) : t.lift.NoCoin"],
+   "assumptions": [],
+   "type_hash": "d0f2fe2198526cf6a425a631badca50065f2c9024d62f94b81a536434f3e4608"
+  },
+  "FlockAudit.auditor_draws_once": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockAudit.auditor_draws_once {H : Type} (k : Nat) (reg : FlockAudit.Step H) (pop : H → Nat)",
+    "  (sess : H → Flock.Draw.UnitDraw → FlockAudit.Step Unit) :",
+    "  And (ExceptT.run reg).lift.NoCoin",
+    "    (And (∀ (h : H) (D : Flock.Draw.UnitDraw), ((FlockAudit.afterDraw sess h D).bind FlockAudit.report).lift.NoCoin)",
+    "      (Eq (FlockAudit.auditorOf k reg pop sess)",
+    "        ((ExceptT.run reg).lift.bind fun x =>",
+    "          FlockAudit.decide.match_3 (fun x => FlockAudit.Prog FlockAudit.Verdict) x",
+    "            (fun e => (FlockAudit.report (FlockAudit.refused Option.none e)).lift) fun h =>",
+    "            (FlockAudit.drawP k (pop h)).bind fun x =>",
+    "              FlockAudit.decide.match_1 (fun x => FlockAudit.Prog FlockAudit.Verdict) x",
+    "                (fun _ => (FlockAudit.report (FlockAudit.refused Option.none \"draw: the sampler ended\")).lift) fun D =>",
+    "                ((FlockAudit.afterDraw sess h D).bind FlockAudit.report).lift)))"
+   ],
+   "assumptions": [],
+   "type_hash": "d5a600c4f86b70fcb6084691f4c401908806a013526f7b20cea9c7b3b2a8c46a"
+  },
+  "FlockAudit.replay_simulate": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockAudit.replay_simulate {α : Type} (env : List FlockAudit.Prog.Event → FlockAudit.Req → ByteArray)",
+    "  (draw : List FlockAudit.Prog.Event → Nat → ByteArray) (p : FlockAudit.Prog α) (h : List FlockAudit.Prog.Event) {a : α}",
+    "  {es : List FlockAudit.Prog.Event}",
+    "  (hs : Eq (FlockAudit.Prog.simulate env draw p h) (Except.ok { fst := a, snd := es })) :",
+    "  Exists fun suf => And (Eq es (instHAppendOfAppend.hAppend h suf)) (Eq (p.replay suf) (Except.ok a))"
+   ],
+   "assumptions": [],
+   "type_hash": "ac3fa4dd0ba6f902ec57408eec97ca037b5adcabd28e0d679623dc2c20d429c2"
   }
  },
  "reads": {
@@ -384,20 +425,22 @@
     "Flock.merkle_binding",
     "Flock.mkRegion_ok",
     "Flock.squeeze_answers",
-    "Flock.squeeze_retained"
+    "Flock.squeeze_retained",
+    "FlockAudit.auditor_draws_once"
    ]
   },
   "Flock.Canon": {
-   "digest": "8007e75768ac06a82e8a9b3f1f782447dae1292a6154d5df8bc449841a2db6f8",
+   "digest": "7ff7b85f4d1d2fd4ae9adae99dffc451035174960f1f387b180262428532fc09",
    "definitions": {
     "Flock.J.arr": "e94445c03299d8a507d899f63836a7bf1449487d9f7e5e8fdf40233a8f5909ed",
     "Flock.J.asArr": "1b27db679047d2f116aa1f9a34f952f53a203ac47471331311ff49f0937597b0",
     "Flock.J.asNat": "b2bb333e2ead86afa350e700ce020b00506fa75b672f7eef4753f1a8c71595a5",
     "Flock.J.asStr": "791157c5ecc4f6a140378e575b030661c8cca532c1e232153200c3c3f238fc90",
     "Flock.J.get": "b9713926f46759187e8644c994f413c55b938954c67e17c896bc28271d5b02ef",
-    "Flock.J.str": "e3b64bf9e865f4b684f547639349e4d4af1dca863e4b32aa1becab9980d2fdaa"
+    "Flock.J.str": "e3b64bf9e865f4b684f547639349e4d4af1dca863e4b32aa1becab9980d2fdaa",
+    "Flock.canon": "93dbf8cf653d16c809b10196ae319b382c9029b69aef49a3395c51de57ae1519"
    },
-   "guarantees": ["Flock.Registered.check_ok"]
+   "guarantees": ["Flock.Registered.check_ok", "FlockAudit.auditor_draws_once"]
   },
   "Flock.Circuit": {
    "digest": "a6eb06b9b9b03d597c2d2bac7381be0769605d079656690bad6fbbdad3d181fa",
@@ -623,6 +666,48 @@
     "Flock.DeriveAll.walk": "61369559eae0ff16ddc99593e9a40f1132aafe6eede1c393c7aa0e951be6ae0c"
    },
    "guarantees": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
+  },
+  "Flock.Draw": {
+   "digest": "cfc7ac7568a474b40270b8c8f8741665b4ae6b103f7ca6bf2f607686dc91b8ad",
+   "definitions": {
+    "Flock.Draw.Law": "b12eff30800c1e9d28be153d2cb21219608dabe1da6d5c91a6a1f3c329c688ee",
+    "Flock.Draw.Law.bernoulli": "74f514d660c8772abf134bce094e4bc4c8b12f30a7c18bcfcb3de380468388db",
+    "Flock.Draw.Law.stratified": "275c795ca541c8ad7fa3284476d7e123da83140a05d2e227bf8278c490500a5e",
+    "Flock.Draw.Law.subset": "40af69ce9dcca331f9cf7feaea741ca2ecec159f344d7ec2cafefe84e884c780",
+    "Flock.Draw.Law.toJson": "154c6600d4cddb8a9dabd4f91551c409d688c432fa03f4a8f4f3147ed3a7d7b4",
+    "Flock.Draw.Law.work": "792f185fa5876c574d2ca717c47205953ed0d94d8ca01815cf8a84b1a8b55297",
+    "Flock.Draw.Stratum": "72f0cb58c11908ab57f86963945181438a6d108803b11acbee8be5115eb92331",
+    "Flock.Draw.Stratum.k": "37d45810ccea236b78bbb027ed7a13ac0f75f89398316d3d9310a0c2386734e2",
+    "Flock.Draw.Stratum.need": "059401fb1c1c268c541cba770f329b23c9fc225df079ade55f81059fd085e2c6",
+    "Flock.Draw.Stratum.size": "16711658cdd836cf6d0e9663608a92f67da56d85ed2c60e68165c379c727df0c",
+    "Flock.Draw.Stratum.template": "aa3fa326d3cf55dc3b623970322903d8b54d3eac616429f46389ea1524b10646",
+    "Flock.Draw.Stratum.toJson": "99b3fa0850e43be80bbbf39fd0df4d5d4465295906e01f370df179d8ee48339c",
+    "Flock.Draw.Stratum.unit": "49c442c22e2fcdf2dd1c8d42263032e3a03d26a993a2e21870c759d380d2fd70",
+    "Flock.Draw.Stratum.units": "6cb39eabc04d0183dd8cb498aa9c345c24f4f5d1d11d44c5b691c0a88cd080c7",
+    "Flock.Draw.UnitDraw": "83415836d21d53b361887361dc10abc929ec0865a1092a862feb643877104154",
+    "Flock.Draw.UnitDraw.closure": "6577e6f6d70ce0695b6829c92c9ed56fdfe1be10c99cda64b9552e4510827c82",
+    "Flock.Draw.UnitDraw.law": "b01e91051bcef69ceecfeaa5250e0d58aac9ad8b6823c973d31d2c01e13e16a5",
+    "Flock.Draw.UnitDraw.population": "b9851bf1fc555aaaf78b2fde9af0fb04882c2887d9efb63c4d7f606e1f459677",
+    "Flock.Draw.UnitDraw.toJson": "95c2738ad97f678df75f13eff596d6bef17bbc03f237019652596ff6f1b5fe1a",
+    "Flock.Draw.UnitDraw.units": "12dc81197a13dcf593977fd0860c84a576f08289c414d1ba78185723904665ab",
+    "Flock.Draw.WorkStratum": "c825a542c8ef60f327f4ce62ffe657f9ed9163339bd1d49c5614c672ef31304b",
+    "Flock.Draw.WorkStratum.floor": "c235e75613582f370c101dad10f5dc13bbf7acba7bb5a42d96505555cb59c897",
+    "Flock.Draw.WorkStratum.toJson": "999c6f978f18676d4909884c850deaf5ab7531b7a93e1a0eeeddcec625710a37",
+    "Flock.Draw.WorkStratum.toStratum": "1be491674fba2a0f01f671db5fe348c03f76fe4023d42306592040ca4117a752",
+    "Flock.Draw.WorkStratum.work": "eeee7219f73bfc21bdc0e819bc356be12e9950221a80b9b620b14c35ca1f8b35",
+    "Flock.Draw.beNat": "f33b44ce3176ec4606668c2599a46d7d8983a16678aa2e21c506b543e62ca721",
+    "Flock.Draw.bernoulli": "14cd4d5eebd87143635f7bfb5aa6f8fa0d5314eabf007818c138634031efc1df",
+    "Flock.Draw.drawWith": "12e803815e4628fba57142905951414475505324c9e2f89d4bf48ac9e0cf70e4",
+    "Flock.Draw.instInhabitedStratum": "84bfae5008c211276e37173a74dca9cc1eb81d5aa599b7b4049d08752f8ee8b6",
+    "Flock.Draw.instInhabitedStratum.default": "3e1ea59d4c6c27f171beee6423e781fb37676836b298e5eefd6f27a19b7065aa",
+    "Flock.Draw.onWith": "987dc554e6fcfebb01c1e79cabb529bf2749eb60a567dcf1152e3fe5574af2b8",
+    "Flock.Draw.stratifiedWith": "27438dc7bc06d6f5d55a891addbaeda0c647b7ee9e7ff8616db51c8196d652a3",
+    "Flock.Draw.subset": "0fc9e572d0b4d8409cedc078bf52b63e6279a64d401dea42cd69525d95bfb335",
+    "Flock.Draw.uniform": "1817d8be46815930147d46d70a731b71a18fa88bdebb880f99e4124286bcdfe1",
+    "Flock.Draw.width": "80674d324269f3df3066a958d4159bf0d1321b5d14bfc80c928ca16a55aa77f4",
+    "Flock.Draw.workTableOfJson": "e1c5d286ad2918af56c64eb00aed16daa57590a93e7f925915ca8639130417cc"
+   },
+   "guarantees": ["FlockAudit.auditor_draws_once"]
   },
   "Flock.Field": {
    "digest": "22303c3aee8bcc287e55cba20d73253ba648a74a42c94fe85682b94e7f0c0f04",
@@ -1110,6 +1195,64 @@
     "Flock.Typed.wordsIn": "3ffd7ac29f7f5340588d0abad6a3d03fb6923d39e72756713531e04159dbc6e9"
    },
    "guarantees": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
+  },
+  "FlockAudit.Auditor": {
+   "digest": "98c40869dc50d67856c7774f168c07b277f70d277bdf72832050437061c6fa97",
+   "definitions": {
+    "FlockAudit.ANSWER_MAX": "c2b5896552e6ae8424f6c2b56c66af159090423cc165229a2ab82461ee86adbf",
+    "FlockAudit.Step": "14dc7dc99f6c75ad2ab52e9da870f970373ba323a63beae03888cbd441d99fa1",
+    "FlockAudit.Verdict": "358faf1a57a4716f3a7168059fd1ca3103d6580ae0673d9a1f7219446741cc0a",
+    "FlockAudit.Verdict.accepted": "6aea31f6ab21aac06ec7285571e09a4efae06e86676e850029a2bc8309896d95",
+    "FlockAudit.Verdict.draw": "2ba8afc7db6a4cd5c1f06bc1e2ce9177bcf043d7b89aa1a92e32911d3967f1ac",
+    "FlockAudit.Verdict.report": "8eaa46cf03d441b1e7f8c98ef295dac8b5b556767cc4c6de97b790072a66c1fe",
+    "FlockAudit.Verdict.toJson": "bb250408fdcc59ed04683e6c8cf68d47558aba248b4602de52ae6c4705f4c827",
+    "FlockAudit.Verdict.why": "4ba9d9eeed2485891238e5622a4f879ea2493d640bca7479dd5aba2a7913bf45",
+    "FlockAudit.afterDraw": "431a9851a8e96db20fb83ca8621c676647adb4f6caaf648184603856038e62c7",
+    "FlockAudit.answerJson": "61a433310c2aec3ebadbce7dbcd20faa08c84515955dbfe7bb1cf3faaaad6d4c",
+    "FlockAudit.ask": "a67e729300a6d256209317400156b077e6e616c4bf8343db3ffd8a871d9f525c",
+    "FlockAudit.askJson": "ce8426599433aee0ecd4371ae37461e0c729b9b6aa767658d38e0cb8d8ee6b02",
+    "FlockAudit.auditorOf": "71261d36b6cd03a260577d2371db225562208c3e6097242dd00513e7fb279d02",
+    "FlockAudit.decide": "c771de8ae64f3609404e5eb963b6efced427b7bb489c119f3e400e95fffa23df",
+    "FlockAudit.drawP": "1ee3b8d1ba3e7989c907449558f9e28b6e11cfdcd03c90691e13392280f5aae0",
+    "FlockAudit.liftV": "c5c320bcbcad9fffa6ed9510b193b2c48b02cb6efe0ebac029758dd527fba386",
+    "FlockAudit.refused": "c72c3dbf4c85fbc760826333bce9b3da552e503bf7ed61556a6ac66d764d82d0",
+    "FlockAudit.report": "89567999f74f3fcea9744fae7d5d5274cd7855a8ecfe496b0bdf77de6e7991bc"
+   },
+   "guarantees": ["FlockAudit.auditor_draws_once"]
+  },
+  "FlockAudit.Prog": {
+   "digest": "51e571a0ac60a387a3657f28876eb1b4e21bac6898b524be740feb6de4b6d9e6",
+   "definitions": {
+    "FlockAudit.Prog": "82e4c84c02dbf2ee9fdab454c61601119d46afff7832e17770ef6dc87628ae17",
+    "FlockAudit.Prog.Event": "01e7a5487e2b3acc78b7ea08e04cdf77c1c1b9bc934275dd6cb6d2ed3691ff7a",
+    "FlockAudit.Prog.Event.asked": "b56d8b55285f00f817dc2db0296489448111d41987d4f80c525a0d030c87af6f",
+    "FlockAudit.Prog.Event.drew": "8437b6ed4784e718c058d5d1f3686d81494105e345768b064493ae993cb2ac81",
+    "FlockAudit.Prog.NoCoin": "6052e354cd8f90ad3914a90b695ca80775a0c23bf9c8c4df11045b34c477dc15",
+    "FlockAudit.Prog.NoCoin.ask": "074f3dd3272e08e5967e3193cf2988afdf557a2d621e41876496f4e1c8b74f19",
+    "FlockAudit.Prog.NoCoin.ret": "f14d1155b579cf27a73b9ddb30bdad4e4dbde2efb750fc891c15bcb978b83681",
+    "FlockAudit.Prog.ask": "bd686ba76aeea982d2526b28c1d9c09731778a4232f8d1150f92b137999b68e9",
+    "FlockAudit.Prog.bind": "511713f32f1636c8a09dd5d22c165d56eb83a35ee2e0ba2b525f99ce4b66d79a",
+    "FlockAudit.Prog.brecOn.go": "887745fb9dff6774b5ebce6e1470535abd612f64c1a4f327e0f5bf775023ffdf",
+    "FlockAudit.Prog.coin": "4ff07e077393feef2435ad7c533207131efe3396fe45b7f39138c175ee52e910",
+    "FlockAudit.Prog.coins": "356e473c76077f89b543f60d29b61990162e918f4bae108eac97b2976f355d79",
+    "FlockAudit.Prog.instMonad": "88e55cf50c29dcd2426d5ae9fb2b2da775669322d8234e2e533142e559953850",
+    "FlockAudit.Prog.replay": "6ae4d7c94a27196b9a2203cc5fa7a08a6bfa408749fa9ab8498c21aab4ab8889",
+    "FlockAudit.Prog.ret": "b9e6f5de71e0fd24519a99b630ae284e81d0c23383aadd23d8561d40f5868eee",
+    "FlockAudit.Prog.simulate": "3fc57efe7d1c61c072f43560079a157d843a38ad94633236742c22b354ab55cf",
+    "FlockAudit.Req": "5b2a9d9d40edce34531ccd42adbcc55f551aa9b27c3633fac66b1aa5ea6def83",
+    "FlockAudit.Req.body": "c0826c309ccddbc582257f3c3ad3554a9447d73dd33c61a8c6ac6563f6578736",
+    "FlockAudit.Req.chan": "d07dc433b5d00fc5661335617a2f838cacc5706071a07af65c9a168b9cce3ebd",
+    "FlockAudit.Req.max": "5d971bd87a820d39308e16c6a002ea724555ba530dd013ae8a9f13009e0b6c73",
+    "FlockAudit.Talk": "416c32feffedbe82aac4aa70b5da44ab76b7ba895d54220051bd5019ae6d582e",
+    "FlockAudit.Talk.ask": "64a14a9deef3f9743934376aba56dfd6d753e5c0a07d25f5589cf01f95da0010",
+    "FlockAudit.Talk.bind": "5889c7fd355ae41b05a1e770f540322f2f6b5e0e87686534154e783fb6799131",
+    "FlockAudit.Talk.brecOn.go": "00ac1da2e2945fe1ebc7f2ffcb6c29e05973a73fbdbe7174ad0f3332be118c3f",
+    "FlockAudit.Talk.instMonad": "14592d1a2fdb5c842fed778481998b6128fcf92b4a616f627e7fbde2198e0002",
+    "FlockAudit.Talk.lift": "03060fa614df928ca21f2f88b3d1727202bb86451f594e9da0c8d80723eb31df",
+    "FlockAudit.Talk.req": "921d0286309975c415e963bd23f579bd1986b17ff0d36b28b103af7ba1a86f13",
+    "FlockAudit.Talk.ret": "66bfdd05a20e12774cd6378fce9d559bd65a81087c3f67b7bc65a6ec17662faa"
+   },
+   "guarantees": ["FlockAudit.Talk.noCoin_lift", "FlockAudit.auditor_draws_once", "FlockAudit.replay_simulate"]
   },
   "FlockProofs.Hash": {
    "digest": "d6d1e8b248f3eb42f59dc34dc27f0fcfd6283a88ba7e68b82990f6f603201997",

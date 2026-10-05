@@ -1,6 +1,6 @@
 name = "flock_verifier"
 version = "0.1.0"
-defaultTargets = ["flock-verify", "flock-rows", "FlockProofs"]
+defaultTargets = ["flock-verify", "flock-rows", "FlockProofs", "flock-audit", "flock-audit-tape"]
 
 [leanOptions]
 autoImplicit = false
@@ -12,6 +12,10 @@ name = "Flock"
 [[lean_lib]]
 name = "FlockProofs"
 
+# The one-stage audit's auditor as a program that drives its run (Prog, its frames and workers), beside the verifier.
+[[lean_lib]]
+name = "FlockAudit"
+
 [[lean_exe]]
 name = "flock-verify"
 root = "Main"
@@ -20,3 +24,12 @@ root = "Main"
 [[lean_exe]]
 name = "flock-rows"
 root = "FlockRows"
+
+[[lean_exe]]
+name = "flock-audit"
+root = "AuditMain"
+
+# A test harness: flock-audit with its coins from a tape.
+[[lean_exe]]
+name = "flock-audit-tape"
+root = "AuditTape"
