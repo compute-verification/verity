@@ -29,7 +29,7 @@ rm -r "$OUT/pearl_c4.sass" "$OUT/inc"
   uv run python benchmarks/pouw/pearl_c4/fixture.py "$OUT/check2" --shape 256x384x2048)
 cp "$HERE/dev.py" "$HERE/run.sh" "$OUT/"
 { "$C9/bin/nvcc" --version | tail -2; echo "nvcc $FLAGS"; } > "$OUT/toolchain.txt"
-{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c4 protocols/pouw packages/verity
+{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c4 verity/protocols/accounting/work/pouw verity
   echo "pouw_hash.cuh $HASH_COMMIT $HASH_SHA256"; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"
