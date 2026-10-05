@@ -97,15 +97,13 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
-- 2026-10-05 (1:27 PM PDT): a coordinator never loses contact with a worker it launched. A running cloud agent can't take a
-  `Task` resume, and the Lean move lead went 85 minutes without a word. So every brief names the worker's lane, so
-  `research notes status` flags it STALE, and the worker checkpoints at least every 20 minutes (contract §3). At each
-  checkpoint it reads its follow-up queue (`cursor-cloud` `get-message-queue`). When something is queued, it ends its
-  turn soon, leaving long runs going on their pods, so the message is delivered. Only the agent that launched a worker
-  owns it: its coordinator's `SendToAgent` refuses it ("not a worker of this coordinator"). Until there's a channel, the
-  one way to reach a running worker the launcher can't queue to is a human's follow-up box on the worker's dashboard
-  page. So as soon as a worker goes STALE, the launcher asks Daniel, with the page's link and the message to paste.
-  It starts a parallel lane only if that gets no answer.
+- 2026-10-05 (1:27 PM PDT): a coordinator never loses contact with a worker it launched. Nothing reaches a running agent:
+  a `Task` resume is refused, another agent's `SendToAgent` refuses it ("not a worker of this coordinator") and its
+  dashboard follow-up box is disabled. So the Lean move lead went 85 minutes unreachable. Every brief therefore names an
+  inbox branch, `cursor/inbox-<first 8 of the worker's id>-<launcher's suffix>`, and the worker runs `git fetch` on it
+  at every checkpoint (at least every 20 minutes, contract §3), acting on each new commit message. The launcher writes
+  there with empty commits; the inbox is a channel, not a note. A worker silent for 30 minutes gets one inbox message,
+  and only if that brings no answer does the launcher start a parallel lane.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
   piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
   critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
