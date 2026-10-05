@@ -65,7 +65,7 @@
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   }
  },
- "pins": {
+ "guarantees": {
   "Pous.SecurityProofs.BandMultiMeetsFamily": {
    "signature": ["Pous.SecurityProofs.BandMultiMeetsFamily : Pous.Guarantees.BandMultiMeetsFamily"],
    "assumptions": [],
@@ -152,7 +152,7 @@
     "Pous.Guarantees.BandMultiMeetsFamilyD2": "2aafa1eeb7b1638689f0cec3ed52c6c1749c0c9313262895923f143d767cfc23",
     "Pous.Guarantees.ChainDenseMeets64": "2ef2d27764e6e2a07de8d53ad5468b24a51c0764f5f542ce9b6a8f6376761534"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -170,7 +170,7 @@
     "Pous.Guarantees.P2SlackB19Uncond": "29abf694f38211f455a2a46a228f6e968f6320e447ed414279fde6a9be57d863",
     "Pous.Guarantees.P2SlackFamilyUncond": "56aa4860fbb0c6a834054089ba0cb9b580789ca4ac9e4188a48b59a75bf76fd5"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -187,7 +187,7 @@
     "Pous.Guarantees.SecureErasureMeets96GiB": "ca68a0c6604d5c0c755518406baab7700a1835c3c3d7a056cf14b7af3a16fa69",
     "Pous.Guarantees.SecureErasureMeetsFamily": "ace733db06755c57c72d92866b146d677574c14c95f9cb7430838de7e05127ca"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.DigestAU",
     "Pous.SecurityProofs.SecureErasureMeets",
     "Pous.SecurityProofs.SecureErasureMeets96GiB",
@@ -199,7 +199,7 @@
    "definitions": {
     "Pous.EraseMeets": "2fae65625d879d92a291808f8bb16943defd93eaf769067963c05004937eab3d"
    },
-   "pins": ["Pous.SecurityProofs.SecureErasureMeets96GiB", "Pous.SecurityProofs.SecureErasureMeetsFamily"]
+   "guarantees": ["Pous.SecurityProofs.SecureErasureMeets96GiB", "Pous.SecurityProofs.SecureErasureMeetsFamily"]
   },
   "Pous.Protocol.Accounting.Params": {
    "digest": "3ae4cf02f914e89aef86f7a97df55e5b99671478c007e62ca89576f23a655e1c",
@@ -212,7 +212,7 @@
     "Pous.Params.ρ": "44def8edadaf34487bc90e56af018f9151023082e982951a77f82f78d819f9b9",
     "Pous.Scheme.stateBound": "f219b3199888b8a45eac393ac75becffadc935c7cd567be9198c400bd69c17d1"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -246,7 +246,7 @@
     "Pous.Prog.run": "c0021163e15a15e3d0553d037f1a4752b6e69010f3dae00e0d5181e749eed9da",
     "Pous.Prog.work": "d2d99c0b30b712934b04158c0ded72b0ba662f4a1cc358734c2223d113b94ae3"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -269,7 +269,7 @@
     "Pous.Bits": "9290fa20f06bfe4423f67acf59109a8e4d14d7a87a9aa1e5085b43ee795a0f68",
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -304,7 +304,7 @@
     "Pous.seqAnswers": "fa7d86156927a2653b23b9db3a28c80e980af999c7989217f0f078f60a80fed3",
     "Pous.simAccepts": "62c4ef9b9565b20f69da1313f95ed2e92d2b3f1f1d2ff63bc1f71c38a804523d"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -339,7 +339,7 @@
     "Pous.Sponge.labelOv": "5623d70ee6b9af03c4bf55def1dba451dfcf97daf345d00776a736bcb04b6d75",
     "Pous.Sponge.parentsNF": "51d3bef2ec734d993123fef15fb08b38752fd81f2371023def33918aed8590e9"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -354,7 +354,7 @@
    "definitions": {
     "Pous.Dense.blocks": "7ec004a481c1997e70cc5f077ecd5f9bd0b7105cfd849982b52d64448cc13960"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -372,7 +372,7 @@
     "Pous.Digest.blockHash": "943b3e29897664ceaca76e45b21fee437d7958d2d40d629d08e08bceda0d78e5",
     "Pous.Digest.digest": "712eed3458c39093e84c682b165839cb6910f01f7f098d09e61d9d8d5f555db4"
    },
-   "pins": ["Pous.SecurityProofs.DigestAU"]
+   "guarantees": ["Pous.SecurityProofs.DigestAU"]
   },
   "Pous.Protocol.Model.Labelling": {
    "digest": "4ca764fa447189edbc157b1653ec4f0b5b1c2d7481eabfa2adb334d38802a23c",
@@ -381,7 +381,7 @@
     "Pous.Labelling.TopoDAG.par": "70dc9b0b5c9895d4e5acfeaed66ab4cd6d7f36d39aa29493aa2c17e0881d4153",
     "Pous.Labelling.bxor": "37cce8248a6285cfbb23e38e7ff20aab3636b405b755aa303ddf84adcd562e6b"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -396,7 +396,7 @@
    "definitions": {
     "Pous.codeEquiv": "5431e034e408a3add1b4c547c4a73d431438e40ba35a2b2f767ced58e1f174ab"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -422,7 +422,7 @@
     "Pous.permAct": "57f826c894c3dc492df3da7be0515db5713131866bf421543f0b4667df76f265",
     "Pous.permsp": "d4fa4566b0ea5f7ad48a716aa9c4a6397da89f45fcd110dc2fa0502ecabfe819"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -443,7 +443,7 @@
     "Pous.Sponge.padBlk": "52aca19377e5596e59fe13cebcfe5eb4d852ba8c63c05d3efa3f67d852732944",
     "Pous.Sponge.parentsDesc": "e0c021c592c36635fb1c492903c3b6f7b37b6a4e6ce8446cde7d429d083ffd52"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -470,7 +470,7 @@
     "Pous.Scheme.t": "fc8bee5b18948b88737142fe5ff74f8ed361b46468a87c34a51652defe23b8e1",
     "Pous.Scheme.ℓ": "cc713501fb08eb0fb1403b0163bb043f5e39683832d9c644e0cf50c5d6000f9c"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -499,7 +499,7 @@
     "Pous.eraseAnswers": "28b84d7fa384e3172e691aea4e96b8cfaaab9333b03bfc0c2699004f5c52aab9",
     "Pous.eraseWins": "573c0c8e8d2b98d8fb54e8c78a63f382647bdc5efa538225d46435d9526f7955"
    },
-   "pins": [
+   "guarantees": [
     "Pous.SecurityProofs.SecureErasureMeets",
     "Pous.SecurityProofs.SecureErasureMeets96GiB",
     "Pous.SecurityProofs.SecureErasureMeetsFamily"

@@ -144,6 +144,12 @@
   "DotE4m3_v4{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
    "and": 17984
   },
+  "DsaTopKShortRow_v2{TOPK=16}": {
+   "and": 469
+  },
+  "DsaUe8m0Scale_v2": {
+   "and": 50895
+  },
   "E4m3ToF32_v2": {
    "and": 15
   },
@@ -215,6 +221,9 @@
   },
   "F32ArgmaxStage_v1{V=65,L=1}": {
    "and": 39
+  },
+  "F32CeilFtz_v2": {
+   "and": 315
   },
   "F32Div_v3": {
    "and": 2517
@@ -350,6 +359,12 @@
   },
   "I32Add_v2": {
    "and": 31
+  },
+  "I32Sub_v2": {
+   "and": 31
+  },
+  "I32ToF32_v2": {
+   "and": 368
   },
   "MeanCombineTriton_v1{N=1030}": {
    "and": 5897
@@ -671,6 +686,9 @@
   },
   "TokenSelect_v2{V=50}": {
    "and": 2661
+  },
+  "U32And_v2": {
+   "and": 32
   },
   "UniversalUnit_v1{G=16,N_IN=16,N_OUT=8}": {
    "and": 1066
