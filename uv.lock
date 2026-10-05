@@ -1418,11 +1418,21 @@ torch-cpu = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "cluster" },
     { name = "editables" },
     { name = "jsonschema" },
     { name = "pytest" },
     { name = "pytest-xdist" },
     { name = "pyyaml" },
+    { name = "research" },
+    { name = "verity-catalog" },
+    { name = "verity-circuit-check" },
+    { name = "verity-experimental" },
+    { name = "verity-flock" },
+    { name = "verity-kernels" },
+    { name = "verity-numerical" },
+    { name = "verity-sp1" },
+    { name = "verity-vllm" },
 ]
 
 [package.metadata]
@@ -1434,11 +1444,21 @@ provides-extras = ["torch-cpu"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "cluster", editable = "tools/cluster" },
     { name = "editables", specifier = ">=0.5" },
     { name = "jsonschema", specifier = ">=4.26" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-xdist", specifier = ">=3.6" },
     { name = "pyyaml", specifier = ">=6" },
+    { name = "research", editable = "tools/research" },
+    { name = "verity-catalog", editable = "catalog" },
+    { name = "verity-circuit-check", editable = "tools/circuit_check" },
+    { name = "verity-experimental", editable = "experimental" },
+    { name = "verity-flock", editable = "backends/flock" },
+    { name = "verity-kernels", editable = "kernels" },
+    { name = "verity-numerical", editable = "benchmarks/numerical" },
+    { name = "verity-sp1", editable = "archive/sp1" },
+    { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
 [[package]]
