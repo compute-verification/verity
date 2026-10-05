@@ -1183,6 +1183,7 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     box = inbox(fake, routes_dirs, "circuits")
     add_route(routes_dirs[0], "old-circuits", box, closed="2026-10-01T18:00Z", forward_to="circuits")   # renamed: one inbox
     run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "one")
+    fake.add(COORD, text="circuits 06:00Z: 3 open", username="circuits", bot_id=BOT, thread_ts=box)   # its own note, no doorbell
     old = fake.add(COORD, text="@proofs ancient ask", username="infra", bot_id=BOT, ts="1600000000.000001")
     fyi = fake.add(COORD, text="@proofs ancient fyi (quiet)", username="infra", bot_id=BOT, ts="1600000000.000002")
     fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)
