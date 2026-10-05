@@ -26,7 +26,7 @@ M = _load()
 Q = "verity_vllm.program.registry.quarantine"
 QDIR = "integrations/vllm/verity_vllm/program/registry/quarantine"
 REG = "integrations/vllm/verity_vllm/program/registry"
-PKG = "experimental/vllm/quarantine/verity_quarantine"
+PKG = f"{M.DEST}/{M.PACKAGE}"
 
 FILES = {
     "pyproject.toml": '[project]\nname = "w"\ndependencies = ["verity"]\n\n[tool.uv.workspace]\nmembers = ["packages/verity", '
@@ -77,8 +77,8 @@ def _contents(root: Path) -> dict[str, str]:
     return {p.relative_to(root).as_posix(): p.read_text() for p in sorted(root.rglob("*")) if p.is_file() and ".git" not in p.parts}
 
 
-def _apply(root: Path, *only: str) -> int:
-    return M.main(["apply", "--root", str(root), *(["--only", *only] if only else [])])
+def _apply(root: Path, *only: str, dest: str | None = None) -> int:
+    return M.main(["apply", "--root", str(root), *(["--only", *only] if only else []), *(["--dest", dest] if dest else [])])
 
 
 def test_apply_moves_the_lanes_core_does_not_bind_and_rewrites_what_names_them(tmp_path, capsys):
@@ -87,11 +87,11 @@ def test_apply_moves_the_lanes_core_does_not_bind_and_rewrites_what_names_them(t
     for lane in M.MOVE:
         assert (root / PKG / lane / "__init__.py").is_file() and not (root / QDIR / lane).exists()
     assert (root / QDIR / "ln" / "layer_norm.py").is_file()
-    assert (root / QDIR / "__init__.py").read_text() == M.CORE_DOC and (root / PKG / "__init__.py").read_text() == M.PACKAGE_DOC
-    assert (root / PKG / "act" / "__init__.py").read_text() == "from verity_quarantine.act import silu_mul  # noqa: F401\n"
+    assert (root / QDIR / "__init__.py").read_text() == M.core_doc(M.DEST) and (root / PKG / "__init__.py").read_text() == M.PACKAGE_DOC
+    assert (root / PKG / "act" / "__init__.py").read_text() == f"from {M.PACKAGE}.act import silu_mul  # noqa: F401\n"
     assert (root / "integrations/vllm/tests/test_lanes.py").read_text() == (
-        f"from verity_quarantine.act import silu_mul as S\nfrom verity_quarantine import collective as QC\n"
-        f"from {Q}.ln import layer_norm\nMODULE = \"verity_quarantine.act.silu_mul\"\n")
+        f"from {M.PACKAGE}.act import silu_mul as S\nfrom {M.PACKAGE} import collective as QC\n"
+        f"from {Q}.ln import layer_norm\nMODULE = \"{M.PACKAGE}.act.silu_mul\"\n")
     assert "from verity_vllm.program.registry import moe as Q" in (root / "integrations/vllm/tests/program/fixtures_query.py").read_text()
 
     entries = json.loads((root / "integrations/vllm/tests/lint/allowlists/p11_names.json").read_text())["entries"]
@@ -100,19 +100,54 @@ def test_apply_moves_the_lanes_core_does_not_bind_and_rewrites_what_names_them(t
     assert (root / "integrations/vllm/verity_vllm/engine/profiles/quarantine/REC.json").read_text() == FILES[
         "integrations/vllm/verity_vllm/engine/profiles/quarantine/REC.json"]
 
-    import tomllib
-    top = tomllib.loads((root / "pyproject.toml").read_text())
-    assert "experimental/vllm/quarantine" in top["tool"]["uv"]["workspace"]["members"]
-    assert "verity-quarantine" in top["project"]["dependencies"]
-    assert top["tool"]["uv"]["sources"]["verity-quarantine"] == {"workspace": True}
-    vllm = tomllib.loads((root / "integrations/vllm/pyproject.toml").read_text())
-    assert vllm["tool"]["verity"]["tests"]["inputs"] == ["experimental/vllm/quarantine", "fixtures/artifacts.json", ".gitignore"]
-    assert tomllib.loads((root / "experimental/vllm/quarantine/pyproject.toml").read_text())["project"]["name"] == "verity-quarantine"
+    _assert_member(root, M.DEST)
 
     before = _contents(root)
     capsys.readouterr()
     assert _apply(root) == 0
     assert capsys.readouterr().out.strip() == "nothing to do"
+    assert _contents(root) == before
+
+
+def _assert_member(root: Path, dest: str) -> None:
+    import tomllib
+    top = tomllib.loads((root / "pyproject.toml").read_text())
+    assert dest in top["tool"]["uv"]["workspace"]["members"]
+    assert M.DISTRIBUTION in top["project"]["dependencies"]
+    assert top["tool"]["uv"]["sources"][M.DISTRIBUTION] == {"workspace": True}
+    vllm = tomllib.loads((root / "integrations/vllm/pyproject.toml").read_text())
+    assert vllm["tool"]["verity"]["tests"]["inputs"] == [dest, "fixtures/artifacts.json", ".gitignore"]
+    pyproject = tomllib.loads((root / dest / "pyproject.toml").read_text())
+    assert pyproject["project"]["name"] == M.DISTRIBUTION
+    assert pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"] == [M.PACKAGE]
+
+
+def test_apply_puts_the_package_where_dest_says(tmp_path):
+    root = _tree(tmp_path)
+    assert _apply(root, dest="experimental/elsewhere") == 0
+    for lane in M.MOVE:
+        assert (root / "experimental/elsewhere" / M.PACKAGE / lane / "__init__.py").is_file()
+    assert not (root / M.DEST).exists()
+    assert (root / QDIR / "__init__.py").read_text() == M.core_doc("experimental/elsewhere")
+    _assert_member(root, "experimental/elsewhere")
+
+
+@pytest.mark.parametrize("dest", ["/abs/path", "experimental/../x", "experimental/./x", "integrations/vllm/q", "packages/q", ""])
+def test_apply_refuses_a_dest_that_is_not_a_directory_outside_core(tmp_path, capsys, dest):
+    root = _tree(tmp_path)
+    before = _contents(root)
+    assert M.main(["apply", "--root", str(root), "--dest", dest]) == 2
+    assert "--dest" in capsys.readouterr().err
+    assert _contents(root) == before
+
+
+def test_apply_refuses_a_second_copy_of_the_package_elsewhere(tmp_path, capsys):
+    root = _tree(tmp_path)
+    assert _apply(root) == 0
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+    before = _contents(root)
+    assert _apply(root, dest="experimental/elsewhere") == 2
+    assert f"{M.PACKAGE} already lives in {M.DEST}" in capsys.readouterr().err
     assert _contents(root) == before
 
 
