@@ -361,7 +361,7 @@ def run(args) -> int:
     for r in args.rounds:
         k = r % len(arms)
         order = arms[k:] + arms[:k]
-        if r % 2:
+        if r % 2 and len(arms) > 2:
             order.reverse()
         for a in order:
             rc |= _child(args, ["arm", "--arm", a, "--round", str(r)], a, out / "logs" / f"arm-r{r}-{a}.log")
