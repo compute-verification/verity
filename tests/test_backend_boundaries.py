@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 import functools
+import importlib.util
 import re
 import tomllib
 from pathlib import Path
@@ -98,6 +99,15 @@ def _sites() -> frozenset[tuple[str, str]]:
 
 def test_the_integrations_are_found():
     assert "verity_vllm" in INTEGRATIONS
+
+
+def test_the_scan_sees_the_backends():
+    """The scan walks `backends/`: a backend that moved out of it would leave its imports unchecked, and `KNOWN` would pass
+    as sites of files that don't exist yet."""
+    for name in ("verity_flock", "verity_numerical"):
+        origin = Path(importlib.util.find_spec(name).origin).resolve()
+        assert origin.is_relative_to(ROOT / "backends"), f"{name} is at {origin}, outside the scanned backends/"
+    assert not KNOWN or any((ROOT / f).exists() for f, _ in KNOWN), "no file KNOWN lists exists: it names pre-move paths"
 
 
 def test_no_backend_imports_an_integration_outside_known():

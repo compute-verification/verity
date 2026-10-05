@@ -10,10 +10,10 @@ authority that is independent of the run for each class:
 |------------------|------------------------------------------------------------|--------------------------------------------------------|
 | weight           | `named_parameters()` mapped to a `weights` Record field    | checkpoint bytes: the snapshot of the root's storage == the checkpoint's words (`WeightSource`); roots the observer did not snapshot (over `snapshot-max-bytes`) fall back to *checkpoint identity*: the header's frozen `weights_sha256` verified at engine build (`--verify-weights`) |
 | analytic-table   | the rotary `cos_sin_cache` buffer; Gemma-2's `model.normalizer` (0-d bf16 `sqrt(H)` buffer) | recomputed from `C` (`analytic.check_cos_sin`; `analytic.check_normalizer`, exact) |
-| alias            | another name for a root's storage (layer-k `cos_sin_cache`, tied `lm_head.weight`) | identical allocation + view in the observation log (storage identity proven by the runtime, never assumed from the family) |
+| alias            | another name for a root's storage (layer-k `cos_sin_cache`, tied `lm_head.weight`, MLA's absorbed `W_UK_T` / `W_UV`) | identical allocation + view in the observation log (storage identity proven by the runtime, never assumed from the family); for `W_UK_T` / `W_UV` the view of a validated `kv_b_proj.weight` root that C's MLA dimensions give |
 | request-input    | prompt token rows                                          | the request record (`RunHeader.workload`)              |
-| config           | the static configuration `C` behind every specialization   | the checkpoint's `config.json` subset in the header (`analytic.config_of`), field by field |
-| ignored          | placeholders never read by a modeled kernel (`*_scale` with `kv_cache_dtype=auto`) | every read of their storage happens in a frozen set of non-semantic argument slots |
+| config           | the static configuration `C` behind every specialization   | the checkpoint's `config.json` subset in the header (`analytic.config_of`), field by field; an MLA configuration's fields (`MLA_CONFIG_KEYS`) each need their key recorded |
+| ignored          | placeholders never read by a modeled kernel (`*_scale` with `kv_cache_dtype=auto`) | every read of their storage happens in a frozen set of non-semantic argument slots (`IGNORED_ROOT_CONSUMERS`, or `CONDITIONAL_IGNORED_SLOTS` when the same event's arguments select the branch that never reads the slot) |
 
 Anything else — an unknown root name, a `Root.role` outside the table, an `Opaque`/prescribed fallback — is a **new root
 class** and fails.  A lane cannot make replay pass by declaring an inconvenient tensor an input: that would show up here as
@@ -73,8 +73,63 @@ def analytic_table_of_buffer(name: str) -> str | None:
 _MODULE_PREFIX = r"(?:model|gpt_neox)"
 _ATTN_MODULE = r"(?:self_attn|attention)"
 ALIAS_OF_COS_SIN = re.compile(rf"^{_MODULE_PREFIX}\.layers\.[1-9]\d*\.{_ATTN_MODULE}\.rotary_emb\.cos_sin_cache$")
-IGNORED_ROOT_NAMES = (re.compile(rf"^{_MODULE_PREFIX}\.layers\.\d+\.{_ATTN_MODULE}\.attn\.(k_scale|v_scale|q_scale|prob_scale|_k_scale|_v_scale|_q_scale|_prob_scale)$"),)
+#: [ADAPTER lane glm47-flash] multi-head latent attention keeps its kv/q/prob scale placeholders on `MLAAttention`
+#: (`self_attn.mla_attn.mla_attn`, vLLM d9105ea80 `set_default_quant_scales`), the same class as the attention layer's.
+IGNORED_ROOT_NAMES = (re.compile(rf"^{_MODULE_PREFIX}\.layers\.\d+\.{_ATTN_MODULE}\.attn\.(k_scale|v_scale|q_scale|prob_scale|_k_scale|_v_scale|_q_scale|_prob_scale)$"),
+                      re.compile(rf"^{_MODULE_PREFIX}\.layers\.\d+\.{_ATTN_MODULE}\.mla_attn\.mla_attn\.(_k_scale|_v_scale|_q_scale|_prob_scale)$"))
 _LAYER0_COS_SIN = re.compile(rf"^{_MODULE_PREFIX}\.layers\.0\.{_ATTN_MODULE}\.rotary_emb\.cos_sin_cache$")
+#: Frozen.  [ADAPTER lane glm47-flash] MLA's absorbed up-projections.  vLLM d9105ea80 `MLAAttention.process_weights_after_loading`
+#: (model_executor/layers/attention/mla_attention.py:1154-1191, 1248-1252) splits `kv_b_proj.weight.T.view(KV_LORA, heads, QK_NOPE +
+#: V_HEAD)` into `[QK_NOPE, V_HEAD]` and registers `W_UK_T = W_UK.permute(1, 2, 0)`, `W_UV = W_UV.transpose(0, 1)`: views of the layer's
+#: weight of record, so their words are its words.  `replace_parameter(..., prefer_copy=True)` may copy instead, so the class is
+#: proven per root from the log (same allocation), never assumed.
+MLA_KV_B_VIEW = re.compile(rf"^(?P<layer>{_MODULE_PREFIX}\.layers\.\d+\.{_ATTN_MODULE})\.mla_attn\.mla_attn\.(?P<view>W_UK_T|W_UV)$")
+
+
+@dataclass(frozen=True)
+class IgnoredSlots:
+    """The argument slots of one consumer that may hold an `ignored` root, when the event is the code `pin` names (a dispatcher op's
+    schema, a Triton kernel's source sha256) and every `selectors` argument of the same event takes a value in `admitted` (a tensor
+    argument stands for its dtype)."""
+    slots: frozenset
+    selectors: tuple
+    admitted: frozenset
+    pin: str
+
+    def admits(self, e: DispatchEnter | TritonLaunch, reads: list[tuple]) -> bool:
+        pin = e.schema if isinstance(e, DispatchEnter) else e.src_sha
+        return pin == self.pin and set(reads) <= self.slots and all(_arg_value(e, p) in self.admitted for p in self.selectors)
+
+
+#: Frozen.  [ADAPTER lane glm47-flash] MLA's bf16 KV path (vLLM d9105ea80): consumers that receive the `_k_scale` placeholder in a
+#: slot their code reads only for an fp8 KV cache.
+#:  * `concat_and_cache_mla`: `kv_cache_dtype` "auto" dispatches `kAuto` (csrc/libtorch_stable/cache_kernels.cu:971), whose copy is
+#:    `dst = src`; `*scale` is read only in the fp8 branch (:443-448).
+#:  * `unified_mla_kv_cache_update` only forwards `k_scale` to that cache update (model_executor/layers/attention/mla_attention.py:1335-1367).
+#:  * `_fwd_grouped_kernel_stage1` loads `k_scale` / `v_scale` and uses them only under `k.dtype.is_fp8()`, `kpe.dtype.is_fp8()`,
+#:    `v.dtype.is_fp8()` of values loaded from `K_Buffer` / `V_Buffer` (v1/attention/ops/triton_decode_attention.py:367-427): dead
+#:    for bf16 / f16 buffers.
+CONDITIONAL_IGNORED_SLOTS = {
+    "_C_cache_ops.concat_and_cache_mla.default": IgnoredSlots(
+        slots=frozenset({("args", 5)}), selectors=(("args", 4),), admitted=frozenset({"auto"}),
+        pin="_C_cache_ops::concat_and_cache_mla(Tensor kv_c, Tensor k_pe, Tensor($0! -> ) kv_cache, Tensor slot_mapping, str kv_cache_dtype, Tensor scale) -> ()"),
+    "vllm.unified_mla_kv_cache_update.default": IgnoredSlots(
+        slots=frozenset({("args", 4)}), selectors=(("args", 3),), admitted=frozenset({"auto"}),
+        pin="vllm::unified_mla_kv_cache_update(Tensor kv_c_normed, Tensor k_pe, PyObject layer_name, str kv_cache_dtype, Tensor k_scale) -> Tensor"),
+    "triton:vllm.v1.attention.ops.triton_decode_attention._fwd_grouped_kernel_stage1": IgnoredSlots(
+        slots=frozenset({("args", "k_scale"), ("args", "v_scale")}), selectors=(("args", "K_Buffer"), ("args", "V_Buffer")),
+        admitted=frozenset({"bfloat16", "float16"}), pin="fdd0368d448e87105168c26088c95ad46b4c08c45149db273a9451111936f9b4"),
+}
+#: Frozen.  [ADAPTER lane glm47-flash] The config.json keys of an MLA configuration's (C carries `KV_LORA`) attention and MoE fields,
+#: the first key recorded being compared.  Every field C carries needs its key recorded in the header: a field no recorded key states
+#: is not validated, so it fails.
+MLA_CONFIG_KEYS = {
+    "Q_LORA": ("q_lora_rank",), "KV_LORA": ("kv_lora_rank",), "QK_NOPE": ("qk_nope_head_dim",), "QK_ROPE": ("qk_rope_head_dim",),
+    "V_HEAD": ("v_head_dim",), "FIRST_DENSE": ("first_k_dense_replace",), "I_DENSE": ("intermediate_size",),
+    "MOE_I_FULL": ("moe_intermediate_size",), "NUM_EXPERTS": ("num_experts", "num_local_experts", "n_routed_experts"),
+    "TOPK": ("num_experts_per_tok",), "NORM_TOPK_PROB": ("norm_topk_prob",), "RENORMALIZE": ("norm_topk_prob",), "N_GROUP": ("n_group",),
+    "TOPK_GROUP": ("topk_group",), "ROUTED_SCALING": ("routed_scaling_factor",), "SHARED_EXPERTS": ("n_shared_experts",),
+}
 
 
 def frozen_root_class(name: str, weight_field) -> str:
@@ -82,20 +137,34 @@ def frozen_root_class(name: str, weight_field) -> str:
         return "weight"
     if ALIAS_OF_COS_SIN.match(name):
         return "alias-of-cos_sin"
+    if MLA_KV_B_VIEW.match(name):
+        return "alias-of-kv_b"
     if any(r.match(name) for r in IGNORED_ROOT_NAMES):
         return "ignored"
     return "unknown"
 
 
-def _views(x: Any):
+def _slotted(x: Any, path: tuple):
+    """(argument path, view) for every tensor view in a recorded argument value."""
     if isinstance(x, ViewDesc):
-        yield x
+        yield path, x
     elif isinstance(x, (list, tuple)):
-        for y in x:
-            yield from _views(y)
+        for i, y in enumerate(x):
+            yield from _slotted(y, path + (i,))
     elif isinstance(x, dict):
-        for y in x.values():
-            yield from _views(y)
+        for k, y in x.items():
+            yield from _slotted(y, path + (k,))
+
+
+def _arg_value(e: DispatchEnter | TritonLaunch, path: tuple) -> Any:
+    """The recorded scalar at an argument path of an event, a tensor's dtype, or None."""
+    x: Any = {"args": e.args, "kwargs": getattr(e, "kwargs", None) or {}}
+    for p in path:
+        try:
+            x = x[p]
+        except (KeyError, IndexError, TypeError):
+            return None
+    return x.dtype if isinstance(x, ViewDesc) else (x if isinstance(x, (str, int, float, bool)) else None)
 
 
 def _field_name(path: tuple) -> str:
@@ -235,6 +304,8 @@ def evaluate(log_path: str | Path, snapshots: str | Path | None, profile, *, saf
                 same = tgt is not None and (tgt.view.alloc, tgt.view.offset, tuple(tgt.view.shape)) == (r.view.alloc, r.view.offset, tuple(r.view.shape))
                 entry.update(status="pass" if same else "fail", reason=None if same else "claimed alias has different storage than layer-0 cos_sin")
                 out["alias_claims"].append({"name": r.name, "alias_of": tgt.name if tgt else None, "proven_by": "alloc+offset+shape", "status": entry["status"]})
+            elif pc == "alias-of-kv_b":
+                entry.update(**{"class": "alias", "validator": "storage-identity+mla-view", "status": "pending"})   # `_resolve_kv_b_views`
             elif pc == "ignored":
                 entry["class"], entry["validator"] = "ignored", "never-read-semantically"
                 entry["status"] = "pending"                 # filled by the read scan below
@@ -251,29 +322,8 @@ def evaluate(log_path: str | Path, snapshots: str | Path | None, profile, *, saf
         out["roots"].append(entry)
         classes[entry["class"]][entry["status"]] += 1
 
-    # --- ignored roots: every read must sit in a frozen non-semantic slot ---------------------------------------------------
-    ignored_allocs = {e["alloc"]: e for e in out["roots"] if e["class"] == "ignored"}
-    consumers: Counter = Counter()
-    bad_consumers: Counter = Counter()
-    if ignored_allocs:
-        for e in events:
-            if isinstance(e, DispatchEnter):
-                vs = [v for v in list(_views(e.args)) + list(_views(e.kwargs)) if v.alloc in ignored_allocs]
-                if vs:
-                    consumers[e.op] += len(vs)
-                    if e.op not in IGNORED_ROOT_CONSUMERS:
-                        bad_consumers[e.op] += len(vs)
-            elif isinstance(e, TritonLaunch):
-                vs = [v for v in _views(e.args) if v.alloc in ignored_allocs]
-                if vs:
-                    consumers[f"triton:{e.fn}"] += len(vs)
-                    bad_consumers[f"triton:{e.fn}"] += len(vs)
-        for ent in ignored_allocs.values():
-            ent["status"] = "pass" if not bad_consumers else "fail"
-            if bad_consumers:
-                ent["reason"] = f"read by non-frozen consumers {dict(bad_consumers)}"
-        classes["ignored"] = Counter(ent["status"] for ent in ignored_allocs.values())
-    out["ignored_root_consumers"] = dict(consumers)
+    _resolve_kv_b_views(out, by_name, C, classes)
+    _scan_ignored(events, out, classes)
 
     # --- tied / untied lm_head: proven by the runtime, checked against C -----------------------------------------------------
     lm = by_name.get("lm_head.weight") or by_name.get("embed_out.weight")
@@ -293,25 +343,7 @@ def evaluate(log_path: str | Path, snapshots: str | Path | None, profile, *, saf
         if not ok:
             out["problems"].append("lm_head tie: runtime has no separate lm_head.weight parameter but C says untied")
 
-    # --- config root: C's hf-config fields against the checkpoint's config.json subset in the header ------------------------
-    cfg_entry = {"class": "config", "validator": "hf-config (header.model.config)", "status": "skipped", "fields": {}}
-    hf = (header.model or {}).get("config") if header is not None else None
-    if hf:
-        try:
-            derived, prov = analytic.config_of(hf, model=repo)
-            mism = {}
-            for k in ("H", "NL", "NH", "KVH", "D", "I", "V", "EPS", "ROPE_THETA", "MAX_POS", "tie_word_embeddings"):
-                if k in derived and k in C and prov.get(k) == "hf-config" and derived[k] != C[k]:
-                    mism[k] = {"C": C[k], "hf": derived[k]}
-                cfg_entry["fields"][k] = prov.get(k, "n/a")
-            cfg_entry["status"] = "pass" if not mism else "fail"
-            cfg_entry["mismatches"] = mism
-            if mism:
-                out["problems"].append(f"C differs from the checkpoint config: {mism}")
-        except Exception as e:  # noqa: BLE001
-            cfg_entry.update(status="fail", reason=f"{type(e).__name__}: {e}")
-    else:
-        cfg_entry["reason"] = "header carries no HF config subset"
+    cfg_entry = _config_root(header, C, repo, out)
     out["config_root"] = cfg_entry
     classes["config"][cfg_entry["status"]] += 1
 
@@ -325,6 +357,119 @@ def evaluate(log_path: str | Path, snapshots: str | Path | None, profile, *, saf
     out["status"] = "pass" if not failed and not out["new_root_classes"] and not alias_fail and not out["problems"] and cfg_entry["status"] == "pass" else "fail"
     out["seconds"] = round(time.time() - t0, 2)
     return out
+
+
+def _kv_b_view_mismatch(view: ViewDesc, which: str, weight: ViewDesc, C: dict[str, Any]) -> str | None:
+    """None when `view` is MLA's `which` (`W_UK_T` | `W_UV`) of `weight`, the layer's row-major `kv_b_proj.weight`
+    [heads·(QK_NOPE + V_HEAD)][KV_LORA], as `MLA_KV_B_VIEW` states vLLM takes it; else why not.  `heads` is the weight's own (a rank's
+    under tensor parallelism)."""
+    DN, DV, L = (int(C[k]) for k in ("QK_NOPE", "V_HEAD", "KV_LORA"))
+    if (view.alloc, view.dtype) != (weight.alloc, weight.dtype):
+        return f"allocation/dtype {(view.alloc, view.dtype)} is not kv_b_proj.weight's {(weight.alloc, weight.dtype)}"
+    if len(weight.shape) != 2 or weight.shape[1] != L or tuple(weight.strides) != (L, 1) or weight.shape[0] % (DN + DV):
+        return f"kv_b_proj.weight {tuple(weight.shape)} strides {tuple(weight.strides)} is not row-major [heads*{DN + DV}][{L}]"
+    nh, hs = weight.shape[0] // (DN + DV), (DN + DV) * L
+    want = {"W_UK_T": (weight.offset, (nh, DN, L), (hs, L, 1)), "W_UV": (weight.offset + DN * L, (nh, L, DV), (hs, 1, L))}[which]
+    got = (view.offset, tuple(view.shape), tuple(view.strides))
+    return None if got == want else f"(offset, shape, strides) {got} != {want}, the {which} view of QK_NOPE={DN} V_HEAD={DV} KV_LORA={L}"
+
+
+def _resolve_kv_b_views(out: dict[str, Any], by_name: dict[str, Root], C: dict[str, Any], classes: dict[str, Counter]) -> None:
+    """A pending `alias-of-kv_b` root passes iff its layer's `kv_b_proj.weight` is a weight root that passed its own validator and the
+    root is the view of it that `_kv_b_view_mismatch` derives from C."""
+    entries = {e["name"]: e for e in out["roots"]}
+    pending = [e for e in out["roots"] if e["class"] == "alias" and e["status"] == "pending"]
+    for ent in pending:
+        m = MLA_KV_B_VIEW.match(ent["name"])
+        wname = f"{m['layer']}.kv_b_proj.weight"
+        w = entries.get(wname)
+        if w is None or w["class"] != "weight" or w["status"] != "pass":
+            why = f"{wname} is not a validated weight root"
+        else:
+            try:
+                why = _kv_b_view_mismatch(by_name[ent["name"]].view, m["view"], by_name[wname].view, C)
+            except (KeyError, ValueError, TypeError) as e:
+                why = f"{type(e).__name__}: {e}"
+        ent["status"] = "pass" if why is None else "fail"
+        if why:
+            ent["reason"] = why
+        out["alias_claims"].append({"name": ent["name"], "alias_of": wname, "proven_by": "alloc+dtype+view from C", "status": ent["status"]})
+    if pending:
+        classes["alias"] = Counter(e["status"] for e in out["roots"] if e["class"] == "alias")
+
+
+def _scan_ignored(events: list, out: dict[str, Any], classes: dict[str, Counter]) -> None:
+    """Every read of an `ignored` root's storage must sit in a frozen non-semantic slot: any slot of an `IGNORED_ROOT_CONSUMERS` op, or a
+    `CONDITIONAL_IGNORED_SLOTS` slot of an event that admits it."""
+    ignored_allocs = {e["alloc"]: e for e in out["roots"] if e["class"] == "ignored"}
+    consumers: Counter = Counter()
+    bad_consumers: Counter = Counter()
+    if ignored_allocs:
+        for e in events:
+            if isinstance(e, DispatchEnter):
+                name, reads = e.op, [p for p, v in (*_slotted(e.args, ("args",)), *_slotted(e.kwargs, ("kwargs",))) if v.alloc in ignored_allocs]
+            elif isinstance(e, TritonLaunch):
+                name, reads = f"triton:{e.fn}", [p for p, v in _slotted(e.args, ("args",)) if v.alloc in ignored_allocs]
+            else:
+                continue
+            if reads:
+                consumers[name] += len(reads)
+                cond = CONDITIONAL_IGNORED_SLOTS.get(name)
+                if name not in IGNORED_ROOT_CONSUMERS and not (cond is not None and cond.admits(e, reads)):
+                    bad_consumers[name] += len(reads)
+        for ent in ignored_allocs.values():
+            ent["status"] = "pass" if not bad_consumers else "fail"
+            if bad_consumers:
+                ent["reason"] = f"read by non-frozen consumers {dict(bad_consumers)}"
+        classes["ignored"] = Counter(ent["status"] for ent in ignored_allocs.values())
+    out["ignored_root_consumers"] = dict(consumers)
+
+
+def _config_root(header: RunHeader | None, C: dict[str, Any], repo: str | None, out: dict[str, Any]) -> dict[str, Any]:
+    """C's hf-config fields against the checkpoint's config.json subset in the header, field by field (`analytic.config_of`, no family
+    rules).  An MLA configuration (C carries `KV_LORA`) reads its head width `D` as `qk_nope_head_dim + qk_rope_head_dim` (vLLM's
+    `qk_head_dim`; transformers' MLA configs set `head_dim = qk_rope_head_dim`), its `I` as the routed experts' `moe_intermediate_size`
+    when C states that width (`MOE_I_FULL`; `I_DENSE` is the dense layers' `intermediate_size`), and compares every `MLA_CONFIG_KEYS`
+    field C carries; any of these whose keys the header does not record fails."""
+    cfg_entry: dict[str, Any] = {"class": "config", "validator": "hf-config (header.model.config)", "status": "skipped", "fields": {}}
+    hf = (header.model or {}).get("config") if header is not None else None
+    if not hf:
+        cfg_entry["reason"] = "header carries no HF config subset"
+        return cfg_entry
+    try:
+        derived, prov = analytic.config_of(hf, model=repo)
+        fields, unrecorded = ["H", "NL", "NH", "KVH", "D", "I", "V", "EPS", "ROPE_THETA", "MAX_POS", "tie_word_embeddings"], []
+        if C.get("KV_LORA"):
+            def recorded(*keys: str) -> Any:
+                return next((hf[k] for k in keys if hf.get(k) is not None), None)
+            nope, rope = recorded("qk_nope_head_dim"), recorded("qk_rope_head_dim")
+            mla = {"D": (None if nope is None or rope is None else int(nope) + int(rope), "qk_nope_head_dim + qk_rope_head_dim")}
+            if "MOE_I_FULL" in C:
+                mla["I"] = (recorded("moe_intermediate_size"), "moe_intermediate_size")
+            mla.update({k: (recorded(*keys), " | ".join(keys)) for k, keys in MLA_CONFIG_KEYS.items() if k in C})
+            for k, (v, src) in mla.items():
+                if v is None:
+                    unrecorded.append(f"{k} ({src})")
+                    derived.pop(k, None)
+                    prov[k] = "unrecorded"
+                else:
+                    derived[k], prov[k] = v, "hf-config"
+            fields += [k for k in MLA_CONFIG_KEYS if k in C]
+        mism = {}
+        for k in fields:
+            if k in derived and k in C and prov.get(k) == "hf-config" and derived[k] != C[k]:
+                mism[k] = {"C": C[k], "hf": derived[k]}
+            cfg_entry["fields"][k] = prov.get(k, "n/a")
+        cfg_entry["status"] = "pass" if not mism and not unrecorded else "fail"
+        cfg_entry["mismatches"] = mism
+        if mism:
+            out["problems"].append(f"C differs from the checkpoint config: {mism}")
+        if unrecorded:
+            cfg_entry["unrecorded"] = unrecorded
+            out["problems"].append(f"the header's config records no key of C's {unrecorded}")
+    except Exception as e:  # noqa: BLE001
+        cfg_entry.update(status="fail", reason=f"{type(e).__name__}: {e}")
+    return cfg_entry
 
 
 def _check_prompt_root(r: Root, header: RunHeader | None) -> tuple[bool, str]:
