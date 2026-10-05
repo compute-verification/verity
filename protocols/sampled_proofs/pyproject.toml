@@ -26,5 +26,9 @@ inputs = ["backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Influence
           "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Law.lean",
           "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Stratified.lean",
           "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/StratifiedMiss.lean",
+          "backends/flock/verifier/lean/soundness/FlockSoundness/Protocol/Audit/Influence.lean",
+          "backends/flock/verifier/lean/soundness/FlockSoundness/Protocol/Audit/Law.lean",
+          "backends/flock/verifier/lean/soundness/FlockSoundness/Protocol/Audit/Stratified.lean",
+          "backends/flock/verifier/lean/soundness/FlockSoundness/Protocol/Audit/StratifiedMiss.lean",
           "backends/flock/verifier/lean/soundness/lake-manifest.json",
           "backends/flock/verifier/lean/soundness/lean-toolchain"]

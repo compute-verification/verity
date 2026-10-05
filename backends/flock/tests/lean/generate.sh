@@ -22,7 +22,10 @@ data["inputs"] = {
     "backends/flock/tests/lean/RandomnessVectors.lean": sha(here / "RandomnessVectors.lean"),
     "packages/verity/tests/randomness/vectors.json": sha(root / "packages/verity/tests/randomness/vectors.json"),
     **{"backends/flock/verifier/lean/soundness/" + f: sha(pkg / f) for f in (
-        "FlockSoundness/Randomness.lean", "FlockSoundness/PlanDraw.lean", "lake-manifest.json", "lean-toolchain")},
+        "FlockSoundness/Randomness.lean", "FlockSoundness/PlanDraw.lean", "lake-manifest.json", "lean-toolchain",
+        # a module whose definitions are the spec's has them in its spec half (model_split.py)
+        *(h for h in ("FlockSoundness/Protocol/Randomness.lean", "FlockSoundness/Protocol/PlanDraw.lean")
+          if (pkg / h).exists()))},
     **{"backends/flock/verifier/lean/" + f: sha(verifier / f) for f in ("Flock/Hash.lean", "Flock/Draw.lean")}}
 (here.parent / "fixtures" / "randomness_lean.json").write_text(json.dumps(data, indent=1) + "\n")
 PY

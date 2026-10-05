@@ -16,12 +16,12 @@ out, here, pkg = map(Path, sys.argv[1:])
 data = json.loads(out.read_text())
 sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 soundness = "backends/flock/verifier/lean/soundness/"
+files = ("FlockSoundness/Audit/Influence.lean", "FlockSoundness/Audit/Law.lean", "FlockSoundness/Audit/Stratified.lean",
+         "FlockSoundness/Audit/StratifiedMiss.lean")
+# a module whose definitions are the spec's has them in its spec half, FlockSoundness/Protocol/<module> (model_split.py)
+files += tuple(h for f in files if (pkg / (h := f.replace("FlockSoundness/", "FlockSoundness/Protocol/", 1))).exists())
 data["inputs"] = {"protocols/sampled_proofs/tests/lean/ExfiltrationVectors.lean": sha(here / "ExfiltrationVectors.lean"),
-                  **{soundness + f: sha(pkg / f) for f in ("FlockSoundness/Audit/Influence.lean",
-                                                           "FlockSoundness/Audit/Law.lean",
-                                                           "FlockSoundness/Audit/Stratified.lean",
-                                                           "FlockSoundness/Audit/StratifiedMiss.lean",
-                                                           "lake-manifest.json", "lean-toolchain")}}
+                  **{soundness + f: sha(pkg / f) for f in files + ("lake-manifest.json", "lean-toolchain")}}
 lists = {key: data.pop(key) for key in ("vectors", "stratified")}
 text = json.dumps(data, indent=1)[:-2] + "".join(f',\n "{key}": [\n' + ",\n".join(json.dumps(v) for v in vs) + "\n ]"
                                                  for key, vs in lists.items()) + "\n}\n"
