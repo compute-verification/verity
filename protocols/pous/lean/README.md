@@ -5,7 +5,6 @@ Conventions follow Flock's Lean packages (`backends/flock/verifier/lean/`): the 
 `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a check file.
 
 ~~~text
-Pous.lean                           the package's root: imports the four layers below
 Pous/Protocol.lean                  trusted, the Protocol layer: imports every module under Pous/Protocol/
 Pous/Protocol/Game/{Prob,Oracle}.lean
                                     bits, uniform probability, ideal primitive, parallel oracle programs
@@ -52,46 +51,56 @@ Pous/Guarantees/SecureErasure.lean  four statements, which grade.sh also grades 
                                     (`SecureErasureMeets`), and on the band at every `N` and at 96 GiB
                                     (`SecureErasureMeetsFamily`, `SecureErasureMeets96GiB`); no named assumption,
                                     no bandwidth-separation premise
-Pous/SecurityProofs.lean            proved, the SecurityProofs layer: imports every proof module, and proves
-                                    Pous.SecurityProofs.X : Pous.Guarantees.X for each proved guarantee
 Pous/SecurityProofs/{Sanity,Accounting/Numbers}.lean
                                     proved: the definitions are not vacuous; certified numbers
-Pous/SecurityProofs/                proved: Theorem 1, Track A, pebbling, B5, sampled audits, the dense scheme, P3
-Pous/SecurityProofs/P2/             proved: the `m1p` guarantees (Count, Rows, Domain, Margin); P2 in the cost model
-                                    (RingBasic: `MeetsOn` at `L = Q` gives `Meets`, honest storage is accepted;
-                                    RingTight: recomputing the roots breaks `MeetsOn`; RingTrunc: dropping low
-                                    bits breaks `k = 88` from `L = 2^30`)
-Pous/SecurityProofs/Chain/Flat.lean proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
-                                    the public encoder over the overwrite chain (the graded lanes, flattened)
-Pous/SecurityProofs/Continuous/     proved: the continuous audit's counting step (`MissCount.lean`), the three
-                                    rules its verifier enforces (`Verifier.lean`), `PerAnswer` and
-                                    `ContinuousAudit` (`PerAnswer.lean`), the 64 KiB band at `D = 5`
-                                    (`Band.lean`, no record), completeness, `ContinuousComplete`
-                                    (`Complete.lean`), the idle-slot time average `ContinuousTimeAverage`
-                                    (`TimeAverage.lean`) and its band family at `D = 0, 1, 2, 5`
-                                    (`BandTimeAverage.lean`, `BandFamilyContinuousTimeAverage`)
-Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit
-                                    (`Theorem.lean`) and the band with grace `t` at `D = 5` (`Band.lean`,
-                                    `BandGradedMeetsFamily`)
-Pous/SecurityProofs/Rebuild/        proved: under the verifier's duration cap, no audit re-encodes a whole band
-                                    segment from `W` alone (`Clock.lean`, the cumulative chain clock;
-                                    `Window.lean`, the counts; `Exclusion.lean`, `BackgroundRebuildExcluded`)
-Pous/SecurityProofs/SecureErasure/  proved: `DigestAU` (Digest), secure erasure from the audit by counting
-                                    (Reduction), and the band's audit at 2152 reads with `EraseMeets` at
-                                    `f = 1/19`, `ε = 2^-128` (Band)
 lean-audit.json                     the policy and guarantee records for tools/lean/audit.py
-CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets
 Grader/{Main,Registry}.lean, grade.sh, TRUSTED.sha256   the grader (allowed axioms and pinned targets compiled in),
                                     its driver, the trusted-file hashes
 submissions/reference.lean          the grader's positive control
 ~~~
 
+The proofs are the package `security_proofs/pous/`, which requires this one by path. Its modules are under `PousProofs`,
+and their declarations keep the names the records hold (`Pous.SecurityProofs.X`):
+
+~~~text
+PousProofs.lean                     the package's root: imports the proofs below
+PousProofs/SecurityProofs.lean      proved, the SecurityProofs layer: imports every proof module, and proves
+                                    Pous.SecurityProofs.X : Pous.Guarantees.X for each proved guarantee
+PousProofs/SecurityProofs/          proved: Theorem 1, Track A, pebbling, B5, sampled audits, the dense scheme, P3
+PousProofs/SecurityProofs/P2/       proved: the `m1p` guarantees (Count, Rows, Domain, Margin); P2 in the cost model
+                                    (RingBasic: `MeetsOn` at `L = Q` gives `Meets`, honest storage is accepted;
+                                    RingTight: recomputing the roots breaks `MeetsOn`; RingTrunc: dropping low
+                                    bits breaks `k = 88` from `L = 2^30`)
+PousProofs/SecurityProofs/Chain/Flat.lean
+                                    proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
+                                    the public encoder over the overwrite chain (the graded lanes, flattened)
+PousProofs/SecurityProofs/Continuous/
+                                    proved: the continuous audit's counting step (`MissCount.lean`), the three
+                                    rules its verifier enforces (`Verifier.lean`), `PerAnswer` and
+                                    `ContinuousAudit` (`PerAnswer.lean`), the 64 KiB band at `D = 5`
+                                    (`Band.lean`, no record), completeness, `ContinuousComplete`
+                                    (`Complete.lean`), the idle-slot time average `ContinuousTimeAverage`
+                                    (`TimeAverage.lean`) and its band family at `D = 0, 1, 2, 5`
+                                    (`BandTimeAverage.lean`, `BandFamilyContinuousTimeAverage`)
+PousProofs/SecurityProofs/Graded/   proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit
+                                    (`Theorem.lean`) and the band with grace `t` at `D = 5` (`Band.lean`,
+                                    `BandGradedMeetsFamily`)
+PousProofs/SecurityProofs/Rebuild/  proved: under the verifier's duration cap, no audit re-encodes a whole band
+                                    segment from `W` alone (`Clock.lean`, the cumulative chain clock;
+                                    `Window.lean`, the counts; `Exclusion.lean`, `BackgroundRebuildExcluded`)
+PousProofs/SecurityProofs/SecureErasure/
+                                    proved: `DigestAU` (Digest), secure erasure from the audit by counting
+                                    (Reduction), and the band's audit at 2152 reads with `EraseMeets` at
+                                    `f = 1/19`, `ε = 2^-128` (Band)
+CheckAxioms.lean                    one #print axioms line per headline theorem
+~~~
+
 ~~~bash
 lake exe cache get                  # Mathlib's prebuilt oleans; never build Mathlib from source
-lake build                          # Pous, the four layers (the default target)
+lake build                          # Pous, the spec (the default target)
 python3 ../../../tools/lean/audit.py --all --root . --fresh   # Verity's Lean audit
-lake env lean CheckAxioms.lean      # the headline theorems' axioms
+(cd ../../../security_proofs/pous && lake env lean CheckAxioms.lean)   # the headline theorems' axioms
 bash grade.sh submissions/reference.lean Pous.Guarantees.KFloor   # one JSON line, exit 0 iff PASS
 bash check.sh                       # the audit, the open targets, and the grader's controls
 ~~~
@@ -101,7 +110,7 @@ bash check.sh                       # the audit, the open targets, and the grade
 grader and its sandbox. Everything else is checked by machine. Docstring paths such as `lean/submissions/…` and
 `docs/…` name the POUS Project store, where the provers' drafts and reviews live.
 
-**The audit.** `tools/lean/audit.py` audits every declaration under `Pous`: allowed axioms, named assumptions, escapes,
+**The audit.** `tools/lean/audit.py` audits every declaration under `Pous` and its proofs' `PousProofs`: allowed axioms, named assumptions, escapes,
 orphan files, import layers (Protocol imports no assumption, guarantee or proof; Assumptions only Protocol; Guarantees
 no proof), a kernel replay, and the guarantees' records. `lean-audit.json` lists as guarantees the sanity theorems,
 every `Pous.SecurityProofs.X` (among them the stacked one-way bound, the band certificate, and the dense scheme at the
@@ -121,7 +130,8 @@ replays every constant it adds through the kernel, requires `solution`'s type to
 syntactic comparison, so a near-miss statement cannot keep the kernel unfolding), and requires its axioms to be in
 `allowedAxioms` (Lean's three, compiled in). The compile and the grader run under a time limit and a memory limit
 (`POUS_GRADE_TIMEOUT`, `POUS_GRADE_MEMORY_MB`). `grade.sh` needs unprivileged user namespaces (`unshare --user`). A
-graded proof moves into `Pous/SecurityProofs/` as a module, with its theorem added to `Pous/SecurityProofs.lean` and
+graded proof moves into `security_proofs/pous/PousProofs/SecurityProofs/` as a module, with its theorem added to
+`PousProofs/SecurityProofs.lean` there and
 listed as a guarantee in `lean-audit.json` (`audit.py --update`, then review the records' diff).
 
 **Changing the trusted layer** means editing the files listed in `TRUSTED.sha256` and regenerating it after review:

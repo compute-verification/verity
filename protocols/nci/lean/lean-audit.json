@@ -1,5 +1,6 @@
 {
- "roots": ["Nci"],
+ "roots": ["Nci.Assumptions", "Nci.Guarantees", "Nci.Protocol"],
+ "proved_in": ["../../../security_proofs/nci"],
  "assumptions": ["Nci.Assumptions", "Verity.Assumptions"],
  "meaning": [
   "Nci.Protocol",
@@ -34,42 +35,33 @@
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
   }
  },
- "upstream": {
-  "imports": ["Mathlib"],
-  "watch": {
-   "loomis-whitney": {
-    "about": "Nci.SecurityProofs.loomis_whitney: the discrete Loomis-Whitney inequality, proved by hand",
-    "mentions": ["Finset.card", "Finset.image", "HPow.hPow"],
-    "ack": [
-     "Finset.card_pow_quotient_mul_pow_inter_subgroup_le",
-     "Finset.le_card_quotient_mul_sq_inter_subgroup",
-     "Finset.prod_comp"
-    ]
-   }
-  }
- },
  "guarantees": {
   "Nci.SecurityProofs.Inference": {
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.Inference : Nci.Guarantees.Inference"],
    "assumptions": [],
    "type_hash": "9577814bc7cda3860fee9d3428ecde7e11d7299009a1d3bfb405e11c92e5c600"
   },
   "Nci.SecurityProofs.ReadBound": {
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ReadBound : Nci.Guarantees.ReadBound"],
    "assumptions": [],
    "type_hash": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548"
   },
   "Nci.SecurityProofs.Training": {
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.Training : Nci.Guarantees.Training"],
    "assumptions": [],
    "type_hash": "b3e344c8c136829d0a3a4130fa3fc8a8d5bb34e0a0fe3f5673183e5e7cd2cf3a"
   },
   "Nci.SecurityProofs.UpdatedMatMul": {
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.UpdatedMatMul : Nci.Guarantees.UpdatedMatMul"],
    "assumptions": [],
    "type_hash": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b"
   },
   "Nci.SecurityProofs.full_positions": {
+   "owner": "@lean",
    "signature": [
     "Nci.SecurityProofs.full_positions {D : Verity.Circuit} (c : Nci.Chain D) (R : Finset (Fin D.N)) (d : Nat)",
     "  (hd : ∀ (ℓ : Fin c.L), instLENat.le d (c.d ℓ)) :",
@@ -89,6 +81,7 @@
    "type_hash": "0be1f142229f412b399a736e39e8d50f020462af3b5666531fafe52754deb854"
   },
   "Nci.SecurityProofs.iu_reads": {
+   "owner": "@lean",
    "signature": [
     "Nci.SecurityProofs.iu_reads (D : Verity.Declaration) (c : Nci.Chain D.D) (Γ : Nat) (K b_w b_a : Real) (d : Nat)",
     "  (hd : ∀ (ℓ : Fin c.L), instLENat.le d (c.d ℓ)) (hb_a : Real.instLE.le 0 b_a)",
@@ -106,6 +99,7 @@
    "type_hash": "d5d11e43644ce9e4ad964bfcda1cf765924fc720b505c56993f236f058d9d693"
   },
   "Nci.SecurityProofs.loomis_whitney": {
+   "owner": "@lean",
    "signature": [
     "Nci.SecurityProofs.loomis_whitney.{u_1, u_2, u_3} {α : Type u_1} {β : Type u_2} {γ : Type u_3} [DecidableEq α]",
     "  [DecidableEq β] [DecidableEq γ] (T : Finset (Prod α (Prod β γ))) :",
@@ -119,6 +113,7 @@
    "type_hash": "699c0e8c25ebd5e02db7990880c2aab5edf63a3a632f092488b8826906380abe"
   },
   "Nci.SecurityProofs.other_positions": {
+   "owner": "@lean",
    "signature": [
     "Nci.SecurityProofs.other_positions {D : Verity.Circuit} (c : Nci.Chain D) {n : Nat} (P : Verity.Partition D n)",
     "  (u : Fin n) :",
@@ -266,7 +261,7 @@
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
   "batteries": "93d037527498f18cb49b52aa08a14febe351a161b47e44ca105e85e935264406",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "7f06290441cddff16bb7f496abdbf97c1bdcee0b6ad4de497c49901873c1f5f4",
+  "mathlib": "298cef5d913a1b13766cae2a98b5255d7646b627c5f8a1f9cc9a70ca5ae90942",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
   "toolchain": "79e6521fe6b4a2f00c882f4e958f6f0792dfe631c199ed89d2cf4af265b981cf"

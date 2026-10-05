@@ -1,7 +1,7 @@
 {
- "roots": ["NetTiming"],
+ "roots": ["NetTiming.Assumptions", "NetTiming.Difftest", "NetTiming.Guarantees", "NetTiming.Protocol"],
+ "proved_in": ["../../../security_proofs/network_warden"],
  "exempt": {
-  "CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)",
   "NetTimingDifftest": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof"
  },
  "runs": {
@@ -34,38 +34,49 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   }
  },
+ "reads_exempt": {
+  "NetTimingProofs.SecurityProofs.Sanity": "non-vacuity witnesses; they leave the lock in @network-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
+  "NetTimingProofs.SecurityProofs.Schedule": "non-vacuity witnesses; they leave the lock in @network-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)"
+ },
  "guarantees": {
   "NetTiming.SecurityProofs.CardCountsEqLe": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.CardCountsEqLe : NetTiming.Guarantees.CardCountsEqLe"],
    "assumptions": [],
    "type_hash": "6ac53363ef74893090add2bcb7ad5ecbe306964a195570aec5a74a7936409f03"
   },
   "NetTiming.SecurityProofs.CardCountsLeLe": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.CardCountsLeLe : NetTiming.Guarantees.CardCountsLeLe"],
    "assumptions": [],
    "type_hash": "04f7131f74dd541c625ac0f7f98fdb853bba88a3cdd68335d671a5fe3fd3916c"
   },
   "NetTiming.SecurityProofs.CardFree": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.CardFree : NetTiming.Guarantees.CardFree"],
    "assumptions": [],
    "type_hash": "e4e7a9edfc56cbca57a08a9cf0180c2156dab3e50650ae6ff3e0d0611079c2ee"
   },
   "NetTiming.SecurityProofs.CardLeftPacked": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.CardLeftPacked : NetTiming.Guarantees.CardLeftPacked"],
    "assumptions": [],
    "type_hash": "fdfab1c44d76caa6294c61288540dfde050ca2359206918637a50e713c6b9185"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeAdvice": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeAdvice : NetTiming.Guarantees.EncardAccSeqsLeAdvice"],
    "assumptions": [],
    "type_hash": "40d4a073062cf0330c38a8bb969f3a51e891a89e54e2f1cae778a65226df30f0"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeBlocks : NetTiming.Guarantees.EncardAccSeqsLeBlocks"],
    "assumptions": [],
    "type_hash": "650045ec93f3bbadeb3f68796211ea24031bfbd9d8e4e0d267e7d5d5728382a6"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts : NetTiming.Guarantees.EncardAccSeqsLeBlocksCounts"
    ],
@@ -73,6 +84,7 @@
    "type_hash": "823fadfc71bbd70bb7d1b371d8148c6a54e6e63a9a6843d371d743d001f741c8"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate : NetTiming.Guarantees.EncardAccSeqsLeConstantRate"
    ],
@@ -80,6 +92,7 @@
    "type_hash": "5caed7ee8a100a9d93ca89b56802ab4a910a4db1c88e5e7788023283170da941"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock :",
     "  NetTiming.Guarantees.EncardAccSeqsLeConstantRateFixedClock"
@@ -88,6 +101,7 @@
    "type_hash": "20fc39951575ab482c9cae2fd98b1f3227bada256f634044e929818e3bd26afb"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow :",
     "  NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow"
@@ -96,6 +110,7 @@
    "type_hash": "cb4edaa614fa554bf28260d3f2be7a97d1fbcc281c4d5289f1ed37f1867bbb6e"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows : NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows"
    ],
@@ -103,31 +118,37 @@
    "type_hash": "0b1f8a5253756424c59436b951f35d3c27d1ad0a2e780734d7ce6d21b6af784a"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock : NetTiming.Guarantees.EncardAccSeqsLeFixedClock"],
    "assumptions": [],
    "type_hash": "83702ebbd0d402a2f16e304ab599dcff7ea1f1557615b05a358e2b3caca1257d"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeSync": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeSync : NetTiming.Guarantees.EncardAccSeqsLeSync"],
    "assumptions": [],
    "type_hash": "1564cbcbef1db36b50e4f1da0cc1c7b6691134430a5d88f497954467812a4ada"
   },
   "NetTiming.SecurityProofs.EncardAcceptedRunsLe": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardAcceptedRunsLe : NetTiming.Guarantees.EncardAcceptedRunsLe"],
    "assumptions": [],
    "type_hash": "d673c351e63c9cc82aca6bec1775269b8efcaa21073223340674c64073b5e6ae"
   },
   "NetTiming.SecurityProofs.EncardDecodableLe": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardDecodableLe : NetTiming.Guarantees.EncardDecodableLe"],
    "assumptions": [],
    "type_hash": "6d4f0f243d8a54ddc3a160d8a6f3de5b90c7bcddd55d1dc4a091f76736a5109c"
   },
   "NetTiming.SecurityProofs.EncardDecodableLeBlocks": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardDecodableLeBlocks : NetTiming.Guarantees.EncardDecodableLeBlocks"],
    "assumptions": [],
    "type_hash": "ea0d8acb8a2a5711c199aa1d7abd4ce9a53a7b750dcd511fd0998914510848dc"
   },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate : NetTiming.Guarantees.EncardDecodableLeConstantRate"
    ],
@@ -135,6 +156,7 @@
    "type_hash": "39a3ef7e0a076cb6b30cd12c203a8efb190a4e1e7092c69f1647bbc6dbd6289b"
   },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow :",
     "  NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow"
@@ -143,11 +165,13 @@
    "type_hash": "2b88be87e58fe0688ef1e94ad5860bf98c293951ab6fe4bafc6f32b45c155816"
   },
   "NetTiming.SecurityProofs.EncardFifoGrids": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardFifoGrids : NetTiming.Guarantees.EncardFifoGrids"],
    "assumptions": [],
    "type_hash": "5f7005aaad8517a5e9ae40189d5fed4703b1b743643e815d658f804fc67b2385"
   },
   "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable : NetTiming.Guarantees.EncardFifoGridsLeOfAvailable"
    ],
@@ -155,11 +179,13 @@
    "type_hash": "02730e35f9f7a998b1685f27c853538842a5575dd32c53de7a5088909c2211c0"
   },
   "NetTiming.SecurityProofs.EncardIngressDecodableLe": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardIngressDecodableLe : NetTiming.Guarantees.EncardIngressDecodableLe"],
    "assumptions": [],
    "type_hash": "573fa5899e9bf7dc405fe54301de29c9298da91c72c35eb4269c04b82284b1b0"
   },
   "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents : NetTiming.Guarantees.EncardIngressDecodableLeContents"
    ],
@@ -167,6 +193,7 @@
    "type_hash": "3440d51f33b630457f4da31510ecf35700d053c06e69fa93448f649c9b85e861"
   },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe : NetTiming.Guarantees.EncardIngressObsDecodableLe"
    ],
@@ -174,6 +201,7 @@
    "type_hash": "2ca793f68266f5d8b633599df98d5a44b14180caa908bc4ed29f780257ee184a"
   },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents : NetTiming.Guarantees.EncardIngressObsDecodableLeContents"
    ],
@@ -181,6 +209,7 @@
    "type_hash": "bdbc1f954c6569542c9d89590e8f6797c070343487e075e38dd8a2e9a24d5f44"
   },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow :",
     "  NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow"
@@ -189,6 +218,7 @@
    "type_hash": "c8332f52fdcab8bc4e7465816cc451535a743eaf18a480d6dd14909cc8476545"
   },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow :",
     "  NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow"
@@ -197,51 +227,61 @@
    "type_hash": "13ea83921034e1ee1dc0cb725f2a74c0c928d20fccf7e71f6d962b726f735fa1"
   },
   "NetTiming.SecurityProofs.EncardLeProdOfBranching": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardLeProdOfBranching : NetTiming.Guarantees.EncardLeProdOfBranching"],
    "assumptions": [],
    "type_hash": "6040733c353c0ca25247cfabedf1e884f1f7c64f9e37f86a94d407c308b94fbc"
   },
   "NetTiming.SecurityProofs.EncardObsDecodableLe": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardObsDecodableLe : NetTiming.Guarantees.EncardObsDecodableLe"],
    "assumptions": [],
    "type_hash": "59be610877959f8821b9431a9bfff89a86008fb9555357d0829964e42358cdad"
   },
   "NetTiming.SecurityProofs.ExistsFillOfLeftPacked": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.ExistsFillOfLeftPacked : NetTiming.Guarantees.ExistsFillOfLeftPacked"],
    "assumptions": [],
    "type_hash": "0a3dad879e152c0af9af48a2761127ce88794f823622cdec16a4d52cad676951"
   },
   "NetTiming.SecurityProofs.ExpectedRowCausal": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal"],
    "assumptions": [],
    "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
   },
   "NetTiming.SecurityProofs.FillInjective": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.FillInjective : NetTiming.Guarantees.FillInjective"],
    "assumptions": [],
    "type_hash": "0764b96209fc576521fd63ef7eedb174390a8cf5f7d6c1ba5847028e37aa6e59"
   },
   "NetTiming.SecurityProofs.NoFaultOfAccepted": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.NoFaultOfAccepted : NetTiming.Guarantees.NoFaultOfAccepted"],
    "assumptions": [],
    "type_hash": "437ff0e08b9259496169df566db65c22ef70646a8531de204c886dcf5ae5447e"
   },
   "NetTiming.SecurityProofs.RecordedRowEqFill": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.RecordedRowEqFill : NetTiming.Guarantees.RecordedRowEqFill"],
    "assumptions": [],
    "type_hash": "c8caf87035332bb668e0b8c19d145372ac9cbd88b1ce8ad09ac552e0900053aa"
   },
   "NetTiming.SecurityProofs.ReleasedSelf": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.ReleasedSelf : NetTiming.Guarantees.ReleasedSelf"],
    "assumptions": [],
    "type_hash": "187e9682fac50fa5479e5be9401bace64aa4fa5e21ea5230713d08fc0b653a8b"
   },
   "NetTiming.SecurityProofs.SumReleasedLe": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.SumReleasedLe : NetTiming.Guarantees.SumReleasedLe"],
    "assumptions": [],
    "type_hash": "f16a2e8bdc945ffd0434cf7c774b95e5547888e1bfb4854fcdb47113f3ed4287"
   },
   "NetTiming.allocated_witness": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.allocated_witness :",
     "  And (NetTiming.Regenerates NetTiming.aWarden fun x o => o)",
@@ -259,6 +299,7 @@
    "type_hash": "c7b92f3c441e1a1c0e7ca0fc99a4ead1277ce69b543c3147adf652cf9ce200b5"
   },
   "NetTiming.allocated_witness_tight": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.allocated_witness_tight :",
     "  And",
@@ -271,6 +312,7 @@
    "type_hash": "16ef675c77312a82d790394b3ff53cb5eb300fb3feaece762ff3a002fd1b59ac"
   },
   "NetTiming.constantRate_joint_witness": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.constantRate_joint_witness :",
     "  And (NetTiming.Regenerates NetTiming.syncInteraction.warden fun x o => o)",
@@ -298,6 +340,7 @@
    "type_hash": "6cffc1e8c9160036bbd429d1adaef14b6fd4c8bdff72fc6b4c60417afbada404"
   },
   "NetTiming.constantRate_not_framesRead_counts": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.constantRate_not_framesRead_counts :",
     "  Not",
@@ -310,6 +353,7 @@
    "type_hash": "8fd5c98a95eb62f956d5c563ea9e0c9f283c2a03019e39dc4c87d08ed9feba41"
   },
   "NetTiming.constantRate_not_windowBlocks": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.constantRate_not_windowBlocks {C : Type} {U : C → Type} (step : C → Nat) (blk : C → Fin 2)",
     "  (hblk : ∀ (c : C), Eq (blk c).val (instHDiv.hDiv (step c) 2))",
@@ -323,6 +367,7 @@
    "type_hash": "0c47f8ab26c23e611e9a47ea3b071d4e5d6b983387fd6cfb54d1911dea89a850"
   },
   "NetTiming.ingress_witness": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.ingress_witness :",
     "  And (NetTiming.Regenerates NetTiming.iWarden fun x o => o)",
@@ -340,6 +385,7 @@
    "type_hash": "88ff78c77875200a899049342ec1c955f944475dce75da66da62f053249218eb"
   },
   "NetTiming.ingress_witness_tight": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.ingress_witness_tight :",
     "  Eq Set.univ.encard",
@@ -349,6 +395,7 @@
    "type_hash": "17adfa50064aedc30f576c25fb92c3fc3e3ade1284524b2d91962262135a55db"
   },
   "NetTiming.joint_witness": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.joint_witness :",
     "  And (NetTiming.Regenerates NetTiming.rWarden fun x o => o)",
@@ -368,6 +415,7 @@
    "type_hash": "9e9d0d443fbf20f20b54c25a267d730edfac79bcf57d5013114fe3e612051b86"
   },
   "NetTiming.joint_witness_bound": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.joint_witness_bound :",
     "  And (Eq Set.univ.encard 27)",
@@ -382,11 +430,13 @@
    "type_hash": "4e0a1896f7257c58c36db86aef1c702baa500d316e70b697a770fd48b54df2f6"
   },
   "NetTiming.toy_leftPacked": {
+   "owner": "@network-accounting",
    "signature": ["NetTiming.toy_leftPacked : Eq (Fintype.card (Subtype fun P => NetTiming.LeftPacked P)) 729"],
    "assumptions": [],
    "type_hash": "92f5deef0dfaa89b255653779d68fd58a833fae6bd3dc228c05ddd19d70bc8de"
   },
   "NetTiming.witnessProgram_conditions": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.witnessProgram_conditions (n : Nat) :",
     "  And",
@@ -399,6 +449,7 @@
    "type_hash": "760fbb68167b51d30e7343fb655d17adb9e494d2753281647e48494514d569dc"
   },
   "NetTiming.witnessProgram_timing_matters": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.witnessProgram_timing_matters :",
     "  Ne ((NetTiming.witnessProgram 1).rows 0 List.nil { fst := Bool.true, snd := fun x => 0 })",
@@ -408,6 +459,7 @@
    "type_hash": "d5212140ce592ee005398ea9c697a58cb1f754a86a109ffebcd0c4fc7ce37060"
   },
   "NetTiming.witnessWarden_assumptions": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.witnessWarden_assumptions :",
     "  And (NetTiming.Regenerates NetTiming.witnessWarden fun x o => o)",
@@ -421,6 +473,7 @@
    "type_hash": "7838ad8495eb75f1807ee5055185ef4d05b35ad1304344b99444db73f901ccc0"
   },
   "NetTiming.witnessWarden_jitter_varies": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.witnessWarden_jitter_varies :",
     "  Ne",
@@ -433,6 +486,7 @@
    "type_hash": "8a51065e2cf5e9345502f2b220f18be03df9fcc0f21975385c184ecb110db2fe"
   },
   "NetTiming.zP_accepts_one": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.zP_accepts_one (z : Fin 3 → Fin 3) :",
     "  Iff (NetTiming.AcceptedUpTo (NetTiming.zP 3) NetTiming.rOp 3 ((NetTiming.rI 3).obsRun z 3)) (Eq z fun x => 0)"
@@ -441,6 +495,7 @@
    "type_hash": "5da61a0904de11308cfae160cda1cce6e98e3039e4b4148a7c13c211811b5f39"
   },
   "NetTiming.zP_constOp_accepts_one": {
+   "owner": "@network-accounting",
    "signature": [
     "NetTiming.zP_constOp_accepts_one (z : Fin 3 → Fin 3) :",
     "  Iff (NetTiming.AcceptedUpTo (NetTiming.zP 3) (fun x x_1 => 1) 3 ((NetTiming.rI 3).obsRun z 3)) (Eq z fun x => 1)"
