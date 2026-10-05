@@ -23,6 +23,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Test-only: the bench spine's tests drive every backend family, and the dot-product workload,
-# over the repository's fixtures and census.
-inputs = ["backends/direct", "backends/flock", "backends/gkr", "backends/ligero-verify", "backends/sp1", "benchmarks/dot_product", "census", "fixtures"]
+# over the repository's fixtures and census; tests/bench/test_bench_judge.py runs benchmarks/judge.py.
+inputs = ["backends/direct", "backends/flock", "backends/gkr", "backends/ligero-verify", "backends/sp1", "benchmarks/dot_product", "benchmarks/judge.py", "census", "fixtures"]
 parallel = true

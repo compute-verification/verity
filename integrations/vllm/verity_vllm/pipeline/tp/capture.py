@@ -99,9 +99,12 @@ class Options:
 def main(args: Options) -> None:
     from vllm import LLM
 
+    from verity_vllm.pipeline.tp import lease as TPL
+
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, args.max_tokens)
+    TPL.acquire()        # a leased row's Match leg: every GPU of the task from here to the exit (`row_tp.TpRow.match`); nothing reads the device before
     case = va.case_of(wl, args.case)
     revision = args.adapter_revision
     if revision is None:

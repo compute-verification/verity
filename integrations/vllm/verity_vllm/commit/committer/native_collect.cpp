@@ -2,7 +2,8 @@
 //
 // One `Collector` per committer.  Per step the serving thread calls `begin_step(plan_key, arena_ptr, arena_bytes)` once, then
 // `collect(name_id, tensor)` once per acquired tensor IN HOOK ORDER, then `end_step()`.  The collector keeps one PLAN per step-shape class
-// (`plan_key`): hook sequence number -> (name_id, dtype, sizes, nbytes, arena offset, zero-gap before it).  On a plan hit the hook does
+// (`plan_key`): hook sequence number -> (name_id, dtype, sizes, nbytes, arena offset, zero-gap before it), for the plans of the current run
+// and the previous one (`end_run`, native_plans.h).  On a plan hit the hook does
 // exactly: compare (name_id, nbytes, dtype, sizes) against the entry, then ONE cudaMemcpyAsync(device->arena, D2D) enqueued on the
 // PRODUCER's current stream (c10 current CUDA stream of the calling thread) -- so the snapshot is stream-ordered after the producer kernel
 // and before any later kernel that overwrites the value in place (CMT-3's known-safe placement; no collector stream, no event per tensor).
@@ -34,6 +35,8 @@
 #include <vector>
 #include <optional>
 
+#include "native_plans.h"
+
 extern "C" int verity_gather_launch(const void* d_desc, int n, int blocks_per_desc, cudaStream_t stream);   // native_gather.cu
 extern "C" int verity_chunk_leaves_launch(const uint32_t* stream, uint32_t* out, long n_chunks, int chunk_words, uint32_t launch_tag,
                                           uint32_t src_mask, uint32_t HB, uint32_t M, uint32_t NB, cudaStream_t st);   // native_tree.cu
@@ -43,27 +46,15 @@ extern "C" int verity_tree_level_launch(const uint32_t* in, uint32_t* out, long 
 
 namespace {
 
-struct Entry {
-  int64_t name_id;
-  int64_t nbytes;
-  int64_t off;                 // byte offset in the arena block
-  int64_t gap;                 // zero bytes between the previous entry's end and `off` (0 or 1..3)
-  int32_t dtype;               // c10::ScalarType
-  std::vector<int64_t> sizes;
-};
-
-struct Plan {
-  std::vector<Entry> entries;
-  int64_t version = 0;
-  int64_t used = 0;            // bytes used by the full plan (end of last entry)
-};
+using native_plans::Entry;
+using native_plans::Plan;
 
 inline double now_s() {
   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
 struct Collector {
-  std::unordered_map<int64_t, Plan> plans;
+  native_plans::Plans plans;   // this run's and the previous run's (native_plans.h)
   Plan* plan = nullptr;
   int64_t plan_key = 0;
   size_t cursor = 0;           // hook sequence number within the step
@@ -353,14 +344,13 @@ struct Collector {
     step_wins.erase(it);
   }
   int64_t plan_used(int64_t key) const {                 // the step length a HIT plan predicts (-1: no plan yet -> learning step)
-    auto it = plans.find(key);
-    if (it == plans.end() || it->second.entries.empty()) return -1;
-    return it->second.used;
+    const Plan* p = plans.find(key);
+    if (!p || p->entries.empty()) return -1;
+    return p->used;
   }
   int64_t plan_version(int64_t key) const {              // [R17 fp8] the version of the plan a hit step follows (the worker's metas cache key)
-    auto it = plans.find(key);
-    if (it == plans.end()) return -1;
-    return it->second.version;
+    const Plan* p = plans.find(key);
+    return p ? p->version : -1;
   }
   py::dict window_stats() const {
     py::dict d;
@@ -372,7 +362,7 @@ struct Collector {
   void begin_step(int64_t key, int64_t arena_ptr, int64_t nbytes, bool use_plan, int64_t step_id = -1) {
     if (active) throw std::runtime_error("begin_step while a step is active");
     plan_key = key;
-    plan = &plans[key];
+    plan = &plans.use(key);
     arena = reinterpret_cast<char*>(arena_ptr);
     arena_bytes = nbytes;
     if (windowed) {
@@ -558,9 +548,9 @@ struct Collector {
   // Snapshot of the plan for `key`: list of (name_id, dtype, sizes, nbytes, off, gap) -- called by the serving thread only when `changed`.
   py::list export_plan(int64_t key) {
     py::list out;
-    auto it = plans.find(key);
-    if (it == plans.end()) return out;
-    for (const Entry& e : it->second.entries) {
+    const Plan* p = plans.find(key);
+    if (!p) return out;
+    for (const Entry& e : p->entries) {
       py::tuple sizes(e.sizes.size());
       for (size_t i = 0; i < e.sizes.size(); ++i) sizes[i] = e.sizes[i];
       out.append(py::make_tuple(e.name_id, static_cast<c10::ScalarType>(e.dtype), sizes, e.nbytes, e.off, e.gap));
@@ -578,7 +568,9 @@ struct Collector {
   py::dict stats() const {
     py::dict d;
     d["copies"] = tot_copies; d["bytes"] = tot_bytes; d["memsets"] = tot_memsets; d["misses"] = tot_misses;
-    d["learn_steps"] = tot_learn_steps; d["issue_s"] = tot_issue_s; d["plans"] = static_cast<int64_t>(plans.size());
+    d["learn_steps"] = tot_learn_steps; d["issue_s"] = tot_issue_s; d["plans"] = plans.size(); d["plan_entries"] = plans.entries();
+    d["plans_pending"] = plans.pending(); d["plan_entries_pending"] = plans.pending_entries();
+    d["plans_dropped"] = plans.dropped(); d["plans_pending_emptied_step"] = plans.pending_emptied_step();
     d["strided_2d"] = tot_strided; d["contiguous_fallback"] = tot_fallback; d["flushes"] = tot_flushes; d["staged"] = tot_staged;
     d["gather_blocks"] = tot_blocks; d["auto_blocks"] = auto_blocks;
     d["expected"] = tot_expected; d["committed"] = tot_committed;
@@ -588,6 +580,11 @@ struct Collector {
 
   void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_expected = tot_committed = 0; }
   void clear_plans() { plans.clear(); plan = nullptr; }
+  void end_run() {             // the committer's reset between runs: the run totals, and the plans the run that ended did not use (freed by
+    reset_stats();             // the next run's steps, native_plans.h)
+    plans.end_run();
+    if (!active) plan = nullptr;
+  }
 
   // ------------------------------------------------------------------ SECONDARY bet: staged gather-copy (native_gather.cu)
   // `stage()` = the same plan logic as `collect()` but the copy is only recorded (a reference to the tensor is HELD so the allocator cannot
@@ -1571,6 +1568,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("stats", &Collector::stats)
       .def("reset_stats", &Collector::reset_stats)
       .def("clear_plans", &Collector::clear_plans)
+      .def("end_run", &Collector::end_run)
       .def("enable_gather", &Collector::enable_gather, py::arg("capacity") = 65536)
       .def("stage", &Collector::stage, py::arg("name_id"), py::arg("tensor"))
       .def("flush", &Collector::flush)

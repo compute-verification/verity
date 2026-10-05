@@ -18,9 +18,12 @@ as the Commit stage builds it (batch-invariant, eager), with `native_collect`, t
 output of every step on the GPU; each window is one commitment run, finalized at the window's end. `bi-eager` is that
 engine without the committer. Both stamp the tokens each engine step adds when the step returns, and add `steps.jsonl`
 (each step's end, duration and time in garbage collection) and, for `commit`, `commits.jsonl` (each run's finalization
-stall). Their monitor runs in a child process, so that the engine's own pauses stay in the trace. A step or a
-finalization that takes `STALL_S` is hung: every thread's stack goes to stderr and the job exits, rather than holding
-its GPU to the lease's end.
+stall). Their monitor runs in a child process, so that the engine's own pauses stay in the trace. Before the replay,
+with the schedule and every other input built, the recorder freezes its heap (`gc.freeze()`, `gc` in `meta.json`), so
+that full collections don't walk the whole run's requests, which a served engine never holds at once. Offline traces
+recorded without `gc` were taken on a higher GC floor (a 42 ms full collection before t0 in `art:ef0c3e05`) and compare
+against a different floor than later ones. A step or a finalization that takes `STALL_S` is hung: every thread's stack
+goes to stderr and the job exits, rather than holding its GPU to the lease's end.
 
 **What a job writes** to `--out`:
 - `requests.jsonl`, one line per request as it finishes, so an evicted job keeps what it finished;
@@ -337,7 +340,11 @@ def offline_replay(eng, com, requests: list[dict], t0: float, drain_until: float
                 commits({"t_ms": ms(now - t0), "finalize_ms": ms(done - now), "restart_ms": ms(clock() - done),
                          "steps": len(rc.steps), "bytes": sum(s.n_bytes for s in rc.steps),
                          "root_ready_delay_ms": ms(rc.root_ready_delay_s), "run_root": rc.run_root.hex(),
-                         "errors": rc.extra.get("errors_n"), "gc_ms": ms(paused.take())})
+                         "errors": rc.extra.get("errors_n"), "gc_ms": ms(paused.take()),
+                         # the collector's plans the reset before this window dropped, those still pending at its end, and the
+                         # window's step that freed the last of them (native_plans.h)
+                         **{k: rc.extra.get("native_collect", {}).get(k)
+                            for k in ("plans_dropped", "plans_pending", "plans_pending_emptied_step")}})
                 next_run += window_s
                 continue
             if not core.has_unfinished_requests():
@@ -618,6 +625,10 @@ def run(args: argparse.Namespace) -> int:
         reqs = schedule(mix, -args.warmup_s, windows * window_s, args.seed)
         meta |= {"t0_mono": t0, "t0_unix": time.time() + (t0 - clock()), "startup_s": round(ready - start, 1),
                  "windows": windows, "requests": len(reqs)}
+        if offline:
+            gc.collect()  # cyclic garbage that a freeze caught would never be freed
+            gc.freeze()
+            meta["gc"] = {"frozen_before_t0": gc.get_freeze_count()}
         (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         if offline:
             ended = offline_replay(eng, com, reqs, t0, deadline - 20, requests, steps, commits)
@@ -791,6 +802,9 @@ def convert(out: Path, **rules) -> dict:
         summary = {"frozen": False, "windows_planned": 0, "windows_kept": 0, "error": "the job ended before t0"}
         (out / "summary.json").write_text(json.dumps(summary, indent=1))
         return summary
+    if not (out / "requests.jsonl").exists():
+        raise FileNotFoundError(f"{out / 'requests.jsonl'}: missing, though `run` creates it before t0; restore it (an evicted "
+                                f"run file's run-files.evicted.json names its artifact) rather than convert every window as idle")
     samples = [s | {"t_ms": ms(s["mono"] - meta["t0_mono"])} for s in read_lines(out / "samples.jsonl")]
     run_id = meta["env"].get("RESEARCH_RUN_ID") or out.name
     labels = {"mode": meta["mode"], "model": meta["model"], "mix": meta["mix"], "host": meta["host"],

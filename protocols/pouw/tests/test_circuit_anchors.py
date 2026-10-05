@@ -3,6 +3,7 @@ and refuses a repeated call index in a window (the red team's X-SPC-72); a tile 
 values unpacked into whole words."""
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pytest
@@ -11,9 +12,9 @@ import circuit_fixtures as F
 import pouw_regions_vectors as RV
 from verity.commitments.blake3 import blake3, keyed
 from verity.commitments.turboshake import turboshake128
-from verity_pouw.circuit import ncp2, traced_as
+from verity_pouw.circuit import ncp2, pc4, pc8, traced_as
 from verity_pouw.circuit import reference as R
-from verity_pouw.circuit.anchors import Anchors, Ledger, region_bytes, region_words
+from verity_pouw.circuit.anchors import ANCHORED, Anchors, Ledger, public_ports, region_bytes, region_words
 from verity_pouw.protocol import DomainError
 
 SHAPE = ncp2.Shape(32, 64, 32)
@@ -81,6 +82,27 @@ def test_pinned_region_vectors():
             assert e["bytes"] == bytes(b for x in raw for n in (x & 0xF, x >> 4) for b in (n, 0)).hex()
 
 
+#: each anchor's rule id, as META's ``derivation`` names it: part of C-Flock's circuit pin, so a changed rule is a new version
+RULES = {"pc4": {a: f"verity/pouw/anchor/pearl-c4/{a}/v1" for a in ANCHORED},
+         "pc8": {a: f"verity/pouw/anchor/pearl-c/{a}/v1" for a in ANCHORED}}
+
+
+def test_an_anchor_names_its_rule_not_its_function():
+    """A region names its derivation by the rule's versioned id (`Derivation.rule`), one per scheme and anchor, so moving or
+    renaming the function that computes it moves no circuit pin; a rule that is not such an id is refused."""
+    for name, shape in (("pc4", pc4.Shape), ("pc8", pc8.Shape)):
+        assert {a: d.rule for a, d in shape.derivations.items()} == RULES[name]
+        moved = {a: dataclasses.replace(d, fn=lambda *args, f=d.fn: f(*args)) for a, d in shape.derivations.items()}
+        alias = type("Moved", (), {"ports": shape.ports, "derivations": moved, "seeds": shape.seeds})
+        for role in shape.ports:
+            assert public_ports(alias, role) == public_ports(shape, role)
+    d = pc4.DERIVATIONS["ea"]
+    for bad in (f"{d.fn.__module__}.{d.fn.__qualname__}", "verity/pouw/anchor/pearl-c4/ea", "verity/pouw/anchor/ea/v1",
+                "verity/pouw/anchor/pearl-c4/ea/v01"):
+        with pytest.raises(ValueError, match="versioned id"):
+            dataclasses.replace(d, rule=bad)
+
+
 @pytest.mark.parametrize("case", RV.CASES, ids=[c[0] for c in RV.CASES])
 def test_the_public_inputs_file_is_c_flocks(case):
     """`TileAnchors.public_inputs` is C-Flock's ``verity/flock-public-inputs/v1``: a key-sorted JSON header line naming each
@@ -96,9 +118,10 @@ def test_the_public_inputs_file_is_c_flocks(case):
         names = list(t.shape.ports[role]["regions"])
         assert [p["port"] for p in h["ports"]] == names
         for p in h["ports"]:
-            d = t.shape.derivations[t.shape.ports[role]["regions"][p["port"]]]
+            anchor = t.shape.ports[role]["regions"][p["port"]]
+            d = t.shape.derivations[anchor]
             assert p["seed"] == f"{label}/{'seed-A' if d.seed == 'seed_a' else 'seed-B'}"
-            assert p["derivation"] == f"verity_pouw.circuit.{case[1]}.{d.fn.__name__}"
+            assert p["derivation"] == RULES[case[1]][anchor]
             assert p["words"] == len(t.regions(role, indexes[0])[p["port"]])
         assert body == b"".join(region_bytes(t.regions(role, i)[p]) for i in indexes for p in names)
     for role, indexes in (("tile", (0,)), ("row_a", ())):

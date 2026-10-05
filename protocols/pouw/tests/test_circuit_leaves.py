@@ -22,7 +22,7 @@ from verity.evaluation import evaluate
 from verity.ml.scalar import BitAnd, SelectBf16
 
 from verity_pouw.circuit import leaves as L
-from verity_pouw.circuit import pc4, pc8
+from verity_pouw.circuit import pc4, pc8, rowk
 from verity_pouw.schemes import pearl_c as C
 
 PINNED = json.loads(V.OUT.read_text())
@@ -79,11 +79,13 @@ def test_a_rows_commit_string_is_cores_at_every_padding_edge(row, role, sizes):
         assert L.commit(row, role, words, y) == L.INST.commit_string(L.KEY, x, y), n
 
 
-def test_every_per_call_row_but_ok_and_the_tile_is_a_row_seg_row():
-    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`) are exactly the rows with a schema, and the row-seg ones are
-    the per-call rows (role X) but ok and the tile digest: A_i and A′_i ‖ P_A,i of both checks.  Every other row, each
-    registered row (role W) included, is a `sha512/row/v2` row: no row is `sha512/row/v1`."""
-    used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS) for unit in ports.values() for row, role, _ in unit["rows"]}
+def test_every_per_call_row_but_ok_the_tile_and_the_cuts_is_a_row_seg_row():
+    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`, and the row_k cut's `rowk.PORTS4`, `rowk.PORTS8`) are exactly
+    the rows with a schema, and the row-seg ones are the per-call rows (role X) but ok, the tile digest and the cut's six:
+    A_i and A′_i ‖ P_A,i of both checks.  Every other row, each registered row (role W) included, is a `sha512/row/v2`
+    row: no row is `sha512/row/v1`."""
+    used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS, rowk.PORTS4, rowk.PORTS8) for unit in ports.values()
+            for row, role, _ in unit["rows"]}
     assert used == set(L.ROW_SCHEMA)
     seg = {(row, ROLE_X) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p")}
     assert {k for k, s in L.ROW_SCHEMA.items() if s == SCHEMA_HM96_SHA512_ROW_SEG} == seg

@@ -6,7 +6,8 @@ A weight's side is formed once per job and weight, by `Pc4Weight{K,N}`, whose ro
 One call's side is `Pc4Call{M,K,N,TM,TN}`, which reads that weight's B̃ codes, scale bytes and P_B rows as committed
 inputs.  `Pc4Check{M,K,N,TM,TN}` is both in one root: the whole check of an M × N block, recompute-free.  Each root body
 holds only instances of the unit templates below (the partition is `Q_template_instances` over them, `query`), and every
-value is computed in exactly one of them.
+value is computed in exactly one of them.  ``Shape.row_k`` cuts each row unit along k into a head, a form per segment of
+row_k positions and a tail (`rowk`), so that a row unit fits C-Flock's block at every served k; off, nothing here changes.
 
     template          one instance per        reads                                    computes and returns
     Pc4RowB{K}        row j of B              B_j, E_B,j, F_B, F_A, G                   B̃_j's codes and scale bytes, P_B,j, ok
@@ -116,9 +117,9 @@ class _Emit:
 
 # ---- the pieces of a unit ------------------------------------------------------------------------------------------------
 
-def _chain(e: _Emit, a, b, sa, sb, k: int):
-    """The NVF4 atom chained from +0 over k, no promotion (`pearl_c4.chain`): k/64 steps in ascending k."""
-    acc = 0
+def _chain(e: _Emit, a, b, sa, sb, k: int, acc=0):
+    """The NVF4 atom chained from +0 over k, no promotion (`pearl_c4.chain`): k/64 steps in ascending k.  ``acc`` is the
+    accumulator it starts from: +0, or the carry of the k positions before ``a`` and ``b`` (`rowk`)."""
     for s in range(k // ATOM):
         acc = e.call(BlackwellNvf4OmmaDot64, acc, a[ATOM * s:ATOM * (s + 1)], b[ATOM * s:ATOM * (s + 1)],
                      sa[4 * s:4 * (s + 1)], sb[4 * s:4 * (s + 1)])
@@ -323,13 +324,19 @@ def gram_g(shape, seed_b: bytes, _i=None) -> list[int]:
 
 _LINE = f"TurboSHAKE128(seed ‖ role ‖ index u32 LE, D = {S.D_LINE:#04x}), 16 bytes, low nibble first; role "
 #: each anchor's recomputation from `pearl_c4`'s seeds (`noise`: seed_A = BLAKE3 keyed by blake3("pearl-c4/v0/seed-A") over
-#: salt ‖ root_A ‖ root_B ‖ matmul u64 LE, seed_B keyed by blake3("pearl-c4/v0/seed-B") over salt ‖ root_B)
+#: salt ‖ root_A ‖ root_B ‖ matmul u64 LE, seed_B keyed by blake3("pearl-c4/v0/seed-B") over salt ‖ root_B), each under its
+#: rule's versioned id
 DERIVATIONS = {
-    "ea": A.Derivation("seed_a", _LINE + f"{S.ROLE_EA:#04x} (ROLE_EA), index A's global row", line_ea, 4, per_row=True),
-    "eb": A.Derivation("seed_b", _LINE + f"{S.ROLE_EB:#04x} (ROLE_EB), index B's global row", line_eb, 4, per_row=True),
-    "fa": A.Derivation("seed_b", _LINE + f"{S.ROLE_FA:#04x} (ROLE_FA), index the position t < k", basis_fa, 4),
-    "fb": A.Derivation("seed_b", _LINE + f"{S.ROLE_FB:#04x} (ROLE_FB), index the position t < k", basis_fb, 4),
-    "g": A.Derivation("seed_b", f"G_pq = the NVF4 atom chained from +0 over F_B[:, p]·F_A[:, q], k/64 steps, every scale "
+    "ea": A.Derivation("verity/pouw/anchor/pearl-c4/ea/v1", "seed_a",
+                       _LINE + f"{S.ROLE_EA:#04x} (ROLE_EA), index A's global row", line_ea, 4, per_row=True),
+    "eb": A.Derivation("verity/pouw/anchor/pearl-c4/eb/v1", "seed_b",
+                       _LINE + f"{S.ROLE_EB:#04x} (ROLE_EB), index B's global row", line_eb, 4, per_row=True),
+    "fa": A.Derivation("verity/pouw/anchor/pearl-c4/fa/v1", "seed_b",
+                       _LINE + f"{S.ROLE_FA:#04x} (ROLE_FA), index the position t < k", basis_fa, 4),
+    "fb": A.Derivation("verity/pouw/anchor/pearl-c4/fb/v1", "seed_b",
+                       _LINE + f"{S.ROLE_FB:#04x} (ROLE_FB), index the position t < k", basis_fb, 4),
+    "g": A.Derivation("verity/pouw/anchor/pearl-c4/g/v1", "seed_b",
+                      f"G_pq = the NVF4 atom chained from +0 over F_B[:, p]·F_A[:, q], k/64 steps, every scale "
                       f"byte UE4M3 1.0 ({S.NVFP4.one:#04x}); FP32 words", gram_g, 32),
 }
 #: each seed as a public input port names it: the scheme's label for it
@@ -345,46 +352,74 @@ def templates(k: int, tile: tuple[int, int] = TILE, hidden: bool = False) -> dic
 
 # ---- the Programs --------------------------------------------------------------------------------------------------------
 
+class RowK:
+    """A tile check's `Shape` attribute (``ports``, ``derivations``) that is ``today`` on the class and on a shape without
+    ``row_k``, and with ``row_k`` set `rowk`'s attribute ``name``: the cut's roles and anchors.  So the class and every
+    shape without the cut read today's dicts, which `rowk` leaves alone."""
+
+    def __init__(self, today: dict, name: str) -> None:
+        self.today, self.name = today, name
+
+    def __get__(self, shape, cls=None) -> dict:
+        if shape is None or shape.row_k is None:
+            return self.today
+        from . import rowk
+        return getattr(rowk, self.name)
+
+
 @dataclass(frozen=True)
 class Shape:
     """    M rows of A and N rows of B at depth k, cut into tiles of ``tile`` (rows of A, rows of B; the scheme's is 64 x 64);
-    ``hidden``, the hiding Programs.  `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
+    ``hidden``, the hiding Programs; ``row_k``, each row unit cut into k / row_k segments (`rowk`; None, today's
+    Programs).  `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
 
     m: int
     k: int
     n: int
     tile: tuple[int, int] = TILE
     hidden: bool = False
-    ports: ClassVar[dict] = PORTS
-    derivations: ClassVar[dict] = DERIVATIONS
+    row_k: int | None = None
+    ports = RowK(PORTS, "PORTS4")
+    derivations = RowK(DERIVATIONS, "DERIVATIONS4")
     seeds: ClassVar[dict] = SEEDS
 
     def check(self) -> None:
         tm, tn = self.tile
         if self.k % ATOM or min(self.m, self.k, self.n, tm, tn) <= 0 or self.m % tm or self.n % tn:
             raise DomainError(f"Pearl-C4's circuit needs 64 | k and whole tiles on each side: {self}")
+        if self.row_k is not None:
+            from . import rowk
+            rowk.check4(self)
 
 
-def _weight_units(B, k: int, b, eb, fa, fb, g):
+def _weight_units(B, k: int, b, eb, fa, fb, g, row_k: int | None = None):
+    if row_k is not None:
+        from . import rowk
+        return rowk.rows4(B, k, row_k, "b", b, eb, fb, fa, g)
     rows = B.batch(templates(k)["row_b"], b, eb, fb, fa, g, axes=(0, 0, None, None, None))
     n = len(b)
     return [array_of([rows[j][f] for j in range(n)]) for f in range(4)]
 
 
-def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb, hidden: bool = False):
-    """The call's units: (C̃, U, ok), or under hiding (the tile digests by tile row and column, ok)."""
+def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb, hidden: bool = False,
+                row_k: int | None = None):
+    """The call's units: (C̃, U, ok), or under hiding (the tile digests by tile row and column, ok); with ``row_k``, each
+    A row's unit cut into `rowk`'s pieces."""
     tm, tn = tile
     tp = templates(k, tile, hidden)
-    rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))
     m, n = len(a), len(bc)
+    if row_k is None:
+        rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))
+        ac, as_, pa, ok = (array_of([rows[i][f] for i in range(m)]) for f in range(4))
+    else:
+        from . import rowk
+        ac, as_, pa, ok = rowk.rows4(B, k, row_k, "a", a, ea, fa, fb)
     ms, ns = m // tm, n // tn
-    ac, as_, pa = (array_of([rows[i][f] for i in range(m)]) for f in range(3))
     blocks = lambda x, h, t: x.reshape(Array(h, Array(t, x.type.elem)))            # noqa: E731
     acs, ass, pas = blocks(ac, ms, tm), blocks(as_, ms, tm), blocks(pa, ms, tm)
     bcs, bss, pbs = blocks(bc, ns, tn), blocks(bs, ns, tn), blocks(pb, ns, tn)
     tiles = [B.batch(tp["tile"], acs[rs], ass[rs], bcs, bss, pas[rs], pbs, axes=(None, None, 0, 0, None, 0))
              for rs in range(ms)]
-    ok = array_of([rows[i][3] for i in range(m)])
     if hidden:
         return array_of([array_of([tiles[rs][cs] for cs in range(ns)]) for rs in range(ms)]), ok
     cw, uw = (array_of([array_of([tiles[i // tm][j // tn][f][i % tm][j % tn] for j in range(n)]) for i in range(m)])
@@ -464,17 +499,26 @@ Pc4CheckHiddenDef = CompositeDefinition(
 
 def weight(shape: Shape) -> SpecializedDefinition:
     shape.check()
+    if shape.row_k is not None:
+        from . import rowk
+        return rowk.root4(shape, "weight")
     return bind(Pc4WeightDef, K=shape.k, N=shape.n)
 
 
 def call(shape: Shape) -> SpecializedDefinition:
     shape.check()
+    if shape.row_k is not None:
+        from . import rowk
+        return rowk.root4(shape, "call")
     return bind(Pc4CallHiddenDef if shape.hidden else Pc4CallDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0],
                 TN=shape.tile[1])
 
 
 def check(shape: Shape) -> SpecializedDefinition:
     shape.check()
+    if shape.row_k is not None:
+        from . import rowk
+        return rowk.root4(shape, "check")
     return bind(Pc4CheckHiddenDef if shape.hidden else Pc4CheckDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0],
                 TN=shape.tile[1])
 
@@ -485,8 +529,17 @@ ROLES = {"weight": ("row_b",), "call": ("row_a", "tile"), "check": ("row_b", "ro
 _ROLE_OF = {id(Pc4RowBDef): "row_b", id(Pc4RowADef): "row_a", id(Pc4TileDef): "tile", id(Pc4TileHiddenDef): "tile"}
 
 
+def _role_of() -> dict[int, str]:
+    from . import rowk
+    return _ROLE_OF | rowk.ROLE_OF
+
+
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
-    """`Q_template_instances` over the side's unit templates (`ROLES`), in the order its root body first uses them."""
+    """`Q_template_instances` over the side's unit templates (`ROLES`, or with ``row_k`` `rowk.ROLES`), in the order its
+    root body first uses them."""
+    if shape.row_k is not None:
+        from . import rowk
+        return PO.template_instances_query(rowk.unit_templates4(shape, side))
     tp = templates(shape.k, shape.tile, shape.hidden)
     return PO.template_instances_query([tp[r] for r in ROLES[side]])
 
@@ -494,23 +547,27 @@ def query(shape: Shape, side: str = "check") -> dict[str, Any]:
 @dataclass(frozen=True)
 class Unit:
     index: int
-    role: str                   # a key of `templates`
+    role: str                   # a key of `templates`, or of `rowk.ROLES`
     node: int                   # its root-body node
     member: int                 # its member of that batch node
     template: str = ""          # its template's descriptor id (`plan.template_strata`'s stratum)
-    where: tuple[int, ...] = field(default=())    # a row unit's row; a tile unit's (tile row, tile column)
+    where: tuple[int, ...] = field(default=())    # a row unit's row; a tile unit's (tile row, tile column); a `rowk`
+                                                  # form's (row, segment)
 
 
 def units(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> tuple[Unit, ...]:
     """Every unit of a Program built from the unit templates, in the partition's numbering (node order, then member);
     ``role_of`` maps each template's Definition (by id) to its role, Pearl-C4's by default."""
-    role_of = _ROLE_OF if role_of is None else role_of
+    from . import rowk
+
+    role_of = _role_of() if role_of is None else role_of
     out: list[Unit] = []
     tile_rows = 0
     for j, nd in enumerate(fn.body.nodes):
         role, tid = role_of[id(nd.fn.defn)], descriptor_id(nd.fn)
         for m in range(nd.n if nd.form == "batch" else 1):
-            out.append(Unit(len(out), role, j, m, tid, (tile_rows, m) if role == "tile" else (m,)))
+            where = (tile_rows, m) if role == "tile" else (m, rowk.segment(nd.fn)) if role in rowk.FORMS else (m,)
+            out.append(Unit(len(out), role, j, m, tid, where))
         tile_rows += role == "tile"
     return tuple(out)
 
