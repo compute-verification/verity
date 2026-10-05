@@ -31,7 +31,7 @@ from verity.ir.codec import encode_program, program_digest
 from verity.ir.defs import composite
 from verity.ir.refs import array_of, tuple_of
 from verity_vllm.program.registry import b1, lifted as L, moe, moe_pad as MP, prims as P
-from verity_vllm.program.registry import serve3_reference as ref
+from verity_vllm.program.kernels import serve3_reference as ref
 from verity_vllm.program.registry.prims import BF16, F32, I32
 from verity.ir.types import Array, Tuple
 

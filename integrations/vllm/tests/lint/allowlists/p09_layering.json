@@ -131,8 +131,8 @@
     {"file": "verity_vllm/program/kernels/sampling_rng.py", "kind": "layer", "symbol": "<module>", "detail": "program.kernels.sampling_rng -> observe.events"},
     {"file": "verity_vllm/program/kernels/sampling_rng.py", "kind": "layer", "symbol": "<module>", "detail": "program.kernels.sampling_rng -> observe.log"},
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "layer", "symbol": "<module>", "detail": "program.kernels.twins -> check.fold_compare"},
-    {"file": "verity_vllm/program/registry/lifted.py", "kind": "layer", "symbol": "<module>", "detail": "program.registry.lifted -> pipeline.global_program"},
-    {"file": "verity_vllm/program/registry/lifted.py", "kind": "layer", "symbol": "<module>", "detail": "program.registry.lifted -> query.query_artifact"},
+    {"file": "verity_vllm/program/lifting/lifted_records.py", "kind": "layer", "symbol": "<module>", "detail": "program.lifting.lifted_records -> pipeline.global_program"},
+    {"file": "verity_vllm/program/lifting/lifted_records.py", "kind": "layer", "symbol": "<module>", "detail": "program.lifting.lifted_records -> query.query_artifact"},
     {"file": "verity_vllm/query/manifest/verify.py", "kind": "layer", "symbol": "<module>", "detail": "query.manifest.verify -> pipeline.manifest"}
   ]
 }

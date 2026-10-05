@@ -4,8 +4,8 @@ of one host, through `torch.cuda.nccl` (one process driving both devices: the sa
 communicator calls, with no rank processes to spawn):
 
     # pod with two GPUs, torch venv (the transport is the caller's: NCCL_P2P_DISABLE=1 for hosts without NVLink):
-    verity-vllm properties-admission produce --adapter verity_vllm.program.registry.collectives_difftest --n 30 --seed 5 --out DIR
-    verity-vllm properties-admission check   --adapter verity_vllm.program.registry.collectives_difftest --dir DIR --out RUN/tp2.json
+    verity-vllm properties-admission produce --adapter verity_vllm.properties.difftests.collectives_difftest --n 30 --seed 5 --out DIR
+    verity-vllm properties-admission check   --adapter verity_vllm.properties.difftests.collectives_difftest --dir DIR --out RUN/tp2.json
 
 Rank r contributes operand r; every rank must receive the same words (asserted), and rank 0's are the production output."""
 from __future__ import annotations

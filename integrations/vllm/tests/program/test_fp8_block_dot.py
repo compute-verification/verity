@@ -3,7 +3,7 @@
 * `ScaledMmFp8Block_v3{K,N,G,DOT}` and the shared-scale form's version 3 Definitions are the version 1 forms with the step lifted: at
   DOT = HopperE4m3QgmmaDot32 the same circuit gate for gate (so every word equal), at DOT = BlackwellE4m3QmmaDot32 another function;
   their version 4 forms are Boolean, agree with their word views, and are what the switch maps them to.
-* `registry.targets.scaled_mm_fp8_block_spec` binds by `GemmTarget.fp8_block_dot`: the version 1 forms on hopper (its Programs keep
+* `frontend.targets.scaled_mm_fp8_block_spec` binds by `GemmTarget.fp8_block_dot`: the version 1 forms on hopper (its Programs keep
   their digests), the version 3 forms over another target's step, and a refusal by name where a target records none.  The frontend
   rule and the fold's pattern ask it instead of comparing the compute capability with 9.
 * `Fp8GroupQuant_v1{K,G}` at G = 64 (`fp8.QUANT_GROUPS`): a group's words are those of the G = 128 form over that group padded with
@@ -31,7 +31,7 @@ from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetPr
 from verity_vllm.program.registry import boolean_fp8 as BF
 from verity_vllm.program.registry import fp8 as F
 from verity_vllm.program.frontend import gemm_targets as GT
-from verity_vllm.program.registry import targets as TG
+from verity_vllm.program.frontend import targets as TG
 from tests.program import test_fp8_profile as FP
 from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 from tests.program.test_fp8_shared_scale import _canon, _Ctx

@@ -20,7 +20,8 @@ for m in sys.argv[1:]:
     importlib.import_module(m)
 from verity.ir.defs import REGISTRY
 from verity.ml import fp32 as F, gemm as G, mufu as M, prims as C, scalar as S
-from verity_vllm.program.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM, targets as T
+from verity_vllm.program.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM
+from verity_vllm.program.frontend import targets as T
 from verity.ir.defs import PrimitiveDefinition
 core = [C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16, C.HopperBF16WgmmaDot16, C.AmpereBF16TcDot16, C.F32ToE4m3Sat,
         C.HopperE4m3QgmmaDot32, C.ZERO32, G.DotBf16, G.GemmCoordinate, G.Gemm]

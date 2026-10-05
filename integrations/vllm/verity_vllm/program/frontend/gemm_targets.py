@@ -180,7 +180,7 @@ REGISTERED: dict[str, GemmTarget] = {
                   "k16 chain of mma.AMPERE_BF16 — out/gen/sweep/evidence/ampere/gemm_target_a100.json",)),
     # [R13 hopper] sm_90: Triton lowers `tl.dot` to `wgmma.mma_async` — a different k16 step (`HopperBF16WgmmaDot16`: one group of 16 products,
     # 26-bit adder, floor -133; lane HP's wgmma re-measurement = Hawkeye's H100 `mma.sync.m16n8k16` model), so the Definition is the
-    # statics-lifted `Gemm_v2{K,N,DOT}` (`verity_vllm.program.registry.targets.gemm_spec`), not `Gemm_v1`.  vLLM family "hopper": the tuned table above.
+    # statics-lifted `Gemm_v2{K,N,DOT}` (`verity_vllm.program.frontend.targets.gemm_spec`), not `Gemm_v1`.  vLLM family "hopper": the tuned table above.
     "hopper": GemmTarget(
         key="hopper", compute_capabilities=((9, 0),), vllm_arch_family="hopper", dot="HopperBF16WgmmaDot16", tuned_table=HOPPER_TUNED_GEMM,
         kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_block_dot="HopperE4m3QgmmaDot32",

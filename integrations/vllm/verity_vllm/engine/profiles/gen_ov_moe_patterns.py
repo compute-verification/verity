@@ -41,7 +41,7 @@ from typing import Any
 from verity.ir.defs import bind
 from verity_vllm.program.registry import act as _ACT
 from verity_vllm.program.registry import moe as _MOE
-from verity_vllm.program.registry import targets as T
+from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
 
 from verity_vllm.observe.events import ViewDesc
@@ -279,7 +279,7 @@ class MoEFusedExperts:
         # 3. up/gate GEMM over pairs --------------------------------------------------------------------------------
         P = M * TOPK
         ids_flat = _flat(ids, P)
-        try:   # the record target's expert GEMM Definitions (`registry.targets.moe_expert_gemm_spec`): the same selection the builder makes
+        try:   # the record target's expert GEMM Definitions (`frontend.targets.moe_expert_gemm_spec`): the same selection the builder makes
             up_spec, down_spec = (T.moe_expert_gemm_spec(target_of(ctx)[0], E, K, N, routed=w) for K, N, w in ((H, 2 * I, False), (I, H, True)))
         except T.UnregisteredTarget as e:
             return unsupported(node, f"target has no registered fused-MoE binding: {e}")

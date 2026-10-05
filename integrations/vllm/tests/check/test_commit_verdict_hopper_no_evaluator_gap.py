@@ -1,4 +1,4 @@
-"""[R16 pin F-r16-20b / M-0431; the Hopper instance of rev's F-r16-20 class] On a cc 9.0 step `verity_vllm.program.registry.targets.gemm_spec` /
+"""[R16 pin F-r16-20b / M-0431; the Hopper instance of rev's F-r16-20 class] On a cc 9.0 step `verity_vllm.program.frontend.targets.gemm_spec` /
 `attention_spec` bind `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}` and `Attention_v2{...}` (only an Ampere-family step under FA2 binds the
 accepted Gemm_v1 / Attention_v3).  `rows.EVALUATORS` has Gemm_v1 and not Gemm_v2, so `population.population()` excluded
 EVERY Hopper GEMM output VU (every linear + lm_head) as `no registered evaluator for Gemm_v2` -- why-class 'no-evaluator', the applicability
@@ -22,7 +22,7 @@ from verity_vllm.check.c2_rules import _complete_replay_population_gap, _no_eval
 from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.kernels.rows import EVALUATORS
-from verity_vllm.program.registry import targets as T
+from verity_vllm.program.frontend import targets as T
 
 
 def _bnd(n_req):
