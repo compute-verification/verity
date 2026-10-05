@@ -81,7 +81,24 @@
  },
  "step_routes": {
   "prefill": "dense-mha when the step's longest prefill sequence <= TOPK, else sparse-mqa",
-  "decode": "sparse-mqa"
+  "decode": "sparse-mqa",
+  "mixed": "a step with prefill and decode tokens takes both routes when its prefill takes dense-mha (forward_impl runs forward_mha for the prefill tokens and the MQA path for the decode tokens, and the indexer scores), else sparse-mqa",
+  "recorded": "per layer and step from route_site (acquire.sources.route_source); a tap with a route is captured only on a step that takes it"
+ },
+ "route_site": {
+  "module": "model.layers.{i}.self_attn",
+  "method": "_use_sparse_mha",
+  "target": "vllm/model_executor/layers/attention/mla_attention.py:MLAAttention._use_sparse_mha",
+  "true": [
+   "dense-mha"
+  ],
+  "false": [
+   "sparse-mqa"
+  ],
+  "decode_tokens": [
+   "sparse-mqa"
+  ],
+  "detail": "called with the layer's attention metadata once per layer and step in _sparse_indexer_and_attn before it attends (again in forward_impl when the step has prefill tokens): True sends the prefill tokens to forward_mha, False sends every token to forward_mqa; a step's decode tokens (attn_metadata.num_decode_tokens > 0) take the MQA path on either answer"
  },
  "symbols": {
   "H": "hidden_size",
@@ -141,9 +158,10 @@
    "status": "exists",
    "definitions": [
     "Fp8GroupQuant_v1",
+    "ScaledMmFp8BlockSharedScale_v1",
     "ScaledMmFp8Block_v1"
    ],
-   "note": "_C.per_token_group_fp8_quant + CUTLASS sm_90 blockwise GEMM (128x128 weight blocks, f32 promotion per 128-wide K block), exact-model-tested on H100 (VLLM_USE_DEEP_GEMM=0). Weights are the checkpoint words."
+   "note": "_C.per_token_group_fp8_quant + CUTLASS sm_90 blockwise GEMM (128x128 weight blocks, f32 promotion per 128-wide K block), exact-model-tested on H100 (VLLM_USE_DEEP_GEMM=0). Weights are the checkpoint words. The target's fp8_scale_construction (shared-per-block, the default) binds ScaledMmFp8BlockSharedScale_v1, ScaledMmFp8Block_v1's function with the scale products committed; per-coordinate binds ScaledMmFp8Block_v1."
   },
   "fp8-block-linear-deepgemm": {
    "status": "tonight",
@@ -156,17 +174,21 @@
   "silu-mul": {
    "status": "exists",
    "definitions": [
-    "SiluMul_v1",
     "SiluMul_v2"
    ],
-   "note": "torch.ops._C.silu_and_mul (CUDA)"
+   "note": "torch.ops._C.silu_and_mul (CUDA act_and_mul_kernel): SiluMul_v2, the Build's silu_mul. SiluMul_v1 is not this kernel's function (NaN, gate -inf, gates past expf overflow, -0)"
+  },
+  "silu-mul-block-quant": {
+   "status": "committed-only",
+   "definitions": [],
+   "note": "ops.silu_and_mul_per_block_quant(intermediate_cache1, group_size=128, e4m3) (csrc fused_silu_mul_block_quant.cu), which TritonExperts.apply launches in place of silu_and_mul + the w2 input's group quant for SiLU with 128x128 block FP8, no LoRA and no DeepGEMM e8m0: per element f32 silu(gate) * up kept in registers (never rounded to bf16), per 128-group max |y|, scale = max / 448 floored by the kernel's minimum, then e4m3 RN of y / scale. No Definition yet (fp8_moe.py on cursor/hopper-block-fp8-8c79 leaves it to its own); its two outputs are the w2 Program's xq and sx"
   },
   "bf16-add": {
    "status": "exists",
    "definitions": [
-    "Bf16AddF2fp_v1"
+    "ResidualAdd_v1"
    ],
-   "note": "ATen add on bf16: bf16_rn(f32(a) + f32(b)) per element"
+   "note": "ATen add on bf16: bf16_rn(f32(a) + f32(b)) per element, NaN 0x7FC0 (Bf16Add_v1; ResidualAdd_v1{N} per row, the Build's residual_add). Not Bf16AddF2fp_v1, the CUDA _f16Vec add inside fused_add_rms_norm (NaN 0x7FFF)"
   },
   "moe-sum": {
    "status": "exists",
@@ -179,6 +201,7 @@
   "token-select": {
    "status": "exists",
    "definitions": [
+    "TokenSelect_v1",
     "TokenSelect_v2"
    ],
    "note": "greedy argmax over the gathered logits (B1 row: temperature 0)"
@@ -198,7 +221,7 @@
   "sigmoid-router": {
    "status": "tonight",
    "definitions": [],
-   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5 (NvExpf, the argmax top-k steps and F32 divide exist in moe.py)",
+   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5. MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} per token row: inputs logits (Array(E, F32), the gate's f32 row) and bias (Array(E, F32), e_score_correction_bias); output (topk_weights Array(TOPK, F32), topk_ids Array(TOPK, I32)) as the kernel writes them; KERNEL block (single_group_topk_block_kernel, M <= 1024 at E = 256) or warp",
    "branch": "cursor/sigmoid-router-8c79"
   },
   "fp8-moe-triton": {
@@ -259,15 +282,70 @@
    "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256. AttentionFA3_v1 is FA3 at head dim 128 (kBlockN 128, RescaleOBeforeGemm false); the head-256 tile geometry and rescale order must be pinned before it binds"
   },
   "mla-sparse-attention": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "FlashAttnMLASparseImpl.forward_mqa: absorbed MLA over the selected keys (latent 512 + rope 64, scale 1/16) from the bf16 MLA cache"
+   "status": "port",
+   "definitions": [
+    "SparseMla_v1",
+    "SparseMlaHead_v1",
+    "SparseMlaBlock_v1",
+    "SparseMla_v2",
+    "SparseMlaHead_v2",
+    "SparseMlaBlock_v2"
+   ],
+   "note": "FlashAttnMLASparseImpl.forward_mqa -> FA3 flash_attn_varlen_func (FLASH_ATTN_MLA_SPARSE: bf16 MLA cache, no DCP): per query token the NHL heads over the row's valid_counts selected rows [kv_c 512 | k_pe 64] in the top-k's order, scale 1/16: SparseMla_v1{T=valid count,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}. FlashInfer's sparse path (FLASHINFER_MLA_SPARSE_SM90) runs only with an fp8 KV cache or a named --attention-backend and has no Definition; port until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) pins the kernel variant and a Build rule binds it"
   },
-  "dsa-indexer": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "the lightning indexer: LayerNorm + RoPE + ue8m0 FP8 quant of k into the indexer cache, RoPE + FP8 quant of q and the head weights (fused_q), DeepGEMM fp8_fp4_mqa_logits / fp8_fp4_paged_mqa_logits, and the top-2048 selection (top_k_per_row_prefill / cooperative_topk)"
+  "dsa-indexer-q": {
+   "status": "port",
+   "definitions": [
+    "DsaIndexerQ_v1",
+    "DsaIndexerQHead_v1",
+    "DsaUe8m0Quant_v1",
+    "DsaUe8m0Scale_v1",
+    "DsaIndexerQ_v2",
+    "DsaIndexerQHead_v2",
+    "DsaUe8m0Quant_v2",
+    "DsaUe8m0Scale_v2"
+   ],
+   "note": "fused_q (Triton _fused_q_kernel, num_warps 1; the CuTe DSL branch needs capability >= 100): per head the interleaved RoPE of the first 64 dims and the ue8m0 FP8 quantisation (q_fp8, port 1), and the head weight times the q scale, 128^-0.5 and 32^-0.5 (weights, port 2): DsaIndexerQ_v1{H=32,D=128,ROPE=64} per token; port until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) pins the kernel variant and a Build rule binds it"
+  },
+  "dsa-indexer-k": {
+   "status": "port",
+   "definitions": [
+    "DsaIndexerKRow_v1",
+    "DsaUe8m0Quant_v1",
+    "DsaUe8m0Scale_v1",
+    "DsaIndexerKRow_v2",
+    "DsaUe8m0Quant_v2",
+    "DsaUe8m0Scale_v2"
+   ],
+   "note": "_fused_norm_rope_kernel, program 0: k_norm (LayerNorm, eps 1e-6, f32 weight and bias), the interleaved RoPE of the first 64 dims and the ue8m0 FP8 quantisation, written as the cache row (128 e4m3 bytes + one f32 scale): DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06} per row; port until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) pins the kernel variant and a Build rule binds it"
+  },
+  "dsa-mqa-logits": {
+   "status": "port",
+   "definitions": [
+    "DsaMqaLogits_v1",
+    "DsaMqaLogit_v1",
+    "DsaMqaLogits_v2",
+    "DsaMqaLogit_v2"
+   ],
+   "note": "DeepGEMM fp8_mqa_logits (prefill) / fp8_paged_mqa_logits (decode), clean_logits False: per (query row, key) the sum over the 32 heads of relu(q_h . k) * w_h in the kernels' order, times the key's scale: DsaMqaLogits_v1{N=keys,H=32,D=128} per row. Only a row's keys are written (clean_logits False), so only those columns are compared; port until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) pins the kernel variant and a Build rule binds it"
+  },
+  "dsa-topk": {
+   "status": "port",
+   "definitions": [
+    "DsaTopKShortRow_v1",
+    "DsaTopKShortRow_v2"
+   ],
+   "when": "every row has at most TOPK = 2048 keys",
+   "note": "top_k_per_row_prefill (prefill) / cooperative_topk (decode, at most 64 rows; else persistent_topk): a row of at most 2048 keys takes each kernel's shortcut, slot i = i when i < the row's length, else -1: DsaTopKShortRow_v1{TOPK=2048}. A longer row is a radix selection whose order (ties included) the kernels leave to their atomics, with no Definition; port until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) pins the kernel variant and a Build rule binds it"
   }
+ },
+ "binders": {
+  "module_hook": "the committer's forward hooks on the modules of its acquired classes whose forward runs (commit/committer/native_host.py _make_hook, _make_pre_hook): <module> for a tensor output, <module>/<k> for tuple element k, <module>/in for an acquired input",
+  "sampler": "the committer's runner.sample wrap: runner.sampler/sampled_token_ids",
+  "tp_partial": "TPPartialSource (acquire/sources/partial_source.py): a collective's rank-local input, <site>/part_rank<r> or <site>/shard_rank<r>",
+  "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block",
+  "allreduce_norm": "TPPartialSource's fused_allreduce_rms_norm wrap (acquire/sources/allreduce_norm.py): on every call the partial as <norm>/part_rank<r>, copied before the call; on the FlashInfer path, where the norm module never runs, the returns as <norm>/0 and <norm>/1. On the all-reduce + RMSNorm path the norm module runs and the module hook binds those two names, so a step commits the same names on either path",
+  "attention": "AttentionSource (acquire/sources/attention_source.py), on every attention layer: _sparse_indexer_and_attn's arguments before it runs (fused_norm_rope's q_c, kv_c_out and k_pe_out, the W_UK_T product, fused_q's outputs) and the layer's cache rows at the step's slot mapping, read from the caches fused_norm_rope was given; after it returns, the rows of output that forward_mqa's rows were up-projected into and topk_indices_buffer[:M, :TOPK]; impl.forward_mqa's return; impl.forward_mha's output argument after it returns (not bound with a chunked context). <attn>/<value> for the layer's values, <indexer>/<value> and <k_cache>/rows for the indexer's"
  },
  "taps": [
   {
@@ -291,7 +369,11 @@
    "rank_identical": true,
    "target_only": false,
    "manifest_family": "instance_outputs",
-   "note": "VocabParallelEmbedding.forward: the all-reduce of the 8 masked shard gathers; equal to the owning rank's partial word for word except that a -0.0 row word reduces to +0.0"
+   "note": "VocabParallelEmbedding.forward: the all-reduce of the 8 masked shard gathers; equal to the owning rank's partial word for word except that a -0.0 row word reduces to +0.0",
+   "commit": {
+    "name": "model.embed_tokens",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "embed.partial",
@@ -320,7 +402,37 @@
      "provenance": "checkpoint",
      "rows": "VS"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.embed_tokens/part_rank{r}",
+    "binder": "tp_partial"
+   }
+  },
+  {
+   "id": "input_ids",
+   "op": "embed_tokens.input_ids",
+   "port": 0,
+   "layer": "embed",
+   "module": "model.embed_tokens",
+   "site": {
+    "kind": "module_input",
+    "target": "model.embed_tokens",
+    "detail": "the step's token ids (VocabParallelEmbedding.forward's input_)"
+   },
+   "dtype": "int32",
+   "shape": [
+    "M"
+   ],
+   "program": "copy-equality",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "input_token_ids",
+   "note": "a root input: the prompt's ids on a prefill step, the previous step's sampled ids on a decode step",
+   "commit": {
+    "name": "model.embed_tokens/in",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "norm",
@@ -332,7 +444,7 @@
     "kind": "function_return",
     "target": "vllm/models/common/ops/fused_allreduce_rms_norm.py:fused_allreduce_rms_norm",
     "output": 0,
-    "detail": "the last layer's MLP/MoE partial, all-reduced, + residual, RMSNorm (the new residual is discarded)"
+    "detail": "the last layer's MLP/MoE partial, all-reduced, + residual, RMSNorm"
    },
    "dtype": "bfloat16",
    "shape": [
@@ -349,7 +461,66 @@
      "param": "model.norm.weight",
      "provenance": "checkpoint"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.norm/0",
+    "binder": "allreduce_norm"
+   }
+  },
+  {
+   "id": "norm.residual",
+   "op": "norm.rmsnorm",
+   "port": 1,
+   "layer": "norm",
+   "module": "model.norm",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/common/ops/fused_allreduce_rms_norm.py:fused_allreduce_rms_norm",
+    "output": 1,
+    "detail": "the new residual, which the model discards"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "fused-allreduce-rmsnorm",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.norm/1",
+    "binder": "allreduce_norm"
+   }
+  },
+  {
+   "id": "norm.partial",
+   "op": "norm.partial",
+   "port": 0,
+   "layer": "norm",
+   "module": "model.norm",
+   "site": {
+    "kind": "collective_input",
+    "target": "vllm/models/common/ops/fused_allreduce_rms_norm.py:fused_allreduce_rms_norm",
+    "argument": "hidden_states",
+    "detail": "the last layer's MoE output, un-reduced (member part_rank<r>)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "tp-allreduce",
+   "tp": "partial",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "tp_rank_partials",
+   "note": "copied before the call: the FlashInfer path writes the new residual into this buffer. The same words as the last layer's moe.out, committed again under the all-reduce's site name, the TP partial source's name for every collective input",
+   "commit": {
+    "name": "model.norm/part_rank{r}",
+    "binder": "allreduce_norm"
+   }
   },
   {
    "id": "lm_head.shard",
@@ -378,7 +549,11 @@
      "provenance": "checkpoint",
      "rows": "VS"
     }
-   ]
+   ],
+   "commit": {
+    "name": "logits_processor/shard_rank{r}",
+    "binder": "tp_partial"
+   }
   },
   {
    "id": "logits",
@@ -401,7 +576,11 @@
    "rank_identical": true,
    "target_only": false,
    "manifest_family": "instance_outputs",
-   "note": "the all-gather of the 8 lm_head shards: word-equal to their concatenation"
+   "note": "the all-gather of the 8 lm_head shards: word-equal to their concatenation",
+   "commit": {
+    "name": "logits_processor",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "sampler",
@@ -422,7 +601,11 @@
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
-   "manifest_family": "sampled_token_ids"
+   "manifest_family": "sampled_token_ids",
+   "commit": {
+    "name": "runner.sampler/sampled_token_ids",
+    "binder": "sampler"
+   }
   },
   {
    "id": "input_layernorm.first",
@@ -451,7 +634,11 @@
      "provenance": "checkpoint"
     }
    ],
-   "note": "layer 0: RMSNorm.forward_cuda on the embedding (rms_norm, no residual); the residual is the embedding itself"
+   "note": "layer 0: RMSNorm.forward_cuda on the embedding (rms_norm, no residual); the residual is the embedding itself",
+   "commit": {
+    "name": "model.layers.{i}.input_layernorm",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "input_layernorm",
@@ -480,7 +667,11 @@
      "param": "model.layers.{i}.input_layernorm.weight",
      "provenance": "checkpoint"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.input_layernorm/0",
+    "binder": "allreduce_norm"
+   }
   },
   {
    "id": "input_layernorm.residual",
@@ -502,7 +693,11 @@
    "tp": "reduced",
    "rank_identical": true,
    "target_only": false,
-   "manifest_family": "instance_outputs"
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}.input_layernorm/1",
+    "binder": "allreduce_norm"
+   }
   },
   {
    "id": "post_attention_layernorm",
@@ -531,7 +726,11 @@
      "param": "model.layers.{i}.post_attention_layernorm.weight",
      "provenance": "checkpoint"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.post_attention_layernorm/0",
+    "binder": "allreduce_norm"
+   }
   },
   {
    "id": "post_attention_layernorm.residual",
@@ -553,7 +752,67 @@
    "tp": "reduced",
    "rank_identical": true,
    "target_only": false,
-   "manifest_family": "instance_outputs"
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}.post_attention_layernorm/1",
+    "binder": "allreduce_norm"
+   }
+  },
+  {
+   "id": "input_layernorm.partial",
+   "op": "layers.{i}.input_layernorm.partial",
+   "port": 0,
+   "layers": "after_first",
+   "module": "model.layers.{i}.input_layernorm",
+   "site": {
+    "kind": "collective_input",
+    "target": "vllm/models/common/ops/fused_allreduce_rms_norm.py:fused_allreduce_rms_norm",
+    "argument": "hidden_states",
+    "detail": "the previous layer's MLP or MoE output, un-reduced (member part_rank<r>)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "tp-allreduce",
+   "tp": "partial",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "tp_rank_partials",
+   "note": "copied before the call: the FlashInfer path writes the new residual into this buffer. The same words as layer i - 1's mlp.down_proj (a dense layer) or moe.out (a MoE layer), committed again under the all-reduce's site name, the TP partial source's name for every collective input",
+   "commit": {
+    "name": "model.layers.{i}.input_layernorm/part_rank{r}",
+    "binder": "allreduce_norm"
+   }
+  },
+  {
+   "id": "post_attention_layernorm.partial",
+   "op": "layers.{i}.post_attention_layernorm.partial",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.post_attention_layernorm",
+   "site": {
+    "kind": "collective_input",
+    "target": "vllm/models/common/ops/fused_allreduce_rms_norm.py:fused_allreduce_rms_norm",
+    "argument": "hidden_states",
+    "detail": "o_proj's output, un-reduced (member part_rank<r>)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "tp-allreduce",
+   "tp": "partial",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "tp_rank_partials",
+   "note": "copied before the call: the FlashInfer path writes the new residual into this buffer. The same words as o_proj, committed again under the all-reduce's site name, the TP partial source's name for every collective input",
+   "commit": {
+    "name": "model.layers.{i}.post_attention_layernorm/part_rank{r}",
+    "binder": "allreduce_norm"
+   }
   },
   {
    "id": "fused_qkv_a_proj",
@@ -583,7 +842,11 @@
      "rows": "KVA"
     }
    ],
-   "note": "q_a_proj (2048) and kv_a_proj_with_mqa (512 + 64) fused, replicated (disable_tp): every rank computes the same words"
+   "note": "q_a_proj (2048) and kv_a_proj_with_mqa (512 + 64) fused, replicated (disable_tp): every rank computes the same words",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.fused_qkv_a_proj/0",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "q_a_layernorm",
@@ -611,7 +874,11 @@
      "param": "model.layers.{i}.self_attn.q_a_layernorm.weight",
      "provenance": "checkpoint"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.self_attn/q_c",
+    "binder": "attention"
+   }
   },
   {
    "id": "kv_a_layernorm",
@@ -639,7 +906,11 @@
      "param": "model.layers.{i}.self_attn.kv_a_layernorm.weight",
      "provenance": "checkpoint"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.self_attn/kv_c",
+    "binder": "attention"
+   }
   },
   {
    "id": "k_pe_rope",
@@ -668,7 +939,11 @@
      "provenance": "computed at init (get_rope, base 8e6)",
      "shared": true
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.self_attn/k_pe",
+    "binder": "attention"
+   }
   },
   {
    "id": "mla_kv_cache",
@@ -691,7 +966,11 @@
    "rank_identical": true,
    "target_only": false,
    "manifest_family": "instance_outputs",
-   "note": "what the attention core of every later step reads; word-equal to the two fused_norm_rope outputs it copies"
+   "note": "what the attention core of every later step reads; word-equal to the two fused_norm_rope outputs it copies",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/kv_cache_rows",
+    "binder": "attention"
+   }
   },
   {
    "id": "q_b_proj",
@@ -721,7 +1000,11 @@
      "rows": "=NHL * QKH"
     }
    ],
-   "note": "heads 8r..8r+7, each 192 nope + 64 rope"
+   "note": "heads 8r..8r+7, each 192 nope + 64 rope",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.q_b_proj/0",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "q_nope_absorb",
@@ -745,7 +1028,6 @@
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "instance_outputs",
-   "route": "sparse-mqa",
    "weights": [
     {
      "param": "model.layers.{i}.self_attn.W_UK_T",
@@ -753,7 +1035,11 @@
      "after_load": true
     }
    ],
-   "note": "computed on both routes; only the sparse route reads it (the MQA query's latent half)"
+   "note": "computed on both routes; only the sparse route reads it (the MQA query's latent half)",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/ql_nope",
+    "binder": "attention"
+   }
   },
   {
    "id": "kv_b_proj",
@@ -784,7 +1070,11 @@
      "rows": "=NHL * (DN + DV)"
     }
    ],
-   "note": "the normed latents up-projected: per head 192 k_nope then 256 v (forward_mha)"
+   "note": "the normed latents up-projected: per head 192 k_nope then 256 v (forward_mha)",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.kv_b_proj/0",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "attn.mha",
@@ -808,7 +1098,12 @@
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "instance_outputs",
-   "route": "dense-mha"
+   "route": "dense-mha",
+   "note": "bound as forward_mha's output argument, [rows, NHL * DV], the prefill rows of the o_proj input; a mixed step's are its last M - num_decode_tokens rows (its decode rows take the MQA path)",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/attn_mha",
+    "binder": "attention"
+   }
   },
   {
    "id": "q_pe_rope",
@@ -832,7 +1127,11 @@
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
-   "manifest_family": "instance_outputs"
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/mqa_q",
+    "binder": "attention"
+   }
   },
   {
    "id": "attn",
@@ -858,7 +1157,11 @@
    "target_only": true,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa",
-   "note": "layers in 'shared_topk' read the indices the most recent 'indexer' layer wrote (IndexShare); see topk_source"
+   "note": "layers in 'shared_topk' read the indices the most recent 'indexer' layer wrote (IndexShare), committed as that layer's indexer.topk. A dense-mha step with decode tokens calls it from forward_impl on its first num_decode_tokens rows only",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/attn_mqa",
+    "binder": "attention"
+   }
   },
   {
    "id": "v_absorb",
@@ -889,7 +1192,12 @@
      "provenance": "load-derived: kv_b_proj dequantized to bf16 and split ([NHL, KVL, DV])",
      "after_load": true
     }
-   ]
+   ],
+   "note": "the rows of output forward_mqa's rows were up-projected into: every row on the sparse route; on a dense-mha step with decode tokens the first num_decode_tokens, through forward_impl's _v_up_proj (the same bmm)",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/v_absorb",
+    "binder": "attention"
+   }
   },
   {
    "id": "o_proj",
@@ -919,7 +1227,11 @@
      "rows": "H"
     }
    ],
-   "note": "reduce_results=False: the rank's partial, reduced inside post_attention_layernorm"
+   "note": "reduce_results=False: the rank's partial, reduced inside post_attention_layernorm",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.o_proj/0",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "indexer.wk_weights_proj",
@@ -949,7 +1261,11 @@
      "rows": "IKW"
     }
    ],
-   "note": "index_k (128) and the per-head weights (32), replicated"
+   "note": "index_k (128) and the per-head weights (32), replicated",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.indexer.wk_weights_proj/0",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "indexer.wq_b",
@@ -972,7 +1288,6 @@
    "rank_identical": true,
    "target_only": false,
    "manifest_family": "instance_outputs",
-   "route": "sparse-mqa",
    "weights": [
     {
      "param": "model.layers.{i}.self_attn.indexer.wq_b.weight",
@@ -980,7 +1295,11 @@
      "rows": "=IH * ID"
     }
    ],
-   "note": "computed on both routes; only the sparse route scores with it"
+   "note": "computed on both routes (DeepseekV32Attention.forward calls it before the route is decided); only the sparse route scores with it",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.indexer.wq_b/0",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "indexer.q_fp8",
@@ -1000,12 +1319,16 @@
     "IH",
     "ID"
    ],
-   "program": "dsa-indexer",
+   "program": "dsa-indexer-q",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": true,
    "manifest_family": "instance_outputs",
-   "route": "sparse-mqa"
+   "note": "computed on both routes; only the sparse route scores with it",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.indexer/q_fp8",
+    "binder": "attention"
+   }
   },
   {
    "id": "indexer.weights",
@@ -1024,12 +1347,16 @@
     "M",
     "IH"
    ],
-   "program": "dsa-indexer",
+   "program": "dsa-indexer-q",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": true,
    "manifest_family": "instance_outputs",
-   "route": "sparse-mqa"
+   "note": "computed on both routes; only the sparse route scores with it",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.indexer/weights",
+    "binder": "attention"
+   }
   },
   {
    "id": "indexer.k_cache",
@@ -1047,7 +1374,7 @@
     "M",
     "=ID + 4"
    ],
-   "program": "dsa-indexer",
+   "program": "dsa-indexer-k",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": true,
@@ -1061,7 +1388,11 @@
      "param": "model.layers.{i}.self_attn.indexer.k_norm.bias",
      "provenance": "checkpoint"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.self_attn.indexer.k_cache/rows",
+    "binder": "attention"
+   }
   },
   {
    "id": "indexer.logits",
@@ -1079,12 +1410,13 @@
     "M",
     "CTX"
    ],
-   "program": "dsa-indexer",
+   "program": "dsa-mqa-logits",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": true,
    "manifest_family": "instance_outputs",
-   "route": "sparse-mqa"
+   "route": "sparse-mqa",
+   "note": "not bound: one call per prefill chunk plus one for the decode rows, so the count per step follows the scheduler's chunking, and each is M x CTX f32 (a decode row is max_model_len wide). The topk tap and its inputs (q_fp8, weights, k_cache) are what the attention reads; a Program that needs the logits recomputes them from those"
   },
   {
    "id": "indexer.topk",
@@ -1102,13 +1434,17 @@
     "M",
     "TOPK"
    ],
-   "program": "dsa-indexer",
+   "program": "dsa-topk",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": true,
    "manifest_family": "instance_outputs",
    "route": "sparse-mqa",
-   "note": "the dense-mha route leaves the buffer untouched; record which route each step took"
+   "note": "bound after _sparse_indexer_and_attn returns, on a step whose layer ran forward_mqa (the sparse route, or decode tokens): every row the indexer scored. A dense-mha step without decode tokens leaves the buffer untouched and binds none",
+   "commit": {
+    "name": "model.layers.{i}.self_attn.indexer.indexer_op/topk",
+    "binder": "attention"
+   }
   },
   {
    "id": "mlp.gate_up_proj",
@@ -1137,7 +1473,11 @@
      "provenance": "checkpoint",
      "rows": "=2 * IL"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.mlp.gate_up_proj/0",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "mlp.act_fn",
@@ -1159,7 +1499,11 @@
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
-   "manifest_family": "instance_outputs"
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}.mlp.act_fn",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "mlp.down_proj",
@@ -1188,7 +1532,11 @@
      "provenance": "checkpoint",
      "rows": "H"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.mlp.down_proj/0",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "mlp.gate",
@@ -1217,7 +1565,11 @@
      "provenance": "checkpoint",
      "rows": "E"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.mlp.gate/0",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "moe.router_w",
@@ -1226,9 +1578,10 @@
    "layers": "moe",
    "module": "model.layers.{i}.mlp.experts",
    "site": {
-    "kind": "launch_wrap",
-    "target": "vllm/_custom_ops.py:grouped_topk",
-    "detail": "topk_values: renormalised sigmoid weights x routed_scaling_factor (moe_source names it moe/L<k>/router_w)"
+    "kind": "function_return",
+    "target": "vllm/model_executor/layers/fused_moe/router/grouped_topk_router.py:grouped_topk",
+    "output": 0,
+    "detail": "topk_values, as _custom_ops.grouped_topk returns them: renormalised sigmoid weights x routed_scaling_factor"
    },
    "dtype": "float32",
    "shape": [
@@ -1246,7 +1599,26 @@
      "provenance": "checkpoint"
     }
    ],
-   "source": "moe/L{i}/router_w"
+   "source": "moe/L{i}/router_w",
+   "commit": {
+    "name": "moe/L{i}/router_w",
+    "binder": "moe"
+   },
+   "program_io": {
+    "definition": "MoeRouterSigmoidBias_v1",
+    "per": "token row",
+    "statics": {
+     "E": "=E",
+     "TOPK": "=K",
+     "SCALE": 2.5,
+     "KERNEL": "block when M <= 1024, else warp (the moe source's router_kernel_steps)"
+    },
+    "inputs": {
+     "logits": "tap mlp.gate (its row)",
+     "bias": "weight model.layers.{i}.mlp.gate.e_score_correction_bias"
+    },
+    "output": 0
+   }
   },
   {
    "id": "moe.router_ids",
@@ -1255,8 +1627,9 @@
    "layers": "moe",
    "module": "model.layers.{i}.mlp.experts",
    "site": {
-    "kind": "launch_wrap",
-    "target": "vllm/_custom_ops.py:grouped_topk",
+    "kind": "function_return",
+    "target": "vllm/model_executor/layers/fused_moe/router/grouped_topk_router.py:grouped_topk",
+    "output": 1,
     "detail": "topk_indices"
    },
    "dtype": "int32",
@@ -1269,7 +1642,26 @@
    "rank_identical": true,
    "target_only": false,
    "manifest_family": "moe_block_stream",
-   "source": "moe/L{i}/router_ids"
+   "source": "moe/L{i}/router_ids",
+   "commit": {
+    "name": "moe/L{i}/router_ids",
+    "binder": "moe"
+   },
+   "program_io": {
+    "definition": "MoeRouterSigmoidBias_v1",
+    "per": "token row",
+    "statics": {
+     "E": "=E",
+     "TOPK": "=K",
+     "SCALE": 2.5,
+     "KERNEL": "block when M <= 1024, else warp (the moe source's router_kernel_steps)"
+    },
+    "inputs": {
+     "logits": "tap mlp.gate (its row)",
+     "bias": "weight model.layers.{i}.mlp.gate.e_score_correction_bias"
+    },
+    "output": 1
+   }
   },
   {
    "id": "moe.up",
@@ -1300,7 +1692,11 @@
      "rows": "=2 * MIL"
     }
    ],
-   "source": "moe/L{i}/up"
+   "source": "moe/L{i}/up",
+   "commit": {
+    "name": "moe/L{i}/up",
+    "binder": "moe"
+   }
   },
   {
    "id": "moe.act",
@@ -1309,23 +1705,53 @@
    "layers": "moe",
    "module": "model.layers.{i}.mlp.experts.routed_experts",
    "site": {
-    "kind": "out_argument",
-    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:apply_moe_activation",
-    "argument": "output",
-    "detail": "torch.ops._C.silu_and_mul's bf16 output (clamp_limit None), before moe_kernel_quantize_input"
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
+    "detail": "the w2 launch's A: qintermediate_cache2, the e4m3 output of ops.silu_and_mul_per_block_quant (triton_moe.py TritonExperts.apply)"
    },
-   "dtype": "bfloat16",
+   "dtype": "float8_e4m3fn",
    "shape": [
     "=M * K",
     "MIL"
    ],
-   "program": "silu-mul",
+   "program": "silu-mul-block-quant",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "moe_block_stream",
    "source": "moe/L{i}/act",
-   "note": "not A of the w2 launch, which moe_source binds as act today: with block FP8 that A is qintermediate_cache2, the e4m3 words of this tensor with a2q_scale, which fp8-moe-triton recomputes (Fp8GroupQuant). Likewise the w13 launch reads qhidden_states, the group quant of post_attention_layernorm's output"
+   "note": "no bf16 activation exists on this path: with SiLU, 128x128 block FP8, no LoRA and no DeepGEMM e8m0 TritonExperts.apply fuses silu_and_mul and the w2 input's group quant into one kernel, so apply_moe_activation never runs. Likewise the w13 launch reads qhidden_states, the group quant of post_attention_layernorm's output, which fp8-moe-triton recomputes",
+   "commit": {
+    "name": "moe/L{i}/act",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "moe.act_scale",
+   "op": "layers.{i}.mlp.experts.moe_act",
+   "port": 1,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
+    "detail": "the w2 launch's A_scale: a2q_scale, one f32 scale per 128 elements of each act row"
+   },
+   "dtype": "float32",
+   "shape": [
+    "=M * K",
+    "=MIL // B"
+   ],
+   "program": "silu-mul-block-quant",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/act_scale",
+   "commit": {
+    "name": "moe/L{i}/act_scale",
+    "binder": "moe"
+   }
   },
   {
    "id": "moe.down",
@@ -1356,7 +1782,11 @@
      "rows": "H"
     }
    ],
-   "source": "moe/L{i}/down"
+   "source": "moe/L{i}/down",
+   "commit": {
+    "name": "moe/L{i}/down",
+    "binder": "moe"
+   }
   },
   {
    "id": "moe.sum",
@@ -1380,7 +1810,11 @@
    "target_only": false,
    "manifest_family": "moe_block_stream",
    "source": "moe/L{i}/sum",
-   "note": "each rank holds all 256 experts with a 256-wide slice of each expert's intermediate: the sum is a partial"
+   "note": "each rank holds all 256 experts with a 256-wide slice of each expert's intermediate: the sum is a partial",
+   "commit": {
+    "name": "moe/L{i}/sum",
+    "binder": "moe"
+   }
   },
   {
    "id": "shared.gate_up_proj",
@@ -1409,7 +1843,11 @@
      "provenance": "checkpoint",
      "rows": "=2 * SIL"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.mlp.shared_experts.gate_up_proj/0",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "shared.act_fn",
@@ -1431,7 +1869,11 @@
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
-   "manifest_family": "instance_outputs"
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}.mlp.shared_experts.act_fn",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "shared.down_proj",
@@ -1460,7 +1902,11 @@
      "provenance": "checkpoint",
      "rows": "H"
     }
-   ]
+   ],
+   "commit": {
+    "name": "model.layers.{i}.mlp.shared_experts.down_proj/0",
+    "binder": "module_hook"
+   }
   },
   {
    "id": "moe.out",
@@ -1483,7 +1929,7 @@
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "tp_rank_partials",
-   "note": "MoERunner.forward: shared_output + fused_output (routed scale already in the router weights; reduce_results=False)"
+   "note": "MoERunner.forward: shared_output + fused_output (routed scale already in the router weights; reduce_results=False). Not committed under its own name: its words are committed as the next layer's input_layernorm.partial (the last layer's as norm.partial)"
   }
  ],
  "modules": [
@@ -1516,6 +1962,7 @@
    "type": "VocabParallelEmbedding",
    "disposition": "taps",
    "taps": [
+    "input_ids",
     "embed",
     "embed.partial"
    ]
@@ -1542,7 +1989,9 @@
    "type": "RMSNorm",
    "disposition": "taps",
    "taps": [
-    "norm"
+    "norm",
+    "norm.residual",
+    "norm.partial"
    ]
   },
   {
@@ -1552,7 +2001,8 @@
    "taps": [
     "input_layernorm.first",
     "input_layernorm",
-    "input_layernorm.residual"
+    "input_layernorm.residual",
+    "input_layernorm.partial"
    ]
   },
   {
@@ -1561,7 +2011,8 @@
    "disposition": "taps",
    "taps": [
     "post_attention_layernorm",
-    "post_attention_layernorm.residual"
+    "post_attention_layernorm.residual",
+    "post_attention_layernorm.partial"
    ]
   },
   {
@@ -1788,6 +2239,7 @@
    "taps": [
     "moe.up",
     "moe.act",
+    "moe.act_scale",
     "moe.down",
     "moe.sum"
    ],
@@ -2192,12 +2644,40 @@
   }
  ],
  "capture_work": [
-  "moe_source: add vllm._custom_ops.grouped_topk as the router launch site (it wraps topk_softmax today: router_w = topk_values, router_ids = topk_indices) and accept the FP8 block launches of invoke_fused_moe_triton_kernel (A_scale, B_scale, block_shape)",
-  "moe_source: bind act at fused_moe.apply_moe_activation's output argument (bf16) rather than A of the MUL_ROUTED_WEIGHT launch, which is FP8 e4m3 under block quant; the six-tensors-per-MoE-layer-per-step check is unchanged",
-  "tp_partial_source: add fused_allreduce_rms_norm's input as the partial site (it calls tensor_model_parallel_all_reduce or FlashInfer directly, not through a linear), and copy the partial at hook time: the FlashInfer path writes the new residual into that buffer in place",
-  "record per step which route each layer took (dense-mha or sparse-mqa: prefill_max_seq_len <= TOPK) so a dense-mha step binds kv_b_proj and attn.mha and not q_nope_absorb, attn, v_absorb or the indexer's scoring taps",
-  "function-return and out-argument taps inside DeepseekV32Attention.forward: fused_norm_rope (q_c, kv_c_out, k_pe_out), the W_UK_T bmm, fused_q, forward_mqa, the W_UV bmm into output",
-  "fused_allreduce_rms_norm: tap (normed, new residual) at its return and the partial at its input, and record per call which path ran (FlashInfer fused or all-reduce + RMSNorm)",
-  "the indexer: wrap the DeepGEMM logits calls and read topk_indices_buffer[:M] after sparse_attn_indexer; read the indexer cache and MLA cache rows at slot_mapping after fused_norm_rope"
+  {
+   "item": 1,
+   "work": "moe_source: add vllm._custom_ops.grouped_topk as the router launch site (it wraps topk_softmax today: router_w = topk_values, router_ids = topk_indices) and accept the FP8 block launches of invoke_fused_moe_triton_kernel (A_scale, B_scale, block_shape)",
+   "done": "moe source: grouped_topk_router.grouped_topk bound as router_w / router_ids (the custom op is reached inside that function's torch.compile region, so the wrapper sits at the call-time global _compute_routing reads), with the kernel per step; the block-FP8 launches bound unchanged"
+  },
+  {
+   "item": 2,
+   "work": "moe_source: bind act at fused_moe.apply_moe_activation's output argument (bf16) rather than A of the MUL_ROUTED_WEIGHT launch, which is FP8 e4m3 under block quant; the six-tensors-per-MoE-layer-per-step check is unchanged",
+   "done": "moe source: no bf16 activation exists on this path (TritonExperts.apply fuses SiLU and the w2 quant into silu_and_mul_per_block_quant); act is the w2 launch's e4m3 A and act_scale its A_scale, seven tensors per MoE layer"
+  },
+  {
+   "item": 3,
+   "work": "tp_partial_source: add fused_allreduce_rms_norm's input as the partial site (it calls tensor_model_parallel_all_reduce or FlashInfer directly, not through a linear), and copy the partial at hook time: the FlashInfer path writes the new residual into that buffer in place",
+   "done": "tp partial source: every fused_allreduce_rms_norm call's hidden_states bound as <norm>/part_rank<r> and copied before the call (acquire/sources/allreduce_norm.py); one site per norm the first step passes, counted by identity_check like any other TP partial site"
+  },
+  {
+   "item": 4,
+   "work": "record per step which route each layer took (dense-mha or sparse-mqa: prefill_max_seq_len <= TOPK) so a dense-mha step binds kv_b_proj and attn.mha and not q_nope_absorb, attn, v_absorb or the indexer's scoring taps",
+   "done": "route source (acquire/sources/route_source.py): route_site wrapped on every attention layer, each step's routes recorded per layer; identity_check holds the step's module-hook, sampler, all-reduce-norm and attention names to committer_names for those routes (capture-map ids --route R --binder B --names prints them), and its every-hooked-module-ran rule covers only the hooked modules the map has no entry for. q_nope_absorb, indexer.wq_b, indexer.q_fp8 and indexer.weights lose their route: forward computes them on both"
+  },
+  {
+   "item": 5,
+   "work": "function-return and out-argument taps inside DeepseekV32Attention.forward: fused_norm_rope (q_c, kv_c_out, k_pe_out), the W_UK_T bmm, fused_q, forward_mqa, the W_UV bmm into output",
+   "done": "attention source (acquire/sources/attention_source.py): _sparse_indexer_and_attn's arguments (q_c, kv_c, k_pe, ql_nope, mqa_q) bound before it runs, the W_UV rows of output after it, impl.forward_mqa's return (target only) and impl.forward_mha's output argument; a mixed dense-mha step binds attn and v_absorb over its decode rows and attn.mha over its prefill rows"
+  },
+  {
+   "item": 6,
+   "work": "fused_allreduce_rms_norm: tap (normed, new residual) at its return and the partial at its input, and record per call which path ran (FlashInfer fused or all-reduce + RMSNorm)",
+   "done": "the same wrap binds (normed, new residual) as <norm>/0, <norm>/1 when the norm module did not run (the FlashInfer path) and records each call's path per step (F fused, N all-reduce + norm module)"
+  },
+  {
+   "item": 7,
+   "work": "the indexer: wrap the DeepGEMM logits calls and read topk_indices_buffer[:M] after sparse_attn_indexer; read the indexer cache and MLA cache rows at slot_mapping after fused_norm_rope",
+   "done": "the same source: index_q_fp8 and index_weights_out bound before _sparse_indexer_and_attn, topk_indices_buffer[:M, :TOPK] after it when the layer ran forward_mqa, and the MLA and indexer cache rows at fused_norm_rope's slot mapping (the indexer cache's per-block key bytes then scale bytes regrouped per row); all indexer taps target only. Not done: indexer.logits (see its note)"
+  }
  ]
 }

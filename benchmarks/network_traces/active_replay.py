@@ -1,0 +1,1446 @@
+"""The active warden on recorded traces, in real time: `verity_network_warden.active` serving a replay of honest traces'
+configurations over localhost, then the audit of the records it published.
+
+Each configuration is one run of three processes on the host's monotonic clock, from an origin they share:
+- **the peer**, outside the boundary, sends each request of the trace as B-byte link frames (`active.encode_frame`) in
+  the middle of the ingress bucket its arrival falls in, so the ingress warden enqueues it at ⌈t/τ_in⌉, `replay.py`'s
+  model; it reads the wire and keeps one SHA-256 per window of it;
+- **the proxy**, `active.Proxy` at the calibration's r, r_in, B and Σ_sync, with the prover's syncs given before the run;
+  it publishes every record raw and committed (`commitment.commit`) from a worker thread;
+- **the server**, an OpenAI-compatible endpoint: a request reaching it in bucket R gets the trace's token emissions,
+  frame k as one server-sent event written in the middle of bucket R + d_k − 1, where d_k is the frame's
+  `ready − anchor` in the trace. An event's `id:` is its position in the canonical order (ready, anchor, session, k).
+
+**The honest prover** declares `calibration.choose_syncs` over the run the model predicts: each request released by the
+ingress warden's rule, its frame k ready d_k buckets after its release. The replay keeps every bucket the warden sees and
+leaves half a bucket of margin around each write; a write later than that moves its bucket.
+
+**The audit** reads each request's release from the raw ingress records, rebuilds the Program's frames (the server's
+events, in canonical order, anchored at the release) and runs `Audit.check_link` and `check_ingress_link` on the raw
+records and on the committed ones. It also checks that the proxy's records are `run_shaper`'s on the ready buckets the
+proxy saw, that its hand times are the rule's, and that the peer's digest of each window of the wire is the records'.
+
+Latencies are in ms: shaping is hand minus ready, queueing release minus hand, first frame the first frame's release
+minus its anchor (`replay.py`'s) and minus the trace's send time. `model` beside each is `replay.replay_configuration`
+on the same configuration of the trace, lane F's replay model.
+
+Each process runs with Python's cyclic garbage collector off: a full collection over a run's heap is a pause longer
+than the slack, and the proxy would fail the window closed (`monitor-unavailable`).
+
+**A live server** (`--server-url`, or `--vllm MODEL` to start one as `record.py` does): the server is a real vLLM
+OpenAI endpoint behind a shim inside the boundary (`LiveServer`). The peer sends each request of the trace as
+`record.py` sent it (its session names the workload's request: prompt token ids, `max_tokens`, `ignore_eos`), padded to
+whole link frames. The shim forwards it to vLLM and writes vLLM's stream back cut at `\\n\\n`, each event with `id:` its
+position in write order, and logs every event it wrote; it writes nothing from 1.5 buckets before the horizon on. The
+audit's Program is that log. A live prover can't choose syncs on frames it hasn't seen, so it declares one value for
+every window (`--syncs envelope`): the largest δ and the smallest ρ the calibration's honest prover declared, met by
+every window any declared value meets. The audit also counts the windows the trace's model syncs and a hindsight
+prover (`choose_syncs` on the frames as read) would have met.
+
+    python active_replay.py --calibration REPORT.json --out DIR [--windows 60] [--config-windows 4:10] TRACE.json ...
+    python active_replay.py --vllm MODEL --calibration REPORT.json --out DIR --config NAME ... TRACE.json ...
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import bisect
+import gc
+import gzip
+import hashlib
+import itertools
+import json
+import math
+import multiprocessing
+import os
+import random
+import re
+import resource
+import signal
+import struct
+import subprocess
+import sys
+import time
+import zlib
+from collections import Counter, defaultdict
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
+from fractions import Fraction
+from pathlib import Path
+
+import replay
+from verity_network_warden.active import (
+    DATA,
+    HEADER,
+    LAST,
+    Events,
+    Proxy,
+    VirtualClock,
+    decode_frame,
+    encode_frame,
+)
+from verity_network_warden.audit import Audit
+from verity_network_warden.calibration import choose_syncs
+from verity_network_warden.commitment import CommittedRecord, commit
+from verity_network_warden.grid import (
+    COMPLETE,
+    GridParams,
+    Reason,
+    Record,
+    Status,
+    Warden,
+    row_count,
+)
+from verity_network_warden.schedule import (
+    ClockSync,
+    LogicalFrame,
+    SyncSet,
+    handing_buckets,
+    run_shaper,
+)
+
+MODEL = "llama-3.1-8b-instruct"
+HTTP_HEAD = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncache-control: no-cache\r\n\r\n"
+STARTUP_S = 3.0
+
+
+def event_bytes(session: str, k: int, n: int, position: int) -> bytes:
+    """Frame k of n of a session's response: one OpenAI chat-completion chunk as a server-sent event, the HTTP head
+    with the first."""
+    chunk = {"id": f"chatcmpl-{session}", "object": "chat.completion.chunk", "created": 0, "model": MODEL,
+             "choices": [{"index": 0, "delta": {"content": f" t{k}"},
+                          "finish_reason": "length" if k == n - 1 else None}]}
+    body = b"id: %d\ndata: %s\n\n" % (position, json.dumps(chunk, separators=(",", ":")).encode())
+    return HTTP_HEAD + body if k == 0 else body
+
+
+def request_bytes(session: str, frames: int, frame_bytes: int) -> bytes:
+    """A streaming chat request naming its session (`user`), its prompt padded to take exactly `frames` link frames."""
+    room = frame_bytes - HEADER.size
+
+    def build(pad: int) -> bytes:
+        body = json.dumps({"model": MODEL, "stream": True, "user": session,
+                           "messages": [{"role": "user", "content": "x" * pad}]}).encode()
+        return (b"POST /v1/chat/completions HTTP/1.1\r\nhost: server\r\ncontent-type: application/json\r\n"
+                b"content-length: %d\r\n\r\n" % len(body)) + body
+
+    target, pad = (frames - 1) * room + 1, 0
+    out = build(pad)
+    while len(out) < target:
+        pad += target - len(out)
+        out = build(pad)
+    if math.ceil(len(out) / room) != frames:
+        raise ValueError(f"a request of {frames} frames can't be built")
+    return out
+
+
+LIVE_PATH = b"/v1/completions"
+_WORKLOADS: dict[str, dict[int, dict]] = {}
+
+
+def live_body(session: str | None, model: str) -> dict:
+    """The request `record.py` sent for a session named `workload.instance.index`, its first prompt token drawn from the
+    session's name; one token of a one-token prompt for a request no session names. Without `return_token_ids`, with
+    which vLLM puts the prompt's token ids in the first event, past a frame."""
+    import record
+
+    if session is None:
+        q = {"prompt": [1], "max_tokens": 1}
+    else:
+        name, _, index = session.split(".")
+        if name not in _WORKLOADS:
+            _WORKLOADS[name] = {r["index"]: r for r in record.load_workload(name)}
+        r = _WORKLOADS[name][int(index)]
+        q = {"prompt": [random.Random(session).randrange(1000, 100_000), *r["prompt"][1:]], "max_tokens": r["max_tokens"]}
+    body = json.loads(record.request_body(model, q))
+    del body["return_token_ids"]
+    return body
+
+
+def live_request_bytes(session: str, body: dict, frames: int | None, frame_bytes: int) -> bytes:
+    """The live request: `body` with `user` the session, padded with spaces to take exactly `frames` link frames (the
+    fewest it fits in, with None)."""
+    room = frame_bytes - HEADER.size
+    raw = json.dumps(body | {"user": session}, separators=(",", ":")).encode()
+
+    def build(pad: int) -> bytes:
+        return (b"POST " + LIVE_PATH + b" HTTP/1.1\r\nhost: server\r\ncontent-type: application/json\r\n"
+                b"content-length: %d\r\n\r\n" % (len(raw) + pad)) + raw + b" " * pad
+
+    out, pad = build(0), 0
+    frames = frames or math.ceil(len(out) / room)
+    target = (frames - 1) * room + 1
+    while len(out) < target:
+        pad += target - len(out)
+        out = build(pad)
+    if math.ceil(len(out) / room) != frames:
+        raise ValueError(f"a request of {frames} frames can't be built")
+    return out
+
+
+def request_frames(stream: int, request: bytes, frame_bytes: int) -> bytes:
+    room = frame_bytes - HEADER.size
+    chunks = [request[i : i + room] for i in range(0, len(request), room)]
+    return b"".join(encode_frame(LAST if j == len(chunks) - 1 else DATA, stream, c, frame_bytes)
+                    for j, c in enumerate(chunks))
+
+
+# Records on disk: the reference's `Record`, each slot that is a link frame stored as (kind, stream, payload) and any
+# other slot as its bytes, then zlib. `unpack_record` gives back the same Record.
+
+def pack_record(record: Record) -> bytes:
+    allocation = len(record.grid[0]) if record.grid else 0
+    head = json.dumps({"link": record.link, "window": record.window, "allocation": allocation,
+                       "reason": record.status.reason.value if record.status.reason else None}).encode()
+    parts = [struct.pack(">II", len(head), len(record.grid)), head]
+    for row in record.grid:
+        n = row_count(row)
+        if any(slot is not None for slot in row[n:]):
+            raise ValueError("a row that isn't left-packed")
+        parts.append(struct.pack(">I", n))
+        for slot in row[:n]:
+            kind, stream, payload = decode_frame(slot)
+            try:
+                same = encode_frame(kind, stream, payload, len(slot)) == slot
+            except ValueError:
+                same = False
+            if same:
+                parts += [struct.pack(">BBII", 0, kind, stream, len(payload)), payload]
+            else:
+                parts += [struct.pack(">BI", 1, len(slot)), slot]
+    return zlib.compress(b"".join(parts), 1)
+
+
+def unpack_record(blob: bytes, frame_bytes: int, intern: dict[bytes, bytes] | None = None) -> Record:
+    data = zlib.decompress(blob)
+    head_len, rows = struct.unpack_from(">II", data)
+    i = 8 + head_len
+    head = json.loads(data[8:i])
+    grid = []
+    for _ in range(rows):
+        (n,), i = struct.unpack_from(">I", data, i), i + 4
+        slots = []
+        for _ in range(n):
+            if data[i] == 0:
+                _, kind, stream, length = struct.unpack_from(">BBII", data, i)
+                i += 10
+                slot = encode_frame(kind, stream, data[i : i + length], frame_bytes)
+            else:
+                (length,) = struct.unpack_from(">I", data, i + 1)
+                i += 5
+                slot = data[i : i + length]
+            i += length
+            slots.append(intern.get(slot, slot) if intern is not None else slot)
+        grid.append(tuple(slots) + (None,) * (head["allocation"] - n))
+    status = Status(Reason(head["reason"])) if head["reason"] else COMPLETE
+    return Record(head["link"], head["window"], tuple(grid), status)
+
+
+def write_blobs(path: Path, blob: bytes) -> None:
+    with open(path, "ab") as fh:
+        fh.write(struct.pack(">I", len(blob)) + blob)
+
+
+def read_blobs(path: Path) -> list[bytes]:
+    data, out, i = path.read_bytes() if path.exists() else b"", [], 0
+    while i < len(data):
+        (n,) = struct.unpack_from(">I", data, i)
+        out.append(data[i + 4 : i + 4 + n])
+        i += 4 + n
+    return out
+
+
+def committed_line(record: CommittedRecord) -> str:
+    return json.dumps({"link": record.link, "window": record.window, "digest": str(record.digest),
+                       "status": record.status.reason.value if record.status.reason else "complete"})
+
+
+def read_committed(path: Path) -> list[CommittedRecord]:
+    from verity.commitments.identity import Digest
+
+    out = []
+    for line in path.read_text().splitlines() if path.exists() else []:
+        d = json.loads(line)
+        status = COMPLETE if d["status"] == "complete" else Status(Reason(d["status"]))
+        out.append(CommittedRecord(d["link"], d["window"], Digest(d["digest"]), status))
+    return out
+
+
+class Setup(replay.Setup):
+    """The calibration report's parameters at its own B, the frame size the active warden runs at."""
+
+    def __init__(self, report: dict) -> None:
+        super().__init__(report)
+        g = report["grid"]
+        self.egress_link, self.ingress_link = report["egress"][0]["link"], report["ingress"][0]["link"]
+        e, i = self.egress[self.egress_link], self.ingress[self.ingress_link]
+        self.egress_params = GridParams(e.buckets, e.allocation, g["frame_bytes"], e.bucket_ms, e.queue_capacity)
+        self.ingress_params = GridParams(i.buckets, i.allocation, g["frame_bytes"], i.bucket_ms, i.queue_capacity)
+        declared = report["clock_sync"].get("declared")
+        self.envelope = ClockSync(max(declared["delta"]), min(Fraction(r) for r in declared["rho"])) if declared else None
+
+
+SYNC_POLICIES = ("model", "envelope")
+
+
+def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, syncs: str = "model") -> dict:
+    """The run of one configuration: its sessions (rank = list order, stream id, d_k per frame), its requests (stream,
+    session, frames, the trace's send time and the peer's), the model's release of each request and the prover's
+    syncs: `model`, chosen over the model's run, or `envelope`, the calibration's envelope in every window. With
+    `live_model`, a request takes the frames of its live body when they are more than the trace's."""
+    if syncs not in SYNC_POLICIES:
+        raise ValueError(f"syncs is one of {SYNC_POLICIES}, not {syncs!r}")
+    e, i = setup.egress_params, setup.ingress_params
+    T, windows = e.buckets, replay.config_windows(cfg, e.buckets)
+    if len(cfg["egress"]) != 1 or len(cfg["ingress"]) != 1:
+        raise ValueError("a configuration with one egress and one ingress link")
+    first, ds = {}, defaultdict(list)
+    for pos, f in enumerate(cfg["egress"][0]["frames"]):
+        first.setdefault(f["session"], (f["anchor"], pos))
+        ds[f["session"]].append((f["index"], f["ready"] - f["anchor"]))
+    names = sorted(first, key=first.__getitem__)
+    sessions_by_bucket = defaultdict(list)
+    for s in names:
+        sessions_by_bucket[first[s][0]].append(s)
+    groups_by_bucket = defaultdict(list)
+    for t, n in sorted(Counter(cfg["ingress"][0]["arrival_ms"]).items()):
+        groups_by_bucket[math.floor(t / e.bucket_ms)].append((t, n))
+    send: dict[str | None, tuple[float, int]] = {}
+    extra, unmatched = [], 0
+    for b in sorted(set(sessions_by_bucket) | set(groups_by_bucket)):
+        ss, gs = sessions_by_bucket.get(b, []), groups_by_bucket.get(b, [])
+        for s, g in zip(ss, gs):
+            send[s] = g
+        extra += gs[len(ss):]
+        for s in ss[len(gs):]:
+            send[s] = (b * e.bucket_ms + e.bucket_ms / 2, 1)
+            unmatched += 1
+    sessions = []
+    for rank, s in enumerate(names):
+        frames = sorted(ds[s])
+        if [k for k, _ in frames] != list(range(len(frames))):
+            raise ValueError(f"{cfg.get('name')}: session {s}'s indices aren't 0 … n−1")
+        if any(b < a for (_, a), (_, b) in itertools.pairwise(frames)):
+            raise ValueError(f"{cfg.get('name')}: session {s}'s frames aren't ready in order")
+        sessions.append([s, 0, [d for _, d in frames]])
+    requests = [[t, n, s] for s, (t, n) in send.items()] + [[t, n, None] for t, n in extra]
+    requests.sort(key=lambda q: (q[0], q[2] is None, q[2] or ""))
+    stream_of = {}
+    for sid, q in enumerate(requests, start=1):
+        if q[2] is not None:
+            stream_of[q[2]] = sid
+    for row in sessions:
+        row[1] = stream_of[row[0]]
+    tau_in = i.bucket_ms
+    peer = []
+    for sid, (t, n, s) in enumerate(requests, start=1):
+        enq = math.ceil(t / tau_in)
+        if live_model is not None:
+            fewest = live_request_bytes(s or f"none-{sid}", live_body(s, live_model), None, i.frame_bytes)
+            n = max(n, math.ceil(len(fewest) / (i.frame_bytes - HEADER.size)))
+        peer.append({"stream": sid, "session": s, "frames": n, "trace_ms": t, "enqueue": enq,
+                     "send_ms": (enq - 1) * tau_in + tau_in / 2})
+    release = model_releases(peer, i, windows, e.bucket_ms)
+    frames, ready = model_frames(sessions, release, windows * T)
+    sync_set = setup.sync_set
+    chosen, _, misses = choose_syncs([(frames, ready)], sync_set, T)
+    eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
+    chosen = (list(chosen) + [eager] * windows)[:windows]
+    declared = chosen if syncs == "model" else [setup.envelope] * windows
+    out = {"name": cfg.get("name"), "windows": windows, "sessions": sessions, "requests": peer,
+           "model_release": {str(k): v for k, v in release.items()}, "model_misses": misses,
+           "unmatched_sessions": unmatched, "ingress_only_requests": len(extra),
+           "syncs": [[s.delta, str(s.rho)] for s in declared], "sync_policy": syncs,
+           "model_syncs": [[s.delta, str(s.rho)] for s in chosen]}
+    if live_model is not None:
+        out["live_model"] = live_model
+    return out
+
+
+def model_releases(requests: Sequence[dict], params: GridParams, windows: int, egress_bucket_ms: int) -> dict[int, int]:
+    """Each request's release as the ingress warden's rule gives it: its frames enqueued at their bucket, in send
+    order, and released r_in per bucket; the egress bucket of its last frame's release."""
+    pending = sorted((q["enqueue"], q["send_ms"], q["stream"], q["frames"]) for q in requests)
+    out, queue, k = {}, [], 0
+    for t in range(windows * params.buckets):
+        while k < len(pending) and pending[k][0] <= t:
+            _, _, s, n = pending[k]
+            queue += [(s, j == n - 1) for j in range(n)]
+            k += 1
+        for s, last in queue[: params.allocation]:
+            if last:
+                out[s] = t * params.bucket_ms // egress_bucket_ms
+        del queue[: params.allocation]
+    return out
+
+
+def program_keys(sessions: Sequence[list], release: dict[int, int], horizon: int) -> list[tuple[int, int, int, int]]:
+    """The Program's frames ready before the horizon, in canonical order: (ready, anchor, session rank, k)."""
+    keys = []
+    for rank, (_, stream, ds) in enumerate(sessions):
+        r = release.get(stream)
+        if r is not None:
+            keys += [(r + d, r, rank, k) for k, d in enumerate(ds) if r + d < horizon]
+    keys.sort()
+    return keys
+
+
+def model_frames(sessions, release, horizon):
+    keys = program_keys(sessions, release, horizon)
+    return ([LogicalFrame(p.to_bytes(8, "big"), a, k) for p, (_, a, _, k) in enumerate(keys)],
+            [rd for rd, _, _, _ in keys])
+
+
+def program(plan: dict, release: dict[int, int], params: GridParams) -> tuple[list[LogicalFrame], list[int]]:
+    """The Program's frames at B bytes, the server's events in canonical order, and the ready bucket each is meant for."""
+    sessions = plan["sessions"]
+    keys = program_keys(sessions, release, plan["windows"] * params.buckets)
+    frames = []
+    for p, (_, a, rank, k) in enumerate(keys):
+        name, stream, ds = sessions[rank]
+        frames.append(LogicalFrame(encode_frame(DATA, stream, event_bytes(name, k, len(ds), p), params.frame_bytes),
+                                   a, k))
+    return frames, [rd for rd, _, _, _ in keys]
+
+
+STRATEGIES = ("honest", "burst", "spread", "bits", "late")
+
+
+def adversary_writes(plan: dict, sync_set: SyncSet, buckets: int, strategy: str, seed: int = 0) -> dict[str, list]:
+    """A server inside the boundary that signals by its write times: each frame's write bucket and position, over the
+    model's releases. `burst` writes a session's frames in the bucket its request reaches it, `spread` frame k in the
+    bucket before its logical hand time, `bits` one or the other per session by a random bit, and `late` is honest
+    but holds one session in window 0, from its first frame on, until the hand time of the most lenient sync. A stream's
+    writes keep their order, and nothing is written in the last bucket or after."""
+    windows = plan["windows"]
+    horizon = windows * buckets
+    release = {int(k): v for k, v in plan["model_release"].items()}
+    keys = program_keys(plan["sessions"], release, horizon)
+    frames = [LogicalFrame(p.to_bytes(8, "big"), a, k) for p, (_, a, _, k) in enumerate(keys)]
+    hands = handing_buckets(frames, [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]], buckets)
+    names = [s[0] for s in plan["sessions"]]
+    rng = random.Random(seed)
+    bits = {name: rng.randrange(2) for name in names}
+    held = None
+    if strategy == "late":
+        lenient = handing_buckets(frames, [ClockSync(max(sync_set.deltas), min(sync_set.rhos))] * windows, buckets)
+        p = next(p for p, (_, a, _, k) in enumerate(keys) if k == 0 and a < buckets and lenient[p] < horizon - 2)
+        held = (keys[p][2], lenient[p])
+    out: dict[str, list] = defaultdict(list)
+    for p, (ready, anchor, rank, _) in enumerate(keys):
+        if strategy == "burst" or (strategy == "bits" and bits[names[rank]]):
+            b = anchor
+        elif strategy in ("spread", "bits"):
+            b = hands[p] - 1
+        elif strategy == "late":
+            b = max(ready - 1, held[1]) if rank == held[0] else ready - 1
+        else:
+            raise ValueError(f"strategy is one of {STRATEGIES[1:]}, not {strategy!r}")
+        out[names[rank]].append([b, p])
+    for name, ws in out.items():
+        last = -1
+        for w in ws:
+            w[0] = last = max(w[0], last)
+        out[name] = [w for w in ws if w[0] < horizon - 1]
+    return dict(out)
+
+
+# The three processes.
+
+def peak_rss_mb() -> float:
+    """This process's peak resident set (`VmHWM`; `ru_maxrss` survives exec, so a spawned child reports its parent's)."""
+    status = Path("/proc/self/status").read_text()
+    return int(re.search(r"VmHWM:\s+(\d+) kB", status).group(1)) / 1024
+
+
+def _quiet_runtime() -> None:
+    gc.disable()
+    sys.setswitchinterval(0.001)
+    _, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))  # a live run holds two sockets per stream in flight
+
+
+def _usage() -> dict:
+    return {"max_rss_mb": peak_rss_mb(), "cpu_s": sum(os.times()[:2]), "nice": os.getpriority(os.PRIO_PROCESS, 0),
+            "cpus": sorted(os.sched_getaffinity(0))}
+
+
+class Server:
+    """The OpenAI-compatible endpoint inside the boundary. `handle` serves one stream's connection; `serve` writes, in
+    the middle of each bucket b, the events due in it: the honest server's frame k of a request it received in bucket R
+    is due in R + d_k − 1, with the next position in canonical order; an adversary's (`plan["writes"]`) at its planned
+    bucket and position. `notify` is called on every step, for a driver on a virtual clock."""
+
+    def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
+        self.clock, self.sleep, self.notify = clock, sleep, notify
+        self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
+        self.sessions = {name: (rank, ds) for rank, (name, _, ds) in enumerate(plan["sessions"])}
+        self.writes = plan.get("writes")
+        self.batches: dict[int, list] = defaultdict(list)
+        self.processed, self.position, self.origin = -1, 0, None
+        self.writers: set = set()
+        self.log = {"receipt_late_ms": [], "batch_late_ms": [], "late_registrations": 0, "requests": 0, "events": 0}
+
+    def _write(self, item) -> None:
+        _, k, scheduled, name, writer, position = item
+        if position is None:
+            position, self.position = self.position, self.position + 1
+        writer.write(event_bytes(name, k, len(self.sessions[name][1]), position))
+        self.log["events"] += 1
+        if k == scheduled - 1:
+            writer.close()
+
+    async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self.writers.add(writer)
+        try:
+            head = await reader.readuntil(b"\r\n\r\n")
+            length = int(re.search(rb"content-length: (\d+)", head, re.IGNORECASE).group(1))
+            body = json.loads(await reader.readexactly(length))
+        except (asyncio.IncompleteReadError, ConnectionError):
+            writer.close()
+            return
+        now = self.clock() - self.origin
+        r = math.floor(now / self.tau)
+        self.log["requests"] += 1
+        self.log["receipt_late_ms"].append(round((now - r * self.tau) * 1000, 3))
+        name = body.get("user")
+        rank, ds = self.sessions.get(name, (None, []))
+        if self.writes is not None:
+            planned = self.writes.get(name, [])
+            items = [(b, (p,), k, len(planned), name, writer, p) for k, (b, p) in enumerate(planned)]
+        else:
+            n = sum(1 for d in ds if r + d < self.horizon)
+            items = [(r + d - 1, (r, rank, k), k, n, name, writer, None) for k, d in enumerate(ds[:n])]
+        if not items:
+            writer.close()
+        for b, *item in items:
+            if b <= self.processed:
+                self.log["late_registrations"] += 1
+                self._write(item)
+            else:
+                self.batches[b].append(item)
+        self.notify()
+
+    async def serve(self, origin: float) -> None:
+        self.origin = origin
+        for b in range(self.horizon - 1):
+            deadline = origin + b * self.tau + self.tau / 2
+            if (delay := deadline - self.clock()) > 0:
+                await self.sleep(delay)
+            self.log["batch_late_ms"].append(round((self.clock() - deadline) * 1000, 3))
+            for item in sorted(self.batches.pop(b, []), key=lambda x: x[0]):
+                self._write(item)
+            self.processed = b
+            self.notify()
+
+    def close(self) -> None:
+        for w in self.writers:
+            w.close()
+
+
+async def _http_body(reader: asyncio.StreamReader, head: bytes):
+    """A response's body as it arrives: de-chunked under `transfer-encoding: chunked`, else read to its end."""
+    if re.search(rb"transfer-encoding:\s*chunked", head, re.IGNORECASE):
+        while size := int((await reader.readuntil(b"\r\n")).split(b";")[0], 16):
+            yield await reader.readexactly(size)
+            await reader.readexactly(2)
+    else:
+        while data := await reader.read(1 << 16):
+            yield data
+
+
+class LiveServer:
+    """A live OpenAI endpoint inside the boundary, behind a shim: `handle` serves one stream's connection by sending its
+    request (less its padding and `user`, which names the session) to the endpoint at `upstream`, and writing back each
+    server-sent event of the response with `id:` its position in write order, the HTTP head with the first. Every event
+    written is logged as (position, session, k, the bucket it was written in, its bytes). From 1.5 buckets before the
+    horizon on it writes nothing more, and closes the stream, so that every event logged is read before the last bucket.
+    `open` counts the streams whose response hasn't ended, for a driver on a virtual clock."""
+
+    def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
+        self.clock, self.notify = clock, notify
+        self.upstream = tuple(params["upstream"])
+        self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
+        self.position, self.origin, self.open = 0, None, 0
+        self.writers: set = set()
+        self.events: list[tuple[int, str, int, int, bytes]] = []
+        self.log = {"receipt_late_ms": [], "batch_late_ms": [], "late_registrations": 0, "requests": 0, "events": 0,
+                    "failed": [], "cut_at_horizon": 0, "first_event_ms": [], "server": "live"}
+
+    async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self.writers.add(writer)
+        try:
+            head = await reader.readuntil(b"\r\n\r\n")
+            length = int(re.search(rb"content-length: (\d+)", head, re.IGNORECASE).group(1))
+            body = json.loads(await reader.readexactly(length))
+        except (asyncio.IncompleteReadError, ConnectionError, ValueError) as e:
+            self.log["failed"].append(repr(e)[:200])
+            writer.close()
+            return
+        self.open += 1
+        try:
+            await self._serve(body, writer)
+        except (asyncio.IncompleteReadError, ConnectionError, OSError, ValueError) as e:
+            self.log["failed"].append(repr(e)[:200])
+        finally:
+            self.open -= 1
+            writer.close()
+            self.notify()
+
+    async def _serve(self, body: dict, writer: asyncio.StreamWriter) -> None:
+        received = self.clock() - self.origin
+        self.log["requests"] += 1
+        self.log["receipt_late_ms"].append(round((received % self.tau) * 1000, 3))
+        name = body.pop("user")
+        raw = json.dumps(body, separators=(",", ":")).encode()
+        up_reader, up_writer = await asyncio.open_connection(*self.upstream[:2], limit=1 << 22)
+        try:
+            up_writer.write(b"POST " + LIVE_PATH + b" HTTP/1.1\r\nhost: %s:%d\r\ncontent-type: application/json\r\n"
+                            b"content-length: %d\r\nconnection: close\r\n\r\n" % (self.upstream[0].encode(),
+                                                                                    self.upstream[1], len(raw)) + raw)
+            up_head = await up_reader.readuntil(b"\r\n\r\n")
+            if not up_head.startswith((b"HTTP/1.1 200", b"HTTP/1.0 200")):
+                self.log["failed"].append(up_head.split(b"\r\n")[0].decode(errors="replace"))
+                return
+            cutter, k, cutoff = Events(), 0, self.origin + (self.horizon - 1.5) * self.tau
+            async for data in _http_body(up_reader, up_head):
+                for event in cutter.feed(data):
+                    now = self.clock()
+                    if now >= cutoff:
+                        self.log["cut_at_horizon"] += 1
+                        return
+                    p, self.position = self.position, self.position + 1
+                    out = (HTTP_HEAD if k == 0 else b"") + b"id: %d\n" % p + event
+                    writer.write(out)
+                    if k == 0:
+                        self.log["first_event_ms"].append(round((now - self.origin - received) * 1000, 3))
+                    self.events.append((p, name, k, math.floor((now - self.origin) / self.tau), out))
+                    self.log["events"] += 1
+                    k += 1
+                self.notify()
+        finally:
+            up_writer.close()
+
+    async def serve(self, origin: float) -> None:
+        self.origin = origin
+
+    def close(self) -> None:
+        for w in self.writers:
+            w.close()
+
+    def dump_events(self, path: Path) -> None:
+        with gzip.open(path, "wt", compresslevel=1) as fh:
+            for p, name, k, bucket, event in self.events:
+                fh.write(json.dumps([p, name, k, bucket, event.decode("latin-1")]) + "\n")
+
+
+def read_events(path: Path) -> list[tuple[int, str, int, int, bytes]]:
+    with gzip.open(path, "rt") as fh:
+        return [(p, name, k, b, e.encode("latin-1")) for p, name, k, b, e in map(json.loads, fh)]
+
+
+class Peer:
+    """The client outside the boundary: `send` writes each request's link frames at its send time, `read` reads the wire
+    to its end, keeping a SHA-256 per window and each bucket's arrival after its tick."""
+
+    def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
+        self.clock, self.sleep, self.notify = clock, sleep, notify
+        self.B, self.tau = params["frame_bytes"], params["bucket_ms"] / 1000
+        self.bucket_bytes = params["allocation"] * self.B
+        self.window_bytes = params["buckets"] * self.bucket_bytes
+        self.by_time = defaultdict(list)
+        for q in plan["requests"]:
+            self.by_time[q["send_ms"]].append(q)
+        self.live_model = plan.get("live_model")
+        self.instants_sent = self.frames_sent = self.bytes = 0
+        self.log = {"send_late_ms": [], "window_sha256": [], "bucket_lag_ms": []}
+
+    async def send(self, writer: asyncio.StreamWriter, origin: float) -> None:
+        for t in sorted(self.by_time):
+            deadline = origin + t / 1000
+            if (delay := deadline - self.clock()) > 0:
+                await self.sleep(delay)
+            self.log["send_late_ms"].append(round((self.clock() - deadline) * 1000, 3))
+            data = b"".join(request_frames(q["stream"], self.request(q), self.B) for q in self.by_time[t])
+            writer.write(data)
+            self.instants_sent += 1
+            self.frames_sent += len(data) // self.B
+            self.notify()
+
+    def request(self, q: dict) -> bytes:
+        name = q["session"] or f"none-{q['stream']}"
+        if self.live_model is None:
+            return request_bytes(name, q["frames"], self.B)
+        return live_request_bytes(name, live_body(q["session"], self.live_model), q["frames"], self.B)
+
+    async def read(self, reader: asyncio.StreamReader, origin: float) -> None:
+        h = hashlib.sha256()
+        while data := await reader.read(1 << 22):
+            now, mv, before = self.clock(), memoryview(data), self.bytes // self.bucket_bytes
+            while mv:
+                take = min(len(mv), self.window_bytes - self.bytes % self.window_bytes)
+                h.update(mv[:take])
+                self.bytes, mv = self.bytes + take, mv[take:]
+                if self.bytes % self.window_bytes == 0:
+                    self.log["window_sha256"].append(h.hexdigest())
+                    h = hashlib.sha256()
+            for t in range(before, self.bytes // self.bucket_bytes):
+                self.log["bucket_lag_ms"].append(round((now - origin - t * self.tau) * 1000, 3))
+            self.notify()
+
+    def dump(self) -> dict:
+        return self.log | {"bytes": self.bytes}
+
+
+class Publisher:
+    """The proxy's `publish`: each record goes to its link's file, packed, and its commitment to `committed.jsonl`, on a
+    worker thread, or inline with `threaded=False`."""
+
+    def __init__(self, out: Path, setup: Setup, threaded: bool = True) -> None:
+        self.out = out
+        self.files = {setup.egress_params: out / "responses.records", setup.ingress_params: out / "requests.records"}
+        self.executor = ThreadPoolExecutor(1) if threaded else None
+        self.futures: list = []
+
+    def keep(self, record: Record, params: GridParams) -> None:
+        write_blobs(self.files[params], pack_record(record))
+        with open(self.out / "committed.jsonl", "a") as fh:
+            fh.write(committed_line(commit(record, params)) + "\n")
+
+    def __call__(self, record: Record, params: GridParams) -> None:
+        if self.executor is None:
+            self.keep(record, params)
+        else:
+            self.futures.append(self.executor.submit(self.keep, record, params))
+
+    def close(self) -> None:
+        if self.executor is not None:
+            self.executor.shutdown(wait=True)
+            for f in self.futures:
+                f.result()
+
+
+def proxy_log(proxy: Proxy) -> dict:
+    return {"lateness_ms": {k: [round(x * 1000, 3) for x in v] for k, v in proxy.lateness.items()},
+            "frames": proxy.frames, "hands": proxy.shaper.hands, "link_frames_read": proxy.link_frames_read,
+            "streams": len(proxy.streams), "slack_ms": proxy.slack * 1000} | _usage()
+
+
+def write_logs(out: Path, proxy: Proxy | None = None, server: Server | None = None, peer: Peer | None = None) -> None:
+    if proxy is not None:
+        with gzip.open(out / "proxy.json.gz", "wt") as fh:
+            json.dump(proxy_log(proxy), fh)
+    if server is not None:
+        (out / "server.json").write_text(json.dumps(server.log | _usage()))
+        if isinstance(server, LiveServer):
+            server.dump_events(out / "server.events.gz")
+    if peer is not None:
+        (out / "peer.json").write_text(json.dumps(peer.dump() | _usage()))
+
+
+def server_process(plan: dict, params: dict, conn, out: str) -> None:
+    _quiet_runtime()
+    asyncio.run(_server(plan, params, conn, Path(out)))
+
+
+async def _server(plan: dict, params: dict, conn, out: Path) -> None:
+    loop = asyncio.get_running_loop()
+    server = LiveServer(plan, params) if "upstream" in params else Server(plan, params)
+    listening = await asyncio.start_server(server.handle, "127.0.0.1", 0)
+    conn.send(listening.sockets[0].getsockname()[1])
+    await server.serve(await loop.run_in_executor(None, conn.recv))
+    await loop.run_in_executor(None, conn.recv)
+    listening.close()
+    server.close()
+    write_logs(out, server=server)
+
+
+def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], conn, out: str) -> None:
+    _quiet_runtime()
+    asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out)))
+
+
+async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out: Path) -> None:
+    publish = Publisher(out, setup)
+    syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
+    done = asyncio.get_running_loop().create_future()
+    holder: dict = {}
+
+    async def on_link(reader, writer) -> None:
+        await holder["proxy"].run(reader, writer)
+        done.set_result(None)
+
+    listening = await asyncio.start_server(on_link, "127.0.0.1", 0)
+    conn.send(listening.sockets[0].getsockname()[1])
+    origin = conn.recv()
+    proxy = holder["proxy"] = Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs,
+                                    origin=origin, publish=publish, egress_link=setup.egress_link,
+                                    ingress_link=setup.ingress_link)
+    await done
+    listening.close()
+    publish.close()
+    write_logs(out, proxy=proxy)
+
+
+def peer_process(plan: dict, params: dict, link_port: int, conn, out: str) -> None:
+    _quiet_runtime()
+    asyncio.run(_peer(plan, params, link_port, conn, Path(out)))
+
+
+async def _peer(plan: dict, params: dict, link_port: int, conn, out: Path) -> None:
+    peer = Peer(plan, params)
+    reader, writer = await asyncio.open_connection("127.0.0.1", link_port, limit=1 << 22)
+    conn.send("connected")
+    origin = conn.recv()
+    sending = asyncio.create_task(peer.send(writer, origin))
+    await peer.read(reader, origin)
+    sending.cancel()
+    writer.close()
+    write_logs(out, peer=peer)
+
+
+def wire_params(setup: Setup) -> dict:
+    e = setup.egress_params
+    return {"buckets": e.buckets, "bucket_ms": e.bucket_ms, "allocation": e.allocation, "frame_bytes": e.frame_bytes}
+
+
+class Evicted(Exception):
+    """SIGTERM: the lease is reclaimed."""
+
+
+def run_configuration(plan: dict, report: dict, out: Path, nice: int | None = None,
+                      upstream: tuple[str, int] | None = None, cpus: Sequence[int] | None = None) -> dict:
+    """One configuration in real time: the server, then the proxy, then the peer, released together at one origin.
+    With `nice`, every thread of the three runs at that niceness (`renice`, through sudo); with `cpus`, the server's,
+    the proxy's and the peer's threads each run on one core of their own. Threads they start later inherit both. With
+    `upstream`, the server is `LiveServer` in front of the endpoint there. On `Evicted` the three are terminated and it
+    is raised again."""
+    params = wire_params(Setup(report)) | ({"upstream": list(upstream)} if upstream else {})
+    started: list = []
+    try:
+        return _run_configuration(plan, report, out, nice, cpus, params, started)
+    except Evicted:
+        for proc in started:
+            proc.terminate()
+        raise
+
+
+def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, cpus: Sequence[int] | None,
+                       params: dict, started: list) -> dict:
+    out.mkdir(parents=True, exist_ok=True)
+    ctx = multiprocessing.get_context("spawn")
+    (s, s_child), (p, p_child), (q, q_child) = ctx.Pipe(), ctx.Pipe(), ctx.Pipe()
+    server = ctx.Process(target=server_process, args=(plan, params, s_child, str(out)))
+    started.append(server)
+    server.start()
+    port = s.recv()
+    proxy = ctx.Process(target=proxy_process, args=(plan, report, ("127.0.0.1", port), p_child, str(out)))
+    started.append(proxy)
+    proxy.start()
+    link = p.recv()
+    peer = ctx.Process(target=peer_process, args=(plan, params, link, q_child, str(out)))
+    started.append(peer)
+    peer.start()
+    q.recv()
+    for proc, cpu in zip((server, proxy, peer), cpus or (None,) * 3):
+        for tid in os.listdir(f"/proc/{proc.pid}/task"):
+            if nice is not None:
+                subprocess.run(["sudo", "-n", "renice", "-n", str(nice), "-p", tid], check=True, capture_output=True)
+            if cpu is not None:
+                os.sched_setaffinity(int(tid), {cpu})
+    origin = time.monotonic() + STARTUP_S
+    for c in (s, p, q):
+        c.send(origin)
+    proxy.join()
+    peer.join()
+    s.send("stop")
+    server.join()
+    codes = {"server": server.exitcode, "proxy": proxy.exitcode, "peer": peer.exitcode}
+    (out / "processes.json").write_text(json.dumps({"exit": codes, "origin": origin, "clock": "real",
+                                                    "nice": nice, "cpus": list(cpus) if cpus else None,
+                                                    "server": "live" if "upstream" in params else "fake"}))
+    return codes
+
+
+def run_virtual(plan: dict, report: dict, out: Path, upstream: tuple[str, int] | None = None) -> dict:
+    """One configuration on an injected clock: the same sockets, proxy, server and peer in one event loop, the clock
+    moved to each instant something is due (a tick, a server batch, a send) once everything due before it is done.
+    With `upstream`, the server is `LiveServer` in front of an endpoint that answers without the clock moving."""
+    out.mkdir(parents=True, exist_ok=True)
+    asyncio.run(_virtual(plan, Setup(report), out, upstream))
+    (out / "processes.json").write_text(json.dumps({"exit": {"server": 0, "proxy": 0, "peer": 0}, "origin": 0.0,
+                                                    "clock": "virtual"}))
+    return {"server": 0, "proxy": 0, "peer": 0}
+
+
+def virtual_process(plan: dict, report: dict, out: Path) -> None:
+    _quiet_runtime()
+    run_virtual(plan, report, out)
+
+
+async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int] | None = None) -> None:
+    e, i = setup.egress_params, setup.ingress_params
+    params = wire_params(setup) | ({"upstream": list(upstream)} if upstream else {})
+    clock = VirtualClock(-1.0)
+    holder: dict = {}
+
+    def notify() -> None:
+        holder["proxy"]._changed.set()
+
+    server = (LiveServer if upstream else Server)(plan, params, clock, clock.sleep, notify)
+    peer = Peer(plan, params, clock, clock.sleep, notify)
+    listening = await asyncio.start_server(server.handle, "127.0.0.1", 0)
+    publish = Publisher(out, setup, threaded=False)
+    syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
+    proxy = holder["proxy"] = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0,
+                                    clock=clock, sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,
+                                    ingress_link=setup.ingress_link)
+    accepted: asyncio.Future = asyncio.get_running_loop().create_future()
+    link = await asyncio.start_server(lambda r, w: accepted.set_result(asyncio.create_task(proxy.run(r, w))),
+                                      "127.0.0.1", 0)
+    reader, writer = await asyncio.open_connection(*link.sockets[0].getsockname()[:2], limit=1 << 22)
+    running = await accepted
+    tasks = [asyncio.create_task(peer.send(writer, 0.0)), asyncio.create_task(peer.read(reader, 0.0)),
+             asyncio.create_task(server.serve(0.0))]
+    horizon = plan["windows"] * e.buckets
+    tau_e, tau_i = e.bucket_ms / 1000, i.bucket_ms / 1000
+    instants = sorted({t * tau_e for t in range(horizon)} | {t * tau_i for t in range(plan["windows"] * i.buckets)}
+                      | {b * tau_e + tau_e / 2 for b in range(horizon - 1)} | {t / 1000 for t in peer.by_time})
+    sends = sorted(t / 1000 for t in peer.by_time)
+    end = (horizon - 1) * tau_e
+
+    def settled(x: float) -> bool:
+        ticks_e = min(horizon, math.floor(x / tau_e + 1e-9) + 1) if x >= 0 else 0
+        ticks_i = min(plan["windows"] * i.buckets, math.floor(x / tau_i + 1e-9) + 1) if x >= 0 else 0
+        batches = min(horizon - 1, math.floor((x - tau_e / 2) / tau_e + 1e-9) + 1) if x >= tau_e / 2 else 0
+        return (len(proxy.lateness["egress"]) >= ticks_e and len(proxy.lateness["ingress"]) >= ticks_i
+                and getattr(server, "processed", horizon) + 1 >= batches and getattr(server, "open", 0) == 0
+                and peer.instants_sent >= bisect.bisect_right(sends, x + 1e-9)
+                and proxy.link_frames_read >= peer.frames_sent and server.log["requests"] >= proxy.requests_released
+                and len(proxy.frames) >= server.log["events"]
+                and peer.bytes >= len(proxy.lateness["egress"]) * e.allocation * e.frame_bytes)
+
+    for x in instants:
+        if x > end + 1e-9:
+            break
+        clock.advance(x + 1e-9)
+        await proxy.until(lambda p, x=x: settled(x))
+    await running
+    await tasks[1]
+    tasks[0].cancel()
+    writer.close()
+    listening.close()
+    link.close()
+    server.close()
+    publish.close()
+    write_logs(out, proxy, server, peer)
+
+
+# The audit.
+
+def ingress_releases(records: Sequence[Record], ingress: GridParams, egress: GridParams) -> tuple[dict, dict]:
+    """Each stream's release, as the egress bucket of its last frame's ingress bucket, and every ingress frame's
+    release bucket by stream, read from the ingress records."""
+    last, frames = {}, defaultdict(list)
+    for rec in records:
+        for t, row in enumerate(rec.grid):
+            b = rec.window * ingress.buckets + t
+            for slot in row[: row_count(row)]:
+                kind, stream, _ = decode_frame(slot)
+                frames[stream].append(b)
+                if kind == LAST:
+                    last.setdefault(stream, b * ingress.bucket_ms // egress.bucket_ms)
+    return last, frames
+
+
+def percentiles_ms(values: Sequence[float]) -> dict:
+    return replay.hist_percentiles(Counter(values)) if values else {}
+
+
+def live_program(plan: dict, release: dict[int, int], params: GridParams,
+                 path: Path) -> tuple[list[LogicalFrame], list[int]]:
+    """The Program a live server served: the shim's events in position order, each anchored at its stream's release,
+    and the ready bucket each was meant for, the one after the bucket it was written in. An event longer than a frame
+    is kept unpadded, as a frame of the wrong size, which the Warden faults as malformed just as the proxy did."""
+    stream_of = {q["session"] or f"none-{q['stream']}": q["stream"] for q in plan["requests"]}
+    events = sorted(read_events(path))
+    if [p for p, *_ in events] != list(range(len(events))):
+        raise ValueError(f"{path}: the positions aren't 0 … n−1")
+
+    def frame(stream: int, event: bytes) -> bytes:
+        if HEADER.size + len(event) > params.frame_bytes:
+            return HEADER.pack(DATA, stream, len(event)) + event
+        return encode_frame(DATA, stream, event, params.frame_bytes)
+
+    frames = [LogicalFrame(frame(stream_of[name], event), release[stream_of[name]], k)
+              for _, name, k, _, event in events]
+    return frames, [b + 1 for *_, b, _ in events]
+
+
+def live_comparisons(plan: dict, setup: Setup, frames: Sequence[LogicalFrame], ready: Sequence[int]) -> dict:
+    """What other provers would have met on a live run's frames as read: the windows whose every frame is ready by
+    its hand time under the trace model's syncs, and the windows a hindsight prover (`choose_syncs`) misses."""
+    T, windows = setup.egress_params.buckets, plan["windows"]
+    model_syncs = [ClockSync(d, Fraction(r)) for d, r in plan["model_syncs"]]
+    late = {f.anchor // T for f, h, r in zip(frames, handing_buckets(frames, model_syncs, T), ready) if r > h}
+    try:
+        chosen, _, misses = choose_syncs([(frames, ready)], setup.sync_set, T)
+        hindsight = {"misses": misses, "delta": sorted({s.delta for s in chosen}),
+                     "rho": [str(r) for r in sorted({s.rho for s in chosen})]}
+    except ValueError as err:
+        hindsight = {"error": str(err)}
+    return {"model_syncs_met_windows": sum(w not in late for w in range(windows)), "hindsight": hindsight}
+
+
+def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
+    """The audit of one run's published records, and the comparisons with the reference and the model."""
+    setup = Setup(report)
+    e, i = setup.egress_params, setup.ingress_params
+    T, windows = e.buckets, plan["windows"]
+    horizon = windows * T
+    syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
+    in_records = [unpack_record(b, i.frame_bytes) for b in read_blobs(run / "requests.records")]
+    release, in_frames = ingress_releases(in_records, i, e)
+    live = "live_model" in plan
+    frames, meant = live_program(plan, release, e, run / "server.events.gz") if live else program(plan, release, e)
+    intern = {f.payload: f.payload for f in frames}
+    position = {f.payload: p for p, f in enumerate(frames)}
+    out_records = [unpack_record(b, e.frame_bytes, intern) for b in read_blobs(run / "responses.records")]
+    committed = read_committed(run / "committed.jsonl")
+    verdicts = []
+    for kind, records in (("raw", in_records + out_records), ("committed", committed)):
+        a = Audit()
+        v = a.check_link(setup.egress_link, records, frames, syncs, setup.sync_set, e)
+        v += a.check_ingress_link(setup.ingress_link, records, windows)
+        verdicts.append(v)
+    rows = [{"config": plan["name"], "link": a.link, "window": a.window,
+             "direction": "egress" if a.link == setup.egress_link else "ingress",
+             "raw": a.violation, "committed": b.violation} for a, b in zip(*verdicts, strict=True)]
+
+    with gzip.open(run / "proxy.json.gz", "rt") as fh:
+        log = json.load(fh)
+    seen = {p: (stream, k, anchor, ready) for p, stream, k, anchor, ready in log["frames"]}
+    ready = [seen[p][3] if p in seen else horizon for p in range(len(frames))]
+    ref = run_shaper(frames, ready, syncs, Warden(setup.egress_link, e))
+    logical = handing_buckets(frames, syncs, T)
+    rule, last = [], 0
+    for h, r in zip(logical, ready, strict=True):
+        last = max(h, r, last)
+        rule.append(last)
+    hands = log["hands"]
+    model_release = {int(k): v for k, v in plan["model_release"].items()}
+    stream_of = {p: frames[p].payload[1:5] for p in range(len(frames))}
+    comparisons = {
+        "records_are_run_shapers": ref == sorted((r for r in out_records), key=lambda r: r.window),
+        "hands_are_the_rules": hands == [h for h in rule if h < horizon],
+        "hands_max_diff_from_rule": max((abs(a - b) for a, b in zip(hands, rule)), default=0),
+        "frames_read": len(log["frames"]), "frames_meant": len(frames),
+        "frames_log_is_the_programs": sorted((p, s, k, a) for p, (s, k, a, _) in seen.items()) ==
+            [(p, int.from_bytes(stream_of[p], "big"), f.index, f.anchor) for p, f in enumerate(frames) if p in seen],
+        "ready_off_meant": sum(1 for p, (_, _, _, r) in seen.items() if p < len(meant) and r != meant[p]),
+        "releases_off_model": sum(1 for s, r in release.items() if model_release.get(s) != r)
+            + sum(1 for s in model_release if s not in release),
+        "model_misses": plan["model_misses"],
+    }
+    if live:
+        comparisons |= live_comparisons(plan, setup, frames, ready)
+    else:
+        model_hands = handing_buckets(model_frames(plan["sessions"], model_release, horizon)[0], syncs, T)
+        comparisons["hands_max_diff_from_model"] = max((abs(a - b) for a, b in zip(hands, model_hands)), default=0)
+
+    released, real, slots = {}, 0, 0
+    comparisons["released_not_the_programs"] = 0
+    for rec in out_records:
+        for t, row in enumerate(rec.grid):
+            n = row_count(row)
+            real, slots = real + n, slots + len(row)
+            for slot in row[:n]:
+                if (p := position.get(slot)) is None:
+                    comparisons["released_not_the_programs"] += 1
+                else:
+                    released[p] = rec.window * T + t
+    send_ms = {q["stream"]: q["trace_ms"] for q in plan["requests"]}
+    hist = {k: Counter() for k in ("shaping", "queueing", "first_frame", "first_frame_from_send")}
+    for p, f in enumerate(frames):
+        if p < len(hands):
+            hist["shaping"][(hands[p] - ready[p]) * e.bucket_ms] += 1
+        if p in released:
+            hist["queueing"][(released[p] - hands[p]) * e.bucket_ms] += 1
+            if f.index == 0:
+                hist["first_frame"][(released[p] - f.anchor) * e.bucket_ms] += 1
+                s = int.from_bytes(f.payload[1:5], "big")
+                hist["first_frame_from_send"][round(released[p] * e.bucket_ms - send_ms[s])] += 1
+    delivery = Counter()
+    for q in plan["requests"]:
+        for b in in_frames.get(q["stream"], []):
+            delivery[round(b * i.bucket_ms - q["trace_ms"], 3)] += 1
+
+    peer = json.loads((run / "peer.json").read_text())
+    zero = bytes(e.allocation * e.frame_bytes)
+    wire = []
+    for rec in sorted(out_records, key=lambda r: r.window):
+        h = hashlib.sha256()
+        for row in rec.grid:
+            n = row_count(row)
+            h.update(b"".join(row[:n]))
+            h.update(zero[: (e.allocation - n) * e.frame_bytes])
+        wire.append(h.hexdigest())
+    comparisons["wire_is_the_records"] = wire == peer["window_sha256"]
+    server = json.loads((run / "server.json").read_text())
+    lateness = log["lateness_ms"]
+    timing = {
+        "slack_ms": log["slack_ms"],
+        "tick_late_ms": {k: percentiles_ms(v) | {"over_slack": sum(x > log["slack_ms"] for x in v), "ticks": len(v)}
+                         for k, v in lateness.items()},
+        "server_batch_late_ms": percentiles_ms(server["batch_late_ms"]),
+        "server_receipt_late_ms": percentiles_ms(server["receipt_late_ms"]),
+        "server_late_registrations": server["late_registrations"],
+        "peer_send_late_ms": percentiles_ms(peer["send_late_ms"]),
+        "wire_bucket_lag_ms": percentiles_ms(peer["bucket_lag_ms"]),
+        "cpu_s": {"proxy": log["cpu_s"], "server": server["cpu_s"], "peer": peer["cpu_s"]},
+        "max_rss_mb": {"proxy": log["max_rss_mb"], "server": server["max_rss_mb"], "peer": peer["max_rss_mb"]},
+    }
+    if live:
+        timing |= {"server_first_event_ms": percentiles_ms(server["first_event_ms"]),
+                   "server_failed": len(server["failed"]), "server_failures": server["failed"][:20],
+                   "server_cut_at_horizon": server["cut_at_horizon"], "server_requests": server["requests"]}
+    return {"config": plan["name"], "windows": windows, "rows": rows, "comparisons": comparisons, "timing": timing,
+            "egress": {"real": real, "slots": slots, "frames": len(frames)},
+            "hist": {k: {str(x): n for x, n in v.items()} for k, v in hist.items()},
+            "ingress_delivery": {str(x): n for x, n in delivery.items()},
+            "lateness_ms": lateness}
+
+
+def select(traces: Sequence[Path], setup: Setup, windows: int, lo: int, hi: int) -> list[tuple[Path, str]]:
+    """Configurations of lo … hi windows, one per trace file in order and then a second round, until `windows`."""
+    pool = []
+    for path in traces:
+        doc = replay.read_trace(path)
+        sizes = [(c["name"], replay.config_windows(c, setup.egress_params.buckets)) for c in doc["configurations"]]
+        pool.append([(path, name, n) for name, n in sizes if lo <= n <= hi])
+        del doc
+    picked, total, round_ = [], 0, 0
+    while total < windows and any(len(p) > round_ for p in pool):
+        for p in pool:
+            if len(p) > round_ and total < windows:
+                path, name, n = p[round_]
+                picked.append((path, name))
+                total += n
+        round_ += 1
+    return picked
+
+
+def slug(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", name)
+
+
+def _audit_job(args) -> dict:
+    plan_path, report, run, strategy = args
+    os.nice(19)
+    with gzip.open(plan_path, "rt") as fh:
+        plan = json.load(fh)
+    result = audit_configuration(plan, report, Path(run))
+    with gzip.open(Path(run) / "audit.json.gz", "wt") as fh:
+        json.dump(result, fh)
+    return {k: v for k, v in result.items() if k in ("config", "windows", "rows", "comparisons", "timing")} | \
+        {"run": run, "strategy": strategy}
+
+
+def summarize(results: Sequence[dict], models: Sequence[dict]) -> dict:
+    rows = [r for res in results for r in res["rows"]]
+    hist = defaultdict(Counter)
+    real = slots = 0
+    late = defaultdict(list)
+    for res in results:
+        with gzip.open(Path(res["run"]) / "audit.json.gz", "rt") as fh:
+            full = json.load(fh)
+        for k, v in full["hist"].items():
+            hist[k].update({float(x): n for x, n in v.items()})
+        hist["ingress_delivery"].update({float(x): n for x, n in full["ingress_delivery"].items()})
+        real, slots = real + full["egress"]["real"], slots + full["egress"]["slots"]
+        for k, v in full["lateness_ms"].items():
+            late[k] += v
+    out = {"configurations": len(results), "windows": sum(r["windows"] for r in results)}
+    for side in ("egress", "ingress"):
+        mine = [r for r in rows if r["direction"] == side]
+        out[side] = {"link_windows": len(mine), "accepted": {k: sum(r[k] is None for r in mine)
+                                                             for k in ("raw", "committed")},
+                     "violations": [r for r in mine if r["raw"] or r["committed"]]}
+    out["egress"]["padding_share"] = 1 - real / slots if slots else None
+    out["latency_ms"] = {k: replay.hist_percentiles(v) for k, v in hist.items()}
+    slack = results[0]["timing"]["slack_ms"] if results else None
+    out["tick_late_ms"] = {k: percentiles_ms(v) | {"ticks": len(v), "over_slack": sum(x > slack for x in v)}
+                           for k, v in late.items()}
+    out["comparisons"] = {k: all(r["comparisons"][k] for r in results)
+                          for k in ("records_are_run_shapers", "hands_are_the_rules", "frames_log_is_the_programs",
+                                    "wire_is_the_records")}
+    out["comparisons"] |= {k: max((r["comparisons"][k] for r in results if k in r["comparisons"]), default=None)
+                           for k in ("hands_max_diff_from_rule", "hands_max_diff_from_model")}
+    out["comparisons"] |= {k: sum(r["comparisons"][k] for r in results)
+                           for k in ("ready_off_meant", "releases_off_model", "model_misses",
+                                     "released_not_the_programs")}
+    if any("hindsight" in r["comparisons"] for r in results):
+        out["live"] = {
+            "model_syncs_met_windows": sum(r["comparisons"]["model_syncs_met_windows"] for r in results),
+            "hindsight_misses": sum(r["comparisons"]["hindsight"].get("misses", 0) for r in results),
+            "hindsight_errors": [r["comparisons"]["hindsight"]["error"] for r in results
+                                 if "error" in r["comparisons"]["hindsight"]],
+            "server_requests": sum(r["timing"]["server_requests"] for r in results),
+            "server_failed": sum(r["timing"]["server_failed"] for r in results),
+            "server_cut_at_horizon": sum(r["timing"]["server_cut_at_horizon"] for r in results)}
+    if models:
+        mt, mrows = replay.new_tally(), []
+        for m in models:
+            mrows += m["rows"]
+            replay.add_tally(mt, m["tally"])
+        ms = replay.summarize(mrows, mt, Setup(models[0]["report"]))
+        out["model"] = {"egress": {k: ms["egress"][k] for k in ("link_windows", "accepted", "padding_share",
+                                                               "latency_ms")},
+                        "ingress": {k: ms["ingress"][k] for k in ("link_windows", "accepted", "delivery_delay_ms")}}
+    out["per_configuration"] = [{"config": r["config"], "windows": r["windows"], "comparisons": r["comparisons"],
+                                 "tick_late_ms": r["timing"]["tick_late_ms"], "timing": r["timing"],
+                                 "accepted": {k: sum(x[k] is None for x in r["rows"]) for k in ("raw", "committed")},
+                                 "link_windows": len(r["rows"])} for r in results]
+    return out
+
+
+def against_honest(run: Path, honest: Path) -> dict:
+    """Whether a run's wire, as the peer read it, and its committed records are the honest run's."""
+    def wire(p: Path) -> list[str]:
+        return json.loads((p / "peer.json").read_text())["window_sha256"]
+
+    def committed(p: Path) -> list[str]:
+        return sorted((p / "committed.jsonl").read_text().splitlines())
+
+    return {"wire_is_honests": wire(run) == wire(honest), "committed_is_honests": committed(run) == committed(honest),
+            "windows_whose_wire_differs": [w for w, (a, b) in enumerate(zip(wire(run), wire(honest))) if a != b]}
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="active_replay.py", description=__doc__.splitlines()[0])
+    ap.add_argument("traces", nargs="+", type=Path)
+    ap.add_argument("--calibration", required=True, type=Path)
+    ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--windows", type=int, default=60, help="windows to replay, in whole configurations")
+    ap.add_argument("--config-windows", default="4:10", help="the configurations' sizes, lo:hi windows")
+    ap.add_argument("--config", dest="configs", action="append", help="a configuration's name, instead of --windows")
+    ap.add_argument("--truncate", type=int, help="replay only each configuration's first N windows")
+    ap.add_argument("--strategies", default="honest",
+                    help=f"the server's write timing, comma-separated: {', '.join(STRATEGIES)}; each one is compared "
+                         "with the honest run")
+    ap.add_argument("--seed", type=int, default=0, help="the bits strategy's seed")
+    ap.add_argument("--clock", choices=("real", "virtual"), default="real",
+                    help="real: three processes on the host's clock; virtual: one event loop on an injected clock")
+    ap.add_argument("--nice", type=int, help="run the three processes at this niceness, e.g. -20 (through sudo renice)")
+    ap.add_argument("--cpus", type=lambda s: [int(c) for c in s.split(",")],
+                    help="pin the server, the proxy and the peer each to one core, e.g. 1,2,3")
+    ap.add_argument("--reaudit", action="store_true",
+                    help="audit and summarize the runs already under --out, from their records, instead of running them")
+    ap.add_argument("--server-url", help="a live OpenAI endpoint, e.g. http://127.0.0.1:8000, instead of the fake server")
+    ap.add_argument("--vllm", metavar="MODEL", help="start a vLLM server for MODEL as record.py does, and use it live")
+    ap.add_argument("--vllm-cpus", help="with --vllm: its CPUs (taskset -c); the harness takes the rest of its own")
+    ap.add_argument("--served-model", default="served", help="the live endpoint's model name")
+    ap.add_argument("--syncs", choices=SYNC_POLICIES, help="the prover's syncs (default: envelope live, else model)")
+    ap.add_argument("--max-minutes", type=float,
+                    help="start no configuration that would end later than this from the start")
+    args = ap.parse_args(argv)
+    started = time.monotonic()
+    strategies = args.strategies.split(",")
+    if strategies[0] != "honest" or any(s not in STRATEGIES for s in strategies):
+        raise SystemExit(f"--strategies starts with honest and names some of {STRATEGIES}")
+    live = bool(args.server_url or args.vllm)
+    if live and (strategies != ["honest"] or args.clock != "real"):
+        raise SystemExit("a live server runs honest, on the real clock")
+    sync_policy = args.syncs or ("envelope" if live else "model")
+    report = json.loads(args.calibration.read_text())
+    setup = Setup(report)
+    lo, hi = (int(x) for x in args.config_windows.split(":"))
+    traces = sorted(args.traces)
+    if args.configs:
+        wanted = set(args.configs)
+        picked = [(p, n) for p in traces for n in [c["name"] for c in replay.read_trace(p)["configurations"]]
+                  if n in wanted]
+    else:
+        picked = select(traces, setup, args.windows, lo, hi)
+    runs = args.out / "runs"
+    runs.mkdir(parents=True, exist_ok=True)
+    if not args.reaudit:
+        (args.out / "selection.json").write_text(json.dumps([[str(p), n] for p, n in picked], indent=1))
+    def evicted(*_) -> None:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        raise Evicted
+
+    signal.signal(signal.SIGTERM, evicted)
+    vllm: list = []
+    try:
+        upstream = None
+        if live and not args.reaudit:
+            upstream = start_vllm(args, args.out, vllm) if args.vllm else _host_port(args.server_url)
+        return _main(args, report, setup, picked, runs, strategies, live, sync_policy, upstream, started)
+    except Evicted:
+        print("evicted before the first configuration", flush=True)
+        return 143
+    finally:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        if vllm:
+            import record
+
+            record.stop_server(vllm[0])
+
+
+def _host_port(url: str) -> tuple[str, int]:
+    m = re.fullmatch(r"https?://([^:/]+):(\d+)/?", url)
+    if not m:
+        raise SystemExit(f"--server-url is http://HOST:PORT, not {url!r}")
+    return m.group(1), int(m.group(2))
+
+
+def start_vllm(args, out: Path, started: list) -> tuple[str, int]:
+    """vLLM's OpenAI server on this host's GPU, with `record.py`'s arguments, once it answers /health; the process is
+    appended to `started` as soon as it exists."""
+    import record
+
+    port = record.free_port()
+    model = record.local_model(args.vllm, Path(os.environ.get("HF_HOME", Path.home() / ".cache/huggingface")))
+    argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", model,
+            "--served-model-name", args.served_model, "--host", "127.0.0.1", "--port", str(port), "--seed", "0",
+            "--max-model-len", "2048", "--disable-uvicorn-access-log"]
+    if args.vllm_cpus:
+        argv = ["taskset", "-c", args.vllm_cpus, *argv]
+        mine = os.sched_getaffinity(0) - set(os.sched_getaffinity(0) & _cpu_list(args.vllm_cpus))
+        if mine:
+            os.sched_setaffinity(0, mine)
+    (out / "vllm.json").write_text(json.dumps({"argv": argv, "harness_cpus": sorted(os.sched_getaffinity(0))}))
+    with open(out / "vllm.log", "wb") as log:
+        started.append(server := subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT))
+    t0 = time.monotonic()
+    record.wait_ready(server, port, t0 + 900)
+    print(f"vLLM ready in {time.monotonic() - t0:.0f} s on port {port}", flush=True)
+    return "127.0.0.1", port
+
+
+def _cpu_list(text: str) -> set[int]:
+    out = set()
+    for part in text.split(","):
+        lo, _, hi = part.partition("-")
+        out |= set(range(int(lo), int(hi or lo) + 1))
+    return out
+
+
+def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upstream, started) -> int:
+    ctx = multiprocessing.get_context("spawn")
+    audits, models, processes = [], [], []
+    stopped = None
+    with ctx.Pool(1, initializer=signal.signal, initargs=(signal.SIGTERM, signal.SIG_IGN),
+                  maxtasksperchild=1) as pool:
+        for path, name in picked:
+            if stopped:
+                break
+            doc = replay.read_trace(path)
+            cfg = next(c for c in doc["configurations"] if c["name"] == name)
+            del doc
+            if args.truncate:
+                cfg = truncate(cfg, args.truncate, setup.egress_params)
+            plan = plan_configuration(cfg, setup, args.served_model if live else None, sync_policy)
+            span_s = plan["windows"] * setup.egress_params.buckets * setup.egress_params.bucket_ms / 1000 + STARTUP_S
+            if (not args.reaudit and args.max_minutes
+                    and time.monotonic() - started + span_s + 10 > 60 * args.max_minutes):
+                stopped = f"{name}: would end after --max-minutes"
+                print(stopped, flush=True)
+                break
+            mrows, mtally = replay.replay_configuration(cfg, replay.Setup(report))
+            del cfg
+            for strategy in strategies:
+                run = runs / slug(name) / strategy
+                if args.reaudit and not (run / "processes.json").exists():
+                    print(f"{name} {strategy}: not run", flush=True)
+                    break
+                if not args.reaudit:
+                    run.mkdir(parents=True, exist_ok=True)
+                    mine = plan if strategy == "honest" else plan | {
+                        "strategy": strategy,
+                        "writes": adversary_writes(plan, setup.sync_set, setup.egress_params.buckets, strategy,
+                                                   args.seed)}
+                    with gzip.open(run / "plan.json.gz", "wt") as fh:
+                        json.dump(mine, fh)
+                    t0 = time.monotonic()
+                    if args.clock == "virtual":
+                        job = ctx.Process(target=virtual_process, args=(mine, report, run))
+                        job.start()
+                        job.join()
+                        if job.exitcode:
+                            return 1
+                    else:
+                        try:
+                            run_configuration(mine, report, run, args.nice, upstream, args.cpus)
+                        except Evicted:
+                            stopped = f"evicted in {name}"
+                            print(stopped, flush=True)
+                            break
+                    print(f"{name} {strategy}: {plan['windows']} windows in {time.monotonic() - t0:.0f} s", flush=True)
+                processes.append(json.loads((run / "processes.json").read_text()))
+                if any(processes[-1]["exit"].values()):
+                    print(f"{name} {strategy}: exit {processes[-1]['exit']}", flush=True)
+                    return 1
+                audits.append(pool.apply_async(_audit_job, ((run / "plan.json.gz", report, str(run), strategy),)))
+            else:
+                models.append({"rows": mrows, "tally": mtally, "report": report})
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        results = []
+        for a in audits:
+            res = a.get()
+            acc = {k: sum(r[k] is None for r in res["rows"]) for k in ("raw", "committed")}
+            if res["strategy"] != "honest":
+                res["against_honest"] = against_honest(Path(res["run"]), Path(res["run"]).parent / "honest")
+            print(f"{res['config']} {res['strategy']}: accepted {acc} of {len(res['rows'])}; {res['comparisons']}; "
+                  f"{res.get('against_honest', '')}", flush=True)
+            results.append(res)
+    honest = [r for r in results if r["strategy"] == "honest"]
+    summary = summarize(honest, models) | {"calibration": str(args.calibration),
+                                           "clock": sorted({p["clock"] for p in processes}),
+                                           "nice": sorted({p.get("nice") for p in processes}, key=str),
+                                           "cpus": sorted({str(p.get("cpus")) for p in processes}),
+                                           "selection": [[str(p), n] for p, n in picked],
+                                           "server": "live" if live else "fake", "sync_policy": sync_policy,
+                                           "stopped": stopped}
+    summary["adversarial"] = {}
+    for s in strategies[1:]:
+        mine = [r for r in results if r["strategy"] == s]
+        summary["adversarial"][s] = {
+            "link_windows": sum(len(r["rows"]) for r in mine),
+            "accepted": {k: sum(x[k] is None for r in mine for x in r["rows"]) for k in ("raw", "committed")},
+            "violations": [x for r in mine for x in r["rows"] if x["raw"] or x["committed"]],
+            "wire_is_honests": [r["against_honest"]["wire_is_honests"] for r in mine],
+            "committed_is_honests": [r["against_honest"]["committed_is_honests"] for r in mine],
+            "windows_whose_wire_differs": [r["against_honest"]["windows_whose_wire_differs"] for r in mine],
+            "records_are_run_shapers": all(r["comparisons"]["records_are_run_shapers"] for r in mine),
+            "ready_off_honest": sum(r["comparisons"]["ready_off_meant"] for r in mine),
+            "tick_late_ms": [r["timing"]["tick_late_ms"] for r in mine]}
+    (args.out / "summary.json").write_text(json.dumps(summary, indent=1))
+    with open(args.out / "verdicts.jsonl", "w") as fh:
+        for res in results:
+            fh.writelines(json.dumps(r | {"strategy": res["strategy"]}) + "\n" for r in res["rows"])
+    e, i = summary["egress"], summary["ingress"]
+    print(f"{summary['configurations']} configurations, {summary['windows']} windows; egress {e['accepted']} of "
+          f"{e['link_windows']}; ingress {i['accepted']} of {i['link_windows']}; {summary['comparisons']}")
+    for s, a in summary["adversarial"].items():
+        print(f"{s}: accepted {a['accepted']} of {a['link_windows']}; wire is honest's {a['wire_is_honests']}; "
+              f"committed is honest's {a['committed_is_honests']}")
+    return 143 if stopped and stopped.startswith("evicted") else 0
+
+
+def truncate(cfg: dict, windows: int, params: GridParams) -> dict:
+    """The configuration's first `windows` windows: its frames anchored and its arrivals in them."""
+    lo, _ = cfg["labels"]["windows"]
+    end = windows * params.buckets
+    out = dict(cfg)
+    out["egress"] = [{"link": l["link"], "frames": [f for f in l["frames"] if f["anchor"] < end]} for l in cfg["egress"]]
+    out["ingress"] = [{"link": l["link"], "arrival_ms": [t for t in l["arrival_ms"] if t < end * params.bucket_ms]}
+                      for l in cfg["ingress"]]
+    out["labels"] = cfg["labels"] | {"windows": [lo, lo + windows]}
+    return out
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -11,7 +11,7 @@ A scheme (`protocol.PoUWScheme`) is a named, versioned object, looked up by name
 `tests/vectors`, like `verity.commitments.scheme.CommitmentScheme`. It turns one declared matmul's committed operand
 rows into, for each tile, checked values, a transcript leaf and the useful output. It exposes:
 
-- `name` and `certificate`: what an accepted audit rests on (the conjecture's claim id, γ_0, Ω*, the pinned Lean theorems,
+- `name` and `certificate`: what an accepted audit rests on (the conjecture's claim id, γ_0, Ω*, the Lean guarantees,
   the hypotheses, the allowances);
 - `check(matmul)`: refuses a declaration outside the domain, before any work;
 - `tiles(shape)`: the checked units, a partition of the output cells; a tile is rows of A times rows of B at full k;
@@ -40,7 +40,9 @@ Everything else is the protocol's (`audit`), the same for every scheme.
      W_ref(tile)/W, a tile's work being its cells' share of its matmul's W_ref (Lean `WorkWeightedSampling`).
    - `Lottery(target)`, Pearl's mining rule: the tiles whose digest, read little-endian, is at most target·|rows|·|cols|·k.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
-   recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf.
+   recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf. It refuses
+   a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
+   `TileCheck.Accepts` asks the same of the tile's weight rows (the protocol's `weightOK`).
 The row and tile trees are framed SHA-256 unless the scheme names another frame hash (`commitment_hash`). `"blake3"` is
 `frame-b3` (`verity.commitments.merkle`), BLAKE3 keyed by the domain id. A leaf's header fills one 64-byte block, so a row
 leaf streams through BLAKE3's chunk tree, for rows that must be committed within a decode step. A node is one compression
@@ -140,7 +142,7 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   `tests/test_pouw_word_p.py` certifies all of them exactly at the k the MVP uses (1,088, 2,048, 11,008).
   `ncp-v1-shift24` uses the shift by 24 instead, admissible with independent checkpoints for every k ≥ 1,024 with
   16 ∣ k (Lean `Pouw.SecurityProofs.NCP.ShiftBy24Admissible`, `Pouw.SecurityProofs.NCP.IndependentWitness`).
-- **Lean** (the certificate's pins, all approved by the red team, Phase 13):
+- **Lean** (the certificate's guarantees, all approved by the red team, Phase 13):
   - the reduction: `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1` (β = 128, f = 24, n₀ ≤ n), from the named assumption
     `Pouw.NCP.Assumptions.TTNCP_U`, with `Pouw.SecurityProofs.NCP.TTNCPUIff` (it is TT_NCP over the route-U checked
     set) and `Pouw.SecurityProofs.NCP.TTNCPUWitness`;
@@ -289,8 +291,8 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     W_ref per tile and 0 for `digest`, `node`, `key`, `form_x` and `dequant`; `dequant`'s floor is y's (below), and the
     others' 1 unless POUS sets them. A call's work is in one stratum (0 < w_s·n_s in one only) and its tiles are of one
     template: `work_table`, `WorkLaw.budget` and `window_laws` refuse any other (`plan.check_work_strata`), since the
-    window pin takes it as its hypothesis `hone`. Where the cap K_c ≤ N_c binds, a second work stratum is under-drawn:
-    in the red team's window ten wrong units escape with 0.156 against a claimed 2.4·10⁻⁴
+    window guarantee takes it as its hypothesis `hone`. Where the cap K_c ≤ N_c binds, a second work stratum is
+    under-drawn: in the red team's window ten wrong units escape with 0.156 against a claimed 2.4·10⁻⁴
     (`test_the_red_team_s_capped_window_is_refused`).
   - `plan.law_object` is the law `verify` derives from it, each stratum `{template, units, work, floor, k}`.
   - K is a **window's** budget (X-SPC-83): a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
@@ -301,9 +303,9 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     cells and N the window's, with K_y = K = 27,713 (`plan.window_laws`). So k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c
     or proves the call's y, and a window draws at most K_y + C y cells. δ stays 2⁻⁴⁰: a tile-bad and a y-bad wrong set
     are one family of the one window audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their
-    sum. Per call the floor is pinned (`audit_work_floor`); `flock-verify draw --work` derives the same law from these
-    tables.
-  - **X-SPC-105 and X-SPC-106 are closed by the window pin**, `audit_window_split_of_record` in
+    sum. Per call the floor is a guarantee (`audit_work_floor`); `flock-verify draw --work` derives the same law from
+    these tables.
+  - **X-SPC-105 and X-SPC-106 are closed by the window guarantee**, `audit_window_split_of_record` in
     `FlockSoundness/Audit/Window.lean` ([#418](https://github.com/danielreuter/verity/pull/418), proved at `f06327bd`,
     pending its grant): the per-call law with y's floors at
     K = K_y = 27,713 accepts a window with at least 0.1% of its work unsound or 0.1% of its y cells wrong with probability
@@ -321,7 +323,7 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
       (`__init__.py:97`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:215–221`),
       and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:291`). The index is the
       verifier's anchors' (`Anchors`, `anchors.py:42`, which `Anchors.check_call` holds the call's inputs to,
-      `anchors.py:83`). This is the pin's M1.
+      `anchors.py:83`). This is the guarantee's M1.
     - *Every call's commitment precedes the window key* (root's C1). A window's `anchors.Receipt` lists every call with
       its anchors, shape and commitment, and is immutable (`anchors.py:130`); its digest binds each call's full
       anchors (index, salt, weight id, rows and columns), shape and commitment. `Ledger.open` derives the key from it
@@ -342,8 +344,8 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
       source whose draw misses; that is the designated verifier's trust, and a beacon or a commit-and-reveal would be
       needed for a third party to check it. No protocol or beacon timing changes: the key is still the verifier's own
       randomness after the receipt.
-    - *ε_ks and δ_link are the window's.* The pin's are one window `Analysis`'s (M2). The per-call values are not cited
-      as the window's; no statement composes them yet.
+    - *ε_ks and δ_link are the window's.* The guarantee's are one window `Analysis`'s (M2). The per-call values are not
+      cited as the window's; no statement composes them yet.
 - `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
 
 **The draw is per call** (X-SPC-96). Each stratum's subset is drawn from the verifier's key under the call's index,
@@ -354,7 +356,7 @@ window's `anchors.Ledger` is opened from its complete `Receipt` (`Ledger.open`),
 fresh source under the receipt's digest; `Traced.draw` draws only under that key, admits the call first, refusing one
 the receipt doesn't list or the window already holds before anything is drawn, and then keys each stratum's subset
 with ("call", forward, position, "stratum", template). So every call's commitment precedes the key, and each call of a
-window draws under a context of its own, the product law the window pin takes as M1.
+window draws under a context of its own, the product law the window guarantee takes as M1.
 
 **The call's Y is linked to the weight Program** (X-SPC-95). The call reads its weight's Y strips and c₀ as committed
 inputs, so at each drawn tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens
@@ -474,11 +476,18 @@ useful    U/(α_A·α_B), glue
     - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
     - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
       tile under, before the beacon.
-  - A cell's draw weight is its row's share of `wref` at the kept width. An accepted unit is credited
-    (1 − ρ)·`credit_of` over its credited cells.
+  - A cell's draw weight is its row's share of `W_ref` at the kept width, the `W_ref` of the Lean statement the draw
+    cites (`draw_wref`). On sm_120 at its cap that is `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72
+    (`SM120_LOOP_CAST_8P72`), the statement of the served γ and ε. Its ratio to `wref` differs between linears, so a
+    served step's mixed layout drawn by `wref` would not be work-weighted in its sense (red team #919 F1). Elsewhere it
+    is `wref`. A tile's draw weight is the sum over its credited cells. Where every cell is credited, that is the cited
+    statement's ticket (the tile's `Wref`). The statements weigh every cell, so a tile with filler, excluded or
+    voluntary rows gets less than its `Wref`'s ticket, and unless every tile's credited share is the same, the draw is
+    not yet the one they state (Not here yet). An accepted unit is credited (1 − ρ)·`credit_of` over its credited
+    cells.
   - **The sampling guarantee is per credited cell.** A drawn tile's uncredited cells (filler, excluded or voluntary)
-    never count as coverage. Volunteering a tile's other rows only lowers that tile's draw weight to its credited cells,
-    which is exactly the bound claimed.
+    never count as coverage. Volunteering a tile's other rows lowers that tile's draw weight to its credited cells.
+    Lean's statements don't model that yet: their draw weight is the whole tile's `Wref`, whatever is volunteered.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
     is at most ρ times those cells' credit. ρ is the device record's cap (`Device.cap`): 1/400 on the H100.
@@ -552,13 +561,25 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     module docstring).
   - The noise lines and G are verifier-derived public inputs, as in `pc4` (`anchors.TileAnchors`, G on the record's
     chain), and each is a public input region in a unit's proof (`pc8.DERIVATIONS`; one u16 word per E4M3 code).
-  - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance, and to the scheme on sm_120's records. Every
-    partition computes each value in exactly one unit.
+  - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance (and its decode-32 case's B̃, P_B, C̃ and U), and
+    to the scheme on sm_120's records, a short last tile row included. Every partition computes each value in exactly
+    one unit.
+  - **A short last tile row.** `Shape.check` is the scheme's domain down the rows (`Row tiles` above: whole 16-row
+    ticket subtiles), so where 64 ∤ m the last tile row is r = m mod 64 rows, its own batch of `Pc8Tile` (or
+    `Pc8TileHidden`) at r × 64, whose digest is the scheme's leaf over its real rows. So m = 80 is a 64-row tile row and
+    a 16-row one, and decode's m = 32 is one 32-row tile row at the default tile.
+    - `plan.tile_layout` proves a short tile with its r `Pc8RowA` units, in its own stratum at W_ref r/64 of a whole
+      tile's.
+    - A call with both whole and short tile rows is therefore two tile strata, which the work law refuses
+      (`plan.check_work_strata`, the window pin's `hone`). Under the work law such a call is not drawn yet; a call that is
+      all one tile row height is.
   - The hiding Programs are `pc4`'s (``Shape.hidden``; the rows and their vectors are under `circuit.pc4` below):
     `Pc8TileHidden` returns its tile digest in place of C̃ and U, the weight's Program is `Pc8Weight`, and the rows are
     C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
     `pouw/row-ok/v1` rows. A 64 × 64 tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile
     with its rows, as for `pc4`.
+  - The row cut along k (``Shape.row_k``, `circuit.rowk`) is `pc4`'s, below, on each of the three records. It takes
+    whole tiles only: `Shape.check` refuses a short last tile row under the cut.
   - Not in it yet: the debit and the cap. Until they land, Pearl-C's runs are checked by its reference audit, a
     development shortcut that opens rows.
 
@@ -620,9 +641,10 @@ useful    U/(α_A·α_B), glue
     discount.
   - Honest cost, from shapes alone: 0.54% of credit on Qwen2.5-0.5B, 0.24% on 1.5B, about 0.1% on 3B, 7B and
     Llama-3.2-1B/3B, and at most 0.019% from 8B up.
-- **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
-  strictly row-relative). It reads (`dnf`) 0 ≤ β and v in 0x08–0x7E, where v is β's E4M3 byte with its sign; these
-  are the bytes Lean accepts. The pinned stats never make β negative or NaN, but the rule states both cases:
+- **Admission, per row and salt-free (`row_passes`):** every word a finite widened BF16 word (its low 16 bits zero, the
+  only words `parse_row` writes; Lean's `Fp4Sem.RowOK` and `OperandOK`), and D-NF, a_E is a normal UE4M3 (one a_E per
+  row, so the noise is strictly row-relative). It reads (`dnf`) 0 ≤ β and v in 0x08–0x7E, where v is β's E4M3 byte
+  with its sign; these are the bytes Lean accepts. The pinned stats never make β negative or NaN, but the rule states both cases:
   - A negative β would cast to a byte with bit 7 set. At β = −1/4096 the byte 0x80 passes 8 ≤ v alone, and sm_120
     reads it from its low 7 bits as a zero scale, so the row would carry no noise (bc-824e54a2's post-M4 rebuild).
   - A NaN β with its sign clear would cast to 0x7F (bc-22298e90's review).
@@ -811,9 +833,32 @@ useful    U/(α_A·α_B), glue
     commit string and tree leaf at k = 64 and 4,096, and the digest of two tiles, which the gates compute. C-Flock's
     ports commit them byte for byte: `backends/flock/tests/test_pouw_rows.py` recomputes every vector through C-Flock's
     port for the row, and one v1 row, one v2 row and a tile through the Lean verifier's row constants.
+  - The six PoUW primitives the row units call (`PouwF32SqrtRn`, `PouwETilde`, `PouwBf16Neg`, `PouwSqAcc`, `PouwSqCeil`,
+    `PouwSqGe`) have Boolean versions, the same functions on bits (`circuit.boolean`, `_v2`, traced from `forms` builders;
+    their AND counts are pinned in circuit-check's `pins.json`). C-Flock's lowering maps a primitive id to a piece of its own
+    (`ir_lower.PIECES`), which has entries for core's `E4m3ToF32`, `F32ToE2m1Sat` and `BitAnd` but none for these six yet.
   - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
     each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
     TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.
+  - **The row cut (`circuit.rowk`, ``Shape.row_k``) is opt-in**, for both checks. C-Flock proves one instance in at most
+    a 2^27-bit block (`verity_flock.circuit.K_MAX`), and a whole row unit outgrows it before the served k (Pearl-C's row
+    of A on sm_120 past k = 2,560; Pearl-C4's fills it at 4,096). A shape with ``row_k`` (2,048 deployed, `rowk.ROW_K`)
+    cuts each row unit along k into a head (the row's statistics and E′, or a_E), one form per segment of row_k positions
+    (its codes, and the clean-up's 32 chains over it started from the previous form's carry) and a tail (P, from the
+    chains and, on B, E′·G). Pearl-C's ok is the tail's (the dead count is carried), Pearl-C4's the head's.
+    - A segment is whole device windows and whole 32-position blocks, so each form adds the same atoms in the same order
+      as the whole row, and the carry is exact: the pieces' outputs are the whole row's, and every value is computed in
+      exactly one unit.
+    - The tail writes the fp8-p or nvfp4-p row today's row unit writes, so a tile reads its rows unchanged. The pieces
+      pass their values in six more v2 rows (`leaves`' pc8-head, pc8-carry, fp8-codes, pc4-head, pc4-carry and
+      nvfp4-codes; `rowk.PORTS8`, `PORTS4`). At row_k = 2,048 each is short (at most 55 words) or whole SHA-512 blocks,
+      the v2 rows C-Flock's widened scope takes; pc8-carry ends in 62 zero words for that.
+    - A form reads its segment of F_A and F_B as a public input region under the anchor's slice rule,
+      `verity/pouw/anchor/<scheme>/<anchor>/slice/v1` (`rowk.DERIVATIONS8`, `DERIVATIONS4`,
+      `anchors.Derivation.per_segment`), which only the cut's shapes name.
+    - A shape without ``row_k`` builds today's Programs, their digests unchanged. `pouw_rows.json` pins the six rows and
+      `pouw_regions.json` the slice regions (`row_k_cases`). Every form still opens the row of A whole, so a form's SHA
+      work grows with k, and past k = 18,432 (Pearl-C's row of A) a form no longer fits.
   - Not in it yet: the debit and the cap, R1, D-24, and the plan's link checks and paths. Until those land, runs are
     checked by the replay above, a development shortcut that opens rows, and every report says so.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
@@ -822,24 +867,60 @@ useful    U/(α_A·α_B), glue
   and one 64 × 1,024 × 64 NVFP4 tile, each with its replayed debit and cap, and A row 0's F1′ inputs (the noise law's
   digest, the modal bytes, p_t) and charge.
 
+### A row's statistics, scales and forming (`pc8`, `pc4`)
+
+A row of `K` words `x_0, …, x_{K−1}` (`pc8`: FP32; `pc4`: BF16, widened by `Bf16ToF32_v1` wherever read) gives its
+scales and codes by the following primitive calls, in this order. Each result is a word of its primitive's return width;
+`|·|` is `F32Fabs_v1`.
+
+1. **Running max.** `s_0 = |x_0|`, and for `t = 1, …, K − 1`, `s_t = SelectI32_v1(I32Le_v1(s_{t−1}, |x_t|), |x_t|, s_{t−1})`.
+   `s = s_{K−1}`.
+2. **Mean square and `ρ`.** With `n = K/8`, partial `i < n` is `a_i = F32Fma_v2(x_{8i}, x_{8i}, c_i)`, where `c_i = +0`
+   for `i < 32` and `c_i = a_{i−32}` otherwise (accumulator `i mod 32`); accumulator `j` is its last partial. The butterfly
+   runs rounds `h = 16, 8, 4, 2, 1`, each mapping the sums `v` to `v'_j = F32Add_v2(v_j, v_{j+h})` for `j < min(h, n)`,
+   with `+0` for `v_{j+h}` when `j + h ≥ n`. `Σ` is the last round's `v'_0`, and
+   `ρ = PouwF32SqrtRn_v1(F32Div_v2(Σ, f32(n)))`.
+3. **`pc8`'s scales and floor.** `α = F32Div_v2(448, F32Fmaxf_v1(F32Add_v2(s, F32Mul_v2(4, ρ)), 2⁻³²))` and
+   `β = F32Mul_v2(F32Mul_v2(ρ, α), 0x3AB504F3)` (`2^(−19/2)`). The floor is `φ = F32Fma_v2(ρ, α, −1)`: the row is above
+   the noise floor where `I32Le_v1(0, φ)`.
+4. **`pc8`'s forming.** Noise code `e_l` (`l < 32`) becomes `ẽ_l = F32ToE4m3Sat_v1(F32Mul_v2(β, E4m3ToF32_v1(e_l)))`.
+   Position `t`'s formed word `D_t` is one E4M3 k32 atom of the device (`BlackwellE4m3QmmaDot32_v1` on sm_120,
+   `HopperE4m3QgmmaDot32_v1` on the H100), with accumulator `F32Mul_v2(α, x_t)`, over the pairs `(ẽ_l, F_{t,l})`, where
+   `F_t` is the form basis' row `t`. The code is `F32ToE4m3Sat_v1(D_t)`.
+5. **`pc4`'s scales.** `δρ = F32Mul_v2(ρ, 1/4)`, then `α = F32Div_v2(2688, F32Fmaxf_v1(F32Add_v2(s, F32Mul_v2(4, δρ)), 2⁻³²))`
+   and `β = F32Mul_v2(F32Mul_v2(δρ, α), 0x3EA920A7)` (`k_β`).
+
+The Lean names are `rowMax`, `rowRho`, `alpha8`, `beta8`, `floor8`, `eTilde8`, `code8W`, `alpha4` and `beta4`
+(`Pouw/Protocol/PearlC/RowSem.lean`, namespace `PearlC.RowCircuit`). Pearl-C's and Pearl-C4's semantics at them are `pc8Sem` and
+`pc4Sem`, on the row's words re-encoded (`f32Word`; `pc4`: `bf16WordOf`). Their `α` and `β` are those words read back as
+values. `pc4`'s rules ask finite widened BF16 words, so `bf16WordOf` of a word's value is the word's high half with `−0`
+written `+0`. The `pc4` table registers the high half itself (`rows4`), and a row unit reads `−0` as `+0`
+(`formRow_table`). `pc8Sem`'s floor is `φ`'s value plus 1 where `ρ`'s word is finite and `0` where it is not, so the rule
+`1 ≤ floor` is `ρ` finite and `φ ≥ 0`, the circuit's flag. `pc4Sem`'s `β` is `0` where `β`'s word is not finite, so
+`RowAdmit4` refuses the row, as the circuit's flag (`β ≤ F32_MAX`) does. `pc8Sem`'s forming value is `D_t`'s,
+and its `e4m3` is the code wherever `F32ToE4m3Sat_v1` agrees with `e4m3Word` and `D_t` is not NaN.
+
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
   are gated by these vectors when they land. Pearl-C's H100 kernel is `benchmarks/pouw/pearl_c/`, its sm_120 kernel
   `benchmarks/pouw/pearl_c_sm120/`.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
+- For Pearl-C's draw: `GγSampled`, `HonestTileCapRate` and `CompleteSampled` take tickets proportional to the whole
+  tile's `Wref`, while the audit weighs a tile by its credited cells. The two agree on fully credited tiles. Closing it
+  means Lean statements over credited-cell tickets, or tickets over every cell; lean's to choose (red team #1014).
 - C-Flock's side of the proof's identifier: the header's `identifier`, its binding through `pub.sha`, and the verifier's
   `--identifier` (proofs' lane).
 - For `ncp-v2`:
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
   - C-Flock pieces for the PoUW primitives;
   - the floors POUS sets for the zero-work templates other than `dequant` (X-SPC-55; 1 until then);
-  - the grant and merge of the window pin, `audit_window_split_of_record`
+  - the grant and merge of the window guarantee, `audit_window_split_of_record`
     ([#418](https://github.com/danielreuter/verity/pull/418));
-  - the audit for a draw that depends on the registration: the key's context is the receipt digest, which the pinned
-    `audit` game (the registration before the coin, `L.draw ω`) can't express. Either apply the pins strategy by
-    strategy, at the context digest(reg σ), or state the audit for a draw `L.draw R ω` with A4 uniform over contexts;
-    the Lean lane's to choose (root's C1);
+  - the audit for a draw that depends on the registration: the key's context is the receipt digest, which the `audit`
+    game the guarantees state (the registration before the coin, `L.draw ω`) can't express. Either apply the guarantees
+    strategy by strategy, at the context digest(reg σ), or state the audit for a draw `L.draw R ω` with A4 uniform over
+    contexts; the Lean lane's to choose (root's C1);
   - a statement composing the calls' ε_ks and δ_link into the window's (M2);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;

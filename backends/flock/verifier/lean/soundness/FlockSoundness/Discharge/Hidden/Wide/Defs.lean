@@ -10,7 +10,9 @@ unit, or a tail's last stage):
 
 * `…Tail`: a tail that returns the outputs too (GEMM, attention: META `out_net` a stage). The circuit has a unit per VU
   at least (`0 < upv`), in place of `outNet = unitNet`;
-* `…V2`: `sha512/row/v2` rows too (META `row_schemas`), every row's prefix its own (`HmRow.prefixOf`);
+* `…V2`: `sha512/row/v2` rows too (META `row_schemas`), every row's prefix its own (`HmRow.prefixOf`), for output rows
+  one per output port, each of whole SHA-512 blocks (a run of ports in one row, or an exact-length row whose last block
+  is partial and so in its `hm96` slot, is not covered);
 * `…Wide`: a population file with shared rows too (header `shared_rows`, `pop.tables ≠ none`).
 -/
 
@@ -81,8 +83,9 @@ def OutputsBindingTail : Prop :=
 /-! ## `sha512/row/v2` rows -/
 
 /-- **`OutputsCommittedV2`**: `OutputsCommittedTail` for `sha512/row/v1` or `sha512/row/v2` rows, the row prefix
-the row's own (`HmRow.prefixOf`: `sha512/row/v1`'s for its words, or a bit row's `P(bits)`). For unsegmented rows
-(no `segs`: one output port per output row), a population file without shared rows and a draw whose proved units are in the population. -/
+the row's own (`HmRow.prefixOf`: `sha512/row/v1`'s for its words, or a bit row's `P(bits)`). For unsegmented rows (no
+`segs`) whose output rows are one per output port, each of whole SHA-512 blocks (a multiple of 64 words), a population
+file without shared rows and a draw whose proved units are in the population. -/
 def OutputsCommittedV2 : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
@@ -91,6 +94,8 @@ def OutputsCommittedV2 : Prop :=
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     0 < st.c.upv →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
+    st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
+    (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
@@ -114,6 +119,8 @@ def OutputsBindingV2 : Prop :=
     Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     0 < st.c.upv →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
+    st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
+    (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ (L' : Layout st') (regs' : List (Model.Region st'.c.kLog (st'.m - st'.c.kLog))),
@@ -146,6 +153,8 @@ def OutputsCommittedWide : Prop :=
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     0 < st.c.upv →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
+    st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
+    (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
@@ -168,6 +177,8 @@ def OutputsBindingWide : Prop :=
     Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     0 < st.c.upv →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
+    st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
+    (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ (L' : Layout st') (regs' : List (Model.Region st'.c.kLog (st'.m - st'.c.kLog))),
