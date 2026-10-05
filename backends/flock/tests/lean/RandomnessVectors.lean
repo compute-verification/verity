@@ -1,4 +1,4 @@
-import FlockSoundness.PlanDraw
+import Proofs.Flock.Soundness.PlanDraw
 
 /-!
 Vectors for `verity.randomness` v1 and the PoUW window draw, from the soundness package's Lean spec
