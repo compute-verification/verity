@@ -11,7 +11,7 @@
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 PASSES=$WORK/passes/${1:?the window run id}; JOBS=${2:-48}; OUT=${RESEARCH_RUN_DIR:-.}
-export PYTHONPATH=$PWD/packages/verity/src:$PWD/protocols/pouw:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/verity/protocols/accounting/work/pouw:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 status=0
 for pass in prefill decode control control-leaves; do
   [ "$pass" = control-leaves ] && [ ! -f "$PASSES/$pass/manifest.json" ] && continue
