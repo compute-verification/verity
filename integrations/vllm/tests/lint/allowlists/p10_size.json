@@ -16,7 +16,7 @@
     {"file": "verity_vllm/check/replay/driver.py", "kind": "function", "symbol": "sampled_replay", "detail": "lines", "count": 219},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "function", "symbol": "recompute_run", "detail": "lines", "count": 310},
     {"file": "verity_vllm/check/replay/vu_query.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 813},
-    {"file": "verity_vllm/check/root_policy.py", "kind": "function", "symbol": "evaluate", "detail": "lines", "count": 219},
+    {"file": "verity_vllm/check/root_policy.py", "kind": "function", "symbol": "evaluate", "detail": "lines", "count": 182},
     {"file": "verity_vllm/check/verdict.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 837},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 983},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "function", "symbol": "NativeCollectCommitter._commit_step_windowed", "detail": "lines", "count": 399},
