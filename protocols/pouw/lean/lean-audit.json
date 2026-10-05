@@ -8753,7 +8753,7 @@
    "definitions": {
     "Pouw.Assumptions.HonestClock": "b834a5b2456ac78c2c5b98a872a1ee0d833cfb9b8f26a63e562596e7ff5bbd1a"
    },
-   "pins": ["Pouw.SecurityProofs.SpareCapacityAtDeadline", "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"]
+   "guarantees": ["Pouw.SecurityProofs.SpareCapacityAtDeadline", "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"]
   },
   "Pouw.Assumptions.Dimension.A2Words": {
    "digest": "7e6d34bdc38faea2c9ca5bce75c06081189f0b6643489420abf5942cd7737321",
@@ -9864,7 +9864,7 @@
    "definitions": {
     "Pouw.PearlC.Assumptions.HonestClock": "1a8887962f5cb3a27b40e5ac7e29aea164b786ecaaeb358379f617e50b3be2ba"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.SecurityProofs.PearlCSampledByDeadline",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
@@ -10729,7 +10729,7 @@
     "Pouw.Guarantees.SpareCapacityAtDeadline": "fce79a1b3a99f37d1c77ca7e75afdd39bcf01d5aca010d24d79196206e28fd4b",
     "Pouw.Guarantees.WorkBetweenSaltAndDeadline": "3788462f2fdf84cd3f392455f2a420582c649e83cbe274c773123fee66e690df"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.SecurityProofs.PearlCSampledByDeadline",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
@@ -13797,7 +13797,7 @@
     "Pouw.TimedRun.tr": "a5bad4b8942944dbaf69e86e30029b571091990fded18b1f0a415848dd433b2f",
     "Pouw.TimedRun.ts": "40f75470edae3373b3b01069f7c534314a1fee16b56ea16bc0b51866618cbc74"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.SecurityProofs.PearlCSampledByDeadline",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
@@ -15014,7 +15014,7 @@
    "definitions": {
     "Pouw.PearlC.Adversary.BoundedBy": "a5b5bff4710605b5b183730c17860dfaf922415160258b902d1d7244133e3a73"
    },
-   "pins": [
+   "guarantees": [
     "Pouw.SecurityProofs.PearlCSampledByDeadline",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
