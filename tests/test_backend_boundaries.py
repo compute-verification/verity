@@ -1,6 +1,6 @@
 """Backends never need an integration (README "Development": backends must be testable without installing a frontend or
-runtime integration).  Today some do: C-Flock and the numerical bench take the vLLM integration's registered Definitions and
-kernels where core has no equivalent yet.  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site
+runtime integration).  Today one does: C-Flock takes the vLLM integration's registered Definitions and kernels where core has no
+equivalent yet (the numerical bench, which did too, is a benchmark now, and a benchmark may compose an integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site
 fails, and so does a listed site that is gone, so the list stays exact.
 
 An import is an import statement, a string handed to ``importlib.import_module``, ``__import__`` or ``pytest.importorskip``, or
@@ -57,15 +57,6 @@ KNOWN = {
     ("backends/flock/tests/test_stage_typed.py", "verity_vllm.program.registry.prims"),
     ("backends/flock/tests/test_topp_word.py", "verity_vllm.program.registry"),
     ("backends/flock/tests/test_typed_statement.py", "verity_vllm.program.registry.prims"),
-    ("benchmarks/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.kernels"),
-    ("benchmarks/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.kernels.rows"),
-    ("benchmarks/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.registry"),
-    ("benchmarks/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.registry.b1"),
-    ("benchmarks/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.registry.moe"),
-    ("benchmarks/numerical/python/verity_numerical/bench/templates.py", "verity_vllm.program.registry.sampling"),
-    ("benchmarks/numerical/tests/bench/test_headline.py", "verity_vllm"),
-    ("benchmarks/numerical/tests/bench/test_input_sets.py", "verity_vllm.program.registry"),
-    ("benchmarks/numerical/tests/bench/test_served_templates.py", "verity_vllm"),
 }
 
 
@@ -104,7 +95,7 @@ def test_the_integrations_are_found():
 def test_the_scan_sees_the_backends():
     """The scan walks `backends/`: a backend that moved out of it would leave its imports unchecked, and `KNOWN` would pass
     as sites of files that don't exist yet."""
-    for name in ("verity_flock", "verity_numerical"):
+    for name in ("verity_flock",):
         origin = Path(importlib.util.find_spec(name).origin).resolve()
         assert origin.is_relative_to(ROOT / "backends"), f"{name} is at {origin}, outside the scanned backends/"
     assert not KNOWN or any((ROOT / f).exists() for f, _ in KNOWN), "no file KNOWN lists exists: it names pre-move paths"

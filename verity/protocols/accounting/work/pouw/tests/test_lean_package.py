@@ -17,7 +17,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 LEAN = HERE / "lean"
-ROOT = HERE.parents[1]
+ROOT = HERE.parents[4]
 SCRIPT = LEAN / "scripts" / "fp8atom_vectors.py"
 POLICY = json.loads((LEAN / "lean-audit.json").read_text())
 
