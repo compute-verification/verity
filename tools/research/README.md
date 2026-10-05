@@ -590,8 +590,7 @@ approach <campaign>/<slug> --by LANE`.
 ~~~text
 research notes approaches [--campaign C] [--status S] [--grep WORDS] [--refresh]   # the registry
 research notes claim C/SLUG --lane L [--title T --hypothesis H --type scheme|route|attack] [--cite TOKEN]... [--reopen WHY]
-research notes approach C/SLUG STATUS --by L --reason R [--cite TOKEN]... [--superseded-by C/SLUG] [--owner L] [--at UTC]
-research notes approach C/SLUG --by L [--cite TOKEN]... [--uncite TOKEN]...         # its evidence alone
+research notes approach C/SLUG [STATUS --reason R] --by L [--cite TOKEN]... [--uncite TOKEN]... [--superseded-by C/SLUG] [--owner L] [--at UTC]
 research notes approaches render | check                                           # campaigns/<c>/APPROACHES.md; the lint
 ~~~
 
@@ -599,9 +598,8 @@ research notes approaches render | check                                        
   refuses a killed, superseded or merged approach without `--reopen WHY`. It writes through to the remote and re-reads it, exiting
   3 when a rival claim landed first.
 - **`approach --at`** records work done before the registry existed. History is append-only.
-- **`approach` without a status** changes only the evidence: `--uncite` takes back a cite, and the status, its reason and
-  the history stay as they are. A `store:` path cites a private agent store that nobody else can read, so `check` reports one
-  until it is copied into the notes and cited as `--cite note:ID --uncite store:…`.
+- **`approach` without a status** changes only its cites; `--uncite` takes one back. `check` flags a `store:` cite, which
+  nobody else can read: copy it into the notes, then `--cite note:ID --uncite store:…`.
 - **The public view** is one generated file per campaign, `campaigns/<c>/APPROACHES.md` in the notes. The steward's
   `[approaches]` rule in `steward.toml` (`store`, `every_min`) refreshes and renders it. The campaign's `BRIEF.md` front matter
   `registry: titles | full` sets whether hypotheses and reasons are shown, since the notes repo is public.
