@@ -63,3 +63,13 @@ def test_a_changed_frozen_manifest_entry_is_not_sealed(tmp_path):
     rep = protected.provenance(base, head, cwd=root / PKG)
     assert not rep["sealed"]
     assert [p["rule"] for p in rep["protected_files_modified"]] == ["frozen manifest entry: a@00000000 (#0): changed"]
+
+
+def test_renaming_a_protected_file_into_a_lane_writable_tree_is_not_sealed(tmp_path):
+    root, base = _repo(tmp_path)
+    (root / PKG / "verity_vllm/program/registry/quarantine").mkdir(parents=True)
+    _git(root, "mv", f"{PKG}/verity_vllm/check/gates.py", f"{PKG}/verity_vllm/program/registry/quarantine/gates.py")
+    head = _commit(root, {}, "lane")
+    rep = protected.provenance(base, head, cwd=root / PKG)
+    assert not rep["sealed"]
+    assert rep["protected_files_modified"] == [{"status": "D", "path": "verity_vllm/check/gates.py", "rule": "protected"}]

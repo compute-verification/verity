@@ -96,9 +96,10 @@ def classify(changed: list[tuple[str, str]]) -> dict[str, Any]:
 
 def diff(base: str, head: str, cwd: Path = REPO) -> list[tuple[str, str]]:
     """[(status, path)] of `base...head`, each path relative to the package root `cwd` (one outside it starts with `../`).
-    git names them from the repository root whatever its working directory, and the globs name them from the package root."""
+    git names them from the repository root whatever its working directory, and the globs name them from the package root.
+    A rename is its deletion and its addition, so moving a protected file out of its path counts."""
     prefix = _git("rev-parse", "--show-prefix", cwd=cwd).strip() or "."
-    out = _git("diff", "--name-status", f"{base}...{head}", cwd=cwd)
+    out = _git("diff", "--name-status", "--no-renames", f"{base}...{head}", cwd=cwd)
     rows = []
     for line in out.splitlines():
         parts = line.split("\t")
