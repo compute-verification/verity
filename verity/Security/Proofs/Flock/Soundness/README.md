@@ -129,7 +129,7 @@ link term per audit.
   with that binding on the statement's rows' circuit at the live draw under A3 (`ASSUMPTIONS.md`, The headline). Each
   is proved under the assumptions its footprint lists, every hypothesis with its kind: hardness (`cr/sha-512`,
   `ecr/sha-512`), platform (A3, and A6, the coin server's OS randomness), model, intended to prove (`hHm`, the placements
-  `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`; `assumptions/e2e-checklist.md`), or a numeric condition.
+  `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`; `assumption-notes/e2e-checklist.md`), or a numeric condition.
 - **`registered_weights`** (`Binding/Weights.lean`). At each of a drawn unit's wires, the row a satisfying witness of
   its table holds is the registered row (any opening of the registered leaf: the weights and salt the registrant
   committed to), or `collide` of the two openings is a SHA-512 collision (`Layout.registered_weights`; from
@@ -178,7 +178,7 @@ link term per audit.
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (`Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
-| The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: RoPE's rows by `Rope.rope_sound`, the rest by the IR comparison tests (`assumptions/template-rows.md`) |
+| The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: RoPE's rows by `Rope.rope_sound`, the rest by the IR comparison tests (`assumption-notes/template-rows.md`) |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `python tools/lean/audit.py verity/Security/Proofs` to check every declaration (`lean-audit.json`).
@@ -251,7 +251,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   end-to-end theorems are about the circuit of the statement's rows (`Prog.circuit`), and when a unit's rows are
   `GateRows.rows G L` and `G` computes `D`, a unit that is not wrong computes `D` (`IsRowsUnit.computes_of_cert`,
   `Certificate.lean`). RoPE's rows are proved to be its gate circuit's (`Rope.rope_sound`,
-  `assumptions/template-rows.md`).
+  `assumption-notes/template-rows.md`).
 - **The rows the verifier derives, read as `Rows`** (`Compose.lean`; verified-lowering phase 1, item 1d).
   - `Rows.compose` reads a unit's rows in logical order from a `Compose.Logical`: the columns in order, the input bits
     first, and each column's row as the block holds it, or a copy of `one` (the unit's constant, which Δ binds to the

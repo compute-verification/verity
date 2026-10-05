@@ -7,7 +7,7 @@ and, for the audit layer, `Audit/README.md`. `DESIGN.md` holds the derivations.
 **The end-to-end theorem** is a skeleton: `flock_e2e_count` and `flock_e2e_drawn`, in `E2E.lean`, and
 `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` on the circuit of the statement's rows (`Prog.circuit`). They state the
 chain from the audit's acceptance to the integrity profile on the committed circuit. Each unfinished piece is a named
-hypothesis, and `assumptions/e2e-checklist.md` lists them with their owners. The circuit is the one the statement's rows
+hypothesis, and `assumption-notes/e2e-checklist.md` lists them with their owners. The circuit is the one the statement's rows
 make, chosen on the untrusted side, and the lowering does no optimizing (Daniel, Sep 30). So no hypothesis relates the
 rows to another circuit: what a correct unit computes is its certificate's (The circuit and the certificate, below). One
 hypothesis carries what the statement doesn't say yet: that the acceptance is the executable verifier's (`hExec`; in the
@@ -89,7 +89,7 @@ sense, ePrint 2024/1434), for the audit's value layer (Daniel, Sep 27; constant 
 - **Where it is used.** The link theorem takes it for the finders it builds from the prover it bounds (`LinkCR … R τ …`).
   `flock_batched_linkSoundE` gives the bound at each prover whose finders satisfy it, and `⊤` at any other
   (`linkBoundCR`); the end-to-end theorems take `hCR` for `σ`'s finders alone.
-- **Why it is plausible:** `assumptions/a2-sha512-expected-time-cr.md`.
+- **Why it is plausible:** `assumption-notes/a2-sha512-expected-time-cr.md`.
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
 **A3. The verifier's operating-system randomness is independent uniform bytes** (`uniform/io-getrandombytes`), for the
@@ -498,4 +498,4 @@ exact pass over everything imported (VCVio and CompPoly too), is run at a depend
 
 ## Trusted components
 
-Not assumptions of the theorem, though the verdict depends on them: `assumptions/trusted-components.md`.
+Not assumptions of the theorem, though the verdict depends on them: `assumption-notes/trusted-components.md`.

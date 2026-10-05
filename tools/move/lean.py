@@ -517,6 +517,16 @@ def merge_locks(m: Map, root: Path, locks: dict, dry: bool):
 
 # ---------------------------------------------------------------------------------------------------------------- main
 
+def case_clashes(paths) -> list[list[str]]:
+    """Paths (and their directories) that differ only in case: a checkout on a case-insensitive filesystem holds one."""
+    seen: dict[str, set[str]] = {}
+    for f in paths:
+        parts = f.split("/")
+        for i in range(1, len(parts) + 1):
+            seen.setdefault("/".join(parts[:i]).lower(), set()).add("/".join(parts[:i]))
+    return sorted(sorted(v) for v in seen.values() if len(v) > 1)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--map", type=Path, default=HERE / "lean_map.toml")
@@ -573,6 +583,8 @@ def main(argv=None) -> int:
     print(f"  lean-deps.json: {rekey_bundles(m, root, old_keys, LA)}")
     print(f"  locks: {json.dumps(merge_locks(m, root, locks, False))}")
     git(root, "add", "-A")
+    if clash := case_clashes(tracked(root)):
+        raise SystemExit(f"paths that differ only in case (a [files] entry in {a.map.name} must keep them apart): {clash}")
     return 0
 
 
