@@ -2,11 +2,14 @@
 differ from the definitions a proof is about (`native_decide`, `implemented_by`, `extern`, `unsafe`)."""
 from __future__ import annotations
 
+import fcntl
+import hashlib
 import importlib.util
 import json
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -15,6 +18,15 @@ LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 PROOFS = Path(__file__).resolve().parents[3] / "verity" / "Security" / "Proofs"
 TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the security packages' Mathlib and ArkLib pin v4.34.0
 FORBIDDEN = re.compile(r"\b(native_decide|implemented_by|extern|unsafe)\b")
+
+
+def build_proofs_verifier() -> None:
+    """`lake build Proofs.Flock.Verifier` in `security_proofs`, one process at a time: on a fresh tree Lake first clones that
+    package's dependencies, and two Lake processes cloning them at once (two xdist workers) both fail."""
+    key = hashlib.sha256(str(PROOFS).encode()).hexdigest()[:16]
+    with open(Path(tempfile.gettempdir()) / f"verity-security-proofs-{key}.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        subprocess.run(["lake", "build", "Proofs.Flock.Verifier"], cwd=PROOFS, check=True, capture_output=True)
 
 
 def sources():
@@ -674,7 +686,7 @@ def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
     (`[0] ‖ []` against `[] ‖ [0]`) gives one node, and must not count, since the children are not of the digest's width
     (PR #146's red-team review). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
-    subprocess.run(["lake", "build", "Proofs.Flock.Verifier"], cwd=PROOFS, check=True, capture_output=True)
+    build_proofs_verifier()
     for goal, witness in [
         ('(MerkleScheme.sha256 "flock-leaf/sha256-unsalted").Collision',
          "⟨.node (ByteArray.mk #[0]) ByteArray.empty ByteArray.empty (ByteArray.mk #[0]), by simp only [MerklePair.Collides]; "
@@ -1317,7 +1329,7 @@ def test_merkle_extractor_computes_a_collision(tmp_path):
     """`merkle_binding` is stated over `merklePair`, a computable extractor, since a collision of a fixed hash exists by
     counting (PR #146's red-team delta check). On a toy scheme with 1-byte digests, two accepted checks with different rows
     give its pair: two children pairs under one node, or two rows with one leaf, and each collides."""
-    subprocess.run(["lake", "build", "Proofs.Flock.Verifier"], cwd=PROOFS, check=True, capture_output=True)
+    build_proofs_verifier()
     f = tmp_path / "Toy.lean"
     f.write_text(TOY_EXTRACTOR)
     p = subprocess.run(["lake", "env", "lean", str(f)], cwd=PROOFS, capture_output=True, text=True)

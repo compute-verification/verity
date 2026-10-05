@@ -42,7 +42,8 @@ Everything else is the protocol's (`audit`), the same for every scheme.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
    recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf. It refuses
    a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
-   `TileCheck.Accepts` asks the same of the tile's weight rows (the protocol's `weightOK`).
+   `TileCheck.Accepts` asks the same of the tile's weight rows (the protocol's `weightOK`), and a good tile
+   (`TileGood`) has every one passing.
 The row and tile trees are framed SHA-256 unless the scheme names another frame hash (`commitment_hash`). `"blake3"` is
 `frame-b3` (`verity.primitives.commitments.merkle`), BLAKE3 keyed by the domain id. A leaf's header fills one 64-byte block, so a row
 leaf streams through BLAKE3's chunk tree, for rows that must be committed within a decode step. A node is one compression
@@ -466,6 +467,11 @@ useful    U/(α_A·α_B), glue
     and its excluded rows. `records_root` binds the records and the splits.
   - One exclusion rule, per row: a row that fails the per-row rules stays in the unit, bound as any other, and its cells
     earn no credit. Tiles with credited cells stay drawable, and the audit also opens one tile per excluded row.
+    - A known difference from Lean: the work law excludes a failing weight row and accepts its tiles, while Lean's good
+      tile (`TileGood`) and correct unit (`Correct`) never exclude one, so `TileCheck.Accepts` refuses the tile as
+      `check_tile` does. The work law stays credit-sound there only while an excluded column earns nothing
+      (`test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted`); approaches registry
+      `pouw/work-law-weight-row-exclusion`.
   - **Voluntary rows (V-EX;** research store `theory-pearl-c4-domain.md` §6.13, the assessor's B at 17:32Z**):** the
     record may also give up up to ⌈m/64⌉ A rows (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`,
     the same in every unit of the weight).
@@ -522,8 +528,8 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     unit is credited (1 − 1/1,000)·`credit_of`. `volunteer` reads the same cap. The certificate states TT_OUT(1/1000) and
     names the cap among its parameters.
   - γ at the headline record (FP32 at 8.376, the packed cast at 8.72, rev1's credit) is 0.36949% at 8,192³ and 0.35973%
-    at 16,384³, per unit and per audit tile (Lean `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192`, `_16384` and their
-    `pearlCSampled…` twins). Per unit it follows from rev1 at 1/400 alone (`…Cap1000_8192_of_cap400`); per tile, TT_OUT
+    at 16,384³, per unit and per audit tile (Lean `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192`,
+    which is `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192`; its `_16384` and their `pearlCSampled…` twins). Per unit it follows from rev1 at 1/400 alone (`…Cap1000_8192_of_cap400`); per tile, TT_OUT
     at 1/1,000 is the assumption. At the issue-bound FP32 add (8.00) it is 0.36901% and 0.35949%
     (`pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192`, `_16384` and their `pearlCSampled…` twins, from TT_OUT at 1/1,000);
     the ledger publishes the larger of the two prices, the in-loop add's.
@@ -806,33 +812,54 @@ useful    U/(α_A·α_B), glue
     unit's committed rows: a row unit's input row (bf16), the nvfp4-p row it writes and its ``ok`` row (every output is
     committed, #757), and a tile's TM + TN nvfp4-p rows and its tile digest. A tile reads each row as its row unit wrote
     it (the same words, schema and salt), so the units link by equal commit strings b ‖ c.
-  - The rows are rows of 16-bit words, each the row C-Flock's port of its words commits (`leaves.ROW_SCHEMA`): an
-    `hm96-sha512/row/v1` row (`sha512/row/v1`, role X and word width 16, as every C-Flock v1 port is, of whole SHA-512
-    blocks) or an `hm96-sha512/row/v2` bit row (`sha512/row/v2`, 16 bits a word). Neither digest names the role or the
-    schema, so the registration domain of the tree a row sits in binds the schema id, the word count and the role. Every
-    narrower element is packed low bits first, so a row's bytes are the tensor's memory (`rowleaf.bit_row`'s of its
-    elements):
+  - The rows are rows of 16-bit words, each committed under the schema of its row and its tree's role
+    (`leaves.ROW_SCHEMA`): an `hm96-sha512/row-seg/v1` row (`sha512/row-seg/v1`: the words' bit row in 1 KiB segments that
+    hash in parallel, frame-v3's PROTOCOL.md) or an `hm96-sha512/row/v2` row (`sha512/row/v2`: the words' bit row,
+    serial). No digest names the role or the schema, so the registration domain of the tree a row sits in binds the schema
+    id, the word count and the role, and each tree holds exactly one (schema id, word count, role). Every narrower element
+    is packed low bits first, so a row's bytes are the tensor's memory (`rowleaf.bit_row`'s of its elements):
 
     ~~~text
-    schema id            words                                                     count             role               row
-    pouw/row-bf16/v1     k BF16 words                                              k                 X (A_i), W (B_j)   v1
-    pouw/row-fp32/v1     k FP32 words, low half first                              2k                X, W               v1
-    pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),  v2
+    schema id            words                                                     count             role               row (X / W)
+    pouw/row-bf16/v1     k BF16 words                                              k                 X (A_i), W (B_j)   seg / v2
+    pouw/row-fp32/v1     k FP32 words, low half first                              2k                X, W               seg / v2
+    pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),  seg / v2
                          UE4M3 scale bytes, then P's 64 BF16 words                                   W (B̃_j ‖ P_B,j)
-    pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W               v2
-    pouw/row-ok/v1       the row's admission bit, bit 0 of one word, bits 1–15 0   1                 X, W               v2
+    pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W               seg / v2
+    pouw/row-ok/v1       the row's admission bit, bit 0 of one word, bits 1–15 0   1                 X, W               v2 / v2
     pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X                  v2
     ~~~
 
-    Whole blocks hold a bf16 row when 64 | k and an fp32 row when 32 | k (`leaves.row_leaf` refuses the rest).
-    nvfp4-p's codes and scales are core's `nvfp4_row_bytes`, as in flock-fp's packed rows, with P appended: every unit
-    that reads such a row reads all of it, since a tile needs A′_i and P_A,i both. The salt is 192 bytes; the verifier
-    computes the tree leaf, H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c.
+    Every per-call row (role X) but ok, the tile digest and the row cut's rows (below) is a row-seg row, so decode's
+    serial hash chain is a segment's, not the row's (Daniel's ruling, card 637f70c6): A_i (bf16, 8 KiB at k = 4,096, 8
+    segments), A′_i ‖ P_A,i (3 segments), and Pearl-C's FP32 A_i (16 KiB, 16 segments) and fp8-p row (5 segments). Every
+    other row is a v2 row, the registered rows (role W) included, in the registered tree and in every statement that
+    reads or writes them, so each (row, role) has one leaf schema wherever it appears and no row is `sha512/row/v1`
+    (Daniel's ruling, Slack 1790973124.259289). A v2 row costs what a v1 row of the same words would, a 128-byte prefix
+    block and the row, and is any length; the role byte v2 drops is bound by the registration domain. nvfp4-p's codes
+    and scales are core's `nvfp4_row_bytes`, as in flock-fp's packed rows, with P appended: every unit that reads such a
+    row reads all of it, since a tile needs A′_i and P_A,i both. The salt is 192 bytes; the verifier computes the tree
+    leaf, H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c.
+  - A unit's C-Flock statement names its rows in META (`leaves.statement_rows` of its ports): ``row_schemas``, each
+    row's [schema, bits] (the input rows, one per row a tile reads, then the output rows), and ``out_row_ports``, each
+    output row's run of output ports, which META names when an output row is row-seg or a run of several. Every output
+    row is a row of exactly its words, as every input row is. A row unit writes A′_i ‖ P_A,i (or the fp8-p row) as three
+    (two) output ports, the codes, the scales and P, which C-Flock commits as one row-seg row of exactly their words
+    (#849), and B̃_j ‖ P_B,j (or the registered fp8-p row) as one v2 row of them; the ok word and the tile digest are each
+    one port's v2 row, not padded to whole blocks (`cursor/row-v2-out-95d4`). So the writer's leaf is the leaf of the
+    unit that reads the row as one input port.
   - In gates the hiding adds only the tile digest: 281 Keccak-p[1600, 12] a 64 × 64 tile.
   - Vectors: `tests/vectors/pouw_rows.json` (`tests/pouw_rows_vectors.py`) pins each schema's row bytes, row digest,
-    commit string and tree leaf at k = 64 and 4,096, and the digest of two tiles, which the gates compute. C-Flock's
-    ports commit them byte for byte: `backends/flock/tests/test_pouw_rows.py` recomputes every vector through C-Flock's
-    port for the row, and one v1 row, one v2 row and a tile through the Lean verifier's row constants.
+    commit string and tree leaf in each role at k = 64 and 4,096 (a row-seg row's with each segment's length and digest),
+    and the digest of two tiles, which the gates compute. `test_circuit_leaves.py` rebuilds every row-seg vector from the
+    spec by hand and reads core's own row-seg vectors as PoUW's rows. C-Flock's ports commit every row byte for byte:
+    `backends/flock/tests/test_pouw_rows.py` recomputes each one's vector through C-Flock's port for the row, and two v2
+    rows and a tile through the Lean verifier's row constants; on C-Flock's writer/reader pairs (`ROW_SEG_PAIRS`: A′_i ‖
+    P_A,i at k = 4,096, the fp8-p row at k = 1,024; `ROW_V2_PAIRS`: an ok row, a tile digest, B̃_j ‖ P_B,j and the
+    registered fp8-p row at k = 1,024) PoUW's commit string is the writer's and the reader's. Each of the six units'
+    statement rows compose (a toy unit with the unit's ports): META is `statement_rows`', and every staged row's b ‖ c
+    is PoUW's commit string of its words. No C-Flock composer stages a PoUW unit's own gates with these rows yet
+    (`class_statement.stage` commits one output port for all of a unit's outputs), so neither does a `--zk` proof.
   - The six PoUW primitives the row units call (`PouwF32SqrtRn`, `PouwETilde`, `PouwBf16Neg`, `PouwSqAcc`, `PouwSqCeil`,
     `PouwSqGe`) have Boolean versions, the same functions on bits (`circuit.boolean`, `_v2`, traced from `forms` builders;
     their AND counts are pinned in circuit-check's `pins.json`). C-Flock's lowering maps a primitive id to a piece of its own
@@ -850,9 +877,9 @@ useful    U/(α_A·α_B), glue
       as the whole row, and the carry is exact: the pieces' outputs are the whole row's, and every value is computed in
       exactly one unit.
     - The tail writes the fp8-p or nvfp4-p row today's row unit writes, so a tile reads its rows unchanged. The pieces
-      pass their values in six more v2 rows (`leaves`' pc8-head, pc8-carry, fp8-codes, pc4-head, pc4-carry and
-      nvfp4-codes; `rowk.PORTS8`, `PORTS4`). At row_k = 2,048 each is short (at most 55 words) or whole SHA-512 blocks,
-      the v2 rows C-Flock's widened scope takes; pc8-carry ends in 62 zero words for that.
+      pass their values in six more rows, v2 in either role (`leaves`' pc8-head, pc8-carry, fp8-codes, pc4-head,
+      pc4-carry and nvfp4-codes; `rowk.PORTS8`, `PORTS4`). At row_k = 2,048 each is short (at most 55 words) or whole
+      SHA-512 blocks, the v2 rows C-Flock's widened scope takes; pc8-carry ends in 62 zero words for that.
     - A form reads its segment of F_A and F_B as a public input region under the anchor's slice rule,
       `verity/pouw/anchor/<scheme>/<anchor>/slice/v1` (`rowk.DERIVATIONS8`, `DERIVATIONS4`,
       `anchors.Derivation.per_segment`), which only the cut's shapes name.

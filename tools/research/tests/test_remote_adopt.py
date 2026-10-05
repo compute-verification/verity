@@ -30,7 +30,8 @@ def machines(tmp_path, monkeypatch):
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "store.toml"))
     ms = {"vy-a": {"provider": "ssh", "host": "a", "user": "research", "root": str(tmp_path / "a"), "project": "verity"},
           "vy-b": {"provider": "ssh", "host": "b", "user": "research", "root": str(tmp_path / "b"), "project": "verity"},
-          "pod": {"provider": "runpod", "pod_id": "p1", "root": "/workspace/research", "project": "verity"}}
+          "pod": {"provider": "runpod", "pod_id": "p1", "root": "/workspace/research", "project": "verity"},
+          "vy-pod": {"provider": "runpod", "pod_id": "p2", "host": "p", "user": "root", "project": "verity"}}
     probed: list[str] = []
     monkeypatch.setattr(remote, "load_machines", lambda path=None: ms)
     monkeypatch.setattr(remote, "pod_target", lambda m: probed.append(m["host"]) or {"host": m["host"], "port": 22, "user": m["user"]})
@@ -62,6 +63,19 @@ def test_status_run_adopts_a_running_run_and_on_names_the_only_machine_asked(mac
     assert cli.main(["status", LIVE, "--on", "vy-a", "--runs-dir", str(here), "--json"]) == 0
     (s,) = json.loads(capsys.readouterr().out)["runs"]
     assert s["id"] == LIVE and s["state"] == "running" and machines["probed"] == ["a"], "only the machine --on names is asked"
+
+
+def test_a_pod_registered_without_a_root_is_asked_under_the_default_one(machines, monkeypatch, capsys):
+    """`research pods register` writes no root, which `resolve_machine` defaults: adopting from such a pod uses that default
+    rather than failing on the missing key."""
+    monkeypatch.setattr(remote, "DEFAULT_ROOT", str(machines["tmp"] / "pod"))
+    _run_on(machines["tmp"] / "pod", "r20261002-081500-0a0a", "running")
+    here = machines["local"]
+    assert cli.main(["status", "r20261002-081500-0a0a", "--on", "vy-pod", "--runs-dir", str(here), "--json"]) == 0
+    (s,) = json.loads(capsys.readouterr().out)["runs"]
+    assert s["state"] == "running" and machines["probed"] == ["p"]
+    rec = json.loads((here / "r20261002-081500-0a0a" / "remote.json").read_text())
+    assert rec["root"] == str(machines["tmp"] / "pod") and rec["machine"] == "vy-pod"
 
 
 def test_a_run_no_machine_holds_names_each_machines_answer_and_the_store_attempt(machines, capsys):

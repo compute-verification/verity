@@ -59,6 +59,7 @@ import Proofs.Pouw.NCP.RelationWitness
 import Proofs.Pouw.NCP.RouteUProofs
 import Proofs.Pouw.NCP.RouteUWordProofs
 import Proofs.Pouw.NCP.WordProofs
+import Proofs.Pouw.PearlC
 import Proofs.Pouw.PearlC.AccumProofs
 import Proofs.Pouw.PearlC.AtomErr
 import Proofs.Pouw.PearlC.Cap
@@ -150,5 +151,5 @@ import Proofs.Pouw.Witness
 
 Every theorem of the package and every lemma behind it, over `Pouw.Protocol`'s definitions and `Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
-`Game`, `NCP`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Pouw.Protocol`.
+`Game`, `NCP`, `PearlC`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Pouw.Protocol`.
 -/

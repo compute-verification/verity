@@ -942,6 +942,7 @@
         "verity/protocols/accounting/work/pouw/lean/Pouw/Guarantees/Dimension.lean": "verity/Security/Specs/Pouw/Guarantees/Dimension.lean",
         "verity/protocols/accounting/work/pouw/lean/Pouw/Guarantees/Game.lean": "verity/Security/Specs/Pouw/Guarantees/Game.lean",
         "verity/protocols/accounting/work/pouw/lean/Pouw/Guarantees/NCP.lean": "verity/Security/Specs/Pouw/Guarantees/NCP.lean",
+        "verity/protocols/accounting/work/pouw/lean/Pouw/Guarantees/PearlC.lean": "verity/Security/Specs/Pouw/Guarantees/PearlC.lean",
         "verity/protocols/accounting/work/pouw/lean/Pouw/Protocol.lean": "verity/Security/Definitions/Pouw.lean",
         "verity/protocols/accounting/work/pouw/lean/Pouw/Protocol/Barrier/Defs.lean": "verity/Security/Definitions/Pouw/Barrier/Defs.lean",
         "verity/protocols/accounting/work/pouw/lean/Pouw/Protocol/Barrier/Pinned.lean": "verity/Security/Definitions/Pouw/Barrier/Pinned.lean",
@@ -1092,6 +1093,7 @@
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/NCP/RouteUProofs.lean": "verity/Security/Proofs/Pouw/NCP/RouteUProofs.lean",
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/NCP/RouteUWordProofs.lean": "verity/Security/Proofs/Pouw/NCP/RouteUWordProofs.lean",
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/NCP/WordProofs.lean": "verity/Security/Proofs/Pouw/NCP/WordProofs.lean",
+        "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/PearlC.lean": "verity/Security/Proofs/Pouw/PearlC.lean",
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/PearlC/AccumProofs.lean": "verity/Security/Proofs/Pouw/PearlC/AccumProofs.lean",
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/PearlC/AtomErr.lean": "verity/Security/Proofs/Pouw/PearlC/AtomErr.lean",
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/PearlC/Block4Sem.lean": "verity/Security/Proofs/Pouw/PearlC/Block4Sem.lean",
@@ -1263,6 +1265,7 @@
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/Dimension/": "verity/Security/Proofs/Pouw/Dimension/",
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/Fp8Atom/Checks/": "verity/Security/Proofs/Pouw/Fp8Atom/Checks/",
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/NCP/": "verity/Security/Proofs/Pouw/NCP/",
+        "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/PearlC/": "verity/Security/Proofs/Pouw/PearlC/",
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/PearlC/Cap/": "verity/Security/Proofs/Pouw/PearlC/Cap/",
         "verity/protocols/compliance/nci/lean/Nci/SecurityProofs/": "verity/Security/Proofs/Nci/"
       }

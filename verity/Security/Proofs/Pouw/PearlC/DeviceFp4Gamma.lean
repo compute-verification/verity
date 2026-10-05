@@ -50,7 +50,7 @@ theorem pearlCGammaFp4At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] 
         (pearlCProtocolFp4 d sem ρ).capOK H s' U u act →
           (pearlCProtocolFp4 d sem ρ).Wref U.layout u ≤ (ω : ℝ) * (pearlCProtocolFp4 d sem ρ).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
-    have hsh : U.layout.shape u = s := hU.2.1.2 u hu
+    have hsh : U.layout.shape u = s := hU.2.2 u hu
     have hc : sem.unitDebit d H s' U u act ≤ ρ * creditFp4 d (U.layout.shape u) := hcap
     show (wrefFp4 d (U.layout.shape u) : ℝ) ≤
       (ω : ℝ) * ((creditFp4 d (U.layout.shape u) - sem.unitDebit d H s' U u act : ℚ) : ℝ)
@@ -77,7 +77,7 @@ theorem pearlCSampledFp4At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R
         (pearlCTilesFp4 d sem ρ).Wcred U.layout g act ≤ (ω : ℝ) * (pearlCTilesFp4 d sem ρ).credit H s' U g act := by
     intro U hU H s' g hg act _
     have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.2 _ hu
+    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.2 _ hu
     simp only [pearlCTilesFp4]
     rw [hsh, hω]
     push_cast
@@ -87,7 +87,7 @@ theorem pearlCSampledFp4At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R
         (pearlCTilesFp4 d sem ρ).Wcred U.layout g act ≤ (pearlCTilesFp4 d sem ρ).Wref U.layout g := by
     intro U hU g hg act
     have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.2 _ hu
+    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.2 _ hu
     simp only [pearlCTilesFp4]
     rw [hsh]
     exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (Fp4Sem.passRows_subset sem _ _ _) _) hw0

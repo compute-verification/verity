@@ -5,9 +5,9 @@ import Specs.Pouw.Assumptions.PearlC.TTOutRev1
 
 Under the `-h1` hashing format's U-only messages (P1 of `internal/pouw/hashing-sm120-options.md`) the verifier checks a
 unit's useful words U and not its ticket words C̃. A unit is then correct when its activations pass, its debit is within
-the cap and its U words are right (`CorrectU`); `correctSetU` and the γ-gap property `GγU` are `correctSet` and `Gγ`
-with that. `TTOutU` is `TTOut` over `correctSetU`, and `TTOutPearlCDevUOnly` is it at rev1's protocol, so its credit,
-cap, W_ref, debit and domain are rev1's (the granted ones at `G = 0`).
+the cap, its weight rows pass and its U words are right (`CorrectU`); `correctSetU` and the γ-gap property `GγU` are
+`correctSet` and `Gγ` with that. `TTOutU` is `TTOut` over `correctSetU`, and `TTOutPearlCDevUOnly` is it at rev1's
+protocol, so its credit, cap, W_ref, debit and domain are rev1's (the granted ones at `G = 0`).
 
 It asserts **more** than the (C̃, U) row: every unit correct under both bindings is correct under U alone, so its event
 contains the (C̃, U) row's (`ttOutPearlCDevRev1_of_uOnly`). It is a new conjecture, not a weakening.
@@ -19,10 +19,12 @@ open Finset Pouw.Fp8Atom
 
 variable {Q R S : Type}
 
-/-- A unit correct under U-only binding: admissible activations, its replayed debit within the cap, and every useful word
-on its `m × n` entries has the reference FP32 value. Its ticket words are not read. -/
+/-- A unit correct under U-only binding: admissible activations, its replayed debit within the cap, every row of its
+weight passing the rules, and every useful word on its `m × n` entries has the reference FP32 value. Its ticket words
+are not read. -/
 def CorrectU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ) (c : Commit) : Prop :=
   P.actOK (U.layout.shape u) c.act ∧ P.capOK H s U u c.act ∧
+    (∀ j < (U.layout.shape u).n, P.weightOK (U.layout.shape u) (U.weight (U.layout.wid u)) j) ∧
     ∀ i < (U.layout.shape u).m, ∀ j < (U.layout.shape u).n, wordQ (c.useful i j) = P.useful H s U u c.act i j
 
 open Classical in

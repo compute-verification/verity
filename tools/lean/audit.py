@@ -695,6 +695,18 @@ def homes(pkg: Path, policy: dict) -> dict[str, list[str]]:
     return out
 
 
+def reads_home(pkg: Path, policy: dict) -> dict[str, list[str]]:
+    """The ``home`` of ``pkg``'s reads check (`spec_reads`): `homes` of ``pkg``, then of each package its `proved_in` names,
+    whose own modules are no spec (it requires this package, not the converse) and whose path dependencies keep theirs.  A
+    guarantee's statement elaborates in its prover, so it can read the prover's path dependencies; were they missing here,
+    the check would take them for pinned dependencies and pass any read of them."""
+    home = homes(pkg, policy)
+    for _, q in provers(pkg, policy):
+        for m, spec in (homes(q, {}) if q.is_dir() else {}).items():
+            home.setdefault(m, spec)
+    return home
+
+
 def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[str]:
     """The reads check: every definition a guarantee's statement reads (`reads` under `meaning`, and `outside` it where the
     walk stops) lies in a spec module of its package or of a package it requires by path (``home``, `homes`), and the record
@@ -1217,11 +1229,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
     files = lean_modules(pkg)
     fails, new = judge(current, facts, files, update, owner)
-    home = homes(pkg, current)
-    for _, q in provers(pkg, current):                  # a prover's modules are not spec: it requires this package, not the converse
-        for m in (lean_modules(q) if q.is_dir() else {}):
-            home.setdefault(m, [])
-    fails = cross + fails + spec_reads(current, facts, home)
+    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current))
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     s = time.monotonic()
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
