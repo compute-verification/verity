@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -237,3 +238,15 @@ def test_inner_fold_gives_inner_claims_comb_and_extras(inner, tmp_path):
     assert (out["m"], out["k_log"]) == (INNER["m"], INNER["k_log"])
     assert out["extras"] == INNER["reps"][0]["extras"] == INNER["reps"][1]["extras"]
     assert [r["comb"] for r in out["reps"]] == [d["comb"] for d in INNER["reps"]]
+
+
+def test_inner_folds_plain_leaf_scheme_is_the_staged_one():
+    """`InnerFold.lean --plain-leaves` pins the META ``leaf_scheme`` a recursive session's inner statement is staged with."""
+    from verity_flock import circuit as FC
+
+    src = (HERE / "lean" / "InnerFold.lean").read_text()
+    body = src[src.index("def leafSchemePlain : Json :="):].split("\n\n", 1)[0]
+    got = dict(re.findall(r'\("(\w+)", \.str "([^"]*)"\)', body))
+    got.update({k: int(v) for k, v in re.findall(r'\("(\w+)", toJson \((\d+) : Nat\)\)', body)})
+    assert got == FC.LEAF_SCHEME_PLAIN
+    assert 'merkleLeaf := "flock-leaf/sha512-unsalted"' in src and FC.LEAF_SCHEME_PLAIN["id"] == "flock-leaf/sha512-unsalted"
