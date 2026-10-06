@@ -194,10 +194,10 @@ first in a quiet window, alone in its train (Daniel, 4 Oct).
   needs no verifier or proof change (ruling 2026-10-04, `.agents/skills/friction/SKILL.md`).
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
   about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
-  `verity/protocols/accounting/space/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `verity/protocols/accounting/work/pouw/lean/` (PoUW's games,
-  named assumptions and the proofs behind its γ, Mathlib and core's), `verity/protocols/accounting/communication/warden/lean/` (the network
-  warden's timing-channel guarantees and their proofs, Mathlib), `verity/protocols/compliance/nci/lean/` (NCI's policy and guarantees, on
-  core's), and `verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
+  `verity/protocols/accounting/space/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `verity/Security/` (PoUW's games,
+  named assumptions and the proofs behind its γ, Mathlib and core's), `verity/Security/` (the network
+  warden's timing-channel guarantees and their proofs, Mathlib), `verity/Security/` (NCI's policy and guarantees, on
+  core's), and `verity/Security/` (the model every protocol states its guarantees in: circuits, partitions,
   declarations and games; and core's own proofs about `verity`'s definitions, such as `verity_catalog.silicon`'s step relation;
   Mathlib only). New Lean goes into the package whose dependencies it needs, in a subdirectory and namespace of its own;
   a core-only proof goes into core's package, never a backend's. A protocol's package may require core's and other

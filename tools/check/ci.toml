@@ -77,7 +77,7 @@ after = "lean-build"
 # 3 pods: the soundness audit beside the suites; the rest of the Lean; the Rust build and the circuits.
 [[plan]]
 shards = [
-    ["lean-audit:backends/flock/verifier/lean/soundness", "pytest"],
+    ["lean-audit:verity/Security/Proofs", "pytest"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
 ]
@@ -85,7 +85,7 @@ shards = [
 # 5 pods: each of those apart.
 [[plan]]
 shards = [
-    ["lean-audit:backends/flock/verifier/lean/soundness"],
+    ["lean-audit:verity/Security/Proofs"],
     ["lean-audit:*", "lean-changed"],
     ["lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"],
     ["pytest"],
