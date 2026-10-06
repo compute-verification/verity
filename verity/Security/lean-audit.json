@@ -21430,6 +21430,9 @@
    "assumptions": [],
    "type_hash": "2e5de015453b9c78a5ff10f69aba49dbb40f087a61fddf40ae32afda6393927d"
   },
+  "Pous.SecurityProofs.P2SlackFamilyFreeBlocks": {
+   "owner": "@memory-accounting"
+  },
   "Pous.SecurityProofs.P2SlackFamilyUncond": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.P2SlackFamilyUncond : Pous.Guarantees.P2SlackFamilyUncond"],

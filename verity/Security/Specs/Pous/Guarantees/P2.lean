@@ -10,7 +10,7 @@ Six statements about the abstract model `m1p` (`Pous/Protocol/Model/M1p.lean`: i
 namespace `Pous.Guarantees` with the rest. Their texts are those of the statement review named in each docstring,
 verbatim. The proofs are in `Pous/SecurityProofs/P2/` (`Pous.SecurityProofs.P2MeetsM1pB19Uncond` and the others in
 `Pous/SecurityProofs.lean`); a docstring's `lean/submissions/efficient-crypto/…` path names the store draft each was
-graded from. A seventh, `P2SlackFamilyFreeBlocks` (the sampled setup's free blocks), is stated and not yet proved.
+graded from. A seventh, `P2SlackFamilyFreeBlocks` (the sampled setup's free blocks), is proved in `Proofs/Pous/FreeBlocks/`.
 
 Each is a theorem about `m1p` only, not about the concrete P2: nothing here models square–mask–square, SHAKE256, roots
 or time, so none of them says the deployed P2 is secure.
@@ -151,7 +151,7 @@ def P2ErrorSplitB19Uncond : Prop :=
       AuditSecure sch .sequential (sch.stateBound Params.ρ + 256 * sch.B) D (2 ^ 20) 127 (ENNReal.ofReal Params.δ)
         ((2⁻¹ : ENNReal) ^ 129)
 
-/-- **Not proved; a statement for the sampled setup.** For every `B` with `2^8 ≤ B ≤ 2^23` and every `b` with
+/-- **The sampled setup's free blocks.** For every `B` with `2^8 ≤ B ≤ 2^23` and every `b` with
 `20·16448 ≤ 21·b` and `b ≤ 16447`, the `m1p B 16448 (2^16448 − 21065) b` audit with at most `⌊B/100⌋` free blocks
 (`AuditSecureFree`: blocks a sampled setup let through, which pass every challenge) accepts every adversary holding
 `⌊ρ_eff·|C|⌋ + 128·B` bits, `ρ_eff = 18/19 · 99/100 ≈ 0.938`, with sequential reveal, `2^20` forward queries per
@@ -159,9 +159,10 @@ answer and any depth, with probability at most `1% + 2^-128 + 2^-129`, at `k = 1
 
 Where the numbers come from: a sampled setup of `s = 8,828` blocks (`⌈128 / −log₂ 0.99⌉`) leaves more than `B/100`
 blocks not decoding to `W` with probability at most `2^-128`, which the profile's failure union carries, not this
-statement. `ρ_eff` is `ρ` of the blocks that must be stored. Of 140 uniform challenges more than 35 land on free blocks
-with probability `P[Bin(140, 1/100) > 35] = 2^-129.2 ≤ 2^-129`, and the other 105 or more are `P2SlackFamilyUncond`'s
-`λ = 128` row. Scope: as `P2SlackB19Uncond`. -/
+statement. `ρ_eff` is `ρ` of the blocks that must be stored. The proof (`Pous.FreeBlocks.p2_slack_family_free_blocks`)
+counts the free blocks in the 1% term, `((g − 1 + ⌊B/100⌋)/B)^140 ≤ (0.9576 + 0.01)^140 ≤ 1/100` with
+`g = ⌊0.9576·B⌋ + 1`, and the state is below `P2SlackFamilyUncond`'s `λ = 0` one, so it shows `1% + 2^-129`; the `2^-128`
+term is slack. Scope: as `P2SlackB19Uncond`. -/
 def P2SlackFamilyFreeBlocks : Prop :=
   ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 23 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
     let sch := m1p B 16448 (2 ^ 16448 - 21065) b
