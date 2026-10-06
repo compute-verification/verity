@@ -7,9 +7,10 @@ the contract's property.
 
 Each session runs through the firewall with `verity_flock.firewall_transcript` watching what it sends the coin server; the
 firewall's decision is whether the session ended with Finish, the contract's is `Flock.Firewall.Contract.run` on the
-transcript (`verdicts`). `--cases` runs the built-in sessions (`cases`): honest ones, the red team's six on #1270
+transcript under the verifier's public input, the session's own schedule (`verdicts`, `decide`). `--cases` runs the built-in sessions (`cases`): honest ones, the red team's six on #1270
 (review-zk-gateway, c00b85b0c), and tamper controls, firewalls that let out what the contract forbids, which the contract
-must refuse. `--sessions` replays
+must refuse. `leaks` are review r6's transcripts on #1323 that leak a bit, each with its public input and the item the
+contract must cut. `--sessions` replays
 recorded inner sessions (`rec_live serve`'s output directories: ``session/session.json``, ``public.json``, ``private.json``,
 and ``schedule.json`` beside them or in their parent, or ``--schedule``) with their own coins and salts, checks the replay gives the recorded
 coin server record byte for byte, and expects both to accept. Each case carries its expectation (``firewall``, ``lean``,
@@ -19,6 +20,7 @@ DIR/agreement.tsv and DIR/result.json; exits 1 if any case misses its expectatio
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import struct
@@ -184,7 +186,7 @@ def cases():
     tamper = lambda why: {"firewall": True, "lean": False, "why": why}
     out += [("tamper-forwards-hello", requests(hello={**HELLO, "reps": 2.0}), ForwardsHello, None, tamper("hello: not the value")),
             ("tamper-any-y", requests(y=bytes(48)), AnyY, None, tamper("link.y: not the value")),
-            ("tamper-reused-salt", requests(), RL.Proxy, reused(), tamper("a commitment under salt 0, used before")),
+            ("tamper-reused-salt", requests(), RL.Proxy, reused(), tamper("the tape's salts are not pairwise distinct")),
             ("tamper-clear-top", requests(), ClearTop, None, tamper("a commitment under salt 0 that is not the message's")),
             ("tamper-shows-salt", requests(), ShowsSalt, None, tamper("a commitment under salt")),
             ("tamper-swaps-coins", requests(), SwapsCoins, None, tamper("circuit/rep0 round 0: the workers' coins"))]
@@ -242,21 +244,133 @@ def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | Non
     return s, (f"the replay's coin server record differs from public.json at {diff}" if diff else None)
 
 
-def verdicts(lean: str, out: Path, sessions: list[tuple[str, FT.Session]]) -> list[dict]:
-    """Each session's transcript written to ``out/<name>.json`` and decided by `flock-firewall contract`: its verdict
+def decide(lean: str, out: Path, named: list[tuple[str, dict, dict]]) -> list[dict]:
+    """Each ``(name, transcript, public input)`` written to ``out/<name>.json`` and decided by `flock-firewall contract
+    --public` under its public input (one call per distinct public input, written to ``out/public-<k>.json``): its verdict
     (``accepted``, ``released``, ``why``), or ``{"accepted": None, "why": …}`` when the contract could not read it."""
-    files = []
-    for name, s in sessions:
+    groups: dict[str, list[str]] = {}
+    for name, t, pub in named:
         f = out / f"{name}.json"
-        f.write_text(json.dumps(s.transcript()))
-        files.append(str(f))
-    p = subprocess.run([lean, "contract", *files], capture_output=True, text=True)
-    got = {v["file"]: v for v in map(json.loads, p.stdout.splitlines())}
-    res = []
-    for f in files:
-        v = got.get(f) or {"accepted": None, "why": p.stderr.strip()[-200:]}
-        res.append({"accepted": None, "why": v["error"]} if "error" in v else v)
-    return res
+        f.write_text(json.dumps(t))
+        groups.setdefault(json.dumps(pub, sort_keys=True), []).append(str(f))
+    got: dict[str, dict] = {}
+    for k, (pub, files) in enumerate(groups.items()):
+        pf = out / f"public-{k}.json"
+        pf.write_text(pub)
+        p = subprocess.run([lean, "contract", "--public", str(pf), *files], capture_output=True, text=True)
+        lines = [json.loads(x) for x in p.stdout.splitlines()]
+        bad = next((v["error"] for v in lines if "public" in v), None)
+        for f in files:
+            v = next((v for v in lines if v.get("file") == f), None)
+            got[f] = ({"accepted": None, "why": bad or p.stderr.strip()[-200:]} if v is None
+                      else {"accepted": None, "why": v["error"]} if "error" in v else v)
+    return [got[str(out / f"{name}.json")] for name, _, _ in named]
+
+
+def verdicts(lean: str, out: Path, sessions: list[tuple[str, FT.Session]]) -> list[dict]:
+    """Each session's transcript decided under its public input (`FT.Session.public`: the schedule the session was run
+    with, never the transcript's), as `decide` does."""
+    return decide(lean, out, [(name, s.transcript(), s.public()) for name, s in sessions])
+
+
+def leaks() -> list[tuple[str, dict, dict, dict]]:
+    """Review r6's transcripts on #1323 (``note:review-zk-gateway/20261006T0934Z-finding-review-zk-gateway-r6``), each a
+    bit the firewall could choose, built from the honest case's transcript: ``(name, transcript, public input,
+    expectation)``, the expectation the contract's verdict (``accepted``), the items it releases (``released``: the cut is
+    the next one) and a part of why. B1, the commitments' count and place: one more, one fewer, one moved. B2, a tape
+    number naming another's value: a salt's bytes under two numbers, the workers seeing one under another number, the same
+    for a pad; and two commitments under one number. B3, the public input from the transcript: a masked value no relation
+    is checked on, or one checked only on a relation the transcript names, a statement value nothing fixes or a wrong one,
+    a Hello from the transcript's own schedule, and no public input at all. N1, a value of the firewall's own under a name
+    it chose. Accepted: the honest transcript, and a masked value checked against the verifier's relation before a value of
+    the firewall's own that depends on it leaves."""
+    s = run_case("honest", requests(), RL.Proxy, None)
+    honest, pub = s.transcript(), s.public()
+    n = len(honest["items"])
+    at = {it["fixed"]["what"]: i for i, it in enumerate(honest["items"]) if "fixed" in it}
+    commits = [i for i, it in enumerate(honest["items"]) if "commit" in it]
+    r1 = max(i for i in commits if at["round:1"] < i < at["open:circuit/rep1"])
+    c0 = honest["items"][commits[0]]["commit"]
+    r2 = at["round:2"]
+
+    def commit(msg: bytes, salt: str, sid: int) -> dict:
+        sent = FT.INST.commit_string(FT.INST.default_key, hashlib.sha512(msg).digest(), bytes.fromhex(salt))
+        return {"commit": {"msg": msg.hex(), "salt": sid, "sent": sent.hex()}}
+
+    def refused(released: int, why: str) -> dict:
+        return {"accepted": False, "released": released, "why": why}
+
+    def masked(relations=(), check=None, computes=()):
+        t = copy.deepcopy(honest)
+        t["tape"]["pads"] = ["%032x" % 7]
+        mid = [{"masked": {"value": "%032x" % 1, "pad": 0, "sent": "%032x" % (1 ^ 7)}}]
+        if check is not None:
+            mid.append({"check": {"relation": check, "pads": [0], "ok": True}})
+        mid.append({"fixed": {"what": "final_c'", "by": "own", "want": "01", "sent": "01", "pads": [0]}})
+        t["items"][r2:r2] = mid
+        return t, FT.public(pub["schedule"], relations, computes=computes)
+
+    out = [("honest", honest, pub, {"accepted": True, "released": n, "why": ""})]
+    t = copy.deepcopy(honest)
+    t["tape"]["salts"].append(hashlib.shake_256(b"r6-extra1").digest(FT.INST.salt_bytes).hex())
+    sid = len(t["tape"]["salts"]) - 1
+    t["items"].insert(r2, commit(b"the worker's bit", t["tape"]["salts"][sid], sid))
+    out.append(("extra-commitment", t, pub, refused(r2, f"a commitment under salt {sid} that the schedule does not owe here")))
+    t = copy.deepcopy(honest)
+    del t["items"][r1]
+    out.append(("dropped-commitment", t, pub, refused(r1, "before the commitments the schedule owes")))
+    t = copy.deepcopy(honest)
+    t["items"].insert(at["link.y"] + 1, t["items"].pop(r1))
+    out.append(("moved-commitment", t, pub, refused(at["link.y"] + 1, "that the schedule does not owe here")))
+    t = copy.deepcopy(honest)
+    t["tape"]["salts"].append(t["tape"]["salts"][c0["salt"]])
+    sid = len(t["tape"]["salts"]) - 1
+    t["items"].insert(r2, commit(bytes.fromhex(c0["msg"]), t["tape"]["salts"][sid], sid))
+    out.append(("salt-bytes-reused", t, pub, refused(0, "the tape's salts are not pairwise distinct")))
+    t = copy.deepcopy(honest)
+    t["tape"]["salts"].append(t["tape"]["salts"][c0["salt"]])
+    t["exposed"] = {"salts": [len(t["tape"]["salts"]) - 1], "pads": []}
+    out.append(("salt-shown-under-another-id", t, pub, refused(0, "the tape's salts are not pairwise distinct")))
+    t = copy.deepcopy(honest)
+    c1 = t["items"][commits[1]]["commit"]
+    t["items"][commits[1]] = commit(bytes.fromhex(c1["msg"]), t["tape"]["salts"][c0["salt"]], c0["salt"])
+    out.append(("salt-number-reused", t, pub, refused(commits[1], f"a commitment under salt {c0['salt']}, used before")))
+    t, p = masked()
+    out.append(("masked-no-relations", t, p, refused(r2, "but the verifier checks no relation on it")))
+    t, p = masked(check="anything the firewall likes")
+    t["relations"] = ["anything the firewall likes"]
+    out.append(("masked-own-relation", t, p, refused(r2, "but the verifier checks no relation on it")))
+    t, p = masked(["the verifier's relation"], "anything the firewall likes", ["final_c'"])
+    out.append(("masked-unlisted-relation", t, p, refused(r2 + 1, "which is not a relation the verifier checks")))
+    t, p = masked(["the verifier's relation"], "the verifier's relation", ["final_c'"])
+    out.append(("masked-checked", t, p, {"accepted": True, "released": n + 3, "why": ""}))
+    t, p = masked()
+    t["tape"]["pads"].append(t["tape"]["pads"][0])
+    t["exposed"] = {"salts": [], "pads": [1]}
+    out.append(("pad-shown-under-another-id", t, p, refused(0, "the tape's pads are not pairwise distinct")))
+    t = copy.deepcopy(honest)
+    t["items"].insert(r2, {"fixed": {"what": "anything", "by": "statement", "want": "5e" * 8, "sent": "5e" * 8}})
+    out.append(("statement-value-unchecked", t, pub, refused(r2, "anything: a value the public statement does not fix")))
+    out.append(("statement-value-wrong", t, FT.public(pub["schedule"], statement={"anything": bytes(8)}),
+                refused(r2, "anything: not the value the statement fixes")))
+    t = copy.deepcopy(honest)
+    t["schedule"] = copy.deepcopy(pub["schedule"])
+    t["schedule"]["hello"]["note"] = "5e"
+    t["items"][at["hello"]]["fixed"]["sent"] = FT.canon(t["schedule"]["hello"]).hex()
+    out.append(("schedule-from-the-transcript", t, pub, refused(at["hello"], "hello: not the value the schedule fixes")))
+    out.append(("no-public-input", honest, FT.public(None), refused(at["hello"], "a schedule the public input does not carry")))
+    t = copy.deepcopy(honest)
+    t["items"].insert(r2, {"fixed": {"what": "own:bit=1", "by": "own", "want": "", "sent": ""}})
+    out.append(("own-item-chosen", t, pub,
+                refused(r2, "own:bit=1: not a value the public input lets the firewall fix by its own computation")))
+    return out
+
+
+def meets(v: dict, expect: dict) -> bool:
+    """Whether a verdict is the expected one: accepted or not, as many items released, and its reason containing the
+    expected part."""
+    return (v.get("accepted") == expect["accepted"] and v.get("released") == expect["released"]
+            and expect["why"] in (v.get("why") or ""))
 
 
 def main(argv=None) -> int:

@@ -1,8 +1,8 @@
 """The firewall's contract (`Flock/Firewall/Contract.lean`, `flock-firewall contract`) against the inner phase's firewall
 (`verity_flock.rec_live.Proxy`), on the transcripts `verity_flock.firewall_transcript` records (`firewall_agree.py`):
 honest sessions accepted by both, the red team's six sessions on #1270 refused by both or sent as the schedule has them,
-tamper controls (firewalls that let out what the contract forbids) refused by the contract, and every session
-`test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on."""
+tamper controls (firewalls that let out what the contract forbids) refused by the contract, review r6's leaks on #1323
+each cut at its item, and every session `test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on."""
 from __future__ import annotations
 
 import hashlib
@@ -58,6 +58,8 @@ def test_a_commit_item_is_the_row_the_coin_server_receives():
     joined = b"".join(sent)
     assert all(bytes.fromhex(c["sent"]) in joined for c in commits)
     assert t["exposed"] == {"salts": [], "pads": []} and t["firewall"] == {"accepted": True, "why": None}
+    assert "schedule" not in t and "relations" not in t, "the public input is the verifier's, never the transcript's"
+    assert s.public() == FT.public(FA.SCHEDULE)
 
 
 def test_the_transcript_is_the_schedule_in_its_order():
@@ -130,7 +132,33 @@ def test_a_firewall_that_lets_out_what_the_contract_forbids_fails_the_check(lean
     monkeypatch.setattr(FA, "cases", lambda: [(name, reqs, proxy, fresh, {"firewall": True, "lean": True, "why": None})])
     assert FA.main(["--lean", lean, "--out", str(tmp_path), "--cases"]) == 1
     missed = json.loads((tmp_path / "result.json").read_text())["missed"]
-    assert [m["case"] for m in missed] == [name] and missed[0]["lean"]["why"].startswith("a commitment under salt 0, used before")
+    assert [m["case"] for m in missed] == [name] and missed[0]["lean"]["why"].startswith("the tape's salts are not pairwise distinct")
+
+
+def test_the_contract_cuts_every_leak_of_review_r6_at_its_item(lean, tmp_path):
+    """Review r6's leaks on #1323 (`firewall_agree.leaks`), each a bit the firewall could choose and each accepted before:
+    the commitments' count and place (B1), a tape number naming another's value (B2), the public input taken from the
+    transcript (B3) and a value of the firewall's own under a name it chose (N1). Each is cut at its item for its reason;
+    the honest transcript and a masked value checked against the verifier's relation are accepted."""
+    cases = FA.leaks()
+    got = FA.decide(lean, tmp_path, [(n, t, p) for n, t, p, _ in cases])
+    assert not [(n, v, e) for (n, _, _, e), v in zip(cases, got) if not FA.meets(v, e)]
+    review = {"extra-commitment", "dropped-commitment", "moved-commitment", "salt-bytes-reused", "salt-shown-under-another-id",
+              "pad-shown-under-another-id", "masked-no-relations", "masked-own-relation", "statement-value-unchecked",
+              "schedule-from-the-transcript", "own-item-chosen"}
+    names = [n for n, *_ in cases]
+    assert review <= set(names) and len(names) == len(set(names))
+    assert {n for n, (*_, e) in zip(names, cases) if e["accepted"]} == {"honest", "masked-checked"}
+
+
+def test_a_public_input_the_contract_cannot_read_decides_nothing(lean, tmp_path):
+    """`contract --public` with a file that is not a public input exits 2 and prints no transcript's verdict."""
+    s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
+    (tmp_path / "t.json").write_text(json.dumps(s.transcript()))
+    (tmp_path / "p.json").write_text(json.dumps({**s.public(), "kind": FT.FORMAT}))
+    p = subprocess.run([lean, "contract", "--public", str(tmp_path / "p.json"), str(tmp_path / "t.json")],
+                       capture_output=True, text=True)
+    assert p.returncode == 2 and [list(json.loads(x)) for x in p.stdout.splitlines()] == [["error", "public"]]
 
 
 def test_a_recorded_session_replays_to_its_record(lean, tmp_path):

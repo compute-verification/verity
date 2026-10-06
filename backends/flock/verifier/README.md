@@ -166,7 +166,12 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   to): `firewall_agree.py` runs the inner phase's firewall (`rec_live.Proxy`) and the contract on the same transcript
   (`verity_flock.firewall_transcript`) over 22 cases: the honest sessions accepted by both, the red team's six on #1270
   refused by both or sent as the schedule places them, and tamper controls the firewall passes and the contract refuses.
-  `test_firewall_contract.py` also runs the contract on every session of `test_firewall_agreement.py`. `--sessions`
+  The contract holds each transcript to the verifier's public input (`flock-firewall contract --public FILE`,
+  `verity/firewall-public/v0`: the schedule, the relations, the statement's values and the names of the firewall's own
+  values), never to the transcript's own copy; without one it refuses whatever leans on it. `test_firewall_contract.py`
+  also cuts each of review r6's leaks on #1323 at its item (`firewall_agree.leaks`: the commitments' count and place, a
+  tape number naming another's value, the public input from the transcript, a name of the firewall's choosing), and runs
+  the contract on every session of `test_firewall_agreement.py`. `--sessions`
   replays recorded K = 4096 sessions from their coins and salts (`r20261006-070620-e02d`'s, 4 of 4 accepted by both). The
   outer phase (`gate.rs`) is not covered yet.
 - Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agrees 27 of 27. Set 14 (a shared-row RoPE file whose six
