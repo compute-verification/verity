@@ -64,7 +64,7 @@ def _raw(man: dict) -> bytes:
 
 
 def _params(run: str, raw: bytes) -> dict:
-    return {"context": f"served-zk/{run}/{hashlib.sha256(raw).hexdigest()[:16]}", "deployment": f"served-zk/{run}",
+    return {"context": f"served-zk/{run}/{SC.manifest_name(raw)}", "deployment": f"served-zk/{run}",
             "k": K, "eps": "1/2", "delta": "1/10", "grid_bits": Wd.GRID_BITS, "range": [1, 1 << 40], "entries": 4, "w_rows": N}
 
 

@@ -579,6 +579,11 @@ def width(n: int) -> int:
     return (n.bit_length() + 64 + 7) // 8
 
 
+def manifest_name(raw: bytes) -> str:
+    """A pass as the window's context names it: the SHA-512 of its manifest's bytes, in hex."""
+    return hashlib.sha512(raw).hexdigest()
+
+
 def draw_key(coin: bytes, stream: S.Stream, reg: S.Registration) -> Key:
     """The window draw's key: the epoch's draw coin, under the stream and the registration and receipt it was opened after."""
     return derive(coin, DRAW_DOMAIN, {"stream": stream.digest, "registration": reg.digest,
@@ -692,7 +697,7 @@ class Challenger:
             raise _refused("coin", str(e)) from None
         except (KeyError, TypeError, ValueError) as e:
             raise _refused("manifest", f"{type(e).__name__}: {e}") from None
-        if hashlib.sha256(raw).hexdigest()[:16] != self.params["context"].rsplit("/", 1)[-1]:
+        if manifest_name(raw) != self.params["context"].rsplit("/", 1)[-1]:
             raise _refused("manifest", "the pass is not the one the window's parameters name")
         return how
 
@@ -868,7 +873,7 @@ def _pass(pass_dir: Path):
     calls = [u for u in man["matmuls"] if u["k"] == K and u["n"] == K]
     if not calls:
         raise SystemExit(f"{pass_dir}: no call of k = n = {K}")
-    return PD, man, hashlib.sha256(raw).hexdigest(), calls
+    return PD, man, manifest_name(raw), calls
 
 
 def _weights(man: dict, calls: list[dict]) -> list[int]:
@@ -878,10 +883,10 @@ def _weights(man: dict, calls: list[dict]) -> list[int]:
 def cmd_params(a) -> int:
     """The verifier's own parameters, from the served request it audits: its run and manifest name the window, and the
     model's k = n = K weights give |W|."""
-    _, man, sha, calls = _pass(Path(a.pass_dir))
+    _, man, name, calls = _pass(Path(a.pass_dir))
     rows = sum(next(u["n"] for u in calls if int(u["weight"]) == w) for w in _weights(man, calls))
     deployment = f"served-zk/{man.get('run')}"
-    params = {"context": f"{deployment}/{sha[:16]}", "deployment": deployment, "k": K, "eps": a.eps, "delta": a.delta,
+    params = {"context": f"{deployment}/{name}", "deployment": deployment, "k": K, "eps": a.eps, "delta": a.delta,
               "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows}
     Path(a.out).write_text(json.dumps(params, sort_keys=True))
     print(json.dumps(params), flush=True)
@@ -890,7 +895,7 @@ def cmd_params(a) -> int:
 
 def cmd_commit(a) -> int:
     pass_dir = Path(a.pass_dir)
-    PD, man, sha, calls = _pass(pass_dir)
+    PD, man, name, calls = _pass(pass_dir)
     import fast_tile as FT
     params = _json(a.params)
     scheme = PD.scheme_of(man["scheme"])
@@ -928,7 +933,7 @@ def cmd_commit(a) -> int:
                 yield data[2 * K * j:2 * K * (j + 1)]
     root_w, _ = commit_weights(params, w_rows())
     public, advice, priv = commit_window(params, window, root_w)
-    advice["provenance"] = {"run": man.get("run"), "manifest_sha256": sha, "scheme": man["scheme"],
+    advice["provenance"] = {"run": man.get("run"), "manifest_sha512": name, "scheme": man["scheme"],
                             "transcript_root": man.get("transcript_root"), "commitment": man.get("commitment"),
                             "records_root": man.get("records_root"),
                             "call_draw": {"source": source.hex(), "among": [x["index"] for x in calls]} if not a.call else {"given": a.call}}
