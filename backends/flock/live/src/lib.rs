@@ -33,7 +33,7 @@ pub mod ir_sampling;
 pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
-pub mod gate;
+pub mod firewall;
 #[cfg(feature = "sha512")]
 pub mod gate_transcript;
 pub mod glue;

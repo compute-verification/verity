@@ -87,7 +87,7 @@ def eHiFor (rho : Array F128) (r : Range) : Array F128 := eqTable (rho.extract (
 /-- `c` lies in one of `r`'s slots. -/
 def covers (r : Range) (c : ℕ) : Prop := r.pos0 ≤ c / 2 ^ r.slotLog ∧ c / 2 ^ r.slotLog < r.pos0 + r.count
 
-instance (r : Range) (c : ℕ) : Decidable (covers r c) := inferInstanceAs (Decidable (_ ∧ _))
+instance instDecidableCovers (r : Range) (c : ℕ) : Decidable (covers r c) := inferInstanceAs (Decidable (_ ∧ _))
 
 /-- What the ranges leave at `c`: the last covering range's scaled base, else `v`. -/
 def rangesVal (st : Stmt) (alpha : F128) (lw rho : Array F128) : List Range → ℕ → F128 → F128
