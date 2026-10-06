@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`tools/move/restack.py BRANCH... --move-commit SHA [--onto REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
+"""`tools/move/restack.py BRANCH... --move-commit SHA [--script S] [--onto REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
 branch across a generated layout move by running the move's own script on it, instead of rebasing it.
 
 A layout move is one commit M that `python3 tools/move/layout.py` (with its map, `tools/move/layout_map.toml`) wrote by running at
@@ -207,17 +207,23 @@ def line(r: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global SCRIPT
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("branches", nargs="+", metavar="BRANCH")
     ap.add_argument("--move-commit", required=True, metavar="SHA", help="the commit layout.py generated")
     ap.add_argument("--onto", metavar="REF", help="what to merge last: the moved main (default: the move commit)")
     ap.add_argument("--base", metavar="REF", help="the tree the move ran on (default: the move commit's parent)")
     ap.add_argument("--python", default=sys.executable, help="the interpreter that runs layout.py")
+    ap.add_argument("--script", default=SCRIPT, help=f"the move's script, under {SCRIPT_DIR}/ (default {SCRIPT}; the Lean "
+                                                    "move's is tools/move/lean.py)")
     ap.add_argument("--push-to", metavar="NEWBRANCH", help="push the clean result to this new branch")
     ap.add_argument("--remote", default="origin")
     ap.add_argument("--dry-run", action="store_true", help="report only; never push")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+    if not a.script.startswith(SCRIPT_DIR + "/"):
+        ap.error(f"--script: a script under {SCRIPT_DIR}/")
+    SCRIPT = a.script
     if a.push_to and len(a.branches) != 1:
         ap.error("--push-to takes one branch")
     results = []

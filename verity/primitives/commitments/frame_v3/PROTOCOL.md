@@ -147,7 +147,7 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
   undefined at n = 0 for no soundness reason.
 - **What the digest fixes.** A message decodes to one bit string: the tag, then ℓ, then ⌈ℓ/8⌉ bytes with a zero fill. The encoding is
   therefore injective, the one property the soundness theorem asks of a row encoding (`HmRows.enc_inj`,
-  `backends/flock/verifier/lean/soundness/FlockSoundness/Binding/Rows.lean`), and under `cr/sha-512` two rows with equal digests are
+  `verity/Security/Proofs/Flock/Soundness/Binding/Rows.lean`), and under `cr/sha-512` two rows with equal digests are
   the same bit string. They need not have one format or role: an x row and a W column with equal bits have one digest. The tree leaf
   binds the port's domain, the rank, the position and the schema (§1), so rows of different ports or positions keep different tree
   leaves. The tag differs from `sha512/row/v1`'s before its zero byte, so no P(ℓ) is a `sha512/row/v1` prefix.

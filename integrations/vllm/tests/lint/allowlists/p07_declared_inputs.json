@@ -294,7 +294,7 @@
     {"file": "verity_vllm/program/kernels/sampling_rng.py", "kind": "seed-default", "symbol": "tl_rand", "detail": "seed_bits"},
     {"file": "verity_vllm/program/kernels/sampling_rng.py", "kind": "seed-default", "symbol": "tl_randint", "detail": "seed_bits"},
     {"file": "verity_vllm/program/kernels/sampling_rng.py", "kind": "seed-default", "symbol": "tl_randint4x", "detail": "seed_bits"},
-    {"file": "verity_vllm/program/registry/gemm_targets.py", "kind": "broad-except", "symbol": "vllm_tuned_gemm_arch_family", "detail": "except Exception"},
+    {"file": "verity_vllm/program/frontend/gemm_targets.py", "kind": "broad-except", "symbol": "vllm_tuned_gemm_arch_family", "detail": "except Exception"},
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "broad-except", "symbol": "_is_decoded", "detail": "except Exception"},
     {"file": "verity_vllm/program/registry/sampling_topp_difftest.py", "kind": "environ", "symbol": "_real_rows", "detail": "VERITY_REAL_LOGITS"},
     {"file": "verity_vllm/program/registry/sampling_topp_difftest.py", "kind": "environ", "symbol": "cases", "detail": "VERITY_REAL_LOGITS"},

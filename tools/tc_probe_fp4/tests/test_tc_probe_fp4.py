@@ -289,7 +289,7 @@ def _lean_vectors_file(path: Path, rng) -> None:
     p7 = [entry(1, False) for _ in range(5)] + [entry(1, True), entry(1, True, known=False)]
     ch = [entry(2, False), entry(2, True)]
     sp = [{**entry(1, True), "acc": 0xFFACB8FF, "d": 0x7FFFFFFF}]
-    path.write_text("import Pouw.Protocol.PearlC.Fp4Chain\n\n/-- vectors -/\ndef nvf4P7 : List Vec := [\n" + ",\n".join(lean(v, False) for v in p7)
+    path.write_text("import Definitions.Pouw.PearlC.Fp4Chain\n\n/-- vectors -/\ndef nvf4P7 : List Vec := [\n" + ",\n".join(lean(v, False) for v in p7)
                     + "]\n\n/-- chains -/\ndef nvf4Chains : List ChainVec := [\n" + ",\n".join(lean(v, True) for v in ch) + "]\n"
                     + "\n/-- specials -/\ndef nvf4Specials : List Vec := [\n" + ",\n".join(lean(v, False) for v in sp) + "]\n")
 

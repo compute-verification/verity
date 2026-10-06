@@ -73,11 +73,13 @@ after = "lean-build"
 # 22, circuit-check about 48 on half the cores), so the wall time is about the soundness audit's.
 # lean-audit runs on a scratch tree, so a shard audits without lean-build; the jobs that read lean-build's binaries `needs`
 # it, or run `after` it, and a shard holds both.
+# verity/Security and its proofs (verity/Security/Proofs, which its `proved_in` names) are audited together, from one build
+# of the proofs, so they share a shard.
 
-# 3 pods: the soundness audit beside the suites; the rest of the Lean; the Rust build and the circuits.
+# 3 pods: the security analysis's audit beside the suites; the rest of the Lean; the Rust build and the circuits.
 [[plan]]
 shards = [
-    ["lean-audit:backends/flock/verifier/lean/soundness", "pytest"],
+    ["lean-audit:verity/Security", "lean-audit:verity/Security/Proofs", "pytest"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
 ]
@@ -85,7 +87,7 @@ shards = [
 # 5 pods: each of those apart.
 [[plan]]
 shards = [
-    ["lean-audit:backends/flock/verifier/lean/soundness"],
+    ["lean-audit:verity/Security", "lean-audit:verity/Security/Proofs"],
     ["lean-audit:*", "lean-changed"],
     ["lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"],
     ["pytest"],
