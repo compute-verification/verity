@@ -23,10 +23,10 @@
   {
    "type": "path",
    "scope": "",
-   "name": "warden_program",
+   "name": "certifier_program",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../protocols/accounting/communication/warden/lean",
+   "dir": "../../protocols/accounting/communication/certifier/lean",
    "configFile": "lakefile.toml"
   },
   {

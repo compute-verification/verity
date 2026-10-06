@@ -72,8 +72,8 @@ first. Do not scaffold directories the README merely anticipates.
     (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
     pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
     in `verity/Security/` (`Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
-    `verity.protocols.accounting.communication.warden` is network transparency's timing
-    channel: the warden, its audit and calibration, and its Lean in `verity/Security/`.
+    `verity.protocols.accounting.communication.certifier` is network transparency's timing
+    channel: the certifier, its audit and calibration, and its Lean in `verity/Security/`.
     NCI is novel communication intensity, the policy that throttles frontier training
     and leaves inference alone; so far only its Lean, in `verity/Security/`.
     Applications (vLLM) compose protocols.
@@ -188,13 +188,13 @@ first in a quiet window, alone in its train (Daniel, 4 Oct).
   needs no verifier or proof change (ruling 2026-10-04, `.agents/skills/friction/SKILL.md`).
 - Lean is code or security analysis (Daniel's layout ruling, 5 Oct). Code stays with its component and never requires
   `verity/Security/`: C-Flock's executable verifier (`backends/flock/verifier/lean/`, `Flock` and `FlockVerify`, no
-  dependencies), the PoUS grader (`verity/protocols/accounting/space/pous/lean/`, Lean only) and the warden program
-  (`verity/protocols/accounting/communication/warden/lean/`, `Warden`, Lean only, with its difftest). The analysis is
+  dependencies), the PoUS grader (`verity/protocols/accounting/space/pous/lean/`, Lean only) and the certifier program
+  (`verity/protocols/accounting/communication/certifier/lean/`, `NetworkCertifier`, Lean only, with its difftest). The analysis is
   `verity/Security/`, in three trees: `Definitions/` (each component's vocabulary) and `Specs/` (its named assumptions and
   guarantee statements), the package `security` (Mathlib, no ArkLib), and `Proofs/`, the nested package `security_proofs`
   (`srcDir = ".."`, root `Proofs`, ArkLib allowed), which requires `security` and holds every proof, C-Flock's level3 and
   soundness among them (`Proofs.Flock.*`). Each component has an area of its own in each tree (`Core`, `Nci`, `Pouw`,
-  `Pous`, `Warden`, `Flock`): `Definitions.Pouw.X`, `Specs.Pouw.Guarantees`, `Proofs.Pouw.X`; declarations keep their
+  `Pous`, `NetworkCertifier`, `Flock`): `Definitions.Pouw.X`, `Specs.Pouw.Guarantees`, `Proofs.Pouw.X`; declarations keep their
   names (`Pouw.Guarantees.G`, `Pouw.SecurityProofs.G`). New Lean goes into its component's area of the tree it belongs
   to; `tools/move/lean.py --resolve MODULE` names where a module from before the move went. All packages share one
   toolchain and one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
