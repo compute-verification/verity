@@ -46,7 +46,7 @@ SCATTER_BLOCK = 1024
 def scatter_into(x: Any, alpha: Any, aux: Any, rows: int, flags_to: Any, leaves: Any, leaves_to: Any, root: Any, roots_to: Any,
                  offs: Any) -> None:
     """A graph's scatter into the pass, one launch: the first `rows` rows of x screened (`screen_into`'s flags) into
-    `flags_to`, and the `leaves` and A's `root` (32 bytes, 64 under -h3s) copied to `leaves_to` and `roots_to`, each at the byte offset
+    `flags_to`, and the `leaves` and A's 64-byte `root` copied to `leaves_to` and `roots_to`, each at the byte offset
     `offs[1]`, `offs[0]`, `offs[2]` read on the device.  Its first `rows` programs screen a row each, the next
     ⌈len(leaves) / SCATTER_BLOCK⌉ copy the leaves, the last one the root."""
     import torch

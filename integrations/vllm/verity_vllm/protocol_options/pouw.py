@@ -478,9 +478,9 @@ class _CircuitRun:
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
 #: replay (`check.replay.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[_CircuitRun, dict[str, int]]] = {}
-# -h3s's prover hm96 salt key per entry: its weight trees' salts, shared by `commit_weights` and `install` and never in the
+# The Pearl-C prover's hm96 salt key per entry: its weight trees' salts, shared by `commit_weights` and `install` and never in the
 # record (published weight commitments without it fail the install's root check).
-_SALT_KEYS: dict[str, bytes | None] = {}
+_SALT_KEYS: dict[str, bytes] = {}
 
 
 def circuit_run(entry: str) -> tuple[_CircuitRun, dict[str, int]] | None:

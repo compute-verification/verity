@@ -79,7 +79,7 @@ def test_schemes_are_the_protocol_packages_and_only_ncp_and_pearl_c_sm120_are_ex
 
 
 def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_sampled_proofs():
-    scheme = "pearl-c-sm120-v1-h1"
+    scheme = "pearl-c-sm120-v1-h3"
     assert scheme in pouw.EXECUTED
     assert any("device only" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}")))
     on = {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120"}}
@@ -90,8 +90,8 @@ def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_sampled_proofs():
 
 
 def test_pearl_c_sm120_refuses_linears_outside_the_kernels():
-    assert PPD.refusals("pearl-c-sm120-v1-h1", {0: (4096, 4096), 1: (6144, 4096), 2: (4096, 14336), 3: (28672, 4096)}) == []
-    bad = PPD.refusals("pearl-c-sm120-v1-h1", {0: (3584, 3584), 1: (4096, 896), 2: (4160, 4096)})
+    assert PPD.refusals("pearl-c-sm120-v1-h3", {0: (4096, 4096), 1: (6144, 4096), 2: (4096, 14336), 3: (28672, 4096)}) == []
+    bad = PPD.refusals("pearl-c-sm120-v1-h3", {0: (3584, 3584), 1: (4096, 896), 2: (4160, 4096)})
     assert [r.split(":")[0] for r in bad] == ["linear 0", "linear 1", "linear 2"] and "1,024" in bad[0]
 
 
@@ -259,7 +259,7 @@ def test_ncp_v1_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monke
     assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == ()
 
 
-@pytest.mark.parametrize("scheme", ["pearl-c-sm120-v1-h1", "ncp-v2"])
+@pytest.mark.parametrize("scheme", ["pearl-c-sm120-v1-h3", "ncp-v2"])
 def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, scheme):
     """Pearl-C forms B~ once per install, and ncp-v2 reuses each weight's side: under POUS their GEMMs would read a copy made
     from the plaintext, not what POUS decodes (the composition's decision 3)."""
@@ -274,7 +274,7 @@ def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, sc
 
 
 def test_kernel_directories_load_as_their_own_modules_named_by_their_sources(tmp_path, monkeypatch):
-    """Two kernel directories in one process (an -h2 tree beside -h1, a tuned variant beside the gated one) get their own
+    """Two kernel directories in one process (a tuned variant beside the gated one) get their own
     run.py and fixture.py; the same bytes anywhere are one kernel.  Before this, the second got the first's run.py."""
     import hashlib
 
@@ -293,9 +293,9 @@ def test_kernel_directories_load_as_their_own_modules_named_by_their_sources(tmp
     monkeypatch.setattr(PPK, "_KERNELS", {})
     before = set(sys.modules)
     try:
-        a, b, a2 = kernel_dir("a", "h1"), kernel_dir("b", "h2"), kernel_dir("a2", "h1")
+        a, b, a2 = kernel_dir("a", "gated"), kernel_dir("b", "tuned"), kernel_dir("a2", "gated")
         ka, kb, ka2 = (PPD.Kernel.load(str(d)) for d in (a, b, a2))
-        assert (ka.run.MARK, kb.run.MARK) == ("h1", "h2") and ka.run is not kb.run and ka.dev.opened
+        assert (ka.run.MARK, kb.run.MARK) == ("gated", "tuned") and ka.run is not kb.run and ka.dev.opened
         assert ka2 is ka and ka.fixture is kb.fixture
         assert ka.source_sha256 == PPD.source_digest(sha(a / "run.py"), sha(a / "fixture.py")) != kb.source_sha256
         assert ka.cubin_sha256 == sha(a / "pearl_c_sm120.cubin")
@@ -321,7 +321,7 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
 
 
 def test_pearl_cs_schedule_is_a_setting_checked_against_the_scheme():
-    scheme, on = "pearl-c-sm120-v1-h1", {"beacon": BEACON, "device": "cuda", "kernel": "k"}
+    scheme, on = "pearl-c-sm120-v1-h3", {"beacon": BEACON, "device": "cuda", "kernel": "k"}
     for name in ("serial", "deferred", "deferred-caller"):
         assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": name}})) == ()
     assert any("'schedule' is one of" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": "h3o"}})))

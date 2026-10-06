@@ -1,4 +1,4 @@
-"""PoUW's MVP end to end on the RTX PRO 6000 (sm_120): Pearl-C (`pearl-c-sm120-v1-h1`) commits every linear call of a vLLM model
+"""PoUW's MVP end to end on the RTX PRO 6000 (sm_120): Pearl-C (`pearl-c-sm120-v1-h3`) commits every linear call of a vLLM model
 on the device, timed against stock vLLM on the same card at the panel's two shapes, rep by rep.
 
   python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
@@ -29,7 +29,7 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
   `verify_run.py` after the window: the first two must be replay-verified (development shortcut; the protocol's check is
   a ZK proof, PROTOCOL.md) and the control rejected (the panel's rule of 11:50Z).
-- **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h1; `panel_rows.py` writes the rows.
+- **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
 size only), and each Pearl-C arm's decode forward is captured whole with its calls' graph steps inside
@@ -39,9 +39,6 @@ replayed whole to the eager calls, and a retained pass replayed whole to an eage
 counts the steps replayed and run eagerly.  vLLM's eager decode isn't its graph's bit for bit, so the verify pass's eager
 check compares Pearl-C's graphed calls with its eager ones both under vLLM's eager decode.  ``--whole-defer`` (with
 ``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), under the same gate.
-
-``--rows-form s`` (-h2 and -h3, frame-b3s's) serves A's rows form ``s``: forming's statistics come from the row-leaf kernel's own pass over A
-(`run.Pipeline`'s ``rows_form``), the same bytes as ``stats_s5``'s.  The quality run keeps its schemes' form, ``w``.
 
 Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before a window: both
 engines resident, the arm's install and gates, and each engine's first sampling calls.  ``--perplexity`` (`perplexity`) is
@@ -67,7 +64,7 @@ os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-SCHEME = "pearl-c-sm120-v1-h1"
+SCHEME = "pearl-c-sm120-v1-h3"
 MODES = ("bf16", "fp8", "pearlc-nohash", "pearlc")
 PEARLC = ("pearlc-nohash", "pearlc")
 GROUP = {"fp8": "base", "fp8-graphs": "base-graphs", "bf16": "arm", "pearlc-nohash": "arm", "pearlc": "arm"}
@@ -83,13 +80,13 @@ BLOCKS = 4
 PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 #: the served y's bound against the float product (the scheme's tested bound, verity/protocols/accounting/work/pouw's sm120 useful-output test)
 ERR = 0.08
-#: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
-CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
+#: the negative control's omitted steps: every write of the commitment (A's row digests and row tree, the tile leaves)
+CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_leaf"})
 #: the verify's no-write controls, each a retained pass the reference replay must reject: every commitment write omitted, and (under
 #: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
-CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_msg", "hash_leaf"})}
+CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_leaf"})}
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
-QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h1", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h1"}
+QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"}
 #: WikiText-2 (raw), its test split, at the revision cached on node 2
 WIKITEXT = ("Salesforce/wikitext", "b08601e04326c79dfdd32d625aee71d232d685c3", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
 #: the quality run's windows: BOS and 2,047 tokens each, non-overlapping; its batch budget, one window a step
@@ -145,8 +142,7 @@ def install(model, args, beacon: bytes):
     salt = Epoch.unverified(declared, roots, beacon).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
-                              rows_form=getattr(args, "rows_form", "w"), whole_defer=getattr(args, "whole_defer", False),
-                              salt_key=salt_key)
+                              whole_defer=getattr(args, "whole_defer", False), salt_key=salt_key)
     stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
     bad = stack.refusals()
     if bad:
@@ -314,7 +310,7 @@ def whole_retained_check(run, forward, side) -> bool:
 
 
 def schedule_check(run, weights: dict) -> dict:
-    """The run's schedule on the card: the same calls (m = 32 on the unfused 64 x 64 path, m = 128 on the fused one), each
+    """The run's schedule on the card: the same calls (m = 32 on the 64 x 64 path, m = 128 on the 128 x 128 one), each
     from a fresh pass on poisoned outputs, under the serial schedule and under the run's, must commit the same A roots and
     tile roots.  The run's schedule is its own again after."""
     import torch
@@ -680,7 +676,7 @@ def smoke(args) -> None:
     Writes each step's time and the GPU's memory use after it, the gates, and the greedy tokens' agreement with BF16."""
     ctx, beacon = mp.get_context("spawn"), os.urandom(32)
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "scheme": getattr(args, "scheme", SCHEME),
-                 "schedule": getattr(args, "schedule", "serial"), "rows_form": getattr(args, "rows_form", "w"),
+                 "schedule": getattr(args, "schedule", "serial"),
                  "whole_step": getattr(args, "whole_step", False), "whole_defer": getattr(args, "whole_defer", False),
                  "run": os.environ.get("RESEARCH_RUN_ID"), "steps": [], "resident": False}
 
@@ -767,7 +763,7 @@ def perplexity(args) -> int:
             return 99
         ran = True
         a = copy.copy(args)
-        a.scheme, a.batch_tokens, a.rows_form = scheme, PPL_BATCH, "w"
+        a.scheme, a.batch_tokens = scheme, PPL_BATCH
         w = Worker(ctx, a, group, beacon)
         try:
             res = {"gate": w.ready.get("gate"), "committer": w.ready.get("committer"), "modes": {}}
@@ -824,8 +820,6 @@ def main() -> None:
                          "(pouw_pearl_c_whole); retained passes run eagerly")
     ap.add_argument("--whole-defer", action="store_true",
                     help="(with --whole-step) a whole capture runs each call's tile hashing beside the next call's A tree")
-    ap.add_argument("--rows-form", choices=("w", "s"), default="w",
-                    help="A's rows form: s takes forming's statistics from the frame-b3s row-leaf pass over A (-h2 and -h3 schemes only)")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
     ap.add_argument("--perplexity", action="store_true", help="untimed: WikiText-2 perplexity and agreement for bf16, fp8, v1, v2")
     ap.add_argument("--ppl-windows", type=int, help="the quality run's first N windows (default all)")
@@ -834,8 +828,6 @@ def main() -> None:
     args.graphs = args.graphs or args.whole_step
     if args.whole_defer and not args.whole_step:
         ap.error("--whole-defer defers within a whole capture: it needs --whole-step")
-    if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing not in ("h2", "h3"):
-        ap.error(f"--rows-form s is frame-b3s's (-h2, -h3), and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
     if args.smoke:
         smoke(args)
         return
@@ -844,7 +836,7 @@ def main() -> None:
     ctx, beacon, p = mp.get_context("spawn"), os.urandom(32), prompts(args.reps)
     records: list[dict] = []
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
-                 "rows_form": args.rows_form, "whole_step": args.whole_step, "whole_defer": args.whole_defer,
+                 "whole_step": args.whole_step, "whole_defer": args.whole_defer,
                  "run": os.environ.get("RESEARCH_RUN_ID"),
                  "beacon": beacon.hex(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}

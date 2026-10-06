@@ -33,7 +33,7 @@ from .pouw_pearl_c_screen import excluded, scatter_into
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
 GRAPH_ROWS = 256
-#: with ``graphs``, each weight's slot of per-call inputs its graph reads: dom_a ‖ unit (136 bytes, under -h3s 168, padded), and
+#: with ``graphs``, each weight's slot of per-call inputs its graph reads: dom_a ‖ unit (168 bytes, padded), and
 #: the byte offsets of the call's leaves, flags and A root in the pass's buffers (three int64)
 SLOT_BYTES = 176
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The served -h3 device path on a node, untimed: GPU 1's ship (build.sh, its SASS gate) built on the node's CPUs, then
 # h3_screen.py's capture on one preemptible GPU, its check against the reference on the CPUs after the lease, and window.sh
-# MODE=smoke with SCHEME (default pearl-c-sm120-v1-h3; pearl-c-sm120-v1-h3s for -h3s) and the served row's switches (-h2's:
-# rows form s, w under -h3s, whose rows are hm96's; whole step, deferred tile hashing, both arms graphed).
+# MODE=smoke with SCHEME (default pearl-c-sm120-v1-h3) and the served row's switches (whole step, deferred tile hashing, both
+# arms graphed).
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
 #     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/pearl_c_vllm/h3_window.sh
 # STEPS: the steps to run, of build (the ship), capture (the screen's, on the GPU), check (the capture against the reference,
@@ -60,8 +60,7 @@ if has check; then
 fi
 
 if has smoke; then
-  case $SCHEME in *-h3s) ROWS_FORM=w ;; *) ROWS_FORM=s ;; esac
-  export SCHEME GRAPHS=1 FP8_GRAPHS=1 SCHEDULE=serial ROWS_FORM WHOLE_STEP=1 WHOLE_DEFER=1 MODE=smoke
+  export SCHEME GRAPHS=1 FP8_GRAPHS=1 SCHEDULE=serial WHOLE_STEP=1 WHOLE_DEFER=1 MODE=smoke
   stamp "window.sh MODE=smoke SCHEME=$SCHEME under gpu-lease 1"
   SHIP_TAR=$S/ship.tar OUT=$OUT/window lease 1 --wait --preemptible --max-min 25 -- timeout 1440 \
     bash benchmarks/pouw/pearl_c_vllm/window.sh

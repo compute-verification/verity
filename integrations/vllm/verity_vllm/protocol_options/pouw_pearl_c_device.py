@@ -7,11 +7,9 @@ the keys (`keys_of`, `unit_block`).  The cubin is build.sh's (setting ``cubin``,
 cubin).  This module owns the buffers and runs the pipeline's steps on torch's current stream, in the
 device's primary context:
 
-* **The trees** are the scheme's hashing format's (`SCHEMES`, the pipeline's ``hashing``): frame-b3 under -h1, frame-b3s
-  under -h2 and -h3, whose row leaves are trees over 256-byte segments (the segment trees' level keys derived in the leaf
-  kernel), and under -h3s `audit.HM96` (frame-v3-sha512 over hm96-sha512 leaves, 64-byte nodes), salted by the prover's
-  hm96 salt key (the install's, `weight_roots`' and the run's ``salt_key``, which a retained manifest records for the
-  reference verifier).
+* **The trees** are -h3's (`SCHEMES`): `audit.HM96`, frame-v3-sha512 over hm96-sha512 leaves (64-byte nodes), each leaf
+  over a row's SHA-512 row digest, salted by the prover's hm96 salt key (the install's, `weight_roots`' and the run's
+  ``salt_key``, which a retained manifest records for the reference verifier).
 * **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact) are hashed
   into B's row tree (phase ``epoch``), whose root must be the committed one.  Then, with the salt's seed_B, come E_B's
   and the F lines, B's statistics and forming, B̃·F_A, G and P_B (phase ``job``).  B's FP32 copy is dropped after, so the
@@ -19,14 +17,13 @@ device's primary context:
 * **Each call** (`gemm`):
   - x's rows are widened into A's FP32 words, with zero filler rows up to m₁₆ (the domain's 16 | m; filler is committed as
     zero rows) and zero padding up to the kernels' tile;
-  - ``commit``: A's pads and level keys (and the segment level keys) under its domain, A's row tree, seed_A and E_A's
-    line key, and under -h3 each real row's seed over its leaf (``seeds_a``: b3_seeds in mode 1, `pearl_c.row_seed`), under
-    -h3s over its SHA-512 row digest (``rowdig_a``: s512_rows, `pearl_c.row_digest`, before A's tree, whose hm96 leaves it
-    is the inner digest of; then ``seeds_a``, s512_seeds, with each row's line key);
-  - ``forming``: E_A's lines (under -h3 and -h3s each real row's line 0 from its own seed), A's statistics and forming;
+  - ``commit``: A's pads under its domain, each row's SHA-512 row digest (``rowdig_a``: s512_rows, `pearl_c.row_digest`, the
+    inner digest of A's hm96 leaves), A's row tree, seed_A and E_A's line key, and each real row's seed over its row digest
+    with its line key (``seeds_a``: s512_seeds, `pearl_c.row_seed`);
+  - ``forming``: E_A's lines (each real row's line 0 from its own seed), A's statistics and forming;
   - ``cleanup``: A′·F_B, P_A, and the chain with its peel and y (``gemm_pearlc`` writes y into the tensor this returns);
-  - ``hashing``: the message digests and the tile leaves (under -h3s the leaves alone, ``sha512/row-seg/v1`` over C̃ and U),
-    into the pass's leaf buffer at the call's offset.  No per-call tile tree is built, since the pass has one.
+  - ``hashing``: the tile leaves (``sha512/row-seg/v1`` over C̃ and U), into the pass's leaf buffer at the call's offset.
+    No per-call tile tree is built, since the pass has one.
 * **The records** (`pearl_c_work.UnitRecord`): each call's real rows and width, and the rows that fail the per-row rules
   (`pearl_c_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
   The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
@@ -40,13 +37,13 @@ device's primary context:
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
 
 The per-call host work is kept small (the decode profile, research store ``internal/pouw/rtx-pro/pouw-mvp-decode-profile.md``):
-the keys by native BLAKE3 or SHA-512 (`_Keys`, byte for byte `call_keys`), their upload through a pinned ring (`_Uploads`), the records'
+the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), their upload through a pinned ring (`_Uploads`), the records'
 screen as one fused kernel (`screen_into`, Triton; `screen` where Triton can't run), A's roots copied into a pass buffer,
 and the stream read from torch's raw accessor.
 
 The schedule (`verity.protocols.accounting.work.pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2, bc-b139c29c's) places each
 call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile hashing (`SIDE_IO`: the
-message digests and the tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
+tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
 calls go on, and the rest of the call runs on a main lane of the run's own at the greatest priority, joined to the caller's
 stream by events on both sides (``deferred-caller`` leaves it on the caller's stream, #564's first cut).  A's commitment stays
 on the main lane, since forming reads seed_A.  Each shape rotates `Schedule.ring` sets of the buffers the side lane touches
@@ -55,8 +52,8 @@ wait for the side lane.  The same kernels read and write the same bytes, so the 
 schedule changes only between passes (`begin`), and one whose placement this path or the scheme's format can't run is refused
 (`schedule_of`).
 
-With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the digests, the leaves and the
-records.  What is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between
+With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the leaves and the records.  What
+is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between
 passes, never within one.
 """
 from __future__ import annotations
@@ -108,14 +105,11 @@ from .pouw_pearl_c_screen import (
 
 #: the Pearl-C schemes this device path runs, by name (`verity.protocols.accounting.work.pouw.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
-#: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it).  The format is a
-#: switch: -h1 commits with frame-b3 trees, -h2 with frame-b3s (GPU 1's pipeline, `run.Pipeline`'s ``hashing``), -h3 with
-#: -h2's trees and each row's E_A line from its own seed (the work law capping each credited row too), -h3s with -h3 entirely
-#: through SHA-512 (its seeds, lines and tile leaves, and HM96 trees); which one serves is
-#: Daniel's call.  Its keys and tree hash come from `verity.protocols.accounting.work.pouw.serving.HASH_FORMATS`, the one table, through the
-#: scheme.
-SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing=h).name
-                for d, h in ((SM120, "h1"), (SM120_UNPROMOTED, "h1"), (SM120, "h2"), (SM120, "h3"), (SM120, "h3s")))
+#: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it).  The format is
+#: -h3, SHA-512 throughout (its seeds, lines, tile leaves and HM96 trees; Daniel's 2026-10-06 ruling), each row's E_A line
+#: from its own seed (the work law capping each credited row too); its tree hash comes from
+#: `verity.protocols.accounting.work.pouw.serving.HASH_FORMATS` through the scheme.
+SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED))
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
 #: tiles one pass's leaf buffer holds (256 MiB)
@@ -125,29 +119,23 @@ CALL_CAPACITY = 1 << 16
 FLAG_ROWS = 1 << 22
 MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v1"
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
-                  "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b", "skeys_b", "rowdig_b")
-CALL_BUFFERS = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "ea_codes", "at", "af", "pa_t", "c", "u", "digests",
-                "tree_a", "keys_a", "skeys_a", "line_a", "seed_a", "rowdig_a", "seeds_a", "lkeys_a")
-EPOCH_STEPS = ("pad_b", "node_keys_b", "rowdig_b", "hash_rows_b", "tree_b")
+                  "epb_codes", "bt", "bf", "pb_t", "tree_b", "rowdig_b")
+CALL_BUFFERS = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "ea_codes", "at", "af", "pa_t", "c", "u", "tree_a", "line_a",
+                "seed_a", "rowdig_a", "seeds_a", "lkeys_a")
+EPOCH_STEPS = ("pad_b", "rowdig_b", "hash_rows_b", "tree_b")
 JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b", "bf", "g", "pb")
-CALL_STEPS = ("pad_a", "node_keys_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "stats_a", "eprime_a",
-              "form_a", "af", "pa", "gemm_pearlc", "hash_msg", "hash_leaf")
-HASH_STEPS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "rowdig_a", "seeds_a", "lines_ea", "hash_msg",
-                        "hash_leaf"})
-#: the steps only some formats have, and which: the row seeds, -h3s's row digests (its trees' inner digests and its seeds'
-#: keys), and the message digests, which -h3s's tile leaf doesn't take
-FORMAT_STEPS = {"seeds_a": ("h3", "h3s"), "rowdig_a": ("h3s",), "rowdig_b": ("h3s",), "hash_msg": ("h1", "h2", "h3")}
+CALL_STEPS = ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "stats_a", "eprime_a", "form_a",
+              "af", "pa", "gemm_pearlc", "hash_leaf")
+HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "hash_leaf"})
 #: each call step's group (`verity.protocols.accounting.work.pouw.serving.GROUPS`), which a schedule places on a lane
-STEP_GROUPS = {"pad_a": "a_tree", "node_keys_a": "a_tree", "hash_rows_a": "a_tree", "tree_a": "a_tree", "seed_a": "a_tree",
-               "rowdig_a": "a_tree", "seeds_a": "a_tree",
-               "lines_ea": "forming", "stats_a": "forming", "eprime_a": "forming", "form_a": "forming",
-               "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_msg": "tile_hash", "hash_leaf": "tile_hash"}
+STEP_GROUPS = {"pad_a": "a_tree", "rowdig_a": "a_tree", "hash_rows_a": "a_tree", "tree_a": "a_tree", "seed_a": "a_tree",
+               "seeds_a": "a_tree", "lines_ea": "forming", "stats_a": "forming", "eprime_a": "forming", "form_a": "forming",
+               "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_leaf": "tile_hash"}
 #: the steps this path can run on a side lane, with the per-call buffers they read and write (the constant keys and the pass's
 #: leaf buffer aside, which no later call rewrites): each shape rotates these, so a call never overwrites what the side lane
-#: still reads.  Only the tile hashing moves: A's tree stays on the main lane under -h1, and the screen runs on the caller.
-#: -h3s's hash_leaf reads C~ and U themselves.
-SIDE_IO = {"hash_msg": StepIO("tile_hash", frozenset({"c", "u"}), frozenset({"digests"})),
-           "hash_leaf": StepIO("tile_hash", frozenset({"digests", "c", "u"}), frozenset())}
+#: still reads.  Only the tile hashing moves, the tile leaves over C~ and U; A's tree stays on the main lane, and the screen
+#: runs on the caller.
+SIDE_IO = {"hash_leaf": StepIO("tile_hash", frozenset({"c", "u"}), frozenset())}
 SIDE_GROUPS = frozenset(io.group for io in SIDE_IO.values())
 
 
@@ -234,33 +222,33 @@ class _Pass:
 
 def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[0], salt_key: bytes | None = None) -> dict[int, bytes]:
     """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase, under the scheme
-    `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash and the trees'
-    frame.  Under -h3s the trees' hm96 salts are the prover's, from `salt_key` (the install's, which its run is given too)."""
+    `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash.  The trees' hm96
+    salts are the prover's, from `salt_key` (the install's, which its run is given too)."""
     import torch
     s = scheme_of(scheme)
     variant, hash = s.device.name, hash_format(s).tree_hash
     R, out = kernel.run, {}
-    nb = R.node_bytes(s.hashing)
+    nb = R.NB
     for w, weight in weights.items():
         n, k = weight.shape
-        size = R.Pipeline.sizes(R.BM, n, k, R.BM, s.hashing)
-        b = {name: _zeros(size[name], weight.device)
-             for name in ("tree_b", "keys_b", "skeys_b", "faT32", "fbT32", "fbT128", "rowdig_b")}
-        keys, const = _zeros(128, weight.device), _constants(kernel, s, weight.device, salt_key)
+        size = R.Pipeline.sizes(R.BM, n, k, R.BM)
+        b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "faT32", "fbT32", "fbT128", "rowdig_b")}
+        keys, const = _zeros(128, weight.device), _constants(s, weight.device, salt_key)
         _put(keys[64:], rows_domain(_weight_binding(w), -2, n, hash).domain_id)
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
-                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **_constant_keys(const, s.hashing)},
-                         variant=variant, hashing=s.hashing, weight=w)
+                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **_constant_keys(const)},
+                         variant=variant, weight=w)
         _run(kernel, pipe, EPOCH_STEPS, _stream(weight.device))
         out[w] = _bytes(b["tree_b"][size["tree_b"] - nb:size["tree_b"]])
     return out
 
 
-def new_salt_key(scheme: str) -> bytes | None:
-    """A fresh prover hm96 salt key under -h3s (its trees' salts, kept by the prover and never in a record), else None."""
+def new_salt_key(scheme: str) -> bytes:
+    """A fresh prover hm96 salt key for `scheme`'s trees (their salts, kept by the prover and never in a record)."""
     import os
-    return os.urandom(32) if scheme_of(scheme).hashing == "h3s" else None
+    scheme_of(scheme)
+    return os.urandom(32)
 
 
 def _weight_binding(w: int) -> bytes:
@@ -268,48 +256,32 @@ def _weight_binding(w: int) -> bytes:
     return weight_binding(w)
 
 
-def _constants(kernel: Kernel, scheme: C.PearlC, device: Any, salt_key: bytes | None = None) -> Any:
-    """The pipeline's constant keys on the device: the scheme's digest keys (message, leaf) and frame-b3s's segment-key
-    templates (row, tile); under -h3s, which has no digest keys, the prover's hm96 salt key and, from byte 256,
+def _constants(scheme: C.PearlC, device: Any, salt_key: bytes | None) -> Any:
+    """The pipeline's constant keys on the device: the prover's hm96 salt key and, from byte 256,
     `audit.hm96_kernel_constants`."""
-    if scheme.hashing == "h3s":
-        if salt_key is None or len(salt_key) != 32:
-            raise ValueError(f"{scheme.name}: -h3s's trees take the prover's 32-byte hm96 salt key")
-        consts = hm96_kernel_constants()
-        t = _zeros(256 + len(consts), device)
-        _put(t, salt_key.ljust(256, b"\0") + consts)
-        return t
-    keys = scheme.digest_keys
-    if keys is None:
-        raise ValueError(f"{scheme.name}: the device path's digests are keyed BLAKE3, and hashing {scheme.hashing} has no keys")
-    R, t = kernel.run, _zeros(192, device)
-    _put(t, keys["message"] + keys["leaf"] + R.b3s_template(R.ROW_SCHEMA) + R.b3s_template(R.TILE_SCHEMA))
+    if salt_key is None or len(salt_key) != 32:
+        raise ValueError(f"{scheme.name}: -h3's trees take the prover's 32-byte hm96 salt key")
+    consts = hm96_kernel_constants()
+    t = _zeros(256 + len(consts), device)
+    _put(t, salt_key.ljust(256, b"\0") + consts)
     return t
 
 
-def _constant_keys(t: Any, hashing: str) -> dict[str, int]:
+def _constant_keys(t: Any) -> dict[str, int]:
     p = t.data_ptr()
-    if hashing == "h3s":
-        return {"salt_key": p, "hm": p + 256}
-    return {"k_msg": p, "k_leaf": p + 32, "t_row": p + 64, "t_tile": p + 128}
+    return {"salt_key": p, "hm": p + 256}
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
-              m_real: int | None = None, *, variant: str, hashing: str, rows_form: str = "w", weight: int = 0) -> Any:
-    full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "k_msg": 0, "k_leaf": 0, "t_row": 0, "t_tile": 0, "unit": 0,
-            "salt_key": 0, "hm": 0, **keys}
-    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, hashing=hashing,
-                               rows_form=rows_form, weight=weight)
+              m_real: int | None = None, *, variant: str, weight: int = 0) -> Any:
+    full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "unit": 0, "salt_key": 0, "hm": 0, **keys}
+    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, weight=weight)
 
 
 def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
-    """The named steps in order.  A tree's pads and level keys exist only where the tree needs them, and on the fused path
-    (``pipe.fused``: 128 x 128 tiles over every row) ``gemm_pearlc`` writes the message digests itself, so ``hash_msg`` isn't
-    a step; a format's own steps (`FORMAT_STEPS`) exist only under it."""
+    """The named steps in order.  A tree's pads exist only where the tree needs them."""
     by = {name: f for name, _, f in pipe.steps()}
-    optional = {"hash_msg"} if getattr(pipe, "fused", False) else set()
-    optional |= {x for x, hs in FORMAT_STEPS.items() if getattr(pipe, "hashing", None) not in hs}
-    missing = [x for x in names if x not in by and not x.startswith(("pad_", "node_keys_")) and x not in optional]
+    missing = [x for x in names if x not in by and not x.startswith("pad_")]
     if missing:
         raise RuntimeError(f"the kernel's pipeline has no steps {missing}")
     return [by[x] for x in names if x in by]
@@ -330,11 +302,9 @@ class PearlCDeviceRun(GraphCalls):
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
-                 schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w", whole_defer: bool = False,
-                 salt_key: bytes | None = None):
+                 schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False, salt_key: bytes | None = None):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
-        self.nb, self.salt_key = kernel.run.node_bytes(scheme.hashing), salt_key
-        self.rows_form = rows_form
+        self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer = whole_defer
         self._graphs: dict[tuple, _Graph] = {}
@@ -349,8 +319,8 @@ class PearlCDeviceRun(GraphCalls):
         self._launching: Any = None          # the torch stream the current step group launches on (the GEMM's timing events)
         self.epoch = Epoch(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
                            self.roots, salt)
-        self.const = _constants(kernel, scheme, self.device, salt_key)
-        self.const_keys = _constant_keys(self.const, scheme.hashing)
+        self.const = _constants(scheme, self.device, salt_key)
+        self.const_keys = _constant_keys(self.const)
         self.leaves = _zeros(self.nb * capacity, self.device)
         self.roots_buf = _zeros(self.nb * CALL_CAPACITY, self.device)
         self.flag_buf = _zeros(2 * FLAG_ROWS, self.device).view(FLAG_ROWS, 2)
@@ -376,8 +346,7 @@ class PearlCDeviceRun(GraphCalls):
             "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]}, "
                                                 f"sources {(kernel.source_sha256 or 'unrecorded')[:16]})",
             "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
-            "host": {"keys": "native sha512" if scheme.hashing == "h3s" else "native blake3",
-                     "screen": "fused (Triton)" if self.fused_screen else "torch"},
+            "host": {"keys": "native sha512", "screen": "fused (Triton)" if self.fused_screen else "torch"},
             "schedule": None,
             "graphs": (f"calls of at most {GRAPH_ROWS} rows, serial schedule"
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")) if self.graphs else None,
@@ -410,7 +379,7 @@ class PearlCDeviceRun(GraphCalls):
         import torch
         K, R = self.kernel, self.kernel.run
         n, k = weight.shape
-        size = R.Pipeline.sizes(R.BM, n, k, R.BM, self.scheme.hashing)
+        size = R.Pipeline.sizes(R.BM, n, k, R.BM)
         b = {name: _zeros(size[name], weight.device) for name in WEIGHT_BUFFERS}
         keys = _zeros(128, weight.device)
         mm = Matmul(0, Shape(ROW_ALIGN, k, n), w)
@@ -420,7 +389,7 @@ class PearlCDeviceRun(GraphCalls):
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
                          {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **self.const_keys},
-                         variant=self.variant, hashing=self.scheme.hashing, weight=w)
+                         variant=self.variant, weight=w)
         stream = _stream(weight.device)
         _run(K, pipe, EPOCH_STEPS, stream)
         root = _bytes(b["tree_b"][size["tree_b"] - self.nb:size["tree_b"]])
@@ -438,7 +407,7 @@ class PearlCDeviceRun(GraphCalls):
         if key not in self.shapes:
             R = self.kernel.run
             mp = R.cdiv(m16, R.BM_D) * R.BM_D
-            size = R.Pipeline.sizes(mp, n, k, m16, self.scheme.hashing)
+            size = R.Pipeline.sizes(mp, n, k, m16)
             sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
                         torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(self.nb + 104, self.device))
             sh.sets = [dict(sh.b)]
@@ -469,16 +438,9 @@ class PearlCDeviceRun(GraphCalls):
         """Every buffer a call of `sh` writes: its own, and the ring's other sets."""
         return [*sh.b.values(), *(t for st in sh.sets[1:] for t in st.values())]
 
-
-    def _rows(self) -> str:
-        """A's rows form: `rows_form`, but `w` without hashing, since `s`'s stats ride on A's row leaves."""
-        return self.rows_form if self.hashing else "w"
-
     def _call_names(self) -> tuple[str, ...]:
-        """The call's step names: every call step but the hashing ones when hashing is off, but the omitted ones, and but
-        stats_a under rows form `s` (hash_rows_a writes it)."""
-        return tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit
-                     and not (x == "stats_a" and self._rows() == "s"))
+        """The call's step names: every call step but the hashing ones when hashing is off, and but the omitted ones."""
+        return tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
 
     def _call_steps(self, pipe: Any) -> list[Any]:
         """The call's steps in order (`_call_names`)."""
@@ -505,8 +467,7 @@ class PearlCDeviceRun(GraphCalls):
             kp = self.key_slots[self.order[w]].data_ptr() if self._graphed(sh.m16) else sh.keys.data_ptr()
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64, "dom_a": kp, "unit": kp + self.nb,
                     **self.const_keys}
-            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant,
-                             hashing=self.scheme.hashing, rows_form=self._rows())
+            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant)
             names = self._call_names()
             present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
             steps = _steps(pipe, names)
@@ -672,10 +633,9 @@ class PearlCDeviceRun(GraphCalls):
             epoch = Epoch(Workload(tuple(cur.matmuls)), self.roots, self.salt)
             R, count, nb = K.run, cur.tiles, self.nb
             tree = _zeros(nb * (2 * R.pow2(count) - 1), self.device)
-            lk, dom = _zeros(32 * max(R.depth(count), 1), self.device), _zeros(nb, self.device)
+            dom = _zeros(nb, self.device)
             _put(dom, transcript_domain(epoch, count, self.tree_hash).domain_id)
-            ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr(), "keys_t": lk.data_ptr()},
-                                       keys={"dom_t": dom.data_ptr(), **self.const_keys}, hashing=self.scheme.hashing, nb=nb)
+            ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr()}, keys={"dom_t": dom.data_ptr(), **self.const_keys})
             K.dev.stream = self.stream()
             try:
                 for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
@@ -704,7 +664,7 @@ class PearlCDeviceRun(GraphCalls):
         weights = {}
         for w in sorted(self.weights):
             wt = self.weights[w]
-            size = self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM, self.scheme.hashing)["tree_b"]
+            size = self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
             weights[str(w)] = {"n": wt.n, "k": wt.k, "root": wt.root.hex(), "excluded_b": list(wt.excluded),
                                "rows": _write(wd / f"{w}.rows.bf16", _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8)),
                                               digest=False),
@@ -721,9 +681,7 @@ class PearlCDeviceRun(GraphCalls):
                                                 {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}, cur.records).hex(),
                 "commitment": {"root": _bytes(tree[-self.nb:]).hex(), "count": count},
                 "leaves": _write(d / "leaves", _bytes(self.leaves[:self.nb * count])),
-                "tree_t": _write(d / "tree_t", _bytes(tree))}
-        if self.scheme.hashing == "h3s":
-            head["hm96_salt_key"] = self.salt_key.hex()
+                "tree_t": _write(d / "tree_t", _bytes(tree)), "hm96_salt_key": self.salt_key.hex()}
         return write_manifest(d, head, weights, matmuls)
 
     def finish(self) -> None:

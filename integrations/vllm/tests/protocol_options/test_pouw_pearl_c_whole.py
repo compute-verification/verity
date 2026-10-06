@@ -240,15 +240,15 @@ class Calls(PG.GraphCalls):
 
     def __init__(self, torch):
         self.entry, self.hashing, self.graphs, self.omit = "test", True, True, frozenset()
-        self.schedule, self.capacity = PPD.schedule_of(SERIAL, PPD.scheme_of(PPD.SCHEMES[2])), PPD.LEAF_CAPACITY
-        self.order, self.nb = {7: 0, 8: 1, 9: 2}, 32
+        self.schedule, self.capacity = PPD.schedule_of(SERIAL, PPD.scheme_of(PPD.SCHEMES[0])), PPD.LEAF_CAPACITY
+        self.order, self.nb = {7: 0, 8: 1, 9: 2}, 64
         self.roots = {w: bytes([w]) * 32 for w in self.order}
-        self.keys = lambda root, index, m16: bytes([root[0], index, m16]) * 45 + b"\0"
+        self.keys = lambda root, index, m16: bytes([root[0], index, m16]) * 56
         self.key_slots = torch.zeros((3, PG.SLOT_BYTES), dtype=torch.uint8)
         self.offs = torch.zeros((3, 3), dtype=torch.int64)
         self._host_keys, self._host_offs = torch.zeros_like(self.key_slots), torch.zeros_like(self.offs)
         self._slots_copied, self._predicted = Event(), {}
-        self.roots_buf, self.flag_buf = torch.zeros(32 * 8, dtype=torch.uint8), torch.zeros((256, 2), dtype=torch.uint8)
+        self.roots_buf, self.flag_buf = torch.zeros(64 * 8, dtype=torch.uint8), torch.zeros((256, 2), dtype=torch.uint8)
         self.cur = PPD._Pass(None)
 
 
@@ -264,8 +264,8 @@ def test_a_replay_uploads_every_calls_slot_once_and_appends_its_records():
     assert run.cur.matmuls[1:] == [Matmul(1, Shape(32, 4096, 1024), 9), Matmul(2, Shape(32, 1024, 4096), 7)]
     assert (run.cur.tiles, run.cur.flag_rows) == (5 + 8 + 32, 16 + 64)
     keys, offs = run.key_slots.numpy(), run.offs.numpy()
-    assert keys[2, :136].tobytes() == run.keys(run.roots[9], 1, 32) and keys[0, :136].tobytes() == run.keys(run.roots[7], 2, 32)
-    assert offs[2].tolist() == [32 * 5, 2 * 16, 32 * 1] and offs[0].tolist() == [32 * 13, 2 * 48, 32 * 2]
+    assert keys[2, :168].tobytes() == run.keys(run.roots[9], 1, 32) and keys[0, :168].tobytes() == run.keys(run.roots[7], 2, 32)
+    assert offs[2].tolist() == [64 * 5, 2 * 16, 64 * 1] and offs[0].tolist() == [64 * 13, 2 * 48, 64 * 2]
     assert run._predicted == {9: (1, 32, 5, 16), 7: (2, 32, 13, 48)}     # 8's slot was rewritten from the host copy
     assert (run._slots_copied.synced, run._slots_copied.recorded) == (1, 1)
 
@@ -284,14 +284,14 @@ def test_a_replay_uploads_the_slots_the_last_one_staged_only_from_where_they_wer
     run.whole_replayed(calls)
     assert run.cur.matmuls[2:] == [Matmul(2, Shape(32, 4096, 1024), 9), Matmul(3, Shape(32, 1024, 4096), 7)]
     keys, offs = run.key_slots.numpy(), run.offs.numpy()
-    assert keys[2, :136].tobytes() == run.keys(run.roots[9], 2, 32) and keys[0, :136].tobytes() == run.keys(run.roots[7], 3, 32)
-    assert offs[2].tolist() == [32 * 40, 2 * 64, 32 * 2] and offs[0].tolist() == [32 * 48, 2 * 96, 32 * 3]
+    assert keys[2, :168].tobytes() == run.keys(run.roots[9], 2, 32) and keys[0, :168].tobytes() == run.keys(run.roots[7], 3, 32)
+    assert offs[2].tolist() == [64 * 40, 2 * 64, 64 * 2] and offs[0].tolist() == [64 * 48, 2 * 96, 64 * 3]
     assert run._predicted == {9: (2, 32, 40, 64), 7: (3, 32, 48, 96)} and run._slots_copied.recorded == 2
     run.cur = PPD._Pass(None)                                 # a new pass is elsewhere: it makes its own
     assert run.whole_replay(calls) is False and offs[2].tolist() == [0, 0, 0]
     run.whole_replayed(calls)
     assert run.whole_replay(calls[:1]) is False               # and so do other calls
-    assert keys[2, :136].tobytes() == run.keys(run.roots[9], 2, 32)
+    assert keys[2, :168].tobytes() == run.keys(run.roots[9], 2, 32)
 
 
 def test_a_replay_without_hashing_appends_the_matmuls_only():
@@ -348,7 +348,7 @@ def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whet
     assert run.whole_key() == (False, frozenset(), name, False, False)        # nothing to defer without hashing
     run.cur, run.graphs = PPD._Pass(None), False
     assert run.whole_key() is None
-    run.graphs, run.schedule = True, PPD.schedule_of("deferred", PPD.scheme_of(PPD.SCHEMES[2]))
+    run.graphs, run.schedule = True, PPD.schedule_of("deferred", PPD.scheme_of(PPD.SCHEMES[0]))
     assert run.whole_key() is None
 
 
@@ -440,7 +440,7 @@ def test_a_deferred_capture_runs_each_calls_tile_hashing_beside_the_next_calls_a
     monkeypatch.setattr(PG, "_capturing", lambda: True)
     shapes = {7: SimpleNamespace(m16=32, k=8, n=16), 8: SimpleNamespace(m16=32, k=8, n=32)}
     shapes[9] = shapes[8]
-    names = ("a_tree", "forming", "gemm", "hash_msg", "hash_leaf", "scatter")
+    names = ("a_tree", "forming", "gemm", "hash_leaf", "tree_leaves", "scatter")
 
     def step(w, name):
         return lambda: log.append(f"{w}:{name} on {current[0].name} ({run.kernel.dev.stream})")
@@ -471,21 +471,15 @@ def test_a_deferred_capture_runs_each_calls_tile_hashing_beside_the_next_calls_a
 
 
 def test_a_calls_steps_split_after_its_a_tree_and_before_its_tile_hashing():
-    h3 = SimpleNamespace(steps=lambda: [(x, None, None) for x in PPD.CALL_STEPS if x not in ("pad_a", "rowdig_a")])
-    run = SimpleNamespace(entry="test", hashing=True, omit=frozenset(), _rows=lambda: "s")
+    pipe = SimpleNamespace(steps=lambda: [(x, None, None) for x in PPD.CALL_STEPS if x != "pad_a"])
+    run = SimpleNamespace(entry="test", hashing=True, omit=frozenset())
     run._call_names = lambda: PPD.PearlCDeviceRun._call_names(run)
-    a, b = PPD.PearlCDeviceRun._call_cuts(run, h3)
-    names = [x for x in run._call_names() if x not in ("pad_a", "rowdig_a")]
-    # every -h3 call step, so its row seeds too: A's tree, before forming
-    assert names[:a] == ["node_keys_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a"] and names[b:] == ["hash_msg", "hash_leaf"]
-    # -h3s's row digests go with A's tree, and its tile hashing is the leaves alone
-    h3s = SimpleNamespace(steps=lambda: [(x, None, None) for x in PPD.CALL_STEPS if x not in ("pad_a", "hash_msg")])
-    a, b = PPD.PearlCDeviceRun._call_cuts(run, h3s)
-    names = [x for x in run._call_names() if x not in ("pad_a", "hash_msg")]
-    assert names[:a] == ["node_keys_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a"] and names[b:] == ["hash_leaf"]
-    pipe = h3
+    a, b = PPD.PearlCDeviceRun._call_cuts(run, pipe)
+    names = [x for x in run._call_names() if x != "pad_a"]
+    # A's tree with its row digests and row seeds, before forming; the tile hashing is the leaves alone
+    assert names[:a] == ["rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a"] and names[b:] == ["hash_leaf"]
     run.hashing = False
     assert PPD.PearlCDeviceRun._call_cuts(run, pipe) == (0, len(run._call_names()))
-    run._call_names = lambda: ("lines_ea", "hash_rows_a", "gemm_pearlc", "hash_msg")
+    run._call_names = lambda: ("lines_ea", "hash_rows_a", "gemm_pearlc", "hash_leaf")
     with pytest.raises(RuntimeError, match="A's tree"):
         PPD.PearlCDeviceRun._call_cuts(run, pipe)

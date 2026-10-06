@@ -3,7 +3,7 @@ pearl_c_sm120.cu's kernels write, in its row-major layout (A' and B~'s codes and
 `k32`; every product over k is the unpermuted operands'), for forming v1 on `pearl_c_device.SM120` (G = 4) and
 `SM120_UNPROMOTED`, hashing format -h3 (SHA-512 throughout).  Forming, lines and hashes come from
 `verity.protocols.accounting.work.pouw.schemes.pearl_c` on the device record; the products over every cell are batched in
-numpy (the chains by the twin, `benchmarks/pouw/pearl_c/twin.py`, the peel with `verity_kernels.tc.group_sum_total_batch`
+numpy (the chains window by window, the peel with `verity_kernels.tc.group_sum_total_batch`
 on the record's peel step), and one whole 64 x 64 tile per variant is recomputed by the scheme (`encode`, `checked`,
 `digest`) and must agree.  Pearl's tickets are not part of `pearl-c-sm120` (no PoUW check reads them), so nothing here
 computes them.  run.py compares the device's buffers with these bytes before it times anything.
@@ -23,7 +23,6 @@ and the tile tree.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import multiprocessing
 import sys
@@ -36,15 +35,6 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT / "verity" / "protocols" / "accounting" / "work" / "pouw" / "tests"))
 
-
-def _load(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = sys.modules[name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-W = _load("pearl_c_twin", HERE.parent / "pearl_c" / "twin.py")
 
 import pearl_c_vectors as CV  # noqa: E402
 from verity.primitives.commitments.merkle import tree_levels  # noqa: E402
@@ -200,10 +190,30 @@ def k32(x: np.ndarray) -> np.ndarray:
     return x[..., (t & ~31) | (t >> 1 & 3) << 3 | (t >> 3 & 3) << 1 | (t & 1)]
 
 
+def chain(a: np.ndarray, b: np.ndarray, ii: np.ndarray, jj: np.ndarray, device: Device, block: int = 1 << 16) -> np.ndarray:
+    """`pearl_c.chain` on `device` for the cells (ii, jj) of code matrices a and b: +0 per window of G atoms, one FP32 add
+    per window; unpromoted, one accumulator over all of k."""
+    out = np.empty(len(ii), np.uint32)
+    k = a.shape[1]
+    window = device.window if device.g else k
+    for lo in range(0, len(ii), block):
+        ci, cj = ii[lo:lo + block], jj[lo:lo + block]
+        total = np.zeros(len(ci), np.uint32)
+        for ws in range(0, k, window):
+            local = np.zeros(len(ci), np.uint32)
+            for s in range(ws, min(ws + window, k), C.SLICE):
+                local = group_sum_total_batch(device.atom, local, a[ci, s:s + C.SLICE], b[cj, s:s + C.SLICE])[0]
+            total = (total.view(np.float32) + local.view(np.float32)).view(np.uint32) if device.g else local
+        if device.g:
+            total[total == 0x80000000] = 0
+        out[lo:lo + block] = total
+    return out
+
+
 def product(device: Device, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """C.chain on `device` for every cell of codes a (rows x k) and b, through the twin's batched chain."""
+    """C.chain on `device` for every cell of codes a (rows x k) and b, batched."""
     ii, jj = grid(a.shape[0], b.shape[0])
-    return W.chain(a, b, ii, jj, device=device).reshape(a.shape[0], b.shape[0])
+    return chain(a, b, ii, jj, device).reshape(a.shape[0], b.shape[0])
 
 
 def peel_np(device: Device, c: np.ndarray, pa: np.ndarray, pb: np.ndarray) -> np.ndarray:
