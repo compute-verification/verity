@@ -27,7 +27,7 @@ structure WAct where
   jit : Fin 2
   fault : Bool
 
-instance : Inhabited WAct := ⟨⟨0, 0, false⟩⟩
+instance instInhabitedWAct : Inhabited WAct := ⟨⟨0, 0, false⟩⟩
 
 /-- Windows of two steps: `{0, 1}, {2, 3}, …`. -/
 def winEnd2 (k : ℕ) : ℕ := 2 * (k / 2) + 1
@@ -171,11 +171,11 @@ def rP (n : ℕ) : Program 1 2 (Fin 3) (Unit × ((β : Fin n) → Fin 3)) where
   rows t ins a _ s :=
     if h : t < n then (if (s : ℕ) < ((a.2 ⟨t, h⟩ + ins.getD t 0 : Fin 3) : ℕ) then some [true] else none) else none
 
-instance (n k : ℕ) (op : ℕ → List (Obs 1 1 2) → Fin 3) (o : List (Obs 1 1 2)) (a : Unit × ((β : Fin n) → Fin 3)) :
+instance instDecidableAcceptedFinOfNatNatProdUnitForallRP (n k : ℕ) (op : ℕ → List (Obs 1 1 2) → Fin 3) (o : List (Obs 1 1 2)) (a : Unit × ((β : Fin n) → Fin 3)) :
     Decidable (Accepted (rP n) op k o a) := by
   unfold Accepted; infer_instance
 
-instance (n k : ℕ) (op : ℕ → List (Obs 1 1 2) → Fin 3) (o : List (Obs 1 1 2)) :
+instance instDecidableAcceptedUpToFinOfNatNatProdUnitForallRP (n k : ℕ) (op : ℕ → List (Obs 1 1 2) → Fin 3) (o : List (Obs 1 1 2)) :
     Decidable (AcceptedUpTo (rP n) op k o) := by
   unfold AcceptedUpTo; infer_instance
 
@@ -183,11 +183,11 @@ instance (n k : ℕ) (op : ℕ → List (Obs 1 1 2) → Fin 3) (o : List (Obs 1 
 def zP (n : ℕ) : Program 1 2 (Fin 3) (Unit × ((β : Fin n) → Fin 1)) where
   rows t ins _ _ s := if t < n then (if (s : ℕ) < ((ins.getD t 0 : Fin 3) : ℕ) then some [true] else none) else none
 
-instance (n k : ℕ) (op : ℕ → List (Obs 1 1 2) → Fin 3) (o : List (Obs 1 1 2)) (a : Unit × ((β : Fin n) → Fin 1)) :
+instance instDecidableAcceptedFinOfNatNatProdUnitForallZP (n k : ℕ) (op : ℕ → List (Obs 1 1 2) → Fin 3) (o : List (Obs 1 1 2)) (a : Unit × ((β : Fin n) → Fin 1)) :
     Decidable (Accepted (zP n) op k o a) := by
   unfold Accepted; infer_instance
 
-instance (n k : ℕ) (op : ℕ → List (Obs 1 1 2) → Fin 3) (o : List (Obs 1 1 2)) :
+instance instDecidableAcceptedUpToFinOfNatNatProdUnitForallZP (n k : ℕ) (op : ℕ → List (Obs 1 1 2) → Fin 3) (o : List (Obs 1 1 2)) :
     Decidable (AcceptedUpTo (zP n) op k o) := by
   unfold AcceptedUpTo; infer_instance
 
