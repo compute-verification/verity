@@ -3,6 +3,8 @@ import Proofs.Flock.Level3
 import Proofs.Flock.Soundness
 import Proofs.Flock.EndToEnd
 import Proofs.Flock.EndToEndDrawn
+import Proofs.Flock.EndToEndHidden
+import Proofs.Flock.EndToEndRegistered
 import Proofs.Flock.Recursive
 import Proofs.Flock.VBridge
 
