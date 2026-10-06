@@ -3,6 +3,7 @@ that the move has nothing left to do on this tree (a rerun renames no module).""
 from __future__ import annotations
 
 import importlib.util
+import json
 import tomllib
 from pathlib import Path
 
@@ -62,6 +63,20 @@ def test_a_dropped_root_keeps_its_imports_reachable(tmp_path):
     assert M.keep_reachable(m, tmp_path, ren, dropped, False) == ["Proofs.A imports Proofs.A.Only"]
     assert (proofs / "A.lean").read_text().startswith("import Proofs.A.Used\nimport Proofs.A.Only\n\n")
     assert M.keep_reachable(m, tmp_path, ren, dropped, False) == []
+
+
+def test_the_merged_locks_are_laid_out_as_the_audit_writes_them(tmp_path):
+    import audit as A
+    toy = {**TOY, "packages": {**TOY["packages"], "verifier": {"dir": "v/lean", "code": ["Flock"]},
+                               "pous": {"dir": "p/lean", "code": ["Grader"]}}}
+    m = M.Map(toy, tmp_path)
+    rec = {"owner": "@lean", "signature": ["A.SecurityProofs.G : True"], "assumptions": [], "type_hash": "00"}
+    locks = {"a": {"roots": ["A"], "guarantees": {"A.SecurityProofs.G": rec}, "reads": {}, "dependencies": {"toolchain": "t"}}}
+    M.merge_locks(m, tmp_path, locks, {}, False)
+    for rel in ("sec", "sec/Proofs", "v/lean", "p/lean"):
+        text = (tmp_path / rel / M.POLICY).read_text()
+        assert text == A.text(json.loads(text)), rel
+    assert '"roots": ["Definitions", "Specs"]' in (tmp_path / "sec" / M.POLICY).read_text()
 
 
 def test_the_tree_is_moved():
