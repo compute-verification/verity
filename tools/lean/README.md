@@ -51,10 +51,10 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 - nor does the source of a module the package imports from a fetched package (`.lake/packages/*`: Mathlib, ArkLib and
   what they require), or the lakefile of a package it imports from, unless `dependency_unchecked` lists the module with
   the reason. The imported modules are the ones the `dependencies` record covers, and their sources are there once the
-  package is built, so the scan builds nothing: soundness's 3,900 imported dependency modules take about a second. The
-  toolchain, which defines these options, is trusted, and a path dependency is a package of the repository, audited on
-  its own. Among the pinned dependencies only doc-gen4's loader names one, and no audited package
-  imports it;
+  package is built, so the scan builds nothing: the security analysis's imported dependency modules, Mathlib's and
+  ArkLib's, take about a second. The toolchain, which defines these options, is trusted, and a path dependency is a
+  package of the repository, audited on its own. Among the pinned dependencies only doc-gen4's loader names one, and no
+  audited package imports it;
 - no source file runs code while it compiles (`initialize`, `#eval`, `run_cmd`, `run_elab`, an `elab`, `macro` or `syntax`
   definition, an elaborator attribute), unless its module is listed under `compile_time` with a reason and the digest of
   its file as it was reviewed. No listed module may declare a guarantee or a definition a guarantee reads.
@@ -154,9 +154,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   guarantees that read them, and a `digest` of those hashes (which the record therefore determines). Without `--update`
   the audit fails on any difference, so a statement, or a definition it depends on, cannot change without a visible diff
   of this file. A record holds the statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof
-  with allowed axioms replaces it. A record written before guarantees were called that holds them (and each module's
-  readers) under `pins`: the audit reads it so, `--update` rewrites it under today's names, and a record holding both
-  is refused.
+  with allowed axioms replaces it. A record that still holds them, or a module's readers, under `pins` (their name
+  before) is refused.
 - `owner`, in each guarantee's entry: the handle of the lane that answers for it (`@proofs`, `@compute-accounting`), whom
   a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
   `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
@@ -187,8 +186,7 @@ When the change lands on `main` (`research merge --push`, `research queue land`)
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
 of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one
-read from another module with the same content is counted on one line. A grant in `tools/check/queue.toml`
-(`lean_audit = ["guarantees", "reads"]`) would make such a change wait for a reviewer again.
+read from another module with the same content is counted on one line.
 
 **A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with
 `def G (ys) : Prop := e'` in a `Guarantees` module, changes its record's signature and type hash. `audit.py --update`
@@ -198,8 +196,7 @@ are, and in place of `G as` the value of `G` at the type's universe levels with 
 `Meta.unfoldDefinition?` unfolds an applied constant), the proofs Lean abstracts out of a definition (its `G._proof_<n>`
 theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
 type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
-read by no other guarantee, needs no reading of its own; the review then holds no statement change, so the merge needs no
-statement reviewer for it. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+read by no other guarantee, needs no reading of its own; the review then holds no statement change. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
 (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
 theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
 lists a lifted guarantee as changed.
@@ -238,15 +235,16 @@ guarantee is no conflict.
 
 ## A spec and its proofs in two packages: `proved_in`
 
-A spec package (`Pkg.Protocol`, `Pkg.Assumptions`, `Pkg.Guarantees`: definitions and `def G : Prop` statements) keeps the
-lock, the trusted object. Its proofs may live in another Lake package (`security_proofs/<area>/`) that `require`s the spec
-by path and proves `theorem SecurityProofs.G : Guarantees.G`; that package is untrusted. The spec's policy names it:
+A spec package (`verity/Security/`: `Definitions`, and `Specs/<Area>/{Assumptions,Guarantees}` with the
+`def G : Prop` statements) keeps the lock, the trusted object. Its proofs live in another Lake package
+(`verity/Security/Proofs/`, modules `Proofs.<Area>.…`) that `require`s the spec by path and proves
+`theorem X.SecurityProofs.G : X.Guarantees.G`; that package is untrusted. The spec's policy names it:
 
 ~~~json
 {
- "roots": ["Pkg.Protocol", "Pkg.Assumptions", "Pkg.Guarantees"],
- "proved_in": ["../../security_proofs/pkg"],
- "guarantees": {"Pkg.SecurityProofs.g": {}}
+ "roots": ["Definitions", "Specs"],
+ "proved_in": ["Proofs"],
+ "guarantees": {"Pous.SecurityProofs.BandMultiMeetsFamily": {"owner": "@memory-accounting"}}
 }
 ~~~
 
@@ -280,8 +278,8 @@ conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python t
 it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
 or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
 the digest is recomputed. Guarantees arrive byte for byte from their branches, and a hand-written section one side extends
-(a module added to `meaning`) is kept. A side written before guarantees were called that (`pins`) is read under today's
-names. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the other side's
+(a module added to `meaning`) is kept. A side that still holds `pins` (the name guarantees had before) is refused. A
+guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the other side's
 restatement both apply.
 
 It refuses when both sides changed one entry differently: a guarantee restated on both, a definition whose content both changed,
