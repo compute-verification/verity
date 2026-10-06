@@ -40,7 +40,7 @@ from .fp32 import bits_of, f32_is_nan, f32_of
 F32 = Value(32)
 
 __all__ = ["DELTA_TABLES", "F32", "MUFU_TANH_RULES", "MUFU_TANH_SHARD_FORMAT", "MUFU_TANH_TABLE_DIR", "MUFU_TANH_TABLE_FORMAT",
-           "MUFU_TANH_TABLE_MANIFEST", "MUFU_TANH_TABLE_MANIFEST_SHA256", "TABLE_DIR", "DivFullRcp", "DivFullScaleA", "Fa2InvSum",
+           "MUFU_TANH_TABLE_MANIFEST", "MUFU_TANH_TABLE_MANIFEST_SHA512", "TABLE_DIR", "DivFullRcp", "DivFullScaleA", "Fa2InvSum",
            "MufuEx2Ftz", "MufuRcpFtz", "MufuSqrtFtz", "MufuTanh", "MufuTanhUnmeasured", "RsqrtApprox", "mufu_ex2_bits",
            "mufu_rcp_bits", "mufu_rsq_bits", "mufu_sqrt_bits", "mufu_tanh_coverage", "mufu_tanh_shards", "mufu_tanh_table_manifest",
            "table", "table_path"]
@@ -274,11 +274,11 @@ def RsqrtApprox(x: int) -> int:
 # ~0.005 B/word).  The evaluator answers
 #   (a) NaN inputs and the closed regions in `MUFU_TANH_RULES` (each established by an EXHAUSTIVE scan of the whole region),
 #   (b) every other word from the table: the in-tree `tables/mufu_tanh_sm89.{json,xzblocks}` (manifest with
-#       sha256, hardware/software, rules, evidence job ids, a 512-word raw sample; table [0x31000000, 0x41000000) = [2^-29, 8), which
-#       covers the table-only region [2^-8, 8) with margin; the manifest is pinned by `MUFU_TANH_TABLE_MANIFEST_SHA256`); negative
+#       sha512, hardware/software, rules, evidence job ids, a 512-word raw sample; table [0x31000000, 0x41000000) = [2^-29, 8), which
+#       covers the table-only region [2^-8, 8) with margin; the manifest is pinned by `MUFU_TANH_TABLE_MANIFEST_SHA512`); negative
 #       words via the table's odd symmetry, which is used only where the measurement shows 0 violations over the table's whole range.
 # `MufuTanhUnmeasured` is raised only when the table does not cover the word or does not load: manifest missing or not the pinned
-# one, table file sha256 != manifest.  Never an approximation.
+# one, table file sha512 != manifest.  Never an approximation.
 # Hardware/software of the table: RTX 4090 (sm_89), driver 580.178.04, torch 2.13.0+cu129 / triton 3.7.1
 # (`inline_asm_elementwise("tanh.approx.f32 $0, $1;")`); the sub-ranges re-measured on driver 580.126.20 (cp-cov-a) hashed identical.
 # The table is conformance evidence for that stack only.
@@ -288,7 +288,8 @@ MUFU_TANH_SHARD_FORMAT = "verity/mufu-tanh-shard/xz-blocks/v1"
 MUFU_TANH_TABLE_FORMAT = "verity/mufu-tanh-table/v1"
 MUFU_TANH_TABLE_DIR = TABLE_DIR
 MUFU_TANH_TABLE_MANIFEST = os.path.join(MUFU_TANH_TABLE_DIR, "mufu_tanh_sm89.json")
-MUFU_TANH_TABLE_MANIFEST_SHA256 = "674b3663b5737e9d6b87a1a6a249e5a2a17cea279f89bae5d42fe8d0b123bb60"  # another table is another MufuTanh version
+MUFU_TANH_TABLE_MANIFEST_SHA512 = ("e206d35a2b05819d283694486510e115df650eb775433d1c0f4c66f6d683f701"
+                                   "d104fde89ee22232d11b9c143ee66e2c95dbcc695e95c1d121d4ef1b94b40312")  # another table is another MufuTanh version
 _F32_SIGN = 0x80000000
 
 # Closed regions of the domain, each established ONLY by an exhaustive measurement of the whole region; None = not established, the
@@ -318,7 +319,7 @@ class MufuTanhUnmeasured(LookupError):
 
 class _TanhShard:
     """One measured word range: `header` = block index (`verity/mufu-tanh-shard/xz-blocks/v1`), `sym` = the odd-symmetry record of
-    the measurement over exactly this range (`{"checked", "violations"}`); the file sha256 is verified against the header at load
+    the measurement over exactly this range (`{"checked", "violations"}`); the file sha512 is verified against the header at load
     (mismatch -> `MufuTanhUnmeasured`); blocks are decoded on demand."""
 
     def __init__(self, path: str, header: dict, sym: dict | None, sha_words: str | None = None, job: str | None = None) -> None:
@@ -330,12 +331,12 @@ class _TanhShard:
         self.block_words = int(header["block_words"])
         if not os.path.exists(path):
             raise MufuTanhUnmeasured(f"MufuTanh table file missing: {path}")
-        h = _hl.sha256()
+        h = _hl.sha512()
         with open(path, "rb") as f:
             for blk in iter(lambda: f.read(1 << 22), b""):
                 h.update(blk)
-        if h.hexdigest() != header["sha256_file"]:
-            raise MufuTanhUnmeasured(f"MufuTanh table {path}: file sha256 {h.hexdigest()} != recorded {header['sha256_file']} (corrupt)")
+        if h.hexdigest() != header["sha512_file"]:
+            raise MufuTanhUnmeasured(f"MufuTanh table {path}: file sha512 {h.hexdigest()} != recorded {header['sha512_file']} (corrupt)")
         sym = sym or {}
         self.sym_ok = sym.get("violations") == 0 and sym.get("checked") == self.hi - self.lo
         self.sha_words, self.job = sha_words, job
@@ -370,7 +371,7 @@ class _TanhShard:
 
 
 def mufu_tanh_table_manifest(path: str = MUFU_TANH_TABLE_MANIFEST) -> dict:
-    """The in-tree table's manifest (format `verity/mufu-tanh-table/v1`): sha256s, hardware/software, rules, evidence job ids, the
+    """The in-tree table's manifest (format `verity/mufu-tanh-table/v1`): digests, hardware/software, rules, evidence job ids, the
     512-word raw sample (`sample.pairs` = [[x_hex, hw_hex], ...]) and the xz-block index (`table`)."""
     import json as _json
     with open(path) as f:
@@ -382,16 +383,16 @@ def mufu_tanh_table_manifest(path: str = MUFU_TANH_TABLE_MANIFEST) -> dict:
 
 @lru_cache(maxsize=None)
 def mufu_tanh_shards() -> tuple:
-    """The loaded table: the in-tree manifest, which must be the pinned one (`MUFU_TANH_TABLE_MANIFEST_SHA256`).  Raises
+    """The loaded table: the in-tree manifest, which must be the pinned one (`MUFU_TANH_TABLE_MANIFEST_SHA512`).  Raises
     `MufuTanhUnmeasured` when it is missing / not the pinned one / corrupt or does not cover the table-only region
     [identity_below, saturate_from) (a configuration error, not a measurement gap)."""
     import hashlib as _hl
     if not os.path.exists(MUFU_TANH_TABLE_MANIFEST):
         raise MufuTanhUnmeasured(f"MufuTanh table manifest missing: {MUFU_TANH_TABLE_MANIFEST}")
     with open(MUFU_TANH_TABLE_MANIFEST, "rb") as f:
-        digest = _hl.sha256(f.read()).hexdigest()
-    if digest != MUFU_TANH_TABLE_MANIFEST_SHA256:
-        raise MufuTanhUnmeasured(f"MufuTanh table manifest {MUFU_TANH_TABLE_MANIFEST}: sha256 {digest} != pinned {MUFU_TANH_TABLE_MANIFEST_SHA256}")
+        digest = _hl.sha512(f.read()).hexdigest()
+    if digest != MUFU_TANH_TABLE_MANIFEST_SHA512:
+        raise MufuTanhUnmeasured(f"MufuTanh table manifest {MUFU_TANH_TABLE_MANIFEST}: sha512 {digest} != pinned {MUFU_TANH_TABLE_MANIFEST_SHA512}")
     man = mufu_tanh_table_manifest()
     t = man["table"]
     s = _TanhShard(os.path.join(MUFU_TANH_TABLE_DIR, t["file"]), t, t.get("odd_symmetry"), t.get("sha256_words_le_u32"),

@@ -43,7 +43,7 @@ def test_a_table_that_is_not_the_pinned_one_does_not_load(monkeypatch):
     monkeypatch.setitem(rms_relation._TABLES, rms_relation.tables_dir("cuda"), RM.RmsTables(z, z, {"sqrt": other, "rcp": other, "rsq": other}, z))
     with pytest.raises(ValueError, match="pinned"):
         rms_relation.tables("cuda")
-    monkeypatch.setattr(mufu, "MUFU_TANH_TABLE_MANIFEST_SHA256", "0" * 64)
+    monkeypatch.setattr(mufu, "MUFU_TANH_TABLE_MANIFEST_SHA512", "0" * 128)
     mufu.mufu_tanh_shards.cache_clear()
     with pytest.raises(P.MufuTanhUnmeasured, match="pinned"):
         P.MufuTanh.evaluate(TANH_TABLE_WORD)
