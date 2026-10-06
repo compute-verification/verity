@@ -1,0 +1,108 @@
+"""The firewall's contract (`Flock/Firewall/Contract.lean`, `flock-firewall check`) against the inner phase's firewall
+(`verity_flock.rec_live.Proxy`), on the transcripts `verity_flock.firewall_transcript` records (`firewall_agree.py`):
+honest sessions accepted by both, the red team's six sessions on #1270 refused by both or sent as the schedule has them,
+the Open-order divergence, and tamper controls (firewalls that let out what the contract forbids) refused by the contract."""
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_digest
+from verity_flock import firewall_transcript as FT
+from verity_flock import rec_live as RL
+
+VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
+LEAN = VERIFIER / "lean"
+BIN = LEAN / ".lake/build/bin/flock-firewall"
+
+
+def _agree():
+    spec = importlib.util.spec_from_file_location("firewall_agree", VERIFIER / "firewall_agree.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+FA = _agree()
+
+
+@pytest.fixture(scope="module")
+def lean():
+    if shutil.which("lake") is None:
+        pytest.skip("no Lean toolchain")
+    subprocess.run(["lake", "build", "flock-firewall"], cwd=LEAN, check=True, capture_output=True)
+    return str(BIN)
+
+
+def test_a_commit_item_is_the_row_the_coin_server_receives():
+    """A commit item's message is the bytes the registered row's digest hashes, and the firewall's ``b || c`` is hm96-sha512's
+    commit string of that digest: what `Flock.Firewall.commitBC` recomputes."""
+    s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
+    t = s.transcript()
+    row = s.proxy.private[1]["rows"][0]
+    assert hashlib.sha512(FT.row_message(row)).digest() == sha512_row_digest(row, 16, ROLE_X)
+    commits = [i["commit"] for i in t["items"] if "commit" in i]
+    assert len(commits) == 2 + 2 * (2 + 2), "the level-0 top's two nodes, then per rep its cap's two and two message rows"
+    for c in commits:
+        msg, salt = bytes.fromhex(c["msg"]), bytes.fromhex(t["tape"]["salts"][c["salt"]])
+        assert bytes.fromhex(c["sent"]) == FT.INST.commit_string(FT.INST.default_key, hashlib.sha512(msg).digest(), salt)
+    assert sorted(c["salt"] for c in commits) == list(range(len(t["tape"]["salts"]))), "each salt drawn is used once"
+    sent = {bytes.fromhex(x) for r in s.coins.record()["rounds"] for x in r["commits"] + r["caps"]}
+    sent |= set(bytes.fromhex(v) for v in s.coins.record()["link"]["roots"].values())
+    joined = b"".join(sent)
+    assert all(bytes.fromhex(c["sent"]) in joined for c in commits)
+    assert t["exposed"] == {"salts": [], "pads": []} and t["firewall"] == {"accepted": True, "why": None}
+
+
+def test_the_transcript_is_the_schedule_in_the_provers_order():
+    t = FA.run_case("honest", FA.requests(), RL.Proxy, None).transcript()
+    fixed = [i["fixed"]["what"] for i in t["items"] if "fixed" in i]
+    assert fixed == ["hello", "open:circuit/rep0", "roots", "link.y", "round:0", "round:1", "open:circuit/rep1", "round:2",
+                     "round:3", "finish"]
+    assert list(t["items"][-1]) == ["finish"]
+    hello = next(i["fixed"] for i in t["items"] if "fixed" in i and i["fixed"]["what"] == "hello")
+    assert bytes.fromhex(hello["sent"]) == FT.canon(FA.SCHEDULE["hello"])
+
+
+def test_the_contract_and_the_firewall_agree_on_every_case(lean, tmp_path):
+    """Every case meets its expectation (`firewall_agree.cases`): the honest sessions accepted by both; the red team's six on
+    #1270 a stop for both, or (a Hello spelled with its keys in another order) the schedule's Hello sent; the three Open
+    orders other than the prover's held by the firewall and refused by the contract (the divergence the case names); each
+    tamper control refused by the contract alone."""
+    assert FA.main(["--lean", lean, "--out", str(tmp_path), "--cases"]) == 0
+    rows = [r.split("\t") for r in (tmp_path / "agreement.tsv").read_text().splitlines()[1:]]
+    got = {r[0]: (r[1], r[2]) for r in rows}
+    assert len(rows) == len(FA.cases()) == 22
+    assert [n for n, v in got.items() if v == ("True", "True")] == ["honest", "honest-pings", "hello-keys-reordered"]
+    gaps = [n for n in got if n.startswith("gap")]
+    assert {n.split("-")[0] for n in gaps} == {f"gap{i}" for i in range(1, 7)}
+    assert all(got[n] == ("False", "False") for n in gaps if not n.startswith("gap3"))
+    assert all(got[n] == ("True", "False") for n in got if n.startswith(("gap3", "tamper")))
+    assert json.loads((tmp_path / "result.json").read_text())["divergences"] == [n for n in gaps if n.startswith("gap3")]
+
+
+def test_a_firewall_that_lets_out_what_the_contract_forbids_fails_the_check(lean, tmp_path, monkeypatch):
+    """Negative control of the check itself: a tamper control expected to agree (as a firewall that reused salts would be,
+    if the contract missed it) is a miss, and the check exits 1."""
+    name, reqs, proxy, fresh, _ = next(c for c in FA.cases() if c[0] == "tamper-reused-salt")
+    monkeypatch.setattr(FA, "cases", lambda: [(name, reqs, proxy, fresh, {"firewall": True, "lean": True, "why": None})])
+    assert FA.main(["--lean", lean, "--out", str(tmp_path), "--cases"]) == 1
+    missed = json.loads((tmp_path / "result.json").read_text())["missed"]
+    assert [m["case"] for m in missed] == [name] and missed[0]["lean"]["why"].startswith("a commitment under salt 0, used before")
+
+
+def test_a_recorded_session_replays_to_its_record(lean, tmp_path):
+    """`firewall_agree.replay` on a session `rec_live` wrote: the same coin server record from its own coins and salts, and
+    both accept it."""
+    s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
+    d = tmp_path / "s"
+    s.proxy.write(d)
+    (d / "schedule.json").write_text(json.dumps(FA.SCHEDULE))
+    r, bad = FA.replay(d)
+    assert bad is None and r.coins.record() == s.coins.record() and r.accepted()
+    assert FA.main(["--lean", lean, "--out", str(tmp_path / "out"), "--sessions", str(d)]) == 0
