@@ -853,7 +853,7 @@ class LaggedProver(online.Prover):
         self._pool = None
         if background:
             self._pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
-            self._pool.submit(_warm)
+            self._pool.submit(_warm).result()  # the worker's start-up imports must not share window 0 with forwards
         self.log = {"lag": lag, "unready": [], "choose_ms": []}
         self.started = 0
 
