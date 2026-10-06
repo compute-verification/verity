@@ -1,7 +1,8 @@
-"""The firewall's contract (`Flock/Firewall/Contract.lean`, `flock-firewall check`) against the inner phase's firewall
+"""The firewall's contract (`Flock/Firewall/Contract.lean`, `flock-firewall contract`) against the inner phase's firewall
 (`verity_flock.rec_live.Proxy`), on the transcripts `verity_flock.firewall_transcript` records (`firewall_agree.py`):
 honest sessions accepted by both, the red team's six sessions on #1270 refused by both or sent as the schedule has them,
-the Open-order divergence, and tamper controls (firewalls that let out what the contract forbids) refused by the contract."""
+tamper controls (firewalls that let out what the contract forbids) refused by the contract, and every session
+`test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on."""
 from __future__ import annotations
 
 import hashlib
@@ -41,7 +42,7 @@ def lean():
 
 def test_a_commit_item_is_the_row_the_coin_server_receives():
     """A commit item's message is the bytes the registered row's digest hashes, and the firewall's ``b || c`` is hm96-sha512's
-    commit string of that digest: what `Flock.Firewall.commitBC` recomputes."""
+    commit string of that digest: what `Flock.Firewall.Contract.commitBC` recomputes."""
     s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
     t = s.transcript()
     row = s.proxy.private[1]["rows"][0]
@@ -59,11 +60,14 @@ def test_a_commit_item_is_the_row_the_coin_server_receives():
     assert t["exposed"] == {"salts": [], "pads": []} and t["firewall"] == {"accepted": True, "why": None}
 
 
-def test_the_transcript_is_the_schedule_in_the_provers_order():
+def test_the_transcript_is_the_schedule_in_its_order():
+    """Each stream's Open just before its first round, wherever the prover sent it."""
     t = FA.run_case("honest", FA.requests(), RL.Proxy, None).transcript()
-    fixed = [i["fixed"]["what"] for i in t["items"] if "fixed" in i]
-    assert fixed == ["hello", "open:circuit/rep0", "roots", "link.y", "round:0", "round:1", "open:circuit/rep1", "round:2",
-                     "round:3", "finish"]
+    fixed = lambda t: [i["fixed"]["what"] for i in t["items"] if "fixed" in i]
+    assert fixed(t) == ["hello", "roots", "link.y", "open:circuit/rep0", "round:0", "round:1", "open:circuit/rep1", "round:2",
+                        "round:3", "finish"]
+    for o in ("reversed", "after-link", "early"):
+        assert fixed(FA.run_case(o, FA.requests(order=o), RL.Proxy, None).transcript()) == fixed(t)
     assert list(t["items"][-1]) == ["finish"]
     hello = next(i["fixed"] for i in t["items"] if "fixed" in i and i["fixed"]["what"] == "hello")
     assert bytes.fromhex(hello["sent"]) == FT.canon(FA.SCHEDULE["hello"])
@@ -71,19 +75,52 @@ def test_the_transcript_is_the_schedule_in_the_provers_order():
 
 def test_the_contract_and_the_firewall_agree_on_every_case(lean, tmp_path):
     """Every case meets its expectation (`firewall_agree.cases`): the honest sessions accepted by both; the red team's six on
-    #1270 a stop for both, or (a Hello spelled with its keys in another order) the schedule's Hello sent; the three Open
-    orders other than the prover's held by the firewall and refused by the contract (the divergence the case names); each
-    tamper control refused by the contract alone."""
+    #1270 a stop for both, or the schedule's value sent in its place (a Hello spelled with its keys in another order, each
+    stream's Open wherever the prover sent it); each tamper control refused by the contract alone."""
     assert FA.main(["--lean", lean, "--out", str(tmp_path), "--cases"]) == 0
     rows = [r.split("\t") for r in (tmp_path / "agreement.tsv").read_text().splitlines()[1:]]
     got = {r[0]: (r[1], r[2]) for r in rows}
     assert len(rows) == len(FA.cases()) == 22
-    assert [n for n, v in got.items() if v == ("True", "True")] == ["honest", "honest-pings", "hello-keys-reordered"]
+    assert [n for n, v in got.items() if v == ("True", "True")] == ["honest", "honest-pings", "hello-keys-reordered",
+                                                                     "gap3-open-reversed", "gap3-open-after-link", "gap3-open-early"]
     gaps = [n for n in got if n.startswith("gap")]
     assert {n.split("-")[0] for n in gaps} == {f"gap{i}" for i in range(1, 7)}
     assert all(got[n] == ("False", "False") for n in gaps if not n.startswith("gap3"))
-    assert all(got[n] == ("True", "False") for n in got if n.startswith(("gap3", "tamper")))
-    assert json.loads((tmp_path / "result.json").read_text())["divergences"] == [n for n in gaps if n.startswith("gap3")]
+    assert all(got[n] == ("True", "False") for n in got if n.startswith("tamper"))
+    assert json.loads((tmp_path / "result.json").read_text())["divergences"] == []
+
+
+def test_the_contract_holds_on_every_session_of_the_agreement_test(lean, tmp_path):
+    """`test_firewall_agreement`'s sessions (its cases: each schedule edit, prefix, drop, duplicate and swap of a request,
+    requests after Finish, forgeries, byte flips; and every placement of the Opens) through the proxy: the contract accepts
+    each session the proxy
+    finishes, and of each one it stops releases every item, save where the proxy hands the coin server a call the coin server
+    refuses (a Commit before Hello or a second one, a Link before Commit or a second one). Such a call reaches the coin
+    server, so the contract's cut is that call; `Flock.Firewall.run` refuses it before it sends anything, and
+    `test_firewall_agreement` compares the calls the coin server takes."""
+    from test_firewall_agreement import SALTS, _coins, cases, placements
+
+    sessions = []
+    for name, schedule, reqs in cases() + placements():
+        salts = iter(SALTS)
+        s = FT.Session(schedule, _coins, lambda salts=salts: next(salts))
+        for r in reqs:
+            s.handle(r)
+        sessions.append((name, s))
+    got = FA.verdicts(lean, tmp_path, [(f"s{i}", s) for i, (_, s) in enumerate(sessions)])
+    cut = {"roots": "Commit's roots: not just after Hello", "y": "Link's y: not after Commit"}
+    wrong = []
+    for i, ((name, s), v) in enumerate(zip(sessions, got)):
+        n = len(json.loads((tmp_path / f"s{i}.json").read_text())["items"])
+        bad = next((c["call"] for c in s.coins.calls if "refused" in c), None)
+        if bad is not None:
+            ok = v["accepted"] is False and v["released"] < n and v["why"].startswith(cut[bad])
+        else:
+            ok = v["accepted"] == s.accepted() and v["released"] == n
+            ok = ok and (v["accepted"] or v["why"] == "the session ended without Finish")
+        if not ok:
+            wrong.append((name, bad, v))
+    assert len(sessions) > 1000 and not wrong, wrong[:3]
 
 
 def test_a_firewall_that_lets_out_what_the_contract_forbids_fails_the_check(lean, tmp_path, monkeypatch):

@@ -1,12 +1,15 @@
-"""The firewall's agreement check: the inner phase's firewall (`verity_flock.rec_live.Proxy`) and its contract
-(`flock-firewall check`, `Flock/Firewall/Contract.lean`) on the same sessions.
+"""The firewall's contract check: the inner phase's firewall (`verity_flock.rec_live.Proxy`) and its contract
+(`flock-firewall contract`, `Flock/Firewall/Contract.lean`) on the same sessions. Whether the proxy sends what the Lean
+program `Flock.Firewall.run` sends is `tests/test_firewall_agreement.py`'s question; this one is whether what it sends has
+the contract's property.
 
     python firewall_agree.py --lean BIN --out DIR [--cases] [--sessions DIR... [--schedule FILE]]
 
 Each session runs through the firewall with `verity_flock.firewall_transcript` watching what it sends the coin server; the
-firewall's decision is whether the session ended with Finish, the contract's is `Flock.Firewall.run` on the transcript.
-`--cases` runs the built-in sessions (`cases`): honest ones, the red team's six on #1270 (review-zk-gateway, c00b85b0c), and
-tamper controls, firewalls that let out what the contract forbids, which the contract must refuse. `--sessions` replays
+firewall's decision is whether the session ended with Finish, the contract's is `Flock.Firewall.Contract.run` on the
+transcript (`verdicts`). `--cases` runs the built-in sessions (`cases`): honest ones, the red team's six on #1270
+(review-zk-gateway, c00b85b0c), and tamper controls, firewalls that let out what the contract forbids, which the contract
+must refuse. `--sessions` replays
 recorded inner sessions (`rec_live serve`'s output directories: ``session/session.json``, ``public.json``, ``private.json``,
 and ``schedule.json`` beside them or in their parent, or ``--schedule``) with their own coins and salts, checks the replay gives the recorded
 coin server record byte for byte, and expects both to accept. Each case carries its expectation (``firewall``, ``lean``,
@@ -170,16 +173,10 @@ def cases():
     out = [("honest", requests(), RL.Proxy, None, same(True)),
            ("honest-pings", requests(ping=True), RL.Proxy, None, same(True)),
            ("hello-keys-reordered", requests(hello={k: HELLO[k] for k in reversed(list(HELLO))}), RL.Proxy, None, same(True))]
-    # the red team's six on #1270 (c00b85b0c), on today's firewall: each a stop, or the schedule's value sent
+    # the red team's six on #1270 (c00b85b0c), on today's firewall: each a stop, or the schedule's value sent in its place
     out += [(f"gap1-y-{k}", requests(y=bytes(16 * k)), RL.Proxy, None, same(False, stop)) for k in (0, 1, 3, 1000)]
     out += [("gap2-hello-reps-float", requests(hello={**HELLO, "reps": 2.0}), RL.Proxy, None, same(False, stop))]
-    out += [(f"gap3-open-{o}", requests(order=o), RL.Proxy, None,
-             {"firewall": True, "lean": False, "why": why,
-              "divergence": "the firewall holds each Open's parent and position in its stream, not where it comes in the "
-                            "session; the contract gives each Open one place (the prover's order), so the order carries nothing"})
-            for o, why in (("reversed", "Open circuit/rep1: not the schedule's next stream"),
-                           ("after-link", "Commit's roots: not after Hello and the first stream's Open"),
-                           ("early", "Open circuit/rep1: a later stream opens just before its first round"))]
+    out += [(f"gap3-open-{o}", requests(order=o), RL.Proxy, None, same(True)) for o in ("reversed", "after-link", "early")]
     out += [("gap4-no-finish", requests(finish=False), RL.Proxy, None, same(False, stop))]
     out += [(f"gap5-unreadable-hello-{i}", requests(hello=t), RL.Proxy, None, same(False, stop)) for i, t in enumerate(("[]", "7", '"x"'))]
     out += [("gap6-unpinned-field", requests(hello={**HELLO, "note": "5e" * 64}), RL.Proxy, None, same(False, stop))]
@@ -245,6 +242,23 @@ def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | Non
     return s, (f"the replay's coin server record differs from public.json at {diff}" if diff else None)
 
 
+def verdicts(lean: str, out: Path, sessions: list[tuple[str, FT.Session]]) -> list[dict]:
+    """Each session's transcript written to ``out/<name>.json`` and decided by `flock-firewall contract`: its verdict
+    (``accepted``, ``released``, ``why``), or ``{"accepted": None, "why": …}`` when the contract could not read it."""
+    files = []
+    for name, s in sessions:
+        f = out / f"{name}.json"
+        f.write_text(json.dumps(s.transcript()))
+        files.append(str(f))
+    p = subprocess.run([lean, "contract", *files], capture_output=True, text=True)
+    got = {v["file"]: v for v in map(json.loads, p.stdout.splitlines())}
+    res = []
+    for f in files:
+        v = got.get(f) or {"accepted": None, "why": p.stderr.strip()[-200:]}
+        res.append({"accepted": None, "why": v["error"]} if "error" in v else v)
+    return res
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lean", required=True)
@@ -261,20 +275,11 @@ def main(argv=None) -> int:
     for d in map(Path, a.sessions):
         s, bad = replay(d, json.loads(a.schedule.read_text()) if a.schedule else None)
         todo.append((f"session-{d.name}", s, {"firewall": True, "lean": True, "why": None}, bad))
-    files = []
-    for name, s, expect, _ in todo:
-        f = a.out / f"{name}.json"
-        f.write_text(json.dumps(s.transcript()))
-        files.append(str(f))
-    p = subprocess.run([a.lean, "check", *files], capture_output=True, text=True)
-    lean = {v["file"]: v for v in map(json.loads, p.stdout.splitlines())}
+    lean = verdicts(a.lean, a.out, [(name, s) for name, s, _, _ in todo])
     rows, bad = ["case\tfirewall\tlean\treleased\titems\twhy\tok"], []
-    for (name, s, expect, replay_bad), f in zip(todo, files):
-        L = lean.get(f) or {"accepted": None, "why": p.stderr.strip()[-200:]}
-        if "error" in L:
-            L = {"accepted": None, "why": L["error"]}
+    for (name, s, expect, replay_bad), L in zip(todo, lean):
         fw = s.accepted()
-        n = len(json.loads(Path(f).read_text())["items"])
+        n = len(json.loads((a.out / f"{name}.json").read_text())["items"])
         why = L.get("why") or ""
         ok = fw == expect["firewall"] and L["accepted"] == expect["lean"] and why.startswith(expect["why"] or "") and replay_bad is None
         if not ok:

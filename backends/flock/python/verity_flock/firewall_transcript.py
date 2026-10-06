@@ -1,7 +1,7 @@
 """The firewall's transcript (``verity/firewall-transcript/v0``): what the inner phase's firewall (`rec_live.Proxy`) sends
 its challenger (the coin server), in order, each item tagged with the case of the firewall's contract it falls under, with
-the firewall's own decision beside it. ``flock-firewall check`` (``Flock.Firewall.run`` in the Lean verifier) decides the
-same transcript; `firewall_agree.py` compares the two.
+the firewall's own decision beside it. ``flock-firewall contract`` (``Flock.Firewall.Contract.run`` in the Lean verifier)
+decides the same transcript; `firewall_agree.py` compares the two.
 
 The recorder watches the firewall from outside: a coin server that keeps every call made to it (`RecordingCoins`), a salt
 source that keeps every salt it hands out (`Tape`), and every answer the firewall gives the workers (`Session.handle`). It
@@ -48,36 +48,40 @@ class Tape:
 
 
 class RecordingCoins(RL.CoinServer):
-    """The coin server, keeping every call the firewall makes to it as it was made (before the coin server judges it)."""
+    """The coin server, keeping every call the firewall makes to it as it was made (before the coin server judges it); a
+    call the coin server refused also carries its reason (``refused``)."""
 
     def __init__(self, rand=None):
         super().__init__(rand) if rand else super().__init__()
         self.calls: list[dict] = []
 
+    def _call(self, c: dict, f, *a):
+        self.calls.append(c)
+        try:
+            return f(*a)
+        except Exception as e:
+            c["refused"] = str(e)
+            raise
+
     def start(self, hello):
-        self.calls.append({"call": "hello", "hello": hello})
-        return super().start(hello)
+        return self._call({"call": "hello", "hello": hello}, super().start, hello)
 
     def commit(self, roots):
         c = {"call": "roots", "roots": dict(roots), "coins": None}
-        self.calls.append(c)
-        c["coins"] = super().commit(roots)
+        c["coins"] = self._call(c, super().commit, roots)
         return c["coins"]
 
     def y(self, y):
-        self.calls.append({"call": "y", "y": list(y)})
-        return super().y(y)
+        return self._call({"call": "y", "y": list(y)}, super().y, y)
 
     def open(self, stream, parent, at):
-        self.calls.append({"call": "open", "stream": stream, "parent": parent, "at": at})
-        return super().open(stream, parent, at)
+        return self._call({"call": "open", "stream": stream, "parent": parent, "at": at}, super().open, stream, parent, at)
 
     def round(self, stream, caps, commits, n):
         st = self.streams.get(stream)
         c = {"call": "round", "stream": stream, "k": st["rounds"] if st else None, "caps": list(caps), "commits": list(commits),
              "n": n, "coins": None}
-        self.calls.append(c)
-        c["coins"] = super().round(stream, caps, commits, n)
+        c["coins"] = self._call(c, super().round, stream, caps, commits, n)
         return c["coins"]
 
 
