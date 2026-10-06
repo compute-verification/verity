@@ -8,7 +8,7 @@
 # The variants build in parallel before the GPU is leased (gpu-lease 1 --wait --max-min MAXMIN, from GPU's indices when it is
 # set), which only the bench holds.
 # A variant is NAME=SOURCE:FLAGS; FLAGS replace the Makefile's defaults where they name the same macro (later -D wins).
-# BLOCKS (default 8 segments, 524,288 blocks), REPS and GATE pass through.  ENV_DIR holds the shared torch venv and CGBN
+# BLOCKS (default 8 segments, 524,288 blocks), REPS and GATE pass through, and KEYS_ALL=1 checks every block's v4 keys.  ENV_DIR holds the shared torch venv and CGBN
 # (pod.sh's WORK/pous-bench, used read-only); WORK holds this job's own builds.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
@@ -41,4 +41,4 @@ gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-20}" -- bash -c '"$@
   nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu --format=csv,noheader \
     -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1; exit $rc' _ \
   "$PY" benchmarks/pous/p2_v1/decode_bench.py "${LIBS[@]}" --build-dir "$WORK/pous_build" --blocks "${BLOCKS:-524288}" \
-  --reps "${REPS:-10}" --gate "${GATE:-48}" --out "$O"
+  --reps "${REPS:-10}" --gate "${GATE:-48}" ${KEYS_ALL:+--keys-all} --out "$O"

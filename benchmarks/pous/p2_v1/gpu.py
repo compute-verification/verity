@@ -1,11 +1,10 @@
-"""P2 v1's GPU backend: `libp2v1.so` (`p2v1.cu`) through ctypes on torch tensors, with every block's `K` and `t` expanded on the
-device by SHAKE256 with the spec's v1 framing (`band_gpu`'s `pous_native.shake256_rows`: one shared prefix, then each block's
-`u64be(segment) ‖ u64be(local block) ‖ purpose`, or the library's own `p2v1_keys` when it is built with one) just before the
-kernel that uses them, and freed after it."""
+"""P2's GPU backend: `libp2v1.so` (`p2v1.cu`) through ctypes on torch tensors, with every block's `K` and `t` expanded on the
+device by the library's `p2v1_keys` with v4's framing (`p2keys4.cuh`: counter-mode SHA-512 over `reference.expand_prefix`'s
+256-byte prefix, which the library compresses once into a midstate; `reference.keys`) just before the kernel that uses
+them, and freed after it. A library must report `p2v1_keys_version() == 4`: v1's SHAKE256 keys are retired."""
 from __future__ import annotations
 
 import ctypes
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -25,18 +24,13 @@ def exponent_split(params: reference.Params) -> tuple[int, int, int]:
 
 
 class Kernels:
-    """The library and the SHAKE256 kernel on the current CUDA device, for one parameter set, salt and model commitment."""
+    """The library on the current CUDA device, for one parameter set, salt and model commitment (`build_dir`, where v1's
+    SHAKE256 extension was built, is no longer read)."""
 
     def __init__(self, lib_dir: str, build_dir: str, params: reference.Params, salt: bytes, model: bytes) -> None:
         import torch
 
-        root = str(Path(__file__).resolve().parents[1])
-        if root not in sys.path:
-            sys.path.insert(0, root)
-        from band_gpu import native
-
         self.torch = torch
-        self.native = native.load(build_dir)
         self.lib = ctypes.CDLL(str(Path(lib_dir) / LIB))
         if self.lib.p2v1_width_bits() != params.w:
             raise RuntimeError(f"{LIB} is built for {self.lib.p2v1_width_bits()} bits, not {params.w}")
@@ -51,35 +45,24 @@ class Kernels:
         if self.fast_keys:
             q = ctypes.c_uint64
             self.lib.p2v1_keys.argtypes = [ctypes.c_char_p, ctypes.c_int, q, u, q, v, v, v]
+        self.keys_version = self.lib.p2v1_keys_version() if hasattr(self.lib, "p2v1_keys_version") else 1
+        if self.keys_version != 4 or not self.fast_keys:
+            raise RuntimeError(f"{LIB} expands keys v{self.keys_version}, not v4: build it with FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA'")
         self.params, self.split = params, exponent_split(params)
         self.device = torch.device("cuda", torch.cuda.current_device())
-        prefix = self.prefix_bytes = reference.expand_prefix(salt, params, model)
-        self.prefix = torch.tensor(list(prefix), dtype=torch.uint8, device=self.device).view(1, -1)
+        self.prefix_bytes = reference.expand_prefix(salt, params, model)
         self.flags = torch.zeros(1, dtype=torch.int32, device=self.device)
 
     def keys(self, first: int, count: int) -> tuple[Any, Any]:
         """`K` and `t` of blocks `first .. first + count − 1`, as `[count, W/8]` big-endian rows (`t`'s first candidate; a
         second is needed with probability `c0 / 2^W`, which the kernels flag)."""
         torch = self.torch
-        if self.fast_keys:
-            k, t = (torch.empty(count, self.params.width_bytes, dtype=torch.uint8, device=self.device) for _ in range(2))
-            rc = self.lib.p2v1_keys(self.prefix_bytes, len(self.prefix_bytes), first, count, self.params.blocks_per_segment,
-                                    k.data_ptr(), t.data_ptr(), self._stream())
-            if rc:
-                raise RuntimeError(f"p2v1_keys: error {rc}")
-            return k, t
-        idx = torch.arange(first, first + count, dtype=torch.int64, device=self.device)
-        s, v = idx // self.params.blocks_per_segment, idx % self.params.blocks_per_segment
-        shifts = torch.arange(56, -1, -8, dtype=torch.int64, device=self.device)
-        sv = torch.cat([(s[:, None] >> shifts) & 0xFF, (v[:, None] >> shifts) & 0xFF], 1).to(torch.uint8)
-        pre = self.prefix.expand(count, -1)
-        out = []
-        for purpose in (b"K", b"t"):
-            body = torch.cat([sv, torch.full((count, 1), purpose[0], dtype=torch.uint8, device=self.device)], 1).contiguous()
-            rows = torch.zeros(count, self.params.width_bytes, dtype=torch.uint8, device=self.device)
-            self.native.shake256_rows(pre, body, rows, True)
-            out.append(rows)
-        return out[0], out[1]
+        k, t = (torch.empty(count, self.params.width_bytes, dtype=torch.uint8, device=self.device) for _ in range(2))
+        rc = self.lib.p2v1_keys(self.prefix_bytes, len(self.prefix_bytes), first, count, self.params.blocks_per_segment,
+                                k.data_ptr(), t.data_ptr(), self._stream())
+        if rc:
+            raise RuntimeError(f"p2v1_keys: error {rc}")
+        return k, t
 
     def _stream(self) -> int:
         return self.torch.cuda.current_stream().cuda_stream

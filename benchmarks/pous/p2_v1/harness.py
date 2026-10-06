@@ -119,22 +119,38 @@ def rows(values: list[int], width: int, device: Any) -> Any:
     return torch.tensor([list(v.to_bytes(width, "big")) for v in values], dtype=torch.uint8, device=device)
 
 
-def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The pinned vector at `params.w`, through the device: keys, encode and decode, bit-exact."""
+KEYS = Path(__file__).resolve().parents[3] / "verity/protocols/accounting/space/pous/tests/fixtures/p2-v4-keys.json"
+"""The pinned v4 keys (`p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
+
+
+def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | None = None,
+                keys: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The pinned vector at `params.w`, through the device: its `K` and `t` against `KEYS`, encode and decode against
+    `vectors.json`, bit-exact, from a library that reports v4's keys."""
     doc = vectors or json.loads(R.VECTORS.read_text())
     v = next((x for x in doc["vectors"] if int(x["w"]) == params.w and int(x["c0"]) == params.c0), None)
     if v is None:
         return {"passed": False, "reason": f"no pinned vector at w = {params.w}, c0 = {params.c0}"}
+    kv = next((x for x in (keys or json.loads(KEYS.read_text()))["vectors"] if x["id"] == v["id"]), None)
+    if kv is None or (kv["setup_salt"], kv["model_commitment"]) != (v["setup_salt"], v["model_commitment"]):
+        return {"passed": False, "reason": f"no pinned keys for {v['id']}"}
     salt, model = bytes.fromhex(v["setup_salt"]), bytes.fromhex(v["model_commitment"])
     bound = backend.bind(params, salt, model)
     first = int(v["segment"]) * params.blocks_per_segment + int(v["block"])
     k, t = bound.keys(first, 1)
     nb = params.width_bytes
     m, c = rows([int(v["m"], 16)], nb, backend.device), rows([int(v["c"], 16)], nb, backend.device)
-    got = {"K": k[0].cpu().numpy().tobytes().hex() == v["K"], "t": t[0].cpu().numpy().tobytes().hex() == v["t"],
+    version = keys_version(bound)
+    got = {"keys_v4": version == 4, "K": k[0].cpu().numpy().tobytes().hex() == kv["K"],
+           "t": t[0].cpu().numpy().tobytes().hex() == kv["t"],
            "encode": bytes(bound.encode(m, first)[0].cpu().numpy()) == bytes.fromhex(v["c"]),
            "decode": bytes(bound.decode(c, first)[0].cpu().numpy()) == bytes.fromhex(v["m"]), "flags": bound.raised() == 0}
-    return {"passed": all(got.values()), "vector": v["id"], **got}
+    return {"passed": all(got.values()), "vector": v["id"], "keys_version": version, **got}
+
+
+def keys_version(bound: Any) -> int:
+    """The key framing a bound library reports expanding: 4 is `reference.keys`; anything else is retired."""
+    return getattr(bound, "keys_version", 1)
 
 
 def picks(encoded: int, blocks: int, extra: int = 8) -> list[int]:
@@ -295,10 +311,12 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     def result(metrics: dict[str, Any], rows_: list[tuple[str, Any, str]], prof: dict[str, Any] | None) -> dict[str, Any]:
         return {"implementation": {"name": "p2-v1-gpu", "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
-                                   "kernels": "p2v1.cu: p2dec.cu's tuned decode with v1 keys expanded by pous_native.shake256_rows; "
+                                   "kernels": "p2v1.cu: p2dec.cu's tuned decode with v4 keys expanded by p2keys4.cuh (counter-mode "
+                                              "SHA-512 from the 256-byte prefix's midstate); "
                                               "encode by an addition-chain root on CGBN's generic squaring"},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
-                "setup": {"manifest": P.manifest(), "w_commitment": model.hex(), "salt": salt.hex()},
+                "setup": {"manifest": P.manifest(), "w_commitment": model.hex(), "salt": salt.hex(),
+                          "keys_version": keys_version(bound)},
                 **({} if a.audits else H.UNTIMED), "gates": gates, "metrics": metrics, "profile": prof,
                 "measurements": [{"name": n, "value": v, "unit": u} for n, v, u in rows_ if v is not None]}
 
