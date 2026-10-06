@@ -70,8 +70,9 @@ def CostModel.Queries {Q R S : Type} (CM : CostModel Q R S) : Prop :=
 
 /-- An output-ticket protocol: the FP32 values of its reference ticket and useful words (`none` for a non-finite word),
 its domain rules on committed activations and on each weight row, and its costs.
-- `weightOK sh w j`: row `j` of the weight `w` of a unit of shape `sh` passes the rules. A tile's check asks it of the
-  tile's columns, on the weight rows it opens (`TileCheck.Accepts`).
+- `weightOK sh w j`: row `j` of the weight `w` of a unit of shape `sh` passes the rules. A correct unit and a good tile
+  have every weight row they read passing (`Correct`, `TileGood`); a tile's check asks it of the tile's columns, on the
+  weight rows it opens (`TileCheck.Accepts`).
 - `credit H s U u act`: what the named assumption credits for unit `u`. The reference computes it from the committed
   activations `act`, the weights and the realized noise `(H, s)`, by the same replay that checks the unit; it never reads
   the transcript's claimed ticket or useful words.
@@ -91,16 +92,22 @@ structure Protocol (Q R S : Type) where
 
 variable {Q R S : Type}
 
-/-- A workload is in the domain `D`: at most `2^64` units, `D` holds of its layout, and every row of its weights passes
-the rules. -/
-def Workload.InDomain (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) : Prop :=
-  U.layout.N ≤ 2 ^ 64 ∧ D U.layout ∧
-    ∀ u < U.layout.N, ∀ j < (U.layout.shape u).n, P.weightOK (U.layout.shape u) (U.weight (U.layout.wid u)) j
+/-- A workload is in the domain `D`: at most `2^64` units, and `D` holds of its layout. Its weights may fail the rules:
+a unit or tile that reads a failing weight row is neither correct nor good, so it earns nothing. -/
+def Workload.InDomain (_P : Protocol Q R S) (D : Layout → Prop) (U : Workload) : Prop :=
+  U.layout.N ≤ 2 ^ 64 ∧ D U.layout
 
-/-- A correct unit: admissible activations, its replayed debit within the cap, and every ticket and useful word on its
-`m × n` entries has the reference FP32 value (bit for bit up to the sign of zero). -/
+/-- Every row of the workload's weights passes the rules: the honest workload's admission, which completeness and
+`AdmitsRef` take beside admissible activations. -/
+def Workload.WeightsOK (P : Protocol Q R S) (U : Workload) : Prop :=
+  ∀ u < U.layout.N, ∀ j < (U.layout.shape u).n, P.weightOK (U.layout.shape u) (U.weight (U.layout.wid u)) j
+
+/-- A correct unit: admissible activations, its replayed debit within the cap, every row of its weight passing the
+rules, and every ticket and useful word on its `m × n` entries has the reference FP32 value (bit for bit up to the sign
+of zero). -/
 def Correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ) (c : Commit) : Prop :=
   P.actOK (U.layout.shape u) c.act ∧ P.capOK H s U u c.act ∧
+    (∀ j < (U.layout.shape u).n, P.weightOK (U.layout.shape u) (U.weight (U.layout.wid u)) j) ∧
     ∀ i < (U.layout.shape u).m, ∀ j < (U.layout.shape u).n,
       wordQ (c.ticket i j) = P.ticket H s U u c.act i j ∧ wordQ (c.useful i j) = P.useful H s U u c.act i j
 
@@ -127,9 +134,10 @@ noncomputable def honestTranscript (P : Protocol Q R S) (H : Q → R) (s : S) (U
   else none
 
 /-- The cost model runs the honest reference: one program outputs the honest transcript on every in-domain workload
-and admissible activations, with no preprocessing, at cost at most `∑_u W_ref(u)` and at most `qref U` calls. -/
+whose weights pass the rules and admissible activations, with no preprocessing, at cost at most `∑_u W_ref(u)` and at
+most `qref U` calls. -/
 def AdmitsRef (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) : Prop :=
-  ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → ∀ act : ℕ → Codes,
+  ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes,
     (∀ u < U.layout.N, P.actOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
       CM.run prog H U act [] s = honestTranscript P H s U act ∧
       CM.cost prog H U act [] s ≤ ∑ u ∈ range U.layout.N, P.Wref U.layout u ∧
