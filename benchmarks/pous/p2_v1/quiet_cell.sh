@@ -3,6 +3,7 @@
 # 124-127, GPU 7) under a timed GPU-7 lease, which serializes it with every other timed run there. It waits on the node until a
 # BUDGET_MIN lease from now clears every held window AVOID (START/END, UTC), takes the lease, and runs `sweep.py cell` with the
 # same guard; a cell whose lease came too late refuses (75) and the loop waits again, until a lease would end past UNTIL (UTC).
+# QUIET_WRAP (e.g. `numactl --localalloc`) prefixes the cell inside the slice, so every process and thread of it inherits it.
 set -u
 budget=$1 until=$2 avoid=$3
 shift 3
@@ -15,7 +16,7 @@ while :; do
   # node_ops' Quiet stops this user's busy process groups outside the lease's process tree while a timed lease is held, and
   # vy-pous-quiet's sudo (root's) cuts that tree; a group under GNU timeout is exempt, so the cell runs as one.
   gpu-lease 1 --on 7 --wait --max-min "$budget" --timed -- \
-    vy-pous-quiet timeout -k 20 $((budget * 60 - 30)) python3 "$here/sweep.py" cell "$@" --quiet-slice "${windows[@]}" \
+    vy-pous-quiet ${QUIET_WRAP:-} timeout -k 20 $((budget * 60 - 30)) python3 "$here/sweep.py" cell "$@" --quiet-slice "${windows[@]}" \
     --budget-min "$budget"
   rc=$?
   [ "$rc" = 75 ] || exit "$rc"
