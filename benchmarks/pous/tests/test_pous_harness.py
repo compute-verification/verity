@@ -451,6 +451,21 @@ def test_the_native_build_is_keyed_by_the_nvcc_release_that_compiles_it(tmp_path
     assert at("12.8") == at("12.8") != at("13.0")                       # another toolkit's .so is never adopted
 
 
+def test_every_checkout_of_the_same_native_source_compiles_one_copy_left_untouched(tmp_path, monkeypatch):
+    sys.path.insert(0, str(BENCH))
+    from band_gpu import native
+
+    copy = native._stable_copy(str(tmp_path))
+    assert open(copy, "rb").read() == open(native.SOURCE, "rb").read()
+    os.utime(copy, ns=(1, 1))
+    assert native._stable_copy(str(tmp_path)) == copy and os.stat(copy).st_mtime_ns == 1   # ninja sees nothing to rebuild
+    other = tmp_path / "checkout" / "pous_native.cu"
+    other.parent.mkdir()
+    other.write_bytes(b"// another source\n")
+    monkeypatch.setattr(native, "SOURCE", str(other))
+    assert native._stable_copy(str(tmp_path)) == copy and open(copy, "rb").read() == b"// another source\n"
+
+
 def test_the_recompute_gate_fails_a_run_whose_challenges_missed_every_dropped_block():
     harness = _harness()
     assert harness.recompute_gate({"wrong": 0, "answers": 20, "recomputed_answers": 3})["passed"]
