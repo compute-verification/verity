@@ -1,7 +1,6 @@
 import Specs.Pouw.Guarantees.Game
 import Proofs.Pouw.Sampling
 import Proofs.Pouw.Theorem1
-import Proofs.Pouw.Reduction
 
 /-!
 # Proofs of the game's guarantees
@@ -17,5 +16,3 @@ theorem WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling := Pouw.Proo
 theorem EndToEnd : Pouw.Guarantees.EndToEnd := Pouw.Proofs.endToEnd
 
 end Pouw.SecurityProofs
-
-theorem Pouw.SecurityProofs.GammaFromTT : Pouw.Guarantees.GammaFromTT := @Pouw.Proofs.gammaFromTT
