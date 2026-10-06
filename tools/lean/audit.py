@@ -46,8 +46,8 @@ environment extension loaded, so none of the package's code runs), and replays t
                  module outside `meaning`, which the record therefore does not hold
     proved_in    (a spec package whose guarantees another package proves) a package `proved_in` names does not require this
                  one by path, holds guarantees in its own policy, shares a module root with a package it requires, or
-                 imports modules of its own outside its roots; or a guarantee is proved by none of this package and those, or
-                 by two
+                 imports modules of its own outside its roots, or modules of this one that this one's roots don't import (no
+                 replay checks them); or a guarantee is proved by none of this package and those, or by two
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside, one declaration per task on Lean's threads
                  (`LEAN_NUM_THREADS`, by default the CPUs the audit may use): a declaration that skipped the kernel shows
@@ -912,6 +912,12 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         if unaudited := sorted(loaded - set(qf["modules"])):
             fails.append(f"proved_in: {entry}'s roots ({', '.join(qpol['roots'])}) import its {', '.join(unaudited)}, which are "
                          f"not under them, so its replay does not check them")
+        own = (pkg / ".lake" / "build" / "lib" / "lean").resolve()
+        if stray := sorted({".".join(Path(o).resolve().relative_to(own).with_suffix("").parts) for o in qf["oleans"]
+                            if Path(o).resolve().is_relative_to(own)} - set(facts["modules"])):
+            fails.append(f"proved_in: {entry}'s roots import this package's {', '.join(stray)}, which this package's roots "
+                         f"do not, so neither package's replay checks them; import them from this package's roots, or move "
+                         f"them into {entry}")
         listed = qpol.get("compile_time", {})
         for n, p in qf["pins"].items():
             if p.get("kind", "missing") != "missing" and p.get("module") in files and (

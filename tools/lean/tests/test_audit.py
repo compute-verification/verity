@@ -980,7 +980,8 @@ def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was
     stated as a `Guarantees` definition, one inline with a named assumption) are proved first in the spec's own package, then
     in a package of their own that requires it, its modules under a root of their own and the declarations under their old
     names. The spec's `--update` writes the same guarantees and reads both times, and its audit passes beside the proofs'.
-    Then a proof module the proofs' roots import but do not cover (exempt) fails the spec's audit: its replay skips it."""
+    Then a proof module the proofs' roots import but do not cover (exempt) fails the spec's audit: its replay skips it. So
+    does a spec module that only the proofs import, which neither replay covers."""
     one, spec, proofs, out = tmp_path / "one", tmp_path / "spec", tmp_path / "proofs", tmp_path / "out"
     _package(one, CORE | {"Core/SecurityProofs.lean": PROOFS, "Core.lean": "".join(
         f"import Core.{m}\n" for m in ("Protocol", "Assumptions", "Guarantees", "SecurityProofs"))},
@@ -1024,6 +1025,13 @@ def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was
     assert any(f.startswith("reads: Core.SecurityProofs.inline read Core.SecurityProofs.twice in CoreProofs, outside the spec")
                for f in A.audit(spec, out, replay=False, runs=False, log=lambda *_: None)["failures"]), \
         "a statement reading a proof package's definition fails: that package requires the spec, so it is no spec of it"
+    (spec / "Core" / "Stray.lean").write_text("def Core.stray : Nat := 0\n")
+    (proofs / "CoreProofs.lean").write_text("import Core.Stray\n" + PROOFS)
+    build(proofs)
+    assert "proved_in: ../proofs's roots import this package's Core.Stray, which this package's roots do not, so neither " \
+           "package's replay checks them; import them from this package's roots, or move them into ../proofs" in \
+           A.audit(spec, out, replay=False, runs=False, log=lambda *_: None)["failures"], \
+        "#1261's shape: a spec module only the proofs import is replayed by neither package"
 
 
 def _runs(tmp_path, monkeypatch, entry, exit=0):
