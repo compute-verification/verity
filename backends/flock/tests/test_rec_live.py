@@ -1,6 +1,6 @@
 """The inner session's proxy and coin server (`verity_flock.rec_live`): the wire codec, how a round's frames are sorted into
 caps and the private free message, the message rows' commitments and the salted tops, that the coin server is shown nothing
-of the hidden statement while the proxy's session record keeps what the live server's would, and the gateway's refusals (a
+of the hidden statement while the proxy's session record keeps what the live server's would, and the firewall's refusals (a
 session off its pinned schedule, a nonzero ``y``)."""
 from __future__ import annotations
 
@@ -219,7 +219,7 @@ def test_a_session_off_its_pinned_schedule_is_refused_before_the_coin_server_see
         edit(s)
         proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=s)
         why = next(r[1] for r in _session(proxy) if r[0] == RL.RESP_REFUSED)
-        assert why.startswith(f"rec proxy: GATE-REFUSED: {what}: "), (what, why)
+        assert why.startswith(f"rec proxy: FIREWALL-REFUSED: {what}: "), (what, why)
     s = json.loads(json.dumps(SCHEDULE))
     s["rounds"][1]["n"] = 2
     proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=s)
@@ -233,7 +233,7 @@ def test_a_link_whose_y_is_not_zero_is_refused():
     assert RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_COMMIT, b"rf", [("circuit", CAP0)], [])))[0] == RL.RESP_COINS
     y = bytearray(32)
     y[17] = 1
-    assert _refusal(RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_LINK, bytes(y))))) == "rec proxy: GATE-REFUSED: Link's y is not zero"
+    assert _refusal(RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_LINK, bytes(y))))) == "rec proxy: FIREWALL-REFUSED: Link's y is not zero"
     assert proxy.coins.link["y"] is None
 
 
@@ -267,7 +267,7 @@ def test_serve_writes_each_of_several_sessions_to_its_own_directory(tmp_path):
     assert [v[0] for v in verdicts] == [RL.RESP_VERDICT] * 3 and json.loads(verdicts[1][1])["accepted"] is False
     res = got["res"]
     assert [r["session"] for r in res] == [str(tmp_path / "s0" / "session"), None, str(tmp_path / "s2" / "session")]
-    assert res[1]["refused"].startswith("rec proxy: GATE-REFUSED: round 1: ") and res[1]["rounds"] == 1
+    assert res[1]["refused"].startswith("rec proxy: FIREWALL-REFUSED: round 1: ") and res[1]["rounds"] == 1
     assert json.loads((tmp_path / "schedule.json").read_text()) == SCHEDULE
     assert RL.schedule_of(json.loads((tmp_path / "s0" / "public.json").read_text())) == SCHEDULE
     for k in (0, 2):
