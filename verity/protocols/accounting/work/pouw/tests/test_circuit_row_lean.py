@@ -1,7 +1,7 @@
 """The Lean row circuits are `pc8`'s and `pc4`'s row templates: the same computing gates in the same order, each with its
 primitive, width and operands in order (an earlier gate, read plain or through core's wiring, or a constant), with the
 template's parameter leaves as its input gates. `lean_rows` restates `RowCircuit.row8A`, `row8B`
-(`lean/Pouw/Protocol/PearlC/RowCircuit.lean`), `row4A` and `row4B` (`Row4Circuit.lean`) run by run; the Lean proofs are
+(`verity/Security/Definitions/Pouw/PearlC/RowCircuit.lean`), `row4A` and `row4B` (`Row4Circuit.lean`) run by run; the Lean proofs are
 about those tables, so this test and the pinned descriptor digests are what tie them to the Programs. Unlike the tile's
 check (`test_circuit_tile_lean.py`) this one reads each gate's operand order and constants from the template's own gates,
 since `CallGraph` keeps neither. Each primitive's semantics is the trusted step: core's are `RowOps`' fields, PoUW's are
