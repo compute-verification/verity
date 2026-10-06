@@ -10,7 +10,7 @@
    including bundles unpacked there before the first run.
 4. Per package, `vy-lean-sandbox run` builds it as `lean-build` with `cache.py build`. The build writes only the tree's
    `.lake` directories and the package's directory in `/build/out` (`cache.out_dir`), the one below `/build/out` root
-   doesn't own.
+   doesn't own. A build that fails has the end of Lake's output logged.
 5. `vy-lean-sandbox clean` must find the tree still the commit's, with no build left running. Only then does root read the
    key, with `cache.py publish` of what built, then `cache.py prune`.
 
@@ -85,6 +85,27 @@ def owned_dirs(top: Path, leaf: Path) -> None:
         st = os.lstat(d)
         if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o022:
             raise SystemExit(f"run-daily: {d} is not a directory only {pwd.getpwuid(os.geteuid()).pw_name} writes")
+
+
+def log_tail(d: Path, name: str, limit: int = 4096) -> str:
+    """The last ``limit`` bytes of ``d/name``, a file the build's user wrote: read without following a link, and only from
+    a regular file with one link, so the build can't point it at the key; "" otherwise."""
+    try:
+        fd = os.open(d, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            f = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+        finally:
+            os.close(fd)
+    except OSError:
+        return ""
+    try:
+        st = os.fstat(f)
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+            return ""
+        os.lseek(f, max(0, st.st_size - limit), os.SEEK_SET)
+        return os.read(f, limit).decode(errors="replace")
+    finally:
+        os.close(f)
 
 
 def deps_key(pkg: Path) -> str:
@@ -189,7 +210,8 @@ def _daily(n: Node, log) -> int:
         if rc == 0:
             built.append(pkg)
         else:
-            log(f"run-daily: {pkg} didn't build (exit {rc}); it isn't published")
+            log(f"run-daily: {pkg} didn't build (exit {rc}); it isn't published. The end of {o / CACHE.BUILD_LOG}:\n"
+                + log_tail(o, CACHE.BUILD_LOG))
     if _run([*n.sandbox, "clean", "--tree", n.tree, "--sha", sha], log) != 0:
         log("run-daily: the tree isn't clean after the builds; nothing published")
         return 1

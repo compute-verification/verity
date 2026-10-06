@@ -585,6 +585,9 @@ FAKE_BIN = {
     "lean": 'print("Lean (version 4.34.0, x86_64-unknown-linux-gnu, commit 0, Release)")',
     "lake": """import os, pathlib, sys
 a, cache = sys.argv[1:], pathlib.Path(os.environ["LAKE_CACHE_DIR"])
+if a[0] == "build" and os.path.exists("FAIL"):
+    print("error: Definitions/Broken.lean:1:0: unknown identifier")
+    sys.exit(1)
 if a[0] == "build":
     pathlib.Path(a[a.index("-o") + 1]).write_text('"2026-03-17"\\n["aa","bb.ltar"]\\n')
     cache.mkdir(parents=True)
@@ -698,6 +701,29 @@ def test_the_daily_run_builds_and_publishes_a_package_inside_another(s3, tmp_pat
     for pkg in ("pkg", "pkg/sub"):
         assert C.record_key(C.identity(n.tree, pkg, PLAT), sha) in b.objects
     assert "2 of 2 packages built; publish exited 0, prune 0" in lines[-1]
+
+
+def test_a_build_that_fails_has_the_end_of_lakes_output_logged(s3, tmp_path):
+    b, url = s3
+    n, _, _ = node(tmp_path, url, extra={**SUB, "pkg/sub/FAIL": ""})
+    lines = []
+    assert D.daily(n, lines.append) == 1
+    failed = next(ln for ln in lines if "pkg/sub didn't build" in ln)
+    assert "error: Definitions/Broken.lean:1:0: unknown identifier" in failed
+    assert "1 of 2 packages built" in lines[-1]
+
+
+def test_the_log_tail_follows_no_link(tmp_path):
+    (tmp_path / "key").write_text("SECRET")
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "build.log").symlink_to(tmp_path / "key")
+    assert D.log_tail(tmp_path / "out", "build.log") == ""
+    (tmp_path / "out" / "build.log").unlink()
+    os.link(tmp_path / "key", tmp_path / "out" / "build.log")
+    assert D.log_tail(tmp_path / "out", "build.log") == ""
+    (tmp_path / "out" / "build.log").unlink()
+    (tmp_path / "out" / "build.log").write_text("x" * 5000 + "the end")
+    assert D.log_tail(tmp_path / "out", "build.log", 7) == "the end"
 
 
 def test_the_daily_run_refuses_dependencies_under_a_directory_another_user_could_write(tmp_path):

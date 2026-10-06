@@ -60,6 +60,8 @@ TOP = "main/"
 BLOBS = TOP + "blobs/"
 RECORD = ".sha256.json"
 MAPPING = "outputs.jsonl"
+#: Lake's output of `build`, beside its stage
+BUILD_LOG = "build.log"
 TOOL = "tools/lean/"
 STATE_URL = "https://website-docs-sage.vercel.app/api/lean-cache/state"
 STATE_TTL_S = 300
@@ -471,15 +473,22 @@ def out_dir(out: Path, pkg: str) -> Path:
 
 def build(pkg: Path, out: Path, lake: list[str] | None = None) -> int:
     """Inside the build's sandbox: `lake build` ``pkg`` with Lake's cache writable under ``out``, then `lake cache stage`
-    the root package's outputs into ``out/stage``. Lake's cache is deleted after: it holds copies of every dependency's
-    artifacts too (1.5 GB for core's package against Mathlib's 2 MB stage)."""
+    the root package's outputs into ``out/stage``. Lake's output goes to this process's and to ``out/build.log``. Lake's
+    cache is deleted after: it holds copies of every dependency's artifacts too (1.5 GB for core's package against
+    Mathlib's 2 MB stage)."""
     out.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache"), "LEAN_CACHE": "off"}
     lake = lake or ["lake"]
     try:
-        r = subprocess.run([*lake, "build", "-o", str(out / MAPPING)], cwd=pkg, env=env)
-        if r.returncode != 0:
-            return r.returncode
+        with open(out / BUILD_LOG, "wb") as f:
+            p = subprocess.Popen([*lake, "build", "-o", str(out / MAPPING)], cwd=pkg, env=env, stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT)
+            for line in p.stdout:
+                sys.stdout.buffer.write(line)
+                sys.stdout.flush()
+                f.write(line)
+        if p.wait() != 0:
+            return p.returncode
         shutil.rmtree(out / "stage", ignore_errors=True)
         return subprocess.run([*lake, "cache", "stage", str(out / MAPPING), str(out / "stage")], cwd=pkg, env=env).returncode
     finally:
