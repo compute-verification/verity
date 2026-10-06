@@ -1,14 +1,14 @@
 """The firewall's agreement check: the inner phase's firewall (`verity_flock.rec_live.Proxy`) and its contract
 (`flock-firewall check`, `Flock/Firewall/Contract.lean`) on the same sessions.
 
-    python firewall_agree.py --lean BIN --out DIR [--cases] [--sessions DIR...]
+    python firewall_agree.py --lean BIN --out DIR [--cases] [--sessions DIR... [--schedule FILE]]
 
 Each session runs through the firewall with `verity_flock.firewall_transcript` watching what it sends the coin server; the
 firewall's decision is whether the session ended with Finish, the contract's is `Flock.Firewall.run` on the transcript.
 `--cases` runs the built-in sessions (`cases`): honest ones, the red team's six on #1270 (review-zk-gateway, c00b85b0c), and
 tamper controls, firewalls that let out what the contract forbids, which the contract must refuse. `--sessions` replays
 recorded inner sessions (`rec_live serve`'s output directories: ``session/session.json``, ``public.json``, ``private.json``,
-and ``schedule.json`` beside them or in their parent) with their own coins and salts, checks the replay gives the recorded
+and ``schedule.json`` beside them or in their parent, or ``--schedule``) with their own coins and salts, checks the replay gives the recorded
 coin server record byte for byte, and expects both to accept. Each case carries its expectation (``firewall``, ``lean``,
 and a prefix of the contract's reason); one where the two may differ says why (``divergence``). Writes DIR/<case>.json,
 DIR/agreement.tsv and DIR/result.json; exits 1 if any case misses its expectation.
@@ -201,14 +201,15 @@ def run_case(name, reqs, proxy, fresh, schedule=SCHEDULE, rand=None):
     return s
 
 
-def replay(d: Path) -> tuple[FT.Session, str | None]:
+def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | None]:
     """A recorded inner session through today's firewall again, with its own coins and salts and its requests in the prover's
     order; and why the replay differs from the record, if it does."""
     rec = json.loads((d / "session" / "session.json").read_text())
     pub = json.loads((d / "public.json").read_text())
     priv = json.loads((d / "private.json").read_text())
-    sched_path = next((p for p in (d / "schedule.json", d.parent / "schedule.json") if p.exists()), None)
-    schedule = json.loads(sched_path.read_text()) if sched_path else RL.schedule_of(pub)
+    if schedule is None:
+        sched_path = next((p for p in (d / "schedule.json", d.parent / "schedule.json") if p.exists()), None)
+        schedule = json.loads(sched_path.read_text()) if sched_path else RL.schedule_of(pub)
     coins = b"".join(RL.f128_bytes(int(h, 16)) for h in pub["link"]["points"] + [c for r in pub["rounds"] for c in r["coins"]])
     at = {"i": 0}
 
@@ -251,6 +252,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--cases", action="store_true")
     ap.add_argument("--sessions", nargs="*", default=[])
+    ap.add_argument("--schedule", type=Path, help="the schedule every --sessions session is held to (default: its schedule.json)")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     todo: list[tuple[str, FT.Session, dict, str | None]] = []
@@ -258,7 +260,7 @@ def main(argv=None) -> int:
         for name, reqs, proxy, fresh, expect in cases():
             todo.append((name, run_case(name, reqs, proxy, fresh), expect, None))
     for d in map(Path, a.sessions):
-        s, bad = replay(d)
+        s, bad = replay(d, json.loads(a.schedule.read_text()) if a.schedule else None)
         todo.append((f"session-{d.name}", s, {"firewall": True, "lean": True, "why": None}, bad))
     files = []
     for name, s, expect, _ in todo:
