@@ -48,9 +48,9 @@ from verity.primitives.circuits.types import Array
 
 from verity.primitives.circuits.boolean import trace as TR
 
-__all__ = ["F", "Gf128Mul", "Gf256Mul", "GfResiduals", "GfScale", "K", "MASK", "XINV", "clmul", "from_bytes", "hex128", "inv",
-           "karatsuba", "kmul", "kmul_forms", "mul", "mul_forms", "of_hex", "phi8", "reduce", "reduce_forms", "residuals",
-           "smul", "to_bytes"]
+__all__ = ["F", "Gf128Mul", "Gf256Mul", "GfResiduals", "GfScale", "K", "MASK", "XINV", "check_structure", "clmul", "from_bytes",
+           "hex128", "inv", "karatsuba", "kmul", "kmul_forms", "mul", "mul_forms", "of_hex", "phi8", "reduce", "reduce_forms",
+           "residuals", "smul", "to_bytes"]
 
 BIT = BL.BIT
 #: one F element: 128 bits, bit i the coefficient of x^i
@@ -244,8 +244,38 @@ def _term_value(t: Sequence, w: Sequence[int], v: Sequence[int]) -> int:
     raise ValueError(f"unknown term {t!r}")
 
 
+def check_structure(S: dict) -> None:
+    """Refuse an S out of range: every ``w``/``v`` term's element inside its port, a ``wt`` term's 128 elements inside w and
+    its bit ``u < 128``, every product's operands among ``ops``. Past a port's end a slice comes up short and `zip`
+    truncates, so the Python builders and Lean's `residualForms` agree only on an in-range S."""
+    def nat(x) -> bool:
+        return isinstance(x, int) and not isinstance(x, bool) and x >= 0
+
+    if not (nat(S["nw"]) and nat(S["nv"])):
+        raise ValueError(f"GfResiduals' S: port lengths {S['nw']!r} and {S['nv']!r}")
+    size = {"w": S["nw"], "v": S["nv"]}
+
+    def term(t) -> None:
+        if len(t) == 2 and t[0] in size and nat(t[1]) and t[1] < size[t[0]]:
+            return
+        if len(t) == 3 and t[0] == "wt" and nat(t[1]) and nat(t[2]) and t[1] + 128 <= S["nw"] and t[2] < 128:
+            return
+        raise ValueError(f"GfResiduals' S: term {list(t)!r} is out of range for ports of {S['nw']} and {S['nv']} elements")
+
+    for o in S["ops"]:
+        for t in o:
+            term(t)
+    for r in S["res"]:
+        for t in r["add"]:
+            term(t)
+        for pair in r["mul"]:
+            if len(pair) != 2 or not all(nat(k) and k < len(S["ops"]) for k in pair):
+                raise ValueError(f"GfResiduals' S: product {list(pair)!r} of {len(S['ops'])} operands")
+
+
 def residuals(S: dict, w: Sequence[int], v: Sequence[int]) -> list[int]:
     """`GfResiduals{S}` on F elements: each residual's products and added terms, summed."""
+    check_structure(S)
     if len(w) != S["nw"] or len(v) != S["nv"]:
         raise ValueError(f"ports of {len(w)} and {len(v)} elements, S wants {S['nw']} and {S['nv']}")
     ops: list[int | None] = [None] * len(S["ops"])
@@ -301,6 +331,7 @@ def _xor_sums(B, groups: list[list[list[tuple]]]) -> list[list[tuple] | None]:
 
 def _res_sig(S):
     s = S.S
+    check_structure(s)
     return (("w", Array(s["nw"], F)), ("v", Array(s["nv"], F))), Array(len(s["res"]), F)
 
 
