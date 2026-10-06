@@ -153,7 +153,7 @@ regression's manifest rebuilds, which label the landing's check attempt.
 label alone lands nothing; ask the train runner on Slack as well until the queue lands a full train.
 
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
-fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (draft state is ignored),
+fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
 ready PR`, a `ready` label on `pr:{n}@{head}`, by hand for a train member), and has the grants the rules file
 (`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}`, or on an older head it only
