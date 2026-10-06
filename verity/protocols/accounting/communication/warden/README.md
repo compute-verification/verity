@@ -12,7 +12,11 @@ A spec-level reference for network transparency's timing channel:
 
 It is pure Python. It imports only the standard library and `verity`, for the record digest's `tagged_sha256` and
 `canonical_json_bytes`.
-`PROTOCOL.md` has the semantics and the correspondence to the Lean package.
+`PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`verity/Security/`, area `Warden`).
+`lean/` is the warden program, the Lake package `warden_program` (Lean core only): List forms of the analysis's
+definitions, proved equal to them in `verity/Security/Proofs/Warden/Code.lean`, and the difftest that holds this
+package to them (`lake exe warden-difftest INSTANCES PYTHON N` on what `lean/scripts/difftest_vectors.py` writes; the audit runs it
+from `lean/lean-audit.json`).
 
 ~~~python
 from verity.protocols.accounting.communication.warden.audit import Audit

@@ -188,7 +188,8 @@ first in a quiet window, alone in its train (Daniel, 4 Oct).
   needs no verifier or proof change (ruling 2026-10-04, `.agents/skills/friction/SKILL.md`).
 - Lean is code or security analysis (Daniel's layout ruling, 5 Oct). Code stays with its component and never requires
   `verity/Security/`: C-Flock's executable verifier (`backends/flock/verifier/lean/`, `Flock` and `FlockVerify`, no
-  dependencies) and the PoUS grader (`verity/protocols/accounting/space/pous/lean/`, Lean only). The analysis is
+  dependencies), the PoUS grader (`verity/protocols/accounting/space/pous/lean/`, Lean only) and the warden program
+  (`verity/protocols/accounting/communication/warden/lean/`, `Warden`, Lean only, with its difftest). The analysis is
   `verity/Security/`, in three trees: `Definitions/` (each component's vocabulary) and `Specs/` (its named assumptions and
   guarantee statements), the package `security` (Mathlib, no ArkLib), and `Proofs/`, the nested package `security_proofs`
   (`srcDir = ".."`, root `Proofs`, ArkLib allowed), which requires `security` and holds every proof, C-Flock's level3 and
