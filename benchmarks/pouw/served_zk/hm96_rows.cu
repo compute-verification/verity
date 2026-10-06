@@ -20,7 +20,7 @@ struct Args { unsigned long long p[16]; int i[16]; };
 #define SLOT 256   // bytes a leaf or node message head takes in its buffer; its length is the slot's first u32
 
 // SHA-512 of head || a || [u64be 64 || b] (b optional): a frame leaf (head || value) or node (head || left || len || right)
-__device__ void sz_frame(const uint8_t* head_slot, const uint8_t* a, const uint8_t* b, uint8_t* out) {
+__device__ __noinline__ void sz_frame(const uint8_t* head_slot, const uint8_t* a, const uint8_t* b, uint8_t* out) {
     uint8_t m[512];
     int hl = *(const uint32_t*)head_slot, n = 0;
     for (int t = 0; t < hl; t++) m[n++] = head_slot[4 + t];
@@ -109,7 +109,7 @@ extern "C" __global__ void sz_segments(Args a) {
     s512_out(st, out + g * 64);
 }
 
-__device__ void sz_tree(uint8_t* tree, const uint8_t* node_heads, int width) {
+__device__ __noinline__ void sz_tree(uint8_t* tree, const uint8_t* node_heads, int width) {
     int off = 0, lvl_nodes = 0;
     for (int w = width; w > 1; w >>= 1) {
         __syncthreads();
@@ -223,7 +223,7 @@ __device__ void sz_row(const Args& a, long long i) {
     }
 }
 
-extern "C" __global__ void sz_finish(Args a) {
+extern "C" __global__ void __launch_bounds__(256) sz_finish(Args a) {
     for (long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x; i < a.i[0]; i += (long long)gridDim.x * blockDim.x)
         sz_row(a, i);
     if (a.i[3] == 2 && gridDim.x == 1) sz_tree((uint8_t*)a.p[9], (const uint8_t*)a.p[6], a.i[6]);

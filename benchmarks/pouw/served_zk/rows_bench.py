@@ -160,7 +160,7 @@ class Commit:
 
     def finish(self, mode: int, one_cta: bool = True) -> None:
         c = self.c
-        block = min(512, 32 * (-(-self.rows // 32))) if one_cta else 128
+        block = min(256, 32 * (-(-self.rows // 32))) if one_cta else 128
         grid = 1 if one_cta else -(-self.rows // block)
         self.h.launch("sz_finish", grid, block, p=(self.digests if self.s else self.data, self.q_mid, c["tables"], c["salt_key"],
                                                     c["hm_mid"], self.leaf_heads, self.node_heads, self.x, self.bc, self.tree),
@@ -282,6 +282,7 @@ def main() -> int:
         gate(cm_p, 2, "p.hm96", g)
         gate(cm_t, 2, "t.hm96", g)
         gates[shape] = g
+        print(f"gates {shape}: {g}", flush=True)
         ok = ok and all(g.values())
         for f in ("s", "w"):
             for nm in (*HASH_A, "seed_a", *HASH_T):
