@@ -4,7 +4,7 @@
 The contract derives what the schedule fixes, and checks every commitment, pad and coin itself. What the firewall fixes by
 its own computation it only reports: its level-0 recheck commitment (`By.recheck`), its opening of that commitment
 (`By.shadow`), and the values it computes from its pads and the values that passed, `final_c'` and the inner proof
-(`By.own`). Today's Rust computes them (`gate.rs`: the recheck's `commit_zk`, `ShadowLink`, `zkv::replay`, `prove_inner`),
+(`By.own`). Today's Rust computes them (`firewall.rs`: the recheck's `commit_zk`, `ShadowLink`, `zkv::replay`, `prove_inner`),
 and the contract checks only that what leaves is what the transcript reports. `FirewallComputes spec t` names that
 assumption: each such value is `spec`'s for its name. It bears on zero knowledge only: the verifier checks every outer
 proof whatever the firewall computed, so no soundness statement reads it.
