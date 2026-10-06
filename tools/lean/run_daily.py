@@ -56,6 +56,8 @@ class Node:
     out: Path = Path("/build/out")
     prep: Path = Path("/workspace/research/lean-cache/prep")
     deps: Path = Path("/workspace/lean-build/deps")
+    #: root replaces entries under DEPS, so every directory from here down to DEPS must be one only root writes
+    trusted: Path = Path("/")
     lock: Path = Path("/run/vy-lean-cache-daily.lock")
     sandbox: list[str] = field(default_factory=lambda: ["/usr/local/bin/vy-lean-sandbox"])
     research: list[str] = field(default_factory=as_research)
@@ -119,7 +121,7 @@ def prepare(n: Node, sha: str, pkgs: list[str], log) -> dict[str, Path]:
     if _run([*n.research, "git", "-C", n.prep, "-c", "advice.detachedHead=false", "checkout", "-q", "-f", "--detach", sha],
             log) != 0:
         return {}
-    owned_dirs(n.deps, n.deps / "x")
+    owned_dirs(n.trusted, n.deps / "x")
     deps = {}
     for pkg in pkgs:
         src = n.prep / pkg / ".lake" / "packages"

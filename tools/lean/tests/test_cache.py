@@ -625,7 +625,7 @@ def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0) -> tuple["D.No
     key.write_text(f"AWS_ACCESS_KEY_ID={WRITE[0]}\nAWS_SECRET_ACCESS_KEY={WRITE[1]}\nR2_ENDPOINT={url}\n"
                    f"R2_BUCKET=verity-lean-cache\n")
     n = D.Node(bare=tmp / "bare.git", tree=tmp / "build" / "verity", out=tmp / "build" / "out", prep=tmp / "prep",
-               deps=tmp / "var" / "deps", lock=tmp / "lock", sandbox=[sys.executable, str(box)],
+               deps=tmp / "var" / "deps", trusted=tmp, lock=tmp / "lock", sandbox=[sys.executable, str(box)],
                research=["env", f"PATH={path}"], builder=D.pwd.getpwuid(os.getuid()).pw_name, key_file=str(key),
                python=sys.executable)
     return n, tmp / "sandbox.log", subprocess.run(["git", "-C", str(src), "rev-parse", "HEAD"], capture_output=True,
@@ -635,7 +635,7 @@ def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0) -> tuple["D.No
 def test_the_daily_run_builds_in_the_sandbox_and_publishes_only_after_clean(s3, tmp_path):
     b, url = s3
     n, log, sha = node(tmp_path, url)
-    n.deps.mkdir(mode=0o755, parents=True)                  # not by the umask: `owned_dirs` refuses a group-writable one
+    D.owned_dirs(n.trusted, n.deps / "x")                   # not by the umask: `owned_dirs` refuses a group-writable one
     (n.deps / "stale-key").mkdir()
     lines = []
     assert D.daily(n, lines.append) == 0, "\n".join(lines)
@@ -678,6 +678,15 @@ def test_the_daily_run_refuses_an_out_directory_another_user_could_replace(tmp_p
     (out / "a").chmod(0o777)
     with pytest.raises(SystemExit, match="is not a directory only"):
         D.owned_dirs(out, leaf)
+
+
+def test_the_daily_run_refuses_dependencies_under_a_directory_another_user_could_write(tmp_path):
+    n, _, _ = node(tmp_path, "http://127.0.0.1:9")
+    (tmp_path / "var").mkdir(mode=0o755)
+    (tmp_path / "var").chmod(0o775)
+    with pytest.raises(SystemExit, match=f"{tmp_path / 'var'} is not a directory only"):
+        D.daily(n, [].append)
+    assert not n.deps.exists()
 
 
 @pytest.mark.parametrize("run_rc, clean_rc, rc, why", [(3, 0, 3, "the sandbox exited 3"), (2, 0, 2, "the sandbox exited 2"),
