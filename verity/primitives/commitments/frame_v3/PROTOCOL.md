@@ -255,7 +255,7 @@ and `test_rowleaf_bits.py` check them.
 A tree mode for latency, not a leaf schema of frame v3: `CommitmentDomain(binding, owner, positions, hash="blake3")` in
 `verity.primitives.commitments.merkle`, where the module docstring states the layout. Its first user is Pearl-C's hashing format `-h1`
 (`verity/protocols/accounting/work/pouw/PROTOCOL.md`), whose rows must be committed within a decode step. The SP1 kernel, `ligero-verify` and
-B-Ligero do not mirror it, and `FrameV3` does not offer it.
+B-Ligero do not mirror it, `FrameV3` does not offer it, and `multiproof` refuses it.
 
 ~~~text
 domain id  = BLAKE3( the frame-v3 domain message )                     (not keyed)
