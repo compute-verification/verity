@@ -311,10 +311,14 @@ def size_ingress_ms(arrival_ms: Sequence[float], ingress_bucket_ms: int = 100, q
 
 
 def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n_rho: int = 8,
-              headroom: float = 2.0, epsilon: float = 1e-4, target_k_share: float | None = None,
-              target_span_s: int = 3600, ingress_max_delay_ms: int | None = None) -> dict:
+              headroom: float = 2.0, epsilon: float = 1e-4, k_bits: float | None = None,
+              target_k_share: float | None = None, target_span_s: int = 3600,
+              ingress_max_delay_ms: int | None = None) -> dict:
     """Size every link of the trace and report the costs and the capacity. The ingress FIFO's p99 delay is at most one
-    ingress bucket, or `ingress_max_delay_ms` when given."""
+    ingress bucket, or `ingress_max_delay_ms` when given. With `k_bits` (K, the policy's budget per isolation unit in
+    bits) the ingress charge is also reported as a share of K, under the K it was computed with."""
+    if target_k_share is not None and k_bits is None:
+        raise ValueError("a target share of K needs K (k_bits)")
     in_delay = 1 if ingress_max_delay_ms is None else max(1, ingress_max_delay_ms // ingress_bucket_ms)
     bucket_ms = trace.get("bucket_ms", 100)
     T = trace["window_buckets"]
@@ -396,7 +400,6 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
     miss_rate = misses_total / windows_total if windows_total else 0.0
     windows_per_day = 86400 * 1000 / (T * bucket_ms)
     ingress_bps = sum(i["rate_bps"] for i in ingress)
-    k_charge = {f"{s}s": capacity.k_share(ingress_bps * s) for s in SPANS_S}
     report = {
         "grid": {"bucket_ms": bucket_ms, "window_buckets": T, "frame_bytes": frame_bytes, "queue_capacity": q},
         "egress": egress,
@@ -416,12 +419,14 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
             "egress_bits_per_day_clock_per_link": sync_set.bits * windows_per_day * max(1, len(egress)),
         },
         "ingress": ingress,
-        "k_charge": {"ingress_bps": ingress_bps, "share_of_k_by_span": k_charge,
-                     "memory_after_wipe": "added from the wipe evidence; not measured here"},
+        "k_charge": {"ingress_bps": ingress_bps, "memory_after_wipe": "added from the wipe evidence; not measured here"},
         "provenance": {"configurations": [c.get("name", "") for c in configs]},
     }
+    if k_bits is not None:
+        report["k_charge"] |= {"k_bits": k_bits,
+                               "share_of_k_by_span": {f"{s}s": capacity.k_share(ingress_bps * s, k_bits) for s in SPANS_S}}
     if target_k_share is not None:
-        share = capacity.k_share(ingress_bps * target_span_s)
+        share = capacity.k_share(ingress_bps * target_span_s, k_bits)
         report["k_charge"]["target"] = {"span_s": target_span_s, "share": target_k_share,
                                         "meets_target": share <= target_k_share}
     return report
@@ -436,7 +441,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--rhos", type=int, default=8, help="rates in Σ_sync")
     ap.add_argument("--headroom", type=float, default=2.0)
     ap.add_argument("--epsilon", type=float, default=1e-4, help="target honest miss rate per window")
-    ap.add_argument("--target-k-share", type=float, default=None)
+    ap.add_argument("--k-bits", type=float, default=None,
+                    help="K, the policy's budget per isolation unit in bits (NCI's inference-only policy: 9.12e7); "
+                         "without it the ingress charge is reported in bits only")
+    ap.add_argument("--target-k-share", type=float, default=None, help="with --k-bits")
     ap.add_argument("--target-span-s", type=int, default=3600)
     ap.add_argument("--ingress-max-delay-ms", type=int, default=None,
                     help="p99 ingress FIFO delay budget (default: one ingress bucket)")
@@ -445,8 +453,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         trace = json.load(fh)
     try:
         report = calibrate(trace, ingress_bucket_ms=args.ingress_bucket_ms, n_delta=args.deltas, n_rho=args.rhos,
-                           headroom=args.headroom, epsilon=args.epsilon, target_k_share=args.target_k_share,
-                           target_span_s=args.target_span_s, ingress_max_delay_ms=args.ingress_max_delay_ms)
+                           headroom=args.headroom, epsilon=args.epsilon, k_bits=args.k_bits,
+                           target_k_share=args.target_k_share, target_span_s=args.target_span_s, ingress_max_delay_ms=args.ingress_max_delay_ms)
     except ValueError as e:
         print(f"{ap.prog}: error: {e}", file=sys.stderr)
         return 2

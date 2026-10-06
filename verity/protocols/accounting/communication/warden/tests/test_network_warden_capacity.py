@@ -252,4 +252,4 @@ def test_doc_numbers():
     assert math.isclose(capacity.ingress_rate(64), 60.2, rel_tol=1e-3)
     assert math.isclose(capacity.ingress_rate(64, 1000), 6.02, rel_tol=1e-3)
     two_links_hour = (capacity.ingress_rate(64) + capacity.ingress_rate(1024)) * 3600
-    assert math.isclose(capacity.k_share(two_links_hour), 0.0063, rel_tol=0.01)
+    assert math.isclose(capacity.k_share(two_links_hour, 9.12e7), 0.0063, rel_tol=0.01)
