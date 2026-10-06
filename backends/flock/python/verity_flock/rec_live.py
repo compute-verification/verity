@@ -1,4 +1,4 @@
-"""``rec/inner-transcript/v0``: the inner session of a recursive session (hiding model architectures), run by the unmodified
+"""``rec/inner-transcript/v1``: the inner session of a recursive session (hiding model architectures), run by the unmodified
 C-Flock prover against a verifier that never sees the hidden statement or the prover's messages.
 
     python -m verity_flock.rec_live --listen 127.0.0.1:PORT --out DIR --schedule FILE [--sessions 1]
@@ -12,39 +12,47 @@ only the session's public schedule and salted hashes:
 
 * ``Hello``: the pinned schedule's (profile, reps, flavor, tables, the link's shape), without Σ (a digest of the hidden
   statement), once the prover's, Σ aside, is the same canonical JSON (`canonical`); never the prover's own text or object;
-* ``Commit``: each table's level-0 cap (``root_B``) as a salted top (`commit_top`), answered with the link points; root_F
+* ``Commit``: each table's level-0 cap (``root_B``) as its salted top (`commit_top`), answered with the link points; root_F
   (Σ) stays with the prover;
-* each ``Round``: its caps (the ``BYTES`` frames that commit a Merkle tree), each a salted top, and ``c_k``, a hiding
+* each ``Round``: the salted top of each tree it commits (its ``BYTES`` frames that are caps), and ``c_k``, a hiding
   commitment to the round's free message, answered with the round's ``n`` coins.
 
-A **salted top** is a tree top (a cap: one or more 64-byte nodes) with each node replaced by the ``b || c`` of a registered
-row (`top_rows`: its 32 u16 words, then 32 zero words; ``hm96-sha512/row/v1``) under its own fresh 192-byte salt, so V*'s
-openings read a node as one row of the value the verifier builds from them; the clear tops and their salts are the prover's
-(``private.json``), and V*'s inputs refuse a top that does not open its commitment (`verity_flock.rec_vstar.caps`). The
-proxy holds the session to a pinned **schedule** (`schedule_of`: the public ``Hello``, each table's root node count, the
-number of ``Link``'s ``y`` elements, every stream's parent, position and round count, and per round its stream, index, coin
-count, caps' node counts and message-row count). ``--schedule`` gives it and is required: `schedule_for` derives it from the
-statement's public shape alone (``flock-circuit statement``), never from a session the prover ran, and `serve` writes it to
-``OUT/schedule.json`` before the first session. A request that leaves the schedule, or a ``Link`` whose ``y`` is not the
-schedule's number of zero elements (the prover sends zeros), is refused ``FIREWALL-REFUSED`` before the coin server sees it. A
-refusal, or a session that ends without ``Finish``, is a **stop**: the coin server's record says so (``end``: ``stop``, not
-why), and `serve` writes that record and counts the session.
+**Salted tops.** A tree's top (a Ligerito cap of ``2^c`` nodes, 64 bytes each) is committed node by node, each node as a
+registered row is (`top_rows`: its 32 u16 words and 32 zero words, one SHA-512 block; ``hm96-sha512/row/v1`` under its own
+fresh 192-byte salt), so the coin server holds one ``b || c`` a node and V*'s openings each read their node as one row of the
+registered value the verifier builds from them (`verity_flock.rec_outer`). The nodes and salts are the prover's
+(``private.json``). Level 0's cap reaches the firewall three times (``Commit``, the rep's binding round, Ligerito's first
+absorb): it is committed once, at ``Commit``, and the firewall refuses a binding round whose cap is not ``root_B``; a later
+copy is counted (``level0``), never committed again. The inner trees' leaves need no salt of their own (the statement's
+``flock-leaf/sha512-unsalted``, `verity_flock.circuit.LEAF_SCHEME_PLAIN`): nothing about a tree but its salted top leaves the
+firewall.
+
+**The schedule.** The proxy holds the session to a pinned schedule (`schedule_of`: the public ``Hello``, each table's root
+node count, the number of ``Link``'s ``y`` elements, every stream's parent, position and round count, and per round its
+stream, index, coin count, its salted tops' node counts, its copies of a level-0 top and its message-row count).
+``--schedule`` gives it and is required: `schedule_for` derives it from the statement's public shape alone (``flock-circuit
+statement``), never from a session the prover ran, and `serve` writes it to ``OUT/schedule.json`` before the first session. A
+request that leaves the schedule, or a ``Link`` whose ``y`` is not the schedule's number of zero elements (the prover sends
+zeros), is refused ``FIREWALL-REFUSED`` before the coin server sees it. A refusal, or a session that ends without ``Finish``,
+is a **stop**: the coin server's record says so (``end``: ``stop``, not why), and `serve` writes that record and counts the
+session.
 
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
-sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (its bytes public), a
-proof-of-work nonce (8 bytes, dropped: with live coins grinding buys nothing) or, in a rep's first round, the statement digest
-(dropped: it is a function of the hidden statement); the observed field elements are the free message ``F_k``. ``F_k`` is
-laid out as rows of :data:`ROW_WORDS` u16 words (each element 8 words, its 16 bytes lo LE then hi LE; the last row
-zero-padded) and each row is committed as a registered row is (``verity.protocols.verification.sampled_proofs.one_stage.registered``:
-``hm96-sha512/row/v1`` under its own fresh 192-byte salt), so ``c_k`` is the list of the rows' ``b || c``. A round with no free
-message has an empty ``c_k``. The rows and salts are the prover's: V*'s units open them against the registered value the
-verifier builds from every ``c_k`` it received (`message_rows`, `commit_rows`).
+sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (committed as its salted
+top), a proof-of-work nonce (8 bytes, dropped: with live coins grinding buys nothing) or, in a rep's first round, the
+statement digest (dropped: it is a function of the hidden statement); the observed field elements are the free message ``F_k``. ``F_k`` is
+laid out as one row of whole :data:`ROW_WORDS`-word blocks (each element 8 words, its 16 bytes lo LE then hi LE; the last
+block zero-padded) and committed as a registered row is (``verity.protocols.verification.sampled_proofs.one_stage.registered``:
+``hm96-sha512/row/v1`` under its own fresh 192-byte salt), so ``c_k`` is that row's ``b || c``: one commitment a round, as
+one port of V*'s algebra reads it. A round with no free message has an empty ``c_k``. The row and salt are the prover's:
+V*'s algebra opens each round's row against the registered value the verifier builds from that round's ``c_k`` of both reps
+(`message_row`, `commit_rows`).
 
 At ``Finish`` the proxy writes the session directory (``session.json``, a ``flock-live-session/v1`` record that
 ``flock-circuit replay`` and the Lean verifier check, and ``<table>.rep<r>.bin``), the coin server's record ``public.json``
-(``rec/inner-transcript/v0``: everything the verifier saw and issued, ``tops`` naming how its tops are salted) and the
-prover's ``private.json`` (every round's rows and salts, every clear top and its salts), and answers the prover with a
-verdict that says nothing was verified: the inner proof is V*'s witness.
+(``rec/inner-transcript/v1``: everything the verifier saw and issued, ``tops`` naming how its tops are salted) and the
+prover's ``private.json`` (every top's nodes and every round's rows, with their salts), and answers the prover with a verdict
+that says nothing was verified: the inner proof is V*'s witness.
 """
 from __future__ import annotations
 
@@ -61,7 +69,7 @@ from verity.primitives.commitments import hm96
 
 from .rec_algebra import fast100
 
-KIND = "rec/inner-transcript/v0"
+KIND = "rec/inner-transcript/v1"
 SESSION_KIND = "flock-live-session/v1"
 #: how a record's tree tops are salted: each 64-byte node a registered row (``hm96-sha512/row/v1``) under its own salt
 #: (`commit_top`)
@@ -76,10 +84,9 @@ CAP_NODE_BYTES = 64
 REQ_HELLO, REQ_LINK, REQ_OPEN, REQ_ROUND, REQ_PROOF, REQ_FINISH, REQ_COMMIT, REQ_PRIME, REQ_PING, REQ_REGISTER = range(1, 11)
 RESP_OK, RESP_COINS, RESP_REFUSED, RESP_VERDICT, RESP_WORDS, RESP_DRAW = range(1, 7)
 
-#: u16 words per message row: one SHA-512 block, 8 field elements
+#: u16 words per block of a message row: one SHA-512 block, 8 field elements
 ROW_WORDS = 64
 F_WORDS = 8
-F_PER_ROW = ROW_WORDS // F_WORDS
 MASK64 = (1 << 64) - 1
 
 #: a flock-circuit statement's session (`schedule_for`): its one table, fast100's reps, the link's points (one ``y``
@@ -293,18 +300,17 @@ def split_round(content: bytes, first_of_rep: bool) -> Split:
 
 
 def message_rows(free: list[int]) -> list[list[int]]:
-    """``F_k`` as rows of :data:`ROW_WORDS` u16 words: element ``i`` is words ``8 (i mod 8) ..`` of row ``i // 8``, its lo
-    then hi 64 bits as little-endian u16 words; the last row zero-padded. No rows for an empty message."""
+    """``F_k`` as its round's one row (none for an empty message): element ``i`` is words ``8 i ..``, its lo then hi 64 bits
+    as little-endian u16 words, zero words up to whole blocks of :data:`ROW_WORDS`."""
     words: list[int] = []
     for v in free:
         words += [(v >> (16 * j)) & 0xFFFF for j in range(F_WORDS)]
-    words += [0] * (-len(words) % ROW_WORDS)
-    return [words[i:i + ROW_WORDS] for i in range(0, len(words), ROW_WORDS)]
+    return [words + [0] * (-len(words) % ROW_WORDS)] if words else []
 
 
 def row_elements(row: list[int]) -> list[int]:
-    """`message_rows`' inverse on one row: its 8 field elements."""
-    return [sum(row[F_WORDS * i + j] << (16 * j) for j in range(F_WORDS)) for i in range(F_PER_ROW)]
+    """`message_rows`' inverse on one row: its ``len(row) / 8`` field elements (the padding's zeros last)."""
+    return [sum(row[F_WORDS * i + j] << (16 * j) for j in range(F_WORDS)) for i in range(len(row) // F_WORDS)]
 
 
 def commit_rows(rows: list[list[int]], salts: list[bytes]) -> list[bytes]:
@@ -321,16 +327,17 @@ def top_nodes(top: bytes) -> list[bytes]:
     return [top[i:i + CAP_NODE_BYTES] for i in range(0, len(top), CAP_NODE_BYTES)]
 
 
-def top_rows(top: bytes) -> list[list[int]]:
-    """A tree top as registered rows, one a node: its 64 bytes as 32 little-endian u16 words, then 32 zero words."""
-    return [[n[j] | (n[j + 1] << 8) for j in range(0, CAP_NODE_BYTES, 2)] + [0] * (ROW_WORDS - CAP_NODE_BYTES // 2)
-            for n in top_nodes(top)]
+def top_rows(cap: bytes) -> list[list[int]]:
+    """A tree's top as registered rows, one a node: its 64 bytes as 32 little-endian u16 words, then 32 zero words."""
+    if not cap or len(cap) % CAP_NODE_BYTES:
+        raise ValueError(f"a top of {len(cap)} bytes is not whole {CAP_NODE_BYTES}-byte nodes")
+    return [[cap[i + j] | (cap[i + j + 1] << 8) for j in range(0, CAP_NODE_BYTES, 2)] + [0] * (ROW_WORDS - CAP_NODE_BYTES // 2)
+            for i in range(0, len(cap), CAP_NODE_BYTES)]
 
 
-def commit_top(top: bytes, salts: list[bytes]) -> bytes:
-    """A tree top as the coin server receives it: each node's ``b || c`` as a registered row's (`top_rows`, `commit_rows`)
-    under its own salt, in node order, so V*'s openings read each node as one row of the value the verifier builds."""
-    return b"".join(commit_rows(top_rows(top), salts))
+def commit_top(cap: bytes, salts: list[bytes]) -> list[bytes]:
+    """A top's salted commitment: each node's ``b || c`` as a registered row's (`top_rows`), one salt a node."""
+    return commit_rows(top_rows(cap), salts)
 
 
 def refused(what: str) -> str:
@@ -343,34 +350,36 @@ def canonical(v) -> str:
     return json.dumps(v, sort_keys=True, separators=(",", ":"))
 
 
-def rep_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], int]]:
+def rep_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], int, int]]:
     """One fast100 rep's rounds for a table of ``2^m`` packed elements, ``2^k_log`` a block, with ``claims`` claims (2 and the
-    statement's extra ones): each round's coin count, its caps' node counts and the number of field elements the prover
-    absorbs before its squeeze, in `rec_algebra.run`'s order of draws."""
+    statement's extra ones): each round's coin count, the node counts of the tops it commits, its copies of level 0's top
+    (committed once, at ``Commit``) and the number of field elements the prover absorbs before its squeeze (one message row
+    when there are any: `message_rows`), in `rec_algebra.run`'s order of draws."""
     sch = fast100(m)
     lv, R = sch.levels, len(sch.levels) - 1
     cap = lambda level: [1 << lv[level].cap]
     # the zerocheck (the binding round, its point, round 1's ab and c, one round a variable), the lincheck, the ring switches
-    out = [(6, cap(0), 0), (m - 13, [], 0), (1, [], 128)] + [(1, [], 2)] * (m - 5) + [(1, [], 0)]
-    out += [(1, [], 2)] * (k_log - 6) + [(1, [], 64)] + [(7, [], 128)] * claims + [(claims, [], 0)]
+    out = [(6, [], 1, 0), (m - 13, [], 0, 0), (1, [], 0, 128)] + [(1, [], 0, 2)] * (m - 5) + [(1, [], 0, 0)]
+    out += [(1, [], 0, 2)] * (k_log - 6) + [(1, [], 0, 64)] + [(7, [], 0, 128)] * claims + [(claims, [], 0, 0)]
     # Ligerito: level 0's cap again and its k0 challenges, then per level its OOD pair, queries and sumcheck challenges
 
     def level(i: int, split: int) -> list:
         q = lv[i].q
-        return [(split, cap(i + 1), 4), (1, [], 5), (split, [], 0), (1, [], 5), (q, [], 0), ((q - 1).bit_length(), [], 0), (1, [], 4)]
+        return [(split, cap(i + 1), 0, 4), (1, [], 0, 5), (split, [], 0, 0), (1, [], 0, 5), (q, [], 0, 0),
+                ((q - 1).bit_length(), [], 0, 0), (1, [], 0, 4)]
 
     split = sch.n - sch.k0 + 1
-    out += [(sch.n, cap(0), 1), (1, [], 1)] + [(2, [], 4)] * sch.k0 + level(0, split)
+    out += [(sch.n, [], 1, 1), (1, [], 0, 1)] + [(2, [], 0, 4)] * sch.k0 + level(0, split)
     for i in range(R):
         if split < 4:
             raise ValueError(f"m = {m}: ligerito's split_dim < k")
-        out += [(2, [], 0)] + [(2, [], 4)] * 3
+        out += [(2, [], 0, 0)] + [(2, [], 0, 4)] * 3
         ext = split - 4
         if i + 1 < R:
             split = ext + 1
             out += level(i + 1, split)
         else:
-            out += [(lv[R].q, [], 4 + (2 << ext)), ((lv[R].q - 1).bit_length(), [], 0), (1, [], 0)]
+            out += [(lv[R].q, [], 0, 4 + (2 << ext)), ((lv[R].q - 1).bit_length(), [], 0, 0), (1, [], 0, 0)]
     return out
 
 
@@ -389,8 +398,8 @@ def schedule_for(statement: dict) -> dict:
                       "reps": REPS, "rounds": "bytes retained", "tables": [TABLE]},
             "roots": {TABLE: 1 << fast100(m).levels[0].cap}, "link": {"y": LINK_POINTS},
             "streams": {s: {"parent": "", "at": 0, "rounds": len(rep)} for s in streams},
-            "rounds": [{"stream": s, "k": k, "n": n, "caps": caps, "commits": -(-e // F_PER_ROW)}
-                       for s in streams for k, (n, caps, e) in enumerate(rep)]}
+            "rounds": [{"stream": s, "k": k, "n": n, "tops": tops, "level0": level0, "commits": int(e > 0)}
+                       for s in streams for k, (n, tops, level0, e) in enumerate(rep)]}
 
 
 def statement_of(text: str) -> dict:
@@ -411,8 +420,8 @@ def check_schedule(s) -> dict:
               and nat(h["link"]["m"]) and nat(h["link"]["points"]) and nat(s["link"]["y"])
               and all(isinstance(t, str) and nat(v) for t, v in s["roots"].items())
               and all(isinstance(n, str) and isinstance(v["parent"], str) and nat(v["at"]) and nat(v["rounds"]) for n, v in s["streams"].items())
-              and all(r["stream"] in s["streams"] and nat(r["k"]) and nat(r["n"]) and all(nat(c) for c in r["caps"]) and nat(r["commits"])
-                      for r in s["rounds"]))
+              and all(r["stream"] in s["streams"] and nat(r["k"]) and nat(r["n"]) and all(nat(c) for c in r["tops"]) and nat(r["level0"])
+                      and nat(r["commits"]) for r in s["rounds"]))
     except (KeyError, TypeError, AttributeError):
         ok = False
     if not ok:
@@ -422,14 +431,12 @@ def check_schedule(s) -> dict:
 
 def schedule_of(record: dict) -> dict:
     """What the pinned schedule fixes of a coin server's record (module docstring), to compare a session with the schedule it
-    was held to; a record of clear tops (no ``tops``) counts 64 bytes a node, a salted one ``b || c`` a node."""
-    per = hm96.SHA512.proven_bytes if record.get("tops") == TOPS else CAP_NODE_BYTES
-    nodes = lambda h: len(h) // 2 // per
+    was held to: a salted top's node count is its number of ``b || c``."""
     return {"kind": KIND + "/schedule", "hello": record["hello"],
-            "roots": {t: nodes(r) for t, r in sorted(record["link"]["roots"].items())}, "link": {"y": len(record["link"]["y"])},
+            "roots": {t: len(r) for t, r in sorted(record["link"]["roots"].items())}, "link": {"y": len(record["link"]["y"])},
             "streams": {s: {"parent": v["parent"], "at": v["at"], "rounds": v["rounds"]} for s, v in sorted(record["streams"].items())},
-            "rounds": [{"stream": r["stream"], "k": r["k"], "n": r["n"], "caps": [nodes(c) for c in r["caps"]], "commits": len(r["commits"])}
-                       for r in record["rounds"]]}
+            "rounds": [{"stream": r["stream"], "k": r["k"], "n": r["n"], "tops": [len(t) for t in r["tops"]], "level0": r["level0"],
+                        "commits": len(r["commits"])} for r in record["rounds"]]}
 
 
 # --- the verifier's side ----------------------------------------------------------------------------------------------------------
@@ -459,13 +466,15 @@ class CoinServer:
             raise ValueError("the coin server is never shown Σ")
         self.hello = hello
 
-    def commit(self, roots: dict[str, bytes]) -> list[int]:
-        """Each table's level-0 cap in; the link points out (``points × m`` coins)."""
+    def commit(self, roots: dict[str, list[bytes]]) -> list[int]:
+        """Each table's level-0 top as its salted commitment (`commit_top`: a ``b || c`` a node) in; the link points out
+        (``points × m`` coins)."""
         if self.hello is None or self.link is not None:
             raise ValueError("the link points are drawn once, after Hello")
         spec = self.hello["link"]
         pts = self._coins(spec["points"] * spec["m"])
-        self.link = {"roots": {t: r.hex() for t, r in sorted(roots.items())}, "points": [f128_hex(c) for c in pts], "y": None}
+        self.link = {"roots": {t: [b.hex() for b in bcs] for t, bcs in sorted(roots.items())}, "points": [f128_hex(c) for c in pts],
+                     "y": None}
         return pts
 
     def y(self, y: list[int]) -> None:
@@ -478,15 +487,17 @@ class CoinServer:
             raise ValueError(f"stream {stream} opened twice")
         self.streams[stream] = {"parent": parent, "at": at, "rounds": 0}
 
-    def round(self, stream: str, caps: list[bytes], commits: list[bytes], n: int) -> list[int]:
+    def round(self, stream: str, tops: list[list[bytes]], commits: list[bytes], n: int, level0: int = 0) -> list[int]:
+        """A round's salted tops (each a ``b || c`` a node) and ``c_k`` in, ``n`` coins out. ``level0``: how many copies of
+        a level-0 top the round absorbed (committed at ``Commit``, not again)."""
         if self.link is None or self.link["y"] is None:
             raise ValueError("a coin before the link exchange")
         st = self.streams.get(stream)
         if st is None:
             raise ValueError(f"a round on stream {stream}, never opened")
         coins = self._coins(n)
-        self.rounds.append({"stream": stream, "k": st["rounds"], "caps": [c.hex() for c in caps], "commits": [c.hex() for c in commits],
-                            "n": n, "coins": [f128_hex(c) for c in coins]})
+        self.rounds.append({"stream": stream, "k": st["rounds"], "tops": [[b.hex() for b in t] for t in tops], "level0": level0,
+                            "commits": [c.hex() for c in commits], "n": n, "coins": [f128_hex(c) for c in coins]})
         st["rounds"] += 1
         return coins
 
@@ -506,6 +517,11 @@ def _dg(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
+def _opening(cap: bytes, salts: list[bytes]) -> dict:
+    """A salted top's opening as ``private.json`` keeps it: its nodes and their salts."""
+    return {"nodes": [cap[i:i + CAP_NODE_BYTES].hex() for i in range(0, len(cap), CAP_NODE_BYTES)], "salts": [s.hex() for s in salts]}
+
+
 class Proxy:
     """The live server's part on the prover's side: answers the unmodified prover, takes every coin from ``coins`` (shown only
     the schedule and salted hashes), holds the session to ``schedule`` (`check_schedule`), and keeps what the session record
@@ -518,18 +534,19 @@ class Proxy:
         self.hello: str | None = None
         self.hello_v: dict | None = None
         self.commit: tuple | None = None
+        self.roots: dict[str, dict] = {}
         self.points: list[list[int]] = []
         self.y: bytes | None = None
         self.streams: dict[str, dict] = {}
         self.proofs: dict[tuple[str, int], bytes] = {}
         self.private: list[dict] = []
-        self.roots: dict[str, dict] = {}
         self.stopped: str | None = None
         self.verdict: dict | None = None
 
-    def _salted(self, top: bytes) -> tuple[bytes, list[bytes]]:
-        salts = [self.fresh_salt() for _ in top_nodes(top)]
-        return commit_top(top, salts), salts
+    def _salted(self, cap: bytes) -> tuple[list[bytes], dict]:
+        """A top under fresh salts, one a node: its ``b || c`` a node for the coin server, its opening for ``private.json``."""
+        salts = [self.fresh_salt() for _ in top_rows(cap)]
+        return commit_top(cap, salts), _opening(cap, salts)
 
     def _pinned(self, what: str, got, want) -> None:
         if canonical(got) != canonical(want):
@@ -590,11 +607,10 @@ class Proxy:
                 raise ValueError(refused("Commit names a table twice"))
             self._pinned("Commit's roots", {name: len(top_nodes(v)) for name, v in sorted(roots)}, self.schedule["roots"])
             self.commit = (root_f, roots, publics)
-            salted = {}
-            for name, top in roots:
-                salted[name], salts = self._salted(top)
-                self.roots[name] = {"top": top.hex(), "salts": [x.hex() for x in salts]}
-            pts = self.coins.commit(salted)
+            bcs = {}
+            for t, cap in roots:
+                bcs[t], self.roots[t] = self._salted(cap)
+            pts = self.coins.commit(bcs)
             m = self.hello_v["link"]["m"]
             self.points = [pts[i:i + m] for i in range(0, len(pts), m)]
             return resp_coins(pts)
@@ -627,24 +643,28 @@ class Proxy:
             s = split_round(content, k == 0 and not st["parent"])
             if s.n != n:
                 raise ValueError(f"the round squeezes {s.n} coins, the prover asked for {n}")
+            level0 = {bytes.fromhex("".join(o["nodes"])) for o in self.roots.values()}
             if k == 0 and not st["parent"]:
+                root_b = self.roots.get(stream.rsplit("/", 1)[0])
+                if root_b is None or s.caps[0].hex() != "".join(root_b["nodes"]):
+                    raise ValueError(f"{stream}: the binding round's cap is not the committed root_B")
                 st["cap"] = s.caps[0]
+            tops = [self._salted(c) for c in s.caps if c not in level0]
             rows = message_rows(s.free)
             i, sched = len(self.coins.rounds), self.schedule["rounds"]
-            self._pinned(f"round {i}", {"stream": stream, "k": k, "n": n, "caps": [len(top_nodes(c)) for c in s.caps], "commits": len(rows)},
+            self._pinned(f"round {i}", {"stream": stream, "k": k, "n": n, "tops": [len(top_nodes(c)) for c in s.caps if c not in level0],
+                                        "level0": sum(c in level0 for c in s.caps), "commits": len(rows)},
                          sched[i] if i < len(sched) else None)
             salts = [self.fresh_salt() for _ in rows]
             bcs = commit_rows(rows, salts)
-            caps, cap_salts = zip(*(self._salted(c) for c in s.caps)) if s.caps else ((), ())
             if k == 0:
                 if self.y is None:
                     raise ValueError("a coin before the link exchange")
                 self.coins.open(stream, st["parent"], st["at"])
-            coins = self.coins.round(stream, list(caps), bcs, n)
+            coins = self.coins.round(stream, [t for t, _ in tops], bcs, n, level0=sum(c in level0 for c in s.caps))
             st["rounds"].append({"content": content, "n": n, "coins": coins})
-            self.private.append({"stream": stream, "k": k, "elements": [f128_hex(v) for v in s.free], "rows": rows,
-                                 "salts": [x.hex() for x in salts], "nonces": [x.hex() for x in s.nonces],
-                                 "caps": [c.hex() for c in s.caps], "cap_salts": [[x.hex() for x in cs] for cs in cap_salts]})
+            self.private.append({"stream": stream, "k": k, "tops": [o for _, o in tops], "elements": [f128_hex(v) for v in s.free],
+                                 "rows": rows, "salts": [x.hex() for x in salts], "nonces": [x.hex() for x in s.nonces]})
             return resp_coins(coins)
         if t == REQ_PROOF:
             _, table, rep, b = r
@@ -658,7 +678,7 @@ class Proxy:
             self._pinned("Finish's rounds", sum(ran.values()), len(self.schedule["rounds"]))
             self._pinned("Finish's streams", ran, {s: v["rounds"] for s, v in sorted(self.schedule["streams"].items())})
             self.coins.end = "finish"
-            self.verdict = {"accepted": None, "why": "rec/inner-transcript/v0: the inner proof is V*'s witness; nothing verified here"}
+            self.verdict = {"accepted": None, "why": f"{KIND}: the inner proof is V*'s witness; nothing verified here"}
             return resp_str(RESP_VERDICT, json.dumps(self.verdict))
         raise ValueError(f"request tag {t} has no place in an inner session")
 
@@ -753,7 +773,8 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 sess = proxy.write(d)
                 rec = proxy.coins.record()
                 res.append({"session": str(sess), "rounds": len(rec["rounds"]), "message_rows": rec["message_rows"],
-                            "coins": sum(r["n"] for r in rec["rounds"]), "caps": sum(len(r["caps"]) for r in rec["rounds"]),
+                            "coins": sum(r["n"] for r in rec["rounds"]), "tops": sum(len(r["tops"]) for r in rec["rounds"]),
+                            "top_nodes": sum(len(t) for r in rec["rounds"] for t in r["tops"]),
                             "proof_bytes": {f"{t}/rep{r}": len(b) for (t, r), b in proxy.proofs.items()}})
                 if firewall is not None:
                     firewall.finish(sid)
