@@ -6052,6 +6052,15 @@
    "assumptions": [],
    "type_hash": "baf2186c87278d53e5a33433ec8db053f331a733e8fc73d34f077866e8000aaa"
   },
+  "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.Composed.e2e_forces_mPts": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Discharge.Composed.folded_comb": {
    "owner": "@proofs",
    "signature": [
@@ -6070,6 +6079,15 @@
    "assumptions": [],
    "type_hash": "63e83c6824160ccb4c99482861e31213a7e0a94f01827fd3d87cbe64728677ba"
   },
+  "FlockSoundness.Discharge.Composed.mPtsOf_16_8": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.Composed.mPtsOf_16_ne_8": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Discharge.Composed.tagsOk_circuit967b8d06": {
    "owner": "@proofs",
    "signature": [
@@ -6079,6 +6097,9 @@
    ],
    "assumptions": [],
    "type_hash": "5749be06456a1575bbd213ef8d26cb89e35fd70abfc797196fe930c5c69d27a7"
+  },
+  "FlockSoundness.Discharge.Composed.y0_binder_16_2_1": {
+   "owner": "@proofs"
   },
   "FlockSoundness.Discharge.Composed.zk_session_composed": {
    "owner": "@proofs",
@@ -6617,6 +6638,15 @@
    ],
    "assumptions": [],
    "type_hash": "14dbde1389fb6f3a1c41d956ca495f0269183943158ee281586f173a23eea7b3"
+  },
+  "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous": {
+   "owner": "@proofs"
   },
   "FlockSoundness.Discharge.Composed.zk_session_sound_custody": {
    "owner": "@proofs",
@@ -13959,11 +13989,20 @@
    "assumptions": [],
    "type_hash": "76cffb2b67be5b6ca32e71930538fba7a408437f009e8028468c233b2fa33d30"
   },
+  "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Discharge.ZkHidden.runsZC_liveH": {
    "owner": "@proofs",
    "signature": ["FlockSoundness.Discharge.ZkHidden.runsZC_liveH : FlockSoundness.Discharge.ZkHidden.RunsZCLiveH"],
    "assumptions": [],
    "type_hash": "35f2645049382eb48a737411968773fd10c7eb32b558e36f275dbb7f20f981d8"
+  },
+  "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK": {
+   "owner": "@proofs"
   },
   "FlockSoundness.Discharge.ZkHidden.tablesAtZKH_live": {
    "owner": "@proofs",
@@ -13983,6 +14022,9 @@
    ],
    "assumptions": [],
    "type_hash": "1246488c28186f490c070e78cde21aa1ef1d5e5df21b6bd976ce49d525c7b159"
+  },
+  "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1": {
+   "owner": "@proofs"
   },
   "FlockSoundness.Discharge.ZkHidden.zk_flock_countC_execOS_crH": {
    "owner": "@proofs",
@@ -14192,6 +14234,9 @@
    ],
    "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
    "type_hash": "51eb2c4d89d0de56e9c68a2a8b03713e91098c31b9887f2d6b5ea9e764d7d01a"
+  },
+  "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ_nonvacuous": {
+   "owner": "@proofs"
   },
   "FlockSoundness.Discharge.ZkHidden.zk_session_soundH": {
    "owner": "@proofs",
@@ -14596,6 +14641,15 @@
    "assumptions": [],
    "type_hash": "8a32c98d6992e77860fc866864203f6bb16b631e2d288d9b085503401d6521ab"
   },
+  "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_custody_json_nonvacuous": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_custody_nonvacuous": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Discharge.ZkHidden.zk_session_soundH_custody": {
    "owner": "@proofs",
    "signature": [
@@ -14783,6 +14837,9 @@
    ],
    "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
    "type_hash": "14702543e992fa8c365c7f126cccf32b221c48ab968e6be8e053f6b21a5036ed"
+  },
+  "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous": {
+   "owner": "@proofs"
   },
   "FlockSoundness.Discharge.ZkLink.allInh_repZCAt": {
    "owner": "@proofs",
@@ -15737,6 +15794,12 @@
    ],
    "assumptions": [],
    "type_hash": "0f1bcf5d19b9ea7c21679cdd006bd231564e5b70473724fd3813e193eb33fb1b"
+  },
+  "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous": {
+   "owner": "@proofs"
   },
   "FlockSoundness.Discharge.ZkReg.zk_session_soundHR": {
    "owner": "@proofs",
