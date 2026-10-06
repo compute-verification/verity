@@ -52,7 +52,8 @@
   "Proofs.Flock.Verifier",
   "Flock",
   "Proofs.Flock.Level3",
-  "Proofs.Flock.Soundness"
+  "Proofs.Flock.Soundness",
+  "Proofs.Flock.VBridge"
  ],
  "layers": {
   "Definitions.Core": {
@@ -226,7 +227,8 @@
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
   "Flock.HmNets.col_and": {
@@ -20960,6 +20962,9 @@
    ],
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
+  },
+  "FlockVBridge.sound_shaFrom": {
+   "owner": "@proofs"
   },
   "Nci.SecurityProofs.Inference": {
    "owner": "@lean",
