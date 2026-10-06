@@ -616,7 +616,7 @@ the proof's level-0 rows and paths are checked against it at the end. Its cost i
 | a round's free message | salted | `c_k`, its rows committed under fresh salts (as before) |
 | statement digest, labels, domain, nonces | dropped | public constants or functions of the hidden statement; never forwarded |
 | `Link`'s `y` | constant `0` | the schedule fixes its length (`link.y` elements of 16 bytes); the gateway refuses any other byte length, and any nonzero byte |
-| stream names, `Open`'s parent and position, each round's coin count and the counts of its caps' nodes and message rows | constant | the pinned schedule's; the gateway refuses any other. The coin server's record lists the streams by name, as the schedule does, never in the order the prover opened them |
+| stream names, `Open`'s parent and position, each round's coin count and the counts of its caps' nodes and message rows | constant | the pinned schedule's; the gateway refuses any other. The coin server's record lists the streams by name, as the schedule does, never in the order the prover opened them, and lists a stream only from its first round: an `Open` may come any time before that round, so a stopped session's record does not show whether or when it came |
 | how the session ends | `finish` or `stop` | every session served is written and counted toward `--sessions`, with `end` `finish` or `stop` (a refusal, or a session that ends without `Finish`: closed, reset or cut inside a frame), never why |
 | a request the gateway cannot read, or the gateway's own fault | refusal | any exception while handling a request stops the session (`GATE-REFUSED: a request the gateway cannot read (…)`), never the gateway |
 
@@ -636,6 +636,15 @@ clear cap nodes. A node is committed as a registered row is, so climbing costs `
 builds a registered value from the coin server's `b ‖ c` (one row a node, under the gateway's salts), and each opening's
 `out` reads the row of the node it climbs to. The gateway pays one SHA-512 a node more than for a bare node (the row
 digest).
+
+The rule is also a Lean program, `Flock.Firewall.run` (`verifier/lean/Flock/Firewall.lean`, the executable
+`flock-firewall`): the pinned schedule, the worker's requests and the gateway's salts in, the coin server's record out. Its
+message type is the contract: each message is the schedule's own value, a count it fixes, zeros, or commitments under the
+gateway's salts, so nothing a worker sends reaches the coin server any other way. `tests/test_firewall_agreement.py` holds
+`rec_live`'s proxy to it byte for byte (the record without the coins it drew), on an honest session and on every prefix,
+drop, duplicate, swap, forgery and seeded byte flip of one. One difference is deliberate: Lean's JSON keeps no number's
+spelling, so `flock-firewall` refuses any `Hello` with a fraction or an exponent, where the proxy compares Python's canonical
+JSON. The two agree whenever the schedule's `Hello` holds only integers, as `schedule_for`'s does.
 
 ### 10.4 The prototype (`FC_GATE=1`)
 
@@ -683,7 +692,9 @@ over the eight, under contention) and the comb fold stay on the session's path.
 A recursive session is the inner phase's session and the outer phase's sessions, one per V* statement (at K = 4096 eight: the
 levels L0–L6 and the algebra). With §10.1 and §10.3, every message of a session that reaches the auditor is fixed, and so is
 their order: `Hello`, `Commit`, `Link`, each stream's `Open` and rounds, the proofs, `Finish` (`Ping`, and `Register` in a
-session that draws no units, change no record: the inner gateway answers `Register` itself). What a worker still chooses is
+session that draws no units, change no record: the inner gateway answers `Register` itself). An inner `Open` may come any
+time before its stream's first round, but the record lists a stream only from that round (§10.3), so where it came is not
+seen. What a worker still chooses is
 whether and where a session stops: a refusal it provokes, or a session that ends without `Finish` (a crash, a hang, a cut
 connection). The auditor sees every stop:
 - inner phase: `rec_live` writes every session it serves, with `end` `finish` or `stop` (a refusal and a session that ends
