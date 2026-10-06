@@ -24,6 +24,9 @@ def test_the_rules_parse_and_name_known_roles():
 def test_the_rules_ask_for_the_grants_applied_by_hand():
     assert _roles("integrations/vllm/verity_vllm/program/x.py") == {"vllm-coordinator"}
     assert _roles("backends/flock/verifier/lean/Flock/Tags.lean") == {"red-team"}
+    assert _roles("verity/Security/Proofs/Flock/Soundness/Headline.lean") == {"red-team"}   # C-Flock's proofs, moved
+    assert _roles("verity/Security/Proofs/Flock.lean") == {"red-team"}                       # and their umbrella
+    assert _roles("verity/Security/Proofs/Flock/Soundness/README.md", "verity/Security/Proofs/Pouw.lean") == set()
     assert _roles("backends/flock/README.md", "integrations/vllm/README.md") == set()
     assert _roles("backends/flock/python/tests/test_x.py") == set()                 # tests alone change no statement
     assert _roles("packages/verity/verity/ir/cut.py", "tools/research/src/research/queue.py") == set()

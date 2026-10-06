@@ -164,6 +164,6 @@ sequential `Π₂` calls, within its own segment. -/
 def chainBandSeg (N B d ℓ c : ℕ) [NeZero (N * B)] (dom : ℕ → Bits c) : Scheme (idealPerm (ℓ + (ℓ + c))) :=
   chainScheme (bandSegDAG N B d) ℓ c dom
 
-instance : NeZero (448 * 2 ^ 9) := ⟨by norm_num⟩
+instance instNeZeroHMulOfNatHPow_pous : NeZero (448 * 2 ^ 9) := ⟨by norm_num⟩
 
 end Pous.BandMulti
