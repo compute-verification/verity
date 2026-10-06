@@ -68,6 +68,10 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
     Entry("seq-root", "assumption",
           "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core, "
           "with up to 8 cores of one chiplet cooperating", "SeqRoot", "conjectured"),
+    Entry("honest-nebius-host", "assumption",
+          "Nebius, which hosts the memory challenger's VM, runs it as configured and neither reads nor alters its "
+          "secrets, coins, clock or traffic; Nebius offers no confidential VMs, so nothing attests this (Daniel's "
+          "ruling of 6 Oct 2026)", "Honest Nebius host", "standard"),
 )}
 """Claims a certificate cites that `verity.claims` does not hold yet, in its id format.  Each moves to core when a
 render cites it; the tests fail once core defines an id this table still holds."""
