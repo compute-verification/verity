@@ -2,6 +2,7 @@ import Proofs.Flock.Verifier
 import Proofs.Flock.Level3
 import Proofs.Flock.Soundness
 import Proofs.Flock.EndToEnd
+import Proofs.Flock.EndToEndDrawn
 import Proofs.Flock.Recursive
 import Proofs.Flock.VBridge
 
