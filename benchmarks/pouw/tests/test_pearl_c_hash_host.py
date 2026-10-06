@@ -314,7 +314,7 @@ def s512_levels(host: Host, base: int, count: int, dom: int, small: int = 4) -> 
 
 @pytest.mark.parametrize("count,digests,nonce", [(1, False, 0), (5, False, 7), (300, True, 1 << 63), (64, False, (1 << 62) + 3)])
 def test_hm96_trees_are_the_verifiers(host, count, digests, nonce):
-    """hm_leaves over 64-byte values (row digests, or with ``digests`` tile leaves) under ChaCha20 salts at each tree's nonce
+    """hm_leaves then s512_frame_leaves over 64-byte values (row digests, or with ``digests`` tile leaves) under ChaCha20 salts at each tree's nonce
     (an activation tree's unit index, a weight's 2^62 + w, the transcript's 2^63), then pads, nodes and the small tree: every
     level is the frame-v3-sha512 tree `audit.commit_rows` builds, its root the `MerkleTree`'s.  300 leaves put ranks past one
     byte; the nonce is read from the unit block's index at 7 and given as i1, i2 otherwise."""
@@ -328,8 +328,9 @@ def test_hm96_trees_are_the_verifiers(host, count, digests, nonce):
     buf, pdom = host.alloc(64 * (2 * width - 1)), host.put(dom.domain_id)
     const = host.put(audit.hm96_kernel_constants())
     block = host.put(unit_block(bytes(32), bytes(64), nonce)) if nonce == 7 else 0
-    host.launch("hm_leaves", R.cdiv(count, 64), 64, p=(host.put(b"".join(xs)), buf, host.put(salt_key), const, pdom, block + 96 if block else 0),
+    host.launch("hm_leaves", R.cdiv(count, 64), 64, p=(host.put(b"".join(xs)), buf, host.put(salt_key), const, 0, block + 96 if block else 0),
                 i=(count, 0, 0) if block else (count, nonce & 0xFFFFFFFF, nonce >> 32))
+    host.launch("s512_frame_leaves", R.cdiv(count, 64), 64, p=(buf, pdom), i=(0, count))
     s512_levels(host, buf, count, pdom)
     salted = [v + audit.hm96_salt(salt_key, nonce, i) for i, v in enumerate(values)]
     want = b"".join(b"".join(level) for level in tree_levels(dom, [dom.leaf(i, i, ROW_SCHEMA, v) for i, v in enumerate(salted)]))

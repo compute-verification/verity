@@ -62,7 +62,7 @@ DEV void s512_line_raw(const uint32_t* key, uint32_t side, uint32_t factor, uint
 // ι = unit · 2^32 + r; i2 = 0: the unit's seed_A, x root_A (p0) and ι = the unit index.  p0 x, p1 seeds out (32 B each), p2
 // line keys out (32 B each) or 0, p3 the unit block: salt (32) ‖ root_B (64) ‖ u64 LE unit index (a graph's per-call slot);
 // i0 rows (1 at mode 0), i2 the mode
-extern "C" __global__ void __launch_bounds__(128) s512_seeds(const Args a) {
+extern "C" __global__ void __launch_bounds__(128, 1) s512_seeds(const Args a) {
   const uint64_t r = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (r >= (uint64_t)a.i[0]) return;
   const uint32_t* x = reinterpret_cast<const uint32_t*>(a.p[0] + 64 * r);
@@ -290,24 +290,24 @@ DEV void chacha20_block(const uint32_t* key, uint64_t counter, uint64_t nonce, u
 }
 DEV uint64_t rs_bswap64(uint64_t v) { return rs_be64((uint32_t)v, (uint32_t)(v >> 32)); }
 
-// level 0 of an `audit.HM96` tree: leaf i < i0 over x_i (p0 + 64 i: a row's sha512/row-seg/v1 digest, or a tile leaf) and its
-// salt y_i = `audit.hm96_salt`(key, nonce, i): b = x ⊕ M·y (the byte tables), c = SHA-512(salt prefix ‖ y), hl =
-// SHA-512(leaf prefix ‖ b ‖ c), and the frame leaf over hl (schema hm96-sha512/row-seg/v1, rank = position = i).  p0 x, p1 out
-// (64 B a leaf), p2 the salt key (32 B), p3 `audit.hm96_kernel_constants` (the salt prefix and the leaf prefix, 128 B each,
-// then the byte tables, [192][256] entries of 64 B little-endian), p4 domain id (64 B), p5 0 or the address of the nonce
-// (u64 LE: an activation tree's unit index, in the unit block); i0 leaves, i1 and i2 the nonce's low and high 32 bits (when
-// p5 is 0)
+// the inner leaves of an `audit.HM96` tree (C-Flock's ``hm96_finish_leaves``): leaf i < i0 over x_i (p0 + 64 i: a row's
+// sha512/row-seg/v1 digest, or a tile leaf) and its salt y_i = `audit.hm96_salt`(key, nonce, i): b = x ⊕ M·y (the byte
+// tables), c = SHA-512(salt prefix ‖ y), hl = SHA-512(leaf prefix ‖ b ‖ c); s512_frame_leaves makes hl the frame leaf.  p0 x,
+// p1 out (64 B a leaf, hl), p2 the salt key (32 B), p3 `audit.hm96_kernel_constants` (the prefixes' midstates, 8 u64 each,
+// then the byte tables, [192][256] entries of 64 B little-endian), p5 0 or the address of the nonce (u64 LE: an activation
+// tree's unit index, in the unit block); i0 leaves, i1 and i2 the nonce's low and high 32 bits (when p5 is 0).  The salt
+// stays in registers, unrolled, so the table rows' loads are independent.
 extern "C" __global__ void __launch_bounds__(64) hm_leaves(const Args a) {
-  SMSG(64);
   const uint64_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= (uint64_t)a.i[0]) return;
   const uint64_t nonce = a.p[5] ? *reinterpret_cast<const uint64_t*>(a.p[5])
                                 : (uint64_t)(uint32_t)a.i[1] | (uint64_t)(uint32_t)a.i[2] << 32;
+  const uint64_t* mid = reinterpret_cast<const uint64_t*>(a.p[3]);
+  const uint64_t* tables = reinterpret_cast<const uint64_t*>(a.p[3] + 128);
   uint32_t key[8], y[48];
   load_key(a.p[2], key);
 #pragma unroll
   for (int j = 0; j < 3; j++) chacha20_block(key, 3 * i + j, nonce, y + 16 * j);
-  const uint64_t* tables = reinterpret_cast<const uint64_t*>(a.p[3] + 256);
   uint64_t mk[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 #pragma unroll
   for (int q = 0; q < 48; q++) {
@@ -322,13 +322,13 @@ extern "C" __global__ void __launch_bounds__(64) hm_leaves(const Args a) {
       }
     }
   }
-  const uint64_t* x = reinterpret_cast<const uint64_t*>(a.p[0] + 64 * i);
-  const uint32_t* pre = reinterpret_cast<const uint32_t*>(a.p[3]);
-  uint64_t st[8], lt[8], w[16];
-  rs_iv(st);
+  const uint64_t* x = reinterpret_cast<const uint64_t*>(a.p[0] + 64 * i);   // the digest's bytes as the mask's limbs
+  uint64_t b[8];
 #pragma unroll
-  for (int j = 0; j < 16; j++) w[j] = rs_be64(pre[2 * j], pre[2 * j + 1]);
-  rs_compress(st, w);
+  for (int k = 0; k < 8; k++) b[k] = x[k] ^ mk[k];
+  uint64_t st[8], lt[8], w[16];
+#pragma unroll
+  for (int j = 0; j < 8; j++) st[j] = mid[j];
 #pragma unroll
   for (int j = 0; j < 16; j++) w[j] = rs_be64(y[2 * j], y[2 * j + 1]);
   rs_compress(st, w);
@@ -337,20 +337,26 @@ extern "C" __global__ void __launch_bounds__(64) hm_leaves(const Args a) {
   w[8] = 0x8000000000000000ull;
   w[15] = 8 * (128 + 192);
   rs_compress(st, w);   // st: c
-  rs_iv(lt);
 #pragma unroll
-  for (int j = 0; j < 16; j++) w[j] = rs_be64(pre[32 + 2 * j], pre[33 + 2 * j]);
-  rs_compress(lt, w);
+  for (int j = 0; j < 8; j++) lt[j] = mid[8 + j];
 #pragma unroll
-  for (int k = 0; k < 8; k++) { w[k] = rs_bswap64(x[k] ^ mk[k]); w[8 + k] = st[k]; }
+  for (int k = 0; k < 8; k++) { w[k] = rs_bswap64(b[k]); w[8 + k] = st[k]; }
   rs_compress(lt, w);
-  rs_pad(lt, 256);      // lt: hl
-  sm_frame(m, "leaf", 4, a.p[4]);
+  rs_pad(lt, 256);
+  s512_store(a.p[1] + 64 * i, lt, 8);
+}
+
+// level 0 of an `audit.HM96` tree from hm_leaves' hl, in place: leaf i < i1 the frame leaf over hl_i (schema
+// hm96-sha512/row-seg/v1, rank = position = i).  p0 the level (64 B a leaf), p1 domain id (64 B); i1 leaves
+extern "C" __global__ void __launch_bounds__(64) s512_frame_leaves(const Args a) {
+  SMSG(64);
+  const uint64_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= (uint64_t)a.i[1]) return;
+  sm_frame(m, "leaf", 4, a.p[1]);
   sm_uint(m, i);
   sm_uint(m, i);
   sm_be(m, 22, 8);
   for (int j = 0; j < 22; j++) sm_byte(m, HM96_SCHEMA[j]);
-  sm_be(m, 64, 8);
-  for (int k = 0; k < 8; k++) sm_be(m, lt[k], 8);
-  sm_hash(m, a.p[1] + 64 * i);
+  sm_mem64(m, a.p[0] + 64 * i);
+  sm_hash(m, a.p[0] + 64 * i);
 }

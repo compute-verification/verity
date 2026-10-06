@@ -16,7 +16,7 @@ using std::min;
 #define __forceinline__ inline
 #define __global__
 #define __constant__ static const
-#define __launch_bounds__(n)
+#define __launch_bounds__(...)
 #define __shared__ static
 struct Dim3 { unsigned x = 0, y = 1, z = 1; };
 static Dim3 blockIdx, blockDim;
@@ -45,7 +45,7 @@ const Kernel KERNELS[] = {{"hash_msg", hash_msg, false},       {"hash_leaf", has
                           {"s512_line_raws", s512_line_raws, false}, {"s512_tile_leaves", s512_tile_leaves, true},
                           {"s512_pads", s512_pads, false},     {"s512_nodes", s512_nodes, false},
                           {"s512_tree_small", s512_tree_small, true}, {"hm_leaves", hm_leaves, false},
-                          {"s512_tickets", s512_tickets, false}};
+                          {"s512_tickets", s512_tickets, false}, {"s512_frame_leaves", s512_frame_leaves, false}};
 constexpr int COUNT = sizeof KERNELS / sizeof *KERNELS;
 }  // namespace
 
