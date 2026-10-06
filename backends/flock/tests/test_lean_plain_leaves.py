@@ -2,7 +2,8 @@
 `FLOCK_PLAIN_LEAVES=1`). The statement digest binds the prover's identity, which names the leaf scheme and the Merkle hash,
 so the Lean verifier's `verity/flock-circuit+plain-leaves` (`Tags.withPlainLeaves`) writes both as upstream's `identity`
 does, pins META `leaf_scheme` to the staged object, and decodes each opening's empty `opened_salts`. Upstream's `--zk`
-refuses such a statement, and so does Lean's."""
+refuses such a statement; Lean's `verify` refuses it with or without `--zk` until a soundness headline covers plain
+leaves."""
 from __future__ import annotations
 
 import re
@@ -83,12 +84,16 @@ def test_the_plain_leaf_statement_is_the_default_one_by_name():
 
 
 @pytest.mark.slow
-def test_verify_zk_refuses_the_plain_leaf_statement(tmp_path):
+@pytest.mark.parametrize("mode", [[], ["--zk"]], ids=["plain", "zk"])
+def test_verify_refuses_the_plain_leaf_statement(tmp_path, mode):
+    """No soundness headline covers plain leaves yet (the hidden-output ones need `hm96-sha512/v1`), so `verify`
+    refuses the statement in every mode before it reads an input."""
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run([str(BIN), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(tmp_path / "c"),
+    p = subprocess.run([str(BIN), "verify", *mode, "--statement", STATEMENT, "--circuit", str(tmp_path / "c"),
                         "--public", str(tmp_path / "p"), "--session", str(tmp_path / "s")],
                        capture_output=True, text=True, check=False)
     assert p.returncode == 2, p.stdout + p.stderr
-    assert "plain SHA-512 leaves (flock-leaf/sha512-unsalted), a ZK-off statement" in p.stderr
+    assert (f"refused: {STATEMENT}, a statement with plain SHA-512 leaves (flock-leaf/sha512-unsalted): "
+            "a form the soundness proof does not cover yet") in p.stderr
