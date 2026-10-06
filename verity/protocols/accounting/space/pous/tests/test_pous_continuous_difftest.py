@@ -29,19 +29,13 @@ import pous_continuous_model as model
 from pous_continuous_model import (ALL_SENT, CLOSED, HIT, LATE, NO_HARD_DEADLINE, NONE_OPEN, NOT_REVEALED, REJECT,
                                    UNANSWERED, WITHIN, WRONG, ClockOracle, Record, Refused)
 from verity.protocols.accounting.space.pous import band
-from verity.protocols.accounting.space.pous.audit import AuditResult, UnsignedRounds, challenge_key, run_timed
+from verity.protocols.accounting.space.pous.audit import UnsignedRounds, challenge_key, run_timed
 from verity.protocols.accounting.space.pous.codec import encode_segments
 from verity.protocols.accounting.space.pous.verifier import VerifierKey
-
-try:
-    from verity.protocols.accounting.space.pous.continuous import ContinuousMemoryChallenger, Reply, run_continuous
-except ImportError:
-    ContinuousMemoryChallenger = Reply = run_continuous = None
+from verity.protocols.accounting.space.pous.continuous import ContinuousMemoryChallenger, Reply, run_continuous
 
 ROOT = Path(__file__).resolve().parents[6]
 MODEL = "verity/Security/Definitions/Pous/Model/Continuous.lean"
-ENFORCE = "the hard deadline and ContinuousMemoryChallenger land with cursor/pous-continuous-enforce-3cf5"
-HARD = "late_deadline_ns" in inspect.signature(UnsignedRounds).parameters
 
 PARAMS = band.BandParams(16, 64, 12, 2)
 SALT = bytes(range(24))
@@ -54,11 +48,7 @@ LIMITS = [(500_000, 2_000_000, 0), (500_000, 2_000_000, 40_000), (2 * CALL, 2 * 
 """`(Δ, Δ_late, RTT)`: the default, with a round-trip allowance, `Δ_late = Δ` on an exact multiple of a call (no answer
 can be late without being rejected), and `D = 0` with the largest `D_late`, 12."""
 
-KINDS = [
-    pytest.param("timed", id="timed"),
-    pytest.param("timed-hard", id="timed-hard", marks=pytest.mark.skipif(not HARD, reason=ENFORCE)),
-    pytest.param("continuous", id="continuous", marks=pytest.mark.skipif(ContinuousMemoryChallenger is None, reason=ENFORCE)),
-]
+KINDS = ["timed", "timed-hard", "continuous"]
 
 MESSAGES = {
     UNANSWERED: "the previous challenge is unanswered",
@@ -112,7 +102,6 @@ class Subject:
             kw = {"late_deadline_ns": late} if self.hard else {}
             self.v = self.timed = UnsignedRounds(vk, key, n, deadline, rtt, clock, **kw)
         self.max_misses = max_misses if self.named else 0
-        self.can_expire = hasattr(self.timed, "expire")
 
     def challenge(self):
         if self.named:
@@ -132,11 +121,8 @@ class Subject:
     def counts(self) -> dict:
         """What this memory challenger reports of the run."""
         r = self.timed.result()
-        out = {"done": self.v.done, "accepted": self.v.accepted}
-        if hasattr(AuditResult, "misses"):
-            out |= {"misses": r.misses, "late": r.late}
-        if hasattr(self.timed, "pending"):
-            out["pending"] = self.timed.pending
+        out = {"done": self.v.done, "accepted": self.v.accepted, "misses": r.misses, "late": r.late,
+               "pending": self.timed.pending}
         if self.named:
             out |= {"misses": self.v.misses, "exceeded": self.v.exceeded}
         return out
@@ -224,7 +210,7 @@ def test_the_oracle_transcribes_the_lean_model():
 # Fuzzed traces.
 
 def _fuzz(h: Harness, rng: random.Random) -> None:
-    o, s = h.oracle, h.subject
+    o = h.oracle
     lim, hard = o.limit, o.late_limit
     marks = {0: "0", lim: "limit", lim + 1: "limit+1"}
     if hard is not None:
@@ -245,7 +231,7 @@ def _fuzz(h: Harness, rng: random.Random) -> None:
             elif r < 0.9:
                 k = other(len(o.records))
                 h.act("out-of-turn", "respond", h.now + rng.randrange(10**6), k, h.block(k))
-            elif s.can_expire:
+            else:
                 h.act("expire-none-open", "expire", h.now + rng.randrange(10**6))
             continue
         j, _, send = o.open
@@ -264,11 +250,11 @@ def _fuzz(h: Harness, rng: random.Random) -> None:
         elif hard is not None and r < 0.87:
             last = "-last" if j == o.n - 1 else ""
             h.act(f"dropped{last}->challenge", "challenge", max(h.now, send + hard + 1 + rng.choice([0, 10**7])))
-        elif s.can_expire:
+        else:
             e = rng.choice([0, lim, beyond, beyond + 1, beyond + 1 + rng.randrange(10**7)])
             h.act(f"expire@{name(e)}" if e <= beyond else "dropped->expire", "expire", max(h.now, send + e))
     for _ in range(3):
-        action = rng.choice(["challenge", "respond", "expire"] if s.can_expire else ["challenge", "respond"])
+        action = rng.choice(["challenge", "respond", "expire"])
         k = rng.randrange(o.n + 2)
         args = [k, h.block(k)] if action == "respond" else []
         h.act(f"after-done-{action}", action, h.now + rng.randrange(10**6), *args)
