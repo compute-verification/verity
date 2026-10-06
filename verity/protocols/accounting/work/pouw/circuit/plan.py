@@ -269,11 +269,12 @@ def layout(shape: Shape, kind: str = "shift24") -> Layout:
 
 def tile_layout(shape, w_ref: int) -> Layout:
     """A tile check's layout (`pc4.Shape` or `pc8.Shape`), from the shape alone: the call's units and strata, each tile's
-    closure (itself, then its rows of A's units: TM, or a short last tile row's r) and its TN rows of B's units in the
-    weight's Program, at W_ref ``w_ref`` a whole tile.  A row's units are its `RowA` (`RowB`) unit, or with ``row_k`` its
-    head, forms and tail (`rowk`).  A short tile is its own template's stratum at its rows' share of that, w_ref·r/TM, which
-    must be whole; a call with whole and short tiles is then two tile strata, which the work law refuses
-    (`check_work_strata`)."""
+    closure (itself, then its rows of A's units: TM, or a short last tile row's r; and under pc8's cap, on whole tiles
+    only, its strip, its TM·TN word units row by row, its TM rows' digest and tally units and its tally, so every cap word
+    is proved with its tile, never sampled) and its TN rows of B's units in the weight's Program, at W_ref ``w_ref`` a
+    whole tile.  A row's units are its `RowA` (`RowB`) unit, or with ``row_k`` its head, forms and tail (`rowk`).  A short
+    tile is its own template's stratum at its rows' share of that, w_ref·r/TM, which must be whole; a call with whole and
+    short tiles is then two tile strata, which the work law refuses (`check_work_strata`)."""
     from . import pc4, pc8
 
     mod = pc8 if isinstance(shape, pc8.Shape) else pc4
@@ -285,10 +286,17 @@ def tile_layout(shape, w_ref: int) -> Layout:
         for u in units_:
             if u.role.startswith(side):
                 rows.setdefault(u.where[0], []).append(u.index)
+    strip = {u.where[0]: u.index for u in us if u.role == "strip"}
+    word, row_digest, row_tally, tally = ({u.where: u.index for u in us if u.role == r}
+                                          for r in ("word", "row_digest", "row_tally", "tally"))
     closure, b_rows = {}, {}
     for t in (u for u in us if u.role == "tile"):
         rs, cs = t.where
         closure[t.index] = (t.index, *(a for i in range(rs * tm, min(shape.m, (rs + 1) * tm)) for a in row_a[i]))
+        if getattr(shape, "cap", False):
+            closure[t.index] += (strip[rs], *(word[rs * tm + i, cs * tn + j] for i in range(tm) for j in range(tn)),
+                                 *(row_digest[rs * tm + i, cs] for i in range(tm)),
+                                 *(row_tally[rs * tm + i, cs] for i in range(tm)), tally[rs, cs])
         b_rows[t.index] = tuple(b for j in range(tn) for b in row_b[cs * tn + j])
     strata, r = template_strata(us, w_ref), shape.m % tm
     if r:
