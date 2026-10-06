@@ -172,8 +172,8 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   word with p at a drawn word, under repair 1's condition. The order inside each word is kept and every sign is +1. Its
   SHA-256 (entries as 2-byte little-endian integers) is `536757a2…` at k = 1,088, `7f00a9b7…` at 2,048, `24e68f30…` at
   4,096 and `a57ea054…` at 11,008, all reproduced by the red team's own generator, which certified independence rank
-  T − 1, λ₃ = 32 and MinRank 16 at each. The repairs guarantee clause 1 of the rejection rule and minrank.md's hypotheses
-  (a) to (c), not the rule's other clauses or λ₃ ≥ 16: the rule (Lean `Admissible`) is checked at every k, and
+  T − 1, λ₃ = 32 and MinRank 16 at each. The repairs guarantee clause 1 of the rejection rule and the MinRank argument's
+  hypotheses (a) to (c), not the rule's other clauses or λ₃ ≥ 16: the rule (Lean `Admissible`) is checked at every k, and
   `tests/test_pouw_word_p.py` certifies all of them exactly at the k the MVP uses (1,088, 2,048, 11,008).
   `ncp-v1-shift24` uses the shift by 24 instead, admissible with independent checkpoints for every k ≥ 1,024 with
   16 ∣ k (Lean `Pouw.SecurityProofs.NCP.ShiftBy24Admissible`, `Pouw.SecurityProofs.NCP.IndependentWitness`).
@@ -220,9 +220,8 @@ docstring states every parameter.
 ## `ncp-v2`: NCP-INT as a circuit under sampled proofs (`verity/protocols/accounting/work/pouw/circuit`)
 
 Sampled proofs is PoUW's verifier here: the call is a `verity.primitives.circuits` Program, drawn units are proved, never recomputed, and
-the audit's integrity profile carries the work bound (Project design note `docs/pouw/sampled-proofs-circuit.md`, §12; its
-Lean statements are the store's `lean/submissions/pouw-accountable-compute`). This package has NCP-INT at small shapes
-(16 | m, 16 | n, 64 | k); the certificate's domain is still `ncp-v1`'s.
+the audit's integrity profile carries the work bound. This package has NCP-INT at small shapes (16 | m, 16 | n,
+64 | k); the certificate's domain is still `ncp-v1`'s.
 
 **The units.** A weight's Y strips and c₀ read only B, the salt, the weight id and the column ids, so they are formed once
 per run and weight: `NcpWeight{K,N,PERM}`'s root body is its `NcpFormY` units (`partition.weight_query`). One linear call
@@ -401,15 +400,15 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
 
 ## `pearl-c-h100-v0` and `pearl-c-h100-v1`: Pearl-C, Pearl's product with its noisy clean-up checked (`schemes/pearl_c.py`)
 
-The cheap-binding lane's H100 candidate (research store `docs/pouw/cheap-binding.md` §1). It takes Pearl's H100 product
-and output tickets, and adds #311's noisy clean-up pinned bit for bit, so that the useful output U is a checked value.
+The cheap-binding lane's H100 candidate. It takes Pearl's H100 product and output tickets, and adds #311's noisy clean-up
+pinned bit for bit, so that the useful output U is a checked value.
 γ rests on the named conjecture TT_OUT(1/400), not on counting, so the certificate names no γ_0. The module's docstring
 states every step.
 
 ~~~text
 seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64)
 forming   v0, #311's as ported (`pearl_kw`): FP10 rows, exact norms, α, β, N = E·Fᵀ, X̃ = fp8(clamp(fma(α, X, β·N)))
-          v1, §5's: FP32 rows x; s = max|x|, ρ = RMS over every 8th position, α = 448/max(s + 4ρ, 2^−32), σ = ρ,
+          v1, the rework's: FP32 rows x; s = max|x|, ρ = RMS over every 8th position, α = 448/max(s + 4ρ, 2^−32), σ = ρ,
           β_row = (σ·α)·√r/(256·16), E′ = e4m3(β_row·E), X̃ = e4m3(HOPPER_E4M3_K32.step(C = α·x, E′_row, F line)),
           with F_A and F_B's lines at L2 norm 16 (E's at Pearl's 256)
 chain     C̃ = the H100 replay of A′·B̃ᵀ: a +0 accumulator per 128 products chains four HOPPER_E4M3_K32 atoms,
@@ -437,8 +436,8 @@ useful    U/(α_A·α_B), glue
 - **Two formings.**
   - v0 is the port, not the design: it keeps #311's FP10 decode and exact norms, whose A-only work the red team counts
     as skippable (X-PC-2).
-  - v1 is the rework (`cheap-binding.md` §5), with its roundings pinned in the module docstring: the order of ρ's
-    partial sums, α and β_row's FP32 steps, and the 2^−32 floor that keeps an all-zero row finite.
+  - v1 is the rework, with its roundings pinned in the module docstring: the order of ρ's partial sums, α and β_row's
+    FP32 steps, and the 2^−32 floor that keeps an all-zero row finite.
     - Only ρ depends on A alone. The model adopts s, ρ and α as its own FP8 quantizer, so W_ref counts 68 units per
       element of forming, 64 of them credited (the lane's `Costs.adopted`).
     - `wref` is Lean's `wrefOfRev1` and `credit_of` its `creditOfRev1` (rev1, `DeviceRev1.lean`; `wrefDevRev1` and
@@ -477,7 +476,7 @@ useful    U/(α_A·α_B), glue
   - `word_flags` flags an atom when some set of its promotion group's atoms containing it, skipped jointly, leaves the
     word's output unchanged. The later promotions are tested by intervals found backward by bisection.
   - It equals P1's Lean-checked word vectors: all 552 when they were cut, and the 448 kept in
-    `tests/vectors/pearl_c_skip_vectors*.txt.gz` under the 256 KiB blob limit (every word with k ≤ 512, and §5's
+    `tests/vectors/pearl_c_skip_vectors*.txt.gz` under the 256 KiB blob limit (every word with k ≤ 512, and the
     aligned-spike words at k = 2,048 and 8,192).
   - A tile's chain debit is 40 units per flagged atom-word and, under rev1 (`tileDebitRev1`), an add (32 units) per
     later promotion into a +0 total, the g ≥ 1 whose total after g groups is ±0 (`word_debit`, rev1's
@@ -498,9 +497,8 @@ useful    U/(α_A·α_B), glue
       `check_tile` does. The work law stays credit-sound there only while an excluded column earns nothing
       (`test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted`); approaches registry
       `pouw/work-law-weight-row-exclusion`.
-  - **Voluntary rows (V-EX;** research store `theory-pearl-c4-domain.md` §6.13, the assessor's B at 17:32Z**):** the
-    record may also give up up to ⌈m/64⌉ A rows (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`,
-    the same in every unit of the weight).
+  - **Voluntary rows (V-EX;** the assessor's B at 17:32Z**):** the record may also give up up to ⌈m/64⌉ A rows
+    (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same in every unit of the weight).
     - They are committed in `records_root` beside the excluded rows, before the draw coin opens. A record without them
       encodes exactly as before.
     - A voluntary row earns no credit, and its words are still checked on every drawn tile that holds it.
@@ -653,16 +651,15 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
 
 ## `pearl-c-nvfp4-v0`: Pearl-C on sm_120's block-scaled FP4, NVFP4 only (`schemes/pearl_c4.py`)
 
-GPU 5's RTX PRO 6000 design (research store `internal/pouw/rtx-pro/fp4-design.md`). It is Pearl-C with the FP8 product
-replaced by `mma.sync kind::mxf4nvf4`, on NVFP4 (UE4M3 scales per 16).
+GPU 5's RTX PRO 6000 design. It is Pearl-C with the FP8 product replaced by `mma.sync kind::mxf4nvf4`, on NVFP4
+(UE4M3 scales per 16).
 - **MXFP4 is a contrast line, not in the claimed domain** (Daniel, 15:34Z). The module keeps it (UE8M0 scales per 32,
   `pearl-c-mxfp4-v0`), unregistered in `schemes.get`, with a certificate that claims nothing.
 - **Why it is excluded:** its int8 closure holds under F2, but F1′ below puts 9.5–57% of honest MXFP4 credit over the
   cap on every model, so its line is D on honest coverage. Its UE8M0 scales don't move with the salt, and its round-up
   scales make honest zero codes reliable.
-The conjecture it rests on, TT_OUT-FP4 (`tt-out/fp4-sm120`), is stated by the theory lane
-(`internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §2) and proposed, not proved, so the certificate names no γ_0. The
-module's docstring states every step and rounding.
+The conjecture it rests on, TT_OUT-FP4 (`tt-out/fp4-sm120`), is stated by the theory lane and proposed, not proved, so
+the certificate names no γ_0. The module's docstring states every step and rounding.
 
 ~~~text
 rows      k BF16 words per row of either operand
@@ -689,8 +686,8 @@ useful    U/(α_A·α_B), glue
   stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
 - **The domain (`check`):** 1,024 ≤ k ≤ 2^16 with 128 | k, 64 × 64 tiles, m ≤ 2^24, and 128 ≤ n ≤ 2^18. The n ≥ 128
   floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
-- **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at 18:45Z; theory
-  §6.12b):** creditOf(m, k, n) = mnk + 32·mk + 256·mn + f_s·mk − ⌈β(n_b)·mnk⌉, where n_b is the largest tabled n ≤ n.
+- **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at
+  18:45Z):** creditOf(m, k, n) = mnk + 32·mk + 256·mn + f_s·mk − ⌈β(n_b)·mnk⌉, where n_b is the largest tabled n ≤ n.
   - β = 4.14 / 2.23 / 1.19 / 0.50 / 0.18% at n_b = 128 / 256 / 512 / 1,024 / 2,048, and 0 from 4,096 up.
   - It covers a layout for B̃'s residual chosen after the salt and shared by all n weight rows. At small n such a layout
     fits the realised change pattern, and it can pay even where F1′ is near zero, so no factor on F1′ closes it.
@@ -702,9 +699,7 @@ useful    U/(α_A·α_B), glue
     boundary check (2.23% at n = 256), the earlier grid's cells under the same cap (0.18% at n = 2,048, from its
     L = 0, p = 0.40 cell) and the grid's table.
   - The evidence is `art:cb8395f9d67e84c354611d00bd2b6bacd490db25b535cbfb1f12490d3f6653ca` (`beta_final.py`, the
-    boundary run and its sources). The grid before it is research store `cheap-binding/pearlc4-fix/beta_table.py
-    --mu 1.5` on `strong.jsonl` and `strong_ext.jsonl`; exact optimisation stays within 1.02× of annealing at n = 256
-    and 512 (`exact256.jsonl`).
+    boundary run and its sources). Exact optimisation stays within 1.02× of annealing at n = 256 and 512.
   - R1's per-row bound and the tile cap read `credit_of`, so both tighten with it. The fork (`tt-out-aw`) takes the same
     discount.
   - Honest cost, from shapes alone: 0.54% of credit on Qwen2.5-0.5B, 0.24% on 1.5B, about 0.1% on 3B, 7B and
@@ -718,13 +713,12 @@ useful    U/(α_A·α_B), glue
   - A NaN β with its sign clear would cast to 0x7F (bc-22298e90's review).
 - **Screened blocks are charged, not rejected (`dead_blocks`):** a block is screened when (clean amax_b)² > 90·ρ²
   (9.5ρ), and the screen covers every salt-dead element (Lean `saltDead4_screened`). Items 3 and 4 below charge the
-  reference's witness (`salt_dead`) per element, not every element of a screened block (`server.md` 11:32Z; item 3's
+  reference's witness (`salt_dead`) per element, not every element of a screened block (item 3's
   per-element form, the assessor's B at 17:25Z), so a row with many screened blocks is rejected only when its tile's
   debit passes the cap, and neither item charges more than its block form. F1′ charges a screened block's near-certain
   codes at their own p_t. This replaces D-SS's one-in-64 row cap, which rejected about half of real activation rows.
 - **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units. Items 1 and 1b and R1
-  are the base-split and flatness fix: research store `internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §6.2, §6.3 and
-  §6.8, under the assessor's FP4 conditions (`internal/pouw/red-team/ratings.md` 15:18Z).
+  are the base-split and flatness fix, under the assessor's FP4 conditions (15:18Z).
   1. **F1′, the base split's expected saving,** per row and aligned 128-window of A′ and of B̃, on every word the row
      feeds:
      - p_t = P(code ≠ its modal code) at the block's modal scale byte, under the exact law of the row's noise given
@@ -734,15 +728,14 @@ useful    U/(α_A·α_B), glue
      - it is taken at the cheater's sorted layout inside each block, with κ = min(c·M_w, 0.125) inside the expectation,
        where c = 16.92/128 and M_w counts the window's blocks whose realised byte isn't their modal byte;
      - B̃'s rows are charged `F1_B_OVERFIT` = 10 times it per window, capped at the window's MACs. That factor is
-       measured, not derived (`btilde_mirror.py`, `btilde_honest.py`); at n ≤ 1,024 a stronger search pays past it,
-       which B-OVF covers.
+       measured, not derived; at n ≤ 1,024 a stronger search pays past it, which B-OVF covers.
 
   1b. **F2, the masked int8 route's saving,** per tile on both operands: max(0, 1 − c_L − 4·(2 − f_A − f_B)) per chain
       MAC.
       - f is read at the tile's modal byte, per row and per block-column class, taking the largest reading.
       - c_L is the fast-matmul catalogue's minimum at its lower-bound add count, one add per new form (the assessor's
-        20:00Z ruling; `fast-matmul-catalogue-audit.md` §4). It is pinned per shape (`pearl_c4_c_L`), and a shape
-        between table points reads the next point up in m, k and n, whose c_L is the lower.
+        20:00Z ruling). It is pinned per shape (`pearl_c4_c_L`), and a shape between table points reads the next
+        point up in m, k and n, whose c_L is the lower.
         - The routes: Perminov's catalogue at `ac13ca88`, every orientation, rational levels included, nested with
           Strassen–Winograd levels; W1's int8 leaf 2.0; 4.25 FP4 slots per pre-add element-op; A′'s pre-adds amortised
           over n and B's over m.
@@ -780,8 +773,7 @@ useful    U/(α_A·α_B), glue
     verifier forms every scale itself from the committed rows, and every replayed step reads a UE4M3 byte as the hardware
     does (`hw_scales`).
     The decode is the Lean `scaleDyadic` proposal's.
-    - Its `nvf4Specials` table has 28 rows: research store `internal/pouw-fp8/pearl-c4-scale-decode/`, bc-5a715b19's
-      review.
+    - Its `nvf4Specials` table has 28 rows (bc-5a715b19's review).
     - Four of those rows are NaN accumulators whose scale bytes set bit 7. They are valid scales under the hardware
       decode, and outside the model through the accumulator (a test); the card writes 0x7FFFFFFF.
     - The pinned model (`verity_catalog.silicon.models._scale_dyadic`) reads the low 7 bits too. GPU 4 replayed all 17 bit-7
@@ -801,12 +793,11 @@ useful    U/(α_A·α_B), glue
     heads. They are never applied on an unrotated checkpoint, curated or not.
   - A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
     V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
-    because the two were measured only together, after the rotation (research store `internal/pouw/keyed-transforms/`).
+    because the two were measured only together, after the rotation.
   - **A checkpoint that needs γ folded registers only with it**, as Llama-3.1-70B does: the cast moves its layer 0's
-    update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded (research store
-    `docs/pouw/keyed-transforms.md` §14). The rotation folds γ, so its stacks pass as they are. An unrotated, curated
-    checkpoint declares `gamma-fold` (every RMSNorm scale folded into the linears it feeds), and takes no V/O or
-    interleave.
+    update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded. The rotation folds γ, so its
+    stacks pass as they are. An unrotated, curated checkpoint declares `gamma-fold` (every RMSNorm scale folded into
+    the linears it feeds), and takes no V/O or interleave.
   - The rule reads what a registration declares. Applying the transforms and drawing their keys are the
     registration's own.
 - **The work law** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.

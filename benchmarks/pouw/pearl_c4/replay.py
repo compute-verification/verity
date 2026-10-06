@@ -1,7 +1,7 @@
-"""Pearl-C4's reference replay of a device run's own transcript under the work law (`pearl_c_work.audit`), with the domain
-and the debit of research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md`` §1 and §2.  It opens rows and words
-and recomputes them in the clear, so its ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK
-proof, PROTOCOL.md), never the protocol's verdict.
+"""Pearl-C4's reference replay of a device run's own transcript under the work law (`pearl_c_work.audit`), with
+Pearl-C4's domain and debit (`schemes.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
+ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md), never the protocol's
+verdict.
 
 **The dump** (`write_dump`) is what a timed call emits, as the device holds it after the call: A's rows (BF16, row-major,
 the unit's m rows with its zero filler) and B's, the device's A and B roots (`audit.commit_rows`, SHA-256 whole-row leaves),
