@@ -41206,6 +41206,9 @@
     "Flock.MerkleScheme.collision_hash",
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.merkleCheck_opens",
     "Flock.merkle_binding",
     "Flock.squeeze_answers",
@@ -41615,6 +41618,9 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_block",
@@ -41970,6 +41976,9 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -42317,6 +42326,9 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -42643,6 +42655,9 @@
     "Flock.CoinTree.ofHello": "a145ee007c12826ee60aca145efa20c71dc9439960cbb439e48cf12ffb7fa6da"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -42916,6 +42931,9 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.baseOf_get",
     "FlockLevel3.build_computes",
     "FlockLevel3.foldB_get",
@@ -43246,6 +43264,9 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -43629,6 +43650,9 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -43975,6 +43999,9 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -44347,6 +44374,9 @@
     "_private.Flock.Draw.0.Flock.Draw.workStratumOfJson": "5cad839e36fe00cc241399868793440ece4cd9d90015ce20cba8172b76884588"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Audit.Law.countRule_eq_draw",
     "FlockSoundness.Audit.Law.drawOS_def",
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
@@ -44657,6 +44687,9 @@
     "Flock.Extract.graph": "0c0133729e0bfc266dbd35d61822938e72fdf4c750dfd36a215c6843e2a3f680"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -44942,6 +44975,9 @@
     "Flock.MerklePair.sha512_inputs",
     "Flock.MerkleScheme.all_sized",
     "Flock.MerkleScheme.collision_hash",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.climb_binding",
     "Flock.merkleCheck_opens",
     "Flock.merkle_binding",
@@ -45429,6 +45465,9 @@
     "Flock.MerkleScheme.collision_hash",
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.squeeze_answers",
     "Flock.squeeze_retained",
     "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
@@ -45818,6 +45857,9 @@
     "Flock.MerkleScheme.all_sized",
     "Flock.MerkleScheme.collision_hash",
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.RowV2.enc_inj",
     "FlockLevel3.RowV2.prefix_size",
     "FlockSoundness.Binding.HmRows.registered",
@@ -46237,6 +46279,9 @@
     "Flock.HmNets.hmLaid_eq",
     "Flock.HmNets.layout_rows",
     "Flock.HmNets.shaLaid_eq",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_block",
@@ -46618,6 +46663,9 @@
    "guarantees": [
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.RowV2.enc_inj",
     "FlockLevel3.RowV2.packBits_length",
     "FlockLevel3.RowV2.prefix_size",
@@ -46965,6 +47013,9 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -47285,6 +47336,9 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -47641,6 +47695,9 @@
     "Flock.whatsGo": "f9caac05639e5876006e083cbb72fb76c62689db2c98ee875127b5c7f5ed1274"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
@@ -47790,6 +47847,9 @@
     "Flock.MufuTable.words": "89cf712873d3107f3917070011dc4a22b66cc68311751742ea6645539180175d"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.baseOf_get",
     "FlockLevel3.build_computes",
     "FlockLevel3.foldB_get",
@@ -48072,6 +48132,9 @@
     "Flock.MerklePair.sha512_inputs",
     "Flock.MerkleScheme.all_sized",
     "Flock.MerkleScheme.collision_hash",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.climb_binding",
     "Flock.merkleCheck_opens",
     "Flock.merkle_binding",
@@ -48410,6 +48473,9 @@
     "Flock.HmNets.shaLaid_eq",
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.baseOf_get",
     "FlockLevel3.build_computes",
     "FlockLevel3.foldB_get",
@@ -48727,6 +48793,9 @@
     "Flock.ringSwitch": "87fa68afdd557e70b0e440edf5a58b49207c15bd8a8c6eb3013348a2af42e2a8"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
@@ -48889,6 +48958,9 @@
     "Flock.Partition.validate": "258ccfcfd51cf7ddff8d88638763a2e4220507340884be487fc57049d3eba285"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -49156,6 +49228,9 @@
     "Flock.skipWeights": "aff948bf8c5a5b9d23dd040dd3d7887973a997a1c0f68e53c50c56517d9c023a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.eqTable_get",
     "FlockLevel3.eqTable_size",
     "FlockLevel3.foldRanges_get",
@@ -49535,6 +49610,9 @@
     "_private.Flock.Program.0.Flock.Program.widthAfter?": "d2d3353bca7af82568c6f879cb7eab47614b60e8d80d22d30d8a6092bf00c061"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -49829,6 +49907,9 @@
     "Flock.instInhabitedZerocheckProof.default": "1958fa8c58e95acc1d63b3659ae5368b791c029b919acbfa1b25aea8f86c68f3"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.Lincheck.replay_lincheck",
     "FlockSoundness.Discharge.Composed.Zerocheck.c_eval",
     "FlockSoundness.Discharge.Composed.Zerocheck.claim_honest",
@@ -50013,6 +50094,9 @@
    "guarantees": [
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -50332,6 +50416,9 @@
     "_private.Flock.Qcall.0.Flock.Qcall.withCall": "46681ccf55dd9332937bb85b5fa6300725adfe5b242727092c6cc5b124020205"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -50571,6 +50658,9 @@
     "Flock.Qword.instInhabitedDCut.default": "ce24148e80df5c60168f6ec16daa77bc201c280f9b96e8a3c68397aa62cf4b8a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -50833,6 +50923,9 @@
     "Flock.StreamRec.rounds": "5b146dec61efbb297a72cb7578d80cbb1da9e81ebd64fae52b0edb5b4919f4f3"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
@@ -51018,6 +51111,9 @@
     "Flock.mkRegion": "5f114dc12db36808d8d8d876a67e06d165ba81c44eb0ca2cd345fdadd66b5188"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -51294,6 +51390,9 @@
     "Flock.queriesAt": "e5c2e5d88c9efd1ef08a6bb2dd8fab6ccae9de9d90a49d5f64119195e0d3f903"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -51506,6 +51605,9 @@
     "Flock.instInhabitedStmt.default": "2cc8a24a64bf8126a8f5ba4bbc778b1917a99776b220735bfaa7cd4f041eba7d"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.addDelta_get",
     "FlockLevel3.baseOf_get",
     "FlockLevel3.foldRanges_get",
@@ -51819,6 +51921,9 @@
     "_private.Flock.Tags.0.Flock.Tags.s": "a4a190d4a37066637be18f3ca5b4adc590b08525521438547f56b4222a5775ff"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -52112,6 +52217,9 @@
     "_private.Flock.TemplateQuery.0.Flock.TemplateQuery.showList": "d5a3296879e70e5e0cb3eb37f12c4953792cd600933b0f6bef8905084afc58cd"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -52367,6 +52475,9 @@
     "_private.Flock.Transcript.0.Flock.Round.answers.match_1.splitter": "4b402e2ea389f69e2be9145428adfb21ec78ecf6124db4edb1970ee2a421d2af"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.squeeze_answers",
     "Flock.squeeze_retained",
     "FlockSoundness.Discharge.Composed.Lincheck.replay_lincheck",
@@ -52566,6 +52677,9 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -52871,6 +52985,9 @@
     "Flock.verifyRep": "2cf106cd1d90ad6600c8cca1b840aeb66d49f2834ab54d92644c61d7764e5b18"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.Lincheck.replay_lincheck",
     "FlockSoundness.Discharge.Composed.ZerocheckMasked.finalC_masked_eval",
     "FlockSoundness.Discharge.Composed.ZerocheckMasked.replay_zerocheck",
@@ -53072,6 +53189,9 @@
     "_private.Flock.Zk.0.Flock.Zk.s": "328fbfec598bc6d2a7439596efe2435ec8d78dbb84f23880e4b0b104a2453b1f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.Lincheck.lincheck_complete",
     "FlockSoundness.Discharge.Composed.Lincheck.replay_lincheck",
     "FlockSoundness.Discharge.Composed.ZerocheckMasked.c_eval_eval",
@@ -53196,6 +53316,9 @@
     "Flock.Zk.rhoIndependent": "f0006095b61ed91fc31bc4b8c47e4a75adcb8d2889f72daecc4e1e9c2e883868"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
@@ -53308,6 +53431,9 @@
     "Flock.Zk.reader": "25a7fe6abd2440d7a1bcb899a7794769202b2b105d481294da3992e865fd7226"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
@@ -53392,6 +53518,9 @@
     "FlockLevel3.unpack": "34d46d73da3087e523794f03fdf8cc353e89599bab7796dabf68f8d46e7a5d66"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.card_F",
     "FlockLevel3.card_K",
     "FlockLevel3.lo_balanced",
@@ -54343,6 +54472,9 @@
     "FlockLevel3.instFieldGF128": "8d89e3a068c342c818866b82d507901b8cea23772c0345b39cc1467af187f955"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.GF128.add_eq",
     "FlockLevel3.GF128.inv_eq",
     "FlockLevel3.GF128.mul_eq",
@@ -55665,6 +55797,9 @@
     "FlockLevel3.u": "9f0c9aed308bb84c708a957725a63f5d9be6219ba17e66216cc1f311c9249e2a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockLevel3.card_F",
     "FlockLevel3.card_K",
     "FlockLevel3.lo_balanced",
@@ -55931,6 +56066,9 @@
     "FlockSoundness.Accounting.tableError": "379cb0e59f39af11a43528dc3c88b34e0e8c55b7c3d4563e22d4371bdb6e1c48"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -56177,6 +56315,9 @@
     "FlockSoundness.Accounting.instDecidableOk": "6ff45e7f70c0f9683114f2e765e0f9c5c8ce64c01d70afc473dd93b28887b614"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
@@ -56316,6 +56457,9 @@
     "FlockSoundness.Accounting.padRepError": "4f4a4fdca77d6a089e1d51810b1206ea8ea24c612a05babeb3cfbd44aa4ef50a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -56463,6 +56607,9 @@
     "FlockSoundness.Accounting.queriesAt": "02ff8aa174c6daa85acab4c3c46c3a7c884bdb01a81e37e168dc3815b407d42b"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -59336,6 +59483,9 @@
     "FlockSoundness.wit": "63c5ebda55f859c118e57170708ff50a8560217a34e1e68f2e4a80bafc169cb2"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -59856,6 +60006,9 @@
     "FlockSoundness.Discharge.Composed.tableZJ": "d1ba296f6cdeec31109a8130fdb33895658c82be4fd90d8d73feeca58a1af87c"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.e2e_forces_mPts",
@@ -60365,6 +60518,9 @@
     "FlockSoundness.Discharge.DecodeZLJ.tableJ": "8ad7ea459f6892d00d3afac47210ebd08d32a715ab8bba3d9d662e3502a83b83"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
@@ -60594,6 +60750,9 @@
     "FlockSoundness.Discharge.Exec.setupOf": "a1b00a74a7d210e3564d54a90f1691ea9da1252cd87fbeac47ee3b0225b9e412"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
@@ -60936,6 +61095,9 @@
     "FlockSoundness.Discharge.Exec.mPtsOf": "7080ef81fec16a718bf61f0c69adb35559ecb27ee2fa01e9e75939c45dd429cc"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -61128,6 +61290,9 @@
     "FlockSoundness.Discharge.Exec.tagsAt": "1a652483666eca83aff8dc337ed3f972341fa267c6b8869083f6603433b763fa"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
@@ -62020,6 +62185,9 @@
     "FlockSoundness.Discharge.Integrate.tableAt": "140e6a4921ac8bcbce985f756708f24cd28680293b857a37bcde8ae87070c293"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -62657,6 +62825,8 @@
     "FlockSoundness.Discharge.Layout.v1Ports": "419f84805405ff9c528ff08704dd885ad8d8fcd0cbab869cbbd47a4e2d00d074"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -63204,6 +63374,9 @@
     "FlockSoundness.Discharge.Tables.partDraw": "bf70222edaa33c796d3a2885c49eb9ca1bb01926a8832f80ea4fa7fba4ef1e3e"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
@@ -63612,6 +63785,9 @@
     "FlockSoundness.Discharge.ZkExec.zkTags": "52b991cd340260bb9563ca78fbec6a9a4318ff1fee04560d8dcbfedbfdb053cf"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
@@ -63861,6 +64037,9 @@
     "FlockSoundness.Discharge.ZkExec.shapeZK": "bad8fdd7105deeea695a8bec6eeb8a3d764f616b7fe9dd22d4704561e322aefe"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -64388,6 +64567,9 @@
     "FlockSoundness.Discharge.ZkLink.drawOf": "ef60d41dd614d169fc272ee62e10e6c07a47af85af2fe43a6322d3092d3ff1ea"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -64820,6 +65002,9 @@
     "FlockSoundness.Discharge.ZkLink.tripleOfLay": "01f448f1b124afcfc3c9572e92e604b0ef79afd0cfd0fb1f2e906046cc7d9970"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -66015,6 +66200,8 @@
     "FlockSoundness.setupH_flatTableClass": "f80866e9876bd79186a50c02f9264739ef8c7e930c6244bf6979c169735c6850"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_block",
@@ -66275,6 +66462,8 @@
     "FlockSoundness.stackPlace": "9c604532cbcbc4c972da554a1e5aae73bae1033eb4a6d24d2d207c8c121b555b"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_block",
@@ -66836,6 +67025,9 @@
     "FlockSoundness.Game.value": "bc2660b60becad0b8b4c4f8f12e9810dd670a419e44ddecab4f976b1af502fda"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Ex.exfil",
@@ -68420,6 +68612,9 @@
     "FlockSoundness.levelsChained": "d17168c6830ac2f8f5ff353882993e380bb0a18555b1ce9dceb0ee77fd8400d5"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -71892,6 +72087,8 @@
     "FlockSoundness.Refine.regionsOf": "64a77bb4527c2fa7b43f0591444fc7f6078ac344e7fe2e7f6b50972318acd3ae"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -72306,6 +72503,9 @@
     "FlockSoundness.Refine.schedOf": "42ccc94c62f4e76f64ce302754198a1bf0069d2181af3fefed823c4d9aae5cce"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -72414,6 +72614,8 @@
     "FlockSoundness.Refine.stmtOf": "e9b850a1a4865c1694dbcf82b840df952e4810c9570f20f74d63a3d8bd2a2f2c"
    },
    "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
