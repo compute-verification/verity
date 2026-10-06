@@ -76,27 +76,25 @@ theorem checkPort_at {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
   · rename_i p hp
     split at h
     · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
-    · split at h
+    · obtain ⟨⟨positions, paths⟩, hent, h⟩ := Registered.except_bind_ok h
+      simp only at h
+      split at h
       · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
-      · obtain ⟨⟨positions, paths⟩, hent, h⟩ := Registered.except_bind_ok h
-        simp only at h
-        split at h
-        · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
-        · split at h
-          · exact absurd h (Registered.throw_ne_ok _ _)
-          · rename_i hrow
-            split at h
-            · rename_i hinst
-              refine ⟨p, positions, paths, hp, hent, fun i hi => ?_⟩
-              have hi' := List.find?_eq_none.mp hinst i (List.mem_range.mpr hi)
-              simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or,
-                Classical.not_not] at hi'
-              obtain ⟨hr, hreads⟩ := hi'
-              have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
-              exact ⟨hr, hreads, by simpa using ho⟩
-            · split at h
-              · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
-              · split at h <;> exact absurd h (Registered.throw_ne_ok _ _)
+      · split at h
+        · exact absurd h (Registered.throw_ne_ok _ _)
+        · rename_i hrow
+          split at h
+          · rename_i hinst
+            refine ⟨p, positions, paths, hp, hent, fun i hi => ?_⟩
+            have hi' := List.find?_eq_none.mp hinst i (List.mem_range.mpr hi)
+            simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or,
+              Classical.not_not] at hi'
+            obtain ⟨hr, hreads⟩ := hi'
+            have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
+            exact ⟨hr, hreads, by simpa using ho⟩
+          · split at h
+            · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
+            · split at h <;> exact absurd h (Registered.throw_ne_ok _ _)
   · exact absurd h (Registered.throw_ne_ok _ _)
 
 variable {mPts n : ℕ} {Reg : Type}

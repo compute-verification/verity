@@ -49,7 +49,8 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
 
 /-- **A layout's registered reads.** The commit strings whose rows the session reads from a value registered before
-(`isRead`), each an `hm96-sha512/row/v1` row (`read_row`); at each, the registered root the verifier holds (`port`, from
+(`isRead`), each one of the layout's hm96 rows (`read_row`; the verifier's check takes registered rows to be
+`hm96-sha512/row/v2` rows, `HmRows.v2`); at each, the registered root the verifier holds (`port`, from
 the registration log's held roots) and the position the verifier's program reads there (`readAt`); and the registrant's
 opening there: the row and salt it committed (`wv`, `ws`) and their path (`wpath`), which open that root at that
 position (`committed`). -/

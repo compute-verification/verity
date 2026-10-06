@@ -180,7 +180,7 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--comp", default=None, help="the BLAKE3 row leaf's compression circuit (statements before eb90718f)")
     ap.add_argument("--partition", default=None, help="the verity/partition/v1 object the circuit binds (PR #83 from e51e2b86)")
     ap.add_argument("--program", default=None, help="the program's descriptor bytes, to derive a template query's units")
-    ap.add_argument("--registered", default=None, help="the verifier's own registered reads (verity/registered-reads/v0)")
+    ap.add_argument("--registered", default=None, help="the verifier's own registered reads (verity/registered-reads/v1)")
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
     ap.add_argument("--zk", action="store_true", help="flock-circuit --zk sessions (upstream: the live build's replay)")

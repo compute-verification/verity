@@ -1315,11 +1315,12 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   failing cut refuses the partition, naming the Call and its codes. For any other query, or without `--program`, `units`
   is `as stated`, with the reason in `note`, which an audit reports as a gap.
 - **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
-  The verifier needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, root, leaves, domain,
-  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be
-  `sha512/row/v1` rows of their u16 words, padded. A port is any row of the circuit: an input port's, or (§16.13) an
+  The verifier needs its own `--registered F` (`verity/registered-reads/v1`: per port the value, root, leaves, domain,
+  read positions, `words` and `word_bits`, 16 or 32); the port must be a bit row (`row_schemas`: `hm96-sha512/row/v2`,
+  not a segmented row) of exactly `words * word_bits` bits, as the registration commits each row (`sha512/row/v2` of the
+  row's leaves little-endian). A port is any row of the circuit: an input port's, or (§16.13) an
   output port's row, whose table is the instances' output rows, instance `i`'s ref `i`, so instance `i`'s output is the
-  registered row at `positions[i]`. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its
+  registered row at `positions[i]`. Each table row's `hm96-sha512/row/v2` leaf must climb its path to the root at its
   position, each instance's ref name its unit's read position in the verifier's program (units `derived`). A port on
   one side only refuses; verdicts report `registered`.
 - **Identifier.** The header may carry `identifier`, a JSON object C-Flock does not read (an application's name for what the
@@ -1469,9 +1470,10 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
   as both proofs (under a draw, an undrawn writer's output is unproven: the check binds the reader's input to the writer's
   committed output, not to a correct one), and a deduplicated reader table (`shared_rows`) links at most one producer
   instance per row.
-- **Registered reads** are §16.10's, of `v1` rows. A registered port is an input row or an output row: a registered output
-  row opens the registered root at its unit's read position, under the registered row's salt, so the instance's output is
-  that row (a `row-seg/v1` or `v2` row is refused: its leaf is not the registration's `row/v1` leaf).
+- **Registered reads** are §16.10's, of `v2` rows. A registered port is an input row or an output row: a registered output
+  row (`v2_out_rows`, a bit row of exactly its words) opens the registered root at its unit's read position, under the
+  registered row's salt, so the instance's output is that row (a `row/v1` or `row-seg/v1` row is refused: its leaf is not
+  the registration's `row/v2` leaf).
 - **Agreement:** README.
 
 ### 16.14 `--zk` sessions

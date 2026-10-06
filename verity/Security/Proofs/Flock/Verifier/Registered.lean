@@ -1,6 +1,6 @@
 /-
 Level 3: registered reads (PROTOCOL.md §16.10). `check_ok`: when `Registered.check` accepts, each of the verifier's
-registered ports has the registered rows' width, and every instance's row of it climbs, from its frame-v3-sha512 leaf at
+registered ports is a bit row of the registered rows' bits, and every instance's row of it climbs, from its frame-v3-sha512 leaf at
 the position the verifier's program reads for the instance's unit, to the registered root the verifier holds.
 `opensLeaf_binding`: two openings the verifier accepts at
 one position under one registered root, with different leaves, give an explicit SHA-512 collision (`openPair`). No random
@@ -30,11 +30,11 @@ theorem forM_ok {ε α : Type} {f : α → Except ε Unit} : ∀ {l : List α}, 
     | head => exact hu
     | tail _ hx => exact forM_ok hrest x hx
 
-/-- A port `checkPort` accepts is the circuit's port `p`, whose rows are the registered rows, and every instance's row of
+/-- A port `checkPort` accepts is the circuit's port `p`, a bit row of the registered rows' bits, and every instance's row of
 its table opens the registered root at the position the verifier's program reads for the instance's unit. -/
 theorem checkPort_ok {c : Circuit} {pub : Public} {t : Tables} {indices : Array Nat} {reg : Port}
     (h : checkPort c pub t indices reg = .ok ()) :
-    ∃ p, p < c.ports.size ∧ c.ports[p]!.name = reg.name ∧ reg.fits c.ports[p]!.words = true ∧ ∀ i < pub.n,
+    ∃ p, p < c.ports.size ∧ c.ports[p]!.name = reg.name ∧ reg.fits c.ports[p]! = true ∧ ∀ i < pub.n,
       ref t c.ports.size p i < t.counts.getD p 0 ∧ ∃ pos path, reg.reads[indices.getD i 0]? = some (some pos) ∧
         opens reg (tableRow pub t p (ref t c.ports.size p i)) pos path = true := by
   unfold checkPort at h
@@ -43,42 +43,40 @@ theorem checkPort_ok {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
   · rename_i p hp
     split at h
     · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
-    · split at h
+    · rename_i hfit
+      obtain ⟨⟨positions, paths⟩, _, h⟩ := except_bind_ok h
+      simp only at h
+      split at h
       · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
-      · rename_i hfit
-        obtain ⟨⟨positions, paths⟩, _, h⟩ := except_bind_ok h
-        simp only at h
-        split at h
-        · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
-        · split at h
-          · exact absurd h (throw_ne_ok _ _)
-          · rename_i hrow
-            split at h
-            · rename_i hinst
-              have hpn := List.find?_some hp
-              refine ⟨p, List.mem_range.mp (List.mem_of_find?_eq_some hp), by simpa using hpn, by simpa using hfit,
-                fun i hi => ?_⟩
-              have hi' := List.find?_eq_none.mp hinst i (List.mem_range.mpr hi)
-              simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or, Classical.not_not] at hi'
-              obtain ⟨hr, hreads⟩ := hi'
-              have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
-              exact ⟨hr, _, _, hreads, by simpa using ho⟩
-            · split at h
-              · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
-              · split at h <;> exact absurd h (throw_ne_ok _ _)
+      · split at h
+        · exact absurd h (throw_ne_ok _ _)
+        · rename_i hrow
+          split at h
+          · rename_i hinst
+            have hpn := List.find?_some hp
+            refine ⟨p, List.mem_range.mp (List.mem_of_find?_eq_some hp), by simpa using hpn, by simpa using hfit,
+              fun i hi => ?_⟩
+            have hi' := List.find?_eq_none.mp hinst i (List.mem_range.mpr hi)
+            simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or, Classical.not_not] at hi'
+            obtain ⟨hr, hreads⟩ := hi'
+            have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
+            exact ⟨hr, _, _, hreads, by simpa using ho⟩
+          · split at h
+            · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
+            · split at h <;> exact absurd h (throw_ne_ok _ _)
   · exact absurd h (throw_ne_ok _ _)
 
 /-- **`Registered.check` accepting.** If the verifier holds registered roots (`own`) and `check` accepts the statement, the
 units were derived from the verifier's own program, and for each of the verifier's registered ports `reg` (the circuit's
-port `p`, whose rows of u16 words are `reg`'s registered rows: `Port.fits`) and each instance `i`, the verifier's program
+port `p`, a bit row of `reg`'s registered rows' bits: `Port.fits`) and each instance `i`, the verifier's program
 reads a position `pos` of `reg`'s value in instance `i`'s unit (`indices`: the units the public file's header names,
 which the partition check derived), and instance `i`'s row (`Public.digest`, its `b ‖ c`) climbs from its
-frame-v3-sha512 leaf at `pos` (its `hm96-sha512/row/v1` leaf, framed at `pos` under `reg`'s domain) through a path of
+frame-v3-sha512 leaf at `pos` (its `hm96-sha512/row/v2` leaf, framed at `pos` under `reg`'s domain) through a path of
 one 64-byte sibling per level to `reg`'s root. -/
 theorem check_ok {c : Circuit} {pub : Public} {own : Array Port} {derived : Bool}
     (h : check c pub (some own) derived = .ok ()) :
     derived = true ∧ ∃ indices, unitIndices pub = .ok indices ∧
-      ∀ reg ∈ own, ∃ p, p < c.ports.size ∧ c.ports[p]!.name = reg.name ∧ reg.fits c.ports[p]!.words = true ∧
+      ∀ reg ∈ own, ∃ p, p < c.ports.size ∧ c.ports[p]!.name = reg.name ∧ reg.fits c.ports[p]! = true ∧
         ∀ i < pub.n, ∃ pos path, reg.reads[indices.getD i 0]? = some (some pos) ∧ pos < reg.leaves ∧
           path.size = 64 * log2ceil reg.leaves ∧
           climb reg.domain (rowLeaf reg.domain pos (Hm96.Default512.treeLeaf (pub.digest i p c.ports.size))) pos
@@ -126,7 +124,7 @@ def nodeIn (dom : ByteArray) (d idx : Nat) (l r : ByteArray) : ByteArray := fram
 
 /-- What `rowLeaf` hashes. -/
 def leafIn (dom : ByteArray) (pos : Nat) (payload : ByteArray) : ByteArray :=
-  frame "leaf" [dom, FV3.uint pos, FV3.uint pos, HmRow.ROW_SCHEMA.toUTF8, payload]
+  frame "leaf" [dom, FV3.uint pos, FV3.uint pos, HmRow.ROW_SCHEMA_V2.toUTF8, payload]
 
 theorem node_eq (dom : ByteArray) (d idx : Nat) (l r : ByteArray) :
     node dom d idx l r = Sha512.hash (nodeIn dom d idx l r) := rfl
@@ -231,7 +229,7 @@ def openPair (reg : Port) (pos : Nat) (x path y path' : ByteArray) : ByteArray �
     (sibs path' (log2ceil reg.leaves))
 
 /-- **Registered-path binding.** Two openings the verifier accepts (`opensLeaf`) at one position `pos` under one registered
-root, of two different 64-byte `hm96-sha512/row/v1` leaves `x ≠ y`: `openPair` computes two different SHA-512 inputs with
+root, of two different 64-byte `hm96-sha512/row/v2` leaves `x ≠ y`: `openPair` computes two different SHA-512 inputs with
 one digest from them. The frame binds the payload's position, the node's level and index, and each child's length, so
 the pair is a collision of two leaves' frames or of two nodes' frames. -/
 theorem opensLeaf_binding (reg : Port) (pos : Nat) (x path y path' : ByteArray) (hx : x.size = 64) (hy : y.size = 64)

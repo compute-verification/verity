@@ -793,8 +793,9 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     ``salts`` (``{port: [192-byte salt, ...]}``, every row port's, one per table row, or per instance without tables): the
     committer's own salts.
 
-    ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the ``sha512/row/v1`` rows whose table rows
-    are rows of a registered value, committed with the registration's salts (``salts``), each table row's position and
+    ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the ``sha512/row/v2`` rows (bit rows of
+    whole u16 words, ``port_bits``; an output port's row of exactly its words, ``v2_out_rows``) whose table rows are rows of
+    a registered value, committed with the registration's salts (``salts``), each table row's position and
     frame-v3 path to the registered root (``verity.protocols.verification.sampled_proofs.one_stage.registered``); the header's ``registered``. A port
     is an input port (its table's rows) or an output port's row (its table the instances' output rows, one each: instance
     ``i``'s output is the registered row at ``positions[i]``, under that row's registered salt ``salts[port][i]``). A padding
@@ -832,11 +833,14 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
         if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ports}:
             raise ValueError("registered: some rows' tables (input ports' or output rows'), given with their tables, refs and "
                              "registered salts")
+        from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+
         by_name = {p.name: p for p in ports}
         for name, e in registered.items():
-            if by_name[name].bits is not None:
-                raise ValueError(f"registered port {name}: a {by_name[name].schema} row, and registered rows are "
-                                 f"{ROW_SCHEMA} rows")
+            p = by_name[name]
+            if p.bits is None or p.seg or p.bits != 16 * p.words:
+                raise ValueError(f"registered port {name}: a {p.schema} row of {p.n_bits} bits, and registered rows are "
+                                 f"{SCHEMA_HM96_SHA512_ROW_V2} rows of whole u16 words")
             rows_p = n if by_name[name] in orows else len(np.asarray(tables[name]).reshape(-1, by_name[name].words))
             if set(e) != {"value", "positions", "paths"} or len(e["positions"]) != rows_p or len(e["paths"]) != rows_p:
                 raise ValueError(f"registered port {name}: a value, and one position and path per table row")

@@ -180,6 +180,27 @@ def test_shared_rows_as_given_keep_equal_rows_apart(tmp_path):
     assert x0 != x2, "equal rows, different salts: different leaves"
     with pytest.raises(ValueError, match="one ref per instance"):
         FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", share_rows=True, outs=outs, tables=tables, refs={**refs, "x": [0, 1, 3, 1]})
+
+
+@pytest.mark.slow
+def test_registered_rows_are_bit_rows_of_their_words(tmp_path):
+    """A registered port is a `sha512/row/v2` row of exactly its words (`port_bits`, and an output port's `v2_out_rows`), as
+    the registration commits its rows: the header carries each port's positions and paths, and a `sha512/row/v1` port is
+    refused."""
+    s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
+    low = FC.lowering_for_set(s)
+    out = s.subcircuit.outputs[0].name
+    bits = [16 * w for w, _ in low.leaves["in_ports"]]
+    text = FC.compose(low, s.subcircuit, port_bits=bits, v2_out_rows=((out,),))
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    names = [nm for nm, _, _ in meta["ports"]]
+    assert [sch for sch, _ in meta["row_schemas"]] == ["hm96-sha512/row/v2"] * len(names)
+    base = {nm: np.asarray(s.port(nm, 0, 4), dtype=np.uint16).reshape(4, -1) for nm in ("x", "cs")}
+    tables = {"x": base["x"][[0, 1, 0]], "cs": base["cs"][[0, 1]]}
+    refs = {"x": [0, 1, 2, 1], "cs": [0, 1, 0, 1]}
+    outs = {p.name: np.asarray(s.port(p.name, 0, 4), dtype=np.uint16).reshape(4, -1)[[0, 1, 0, 1]] for p in s.subcircuit.outputs}
+    counts = {"x": 3, "cs": 2, **{nm: 4 for nm in outs}}
+    salts = {nm: [bytes([k + 1, r]) * (FC.SALT_BYTES // 2) for r in range(counts[nm])] for k, nm in enumerate(names)}
     reg = {"cs": {"value": "w", "positions": [4, 2], "paths": ["00" * 64, "11" * 64]}}
     shared = dict(share_rows=True, outs=outs, tables=tables, refs=refs)
     assert FC.write(text, s, 0, 4, None, tmp_path / "reg.bin", salts=salts, registered=reg, **shared)["registered"] == reg
@@ -197,6 +218,9 @@ def test_shared_rows_as_given_keep_equal_rows_apart(tmp_path):
                  **shared)
     with pytest.raises(ValueError, match="some rows' tables"):
         FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered={"nope": reg["cs"]}, **shared)
+    v1 = FC.compose(low, s.subcircuit)
+    with pytest.raises(ValueError, match="registered port cs: a hm96-sha512/row/v1 row"):
+        FC.write(v1, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered=reg, **shared)
 
 
 @pytest.mark.slow

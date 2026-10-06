@@ -78,8 +78,9 @@ def staged(tmp_path_factory):
     program, query = _program()
     part = P.partition(program, query)
     s = InputSet.open(generate(TM.rope_head(64), len(POSITIONS), 20260928, d / "set")["path"])
-    text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_sha512(program),
-                      statics=FC.set_statics(s))
+    low = FC.lowering_for_set(s)
+    text = FC.compose(low, s.subcircuit, partition=P.digest(part), program=P.program_sha512(program),
+                      statics=FC.set_statics(s), port_bits=[16 * w for w, _ in low.leaves["in_ports"]])
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(program)))
     (d / "partition.json").write_text(json.dumps(part))
@@ -94,8 +95,8 @@ def staged(tmp_path_factory):
                               np.random.default_rng(20261003).integers(0, 1 << 16, (OUT_ROWS, 64)).tolist())
     own_out = {**own, "ports": {**own["ports"], "out": {**out.entry(), "word_bits": 16, "reads": list(OUT_POSITIONS)}}}
     (d / "own-out.json").write_text(json.dumps(own_out))
-    return SimpleNamespace(dir=d, text=text, reg=reg, own=own, out=out, own_out=own_out, program=program, x=x,
-                           bound=["--partition", str(d / "partition.json"), "--program", str(d / "program.json")])
+    return SimpleNamespace(dir=d, text=text, reg=reg, own=own, out=out, own_out=own_out, program=program, x=x, set=s, low=low,
+                           part=part, bound=["--partition", str(d / "partition.json"), "--program", str(d / "program.json")])
 
 
 def _stage(s, name: str, registered=True, salts=None, entry=None, extra=None, outs=None, out_salts=None) -> Path:
@@ -202,31 +203,55 @@ def test_the_ports_are_exactly_the_verifiers(staged):
     assert code == 1 and "names port x registered, and the verifier's registered reads do not" in out
     bad = staged.dir / "bad.json"
     cs = {k: v for k, v in staged.own["ports"]["cs"].items() if k not in ("words", "word_bits")}
-    for doc, want in (({"format": "verity/registered-reads/v1", "ports": {}}, "not a verity/registered-reads/v0 file"),
+    for doc, want in (({"format": "verity/registered-reads/v0", "ports": {}}, "not a verity/registered-reads/v1 file"),
                       ({**staged.own, "ports": {}}, "no port"),
                       ({**staged.own, "ports": {"cs": {**cs, "words": 64, "word_bits": 8}}}, "leaves of 16 or 32 bits"),
-                      ({**staged.own, "ports": {"cs": {**cs, "word_bits": 32}}}, "a row's words when they are 32"),
-                      ({**staged.own, "ports": {"cs": {**cs, "words": 0}}}, "at least one to a row")):
+                      ({**staged.own, "ports": {"cs": {**cs, "word_bits": 16}}}, "words missing"),
+                      ({**staged.own, "ports": {"cs": {**cs, "words": 64}}}, "word_bits missing"),
+                      ({**staged.own, "ports": {"cs": {**cs, "words": 0, "word_bits": 16}}}, "at least one to a row")):
         bad.write_text(json.dumps(doc))
         code, out = _statement(staged, public, bad)
         assert code == 2 and want in out, out
 
 
 def test_the_ports_rows_are_the_registered_rows(staged):
-    """The reads file's row width (`words` leaves of `word_bits`, each leaf `word_bits / 16` u16 words, padded to whole
-    SHA-512 blocks) must be the circuit port's: cs's rows are 64 u16 words, one block, which 64 16-bit leaves fill and so
-    do 32 32-bit ones; 64 32-bit leaves or 65 16-bit ones are two blocks, and are refused. A file that names no width has
-    the port's own 16-bit rows (the fixture's, `test_a_session_verified_with_registered_reads_is_held_to_them`)."""
+    """The reads file's row width (`words` leaves of `word_bits`) must be the circuit port's bit row, bit for bit: cs's rows
+    are 1024-bit rows, which 64 16-bit leaves fill and so do 32 32-bit ones; 64 32-bit leaves, 65 16-bit ones and 63 (which
+    a row padded to whole SHA-512 blocks would have taken) are refused."""
     assert staged.own["ports"]["cs"]["words"] == 64 and staged.own["ports"]["cs"]["word_bits"] == 16
     public = _stage(staged, "honest-6")
     for name, width, want in (("own-32x32", {"words": 32, "word_bits": 32}, None),
                               ("own-64x32", {"words": 64, "word_bits": 32}, "rows of 64 32-bit leaves"),
-                              ("own-65x16", {"words": 65}, "rows of 65 16-bit leaves")):
+                              ("own-65x16", {"words": 65}, "rows of 65 16-bit leaves"),
+                              ("own-63x16", {"words": 63}, "rows of 63 16-bit leaves")):
         code, out = _statement(staged, public, _own(staged, name, lambda ps, width=width: ps["cs"].update(width)))
         if want is None:
             assert code == 0, (name, out)
         else:
-            assert code == 1 and f"port cs's rows are 64 u16 words, not {VALUE}'s registered {want}" in out, (name, out)
+            want = f"port cs is a hm96-sha512/row/v2 row of 1024 bits, and {VALUE}'s registered rows are hm96-sha512/row/v2 {want}"
+            assert code == 1 and want in out, (name, out)
+
+
+def test_a_registered_port_of_sha512_row_v1_rows_is_refused(staged):
+    """A statement whose cs port is a `sha512/row/v1` row (u16 words padded to whole SHA-512 blocks), its header naming the
+    registered positions and paths, is refused for its schema: its leaves are not the registration's `row/v2` leaves."""
+    text = FC.compose(staged.low, staged.set.subcircuit, partition=P.digest(staged.part), program=P.program_sha512(staged.program),
+                      statics=FC.set_statics(staged.set))
+    (staged.dir / "circuit-v1.txt").write_text(text)
+    positions, refs = G.table(POSITIONS)
+    rows, salts, e = staged.reg.statement(positions)
+    inputs = SimpleNamespace(name="rope-registered", subcircuit=SimpleNamespace(id="rope-head/d64/neox-bf16"))
+    pub = staged.dir / "v1.bin"
+    FC.write(text, inputs, 0, 8, None, pub, None, list(range(8)), share_rows=True, outs={"out": np.zeros((8, 64), np.uint16)},
+             tables={"x": staged.x, "cs": np.asarray(rows)}, refs={"x": list(range(8)), "cs": refs},
+             salts={"x": [hm96.SHA512.fresh_salt() for _ in range(8)], "cs": salts, "out": [hm96.SHA512.fresh_salt() for _ in range(8)]})
+    head, rest = pub.read_bytes().split(b"\n", 1)
+    pub.write_bytes(json.dumps({**json.loads(head), "registered": {"cs": e}}).encode() + b"\n" + rest)
+    args = [str(BIN), "statement", "--statement", STATEMENT, "--circuit", str(staged.dir / "circuit-v1.txt"), "--public", str(pub),
+            *staged.bound, "--registered", str(staged.dir / "own.json")]
+    p = subprocess.run(args, capture_output=True, text=True, check=False)
+    out = (p.stdout + p.stderr).strip()
+    assert p.returncode == 1 and f"port cs is a hm96-sha512/row/v1 row of 1024 bits, and {VALUE}'s registered rows are" in out, out
 
 
 def test_a_registered_output_row_is_accepted_and_reports_its_root(staged):

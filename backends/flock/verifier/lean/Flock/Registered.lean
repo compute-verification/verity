@@ -1,6 +1,6 @@
 /-
 PROTOCOL.md §16.10 (registered reads); `protocols/sampled_proofs/README.md`, "Registered values": a statement's rows of a
-registered value (a program's weights, constants and tables, committed once at registration under `hm96-sha512/row/v1`
+registered value (a program's weights, constants and tables, committed once at registration under `hm96-sha512/row/v2`
 leaves), opened against the verifier's own registered roots at the positions its own program reads.
 -/
 import Flock.HmRow
@@ -10,18 +10,17 @@ namespace Registered
 
 open Lean (Json)
 
-def FORMAT : String := "verity/registered-reads/v0"
+def FORMAT : String := "verity/registered-reads/v1"
 
 /-- A port of the verifier's own `--registered` file: the value its rows are rows of, the value's registered root, leaf
 count, row width and frame-v3-sha512 domain, and the position every unit of the population reads (none: a unit of
-another template). A row is `words` leaves of `wordBits` bits (16 or 32); a file that names neither (`words` none,
-`wordBits` 16) has rows of 16-bit words, the port's own. -/
+another template). A row is `words` leaves of `wordBits` bits (16 or 32), a bit row of `words * wordBits` bits. -/
 structure Port where
   name : String
   value : String
   root : ByteArray
   leaves : Nat
-  words : Option Nat
+  words : Nat
   wordBits : Nat
   domain : ByteArray
   reads : Array (Option Nat)
@@ -38,21 +37,23 @@ def ofJson (j : Json) : V (Array Port) := do
     let leaves ← J.nat e "leaves" ctx
     if root.size != 64 || domain.size != 64 || leaves == 0 then
       throw s!"{ctx}: port {name}: a 64-byte root and domain, and at least one leaf"
-    let wordBits ← if J.has e "word_bits" then J.nat e "word_bits" ctx else pure 16
-    let words ← if J.has e "words" then some <$> J.nat e "words" ctx else pure none
-    if !(wordBits == 16 || wordBits == 32) || words == some 0 || (words.isNone && wordBits != 16) then
-      throw s!"{ctx}: port {name}: leaves of 16 or 32 bits, at least one to a row, and a row's words when they are 32"
+    let wordBits ← J.nat e "word_bits" ctx
+    let words ← J.nat e "words" ctx
+    if !(wordBits == 16 || wordBits == 32) || words == 0 then
+      throw s!"{ctx}: port {name}: leaves of 16 or 32 bits, at least one to a row"
     let reads ← (← J.arr e "reads" ctx).mapM fun r => match r with
       | .null => pure none
       | r => some <$> J.asNat r s!"{ctx}: a read position"
     return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, reads }
 
-/-- The u16 words of a registered row of `words` leaves of `wordBits` bits, as the statement lays out the port's row:
-each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks of 64 words. -/
-def rowWords (words wordBits : Nat) : Nat := (words * (wordBits / 16) + 63) / 64 * 64
+/-- A circuit port's frame leaf schema: `hm96-sha512/row/v1`, a bit row's `hm96-sha512/row/v2`, a segmented one's
+`hm96-sha512/row-seg/v1`. -/
+def schemaOf (q : Flock.Port) : String :=
+  if q.segs.isSome then HmRow.ROW_SCHEMA_SEG else if q.v2 then HmRow.ROW_SCHEMA_V2 else HmRow.ROW_SCHEMA
 
-/-- The circuit's port rows, of `n` u16 words, are `reg`'s registered rows. -/
-def Port.fits (reg : Port) (n : Nat) : Bool := reg.words.all fun w => n == rowWords w reg.wordBits
+/-- The circuit's port `q` holds `reg`'s registered rows: a bit row (`sha512/row/v2`, its leaf `hm96-sha512/row/v2`, not
+a segmented one) of a registered row's `words * wordBits` bits, as the registration commits each row. -/
+def Port.fits (reg : Port) (q : Flock.Port) : Bool := q.v2 && q.segs.isNone && q.bits == reg.words * reg.wordBits
 
 /-- The frame-v3-sha512 node over `l` and `r` at index `idx` of level `d`. -/
 def node (dom : ByteArray) (d idx : Nat) (l r : ByteArray) : ByteArray :=
@@ -71,11 +72,11 @@ def sibs (path : ByteArray) (depth : Nat) : List ByteArray :=
 /-- The frame-v3-sha512 root a leaf at `i` climbs to through `path` (the siblings, leaf level first, 64 bytes each). -/
 def climb (dom leaf : ByteArray) (i depth : Nat) (path : ByteArray) : ByteArray := climbL dom leaf i 0 (sibs path depth)
 
-/-- The frame-v3-sha512 leaf at `pos` of a registered value's row whose `hm96-sha512/row/v1` leaf is `payload`. -/
+/-- The frame-v3-sha512 leaf at `pos` of a registered value's row whose `hm96-sha512/row/v2` leaf is `payload`. -/
 def rowLeaf (dom : ByteArray) (pos : Nat) (payload : ByteArray) : ByteArray :=
-  FV3.leaf dom pos HmRow.ROW_SCHEMA payload Sha512.hash
+  FV3.leaf dom pos HmRow.ROW_SCHEMA_V2 payload Sha512.hash
 
-/-- A row whose `hm96-sha512/row/v1` leaf is `payload` opens `reg`'s registered root at `pos` through `path`: a position
+/-- A row whose `hm96-sha512/row/v2` leaf is `payload` opens `reg`'s registered root at `pos` through `path`: a position
 among its leaves, one 64-byte sibling per level, and the climb ends at the root. -/
 def opensLeaf (reg : Port) (payload : ByteArray) (pos : Nat) (path : ByteArray) : Bool :=
   decide (pos < reg.leaves) && decide (path.size = 64 * log2ceil reg.leaves) &&
@@ -125,17 +126,15 @@ def badInstance (reg : Port) (t : Tables) (np p rows n : Nat) (positions indices
     !(decide (ref t np p i < rows) && decide (reg.reads[indices.getD i 0]? = some (some (positions.getD (ref t np p i) 0))))
 
 /-- One port of the verifier's registered reads: a row of the circuit (an input port's, or a hidden-output statement's
-output row, §16.13, whose table is its instances' own rows, instance `i`'s ref `i`), an `hm96-sha512/row/v1` row as the
-registration commits one, whose rows are the registered rows (`Port.fits`), whose table rows all open the registered
-root, and whose instances each read the row at the position the verifier's program reads for their unit. -/
+output row, §16.13, whose table is its instances' own rows, instance `i`'s ref `i`), an `hm96-sha512/row/v2` row of the
+registered rows' bits as the registration commits one (`Port.fits`), whose table rows all open the registered root, and
+whose instances each read the row at the position the verifier's program reads for their unit. -/
 def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (reg : Port) : V Unit := do
   let np := c.ports.size
   let some p := (List.range np).find? (fun p => c.ports[p]!.name == reg.name)
     | throw s!"registered reads: {reg.name} is not a row of the circuit (an input port, or an output port's row)"
-  if c.ports[p]!.v2 then
-    throw s!"registered reads: port {reg.name} is a {if c.ports[p]!.segs.isSome then HmRow.ROW_SCHEMA_SEG else HmRow.ROW_SCHEMA_V2} row, and {reg.value}'s registered rows are {HmRow.ROW_SCHEMA} rows"
-  if !reg.fits c.ports[p]!.words then
-    throw s!"registered reads: port {reg.name}'s rows are {c.ports[p]!.words} u16 words, not {reg.value}'s registered rows of {reg.words.getD 0} {reg.wordBits}-bit leaves"
+  if !reg.fits c.ports[p]! then
+    throw s!"registered reads: port {reg.name} is a {schemaOf c.ports[p]!} row of {c.ports[p]!.bits} bits, and {reg.value}'s registered rows are {HmRow.ROW_SCHEMA_V2} rows of {reg.words} {reg.wordBits}-bit leaves"
   let (positions, paths) ← entry pub reg
   let rows := t.counts.getD p 0
   if positions.size != rows || paths.size != rows then

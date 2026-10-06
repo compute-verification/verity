@@ -3,13 +3,13 @@ R7, the verifier's read map from its own program, the read check, and the audit 
 from __future__ import annotations
 
 import hashlib
+import struct
 
 import pytest
 
 import verity_catalog.definitions.scalar  # noqa: F401
 from verity.primitives.commitments import hm96
 from verity.primitives.commitments.merkle import merkle_depth
-from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_digest
 from verity.primitives.circuits.codec import canonical_json
 from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.primitives.circuits.program import Program
@@ -27,12 +27,17 @@ TABLE = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LAW = {"law": "subset", "k": 2}
 SERVED = {"kind": "served", "row": 7, "run": "r-registered"}
-#: a 16-bit registration's root as `registered.py` computed it before `word_bits`: three 64-word rows, salts 01.., 02.., 03..
-ROOT_16 = ("17b12eea66ca473baf95f834bcdef8bbb94001549fa85061f3b0166d795d2812"
-           "7d5db86a105ab3ceb1821cf9f57a66323a873f55355370fdeff6bd7e2cfd8a07")
+#: a 16-bit registration's root: three 64-word rows, salts 01.., 02.., 03..
+ROOT_16 = ("c373dc7f8ea8bae89a456ef42d3aad1e28acb5ba0b1a533d1559ee3c86616582"
+           "32c8b89503d2586102dd140674964aa27a0bfbfee7a276942e6445afae7aefbc")
 #: a 32-bit registration's root: one row of eps and the softmax scale at D = 64, salt 09..
-ROOT_32 = ("111850c621f50137b50e36ee9e22fe8cefd28761e8b7ad98b175eaf0e8c7413d"
-           "27364f184783f7680bf638c9b039154a53ef8908faba261a4eb208c22552c40f")
+ROOT_32 = ("b960288619dd32ffb275a88861b80fb912551c52d77432a1ad80d664b645f736"
+           "751e0493cb309be0667c7a360a948a3ce5ff71a4684bcdc60b14a99c6d9384ce")
+
+
+def _row_v2(row_bytes: bytes, n_bits: int) -> bytes:
+    """`sha512/row/v2` written out: `SHA-512("verity/sha512-row/v2\\0" || u64be n_bits, zero-padded to 128 bytes || row)`."""
+    return hashlib.sha512((b"verity/sha512-row/v2\0" + n_bits.to_bytes(8, "big")).ljust(128, b"\0") + row_bytes).digest()
 
 
 def _program(pos=POS, rows: int = len(TABLE), body=None, w: int = 8) -> Program:
@@ -67,9 +72,9 @@ def test_the_registered_root_is_the_hm96_rows_tree_under_its_own_domain():
     dom = G.domain(P.program_sha512(prog), "W", 2, len(TABLE))
     inst = hm96.SHA512
     for r, row in enumerate(TABLE):
-        # the statement's port row: the two 16-bit words, zero-padded to one SHA-512 block
-        assert G.row_words(row) == [*row, *[0] * 62]
-        assert reg.bcs[r] == inst.commit_string(inst.default_key, sha512_row_digest([*row, *[0] * 62], 16, ROLE_X), reg.salts[r])
+        # the statement's port row: a bit row of exactly the two 16-bit words, no padding
+        assert G.row_words(row) == row and G.row_bits(2) == 32
+        assert reg.bcs[r] == inst.commit_string(inst.default_key, _row_v2(struct.pack("<2H", *row), 32), reg.salts[r])
         assert G.verify_read(dom, reg.root, r, reg.bcs[r], reg.path(r))
         assert len(reg.path(r)) == 64 * merkle_depth(len(TABLE))
     assert reg.entry() == {"value": "W", "root": reg.root.hex(), "leaves": 5, "words": 2, "domain": dom.domain_id.hex()}
@@ -78,28 +83,34 @@ def test_the_registered_root_is_the_hm96_rows_tree_under_its_own_domain():
     assert again.root != reg.root and set(again.bcs).isdisjoint(reg.bcs)
 
 
-def test_a_16_bit_value_keeps_the_bytes_it_had_before_word_bits():
-    """16 is the default width: its domain binds the five keys it always did, and a whole-block row is the port's row
-    as it stands, so a 16-bit value's domain, leaves and root are the ones registered before `word_bits` (`ROOT_16`)."""
+def test_a_registered_row_is_a_sha512_row_v2_bit_row_under_a_domain_that_binds_its_width():
+    """A row's `x` is `sha512/row/v2` over its leaves little-endian, the prefix carrying only its length in bits, so a
+    weight row's digest is PoUW's of the same row; the domain binds the schema and `word_bits` (16 included), and the
+    leaves are `hm96-sha512/row/v2` (`ROOT_16`)."""
     from verity.primitives.commitments.identity import identity_digest
 
     prog = P.program_sha512(_program())
-    binding = identity_digest(G.REGISTERED_DOMAIN, {"program": prog, "value": "W", "schema": G.SCHEMA, "words": 2, "leaves": 5})
+    binding = identity_digest("verity/one-stage/registered-domain/v1", {"program": prog, "value": "W", "schema": "hm96-sha512/row/v2",
+                                                                        "words": 2, "word_bits": 16, "leaves": 5})
+    assert G.REGISTERED_DOMAIN == "verity/one-stage/registered-domain/v1" and G.SCHEMA == "hm96-sha512/row/v2"
     assert G.domain(prog, "W", 2, 5).domain_id == G.domain(prog, "W", 2, 5, 16).domain_id
     assert G.domain(prog, "W", 2, 5).binding == bytes.fromhex(binding)
     row = list(range(1, 65))
-    assert G.row_words(row) == row and G.row_digest(row) == sha512_row_digest(row, 16, ROLE_X)
+    assert G.row_words(row) == row and G.row_digest(row) == _row_v2(struct.pack("<64H", *row), 1024)
+    # a row of any length: three leaves are 48 bits, not a whole SHA-512 block
+    assert G.row_words([1, 2, 3]) == [1, 2, 3] and G.row_digest([1, 2, 3]) == _row_v2(struct.pack("<3H", 1, 2, 3), 48)
     rows = [[(r * 64 + j) * 1009 % 65536 for j in range(64)] for r in range(3)]
     reg = G.Registered.commit("ab" * 64, "cs_table", rows, [bytes([r + 1]) * 192 for r in range(3)])
     assert reg.root.hex() == ROOT_16 and "word_bits" not in reg.entry()
 
 
-
 def test_a_32_bit_value_is_its_u16_words_low_first_under_its_own_domain():
-    """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and C-Flock's `values` row): its
-    domain names `word_bits`, so a 32-bit registration is never a 16-bit one's, and the entry carries it."""
+    """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and C-Flock's `values` row), a
+    bit row of 32 bits per leaf: its domain names `word_bits`, so a 32-bit registration is never a 16-bit one's, and the
+    entry carries it."""
     prog = P.program_sha512(_program(w=32))
-    assert G.row_words([0x3727C5AC, 0x3E38AA3B], 32) == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, *[0] * 60]
+    assert G.row_words([0x3727C5AC, 0x3E38AA3B], 32) == [0xC5AC, 0x3727, 0xAA3B, 0x3E38] and G.row_bits(2, 32) == 64
+    assert G.row_digest([0x3727C5AC, 0x3E38AA3B], 32) == _row_v2(struct.pack("<2I", 0x3727C5AC, 0x3E38AA3B), 64)
     assert G.domain(prog, "W", 2, 5, 32).domain_id != G.domain(prog, "W", 2, 5).domain_id
     reg = G.Registered.commit(prog, "W", [[0x3727C5AC, 0x3E38AA3B]] * 2, word_bits=32)
     assert reg.entry() == {"value": "W", "root": reg.root.hex(), "leaves": 2, "words": 2, "word_bits": 32,
@@ -139,7 +150,7 @@ def test_a_read_opens_only_its_own_row_under_its_own_value():
     assert not G.verify_read(dom, reg.root, 3, reg.bcs[3], reg.path(3)[:-64])
     # the row with a fresh salt is another b || c: it opens nothing
     inst = hm96.SHA512
-    fresh = inst.commit_string(inst.default_key, sha512_row_digest(TABLE[3], 16, ROLE_X), inst.fresh_salt())
+    fresh = inst.commit_string(inst.default_key, G.row_digest(TABLE[3]), inst.fresh_salt())
     assert not G.verify_read(dom, reg.root, 3, fresh, reg.path(3))
 
 
@@ -201,7 +212,7 @@ def test_the_verifiers_reads_file():
     prog = _program()
     reg = _registered(prog)
     doc = G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()})
-    assert doc == {"format": "verity/registered-reads/v0",
+    assert doc == {"format": "verity/registered-reads/v1",
                    "ports": {"w": {"value": "W", "root": reg.root.hex(), "leaves": 5, "words": 2, "word_bits": 16,
                                    "domain": reg.domain.domain_id.hex(), "reads": list(POS)}}}
     keys = ("leaves", "words", "word_bits", "domain")
