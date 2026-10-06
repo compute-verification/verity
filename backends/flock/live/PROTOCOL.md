@@ -609,7 +609,7 @@ the proof's level-0 rows and paths are checked against it at the end. Its cost i
 | item | rule | why the M0 prover has no free choice |
 |---|---|---|
 | `Hello` | constant | the gateway forwards its public part (no Σ) only when it equals the pinned schedule's |
-| `Commit`'s level-0 roots | salted | each 64-byte node of each root reaches the coin server as its `hm96-sha512/v1` commit string `b ‖ c` (`default_key`) under its own fresh 192-byte salt; the roots and salts stay in `private.json` |
+| `Commit`'s level-0 roots | salted | each 64-byte node of each root reaches the coin server as a registered row's `b ‖ c` (`rec_live.top_rows`: its 32 u16 words, then 32 zero words; `hm96-sha512/row/v1`) under its own fresh 192-byte salt; the roots and salts stay in `private.json` |
 | a round's caps (its `BYTES` frames that commit a tree) | salted | as the roots, one fresh salt per node |
 | a round's free message | salted | `c_k`, its rows committed under fresh salts (as before) |
 | statement digest, labels, domain, nonces | dropped | public constants or functions of the hidden statement; never forwarded |
@@ -618,17 +618,17 @@ the proof's level-0 rows and paths are checked against it at the end. Its cost i
 
 The schedule is `rec_live --schedule FILE` (`--schedule-of PUBLIC_JSON` prints one record's), or else the first session the
 proxy finishes pins it for the rest; `schedule.json` beside the sessions is the one in force. The record says how its tops
-are salted (`"tops": "hm96-sha512/v1/node"`, `rec_live.TOPS`). A refusal (`GATE-REFUSED: …`) stops the session: every later
+are salted (`"tops": "hm96-sha512/v1/node-row"`, `rec_live.TOPS`). A refusal (`GATE-REFUSED: …`) stops the session: every later
 request is refused with the same reason, `Finish` answers not accepted, and only `public.json` (what the coin server had
 received) is written.
 
 A salted node's opening (node and salt) is the prover's. V*'s inputs (`rec_vstar.root`, `caps`) read the clear tops from
 `private.json` and refuse `GATE-REFUSED: tree top` when one does not open its commit string in `public.json`, or when the
 record's tops are not salted. The outer circuit does not yet climb to the committed tops: `rec_outer` still registers the
-clear cap nodes. Climbing needs rec-step2's `RecOpen` openings to end at each opened cap node's commit string instead of at
-the node: per distinct cap node a query reaches, the commit string from the node and its private salt, which is two private
-SHA-512 compressions (`c`, 116,240 ANDs) and an XOR-only product under the constant key (`b`), with `b ‖ c` registered in
-place of the node.
+clear cap nodes. A node is committed as a registered row is, so climbing costs `RecOpen` no hashing of its own: the verifier
+builds a registered value from the coin server's `b ‖ c` (one row a node, under the gateway's salts), and each opening's
+`out` reads the row of the node it climbs to. The gateway pays one SHA-512 a node more than for a bare node (the row
+digest).
 
 ### 10.4 The prototype (`FC_GATE=1`)
 

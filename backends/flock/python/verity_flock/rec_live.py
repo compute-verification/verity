@@ -15,14 +15,15 @@ only the session's public schedule and salted hashes:
 * each ``Round``: its caps (the ``BYTES`` frames that commit a Merkle tree), each a salted top, and ``c_k``, a hiding
   commitment to the round's free message, answered with the round's ``n`` coins.
 
-A **salted top** is a tree top (a cap: one or more 64-byte nodes) with each node replaced by its ``hm96-sha512/v1`` commit
-string ``b || c`` under its own fresh 192-byte salt; the clear tops and their salts are the prover's (``private.json``), and
-V*'s inputs refuse a top that does not open its commitment (`verity_flock.rec_vstar.caps`). The proxy holds the session to
-a pinned **schedule** (`schedule_of`: the public ``Hello``, each table's root node count, every stream's parent, position and
-round count, and per round its stream, index, coin count, caps' node counts and message-row count): ``--schedule`` gives it;
-without one, the first session the proxy serves pins it for the rest (``OUT/schedule.json``). A request that leaves the
-schedule, or a ``Link`` whose ``y`` is not zero (the prover sends zeros), is refused ``GATE-REFUSED`` before the coin server
-sees it.
+A **salted top** is a tree top (a cap: one or more 64-byte nodes) with each node replaced by the ``b || c`` of a registered
+row (`top_rows`: its 32 u16 words, then 32 zero words; ``hm96-sha512/row/v1``) under its own fresh 192-byte salt, so V*'s
+openings read a node as one row of the value the verifier builds from them; the clear tops and their salts are the prover's
+(``private.json``), and V*'s inputs refuse a top that does not open its commitment (`verity_flock.rec_vstar.caps`). The
+proxy holds the session to a pinned **schedule** (`schedule_of`: the public ``Hello``, each table's root node count, every
+stream's parent, position and round count, and per round its stream, index, coin count, caps' node counts and message-row
+count): ``--schedule`` gives it; without one, the first session the proxy serves pins it for the rest
+(``OUT/schedule.json``). A request that leaves the schedule, or a ``Link`` whose ``y`` is not zero (the prover sends zeros),
+is refused ``GATE-REFUSED`` before the coin server sees it.
 
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (its bytes public), a
@@ -55,8 +56,9 @@ from verity.primitives.commitments import hm96
 
 KIND = "rec/inner-transcript/v0"
 SESSION_KIND = "flock-live-session/v1"
-#: how a record's tree tops are salted: each 64-byte node an hm96-sha512/v1 commit string under its own salt (`commit_top`)
-TOPS = "hm96-sha512/v1/node"
+#: how a record's tree tops are salted: each 64-byte node a registered row (``hm96-sha512/row/v1``) under its own salt
+#: (`commit_top`)
+TOPS = "hm96-sha512/v1/node-row"
 
 OP_DOMAIN, OP_LABEL, OP_OBSERVE, OP_SQUEEZE, OP_BYTES = 1, 2, 3, 4, 5
 KIND_SCALAR, KIND_SLICE = 1, 2
@@ -308,11 +310,16 @@ def top_nodes(top: bytes) -> list[bytes]:
     return [top[i:i + CAP_NODE_BYTES] for i in range(0, len(top), CAP_NODE_BYTES)]
 
 
+def top_rows(top: bytes) -> list[list[int]]:
+    """A tree top as registered rows, one a node: its 64 bytes as 32 little-endian u16 words, then 32 zero words."""
+    return [[n[j] | (n[j + 1] << 8) for j in range(0, CAP_NODE_BYTES, 2)] + [0] * (ROW_WORDS - CAP_NODE_BYTES // 2)
+            for n in top_nodes(top)]
+
+
 def commit_top(top: bytes, salts: list[bytes]) -> bytes:
-    """A tree top as the coin server receives it: each node's ``b || c`` (``hm96-sha512/v1``, ``default_key``, the node as
-    the inner digest) under its own salt, in node order."""
-    inst = hm96.SHA512
-    return b"".join(inst.commit_string(inst.default_key, n, s) for n, s in zip(top_nodes(top), salts, strict=True))
+    """A tree top as the coin server receives it: each node's ``b || c`` as a registered row's (`top_rows`, `commit_rows`)
+    under its own salt, in node order, so V*'s openings read each node as one row of the value the verifier builds."""
+    return b"".join(commit_rows(top_rows(top), salts))
 
 
 def refused(what: str) -> str:

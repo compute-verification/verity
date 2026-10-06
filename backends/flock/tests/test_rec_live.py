@@ -115,6 +115,17 @@ def test_message_rows_hold_eight_elements_each_and_commit_as_registered_rows():
     assert RL.commit_rows(rows, salts) == list(reg.bcs)
 
 
+def test_a_salted_top_is_its_nodes_as_registered_rows():
+    rows = RL.top_rows(CAP0)
+    assert len(rows) == 2 and all(len(r) == RL.ROW_WORDS and r[32:] == [0] * 32 for r in rows)
+    assert b"".join(struct.pack("<32H", *r[:32]) for r in rows) == CAP0
+    salts = [bytes([i]) * 192 for i in range(1, 3)]
+    reg = G.Registered.commit("00" * 64, "rec-top", rows, salts)
+    assert RL.commit_top(CAP0, salts) == b"".join(reg.bcs)
+    with pytest.raises(ValueError, match="tree top of 65 bytes"):
+        RL.top_rows(CAP0[:65])
+
+
 def _session(proxy, n=1):
     m = 4
     hello = json.dumps({"profile": "fast100", "reps": 2, "flavor": "rs", "tables": ["circuit"],
