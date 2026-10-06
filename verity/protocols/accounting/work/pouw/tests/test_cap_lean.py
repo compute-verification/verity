@@ -15,7 +15,7 @@ from verity.protocols.accounting.work.pouw.protocol import DomainError, Shape
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import DEVICES
 
-CAP = Path(__file__).resolve().parents[1] / "lean" / "Pouw" / "SecurityProofs" / "PearlC" / "Cap"
+CAP = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Pouw" / "PearlC" / "Cap"
 INT_FORM = (CAP / "IntForm.lean").read_text()
 PINS = (CAP / "Pins.lean").read_text()
 SHAPE = r"IntPrices\.(\w+) (\d+) (\d+) (\d+) (\d+) (\d+) (\d+)"

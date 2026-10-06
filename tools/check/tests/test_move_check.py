@@ -201,8 +201,8 @@ VERITY_PATH = {"type": "path", "scope": "", "name": "verity", "manifestFile": "l
                "dir": "../../packages/verity/lean", "configFile": "lakefile.toml"}
 PINS = {"Verity.SecurityProofs.G": {"signature": ["Verity.SecurityProofs.G : Verity.G"], "assumptions": [], "type_hash": "aa"}}
 READS = {"Verity.Guarantees": {"digest": "dd", "definitions": {"Verity.G": "ee"}}}
-FOO = "import Verity.Guarantees\n\nnamespace Verity.SecurityProofs\n\ntheorem G : Verity.G := rfl\n\nend Verity.SecurityProofs\n"
-BAR = ("import Verity.SecurityProofs.Foo\nimport Mathlib.Tactic\n\nnamespace Verity.SecurityProofs\n\n"
+FOO = "import Specs.Core.Guarantees\n\nnamespace Proofs.Core\n\ntheorem G : Verity.G := rfl\n\nend Proofs.Core\n"
+BAR = ("import Verity.SecurityProofs.Foo\nimport Mathlib.Tactic\n\nnamespace Proofs.Core\n\n"
        "theorem H : 1 = 1 := rfl\n\nend Verity.SecurityProofs\n")
 
 
@@ -218,9 +218,9 @@ SPEC_FILES = {
     f"{SPEC}/lakefile.toml": LAKEFILE_SPEC, f"{SPEC}/lean-toolchain": "leanprover/lean4:v4.99.0\n",
     f"{SPEC}/lake-manifest.json": _manifest("verity", MATHLIB),
     f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS, reads=READS),
-    f"{SPEC}/Verity.lean": "import Verity.Protocol\nimport Verity.Guarantees\nimport Verity.SecurityProofs\n",
+    f"{SPEC}/Verity.lean": "import Definitions.Core\nimport Specs.Core.Guarantees\nimport Proofs.Core\n",
     f"{SPEC}/Verity/Protocol.lean": "def Verity.p := 1\n",
-    f"{SPEC}/Verity/Guarantees.lean": "import Verity.Protocol\n\ndef Verity.G : Prop := Verity.p = 1\n",
+    f"{SPEC}/Verity/Guarantees.lean": "import Definitions.Core\n\ndef Verity.G : Prop := Verity.p = 1\n",
     f"{SPEC}/Verity/SecurityProofs.lean": "import Verity.SecurityProofs.Foo\nimport Verity.SecurityProofs.Bar\n",
     f"{SPEC}/Verity/SecurityProofs/Foo.lean": FOO,
     f"{SPEC}/Verity/SecurityProofs/Bar.lean": BAR,
