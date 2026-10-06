@@ -41,7 +41,9 @@ write times then move the declarations, so an adversarial strategy's wire differ
 on, within the log2 #Σ_sync bits per window the bound charges. Live, `--strategies` makes the shim the adversary: it
 holds each event until its planned bucket, never before vLLM sent it, and `windows_whose_declared_differs` counts the
 windows whose declared sync is not the honest run's. The audit also counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
-have met.
+have met, and `mismatches_from_late_frames`: the mismatched egress windows whose record is the shaper's rule on the
+frames as read: a frame read after its hand time under the declared sync, which an online rule's honest miss and a
+sender's held frames both give.
 
     python active_replay.py --calibration REPORT.json --out DIR [--windows 60] [--config-windows 4:10] TRACE.json ...
     python active_replay.py --vllm MODEL --calibration REPORT.json --out DIR --config NAME ... TRACE.json ...
@@ -1239,6 +1241,11 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
         "model_misses": plan["model_misses"],
         "declared_are_planned": declared == plan["syncs"],
     }
+    shaped = {r.window: r.grid for r in ref}
+    by_window = {r.window: r.grid for r in out_records}
+    mismatched = [r["window"] for r in rows if r["direction"] == "egress" and r["raw"] == "mismatch"]
+    comparisons["mismatches"] = len(mismatched)
+    comparisons["mismatches_from_late_frames"] = sum(w in by_window and by_window[w] == shaped.get(w) for w in mismatched)
     if live:
         comparisons |= live_comparisons(plan, setup, frames, ready)
     else:
@@ -1375,7 +1382,7 @@ def summarize(results: Sequence[dict], models: Sequence[dict]) -> dict:
                            for k in ("hands_max_diff_from_rule", "hands_max_diff_from_model")}
     out["comparisons"] |= {k: sum(r["comparisons"][k] for r in results)
                            for k in ("ready_off_meant", "releases_off_model", "model_misses",
-                                     "released_not_the_programs")}
+                                     "released_not_the_programs", "mismatches", "mismatches_from_late_frames")}
     out["comparisons"]["declared_are_planned"] = all(r["comparisons"].get("declared_are_planned", True)
                                                      for r in results)
     if any("hindsight" in r["comparisons"] for r in results):

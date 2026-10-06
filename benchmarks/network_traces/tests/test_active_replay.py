@@ -261,6 +261,20 @@ def test_a_stalled_proxy_fails_its_window_closed(setup, runs, tmp_path, ms, resp
     assert audit["comparisons"]["frames_log_is_the_programs"]
 
 
+def test_a_window_its_online_declaration_misses_is_a_mismatch_from_late_frames(setup, tmp_path):
+    """Under `last`, a 110 ms stall after window 0's first release perturbs what the prover read of window 0, and it
+    declares window 1 a δ the Program's frames don't meet. Window 1's record is the shaper's rule on the frames as read
+    but not the Program's grid: a `mismatch` of an honest run, from frames read after their hand times."""
+    doc, report, s = setup
+    plan = ar.plan_configuration(doc["configurations"][0], s, syncs="last")
+    ar.run_virtual(plan, report, tmp_path, stalls=[(1, 0.11)])
+    audit = ar.audit_configuration(plan, report, tmp_path)
+    assert [(r["link"], r["window"], r["raw"]) for r in audit["rows"] if r["raw"]] == \
+        [("responses", 0, "status:delivery-refused"), ("responses", 1, "mismatch"),
+         ("requests", 0, "status:delivery-refused")]
+    assert audit["comparisons"]["mismatches"] == audit["comparisons"]["mismatches_from_late_frames"] == 1
+
+
 TOKENS = 4
 
 
