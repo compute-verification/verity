@@ -103,6 +103,10 @@ class Session:
         before = len(self.coins.calls)
         resp = self.proxy.handle(req)
         self.answers.append(resp)
+        for c in self.coins.calls[before:]:
+            if c["call"] == "roots":
+                # the firewall's roots record as of this call: a later Commit overwrites it
+                c["mine"] = {t: dict(v) for t, v in self.proxy.roots.items()}
         d = RL.decode_resp(resp)
         if d[0] == RL.RESP_COINS:
             new = [i for i in range(before, len(self.coins.calls)) if self.coins.calls[i].get("coins") is not None]
@@ -144,7 +148,7 @@ class Session:
                 items.append({"fixed": {"what": "roots", "by": "schedule",
                                         "sent": canon({t: nodes(r) for t, r in c["roots"].items()}).hex()}})
                 for t, r in sorted(c["roots"].items()):
-                    mine = self.proxy.roots.get(t, {})
+                    mine = c.get("mine", self.proxy.roots).get(t, {})
                     commits(r, RL.top_rows(bytes.fromhex(mine["top"])) if mine else [], mine.get("salts", []))
                 coins("link", 0, i, c)
             elif kind == "y":
