@@ -12,7 +12,7 @@ import pytest
 from verity.primitives.commitments.identity import tagged_sha512
 from verity.protocols.accounting.communication.certifier.audit import Audit
 from verity.protocols.accounting.communication.certifier.certificate import (
-    STATUS_CODES, Certificate, CertifiedRecord, Certifier, Direction, RecordHead, certificate_message, depth, empty,
+    STATUS_CODES, Certificate, CertifiedRecord, Direction, Issuer, RecordHead, certificate_message, depth, empty,
     frames_root, open_frame, parameters_digest, real_frames, record_head, verify_frame)
 from verity.protocols.accounting.communication.certifier.commitment import commit
 from verity.protocols.accounting.communication.certifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier, fill
@@ -126,9 +126,9 @@ def test_parameters_digest_binds_queue_capacity_and_sync_set():
     assert base != parameters_digest(P, SYNC_SET.__class__((0, 1), (1, 2)))
 
 
-def certify_all(certifier, records, direction=EGRESS, params=P, sync_set=SYNC_SET):
+def certify_all(issuer, records, direction=EGRESS, params=P, sync_set=SYNC_SET):
     parameters = parameters_digest(params, sync_set if direction is EGRESS else None)
-    return [c for r in records if (c := certifier.certify(r, direction, params, parameters)) is not None]
+    return [c for r in records if (c := issuer.certify(r, direction, params, parameters)) is not None]
 
 
 def egress_verdicts(records, key=None, syncs=SYNCS, link="responses"):
@@ -167,14 +167,14 @@ def scenarios():
 
 
 def test_certified_audit_matches_raw_audit_on_every_egress_scenario(tmp_path):
-    """The difftest on the test vectors: with an honest certifier, every egress scenario gets the raw audit's verdicts,
+    """The difftest on the test vectors: with an honest issuer, every egress scenario gets the raw audit's verdicts,
     rejections included, and the committed (v1) audit agrees."""
     signer = ToySigner.create(tmp_path, height=6)
     key = signer.public_key()
     seen = set()
     for name, (records, syncs) in scenarios().items():
         raw = egress_verdicts(records, syncs=syncs)
-        certified = certify_all(Certifier(signer), records)
+        certified = certify_all(Issuer(signer), records)
         assert egress_verdicts(certified, key, syncs) == raw, name
         assert egress_verdicts([commit(r, P) for r in records], syncs=syncs) == raw, name
         seen.update(raw)
@@ -188,8 +188,8 @@ def test_certified_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path
     other = [SYNCS[0], ClockSync(2, 1), SYNCS[2]]
     responses = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     tokens = run_shaper(FRAMES, honest_ready(), other, Certifier("tokens", P))
-    certifier = Certifier(signer)
-    for recs in ((responses, tokens), (certify_all(certifier, responses), certify_all(certifier, tokens))):
+    issuer = Issuer(signer)
+    for recs in ((responses, tokens), (certify_all(issuer, responses), certify_all(issuer, tokens))):
         audit = Audit()
         audit.check_link("responses", recs[0], FRAMES, SYNCS, SYNC_SET, P, key=key)
         audit.check_link("tokens", recs[1], FRAMES, other, SYNC_SET, P, key=key)
@@ -206,7 +206,7 @@ def test_certified_audit_matches_raw_audit_on_ingress(tmp_path):
     faulted = ingress_run([[1, 0, 0, 0], [0, 2, 0, 0]], faults={1: Reason.DELIVERY_REFUSED})
     for records, windows in ((early, 3), (late, 3), ([faulted[0], *faulted], 3), (faulted, 2)):
         raw = ingress_verdicts(records, windows)
-        assert ingress_verdicts(certify_all(Certifier(signer), records, INGRESS), windows, key) == raw
+        assert ingress_verdicts(certify_all(Issuer(signer), records, INGRESS), windows, key) == raw
     assert ingress_verdicts([faulted[0], *faulted], 3) == ["duplicate", "status:delivery-refused", "no-verdict"]
 
 
@@ -216,7 +216,7 @@ def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
     signer = ToySigner.create(tmp_path, height=6)
     key = signer.public_key()
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
-    certified = certify_all(Certifier(signer), honest)
+    certified = certify_all(Issuer(signer), honest)
     c0, c1 = certified[0], certified[1]
 
     def with_window_0(rec: CertifiedRecord, *, head=True, cert=True) -> CertifiedRecord:
@@ -239,7 +239,7 @@ def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
     assert egress_verdicts([forged, *certified[1:]], key) == ["signature", None, None]
     (tmp_path / "stranger").mkdir()
     stranger = ToySigner.create(tmp_path / "stranger", seed=b"other", height=6)
-    assert egress_verdicts(certify_all(Certifier(stranger), honest), key) == ["signature"] * 3
+    assert egress_verdicts(certify_all(Issuer(stranger), honest), key) == ["signature"] * 3
     assert egress_verdicts(certified, key) == [None, None, None]
 
 
@@ -250,7 +250,7 @@ def test_a_relayed_status_the_certificate_disagrees_with_is_a_signature_violatio
     w.fault(Reason.DROPPED)
     for _ in range(P.buckets):
         w.tick()
-    faulted = certify_all(Certifier(signer), [w.close_window()], INGRESS)[0]
+    faulted = certify_all(Issuer(signer), [w.close_window()], INGRESS)[0]
     lying = CertifiedRecord(RecordHead(**{f: getattr(faulted.head, f) for f in RecordHead.__slots__}
                                        | {"status": COMPLETE}), faulted.certificate)
     key = signer.public_key()
@@ -262,29 +262,29 @@ def test_a_record_past_the_deadline_is_no_verdict_and_other_parameters_a_mismatc
     signer = ToySigner.create(tmp_path, height=6)
     key = signer.public_key()
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
-    certifier = Certifier(signer)
+    issuer = Issuer(signer)
     parameters = parameters_digest(P, SYNC_SET)
-    late = [certifier.certify(honest[0], EGRESS, P, parameters, deadline=False)] + certify_all(certifier, honest[1:])
+    late = [issuer.certify(honest[0], EGRESS, P, parameters, deadline=False)] + certify_all(issuer, honest[1:])
     assert egress_verdicts(late, key) == ["no-verdict", None, None]
-    other_set = certify_all(certifier, honest, sync_set=SYNC_SET.__class__((0, 1), (1, 2)))
+    other_set = certify_all(issuer, honest, sync_set=SYNC_SET.__class__((0, 1), (1, 2)))
     assert egress_verdicts(other_set, key) == ["mismatch"] * 3
     ingress = ingress_run([[1, 0, 0, 0]])
-    assert ingress_verdicts(certify_all(certifier, ingress, INGRESS), 1, key) == [None]
-    assert ingress_verdicts(certify_all(certifier, ingress, INGRESS, sync_set=None), 1, key) == [None]
+    assert ingress_verdicts(certify_all(issuer, ingress, INGRESS), 1, key) == [None]
+    assert ingress_verdicts(certify_all(issuer, ingress, INGRESS, sync_set=None), 1, key) == [None]
     q8 = GridParams(buckets=4, allocation=2, frame_bytes=1, queue_capacity=8)
-    wrong = [certifier.certify(ingress[0], INGRESS, P, parameters_digest(q8))]
+    wrong = [issuer.certify(ingress[0], INGRESS, P, parameters_digest(q8))]
     assert ingress_verdicts(wrong, 1, key) == ["mismatch"]
-    egress_as_ingress = certify_all(certifier, ingress, EGRESS)
+    egress_as_ingress = certify_all(issuer, ingress, EGRESS)
     assert ingress_verdicts(egress_as_ingress, 1, key) == ["no-verdict"]
 
 
 def test_certified_records_need_the_key_and_ingress_its_parameters(tmp_path):
     signer = ToySigner.create(tmp_path, height=6)
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
-    certified = certify_all(Certifier(signer), honest)
+    certified = certify_all(Issuer(signer), honest)
     with pytest.raises(ValueError, match="public key"):
         egress_verdicts(certified)
-    ingress = certify_all(Certifier(signer), ingress_run([[1, 0, 0, 0]]), INGRESS)
+    ingress = certify_all(Issuer(signer), ingress_run([[1, 0, 0, 0]]), INGRESS)
     with pytest.raises(ValueError, match="params"):
         Audit().check_ingress_link("requests", ingress, 1, key=signer.public_key())
 
@@ -297,18 +297,18 @@ def test_a_signer_with_missing_or_behind_state_refuses_and_the_window_fails_clos
     key = signer.public_key()
     old = tmp_path / "old-state.json"
     shutil.copy(signer.state, old)
-    certifier = Certifier(signer)
-    first = certifier.certify(honest[0], EGRESS, P, parameters_digest(P, SYNC_SET))
+    issuer = Issuer(signer)
+    first = issuer.certify(honest[0], EGRESS, P, parameters_digest(P, SYNC_SET))
     shutil.copy(old, signer.state)
-    rest = certify_all(certifier, honest[1:])
-    assert rest == [] and certifier.refused == [("responses", EGRESS, 1), ("responses", EGRESS, 2)]
+    rest = certify_all(issuer, honest[1:])
+    assert rest == [] and issuer.refused == [("responses", EGRESS, 1), ("responses", EGRESS, 2)]
     assert egress_verdicts([first], key) == [None, "no-verdict", "no-verdict"]
     assert signer.used() == [0]
     signer.state.write_text('{"next": 1}')
-    assert egress_verdicts([first, *certify_all(certifier, honest[1:])], key) == [None, None, None]
+    assert egress_verdicts([first, *certify_all(issuer, honest[1:])], key) == [None, None, None]
     assert signer.used() == [0, 1, 2]
     signer.state.unlink()
-    missing = Certifier(signer)
+    missing = Issuer(signer)
     assert certify_all(missing, honest) == [] and len(missing.refused) == 3
     assert egress_verdicts([], key) == ["no-verdict"] * 3
 

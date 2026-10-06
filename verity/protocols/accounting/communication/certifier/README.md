@@ -12,8 +12,8 @@ A spec-level reference for network transparency's timing channel:
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
 
 It is pure Python. It imports only the standard library and `verity`, for the record digests' `tagged_sha256` and
-`tagged_sha512` and `canonical_json_bytes`. The certificate's signature scheme is a parameter: the certifier takes a
-`Signer` and the audit a `PublicKey` (`certificate`).
+`tagged_sha512` and `canonical_json_bytes`. The certificate's signature scheme is a parameter: the certifier's
+`certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean package.
 
 ~~~python
@@ -37,4 +37,4 @@ Calibration, from a JSON trace of honest runs:
 uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ~~~
 
-Tests: `uv run tools/check/suites.py verity-network-certifier`.
+Tests: `uv run tools/check/suites.py verity/protocols/accounting/communication/certifier`.

@@ -1,7 +1,7 @@
 """Network certificates: the network certifier's signed record of each link-window, on SHA-512 (record v2).
 
-The network certifier is the auditor-trusted device on a node's uplink that runs the certifier (`grid`). Once per
-link-window it signs one **network certificate**: a signature over the SHA-512 digest of the window's record. A
+The network certifier is the auditor-trusted device on a node's uplink that shapes each link into the grid
+(`grid.Certifier`). Once per link-window it signs one **network certificate**: a signature over the SHA-512 digest of the window's record. A
 certificate is witness: it enters proofs and never reaches the auditor in the clear, so its hashes are unsalted.
 
 **The record (v2).** The record is still exactly the grid and one status (W5), encoded with padding elided:
@@ -31,8 +31,8 @@ certificate can't be replayed onto another window, link, direction or key:
     message = tagged_sha512("verity/network-certificate/v1",
                             u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ record digest)
 
-The scheme is a stateful hash-based signature over SHA-512 (LMS-shaped, n = 32, h = 20). The certifier is handed it
-as a `Signer`, and the audit as a `PublicKey`. A signer whose one-time-key state is missing or behind refuses
+The scheme is a stateful hash-based signature over SHA-512 (LMS-shaped, n = 32, h = 20). The certifier's signing step
+(`Issuer`) is handed it as a `Signer`, and the audit as a `PublicKey`. A signer whose one-time-key state is missing or behind refuses
 (`SignerRefused`), and then the link-window has no certificate: it fails closed, as a `no-verdict`.
 """
 
@@ -310,9 +310,9 @@ class CertifiedRecord:
 
 
 @dataclass
-class Certifier:
-    """The network certifier's signing step: one certificate per closed link-window. A refusal leaves the link-window
-    without a certificate (fail-closed) and is listed in `refused`."""
+class Issuer:
+    """The network certifier's signing step, beside its grid (`grid.Certifier`): one certificate per closed link-window.
+    A refusal leaves the link-window without a certificate (fail-closed) and is listed in `refused`."""
 
     signer: Signer
     refused: list[tuple[str, Direction, int]] = field(default_factory=list)

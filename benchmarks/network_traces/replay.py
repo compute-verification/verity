@@ -14,7 +14,7 @@ unit, so it gets its own `audit.Audit` and one clock:
 - **the ingress certifier** is a `grid.Certifier` at the report's r_in and τ_in. A frame is enqueued at the first ingress
   bucket boundary after it arrives (`calibration.size_ingress_ms`'s model);
 - **the published records** are the raw network certificates, their commitments (`commitment.commit`) and their network
-  certificates (`certificate.Certifier`), signed by `DigestSigner`;
+  certificates (`certificate.Issuer`), signed by `DigestSigner`;
 - **the verifier** is `Audit.check_link` on egress and `Audit.check_ingress_link` on ingress, once on the raw records,
   once on the committed ones and once on the certified ones. The three must agree on every link-window.
 
@@ -58,7 +58,7 @@ from pathlib import Path
 from verity.protocols.accounting.communication.certifier import online
 from verity.protocols.accounting.communication.certifier.audit import Audit
 from verity.protocols.accounting.communication.certifier.calibration import choose_syncs
-from verity.protocols.accounting.communication.certifier.certificate import Certifier, Direction, parameters_digest
+from verity.protocols.accounting.communication.certifier.certificate import Direction, Issuer, parameters_digest
 from verity.protocols.accounting.communication.certifier.commitment import commit
 from verity.protocols.accounting.communication.certifier.grid import GridParams, Record, Certifier
 from verity.protocols.accounting.communication.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
@@ -81,8 +81,8 @@ class DigestSigner:
 
 
 def certify(records: Sequence[Record], direction: Direction, params: GridParams, parameters: bytes) -> list:
-    certifier = Certifier(DigestSigner())
-    return [c for r in records if (c := certifier.certify(r, direction, params, parameters)) is not None]
+    issuer = Issuer(DigestSigner())
+    return [c for r in records if (c := issuer.certify(r, direction, params, parameters)) is not None]
 
 
 class Setup:

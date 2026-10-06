@@ -53,12 +53,13 @@ v1 stays as it is, and readable: `CommittedRecord` and `record_digest` are uncha
 
 ## Network certificates (`certificate`)
 
-**The trust change.** The **network certifier** is the device on a node's uplink that runs the certifier. It is
-auditor-trusted: the auditor trusts it to run the certifier and to sign what it ran, as it trusted the certifier to publish
-its own record. Once per link-window it signs a **network certificate**: a signature over the SHA-512 digest of the
-window's record. A certificate is witness. It enters proofs, which open frames of its record in-circuit, and never
-reaches the auditor in the clear, so its hashes are unsalted. The audit checks it against the certifier's public key.
-With an honest certifier every certificate verifies, and the audit's verdicts are those of the raw records.
+**The trust change.** The **network certifier**, the device on a node's uplink that shapes each link into the grid
+(`grid.Certifier`), is auditor-trusted: the auditor trusts it to run the grid and to sign what it ran. A raw or
+committed record reaches the auditor as published. Instead, once per link-window, the certifier signs a **network
+certificate**: a signature over the SHA-512 digest of the window's record (`certificate.Issuer`). A certificate is
+witness. It enters proofs, which open frames of its record in-circuit, and never reaches the auditor in the clear, so
+its hashes are unsalted. The audit checks it against the certifier's public key. With an honest certifier every
+certificate verifies, and the audit's verdicts are those of the raw records.
 
 **The record (v2)** is still exactly the grid and one status (W5), with padding elided, in a fixed binary layout
 (`RecordHead.encode`), all integers big-endian:
@@ -104,10 +105,10 @@ link-window, so a certificate can't be replayed onto another window, link, direc
                             u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ record digest)
 
 I is the certifier's key id. The scheme is a stateful hash-based signature on SHA-512, LMS-shaped (n = 32, h = 20).
-The certifier holds it as a `Signer` (`key_id`, `sign(message)`) and the audit as a `PublicKey` (`key_id`,
-`verify(message, signature)`), so the scheme is a parameter of both. A signer whose one-time-key state is missing, or
+The certifier's `Issuer` holds it as a `Signer` (`key_id`, `sign(message)`) and the audit as a `PublicKey`
+(`key_id`, `verify(message, signature)`), so the scheme is a parameter of both. A signer whose one-time-key state is missing, or
 behind the leaves it has used, refuses (`SignerRefused`). The certifier then publishes nothing for the link-window
-(`Certifier.refused` lists it), which fails closed as a `no-verdict`; it never signs with a reused leaf.
+(`Issuer.refused` lists it), which fails closed as a `no-verdict`; it never signs with a reused leaf.
 
 **The check.** On egress the audit recomputes the record digest from the Program's grid, with a complete status, the
 deadline bit set and the parameters digest of `params` and Σ_sync, and compares it with the certificate's. Under
@@ -377,8 +378,8 @@ replays recorded traces through the proxy in real time, and on an injected clock
 
 ## Tests
 
-`uv run tools/check/suites.py verity-network-certifier`. The tests enumerate small horizons, so they check the Lean
-statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 35 statements
+`uv run tools/check/suites.py verity/protocols/accounting/communication/certifier`. The tests enumerate small
+horizons, so they check the Lean statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 35 statements
 `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, none of them among its four guarantees (`lean-audit.json`'s
 `guarantees`), and three more proved lemmas:
 - **`test_network_certifier_grid.py`:**
