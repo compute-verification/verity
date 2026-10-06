@@ -80,6 +80,13 @@ def test_a_level_that_is_not_the_schedules_is_refused(inner):
         RS.check(sh, [{**lvls[0], "H": lvls[0]["H"] + 1}, *lvls[1:]], _cap())
 
 
+def test_the_filler_forgery_is_v_stars_algebra_alone(inner, tmp_path):
+    """``--forge filler`` stages no level (the forged session's openings are consistent with its commitments, which the
+    forgery changes) and the algebra under ``forged-filler/`` (not staged here: about 12 minutes at the fixture's m)."""
+    res = S.stage(inner, _fold(), tmp_path, algebra=False, forge="filler")
+    assert res["forge"] == "filler" and res["levels"] == {} and "filler" in S.FORGERIES
+
+
 @pytest.fixture(scope="module")
 def staged(tmp_path_factory):
     """A Gemm_v2{K=64} GemmCoordinate class staged in both layouts, 4 x 4 tiles (``tile``, `stage_tiled`) and one coordinate an

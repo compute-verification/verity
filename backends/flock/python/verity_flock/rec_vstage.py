@@ -40,8 +40,8 @@ rep r's) under `rec_outer.session_program` of ``public.json``, which the chain s
 In both, the opening climbs to the output row the prover gives, and that row does not open the committed ``b || c``.
 
 * ``filler``: the inner session's own forgery, a padded inner statement's filler output row one bit off in the inner prover's
-  file (`rec_shape.forge_filler`), so the session it gave is of an unsatisfied table. V*'s statements over it are staged as
-  they are (every level and the algebra), under ``forged-filler/``: the openings hold, the algebra must not.
+  file (`rec_shape.forge_filler`), so the session it gave is of an unsatisfied table. V*'s algebra over it is staged as it
+  is, under ``forged-filler/``, and must not hold (the openings are the session's, which the forgery leaves consistent).
 
 ``--cap`` (default REC_CAP, `rec_shape.Cap.parse`): the deployment's public cap; a session whose V* is not the cap's shape is
 refused before anything is staged (`rec_shape.check`, exit 2).
@@ -321,7 +321,7 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
             res["forged_acc_root"] = chain.reg.root.hex()
         elif forge in ("top", "top-salt"):
             levels, algebra = [lvls[-1 if forge == "top" else 0]["level"]], False
-        elif forge != "filler":
+        else:
             levels = []
     want = None if levels is None else set(levels)
     res["levels"] = {}
