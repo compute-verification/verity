@@ -43,7 +43,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from verity.primitives.commitments.identity import identity_digest
+from verity.primitives.commitments.identity import identity_digest_sha512
 from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X, row_leaf
@@ -138,9 +138,9 @@ def domain(st: dict, side: str, count: int) -> tuple[CommitmentDomain, str]:
     """Side `side`'s frame-v3-sha512 domain over `count` rows: one-stage's served domain (`registration.served_domain`) of
     the statement's program, partition and run, the side's port and schema."""
     schema = L.ROW_SCHEMA["fp8-p", SIDES[side]]
-    b = identity_digest(R.SERVED_DOMAIN, {"program": st["program"], "partition": st["partition"], "port": side, "schema": schema,
-                                          "leaves": int(count), "run": st["run"]})
-    return CommitmentDomain(bytes.fromhex(b), OWNER, RangeIndexedDomain(0, count), hash="sha512"), schema
+    b = identity_digest_sha512(R.SERVED_DOMAIN, {"program": st["program"], "partition": st["partition"], "port": side,
+                                                 "schema": schema, "leaves": int(count), "run": st["run"]})
+    return CommitmentDomain(b, OWNER, RangeIndexedDomain(0, count), hash="sha512"), schema
 
 
 def leaves_of(dom: CommitmentDomain, schema: str, bcs: list[bytes]) -> list[bytes]:
