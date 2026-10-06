@@ -6,7 +6,7 @@ import Definitions.Core.Scalar
 /-!
 # The row units as core circuits (definitions only)
 
-`pc8`'s row templates `Pc8RowA_v1{K, DEV}` and `Pc8RowB_v1{K, DEV}` (`verity_pouw.circuit.pc8`, their
+`pc8`'s row templates `Pc8RowA_v1{K, DEV}` and `Pc8RowB_v1{K, DEV}` (`verity.protocols.accounting.work.pouw.circuit.pc8`, their
 `_row_a_body`, `_row_b_body`, `_stats`, `_form` and `_chain`) as gate tables (`Rows`, each a `TileCircuit.Spec`),
 generic in the depth `K`; `Row4Circuit` writes `pc4`'s the same way. Unlike the tile's, a row gate names its
 primitive (`Prim`, the template's primitive id in its docstring) and lists its operands in order (`Arg`): an earlier
