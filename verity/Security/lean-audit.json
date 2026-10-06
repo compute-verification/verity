@@ -21054,16 +21054,78 @@
    "type_hash": "0693c86395598e912e46a3b378916fd19c2b49711826f9c16546ffecd8fea217"
   },
   "NetTiming.SecurityProofs.CodeAcceptedConstantRate": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.CodeAcceptedConstantRate {L K S : Nat} {In Ac : Type} (T W : Nat) (ss : Warden.SyncSet)",
+    "  (ss' : NetTiming.SyncSet) (frames : List In → Ac → Fin L → List Warden.LogicalFrame)",
+    "  (frames' : List In → Ac → Fin L → List NetTiming.LogicalFrame)",
+    "  (hf :",
+    "    ∀ (ins : List In) (c : Ac) (ℓ : Fin L),",
+    "      Eq (List.map (fun f => { fst := f.payload, snd := { fst := f.anchor, snd := f.index } }) (frames ins c ℓ))",
+    "        (List.map (fun f => { fst := f.payload, snd := { fst := f.anchor, snd := f.index } }) (frames' ins c ℓ)))",
+    "  (op : Nat → List (Warden.Obs L K S) → In) (op' : Nat → List (NetTiming.Obs L K S) → In) (k : Nat)",
+    "  (o : List (Warden.Obs L K S)) (o' : List (NetTiming.Obs L K S)) (hlen : Eq o.length o'.length)",
+    "  (hrows :",
+    "    ∀ (t : Nat) (h : instLTNat.lt t o.length) (h' : instLTNat.lt t o'.length),",
+    "      Eq (List.instGetElemNatLtLength.getElem o t h).rows (List.instGetElemNatLtLength.getElem o' t h').rows)",
+    "  (hstatus :",
+    "    ∀ (t : Nat) (h : instLTNat.lt t o.length) (h' : instLTNat.lt t o'.length) (κ : Fin K),",
+    "      Iff (Eq ((List.instGetElemNatLtLength.getElem o t h).status κ) Warden.Status.complete)",
+    "        (Eq ((List.instGetElemNatLtLength.getElem o' t h').status κ) NetTiming.Status.complete))",
+    "  (hop : ∀ (i : Nat), Eq (op i (List.take i o)) (op' i (List.take i o'))) (c : Ac) (σ : Fin W → ss.Elem)",
+    "  (σ' : Fin W → ss'.Elem)",
+    "  (hσ : ∀ (w : Fin W), And (Eq (σ w).fst.val (σ' w).fst.val) (Eq (σ w).snd.val (σ' w).snd.val)) :",
+    "  Iff (Warden.Accepted (Warden.constantRate T W ss frames) op k o { fst := c, snd := σ })",
+    "    (NetTiming.Accepted (NetTiming.constantRate T W ss' frames') op' k o' { fst := c, snd := σ' })"
+   ],
+   "assumptions": [],
+   "type_hash": "54fd5db7674f52d465517fcc28fda34df53e4a627bea33367579593be9133fb5"
   },
   "NetTiming.SecurityProofs.CodeExpectedRow": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.CodeExpectedRow (S T W : Nat) (syncs : Fin W → Warden.ClockSync)",
+    "  (syncs' : Fin W → NetTiming.ClockSync)",
+    "  (hs : ∀ (w : Fin W), And (Eq (syncs w).delta (syncs' w).delta) (Eq (syncs w).rho (syncs' w).rho))",
+    "  (frames : List Warden.LogicalFrame) (frames' : List NetTiming.LogicalFrame)",
+    "  (hf :",
+    "    Eq (List.map (fun f => { fst := f.payload, snd := { fst := f.anchor, snd := f.index } }) frames)",
+    "      (List.map (fun f => { fst := f.payload, snd := { fst := f.anchor, snd := f.index } }) frames'))",
+    "  (t : Nat) : Eq (Warden.expectedRow S T W syncs frames t) (NetTiming.expectedRow S T W syncs' frames' t)"
+   ],
+   "assumptions": [],
+   "type_hash": "d8bd1431047d9cba5b8853626c516dc1220406e7e5a1238a47f213693a64e30d"
   },
   "NetTiming.SecurityProofs.CodeStatusComplete": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.CodeStatusComplete {L K S : Nat} (k : Nat) (o : List (Warden.Obs L K S))",
+    "  (o' : List (NetTiming.Obs L K S)) (hlen : Eq o.length o'.length)",
+    "  (hstatus :",
+    "    ∀ (t : Nat) (h : instLTNat.lt t o.length) (h' : instLTNat.lt t o'.length) (κ : Fin K),",
+    "      Iff (Eq ((List.instGetElemNatLtLength.getElem o t h).status κ) Warden.Status.complete)",
+    "        (Eq ((List.instGetElemNatLtLength.getElem o' t h').status κ) NetTiming.Status.complete)) :",
+    "  Iff (Warden.StatusComplete k o) (NetTiming.StatusComplete k o')"
+   ],
+   "assumptions": [],
+   "type_hash": "fe8a12b721c7c103871b058f6208ce5aad92c77c52fda7b6f26fc366b7a54bb0"
   },
   "NetTiming.SecurityProofs.CodeSyncSet": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.CodeSyncSet :",
+    "  And",
+    "    (∀ (ss : Warden.SyncSet),",
+    "      Exists fun ss' =>",
+    "        And (∀ (d : Nat), Iff (List.instMembership.mem ss.deltas d) (SetLike.instMembership.mem ss'.deltas d))",
+    "          (∀ (ρ : Rat), Iff (List.instMembership.mem ss.rhos ρ) (SetLike.instMembership.mem ss'.rhos ρ)))",
+    "    (∀ (ss' : NetTiming.SyncSet),",
+    "      Exists fun ss =>",
+    "        And (∀ (d : Nat), Iff (List.instMembership.mem ss.deltas d) (SetLike.instMembership.mem ss'.deltas d))",
+    "          (∀ (ρ : Rat), Iff (List.instMembership.mem ss.rhos ρ) (SetLike.instMembership.mem ss'.rhos ρ)))"
+   ],
+   "assumptions": [],
+   "type_hash": "4a5bf2178d5c143259ada9f71cb299de0df211411f4d1d8b47534bf7df116aa6"
   },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
    "owner": "@network-accounting",
@@ -42066,6 +42128,9 @@
     "NetTiming.rowCount": "95cee3532364711f79cb77b0ba21751b405644470a935c9f92c99eda351ab005"
    },
    "guarantees": [
+    "NetTiming.SecurityProofs.CodeAcceptedConstantRate",
+    "NetTiming.SecurityProofs.CodeExpectedRow",
+    "NetTiming.SecurityProofs.CodeStatusComplete",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -42080,6 +42145,7 @@
     "NetTiming.rowFrames": "a1c2604aec04da7731fcbd03d5189d5e8c3d2915e7c3ad309dc1320af225403e"
    },
    "guarantees": [
+    "NetTiming.SecurityProofs.CodeStatusComplete",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
    ]
@@ -42118,6 +42184,8 @@
     "NetTiming.ingressUpTo": "d5d3269d8dd71a353c700722aa08bd635e621d61f95c36aaf14a34ebf1bbafe3"
    },
    "guarantees": [
+    "NetTiming.SecurityProofs.CodeAcceptedConstantRate",
+    "NetTiming.SecurityProofs.CodeStatusComplete",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -42149,6 +42217,9 @@
     "NetTiming.payloads": "629f7e81bf6e3bc9a64a924267226b9298a3069c46e5d2a8101b6bc9e43f1d87"
    },
    "guarantees": [
+    "NetTiming.SecurityProofs.CodeAcceptedConstantRate",
+    "NetTiming.SecurityProofs.CodeExpectedRow",
+    "NetTiming.SecurityProofs.CodeSyncSet",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow"
    ]
@@ -76122,6 +76193,82 @@
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
+   ]
+  },
+  "Warden.Grid": {
+   "digest": "8dedb2a6c8ea4d066e0fc825980f1051be09d9b8a2f43938b908ecb0a08af243",
+   "definitions": {
+    "Warden.Grid": "a8775e6beb8b024135ba511215c4c3a5733023372b08ef83ea7a8d2494f369df",
+    "Warden.Row": "10d3fa7bc32936a2689d999d73ee847feb540f577cafc01a4126f99bb0fa4d47",
+    "Warden.fifoGrid": "41f83c2b29d7fb6f08ce0a42d17fdf9111792344cb7dd43e293cfdb65a508453",
+    "Warden.fill": "d9c77e2663b10dfad592d3e87aa8b376661b963c44e982662d06d4e5f9503c71",
+    "Warden.offset": "8202b14cf24f739a14748c5ed270f1519f41bec6937fc2ac11ad3527da58dd2b",
+    "Warden.queue": "cbe00186e37a04dede5b7b7e9d00de1706a054c352d4972d0d925df756d61d6a",
+    "Warden.released": "b07e7ee233c6ba294652481e76d6147af4f2804e4cbfa1c406cf93a26b45806b"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.CodeAcceptedConstantRate",
+    "NetTiming.SecurityProofs.CodeExpectedRow",
+    "NetTiming.SecurityProofs.CodeStatusComplete"
+   ]
+  },
+  "Warden.Ingress": {
+   "digest": "2e9706cc153f510165936d75172cd1bfbfe377896e136e9d9b5cf3f9c5cd684c",
+   "definitions": {
+    "Warden.StatusComplete": "1d55ad1e46661a16dba9ac71370be664dc49f33a419f148b8f767169b5371378"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.CodeStatusComplete"]
+  },
+  "Warden.Run": {
+   "digest": "23aa392062321c7659af871a766008822d603419b2b39adb488841cfc063781c",
+   "definitions": {
+    "Warden.Accepted": "ffc24d377522da149d83ea4a38db7bdb69b503ffccd554fa32f90de90ce69ce0",
+    "Warden.Obs": "4826341154a0b7b98d33a4888c6a8512f4fac7aaafe1d2aa864b700831432d12",
+    "Warden.Obs.rows": "d1017d39defd51bd9bb0730de3c91787190be209ca37c16ecc6d1df013f23bdf",
+    "Warden.Obs.status": "12c6efc7a0a2471466d03d408942ad6f20715e735f0f2e5f8472cb6492dbbbbc",
+    "Warden.Program": "1ad46e703cc999a9273f780292b359ad2d9e0440db3cf9e906179638508f6120",
+    "Warden.Program.rows": "7b7c0f5af0f00de7a99cb9d504f24a9f7e732519ae42dc48ccd2e49835931929",
+    "Warden.Reason": "5c50ff709b94b2dda40d1b3d197a5fc0a226d95e709ce8d03d26ac914a0533b2",
+    "Warden.Reason.coverageNeverEstablished": "17ff4929e090d534ba71de3c0c777a250eb13ea674e4b9edcf36516a2950dc97",
+    "Warden.Reason.deliveryRefused": "b30475c2fbf5df7fb1d1b0b43b8397c5b52b2699d44630a6c1e10679697780b2",
+    "Warden.Reason.dropped": "c6f709e85ae226ff233201303814aee295b573436a6392e8652275aca1078ac7",
+    "Warden.Reason.malformed": "a458d9dbc24068119484c15235ea1b09a991a3cb37f84ce9a416295edd6704ac",
+    "Warden.Reason.monitorUnavailable": "a96c1afe7f85a08c54f1873199a6e0886eee5b811d01d42561937b8abf498442",
+    "Warden.Reason.overflow": "69a3b78505e20e182e9ed3a53139b4c32bb7f6a0f67ee65f05232c85ec61d23e",
+    "Warden.Status": "1393b6428378359302de3d45cb92390fd18576caddda259caabd38f972218348",
+    "Warden.Status.complete": "76e7b41a675e5a67fb6ff34711d551b50ce549f1dc2a26e617d8b1135bbc0a0b",
+    "Warden.Status.notEstablished": "e808099d473870e29c34b3b8ffbc50416905c3a8b1e2fff4a42c42a745ce5a9c",
+    "Warden.ingressUpTo": "f2e2b94f0ef9f40afe62caef984dc062308550f651f7e635e0fbde5b34a4aace"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.CodeAcceptedConstantRate", "NetTiming.SecurityProofs.CodeStatusComplete"]
+  },
+  "Warden.Schedule": {
+   "digest": "44087a7df781c25c7798f99e3a76a381380522d52bc8a2df70e41169e4cf3a43",
+   "definitions": {
+    "Warden.ClockSync": "075392e55c3a5c439a1046aa5a24a940174f7ebcf8d48a7f7887d4738cbe4b87",
+    "Warden.ClockSync.delta": "45f6ec36366f7aa969e0e41c0d8eec780a51320c0295e2558950dd8da8dc95a9",
+    "Warden.ClockSync.rho": "f6cc91fbbaad610a63f195b0d35ec306caf40abe2c7c6fe3c96999b142bc490d",
+    "Warden.LogicalFrame": "530068c304839345d67b8d7d7219126873c590c026781788688d938c5186bbd1",
+    "Warden.LogicalFrame.anchor": "e2d08613a6121292de96b25254098398d166135bfc276d3e78d9606e803ef709",
+    "Warden.LogicalFrame.index": "7ddd9b5d06d60534d716b281f57ff13b0c1088b1e8b8d43d2132135d27e3c9b6",
+    "Warden.LogicalFrame.payload": "e892fc67c3508dccc91c134e7d9e49b6533e50d213d2854473a0fa904d5e80e1",
+    "Warden.SyncSet": "d6a18a8a123603c6c8a6827d18e817f89fba5b10d88e3f5e98d2586f99693a67",
+    "Warden.SyncSet.Elem": "ed39d5b5736e59e0b7cdabdc9f26236bb154d50fc5e6d56cf0a507c174d2fdc6",
+    "Warden.SyncSet.deltas": "491461e13d29afbab137a395dd62caaf5458719e47ac618d10f8b2fa10f483a8",
+    "Warden.SyncSet.rhos": "0a90852a7a413f0eee9f1530bff75a01f9a89bb528a1b44c0b2a0e5ad3b56ac3",
+    "Warden.SyncSet.sync": "027a79bd80f86726d58677837217b5401f656e0751f1706b065cf7f58c79afef",
+    "Warden.constantRate": "e1c0bd34ba165d5cec2a54e8deb7b3e93ba5a83680c774f28a8f0f41de8ee055",
+    "Warden.eligible": "2abb030b95cfb3cc4c0e6b9517baae1b14ec2e89d7330ce2eeb31bd43f37f128",
+    "Warden.enqueued": "a5bc5def8318ef39640597d6ca42a41955c3e702903d77cd02703597cd259107",
+    "Warden.expectedRow": "1d88ba706a36659ec56e3d9ae6239d8c2ce1677ebb488fdcfd81ee6369af0be0",
+    "Warden.handingBuckets": "aa0b0b26311ac61874c9e9cf0bbebc18fa350c3c91225ff05cc5b747af3469cf",
+    "Warden.handingFrom": "f5b60447169882053f3290bfb3bead3413bee452c9628ce1c089038ac0363b21",
+    "Warden.payloads": "59a5c2297d5a6dfaec1a9bad521d92c0d2b537118ad36d6bc0d08bf2484ca26b"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.CodeAcceptedConstantRate",
+    "NetTiming.SecurityProofs.CodeExpectedRow",
+    "NetTiming.SecurityProofs.CodeSyncSet"
    ]
   }
  },
