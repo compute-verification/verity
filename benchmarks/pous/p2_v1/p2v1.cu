@@ -22,6 +22,13 @@
 
 #define P2V1_WARPS (P2_TPB / 32)
 
+#ifdef P2_FAST
+#include "p2sq.cuh"
+#endif
+#ifdef P2_KEYS
+#include "p2keys.cuh"
+#endif
+
 #ifdef __CUDA_ARCH__
 // big-endian row of NL words -> little-endian limbs
 __device__ __forceinline__ void load_be(uint32_t *sm, const uint32_t *__restrict__ row, uint32_t lane) {
@@ -205,6 +212,18 @@ extern "C" int p2v1_width_bits() { return P2_BITS; }
 extern "C" int p2v1_decode(const void *c, void *m, const void *k, const void *t, uint32_t n, uint32_t c0, void *flags,
                            void *stream) {
   if (n == 0) return 0;
+#ifdef P2_FAST
+  {
+    int dev = 0, sms = 0, occ = 0;
+    cudaGetDevice(&dev);
+    cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, (const void *)decode_sq_kernel, 32 * P2SQ_WARPS, 0);
+    uint64_t full = ((uint64_t)n + P2SQ_WARPS - 1) / P2SQ_WARPS, cap = (uint64_t)(occ > 0 ? occ : 1) * (sms > 0 ? sms : 1);
+    decode_sq_kernel<<<(uint32_t)std::max<uint64_t>(1, std::min<uint64_t>(full, cap)), 32 * P2SQ_WARPS, 0, (cudaStream_t)stream>>>(
+        (const uint32_t *)c, (uint32_t *)m, (const uint32_t *)k, (const uint32_t *)t, n, c0, (uint32_t *)flags);
+    return (int)cudaGetLastError();
+  }
+#endif
   decode_v1_kernel<<<grid_for((const void *)decode_v1_kernel, n), P2_TPB, 0, (cudaStream_t)stream>>>(
       (const uint32_t *)c, (uint32_t *)m, (const uint32_t *)k, (const uint32_t *)t, n, c0, (uint32_t *)flags);
   return (int)cudaGetLastError();
@@ -217,3 +236,17 @@ extern "C" int p2v1_encode(const void *m, void *c, const void *k, const void *t,
       (const uint32_t *)m, (uint32_t *)c, (const uint32_t *)k, (const uint32_t *)t, n, c0, ea, en, er, (uint32_t *)flags);
   return (int)cudaGetLastError();
 }
+
+#ifdef P2_KEYS
+// K and t rows (as gpu.Kernels.keys) of blocks first .. first + count - 1, under the expansion prefix; -1 if it doesn't fit
+extern "C" int p2v1_keys(const uint8_t *prefix, int plen, uint64_t first, uint32_t count, uint64_t per_segment, void *k, void *t,
+                         void *stream) {
+  p2keys::Mid mid;
+  if (!p2keys::midstate(prefix, plen, mid)) return -1;
+  if (count == 0) return 0;
+  const uint32_t per = 32 * p2keys::WARPS;
+  p2keys::keys_kernel<<<(count + per - 1) / per, per, 0, (cudaStream_t)stream>>>(mid, first, count, per_segment, (uint64_t *)k,
+                                                                                  (uint64_t *)t);
+  return (int)cudaGetLastError();
+}
+#endif

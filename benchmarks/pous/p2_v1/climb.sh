@@ -3,14 +3,15 @@
 # them, the first as the baseline every other's output must equal.  Results go to $RESEARCH_RUN_DIR/out.
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign pous --declared-output 'out/*' -- \
-#     env GPU=N MAXMIN=M taskset -c 0-119 bash benchmarks/pous/p2_v1/climb.sh 'base=p2v1.cu:' 'tpb128=p2v1.cu:-DP2_TPB=128' ...
+#     env MAXMIN=M taskset -c 0-119 bash benchmarks/pous/p2_v1/climb.sh 'base=p2v1.cu:' 'tpb128=p2v1.cu:-DP2_TPB=128' ...
 #
-# The variants build in parallel before the GPU is leased (gpu-lease 1 --on GPU --max-min MAXMIN), which only the bench holds.
+# The variants build in parallel before the GPU is leased (gpu-lease 1 --wait --max-min MAXMIN, from GPU's indices when it is
+# set), which only the bench holds.
 # A variant is NAME=SOURCE:FLAGS; FLAGS replace the Makefile's defaults where they name the same macro (later -D wins).
 # BLOCKS (default 8 segments, 524,288 blocks), REPS and GATE pass through.  ENV_DIR holds the shared torch venv and CGBN
 # (pod.sh's WORK/pous-bench, used read-only); WORK holds this job's own builds.
 set -uxo pipefail
-O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
+export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
 WORK=${WORK:-/workspace/pouw/fill-out/pous/p2climb}
 PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
@@ -35,8 +36,9 @@ for spec in "$@"; do
   LIBS+=(--lib "$d")
 done
 for i in "${!PIDS[@]}"; do wait "${PIDS[$i]}" || { tail -30 "$O"/*.ptxas; exit 3; }; done
-gpu-lease 1 --on "${GPU:?}" --max-min "${MAXMIN:-20}" -- "$PY" benchmarks/pous/p2_v1/decode_bench.py "${LIBS[@]}" --build-dir "$WORK/pous_build" --blocks "${BLOCKS:-524288}" \
+# shellcheck disable=SC2016
+gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-20}" -- bash -c '"$@"; rc=$?
+  nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu --format=csv,noheader \
+    -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1; exit $rc' _ \
+  "$PY" benchmarks/pous/p2_v1/decode_bench.py "${LIBS[@]}" --build-dir "$WORK/pous_build" --blocks "${BLOCKS:-524288}" \
   --reps "${REPS:-10}" --gate "${GATE:-48}" --out "$O"
-rc=$?
-nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu --format=csv,noheader -i "$GPU" > "$O/gpu.txt" 2>&1
-exit $rc

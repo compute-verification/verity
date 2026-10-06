@@ -1,6 +1,7 @@
 """P2 v1's GPU backend: `libp2v1.so` (`p2v1.cu`) through ctypes on torch tensors, with every block's `K` and `t` expanded on the
 device by SHAKE256 with the spec's v1 framing (`band_gpu`'s `pous_native.shake256_rows`: one shared prefix, then each block's
-`u64be(segment) ‖ u64be(local block) ‖ purpose`) just before the kernel that uses them, and freed after it."""
+`u64be(segment) ‖ u64be(local block) ‖ purpose`, or the library's own `p2v1_keys` when it is built with one) just before the
+kernel that uses them, and freed after it."""
 from __future__ import annotations
 
 import ctypes
@@ -43,9 +44,13 @@ class Kernels:
         u = ctypes.c_uint32
         self.lib.p2v1_decode.argtypes = [v, v, v, v, u, u, v, v]
         self.lib.p2v1_encode.argtypes = [v, v, v, v, u, u, u, u, u, v, v]
+        self.fast_keys = hasattr(self.lib, "p2v1_keys")
+        if self.fast_keys:
+            q = ctypes.c_uint64
+            self.lib.p2v1_keys.argtypes = [ctypes.c_char_p, ctypes.c_int, q, u, q, v, v, v]
         self.params, self.split = params, exponent_split(params)
         self.device = torch.device("cuda", torch.cuda.current_device())
-        prefix = reference.expand_prefix(salt, params, model)
+        prefix = self.prefix_bytes = reference.expand_prefix(salt, params, model)
         self.prefix = torch.tensor(list(prefix), dtype=torch.uint8, device=self.device).view(1, -1)
         self.flags = torch.zeros(1, dtype=torch.int32, device=self.device)
 
@@ -53,6 +58,13 @@ class Kernels:
         """`K` and `t` of blocks `first .. first + count − 1`, as `[count, W/8]` big-endian rows (`t`'s first candidate; a
         second is needed with probability `c0 / 2^W`, which the kernels flag)."""
         torch = self.torch
+        if self.fast_keys:
+            k, t = (torch.empty(count, self.params.width_bytes, dtype=torch.uint8, device=self.device) for _ in range(2))
+            rc = self.lib.p2v1_keys(self.prefix_bytes, len(self.prefix_bytes), first, count, self.params.blocks_per_segment,
+                                    k.data_ptr(), t.data_ptr(), self._stream())
+            if rc:
+                raise RuntimeError(f"p2v1_keys: error {rc}")
+            return k, t
         idx = torch.arange(first, first + count, dtype=torch.int64, device=self.device)
         s, v = idx // self.params.blocks_per_segment, idx % self.params.blocks_per_segment
         shifts = torch.arange(56, -1, -8, dtype=torch.int64, device=self.device)
