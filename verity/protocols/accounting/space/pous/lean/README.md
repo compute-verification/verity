@@ -30,7 +30,7 @@ Pous/Protocol/Model/{BandGraph,SegLift}.lean
                                     the band graph the column game's band certificates are stated over; a
                                     segment's parents at their global positions, which the tagged transfer reads
 Pous/Protocol/Model/Graded.lean     the graded audit: up to `t` late rounds, each within a hard `(D_late, Q_late)`
-Pous/Protocol/Model/Continuous.lean the continuous audit: an explicit timed verifier (sequential reveal, a hard
+Pous/Protocol/Model/Continuous.lean the continuous audit: an explicit memory challenger (sequential reveal, a hard
                                     deadline, every answer past `Δ` counted) and a responder on its clock; the
                                     arrivals the verifier draws (queued, never dropped) and the memory at each time
 Pous/Protocol/Model/{Digest,SecureErasure}.lean

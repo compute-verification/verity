@@ -3,7 +3,7 @@ import Std.Internal.UV.TCP
 /-!
 # The responder's wire, from Lean
 
-`pous_native.cu`'s wire (`benchmarks/pous/band_gpu/live.py`): a request is `<QQ` (op, argument); an answer is a 24-byte
+`pous_native.cu`'s wire (`benchmarks/pous/band_gpu/memory_challenger.py`): a request is `<QQ` (op, argument); an answer is a 24-byte
 header `<QQQ` (status, device ns, server ns) and one block. The socket is the toolchain's own (`Std.Internal.UV.TCP`, libuv
 on Lean's event-loop thread): a receive resolves a promise there, and this thread waits on it.
 -/

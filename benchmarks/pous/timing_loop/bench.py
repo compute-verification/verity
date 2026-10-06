@@ -4,11 +4,11 @@
     python benchmarks/pous/timing_loop/bench.py --out DIR --scratch DIR --lean-exe EXE [--cpu-responder] [--segments S]
         [--rounds N] [--pings N] [--loads idle,load] [--verifier-cpu C] [--helper-cpu C] [--responder-cpu C] [--limit-ns L]
 
-- **python**: today's loop, `live.py`'s timed audit in a Python process (`loops.py python`).
+- **python**: today's loop, `memory_challenger.py`'s timed audit in a Python process (`loops.py python`).
 - **lean-drive**: a Lean driver (`timing-loop drive`) asks a Python worker (`loops.py helper`) over stdin and stdout for each
   challenge, the reveal and the verdict, while Python keeps the socket: the Lean-to-Python hop on every round.
 - **lean-own**: Lean owns the socket and the clock (`timing-loop own`, `Std.Internal.UV.TCP`), sends indices drawn here as
-  `audit.TimedVerifier` draws them, and checks each answer byte for byte against the store. `lean-own-2cpu` is the same loop
+  `audit.MemoryChallenger` draws them, and checks each answer byte for byte against the store. `lean-own-2cpu` is the same loop
   with the verifier CPU's sibling allowed too, so Lean's event-loop thread need not share the loop's CPU; `lean-own-digest`
   checks each answer as `VerifierKey.check` does, its leaf digest in Lean (`Flock.Sha256`), on one CPU.
 
@@ -19,7 +19,7 @@ synchronized), as the honest audit runs. Every loop is pinned (`--verifier-cpu`;
 responder's thread on `--responder-cpu`).
 
 A round's latency is the verifier's own reading, from just before the send to the whole answer (python: `challenge()` to
-`respond()`, as `TimedVerifier` judges it); its overhead is the latency less the responder's reported server time; its gap is
+`respond()`, as `MemoryChallenger` judges it); its overhead is the latency less the responder's reported server time; its gap is
 the time from that receipt to the next round's send within one audit (the check and the next draw, on a sequential reveal's
 critical path). `out/summary.json` holds each configuration's quantiles, the fractions over 0.5 and 0.85 ms and the machine;
 `out/rounds/*.npz` every round.

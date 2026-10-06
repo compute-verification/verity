@@ -4,7 +4,7 @@
         [--verifier-cpu C]
     python loops.py helper --ready READY.json --leaves LEAVES.bin --k K --limit-ns L [--cpu C]
 
-- **python** is `live.py`'s timed audit (`LiveResponder`, `protocol.Verifier.run`, the garbage collector frozen and off), with
+- **python** is `memory_challenger.py`'s timed audit (`LiveResponder`, `protocol.MemoryChallenger.run`, the garbage collector frozen and off), with
   every reading of the verifier's clock kept. A round reads it four times, in order: the challenge's start (`challenge()`,
   after the draw), the send and the whole answer (`LiveResponder.roundtrip`), and the receipt (`respond()`, before the check).
 - **helper** keeps the socket and the verifier, and answers the Lean driver's frames (`lean/TimingLoop/Frame.lean`) on stdin
@@ -52,7 +52,7 @@ def quiet(cpu: int | None) -> None:
 def verifier(scheme: Any, vk: Any, k: int, limit_ns: int, clock: Any) -> Any:
     from verity.protocols.accounting.space.pous import audit, protocol
 
-    return protocol.Verifier(scheme, vk, protocol.challenge_key(os.urandom(32), vk), k=k, deadline_ns=audit.DEADLINE_NS,
+    return protocol.MemoryChallenger(scheme, vk, protocol.challenge_key(os.urandom(32), vk), k=k, deadline_ns=audit.DEADLINE_NS,
                              rtt_allowance_ns=limit_ns - audit.DEADLINE_NS, clock=clock, research=True, experimental=True)
 
 

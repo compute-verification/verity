@@ -7,7 +7,7 @@ import TimingLoop.Wire
 
 * `own --port P --challenges FILE --store FILE --block B --k K --pings N --limit-ns L --out FILE [--check digest --leaves
   FILE --prefixes FILE]`: Lean owns the socket. It connects to the responder, sends each index of `FILE` (8 little-endian
-  bytes each, `k` to an audit, drawn by the Python side as `audit.TimedVerifier` draws them), times each round from just
+  bytes each, `k` to an audit, drawn by the Python side as `audit.MemoryChallenger` draws them), times each round from just
   before the send to the whole answer, and checks the answer byte for byte against block `i` of the store, or with `--check
   digest` as `VerifierKey.check` does: `Flock.Sha256` of leaf `i`'s 35-byte prefix and the block against leaf `i`.
 * `drive --k K --audits A --pings N --limit-ns L --out FILE -- CMD ARGS…`: Lean drives a Python worker (`CMD ARGS…`,
