@@ -429,11 +429,20 @@ def _merkle_roots() -> list[Any]:
 
 
 def _lms_roots() -> list[Any]:
-    """The LMS verifier (`verity.primitives.commitments.gates.lms`) at its smallest binding, N = 32, W = 1, H = 1, which reaches
-    every part: one compression, the message digits, a chain step, the leaf, one tree level and the comparison."""
-    from verity.primitives.commitments.gates.lms import verifier
+    """The LMS verifier (`verity.primitives.commitments.gates.lms`) at a toy binding, N = 8 (`lms.TOY_N`, one SHA-512 word per
+    value), W = 1, H = 1: 71 chains of one step (64 message digits and a checksum of 7), a five-block one-time public key, the
+    leaf, one tree level and the comparison, 79 compressions. The smallest production binding (N = 32) is 336 compressions,
+    and correspondence on it does not finish; the package's tests keep its agreement with `verity.primitives.crypto.lms` there.
+    What the toy catches that the parts' own checks can't is the wiring: the digits fed to the chain steps' batch axes, each
+    chain's index and step constants, the chain ends laid out into K's blocks, q's bits under the constant 1 as node numbers,
+    and the side each level's swap takes. The parts are also bound at N = 32, a compression or two each, so production's
+    layout keeps its own checks (its message hash is two blocks, which no N below 26 reaches)."""
+    from verity.primitives.circuits.defs import bind
+    from verity.primitives.commitments.gates.lms import LmsChainStep, LmsEqual, LmsLeaf, LmsMessage, LmsNode, verifier
+    from verity.primitives.crypto.lms import TOY_N
 
-    return [verifier(32, 1, 1)]
+    return [verifier(TOY_N, 1, 1), bind(LmsMessage, N=32, W=1), bind(LmsChainStep, N=32, W=1), bind(LmsLeaf, N=32),
+            bind(LmsNode, N=32), bind(LmsEqual, N=32)]
 
 
 def _kernel_roots() -> list[Any]:
@@ -767,11 +776,6 @@ def reachable(roots: Iterable[Any]) -> dict[str, Any]:
 #: targets such as `TokenSelect_v1{V=151936}` stay with the kernel tests)
 MAX_GATES = 150_000
 
-#: families the suite checks through their calls alone (every callee is a target), each with why its own circuit is not
-CHECKED_THROUGH_CALLS = {
-    "LmsVerify_v1": "112M gates at its smallest binding (265 chain steps); its body is only calls to its parts and wiring",
-}
-
 
 def family(fn: Any) -> str:
     return getattr(fn, "base_id", None) or fn.id
@@ -787,9 +791,7 @@ def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
     for fn in found.values():
         by.setdefault(family(fn), []).append(fn)
     out = {}
-    for fam, fns in by.items():
-        if fam in CHECKED_THROUGH_CALLS:
-            continue
+    for fns in by.values():
         keep = [f for f in fns if getattr(f, "gates", 1) <= max_gates]
         if not keep:
             keep = [min(fns, key=lambda f: f.gates)]
