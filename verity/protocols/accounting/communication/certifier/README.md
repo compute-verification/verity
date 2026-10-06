@@ -3,20 +3,30 @@
 A spec-level reference for network transparency's timing channel:
 - the constant-rate, left-packed certifier;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
-- the exact audit with record-and-reject, on raw records or records committed by hash (padding elided), and the
-  ingress links' status check;
+- the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network
+  certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest, with the window's
+  frames in a fixed-depth SHA-512 tree), and the ingress links' status check;
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it has seen by then;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
 
-It is pure Python. It imports only the standard library and `verity`, for the record digest's `tagged_sha256` and
-`canonical_json_bytes`.
+It is pure Python. It imports only the standard library and `verity`, for the record digests' `tagged_sha256` and
+`tagged_sha512` and `canonical_json_bytes`. The certificate's signature scheme is a parameter: the certifier's
+`certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`verity/Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `verity/Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
 package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `lean/scripts/difftest_vectors.py` writes; the audit runs it
 from `lean/lean-audit.json`).
+
+The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
+`verity/Security/Specs/NetworkCertifier/Guarantees.lean`'s documentation:
+- the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
+  scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
+  `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;
+- the challenger's coins (D7), an ingress link whose timing is charged on the ingress grid and whose content costs
+  0 bits.
 
 ~~~python
 from verity.protocols.accounting.communication.certifier.audit import Audit
@@ -39,4 +49,4 @@ Calibration, from a JSON trace of honest runs:
 uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ~~~
 
-Tests: `uv run tools/check/suites.py verity-network-certifier`.
+Tests: `uv run tools/check/suites.py verity/protocols/accounting/communication/certifier`.

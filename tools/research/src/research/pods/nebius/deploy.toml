@@ -460,9 +460,9 @@ by = "tools/research/src/research/pods/nebius/monitoring/host_up.sh"
 nodes = ["vy-nebius-1"]
 owner = "infra"
 
-# ---- node 1: the Lean build cache. Infra's sandbox and its user (`sudo -n vy-lean-build-setup` after installing), then console's
-# key (/etc/verity/lean-cache.env), then lean's publisher in place of run-daily's stub, then `systemctl enable --now` the timer by
-# hand. No `run`: the timer is started last, never by an install.
+# ---- node 1: the Lean build cache. Infra's sandbox and its user (`sudo -n vy-lean-build-setup` after installing), console's key
+# (/etc/verity/lean-cache.env), lean's publisher (run-daily, with the cache.py it runs beside it), then `systemctl enable --now`
+# the timer by hand. No `run`: the timer is started last, never by an install.
 
 [[file]]
 path = "/usr/local/sbin/vy-lean-build-setup"
@@ -478,7 +478,13 @@ owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-lean-cache/run-daily"
-src = "tools/research/src/research/pods/nebius/lean_cache_daily.sh"
+src = "tools/lean/run_daily.py"
+nodes = ["vy-nebius-1"]
+owner = "lean"
+
+[[file]]
+path = "/usr/local/lib/vy-lean-cache/cache.py"
+src = "tools/lean/cache.py"
 nodes = ["vy-nebius-1"]
 owner = "lean"
 
@@ -609,6 +615,18 @@ owner = "infra"
 [[file]]
 path = "/usr/local/bin/vy-pous-quiet"
 src = "tools/research/src/research/pods/nebius/pous_quiet.sh"
+nodes = ["vy-nebius-2"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/bin/vy-device"
+src = "tools/research/src/research/pods/nebius/device.sh"
+nodes = ["vy-nebius-2"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/sbin/vy-device-cores"
+src = "tools/research/src/research/pods/nebius/device_cores.sh"
 nodes = ["vy-nebius-2"]
 owner = "infra"
 

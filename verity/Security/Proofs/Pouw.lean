@@ -90,10 +90,12 @@ import Proofs.Pouw.PearlC.Fp4IssueGamma
 import Proofs.Pouw.PearlC.Freeze
 import Proofs.Pouw.PearlC.FreezeP
 import Proofs.Pouw.PearlC.FreezePPure
+import Proofs.Pouw.PearlC.Game
 import Proofs.Pouw.PearlC.Gamma
 import Proofs.Pouw.PearlC.HiddenGamma
 import Proofs.Pouw.PearlC.HiddenTileGame
 import Proofs.Pouw.PearlC.HonestWords
+import Proofs.Pouw.PearlC.Instance
 import Proofs.Pouw.PearlC.KernelWrefGamma
 import Proofs.Pouw.PearlC.Peel
 import Proofs.Pouw.PearlC.PeelExactChecks
@@ -108,6 +110,7 @@ import Proofs.Pouw.PearlC.RowPrimChecks
 import Proofs.Pouw.PearlC.RowSeedCode
 import Proofs.Pouw.PearlC.RowSeedFragment
 import Proofs.Pouw.PearlC.RowSeedGamma
+import Proofs.Pouw.PearlC.RowSeedKGamma
 import Proofs.Pouw.PearlC.RowSeedSkip
 import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
 import Proofs.Pouw.PearlC.ServedRev1Gamma

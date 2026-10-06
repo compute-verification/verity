@@ -9,7 +9,7 @@ e76a73face016098c6dd6a03974c4241b0616741a755c5a50fc2eac9d524de62  lake-manifest.
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../../../../Security/lake-manifest.json
 3e5b9a03d2a6c42e1bc658658ea8b993757e19fb5cb23fe03bebe9b0bc3367f9  ../../../../../Security/Proofs/lakefile.toml
 87d54345e1e4b38bd893310bd95835c02c668e9580737329828ae96be65cccdb  ../../../../../Security/Proofs/lake-manifest.json
-365c9a5941bd0da05fd2937600ade8f87f52d8da37f471f6fe1c665e5941187f  ../../../../../Security/Definitions/Pous.lean
+ee0598f20f38ff48f9aad138041227de6cdf1acd385ce46b6a9774b9c490c5cd  ../../../../../Security/Definitions/Pous.lean
 08f3f47237b05bf513bfb1113650c9c12b9aac75db8866ca7f0c790af36a0f68  ../../../../../Security/Specs/Pous/Assumptions.lean
 649d21d4bb6c284b341981ea242af274d9071dca0b90c514d11f3321c2a5771c  ../../../../../Security/Specs/Pous/Guarantees.lean
 9005c1c48de560fd4412db56fa9929cc4b68523b75ed9f0934d357eb0d0fad15  ../../../../../Security/Proofs/Pous/Sanity.lean
@@ -29,6 +29,7 @@ bf08a5d4fd4f4a182a5918df5719c8b3f1367ee558b8df44a55f48ff801791ca  ../../../../..
 5f6942760f16819b1733d477628814a99a699fa5026c1d61f85a192dd83a2370  ../../../../../Security/Definitions/Pous/Model/Continuous.lean
 4720078c803f1dc12bc5ae6b96a00982782e2cdf386d12c68868c92f4338df04  ../../../../../Security/Definitions/Pous/Model/Dense.lean
 44b6bb1984f39802a42e4e33e583220b1f2770286b5a377eea5a8de450a197f5  ../../../../../Security/Definitions/Pous/Model/Digest.lean
+f5c0663c315513f80228ee1d3eeb58a53bbf235852e1ce8c8010349e294dc253  ../../../../../Security/Definitions/Pous/Model/FreeBlocks.lean
 69b75235084e1db4b42b6be9733d33db503a2468acf69283aa6f93c422a633e8  ../../../../../Security/Definitions/Pous/Model/Graded.lean
 b72a5ae6ad7aa0060cf49216cfcaa3de292916a6460ba365f53b7a3cd0b291cb  ../../../../../Security/Definitions/Pous/Model/HashChain.lean
 a6d91b5df92724de3b222d1f91d6b9802dc8665f99b84172ace0f9f224b8f5ec  ../../../../../Security/Definitions/Pous/Model/Inc.lean
@@ -45,5 +46,5 @@ fbd6d2fee4fde620966a4707303d25a81f969420529f3bf53e05f47ad0548178  ../../../../..
 57e605cac56a8976de264946d3e0e7573efd583318d01ead07b1731fca0a248d  ../../../../../Security/Definitions/Pous/Model/SegLift.lean
 d1387ddc90e295e3a6cc44de9bf9ce3b1b01d30c3eafcd97ae24132e65805ceb  ../../../../../Security/Definitions/Pous/P2/Cost.lean
 b8197a23f8d3ae2ce906ed6e531fbf84c6e36c4b0a6d7421ded415990990c11d  ../../../../../Security/Specs/Pous/Assumptions/P2.lean
-47436069977253d61974885ab8938313c4bdb533ed858419dc312efb1beb2aca  ../../../../../Security/Specs/Pous/Guarantees/P2.lean
+b32845370aa7b09832ebe51395618b3b8f43b6d4927359af5bf77da934d866eb  ../../../../../Security/Specs/Pous/Guarantees/P2.lean
 38f0faf3ba0810de6a753883b49210df36de03455a9b6ca65e9ad387a865ee8f  ../../../../../Security/Specs/Pous/Guarantees/SecureErasure.lean

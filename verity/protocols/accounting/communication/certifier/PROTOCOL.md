@@ -51,6 +51,73 @@ status instead, which is 32 bytes per link-window, or about 46 KB per link per d
 - **The status in the clear** is only for classifying a violation. The digest binds it too, so a published status that
   disagrees with the digest is a mismatch.
 
+v1 stays as it is, and readable: `CommittedRecord` and `record_digest` are unchanged, and the audit still takes them.
+
+## Network certificates (`certificate`)
+
+**The trust change.** The **network certifier**, the device on a node's uplink that shapes each link into the grid
+(`grid.Certifier`), is auditor-trusted: the auditor trusts it to run the grid and to sign what it ran. A raw or
+committed record reaches the auditor as published. Instead, once per link-window, the certifier signs a **network
+certificate**: a signature over the SHA-512 digest of the window's record (`certificate.Issuer`). A certificate is
+witness. It enters proofs, which open frames of its record in-circuit, and never reaches the auditor in the clear, so
+its hashes are unsalted. The audit checks it against the certifier's public key. With an honest certifier every
+certificate verifies, and the audit's verdicts are those of the raw records.
+
+**The record (v2)** is still exactly the grid and one status (W5), with padding elided, in a fixed binary layout
+(`RecordHead.encode`), all integers big-endian:
+
+| field | bytes | |
+|---|---|---|
+| `len(link)`, `link` | 2, len | UTF-8 |
+| direction | 1 | 0 egress, 1 ingress |
+| window | 8 | |
+| T, r, B, τ_b | 4 each | τ_b in ms |
+| status | 1 | 0 complete; 1 monitor-unavailable, 2 overflow, 3 malformed, 4 dropped, 5 delivery-refused, 6 coverage-never-established (`STATUS_CODES`) |
+| deadline | 1 | 1 when the certifier settled the record by the verdict deadline |
+| parameters | 64 | `parameters_digest`: `tagged_sha512("verity-network-certifier/parameters/v1", ·)` of the canonical JSON of every `GridParams` field, Q included, and of Σ_sync (δs, and ρs as fraction strings; null on ingress) |
+| n_0 … n_{T−1} | 4 each | the occupancy |
+| root | 64 | the frame tree's root |
+
+The record digest is `tagged_sha512("verity-network-certifier/record/v2", R)` (`verity.primitives.commitments.identity`).
+Every field has a fixed width or a length before it, so R parses one way, and the counts fix where each frame sits in
+the grid (W4). The schedule check reads the counts exhaustively; the frames are in the tree.
+
+**The frame tree** is a binary SHA-512 Merkle tree over the window's N = Σ n_t real frames, in the order `grid.fill`
+places them, each of B bytes:
+
+    leaf(f)    = SHA-512( block("verity-network-certifier/frame/v2\0" ‖ u32be B) ‖ f )
+    E_0        = SHA-512( block("verity-network-certifier/empty/v2\0") )
+    node(a, b) = SHA-512( block("verity-network-certifier/node/v2\0") ‖ a ‖ b ),   E_{l+1} = node(E_l, E_l)
+
+`block(x)` is x zero-padded to one 128-byte SHA-512 block, so each of the three hashes starts from a constant
+midstate, and the tags keep leaves, nodes and empty subtrees apart. The depth is fixed, D = ⌈log2(T·r)⌉: leaf k is
+frame k for k < N and E_0 after, so padding slots never enter the tree, and opening frame k (`open_frame`,
+`verify_frame`) costs D siblings at every occupancy, which is the shape a sampled in-circuit opening needs.
+
+frame-v3's SHA-512 tree (`frame-v3-sha512`) doesn't fit, for three reasons:
+- its `CommitmentDomain` takes a 32-byte SHA-256 `binding`, and its positions compute a SHA-256 identity eagerly, so the
+  record would rest on `cr/sha-256` as well;
+- its `owner` is a weights, boundary or replay unit, not a link-window;
+- it pads its leaves to the next power of two of N, so its depth and opening shape change with the occupancy.
+
+**The certificate** is the record digest and a signature over a 64-byte message that binds it to the key and the
+link-window, so a certificate can't be replayed onto another window, link, direction or key:
+
+    message = tagged_sha512("verity/network-certificate/v1",
+                            u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ record digest)
+
+I is the certifier's key id. The scheme is a stateful hash-based signature on SHA-512, LMS-shaped (n = 64, h = 20): the whole
+SHA-512 output, not truncated.
+The certifier's `Issuer` holds it as a `Signer` (`key_id`, `sign(message)`) and the audit as a `PublicKey`
+(`key_id`, `verify(message, signature)`), so the scheme is a parameter of both. A signer whose one-time-key state is missing, or
+behind the leaves it has used, refuses (`SignerRefused`). The certifier then publishes nothing for the link-window
+(`Issuer.refused` lists it), which fails closed as a `no-verdict`; it never signs with a reused leaf.
+
+**The check.** On egress the audit recomputes the record digest from the Program's grid, with a complete status, the
+deadline bit set and the parameters digest of `params` and Σ_sync, and compares it with the certificate's. Under
+`cr/sha-512`, equal digests mean equal records, so the audit stays exact. A certified record rests on `cr/sha-512`,
+on the signature's unforgeability, and on an honest certifier; not on `cr/sha-256`.
+
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
 The Program fixes each real frame's content, its **anchor** and its **logical index** λ. The anchor is the recorded
@@ -75,13 +142,17 @@ modelling choices 13–17).
 
 An egress link-window (`Audit.check_link`) is accepted if:
 - its status is complete;
-- every slot equals the Program's grid (for a committed record: its digest equals the Program grid's digest);
+- every slot equals the Program's grid (for a committed record: its digest equals the Program grid's digest; for a
+  certified record: the digest its certificate signs does);
 - its declared clock sync is in the set, and is the spatial unit's sync for the window;
-- it has exactly one record, present by the verdict deadline.
+- it has exactly one record, present by the verdict deadline;
+- for a certified record, its certificate verifies under the certifier's key (`key`), names the record's link,
+  direction and window, and signs its record digest.
 
 Anything else is a violation, and the first that applies names it:
-- `no-verdict`: no record by the deadline;
+- `no-verdict`: no record by the deadline (for a certified record, also one whose deadline bit is 0);
 - `duplicate`: more than one record for the link-window, whatever they say (the audit never picks one);
+- `signature`: a certified record's certificate doesn't verify, or names another link-window, or signs another digest;
 - `status:<reason>`: the status is not complete;
 - `advice`: the declared clock sync is outside Σ_sync, or differs from the unit's for the window;
 - `mismatch`: a slot differs from the Program's grid (for a committed record, the digest differs).
@@ -112,12 +183,15 @@ than predicts, so no grid is compared. An ingress link-window is accepted if it 
 deadline, and its status is complete; otherwise it is a `no-verdict`, `duplicate` or `status:<reason>` violation, as on
 egress. A committed record's status is read in the clear, and the digest binds it. The verifier has no Program grid to
 recompute an ingress digest from, though, so unlike on egress it can't catch a published status that disagrees with
-the digest: that rests on the certifier publishing its own status (W5). A run is accepted only if every link-window of
+the digest: that rests on the certifier publishing its own status (W5). A certified ingress record's status is the signed
+head's, so it rests on the certifier instead, and the audit (`check_ingress_link(..., key=key, params=params)`) also
+requires the head's T, r, B, τ_b and parameters digest to be `params`'s, or it is a `mismatch`. A run is accepted only if every link-window of
 every link the audit checks is, so an accepted verdict on every link of ∂X, with `check_link` on egress and
 `check_ingress_link` on ingress, means every boundary link's status was complete in every window audited.
 
 Every capacity bound holds on accepted runs only. A rejected window may already have carried up to its unbound capacity,
-about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-256`.
+about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-256`; on certified
+records, `cr/sha-512`, the signature's unforgeability and an honest network certifier.
 
 ## Capacity (`capacity`)
 
@@ -195,6 +269,11 @@ the timing bits (`SecurityProofs.EncardIngressObsDecodableLeContents`, and
 timing bits. Taking `log2 #Cs` to be those content bits is an accounting step, not part of the theorem. It is exact
 under fixed-length frames (W3): N frames of B bytes have `2^(8·B·N)` contents, so for `Cs` all of them, `log2 #Cs` is
 the `8·B·N` bits read.
+
+## The schedule's declared bound and the coins
+
+The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
+the trusted text: the last section of `verity/Security/Specs/NetworkCertifier/Guarantees.lean`'s documentation.
 
 ## Calibration (`calibration`)
 
@@ -308,8 +387,8 @@ replays recorded traces through the proxy in real time, and on an injected clock
 
 ## Tests
 
-`uv run tools/check/suites.py verity-network-certifier`. The tests enumerate small horizons, so they check the Lean
-statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 35 statements
+`uv run tools/check/suites.py verity/protocols/accounting/communication/certifier`. The tests enumerate small
+horizons, so they check the Lean statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 35 statements
 `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, none of them among its guarantees (`verity/Security/lean-audit.json`'s
 `guarantees`), and three more proved lemmas:
 - **`test_network_certifier_grid.py`:**
@@ -339,6 +418,16 @@ statements on examples and prove nothing. By name, they mirror 19 of the Lean pa
   - the elided digest is injective on left-packed grids, by enumeration;
   - it binds the link, window, status and parameters;
   - the committed audit's verdicts equal the raw audit's;
+- **`test_network_certifier_certificate.py`:**
+  - record v2's byte layout, rebuilt field by field and pinned by one digest; the status codes;
+  - the head is injective on left-packed grids, by enumeration, and binds every field; padding never enters the tree,
+    and every frame opens at depth D;
+  - the certified audit's verdicts equal the raw and committed audits', per link-window, on egress and ingress;
+  - a certificate moved to another window, link or direction, relabelled, forged or checked under another key is a
+    `signature` violation; an unset deadline bit is a `no-verdict`, another Σ_sync or Q a `mismatch`;
+  - a signer whose state is missing or behind refuses, and that link-window is a `no-verdict`; it signs again once its
+    state is restored, never reusing a leaf. The signer is a test-only Lamport tree (`tests/toy_signer.py`), not the
+    certifier's scheme;
 - **`test_network_certifier_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
   brute force, on one link and on several under one clock;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
