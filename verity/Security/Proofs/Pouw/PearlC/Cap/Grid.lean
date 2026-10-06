@@ -8,7 +8,7 @@ import Proofs.Pouw.Fp8Atom.Fp32Proofs
 /-!
 # The FP32 values in order, and a value's neighbours (the cap circuit's certificates)
 
-The cap circuit (`verity_pouw/circuit/cap.py`, `Pc8CapWord`) is given only `lo` and `hi` of each of Freeze's
+The cap circuit (`verity/protocols/accounting/work/pouw/circuit/cap.py`, `Pc8CapWord`) is given only `lo` and `hi` of each of Freeze's
 certificates. It takes `c` and `d` as their neighbours in FP32 value order (`_Cmp.pred`, `_Cmp.succ`): one step on the
 sign-magnitude encoding, and `∓2^-149` at `±0`. This file puts the FP32 values in order on ℤ, so that "the next value"
 is an index step:

@@ -944,7 +944,8 @@ def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True)
     `hm96-sha512/row-seg/v1` row ``a0`` of exactly their words (META ``out_row_ports``; ``seg`` false: one exact-length
     `hm96-sha512/row/v2` row, META ``out_row_ports`` only for a run of several), staged in ``d`` like `_bit_row_toy`:
     one 1024-bit input row ``p0`` (seed 1), output word ``o`` the XOR of input word ``o mod 64`` and input word ``o + 1 mod
-    64`` rotated by ``o mod 16``, with AND(bit 0, bit 1) of the first added at word 0's bit 0. The salts are SHAKE-256 of
+    64`` rotated by ``o mod 16``, with AND(bit 0, bit 1) of the first added at word 0's bit 0; a lone 1-word output is that
+    AND alone, zero above, so an admission value like PoUW's ok word. The salts are SHAKE-256 of
     ``row-seg-pair`` and the row. Returns the circuit text, the row's words per instance and its salts."""
     import hashlib
     from types import SimpleNamespace
@@ -963,7 +964,9 @@ def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True)
     for o in range(W):
         a, b, r = ins[o % 64], ins[(o + 1) % 64], o % 16
         out = [a[t] ^ b[(t + r) % 16] for t in range(16)]
-        if o == 0:
+        if out_words == [1]:
+            out = [C.AND(ins[0][0], ins[0][1])] + [gf2.ZERO] * 15
+        elif o == 0:
             out[0] = out[0] ^ C.AND(ins[0][0], ins[0][1])
         C.output(f"out{o}", out)
     units = IL.Units(target=None, in_widths=[16] * 64, out_widths=[16] * W, in_src=[[("leaf", p) for p in range(64)]],
@@ -1221,10 +1224,10 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
 
 ROW_V2_PAIRS = {
     "row-v2-pair/ok": ([1], {
-        "x": "8d20f8025fed0d15f703681378bdd4112b8b530b4b4ec7020d81703e4a2a47d622a536a2b1463c99ee152e7ebfbe1b8e995a447402d877fdfdbf984e9683e6bd",
-        "tree_leaf": "f9992b597e19dea48018e5e1051fd3728f0b41ea0db47e0abfaf9e74fc49b4e403fb9f19fd95e3a9debc1fb717d678bfee33bcebca228bc26929004979f47335",
-        ("writer", "seed"): "26a6f43a4aaea361a874c67f3bb97396b6a0505dcde45f96e18e66b38aca7011402199c6e87edec812f8c34b4c67dbebed8e843d7ba82bb7489adbc3e255ab8a",
-        ("writer", "os"): "44f3e8b3b4802d12e815207a37758171264c17b9a1a3bb2d16858af96c162e075ef25e847406f937421d91d08f6b20ff930c2de3363dcd204a204be0747b4a11",
+        "x": "5bba43fb72473ee2391e7fc71d9f3ec753c6397c80fde57eae6a81c30cd9d4a3522fda587d392d6ddef14ed97b95d76a48cb6748575f089ae802b25e3564f411",
+        "tree_leaf": "d96220619679f36cc1864d8a4563b8e626ca22706fbe4a44136ac3299b40dc573a3626c14b4f309581481315a59eeb3ec4d98a6c7464f1a93d4f98b5fec92f0c",
+        ("writer", "seed"): "ec6e78ec52a013efecbec71bb5acbfc20299ec1b500c9f9fc553333b1dc9415a3fe805856e4f445d1d4f4d20b2e10c90759a1d90920de4cddfafd7c5793d93b5",
+        ("writer", "os"): "2dba6f2e5c2e2c89c218b20db02e83844fb536a076df41049cc65b6f031fc6b278c2e8705874578ae06e57a149b978048f4668546550b795d60b801d6d603f24",
         ("reader", "seed"): "fb472687b5da4c66355a65b6385106eefa09bac440bc6becdc59cca32ec28c3d3e0f5f6c18ce597049fa64f6bcbb86a8bc9c8fdfe3d679901cbb5a37a9b48ba1",
         ("reader", "os"): "5ed878518c8fd815a12bd600f543af50041d0968864b4775144de24c0121303f8ce593adb1cce14006139212cb18fd56fcebdb85b0737c23d8ffcc49da0b23bf"}),
     "row-v2-pair/tile": ([16], {
@@ -1301,6 +1304,36 @@ def test_an_exact_v2_output_row_of_one_or_several_ports_is_the_row_its_reader_co
         change(meta)
         p = statement(d, f"{head}\nMETA {json.dumps(meta)}\n{rest}")
         assert p.returncode != 0, name
+
+
+#: frame_v3 PROTOCOL §6's rule for META ``out_row_ports`` (present iff an output row is row-seg or a run covers more than one
+#: port), per writer: its output words, whether its row is row-seg, the ``out_row_ports`` META names, and the circuit's SHA-512
+OUT_ROW_PORTS_RULE = {
+    "v2-lone-1": ([1], False, None,
+                  "47aa7213fd618ec4889ebc494a856009061ce448b52fcc3206275ef34cac782bc130cc3ab7b58bae18815ef69f72f1929c7a41e733af21b7750e8a12b80ddc33"),
+    "v2-lone-16": ([16], False, None,
+                   "fc0533fdb73983738defcc8e009c9a4748b4d9342f1f91cbb88b1b615dda9eaa293a20b341f93f2df46e3dd890975967de0283e18f33137005ad09f30a5b7a84"),
+    "v2-run-3": ([256, 32, 64], False, [3],
+                 "f05cfe6e0b54dc144b762d023592439afc2796c318bddaafaafcad60f5d6879f27fee2c24be5aaae16d263240a2ab0c176455da7e6aaf9648e4c14f8d39fbef4"),
+    "seg-lone-1": ([64], True, [1],
+                   "8dfc5343c90d516e681dec89c9833cecd6ab006b70dc25d301d7fe24c07969bf2a93fc5d15a09d4535dfe3daed548f779d7b9a80f5c233023f655f589a8b3400"),
+    "seg-run-2": ([512, 64], True, [2],
+                  "d3a3df53b670bc95dc0a28e2d2e2f8712e4bdc89868fa370dd09415e5262e054e1e5b390214424ea50038357d1defb0f91f12426fbacaf4b6dcb99a11bbaf0fd"),
+}
+
+
+@pytest.mark.parametrize("vid", list(OUT_ROW_PORTS_RULE))
+def test_out_row_ports_is_in_meta_only_for_a_row_seg_output_row_or_a_run_of_several_ports(vid, tmp_path):
+    """`circuit.compose` names META ``out_row_ports`` exactly when an output row is row-seg or a run covers more than one port
+    (frame_v3 PROTOCOL §6), and the writer's circuit text, META included, is the pinned one: the rule decides the statement's
+    identity, so moving it moves these digests."""
+    from verity_flock import circuit as FC
+
+    out_words, seg, runs, sha = OUT_ROW_PORTS_RULE[vid]
+    text, _got, _salts = _seg_writer_toy(out_words, tmp_path, seg=seg)
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    assert meta.get("out_row_ports") == runs == ([len(out_words)] if seg or len(out_words) > 1 else None)
+    assert FC.digest(text) == sha
 
 
 TOY_EXTRACTOR = r"""import Proofs.Flock.Verifier
