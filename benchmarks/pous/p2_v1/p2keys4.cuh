@@ -10,7 +10,8 @@
 //   P2K4_MODE 0  a thread a (purpose, row, chunk), consecutive threads consecutive chunks (the default)
 //   P2K4_MODE 1  a thread a (purpose, row), its 33 chunks in turn
 //   P2K4_STAGE   (mode 0) each warp's 32 chunks go out through shared memory as one contiguous run of 8-byte words
-//   P2K4_ROLL    rounds 16 to 79 as a loop of 16 unrolled rounds (a quarter of the code), K from constant memory
+//   P2K4_ROLL    rounds 32 to 79 as a loop of 16 unrolled rounds (less code), K from constant memory
+//   P2K4_MADD    bits for adds moved to the multiply-add pipe (fadd)
 #pragma once
 #include <cstdint>
 
@@ -53,18 +54,43 @@ __host__ __device__ __forceinline__ const uint64_t *kconst() {
 #endif
 }
 
-#define P2K4_ROUND(a, b, c, d, e, f, g, h, k, w)                                                                         \
+// a + b on the multiply-add pipe (a's halves times `one`, which the compiler cannot see is 1, added in), leaving the logic pipe
+// that SHA-512's shifts and LOP3s saturate to them; on the host, a + b
+__host__ __device__ __forceinline__ uint64_t fadd(uint64_t a, uint64_t b, uint32_t one) {
+#ifdef __CUDA_ARCH__
+  uint64_t d;
+  asm("{\n\t.reg .u32 al, ah, dl, dh;\n\tmov.b64 {al, ah}, %1;\n\tmad.wide.u32 %0, al, %3, %2;\n\tmov.b64 {dl, dh}, %0;\n\t"
+      "mad.lo.u32 dh, ah, %3, dh;\n\tmov.b64 %0, {dl, dh};\n\t}"
+      : "=l"(d)
+      : "l"(a), "l"(b), "r"(one));
+  return d;
+#else
+  return a + b;
+#endif
+}
+
+// P2K4_MADD's bits put adds on the multiply-add pipe: 1 the schedule's, 2 T1's, 4 those of d + T1 and T1 + T2
+#ifndef P2K4_MADD
+#define P2K4_MADD 0
+#endif
+#define P2K4_ADD(bit, x, y) ((P2K4_MADD & (bit)) ? fadd((x), (y), one) : (x) + (y))
+
+// a round, and one whose schedule word is zero
+#define P2K4_ROUNDX(a, b, c, d, e, f, g, h, kw)                                                                          \
   do {                                                                                                                     \
-    const uint64_t t1_ = (h) + S1(e) + ch(e, f, g) + (k) + (w);                                                          \
-    (d) += t1_;                                                                                                            \
-    (h) = t1_ + S0(a) + maj(a, b, c);                                                                                     \
+    const uint64_t t1_ = P2K4_ADD(2, P2K4_ADD(2, P2K4_ADD(2, (h), S1(e)), ch(e, f, g)), kw);                             \
+    (d) = P2K4_ADD(4, (d), t1_);                                                                                           \
+    (h) = P2K4_ADD(4, P2K4_ADD(4, t1_, S0(a)), maj(a, b, c));                                                             \
   } while (0)
+#define P2K4_ROUND(a, b, c, d, e, f, g, h, k, w) P2K4_ROUNDX(a, b, c, d, e, f, g, h, P2K4_ADD(2, (k), (w)))
+#define P2K4_ROUND0(a, b, c, d, e, f, g, h, k) P2K4_ROUNDX(a, b, c, d, e, f, g, h, (k))
 
 // The state after the prefix's whole blocks; a .. h after the last block's rounds 0 and 1; its words W0, W1 (the prefix's
-// tail), W15 (the message's length in bits) and W16.
+// tail), W15 (the message's length in bits) and W16; and 1, for fadd.
 struct Mid {
   uint64_t h[8], v[8];
   uint64_t w0, w1, w15, w16;
+  uint32_t one;
 };
 
 constexpr int TAIL = 16;
@@ -114,31 +140,35 @@ inline bool midstate(const uint8_t *prefix, int plen, Mid &m) {
     v[0] = t1 + t2;
   }
   for (int i = 0; i < 8; i++) m.v[i] = v[i];
+  m.one = 1;
   return true;
 }
 
 // The digest of chunk (seg, blk, w4): the last block from round 2 on.
 __host__ __device__ __forceinline__ void chunk(const Mid &m, uint64_t seg, uint64_t blk, uint64_t w4, uint64_t o[8]) {
   const uint64_t *K = kconst();
+  const uint32_t one = m.one;
+  (void)one;
   // round t's a .. h are the names rotated right by t, so after round 79 they are a .. h again
   uint64_t g = m.v[0], h = m.v[1], a = m.v[2], b = m.v[3], c = m.v[4], d = m.v[5], e = m.v[6], f = m.v[7];
   uint64_t W[16] = {m.w0, m.w1, seg, blk, w4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, m.w15};
   P2K4_ROUND(g, h, a, b, c, d, e, f, K[2], W[2]);
   P2K4_ROUND(f, g, h, a, b, c, d, e, K[3], W[3]);
   P2K4_ROUND(e, f, g, h, a, b, c, d, K[4], W[4]);
-  P2K4_ROUND(d, e, f, g, h, a, b, c, K[5], 0);
-  P2K4_ROUND(c, d, e, f, g, h, a, b, K[6], 0);
-  P2K4_ROUND(b, c, d, e, f, g, h, a, K[7], 0);
-  P2K4_ROUND(a, b, c, d, e, f, g, h, K[8], 0);
-  P2K4_ROUND(h, a, b, c, d, e, f, g, K[9], 0);
-  P2K4_ROUND(g, h, a, b, c, d, e, f, K[10], 0);
-  P2K4_ROUND(f, g, h, a, b, c, d, e, K[11], 0);
-  P2K4_ROUND(e, f, g, h, a, b, c, d, K[12], 0);
-  P2K4_ROUND(d, e, f, g, h, a, b, c, K[13], 0);
-  P2K4_ROUND(c, d, e, f, g, h, a, b, K[14], 0);
+  P2K4_ROUND0(d, e, f, g, h, a, b, c, K[5]);
+  P2K4_ROUND0(c, d, e, f, g, h, a, b, K[6]);
+  P2K4_ROUND0(b, c, d, e, f, g, h, a, K[7]);
+  P2K4_ROUND0(a, b, c, d, e, f, g, h, K[8]);
+  P2K4_ROUND0(h, a, b, c, d, e, f, g, K[9]);
+  P2K4_ROUND0(g, h, a, b, c, d, e, f, K[10]);
+  P2K4_ROUND0(f, g, h, a, b, c, d, e, K[11]);
+  P2K4_ROUND0(e, f, g, h, a, b, c, d, K[12]);
+  P2K4_ROUND0(d, e, f, g, h, a, b, c, K[13]);
+  P2K4_ROUND0(c, d, e, f, g, h, a, b, K[14]);
   P2K4_ROUND(b, c, d, e, f, g, h, a, K[15], W[15]);
   W[0] = m.w16;
-#define P2K4_W(j) (W[(j) & 15] += s1(W[((j) + 14) & 15]) + W[((j) + 9) & 15] + s0(W[((j) + 1) & 15]))
+#define P2K4_W(j)                                                                                                          \
+  (W[(j) & 15] = P2K4_ADD(1, P2K4_ADD(1, W[(j) & 15], s1(W[((j) + 14) & 15])), P2K4_ADD(1, W[((j) + 9) & 15], s0(W[((j) + 1) & 15]))))
 // rounds tk .. tk + 7 on schedule words tw .. tw + 7 (tw = tk mod 16, a constant even where tk is not)
 #define P2K4_EIGHT(tk, tw, wa)                                                                                             \
   P2K4_ROUND(a, b, c, d, e, f, g, h, K[(tk) + 0], wa);                                                                   \
@@ -171,6 +201,9 @@ __host__ __device__ __forceinline__ void chunk(const Mid &m, uint64_t seg, uint6
   o[4] = m.h[4] + e, o[5] = m.h[5] + f, o[6] = m.h[6] + g, o[7] = m.h[7] + h;
 }
 #undef P2K4_ROUND
+#undef P2K4_ROUND0
+#undef P2K4_ROUNDX
+#undef P2K4_ADD
 
 __host__ __device__ __forceinline__ uint64_t w4(int purpose, uint32_t i) {
   return (uint64_t)(purpose ? 't' : 'K') << 56 | (uint64_t)i << 24 | 0x80ULL << 16;
