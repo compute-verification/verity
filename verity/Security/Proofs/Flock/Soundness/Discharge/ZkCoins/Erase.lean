@@ -166,7 +166,7 @@ theorem er_afterC (dc : Decoders Blk) (R : ℕ) {J : ℕ} (j : Fin J) (A : Arith
   exact ((er_tagRep dc _ 0 _).interleave (er_tagRep dc _ 0 _)).map _
 
 omit [Fintype K] in
-/-- **The session on committed coins is the live session with its coins read off M2's rounds.** -/
+/-- **The session on committed coins is the live session with its coins read off C-Flock ZK's rounds.** -/
 theorem er_sessionZKC (dc : Decoders Blk) (R : ℕ) (A : Arith F K) (ts : List (TabZK F mPts)) :
     Er (sessionZKC dc R A ts) (sessionZK A ts) :=
   .send _ fun Cs => er_coinAt dc none fun pts =>

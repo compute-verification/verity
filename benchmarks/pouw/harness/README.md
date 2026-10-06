@@ -10,7 +10,7 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 
 | File | What |
 |---|---|
-| `arm.py` | the arm interface (v0.x): what an arm provides and what the harness checks; the contract is published in the project store, `internal/pouw/rtx-pro/workers/6-harness.md` |
+| `arm.py` | the arm interface (v0.x): what an arm provides and what the harness checks, the contract in code |
 | `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune (its fastest `--finalists` per family and each library's fastest go on to the timing, and at decode each gets a chain), a warm-up to steady state, interleaved timing in items of equal device time, the consistency gate, the report |
 | `chain.py`, `derive.py` | decode as a dependent chain (`--decode-method dependent-chain`, the default): call i+1's A is derived on the device from call i's y, for the plain GEMM and for arms alike; an arm's decode split into before, during and after the GEMM, with and without a side stream; `derive.py` is the derive's bit-exact numpy twin, which gates every chain |
 | `characterize.py` | the card: identity, tensor-core peak rates per MMA kind, DRAM and L2 bandwidth, operand-entropy control, sustained clocks under a held GEMM; the lock-clock sweep only when asked (`--sections lock`), never where someone else fixes the clocks (node 2) |
@@ -66,7 +66,7 @@ cuBLASLt and runtime wheels, a library built elsewhere (a build directory, or `a
 against `server.md`'s GPU table); a timed run holds the node with `gpu-lease 8 --wait --timed` and times on its first GPU
 (`--timed` pauses the fill queue: without it, fill jobs keep running beside the timed run). A timed run also passes
 `research run --no-sampler`, so `research`'s own telemetry sampler (`nvidia-smi` every 5 s) stays off the node while it
-times (server.md 17:27Z); the harness records clocks and the UUID itself:
+times (17:27Z); the harness records clocks and the UUID itself:
 
 ```bash
 R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<your bc-id>
@@ -97,7 +97,7 @@ it; the shape's `warmup` says whether it got steady). Then every entry's timed i
 least `--item-ms` (40): calls for a baseline or an arm, replays for a chain (`sizing`). Every item samples NVML while the GPU
 runs it (`sensors.during`), and each panel row carries both sides' reps in the same run (`panel.reps`: per-call and item ms
 and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` and `sm_clock_base` for `panel.py`, and
-`clock_gap` (medians more than 0.5% apart; server.md 08:50Z).
+`clock_gap` (medians more than 0.5% apart; 08:50Z).
 
 Decode rows count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
 `--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface v0.6;
@@ -153,7 +153,7 @@ take minutes. So `refs.py` gives arms `pool()`, a forked process pool of the job
 every call a flag set's gate is about to check before the first of them, so their references compute side by side; the gate still compares against the
 inputs as the device holds them at the gate.
 
-**Poisoned transcripts and the no-write control** (panel rule, server.md 11:50Z). An arm with `dump` (arm interface v0.5)
+**Poisoned transcripts and the no-write control** (panel rule, 11:50Z). An arm with `dump` (arm interface v0.5)
 lets the harness make its transcripts after the timed items: every buffer the transcript reads (`call.transcript_buffers`,
 default `call.outputs`; never an operand, since poisoning one changes what the call computes, so an overlap is refused and the
 row gets no control) is filled with 0xA5, the weight side and the call run, and the arm's `dump` writes

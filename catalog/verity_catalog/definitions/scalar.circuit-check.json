@@ -1,0 +1,58 @@
+{
+ "pieces": {
+  "Bf16GtStrict_v1": {
+   "and": 95
+  },
+  "BitAnd_v1": {
+   "and": 1
+  },
+  "BitNot_v1": {
+   "and": 0
+  },
+  "BitOr_v1": {
+   "and": 1
+  },
+  "F32BitsShl23_v1": {
+   "and": 0
+  },
+  "F32Eq_v1": {
+   "and": 155
+  },
+  "F32Fabs_v1": {
+   "and": 0
+  },
+  "F32Fmaxf_v1": {
+   "and": 474
+  },
+  "F32Fminf_v1": {
+   "and": 474
+  },
+  "F32IsFinite_v1": {
+   "and": 7
+  },
+  "F32Neg_v1": {
+   "and": 0
+  },
+  "F32Sat_v1": {
+   "and": 100
+  },
+  "I32Add_v1": {
+   "and": 31
+  },
+  "I32Eq_v1": {
+   "and": 31
+  },
+  "I32Le_v1": {
+   "and": 32
+  },
+  "SelectBf16_v1": {
+   "and": 16
+  },
+  "SelectF32_v1": {
+   "and": 32
+  },
+  "SelectI32_v1": {
+   "and": 32
+  }
+ }
+}

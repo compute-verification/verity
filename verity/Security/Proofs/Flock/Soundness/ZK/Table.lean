@@ -317,7 +317,7 @@ def xTarget (rows : Fin T.nS → Fin T.nL → F) (y1 : Fin 2 → Fin T.L → K) 
   ∑ c, y1 r c * T.embed (T.E q c) + ∑ j, yb r j * T.embed (T.Gp q j) - ∑ l, T.rbar r l * T.embed (rows q l)
 
 /-- The level-0 padding reaches every vector of values at the opened positions (T4: at most `t_pad` distinct positions,
-where `X_L + κ` vanishes at none; `pad_onto_M1` for M1's code). -/
+where `X_L + κ` vanishes at none; `pad_onto_M1` for C-Flock ZK's code). -/
 def PadOnto : Prop := Function.Surjective fun μ : Fin T.tpad → F => fun q => ∑ j, μ j * T.Gp q j
 
 /-- Rep `r`'s pads-code padding reaches every vector of values at its opened positions (T4 with the monomials: at most
