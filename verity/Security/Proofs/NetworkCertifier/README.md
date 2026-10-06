@@ -31,7 +31,7 @@ PerWindow.lean  the last two over the run's first `m` whole windows: the factor 
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftest runs, equal to the
-                               definitions above: four guarantees (below)
+                               definitions above: four theorems, not guarantees (below)
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/lean/audit.py
 CheckAxioms.lean               one #print axioms line per statement and witness, then three more lemmas
 ~~~
@@ -121,7 +121,7 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 ## The records
 
-The lock (`lean-audit.json`'s `guarantees`) holds eight guarantees. Four are the theorems whose bounds the calibration reports
+The lock (`lean-audit.json`'s `guarantees`) holds four guarantees: the theorems whose bounds the calibration reports
 (`verity.protocols.accounting.communication.certifier.calibration`, `PROTOCOL.md`'s "Capacity"), each listed as `NetTiming.SecurityProofs.G` and
 proved by the lemma of the same statement whose name it spells in UpperCamelCase:
 
@@ -130,7 +130,8 @@ proved by the lemma of the same statement whose name it spells in UpperCamelCase
 - ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
 
-The other four tie the difftest to these definitions (`NetTiming.SecurityProofs.Code`): the difftest holds the Python audit
+**The program's agreements, proved and audited, not guarantees.** Four theorems tie the difftest to these definitions
+(`NetTiming.SecurityProofs.Code`): the difftest holds the Python audit
 to the certifier program (`verity/protocols/accounting/communication/certifier/lean/`, Lean core only, `NetworkCertifier`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
@@ -144,6 +145,10 @@ definitions, relating them by their fields, since `security` requires nothing bu
 - `CodeStatusComplete`: `NetworkCertifier.StatusComplete` is `StatusComplete` for observations with the same complete statuses
   (`complete`);
 - `CodeSyncSet`: every sync set of the program has a reference sync set with the same values and conversely (`advice`).
+
+They aren't guarantees because `four_names` holds every `NetTiming` guarantee to `SecurityProofs.G : Guarantees.G`,
+and a `Guarantees` module can't state them: it would have to import the program. They are built and checked like every
+declaration, and no citation may call them guarantees.
 
 **Proved and audited, not guarantees.** The other 31 statements in `Guarantees.lean` are lemmas: nothing relies on them
 as proved (README "Glossary"), so they have no record. Each is still `SecurityProofs.G : Guarantees.G`, built and checked

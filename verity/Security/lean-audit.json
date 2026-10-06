@@ -49,7 +49,6 @@
   "Definitions.NetworkCertifier",
   "Specs.NetworkCertifier.Assumptions",
   "Specs.NetworkCertifier.Guarantees",
-  "NetworkCertifier",
   "Proofs.Flock.Verifier",
   "Flock",
   "Proofs.Flock.Level3",
@@ -234,6 +233,7 @@
   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
+ "four_names": ["Nci", "NetTiming"],
  "guarantees": {
   "Flock.HmNets.col_and": {
    "owner": "@proofs",
@@ -21645,81 +21645,6 @@
    "assumptions": [],
    "type_hash": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b"
   },
-  "NetTiming.SecurityProofs.CodeAcceptedConstantRate": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.CodeAcceptedConstantRate {L K S : Nat} {In Ac : Type} (T W : Nat)",
-    "  (ss : NetworkCertifier.SyncSet) (ss' : NetTiming.SyncSet)",
-    "  (frames : List In → Ac → Fin L → List NetworkCertifier.LogicalFrame)",
-    "  (frames' : List In → Ac → Fin L → List NetTiming.LogicalFrame)",
-    "  (hf :",
-    "    ∀ (ins : List In) (c : Ac) (ℓ : Fin L),",
-    "      Eq (List.map (fun f => { fst := f.payload, snd := { fst := f.anchor, snd := f.index } }) (frames ins c ℓ))",
-    "        (List.map (fun f => { fst := f.payload, snd := { fst := f.anchor, snd := f.index } }) (frames' ins c ℓ)))",
-    "  (op : Nat → List (NetworkCertifier.Obs L K S) → In) (op' : Nat → List (NetTiming.Obs L K S) → In) (k : Nat)",
-    "  (o : List (NetworkCertifier.Obs L K S)) (o' : List (NetTiming.Obs L K S)) (hlen : Eq o.length o'.length)",
-    "  (hrows :",
-    "    ∀ (t : Nat) (h : instLTNat.lt t o.length) (h' : instLTNat.lt t o'.length),",
-    "      Eq (List.instGetElemNatLtLength.getElem o t h).rows (List.instGetElemNatLtLength.getElem o' t h').rows)",
-    "  (hstatus :",
-    "    ∀ (t : Nat) (h : instLTNat.lt t o.length) (h' : instLTNat.lt t o'.length) (κ : Fin K),",
-    "      Iff (Eq ((List.instGetElemNatLtLength.getElem o t h).status κ) NetworkCertifier.Status.complete)",
-    "        (Eq ((List.instGetElemNatLtLength.getElem o' t h').status κ) NetTiming.Status.complete))",
-    "  (hop : ∀ (i : Nat), Eq (op i (List.take i o)) (op' i (List.take i o'))) (c : Ac) (σ : Fin W → ss.Elem)",
-    "  (σ' : Fin W → ss'.Elem)",
-    "  (hσ : ∀ (w : Fin W), And (Eq (σ w).fst.val (σ' w).fst.val) (Eq (σ w).snd.val (σ' w).snd.val)) :",
-    "  Iff (NetworkCertifier.Accepted (NetworkCertifier.constantRate T W ss frames) op k o { fst := c, snd := σ })",
-    "    (NetTiming.Accepted (NetTiming.constantRate T W ss' frames') op' k o' { fst := c, snd := σ' })"
-   ],
-   "assumptions": [],
-   "type_hash": "91ece4b141fff55de8c1cc318ed45323ddbdceb99ed7a802b9eb074715c94138"
-  },
-  "NetTiming.SecurityProofs.CodeExpectedRow": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.CodeExpectedRow (S T W : Nat) (syncs : Fin W → NetworkCertifier.ClockSync)",
-    "  (syncs' : Fin W → NetTiming.ClockSync)",
-    "  (hs : ∀ (w : Fin W), And (Eq (syncs w).delta (syncs' w).delta) (Eq (syncs w).rho (syncs' w).rho))",
-    "  (frames : List NetworkCertifier.LogicalFrame) (frames' : List NetTiming.LogicalFrame)",
-    "  (hf :",
-    "    Eq (List.map (fun f => { fst := f.payload, snd := { fst := f.anchor, snd := f.index } }) frames)",
-    "      (List.map (fun f => { fst := f.payload, snd := { fst := f.anchor, snd := f.index } }) frames'))",
-    "  (t : Nat) : Eq (NetworkCertifier.expectedRow S T W syncs frames t) (NetTiming.expectedRow S T W syncs' frames' t)"
-   ],
-   "assumptions": [],
-   "type_hash": "a28f366d3770f14fc5ea53155dc1541f10cce6d8677765da696bf083dfeaac9b"
-  },
-  "NetTiming.SecurityProofs.CodeStatusComplete": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.CodeStatusComplete {L K S : Nat} (k : Nat) (o : List (NetworkCertifier.Obs L K S))",
-    "  (o' : List (NetTiming.Obs L K S)) (hlen : Eq o.length o'.length)",
-    "  (hstatus :",
-    "    ∀ (t : Nat) (h : instLTNat.lt t o.length) (h' : instLTNat.lt t o'.length) (κ : Fin K),",
-    "      Iff (Eq ((List.instGetElemNatLtLength.getElem o t h).status κ) NetworkCertifier.Status.complete)",
-    "        (Eq ((List.instGetElemNatLtLength.getElem o' t h').status κ) NetTiming.Status.complete)) :",
-    "  Iff (NetworkCertifier.StatusComplete k o) (NetTiming.StatusComplete k o')"
-   ],
-   "assumptions": [],
-   "type_hash": "8782e7f8ab9dc8ffb3ebea72786450bfa3d94d8c5b3aa0e7b602de1664658931"
-  },
-  "NetTiming.SecurityProofs.CodeSyncSet": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.CodeSyncSet :",
-    "  And",
-    "    (∀ (ss : NetworkCertifier.SyncSet),",
-    "      Exists fun ss' =>",
-    "        And (∀ (d : Nat), Iff (List.instMembership.mem ss.deltas d) (SetLike.instMembership.mem ss'.deltas d))",
-    "          (∀ (ρ : Rat), Iff (List.instMembership.mem ss.rhos ρ) (SetLike.instMembership.mem ss'.rhos ρ)))",
-    "    (∀ (ss' : NetTiming.SyncSet),",
-    "      Exists fun ss =>",
-    "        And (∀ (d : Nat), Iff (List.instMembership.mem ss.deltas d) (SetLike.instMembership.mem ss'.deltas d))",
-    "          (∀ (ρ : Rat), Iff (List.instMembership.mem ss.rhos ρ) (SetLike.instMembership.mem ss'.rhos ρ)))"
-   ],
-   "assumptions": [],
-   "type_hash": "ade6d55d361242fd3198bfb7cfc84d47c6c278977481313b92a2a54b11d758ae"
-  },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
    "owner": "@network-accounting",
    "signature": [
@@ -31526,9 +31451,6 @@
     "NetTiming.rowCount": "95cee3532364711f79cb77b0ba21751b405644470a935c9f92c99eda351ab005"
    },
    "guarantees": [
-    "NetTiming.SecurityProofs.CodeAcceptedConstantRate",
-    "NetTiming.SecurityProofs.CodeExpectedRow",
-    "NetTiming.SecurityProofs.CodeStatusComplete",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -31543,7 +31465,6 @@
     "NetTiming.rowFrames": "a1c2604aec04da7731fcbd03d5189d5e8c3d2915e7c3ad309dc1320af225403e"
    },
    "guarantees": [
-    "NetTiming.SecurityProofs.CodeStatusComplete",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
    ]
@@ -31582,8 +31503,6 @@
     "NetTiming.ingressUpTo": "d5d3269d8dd71a353c700722aa08bd635e621d61f95c36aaf14a34ebf1bbafe3"
    },
    "guarantees": [
-    "NetTiming.SecurityProofs.CodeAcceptedConstantRate",
-    "NetTiming.SecurityProofs.CodeStatusComplete",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -31615,9 +31534,6 @@
     "NetTiming.payloads": "629f7e81bf6e3bc9a64a924267226b9298a3069c46e5d2a8101b6bc9e43f1d87"
    },
    "guarantees": [
-    "NetTiming.SecurityProofs.CodeAcceptedConstantRate",
-    "NetTiming.SecurityProofs.CodeExpectedRow",
-    "NetTiming.SecurityProofs.CodeSyncSet",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow"
    ]
@@ -53749,82 +53665,6 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR_custody",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundR",
     "FlockSoundness.Discharge.ZkView.decode_encode"
-   ]
-  },
-  "NetworkCertifier.Grid": {
-   "digest": "2820ed149c9f5c25aab1a13fe34e16774250801c8bbaaca88b61e263b417b53c",
-   "definitions": {
-    "NetworkCertifier.Grid": "939aa34897c384bdd15f2d1e0bb266d1dc92f9e35d98d3403b0f20a3991c6b3e",
-    "NetworkCertifier.Row": "14521db588c4829f702c6f7cf34c99033c801a2660ed7ad54a1f7faebfb4a98b",
-    "NetworkCertifier.fifoGrid": "574b595afcaabdac77acfc9720518f6597271129daa1c19ed3f5e78d6e76fe22",
-    "NetworkCertifier.fill": "b5916e72da63790badda0683273411e7a37cef6befda1ac0f8983dd6ed6651d1",
-    "NetworkCertifier.offset": "11936ffbcf3bd56fef77f2cb72c860aa3b2191f8026b04a96ae49b14650d9ee8",
-    "NetworkCertifier.queue": "9cb5b90d40cf61fa0fe209000555ca6d7a77bff64bf92390464c83961656d5ae",
-    "NetworkCertifier.released": "1fdcf4e8c44f44d33b8544e62b77d34595b04ef42157d1d719e9d1e656fdd80a"
-   },
-   "guarantees": [
-    "NetTiming.SecurityProofs.CodeAcceptedConstantRate",
-    "NetTiming.SecurityProofs.CodeExpectedRow",
-    "NetTiming.SecurityProofs.CodeStatusComplete"
-   ]
-  },
-  "NetworkCertifier.Ingress": {
-   "digest": "3568068fc38e427222b87b4f60d5847216d924afdfc9d97d83074b142f89b3ff",
-   "definitions": {
-    "NetworkCertifier.StatusComplete": "15ddbcaeaaf5b39de599a74fd009d6539824dcd8a18371606fc7c7a853a39a16"
-   },
-   "guarantees": ["NetTiming.SecurityProofs.CodeStatusComplete"]
-  },
-  "NetworkCertifier.Run": {
-   "digest": "7ccc4e805bf9f6a3e1113df1fb582120d00773c0ef05c9157694186c2ee820c8",
-   "definitions": {
-    "NetworkCertifier.Accepted": "853fadc524f27db564c31daf532361d3047abe04f4ff89a26508e85878a53d96",
-    "NetworkCertifier.Obs": "b063f38736e5cdff9f3180666cc5b4513bd779c71c99fa17e8eaf5c5db0c1fc1",
-    "NetworkCertifier.Obs.rows": "604af0fb3e664e5977164dcd712abe54ebafc3b2dc2bec6c0a6173daba6f90d8",
-    "NetworkCertifier.Obs.status": "4eb12a69e11a2f1432fd5c02e5492e78fb059f2220d61326fb31a20c9c4fb1a6",
-    "NetworkCertifier.Program": "e2e08406c126bce514103b843ced49f1613c12230e1bd9dd1f850618c590d6db",
-    "NetworkCertifier.Program.rows": "adf82d1a7d4cf066cd2e4e50ac36af5e69ce4d768dc995980d8f4f1feb43045b",
-    "NetworkCertifier.Reason": "aabfdef44cd3bc6e9aa44d1732ae336b6c8d83d61beb2a50ebb98a7a9d01b806",
-    "NetworkCertifier.Reason.coverageNeverEstablished": "1960b1121a0121e2ca17b5c1384e468265063d2ffba04016545c76f529ecf217",
-    "NetworkCertifier.Reason.deliveryRefused": "3b27517e3926ba6dd88b6827481cf3cc5b2fb93879b70c069beafd9576c455e4",
-    "NetworkCertifier.Reason.dropped": "73b267ad1dd3e7a59a03780f1d4642b00c7f6f4a83d7179c3f3c0ecc6f75bedd",
-    "NetworkCertifier.Reason.malformed": "830c23ec8d4178d582f542242fd589ed40679496d5c68eef6b12c446e0049f8a",
-    "NetworkCertifier.Reason.monitorUnavailable": "43b996dd274789b1e0715982af54d4fcb5a2a5aa6c7cb10fce00af685532c46c",
-    "NetworkCertifier.Reason.overflow": "de77221c3d08688a959feffd1e758171ee5361cd5be03488857861511df05cb7",
-    "NetworkCertifier.Status": "a405a46ac4c9919b3f23c946d9a13e5d9ce6ff50d66709dfc7912516f3de56aa",
-    "NetworkCertifier.Status.complete": "1ebcb08fec7677c6badaf7556270acb74c3628dd443041a20f6602a2e3f7ca92",
-    "NetworkCertifier.Status.notEstablished": "9dcb5749ef14b8cee367ce7b5a3d1539ba97f6dff00e2c7de4f89e2a25a82d02",
-    "NetworkCertifier.ingressUpTo": "f921024fc7e8d76912904772b432adbb3e193c70d1f901f09a345437c306c632"
-   },
-   "guarantees": ["NetTiming.SecurityProofs.CodeAcceptedConstantRate", "NetTiming.SecurityProofs.CodeStatusComplete"]
-  },
-  "NetworkCertifier.Schedule": {
-   "digest": "3554e8afe01e54dd9f85b14a904475570b2ebe76cb94de76e13dce2123b7045e",
-   "definitions": {
-    "NetworkCertifier.ClockSync": "c65c0e7cb9c83e7b0a7a8ca262b6cfaa2959b34fdb0f2ba9317dc3aa2c0a2c13",
-    "NetworkCertifier.ClockSync.delta": "86eec444cd545a1d85fabe3294e6d8d1ad0317ba8f779d4b458c25312841e4f6",
-    "NetworkCertifier.ClockSync.rho": "7e6e456765a79bfaf59593ab6c93fabcc7cf4252be1debfe91ca51da1bb504f4",
-    "NetworkCertifier.LogicalFrame": "b9d6b58441ba2a73c4a60bb7a4260115620ad85e4c19f3ea530bba8660d33a82",
-    "NetworkCertifier.LogicalFrame.anchor": "d6cecba982b5c6c8141acedbd4cf3ab976bcc9cb6d20b0ac60079f06c769c7ea",
-    "NetworkCertifier.LogicalFrame.index": "48e796acfe38187ca74ec70d82bc1476a934c705bce545887b305a784622ed68",
-    "NetworkCertifier.LogicalFrame.payload": "42aa8712d0ccb631f59d979c903441fad5b922b371b21fad13bb341a686fc917",
-    "NetworkCertifier.SyncSet": "21cf1ad406dba9cd9be13c0656651e05e642abc979e47203f5af2cf24180d912",
-    "NetworkCertifier.SyncSet.Elem": "01430d5ca1025228a92bc482ce86b0c22af42f8345fb54b6176e50152a894e48",
-    "NetworkCertifier.SyncSet.deltas": "56708863c9fcf25adc8e5fb0a6162c58127ffe5a2d22a7e71e2a0191a11aac72",
-    "NetworkCertifier.SyncSet.rhos": "fef6aa011f5487fd349faefb86188d6eda2bf41651d86986675e9cb95488024d",
-    "NetworkCertifier.SyncSet.sync": "6579b3da0dfb230b4fcfa6eab4b58ae139bb92cc0e4f54ddbc36c80a6f87d1cf",
-    "NetworkCertifier.constantRate": "fa5439eb81cf9cf14c3bf5f43228f3fe2d523aa0cae2983a83a23f6806279a73",
-    "NetworkCertifier.eligible": "5c93c34d91320ae8bb10f2e951ad3e20c0eeffc48ac55a93facf690718bf14a8",
-    "NetworkCertifier.enqueued": "c5962f6ff2f6f48a6f7cda2076821d019eedf7a5c03ce1a00606d938646bd5a5",
-    "NetworkCertifier.expectedRow": "be6e22ea3b91730480d7177b7976e3a936ec946cda45e29f8802fac91b41c160",
-    "NetworkCertifier.handingBuckets": "7ccdd90843ff22d3d6b87b0f753e87d2080cd995e86ddcc133a36713350ccc1d",
-    "NetworkCertifier.handingFrom": "d263adc51325a2256ff9f4a5be03da6f16184be44644f1c0c4fec3656f18978b",
-    "NetworkCertifier.payloads": "eabf67a4741af4f3d31371a37212653f5039c29c32180a31458c90cfb52f6a95"
-   },
-   "guarantees": [
-    "NetTiming.SecurityProofs.CodeAcceptedConstantRate",
-    "NetTiming.SecurityProofs.CodeExpectedRow",
-    "NetTiming.SecurityProofs.CodeSyncSet"
    ]
   },
   "Proofs.Flock.Level3.ArithFacts": {
@@ -76857,6 +76697,5 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
   "toolchain": "d95e8a4c480ea108924167135008bc1409c650e2ac659cc2acb8bd8db870d011"
- },
- "four_names": ["Nci", "NetTiming"]
+ }
 }
