@@ -270,13 +270,19 @@ def test_serve_opens_each_recursive_session_with_the_streams_budget_and_its_publ
     connection is closed before anything is served, and ``serve`` returns."""
     fw = FW.Firewall(tmp_path / "fw")
     windows = {"parts": ["L0", "alg"], "windows_ms": [12000, 28000]}
-    t, got = _serve(tmp_path, 3, fw, budget=1, release=windows, now_ms=lambda: 1234)
+    t, got = _serve(tmp_path, 2, fw, budget=1, release=windows, now_ms=lambda: 1234)
     w = G._Wire(got["addr"])
     assert not G._held(G._run(w, y=bytes(48)))
     w.close()
     w = G._Wire(got["addr"])
-    assert w.rf.read(1) == b""
-    w.close()
+    try:
+        try:
+            answer = w.handle(RL.encode_req(RL.REQ_REGISTER))
+        except OSError:
+            answer = None
+        assert answer is None, "a connection on a stopped stream was served"
+    finally:
+        w.close()
     t.join()
     assert [r["firewall"] for r in got["res"]] == ["r0000", None] and fw.failures("pouw") == 1
     assert got["res"][1]["refused"] == "FIREWALL-REFUSED: stream pouw stopped at its failure budget (1 of 1)"
