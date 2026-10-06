@@ -157,10 +157,10 @@ class Val (α : Type) where
   cst : F128 → α
 
 /-- The reference: values are F's elements. -/
-instance : Val F128 := ⟨0, (· + ·), (· * ·), fun x y => .ok (x * y), id⟩
+instance instValF128 : Val F128 := ⟨0, (· + ·), (· * ·), fun x y => .ok (x * y), id⟩
 
 /-- Symbolic values (`symbolic`, `cst = lambda v: Lin(c=v)`, rec_algebra.py:582). -/
-instance : Val Lin := ⟨{}, Lin.xor, Lin.scale, Lin.mv, fun v => { c := some v }⟩
+instance instValLin : Val Lin := ⟨{}, Lin.xor, Lin.scale, Lin.mv, fun v => { c := some v }⟩
 
 open Val (zero add sm mv cst)
 
