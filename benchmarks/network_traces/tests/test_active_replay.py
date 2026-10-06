@@ -12,9 +12,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.protocols.accounting.communication.warden import calibration
-from verity.protocols.accounting.communication.warden.active import DATA, LAST, encode_frame
-from verity.protocols.accounting.communication.warden.grid import COMPLETE, GridParams, Reason, Record, Status, Warden
+from verity.protocols.accounting.communication.certifier import calibration
+from verity.protocols.accounting.communication.certifier.active import DATA, LAST, encode_frame
+from verity.protocols.accounting.communication.certifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier
 
 HERE = Path(__file__).resolve().parents[1]
 T = 60
@@ -82,7 +82,7 @@ def test_requests_take_the_frames_the_trace_gives_them():
 
 def test_records_round_trip_through_their_packing():
     p = GridParams(3, 2, 64)
-    w = Warden("responses", p)
+    w = Certifier("responses", p)
     w.enqueue(encode_frame(DATA, 9, b"id: 0\n\n", 64))
     w.enqueue(bytes(range(64)))
     w.tick()
@@ -196,7 +196,7 @@ def test_a_lagged_prover_declares_off_the_tick_and_is_accepted(setup, tmp_path):
     """`--prover-lag`: window w's sync is the rule's on the frames ready by w·T − lag, chosen at that bucket, so the
     tick at w·T only takes it. Every window after the first takes the rule's choice, none the envelope for want of
     it, and the run is accepted and is `run_shaper`'s under what was declared."""
-    from verity.protocols.accounting.communication.warden import online
+    from verity.protocols.accounting.communication.certifier import online
 
     doc, report, s = setup
     plan = ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1") | {"prover_lag": 5}
