@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from research.cli import main as research_main
+from research.cli import _custody_ttl_problem, main as research_main
 from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, grant_target
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
@@ -33,8 +33,8 @@ paths = ["integrations/vllm/"]
 by = "the vLLM coordinator"
 
 [[grant]]
-role = "statement-reviewer"
-lean_audit = ["guarantees", "reads"]
+role = "red-team"
+paths = ["pkg/", "pké/"]
 """
 AGENT = "bc-605d7c89-ca73-5a32-a582-ee77c49e762a"
 
@@ -181,17 +181,17 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     assert [m.pr for m in members] == [5, 4]
 
 
-def test_grants_follow_paths_and_lean_audit_sections_at_the_exact_head(world):
+def test_grants_follow_paths_at_the_exact_head(world):
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
     world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 1\n"}))
     world.gh.put(2, world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}))
-    world.gh.put(3, world.change({"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})}))
+    world.gh.put(3, world.change({"other/x.txt": "x\n"}))
     q = world.queue()
     _, entries = q.sync()
     assert entries[1].why.startswith("waiting for the vllm-coordinator grant")
-    assert entries[2].why.startswith("waiting for the statement-reviewer grant")
-    assert "statement-reviewer (no `by` in ci/queue.toml)" in entries[2].why
-    assert entries[3].state == "queued"                         # a dependency digest isn't a statement
+    assert entries[2].why.startswith("waiting for the red-team grant")
+    assert "red-team (no `by` in ci/queue.toml)" in entries[2].why
+    assert entries[3].state == "queued"
     world.grants[(1, world.gh.prs[1].head)] = {"vllm-coordinator"}
     assert 1 in [m.pr for m in q.sync()[0]]
     world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 2\n"}))
@@ -241,23 +241,6 @@ def test_a_head_with_two_merge_bases_needs_only_what_merging_it_onto_main_change
     rules = Rules.parse(RULES)
     assert rules.needs(tmp_path, main, head) == set()
     assert rules.needs(tmp_path, main, commit({"integrations/vllm/x.py": "x = 2\n"}, "and a vLLM change")) == {"vllm-coordinator"}
-
-
-def test_a_lean_review_covers_only_the_change_it_printed_as_the_same_statements():
-    """`reviewed`: an `audit.py --update` report stands in for the statement reviewer only on its own package, only when it printed
-    nothing a reviewer must read, and only for entries it saw change: one another PR changed on `main` meanwhile isn't covered."""
-    from research.queue import reviewed
-
-    old, new = {"guarantees": {"P.t": "1", "P.u": "5"}, "reads": None}, {"guarantees": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
-    rep = {"package": "lean", "statement_changes": False, "before": {"guarantees": {"P.t": "1", "P.u": "5"}, "reads": {}},
-           "guarantees": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
-    assert reviewed("lean/lean-audit.json", old, new, rep)
-    assert reviewed("lean/lean-audit.json", old, new, rep | {"package": "/w/verity/lean/"})
-    assert not reviewed("other/lean/lean-audit.json", old, new, rep) and not reviewed("lean-audit.json", old, new, rep)
-    assert not reviewed("lean/lean-audit.json", old, new, rep | {"statement_changes": True})
-    assert not reviewed("lean/lean-audit.json", old, new, {k: v for k, v in rep.items() if k != "before"})
-    assert not reviewed("lean/lean-audit.json", {**old, "guarantees": {"P.t": "1", "P.u": "6"}}, new, rep), "P.u changed on main since"
-    assert not reviewed("lean/lean-audit.json", old, {**new, "reads": "{not json"}, rep)
 
 
 def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
@@ -502,8 +485,9 @@ def test_grants_read_through_to_the_remote_and_without_that_pull_the_queue_refus
 
 
 def test_rules_refuse_what_they_cannot_place():
-    assert [r.role for r in Rules.parse(RULES).grants] == ["vllm-coordinator", "statement-reviewer"]
+    assert [r.role for r in Rules.parse(RULES).grants] == ["vllm-coordinator", "red-team"]
     for bad in ('[[grant]]\nrole = "whoever"\npaths = ["x/"]\n', '[[grant]]\nrole = "review"\n', 'colour = "red"\n',
+                '[[grant]]\nrole = "red-team"\nlean_audit = ["guarantees"]\n',
                 '[[grant]]\nrole = "review"\npaths = ["x/"]\nwhen = "always"\n'):
         with pytest.raises(QueueError):
             Rules.parse(bad)
@@ -711,7 +695,7 @@ def _carrying(world: World, rules: str | None = None) -> Queue:
     workdir = world.tmp / "q" / "verity"
     labels = StoreGrants(world.store, log=world.logs.append, repo=workdir)
     return Queue(workdir, remote=str(world.origin), github=world.gh, grants=labels, ready=lambda n, h: (n, h) in world.gh.ready,
-                 store=world.store, notes=world.tmp / "notes", log=world.logs.append, reviews=labels.reviews, carry=labels.carried,
+                 store=world.store, notes=world.tmp / "notes", log=world.logs.append, carry=labels.carried,
                  rules=Rules.parse(rules) if rules else None)
 
 
@@ -723,42 +707,42 @@ def _grant(world: World, pr: int, head: str, role: str) -> None:
 
 
 def test_a_grant_carries_to_a_restack_with_a_byte_identical_lean_audit_change_and_the_queue_names_the_head_it_came_from(world):
-    """Daniel's ruling (2 Oct): a statement review carries across a restack when the new head's `lean-audit.json` change is
+    """Daniel's ruling (2 Oct): a grant carries across a restack when the new head's `lean-audit.json` change is
     byte-identical to the one granted.  The clone holds the old head from the sync that admitted it; the grant was written on
     another machine and comes through the store's remote, pulled for every head of the PR at once."""
     q = _carrying(world)
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
     pin = {"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}
     world.gh.put(1, old := world.change(pin))
-    _grant(world, 1, old, "statement-reviewer")
+    _grant(world, 1, old, "red-team")
     assert [m.pr for m in q.sync()[0]] == [1]
     _move_main(world, {"d.txt": "landed meanwhile\n"})
     world.gh.put(1, new := world.change(pin))                   # the same change on the new `main`
     members, _ = q.sync()
     assert [(m.pr, m.head) for m in members] == [(1, new)]
-    assert (f"research queue: grant statement-reviewer carried from pr:1@{old} to {new[:12]} "
+    assert (f"research queue: grant red-team carried from pr:1@{old} to {new[:12]} "
             f"(restack; lean-audit.json change identical)") in world.logs
 
 
 def test_a_grant_carries_to_a_merge_of_main_and_not_to_any_other_lean_audit_change(world):
     """A merge of `main` carries; a restated pin doesn't, and neither does the same pin change restacked onto a `main` that changed
-    the same line of `lean-audit.json` meanwhile (fail closed: a new grant, or a lean_review)."""
+    the same line of `lean-audit.json` meanwhile (fail closed: a new grant)."""
     q = _carrying(world)
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
     world.gh.put(1, old := world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}))
-    _grant(world, 1, old, "statement-reviewer")
+    _grant(world, 1, old, "red-team")
     q.sync()
     _move_main(world, {"d.txt": "landed meanwhile\n"})
     world.gh.put(1, merged := _merge_main(world, old))
     assert [m.head for m in q.sync()[0]] == [merged]
-    assert (f"research queue: grant statement-reviewer carried from pr:1@{old} to {merged[:12]} "
+    assert (f"research queue: grant red-team carried from pr:1@{old} to {merged[:12]} "
             f"(merge of main; lean-audit.json change identical)") in world.logs
 
     def refused(h: str) -> None:
         world.gh.put(1, h)
         members, entries = q.sync()
-        assert members == [] and entries[1].why.startswith(f"waiting for the statement-reviewer grant at {h[:8]}")
-        assert (f"research queue: grant statement-reviewer on pr:1@{old} doesn't carry to {h[:12]}: its lean-audit.json patch "
+        assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
+        assert (f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: its lean-audit.json patch "
                 f"isn't byte-identical (pkg/lean-audit.json)") in world.logs
 
     refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "3"}})}))
@@ -905,7 +889,7 @@ def test_a_change_under_a_name_git_would_quote_needs_its_grants(world):
     _move_main(world, {"pké/lean-audit.json": json.dumps(audit)})
     rules = Rules.parse(RULES)
     pin = world.change({"pké/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})})
-    assert rules.needs(world.dev, "origin/main", pin) == {"statement-reviewer"}
+    assert rules.needs(world.dev, "origin/main", pin) == {"red-team"}
     assert rules.needs(world.dev, "origin/main", world.change({"integrations/vllm/café.py": "x\n"})) == {"vllm-coordinator"}
 
 
@@ -1062,6 +1046,9 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     assert flags[:4] == [sys.executable, "-m", "research", "run"] and "--require-result" in flags
     assert [flags[flags.index(k) + 1] for k in ("--on", "--project", "--cwd", "--declared-output")] == ["vy-test", "verity", "source", "out/*"]
     assert float(flags[flags.index("--timeout") + 1]) == Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S
+    ttl = flags[flags.index("--custody-ttl") + 1]
+    assert int(ttl) >= Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S + Q.REMOTE_GRACE_S and _custody_ttl_problem(ttl, flags) is None, \
+        "the custody key outlasts the run and the wait for its upload, so `research run` takes the launch"
     assert sorted(Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send") == ["quick_tier.py", "slot.py"]
     assert json.loads((world.tmp / "slot-seen.json").read_text())[:8] == [
         "--by", "lane-1", "--wait-max", f"{Q.REMOTE_WAIT_S:g}", "--run-max", f"{Q.REMOTE_TIMEOUT_S:g}", "--", "python3"]
