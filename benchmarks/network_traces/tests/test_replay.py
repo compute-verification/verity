@@ -11,7 +11,7 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-from verity.protocols.accounting.communication.warden import calibration
+from verity.protocols.accounting.communication.certifier import calibration
 
 HERE = Path(__file__).resolve().parents[1]
 T = 60  # buckets per window

@@ -1,0 +1,322 @@
+"""Network certificates (record v2 on SHA-512): the layout restated from PROTOCOL.md, the frame tree, what the digest
+and the signed message bind, the signer's refusal failing closed, and the certified audit's verdicts against the raw
+audit's on every scenario of the audit and commitment tests."""
+
+import hashlib
+import itertools
+import shutil
+import struct
+
+import pytest
+
+from verity.primitives.commitments.identity import tagged_sha512
+from verity.protocols.accounting.communication.certifier.audit import Audit
+from verity.protocols.accounting.communication.certifier.certificate import (
+    STATUS_CODES, Certificate, CertifiedRecord, Certifier, Direction, RecordHead, certificate_message, depth, empty,
+    frames_root, open_frame, parameters_digest, real_frames, record_head, verify_frame)
+from verity.protocols.accounting.communication.certifier.commitment import commit
+from verity.protocols.accounting.communication.certifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier, fill
+from verity.protocols.accounting.communication.certifier.schedule import ClockSync, run_shaper
+
+from test_network_certifier_audit import FRAMES, P, SYNC_SET, SYNCS, honest_ready, ingress_run
+from toy_signer import ToySigner
+
+EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
+PARAMS = bytes(range(64))
+
+
+def block(data: bytes) -> bytes:
+    return data + bytes(128 - len(data))
+
+
+def test_the_record_is_the_documented_bytes():
+    """PROTOCOL.md's layout, rebuilt field by field with struct, and the tree from its three messages."""
+    params = GridParams(buckets=3, allocation=2, frame_bytes=2, bucket_ms=50)
+    grid = fill([b"ab", b"cd", b"ef"], [2, 0, 1], 2)
+    head = record_head("lnk", INGRESS, 7, grid, Status(Reason.DROPPED), params, PARAMS, deadline=False)
+
+    def leaf(f):
+        return hashlib.sha512(block(b"verity-network-warden/frame/v2\0" + struct.pack(">I", 2)) + f).digest()
+
+    def node(a, b):
+        return hashlib.sha512(block(b"verity-network-warden/node/v2\0") + a + b).digest()
+
+    e0 = hashlib.sha512(block(b"verity-network-warden/empty/v2\0")).digest()
+    e1 = node(e0, e0)
+    assert depth(params) == 3 and empty(1) == e1
+    root = node(node(node(leaf(b"ab"), leaf(b"cd")), node(leaf(b"ef"), e0)), node(e1, e1))
+    want = (struct.pack(">H", 3) + b"lnk" + bytes([1]) + struct.pack(">Q", 7) + struct.pack(">IIII", 3, 2, 2, 50)
+            + bytes([4, 0]) + PARAMS + struct.pack(">III", 2, 0, 1) + root)
+    assert head.root == root and head.encode() == want
+    assert head.digest() == tagged_sha512("verity-network-warden/record/v2", want)
+    assert head.digest().hex() == ("6bfe9f6aa8fd40d8d3c5c2cc21486123e6f4905c2b150bd7571d9d5518a6f13e"
+                                   "fbafb76814ec98d4adc640d5c7dbb2ba3a61434999958dce03cc51a7182d226d")
+
+
+def test_status_codes_cover_every_reason_once():
+    assert set(STATUS_CODES) == {None, *Reason} and sorted(STATUS_CODES.values()) == list(range(len(Reason) + 1))
+
+
+def test_the_digest_is_injective_on_left_packed_grids():
+    """Every left-packed grid on T = 2, r = 2 over a 2-frame alphabet has its own record digest, padding elided."""
+    params = GridParams(buckets=2, allocation=2, frame_bytes=1)
+    seen = {}
+    for counts in itertools.product(range(3), repeat=2):
+        for frames in itertools.product([b"a", b"b"], repeat=sum(counts)):
+            grid = fill(list(frames), counts, 2)
+            d = record_head("l", EGRESS, 0, grid, COMPLETE, params, PARAMS).digest()
+            assert seen.setdefault(d, grid) == grid
+    assert len(seen) == sum(2 ** (a + b) for a, b in itertools.product(range(3), repeat=2))
+
+
+def test_the_head_binds_every_field():
+    params = GridParams(buckets=2, allocation=2, frame_bytes=1)
+    grid = fill([b"x", b"y"], [1, 1], 2)
+    base = record_head("l", EGRESS, 0, grid, COMPLETE, params, PARAMS)
+    variants = [
+        record_head("m", EGRESS, 0, grid, COMPLETE, params, PARAMS),
+        record_head("l", INGRESS, 0, grid, COMPLETE, params, PARAMS),
+        record_head("l", EGRESS, 1, grid, COMPLETE, params, PARAMS),
+        record_head("l", EGRESS, 0, grid + (fill([], [0], 2)[0],), COMPLETE,
+                    GridParams(buckets=3, allocation=2, frame_bytes=1), PARAMS),
+        record_head("l", EGRESS, 0, tuple(row + (None,) for row in grid), COMPLETE,
+                    GridParams(buckets=2, allocation=3, frame_bytes=1), PARAMS),
+        record_head("l", EGRESS, 0, grid, COMPLETE, GridParams(buckets=2, allocation=2, frame_bytes=1, bucket_ms=50),
+                    PARAMS),
+        record_head("l", EGRESS, 0, grid, COMPLETE, params, PARAMS, deadline=False),
+        record_head("l", EGRESS, 0, grid, COMPLETE, params, bytes(64)),
+        record_head("l", EGRESS, 0, fill([b"x", b"y"], [2, 0], 2), COMPLETE, params, PARAMS),
+        record_head("l", EGRESS, 0, fill([b"y", b"x"], [1, 1], 2), COMPLETE, params, PARAMS),
+        *(record_head("l", EGRESS, 0, grid, Status(r), params, PARAMS) for r in Reason),
+    ]
+    two_byte = GridParams(buckets=2, allocation=2, frame_bytes=2)
+    variants.append(record_head("l", EGRESS, 0, fill([b"x\0", b"y\0"], [1, 1], 2), COMPLETE, two_byte, PARAMS))
+    digests = {base.digest(), *(v.digest() for v in variants)}
+    assert len(digests) == 1 + len(variants)
+
+
+def test_padding_and_packing():
+    params = GridParams(buckets=1, allocation=4, frame_bytes=1)
+    with pytest.raises(ValueError, match="left-packed"):
+        real_frames(((None, b"a", None, None),), params)
+    with pytest.raises(ValueError, match="frames are 1 bytes"):
+        frames_root([b"aa"], params)
+    assert frames_root([], params) == empty(depth(params))
+
+
+def test_every_frame_opens_at_one_depth_and_nothing_else_does():
+    """Frame k opens with D = ⌈log2(T·r)⌉ siblings at every occupancy; another frame, index or path fails."""
+    params = GridParams(buckets=3, allocation=3, frame_bytes=1)
+    assert depth(params) == 4
+    for n in range(10):
+        frames = [bytes([k]) for k in range(n)]
+        root = frames_root(frames, params)
+        for k in range(n):
+            path = open_frame(frames, params, k)
+            assert len(path) == 4 and verify_frame(root, params, k, frames[k], path)
+            assert not verify_frame(root, params, k, b"\xff", path)
+            assert not verify_frame(root, params, k ^ 1, frames[k], path)
+            assert not verify_frame(root, params, k, frames[k], path[:-1])
+
+
+def test_parameters_digest_binds_queue_capacity_and_sync_set():
+    base = parameters_digest(P, SYNC_SET)
+    assert len(base) == 64 and base != parameters_digest(P)
+    assert base != parameters_digest(GridParams(buckets=4, allocation=2, frame_bytes=1, queue_capacity=8), SYNC_SET)
+    assert base != parameters_digest(P, SYNC_SET.__class__((0, 1), (1, 2)))
+
+
+def certify_all(certifier, records, direction=EGRESS, params=P, sync_set=SYNC_SET):
+    parameters = parameters_digest(params, sync_set if direction is EGRESS else None)
+    return [c for r in records if (c := certifier.certify(r, direction, params, parameters)) is not None]
+
+
+def egress_verdicts(records, key=None, syncs=SYNCS, link="responses"):
+    return [v.violation for v in Audit().check_link(link, records, FRAMES, syncs, SYNC_SET, P, key=key)]
+
+
+def ingress_verdicts(records, windows, key=None):
+    return [v.violation for v in Audit().check_ingress_link("requests", records, windows, key=key, params=P)]
+
+
+def scenarios():
+    """The audit and commitment tests' egress runs: honest, late, tampered, faulted, duplicated, missing a window,
+    and out-of-set advice with and without a tampered later window."""
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    late_ready = honest_ready()
+    late_ready[3] = 7
+    late = run_shaper(FRAMES, late_ready, SYNCS, Certifier("responses", P))
+    rows = [list(row) for row in honest[0].grid]
+    rows[0][0] = b"\xff"
+    tampered = [Record("responses", 0, tuple(tuple(r) for r in rows), COMPLETE)] + honest[1:]
+    w = Certifier("responses", P)
+    faulted = run_shaper(FRAMES, honest_ready(), SYNCS[:1], w)
+    w.fault(Reason.MONITOR_UNAVAILABLE)
+    for _ in range(P.buckets):
+        w.tick()
+    faulted.append(w.close_window())
+    duplicated = tampered[:1] + honest
+    declared = [SYNCS[0], ClockSync(3, 1), SYNCS[2]]
+    advised = run_shaper(FRAMES, honest_ready(), declared, Certifier("responses", P))
+    rows = [list(row) for row in advised[2].grid]
+    rows[2][0] = b"\xff"
+    advised_tampered = advised[:2] + [Record("responses", 2, tuple(tuple(r) for r in rows), advised[2].status)]
+    return {"honest": (honest, SYNCS), "late": (late, SYNCS), "tampered": (tampered, SYNCS),
+            "faulted": (faulted, SYNCS), "duplicated": (duplicated, SYNCS), "missing": (honest[:2], SYNCS),
+            "advice": (advised, declared), "advice-tampered": (advised_tampered, declared)}
+
+
+def test_certified_audit_matches_raw_audit_on_every_egress_scenario(tmp_path):
+    """The difftest on the test vectors: with an honest certifier, every egress scenario gets the raw audit's verdicts,
+    rejections included, and the committed (v1) audit agrees."""
+    signer = ToySigner.create(tmp_path, height=6)
+    key = signer.public_key()
+    seen = set()
+    for name, (records, syncs) in scenarios().items():
+        raw = egress_verdicts(records, syncs=syncs)
+        certified = certify_all(Certifier(signer), records)
+        assert egress_verdicts(certified, key, syncs) == raw, name
+        assert egress_verdicts([commit(r, P) for r in records], syncs=syncs) == raw, name
+        seen.update(raw)
+    assert seen == {None, "mismatch", "status:monitor-unavailable", "no-verdict", "duplicate", "advice"}
+
+
+def test_certified_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path):
+    """One clock per spatial unit: a second link with another in-set sync in window 1 is advice there, certified too."""
+    signer = ToySigner.create(tmp_path, height=6)
+    key = signer.public_key()
+    other = [SYNCS[0], ClockSync(2, 1), SYNCS[2]]
+    responses = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    tokens = run_shaper(FRAMES, honest_ready(), other, Certifier("tokens", P))
+    certifier = Certifier(signer)
+    for recs in ((responses, tokens), (certify_all(certifier, responses), certify_all(certifier, tokens))):
+        audit = Audit()
+        audit.check_link("responses", recs[0], FRAMES, SYNCS, SYNC_SET, P, key=key)
+        audit.check_link("tokens", recs[1], FRAMES, other, SYNC_SET, P, key=key)
+        assert [(v.link, v.window, v.violation) for v in audit.violations] == [("tokens", 1, "advice")]
+
+
+def test_certified_audit_matches_raw_audit_on_ingress(tmp_path):
+    """Ingress: different timings are both accepted, and an incomplete status, a duplicate and a missing window are the
+    raw audit's violations, certified."""
+    signer = ToySigner.create(tmp_path, height=6)
+    key = signer.public_key()
+    early = ingress_run([[2, 0, 0, 0], [1, 1, 0, 0], [0, 0, 0, 0]])
+    late = ingress_run([[0, 0, 0, 2], [0, 0, 1, 1], [0, 0, 0, 3]])
+    faulted = ingress_run([[1, 0, 0, 0], [0, 2, 0, 0]], faults={1: Reason.DELIVERY_REFUSED})
+    for records, windows in ((early, 3), (late, 3), ([faulted[0], *faulted], 3), (faulted, 2)):
+        raw = ingress_verdicts(records, windows)
+        assert ingress_verdicts(certify_all(Certifier(signer), records, INGRESS), windows, key) == raw
+    assert ingress_verdicts([faulted[0], *faulted], 3) == ["duplicate", "status:delivery-refused", "no-verdict"]
+
+
+def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
+    """Moving a certificate to another window, link or direction, editing its head, signing with another key or
+    forging the signature is a `signature` violation, and only in that window."""
+    signer = ToySigner.create(tmp_path, height=6)
+    key = signer.public_key()
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    certified = certify_all(Certifier(signer), honest)
+    c0, c1 = certified[0], certified[1]
+
+    def with_window_0(rec: CertifiedRecord, *, head=True, cert=True) -> CertifiedRecord:
+        h = RecordHead(**{f: getattr(rec.head, f) for f in RecordHead.__slots__} | {"window": 0}) if head else rec.head
+        c = Certificate(**{f: getattr(rec.certificate, f) for f in Certificate.__slots__} | {"window": 0}) if cert \
+            else rec.certificate
+        return CertifiedRecord(h, c)
+
+    assert egress_verdicts([with_window_0(c1), *certified[1:]], key) == ["signature", None, None]
+    assert egress_verdicts([with_window_0(c1, cert=False), *certified[1:]], key) == ["signature", None, None]
+    # the head still says window 1, so the moved certificate is a second record there
+    assert egress_verdicts([with_window_0(c1, head=False), *certified[1:]], key) == ["no-verdict", "duplicate", None]
+    relabelled = [CertifiedRecord(
+        RecordHead(**{f: getattr(c.head, f) for f in RecordHead.__slots__} | {"link": "tokens"}),
+        Certificate(**{f: getattr(c.certificate, f) for f in Certificate.__slots__} | {"link": "tokens"}))
+        for c in certified]
+    assert egress_verdicts(relabelled, key, link="tokens") == ["signature"] * 3
+    forged = CertifiedRecord(c0.head, Certificate(**{f: getattr(c0.certificate, f) for f in Certificate.__slots__}
+                                                  | {"signature": bytes(len(c0.certificate.signature))}))
+    assert egress_verdicts([forged, *certified[1:]], key) == ["signature", None, None]
+    (tmp_path / "stranger").mkdir()
+    stranger = ToySigner.create(tmp_path / "stranger", seed=b"other", height=6)
+    assert egress_verdicts(certify_all(Certifier(stranger), honest), key) == ["signature"] * 3
+    assert egress_verdicts(certified, key) == [None, None, None]
+
+
+def test_a_relayed_status_the_certificate_disagrees_with_is_a_signature_violation(tmp_path):
+    """The status is the signed head's: a relay that edits a faulted head to complete breaks the certificate."""
+    signer = ToySigner.create(tmp_path, height=6)
+    w = Certifier("requests", P)
+    w.fault(Reason.DROPPED)
+    for _ in range(P.buckets):
+        w.tick()
+    faulted = certify_all(Certifier(signer), [w.close_window()], INGRESS)[0]
+    lying = CertifiedRecord(RecordHead(**{f: getattr(faulted.head, f) for f in RecordHead.__slots__}
+                                       | {"status": COMPLETE}), faulted.certificate)
+    key = signer.public_key()
+    assert ingress_verdicts([faulted], 1, key) == ["status:dropped"]
+    assert ingress_verdicts([lying], 1, key) == ["signature"]
+
+
+def test_a_record_past_the_deadline_is_no_verdict_and_other_parameters_a_mismatch(tmp_path):
+    signer = ToySigner.create(tmp_path, height=6)
+    key = signer.public_key()
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    certifier = Certifier(signer)
+    parameters = parameters_digest(P, SYNC_SET)
+    late = [certifier.certify(honest[0], EGRESS, P, parameters, deadline=False)] + certify_all(certifier, honest[1:])
+    assert egress_verdicts(late, key) == ["no-verdict", None, None]
+    other_set = certify_all(certifier, honest, sync_set=SYNC_SET.__class__((0, 1), (1, 2)))
+    assert egress_verdicts(other_set, key) == ["mismatch"] * 3
+    ingress = ingress_run([[1, 0, 0, 0]])
+    assert ingress_verdicts(certify_all(certifier, ingress, INGRESS), 1, key) == [None]
+    assert ingress_verdicts(certify_all(certifier, ingress, INGRESS, sync_set=None), 1, key) == [None]
+    q8 = GridParams(buckets=4, allocation=2, frame_bytes=1, queue_capacity=8)
+    wrong = [certifier.certify(ingress[0], INGRESS, P, parameters_digest(q8))]
+    assert ingress_verdicts(wrong, 1, key) == ["mismatch"]
+    egress_as_ingress = certify_all(certifier, ingress, EGRESS)
+    assert ingress_verdicts(egress_as_ingress, 1, key) == ["no-verdict"]
+
+
+def test_certified_records_need_the_key_and_ingress_its_parameters(tmp_path):
+    signer = ToySigner.create(tmp_path, height=6)
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    certified = certify_all(Certifier(signer), honest)
+    with pytest.raises(ValueError, match="public key"):
+        egress_verdicts(certified)
+    ingress = certify_all(Certifier(signer), ingress_run([[1, 0, 0, 0]]), INGRESS)
+    with pytest.raises(ValueError, match="params"):
+        Audit().check_ingress_link("requests", ingress, 1, key=signer.public_key())
+
+
+def test_a_signer_with_missing_or_behind_state_refuses_and_the_window_fails_closed(tmp_path):
+    """No state: nothing is signed and every window is `no-verdict`. State restored from an old copy: the signer
+    refuses rather than reuse a leaf, and the windows from then on are `no-verdict` until the state is current."""
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    signer = ToySigner.create(tmp_path, height=6)
+    key = signer.public_key()
+    old = tmp_path / "old-state.json"
+    shutil.copy(signer.state, old)
+    certifier = Certifier(signer)
+    first = certifier.certify(honest[0], EGRESS, P, parameters_digest(P, SYNC_SET))
+    shutil.copy(old, signer.state)
+    rest = certify_all(certifier, honest[1:])
+    assert rest == [] and certifier.refused == [("responses", EGRESS, 1), ("responses", EGRESS, 2)]
+    assert egress_verdicts([first], key) == [None, "no-verdict", "no-verdict"]
+    assert signer.used() == [0]
+    signer.state.write_text('{"next": 1}')
+    assert egress_verdicts([first, *certify_all(certifier, honest[1:])], key) == [None, None, None]
+    assert signer.used() == [0, 1, 2]
+    signer.state.unlink()
+    missing = Certifier(signer)
+    assert certify_all(missing, honest) == [] and len(missing.refused) == 3
+    assert egress_verdicts([], key) == ["no-verdict"] * 3
+
+
+def test_certificate_message_binds_key_link_direction_window_and_digest():
+    d = bytes(64)
+    base = certificate_message(b"I" * 16, "l", EGRESS, 0, d)
+    others = [certificate_message(b"J" * 16, "l", EGRESS, 0, d), certificate_message(b"I" * 16, "m", EGRESS, 0, d),
+              certificate_message(b"I" * 16, "l", INGRESS, 0, d), certificate_message(b"I" * 16, "l", EGRESS, 1, d),
+              certificate_message(b"I" * 16, "l", EGRESS, 0, b"\1" + bytes(63))]
+    assert len(base) == 64 and len({base, *others}) == 6
