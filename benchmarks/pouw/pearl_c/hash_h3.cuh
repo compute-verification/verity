@@ -1,14 +1,42 @@
-// Hashing format -h3s: -h3 through SHA-512 (`verity.protocols.accounting.work.pouw.schemes.pearl_c`'s module docstring).  The
-// labels' H_l = `pearl_c.s512`, SHA-512 after a 128-byte label block, its first 32 bytes; A's row digests (`s512_rows`) and
-// the tile leaf, `sha512/row-seg/v1` over each row and over the tile's messages; the trees `audit.HM96`: frame-v3-sha512 (`verity.primitives.commitments.merkle`, hash="sha512")
-// over hm96-sha512 leaves (`audit.Hm96Domain`, `verity.primitives.commitments.hm96.SHA512`) salted by ChaCha20
-// (`audit.hm96_salt`).  Every SHA-512 word is big-endian; buffers hold bytes, loaded as little-endian u32 (`rs_be64`).  A
-// frame message's integers have minimal big-endian lengths, so each thread assembles it in its own slice of shared memory
-// (`SMsg`), never in a local array.  pearl_c_sm120.cu includes it; hash_host.cpp builds it for the host tests.
+// Pearl-C's hashing format -h3, SHA-512 throughout (`verity.protocols.accounting.work.pouw.schemes.pearl_c`'s module docstring).  The
+// labels' H_l = `pearl_c.s512`, SHA-512 after a 128-byte label block, its first 32 bytes (the labels keep their `pearl-c/h3s/`
+// bytes, `pearl_c.S512_LABELS`); A's row digests (`s512_rows`) and the tile leaf, `sha512/row-seg/v1` over each row and over
+// the tile's messages; the trees `audit.HM96`: frame-v3-sha512 (`verity.primitives.commitments.merkle`, hash="sha512") over
+// hm96-sha512 leaves (`audit.Hm96Domain`, `verity.primitives.commitments.hm96.SHA512`) salted by ChaCha20 (`audit.hm96_salt`).
+// Every SHA-512 word is big-endian; buffers hold bytes, loaded as little-endian u32 (`rs_be64`).  A frame message's integers
+// have minimal big-endian lengths, so each thread assembles it in its own slice of shared memory (`SMsg`), never in a local
+// array.  pearl_c_sm120.cu includes it; hash_host.cpp builds it for the host tests.
 #pragma once
-#include "hash.cuh"
+#include <cstdint>
 
-// ---------------------------------------------------------------- -h3s's row digests: SHA-512, sha512/row-seg/v1
+struct Args { uint64_t p[16]; int32_t i[16]; };
+
+#define DEV __device__ __forceinline__
+
+DEV void load_key(uint64_t p, uint32_t* k) {   // 32 bytes at device address p as 8 words
+#pragma unroll
+  for (int i = 0; i < 8; i++) k[i] = reinterpret_cast<const uint32_t*>(p)[i];
+}
+DEV void store_cv(uint64_t p, const uint32_t* h) {
+  reinterpret_cast<uint4*>(p)[0] = make_uint4(h[0], h[1], h[2], h[3]);
+  reinterpret_cast<uint4*>(p)[1] = make_uint4(h[4], h[5], h[6], h[7]);
+}
+// Pearl's ticket fold: per 16 x 16 subtile of C~, 16 lanes, lane (rb, cb) folding its 4 x 4 block row-major,
+// lane <- rotl32(lane 0x9E3779B1 + bits, 13)
+DEV void ticket_fold(const uint32_t* C, int cols, int si, int sj, uint32_t* z) {
+#pragma unroll
+  for (int l = 0; l < 16; l++) {
+    uint32_t lane = 0;
+#pragma unroll
+    for (int f = 0; f < 16; f++) {
+      lane = lane * 0x9E3779B1u + C[(size_t)(16 * si + 4 * (l / 4) + f / 4) * cols + 16 * sj + 4 * (l % 4) + f % 4];
+      lane = __funnelshift_l(lane, lane, 13);
+    }
+    z[l] = lane;
+  }
+}
+
+// ---------------------------------------------------------------- -h3's row digests: SHA-512, sha512/row-seg/v1
 // `rowleaf.sha512_row_seg_digest` of each FP32 row (FIPS 180-4 SHA-512, every word big-endian): d_j = SHA-512(S(j, s, 8192) ‖
 // segment j) over its s 1 KiB segments, then SHA-512(Q(8 · row bytes) ‖ d_0 ‖ … ‖ d_(s−1)), S and Q the format's 128-byte
 // headers.  k is a multiple of 256 here, so every segment is whole.
@@ -120,7 +148,7 @@ DEV void rs_fold(const uint64_t* qst, const uint64_t* dig, int s, uint64_t p) {
   }
   s512_store(p, st, 8);
 }
-// -h3s's row digests (`pearl_c.row_digest`): block r hashes row r (p0 + 4 i1 r, i1 = k words), its thread j < s = k / 256
+// -h3's row digests (`pearl_c.row_digest`): block r hashes row r (p0 + 4 i1 r, i1 = k words), its thread j < s = k / 256
 // segment j into shared memory and its last thread Q, then thread 0 the row.  p0 rows, p1 out (64 B a row, the digest's
 // bytes); i0 rows, i1 k (a multiple of 256, at most 256 RS_MAX_SEGS)
 extern "C" __global__ void __launch_bounds__(128) s512_rows(const Args a) {
@@ -205,7 +233,7 @@ DEV void s512_line_raw(const uint32_t* key, uint32_t side, uint32_t factor, uint
   s512_out32(st, h);
 }
 
-// -h3s's seeds (`pearl_c.row_seed`, `pearl_c.unit_seed_a`): H_seed-A(salt ‖ x ‖ root_B ‖ u64 LE ι), 168 bytes after the label,
+// -h3's seeds (`pearl_c.row_seed`, `pearl_c.unit_seed_a`): H_seed-A(salt ‖ x ‖ root_B ‖ u64 LE ι), 168 bytes after the label,
 // and each seed's line key H_noise-line(seed).  i2 = 1: row r < i0, x its 64-byte row digest (p0 + 64 r, s512_rows') and
 // ι = unit · 2^32 + r; i2 = 0: the unit's seed_A, x root_A (p0) and ι = the unit index.  p0 x, p1 seeds out (32 B each), p2
 // line keys out (32 B each) or 0, p3 the unit block: salt (32) ‖ root_B (64) ‖ u64 LE unit index (a graph's per-call slot);
@@ -253,7 +281,7 @@ extern "C" __global__ void __launch_bounds__(128) s512_line_raws(const Args a) {
   store_cv(a.p[1] + 32ull * line, h);
 }
 
-// -h3s's tickets (`PearlC.tickets`): per 16 x 16 subtile of C~, H_jackpot(seed_A ‖ fold), the fold `tickets`'.  p0 C~, p1 out
+// -h3's tickets (`PearlC.tickets`): per 16 x 16 subtile of C~, H_jackpot(seed_A ‖ fold), the fold `ticket_fold`'s.  p0 C~, p1 out
 // (subtiles row-major x 32 B), p2 seed_A (32 B); i0 rows, i1 cols
 extern "C" __global__ void __launch_bounds__(128) s512_tickets(const Args a) {
   const int cols = a.i[1], sn = cols / 16;
@@ -274,7 +302,7 @@ extern "C" __global__ void __launch_bounds__(128) s512_tickets(const Args a) {
 }
 
 // ---------------------------------------------------------------- sha512/row-seg/v1 (`rowleaf.sha512_row_seg_digest`)
-// -h3s's tile leaves (`pearl_c.leaf`): `sha512/row-seg/v1` over the tile's messages, row-major, each row's two 32-column chunks
+// -h3's tile leaves (`pearl_c.leaf`): `sha512/row-seg/v1` over the tile's messages, row-major, each row's two 32-column chunks
 // as le32 C~ ‖ le32 U, 512 bytes a row, so segment j is rows 2j and 2j + 1.  One CTA a tile (tiles row-major, a last row block of
 // R = 16, 32 or 48 rows partial), thread j < s = R / 2 its segment j, then thread 0 the leaf.  p0 C~ (rows x cols), p1 U, p2 out
 // (64 B a tile); i0 rows (a multiple of 16), i1 cols (a multiple of 64)
