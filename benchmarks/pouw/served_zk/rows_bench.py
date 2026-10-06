@@ -317,7 +317,7 @@ def main() -> int:
 
         call = {f: [nm for nm, ph in phases[f] if ph in CALL_PHASES] for f in ("s", "w")}
         nohash = [nm for nm in call["w"] if nm not in HASH_A + HASH_T]
-        a_hm96, t_hm96 = (lambda: cm_a.run(2)), (lambda: cm_t.run(2))
+        a_hm96, t_hm96 = (lambda cm=cm_a: cm.run(2)), (lambda cm=cm_t: cm.run(2))
 
         def hm96_call(a_hm96, t_hm96, fs) -> callable:
             def run() -> None:
@@ -330,11 +330,11 @@ def main() -> int:
         call_hm96 = hm96_call(a_hm96, t_hm96, [steps["w"][nm] for nm in (*nohash, "hash_msg", "hash_leaf") if nm in steps["w"]])
         call_s = seq("s", call["s"])
         v = {"a.h2s": seq("s", HASH_A), "a.h2w": seq("w", HASH_A), "k.stats_a": seq("w", ("stats_a",)),
-             "a.hm96": a_hm96, "a.sha512": lambda: cm_a.run(0), "p.hm96": lambda: cm_p.run(2),
+             "a.hm96": a_hm96, "a.sha512": lambda cm=cm_a: cm.run(0), "p.hm96": lambda cm=cm_p: cm.run(2),
              "t.h2": seq("s", HASH_T), "t.hm96": t_hm96,
              "call.h2": call_s, "call.nohash": seq("w", nohash), "call.hm96": call_hm96,
-             "call.both": lambda: (call_s(), a_hm96(), t_hm96()),
-             "k.sz_segments.a": cm_a.segments, "k.sz_finish.a": lambda: cm_a.finish(2), "k.hash_rows_a.s": seq("s", ("hash_rows_a",))}
+             "call.both": lambda c=call_s, a=a_hm96, t=t_hm96: (c(), a(), t()),
+             "k.sz_segments.a": cm_a.segments, "k.sz_finish.a": lambda cm=cm_a: cm.finish(2), "k.hash_rows_a.s": seq("s", ("hash_rows_a",))}
         graphs[shape] = {nm: capture(fn) for nm, fn in v.items()}
         tdig = [steps["w"][nm] for nm in (*nohash, "hash_msg", "hash_leaf") if nm in steps["w"]]
         per[shape] = {"h2": call_s, "nohash": v["call.nohash"], "hm96": call_hm96, "tdig": hm96_call(lambda: None, lambda: None, tdig),
