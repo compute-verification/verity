@@ -1044,8 +1044,6 @@ def test_the_controller_runs_each_rep_on_the_same_prompt_and_warms_each_engine_o
 def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tmp_path, monkeypatch):
     E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
     monkeypatch.setattr(E2E, "memory_mib", lambda: 30000)
-    # `run_result.write` would otherwise write this smoke's verdict over the result.json of the run the suite is in
-    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
 
     class Fake:
         live: ClassVar[list] = []
