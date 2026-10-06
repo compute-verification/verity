@@ -2984,7 +2984,13 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 };
                 if let (Some(id), 1) = (pre_id, rep) {
                     let got = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
-                    assert_eq!(got, id, "rep 1's pads tree takes the salt id after rep 0's proof's trees");
+                    if got != id {
+                        // rep 0's replay and inner proof may still be sending: it ends before the stop, so the wire holds whole messages
+                        if let Some(h) = rep0_finish.take() {
+                            let _ = h.join();
+                        }
+                        return Err(format!("PROVER-STOPPED: rep 1's pads tree takes salt id {id}, but the salt counter is at {got} after rep 0's proof's trees"));
+                    }
                 }
                 if let (Some(g), Some(z)) = (&gate, &zkrep) {
                     g.lock().unwrap_or_else(PoisonError::into_inner).begin_rep(rep, z)?;
