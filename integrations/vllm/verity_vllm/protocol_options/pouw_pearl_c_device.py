@@ -57,8 +57,6 @@ passes, never within one.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
-import sys
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -66,7 +64,7 @@ from typing import Any
 
 from verity.protocols.accounting.work.pouw.audit import Epoch, Workload, rows_domain, transcript_domain
 from verity.protocols.accounting.work.pouw.coins import CoinCommitment, CoinOpening
-from verity.protocols.accounting.work.pouw.protocol import DomainError, Matmul, Shape
+from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
 from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
@@ -94,6 +92,17 @@ from .pouw_pearl_c_host import (
     call_keys,  # noqa: F401 - kept importable here, as the tests read it
     write_manifest,
 )
+from .pouw_pearl_c_kernel import (
+    Kernel,
+    source_digest,  # noqa: F401 - kept importable here, as callers read it
+)
+from .pouw_pearl_c_manifest import (  # noqa: F401 - the manifest's readers, kept importable here, as callers read them
+    MANIFEST_SCHEMA,
+    MANIFEST_SCHEMA_RECORDED,
+    MANIFEST_SCHEMAS,
+    manifest_epoch,
+    manifest_schema,
+)
 from .pouw_pearl_c_screen import (
     excluded,
     screen,
@@ -114,10 +123,6 @@ LEAF_CAPACITY = 1 << 23
 #: calls one pass's A-root buffer holds, and rows its screen-flag buffer holds
 CALL_CAPACITY = 1 << 16
 FLAG_ROWS = 1 << 22
-MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v2"
-#: a pass recorded before epoch coins, salted from a beacon: only a replay of a recorded pass reads it (`manifest_epoch`)
-MANIFEST_SCHEMA_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
-MANIFEST_SCHEMAS = (MANIFEST_SCHEMA, MANIFEST_SCHEMA_RECORDED)
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
                   "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b", "skeys_b")
 CALL_BUFFERS = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "ea_codes", "at", "af", "pa_t", "c", "u", "digests",
@@ -168,50 +173,6 @@ def scheme_of(name: str, **instance: Any) -> C.PearlC:
     return s
 
 
-def manifest_schema(man: dict, recorded: bool = False) -> str:
-    """`man`'s schema, if a verifier reads it: `MANIFEST_SCHEMA`, or `MANIFEST_SCHEMA_RECORDED` only as a replay of a
-    recorded pass (`recorded`).  Raises `DomainError` otherwise."""
-    schema = man.get("schema")
-    if schema == MANIFEST_SCHEMA_RECORDED and not recorded:
-        raise DomainError(f"the pass's manifest is {schema}, recorded before epoch coins: only a replay of a recorded pass "
-                          "reads it")
-    if schema not in MANIFEST_SCHEMAS:
-        raise DomainError(f"schema {schema!r}, not {MANIFEST_SCHEMA}" + (f" or {MANIFEST_SCHEMA_RECORDED}" if recorded else ""))
-    return schema
-
-
-def manifest_epoch(man: dict, coins: CoinCommitment | None, recorded: bool = False) -> tuple[Epoch, str]:
-    """A retained pass's epoch, as its verifier re-starts it, and how its salt was had.  A `MANIFEST_SCHEMA` pass carries
-    the epoch's coin commitment and its salt coin's opening: the commitment must be `coins`, the one the challenger published
-    (the verifier's copy, not the pass's), and the opening the salt coin's against it, opened after every weight's root
-    (`Epoch.start`).  A pass recorded before epoch coins (`MANIFEST_SCHEMA_RECORDED`) carries a beacon instead, which only a
-    replay of a recorded pass reads (`recorded`: `Epoch.unverified`, a salt that claims nothing).  Either way the pass's salt
-    must be the epoch's.  Raises `DomainError` naming what doesn't hold."""
-    schema = manifest_schema(man, recorded)
-    matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
-    roots = {int(w): bytes.fromhex(v["root"]) for w, v in man["weights"].items()}
-    if schema == MANIFEST_SCHEMA:
-        if "salt_opening" not in man:
-            raise DomainError("the pass has no salt coin")
-        if coins is None:
-            raise DomainError("the pass's salt coin opens against the epoch's published coin commitment, which the verifier holds")
-        try:
-            opening = CoinOpening.from_json(man["salt_opening"])
-            claimed = CoinCommitment.from_json(man["coins"])
-        except (KeyError, TypeError, ValueError) as e:
-            raise DomainError(f"the pass's coins are malformed: {e}") from None
-        if claimed != coins:
-            raise DomainError("the pass's coin commitment is not the epoch's")
-        epoch, how = Epoch.start(Workload(matmuls), roots, coins, opening), "coin"
-    elif "beacon" in man:
-        epoch, how = Epoch.unverified(Workload(matmuls), roots, bytes.fromhex(man["beacon"])), "recorded beacon"
-    else:
-        raise DomainError("the recorded pass has no beacon")
-    if epoch.salt.hex() != man.get("salt"):
-        raise DomainError(f"the pass's salt is not its {how}'s and the weights'")
-    return epoch, how
-
-
 def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
     """Every linear outside the scheme's domain or the kernels' (k a multiple of 1,024, n of 128), by weight id."""
     s, out = scheme_of(name), []
@@ -224,60 +185,6 @@ def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
         except Exception as e:  # noqa: BLE001 - DomainError, named per layer
             out.append(f"linear {w}: {e}")
     return out
-
-
-def _load(name: str, path: Path) -> tuple[Any, str]:
-    """`path` as a module and its bytes' SHA-256.  The module is named by the digest, so two kernel directories in one process
-    never share a module, and the same bytes loaded twice are one module."""
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    key = f"{name}_{digest[:16]}"
-    if key not in sys.modules:
-        spec = importlib.util.spec_from_file_location(key, path)
-        mod = sys.modules[key] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-    return sys.modules[key], digest
-
-
-def _the_cubin(directory: Path) -> Path:
-    """A kernel directory's one cubin, when the caller names none."""
-    found = sorted(directory.glob("*.cubin"))
-    if len(found) != 1:
-        raise ValueError(f"{directory}: {len(found)} cubins, not one: name the cubin")
-    return found[0]
-
-
-def source_digest(run_sha256: str, fixture_sha256: str) -> str:
-    """The kernel sources' digest: `run.py`'s and `fixture.py`'s, in that order."""
-    return hashlib.sha256(bytes.fromhex(run_sha256) + bytes.fromhex(fixture_sha256)).hexdigest()
-
-
-@dataclass
-class Kernel:
-    """GPU 1's pipeline, loaded once per process per (sources, cubin): ``run.py`` (as `run`), ``fixture.py`` (as `fixture`), the
-    device (`dev`), and the digests that name what ran (the manifest records both)."""
-
-    run: Any
-    fixture: Any
-    dev: Any
-    cubin_sha256: str
-    source_sha256: str | None = None
-
-    @classmethod
-    def load(cls, directory: str, cubin: str | None = None) -> Kernel:
-        d = Path(directory)
-        run, run_sha = _load("pearl_c_run", d / "run.py")
-        fixture, fixture_sha = _load("pearl_c_fixture", d / "fixture.py")
-        raw = Path(cubin or _the_cubin(d)).read_bytes()
-        key = (source_digest(run_sha, fixture_sha), hashlib.sha256(raw).hexdigest())
-        if key not in _KERNELS:
-            dev = run.Dev(raw)
-            dev.open()
-            _KERNELS[key] = cls(run, fixture, dev, key[1], key[0])
-        return _KERNELS[key]
-
-
-#: (source_sha256, cubin_sha256) -> the loaded kernel
-_KERNELS: dict[tuple[str, str], Kernel] = {}
 
 
 @dataclass
