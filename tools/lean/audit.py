@@ -386,6 +386,72 @@ def name_instances(pkg: Path, found: list[dict]) -> None:
 
 
 OPEN = {"(": ")", "[": "]", "{": "}", "⦃": "⦄", "⟨": "⟩"}
+IDENT = r"(?<![\w.'!?₀-₉ₐ-ₜᵢ-ᵪ])({})(?![\w'!?₀-₉ₐ-ₜᵢ-ᵪ])"
+
+
+def groups(text: str) -> list[str]:
+    """The bracketed binder groups of ``text`` at its top level (`(a b : T)`, `{a}`, `[C a]`, `⦃a : T⦄`)."""
+    out, depth, at = [], [], 0
+    for i, c in enumerate(text):
+        if c in OPEN and c != "⟨":
+            if not depth:
+                at = i
+            depth.append(OPEN[c])
+        elif depth and c == depth[-1]:
+            depth.pop()
+            if not depth:
+                out.append(text[at:i + 1])
+    return out
+
+
+def in_scope(src: str, start: int) -> tuple[list[str], str]:
+    """The `variable` binder groups in scope at ``start`` of ``src`` (those of sections and namespaces not yet ended),
+    and the `open … in` line directly above the declaration there (above its doc comment, if it has one)."""
+    clean, scopes = strip_comments(src[:start]), [[]]
+    for cmd in re.finditer(r"(?m)^(section|namespace|end|variable)\b(.*(?:\n[ \t]+\S.*)*)", clean):
+        kind, rest = cmd.group(1), cmd.group(2)
+        if kind in ("section", "namespace"):
+            scopes.extend([] for _ in (rest.split()[0].split(".") if kind == "namespace" and rest.split() else [""]))
+        elif kind == "end":
+            for _ in (rest.split()[0].split(".") if rest.split() else [""]):
+                if len(scopes) > 1:
+                    scopes.pop()
+        else:
+            scopes[-1].extend(groups(rest))
+    above = src[:start].rstrip()
+    if above.endswith("-/") and (o := above.rfind("/--")) >= 0:
+        above = above[:o].rstrip()
+    last = above.rsplit("\n", 1)[-1].strip()
+    return [g for s in scopes for g in s], last if re.fullmatch(r"open\s.*\sin", last) else ""
+
+
+def used(variables: list[str], text: str) -> list[str]:
+    """The groups of ``variables`` a statement ``text`` includes, as Lean does: a named group when the statement or an
+    included group mentions one of its names, an instance group when every variable it mentions is included."""
+    named = {g: g[1:-1].split(":")[0].split() for g in variables if g[0] != "["}
+    names = {n for ns in named.values() for n in ns}
+    mentions = lambda s: {n for n in names if re.search(IDENT.format(re.escape(n)), s)}
+    inc, seen = set(), None
+    while seen != inc:
+        seen = set(inc)
+        for g, ns in named.items():
+            if g not in inc and mentions(" ".join([text, *inc])) & set(ns):
+                inc.add(g)
+        have = {n for g in inc for n in named.get(g, [])}
+        for g in variables:
+            if g[0] == "[" and (ms := mentions(g)) and ms <= have:
+                inc.add(g)
+    return [g for g in variables if g in inc]
+
+
+def unproved_opens(line: str, proof_ns: set[str]) -> str:
+    """An `open A B …` line without the namespaces only proof modules declare, which a spec module cannot open (empty when
+    none is left); any other form of `open` as it is."""
+    words = line.split()[1:]
+    if not words or any(w in ("scoped", "hiding", "renaming") or not re.fullmatch(r"[^\s()]+", w) for w in words):
+        return line
+    kept = [w for w in words if w not in proof_ns]
+    return line if kept == words else f"open {' '.join(kept)}" if kept else ""
 
 
 def statement(src: str, at: tuple[int, int]) -> tuple[str, str, str, str]:
@@ -428,15 +494,18 @@ def statement(src: str, at: tuple[int, int]) -> tuple[str, str, str, str]:
 
 def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[str, str]:
     """Lift each guarantee ``old`` of ``lifts`` ({old: {"as": "X.Guarantees.G", "into": spec module}}) into the four-name
-    form: `def G : Prop := ∀ binders, type` (its theorem's doc comment, binders and type as its source writes them),
-    appended to the spec module in the theorem's namespace with its file's `open`s, so that its names resolve as they did
-    (the spec module then imports the modules of the definitions the statement reads; a statement that reads a definition
-    of a proof package is refused), and `theorem X.SecurityProofs.G : X.Guarantees.G := @old` appended to the module that
+    form: `def G : Prop := ∀ binders, type` (its theorem's doc comment, binders and type as its source writes them, after
+    the binders of the `variable`s in scope that Lean would include), appended to the spec module in the theorem's
+    namespace with its file's `open`s above it (less the namespaces only proof modules declare) and the `open … in` right
+    above it, so that its names resolve as they did (the spec module then imports the modules of the definitions the
+    statement reads; a statement that reads a non-theorem constant of a proof package is refused), and `theorem X.SecurityProofs.G : X.Guarantees.G := @old` appended to the module that
     proves ``old``, or to the one ``beside`` names, which then imports the spec module and the proof's. Returns the
     moves ({old: X.SecurityProofs.G}) for `--update --moved`, which certifies each lift as the same statement or prints
     the change."""
     files = {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
     proofs = {m for _, q in provers(pkg, policy) if q.is_dir() for m in lean_modules(q)}
+    declared = lambda mods: {n for mod in mods for n in re.findall(r"(?m)^namespace\s+(\S+)", strip_comments(files[mod].read_text()))}
+    proof_ns = declared(proofs & files.keys()) - declared(files.keys() - proofs)
     moves, original, added, needs = {}, {}, {}, {}
     for old, spec in sorted(lifts.items()):
         new, into = spec["as"], spec["into"]
@@ -451,7 +520,8 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
         beside = spec.get("beside", m)
         if beside not in files or spec_module(beside):
             raise ValueError(f"lift {old}: `beside` names a module of the package outside `Guarantees` ({beside})")
-        reads = {r["module"] for r in fact.get("reads", []) if r.get("module") in files} - {into}
+        reads = {mod for mod in [*(r.get("module") for r in fact.get("reads", [])), *(o[1] for o in fact.get("outside", []))]
+                 if mod in files} - {into}
         if bad := sorted(reads & proofs):
             raise ValueError(f"lift {old}: its statement reads definitions of {', '.join(bad)}, which a spec module may not "
                              f"import; move them into the definitions first")
@@ -461,10 +531,14 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
         original.setdefault(into, files[into].read_text())
         original.setdefault(beside, files[beside].read_text())
         doc, univ, binders, typ = statement(src, tuple(fact["at"]))
-        opens = [line for line in strip_comments(src).split("\n") if re.match(r"open\s", line) and not re.search(r"\sin\s*$", line)]
+        start = sum(len(line) + 1 for line in src.split("\n")[:fact["at"][0] - 1]) + fact["at"][1]
+        variables, open_in = in_scope(src, start)
+        binders = " ".join([*used(variables, f"{binders} {typ}"), binders]).strip()
+        opens = [o for o in (unproved_opens(line, proof_ns) for line in strip_comments(src[:start]).split("\n")
+                             if re.match(r"open\s", line) and not re.search(r"\sin\s*$", line)) if o]
         ns = ".".join(old.split(".")[:-1])
         added.setdefault(into, []).append("\n".join([
-            f"namespace {ns}" if ns else "section", *opens, "", *([doc] if doc else []),
+            f"namespace {ns}" if ns else "section", *opens, "", *([open_in] if open_in else []), *([doc] if doc else []),
             f"def _root_.{new}{univ} : Prop :=", *([f"  ∀ {binders},", f"    {typ}"] if binders else [f"  {typ}"]), "",
             f"end {ns}".rstrip()]))
         added.setdefault(beside, []).append(f"theorem {proof}{univ} : {new}{univ} := @{old}{univ}")
