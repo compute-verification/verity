@@ -18,7 +18,7 @@ D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out; mkdir -p "$OUT/p
 POINTS=${1:?a points file}; UNTIL=${UNTIL:?an absolute UTC end, e.g. 2026-10-06T13:58:00Z}
 PAR=${PAR:-5} REPLICATES=${REPLICATES:-2} LEASE_MIN=${LEASE_MIN:-20} MIN_MIN=${MIN_MIN:-8}
 export UNTIL OUT LEASE_MIN MIN_MIN
-WORK=${WORK:-/workspace/pouw/mvp-e2e}
+export WORK=${WORK:-/workspace/pouw/mvp-e2e}
 S=$(mktemp -d /workspace/pouw/tmp-noise-sweep.XXXXXX); trap 'rm -rf "$S"' EXIT
 HEAD=$(git rev-parse HEAD); echo "tree $HEAD" | tee "$OUT/tree.txt"; cp "$POINTS" "$OUT/points.txt"
 stamp() { echo "noise-sweep: $* at $(date -u +%H:%M:%SZ)"; }
@@ -52,11 +52,12 @@ one() {  # one run of one point: <dir name> <VAR=value>...
     left=$(( $(date -u -d "$UNTIL" +%s) - $(date -u +%s) )); [ "$left" -gt 240 ] || exit 75
     exec timeout --kill-after=30 "$left" bash benchmarks/pouw/pearl_c_vllm/served_profile.sh gpu' > "$dir/log" 2>&1
   rc=$?
-  if [ -f "$dir/served.nsys-rep" ]; then   # a point with NSYS=1: its analysis after the lease, the report itself not kept
+  if [ -f "$dir/served.nsys-rep" ]; then   # a point with NSYS=1: its analysis after the lease, the report kept only if that fails
     nsys export --type sqlite --force-overwrite true -o "$dir/served.sqlite" "$dir/served.nsys-rep" >> "$dir/log" 2>&1 \
       && "$WORK/venv312/bin/python" benchmarks/pouw/pearl_c_vllm/served_profile.py --analyze "$dir/served.sqlite" \
-           --out "$dir/served-profile.json" >> "$dir/log" 2>&1
-    rm -f "$dir/served.sqlite" "$dir/served.nsys-rep"
+           --out "$dir/served-profile.json" >> "$dir/log" 2>&1 \
+      && rm -f "$dir/served.nsys-rep"
+    rm -f "$dir/served.sqlite"
   fi
   echo "{\"point\": \"$name\", \"rc\": $rc, \"ended\": \"$(date -u +%FT%TZ)\", \"e2e\": $( [ -f "$dir/e2e.json" ] && echo true || echo false)}" >> "$OUT/progress.jsonl"
   return "$rc"
