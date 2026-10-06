@@ -20963,6 +20963,9 @@
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
   },
+  "FlockVBridge.Algebra.residuals_eq_run": {
+   "owner": "@proofs"
+  },
   "FlockVBridge.Algebra.run_sim": {
    "owner": "@proofs"
   },
