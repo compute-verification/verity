@@ -191,7 +191,8 @@ LSB first. The audit checks this indexing by recomputing every region claim's `s
 words (`2^(mask_log−7)` per block, all blocks, uniform bits `u`) add `Σ_{x ∈ mask} eq(p_w, x) u_{v,x}`. For the claim
 points `p_1..p_k` seen so far (ab and c of each rep, up to 4), that sum is uniform on `F^k`, independently for every `v`,
 exactly when `(eq(p_1, x), .., eq(p_k, x))` over the mask words span `GF(2)^{128k}`. The prover checks this rank at the
-opening's label, before any `s_hat_v` leaves (`mask_rank_ok`, 2–4 ms), and stops otherwise. RoPE: rank 512 needed, from
+opening's label, before any `s_hat_v` leaves (`mask_rank_ok`, under 2 ms: an echelon basis that reads mask words only
+until its rank is full), and stops otherwise. RoPE: rank 512 needed, from
 1024 words. Region claims' `s_hat_v` are functions of public region data (`Stmt::region_s_hat_v`).
 
 ## 7. Ligerito level 0 (VEIL Figs. 8–9), and zero knowledge for the session
