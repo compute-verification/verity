@@ -109,7 +109,8 @@ simp with that.
 
 ## Assumptions and guarantees
 
-- **An assumption is a named `Prop`** in the package's assumptions module (`FlockSoundness.Assumptions`), taken as a
+- **An assumption is a named `Prop`** in its area's `Specs/<Area>/Assumptions` (C-Flock's in
+  `Proofs/Flock/Soundness/Assumptions`, `FlockSoundness.Assumptions`, until its spec is extracted), taken as a
   hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`). Its docstring opens with its
   claim id (`uniform/io-getrandombytes`, from `verity.claims`) and gives its rationale. Lean is the source of truth for
   what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on
