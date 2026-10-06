@@ -17,7 +17,8 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, is marked ready at its head, and
 has every grant its change needs.  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that `research queue ready PR`
-writes, so a new push needs a new one (a restack too: the tier ran on the old tree), and only after the quick tier passes at that
+writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
+as a merge of `main` that changes no file leaves it: `ready` marks that one without a tier), and only after the quick tier passes at that
 head: `suites.py --quick` on the suites the PR changes, from a clean checkout, either as a `research run` on a machine (`--on`,
 `RemoteQuickTier`: in one of its check slots, so several PRs' tiers run at once and the caller only waits) or here (`--local`,
 `QuickTier`); a failure refuses and names the tests, and a remote run whose result can't be read, or that reports another head, is a
@@ -991,13 +992,42 @@ def _json_file(p: Path) -> dict:
     return doc if isinstance(doc, dict) else {}
 
 
+def same_tree_mark(store, repo: Path, remote: str, pr: PR) -> str | None:
+    """Another head of ``pr`` marked ready whose tree is ``pr.head``'s (a merge of `main` that changes no file), or None.  The tier
+    at that head ran these exact files, and when a clean merge of `main` leaves the tree as it was, the files the new head changes
+    against `main` are among those the marked head changed against its merge base, so the tier would run no suite it didn't.  None
+    when either commit isn't here after fetching the PR's head (a rebase drops the old one), and QueueError when the PR's labels
+    can't be pulled from the store's remote.  Its own ref, so a tier's fetch under the worktree's lock never meets this one."""
+    _git(repo, "fetch", "-q", remote, f"+refs/pull/{pr.number}/head:refs/queue/same-tree/{pr.number}", check=False)
+
+    def tree(commit: str) -> str:
+        return _git(repo, "rev-parse", "-q", "--verify", f"{commit}^{{tree}}", check=False).stdout.strip()
+
+    if not (want := tree(pr.head)):
+        return None
+    marked = StoreGrants(store, repo=repo)._other_heads(pr.number, pr.head, vocab.READY)
+    return next((old for old, labs in sorted(marked.items()) if any(str(lab.value).lower() == "true" for lab in labs)
+                 and tree(old) == want), None)
+
+
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None]) -> int:
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
-    it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote."""
+    it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
+    head marked ready (`same_tree_mark`) is marked without running the tier again."""
     pr = next((p for p in github.open_prs() if p.number == number), None) if number is not None else None
     if pr is None:
         print(f"research queue ready: {'#' + str(number) if number is not None else 'a PR number'} is not an open PR", file=sys.stderr)
         return 2
+    if (repo := getattr(tier, "repo", None)) is not None:
+        try:
+            old = same_tree_mark(store, repo, tier.remote, pr)
+        except QueueError as e:
+            print(f"research queue: {e}; running the quick tier", file=sys.stderr)
+            old = None
+        if old:
+            print(f"research queue: #{pr.number}'s head {pr.head[:12]} has the tree of {old[:12]}, marked ready after its quick tier "
+                  f"passed: the same files, so the tier isn't run again", flush=True)
+            return _mark(store, pr, by, None, "ready")
     print(f"research queue: the quick tier at #{pr.number}'s head {pr.head[:12]}: `suites.py --quick` on the suites it changes", flush=True)
     return _mark(store, pr, by, tier(pr), "ready")
 

@@ -517,6 +517,49 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
     assert ready(world.gh, world.store, 99, "lane-1", PASS) == 2
 
 
+def test_a_head_with_the_tree_of_a_head_marked_ready_is_marked_without_running_the_tier_again(world, monkeypatch, capsys):
+    """Merging a `main` that changes none of a PR's files (the repository move's merges did this) gave lanes a new head and a
+    35-minute tier over the same files.  Only an identical tree, read with labels pulled from the remote, skips the tier."""
+    from research import queue as Q
+
+    class Counting:
+        def __init__(self):
+            self.repo, self.remote, self.ran = world.dev, str(world.origin), []
+
+        def __call__(self, pr: PR) -> None:
+            self.ran.append(pr.head)
+
+    world.with_store_remote()
+    monkeypatch.setenv("RESEARCH_WRITE_THROUGH", "1")
+    tier = Counting()
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and tier.ran == [h1]
+    _move_main(world, {"a.txt": "a1\n", "b.txt": "b\n"})              # `main` makes the PR's own change
+    world.gh.put(1, h2 := _merge_main(world, h1), ready=False)
+    assert h2 != h1 and _git(world.dev, "rev-parse", f"{h2}^{{tree}}") == _git(world.dev, "rev-parse", f"{h1}^{{tree}}")
+    capsys.readouterr()
+    elsewhere = LocalStore(world.tmp / "elsewhere", config_path=world.tmp / "store.toml")   # h1's mark only on the remote
+    assert Q.ready(world.gh, elsewhere, 1, "lane-1", tier) == 0 and tier.ran == [h1]
+    assert f"#1's head {h2[:12]} has the tree of {h1[:12]}" in capsys.readouterr().out
+    assert Q.StoreGrants(elsewhere).ready(1, h2) is True
+
+    world.gh.put(1, h3 := world.change({"c.txt": "c3\n"}, base=h2), ready=False)
+    assert Q.ready(world.gh, elsewhere, 1, "lane-1", tier) == 0 and tier.ran == [h1, h3]
+
+    _move_main(world, {"a.txt": "a1\n", "b.txt": "b4\n"})
+    world.gh.put(1, h4 := _merge_main(world, h3), ready=False)        # a merge of `main` that changes a file runs the tier
+    assert Q.ready(world.gh, elsewhere, 1, "lane-1", tier) == 0 and tier.ran == [h1, h3, h4]
+
+    h5 = _git(world.dev, "commit-tree", f"{h4}^{{tree}}", "-p", h4, "-m", "h4's tree again")
+    _git(world.dev, "push", "-q", "origin", f"{h5}:refs/dev/{h5}")
+    world.gh.put(1, h5, ready=False)
+    monkeypatch.setattr(LocalStore, "remote", property(lambda self: _Unreachable()))
+    capsys.readouterr()
+    Q.ready(world.gh, LocalStore(world.tmp / "cut-off", config_path=world.tmp / "store.toml"), 1, "lane-1", tier)
+    assert tier.ran == [h1, h3, h4, h5]                               # labels it can't pull say nothing: the tier runs
+    assert "STALE" in capsys.readouterr().err
+
+
 #: a `suites.py` that says what it was asked and what it found, and fails one test when FAKE_FAIL names it
 FAKE_SUITES = """\
 # it knows "--changed"
