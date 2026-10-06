@@ -34,7 +34,7 @@ from typing import Any
 from verity.primitives.circuits.defs import SpecializedDefinition, bind
 from verity.primitives.circuits.program import Program
 from verity.primitives.commitments import hm96
-from verity.primitives.commitments.identity import identity_digest
+from verity.primitives.commitments.identity import identity_digest_sha512
 from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.limits import VerificationLimits
 from verity.primitives.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
@@ -43,6 +43,7 @@ from verity.protocols.accounting.space.pous import memory_challenger as mc
 from verity.protocols.accounting.space.pous.answer_circuit import PousAnswerRow
 from verity.protocols.verification.sampled_proofs import service as S
 from verity.protocols.verification.sampled_proofs.one_stage import partition as P, registration as R
+from verity_flock import circuit as FC
 
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 HM = hm96.SHA512
@@ -52,7 +53,6 @@ PORTS = ("block", "o0")
 C_BINDING = b"verity-pous/service/c-commitment/v1\0"
 C_SALT = b"verity-pous/service/c-salt/v1\0"
 SESSION_BINDING = b"verity-pous/service/session-binding/v1\0"
-FRAME_BINDING = "verity/flock-ir-frame/binding/v1"
 CONTEXT = b"verity-pous/service/memory-challenger/v1"
 CHALLENGER = "pous-memory-challenger"
 LIMITS = VerificationLimits()
@@ -135,8 +135,8 @@ def ports(session: bytes, k: int) -> dict[str, dict[str, Any]]:
     the session names (`verity_flock.circuit.statement`)."""
     out = {}
     for p in PORTS:
-        b = bytes.fromhex(identity_digest(FRAME_BINDING, {"set": set_name(session), "lo": 0, "hi": k, "port": p, "schema": SCHEMA}))
-        out[p] = {"leaves": k, "domain": CommitmentDomain(b, -1, RangeIndexedDomain(0, k), hash="sha512").domain_id.hex()}
+        b = identity_digest_sha512(FC.BINDING_TAG, {"set": set_name(session), "lo": 0, "hi": k, "port": p, "schema": SCHEMA})
+        out[p] = {"leaves": k, "domain": CommitmentDomain(b, FC.OWNER, RangeIndexedDomain(0, k), hash="sha512").domain_id.hex()}
     return out
 
 
