@@ -458,11 +458,21 @@ def test_naming_the_anonymous_instances_keeps_their_names_and_the_record(tmp_pat
     record = (pkg / A.POLICY).read_text()
     facts = lambda: sorted(i["name"] for i in json.loads((tmp_path / "out" / "audit-control" / "facts.json").read_text())["instances"])
     names = facts()
-    assert len(audit(name=True)["named_instances"]) == 4
+    named = audit(name=True)
+    assert len(named["named_instances"]) == 4
+    assert named["failures"] == ["instance: named 4 anonymous instances in Control/Inst.lean, so this audit is of sources it has "
+                                 "since rewritten: build and audit again to see that no record changed"]
     assert "local instance instInhabitedNat_control : Inhabited Nat" in (pkg / "Control" / "Inst.lean").read_text()
     build()
     assert audit()["failures"] == []
     assert facts() == names and (pkg / A.POLICY).read_text() == record
+
+
+def test_all_neither_updates_records_nor_names_instances(capsys):
+    for flag in ("--update", "--name-instances"):
+        with pytest.raises(SystemExit):
+            A.main(["--all", flag])
+        assert "neither updates records nor names instances" in capsys.readouterr().err
 
 
 def test_a_theorem_s_statement_is_read_from_its_source():
