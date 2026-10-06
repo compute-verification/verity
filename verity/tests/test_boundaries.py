@@ -36,8 +36,8 @@ ALLOWED = {
     "primitives.crypto": set(),
     "primitives.commitments": {"primitives.circuits", "primitives.crypto"},
     "protocols.profile": {"primitives.circuits"},
-    # The proof service's challenger draws through the one challenge derivation (`service.Stream.select`), and the
-    # two-stage law samples the verifier's own bytes as the Lean verifier does (`two_stage`).
+    # The two-stage law samples the verifier's own bytes as the Lean verifier does (`two_stage`), and the proof
+    # service's challenger draws with it (`service.Stream.select`).
     "protocols.verification.sampled_proofs": {"primitives.circuits", "primitives.commitments", "primitives.randomness",
                                               "protocols.profile"},
     "protocols.accounting.space.pous": {"claims", "primitives.commitments", "primitives.randomness"},
