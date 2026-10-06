@@ -288,7 +288,7 @@ def jnat (n : Nat) : Json := .num ⟨Int.ofNat n, 0⟩
 
 def pinned (what : String) (got want : Json) : V Unit := do
   if got.compress != want.compress then
-    throw s!"GATE-REFUSED: {what}: {got.compress} where the pinned schedule has {want.compress}"
+    throw s!"FIREWALL-REFUSED: {what}: {got.compress} where the pinned schedule has {want.compress}"
 
 abbrev Fw := StateT State V
 
@@ -349,9 +349,9 @@ def step (s : Schedule) : Req → Fw Unit
     let ok := match v.getObjVal? "link" with
       | .ok l@(.obj _) => match l.getObjVal? "sigma" with | .ok (.str _) => true | _ => false
       | _ => false
-    if !ok then throw "GATE-REFUSED: Hello: not an object whose link names Σ"
+    if !ok then throw "FIREWALL-REFUSED: Hello: not an object whose link names Σ"
     if (v.getObjVal? "coins").toOption.isSome then throw "the inner session runs on live OS coins"
-    if fractional text then throw "GATE-REFUSED: Hello: a number that is not an integer"
+    if fractional text then throw "FIREWALL-REFUSED: Hello: a number that is not an integer"
     let link := without ((v.getObjVal? "link").toOption.getD .null) "sigma"
     pinned "Hello" (withField v "link" link) s.hello
     modify fun st => { st with hello := true }
@@ -359,7 +359,7 @@ def step (s : Schedule) : Req → Fw Unit
   | .commit _ roots publics => do
     if (← get).finished then throw "session finished"
     if publics.any (·.2.size > 0) then throw "public words in an inner session"
-    if (roots.map (·.1)).eraseDups.length != roots.length then throw "GATE-REFUSED: Commit names a table twice"
+    if (roots.map (·.1)).eraseDups.length != roots.length then throw "FIREWALL-REFUSED: Commit names a table twice"
     let counts ← roots.mapM fun (n, v) => do return (n, jnat (← nodes v))
     pinned "Commit's roots" (Json.mkObj counts) s.roots
     let tops ← roots.mapM fun (n, v) => do return (n, ← saltedTop v)
@@ -369,16 +369,16 @@ def step (s : Schedule) : Req → Fw Unit
     send (.commit tops)
   | .link y => do
     if (← get).finished then throw "session finished"
-    if y.size != 16 * s.y then throw s!"GATE-REFUSED: Link's y: {y.size} bytes"
-    if y.toList.any (· != 0) then throw "GATE-REFUSED: Link's y is not zero"
+    if y.size != 16 * s.y then throw s!"FIREWALL-REFUSED: Link's y: {y.size} bytes"
+    if y.toList.any (· != 0) then throw "FIREWALL-REFUSED: Link's y is not zero"
     let st ← get
     if !st.committed || st.linked then throw "y follows the link points, once"
     set { st with linked := true }
     send (.link s.y)
   | .openStream stream parent _ pos => do
     if (← get).finished then throw "session finished"
-    let some (_, wp, wa, _) := s.streams.find? (·.1 == stream) | throw s!"GATE-REFUSED: Open {stream}"
-    if parent != wp || pos != wa then throw s!"GATE-REFUSED: Open {stream}"
+    let some (_, wp, wa, _) := s.streams.find? (·.1 == stream) | throw s!"FIREWALL-REFUSED: Open {stream}"
+    if parent != wp || pos != wa then throw s!"FIREWALL-REFUSED: Open {stream}"
     let st ← get
     if st.streams.any (·.1 == stream) then throw s!"stream {stream} opened twice"
     set { st with streams := st.streams ++ [(stream, parent, 0)] }
@@ -397,7 +397,7 @@ def step (s : Schedule) : Req → Fw Unit
     let capsSalted ← sp.caps.toList.mapM saltedTop
     if !(← get).linked then throw "a coin before the link exchange"
     if k == 0 then
-      let some (_, _, pos, _) := s.streams.find? (·.1 == stream) | throw s!"GATE-REFUSED: Open {stream}"
+      let some (_, _, pos, _) := s.streams.find? (·.1 == stream) | throw s!"FIREWALL-REFUSED: Open {stream}"
       send (.openStream stream parent pos)
     modify fun st => { st with rounds := st.rounds + 1,
                                streams := st.streams.map fun e => if e.1 == stream then (e.1, e.2.1, e.2.2 + 1) else e }
