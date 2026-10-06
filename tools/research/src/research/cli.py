@@ -4,7 +4,7 @@
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
   research run --local-only REASON [...] -- CMD...   # where the store has no usable remote a local run refuses (exit 3): REASON says
                                                  # what preserves its records instead (default $RESEARCH_LOCAL_ONLY; job.json records it)
-  research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...
+  research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--quiet] [--on NODE] -- CMD...
                                                  # the one queue (tools/cluster) places the job and runs it under its node's executor
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
@@ -209,6 +209,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                    help="the phase this run is (default: gpu with --gpus, else cpu); a GPU is booked only for a gpu phase, and only "
                         "around the workload, so the runner's custody runs in the CPU allocation")
     q.add_argument("--preemptible", action="store_true", help="it may be stopped for higher-ranked work and requeued (a guest's must be)")
+    q.add_argument("--gpu-host", action="store_true",
+                   help="a job without --gpus whose workload takes its GPUs with gpu-lease itself, around each GPU step: its CPU "
+                        "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle)")
     q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
     q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
     ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
@@ -265,6 +268,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                                            ("--kind", ns.queue_kind != "adhoc"), ("--question", ns.question),
                                            ("--phase", ns.queue_phase), ("--class", ns.queue_class != "work"),
                                            ("--preemptible", ns.preemptible), ("--quiet", ns.quiet), ("--gpu-ids", ns.gpu_ids),
+                                           ("--gpu-host", ns.gpu_host),
                                            ("--disk-gb", ns.disk_gb is not None))
                   if given]
     if queue_only:
@@ -854,7 +858,8 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
             "gpu-model": ns.gpu_model, "cpus": ns.cpus, "mem-gb": math.ceil(ns.mem_gb) if ns.mem_gb is not None else None,
             "max-s": int(given_max) if given_max else None, "custody-s": RUN_MARGIN_S,
             "disk-gb": ns.disk_gb,
-            "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.quiet, "node": ns.on, "gpu-ids": ns.gpu_ids}
+            "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.quiet, "node": ns.on, "gpu-ids": ns.gpu_ids,
+            "gpu-host": ns.gpu_host}
     try:
         placed = remote.queue_placement(Path(ns.source).expanduser(), run_id, spec)
     except remote.Refused as e:
