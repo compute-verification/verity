@@ -3,8 +3,9 @@
 //   switch CPU T PREV_COMM PREV_PID NEXT_COMM NEXT_PID    every context switch
 //   irq|softirq|vec CPU T WHAT NS                        a hard interrupt, softirq or APIC vector (the local timer, IPIs) over $3 ns
 //   fault CPU T PID NS                                   a page fault handled for over $3 ns
-//   steal CPU T NS                                       steal time over $3 ns that the hypervisor reported at a tick
-// (account_steal_time: time the vCPU did not run, accounted at the next tick after it).  hosttrace.sh runs it.
+//   work CPU T FUNCTION NS                               a workqueue item (a kworker's) that ran for over $3 ns
+// The hypervisor's steal is not here (account_steal_time is inlined, so a kprobe on it never fires): hosttrace.sh records
+// the two cores' /proc/stat steal before and after.  hosttrace.sh runs it.
 BEGIN { printf("hosttrace cpus %d %d over %d ns\n", $1, $2, $3); }
 
 tracepoint:sched:sched_switch /cpu == $1 || cpu == $2/ {
@@ -43,12 +44,15 @@ kretprobe:handle_mm_fault /@pf[tid]/ {
   delete(@pf[tid]);
 }
 
-kprobe:account_steal_time /cpu == $1 || cpu == $2/ {
-  @steal_ns[cpu] = sum(arg0);
-  if (arg0 > $3) { printf("steal %d %llu %llu\n", cpu, nsecs, arg0); }
+tracepoint:workqueue:workqueue_execute_start /cpu == $1 || cpu == $2/ { @wq[tid] = nsecs; @wqf[tid] = args->function; }
+tracepoint:workqueue:workqueue_execute_end /@wq[tid]/ {
+  $d = nsecs - @wq[tid];
+  @works[cpu, ksym(@wqf[tid])] = count();
+  if ($d > $3) { printf("work %d %llu %s %llu\n", cpu, @wq[tid], ksym(@wqf[tid]), $d); }
+  delete(@wq[tid]); delete(@wqf[tid]);
 }
 
 END {
-  clear(@irq); clear(@irqn); clear(@sirq); clear(@vec); clear(@pf);
+  clear(@irq); clear(@irqn); clear(@sirq); clear(@vec); clear(@pf); clear(@wq); clear(@wqf);
   printf("end %llu\n", nsecs);
 }

@@ -18,10 +18,13 @@ if sudo -n true 2>/dev/null && command -v bpftrace >/dev/null; then
 else
   echo "hosttrace: no passwordless sudo or no bpftrace; untraced" > "$out"
 fi
+steal() { awk -v a="cpu$vcpu" -v b="cpu$rcpu" -v w="$1" '$1 == a || $1 == b {print "steal_ticks", w, $1, $9}' /proc/stat; }
+before=$(steal before)
 "$@"
 rc=$?
 if [ -n "$pid" ]; then
   sudo -n kill -INT "$(pgrep -P "$pid" bpftrace || echo "$pid")" 2>/dev/null
   wait "$pid"
 fi
+{ echo "$before"; steal after; echo "steal_ticks_hz $(getconf CLK_TCK)"; } >> "$out"
 exit $rc
