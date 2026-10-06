@@ -516,11 +516,22 @@ def _cells_child(args, model_key: str, path: Path, gran: str, seed: int, batches
 def sweep(args) -> int:
     """Every (model, granularity, batch, seed) cell not yet in ``--state``: per model, a staged verify once, then per seed
     one engine per granularity (order rotated by seed, reversed on odd seeds) running that seed's missing batches.  Stops
-    starting engines when the next one would not finish before ``--deadline``; a lane resumed later skips finished cells."""
+    starting engines when the next one would not finish before ``--deadline`` or ``--budget-min`` from now; a lane resumed
+    later skips finished cells.  Run as a keeper chunk (``research keeper set``), it stops its own target once no cell is
+    missing, so the keeper starts no more empty chunks."""
     out, st = Path(args.out), Path(args.state)
     (out / "logs").mkdir(parents=True, exist_ok=True)
     st.mkdir(parents=True, exist_ok=True)
-    deadline = calendar.timegm(time.strptime(args.deadline, "%Y-%m-%dT%H:%MZ")) if args.deadline else None
+    ends = [calendar.timegm(time.strptime(args.deadline, "%Y-%m-%dT%H:%MZ"))] if args.deadline else []
+    ends += [time.time() + args.budget_min * 60] if args.budget_min else []
+    deadline = min(ends) if ends else None
+    left = [(m, g, b, s) for m in args.models for g in args.grans for b in args.batches for s in args.seeds
+            if not (st / "cells" / _cell_name(m, g, b, s)).exists()]
+    if not left and os.environ.get("RESEARCH_KEEPER_TARGET"):
+        target = os.environ["RESEARCH_KEEPER_TARGET"]
+        r = subprocess.run([sys.executable, "/usr/local/bin/vy-keeper", "stop", target, "--by", os.environ.get("GPU_LEASE_WHO", "-"),
+                            "--reason", "every cell is done"], capture_output=True, text=True)
+        print(f"[sweep] every cell is done; vy-keeper stop {target}: rc={r.returncode} {r.stdout.strip()[-300:]}", flush=True)
     grans = list(args.grans)
     engine_s: list[float] = []
     rc, notes = 0, []
@@ -683,6 +694,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--seeds", type=ints, default=[0, 1, 2])
     ap.add_argument("--state", default="/workspace/jobs/cco-sweep", help="finished cells (resumable across runs), caches")
     ap.add_argument("--deadline", default=None, help="UTC YYYY-MM-DDTHH:MMZ: start no engine that would end after it")
+    ap.add_argument("--budget-min", type=float, default=None,
+                    help="start no engine that would end more than this many minutes from now (a keeper chunk: its --max-min less a margin)")
+    ap.add_argument("--chunk", type=int, default=None, help="the keeper's {seed} for this chunk; unused, cells resume from --state")
     ap.add_argument("--engine-min", type=float, default=12.0, help="minutes one engine is assumed to take before one has run")
     ap.add_argument("--model-key", default=None)
     ap.add_argument("--gran", choices=tuple(GRANS), default="none")

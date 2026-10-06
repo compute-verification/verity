@@ -116,7 +116,9 @@ def parse_vllm_pu(argv: list[str]) -> dict:
     ap.add_argument("--grans", default="none,coarse,fine,staged")
     ap.add_argument("--batches", default="1,8,32,128")
     ap.add_argument("--seeds", default="0,1,2")
-    ns, _ = ap.parse_known_args([a for a in argv if not a.endswith(("python", "python3", "pu_bench.py"))])
+    # a keeper chunk's command is `gpu-lease ... -- /usr/bin/env K=V ... python pu_bench.py ...`: only what follows the script
+    i = max((k for k, a in enumerate(argv) if a.endswith("pu_bench.py")), default=-1)
+    ns, _ = ap.parse_known_args(argv[i + 1:] if i >= 0 else [a for a in argv if not a.endswith(("python", "python3"))])
     return vars(ns)
 
 
