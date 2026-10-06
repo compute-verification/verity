@@ -30,6 +30,7 @@ Stdlib only; it imports the warden's `schedule` and `online` and nothing from th
 
 from __future__ import annotations
 
+import hashlib
 import heapq
 import math
 import random
@@ -148,19 +149,18 @@ def measure_runs(runs: Sequence[tuple[Sequence[int], Sequence[Sequence]]], sync_
     Pairs symbol `g_w` with the declaration at window `w + delay` of the same run (the first window that reads the
     frontier `g_w`). Reports the plug-in mutual information with the declared δ and with the full declared sync, and
     its shuffle null (the estimator's bias on this many pairs); the symbol error rate of the decoder
-    `ĝ = δ_declared(w + delay) − M` (exact under `last`, where M = 0); and the bits it recovers per window (`log2 cap_w`
-    on each correctly decoded window, where the receiver knows the ceiling `cap_w = δ_declared(w)` because it read
-    it). Every rate is in bits per window and is at most `log2 #Σ_sync`."""
-    pairs_delta, pairs_full, recovered_each = [], [], []
+    `ĝ = δ_declared(w + delay) − M` (exact under `last`, where M = 0); and its decoded rate, the mutual information
+    between the symbol and `ĝ` less its shuffle null (a decoder that guesses scores 0, not its lucky hits). Every rate
+    is in bits per window and is at most `log2 #Σ_sync`."""
+    pairs_delta, pairs_full, pairs_decoded = [], [], []
     for symbols, declared in runs:
         for w in range(max(0, len(symbols) - delay)):
             d = int(declared[w + delay][0])
             pairs_delta.append((symbols[w], d))
             pairs_full.append((symbols[w], _sync_index(declared[w + delay], sync_set)))
-            recovered_each.append(math.log2(max(1, int(declared[w][0]))) if symbols[w] == d - margin else None)
+            pairs_decoded.append((symbols[w], d - margin))
     n = len(pairs_delta)
-    correct = [r is not None for r in recovered_each]
-    recovered = sum(r for r in recovered_each if r is not None)
+    errors = sum(x != y for x, y in pairs_decoded)
     return {
         "window_decisions": n,
         "mutual_information_delta_bits": _mutual_information(pairs_delta),
@@ -169,12 +169,19 @@ def measure_runs(runs: Sequence[tuple[Sequence[int], Sequence[Sequence]]], sync_
         "mutual_information_corrected_bits": max(0.0, _mutual_information(pairs_full) - _null_mi(pairs_full)),
         "declared_delta_entropy_bits": _entropy(list(Counter(d for _, d in pairs_delta).values())),
         "declared_full_entropy_bits": _entropy(list(Counter(d for _, d in pairs_full).values())),
-        "symbol_error_rate": correct.count(False) / n if n else 0.0,
-        "decoded_bits_per_window": recovered / n if n else 0.0,
+        "symbol_entropy_bits": _entropy(list(Counter(x for x, _ in pairs_delta).values())),
+        "symbol_error_rate": errors / n if n else 0.0,
+        "decoded_bits_per_window": max(0.0, _mutual_information(pairs_decoded) - _null_mi(pairs_decoded)),
         "distinct_declared_delta": len({d for _, d in pairs_delta}),
         "distinct_declared_full": len({d for _, d in pairs_full}),
         "max_bits": sync_set.bits,
     }
+
+
+def stream_seed(seed: int, name: str) -> int:
+    """A configuration's own seed: pooled configurations must carry independent messages, or the estimator would read
+    their shared prefix as signal."""
+    return int.from_bytes(hashlib.sha256(f"{seed}:{name}".encode()).digest()[:8], "big")
 
 
 def control_symbols(windows: int, seed: int) -> list[int]:

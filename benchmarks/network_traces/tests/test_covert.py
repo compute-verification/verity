@@ -87,6 +87,7 @@ def test_under_a_fixed_sync_the_covert_sender_conveys_nothing(setup, tmp_path):
     c = audit["comparisons"]["covert"]
     assert len({tuple(d) for d in c["declared"]}) == 1
     assert c["mutual_information_full_bits"] == c["mutual_information_corrected_bits"] == 0
+    assert c["decoded_bits_per_window"] == 0
 
 
 def test_the_measure_pools_runs_and_is_exact_on_a_noiseless_channel():
@@ -96,3 +97,4 @@ def test_the_measure_pools_runs_and_is_exact_on_a_noiseless_channel():
     assert m["window_decisions"] == 10 and m["symbol_error_rate"] == 0
     assert m["mutual_information_delta_bits"] == pytest.approx(m["declared_delta_entropy_bits"])
     assert covert.margin_of("last") == 0 and covert.margin_of("cover-3-2") == 2
+    assert covert.stream_seed(0, "a/w0-4") != covert.stream_seed(0, "a/w5-9") != covert.stream_seed(1, "a/w5-9")

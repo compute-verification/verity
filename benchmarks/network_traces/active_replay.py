@@ -479,7 +479,8 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     rule = online.rule(plan["sync_rule"]) if "sync_rule" in plan else None
     fixed = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     enc = covert.encode_writes(program_keys(plan["sessions"], release, horizon), plan["sessions"], setup.sync_set, T,
-                               plan["windows"], rule, setup.envelope, seed, horizon, fixed)
+                               plan["windows"], rule, setup.envelope, covert.stream_seed(seed, plan["name"]), horizon,
+                               fixed)
     return plan | {"strategy": strategy, "seed": seed, "writes": enc["writes"],
                    "covert": {"symbols": enc["symbols"], "caps": enc["caps"], "predicted": enc["declared"],
                               "margin": covert.margin_of(plan["sync_rule"]) if rule else 0}}
@@ -487,7 +488,7 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
 
 def covert_symbols(plan: dict, buckets: int) -> tuple[list[int], int]:
     """What a run's sender sent per window, for `covert.measure`, and the rule's δ margin: the covert sender's symbols;
-    for `bits`, the bits of the sessions released in each window (as one integer); for any other run, a random stream
+    for `bits`, how many of the sessions released in each window burst; for any other run, a random stream
     independent of it, so its measured rate is the estimator's null (the honest control)."""
     margin = covert.margin_of(plan["sync_rule"]) if "sync_rule" in plan else 0
     if "covert" in plan:
@@ -501,7 +502,7 @@ def covert_symbols(plan: dict, buckets: int) -> tuple[list[int], int]:
             if (r := release.get(stream)) is not None and r // buckets < plan["windows"]:
                 out[r // buckets] += bits[name]
         return out, margin
-    return covert.control_symbols(plan["windows"], plan.get("seed", 0)), margin
+    return covert.control_symbols(plan["windows"], covert.stream_seed(plan.get("seed", 0), plan["name"])), margin
 
 
 # The three processes.
