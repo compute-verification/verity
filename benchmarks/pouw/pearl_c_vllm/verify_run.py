@@ -5,8 +5,8 @@
 
 - **The epoch** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
   against the epoch's coin commitment as the challenger published it (``--coins``, not the pass's copy), as the salt coin,
-  opened after the weights' root, and the salt must be the manifest's.  A pass recorded before epoch coins carries a beacon
-  instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
+  opened after the weights' root, and the salt must be the manifest's.  A pass recorded before epoch coins (a v1 manifest)
+  carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
 - **The records** (each matmul's real rows, width and excluded rows; each weight's excluded rows) are the manifest's.
   Their root must be the one the pass published before any draw.
 - **The draws' source** is `os.urandom(32)`, the verifier's own, drawn here after the transcript is fixed: a
@@ -156,8 +156,7 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
     out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": draws,
            "replay": "batch" if fast else "scalar"}
     try:
-        if man.get("schema") != PD.MANIFEST_SCHEMA:
-            raise ValueError(f"schema {man.get('schema')!r}, not {PD.MANIFEST_SCHEMA}")
+        PD.manifest_schema(man, recorded)
         scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
         matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
         epoch, out["salt"] = PD.manifest_epoch(man, coins, recorded)

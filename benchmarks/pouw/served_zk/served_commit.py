@@ -846,7 +846,7 @@ def _pass(pass_dir: Path):
     PD = _pd()
     raw = (pass_dir / "manifest.json").read_bytes()
     man = json.loads(raw)
-    if man.get("schema") != PD.MANIFEST_SCHEMA:
+    if man.get("schema") not in PD.MANIFEST_SCHEMAS:
         raise SystemExit(f"{pass_dir}: not a retained pass ({man.get('schema')!r})")
     calls = [u for u in man["matmuls"] if u["k"] == K and u["n"] == K]
     if not calls:
@@ -1070,7 +1070,7 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     elif case != "resalted":
         raise ValueError(f"a coin variant is one of {', '.join(CASES)}")
     out = {k: v for k, v in man.items() if k != "beacon"}
-    return {**out, "coins": coins.to_json(), "salt_opening": o.to_json()}
+    return {**out, "schema": _pd().MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
 
 
 def cmd_coin_variant(a) -> int:

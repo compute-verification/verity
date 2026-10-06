@@ -153,8 +153,7 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
     no file of the pass is opened), for reading recorded lines back (``--resumed-only``)."""
     raw = path.read_bytes()
     man = json.loads(raw)
-    if man.get("schema") != PD.MANIFEST_SCHEMA:
-        raise ValueError(f"schema {man.get('schema')!r}, not {PD.MANIFEST_SCHEMA}")
+    PD.manifest_schema(man, recorded=True)
     scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
     epoch, _ = PD.manifest_epoch(man, coins, recorded=True)

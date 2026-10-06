@@ -29,6 +29,8 @@ from verity.protocols.verification.sampled_proofs.one_stage import registration 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC  # noqa: E402
 
+PD = SC._pd()
+
 K, M, N = 128, 3, 4
 
 
@@ -50,9 +52,10 @@ def _manifest(run: str, coins: Coins | None) -> dict:
     man = {"run": run, "matmuls": [{"index": 5, "m": 16, "k": K, "n": N, "weight": 2}], "weights": {"2": {"root": roots[2].hex()}}}
     if coins is None:
         beacon = bytes(32)
-        return {**man, "beacon": beacon.hex(), "salt": Epoch.unverified(work, roots, beacon).salt.hex()}
+        return {**man, "schema": PD.MANIFEST_SCHEMA_RECORDED, "beacon": beacon.hex(),
+                "salt": Epoch.unverified(work, roots, beacon).salt.hex()}
     opening = coins.open("salt", weights_root(roots))
-    return {**man, "coins": coins.commitment.to_json(), "salt_opening": opening.to_json(),
+    return {**man, "schema": PD.MANIFEST_SCHEMA, "coins": coins.commitment.to_json(), "salt_opening": opening.to_json(),
             "salt": Epoch.start(work, roots, coins.commitment, opening).salt.hex()}
 
 
@@ -285,8 +288,9 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
     """The challenger re-starts the window's pass's epoch from its manifest under its own coin commitment: a salt coin of
     another challenger, opened after what it had not recorded, labelled the draw coin or tampered is refused, and so is a
     pass whose commitment is not the epoch's, whose salt is not its coin's, which carries no coin or names no pass, or
-    which is not the pass the window's parameters name.  A pass recorded before epoch coins (a beacon's salt) is received
-    only as a recorded replay.  Nothing refused opens a coin."""
+    which is not the pass the window's parameters name.  A pass recorded before epoch coins (a v1 manifest, a beacon's
+    salt) is received only as a recorded replay, and a manifest of any other schema not at all.  Nothing refused opens a
+    coin."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
@@ -316,7 +320,13 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
     brec, braw = _register(bparams, bpublic), PASSES[bparams["context"]][1]
     with pytest.raises(S.Refused) as e:
         _challenger(bparams, coins=_coins()).register("x", brec, manifest=braw)
-    assert _codes(e) == {"coin"} and "no salt coin" in e.value.verdict.detail["coin"]
+    assert _codes(e) == {"coin"} and f"is {PD.MANIFEST_SCHEMA_RECORDED}, recorded before epoch coins" in e.value.verdict.detail["coin"]
+    _, _, bman = PASSES[bparams["context"]]
+    for schema in ("verity-vllm/pouw-pearl-c-run/v0", None):
+        ch = _challenger(bparams, coins=_coins())
+        with pytest.raises(S.Refused) as e:
+            ch.register("x", brec, manifest=_raw({**bman, "schema": schema}), recorded=True)
+        assert f"schema {schema!r}, not {PD.MANIFEST_SCHEMA}" in e.value.verdict.detail["coin"]
     ch = _challenger(bparams, coins=_coins())
     ch.register("honest", brec, manifest=braw, recorded=True)
     assert ch.passes == {"honest": "recorded beacon"} and len(ch.select("honest").units) == SC.law_of(bparams, bpublic["level"])["k"]

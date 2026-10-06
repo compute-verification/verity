@@ -497,16 +497,33 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
     assert not r["accepted"] and "records are not the ones" in r["line"]
 
 
+@pytest.mark.slow
+def test_verify_run_reads_a_v1_manifest_only_as_a_recorded_replay(honest_pass):
+    """A v1 manifest (a pass recorded before epoch coins) is refused unless ``--recorded``; read as a recorded pass it needs
+    a beacon its salt is from; a manifest of another schema is refused either way."""
+    path, *_ = honest_pass
+    man = json.loads(path.read_text())
+    v1 = path.parent / "manifest-v1.json"
+    for schema, recorded, why in ((PPD.MANIFEST_SCHEMA_RECORDED, False, "recorded before epoch coins"),
+                                  (PPD.MANIFEST_SCHEMA_RECORDED, True, "recorded pass has no beacon"),
+                                  ("verity-vllm/pouw-pearl-c-run/v0", True, f"not {PPD.MANIFEST_SCHEMA}")):
+        v1.write_text(json.dumps({**man, "schema": schema}))
+        r = VR.verify(v1, 3, 1, "test", b"verifier" * 4, coins=published(path), recorded=recorded)
+        assert not r["accepted"] and r["line"].startswith("REJECT") and why in r["line"], (schema, recorded, r["line"])
+    v1.unlink()
+
+
 def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refused():
     """A pass's epoch re-starts only from the epoch's own salt coin under the commitment the verifier holds, opened after
     the weights' root, with the salt it derives: a coin of another challenger, one opened after another record, the draw
     coin's label, a flipped coin byte, a claimed commitment that isn't the published one, or a salt that isn't the coin's is
-    refused.  A pass recorded with a beacon is read only as a replay of a recorded pass."""
+    refused.  A pass recorded with a beacon (a v1 manifest) is read only as a replay of a recorded pass, and a manifest of
+    any other schema not at all."""
     roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
     commitment, opening = salt_coin(roots)
     epoch = Epoch.start(Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1))), roots, commitment,
                         opening)
-    man = {"matmuls": [{"index": 0, "m": 16, "k": 1024, "n": 256, "weight": 0}, {"index": 1, "m": 16, "k": 1024, "n": 128, "weight": 1}],
+    man = {"schema": PPD.MANIFEST_SCHEMA, "matmuls": [{"index": 0, "m": 16, "k": 1024, "n": 256, "weight": 0}, {"index": 1, "m": 16, "k": 1024, "n": 128, "weight": 1}],
            "weights": {str(w): {"root": r.hex()} for w, r in roots.items()},
            "coins": commitment.to_json(), "salt_opening": opening.to_json(), "salt": epoch.salt.hex()}
     got, how = PPD.manifest_epoch(man, commitment)
@@ -527,11 +544,26 @@ def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refu
             PPD.manifest_epoch({**man, **change}, commitment)
     with pytest.raises(DomainError, match="the verifier holds"):
         PPD.manifest_epoch(man, None)
-    recorded = {k: v for k, v in man.items() if k not in ("coins", "salt_opening")}
-    recorded |= {"beacon": SEED.hex(), "salt": Epoch.unverified(epoch.workload, roots, SEED).salt.hex()}
     with pytest.raises(DomainError, match="no salt coin"):
+        PPD.manifest_epoch({k: v for k, v in man.items() if k not in ("coins", "salt_opening")}, commitment)
+    recorded = {k: v for k, v in man.items() if k not in ("coins", "salt_opening")}
+    recorded |= {"schema": PPD.MANIFEST_SCHEMA_RECORDED, "beacon": SEED.hex(),
+                 "salt": Epoch.unverified(epoch.workload, roots, SEED).salt.hex()}
+    with pytest.raises(DomainError, match="recorded before epoch coins: only a replay of a recorded pass reads it"):
         PPD.manifest_epoch(recorded, commitment)
     assert PPD.manifest_epoch(recorded, None, recorded=True)[1] == "recorded beacon"
+    with pytest.raises(DomainError, match="recorded pass has no beacon"):
+        PPD.manifest_epoch({**man, "schema": PPD.MANIFEST_SCHEMA_RECORDED}, commitment, recorded=True)
+    with pytest.raises(DomainError, match="not its recorded beacon's"):
+        PPD.manifest_epoch({**recorded, "salt": "00" * 32}, None, recorded=True)
+    assert PPD.manifest_epoch(man, commitment, recorded=True) == (epoch, "coin")
+    for schema in ("verity-vllm/pouw-pearl-c-run/v0", None):
+        for flag in (False, True):
+            with pytest.raises(DomainError, match=f"schema {schema!r}, not {PPD.MANIFEST_SCHEMA}"):
+                PPD.manifest_epoch({**man, "schema": schema}, commitment, recorded=flag)
+    with pytest.raises(DomainError, match="recorded before epoch coins"):
+        PPD.manifest_epoch({**recorded, "schema": PPD.MANIFEST_SCHEMA_RECORDED, **{k: man[k] for k in ("coins", "salt_opening")}},
+                           commitment)
 
 
 @pytest.mark.slow
