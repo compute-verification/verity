@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from verity_flock import rec_live as RL
 
-from test_rec_live import CAP0, CAP1, HELLO, SCHEDULE, _binding_round, _bytes, _domain, _hdr, _label, _obs, _sq
+from test_rec_live import CAP0, CAP1, HELLO, SCHEDULE, _binding_round, _bytes, _content, _domain, _hdr, _label, _obs, _sq
 
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
@@ -27,20 +27,25 @@ def _coins(n: int) -> bytes:
 
 
 def honest() -> list[bytes]:
+    """`test_rec_live`'s session: the binding round (level 0's top again), a free message with a fresh top, and Ligerito's
+    copy of level 0's top."""
     return [RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, HELLO),
             RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [("circuit", CAP0)], []),
             RL.encode_req(RL.REQ_LINK, bytes(32)),
             RL.encode_req(RL.REQ_OPEN, "circuit/rep0", "", b"flock-circuit/fast100/rep0", 0),
             RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _binding_round(), 6),
-            RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _obs([5, 6, 7]) + _sq(1, RL.KIND_SCALAR), 1),
+            RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _content()[0], 1),
+            RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _content()[1], 2),
             RL.encode_req(RL.REQ_PROOF, "circuit", 0, b"the proof"),
             RL.encode_req(RL.REQ_FINISH)]
 
 
-#: a schedule with a child stream, so `Open`'s parent and position and a round's caps after the binding round are pinned too
+#: a schedule with a child stream, so `Open`'s parent and position are pinned too, and a child's round with a fresh top
+#: and a message row comes between its parent's
 SCHEDULE2 = {**json.loads(json.dumps(SCHEDULE)),
-             "streams": {"circuit/rep0": {"parent": "", "at": 0, "rounds": 2}, "circuit/rep0/x": {"parent": "circuit/rep0", "at": 1, "rounds": 1}},
-             "rounds": SCHEDULE["rounds"] + [{"stream": "circuit/rep0/x", "k": 0, "n": 3, "caps": [1], "commits": 2}]}
+             "streams": {"circuit/rep0": {"parent": "", "at": 0, "rounds": 3}, "circuit/rep0/x": {"parent": "circuit/rep0", "at": 1, "rounds": 1}},
+             "rounds": SCHEDULE["rounds"][:2] + [{"stream": "circuit/rep0/x", "k": 0, "n": 3, "tops": [1], "level0": 0, "commits": 1}]
+             + SCHEDULE["rounds"][2:]}
 
 
 def honest2() -> list[bytes]:
@@ -59,7 +64,7 @@ def proxy_session(schedule: dict, reqs: list[bytes]) -> tuple[dict, list]:
     salts, coins, calls = iter(SALTS), RL.CoinServer(_coins), []
     for name, show in CALL.items():
         f = getattr(coins, name)
-        setattr(coins, name, lambda *a, _f=f, _show=show: (calls.append(_show(a)), _f(*a))[1])
+        setattr(coins, name, lambda *a, _f=f, _show=show, **kw: (calls.append(_show(a)), _f(*a, **kw))[1])
     proxy = RL.Proxy(coins, lambda: next(salts), schedule=schedule)
     for b in reqs:
         proxy.handle(b)
@@ -107,7 +112,10 @@ def cases() -> list[tuple[str, dict, list[bytes]]]:
             out.append((f"{name}: then {tag}", sched, reqs + [req]))
     edits = {"Hello": lambda s: s["hello"].update(reps=1), "roots": lambda s: s["roots"].update(circuit=1),
              "Open": lambda s: s["streams"]["circuit/rep0"].update(at=1), "round 0": lambda s: s["rounds"][0].update(n=5),
-             "round 1": lambda s: s["rounds"][1].update(commits=2),
+             "round 1's tops": lambda s: s["rounds"][1].update(tops=[2]),
+             "round 1's commits": lambda s: s["rounds"][1].update(commits=0),
+             "round 2's level0": lambda s: s["rounds"][2].update(level0=0),
+             "round 2's level-0 copy as a top": lambda s: s["rounds"][2].update(tops=[2], level0=0),
              "rounds": lambda s: s["rounds"].append({**s["rounds"][1], "k": 2}), "y": lambda s: s["link"].update(y=1),
              "an extra key in a round": lambda s: s["rounds"][0].update(extra=0)}
     for what, edit in edits.items():
@@ -236,3 +244,21 @@ def test_the_cases_reach_every_ending(lean_records):
     ends = [r["end"] for r in lean]
     assert ends.count("finish") >= 2 and ends.count("stop") >= 50
     assert sum(1 for r in lean if r["end"] == "stop" and r["rounds"]) >= 20
+
+
+def test_a_schedule_of_another_form_is_refused(lean_runs):
+    """A schedule not of rec-step3's form (`rec_live.check_schedule`) is refused by both before any request: v0's rounds,
+    whose ``caps`` count level 0's copies as tops, a round without ``level0``, and v0's kind."""
+    v0 = json.loads(json.dumps(SCHEDULE))
+    for r in v0["rounds"]:
+        r["caps"] = r.pop("tops") + [2] * r.pop("level0")
+    no_level0 = json.loads(json.dumps(SCHEDULE))
+    del no_level0["rounds"][1]["level0"]
+    bad = [v0, no_level0, {**SCHEDULE, "kind": "rec/inner-transcript/v0/schedule"}]
+    lines = "".join(json.dumps({"schedule": s, "requests": [b.hex() for b in honest()], "salts": [x.hex() for x in SALTS]}) + "\n"
+                    for s in bad)
+    out = subprocess.run([str(BIN)], input=lines, capture_output=True, text=True, check=True).stdout.splitlines()
+    assert [json.loads(x) for x in out] == [{"error": "not a rec/inner-transcript/v1/schedule"}] * len(bad)
+    for s in bad:
+        with pytest.raises(ValueError, match="not a rec/inner-transcript/v1/schedule"):
+            RL.Proxy(RL.CoinServer(_coins), lambda: SALTS[0], schedule=s)
