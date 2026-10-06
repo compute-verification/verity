@@ -1121,6 +1121,8 @@ def main(argv: list[str]) -> int:
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     a = ap.parse_args(argv)
+    if a.dry_run and a.command not in ("sync", "land"):
+        ap.error(f"--dry-run is for sync and land only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) == a.local:
         ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot) and --local (here)")
     if a.command == "judge" and not a.pr:
