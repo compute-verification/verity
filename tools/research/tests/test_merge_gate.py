@@ -427,26 +427,20 @@ def _pr_train(tmp_path: Path, monkeypatch, rules: str | None = None) -> tuple[Pa
     return main, origin, a, tip
 
 
-def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head_marked_ready_with_its_grants(tmp_path, monkeypatch, capsys):
+def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head_with_its_grants(tmp_path, monkeypatch, capsys):
     """A tip merging `Merge #1126 (83c25a27b)` would have landed after #1126 moved to a head that fixed two red-team findings
     against that one (the lander, 4 Oct): pins and grants were read at `--prepare` only.  The gate reads them again at landing:
-    #7's head on origin must still be the merged one, and `pr:7@{head}` must hold `ready = true` and every grant the queue's
-    rules say its change needs; a check of the tip doesn't stand in for either."""
+    #7's head on origin must still be the merged one, and `pr:7@{head}` must hold every grant the queue's rules say its change
+    needs; a check of the tip doesn't stand in for either.  No ready mark is asked: the train's own check is the gate (Daniel,
+    6 Oct)."""
     from research.store.local import LocalStore
 
     main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch, '[[grant]]\nrole = "red-team"\npaths = ["a2.txt"]\n')
     assert merge_main(["train-prep/t", "--dry-run"]) == 3
-    assert f"#7 is not marked ready at {a[:12]} (`ready = true` on pr:7@{a}: `research queue ready 7 --by LANE`)" in capsys.readouterr().err
-    store = LocalStore()
-    store.add_label(f"pr:7@{a}", "ready", True, "merge-queue")            # the queue's old default author: no one's word
-    assert merge_main(["train-prep/t", "--dry-run"]) == 3
-    assert (f"#7's ready at {a[:12]} is by merge-queue, not its owner: the owner relabels it (research data label pr:7@{a} ready "
-            "true --by LANE)") in capsys.readouterr().err
-    store.add_label(f"pr:7@{a}", "ready", True, "lane-7")
-    assert merge_main(["train-prep/t", "--dry-run"]) == 3
     err = capsys.readouterr().err
     assert f"#7 lacks the red-team grant at {a[:12]}" in err and f"research data label pr:7@{a} grant ROLE" in err
-    assert "not marked ready" not in err
+    assert "ready" not in err
+    store = LocalStore()
     store.add_label(f"pr:7@{a}", "grant", "red-team", "red-team")
     assert merge_main(["train-prep/t", "--dry-run"]) == 0, capsys.readouterr().err
     before = _git(main, "rev-parse", "main")
@@ -486,8 +480,6 @@ def test_a_pr_stacked_on_another_in_the_tip_needs_grants_only_for_what_it_adds(t
     assert _record(tmp_path, tmp_path / "tip", monkeypatch, *CHECKED) == 0
     monkeypatch.chdir(main)
     store = LocalStore()
-    for n in (30, 31):
-        store.add_label(f"pr:{n}@{heads[n]}", "ready", True, "lane-7")
     capsys.readouterr()
     assert merge_main(["train-prep/s", "--dry-run"]) == 3
     err = capsys.readouterr().err
@@ -512,8 +504,8 @@ def test_a_tip_whose_pr_heads_or_labels_cant_be_read_is_refused(tmp_path, monkey
     (`StoreGrants` raises STALE), so it refuses either way, saying why.  `--train` refuses before recording anything."""
     from research.store.local import LocalStore
 
-    main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch)
-    LocalStore().add_label(f"pr:7@{a}", "ready", True, "lane-7")
+    main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch, '[[grant]]\nrole = "red-team"\npaths = ["a2.txt"]\n')
+    LocalStore().add_label(f"pr:7@{a}", "grant", "red-team", "red-team")
     assert merge_main(["train-prep/t", "--dry-run"]) == 0, capsys.readouterr().err
     url = _git(main, "remote", "get-url", "origin")
     _git(main, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
@@ -618,6 +610,35 @@ def test_a_statement_review_carries_into_a_train_across_a_restack_or_a_merge_of_
             f"isn't byte-identical (lean-audit.json)") in out
     assert _git(origin, "for-each-ref", "--format=%(refname)", "refs/heads/train-prep") == \
         "refs/heads/train-prep/m\nrefs/heads/train-prep/r"
+
+
+def test_a_grant_carries_at_landing_as_at_prepare(tmp_path, monkeypatch, capsys):
+    """Proofs' restacked PRs (#1325 #1326 #1331 #1307 #1313, 6 Oct) were built into trains on grants carried from their reviewed
+    heads, but the landing gate read grants at the pinned head alone and would have refused the checked tip.  It carries them
+    under the same rule (`research.queue.carry`, Daniel's Q5), saying from which head."""
+    from research.store.local import LocalStore
+
+    _store_remote(tmp_path, monkeypatch)
+    main, _feat, _tip = _repos(tmp_path)
+    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
+    pinned = json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)
+    origin, heads = _origin_with(tmp_path, main, {
+        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["pins", "reads"]\n',
+        "lean-audit.json": json.dumps(audit, indent=1)}, {20: {"lean-audit.json": pinned}})
+    old = heads[20]
+    LocalStore().add_label(f"pr:20@{old}", "grant", "statement-reviewer", "reviewer")
+    _main_moves(main, origin)
+    restacked = _files_branch(main, "pr20-restacked", {"lean-audit.json": pinned})
+    monkeypatch.chdir(main)
+    _git(main, "push", "-q", "-f", "origin", f"{restacked}:refs/pull/20/head")
+    assert merge_main(["--train", "--prepare", "train-prep/r", f"20@{restacked[:9]}", "--lint", "true"]) == 0, capsys.readouterr()
+    _git(main, "fetch", "-q", "origin", "train-prep/r:train-prep/r")
+    _git(main, "worktree", "add", "-q", str(tmp_path / "tip"), _git(main, "rev-parse", "train-prep/r"))
+    assert _record(tmp_path, tmp_path / "tip", monkeypatch, *CHECKED) == 0
+    monkeypatch.chdir(main)
+    capsys.readouterr()
+    assert merge_main(["train-prep/r", "--dry-run"]) == 0, capsys.readouterr().err
+    assert f"research merge: grant statement-reviewer carried from pr:20@{old} to {restacked[:12]} (restack" in capsys.readouterr().out
 
 
 def test_a_lean_review_carries_under_the_same_rule(tmp_path, monkeypatch, capsys):
