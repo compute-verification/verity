@@ -1,7 +1,8 @@
-"""The PoUW Lean package (`lean/`) and what the rest of this directory says about it: every Lean theorem `PROTOCOL.md` cites is
-a guarantee in its `lean-audit.json`, and its FP8 conformance data is what `verity_catalog.silicon` computes.
-`lean/scripts/fp8atom_vectors.py`, run again, writes the kernel-pinned vectors in `lean/Pouw/Protocol/Fp8Atom/` and their
-checks in `lean/Pouw/SecurityProofs/Fp8Atom/` byte for byte, and the bulk whose SHA-256 the record holds for `PouwBulk`. The
+"""PoUW's Lean (in `verity/Security`) and what the rest of this directory says about it: every Lean theorem `PROTOCOL.md`
+cites is a guarantee in `verity/Security/lean-audit.json`, and its FP8 conformance data is what `verity_catalog.silicon`
+computes. `lean/scripts/fp8atom_vectors.py`, run again, writes the kernel-pinned vectors in `Definitions/Pouw/Fp8Atom/` and
+their checks in `Proofs/Pouw/Fp8Atom/` byte for byte, and the bulk whose SHA-256 the proofs' record holds for
+`Proofs.Pouw.Bulk`. The
 Lean audit runs `PouwBulk` on that bulk (`runs`); this is the half that says the data is still `verity_catalog.silicon`'s."""
 from __future__ import annotations
 
@@ -16,10 +17,11 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-LEAN = HERE / "lean"
 ROOT = HERE.parents[4]
-SCRIPT = LEAN / "scripts" / "fp8atom_vectors.py"
+LEAN = ROOT / "verity" / "Security"
+SCRIPT = HERE / "lean" / "scripts" / "fp8atom_vectors.py"
 POLICY = json.loads((LEAN / "lean-audit.json").read_text())
+RUNS = json.loads((LEAN / "Proofs" / "lean-audit.json").read_text())["runs"]
 
 
 def test_cited_theorems_are_guarantees() -> None:
@@ -49,6 +51,6 @@ def test_kernel_pinned_vectors_are_regenerated(generated: Path) -> None:
 
 @pytest.mark.slow
 def test_bulk_is_what_the_audit_pins(generated: Path) -> None:
-    pinned = POLICY["runs"]["PouwBulk"]["data"]
+    pinned = RUNS["Proofs.Pouw.Bulk"]["data"]
     made = {n: hashlib.sha256(gzip.decompress((generated / f"{n}.gz").read_bytes())).hexdigest() for n in pinned}
     assert made == pinned

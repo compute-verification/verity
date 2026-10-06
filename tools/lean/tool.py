@@ -2,7 +2,7 @@
 
     research run --on MACHINE --project verity --source . --cwd source --tool lean_audit -- python tools/lean/audit.py --all --build --fresh
     research run --on MACHINE --project verity --source . --cwd source --tool lean_upstream -- \
-        python tools/lean/upstream.py backends/flock/verifier/lean/soundness --fetch --rev origin/main
+        python tools/lean/upstream.py verity/Security/Proofs --fetch --rev origin/main
 
 The steward launches the first nightly on `main` and the second weekly (`[[run]]` entries of its steward.toml,
 `research.notes.run_lines`).  A nonzero exit is a failed attempt: the audit failed, or upstream proves a theorem about a

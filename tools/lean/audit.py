@@ -245,17 +245,32 @@ def under(prefixes, name: str) -> bool:
     return any(name == p or name.startswith(p + ".") for p in prefixes)
 
 
+def source_dirs(pkg: Path) -> list[Path]:
+    """The directories module names are relative to, deepest first: each `lean_lib`'s `srcDir` under the package's
+    (`lakefile.toml`; Lake's default `.` for each), so a nested package with `srcDir = ".."` names its modules from the
+    directory above it."""
+    if not (pkg / "lakefile.toml").exists():
+        return [pkg.resolve()]
+    import tomllib
+    cfg = tomllib.loads((pkg / "lakefile.toml").read_text())
+    top = (pkg / cfg.get("srcDir", ".")).resolve()
+    dirs = {top, *((top / lib.get("srcDir", ".")).resolve() for lib in cfg.get("lean_lib", []))}
+    return sorted(dirs, key=lambda d: len(d.parts), reverse=True)
+
+
 def lean_modules(pkg: Path) -> dict[str, str]:
-    """{module: path relative to the package} for the package's own .lean files (not `.lake`, not a nested package)."""
-    out = {}
+    """{module: path relative to the package} for the package's own .lean files (not `.lake`, not a nested package),
+    each named from the deepest source directory holding it (`source_dirs`), or from the package's directory."""
+    out, srcs = {}, source_dirs(pkg)
     for d, dirs, files in os.walk(pkg):
         here = Path(d)
         dirs[:] = sorted(x for x in dirs if x not in SKIP_DIRS and not any((here / x / f).exists()
                                                                           for f in ("lakefile.toml", "lakefile.lean")))
         for f in files:
             if f.endswith(".lean") and not (here == pkg and f == "lakefile.lean"):
-                rel = (here / f).relative_to(pkg)
-                out[".".join(rel.with_suffix("").parts)] = str(rel)
+                path = (here / f).resolve()
+                src = next((s for s in srcs if path.is_relative_to(s)), pkg.resolve())
+                out[".".join(path.relative_to(src).with_suffix("").parts)] = str((here / f).relative_to(pkg))
     return out
 
 
@@ -675,6 +690,18 @@ def homes(pkg: Path, policy: dict) -> dict[str, list[str]]:
         for m in lean_modules(d):
             out.setdefault(m, spec)
     return out
+
+
+def reads_home(pkg: Path, policy: dict) -> dict[str, list[str]]:
+    """The ``home`` of ``pkg``'s reads check (`spec_reads`): `homes` of ``pkg``, then of each package its `proved_in` names,
+    whose own modules are no spec (it requires this package, not the converse) and whose path dependencies keep theirs.  A
+    guarantee's statement elaborates in its prover, so it can read the prover's path dependencies; were they missing here,
+    the check would take them for pinned dependencies and pass any read of them."""
+    home = homes(pkg, policy)
+    for _, q in provers(pkg, policy):
+        for m, spec in (homes(q, {}) if q.is_dir() else {}).items():
+            home.setdefault(m, spec)
+    return home
 
 
 def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[str]:
@@ -1184,11 +1211,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
     files = lean_modules(pkg)
     fails, new = judge(current, facts, files, update, owner)
-    home = homes(pkg, current)
-    for _, q in provers(pkg, current):                  # a prover's modules are not spec: it requires this package, not the converse
-        for m in (lean_modules(q) if q.is_dir() else {}):
-            home.setdefault(m, [])
-    fails = cross + fails + spec_reads(current, facts, home)
+    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current))
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     s = time.monotonic()
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
