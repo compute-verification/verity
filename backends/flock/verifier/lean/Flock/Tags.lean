@@ -300,10 +300,30 @@ def circuitTypesSelftest : Tags :=
     name := "verity/flock-circuit/types+seed-injection", identity := identityHidden true "verity/flock-circuit/types",
     liveOs := false }
 
+/-- META `leaf_scheme` of a recursive session's inner statement (upstream's `leaf_scheme_plain`,
+`verity_flock.circuit.LEAF_SCHEME_PLAIN`): plain SHA-512 leaves and no salt, since the firewall commits every tree top under
+a salt of its own. -/
+def leafSchemePlain : Json :=
+  Json.mkObj [("id", s "flock-leaf/sha512-unsalted"), ("inner", s "sha512 column digest"), ("salt_bytes", n 0),
+    ("use", s "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off")]
+
+/-- `t` with plain SHA-512 leaves (`leafSchemePlain`), as upstream proves a statement whose META `leaf_scheme` is that
+object: its identity names the leaf scheme and the Merkle hash (`flock-circuit`'s `identity`, from `merkle(c)`). -/
+def withPlainLeaves (t : Tags) : Tags :=
+  let hashes := (t.identity.getObjValD "hashes").setObjVal! "merkle" (s "sha512 (every Ligerito level)")
+  let identity := (t.identity.setObjVal! "leaf_scheme" leafSchemePlain).setObjVal! "hashes" hashes
+  { t with merkleLeaf := "flock-leaf/sha512-unsalted", pinnedLeafScheme := some leafSchemePlain, identity }
+
+/-- A ZK-off statement: its trees have plain SHA-512 leaves, so `verify --zk` refuses it, as upstream's `--zk` does. -/
+def plainLeaves (t : Tags) : Bool := t.pinnedLeafScheme == some leafSchemePlain
+
+/-- A recursive session's inner statement (PROTOCOL.md §16.15): the default statement with plain SHA-512 leaves. -/
+def circuitPlainLeaves : Tags := { circuit.withPlainLeaves with name := "verity/flock-circuit+plain-leaves" }
+
 /-- The versions this verifier knows, by name. -/
 def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuitEb90718f, circuitEb90718fSelftest,
   circuitE51e2b86, circuitE51e2b86Selftest, circuit967b8d06, circuit967b8d06Selftest, circuitTypes210d32e1,
-  circuitTypes210d32e1Selftest, circuit, circuitSelftest, circuitTypes, circuitTypesSelftest]
+  circuitTypes210d32e1Selftest, circuit, circuitSelftest, circuitTypes, circuitTypesSelftest, circuitPlainLeaves]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 
