@@ -767,6 +767,11 @@ def reachable(roots: Iterable[Any]) -> dict[str, Any]:
 #: targets such as `TokenSelect_v1{V=151936}` stay with the kernel tests)
 MAX_GATES = 150_000
 
+#: families the suite checks through their calls alone (every callee is a target), each with why its own circuit is not
+CHECKED_THROUGH_CALLS = {
+    "LmsVerify_v1": "112M gates at its smallest binding (265 chain steps); its body is only calls to its parts and wiring",
+}
+
 
 def family(fn: Any) -> str:
     return getattr(fn, "base_id", None) or fn.id
@@ -782,7 +787,9 @@ def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
     for fn in found.values():
         by.setdefault(family(fn), []).append(fn)
     out = {}
-    for fns in by.values():
+    for fam, fns in by.items():
+        if fam in CHECKED_THROUGH_CALLS:
+            continue
         keep = [f for f in fns if getattr(f, "gates", 1) <= max_gates]
         if not keep:
             keep = [min(fns, key=lambda f: f.gates)]
