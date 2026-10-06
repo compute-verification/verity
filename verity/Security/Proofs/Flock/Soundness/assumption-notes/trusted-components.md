@@ -28,7 +28,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   domain points `ω_q` are distinct only for `2^d ≤ 2^64` (`ω_q` is the low word of `q`). The novel basis is a basis
   only for `L ≤ 40` columns (the range the executable's normalisers are checked on). `Level.Fits` carries those bounds,
   and every `fast100` level fits.
-- **The theorem statements.** A proof of the wrong statement is worthless. The reviewer's job is `../../../../../../backends/flock/verifier/lean/soundness/lean-audit.json`'s
+- **The theorem statements.** A proof of the wrong statement is worthless. The reviewer's job is `../../../../lean-audit.json`'s
   `pins` and `reads`, and `../ASSUMPTIONS.md` for the named assumptions.
   - `pins`: each pinned theorem's signature as Lean prints it, with its named assumptions.
   - `reads`: per module, the definitions those statements depend on (followed through the `meaning` modules,

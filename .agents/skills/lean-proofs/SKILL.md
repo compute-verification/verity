@@ -18,20 +18,17 @@ The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/READ
 
 ## Where the work goes
 
-- **Pick the package by its dependencies.** Code the verifier runs, and anything the V[B] generator or a reference
-  prover runs: `backends/flock/verifier/lean/` (no dependencies). Facts about the executable's definitions:
-  `level3/` (Mathlib). C-Flock's guarantees (soundness, knowledge soundness, zero knowledge, audits): `soundness/`
-  (ArkLib).
-  Proofs about core's own definitions (`verity_catalog.silicon` and the like), and the model every protocol states its guarantees
-  in (circuits, partitions, declarations, games): `verity/Security/` (Mathlib only), since core depends on no
-  backend. A protocol's guarantees: its own package under `protocols/<name>/lean/`, which may require core's and other
-  protocols' packages. A new package only when the dependencies differ; give it a `lean-audit.json` and the shared `lean-toolchain`.
-- **Own a subdirectory and namespace** (`FlockSoundness/Knowledge/`, `FlockSoundness.Knowledge`), with one aggregator
-  module that imports its files. The package root imports the aggregator once, when the area is created, so parallel
-  lanes don't edit the same root file.
-- **Definitions a guarantee reads go in definition files** (`Protocol/`, `Assumptions`, `Guarantees/` in the
-  packages laid out under the four names, see `AGENTS.md`; `Model/`, `Accounting/`, `Assumptions.lean` elsewhere), not in
-  a proof file. The audit lists where they are (`reads` in `lean-audit.json`); keep that list short.
+- **Code or analysis** (`AGENTS.md` "Lean"). Code the verifier runs, and anything the V[B] generator or a reference
+  prover runs: `backends/flock/verifier/lean/` (no dependencies); the PoUS grader stays with PoUS. Everything else is
+  security analysis, under `verity/Security/`: a definition or statement in `Definitions/<Area>/` or
+  `Specs/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
+  `security_proofs` in `verity/Security/Proofs/`, which may use ArkLib). C-Flock's level3 and soundness are
+  `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. No new package: an area is a directory in each tree.
+- **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
+  one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
+  so parallel lanes don't edit the same root file.
+- **Definitions a guarantee reads go in `Definitions/` or `Specs/`**, not in a proof file. The audit lists where they are
+  (`reads` in `verity/Security/lean-audit.json`); keep that list short.
 - **Build in your own checkout.** Two agents never share a writable `.lake`: concurrent builds overwrite each other's
   `.olean` files, and an audit then reads what another agent's build left. A second Lean task on the same machine gets
   its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
@@ -62,7 +59,7 @@ research run --on vy-nebius-1 --project verity --source . --cwd source --declare
 
 It waits for one of the node's Lean slots of pool `build` (`lean_slot.py`; a node whose slot file lists no `build` pool
 refuses it, exit 2, even with an `any` pool), never behind merge checks or hour-long audits, rebuilds only what changed since
-that slot's last run, and audits without the kernel replay: on `soundness/` with nothing to rebuild that was 6.5 minutes, and a
+that slot's last run, and audits without the kernel replay: on C-Flock's soundness with nothing to rebuild that was 6.5 minutes, and a
 slot's first run, a cold build, 31. The record is in the run's `lean-audit/audit-*/`, with `review.txt` when it changed; commit
 the record. It vouches for nothing: its result is of kind `lean-fast/v1`, which `check`'s lean-audit step and `research merge`
 refuse.
@@ -140,7 +137,7 @@ your modules.
   pinned dependency proves an unacknowledged theorem about them. Read the theorem, say in the PR whether it discharges the assumption or replaces the proof, then run
   `python tools/lean/upstream.py PKG --ack`. At a dependency bump, also run `upstream.py PKG --lean` (the exact pass).
   At a toolchain bump, also re-read `lean_io_get_random_bytes` in the new toolchain's `src/runtime/io.cpp`. A3
-  (`soundness/ASSUMPTIONS.md`) cites what it reads, and `tests/test_lean_packages.py` fails until the citation names the
+  (`verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`) cites what it reads, and `tests/test_lean_packages.py` fails until the citation names the
   new version.
   Cite the output in `ASSUMPTIONS.md`'s upstream status rather than writing one.
 - **A changed record is a changed claim.** If `--update` changes a record or `reads` for a guarantee you didn't mean to

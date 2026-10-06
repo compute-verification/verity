@@ -1,6 +1,6 @@
-"""The Lean word functions of PoUW's row-unit primitives (`lean/Pouw/Protocol/PearlC/RowPrims.lean`) are
+"""The Lean word functions of PoUW's row-unit primitives (`verity/Security/Definitions/Pouw/PearlC/RowPrims.lean`) are
 `verity.protocols.accounting.work.pouw.circuit.words`': `lean/scripts/row_prims_vectors.py`, run again, writes the vectors the kernel checks
-(`RowPrimVectors.lean`, `SecurityProofs/PearlC/RowPrimChecks.lean`) byte for byte, each expected word the primitive's
+(`RowPrimVectors.lean`, `Proofs/Pouw/PearlC/RowPrimChecks.lean`) byte for byte, each expected word the primitive's
 own `evaluate`."""
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ import pytest
 pytest.importorskip("verity.protocols.accounting.work.pouw.circuit.words", reason="the row primitives are `verity.protocols.accounting.work.pouw.circuit.words`'")
 
 LEAN = Path(__file__).resolve().parents[5] / "Security"
-SCRIPT = LEAN / "scripts" / "row_prims_vectors.py"
-FILES = ["Pouw/Protocol/PearlC/RowPrimVectors.lean", "Pouw/SecurityProofs/PearlC/RowPrimChecks.lean"]
+SCRIPT = Path(__file__).resolve().parents[1] / "lean" / "scripts" / "row_prims_vectors.py"
+FILES = ["Definitions/Pouw/PearlC/RowPrimVectors.lean", "Proofs/Pouw/PearlC/RowPrimChecks.lean"]
 
 
 def test_the_row_prim_vectors_are_regenerated(tmp_path: Path) -> None:
