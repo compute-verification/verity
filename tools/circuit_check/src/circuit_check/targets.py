@@ -69,6 +69,7 @@ def load_registries() -> None:
     import verity_catalog.definitions.boolean.elementwise  # noqa: F401
     import verity_catalog.definitions.boolean.gemm  # noqa: F401
     import verity_catalog.definitions.boolean.gf2k  # noqa: F401
+    import verity.primitives.commitments.gates.lms  # noqa: F401
     import verity.primitives.commitments.gates.merkle  # noqa: F401
     import verity_catalog.definitions.boolean.mufu  # noqa: F401
     import verity_catalog.definitions.boolean.scalar  # noqa: F401
@@ -222,7 +223,8 @@ BINDINGS: dict[str, set[str]] = {}
 #: the root functions a binding file may define, in catalog order (each file's in turn, this module first); ``_X_roots`` holds
 #: ``_X_bindings`` beside it as one binding when the file defines both
 ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_universal_roots", "_gf2k_roots",
-                  "_merkle_roots", "_pous_roots", "_rec_roots", "_kernel_roots", "_vocabulary_roots", "_pouw_roots")
+                  "_merkle_roots", "_lms_roots", "_pous_roots", "_rec_roots", "_kernel_roots", "_vocabulary_roots",
+                  "_pouw_roots")
 
 
 def binding_files() -> list[tuple[str, dict[str, Any]]]:

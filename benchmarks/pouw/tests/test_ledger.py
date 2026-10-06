@@ -337,7 +337,7 @@ def test_a_pin_whose_signature_isn_t_its_name_is_an_error():
 
 
 @pytest.mark.parametrize("statement, path, reading, published, at", [
-    # the panel's published figures (docs/pouw/panel.md, 30 Sep 16:00Z), each from its pin, the larger of the two prices;
+    # the panel's published figures (30 Sep 16:00Z), each from its pin, the larger of the two prices;
     # v1's at its cap then, 1/400
     ("pearl-c-sm120/v1", "cast-32.06", "forming-credited", "0.77888%", "8"),
     ("pearl-c-sm120/v1", "cast-16", "forming-credited", "0.60019%", "1047/125"),
