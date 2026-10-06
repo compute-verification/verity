@@ -580,14 +580,14 @@ kept as an early tripwire).
 | `T'^r` | recomputed | `T'^r = ⟨w^r, y_1'^r⟩ = ⟨w^r, y_1^r⟩ + ρ^r_0 e^r_0 + ρ^r_1 e^r_1` with the honest `e^r = ⟨w^r, R^r⟩`: `w^r` from the coins and claims, `y_1^r` the fold of the host witness's lanes, `R^r` the host's extra lanes. The lane-phase relation alone (`claim_k + ρe + T'`, on the device's unmasked values) does not fix it: a device that shifts `e` by `δ` and `T'` by `ρδ` keeps the relation and sends 256 bits of its choice |
 | `ybar^r` | recomputed | `zk::ybar` from the session's level-0 padding (host), `w^r` and `ρ^r` |
 | levels 1+: the code-switch message, every cap, OOD value, sumcheck message and nonce | recomputed | functions of `y_1'^r`, the coins and the salts the host expands for trees `1..R` |
-| the inner proof: `[ρ, σ]`, `τ`'s commitment, `Y`, its openings | the gateway's own | `zk_finish`, from the pads on the host |
+| the inner proof: `[ρ, σ]`, `τ`'s commitment, `Y`, its openings | the gateway's own | `zk_finish`, from the pads on the host, over §4's rows replayed from the passed values with the lincheck's comb the gateway folds itself: a device's comb would choose the rows the inner proof proves, so the gate drops it (the outer proof never carries it; the verifier folds its own) |
 | the proof bytes | recomputed | every transcript field equals what the gate passed; level 0's rows and paths are the recheck tree's at the queries the coins fix; levels 1+'s are the recomputed trees' |
 
 So the rule is: **the gateway masks the algebraic phase and level 0's lane rounds, and recomputes the polynomial
-commitment's outputs** (the level-0 commitment, the opening's `s_hat_v` and `target`, and everything from `T'` on). It
-does not recompute the zerocheck or the lincheck, the bulk of the device's arithmetic. What it recomputes is a CPU
-Ligerito: the commitment over the whole witness, and the opening's basis fold `w^r`, which `T'`, `ybar` and levels 1+ all
-read.
+commitment's outputs** (the level-0 commitment, the opening's `s_hat_v` and `target`, and everything from `T'` on), and
+folds the lincheck's comb for its own relation check, as the verifier does. It does not recompute the zerocheck or the
+lincheck, the bulk of the device's arithmetic. What it recomputes is a CPU Ligerito: the commitment over the whole
+witness, and the opening's basis fold `w^r`, which `T'`, `ybar` and levels 1+ all read.
 
 **What a refusal costs.** A refusal stops the session, which the auditor sees: one event per session, at a round the
 device can move (about `log₂ 100` bits a rep). A gateway that refuses is evidence against its rack. Timing (when a message
@@ -655,4 +655,14 @@ or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), befor
 
 The inner phase's controls are V*'s: `rec_inner.py forge --what top` (a clear top that does not open the salted one the coin
 server received) and `--what unsalted` (a record of clear tops), refused `GATE-REFUSED: tree top: …` by `rec_vstar`.
-`85-rec-reprice.sh` runs both phases on node 1 (`STEP=icheck`; `STEP=oprove MODES="dev host gate" CONTROLS=L6`).
+`85-rec-reprice.sh` runs both phases on node 1 (`STEP=icheck`; `STEP=oprove MODES=dev,host,gate CONTROLS=L6`).
+
+**What it costs** (node 1, one RTX PRO 6000, the prover's 16 cores shared with the gate; K = 4096, V*'s eight `--zk`
+statements L0–L6 and the algebra, m = 28–32; medians of 3 sessions after 1 warm, summed over the eight): prove 46.8 s
+gated against 7.4 s with the host witness ungated and 6.7 s with the device's witness; the proof bytes are the same. The
+gateway's CPU is about 176 CPU seconds a session (the gated process's over the ungated one's). Of the 39 s the gate adds to
+prove, the level-0 recheck is 5.2 s (51 CPU seconds; L0's alone 1.8 s and 17.8), the device's wait for the shadow opening
+13.4 s, the gateway's own comb fold 10.5 s, and the rest the device's host phases slowed by the gate's threads on the same
+cores. None of it is the GPU's: the gate runs on CPUs the device does not need, it can run on cores of its own, the
+recheck can run a session ahead (it reads only the host witness and the gateway's own salts and hiding), and the device
+need not compute the opening the shadow replaces.
