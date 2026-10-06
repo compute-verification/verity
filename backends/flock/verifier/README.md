@@ -174,8 +174,9 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   the contract on every session of `test_firewall_agreement.py`. `--sessions`
   replays recorded sessions from their coins and salts. The K = 4096 sessions it replayed before (`r20261006-070620-e02d`'s,
   4 of 4 accepted by both) are `rec/inner-transcript/v0`'s, from before rec-step3's tops and level0, and today's firewall
-  refuses their schedule; no v1 session has been recorded at that size yet. The outer phase (`firewall.rs`) is not
-  covered yet.
+  refuses their schedule. A v1 session at that size has been recorded since (`r20261006-021550-4e4b`, rec-reprice's
+  `85-rec-reprice.sh STEP=inner K=4096`), but its outputs keep no `private.json`, whose salts the replay needs. The outer
+  phase (`firewall.rs`) is not covered yet.
 - Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agrees 27 of 27. Set 14 (a shared-row RoPE file whose six
   instances repeat three rows) agrees 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included; set 15
   (the same instances per instance) 22 of 22. The `967b8d06` vectors patch writes each false statement as the verifier's
