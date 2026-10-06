@@ -6,6 +6,7 @@
 set -euo pipefail
 systemctl set-property --runtime user.slice AllowedCPUs=0-119
 systemctl set-property --runtime system.slice AllowedCPUs=0-119
+systemctl set-property --runtime init.scope AllowedCPUs=0-119
 for s in provers.slice vy.slice; do systemctl set-property --runtime "$s" AllowedCPUs=0-119,128-191; done
 systemctl set-property --runtime devices.slice AllowedCPUs=120-127
 systemctl set-property --runtime pous.slice AllowedCPUs=124-127
