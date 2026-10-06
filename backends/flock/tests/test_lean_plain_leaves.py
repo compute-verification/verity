@@ -1,7 +1,8 @@
 """A recursive session's inner statement has plain SHA-512 leaves (`verity_flock.circuit.LEAF_SCHEME_PLAIN`, staged under
 `FLOCK_PLAIN_LEAVES=1`). The statement digest binds the prover's identity, which names the leaf scheme and the Merkle hash,
 so the Lean verifier's `verity/flock-circuit+plain-leaves` (`Tags.withPlainLeaves`) writes both as upstream's `identity`
-does, and pins META `leaf_scheme` to the staged object. Upstream's `--zk` refuses such a statement, and so does Lean's."""
+does, pins META `leaf_scheme` to the staged object, and decodes each opening's empty `opened_salts`. Upstream's `--zk`
+refuses such a statement, and so does Lean's."""
 from __future__ import annotations
 
 import re
