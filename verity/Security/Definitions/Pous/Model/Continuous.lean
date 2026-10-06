@@ -3,7 +3,7 @@ import Mathlib.Order.ConditionallyCompleteLattice.Indexed
 import Definitions.Pous.Model.Audit
 
 /-!
-# The continuous audit: a timed verifier, and a responder that runs on its clock
+# The continuous audit: a memory challenger, and a responder that runs on its clock
 
 Added on 3 Oct 2026, with `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`; the arrivals and the
 memory at every time (the last section) with `Pous.Guarantees.ContinuousTimeAverage`. Statement reviewer:
@@ -25,15 +25,15 @@ deadline `Δ_late` plus the round trip. The verifier's arrival times `arr j` are
   by any function of their answers. During a round the responder sees neither `C` nor `ω` whole and reaches the
   primitive only through queries.
 
-**The verifier.** For `j = 0, 1, …` (with the names of `verity_pous.continuous.ContinuousVerifier`, which enforces
-the same rules on `audit.TimedVerifier`):
+**The verifier.** For `j = 0, 1, …` (with the names of `verity_pous.continuous.ContinuousMemoryChallenger`, which enforces
+the same rules on `audit.MemoryChallenger`):
 
 1. It sends index `i_j` at `max(arr j, c_{j−1})` (`contSend`), where `arr j` is challenge `j`'s arrival
    (`run_continuous`'s `wait(j)`), `c_{j−1}` is the time round `j − 1` closed and `c_{−1} = 0`. A challenge is never
-   outstanding when the next is sent: `TimedVerifier.challenge()` refuses while one is open within its hard deadline.
+   outstanding when the next is sent: `MemoryChallenger.challenge()` refuses while one is open within its hard deadline.
 2. It times the answer from its own send time. The answer's delay is the number of units the machine took, the depth
-   of the round's program (`contProg`), as `TimedVerifier.respond()` measures `stop − start` from `challenge()`. A
-   round's answer is the answer to its own index, as `ContinuousVerifier.respond(j, …)` refuses an answer to any
+   of the round's program (`contProg`), as `MemoryChallenger.respond()` measures `stop − start` from `challenge()`. A
+   round's answer is the answer to its own index, as `ContinuousMemoryChallenger.respond(j, …)` refuses an answer to any
    challenge but the open one and `run_continuous` drops a reply naming any other.
 3. It waits at most `D_late` units. The round closes at the answer, or after `D_late` units with no answer
    (`contNext`). A round with no answer by then, or whose answer took more than `Q_late` queries, is **rejected**
@@ -43,7 +43,7 @@ the same rules on `audit.TimedVerifier`):
    (`Answer.on_time` is false past `Δ + RTT`). An answer within `(D, Q)` is a **hit** if it is the block `C i_j`
    (`Answer.correct`), and **wrong** otherwise.
 5. With tolerance `f₀` it accepts iff at most `f₀` rounds are not hits: rejected, late or wrong (`contAccepts`), as
-   `ContinuousVerifier.accepted` compares `AuditResult.misses` with `max_misses`.
+   `ContinuousMemoryChallenger.accepted` compares `AuditResult.misses` with `max_misses`.
 
 `contRecords` runs rules 1–4 over the indices. Each round's record holds its verdict and the length of the responder's
 memory at the send time. The memory length is the game's measurement, which the verifier never sees.

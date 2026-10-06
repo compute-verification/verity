@@ -1,7 +1,7 @@
 """P2 v1's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu`) on CPU: the reference
 (`p2_v1/reference.py`) against the P2 kit's pinned vectors, and every step of the arm with the reference standing in for the GPU
 library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's own verifier process
-(`p2_v1/live.py`) on its logical clock, so no outcome depends on a clock."""
+(`p2_v1/memory_challenger.py`) on its logical clock, so no outcome depends on a clock."""
 from __future__ import annotations
 
 import importlib.util
