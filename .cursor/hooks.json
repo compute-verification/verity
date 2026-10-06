@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {"command": "python3 tools/agent-guard/shell_hook.py", "timeout": 10, "failClosed": true}
+    ]
+  }
+}
