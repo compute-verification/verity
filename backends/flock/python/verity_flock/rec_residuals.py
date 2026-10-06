@@ -77,8 +77,8 @@ V_VALUE = "rec-v"
 # (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 256 (`coin_spec_of`)
 MAX_REGIONS = 64
 # a part's sha512x3 slots per instance, at most (`slots`): 2^25 bits of compressions beside its hm96 slots' 2^24 (at most
-# MAX_REGIONS) and its unit keep its block at 2^26, below circuit.K_MAX's 2^27 at any inner shape; v's compressions (about
-# nv / 8) would otherwise put K = 4096's first part at 2^27
+# MAX_REGIONS) leave its unit 2^24 of a 2^26 block, below circuit.K_MAX's 2^27 (`circuit.compose` refuses a larger one); K =
+# 4096's units are 2^22, and without the bound v's compressions (about nv / 8) put its first part at 2^27
 MAX_SLOTS = 128
 
 
