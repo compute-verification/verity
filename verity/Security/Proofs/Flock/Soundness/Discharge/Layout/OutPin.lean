@@ -8,13 +8,14 @@ set_option Elab.async false
 # The units' committed gates at `keyProg`'s places: the population's returned outputs
 
 `keyProg_valPinned` takes `hout`: at a unit's committed gate, a satisfying witness holds the registration's bit. Here
-that bit is `outBitOf`: the gate's column in its unit's instance is a VU copy `u'`'s computed column `outCol j t`
-(column `16 j + t` of the unit's returned-output group; `OutColAt`, read back by `outDecode`), and the bit is bit `t` of
-the population's output word `lo[j]` of the unit, for the copy's leaf's outputs `lo`. `keyProg_hout` proves `hout` for
-it, in an untyped circuit whose unit returns the outputs (`c.outNet = c.unitNet`), from:
+that bit is `outBitOf`: the gate's column in its unit's instance is a template instance copy `u'`'s computed column
+`outCol j t` (column `16 j + t` of the unit's returned-output group; `OutColAt`, read back by `outDecode`), and the bit
+is bit `t` of the population's output word `lo[j]` of the unit, for the copy's leaf's outputs `lo`. `keyProg_hout`
+proves `hout` for it, in an untyped circuit whose unit returns the outputs (`c.outNet = c.unitNet`), from:
 
-* the stacked column's place in the block (`stackPlace_val_comp`, `col_val_comp`): the VU's slot `vu · upv + u'` at
-  column `outCol j t`, which is region "out"'s `outAddr` (`out_site`, at each drawn unit's site, `BcSite`);
+* the stacked column's place in the block (`stackPlace_val_comp`, `col_val_comp`): the template instance's slot
+  `vu · upv + u'` at column `outCol j t`, which is region "out"'s `outAddr` (`out_site`, at each drawn unit's site,
+  `BcSite`);
 * `OutsOut`: every committed gate a unit computes is on such a column (a condition on the circuit's outputs `outs`: the
   returned outputs' bits, and nothing else a unit computes);
 * `OutShape`, which the parse checked (`outShape_of_parse`): the output group's words are a power of two, and each
@@ -43,8 +44,8 @@ theorem stackPlace_val_comp (S : Model.Statement) (R : FlockSoundness.Rows) (k :
   rw [e, stackPlace_stackCol]
   rfl
 
-/-- **An accepted statement's VU column of copy `u'`'s computed column `c0`** is column `c0` of the unit slot
-`vu · upv + u'`. -/
+/-- **An accepted statement's template instance column of copy `u'`'s computed column `c0`** is column `c0` of the unit
+slot `vu · upv + u'`. -/
 theorem col_val_comp {T : Model.Statement} (a : Placed.Accepted T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
     {u' c0 : ℕ} (hu' : u' < a.st.c.upv) (h1 : (unitRows a.st a.layout.unit_built).nIn ≤ c0)
     (h2 : c0 < (unitRows a.st a.layout.unit_built).nIn + (unitRows a.st a.layout.unit_built).nComp)
@@ -62,8 +63,8 @@ variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
 /-- Column `16 j + t` of the unit's returned-output group, in the unit's rows. -/
 def outCol (j t : ℕ) : ℕ := (c.unit.outGroups.getD 0 default).col * WORD + (16 * j + t)
 
-/-- **Stacked column `x` of a VU is a returned output's bit**: copy `u'`'s computed column `outCol j t`, for output
-`j` of the copy's leaf and bit `t < 16`. -/
+/-- **Stacked column `x` of a template instance is a returned output's bit**: copy `u'`'s computed column `outCol j t`,
+for output `j` of the copy's leaf and bit `t < 16`. -/
 def OutColAt (x u' j t : ℕ) : Prop :=
   u' < c.upv ∧ j < (c.leavesOut.getD u' #[]).size ∧ t < 16 ∧ (Rows.ofNet hU).nIn ≤ outCol c j t ∧
     outCol c j t < (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp ∧

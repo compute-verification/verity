@@ -18,7 +18,7 @@ calls needs, recompute-free.
     NcpTile{K}          16 × 16 block                    its X strip, its Y strip, c₀                    the credited words, and Z
     NcpDequant          output entry                     Z, the row scale, the column scale, the bias    y (BF16)
 
-**The key** (the design note's two-level key, `docs/pouw/sampled-proofs-circuit.md` §5.4):
+**The key** (a two-level key):
 
     r_i  = SHA-512("ncp2-row" ‖ row i's int7 bytes)                   D_s = SHA-512("ncp2-stp" ‖ r_16s ‖ … ‖ r_16s+15)
     D_A  = the RFC 6962 tree over D_1 … D_(m/16), node = SHA-512("ncp2-nod" ‖ left ‖ right), one leaf's root the leaf

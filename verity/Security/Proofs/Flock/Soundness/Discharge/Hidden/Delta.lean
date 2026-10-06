@@ -3,9 +3,9 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 /-!
 # A hidden-output statement's Δ (`HiddenDelta`)
 
-`HmOut.delta` is `HmRow.delta`'s pairs, then the output rows' message bits: per VU `g`, output port `j`, row word `k` and
+`HmOut.delta` is `HmRow.delta`'s pairs, then the output rows' message bits: per template instance `g`, output port `j`, row word `k` and
 bit `t < 16`, the pairs `outPairs` lists. Its loops are `forIn_range_append`'s, but for the port loop, which also carries
-the VU's first output word of port `j`, `outAt c j` (`forIn_range_at`).
+the template instance's first output word of port `j`, `outAt c j` (`forIn_range_at`).
 -/
 
 open Flock FlockLevel3
