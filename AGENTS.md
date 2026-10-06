@@ -162,8 +162,9 @@ Landing:
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `SecurityProofs.G : G` for each guarantee.
   - Each component has its own area in each tree (`Core`, `Nci`, `Pouw`, `Pous`, `NetworkCertifier`, `Flock`).
-  - The spec imports only itself and Mathlib (`layers` in `verity/Security/lean-audit.json`). C-Flock's analysis is all in
-    `Proofs.Flock` until its spec is extracted.
+  - The spec imports only itself and Mathlib (`layers` in `verity/Security/lean-audit.json`). A theorem that must stay
+    in a trusted module (a definition's proof field) may; the audit replays it like any proof. C-Flock's analysis is all
+    in `Proofs.Flock` until its spec is extracted.
   - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
     PR of their own.
 - **The audit.** Every Lake package has a `lean-audit.json`, and `check` audits every declaration
