@@ -5,5 +5,6 @@ testpaths = ["tests", "hbm_audit/tests", "erase_calib/tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# tests/ checks the harness against PoUS itself (verity.protocols.accounting.space.pous) and the census's hardware ids.
-inputs = ["verity", "catalog/census/hardware.json"]
+# tests/ checks the harness against PoUS itself (verity.protocols.accounting.space.pous) and the census's hardware ids;
+# test_pous_service.py stages the answers with C-Flock's row machinery (backends/flock/python, which reads catalog).
+inputs = ["verity", "catalog", "backends/flock/python"]
