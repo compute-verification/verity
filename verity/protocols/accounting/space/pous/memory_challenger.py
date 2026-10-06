@@ -8,7 +8,7 @@ A session has four steps:
    (`verity.primitives.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree.  It publishes the coin tree's
    root and hm96 key together with the session's parameters (`SessionCommitment`).
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
-   for the receipt before it hashes anything, then hashes the received bytes with SHA-512 itself.  Its record is
+   for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
    retried, and no index is redrawn.
 3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records root)`: the header is
@@ -40,7 +40,11 @@ bound, `k · 2^-256` under the fresh key.  The domain's 32-byte binding is the f
 
 **Round records** (`RECORDS_TREE`): record `j` is `u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)` (92
 bytes), the value of frame leaf `(rank j, position j, RECORD_SCHEMA)`, in a frame-v3-sha512 tree over the session's
-rounds (binding(RECORD_BINDING, session), owner -1).
+rounds (binding(RECORD_BINDING, session), owner -1).  `H(block)` is the block's `sha512/row/v2` digest
+`SHA-512(P(8N) ‖ block)` for an N-byte block (`verity.primitives.commitments.rowleaf.sha512_row_v2_digest`), the inner
+digest of C's `hm96-sha512/row/v2` leaf: `answer_circuit.PousAnswerOpens_v1` proves it equal to `h` and opens it against
+C's leaf with no second hash of the block.  The digest costs the same 17 compressions as a plain SHA-512 of the block,
+P's block a constant midstate, and is taken after the receipt time.
 
 **Signatures.** A `Signer` signs a session's record (`message`, 64 bytes) under its session id; `SCHEMES` maps an
 accepted scheme to its `verify(public_key, session, record, signature)`.  The one accepted scheme is S1's, `LMS`:
@@ -67,6 +71,7 @@ from verity.primitives.commitments import hm96
 from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.limits import VerificationLimits
 from verity.primitives.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
+from verity.primitives.commitments.rowleaf import sha512_row_v2_digest
 from verity.primitives.crypto import lms
 from verity.primitives.randomness import derive
 
@@ -81,7 +86,7 @@ COIN_BINDING = b"verity-pous/memory-challenger/coin-tree/v1\0"
 RECORD_BINDING = b"verity-pous/memory-challenger/round-records/v1\0"
 SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
 COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
-RECORD_SCHEMA = "pous/round-record/v1"
+RECORD_SCHEMA = "pous/round-record/v2"
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
 """The coarsest clock the memory challenger runs on: a microsecond (the certifier's 100 ms buckets are far too coarse)."""
@@ -95,6 +100,11 @@ def _sha512(*parts: bytes) -> bytes:
     for p in parts:
         h.update(p)
     return h.digest()
+
+
+def block_digest(block: bytes) -> bytes:
+    """`H(block)`: the block's `sha512/row/v2` digest, `SHA-512(P(8N) ‖ block)` (module docstring)."""
+    return sha512_row_v2_digest(block, 8 * len(block))
 
 
 def _domain(tag: bytes, session: bytes, count: int) -> CommitmentDomain:
@@ -219,7 +229,7 @@ class SessionCommitment:
 
 @dataclass(frozen=True, slots=True)
 class Round:
-    """One round's record: its index, the challenge's send time, the answer's receipt time and the SHA-512 of the
+    """One round's record: its index, the challenge's send time, the answer's receipt time and `block_digest` of the
     whole answer as received."""
 
     j: int
@@ -385,7 +395,7 @@ class MemoryChallenger:
         return i
 
     def receive(self, block: bytes) -> Round:
-        """The open round's answer: its receipt time, then SHA-512 of all of `block`, which must be `block_bytes`."""
+        """The open round's answer: its receipt time, then `block_digest` of all of `block`, which must be `block_bytes`."""
         receipt = self.clock()
         if self._open is None:
             raise RuntimeError("no round is open")
@@ -393,7 +403,7 @@ class MemoryChallenger:
             raise ValueError(f"an answer is the whole {self.commitment.block_bytes}-byte block, not {len(block)} bytes")
         j, i, send = self._open
         self._open = None
-        r = Round(j, i, send, receipt, hashlib.sha512(block).digest())
+        r = Round(j, i, send, receipt, block_digest(block))
         self.rounds.append(r)
         if r.elapsed_ns > self.commitment.limit_ns:
             self.ended = LATE
@@ -442,7 +452,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
             expected: Callable[[int], bytes], *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Verify] = SCHEMES) -> Verdict:
     """The check of a signed session against the commitment published before it (module docstring): `expected(i)` is
-    SHA-512 of block `i` of `C`, `trusted` the memory challengers' public keys, `schemes` the accepted signature schemes
+    `block_digest` of block `i` of `C`, `trusted` the memory challengers' public keys, `schemes` the accepted signature schemes
     (S1's; a test's own mapping in tests).  It fails closed: an unknown scheme, an untrusted key or a bad signature
     rejects, whatever the rounds."""
     reasons: list[str] = []
@@ -481,5 +491,5 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "LMS", "PROTOCOL",
            "RECORDS_TREE", "RECORD_SCHEMA", "SCHEMES", "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryChallenger",
-           "Round", "SessionCommitment", "SignedSession", "Signer", "Verdict", "Verify", "coin_digest", "coin_leaf",
+           "Round", "SessionCommitment", "SignedSession", "Signer", "Verdict", "Verify", "block_digest", "coin_digest", "coin_leaf",
            "covering_certificate", "lms_verify", "message", "records_root", "register", "verdict", "verify_coin"]

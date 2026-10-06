@@ -5,9 +5,10 @@ memory_challenger` against the responder, over the harness's responder wire (`ba
         [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
         [--signer lms --lms-key DIR [--keygen-workers N] | --signer test]
 
-`READY.json` names the responder's port, the scheme, its manifest and the setup salt.  `DIGESTS.bin` is SHA-512 of every
-block of `C`, in block order: what `memory_challenger.verdict` checks each round's `H(block)` against, the verifier-side
-table a proof will replace.
+`READY.json` names the responder's port, the scheme, its manifest and the setup salt.  `DIGESTS.bin` is the `sha512/row/v2`
+digest of every block of `C` (`memory_challenger.block_digest`), in block order: what `memory_challenger.verdict` checks
+each round's `H(block)` against, the table a proof will replace (`answer_circuit.PousAnswerOpens_v1` opens `H(block)`
+against C's leaf).
 
 - **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (spec v1.1's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
   calibration (`--calibrate-only`) still measures the loopback round trip and records whether its p99.9 fits under the cap.
@@ -267,7 +268,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     probe = digests[:nb].ljust(nb, b"\0")
     for n in range(len(sha)):
         t0 = time.perf_counter_ns()
-        hashlib.sha512(probe).digest()
+        mc.block_digest(probe)
         sha[n] = time.perf_counter_ns() - t0
     first = records[0] if records else None
     accepted = first is not None and first["accepted"]
@@ -291,7 +292,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
             "margin_s": quantiles([(limit - a["elapsed_ns"]) / 1e9 for a in answers]),
             "device_s": quantiles([a["device_ns"] / 1e9 for a in answers]),
             "server_s": quantiles([a["server_ns"] / 1e9 for a in answers]),
-            "sha512_block_s": quantiles([x / 1e9 for x in sha]),
+            "block_digest_s": quantiles([x / 1e9 for x in sha]),
             "sign_s": quantiles([rec["sign_ns"] / 1e9 for rec in records]),
             "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()}, "records": records}
 
@@ -301,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ready", required=True)
-    ap.add_argument("--leaves", required=True, help="SHA-512 of every block of C, in block order")
+    ap.add_argument("--leaves", required=True, help="the sha512/row/v2 digest of every block of C, in block order")
     ap.add_argument("--out", required=True)
     ap.add_argument("--audits", type=int, default=20)
     ap.add_argument("--pings", type=int, default=5000)

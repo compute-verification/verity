@@ -442,10 +442,10 @@ def test_a_cached_encoding_is_reused_for_its_own_setup_and_never_when_its_bytes_
 
 
 def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_test_signer(tmp_path):
-    """Under `MC` every audit and control is the memory challenger's: its leaves are SHA-512 of each block, the honest
-    sessions pass under the test signer's own mapping and every control is rejected under it (the tampered one for a flipped
-    bit in a block's last byte, the bad-signature one for a flipped signature bit and for a receipt time edited after
-    signing).  `memory_challenger.SCHEMES` accepts S1's scheme alone, so the real verdict rejects every test-signed session
+    """Under `MC` every audit and control is the memory challenger's: its leaves are each block's `sha512/row/v2` digest,
+    the honest sessions pass under the test signer's own mapping and every control is rejected under it (the tampered one
+    for a flipped bit in a block's last byte, the bad-signature one for a flipped signature bit and for a receipt time
+    edited after signing).  `memory_challenger.SCHEMES` accepts S1's scheme alone, so the real verdict rejects every test-signed session
     and no profile is issued; a session's public part is its commitment, its verdict and its coin openings."""
     bench = _bench()
     assert bench.IMPLS["p2-v3-mc-gpu"] is bench.P2V3McGpu
@@ -491,7 +491,7 @@ def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset(), aud
     scheme = schemes.get("p2-16448/v3")
     nb = scheme.params.block_bytes
     block = lambda i: i.to_bytes(8, "big") * (nb // 8)  # noqa: E731
-    digests = b"".join(hashlib.sha512(block(i)).digest() for i in range(scheme.params.blocks))
+    digests = b"".join(_p2()[1].MC.leaf(None, i, block(i)) for i in range(scheme.params.blocks))
     responder = H.ControlResponder(nb, H.control_answers(b"".join(block(i) for i in range(scheme.params.blocks)), nb,
                                                          tamper=set(tamper)))
     try:
@@ -588,7 +588,7 @@ def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profil
     from verity.protocols.accounting.space.pous import schemes
 
     nb = schemes.get("p2-16448/v3").params.block_bytes
-    ctl = live.signature_control(doc, lambda i: hashlib.sha512(i.to_bytes(8, "big") * (nb // 8)).digest())
+    ctl = live.signature_control(doc, lambda i: mc.block_digest(i.to_bytes(8, "big") * (nb // 8)))
     assert ctl == {"sessions": 1, "unedited_accepted": 1, "flipped_rejected": 1, "edited_rejected": 1, "passed": True}
     with pytest.raises(ValueError, match="'lms' with a key directory"):
         _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms")

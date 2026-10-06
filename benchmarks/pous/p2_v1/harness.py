@@ -157,8 +157,9 @@ class V3(V1):
 
 class MC(V3):
     """`p2-16448/v3` audited by the memory challenger (`p2-v3-mc-gpu`, `memory_challenger/live.py`): sessions over a coin
-    tree committed before them, each round's whole answer hashed with SHA-512 after its receipt time, one signature a
-    session.  Its leaves are SHA-512 of each block, what the verdict checks a round's digest against.  `sign_with` picks the
+    tree committed before them, each round's whole answer hashed after its receipt time, one signature a session.  Its
+    leaves are each block's `sha512/row/v2` digest (`memory_challenger.block_digest`), what the verdict checks a round's
+    digest against.  `sign_with` picks the
     signer: S1's LMS key in a directory, whose sessions the verdict accepts, or the PoUS tests' test signer, which
     `memory_challenger.SCHEMES` never accepts (fail closed), so its gates read the verdict under the signer's own mapping
     (`accepted`) and, under the test signer, check the real verdict rejected them all."""
@@ -173,7 +174,8 @@ class MC(V3):
         self.verifier_args = (*self.verifier_args, *(("--signer", "lms", "--lms-key", lms_key) if lms_key else ("--signer", "test")))
 
     def leaf(self, i: int, block: bytes) -> bytes:
-        return hashlib.sha512(block).digest()
+        from verity.protocols.accounting.space.pous.memory_challenger import block_digest
+        return block_digest(block)
 
 
 FRAMINGS = {f.impl: f for f in (V1, V3, MC)}

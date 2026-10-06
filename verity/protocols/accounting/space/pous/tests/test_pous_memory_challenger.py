@@ -1,5 +1,5 @@
 """The memory challenger (`memory_challenger`): the coin tree's commit and openings, the signed session record, the
-verdict that fails closed, the whole block hashed, and a late round that ends the session with no retry.  Every clock is
+verdict that fails closed, the whole block hashed under `sha512/row/v2`, and a late round that ends the session with no retry.  Every clock is
 injected."""
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import hashlib
 import pytest
 
 import pous_test_signer as ts
+from verity.primitives.commitments import rowleaf
 from verity.primitives.crypto import lms
 from verity.protocols.accounting.space.pous import memory_challenger as mc
 from verity.protocols.accounting.space.pous import schemes
@@ -24,7 +25,7 @@ def block(i: int) -> bytes:
 
 
 def expected(i: int) -> bytes:
-    return hashlib.sha512(block(i)).digest()
+    return hashlib.sha512(rowleaf.sha512_row_v2_prefix(8 * BLOCK_BYTES) + block(i)).digest()
 
 
 class Clock:
@@ -143,18 +144,38 @@ def test_receipt_time_is_read_before_hashing(monkeypatch):
             events.append("clock")
             return self.now
 
-    real = hashlib.sha512
+    real = mc.block_digest
 
-    def sha512(data: bytes = b""):
+    def digest(data: bytes) -> bytes:
         events.append("hash")
         return real(data)
 
     c = mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, clock=Seen())
     i = c.challenge()
-    monkeypatch.setattr(mc.hashlib, "sha512", sha512)
+    monkeypatch.setattr(mc, "block_digest", digest)
     events.clear()
     c.receive(block(i))
     assert events == ["clock", "hash"]
+
+
+def test_a_rounds_digest_is_the_blocks_sha512_row_v2_digest_in_a_92_byte_record():
+    """`H(block)` is the inner digest of C's `hm96-sha512/row/v2` leaf, which `answer_circuit.PousAnswerOpens_v1` opens; a
+    plain SHA-512 of the block is not, and the verdict counts a round carrying one as wrong."""
+    b = block(5)
+    assert mc.block_digest(b) == rowleaf.sha512_row_v2_digest(b, 8 * BLOCK_BYTES) == expected(5)
+    assert mc.block_digest(b) != hashlib.sha512(b).digest()
+    assert mc.block_digest(bytes(2056)) == hashlib.sha512(rowleaf.sha512_row_v2_prefix(16448) + bytes(2056)).digest()
+    _, signed, signer = session()
+    assert mc.RECORD_SCHEMA == "pous/round-record/v2"
+    assert all(len(r.value()) == 92 and r.value()[-64:] == expected(r.index) for r in signed.rounds)
+    plain = mc.MemoryChallenger(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, clock=Clock())
+    while not plain.done:
+        i = plain.challenge()
+        plain.receive(block(i))
+        r = plain.rounds[-1]
+        plain.rounds[-1] = dataclasses.replace(r, digest=hashlib.sha512(block(i)).digest())
+    v = judge(plain, plain.close(), signer)
+    assert not v.accepted and v.wrong == K
 
 
 def test_a_late_round_ends_the_session_with_no_retry():

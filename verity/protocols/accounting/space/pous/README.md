@@ -59,7 +59,8 @@ print(v.profile().statement())                                                 #
 
 On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device
 inside the node's isolation boundary. It commits its indices in a coin tree before the session, hashes each whole
-answer with SHA-512 after reading its receipt time, and signs the session's round records once. `verdict` checks a
+answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's leaf, which
+`answer_circuit.py` opens), and signs the session's round records once. `verdict` checks a
 signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`
 (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
 
@@ -71,7 +72,7 @@ signer = mc.LmsSigner(key, lms.LeafState(state_path, lms.public_key(key), lms.DE
 coins = mc.CoinTree.draw(challenger_secret, session_id, params.blocks, k)          # before the session
 c = mc.MemoryChallenger(coins, signer, limit_ns=500_000 + rtt, block_bytes=params.block_bytes)
 signed = c.run(blocks.__getitem__)                                                  # witness: never sent in the clear
-v = mc.verdict(signed, c.commitment, c.openings(), sha512_of_block, trusted={signer.public_key})
+v = mc.verdict(signed, c.commitment, c.openings(), lambda i: mc.block_digest(blocks[i]), trusted={signer.public_key})
 print(v.public())                                                                   # {"accepted": ...}
 ~~~
 
