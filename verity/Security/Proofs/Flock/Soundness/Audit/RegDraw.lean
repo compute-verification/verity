@@ -9,7 +9,7 @@ is that game: registration `R`, then the coin of `L R`, then the session on `L R
 
 * `atReg σ`: the strategy of `audit (L (reg σ))` that registers `σ`'s `R` and plays its continuation.
 * `prob_auditReg`: **it has the same outcome probabilities** (`rfl`), since the registration is the strategy's first move,
-  fixed before the coin. So every pinned theorem about `audit L_c` applies to `auditReg L`, strategy by strategy, at
+  fixed before the coin. So every guarantee about `audit L_c` applies to `auditReg L`, strategy by strategy, at
   `c := R`, with its hypotheses taken for every `R`.
 -/
 
