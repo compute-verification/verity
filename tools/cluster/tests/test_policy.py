@@ -37,7 +37,7 @@ VY_POOL_IDLE_S=30
 """
 FILES = {policy.LEAN_SLOTS: "# NAME CAP\ncheck 2\naudit 2\n",
          policy.CHECK_SLOTS: "c 8-31\na 32-63\nb 64-95\nd 128-159  # since 2 Oct\n",
-         "/etc/vy/direct-gpus": "none\n", "/etc/vy/direct-cpus": "# the non-benchmark CPUs\n0-95,128-159\n",
+         "/etc/vy/direct-gpus": "none\n", "/etc/vy/direct-cpus": "# the non-benchmark CPUs\n0-159\n",
          policy.USER_CPUSET: "# delegate cpuset\n[Service]\nDelegate=cpu cpuset memory pids\n",
          policy.DISPATCH_ENV: "VY_PROVER_CPUS=160-191\n"}
 STATUS = ("2026-10-03T19:39:59Z free GPUs 7/8, kept free -, waiters -, timed False, window waiting False, backfill False, "

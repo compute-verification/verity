@@ -1,6 +1,6 @@
 """One-stage audit, run A2: A1 with the serving commit taken from serving itself. vllm-serving-commit commits #101's RoPE
-heads at serving time in M0's row format and hands over the registration, the verifier's public file, the prover's file
-and the unit index; nothing else changes.
+heads at serving time in the circuit prover's row format and hands over the registration, the verifier's public file,
+the prover's file and the unit index; nothing else changes.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a2.py --served DIR --template-set DIR --m0-pythonpath PATH --bin flock-circuit \\
@@ -13,9 +13,10 @@ and the unit index; nothing else changes.
   itself and holds the public file's pin and bindings to it. N is taken from the registration (the served index); the
   verifier doesn't yet derive it from #101's program, and the audit record says so.
 * **`--unbind`.** After checking serving's files as received (R1-R6, the pin, the bindings), the session runs on the
-  verifier's own re-headered copies for M0's unbound statement (no `units.classes`, the unbound circuit's pin): the leaf
-  layer, every `b || c` and output word, is byte for byte serving's, so the roots are unchanged; only the statement no
-  longer carries the partition. For a Lean verifier that doesn't yet read the bound header.
+  verifier's own re-headered copies for the circuit prover's unbound statement (no `units.classes`, the unbound
+  circuit's pin): the leaf layer, every `b || c` and output word, is byte for byte serving's, so the roots are
+  unchanged; only the statement no longer carries the partition. For a Lean verifier that doesn't yet read the bound
+  header.
 """
 from __future__ import annotations
 
@@ -37,9 +38,10 @@ from verity.protocols.verification.sampled_proofs.one_stage import audit, draw a
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:
-    """The verifier's own copies of the public and prover files for M0's unbound statement (its provisional unit cover): the
+    """The verifier's own copies of the public and prover files for the circuit prover's unbound statement (its provisional unit cover): the
     same body, and a header whose `circuit_sha512` is the unbound circuit's pin, composed by the verifier. A class leaves
-    META's bindings out, so `units.classes` is unchanged where that M0 has classes and dropped where it hasn't."""
+    META's bindings out, so `units.classes` is unchanged where that tree's circuit prover has classes and dropped where
+    it hasn't."""
     ub = out / "unbound"
     ub.mkdir(parents=True, exist_ok=True)
     p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), "--input-set", a.template_set, "--out", str(ub / "circuit.txt")],
@@ -72,11 +74,11 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=256)
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=7531)
-    ap.add_argument("--unbind", action="store_true", help="run the session on re-headered copies for M0's unbound statement")
+    ap.add_argument("--unbind", action="store_true", help="run the session on re-headered copies for the circuit prover's unbound statement")
     ap.add_argument("--legacy-partition", action="store_true",
                     help="the served files bind the pre-canonical partition object {program, query: {name, version, template, "
                          "width_rule}}; check them against it")
-    ap.add_argument("--unbound-m0-pythonpath", default=None, help="M0's tree for the unbound circuit (default --m0-pythonpath)")
+    ap.add_argument("--unbound-m0-pythonpath", default=None, help="the circuit prover's tree for the unbound circuit (default --m0-pythonpath)")
     ap.add_argument("--statement", default=a0.STATEMENT_ID, help="the Lean verifier's statement name")
     a = ap.parse_args()
     a0.STATEMENT_ID = a.statement
