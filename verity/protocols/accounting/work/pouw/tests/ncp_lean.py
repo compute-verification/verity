@@ -20,7 +20,7 @@ from verity.protocols.accounting.work.pouw.schemes import ncp
 
 PINNED = Path(__file__).with_name("vectors") / "ncp_lean.json"
 K, M, N = 64, 2, 2
-SOURCES = ("Pouw/Protocol/NCP/Defs.lean", "Pouw/Protocol/Basic/Mat.lean", "Pouw/Protocol/NCP/RouteU.lean")
+SOURCES = ("Definitions/Pouw/NCP/Defs.lean", "Definitions/Pouw/Basic/Mat.lean", "Definitions/Pouw/NCP/RouteU.lean")
 
 
 def draws(label: str, n: int, lo: int, span: int) -> list[int]:

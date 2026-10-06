@@ -15,7 +15,7 @@ so relative to `Attention_v3` the body gains one stage in front of the online so
 when the bound launch argument `softcap` is a positive finite float, re-checks every base fact through the base `AttentionScope` (causal,
 `softmax_scale == D**-0.5`, bf16, paged KV, `num_splits`, kBlockN, geometry, rows) on a copy of the launch with `softcap` rewritten to
 `0.0`, keeps the inert-window rule of `AttentionScopeInertWindow` (Gemma-2's even layers pass `window_size_left = 4095`, inert below 4096
-tokens), and then re-binds every resulting attention compute to its softcapped chain (`registry.targets.softcapped`, the builder's
+tokens), and then re-binds every resulting attention compute to its softcapped chain (`frontend.targets.softcapped`, the builder's
 selection: `Attention_v3{T,NH,KVH,D,BN}` -> `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP=softcap}` on the accepted target, `Attention_v5` ->
 `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`; any other chain is Unsupported by name) with the same operands / outputs /
 attribution / consumed ids.  `softcap` in `(None, 0.0)` is the base pattern's case (returns None); a negative,
@@ -31,7 +31,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.program.registry import targets as TG
+from verity_vllm.program.frontend import targets as TG
 
 from verity_vllm.observe.fold.patterns import FA2_OP_NAMES, AttentionScope, ComputeGroup, as_float, bound_args, find_descendants, op_name, unsupported
 from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, _annotate, _replace_descendant, _rewrite_args
@@ -78,7 +78,7 @@ class AttentionScopeSoftcap(AttentionScopeInertWindow):
             return unsupported(node, f"target has no registered softcapped attention binding: {e}", softcap=cap)
 
     def _rebind(self, r: Resolution, cap: float) -> Resolution:
-        """Every attention compute of the group -> its softcapped chain with `CAP=cap` (`registry.targets.softcapped`, the selection the
+        """Every attention compute of the group -> its softcapped chain with `CAP=cap` (`frontend.targets.softcapped`, the selection the
         builder makes: `Attention_v3` -> `AttentionSoftcap_v1`, `Attention_v5` -> `AttentionSoftcap_v2`; any other chain raises
         UnregisteredTarget); operands, outputs, rows, attribution and consumed ids are the base pattern's (the scope's transparent
         children in `.before` are untouched)."""
