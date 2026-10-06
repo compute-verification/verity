@@ -24,6 +24,10 @@ The executors, as they stand:
   (`--on vy-nebius-1`) is sent: the submit path sees neither node's live state, so the router, which prefers the owner's
   node, would queue every Verity GPU job on node 1's pool (`provers`' unborrowed quota) while node 2 had GPUs free.
 
+A job's CPUs come from those its node allows it (its pool, else the CPUs outside every pool, narrowed by a guest's share). A job
+that asks for fewer takes that many in whole cores on the node when it starts (`CORES`), and keeps them until its runner ends, so
+two jobs never share a core; it waits while too few are free. A job that asks for all of them, or more, gets the whole set.
+
 A job asks for `max_s` of its own. A CPU job's allocation also covers `custody_s` (the runner's publish), so its `max_s` in the
 model is their sum; a GPU job's lease covers the workload alone, and custody runs in its CPU allocation after the lease ends.
 """
@@ -47,6 +51,72 @@ UNSEEN_POOL = f"{NODE1} lends GPUs only to a job pinned there (--on {NODE1}): th
 CPUSET_CHECK = ('c=$(cut -d: -f3 /proc/self/cgroup); '
                 '[ "$(cat "/sys/fs/cgroup$c/cpuset.cpus" 2>/dev/null)" = "$1" ] && shift && exec "$@"; '
                 'echo "cluster: scope $c does not hold CPUs $1 (is cpuset delegated to user@.service?)" >&2; exit 70')
+CORE_LOCKS = "/dev/shm/vy-cores"
+CPU_ROOT = "/sys/devices/system/cpu"
+CPUS_SLOT = "@CPUS@"
+# `python3 -c CORES LOCKS CPU_ROOT POOL N -- CMD...`: N CPUs of POOL in whole cores (a core: its CPUs in POOL among its SMT siblings),
+# lowest free first, each core held by an flock on LOCKS/cpu<first> that every user can open; while fewer are free it waits, holding
+# none. The locks stay open across the exec, so they hold as long as the runner lives, and CMD gets the set in place of CPUS_SLOT.
+CORES = r'''
+import fcntl, os, sys, time
+locks, root, pool, n = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+cmd = sys.argv[sys.argv.index("--") + 1:]
+def parse(s):
+    out = set()
+    for part in s.strip().split(","):
+        if part:
+            a, _, b = part.partition("-")
+            out.update(range(int(a), int(b or a) + 1))
+    return out
+def fmt(cs):
+    runs = []
+    for c in sorted(cs):
+        if runs and c == runs[-1][1] + 1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in runs)
+cpus, cores = parse(pool), {}
+for c in sorted(cpus):
+    try:
+        core = parse(open(f"{root}/cpu{c}/topology/thread_siblings_list").read()) & cpus
+    except (OSError, ValueError):
+        core = {c}
+    cores.setdefault(min(core | {c}), core | {c})
+n = min(n, len(cpus))
+os.umask(0)
+try:
+    os.mkdir(locks, 0o1777)
+except FileExistsError:
+    pass
+waiting = False
+while True:
+    held, got = [], set()
+    for first in sorted(cores):
+        if len(got) >= n:
+            break
+        fd = os.open(f"{locks}/cpu{first}", os.O_RDONLY | os.O_CREAT, 0o666)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
+            continue
+        held.append(fd)
+        got |= cores[first]
+    if len(got) >= n:
+        break
+    for fd in held:
+        os.close(fd)
+    if not waiting:
+        print(f"cluster: waiting for {n} free CPUs of {pool}", file=sys.stderr, flush=True)
+        waiting = True
+    time.sleep(2)
+for fd in held:
+    os.set_inheritable(fd, True)
+pin = fmt(got)
+print(f"cluster: CPUs {pin} of {pool}", file=sys.stderr, flush=True)
+os.execvp(cmd[0], [a.replace("@CPUS@", pin) for a in cmd])
+'''
 
 
 class Refused(Exception):
@@ -73,9 +143,12 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
     if j.gpus and node == NODE1 and j.quiet:
         raise Refused(f"{node} has no timed windows")
     guest = cluster.standing(j.project, node) != OWNER
-    pin = cpuset.format(allowed_cpus(cluster, cluster.nodes[node], j))
+    allowed = allowed_cpus(cluster, cluster.nodes[node], j)
+    pool = cpuset.format(allowed)
+    pin = CPUS_SLOT if j.cpus < len(allowed) else pool
+    cores = ["python3", "-c", CORES, CORE_LOCKS, CPU_ROOT, pool, str(j.cpus), "--"] if pin == CPUS_SLOT else []
     runner = ["env", f"GPU_LEASE_WHO={f'{kind}:' if kind else ''}{j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
-              "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", f"cluster-{run_id}",
+              *cores, "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", f"cluster-{run_id}",
               "-p", f"MemoryMax={j.memory_gib}G", "-p", "MemorySwapMax=0", "-p", f"AllowedCPUs={pin}",
               *(["-p", "CPUWeight=idle"] if node == NODE1 and not j.gpus and not gpu_host else []), "--",
               "sh", "-c", CPUSET_CHECK, "cpuset-check", pin, "taskset", "-c", pin, *(["nice", "-n", "19"] if guest else [])]
@@ -145,4 +218,4 @@ def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int
     return out
 
 
-__all__ = ["CPUSET_CHECK", "GPU_LEASE", "GPU_LEASE_N1", "UNSEEN_POOL", "Refused", "job", "wrappers", "resolve", "submit"]
+__all__ = ["CORES", "CORE_LOCKS", "CPU_ROOT", "CPUS_SLOT", "CPUSET_CHECK", "GPU_LEASE", "GPU_LEASE_N1", "UNSEEN_POOL", "Refused", "job", "wrappers", "resolve", "submit"]

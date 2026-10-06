@@ -1,6 +1,9 @@
 """`cluster submit`, the queue's side of `research run --queue`: a declared job is placed and gets its node executor's wrapper."""
+import fcntl
 import json
+import os
 import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -33,13 +36,21 @@ def test_a_cpu_job_goes_home_in_a_capped_pinned_scope_with_cuda_hidden():
     assert w[:3] == ["env", "GPU_LEASE_WHO=lane-x", "RESEARCH_RUN_ID=r1"] and "CUDA_VISIBLE_DEVICES=" in w
     assert w[w.index("systemd-run"):][:7] == ["systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", "cluster-r1"]
     assert "MemoryMax=16G" in w and "MemorySwapMax=0" in w
-    assert "AllowedCPUs=96-127" in w and w[w.index("--"):][1:6] == ["sh", "-c", submit.CPUSET_CHECK, "cpuset-check", "96-127"], \
+    assert w[w.index("CUDA_VISIBLE_DEVICES=") + 1:][:8] == ["python3", "-c", submit.CORES, submit.CORE_LOCKS, submit.CPU_ROOT, "96-127",
+                                                             "4", "--"], "4 of the CPUs outside node 1's pools, taken on the node"
+    slot = submit.CPUS_SLOT
+    assert f"AllowedCPUs={slot}" in w and w[w.index("--", w.index("systemd-run")):][1:6] == \
+        ["sh", "-c", submit.CPUSET_CHECK, "cpuset-check", slot], \
         "the scope holds the pin, so a workload's own taskset can't leave it, and the wrapper checks that it does"
-    assert w[-3:] == ["taskset", "-c", "96-127"], "the owner runs outside node 1's checks and provers pools, at its own priority"
+    assert w[-3:] == ["taskset", "-c", slot], "the owner runs outside node 1's checks and provers pools, at its own priority"
     assert "CPUWeight=idle" in w, "on node 1 a CPU job yields its CPUs to the GPU jobs' host threads that share them"
     assert out["workload_wrap"] == []
     guest = submit.resolve(model.load(NEBIUS), _job(project="pous", cpus=4, memory_gib=16, node="vy-nebius-1"), "r1", T)
-    assert guest["wrap"][-6:] == ["taskset", "-c", "96-127", "nice", "-n", "19"], "a guest's share narrows to the unpooled CPUs"
+    assert guest["wrap"][-6:] == ["taskset", "-c", slot, "nice", "-n", "19"] and "96-127" in guest["wrap"], \
+        "a guest's share narrows to the unpooled CPUs"
+    whole = submit.resolve(model.load(NEBIUS), _job(cpus=32, memory_gib=16), "r1", T)["wrap"]
+    assert submit.CORES not in whole and "AllowedCPUs=96-127" in whole and whole[-3:] == ["taskset", "-c", "96-127"], \
+        "a job that asks for every CPU it may have takes the set as it is"
 
 
 def test_a_gpu_host_on_node_1_runs_at_a_gpu_jobs_weight_and_takes_no_gpus_from_the_queue():
@@ -48,13 +59,63 @@ def test_a_gpu_host_on_node_1_runs_at_a_gpu_jobs_weight_and_takes_no_gpus_from_t
     c, reg = model.load(NEBIUS), kinds.load(KINDS)
     out = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=16, cpus=4,
                         node="vy-nebius-1", gpu_host=True)
-    assert "CPUWeight=idle" not in out["wrap"] and "AllowedCPUs=96-127" in out["wrap"] and out["workload_wrap"] == []
+    assert "CPUWeight=idle" not in out["wrap"] and "96-127" in out["wrap"] and out["workload_wrap"] == []
     assert out["gpu_host"] is True
     plain = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=16, cpus=4,
                           node="vy-nebius-1")
     assert "CPUWeight=idle" in plain["wrap"] and plain["gpu_host"] is False
     with pytest.raises(submit.Refused, match="takes its GPUs with gpu-lease itself"):
         submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=16, gpus=1, gpu_host=True)
+
+
+def _topology(root, cpus):
+    for c in cpus:
+        (root / f"cpu{c}" / "topology").mkdir(parents=True)
+        (root / f"cpu{c}" / "topology" / "thread_siblings_list").write_text(f"{c & ~1}-{c | 1}\n")
+    return root
+
+
+HOLDS = ("import fcntl, os, sys\n"
+         "print(sys.argv[-1])\n"
+         "for c in sys.argv[2:-1]:\n"
+         "    fd = os.open(f'{sys.argv[1]}/cpu{c}', os.O_RDONLY | os.O_CREAT)\n"
+         "    try:\n"
+         "        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+         "        print('free', c)\n"
+         "    except BlockingIOError:\n"
+         "        print('held', c)\n")
+
+
+def _cores(tmp_path, pool, n, *cmd):
+    return subprocess.Popen([sys.executable, "-c", submit.CORES, str(tmp_path / "locks"), str(tmp_path / "sys"), pool, str(n), "--", *cmd],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+
+def test_a_job_takes_its_cpus_in_whole_cores_and_holds_them_while_its_command_runs(tmp_path):
+    _topology(tmp_path / "sys", range(96, 104))
+    p = _cores(tmp_path, "96-103", 3, sys.executable, "-c", HOLDS, str(tmp_path / "locks"), "96", "100", "--pin=@CPUS@")
+    out, err = p.communicate()
+    assert p.returncode == 0, err
+    assert out.splitlines() == ["--pin=96-99", "held 96", "free 100"], "the command gets the cores in place of the slot, and holds them alone"
+    assert "cluster: CPUs 96-99 of 96-103" in err, "3 CPUs in whole cores are two cores: 96-97 and 98-99"
+    assert (tmp_path / "locks").stat().st_mode & 0o1777 == 0o1777, "every user's job takes cores from the same directory"
+
+
+def test_a_job_skips_cores_another_holds_and_waits_while_too_few_are_free(tmp_path):
+    _topology(tmp_path / "sys", range(96, 100))
+    (tmp_path / "locks").mkdir()
+    other = [os.open(tmp_path / "locks" / f"cpu{c}", os.O_RDONLY | os.O_CREAT, 0o666) for c in (96, 98)]
+    fcntl.flock(other[0], fcntl.LOCK_EX)
+    p = _cores(tmp_path, "96-99", 2, "printf", "%s", "@CPUS@")
+    out, err = p.communicate()
+    assert (p.returncode, out) == (0, "98-99"), err
+    fcntl.flock(other[1], fcntl.LOCK_EX)
+    p = _cores(tmp_path, "96-99", 2, "printf", "%s", "@CPUS@")
+    assert p.stderr.readline() == "cluster: waiting for 2 free CPUs of 96-99\n"
+    os.close(other[1])
+    out, _ = p.communicate()
+    assert (p.returncode, out) == (0, "98-99"), "it starts once a core is freed"
+    os.close(other[0])
 
 
 def test_the_cpuset_check_starts_the_job_only_in_a_scope_whose_cpuset_is_the_pin():
@@ -73,8 +134,9 @@ def test_the_cpuset_check_starts_the_job_only_in_a_scope_whose_cpuset_is_the_pin
 def test_a_guest_gpu_job_goes_to_node_2_its_runner_on_its_shares_cpus_and_its_workload_alone_in_gpu_lease():
     out = submit.resolve(model.load(NEBIUS), _job(gpus=1, cpus=4, memory_gib=64), "r1", T)
     assert out["node"] == "vy-nebius-2" and "pinned there" in out["why"]
-    assert "systemd-run" in out["wrap"] and out["wrap"][-6:] == ["taskset", "-c", "48-95", "nice", "-n", "19"]
-    assert "AllowedCPUs=48-95" in out["wrap"], "the runner's scope holds the share's CPUs; the workload keeps taskset's pin in its lease"
+    assert "systemd-run" in out["wrap"] and out["wrap"][-6:] == ["taskset", "-c", submit.CPUS_SLOT, "nice", "-n", "19"]
+    assert "48-95" in out["wrap"] and f"AllowedCPUs={submit.CPUS_SLOT}" in out["wrap"], \
+        "the runner's scope holds 4 of the share's CPUs; the workload keeps taskset's pin in its lease"
     assert submit.GPU_LEASE not in out["wrap"], "custody runs in the CPU allocation, not under the GPU lease"
     assert out["workload_wrap"] == [submit.GPU_LEASE, "1", "--wait", "--max-min", "10", "--mem-gb", "64", "--preemptible", "--"]
     assert out["job"]["node"] == "vy-nebius-2" and out["job"]["max_s"] == 600
