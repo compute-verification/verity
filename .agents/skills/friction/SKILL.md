@@ -97,6 +97,9 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
+  asks for a change. A conflict is fixed at the tip (ci restacks it), not by pushing to the PR: a new head refuses every
+  tip that pins the old one at landing, and their checks are spent for nothing.
 - 2026-10-06 (8:03 and 8:14 AM PDT): research velocity first, no red tape (`AGENTS.md`, "Working principles"). Its
   applications so far:
   - a red-team grant carries when the PR's own patch is byte-identical at both heads, even if `main` moved under it,
