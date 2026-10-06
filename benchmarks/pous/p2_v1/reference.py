@@ -33,8 +33,10 @@ W_COMMITMENT_LABEL = b"verity-pous/w-commitment/v1"
 K_AUDIT = 105
 """The deployment audit's challenges (spec §5, F6)."""
 DELTA_NS = 500_000
-MAX_RTT_ALLOWANCE_NS = 1_000_000
-"""Δ and the most round-trip allowance the frozen operating point permits (spec §6)."""
+MAX_RTT_ALLOWANCE_NS = 354_000
+"""Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, Daniel's ruling of 4 Oct
+2026, so that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
+(`verity.protocols.accounting.space.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
 
 try:
     import gmpy2
