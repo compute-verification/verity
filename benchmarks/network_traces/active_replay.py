@@ -1707,6 +1707,8 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
             print(f"{res['config']} {res['strategy']}: accepted {acc} of {len(res['rows'])}; {res['comparisons']}; "
                   f"{res.get('against_honest', '')}", flush=True)
             results.append(res)
+        pool.close()  # the workers ignore SIGTERM, so the `with`'s terminate would wait on a fresh one forever
+        pool.join()
     honest = [r for r in results if r["strategy"] == "honest"]
     summary = summarize(honest, models) | {"calibration": str(args.calibration),
                                            "clock": sorted({p["clock"] for p in processes}),
