@@ -66,6 +66,16 @@ def test_the_plain_leaf_identity_is_the_provers():
     assert "t.pinnedLeafScheme == some leafSchemePlain" in _lean_def("plainLeaves")
 
 
+def test_a_plain_leaf_opening_carries_an_empty_salt_vector():
+    """The pinned patch serializes `opened_salts` in every opening, "empty for unsalted leaves", so Lean decodes an unsalted
+    opening of an hm96-row statement (the inner statement's) with an empty vector, not `631567f7`'s absent one."""
+    patch = (FLOCK / "flock-sha512-b684b12.patch").read_text()
+    assert "(empty for unsalted leaves).\n+    pub opened_salts: Vec<flock_merkle::hm96::Salt>," in patch
+    verify = (LEAN / "Flock" / "Verify.lean").read_text()
+    assert "openedSalts := st.tags.hm96Rows" in verify
+    assert "saltLen : Option Nat := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes" in verify
+
+
 def test_the_plain_leaf_statement_is_the_default_one_by_name():
     assert f'{{ circuit.withPlainLeaves with name := "{STATEMENT}" }}' in _lean_def("circuitPlainLeaves")
     assert "circuitPlainLeaves]" in _lean_def("all")
