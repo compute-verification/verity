@@ -168,9 +168,9 @@ def device_run():
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.unverified(declared, roots, BEACON).salt
 
-    def make(hashing=True, schedule="serial"):
+    def make(hashing=True, schedule="serial", flag_rows=PPD.FLAG_ROWS):
         return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, salt, BEACON, hashing=hashing,
-                                   capacity=1 << 12, schedule=schedule)
+                                   capacity=1 << 12, schedule=schedule, flag_rows=flag_rows)
     return make, kernel, weights, roots, salt
 
 
@@ -224,6 +224,17 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
     assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == ["stats_s5", "eprime", "form_s5", "words", "pa",
                                                                           "gemm_pearlc_d"]
     assert run.end() == {"units": 1, "tiles": 0, "hashing": False, "schedule": "serial"}
+
+
+def test_a_pass_screens_at_most_its_flag_rows(device_run):
+    make, _, weights, _, _ = device_run
+    run = make(flag_rows=48)
+    assert run.flag_buf.shape == (48, 2)
+    run.begin()
+    x = torch.randn(32, 1024).to(torch.bfloat16)
+    run.gemm(0, x, weights[0], None)
+    with pytest.raises(RuntimeError, match="over its capacity .* 48 screened rows"):
+        run.gemm(1, x, weights[1], None)
 
 
 def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
@@ -1002,6 +1013,11 @@ def test_a_sweep_points_decode_batch_and_prompt_name_its_key_and_its_graph_sizes
     t = E2E.timing([rec(m, ph) for m in E2E.MODES for ph in ("prefill", "decode")])
     assert set(t["fp8"]["timing"]) == {"prefill_8192_s", "prefill_8192_gemm_s", "decode_b128_p2048_step_s", "decode_b128_p2048_step_gemm_s"}
     assert list(E2E.split(t)) == ["prefill_8192", "decode_b128_p2048_step"]
+    ns = [6144, 4096, 28672, 4096] * 32                               # Llama-3.1-8B's linears
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
+    assert E2E.pass_capacity(128, ns) == (PPD.LEAF_CAPACITY, PPD.FLAG_ROWS)
+    E2E.configure(types.SimpleNamespace(batch=256, prompt=64))       # 256 x (64 + 65) tokens, 128 calls each: over 4M rows
+    assert E2E.pass_capacity(128, ns) == (PPD.LEAF_CAPACITY, 2 * PPD.FLAG_ROWS)
     E2E.configure(types.SimpleNamespace(batch=1, prompt=64))
     assert E2E.decode_key() == "decode_b1" and E2E.CAPTURE_SIZES == [1]
 

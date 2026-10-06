@@ -126,6 +126,20 @@ def kv_tokens(llm) -> int | None:
         return None
 
 
+def pass_capacity(tile: int, ns: list[int]) -> tuple[int, int]:
+    """The tiles and screened rows one decode generate's pass holds at the decode batch and prompt length, each a power of two
+    and at least the device run's defaults: the prompts' prefill in chunks of `PREFILL` tokens, then 1 + `STEPS` forwards of the
+    batch, each forward's rows padded to `ROW_ALIGN` and its tiles to whole tile rows, with as many forwards again for
+    vLLM's mixed prefill-and-decode steps.  Every linear (`ns`, their n) runs once per forward."""
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    cdiv = lambda a, b: -(-a // b)  # noqa: E731
+    prompt_rows, forwards = BATCH * PROMPT, 2 * (cdiv(BATCH * PROMPT, PREFILL) + 1 + STEPS)
+    tile_rows = cdiv(prompt_rows, tile) + forwards * cdiv(BATCH, tile)
+    rows = prompt_rows + forwards * cdiv(BATCH, PPD.ROW_ALIGN) * PPD.ROW_ALIGN
+    pow2 = lambda x: 1 << max(0, x - 1).bit_length()  # noqa: E731
+    return (max(PPD.LEAF_CAPACITY, pow2(tile_rows * sum(n // tile for n in ns))), max(PPD.FLAG_ROWS, pow2(rows * len(ns))))
+
+
 def engine(args, group: str):
     from vllm import LLM
     kw = {"model": args.model, "enforce_eager": True,
@@ -170,9 +184,11 @@ def install(model, args, beacon: bytes):
     roots = PPD.weight_roots(kernel, weights, scheme)
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.unverified(declared, roots, beacon).salt
+    tiles, rows = pass_capacity(kernel.run.TILE, [t.shape[0] for t in weights.values()])
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
-                              rows_form=getattr(args, "rows_form", "w"), whole_defer=getattr(args, "whole_defer", False))
+                              rows_form=getattr(args, "rows_form", "w"), whole_defer=getattr(args, "whole_defer", False),
+                              capacity=tiles, flag_rows=rows)
     stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
     bad = stack.refusals()
     if bad:
@@ -473,7 +489,9 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
         one = SamplingParams(temperature=0.0, max_tokens=1, ignore_eos=True)
         many = SamplingParams(temperature=0.0, max_tokens=1 + STEPS, ignore_eos=True)
         tok = llm.get_tokenizer()
-        chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in PROMPTS]
+        # at most a decode batch of them, so a small batch's chat (its prompts one after another) stays within one pass
+        chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True)
+                for p in PROMPTS[:BATCH]]
 
         def timed(prompts, sp, retain=None, controls=()):
             """One timed generate; under a Pearl-C arm it is one pass (`Stack.pass_`), whose end is inside the time."""
