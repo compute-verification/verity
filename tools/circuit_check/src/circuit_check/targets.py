@@ -79,7 +79,8 @@ def load_registries() -> None:
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
-    import verity.protocols.accounting.work.pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits, the six `pc4` and `pc8` rows call)
+    import verity.protocols.accounting.work.pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits: the rows' six, the hiding tiles' four Keccak words, the cap's five window words)
+    import verity.protocols.accounting.work.pouw.circuit.cap  # noqa: F401  (PoUW's prototype of Pearl-C's per-tile cap)
     import verity.protocols.accounting.work.pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
     import verity.protocols.accounting.work.pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
     import verity.protocols.accounting.work.pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
@@ -264,14 +265,17 @@ def _pouw_roots() -> list[Any]:
     templates at k = 64 with a one-word tile (small enough to lower whole), and its weight side, call side and whole check at
     one row a side; and Pearl-C's (`verity.protocols.accounting.work.pouw.circuit.pc8`) the same way at k = 128 (one promotion window), its templates
     on the H100's and sm_120's records and its roots on sm_120's.  Both checks' hiding tiles and roots (``hidden``: the tile
-    digest, `verity.protocols.accounting.work.pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes.  The row units cut along k
-    (`verity.protocols.accounting.work.pouw.circuit.rowk`, ``Shape.row_k``) in two segments: Pearl-C4's pieces at k = 128 and its roots, Pearl-C's
-    pieces at k = 256 on the H100's and sm_120's records and at k = 64 unpromoted, and its roots on sm_120's, plain and
-    hiding."""
+    digest, `verity.protocols.accounting.work.pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes.  The prototype of Pearl-C's
+    per-tile cap (`verity.protocols.accounting.work.pouw.circuit.cap`): its row (pc8's with the salt-dead counts), its word and a one-word tile at
+    k = 256 (two promotion windows) on sm_120, and the split's units (``cap``: the strip, the word unit, a tile row's
+    digests and sums, the tile and its tally) and roots at the same k with one row a side, and a tile row's digests and
+    sums at the deployed 64 columns (two chunks).  The row units cut along k (`verity.protocols.accounting.work.pouw.circuit.rowk`, ``Shape.row_k``)
+    in two segments: Pearl-C4's pieces at k = 128 and its roots, Pearl-C's pieces at k = 256 on the H100's and sm_120's
+    records and at k = 64 unpromoted, and its roots on sm_120's, plain and hiding."""
     from dataclasses import replace
 
     from verity.primitives.circuits.defs import bind
-    from verity.protocols.accounting.work.pouw.circuit import ncp2, pc4, pc8, rowk
+    from verity.protocols.accounting.work.pouw.circuit import cap, ncp2, pc4, pc8, rowk
     from verity_vllm.program.registry import pouw_rows
 
     shape = ncp2.Shape(16, 64, 16)
@@ -288,6 +292,12 @@ def _pouw_roots() -> list[Any]:
     out += [t for t in [*pc4.templates(64, h4.tile, True).values(), pc4.weight(h4), pc4.call(h4), pc4.check(h4),
                         *pc8.templates(128, h8.tile, "sm120", True).values(), pc8.weight(h8), pc8.call(h8), pc8.check(h8)]
             if t not in out]
+    out += [*cap.templates(256, "sm120").values()]
+    split = pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", hidden=True, cap=True)
+    out += [t for r, t in cap.unit_templates(256, "sm120").items()
+            if r in ("strip", "word", "row_digest", "row_tally", "tile", "tally")]
+    out += [bind(cap.Pc8CapRowDigestDef, TN=64), bind(cap.Pc8CapRowTallyDef, K=256, TN=64)]
+    out += [pc8.call(split), pc8.check(split)]
     cut = [p for side in ("a", "b") for pieces in (rowk.pieces4(128, 64, side), rowk.pieces8(256, 128, "h100", side),
                                                     rowk.pieces8(256, 128, "sm120", side),
                                                     rowk.pieces8(64, 32, "sm120-unpromoted", side))

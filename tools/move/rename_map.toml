@@ -1,0 +1,169 @@
+# The rename move: what `tools/move/rename.py` renames (Daniel's ruling, 5 Oct 2026 10:45 PM PDT: the network certifier,
+# network certificates, memory challenger, firewall, challenger, verifier and workers; "gateway" is retired). The owners'
+# maps: note:network-accounting/20261006T0625Z-draft-certifier-rename-map (the certifier), memory-accounting's
+# pous-rename-map.json of 6 Oct 05:59Z (the memory challenger).
+#
+# [words] are applied in the order written, each where it stands as a word or as one part of an identifier: an old word
+# that starts in lower case is not preceded by a letter or digit (`network_warden`, `I.warden`), one that starts in upper
+# case not by an upper-case letter (`witnessWarden`), and neither is followed by a lower-case letter (`gatewayLeaf` is
+# renamed, `wardens` has a rule of its own). An old word with a space, a dot or a slash in it is preceded by no word
+# character or hyphen ("2-GPU worker" stays). Each [[words_in]] holds words for the files its globs match only, renamed
+# as whole words and before [words]; one that ends in a dot is a namespace, renamed only at the start of a name
+# (`Warden.Obs`, not `NetTiming.Warden.obs`). A path is renamed with the same words, so a file moves where its references
+# now point. Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that `audit.py
+# --update --moved` takes.
+
+[words]
+# --- the network certifier (was the network warden) and its records, the network certificates; its Lean modules are
+# `NetworkCertifier` (network-accounting's map), its declarations `Certifier`
+"Definitions.Warden" = "Definitions.NetworkCertifier"
+"Specs.Warden" = "Specs.NetworkCertifier"
+"Proofs.Warden" = "Proofs.NetworkCertifier"
+"Definitions/Warden" = "Definitions/NetworkCertifier"
+"Specs/Warden" = "Specs/NetworkCertifier"
+"Proofs/Warden" = "Proofs/NetworkCertifier"
+"../Warden.lean" = "../NetworkCertifier.lean"
+"lean/Warden" = "lean/NetworkCertifier"
+"(`lean/`, `Warden`)" = "(`lean/`, `NetworkCertifier`)"
+"area `Warden`" = "area `NetworkCertifier`"
+"`Warden`, Lean only" = "`NetworkCertifier`, Lean only"
+"`Pous`, `Warden`, `Flock`" = "`Pous`, `NetworkCertifier`, `Flock`"
+"the network warden's records" = "the network certificates"
+"the warden's raw records" = "the raw network certificates"
+"the warden's records" = "the network certificates"
+"The warden's records" = "The network certificates"
+"An ingress warden's records" = "An ingress certifier's network certificates"
+"the warden's record of one link-window" = "the network certificate of one link-window"
+"The allocated warden's record" = "The allocated certifier's network certificate"
+"a warden record" = "a network certificate"
+"Warden records" = "Network certificates"
+"fail-closed wardening" = "fail-closed certification"
+"unwardened" = "uncertified"
+"wardens" = "certifiers"
+"Wardens" = "Certifiers"
+"warden" = "certifier"
+"Warden" = "Certifier"
+"WARDEN" = "CERTIFIER"
+
+# --- the firewall (was the prover gateway) and the challenger (was the verifier gateway)
+"prover gateways" = "firewalls"
+"prover gateway" = "firewall"
+"Prover gateway" = "Firewall"
+"prover's gateway" = "prover's firewall"
+"verifier gateways" = "challengers"
+"verifier gateway" = "challenger"
+"Verifier gateway" = "Challenger"
+"verifier's gateway" = "challenger"
+"auditor's gateway" = "challenger"
+"gateways" = "firewalls"
+"Gateways" = "Firewalls"
+"gateway" = "firewall"
+"Gateway" = "Firewall"
+
+# --- the verifier (was the batch verifier) and the workers (were the GPU workers)
+"batch verifiers" = "verifiers"
+"batch verifier" = "verifier"
+"Batch verifier" = "Verifier"
+"GPU workers" = "workers"
+"GPU worker" = "worker"
+
+# --- the memory challenger (was PoUS's timed verifier: `audit.TimedVerifier`, `continuous.ContinuousVerifier` and
+# `protocol.Verifier`, below); `VerifierKey`, `verifier.py`, `run_timed` and Lean's `Proofs.Pous.Continuous.Verifier`
+# (the game's abstract verifier) keep their names
+"ContinuousVerifier" = "ContinuousMemoryChallenger"
+"TimedVerifier" = "MemoryChallenger"
+"timed verifiers" = "memory challengers"
+"timed verifier" = "memory challenger"
+"Timed verifier" = "Memory challenger"
+"timed_verifier" = "memory_challenger"
+"test_deadlines_run_from_the_verifiers_send" = "test_deadlines_run_from_the_memory_challengers_send"
+"test_the_verifier_enforces_the_certificate" = "test_the_memory_challenger_enforces_the_certificate"
+"test_the_verifier_audits_at_two_or_one_rounds_when_asked" = "test_the_memory_challenger_audits_at_two_or_one_rounds_when_asked"
+
+# The network certifier's program (#1268's `warden_program`, network-accounting's section 4): its Lean library and
+# namespace `Warden` become `NetworkCertifier`, in its own files and the four that speak of it ...
+[[words_in]]
+files = ["verity/protocols/accounting/communication/warden/lean/*.lean",
+         "verity/protocols/accounting/communication/warden/lean/lakefile.toml",
+         "verity/protocols/accounting/communication/warden/lean/lean-audit.json",
+         "verity/protocols/accounting/communication/warden/tests/test_network_warden_lean_difftest.py",
+         "verity/Security/Proofs/Warden.lean", "verity/Security/Proofs/Warden/Code.lean",
+         "verity/Security/Proofs/Warden/README.md"]
+[words_in.words]
+"NetTiming.Warden" = "NetTiming.Certifier"
+"Warden" = "NetworkCertifier"
+
+# ... and in the locks, whose records name its declarations (`Warden.Obs`) beside the structure `NetTiming.Warden`
+[[words_in]]
+files = ["**/lean-audit.json"]
+[words_in.words]
+"Warden." = "NetworkCertifier."
+'"Warden"' = '"NetworkCertifier"'
+
+# A path the layout move missed, in the certifier's schedule definitions (lean's certification of the map)
+[[words_in]]
+files = ["verity/Security/Definitions/Warden/Schedule.lean"]
+[words_in.words]
+"protocols/network_warden/verity_network_warden/schedule.py" = "verity/protocols/accounting/communication/certifier/schedule.py"
+
+# PoUS's protocol.Verifier and its prose
+[[words_in]]
+files = ["verity/protocols/accounting/space/pous/**", "benchmarks/pous/**",
+         "integrations/vllm/tests/protocol_options/test_pous_option.py", "verity/Security/Definitions/Pous/Model/Continuous.lean"]
+[words_in.words]
+"protocol.Verifier" = "protocol.MemoryChallenger"
+"class Verifier:" = "class MemoryChallenger:"
+"`Verifier`" = "`MemoryChallenger`"
+"`Verifier(" = "`MemoryChallenger("
+'"Verifier"' = '"MemoryChallenger"'
+"The continuous audit's verifier" = "The continuous audit's memory challenger"
+"the deployed verifier" = "the memory challenger"
+"the single audit's verifier" = "the single audit's memory challenger"
+"root-only verifier" = "root-only memory challenger"
+"the verifier process" = "the memory challenger process"
+"its verifier process" = "its memory challenger process"
+"the band verifier's" = "the band memory challenger's"
+"a remote verifier's round trip" = "a remote memory challenger's round trip"
+"Verifier on another host in the rack" = "Memory challenger on another host in the rack"
+"Verifier a few hops away" = "Memory challenger a few hops away"
+
+# the memory challenger's process in PoUS's GPU benchmarks (was `live.py`)
+[[words_in]]
+files = ["benchmarks/pous/**"]
+[words_in.words]
+"band_gpu/live.py" = "band_gpu/memory_challenger.py"
+"p2_v1/live.py" = "p2_v1/memory_challenger.py"
+"band_gpu.live" = "band_gpu.memory_challenger"
+"from .live import" = "from .memory_challenger import"
+"`live.py`" = "`memory_challenger.py`"
+'HERE / "live.py"' = 'HERE / "memory_challenger.py"'
+"_verifier_cmd" = "_memory_challenger_cmd"
+"_verifier_env" = "_memory_challenger_env"
+
+[[words_in]]
+files = ["benchmarks/pous/band_gpu/harness.py", "benchmarks/pous/p2_v1/harness.py"]
+[words_in.words]
+"LIVE" = "MEMORY_CHALLENGER"
+
+[rewrite]
+# Never rewritten: records of what was (the rulings, changelogs, the earlier moves and this one's own map), the frozen
+# backends, files whose bytes a digest pins, and the research harness, whose label values are keys in the store
+# (`replay_set=warden/re-verify`).
+exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
+           "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "**/price_twins.json",
+           "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**",
+           "catalog/verity_catalog/silicon/captures/**", "catalog/verity_catalog/silicon/hawkeye/**",
+           "tools/tc_probe_fp4/fp4_emulation_1ad1aaa2.py"]
+
+[keep]
+# Never rewritten wherever they stand: a domain tag or format id (anything shaped `a/b/v1`), a note, artifact or branch
+# name, a row of the Glossary's table of older names that names one of this move's, and the strings below, which are
+# protocol text (a statement's fields, the same in Python, Rust and Lean).
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '(?m)^\| "(?:warden|timed verifier|prover gateway|verifier gateway|batch verifier|GPU workers)".*$']
+strings = ["a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"]
+
+[keep_in]
+# Kept only in the files a glob matches: pytest-xdist's execnet gateway (`node.gateway.id`) is no prover's.
+"tools/check/**" = ["gateway", "Gateway"]
