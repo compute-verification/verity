@@ -1,0 +1,161 @@
+"""The outer gate's contract check: `flock-circuit prove --zk` gated sessions (`FC_GATE=1 FC_HOST_WITNESS=1`, the CPU
+prover) with `FC_GATE_TRANSCRIPT` recording what the gate lets out (`live/src/gate_transcript.rs`), and the contract
+(`flock-firewall contract`, `Flock/Firewall/Contract.lean`) on each transcript. `firewall_agree.py` is the inner phase's.
+
+    python firewall_outer_agree.py --lean BIN --out DIR CASE=DIR...
+
+`CASE` is `honest` or an `FC_GATE_TAMPER` control, `DIR` the directory its sessions' transcripts went to. Each transcript must
+meet its case's expectation (`EXPECT`): an honest session passes the gate, the prover does not stop, and the contract
+accepts; a control's session is refused by the gate (or, for `algebra`, stopped by the prover's self-check), and the contract
+refuses it for the control's own reason at the item where the firewall stopped (`firewall.gate.at`; for `algebra`, the first
+failing check). Every check's outcome is recomputed here from its affine form and the tape's pads (`c + Σ a_i h_i = 0` in
+GF(2^128)); the form is the verifier's replay of the masked values and the coins, on the transcript's word. Writes
+DIR/agreement.tsv and DIR/result.json; exits 1 if any transcript misses its expectation.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+MOD = (1 << 128) | 0x87
+
+#: per case: the gate's refusal (a prefix) or the prover's stop, and the contract's reason (a prefix and a suffix)
+EXPECT = {
+    "honest": {"firewall": None, "lean": None},
+    "root": {"firewall": "GATE-REFUSED: level-0 root",
+             "lean": ("the session's Commit: the level-0 roots", "not the value the firewall's recheck fixes")},
+    "witness": {"firewall": "GATE-REFUSED: level-0 root",
+                "lean": ("the session's Commit: the level-0 roots", "not the value the firewall's recheck fixes")},
+    "label": {"firewall": "GATE-REFUSED: algebraic phase, round 0, frame 1",
+              "lean": ("rep 0 algebraic phase round 0 frame 1: label", "not the value the statement fixes")},
+    "opening": {"firewall": "GATE-REFUSED: opening round 0, frame 2",
+                "lean": ("rep 0 opening round 0 frame 2: ", "not the value the firewall's opening fixes")},
+    "algebra": {"firewall": "PROVER-STOPPED: the batched constraint fails", "lean": ("the relation ", " fails")},
+    "algebra-proof": {"firewall": "GATE-REFUSED: the proof's exposed value 0",
+                      "lean": ("rep 0 proof: the masked zerocheck and lincheck", "not the value the firewall's own values fixes")},
+    "shape": {"firewall": "GATE-REFUSED: the proof's shape",
+              "lean": ("rep 0 proof: shape", "not the value the statement fixes")},
+}
+
+
+def gmul(a: int, b: int) -> int:
+    r = 0
+    while b:
+        if b & 1:
+            r ^= a
+        b >>= 1
+        a <<= 1
+        if a >> 128:
+            a ^= MOD
+    return r
+
+
+def recheck(t: dict) -> tuple[int, int]:
+    """Each check's outcome from its form: (agreeing, total)."""
+    pads = [int(h, 16) for h in t["tape"]["pads"]]
+    agree = total = 0
+    for it in t["items"]:
+        if "check" not in it:
+            continue
+        c = it["check"]
+        v = int(c["form"]["c"], 16)
+        for i, a in c["form"]["a"]:
+            v ^= gmul(int(a, 16), pads[i])
+        total += 1
+        agree += (v == 0) == c["ok"]
+    return agree, total
+
+
+def first_failing_check(t: dict) -> int | None:
+    return next((k for k, it in enumerate(t["items"]) if "check" in it and not it["check"]["ok"]), None)
+
+
+def judge(case: str, t: dict, v: dict) -> tuple[bool, str]:
+    """Whether the transcript and the contract's verdict meet the case's expectation, and why not."""
+    e, fw = EXPECT[case], t["firewall"]
+    if fw["recorder_errors"]:
+        return False, f"recorder: {fw['recorder_errors'][0]}"
+    why_fw = fw["gate"]["refused"] or fw["stopped"]
+    if e["firewall"] is None:
+        if why_fw:
+            return False, f"the firewall stopped an honest session: {why_fw}"
+        return (v["accepted"], "" if v["accepted"] else f"the contract refuses an honest session: {v['why']}")
+    if not (why_fw or "").startswith(e["firewall"]):
+        return False, f"the firewall's outcome {why_fw!r} is not {e['firewall']!r}"
+    if v["accepted"]:
+        return False, "the contract accepts a control"
+    pre, suf = e["lean"]
+    if not (v["why"].startswith(pre) and v["why"].endswith(suf)):
+        return False, f"the contract's reason {v['why']!r} is not {pre!r}…{suf!r}"
+    at = fw["gate"]["at"] if fw["gate"]["refused"] else first_failing_check(t)
+    if v["released"] != at:
+        return False, f"the contract cuts at item {v['released']}, the firewall at {at}"
+    return True, ""
+
+
+def contract(lean: str, files: list[Path]) -> dict[str, dict]:
+    p = subprocess.run([lean, "contract", *map(str, files)], capture_output=True, text=True, check=False)
+    out = {}
+    for line in p.stdout.splitlines():
+        d = json.loads(line)
+        out[d["file"]] = d
+    if p.returncode not in (0, 2) or len(out) != len(files):
+        raise SystemExit(f"flock-firewall contract: rc {p.returncode}: {p.stderr[-2000:]}")
+    return out
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--lean", required=True)
+    ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("cases", nargs="+", help="CASE=DIR: a case of EXPECT and its transcripts' directory")
+    a = ap.parse_args(argv)
+    a.out.mkdir(parents=True, exist_ok=True)
+    rows, ok_all = [], True
+    for spec in a.cases:
+        case, _, d = spec.partition("=")
+        if case not in EXPECT:
+            ap.error(f"{case}: not a case of {sorted(EXPECT)}")
+        files = sorted(Path(d).glob("session-*.json"), key=lambda p: int(p.stem.split("-")[1]))
+        if not files:
+            ap.error(f"{d}: no session-*.json")
+        verdicts = contract(a.lean, files)
+        for f in files:
+            t, v = json.loads(f.read_text()), verdicts[str(f)]
+            if "error" in v:
+                good, why = False, f"not a transcript: {v['error']}"
+            else:
+                good, why = judge(case, t, v)
+            agree, total = recheck(t)
+            if agree != total:
+                good, why = False, f"{total - agree} of {total} checks' outcomes are not their forms'"
+            kinds: dict[str, int] = {}
+            for it in t["items"]:
+                (k,) = it
+                kinds[k] = kinds.get(k, 0) + 1
+            fw = t["firewall"]
+            rows.append({"case": case, "file": f.name, "firewall": fw["gate"]["refused"] or fw["stopped"], "firewall_at": fw["gate"]["at"],
+                         "accepted": v.get("accepted"), "released": v.get("released"), "why": v.get("why"), "items": len(t["items"]),
+                         "kinds": kinds, "checks_recomputed": f"{agree}/{total}",
+                         "on_its_word": sorted({it["fixed"]["what"] for it in t["items"] if it.get("fixed", {}).get("on_its_word")}),
+                         "stand_in": sum(1 for it in t["items"] if it.get("fixed", {}).get("stand_in")), "ok": good, "miss": why})
+            ok_all &= good
+    cols = ["case", "file", "firewall", "firewall_at", "accepted", "released", "why", "items", "checks_recomputed", "stand_in", "ok", "miss"]
+    with open(a.out / "agreement.tsv", "w") as fh:
+        fh.write("\t".join(cols) + "\n")
+        for r in rows:
+            fh.write("\t".join("" if r[c] is None else str(r[c]).replace("\t", " ") for c in cols) + "\n")
+    summary = {"transcripts": len(rows), "ok": sum(r["ok"] for r in rows), "cases": sorted({r["case"] for r in rows}), "rows": rows}
+    (a.out / "result.json").write_text(json.dumps(summary, indent=1))
+    for r in rows:
+        if not r["ok"]:
+            print(f"MISS {r['case']} {r['file']}: {r['miss']}", file=sys.stderr)
+    print(json.dumps({k: summary[k] for k in ("transcripts", "ok", "cases")}))
+    return 0 if ok_all else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
