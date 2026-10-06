@@ -77,9 +77,10 @@ def gpu(lib_dir: str, build_dir: str) -> Backend:
     from .gpu import Kernels
 
     device = torch.device("cuda", torch.cuda.current_device())
+    ext = native.load(build_dir)
 
     def responder(c: Any, cpu: int | None) -> Any:
-        r = native.ext().Responder(c.data_ptr(), c.shape[0], c.shape[1], device.index, "127.0.0.1", 0, -1 if cpu is None else cpu)
+        r = ext.Responder(c.data_ptr(), c.shape[0], c.shape[1], device.index, "127.0.0.1", 0, -1 if cpu is None else cpu)
         r.start()
         return r
 
