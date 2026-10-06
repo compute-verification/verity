@@ -8,10 +8,10 @@ import Specs.Pouw.Assumptions.NCP.RouteUWord
 /-!
 # NCP's guarantees (trusted)
 
-Each guarantee is a `def G : Prop`, stated over `Pouw.Protocol`'s definitions with the named assumptions it rests on as
+Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
 hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.NCP.G : Pouw.Guarantees.NCP.G`. The
-lead's algebra (`Pouw.Protocol.NCP.Pinned`), the shift by 24 under the rejection rule (`Pouw.Protocol.NCP.Protocol`),
-the rejection rule's witness (`Pouw.Protocol.NCP.Relation`), route U's checked values (`Pouw.Protocol.NCP.RouteU`), its
+lead's algebra (`Definitions.Pouw.NCP.Pinned`), the shift by 24 under the rejection rule (`Definitions.Pouw.NCP.Protocol`),
+the rejection rule's witness (`Definitions.Pouw.NCP.Relation`), route U's checked values (`Definitions.Pouw.NCP.RouteU`), its
 game instance (`Pouw.Assumptions.NCP.RouteUGame`) and its word layer (`Pouw.Assumptions.NCP.RouteUWord`). Each keeps
 the text, the docstring and the `open`s of the statement it was in its source module. `ShiftBy24Admissible` is the type
 of the theorem `Pouw.NCP.GameProofs.shiftBy24_admissible`, its binders written as a `∀`, in that theorem's `open`s but
@@ -24,7 +24,7 @@ for its `3 : ℝ` (`Pouw.NCP.RouteU.GammaFromTTNCP_U._proof_1`), and the audit r
 
 namespace Pouw.Guarantees.NCP
 
-/-! ## The lead's algebra (`Pouw.Protocol.NCP.Pinned`) -/
+/-! ## The lead's algebra (`Definitions.Pouw.NCP.Pinned`) -/
 
 section
 
@@ -54,7 +54,7 @@ def Range : Prop :=
 
 end
 
-/-! ## The shift by 24 under the rejection rule (`Pouw.Protocol.NCP.Protocol`) -/
+/-! ## The shift by 24 under the rejection rule (`Definitions.Pouw.NCP.Protocol`) -/
 
 section
 
@@ -67,7 +67,7 @@ def ShiftBy24Admissible : Prop := ∀ {k : ℕ}, 1024 ≤ k → 16 ∣ k → Adm
 
 end
 
-/-! ## The rejection rule's witness (`Pouw.Protocol.NCP.Relation`) -/
+/-! ## The rejection rule's witness (`Definitions.Pouw.NCP.Relation`) -/
 
 section
 
@@ -79,7 +79,7 @@ def IndependentWitness : Prop := ∀ k, 1024 ≤ k → 16 ∣ k → ∃ R, Admis
 
 end
 
-/-! ## Route U's checked values (`Pouw.Protocol.NCP.RouteU`) -/
+/-! ## Route U's checked values (`Definitions.Pouw.NCP.RouteU`) -/
 
 section
 
