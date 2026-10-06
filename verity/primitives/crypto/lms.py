@@ -1,34 +1,46 @@
 """A stateful hash-based signature: LMS with LM-OTS (RFC 8554) over SHA-512, in plain Python, the scheme of the network
 certifier's certificates and the memory challenger's records, and the reference of their in-proof verifier
-(`verity.primitives.commitments.gates.lms`).
+(`verity.primitives.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n32`` (`verity.claims`).
 
-**The hash.** ``H(x) = SHA-512(x)[:N]``, N = 32 (SHA-512 truncated, the default) or 64. Every hash input is RFC 8554's, with
-its domain separators: a chain step ``H(I || u32(q) || u16(i) || u8(j) || tmp)``, the message
-``Q = H(I || u32(q) || u16(D_MESG) || C || message)``, the one-time public key ``K = H(I || u32(q) || u16(D_PBLC) || z_0 ||
-... || z_{P-1})``, a leaf ``H(I || u32(r) || u16(D_LEAF) || K)`` and an interior node ``H(I || u32(r) || u16(D_INTR) || left
-|| right)``, node r of the tree numbered from the root r = 1 (a leaf q is node 2^H + q). A message is any bytes; a
-certifier signs a record's 64-byte SHA-512 digest, the message the in-proof verifier takes.
+**Use.** One key per device per role. ``keygen(DEPLOYED, seed)`` (seed: 32 secret bytes the device keeps), then once
+``LeafState.create(path, public_key(key), DEPLOYED.H)``; to sign, ``sign(key, state, message)`` with ``state = LeafState(path,
+public_key(key), DEPLOYED.H)``; to check, ``verify(DEPLOYED, public, message, sig)``. The message is a role's digest
+(`certificate_message`, `memory_challenger_message`), never hand-rolled.
 
-**Parameters.** (N, W, H): N the hash length, W in {1, 2, 4, 8} the Winternitz width, H the tree height (2^H one-time keys;
-20 for a certifier). P = U + V chains, U = ceil(8N / W) message digits and V checksum digits, and the checksum shifted left
-LS = 16 - V W bits (RFC 8554 §4.1, Appendix B).
+**The hash.** ``H(x) = SHA-512(x)[:N]``, N = 32 (SHA-512 truncated, deployed) or 64. Every hash input is RFC 8554's, with its
+domain separators: a chain step ``H(I || u32(q) || u16(i) || u8(j) || tmp)``, the message ``Q = H(I || u32(q) || u16(D_MESG)
+|| C || message)``, the one-time public key ``K = H(I || u32(q) || u16(D_PBLC) || z_0 || ... || z_{P-1})``, a leaf ``H(I ||
+u32(r) || u16(D_LEAF) || K)`` and an interior node ``H(I || u32(r) || u16(D_INTR) || left || right)``, node r of the tree
+numbered from the root r = 1 (a leaf q is node 2^H + q). A message is any bytes; a role's digest is 64, the length the
+in-proof verifier takes.
+
+**Parameters.** (N, W, H): N the hash length, W in {1, 2, 4, 8} the Winternitz width, H the tree height (2^H one-time keys).
+Deployed: ``DEPLOYED = Params(32, 1, 20)``. P = U + V chains, U = ceil(8N / W) message digits and V checksum digits, and the
+checksum shifted left LS = 16 - V W bits (RFC 8554 §4.1, Appendix B).
 
 **Differences from RFC 8554.** No type fields: a verifier holds one parameter set, so a signature is ``u32(q) || C || y_0 ||
 ... || y_{P-1} || path_0 || ... || path_{H-1}`` and a public key ``I || T[1]``. Keys are deterministic from a seed (the RFC's
 Appendix A): ``x_q[i] = H(I || u32(q) || u16(i) || u8(0xff) || SEED)``, ``C = H(I || u32(q) || u16(0xfffd) || u8(0xff) ||
-SEED)`` and ``I = SHA-512(b"verity/lms/v0/I" || SEED)[:16]``. The scheme is stateful: a key signs at most once per q,
-and keeping q is the signer's (`sign` takes it). With the hash swapped for SHA-256 (`Params.hash`), the tests reproduce
-RFC 8554's Test Case 2.
+SEED)`` and ``I = SHA-512(b"verity/lms/v0/I" || SEED)[:16]``. With the hash swapped for SHA-256 (`Params.hash`), the tests
+reproduce RFC 8554's Test Case 2.
 
-Standard library only, and slow: keygen hashes 2^H P (2^W - 1) times, so the tests use small H.
+**Cost.** Keygen hashes about 2^H (P 2^W + 70) times: about 628M at the deployed parameters, about 10 minutes on one core,
+divided by ``workers``; a signature at most P (2^W - 1) + P + 1; a verification at most P (2^W - 1) + 25. Standard library
+only.
 """
 from __future__ import annotations
 
+import fcntl
 import hashlib
+import json
+import os
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 
-__all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "Params", "PrivateKey", "Signature", "digits", "key", "keygen",
-           "public_key", "root_of", "sign", "verify"]
+__all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "DEPLOYED", "DIRECTIONS", "LeafState", "Params", "PrivateKey", "ROLES",
+           "Signature", "StateError", "certificate_message", "digits", "key", "keygen", "memory_challenger_message",
+           "public_key", "root_of", "sign", "sign_at", "verify"]
 
 D_PBLC, D_MESG, D_LEAF, D_INTR = 0x8080, 0x8181, 0x8282, 0x8383
 
@@ -74,6 +86,9 @@ class Params:
         return 4 + self.N * (1 + self.P + self.H)
 
 
+DEPLOYED = Params(32, 1, 20)
+
+
 @dataclass(frozen=True)
 class PrivateKey:
     params: Params
@@ -104,6 +119,42 @@ class Signature:
         cut = [data[4 + n * k:4 + n * (k + 1)] for k in range(1 + params.P + params.H)]
         return cls(q, cut[0], tuple(cut[1:1 + params.P]), tuple(cut[1 + params.P:]))
 
+
+# --- the messages ------------------------------------------------------------------------------------------------------------
+
+#: role -> its tag, which every digest of the role begins with
+ROLES = {"network-certificate": "verity/network-certificate/v1", "memory-challenger-record": "verity/memory-challenger-record/v1"}
+DIRECTIONS = ("egress", "ingress")
+
+
+def _field(b: bytes) -> bytes:
+    return len(b).to_bytes(8, "big") + b
+
+
+def _digest(role: str, I: bytes, context: bytes, record: bytes) -> bytes:
+    if len(I) != 16:
+        raise ValueError(f"an LMS identifier is 16 bytes, not {len(I)}")
+    return hashlib.sha512(_field(ROLES[role].encode()) + I + _field(context) + _field(record)).digest()
+
+
+def certificate_message(I: bytes, link: str, direction: str, window: int, record: bytes) -> bytes:
+    """The message a network certificate signs: ``SHA-512(tag || I || context || record)``, the tag
+    ``verity/network-certificate/v1``, the context the link's name, the direction (``egress`` or ``ingress``) and the window's
+    index, each field but I prefixed with its length (u64)."""
+    if direction not in DIRECTIONS or isinstance(window, bool) or not 0 <= window < 2 ** 64:
+        raise ValueError(f"a certificate's direction is one of {DIRECTIONS} and its window a u64, not {direction!r}, {window!r}")
+    context = _field(link.encode()) + _field(direction.encode()) + window.to_bytes(8, "big")
+    return _digest("network-certificate", I, context, record)
+
+
+def memory_challenger_message(I: bytes, session: str | bytes, record: bytes) -> bytes:
+    """The message a memory challenger's session record signs: as `certificate_message`, the tag
+    ``verity/memory-challenger-record/v1`` and the context the session id."""
+    sid = session.encode() if isinstance(session, str) else bytes(session)
+    return _digest("memory-challenger-record", I, _field(sid), record)
+
+
+# --- the scheme --------------------------------------------------------------------------------------------------------------
 
 def _coef(s: bytes, i: int, w: int) -> int:
     return ((2 ** w - 1) & (s[i * w // 8] >> (8 - (w * (i % (8 // w)) + w))))
@@ -139,23 +190,36 @@ def _interior(params: Params, I: bytes, r: int, left: bytes, right: bytes) -> by
     return params.hash(I + _u32(r) + _u16(D_INTR) + left + right)
 
 
-def keygen(params: Params, seed: bytes) -> PrivateKey:
-    """The key with 2^H one-time keys that ``seed`` (N bytes) determines, with its whole tree."""
+def _leaves(params: Params, I: bytes, seed: bytes, lo: int, hi: int) -> list[bytes]:
+    e = 2 ** params.W - 1
+    out = []
+    for q in range(lo, hi):
+        z = [_chain(params, I, q, i, _x(params, I, seed, q, i), 0, e) for i in range(params.P)]
+        out.append(_leaf(params, I, q, _ots_public(params, I, q, z)))
+    return out
+
+
+def keygen(params: Params, seed: bytes, workers: int = 1) -> PrivateKey:
+    """The key with 2^H one-time keys that ``seed`` (N secret bytes) determines, its whole tree computed in ``workers``
+    processes."""
     if len(seed) != params.N:
         raise ValueError(f"an LMS seed is {params.N} bytes, not {len(seed)}")
-    return key(params, hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16], seed)
+    return key(params, hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16], seed, workers)
 
 
-def key(params: Params, I: bytes, seed: bytes) -> PrivateKey:
+def key(params: Params, I: bytes, seed: bytes, workers: int = 1) -> PrivateKey:
     """The key of identifier ``I`` (16 bytes) whose one-time keys ``seed`` derives (RFC 8554 Appendix A)."""
     if len(I) != 16:
         raise ValueError(f"an LMS identifier is 16 bytes, not {len(I)}")
     top = 2 ** params.H
-    tree: list[bytes] = [b""] * (2 * top)
-    e = 2 ** params.W - 1
-    for q in range(top):
-        z = [_chain(params, I, q, i, _x(params, I, seed, q, i), 0, e) for i in range(params.P)]
-        tree[top + q] = _leaf(params, I, q, _ots_public(params, I, q, z))
+    if workers <= 1:
+        leaves = _leaves(params, I, seed, 0, top)
+    else:
+        step = -(-top // (4 * workers))
+        with ProcessPoolExecutor(workers) as pool:
+            parts = [pool.submit(_leaves, params, I, seed, lo, min(lo + step, top)) for lo in range(0, top, step)]
+            leaves = [x for f in parts for x in f.result()]
+    tree: list[bytes] = [b""] * top + leaves
     for r in range(top - 1, 0, -1):
         tree[r] = _interior(params, I, r, tree[2 * r], tree[2 * r + 1])
     return PrivateKey(params, I, seed, tuple(tree))
@@ -170,8 +234,9 @@ def _message_hash(params: Params, I: bytes, q: int, C: bytes, message: bytes) ->
     return params.hash(I + _u32(q) + _u16(D_MESG) + C + message)
 
 
-def sign(key: PrivateKey, q: int, message: bytes) -> Signature:
-    """The signature of ``message`` with one-time key q, which the caller never uses again."""
+def sign_at(key: PrivateKey, q: int, message: bytes) -> Signature:
+    """The signature of ``message`` with one-time key q, with no state: for vectors and tests. A signer uses `sign`, since two
+    messages signed at one q give the key away."""
     p = key.params
     if not 0 <= q < 2 ** p.H:
         raise ValueError(f"q is below 2^{p.H}, not {q}")
@@ -183,6 +248,13 @@ def sign(key: PrivateKey, q: int, message: bytes) -> Signature:
         path.append(key.tree[r ^ 1])
         r //= 2
     return Signature(q, C, y, tuple(path))
+
+
+def sign(key: PrivateKey, state: "LeafState", message: bytes) -> Signature:
+    """The signature of ``message`` at the next unused leaf, which ``state`` has advanced past on disk before this returns."""
+    if state.public != public_key(key) or state.H != key.params.H:
+        raise StateError("the leaf state is another key's")
+    return sign_at(key, state.reserve(), message)
 
 
 def root_of(params: Params, I: bytes, message: bytes, sig: Signature) -> bytes:
@@ -207,3 +279,127 @@ def verify(params: Params, public: bytes, message: bytes, sig: Signature) -> boo
         return root_of(params, public[:16], message, sig) == public[16:]
     except ValueError:
         return False
+
+
+# --- the leaf state ----------------------------------------------------------------------------------------------------------
+
+class StateError(RuntimeError):
+    """A refusal to sign: the leaf state is missing, unreadable, another key's, behind a leaf already used, held by another
+    signer, or used up."""
+
+
+def _fsync_dir(d: Path) -> None:
+    fd = os.open(d, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+class LeafState:
+    """The next unused leaf of one key, in a file that fails closed.
+
+    ``path`` holds ``{"public", "H", "next", "check"}`` as JSON (``check`` the first 16 bytes of SHA-512 over the rest), and
+    ``path.journal`` every leaf reserved, one per line. Opening takes ``path.lock`` exclusively for the object's life (a second
+    signer on the same state is refused), and refuses a state that is missing, unreadable, another key's, or behind its own
+    journal or ``floor`` (the caller's next leaf known unused, such as 1 + the last q it published). `reserve` writes the
+    advanced state and its journal line and fsyncs both before it returns the leaf, so a crash never reuses one: at worst the
+    journal misses the one leaf the state already skipped. A restore of both files from one snapshot is past what a file can
+    see; ``floor`` is its guard.
+    """
+
+    def __init__(self, path: str | os.PathLike, public: bytes, H: int, *, floor: int = 0) -> None:
+        self.path, self.public, self.H = Path(path), bytes(public), H
+        self._journal = self.path.with_name(self.path.name + ".journal")
+        self._lock = open(self.path.with_name(self.path.name + ".lock"), "a+")
+        try:
+            fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            self._lock.close()
+            raise StateError(f"{self.path} is held by another signer") from None
+        try:
+            self._next = self._read()
+            if self._next < floor:
+                raise StateError(f"{self.path}: next leaf {self._next} is behind the floor {floor}")
+        except BaseException:
+            self.close()
+            raise
+
+    @staticmethod
+    def create(path: str | os.PathLike, public: bytes, H: int) -> None:
+        """A new key's state, at leaf 0; refused when the state or its journal exists."""
+        p = Path(path)
+        j = p.with_name(p.name + ".journal")
+        if p.exists() or j.exists():
+            raise StateError(f"{p} already has a leaf state")
+        with open(j, "x") as f:
+            os.fsync(f.fileno())
+        LeafState._write(p, bytes(public), H, 0)
+
+    @staticmethod
+    def _body(public: bytes, H: int, nxt: int) -> dict:
+        b = {"public": public.hex(), "H": H, "next": nxt}
+        b["check"] = hashlib.sha512(json.dumps(b, sort_keys=True).encode()).hexdigest()[:32]
+        return b
+
+    @staticmethod
+    def _write(p: Path, public: bytes, H: int, nxt: int) -> None:
+        tmp = p.with_name(p.name + ".tmp")
+        with open(tmp, "w") as f:
+            json.dump(LeafState._body(public, H, nxt), f, sort_keys=True)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, p)
+        _fsync_dir(p.parent)
+
+    def _read(self) -> int:
+        try:
+            body = json.loads(self.path.read_text())
+            used = [int(x) for x in self._journal.read_text().splitlines()]
+            intact = (isinstance(body, dict) and isinstance(body.get("next"), int)
+                      and body == self._body(bytes.fromhex(str(body.get("public"))), body.get("H"), body["next"]))
+        except FileNotFoundError as e:
+            raise StateError(f"{e.filename}: missing") from None
+        except (OSError, ValueError, TypeError) as e:
+            raise StateError(f"{self.path}: unreadable ({type(e).__name__})") from None
+        if not intact:
+            raise StateError(f"{self.path}: unreadable (its check does not match)")
+        if body["public"] != self.public.hex() or body["H"] != self.H:
+            raise StateError(f"{self.path} is another key's")
+        nxt = body["next"]
+        if any(b <= a for a, b in zip(used, used[1:])):
+            raise StateError(f"{self._journal}: unreadable (not increasing)")
+        last = used[-1] if used else -1
+        if last >= nxt:
+            raise StateError(f"{self.path}: next leaf {nxt} is behind leaf {last}, already used")
+        if last < nxt - 2:
+            raise StateError(f"{self._journal}: behind its state (last leaf {last}, next {nxt})")
+        return nxt
+
+    def reserve(self) -> int:
+        """The next unused leaf, after the state on disk is past it."""
+        if self._lock.closed:
+            raise StateError(f"{self.path}: closed")
+        nxt = self._read()
+        if nxt != self._next:
+            raise StateError(f"{self.path}: next leaf {nxt} on disk, {self._next} here: changed under this signer")
+        if nxt >= 2 ** self.H:
+            raise StateError(f"{self.path}: all 2^{self.H} leaves are used")
+        self._write(self.path, self.public, self.H, nxt + 1)
+        with open(self._journal, "a") as f:
+            f.write(f"{nxt}\n")
+            f.flush()
+            os.fsync(f.fileno())
+        self._next = nxt + 1
+        return nxt
+
+    def close(self) -> None:
+        if not self._lock.closed:
+            fcntl.flock(self._lock, fcntl.LOCK_UN)
+            self._lock.close()
+
+    def __enter__(self) -> "LeafState":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
