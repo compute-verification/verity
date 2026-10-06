@@ -1334,7 +1334,7 @@
   "verity/primitives/randomness/tests/vectors.json": "1718bb52122a00e24b497a3b98e4e17aef38321e5e61d07f478bc34ac536d405",
   "verity/Security/Proofs/Flock/Soundness/Randomness.lean": "3aedf278e6294a45b31eff51dd66826635fbb9a87972ff2da39df315a28c2113",
   "verity/Security/Proofs/Flock/Soundness/PlanDraw.lean": "628b706effd23f466fdf2675cf93b763aa708a7ee9637e646df924a476f94344",
-  "verity/Security/Proofs/lake-manifest.json": "414ad2f21442a2c3e6ff556139c15df3bad19cfd6bd20d33114c2337eac5f54f",
+  "verity/Security/Proofs/lake-manifest.json": "0cd701ee79aa70b68701340db2a3e8b38a43680e5ad04a857f4f2f6602ecdd00",
   "verity/Security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632",
   "backends/flock/verifier/lean/Flock/Hash.lean": "962f57810414e733f3effebe28f9a6b9acbce671e075aaa03a05ce255767d69a",
   "backends/flock/verifier/lean/Flock/Draw.lean": "9ca895edc41bfd9ae48444d85c403fd4120baf51789885ac7e22e3bec9f55886"
