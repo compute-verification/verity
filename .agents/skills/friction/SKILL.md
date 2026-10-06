@@ -167,6 +167,10 @@ Newest first. Each is Daniel's unless it names the coordinator.
   circuit accepting implies the verifier of record accepts; completeness stays a test.
 - 2026-10-05: don't resume or re-dispatch a turn cut off by a console drop or a provider outage unless Daniel asks;
   report it to your coordinator and wait.
+- 2026-10-05 (8:53 AM PDT): the Lean audit is the Lean check. `tools/lean/audit.py` becomes `lean_check.py` (the CI
+  step `lean-check`), and each package's `lean-audit.json` becomes `lean-lock.json`, its lock. The alert that DMs
+  Daniel treats the renamed lock as a move, so the rename sends no DM. Until lean's rename lands, docs say "the Lean
+  check" and "the lock" and keep the current paths.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
   piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
   critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU

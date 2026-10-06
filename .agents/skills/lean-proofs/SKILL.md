@@ -14,7 +14,7 @@ description: >
 
 # Lean proofs
 
-The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/README.md`. This is the workflow.
+The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/lean/README.md`. This is the workflow.
 
 ## Where the work goes
 
@@ -27,17 +27,17 @@ The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/READ
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.
-- **Definitions a guarantee reads go in `Definitions/` or `Specs/`**, not in a proof file. The audit lists where they are
+- **Definitions a guarantee reads go in `Definitions/` or `Specs/`**, not in a proof file. The Lean check lists where they are
   (`reads` in `verity/Security/lean-audit.json`); keep that list short.
 - **Build in your own checkout.** Two agents never share a writable `.lake`: concurrent builds overwrite each other's
-  `.olean` files, and an audit then reads what another agent's build left. A second Lean task on the same machine gets
+  `.olean` files, and a Lean check then reads what another agent's build left. A second Lean task on the same machine gets
   its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
   `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. Copy, never symlink, because Lake
   rewrites `.olean` files in place. After the copy, `lake build` compiles only the package's own modules.
 - **A reviewer or red-team subagent works in its own worktree** (`git worktree add`), never by `git checkout` in a tree
   another agent is using: a checkout there switches that agent's files under it.
 
-## Build, iterate, audit
+## Build, iterate, check
 
 ~~~text
 bash tools/lean/setup.sh PKG                  once per machine: elan, the toolchain, Mathlib's cache
@@ -69,12 +69,12 @@ the record. It vouches for nothing: its result is of kind `lean-fast/v1`, which 
 refuse.
 
 To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd clone -- python
-tools/lean/audit.py --build --update PKG` with no wrapper around it. It exits 0 when the audit passes, whether or not the
+tools/lean/audit.py --build --update PKG` with no wrapper around it. It exits 0 when the Lean check passes, whether or not the
 record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`. `--cwd clone` builds
 in the run's own clone of the shipped tree, removed when the run ends; with `--cwd source` every run of the commit builds in
-the one shared tree, and a cancelled duplicate there deleted `PKG/.lake/packages` under a live audit.
+the one shared tree, and a cancelled duplicate there deleted `PKG/.lake/packages` under a live Lean check.
 
-While proving, check one file at a time, and leave the whole package and the audit for the end:
+While proving, check one file at a time, and leave the whole package and the Lean check for the end:
 
 - **`lake env lean FILE`** prints that file's errors and warnings, and writes nothing. Core's slowest file takes about 10 s
   this way. A file that imports what you changed sees the change only after `lake build` of the changed module.
@@ -83,7 +83,7 @@ While proving, check one file at a time, and leave the whole package and the aud
 
   ~~~lean
   import Proofs.Core.TC.AmpereSound
-  #print axioms Verity.TC.ampere_step_hw     -- a sorry shows as sorryAx, long before the audit runs
+  #print axioms Verity.TC.ampere_step_hw     -- a sorry shows as sorryAx, long before the Lean check runs
   example (a b : Nat) : a + b = b + a := by exact?
   ~~~
 
@@ -128,7 +128,7 @@ simp with that.
   (Mathlib, ArkLib, VCVio, CompPoly) could prove gets an entry under `upstream.watch` in the package's `lean-audit.json`.
   The entry lists the dependency's constants that the statement is about. An assumption stated over the package's own
   definitions gets none: no upstream theorem can mention them, so the entry could never fire. Nor does one about a single
-  number (PoUS's `PrimeP16448`): its entry would fire on every theorem about primes. The audit fails when the
+  number (PoUS's `PrimeP16448`): its entry would fire on every theorem about primes. The Lean check fails when the
   pinned dependency proves an unacknowledged theorem about them. Read the theorem, say in the PR whether it discharges the assumption or replaces the proof, then run
   `python tools/lean/upstream.py PKG --ack`. At a dependency bump, also run `upstream.py PKG --lean` (the exact pass).
   At a toolchain bump, also re-read `lean_io_get_random_bytes` in the new toolchain's `src/runtime/io.cpp`. A3
@@ -184,6 +184,6 @@ These are Daniel's rulings, newest first.
   hard to break, a table, a ledger or a PR cites a guarantee with its assumptions, and proving an assumption removes it
   from every guarantee that took it.
 - 2026-09-30: Lean is the one source of truth for the assumptions we make. Views of them (the console, the tables) are
-  derived from Lean and the audit's output, and no hand-kept ledger is generated alongside.
+  derived from Lean and the Lean check's output, and no hand-kept ledger is generated alongside.
 - 2026-09-30: probability and games shared across packages are our own minimal definitions over Mathlib's `PMF`, not
   VCVio's `OracleComp`; soundness bridges to VCVio where it needs it.

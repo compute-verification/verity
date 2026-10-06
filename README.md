@@ -104,7 +104,7 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 - [`tools/research/`](tools/research/README.md): the research harness, for recorded runs on remote pods and the evidence store that keeps their results; it treats every workload as opaque and imports nothing from Verity
 - [`tools/check/`](tools/check/check.py): `check`, the one check a merge requires, and `suites.py`, which runs the test suites; `rename_merge.py` merges a PR onto a train tip that moved files it edits, applying its changes at the new paths or refusing with the paths
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes ([rules](AGENTS.md#circuits))
-- [`tools/lean/`](tools/lean/README.md): the audit every Lean package passes
+- [`tools/lean/`](tools/lean/README.md): the Lean check every Lean package passes
 - [`tools/cluster/`](tools/cluster/README.md): `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger
 - `tools/tc_probe/`, `tools/tc_probe_fp4/`, `tools/native_peak/`: GPU probes that compare tensor-core instructions bit for bit with the primitive circuits' models, and measure native peak throughput
 - `benchmarks/`: reproducible workloads and measurements, including the [one-stage audit end to end](benchmarks/one_stage/README.md)
