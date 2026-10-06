@@ -123,6 +123,29 @@ def test_gfresiduals_rejects_ports_of_the_wrong_length() -> None:
         G.residuals(S, [0] * (S["nw"] - 1), [0] * S["nv"])
 
 
+@pytest.mark.parametrize("op", [[["w", 130]], [["v", 4]], [["w", -1]], [["wt", 3, 0]], [["wt", 2, 128]], [["x", 0]]],
+                         ids=["w-past-end", "v-past-end", "w-negative", "wt-past-end", "wt-bit-128", "unknown-kind"])
+def test_gfresiduals_refuses_an_out_of_range_term(op) -> None:
+    """A term past its port's end would come up short in a builder's slice (and `zip` would truncate the sum) or index
+    from the end; S is refused, by the reference and by the Definition's signature, before anything is built."""
+    bad = {**S, "ops": S["ops"] + [op], "res": S["res"] + [{"mul": [[len(S["ops"]), 0]], "add": []}]}
+    with pytest.raises(ValueError, match="out of range"):
+        G.check_structure(bad)
+    with pytest.raises(ValueError, match="out of range"):
+        G.residuals(bad, [0] * S["nw"], [0] * S["nv"])
+    with pytest.raises(ValueError, match="out of range"):
+        bind(G.GfResiduals, S=bad).signature()
+    G.check_structure(S)
+
+
+def test_gfresiduals_refuses_a_product_of_a_missing_operand() -> None:
+    bad = {**S, "res": S["res"] + [{"mul": [[0, len(S["ops"])]], "add": []}]}
+    with pytest.raises(ValueError, match="product"):
+        G.residuals(bad, [0] * S["nw"], [0] * S["nv"])
+    with pytest.raises(ValueError, match="product"):
+        bind(G.GfResiduals, S=bad).signature()
+
+
 @pytest.mark.parametrize("target", TARGETS, ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
