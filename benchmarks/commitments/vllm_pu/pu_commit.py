@@ -262,7 +262,10 @@ def _wrap(mod, name: str, roles: tuple[str, ...] = (), last: bool = False) -> No
 def _site_types() -> tuple[tuple[type, ...], ...]:
     from vllm.model_executor.layers import activation, layernorm
     from vllm.model_executor.layers.attention import Attention, MLAAttention
-    from vllm.model_executor.layers.fused_moe import FusedMoE
+    try:
+        from vllm.model_executor.layers.fused_moe.runner.moe_runner_interface import MoERunnerInterface as FusedMoE
+    except ImportError:
+        from vllm.model_executor.layers.fused_moe import FusedMoE
     from vllm.model_executor.layers.linear import LinearBase
     from vllm.model_executor.custom_op import CustomOp
     acts = tuple(c for c in vars(activation).values() if isinstance(c, type) and issubclass(c, CustomOp) and c is not CustomOp)
