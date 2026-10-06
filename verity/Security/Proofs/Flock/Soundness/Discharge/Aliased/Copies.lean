@@ -8,7 +8,8 @@ At a unit slot's input port bit the block rows are the net's self row and Δ's o
 column lies outside the block. Each unit slot's row past its useful rows is a forced-zero row (`Layout.placed_zero`):
 the net's row there is empty (`parse_rows`), no slot constant is there, and Δ's other pairs are at input bits. So in
 every witness satisfying the accepted statement:
-- `copyPos_block`: each of VU `g`'s stacked unit inputs carries what its copy position (`copyPos`) carries;
+- `copyPos_block`: each of template instance `g`'s stacked unit inputs carries what its copy position (`copyPos`)
+  carries;
 - `zeroPos_block`: each unit slot's forced-zero row (`zeroPos`) carries 0. Δ copies these into zero leaves (the slot's
   own) and into cut bits past a row word (the range's first slot's).
 
@@ -114,15 +115,15 @@ theorem stack_copy_lt {g x : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st.c.u
   have hn : 0 < st.c.unit.inWords * WORD := Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hx; omega
   exact L.slot_lt hg ((Nat.div_lt_iff_lt_mul hn).2 hx)
 
-/-- **VU `g`'s stacked unit input `x`'s copy position**: input `x % (inWords·WORD)` of unit slot
+/-- **Template instance `g`'s stacked unit input `x`'s copy position**: input `x % (inWords·WORD)` of unit slot
 `g·upv + x / (inWords·WORD)` (`copyAt`). -/
 def copyPos {g : ℕ} (hg : g < st.c.g) (x : ℕ) : Fin (2 ^ (L.model regs).kLog) :=
   if hx : x < st.c.upv * (st.c.unit.inWords * WORD) then
     copyAt L regs F (stack_copy_lt L hg hx) (x % (st.c.unit.inWords * WORD))
   else ⟨0, Nat.two_pow_pos _⟩
 
-/-- **Each of VU `g`'s stacked unit inputs carries what its copy position carries**, at its place (`stackPlace`, which
-`Layout.Aliased` reads), in every block of a satisfying witness. -/
+/-- **Each of template instance `g`'s stacked unit inputs carries what its copy position carries**, at its place
+(`stackPlace`, which `Layout.Aliased` reads), in every block of a satisfying witness. -/
 theorem copyPos_block {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
@@ -146,9 +147,9 @@ theorem copyPos_block {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_
 def IsZeroPos (q : Fin (2 ^ (L.model regs).kLog)) : Prop :=
   ∃ s₀, ∃ hs₀ : s₀ < st.c.unitRange.count, q = zeroPos L regs F hs₀
 
-/-- **An instance wires VU `g`'s stacked unit inputs as Δ copies them**: inputs it puts on one gate copy one position,
-or each copies a forced-zero row. A relation between the instance and the statement, which the program's construction
-supplies. -/
+/-- **An instance wires template instance `g`'s stacked unit inputs as Δ copies them**: inputs it puts on one gate copy
+one position, or each copies a forced-zero row. A relation between the instance and the statement, which the program's
+construction supplies. -/
 def Copies {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g) : Prop :=
   ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_built).stack st.c.upv).nIn →
@@ -156,8 +157,8 @@ def Copies {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
       copyPos L regs F hg c.val = copyPos L regs F hg c'.val ∨
         (IsZeroPos L regs F (copyPos L regs F hg c.val) ∧ IsZeroPos L regs F (copyPos L regs F hg c'.val))
 
-/-- **The unit's inputs on one gate carry one value** (`Layout.Aliased`), at VU `g`'s stacked unit slots in every block,
-for an instance that wires them as Δ copies them (`Copies`). -/
+/-- **The unit's inputs on one gate carry one value** (`Layout.Aliased`), at template instance `g`'s stacked unit slots
+in every block, for an instance that wires them as Δ copies them (`Copies`). -/
 theorem aliased_of_copies {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g)
     (hcp : Copies L regs F inst hg) (o : Fin (2 ^ (L.model regs).nbl)) : L.Aliased regs inst o hg := by
@@ -206,7 +207,7 @@ theorem setupH_unitFacts (ht : tags.typed = false)
     exact absurd hhn (by unfold HmRow.HM_NET; decide)
 
 /-- **`pp.aliased` at the untyped statement `Stmt.setupH` accepted** (`unitPlace_of_setupH`'s `hal`): for an instance
-that wires VU `g`'s stacked unit inputs as Δ copies them (`Copies`). -/
+that wires template instance `g`'s stacked unit inputs as Δ copies them (`Copies`). -/
 theorem setupH_aliased (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
@@ -217,8 +218,8 @@ theorem setupH_aliased (ht : tags.typed = false)
     (setupH_layout ht h).Aliased regs inst o hg :=
   aliased_of_copies _ regs _ inst hg hcp o
 
-/-- **A drawn unit's place, from the executable's accept step** (`unitPlace_of_setupH` with `setupH_aliased`): VU `g`'s
-stacked unit slots in block `o`, for an instance that wires their inputs as Δ copies them. -/
+/-- **A drawn unit's place, from the executable's accept step** (`unitPlace_of_setupH` with `setupH_aliased`): template
+instance `g`'s stacked unit slots in block `o`, for an instance that wires their inputs as Δ copies them. -/
 noncomputable def setupH_unitPlace (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}

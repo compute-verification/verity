@@ -5,13 +5,15 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 /-!
 # A `--zk` rep's requested rows verify
 
-`zk_opens_ok`: the third conclusion of `ZkRepAccepts`, the `--zk` analogue of M0's `opensOKL_of`. Every row a compiled
-`--zk` rep requests verifies against its level's cap (`OpensOKZ`), at openings that are the proof's rows and salts.
+`zk_opens_ok`: the third conclusion of `ZkRepAccepts`, the `--zk` analogue of the non-ZK session's `opensOKL_of`. Every
+row a compiled `--zk` rep requests verifies against its level's cap (`OpensOKZ`), at openings that are the proof's rows
+and salts.
 
 The run `zk_rep_plays` builds records its requests; `zk_ligerito_reqs` builds the same run as `zk_ligerito_plays` and
 tracks, along Ligerito's level loop, that its caps are the proof's and that each request is one whose Merkle check the
 executable passed (`ReqOKZ`): level 0's on the `2^k₀ + 4`-lane rows against the commitment's cap (`Zk.queryLevel0`), a
-later level's as M0's `ReqOK`. `zk_rep_reqs` carries that to the rep, and a run has one result (`plays_det`).
+later level's as the non-ZK session's `ReqOK`. `zk_rep_reqs` carries that to the rep, and a run has one result
+(`plays_det`).
 -/
 
 namespace FlockSoundness.Discharge.ZkExec
@@ -27,7 +29,7 @@ variable {D β : Type}
 
 /-- **A `--zk` request whose Merkle check the executable passed**: at level 0, its paths have level 0's length and the
 proof's level-0 rows, `2^lanes + EXTRA_LANES` wide, verify against the commitment's cap (`Zk.queryLevel0`); above,
-M0's `ReqOK`. -/
+the non-ZK session's `ReqOK`. -/
 def ReqOKZ (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof) (req : Req) : Prop :=
   (req.level = 0 → req.depth = pathLen (levelOf (sch.levels.getD 0 default)) ∧
       merkleCheck ms cap (sch.levels.getD 0 default).cap (sch.levels.getD 0 default).d req.positions.toArray

@@ -9,7 +9,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigFinal
 at the openings, the executable's claim, polynomial, out-of-domain and consistency contexts from level 0's queries on,
 so its verdict is the executable's final check (`final_refinesZ`). The lane phase is masked, so only its coins, `ρ`
 and the blinded claim `T'` carry over (`lane_vals`); level 0's enforced sum is `consE0` (`queryLevel0_val`), and with
-the extra lanes' terms it is the model's padded column (`consPad_eq`). Levels ≥ 1 are M0's (`LigeritoRun.lean`).
+the extra lanes' terms it is the model's padded column (`consPad_eq`). Levels ≥ 1 are the non-ZK session's
+(`LigeritoRun.lean`).
 -/
 
 namespace FlockSoundness.Discharge.ZkExec
