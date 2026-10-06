@@ -34,6 +34,8 @@ pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
 pub mod gate;
+#[cfg(feature = "sha512")]
+pub mod gate_transcript;
 pub mod glue;
 pub mod pure_block;
 #[cfg(feature = "glue")]
