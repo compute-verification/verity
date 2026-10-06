@@ -490,6 +490,34 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
 
 
 @pytest.mark.slow
+def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
+    """h3_screen's check on a pass the reference proved: every tile's leaf is the reference's, and a call's dumped row seeds,
+    seed_A and E_A lines (16 padding rows on -h2's lines) are; the same -h3 pass read as -h2 fails its tiles."""
+    path, s, epoch, prover, tr, splits, records = honest_pass
+    if s.hashing != "h3":
+        pytest.skip("the -h3 screen")
+    HS = load("pearl_c_vllm_h3_screen", KERNEL.parent / "pearl_c_vllm" / "h3_screen.py")
+    d = path.parent
+    assert HS._tiles(d, 1) == {"tiles": tr.commitment.count, "failed": 0, "failures": []}
+    for u in epoch.workload.matmuls:
+        ctx = Context(epoch.salt, u, tr.activation_roots[u.index], epoch.weight_roots[u.weight])
+        data = VR.Files(d)(json.loads(path.read_text())["matmuls"][u.index]["rows"])
+        rows = [VR.f32_row(data, u.shape.k, i) for i in range(u.shape.m)]
+        seeds, seed_a = s.row_seeds(ctx, rows, range(u.shape.m)), s.noise(ctx).seed_a
+        lines = [P.sample_line(x, 0, 0, 0) for x in seeds] + [P.sample_line(seed_a, 0, 0, r) for r in range(u.shape.m, u.shape.m + 16)]
+        (d / f"call{u.index}.seeds_a").write_bytes(b"".join(seeds))
+        (d / f"call{u.index}.seed_a").write_bytes(seed_a)
+        (d / f"call{u.index}.ea_codes").write_bytes(b"".join(bytes(x) for x in lines))
+    got = HS._calls(d)
+    assert got["ok"] and [c["padded"] - c["m16"] for c in got["calls"]] == [16, 16]
+    (d / "call1.ea_codes").write_bytes(bytes(32) + (d / "call1.ea_codes").read_bytes()[32:])
+    assert HS._calls(d)["calls"][1]["ea_rows_wrong"] == [0]
+    man = json.loads(path.read_text())
+    path.write_text(json.dumps({**man, "scheme": s.name.replace("-h3", "-h2")}))
+    assert HS._tiles(d, 1)["failed"] == tr.commitment.count
+
+
+@pytest.mark.slow
 def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_path):
     path, s, epoch, prover, tr, splits, records = honest_pass
     out = tmp_path / "out"
