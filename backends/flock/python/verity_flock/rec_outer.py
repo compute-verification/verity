@@ -9,7 +9,7 @@ partition that program's ``Q_template_instance`` v0. Every instance reads two fr
 ``aux`` (its siblings: `rec_open.pack`), two public inputs, its coefficients ``coef`` and the position's low bits ``dirs``,
 and three registered rows: ``out``, ``acc`` in and ``acc_out`` out (§16.13).
 
-**The tops** (`TopValue`). Neither side sees a tree's top in the clear: the gateway committed each node as a registered row
+**The tops** (`TopValue`). Neither side sees a tree's top in the clear: the firewall committed each node as a registered row
 (`verity_flock.rec_live.top_rows`) under a fresh salt of its own, and the coin server recorded only the nodes' ``b || c``
 (`verity_flock.rec_vstar.tops`). The prover registers the tops a level's openings climb to (level 0's ``root_B``, both reps'
 one tree, else rep 0's top then rep 1's) as the value ``rec-top-L<level>`` under the V* session's program and those very salts;
@@ -17,7 +17,7 @@ the verifier builds its own entry of that value from the recorded ``b || c`` alo
 reads file puts instance ``i``'s output at the row of the top node its position names (rep ``r``'s first row plus
 ``pos >> H``; PROTOCOL.md §16.13 "Registered reads", `verity.protocols.verification.sampled_proofs.one_stage.registered`). An
 instance is satisfiable only if its private rows climb, by the public ``dirs``, to that registered row, whose ``b || c`` the
-gateway committed: the statement holds only if every opening climbs to the committed top node its coin names.
+firewall committed: the statement holds only if every opening climbs to the committed top node its coin names.
 
 **The running sums** (`Chain`). The openings of both reps, rep-major, then by level and query (`chain_order`), are positions
 ``0 .. N - 1`` of one chain; the prover registers its ``N + 1`` rows as the value ``rec-acc`` (`ACC_VALUE`) under the V*
@@ -117,7 +117,7 @@ def top_value_name(level: int) -> str:
 @dataclass
 class TopValue:
     """A level's tops as one registered value (`top_value_name`): the prover's registration (``reg``, the top rows under the
-    gateway's salts), the verifier's own entry from the coin server's ``b || c`` alone (``own``), and each rep's first row."""
+    firewall's salts), the verifier's own entry from the coin server's ``b || c`` alone (``own``), and each rep's first row."""
 
     reg: object
     own: dict
@@ -140,7 +140,7 @@ class TopValue:
         reg = G.Registered.commit(program, value, rows, [s for t in runs for s in t.salts])
         own = RR.commits_entry(program, value, R.OUT_WORDS, [b for t in runs for b in t.bcs])
         if own["root"] != reg.entry()["root"]:
-            raise ValueError(f"level {level}: the prover's tops are not the ones the gateway committed")
+            raise ValueError(f"level {level}: the prover's tops are not the ones the firewall committed")
         return cls(reg, own, first)
 
     def position(self, q: V.Query) -> int:

@@ -41,7 +41,7 @@ def _fold() -> dict:
 
 @pytest.fixture(scope="module")
 def inner(tmp_path_factory) -> Path:
-    """The fixture's honest session replayed through the gateway (`rec_live.Proxy`, seeded salts), whose coin server returns
+    """The fixture's honest session replayed through the firewall (`rec_live.Proxy`, seeded salts), whose coin server returns
     the recorded coins, as `rec_live.Proxy.write` lays it out. The session ran on seeded coins: its Hello is replayed without
     the coin scheme."""
     assert (SET / "stage" / "circuit.txt").is_file(), (
@@ -100,7 +100,7 @@ def _ports(vf, chain, mrs, rep: int, acc: O.Chain | None = None) -> list[list[in
 
 
 def test_the_record_holds_every_top_salted_and_the_openings_climb_to_them(inner):
-    """Replayed through the gateway, the coin server's record holds no tree top in the clear (level 0's ``root_B``, each
+    """Replayed through the firewall, the coin server's record holds no tree top in the clear (level 0's ``root_B``, each
     later level's cap: one ``b || c`` a node), V*'s opened tops are the proofs' caps, and every opening climbs to its node."""
     public, private, proofs = V.load(inner)
     text = (inner / "public.json").read_text()

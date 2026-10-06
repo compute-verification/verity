@@ -14,7 +14,7 @@ POINTS: `{"link": [[hex, ...], ...], "reps": [{"alpha", "beta", "lw": [64], "rho
 `os`: the statement's tags on the verifier's live OS coins (`verify --coins os`), else seeded coins.
 `--partition`: the verifier's copy of the `verity/partition/v1` object a circuit binds (`verify --partition`).
 `--plain-leaves`: the statement's tags with the inner statement's plain SHA-512 leaves (`leafSchemePlain`) in place of
-their own leaf-commitment scheme: a recursive session's inner statement, whose tree tops the gateway salts.
+their own leaf-commitment scheme: a recursive session's inner statement, whose tree tops the firewall salts.
 -/
 
 open Lean Flock

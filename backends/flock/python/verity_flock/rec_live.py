@@ -4,7 +4,7 @@ C-Flock prover against a verifier that never sees the hidden statement or the pr
     python -m verity_flock.rec_live --listen 127.0.0.1:PORT --out DIR [--sessions 1]
 
 The prover (``flock-circuit prove --verifier ADDR`` under ``FC_COINS=os``) speaks the live protocol (``live/src/lib.rs``) to
-:class:`Proxy`, the gateway, which runs on the prover's side. The proxy answers what the live server would, except that every
+:class:`Proxy`, the firewall, which runs on the prover's side. The proxy answers what the live server would, except that every
 coin comes from :class:`CoinServer`, the verifier's side, which is shown only the session's public data:
 
 * ``Hello``: the schedule (profile, reps, flavor, tables, the link's shape), without Σ (a digest of the hidden statement);
@@ -17,11 +17,11 @@ coin comes from :class:`CoinServer`, the verifier's side, which is shown only th
 registered row is (`top_rows`: its 32 u16 words and 32 zero words, one SHA-512 block; ``hm96-sha512/row/v1`` under its own
 fresh 192-byte salt), so the coin server holds one ``b || c`` a node and V*'s openings each read their node as one row of the
 registered value the verifier builds from them (`verity_flock.rec_outer`). The nodes and salts are the prover's
-(``private.json``). Level 0's cap reaches the gateway three times (``Commit``, the rep's binding round, Ligerito's first
-absorb): it is committed once, at ``Commit``, and the gateway refuses a binding round whose cap is not ``root_B``; a later
+(``private.json``). Level 0's cap reaches the firewall three times (``Commit``, the rep's binding round, Ligerito's first
+absorb): it is committed once, at ``Commit``, and the firewall refuses a binding round whose cap is not ``root_B``; a later
 copy is counted (``level0``), never committed again. The inner trees' leaves need no salt of their own (the statement's
 ``flock-leaf/sha512-unsalted``, `verity_flock.circuit.LEAF_SCHEME_PLAIN`): nothing about a tree but its salted top leaves the
-gateway.
+firewall.
 
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (committed as its salted

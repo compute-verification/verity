@@ -1488,7 +1488,7 @@ needs none. `Tags.withPlainLeaves` changes three things.
 
 - META `leaf_scheme` is pinned to upstream's `leaf_scheme_plain` object (`verity_flock.circuit.LEAF_SCHEME_PLAIN`):
   `{"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0, "use": "a recursive session's
-  inner statement: the gateway commits every tree top under a salt, ZK off"}`.
+  inner statement: the firewall commits every tree top under a salt, ZK off"}`.
 - The identity's `leaf_scheme` is that object, and its `hashes.merkle` is `"sha512 (every Ligerito level)"`, as upstream's
   `identity` writes them for such a statement. Everything else is §16.13's identity, and on `--coins os` its live-OS form.
 - Every opening carries an empty `opened_salts`, as every opening of PR #83's prover does from `2908d078` on
