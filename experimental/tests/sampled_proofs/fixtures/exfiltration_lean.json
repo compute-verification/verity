@@ -3,10 +3,14 @@
  "statement": "FlockSoundness.Audit.Partition.audit_exfiltration",
  "inputs": {
   "experimental/tests/sampled_proofs/lean/ExfiltrationVectors.lean": "3b4a068d82025f3f5883b36944806786da1e72bdf5bb24f260e26c0e19bf49d9",
-  "verity/Security/Proofs/Flock/Soundness/Audit/Influence.lean": "9548ca5d7a170e2830009e028ab679a99aef66872fc2f328750c048beb54a4b1",
-  "verity/Security/Proofs/Flock/Soundness/Audit/Law.lean": "cf59d38162da3bebbbf533b0c8d064d4ac0609c619c14d7216342bc03b3bd81e",
-  "verity/Security/Proofs/Flock/Soundness/Audit/Stratified.lean": "0a0758fd56f4f5b2b5bb3da987ccb130ac23e999911962f12b7b1ff5f3e4c8ce",
-  "verity/Security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean": "8ca04b7e4c055f5d66108bb0faea515554dd865d5ef5308a604c2821532cd240",
+  "verity/Security/Proofs/Flock/Soundness/Audit/Influence.lean": "47b832e94ad73254f1f26b0d34d453b7a726f02de695b9ca796f2df9d4dfa7cc",
+  "verity/Security/Proofs/Flock/Soundness/Audit/Law.lean": "5809f3ef80d0d66b2aaf3859b08d570c21a3173ee8e38886413644dea8847e02",
+  "verity/Security/Proofs/Flock/Soundness/Audit/Stratified.lean": "588b13ca0cb0fdf7d737cde3c3cceac1874011124952e95a04727323679da328",
+  "verity/Security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean": "3f9bd5f3507b60953fe73c23e9b2afd4b41228b7fd955e66cd1f8446447d0de4",
+  "verity/Security/Definitions/Flock/Audit/Influence.lean": "64160f3e84ed126b471766c2f6aa9132f4fdea83347a6de174ac9470ce98efe6",
+  "verity/Security/Definitions/Flock/Audit/Law.lean": "ec44c541403082b11baa4fc97bb433fd5a730f8f386a2dd958b75c4aaa50fe24",
+  "verity/Security/Definitions/Flock/Audit/Stratified.lean": "b282ef85d86fa2796d3aa939c7dfcc064c5901359b25f5ef5a993af9777cb422",
+  "verity/Security/Definitions/Flock/Audit/StratifiedMiss.lean": "c6ece16d911aa67c463f3234f73c4a8edbdf02d1c2fb579b9051f68bf30708ba",
   "verity/Security/Proofs/lake-manifest.json": "414ad2f21442a2c3e6ff556139c15df3bad19cfd6bd20d33114c2337eac5f54f",
   "verity/Security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632"
  },
