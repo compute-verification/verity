@@ -6,7 +6,7 @@ Inputs taken from probe5.jsonl, each at the attacker's end of what was measured:
              models are also run at t_smem_pass, the fastest full pass (read a neighbour, write, barrier)
   t_mul      a Barrett modular multiplication's chain: two IMAD.HI (product and quotient) and two IMAD (q*m and the
              correction)
-  t_sm       30 IMAD.WIDE + the densest measured round's int8 MACs per cycle / 16 (this GPU only)
+  t_sm       30 IMAD.WIDE + int8 MACs per cycle / 16, at the larger of probe4's 1,004 and the densest round here
   sm_sq_cyc  the fastest block size's dependent round of 330 m16n8k32 int8 mma (1.35M MACs, one depth-3 Karatsuba
              squaring of 633 words; rounded up to a multiple of the warps), with its smem write-back and barrier; it
              omits carries and the fold
@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from floor_model import T_MMA, rows
+from floor_model import T_MMA, T_SM, rows
 
 K_MMA = 330
 
@@ -62,7 +62,7 @@ def main() -> None:
     b200 = {"scaled": c0 + mma, "mma_tail": mma + a.t_mma + m["t_mul"] + m["t_smem"], "mma_only": mma}
     out = {"inputs": m, "b200_sm_sq_cyc": {k: round(v, 1) for k, v in b200.items()},
            "b200_macs_per_clk": a.b200_macs_per_clk, "t_mma": a.t_mma, "models": {}}
-    rtx_t_sm = 30 + m["dense_macs_per_clk"] / 16
+    rtx_t_sm = max(T_SM, 30 + m["dense_macs_per_clk"] / 16)
     for hop in (324, 447):
         for sname, ts in (("ld", m["t_smem"]), ("pass", m["t_smem_pass"])):
             out["models"][f"rtx_hop{hop}_smem_{sname}"] = rows(hop, m["t_mul"], 2430, m["t_bfly"], ts, t_sm=rtx_t_sm,
