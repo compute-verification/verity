@@ -57171,11 +57171,12 @@
    ]
   },
   "Proofs.Flock.Soundness.Audit.Circuit": {
-   "digest": "6ff5d938f4c9e28edeff46c36d582bbf0d7bcac43cbbd8de82390724b13cca83",
+   "digest": "e4079ef36de136feddfdaf8c22feaf69d64568230a3b19b92fa1a826dd802a1d",
    "definitions": {
     "FlockSoundness.Audit.Circuit": "eae3834eb80d05abdb52d58e58d3c548f90ac029f7714633011254b9b86ce639",
     "FlockSoundness.Audit.Circuit.InputsAgree": "946208bc30eceea43a59a532b892b35ffd7f158e33cbc6499dd192a9eb2b5ac3",
     "FlockSoundness.Audit.Circuit.N": "2b5691665b0fbb60db49cdf4b0747640b7040dfa5bf45633080d74aba0ad1b78",
+    "FlockSoundness.Audit.Circuit.eval": "57422ea01448b310290b329076d199020ceed1cd3a4cd2802406443810c88dfc",
     "FlockSoundness.Audit.Circuit.op": "97912b36c50d00a1dbe0dfc71e4078501f7f6ac4ff029f43397ff23629d59ecc",
     "FlockSoundness.Audit.Circuit.outputs": "97687faac62607feefae89c9d9802053cfade7d48f155c95c6e3c7abe73a0412",
     "FlockSoundness.Audit.Circuit.run": "7344d2539a14645ea847e2a24c10d5564626bb33c215b1677fbefd5757aaea11",
@@ -64595,6 +64596,14 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR_custody",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundR"
    ]
+  },
+  "Proofs.Flock.Soundness.Discharge.ZkLink.Public": {
+   "digest": "73167417cd1d0e801e3d97cc32b10b24c581c56a80a2a999c7ade1496e9d7ed5",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkLink.RightRegZ": "89ee6b65b31cdef6e0edfe8e443dd4f6500bc9f32464da0d7a72d1a5c9a0b4e7",
+    "FlockSoundness.Discharge.ZkLink.wrongRegZ": "ccbde5e870e121f958eac0c18f18f754f863cefc3c3b641e052132f726e9a9d2"
+   },
+   "guarantees": ["Flock.SecurityProofs.EndToEnd"]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.Push": {
    "digest": "8fece95b459b80493de9fb03a2db80f193ea744cef25242ebfd585429fa6b5b2",
@@ -74069,9 +74078,9 @@
    ]
   },
   "Specs.Flock.Guarantees.EndToEnd": {
-   "digest": "9df81e3b6cd024b47799e4c9d42728a803e740a42fbc8f9345ea65499dbd23ac",
+   "digest": "ad40a08625b963990b9762baf1aee17069395d082076b64e8ccf81c8897ab308",
    "definitions": {
-    "Flock.Guarantees.EndToEnd": "c8e82f248cc5e6f01356f4e1755e2450dd6ee36f0aa5a1b8af615e50651e767d"
+    "Flock.Guarantees.EndToEnd": "da693c86a82219df30325e227fe5226e7346c3a588a2473e22240cdfc111e3ff"
    },
    "guarantees": ["Flock.SecurityProofs.EndToEnd"]
   },
