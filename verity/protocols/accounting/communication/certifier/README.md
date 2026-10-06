@@ -14,7 +14,11 @@ A spec-level reference for network transparency's timing channel:
 It is pure Python. It imports only the standard library and `verity`, for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`. The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
-`PROTOCOL.md` has the semantics and the correspondence to the Lean package.
+`PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`verity/Security/`, area `NetworkCertifier`).
+`lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
+definitions, proved equal to them in `verity/Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
+package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `lean/scripts/difftest_vectors.py` writes; the audit runs it
+from `lean/lean-audit.json`).
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
 `verity/Security/Specs/NetworkCertifier/Guarantees.lean`'s documentation:
