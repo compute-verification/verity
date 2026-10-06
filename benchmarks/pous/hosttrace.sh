@@ -10,8 +10,15 @@ vcpu=$1 rcpu=$2; shift 3
 out=${HOSTTRACE_OUT:-${RESEARCH_RUN_DIR:-.}/hosttrace.txt}
 here=$(cd "$(dirname "$0")" && pwd)
 pid=
-if sudo -n true 2>/dev/null && command -v bpftrace >/dev/null; then
-  sudo -n bpftrace "$here/hosttrace.bt" "$vcpu" "$rcpu" "${HOSTTRACE_OVER_NS:-5000}" > "$out" 2>&1 &
+# bpftrace runs as root, so nothing this script's caller can signal reaches it: a root guard stops it once this script is
+# gone, however it ended (a SIGKILLed lease included), so a tracer never outlives its run and holds the timed lease.
+guard='p=$1; shift; "$@" & b=$!
+trap "kill -INT $b" TERM HUP
+while kill -0 "$p" 2>/dev/null && kill -0 "$b" 2>/dev/null; do sleep 0.2; done
+kill -INT "$b" 2>/dev/null; wait "$b"'
+bpftrace=$(command -v "${HOSTTRACE_BPFTRACE:-bpftrace}")
+if sudo -n true 2>/dev/null && [ -n "$bpftrace" ]; then
+  sudo -n sh -c "$guard" hosttrace-guard $$ "$bpftrace" "$here/hosttrace.bt" "$vcpu" "$rcpu" "${HOSTTRACE_OVER_NS:-5000}" > "$out" 2>&1 &
   pid=$!
   for _ in $(seq 300); do grep -q '^hosttrace' "$out" 2>/dev/null && break; kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
   grep -q '^hosttrace' "$out" 2>/dev/null || { echo "hosttrace: bpftrace did not attach" >> "$out"; pid=; }
@@ -23,7 +30,7 @@ before=$(steal before)
 "$@"
 rc=$?
 if [ -n "$pid" ]; then
-  sudo -n kill -INT "$(pgrep -P "$pid" bpftrace || echo "$pid")" 2>/dev/null
+  sudo -n kill -TERM "$pid" 2>/dev/null
   wait "$pid"
 fi
 { echo "$before"; steal after; echo "steal_ticks_hz $(getconf CLK_TCK)"; } >> "$out"
