@@ -476,7 +476,8 @@ def test_a_calls_steps_split_after_its_a_tree_and_before_its_tile_hashing():
     run._call_names = lambda: PPD.PearlCDeviceRun._call_names(run)
     a, b = PPD.PearlCDeviceRun._call_cuts(run, pipe)
     names = [x for x in run._call_names() if x != "pad_a"]
-    assert names[:a] == ["node_keys_a", "hash_rows_a", "tree_a", "seed_a"] and names[b:] == ["hash_msg", "hash_leaf"]
+    # every call step, so -h3's row seeds too: A's tree, before forming
+    assert names[:a] == ["node_keys_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a"] and names[b:] == ["hash_msg", "hash_leaf"]
     run.hashing = False
     assert PPD.PearlCDeviceRun._call_cuts(run, pipe) == (0, len(run._call_names()))
     run._call_names = lambda: ("lines_ea", "hash_rows_a", "gemm_pearlc", "hash_msg")
