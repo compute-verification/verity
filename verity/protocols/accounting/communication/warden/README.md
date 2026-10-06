@@ -3,15 +3,17 @@
 A spec-level reference for network transparency's timing channel:
 - the constant-rate, left-packed warden;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
-- the exact audit with record-and-reject, on raw records or records committed by hash (padding elided), and the
-  ingress links' status check;
+- the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network
+  certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest, with the window's
+  frames in a fixed-depth SHA-512 tree), and the ingress links' status check;
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it has seen by then;
 - the active warden (`active`): an asyncio TCP proxy that runs the wardens on a live link and publishes their records.
 
-It is pure Python. It imports only the standard library and `verity`, for the record digest's `tagged_sha256` and
-`canonical_json_bytes`.
+It is pure Python. It imports only the standard library and `verity`, for the record digests' `tagged_sha256` and
+`tagged_sha512` and `canonical_json_bytes`. The certificate's signature scheme is a parameter: the certifier takes a
+`Signer` and the audit a `PublicKey` (`certificate`).
 `PROTOCOL.md` has the semantics and the correspondence to the Lean package.
 
 ~~~python
