@@ -4,8 +4,10 @@ import Proofs.Flock.Soundness.Discharge.Hm.Laid
 /-!
 # V*'s opening as one laid-out net
 
-`recOpenNet`: V*'s outer circuit `RecOpen_v3` as one circuit of the verifier's builder (`Flock.HmNets`), its ports
-`row, aux, acc, coef, dirs` the input bits `0, 1, …` in that order, then `recOpen`; its outputs `out ‖ acc_out`.
+`recOpenNet`: V*'s outer circuit `RecOpen_v3` or `RecOpen_v4` as one circuit of the verifier's builder
+(`Flock.HmNets`), its ports `row, aux, acc, coef, dirs` the input bits `0, 1, …` in that order, then `recOpen`; its
+outputs `out ‖ acc_out`. `Ports` gives the ports' widths, so it is either version: v4's `dirs` is 64 words where v3's
+is 8, and `recOpen` reads only its low bits.
 `Flock.HmNets.layout` lays it out as one slot type (`recOpenLaid`): the input bits in one group from column 0, then every
 AND's row in creation order, then the outputs in one group from `outStart`.
 
