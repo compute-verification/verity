@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from research.cli import main as research_main
+from research.cli import _custody_ttl_problem, main as research_main
 from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, grant_target
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
@@ -1000,6 +1000,9 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     assert flags[:4] == [sys.executable, "-m", "research", "run"] and "--require-result" in flags
     assert [flags[flags.index(k) + 1] for k in ("--on", "--project", "--cwd", "--declared-output")] == ["vy-test", "verity", "source", "out/*"]
     assert float(flags[flags.index("--timeout") + 1]) == Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S
+    ttl = flags[flags.index("--custody-ttl") + 1]
+    assert int(ttl) >= Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S + Q.REMOTE_GRACE_S and _custody_ttl_problem(ttl, flags) is None, \
+        "the custody key outlasts the run and the wait for its upload, so `research run` takes the launch"
     assert sorted(Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send") == ["quick_tier.py", "slot.py"]
     assert json.loads((world.tmp / "slot-seen.json").read_text())[:8] == [
         "--by", "lane-1", "--wait-max", f"{Q.REMOTE_WAIT_S:g}", "--run-max", f"{Q.REMOTE_TIMEOUT_S:g}", "--", "python3"]
