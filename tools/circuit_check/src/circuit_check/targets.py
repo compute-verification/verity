@@ -85,6 +85,9 @@ def load_registries() -> None:
     import verity.protocols.accounting.work.pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
     import verity.protocols.accounting.work.pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
     import verity.protocols.accounting.work.pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
+    import verity.protocols.accounting.space.pous.circuit  # noqa: F401  (P2's modular squaring on bits)
+    import verity.protocols.accounting.space.pous.decode_circuit  # noqa: F401  (P2's decode of one block)
+    import verity.protocols.accounting.space.pous.answer_circuit  # noqa: F401  (PoUS's per-answer opening)
     import verity_flock.rec_open  # noqa: F401  (V*'s opening check: recursion's inner Ligerito openings)
     import verity_flock.rec_residuals  # noqa: F401  (V*'s algebra: the inner verifier's checks on one rep)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
@@ -444,6 +447,20 @@ def _merkle_roots() -> list[Any]:
     return [bind(MerkleRead, ARITY=2, D=1), bind(MerkleRead, ARITY=4, D=1)]
 
 
+def _pous_roots() -> list[Any]:
+    """P2's modular squaring (`verity.protocols.accounting.space.pous.circuit`) at W = 128 with P2's C0 = 21,065: its square
+    takes a Toom-3 level (above `TOOM`), then Karatsuba (above `SCHOOL`), then schoolbook, so it reaches every piece; the
+    package's tests check it against Python's integers at P2's width and pin its gate counts there.  P2's decode of one
+    block at W = 64 (C0 = 189, its 116-byte expansion base) reaches the Keccak and field pieces; the answer opening of a
+    264-byte row reaches the row digest's head, a middle compression and a tail with its rest."""
+    from verity.primitives.circuits.defs import bind
+    from verity.protocols.accounting.space.pous.answer_circuit import PousAnswerOpens
+    from verity.protocols.accounting.space.pous.circuit import PousModSquare
+    from verity.protocols.accounting.space.pous.decode_circuit import PousP2Decode
+
+    return [bind(PousModSquare, W=128, C0=21065), bind(PousP2Decode, W=64, C0=189, L=116), bind(PousAnswerOpens, N=264)]
+
+
 def _rec_roots() -> list[Any]:
     """V*'s opening check (`verity_flock.rec_open`) at its smallest shape: a row of 8 lanes (one SHA-512 block) and one level,
     four compressions (the plain leaf's two and the level's two) and the consistency term's 16 products. Wider rows add
@@ -748,7 +765,7 @@ def catalog(by_unit: list | None = None) -> list[Any]:
     ROOT_ERRORS.clear()
     for units, make in ((("_core_roots",), _core_roots), (("_boolean_roots",), _boolean_roots),
                         (("_boolean_gather_roots",), _boolean_gather_roots), (("_universal_roots",), _universal_roots), (("_gf2k_roots",), _gf2k_roots),
-                        (("_merkle_roots",), _merkle_roots), (("_rec_roots",), _rec_roots), (("_kernel_roots",), _kernel_roots),
+                        (("_merkle_roots",), _merkle_roots), (("_pous_roots",), _pous_roots), (("_rec_roots",), _rec_roots), (("_kernel_roots",), _kernel_roots),
                         (("_vocabulary_roots", "_vocabulary_bindings"), _vocabulary_roots), (("_pouw_roots",), _pouw_roots)):
         roots += _produce(units, make, by_unit)
     for label, make in _model_roots():
