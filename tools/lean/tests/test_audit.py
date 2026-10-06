@@ -124,7 +124,9 @@ def test_a_guarantee_reads_only_spec_definitions_and_pinned_dependencies():
         "`meaning` and run `audit.py --update`"]
     exempt = pol | {"reads_exempt": {"P.Proofs": "until its spec is extracted", "P.Old": "stale"}}
     assert A.spec_reads(exempt, spec_facts(reads=fact()["reads"] + extra), home) == [
-        "reads: `reads_exempt` lists P.Old, under which no guarantee reads outside the spec; remove the entry"]
+        "reads: `reads_exempt` lists P.Old, under which no guarantee reads outside the spec; remove the entry, or, if a new "
+        "guarantee reads there, name it under `guarantees` (`\"NAME\": {\"owner\": \"@lane\"}`) and run "
+        "`audit.py --update`: the audit reads only the guarantees named there"]
     assert A.spec_reads(recorded(), spec_facts(), dict.fromkeys(FILES, []))[0].startswith(
         "reads: P.t read P.Hyp in P.Assumptions, outside the spec (none: no `layers`)"), "a package without layers has no spec"
 

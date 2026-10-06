@@ -743,7 +743,9 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
             fails.append(f"reads: {few(by)} read {few(defs)} in {m}, a spec module outside `meaning`, so the record holds "
                          f"nothing of them: add {m} to `meaning` and run `audit.py --update`")
     for p in sorted(set(exempt) - used):
-        fails.append(f"reads: `reads_exempt` lists {p}, under which no guarantee reads outside the spec; remove the entry")
+        fails.append(f"reads: `reads_exempt` lists {p}, under which no guarantee reads outside the spec; remove the entry, "
+                     f"or, if a new guarantee reads there, name it under `guarantees` (`\"NAME\": {{\"owner\": \"@lane\"}}`) "
+                     f"and run `audit.py --update`: the audit reads only the guarantees named there")
     return fails
 
 
