@@ -492,8 +492,8 @@ class CoinServer:
 
     def record(self) -> dict:
         """Everything the coin server saw and issued; its streams by name, as a schedule lists them, whatever order the
-        prover opened them in. A stream is listed once it has a round: the prover may send an Open any time before the
-        stream's first round, so a stopped session's record would otherwise show when it did."""
+        prover opened them in. A stream is listed once it has a round; the gateway opens it here only at that round, so
+        neither the record nor the coin server's calls show whether or when the prover sent its Open."""
         return {"kind": KIND, "tops": TOPS, "hello": self.hello, "link": self.link,
                 "streams": {s: self.streams[s] for s in sorted(self.streams) if self.streams[s]["rounds"]},
                 "rounds": self.rounds,
@@ -608,7 +608,9 @@ class Proxy:
             _, stream, parent, label, at = r
             want = self.schedule["streams"].get(stream)
             self._pinned(f"Open {stream}", {"parent": parent, "at": at}, want and {"parent": want["parent"], "at": want["at"]})
-            self.coins.open(stream, parent, at)
+            if stream in self.streams:
+                raise ValueError(f"stream {stream} opened twice")
+            # held until the stream's first round: where the prover sent its Open must not reach the coin server
             self.streams[stream] = {"parent": parent, "label": label, "at": at, "rounds": [], "cap": None}
             return resp_ok()
         if t == REQ_ROUND:
@@ -629,6 +631,10 @@ class Proxy:
             salts = [self.fresh_salt() for _ in rows]
             bcs = commit_rows(rows, salts)
             caps, cap_salts = zip(*(self._salted(c) for c in s.caps)) if s.caps else ((), ())
+            if k == 0:
+                if self.y is None:
+                    raise ValueError("a coin before the link exchange")
+                self.coins.open(stream, st["parent"], st["at"])
             coins = self.coins.round(stream, list(caps), bcs, n)
             st["rounds"].append({"content": content, "n": n, "coins": coins})
             self.private.append({"stream": stream, "k": k, "elements": [f128_hex(v) for v in s.free], "rows": rows,
