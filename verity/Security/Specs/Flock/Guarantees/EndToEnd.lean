@@ -53,7 +53,7 @@ def EndToEnd : Prop :=
     (pub : Public) (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOk c = true)
     -- the law: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
-    (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
+    (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     -- the record: the draw file at each draw, and the session at each draw and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n))
     (y₀ : DrawSetupZK I (mPtsOf c.g (kd / nTab I)) S₀ (dj S₀))

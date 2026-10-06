@@ -21,7 +21,7 @@ theorem EndToEnd : Flock.Guarantees.EndToEnd := by
     hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ hCR hA2
   have h := Discharge.Composed.zk_session_soundJ_custody I ht hc hU hpub hpt hscope kd hkd hdiv dj y₀ wr dg N Lb src hA3
     hTags hCust hk hRw hM hρ hr ht' K₀ τ (qF := qF) (qS := qS) hCR
-  rw [Law.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, if_pos hA2] at h
+  rw [Law.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
   exact h
 
 end Flock.SecurityProofs
