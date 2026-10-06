@@ -30,5 +30,5 @@ At hidden outputs and `J` tables (the production configuration): `DefsHJ`, the r
 is drawn into (`OwnReadsHJ`, `regPathsHJ`); `BindHJ`, the `J`-table rows without `pub.tables = none` (`rsZHJS`);
 `CheckedHJ`, `checked_of_acceptsHJ`; `SoundHJ`: `zk_session_soundHJR`; `SoundHJCustody`: `drawOkZKHJ_of_file` and
 `zk_session_soundHJR_custody`, under `live-verifier`; `PublicHJ`: `zk_session_soundHJR_custody_reg`, with "wrong"
-measured against the public file.
+measured against the public file, and `zk_session_soundHJR_custody_drawn_reg`, at the drawn units.
 -/
