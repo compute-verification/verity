@@ -9,7 +9,8 @@ kit's `p2-test-vectors/v1` (SHA-256 `781fec77…`, the file hash in the spec's �
 - `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile (`p2-2054B` at `DEPLOYMENT`: 2,054 bytes of each 2,056-byte block)
   and the store's shape (blocks per segment, segments).
 - `setup_salt`, `keys`: §4's post-commitment salt and per-block `K` and `t` (SHAKE256 with the v1 framing; `t` is
-  rejection-sampled below `p`).
+  rejection-sampled below `p`). `keys_v4`: the same keys from counter-mode SHA-512 streams under the v4 tag (Daniel's
+  ruling of 6 Oct 2026, one hash everywhere); not pinned by `vectors.json`.
 - `d`, `rho`, `sigma`, `encode`, `decode`: §3's maps, `E_j(m) = ρ(σ_K(ρ(m + t)))` and `D_j(c) = d(σ_K(d(c))) − t`.
 - `manifest`, `w_commitment`, `leaf`, `root`, `epoch_id`, `audit_key`: the setup commitment, the RFC 6962 verification
   tree over 0x00-tagged leaves, and the audit's challenge derivation (mode 0, `verity/pous/audit-challenge/v2`).
@@ -113,6 +114,35 @@ def keys(salt: bytes, params: Params, model: bytes, segment: int, block: int) ->
     attempt = 0
     while True:
         candidate = int.from_bytes(stream.digest((attempt + 1) * n)[attempt * n:], "big")
+        if candidate < params.p:
+            return k, candidate, attempt
+        attempt += 1
+
+
+KEYS_V4_TAG = b"verity/pous/p2/keys/v4\0"
+
+
+def expand_prefix_v4(salt: bytes, params: Params, model: bytes) -> bytes:
+    """v1's prefix with `KEYS_V4_TAG` in place of `frame(EXPAND_LABEL)`: 144 bytes at the deployment's prime id, one SHA-512
+    block and a 16-byte tail, so that every 64-byte chunk of a stream costs one compression past the host's midstate."""
+    return KEYS_V4_TAG + expand_prefix(salt, params, model)[len(frame(EXPAND_LABEL)):]
+
+
+def stream_v4(base: bytes, purpose: bytes, nbytes: int) -> bytes:
+    """The first `nbytes` of `SHA-512(base ‖ purpose ‖ u32be(0)) ‖ SHA-512(base ‖ purpose ‖ u32be(1)) ‖ …`."""
+    chunks = -(-nbytes // 64)
+    return b"".join(hashlib.sha512(base + purpose + i.to_bytes(4, "big")).digest() for i in range(chunks))[:nbytes]
+
+
+def keys_v4(salt: bytes, params: Params, model: bytes, segment: int, block: int) -> tuple[int, int, int]:
+    """`keys` with counter-mode SHA-512 streams (`stream_v4`) over `expand_prefix_v4` in place of SHAKE256; `t`'s rejection
+    sampling below `p` is v1's, over its stream's consecutive `W/8`-byte candidates."""
+    n = params.width_bytes
+    base = expand_prefix_v4(salt, params, model) + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
+    k = int.from_bytes(stream_v4(base, b"K", n), "big")
+    attempt = 0
+    while True:
+        candidate = int.from_bytes(stream_v4(base, b"t", (attempt + 1) * n)[attempt * n:], "big")
         if candidate < params.p:
             return k, candidate, attempt
         attempt += 1

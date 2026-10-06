@@ -111,6 +111,28 @@ def test_the_reference_encodes_the_full_width_vector():
     assert R.conformance(full_encode=True)["passed"]
 
 
+def test_the_v4_keys_are_counter_mode_sha512_over_one_block_and_a_16_byte_tail():
+    """`p2keys4.cuh` takes the prefix as whole SHA-512 blocks and a 16-byte tail, so that every chunk costs one compression."""
+    import hashlib
+
+    R, _, _ = _p2()
+    salt, model = bytes(range(32)), bytes(range(32, 64))
+    prefix = R.expand_prefix_v4(salt, R.DEPLOYMENT, model)
+    assert prefix.startswith(R.KEYS_V4_TAG) and prefix[len(R.KEYS_V4_TAG):] == R.expand_prefix(salt, R.DEPLOYMENT, model)[33:]
+    assert len(prefix) == 144 and len(prefix) % 128 + 16 + 1 + 4 + 1 + 16 <= 128
+    k, t, attempt = R.keys_v4(salt, R.DEPLOYMENT, model, 5, 1234)
+    base = prefix + (5).to_bytes(8, "big") + (1234).to_bytes(8, "big")
+    row = lambda p: b"".join(hashlib.sha512(base + p + i.to_bytes(4, "big")).digest() for i in range(33))[:2056]  # noqa: E731
+    assert k.to_bytes(2056, "big") == row(b"K") and attempt == 0 and t.to_bytes(2056, "big") == row(b"t")
+    assert (k, t) != R.keys(salt, R.DEPLOYMENT, model, 5, 1234)[:2]
+    small = _small()
+    for block in range(64):                                        # w = 128: t's rejection below p, over the stream's candidates
+        k, t, attempt = R.keys_v4(salt, small, model, 0, block)
+        stream = R.stream_v4(R.expand_prefix_v4(salt, small, model) + bytes(8) + block.to_bytes(8, "big"), b"t", 16 * (attempt + 1))
+        assert t == int.from_bytes(stream[-16:], "big") < small.p and k < 1 << 128
+        assert all(int.from_bytes(stream[16 * j:16 * j + 16], "big") >= small.p for j in range(attempt))
+
+
 def test_the_root_exponent_splits_as_the_kernel_takes_it():
     R, _, gpu = _p2()
     for params in (R.DEPLOYMENT, _small()):
