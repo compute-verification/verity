@@ -70,7 +70,7 @@ from math import lcm
 from verity.primitives.randomness import derive
 
 from verity.primitives.crypto import beacon as B
-from ..audit import Audit, Epoch, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile
+from ..audit import Audit, Epoch, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash, opened_value
 from ..protocol import Context, Matmul, Shape, Tile, tagged
 from ..serving import HASH_FORMATS
 from . import pearl_c as C
@@ -440,7 +440,8 @@ def check_drawn(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records:
     if v.ok:
         u = epoch.workload.matmuls[pos]
         ctx = Context(epoch.salt, u, transcript.activation_roots[pos], epoch.weight_roots[u.weight])
-        a, b = [o.value for o in opening.a], [o.value for o in opening.b]
+        h = commitment_hash(scheme)
+        a, b = [opened_value(h, o.value) for o in opening.a], [opened_value(h, o.value) for o in opening.b]
         reason = check_opened(scheme, records[pos], tile, a, b, scheme.encode(ctx, scheme.noise(ctx), a, b, tile))
         v = v if reason is None else Verdict(v.tile, False, reason)
     return v

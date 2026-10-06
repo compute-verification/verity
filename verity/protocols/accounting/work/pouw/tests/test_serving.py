@@ -64,13 +64,15 @@ def test_a_name_outside_the_grammar_is_refused_by_what_is_wrong(name, why):
 
 
 def test_the_formats_keys_are_blake3_of_their_labels_and_h0_has_none():
-    """`pearl_c.H1_KEYS` is ``blake3(f"pearl-c/h1/{role}")``; h2, h3 and h3s keep h1's digests and leaf (#532, #549)."""
-    for h in ("h1", "h2", "h3", "h3s"):
+    """`pearl_c.H1_KEYS` is ``blake3(f"pearl-c/h1/{role}")``; h2 and h3 keep h1's digests and leaf (#532, #549); h3s, SHA-512
+    throughout, has no BLAKE3 key."""
+    for h in ("h1", "h2", "h3"):
         f = HASH_FORMATS[h]
         assert f.message_key() == blake3(b"pearl-c/h1/message") and f.leaf_key() == blake3(b"pearl-c/h1/leaf")
-    assert HASH_FORMATS["h0"].message_key() is None and HASH_FORMATS["h0"].leaf_key() is None
+    for h in ("h0", "h3s"):
+        assert HASH_FORMATS[h].message_key() is None and HASH_FORMATS[h].leaf_key() is None
     assert [HASH_FORMATS[h].tree_hash for h in ("h0", "h1", "h2", "h3", "h3s")] == ["sha256", "blake3", "blake3-s256", "blake3-s256",
-                                                                                     "blake3-s256"]
+                                                                                     "hm96-sha512"]
 
 
 def test_hash_format_reads_a_name_an_id_or_a_scheme_object():

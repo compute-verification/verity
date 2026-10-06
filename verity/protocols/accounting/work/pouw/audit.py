@@ -17,10 +17,16 @@ prover's roots, Fiat-Shamir inside the scheme.  Commitments are `verity.primitiv
 scheme names another frame hash in ``commitment_hash`` (`commitment_hash`): ``"blake3"`` is ``frame-b3``, the tree mode whose
 row leaves stream through BLAKE3's chunk tree, for schemes whose rows must be committed within a decode step, and
 ``"blake3-s256"`` is ``frame-b3s``, ``frame-b3`` with each leaf a tree over its value's 256-byte segments (a shallower leaf).
+``"hm96-sha512"`` (`HM96`) is ``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
+followed by a 192-byte salt, a row's leaf ``hm96-sha512/row-seg/v1`` over the row's ``sha512/row-seg/v1`` digest and a tile's
+over its 64-byte digest itself; the prover's salts are a ChaCha20 stream under its own key (`hm96_salt`), and an opening's
+value carries its salt, so `opened_value` strips it before the scheme reads the value.
 """
 
 from __future__ import annotations
 
+import os
+import struct
 from bisect import bisect_right
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -28,7 +34,10 @@ from fractions import Fraction
 from itertools import accumulate
 from math import lcm
 
+from verity.errors import ProtocolError
 from verity.primitives.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits, verify_opening
+from verity.primitives.commitments import hm96
+from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
 from verity.primitives.randomness import derive
 
 from verity.primitives.crypto.beacon import QUICKNET, Chain, Round, check_after
@@ -38,6 +47,13 @@ SALT_DOMAIN = "verity/pouw/salt/v1"
 AUDIT_DOMAIN = "verity/pouw/audit/v1"
 ROW_SCHEMA = "verity/pouw/row/v1"
 TILE_SCHEMA = "verity/pouw/tile/v1"
+#: ``frame-v3-sha512`` with hm96-sha512 leaves (module docstring)
+HM96 = "hm96-sha512"
+HM96_KEY = hm96.SHA512.default_key
+HM96_SALT = hm96.SHA512.salt_bytes
+#: the hm96 salt stream's nonce of each tree: an activation tree's is its unit index, below 2^62
+HM96_WEIGHTS, HM96_TRANSCRIPT = 1 << 62, 1 << 63
+_M32 = 0xFFFFFFFF
 
 
 def commitment_hash(scheme: PoUWScheme) -> str:
@@ -45,7 +61,57 @@ def commitment_hash(scheme: PoUWScheme) -> str:
     return getattr(scheme, "commitment_hash", "sha256")
 
 
-def rows_domain(binding: bytes, owner: int, count: int, hash: str = "sha256") -> CommitmentDomain:
+def chacha20_block(key: bytes, counter: int, nonce: int) -> bytes:
+    """ChaCha20's block function, 20 rounds, with a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14, 15): C-Flock's
+    ``chacha20_block`` (``backends/flock/cuda/sha512.cuh``), the stream its hm96 leaf salts are drawn from."""
+    s = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574, *struct.unpack("<8I", key),
+         counter & _M32, counter >> 32, nonce & _M32, nonce >> 32]
+    x = list(s)
+
+    def qr(a: int, b: int, c: int, d: int) -> None:
+        for p, q, r, n in ((a, b, d, 16), (c, d, b, 12), (a, b, d, 8), (c, d, b, 7)):
+            x[p] = (x[p] + x[q]) & _M32
+            x[r] ^= x[p]
+            x[r] = ((x[r] << n) | (x[r] >> (32 - n))) & _M32
+
+    for _ in range(10):
+        qr(0, 4, 8, 12), qr(1, 5, 9, 13), qr(2, 6, 10, 14), qr(3, 7, 11, 15)
+        qr(0, 5, 10, 15), qr(1, 6, 11, 12), qr(2, 7, 8, 13), qr(3, 4, 9, 14)
+    return struct.pack("<16I", *[(x[i] + s[i]) & _M32 for i in range(16)])
+
+
+def hm96_salt(key: bytes, nonce: int, i: int) -> bytes:
+    """Leaf i's 192-byte salt in the tree with salt nonce `nonce`: ChaCha20 blocks 3i, 3i + 1 and 3i + 2 under the prover's
+    32-byte `key` (C-Flock's ``hm96_salt``)."""
+    return b"".join(chacha20_block(key, 3 * i + j, nonce) for j in range(3))
+
+
+@dataclass(frozen=True, slots=True)
+class Hm96Domain(CommitmentDomain):
+    """A ``frame-v3-sha512`` domain whose leaves are hm96-sha512 leaves under the pinned key: a value is its preimage followed
+    by its 192-byte salt y, x the preimage's ``sha512/row-seg/v1`` digest (a row) or, with ``digests``, the 64-byte preimage
+    itself (a tile's digest), and the frame leaf is ``rowleaf.row_leaf``'s over ``hm96.SHA512.tree_leaf(b ‖ c)`` under
+    ``hm96-sha512/row-seg/v1``.  ``schema`` is not read: the domain's binding separates its trees."""
+
+    digests: bool = False
+
+    def leaf(self, rank: int, position: int, schema: str, value: bytes) -> bytes:
+        if len(value) < HM96_SALT or self.digests and len(value) != 64 + HM96_SALT:
+            raise ProtocolError(f"an {HM96} value is its preimage and a {HM96_SALT}-byte salt")
+        pre, y = value[:-HM96_SALT], value[-HM96_SALT:]
+        x = pre if self.digests else sha512_row_seg_digest(pre, 8 * len(pre))
+        hl = hm96.SHA512.tree_leaf(HM96_KEY, hm96.SHA512.commit_string(HM96_KEY, x, y))
+        return CommitmentDomain.leaf(self, rank, position, SCHEMA_HM96_SHA512_ROW_SEG, hl)
+
+
+def opened_value(hash: str, value: bytes) -> bytes:
+    """What a scheme reads of a committed value: the value, less its salt under `HM96`."""
+    return value[:-HM96_SALT] if hash == HM96 else value
+
+
+def rows_domain(binding: bytes, owner: int, count: int, hash: str = "sha256", digests: bool = False) -> CommitmentDomain:
+    if hash == HM96:
+        return Hm96Domain(binding, owner, RangeIndexedDomain(count), hash="sha512", digests=digests)
     return CommitmentDomain(binding, owner, RangeIndexedDomain(count), hash=hash)
 
 
@@ -57,8 +123,14 @@ def activation_binding(salt: bytes, index: int) -> bytes:
     return tagged("verity/pouw/activation-rows/v1", salt, index)
 
 
-def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "sha256") -> MerkleTree:
-    return MerkleTree(rows_domain(binding, owner, len(rows), hash), dict(enumerate(rows)), lambda _: ROW_SCHEMA)
+def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "sha256", salt_key: bytes | None = None,
+                nonce: int = 0, digests: bool = False) -> MerkleTree:
+    """`rows` in one tree; under `HM96` each value is followed by its salt, `hm96_salt(salt_key, nonce, i)`."""
+    if hash == HM96:
+        if salt_key is None:
+            raise ProtocolError(f"an {HM96} tree takes the prover's salt key")
+        rows = [r + hm96_salt(salt_key, nonce, i) for i, r in enumerate(rows)]
+    return MerkleTree(rows_domain(binding, owner, len(rows), hash, digests), dict(enumerate(rows)), lambda _: ROW_SCHEMA)
 
 
 def weights_root(weight_roots: Mapping[int, bytes]) -> bytes:
@@ -133,8 +205,12 @@ def tile_refs(scheme: PoUWScheme, workload: Workload) -> list[TileRef]:
     return out
 
 
+def transcript_binding(epoch: Epoch) -> bytes:
+    return tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root)
+
+
 def transcript_domain(epoch: Epoch, count: int, hash: str = "sha256") -> CommitmentDomain:
-    return rows_domain(tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root), -1, count, hash)
+    return rows_domain(transcript_binding(epoch), -1, count, hash, digests=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,11 +249,14 @@ class Prover:
     fast implementation replaces it and must agree with the reference on the scheme's vectors."""
 
     def __init__(self, scheme: PoUWScheme, weights: Mapping[int, Sequence[bytes]],
-                 kernel: Callable[..., list[tuple[bytes, list[list]]]] = reference_kernel):
+                 kernel: Callable[..., list[tuple[bytes, list[list]]]] = reference_kernel, salt_key: bytes | None = None):
+        """`salt_key` is the prover's key of its hm96 salts under `HM96` (fresh by default)."""
         self.scheme, self.kernel = scheme, kernel
         self.weights = {w: list(rows) for w, rows in weights.items()}
         self.hash = commitment_hash(scheme)
-        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash) for w, rows in self.weights.items()}
+        self.salt_key = (salt_key or os.urandom(32)) if self.hash == HM96 else None
+        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash, self.salt_key, HM96_WEIGHTS + w)
+                             for w, rows in self.weights.items()}
         self._act_trees: list[MerkleTree] = []
         self._refs: list[TileRef] = []
         self._tree: MerkleTree | None = None
@@ -197,7 +276,7 @@ class Prover:
             rows = list(activations[u.index])
             if len(rows) != u.shape.m:
                 raise DomainError(f"matmul {u.index} has {u.shape.m} activation rows")
-            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash)
+            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash, self.salt_key, u.index)
             self._act_trees.append(tree)
             ctx = Context(epoch.salt, u, tree.commitment.root, epoch.weight_roots[u.weight])
             tiles = scheme.tiles(u.shape)
@@ -209,11 +288,13 @@ class Prover:
                     for bj, j in enumerate(t.cols):
                         out[i][j] = block[bi][bj]
             outputs.append(out)
+        if self.hash == HM96:
+            leaves = [d + hm96_salt(self.salt_key, HM96_TRANSCRIPT, i) for i, d in enumerate(leaves)]
         self._tree = MerkleTree(transcript_domain(epoch, len(leaves), self.hash), dict(enumerate(leaves)), lambda _: TILE_SCHEMA)
         return Transcript(tuple(t.commitment.root for t in self._act_trees), self._tree.commitment, tuple(outputs))
 
     def digest(self, tile_id: int) -> bytes:
-        return self._tree.open(tile_id).value
+        return opened_value(self.hash, self._tree.open(tile_id).value)
 
     def open(self, epoch: Epoch, tile_id: int) -> TileOpening:
         ref = self._refs[tile_id]
@@ -328,19 +409,27 @@ class Verifier:
         db = rows_domain(weight_binding(u.weight), -2, u.shape.n, h)
         if [o.position for o in opening.a] != list(ref.tile.rows) or [o.position for o in opening.b] != list(ref.tile.cols):
             return Verdict(ref.id, False, "openings do not cover the tile")
-        if not all(verify_opening(da, Commitment(root_a, u.shape.m), o, ROW_SCHEMA, self.limits) for o in opening.a):
+
+        def opens(dom: CommitmentDomain, c: Commitment, o: Opening, schema: str) -> bool:
+            try:
+                return verify_opening(dom, c, o, schema, self.limits)
+            except ProtocolError:
+                return False
+
+        if not all(opens(da, Commitment(root_a, u.shape.m), o, ROW_SCHEMA) for o in opening.a):
             return Verdict(ref.id, False, "activation opening")
-        if not all(verify_opening(db, Commitment(root_b, u.shape.n), o, ROW_SCHEMA, self.limits) for o in opening.b):
+        if not all(opens(db, Commitment(root_b, u.shape.n), o, ROW_SCHEMA) for o in opening.b):
             return Verdict(ref.id, False, "weight opening")
-        if opening.leaf.position != ref.id or not verify_opening(transcript_domain(ep, len(self.refs), h), transcript.commitment,
-                                                                 opening.leaf, TILE_SCHEMA, self.limits):
+        if opening.leaf.position != ref.id or not opens(transcript_domain(ep, len(self.refs), h), transcript.commitment,
+                                                        opening.leaf, TILE_SCHEMA):
             return Verdict(ref.id, False, "transcript opening")
         ctx = Context(ep.salt, u, root_a, root_b)
         noise = scheme.noise(ctx)
-        ops = scheme.encode(ctx, noise, [o.value for o in opening.a], [o.value for o in opening.b], ref.tile)
+        ops = scheme.encode(ctx, noise, [opened_value(h, o.value) for o in opening.a], [opened_value(h, o.value) for o in opening.b],
+                            ref.tile)
         if ops is None or not scheme.admissible(ctx, ops):
             return Verdict(ref.id, False, "inadmissible inputs")
-        if scheme.digest(ctx, noise, scheme.checked(ctx, ops)) != opening.leaf.value:
+        if scheme.digest(ctx, noise, scheme.checked(ctx, ops)) != opened_value(h, opening.leaf.value):
             return Verdict(ref.id, False, "checked values")
         return Verdict(ref.id, True)
 
@@ -355,6 +444,6 @@ class Verifier:
         return Audit(ok, selected, verdicts, profile)
 
 
-__all__ = ["AUDIT_DOMAIN", "SALT_DOMAIN", "Audit", "Epoch", "Lottery", "Prover", "Sampled", "TileOpening", "TileRef", "Transcript",
-           "Verdict", "Verifier", "WorkProfile", "Workload", "commit_rows", "commitment_hash", "reference_kernel", "tickets",
-           "tile_refs"]
+__all__ = ["AUDIT_DOMAIN", "HM96", "SALT_DOMAIN", "Audit", "Epoch", "Hm96Domain", "Lottery", "Prover", "Sampled", "TileOpening",
+           "TileRef", "Transcript", "Verdict", "Verifier", "WorkProfile", "Workload", "commit_rows", "commitment_hash", "hm96_salt",
+           "opened_value", "reference_kernel", "tickets", "tile_refs"]

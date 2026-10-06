@@ -52,8 +52,7 @@ HASH_FORMATS: dict[str, HashFormat] = {
     "h1": HashFormat("h1", "blake3", "pearl-c/h1/message", "pearl-c/h1/leaf", "unit-root"),
     "h2": HashFormat("h2", "blake3-s256", "pearl-c/h1/message", "pearl-c/h1/leaf", "unit-root"),
     "h3": HashFormat("h3", "blake3-s256", "pearl-c/h1/message", "pearl-c/h1/leaf", "row", row_cap=True),
-    "h3s": HashFormat("h3s", "blake3-s256", "pearl-c/h1/message", "pearl-c/h1/leaf", "row", row_cap=True,
-                      row_digest="sha512/row-seg/v1"),
+    "h3s": HashFormat("h3s", "hm96-sha512", None, None, "row", row_cap=True, row_digest="sha512/row-seg/v1"),
 }
 
 #: `pearl_c_device.DEVICES`' records: the panel's pearl-c-sm120 v1 is ``sm120`` (G = 4), its v2 ``sm120-unpromoted``

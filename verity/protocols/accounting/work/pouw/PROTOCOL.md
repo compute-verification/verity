@@ -466,18 +466,31 @@ useful    U/(α_A·α_B), glue
     unit's seed_A over root_A. The `test-16-v1-h3` and `decode-32-v1-h3` vectors pin a call end to end.
   - The work law checks the row cap on every credited A row of a drawn tile, over its credited columns, after the tile's
     cap (`pearl_c_work.row_cap`), and `volunteer` gives up a row over it first.
-- **Hashing format -h3s** (`serving.HASH_FORMATS["h3s"]`: -h3's, with `row_digest="sha512/row-seg/v1"`) is -h3 with each
-  row's seed keyed on its SHA-512 row digest instead of its leaf in A's tree: one hash for the row-seed key, SHA-512, as
-  the proof service's row commitments use.
-  - `row_seed`(salt, d_i, root_B, u, i) with d_i = `pearl_c.row_digest`(row i), `rowleaf.sha512_row_seg_digest` over the
-    row's FP32 words little-endian: 1 KiB segments hashed on their own, then their digests (a 4096-wide row is 16
-    segments, a 14336-wide one 56). The seed's input is 136 bytes; `hash.cuh`'s `b3_seeds` computes it in mode 2, from
-    the digests `sha512_rows.cuh`'s `s512_rows` writes in the commit phase.
-  - Everything else is -h3's: A's tree is still `frame-b3s`, the tickets keep seed_A over its root, and the row cap
-    holds. A's tree is no longer read by forming at all, so it may leave the main lane as under -h3.
+- **Hashing format -h3s** (`serving.HASH_FORMATS["h3s"]`: tree hash `audit.HM96`, no BLAKE3 keys,
+  `row_digest="sha512/row-seg/v1"`) is -h3 through SHA-512: every place -h3 hashes with BLAKE3 hashes with SHA-512, as the
+  proof service's row commitments do, so the scheme assumes one hash's collision resistance (`cr/sha-512`) where -h3 assumes
+  BLAKE3's.
+  - Labels: H_ℓ(x) = `pearl_c.s512`(ℓ, x), the first 32 bytes of SHA-512(``pearl-c/h3s/<ℓ>\0`` zero-padded to 128 bytes ‖
+    x), for ℓ in seed-A, seed-B, noise-line, line and jackpot. seed_B = H_seed-B(salt ‖ root_B), seed_A = H_seed-A(salt ‖
+    root_A ‖ root_B ‖ u64 LE index), the roots 64 bytes.
+  - `row_seed`(salt, d_i, root_B, u, i) is H_seed-A over salt ‖ d_i ‖ root_B ‖ u64 LE (u · 2^32 + i), 168 bytes, with
+    d_i = `pearl_c.row_digest`(row i), `rowleaf.sha512_row_seg_digest` over the row's FP32 words little-endian: 1 KiB
+    segments hashed on their own, then their digests (a 4096-wide row is 16 segments, a 14336-wide one 56).
+  - Lines (`pearl_c.sample_line`): Pearl's rule over 32 bytes H_line(H_noise-line(seed) ‖ side ‖ factor ‖ u32 LE line)
+    in place of BLAKE3's keyed by Pearl's line key.
+  - The tile leaf is `sha512_row_seg_digest` over the tile's messages themselves (le32 C̃ ‖ le32 U per row and 32-column
+    chunk, row-major), 64 bytes; its 1 KiB segment digests take the message digests' place. The tickets are
+    H_jackpot(seed_A ‖ fold).
+  - Trees: A's rows, B's rows and the tile leaves are `audit.HM96`, `frame-v3-sha512` with hm96-sha512 leaves
+    (`audit.Hm96Domain`): x is a row's `sha512/row-seg/v1` digest (the same d_i) or the tile leaf, the salt the prover's
+    ChaCha20 stream (`audit.hm96_salt`, nonce the unit index for A's tree, 2^62 + w for weight w's, 2^63 for the
+    transcript's), and an opening's value carries its salt.
+  - SHA-256 stays where the protocol, not the scheme, hashes: each domain's binding (`tagged`, which core's frame takes as
+    32 bytes), the salt's derivation, the draws and the records' root. It is not -h3's own and was never BLAKE3.
+  - The row cap holds as under -h3. A's tree is not read by forming, so it may leave the main lane as under -h3.
   - `PearlC(hashing="h3s")` (`pearl-c-…-v1-h3s`, not registered); the `test-16-v1-h3s` and `decode-32-v1-h3s` vectors pin
     a call end to end, with row 0's digest and a hash of every row digest. -h3's verifier refuses an -h3s transcript on its
-    checked values.
+    activation openings. -h3 (BLAKE3) stays as the comparison arm.
 - **Row tiles.** m is a multiple of 16, not of 64: the last row tile may be partial, in whole 16 × 16 ticket subtiles.
   Decode's 32 × 64 tile has a leaf over its 64 digests (2 KB), so decode is not padded to 64 rows.
 - **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
