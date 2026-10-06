@@ -38,8 +38,11 @@ mountpoint -q /workspace || mount /workspace
 install -d -o "$U" -g "$U" /workspace/hf /workspace/hf/hub /workspace/hf/prefetch /workspace/research /workspace/ramlock \
   /workspace/cache /workspace/cache/uv /workspace/cp
 
+# TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB; four at once filled it on vy-nebius-1 (6 Oct)
+install -d -m 1777 -o root -g root /workspace/tmp
+echo 'd /workspace/tmp 1777 root root 10d' > /etc/tmpfiles.d/workspace-tmp.conf
 touch /etc/environment
-for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID; do
+for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID TMPDIR=/workspace/tmp; do
   grep -q "^${kv%%=*}=" /etc/environment || echo "$kv" >> /etc/environment
 done
 

@@ -64,8 +64,7 @@ def runs(setup, tmp_path_factory):
     results = {}
     for strategy in ar.STRATEGIES:
         run = out / strategy
-        mine = plan if strategy == "honest" else plan | {
-            "writes": ar.adversary_writes(plan, s.sync_set, s.egress_params.buckets, strategy, seed=1)}
+        mine = plan if strategy == "honest" else ar.adversary_plan(plan, s, strategy, seed=1)
         assert ar.run_virtual(mine, report, run) == {"server": 0, "proxy": 0, "peer": 0}
         results[strategy] = (run, ar.audit_configuration(mine, report, run))
     return plan, results
@@ -146,12 +145,13 @@ def test_a_released_frame_that_isnt_the_programs_is_counted_not_a_crash(setup, r
         [("requests", w, None, None) for w in range(3)]
 
 
-@pytest.mark.parametrize("strategy", ["burst", "spread", "bits"])
+@pytest.mark.parametrize("strategy", ["burst", "spread", "bits", "covert"])
 def test_a_server_that_signals_by_its_write_times_leaves_the_wire_identical(runs, strategy):
     _, results = runs
     run, audit = results[strategy]
     assert ar.against_honest(run, results["honest"][0]) == {"wire_is_honests": True, "committed_is_honests": True,
-                                                            "windows_whose_wire_differs": []}
+                                                            "windows_whose_wire_differs": [],
+                                                            "windows_whose_declared_differs": []}
     assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"])
     assert audit["comparisons"]["records_are_run_shapers"]
 
@@ -191,6 +191,43 @@ def test_a_proxy_that_declares_its_own_syncs_is_accepted_and_is_run_shapers(setu
         ar.plan_configuration(doc["configurations"][0], s, syncs="cover")
 
 
+def test_a_lagged_prover_declares_off_the_tick_and_is_accepted(setup, tmp_path):
+    """`--prover-lag`: window w's sync is the rule's on the frames ready by w·T − lag, chosen at that bucket, so the
+    tick at w·T only takes it. Every window after the first takes the rule's choice, none the envelope for want of
+    it, and the run is accepted and is `run_shaper`'s under what was declared."""
+    from verity.protocols.accounting.communication.certifier import online
+
+    doc, report, s = setup
+    plan = ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1") | {"prover_lag": 5}
+    assert ar.run_virtual(plan, report, tmp_path) == {"server": 0, "proxy": 0, "peer": 0}
+    import gzip
+    log = json.load(gzip.open(tmp_path / "proxy.json.gz", "rt"))
+    assert log["prover"]["lag"] == 5 and log["prover"]["unready"] == [] and len(log["prover"]["choose_ms"]) == 2
+    audit = ar.audit_configuration(plan, report, tmp_path)
+    assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"])
+    assert audit["comparisons"]["records_are_run_shapers"] and audit["comparisons"]["hands_are_the_rules"]
+    # the rule's choice on the model's frames ready by w·T − 5, window by window
+    release = {int(k): v for k, v in plan["model_release"].items()}
+    frames, ready = ar.model_frames(plan["sessions"], release, plan["windows"] * T)
+    want = [s.envelope]
+    for w in range(1, plan["windows"]):
+        seen = [(f, r) for f, r in zip(frames, ready) if r <= w * T - 5]
+        p = online.Prover(s.sync_set, T, online.rule("cover-2-1"), s.envelope)
+        for k, (f, r) in enumerate(seen):
+            p.arrive(0, k, f, r)
+        p.syncs = list(want)
+        want.append(p.declare())
+    assert log["syncs"] == [[x.delta, str(x.rho)] for x in want]
+
+
+def test_a_lagged_prover_with_no_choice_ready_declares_the_envelope(setup):
+    _, _, s = setup
+    p = ar.LaggedProver(s.sync_set, T, ar.online.rule("last"), s.envelope, lag=5, background=False)
+    assert p.declare() == s.envelope and p.declare() == s.envelope and p.log["unready"] == [1]
+    with pytest.raises(ValueError):
+        ar.LaggedProver(s.sync_set, T, ar.online.rule("last"), s.envelope, lag=T)
+
+
 def test_the_command_line_parses_a_sync_rule(tmp_path, capsys):
     """`--syncs` takes an online rule's name and refuses anything else, as an argument error."""
     argv = ["t.json", "--calibration", "c.json", "--out", str(tmp_path)]
@@ -221,6 +258,20 @@ def test_a_stalled_proxy_fails_its_window_closed(setup, runs, tmp_path, ms, resp
         [("requests", w, requests if w == 1 else None, requests if w == 1 else None) for w in range(3)]
     assert audit["comparisons"]["released_not_the_programs"] == 0
     assert audit["comparisons"]["frames_log_is_the_programs"]
+
+
+def test_a_window_its_online_declaration_misses_is_a_mismatch_from_late_frames(setup, tmp_path):
+    """Under `last`, a 110 ms stall after window 0's first release perturbs what the prover read of window 0, and it
+    declares window 1 a δ the Program's frames don't meet. Window 1's record is the shaper's rule on the frames as read
+    but not the Program's grid: a `mismatch` of an honest run, from frames read after their hand times."""
+    doc, report, s = setup
+    plan = ar.plan_configuration(doc["configurations"][0], s, syncs="last")
+    ar.run_virtual(plan, report, tmp_path, stalls=[(1, 0.11)])
+    audit = ar.audit_configuration(plan, report, tmp_path)
+    assert [(r["link"], r["window"], r["raw"]) for r in audit["rows"] if r["raw"]] == \
+        [("responses", 0, "status:delivery-refused"), ("responses", 1, "mismatch"),
+         ("requests", 0, "status:delivery-refused")]
+    assert audit["comparisons"]["mismatches"] == audit["comparisons"]["mismatches_from_late_frames"] == 1
 
 
 TOKENS = 4
@@ -280,6 +331,64 @@ def test_a_live_server_behind_the_shim_is_accepted(live, setup):
         [b"id: %d\ndata: [DONE]\n\n" % p for p, _, k, _, _ in events if k == TOKENS]
     assert audit["timing"]["server_failed"] == 0 and audit["timing"]["server_cut_at_horizon"] == 0
     assert c["hindsight"]["misses"] == 0
+
+
+def _live_run(setup, run, syncs: str, strategy: str = "honest", lag: int = 0) -> tuple[dict, dict]:
+    import asyncio
+
+    doc, report, s = setup
+    mp = pytest.MonkeyPatch()
+    mp.setattr(ar, "live_body", lambda session, model: {"model": model, "prompt": [1, 2, 3], "max_tokens": TOKENS,
+                                                        "stream": True})
+    plan = ar.plan_configuration(doc["configurations"][0], s, "served", syncs)
+    if strategy != "honest":
+        plan |= {"strategy": strategy,
+                 "writes": ar.adversary_writes(plan, s.sync_set, s.egress_params.buckets, strategy, seed=1)}
+    if lag:
+        plan |= {"prover_lag": lag}
+
+    async def go():
+        server = await asyncio.start_server(_fake_vllm, "127.0.0.1", 0)
+        await asyncio.to_thread(ar.run_virtual, plan, report, run, server.sockets[0].getsockname()[:2])
+        server.close()
+
+    try:
+        asyncio.run(go())
+        return plan, ar.audit_configuration(plan, report, run)
+    finally:
+        mp.undo()
+
+
+@pytest.mark.parametrize("syncs", ["envelope", "cover-2-1"])
+def test_a_live_shim_that_holds_its_writes_is_accepted(setup, tmp_path, syncs):
+    """A live endpoint that answers at once, behind a shim that holds each event to the bucket before its hand time
+    (`spread`): accepted on every link-window. Under the envelope its wire is honest's; under an online rule the proxy
+    declares from what it read, so the later windows' syncs, and with them the wire, may move, never window 0's."""
+    _, honest = _live_run(setup, tmp_path / "honest", syncs)
+    plan, audit = _live_run(setup, tmp_path / "spread", syncs, "spread")
+    assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"]) and len(audit["rows"]) == 6
+    c = audit["comparisons"]
+    assert c["records_are_run_shapers"] and c["hands_are_the_rules"] and c["frames_log_is_the_programs"]
+    assert c["wire_is_the_records"]
+    events = ar.read_events(tmp_path / "spread" / "server.events.gz")
+    honest_events = ar.read_events(tmp_path / "honest" / "server.events.gz")
+    assert len(events) == len(honest_events) == c["frames_read"]
+    assert sorted(b for *_, b, _ in events) != sorted(b for *_, b, _ in honest_events)
+    vs = ar.against_honest(tmp_path / "spread", tmp_path / "honest")
+    if syncs == "envelope":
+        assert vs["wire_is_honests"] and vs["windows_whose_declared_differs"] == []
+    else:
+        assert 0 not in vs["windows_whose_wire_differs"] and 0 not in vs["windows_whose_declared_differs"]
+        assert vs["windows_whose_declared_differs"]
+
+
+def test_a_lagged_prover_in_front_of_a_live_shim_is_accepted(setup, tmp_path):
+    """The lagged prover's choices wake the driver on the injected clock, so a run behind the live shim, where nothing
+    else may move the proxy, still ends: every link-window accepted, no window declared the envelope for want of a choice."""
+    _, audit = _live_run(setup, tmp_path, "cover-2-1", lag=5)
+    assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"]) and len(audit["rows"]) == 6
+    import gzip
+    assert json.load(gzip.open(tmp_path / "proxy.json.gz", "rt"))["prover"]["unready"] == []
 
 
 def test_a_live_request_asks_for_no_token_ids():

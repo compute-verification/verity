@@ -1,4 +1,4 @@
-"""`research slack` against a fake Slack Web API: a local HTTP server that keeps channels, threads, reactions and user groups the
+"""`research msg` against a fake Slack Web API: a local HTTP server that keeps channels, threads, reactions and user groups the
 way the real one returns them. No real token or workspace is involved (conftest clears SLACK_*)."""
 from __future__ import annotations
 
@@ -1077,6 +1077,20 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 2                                             # a quiet post still reaches the names it starts with
     assert run(capsys, "done", "--as", "infra", "--thread", root["ts"], "--link", "https://x/pr/1")[0] == 0
     assert len(bells(fake, circuits)) == 3                                             # a status line reaches the root's poster
+
+
+def test_send_refuses_a_post_that_names_only_its_author(registry, capsys):
+    rc, _, err = run(capsys, "send", "--as", "infra", "--dry-run", "--text", "<!subteam^SINFRA|@infra> steward: is exit 1 harmless?")
+    assert rc == 2 and "never wakes its author" in err
+    assert run(capsys, "send", "--as", "infra", "--dry-run", "--text", "@infra @ci is exit 1 harmless?")[0] == 0
+
+
+def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys):
+    rc, _, err = run(capsys, "send", "--as", "infra", "--kind", "announce", "--dry-run", "--text", "@lean @ci daily wasters")
+    assert rc == 2 and "pass them as --to" in err
+    assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--dry-run", "--text", "Daily wasters. @lean, yours")[0] == 0
+    assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--to", "@lean", "@ci", "--dry-run", "--text", "daily")[0] == 0
+    assert run(capsys, "announce", "--as", "infra", "--dry-run", "--text", "@lean @ci daily wasters")[0] == 2
 
 
 def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_dirs, capsys):

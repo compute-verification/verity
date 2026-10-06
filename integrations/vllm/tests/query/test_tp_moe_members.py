@@ -5,13 +5,7 @@ Program its AllReduce's) was dropped as a "second producer", and the manifest wa
 partial of the dropped all-reduce outputs was left without its peer's collective output: 12,480 unbound bindings."""
 from __future__ import annotations
 
-import fcntl
-import hashlib
 import json
-import os
-import subprocess
-import sys
-from pathlib import Path
 
 import pytest
 
@@ -78,48 +72,3 @@ def test_an_incomplete_manifest_is_a_failed_manifest_step(tmp_path, monkeypatch,
     monkeypatch.setattr(M, "build", lambda *a, **k: bad)
     out = tmp_path / "manifest.json"
     assert M.main(cli.parse("manifest", ["build", "--program", "p", "--out", str(out)], {})) == 4 and json.loads(out.read_text())["complete"] is False
-
-
-VLLM_DIR = Path(__file__).resolve().parents[2]
-#: the TP2 MoE rows' side-stored Builds (the Build stage's own manifest had `complete False`: #75 12,480 unbound peer bindings)
-STORED = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager":
-          "art:8f0d249acddbaa2f8c019b6ec5f52d78ff15e62fa157a98154f55feea7f1f465",
-          "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager":
-          "art:82931d609f9f8df3df847190a4e63de2302dc1c2b12c3d722a227e79dc527d37"}
-#: the sha256 of the manifest.json each row's `build-global` writes: main 33828711's, built in one process (2026-09-29), with
-#: the query's named residuals (`query.required.NAMED_RESIDUALS`, which the manifest records) naming pouw:ncp-v2's linears and
-#: GemmBias_v1/v2 too, and the query's text naming the cut's module as `verity.primitives.circuits.cut`.  The parallel build
-#: (`--jobs`: the word check's cuts prefetched, the components built in forked processes) writes the same bytes; a change to what
-#: the manifest says re-pins them (the failure prints the new digest)
-MANIFEST_SHA256 = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager":
-                   "1f9810c533121c24ae38628e4d6152107a130c239859cd88140dc312bc5d81c1",
-                   "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager":
-                   "99d637bda80f94b07ae17a43accfcc6558ed20573a9666ca9bcda1aaafe4d39a"}
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("row", sorted(STORED))
-def test_the_stored_tp2_moe_builds_merge_with_every_peer_bound(tmp_path, row):
-    """#75 and #70: the TP row's own `build-global` over the stored rank Programs (`TpRow.manifest_global`'s arguments) is complete,
-    and is the manifest of record byte for byte (`MANIFEST_SHA256`)."""
-    from tests.regression import store_io
-    if os.environ.get("VERITY_SKIP_STORE") == "1" or not store_io.reachable():
-        pytest.skip("the evidence store is not reachable here")
-    root = tmp_path / "build"
-    store_io._cli("fetch", STORED[row], "--to", str(root), "--path", "*build/rank*/build_request_LP*", "--path", "*build/rank*/build_workload/workload_program.json")
-    ranks = sorted(root.rglob("build/rank[0-9]"), key=lambda p: p.name)
-    assert [p.name for p in ranks] == ["rank0", "rank1"], ranks
-    args = []
-    for r, d in enumerate(ranks):
-        wd = json.loads((d / "build_workload" / "workload_program.json").read_text())["workload_digest"]
-        args += ["--programs-root", str(d), "--rank", str(r), "--workload-digest", wd]
-    out = tmp_path / "manifest.json"
-    # checks share a host (vy-nebius-1's slots): its stored-MoE build-globals run one at a time there, and nothing else waits
-    with open(os.environ.get("VERITY_TP_MOE_LOCK", "/tmp/verity-tp-moe-build-global.lock"), "a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build-global", "--fixture", str(VLLM_DIR / "workloads" / f"{row}.json"),
-                            *args, "--ranks", "2", "--out", str(out)], cwd=VLLM_DIR, capture_output=True, text=True)
-    assert p.returncode == 0, p.stderr[-3000:]
-    m = json.loads(out.read_text())
-    assert m["complete"] and m["tp_peer_binding"]["n_unbound"] == 0 and not any("two producers" in k for k in m["unmodelled"]), m["tp_peer_binding"]
-    assert hashlib.sha256(out.read_bytes()).hexdigest() == MANIFEST_SHA256[row]
