@@ -44,6 +44,9 @@ class Kernels:
         u = ctypes.c_uint32
         self.lib.p2v1_decode.argtypes = [v, v, v, v, u, u, v, v]
         self.lib.p2v1_encode.argtypes = [v, v, v, v, u, u, u, u, u, v, v]
+        self.fused = hasattr(self.lib, "p2v1_decode_fused")
+        if self.fused:
+            self.lib.p2v1_decode_fused.argtypes = [v, v, ctypes.c_char_p, ctypes.c_int, ctypes.c_uint64, u, ctypes.c_uint64, u, v, v]
         self.fast_keys = hasattr(self.lib, "p2v1_keys")
         if self.fast_keys:
             q = ctypes.c_uint64
@@ -81,8 +84,19 @@ class Kernels:
     def _stream(self) -> int:
         return self.torch.cuda.current_stream().cuda_stream
 
+    def decode_fused(self, c: Any, first: int = 0) -> Any:
+        """`decode` by the library's `p2v1_decode_fused`, which expands the keys itself, pipelined with the decode."""
+        m = self.torch.empty_like(c)
+        rc = self.lib.p2v1_decode_fused(c.data_ptr(), m.data_ptr(), self.prefix_bytes, len(self.prefix_bytes), first, c.shape[0],
+                                        self.params.blocks_per_segment, self.params.c0, self.flags.data_ptr(), self._stream())
+        if rc:
+            raise RuntimeError(f"p2v1_decode_fused: error {rc}")
+        return m
+
     def decode(self, c: Any, first: int = 0) -> Any:
         """`m` rows of the `c` rows of blocks `first ..`, keys expanded for them."""
+        if self.fused:
+            return self.decode_fused(c, first)
         k, t = self.keys(first, c.shape[0])
         m = self.torch.empty_like(c)
         rc = self.lib.p2v1_decode(c.data_ptr(), m.data_ptr(), k.data_ptr(), t.data_ptr(), c.shape[0], self.params.c0,

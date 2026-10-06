@@ -95,14 +95,14 @@ constexpr int WARPS = 4;
 constexpr int OUT_WORDS = P2_BITS / 64;   // W/8 bytes
 static_assert(P2_BITS % 64 == 0, "rows of whole 64-bit words");
 
-// rows k and t (each [count, 257] 64-bit words, the SHAKE output bytes in order) for blocks first .. first + count - 1
+// rows k and t (each [count, W/64] 64-bit words, the SHAKE output bytes in order) for blocks first .. first + count - 1, 32
+// rows a warp, the grid striding over them
 __global__ void __launch_bounds__(32 * WARPS) keys_kernel(const __grid_constant__ Mid mid, uint64_t first, uint32_t count,
                                                           uint64_t per_segment, uint64_t *__restrict__ kout,
                                                           uint64_t *__restrict__ tout) {
   __shared__ uint64_t stage[WARPS][32 * RW];
   const uint32_t lane = threadIdx.x % 32, wid = threadIdx.x / 32;
-  const uint64_t row0 = ((uint64_t)blockIdx.x * WARPS + wid) * 32;
-  if (row0 >= count) return;
+  for (uint64_t row0 = ((uint64_t)blockIdx.x * WARPS + wid) * 32; row0 < count; row0 += (uint64_t)gridDim.x * WARPS * 32) {
   const uint32_t rows = count - row0 < 32 ? (uint32_t)(count - row0) : 32;
   const uint64_t idx = first + row0 + lane;
   const uint64_t seg = idx / per_segment, blkno = idx % per_segment;
@@ -137,6 +137,7 @@ __global__ void __launch_bounds__(32 * WARPS) keys_kernel(const __grid_constant_
         out[(size_t)r * OUT_WORDS + RW * b + w] = st_[r * RW + w];
       }
     }
+  }
   }
 }
 

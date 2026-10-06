@@ -250,3 +250,74 @@ extern "C" int p2v1_keys(const uint8_t *prefix, int plen, uint64_t first, uint32
   return (int)cudaGetLastError();
 }
 #endif
+
+#if defined(P2_FUSED)
+#if !defined(P2_FAST) || !defined(P2_KEYS)
+#error "P2_FUSED pipelines P2_KEYS's expansion with P2_FAST's decode"
+#endif
+// The decode with its keys: chunks of P2_FUSED_CHUNK blocks, chunk i + 1's keys expanded on a second stream while chunk i
+// decodes, in two scratch buffers. The decode's grid holds P2SQ_BPS blocks an SM and the keys' P2K_BPS, so that both fit
+// on every SM at once: the decode's multiplies and the keys' logic use different pipes.
+#ifndef P2_FUSED_CHUNK
+#define P2_FUSED_CHUNK 16384
+#endif
+#ifndef P2SQ_BPS
+#define P2SQ_BPS 3
+#endif
+#ifndef P2K_BPS
+#define P2K_BPS 1
+#endif
+static struct {
+  cudaStream_t sk = nullptr, sd = nullptr;
+  cudaEvent_t start, done, keys[2], dec[2];
+  void *buf = nullptr;
+  size_t cap = 0;
+} g_fused;
+
+extern "C" int p2v1_decode_fused(const void *c, void *m, const uint8_t *prefix, int plen, uint64_t first, uint32_t n,
+                                 uint64_t per_segment, uint32_t c0, void *flags, void *stream) {
+  p2keys::Mid mid;
+  if (!p2keys::midstate(prefix, plen, mid)) return -1;
+  if (n == 0) return 0;
+  auto &f = g_fused;
+  if (!f.sk) {
+    cudaStreamCreateWithFlags(&f.sk, cudaStreamNonBlocking);
+    cudaStreamCreateWithFlags(&f.sd, cudaStreamNonBlocking);
+    for (cudaEvent_t *e : {&f.start, &f.done, &f.keys[0], &f.keys[1], &f.dec[0], &f.dec[1]})
+      cudaEventCreateWithFlags(e, cudaEventDisableTiming);
+  }
+  const size_t row = P2_BITS / 8, chunk = P2_FUSED_CHUNK, need = 4 * chunk * row;
+  if (f.cap < need) {
+    cudaStreamSynchronize(f.sk);
+    cudaStreamSynchronize(f.sd);
+    if (f.buf) cudaFree(f.buf);
+    if (cudaMalloc(&f.buf, need) != cudaSuccess) { f.buf = nullptr; f.cap = 0; return (int)cudaGetLastError(); }
+    f.cap = need;
+  }
+  int dev = 0, sms = 0, occ = 0;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, (const void *)decode_sq_kernel, 32 * P2SQ_WARPS, 0);
+  const uint32_t dgrid = (uint32_t)(sms * std::max(1, std::min(occ, P2SQ_BPS))), kgrid = (uint32_t)(sms * P2K_BPS);
+  cudaEventRecord(f.start, (cudaStream_t)stream);
+  for (cudaStream_t s : {f.sk, f.sd}) cudaStreamWaitEvent(s, f.start, 0);
+  const uint32_t nchunks = (uint32_t)((n + chunk - 1) / chunk);
+  for (uint32_t i = 0; i < nchunks; i++) {
+    const int b = i & 1;
+    const uint32_t cnt = (uint32_t)std::min<uint64_t>(chunk, n - (uint64_t)i * chunk);
+    uint8_t *K = (uint8_t *)f.buf + 2 * b * chunk * row, *T = K + chunk * row;
+    if (i >= 2) cudaStreamWaitEvent(f.sk, f.dec[b], 0);
+    p2keys::keys_kernel<<<std::min<uint32_t>(kgrid, (cnt + 32 * p2keys::WARPS - 1) / (32 * p2keys::WARPS)), 32 * p2keys::WARPS, 0,
+                          f.sk>>>(mid, first + (uint64_t)i * chunk, cnt, per_segment, (uint64_t *)K, (uint64_t *)T);
+    cudaEventRecord(f.keys[b], f.sk);
+    cudaStreamWaitEvent(f.sd, f.keys[b], 0);
+    const size_t off = (size_t)i * chunk * (row / 4);
+    decode_sq_kernel<<<std::min<uint32_t>(dgrid, (cnt + P2SQ_WARPS - 1) / P2SQ_WARPS), 32 * P2SQ_WARPS, 0, f.sd>>>(
+        (const uint32_t *)c + off, (uint32_t *)m + off, (const uint32_t *)K, (const uint32_t *)T, cnt, c0, (uint32_t *)flags);
+    cudaEventRecord(f.dec[b], f.sd);
+  }
+  cudaEventRecord(f.done, f.sd);
+  cudaStreamWaitEvent((cudaStream_t)stream, f.done, 0);
+  return (int)cudaGetLastError();
+}
+#endif
