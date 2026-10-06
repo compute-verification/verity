@@ -71,6 +71,10 @@ keeps only passes that took at least that long; `--no-per-test` turns it off; `-
 that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal that a key misses an input
 (`check.py --no-cache`, the nightly `audit-main` job). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
 
+Each suite's pytest runs in a process group of its own, and whatever is left in the group when pytest ends (a multiprocessing
+forkserver and its workers, after a kill) is killed with it. A suite whose pytest dies by a signal is reported with it, its peak
+RSS and, when the kernel's OOM count rose meanwhile, as an OOM kill, with the machine's memory and the way to a check slot.
+
 Every suite, parallel or not, records each test's outcome under its module's key (a suite that isn't parallel keys every module on
 all its files, and reuses nothing): a test that both passed and failed under one key is `nondeterministic`, since its inputs were
 identical, and is never reused. Each pass keeps its key's components beside it (`components`: every input's object id, the build
@@ -96,6 +100,7 @@ import os
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -1114,6 +1119,10 @@ class Result:
     untraced: dict | None = None     # test module (or "*") -> programs its tests started that no tracer sees into
     ran_all: bool = False            # pytest itself passed: every test it ran passed
     child_reads: list | None = None  # (kind, file or why, tests): "O" a file a child read outside the inputs, "E" a child untraced
+    signal: str = ""                 # the signal pytest died by ("" when it exited)
+    peak_rss_gb: float = 0.0         # pytest's peak RSS, its reaped children's included
+    oom: bool = False                # SIGKILL while the kernel's OOM-kill count rose
+    leftover: int = 0                # processes still in the suite's group when pytest ended, killed
 
 
 #: pytest with the guard loaded by name (`-p`), which xdist repeats in each worker, from `guard/`: appended to sys.path, and
@@ -1145,11 +1154,23 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         (logs / f"{slug}.heavy.json").write_text(json.dumps(first))
         env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
-    start = time.monotonic()
+    start, ooms = time.monotonic(), oom_kills()
     with log.open("w") as out:
-        rc = subprocess.run([sys.executable, "-P", "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
-                             *spread, *args], cwd=ROOT / suite.path, env=env, stdout=out, stderr=subprocess.STDOUT).returncode
+        p = subprocess.Popen([sys.executable, "-P", "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
+                              *spread, *args], cwd=ROOT / suite.path, env=env, stdout=out, stderr=subprocess.STDOUT,
+                             start_new_session=True)
+        with _GROUPS_LOCK:
+            _GROUPS.add(p.pid)
+        try:
+            status, usage = _wait4(p.pid)
+        finally:
+            with _GROUPS_LOCK:
+                _GROUPS.discard(p.pid)
+            leftover = kill_group(p.pid)
+    rc = p.returncode = os.waitstatus_to_exitcode(status)
     seconds = time.monotonic() - start
+    sig = signal.Signals(-rc).name if rc < 0 else ""
+    oom = sig == "SIGKILL" and ooms is not None and (oom_kills() or 0) > ooms
     rep = json.loads(report.read_text()) if report.exists() else None
     ran_all = rc == 0 or (rc == 5 and bool(reuse))           # 5: nothing left to run, every test's pass reused
     rep = rep or {}
@@ -1179,7 +1200,56 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
                   passed=rep.get("passed"), failed_tests=rep.get("failed"), reads=rep.get("reads"), reused=len(reuse),
                   child_outside={m: sorted(set(fs)) for m, fs in child_outside.items()}, traced=traced,
                   untraced={m: sorted(v) for m, v in untraced.items()}, ran_all=ran_all,
-                  child_reads=[(k, rel, sorted(w)) for (k, rel), w in sorted(by.items())])
+                  child_reads=[(k, rel, sorted(w)) for (k, rel), w in sorted(by.items())], signal=sig,
+                  peak_rss_gb=usage.ru_maxrss / 2**20, oom=oom, leftover=leftover)
+
+
+#: the process groups of the suites running now: a ^C reaches suites.py's group only, so `main` passes it on to these
+_GROUPS: set[int] = set()
+_GROUPS_LOCK = threading.Lock()
+
+
+def _wait4(pid: int):
+    while True:
+        try:
+            _, status, usage = os.wait4(pid, 0)
+            return status, usage
+        except InterruptedError:
+            continue
+
+
+def oom_kills() -> int | None:
+    """The kernel's count of OOM kills since boot (`/proc/vmstat`), or None where it isn't there."""
+    try:
+        for line in Path("/proc/vmstat").read_text().splitlines():
+            if line.startswith("oom_kill "):
+                return int(line.split()[1])
+    except OSError:
+        pass
+    return None
+
+
+def kill_group(pgid: int, sig: int = signal.SIGKILL) -> int:
+    """Signal what is left in a suite's process group; how many processes that was (0 where /proc can't say)."""
+    n = 0
+    for d in Path("/proc").glob("[0-9]*"):
+        try:
+            if int((d / "stat").read_text().rsplit(")", 1)[1].split()[2]) == pgid:
+                n += 1
+        except (OSError, ValueError, IndexError):
+            pass
+    try:
+        os.killpg(pgid, sig)
+    except (ProcessLookupError, PermissionError):
+        pass
+    return n
+
+
+def memory_gb() -> float | None:
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30
+    except (ValueError, OSError):
+        return None
 
 
 class Slots:
@@ -1350,6 +1420,13 @@ def main(argv: list[str] | None = None) -> int:
         r.nondeterministic = sorted(set(per[s].nondeterministic)) if s in per else []
         print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
               + (f"; {kept} per-test passes kept" if kept and per[s].narrow else f"; {kept} outcomes recorded" if kept else ""))
+        if r.signal:
+            mem = memory_gb()
+            print(f"        {'OOM-KILLED' if r.oom else 'killed by ' + r.signal}: pytest died by {r.signal} at a peak RSS of "
+                  f"{r.peak_rss_gb:.1f} GB" + (f" on a machine with {mem:.0f} GB" if mem else "")
+                  + ("; run it in a check slot (`research queue ready N --on vy-nebius-1`, or `check.py --on`)" if r.oom else ""))
+        if r.leftover:
+            print(f"        killed {r.leftover} processes its tests left in the suite's process group")
         if r.child_reads:
             def who(w: list[str]) -> str:
                 return " and ".join(w) if len(w) < 3 else f"{w[0]}, {w[1]} and {len(w) - 2} more"
@@ -1393,6 +1470,9 @@ def main(argv: list[str] | None = None) -> int:
         except KeyboardInterrupt:
             # a stop (check.py's, or ^C) reaches the suites' pytest processes too: keep what each finished run's guard vouches for
             stopping.set()
+            with _GROUPS_LOCK:
+                for g in list(_GROUPS):
+                    kill_group(g, signal.SIGINT)
             for fut in futures:
                 if fut not in handled:
                     finish(fut)
