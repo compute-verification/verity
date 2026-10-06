@@ -25,14 +25,14 @@ def f128Equiv : GF128 ≃ Fin (2 ^ 64) × Fin (2 ^ 64) :=
   ⟨fun a => (GF128.val a |>.lo.toFin, GF128.val a |>.hi.toFin), fun p => GF128.of ⟨UInt64.ofFin p.1, UInt64.ofFin p.2⟩,
     fun _ => rfl, fun _ => rfl⟩
 
-instance : Fintype GF128 := Fintype.ofEquiv _ f128Equiv.symm
-instance : DecidableEq GF128 := inferInstanceAs (DecidableEq F128)
+instance instFintypeGF128 : Fintype GF128 := Fintype.ofEquiv _ f128Equiv.symm
+instance instDecidableEqGF128 : DecidableEq GF128 := inferInstanceAs (DecidableEq F128)
 
 def f256Equiv : GF256 ≃ GF128 × GF128 :=
   ⟨fun a => ((a : F256).c0, (a : F256).c1), fun p => GF256.of ⟨p.1.val, p.2.val⟩, fun _ => rfl, fun _ => rfl⟩
 
-instance : Fintype GF256 := Fintype.ofEquiv _ f256Equiv.symm
-instance : DecidableEq GF256 := inferInstanceAs (DecidableEq F256)
+instance instFintypeGF256 : Fintype GF256 := Fintype.ofEquiv _ f256Equiv.symm
+instance instDecidableEqGF256 : DecidableEq GF256 := inferInstanceAs (DecidableEq F256)
 
 theorem card_F : Fintype.card GF128 = 2 ^ 128 := by
   rw [Fintype.card_congr f128Equiv, Fintype.card_prod, Fintype.card_fin]; norm_num
@@ -45,7 +45,7 @@ theorem charTwo : CharP GF128 2 := inferInstance
 theorem GF256.two_eq_zero : (2 : GF256) = 0 := by
   rw [← map_ofNat embed 2, GF128.two_eq_zero, map_zero]
 
-instance : CharP GF256 2 := (CharP.charP_iff_prime_eq_zero Nat.prime_two).mpr (by exact_mod_cast GF256.two_eq_zero)
+instance instCharPGF256OfNatNat : CharP GF256 2 := (CharP.charP_iff_prime_eq_zero Nat.prime_two).mpr (by exact_mod_cast GF256.two_eq_zero)
 
 theorem charTwoK : CharP GF256 2 := inferInstance
 
