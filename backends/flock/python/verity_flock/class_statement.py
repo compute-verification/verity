@@ -792,6 +792,160 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
 
 
+def _leaf_bits(t) -> list[int]:
+    return list(t.leaf_widths())
+
+
+def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
+                  public: Sequence[str] = ()) -> tuple[IL.Lowering, list[int]]:
+    """A unit Definition on named u16 row ports: input row ``(row, params)`` is the little-endian bit concatenation of those
+    parameters' leaves, in order (PoUW's rows, `leaves.words_*`; ``p[r]`` is row ``r`` of parameter ``p``, as a tile reads
+    it), of exactly its words (its bits a multiple of 16); output
+    port ``o{j}`` is return field ``j``'s leaves concatenated the same way, zero-padded to whole u16 words. Every
+    parameter (or each of its rows) is in one row, or is one of ``public``: a public input port before the rows, each leaf in
+    its own ceil(bits / 16) u16 words, low first (`verity.protocols.accounting.work.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
+    `circuit.compose`'s public input ports read them). Returns the lowering and each output port's words."""
+    params, ret = definition.signature()
+    types = dict(params)
+
+    def part(p):
+        m = re.fullmatch(r"(\w+)\[(\d+)\]", p)
+        return (m[1], int(m[2])) if m else (p, None)
+
+    def widths(p):
+        nm, r = part(p)
+        return _leaf_bits(types[nm] if r is None else types[nm].elem)
+
+    want = sorted((n, r) for n, t in params for r in ([None] if not any(part(p) == (n, 0) for _r, ps in in_rows for p in ps) else range(t.n)))
+    if sorted([part(p) for _r, ps in in_rows for p in ps] + [(p, None) for p in public]) != want:
+        raise ValueError(f"{name}: the rows {[list(ps) for _r, ps in in_rows]} are not the parameters {list(types)} (or their rows), once each")
+    C = gf2.Circuit()
+    words, leaves = [], {}
+    for p in public:
+        leaves[(p, None)] = []
+        for w in widths(p):
+            at = len(words)
+            words += [C.input(f"in{at + j}", 16) for j in range(-(-w // 16))]
+            leaves[(p, None)].append([b for x in words[at:] for b in x][:w])
+    for row, ps in in_rows:
+        bits = sum(sum(widths(p)) for p in ps)
+        if bits % 16:
+            raise ValueError(f"{name}: row {row} is {bits} bits, not whole u16 words")
+        at = len(words)
+        words += [C.input(f"in{at + j}", 16) for j in range(bits // 16)]
+        flat = [b for w in words[at:] for b in w]
+        for p in ps:
+            leaves[part(p)] = []
+            for w in widths(p):
+                leaves[part(p)].append(flat[:w])
+                flat = flat[w:]
+    flat_in = [lf for n, _t in params for key in sorted(k for k in leaves if k[0] == n) for lf in leaves[key]]
+    outs = IL.lower(C, definition, flat_in)
+    fields = ret.fields if hasattr(ret, "fields") else (ret,)
+    out_words, out_bits, at = [], [], 0
+    for f in fields:
+        bits = []
+        for _w in _leaf_bits(f):
+            bits += list(outs[at])
+            at += 1
+        bits += [gf2.ZERO] * (-len(bits) % 16)
+        out_words.append(len(bits) // 16)
+        out_bits += bits
+    W = len(out_bits) // 16
+    for j in range(W):
+        C.output(f"out{j}", out_bits[16 * j:16 * (j + 1)])
+    units = IL.Units(target=None, in_widths=[16] * len(words), out_widths=[16] * W, in_src=[[("leaf", p) for p in range(len(words))]],
+                     out_src=[[("ret", o) for o in range(W)]], signature=(definition.id,), gates=[], arg_gates=[], ret_gates=[])
+    row_words = [sum(-(-w // 16) for w in widths(p)) for p in public] + [sum(sum(widths(p)) for p in ps) // 16 for _r, ps in in_rows]
+    sig = (tuple((r, Array(w, Value(16))) for r, w in zip([*public, *(r for r, _ps in in_rows)], row_words)),
+           Tuple(tuple(Array(w, Value(16)) for w in out_words)))
+    lay = IL.layout(C, [f"in{j}" for j in range(len(words))], [f"out{o}" for o in range(W)])
+    return IL.Lowering(name, SimpleNamespace(id=name, signature=lambda: sig), units, C, lay), out_words
+
+
+def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]], out_rows: Sequence[tuple[str, Sequence[int]]],
+               rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
+               public_inputs: dict | None = None) -> dict:
+    """One unit Definition (a PoUW unit: several output ports, rows a tile reads) as a bit-row statement: ``in_rows`` its input
+    rows ``(row, schema, bits, params)`` (`unit_lowering`; ``schema`` ``hm96-sha512/row/v2`` or ``…/row-seg/v1``, ``bits`` its
+    META length), ``out_rows`` each output row ``(schema, output ports)``, a run of consecutive output ports of exactly their
+    words (`circuit.compose`'s ``seg_out_rows`` / ``v2_out_rows``), ``rows`` each input row's words per instance ``(n, words)``
+    u16. The outputs are the lowering's, checked against the IR reference (`verity.primitives.circuits.evaluation.evaluate`) on every instance;
+    the salts are ``salts``' where given, else `circuit.stage_salts`'. ``public_inputs`` (``{param: {"seed", "derivation"}}``):
+    parameters that are public input ports, not rows (`circuit.compose`; PoUW's anchors, which the verifier recomputes from
+    public seeds), laid out as `unit_lowering`'s ``public``, ``rows[param]`` their words per instance. Writes ``circuit.txt``,
+    ``inst.bin`` and ``pub.bin``; returns META, the outputs per port and every row's salts."""
+    from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
+    from verity.primitives.circuits.evaluation import evaluate
+
+    public_inputs = dict(public_inputs or {})
+    low, out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs))
+    if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(out_words))):
+        raise ValueError(f"{name}: the output rows {[list(ps) for _s, ps in out_rows]} are not the outputs, once each")
+    oname = lambda ps: tuple(f"o{p}" for p in ps)  # noqa: E731
+    seg_out = tuple(oname(ps) for s, ps in out_rows if s == SCHEMA_HM96_SHA512_ROW_SEG)
+    v2_out = tuple(oname(ps) for s, ps in out_rows if s != SCHEMA_HM96_SHA512_ROW_SEG)
+    cache_slot_circuits()
+    port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
+    content = json.dumps([definition.id, [list(r[:3]) + [list(r[3])] for r in in_rows], [[s, list(ps)] for s, ps in out_rows]]
+                         + ([public_inputs] if public_inputs else [])).encode()
+    sub = SimpleNamespace(id=name, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r in [*public_inputs, *(r for r, *_ in in_rows)]],
+                          outputs=[port(f"o{j}") for j in range(len(out_words))],
+                          program_digests=lambda statics: {name: hashlib.sha256(content).hexdigest()})
+    iset = SimpleNamespace(subcircuit=sub, name=name.replace("/", "-"), content_digest=hashlib.sha256(content).hexdigest())
+    text = FC.compose(low, sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
+                      seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
+                      seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None)
+    n = len(rows[in_rows[0][0]])
+    flat = np.concatenate([np.asarray(rows[r], dtype=np.uint16) for r in [*public_inputs, *(r for r, *_ in in_rows)]], axis=1)
+    got, _cut, ok = low.evaluate(flat.astype(np.uint64))
+    if int(ok) != (1 << n) - 1:
+        raise AssertionError(f"{name}: a unit is unsatisfied on its rows")
+    got = got.astype(np.uint16)
+    at = np.cumsum([0] + out_words)
+    outs = {f"o{j}": got[:, at[j]:at[j + 1]] for j in range(len(out_words))}
+    params, ret = definition.signature()
+    out_leaves = [_leaf_bits(f) for f in (ret.fields if hasattr(ret, "fields") else (ret,))]
+    for i in range(n):
+        got_leaves = {}
+        for p in public_inputs:
+            ws, at_ = _leaf_bits(dict(params)[p]), 0
+            got_leaves[(p, -1)] = []
+            for w in ws:
+                k = -(-w // 16)
+                got_leaves[(p, -1)].append(int.from_bytes(np.asarray(rows[p][i][at_:at_ + k], dtype="<u2").tobytes(), "little") & ((1 << w) - 1))
+                at_ += k
+        for r, _s, _b, ps in in_rows:
+            bits = int.from_bytes(np.asarray(rows[r][i], dtype="<u2").tobytes(), "little")
+            for q in ps:
+                nm, _, rr = q.partition("[")
+                key = (nm, int(rr[:-1]) if rr else -1)
+                got_leaves[key] = []
+                ws = _leaf_bits(dict(params)[nm] if not rr else dict(params)[nm].elem)
+                for w in ws:
+                    got_leaves[key].append(bits & ((1 << w) - 1))
+                    bits >>= w
+        args = []
+        for nm, t in params:
+            vals = [v for key in sorted(k for k in got_leaves if k[0] == nm) for v in got_leaves[key]]
+            args.append(vals[0] if isinstance(t, Value) else vals)
+        want, have = list(evaluate(definition, *args)), []
+        for j, ws in enumerate(out_leaves):
+            g = int.from_bytes(outs[f"o{j}"][i].astype("<u2").tobytes(), "little")
+            for w in ws:
+                have.append(g & ((1 << w) - 1))
+                g >>= w
+        if have != want:
+            raise AssertionError(f"{name}: instance {i}'s outputs are not the IR reference's")
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    salts = {**FC.stage_salts(iset, 0, n, FC._meta_ports(meta), salt_key), **(salts or {})}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "circuit.txt").write_text(text)
+    FC.write(text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key, rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in in_rows},
+             outs=outs, salts=salts, public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in public_inputs})
+    return {"meta": meta, "outs": outs, "salts": salts, "ands": low.layout.counts["ands"], "circuit_sha512": FC.digest(text)}
+
+
 def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
     """The statement as the verifier builds it from its public file (``flock-circuit statement``: its digest, the circuit's and
     the public file's SHA-512, k_log, blocks; nothing proved), or why it couldn't."""
