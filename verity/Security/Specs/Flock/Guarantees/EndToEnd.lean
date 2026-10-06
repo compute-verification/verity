@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 
 /-!
 # C-Flock's one-stage audit, end to end (trusted)
@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 named assumptions it rests on as hypotheses. Its proof is `Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd`.
 
 C-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.Composed.CustodyJ`, and `Specs.lean`, which the `security` package builds without
+`Proofs.Flock.Soundness.Discharge.Composed.PublicJ`, and `Specs.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEnd` does.
 -/
 
@@ -26,10 +26,17 @@ source `src`); one `--zk` session of `J = nTab I` tables proves the drawn units,
 record, `flock-verify verify --zk --session-tables J`, reads the session's record. Then for every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
-* a unit wrong when, in the committed transcript fixed at registration (`XplurZC`: the plurality of what the expected-time
-  extractor recovers behind each commit string), its committed outputs differ from its gates applied to its committed
-  inputs. The units are those of the key program of the circuit the verifier parses (`keyProg c hU n`, partitioned at
-  `Layout.outsOf`), each read at its `--zk` site in the table it is drawn into and bound to the rows it commits;
+* a unit wrong (`wrongRegZ`) unless it is right against the public file: in the committed transcript fixed at
+  registration (`XplurZC`: the plurality of what the expected-time extractor recovers behind each commit string) its
+  committed outputs are its gates applied to its committed inputs, and one opening per commit string of the public
+  file's commitments carries, on each of its committed wires, the key program's evaluation on the committed inputs (on
+  its outputs, the program's output on them). The commitments are the public file's (`rsZJ_wrongRegZ`): at a row its
+  `b ‖ c`, an `hm96` commitment to the row's bytes under a 192-byte salt; elsewhere the SHA-512 leaf of the public
+  output word's bits, or of the constant `1` or `0`. So at a unit that is not wrong, the program's output on the
+  committed inputs is the public output, up to a SHA-512 collision on its leaf, and the committed inputs open the
+  public `b ‖ c`. The units are those of the key program of the circuit the verifier parses (`keyProg c hU n`,
+  partitioned at `Layout.outsOf`), each read at its `--zk` site in the table it is drawn into and bound to the rows it
+  commits;
 * `ε_ks = ksAvgStrictZ`: the worst table's knowledge error, `ksStrictZ / (1 − N₀/(ek))`, averaged over the draw;
 * `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, `Q_s` the expected number of commit strings the drawn
   units read.
@@ -85,7 +92,8 @@ def EndToEnd : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (P.wrong (XplurZC execArith hs512 P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
+        K₀ ≤ (wrongRegZ execArith P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ)
+          (XplurZC execArith hs512 P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (auditLive L Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
         ksAvgStrictZ (planZJ dj y₀) L k qF qS (reg σ) +
