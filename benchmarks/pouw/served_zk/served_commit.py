@@ -13,8 +13,8 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
 
-- **The window** is SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), picked from ``os.urandom`` unless
-  ``--call`` names them.  Each call's A rows (the pass's retained activations, BF16 widened to FP32) and its weight's B rows
+- **The window** is SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), a uniform subset under a key derived from
+  32 bytes of ``os.urandom`` (`choose_calls`) unless ``--call`` names them.  Each call's A rows (the pass's retained activations, BF16 widened to FP32) and its weight's B rows
   are formed on the CPU as `pearl_c` forms them under the pass's epoch (`PearlC.noise`, forming v1, the peel factors), and
   become the statement's fp8-p rows (A′_i ‖ P_A,i of role X, ``hm96-sha512/row-seg/v1``; B̃_j ‖ P_B,j of role W,
   ``hm96-sha512/row/v2``; `leaves.words_fp8_p`).  A row whose forming the scheme refuses is no tile's.
@@ -96,6 +96,8 @@ SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
 #: the window draw's key, from the epoch's draw coin (`draw_key`)
 DRAW_DOMAIN = "verity/pouw/served-zk-draw/v1"
+#: the committer's choice of the window's calls (`choose_calls`)
+CALLS_DOMAIN = "verity/pouw/served-zk-calls/v1"
 #: the window root's port: the window's entries
 PORT = "entries"
 #: a window stream's failure budget: its first failure stops it
@@ -584,6 +586,13 @@ def manifest_name(raw: bytes) -> str:
     return hashlib.sha512(raw).hexdigest()
 
 
+def choose_calls(source: bytes, calls: list[dict], n: int) -> list[dict]:
+    """`n` of `calls` (all of them when there are fewer), a uniform subset under `derive(source, CALLS_DOMAIN, {})`, in
+    index order."""
+    among = sorted(calls, key=lambda u: u["index"])
+    return [among[i] for i in derive(source, CALLS_DOMAIN, {}).subset(min(n, len(among)), len(among), "calls")]
+
+
 def draw_key(coin: bytes, stream: S.Stream, reg: S.Registration) -> Key:
     """The window draw's key: the epoch's draw coin, under the stream and the registration and receipt it was opened after."""
     return derive(coin, DRAW_DOMAIN, {"stream": stream.digest, "registration": reg.digest,
@@ -903,8 +912,7 @@ def cmd_commit(a) -> int:
     if a.call:
         chosen = [next(x for x in calls if x["index"] == i) for i in a.call]
     else:
-        order = sorted(calls, key=lambda u: hashlib.sha256(source + u["index"].to_bytes(8, "little")).digest())
-        chosen = sorted(order[:a.calls], key=lambda u: u["index"])
+        chosen = choose_calls(source, calls, a.calls)
     undo = FT.install(scheme)
     window = []
     try:
