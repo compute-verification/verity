@@ -490,7 +490,8 @@ def cells(args) -> int:
     return rc
 
 
-def _cells_child(args, model_key: str, path: Path, gran: str, seed: int, batches: list[int], log: Path) -> int:
+def _cells_child(args, model_key: str, path: Path, gran: str, seed: int, batches: list[int], log: Path,
+                 timeout: float | None = None) -> int:
     env = dict(os.environ)
     env.pop("VLLM_BATCH_INVARIANT", None)
     scratch = Path(args.scratch)
@@ -504,7 +505,10 @@ def _cells_child(args, model_key: str, path: Path, gran: str, seed: int, batches
     print(f"[sweep] {model_key} {gran} seed {seed} batches {batches} -> {log}", flush=True)
     t = time.time()
     with log.open("w") as f:
-        rc = subprocess.run(cmd, env=env, stdout=f, stderr=subprocess.STDOUT).returncode
+        try:
+            rc = subprocess.run(cmd, env=env, stdout=f, stderr=subprocess.STDOUT, timeout=timeout).returncode
+        except subprocess.TimeoutExpired:
+            rc = 124
     print(f"[sweep] rc={rc} in {time.time() - t:.0f} s", flush=True)
     return rc
 
@@ -552,7 +556,8 @@ def sweep(args) -> int:
                     return rc
                 t = time.time()
                 crc = _cells_child(args, model_key, path, gran, seed, missing,
-                                   out / "logs" / f"{model_key}__{gran}__s{seed}.log")
+                                   out / "logs" / f"{model_key}__{gran}__s{seed}.log",
+                                   deadline + 180 - time.time() if deadline else None)
                 engine_s.append(time.time() - t)
                 rc |= crc
                 if crc:
