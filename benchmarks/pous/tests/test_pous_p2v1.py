@@ -455,8 +455,9 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
               "late_control", "recompute_control", "tampered_control", "signature_control", "fail_closed"):
         assert gates[g]["passed"], (g, gates[g])
     assert "certificate" not in gates and body["profile"] is None
-    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "memory_challenger": "memory_challenger/live.py",
-                                      "memory_challenger_args": ["--signer", "test"]}
+    args = body["implementation"]["memory_challenger_args"]
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "memory_challenger": "memory_challenger/live.py"}
+    assert args[:3] == ["--signer", "test", "--c-root"] and len(args) == 4
     nb = _small().width_bytes
     raw = (tmp_path / "leaves-p2.bin").read_bytes()
     assert len(raw) == 64 * body["blocks"]
@@ -477,6 +478,32 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
     assert m["signature_control"] == {"sessions": 2, "unedited_accepted": 2, "flipped_rejected": 2, "edited_rejected": 2,
                                       "passed": True}
     assert len(bytes.fromhex(honest["records"][0]["public"]["openings"][0]["salt"])) == 192 and nb == 16
+    _service_input_opens_under_c(tmp_path / "service-input.json", args[3], raw, honest)
+
+
+def _service_input_opens_under_c(path, c_root: str, digests: bytes, honest) -> None:
+    """The MC arm's audit of record for the proof service: the header binds C's hiding root, and each answered block is
+    C's leaf at its round's index under its salt and path (`service/spec.py`)."""
+    import json
+
+    from verity.primitives.commitments.merkle import Commitment, Opening, verify_opening
+    from verity.protocols.accounting.space.pous import memory_challenger as mc
+    from service import spec as SP
+
+    doc = json.loads(path.read_text())
+    commitment = mc.SessionCommitment.from_json(doc["commitment"])
+    assert doc["c_root"] == c_root and doc["signed"] == honest["records"][0]["witness"]["signed"]
+    assert commitment.binding == SP.session_binding(bytes.fromhex(c_root), commitment.blocks)
+    dom = SP.c_domain(bytes.fromhex(doc["c_setup"]), commitment.blocks)
+    rounds = mc.SignedSession.from_json(doc["signed"]).rounds
+    assert [a["index"] for a in doc["answered"]] == [r.index for r in rounds] and len(rounds) == 105
+    for a, r in zip(doc["answered"], rounds, strict=True):
+        block = bytes.fromhex(a["block"])
+        assert mc.block_digest(block) == r.digest == digests[64 * r.index:64 * (r.index + 1)]
+        bc = SP.HM.commit_string(SP.KEY, r.digest, bytes.fromhex(a["salt"]))
+        assert verify_opening(dom, Commitment(bytes.fromhex(c_root), commitment.blocks),
+                              Opening(r.index, SP.HM.tree_leaf(SP.KEY, bc), tuple(bytes.fromhex(p) for p in a["path"])),
+                              SP.SCHEMA, SP.LIMITS)
 
 
 def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset(), audits: int = 2, **kw):

@@ -26,6 +26,8 @@ against C's leaf).
   acceptance, and never the verdict.
 - **The record** separates what is published (`public`: the commitment, the verdict, the coin openings) from the witness
   (`witness`: the signed session, the reasons, per-round on-time and digest bits), and keeps the responder's reports beside.
+- **The binding** each header carries is the setup salt and the digest table (`binding_of`), or with `--c-root` C's hiding
+  root (`service_binding`), for a session whose answers are proved through the proof service (`service/driver.py`).
 
 Exit 0 when every session passes under the signer the run used, 1 otherwise.
 """
@@ -132,6 +134,14 @@ def binding_of(salt: bytes, digests: bytes) -> bytes:
     return hashlib.sha512(b"verity-pous/bench/memory-challenger/binding/v1\0" + salt + hashlib.sha512(digests).digest()).digest()
 
 
+def service_binding(c_root: bytes, blocks: int) -> bytes:
+    """What a session audits when its answers are proved through the proof service: C's hiding root
+    (`service.spec.session_binding`)."""
+    from service.spec import session_binding
+
+    return session_binding(c_root, blocks)
+
+
 def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trusted: set[bytes],
           signer_schemes: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Each session's verdict under `memory_challenger.SCHEMES` and under the signer's own mapping."""
@@ -191,7 +201,7 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
 def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, audits: int, pings: int, k: int | None = None,
           cpu: int | None = None, allowance: str = "p99.9", deadline_ns: int | None = None, limit_ns: int | None = None,
           clock: Callable[[], int] = time.perf_counter_ns, strict: bool = True, signer: str = "test",
-          lms_key: str | os.PathLike | None = None, keygen_workers: int = 1) -> dict[str, Any]:
+          lms_key: str | os.PathLike | None = None, keygen_workers: int = 1, c_root: bytes | None = None) -> dict[str, Any]:
     """`audits` sessions of the memory challenger against `limit_ns` (else `Δ` plus the cap), each judged after all of them
     ran, off the timed path."""
     from verity.protocols.accounting.space.pous import audit as pous_audit
@@ -228,7 +238,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     sig = (lms_signer(lms_key, keygen_workers) if signer == "lms"
            else test_signer().TestSigner(os.urandom(32), height=max(1, (max(1, audits) - 1).bit_length())))
     key_load_s = (time.perf_counter_ns() - t0) / 1e9
-    binding = binding_of(salt, digests)
+    binding = binding_of(salt, digests) if c_root is None else service_binding(c_root, blocks)
     resolution = None if clock is time.perf_counter_ns else 1
     if cpu is not None:
         os.sched_setaffinity(0, {cpu})
@@ -317,6 +327,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--signer", default="test", choices=["lms", "test"])
     ap.add_argument("--lms-key", default=None, help="the S1 key's directory (--signer lms), made there when absent")
     ap.add_argument("--keygen-workers", type=int, default=len(os.sched_getaffinity(0)))
+    ap.add_argument("--c-root", default=None, help="C's hiding root (service/spec.py's commit_c), which the header binds")
     a = ap.parse_args(argv)
     ready = json.loads(Path(a.ready).read_text())
     params = params_of(ready["scheme"], ready["params"])
@@ -335,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
            **audit("127.0.0.1", ready["port"], scheme, bytes.fromhex(ready["salt"]), Path(a.leaves).read_bytes(),
                    audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu, allowance=a.allowance, deadline_ns=deadline,
                    limit_ns=a.limit_ns or None, clock=clock, strict=a.strict, signer=a.signer, lms_key=a.lms_key,
-                   keygen_workers=a.keygen_workers)}
+                   keygen_workers=a.keygen_workers, c_root=bytes.fromhex(a.c_root) if a.c_root else None)}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
     return 0 if doc["audits"] and doc["audits_accepted_under_signer"] == doc["audits"] else 1
 

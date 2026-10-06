@@ -11,7 +11,9 @@ The kernels take a setup's key prefix, so one arm runs either framing:
   cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
   of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
   Its sessions are signed with S1's LMS key in `--mc-lms-key DIR` (made there when absent), else with the PoUS tests'
-  test signer, whose sessions the verdict rejects (its `fail_closed` gate).
+  test signer, whose sessions the verdict rejects (its `fail_closed` gate).  Before the sessions it commits C's hiding
+  leaves (`service/spec.py`'s `commit_c`), whose root every header binds, and it writes the honest audit of record as
+  `service-input.json` for the proof service (`service/driver.py --from-audit`).
 
 1. **Kernel gates.** The pinned vector of the width (`vectors.json`, the P2 kit's): its keys expanded on the device, its `m`
    encoded and its `c` decoded, all bit-exact. Then the run's own blocks: the encoded ones decode back to their payloads (the
@@ -176,6 +178,35 @@ class MC(V3):
     def leaf(self, i: int, block: bytes) -> bytes:
         from verity.protocols.accounting.space.pous.memory_challenger import block_digest
         return block_digest(block)
+
+    def commit_c(self, digests: list[bytes]) -> None:
+        """C's hiding commitment (`service.spec.commit_c`) under a fresh salt key, before any session: the memory
+        challenger's header binds its root (`--c-root`), so the answers can be proved through the proof service."""
+        from service import spec as SP
+
+        self.c_salt_key, self.c_setup = os.urandom(32), self.salt + self.model
+        self.c_tree = SP.commit_c(digests, self.c_salt_key, self.c_setup)
+        self.memory_challenger_args = (*self.memory_challenger_args, "--c-root", self.c_tree.root.hex())
+
+    def service_input(self, honest: dict[str, Any], c_host: bytes, out: Path) -> Path | None:
+        """The audit of record for `service/driver.py --from-audit`: its signed session and coin openings, C's root, and
+        each round's answered block of C with its salt and path (the prover's side, for the proof)."""
+        from service import spec as SP
+
+        recs = honest.get("records") or []
+        if not recs:
+            return None
+        signed, nb = recs[0]["witness"]["signed"], self.P.width_bytes
+        answered = [{"j": r["j"], "index": r["index"], "block": c_host[r["index"] * nb:(r["index"] + 1) * nb].hex(),
+                     "salt": SP.c_salt(self.c_salt_key, r["index"]).hex(), "path": [p.hex() for p in self.c_tree.path(r["index"])]}
+                    for r in signed["rounds"]]
+        doc = {"source": {"run": os.environ.get("RESEARCH_RUN_ID"), "audit": "p2-honest", "session": 0},
+               "signed": signed, "commitment": recs[0]["public"]["commitment"], "openings": recs[0]["public"]["openings"],
+               "c_root": self.c_tree.root.hex(), "c_setup": self.c_setup.hex(), "answered": answered,
+               "timing": {k: honest.get(k) for k in ("limit_ns", "elapsed_s", "margin_s", "audits", "audits_accepted")}}
+        path = out / "service-input.json"
+        path.write_text(json.dumps(doc) + "\n")
+        return path
 
 
 FRAMINGS = {f.impl: f for f in (V1, V3, MC)}
@@ -471,7 +502,11 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
         return result(metrics, rows_, None)
 
     leaves = out / "leaves-p2.bin"
-    leaves.write_bytes(b"".join(fr.leaf(i, c_host[i * nb:(i + 1) * nb]) for i in range(blocks)))
+    digests = [fr.leaf(i, c_host[i * nb:(i + 1) * nb]) for i in range(blocks)]
+    leaves.write_bytes(b"".join(digests))
+    if isinstance(fr, MC):
+        fr.commit_c(digests)
+    del digests
     fields, live, extra = fr.ready(), fr.live, list(fr.memory_challenger_args)
     H.leave_reserved(a)
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
@@ -497,6 +532,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     if mc:
         from memory_challenger.live import signature_control
 
+        fr.service_input(honest, c_host, out)
         tampered = control("p2-tampered", H.control_answers(c_host, nb, tamper=set(range(0, blocks, TAMPER_EVERY))))
         signature = signature_control(honest, lambda i: fr.leaf(i, c_host[i * nb:(i + 1) * nb]))
 
