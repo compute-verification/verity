@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Randomness
 /-!
 # The PoUW window draw, as a Lean spec
 
-`verity/protocols/accounting/work/pouw/circuit/plan.py`'s `draw` (#364), which `Traced.draw` calls for each call of a window under
+`protocols/pouw/verity_pouw/circuit/plan.py`'s `draw` (#364), which `Traced.draw` calls for each call of a window under
 the window's one key, and the window around it:
 
 * `context call name`: `plan.draw`'s context for a stratum, `("call", *call, "stratum", name)`, or `("stratum", name)`
