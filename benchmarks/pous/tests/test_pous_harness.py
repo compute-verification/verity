@@ -328,7 +328,7 @@ def test_audits_0_runs_the_band_untimed_with_no_limit_audit_or_control_and_says_
 def test_bench_labels_an_untimed_result_and_refuses_audits_0_where_it_would_pass_vacuously(tmp_path, monkeypatch):
     bench = _bench()
     common = ["--weight-set", "qwen2.5-0.5b/linears+head", "--hardware", "cpu", "--out", str(tmp_path)]
-    with pytest.raises(SystemExit, match="only band-gpu and p2-v1-gpu run untimed"):
+    with pytest.raises(SystemExit, match="only band-gpu and the P2 arms run untimed"):
         bench.main(["--impl", "reference", "--audits", "0", *common])
 
     class Untimed:
