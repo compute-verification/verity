@@ -43,7 +43,6 @@ from verity.protocols.accounting.space.pous import memory_challenger as mc
 from verity.protocols.accounting.space.pous.answer_circuit import PousAnswerRow
 from verity.protocols.verification.sampled_proofs import service as S
 from verity.protocols.verification.sampled_proofs.one_stage import partition as P, registration as R
-from verity_flock import circuit as FC
 
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 HM = hm96.SHA512
@@ -136,6 +135,9 @@ def set_name(session: bytes) -> str:
 def ports(session: bytes, k: int) -> dict[str, dict[str, Any]]:
     """The challenger's own copy of a session's ports: `k` rows each, under the frame domain C-Flock binds to the set
     the session names (`verity_flock.circuit.statement`)."""
+    # Not at module level: the GPU bench's venv has no verity_flock and imports this module for `commit_c`.
+    from verity_flock import circuit as FC
+
     out = {}
     for p in PORTS:
         b = identity_digest_sha512(FC.BINDING_TAG, {"set": set_name(session), "lo": 0, "hi": k, "port": p, "schema": SCHEMA})
