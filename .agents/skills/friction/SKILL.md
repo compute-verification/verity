@@ -41,7 +41,7 @@ A change is near the line when it changes what other agents must do or what a ga
 in-flight files, spends money, deletes others' work, or changes agreed semantics or acceptance criteria. Read the rulings
 below first, and follow one if it covers the case. Otherwise ask:
 
-- one stand-alone question to your coordinator (a handle holder: on Slack, `research slack ask`; a worker: its report or
+- one stand-alone question to your coordinator (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or
   reply to the coordinator that launched it). The coordinator answers from the rulings when one applies, and
   otherwise puts the question to Daniel as written;
 - the case, the change, and your recommendation, in a few lines;
@@ -60,6 +60,9 @@ makes the change or in a one-line PR of its own:
 - otherwise: a line under "Rulings so far" below, with its date.
 
 Write it for the class of case, not the one instance, in one line. Delete it once code enforces it.
+
+Then roll it out in the same PR: search for the old way's terms and paths (`rg`) and rewrite every place that still states it,
+in `AGENTS.md`, `README.md`, the skills, docstrings and docs. A ruling written only in a log is one the next agent misses.
 
 ## 4. Note it, when you can't fix it now
 
@@ -174,7 +177,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
   registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
   for itself. No package requires both a protocol and a backend, there is no `bridges/` layer, and a citation names both
-  guarantees.
+  guarantees. Its package clause is superseded by the Lean layout move (2026-10-06): every proof is in
+  `verity/Security/Proofs`, whose package requires C-Flock's verifier.
 - 2026-10-02 (10:27 PM PDT): `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption. Hiding is
   proved at a fresh uniform key, and nobody works on proving that the pinned key behaves like one.
 - 2026-10-02 (10:27 PM PDT): the lander starts every merge check (`check --record`, `research merge`). The PR captain

@@ -7,9 +7,9 @@ description: >
   lean-audit.json, moving them without a DM to Daniel (--moved), watching ArkLib and other dependencies for proofs
   of what we assume (tools/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
   directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
-  them). Use when adding or changing Lean proofs, definitions or packages (backends/flock/verifier/lean, level3,
-  soundness, verity/Security, verity/protocols/accounting/space/pous/lean, verity/Security), when a Lean build or proof is
-  slow, editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
+  them). Use when adding or changing Lean proofs, definitions or packages (backends/flock/verifier/lean, verity/Security
+  and its Proofs, the PoUS grader in verity/protocols/accounting/space/pous/lean), when a Lean build or proof is slow,
+  editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
 # Lean proofs
@@ -44,12 +44,13 @@ bash tools/lean/setup.sh PKG                  once per machine: elan, the toolch
 cd PKG && lake build                          once per checkout; incremental from then on
 lake env lean Pkg/Area/File.lean              each edit: elaborate one file against the built imports
 lake build Pkg.Area.File                      after editing a file others import, so they see the change
-python tools/lean/audit.py PKG                once, before pushing (seconds; level3's replay takes ~3 min)
+python tools/lean/audit.py PKG                once, before pushing (the kernel replay of verity/Security/Proofs is the slow part)
 ~~~
 
-Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
-never change a `require`, a revision or `lean-toolchain` in a feature PR. The soundness package's build peaks at 15–24 GB
-of memory: on a machine with less than 24 GB, add a swapfile first, and give a queued job `--mem-gb 32`.
+Build on a CPU machine; `verity/Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
+update`, and never change a `require`, a revision or `lean-toolchain` in a feature PR. Its build of C-Flock's soundness
+proofs peaks at 15–24 GB of memory: on a machine with less than 24 GB, add a swapfile first, and give a queued job
+`--mem-gb 32`.
 
 To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
 your own, use the fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took
@@ -152,7 +153,7 @@ simp with that.
 ## Before the PR
 
 - `python tools/lean/audit.py PKG` passes for every package you touched, and `pytest backends/flock/tests
-  tools/lean/tests tests/test_lean_packages.py` passes.
+  tools/lean/tests tools/check/tests/test_lean_*.py tests/test_lean_packages.py` passes.
 - The PR says which guarantees changed, if any, and why; the ledger's status rows match `lean-audit.json`.
 - Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping
   both sides' rows. Run `python tools/lean/merge.py --install` once per clone: `lean-audit.json` then merges without a
@@ -174,7 +175,8 @@ These are Daniel's rulings, newest first.
   because composing their guarantees needs it. The requires stay acyclic, and a protocol never requires a backend. Such a
   `path` require changes no revision, so a feature PR may add it. Python's protocols import only `verity`, themselves
   and the protocols `ALLOWED` in `verity/tests/test_boundaries.py` lists (PoUW → sampled proofs, the ruling of
-  2026-10-03 in `.agents/skills/friction/SKILL.md`).
+  2026-10-03 in `.agents/skills/friction/SKILL.md`). Its Lean half is superseded by the Lean layout move (2026-10-06):
+  there are no protocol packages, only areas of `verity/Security` and its Proofs.
 - 2026-10-01: there are guarantees and assumptions, and a guarantee is **proved under its assumptions**; there is no
   third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one
   than a fact about our own circuit that we mean to prove (`HmRowComputes`). So what a guarantee assumes is explicit and
