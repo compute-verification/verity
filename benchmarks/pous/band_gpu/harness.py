@@ -527,6 +527,24 @@ def _verifier_env() -> dict[str, str]:
     return {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in paths if p)}
 
 
+def keep_off(a: Any) -> dict[str, Any]:
+    """Every thread of this process off the verifier's and the responder's cores (`a.verifier_cpu`, `a.responder_cpu`), and the
+    threads it starts after with them: `sched_setaffinity(0)` moves the calling thread only, and the threads torch and CUDA
+    started before would share the verifier's core with it. The responder's thread pins itself back onto its own."""
+    here = set(os.sched_getaffinity(0))
+    reserved = {x for x in (a.verifier_cpu, a.responder_cpu) if x is not None} & here
+    if not reserved or not here - reserved:
+        return {"cpus": sorted(here), "threads_moved": 0}
+    moved = 0
+    for tid in os.listdir("/proc/self/task"):
+        try:
+            os.sched_setaffinity(int(tid), here - reserved)
+            moved += 1
+        except OSError:                                  # a thread that exited meanwhile
+            pass
+    return {"cpus": sorted(here - reserved), "threads_moved": moved}
+
+
 def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Path, out: Path, a: Any, leaves: Path | None = None,
                     tag: str = "calibrate") -> dict[str, Any]:
     """The verifier's no-load loopback calibration (`--calibrate-only`): the limit every audit below is judged against."""
@@ -858,10 +876,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     leaves = out / "leaves.bin"
     leaves.write_bytes(b"".join(leaf_hash(p, SALT, i, c_host[i * width:(i + 1) * width]) for i in range(p.blocks)))
-    here = set(os.sched_getaffinity(0))
-    reserved = {x for x in (a.verifier_cpu, a.responder_cpu) if x is not None} & here
-    if reserved and here - reserved:
-        os.sched_setaffinity(0, here - reserved)
+    facts["harness_cpus"] = keep_off(a)
     fields = {"salt": SALT.hex(), "scheme": scheme.name, "params": scheme.params.manifest()}
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None

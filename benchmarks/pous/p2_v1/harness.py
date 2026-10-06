@@ -320,6 +320,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     leaves = out / "leaves-p2.bin"
     leaves.write_bytes(b"".join(R.leaf(salt, i // bps, i % bps, c_host[i * nb:(i + 1) * nb]) for i in range(blocks)))
+    facts["harness_cpus"] = H.keep_off(a)
     fields = {"salt": salt.hex(), "model": model.hex(), "manifest": P.manifest(), "payload_bytes": payload}
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None

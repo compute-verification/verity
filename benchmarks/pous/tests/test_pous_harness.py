@@ -450,6 +450,27 @@ def test_the_native_build_is_keyed_by_the_nvcc_release_that_compiles_it(tmp_path
     assert at("12.8") == at("12.8") != at("13.0")                       # another toolkit's .so is never adopted
 
 
+@pytest.mark.skipif(not hasattr(os, "sched_setaffinity") or len(os.sched_getaffinity(0)) < 3, reason="needs 3 CPUs")
+def test_the_harness_moves_every_thread_it_has_off_the_verifiers_and_responders_cores():
+    """`sched_setaffinity(0)` moved only the harness's calling thread: a thread started before it (torch's, CUDA's) kept the
+    verifier's core (vy-nebius-2's quiet slice: verifier-side stalls of 1-13 ms at the same seconds into every run)."""
+    probe = """
+import os, sys, threading, types
+sys.path.insert(0, sys.argv[1])
+from band_gpu import harness as H
+cpus = sorted(os.sched_getaffinity(0))
+go = threading.Event()
+t = threading.Thread(target=go.wait, daemon=True)
+t.start()
+got = H.keep_off(types.SimpleNamespace(verifier_cpu=cpus[0], responder_cpu=cpus[1]))
+masks = [os.sched_getaffinity(int(tid)) for tid in os.listdir("/proc/self/task")]
+go.set()
+print(got["threads_moved"] >= 2, all(not {cpus[0], cpus[1]} & m for m in masks), got["cpus"] == cpus[2:])
+"""
+    out = subprocess.run([sys.executable, "-c", probe, str(BENCH)], capture_output=True, text=True, check=True).stdout.split()
+    assert out == ["True", "True", "True"]
+
+
 def test_the_native_build_compiles_a_copy_staged_once_in_its_keyed_directory(tmp_path):
     """build.ninja names its sources' paths, and each research run's tree sits under its commit: compiling the tree's copy
     rebuilt the extension in every new commit's first run, inside node 2's timed lease (r20261006-054903-459c)."""
