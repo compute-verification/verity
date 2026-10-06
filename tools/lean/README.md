@@ -129,7 +129,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   outside the sandbox, with `{repo}` the checkout, `--repo`, and `{out}` the directory it writes) or else the package's
   own file, either one possibly gzipped (`NAME.gz`). A file is used only with the SHA-256 under `data`: another fails the
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
-  a test of the package's own (PoUW's `tests/test_lean_package.py`) checks that the generator still writes the recorded
+  a test of the package's own (PoUW's `verity/protocols/accounting/work/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
 - `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a guarantee: its named assumptions.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
