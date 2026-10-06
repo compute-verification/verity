@@ -21534,10 +21534,79 @@
    "type_hash": "2a673d725e2bd227ddbdd8a13eee9fd681ee8a56e8091cdb3de90c3774590fd6"
   },
   "FlockVBridge.keyProg_parse": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.keyProg_parse {tags : Flock.Tags} {bytes : ByteArray} {tables : List (Prod String ByteArray)}",
+    "  {c : Flock.Circuit} (hc : Eq (Flock.HmRow.parse tags bytes tables) (Except.ok c)) (hU : FlockSoundness.Built c.unit)",
+    "  (n : Nat) (outs : Finset (Fin (FlockVBridge.keyGates hU n))) (X : Fin (FlockVBridge.keyGates hU n) → Bool) (u : Fin n)",
+    "  {j : Nat} (hj : instLTNat.lt j c.upv)",
+    "  (hone :",
+    "    Eq (X (FlockSoundness.Discharge.Const.Prog.oneAt (FlockSoundness.Discharge.Placed.keyProg c hU n) u)) Bool.true)",
+    "  (ms : Flock.MerkleScheme)",
+    "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) {LANES H : Nat}",
+    "  (hp : Eq (Flock.RecOpen.params c.unit.name) (Option.some { fst := LANES, snd := H }))",
+    "  (hu : instLENat.le c.unit.unitLog 32) (r a cf : Array Flock.F128) (rest : ByteArray) (idx : Nat) (ss : List ByteArray)",
+    "  (hr : Eq r.size LANES) (ha : Eq a.size 2) (hcf : Eq cf.size (instHMul.hMul 2 LANES)) (hrest : Eq rest.size 96)",
+    "  (hss : Eq ss.length H)",
+    "  (hrow :",
+    "    FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj) 0",
+    "      (Flock.MerkleScheme.rowBytes r))",
+    "  (haux :",
+    "    ∀ (i : Nat) (hi : instLTNat.lt i ss.length),",
+    "      And (Eq (List.instGetElemNatLtLength.getElem ss i hi).size 64)",
+    "        (FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
+    "          (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 512 i))",
+    "          (List.instGetElemNatLtLength.getElem ss i hi)))",
+    "  (hacc :",
+    "    FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
+    "  (hcoef :",
+    "    FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "      (Flock.MerkleScheme.rowBytes cf))",
+    "  (hdir :",
+    "    ∀ (h : Nat),",
+    "      instLTNat.lt h H →",
+    "        Eq",
+    "          (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj",
+    "            (instHAdd.hAdd",
+    "              (instHAdd.hAdd",
+    "                (instHAdd.hAdd",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  1024)",
+    "                (instHMul.hMul 256 LANES))",
+    "              h))",
+    "          (idx.testBit h)) :",
+    "  FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
+    "    (FlockSoundness.Discharge.Hm.outStart",
+    "      (StateT.run (Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)) Flock.HmNets.St.empty).snd",
+    "      (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))",
+    "    (instHAppendOfAppend.hAppend",
+    "      (instHAppendOfAppend.hAppend (Flock.climb ms (Flock.Sha512.hash (Flock.MerkleScheme.rowBytes r)) idx ss)",
+    "        { data := Array.replicate 64 0 })",
+    "      (instHAppendOfAppend.hAppend",
+    "        (Flock.MerkleScheme.rowBytes",
+    "          (List.cons (FlockVBridge.consTerm LANES r a cf 0)",
+    "              (List.cons (FlockVBridge.consTerm LANES r a cf 1) List.nil)).toArray)",
+    "        rest))"
+   ],
+   "assumptions": [],
+   "type_hash": "a55b3e41fe477e035ca10986259778229aff8905511790b11204e492d69d50e8"
   },
   "FlockVBridge.laidRows_layout_congr": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.laidRows_layout_congr (st : Flock.HmNets.St) {i i' o o' : Array Nat} (outs : Array Flock.HmNets.Lin)",
+    "  (hi : Eq (Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 i) (Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 i'))",
+    "  (ho : Eq (Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 o) (Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 o'))",
+    "  (n : Nat) (v : Nat → Bool) :",
+    "  Iff (FlockSoundness.Discharge.Hm.LaidRows (Flock.HmNets.layout st i o outs) n v)",
+    "    (FlockSoundness.Discharge.Hm.LaidRows (Flock.HmNets.layout st i' o' outs) n v)"
+   ],
+   "assumptions": [],
+   "type_hash": "3ab9f7eaf0a2d37f0d8b962d2ec38b0ac5aedf1d29c0e67e7d3e5d32b495d5a8"
   },
   "FlockVBridge.laid_recOpen": {
    "owner": "@proofs",
@@ -21586,13 +21655,77 @@
    "type_hash": "10d2fa996828bfc74558d32b261f36285313ca143fa3b2c99909b22130c05dfd"
   },
   "FlockVBridge.laid_unit": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.laid_unit (ms : Flock.MerkleScheme)",
+    "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) (LANES H : Nat)",
+    "  (hH : instLENat.le H 16) (v : Nat → Bool)",
+    "  (h :",
+    "    FlockSoundness.Discharge.Hm.LaidRows (Flock.RecOpen.unitLaid LANES H)",
+    "      (FlockSoundness.Discharge.Hm.inRowsOf (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H))) v)",
+    "  (r a c : Array Flock.F128) (rest : ByteArray) (idx : Nat) (ss : List ByteArray) (hr : Eq r.size LANES)",
+    "  (ha : Eq a.size 2) (hc : Eq c.size (instHMul.hMul 2 LANES)) (hrest : Eq rest.size 96) (hss : Eq ss.length H)",
+    "  (hrow : FlockVBridge.ColsHold v 0 (Flock.MerkleScheme.rowBytes r))",
+    "  (haux :",
+    "    ∀ (i : Nat) (hi : instLTNat.lt i ss.length),",
+    "      And (Eq (List.instGetElemNatLtLength.getElem ss i hi).size 64)",
+    "        (FlockVBridge.ColsHold v (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 512 i))",
+    "          (List.instGetElemNatLtLength.getElem ss i hi)))",
+    "  (hacc :",
+    "    FlockVBridge.ColsHold v",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
+    "  (hcoef :",
+    "    FlockVBridge.ColsHold v",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "      (Flock.MerkleScheme.rowBytes c))",
+    "  (hdir :",
+    "    ∀ (h : Nat),",
+    "      instLTNat.lt h H →",
+    "        Eq",
+    "          (v",
+    "            (instHAdd.hAdd",
+    "              (instHAdd.hAdd",
+    "                (instHAdd.hAdd",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  1024)",
+    "                (instHMul.hMul 256 LANES))",
+    "              h))",
+    "          (idx.testBit h)) :",
+    "  FlockVBridge.ColsHold v",
+    "    (FlockSoundness.Discharge.Hm.outStart",
+    "      (StateT.run (Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)) Flock.HmNets.St.empty).snd",
+    "      (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))",
+    "    (instHAppendOfAppend.hAppend",
+    "      (instHAppendOfAppend.hAppend (Flock.climb ms (Flock.Sha512.hash (Flock.MerkleScheme.rowBytes r)) idx ss)",
+    "        { data := Array.replicate 64 0 })",
+    "      (instHAppendOfAppend.hAppend",
+    "        (Flock.MerkleScheme.rowBytes",
+    "          (List.cons (FlockVBridge.consTerm LANES r a c 0)",
+    "              (List.cons (FlockVBridge.consTerm LANES r a c 1) List.nil)).toArray)",
+    "        rest))"
+   ],
+   "assumptions": [],
+   "type_hash": "68af55879e1e2d41a75ed922f7ae3192990c59de949dd9a3201c33a70f7b8f36"
   },
   "FlockVBridge.length_recOpenOuts": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.length_recOpenOuts (LANES H : Nat) (p : FlockVBridge.Ports) (hacc : Eq p.acc 1024) :",
+    "  Eq (FlockVBridge.recOpenOuts LANES H p).length 2048"
+   ],
+   "assumptions": [],
+   "type_hash": "d793402153ae302f5f24f98c990ed4e7a53e662e7ca21482978a63b1b8b3ec3a"
   },
   "FlockVBridge.recOpenNet_eq": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.recOpenNet_eq (LANES H : Nat) (p : Flock.RecOpen.Ports) :",
+    "  Eq (Flock.RecOpen.recOpenNet LANES H p) (FlockVBridge.recOpenNet LANES H (FlockVBridge.portsOf p))"
+   ],
+   "assumptions": [],
+   "type_hash": "11657542c8f84cdc029285746852b43b3708b9d181beee2b73e43ab536878edb"
   },
   "FlockVBridge.sound_climbFrom": {
    "owner": "@proofs",
@@ -21729,7 +21862,61 @@
    "type_hash": "7751f3655f8a84941af362f27c5e8f46ef3ee5c69389884ff0cb56c247aa7ad4"
   },
   "FlockVBridge.unit_check": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.unit_check {C : FlockSoundness.Audit.Circuit} {n : Nat} {P : FlockSoundness.Audit.Partition C n}",
+    "  {u : Fin n} {c : Flock.Circuit} (hB : FlockSoundness.Built c.unit) {k : Nat}",
+    "  (I : P.IsRowsUnit u ((FlockSoundness.Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : Nat} (hj : instLTNat.lt j k)",
+    "  (hone : Eq (X (I.wire ((FlockSoundness.Rows.ofNet hB).stack k).one)) Bool.true) (ms : Flock.MerkleScheme)",
+    "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r)))",
+    "  (hrec : Eq (Flock.RecOpen.check c) (Except.ok Unit.unit)) {LANES H : Nat}",
+    "  (hp : Eq (Flock.RecOpen.params c.unit.name) (Option.some { fst := LANES, snd := H }))",
+    "  (hu : instLENat.le c.unit.unitLog 32) (r a cf : Array Flock.F128) (rest : ByteArray) (idx : Nat) (ss : List ByteArray)",
+    "  (hr : Eq r.size LANES) (ha : Eq a.size 2) (hcf : Eq cf.size (instHMul.hMul 2 LANES)) (hrest : Eq rest.size 96)",
+    "  (hss : Eq ss.length H) (hrow : FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj) 0 (Flock.MerkleScheme.rowBytes r))",
+    "  (haux :",
+    "    ∀ (i : Nat) (hi : instLTNat.lt i ss.length),",
+    "      And (Eq (List.instGetElemNatLtLength.getElem ss i hi).size 64)",
+    "        (FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
+    "          (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 512 i))",
+    "          (List.instGetElemNatLtLength.getElem ss i hi)))",
+    "  (hacc :",
+    "    FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
+    "  (hcoef :",
+    "    FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "      (Flock.MerkleScheme.rowBytes cf))",
+    "  (hdir :",
+    "    ∀ (h : Nat),",
+    "      instLTNat.lt h H →",
+    "        Eq",
+    "          (FlockVBridge.copyVal I X hj",
+    "            (instHAdd.hAdd",
+    "              (instHAdd.hAdd",
+    "                (instHAdd.hAdd",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  1024)",
+    "                (instHMul.hMul 256 LANES))",
+    "              h))",
+    "          (idx.testBit h)) :",
+    "  FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
+    "    (FlockSoundness.Discharge.Hm.outStart",
+    "      (StateT.run (Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)) Flock.HmNets.St.empty).snd",
+    "      (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))",
+    "    (instHAppendOfAppend.hAppend",
+    "      (instHAppendOfAppend.hAppend (Flock.climb ms (Flock.Sha512.hash (Flock.MerkleScheme.rowBytes r)) idx ss)",
+    "        { data := Array.replicate 64 0 })",
+    "      (instHAppendOfAppend.hAppend",
+    "        (Flock.MerkleScheme.rowBytes",
+    "          (List.cons (FlockVBridge.consTerm LANES r a cf 0)",
+    "              (List.cons (FlockVBridge.consTerm LANES r a cf 1) List.nil)).toArray)",
+    "        rest))"
+   ],
+   "assumptions": [],
+   "type_hash": "813f73fd31f0f54511835164ae97d598c78cd3349cd31513264cf2727cca2de0"
   },
   "FlockVBridge.unit_recOpen": {
    "owner": "@proofs",
@@ -41855,6 +42042,8 @@
     "FlockSoundness.Registered.TwoOpenings.conflict_strict",
     "FlockSoundness.Registered.flock_e2e_count_hm96_reads",
     "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -42134,7 +42323,8 @@
     "FlockSoundness.Refine.verify_refines_hm96",
     "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_refines_ofCircuit_hm96",
-    "FlockSoundness.Refine.verify_tableAfter"
+    "FlockSoundness.Refine.verify_tableAfter",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Flock.Circuit": {
@@ -42515,7 +42705,9 @@
     "FlockSoundness.Refine.setupH_wf",
     "FlockSoundness.Refine.stmtOf_linkLayout",
     "FlockSoundness.Refine.verify_refines_ofCircuit",
-    "FlockSoundness.Refine.verify_refines_ofCircuit_hm96"
+    "FlockSoundness.Refine.verify_refines_ofCircuit_hm96",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.CircuitType": {
@@ -42883,7 +43075,9 @@
     "FlockSoundness.UProg.flock_e2e_count_classes_zero",
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero",
-    "FlockSoundness.UProg.rowsL1"
+    "FlockSoundness.UProg.rowsL1",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.CoinTree": {
@@ -43467,6 +43661,8 @@
     "FlockSoundness.Refine.stmtOf_linkLayout",
     "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_refines_ofCircuit_hm96",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -43813,7 +44009,9 @@
     "FlockSoundness.UProg.flock_e2e_count_classes_zero",
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero",
-    "FlockSoundness.UProg.rowsL1"
+    "FlockSoundness.UProg.rowsL1",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.DeriveAll": {
@@ -44193,7 +44391,9 @@
     "FlockSoundness.UProg.flock_e2e_count_classes_zero",
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero",
-    "FlockSoundness.UProg.rowsL1"
+    "FlockSoundness.UProg.rowsL1",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.DeriveCheck": {
@@ -44539,7 +44739,9 @@
     "FlockSoundness.UProg.flock_e2e_count_classes_zero",
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero",
-    "FlockSoundness.UProg.rowsL1"
+    "FlockSoundness.UProg.rowsL1",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.Draw": {
@@ -45667,12 +45869,15 @@
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum",
     "FlockVBridge.colsHold_words",
+    "FlockVBridge.keyProg_parse",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_mul128",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_residualForms",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -46051,11 +46256,16 @@
     "FlockSoundness.Registered.TwoOpenings.conflict_strict",
     "FlockSoundness.Registered.flock_e2e_count_hm96_reads",
     "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads",
+    "FlockVBridge.keyProg_parse",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_shaFrom",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -46399,7 +46609,8 @@
     "FlockSoundness.Registered.Reads.regLeaf_eq",
     "FlockSoundness.Registered.Reads.registered_weights",
     "FlockSoundness.Registered.flock_e2e_count_hm96_reads",
-    "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads"
+    "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Flock.HmNets": {
@@ -46757,13 +46968,19 @@
     "FlockSoundness.Prog.flock_headline_live",
     "FlockSoundness.Prog.flock_headline_live_on",
     "FlockSoundness.Refine.setupH_wf",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laidRows_layout_congr",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_mul128",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_residualForms",
     "FlockVBridge.sound_shaFrom",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -47169,7 +47386,8 @@
     "FlockSoundness.Registered.TwoOpenings.collides",
     "FlockSoundness.Registered.TwoOpenings.conflict_strict",
     "FlockSoundness.Registered.flock_e2e_count_hm96_reads",
-    "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads"
+    "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Flock.Layout": {
@@ -47551,7 +47769,9 @@
     "FlockSoundness.UProg.flock_e2e_count_classes_zero",
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero",
-    "FlockSoundness.UProg.rowsL1"
+    "FlockSoundness.UProg.rowsL1",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.Library": {
@@ -47871,7 +48091,9 @@
     "FlockSoundness.UProg.flock_e2e_count_classes_zero",
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero",
-    "FlockSoundness.UProg.rowsL1"
+    "FlockSoundness.UProg.rowsL1",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.Ligerito": {
@@ -48323,7 +48545,8 @@
     "FlockSoundness.Refine.setupH_wf",
     "FlockSoundness.Refine.stmtOf_linkLayout",
     "FlockSoundness.Refine.verify_refines_ofCircuit",
-    "FlockSoundness.Refine.verify_refines_ofCircuit_hm96"
+    "FlockSoundness.Refine.verify_refines_ofCircuit_hm96",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Flock.Merkle": {
@@ -48645,10 +48868,13 @@
     "FlockSoundness.Refine.verify_refines_ofCircuit_hm96",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockVBridge.colsHold_words",
+    "FlockVBridge.keyProg_parse",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -48999,7 +49225,11 @@
     "FlockSoundness.Registered.TwoOpenings.conflict_strict",
     "FlockSoundness.Registered.flock_e2e_count_hm96_reads",
     "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laidRows_layout_congr",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -51381,7 +51611,11 @@
     "FlockSoundness.Prog.flock_headline_execL",
     "FlockSoundness.Prog.flock_headline_live",
     "FlockSoundness.Prog.flock_headline_live_on",
-    "FlockSoundness.Refine.setupH_wf"
+    "FlockSoundness.Refine.setupH_wf",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.recOpenNet_eq",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.Record": {
@@ -52670,7 +52904,8 @@
     "FlockSoundness.Refine.setupH_wf",
     "FlockSoundness.Refine.stmtOf_linkLayout",
     "FlockSoundness.Refine.verify_refines_ofCircuit",
-    "FlockSoundness.Refine.verify_refines_ofCircuit_hm96"
+    "FlockSoundness.Refine.verify_refines_ofCircuit_hm96",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Flock.TemplateQuery": {
@@ -53441,7 +53676,9 @@
     "FlockSoundness.Refine.setupH_wf",
     "FlockSoundness.Refine.stmtOf_linkLayout",
     "FlockSoundness.Refine.verify_refines_ofCircuit",
-    "FlockSoundness.Refine.verify_refines_ofCircuit_hm96"
+    "FlockSoundness.Refine.verify_refines_ofCircuit_hm96",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.Verify": {
@@ -57779,6 +58016,8 @@
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero",
     "FlockSoundness.UProg.rowsL1",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -60231,7 +60470,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR_custody",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundR"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundR",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Composed.Base": {
@@ -60719,7 +60959,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR_custody",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundR"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundR",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.DecodeZL.LIG": {
@@ -62352,11 +62593,16 @@
     "FlockSoundness.Discharge.ZkView.leafSplit",
     "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
     "FlockVBridge.colsHold_words",
+    "FlockVBridge.keyProg_parse",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_shaFrom",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -62369,7 +62615,15 @@
     "FlockSoundness.Discharge.Hm.spanOf": "1c2304c9a5eecd19cb89c0c5320d41986343079479e07213b65853267464cb1b",
     "FlockSoundness.Discharge.Hm.xorRow": "f93cb3d491e3b00761eee66e5a610c8f58540a8f50b23b69d2167988d5705411"
    },
-   "guarantees": ["FlockSoundness.Discharge.Hm.port_commit_rows", "FlockVBridge.laid_recOpen", "FlockVBridge.unit_recOpen"]
+   "guarantees": [
+    "FlockSoundness.Discharge.Hm.port_commit_rows",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laidRows_layout_congr",
+    "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.unit_check",
+    "FlockVBridge.unit_recOpen"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Hm.Place": {
    "digest": "3e72e8ab2971a9e252063ab7a38716af31bc36d446abb80ffe8f45f88413d520",
@@ -62488,6 +62742,8 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
@@ -63346,7 +63602,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR_custody",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundR"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundR",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Placed.Setup": {
@@ -63467,7 +63724,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR_custody",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundR"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundR",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Placed.Typed": {
@@ -63572,7 +63830,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR_custody",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundR"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundR",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements": {
@@ -66597,7 +66856,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR_custody",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundR"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundR",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.ExecPlacement": {
@@ -66905,6 +67165,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR_custody",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundR",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -67075,7 +67337,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR_custody",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundR"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundR",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Extract": {
@@ -69627,6 +69890,8 @@
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero",
     "FlockSoundness.UProg.rowsL1",
     "FlockSoundness.placement_of_realizes",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -74635,6 +74900,8 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
@@ -74663,11 +74930,21 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_mul128",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_residualForms",
     "FlockVBridge.unit_recOpen"
    ]
+  },
+  "Proofs.Flock.VBridge.Keyed": {
+   "digest": "7df06675e0d9f9260040b30fa0e9ab6a5b594460583c177496cd9402b40e2512",
+   "definitions": {
+    "FlockVBridge.keyGates": "49eccba3c3600b87b4b3583d5439c02500e3a4e3d191d967351596e0e3030a15",
+    "FlockVBridge.keyInst": "86b12eb431b2819e98bd75796927b7c592f86e9792418fb81d553a1058b34566"
+   },
+   "guarantees": ["FlockVBridge.keyProg_parse"]
   },
   "Proofs.Flock.VBridge.Net": {
    "digest": "9ce207cb91af9f878f4576a51b69e12c5b3902cdd7ccdd8f23c02ff7fcc90cbe",
@@ -74685,7 +74962,16 @@
     "FlockVBridge.recOpenNet": "20a4b8fb652de3e0d54b261e34b57c216bee8a41b2458af91fb0332e188a4b3a",
     "FlockVBridge.recOpenOuts": "e69879f7325b2faa8e627ae6a3a5646b52eaad009e442880098bb527eb76ecb6"
    },
-   "guarantees": ["FlockVBridge.colsHold_words", "FlockVBridge.laid_recOpen", "FlockVBridge.unit_recOpen"]
+   "guarantees": [
+    "FlockVBridge.colsHold_words",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
+    "FlockVBridge.unit_check",
+    "FlockVBridge.unit_recOpen"
+   ]
   },
   "Proofs.Flock.VBridge.Open": {
    "digest": "c8ab7d4a905cf0d269bffb58c8b39698f1b7c4f08268d49ab5c97675614e8dc8",
@@ -74695,6 +74981,8 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.unit_recOpen"
@@ -74710,8 +74998,13 @@
    "guarantees": [
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum",
+    "FlockVBridge.keyProg_parse",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_recOpen",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -74746,6 +75039,8 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_residualForms",
     "FlockVBridge.unit_recOpen"
@@ -74766,6 +75061,8 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
@@ -74779,7 +75076,20 @@
     "FlockVBridge.colVal": "d9830da71e8dc54d65e1c4ee4b9c3b0a6818535f74313d7ae1a8c93bb1ebf426",
     "FlockVBridge.copyVal": "8c659733be0393be90f2cb4b217f6c0424ebe04a06c282e1cc172ec44afdfdd4"
    },
-   "guarantees": ["FlockVBridge.unit_recOpen"]
+   "guarantees": ["FlockVBridge.keyProg_parse", "FlockVBridge.unit_check", "FlockVBridge.unit_recOpen"]
+  },
+  "Proofs.Flock.VBridge.Verifier": {
+   "digest": "774b13e447c90f041da6dfb70397640664cb353f24fbaab1ac0a4438284a5a44",
+   "definitions": {
+    "FlockVBridge.portsOf": "588c9e2a207469518da236dc8d178ed73e11af86ff84f20b7bcca8988136fc6e",
+    "FlockVBridge.unitIn": "5ec0bf61a4a62189db534c6f28dcbc74373915d42f2e16abbd23b3b6cc316ff1"
+   },
+   "guarantees": [
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.recOpenNet_eq",
+    "FlockVBridge.unit_check"
+   ]
   },
   "Proofs.Flock.Verifier.Hash": {
    "digest": "d6d1e8b248f3eb42f59dc34dc27f0fcfd6283a88ba7e68b82990f6f603201997",
