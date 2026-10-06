@@ -31,7 +31,7 @@ it:
 - a bug in a shared tool that stops it doing what its own docs or help say;
 - a wrong or missing command, flag or gotcha in a skill or a `kb/` doc;
 - a failure message that didn't say how to fix the failure;
-- a nondeterministic or needlessly slow test: make it deterministic or smaller, or delete it.
+- a flaky test: delete it; a needlessly slow one: make it smaller or delete it.
 
 Say what you fixed in the PR description. It needs no note.
 
@@ -97,9 +97,30 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
+  asks for a change. A conflict is fixed at the tip (ci restacks it), not by pushing to the PR: a new head refuses every
+  tip that pins the old one at landing, and their checks are spent for nothing.
 - 2026-10-06 (8:07 AM PDT): one hash covers derivations and PRFs: `derive` is SHA-512, P2's key expansion counter-mode
   SHA-512, and SHA-512 truncated to 256 bits counts as SHA-512; Pearl's FP8 scheme keeps BLAKE3 as Pearl's own
   definition.
+- 2026-10-06 (8:03 and 8:14 AM PDT): research velocity first, no red tape (`AGENTS.md`, "Working principles"). Its
+  applications so far:
+  - a red-team grant carries when the PR's own patch is byte-identical at both heads, even if `main` moved under it,
+    `lean-audit.json` included;
+  - a train member needs no quick-tier pass (its own line below);
+  - a flaky test is deleted, not rerun or fixed (testing skill, "Write tests that mean something");
+  - an auditor-trusted device runs on Nebius, with trust in Nebius a named assumption, rather than on hardware that
+    attests.
+- 2026-10-06 (8:14 AM PDT): a protocol carries no policy parameter. It surfaces what its draw established (ε at δ, in the
+  integrity profile), and accounting decides later what it accepts. The model's size is public.
+- 2026-10-06 (7:51 to 8:14 AM PDT): one hash, SHA-512 with its whole output, everywhere: Pearl-C's `-h3`, PoUS's P2
+  (v4) and its key expansion, core's `randomness.derive`, and LMS (n = 64, no truncation). No hash flags or modular
+  hashing in research mode, and performance requirements relax as far as that needs. BLAKE3 code leaves the served path
+  for `archive/`, kept but not maintained. Pearl's FP8 scheme stays as Pearl defines it, semi-maintained, with
+  `cr/blake3` its assumption alone.
+- 2026-10-06 (8:03 AM PDT): a train member needs no quick-tier pass. The train's own full check is the gate, and the
+  owner's `ready` label at the PR's head may be written by hand (`research data label pr:N@SHA ready true --by LANE`).
+  Grants are still required.
 - 2026-10-05 (10:45 PM PDT): when Daniel hands over a design to implement, build it unless there is a strong reason not
   to: a measured cost that breaks a budget, a soundness or zero-knowledge hole, or a contradiction with a proved theorem.
   Taste isn't one. With a strong reason, build the nearest version you can defend and leave him a report, rather than
@@ -130,6 +151,14 @@ Newest first. Each is Daniel's unless it names the coordinator.
   circuit accepting implies the verifier of record accepts; completeness stays a test.
 - 2026-10-05: don't resume or re-dispatch a turn cut off by a console drop or a provider outage unless Daniel asks;
   report it to your coordinator and wait.
+- 2026-10-05 (1:27 PM PDT): a coordinator never loses contact with a worker it launched. Nothing reaches a running agent:
+  a `Task` resume is refused, another agent's `SendToAgent` refuses it ("not a worker of this coordinator") and its
+  dashboard follow-up box is disabled. So the Lean move lead went 85 minutes unreachable. Every brief therefore names an
+  inbox branch, `cursor/inbox-<first 8 of the worker's id>-<launcher's suffix>`, and the worker runs `git fetch` on it
+  at every checkpoint (at least every 20 minutes, contract §3), acting on each new commit message. The launcher writes
+  there with empty commits; the inbox is a channel, not a note. A worker silent for 30 minutes gets one inbox message,
+  and only if that brings no answer does the launcher start a parallel lane. A worker that is IDLE in
+  `list-cloud-agents` with no result delivered was stopped: report it to your coordinator, don't resume it.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
   piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
   critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
@@ -223,7 +252,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
   nightly uncached check of `main` as the backstop.
 - 2026-09-29: after a train lands, the coordinator closes each stacked PR whose code is on `main` but that GitHub didn't
   mark merged, with a "Merged into main at {sha} (train {name})" comment, without asking.
-- 2026-09-28: a timing-dependent test is made deterministic or deleted.
 - 2026-09-28: changes that speed up checks or merges land ahead of other work.
 
 ## Before you finish
