@@ -124,7 +124,7 @@ def test_the_lean_vectors_were_generated_from_this_tree():
     law and `stratified_miss_eq_greedy` (`Audit/Stratified.lean`, `Audit/StratifiedMiss.lean`), and the toolchain and
     Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
     recorded = json.loads(LEAN_VECTORS.read_text())["inputs"]
-    soundness = "backends/flock/verifier/lean/soundness/"
+    soundness = "verity/Security/Proofs/"
     assert set(recorded) == {"experimental/tests/sampled_proofs/lean/ExfiltrationVectors.lean",
                              *(soundness + f for f in ("FlockSoundness/Audit/Influence.lean", "FlockSoundness/Audit/Law.lean",
                                                        "FlockSoundness/Audit/Stratified.lean",
