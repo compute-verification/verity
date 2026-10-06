@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Live
 # One compiled `--zk` table as `Refine.modelTable`
 
 `sessionZC_one`: the compiled session on one table is `modelTable`'s shape, with the reps `repZCAt` and the output
-`[outZC …]`, as `Exec.sessionBL_one` at M0. So a one-table `modelTable` refinement (`G := repZCAt A Hs T`,
+`[outZC …]`, as `Exec.sessionBL_one` without `--zk`. So a one-table `modelTable` refinement (`G := repZCAt A Hs T`,
 `Cp := Fin 1 → Cap D`, `out := fun caps pend os => [outZC Hs T (caps 0) pend os]`, `acc := acceptedZC [T]`) lands on
 `batchedSessionZC` at the one-table plan (`batchedSessionZC_one`), where the compiled count curves apply.
 -/

@@ -2,19 +2,20 @@ import Flock.Hash
 import Flock.Draw
 
 /-!
-# `verity.randomness` v1, as a Lean spec
+# `verity.randomness` v2, as a Lean spec
 
-The byte formats and samplers of `packages/verity/src/verity/randomness/__init__.py`, executable, on the verifier's
-FIPS 180-4 SHA-256 (`Flock.Sha256.hash`). The Python is tied to them by vectors: the spec reproduces the pinned
-`packages/verity/tests/randomness/vectors.json`, and Python must match the spec's own vectors
+The byte formats and samplers of `verity/primitives/randomness/__init__.py`, executable, on the verifier's
+FIPS 180-4 SHA-512 (`Flock.Sha512.hash`). The Python is tied to them by vectors: the spec reproduces the pinned
+`verity/primitives/randomness/tests/vectors.json`, and Python must match the spec's own vectors
 (`backends/flock/tests/lean/RandomnessVectors.lean`).
 
 * `frame`, `frames`: a part framed as `tag || len(body) as 8 bytes big-endian || body`; an index frames each part,
   concatenates them, and frames the result as bytes.
-* `derive`: `SHA-256("verity/randomness/derive/v1\0" || frame(source) || frame(domain) || frame(ctx))`, `ctx` the
-  context's `frame(key) || frame(value)` sorted by key.
-* `block`, `stream`: block `c` of index `ι` is `SHA-256("verity/randomness/stream/v1\0" || key || frames(ι) || c as 8
-  bytes big-endian)`, and `stream key ι n` the first `n` bytes of the blocks' concatenation.
+* `derive`: the first 32 bytes of `SHA-512("verity/randomness/derive/v2\0" || frame(source) || frame(domain) ||
+  frame(ctx))`, `ctx` the context's `frame(key) || frame(value)` sorted by key.
+* `block`, `stream`: block `c` of index `ι` is `SHA-512("verity/randomness/stream/v2\0" || key || frames(ι) || c as 8
+  bytes big-endian)`, all 64 bytes, and `stream key ι n` the first `n` bytes of the blocks' concatenation.
+* `shard`: the first 32 bytes of `SHA-512("verity/randomness/shard/v2\0" || key || frames(ι))`.
 * `uniformOn n s`: `Key._uniform`'s reduction, which is `Flock.Draw.uniform` from the start of `s`: `none` when `s` runs
   out, which the Python's unbounded stream never does.
 * `subsetOn k n streams`, `subset`: `Key.subset`'s sparse partial Fisher–Yates, swap `i` drawing `uniformOn (n − i)` on
@@ -46,26 +47,26 @@ def frame : Part → ByteArray
 /-- `_frames(index)`: the parts framed and concatenated, framed again as bytes. -/
 def frames (index : List Part) : ByteArray := frame (.bytes (index.foldl (fun acc p => acc ++ frame p) ByteArray.empty))
 
-def DERIVE : ByteArray := "verity/randomness/derive/v1".toUTF8.push 0
-def STREAM : ByteArray := "verity/randomness/stream/v1".toUTF8.push 0
-def SHARD : ByteArray := "verity/randomness/shard/v1".toUTF8.push 0
+def DERIVE : ByteArray := "verity/randomness/derive/v2".toUTF8.push 0
+def STREAM : ByteArray := "verity/randomness/stream/v2".toUTF8.push 0
+def SHARD : ByteArray := "verity/randomness/shard/v2".toUTF8.push 0
 
-/-- `derive(source, domain, context)`: the context's pairs framed in key order. -/
+/-- `derive(source, domain, context)`: the context's pairs framed in key order, the 32-byte key SHA-512's first half. -/
 def derive (source : ByteArray) (domain : String) (context : List (String × Part)) : ByteArray :=
   let ctx := ((context.toArray.qsort fun a b => a.1 < b.1).toList.foldl
     (fun acc kv => acc ++ frame (.str kv.1) ++ frame kv.2) ByteArray.empty)
-  Flock.Sha256.hash (DERIVE ++ frame (.bytes source) ++ frame (.str domain) ++ frame (.bytes ctx))
+  (Flock.Sha512.hash (DERIVE ++ frame (.bytes source) ++ frame (.str domain) ++ frame (.bytes ctx))).extract 0 32
 
-/-- Block `c` of the counter-mode stream at `index`. -/
+/-- Block `c` of the counter-mode stream at `index`, 64 bytes. -/
 def block (key : ByteArray) (index : List Part) (c : Nat) : ByteArray :=
-  Flock.Sha256.hash (STREAM ++ key ++ frames index ++ be8 c)
+  Flock.Sha512.hash (STREAM ++ key ++ frames index ++ be8 c)
 
 /-- `Key.stream(index, n)`: the first `n` bytes of the stream at `index`. -/
 def stream (key : ByteArray) (index : List Part) (n : Nat) : ByteArray :=
-  ((List.range ((n + 31) / 32)).foldl (fun acc c => acc ++ block key index c) ByteArray.empty).extract 0 n
+  ((List.range ((n + 63) / 64)).foldl (fun acc c => acc ++ block key index c) ByteArray.empty).extract 0 n
 
-/-- `Key.shard(index)`. -/
-def shard (key : ByteArray) (index : List Part) : ByteArray := Flock.Sha256.hash (SHARD ++ key ++ frames index)
+/-- `Key.shard(index)`: a 32-byte key, SHA-512's first half. -/
+def shard (key : ByteArray) (index : List Part) : ByteArray := (Flock.Sha512.hash (SHARD ++ key ++ frames index)).extract 0 32
 
 /-- `Key._uniform`'s reduction on the stream `s`, from its start. -/
 def uniformOn (n : Nat) (s : ByteArray) : Option Nat := (Flock.Draw.uniform n s (s.size + 1) 0).map (·.1)
