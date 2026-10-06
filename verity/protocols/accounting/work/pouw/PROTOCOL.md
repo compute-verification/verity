@@ -461,7 +461,10 @@ useful    U/(α_A·α_B), glue
     credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
     row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
     transfer.
-  - Not here yet: `PearlC` refuses `hashing="h3"`, and the work law checks the cap per tile only.
+  - `PearlC(hashing="h3")` (`pearl-c-…-v1-h3`, not registered) draws row i's E_A as line 0 of its row seed, over the
+    row's frame-b3s leaf (`PearlC.row_seeds`); seed_B, E_B, the bases and the digests are -h2's, and the tickets keep the
+    unit's seed_A over root_A. The `test-16-v1-h3` and `decode-32-v1-h3` vectors pin a call end to end.
+  - Not here yet: the work law checks the cap per tile only.
 - **Row tiles.** m is a multiple of 16, not of 64: the last row tile may be partial, in whole 16 × 16 ticket subtiles.
   Decode's 32 × 64 tile has a leaf over its 64 digests (2 KB), so decode is not padded to 64 rows.
 - **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
