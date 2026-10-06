@@ -415,7 +415,8 @@ def _merkle_roots() -> list[Any]:
 
 def _rec_roots() -> list[Any]:
     """V*'s opening check (`verity_flock.rec_open`) at its smallest shape: a row of 8 lanes (one SHA-512 block) and one level,
-    six compressions and the consistency term's 16 products. Wider rows add message blocks and products, and higher openings
+    four compressions (the plain leaf's two and the level's two) and the consistency term's 16 products. Wider rows add
+    message blocks and products, and higher openings
     repeat the level. And V*'s algebra (`verity_flock.rec_residuals`) on two row ports (an element alone, a transposed block)
     and v, under `_gf2k_roots`' GfResiduals: a rep's is the same Calls over more ports and products."""
     from verity_flock import rec_residuals as RR

@@ -15,7 +15,8 @@ table's shape as its setup derives it (`shape`), each rep's coins (its stream's 
 v, the final check's κ and its query rows (`rec_algebra.verifier_rows`), each opening's coefficients
 (`rec_outer.coefficients`, its position checked against `rec_vstar`'s), and the entries its reads files name: per round i that
 absorbs message elements, the value ``rec-c<i>`` rebuilt from that round's two ``c_k`` (`rec_residuals.commits_entry`), and
-each level's expected outputs (`rec_outer.stage`). **The prover's side**: the openings from its proofs, its running sums
+each level's committed tops, rebuilt from their recorded ``b || c`` (`rec_outer.TopValue`). **The prover's side**: the openings
+from its proofs, its tops with the salts the gateway committed them under (`rec_vstar.tops`), its running sums
 (`rec_outer.Chain`, under salts drawn once and kept in ``--salts FILE``, so that every statement staged with one FILE reads one
 chain), and its message rows with the salts it committed them under in the inner session, registered as ``rec-c<i>`` (row r:
 rep r's) under `rec_outer.session_program` of ``public.json``, which the chain shares.
@@ -30,6 +31,13 @@ rep r's) under `rec_outer.session_program` of ``public.json``, which the chain s
   algebra (rep 0's ``acc1``, rep 1's ``acc0``: the part that reads them).
 * ``comb``: the verifier's comb for rep 0 one bit off the inner circuit's fold, as if the inner proof were of another circuit
   (the part whose v holds it).
+* ``top``: a wrong top. The prover commits the last level's first opening with its first sibling one bit off (a fresh row it
+  commits honestly), so the opening climbs to another node, and gives that node as its output row under the ``b || c`` the
+  gateway committed for the top node its position names (``L<last>/``).
+* ``top-salt``: a top that does not match its salt. Level 0's first opening, honest but for its output row's salt, one bit off
+  the salt the gateway committed ``root_B``'s node under (``L0/``).
+
+In both, the opening climbs to the output row the prover gives, and that row does not open the committed ``b || c``.
 """
 from __future__ import annotations
 
@@ -42,12 +50,13 @@ from types import SimpleNamespace
 from verity_catalog.definitions.boolean import gf2k as G
 
 from . import rec_algebra as A
+from . import rec_open as R
 from . import rec_outer as O
 from . import rec_residuals as RR
 from . import rec_vstar as V
 
 TABLE = "circuit"
-FORGERIES = ("message", "sum", "comb")
+FORGERIES = ("message", "sum", "comb", "top", "top-salt")
 VERIFIER_FILES = ("circuit.txt", "pub.bin", "public-inputs.bin", "program.json", "partition.json", "registered.json")
 
 
@@ -184,26 +193,76 @@ def forge_chain(chain: O.Chain, row: int) -> O.Chain:
     return O.Chain(RG.Registered.commit(chain.reg.program, O.ACC_VALUE, rows, list(chain.reg.salts)), dict(chain.at))
 
 
-def forge_row(inst: Path, circuit_text: str, port: str, row: int, word: int, want: int) -> None:
-    """Flip bit 0 of word ``word`` of the prover's table row ``row`` of ``port`` in ``inst`` (`circuit.write`'s file with
-    shared rows: the header, then each row port's table rows in the circuit's port order, u16 little-endian), whose value
-    there must be ``want``; the header, the salts and every ``b || c`` are left as they were."""
-    data = bytearray(inst.read_bytes())
+def _offsets(data: bytes, circuit_text: str, port: str, row: int) -> tuple[int, int]:
+    """Where table row ``row`` of ``port`` and its salt start in `circuit.write`'s prover file with shared rows: the header,
+    each row port's table rows in the circuit's port order (u16 little-endian), then their salts in that order."""
     nl = data.index(b"\n") + 1
     head = json.loads(data[:nl])
     ports = json.loads(circuit_text.split("\n", 2)[1][5:])["ports"]
-    at = nl
+    if port not in [p[0] for p in ports]:
+        raise ValueError(f"no row port {port}")
+    rows_at, salts_at = nl, nl + sum(2 * head["shared_rows"][name] * words for name, words, *_ in ports)
     for name, words, *_ in ports:
         if name == port:
-            at += 2 * (row * words + word)
-            break
-        at += 2 * head["shared_rows"][name] * words
-    else:
-        raise ValueError(f"no row port {port}")
-    if int.from_bytes(data[at:at + 2], "little") != want:
-        raise AssertionError(f"{inst}: {port} row {row} word {word} is not where the layout puts it")
-    data[at] ^= 1
+            return rows_at + 2 * row * words, salts_at + V.SALT * row
+        rows_at += 2 * head["shared_rows"][name] * words
+        salts_at += V.SALT * head["shared_rows"][name]
+    raise AssertionError
+
+
+def _patch(inst: Path, at: int, want: bytes, new: bytes, what: str) -> None:
+    data = bytearray(inst.read_bytes())
+    if bytes(data[at:at + len(want)]) != want or len(new) != len(want):
+        raise AssertionError(f"{inst}: {what} is not where the layout puts it")
+    data[at:at + len(new)] = new
     inst.write_bytes(bytes(data))
+
+
+def _u16(words: list[int]) -> bytes:
+    return b"".join(int(w).to_bytes(2, "little") for w in words)
+
+
+def forge_row(inst: Path, circuit_text: str, port: str, row: int, word: int, want: int) -> None:
+    """Flip bit 0 of word ``word`` of the prover's table row ``row`` of ``port`` in ``inst``, whose value there must be
+    ``want``; the header, the salts and every ``b || c`` are left as they were."""
+    at = _offsets(inst.read_bytes(), circuit_text, port, row)[0] + 2 * word
+    _patch(inst, at, _u16([want]), _u16([want ^ 1]), f"{port} row {row} word {word}")
+
+
+def set_row(inst: Path, circuit_text: str, port: str, row: int, want: list[int], new: list[int]) -> None:
+    """Replace the prover's table row ``row`` of ``port`` (its words ``want``) with ``new``, every salt and ``b || c`` kept."""
+    _patch(inst, _offsets(inst.read_bytes(), circuit_text, port, row)[0], _u16(want), _u16(new), f"{port} row {row}")
+
+
+def set_salt(inst: Path, circuit_text: str, port: str, row: int, want: bytes, new: bytes) -> None:
+    """Replace the prover's salt of table row ``row`` of ``port`` (``want``) with ``new``, every row and ``b || c`` kept."""
+    _patch(inst, _offsets(inst.read_bytes(), circuit_text, port, row)[1], want, new, f"{port} row {row}'s salt")
+
+
+def forged_query(q: V.Query) -> tuple[V.Query, bytes]:
+    """``top``'s opening: ``q`` with its first sibling one bit off (bit 0 of its first byte), and the node it climbs to."""
+    sibs = [bytes([q.sibs[0][0] ^ 1]) + q.sibs[0][1:], *q.sibs[1:]]
+    return V.Query(**{**q.__dict__, "sibs": sibs}), V.climb(V.leaf(q.row), q.pos, sibs)
+
+
+def forge_top(d: Path, level: dict, tops: O.TopValue, kind: str, i: int = 0) -> dict:
+    """The prover's ``inst.bin`` of a level's statement under ``d`` with opening ``i``'s output row forged as ``kind`` names
+    (the module docstring): for ``top``, the level as staged (its query ``i`` `forged_query`'s), and the output row the node
+    that query climbs to; for ``top-salt``, the honest row under another salt. The verifier's files are the staging's."""
+    q = level["queries"][i]
+    text = (d / "circuit.txt").read_text()
+    at = tops.position(q)
+    rec = {"kind": kind, "level": level["level"], "instance": i, "rep": q.rep, "j": q.j, "top_row": at,
+           "committed_node": q.cap_node.hex()}
+    if kind == "top":
+        node = V.climb(V.leaf(q.row), q.pos, q.sibs)
+        if node == q.cap_node:
+            raise ValueError("top: the staged opening climbs to its committed top node")
+        set_row(d / "inst.bin", text, "out", i, R.expected(q.cap_node), R.expected(node))
+        return {**rec, "node": node.hex()}
+    salt = tops.reg.salts[at]
+    set_salt(d / "inst.bin", text, "out", i, salt, bytes([salt[0] ^ 1]) + salt[1:])
+    return {**rec, "salt_byte0": [salt[0], salt[0] ^ 1]}
 
 
 def _copy_verifier(src: Path, dst: Path) -> None:
@@ -230,6 +289,7 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
     qs = V.queries(public, private, proofs, TABLE)
     coefs = coefficients(vf, qs)
     t["coefficients_s"] = round(time.perf_counter() - t0, 2)
+    ts = {rep: V.tops(public, private, f"{TABLE}/rep{rep}", TABLE) for rep in sorted(proofs)}
     chain = O.Chain.build(program, qs, coefs, None if salts is None else acc_salts(Path(salts), len(qs) + 1))
     lvls = O.levels(qs)
     res: dict = {"shape": [sh.m, sh.k_log, sh.claims], "openings": len(qs), "chain_rows": chain.reg.leaves,
@@ -246,6 +306,8 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
             res["forged_row"] = p_last + 1
             chain = forge_chain(chain, p_last + 1)
             res["forged_acc_root"] = chain.reg.root.hex()
+        elif forge in ("top", "top-salt"):
+            levels, algebra = [lvls[-1 if forge == "top" else 0]["level"]], False
         else:
             levels = []
     want = None if levels is None else set(levels)
@@ -253,7 +315,12 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
     for lv in lvls:
         if want is None or lv["level"] in want:
             t0 = time.perf_counter()
-            s = O.stage(lv, out / f"L{lv['level']}", chain, coefs)
+            tops = O.TopValue.build(program, lv["level"], {rep: t_[lv["level"]] for rep, t_ in ts.items()})
+            if forge == "top":
+                lv = {**lv, "queries": [forged_query(lv["queries"][0])[0], *lv["queries"][1:]]}
+            s = O.stage(lv, out / f"L{lv['level']}", chain, coefs, tops)
+            if forge in ("top", "top-salt"):
+                res["forged_top"] = forge_top(out / f"L{lv['level']}", lv, tops, forge)
             s["stage_s"] = round(time.perf_counter() - t0, 1)
             res["levels"][f"L{lv['level']}"] = s
     if algebra:

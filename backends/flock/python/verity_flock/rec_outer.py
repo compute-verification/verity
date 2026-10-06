@@ -1,20 +1,23 @@
 """V*'s outer statements (hiding model architectures, lane rec-v0): the inner session's Ligerito openings, one C-Flock
-statement per level, each instance a `RecOpen` of one opening, its node registered by the verifier and its running sum read
-from the prover's registration of them.
+statement per level, each instance a `RecOpen` of one opening, the top node it climbs to and its running sum read from the
+prover's registrations of them.
 
-A level's openings share one shape (its rows' lanes, ``H = depth - c`` siblings below its cap of ``2^c`` nodes), so each level
+A level's openings share one shape (its rows' lanes, ``H = depth - c`` siblings below its top of ``2^c`` nodes), so each level
 is one template, ``RecOpen{LANES, H}``, and one statement over that level's openings of both reps, in rep and query order
 (M0 proves one template per statement). Its program is `population_program` of the template over the level's openings, its
 partition that program's ``Q_template_instance`` v0. Every instance reads two fresh private rows, the opened row and its
-``aux`` (salt, siblings, the position's low bits: `rec_open.pack`), one public input, its coefficients ``coef``, and two
-registered rows, ``acc`` in and ``acc_out`` out (§16.13).
+``aux`` (its siblings: `rec_open.pack`), two public inputs, its coefficients ``coef`` and the position's low bits ``dirs``,
+and three registered rows: ``out``, ``acc`` in and ``acc_out`` out (§16.13).
 
-The verifier knows what each ``out`` must be: the cap node at the opening's position and the position's low bits
-(`rec_open.expected`), both from the inner session's public record (its caps and the query coins it drew). It registers
-those rows as the value ``rec-L<level>`` under salts it derives itself (`expected_salts`: the rows are public, the salts only
-keep each row's ``b || c`` its own), and its reads file puts instance ``i``'s output at row ``i`` (PROTOCOL.md §16.13
-"Registered reads", `verity.protocols.verification.sampled_proofs.one_stage.registered`). An instance is satisfiable only if its private rows open
-to that registered row, so the statement holds only if every opening climbs to the cap node its coin names.
+**The tops** (`TopValue`). Neither side sees a tree's top in the clear: the gateway committed each node as a registered row
+(`verity_flock.rec_live.top_rows`) under a fresh salt of its own, and the coin server recorded only the nodes' ``b || c``
+(`verity_flock.rec_vstar.tops`). The prover registers the tops a level's openings climb to (level 0's ``root_B``, both reps'
+one tree, else rep 0's top then rep 1's) as the value ``rec-top-L<level>`` under the V* session's program and those very salts;
+the verifier builds its own entry of that value from the recorded ``b || c`` alone (`rec_residuals.commits_entry`), and its
+reads file puts instance ``i``'s output at the row of the top node its position names (rep ``r``'s first row plus
+``pos >> H``; PROTOCOL.md §16.13 "Registered reads", `verity.protocols.verification.sampled_proofs.one_stage.registered`). An
+instance is satisfiable only if its private rows climb, by the public ``dirs``, to that registered row, whose ``b || c`` the
+gateway committed: the statement holds only if every opening climbs to the committed top node its coin names.
 
 **The running sums** (`Chain`). The openings of both reps, rep-major, then by level and query (`chain_order`), are positions
 ``0 .. N - 1`` of one chain; the prover registers its ``N + 1`` rows as the value ``rec-acc`` (`ACC_VALUE`) under the V*
@@ -32,7 +35,7 @@ same rows.
 
 `stage` writes one level's ``circuit.txt``, the prover's ``inst.bin``, the verifier's ``pub.bin`` and ``public-inputs.bin``,
 ``program.json``, ``partition.json`` and the reads file ``registered.json``; `verity_flock.rec_vstage` stages every level
-and the algebra of an inner session.
+and the algebra of an inner session. The openings are of plain SHA-512 leaves (`rec_open`); a level of salted ones is refused.
 """
 from __future__ import annotations
 
@@ -50,15 +53,18 @@ from verity_catalog.definitions.boolean.gf2k import mul
 
 from . import circuit as FC
 from . import ir_lower as IL
+from . import rec_live as RL
 from . import rec_open as R
+from . import rec_residuals as RR
 from . import rec_vstar as V
 from .class_statement import ClassDefinition
 
-EXPECTED_SALT = b"verity/rec-v0/expected-salt/v0"
 SESSION_TAG = b"verity/rec-v0/v-star/v0\0"
 ACC_VALUE = "rec-acc"
-COEF_PUBLIC = {"seed": "the inner session's public record (rec/inner-transcript/v0), the opening = instance",
+COEF_PUBLIC = {"seed": "the inner session's public record (rec/inner-transcript/v1), the opening = instance",
                "derivation": "verity/rec-v0/opening-coefficients/v0"}
+DIRS_PUBLIC = {"seed": "the inner session's public record (rec/inner-transcript/v1), the opening = instance",
+               "derivation": "verity/rec-v0/opening-position-bits/v0"}
 
 
 def session_program(record: bytes) -> str:
@@ -68,15 +74,14 @@ def session_program(record: bytes) -> str:
 
 
 def lowering(LANES: int, H: int) -> IL.Lowering:
-    """`rec_open.unit_circuit` as M0's unit: ports ``row``, ``aux``, ``acc`` and ``coef`` (u16 words, whole SHA-512 blocks), and
-    ``out`` and ``acc_out`` (one row each)."""
+    """`rec_open.unit_circuit` as M0's unit: ports ``row``, ``aux``, ``acc``, ``coef`` and ``dirs`` (u16 words), and ``out``
+    and ``acc_out`` (one row each)."""
     name = f"rec-open/l{LANES}-h{H}"
     C, ins, outs = R.unit_circuit(LANES, H)
     w_in, w_out = len(ins), len(outs)
     units = IL.Units(target=None, in_widths=[16] * w_in, out_widths=[16] * w_out, in_src=[[("leaf", p) for p in range(w_in)]],
                      out_src=[[("ret", p) for p in range(w_out)]], signature=(name,), gates=[], arg_gates=[], ret_gates=[])
-    defn = ClassDefinition(name, (R.row_words(LANES), R.aux_words(H), R.ACC_WORDS, R.coef_words(LANES)), w_out,
-                           (R.OUT_WORDS, R.ACC_WORDS))
+    defn = ClassDefinition(name, R.port_words(LANES, H), w_out, (R.OUT_WORDS, R.ACC_WORDS))
     return IL.Lowering(name, defn, units, C, IL.layout(C, ins, outs))
 
 
@@ -86,7 +91,7 @@ def subcircuit(LANES: int, H: int) -> SimpleNamespace:
     defn = R.definition(LANES, H)
     digest = program_digest(Program(defn))
     return SimpleNamespace(id=f"rec-open/l{LANES}-h{H}", template=SimpleNamespace(id="rec-open"),
-                           inputs=[port(nm) for nm in ("row", "aux", "acc", "coef")], outputs=[port("out"), port("acc_out")],
+                           inputs=[port(nm) for nm in R.PORTS], outputs=[port("out"), port("acc_out")],
                            definition=lambda **_: defn, program_digests=lambda statics: {defn.id: digest})
 
 
@@ -105,9 +110,41 @@ def levels(queries: list[V.Query]) -> list[dict]:
     return out
 
 
-def expected_salts(value: str, n: int) -> list[bytes]:
-    return [hashlib.shake_256(EXPECTED_SALT + value.encode() + b"\0" + i.to_bytes(4, "little")).digest(hm96.SHA512.salt_bytes)
-            for i in range(n)]
+def top_value_name(level: int) -> str:
+    return f"rec-top-L{level}"
+
+
+@dataclass
+class TopValue:
+    """A level's tops as one registered value (`top_value_name`): the prover's registration (``reg``, the top rows under the
+    gateway's salts), the verifier's own entry from the coin server's ``b || c`` alone (``own``), and each rep's first row."""
+
+    reg: object
+    own: dict
+    first: dict[int, int]
+
+    @classmethod
+    def build(cls, program: str, level: int, tops: dict[int, V.Top]) -> "TopValue":
+        """``tops``: each rep's top at the level (`rec_vstar.tops`); a top two reps share (level 0's ``root_B``) is one run of
+        rows. Refused when the prover's registration is not the value the recorded ``b || c`` commit."""
+        from verity.protocols.verification.sampled_proofs.one_stage import registered as G
+
+        runs: list[V.Top] = []
+        first = {}
+        for rep, t in sorted(tops.items()):
+            if t not in runs:
+                runs.append(t)
+            first[rep] = sum(len(u.nodes) for u in runs[:runs.index(t)])
+        value = top_value_name(level)
+        rows = [r for t in runs for r in RL.top_rows(b"".join(t.nodes))]
+        reg = G.Registered.commit(program, value, rows, [s for t in runs for s in t.salts])
+        own = RR.commits_entry(program, value, R.OUT_WORDS, [b for t in runs for b in t.bcs])
+        if own["root"] != reg.entry()["root"]:
+            raise ValueError(f"level {level}: the prover's tops are not the ones the gateway committed")
+        return cls(reg, own, first)
+
+    def position(self, q: V.Query) -> int:
+        return self.first[q.rep] + (q.pos >> (q.depth - q.c))
 
 
 def chain_order(queries: list[V.Query]) -> list[tuple[int, int, int]]:
@@ -149,41 +186,46 @@ class Chain:
         return min(ps), max(ps) + 1
 
 
-def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, int], list[int]], link_rows: bool = False) -> dict:
+def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, int], list[int]], tops: TopValue,
+          link_rows: bool = False) -> dict:
     """One level's statement, the verifier's own files beside the prover's (``out_dir``), and what it costs. ``chain``: the
-    prover's running sums; ``coefs``: each opening's ``coef`` words (the verifier's)."""
+    prover's running sums; ``coefs``: each opening's ``coef`` words (the verifier's); ``tops``: the level's committed tops."""
     from verity.protocols.verification.sampled_proofs.one_stage import partition as P
     from verity.protocols.verification.sampled_proofs.one_stage import registered as G
 
     LANES, H, qs = level["LANES"], level["H"], level["queries"]
     n = len(qs)
-    value = f"rec-L{level['level']}"
+    if any(q.salt is not None for q in qs):
+        raise ValueError(f"level {level['level']}: openings of hm96-sha512/v1 leaves; RecOpen opens plain SHA-512 leaves "
+                         f"(flock-leaf/sha512-unsalted)")
     defn = R.definition(LANES, H)
     program_ = P.population_program(defn, n)
     query = P.template_instance_query(defn)
     part = P.partition(program_, query)
     prog = P.program_sha512(program_)
     keys = [(q.rep, q.level, q.j) for q in qs]
-    packed = [R.pack(q.row, q.salt, q.sibs, q.pos) for q in qs]
+    packed = [R.pack(q.row, q.sibs) for q in qs]
     rows = np.array([r for r, _ in packed], np.uint16)
     aux = np.array([a for _, a in packed], np.uint16)
     coef = np.array([coefs[k] for k in keys], np.uint16)
+    dirs = np.array([R.dirs_words(q.pos, H) for q in qs], np.uint16)
     at = [chain.at[k] for k in keys]
     acc_rows, acc_salts, acc_entry = chain.reg.statement(at)
     out_acc, out_acc_salts, out_acc_entry = chain.reg.statement([p + 1 for p in at])
-    want = [R.expected(q.cap_node, q.pos, H) for q in qs]
+    tops_at = [tops.position(q) for q in qs]
+    out_rows, out_salts, entry = tops.reg.statement(tops_at)
+    if [list(r) for r in out_rows] != [R.expected(q.cap_node) for q in qs]:
+        raise ValueError(f"level {level['level']}: an opening's top node is not its row of the level's tops")
     low = lowering(LANES, H)
-    flat = np.concatenate([rows, aux, np.array(acc_rows, np.uint16), coef], axis=1).astype(np.uint64)
+    flat = np.concatenate([rows, aux, np.array(acc_rows, np.uint16), coef, dirs], axis=1).astype(np.uint64)
     got, _cut, ok = low.evaluate(flat)
-    opened = [bool((int(ok) >> i) & 1) and got[i, :R.OUT_WORDS].astype(np.uint16).tolist() == want[i] for i in range(n)]
+    opened = [bool((int(ok) >> i) & 1) and got[i, :R.OUT_WORDS].astype(np.uint16).tolist() == list(out_rows[i]) for i in range(n)]
     summed = [bool((int(ok) >> i) & 1) and got[i, R.OUT_WORDS:].astype(np.uint16).tolist() == list(out_acc[i]) for i in range(n)]
     sub = subcircuit(LANES, H)
-    text = FC.compose(low, sub, partition=P.digest(part), program=prog, public_inputs={"coef": COEF_PUBLIC})
-    reg = G.Registered.commit(prog, value, want, salts=expected_salts(value, n))
-    out_rows, out_salts, entry = reg.statement(range(n))
-    read = lambda r, reads: {**r.entry(), "word_bits": 16, "reads": list(reads)}
-    own = {"format": G.READS, "ports": {"out": read(reg, range(n)), "acc": read(chain.reg, at),
-                                       "acc_out": read(chain.reg, [p + 1 for p in at])}}
+    text = FC.compose(low, sub, partition=P.digest(part), program=prog, public_inputs={"coef": COEF_PUBLIC, "dirs": DIRS_PUBLIC})
+    read = lambda e, reads: {**e, "word_bits": 16, "reads": list(reads)}
+    own = {"format": G.READS, "ports": {"out": read(tops.own, tops_at), "acc": read(chain.reg.entry(), at),
+                                       "acc_out": read(chain.reg.entry(), [p + 1 for p in at])}}
     fresh = lambda: [hm96.SHA512.fresh_salt() for _ in range(n)]
     salts = {"row": fresh(), "aux": fresh(), "acc": acc_salts, "out": out_salts, "acc_out": out_acc_salts}
     registered = {"out": entry, "acc": acc_entry, "acc_out": out_acc_entry}
@@ -191,24 +233,25 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
     if link_rows:
         linked = G.Registered.commit(prog, f"rec-rows-L{level['level']}", rows.tolist())
         _rows, salts["row"], registered["row"] = linked.statement(range(n))
-        own["ports"]["row"] = read(linked, range(n))
+        own["ports"]["row"] = read(linked.entry(), range(n))
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(program_)))
     (d / "partition.json").write_text(json.dumps(part))
     (d / "registered.json").write_text(json.dumps(own))
-    FC.write_public_inputs(text, {"coef": coef}, n, d / "public-inputs.bin")
+    public = {"coef": coef, "dirs": dirs}
+    FC.write_public_inputs(text, public, n, d / "public-inputs.bin")
     tables = {"row": rows, "aux": aux, "acc": np.array(acc_rows, np.uint16)}
     outs = {"out": np.asarray(out_rows, np.uint16), "acc_out": np.asarray(out_acc, np.uint16)}
-    FC.write(text, SimpleNamespace(name=value, subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None, list(range(n)),
-             share_rows=True, outs=outs, tables=tables, refs={nm: list(range(n)) for nm in tables}, salts=salts,
-             registered=registered, public_words={"coef": coef})
+    FC.write(text, SimpleNamespace(name=f"rec-L{level['level']}", subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None,
+             list(range(n)), share_rows=True, outs=outs, tables=tables, refs={nm: list(range(n)) for nm in tables}, salts=salts,
+             registered=registered, public_words=public)
     meta = json.loads(text.split("\n", 2)[1][5:])
-    return {"level": level["level"], "value": value, "template": defn.id, "LANES": LANES, "H": H, "instances": n,
+    return {"level": level["level"], "value": tops.own["value"], "template": defn.id, "LANES": LANES, "H": H, "instances": n,
             "opened": sum(opened), "not_opened": [(q.rep, q.j) for q, o in zip(qs, opened) if not o],
             "summed": sum(summed), "not_summed": [(q.rep, q.j) for q, s in zip(qs, summed) if not s],
             "unit_rows": low.layout.useful, "unit_log": meta["unit_log"], "k_log": meta["k_log"], "vus_per_block": meta["vus_per_block"],
-            "per_vu": meta["per_vu"], "compressions": LANES // 8 + 5 + 2 * H, "circuit_sha512": FC.digest(text),
-            "program_sha512": prog, "partition_digest": P.digest(part), "registered_root": reg.root.hex(),
-            "acc_root": chain.reg.root.hex(), "rows_root": linked.root.hex() if linked else None}
+            "per_vu": meta["per_vu"], "compressions": R.compressions(LANES, H), "circuit_sha512": FC.digest(text),
+            "program_sha512": prog, "partition_digest": P.digest(part), "registered_root": tops.own["root"],
+            "top_rows": tops.own["leaves"], "acc_root": chain.reg.root.hex(), "rows_root": linked.root.hex() if linked else None}
