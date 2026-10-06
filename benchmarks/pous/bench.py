@@ -504,7 +504,7 @@ class P2Gpu:
         }
 
 
-IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2Gpu)}
+IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2V3Gpu, P2Gpu)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -558,8 +558,8 @@ def main(argv: list[str] | None = None) -> int:
     t = time.perf_counter()
     from verity.protocols.accounting.space.pous import schemes as _schemes
 
-    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu")):
-        raise SystemExit(f"--audits {a.audits}: only band-gpu and p2-v1-gpu run untimed (--audits 0)")
+    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu", "p2-v3-gpu")):
+        raise SystemExit(f"--audits {a.audits}: only band-gpu and the P2 arms run untimed (--audits 0)")
     if a.band_d:
         if a.impl != "band-gpu":
             raise SystemExit(f"--band-d is band-gpu's, not {a.impl}'s")

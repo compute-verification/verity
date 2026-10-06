@@ -274,7 +274,9 @@ def test_side_by_side_tables_both_arms_and_withholds_a_failed_one(tmp_path, monk
 
 
 def test_the_v3_expander_given_the_kits_prefix_gives_every_pinned_key():
-    got = _bench().P2V3Gpu().conformance_gate()
+    bench = _bench()
+    assert bench.IMPLS["p2-v3-gpu"] is bench.P2V3Gpu and bench.IMPLS["p2-v1-gpu"] is bench.P2V1Gpu
+    got = bench.P2V3Gpu().conformance_gate()
     assert got["passed"], got
     assert {k for k in got["checks"] if k.startswith("v3-expander/")} == {
         "v3-expander/p2-v1/w64/0", "v3-expander/p2-v1/w96/0", "v3-expander/p2-v1/w128/0", "v3-expander/p2-v1/w16448/0"}
