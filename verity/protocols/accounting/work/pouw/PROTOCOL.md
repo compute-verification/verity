@@ -364,7 +364,7 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
       to are fixed by the receipt before any draw.
     - *Each window's source is fresh and used once* (root's C2). `Ledger.open` takes no source: it draws 32 bytes from
       the operating system's CSPRNG (`secrets`, `anchors.py:165`) once the receipt is complete, for that window
-      alone. So A4 (`prf/sha-256`) applies as stated, one fresh uniform source per derivation, with the source's
+      alone. So A4 (`prf/sha-512`) applies as stated, one fresh uniform source per derivation, with the source's
       uniformity its own claim, A5 (`uniform/python-secrets`). Once the window's draw is sent (`Ledger.sent`), it draws
       nothing more, and the audit record keeps its source and receipt digest (`Ledger.record`, `anchors.py:245`),
       from which anyone re-derives the key and the draw (`replay_key`). The limit: a third party can check that the
@@ -464,7 +464,7 @@ useful    U/(α_A·α_B), glue
     `frame-b3` root, one row leaf and one message digest pinned. A decode case (m = 32) pins the partial tile's leaf.
   - The certificate cites `xof/blake3`, `cr/blake3` and `cr/sha-256`. TurboSHAKE128 no longer backs anything. SHA-256
     still does: the bindings that name each tree's domain and the epoch's `weights_root` are SHA-256 (`tagged`), and the
-    salt and the draw's `derive` (`prf/sha-256`) are unchanged.
+    salt is unchanged. The draw's `derive` is core's, on SHA-512 (`prf/sha-512`).
 - **Hashing format -h2** (`pearl-c-h100-v1-h2`, `hashing="h2"`) is -h1 with every tree `frame-b3s`. It is P1 of research
   store `internal/pouw/rtx-pro/a-commit-latency.md`, which the theory sign-off there rules sound under four format
   conditions. `verity/primitives/commitments/tests/test_frame_b3s.py` tests each condition.
