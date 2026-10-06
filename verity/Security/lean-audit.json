@@ -237,8 +237,6 @@
   "Specs.Flock": "C-Flock's guarantees and assumptions, over its proof-side model; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
-  "Flock.SecurityProofs.RecursiveSound": {"owner": "@proofs"},
-  "Flock.SecurityProofs.RecursiveZK": {"owner": "@proofs"},
   "Flock.HmNets.col_and": {
    "owner": "@proofs",
    "signature": [
@@ -403,6 +401,18 @@
    ],
    "assumptions": [],
    "type_hash": "4b10575d6fa12090cf49fb2eede5f242b10132a3464dd77f0b13f8351d9abd08"
+  },
+  "Flock.SecurityProofs.RecursiveSound": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.RecursiveSound : Flock.Guarantees.RecursiveSound"],
+   "assumptions": [],
+   "type_hash": "0643eccd98a9217e39b6606019c7b5395905ba6f01aef4c2cf5a5d4edf858324"
+  },
+  "Flock.SecurityProofs.RecursiveZK": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK"],
+   "assumptions": [],
+   "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779"
   },
   "Flock.climb_binding": {
    "owner": "@proofs",
@@ -42185,6 +42195,8 @@
     "Flock.MerkleScheme.collision_hash",
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
+    "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SecurityProofs.RecursiveZK",
     "Flock.merkleCheck_opens",
     "Flock.merkle_binding",
     "Flock.squeeze_answers",
@@ -42575,6 +42587,7 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_block",
@@ -42911,6 +42924,7 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -43239,6 +43253,7 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -43546,6 +43561,7 @@
     "Flock.CoinTree.ofHello": "a145ee007c12826ee60aca145efa20c71dc9439960cbb439e48cf12ffb7fa6da"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -43800,6 +43816,7 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.baseOf_get",
     "FlockLevel3.build_computes",
     "FlockLevel3.foldB_get",
@@ -44111,6 +44128,7 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -44475,6 +44493,7 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -44802,6 +44821,7 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -45155,6 +45175,7 @@
     "_private.Flock.Draw.0.Flock.Draw.workStratumOfJson": "5cad839e36fe00cc241399868793440ece4cd9d90015ce20cba8172b76884588"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Law.countRule_eq_draw",
     "FlockSoundness.Audit.Law.drawOS_def",
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
@@ -45446,6 +45467,7 @@
     "Flock.Extract.graph": "0c0133729e0bfc266dbd35d61822938e72fdf4c750dfd36a215c6843e2a3f680"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -45712,6 +45734,7 @@
     "Flock.MerklePair.sha512_inputs",
     "Flock.MerkleScheme.all_sized",
     "Flock.MerkleScheme.collision_hash",
+    "Flock.SecurityProofs.RecursiveSound",
     "Flock.climb_binding",
     "Flock.merkleCheck_opens",
     "Flock.merkle_binding",
@@ -46180,6 +46203,8 @@
     "Flock.MerkleScheme.collision_hash",
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
+    "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SecurityProofs.RecursiveZK",
     "Flock.squeeze_answers",
     "Flock.squeeze_retained",
     "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
@@ -46549,6 +46574,8 @@
     "Flock.MerkleScheme.all_sized",
     "Flock.MerkleScheme.collision_hash",
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SecurityProofs.RecursiveZK",
     "FlockLevel3.RowV2.enc_inj",
     "FlockLevel3.RowV2.prefix_size",
     "FlockSoundness.Binding.HmRows.registered",
@@ -46949,6 +46976,7 @@
     "Flock.HmNets.hmLaid_eq",
     "Flock.HmNets.layout_rows",
     "Flock.HmNets.shaLaid_eq",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_block",
@@ -47310,6 +47338,7 @@
    "guarantees": [
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.RowV2.enc_inj",
     "FlockLevel3.RowV2.packBits_length",
     "FlockLevel3.RowV2.prefix_size",
@@ -47638,6 +47667,7 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -47939,6 +47969,7 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -48276,6 +48307,7 @@
     "Flock.whatsGo": "f9caac05639e5876006e083cbb72fb76c62689db2c98ee875127b5c7f5ed1274"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -48411,6 +48443,7 @@
     "Flock.MufuTable.words": "89cf712873d3107f3917070011dc4a22b66cc68311751742ea6645539180175d"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.baseOf_get",
     "FlockLevel3.build_computes",
     "FlockLevel3.foldB_get",
@@ -48674,6 +48707,7 @@
     "Flock.MerklePair.sha512_inputs",
     "Flock.MerkleScheme.all_sized",
     "Flock.MerkleScheme.collision_hash",
+    "Flock.SecurityProofs.RecursiveSound",
     "Flock.climb_binding",
     "Flock.merkleCheck_opens",
     "Flock.merkle_binding",
@@ -48993,6 +49027,7 @@
     "Flock.HmNets.shaLaid_eq",
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.baseOf_get",
     "FlockLevel3.build_computes",
     "FlockLevel3.foldB_get",
@@ -49289,6 +49324,7 @@
     "Flock.ringSwitch": "87fa68afdd557e70b0e440edf5a58b49207c15bd8a8c6eb3013348a2af42e2a8"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -49437,6 +49473,7 @@
     "Flock.Partition.validate": "258ccfcfd51cf7ddff8d88638763a2e4220507340884be487fc57049d3eba285"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -49685,6 +49722,7 @@
     "Flock.skipWeights": "aff948bf8c5a5b9d23dd040dd3d7887973a997a1c0f68e53c50c56517d9c023a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.eqTable_get",
     "FlockLevel3.eqTable_size",
     "FlockLevel3.foldRanges_get",
@@ -50050,6 +50088,7 @@
     "_private.Flock.Program.0.Flock.Program.widthAfter?": "d2d3353bca7af82568c6f879cb7eab47614b60e8d80d22d30d8a6092bf00c061"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -50325,6 +50364,7 @@
     "Flock.instInhabitedZerocheckProof.default": "1958fa8c58e95acc1d63b3659ae5368b791c029b919acbfa1b25aea8f86c68f3"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.Lincheck.replay_lincheck",
     "FlockSoundness.Discharge.Composed.Zerocheck.c_eval",
     "FlockSoundness.Discharge.Composed.Zerocheck.claim_honest",
@@ -50495,6 +50535,7 @@
    "guarantees": [
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -50795,6 +50836,7 @@
     "_private.Flock.Qcall.0.Flock.Qcall.withCall": "46681ccf55dd9332937bb85b5fa6300725adfe5b242727092c6cc5b124020205"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -51015,6 +51057,7 @@
     "Flock.Qword.instInhabitedDCut.default": "ce24148e80df5c60168f6ec16daa77bc201c280f9b96e8a3c68397aa62cf4b8a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -51258,6 +51301,7 @@
     "Flock.StreamRec.rounds": "5b146dec61efbb297a72cb7578d80cbb1da9e81ebd64fae52b0edb5b4919f4f3"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -51393,6 +51437,7 @@
    "guarantees": [
     "Flock.Registered.check_ok",
     "Flock.Registered.opensLeaf_binding",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.CROnly.flock_e2e_count_hm96_reads",
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR",
@@ -51429,6 +51474,7 @@
     "Flock.mkRegion": "5f114dc12db36808d8d8d876a67e06d165ba81c44eb0ca2cd345fdadd66b5188"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -51684,6 +51730,7 @@
     "Flock.queriesAt": "e5c2e5d88c9efd1ef08a6bb2dd8fab6ccae9de9d90a49d5f64119195e0d3f903"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -51877,6 +51924,7 @@
     "Flock.instInhabitedStmt.default": "2cc8a24a64bf8126a8f5ba4bbc778b1917a99776b220735bfaa7cd4f041eba7d"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.addDelta_get",
     "FlockLevel3.baseOf_get",
     "FlockLevel3.foldRanges_get",
@@ -52171,6 +52219,7 @@
     "_private.Flock.Tags.0.Flock.Tags.s": "a4a190d4a37066637be18f3ca5b4adc590b08525521438547f56b4222a5775ff"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -52445,6 +52494,7 @@
     "_private.Flock.TemplateQuery.0.Flock.TemplateQuery.showList": "d5a3296879e70e5e0cb3eb37f12c4953792cd600933b0f6bef8905084afc58cd"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
     "FlockSoundness.Discharge.Aliased.flatCopyPos_zero",
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
@@ -52681,6 +52731,7 @@
     "_private.Flock.Transcript.0.Flock.Round.answers.match_1.splitter": "4b402e2ea389f69e2be9145428adfb21ec78ecf6124db4edb1970ee2a421d2af"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "Flock.squeeze_answers",
     "Flock.squeeze_retained",
     "FlockSoundness.Discharge.Composed.Lincheck.replay_lincheck",
@@ -52866,6 +52917,7 @@
    },
    "guarantees": [
     "Flock.Registered.check_ok",
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
     "FlockLevel3.foldedPartial_eq",
@@ -53152,6 +53204,7 @@
     "Flock.verifyRep": "2cf106cd1d90ad6600c8cca1b840aeb66d49f2834ab54d92644c61d7764e5b18"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.Lincheck.replay_lincheck",
     "FlockSoundness.Discharge.Composed.ZerocheckMasked.finalC_masked_eval",
     "FlockSoundness.Discharge.Composed.ZerocheckMasked.replay_zerocheck",
@@ -53339,6 +53392,7 @@
     "_private.Flock.Zk.0.Flock.Zk.s": "328fbfec598bc6d2a7439596efe2435ec8d78dbb84f23880e4b0b104a2453b1f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.Lincheck.lincheck_complete",
     "FlockSoundness.Discharge.Composed.Lincheck.replay_lincheck",
     "FlockSoundness.Discharge.Composed.ZerocheckMasked.c_eval_eval",
@@ -53444,6 +53498,7 @@
     "Flock.Zk.rhoIndependent": "f0006095b61ed91fc31bc4b8c47e4a75adcb8d2889f72daecc4e1e9c2e883868"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -53542,6 +53597,7 @@
     "Flock.Zk.reader": "25a7fe6abd2440d7a1bcb899a7794769202b2b105d481294da3992e865fd7226"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -53612,6 +53668,7 @@
     "FlockLevel3.unpack": "34d46d73da3087e523794f03fdf8cc353e89599bab7796dabf68f8d46e7a5d66"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.card_F",
     "FlockLevel3.card_K",
     "FlockLevel3.lo_balanced",
@@ -53836,6 +53893,7 @@
     "FlockLevel3.natPoly": "111cbf4afcf70249625f67c95ea00b823b4afff592fc0274ac1047bfbf46c941"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.F128.poly_add",
     "FlockLevel3.F128.poly_injective",
     "FlockLevel3.F128.poly_mul",
@@ -54110,6 +54168,7 @@
     "FlockLevel3.sparseT": "19ffccb2c40965ce056f59aa6f23b3f82d5e254e24ff132a8185c40b87916015"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.baseOf_get",
     "FlockLevel3.foldRanges_get",
     "FlockLevel3.fold_get",
@@ -54276,6 +54335,7 @@
     "FlockLevel3.w128": "d6a5772060eba5ae44a5e24a598bbaae27240b7e726634cbd499318fb5ddbfac"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.F128.poly_add",
     "FlockLevel3.F128.poly_injective",
     "FlockLevel3.F128.poly_mul",
@@ -54538,6 +54598,7 @@
     "FlockLevel3.instFieldGF128": "8d89e3a068c342c818866b82d507901b8cea23772c0345b39cc1467af187f955"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.GF128.add_eq",
     "FlockLevel3.GF128.inv_eq",
     "FlockLevel3.GF128.mul_eq",
@@ -54832,6 +54893,7 @@
     "FlockLevel3.toAdj": "3d43ec40ffd40bb80c838bd961cfc60dfffd36a7c5c459a792fa49f89b21fb54"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.GF128.add_eq",
     "FlockLevel3.GF128.inv_eq",
     "FlockLevel3.GF128.mul_eq",
@@ -55094,6 +55156,7 @@
     "FlockLevel3.xK": "917b2bcfdc9e2ff9eee754606678c46b5eb298a2aa0629f24942687a5cc045c2"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.GF256.add_eq",
     "FlockLevel3.GF256.mul_eq",
     "FlockLevel3.Q_irreducible",
@@ -55306,6 +55369,7 @@
     "FlockLevel3.lagΛ": "09a906a6c22c0330f471dd9127b548111bd8adae56940c5354543f1a71b1ffce"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.nodes",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
@@ -55496,6 +55560,7 @@
     "FlockLevel3.sPoly": "ec337ddf87e0323de610b88e2d958535657a6bf98deae09f0257051aa466ffda"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.xhat_poly",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
@@ -55691,6 +55756,7 @@
     "FlockLevel3.sparseEntry": "3f477da2cae04b669b8905fb8b393a1d00b70c9d7f915a42b45cee03768f96c6"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_block",
@@ -55831,6 +55897,7 @@
     "FlockLevel3.u": "9f0c9aed308bb84c708a957725a63f5d9be6219ba17e66216cc1f311c9249e2a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockLevel3.card_F",
     "FlockLevel3.card_K",
     "FlockLevel3.lo_balanced",
@@ -56049,6 +56116,117 @@
     "FlockSoundness.table_sound_exec_fast100_34_35"
    ]
   },
+  "Proofs.Flock.Recursive.Defs": {
+   "digest": "b352622c15bb6908435a8a7fb1c9ee35b975a55a84aa0644d391ef440a19ee0d",
+   "definitions": {
+    "FlockSoundness.Discharge.Recursion.AllAt": "dae015aefb29e92fb58a3a78db8c137afbdfd5f2414655f2a55e0c828b00dd9a",
+    "FlockSoundness.Discharge.Recursion.AllLeaves": "7a6a4c5f3e8b562743458c4b3b1bb9df98ff12128be109cb5a43af5a1d84df02",
+    "FlockSoundness.Discharge.Recursion.Inner": "00707c16ef370c5e1a8ea247d7ab1388b307eac8b779e04d3660ad7a43f485d8",
+    "FlockSoundness.Discharge.Recursion.Inner.Coin": "4f9b527096bac69f02ca6e049a428cba3f71aa1c7df820855adf94a0d8cfbd5f",
+    "FlockSoundness.Discharge.Recursion.Inner.Msg": "c2702aa04bf3f75821c3c4206d23ae2332fe292441b604fccb1aa12c2dc1eee1",
+    "FlockSoundness.Discharge.Recursion.Inner.Stmt": "7ef5d63824e53101b783a8e08a80e7bb9d381b6a7e4bdd98a1710dde9d5dc4a1",
+    "FlockSoundness.Discharge.Recursion.Inner.accepts": "c9a4b31a4a585b989b1c5e2aa1e585f52afcd5e61469461d92f4caa356fe1bca",
+    "FlockSoundness.Discharge.Recursion.Inner.fintype": "aed169626c76f7ad0faf5b89c29f7b6b1c8cc47a162820c026cd020636f6dd8f",
+    "FlockSoundness.Discharge.Recursion.Inner.game": "2f5ccdc0517e735bd771fbf50c025e26b17a973d3f609a46d8155ee61d146102",
+    "FlockSoundness.Discharge.Recursion.Inner.holds": "a13445865b4cf21b51dfb28a569cd36da7fb9766f2a50edca733bd1f9898e672",
+    "FlockSoundness.Discharge.Recursion.Inner.r": "04c2301b42971c395dcd4291ced8f4e5797a6528e1c26fa453fbed0b04b7e9ce",
+    "FlockSoundness.Discharge.Recursion.InnerSound": "cfdcc51712a29f61d501055b6849788cb2e30c68987149be33bbd83e032e5254",
+    "FlockSoundness.Discharge.Recursion.expAt": "611baa216cbc9d8f9ec7ab0bc102aa9b05698eea8b60fbfe1c9730e7dd03f1c9",
+    "FlockSoundness.Discharge.Recursion.leafAvg": "0caee6062d600e8c71f04f9880fb264d48b552549bf202c784739667e7ab662e",
+    "FlockSoundness.Discharge.Recursion.recGame": "13e4784114d07181b02ccff18cff96f52fb3262919bd019b1c7778ef6675f83f",
+    "FlockSoundness.Discharge.Recursion.rounds": "59d4291307103b926c72e23254743b7243e9750365895b33cee6ef23ab61a2e3"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
+  },
+  "Proofs.Flock.Recursive.Flock": {
+   "digest": "223ecf4c9c95d1df60e3809c03b7b82941adee93e30c9cdb0a1f854a38d218fc",
+   "definitions": {
+    "FlockSoundness.Discharge.Recursion.VBridge": "19af984a90cbc8a7708b200b0c35233645c70a9e391568effa0ab09c1031aa83",
+    "FlockSoundness.Discharge.Recursion.ZkOuter": "b645948891cd7c88c327cbf148952d787874869e33d6e4c2bf2c54c0270dd888",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.CR": "7e118aef9fd5f2af538c754b1bc5ef52a25064c54c25063b994a018c280c3833",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.I": "fc68e08977b99e2daf5a553dfb59eaf7aba2306f067e2b296c2adc5512c20a64",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.RegAgree": "1c74b60821965986865c3dec76f5f1341ac09e759f356f2bd418cab3950a4972",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.S₀": "e1dfacd53b2346b2c618e2721c7821e1e434acb78aba580b3bc32dc83a42b4de",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.bound": "c773c638e1f37307ba2bcbf4894ccbb4bc74c94ac29cd4b766b7d7701eb7b029",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.dj": "81a9ba996986d06c571e062dc868779e441ee0693b5c7aac9bbc1af6447f0cec",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.game": "2d8e17f1a9acd1f07c448004ce47a9785585082432a036fa362e303848dd1657",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.layer": "f46be39e958d1ef522c12a8281f383cc06ee12b5b25245737b0e840416376dd3",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.own": "93ca9981555b58ba13254bb8905ca725d7dbd5c0bd1c889ef2ff72e5a515a6a1",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.pub": "fb8c67d44abd60f69e1750096cdb09f3989bd07df06af90df57b305964777bd7",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.rd": "9cd896c7357c2ff2e867b74a3e93a50bf5c17d96f13e59a0ee553c4c6bd3b0c7",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.sim": "0a176b98c29409c244c823bcb470edeeac9e7330dc5f7dd3da2176a2b1922827",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.wr": "446a731e93e99256ecea88af6e5c9eb3a36d59e7ab229c404f3b1b75336b580e",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.y₀": "a3889ccac4d2cc90f8056c58dba31a1086e784c02e457edf2c4bdf4824300d60"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
+  },
+  "Proofs.Flock.Recursive.Fork": {
+   "digest": "aa6da477db708cebcf4c14f64f68644cb020c40f1f76d3cc5888bb1e88523999",
+   "definitions": {
+    "FlockSoundness.Discharge.Recursion.Openings": "0270ded6ce604d329c407c0c5b79bdd420c2c65d0ffd6edca4e0309e0878bbe1",
+    "FlockSoundness.Discharge.Recursion.Openings.Dg": "98b53df269d10b632cd5b4dc02deab9af67b10da7f77b47bd40a6944107dd38f",
+    "FlockSoundness.Discharge.Recursion.Openings.Op": "627be63ab2bcf71547c1a92def518cedb7e3b14f0b57bfb48da888bad2e9dd3c",
+    "FlockSoundness.Discharge.Recursion.Openings.collide": "e6b36a98795083f9fb09069514d67b02a4775b20cf15beb1ac4f8c0ab71a2202",
+    "FlockSoundness.Discharge.Recursion.Openings.com": "42a1016f0356f47e951a2732d0bc562881c9e460fd3e318fef1f297f467528e8",
+    "FlockSoundness.Discharge.Recursion.Openings.val": "a19d0a6694b9a4515ee6e2a9daa1d1bc5f659d507b7f7a5a2c26938f5db91b07",
+    "FlockSoundness.Discharge.Recursion.contF": "e0104242a03ad718b6e105eb2c7d47c5a80cf70ac9167ec8253ef9098d967e87",
+    "FlockSoundness.Discharge.Recursion.forkF": "1bc0b623c1a44aef6edffe5352b152eb676a872c35abc4f5ca1726e4d62247ab",
+    "FlockSoundness.Discharge.Recursion.forkPick": "379528afd8a08bee1ceb425b0175769d80d4ee05774d75aa454f48c925620c81"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
+  },
+  "Proofs.Flock.Recursive.Sound": {
+   "digest": "29ef4c0941d8b0311bd6e029cb4bb556087c16d26aa484dc0e921951f800b167",
+   "definitions": {
+    "FlockSoundness.Discharge.Recursion.forkAt": "89b522caaf610b0117c6773a394c66a4af76b1e77dab836f0cf45a935dc8c9bd"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
+  },
+  "Proofs.Flock.Recursive.Stage": {
+   "digest": "edd4711d8b54adc81a1930f03c4de08960ac0d7fb9bc236804fb099f3078f57e",
+   "definitions": {
+    "FlockSoundness.Discharge.Recursion.PosK": "53d9ed266468b8504b5d54a59d6f58c88f857a0c3d57dbe091d965e4df556332",
+    "FlockSoundness.Discharge.Recursion.ReadsDrawK": "9f711f11c284b403e92d28a801426e33d98a89c94d4a86851fbe3a2be78587a4",
+    "FlockSoundness.Discharge.Recursion.VCommits": "1ff68e4823cb926385ee0bc6c195dc95a3b51e4c25149ca69a8010aa53b42928",
+    "FlockSoundness.Discharge.Recursion.VDecodes": "6bf957930c3ee3fd8c8a2070045dfe5685b2f9707c1ef8afc1bb444e989a0f1c",
+    "FlockSoundness.Discharge.Recursion.ValK": "8195cd44a3add667689eea3a12f40b2615263218a0e898343751d8f7af5ab5ac",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.stageSlack": "383086de7307e471e6da57af52ccb4853c3724deb4cd602edf0fead82cc6d0ce",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.trial": "209471edf6883293da79d7ec8e64f618b083fd753b4bd8a7b766d6364e857f71",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.vb": "c88279095f87737bece7451289ec87c7ea80780885dbadc70bb5dcba013d4aba",
+    "FlockSoundness.Discharge.Recursion.bitK": "2391fdb83957b5b981b6d3327655dbaf93d6997ff708cf26a44c40b90de52e39",
+    "FlockSoundness.Discharge.Recursion.candWeightK": "6d882100b521a6b9f767a16106577379b64177346c6248eb4a6e4561dc7d21fa",
+    "FlockSoundness.Discharge.Recursion.idxK": "1024f37a8b8092251bd8eea27906991f03ddc6d7f6c7b8cfba8cf656ec643a32",
+    "FlockSoundness.Discharge.Recursion.obK": "cea8d3e4c1bb1cd0e24e71727c3073bccf3d84fcb5a8a370befe2819346fa55a",
+    "FlockSoundness.Discharge.Recursion.posK": "f1ee2d210f8e14f752dd5e008c29a418296e11d95ecef90d6ef2ca1ff79e1d87",
+    "FlockSoundness.Discharge.Recursion.schemeK": "f7ba50463595b34d4e61af076709bfeaea21921d8314fade8d0a167f07b4e0c3"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
+  },
+  "Proofs.Flock.Recursive.Transfer": {
+   "digest": "7a9cb3f46a88b37420a5132d5e21752442cd1e2d272346e75c4a7a13208ff502",
+   "definitions": {
+    "FlockSoundness.Discharge.Recursion.candSlackZC": "d9fce8473afc2a42311302a1adb1bd8cfdc1a30516d434450932e2b36bcd65af",
+    "FlockSoundness.Discharge.Recursion.trialFinderZC": "98e8b534084a142bcef07f216d1d50cf40e0d798f328c567eec4829c6afa5708"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
+  },
+  "Proofs.Flock.Recursive.ZkReg.RegLink": {
+   "digest": "c39de060b09867cb139bdca9a35e2e312111063bef6de14bf7b3f49c0db869be",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkReg.RegCRZC": "3ce4b49c755454a67d349b02fb2fadf845366d23c886ec46326d6b9c305cc5e5",
+    "FlockSoundness.Discharge.ZkReg.outRegZC": "cc5303c2581706c36d48a65c4ffa92835871f9d17417e7a24d99d963776ee172",
+    "FlockSoundness.Discharge.ZkReg.regFinderZC": "b5f6fa893c22ac63256c026e9d099096dd9c62a91c8e03fed900f896ac1fd859",
+    "FlockSoundness.Discharge.ZkReg.regTermZC": "ae8606c43f00a7805f2f39664701e47e9327b80367f10592263700dfccaf45a1"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
+  },
+  "Proofs.Flock.Recursive.ZkReg.Vals": {
+   "digest": "9b1239c69b961653d748964cb3e4c6b3609181178fdd48655218f072fcf3d7c8",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkReg.regOpenZ": "18f3b44de96cb00eadb620b6091c5646bce004f9cd8fe59c134554b3cf778eae"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
+  },
   "Proofs.Flock.Soundness.Accounting.Bound": {
    "digest": "40380563a6f220d81b45b9de171e5e25a85ce5d74ea1f18d5500831d646c11e1",
    "definitions": {
@@ -56078,6 +56256,7 @@
     "FlockSoundness.Accounting.tableError": "379cb0e59f39af11a43528dc3c88b34e0e8c55b7c3d4563e22d4371bdb6e1c48"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -56305,6 +56484,7 @@
     "FlockSoundness.Accounting.instDecidableOk": "6ff45e7f70c0f9683114f2e765e0f9c5c8ce64c01d70afc473dd93b28887b614"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
@@ -56425,6 +56605,7 @@
     "FlockSoundness.Accounting.padRepError": "4f4a4fdca77d6a089e1d51810b1206ea8ea24c612a05babeb3cfbd44aa4ef50a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -56553,6 +56734,7 @@
     "FlockSoundness.Accounting.queriesAt": "02ff8aa174c6daa85acab4c3c46c3a7c884bdb01a81e37e168dc3815b407d42b"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -56860,6 +57042,8 @@
     "FlockSoundness.Assumptions.UniformSecret": "788911cfe5fe1875e4d77931fdbd301dd515958c25e73fd855e9892e24b843c9"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SecurityProofs.RecursiveZK",
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
     "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
@@ -57024,6 +57208,7 @@
     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ": "167287a3a7f1c1def8a44226e55431613ce209de3d6f812bd506108d9fd257e4"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveZK",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody",
     "FlockSoundness.Discharge.Composed.zk_session_sound_custody",
@@ -57068,6 +57253,7 @@
     "FlockSoundness.Audit.xorSum": "c627186d879d69d17638b56c9e47172a64d74159228eebeebe6104754ad393a8"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Ex.exfil",
     "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness",
@@ -57362,6 +57548,7 @@
     "FlockSoundness.Audit.Partition.tabOf": "e659a7fc8b58a78b75bbafc0cc9317a0bfc128969b3ac49a6a1946833f835091"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -57645,6 +57832,7 @@
     "FlockSoundness.Audit.Partition.placeDecoder": "e64e289378b2cca6895119e368a0802c090129af173f8b4dca4aec5ae6313934"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
@@ -57737,6 +57925,7 @@
     "FlockSoundness.Audit.Xpub": "db794891339245ce497d42c299519aadd0a003a9312700bd6dd60c399d85eac3"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
@@ -57922,6 +58111,7 @@
     "FlockSoundness.Audit.Law.Ω": "c3422bf20fbb717e53861bbecdf9a42a99ae18322e433a415d5ddc7b72263ef2"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Ex.exfil",
@@ -58147,6 +58337,7 @@
     "FlockSoundness.Audit.reg": "dcf7c15357f24fdae0b8e370f590ca7d5d46f429a3c615a7061874388535e623"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Ex.exfil",
@@ -58376,6 +58567,7 @@
     "FlockSoundness.Audit.Law.stratum": "3b319f016ee6416dd12ae9e2e3a548e29ca32d9ade2a2e6dda26f1c88925cee4"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Law.closure_escape_le_work",
     "FlockSoundness.Audit.Law.countK_eq",
     "FlockSoundness.Audit.Law.covers_of_floor",
@@ -58652,6 +58844,7 @@
     "FlockSoundness.Binding.wit": "aa5b7493972b214f1e00d7f2b25ec445007257a11ec430b4696fc325d2d4f719"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -58780,6 +58973,7 @@
     "FlockSoundness.Binding.hm96Pair": "c1ac7aba11bea03bf4156061f96ef5c100b0e3731b63980fccfb9a29476c4083"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -58895,6 +59089,7 @@
     "FlockSoundness.Binding.RowSite.u": "bbd0b1d2c90cd3228fe03d5c48c6a1622f3d7cb867a4df1113879ad93ff10556"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
@@ -58998,6 +59193,7 @@
     "FlockSoundness.CROnly.hidingGap": "6d876b6561ae5359deb9ec30fdc987c69ab53fb2f2559231552780d04f0d4a08"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveZK",
     "FlockSoundness.CROnly.adaptive_prefinal_gap",
     "FlockSoundness.CROnly.adaptive_prefinal_hm96_sha512",
     "FlockSoundness.CROnly.adaptive_prefinal_key",
@@ -59062,6 +59258,7 @@
     "FlockSoundness.tableOrc": "d89374427c2070b77010d4e267edeaacab2295e6378bb5546753761d62146325"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -59177,6 +59374,7 @@
     "FlockSoundness.tabOf": "e324da8145b1394df62157229abf8075c3f547bc27fd3203b8472bbe93d488cf"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -59380,6 +59578,7 @@
     "FlockSoundness.wit": "63c5ebda55f859c118e57170708ff50a8560217a34e1e68f2e4a80bafc169cb2"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -59623,6 +59822,7 @@
     "FlockSoundness.Discharge.Aliased.srcKey": "da7d260b5d53d2a57fe1aa3b87ad81803bd932a2147d955a1ccc655b3d2f6107"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_zero",
     "FlockSoundness.Discharge.Aliased.flatCopies_of_key",
@@ -59829,6 +60029,7 @@
     "FlockSoundness.Discharge.Composed.simZ": "47916f9ac9ee9f457c5fb828930d4d8307d9b6035491802a7de24dce98b28aef"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_sound_custody",
@@ -60102,6 +60303,7 @@
     "FlockSoundness.Discharge.Const.Prog.rowsWireC": "9dbb5b0dddc8b50ee642561ebe6cce113b441334e422181a03da11367d707d7a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -60176,6 +60378,7 @@
     "FlockSoundness.Discharge.DecodeZL.wMid": "a10467e4576de872572766132148aaaef8a943e493bf94fae4e52ab8b0283f6f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -60212,6 +60415,7 @@
     "FlockSoundness.Discharge.DecodeZL.wOP": "fc88e5df91481d2c4eeec5021441e42abf6c64be5f7c5ea26a70643eab92ab5d"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -60259,6 +60463,7 @@
     "FlockSoundness.Discharge.DecodeZL.opnAt": "608d0412f4c0e83e4aebb30ca4a9a4d84e28c9e972fd3327d1be6131905898e8"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.tagsOk_circuit967b8d06",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -60305,6 +60510,7 @@
     "FlockSoundness.Discharge.DecodeZL.wZL": "a25c95558c75820fcb901e96bcaab12c64fedc942aecd63dd0d8678c8ff659f2"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -60428,6 +60634,7 @@
     "FlockSoundness.Discharge.Exec.tableOrcL": "98755ef3bd6012e0424f3618956c54b840bd52ff169de05db30523e73278a8f5"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -60483,6 +60690,7 @@
     "FlockSoundness.Game.CoinOf": "fe4a968bebe20fd3d5432ec522a95faff06bad350c07b0f6c5e4c486ecac0dd3"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -60573,6 +60781,7 @@
     "FlockSoundness.Discharge.Exec.setupOf": "a1b00a74a7d210e3564d54a90f1691ea9da1252cd87fbeac47ee3b0225b9e412"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file",
     "FlockSoundness.Discharge.Composed.tagsOk_circuit967b8d06",
@@ -60825,6 +61034,7 @@
     "FlockSoundness.Discharge.Exec.tableOutL": "71276f8c57b1004b0283de0d53a0a12f9e086e96165e8e30140873f9a00f3701"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_sound_custody",
@@ -61704,6 +61914,7 @@
     "FlockSoundness.Discharge.Hm.wordL": "710196f22f9eccd694af7a28576e9eaaa793c97e90bdb800f290d5364473543f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveZK",
     "FlockSoundness.Discharge.Hm.bitL_hash",
     "FlockSoundness.Discharge.Hm.bitL_saltHash",
     "FlockSoundness.Discharge.Hm.hm96_commit",
@@ -61759,6 +61970,7 @@
     "FlockSoundness.Discharge.Hm.shaSub": "2afcef0118bebb5e3615c6b27e21173b09037525779000c3061e84883b6ee745"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -61921,6 +62133,7 @@
     "FlockSoundness.Discharge.Integrate.tableAt": "140e6a4921ac8bcbce985f756708f24cd28680293b857a37bcde8ae87070c293"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -61993,6 +62206,7 @@
     "FlockSoundness.Discharge.Layout.inBlockOr": "796471326c0a4141ed0f649e5afb4ca16a24dc7bcb66847bc483bde39b7eddfe"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62063,6 +62277,7 @@
     "FlockSoundness.Discharge.Layout.zeroG": "45cb2aadfda5f30a87d0b37e244c49f2c310b13a1bc529bc667b0d18188fd3ca"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62119,6 +62334,7 @@
     "FlockSoundness.Discharge.Layout.keyedRowsOuts": "1311a3f006b626315f3f49ce8235dadd6f752de90331e7b152415a875c7af460"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62142,6 +62358,7 @@
     "FlockSoundness.Discharge.Layout.portRowW": "4f8a74c9adb179b0de17326bbadd0b3b7524eba8e73d3bfd9109f2761306405b"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62186,6 +62403,7 @@
     "FlockSoundness.Discharge.Layout.gateAt": "cb3d642d67063a0ae2733f072b5fbb176d830c7cdabe4ef6f25e487db3d55402"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62244,6 +62462,7 @@
     "FlockSoundness.Discharge.Layout.outDecode": "c4dbee414c1a0ca04e2c535b37da890ca4cc21dba1ef3eeddb8ed2c731249d38"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62320,6 +62539,7 @@
     "FlockSoundness.Discharge.Layout.outsOf": "a02cb0e26ff57e1a4ef33847605dee6eadf1e5c8aba2f01cf2ea063314801bd4"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62378,6 +62598,7 @@
     "FlockSoundness.Discharge.Layout.Readers.valAt": "1ccb6ab4492f06c3c630c085a3f68ad864c0699801eb2a913097740318c7cc9e"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62430,6 +62651,7 @@
     "FlockSoundness.Discharge.Layout.widthOf": "2712eb32e748df7b6f2b34b611f330edb0312cce2be7f932b390639f6237c0c1"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62487,6 +62709,7 @@
     "FlockSoundness.Discharge.Layout.rowEnc": "fb3bf83523887d88c2b52811e95b722cd80034e5cd142c09f9bc27a49bd56834"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62530,6 +62753,7 @@
     "FlockSoundness.Discharge.Layout.v1Ports": "419f84805405ff9c528ff08704dd885ad8d8fcd0cbab869cbbd47a4e2d00d074"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62568,6 +62792,7 @@
     "FlockSoundness.Discharge.Layout.siteAddr": "4290c174965ee8752263d3675e390943c8ce9ad06bac0b995664a418462b262a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62605,6 +62830,7 @@
     "FlockSoundness.Discharge.Placed.keyProg": "1e6d14ae0da7d8d09e033f920a397f218ddd7f54737886b5a69417791312a18f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62693,6 +62919,7 @@
     "FlockSoundness.Discharge.Placed.uniform": "65281c0d07e03bc97cfeb4962d95824fd69807a0d84420348f1c8283f4bb3eaa"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -62828,6 +63055,7 @@
     "FlockSoundness.Discharge.Placed.zeroGate": "2470ebd857a4c6e4738c56913eb4e8b62dba2dfa558a218702dd87ab05a1c05e"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -63171,6 +63399,7 @@
     "FlockSoundness.Discharge.ZkBind.tableSh": "2296b859094e2bba3f60518b8f289e898b40fb550a970898ee6883c196da28ef"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -63229,6 +63458,7 @@
     "FlockSoundness.Discharge.ZkBind.witZ": "7a2a732d4a526f3e87d610e14743558c41ab3b0602a011d3ea4e034ff0989323"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -63266,6 +63496,7 @@
     "FlockSoundness.Discharge.ZkBind.SitesZ.vu": "45744bcaa2fe9339d993cb63c25fc3fc57a01f2bbfe38e1f28937e62c1bcf2ce"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -63295,6 +63526,7 @@
     "FlockSoundness.Discharge.ZkBind.witOf": "08940d38ba5f567dd74d691ac4950931755a1fbd1e139e5880408e5d8bb46e61"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -63443,6 +63675,7 @@
     "FlockSoundness.Discharge.ZkExec.zkTags": "52b991cd340260bb9563ca78fbec6a9a4318ff1fee04560d8dcbfedbfdb053cf"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.drawOkZKJ_of_file",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
@@ -63505,6 +63738,7 @@
     "FlockSoundness.Discharge.ZkExec.simAuditZK": "c38efdf4839d0461b0a5d663a37dd783da6f3b2c670c213f8c2093ff7de294cb"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_sound_custody",
@@ -63530,6 +63764,7 @@
     "FlockSoundness.Discharge.ZkExec.opnAtZ": "2e4ff64849096f1eb70f20e0a7ca802532c8a9c23e525d88028576d413961b45"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_sound_custody",
@@ -63599,6 +63834,7 @@
     "FlockSoundness.Discharge.ZkExec.zcTailZ": "d5aed1a20576f15a6dce3f3d504cab4e9a3d1b5fdf207fc915d365e1b220c19f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -63671,6 +63907,7 @@
     "FlockSoundness.Discharge.ZkExec.shapeZK": "bad8fdd7105deeea695a8bec6eeb8a3d764f616b7fe9dd22d4704561e322aefe"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -63748,6 +63985,7 @@
     "FlockSoundness.Discharge.ZkExec.shapeZKn": "581edce8533752cbd63acd51ae3d38630cd0911bb182016c2ee7bb1f668f1f77"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -63953,6 +64191,7 @@
     "FlockSoundness.Discharge.ZkLink.tauTab": "f557f4ed66bff223734efcab0d449c6213fb5998a7da9e000198289b16db6a9d"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -64046,6 +64285,7 @@
     "FlockSoundness.Discharge.ZkLink.zcStrat": "dfc16e367a250ae8613b391aa1aa13bceffe6f1be0dfef3f7c5885e44de0e9a9"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -64126,6 +64366,7 @@
     "FlockSoundness.Discharge.ZkLink.trialStratZC": "6a16a970e7e6e4d25ae30170e22e3506951379f5cab13ab4dd1da391ccbb6314"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -64219,6 +64460,7 @@
     "FlockSoundness.Discharge.ZkLink.ΩcZ": "1d5408b8e977ab64102222d179cff9d50ab5697fb794a49412a5171e115fc07e"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -64271,6 +64513,7 @@
     "FlockSoundness.Discharge.ZkLink.lockRecZ": "9cebc30618414c07df55906b42786bde1bbf0c74395f62d3c8a7a1c7d4291feb"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -64326,6 +64569,7 @@
     "FlockSoundness.Discharge.ZkLink.lockSessZ": "0c2f03217c8d57919b84f05b10013b7a425b7e47716467eec8299cb1d5eb9c12"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -64368,6 +64612,7 @@
     "FlockSoundness.Discharge.ZkLink.tabOrcP": "d1fc6227fad2f2bc3b0c14204c1fbd73a5310ed07ee6e2d6e747b6565bc934d8"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -64416,6 +64661,7 @@
     "FlockSoundness.Discharge.ZkLink.tabAfterZCP": "2bc585a5bf519204862e8a260d2237f49464c3511aba6bb624f710943f8b8e22"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -64459,6 +64705,7 @@
     "FlockSoundness.Discharge.ZkLink.stratZ": "ec3e279d4af7ef80cb3c460073d97bff297b1fbbeb0369562651bb809694d4c4"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -64505,6 +64752,7 @@
     "FlockSoundness.Discharge.ZkLink.selfSFinderZ": "3c0c30563915e225be0419fc9644c75484928d10e5d28b2dfe70e8987962103c"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -64558,6 +64806,7 @@
     "FlockSoundness.Discharge.ZkLink.tripleOfLay": "01f448f1b124afcfc3c9572e92e604b0ef79afd0cfd0fb1f2e906046cc7d9970"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -64602,7 +64851,7 @@
     "FlockSoundness.Discharge.ZkReg.rowsSh": "d3f170e45329bfb57877cb09482ef4971ad75358a72b2491e35466cdde0a8dd2",
     "FlockSoundness.Discharge.ZkReg.rsZAtS": "c347df0d2a39e26df56b0a2f3ee9250ca184fdc8a8d143f7ee2b3faf62306d80"
    },
-   "guarantees": ["FlockSoundness.Discharge.ZkReg.zk_session_soundR"]
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound", "FlockSoundness.Discharge.ZkReg.zk_session_soundR"]
   },
   "Proofs.Flock.Soundness.Discharge.ZkReg.BindH": {
    "digest": "ce658a0a9007989298676dc3545a83b46803527ee93865c1a23838642920bb58",
@@ -64636,6 +64885,7 @@
     "FlockSoundness.Discharge.ZkReg.regPaths": "b944e319b40e60721b3d1563861fcdb802c8a8eb46d33cb46eac08c8735a9a1e"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHR",
@@ -64708,6 +64958,7 @@
     "FlockSoundness.Discharge.ZkSession.zerocheckZK": "9ac4ef32f695cb7b12b36171e1dcf1ef0d575a2db63ca12e8d3ffd841660559a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -64853,6 +65104,7 @@
     "FlockSoundness.Discharge.ZkSession.εInner": "40e880dca06dbfc14b036690e78a6a002f521b1ed12eac7089f141e0a17d7e37"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -64973,6 +65225,7 @@
     "FlockSoundness.Discharge.ZkSession.unmask": "c357b03dc113e26534236d04ec77e175578e392cd33cee37f6ffbda77e6438ab"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -65117,6 +65370,7 @@
     "FlockSoundness.Discharge.ZkSession.zkStrat": "610d8cab02af9f0e0289d16c76db51746a522a82092e237be84a9b3532b5df22"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -65307,6 +65561,7 @@
     "FlockSoundness.Discharge.ZkView.κ₀": "10423c5791e22861f69c16e6633a27b13654e8b8c4fb3cbc943aa6583a4059d2"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveZK",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_view",
@@ -65375,6 +65630,7 @@
     "FlockSoundness.Audit.ProgPlaces.o": "6e7a0cb08de242e74872e864e11ee34f8112d44a008eabebcef653bbbeb2a5d6"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
@@ -65544,6 +65800,7 @@
     "FlockSoundness.Audit.Law.streamOf": "67d24db1b71b682e622b4970c754764982ec8493b87fe9f5c8ab9e70c20de0f7"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
     "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
@@ -65632,6 +65889,7 @@
     "FlockSoundness.Audit.Law.tapesOf": "83f1170cbc6f00bde92bd44a30fc157820b2850c012bec049d30d7fe6248e1db"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Law.drawOS_def",
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
     "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
@@ -65720,6 +65978,7 @@
     "FlockSoundness.setupH_flatTableClass": "f80866e9876bd79186a50c02f9264739ef8c7e930c6244bf6979c169735c6850"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_block",
@@ -65828,6 +66087,7 @@
     "FlockSoundness.unitRows": "8fe7519ba88614a977ae11626ef0073862723ee564ecb3017e7216b60f3af0cf"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_block",
@@ -65970,6 +66230,7 @@
     "FlockSoundness.stackPlace": "9c604532cbcbc4c972da554a1e5aae73bae1033eb4a6d24d2d207c8c121b555b"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_block",
@@ -66119,6 +66380,7 @@
     "FlockSoundness.Audit.Law.execStratified": "30f642e38fc4f367551ffa1328b76bd1a82873760e45650d154ee20d5bac9808"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
@@ -66186,6 +66448,7 @@
     "FlockSoundness.Typed.starts": "1e4b3378bcc0ab7e6bb2d562ba84d6923853bd201b4d09cedb724ceb084b781b"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
     "FlockSoundness.Discharge.Aliased.copies_of_key",
     "FlockSoundness.Discharge.Aliased.copyPos_block",
@@ -66288,6 +66551,7 @@
     "FlockSoundness.Extract.firstTable": "c6f5254fa31e64151f581f1f4831d5f7c2a5daa920e2dc8cfe36c0013cb840aa"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -66411,6 +66675,7 @@
     "FlockSoundness.Extract.waitCost": "b3de93a3322597557e3361342d1a3bd3e2d3a2cdb12e87060e7a85bfb643f4ee"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
@@ -66517,6 +66782,8 @@
     "FlockSoundness.Game.value": "bc2660b60becad0b8b4c4f8f12e9810dd670a419e44ddecab4f976b1af502fda"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SecurityProofs.RecursiveZK",
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Ex.exfil",
@@ -66891,6 +67158,7 @@
     "FlockSoundness.Game.batch": "866b22834bce610eb069a1c2285d79a65d6f80912da3c475c04ff81491f5e5fa"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -67025,6 +67293,7 @@
     "FlockSoundness.Rewinding.IsPluralityE": "bf9a6c3f6d76b65e210591d34febc279167fc07e3da3aa5442ba9166c193ad4e"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -67150,6 +67419,7 @@
     "FlockSoundness.Game.interleaveWith": "2c2fa2fa78877e7bc10b20a3063946797a5f8e5c43b68b604f9a7daee32bf588"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -67325,6 +67595,7 @@
     "FlockSoundness.Game.Lock.table": "6049cad8749939632d9ca49981ee41aa2bccb2e38ca1301be6285b068d6fc07f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -67426,6 +67697,7 @@
     "FlockSoundness.Game.Strategy.ofMap": "d45c1c43a350061bcf18d74128ee9d5b0e766c26ccbe1bc90098f0a774247d72"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Ex.exfil",
     "FlockSoundness.Audit.InfluenceWitness.Two.influence",
@@ -67600,6 +67872,7 @@
     "FlockSoundness.Game.runsStrat": "1e0f6d5c51b72b47a858300d8ee46099ad04dd70d57be6e710392a3c7f474502"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
@@ -67789,6 +68062,7 @@
     "FlockSoundness.execArith": "97f7795115ed1d64af251f622e0fc69732cf2653d0b5786aec16a5baab14f1ea"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -68008,6 +68282,7 @@
     "FlockSoundness.padWit": "b476385f1b312a595f8430993f0374ab90570b1c1de69156cb67b465a138fe9f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -68066,6 +68341,7 @@
     "FlockSoundness.levelsChained": "d17168c6830ac2f8f5ff353882993e380bb0a18555b1ce9dceb0ee77fd8400d5"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -68192,6 +68468,7 @@
     "FlockSoundness.LinkFinder.pRd": "c3aed35ba5aa7cf2f797dee74b8c6eb9f42b699e4ce63455819924e519184c7c"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
@@ -68286,6 +68563,7 @@
     "FlockSoundness.Model.Statement.LinkLayout": "b37e44f0312955e52492256533b24acdc935490aeddd9708281231159bd4adce"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -68588,6 +68866,7 @@
     "FlockSoundness.bit": "fa1e76f1a50434b9e7c3510ea8309e5203789a2ec0817c1f61412a0abfe22125"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.IsRowsUnit.computes_of_cert",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
@@ -68820,6 +69099,7 @@
     "FlockSoundness.Merkle.xorBytes": "1a6543034cfd27812c0fa204112fe907680579ff63b51dbefc752739b3b890cf"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -69058,6 +69338,7 @@
     "FlockSoundness.Model.eqAt": "af3e9c770b31ce68d2d7eb0c428ebe813a53cf2cd59a827b02bfe3fb9f84c8fd"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -69363,6 +69644,7 @@
     "FlockSoundness.Model.twoOodC": "06f33671802f2c322c72bb58ee84e35c34c09cc869c79b7843a2df7dcd8cb116"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -69584,6 +69866,7 @@
     "FlockSoundness.Model.twoOod": "4b3281286358a6c31e57db502e0ee569422fb6ca59cad6f97cdc760ad364f1c0"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -69794,6 +70077,7 @@
     "FlockSoundness.Model.repPad": "2d0b062fc67b5e365d38ff5ec2083457340c843ddeb134f3ed37d33d9628a56f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -69894,6 +70178,7 @@
     "FlockSoundness.Model.zerocheck": "1adbe38c3623641cb52b1275da780c46c08f06ef0b895f489fc51348982d8812"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -70105,6 +70390,7 @@
     "FlockSoundness.Model.table": "bcc400a4d021e0c4a46ce632bcaf4f4e66a37f4c0776462c9d2eddf2edce8234"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -70314,6 +70600,7 @@
     "FlockSoundness.Model.witnessOf": "150efb4e315b769ca6097f14841f9ec4055aa45672c84abce160297fec07f1c5"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -70660,6 +70947,7 @@
     "FlockSoundness.opStep": "5ec7851d1115b45a62daaa784397e6e14a3613f28981ae5445883616248b2ce9"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -70736,6 +71024,7 @@
     "FlockSoundness.encAt": "6063ca2589aaf81f35112962526995d10646e325b88bf83074ef8536359667f9"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -70850,6 +71139,7 @@
     "FlockSoundness.Refine.gOf": "3a71f981d04b22a5b07519e7485f36a30469a3a1a63ae3216c0f3f472bda4d17"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -70928,6 +71218,7 @@
     "FlockSoundness.Refine.encs": "953513c483d25f1f7c6693170d5d4d159edf372296a83969ba63b22356e9f53c"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -71022,6 +71313,7 @@
     "FlockSoundness.Refine.yrOf": "50cc64f8179a740435b8f731b0c19d2d8c74f0cd0b80bb9beddfd4b7b1ff2524"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -71108,6 +71400,7 @@
     "FlockSoundness.Refine.roundOf": "8b93e4abf393c54ebedbd05ac7111f15ef698a2d6263d193c37b66026d82f74a"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -71215,6 +71508,7 @@
     "FlockSoundness.Refine.tapeFrom": "29dfaad7239d41edb30d4726b61d156f71a2ee4eadf254f5bc916001fc300995"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -71301,6 +71595,7 @@
     "FlockSoundness.Refine.toDig": "fc09670eec36ed92bef301805e7fd420fc6ae40c8d7e2e886967b6cc3de958a6"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -71481,6 +71776,7 @@
     "FlockSoundness.Refine.regionsOf": "64a77bb4527c2fa7b43f0591444fc7f6078ac344e7fe2e7f6b50972318acd3ae"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -71644,6 +71940,7 @@
     "FlockSoundness.Refine.consumed": "f1305ea18d82be85c70863432b87183bb840ed401f47367931b708465000387e"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -71756,6 +72053,7 @@
     "FlockSoundness.Refine.saltsOf": "a0d5812e80a2fd860d924b9a3b626466509453659b2f05d5e5748a45e51cc96b"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
@@ -71880,6 +72178,7 @@
     "FlockSoundness.Refine.schedOf": "42ccc94c62f4e76f64ce302754198a1bf0069d2181af3fefed823c4d9aae5cce"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -71969,6 +72268,7 @@
     "FlockSoundness.Refine.stmtOf": "e9b850a1a4865c1694dbcf82b840df952e4810c9570f20f74d63a3d8bd2a2f2c"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.coinedOf_setup",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
@@ -72039,6 +72339,7 @@
     "FlockSoundness.Refine.opensOf": "a4daf031f719278dc72fd901ff6e9111823cb4f2b31f95b8cdee277c57b7f610"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -72094,6 +72395,7 @@
     "FlockSoundness.Refine.zcMsgs": "d7884c90d76b30350c724cc7375916f69628fa5fae1eda3d1d22819f9869263b"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.Lincheck.foldAll_lcV",
     "FlockSoundness.Discharge.Composed.Lincheck.lincheck_complete",
     "FlockSoundness.Discharge.Composed.ZerocheckMasked.finalC_eq_eval",
@@ -72241,6 +72543,7 @@
     "FlockSoundness.Registered.TwoOpenings.pos": "ec7c65be50094128eeb16ef1f5452477f9f5d0b33901dd81c395ff5937d4ed1f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.CROnly.flock_e2e_count_hm96_reads",
     "FlockSoundness.CROnly.flock_e2e_drawn_hm96_reads",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR",
@@ -72264,6 +72567,7 @@
     "FlockSoundness.Rewinding.Off": "2b81788218e475354970c221ee9593095b5e5808bd4fc586c4c380f10246f7df"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -72590,6 +72894,7 @@
     "FlockSoundness.stratB": "f3d4ef36cb3344a0c44b5ed705ad6c21e779f339618eb313513fdf359d8589e4"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE",
     "FlockSoundness.Audit.Partition.flock_batched_linkSoundE",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -72840,6 +73145,7 @@
     "FlockSoundness.padWits": "2dcfff3d191b61a77e14cad6defb19a7258ebf3e2f50124eca404e640152564b"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.zk_session_composed",
     "FlockSoundness.Discharge.Composed.zk_session_sound",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ",
@@ -72930,6 +73236,7 @@
     "FlockSoundness.StrictCR.twoRuns": "ac1f6d0c3231bdd7b8f27b5914ec697b054a7b805d780058840462d0d81d9d91"
    },
    "guarantees": [
+    "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -73808,6 +74115,23 @@
     "FlockSoundness.Registered.flock_e2e_count_hm96_reads",
     "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads"
    ]
+  },
+  "Specs.Flock.Assumptions.Recursive": {
+   "digest": "6a77803550ca4ce16b5efb7c53567197fcd1f6063fc4f753ef583a12c32c748e",
+   "definitions": {
+    "Flock.Assumptions.VBridge": "9a2634c2f7b2882e720111109722c412dec75ddc513034c64e7e8e151cb6a47d"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
+  },
+  "Specs.Flock.Guarantees.Recursive": {
+   "digest": "0aa6793aec7c1f2dcbc436ed7faf4d20ed30360b101d91200e937ff012349b71",
+   "definitions": {
+    "Flock.Guarantees.RecursiveSound": "ad8ed98651294debd163883f1e2320d6e20cab69ed332882c9de9d8c0b529a75",
+    "Flock.Guarantees.RecursiveZK": "8d6fab442e8b9ad02f50491202aacf377ded8f4a2db314c7416446fa7b2229b4",
+    "Flock.Guarantees.gatewayLeaf": "f1b305e951dbb636610e9ab637426ff04b74bdd3a8e18a560c21bb077ab837b5",
+    "Flock.Guarantees.idealLeaf": "2b0d4879d5125fbe63d0df20472cb5c2e84da64fd9f79c72d0db1f3f93455ea4"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound", "Flock.SecurityProofs.RecursiveZK"]
   },
   "Specs.Nci.Assumptions": {
    "digest": "f4315d64f98e55121fb85549ad8ce05cbc17be8d78b6d137db676a4c1c12dae5",
