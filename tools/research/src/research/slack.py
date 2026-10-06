@@ -1012,11 +1012,18 @@ def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: 
     return "\n".join(lines)
 
 
+def _check_audience(to: list[dict], body: str, reg: dict) -> None:
+    if not to and (lead := lead_names(body, reg)):
+        raise SlackError(f"with no --to an announcement goes to every handle, but it starts with "
+                         f"{' '.join('@' + n for n in lead)}: pass them as --to, or move them off the start")
+
+
 def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
     to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     ch = channel_id(ns, reg, FRONT_DOOR)
-    _post(client(ns), ch, h["handle"], announcement(h, to, _body(ns), ns.verify, ns.ships),
+    _check_audience(to, body := _body(ns), reg)
+    _post(client(ns), ch, h["handle"], announcement(h, to, body, ns.verify, ns.ships),
           route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1036,6 +1043,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
+        _check_audience(to, body, reg)
         text = announcement(h, to, body, ns.verify, ns.ships)
     else:
         if ns.verify or ns.ships:

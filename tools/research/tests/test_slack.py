@@ -1079,6 +1079,14 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 3                                             # a status line reaches the root's poster
 
 
+def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys):
+    rc, _, err = run(capsys, "send", "--as", "infra", "--kind", "announce", "--dry-run", "--text", "@lean @ci daily wasters")
+    assert rc == 2 and "pass them as --to" in err
+    assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--dry-run", "--text", "Daily wasters. @lean, yours")[0] == 0
+    assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--to", "@lean", "@ci", "--dry-run", "--text", "daily")[0] == 0
+    assert run(capsys, "announce", "--as", "infra", "--dry-run", "--text", "@lean @ci daily wasters")[0] == 2
+
+
 def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_dirs, capsys):
     circuits, lean = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "lean")
     root = fake.add(COORD, text="@circuits @lean the move starts at 7", username="top", bot_id=BOT)
