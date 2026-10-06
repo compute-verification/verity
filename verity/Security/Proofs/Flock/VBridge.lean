@@ -6,6 +6,7 @@ import Proofs.Flock.VBridge.Residuals
 import Proofs.Flock.VBridge.RecOpen
 import Proofs.Flock.VBridge.Net
 import Proofs.Flock.VBridge.Unit
+import Proofs.Flock.VBridge.Keyed
 
 /-! The bridge from V*, the C-Flock verifier as a circuit, to C-Flock's verifier of record: V*'s gadgets compute what the
 verifier of record computes. -/
