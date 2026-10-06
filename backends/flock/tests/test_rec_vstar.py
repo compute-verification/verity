@@ -5,6 +5,7 @@ pod job (``pod/85-rec-reprice.sh``) runs `check` over a real inner session."""
 from __future__ import annotations
 
 import hashlib
+import json
 
 import pytest
 from verity_flock import rec_live as RL
@@ -112,6 +113,23 @@ def test_a_top_that_does_not_open_its_commitment_is_refused(forge):
         op["salts"] = []
     with pytest.raises(ValueError, match="GATE-REFUSED: tree top"):
         V.tops(public, private, "circuit/rep0")
+
+
+@pytest.mark.parametrize("have, streams", [((), 2), ((0,), 2), ((0, 1, 2), 2), ((0, 1), 1)])
+def test_a_session_without_each_reps_stream_and_proof_is_refused(have, streams, tmp_path, capsys):
+    """A prover that stopped mid-session leaves rounds and no proof files; V* refuses it by name (it read no top and would
+    otherwise accept zero queries), as it does a proof of an undeclared rep and a declared rep with no stream."""
+    public, private, _, _ = _session()
+    public |= {"hello": {"reps": 2}, "streams": {f"circuit/rep{r}": {} for r in range(streams)}}
+    with pytest.raises(ValueError, match="GATE-REFUSED: proofs"):
+        V.check(public, private, {r: b"" for r in have})
+    (tmp_path / "session").mkdir()
+    (tmp_path / "public.json").write_text(json.dumps(public))
+    (tmp_path / "private.json").write_text(json.dumps(private))
+    for r in have:
+        (tmp_path / "session" / f"circuit.rep{r}.bin").write_bytes(b"")
+    assert V.main([str(tmp_path)]) == 1
+    assert json.loads(capsys.readouterr().out)["refused"].startswith("GATE-REFUSED: proofs")
 
 
 def test_query_rounds_follow_the_levels_in_order():

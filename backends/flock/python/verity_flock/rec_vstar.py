@@ -258,9 +258,19 @@ def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> li
     return out
 
 
+def reps(public: dict) -> list[int]:
+    """The reps the session's ``hello`` declares; each has a stream and a proof, or V* refuses the session."""
+    return list(range(public["hello"]["reps"]))
+
+
 def queries(public: dict, private: dict, proofs: dict[int, bytes], table: str = "circuit") -> list[Query]:
     """Every opening of every rep, in rep, level and query order, with its public part from ``public``, the top's node it
-    climbs to from ``private`` (`tops`) and the rest of its witness from the proof."""
+    climbs to from ``private`` (`tops`) and the rest of its witness from the proof. Refused by name unless every declared rep
+    (`reps`) has its stream and its proof, and nothing else does."""
+    want = reps(public)
+    if not want or sorted(proofs) != want or any(f"{table}/rep{r}" not in public["streams"] for r in want):
+        raise ValueError(f"GATE-REFUSED: proofs: the session declares {table}'s reps {want}; it has streams "
+                         f"{sorted(public['streams'])} and proofs of reps {sorted(proofs)}")
     out = []
     for rep, b in sorted(proofs.items()):
         p = decode(b)
@@ -302,13 +312,16 @@ def check(public: dict, private: dict, proofs: dict[int, bytes], table: str = "c
     for q in qs:
         per_level[f"rep{q.rep}/L{q.level}"] = per_level.get(f"rep{q.rep}/L{q.level}", 0) + 1
     return {"queries": len(qs), "per_level": per_level, "plain_leaves": all(q.salt is None for q in qs), "openings_failed": bad_q,
-            "message_rows": rows, "message_rows_failed": bad_m, "accepted": not bad_q and not bad_m and rows == public["message_rows"]}
+            "message_rows": rows, "message_rows_failed": bad_m,
+            "accepted": bool(qs) and not bad_q and not bad_m and rows == public["message_rows"]}
 
 
 def load(d: Path, table: str = "circuit") -> tuple[dict, dict, dict[int, bytes]]:
-    """``public.json``, ``private.json`` and the proofs of an inner session directory (`verity_flock.rec_live.Proxy.write`)."""
+    """``public.json``, ``private.json`` and the proofs of an inner session directory (`verity_flock.rec_live.Proxy.write`):
+    every ``<table>.rep<r>.bin`` there; `queries` refuses a missing or an undeclared rep."""
     d = Path(d)
-    proofs = {r: (d / "session" / f"{table}.rep{r}.bin").read_bytes() for r in (0, 1) if (d / "session" / f"{table}.rep{r}.bin").exists()}
+    pre = f"{table}.rep"
+    proofs = {int(p.name[len(pre):-4]): p.read_bytes() for p in (d / "session").glob(f"{pre}*.bin") if p.name[len(pre):-4].isdigit()}
     return json.loads((d / "public.json").read_text()), json.loads((d / "private.json").read_text()), proofs
 
 
