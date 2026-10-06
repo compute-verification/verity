@@ -45,7 +45,7 @@ def _clean(entry: dict) -> None:
 
 def test_every_registered_definition_is_checked():
     """Every registered Definition family is checked at a binding the catalog reaches, and every catalog root builds: a new
-    Definition without one fails here by name (add its binding to `circuit_check.targets`)."""
+    Definition without one fails here by name (add its binding to its module's sidecar, `circuit_check.sidecars`)."""
     assert not TG.ROOT_ERRORS, TG.ROOT_ERRORS
     assert len(TG.REGISTERED) > 200
     checked = {TG.family(fn) for fn in SUITE.values()}
@@ -589,9 +589,11 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out
 
 
+@pytest.mark.slow
 def test_the_cache_reuses_a_targets_result_only_while_every_read_is_unchanged(tmp_path):
     """Two runs of one target: the second reuses it.  An entry whose recorded digest of one module it held no longer matches (as
-    after an edit) is not reused, and the run records a new entry."""
+    after an edit) is not reused, and the run records a new entry.  About 14 min on a node: it runs the CLI end to end in fresh
+    interpreters, so it catches a read the cache records in one process that a fresh one doesn't see."""
     import subprocess
     import sys
 
@@ -696,7 +698,10 @@ def test_a_result_is_not_stored_when_the_tree_changed_while_it_ran(tmp_path):
     CC._MEMO.clear()
 
 
+@pytest.mark.slow
 def test_parallel_jobs_give_the_serial_report(tmp_path):
+    """About 6.5 min on a node: it checks four real targets serially and in worker processes, so it catches a `--jobs` worker
+    whose report differs from the serial one."""
     from circuit_check import cli
 
     specs = ["F32Mul_v1", "RMSNormTriton_v1{N=64,EPS=1e-05}", "TokenSelect_v1{V=64}", "rope-head"]

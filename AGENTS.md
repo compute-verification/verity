@@ -154,13 +154,15 @@ what a suite may read (`[tool.verity.tests] inputs`), and the rules for slow tes
 `.agents/skills/testing/SKILL.md`.
 No test depends on wall-clock time (no sleeps, clock readings or timeouts; wait on the event itself or inject the clock):
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
+A test that flakes is deleted, not fixed or rerun.
 A test that adds more than about a minute to `check` says in its docstring what it catches that a cheaper test can't.
 
 ## Circuits
 
 Any change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) must pass
 `circuit-check` (`uv run circuit-check <definition|template|row>`); include its report in the PR. A new Definition needs a
-small binding in `circuit_check.targets`, which the suite enforces.
+small binding in its module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`; `circuit_check.sidecars`),
+which the suite enforces.
 
 ## Checking and merging
 
@@ -210,13 +212,19 @@ first in a quiet window, alone in its train (Daniel, 4 Oct).
 - A guarantee (README "Glossary"), a theorem something outside Lean relies on as proved, is listed in `lean-audit.json`,
   and `audit.py --update` records what it says in the lock: its statement and every definition the statement reads. No axiom check
   can catch a weakened definition, so when a change to those records lands on `main`, Daniel gets a DM showing it (each
-  changed statement before and after, each changed definition as it is now). Nobody signs off and nothing waits on it.
+  changed statement before and after, each changed definition as it is now). That DM is the check: nobody signs off and
+  nothing waits on it. A lane may ask someone to read the `--update` printout as a statement reviewer, but no merge
+  requires one (Daniel, 3 Oct, 6:46 PM PDT).
   A guarantee that only moved to another module or name sends nothing when `--update --moved MOVES.json` (old names to
   new) prints it as the same statement under its old names.
 - How to work on Lean, how parallel Lean lanes avoid conflicts (two agents never share a writable `.lake`), and which
   assumptions get an `upstream` watch entry (`tools/lean/upstream.py`): `.agents/skills/lean-proofs/SKILL.md`.
 
 ## Working principles
+
+Research velocity comes first (Daniel, 6 Oct). Be as generous as possible with what lands and cut ceremony: propose
+cutting any gate, review or step that slows landing without catching real errors, and fix what breaks later. Our
+machines are research infrastructure, not a rehearsal of deployment, so don't mimic deployment settings.
 
 Solve the current task with the smallest clear implementation. Reuse
 existing code and commands before adding abstractions or procedures. Add
@@ -252,9 +260,10 @@ nothing that bounds spend or preserves results may depend on one: pods bound
 themselves (`research pods create --max-hours`, under a line of the notes repo's
 `budgets.toml`), and runs preserve their results from the pod.
 
-Never print a secret's value. List environment variable names with `compgen -e` (or `env -0 | cut -z -d= -f1 | tr '\0' '\n'`),
-never `env | cut`, `env | grep` or `printenv | …`: a multi-line value's later lines print as if they were names. A secret
-is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env` on the VM.
+Never print a secret's value. List environment variable names with `compgen -e`, never `env | cut`, `env | grep` or
+`printenv | …`: a multi-line value's later lines print as if they were names. `.cursor/hooks.json` refuses any shell command
+that would print the environment or every process's full command line (`tools/agent-guard/shell_hook.py`). A secret is
+stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env` on the VM.
 
 Remove obsolete rules and machinery rather than accumulating them.
 

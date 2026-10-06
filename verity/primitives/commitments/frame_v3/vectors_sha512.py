@@ -5,7 +5,8 @@
 
 The same framing as ``vectors.json`` through SHA-512: domain ids, leaves, pads, nodes and roots are 64 bytes, and row leaves
 are ``sha512/row/v1`` digests or ``sha512/row/v2`` (bit row) digests, the latter also as hiding (``hm96-sha512/row/v2``)
-leaves, and ``sha512/row-seg/v1`` (segmented bit row) digests with their segments.  Every byte is spelled out.
+leaves, and ``sha512/row-seg/v1`` (segmented bit row) digests with their segments.  Domains bind a 32-byte digest, and
+``binding64_trees`` a 64-byte SHA-512 identity digest.  Every byte is spelled out.
 """
 
 from __future__ import annotations
@@ -17,8 +18,9 @@ from pathlib import Path
 from typing import Any
 
 from .. import hm96
+from ..identity import identity_digest_sha512
 from ..indexed import RangeIndexedDomain
-from ..merkle import CommitmentDomain, _hash, _uint
+from ..merkle import CommitmentDomain, _hash, _uint, domain_message
 from ..rowleaf import (ROLE_W, ROLE_X, ROW_SEG_BYTES, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_SHA512_ROW_SEG, bit_row, row_leaf,
                        sha512_row_seg_digest, sha512_row_seg_prefix, sha512_row_seg_segment_prefix, sha512_row_seg_segments)
 from . import NAME_SHA512, BitRowLeaf, FrameV3, Port, RowLeaf, WordLeaf
@@ -40,6 +42,10 @@ ROW_SEG_WORD_CASES = (("bf16/k4096", 16, 4096), ("fp32/k4096", 32, 4096), ("bf16
 #: sha512/row/v2 rows of elements at a small K, ``(name, ((element bits, count), ...))``; the name is a label, never hashed
 FORMAT_ROW_CASES = (("nvfp4/k32", ((4, 32), (8, 2))), ("mxfp4/k64", ((4, 64), (8, 2))), ("e4m3/k5", ((8, 5),)),
                     ("bf16/k3", ((16, 3),)), ("e2m1/k3", ((4, 3),)))
+#: row trees over a 64-byte binding, ``(n, owner)``: the weights' owner, the boundary's and a replay unit's; the binding is
+#: ``identity_digest_sha512(BINDING64_TAG, {"n": n, "owner": owner})``
+BINDING64_CASES = ((1, -2), (3, -1), (5, 4))
+BINDING64_TAG = "frame-v3-sha512/vectors/binding64"
 
 
 def domain(n: int, label: str = "frame-v3-sha512/vectors") -> CommitmentDomain:
@@ -62,19 +68,35 @@ def _row_vectors() -> list[dict[str, Any]]:
     return out
 
 
+def _row_tree(d: CommitmentDomain, n: int, label: str) -> dict[str, Any]:
+    scheme = FrameV3({"rows": Port(d, RowLeaf("sha512", ROLE_X, 16, 8))})
+    rows = [b"".join(w.to_bytes(2, "little") for w in row_words(f"{label}/{n}/{r}", 16, 8)) for r in range(n)]
+    digests = [scheme.leaf_layout("rows", r).digest(v) for r, v in enumerate(rows)]
+    leaves = [scheme.tree_leaf("rows", r, dg) for r, dg in enumerate(digests)]
+    width = 1 << max(0, (n - 1).bit_length())
+    return {"schema": scheme.ports["rows"].leaf.schema, "role": ROLE_X, "word_bits": 16, "n_words": 8, "domain": _domain_doc(d, n),
+            "rows": [v.hex() for v in rows], "digests": [x.hex() for x in digests], "leaves": [x.hex() for x in leaves],
+            "pads": [_hash(b"pad", d.domain_id, _uint(r), hash="sha512").hex() for r in range(n, width)],
+            "root": scheme.root("rows", leaves).hex(), "paths": [[p.hex() for p in scheme.path("rows", leaves, r)] for r in range(n)]}
+
+
 def _tree_vectors() -> list[dict[str, Any]]:
+    return [_row_tree(domain(n), n, "tree-sha512") for n in (1, 2, 3, 5)]
+
+
+def _binding64_tree_vectors() -> list[dict[str, Any]]:
+    """Row trees whose domain binds a 64-byte SHA-512 identity digest, with the identity's tag and document, the positions'
+    SHA-512 identity and the framed domain message whose SHA-512 is the domain id."""
     out = []
-    for n in (1, 2, 3, 5):
-        d = domain(n)
-        scheme = FrameV3({"rows": Port(d, RowLeaf("sha512", ROLE_X, 16, 8))})
-        rows = [b"".join(w.to_bytes(2, "little") for w in row_words(f"tree-sha512/{n}/{r}", 16, 8)) for r in range(n)]
-        digests = [scheme.leaf_layout("rows", r).digest(v) for r, v in enumerate(rows)]
-        leaves = [scheme.tree_leaf("rows", r, dg) for r, dg in enumerate(digests)]
-        width = 1 << max(0, (n - 1).bit_length())
-        out.append({"schema": scheme.ports["rows"].leaf.schema, "role": ROLE_X, "word_bits": 16, "n_words": 8, "domain": _domain_doc(d, n),
-                    "rows": [v.hex() for v in rows], "digests": [x.hex() for x in digests], "leaves": [x.hex() for x in leaves],
-                    "pads": [_hash(b"pad", d.domain_id, _uint(r), hash="sha512").hex() for r in range(n, width)],
-                    "root": scheme.root("rows", leaves).hex(), "paths": [[p.hex() for p in scheme.path("rows", leaves, r)] for r in range(n)]})
+    for n, owner in BINDING64_CASES:
+        doc = {"n": n, "owner": owner}
+        positions = RangeIndexedDomain(n)
+        d = CommitmentDomain(identity_digest_sha512(BINDING64_TAG, doc), owner, positions, hash="sha512")
+        case = _row_tree(d, n, "tree-sha512/binding64")
+        case["binding_identity"] = {"tag": BINDING64_TAG, "doc": doc}
+        case["positions_sha512"] = positions.identity_sha512().hex()
+        case["domain_message"] = domain_message(d.binding, owner, positions.identity_sha512(), n, "sha512").hex()
+        out.append(case)
     return out
 
 
@@ -199,6 +221,7 @@ def build() -> dict[str, Any]:
         "empty_root": {"domain": _domain_doc(empty, 0), "root": empty.empty_root().hex()},
         "row_leaves": _row_vectors(),
         "row_trees": _tree_vectors(),
+        "binding64_trees": _binding64_tree_vectors(),
         "bit_row_leaves": _bit_row_vectors(),
         "bit_row_trees": _bit_row_tree_vectors(),
         "bit_row_hiding_leaves": _bit_row_hiding_vectors(),
