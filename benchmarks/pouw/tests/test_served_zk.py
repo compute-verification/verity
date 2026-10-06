@@ -113,9 +113,6 @@ def _codes(e: pytest.ExceptionInfo) -> set[str]:
     return set(e.value.verdict.codes)
 
 
-SESSION = "5e" * 64
-
-
 def _pub(bca: bytes, bcb: bytes) -> bytes:
     """A tile proof's public file as `verity_flock.circuit.write` lays it out: its header, then instance 0's b || c in port
     order (the A row, the B row, the tile digest's row)."""
@@ -372,18 +369,25 @@ def test_check_opens_the_drawn_units_rows_only(served, tmp_path):
     assert "not the registered window's entry" in SC.check(params, rec, draw, 5, _unit_pub(advice, priv, 5), forged)
 
 
-def _unit(t: int, lean: bool = True, opening: bool = True) -> dict:
+def _session(t: int) -> str:
+    """Unit `t`'s session record's SHA-512, as the firewall delivers it and Lean's verdict names it."""
+    return hashlib.sha512(f"session {t}".encode()).hexdigest()
+
+
+def _unit(t: int, lean: bool = True, opening: bool = True, session: int | None = None) -> dict:
     stage = {"definition": "Pc8TileHidden", "circuit_sha512": "11" * 64, "class_sha512": "22" * 64, "ands": 7, "k_log": 3,
              "binding": "hash scratch"}
     return {"unit": t, "statement": SC.statement(stage, b"pub"),
-            "verdicts": {"lean": {"of_record": True, "accepted": lean, "why": "", "digest": "33" * 64},
+            "verdicts": {"lean": {"of_record": True, "accepted": lean, "why": "", "digest": "33" * 64,
+                                  "sessions": [_session(t if session is None else session)]},
                          "opening": {"of_record": False, "accepted": opening, "why": ""}}}
 
 
 def test_the_outcome_publishes_exactly_the_public_items(served):
     """The outcome over every drawn unit accepts only when each unit's Lean verdict and opening check accept; PoUW's public
     items of it are exactly `window.PUBLIC`; it waits for the proof's delivery, is final, and units other than the draw's
-    are refused.  A control stream replays the honest draw: a reject there is final, and its failure budget stops it."""
+    are refused, and so is a Lean verdict about sessions other than the delivered ones.  A control stream replays the
+    honest draw: a reject there is final, and its failure budget stops it."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
@@ -391,19 +395,22 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
     _held(ch, "honest", rec)
     d = ch.select("honest")
     assert d.units == [3, 7, 20, 25]
-    units = [_unit(t) for t in d.units]
+    units, delivered = [_unit(t) for t in d.units], [_session(t) for t in d.units]
     with pytest.raises(S.Pending):
         ch.outcome("honest", units)
-    assert ch.deliver("honest", [SESSION]) is None
+    assert ch.deliver("honest", delivered) is None
+    with pytest.raises(S.Refused) as e:
+        ch.outcome("honest", [_unit(t, session=99 if t == 7 else None) for t in d.units])
+    assert _codes(e) == {"sessions"}
     with pytest.raises(S.Refused) as e:
         ch.outcome("honest", units[:-1])
     assert _codes(e) == {"units"}
     o, pub, body = ch.outcome("honest", units)
-    assert o.accepted and o.profile is not None and body["audit"]["proved_units"] == d.units and body["sessions"] == [SESSION]
+    assert o.accepted and o.profile is not None and body["audit"]["proved_units"] == d.units and body["sessions"] == delivered
     assert set(pub) == {p[0] for p in Wd.PUBLIC} and pub["verdict"] is True and pub["drawn"] == d.units
     assert pub["work"] == public["items"]["work"] and pub["root_W"] == public["items"]["root_W"]
-    assert body["audit"]["verdicts"]["lean"]["sessions"] == [SESSION]
-    for again in (lambda: ch.outcome("honest", units), lambda: ch.deliver("honest", [SESSION])):
+    assert body["audit"]["verdicts"]["lean"]["sessions"] == delivered
+    for again in (lambda: ch.outcome("honest", units), lambda: ch.deliver("honest", delivered)):
         with pytest.raises(S.Refused) as e:
             again()
         assert _codes(e) == {"final"}
@@ -411,7 +418,7 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
         name = f"ctl-{i}"
         ch.register(name, rec, stream=name, replay="honest")
         assert ch.select(name).units == d.units
-        ch.deliver(name, [SESSION])
+        ch.deliver(name, delivered)
         o, pub, body = ch.outcome(name, bad)
         assert not o.accepted and o.verdict.codes == ("reject",) and pub["verdict"] is False and o.profile is None
         with pytest.raises(S.Refused) as e:
@@ -421,11 +428,28 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
 
 
 def test_lean_and_rust_verdicts_are_read_from_their_outputs(tmp_path):
-    (tmp_path / "lean.out").write_text('setup: 3 ms\nVERDICT {"accepted":false,"why":"ring-switch claim 2 mismatch"}\n')
+    """Lean's verdict is of record and names, for each session it printed a VERDICT of, that session record's SHA-512 (the
+    bytes `deliver` hashes); it accepts only when every session's does.  Rust's is beside it, not of record."""
+    a, b = tmp_path / "s-a", tmp_path / "s-b"
+    for d in (a, b):
+        d.mkdir()
+        (d / "session.json").write_text(json.dumps({"session": d.name}))
+    sha = {d: hashlib.sha512((d / "session.json").read_bytes()).hexdigest() for d in (a, b)}
+    line = {"session": f"{a}/", "accepted": False, "why": "ring-switch claim 2 mismatch"}
+    (tmp_path / "lean.out").write_text(f"setup: 3 ms\nVERDICT {json.dumps(line)}\n")
     v = SC.lean_verdict(tmp_path / "lean.out")
     assert v["of_record"] and v["accepted"] is False and "ring-switch" in v["why"] and len(v["digest"]) == 128
+    assert v["sessions"] == [sha[a]] and v["digest"] == hashlib.sha512(SC.canonical_json(line)).hexdigest()
+    two = [{"session": str(a), "accepted": True, "why": ""}, {"session": str(b), "accepted": True, "why": ""}]
+    (tmp_path / "two.out").write_text("".join(f"VERDICT {json.dumps(x)}\n" for x in two))
+    assert SC.lean_verdict(tmp_path / "two.out")["sessions"] == [sha[a], sha[b]] and SC.lean_verdict(tmp_path / "two.out")["accepted"]
+    (tmp_path / "two.out").write_text("".join(f"VERDICT {json.dumps(x)}\n" for x in (two[0], {**two[1], "accepted": False, "why": "w"})))
+    assert SC.lean_verdict(tmp_path / "two.out")["accepted"] is False and SC.lean_verdict(tmp_path / "two.out")["why"] == "w"
+    (tmp_path / "gone.out").write_text(f"VERDICT {json.dumps({**line, 'session': str(tmp_path / 'gone')})}\n")
+    (tmp_path / "bare.out").write_text('VERDICT {"accepted":true,"why":""}\n')
+    assert SC.lean_verdict(tmp_path / "gone.out")["sessions"] == [None] == SC.lean_verdict(tmp_path / "bare.out")["sessions"]
     (tmp_path / "none.out").write_text("")
-    assert SC.lean_verdict(tmp_path / "none.out")["accepted"] is None
+    assert SC.lean_verdict(tmp_path / "none.out")["accepted"] is None and SC.lean_verdict(tmp_path / "none.out")["sessions"] == []
     (tmp_path / "prove.out").write_text('LIVE\t{"verdict": {"accepted": true, "why": ""}}\n')
     assert SC.rust_verdict(tmp_path / "prove.out")["accepted"] is True and not SC.rust_verdict(tmp_path / "prove.out")["of_record"]
 
@@ -471,12 +495,13 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
         (tmp_path / f"op{u}.json").write_text(json.dumps(SC.opening(advice, priv, params, u)))
         assert SC.check(params, rec, {"units": drawn}, u, _unit_pub(advice, priv, u), SC.opening(advice, priv, params, u)) is None
         (tmp_path / f"open{u}.json").write_text(json.dumps({"of_record": False, "accepted": True, "why": ""}))
-        (tmp_path / f"lean{u}.out").write_text('VERDICT {"accepted":true,"why":""}\n')
+        (tmp_path / f"s{u}").mkdir()
+        (tmp_path / f"s{u}" / "session.json").write_text(json.dumps({"unit": u}))
+        (tmp_path / f"lean{u}.out").write_text(f"VERDICT {json.dumps({'session': f'{t}/s{u}/', 'accepted': True, 'why': ''})}\n")
         (tmp_path / f"stage{u}.json").write_text(json.dumps({"definition": "d", "circuit_sha512": "1", "class_sha512": "2",
                                                              "ands": 1, "k_log": 1, "binding": "hash scratch"}))
-        (tmp_path / f"session{u}.json").write_text(json.dumps({"unit": u}))
         rows.append({"unit": u, "stage": f"{t}/stage{u}.json", "pub": f"{t}/pub{u}.bin", "lean": f"{t}/lean{u}.out",
-                     "opening": f"{t}/open{u}.json", "session": f"{t}/session{u}.json"})
+                     "opening": f"{t}/open{u}.json", "session": f"{t}/s{u}/session.json"})
     (tmp_path / "units.json").write_text(json.dumps(rows))
     honest = {"registration": f"{t}/registration.json", "manifest": f"{t}/manifest.json"}
     reqs = [{"op": "coins"},
@@ -513,7 +538,8 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     assert o["coins"] == {"commitment": coins.commitment.to_json(), "pass": "coin", "draw": draw}
     assert Fraction(o["public"]["sampling"]["delta"]) == Fraction(1, 10)
     audit = json.loads((tmp_path / "outcome" / "audit.json").read_text())
-    assert audit["sessions"] == [hashlib.sha512((tmp_path / f"session{u}.json").read_bytes()).hexdigest() for u in drawn]
+    assert audit["sessions"] == [hashlib.sha512((tmp_path / f"s{u}" / "session.json").read_bytes()).hexdigest() for u in drawn]
+    assert audit["audit"]["verdicts"]["lean"]["sessions"] == audit["sessions"]
     assert len((log / "requests.jsonl").read_text().splitlines()) == len(reqs) - 2
 
     assert SC.main(["replay", p, str(log), f"{t}/replay", "--lean", str(lean)]) == 0

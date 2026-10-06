@@ -482,17 +482,28 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
 
 # ---- verdicts --------------------------------------------------------------------------------------------------------------
 
+def _session_digest(session: Any) -> str | None:
+    """A session record's SHA-512 (its directory's ``session.json``, the bytes `deliver` hashes); None when unreadable."""
+    try:
+        return hashlib.sha512((Path(session) / "session.json").read_bytes()).hexdigest()
+    except (OSError, TypeError):
+        return None
+
+
 def lean_verdict(path_: Path) -> dict:
-    """The Lean verifier's verdict from its output (`VERDICT {…}`), of record; accepted null when it printed none."""
+    """The Lean verifier's verdict from its output (one `VERDICT {…}` line per session it verified), of record: accepted
+    when every session's is, null when it printed none; ``sessions`` the SHA-512 of each session record it covers, in
+    order (None for one it names but this process can't read), which `service.Stream.outcome` holds to the delivery."""
     try:
         lines = [json.loads(x[8:]) for x in path_.read_text().splitlines() if x.startswith("VERDICT ")]
     except (OSError, ValueError):
         lines = []
     if not lines:
-        return {"of_record": True, "accepted": None, "verifier": "lean flock-verify verify --zk"}
-    v = lines[0]
-    return {"of_record": True, "accepted": bool(v.get("accepted")), "why": v.get("why", ""), "verifier": "lean flock-verify verify --zk",
-            "digest": hashlib.sha512(canonical_json(v)).hexdigest()}
+        return {"of_record": True, "accepted": None, "verifier": "lean flock-verify verify --zk", "sessions": []}
+    v = lines[0] if len(lines) == 1 else lines
+    return {"of_record": True, "accepted": all(bool(x.get("accepted")) for x in lines),
+            "why": next((x.get("why", "") for x in lines if not x.get("accepted")), ""), "verifier": "lean flock-verify verify --zk",
+            "digest": hashlib.sha512(canonical_json(v)).hexdigest(), "sessions": [_session_digest(x.get("session")) for x in lines]}
 
 
 def rust_verdict(path_: Path | None) -> dict | None:
@@ -538,9 +549,9 @@ def register(params: dict, commitment: dict, extra: Mapping[str, Any] = {}) -> d
     return rec
 
 
-def _all(units: list[dict], name: str, sessions: list[str]) -> dict[str, Any]:
+def _all(units: list[dict], name: str) -> dict[str, Any]:
     """The drawn units' verdicts by one verifier as one verdict: accepted when every unit's is, null while one hasn't run;
-    a verdict of record names the delivered sessions."""
+    its sessions those each unit's verdict covers, in the units' order (a verdict of record must cover the delivered ones)."""
     vs = [u["verdicts"].get(name) for u in units]
     if all(v is None for v in vs):
         return {}
@@ -549,7 +560,8 @@ def _all(units: list[dict], name: str, sessions: list[str]) -> dict[str, Any]:
     return {name: {"of_record": any(bool(v and v.get("of_record")) for v in vs), "accepted": accepted,
                    "why": next((v.get("why", "") for v in ran if not v["accepted"]), ""),
                    "digest": hashlib.sha512(canonical_json([(v or {}).get("digest") for v in vs])).hexdigest(),
-                   "units": [(v or {}).get("accepted") for v in vs], "sessions": list(sessions)}}
+                   "units": [(v or {}).get("accepted") for v in vs],
+                   "sessions": [d for v in vs for d in (v or {}).get("sessions", ())]}}
 
 
 #: a draw over the key's stream: (law, N, the stream's bytes) to the units
@@ -755,8 +767,7 @@ class Challenger:
         d = self._drawn(name)
         if [u["unit"] for u in units] != D.proved(d.draw):
             raise _refused("units", {"given": [u["unit"] for u in units][:16], "drawn": D.proved(d.draw)[:16]})
-        sessions = self.sessions.get(name, [])
-        verdicts = {k: v for n in sorted({n for u in units for n in u["verdicts"]}) for k, v in _all(units, n, sessions).items()}
+        verdicts = {k: v for n in sorted({n for u in units for n in u["verdicts"]}) for k, v in _all(units, n).items()}
         o = st.outcome(d, verdicts, {"units": [{"unit": u["unit"], **u["statement"]} for u in units]})
         public = {**reg.record["window"]["public"], "verdict": o.accepted, "drawn": d.units}
         if set(public) != {p[0] for p in Wd.PUBLIC}:
