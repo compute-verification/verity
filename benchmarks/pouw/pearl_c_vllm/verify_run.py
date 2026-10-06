@@ -1,12 +1,16 @@
 """The reference replay on a vLLM pass's transcript (``pouw_pearl_c_device``'s retained pass): #449's work law
 (`pearl_c_work`), over the pass's whole workload, with the prover's openings read from the pass's files.
 
-  python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json [--draws T] [--jobs J] [--commit SHA] [--fast]
+  python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json --coins COINS.json [--draws T] [--jobs J] [--commit SHA] [--fast]
 
-- **The epoch** is re-started from the manifest's beacon and every weight's root, and the salt must be the manifest's.
+- **The epoch** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
+  against the epoch's coin commitment as the challenger published it (``--coins``, not the pass's copy), as the salt coin,
+  opened after the weights' root, and the salt must be the manifest's.  A pass recorded before epoch coins (a v1 manifest)
+  carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
 - **The records** (each matmul's real rows, width and excluded rows; each weight's excluded rows) are the manifest's.
   Their root must be the one the pass published before any draw.
-- **The draws' beacon** is `os.urandom(32)`, drawn here after the transcript is fixed: round 1, after the commitment's 0.
+- **The draws' source** is `os.urandom(32)`, the verifier's own, drawn here after the transcript is fixed: a
+  `pearl_c_work.RecordedDraw` of round 1, after the commitment's 0.
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,
   B's rows and tree levels per weight, the tile tree.  Each is checked against the published roots.
 - **The tiles** are `pearl_c_work.audit`'s: its t work-weighted draws (`draw`) and one tile per excluded row
@@ -33,7 +37,8 @@ from pathlib import Path
 
 import numpy as np
 from verity.primitives.commitments import Commitment, Opening
-from verity.protocols.accounting.work.pouw.audit import Epoch, TileOpening, Transcript, Verifier, Workload
+from verity.protocols.accounting.work.pouw.audit import Epoch, TileOpening, Transcript, Verifier
+from verity.protocols.accounting.work.pouw.coins import CoinCommitment
 from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD
@@ -140,8 +145,9 @@ def _check(pick: tuple[int, int]) -> tuple[int, bool, str | None]:
 
 
 def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None = None, fast: bool = False,
-           cross_check: int = 0) -> dict:
-    """The pass's verdict.  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
+           cross_check: int = 0, coins: CoinCommitment | None = None, recorded: bool = False) -> dict:
+    """The pass's verdict, its epoch re-started under `coins`, the epoch's published coin commitment
+    (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before epoch coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
     promoted device; otherwise the scalar reference, ``replay``), and every `cross_check`-th tile id on the scalar reference
     too: any verdict that differs is ``cross_check_failed``, and the pass is not accepted."""
     raw = path.read_bytes()
@@ -150,14 +156,10 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
     out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": draws,
            "replay": "batch" if fast else "scalar"}
     try:
-        if man.get("schema") != PD.MANIFEST_SCHEMA:
-            raise ValueError(f"schema {man.get('schema')!r}, not {PD.MANIFEST_SCHEMA}")
+        PD.manifest_schema(man, recorded)
         scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
         matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
-        roots = {int(w): bytes.fromhex(v["root"]) for w, v in man["weights"].items()}
-        epoch = Epoch.unverified(Workload(matmuls), roots, bytes.fromhex(man["beacon"]))
-        if epoch.salt.hex() != man["salt"]:
-            raise ValueError("the manifest's salt is not the beacon's and the weights'")
+        epoch, out["salt"] = PD.manifest_epoch(man, coins, recorded)
         records = [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]),
                                  tuple(man["weights"][str(mm.weight)]["excluded_b"])) for mm, u in zip(matmuls, man["matmuls"])]
         splits = {w: PW.Split(man["weights"][str(w)]["k"]) for w in epoch.workload.weights()}
@@ -173,9 +175,9 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         if len(verifier.refs) != c["count"]:
             raise ValueError(f"the commitment counts {c['count']} tiles; the workload has {len(verifier.refs)}")
         source = os.urandom(32) if source is None else source
-        beacon = PW.Beacon(1, source)
+        key = PW.replay_key(PW.RecordedDraw(1, source), transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt)
         ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
-        picks = PW.draw(scheme, records, beacon, transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt, draws)
+        picks = PW.draw(scheme, records, key, draws)
         picks += PW.exclusion_tiles(scheme, records)
         todo = [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in picks]
         if fast and (scheme.forming != "v1" or scheme.device.g is None):
@@ -230,8 +232,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cross-check", type=int, default=64, metavar="N",
                    help="with --fast, replay every tile whose id is a multiple of N on the scalar reference too; any verdict "
                         "that differs rejects the pass and exits 2 (0: none)")
+    p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (e2e.py's coins.json)")
+    p.add_argument("--recorded", action="store_true", help="the pass was recorded before epoch coins: its salt is its beacon's")
     a = p.parse_args(argv)
-    r = verify(a.manifest, a.draws, a.jobs, a.commit, fast=a.fast, cross_check=a.cross_check)
+    coins = CoinCommitment.from_json(json.loads(a.coins.read_text())) if a.coins else None
+    r = verify(a.manifest, a.draws, a.jobs, a.commit, fast=a.fast, cross_check=a.cross_check, coins=coins, recorded=a.recorded)
     print(r["line"], flush=True)
     (a.manifest.parent / "verify.json").write_text(json.dumps(r, indent=1) + "\n")
     if r.get("cross_check_failed"):
