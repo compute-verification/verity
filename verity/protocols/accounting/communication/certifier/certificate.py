@@ -31,7 +31,8 @@ certificate can't be replayed onto another window, link, direction or key:
     message = tagged_sha512("verity/network-certificate/v1",
                             u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ record digest)
 
-The scheme is a stateful hash-based signature over SHA-512 (LMS-shaped, n = 32, h = 20). The certifier's signing step
+The scheme is a stateful hash-based signature over SHA-512 (LMS-shaped, n = 64, h = 20: the whole SHA-512
+output, not truncated). The certifier's signing step
 (`Issuer`) is handed it as a `Signer`, and the audit as a `PublicKey`. A signer whose one-time-key state is missing or behind refuses
 (`SignerRefused`), and then the link-window has no certificate: it fails closed, as a `no-verdict`.
 """

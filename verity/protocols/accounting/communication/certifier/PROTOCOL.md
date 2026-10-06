@@ -104,7 +104,8 @@ link-window, so a certificate can't be replayed onto another window, link, direc
     message = tagged_sha512("verity/network-certificate/v1",
                             u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ record digest)
 
-I is the certifier's key id. The scheme is a stateful hash-based signature on SHA-512, LMS-shaped (n = 32, h = 20).
+I is the certifier's key id. The scheme is a stateful hash-based signature on SHA-512, LMS-shaped (n = 64, h = 20): the whole
+SHA-512 output, not truncated.
 The certifier's `Issuer` holds it as a `Signer` (`key_id`, `sign(message)`) and the audit as a `PublicKey`
 (`key_id`, `verify(message, signature)`), so the scheme is a parameter of both. A signer whose one-time-key state is missing, or
 behind the leaves it has used, refuses (`SignerRefused`). The certifier then publishes nothing for the link-window
