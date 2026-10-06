@@ -682,8 +682,8 @@ over the eight, under contention) and the comb fold stay on the session's path.
 
 A recursive session is the inner phase's session and the outer phase's sessions, one per V* statement (at K = 4096 eight: the
 levels L0–L6 and the algebra). With §10.1 and §10.3, every message of a session that reaches the auditor is fixed, and so is
-their order: `Hello`, `Commit`, `Link`, each stream's `Open` and rounds, the proofs, `Finish` (`Ping` touches no session
-state). What a worker still chooses is whether and where a session stops: a refusal it provokes, or a session that ends
+their order: `Hello`, `Commit`, `Link`, each stream's `Open` and rounds, the proofs, `Finish` (`Ping`, and `Register` in a
+session that draws no units, change no record: the inner gateway answers `Register` itself). What a worker still chooses is whether and where a session stops: a refusal it provokes, or a session that ends
 without `Finish` (a crash, a hang, a cut connection). The auditor sees every stop:
 - inner phase: `rec_live` writes every session it serves, with `end` `finish` or `stop` (a refusal and a session that ends
   without `Finish` alike, never why), and counts it toward `--sessions` (§10.3);
