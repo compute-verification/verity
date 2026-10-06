@@ -10,7 +10,8 @@ For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an up
 - for a set that names `mutants`, regenerates the proof mutants (`redigest.py`), the retained-bytes sessions
   (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;
-- runs `agree.py` on all of them.
+- runs `agree.py` on all of them, on the set's `coins` (`agree.py --coins`: `os` for sessions on the live server's OS
+  coins, `FC_COINS=os`) when it names them.
 
 `--live` runs `live.sets` instead: sets with no upstream binary, whose upstream verdicts are the live server's in each
 case's `case.json` (`agree.py --upstream live`).
@@ -109,7 +110,8 @@ def run_set(i, s, a, ups, store):
         sessions += sorted(str(p) for p in d.iterdir() if p.is_dir())
     cmd = [sys.executable, HERE / "agree.py", "--lean", a.lean, "--upstream", up, "--statement", s["lean_statement"],
            "--circuit", circuit, *(("--comp", comp) if comp else ()), *(("--partition", partition) if partition else ()), *(("--program", program) if program else ()),
-           "--public", public, *(("--registered", registered) if registered else ()), *(x for e in expects for x in ("--expect", e)),
+           "--public", public, *(("--registered", registered) if registered else ()), *(("--coins", s["coins"]) if "coins" in s else ()),
+           *(x for e in expects for x in ("--expect", e)),
            "--out", w / "agree", "--jobs", a.session_jobs, "--sessions", *sessions]
     if tables:
         cmd += ["--tables", tables]

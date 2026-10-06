@@ -4,8 +4,8 @@ table row against the verifier's own registered root, at the position the verifi
 derived from that program, or the Lean verifier refuses it. The statements are staged here over a hidden-output RoPE d64
 circuit (§16.13, the default `verity/flock-circuit`) composed for the `RegisteredRoPE` program and its `Q_template_instance`
 v0 partition; the reads come from `reads` on that program (`statement`: setup, no proof; `verify`: setup of each table,
-with no proofs). Upstream's proved session over the public-output statement (`FIXTURE`, vectors.json's registered-reads
-set) is held to the same reads. Composing the 56 MB circuit takes about 30 s and each call sets it up (about 8 s), so the
+with no proofs). A session proved by this tree's prover over the same statement (`FIXTURE`, vectors.json's live
+registered-reads set) is held to the same reads. Composing the 56 MB circuit takes about 30 s and each call sets it up (about 8 s), so the
 module is slow; it catches what the Python reference (`verity/protocols/verification/sampled_proofs/tests/test_registered.py`) can't: the
 executable verifier's own refusals, on both statements' setup paths."""
 from __future__ import annotations
@@ -32,9 +32,8 @@ from verity.protocols.verification.sampled_proofs.one_stage import partition as 
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 VERIFIER = LEAN.parent
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-FIXTURE = "art:bf70d8eb"
+FIXTURE = "art:aa722185"
 STATEMENT = "verity/flock-circuit"
-UPSTREAM_STATEMENT = "verity/flock-circuit@967b8d06"
 VALUE = "cs_table"
 #: the program's: the row of `cs_table` each of its 8 RoPEHead Calls reads
 POSITIONS = (11, 5, 3, 1, 0, 9, 8, 4)
@@ -335,17 +334,17 @@ def rope(tmp_path_factory):
 
 
 def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
-    """`verify` builds every table's statement through the same check on the public-output statement too: the fixture's
-    honest session, proved by upstream over a registered statement, is accepted under its own reads file and refused under
-    one that moves every position."""
+    """The fixture's sessions, proved by this tree's prover (`flock-circuit`, on the live server's OS coins) over statements
+    whose cs rows are `hm96-sha512/row/v2` rows: the honest one is accepted under its own reads file, and refused under one
+    that moves every position; the same rows committed under fresh salts, proved as well, are refused."""
     program, _ = _program()
     assert canonical_json(encode_program(program)) == (rope / "stage" / "program.json").read_bytes()
     bound = ["--partition", str(rope / "stage" / "partition.json"), "--program", str(rope / "stage" / "program.json")]
 
-    def verify(session: str, own: Path) -> dict:
-        p = subprocess.run([str(BIN), "verify", "--statement", f"{UPSTREAM_STATEMENT}+seed-injection", "--circuit",
-                            str(rope / "stage" / "circuit.txt"), "--public", str(rope / "registered" / "pub-8.bin"), *bound,
-                            "--registered", str(own), "--session", str(rope / "vectors" / session)],
+    def verify(session: str, own: Path, public: Path | None = None) -> dict:
+        p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--coins", "os", "--circuit",
+                            str(rope / "stage" / "circuit.txt"), "--public", str(public or rope / "registered" / "pub-8.bin"),
+                            *bound, "--registered", str(own), "--session", str(rope / "vectors" / session)],
                            capture_output=True, text=True, check=False)
         (line,) = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
         return line
@@ -356,3 +355,5 @@ def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
     assert ok["registered"] == {"cs": {"value": VALUE, "root": root}}
     moved = verify("honest", rope / "vectors" / "wrong-position" / "registered.json")
     assert moved["accepted"] is False and "reads position" in moved["why"], moved
+    fresh = verify("fresh-salts", rope / "registered" / "own.json", rope / "vectors" / "fresh-salts" / "pub.bin")
+    assert fresh["accepted"] is False and f"does not open {VALUE}'s registered root" in fresh["why"], fresh
