@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Cursor's `beforeShellExecution` hook (`.cursor/hooks.json`): refuses a shell command that would print the environment.
+"""Cursor's `beforeShellExecution` hook (`.cursor/hooks.json`): refuses shell commands that would print secrets wholesale.
 
 Cursor runs every agent shell command through it, on any VM, so it holds where the redacting `env` (`install.sh`) was never
 installed. A multi-line secret defeats `env | cut -d= -f1`: its later lines print as if they were names, which is how a line
 of the Nebius key reached agents' transcripts at least five times by 6 Oct. Refused, anywhere in the command (pipelines,
 `$(...)`, `bash -c`, `ssh HOST CMD`, `research pods ssh POD -- CMD`): `env` or `printenv` with nothing to run, `printenv` of a
 secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, and reading `/proc/*/environ`.
-`compgen -e` lists names only and passes. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+`compgen -e` lists names only and passes. Also refused: every process's full command line (`ps aux`, `ps -ef`, `ps -eo args`,
+`/proc/*/cmdline`), where a daemon's token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
+`grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
 """
 import json
 import os
@@ -21,13 +23,16 @@ WRAPPER_ARG_OPTIONS = {"sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t"},
 KEYWORDS = {"{", "}", "!", "if", "then", "elif", "else", "do", "while", "until"}
 SHELLS = {"bash", "sh", "zsh", "dash"}
 SSH_ARG_OPTIONS = set("bcDEeFIiJLlmOopQRSWw")
-ENVIRON = re.compile(r"/proc/[^\s'\"]*environ")
+ENVIRON = re.compile(r"/proc/[^\s'\"]*environ|/proc/\*/cmdline")
+FILTERS = {"grep", "egrep", "fgrep", "rg"}
 FALLBACK = re.compile(r"(^|[\s|;&(`])(env|printenv|set|export|declare|typeset)(\s+-\S+)*\s*($|[|;&)>`])", re.M)
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2[ \t]*(?=\n|$)", re.S)
 
-REASON = ("this command would print environment variables' values, and a multi-line secret's later lines print even "
-          "through `cut -d= -f1`. List names with `compgen -e` (filter with `compgen -e | rg NAME`); check one variable "
-          "with `[ -n \"${NAME:-}\" ] && echo set`.")
+REASON = ("this command would print environment variables' values (a multi-line secret's later lines print even through "
+          "`cut -d= -f1`) or every process's full command line (tokens sit in some daemons' argv). List variable names with "
+          "`compgen -e` (filter with `compgen -e | rg NAME`); check one variable with `[ -n \"${NAME:-}\" ] && echo set`. "
+          "List processes with `ps -eo pid,stat,etimes,comm`, or filter full command lines with "
+          "`ps -eo pid,args | grep \"[p]attern\"` or `pgrep -af PATTERN`.")
 
 
 def secret(name: str) -> bool:
@@ -35,8 +40,9 @@ def secret(name: str) -> bool:
     return name in listed or bool(PATTERN.search(name))
 
 
-def words_of(text: str) -> list[list[str]]:
-    """`text`'s simple commands, each as its words, split at pipes, lists, subshells, newlines and backticks."""
+def words_of(text: str) -> list[tuple[list[str], str]]:
+    """`text`'s simple commands, each as its words and the operator after it, split at pipes, lists, subshells, newlines and
+    backticks."""
     text = HEREDOC.sub(" ", text).replace("`", " ; ").replace("\n", " ; ")
     text = re.sub(r"(?<![\w-])\d+(?=[<>])", " ", text)      # `2>/dev/null`: the fd number is not an argument
     lex = shlex.shlex(text, posix=True, punctuation_chars=True)
@@ -44,12 +50,12 @@ def words_of(text: str) -> list[list[str]]:
     commands, current = [], []
     for tok in lex:
         if tok and set(tok) <= set("|&;()<>") and (set(tok) & set("()") or not set(tok) & set("<>")):
-            commands.append(current)
+            commands.append((current, tok))
             current = []
         else:
             current.append(tok)
-    commands.append(current)
-    return [c for c in commands if c]
+    commands.append((current, ""))
+    return [c for c in commands if c[0]]
 
 
 def strip_redirections(words: list[str]) -> list[str]:
@@ -100,7 +106,21 @@ def unwrap(words: list[str]) -> list[str]:
     return words
 
 
-def refused(words: list[str]) -> bool:
+def every_argv(args: list[str]) -> bool:
+    """Whether `ps ARGS` prints every process's full command line."""
+    fmt = next((args[i + 1] for i, a in enumerate(args[:-1])
+                if a == "--format" or re.fullmatch(r"-?[a-zA-Z]*[oO]", a)), None)
+    fmt = fmt or next((a.split("=", 1)[1] for a in args if a.startswith("--format=")), None)
+    shown = fmt is None or bool(re.search(r"\b(args|cmd|command)\b", fmt))
+    bsd = [a for a in args if not a.startswith("-") and re.fullmatch(r"[a-zA-Z]+", a) and a != fmt]
+    short = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--"))
+    if any(set(b) & set("ax") for b in bsd):
+        return shown and not any("c" in b for b in bsd)
+    everyone = bool(set(short) & set("eA")) or "--everyone" in args or "--deselect" in args
+    return everyone and (bool(set(short) & set("fF")) if fmt is None else shown)
+
+
+def refused(words: list[str], filtered: bool = False) -> bool:
     if any(refused_text(w.split("$(", 1)[1]) for w in words if "$(" in w):
         return True
     words = unwrap(strip_redirections(words))
@@ -133,17 +153,26 @@ def refused(words: list[str]) -> bool:
         return refused_text(" ".join(args[i + 1:])) if i + 1 < len(args) else False
     if name == "research" and "ssh" in args and "--" in args:
         return refused_text(" ".join(args[args.index("--") + 1:]))
+    if name == "ps":
+        return not filtered and every_argv(args)
     if name == "xargs":
         rest = [a for a in args if not a.startswith("-")]
         return bool(rest) and refused(rest)
     return False
 
 
+def filter_cmd(words: list[str]) -> bool:
+    words = unwrap(strip_redirections(words))
+    return bool(words) and os.path.basename(words[0]) in FILTERS
+
+
 def refused_text(text: str) -> bool:
     if ENVIRON.search(text):
         return True
     try:
-        return any(refused(w) for w in words_of(text))
+        commands = words_of(text)
+        return any(refused(w, op == "|" and i + 1 < len(commands) and filter_cmd(commands[i + 1][0]))
+                   for i, (w, op) in enumerate(commands))
     except ValueError:                                   # unbalanced quotes: judge the raw text
         return bool(FALLBACK.search(text))
 

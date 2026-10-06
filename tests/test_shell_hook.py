@@ -58,6 +58,17 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     "timeout 5 env",
     "env FOO=1 env",
     "xargs -0 env",
+    "ps aux",                                             # a daemon's token in its argv, 6 Oct
+    "ps auxww | head -50",
+    "ps -ef",
+    "ps -eF | sort",
+    "ps -eo pid,args",
+    "ps -A -o pid,rss,command",
+    "ps axo pid,args",
+    "ps --everyone --format=pid,cmd",
+    "sudo ps aux | tail",
+    "ssh n1 'ps -ef'",
+    "cat /proc/*/cmdline",
 ])
 def test_a_command_that_would_print_the_environment_is_refused(command):
     assert verdict(command) == "deny"
@@ -90,6 +101,17 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "echo \"$(git rev-parse HEAD)\"",
     "ls 2>/dev/null",
     "timeout 30 make test",
+    "ps -eo pid,stat,etimes,comm",
+    "ps -e",
+    "ps axc",
+    "ps ax -o pid,comm",
+    "ps",
+    "ps -p 1234 -o pid,args",
+    "ps -eo pid,args | grep \"[p]ytest\"",
+    "ps aux | rg -i lake",
+    "ssh n1 'ps -eo pid,args | grep \"[s]lot.py\"'",
+    "pgrep -af quick_tier",
+    "cat /proc/1234/cmdline | tr '\\0' ' '",
     "",
 ])
 def test_everything_else_passes(command):
