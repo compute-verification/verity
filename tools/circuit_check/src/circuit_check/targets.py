@@ -84,6 +84,7 @@ def load_registries() -> None:
     import verity.protocols.accounting.work.pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
     import verity.protocols.accounting.work.pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
     import verity.protocols.accounting.work.pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
+    import verity.protocols.accounting.space.pous.circuit  # noqa: F401  (P2's modular squaring on bits)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -427,6 +428,16 @@ def _merkle_roots() -> list[Any]:
     return [bind(MerkleRead, ARITY=2, D=1), bind(MerkleRead, ARITY=4, D=1)]
 
 
+def _pous_roots() -> list[Any]:
+    """P2's modular squaring (`verity.protocols.accounting.space.pous.circuit`) at W = 128 with P2's C0 = 21,065: its square
+    takes a Toom-3 level (above `TOOM`), then Karatsuba (above `SCHOOL`), then schoolbook, so it reaches every piece; the
+    package's tests check it against Python's integers at P2's width and pin its gate counts there."""
+    from verity.primitives.circuits.defs import bind
+    from verity.protocols.accounting.space.pous.circuit import PousModSquare
+
+    return [bind(PousModSquare, W=128, C0=21065)]
+
+
 def _kernel_roots() -> list[Any]:
     from verity_vllm.program.kernels import kernel_registry as KR
 
@@ -717,7 +728,7 @@ def catalog(by_unit: list | None = None) -> list[Any]:
     ROOT_ERRORS.clear()
     for units, make in ((("_core_roots",), _core_roots), (("_boolean_roots",), _boolean_roots),
                         (("_boolean_gather_roots",), _boolean_gather_roots), (("_universal_roots",), _universal_roots),
-                        (("_merkle_roots",), _merkle_roots), (("_kernel_roots",), _kernel_roots),
+                        (("_merkle_roots",), _merkle_roots), (("_pous_roots",), _pous_roots), (("_kernel_roots",), _kernel_roots),
                         (("_vocabulary_roots", "_vocabulary_bindings"), _vocabulary_roots), (("_pouw_roots",), _pouw_roots)):
         roots += _produce(units, make, by_unit)
     for label, make in _model_roots():
