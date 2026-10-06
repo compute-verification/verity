@@ -34,7 +34,7 @@ abbrev M1Q : Type :=
     ((Salt × Fin (2 ^ 64) × Fin (2 ^ 60) × Fin (2 ^ 20)) ⊕ (Salt × Fin (2 ^ 64) × Fin (2 ^ 21)))
 
 set_option synthInstance.maxSize 2048 in
-instance : DecidableEq M1Q := inferInstance
+instance instDecidableEqM1Q : DecidableEq M1Q := inferInstance
 
 /-- An oracle answer: an outer-factor entry and a sign. -/
 abbrev M1R : Type := Fin 7 × Bool

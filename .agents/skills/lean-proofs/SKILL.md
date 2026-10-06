@@ -34,6 +34,8 @@ The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/READ
   its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
   `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. Copy, never symlink, because Lake
   rewrites `.olean` files in place. After the copy, `lake build` compiles only the package's own modules.
+- **A reviewer or red-team subagent works in its own worktree** (`git worktree add`), never by `git checkout` in a tree
+  another agent is using: a checkout there switches that agent's files under it.
 
 ## Build, iterate, audit
 
@@ -46,7 +48,8 @@ python tools/lean/audit.py PKG                once, before pushing (seconds; lev
 ~~~
 
 Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
-never change a `require`, a revision or `lean-toolchain` in a feature PR.
+never change a `require`, a revision or `lean-toolchain` in a feature PR. The soundness package's build peaks at 15–24 GB
+of memory: on a machine with less than 24 GB, add a swapfile first, and give a queued job `--mem-gb 32`.
 
 To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
 your own, use the fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took

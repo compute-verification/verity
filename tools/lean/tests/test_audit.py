@@ -130,6 +130,26 @@ def test_a_guarantee_reads_only_spec_definitions_and_pinned_dependencies():
         "reads: P.t read P.Hyp in P.Assumptions, outside the spec (none: no `layers`)"), "a package without layers has no spec"
 
 
+def test_a_reads_exemption_names_a_prefix_and_a_reason_and_covers_only_reads_outside_the_spec():
+    """Found by red-team-1150: the list form passed with no reason, `null` raised, and an exemption over a spec module
+    hid the `meaning` check while counting as used."""
+    pol = recorded() | {"layers": {"P.Defs": {"imports": []}, "P.Assumptions": {"imports": []}},
+                        "meaning": ["P.Assumptions"]}
+    home = dict.fromkeys(["P", "P.Defs", "P.Assumptions", "P.Proofs", "P.Thms"], A.spec_of(pol))
+    for bad, said in ((["P.Proofs"], 'is ["P.Proofs"]'), (None, "is null"), ("P.Proofs", 'is "P.Proofs"'),
+                      ({"": "why"}, 'lists "" without'), ({"P.Proofs": " "}, 'lists "P.Proofs" without'),
+                      ({"P.Proofs": None}, 'lists "P.Proofs" without')):
+        assert A.spec_reads(pol | {"reads_exempt": bad}, spec_facts(), home)[0].startswith(f"reads: `reads_exempt` {said}")
+    spec_only = pol | {"reads_exempt": {"P.Defs": "hides a spec module outside meaning"}}
+    assert A.spec_reads(spec_only, spec_facts(outside=[("P.f", "P.Defs")]), home) == [
+        "reads: P.t read P.f in P.Defs, a spec module outside `meaning`, so the record holds nothing of them: add P.Defs to "
+        "`meaning` and run `audit.py --update`",
+        "reads: `reads_exempt` lists P.Defs, under which no guarantee reads outside the spec; remove the entry"]
+    whole = pol | {"meaning": ["P"], "reads_exempt": {"P": "covers spec modules only"}}
+    assert A.spec_reads(whole, spec_facts(outside=[("P.f", "P.Defs")]), home) == [
+        "reads: `reads_exempt` lists P, under which no guarantee reads outside the spec; remove the entry"]
+
+
 def test_spec_definitions_no_guarantee_reads_are_reported():
     spec = [{"name": n, "module": m, "kind": "def"} for n, m in (
         ("P.f", "P.Defs"), ("P.f.match_1", "P.Defs"), ("P.unused", "P.Defs"), ("P.Hyp", "P.Assumptions"), ("P.Old", "P.Assumptions"),
@@ -392,6 +412,58 @@ def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
         "definition Control.Guarantees.T (Control.Guarantees), read by Control.t: new",
         "definition Control.Spec.W (Control.Spec), read by Control.w: new"]
     assert "  named assumptions: Control.Hyp -> none" in must
+
+
+def test_an_instance_is_anonymous_where_its_name_is_the_keyword_and_gets_lean_s_name(tmp_path):
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "I.lean").write_text(
+        "namespace P\n/-- instance : here is prose -/\ninstance : Inhabited Nat := ⟨0⟩\n"
+        "@[simp] private instance (priority := (low + 1))\n    : ToString Nat := ⟨fun _ => \"\"⟩\n"
+        "instance instOk : Inhabited Bool := ⟨true⟩\nend P\n")
+    found = [{"name": "P.instInhabitedNat_p", "id": "instInhabitedNat_p", "module": "P.I", "at": [3, 0]},
+             {"name": "P.instToStringNat_p", "id": "instToStringNat_p", "module": "P.I", "at": [4, 16]},
+             {"name": "P.instOk", "id": "instOk", "module": "P.I", "at": [6, 9]},
+             {"name": "P.instReprT", "id": "instReprT", "module": "P.I", "at": [2, 0]},
+             {"name": "Q.instX", "id": "instX", "module": "Q", "at": [1, 0]}]
+    anon = A.anonymous_instances(tmp_path, {"P.I": "P/I.lean"}, {"instances": found})
+    assert [i["name"] for i in anon] == ["P.instInhabitedNat_p", "P.instToStringNat_p"]
+    A.name_instances(tmp_path, anon)
+    assert (tmp_path / "P" / "I.lean").read_text() == (
+        "namespace P\n/-- instance : here is prose -/\ninstance instInhabitedNat_p : Inhabited Nat := ⟨0⟩\n"
+        "@[simp] private instance (priority := (low + 1)) instToStringNat_p\n    : ToString Nat := ⟨fun _ => \"\"⟩\n"
+        "instance instOk : Inhabited Bool := ⟨true⟩\nend P\n")
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_naming_the_anonymous_instances_keeps_their_names_and_the_record(tmp_path):
+    """On a real build: the instances Lean named, a private one with a priority, a local one and one whose type is the
+    package's own among them, fail the audit; `name` writes their names, and the rebuilt package passes with the same
+    instances, the same record and nothing anonymous left. A derived instance and a named one are left as they are."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Inst\n")
+    (pkg / "Control" / "Inst.lean").write_text(
+        "namespace Control\nstructure Box where\n  n : Nat\n  deriving Repr\n/-- documented -/\ninstance : Inhabited Box := ⟨⟨0⟩⟩\n"
+        "@[simp] private instance (priority := low)\n    : ToString Box := ⟨fun b => toString b.n⟩\n"
+        "local instance : Inhabited Nat := ⟨7⟩\ninstance : Inhabited (Fin 3) := ⟨0⟩\n"
+        "instance instNoBox : Inhabited (List Box) := ⟨[]⟩\nend Control\n")
+    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    audit = lambda **kw: A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
+    build()
+    assert audit(update=True)["failures"] == [
+        f"instance: Control/Inst.lean:{line} declares an instance without a name, which Lean names Control.{n} from its type "
+        f"(and, when nothing in the type is the project's own, its project's root): a move or a split renames it, and with it "
+        f"every record whose definitions use it. Write `instance {n}` there (`audit.py --name-instances` writes each one)"
+        for line, n in ((6, "instInhabitedBox"), (7, "instToStringBox"), (9, "instInhabitedNat_control"),
+                        (10, "instInhabitedFinOfNatNat_control"))]
+    record = (pkg / A.POLICY).read_text()
+    facts = lambda: sorted(i["name"] for i in json.loads((tmp_path / "out" / "audit-control" / "facts.json").read_text())["instances"])
+    names = facts()
+    assert len(audit(name=True)["named_instances"]) == 4
+    assert "local instance instInhabitedNat_control : Inhabited Nat" in (pkg / "Control" / "Inst.lean").read_text()
+    build()
+    assert audit()["failures"] == []
+    assert facts() == names and (pkg / A.POLICY).read_text() == record
 
 
 def test_generated_constants_belong_to_their_declaration():
@@ -1005,6 +1077,21 @@ def test_a_run_generates_its_data_and_fails_on_its_exit(tmp_path, monkeypatch):
     assert tests(policy={"exempt": {}, "runs": {"T": entry}})[0] == [
         "runs: T is not under `exempt`: a run is a test, not a proof the audit reads"]
     assert tests(policy={"exempt": {"U": "?"}, "runs": {"U": entry}})[0] == ["runs: U is not a module of the package"]
+
+
+def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):
+    pkg = tmp_path / "a" / "lean"
+    pkg.mkdir(parents=True)
+    runs = {"T": {"generate": ["python3", "../../b/gen.py", "{repo}", "--out", "{out}", "-c", "x = 1/2"],
+                  "args": ["{v.txt}", "data/v.txt", "/etc/v.txt"]},
+            "U": {"generate": ["python3", "{repo}/b/gen.py", "scripts/../gen.py", ".."]}}
+    assert A.run_paths(pkg, {"runs": runs}, tmp_path) == [
+        "runs: T's `generate` names ../../b/gen.py, outside the package: check's audit runs on a scratch tree, where it "
+        "finds nothing or another file; write {repo}/b/gen.py",
+        "runs: T's `args` names /etc/v.txt, outside the package: check's audit runs on a scratch tree, where it finds "
+        "nothing or another file; write a path under `{repo}`",
+        "runs: U's `generate` names .., outside the package: check's audit runs on a scratch tree, where it finds nothing "
+        "or another file; write {repo}/a"]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
