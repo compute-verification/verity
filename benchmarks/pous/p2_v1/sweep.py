@@ -181,7 +181,16 @@ def run_cell(a: argparse.Namespace) -> int:
     finally:
         sampler.terminate()
         (out / "bench" / "leaves-p2.bin").unlink(missing_ok=True)
-    return rc
+    return cell_rc(rc, out / "bench" / "bench-result.json")
+
+
+def cell_rc(rc: int, result: Path) -> int:
+    """A late honest answer is what the sweep measures, not a failed cell: pod.sh's rc unless `timed_audit` is the only gate
+    that failed, so a keeper counts only broken cells toward its pause."""
+    if rc == 0 or not result.exists():
+        return rc
+    gates = json.loads(result.read_text()).get("gates") or {}
+    return 0 if "timed_audit" in gates and all(v.get("passed") for g, v in gates.items() if g != "timed_audit") else rc
 
 
 # --- aggregate --------------------------------------------------------------------------------------------------------------

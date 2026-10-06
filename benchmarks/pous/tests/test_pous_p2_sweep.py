@@ -38,3 +38,15 @@ def test_a_late_answer_is_the_devices_when_its_server_time_leaves_no_room_else_l
     assert sweep.attribute(hostly, limit, host, busy_sibling, cell)["cause"] == "load"
     assert sweep.attribute(hostly, limit, host, quiet, cell)["cause"] == "host, unattributed"
     assert sweep.attribute(hostly, limit, host, None, cell)["cause"] == "host, unattributed"
+
+
+def test_a_cell_whose_only_failed_gate_is_timed_audit_succeeds_and_any_other_failure_keeps_pod_shs_rc(tmp_path):
+    import json
+    result = tmp_path / "bench-result.json"
+    assert sweep.cell_rc(1, result) == 1
+    result.write_text(json.dumps({"gates": {"operating_point": {"passed": True}, "timed_audit": {"passed": False}}}))
+    assert sweep.cell_rc(1, result) == 0 and sweep.cell_rc(0, result) == 0
+    result.write_text(json.dumps({"gates": {"operating_point": {"passed": False}, "timed_audit": {"passed": False}}}))
+    assert sweep.cell_rc(1, result) == 1
+    result.write_text(json.dumps({"gates": {"operating_point": {"passed": True}}}))
+    assert sweep.cell_rc(1, result) == 1
