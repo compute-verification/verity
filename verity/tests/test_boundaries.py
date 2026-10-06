@@ -65,8 +65,10 @@ IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 
 
 def _sources(root: Path = SRC) -> list[Path]:
-    """Core's own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory."""
-    return sorted(p for p in root.rglob("*.py") if not {"tests", "lean", "__pycache__"} & set(p.relative_to(SRC).parts))
+    """Core's own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, or a Lake build
+    directory (``verity/Security/.lake`` holds its dependencies' checkouts, Mathlib's scripts among them)."""
+    return sorted(p for p in root.rglob("*.py")
+                  if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts))
 
 
 def _imports(path: Path) -> list[tuple[str, int, bool]]:

@@ -66,16 +66,16 @@ first. Do not scaffold directories the README merely anticipates.
     C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
     that `--m0-pythonpath` names, not from the checkout) and the Lean
     verifier. `verity.protocols.accounting.space.pous` is proof of useful space: the reference
-    codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`: the
-    statements of its guarantees, their proofs and a submission grader). `verity.protocols.accounting.work.pouw`
+    codecs, setup and timed audit, its `PROTOCOL.md`, and its submission grader (`lean/`; the
+    statements of its guarantees and their proofs are its area of `verity/Security/`). `verity.protocols.accounting.work.pouw`
     is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
     (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
     pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
-    package (`lean/`, whose `Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
+    in `verity/Security/` (`Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
     `verity.protocols.accounting.communication.warden` is network transparency's timing
-    channel: the warden, its audit and calibration, and its Lean package (`lean/`).
-    `verity/protocols/compliance/nci` is novel communication intensity, the policy that throttles frontier training
-    and leaves inference alone; so far only its Lean package (`lean/`).
+    channel: the warden, its audit and calibration, and its Lean in `verity/Security/`.
+    NCI is novel communication intensity, the policy that throttles frontier training
+    and leaves inference alone; so far only its Lean, in `verity/Security/`.
     Applications (vLLM) compose protocols.
   - `verity.claims`: the ids of security claims (guarantees, assumptions as `property/instance`
     such as `cr/sha-512`, models, setup) that Table 1 cites; the docs site imports them from the
@@ -186,21 +186,21 @@ first in a quiet window, alone in its train (Daniel, 4 Oct).
   hypothesis on the circuit file or the statement's form. The verifier refuses any form the proof doesn't cover, and gains
   no new form ahead of its proof. Circuit inputs and outputs use one canonical format proved in general, so a new workload
   needs no verifier or proof change (ruling 2026-10-04, `.agents/skills/friction/SKILL.md`).
-- The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
-  about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
-  `verity/protocols/accounting/space/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `verity/protocols/accounting/work/pouw/lean/` (PoUW's games,
-  named assumptions and the proofs behind its γ, Mathlib and core's), `verity/protocols/accounting/communication/warden/lean/` (the network
-  warden's timing-channel guarantees and their proofs, Mathlib), `verity/protocols/compliance/nci/lean/` (NCI's policy and guarantees, on
-  core's), and `verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
-  declarations and games; and core's own proofs about `verity`'s definitions, such as `verity_catalog.silicon`'s step relation;
-  Mathlib only). New Lean goes into the package whose dependencies it needs, in a subdirectory and namespace of its own;
-  a core-only proof goes into core's package, never a backend's. A protocol's package may require core's and other
-  protocols' packages, never a backend's. All packages share one toolchain and
-  one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
-- Core's and NCI's packages are laid out under four names: `Protocol` (definitions), `Assumptions` (named `Prop`s) and
-  `Guarantees` (each a `def G : Prop`) are the spec (README "Glossary"), importing only one another, core's spec and
-  Mathlib (`layers` in `lean-audit.json`); `SecurityProofs` holds every proof and lemma, with `SecurityProofs.G : G` for
-  each guarantee proved. The other packages move to this layout one at a time.
+- Lean is code or security analysis (Daniel's layout ruling, 5 Oct). Code stays with its component and never requires
+  `verity/Security/`: C-Flock's executable verifier (`backends/flock/verifier/lean/`, `Flock` and `FlockVerify`, no
+  dependencies) and the PoUS grader (`verity/protocols/accounting/space/pous/lean/`, Lean only). The analysis is
+  `verity/Security/`, in three trees: `Definitions/` (each component's vocabulary) and `Specs/` (its named assumptions and
+  guarantee statements), the package `security` (Mathlib, no ArkLib), and `Proofs/`, the nested package `security_proofs`
+  (`srcDir = ".."`, root `Proofs`, ArkLib allowed), which requires `security` and holds every proof, C-Flock's level3 and
+  soundness among them (`Proofs.Flock.*`). Each component has an area of its own in each tree (`Core`, `Nci`, `Pouw`,
+  `Pous`, `Warden`, `Flock`): `Definitions.Pouw.X`, `Specs.Pouw.Guarantees`, `Proofs.Pouw.X`; declarations keep their
+  names (`Pouw.Guarantees.G`, `Pouw.SecurityProofs.G`). New Lean goes into its component's area of the tree it belongs
+  to; `tools/move/lean.py --resolve MODULE` names where a module from before the move went. All packages share one
+  toolchain and one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
+- `Definitions` and `Specs` are the spec (README "Glossary"), importing only one another and Mathlib (`layers` in
+  `verity/Security/lean-audit.json`); `Proofs` holds every proof and lemma, with `SecurityProofs.G : G` for each
+  guarantee proved. A theorem left in a trusted module is tolerated; a trusted module importing a proof or ArkLib is not.
+  C-Flock's analysis is all under `Proofs.Flock` for now (its reads are exempt until its spec is extracted).
 - Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
   `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
   `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
