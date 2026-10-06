@@ -1,4 +1,4 @@
-import Specs.Flock.Assumptions.Recursive
+import Proofs.Flock.Soundness.Assumptions.Recursive
 import Proofs.Flock.Soundness.Assumptions.Zk
 import Proofs.Flock.Soundness.Discharge.ZkView.Defs
 

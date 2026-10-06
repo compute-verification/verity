@@ -1,4 +1,4 @@
-import Specs.Flock.Guarantees.Recursive
+import Proofs.Flock.Recursive.Statements
 import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
