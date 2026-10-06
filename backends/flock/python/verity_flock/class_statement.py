@@ -742,12 +742,19 @@ def tile_lowering(low1: IL.Lowering, P: int, C: int, name: str) -> IL.Lowering:
 
 
 def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes, P: int, C: int,
-                n: int) -> dict:
+                n: int, real: int | None = None) -> dict:
     """As `stage`, for ``n`` P x C tiles of a two-port class: every row of every tile a distinct lane's port-0 row (a valid word
     vector; a dot product's two ports are alike), each unit's output the class lowering's own on its pair, checked through the
-    tile's leaf maps."""
+    tile's leaf maps.
+
+    ``real``: the statement padded to ``n`` instances (a public cap, `rec_shape`), its first ``real`` tiles the class's and the
+    rest fillers: every row zero and the output the class lowering's own on them, checked as every tile's is. A filler's rows
+    are equal, so the fillers open one committed row per port; the real tiles' rows and outputs are the unpadded statement's."""
     if PACK_WORDS or CORE_ROWS:
         raise ValueError("FLOCK_PACK_WORDS, FLOCK_CORE_ROWS: a tile is staged in the default layout only")
+    if real is not None and not 1 <= real <= n:
+        raise ValueError(f"--real {real}: between 1 and the statement's {n} instances")
+    lanes_n = n if real is None else real
     act = units.activation(cl.definition)
     uc = cl.representative
     name = shape[:16]
@@ -760,9 +767,11 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
         raise ValueError(f"class {name}: a tile needs two row ports of one width, not {pw}")
     w = pw[0]
     _rows1, _outs1, per1 = pack(uc, ins, want, low1.definition.w_in, w1, groups, pw)
-    if len(per1["p0"]) < n * (P + C):
-        raise ValueError(f"class {name}: {n} tiles need {n * (P + C)} lanes, not {len(per1['p0'])}")
-    R = np.ascontiguousarray(per1["p0"][:n * (P + C)]).reshape(n, P + C, w)
+    if len(per1["p0"]) < lanes_n * (P + C):
+        raise ValueError(f"class {name}: {lanes_n} tiles need {lanes_n * (P + C)} lanes, not {len(per1['p0'])}")
+    R = np.ascontiguousarray(per1["p0"][:lanes_n * (P + C)]).reshape(lanes_n, P + C, w)
+    if real is not None:
+        R = np.concatenate([R, np.zeros((n - real, P + C, w), R.dtype)])
     R0, R1 = R[:, :C], R[:, C:]
     pairs = np.concatenate([np.broadcast_to(R0[:, None, :, :], (n, P, C, w)), np.broadcast_to(R1[:, :, None, :], (n, P, C, w))], axis=3)
     got, _cut, ok = low1.evaluate(pairs.reshape(n * P * C, 2 * w).astype(np.uint64))
@@ -782,11 +791,14 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
     per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
     cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
     if n * per_instance > cap_bits:
+        if real is not None:
+            raise ValueError(f"class {name}: a statement padded to {n} instances is past --max-statement-bits")
         n = max(meta["vus_per_block"], 1 << ((cap_bits // per_instance).bit_length() - 1))
         outs, per_port = outs[:n], {k: v[:n] for k, v in per_port.items()}
     FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
              share_rows=True)
-    return {"n": n, "tile": [P, C], "coords_per_instance": P * C, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"],
+    return ({} if real is None else {"real": real, "fillers": n - real}) | \
+        {"n": n, "tile": [P, C], "coords_per_instance": P * C, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"],
             "circuit_bytes": len(text), "w_in": low.definition.w_in, "w_out": low.definition.w_out, "unit_rows": low.layout.useful,
             "ports": list(low.definition.port_words), "ands": low.layout.counts["ands"] * P * C, "k_log": meta["k_log"],
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
@@ -1041,7 +1053,7 @@ def _stage_cache(s: str) -> Path | None:
     a = c["a"]
     ident = [c["source_digest"], c["program_sha512"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
              a.seed, a.partition, a.max_ands, a.select, GEMM_TILE] + (["pack-words"] if PACK_WORDS else []) + (["core-rows"] if CORE_ROWS else []) \
-        + (["plain-leaves"] if PLAIN_LEAVES else [])
+        + (["plain-leaves"] if PLAIN_LEAVES else []) + ([f"real-{a.real}"] if a.real is not None else [])
     return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
 
 
@@ -1111,9 +1123,11 @@ def _stage_job_fresh(s: str) -> dict:
                 P, C = tile
                 n = (auto_batch(P * C * cc.counts["ands"], max(1, (c["row_units"].get(s) or cl.units) // (P * C)))
                      if a.batch == "auto" else a.n)
-                lanes_ = class_lanes(units, cl, c["key"], n * (P + C), c["shared"])
-                rec["stage"] = stage_tiled(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"], P, C, n)
+                lanes_ = class_lanes(units, cl, c["key"], (a.real or n) * (P + C), c["shared"])
+                rec["stage"] = stage_tiled(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"], P, C, n, a.real)
             else:
+                if a.real is not None:
+                    raise NotImplementedError("--real: fillers are staged for FLOCK_GEMM_TILE's tiles only")
                 n = auto_batch(cc.counts["ands"], c["row_units"].get(s) or cl.units) if a.batch == "auto" else a.n
                 lanes_ = class_lanes(units, cl, c["key"], n, c["shared"])
                 rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"])
@@ -1268,6 +1282,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--selftest-binary", default=None, help="the flock-circuit build with seed injection, for selftests (a proving "
                     "build never has it; default --binary)")
     ap.add_argument("--n", type=int, default=16, help="instances per class statement (synthetic lanes)")
+    ap.add_argument("--real", type=int, default=int(os.environ["FLOCK_REAL"]) if os.environ.get("FLOCK_REAL") else None,
+                    help="with --batch fixed and FLOCK_GEMM_TILE: the statement's first REAL tiles the class's, the rest to --n "
+                    "fillers (zero rows; stage_tiled), so its shape is --n's whatever REAL is (default FLOCK_REAL)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--selftest", type=int, default=0, help="also run flock-circuit's selftest (31 cases, negatives included) on every "
                     "Nth provable class and on each flat Definition's largest (0: never)")
@@ -1311,6 +1328,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--protocol", default="sweep-v0", help="the measurement protocol the result is labelled with (sweep-v0: never a "
                     "table cell)")
     a = ap.parse_args(argv)
+    if a.real is not None and (a.batch not in (None, "fixed") or not 1 <= a.real <= a.n):
+        ap.error(f"--real {a.real}: with --batch fixed, between 1 and --n {a.n}")
     calls: dict[str, int] | None = None
     if a.program_graph or a.definitions:
         defs = json.loads(Path(a.definitions).read_text()) if a.definitions else None
