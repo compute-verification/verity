@@ -4,19 +4,23 @@
 # --cwd source); the big files stay under $FLOCK_WORK/data/$TAG for the next step, out/ gets the records:
 #   STEP=build   (CPU) the GPU prover (60-circuit.sh's build, keyed by its sources as 70-class-sweep.sh keys it), Lean's
 #                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
-#                --definitions DEFS --stage-only, BATCH=fixed N) into data/$TAG/stage
-#   STEP=inner   (GPU leases) the inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy (verity_flock.rec_live,
-#                WARM + RUNS sessions), upstream's replay of the last one and V*'s hashing reference (rec_vstar) over it; then
-#                (INNER_LOOPBACK=1) the same statement on loopback, M0 and --zk, WARM + RUNS sessions each (today's numbers)
+#                --definitions DEFS --stage-only, BATCH=fixed N) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
+#                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
+#   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy
+#                (verity_flock.rec_live, WARM + RUNS sessions), upstream's replay of the last one and V*'s hashing reference
+#                (rec_vstar) over it, and over two forged copies of its private.json (a round's top: one node one bit off, one
+#                salt one bit off), which it must refuse; then (INNER_LOOPBACK=1) the hm96 statement on loopback, M0 and --zk,
+#                WARM + RUNS sessions each (today's numbers)
 #   STEP=vstage  (CPU) V*'s statements over the inner's last proxied session (verity_flock.rec_vstage) into data/$TAG/v: the
 #                verifier's fold points (rec_vstage points), its extra claims and comb (InnerFold.lean as an executable,
-#                cached by its sources), then each level's RecOpen, the algebra's InnerRepCheck and the forgeries (FORGE=
-#                "message sum comb", each under forged-<kind>/), JOBS at once
+#                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
+#                InnerRepCheck and the forgeries (FORGE="message sum comb top top-salt", each under forged-<kind>/), JOBS at once
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions (a forgery's: one, by a
 #                prover that sends its proofs though the witness fails, FC_ZK_SELF_CHECK=skip), and upstream's replay --zk
 #                of the last
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
-#                --coins os; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s)
+#                --coins os, which Lean's tags refuse while they pin hm96 leaves; ZK_LEAN=1: also today's --zk session;
+#                LEVELS=none: neither of V*'s)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, serve, replay and Lean never hold one.
@@ -24,7 +28,7 @@
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
-#      FORGE="message sum comb" (vstage)  JOBS=4 (vstage, lean)  INNER_LOOPBACK=1 (inner)
+#      FORGE="message sum comb top top-salt" (vstage)  JOBS=4 (vstage, lean)  INNER_LOOPBACK=1 (inner)
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
 #      GPU_LEASE= (the lease command; default the queue's for this node)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
@@ -263,8 +267,10 @@ d = o / step
 if step == "build":
     s["binary"] = text(o / "binary.sha256").strip()
     s["lean"] = text(o / "lean.sha").strip()
-    s["staged"] = [json.loads(l) for l in text(o / "stage" / "staged.jsonl").splitlines() if l.strip()]
-    s["stage_wall"], s["stage_peak_gb"] = tv(o / "time-stage.txt", r"Elapsed \(wall clock\) time"), gb(o / "time-stage.txt")
+    for name in ("stage", "stage-zk"):
+        s[name] = {"staged": [json.loads(l) for l in text(o / name / "staged.jsonl").splitlines() if l.strip()],
+                   "wall": tv(o / name / "time-stage.txt", r"Elapsed \(wall clock\) time"), "peak_gb": gb(o / name / "time-stage.txt"),
+                   "sizes": text(o / name / "sizes.txt")}
     s["statement"] = text(o / "statement.txt")[-2000:]
 elif step == "inner":
     for name in ("proxy", "m0", "zk"):
@@ -277,6 +283,8 @@ elif step == "inner":
                                    "peak_gb": gb(d / f"time-replay-{name}.txt")}
     s["vstar"] = text(d / "vstar.json")[-3000:]
     s["vstar_wall"] = tv(d / "time-vstar.txt", r"Elapsed \(wall clock\) time")
+    for f in ("node", "salt"):
+        s[f"vstar_forged_{f}"] = (text(d / f"vstar-forged-{f}.json") + text(d / f"vstar-forged-{f}.err"))[-1500:]
 elif step == "vstage":
     pts = json.loads(text(d / "points.json")) if text(d / "points.json").strip() else {}
     fold = json.loads(text(d / "fold.json")) if text(d / "fold.json").strip() else {}
@@ -318,17 +326,27 @@ lean_build() {
   )
 }
 
+# stage_inner NAME PLAIN: the inner statement (one Call of Gemm_v2{K, N=4096}, its GemmCoordinate_v2 shape at N instances)
+# staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when PLAIN is 1; its records in $O/NAME
+stage_inner() {
+  local o=$O/$1 c=$DD/$1-cache
+  mkdir -p $o
+  python3 -c "import json, sys; json.dump({'Gemm_v2{K=%s,N=4096,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}' % sys.argv[1]: 1151}, open(sys.argv[2], 'w'))" $K $o/defs.json
+  FLOCK_STAGE_CACHE=$c FLOCK_PLAIN_LEAVES=$2 FLOCK_GEMM_TILE=${FLOCK_GEMM_TILE:-4x4} /usr/bin/time -v -o $o/time-stage.txt \
+    python3 -m verity_flock.class_statement --definitions $o/defs.json --partition q-word --out $o --stage-only --batch fixed --n $N \
+    --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 > $o/stage.log 2>&1
+  echo "stage $1 exit $?"; tail -5 $o/stage.log
+  local C=$(ls -td $c/*/ 2>/dev/null | head -1)
+  [ -n "$C" ] && [ -f $C/inst-$N.bin ] || { echo "no staged statement under $c"; return 1; }
+  mkdir -p $DD/$1 && for f in circuit.txt inst-$N.bin pub-$N.bin rec.json; do ln -f $C/$f $DD/$1/$f || cp $C/$f $DD/$1/$f; done
+  du -sb $DD/$1/* | tee $o/sizes.txt
+}
+
 case $STEP in
 build)
   lean_build > $O/build-lean.log 2>&1 &
   LP=$!
-  # the inner statement: one Call of Gemm_v2{K, N=4096}, its GemmCoordinate_v2 shape staged at N instances
-  mkdir -p $O/stage
-  python3 -c "import json, sys; json.dump({'Gemm_v2{K=%s,N=4096,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}' % sys.argv[1]: 1151}, open(sys.argv[2], 'w'))" $K $O/stage/defs.json
-  export FLOCK_STAGE_CACHE=$DD/stage-cache FLOCK_GEMM_TILE=${FLOCK_GEMM_TILE:-4x4}
-  /usr/bin/time -v -o $O/time-stage.txt python3 -m verity_flock.class_statement --definitions $O/stage/defs.json --partition q-word \
-    --out $O/stage --stage-only --batch fixed --n $N --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 \
-    > $O/stage/stage.log 2>&1 &
+  { stage_inner stage 1 && stage_inner stage-zk 0; } > $O/stage-all.log 2>&1 &
   SPID=$!
   if [ ! -x $B ]; then
     exec 8>$W/build.lock; flock 8
@@ -341,12 +359,7 @@ build)
     exec 8>&-
   fi
   sha256sum $B | tee $O/binary.sha256
-  wait $SPID; echo "stage exit $?"
-  tail -5 $O/stage/stage.log
-  C=$(ls -td $FLOCK_STAGE_CACHE/*/ 2>/dev/null | head -1)
-  [ -n "$C" ] && [ -f $C/inst-$N.bin ] || { echo "no staged statement under $FLOCK_STAGE_CACHE"; exit 1; }
-  mkdir -p $DD/stage && for f in circuit.txt inst-$N.bin pub-$N.bin rec.json; do ln -f $C/$f $DD/stage/$f || cp $C/$f $DD/stage/$f; done
-  du -sb $DD/stage/* | tee $O/stage-sizes.txt
+  wait $SPID; rc=$?; cat $O/stage-all.log; [ $rc = 0 ] || exit 1
   $B statement --instances $DD/stage/inst-$N.bin --circuit $DD/stage/circuit.txt > $O/statement.txt 2>&1; echo "statement exit $?"
   wait $LP; echo "lean build exit $?"
   [ -x $LEAN_BIN ] && sha256sum $LEAN_BIN > $O/lean.sha
@@ -364,15 +377,35 @@ inner)
   taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-proxy.txt $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt \
     --sessions $SESS/session > $O/inner/replay-proxy.txt 2>&1
   taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-vstar.txt python3 -m verity_flock.rec_vstar $SESS > $O/inner/vstar.json 2> $O/inner/vstar.err
-  echo "vstar exit $?"
+  rc=$?; echo "vstar exit $rc"
+  # the prover reports a stop (prover_stopped) and exits 0; the honest session's V* is what refuses one without its proofs
+  [ $rc = 0 ] || { cat $O/inner/vstar.json; grep -h -m3 -e panicked -e prover_stopped $O/inner/proxy/prove.err $O/inner/proxy/prove.tsv
+    mkdir -p $O/inner/session && cp -r $SESS/session $SESS/public.json $O/inner/session/; exit 1; }
+  # the forged sessions V*'s reference must refuse: the session's private.json with the first salted top's first node (node)
+  # or its salt (salt) one bit off, the public record and the proofs as they are
+  for f in node salt; do
+    F=$DD/inner-forged-$f; rm -rf $F; mkdir -p $F; cp $SESS/public.json $F/; ln -s $SESS/session $F/session
+    python3 - $SESS/private.json $F/private.json $f <<'EOF'
+import json, sys
+p = json.load(open(sys.argv[1]))
+op = next(r for r in p["rounds"] if r.get("tops"))["tops"][0]
+key = {"node": "nodes", "salt": "salts"}[sys.argv[3]]
+op[key][0] = "%02x" % (int(op[key][0][:2], 16) ^ 1) + op[key][0][2:]
+json.dump(p, open(sys.argv[2], "w"))
+EOF
+    taskset -c $VCPU python3 -m verity_flock.rec_vstar $F > $O/inner/vstar-forged-$f.json 2> $O/inner/vstar-forged-$f.err
+    echo "vstar forged-$f exit $? (1: refused)"
+  done
   mkdir -p $O/inner/session && cp -r $SESS/session $SESS/public.json $O/inner/session/ && du -sb $SESS/* > $O/inner/session/sizes.txt
   fi
-  # today's numbers on this node and build: M0 and --zk on loopback, the verifier on its own cores, every verdict ahead
+  # today's numbers on this node and build: the hm96 statement's M0 and --zk on loopback, the verifier on its own cores, every
+  # verdict ahead
   if [ "${INNER_LOOPBACK:-1}" = 1 ]; then
-  again loopback m0 $D/pub-$N.bin $D/inst-$N.bin $D/circuit.txt
-  again loopback zk $D/pub-$N.bin $D/inst-$N.bin $D/circuit.txt --zk
-  [ -n "${LAST:-}" ] && taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-zk.txt $B replay --zk --instances $D/pub-$N.bin \
-    --circuit $D/circuit.txt --sessions $LAST > $O/inner/replay-zk.txt 2>&1
+  DZ=$DD/stage-zk; [ -f $DZ/inst-$N.bin ] || { echo "no $DZ (run STEP=build first)"; exit 1; }
+  again loopback m0 $DZ/pub-$N.bin $DZ/inst-$N.bin $DZ/circuit.txt
+  again loopback zk $DZ/pub-$N.bin $DZ/inst-$N.bin $DZ/circuit.txt --zk
+  [ -n "${LAST:-}" ] && taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-zk.txt $B replay --zk --instances $DZ/pub-$N.bin \
+    --circuit $DZ/circuit.txt --sessions $LAST > $O/inner/replay-zk.txt 2>&1
   fi
   ;;
 vstage)
@@ -416,13 +449,13 @@ EOF
   V=$DD/v; rm -rf $V; mkdir -p $V
   /usr/bin/time -v -o $O/vstage/time-points.txt python3 -m verity_flock.rec_vstage points $INNER $DD/stage/circuit.txt \
     $DD/stage/pub-$N.bin > $V/points.json 2> $O/vstage/points.err || { tail -20 $O/vstage/points.err; exit 1; }
-  /usr/bin/time -v -o $O/vstage/time-fold.txt $FOLD_BIN --partition $DD/stage/partition.json verity/flock-circuit \
+  /usr/bin/time -v -o $O/vstage/time-fold.txt $FOLD_BIN --plain-leaves --partition $DD/stage/partition.json verity/flock-circuit \
     $DD/stage/circuit.txt $DD/stage/pub-$N.bin $V/points.json os > $V/fold.json 2> $O/vstage/fold.err
   rc=$?; echo "fold exit $rc"; [ $rc = 0 ] || { tail -20 $O/vstage/fold.err; exit 1; }
   cp $V/points.json $V/fold.json $O/vstage/
   ALL=$(python3 -c "
 import sys; from pathlib import Path; from verity_flock import rec_outer as O, rec_vstar as V
-pub, _, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) for l in O.levels(V.queries(pub, proofs))))" $INNER)
+pub, priv, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) for l in O.levels(V.queries(pub, priv, proofs))))" $INNER)
   echo "levels: $ALL"
   vjob() {
     local name=$1; shift
@@ -434,7 +467,7 @@ pub, _, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) for l
   vjob verifier --levels none --no-algebra
   [ -f $V/acc-salts.bin ] || { tail -20 $O/vstage/verifier.err; exit 1; }
   { want alg && echo alg --levels none
-    for f in ${FORGE-message sum comb}; do echo forged-$f --forge $f; done
+    for f in ${FORGE-message sum comb top top-salt}; do echo forged-$f --forge $f; done
     for l in $ALL; do want L$l && echo L$l --levels $l --no-algebra; done; } | xargs -P ${JOBS:-4} -L 1 bash -c 'vjob "$@"' _
   (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage/sizes.txt
   ;;
@@ -474,8 +507,8 @@ lean)
   # ZK_LEAN=1: today's --zk on the same statement (the inner step's last loopback --zk session), for Lean's like-for-like
   if [ "${ZK_LEAN:-0}" = 1 ]; then
     ZS=$(ls -d $DD/inner-zk/sessions/l* | sort | tail -1)
-    /usr/bin/time -v -o $O/lean/time-zk.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $DD/stage/circuit.txt \
-      --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --session $ZS > $O/lean/zk.log 2> $O/lean/zk.err
+    /usr/bin/time -v -o $O/lean/time-zk.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $DD/stage-zk/circuit.txt \
+      --public $DD/stage-zk/pub-$N.bin --partition $DD/stage/partition.json --session $ZS > $O/lean/zk.log 2> $O/lean/zk.err
     echo "zk lean exit $?"
   fi
   ;;
