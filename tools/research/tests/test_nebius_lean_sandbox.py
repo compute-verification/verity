@@ -1,6 +1,6 @@
 """vy-lean-sandbox (`pods/nebius/lean_sandbox.py`): the unit it starts, what it refuses before starting one, the probes and their
 verdict, the `build` slot in lean_slot.py's files, the tree it checks out and calls clean; with stand-ins for systemd and the
-host. And what deploys it: vy-lean-build-setup, run-daily's stub, the daily units and their entries in deploy.toml."""
+host. And what deploys it: vy-lean-build-setup, lean's publisher, the daily units and their entries in deploy.toml."""
 from __future__ import annotations
 
 import configparser
@@ -712,11 +712,6 @@ def test_the_daily_service_runs_the_publisher_as_root_bounded_and_its_timer_fire
     assert dict(timer["Install"]) == {"WantedBy": "timers.target"}
 
 
-def test_run_daily_is_a_stub_that_exits_2_until_leans_publisher_replaces_it():
-    r = subprocess.run(["bash", str(NEBIUS / "lean_cache_daily.sh")], capture_output=True, text=True)
-    assert r.returncode == 2 and "publisher not installed (lean's PR)" in r.stderr
-
-
 def test_the_setup_script_runs_only_as_root(tmp_path):
     (tmp_path / "id").write_text("#!/bin/sh\necho 1000\n")
     (tmp_path / "id").chmod(0o755)
@@ -725,18 +720,20 @@ def test_the_setup_script_runs_only_as_root(tmp_path):
     assert r.returncode == 2 and "run as root" in r.stdout
 
 
-LEAN_CACHE = {"/usr/local/sbin/vy-lean-build-setup": "lean_build_setup.sh", "/usr/local/bin/vy-lean-sandbox": "lean_sandbox.py",
-              "/usr/local/lib/vy-lean-cache/run-daily": "lean_cache_daily.sh",
-              "/etc/systemd/system/vy-lean-cache-daily.service": "vy-lean-cache-daily.service",
-              "/etc/systemd/system/vy-lean-cache-daily.timer": "vy-lean-cache-daily.timer"}
+_N = "tools/research/src/research/pods/nebius"
+LEAN_CACHE = {"/usr/local/sbin/vy-lean-build-setup": f"{_N}/lean_build_setup.sh", "/usr/local/bin/vy-lean-sandbox": f"{_N}/lean_sandbox.py",
+              "/usr/local/lib/vy-lean-cache/run-daily": "tools/lean/run_daily.py",
+              "/usr/local/lib/vy-lean-cache/cache.py": "tools/lean/cache.py",
+              "/etc/systemd/system/vy-lean-cache-daily.service": f"{_N}/vy-lean-cache-daily.service",
+              "/etc/systemd/system/vy-lean-cache-daily.timer": f"{_N}/vy-lean-cache-daily.timer"}
 
 
 def test_deploy_puts_the_sandbox_its_setup_and_the_daily_units_on_node_1_only_and_starts_nothing():
     nodes = deploy.load()
     n1 = {e.path: e for e in nodes["vy-nebius-1"].entries}
     for path, src in LEAN_CACHE.items():
-        assert n1[path].src == f"tools/research/src/research/pods/nebius/{src}" and n1[path].run == [], path
+        assert n1[path].src == src and n1[path].run == [], path
         assert any(fnmatch.fnmatch(path, m) for m in nodes["vy-nebius-1"].managed), path
     assert not set(LEAN_CACHE) & {e.path for e in nodes["vy-nebius-2"].entries}
-    for src in ("lean_build_setup.sh", "lean_sandbox.py", "lean_cache_daily.sh"):
-        assert os.access(NEBIUS / src, os.X_OK), src                                # installed with the repository's mode
+    for src in (NEBIUS / "lean_build_setup.sh", NEBIUS / "lean_sandbox.py", CHECK.parent / "lean/run_daily.py"):
+        assert os.access(src, os.X_OK), src                                         # installed with the repository's mode
