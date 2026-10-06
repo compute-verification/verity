@@ -1,11 +1,11 @@
 {
- "roots": ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Warden", "Proofs.Flock"],
+ "roots": ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier", "Proofs.Flock"],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
   "Proofs.Pous.Targets": "open targets: every pinned statement as a sorry stub",
   "Proofs.Pous.CheckAxioms": "the headline #print axioms list (`lake env lean CheckAxioms.lean`)",
-  "Proofs.Warden.CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)",
-  "Proofs.Warden.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof"
+  "Proofs.NetworkCertifier.CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)",
+  "Proofs.NetworkCertifier.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
@@ -23,7 +23,7 @@
     "{out}"
    ]
   },
-  "Proofs.Warden.DifftestMain": {
+  "Proofs.NetworkCertifier.DifftestMain": {
    "why": "10,000 random instances on which NetTiming's definitions (expectedRow, and Accepted of constantRate and StatusComplete by decide) give what the Python audit gives: schedule.expected_grids, Audit.check_link with the first differing bucket, Audit.check_ingress_link, and each prefix's acceptance",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "10000"],
    "data": {
@@ -32,7 +32,7 @@
    },
    "generate": [
     "python3",
-    "{repo}/verity/protocols/accounting/communication/warden/lean/scripts/difftest_vectors.py",
+    "{repo}/verity/protocols/accounting/communication/certifier/lean/scripts/difftest_vectors.py",
     "{repo}",
     "--out",
     "{out}"
