@@ -830,9 +830,17 @@ def queue_rules(repo: Path, base: str):
 MERGED_PR = re.compile(r"Merge #(\d+) \(([0-9a-f]{7,40})\)")
 
 
+def adds_nothing(repo: Path, commit: str, head: str) -> bool:
+    """Whether merging ``head`` into ``commit`` leaves ``commit``'s own tree: what ``head`` has, ``commit`` has already (a merge of
+    `main` into a pull request the tip already holds)."""
+    r = _git(repo, "merge-tree", "--write-tree", commit, head, check=False)
+    return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
+
+
 def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]:
     """Why ``commit`` can't land for a pull request it merges above the checkout's HEAD (a first-parent `Merge #N (SHA)` commit
-    `_chain` wrote, whose second parent is the pinned head): N's head on ``remote`` is no longer that head, closed or not, or
+    `_chain` wrote, whose second parent is the pinned head): N's head on ``remote`` is no longer that head, closed or not, and
+    merging the new one would change ``commit`` (`adds_nothing`; a head that only merged `main` in lands as the pinned one), or
     `pr:N@{head}` lacks a grant its change needs under the queue's rules as HEAD has them (`Rules.needs`, every role) for what it
     adds onto the train below its merge (a PR stacked on another in the train needs no grant for that one's change), on that head
     or carried from another (`research.queue.carry`), read after pulling the labels from the store's remote; or N is stacked on
@@ -865,10 +873,14 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
             r = _git(repo, "fetch", "-q", remote, f"pull/{n}/head", check=False)
             head = None if r.returncode else _git(repo, "rev-parse", "FETCH_HEAD").stdout.strip()
             if head != sha:
-                out.append(f"#{n} was merged at {sha[:12]}, but its head on {remote} " + (
-                    f"is now {head[:12]}: rebuild the train on the new head and check that" if head else
-                    f"can't be read ({(r.stderr or r.stdout).strip()[-200:]})"))
-                continue
+                if head and adds_nothing(repo, commit, head):
+                    log(f"research merge: #{n}'s head moved from {sha[:12]} to {head[:12]}, which adds nothing to {commit[:12]} "
+                        f"(merging it leaves the tip's tree); it lands as {sha[:12]}, and the sweep closes it")
+                else:
+                    out.append(f"#{n} was merged at {sha[:12]}, but its head on {remote} " + (
+                        f"is now {head[:12]}: rebuild the train on the new head and check that" if head else
+                        f"can't be read ({(r.stderr or r.stdout).strip()[-200:]})"))
+                    continue
             for h in _git(repo, "rev-list", f"{onto}..{sha}").stdout.split():
                 for m in prs.get(h, []):
                     # rev-list's walk can stop early on skewed commit dates and list a commit `onto` has
@@ -1055,7 +1067,8 @@ def landed_in(repo: Path, commit: str, tip: str) -> str:
 
 
 def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool = False, gh=None, log=print) -> tuple[list[int], list[int]]:
-    """Close every open pull request whose head is on ``remote``'s ``into`` (with a comment naming the commit it landed in) and
+    """Close every open pull request whose head is on ``remote``'s ``into``, or whose pinned head a train landed and whose head since
+    adds nothing to it (`adds_nothing`; its branch is kept), with a comment naming the commit it landed in, and
     retarget onto ``into`` every open pull request whose base branch's tip is on it, deleting each closed one's head branch that no
     open pull request uses.  Idempotent: what it closed is no longer open, and what it retargeted is based on ``into``.  Returns
     (closed, retargeted) PR numbers, ascending."""
@@ -1079,6 +1092,12 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
         out = _git(repo, "ls-remote", remote, *[f"refs/heads/{b}" for b in bases]).stdout
         tips = {ref.removeprefix("refs/heads/"): sha for sha, ref in (line.split() for line in out.splitlines())}
     moved = [p for p in rest if p["baseRefName"] in tips and on(tips[p["baseRefName"]])]
+    # a PR whose pinned head landed in a train and whose head since adds nothing to `into` (it merged `main` in)
+    pinned = {int(m[1]): parents.split()[1] for parents, _, subject in (line.partition("\0") for line in _git(
+        repo, "log", "-n", "5000", "--format=%P%x00%s", "--grep", r"^Merge #[0-9]", tip).stdout.splitlines())
+        if (m := MERGED_PR.fullmatch(subject)) and len(parents.split()) == 2}
+    done += [p for p in rest if p not in moved and p["number"] in pinned and adds_nothing(repo, tip, p["headRefOid"])]
+    rest = [p for p in rest if p not in done]
     verb = "would " if dry_run else ""
     for p in moved:
         log(f"research merge: {verb}retarget #{p['number']} from {p['baseRefName']} (on {remote}/{into}) onto {into}")
@@ -1087,14 +1106,16 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     # a closed PR's head branch goes too, unless an open PR still uses it (as its head, or as a base the retargets left)
     used = {p["headRefName"] for p in rest} | {p["baseRefName"] for p in rest if p not in moved}
     for p in done:
-        landed = landed_in(repo, p["headRefOid"], tip)
+        later = not on(p["headRefOid"])
+        landed = landed_in(repo, pinned[p["number"]] if later else p["headRefOid"], tip)
         subject = _git(repo, "log", "-1", "--format=%s", landed).stdout.strip()
-        note = f"Merged into {into} at {landed[:12]} ({subject})."
+        note = f"Merged into {into} at {landed[:12]} ({subject})." + (
+            f" Its head since, {p['headRefOid'][:12]}, adds nothing to {into}." if later else "")
         log(f"research merge: {verb}close #{p['number']} ({p['headRefName']}): {note}")
         if not dry_run:
             gh("pr", "close", str(p["number"]), "--comment", note)
         head = p["headRefName"]
-        if head in used:
+        if head in used or later:
             continue
         log(f"research merge: {verb}delete {remote}'s branch {head} (#{p['number']}'s head, on {into})")
         if not dry_run:
