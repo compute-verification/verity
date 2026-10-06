@@ -14,17 +14,30 @@ A B200 SM's squaring is extrapolated three ways. `scaled` keeps the round's fixe
 mma part c(330) - c(0) by the measured dense rate here over the B200's peak dense int8 rate per SM, as if a B200 SM
 ran a dependent round at the same fraction of its peak. `mma_tail` replaces c(0) by the dependent chain from one
 squaring's products to the next one's (t_mma + t_mul + t_smem, at this GPU's latencies), and `mma_only` drops it
-too, as if all of it overlapped.
+too, as if all of it overlapped. `mma_only_best_depth` is `mma_only` at the Karatsuba depth and block size (32 or 16
+limbs, mma.sync's k) whose work is least once tile occupancy is counted: a sub-squaring is a block-Toeplitz product
+with one N column per block, and no tile can hold two sub-squarings, so it fills nb of each 8 columns.
     python from_probe5.py probe5.jsonl [--t-mma 27] [--b200-macs-per-clk 7737] [--json]
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 
 from floor_model import T_MMA, T_SM, rows
 
 K_MMA = 330
+KARA_DEPTH = 3
+
+
+def karatsuba(d: int, k: int) -> dict:
+    """Issued tensor work of a depth-d Karatsuba squaring of 633 four-limb words, relative to schoolbook, with
+    k-limb blocks and N = 8 tiles."""
+    limbs = 4 * 633 / 2 ** d
+    nb = math.ceil(limbs / k)
+    occ = limbs / (nb * k) * nb / (math.ceil(nb / 8) * 8)
+    return {"depth": d, "k": k, "blocks": nb, "occupancy": round(occ, 3), "work": (3 / 4) ** d / occ}
 
 
 def inputs(lines: list[dict]) -> dict:
@@ -59,9 +72,13 @@ def main() -> None:
         m = inputs([json.loads(x) for x in f if x.strip()])
     c, c0 = m["sm_sq_cyc"], m["sm_sq_fixed_cyc"]
     mma = (c - c0) * m["dense_macs_per_clk"] / a.b200_macs_per_clk
-    b200 = {"scaled": c0 + mma, "mma_tail": mma + a.t_mma + m["t_mul"] + m["t_smem"], "mma_only": mma}
+    kara = [karatsuba(d, k) for k in (32, 16) for d in range(1, 9)]
+    best = min(kara, key=lambda r: r["work"])
+    b200 = {"scaled": c0 + mma, "mma_tail": mma + a.t_mma + m["t_mul"] + m["t_smem"], "mma_only": mma,
+            "mma_only_best_depth": mma * best["work"] / (3 / 4) ** KARA_DEPTH}
     out = {"inputs": m, "b200_sm_sq_cyc": {k: round(v, 1) for k, v in b200.items()},
-           "b200_macs_per_clk": a.b200_macs_per_clk, "t_mma": a.t_mma, "models": {}}
+           "b200_macs_per_clk": a.b200_macs_per_clk, "t_mma": a.t_mma, "karatsuba": kara, "karatsuba_best": best,
+           "models": {}}
     rtx_t_sm = max(T_SM, 30 + m["dense_macs_per_clk"] / 16)
     for hop in (324, 447):
         for sname, ts in (("ld", m["t_smem"]), ("pass", m["t_smem_pass"])):
@@ -73,7 +90,8 @@ def main() -> None:
     if a.json:
         print(json.dumps(out))
         return
-    print(json.dumps({k: v for k, v in m.items() if k not in ("chain", "smem")}), json.dumps(out["b200_sm_sq_cyc"]))
+    print(json.dumps({k: v for k, v in m.items() if k not in ("chain", "smem")}), json.dumps(out["b200_sm_sq_cyc"]),
+          json.dumps(best))
     for name, rs in out["models"].items():
         best: dict[str, dict] = {}
         for r in rs:
