@@ -18,7 +18,7 @@ only the session's public schedule and salted hashes:
   commitment to the round's free message, answered with the round's ``n`` coins.
 
 **Salted tops.** A tree's top (a Ligerito cap of ``2^c`` nodes, 64 bytes each) is committed node by node, each node as a
-registered row is (`top_rows`: its 32 u16 words and 32 zero words, one SHA-512 block; ``hm96-sha512/row/v1`` under its own
+registered row is (`top_rows`: its 32 u16 words and 32 zero words, one SHA-512 block; ``hm96-sha512/row/v2`` under its own
 fresh 192-byte salt), so the coin server holds one ``b || c`` a node and V*'s openings each read their node as one row of the
 registered value the verifier builds from them (`verity_flock.rec_outer`). The nodes and salts are the prover's
 (``private.json``). Level 0's cap reaches the firewall three times (``Commit``, the rep's binding round, Ligerito's first
@@ -43,7 +43,7 @@ top), a proof-of-work nonce (8 bytes, dropped: with live coins grinding buys not
 statement digest (dropped: it is a function of the hidden statement); the observed field elements are the free message ``F_k``. ``F_k`` is
 laid out as one row of whole :data:`ROW_WORDS`-word blocks (each element 8 words, its 16 bytes lo LE then hi LE; the last
 block zero-padded) and committed as a registered row is (``verity.protocols.verification.sampled_proofs.one_stage.registered``:
-``hm96-sha512/row/v1`` under its own fresh 192-byte salt), so ``c_k`` is that row's ``b || c``: one commitment a round, as
+``hm96-sha512/row/v2`` under its own fresh 192-byte salt), so ``c_k`` is that row's ``b || c``: one commitment a round, as
 one port of V*'s algebra reads it. A round with no free message has an empty ``c_k``. The row and salt are the prover's:
 V*'s algebra opens each round's row against the registered value the verifier builds from that round's ``c_k`` of both reps
 (`message_row`, `commit_rows`).
@@ -315,11 +315,11 @@ def row_elements(row: list[int]) -> list[int]:
 
 
 def commit_rows(rows: list[list[int]], salts: list[bytes]) -> list[bytes]:
-    """Each row's ``b || c`` as a registered row's (``hm96-sha512/row/v1`` over ``sha512/row/v1``, role x)."""
-    from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_digest
+    """Each row's ``b || c`` as a registered row's (``hm96-sha512/row/v2`` over ``sha512/row/v2``)."""
+    from verity.protocols.verification.sampled_proofs.one_stage import registered as RG
 
     inst = hm96.SHA512
-    return [inst.commit_string(inst.default_key, sha512_row_digest(r, 16, ROLE_X), s) for r, s in zip(rows, salts, strict=True)]
+    return [inst.commit_string(inst.default_key, RG.row_digest(r), s) for r, s in zip(rows, salts, strict=True)]
 
 
 def top_nodes(top: bytes) -> list[bytes]:
