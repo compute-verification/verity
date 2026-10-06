@@ -72,9 +72,9 @@ from .rec_algebra import fast100
 
 KIND = "rec/inner-transcript/v1"
 SESSION_KIND = "flock-live-session/v1"
-#: how a record's tree tops are salted: each 64-byte node a registered row (``hm96-sha512/row/v1``) under its own salt
+#: how a record's tree tops are salted: each 64-byte node a registered row (``hm96-sha512/row/v2``) under its own salt
 #: (`commit_top`)
-TOPS = "hm96-sha512/v1/node-row"
+TOPS = "hm96-sha512/row/v2/node-row"
 
 OP_DOMAIN, OP_LABEL, OP_OBSERVE, OP_SQUEEZE, OP_BYTES = 1, 2, 3, 4, 5
 KIND_SCALAR, KIND_SLICE = 1, 2
