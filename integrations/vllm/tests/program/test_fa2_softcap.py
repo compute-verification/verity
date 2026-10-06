@@ -13,7 +13,7 @@ from verity_vllm.program.registry import b1, dense, hopper
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import fa2_softcap as F2S
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import targets as TG
+from verity_vllm.program.frontend import targets as TG
 
 FA2 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}
 PRO6000 = TargetProfile(compute_capability=(12, 0), num_sms=188)

@@ -33,9 +33,9 @@ from verity_vllm.observe.fold.patterns import GemmLaunch, base_op, bound_args, g
 from verity_vllm.observe.fold.resolver import Resolution, StepContext
 from verity_vllm.observe.fold.tree import TreeNode
 
-#: [R13 ampere] the pinned sm_89 table now lives in the GEMM target registry (`verity_vllm.program.registry.gemm_targets.ADA_TUNED_GEMM`, the
+#: [R13 ampere] the pinned sm_89 table now lives in the GEMM target registry (`verity_vllm.program.frontend.gemm_targets.ADA_TUNED_GEMM`, the
 #: `ada` record's `tuned_table`) and is re-exported here unchanged for the tests / profile notes that cite it by this name.
-from verity_vllm.program.registry.gemm_targets import ADA_TUNED_GEMM  # noqa: E402,F401
+from verity_vllm.program.frontend.gemm_targets import ADA_TUNED_GEMM  # noqa: E402,F401
 
 
 def tuned_launch_config(table: dict, M: int, N: int, K: int) -> tuple[dict[str, Any], int, int] | None:

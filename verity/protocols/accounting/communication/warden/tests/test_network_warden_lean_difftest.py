@@ -2,8 +2,8 @@
 
 `lean/scripts/difftest_vectors.py` writes 10,000 random instances and this package's results on each
 (`schedule.expected_grids`, `Audit.check_link` with the first differing bucket, `Audit.check_ingress_link`, and each
-prefix's acceptance). `check` runs the Lean half in its Lean audit (`runs` in `lean/lean-audit.json`):
-`NetTimingDifftest.lean` evaluates every instance with `NetTiming`'s definitions (`expectedRow`, and `Accepted` of
+prefix's acceptance). `check` runs the Lean half in its Lean audit (`runs` in `verity/Security/Proofs/lean-audit.json`):
+`Proofs/Warden/DifftestMain.lean` evaluates every instance with `NetTiming`'s definitions (`expectedRow`, and `Accepted` of
 `constantRate` and `StatusComplete` by `decide`) and fails on any difference. The audit checks that data against the
 record's SHA-256, and its pass is cached on the Lean package's files alone, so the test here is what says the data is
 still what this package computes: a change to the audit's verdicts changes the data, fails this test, and
@@ -24,11 +24,12 @@ import pytest
 from verity.protocols.accounting.communication.warden.grid import released
 from verity.protocols.accounting.communication.warden.schedule import ClockSync, LogicalFrame, handing_buckets
 
-LEAN = Path(__file__).resolve().parents[5] / "Security"
-_spec = importlib.util.spec_from_file_location("difftest_vectors", LEAN / "scripts" / "difftest_vectors.py")
+PROOFS = Path(__file__).resolve().parents[5] / "Security" / "Proofs"
+SCRIPT = Path(__file__).resolve().parents[1] / "lean" / "scripts" / "difftest_vectors.py"
+_spec = importlib.util.spec_from_file_location("difftest_vectors", SCRIPT)
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NetTimingDifftest"]
+RUN = json.loads((PROOFS / "lean-audit.json").read_text())["runs"]["Proofs.Warden.DifftestMain"]
 
 
 def test_the_data_is_what_the_audit_pins(tmp_path):

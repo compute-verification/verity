@@ -97,7 +97,7 @@ research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
-research merge --train --prepare BRANCH [--onto BASE] N@SHA ...      # build a train, lint it, push it for train.sh
+research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --mirror [SHA]                                           # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
@@ -154,8 +154,9 @@ label alone lands nothing; ask the train runner on Slack as well until the queue
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
 fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (draft state is ignored),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
-ready PR`, a `ready` label on `pr:{n}@{head}`, which will replace the merge request once the queue lands trains), and has the grants the rules file
-(`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}` in the store. The branch holds the queue's state (each
+ready PR`, a `ready` label on `pr:{n}@{head}`), and has the grants the rules file
+(`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}`, or on an older head it only
+restacks or merges `main` into (`carry`). The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
 conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
@@ -608,15 +609,11 @@ research notes approaches render | check                                        
 
 ## Not yet built, in order
 
-1. `research compare <a> <b>`: descriptive diff of two run records
-   (source, fingerprints expected/observed, environment, measurements with
-   ratios labeled as treatment/baseline, validation, preservation). It shows
-   differences; the workload's contract decides which ones matter.
-2. `research status` reading the project's budget ledger with its
+1. `research status` reading the project's budget ledger with its
    observation time (no second spend counter).
-3. Reconcile the final `lane/r17-mprof` telemetry revision against
+2. Reconcile the final `lane/r17-mprof` telemetry revision against
    `df7fbea3d` once the r17 campaign is frozen; port, do not overwrite.
-4. Milestone: one real SP1 case through `--on`, then the seven-stage
+3. Milestone: one real SP1 case through `--on`, then the seven-stage
    `campaign_h100.sh` replaced end to end: the stage sequence stays a
    benchmark-owned script; `paired_run.py` writes `result.json`; `research`
    supplies targeting, shipping, identity, telemetry, retrieval. No SP1

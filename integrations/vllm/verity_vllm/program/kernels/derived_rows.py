@@ -671,7 +671,7 @@ def fp8_group_quant_row(x: np.ndarray, *, G: int = 128) -> tuple[np.ndarray, np.
     bytes, sx (K/G,) f32 words).  Per group: `s = fmaxf-fold(eps=1e-10f, |f32(x_e)|) / 448.0f` (an exact max -- fmaxf drops a NaN
     operand -- then an IEEE div.rn.f32), `xq[e] = cvt.rn.satfinite.e4m3(fminf(fmaxf(f32(x[e]) / s, -448), 448))` (a true division; a NaN
     quotient is dropped by fmaxf -> -448 -> 0xFE, the kernel's word)."""
-    from verity_vllm.program.registry.fp8 import np_f32_to_e4m3_sat          # the Definition's own vectorised `cvt.rn.satfinite.e4m3` twin
+    from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat     # the Definition's own vectorised `cvt.rn.satfinite.e4m3` twin
     x = np.asarray(x, dtype=np.uint16).reshape(-1)
     K = x.size
     if K % G:
@@ -750,7 +750,7 @@ def rmsnorm_fused_v2_rows(x: np.ndarray, res: np.ndarray, w: np.ndarray, eps: fl
     ``normed``/``resid`` and the derived f32 words ``var`` (cub BlockReduce output) and ``s``
     (`RsqrtApprox(var / N + eps)`).  Delegates to `rmsnorm_fused_sweep.fused_rows` (the twin that
     reproduced 2,340/2,340 fused-norm rows of the B0 store) with the v2 variance tree."""
-    from verity_vllm.program.registry.rmsnorm_fused_sweep import fused_rows, variance_v2
+    from verity_vllm.program.kernels.rmsnorm_fused_sweep import fused_rows, variance_v2
     R, N = np.asarray(x).shape
     w2 = np.ascontiguousarray(np.broadcast_to(np.asarray(w, dtype=np.uint16), (R, N)))
     out, rp, var, s = fused_rows(np.ascontiguousarray(x, dtype=np.uint16),

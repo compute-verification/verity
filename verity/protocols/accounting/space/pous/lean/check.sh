@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
-# Acceptance check: the package builds and passes Verity's Lean audit (`tools/lean/audit.py --all --fresh`), the open
-# targets elaborate, and the grader passes the positive control and rejects each negative control for the stated
-# reason. Prints ALL CHECKS PASSED.
+# Acceptance check: the grader and the security analysis (`verity/Security`, where PoUS's trusted layer and proofs are)
+# build and pass Verity's Lean audit (`tools/lean/audit.py --fresh`), the open targets elaborate, and the grader passes
+# the positive control and rejects each negative control for the stated reason. Prints ALL CHECKS PASSED.
 set -uo pipefail
 cd "$(dirname "$0")"
+security=$(cd ../../../../../Security && pwd)
 export PATH="$HOME/.elan/bin:$PATH"
 fail() { echo "CHECK FAILED: $1" >&2; exit 1; }
 
-echo "== the package: Verity's Lean audit (its controls, every declaration, pins, kernel replay, leanchecker --fresh)"
-audit_py=${POUS_LEAN_AUDIT:-$PWD/../../../tools/lean/audit.py}
+echo "== the packages: Verity's Lean audit (its controls, every declaration, pins, kernel replay, leanchecker --fresh)"
+audit_py=${POUS_LEAN_AUDIT:-$PWD/../../../../../../tools/lean/audit.py}
 [ -f "$audit_py" ] || fail "no Verity tools/lean/audit.py at $audit_py (set POUS_LEAN_AUDIT to another copy)"
 lake build > /dev/null || fail "lake build"
 alog=$(mktemp)
-python3 "$audit_py" --all --root . --fresh > "$alog" 2>&1 || { tail -40 "$alog" >&2; rm -f "$alog"; fail "audit.py"; }
+python3 "$audit_py" --build --fresh . "$security" > "$alog" 2>&1 || { tail -40 "$alog" >&2; rm -f "$alog"; fail "audit.py"; }
 grep -E '^(audit: controls|AUDIT )' "$alog" | sed 's/^/   /' | cut -c1-160
 rm -f "$alog"
 
 echo "== open targets elaborate"
-lake build Proofs.Pous.Targets > /dev/null 2>&1 || fail "Proofs.Pous.Targets"
+(cd "$security/Proofs" && lake build Proofs.Pous.Targets) > /dev/null 2>&1 || fail "Proofs.Pous.Targets"
 
 echo "== grader controls"
 tmp=$(mktemp -d)
