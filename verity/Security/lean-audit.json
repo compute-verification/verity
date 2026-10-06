@@ -20966,7 +20966,28 @@
   "FlockVBridge.Algebra.decoded_rsT": {
    "owner": "@proofs"
   },
+  "FlockVBridge.Algebra.finalWeights_ok": {
+   "owner": "@proofs"
+  },
   "FlockVBridge.Algebra.folded_size": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.kv_challenge": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.kv_e": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.kv_ood": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.kv_query": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.ligerito_checks": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.ligerito_of_residuals": {
    "owner": "@proofs"
   },
   "FlockVBridge.Algebra.lincheck_checks": {
@@ -20976,6 +20997,9 @@
    "owner": "@proofs"
   },
   "FlockVBridge.Algebra.lincheck_of_residuals": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.polyOf_addScaled": {
    "owner": "@proofs"
   },
   "FlockVBridge.Algebra.residuals_eq_run": {
