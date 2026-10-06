@@ -66,6 +66,7 @@ def load_registries() -> None:
     import verity_catalog.definitions.boolean.cast  # noqa: F401
     import verity_catalog.definitions.boolean.elementwise  # noqa: F401
     import verity_catalog.definitions.boolean.gemm  # noqa: F401
+    import verity.primitives.commitments.gates.lms  # noqa: F401
     import verity.primitives.commitments.gates.merkle  # noqa: F401
     import verity_catalog.definitions.boolean.mufu  # noqa: F401
     import verity_catalog.definitions.boolean.scalar  # noqa: F401
@@ -427,6 +428,14 @@ def _merkle_roots() -> list[Any]:
     return [bind(MerkleRead, ARITY=2, D=1), bind(MerkleRead, ARITY=4, D=1)]
 
 
+def _lms_roots() -> list[Any]:
+    """The LMS verifier (`verity.primitives.commitments.gates.lms`) at its smallest binding, N = 32, W = 1, H = 1, which reaches
+    every part: one compression, the message digits, a chain step, the leaf, one tree level and the comparison."""
+    from verity.primitives.commitments.gates.lms import verifier
+
+    return [verifier(32, 1, 1)]
+
+
 def _kernel_roots() -> list[Any]:
     from verity_vllm.program.kernels import kernel_registry as KR
 
@@ -717,7 +726,7 @@ def catalog(by_unit: list | None = None) -> list[Any]:
     ROOT_ERRORS.clear()
     for units, make in ((("_core_roots",), _core_roots), (("_boolean_roots",), _boolean_roots),
                         (("_boolean_gather_roots",), _boolean_gather_roots), (("_universal_roots",), _universal_roots),
-                        (("_merkle_roots",), _merkle_roots), (("_kernel_roots",), _kernel_roots),
+                        (("_merkle_roots",), _merkle_roots), (("_lms_roots",), _lms_roots), (("_kernel_roots",), _kernel_roots),
                         (("_vocabulary_roots", "_vocabulary_bindings"), _vocabulary_roots), (("_pouw_roots",), _pouw_roots)):
         roots += _produce(units, make, by_unit)
     for label, make in _model_roots():
