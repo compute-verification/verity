@@ -1,4 +1,4 @@
-"""Runs `sqchain` (the dependent 16,448-bit squaring chain) over configurations and checks every result.
+"""Runs the squaring-chain binaries (`sqchain`, `sqchain2`) over configurations and checks every result.
 
 For each configuration: random x < p, N squarings on the device, the output digits read back as an integer and compared
 with Python's `pow(x, 2**N, p)`. Then the root identity at the real width: for y = z^2 mod p, the device's 16,446
@@ -6,7 +6,9 @@ squarings give y^(2^16446), the host multiplies by (y^5266)^-1 (off the critical
 r = y^((p+1)/4) must satisfy r^2 = y. The device's own timing (globaltimer and clock64 around the chain) is what is
 reported; the host times nothing.
 
-    python driver.py --bin BIN --out DIR [--configs C:TPB,...] [--n N] [--reps K] [--roots K]
+    python driver.py --bin NAME=PATH [--bin ...] --out DIR [--configs NAME:C:TPB[:X],...] [--n N] [--reps K] [--roots K]
+
+X is the binary's last argument: MODE for sqchain (1 = st.async), WPB (warps per column block) for sqchain2.
 """
 from __future__ import annotations
 
@@ -51,9 +53,9 @@ def run(binary: str, c: int, tpb: int, mode: int, n: int, reps: int, x: int, tmp
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--bin", required=True)
+    ap.add_argument("--bin", action="append", required=True, help="NAME=PATH")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--configs", default="1:1024,8:256:0,16:256:0,8:256:1,16:256:1", help="C:TPB[:MODE],...; MODE 1 = st.async")
+    ap.add_argument("--configs", required=True, help="NAME:C:TPB[:X],...")
     ap.add_argument("--n", type=int, default=10000)
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--roots", type=int, default=2, help="root identities per configuration, at N = 16,446")
@@ -62,20 +64,24 @@ def main() -> None:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rng = random.Random(a.seed)
+    bins = dict(b.split("=", 1) for b in a.bin)
     rows = []
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         for cfg in a.configs.split(","):
-            c, tpb, mode = ([int(v) for v in cfg.split(":")] + [0])[:3]
+            name, *nums = cfg.split(":")
+            c, tpb, mode = ([int(v) for v in nums] + [0])[:3]
+            if name.startswith("sqchain2") and mode == 0:
+                mode = 1
             x = rng.randrange(P)
-            rec, got, d = run(a.bin, c, tpb, mode, a.n, a.reps, x, tmp)
+            rec, got, d = run(bins[name], c, tpb, mode, a.n, a.reps, x, tmp)
             want = pow(x, 1 << a.n, P)
-            rec.update(check_pow=got == want, max_digit_bits=max(d).bit_length())
+            rec.update(binary=name, check_pow=got == want, max_digit_bits=max(d).bit_length())
             roots = []
             for _ in range(a.roots):
                 z = rng.randrange(1, P)
                 y = z * z % P
-                rr, s, _ = run(a.bin, c, tpb, mode, E_SQ, 1, y, tmp)
+                rr, s, _ = run(bins[name], c, tpb, mode, E_SQ, 1, y, tmp)
                 r = s * pow(pow(y, E_TAIL, P), -1, P) % P
                 roots.append({"identity": r * r % P == y, "ns_per_sq": rr["ns_per_sq_min"],
                               "chain_us": rr["ns_per_sq_min"] * E_SQ / 1e3})
