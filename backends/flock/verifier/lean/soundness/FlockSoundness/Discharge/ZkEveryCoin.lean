@@ -1,2 +1,0 @@
-import FlockSoundness.Discharge.ZkEveryCoin.Defs
-import FlockSoundness.Discharge.ZkEveryCoin.Headline

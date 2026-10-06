@@ -96,7 +96,7 @@ def dropped(pkg: Path) -> None:
 
 
 def added(pkg: Path) -> None:
-    (pkg / "Pous/Guarantees/Added.lean").write_text("import Pous.Protocol\n")
+    (pkg / "Pous/Guarantees/Added.lean").write_text("import Definitions.Pous\n")
 
 
 def extra(pkg: Path) -> None:
