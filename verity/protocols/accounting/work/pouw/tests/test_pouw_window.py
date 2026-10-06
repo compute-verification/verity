@@ -39,6 +39,15 @@ def test_bucket_credits_the_floor_point_and_pads_past_the_real_count():
     assert Wd.bucket(24).to_json(4096) == {"level": 19, "n": 26, "credited_tiles": 24, "credited": 24 * 4096}
 
 
+def test_the_padded_count_is_the_unit_count_bucket_of_the_real_tiles_and_one_filler():
+    """N is the least grid point at or above N_real + 1, the private partition's n_b on the same grid."""
+    for n in range(1, 3000):
+        g = Wd.pad(n)
+        assert Wd.on_grid(g) and g >= n and (g == n or Wd.floor_point(n) < n < g)
+        assert Wd.bucket(n).n == Wd.pad(n + 1)
+    assert [Wd.pad(n) for n in (16, 17, 18, 19, 8192, 8193)] == [16, 18, 18, 20, 8192, 9216]
+
+
 def test_k_prime_is_the_smallest_k_whose_miss_probability_is_at_most_delta():
     eps, delta = Fraction(1, 1000), Fraction(1, 2**40)
     full = Wd.k_prime(eps, delta, 10**7, 10**7, 1)

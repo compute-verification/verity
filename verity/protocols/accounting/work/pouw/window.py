@@ -17,7 +17,9 @@ the window's own root and W's root are salted roots, which the rule allows.
 **The grid** (`GRID_BITS` = s): the positive integers with at most s + 1 significant bits, so consecutive points above
 2^(s+1) differ by a factor of at most 1 + 2^-s (9/8 at s = 3).  A window with N_real real tiles registers one level ℓ, the
 largest point g_ℓ <= N_real: it is credited g_ℓ tiles' work and pads its tiles to N = g_(ℓ+1) > N_real with filler tiles,
-at least one.  Both outputs are fixed by ℓ, so the window's influenceable public output is one grid level, and over a
+at least one.  So N is `pad(N_real + 1)`, the least grid point at or above the real tiles and the one filler a window
+always has: the private partition's unit-count bucket n_b (`note:circuits/20261006T0615Z-draft-private-partitions`,
+G6) on the same grid, one bucket and not two.  Both outputs are fixed by ℓ, so the window's influenceable public output is one grid level, and over a
 declared range [lo, hi] it takes `levels(lo, hi)` = q values: log2 q bits in the draft's leakage bound.  The honest cost is
 under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <= 1 + 2^-s in K′.
 
@@ -79,6 +81,12 @@ def floor_point(n: int, bits: int = GRID_BITS) -> int:
         raise ValueError(f"the grid is over positive integers, not {n!r}")
     s = _shift(n, bits)
     return n >> s << s
+
+
+def pad(n: int, bits: int = GRID_BITS) -> int:
+    """The least grid point at least n >= 1: a unit count's public bucket."""
+    g = floor_point(n, bits)
+    return g if g == n else point(level(g, bits) + 1, bits)
 
 
 def level(g: int, bits: int = GRID_BITS) -> int:
