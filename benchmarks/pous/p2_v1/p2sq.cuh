@@ -357,6 +357,56 @@ __device__ __forceinline__ bool ge_p(const Num &x, uint32_t c0, uint32_t lane) {
   return __all_sync(0xFFFFFFFFu, (lane != 0 || x.l[0] >= 0u - c0) && v == 0xFFFFFFFFu);
 }
 
+// m = d(sigma_K(d(c))) - t mod p of one block, K and t as rows
+__device__ __forceinline__ void decode_one(uint32_t *__restrict__ sm, uint32_t *__restrict__ snap,
+                                           const uint32_t *__restrict__ crow, uint32_t *__restrict__ mrow,
+                                           const uint32_t *__restrict__ krow, const uint32_t *__restrict__ trow,
+                                           uint32_t c0, uint32_t *__restrict__ flags, uint32_t lane) {
+  Num x, k;
+  load_row(snap, crow, x, lane);
+  put_e(sm, x, lane);
+  sqr_d(sm, snap, x, odd_of(x), c0, lane);                     // x = d(c)
+  __syncwarp();
+  load_row(snap, krow, k, lane);
+  #pragma unroll
+  for (int q = 0; q < 16; q++) k.l[q] ^= x.l[q];
+  k.e0 ^= x.e0; k.e1 ^= x.e1;
+  if (!ge_p(k, c0, lane)) x = k;                               // sigma_K
+  put_e(sm, x, lane);
+  sqr_d(sm, snap, x, odd_of(x), c0, lane);                     // x = d(sigma_K(d(c)))
+  __syncwarp();
+  load_row(snap, trow, k, lane);
+  if (ge_p(k, c0, lane) && lane == 0) atomicOr(flags, 1u);
+  uint32_t b = 0;                                              // m = x - t mod p
+  {
+    uint64_t v;
+    #pragma unroll
+    for (int q = 0; q < 16; q++) { v = (uint64_t)x.l[q] - k.l[q] - b; x.l[q] = (uint32_t)v; b = (uint32_t)(v >> 63); }
+    if (lane == 31) {
+      v = (uint64_t)x.e0 - k.e0 - b; x.e0 = (uint32_t)v; b = (uint32_t)(v >> 63);
+      v = (uint64_t)x.e1 - k.e1 - b; x.e1 = (uint32_t)v; b = (uint32_t)(v >> 63);
+    }
+  }
+  uint32_t topb = __shfl_sync(0xFFFFFFFFu, b, 31);
+  if (lane == 31) b = 0;
+  topb += borrow_across(x, b, lane);
+  if (topb) {                                                  // x - t + 2^W, then - c0: x - t + p
+    uint32_t bb = 0;
+    if (lane == 0) {
+      uint64_t v = (uint64_t)x.l[0] - c0;
+      x.l[0] = (uint32_t)v; bb = (uint32_t)(v >> 63);
+      #pragma unroll
+      for (int q = 1; q < 16; q++) { v = (uint64_t)x.l[q] - bb; x.l[q] = (uint32_t)v; bb = (uint32_t)(v >> 63); }
+    }
+    borrow_across(x, bb, lane);
+  }
+  store_row(snap, mrow, x, lane);
+}
+// a row's 2,056 bytes lie in 17 lines of 128, one per lane
+__device__ __forceinline__ void prefetch_row(const uint32_t *row, uint32_t lane) {
+  asm volatile("prefetch.global.L2 [%0];" ::"l"((const char *)row + (lane < 17 ? 128 * lane : 128 * 16)));
+}
+
 }  // namespace p2sq
 
 #ifndef P2SQ_WARPS
@@ -376,53 +426,12 @@ __global__ void __launch_bounds__(32 * P2SQ_WARPS, P2SQ_MINB) decode_sq_kernel(c
   uint32_t *sm = smem[wid], *snap = smem[wid] + E_WORDS;
   const uint32_t stride = gridDim.x * P2SQ_WARPS;
   for (uint32_t j = blockIdx.x * P2SQ_WARPS + wid; j < n; j += stride) {
-    Num x, k;
 #ifndef P2SQ_NO_PREFETCH
-    {  // K and t of this block, c of the next, into L2: a row's 2,056 bytes lie in 17 lines of 128, one per lane
-      const uint32_t at = lane < 17 ? 128 * lane : 128 * 16;
-      const size_t jn = j + stride < n ? j + stride : j;
-      asm volatile("prefetch.global.L2 [%0];" ::"l"((const char *)(kin + (size_t)j * N) + at));
-      asm volatile("prefetch.global.L2 [%0];" ::"l"((const char *)(tin + (size_t)j * N) + at));
-      asm volatile("prefetch.global.L2 [%0];" ::"l"((const char *)(cin + jn * N) + at));
-    }
+    const size_t jn = j + stride < n ? j + stride : j;   // K and t of this block, c of the next, into L2
+    prefetch_row(kin + (size_t)j * N, lane);
+    prefetch_row(tin + (size_t)j * N, lane);
+    prefetch_row(cin + jn * N, lane);
 #endif
-    load_row(snap, cin + (size_t)j * N, x, lane);
-    put_e(sm, x, lane);
-    sqr_d(sm, snap, x, odd_of(x), c0, lane);                     // x = d(c)
-    __syncwarp();
-    load_row(snap, kin + (size_t)j * N, k, lane);
-    #pragma unroll
-    for (int q = 0; q < 16; q++) k.l[q] ^= x.l[q];
-    k.e0 ^= x.e0; k.e1 ^= x.e1;
-    if (!ge_p(k, c0, lane)) x = k;                               // sigma_K
-    put_e(sm, x, lane);
-    sqr_d(sm, snap, x, odd_of(x), c0, lane);                     // x = d(sigma_K(d(c)))
-    __syncwarp();
-    load_row(snap, tin + (size_t)j * N, k, lane);
-    if (ge_p(k, c0, lane) && lane == 0) atomicOr(flags, 1u);
-    uint32_t b = 0;                                              // m = x - t mod p
-    {
-      uint64_t v;
-      #pragma unroll
-      for (int q = 0; q < 16; q++) { v = (uint64_t)x.l[q] - k.l[q] - b; x.l[q] = (uint32_t)v; b = (uint32_t)(v >> 63); }
-      if (lane == 31) {
-        v = (uint64_t)x.e0 - k.e0 - b; x.e0 = (uint32_t)v; b = (uint32_t)(v >> 63);
-        v = (uint64_t)x.e1 - k.e1 - b; x.e1 = (uint32_t)v; b = (uint32_t)(v >> 63);
-      }
-    }
-    uint32_t topb = __shfl_sync(0xFFFFFFFFu, b, 31);
-    if (lane == 31) b = 0;
-    topb += borrow_across(x, b, lane);
-    if (topb) {                                                  // x - t + 2^W, then - c0: x - t + p
-      uint32_t bb = 0;
-      if (lane == 0) {
-        uint64_t v = (uint64_t)x.l[0] - c0;
-        x.l[0] = (uint32_t)v; bb = (uint32_t)(v >> 63);
-        #pragma unroll
-        for (int q = 1; q < 16; q++) { v = (uint64_t)x.l[q] - bb; x.l[q] = (uint32_t)v; bb = (uint32_t)(v >> 63); }
-      }
-      borrow_across(x, bb, lane);
-    }
-    store_row(snap, mout + (size_t)j * N, x, lane);
+    decode_one(sm, snap, cin + (size_t)j * N, mout + (size_t)j * N, kin + (size_t)j * N, tin + (size_t)j * N, c0, flags, lane);
   }
 }

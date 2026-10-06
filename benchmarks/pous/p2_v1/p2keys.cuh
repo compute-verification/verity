@@ -92,19 +92,18 @@ inline bool midstate(const uint8_t *prefix, int plen, Mid &m) {
 }
 
 constexpr int WARPS = 4;
+#ifndef P2K_MINB
+#define P2K_MINB 1
+#endif
 constexpr int OUT_WORDS = P2_BITS / 64;   // W/8 bytes
 static_assert(P2_BITS % 64 == 0, "rows of whole 64-bit words");
 
-// rows k and t (each [count, W/64] 64-bit words, the SHAKE output bytes in order) for blocks first .. first + count - 1, 32
-// rows a warp, the grid striding over them
-__global__ void __launch_bounds__(32 * WARPS) keys_kernel(const __grid_constant__ Mid mid, uint64_t first, uint32_t count,
-                                                          uint64_t per_segment, uint64_t *__restrict__ kout,
-                                                          uint64_t *__restrict__ tout) {
-  __shared__ uint64_t stage[WARPS][32 * RW];
-  const uint32_t lane = threadIdx.x % 32, wid = threadIdx.x / 32;
-  for (uint64_t row0 = ((uint64_t)blockIdx.x * WARPS + wid) * 32; row0 < count; row0 += (uint64_t)gridDim.x * WARPS * 32) {
-  const uint32_t rows = count - row0 < 32 ? (uint32_t)(count - row0) : 32;
-  const uint64_t idx = first + row0 + lane;
+// rows k and t (each W/64 64-bit words, the SHAKE output bytes in order) of blocks idx0 + r, r < rows <= 32, lane r
+// expanding row r; st_ is the warp's 32 * RW words of staging
+__device__ __forceinline__ void keys_rows(const Mid &mid, uint64_t idx0, uint32_t rows, uint64_t per_segment,
+                                          uint64_t *__restrict__ kout, uint64_t *__restrict__ tout, uint64_t *st_,
+                                          uint32_t lane) {
+  const uint64_t idx = idx0 + lane;
   const uint64_t seg = idx / per_segment, blkno = idx % per_segment;
   uint64_t sb[RW];
 #pragma unroll
@@ -117,10 +116,9 @@ __global__ void __launch_bounds__(32 * WARPS) keys_kernel(const __grid_constant_
     }
     sb[w] = x;
   }
-  uint64_t *st_ = stage[wid];
 #pragma unroll 1
   for (int p = 0; p < 2; p++) {
-    uint64_t *out = (p ? tout : kout) + row0 * OUT_WORDS;
+    uint64_t *out = p ? tout : kout;
     uint64_t st[25];
 #pragma unroll
     for (int i = 0; i < 25; i++) st[i] = mid.st[i] ^ (i < RW ? mid.last[p][i] ^ sb[i] : 0);
@@ -138,6 +136,17 @@ __global__ void __launch_bounds__(32 * WARPS) keys_kernel(const __grid_constant_
       }
     }
   }
+}
+
+// rows k and t (each [count, W/64]) for blocks first .. first + count - 1, 32 rows a warp, the grid striding over them
+__global__ void __launch_bounds__(32 * WARPS, P2K_MINB) keys_kernel(const __grid_constant__ Mid mid, uint64_t first, uint32_t count,
+                                                          uint64_t per_segment, uint64_t *__restrict__ kout,
+                                                          uint64_t *__restrict__ tout) {
+  __shared__ uint64_t stage[WARPS][32 * RW];
+  const uint32_t lane = threadIdx.x % 32, wid = threadIdx.x / 32;
+  for (uint64_t row0 = ((uint64_t)blockIdx.x * WARPS + wid) * 32; row0 < count; row0 += (uint64_t)gridDim.x * WARPS * 32) {
+    const uint32_t rows = count - row0 < 32 ? (uint32_t)(count - row0) : 32;
+    keys_rows(mid, first + row0, rows, per_segment, kout + row0 * OUT_WORDS, tout + row0 * OUT_WORDS, stage[wid], lane);
   }
 }
 
