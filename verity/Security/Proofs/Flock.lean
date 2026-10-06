@@ -6,5 +6,6 @@ import Proofs.Flock.EndToEndDrawn
 import Proofs.Flock.EndToEndHidden
 import Proofs.Flock.EndToEndRegistered
 import Proofs.Flock.ZeroKnowledgeHidden
+import Proofs.Flock.VBridge
 
 /-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
