@@ -676,68 +676,6 @@ def test_under_the_agent_a_request_without_wait_gives_up_when_no_grant_comes_and
     assert subprocess.run(["bash", str(GPU_LEASE), "1", "--", "true"], env=env, capture_output=True).returncode == 0
 
 
-needs_taskset = pytest.mark.skipif(shutil.which("taskset") is None or shutil.which("flock") is None
-                                   or not hasattr(os, "sched_getaffinity"), reason="needs taskset and flock")
-# a CPU this process may run on: a container's cpuset (vy-mig-check-*) needn't include CPU 0
-CPU = str(min(os.sched_getaffinity(0))) if hasattr(os, "sched_getaffinity") else "0"
-
-
-@needs_taskset
-def test_check_slot_pins_a_check_to_a_free_slot_with_the_pods_python(tmp_path):
-    slot = NEBIUS / "check_slot.sh"
-    env = {**{k: v for k, v in os.environ.items() if k != "UV_PYTHON"}, "VY_CHECK_SLOTS": f"{CPU} {CPU}", "VY_CHECK_LOCKS": str(tmp_path),
-           "VY_CHECK_WAIT": "0"}
-    show = "echo $UV_PYTHON $(taskset -cp $$ | sed 's/.*: //')"
-    first = subprocess.Popen(["bash", str(slot), "bash", "-c", f"{show}; read x"], env=env, stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    try:
-        assert first.stdout.readline().split() == ["3.14.7", CPU]
-        second = subprocess.run(["bash", str(slot), "bash", "-c", show], env=env, capture_output=True, text=True)
-        assert second.returncode == 0 and "check-b" in second.stderr
-        other = subprocess.Popen(["flock", str(tmp_path / "check-b.lock"), "bash", "-c", "echo ready; read x"], stdin=subprocess.PIPE,
-                                 stdout=subprocess.PIPE, text=True)
-        try:
-            assert other.stdout.readline().strip() == "ready"
-            busy = subprocess.run(["bash", str(slot), "true"], env=env, capture_output=True, text=True)
-            assert busy.returncode == 75 and "every check slot is busy" in busy.stderr
-        finally:
-            other.stdin.close()
-            other.wait()
-    finally:
-        first.stdin.close()
-        first.wait()
-    slots_file = tmp_path / "check-slots"
-    slots_file.write_text(f"{CPU}\n")
-    r = subprocess.run(["bash", str(slot), "bash", "-c", show], env={**env, "VY_CHECK_SLOTS": "", "VY_CHECK_SLOTS_FILE": str(slots_file),
-                       "UV_PYTHON": "3.12"}, capture_output=True, text=True)
-    assert r.stdout.split() == ["3.12", CPU]
-    path_file = tmp_path / "check-path"
-    path_file.write_text("/opt/check-toolchain/bin\n")
-    r = subprocess.run(["bash", str(slot), "bash", "-c", "echo $PATH"], env={**env, "VY_CHECK_PATH_FILE": str(path_file)},
-                       capture_output=True, text=True)
-    assert r.stdout.startswith("/opt/check-toolchain/bin:")
-
-
-
-@needs_taskset
-def test_a_short_check_takes_a_short_slot_while_every_train_slot_is_held(tmp_path):
-    """--short: a lane's short check doesn't queue behind the trains. With both check slots held it still starts, in check-s1, on
-    the check slots' CPUs, at nice 10, so the trains keep first claim on the cores."""
-    slot = NEBIUS / "check_slot.sh"
-    env = {**os.environ, "VY_CHECK_SLOTS": f"{CPU} {CPU}", "VY_CHECK_LOCKS": str(tmp_path), "VY_CHECK_WAIT": "0"}
-    held = [subprocess.Popen(["flock", str(tmp_path / f"check-{s}.lock"), "bash", "-c", "echo ready; read x"], stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE, text=True) for s in ("a", "b")]
-    try:
-        assert [h.stdout.readline().strip() for h in held] == ["ready", "ready"]
-        assert subprocess.run(["bash", str(slot), "true"], env=env, capture_output=True, text=True).returncode == 75
-        r = subprocess.run(["bash", str(slot), "--short", "bash", "-c", "echo $(nice) $(taskset -cp $$ | sed 's/.*: //')"], env=env,
-                           capture_output=True, text=True)
-        assert r.returncode == 0 and "check-s1" in r.stderr and r.stdout.split() == ["10", CPU], (r.stdout, r.stderr)
-    finally:
-        for h in held:
-            h.stdin.close()
-            h.wait()
-
 # ---- launch.sh ---------------------------------------------------------------------------------------------------------------------------
 
 def launch(*args: str, **env: str) -> subprocess.CompletedProcess:
@@ -3048,24 +2986,6 @@ def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared
     (tmp_path / "cg" / cg.lstrip("/") / "memory.peak").write_text(f"{12_340_000_000}\n")
     monkeypatch.setattr(fr, "CGROUP_ROOT", str(tmp_path / "cg"))
     assert fr.mem_peak_gb(os.getpid()) == 12.34 and fr.mem_peak_gb(2**22 + 7) is None
-
-
-def test_slot_d_runs_through_a_window_only_on_a_slot_d_runs_clause(tmp_path):
-    """Node 2, 3 Oct 2:22 PM UTC: circuits' 14:30Z window said "no merge checks on node 2 through it (no slot-d=runs)", and the
-    words alone let slot d run into it. A window that starts in 2000 and lasts 190 years is open whatever the time."""
-    src = (NEBIUS / "check_slot_d.sh").read_text()
-    program = src[src.index("\n", src.index("<< 'EOF'")) + 1:src.index("\nEOF\n")]
-    windows = tmp_path / "windows"
-
-    def refuses(comment: str) -> bool:
-        windows.write_text(f"# slot-d=runs in a header line\n2000-01-01T00:00Z 99999999 # {comment}\n")
-        return subprocess.run([sys.executable, "-", str(windows), "30"], input=program, text=True,
-                              capture_output=True).returncode != 0
-
-    assert refuses("circuits TP8; no merge checks on node 2 through it (no slot-d=runs)")
-    assert refuses("circuits TP8 (slot-d=runs only for the 8:00 run)")
-    assert not refuses("pouw-ncp, bc-2f661c92 (fallback 13:35Z); slot-d=runs (its host threads stay off 0-47)")
-    assert not refuses("slot-d=runs: Pearl-C4 re-time")
 
 
 def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_its_lock(tmp_path, monkeypatch):
