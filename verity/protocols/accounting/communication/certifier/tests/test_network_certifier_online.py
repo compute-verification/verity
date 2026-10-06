@@ -1,6 +1,8 @@
-"""The online prover (`online`): each window's declaration reads only the frames ready by its first bucket, its summary
-of a past window is the least δ per ρ that would have met what it saw, and the rules declare what they say."""
+"""The online prover (`online`): each window's declaration reads only the frames ready by its first bucket less the
+lag, a snapshot of what it reads chooses the same anywhere, its summary of a past window is the least δ per ρ that
+would have met what it saw, and the rules declare what they say."""
 
+import pickle
 import random
 from fractions import Fraction
 
@@ -35,26 +37,49 @@ def split(frames: list[tuple[int, int, int]]) -> tuple[list[LogicalFrame], list[
     return [LogicalFrame(b"", a, i) for a, i, _ in frames], [r for _, _, r in frames]
 
 
-def declared(frames, rule: str, windows: int = 6) -> list[ClockSync]:
-    syncs, _ = online.declare([split(frames)], SIGMA, T, online.rule(rule), windows, ENVELOPE)
+def declared(frames, rule: str, windows: int = 6, lag: int = 0) -> list[ClockSync]:
+    syncs, _ = online.declare([split(frames)], SIGMA, T, online.rule(rule), windows, ENVELOPE, lag=lag)
     return syncs
 
 
+@pytest.mark.parametrize("lag", [0, 3])
 @pytest.mark.parametrize("rule", RULES)
-def test_no_declaration_reads_a_frame_ready_after_it(rule):
-    """Window w's sync is the same however the frames ready after w·T are redrawn: their ready buckets, their
-    anchors, how many there are. So no rule looks past its declaration."""
+def test_no_declaration_reads_a_frame_ready_after_it(rule, lag):
+    """Window w's sync is the same however the frames ready after w·T − lag are redrawn: their ready buckets, their
+    anchors, how many there are. So no rule looks past its declaration, less the lag."""
     rng = random.Random(1)
     for _ in range(40):
         frames = instance(rng)
-        want = declared(frames, rule)
+        want = declared(frames, rule, lag=lag)
         for w in range(6):
-            seen = [f for f in frames if f[2] <= w * T]
+            seen = [f for f in frames if f[2] <= w * T - lag]
             future = sorted((f for _ in range(rng.randint(0, 12))
-                             for f in session_frames(rng, rng.randrange(w * T, 6 * T), 8 * T)),
+                             for f in session_frames(rng, rng.randrange(max(0, w * T - lag), 6 * T), 8 * T)),
                             key=lambda f: (f[2], f[0], f[1]))
-            future = [(a, i, max(r, w * T + 1)) for a, i, r in future]
-            assert declared(seen + future, rule)[: w + 1] == want[: w + 1]
+            future = [(a, i, max(r, w * T - lag + 1)) for a, i, r in future]
+            assert declared(seen + future, rule, lag=lag)[: w + 1] == want[: w + 1]
+
+
+@pytest.mark.parametrize("rule", RULES)
+def test_a_snapshot_chooses_what_the_prover_does(rule):
+    """At each window, `snapshot()` holds only the frames ready by w·T − lag, and its choice, made after a pickle
+    round trip (as in the proxy's worker process), is the prover's own; `declare(sync)` declares a choice made so. The
+    lag is from 0 to T − 1 buckets."""
+    rng = random.Random(5)
+    for lag in (0, 1, 4, T - 1):
+        for _ in range(15):
+            frames = instance(rng)
+            prover = online.Prover(SIGMA, T, online.rule(rule), ENVELOPE, lag=lag)
+            for k, (f, r) in enumerate(zip(*split(frames), strict=True)):
+                prover.arrive(0, k, f, r)
+            for w in range(6):
+                snap = pickle.loads(pickle.dumps(prover.snapshot()))
+                assert snap.links[0].ready == [r for _, _, r in frames[: len(snap.links[0].ready)]]
+                assert all(r <= w * T - lag for r in snap.links[0].ready)
+                assert len(snap.links[0].ready) == len(frames) or frames[len(snap.links[0].ready)][2] > w * T - lag
+                assert prover.declare(snap.choose()) == declared(frames, rule, lag=lag)[w]
+    with pytest.raises(ValueError, match="lag"):
+        online.Prover(SIGMA, T, online.rule("last"), ENVELOPE, lag=T)
 
 
 class Recording:
