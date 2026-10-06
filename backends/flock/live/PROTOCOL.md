@@ -677,7 +677,12 @@ With `FC_GATE_TRANSCRIPT=DIR` (the CPU path only), each gated session also write
 `verity/firewall-transcript/v0` transcript, `DIR/session-<k>.json`, for the firewall's contract (`flock-firewall contract`):
 `gate_transcript.rs` reads the wire after the coin tree's check and the gate's candidates, and changes nothing the gate
 sends. Where the gate refuses, the transcript holds the refused candidate's items up to the first one the contract must
-refuse; where the prover stops, it ends where the prover did. `verifier/firewall_outer_agree.py` runs the contract on them.
+refuse; where the prover stops, it ends where the prover did. Beside it, `DIR/public-<k>.json` (`verity/firewall-public/v0`)
+is the public input the contract holds it to (`flock-firewall contract --public`): the relations the gate checks, the
+statement's values (the constants, the labels, the shapes), and the names of the values the gate fixes by its own
+computation (the recheck, the shadow opening, its own values; the skeleton's cap, whose bytes depend on the session, among
+them). The transcript carries no schedule or relations of its own. `verifier/firewall_outer_agree.py` runs the contract on
+them under one public input, the honest sessions', which every session's must agree with.
 
 The inner phase's controls are V*'s: `rec_inner.py forge --what top` (a clear top that does not open the salted one the coin
 server received) and `--what unsalted` (a record of clear tops), refused `GATE-REFUSED: tree top: …` by `rec_vstar`.
