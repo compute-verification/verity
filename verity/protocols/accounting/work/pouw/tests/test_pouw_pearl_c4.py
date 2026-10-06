@@ -1074,8 +1074,8 @@ def test_the_work_law_audits_pearl_c4_under_h3():
     splits = {9: W.Split(K)}
     records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())]
-    assert W.audit(s, epoch, prover, tr, splits, records, BEFORE, AFTER, 8).audit.accepted
-    h0 = W.audit(V.scheme("nvfp4", True), epoch, prover, tr, splits, records, BEFORE, AFTER, 8)
+    assert W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.accepted
+    h0 = W.audit(V.scheme("nvfp4", True), epoch, prover, tr, splits, records, E.challenger(), 8)
     assert not h0.audit.accepted and {v.reason for v in h0.audit.verdicts if not v.ok} == {"activation opening"}
 
 
