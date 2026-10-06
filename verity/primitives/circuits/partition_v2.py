@@ -70,15 +70,16 @@ predicates give that.  Instances of a Definition are laid out identically, so a 
 """
 from __future__ import annotations
 
-import bisect
 import hashlib
+from array import array
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from . import partition_object as PO
 from .codec import canonical_json
-from .cut import RECOMPUTE, CallGraph, QueryInapplicable, boundary_widths, check_cut, evaluate_definition, fits, separable
+from .cut import (RECOMPUTE, WIDE_FAN_IN, WIRING, CallGraph, QueryInapplicable, _wide_operands, boundary_widths, call_scope, check_cut,
+                  evaluate_definition, fits, separable)
 from .partition import RECOMPUTE_RULES, CutVerdict
 from .units import Activation, UnitCircuit
 
@@ -616,11 +617,15 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], program: Any) -> CutVerdic
             fail("units-canonical", [j, fn.id, en.units])
         if en.kind == PARTS:
             if _check_parts(j, en, fn, adv, G, fail) and p["recompute"] == "refuse":
-                # members are cut apart, so only a value two members compute crosses units, and only `refuse` refuses it: the
-                # rule on the whole body's graph, as `partition_object.verify` checks a Call (its memory grows with the body)
-                r = check_cut(G.graph(fn), _flat_owner(j, adv), None, None, p["recompute"])
-                if not r.ok:
-                    fail("cut", {"entry": j, "definition": fn.id, "codes": list(r.codes), "detail": r.detail})
+                # members are cut apart, so only a value two members compute crosses units, and only `refuse` refuses it
+                owner = _flat_owner(j, adv)
+                pairs, computing = _recomputed(fn)
+                across = [[a, b] for a, b in pairs if owner[a] != owner[b]] if len(owner) == computing else []
+                if len(owner) != computing:
+                    fail("entry-gates", [j, len(owner), computing])
+                elif across:
+                    fail("cut", {"entry": j, "definition": fn.id, "codes": ["gate-recomputed"],
+                                 "detail": {"gate-recomputed": {"n": len(across), "gates": across[:_MAX_LISTED]}}})
             continue
         g = G.graph(fn)
         if en.gates != g.n:
@@ -708,6 +713,74 @@ def _check_parts(j: int, en: Entry, fn: Any, adv: Advice, G: _Graphs, fail: Call
         fail("entry-gates", [j, en.gates, gates])
         ok = False
     return ok
+
+
+def _recomputed(fn: Any, wiring: frozenset[str] = WIRING) -> tuple[list[tuple[int, int]], int]:
+    """`cut.CallGraph(fn).recomputed` and `.n` in one pass over the gates, keeping only a token per gate and the computing keys:
+    the (gate, earlier gate) pairs, compact, by step 3 of `cut`'s algorithm, and the number of computing gates.  A key is its
+    primitive's index and its operands' tokens packed as bytes; a token is a fresh id >= 0 per new value, and -1 - g for the
+    input gate g, so equal tokens are equal values as `cut._Interner`'s are, with no table of the inputs (a Gemm's weights).  A separable body's graph holds every member's operands at once; this holds none of them, so a parts
+    entry over a vocabulary-wide Gemm is checked in its gates' time."""
+    c, call = call_scope(fn)
+    lo, n = call.offset, fn.gates
+    const, tok = bytearray(n), array("q", bytes(8 * n))
+    prims: dict[str, int] = {}
+    named: dict[bytes, int] = {}                   # a structure value's token
+    first: dict[bytes, int] = {}                   # computing key -> the first gate with it
+    out: list[tuple[int, int]] = []
+    idx = array("q", bytes(8 * n))
+    compact = fresh = 0
+
+    def name(key: bytes) -> int:
+        nonlocal fresh
+        t = named.get(key)
+        if t is None:
+            t = named[key] = fresh
+            fresh += 1
+        return t
+
+    for j in range(n):
+        g = c.gate(lo + j)
+        is_const = not g.prim.params
+        is_free = is_const or g.prim.id in wiring
+        wide = len(g.operands) > WIDE_FAN_IN
+        ext = wide
+        key = array("q", [prims.setdefault(g.prim.id, len(prims))])
+        operands = 0
+        all_const = True
+        for o in (_wide_operands(g, call) if wide else g.operands):
+            if 0 <= o - lo < n:
+                if o - lo >= j:
+                    raise QueryInapplicable(f"{fn.id}: gate {j} reads gate {o - lo}, not before it (the layout is not topological)",
+                                            {"definition": fn.id, "gate": j, "reads": o - lo, "why": "not topological"})
+                key.append(tok[o - lo])
+                all_const = all_const and bool(const[o - lo])
+                operands += 1
+            else:
+                ext = True
+                if not wide:
+                    key.append(-1 - o)
+                    all_const = False
+                    operands += 1
+        if not is_free and not ext and operands and all_const:
+            is_const = is_free = True
+        const[j] = is_const
+        k = key.tobytes()
+        if is_free:
+            tok[j] = name(k)
+            continue
+        idx[j] = compact
+        compact += 1
+        f = None if wide else first.get(k)
+        if f is not None:
+            out.append((idx[j], idx[f]))
+            tok[j] = tok[f]
+        else:
+            if not wide:
+                first[k] = j
+            tok[j] = fresh
+            fresh += 1
+    return out, compact
 
 
 def _flat_owner(j: int, adv: Advice) -> list[int]:

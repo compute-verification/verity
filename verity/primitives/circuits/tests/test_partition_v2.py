@@ -16,7 +16,7 @@ import pytest
 import test_partition_object as T1
 import test_template_instance as TT
 
-from verity.primitives.circuits import codec, partition_object as PO, partition_v2 as V
+from verity.primitives.circuits import codec, cut, partition_object as PO, partition_v2 as V
 from verity.primitives.circuits.defs import REGISTRY
 from verity.primitives.circuits.evaluate import evaluate_region
 from verity.primitives.circuits.program import Program
@@ -292,6 +292,35 @@ def test_a_value_two_members_compute_is_v1s_verdict():
         v = V.check(st, rs, P)
         assert v.ok == ok == PO.verify(PO.build(P, PO.query(version=version)), P).ok
         assert ok or v.detail["cut"]["gates"][0]["codes"] == ["gate-recomputed"]
+
+
+def _definitions(fn, out):
+    if fn.id not in out:
+        out[fn.id] = fn
+        for node in getattr(getattr(fn, "body", None), "nodes", ()):
+            if getattr(node, "fn", None) is not None:
+                _definitions(node.fn, out)
+    return out
+
+
+def test_the_one_pass_recompute_pairs_are_the_graphs():
+    """`_recomputed`, which a parts entry's recompute rule uses instead of the body's `cut.CallGraph`, gives the graph's pairs and
+    computing-gate count on every Definition of the pinned programs: wiring, structure, wide fan-in, scans, batches, recomputes."""
+    import test_qword_vectors as TQ
+    defs: dict = {}
+    for P in [*TQ.PROGRAMS.values(), *TT.PROGRAMS.values(), Program(T1.Top), Program(T1._c("VTop2", (("a", T1.Array(2, T1.I32)),),
+                                                                                              T1.Tuple(T1.I32, T1.I32), lambda B, S, a: B.call(_twice(), a)))]:
+        for _k, fn in PO.calls(P):
+            _definitions(fn, defs)
+    checked = 0
+    for fn in defs.values():
+        try:
+            g = cut.CallGraph(fn)
+        except cut.QueryInapplicable:
+            continue
+        assert V._recomputed(fn) == ([tuple(p) for p in g.recomputed], g.n), fn.id
+        checked += 1
+    assert checked >= 30 and any(V._recomputed(fn)[0] for fn in defs.values())
 
 
 def _twice():
