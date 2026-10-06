@@ -1,5 +1,5 @@
 """Every verifier in this suite runs on an injected clock (AGENTS.md "Tests"). `tests/test_no_wall_clock.py` scans for
-clock reads in test source, and cannot see a `TimedVerifier` or `ContinuousVerifier` left on its default
+clock reads in test source, and cannot see a `TimedVerifier`, `ContinuousVerifier` or `MemoryChallenger` left on its default
 `time.perf_counter_ns`; such a test passes or fails with the load on `check`'s slot. Here the default clock fails the
 test that reads it, every time."""
 
@@ -11,6 +11,7 @@ import pytest
 
 from verity.protocols.accounting.space.pous.audit import TimedVerifier
 from verity.protocols.accounting.space.pous.continuous import ContinuousVerifier
+from verity.protocols.accounting.space.pous.memory_challenger import MemoryChallenger
 
 
 def _wall_clock() -> int:
@@ -19,7 +20,7 @@ def _wall_clock() -> int:
 
 @pytest.fixture(autouse=True)
 def _no_default_clock(monkeypatch):
-    for cls in (TimedVerifier, ContinuousVerifier):
+    for cls in (TimedVerifier, ContinuousVerifier, MemoryChallenger):
         init = cls.__init__
         if inspect.signature(init).parameters["clock"].kind is inspect.Parameter.KEYWORD_ONLY:
             monkeypatch.setattr(init, "__kwdefaults__", {**init.__kwdefaults__, "clock": _wall_clock})

@@ -57,6 +57,22 @@ v.run(protocol.responder(scheme, blocks.__getitem__))
 print(v.profile().statement())                                                 # Pous.SecurityProofs.BandMultiMeetsFamily
 ~~~
 
+On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device
+inside the node's isolation boundary. It commits its indices in a coin tree before the session, hashes each whole
+answer with SHA-512 after reading its receipt time, and signs the session's round records once. `verdict` checks a
+signed session in the clear and publishes only the verdict. Until S1's signature scheme is registered
+(`memory_challenger.register`), it refuses every record:
+
+~~~python
+from verity.protocols.accounting.space.pous import memory_challenger as mc
+
+coins = mc.CoinTree.draw(challenger_secret, session_id, params.blocks, k)          # before the session
+c = mc.MemoryChallenger(coins, signer, limit_ns=500_000 + rtt, block_bytes=params.block_bytes)
+signed = c.run(blocks.__getitem__)                                                  # witness: never sent in the clear
+v = mc.verdict(signed, c.commitment, c.openings(), sha512_of_block, trusted={signer.public_key})
+print(v.public())                                                                   # {"accepted": ...}
+~~~
+
 Tests: `uv run pytest verity/protocols/accounting/space/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/protocols/accounting/space/pous/tests/pous_vectors.py`, and the Lean vectors with
 `tests/lean/generate.sh`.
