@@ -26,6 +26,8 @@ python tools/lean/audit.py --update PKG...        write the guarantees' records 
                                                   each record goes beside its reports, which a recorded run publishes)
 python tools/lean/audit.py --update --owner @lane PKG...   the same, with @lane as the owner of each new guarantee
 python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
+python tools/lean/audit.py --name-instances PKG...  write each anonymous instance's name, the one Lean gave it, into its
+                                                  declaration (no record changes)
 python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
@@ -57,6 +59,9 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
   imports change (run `--update`) or at a bump; checking it takes seconds;
 - each `layers` rule holds: the modules under a prefix import only the listed prefixes;
+- every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
+  (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
+  record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
 - the guarantees say what their records say, and each names its owner (below);
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
@@ -157,7 +162,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   spec of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency
   (the toolchain, Mathlib, ArkLib). A definition in a spec module must also be under `meaning`, or the record would hold
   nothing of it. `reads_exempt` lists, each with the reason, module prefixes a guarantee may read outside the spec (a
-  package whose statements are about its executable, not about a model of it); an entry that exempts nothing fails.
+  package whose statements are about its executable, not about a model of it), as an object {prefix: the reason}; an
+  entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`.
   The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
   package's (`unread_spec` in `report.json`).
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
