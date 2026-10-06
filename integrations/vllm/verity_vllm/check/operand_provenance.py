@@ -299,7 +299,8 @@ def _declared_regions(v: ViewDesc) -> list[tuple[int, int, int]]:
 
 
 def stream_and_schema_facts(log_path: str | Path, writes_by_event: dict[int, list[tuple[int, int, int]]]) -> tuple[dict, dict]:
-    """`writes_by_event`: event id -> [(alloc, byte lo, byte hi)] journaled writes.  Returns (streams, schema)."""
+    """`writes_by_event`: event id -> [(alloc, byte lo, byte hi)] regions of its journaled writes (`_declared_regions` of each
+    write's view, the rule the declared side uses).  Returns (streams, schema)."""
     streams: Counter = Counter()
     enters: dict[int, DispatchEnter] = {}
     parent: dict[int, int | None] = {}
@@ -402,11 +403,9 @@ def check(result, log_path: str | Path | None = None) -> dict:
         if acc["kind"] == "write" and acc["event"] is not None and acc["event"] >= 0:
             v = acc["view"]
             rows = acc.get("rows")
-            if rows is None:
-                lo, hi = byte_extent(v); writes_by_event.setdefault(acc["event"], []).append((v.alloc, lo, hi))
-            else:
-                for r in rows:
-                    rv = row_view(v, r); lo, hi = byte_extent(rv); writes_by_event.setdefault(acc["event"], []).append((rv.alloc, lo, hi))
+            # A journaled write is listed by the declared side's own rule: a strided write's byte extent spans its holes.
+            for u in ([v] if rows is None else [row_view(v, r) for r in rows]):
+                writes_by_event.setdefault(acc["event"], []).extend(_declared_regions(u))
     rep: dict[str, Any] = {"reads": ck.reads, "writes": ck.writes, "accesses": dict(ck.by_kind), "n_mismatch": ck.n_mismatch,
                            "uncovered": ck.uncovered, "mismatches": ck.mismatches, "instances": len(result.instances)}
     fails = []
