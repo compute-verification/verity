@@ -1491,7 +1491,9 @@ needs none. `Tags.withPlainLeaves` changes three things.
   inner statement: the gateway commits every tree top under a salt, ZK off"}`.
 - The identity's `leaf_scheme` is that object, and its `hashes.merkle` is `"sha512 (every Ligerito level)"`, as upstream's
   `identity` writes them for such a statement. Everything else is §16.13's identity, and on `--coins os` its live-OS form.
-- An opening carries no salt (`MerkleScheme.saltCount`), and every level's leaf and node are SHA-512 (`merkle_hash` 2).
+- Every opening carries an empty `opened_salts`, as every opening of PR #83's prover does from `2908d078` on
+  (`Setup.openedSalts`, set on every hm96-row statement); `631567f7`'s unsalted openings carry none. Every level's leaf and
+  node are SHA-512 (`merkle_hash` 2).
 
 The statement is ZK off: `verify --zk` refuses any statement whose leaf scheme is that object (`Tags.plainLeaves`), as
 upstream's `--zk` does.
