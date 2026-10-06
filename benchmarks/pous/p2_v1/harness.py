@@ -1,6 +1,12 @@
-"""P2 v1's arm of the POUS-only harness (`bench.py --impl p2-v1-gpu`): the frozen v1 scheme (`reference.py`) with its GPU
-kernels (`p2v1.cu`, `gpu.py`) on one device, the same steps, controls and metrics as the band's arm (`band_gpu/harness.py`), so
-the two compare side by side.
+"""P2's arm of the POUS-only harness (`bench.py --impl p2-v1-gpu | p2-v3-gpu`): P2 with its GPU kernels (`p2v1.cu`, `gpu.py`)
+on one device, the same steps, controls and metrics as the band's arm (`band_gpu/harness.py`), so the two compare side by side.
+The kernels take a setup's key prefix, so one arm runs either framing:
+
+- `V1` (`p2-v1-gpu`): the frozen v1 spec as `reference.py` states it, audited by `live.py`'s own loop.
+- `V3` (`p2-16448/v3`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
+  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.Verifier` through `band_gpu/live.py --strict`, which
+  refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
+  with v3's own codec back to `W`'s, when that segment is wholly encoded.
 
 1. **Kernel gates.** The pinned vector of the width (`vectors.json`, the P2 kit's): its keys expanded on the device, its `m`
    encoded and its `c` decoded, all bit-exact. Then the run's own blocks: the encoded ones decode back to their payloads (the
@@ -53,14 +59,100 @@ RECOMPUTE_EVERY = 10
 """The recompute control drops one block in this many; P2's blocks are independent, so any pattern keeps what a block needs."""
 
 
+class V1:
+    """The frozen spec's framing (`reference.py`): its commitment to `W`, 32-byte setup salt, key prefix (which frames the
+    commitment and that salt) and leaves, audited by `p2_v1/live.py`'s own loop (mode 0's challenge derivation)."""
+
+    impl, scheme, live = "p2-v1-gpu", R.PROTOCOL, LIVE
+    verifier_args: tuple[str, ...] = ()
+
+    def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
+        self.P = P
+        self.model = R.w_commitment(P, w_host)
+        self.salt = R.setup_salt(SETUP_SOURCE, P, self.model)
+        self.prefix = R.expand_prefix(self.salt, P, self.model)
+
+    def manifest(self) -> dict[str, Any]:
+        return self.P.manifest()
+
+    def keys(self, i: int) -> tuple[int, int]:
+        k, t, _ = R.keys_after(self.prefix, self.P, *divmod(i, self.P.blocks_per_segment))
+        return k, t
+
+    def leaf(self, i: int, block: bytes) -> bytes:
+        return R.leaf(self.salt, *divmod(i, self.P.blocks_per_segment), block)
+
+    def ready(self) -> dict[str, Any]:
+        return {"salt": self.salt.hex(), "model": self.model.hex(), "manifest": self.P.manifest(),
+                "payload_bytes": self.P.payload_bytes}
+
+    def codec_gate(self, c_host: bytes, w_host: bytes, encoded: int) -> dict[str, Any] | None:
+        return None
+
+
+class V3(V1):
+    """`p2-16448/v3` (`verity.protocols.accounting.space.pous.schemes.p2`): `protocol.commit`'s commitment to `W` under v3's
+    manifest, `protocol.draw_salt`'s 24-byte salt, v3's key prefix (which frames that salt and no commitment) and `vk`'s
+    leaves, audited by `protocol.Verifier` (`band_gpu/live.py --strict`), which refuses any `k` or `Δ + RTT` the
+    certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
+    the gaps."""
+
+    impl, live = "p2-v3-gpu", HERE.parent / "band_gpu" / "live.py"
+
+    def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
+        from verity.protocols.accounting.space.pous import protocol, schemes
+        from verity.protocols.accounting.space.pous.schemes import p2
+
+        self.P, self.p2 = P, p2
+        self.params = schemes.P2Params(P.w, P.c0, P.blocks_per_segment, P.segments)
+        if self.params.payload_bytes != P.payload_bytes:
+            raise ValueError(f"v3 carries {self.params.payload_bytes} payload bytes a block, not {P.payload_bytes}")
+        self.scheme_obj = schemes.P2(self.params)
+        self.scheme = self.scheme_obj.name
+        self.model = protocol.commit(self.scheme_obj, w_host)
+        self.salt = protocol.draw_salt(SETUP_SOURCE, self.model)
+        self.prefix = p2.expand_prefix(self.params, self.salt)
+        self.verifier_args = () if research else ("--strict",)
+
+    def manifest(self) -> dict[str, Any]:
+        return self.params.manifest()
+
+    def keys(self, i: int) -> tuple[int, int]:
+        return self.p2.block_keys(self.params, self.salt, *divmod(i, self.P.blocks_per_segment))
+
+    def leaf(self, i: int, block: bytes) -> bytes:
+        from verity.protocols.accounting.space.pous.verifier import leaf_hash
+        return leaf_hash(self.params, self.salt, i, block)
+
+    def ready(self) -> dict[str, Any]:
+        return {"salt": self.salt.hex(), "scheme": self.scheme, "params": self.params.manifest()}
+
+    def codec_gate(self, c_host: bytes, w_host: bytes, encoded: int) -> dict[str, Any] | None:
+        """Segment 0 of `C`, as the device encoded it, decoded by v3's own codec (`P2.decode_segment`) to segment 0 of `W`:
+        decoding is a bijection, so `C`'s first segment is exactly v3's encoding of `W`'s.  None (no gate) when segment 0 is
+        not wholly encoded."""
+        bps, nb, seg = self.P.blocks_per_segment, self.P.width_bytes, self.params.segment_bytes
+        if encoded < bps:
+            return None
+        blocks = [c_host[i * nb:(i + 1) * nb] for i in range(bps)]
+        try:
+            ok = self.scheme_obj.decode_segment(self.salt, 0, blocks) == w_host[:seg]
+        except ValueError as e:
+            return {"passed": False, "segment": 0, "reason": str(e)}
+        return {"passed": ok, "segment": 0, "codec": self.params.codec.name}
+
+
+FRAMINGS = {f.impl: f for f in (V1, V3)}
+
+
 @dataclass
 class Backend:
-    """What P2 v1's arm computes with: `bind(params, salt, model)` gives the kernels of one setup (`keys(first, count)`,
-    `encode(m_rows, first)`, `decode(c_rows, first)`, `raised()`) on `[n, W/8]` big-endian rows; `responder`, `timer`,
-    `graphed`, `copy_bw`, `clock_mhz` and `facts` as the band's `Backend`."""
+    """What P2's arm computes with: `bind(params, prefix)` gives the kernels of one setup's key prefix (`keys(first,
+    count)`, `encode(m_rows, first)`, `decode(c_rows, first)`, `raised()`) on `[n, W/8]` big-endian rows; `responder`,
+    `timer`, `graphed`, `copy_bw`, `clock_mhz` and `facts` as the band's `Backend`."""
 
     device: Any
-    bind: Callable[[R.Params, bytes, bytes], Any]
+    bind: Callable[[R.Params, bytes], Any]
     responder: Callable[[Any, int | None], Any]
     timer: Callable[[Callable[[], Any]], float]
     graphed: Callable[[Callable[[], Any]], Callable[[], Any]] | None = None
@@ -110,7 +202,7 @@ def gpu(lib_dir: str, build_dir: str) -> Backend:
                 "cuda": torch.version.cuda, "nvcc": H._nvcc_version()}
 
     smi_id = H.device_uuid(device.index)
-    return Backend(device, lambda params, salt, model: Kernels(lib_dir, build_dir, params, salt, model), responder, timer,
+    return Backend(device, lambda params, prefix: Kernels(lib_dir, build_dir, params, prefix), responder, timer,
                    graphed, copy_bw, lambda: H._sm_clock_mhz(smi_id), facts)
 
 
@@ -126,7 +218,7 @@ def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | No
     if v is None:
         return {"passed": False, "reason": f"no pinned vector at w = {params.w}, c0 = {params.c0}"}
     salt, model = bytes.fromhex(v["setup_salt"]), bytes.fromhex(v["model_commitment"])
-    bound = backend.bind(params, salt, model)
+    bound = backend.bind(params, R.expand_prefix(salt, params, model))
     first = int(v["segment"]) * params.blocks_per_segment + int(v["block"])
     k, t = bound.keys(first, 1)
     nb = params.width_bytes
@@ -145,13 +237,14 @@ def picks(encoded: int, blocks: int, extra: int = 8) -> list[int]:
     return sorted(i for i in out if 0 <= i < blocks)
 
 
-def reference_gate(bound: Any, params: R.Params, salt: bytes, model: bytes, c_host: bytes, m_dev: Any,
+def reference_gate(bound: Any, params: R.Params, keys: Callable[[int], tuple[int, int]], c_host: bytes, m_dev: Any,
                    chosen: list[int]) -> dict[str, Any]:
-    """`chosen` blocks of `C`, decoded on the device, equal to the reference's decode under the reference's keys."""
-    nb, bps = params.width_bytes, params.blocks_per_segment
+    """`chosen` blocks of `C`, decoded on the device, equal to the reference's decode under the framing's reference keys
+    (`keys(i)`)."""
+    nb = params.width_bytes
     equal, keys_equal = [], []
     for i in chosen:
-        k, t, _ = R.keys(salt, params, model, i // bps, i % bps)
+        k, t = keys(i)
         want = R.decode(params, int.from_bytes(c_host[i * nb:(i + 1) * nb], "big"), k, t).to_bytes(nb, "big")
         equal.append(bytes(m_dev[i].cpu().numpy()) == want)
         dk, dt = bound.keys(i, 1)
@@ -164,9 +257,14 @@ def payload_bytes(m: Any, params: R.Params, used: int) -> Any:
     return m[:, params.width_bytes - params.payload_bytes:].reshape(-1)[:used]
 
 
-def profile(k: int, limit_ns: int, gaps: tuple[str, ...]) -> dict[str, Any]:
-    return {"scheme": R.PROTOCOL, "k": k, "limit_ns": limit_ns, "rho": "18/19", "error": "1% + 2^-128", "pins": list(PINS),
-            "assumptions": list(ASSUMPTIONS), "gaps": list(gaps), "certified": False,
+def profile(k: int, limit_ns: int, gaps: tuple[str, ...], scheme: str = R.PROTOCOL,
+            storage: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The run's profile; `storage` is `protocol.Verifier`'s `StorageProfile` of the audit of record (v3), whose
+    `certified` it reports alongside the arm's own gaps."""
+    return {"scheme": scheme, "k": k, "limit_ns": limit_ns, "rho": "18/19", "error": "1% + 2^-128", "pins": list(PINS),
+            "assumptions": list(ASSUMPTIONS), "gaps": list(gaps),
+            "certified": bool(storage and storage.get("certified")) and not gaps,
+            **({"storage_profile": storage} if storage is not None else {}),
             "experimental": "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted (spec §10.8)"}
 
 
@@ -215,16 +313,18 @@ def seqroot_block(dropped: list[int]) -> int:
 
 
 def _failed(gates: dict[str, Any], facts: dict[str, Any], P: R.Params, segments: int, total: int, used: int,
-            commit: str | None) -> dict[str, Any]:
-    return {"implementation": {"name": "p2-v1-gpu", "commit": commit, "harness": "benchmarks/pous/p2_v1/harness.py"},
+            commit: str | None, impl: str) -> dict[str, Any]:
+    return {"implementation": {"name": impl, "commit": commit, "harness": "benchmarks/pous/p2_v1/harness.py"},
             "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": P.blocks, "weight_bytes": used,
             "gates": gates, "metrics": None, "profile": None, "measurements": [], "stopped": H.stopped_reason(gates)}
 
 
-def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int, int, int], bytes],
-        backend: Backend | None = None, params: R.Params | None = None, vectors: dict[str, Any] | None = None) -> dict[str, Any]:
-    """One run of P2 v1's arm.  `backend`, `params` and `vectors` replace the GPU kernels, the deployment point and the pinned
-    vectors (the CPU tests)."""
+def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int, int, int], bytes], framing: type[V1] = V1,
+        backend: Backend | None = None, params: R.Params | None = None, vectors: dict[str, Any] | None = None,
+        research: bool = False) -> dict[str, Any]:
+    """One run of P2's arm under `framing` (`V1`, the frozen spec's, or `V3`, `p2-16448/v3`'s).  `backend`, `params` and
+    `vectors` replace the GPU kernels, the deployment point and the pinned vectors, and `research` lets `V3`'s verifier audit
+    where P2 has no certificate (the CPU tests)."""
     import torch
 
     base = params or R.DEPLOYMENT
@@ -239,9 +339,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     gates: dict[str, Any] = {"vector": vector_gate(backend, base, vectors)}
 
     w_host = b"".join(w_segment(ws["id"], s, bps * payload, used) for s in range(segments))
-    model = R.w_commitment(P, w_host)
-    salt = R.setup_salt(SETUP_SOURCE, P, model)
-    bound = backend.bind(P, salt, model)
+    fr = framing(P, w_host, research)
+    bound = backend.bind(P, fr.prefix)
     pad = nb - payload
     m_dev = torch.zeros(blocks, nb, dtype=torch.uint8, device=backend.device)
     m_dev[:, pad:] = torch.frombuffer(bytearray(w_host), dtype=torch.uint8).to(backend.device).view(blocks, payload)
@@ -257,11 +356,14 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     gates["round_trip"] = {"passed": bool(torch.equal(bound.decode(c[:encoded].contiguous(), 0), m_dev[:encoded])),
                            "blocks": encoded}
     c_host = c.cpu().numpy().tobytes()
-    gates["reference_decode"] = reference_gate(bound, P, salt, model, c_host, bound.decode(c, 0), picks(encoded, blocks))
+    gates["reference_decode"] = reference_gate(bound, P, fr.keys, c_host, bound.decode(c, 0), picks(encoded, blocks))
     gates["kernel_flags"] = {"passed": bound.raised() == 0}
+    codec = fr.codec_gate(c_host, w_host, encoded)
+    if codec is not None:
+        gates["codec"] = codec
     if not all(g["passed"] for g in gates.values()) or getattr(a, "gates_only", False):
         facts["after"] = backend.facts()
-        return _failed(gates, facts, P, segments, total, used, a.impl_commit)
+        return _failed(gates, facts, P, segments, total, used, a.impl_commit, fr.impl)
 
     tokens = [int(t) for t in a.tokens.split(",") if t]
     pl = H.placements(ws["tensors"], used)
@@ -294,11 +396,12 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     dropped = list(range(0, blocks, RECOMPUTE_EVERY))
 
     def result(metrics: dict[str, Any], rows_: list[tuple[str, Any, str]], prof: dict[str, Any] | None) -> dict[str, Any]:
-        return {"implementation": {"name": "p2-v1-gpu", "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
-                                   "kernels": "p2v1.cu: p2dec.cu's tuned decode with v1 keys expanded by pous_native.shake256_rows; "
-                                              "encode by an addition-chain root on CGBN's generic squaring"},
+        return {"implementation": {"name": fr.impl, "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
+                                   "kernels": f"p2v1.cu: p2dec.cu's tuned decode with {fr.scheme} keys expanded by "
+                                              "pous_native.shake256_rows; encode by an addition-chain root on CGBN's generic squaring",
+                                   "verifier": str(fr.live.relative_to(HERE.parent)), "verifier_args": list(fr.verifier_args)},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
-                "setup": {"manifest": P.manifest(), "w_commitment": model.hex(), "salt": salt.hex()},
+                "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex()},
                 **({} if a.audits else H.UNTIMED), "gates": gates, "metrics": metrics, "profile": prof,
                 "measurements": [{"name": n, "value": v, "unit": u} for n, v, u in rows_ if v is not None]}
 
@@ -317,18 +420,18 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
         return result(metrics, rows_, None)
 
     leaves = out / "leaves-p2.bin"
-    leaves.write_bytes(b"".join(R.leaf(salt, i // bps, i % bps, c_host[i * nb:(i + 1) * nb]) for i in range(blocks)))
-    fields = {"salt": salt.hex(), "model": model.hex(), "manifest": P.manifest(), "payload_bytes": payload}
+    leaves.write_bytes(b"".join(fr.leaf(i, c_host[i * nb:(i + 1) * nb]) for i in range(blocks)))
+    fields, live, extra = fr.ready(), fr.live, list(fr.verifier_args)
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None
-    cal = H.calibrate_limit(native_start, fields, LIVE, out, a, leaves, "p2-calibrate")
+    cal = H.calibrate_limit(native_start, fields, live, out, a, leaves, "p2-calibrate")
     limit = int(cal.get("limit_ns") or 0)
-    honest = H.audit_round(native_start, fields, LIVE, leaves, out, "p2-honest", a,
-                           (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync)
+    honest = H.audit_round(native_start, fields, live, leaves, out, "p2-honest", a,
+                           (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync, extra)
 
     def control(tag: str, answer: Callable[[int], tuple[bytes, int, int, int]]) -> dict[str, Any]:
         start = lambda: H.ControlResponder(nb, answer, real_delay=a.clock == "wall")  # noqa: E731
-        return H.audit_round(start, fields, LIVE, leaves, out, tag, a, None, limit)
+        return H.audit_round(start, fields, live, leaves, out, tag, a, None, limit, None, extra)
 
     value = control("p2-value", H.control_answers(c_host, nb, zero=set(range(0, blocks, 10))))
     late = control("p2-late", H.control_answers(c_host, nb, late_every=10, late_ns=limit + H.LATE_EXTRA_NS))
@@ -352,10 +455,17 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     gates["late_control"] = {"passed": late.get("audits_accepted") == 0 and late.get("late", 0) > 0 and late.get("wrong", 1) == 0,
                              "accepted": late.get("audits_accepted"), "late": late.get("late"), "wrong": late.get("wrong")}
     gates["recompute_control"] = H.recompute_gate(recompute)
-    point = {"k": k == R.K_AUDIT, "rtt_allowance": bool(honest.get("rtt_allowance_within_spec")),
+    allowance = honest.get("rtt_allowance_ns")
+    point = {"k": k == R.K_AUDIT, "rtt_allowance": allowance is not None and allowance <= R.MAX_RTT_ALLOWANCE_NS,
              "deadline": honest.get("deadline_ns") == R.DELTA_NS, "blocks": 1 << 8 <= blocks <= 1 << 23}
     gates["operating_point"] = {"passed": all(point.values()), **point}
     gaps = tuple(f"operating point: {name} is not the frozen value" for name, ok in point.items() if not ok)
+    if fr.verifier_args:
+        gates["certificate"] = {"passed": not honest.get("refused") and bool(honest.get("audits")),
+                                "refused": honest.get("refused"), "verifier_gaps": honest.get("gaps"),
+                                "note": "protocol.Verifier refuses any k or Δ + RTT the certificate does not cover; the "
+                                        "gaps it lists (such as W's segment count) are reported, not refused"}
+        gaps += tuple(honest.get("gaps") or ())
     deadline = {"limit_ns": limit, "limit_fixed_before_load": bool(honest.get("limit_fixed_before_load")),
                 "allowance_kind": honest.get("allowance_kind"), "rtt_allowance_ns": honest.get("rtt_allowance_ns"),
                 "honest_margin_min_s": (honest.get("margin_s") or {}).get("min"),
@@ -374,7 +484,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
               ("recompute_margin_max_s", recompute["device_margin_s"].get("max"), "s"),
               ("seqroot_root_s", seqroot["root_s"], "s")]
     rows_ += [("nvme_block_read_p99.9_s", nvme["block_read_s"].get("p99.9"), "s")] if nvme else []
-    return result(metrics, rows_, profile(k, limit, gaps) if gates["timed_audit"]["passed"] else None)
+    return result(metrics, rows_, profile(k, limit, gaps, fr.scheme, honest.get("profile")) if gates["timed_audit"]["passed"]
+                  else None)
 
 
 def _encode_head(backend: Backend, bound: Any, m_dev: Any, encoded: int) -> tuple[float, Any]:
