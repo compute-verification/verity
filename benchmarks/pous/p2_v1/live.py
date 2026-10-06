@@ -22,7 +22,6 @@ when every audit accepted, 1 otherwise.
 from __future__ import annotations
 
 import argparse
-import ctypes
 import gc
 import json
 import os
@@ -67,7 +66,6 @@ def audit(host: str, port: int, params: reference.Params, salt: bytes, model: by
     gc.collect()
     gc.freeze()
     gc.disable()
-    numa_exempt = exempt_from_numa_balancing()
     r = LiveResponder(host, port, params.width_bytes, clock)
     cpu_before = cgroup_cpu()
     records: list[dict[str, Any]] = []
@@ -109,26 +107,7 @@ def audit(host: str, port: int, params: reference.Params, salt: bytes, model: by
             "margin_s": quantiles([(limit - x["elapsed_ns"]) / 1e9 for x in answers]),
             "device_s": quantiles([x["device_ns"] / 1e9 for x in answers]),
             "server_s": quantiles([x["server_ns"] / 1e9 for x in answers]),
-            "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()}, "numa_balancing_exempt": numa_exempt, "records": records}
-
-
-SET_MEMPOLICY = {"x86_64": 238, "aarch64": 237}
-MPOL_LOCAL = 4
-
-
-def exempt_from_numa_balancing() -> bool:
-    """Put this thread under an explicit MPOL_LOCAL memory policy, which automatic NUMA balancing leaves alone: it scans only
-    memory whose policy allows migrate-on-fault (the default's), and the scan runs in the scanned task's own context, so on a
-    node with `kernel.numa_balancing=1` a verifier with the default policy stalls itself for 1-13 ms about once a second
-    (vy-nebius-2's quiet slice, the same seconds into every run's audits). Placement is unchanged: local, as before.
-    False where the syscall is unknown or refused (a container without CAP_SYS_NICE)."""
-    number = SET_MEMPOLICY.get(os.uname().machine)
-    if number is None or not sys.platform.startswith("linux"):
-        return False
-    try:
-        return ctypes.CDLL(None, use_errno=True).syscall(number, MPOL_LOCAL, None, 0) == 0
-    except (OSError, AttributeError):
-        return False
+            "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()}, "records": records}
 
 
 def main(argv: list[str] | None = None) -> int:
