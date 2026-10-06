@@ -155,8 +155,8 @@ named with each. A rule leaves this list in the change whose Lean states it.
   values captured from serving, whose link to the served root is provenance, not proof.
 - A served root's domain (`served_domain`, agreed with vllm-serving-commit) binds the program, the partition, the port,
   its schema, its leaf count and the run: the hex `domain_id` of `CommitmentDomain(B, -1, RangeIndexedDomain(0, leaves),
-  hash="sha512")`, `B` being the bytes of `identity_digest("verity/one-stage/served-domain/v0", {"program", "partition",
-  "port", "schema", "leaves", "run"})`.
+  hash="sha512")`, `B` being the 64 bytes of `identity_digest_sha512("verity/one-stage/served-domain/v1", {"program",
+  "partition", "port", "schema", "leaves", "run"})`.
 
 Pinned by `tests/test_one_stage.py` (`test_registration_v1_passes_r1_to_r6`, `test_registration_refusals`,
 `test_receipt_names_the_record`, `test_registration_holds_the_public_file`, `test_the_window_says_served_or_stand_in`,
@@ -175,7 +175,7 @@ only inside a proof (`one_stage.registered`).
   each leaf `word_bits / 16` words, low first, zero-padded to whole 64-word SHA-512 blocks, as a C-Flock port row and
   its `values` row are laid out; u16 LE, role x), with a 192-byte salt drawn once from the operating system and never
   used for another row. Its root is the frame-v3-sha512 root over the rows under `CommitmentDomain(B, -2,
-  RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes of `identity_digest("verity/one-stage/registered-domain/v0",
+  RangeIndexedDomain(0, rows), hash="sha512")`, `B` the 64 bytes of `identity_digest_sha512("verity/one-stage/registered-domain/v1",
   {"program", "value", "schema", "words", "leaves"})`, plus `"word_bits"` when it is not 16. The prover keeps the rows
   and salts.
 - `verity/registration/v2` is v1 with `"registered": [{"value", "root", "leaves", "words", "domain"}, ...]` (plus

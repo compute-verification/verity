@@ -9,8 +9,8 @@ SHA-512 blocks of 64 words, as a C-Flock port row and its `values` row are laid 
 16, n) || row)` over those `n` words u16 LE, a 192-byte salt `y` drawn from the operating system once, at registration,
 `b || c = hm96.SHA512.commit_string(default_key, x, y)`, and the frame-v3-sha512 leaf `row_leaf(D, r,
 hm96.SHA512.tree_leaf(default_key, b || c), "hm96-sha512/row/v1")`. The value's root is the frame-v3-sha512 root over its
-rows, under the domain `D` (`domain`): `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes
-of `identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})`, with
+rows, under the domain `D` (`domain`): `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512")`, `B` the 64
+bytes of `identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})`, with
 `"word_bits"` beside them when it is not 16 (16 is the default, so a 16-bit value's domain, entry and root are what they
 were before `word_bits`). The prover keeps the rows and salts; the registration names the root.
 
@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from verity.primitives.commitments import hm96
-from verity.primitives.commitments.identity import identity_digest
+from verity.primitives.commitments.identity import identity_digest_sha512
 from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.primitives.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, row_leaf, sha512_row_digest
@@ -37,7 +37,7 @@ from verity.primitives.circuits.program import Program
 
 from . import partition as P
 
-REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v0"
+REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v1"
 READS = "verity/registered-reads/v0"
 SCHEMA = SCHEMA_HM96_SHA512_ROW
 #: the default leaf width, which the domain and the entry name only by leaving `word_bits` out
@@ -64,9 +64,9 @@ def width_entry(word_bits: int) -> dict[str, int]:
 
 
 def domain(program: str, value: str, words: int, leaves: int, word_bits: int = WORD_BITS) -> CommitmentDomain:
-    binding = identity_digest(REGISTERED_DOMAIN, {"program": program, "value": value, "schema": SCHEMA, "words": int(words),
-                                                  "leaves": int(leaves), **width_entry(word_bits)})
-    return CommitmentDomain(bytes.fromhex(binding), OWNER, RangeIndexedDomain(0, int(leaves)), hash="sha512")
+    binding = identity_digest_sha512(REGISTERED_DOMAIN, {"program": program, "value": value, "schema": SCHEMA, "words": int(words),
+                                                         "leaves": int(leaves), **width_entry(word_bits)})
+    return CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, int(leaves)), hash="sha512")
 
 
 def row_words(row: Sequence[int], word_bits: int = WORD_BITS) -> list[int]:
