@@ -306,8 +306,8 @@ def _value_bits(v: bytes) -> list[int]:
 def arguments(params: R.Params, public: bytes, message: bytes, sig: R.Signature) -> tuple[list[int], ...]:
     """``LmsVerify_v1{N, W, H}``'s seven arguments, each a flat list of bits in leaf order."""
     n = params.N
-    if len(public) != 16 + n or len(message) != R.MESSAGE_BYTES or len(sig.C) != n:
-        raise ValueError(f"a public key is {16 + n} bytes, the message {R.MESSAGE_BYTES} and C {n}")
+    if len(public) != 16 + n or len(message) != 64 or len(sig.C) != n:
+        raise ValueError(f"a public key is {16 + n} bytes, the message 64 and C {n}")
     if len(sig.y) != params.P or len(sig.path) != params.H or not 0 <= sig.q < 2 ** params.H:
         raise ValueError(f"a signature for {params} has P = {params.P} chain values, H path nodes and q below 2^H")
     return (_value_bits(public[:16]), _value_bits(public[16:]), _value_bits(message), [(sig.q >> b) & 1 for b in range(params.H)],
