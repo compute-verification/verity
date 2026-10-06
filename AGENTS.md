@@ -160,7 +160,8 @@ A test that adds more than about a minute to `check` says in its docstring what 
 
 Any change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) must pass
 `circuit-check` (`uv run circuit-check <definition|template|row>`); include its report in the PR. A new Definition needs a
-small binding in `circuit_check.targets`, which the suite enforces.
+small binding in its module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`; `circuit_check.sidecars`),
+which the suite enforces.
 
 ## Checking and merging
 
