@@ -8,9 +8,10 @@ import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 event's "wrong" `wrongRegZ` at the prover's registration in place of `Partition.wrong`, at the same bound: a unit counts
 as wrong unless it is correct in the committed transcript and one opening per commit string makes the key program's
 evaluation on the committed inputs, on every committed wire the unit reads or computes, the bit of an opening of that
-wire's registered commit string. Under hidden outputs every row, input or output, is bound to the public file's `b ‖ c`
-(an `hm96` commitment to the row's bytes under a 192-byte salt), so at a unit that is not wrong the program's output on
-the committed inputs opens the public file's commitments to the hidden outputs.
+wire's registered commit string. Under hidden outputs every row, input or output, is registered under the public file's
+`b ‖ c` (an `hm96` commitment to the row's bytes under a 192-byte salt). `hm96` hides, so an opening to essentially
+every value exists at every row, and the opening half adds essentially nothing to correctness in the committed
+transcript.
 
 * `rsZHJ_wrongRegZ`: the registered commit strings are the public file's (`keyLayoutH`'s population is `fun _ => pub`),
   so `wrongRegZ` is one set at every registration.

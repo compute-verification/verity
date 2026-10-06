@@ -24,7 +24,7 @@ open scoped ENNReal
 open Classical in
 /-- **C-Flock's one-stage audit, end to end, under hidden outputs.** As in `EndToEnd`, over a statement whose outputs
 are hidden: the circuit and public file are `HmOut`'s, each table is `Stmt.setupHidden`'s, and every row, input or
-output, is bound to the public file's `b ‖ c`, an `hm96` commitment to the row's bytes under a 192-byte salt
+output, is registered under the public file's `b ‖ c`, an `hm96` commitment to the row's bytes under a 192-byte salt
 (`rsZHJ_wrongRegZ`). The prover registers `R`; the verifier draws a uniform `kd`-subset of the `n` proof units from its
 operating system's bytes (`Law.execOS` on the byte source `src`); one `--zk` session of `J = nTab I` tables proves the
 drawn units, `kd / J` in each; and `flock-verify verify --zk --session-tables J` reads the session's record. Then for
@@ -34,10 +34,12 @@ $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong
 * a unit wrong (`wrongRegZ`) unless it is right against the public file: in the committed transcript fixed at
   registration (`XplurZC`) its committed outputs are its gates applied to its committed inputs, and one opening per
   commit string of the public file's commitments carries, on each of its committed wires, the key program's evaluation
-  on the committed inputs. So at a unit that is not wrong, the program's output on the committed inputs opens the
-  public file's commitments to the hidden outputs, and the committed inputs open the public `b ‖ c` of the input rows.
-  The units are those of the key program of the circuit the verifier parses (`keyProg c hU n`, partitioned at
-  `Layout.outsOf`), each read at its `--zk` site in the hidden-output table it is drawn into (`placeZHJ`);
+  on the committed inputs. That second half binds no row: `hm96` hides (under `hash-derived-key` an honest `b ‖ c` has
+  an opening to any fixed row value except with probability `2^-192` over its salt), so at every row, input or hidden
+  output, the opening conjunct adds essentially nothing to correctness in `XplurZC`. That the committed inputs and the
+  program's outputs on them are the rows the public file commits is not stated here. The units are those of the key
+  program of the circuit the verifier parses (`keyProg c hU n`, partitioned at `Layout.outsOf`), each read at its
+  `--zk` site in the hidden-output table it is drawn into (`placeZHJ`);
 * `ε_ks = ksAvgStrictZ` and `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in `EndToEnd`.
 
 Its named assumptions, each a hypothesis, are `EndToEnd`'s:

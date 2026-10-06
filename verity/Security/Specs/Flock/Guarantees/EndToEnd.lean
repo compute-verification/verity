@@ -33,10 +33,13 @@ $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong
   its outputs, the program's output on them). The commitments are the public file's (`rsZJ_wrongRegZ`): at a row its
   `b ‖ c`, an `hm96` commitment to the row's bytes under a 192-byte salt; elsewhere the SHA-512 leaf of the public
   output word's bits, or of the constant `1` or `0`. So at a unit that is not wrong, the program's output on the
-  committed inputs is the public output, up to a SHA-512 collision on its leaf, and the committed inputs open the
-  public `b ‖ c`. The units are those of the key program of the circuit the verifier parses (`keyProg c hU n`,
-  partitioned at `Layout.outsOf`), each read at its `--zk` site in the table it is drawn into and bound to the rows it
-  commits;
+  committed inputs is the public output and its constant columns hold their constants, each up to a SHA-512 collision
+  on its leaf. The committed inputs are bound to nothing, not even to the public file's rows: `hm96` hides (under
+  `hash-derived-key` an honest `b ‖ c` has an opening to any fixed row value except with probability `2^-192` over its
+  salt), so at the input rows the opening conjunct adds essentially nothing to correctness in `XplurZC`. That the
+  committed inputs are the data owner's bytes is not stated here. The units are those of the key program of the circuit
+  the verifier parses (`keyProg c hU n`, partitioned at `Layout.outsOf`), each read at its `--zk` site in the table it
+  is drawn into and bound to the rows it commits;
 * `ε_ks = ksAvgStrictZ`: the worst table's knowledge error, `ksStrictZ / (1 − N₀/(ek))`, averaged over the draw;
 * `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, `Q_s` the expected number of commit strings the drawn
   units read.

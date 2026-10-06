@@ -26,8 +26,8 @@ open scoped ENNReal
 open Classical in
 /-- **C-Flock's one-stage audit, end to end, with registered reads.** As in `EndToEndHidden`, for
 `flock-verify verify --zk --registered F --session-tables J` (`own` F's ports), over hidden outputs and a public file
-with or without shared-row tables. Every row is bound to the public file's `b ‖ c` (`rsZHJS_wrongRegZ`). Then for every
-live prover `τ`:
+with or without shared-row tables. Every row is registered under the public file's `b ‖ c` (`rsZHJS_wrongRegZ`). Then
+for every live prover `τ`:
 1. $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
    with "wrong" `EndToEndHidden`'s (`wrongRegZ`, against the public file, in the committed transcript fixed at
@@ -36,8 +36,10 @@ live prover `τ`:
    unit is drawn into (`OwnReadsHJ`) is checked at the outcome's registration (`Registered.Reads.Checked`): the SHA-512
    leaf of the public file's `b ‖ c` at the read row opens the root `own` holds, at the position `own` gives, through
    the path that table's drawn statement gives (`regPathsHJ`).
-So at a unit that is not wrong, the committed inputs open the public file's `b ‖ c` at its input rows, and at a read the
-verifier owns that `b ‖ c` is the one registered under F's root.
+The first conjunct binds no row: `hm96` hides, so the opening half of `wrongRegZ` adds essentially nothing to
+correctness in `XplurZC` (`EndToEndHidden`). The second says that at a read the verifier owns, the public file's
+`b ‖ c` is the one registered under F's root. That the committed values are the rows that `b ‖ c` commits is not
+stated here.
 
 Its named assumptions, each a hypothesis, are `EndToEnd`'s, for the first conjunct; the second reads only the
 executable's checks:
