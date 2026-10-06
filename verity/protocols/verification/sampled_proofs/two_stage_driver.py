@@ -10,7 +10,8 @@ replay units' boundaries, committed by serve time (phase `epoch` or `serve`, and
    Lean verifier's `Flock.Draw.drawWith` draws them (`two_stage.draw_first`), a work law with the verifier's closure.
 3. **Interiors** (`register_interiors`): the proved RUs' interiors, committed after the draw and registered before any
    proof, as one-stage's record over those RUs in ascending order. Unit i of the interior registration is RU
-   `ReplayDraw.proved[i]`, and all of its units are proved.
+   `ReplayDraw.proved[i]`, and all of its units are proved. A draw of no RUs has no interiors, and its proof goes to the
+   boundary registration alone, as a `Stream`'s empty draw does.
 4. **Proving** (`deliver`, `outcome`): one proof over the proved RUs, delivered once, and the audit's final outcome.
 
 Stage 2 checks every proof unit of a drawn RU, so there is no second draw, and Lean's `late_interior_insecure` (a
@@ -201,12 +202,12 @@ class TwoStageStream:
         """Step 3: the proved RUs' interiors, registered once, after the draw and before any proof. `record` is one-stage's
         record over `len(draw.proved)` units, the RUs in `draw.proved`'s order, under `All`. It is held to the
         interior values by its own Stream (`Stream.register`). Raises `Refused`: `interior-registered` for a second
-        one, `interior-population` when its population is not the proved RUs'."""
+        one, `interior-population` when its population is not the proved RUs' or no RU was drawn."""
         a = self._drawn_audit(draw)
         if a.interior is not None:
             raise _refuse("interior-registered", {"order": a.registration.order})
         n = record.get("population") if isinstance(record, Mapping) else None
-        if n != len(draw.proved):
+        if n != len(draw.proved) or not draw.proved:
             raise _refuse("interior-population", {"registered": n, "proved": len(draw.proved)})
         interiors = Stream(self.interior_spec, self.unit, budget=1, delta=self.delta, challenger=self.challenger,
                            clock=self._clock, sampler=lambda law, n: range(n))
@@ -216,16 +217,18 @@ class TwoStageStream:
 
     def deliver(self, draw: ReplayDraw, sessions: Sequence[str]) -> Outcome | None:
         """Step 4: the proof, delivered once to both registrations, after the interiors are registered (`interior`
-        otherwise). A proof after the boundary's proof deadline is `late`, returned at once; otherwise None."""
+        otherwise; to the boundary's alone when no RU was drawn). A proof after the boundary's proof deadline is `late`,
+        returned at once; otherwise None."""
         a = self._drawn_audit(draw)
-        if a.interior is None:
+        if a.interior is None and draw.proved:
             raise _refuse("interior", "the interiors are registered before any proof")
         late = self._boundary.deliver(draw.draw, sessions)
         a.sessions = list(sessions)
         if late is not None:
             return self._finish(a, late)
-        assert a.interiors is not None and a.interior_draw is not None
-        a.interiors.deliver(a.interior_draw, sessions)
+        if a.interiors is not None:
+            assert a.interior_draw is not None
+            a.interiors.deliver(a.interior_draw, sessions)
         return None
 
     def outcome(self, draw: ReplayDraw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
@@ -244,7 +247,11 @@ class TwoStageStream:
         if session_roots is not None:
             roots_i = {p: r for p, r in session_roots.items() if p in self._interior_names}
             roots_b = {p: r for p, r in session_roots.items() if p not in self._interior_names}
-        assert a.interiors is not None and a.interior_draw is not None
+        if a.interiors is None:
+            assert not draw.proved
+            return self._finish(a, self._boundary.outcome(draw.draw, verdicts, statement, session_roots=roots_b,
+                                                          session_registered=session_registered))
+        assert a.interior_draw is not None
         if a.interior_outcome is None:
             a.interior_outcome = a.interiors.outcome(a.interior_draw, verdicts, statement, session_roots=roots_i)
         interior = {"of_record": False, "accepted": a.interior_outcome.accepted, "sessions": list(a.sessions),

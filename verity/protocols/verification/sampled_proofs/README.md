@@ -449,7 +449,8 @@ challenger's side:
   draw and before any proof, under `All` in a Stream of its own (codes `interior-population` and
   `interior-registered`). `deliver` refuses a proof before the interiors (`interior`) and delivers it to both
   registrations. `outcome` runs the interior outcome, then the boundary outcome with the interior's as its verdict
-  `two-stage/interior` (not of record), giving each the `session_roots` of its own values.
+  `two-stage/interior` (not of record), giving each the `session_roots` of its own values. A draw of no RUs has no
+  interiors, and its proof goes to the boundary registration alone, as a Stream's empty draw does.
 - **What it decides.** The boundary Stream's outcome is the audit's: an accept exactly when both audits accept, a reject
   when either rejects, and `late` by the boundary's `proof_deadline` from the RU draw, which covers the replay, the
   interiors and the proof (the interior Stream has none). The driver's failures, budget and symbols are the boundary
@@ -473,7 +474,8 @@ the ok rows, `rowk`'s carries and the cap rows. A `work:K` first stage runs as w
 `test_each_step_waits_for_the_one_before`, `test_the_interiors_are_the_proved_replay_units_held_to_the_rule`,
 `test_a_work_first_stage_draws_with_the_verifiers_closure`, `test_a_wrong_interior_or_boundary_rejects_the_audit_once`,
 `test_the_driver_stops_at_its_budgeth_failure`, `test_no_retries_nothing_redraws_and_an_outcome_is_final`,
-`test_a_late_proof_or_missing_interiors_are_late`, `test_what_the_driver_refuses`,
+`test_a_late_proof_or_missing_interiors_are_late`,
+`test_a_draw_of_no_rus_has_no_interiors_and_its_proof_goes_to_the_boundary`, `test_what_the_driver_refuses`,
 `test_the_draw_is_the_verifiers_own_randomness`).
 
 ### Verification plans

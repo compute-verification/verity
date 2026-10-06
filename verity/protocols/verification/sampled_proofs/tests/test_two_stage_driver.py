@@ -296,6 +296,24 @@ def test_a_late_proof_or_missing_interiors_are_late():
     assert driver.outcome(draw, _lean(), {}).accepted and driver.symbols == ("late", "late", "accept")
 
 
+def test_a_draw_of_no_rus_has_no_interiors_and_its_proof_goes_to_the_boundary():
+    law = {"law": "bernoulli", "p": "0/1"}
+    driver = _driver(_spec(S.TwoStage(S.Law("bernoulli:0/1"), "all")))
+    reg = driver.register(_boundary(law=law), _ports(N, BOUNDARY))
+    draw = driver.select(reg)
+    assert draw.units == draw.proved == []
+    for record in (_interior(1), {**_interior(1), "population": 0}):
+        with pytest.raises(S.Refused) as e:
+            driver.register_interiors(draw, record, _ports(1, INTERIOR_VALUES))
+        assert e.value.verdict.codes == ("interior-population",)
+    assert driver.deliver(draw, [SESSION]) is None
+    out = driver.outcome(draw, _lean(), {}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR_VALUES)})
+    assert out.accepted and driver.symbols == ("accept",)
+    assert driver.records[0]["interior"] is None and driver.records[0]["replay_units"] == []
+    assert INTERIOR not in driver.boundary_records[0]["audit"]["verdicts"]
+    assert driver.register(_boundary(law=law, row=1, previous=reg.digest), _ports(N, BOUNDARY)).order == 1
+
+
 def test_what_the_driver_refuses():
     for selection in (S.Law("subset:3"), S.All(), S.TwoStage(S.Law("subset:3"), 1)):
         with pytest.raises(ValueError):
