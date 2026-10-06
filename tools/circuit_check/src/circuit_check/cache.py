@@ -95,7 +95,7 @@ not what the target is), nor one whose reads, digested again by the process that
 the entry would record (the tree changed during the run: a concurrent run rewrote it), nor one after a module was imported from
 outside the tree (another tree's copy, which no recorded read covers).
 
-Entries are files ``<dir>/<version>/<sha256 of the key>/<sha256 of the entry>.json``; there is no expiry and no path or time
+Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``; there is no expiry and no path or time
 shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
 """
 from __future__ import annotations
@@ -185,7 +185,7 @@ _MADE: dict[int, tuple[Any, frozenset[str]]] = {}
 
 
 def _sha_file(p: Path) -> str:
-    h = hashlib.sha256()
+    h = hashlib.sha512()
     with open(p, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
@@ -227,7 +227,7 @@ def _listing(root: Path, rel: str) -> str:
     names = sorted(os.listdir(root / rel))
     if (v := visible(root)) is not None:                # what a build or a run adds inside the tree is not an input
         names = [n for n in names if os.path.normpath(os.path.join(rel, n)) in v[0] | v[1]]
-    return hashlib.sha256("\0".join(names).encode()).hexdigest()
+    return hashlib.sha512("\0".join(names).encode()).hexdigest()
 
 
 def _rel(path: Any) -> str | None:
@@ -821,7 +821,7 @@ def _normalized(node: ast.AST) -> tuple[str, list[tuple[int, str, str | None]], 
 
     n = _Norm()
     out = n.visit(_commuted(copy.deepcopy(node)))
-    return hashlib.sha256(ast.dump(out, include_attributes=False).encode()).hexdigest(), n.sites, n.anchored
+    return hashlib.sha512(ast.dump(out, include_attributes=False).encode()).hexdigest(), n.sites, n.anchored
 
 
 _PARSED: dict[str, tuple[str, list, bool, bool]] = {}
@@ -838,7 +838,7 @@ def _parsed(p: Path) -> tuple[str, list, bool, bool]:
 
 
 def _parsed_bytes(data: bytes) -> tuple[str, list, bool, bool]:
-    h = hashlib.sha256(data).hexdigest()
+    h = hashlib.sha512(data).hexdigest()
     if h not in _PARSED:
         try:
             tree = ast.parse(data)
@@ -1106,7 +1106,7 @@ def _defined_at(p: Path, line: int) -> str:
     """The digest (`_normalized`) of the function, lambda or class definitions in source file ``p`` whose code starts at
     ``line`` (a decorated one at its first decorator), or the line itself when none does."""
     data = p.read_bytes()
-    h = hashlib.sha256(data).hexdigest()
+    h = hashlib.sha512(data).hexdigest()
     if h not in _TREES:
         try:
             _TREES[h] = ast.parse(data)
@@ -1119,7 +1119,7 @@ def _defined_at(p: Path, line: int) -> str:
         and min([n.lineno, *(d.lineno for d in getattr(n, "decorator_list", ()))]) == line]
     if not nodes:
         return f"line:{line}"
-    return hashlib.sha256("".join(_normalized(n)[0] for n in nodes).encode()).hexdigest()
+    return hashlib.sha512("".join(_normalized(n)[0] for n in nodes).encode()).hexdigest()
 
 
 def _kernels_now(key: str) -> str | None:
@@ -1133,7 +1133,7 @@ def _kernels_now(key: str) -> str | None:
     got = {k: {n: [kn.domain, kn.version, _where(kn.fn), _where(kn.sample)] for n, kn in sorted(dict.get(reg, k, {}).items())}
            for k in keys}
     got = {k: v for k, v in got.items() if v}
-    return hashlib.sha256(json.dumps(got, sort_keys=True).encode()).hexdigest() if got else None
+    return hashlib.sha512(json.dumps(got, sort_keys=True).encode()).hexdigest() if got else None
 
 
 # --- a binding file's units -------------------------------------------------------------------------------------------------
@@ -1257,7 +1257,7 @@ _UNITS: dict[str, tuple[dict[str, str], list, dict[str, list]]] = {}
 
 
 def _units_cached(text: str) -> tuple[dict[str, str], list, dict[str, list]]:
-    h = hashlib.sha256(text.encode()).hexdigest()
+    h = hashlib.sha512(text.encode()).hexdigest()
     if h not in _UNITS:
         _UNITS[h] = _units_of(text)
     return _UNITS[h]
@@ -1517,7 +1517,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
 def version() -> str:
     """The checker's own version: the digest of this package's sources, less `targets.py` and `pins.json` (each target holds
     its own parts of them)."""
-    h = hashlib.sha256()
+    h = hashlib.sha512()
     _INTERNAL.append(True)
     try:
         for p in sorted(_HERE.rglob("*")):
@@ -1541,7 +1541,7 @@ def key(request: dict) -> dict:
     dists = sorted(f"{d.metadata['Name']}=={d.version}" for d in metadata.distributions())
     return {"schema": SCHEMA, "version": version(), "request": request, "python": sys.version, "optimize": sys.flags.optimize,
             "platform": plat,
-            "distributions": hashlib.sha256("\n".join(dists).encode()).hexdigest(),
+            "distributions": hashlib.sha512("\n".join(dists).encode()).hexdigest(),
             "path": _path_entries(_ROOT[0]) if _ROOT else list(sys.path),
             "environment": {k: v for k, v in sorted(os.environ.items()) if k.startswith(("VERITY_", "CIRCUIT_CHECK_"))}}
 
@@ -1576,14 +1576,14 @@ def descriptor(fn: Any) -> str:
                 if isinstance(f, (PrimitiveDefinition, SpecializedDefinition)):
                     e = _OWN.get(id(f))
                     if e is None or e[0] is not f:
-                        e = _OWN[id(f)] = (f, hashlib.sha256(C.canonical_json(C.definition_entry(f))).hexdigest())
+                        e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(C.definition_entry(f))).hexdigest())
                     parts.append([C.descriptor_id(f), e[1]])
                 if isinstance(f, SpecializedDefinition):
                     stack.extend(n.fn for n in f.body.nodes)
                     stack.extend(statics(f.bindings))
         except Exception as e:  # noqa: BLE001  (its check raises too, and an errored check is never stored)
             return f"error:{type(e).__name__}"
-    return hashlib.sha256(json.dumps(sorted(parts)).encode()).hexdigest()
+    return hashlib.sha512(json.dumps(sorted(parts)).encode()).hexdigest()
 
 
 def _kind(p: Path) -> str | None:
@@ -1621,7 +1621,7 @@ def _pin(root: Path, r: str, seen) -> str | None:
     if kind not in pins:
         return None
     v = pins[kind] if k == "*" else pins[kind].get(k)
-    return None if v is None else hashlib.sha256(json.dumps(v, sort_keys=True).encode()).hexdigest()
+    return None if v is None else hashlib.sha512(json.dumps(v, sort_keys=True).encode()).hexdigest()
 
 
 def _digests(root: Path, got: dict[str, list[str]], fresh: bool = False) -> dict[str, dict[str, str | None]]:
@@ -1836,7 +1836,7 @@ _MEMO: dict[tuple[str, str, str], str | None] = {}
 
 
 def _dir(cache: Path, k: dict) -> Path:
-    return Path(cache) / k["version"] / hashlib.sha256(json.dumps(k, sort_keys=True, default=str).encode()).hexdigest()[:32]
+    return Path(cache) / k["version"] / hashlib.sha512(json.dumps(k, sort_keys=True, default=str).encode()).hexdigest()[:32]
 
 
 #: the reads that name modules, which a move renames, and those that name a sidecar by its module's
@@ -1895,7 +1895,7 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
         return None
     e = {"key": k, "reads": now, "report": report}
     body = json.dumps(e, sort_keys=True, separators=(",", ":"), default=str)
-    eid = hashlib.sha256(body.encode()).hexdigest()
+    eid = hashlib.sha512(body.encode()).hexdigest()
     d = _dir(cache, k)
     d.mkdir(parents=True, exist_ok=True)
     tmp = d / f".{eid}.tmp"
