@@ -7,8 +7,8 @@ import Proofs.Flock.Recursive.Defs
 drawn units is false]`, by four terms, given **reference openings** `ref ω p c`, one message for each commitment `c`
 sent after the draw `ω` and the transcript `p`:
 
-* `εo`, outer soundness: the outer session accepts but the witness decoded from the prover at its start (`dec`) does not
-  make the inner verifier accept its own statement and messages on the transcript's public coins;
+* `εo`, outer soundness: the outer session accepts but the witness decoded from the prover's strategy for it and its
+  output (`dec`) does not make the inner verifier accept its own statement and messages on the transcript's public coins;
 * `εP`, the circuit's binding: the decoded statement is not `x R ω`, the statement of the circuit registered behind
   `c_P` for the draw;
 * `εb k`, stage `k`'s binding: the decoded round-`k` message is not the reference opening of `c_k`;
@@ -88,22 +88,22 @@ variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
 
 /-- **Commit-and-prove composition, up to what the inner verifier reads.** `Acc R ω t b`: the outer session accepts with
 output `b` after the registration `R`, the draw `ω` and the round transcript `t`; `dec` decodes a witness from the
-prover's strategy for the outer session, with its statement `wstmt` and round messages `wmsg`. `same k ρs` relates two
+prover's strategy for the outer session and its output, with its statement `wstmt` and round messages `wmsg`. `same k ρs` relates two
 round-`k` messages the inner verifier can't tell apart at the coins `ρs` (`hsame`: its verdict doesn't change when each
 message is replaced by a related one), and stage `k`'s binding asks the decoded message only to be related to the
 reference opening. -/
 theorem commit_and_prove_upto (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
-    (dec : ∀ R ω t, Strategy (outer R ω t) → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
+    (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
     (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
     (hsame : ∀ y (ms ms' : List I.Msg) (ρs : List I.Coin), (∀ k < ρs.length, Option.Rel (same k ρs) ms[k]? ms'[k]?) →
       I.accepts y (ms.zip ρs) → I.accepts y (ms'.zip ρs))
     {εo εP εin : ℝ≥0∞} (εb : ℕ → ℝ≥0∞)
     (hout : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧
-      ¬ I.accepts (wstmt (dec σ.1 ω t s)) ((wmsg (dec σ.1 ω t s)).zip (t.map Prod.snd))) ≤ εo)
-    (hP : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s) ≠ x σ.1 ω) ≤ εP)
+      ¬ I.accepts (wstmt (dec σ.1 ω t s b)) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd))) ≤ εo)
+    (hP : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s b) ≠ x σ.1 ω) ≤ εP)
     (hb : ∀ k < I.r, probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
-      (wmsg (dec σ.1 ω t s))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) ≤ εb k)
+      (wmsg (dec σ.1 ω t s b))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) ≤ εb k)
     (hin : InnerSound I εin) :
     prob (fun o => Acc o.1 o.2.1 o.2.2.1 o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1)) (recGame L Reg I Cm outer) σ ≤
       εo + εP + ∑ k ∈ Finset.range I.r, εb k + εin := by
@@ -114,10 +114,10 @@ theorem commit_and_prove_upto (σ : Strategy (recGame L Reg I Cm outer))
   have hleaf : ∀ ω t (s : Strategy (outer σ.1 ω t)), t.length = I.r →
       prob (fun b => Acc σ.1 ω t b ∧ ¬ I.holds (x σ.1 ω)) (outer σ.1 ω t) s ≤
         prob (fun b => Acc σ.1 ω t b ∧
-          ¬ I.accepts (wstmt (dec σ.1 ω t s)) ((wmsg (dec σ.1 ω t s)).zip (t.map Prod.snd))) (outer σ.1 ω t) s +
-        prob (fun b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s) ≠ x σ.1 ω) (outer σ.1 ω t) s +
+          ¬ I.accepts (wstmt (dec σ.1 ω t s b)) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd))) (outer σ.1 ω t) s +
+        prob (fun b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s b) ≠ x σ.1 ω) (outer σ.1 ω t) s +
         ∑ k ∈ Finset.range I.r, prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
-          (wmsg (dec σ.1 ω t s))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) (outer σ.1 ω t) s +
+          (wmsg (dec σ.1 ω t s b))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) (outer σ.1 ω t) s +
         Z ω t := by
     intro ω t s ht
     refine prob_le_union _ _ _ _ _ _ _ _ fun b hb => ?_
@@ -147,21 +147,21 @@ theorem commit_and_prove_upto (σ : Strategy (recGame L Reg I Cm outer))
         (fun t s => prob (fun b => Acc σ.1 ω t b ∧ ¬ I.holds (x σ.1 ω)) (outer σ.1 ω t)
           (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω))
       ≤ avg fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
-          (fun t s => prob (fun b => Acc σ.1 ω t b ∧ ¬ I.accepts (wstmt (dec σ.1 ω t (Strategy.ofMap _ _ s)))
-              ((wmsg (dec σ.1 ω t (Strategy.ofMap _ _ s))).zip (t.map Prod.snd))) (outer σ.1 ω t)
+          (fun t s => prob (fun b => Acc σ.1 ω t b ∧ ¬ I.accepts (wstmt (dec σ.1 ω t (Strategy.ofMap _ _ s) b))
+              ((wmsg (dec σ.1 ω t (Strategy.ofMap _ _ s) b)).zip (t.map Prod.snd))) (outer σ.1 ω t)
               (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) +
-            prob (fun b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t (Strategy.ofMap _ _ s)) ≠ x σ.1 ω) (outer σ.1 ω t)
+            prob (fun b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t (Strategy.ofMap _ _ s) b) ≠ x σ.1 ω) (outer σ.1 ω t)
               (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) +
             ∑ k ∈ Finset.range I.r, prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
-              (wmsg (dec σ.1 ω t (Strategy.ofMap _ _ s)))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1))
+              (wmsg (dec σ.1 ω t (Strategy.ofMap _ _ s) b))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1))
               (outer σ.1 ω t) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) +
             Z ω t) (σ.2 ω) :=
         avg_mono fun ω => leafAvg_mono_len (fun t s ht => hleaf ω t _ ht) _
     _ = probAt σ (fun ω t s b => Acc σ.1 ω t b ∧
-          ¬ I.accepts (wstmt (dec σ.1 ω t s)) ((wmsg (dec σ.1 ω t s)).zip (t.map Prod.snd))) +
-        probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s) ≠ x σ.1 ω) +
+          ¬ I.accepts (wstmt (dec σ.1 ω t s b)) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd))) +
+        probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s b) ≠ x σ.1 ω) +
         ∑ k ∈ Finset.range I.r, probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
-          (wmsg (dec σ.1 ω t s))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) +
+          (wmsg (dec σ.1 ω t s b))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) +
         avg (fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
           (fun t _ => Z ω t) (σ.2 ω)) := by
         simp only [leafAvg_add, leafAvg_sum, avg_add, avg_finset_sum]
@@ -174,13 +174,13 @@ theorem commit_and_prove_upto (σ : Strategy (recGame L Reg I Cm outer))
 reference opening. -/
 theorem commit_and_prove (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
-    (dec : ∀ R ω t, Strategy (outer R ω t) → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
+    (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
     (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) {εo εP εin : ℝ≥0∞} (εb : ℕ → ℝ≥0∞)
     (hout : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧
-      ¬ I.accepts (wstmt (dec σ.1 ω t s)) ((wmsg (dec σ.1 ω t s)).zip (t.map Prod.snd))) ≤ εo)
-    (hP : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s) ≠ x σ.1 ω) ≤ εP)
+      ¬ I.accepts (wstmt (dec σ.1 ω t s b)) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd))) ≤ εo)
+    (hP : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s b) ≠ x σ.1 ω) ≤ εP)
     (hb : ∀ k < I.r, probAt σ (fun ω t s b => Acc σ.1 ω t b ∧
-      (wmsg (dec σ.1 ω t s))[k]? ≠ (t[k]?).map fun e => ref ω (t.take k) e.1) ≤ εb k)
+      (wmsg (dec σ.1 ω t s b))[k]? ≠ (t[k]?).map fun e => ref ω (t.take k) e.1) ≤ εb k)
     (hin : InnerSound I εin) :
     prob (fun o => Acc o.1 o.2.1 o.2.2.1 o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1)) (recGame L Reg I Cm outer) σ ≤
       εo + εP + ∑ k ∈ Finset.range I.r, εb k + εin :=

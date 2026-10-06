@@ -17,7 +17,8 @@ extracted opening and `wo c`, which a one-trial finder outputs (`regFinderZC`, a
   `LinkEvRegZK`;
 * `RegCRZC`, `regTermZC`: `cr/sha-512` for the registered-value finders of one prover at budget `qW` on every outcome,
   and its term `Q_s/(1 − ρ)·(qW²/2^513 + k/(eR_w))`, `Q_s = Σ_c π_c` as in `linkBoundZC`;
-* `zk_flock_regValsC_cr`: `Pr[accept ∧ a drawn unit reads a registered-value disagreement] ≤ ε_ks + δ_link + δ_reg`.
+* `zk_flock_regValsC_cr`: `Pr[accept ∧ a drawn unit reads a registered-value disagreement] ≤ ε_ks + δ_link + δ_reg`;
+  `zk_flock_regDrawnC_cr`: the same with a wrong drawn unit counted too.
 
 `qW` bounds the SHA-512 evaluations of one trial: a fresh run and at most `k` waits of at most `R_w` reruns each, so
 `t'(1 + k R_w)` at `t'` per run is an honest budget. Lean counts no evaluations; whoever instantiates `RegCRZC` states it.
@@ -510,5 +511,39 @@ theorem zk_flock_regValsC_cr (hA : A.Correct)
           regBoundZC A Hs P planZ tab vb wo k Rw ρ qW (reg σ) (cont σ)) ≤ _
     rw [hb, ← add_assoc]
     exact add_le_add (add_le_add (ksAvgZC_le_strict A Hs planZ k (reg σ) (cont σ) hCR) le_rfl) le_rfl
+
+/-- **`zk_flock_regValsC_cr` with the wrong units counted too**: on its assumptions,
+`Pr[accept ∧ a drawn unit is wrong or reads a wire disagreeing with its registered value] ≤ ε_ks + δ_link + δ_reg`, the
+event `analysisRegZC`'s at its committed transcript. -/
+theorem zk_flock_regDrawnC_cr (hA : A.Correct)
+    (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
+    (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc) (wo : vb.Pos → vb.Opening)
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
+    (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ)))
+    {qF qS : ℝ}
+    (hCR : ∀ ω j, TableCRZ A Hs (planZ (L.draw ω) (reg σ)) j (zcStrat A Hs planZ (cont σ ω)) qF qS)
+    {qW : ℝ} (hW : RegCRZC A Hs P planZ tab vb wo (reg σ) (cont σ) k Rw qW) :
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw) ∪
+          regWrongZ A P planZ tab vb wo (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
+        (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
+      ksAvgStrictZ planZ L k qF qS (reg σ) + linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) +
+        regTermZC A P planZ tab vb L k Rw ρ qW := by
+  classical
+  have hlow := loweringSoundZK_of_place A P planZ tab place
+  have hj := jointZC_ksBound A hA Hs planZ hk
+  have h := extraction_audit_drawn
+    (analysisRegZC A Hs P planZ tab vb wo (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
+      (fun S R j => (hr S R j).trans_lt hρ) hlow _ hj)
+    (reg_knowledgeSoundZC A Hs P planZ tab vb wo _ _ hlow hj)
+    (zk_linkSoundRegC A Hs P planZ tab vb wo hlow hRw hM hρ hr hj ht qW) σ
+  have hb : regBoundZC A Hs P planZ tab vb wo k Rw ρ qW (reg σ) (cont σ) =
+      regTermZC A P planZ tab vb L k Rw ρ qW := ite_eq_left hW
+  refine h.trans ?_
+  show ksAvgZC A Hs planZ k _ (reg σ) (cont σ) +
+      (linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) +
+        regBoundZC A Hs P planZ tab vb wo k Rw ρ qW (reg σ) (cont σ)) ≤ _
+  rw [hb, ← add_assoc]
+  exact add_le_add (add_le_add (ksAvgZC_le_strict A Hs planZ k (reg σ) (cont σ) hCR) le_rfl) le_rfl
 
 end FlockSoundness.Discharge.ZkReg

@@ -42,7 +42,7 @@ message not being related (`same k`) to it. -/
 theorem recursive_sound_upto [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos]
     (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
-    (dec : ∀ R ω t, Strategy (outer R ω t) → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
+    (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
     (hsame : ∀ y (ms ms' : List I.Msg) (ρs : List I.Coin), (∀ k < ρs.length, Option.Rel (same k ρs) ms[k]? ms'[k]?) →
       I.accepts y (ms.zip ρs) → I.accepts y (ms'.zip ρs))
@@ -51,10 +51,10 @@ theorem recursive_sound_upto [Fintype V] [DecidableEq V] [Nonempty V] [Fintype P
     (εtr : ℕ → ∀ R ω t, Strategy (outer R ω t) → ℝ≥0∞) (κ : ℕ → Pos → ℝ≥0∞) (q : ℕ → ℝ)
     {εo εP εin : ℝ≥0∞}
     (hout : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧
-      ¬ I.accepts (wstmt (dec σ.1 ω t s)) ((wmsg (dec σ.1 ω t s)).zip (t.map Prod.snd))) ≤ εo)
-    (hP : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s) ≠ x σ.1 ω) ≤ εP)
+      ¬ I.accepts (wstmt (dec σ.1 ω t s b)) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd))) ≤ εo)
+    (hP : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s b) ≠ x σ.1 ω) ≤ εP)
     (htr : ∀ k < I.r, AllAt σ fun ω t s => ∀ (v : Pos → V) (e : Cm × I.Coin), t[k]? = some e →
-      prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd)) (wmsg (dec σ.1 ω t s))[k]? (some (msg k v)))
+      prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd)) (wmsg (dec σ.1 ω t s b))[k]? (some (msg k v)))
         (outer σ.1 ω t) s ≤
         εtr k σ.1 ω t s +
           ∑ pos, κ k pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T k σ.1 ω t s pos).g (T k σ.1 ω t s pos).s)
@@ -67,7 +67,7 @@ theorem recursive_sound_upto [Fintype V] [DecidableEq V] [Nonempty V] [Fintype P
   have hst : ∀ k, k < I.r → ∀ ω, ∃ refv : List (Cm × I.Coin) → Cm → Pos → V,
       leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
         (fun t s => prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
-            (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)))[k]?
+            (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) b))[k]?
               ((t[k]?).map fun e => msg k (refv (t.take k) e.1)))
           (outer σ.1 ω t) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω) ≤
         leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
@@ -76,7 +76,7 @@ theorem recursive_sound_upto [Fintype V] [DecidableEq V] [Nonempty V] [Fintype P
     stage_bind ob cmt (msg k) hk _
       (fun t s => T k σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω)
       (fun t s m => prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
-          (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)))[k]? m)
+          (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) b))[k]? m)
         (outer σ.1 ω t) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s))
       (fun t s => εtr k σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (κ k) (htr k hk ω)
       fun pos => hCR k hk ω pos
@@ -88,12 +88,12 @@ theorem recursive_sound_upto [Fintype V] [DecidableEq V] [Nonempty V] [Fintype P
   unfold probAt expAt
   calc avg (fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
         (fun t s => prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
-            (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)))[k]?
+            (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) b))[k]?
               ((t[k]?).map fun e => msg (t.take k).length (refAll (t.take k).length ω (t.take k) e.1)))
           (outer σ.1 ω t) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω))
       = avg (fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
         (fun t s => prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
-            (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)))[k]?
+            (wmsg (dec σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) b))[k]?
               ((t[k]?).map fun e => msg k ((hst k hk ω).choose (t.take k) e.1)))
           (outer σ.1 ω t) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω)) := by
         refine congrArg avg (funext fun ω => leafAvg_congr_len (fun t s ht => ?_) _)
@@ -110,16 +110,16 @@ opening `msg v`. -/
 theorem recursive_sound [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos]
     (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
-    (dec : ∀ R ω t, Strategy (outer R ω t) → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
+    (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
     (cmt : Cm → Pos → ob.Dg) (msg : (Pos → V) → I.Msg)
     (T : ℕ → ∀ R ω t, Strategy (outer R ω t) → Pos → Finder (Finset ob.Op))
     (εtr : ℕ → ∀ R ω t, Strategy (outer R ω t) → ℝ≥0∞) (κ : ℕ → Pos → ℝ≥0∞) (q : ℕ → ℝ)
     {εo εP εin : ℝ≥0∞}
     (hout : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧
-      ¬ I.accepts (wstmt (dec σ.1 ω t s)) ((wmsg (dec σ.1 ω t s)).zip (t.map Prod.snd))) ≤ εo)
-    (hP : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s) ≠ x σ.1 ω) ≤ εP)
+      ¬ I.accepts (wstmt (dec σ.1 ω t s b)) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd))) ≤ εo)
+    (hP : probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s b) ≠ x σ.1 ω) ≤ εP)
     (htr : ∀ k < I.r, AllAt σ fun ω t s => ∀ (v : Pos → V) (e : Cm × I.Coin), t[k]? = some e →
-      prob (fun b => Acc σ.1 ω t b ∧ (wmsg (dec σ.1 ω t s))[k]? ≠ some (msg v)) (outer σ.1 ω t) s ≤
+      prob (fun b => Acc σ.1 ω t b ∧ (wmsg (dec σ.1 ω t s b))[k]? ≠ some (msg v)) (outer σ.1 ω t) s ≤
         εtr k σ.1 ω t s +
           ∑ pos, κ k pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T k σ.1 ω t s pos).g (T k σ.1 ω t s pos).s)
     (hCR : ∀ k < I.r, ∀ ω pos, (forkAt ob σ cmt (T k) k ω pos).CR H (q k))

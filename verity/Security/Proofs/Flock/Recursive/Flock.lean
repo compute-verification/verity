@@ -201,7 +201,7 @@ theorem zk_session_recursive_upto
         ∑ i ∈ Finset.range I.r,
           (expAt σ (εtr i σ.1) + (∑ pos, κ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
   have h := recursive_sound_upto ob σ (fun R ω t o => LiveAcceptsZKR (zs R ω t).I (zs R ω t).own o) x
-    (W := (Fin (Layout.keyN c hU nv) → Bool) × I.Stmt) (fun R ω t τ => ((zs R ω t).layer dg N k Rw τ, x R ω))
+    (W := (Fin (Layout.keyN c hU nv) → Bool) × I.Stmt) (fun R ω t τ _ => ((zs R ω t).layer dg N k Rw τ, x R ω))
     Prod.snd (fun w => wmsg w.1) same hsame cmt msg T εtr κ q
     (εo := expAt σ fun ω t τ => (zs σ.1 ω t).bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW τ) (εP := 0)
     ?_ ?_ htr hCR hin
