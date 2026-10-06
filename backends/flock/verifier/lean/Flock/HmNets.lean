@@ -65,7 +65,7 @@ def const (b : Bool) : Lin := ⟨[], b⟩
 /-- XOR of two forms. -/
 def xor (f g : Lin) : Lin := ⟨symm f.s g.s, f.c ^^ g.c⟩
 
-instance : HXor Lin Lin Lin := ⟨xor⟩
+instance instHXor : HXor Lin Lin Lin := ⟨xor⟩
 
 def isConst (f : Lin) : Bool := f.s.isEmpty
 

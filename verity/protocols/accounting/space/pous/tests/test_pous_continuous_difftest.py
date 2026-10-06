@@ -1,5 +1,5 @@
 """Differential tests: `verity.protocols.accounting.space.pous`'s timed verifiers against the Lean model of the continuous audit
-(`lean/Pous/Protocol/Model/Continuous.lean`), restated as the oracle in `pous_continuous_model.py`.
+(`verity/Security/Definitions/Pous/Model/Continuous.lean`), restated as the oracle in `pous_continuous_model.py`.
 
 Each action of a trace goes to the verifier and to `ClockOracle` at one reading of an injected clock, and after every
 action the two must agree exactly: whether the action was refused and why, the challenge revealed, every closed round's
@@ -38,8 +38,8 @@ try:
 except ImportError:
     ContinuousVerifier = Reply = run_continuous = None
 
-LEAN = Path(__file__).resolve().parents[1] / "lean"
-MODEL = "Pous/Protocol/Model/Continuous.lean"
+ROOT = Path(__file__).resolve().parents[6]
+MODEL = "verity/Security/Definitions/Pous/Model/Continuous.lean"
 ENFORCE = "the hard deadline and ContinuousVerifier land with cursor/pous-continuous-enforce-3cf5"
 HARD = "late_deadline_ns" in inspect.signature(TimedVerifier).parameters
 
@@ -208,14 +208,13 @@ def _words(text: str) -> str:
 def test_the_oracle_transcribes_the_lean_model():
     """Each Lean definition the oracle transcribes is, word for word, the one in the Lean file its docstring names. A
     failure means the model changed: re-derive the oracle from it before trusting these tests."""
-    if not (LEAN / MODEL).exists():
-        pytest.skip(f"{MODEL} lands with cursor/pous-lean-continuous-3cf5")
+    assert (ROOT / MODEL).exists(), f"{MODEL} is gone: re-point the oracle's docstrings at the model's new home"
     found = {}
     for obj in _transcriptions():
         head, lean = inspect.getdoc(obj).split("\n", 1)
         path = re.search(r"\(`([^`]+\.lean)`\)", head).group(1)
         found[re.match(r"Lean `([^`]+)`", head).group(1)] = path
-        assert _words(lean) in _words((LEAN / path).read_text()), f"{obj.__name__}: {path} no longer says this"
+        assert _words(lean) in _words((ROOT / path).read_text()), f"{obj.__name__}: {path} no longer says this"
     assert set(found) == {"Prog.run", "Prog.depth", "Prog.work", "ContMachine.round", "contVerdict", "ContState",
                           "ContState.start", "contSend", "contMem", "contProg", "contNext", "contAfter", "ContRecord",
                           "contRecord", "contRecords", "contAccepts"}
