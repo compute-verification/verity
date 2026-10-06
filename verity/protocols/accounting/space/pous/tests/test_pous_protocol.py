@@ -504,7 +504,7 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
             core_claim(c)
         assert "/" not in c and c == c.lower()
     assert protocol.claim("cr/sha-512").kind == "assumption"
-    assert protocol.claim("honest-nebius-host").kind == "assumption"
+    assert protocol.claim("trusted-nebius-host").kind == "assumption"
 
 
 def test_p2_is_experimental_and_says_so():
@@ -522,7 +522,7 @@ def test_p2_is_experimental_and_says_so():
         cert = sch.certificate
         assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.call_ns, cert.segments, cert.hypotheses) == (
             "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, ROOT_CALL_NS, 8, ())
-        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "honest-nebius-host"} <= set(
+        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "trusted-nebius-host"} <= set(
             cert.claims) and not any("sha-256" in c for c in cert.claims)
         one = schemes.get(name)
         vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
@@ -607,7 +607,7 @@ def test_p2_v4_keys_are_the_specs():
     from verity.protocols.accounting.space.pous.schemes.p2 import KEYS_TAG, PROTOCOL_ID, expand_prefix, sha512_keys, stream
 
     doc = json.loads((Path(__file__).parent / "fixtures" / "p2-v4-keys.json").read_text())
-    assert doc["source_sha512"] == "29471c3b26a19b9e48a8888ba3450329693194161b6cf08ce2c8658e2772aa5e3028d4dc9f94cb9757582f326e9afe97017bdd597e4de9636d253e6908768bd9"
+    assert doc["source_sha512"] == "959911fd371111fe20c4cee6fc532ff205bbf377962c73ac539a4d2de9b22121287e6e996d9ae4bfbef9f26fcd67ac78620873702c8b2899bc41a21bdd76e853"
     for v in doc["vectors"]:
         params = P2Params(v["w"], v["c0"], 1 << 16, 8)
         spec = (KEYS_TAG + frame("p2/v4") + frame(f"p2-p{v['w']}-c{v['c0']}")

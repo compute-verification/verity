@@ -1,17 +1,18 @@
 """P2 v1's decode throughput on one GPU, kernel by kernel, each gated byte-exact against `reference.py`.
 
 For every library given (`--lib DIR`, each a `libp2v1.so` built with other switches), on `--blocks` uniformly random canonical
-blocks of `C` with the keys of a fixed setup:
+blocks of `C` with the v4 keys of a fixed setup:
 
-- `keys_s`: the expansion of every block's `K` and `t` (`gpu.Kernels.keys`), alone;
+- `keys_s`: the counter-mode SHA-512 expansion of every block's `K` and `t` (`gpu.Kernels.keys`), alone;
 - `kernel_s`: `p2v1_decode` alone, on keys expanded beforehand;
 - `decode_s`: the harness's decode pass (`gpu.Kernels.decode`: keys, then the kernel), or the library's fused decode
   (`p2v1_decode_fused`, the keys expanded inside it) when the library has one;
 - the gate: sampled blocks (and edge values of `c` in the first blocks) decoded on the device equal the reference's decode
-  under the reference's keys, their `K` and `t` rows equal the reference's, every block of `m` equals the first library's of
-  the same key streams (`Kernels.keys_version`: 4, the reference's counter-mode SHA-512, or 1, v1's SHAKE256, whose gate
-  fails), and no kernel flag is raised; with `--keys-all`, every block's `K` and `t` rows equal `reference.stream`'s (hashlib
-  on every CPU, compared by SHA-256 per range of blocks; v4 libraries only).
+  under the reference's keys, their `K` and `t` rows equal the reference's (`reference.keys`), the library reports v4's
+  keys (`Kernels.keys_version`), the deployment entry of the pinned `p2-v4-keys.json` (`harness.KEYS`) expands on the device
+  to its pinned `K` and `t`, every block of `m` equals the first library's, and no kernel flag is raised; with `--keys-all`,
+  every block's `K` and `t` rows equal `reference.stream`'s (hashlib on every CPU, compared by SHA-512 per range of
+  blocks).
 
 GB/s is of `W`, the payload bytes (2,054 of each 2,056-byte block), over the median time.  Writes `decode-bench.json`."""
 from __future__ import annotations
@@ -28,6 +29,7 @@ sys.path.insert(0, str(HERE.parent))
 
 from p2_v1 import reference as R  # noqa: E402
 from p2_v1.gpu import Kernels  # noqa: E402
+from p2_v1.harness import KEYS  # noqa: E402
 
 SALT = hashlib.sha256(b"verity-pous/bench/p2-v1/decode-bench/salt").digest()
 MODEL = hashlib.sha512(b"verity-pous/bench/p2-v1/decode-bench/model").digest()
@@ -54,12 +56,12 @@ def edge_values(p: int) -> list[int]:
 KEYS_RANGE = 2048
 
 
-def _range_digests_v4(job: tuple[int, int, int]) -> tuple[int, str, str]:
-    """SHA-256 of the v4 `K` rows and of the `t` rows (first candidates) of blocks `lo .. hi − 1`."""
+def _range_digests(job: tuple[int, int, int]) -> tuple[int, str, str]:
+    """SHA-512 of the `K` rows and of the `t` rows (first candidates) of blocks `lo .. hi − 1`."""
     lo, hi, segments = job
     P = R.DEPLOYMENT.with_segments(segments)
     prefix = R.expand_prefix(SALT, P, MODEL)
-    hk, ht = hashlib.sha256(), hashlib.sha256()
+    hk, ht = hashlib.sha512(), hashlib.sha512()
     for i in range(lo, hi):
         base = prefix + (i // P.blocks_per_segment).to_bytes(8, "big") + (i % P.blocks_per_segment).to_bytes(8, "big")
         hk.update(R.stream(base, b"K", P.width_bytes))
@@ -67,7 +69,7 @@ def _range_digests_v4(job: tuple[int, int, int]) -> tuple[int, str, str]:
     return lo, hk.hexdigest(), ht.hexdigest()
 
 
-def keys_all_v4(k, t, n: int, segments: int) -> dict[str, object]:
+def keys_all(k, t, n: int, segments: int) -> dict[str, object]:
     """Every block's `K` and `t` rows on the device against hashlib's, a range of `KEYS_RANGE` blocks a job on every CPU."""
     import multiprocessing as mp
     import os
@@ -75,11 +77,22 @@ def keys_all_v4(k, t, n: int, segments: int) -> dict[str, object]:
     kb, tb = k.cpu().numpy(), t.cpu().numpy()
     jobs = [(lo, min(lo + KEYS_RANGE, n), segments) for lo in range(0, n, KEYS_RANGE)]
     with mp.get_context("fork").Pool(len(os.sched_getaffinity(0))) as pool:
-        want = pool.map(_range_digests_v4, jobs)
+        want = pool.map(_range_digests, jobs)
     bad = [lo for lo, wk, wt in want
-           if hashlib.sha256(kb[lo:lo + KEYS_RANGE].tobytes()).hexdigest() != wk
-           or hashlib.sha256(tb[lo:lo + KEYS_RANGE].tobytes()).hexdigest() != wt]
+           if hashlib.sha512(kb[lo:lo + KEYS_RANGE].tobytes()).hexdigest() != wk
+           or hashlib.sha512(tb[lo:lo + KEYS_RANGE].tobytes()).hexdigest() != wt]
     return {"blocks": n, "ranges": len(jobs), "passed": not bad, "failed_ranges": bad[:16]}
+
+
+def pinned_keys(lib_dir: str, build_dir: str) -> dict[str, object]:
+    """The pinned deployment keys (`harness.KEYS`, w = 16,448) expanded by this library at their setup and block."""
+    v = next(x for x in json.loads(KEYS.read_text())["vectors"] if int(x["w"]) == R.DEPLOYMENT.w)
+    seg, blk = int(v["segment"]), int(v["block"])
+    P = R.DEPLOYMENT.with_segments(seg + 1)
+    kern = Kernels(lib_dir, build_dir, P, R.expand_prefix(bytes.fromhex(v["setup_salt"]), P, bytes.fromhex(v["model_commitment"])))
+    k, t = kern.keys(seg * P.blocks_per_segment + blk, 1)
+    got = {"K": k[0].cpu().numpy().tobytes().hex() == v["K"], "t": t[0].cpu().numpy().tobytes().hex() == v["t"]}
+    return {"vector": v["id"], "keys_version": kern.keys_version, "passed": all(got.values()) and kern.keys_version == 4, **got}
 
 
 def main() -> int:
@@ -108,29 +121,23 @@ def main() -> int:
     c_host = c.cpu().numpy().tobytes()
     picks = sorted(set(range(len(edges))) | {n - 1} | {
         int.from_bytes(hashlib.sha256(f"decode-bench/{j}".encode()).digest()[:8], "big") % n for j in range(a.gate)})
-    wants: dict[int, dict[int, tuple[bytes, bytes, bytes]]] = {}
-
-    def want(version: int) -> dict[int, tuple[bytes, bytes, bytes]]:
-        """`(m, K, t)` rows of the sampled blocks under the reference's keys."""
-        if version not in wants:
-            wants[version] = {}
-            for i in picks:
-                k, t, _ = R.keys(SALT, P, MODEL, i // P.blocks_per_segment, i % P.blocks_per_segment)
-                m = R.decode(P, int.from_bytes(c_host[i * nb:(i + 1) * nb], "big"), k, t)
-                wants[version][i] = (m.to_bytes(nb, "big"), k.to_bytes(nb, "big"), t.to_bytes(nb, "big"))
-        return wants[version]
+    ref: dict[int, tuple[bytes, bytes, bytes]] = {}
+    for i in picks:
+        k, t, _ = R.keys(SALT, P, MODEL, i // P.blocks_per_segment, i % P.blocks_per_segment)
+        m = R.decode(P, int.from_bytes(c_host[i * nb:(i + 1) * nb], "big"), k, t)
+        ref[i] = (m.to_bytes(nb, "big"), k.to_bytes(nb, "big"), t.to_bytes(nb, "big"))
 
     results, base_m = [], {}
     for lib_dir in a.lib:
+        pinned = pinned_keys(lib_dir, a.build_dir)
         kern = Kernels(lib_dir, a.build_dir, P, R.expand_prefix(SALT, P, MODEL))
         lib = kern.lib
         fused = hasattr(lib, "p2v1_decode_fused")
         version = kern.keys_version
         k, t = kern.keys(0, n)
         torch.cuda.synchronize()
-        ref = want(version)
         keys_gate = {i: bytes(k[i].cpu().numpy()) == ref[i][1] and bytes(t[i].cpu().numpy()) == ref[i][2] for i in picks}
-        keys_all = keys_all_v4(k, t, n, P.segments) if a.keys_all and version == 4 else None
+        every = keys_all(k, t, n, P.segments) if a.keys_all else None
         m = torch.empty_like(c)
         stream = lambda: torch.cuda.current_stream().cuda_stream  # noqa: E731
 
@@ -158,7 +165,8 @@ def main() -> int:
             base_m[version] = m_full.clone()
         same_as_base = bool(torch.equal(m_full, base_m[version]))
         pay = n * P.payload_bytes / 1e9
-        keys_ok = all(keys_gate.values()) and (keys_all is None or keys_all["passed"])
+        keys_ok = (all(keys_gate.values()) and version == 4 and pinned["passed"]
+                   and (every is None or every["passed"]))
         r = {"lib": lib_dir, "fused": fused, "keys_version": version, "blocks": n, "keys_s": statistics.median(keys_reps),
              "kernel_s": statistics.median(kernel_reps), "decode_s": statistics.median(decode_reps),
              "keys_reps_s": keys_reps, "kernel_reps_s": kernel_reps, "decode_reps_s": decode_reps,
@@ -166,7 +174,8 @@ def main() -> int:
              "keys_GBps": pay / statistics.median(keys_reps),
              "gate": {"passed": all(gate.values()) and keys_ok and kernel_equal and same_as_base and flags == 0,
                       "reference_blocks": len(picks), "reference_equal": sum(gate.values()),
-                      "reference_keys_equal": sum(keys_gate.values()), "keys_all": keys_all, "kernel_equals_full": kernel_equal,
+                      "reference_keys_equal": sum(keys_gate.values()), "pinned_keys": pinned, "keys_all": every,
+                      "kernel_equals_full": kernel_equal,
                       "all_blocks_equal_baseline": same_as_base, "flags": flags,
                       "failed_blocks": [i for i, ok in gate.items() if not ok][:16]}}
         try:

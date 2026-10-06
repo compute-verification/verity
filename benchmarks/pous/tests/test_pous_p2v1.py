@@ -140,6 +140,21 @@ def test_the_key_prefixes_are_whole_sha512_blocks_and_their_keys_counter_mode_sh
     assert R.keys_after(registered, R.DEPLOYMENT, 5, 1234)[:2] == p2.sha512_keys(p2.P2().params, registered, 5, 1234)
 
 
+def test_the_v4_keys_are_one_compression_a_chunk_past_the_prefixs_midstate():
+    """`p2keys4.cuh` takes `expand_prefix` as whole SHA-512 blocks: a chunk's last block is `seg ‖ blk ‖ P ‖ u32be(i)`, SHA-512's
+    0x80 byte and the 16-byte length, so every chunk costs one compression."""
+    import hashlib
+
+    R, _, _ = _p2()
+    salt, model = bytes(range(32)), bytes(range(64))
+    prefix = R.expand_prefix(salt, R.DEPLOYMENT, model)
+    assert len(prefix) == 256 and 8 + 8 + 1 + 4 + 1 + 16 <= 128
+    k, t, attempt = R.keys(salt, R.DEPLOYMENT, model, 5, 1234)
+    base = prefix + (5).to_bytes(8, "big") + (1234).to_bytes(8, "big")
+    row = lambda p: b"".join(hashlib.sha512(base + p + i.to_bytes(4, "big")).digest() for i in range(33))[:2056]  # noqa: E731
+    assert k.to_bytes(2056, "big") == row(b"K") and attempt == 0 and t.to_bytes(2056, "big") == row(b"t")
+
+
 def test_the_root_exponent_splits_as_the_kernel_takes_it():
     R, _, gpu = _p2()
     for params in (R.DEPLOYMENT, _small()):
@@ -278,6 +293,26 @@ def test_a_v4_keyed_library_is_gated_against_the_v4_reference_keys(tmp_path):
                                       params=_small())
         vector = body["gates"]["vector"]
         assert not vector["passed"] and not vector["K"] and not vector["t"] and not body["gates"]["reference_decode"]["passed"]
+
+
+def test_the_vector_gate_holds_the_keys_to_the_pinned_v4_keys(tmp_path):
+    """The vector gate reads `p2-v4-keys.json`: a library that expands v4's keys passes; one that reports another key version,
+    or whose keys differ from the pinned file's, fails it."""
+    import json
+
+    _, harness, _ = _p2()
+    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(), params=_small())
+    assert all(g["passed"] for g in body["gates"].values()), body["gates"]
+    assert body["gates"]["vector"]["keys_version"] == 4 and body["gates"]["vector"]["keys_v4"]
+    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(says=1), params=_small())
+    assert not body["gates"]["vector"]["passed"] and not body["gates"]["vector"]["keys_v4"]
+    keys = json.loads(harness.KEYS.read_text())
+    small = _small()
+    for v in keys["vectors"]:
+        if int(v["w"]) == small.w:
+            v["t"] = "00" * small.width_bytes
+    gate = harness.vector_gate(_backend(), small, keys=keys)
+    assert not gate["passed"] and gate["K"] and not gate["t"]
 
 
 def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):

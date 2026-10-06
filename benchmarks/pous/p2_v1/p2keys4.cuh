@@ -1,11 +1,11 @@
-// P2's per-block keys with the v4 framing on the GPU (`reference.keys_v4`): row P (K or t) is the first W/8 bytes of
-// SHA-512(prefix || u64be(segment) || u64be(block) || P || u32be(i)) for i = 0, 1, ..., written as big-endian rows like
-// `gpu.Kernels.keys`.
+// P2's per-block keys with the v4 framing on the GPU (`reference.keys`, the spec's section 4): row P (K or t) is the first
+// W/8 bytes of SHA-512(prefix || u64be(segment) || u64be(block) || P || u32be(i)) for i = 0, 1, ..., written as big-endian
+// rows like `gpu.Kernels.keys`.
 //
-// The v4 prefix is one SHA-512 block and a 16-byte tail, so the host compresses the block once (the midstate) and every
-// 64-byte chunk is one compression of a last block whose words are fixed but for W2 = segment, W3 = block and
-// W4 = P << 56 | i << 24 | 0x80 << 16; the host also runs rounds 0 and 1 (W0 and W1 are the tail) and W16 (a function of
-// W0, W1 and zeros). A row is 2,056 bytes, 33 compressions, the last one's H0 alone.
+// The v4 prefix (`reference.expand_prefix`) is whole SHA-512 blocks (256 bytes), so the host compresses it once (the
+// midstate) and every 64-byte chunk is one compression of a last block whose words are fixed but for W0 = segment,
+// W1 = block and W2 = P << 56 | i << 24 | 0x80 << 16 (W15 is the message's length in bits). A row is 2,056 bytes,
+// 33 compressions, the last one's H0 alone.
 //
 //   P2K4_MODE 1  a thread a (purpose, row), its 33 chunks in turn (the default)
 //   P2K4_MODE 0  a thread a (purpose, row, chunk), consecutive threads consecutive chunks
@@ -63,14 +63,12 @@ __host__ __device__ __forceinline__ const uint64_t *kconst() {
 #define P2K4_ROUND(a, b, c, d, e, f, g, h, k, w) P2K4_ROUNDX(a, b, c, d, e, f, g, h, (k) + (w))
 #define P2K4_ROUND0(a, b, c, d, e, f, g, h, k) P2K4_ROUNDX(a, b, c, d, e, f, g, h, (k))
 
-// The state after the prefix's whole blocks; a .. h after the last block's rounds 0 and 1; its words W0, W1 (the prefix's
-// tail), W15 (the message's length in bits) and W16.
+// The state after the prefix's whole blocks, and the last block's W15 (the message's length in bits).
 struct Mid {
-  uint64_t h[8], v[8];
-  uint64_t w0, w1, w15, w16;
+  uint64_t h[8];
+  uint64_t w15;
 };
 
-constexpr int TAIL = 16;
 constexpr uint64_t IV[8] = {0x6a09e667f3bcc908ULL, 0xbb67ae8584caa73bULL, 0x3c6ef372fe94f82bULL, 0xa54ff53a5f1d36f1ULL,
                             0x510e527fade682d1ULL, 0x9b05688c2b3e6c1fULL, 0x1f83d9abfb41bd6bULL, 0x5be0cd19137e2179ULL};
 
@@ -94,41 +92,30 @@ inline uint64_t be64(const uint8_t *p) {
   return x;
 }
 
-// Mid for this prefix, or false when it is not whole SHA-512 blocks and a 16-byte tail.
+// Mid for this prefix, or false when it is not whole SHA-512 blocks.
 inline bool midstate(const uint8_t *prefix, int plen, Mid &m) {
-  if (plen % 128 != TAIL) return false;
+  if (plen <= 0 || plen % 128 != 0) return false;
   for (int i = 0; i < 8; i++) m.h[i] = IV[i];
   for (int b = 0; b < plen / 128; b++) {
     uint64_t w[16];
     for (int i = 0; i < 16; i++) w[i] = be64(prefix + 128 * b + 8 * i);
     compress_host(m.h, w);
   }
-  m.w0 = be64(prefix + plen - TAIL);
-  m.w1 = be64(prefix + plen - TAIL + 8);
   m.w15 = (uint64_t)(plen + 16 + 1 + 4) * 8;
-  m.w16 = s0(m.w1) + m.w0;   // s1(W14) + W9 + s0(W1) + W0 with W9 = W14 = 0
-  uint64_t v[8];
-  for (int i = 0; i < 8; i++) v[i] = m.h[i];
-  const uint64_t w01[2] = {m.w0, m.w1};
-  for (int t = 0; t < 2; t++) {
-    const uint64_t t1 = v[7] + S1(v[4]) + ch(v[4], v[5], v[6]) + K_HOST[t] + w01[t], t2 = S0(v[0]) + maj(v[0], v[1], v[2]);
-    for (int i = 7; i > 0; i--) v[i] = v[i - 1];
-    v[4] += t1;
-    v[0] = t1 + t2;
-  }
-  for (int i = 0; i < 8; i++) m.v[i] = v[i];
   return true;
 }
 
-// The digest of chunk (seg, blk, w4): the last block from round 2 on.
+// The digest of chunk (seg, blk, w4): the last block's 80 rounds from the midstate.
 __host__ __device__ __forceinline__ void chunk(const Mid &m, uint64_t seg, uint64_t blk, uint64_t w4, uint64_t o[8]) {
   const uint64_t *K = kconst();
   // round t's a .. h are the names rotated right by t, so after round 79 they are a .. h again
-  uint64_t g = m.v[0], h = m.v[1], a = m.v[2], b = m.v[3], c = m.v[4], d = m.v[5], e = m.v[6], f = m.v[7];
-  uint64_t W[16] = {m.w0, m.w1, seg, blk, w4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, m.w15};
+  uint64_t a = m.h[0], b = m.h[1], c = m.h[2], d = m.h[3], e = m.h[4], f = m.h[5], g = m.h[6], h = m.h[7];
+  uint64_t W[16] = {seg, blk, w4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, m.w15};
+  P2K4_ROUND(a, b, c, d, e, f, g, h, K[0], W[0]);
+  P2K4_ROUND(h, a, b, c, d, e, f, g, K[1], W[1]);
   P2K4_ROUND(g, h, a, b, c, d, e, f, K[2], W[2]);
-  P2K4_ROUND(f, g, h, a, b, c, d, e, K[3], W[3]);
-  P2K4_ROUND(e, f, g, h, a, b, c, d, K[4], W[4]);
+  P2K4_ROUND0(f, g, h, a, b, c, d, e, K[3]);
+  P2K4_ROUND0(e, f, g, h, a, b, c, d, K[4]);
   P2K4_ROUND0(d, e, f, g, h, a, b, c, K[5]);
   P2K4_ROUND0(c, d, e, f, g, h, a, b, K[6]);
   P2K4_ROUND0(b, c, d, e, f, g, h, a, K[7]);
@@ -140,7 +127,6 @@ __host__ __device__ __forceinline__ void chunk(const Mid &m, uint64_t seg, uint6
   P2K4_ROUND0(d, e, f, g, h, a, b, c, K[13]);
   P2K4_ROUND0(c, d, e, f, g, h, a, b, K[14]);
   P2K4_ROUND(b, c, d, e, f, g, h, a, K[15], W[15]);
-  W[0] = m.w16;
 #define P2K4_W(j) (W[(j) & 15] += s1(W[((j) + 14) & 15]) + W[((j) + 9) & 15] + s0(W[((j) + 1) & 15]))
 // rounds tk .. tk + 7 on schedule words tw .. tw + 7 (tw = tk mod 16, a constant even where tk is not)
 #define P2K4_EIGHT(tk, tw, wa)                                                                                             \
@@ -152,7 +138,7 @@ __host__ __device__ __forceinline__ void chunk(const Mid &m, uint64_t seg, uint6
   P2K4_ROUND(d, e, f, g, h, a, b, c, K[(tk) + 5], P2K4_W((tw) + 5));                                                     \
   P2K4_ROUND(c, d, e, f, g, h, a, b, K[(tk) + 6], P2K4_W((tw) + 6));                                                     \
   P2K4_ROUND(b, c, d, e, f, g, h, a, K[(tk) + 7], P2K4_W((tw) + 7))
-  P2K4_EIGHT(16, 0, W[0]);
+  P2K4_EIGHT(16, 0, P2K4_W(0));
   P2K4_EIGHT(24, 8, P2K4_W(8));
 #ifdef P2K4_ROLL
 #pragma unroll 1

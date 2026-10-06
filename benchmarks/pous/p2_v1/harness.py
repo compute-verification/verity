@@ -62,7 +62,7 @@ SETUP_SOURCE = hashlib.sha256(b"verity-pous/bench/p2-v1/setup-source").digest()
 PINS = ("P2MeetsM1pB19Uncond", "P2MeetsM1pFamilyUncond", "P2MeetsM1pW8192Uncond", "P2SlackB19Uncond", "P2SlackFamilyUncond",
         "P2ErrorSplitB19Uncond")
 ASSUMPTIONS = ("P2-EXP-IO", "SHA-512-CTR/P2-EXP-IO", "P2–M1-SGI (not accepted)", "SeqRoot", "perfect isolation", "cr/sha-512",
-               "honest-nebius-host")
+               "trusted-nebius-host")
 RECOMPUTE_EVERY = 10
 """The recompute control drops one block in this many; P2's blocks are independent, so any pattern keeps what a block needs."""
 
@@ -282,29 +282,37 @@ def rows(values: list[int], width: int, device: Any) -> Any:
     return torch.tensor([list(v.to_bytes(width, "big")) for v in values], dtype=torch.uint8, device=device)
 
 
-def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The pinned vector at `params.w`, through the device: keys, encode and decode, bit-exact."""
+KEYS = Path(__file__).resolve().parents[3] / "verity/protocols/accounting/space/pous/tests/fixtures/p2-v4-keys.json"
+"""The pinned v4 keys (`p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
+
+
+def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | None = None,
+                keys: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The pinned vector at `params.w`, through the device: its `K` and `t` against `KEYS`, encode and decode against
+    `vectors.json`, bit-exact, from a library that reports v4's keys."""
     doc = vectors or json.loads(R.VECTORS.read_text())
     v = next((x for x in doc["vectors"] if int(x["w"]) == params.w and int(x["c0"]) == params.c0), None)
     if v is None:
         return {"passed": False, "reason": f"no pinned vector at w = {params.w}, c0 = {params.c0}"}
+    kv = next((x for x in (keys or json.loads(KEYS.read_text()))["vectors"] if x["id"] == v["id"]), None)
+    if kv is None or (kv["setup_salt"], kv["model_commitment"]) != (v["setup_salt"], v["model_commitment"]):
+        return {"passed": False, "reason": f"no pinned keys for {v['id']}"}
     salt, model = bytes.fromhex(v["setup_salt"]), bytes.fromhex(v["model_commitment"])
     bound = backend.bind(params, R.expand_prefix(salt, params, model))
     first = int(v["segment"]) * params.blocks_per_segment + int(v["block"])
     k, t = bound.keys(first, 1)
     nb = params.width_bytes
-    want = {x: v[x] for x in ("K", "t", "m", "c")}
+    m, c = rows([int(v["m"], 16)], nb, backend.device), rows([int(v["c"], 16)], nb, backend.device)
     version = keys_version(bound)
-    m, c = rows([int(want["m"], 16)], nb, backend.device), rows([int(want["c"], 16)], nb, backend.device)
-    got = {"K": k[0].cpu().numpy().tobytes().hex() == want["K"], "t": t[0].cpu().numpy().tobytes().hex() == want["t"],
-           "encode": bytes(bound.encode(m, first)[0].cpu().numpy()) == bytes.fromhex(want["c"]),
-           "decode": bytes(bound.decode(c, first)[0].cpu().numpy()) == bytes.fromhex(want["m"]), "flags": bound.raised() == 0}
+    got = {"keys_v4": version == 4, "K": k[0].cpu().numpy().tobytes().hex() == kv["K"],
+           "t": t[0].cpu().numpy().tobytes().hex() == kv["t"],
+           "encode": bytes(bound.encode(m, first)[0].cpu().numpy()) == bytes.fromhex(v["c"]),
+           "decode": bytes(bound.decode(c, first)[0].cpu().numpy()) == bytes.fromhex(v["m"]), "flags": bound.raised() == 0}
     return {"passed": all(got.values()), "vector": v["id"], "keys_version": version, **got}
 
 
 def keys_version(bound: Any) -> int:
-    """The key streams a bound library expands: 4, counter-mode SHA-512 (`reference.stream`, which `vectors.json` pins), or
-    1, v1's SHAKE256, which no framing here uses any more (so its gates fail)."""
+    """The key framing a bound library reports expanding: 4 is `reference.keys`; anything else is retired."""
     return getattr(bound, "keys_version", 1)
 
 
@@ -487,8 +495,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     def result(metrics: dict[str, Any], rows_: list[tuple[str, Any, str]], prof: dict[str, Any] | None) -> dict[str, Any]:
         return {"implementation": {"name": fr.impl, "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
-                                   "kernels": f"p2v1.cu: p2dec.cu's tuned decode with {fr.scheme} keys expanded by "
-                                              "pous_native.shake256_rows; encode by an addition-chain root on CGBN's generic squaring",
+                                   "kernels": f"p2v1.cu: p2dec.cu's tuned decode with {fr.scheme} keys expanded by p2keys4.cuh (counter-mode "
+                                              "SHA-512 from the key prefix's midstate); encode by an addition-chain root on CGBN's generic squaring",
                                    "memory_challenger": str(fr.live.relative_to(HERE.parent)), "memory_challenger_args": list(fr.memory_challenger_args)},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
                 "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex(),

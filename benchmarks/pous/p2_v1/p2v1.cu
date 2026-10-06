@@ -258,7 +258,7 @@ extern "C" int p2v1_keys(const uint8_t *prefix, int plen, uint64_t first, uint32
 #endif
 
 #ifdef P2_KEYS4
-// the key framing p2v1_keys expands (reference.keys_v4, under reference.expand_prefix_v4's prefix)
+// the key framing p2v1_keys expands (reference.keys, under reference.expand_prefix's 256-byte prefix)
 extern "C" int p2v1_keys_version() { return 4; }
 
 extern "C" int p2v1_keys(const uint8_t *prefix, int plen, uint64_t first, uint32_t count, uint64_t per_segment, void *k, void *t,

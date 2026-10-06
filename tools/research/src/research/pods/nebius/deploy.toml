@@ -595,18 +595,6 @@ nodes = ["vy-nebius-2"]
 owner = "compute-accounting"
 
 [[file]]
-path = "/workspace/pouw/infra/bin/check_slot.sh"
-src = "tools/research/src/research/pods/nebius/check_slot.sh"
-nodes = ["vy-nebius-2"]
-owner = "infra"
-
-[[file]]
-path = "/usr/local/bin/vy-check-slot-d"
-src = "tools/research/src/research/pods/nebius/check_slot_d.sh"
-nodes = ["vy-nebius-2"]
-owner = "infra"
-
-[[file]]
 path = "/usr/local/bin/vy-provers"
 src = "tools/research/src/research/pods/nebius/provers.sh"
 nodes = ["vy-nebius-2"]

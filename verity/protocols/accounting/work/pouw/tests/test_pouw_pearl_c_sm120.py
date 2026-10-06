@@ -11,7 +11,7 @@ from fractions import Fraction
 
 import pytest
 
-import quicknet as Q
+import epoch_coins as E
 
 import pearl_c_u_vectors as UV
 import pearl_c_vectors as CV
@@ -129,12 +129,12 @@ def test_sm120_lifecycle_and_work_audit():
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     prover = Prover(s, {9: rows_b})
-    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     tr = prover.prove(epoch, {3: rows_a})
-    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
+    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), E.challenger()).accepted
     splits = {9: W.Split(k)}
     records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits)
-    res = W.audit(s, epoch, prover, tr, splits, records, Q.recorded_before(Q.LATEST), Q.LATEST, 3)
+    res = W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 3)
     assert res.audit.accepted and res.audit.profile.scheme == "pearl-c-sm120-v1"
 
 
@@ -161,7 +161,7 @@ def test_the_cap_is_the_records(monkeypatch):
     rows_a, rows_b = CV.rows_f32("cap", "A", 32, k), CV.rows_f32("cap", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     prover = Prover(sm, {9: rows_b})
-    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     tr = prover.prove(epoch, {3: rows_a})
     splits = {9: W.Split(k)}
     records = W.declare(sm, epoch, {3: rows_a}, {9: rows_b}, splits)
@@ -174,10 +174,9 @@ def test_the_cap_is_the_records(monkeypatch):
     assert Fraction(1, 1000) * tile_credit < atoms * D.atom_units(SM120) <= Fraction(1, 400) * tile_credit
     monkeypatch.setattr(D, "chain_debit", lambda a, b, device=None: (atoms, 0))
     assert W.tile_cap(sm, records[0], [[0] * k] * 16, [[0] * k] * 16) == (atoms * 34, Fraction(1, 1000) * tile_credit)
-    beacon, before = Q.LATEST, Q.recorded_before(Q.LATEST)
-    out = W.audit(sm, epoch, prover, tr, splits, records, before, beacon, 2)
+    out = W.audit(sm, epoch, prover, tr, splits, records, E.challenger(), 2)
     assert not out.audit.accepted and all("exceeds the cap" in v.reason for v in out.audit.verdicts if not v.ok)
-    assert W.audit(at400, epoch, prover, tr, splits, records, before, beacon, 2).audit.accepted
+    assert W.audit(at400, epoch, prover, tr, splits, records, E.challenger(), 2).audit.accepted
     assert W.volunteer(sm, epoch, tr, records, {3: rows_a}, {9: rows_b}) != ({}, {})
     assert W.volunteer(at400, epoch, tr, records, {3: rows_a}, {9: rows_b}) == ({}, {})
 
