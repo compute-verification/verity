@@ -38,12 +38,13 @@ Everything else is the protocol's (`audit`), the same for every scheme.
    and the index. The scheme derives its noise from (salt, matmul, roots); every tile yields checked values and a digest.
    The useful output is assembled from the tiles.
 4. **Transcript.** A tree over every tile's digest, in matmul order then tile order, bound to (salt, weights_root).
-5. **Selection.**
-   - `Sampled(t)`, the default: `derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`, the source
+5. **Selection.** Served accounting uses only the sampled audit.
+   - `Sampled(t)`: `derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`, the source
      being the epoch's draw coin, opened after the verifier recorded the transcript's root (`draw_coin`); draw j is
      `key.uniform(W, j)` mapped to a tile by cumulative work, so t tiles are drawn independently, each with probability
      W_ref(tile)/W, a tile's work being its cells' share of its matmul's W_ref (Lean `WorkWeightedSampling`).
-   - `Lottery(target)`, Pearl's mining rule: the tiles whose digest, read little-endian, is at most target·|rows|·|cols|·k.
+   - `Lottery(target)` is Pearl's mining rule, not one of the audit's laws: the tiles whose digest, read little-endian, is
+     at most target·|rows|·|cols|·k. It stays in `audit`, unwired: no served path selects with it.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
    recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf. It refuses
    a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
@@ -62,10 +63,13 @@ shallower leaf. A leaf over L bytes is a tree over its ⌈L/256⌉ segments (one
 - the odd last node of a level is promoted unchanged;
 - the domain id's tag is `domain/b3s`.
 
-7. **Profile.** When every selected tile passes, `WorkProfile`: for every ε_s in (0, 1] and every operator whose online cost
-   is at most T, `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + η` (Lean `Pouw.SecurityProofs.EndToEnd`), with
-   γ = 1 − (1 − γ_0)/Ω*, under the certificate's conjecture. A scheme with no γ_0 gets only the sampling half; a lottery
-   gets neither.
+7. **Profile.** When every selected tile passes, `WorkProfile` reports what the draw established, ε at δ, and for a scheme
+   with a γ_0 the work certified at that ε, under the certificate's conjecture. PoUW has no policy parameter: accounting
+   decides which ε at δ it accepts (Daniel, 2026-10-06). The statement is `Pouw.Guarantees.EndToEnd` (proof
+   `Pouw.SecurityProofs.EndToEnd`); a scheme with no γ_0 gets only its sampling half, `Pouw.Guarantees.WorkWeightedSampling`.
+
+**What is public.** Every protocol is zero-knowledge, and only the minimum is public (Daniel, 2026-10-05). |W|, the size
+of the weights, is public (Daniel, 2026-10-06).
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
 a public beacon and never Fiat-Shamir over the prover's roots. A scheme's noise is its own derivation from the salt and the
@@ -313,7 +317,8 @@ stratum, and each drawn tile is proved with its closure: its X unit, strip diges
 the key, each once, and its Y unit in the weight's Program (`Plan.proved_y`), once per plan. Every other template is drawn
 at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratum`). The law is a seam:
 - `WorkLaw` is Verity root's work law (#362 with #374's floors, `Flock/Draw.lean`): k_s = min(n_s, max(f_s,
-  ⌈K·w_s·n_s/W⌉)), with K = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`plan.record_k`; 27,712 misses). Only the tile template does
+  ⌈K·w_s·n_s/W⌉)), with K = 27,713, the draws that establish ε = 0.1% at δ = 2⁻⁴⁰, the default report point and not a
+  policy parameter (`plan.record_k`; 27,712 misses). Only the tile template does
   PoUW work, so W is its stratum's, and k_tile = min(n_tile, max(f_tile, K)).
   - `plan.work_table` is the verifier's `--work-table`: every template of the call, `{"work": w, "floor": f}`, the tile's
     W_ref per tile and 0 for `digest`, `node`, `key`, `form_x` and `dequant`; `dequant`'s floor is y's (below), and the
