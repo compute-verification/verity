@@ -24,8 +24,14 @@ then releases min(queue, r) of them, left-packed, and the proxy writes those and
 model) and released by the ingress `Certifier` at r_in into its stream's server connection.
 
 **Advice.** The proxy runs the windows of its declared syncs, one per window, which the prover gives before the run,
-or which an online prover (`online.Prover`) declares at each window's first tick from the frames ready by then. A
-frame anchored past them is never handed, nor is any frame behind it (`schedule.handing_buckets`).
+or which an online prover (`online.Prover`, with a lag of 1 … T − 1 buckets) declares at each window's first tick. A
+frame anchored past them is never handed, nor is any frame behind it (`schedule.handing_buckets`). The online
+choice for window w costs hundreds of ms on a live configuration, against a slack of tens, so it is never made on a
+tick: right after tick w·T − lag the proxy hands what it reads (`Prover.snapshot`, the frames ready by then and the
+earlier declarations) to a worker process, off its event loop and its GIL, and the tick at w·T declares the result
+if it is done, else the envelope (`LaggedChoices`). Window 0's is started before the first tick. The envelope is in
+Σ_sync, so an unready choice changes nothing the audit checks or charges: a declaration is advice, checked only for
+membership in Σ_sync, and the bound charges log2 #Σ_sync bits per window whatever the value.
 
 **Faults fail closed** through `Certifier.fault`: the rest of the window is padding, the queue is dropped, and the status
 names the first reason (W6). Since the Program's grid carries a queue into the next window, an egress window that
@@ -51,10 +57,12 @@ import asyncio
 import heapq
 import itertools
 import math
+import multiprocessing
 import struct
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable, Sequence
+from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from dataclasses import dataclass, field
 
 from verity.protocols.accounting.communication.certifier.grid import (
@@ -120,11 +128,12 @@ class Shaper:
     `queued` is what the certifier's queue would hold had no fault dropped it. A window that closes faulted with frames
     still queued faults the next one too, with the same reason: the Program's grid carries them over.
 
-    With a `prover` (`online.Prover`), the syncs after the given ones are its: it sees every frame the shaper takes, and
-    declares each of the first `windows` windows' syncs at the window's first tick, before anything is handed."""
+    With a `prover`, the syncs after the given ones are its: it sees every frame the shaper takes, and declares each of
+    the first `windows` windows' syncs at the window's first tick, before anything is handed. The proxy's is
+    `LaggedChoices`, whose `declare` only takes a choice already made; an `online.Prover` chooses at the tick."""
 
-    def __init__(self, certifier: Certifier, syncs: Sequence[ClockSync], sync_set: SyncSet, prover: Prover | None = None,
-                 windows: int | None = None) -> None:
+    def __init__(self, certifier: Certifier, syncs: Sequence[ClockSync], sync_set: SyncSet,
+                 prover: Prover | LaggedChoices | None = None, windows: int | None = None) -> None:
         self.certifier, self.syncs, self.sync_set = certifier, list(syncs), sync_set
         self.prover, self.windows = prover, len(self.syncs) if windows is None else windows
         self.pending: dict[int, tuple[LogicalFrame, int]] = {}
@@ -199,6 +208,63 @@ class Bucketer:
         return row, self.certifier.close_window() if self.t % self.certifier.params.buckets == 0 else None
 
 
+def _choose(snapshot: Prover) -> tuple[ClockSync, float]:
+    t0 = time.perf_counter()
+    sync = snapshot.choose()
+    return sync, round((time.perf_counter() - t0) * 1000, 1)
+
+
+def worker() -> ProcessPoolExecutor:
+    """The proxy's worker for its online choices: one spawned process, started before it returns, so that its
+    start-up imports don't share window 0 with the proxy's forwards. A thread would hold the proxy's GIL."""
+    pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
+    pool.submit(int).result()
+    return pool
+
+
+class InlineExecutor(Executor):
+    """An executor that runs each call at `submit`, for a driver on a `VirtualClock`, where no tick waits for it: every
+    choice is ready."""
+
+    def submit(self, fn, /, *args, **kwargs) -> Future:
+        future: Future = Future()
+        try:
+            future.set_result(fn(*args, **kwargs))
+        except BaseException as err:
+            future.set_exception(err)
+        return future
+
+
+class LaggedChoices:
+    """The online prover's declarations off the proxy's tick (no I/O). `start()`, right after tick w·T − lag (window
+    0's before the first tick), submits window w's choice on `prover.snapshot()` to `executor`; `declare()` at tick w·T
+    declares it if it is done, else the envelope, without waiting. `log` has the lag, the windows declared the envelope
+    for want of a choice (`unready`) and each choice's time in ms (`choose_ms`)."""
+
+    def __init__(self, prover: Prover, executor: Executor) -> None:
+        if not 0 < prover.lag < prover.T:
+            raise ValueError("the proxy's online prover chooses off its tick: a lag of 1 … T − 1 buckets")
+        self.prover, self.executor = prover, executor
+        self._next: tuple[int, Future] | None = None
+        self.log: dict = {"lag": prover.lag, "unready": [], "choose_ms": []}
+
+    def arrive(self, link: int, position: int, frame: LogicalFrame, ready: int) -> None:
+        self.prover.arrive(link, position, frame, ready)
+
+    def start(self) -> None:
+        self._next = (len(self.prover.syncs), self.executor.submit(_choose, self.prover.snapshot()))
+
+    def declare(self) -> ClockSync:
+        w, sync = len(self.prover.syncs), None
+        if self._next is not None and self._next[0] == w and self._next[1].done():
+            sync, ms = self._next[1].result()
+            self.log["choose_ms"].append(ms)
+        else:
+            self.log["unready"].append(w)
+        self._next = None
+        return self.prover.declare(self.prover.envelope if sync is None else sync)
+
+
 class VirtualClock:
     """A clock its caller moves, for runs driven event by event (tests, and replays without the host's timer):
     `clock()` reads it, `sleep` waits until `advance` passes the deadline."""
@@ -242,8 +308,10 @@ class _Stream:
 
 class Proxy:
     """The active certifier on one link: `run(reader, writer)` serves the link connection from `origin`, the clock's time
-    of bucket 0, for the windows of `syncs` (or `windows` of them, the rest declared by `prover`), then closes it.
+    of bucket 0, for the windows of `syncs`, or `windows` of them declared by an online `prover`, then closes it.
 
+    - the prover's choices (`LaggedChoices`) run on `executor`, by default a `worker()` process, which the proxy shuts
+      down when `run` ends; on a `VirtualClock`, pass `InlineExecutor()`;
     - `publish(record, params)` receives every window's record, egress and ingress, as it closes (by default they are
       kept in `records`);
     - `frames` logs every egress frame read, as (position, stream, index, anchor, ready), and `shaper.hands` its hand
@@ -257,13 +325,16 @@ class Proxy:
                  sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
                  publish: Callable[[Record, GridParams], None] | None = None,
                  egress_link: str = "responses", ingress_link: str = "requests",
-                 prover: Prover | None = None, windows: int | None = None) -> None:
+                 prover: Prover | None = None, windows: int | None = None, executor: Executor | None = None) -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
+        if prover is not None and syncs:
+            raise ValueError("an online prover declares every window's sync")
         self.upstream, self.egress, self.ingress = upstream, egress, ingress
         self.origin, self.slack, self.clock, self.sleep = origin, slack, clock, sleep
         self.windows = len(syncs) if windows is None else windows
-        self.shaper = Shaper(Certifier(egress_link, egress), syncs, sync_set, prover, self.windows)
+        self.choices = None if prover is None else LaggedChoices(prover, executor or worker())
+        self.shaper = Shaper(Certifier(egress_link, egress), syncs, sync_set, self.choices, self.windows)
         self.bucketer = Bucketer(Certifier(ingress_link, ingress))
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
@@ -291,6 +362,8 @@ class Proxy:
                     st.task.cancel()
             await asyncio.gather(link, *(st.task for st in self.streams.values() if st.task), return_exceptions=True)
             writer.close()
+            if self.choices is not None:
+                await asyncio.to_thread(self.choices.executor.shutdown, True, cancel_futures=True)
             self._changed.set()
 
     def _bucket_ready(self, now: float) -> int:
@@ -311,7 +384,10 @@ class Proxy:
         p = self.egress
         bucket_bytes = p.allocation * p.frame_bytes
         padding = memoryview(bytes(bucket_bytes))
-        async for _ in self._ticks(p, self.lateness["egress"], self.shaper.certifier):
+        choices = self.choices
+        if choices is not None and self.windows:
+            choices.start()
+        async for t in self._ticks(p, self.lateness["egress"], self.shaper.certifier):
             backlog = writer.transport.get_write_buffer_size()
             if backlog > bucket_bytes:
                 self.shaper.certifier.fault(Reason.DELIVERY_REFUSED)
@@ -320,6 +396,9 @@ class Proxy:
             n = row_count(row)
             if backlog <= 4 * bucket_bytes:
                 writer.writelines([*row[:n], padding[: (p.allocation - n) * p.frame_bytes]])
+            if choices is not None and (t + choices.prover.lag) % p.buckets == 0 and \
+                    (t + choices.prover.lag) // p.buckets < self.windows:
+                choices.start()
             if record is not None:
                 self.publish(record, p)
             self._changed.set()
