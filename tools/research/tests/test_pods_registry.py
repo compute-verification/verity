@@ -34,15 +34,33 @@ def reg(tmp_path, monkeypatch) -> Path:
     return d
 
 
-def test_the_laptop_reads_machines_toml_alone_until_the_variable_is_set(tmp_path):
+def test_register_and_run_on_use_one_directory_with_or_without_machines_toml(tmp_path):
     mt = tmp_path / "machines.toml"
     mt.write_text('[machines.vy-x]\nprovider = "runpod"\npod_id = "abc123def45678"\nproject = "verity"\n')
-    (tmp_path / "notes" / "machines.d").mkdir(parents=True)
+    notes_d = tmp_path / "notes" / "machines.d"
+    notes_d.mkdir(parents=True)
     env = {"RESEARCH_NOTES": str(tmp_path / "notes")}
-    assert registry.registry_dir(mt, env) is None
-    assert registry.registry_dir(tmp_path / "absent.toml", env) == tmp_path / "notes" / "machines.d"   # a cloud VM: no machines.toml
-    assert registry.registry_dir(mt, {**env, "RESEARCH_MACHINES_D": "none"}) is None
-    assert registry.registry_dir(mt, {**env, "RESEARCH_MACHINES_D": str(tmp_path / "r")}) == tmp_path / "r"
+    for toml in (mt, tmp_path / "absent.toml"):
+        assert registry.registry_dir(toml, env) == registry.write_dir(toml, env) == notes_d
+    r = {**env, "RESEARCH_MACHINES_D": str(tmp_path / "r")}
+    assert registry.registry_dir(mt, r) == registry.write_dir(mt, r) == tmp_path / "r"
+    off = {**env, "RESEARCH_MACHINES_D": "none"}
+    assert registry.registry_dir(mt, off) is None
+    with pytest.raises(remote.Refused, match="registry is off"):
+        registry.write_dir(mt, off)
+
+
+def test_a_pod_registered_beside_machines_toml_is_one_run_on_resolves(tmp_path, monkeypatch):
+    mt = tmp_path / "machines.toml"
+    mt.write_text('[machines.vy-x]\nprovider = "runpod"\npod_id = "abc123def45678"\nproject = "verity"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(mt))
+    monkeypatch.setenv("RESEARCH_NOTES", str(tmp_path / "notes"))
+    monkeypatch.delenv("RESEARCH_MACHINES_D", raising=False)
+    (tmp_path / "notes").mkdir()
+    p, _ = registry.register("vy-lane-a", POD["id"], "verity", get_pod=pods(POD))
+    assert p == tmp_path / "notes" / "machines.d" / "vy-lane-a.toml"
+    assert remote.resolve_machine("vy-lane-a", "verity")["pod_id"] == POD["id"]
+    assert remote.resolve_machine("vy-x", "verity")["pod_id"] == "abc123def45678"
 
 
 def test_register_writes_one_file_and_run_on_resolves_it(reg):
