@@ -402,7 +402,10 @@ class CoinServer:
         return coins
 
     def record(self) -> dict:
-        return {"kind": KIND, "tops": TOPS, "hello": self.hello, "link": self.link, "streams": self.streams, "rounds": self.rounds,
+        """Everything the coin server saw and issued; its streams by name, as a schedule lists them, whatever order the
+        prover opened them in."""
+        return {"kind": KIND, "tops": TOPS, "hello": self.hello, "link": self.link,
+                "streams": {s: self.streams[s] for s in sorted(self.streams)}, "rounds": self.rounds,
                 "message_rows": sum(len(r["commits"]) for r in self.rounds), "row_words": ROW_WORDS}
 
 

@@ -1,5 +1,6 @@
 """The inner phase's gateway (`verity_flock.rec_live`) held to what live PROTOCOL.md §10.3 says it does, one rule a test:
-``Link``'s ``y`` is the schedule's number of zero elements."""
+``Link``'s ``y`` is the schedule's number of zero elements, and the coin server is shown the schedule's ``Hello``, once the
+prover's is the same canonical JSON, and the record lists streams by name, whatever order the prover opened them in."""
 from __future__ import annotations
 
 import json
@@ -80,8 +81,20 @@ def test_the_coin_server_records_the_pinned_hello_never_the_provers_spelling():
                                   {"tables": ["circuit", "circuit"]}, {"note": "5e" * 64}, {"link": {"m": 4, "points": 2}},
                                   {"link": {"sigma": 7, "m": 4, "points": 2}}])
 def test_a_hello_whose_canonical_json_is_not_the_pinned_ones_is_refused(edit):
-    """``==`` holds ``2.0`` (and ``True``) equal to ``2``; the canonical JSON does not. A Hello without Σ as a string is refused
-    too (the session record needs it, the coin server never sees it)."""
+    """``==`` holds ``2.0`` equal to ``2``; the canonical JSON does not. A Hello without Σ as a string is refused too (the
+    session record needs it, the coin server never sees it)."""
     proxy = _proxy(_schedule())
     assert _refusal(_run(proxy, hello={**HELLO, **edit})).startswith("rec proxy: GATE-REFUSED: Hello: ")
     assert proxy.coins.hello is None and proxy.coins.link is None
+
+
+def test_the_record_lists_streams_in_the_schedules_order_whatever_order_they_were_opened_in():
+    """Each stream is pinned by its parent and position, not by when it is opened, so the prover may open rep1 first; the
+    coin server's record is the same either way (log2(s!) free bits with s streams, otherwise)."""
+    two = ("circuit/rep0", "circuit/rep1")
+    recs = []
+    for opens in (two, two[::-1]):
+        proxy = _proxy(_schedule(two))
+        assert _held(_run(proxy, opens=opens, streams=two))
+        recs.append(json.dumps(proxy.coins.record()))
+    assert recs[0] == recs[1] and list(json.loads(recs[0])["streams"]) == list(two)
