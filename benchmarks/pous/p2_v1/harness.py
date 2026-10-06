@@ -293,11 +293,19 @@ def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | No
     first = int(v["segment"]) * params.blocks_per_segment + int(v["block"])
     k, t = bound.keys(first, 1)
     nb = params.width_bytes
-    m, c = rows([int(v["m"], 16)], nb, backend.device), rows([int(v["c"], 16)], nb, backend.device)
-    got = {"K": k[0].cpu().numpy().tobytes().hex() == v["K"], "t": t[0].cpu().numpy().tobytes().hex() == v["t"],
-           "encode": bytes(bound.encode(m, first)[0].cpu().numpy()) == bytes.fromhex(v["c"]),
-           "decode": bytes(bound.decode(c, first)[0].cpu().numpy()) == bytes.fromhex(v["m"]), "flags": bound.raised() == 0}
-    return {"passed": all(got.values()), "vector": v["id"], **got}
+    want = {x: v[x] for x in ("K", "t", "m", "c")}
+    version = keys_version(bound)
+    m, c = rows([int(want["m"], 16)], nb, backend.device), rows([int(want["c"], 16)], nb, backend.device)
+    got = {"K": k[0].cpu().numpy().tobytes().hex() == want["K"], "t": t[0].cpu().numpy().tobytes().hex() == want["t"],
+           "encode": bytes(bound.encode(m, first)[0].cpu().numpy()) == bytes.fromhex(want["c"]),
+           "decode": bytes(bound.decode(c, first)[0].cpu().numpy()) == bytes.fromhex(want["m"]), "flags": bound.raised() == 0}
+    return {"passed": all(got.values()), "vector": v["id"], "keys_version": version, **got}
+
+
+def keys_version(bound: Any) -> int:
+    """The key streams a bound library expands: 4, counter-mode SHA-512 (`reference.stream`, which `vectors.json` pins), or
+    1, v1's SHAKE256, which no framing here uses any more (so its gates fail)."""
+    return getattr(bound, "keys_version", 1)
 
 
 def picks(encoded: int, blocks: int, extra: int = 8) -> list[int]:
@@ -483,7 +491,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                                               "pous_native.shake256_rows; encode by an addition-chain root on CGBN's generic squaring",
                                    "memory_challenger": str(fr.live.relative_to(HERE.parent)), "memory_challenger_args": list(fr.memory_challenger_args)},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
-                "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex()},
+                "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex(),
+                          "keys_version": keys_version(bound)},
                 **({} if a.audits else H.UNTIMED), "gates": gates, "metrics": metrics, "profile": prof,
                 "measurements": [{"name": n, "value": v, "unit": u} for n, v, u in rows_ if v is not None]}
 

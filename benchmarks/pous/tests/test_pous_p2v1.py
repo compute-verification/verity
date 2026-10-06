@@ -42,15 +42,23 @@ def _small():
 
 
 class _Bound:
-    """The reference as one setup's kernels (its key prefix), on CPU rows."""
+    """The reference as one setup's kernels (its key prefix), on CPU rows: v4's counter-mode SHA-512 keys, or (`version` 1)
+    v1's SHAKE256 streams over the same prefix; `says` is the version it reports, if not that."""
 
-    def __init__(self, params, prefix, flip: bool) -> None:
+    def __init__(self, params, prefix, flip: bool, version: int = 4, says: int | None = None) -> None:
         self.params, self.prefix, self.flip = params, prefix, flip
+        self.version, self.keys_version = version, version if says is None else says
 
     def _keys(self, i):
         R, _, _ = _p2()
-        k, t, _ = R.keys_after(self.prefix, self.params, *divmod(i, self.params.blocks_per_segment))
-        return k, t
+        s, j = divmod(i, self.params.blocks_per_segment)
+        if self.version == 4:
+            k, t, _ = R.keys_after(self.prefix, self.params, s, j)
+            return k, t
+        n, base = self.params.width_bytes, self.prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
+        k = int.from_bytes(hashlib.shake_256(base + b"K").digest(n), "big")
+        stream = hashlib.shake_256(base + b"t").digest(64 * n)
+        return k, next(x for x in (int.from_bytes(stream[a:a + n], "big") for a in range(0, 64 * n, n)) if x < self.params.p)
 
     def keys(self, first, count):
         n = self.params.width_bytes
@@ -81,14 +89,15 @@ class _Bound:
         return 0
 
 
-def _backend(flip: bool = False):
+def _backend(flip: bool = False, version: int = 4, says: int | None = None):
     _, harness, _ = _p2()
 
     def timer(fn):
         fn()
         return 1e-3
 
-    return harness.Backend("cpu", lambda params, prefix: _Bound(params, prefix, flip), lambda c, cpu: PyResponder(c), timer)
+    return harness.Backend("cpu", lambda params, prefix: _Bound(params, prefix, flip, version, says), lambda c, cpu: PyResponder(c),
+                           timer)
 
 
 def _args(tmp_path, **kw):
@@ -110,6 +119,25 @@ def test_the_reference_matches_every_pinned_vector():
 def test_the_reference_encodes_the_full_width_vector():
     R, _, _ = _p2()
     assert R.conformance(full_encode=True)["passed"]
+
+
+def test_the_key_prefixes_are_whole_sha512_blocks_and_their_keys_counter_mode_sha512():
+    """`p2keys4.cuh` expands the keys after one midstate of the prefix, so each framing's prefix is whole 128-byte blocks:
+    the spec's (`reference.expand_prefix`, 256 bytes at the deployment) and the registered scheme's
+    (`schemes.p2.expand_prefix`, 128), and `keys_after` over either is `SHA512(prefix ‖ s ‖ j ‖ P ‖ u32be i)`."""
+    from verity.protocols.accounting.space.pous.schemes import p2
+
+    R, _, _ = _p2()
+    salt, model = bytes(range(32)), bytes(range(32, 96))
+    spec = R.expand_prefix(salt, R.DEPLOYMENT, model)
+    registered = p2.expand_prefix(p2.P2().params, salt[:24])
+    assert (len(spec), len(registered)) == (256, 128)
+    for prefix in (spec, registered):
+        k, t, attempt = R.keys_after(prefix, R.DEPLOYMENT, 5, 1234)
+        base = prefix + (5).to_bytes(8, "big") + (1234).to_bytes(8, "big")
+        row = lambda p: b"".join(hashlib.sha512(base + p + i.to_bytes(4, "big")).digest() for i in range(33))[:2056]  # noqa: E731
+        assert k.to_bytes(2056, "big") == row(b"K") and attempt == 0 and t.to_bytes(2056, "big") == row(b"t")
+    assert R.keys_after(registered, R.DEPLOYMENT, 5, 1234)[:2] == p2.sha512_keys(p2.P2().params, registered, 5, 1234)
 
 
 def test_the_root_exponent_splits_as_the_kernel_takes_it():
@@ -237,6 +265,19 @@ def test_a_wrong_p2_kernel_stops_the_run_before_anything_is_timed(tmp_path):
     body = _bench().P2V1Gpu().run(_args(tmp_path), WS, tmp_path, backend=_backend(flip=True), params=_small())
     assert body["gates"]["vector"]["passed"] and not body["gates"]["round_trip"]["passed"]
     assert body["metrics"] is None and body["measurements"] == [] and "nothing was timed" in body["stopped"]
+
+
+def test_a_v4_keyed_library_is_gated_against_the_v4_reference_keys(tmp_path):
+    """A library that expands v4's keys passes the gates and its version is recorded; one that expands v1's SHAKE256 streams
+    fails the pinned vector's keys and the reference decode, whatever version it reports."""
+    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(version=4), params=_small())
+    assert all(g["passed"] for g in body["gates"].values()), body["gates"]
+    assert body["gates"]["vector"]["keys_version"] == 4
+    for says in (1, 4):
+        body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(version=1, says=says),
+                                      params=_small())
+        vector = body["gates"]["vector"]
+        assert not vector["passed"] and not vector["K"] and not vector["t"] and not body["gates"]["reference_decode"]["passed"]
 
 
 def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
@@ -499,6 +540,7 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
     assert m["signature_control"] == {"sessions": 2, "unedited_accepted": 2, "flipped_rejected": 2, "edited_rejected": 2,
                                       "passed": True}
     assert len(bytes.fromhex(honest["records"][0]["public"]["openings"][0]["salt"])) == 192 and nb == 16
+    assert body["setup"]["keys_version"] == body["gates"]["vector"]["keys_version"] == 4
     _service_input_opens_under_c(tmp_path / "service-input.json", args[3], raw, honest, body["setup"])
 
 

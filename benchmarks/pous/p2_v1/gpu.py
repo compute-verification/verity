@@ -1,7 +1,9 @@
 """P2 v1's GPU backend: `libp2v1.so` (`p2v1.cu`) through ctypes on torch tensors, with every block's `K` and `t` expanded on the
-device by SHAKE256 (`band_gpu`'s `pous_native.shake256_rows`: the setup's shared prefix, v1's framing or `p2-16448/v3`'s, then
-each block's `u64be(segment) ‖ u64be(local block) ‖ purpose`, or the library's own `p2v1_keys` when it is built with one)
-just before the kernel that uses them, and freed after it."""
+device for the setup's shared key prefix (the framing's: the spec's `reference.expand_prefix` or the registered scheme's
+`schemes.p2.expand_prefix`), then each block's `u64be(segment) ‖ u64be(local block) ‖ purpose`: by SHAKE256 (`band_gpu`'s
+`pous_native.shake256_rows`, or the library's own `p2v1_keys` when it is built with one), or, in a library built with
+`P2_KEYS4`, by counter-mode SHA-512 (`keys_version` 4, with no SHAKE256 fallback), just before the kernel that uses them, and
+freed after it."""
 from __future__ import annotations
 
 import ctypes
@@ -52,6 +54,9 @@ class Kernels:
         if self.fast_keys:
             q = ctypes.c_uint64
             self.lib.p2v1_keys.argtypes = [ctypes.c_char_p, ctypes.c_int, q, u, q, v, v, v]
+        self.keys_version = self.lib.p2v1_keys_version() if hasattr(self.lib, "p2v1_keys_version") else 1
+        if self.keys_version not in (1, 4):
+            raise RuntimeError(f"{LIB} expands keys v{self.keys_version}")
         self.params, self.split = params, exponent_split(params)
         self.device = torch.device("cuda", torch.cuda.current_device())
         prefix = self.prefix_bytes = bytes(prefix)
@@ -69,6 +74,8 @@ class Kernels:
             if rc:
                 raise RuntimeError(f"p2v1_keys: error {rc}")
             return k, t
+        if self.keys_version != 1:
+            raise RuntimeError(f"{LIB} reports keys v{self.keys_version} without p2v1_keys")
         idx = torch.arange(first, first + count, dtype=torch.int64, device=self.device)
         s, v = idx // self.params.blocks_per_segment, idx % self.params.blocks_per_segment
         shifts = torch.arange(56, -1, -8, dtype=torch.int64, device=self.device)
