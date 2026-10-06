@@ -1,17 +1,21 @@
 import Proofs.Flock.Soundness.Discharge.Composed.Sound
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Discharge.ZkRegV2.Bind
 
 /-!
 # One `--zk` sampled session with registered reads
 
 `zk_session_soundR`: `Composed.zk_session_sound` for `flock-verify verify --zk --registered F` sessions, `own` F's
 ports, over a public file with or without shared-row tables (no `pub.tables = none`: `Registered.check` refuses a
-registered port outside a shared-row file's tables, so with that premise the event would be empty). Its first
-conjunct is `zk_session_sound`'s bound at the event `LiveAcceptsZKR I own` and the rows `rsZAtS`; its second is the
-registered check's consequence at every accepted outcome: the layout's registered reads that are the verifier's own
-at the outcome's draw (`OwnReads`) are `Checked` at the outcome's registration, through the paths the drawn statement
-gives (`regPaths`). That is the hypothesis a registered-reads binding theorem takes as `hchk`, here a consequence of
-acceptance.
+registered port outside a shared-row file's tables, so with that premise the event would be empty), at a circuit whose
+rows are whole-block `sha512/row/v2` bit rows (`ZkRegV2.scopeOkV2`), the rows the registered check admits
+(`Registered.Port.fits`): at `Layout.scopeOk`'s `sha512/row/v1` rows it refuses every registered port
+(`ZkRegV2.check_refuses_scopeOk`). Its first conjunct is `zk_session_sound`'s bound at the event `LiveAcceptsZKR I own`
+and the rows `rsZAtSV2`; its second is the registered check's consequence at every accepted outcome: the layout's
+registered reads that are the verifier's own at the outcome's draw (`OwnReads`) are `Checked` at the outcome's
+registration, through the paths the drawn statement gives (`regPaths`). That is the hypothesis a registered-reads
+binding theorem takes as `hchk`, here a consequence of acceptance. `checked_of_accepts_rows` is `checked_of_accepts` at
+any rows of the shadow layout: the registered check reads the layout's leaves, not its rows' bytes.
 
 What it rests on: `zk_session_sound`'s assumptions, and nothing more for the second conjunct, which reads only the
 executable's checks.
@@ -19,13 +23,95 @@ executable's checks.
 
 namespace FlockSoundness.Discharge.ZkReg
 
+variable {mPts n : ℕ} {Reg : Type}
+
+section Checked
+
+open Flock FlockLevel3 Refine ZkLink ZkExec ZkBind Integrate DecodeZL
+open FlockSoundness.Discharge.Exec (Inputs recordDraw)
+
+/-- **The registered reads are checked at every accepted outcome**, at any rows `rows` of the shadow layout:
+`checked_of_accepts`, whose argument reads the layout's registered leaves only. -/
+theorem checked_of_accepts_rows (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
+    {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
+    {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub)
+    (rows : Binding.HmRows (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)))
+    (hTags : TagsOk I) (o : Reg × Finset (Fin n) × Exec.Transcript) (hacc : LiveAcceptsZKR I own o)
+    (rd : FlockSoundness.Registered.Reads (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)) rows)
+    (hown : OwnReads own c pub o.2.2 rd.isRead rd.port rd.readAt) :
+    rd.Checked o.1 (regPaths c pub o.2.2 rd.port) := by
+  intro p hp
+  obtain ⟨u, q, d, D, dp, idx, rfl, hmem, hfind, hd, hD, hdp, hidx, hu, hread⟩ := hown p hp
+  obtain ⟨spec, sts, hs, hreg, -, -⟩ := hacc
+  have hh' : (zkTags I).hiddenOutputs = false := (zkTags_hiddenOutputs I).trans hTags.1
+  rcases Exec.setupTables_ok hh' hs with ⟨-, st, hst, -, rfl⟩ | ⟨hc', -⟩
+  swap
+  · exact absurd hTags.2.2.2 (by change 1 < I.count at hc'; omega)
+  change Stmt.setupH (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (recordDraw o.2.2.record) I.partition
+    I.program = .ok st at hst
+  rw [hd] at hst
+  have hcst : st.c = c := by
+    have h1 := (setupH_spec ((zkTags_typed I).trans ht) hst).1
+    rw [hc] at h1
+    exact (Except.ok.inj h1).symm
+  obtain ⟨pop', hpop', hdr⟩ := Layout.setupH_drawn hst
+  rw [hcst, hpub] at hpop'
+  cases hpop'
+  rw [hcst, hdp] at hdr
+  have hpd : st.pub = dp := (Except.ok.inj hdr).symm
+  have hck := checkRegistered_ok (array_forM_ok hreg 0 (by simp))
+  simp only [List.getElem_toArray, List.getElem_cons_zero] at hck
+  rw [hcst, hpd] at hck
+  obtain ⟨tb, idx', htb, hidx', hports⟩ := check_tables hck
+  rw [hidx] at hidx'
+  cases hidx'
+  obtain ⟨p', positions, paths, hp', hent, hall⟩ := checkPort_at (hports _ hmem)
+  rw [hfind] at hp'
+  cases hp'
+  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdp
+  rw [hD] at hD'
+  cases hD'
+  have hi : D.proved.idxOf u.val < D.proved.size := Array.idxOf_lt_length_of_mem hu
+  obtain ⟨-, hreads, hopens⟩ := hall _ (by rw [hn]; exact hi)
+  rw [hread] at hreads
+  have hra : rd.readAt (.inl (u, q)) =
+      positions.getD (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) 0 := by
+    simpa using hreads
+  have hpath : regPaths c pub o.2.2 rd.port (.inl (u, q)) =
+      paths.getD (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) ByteArray.empty := by
+    simp [regPaths, hd, hD, hdp, htb, hent, Except.toOption]
+  have hleaf : ((laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)).regLeaf o.1 (.inl (u, q))).1 =
+      Hm96.Default512.treeLeaf (pub.digest u.val q.val c.ports.size) := by
+    show (H512 (K512.leafPrefix ++ (pub.digest u.val q.val c.ports.size).data.toList)).1 = _
+    rw [H512_val]
+    show Sha512.hash ⟨(Hm96.Default512.leafPrefix.data.toList ++ (pub.digest u.val q.val c.ports.size).data.toList).toArray⟩ =
+      Sha512.hash (Hm96.Default512.leafPrefix ++ pub.digest u.val q.val c.ports.size)
+    rw [← data_append, bytes_of_list]
+  have hget : D.proved[D.proved.idxOf u.val]'hi = u.val := by
+    have := Array.findIdx_getElem (xs := D.proved) (p := (· == u.val)) (w := hi)
+    simp only [beq_iff_eq] at this
+    exact this
+  have hdig : pub.digest u.val q.val c.ports.size =
+      Registered.tableRow dp tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
+    have h1 := Hidden.drawn_digestW hpub hdp hD (Layout.proved_lt_population hD) hi q.isLt
+    rw [hget] at h1
+    rw [← h1]
+    simp only [Public.digest, htb, Registered.tableRow, Registered.ref]
+  show Registered.opensLeaf (rd.port (.inl (u, q))) _ (rd.readAt (.inl (u, q))) _ = true
+  rw [hleaf, hra, hpath, hdig]
+  exact hopens
+
+end Checked
+
+section Sound
+
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open Composed
 open scoped ENNReal
 
-variable {mPts n : ℕ} {Reg : Type}
-
-/-- **One `--zk --registered` sampled session is sound, and its registered reads are checked.** -/
+/-- **One `--zk --registered` sampled session over `sha512/row/v2` rows is sound, and its registered reads are
+checked.** At a `scopeOkV2` circuit, with the rows `rsZAtSV2`. -/
 theorem zk_session_soundR
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
@@ -34,7 +120,7 @@ theorem zk_session_soundR
     -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub)
-    (hscope : Layout.scopeOk c = true)
+    (hscope : ZkRegV2.scopeOkV2 c = true)
     -- the law and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -58,7 +144,7 @@ theorem zk_session_soundR
     prob (fun o => LiveAcceptsZKR I own o ∧
         K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
-            ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope))
+            ((rsZAtSV2 ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtSV2_computes ht dj y₀ hc hU hpub hscope))
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))
             (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
@@ -66,22 +152,25 @@ theorem zk_session_soundR
         ksAvgStrictZ (planZAt dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
-          ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope))
+          ((rsZAtSV2 ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtSV2_computes ht dj y₀ hc hU hpub hscope))
           k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) ∧
     ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveAcceptsZKR I own o →
       ∀ rd : FlockSoundness.Registered.Reads (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub))
-          (rowsSh ht dj y₀ hc hU hpub hscope),
+          (rowsShV2 ht dj y₀ hc hU hpub hscope),
         OwnReads own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPaths c pub o.2.2 rd.port) := by
-  refine ⟨?_, fun o hacc rd hown => checked_of_accepts I ht own dj y₀ hc hU hpub hscope hTags o hacc rd hown⟩
+  refine ⟨?_, fun o hacc rd hown =>
+    checked_of_accepts_rows I ht own dj y₀ hc hU hpub _ hTags o hacc rd hown⟩
   have hdec := decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)
   have hnever : ∀ o : Bool × Finset (Fin n), ¬ (o.1 = true ∧ o.1 = false) := fun o h => by
     rw [h.1] at h; exact Bool.noConfusion h.2
-  have hc' := zk_flock_countC_execOS_atS ht dj y₀ hc hU hpub hscope hs512 σs ks hks St hS Kd pop Lb src hA3 hk hRw hM
+  have hc' := zk_flock_countC_execOS_atSV2 ht dj y₀ hc hU hpub hscope hs512 σs ks hks St hS Kd pop Lb src hA3 hk hRw hM
     hρ hr ht' K₀ (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ) hCR (execAccept := fun o => o.1 = true)
     (StrictCR.TreeRewind.ofNever hnever) (ofNever_finderCR hs512.H hnever 0)
   rw [StrictCR.TreeRewind.ofNever_bound, ENNReal.ofReal_zero, add_zero] at hc'
   exact le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
     (zk_headline_exec_on execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ _ _ hc')
+
+end Sound
 
 end FlockSoundness.Discharge.ZkReg
