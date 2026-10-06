@@ -16,7 +16,7 @@ residual's coefficients on the consistency sums into `kappa`, and only Ligerito'
 
 namespace FlockVBridge.Algebra
 
-open Flock
+open Flock FlockSoundness.Refine
 
 /-! ## Values -/
 
@@ -47,17 +47,19 @@ def noCons (val : Key → F128) (f : Lin) : F128 :=
 
 /-! ## Sums -/
 
-theorem f128_add_zero (x : F128) : x + 0 = x := by f128_ring
+theorem f128_add_zero (x : F128) : x + 0 = x := by
+  (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
 
-theorem f128_zero_add (x : F128) : 0 + x = x := by f128_ring
+theorem f128_zero_add (x : F128) : 0 + x = x := by
+  (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
 
 theorem foldl_shift {γ : Type} (g : γ → F128) :
     ∀ (l : List γ) (c : F128), l.foldl (fun x a => x + g a) c = c + l.foldl (fun x a => x + g a) 0
-  | [], c => by simp only [List.foldl_nil]; f128_ring
+  | [], c => by simp only [List.foldl_nil]; (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
   | a :: l, c => by
     simp only [List.foldl_cons]
     rw [foldl_shift g l (c + g a), foldl_shift g l (0 + g a)]
-    f128_ring
+    (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
 
 theorem afoldl_shift {γ : Type} (g : γ → F128) (xs : Array γ) (c : F128) :
     xs.foldl (fun x a => x + g a) c = c + xs.foldl (fun x a => x + g a) 0 := by
@@ -70,20 +72,26 @@ theorem afoldl_append {γ : Type} (g : γ → F128) (xs ys : Array γ) :
 
 theorem afoldl_single {γ : Type} (g : γ → F128) (a : γ) : (#[a] : Array γ).foldl (fun x a => x + g a) 0 = g a := by
   simp only [List.foldl_toArray', List.foldl_cons, List.foldl_nil]
-  f128_ring
+  (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
 
 theorem afoldl_empty {γ : Type} (g : γ → F128) : (#[] : Array γ).foldl (fun x a => x + g a) 0 = 0 := rfl
 
 theorem tEval_append {κ : Type} (g : κ → F128) :
     ∀ (a b : Terms κ), tEval g (a ++ b) = tEval g a + tEval g b
-  | [], b => by simp only [List.nil_append, tEval]; f128_ring
-  | (k, x) :: r, b => by simp only [List.cons_append, tEval, tEval_append g r b]; f128_ring
+  | [], b => by
+    simp only [List.nil_append, tEval]
+    (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
+  | (k, x) :: r, b => by
+    simp only [List.cons_append, tEval, tEval_append g r b]
+    (apply fOf_injective; simp only [fOf_add, fOf_mul]; ring)
 
 theorem tEval_perm {κ : Type} (g : κ → F128) {a b : Terms κ} (hp : a.Perm b) : tEval g a = tEval g b := by
   induction hp with
   | nil => rfl
   | cons x _ ih => obtain ⟨k, v⟩ := x; simp only [tEval, ih]
-  | swap x y l => obtain ⟨k, v⟩ := x; obtain ⟨k', v'⟩ := y; simp only [tEval]; f128_ring
+  | swap x y l =>
+    obtain ⟨k, v⟩ := x; obtain ⟨k', v'⟩ := y; simp only [tEval]
+    (apply fOf_injective; simp only [fOf_add, fOf_mul]; ring)
   | trans _ _ ih₁ ih₂ => rw [ih₁, ih₂]
 
 theorem tEval_congr {κ : Type} {g g' : κ → F128} :
@@ -96,7 +104,7 @@ theorem tEval_congr {κ : Type} {g g' : κ → F128} :
 theorem lin_eval_split (val : Key → F128) (f : Lin) : f.eval val = noCons val f + tEval val (consOf f) := by
   have hp := List.filter_append_perm (fun kx : Key × F128 => kx.1.isCons) f.t
   rw [Lin.eval, noCons, consOf, ← tEval_perm val hp, tEval_append]
-  f128_ring
+  (apply fOf_injective; simp only [fOf_add]; ring)
 
 theorem rangeSum_congr {n : Nat} {f g : Nat → F128} (hfg : ∀ i < n, f i = g i) : rangeSum n f = rangeSum n g := by
   unfold rangeSum
@@ -117,11 +125,11 @@ theorem rangeSum_single {n i₀ : Nat} {f g : Nat → F128} (d : F128) (hi : i�
       have : rangeSum i₀ f = rangeSum i₀ g := rangeSum_congr fun i hi => hne i (by omega) (by omega)
       unfold rangeSum at this
       rw [this, h₀]
-      f128_ring
+      (apply fOf_injective; simp only [fOf_add]; ring)
     · have := ih (by omega) fun i hi hi' => hne i (by omega) hi'
       unfold rangeSum at this
       rw [this, hne n (by omega) (Ne.symm hn)]
-      f128_ring
+      (apply fOf_injective; simp only [fOf_add]; ring)
 
 theorem rangeSum_zero {n : Nat} {f : Nat → F128} (hf : ∀ i < n, f i = 0) : rangeSum n f = 0 := by
   rw [rangeSum_congr (g := fun _ => 0) hf]
@@ -129,7 +137,9 @@ theorem rangeSum_zero {n : Nat} {f : Nat → F128} (hf : ∀ i < n, f i = 0) : r
   unfold rangeSum
   induction n with
   | zero => rfl
-  | succ n ih => rw [List.range_succ, List.foldl_append, ih]; simp only [List.foldl_cons, List.foldl_nil]; f128_ring
+  | succ n ih =>
+    rw [List.range_succ, List.foldl_append, ih]; simp only [List.foldl_cons, List.foldl_nil]
+    (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
 
 theorem getElem!_modify_eq {γ : Type} [Inhabited γ] (xs : Array γ) (i : Nat) (g : γ → γ) (hi : i < xs.size) :
     (xs.modify i g)[i]! = g xs[i]! := by
@@ -154,7 +164,7 @@ theorem kapSum_modify (K : Array (Array (Array F128))) (cons : Nat → Nat → F
     · rw [getElem!_modify_eq _ _ _ h1, getElem!_modify_eq _ _ _ h2, Array.size_modify]
       refine rangeSum_single _ h3 (fun i _ hi => ?_) ?_
       · rw [getElem!_modify_ne _ _ (Ne.symm hi)]
-      · rw [getElem!_modify_eq _ _ _ h3]; f128_ring
+      · rw [getElem!_modify_eq _ _ _ h3]; (apply fOf_injective; simp only [fOf_add, fOf_mul]; ring)
   · simp only [hr, ite_false, f128_add_zero]
     apply rangeSum_congr
     intro i _
@@ -352,7 +362,7 @@ theorem prodOps_spec (ri : Nat) : ∀ (l : List ((Key × Key) × F128)) (st st' 
       have hx : x = 1 := by simpa using hx1
       rw [mulSum_cons, hval S V hSV hV, tEval, hx, opValue_single w _ ((h3e.trans (h4e.trans hSV)).ops? hoa),
         opValue_single w _ ((h4e.trans hSV).ops? hob), atom_val w comb cons hta hV, atom_val w comb cons htb hV]
-      f128_ring
+      (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_one]; ring)
 
 /-- A key's consistency sum, or zero. -/
 def consVal : Key → F128
@@ -386,13 +396,13 @@ theorem kapAdd_spec (r : Nat) : ∀ (l : List (Key × F128)) (st st' : BSt), kap
         refine ⟨st, hr, rfl, rfl, rfl, rfl, fun r' => ?_⟩
         have hz : ∀ y : F128, y = 0 →
             kapSum st.kappa r' cons = kapSum st.kappa r' cons + (if r' = r then x * y else 0) := by
-          intro y hy; subst hy; split <;> f128_ring
+          intro y hy; subst hy; split <;> (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_zero]; ring)
         exact hz _ rfl
     obtain ⟨st1, hr1, s1, s2, s3, s4, hs⟩ := hstep
     obtain ⟨e1, e2, e3, e4, ih⟩ := kapAdd_spec r rest st1 st' hr1
     refine ⟨e1.trans s1, e2.trans s2, e3.trans s3, e4.trans s4, fun r' => ?_⟩
     rw [ih, hs, tEval]
-    split <;> f128_ring
+    split <;> (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_zero]; ring)
 
 theorem OpsOk.of_eq {st st' : BSt} (hi : OpsOk sh comb0 st) (h1 : st'.ops = st.ops) (h2 : st'.vVals = st.vVals)
     (h3 : st'.vNames = st.vNames) (h4 : st'.opOf = st.opOf) : OpsOk sh comb0 st' := by
@@ -547,7 +557,8 @@ theorem buildRes_spec {fin ri : Nat} {f : Lin} {st st' : BSt} {res : Res} (hi : 
       h2val S V (h3e.trans (h4e.trans hSV)) hV, h3val S V (h4e.trans hSV) hV,
       tEval_perm _ (sortBy_perm hl1), tEval_perm _ (sortBy_perm hl2), noCons]
     simp only [consOf]
-    by_cases hc : List.filter (fun x => x.1.isCons) f.t = [] <;> simp only [hc, ite_true, ite_false] <;> f128_ring
+    by_cases hc : List.filter (fun x => x.1.isCons) f.t = [] <;> simp only [hc, ite_true, ite_false]
+    all_goals (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
 
 /-- Residual `fi.2`'s value as `buildRes` builds it from `fi.1`: its terms but the consistency sums, and the running
 sums in their place. -/
@@ -579,13 +590,13 @@ theorem buildAll_spec {fin : Nat} : ∀ (fs : List Lin) (ri : Nat) (st st' : BSt
       · rw [show fin + r' - ri = (fin + r' - (ri + 1)) + 1 by omega, List.getD_cons_succ]
         simp only [show ¬ri = fin + r' by omega, show ri + 1 ≤ fin + r' by omega, show ri ≤ fin + r' by omega,
           ite_true, ite_false]
-        f128_ring
+        (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
       · simp only [heq, show ¬fin + r' + 1 ≤ fin + r' by omega, Nat.le_refl, Nat.sub_self, List.getD_cons_zero,
           ite_true, ite_false]
-        f128_ring
+        (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
       · simp only [show ¬ri = fin + r' by omega, show ¬ri + 1 ≤ fin + r' by omega, show ¬ri ≤ fin + r' by omega,
           ite_false]
-        f128_ring
+        (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
     · rw [List.zipIdx_cons, List.mem_cons] at hfi
       rcases hfi with rfl | hfi
       · exact h1fin
@@ -604,7 +615,7 @@ theorem kapSum_zero {K : Array (Array (Array F128))}
   apply rangeSum_zero
   intro c hc
   rw [hK a r c ha hc]
-  f128_ring
+  (apply fOf_injective; simp only [fOf_mul, fOf_zero]; ring)
 
 end Build
 
