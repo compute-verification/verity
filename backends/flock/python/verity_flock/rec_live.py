@@ -1,16 +1,28 @@
 """``rec/inner-transcript/v0``: the inner session of a recursive session (hiding model architectures), run by the unmodified
 C-Flock prover against a verifier that never sees the hidden statement or the prover's messages.
 
-    python -m verity_flock.rec_live --listen 127.0.0.1:PORT --out DIR [--sessions 1]
+    python -m verity_flock.rec_live --listen 127.0.0.1:PORT --out DIR [--sessions 1] [--schedule FILE]
+    python -m verity_flock.rec_live --schedule-of PUBLIC_JSON        a record's schedule, the form --schedule pins
 
 The prover (``flock-circuit prove --verifier ADDR`` under ``FC_COINS=os``) speaks the live protocol (``live/src/lib.rs``) to
-:class:`Proxy`, which runs on the prover's side. The proxy answers what the live server would, except that every coin comes
-from :class:`CoinServer`, the verifier's side, which is shown only the session's public data:
+:class:`Proxy`, which runs on the prover's side. The proxy is the gateway of the inner phase (live PROTOCOL.md §10.3): it
+answers what the live server would, except that every coin comes from :class:`CoinServer`, the verifier's side, which is shown
+only the session's public schedule and salted hashes:
 
 * ``Hello``: the schedule (profile, reps, flavor, tables, the link's shape), without Σ (a digest of the hidden statement);
-* ``Commit``: each table's level-0 cap (``root_B``), answered with the link points; root_F (Σ) stays with the prover;
-* each ``Round``: its caps (the ``BYTES`` frames that commit a Merkle tree), and ``c_k``, a hiding commitment to the round's
-  free message, answered with the round's ``n`` coins.
+* ``Commit``: each table's level-0 cap (``root_B``) as a salted top (`commit_top`), answered with the link points; root_F
+  (Σ) stays with the prover;
+* each ``Round``: its caps (the ``BYTES`` frames that commit a Merkle tree), each a salted top, and ``c_k``, a hiding
+  commitment to the round's free message, answered with the round's ``n`` coins.
+
+A **salted top** is a tree top (a cap: one or more 64-byte nodes) with each node replaced by its ``hm96-sha512/v1`` commit
+string ``b || c`` under its own fresh 192-byte salt; the clear tops and their salts are the prover's (``private.json``), and
+V*'s inputs refuse a top that does not open its commitment (`verity_flock.rec_vstar.caps`). The proxy holds the session to
+a pinned **schedule** (`schedule_of`: the public ``Hello``, each table's root node count, every stream's parent, position and
+round count, and per round its stream, index, coin count, caps' node counts and message-row count): ``--schedule`` gives it;
+without one, the first session the proxy serves pins it for the rest (``OUT/schedule.json``). A request that leaves the
+schedule, or a ``Link`` whose ``y`` is not zero (the prover sends zeros), is refused ``GATE-REFUSED`` before the coin server
+sees it.
 
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (its bytes public), a
@@ -24,8 +36,9 @@ verifier builds from every ``c_k`` it received (`message_rows`, `commit_rows`).
 
 At ``Finish`` the proxy writes the session directory (``session.json``, a ``flock-live-session/v1`` record that
 ``flock-circuit replay`` and the Lean verifier check, and ``<table>.rep<r>.bin``), the coin server's record ``public.json``
-(``rec/inner-transcript/v0``: everything the verifier saw and issued) and the prover's ``private.json`` (every round's rows
-and salts), and answers the prover with a verdict that says nothing was verified: the inner proof is V*'s witness.
+(``rec/inner-transcript/v0``: everything the verifier saw and issued, ``tops`` naming how its tops are salted) and the
+prover's ``private.json`` (every round's rows and salts, every clear top and its salts), and answers the prover with a
+verdict that says nothing was verified: the inner proof is V*'s witness.
 """
 from __future__ import annotations
 
@@ -42,6 +55,8 @@ from verity.primitives.commitments import hm96
 
 KIND = "rec/inner-transcript/v0"
 SESSION_KIND = "flock-live-session/v1"
+#: how a record's tree tops are salted: each 64-byte node an hm96-sha512/v1 commit string under its own salt (`commit_top`)
+TOPS = "hm96-sha512/v1/node"
 
 OP_DOMAIN, OP_LABEL, OP_OBSERVE, OP_SQUEEZE, OP_BYTES = 1, 2, 3, 4, 5
 KIND_SCALAR, KIND_SLICE = 1, 2
@@ -287,6 +302,35 @@ def commit_rows(rows: list[list[int]], salts: list[bytes]) -> list[bytes]:
     return [inst.commit_string(inst.default_key, sha512_row_digest(r, 16, ROLE_X), s) for r, s in zip(rows, salts, strict=True)]
 
 
+def top_nodes(top: bytes) -> list[bytes]:
+    if not top or len(top) % CAP_NODE_BYTES:
+        raise ValueError(f"a tree top of {len(top)} bytes")
+    return [top[i:i + CAP_NODE_BYTES] for i in range(0, len(top), CAP_NODE_BYTES)]
+
+
+def commit_top(top: bytes, salts: list[bytes]) -> bytes:
+    """A tree top as the coin server receives it: each node's ``b || c`` (``hm96-sha512/v1``, ``default_key``, the node as
+    the inner digest) under its own salt, in node order."""
+    inst = hm96.SHA512
+    return b"".join(inst.commit_string(inst.default_key, n, s) for n, s in zip(top_nodes(top), salts, strict=True))
+
+
+def refused(what: str) -> str:
+    return f"GATE-REFUSED: {what}"
+
+
+def schedule_of(record: dict) -> dict:
+    """What the pinned schedule fixes of a coin server's record (module docstring); a record of clear tops (no ``tops``)
+    counts 64 bytes a node, a salted one ``b || c`` a node."""
+    per = hm96.SHA512.proven_bytes if record.get("tops") == TOPS else CAP_NODE_BYTES
+    nodes = lambda h: len(h) // 2 // per
+    return {"kind": KIND + "/schedule", "hello": record["hello"],
+            "roots": {t: nodes(r) for t, r in sorted(record["link"]["roots"].items())},
+            "streams": {s: {"parent": v["parent"], "at": v["at"], "rounds": v["rounds"]} for s, v in sorted(record["streams"].items())},
+            "rounds": [{"stream": r["stream"], "k": r["k"], "n": r["n"], "caps": [nodes(c) for c in r["caps"]], "commits": len(r["commits"])}
+                       for r in record["rounds"]]}
+
+
 # --- the verifier's side ----------------------------------------------------------------------------------------------------------
 
 class CoinServer:
@@ -344,7 +388,7 @@ class CoinServer:
         return coins
 
     def record(self) -> dict:
-        return {"kind": KIND, "hello": self.hello, "link": self.link, "streams": self.streams, "rounds": self.rounds,
+        return {"kind": KIND, "tops": TOPS, "hello": self.hello, "link": self.link, "streams": self.streams, "rounds": self.rounds,
                 "message_rows": sum(len(r["commits"]) for r in self.rounds), "row_words": ROW_WORDS}
 
 
@@ -356,11 +400,13 @@ def _dg(b: bytes) -> str:
 
 class Proxy:
     """The live server's part on the prover's side: answers the unmodified prover, takes every coin from ``coins`` (shown only
-    public data), and keeps what the session record and V*'s witness need."""
+    the schedule and salted hashes), holds the session to ``schedule`` when one is pinned, and keeps what the session record
+    and V*'s witness need."""
 
-    def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt):
+    def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt, schedule: dict | None = None):
         self.coins = coins
         self.fresh_salt = fresh_salt
+        self.schedule = schedule
         self.hello: str | None = None
         self.hello_v: dict | None = None
         self.commit: tuple | None = None
@@ -369,13 +415,32 @@ class Proxy:
         self.streams: dict[str, dict] = {}
         self.proofs: dict[tuple[str, int], bytes] = {}
         self.private: list[dict] = []
+        self.roots: dict[str, dict] = {}
+        self.stopped: str | None = None
         self.verdict: dict | None = None
 
+    def _salted(self, top: bytes) -> tuple[bytes, list[bytes]]:
+        salts = [self.fresh_salt() for _ in top_nodes(top)]
+        return commit_top(top, salts), salts
+
+    def _pinned(self, what: str, got, want) -> None:
+        if self.schedule is not None and got != want:
+            raise ValueError(refused(f"{what}: {json.dumps(got, sort_keys=True)} where the pinned schedule has {json.dumps(want, sort_keys=True)}"))
+
     def handle(self, req: bytes) -> bytes:
+        """One request's answer. A refusal stops the session: every later request is refused for the same reason, and
+        ``Finish`` answers a verdict that names it."""
+        if self.stopped is not None and self.verdict is None and req[:1] != bytes([REQ_PING]):
+            if req[:1] == bytes([REQ_FINISH]):
+                self.verdict = {"accepted": False, "why": self.stopped}
+                return resp_str(RESP_VERDICT, json.dumps(self.verdict))
+            return resp_str(RESP_REFUSED, self.stopped)
         try:
             return self._handle(decode_req(req))
         except ValueError as e:
-            return resp_str(RESP_REFUSED, f"rec proxy: {e}")
+            why = f"rec proxy: {e}"
+            self.stopped = self.stopped or why
+            return resp_str(RESP_REFUSED, why)
 
     def _handle(self, r: tuple) -> bytes:
         t = r[0]
@@ -392,24 +457,35 @@ class Proxy:
                 raise ValueError("the inner session runs on live OS coins (FC_COINS=os): no seed, no coin tree")
             pub = json.loads(r[1])
             pub.get("link", {}).pop("sigma", None)
+            self._pinned("Hello", pub, self.schedule and self.schedule["hello"])
             self.coins.start(pub)
             return resp_ok()
         if t == REQ_COMMIT:
             _, root_f, roots, publics = r
             if publics and any(v for _, v in publics):
                 raise ValueError("public words in an inner session")
+            self._pinned("Commit's roots", {name: len(top_nodes(v)) for name, v in sorted(roots)}, self.schedule and self.schedule["roots"])
             self.commit = (root_f, roots, publics)
-            pts = self.coins.commit(dict(roots))
+            salted = {}
+            for name, top in roots:
+                salted[name], salts = self._salted(top)
+                self.roots[name] = {"top": top.hex(), "salts": [x.hex() for x in salts]}
+            pts = self.coins.commit(salted)
             m = self.hello_v["link"]["m"]
             self.points = [pts[i:i + m] for i in range(0, len(pts), m)]
             return resp_coins(pts)
         if t == REQ_LINK:
+            if any(r[1]):
+                raise ValueError(refused("Link's y is not zero"))
             self.y = r[1]
             self.coins.y([int.from_bytes(self.y[i:i + 8], "little") | (int.from_bytes(self.y[i + 8:i + 16], "little") << 64)
                           for i in range(0, len(self.y), 16)])
             return resp_ok()
         if t == REQ_OPEN:
             _, stream, parent, label, at = r
+            if self.schedule is not None:
+                want = self.schedule["streams"].get(stream)
+                self._pinned(f"Open {stream}", {"parent": parent, "at": at}, want and {"parent": want["parent"], "at": want["at"]})
             self.coins.open(stream, parent, at)
             self.streams[stream] = {"parent": parent, "label": label, "at": at, "rounds": [], "cap": None}
             return resp_ok()
@@ -425,18 +501,29 @@ class Proxy:
             if k == 0 and not st["parent"]:
                 st["cap"] = s.caps[0]
             rows = message_rows(s.free)
+            if self.schedule is not None:
+                i, sched = len(self.coins.rounds), self.schedule["rounds"]
+                self._pinned(f"round {i}", {"stream": stream, "k": k, "n": n, "caps": [len(top_nodes(c)) for c in s.caps], "commits": len(rows)},
+                             sched[i] if i < len(sched) else None)
             salts = [self.fresh_salt() for _ in rows]
             bcs = commit_rows(rows, salts)
-            coins = self.coins.round(stream, s.caps, bcs, n)
+            caps, cap_salts = zip(*(self._salted(c) for c in s.caps)) if s.caps else ((), ())
+            coins = self.coins.round(stream, list(caps), bcs, n)
             st["rounds"].append({"content": content, "n": n, "coins": coins})
             self.private.append({"stream": stream, "k": k, "elements": [f128_hex(v) for v in s.free], "rows": rows,
-                                 "salts": [x.hex() for x in salts], "nonces": [x.hex() for x in s.nonces]})
+                                 "salts": [x.hex() for x in salts], "nonces": [x.hex() for x in s.nonces],
+                                 "caps": [c.hex() for c in s.caps], "cap_salts": [[x.hex() for x in cs] for cs in cap_salts]})
             return resp_coins(coins)
         if t == REQ_PROOF:
             _, table, rep, b = r
             self.proofs[(table, rep)] = b
             return resp_ok()
         if t == REQ_FINISH:
+            if self.schedule is not None:
+                rec = self.coins.record()
+                self._pinned("Finish's rounds", len(rec["rounds"]), len(self.schedule["rounds"]))
+                self._pinned("Finish's streams", {s: v["rounds"] for s, v in sorted(rec["streams"].items())},
+                             {s: v["rounds"] for s, v in sorted(self.schedule["streams"].items())})
             self.verdict = {"accepted": None, "why": "rec/inner-transcript/v0: the inner proof is V*'s witness; nothing verified here"}
             return resp_str(RESP_VERDICT, json.dumps(self.verdict))
         raise ValueError(f"request tag {t} has no place in an inner session")
@@ -477,18 +564,20 @@ class Proxy:
         for (t, r), b in self.proofs.items():
             (sess / f"{t}.rep{r}.bin").write_bytes(b)
         (out / "public.json").write_text(json.dumps(self.coins.record(), indent=1))
-        (out / "private.json").write_text(json.dumps({"kind": KIND + "/private", "rounds": self.private}))
+        (out / "private.json").write_text(json.dumps({"kind": KIND + "/private", "tops": TOPS, "roots": self.roots, "rounds": self.private}))
         return sess
 
 
 def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None,
-          sessions: int = 1, done: Callable[[dict], None] | None = None) -> list[dict]:
+          sessions: int = 1, done: Callable[[dict], None] | None = None, schedule: dict | None = None) -> list[dict]:
     """Accept connections on ``listen`` until ``sessions`` of them have each carried a whole session (``Finish``), write each
     (`Proxy.write`: into ``out``, or ``out/s<k>`` when there are several, a prover's ``--warm`` and ``--runs`` sessions, one
     connection each) and return their summaries, each also passed to ``done`` as it finishes. ``ready`` is called with the
-    bound address."""
+    bound address. Every session is held to ``schedule``; without one, the first finished session's pins the rest, and
+    ``out/schedule.json`` is the schedule they were held to."""
     host, port = listen.rsplit(":", 1)
     res: list[dict] = []
+    given = schedule is not None
     with socket.create_server((host, int(port))) as srv:
         h, p = srv.getsockname()[:2]
         addr = f"{h}:{p}"
@@ -496,18 +585,33 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             ready(addr)
         while len(res) < sessions:
             conn, _ = srv.accept()
-            proxy = Proxy(CoinServer(rand))
+            proxy = Proxy(CoinServer(rand), schedule=schedule)
             with conn, conn.makefile("rb") as rf, conn.makefile("wb") as wf:
                 while (req := read_frame(rf)) is not None:
+                    was = proxy.stopped
                     write_frame(wf, proxy.handle(req))
+                    if was is None and proxy.stopped is not None:
+                        print("STOPPED\t" + json.dumps({"session": len(res), "refused": proxy.stopped}), flush=True)
                     if proxy.verdict is not None:
                         break
-            if proxy.verdict is not None:
+            if proxy.stopped is not None:
+                d = Path(out) / f"s{len(res)}" if sessions > 1 else Path(out)
+                d.mkdir(parents=True, exist_ok=True)
+                (d / "public.json").write_text(json.dumps(proxy.coins.record(), indent=1))
+                res.append({"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)})
+                if done:
+                    done(res[-1])
+            elif proxy.verdict is not None:
                 sess = proxy.write(out if sessions == 1 else Path(out) / f"s{len(res)}")
                 rec = proxy.coins.record()
+                if schedule is None:
+                    schedule = schedule_of(rec)
+                Path(out).mkdir(parents=True, exist_ok=True)
+                (Path(out) / "schedule.json").write_text(json.dumps(schedule, indent=1))
                 res.append({"session": str(sess), "rounds": len(rec["rounds"]), "message_rows": rec["message_rows"],
                             "coins": sum(r["n"] for r in rec["rounds"]), "caps": sum(len(r["caps"]) for r in rec["rounds"]),
-                            "proof_bytes": {f"{t}/rep{r}": len(b) for (t, r), b in proxy.proofs.items()}})
+                            "proof_bytes": {f"{t}/rep{r}": len(b) for (t, r), b in proxy.proofs.items()},
+                            "schedule": "held" if given or res else "pins"})
                 if done:
                     done(res[-1])
     return res
@@ -519,11 +623,19 @@ def main(argv=None) -> int:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--listen", default="127.0.0.1:0")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out")
     ap.add_argument("--sessions", type=int, default=1, help="sessions to serve, one connection each (several: out/s<k>/)")
+    ap.add_argument("--schedule", help="the pinned schedule (default: the first session's pins the rest)")
+    ap.add_argument("--schedule-of", help="print a coin server record's (public.json) schedule and exit")
     a = ap.parse_args(argv)
+    if a.schedule_of:
+        print(json.dumps(schedule_of(json.loads(Path(a.schedule_of).read_text())), indent=1))
+        return 0
+    if not a.out:
+        ap.error("--out is required")
     serve(a.listen, Path(a.out), ready=lambda addr: print(f"SERVING {addr}", flush=True), sessions=a.sessions,
-          done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True))
+          done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True),
+          schedule=json.loads(Path(a.schedule).read_text()) if a.schedule else None)
     sys.stdout.flush()
     return 0
 

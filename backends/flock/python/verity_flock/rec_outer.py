@@ -143,10 +143,10 @@ def main(argv=None) -> int:
     ap.add_argument("--levels", default=None, help="comma-separated levels (default: every level)")
     ap.add_argument("--link-rows", action="store_true", help="the opened rows read from the prover's registration of them")
     a = ap.parse_args(argv)
-    public, _private, proofs = V.load(Path(a.inner))
+    public, private, proofs = V.load(Path(a.inner))
     want = None if a.levels is None else {int(x) for x in a.levels.split(",")}
     res = []
-    for lv in levels(V.queries(public, proofs)):
+    for lv in levels(V.queries(public, private, proofs)):
         if want is None or lv["level"] in want:
             res.append(stage(lv, Path(a.out) / f"L{lv['level']}", a.link_rows))
             print(json.dumps(res[-1], sort_keys=True), flush=True)

@@ -5,13 +5,15 @@ V* (the outer statement) checks an inner session of `verity_flock.rec_live` with
 part, which this module states over plain Python:
 
 * **Openings** (PROTOCOL.md §13.3, §13.5, §14). Level ``l`` of a rep's Ligerito opening is ``Q_l`` queries into the tree
-  whose cap the prover published in the clear (the coin server's record: level 0's in the rep's binding round and in
-  ``Commit``, level ``l >= 1``'s in the round that absorbed it). Query ``j``'s position is ``pos_j = (s_j << (d - c_j)) |
+  whose cap the coin server received as a salted top (`verity_flock.rec_live.commit_top`: level 0's in the rep's binding
+  round and in ``Commit``, level ``l >= 1``'s in the round that absorbed it); the clear cap is the prover's, read from
+  ``private.json`` only where it opens that salted top (`caps`). Query ``j``'s position is ``pos_j = (s_j << (d - c_j)) |
   (coin_j.lo mod 2^(d - c_j))`` over the level's query round's coins, its leaf ``SHA-512(leaf_prefix || b || c)`` for
   ``x = SHA-512(row)`` (the row's elements, 16 bytes each, lo LE then hi LE) under the opening's 192-byte salt
   (``hm96.SHA512``, ``default_key``), and the ``d - c`` siblings climb it (``node(acc, sib)`` at an even index, else
   ``node(sib, acc)``) to ``cap[pos >> (d - c)]``. The rows, salts and siblings are the inner proof's (V*'s witness); the
-  positions, depths and cap nodes are public.
+  positions and depths are public. The cap nodes are the prover's: `verity_flock.rec_outer` still registers them as the
+  verifier's expected rows until the outer circuit climbs on to the salted tops (live PROTOCOL.md §10.3).
 * **Message rows**: each round's free message rows open the ``b || c`` the coin server recorded for them before it drew the
   round's coins (`verity_flock.rec_live.commit_rows`).
 
@@ -203,37 +205,65 @@ def query_rounds(public: dict, stream: str, qs: list[int]) -> list[dict]:
     return out
 
 
-def public_caps(public: dict, stream: str) -> list[list[bytes]]:
-    """Each Ligerito level's cap as the coin server received it: level 0's from the binding round, then each later cap in
-    the order the rounds absorbed them (one cap a round). Ligerito absorbs level 0's cap again when it starts; that copy
-    must equal the binding round's and is not a level of its own."""
-    caps = []
-    for r in _stream_rounds(public, stream):
-        for c in r["caps"]:
-            b = bytes.fromhex(c)
-            caps.append([b[i:i + HASH] for i in range(0, len(b), HASH)])
-    if len(caps) > 1 and len(caps[1]) == len(caps[0]):
-        if caps[1] != caps[0]:
-            raise ValueError(f"{stream}: Ligerito's initial cap is not the binding round's")
-        del caps[1]
-    return caps
+def _opens_top(top: str, salts: list[str], salted: str) -> bool:
+    try:
+        return RL.commit_top(bytes.fromhex(top), [bytes.fromhex(s) for s in salts]).hex() == salted
+    except ValueError:
+        return False
 
 
-def queries(public: dict, proofs: dict[int, bytes], table: str = "circuit") -> list[Query]:
-    """Every opening of every rep, in rep, level and query order, with its public part from ``public`` and its witness part
-    from the proof."""
+def root(public: dict, private: dict, table: str) -> bytes:
+    """``table``'s level-0 root (``Commit``'s ``root_B``) in the clear: the prover's, refused unless it opens the salted top
+    the coin server received."""
+    if public.get("tops") != RL.TOPS or private.get("tops") != RL.TOPS:
+        raise ValueError(RL.refused("tree top: the record's tops are not salted (rec_live.TOPS)"))
+    mine = private["roots"].get(table)
+    if mine is None or not _opens_top(mine["top"], mine["salts"], public["link"]["roots"].get(table, "")):
+        raise ValueError(RL.refused(f"tree top: {table}'s root does not open the salted root the coin server received"))
+    return bytes.fromhex(mine["top"])
+
+
+def caps(public: dict, private: dict, stream: str) -> list[list[bytes]]:
+    """Each Ligerito level's cap in the clear: the prover's tops (``private``), each refused unless it opens the salted top
+    the coin server received for it; level 0's from the binding round, then each later cap in the order the rounds absorbed
+    them (one cap a round). Ligerito absorbs level 0's cap again when it starts; that copy must equal the binding round's and
+    is not a level of its own."""
+    if public.get("tops") != RL.TOPS or private.get("tops") != RL.TOPS:
+        raise ValueError(RL.refused("tree top: the record's tops are not salted (rec_live.TOPS)"))
+    mine = {(p["stream"], p["k"]): p for p in private["rounds"]}
     out = []
+    for r in _stream_rounds(public, stream):
+        p = mine.get((stream, r["k"]), {})
+        tops, salts = p.get("caps", []), p.get("cap_salts", [])
+        if len(tops) != len(r["caps"]) or len(salts) != len(r["caps"]):
+            raise ValueError(RL.refused(f"tree top: {stream} round {r['k']} has {len(r['caps'])} salted tops and {len(tops)} clear ones"))
+        for i, (top, ss, salted) in enumerate(zip(tops, salts, r["caps"])):
+            if not _opens_top(top, ss, salted):
+                raise ValueError(RL.refused(f"tree top: {stream} round {r['k']} cap {i} does not open the salted top the coin server received"))
+            out.append(RL.top_nodes(bytes.fromhex(top)))
+    if len(out) > 1 and len(out[1]) == len(out[0]):
+        if out[1] != out[0]:
+            raise ValueError(f"{stream}: Ligerito's initial cap is not the binding round's")
+        del out[1]
+    return out
+
+
+def queries(public: dict, private: dict, proofs: dict[int, bytes], table: str = "circuit") -> list[Query]:
+    """Every opening of every rep, in rep, level and query order, with its positions from ``public``, its cap nodes from
+    ``private``'s tops (each opening its salted top in ``public``: `caps`) and its witness part from the proof."""
+    out = []
+    root_b = root(public, private, table)
     for rep, b in sorted(proofs.items()):
         p = decode(b)
         stream = f"{table}/rep{rep}"
         levels = p["levels"]
-        caps = public_caps(public, stream)
-        if len(caps) != len(levels):
-            raise ValueError(f"{stream}: {len(caps)} public caps for {len(levels)} opened levels")
-        if public["link"]["roots"].get(table) != b"".join(caps[0]).hex():
+        tops = caps(public, private, stream)
+        if len(tops) != len(levels):
+            raise ValueError(f"{stream}: {len(tops)} caps for {len(levels)} opened levels")
+        if root_b != b"".join(tops[0]):
             raise ValueError(f"{stream}: the binding round's cap is not the committed root_B")
         rounds = query_rounds(public, stream, [len(lv.rows) for lv in levels])
-        for li, (lv, cap, rd) in enumerate(zip(levels, caps, rounds)):
+        for li, (lv, cap, rd) in enumerate(zip(levels, tops, rounds)):
             d, c = lv.depth, (len(cap) - 1).bit_length()
             pos = positions(len(lv.rows), d, [int(x, 16) for x in rd["coins"]])
             for j, ps in enumerate(pos):
@@ -247,7 +277,7 @@ def opens(q: Query) -> bool:
 
 def check(public: dict, private: dict, proofs: dict[int, bytes], table: str = "circuit") -> dict:
     """V*'s hashing over a finished inner session: every opening (`opens`) and every message row's commitment."""
-    qs = queries(public, proofs, table)
+    qs = queries(public, private, proofs, table)
     bad_q = [(q.rep, q.level, q.j) for q in qs if not opens(q)]
     by_round = {(r["stream"], r["k"]): r for r in public["rounds"]}
     bad_m, rows = [], 0
@@ -278,7 +308,10 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("inner", help="an inner session directory (public.json, private.json, session/)")
     a = ap.parse_args(argv)
-    res = check(*load(Path(a.inner)))
+    try:
+        res = check(*load(Path(a.inner)))
+    except ValueError as e:
+        res = {"accepted": False, "refused": str(e)}
     json.dump(res, sys.stdout, sort_keys=True)
     print()
     return 0 if res["accepted"] else 1

@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+from verity_flock import rec_live as RL
 from verity_flock import rec_vstar as V
 
 
@@ -67,15 +68,47 @@ def _round(stream, k, caps=(), commits=(), n=0):
     return {"stream": stream, "k": k, "caps": list(caps), "commits": list(commits), "n": n}
 
 
+def _salted(rounds):
+    """``rounds`` of clear tops as the coin server's record (each top salted) and the prover's ``private.json``."""
+    pub, priv, i = [], [], 0
+    for r in rounds:
+        salts = []
+        for c in r["caps"]:
+            salts.append([_salt(i + j).hex() for j in range(len(c) // 128)])
+            i += len(salts[-1])
+        pub.append({**r, "caps": [RL.commit_top(bytes.fromhex(c), [bytes.fromhex(x) for x in ss]).hex() for c, ss in zip(r["caps"], salts)]})
+        priv.append({"stream": r["stream"], "k": r["k"], "caps": r["caps"], "cap_salts": salts})
+    return {"tops": RL.TOPS, "rounds": pub}, {"tops": RL.TOPS, "rounds": priv}
+
+
 def test_ligeritos_copy_of_the_initial_cap_is_not_a_level():
     a, b, c = (bytes([x]) * 128 for x in (1, 2, 3))
     s = "circuit/rep0"
-    public = {"rounds": [_round(s, 0, [a.hex()], n=6), _round(s, 1, [a.hex()], ["00"], 18), _round(s, 2, [b[:64].hex()], ["00"], 3),
-                         _round("circuit/rep1", 0, [c.hex()], n=6)]}
-    assert V.public_caps(public, s) == [[a[:64], a[64:]], [b[:64]]]
-    public["rounds"][1]["caps"] = [c.hex()]
-    with pytest.raises(ValueError):
-        V.public_caps(public, s)
+    rounds = [_round(s, 0, [a.hex()], n=6), _round(s, 1, [a.hex()], ["00"], 18), _round(s, 2, [b[:64].hex()], ["00"], 3),
+              _round("circuit/rep1", 0, [c.hex()], n=6)]
+    assert V.caps(*_salted(rounds), s) == [[a[:64], a[64:]], [b[:64]]]
+    rounds[1]["caps"] = [c.hex()]
+    with pytest.raises(ValueError, match="initial cap"):
+        V.caps(*_salted(rounds), s)
+
+
+def test_a_top_that_does_not_open_its_salted_top_is_refused():
+    a, b = (bytes([x]) * 128 for x in (1, 2))
+    s = "circuit/rep0"
+    public, private = _salted([_round(s, 0, [a.hex()], n=6), _round(s, 1, [b[:64].hex()], ["00"], 3)])
+    wrong = {**private, "rounds": [private["rounds"][0], {**private["rounds"][1], "caps": [a[:64].hex()]}]}
+    with pytest.raises(ValueError, match="^GATE-REFUSED: tree top: circuit/rep0 round 1 cap 0 does not open"):
+        V.caps(public, wrong, s)
+    missing = {**private, "rounds": private["rounds"][:1]}
+    with pytest.raises(ValueError, match="^GATE-REFUSED: tree top: circuit/rep0 round 1 has 1 salted tops and 0 clear ones"):
+        V.caps(public, missing, s)
+    clear = {"rounds": [_round(s, 0, [a.hex()], n=6), _round(s, 1, [b[:64].hex()], ["00"], 3)]}
+    with pytest.raises(ValueError, match="^GATE-REFUSED: tree top: the record's tops are not salted"):
+        V.caps(clear, private, s)
+    root = {"tops": RL.TOPS, "link": {"roots": {"circuit": public["rounds"][0]["caps"][0]}}}
+    assert V.root(root, {"tops": RL.TOPS, "roots": {"circuit": {"top": a.hex(), "salts": private["rounds"][0]["cap_salts"][0]}}}, "circuit") == a
+    with pytest.raises(ValueError, match="^GATE-REFUSED: tree top: circuit's root does not open"):
+        V.root(root, {"tops": RL.TOPS, "roots": {"circuit": {"top": b.hex(), "salts": private["rounds"][0]["cap_salts"][0]}}}, "circuit")
 
 
 def test_query_rounds_follow_the_levels_in_order():

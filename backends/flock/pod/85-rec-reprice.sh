@@ -317,7 +317,7 @@ ostage)
   [ -f $INNER/public.json ] || { echo "INNER=$INNER: no public.json (run STEP=inner first)"; exit 1; }
   ALL=$(python3 -c "
 import sys; from pathlib import Path; from verity_flock import rec_outer as O, rec_vstar as V
-pub, _, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) for l in O.levels(V.queries(pub, proofs))))" $INNER)
+pub, priv, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) for l in O.levels(V.queries(pub, priv, proofs))))" $INNER)
   echo "levels: $ALL"
   mkdir -p $O/ostage; rm -rf $DD/outer
   for l in ${LEVELS:-$ALL}; do echo $l; done | xargs -P ${JOBS:-4} -I{} sh -c \
