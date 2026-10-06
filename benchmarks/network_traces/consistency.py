@@ -108,7 +108,7 @@ def egress(streams: dict[int, bytearray], sessions: dict[int, str], log: list) -
         logged[session].append(event)
     by_class, fields = Counter(), {"completion_id_hex_digits": Counter(), "created_per_request": Counter(),
                                    "created_values": set(), "events": 0, "done": 0, "reserialized_exactly": 0}
-    differs, unparsed = [], []
+    differs, unparsed, compared = [], [], 0
     for s, raw in sorted(streams.items()):
         head_end = raw.find(b"\r\n\r\n") + 4 if raw.startswith(b"HTTP/") else 0
         by_class["declared"] += head_end
@@ -117,8 +117,10 @@ def egress(streams: dict[int, bytearray], sessions: dict[int, str], log: list) -
         by_class["unexplained"] += rest
         session = sessions.get(s)
         certified = [bytes(raw[:head_end]) + events[0], *events[1:]] if events else []
-        if session is not None and log and certified != logged.get(session, [])[: len(events)]:
-            differs.append(session)
+        if session is not None and log:
+            compared += 1
+            if certified != logged.get(session, [])[: len(events)]:
+                differs.append(session)
         ids, created = set(), set()
         for e in events:
             fields["events"] += 1
@@ -157,7 +159,8 @@ def egress(streams: dict[int, bytearray], sessions: dict[int, str], log: list) -
             "completion_id_hex_digits": dict(fields["completion_id_hex_digits"]),
             "distinct_created_per_request": dict(fields["created_per_request"]),
             "created_span_s": (max(fields["created_values"]) - min(fields["created_values"])) if fields["created_values"] else 0,
-            "streams_differing_from_server_log": differs, "unparsed_events": unparsed}
+            "streams_compared_with_server_log": compared, "streams_differing_from_server_log": differs,
+            "unparsed_events": unparsed}
 
 
 def check_run(run: Path, frame_bytes: int, model: str | None) -> dict:

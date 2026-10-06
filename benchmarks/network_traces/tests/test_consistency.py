@@ -79,6 +79,8 @@ def test_egress_bytes_by_class_and_the_unexplained_fields():
     log = [(10 + k, "b4.0.0", k, 0, e) for k, e in enumerate(events)]
     tally = cons.egress(streams, {5: "b4.0.0"}, log)
     assert tally["streams_differing_from_server_log"] == [] and tally["events_reserialized_exactly"] == 2
+    assert tally["streams_compared_with_server_log"] == 1
+    assert cons.egress(streams, {5: "b4.0.0"}, [])["streams_compared_with_server_log"] == 0
     assert tally["completion_id_hex_digits"] == {16: 1} and tally["distinct_created_per_request"] == {1: 1}
     by = tally["bytes"]
     assert by["crossing"] == len(b'" to"nullnull" be""length"null')
