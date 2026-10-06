@@ -3,11 +3,11 @@ import Proofs.Flock.Recursive.Stage
 /-!
 # The recursive audit's one new assumption: V*'s bridge (trusted)
 
-In the recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`), the developer's gateway sends the auditor a salted
+In the recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`), the developer's firewall sends the auditor a salted
 SHA-512 commitment to each inner round message, relays the auditor's live coin for the round, and afterwards proves, in
 C-Flock `--zk --registered` sessions of the public verifier circuits V* (`Vs j`, one session each, in a row), that
 openings of those commitments exist on which the inner verifier accepts. `VBridge` is what V*'s circuits must compute
-for those sessions to mean it: V* accepts at its public inputs (the gateway's commitments registered in its public
+for those sessions to mean it: V* accepts at its public inputs (the firewall's commitments registered in its public
 files) and at the values it registers itself (the rounds' coins and the comb `coef`, in its record `ZkOuter.rd`) only
 when the inner verifier accepts the inner transcript those commitments open to.
 
@@ -33,8 +33,8 @@ units, the rounds' commitments and coins):
   rows as registered, and the values V* registers itself, the coins and the comb `coef`), the messages `wmsg` reads
   from the layers hold an inner transcript the inner verifier accepts on the hidden circuit's statement `x R ω` at the
   rounds' coins;
-* **their public files register the gateway's commitments** (`VCommits`): the digest session `j`'s value binding
-  registers at each commit string of stage `i`'s `Sk i j` is the gateway's stage-`i` commitment's, `cmt j`;
+* **their public files register the firewall's commitments** (`VCommits`): the digest session `j`'s value binding
+  registers at each commit string of stage `i`'s `Sk i j` is the firewall's stage-`i` commitment's, `cmt j`;
 * **they decode each round's message from those commit strings** (`VDecodes`, at equality): layers whose bits on the
   wires of each `Sk i j` are those of the values `v j` hold `msg i v` as their round-`i` message;
 * **their laws draw every such wire** (`VFull`): each wire of `Sk i j` is a wire of a unit whose stratum session `j`'s

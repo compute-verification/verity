@@ -7,8 +7,8 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Defs
 
 The recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`): the developer registers `R` (the hidden circuit's
 commitment among it); the auditor draws `ω`, the hidden circuit's units to prove; in each of the inner protocol's `I.r`
-rounds the developer's gateway sends the auditor a salted SHA-512 commitment to the round's inner message (C-Flock run
-with `--zk` off on the GPU workers), and the auditor answers with a live coin; then C-Flock `--zk --registered` sessions
+rounds the developer's firewall sends the auditor a salted SHA-512 commitment to the round's inner message (C-Flock run
+with `--zk` off on the workers), and the auditor answers with a live coin; then C-Flock `--zk --registered` sessions
 of the public verifier circuits V* (`zs R ω t j`, `ZkOuter`, one per circuit `(Vs j).c`, in a row: `sessions`) prove
 that openings of those commitments exist on which the inner verifier accepts. Each guarantee is a `def G : Prop` in the
 form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarantees.G`
@@ -16,9 +16,9 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
 
 * `RecursiveSound`, for the auditor: when the auditor accepts every one of V*'s sessions, the hidden circuit's statement
   holds, except with probability at most the sum of V*'s sessions' soundness errors, plus each round's transfer slack
-  and rewinding loss (the binding of the gateway's commitments under `cr/sha-512`), plus the inner protocol's soundness
+  and rewinding loss (the binding of the firewall's commitments under `cr/sha-512`), plus the inner protocol's soundness
   error. Its one new assumption is `Flock.Assumptions.VBridge`.
-* `RecursiveZK`, for the developer: the auditor's whole view, the gateway's commitments (`gatewayLeaf`) to every inner
+* `RecursiveZK`, for the developer: the auditor's whole view, the firewall's commitments (`firewallLeaf`) to every inner
   message and tree top and then its view of the outer session, has a simulator that reads public inputs only, within
   the commitments' hiding gap (`hash-derived-key`) plus the outer session's zero-knowledge gap.
 
@@ -62,7 +62,7 @@ def RecursiveSound : Prop :=
     {t' : ℝ} (_ht' : 0 ≤ t') (qF qS qW qR : ℝ)
     -- the recursive prover
     (σ : Strategy (recGame L Reg I Cm fun R ω t => sessions (zs R ω t) dg N))
-    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the gateway's
+    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the firewall's
     -- commitments and the messages they open to, and V*'s bridge
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
@@ -84,11 +84,11 @@ def RecursiveSound : Prop :=
               (fun j τ => (zs σ.1 ω t j).slackCR dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin
 
-/-- **The gateway's commitment** to one message `msg` (an inner round message or a Merkle tree top) under the salt `y`:
+/-- **The firewall's commitment** to one message `msg` (an inner round message or a Merkle tree top) under the salt `y`:
 the hm96-sha512 leaf of the message's SHA-512 digest, `H(SHA-512(msg) ⊕ M·y, c(y))` (`ZkView.leafH`, `ZkView.My`,
 `ZkView.saltHash` at the pinned key; `ZkView.leafSplit` states that this is the executable's `Hm96.Default512.leaf`). An
-honest gateway sends the auditor this, under a fresh uniform salt, for every message, and nothing else of them. -/
-def gatewayLeaf (msg : ByteArray) (y : ZkView.Salt) : ByteArray :=
+honest firewall sends the auditor this, under a fresh uniform salt, for every message, and nothing else of them. -/
+def firewallLeaf (msg : ByteArray) (y : ZkView.Salt) : ByteArray :=
   ZkView.leafH (ZkView.bitsOf (Sha512.hash msg) + ZkView.My y, ZkView.saltHash y)
 
 /-- **An ideal commitment**: the leaf of a uniform `u` in place of `SHA-512(msg) ⊕ M·y`, beside the salt's own hash; it
@@ -97,7 +97,7 @@ def idealLeaf (u : ZkView.Bits × ZkView.Salt) : ByteArray :=
   ZkView.leafH (u.1, ZkView.saltHash u.2)
 
 /-- **The recursive audit is zero knowledge.** The auditor's tape is `Ωa` and the developer's randomness `Ωp`. The
-gateway sends the `nh` commitments `gatewayLeaf (msgs a p i) (y i)`, to the inner messages and tree tops `msgs a p`, each
+firewall sends the `nh` commitments `firewallLeaf (msgs a p i) (y i)`, to the inner messages and tree tops `msgs a p`, each
 under its own fresh uniform salt `y i`; the inner coins the messages answer are the auditor's, fixed by its tape before
 the first commitment (Goldreich–Kahan's committed coins, or a beacon's). Then the outer session runs at the public input
 `h` (the commitments), with the inner proof and the salts as its witness: `view a h p y r` is the auditor's view of it on
@@ -113,13 +113,13 @@ def RecursiveZK : Prop :=
     (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞},
     (∀ a p y (E : V → Prop),
-      prCoin (fun r : Ωo => E (view a (fun i => gatewayLeaf (msgs a p i) (y i)) p y r))
-        ≤ prCoin (fun s : Ωs => E (sim a (fun i => gatewayLeaf (msgs a p i) (y i)) s)) + εo) →
+      prCoin (fun r : Ωo => E (view a (fun i => firewallLeaf (msgs a p i) (y i)) p y r))
+        ≤ prCoin (fun s : Ωs => E (sim a (fun i => firewallLeaf (msgs a p i) (y i)) s)) + εo) →
     FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96 →
     ∀ E : Ωa × (Fin nh → ByteArray) × V → Prop,
       prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
-          E (w.1.1.1, (fun i => gatewayLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)),
-            view w.1.1.1 (fun i => gatewayLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)) w.1.1.2 w.1.2 w.2))
+          E (w.1.1.1, (fun i => firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)),
+            view w.1.1.1 (fun i => firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)) w.1.1.2 w.1.2 w.2))
         ≤ prCoin (fun w : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
             E (w.1.1, (fun i => idealLeaf (w.1.2 i)), sim w.1.1 (fun i => idealLeaf (w.1.2 i)) w.2))
           + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)
