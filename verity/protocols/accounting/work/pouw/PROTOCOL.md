@@ -821,14 +821,16 @@ useful    U/(α_A·α_B), glue
 
   It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192, and F1′ adds about 0.35 CPU-s per formed row, evaluated
   once per row and shared by R1 and the debit (about 0.75 CPU-minutes per tile; measured on a cloud-agent VM before the
-  sharing, at twice that). Its shortcuts
-  are in every report: the draws are keyed by Fiat-Shamir over the commitment, not a draw coin, the epoch's salt is from the benchmark's label,
-  and the transcript tree and the records are built on the host after timing.
+  sharing, at twice that). The protocol keys the draws and the salt by the epoch's live coins, with no Fiat-Shamir in its
+  draw. The replay's shortcuts are in every report: its draws are keyed by Fiat-Shamir over the commitment in place of
+  the draw coin, the epoch's salt is from the benchmark's label, and the transcript tree and the records are built on
+  the host after timing.
 
   Its ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof). The replay opens rows and
   words and recomputes them in the clear. The protocol keeps every value hidden: it checks a drawn tile by a ZK proof of
-  its units under sampled proofs, which opens nothing (research store `internal/pouw/hidden-check-design.md`). So no
-  report cites the replay's ACCEPT as the protocol's verdict.
+  its units under sampled proofs, which opens nothing. Its units are the hiding Programs of `circuit.pc4` (below), whose
+  every row is a committed hm96-sha512 row hashed inside the proof and whose roots return only admission bits and tile
+  digests. So no report cites the replay's ACCEPT as the protocol's verdict.
 - **The circuit (`circuit.pc4`)** is the tile check as a Program, the first step of moving it into sampled proofs. Its
   units are three templates:
 
