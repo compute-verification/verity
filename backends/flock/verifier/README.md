@@ -172,7 +172,9 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   also cuts each of review r6's leaks on #1323 at its item (`firewall_agree.leaks`: the commitments' count and place, a
   tape number naming another's value, the public input from the transcript, a name of the firewall's choosing), and runs
   the contract on every session of `test_firewall_agreement.py`. `--sessions`
-  replays recorded K = 4096 sessions from their coins and salts (`r20261006-070620-e02d`'s, 4 of 4 accepted by both). The
+  replays recorded sessions from their coins and salts. The K = 4096 sessions it replayed before (`r20261006-070620-e02d`'s,
+  4 of 4 accepted by both) are `rec/inner-transcript/v0`'s, from before rec-step3's tops and level0, and today's firewall
+  refuses their schedule; no v1 session has been recorded at that size yet. The
   outer phase: `firewall_outer_agree.py` runs the contract on the outer firewall's transcripts (`FC_FIREWALL_TRANSCRIPT`,
   `live/PROTOCOL.md` §10.4), each honest one accepted and each `FC_FIREWALL_TAMPER` control cut where the firewall stopped, for its
   control's reason, with every check's outcome recomputed from its affine form over the tape's pads, all under one public

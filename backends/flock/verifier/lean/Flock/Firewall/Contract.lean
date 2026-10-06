@@ -10,8 +10,9 @@ of three things.
   `Item.commit`, the hm96-sha512 commit string `b ‖ c` of SHA-512 of the message (`commitBC`), whose tree leaf is
   `commitLeaf`. That leaf is meant to be the firewall's commitment the recursive guarantee states
   (`Flock.Guarantees.firewallLeaf`, on the rec-thm branch, not in this package); that is not proved here. The
-  commitments come exactly where and as many as the schedule says: each of the Commit's root nodes, and each round's cap
-  nodes and message rows, right after the schedule item that carries them (`State.owed`).
+  commitments come exactly where and as many as the schedule says: each node of the Commit's level-0 tops, and each node
+  of a round's fresh tops (`tops`) and its one message row (`commits`), right after the schedule item that carries them
+  (`State.owed`). A round's copies of a level-0 top (`level0`) carry none: Commit committed them.
 * (b) A value masked with a pad the workers never see (`Item.masked`: `v + h` in GF(2^128)), then checked against every
   relation the verifier will check (`Item.check`, each of the public input's `relations`, of which there must be one),
   before anything that depends on its pad leaves (an `Item.fixed` naming the pad) and before the session ends.
@@ -48,6 +49,9 @@ open Lean (Json)
 def FORMAT : String := "verity/firewall-transcript/v0"
 
 def PUBLIC_FORMAT : String := "verity/firewall-public/v0"
+
+/-- The inner phase's schedule, rec-step3's (`rec_live.check_schedule`). -/
+def SCHEDULE_FORMAT : String := "rec/inner-transcript/v1/schedule"
 
 /-- hm96-sha512's salt (192 bytes). -/
 def SALT_BYTES : Nat := 192
@@ -102,7 +106,7 @@ structure Transcript where
   deriving Inhabited
 
 /-- The verifier's public input, which the contract holds a transcript to and never reads from it: the session's public
-schedule (the inner phase's `rec/inner-transcript/v0/schedule`), every relation the verifier checks on the masked values,
+schedule (the inner phase's `SCHEDULE_FORMAT`), every relation the verifier checks on the masked values,
 the values the public statement fixes by name, and the names of the values the firewall fixes by its own computation. -/
 structure PublicInput where
   schedule : Option Json := none
@@ -169,11 +173,39 @@ def streams (sched : Json) : V (Array String) := do
   | Json.obj kvs => return (kvs.toArray.map (·.1)).qsort (· < ·)
   | _ => throw "the schedule's streams are not an object"
 
+/-- The schedule's round `o.rounds` (for the item `what`), in `SCHEDULE_FORMAT`'s form and no other: exactly its `stream`,
+`k`, `n`, the node counts of the fresh tops it commits (`tops`), its copies of a level-0 top (`level0`) and `commits`, its
+message row (one, or none for a round without a message). -/
+def roundAt (sched : Json) (o : Order) (what : String) : V Json := do
+  let rounds ← J.asArr (← field sched "rounds") "the schedule's rounds"
+  let r ← match rounds[o.rounds]? with
+    | some r => pure r
+    | none => throw s!"{what}: past the schedule's {rounds.size} rounds"
+  let ctx := s!"the schedule's {what}"
+  let keys ← match r with
+    | Json.obj kvs => pure ((kvs.toArray.map (·.1)).qsort (· < ·))
+    | _ => throw s!"{ctx}: not an object"
+  if keys != #["commits", "k", "level0", "n", "stream", "tops"] then
+    throw s!"{ctx}: not a round of {SCHEDULE_FORMAT} (exactly stream, k, n, tops, level0 and commits)"
+  let _ ← J.str r "stream" ctx
+  let _ ← J.nat r "k" ctx
+  let _ ← J.nat r "n" ctx
+  let _ ← J.nat r "level0" ctx
+  for c in ← J.arr r "tops" ctx do
+    let _ ← J.asNat c s!"{ctx}.tops"
+  let rows ← J.nat r "commits" ctx
+  if rows > 1 then throw s!"{ctx}: {rows} message rows, where a round commits one or none"
+  return r
+
 /-- The value the schedule fixes for `what`, and the order it holds `what` to. -/
 def scheduled (sched : Json) (o : Order) (what : String) : V (ByteArray × Order) := do
   let need := fun (b : Bool) (why : String) => if b then pure () else throw (α := Unit) why
   if what == "hello" then
     need (o.stage == 0) "Hello: not the session's first item"
+    let kind := match sched.getObjVal? "kind" with
+      | .ok (.str k) => k
+      | _ => ""
+    need (kind == SCHEDULE_FORMAT) s!"Hello: the public schedule is not a {SCHEDULE_FORMAT}"
     return (← canonBytes (← field sched "hello"), { o with stage := 1 })
   if what == "roots" then
     need (o.stage == 1) "Commit's roots: not just after Hello"
@@ -206,17 +238,14 @@ def scheduled (sched : Json) (o : Order) (what : String) : V (ByteArray × Order
   | ["round", i] =>
     need (o.stage == 3) s!"round {i}: not after Link"
     need (i.toNat? == some o.rounds) s!"round {i}: not the schedule's next round, {o.rounds}"
-    let rounds ← J.asArr (← field sched "rounds") "the schedule's rounds"
-    let r ← match rounds[o.rounds]? with
-      | some r => pure r
-      | none => throw s!"round {i}: past the schedule's {rounds.size} rounds"
+    let r ← roundAt sched o what
     let s ← J.str r "stream" s!"the schedule's round {i}"
     need (o.opened.contains s) s!"round {i}: on stream {s}, not yet opened"
     return (← canonBytes r, { o with rounds := o.rounds + 1 })
   | _ => throw s!"{what}: not an item of the schedule"
 
 /-- The commitments that follow the schedule's value for `what` before anything else leaves: one a node of the Commit's
-roots, and one a cap node or message row of a round. -/
+level-0 tops, and one a node of a round's fresh tops or its message row (its copies of a level-0 top owe none). -/
 def owes (sched : Json) (o : Order) (what : String) : V Nat := do
   if what == "roots" then
     match ← field sched "roots" with
@@ -224,13 +253,10 @@ def owes (sched : Json) (o : Order) (what : String) : V Nat := do
     | _ => throw "the schedule's roots are not an object"
   else match what.splitOn ":" with
     | ["round", _] =>
-      let rounds ← J.asArr (← field sched "rounds") "the schedule's rounds"
-      let r ← match rounds[o.rounds]? with
-        | some r => pure r
-        | none => throw s!"{what}: past the schedule's {rounds.size} rounds"
-      let caps ← (← J.arr r "caps" s!"the schedule's {what}").foldlM
-        (fun n c => do return n + (← J.asNat c s!"the schedule's {what}.caps")) 0
-      return caps + (← J.nat r "commits" s!"the schedule's {what}")
+      let r ← roundAt sched o what
+      let tops ← (← J.arr r "tops" s!"the schedule's {what}").foldlM
+        (fun n c => do return n + (← J.asNat c s!"the schedule's {what}.tops")) 0
+      return tops + (← J.nat r "commits" s!"the schedule's {what}")
     | _ => return 0
 
 /-- What `src` fixes `what` to (`want` for the firewall's own values), the schedule's order after it, and the commitments

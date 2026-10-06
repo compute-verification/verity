@@ -7,7 +7,8 @@ anything the transcript says of itself; `firewall_agree.py` compares the two.
 The recorder watches the firewall from outside: a coin server that keeps every call made to it (`RecordingCoins`), a salt
 source that keeps every salt it hands out (`Tape`), and every answer the firewall gives the workers (`Session.handle`). It
 splits each call into what the schedule fixes (its shape: ``fixed`` items) and the commitments it carries (``commit``
-items, one a node or row, each with the message the firewall's own records say it commits to), and each coin answer into
+items, one a node of a salted top or a message row, each with the message the firewall's own records say it commits to;
+a round's copies of a level-0 top carry none, Commit committed them), and each coin answer into
 the challenger's coins and the coins the workers received (``coins``). A salt any answer to the workers contains is
 exposed. Nothing here trusts the firewall's checks: a call it should have refused is in the transcript as it was made.
 """
@@ -87,11 +88,11 @@ class RecordingCoins(RL.CoinServer):
     def open(self, stream, parent, at):
         return self._call({"call": "open", "stream": stream, "parent": parent, "at": at}, super().open, stream, parent, at)
 
-    def round(self, stream, caps, commits, n):
+    def round(self, stream, tops, commits, n, level0=0):
         st = self.streams.get(stream)
-        c = {"call": "round", "stream": stream, "k": st["rounds"] if st else None, "caps": list(caps), "commits": list(commits),
-             "n": n, "coins": None}
-        c["coins"] = self._call(c, super().round, stream, caps, commits, n)
+        c = {"call": "round", "stream": stream, "k": st["rounds"] if st else None, "tops": [list(t) for t in tops],
+             "level0": level0, "commits": list(commits), "n": n, "coins": None}
+        c["coins"] = self._call(c, super().round, stream, tops, commits, n, level0)
         return c["coins"]
 
 
@@ -141,10 +142,8 @@ class Session:
         items: list[dict] = []
         hexs = lambda xs: [RL.f128_hex(v) for v in xs]
 
-        def commits(sent: bytes, rows: list[list[int]], salts: list[str]):
-            p = INST.proven_bytes
-            chunks = [sent[i:i + p] for i in range(0, len(sent), p)] or [b""]
-            for j, ch in enumerate(chunks):
+        def commits(sent: list[bytes], rows: list[list[int]], salts: list[str]):
+            for j, ch in enumerate(list(sent) or [b""]):
                 msg = row_message(rows[j]) if j < len(rows) else b""
                 sid = tape.get(bytes.fromhex(salts[j]), unknown) if j < len(salts) else unknown
                 items.append({"commit": {"msg": msg.hex(), "salt": sid, "sent": ch.hex()}})
@@ -153,7 +152,6 @@ class Session:
             items.append({"coins": {"stream": stream, "round": k, "coins": hexs(c["coins"] or []),
                                     "relayed": hexs(self.relayed.get(i, []))}})
 
-        nodes = lambda b: len(b) // INST.proven_bytes if len(b) % INST.proven_bytes == 0 else f"{len(b)} bytes"
         priv = iter(self.proxy.private)
         for i, c in enumerate(self.coins.calls):
             kind = c["call"]
@@ -161,10 +159,10 @@ class Session:
                 items.append({"fixed": {"what": "hello", "by": "schedule", "sent": canon(c["hello"]).hex()}})
             elif kind == "roots":
                 items.append({"fixed": {"what": "roots", "by": "schedule",
-                                        "sent": canon({t: nodes(r) for t, r in c["roots"].items()}).hex()}})
+                                        "sent": canon({t: len(r) for t, r in c["roots"].items()}).hex()}})
                 for t, r in sorted(c["roots"].items()):
                     mine = c.get("mine", self.proxy.roots).get(t, {})
-                    commits(r, RL.top_rows(bytes.fromhex(mine["top"])) if mine else [], mine.get("salts", []))
+                    commits(r, RL.top_rows(bytes.fromhex("".join(mine["nodes"]))) if mine else [], mine.get("salts", []))
                 coins("link", 0, i, c)
             elif kind == "y":
                 items.append({"fixed": {"what": "link.y", "by": "schedule", "sent": b"".join(RL.f128_bytes(v) for v in c["y"]).hex()}})
@@ -174,16 +172,16 @@ class Session:
             elif kind == "round":
                 r = len([x for x in self.coins.calls[:i] if x["call"] == "round"])
                 items.append({"fixed": {"what": f"round:{r}", "by": "schedule",
-                                        "sent": canon({"stream": c["stream"], "k": c["k"], "n": c["n"], "caps": [nodes(x) for x in c["caps"]],
-                                                       "commits": len(c["commits"])}).hex()}})
+                                        "sent": canon({"stream": c["stream"], "k": c["k"], "n": c["n"], "tops": [len(x) for x in c["tops"]],
+                                                       "level0": c["level0"], "commits": len(c["commits"])}).hex()}})
                 p = next(priv, None) or {}
-                for j, cap in enumerate(c["caps"]):
-                    clear = p.get("caps", [])
-                    commits(cap, RL.top_rows(bytes.fromhex(clear[j])) if j < len(clear) else [],
-                            p.get("cap_salts", [])[j] if j < len(p.get("cap_salts", [])) else [])
+                clear = p.get("tops", [])
+                for j, top in enumerate(c["tops"]):
+                    o = clear[j] if j < len(clear) else {}
+                    commits(top, RL.top_rows(bytes.fromhex("".join(o["nodes"]))) if o else [], o.get("salts", []))
                 rows, salts = p.get("rows", []), p.get("salts", [])
                 for j, bc in enumerate(c["commits"]):
-                    commits(bc, rows[j:j + 1], salts[j:j + 1])
+                    commits([bc], rows[j:j + 1], salts[j:j + 1])
                 coins(c["stream"], c["k"] if c["k"] is not None else 0, i, c)
         for s in self.stray:
             items.append({"coins": {"stream": "", "round": 0, "coins": [], "relayed": hexs(s)}})
