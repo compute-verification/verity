@@ -52,7 +52,8 @@
   "Proofs.Flock.Verifier",
   "Flock",
   "Proofs.Flock.Level3",
-  "Proofs.Flock.Soundness"
+  "Proofs.Flock.Soundness",
+  "Proofs.Flock.Recursive"
  ],
  "layers": {
   "Definitions.Core": {
@@ -226,7 +227,8 @@
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
   "Flock.HmNets.col_and": {
