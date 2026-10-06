@@ -60,7 +60,7 @@ from typing import Any, Callable, Mapping
 
 import numpy as np
 from verity.primitives.circuits.program import Program
-from verity.primitives.commitments.identity import identity_digest
+from verity.primitives.commitments.identity import identity_digest_sha512
 from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
@@ -167,7 +167,7 @@ def spec_of(params: dict, ell: int) -> S.Spec:
 
 
 def _frame(tag: str, fields: dict, count: int) -> CommitmentDomain:
-    return CommitmentDomain(bytes.fromhex(identity_digest(tag, fields)), OWNER, RangeIndexedDomain(0, count), hash="sha512")
+    return CommitmentDomain(identity_digest_sha512(tag, fields), OWNER, RangeIndexedDomain(0, count), hash="sha512")
 
 
 def _served(params: dict, ell: int, port: str, schema: str, count: int) -> CommitmentDomain:
