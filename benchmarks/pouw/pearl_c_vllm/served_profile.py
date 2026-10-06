@@ -50,13 +50,15 @@ def _mode() -> str:
 
 
 def _phase(prompts, sp) -> str:
-    n = len(prompts) if isinstance(prompts, (list, tuple)) else 1
+    import e2e
+    ps = list(prompts) if isinstance(prompts, (list, tuple)) else [prompts]
     mt = getattr(sp, "max_tokens", None)
-    if mt == 1:
-        return "prefill" if n == 1 else "d1"
     if mt == 48:
         return "chat"
-    return "dn" if n > 1 else f"gen{mt}"
+    one = len(ps) == 1 and isinstance(ps[0], dict) and len(ps[0].get("prompt_token_ids", ())) == e2e.PREFILL
+    if mt == 1:
+        return "prefill" if one else "d1"
+    return "dn" if not one else f"gen{mt}"
 
 
 def _instrument() -> None:
