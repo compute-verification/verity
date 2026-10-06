@@ -11,7 +11,7 @@ collision resistance, a single-stage property.  Lean's audit compares each answe
 "no verifier key ... idealizes the per-block tags"); these digests are that idealization's instance.
 
 The verifier builds `vk` from its own encoding (`setup.verifier_key`) and keeps every leaf digest (0.05% of `C` at
-64 KB), so it checks an answer alone; `root` is the 32-byte key a root-only verifier keeps, checking an answer with the
+64 KB), so it checks an answer alone; `root` is the 32-byte key a root-only memory challenger keeps, checking an answer with the
 server's audit path.  `VerifierKey.from_segments` and `from_leaves` build it one segment at a time, without `C`.  Only
 the geometry (`codec.Geometry`) is read, so the same `vk` serves any codec.
 """

@@ -9,7 +9,7 @@ import pytest
 from verity.primitives.commitments.identity import canonical_json_bytes, tagged_sha256
 
 from verity.protocols.accounting.space.pous import setup
-from verity.protocols.accounting.space.pous.audit import HonestResponder, TimedVerifier, challenge_key, run_timed
+from verity.protocols.accounting.space.pous.audit import HonestResponder, MemoryChallenger, challenge_key, run_timed
 from verity.protocols.accounting.space.pous.codec import Codec, encode_segments, split
 from verity.protocols.accounting.space.pous.layout import Layout, decode_tensor
 from verity.protocols.accounting.space.pous.params import Params
@@ -80,7 +80,7 @@ def test_responder_reports_ride_on_answers():
     enc = encode(PARAMS, PRIMS, W, SALT)
     vk = VerifierKey.build(enc)
     responder = HonestResponder(enc)
-    result = run_timed(TimedVerifier(vk, challenge_key(b"audit", vk), k=5, clock=itertools.count(0, 1000).__next__),
+    result = run_timed(MemoryChallenger(vk, challenge_key(b"audit", vk), k=5, clock=itertools.count(0, 1000).__next__),
                        lambda i: (responder.block(i), {"index": i, "device_ns": 7}))
     assert result.accepted and all(a.report == {"index": a.index, "device_ns": 7} for a in result.answers)
 
@@ -107,4 +107,4 @@ def test_a_second_codec_plugs_in():
     vk = setup.verifier_key(params, None, w, commitment, SALT, codec=toy)
     blocks = [b for seg in encode_segments(toy, params, None, w, SALT) for b in seg]
     assert all(decode_tensor(layout, None, SALT, name, blocks.__getitem__, codec=toy) == data[name] for name in data)
-    assert run_timed(TimedVerifier(vk, challenge_key(b"audit", vk), k=10, clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
+    assert run_timed(MemoryChallenger(vk, challenge_key(b"audit", vk), k=10, clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
