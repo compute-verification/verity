@@ -7,7 +7,7 @@ import Mathlib.Analysis.SpecialFunctions.Log.Base
 
 A computation is divided into `n` proof units. Unit `u` does work `w u`, and proving it costs `c u`. The verifier draws
 units by a law `L` (`Law`), a drawn wrong unit is caught, and the prover fixes its transcript before the draw. These are
-the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
+the definitions the partitioning guarantees (`Specs.Flock.Guarantees.Partitioning`) read:
 
 * `cost L c = ∑_u incl(u) · c(u)`, the verifier's expected proving cost, and `meanDraws L = ∑_u incl(u)`, the expected
   number of units it draws;
