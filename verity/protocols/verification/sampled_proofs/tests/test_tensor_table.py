@@ -85,6 +85,14 @@ def test_the_table_ends_w_and_has_its_public_size():
         TT.check(t, LEAVES, BYTES, CAP, min_row_bits=128)
 
 
+def test_w3s_lower_bound_is_at_least_a_byte():
+    t = TT.table(TENSORS, CAP)
+    for lo in (0, 7):
+        with pytest.raises(ValueError, match="W3's lower bound is"):
+            TT.check(t, LEAVES, BYTES, CAP, min_row_bits=lo)
+    TT.check(t, LEAVES, BYTES, CAP, min_row_bits=8)
+
+
 def test_a_row_of_w_and_the_rows_a_byte_range_falls_in():
     t = TT.table(TENSORS, CAP)
     assert [TT.locate(t, i) for i in range(LEAVES)] == [(0, 0), (0, 1), (1, 0), (1, 1), (1, 2), (2, 0)]

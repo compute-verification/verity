@@ -15,7 +15,8 @@ N_W, "bytes": |W|, "table": the table's root})`. W's byte stream, PoUS's, is the
 **The table.** Entry `t` is `(first_t, rows_t, row_bits_t, elem_bits_t, offset_t, name_t)`: `first_t` W's row of the
 tensor's row 0, `offset_t` its first byte in W's stream, and `name_t` the SHA-512 of the tensor's name (UTF-8), which
 fixes the committed order. The table has a public number of entries, `cap ≥ T`: entries `T … cap−1` are padding, `(N_W,
-0, 0, 0, |W|, 64 zero bytes)`, so the table hides `T` as well as every tensor's shape. An entry is 104 bytes (five u64 and
+0, 0, 0, |W|, 64 zero bytes)`, so the table hides `T` and, when `T > 1`, how `N_W` and `|W|` split among the tensors; with
+one tensor, `N_W` and `|W|` are its shape. An entry is 104 bytes (five u64 and
 the name), 52 u16 words, little-endian (`entry_words`), and the table is committed as `cap` registered rows of 52 16-bit
 leaves (`hm96-sha512/row/v2`, 832 bits each) under its own domain (`table_domain`: `identity_digest(
 "verity/tensor-table/domain/v1", {"deployment", "schema", "words": 52, "word_bits": 16, "leaves": cap})`). Its root, `N_W`,
@@ -127,7 +128,9 @@ def decode_entry(words: Sequence[int]) -> Entry:
 def check(entries: Sequence[Entry], leaves: int, total_bytes: int, cap: int, min_row_bits: int = 8,
           max_row_bits: int = _U64 - 1) -> None:
     """W1-W4 on the opened table against the public `leaves` (N_W), `total_bytes` (|W|) and `cap`; raises ValueError
-    naming the first failure."""
+    naming the first failure. `min_row_bits` is at least 8: below it a zero-width tensor would pass W3."""
+    if min_row_bits < 8:
+        raise ValueError(f"W3's lower bound is {min_row_bits} bits, and a row is at least one byte")
     if len(entries) != cap or cap < 1:
         raise ValueError(f"the table is {len(entries)} entries, and its public size is {cap}")
     if entries[0].first != 0 or entries[0].offset != 0:
