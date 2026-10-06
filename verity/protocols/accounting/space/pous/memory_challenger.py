@@ -41,9 +41,12 @@ bound, `k · 2^-256` under the fresh key.  The domain's 32-byte binding is the f
 bytes), the value of frame leaf `(rank j, position j, RECORD_SCHEMA)`, in a frame-v3-sha512 tree over the session's
 rounds (binding(RECORD_BINDING, session), owner -1).
 
-**Signatures.** A `Signer` signs; `SCHEMES` maps an accepted scheme to its `verify(public_key, message, signature)`.
-The scheme is S1's, which has not landed, so `SCHEMES` is empty and `verdict` refuses every record.  A test signer's
-scheme starts with `TEST_PREFIX`; `register` never adds one, so a test-signed record is refused outside tests.
+**Signatures.** A `Signer` signs a session's record (`message`, 64 bytes) under its session id; `SCHEMES` maps an
+accepted scheme to its `verify(public_key, session, record, signature)`.  The one accepted scheme is S1's, `LMS`:
+LMS/LM-OTS over SHA-512 at `lms.DEPLOYED` (`verity.primitives.crypto.lms`, claim `euf-cma/lms-sha512-n32`), which signs
+the memory challenger role's digest `lms.memory_challenger_message(I, session, record)`; `LmsSigner` is its signer.  A
+test signer's scheme starts with `TEST_PREFIX`; `register` never adds one, so a test-signed record is refused outside
+tests, as is an unsigned one.
 
 Times are the challenger's monotonic clock in ns (`time.perf_counter_ns`, Linux's CLOCK_MONOTONIC); the challenger
 refuses a clock coarser than a microsecond (`CLOCK_RESOLUTION_NS`).
@@ -63,6 +66,7 @@ from verity.primitives.commitments import hm96
 from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.limits import VerificationLimits
 from verity.primitives.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
+from verity.primitives.crypto import lms
 from verity.primitives.randomness import derive
 
 from .protocol import Certificate, Scheme
@@ -254,21 +258,50 @@ def message(commitment: SessionCommitment, ended: str, rounds: Sequence[Round]) 
 
 
 class Signer(Protocol):
-    """A signer of session messages: its scheme's id, its public key, and `sign`, which a stateful hash-based scheme
-    refuses past its last one-time key."""
+    """A signer of session records: its scheme's id, its public key, and `sign(session, record)`, which a stateful
+    hash-based scheme refuses past its last one-time key."""
 
     scheme: str
     public_key: bytes
 
-    def sign(self, message: bytes) -> bytes: ...
+    def sign(self, session: bytes, record: bytes) -> bytes: ...
 
 
-type Verify = Callable[[bytes, bytes, bytes], bool]
-"""`verify(public_key, message, signature)`."""
+type Verify = Callable[[bytes, bytes, bytes, bytes], bool]
+"""`verify(public_key, session, record, signature)`."""
 
-_SCHEMES: dict[str, Verify] = {}
+LMS = "lms-sha512/n32-w1-h20/v0"
+"""S1's scheme at its deployed parameters (`lms.DEPLOYED`)."""
+
+
+def lms_verify(params: lms.Params) -> Verify:
+    """S1's verification at `params`, of the memory challenger role's digest of `(session, record)`."""
+
+    def verify(public_key: bytes, session: bytes, record: bytes, signature: bytes) -> bool:
+        if len(public_key) != 16 + params.N:
+            return False
+        sig = lms.Signature.decode(params, signature)
+        return lms.verify(params, public_key, lms.memory_challenger_message(public_key[:16], session, record), sig)
+
+    return verify
+
+
+class LmsSigner:
+    """A memory challenger's S1 key (`lms.PrivateKey`) and its leaf state (`lms.LeafState`), which refuses a used or
+    missing leaf; `scheme` is `LMS` at `lms.DEPLOYED`, else a test's own id for other parameters."""
+
+    def __init__(self, key: lms.PrivateKey, state: lms.LeafState, scheme: str = LMS) -> None:
+        if (scheme == LMS) != (key.params == lms.DEPLOYED):
+            raise ValueError(f"{LMS} is LMS at {lms.DEPLOYED}, not {key.params}")
+        self.key, self.state, self.scheme, self.public_key = key, state, scheme, lms.public_key(key)
+
+    def sign(self, session: bytes, record: bytes) -> bytes:
+        return lms.sign(self.key, self.state, lms.memory_challenger_message(self.key.I, session, record)).encode()
+
+
+_SCHEMES: dict[str, Verify] = {LMS: lms_verify(lms.DEPLOYED)}
 SCHEMES: Mapping[str, Verify] = MappingProxyType(_SCHEMES)
-"""The signature schemes a session is accepted under: S1's once it lands.  Empty: `verdict` refuses every record."""
+"""The signature schemes a session is accepted under: S1's (`LMS`) and nothing else."""
 
 
 def register(scheme: str, verify: Verify) -> None:
@@ -379,7 +412,7 @@ class MemoryChallenger:
             raise RuntimeError("the session has not ended")
         if self.signed is None:
             rounds = tuple(self.rounds)
-            sig = self.signer.sign(message(self.commitment, self.ended, rounds))
+            sig = self.signer.sign(self.commitment.session, message(self.commitment, self.ended, rounds))
             self.signed = SignedSession(self.commitment, self.ended, rounds, self.signer.scheme, self.signer.public_key, sig)
         return self.signed
 
@@ -419,7 +452,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
         reasons.append("the session is signed by a key that is not a trusted memory challenger's")
     else:
         try:
-            ok = bool(verify(signed.public_key, signed.message(), signed.signature))
+            ok = bool(verify(signed.public_key, signed.commitment.session, signed.message(), signed.signature))
         except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
             ok = False
         if not ok:
@@ -445,7 +478,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 
-__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "PROTOCOL", "RECORDS_TREE",
-           "RECORD_SCHEMA", "SCHEMES", "TEST_PREFIX", "CoinOpening", "CoinTree", "MemoryChallenger", "Round", "SessionCommitment",
-           "SignedSession", "Signer", "Verdict", "Verify", "coin_digest", "coin_leaf", "covering_certificate", "message",
-           "records_root", "register", "verdict", "verify_coin"]
+__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "LMS", "PROTOCOL",
+           "RECORDS_TREE", "RECORD_SCHEMA", "SCHEMES", "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryChallenger",
+           "Round", "SessionCommitment", "SignedSession", "Signer", "Verdict", "Verify", "coin_digest", "coin_leaf",
+           "covering_certificate", "lms_verify", "message", "records_root", "register", "verdict", "verify_coin"]

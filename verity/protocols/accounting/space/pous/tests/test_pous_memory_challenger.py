@@ -9,6 +9,7 @@ import hashlib
 import pytest
 
 import pous_test_signer as ts
+from verity.primitives.crypto import lms
 from verity.protocols.accounting.space.pous import memory_challenger as mc
 from verity.protocols.accounting.space.pous import schemes
 
@@ -95,11 +96,14 @@ def test_honest_session_is_accepted_and_publishes_only_the_verdict():
 
 def test_fail_closed_outside_tests():
     c, signed, signer = session()
+    assert signed.scheme == ts.scheme(2) and signed.scheme.startswith(mc.TEST_PREFIX)
     v = judge(c, signed, signer, schemes_=mc.SCHEMES)
-    assert not v.accepted and v.reasons == (f"signature scheme {ts.SCHEME!r} is not accepted",)
+    assert not v.accepted and v.reasons == (f"signature scheme {signed.scheme!r} is not accepted",)
     with pytest.raises(ValueError, match="test signer"):
-        mc.register(ts.SCHEME, ts.verify)
-    assert ts.SCHEME not in mc.SCHEMES
+        mc.register(signed.scheme, ts.SCHEMES[signed.scheme])
+    assert set(mc.SCHEMES) == {mc.LMS} and not set(ts.SCHEMES) & set(mc.SCHEMES)
+    as_lms = dataclasses.replace(signed, scheme=mc.LMS)
+    assert judge(c, as_lms, signer, schemes_=mc.SCHEMES).reasons == ("the signature does not verify",)
     unsigned = dataclasses.replace(signed, signature=b"")
     assert judge(c, unsigned, signer).reasons == ("the signature does not verify",)
     assert judge(c, dataclasses.replace(signed, scheme="none"), signer).reasons == ("signature scheme 'none' is not accepted",)
@@ -113,8 +117,9 @@ def test_bad_signature_and_edited_records_are_rejected():
     r = signed.rounds[5]
     edited = signed.rounds[:5] + (dataclasses.replace(r, receipt_ns=r.receipt_ns - 1),) + signed.rounds[6:]
     assert judge(c, dataclasses.replace(signed, rounds=edited), signer).reasons == ("the signature does not verify",)
-    stranger = ts.TestSigner(b"someone else", height=1)
-    forged = dataclasses.replace(signed, public_key=stranger.public_key, signature=stranger.sign(signed.message()))
+    stranger = ts.TestSigner(b"someone else", height=2)
+    forged = dataclasses.replace(signed, public_key=stranger.public_key,
+                                 signature=stranger.sign(signed.commitment.session, signed.message()))
     assert judge(c, forged, signer).reasons == ("the session is signed by a key that is not a trusted memory challenger's",)
     moved = dataclasses.replace(signed.commitment, limit_ns=LIMIT + 1)
     assert "the signed header is not the session's commitment" in mc.verdict(
@@ -182,9 +187,9 @@ def test_refusals():
     with pytest.raises(RuntimeError, match="unanswered"):
         c.challenge()
     signer = ts.TestSigner(b"k", height=1)
-    signer.sign(b"a"), signer.sign(b"b")
-    with pytest.raises(RuntimeError, match="every one-time key"):
-        signer.sign(b"c")
+    signer.sign(SESSION, b"a"), signer.sign(SESSION, b"b")
+    with pytest.raises(lms.StateError, match="all 2\\^1 leaves are used"):
+        signer.sign(SESSION, b"c")
 
 
 def test_the_certificate_covers_p2_v3_at_the_cap():
@@ -199,3 +204,49 @@ def test_the_certificate_covers_p2_v3_at_the_cap():
         mc.covering_certificate(scheme, p2.CERT_K, limit)
     with pytest.raises(ValueError, match="no certificate"):
         mc.covering_certificate(scheme, p2.CERT_K, limit + 1_000, experimental=True)
+
+
+class _SparseTree:
+    """A deployed key's tree for leaf 0 alone: its path's siblings arbitrary, its root the one they give, so a test signs
+    once at `lms.DEPLOYED` without its 2^20-leaf keygen."""
+
+    def __init__(self, I: bytes, seed: bytes) -> None:
+        self.root = b""
+        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, I, seed, self), 0, b"probe")  # type: ignore[arg-type]
+        self.root = lms.root_of(lms.DEPLOYED, I, b"probe", probe)
+
+    def __getitem__(self, r: int) -> bytes:
+        return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()[:32]
+
+
+def deployed_signer(tmp_path) -> mc.LmsSigner:
+    I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:32]
+    key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
+    lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
+    return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+
+
+def test_an_lms_signed_session_is_accepted_under_the_deployed_scheme(tmp_path):
+    signer = deployed_signer(tmp_path)
+    assert signer.scheme == mc.LMS and len(signer.public_key) == 48
+    c, signed, _ = session(signer=signer)
+    assert len(signed.signature) == lms.DEPLOYED.signature_bytes()
+    assert judge(c, signed, signer, schemes_=mc.SCHEMES).public() == {"accepted": True}
+    verify = mc.SCHEMES[mc.LMS]
+    session_id, record = signed.commitment.session, signed.message()
+    assert verify(signed.public_key, session_id, record, signed.signature)
+    assert not verify(signed.public_key, hashlib.sha512(b"other").digest()[:32], record, signed.signature)
+    assert not verify(signed.public_key[:-1], session_id, record, signed.signature)
+    with pytest.raises(ValueError, match="an LMS signature"):
+        verify(signed.public_key, session_id, record, signed.signature[:-1])
+    plain = lms.sign_at(signer.key, 0, record).encode()
+    assert not verify(signed.public_key, session_id, record, plain)
+
+
+def test_the_deployed_scheme_id_is_lms_at_the_deployed_parameters():
+    small = lms.keygen(lms.Params(32, 1, 1), bytes(32))
+    with pytest.raises(ValueError, match="lms-sha512/n32-w1-h20/v0 is LMS at"):
+        mc.LmsSigner(small, None)  # type: ignore[arg-type]
+    big = lms.PrivateKey(lms.DEPLOYED, bytes(16), bytes(32), (b"", bytes(32)))
+    with pytest.raises(ValueError, match="is LMS at"):
+        mc.LmsSigner(big, None, scheme=ts.scheme(20))  # type: ignore[arg-type]

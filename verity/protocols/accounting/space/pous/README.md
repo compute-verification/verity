@@ -60,12 +60,14 @@ print(v.profile().statement())                                                 #
 On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device
 inside the node's isolation boundary. It commits its indices in a coin tree before the session, hashes each whole
 answer with SHA-512 after reading its receipt time, and signs the session's round records once. `verdict` checks a
-signed session in the clear and publishes only the verdict. Until S1's signature scheme is registered
-(`memory_challenger.register`), it refuses every record:
+signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`
+(`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
 
 ~~~python
+from verity.primitives.crypto import lms
 from verity.protocols.accounting.space.pous import memory_challenger as mc
 
+signer = mc.LmsSigner(key, lms.LeafState(state_path, lms.public_key(key), lms.DEPLOYED.H))  # key = lms.keygen(lms.DEPLOYED, seed)
 coins = mc.CoinTree.draw(challenger_secret, session_id, params.blocks, k)          # before the session
 c = mc.MemoryChallenger(coins, signer, limit_ns=500_000 + rtt, block_bytes=params.block_bytes)
 signed = c.run(blocks.__getitem__)                                                  # witness: never sent in the clear
