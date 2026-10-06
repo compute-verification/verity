@@ -546,10 +546,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     for nm, v in public_inputs.items():
         if set(v) != {"seed", "derivation"} or not all(isinstance(v[k], str) and v[k] for k in v):
             raise ValueError(f"public input {nm}: it names its recomputation, a non-empty seed and derivation")
-    if port_bits is not None and None in port_bits:
-        raise ValueError(f"{low.name}: bit rows on every input port or on none")
-    if port_bits and public_inputs:
-        raise NotImplementedError(f"{low.name}: public input ports beside bit rows (a public leaf is a 16-bit word)")
+    if port_bits is not None and None in [b for (nm, _w), b in zip(in_ports, port_bits) if nm not in public_inputs]:
+        raise ValueError(f"{low.name}: bit rows on every input row or on none")
     bits_of = port_bits or [None] * len(sub.inputs)
     if seg_ports and (port_bits is None or not seg_ports <= {p.name for p in sub.inputs}):
         raise ValueError(f"{low.name}: segmented rows are bit rows of input ports: {sorted(seg_ports)}")

@@ -79,15 +79,18 @@ def test_a_rows_commit_string_is_cores_at_every_padding_edge(row, role, sizes):
         assert L.commit(row, role, words, y) == L.INST.commit_string(L.KEY, x, y), n
 
 
-def test_every_per_call_row_but_ok_the_tile_and_the_cuts_is_a_row_seg_row():
-    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`, and the row_k cut's `rowk.PORTS4`, `rowk.PORTS8`) are exactly
-    the rows with a schema, and the row-seg ones are the per-call rows (role X) but ok, the tile digest and the cut's six:
-    A_i and A′_i ‖ P_A,i of both checks.  Every other row, each registered row (role W) included, is a `sha512/row/v2`
-    row: no row is `sha512/row/v1`."""
-    used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS, rowk.PORTS4, rowk.PORTS8) for unit in ports.values()
-            for row, role, _ in unit["rows"]}
+def test_every_per_call_row_but_ok_the_tile_the_caps_and_the_cuts_is_a_row_seg_row():
+    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`, `cap.PORTS`, and the row_k cut's `rowk.PORTS4`,
+    `rowk.PORTS8`) are exactly the rows with a schema, and the row-seg ones are the per-call rows (role X) but ok, the tile
+    digest, the cap's rows and the cut's six: A_i, A′_i ‖ P_A,i of both checks and A's salt-dead counts.  Every other row,
+    each registered row (role W) and the cap's chunk digests and strip row (64 words, one whole block, so a unit that reads
+    or writes one hashes a block before its last) included, is a `sha512/row/v2` row: no row is `sha512/row/v1`."""
+    from verity.protocols.accounting.work.pouw.circuit import cap
+
+    used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS, cap.PORTS, rowk.PORTS4, rowk.PORTS8)
+            for unit in ports.values() for row, role, _ in unit["rows"]}
     assert used == set(L.ROW_SCHEMA)
-    seg = {(row, ROLE_X) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p")}
+    seg = {(row, ROLE_X) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p", "sd")}
     assert {k for k, s in L.ROW_SCHEMA.items() if s == SCHEMA_HM96_SHA512_ROW_SEG} == seg
     assert {k for k, s in L.ROW_SCHEMA.items() if s == SCHEMA_HM96_SHA512_ROW_V2} == set(L.ROW_SCHEMA) - seg
 
@@ -131,6 +134,24 @@ def test_statement_rows_refuse_ports_that_are_no_statement():
                       ((("nvfp4-p", ROLE_X, (0, 1)), ("ok", ROLE_X, (1,))), "once each and in order")):
         with pytest.raises(ValueError, match=why):
             L.statement_rows({"rows": rows}, 64, {"ac": 2, "pa": 3})
+
+
+def test_advice_is_in_no_read_set():
+    """Advice (`pc8.PORTS`: the cap tile's certificates) is plain witness only while no row or region reads it: each of
+    `pc8`'s units names its advice apart from its rows and regions; a tile with the cap's advice has the same statement
+    rows as without, so no committed row (and no link, which reads one) holds a bit of it; and advice that is also a
+    row's port or a public input region, or that names an output, is refused."""
+    from verity.protocols.accounting.work.pouw.circuit import cap
+
+    for role, unit in pc8.PORTS.items():
+        bound = {p for _r, _rl, ps in unit["rows"] for p in ps} | set(unit["regions"])
+        assert not set(unit["advice"]) & bound and all(isinstance(p, str) for p in unit["advice"]), role
+    reads = {"ac": 2, "pa": 2, "bc": 3, "pb": 3}
+    tile = pc8.PORTS["tile"]
+    assert L.statement_rows({**tile, "advice": cap.ADVICE}, 128, reads) == L.statement_rows(tile, 128, reads)
+    for unit in ({**tile, "advice": ("pa",)}, {**pc8.PORTS["row_a"], "advice": ("fa",)}, {**tile, "advice": (0,)}):
+        with pytest.raises(ValueError, match="no committed row and no public input region"):
+            L.statement_rows(unit, 128, reads)
 
 
 SEG_TAG, SEGMENT_TAG = b"verity/sha512-row-seg/v1\0", b"verity/sha512-row-seg/v1/segment\0"
