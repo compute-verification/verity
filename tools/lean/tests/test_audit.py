@@ -55,6 +55,23 @@ def recorded(f=None):
     return pol
 
 
+def test_four_names_holds_the_guarantees_under_the_roots_it_lists_to_the_four_name_form():
+    def lifted(name, g, module="P.Guarantees", binders="", args=""):
+        return fact(signature=f"{name}{binders} : {g}{args}", hyps=[], reads=[]) | {"lift": {"head": g, "module": module}}
+    pins = {"P.t": fact(),
+            "P.SecurityProofs.G": lifted("P.SecurityProofs.G", "P.Guarantees.G"),
+            "P.SecurityProofs.R": lifted("P.SecurityProofs.R.{u}", "P.Guarantees.R", args=".{u}"),
+            "P.SecurityProofs.W": lifted("P.SecurityProofs.W", "P.Guarantees.W", module="P.Spec"),
+            "P.SecurityProofs.V": lifted("P.SecurityProofs.V", "P.Guarantees.V", binders=" (n : Nat)", args=" n"),
+            "P.SecurityProofs.X": lifted("P.SecurityProofs.X", "P.Guarantees.Y"),
+            "Q.u": fact(signature="Q.u : True", hyps=[], reads=[])}
+    policy = POLICY | {"four_names": ["P"], "guarantees": {n: {"owner": "@lean"} for n in pins}}
+    fails, _ = A.judge(policy, facts(pins=pins), FILES, update=True)
+    assert [f.split(" is a guarantee")[0] for f in fails] == [
+        f"four names: P.{n}" for n in ("SecurityProofs.V", "SecurityProofs.W", "SecurityProofs.X", "t")]
+    assert A.judge(POLICY | {"guarantees": policy["guarantees"]}, facts(pins=pins), FILES, update=True)[0] == []
+
+
 def test_a_recorded_package_passes_and_its_record_is_the_statement():
     pol = recorded()
     assert pol["guarantees"]["P.t"] == {"owner": "@lean", "signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"],
