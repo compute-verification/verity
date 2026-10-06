@@ -5,6 +5,7 @@
 # rows form s, w under -h3s, whose rows are hm96's; whole step, deferred tile hashing, both arms graphed).
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
 #     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/pearl_c_vllm/h3_window.sh
+# or on node 1, whose GPUs only the queue lends: research run --queue --on vy-nebius-1 --gpus 1 --preemptible ... (the same).
 # STEPS: screen, smoke or both (the default); the smoke passes when window.sh does and smoke.json has the gates and no error.  The
 # screen's retained passes stay in scratch (deleted after); its capture.json and screen.json are copied to out/screen.
 set -uo pipefail
@@ -14,6 +15,8 @@ S=$(mktemp -d "$(dirname "$WORK")/tmp-h3-window.XXXXXX"); trap 'rm -rf "$S"' EXI
 HEAD=$(git rev-parse HEAD); echo "tree $HEAD" | tee "$OUT/tree.txt"
 STEPS=${STEPS:-both}; SCHEME=${SCHEME:-pearl-c-sm120-v1-h3}
 stamp() { echo "h3-window: $* at $(date -u +%H:%M:%SZ)"; }
+# under the queue's lease (research run --queue --gpus 1, node 1's GPUs) the workload already holds its GPU
+lease() { if [ -n "${GPU_LEASE_UUID:-}" ]; then while [ "$1" != -- ]; do shift; done; shift; "$@"; else gpu-lease "$@"; fi; }
 export PYTHONPATH=$PWD:$PWD/catalog:$PWD/kernels:$PWD/experimental:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 
 stamp "ship build"
@@ -25,7 +28,7 @@ rc=0
 
 if [ "$STEPS" != smoke ]; then
   stamp "screen capture under gpu-lease 1"
-  gpu-lease 1 --wait --preemptible --max-min 10 -- bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID;
+  lease 1 --wait --preemptible --max-min 10 -- bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID;
     exec timeout 540 "$0" benchmarks/pouw/pearl_c_vllm/h3_screen.py capture --kernel benchmarks/pouw/pearl_c_sm120 \
       --cubin "$1" --out "$2" --scheme "$3"' "$PY" "$S/ship-${HEAD:0:8}/pearl_c_sm120.cubin" "$S/screen" "$SCHEME" \
     > "$OUT/screen/capture.log" 2>&1
@@ -41,7 +44,7 @@ if [ "$STEPS" != screen ]; then
   case $SCHEME in *-h3s) ROWS_FORM=w ;; *) ROWS_FORM=s ;; esac
   export SCHEME GRAPHS=1 FP8_GRAPHS=1 SCHEDULE=serial ROWS_FORM WHOLE_STEP=1 WHOLE_DEFER=1 MODE=smoke
   stamp "window.sh MODE=smoke SCHEME=$SCHEME under gpu-lease 1"
-  SHIP_TAR=$S/ship.tar OUT=$OUT/window gpu-lease 1 --wait --preemptible --max-min 25 -- timeout 1440 \
+  SHIP_TAR=$S/ship.tar OUT=$OUT/window lease 1 --wait --preemptible --max-min 25 -- timeout 1440 \
     bash benchmarks/pouw/pearl_c_vllm/window.sh
   wrc=$?; stamp "window.sh exited $wrc"
   rm -rf "$OUT/window/ship"
