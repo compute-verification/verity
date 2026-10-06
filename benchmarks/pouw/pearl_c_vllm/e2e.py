@@ -832,8 +832,8 @@ def main() -> None:
     args.graphs = args.graphs or args.whole_step
     if args.whole_defer and not args.whole_step:
         ap.error("--whole-defer defers within a whole capture: it needs --whole-step")
-    if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing not in ("h2", "h3"):
-        ap.error(f"--rows-form s is frame-b3s's (-h2, -h3), and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
+    if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing not in ("h2", "h3", "h3s"):
+        ap.error(f"--rows-form s is frame-b3s's (-h2, -h3, -h3s), and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
     if args.smoke:
         smoke(args)
         return

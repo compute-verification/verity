@@ -271,11 +271,16 @@ def cdiv(a: int, b: int) -> int:
 
 TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_small's widest level 0; hash_rows_w's most rows a CTA
 LEAF_TILES = 32                                  # hash_leaf_p's most tiles a CTA (its shared memory's)
-#: hashing formats: -h1 (frame-b3 trees), -h2 (frame-b3s: each leaf a tree over its value's 256-byte segments) and -h3 (-h2's
-#: trees, each row of A drawing its E_A line from its own seed over its leaf: `seeds_a`, then `lines_ea` per row)
-HASHINGS = ("h1", "h2", "h3")
+#: hashing formats: -h1 (frame-b3 trees), -h2 (frame-b3s: each leaf a tree over its value's 256-byte segments), -h3 (-h2's
+#: trees, each row of A drawing its E_A line from its own seed over its leaf: `seeds_a`, then `lines_ea` per row) and -h3s
+#: (-h3 with each row's seed over its SHA-512 row digest, `rowdig_a`, instead of its leaf)
+HASHINGS = ("h1", "h2", "h3", "h3s")
 #: the formats whose trees are frame-b3s
-B3S_HASHINGS = ("h2", "h3")
+B3S_HASHINGS = ("h2", "h3", "h3s")
+#: the formats whose rows of A seed their own E_A lines
+ROW_SEEDED = ("h3", "h3s")
+#: s512_rows' most segments a row (hash.cuh's RS_MAX_SEGS), 1 KiB each
+RS_MAX_SEGS = 128
 #: `verity.protocols.accounting.work.pouw.audit`'s leaf schemas, which -h2's segment keys bind; hash_rows_b3s's segments a row (a thread each)
 ROW_SCHEMA, TILE_SCHEMA = "verity/pouw/row/v1", "verity/pouw/tile/v1"
 B3S_SEG, B3S_MAX_SEGS = 256, 512
@@ -363,14 +368,16 @@ class Pipeline:
     hash_rows_b3s, under segment level keys it derives itself and its first CTA stores in `skeys_<tree>`; the tile tree's
     leaves hash_leaves_b3s) or -h3 (-h2's trees; after A's tree, `seeds_a` is hash.cuh's b3_seeds in mode 1 over its m_real
     leaves, `pearl_c.row_seed` with the unit index read from `unit`, and `lines_ea` draws row i < m_real's line from its own
-    seed, `pearl_c.PearlC.encode`'s E_A).  Pads, node keys and every level above the leaves are frame-b3's in all three.
-    `rows_form` is A's row-leaf form (ROWS_FORMS): under -h2 and -h3 `s` hashes A's m_real rows and writes stats_a's words for
+    seed, `pearl_c.PearlC.encode`'s E_A) or -h3s (-h3 with `rowdig_a` first, s512_rows' SHA-512 row digest of each of A's
+    m_real rows, `pearl_c.row_digest`, and `seeds_a` b3_seeds in mode 2 over those digests).  Pads, node keys and every level
+    above the leaves are frame-b3's in all.
+    `rows_form` is A's row-leaf form (ROWS_FORMS): under -h2, -h3 and -h3s `s` hashes A's m_real rows and writes stats_a's words for
     all m in one pass.
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
     labels `k_msg`, `k_leaf`, `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
-    BLAKE3("pearl-c/v0/seed-A")), and under -h2 and -h3 `t_row`, `t_tile`, the segment keys' templates (`b3s_template` of
-    ROW_SCHEMA and TILE_SCHEMA).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a` (under -h3 the
+    BLAKE3("pearl-c/v0/seed-A")), and under -h2, -h3 and -h3s `t_row`, `t_tile`, the segment keys' templates (`b3s_template` of
+    ROW_SCHEMA and TILE_SCHEMA).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a` (under -h3 and -h3s the
     key of the rows past m_real, the kernels' padding, which nothing commits)."""
 
     GEMM_SMEM: dict[str, int] = {}
@@ -393,9 +400,11 @@ class Pipeline:
         if self.b3s and cdiv(4 * k, B3S_SEG) > B3S_MAX_SEGS:
             raise ValueError(f"hash_rows_b3s takes rows of at most {B3S_MAX_SEGS} segments (k <= {B3S_MAX_SEGS * B3S_SEG // 4}), "
                              f"not k = {k}")
+        if hashing == "h3s" and 4 * k > RS_MAX_SEGS * 1024:
+            raise ValueError(f"s512_rows takes rows of at most {RS_MAX_SEGS} 1 KiB segments (k <= {RS_MAX_SEGS * 256}), not k = {k}")
         self.hashing = hashing
         if rows_form not in ROWS_FORMS or rows_form == "s" and not self.b3s:
-            raise ValueError(f"rows_form {rows_form!r}: one of {ROWS_FORMS}, and `s` only under -h2 or -h3 on this tree")
+            raise ValueError(f"rows_form {rows_form!r}: one of {ROWS_FORMS}, and `s` only under -h2, -h3 or -h3s on this tree")
         self.rows_form = rows_form
         self.fusable = self.bm == BM and self.m_real == m
         if fused and not self.fusable:
@@ -441,7 +450,7 @@ class Pipeline:
             "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n, "epb_codes": n * 32,
             "at": m * k, "bt": n * k, "at2": max(m, n) * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2, "y2": m * n * 2, "tma": ML_SET * len(ML_MAPS),
-            "line_a": 32, "seed_a": 32, "seeds_a": 32 * m_real, "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * 32,
+            "line_a": 32, "seed_a": 32, "seeds_a": 32 * m_real, "rowdig_a": 64 * m_real, "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * 32,
             **{f"{part}_{t}": size for t, count in (("a", m_real), ("b", n), ("t", tiles)) for part, size in tree(count).items()},
             **{f"skeys_{t}": 32 * max(b3s_levels(4 * k), 1) for t in ("a", "b")},
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
@@ -601,7 +610,7 @@ class Pipeline:
                ("pb", lambda: d.launch("pb", cdiv(n * 32, 256), 256, p=(b["epb_codes"], 0, b["bf"], b["g"], b["pb_t"]), i=(n,)))]
         mr, kk, tiles = self.m_real, self.keys, self.tiles
         ea = lines("ea", b["line_a"], 0, 0, m, "ea_codes")
-        if self.hashing == "h3":
+        if self.hashing in ROW_SEEDED:
             ea = ("lines_ea", lambda: d.launch("lines", cdiv(m, 128), 128, p=(b["line_a"], b["ea_codes"], 0, 0, b["seeds_a"]),
                                                i=(0, 0, m, NORM_256, mr)))
         forming = [ea, *form_side("a", m, "xa", "ea_codes", "fa_codes", "at")]
@@ -614,10 +623,13 @@ class Pipeline:
         unit = self.tree_setup("a", mr, "dom_a") + self.tree_setup("t", tiles, "dom_t")
         commit = self.row_tree("a", "xa", mr, "dom_a") + [
             ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
-        if self.hashing == "h3":
+        if self.hashing == "h3s":
+            commit.append(("rowdig_a", lambda: d.launch("s512_rows", mr, 128, p=(b["xa"], b["rowdig_a"]), i=(mr, k))))
+        if self.hashing in ROW_SEEDED:
+            mode, src = (2, "rowdig_a") if self.hashing == "h3s" else (1, "tree_a")
             commit.append(("seeds_a", lambda: d.launch("b3_seeds", cdiv(mr, 128), 128,
-                                                       p=(b["tree_a"], b["seeds_a"], kk["unit"] + 72, kk["unit"], kk["unit"] + 32,
-                                                          kk["unit"] + 64), i=(mr, 0, 1))))
+                                                       p=(b[src], b["seeds_a"], kk["unit"] + 72, kk["unit"], kk["unit"] + 32,
+                                                          kk["unit"] + 64), i=(mr, 0, mode))))
         hashing = ([] if self.fused else [("hash_msg", chain["hash_msg"])]) + [
                    ("hash_leaf", lambda: d.launch("hash_leaf_p", cdiv(tiles, lt), 4 * lt, p=(b["digests"], b["leaves"], kk["k_leaf"]),
                                                   i=(mr, n))),

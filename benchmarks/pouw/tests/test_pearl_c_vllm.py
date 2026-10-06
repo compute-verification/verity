@@ -322,12 +322,13 @@ def test_the_pipelines_h2_templates_bind_the_audits_schemas():
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
 @pytest.mark.parametrize("scheme,rows_form", [(s, "w") for s in sorted(PPD.SCHEMES)]
-                         + [("pearl-c-sm120-v1-h2", "s"), ("pearl-c-sm120-v1-h3", "s")])
+                         + [("pearl-c-sm120-v1-h2", "s"), ("pearl-c-sm120-v1-h3", "s"), ("pearl-c-sm120-v1-h3s", "s")])
 def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, rows_form):
     """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
     their kernels run by `simt_twin`: each is `MerkleTree`'s root in the scheme's tree hash (frame-b3 or frame-b3s).  Under
     -h3, each call's row seeds (b3_seeds over the leaves, the unit index read from the call's key slot) are the scheme's
-    `row_seeds`, and E_A's lines read them for the m₁₆ committed rows."""
+    `row_seeds`, and E_A's lines read them for the m₁₆ committed rows; under -h3s the seeds are b3_seeds' mode 2 over
+    s512_rows' row digests, each `pearl_c.row_digest` of its row."""
     hashing = PPD.scheme_of(scheme).hashing
     h = PPD.scheme_of(scheme).commitment_hash
     rng = np.random.default_rng(5)
@@ -349,9 +350,10 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, rows_
         want_rows = ["hash_rows_b3s" + ("_stats" if rows_form == "s" else "")] if hashing in R.B3S_HASHINGS else ["hash_rows_w"]
         assert names[:len(want_rows) + 2] == ["hash_node_keys", *want_rows, "hash_tree_small"], names
         assert ("stats_s5" in names) == (rows_form == "w")
-        seeds = ["seed_line_a", "b3_seeds", "lines"] if hashing == "h3" else ["seed_line_a", "lines"]
+        seeds = {"h3": ["seed_line_a", "b3_seeds", "lines"], "h3s": ["seed_line_a", "s512_rows", "b3_seeds", "lines"]}.get(
+            hashing, ["seed_line_a", "lines"])
         assert names[len(want_rows) + 2:len(want_rows) + 2 + len(seeds)] == seeds, names
-        if hashing == "h3":
+        if hashing in R.ROW_SEEDED:
             sh, index = run.shapes[(32, weights[w].shape[0], 1024)], len(run.cur.matmuls) - 1
             a = torch.zeros((32, 1024), dtype=torch.float32)
             a[:x.shape[0]] = x.float()
@@ -360,6 +362,12 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, rows_
             assert PPD._bytes(sh.b["seeds_a"][:32 * 32]) == b"".join(PPD.scheme_of(scheme).row_seeds(ctx, rows(a), range(32)))
             (lines_ea,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "lines"]
             assert lines_ea[0][4] == sh.b["seeds_a"].data_ptr() and lines_ea[1][2:5] == (sh.mp, R.NORM_256, 32)
+            (b3,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "b3_seeds"]
+            if hashing == "h3s":
+                assert PPD._bytes(sh.b["rowdig_a"][:64 * 32]) == b"".join(C.row_digest(r) for r in rows(a))
+                assert b3[0][0] == sh.b["rowdig_a"].data_ptr() and b3[1][2] == 2
+            else:
+                assert b3[0][0] == sh.b["tree_a"].data_ptr() and b3[1][2] == 1
         if rows_form == "s":
             a = torch.zeros((32, 1024), dtype=torch.float32)
             a[:x.shape[0]] = x.float()
@@ -492,9 +500,10 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
 @pytest.mark.slow
 def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
     """h3_screen's check on a pass the reference proved: every tile's leaf is the reference's, and a call's dumped row seeds,
-    seed_A and E_A lines (16 padding rows on -h2's lines) are; the same -h3 pass read as -h2 fails its tiles."""
+    seed_A and E_A lines (16 padding rows on -h2's lines) are, and under -h3s its row digests; the same pass read as -h2 (and
+    an -h3s pass read as -h3) fails its tiles."""
     path, s, epoch, prover, tr, splits, records = honest_pass
-    if s.hashing != "h3":
+    if s.hashing not in ("h3", "h3s"):
         pytest.skip("the -h3 screen")
     HS = load("pearl_c_vllm_h3_screen", KERNEL.parent / "pearl_c_vllm" / "h3_screen.py")
     d = path.parent
@@ -508,13 +517,19 @@ def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
         (d / f"call{u.index}.seeds_a").write_bytes(b"".join(seeds))
         (d / f"call{u.index}.seed_a").write_bytes(seed_a)
         (d / f"call{u.index}.ea_codes").write_bytes(b"".join(bytes(x) for x in lines))
+        if s.hashing == "h3s":
+            (d / f"call{u.index}.rowdig_a").write_bytes(b"".join(C.row_digest(r) for r in rows))
     got = HS._calls(d)
     assert got["ok"] and [c["padded"] - c["m16"] for c in got["calls"]] == [16, 16]
     (d / "call1.ea_codes").write_bytes(bytes(32) + (d / "call1.ea_codes").read_bytes()[32:])
     assert HS._calls(d)["calls"][1]["ea_rows_wrong"] == [0]
+    if s.hashing == "h3s":
+        (d / "call1.rowdig_a").write_bytes(bytes(64) + (d / "call1.rowdig_a").read_bytes()[64:])
+        assert not HS._calls(d)["calls"][1]["row_digests"]
     man = json.loads(path.read_text())
-    path.write_text(json.dumps({**man, "scheme": s.name.replace("-h3", "-h2")}))
-    assert HS._tiles(d, 1)["failed"] == tr.commitment.count
+    for other in ("h2", "h3") if s.hashing == "h3s" else ("h2",):
+        path.write_text(json.dumps({**man, "scheme": s.name.removesuffix(f"-{s.hashing}") + f"-{other}"}))
+        assert HS._tiles(d, 1)["failed"] == tr.commitment.count
 
 
 @pytest.mark.slow

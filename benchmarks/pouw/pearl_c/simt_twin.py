@@ -20,7 +20,7 @@ HERE = Path(__file__).parent
 KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_pad", "hash_node_keys", "hash_nodes",
            "hash_tree_leaves", "hash_tree_small", "hash_rows_wt", "lat_chain", "derive_rows_hash", "derive_rows_wide",
            "hash_rows_blk", "hash_rows_seg", "derive_rows", "standin_gemm",
-           "b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s", "hash_rows_b3s_stats", "b3_seeds")
+           "b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s", "hash_rows_b3s_stats", "b3_seeds", "s512_rows")
 SM120 = HERE.parent / "pearl_c_sm120"
 
 PRELUDE = r"""

@@ -2,7 +2,8 @@
 the bytes the verifier's reference computes.  A's row leaves and frame-b3 trees (pads, level keys, one-compression nodes)
 at rows of 1 to 75 chunks, the message digests, the tile leaves full and partial (decode's 32 x 64), Pearl's tickets, the
 tile tree, a unit's seed_A over its root with its line and jackpot keys, and -h3's row seeds at the pinned vectors (Pearl-C's
-and, under its own label, Pearl-C4's) and over an -h3 call's frame-b3s row leaves; then
+and, under its own label, Pearl-C4's) and over an -h3 call's frame-b3s row leaves, -h3s's SHA-512 row digests and its seeds
+over them at the pinned vectors; then
 run.py's commit and hashing phases end to end."""
 
 from __future__ import annotations
@@ -208,6 +209,50 @@ def test_pearl_c4_row_seeds_are_b3_seeds_under_its_label(host):
         got = host.read(out, 32 * 201)
         assert got == b"".join(C4.row_seed(salt, leaf, root_b, unit, r) for r in range(201))
         assert [got[32 * r:32 * r + 32].hex() for r in (3, 200)] == [C4_ROW_SEEDS[unit, 3], C4_ROW_SEEDS[unit, 200]]
+
+
+def h3s_row(k: int) -> bytes:
+    """The scheme suite's pinned FP32 row of k words (test_pouw_pearl_c's `h3s_row`)."""
+    return bytes((7 * i + k) % 256 for i in range(4 * k))
+
+
+#: -h3s's row digests and row seeds pinned in the scheme's suite (test_pouw_pearl_c's H3S_DIGESTS and H3S_SEEDS)
+H3S_DIGESTS = {
+    4096: "823a21352763ecee3ba7b06da44a04525577197dbee48ef82b12927e6eb6a847360933bed78d80f85b798b77096a8746ce81dc3f48e6891d95d80d0b9432788f",
+    14336: "9743c48588f788041e55fc2ef5cf44aa01225029edcf0539230053fedfcf240032ee695fd36f194c832834df8da839899cdb251e74c0090c150affc90aecadb8"}
+H3S_SEEDS = {(7, 3): "f89d02524a2d9dbc43c9d0f85225c20be248997127c6989e628424b4ac1b8ebc",
+             (7, 200): "e17bc3505bfc9a9b88b67ab02b295dc0939f1f75d88ea986471db261004a3d13",
+             (2 ** 32 - 1, 3): "9f5f48c6cbfbcebe113c4b4795b76a721f4830888efccd72fa3250a0d6b43a76",
+             (2 ** 32 - 1, 200): "e2397edb00222d193f59372a4d0ba21d598b6ca575719c4f87f31877a0ed6bcb"}
+
+
+@pytest.mark.parametrize("k,rows", [(256, 3), (768, 2), (4096, 2), (14336, 1), (32768, 1)])
+def test_s512_rows_are_row_seg_v1_digests(host, k, rows):
+    """s512_rows, a block a row of 128 threads, is `pearl_c.row_digest` (``sha512/row-seg/v1``) of every row: 1, 3, 16, 56 and
+    128 segments (an odd count ends the outer hash in the digests' block, an even one in a padding block of its own), and
+    the pinned rows' digests are the pinned bytes."""
+    rng = np.random.default_rng(k)
+    xs = [h3s_row(k)] + [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(rows - 1)]
+    out = host.alloc(64 * rows)
+    host.launch("s512_rows", rows, 128, p=(host.put(b"".join(xs)), out), i=(rows, k))
+    got = host.read(out, 64 * rows)
+    assert got == b"".join(C.row_digest(x) for x in xs)
+    if k in H3S_DIGESTS:
+        assert got[:64].hex() == H3S_DIGESTS[k]
+
+
+def test_h3s_row_seeds_are_the_pinned_vectors(host):
+    """b3_seeds in mode 2 over 201 64-byte row digests (136 bytes a seed, three BLAKE3 blocks) is `pearl_c.row_seed` over
+    each, and rows 3 and 200 over the pinned row's digest are the pinned bytes, at unit 7 and at 2^32 − 1."""
+    salt, root_b, d = bytes(range(32)), bytes(range(32, 64)), C.row_digest(h3s_row(4096))
+    skey, psalt, prb = host.put(blake3(C.LABELS["seed-A"])), host.put(salt), host.put(root_b)
+    digests = [d if r in (3, 200) else hashlib.sha512(bytes([r])).digest() for r in range(201)]
+    for unit in (7, 2 ** 32 - 1):
+        src, out = host.put(b"".join(digests)), host.alloc(32 * 201)
+        host.launch("b3_seeds", 2, 128, p=(src, out, skey, psalt, prb), i=(201, unit - (unit >> 31 << 32), 2))
+        got = host.read(out, 32 * 201)
+        assert got == b"".join(C.row_seed(salt, x, root_b, unit, r) for r, x in enumerate(digests))
+        assert [got[32 * r:32 * r + 32].hex() for r in (3, 200)] == [H3S_SEEDS[unit, 3], H3S_SEEDS[unit, 200]]
 
 
 def test_row_seeds_over_a_calls_leaves_are_the_schemes(host):

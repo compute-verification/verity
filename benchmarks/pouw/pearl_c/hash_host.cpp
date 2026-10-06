@@ -1,6 +1,6 @@
 // hash.cuh built for the host (tests/test_pearl_c_hash_host.py): the CUDA builtins it uses, and `launch`, which runs a 1-D
 // grid's CTAs in order; a CTA's threads run in order too, or as host threads under one barrier for a kernel that calls
-// __syncthreads (hash_rows).  Buffers are host memory: Args' pointers are host addresses.
+// __syncthreads (hash_rows, s512_rows).  Buffers are host memory: Args' pointers are host addresses.
 //   g++ -O2 -std=c++20 -pthread -shared -fPIC -I benchmarks/pouw/pearl_c -o hash_host.so hash_host.cpp
 #include <algorithm>
 #include <barrier>
@@ -38,7 +38,8 @@ const Kernel KERNELS[] = {{"hash_msg", hash_msg, false},       {"hash_leaf", has
                           {"hash_rows", hash_rows, true},      {"hash_pad", hash_pad, false},
                           {"hash_node_keys", hash_node_keys, false}, {"hash_nodes", hash_nodes, false},
                           {"hash_tree_leaves", hash_tree_leaves, false}, {"tickets", tickets, false},
-                          {"b3_seeds", b3_seeds, false},       {"seed_subkeys", seed_subkeys, false}};
+                          {"b3_seeds", b3_seeds, false},       {"s512_rows", s512_rows, true},
+                          {"seed_subkeys", seed_subkeys, false}};
 constexpr int COUNT = sizeof KERNELS / sizeof *KERNELS;
 }  // namespace
 

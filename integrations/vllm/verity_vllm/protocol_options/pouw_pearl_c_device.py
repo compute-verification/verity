@@ -8,7 +8,7 @@ cubin).  This module owns the buffers and runs the pipeline's steps on torch's c
 device's primary context:
 
 * **The trees** are the scheme's hashing format's (`SCHEMES`, the pipeline's ``hashing``): frame-b3 under -h1, frame-b3s
-  under -h2 and -h3, whose row leaves are trees over 256-byte segments (the segment trees' level keys derived in the leaf
+  under -h2, -h3 and -h3s, whose row leaves are trees over 256-byte segments (the segment trees' level keys derived in the leaf
   kernel).
 * **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact) are hashed
   into B's row tree (phase ``epoch``), whose root must be the committed one.  Then, with the salt's seed_B, come E_B's
@@ -18,8 +18,9 @@ device's primary context:
   - x's rows are widened into A's FP32 words, with zero filler rows up to m₁₆ (the domain's 16 | m; filler is committed as
     zero rows) and zero padding up to the kernels' tile;
   - ``commit``: A's pads and level keys (and the segment level keys) under its domain, A's row tree, seed_A and E_A's
-    line key, and under -h3 each real row's seed over its leaf (``seeds_a``: b3_seeds in mode 1, `pearl_c.row_seed`);
-  - ``forming``: E_A's lines (under -h3 each real row's line 0 from its own seed), A's statistics and forming;
+    line key, and under -h3 each real row's seed over its leaf (``seeds_a``: b3_seeds in mode 1, `pearl_c.row_seed`), under
+    -h3s over its SHA-512 row digest (``rowdig_a``: s512_rows, `pearl_c.row_digest`; then ``seeds_a`` in mode 2);
+  - ``forming``: E_A's lines (under -h3 and -h3s each real row's line 0 from its own seed), A's statistics and forming;
   - ``cleanup``: A′·F_B, P_A, and the chain with its peel and y (``gemm_pearlc`` writes y into the tensor this returns);
   - ``hashing``: the message digests and the tile leaves, into the pass's leaf buffer at the call's offset.  No per-call
     tile tree is built, since the pass has one.
@@ -104,11 +105,12 @@ from .pouw_pearl_c_screen import (
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
 #: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it).  The format is a
 #: switch: -h1 commits with frame-b3 trees, -h2 with frame-b3s (GPU 1's pipeline, `run.Pipeline`'s ``hashing``), -h3 with
-#: -h2's trees and each row's E_A line from its own seed (the work law capping each credited row too); which one serves is
+#: -h2's trees and each row's E_A line from its own seed (the work law capping each credited row too), -h3s with each row's seed
+#: keyed on its SHA-512 row digest instead of its leaf; which one serves is
 #: Daniel's call.  Its keys and tree hash come from `verity.protocols.accounting.work.pouw.serving.HASH_FORMATS`, the one table, through the
 #: scheme.
 SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing=h).name
-                for d, h in ((SM120, "h1"), (SM120_UNPROMOTED, "h1"), (SM120, "h2"), (SM120, "h3")))
+                for d, h in ((SM120, "h1"), (SM120_UNPROMOTED, "h1"), (SM120, "h2"), (SM120, "h3"), (SM120, "h3s")))
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
 #: tiles one pass's leaf buffer holds (256 MiB)
@@ -120,18 +122,18 @@ MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v1"
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
                   "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b", "skeys_b")
 CALL_BUFFERS = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "ea_codes", "at", "af", "pa_t", "c", "u", "digests",
-                "tree_a", "keys_a", "skeys_a", "line_a", "seed_a", "seeds_a")
+                "tree_a", "keys_a", "skeys_a", "line_a", "seed_a", "rowdig_a", "seeds_a")
 EPOCH_STEPS = ("pad_b", "node_keys_b", "hash_rows_b", "tree_b")
 JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b", "bf", "g", "pb")
-CALL_STEPS = ("pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa",
+CALL_STEPS = ("pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "rowdig_a", "seeds_a", "lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa",
               "gemm_pearlc", "hash_msg", "hash_leaf")
-HASH_STEPS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "hash_msg",
+HASH_STEPS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "rowdig_a", "seeds_a", "lines_ea", "hash_msg",
                         "hash_leaf"})
-#: the call steps only one format has, and which: -h3's row seeds
-FORMAT_STEPS = {"seeds_a": "h3"}
+#: the call steps only some formats have, and which: the row seeds, and -h3s's row digests they read
+FORMAT_STEPS = {"seeds_a": ("h3", "h3s"), "rowdig_a": ("h3s",)}
 #: each call step's group (`verity.protocols.accounting.work.pouw.serving.GROUPS`), which a schedule places on a lane
 STEP_GROUPS = {"pad_a": "a_tree", "node_keys_a": "a_tree", "hash_rows_a": "a_tree", "tree_a": "a_tree", "seed_a": "a_tree",
-               "seeds_a": "a_tree",
+               "rowdig_a": "a_tree", "seeds_a": "a_tree",
                "lines_ea": "forming", "stats_a": "forming", "eprime_a": "forming", "form_a": "forming",
                "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_msg": "tile_hash", "hash_leaf": "tile_hash"}
 #: the steps this path can run on a side lane, with the per-call buffers they read and write (the constant keys and the pass's
@@ -334,7 +336,7 @@ def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
     a step; a format's own steps (`FORMAT_STEPS`) exist only under it."""
     by = {name: f for name, _, f in pipe.steps()}
     optional = {"hash_msg"} if getattr(pipe, "fused", False) else set()
-    optional |= {x for x, h in FORMAT_STEPS.items() if getattr(pipe, "hashing", None) != h}
+    optional |= {x for x, hs in FORMAT_STEPS.items() if getattr(pipe, "hashing", None) not in hs}
     missing = [x for x in names if x not in by and not x.startswith(("pad_", "node_keys_")) and x not in optional]
     if missing:
         raise RuntimeError(f"the kernel's pipeline has no steps {missing}")

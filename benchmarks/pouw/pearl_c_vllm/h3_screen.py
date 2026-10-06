@@ -1,4 +1,5 @@
-"""-h3's device screen (``pearl-c-sm120-v1-h3``, untimed, one GPU): the served device path's calls against the reference.
+"""-h3's device screen (``pearl-c-sm120-v1-h3``, or ``-h3s`` with ``--scheme``; untimed, one GPU): the served device path's
+calls against the reference.
 
   python benchmarks/pouw/pearl_c_vllm/h3_screen.py capture --kernel SHIP --out DIR [--scheme S]    # on the GPU
   python benchmarks/pouw/pearl_c_vllm/h3_screen.py check --out DIR [--jobs J]                        # on CPUs, after
@@ -6,16 +7,18 @@
 ``capture`` runs `PearlCDeviceRun` (rows form ``s``, the serial schedule) on synthetic BF16 weights, (256, 1024) and
 (128, 2048), at m = 20, 100 and 200, each pass retained from outputs poisoned 0xA5: eagerly (each call's ``seeds_a``,
 ``seed_a`` and ``ea_codes`` dumped beside the pass), under CUDA graphs (the unit index read from the call's key slot),
-and eagerly with ``seeds_a`` omitted (the negative control: E_A's lines read the poison).  ``check`` holds them to the
-reference (`pearl_c.PearlC`):
+and eagerly with ``seeds_a`` omitted (the negative control: E_A's lines read the poison).  Under -h3s the eager pass also
+dumps ``rowdig_a``, and a second control omits it (the seeds read poisoned digests).  ``check`` holds them to the reference
+(`pearl_c.PearlC`):
 
-- each eager call's row seeds are `row_seeds` over its m₁₆ committed rows, E_A's line of row i is
+- each eager call's row seeds are `row_seeds` over its m₁₆ committed rows (under -h3s its row digests `row_digest`'s too),
+  E_A's line of row i is
   ``sample_line(seed_i, 0, 0, 0)``, and each padding row r's is -h2's, ``sample_line(seed_A, 0, 0, r)``;
 - every tile of each pass is `Verifier.check_tile`'s: openings, then the leaf recomputed by the reference (E_A per row from
   the row's own seed), so the honest passes' leaves are the reference's bit for bit and the control's are not;
 - and `verify_run`'s audit of each pass, recorded (its tile rule includes -h3's row cap, which an honest row can exceed).
 
-Writes ``screen.json`` in DIR, and exits 0 only when every eager call matches, every honest tile checks and the control
+Writes ``screen.json`` in DIR, and exits 0 only when every eager call matches, every honest tile checks and each control
 fails some tile.
 """
 from __future__ import annotations
@@ -34,6 +37,13 @@ SCHEME = "pearl-c-sm120-v1-h3"
 WEIGHTS = {0: (256, 1024), 1: (128, 2048)}
 CALLS = ((0, 20), (1, 100), (0, 200))
 PASSES = {"eager": (False, ()), "graphs": (True, ()), "omit-seeds": (False, ("seeds_a",))}
+#: -h3s's own control: its row digests omitted
+H3S_PASSES = {"omit-rowdig": (False, ("rowdig_a",))}
+
+
+def passes(scheme: str) -> dict:
+    from verity.protocols.accounting.work.pouw.serving import SchemeId
+    return {**PASSES, **(H3S_PASSES if SchemeId.parse(scheme).hashing == "h3s" else {})}
 BEACON = b"pouw-h3-device screen".ljust(32, b"\0")
 
 
@@ -55,7 +65,8 @@ def capture(args) -> int:
     salt = Epoch.unverified(declared, roots, BEACON).salt
     xs = [torch.randn(m, weights[w].shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, m in CALLS]
     s, log = PPD.scheme_of(args.scheme), {}
-    for name, (graphs, omit) in PASSES.items():
+    dumps = ("seeds_a", "seed_a", "ea_codes") + (("rowdig_a",) if s.hashing == "h3s" else ())
+    for name, (graphs, omit) in passes(args.scheme).items():
         run = PPD.PearlCDeviceRun(s, f"pouw:{args.scheme}", kernel, weights, roots, salt, BEACON, graphs=graphs, rows_form="s")
         d = out / name
         try:
@@ -67,7 +78,7 @@ def capture(args) -> int:
                 if not graphs:
                     W = weights[w]
                     sh = run._shape(-(-m // PPD.ROW_ALIGN) * PPD.ROW_ALIGN, W.shape[0], W.shape[1])
-                    for b in ("seeds_a", "seed_a", "ea_codes"):
+                    for b in dumps:
                         (d / f"call{index}.{b}").write_bytes(PPD._bytes(sh.b[b])[:sh.size[b]])
                 ref = x.float() @ weights[w].float().T
                 log.setdefault(name, []).append({"call": index, "rel_rms": float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())})
@@ -91,6 +102,7 @@ def _calls(d: Path) -> dict:
     """An eager pass's calls held to the reference: the row seeds, E_A's committed rows and its padding rows."""
     import verify_run as VR
     from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
+    from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
     from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
 
     man = json.loads((d / "manifest.json").read_text())
@@ -107,10 +119,13 @@ def _calls(d: Path) -> dict:
         lines = [ea[32 * r:32 * r + 32] for r in range(len(ea) // 32)]
         rows_ok = [lines[i] == bytes(P.sample_line(x, 0, 0, 0)) for i, x in enumerate(seeds)]
         pad_ok = [lines[r] == bytes(P.sample_line(seed_a, 0, 0, r)) for r in range(u["m"], len(lines))]
+        dig = d / f"call{u['index']}.rowdig_a"
+        digests = dig.read_bytes()[:64 * u["m"]] == b"".join(C.row_digest(x) for x in rows) if s.hashing == "h3s" else True
         out.append({"call": u["index"], "m16": u["m"], "padded": len(lines), "seed_a": seed_a == s.noise(ctx).seed_a,
-                    "row_seeds": got[:32 * u["m"]] == b"".join(seeds), "ea_rows": all(rows_ok),
+                    "row_digests": digests, "row_seeds": got[:32 * u["m"]] == b"".join(seeds), "ea_rows": all(rows_ok),
                     "ea_rows_wrong": [i for i, ok in enumerate(rows_ok) if not ok][:8], "ea_padding": all(pad_ok)})
-    return {"calls": out, "ok": all(c["seed_a"] and c["row_seeds"] and c["ea_rows"] and c["ea_padding"] for c in out)}
+    return {"calls": out, "ok": all(c["seed_a"] and c["row_digests"] and c["row_seeds"] and c["ea_rows"] and c["ea_padding"]
+                                    for c in out)}
 
 
 _JOB: dict = {}
@@ -153,7 +168,8 @@ def check(args) -> int:
     import verify_run as VR
     out = Path(args.out)
     res: dict = {"capture": json.loads((out / "capture.json").read_text()) if (out / "capture.json").exists() else None}
-    for name, (graphs, omit) in PASSES.items():
+    names = passes(res["capture"]["scheme"] if res["capture"] else SCHEME)
+    for name, (graphs, omit) in names.items():
         d = out / name
         if not (d / "manifest.json").exists():
             res[name] = {"error": "no manifest"}
@@ -167,9 +183,9 @@ def check(args) -> int:
         print(f"{name}: {r['tiles']['tiles']} tiles, {r['tiles']['failed']} failed check_tile; "
               f"{'calls ' + str(r['calls']['ok']) + '; ' if 'calls' in r else ''}{v['line']}", flush=True)
     honest = [res.get(n, {}) for n in ("eager", "graphs")]
-    control = res.get("omit-seeds", {})
+    controls = [res.get(n, {}) for n, (_, omit) in names.items() if omit]
     res["ok"] = (all("tiles" in r and r["tiles"]["failed"] == 0 for r in honest) and res.get("eager", {}).get("calls", {}).get("ok", False)
-                 and "tiles" in control and control["tiles"]["failed"] > 0)
+                 and all("tiles" in c and c["tiles"]["failed"] > 0 for c in controls))
     (out / "screen.json").write_text(json.dumps(res, indent=1) + "\n")
     print(f"h3 screen {'PASS' if res['ok'] else 'FAIL'}", flush=True)
     return 0 if res["ok"] else 1
