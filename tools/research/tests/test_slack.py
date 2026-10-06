@@ -1,4 +1,4 @@
-"""`research slack` against a fake Slack Web API: a local HTTP server that keeps channels, threads, reactions and user groups the
+"""`research msg` against a fake Slack Web API: a local HTTP server that keeps channels, threads, reactions and user groups the
 way the real one returns them. No real token or workspace is involved (conftest clears SLACK_*)."""
 from __future__ import annotations
 
