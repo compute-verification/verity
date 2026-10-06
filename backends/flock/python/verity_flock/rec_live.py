@@ -580,6 +580,9 @@ class Proxy:
             self.coins.start(json.loads(canonical(want)))
             return resp_ok()
         if t == REQ_COMMIT:
+            # refused here, never by the coin server: a call it refuses would reach the auditor
+            if self.hello is None or self.commit is not None:
+                raise ValueError("Commit comes once, after Hello")
             _, root_f, roots, publics = r
             if publics and any(v for _, v in publics):
                 raise ValueError("public words in an inner session")
@@ -596,6 +599,8 @@ class Proxy:
             self.points = [pts[i:i + m] for i in range(0, len(pts), m)]
             return resp_coins(pts)
         if t == REQ_LINK:
+            if self.commit is None or self.y is not None:
+                raise ValueError("Link comes once, after Commit")
             if len(r[1]) != 16 * self.schedule["link"]["y"]:
                 raise ValueError(refused(f"Link's y: {len(r[1])} bytes where the pinned schedule has {self.schedule['link']['y']} elements of 16"))
             if any(r[1]):
@@ -648,10 +653,10 @@ class Proxy:
         if t == REQ_FINISH:
             if self.commit is None or self.y is None:
                 raise ValueError("Finish before the link exchange")
-            rec = self.coins.record()
-            self._pinned("Finish's rounds", len(rec["rounds"]), len(self.schedule["rounds"]))
-            self._pinned("Finish's streams", {s: v["rounds"] for s, v in sorted(rec["streams"].items())},
-                         {s: v["rounds"] for s, v in sorted(self.schedule["streams"].items())})
+            # the gateway's own counts: an early Finish must not make it read the coin server
+            ran = {s: len(v["rounds"]) for s, v in sorted(self.streams.items()) if v["rounds"]}
+            self._pinned("Finish's rounds", sum(ran.values()), len(self.schedule["rounds"]))
+            self._pinned("Finish's streams", ran, {s: v["rounds"] for s, v in sorted(self.schedule["streams"].items())})
             self.coins.end = "finish"
             self.verdict = {"accepted": None, "why": "rec/inner-transcript/v0: the inner proof is V*'s witness; nothing verified here"}
             return resp_str(RESP_VERDICT, json.dumps(self.verdict))
