@@ -13,6 +13,7 @@ import pytest
 from verity_flock import firewall as FW
 from verity_flock import rec_live as RL
 
+import test_rec_live as T
 import test_rec_live_firewall as G
 
 HONEST = [RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, "{}"), RL.encode_req(RL.REQ_ROUND, "circuit/rep0", b"m", 1),
@@ -160,6 +161,41 @@ def test_an_outer_session_is_served_only_after_its_inner_session_finished(tmp_pa
     out, _ = _outer(fw, sid, "L0", HONEST, Challenger(log, "L0"))
     assert out["why"] == f"FIREWALL-REFUSED: recursive session {sid}: its inner session has not finished" and log == []
     assert fw.failures("pouw") == 0
+
+
+def _serve(tmp_path, sessions, fw):
+    bound, got = threading.Event(), {}
+
+    def run():
+        got["res"] = RL.serve("127.0.0.1:0", tmp_path / "inner", T._counter_rand(), sessions=sessions, schedule=G._schedule(),
+                              ready=lambda a: (got.update(addr=a), bound.set()), firewall=fw, stream="pouw")
+
+    t = threading.Thread(target=run)
+    t.start()
+    bound.wait()
+    return t, got
+
+
+def test_an_inner_stop_ends_the_recursive_session(tmp_path):
+    """`rec_live.serve` opens a recursive session for each session it serves: a refused inner session (here Link's y of the
+    wrong length) is that recursive session's stop, and no V* statement of it is then served; a finished one lets them be."""
+    fw = FW.Firewall(tmp_path / "fw")
+    t, got = _serve(tmp_path, 2, fw)
+    w = G._Wire(got["addr"])
+    assert not G._held(G._run(w, y=bytes(48)))
+    w.close()
+    w = G._Wire(got["addr"])
+    assert G._held(G._run(w))
+    w.close()
+    t.join()
+    ids = [json.loads((tmp_path / "inner" / f"s{k}" / "firewall.json").read_text())["session"] for k in range(2)]
+    assert ids == [r["firewall"] for r in got["res"]] == ["r0000", "r0001"]
+    assert fw.stopped("r0000")["part"] == "inner" and fw.stopped("r0001") is None
+    log: list = []
+    out, _ = _outer(fw, "r0000", "L0", HONEST, Challenger(log, "L0"))
+    assert out["why"] == "FIREWALL-REFUSED: recursive session r0000 stopped at inner: the firewall serves nothing more of it" and log == []
+    assert _outer(fw, "r0001", "L0", HONEST, Challenger(log, "L0"))[0]["outcome"] == "release"
+    assert fw.failures("pouw") == 1
 
 
 def test_a_stop_is_recorded_once():
