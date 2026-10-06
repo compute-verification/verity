@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_experimental.sampled_proofs.law import vu_key
+from verity.primitives.randomness import derive
 from verity_vllm.check.replay import sample as SR
 from verity_vllm.commit import binding as B
 from verity_vllm.commit import challenge as CH
@@ -93,9 +93,9 @@ def test_non_legacy_identities_draw_through_the_picker():
     assert all(0 <= pick(i, 7) < 7 for i in range(100))
 
 
-def test_non_legacy_replay_sample_is_the_two_stage_draw():
+def test_non_legacy_replay_sample_is_the_former_proof_unit_draw():
     key = CH.replay_key(BEACON, ROOT)
-    assert key == vu_key(BEACON, {"run_root": ROOT})
+    assert key == derive(BEACON, "verity/sampled-proofs/vu-sample/v1", {"run_root": ROOT})
     picked, strata, _ = SR.sample(_vus(), 3, 0, key=key)
     assert all(s["sampled"] == 3 for s in strata.values()) and len(picked) == 3 * len(strata)
     assert [v["stratum"] for v in picked[:len(strata)]] == sorted(strata)  # round-robin: every stratum's first pick first
@@ -109,3 +109,5 @@ def test_stratum_picks_takes_a_seed_or_a_key():
     with pytest.raises(ValueError):
         CH.stratum_picks([[1, 2]], 1, 1, key=CH.replay_key(BEACON, ROOT))
     assert CH.stratum_picks([[1, 2], [3]], 5, None, key=CH.replay_key(BEACON, ROOT)) == [[1, 2], [3]]
+    with pytest.raises(ValueError):
+        CH.stratum_picks([[1, 2]], -1, None, key=CH.replay_key(BEACON, ROOT))
