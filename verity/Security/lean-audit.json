@@ -53831,6 +53831,22 @@
    },
    "guarantees": ["Flock.SecurityProofs.EndToEndDrawn"]
   },
+  "Proofs.Flock.EndToEndHidden.Statement": {
+   "digest": "6af978f093daeda013f9af45a312ff05582fb897e657f3d269547513d1cc8b4f",
+   "definitions": {
+    "Flock.Guarantees.EndToEndHidden": "55a630585659fbf332ee344e9f0363b484f80e16368a3bc99433e63668de1741",
+    "Flock.Guarantees.EndToEndHiddenDrawn": "cd3a5555d0046db7b08fe13a33ecbf8b26a1a4b03d6b70dfeb7487cd4c54f59d"
+   },
+   "guarantees": ["Flock.SecurityProofs.EndToEndHidden", "Flock.SecurityProofs.EndToEndHiddenDrawn"]
+  },
+  "Proofs.Flock.EndToEndRegistered.Statement": {
+   "digest": "b1b633f5af8bb014e811069e29619feffdd64e77076460b042a5ae409ce4a0bd",
+   "definitions": {
+    "Flock.Guarantees.EndToEndRegistered": "4e63d501097cacf2bdc47c408a16b8649c9eaa5394c7ac59e6bef5c5ae16c60e",
+    "Flock.Guarantees.EndToEndRegisteredDrawn": "b10d90ee0a5bf3c6f5bfbc3c298806d7347ad6add0d0370cbb8a00140ed8c632"
+   },
+   "guarantees": ["Flock.SecurityProofs.EndToEndRegistered", "Flock.SecurityProofs.EndToEndRegisteredDrawn"]
+  },
   "Proofs.Flock.Level3.ArithFacts": {
    "digest": "8331d458360dc0db1496ed0c6a9f8851bc2d8998adf742dd2b70f0f0cf20f373",
    "definitions": {
@@ -75754,22 +75770,6 @@
     "FlockSoundness.Registered.flock_e2e_count_hm96_reads",
     "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads"
    ]
-  },
-  "Proofs.Flock.EndToEndHidden.Statement": {
-   "digest": "6af978f093daeda013f9af45a312ff05582fb897e657f3d269547513d1cc8b4f",
-   "definitions": {
-    "Flock.Guarantees.EndToEndHidden": "55a630585659fbf332ee344e9f0363b484f80e16368a3bc99433e63668de1741",
-    "Flock.Guarantees.EndToEndHiddenDrawn": "cd3a5555d0046db7b08fe13a33ecbf8b26a1a4b03d6b70dfeb7487cd4c54f59d"
-   },
-   "guarantees": ["Flock.SecurityProofs.EndToEndHidden", "Flock.SecurityProofs.EndToEndHiddenDrawn"]
-  },
-  "Proofs.Flock.EndToEndRegistered.Statement": {
-   "digest": "b1b633f5af8bb014e811069e29619feffdd64e77076460b042a5ae409ce4a0bd",
-   "definitions": {
-    "Flock.Guarantees.EndToEndRegistered": "4e63d501097cacf2bdc47c408a16b8649c9eaa5394c7ac59e6bef5c5ae16c60e",
-    "Flock.Guarantees.EndToEndRegisteredDrawn": "b10d90ee0a5bf3c6f5bfbc3c298806d7347ad6add0d0370cbb8a00140ed8c632"
-   },
-   "guarantees": ["Flock.SecurityProofs.EndToEndRegistered", "Flock.SecurityProofs.EndToEndRegisteredDrawn"]
   },
   "Specs.Nci.Assumptions": {
    "digest": "f4315d64f98e55121fb85549ad8ce05cbc17be8d78b6d137db676a4c1c12dae5",
