@@ -53565,6 +53565,13 @@
    },
    "guarantees": ["Flock.SecurityProofs.EndToEnd"]
   },
+  "Proofs.Flock.EndToEndDrawn.Statement": {
+   "digest": "e4d4887c7d10a619a7d05f93c1dd2ce40333e19719578734ef269663244804b3",
+   "definitions": {
+    "Flock.Guarantees.EndToEndDrawn": "c221ab0ab019072aff495b50b1fd5b09ed7292d9002f9129635b34cfd5630bf2"
+   },
+   "guarantees": ["Flock.SecurityProofs.EndToEndDrawn"]
+  },
   "Proofs.Flock.Level3.ArithFacts": {
    "digest": "8331d458360dc0db1496ed0c6a9f8851bc2d8998adf742dd2b70f0f0cf20f373",
    "definitions": {
@@ -74885,13 +74892,6 @@
     "FlockSoundness.Registered.flock_e2e_count_hm96_reads",
     "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads"
    ]
-  },
-  "Proofs.Flock.EndToEndDrawn.Statement": {
-   "digest": "e4d4887c7d10a619a7d05f93c1dd2ce40333e19719578734ef269663244804b3",
-   "definitions": {
-    "Flock.Guarantees.EndToEndDrawn": "c221ab0ab019072aff495b50b1fd5b09ed7292d9002f9129635b34cfd5630bf2"
-   },
-   "guarantees": ["Flock.SecurityProofs.EndToEndDrawn"]
   },
   "Specs.Nci.Assumptions": {
    "digest": "f4315d64f98e55121fb85549ad8ce05cbc17be8d78b6d137db676a4c1c12dae5",
