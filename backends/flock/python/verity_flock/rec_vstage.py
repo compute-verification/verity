@@ -38,6 +38,10 @@ rep r's) under `rec_outer.session_program` of ``public.json``, which the chain s
   the salt the gateway committed ``root_B``'s node under (``L0/``).
 
 In both, the opening climbs to the output row the prover gives, and that row does not open the committed ``b || c``.
+
+* ``coef``: level 0's first opening with the prover's ``coef`` row one bit off (bit 0 of its first word), under the salt the
+  verifier registered it with: the verifier's ``pub.bin`` holds its own ``b || c`` of ``rec-coef`` (``L0/``).
+* ``dirs``: the same for its ``dirs`` row, so the opening's lowest level takes the other side (``L0/``).
 """
 from __future__ import annotations
 
@@ -56,8 +60,8 @@ from . import rec_residuals as RR
 from . import rec_vstar as V
 
 TABLE = "circuit"
-FORGERIES = ("message", "sum", "comb", "top", "top-salt")
-VERIFIER_FILES = ("circuit.txt", "pub.bin", "public-inputs.bin", "program.json", "partition.json", "registered.json")
+FORGERIES = ("message", "sum", "comb", "top", "top-salt", "coef", "dirs")
+VERIFIER_FILES = ("circuit.txt", "pub.bin", "program.json", "partition.json", "registered.json")
 
 
 def meta(circuit: Path) -> dict:
@@ -308,6 +312,8 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
             res["forged_acc_root"] = chain.reg.root.hex()
         elif forge in ("top", "top-salt"):
             levels, algebra = [lvls[-1 if forge == "top" else 0]["level"]], False
+        elif forge in ("coef", "dirs"):
+            levels, algebra = [lvls[0]["level"]], False
         else:
             levels = []
     want = None if levels is None else set(levels)
@@ -321,6 +327,12 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
             s = O.stage(lv, out / f"L{lv['level']}", chain, coefs, tops)
             if forge in ("top", "top-salt"):
                 res["forged_top"] = forge_top(out / f"L{lv['level']}", lv, tops, forge)
+            if forge in ("coef", "dirs"):
+                d = out / f"L{lv['level']}"
+                q = lv["queries"][0]
+                want_ = coefs[(q.rep, q.level, q.j)][0] if forge == "coef" else R.dirs_words(q.pos, lv["H"])[0]
+                forge_row(d / "inst.bin", (d / "circuit.txt").read_text(), forge, 0, 0, want_)
+                res[f"forged_{forge}"] = {"level": lv["level"], "instance": 0, "rep": q.rep, "j": q.j, "word": 0, "bit": 0}
             s["stage_s"] = round(time.perf_counter() - t0, 1)
             res["levels"][f"L{lv['level']}"] = s
     if algebra:
@@ -344,7 +356,7 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
             if forge == "message" and "m0" in names:
                 forge_row(d / "inst.bin", st.text, "m0", 0, 0, mrs[0]["rows"][0][0])
                 res["forged_message"] = {"part": j, "port": "m0", "rep": 0, "word": 0, "bit": 0}
-            res["algebra"].append({**s, "part": j, "of_residuals": p.res, "regions": RR.regions(p.S["ports"], p.S["gf"]["nv"])})
+            res["algebra"].append({**s, "part": j, "of_residuals": p.res, "regions": RR.regions(p.S["ports"])})
     return res
 
 

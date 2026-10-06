@@ -3,9 +3,9 @@ whose top nodes the prover registers under the gateway's salts (the verifier's e
 running sums the prover registers as one chain. Staged here at the smallest shape (8 lanes, one sibling: a synthetic tree of
 four plain leaves, its top two nodes) with three honest openings and one whose sibling is another node's. Composing the
 unit's circuit takes about a minute, so that test is slow; it catches what `test_rec_open` can't: the statement's ports,
-program, partition, public inputs and registered rows (the tops, the running sums and, with `link_rows`, the opened rows) as
-the Lean verifier's `statement` reads them (when it is built), and an opening that does not climb to its top node found
-before anything is proved."""
+program, partition and registered rows (the verifier's ``coef`` and ``dirs``, the tops, the running sums and, with
+`link_rows`, the opened rows), with no public input, as the Lean verifier's `statement` reads them (when it is built), and an
+opening that does not climb to its top node found before anything is proved."""
 from __future__ import annotations
 
 import json
@@ -20,6 +20,7 @@ from verity_flock import circuit as FC
 from verity_flock import rec_live as RL
 from verity_flock import rec_open as R
 from verity_flock import rec_outer as O
+from verity_flock import rec_residuals as RR
 from verity_flock import rec_vstar as V
 
 BIN = Path(__file__).resolve().parents[1] / "verifier" / "lean" / ".lake" / "build" / "bin" / "flock-verify"
@@ -75,6 +76,23 @@ def test_a_levels_tops_are_one_value_the_verifier_rebuilds_from_their_b_c():
         O.TopValue.build(PROGRAM, 0, {0: bad, 1: bad})
 
 
+def test_a_value_the_verifier_registers_is_a_function_of_its_rows_alone():
+    """`rec_residuals.verifier_value`: the same program, name and rows give the same registration (rows, salts, root), so the
+    verifier's entry and the prover's table rows and salts agree without the verifier sending anything; another name, another
+    program or one bit of a row gives another root, and no salt repeats."""
+    qs, _ = _queries()
+    coefs = _coefs(qs)
+    rows = [coefs[(q.rep, q.level, q.j)] for q in qs]
+    a, b = (RR.verifier_value(PROGRAM, O.COEF_VALUE, rows) for _ in range(2))
+    assert (a.rows, a.salts, a.root) == (b.rows, b.salts, b.root) and a.entry()["value"] == O.COEF_VALUE
+    assert len(set(a.salts)) == len(rows) and a.salts == tuple(RR.verifier_salts(PROGRAM, O.COEF_VALUE, len(rows)))
+    flipped = [[rows[0][0] ^ 1, *rows[0][1:]], *rows[1:]]
+    others = [RR.verifier_value(PROGRAM, O.DIRS_VALUE, rows), RR.verifier_value("another program", O.COEF_VALUE, rows),
+              RR.verifier_value(PROGRAM, O.COEF_VALUE, flipped)]
+    assert len({a.root, *(o.root for o in others)}) == 4
+    assert others[2].salts == a.salts
+
+
 @pytest.fixture(scope="module")
 def staged(tmp_path_factory):
     qs, layers = _queries(level=1)
@@ -82,28 +100,37 @@ def staged(tmp_path_factory):
     coefs = _coefs(qs)
     tops = O.TopValue.build(PROGRAM, 1, {0: _top(layers[1], 2), 1: _top(layers[1], 3)})
     d = tmp_path_factory.mktemp("rec-outer")
-    return d, O.stage(level, d, O.Chain.build(PROGRAM, qs, coefs), coefs, tops, link_rows=True), tops
+    return d, O.stage(level, d, O.Chain.build(PROGRAM, qs, coefs), coefs, tops, link_rows=True), tops, level, coefs
 
 
 @pytest.mark.slow
 def test_a_level_is_one_template_over_both_reps(staged):
-    d, s, tops = staged
-    assert s["template"] == "RecOpen_v3{LANES=8,H=1}" and s["instances"] == 4 and s["compressions"] == 4
+    d, s, tops, level, coefs = staged
+    assert s["template"] == "RecOpen_v4{LANES=8,H=1}" and s["instances"] == 4 and s["compressions"] == 4
     assert s["opened"] == 3 and s["not_opened"] == [(1, 1)] and s["summed"] == 4
     own = json.loads((d / "registered.json").read_text())["ports"]
+    qs = level["queries"]
+    for port, value, rows in (("coef", O.COEF_VALUE, [coefs[(q.rep, q.level, q.j)] for q in qs]),
+                              ("dirs", O.DIRS_VALUE, [R.dirs_words(q.pos, 1) for q in qs])):
+        mine = RR.verifier_value(s["program_sha512"], value, rows).entry()
+        assert own[port] == {**mine, "word_bits": 16, "reads": [0, 1, 2, 3]} and own[port]["root"] == s[f"{port}_root"]
     assert own["out"]["reads"] == [0, 1, 3, 2] and own["out"]["root"] == s["registered_root"] == tops.own["root"]
     assert own["out"]["value"] == s["value"] == "rec-top-L1" and own["out"]["leaves"] == s["top_rows"] == 4
     assert own["row"]["reads"] == [0, 1, 2, 3] and own["row"]["root"] == s["rows_root"] != s["registered_root"]
     assert own["acc"]["reads"] == [0, 1, 2, 3] and own["acc_out"]["reads"] == [1, 2, 3, 4]
     assert own["acc"]["root"] == own["acc_out"]["root"] == s["acc_root"] and own["acc"]["leaves"] == 5
     head = json.loads((d / "pub.bin").read_bytes().split(b"\n", 1)[0])
-    assert {k: v["value"] for k, v in head["registered"].items()} == {"row": "rec-rows-L1", "out": "rec-top-L1",
-                                                                     "acc": O.ACC_VALUE, "acc_out": O.ACC_VALUE}
+    assert {k: v["value"] for k, v in head["registered"].items()} == {
+        "row": "rec-rows-L1", "out": "rec-top-L1", "acc": O.ACC_VALUE, "acc_out": O.ACC_VALUE, "coef": O.COEF_VALUE,
+        "dirs": O.DIRS_VALUE}
     assert head["registered"]["out"]["positions"] == [0, 1, 3, 2]
+    assert head["registered"]["coef"]["positions"] == head["registered"]["dirs"]["positions"] == [0, 1, 2, 3]
     meta = json.loads((d / "circuit.txt").read_text().split("\n", 2)[1][5:])
     assert list(meta["program_digests"]) == [s["template"]] and meta["program_sha512"] == s["program_sha512"]
-    assert [p[0] for p in meta["ports"]] == ["row", "aux", "acc", "out", "acc_out"]
-    assert [(p["port"], p["words"]) for p in meta["public_inputs"]] == [("coef", R.coef_words(8)), ("dirs", R.DIRS_WORDS)]
+    assert [p[0] for p in meta["ports"]] == ["row", "aux", "acc", "coef", "dirs", "out", "acc_out"]
+    assert [p[1] for p in meta["ports"]][3:5] == [R.coef_words(8), R.DIRS_WORDS] == [128, 64]
+    assert "public_inputs" not in meta and "leaves_public" not in meta and "public_inputs" not in head
+    assert not (d / "public-inputs.bin").exists()
     assert meta["leaf_scheme"] == FC.LEAF_SCHEME
     with pytest.raises(ValueError, match="one template"):
         O.levels([*_queries()[0], V.Query(0, 0, 2, 0, 3, 1, b"", [0] * 8, None, [b"", b""])])
@@ -117,7 +144,7 @@ def test_the_top_forgeries_move_the_provers_output_row_or_its_salt_alone(staged,
     forged row (or salt) does not open."""
     from verity_flock import rec_vstage as S
 
-    d, _s, tops = staged
+    d, _s, tops, _level, _coefs_ = staged
     (level,) = O.levels(_queries(level=1)[0])
     text = (d / "circuit.txt").read_text()
     honest, pub = (d / "inst.bin").read_bytes(), (d / "pub.bin").read_bytes()
@@ -154,6 +181,36 @@ def test_the_top_forgeries_move_the_provers_output_row_or_its_salt_alone(staged,
         S.forge_top(tmp_path / "top-salt", level, tops, "top", 0)
 
 
+@pytest.mark.slow
+def test_a_forged_coef_or_dirs_row_does_not_open_the_verifiers_registration(staged, tmp_path):
+    """``coef`` and ``dirs`` forged as `rec_vstage.stage` forges them (`rec_vstage.forge_row`, bit 0 of instance 0's word 0):
+    one bit of the prover's row moves in ``inst.bin`` alone, under the verifier's public salt; ``pub.bin`` keeps the ``b || c``
+    of the verifier's own row, which the forged row does not open."""
+    from verity_flock import rec_vstage as S
+
+    d, s, _tops, level, coefs = staged
+    text = (d / "circuit.txt").read_text()
+    honest, pub = (d / "inst.bin").read_bytes(), (d / "pub.bin").read_bytes()
+    nl = pub.index(b"\n") + 1
+    shared = json.loads(pub[:nl])["shared_rows"]
+    ports = [p[0] for p in json.loads(text.split("\n", 2)[1][5:])["ports"]]
+    q = level["queries"][0]
+    for port, value, row in (("coef", O.COEF_VALUE, list(coefs[(q.rep, q.level, q.j)])),
+                             ("dirs", O.DIRS_VALUE, R.dirs_words(q.pos, 1))):
+        f = tmp_path / port
+        shutil.copytree(d, f)
+        S.forge_row(f / "inst.bin", text, port, 0, 0, row[0])
+        forged = (f / "inst.bin").read_bytes()
+        assert (f / "pub.bin").read_bytes() == pub
+        row_at, salt_at = S._offsets(honest, text, port, 0)
+        assert [k for k, (a, b) in enumerate(zip(honest, forged, strict=True)) if a != b] == [row_at]
+        salt = RR.verifier_salts(s["program_sha512"], value, len(level["queries"]))[0]
+        assert forged[salt_at:salt_at + V.SALT] == salt
+        at = nl + 128 * sum(shared[p] for p in ports[:ports.index(port)])
+        assert RL.commit_rows([row], [salt]) == [pub[at:at + 128]]
+        assert RL.commit_rows([[row[0] ^ 1, *row[1:]]], [salt]) != [pub[at:at + 128]]
+
+
 def test_a_level_of_salted_leaves_is_refused(tmp_path):
     qs, layers = _queries()
     qs = [V.Query(**{**qs[0].__dict__, "salt": bytes(V.SALT)}), *qs[1:]]
@@ -166,10 +223,10 @@ def test_a_level_of_salted_leaves_is_refused(tmp_path):
 @pytest.mark.slow
 @pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
 def test_the_lean_verifier_reads_the_statement_under_the_verifiers_own_files(staged):
-    d, _, _ = staged
+    d = staged[0]
     p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
                         "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
-                        "--registered", str(d / "registered.json"), "--public-inputs", str(d / "public-inputs.bin")],
+                        "--registered", str(d / "registered.json")],
                        capture_output=True, text=True, check=False)
     assert p.returncode == 0, p.stdout + p.stderr
     line = json.loads(p.stdout.splitlines()[0])

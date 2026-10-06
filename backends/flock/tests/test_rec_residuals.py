@@ -136,7 +136,8 @@ def test_a_real_rep_holds_and_fails_at_a_changed_comb_or_running_sum(reps):
 def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
     """`parts` cuts the algebra into statements of at most MAX_REGIONS regions that each read their residuals' row ports and v
     elements: each part's residuals are the whole's on the fixture's reps (zero on the honest ones, the changed comb moving
-    the part of the lincheck alone), and at K = 4096's m = 35 the whole has the 125 regions the live prover counted."""
+    the part of the lincheck alone), and at K = 4096's m = 35 the whole has 113 regions (111 row ports, v and out), so two
+    parts."""
     for sh, rows, v in reps:
         S = RR.spec(sh)
         whole = RR.residual_words(S, rows, v)
@@ -144,7 +145,7 @@ def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
         ps = RR.parts(S)
         assert sorted(i for p in ps for i in p.res) == list(range(len(S["gf"]["res"])))
         for p in ps:
-            assert RR.regions(p.S["ports"], p.S["gf"]["nv"]) <= RR.MAX_REGIONS
+            assert RR.regions(p.S["ports"]) <= RR.MAX_REGIONS and len(p.res) <= RR.OUT_WORDS // RR.F_WORDS
             got = RR.residual_words(p.S, [by[nm] for nm, _ in p.S["ports"]], [v[i] for i in p.v])
             assert got[:8 * len(p.res)] == [x for i in p.res for x in whole[8 * i:8 * i + 8]] == [0] * (8 * len(p.res))
     sh, rows, v = reps[0]
@@ -155,7 +156,7 @@ def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
     moved = [p.res for p in RR.parts(S) if any(RR.residual_words(p.S, [by[nm] for nm, _ in p.S["ports"]], [v2[i] for i in p.v]))]
     assert len(moved) == 1 and 1 in moved[0]
     big = RR.spec(A.Shape(35, 24, 8))
-    assert RR.regions(big["ports"], big["gf"]["nv"]) == 125 and len(RR.parts(big)) > 1
+    assert RR.regions(big["ports"]) == 113 and len(RR.parts(big)) == 2
 
 
 def _holding(g: random.Random) -> tuple[list[int], list[int]]:
@@ -169,11 +170,12 @@ def _holding(g: random.Random) -> tuple[list[int], list[int]]:
 
 
 @pytest.mark.slow
-def test_the_statement_reads_every_row_from_a_registration_and_v_as_public_words(tmp_path):
+def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
     """Two instances, one holding and one whose first residual is not zero (v's added constant changed). Each row port reads
     row i of a two-row registration in instance i, the verifier's own entry built from the rows' ``b || c`` alone
-    (`commits_entry`), as V* builds a round's from its two ``c_k``; the files the verifier reads (the circuit's public input
-    port v, its own recomputation of v, its reads file) and, when Lean is built, its `statement` under them."""
+    (`commits_entry`), as V* builds a round's from its two ``c_k``; v is row i of the value the verifier registers itself
+    (`verifier_value`, a function of the two v's alone), so the statement has no public input; and, when Lean is built, its
+    `statement` under the reads file."""
     from verity.protocols.verification.sampled_proofs.one_stage import registered as RG
 
     g = random.Random(11)
@@ -192,19 +194,18 @@ def test_the_statement_reads_every_row_from_a_registration_and_v_as_public_words
     s = RR.write(st, regs, [v0, v1], tmp_path, own=own)
     assert s["holds"] == [True, False] and s["nonzero_residuals"] == [[], [0]] and s["unit_agrees"] == [True, True]
     meta = json.loads((tmp_path / "circuit.txt").read_text().split("\n", 2)[1][5:])
-    assert [p[0] for p in meta["ports"]] == ["m0", "m1", "m2", "out"]
-    [pin] = meta["public_inputs"]
-    assert pin["port"] == "v" and pin["words"] == RR.v_words(S_SMALL) and pin["derivation"] == RR.DERIVATION
-    head, body = (tmp_path / "public-inputs.bin").read_bytes().split(b"\n", 1)
-    assert json.loads(head)["instances"] == 2 and json.loads(head)["ports"] == [pin]
-    assert len(body) == 2 * 2 * RR.v_words(S_SMALL) and (tmp_path / "pub.bin").read_bytes().endswith(body)
+    assert [p[0] for p in meta["ports"]] == ["m0", "m1", "m2", "v", "out"]
+    assert [p[1] for p in meta["ports"]][3] == RR.v_words(S_SMALL) == 64
+    assert "public_inputs" not in meta and not (tmp_path / "public-inputs.bin").exists()
     reads = json.loads((tmp_path / "registered.json").read_text())["ports"]
-    assert list(reads) == ["m0", "m1", "m2", "out"] and all(reads[nm]["reads"] == [0, 1] for nm in reads)
+    assert sorted(reads) == ["m0", "m1", "m2", "out", "v"] and all(reads[nm]["reads"] == [0, 1] for nm in reads)
     assert reads["out"]["root"] == s["zero_root"] and all(reads[nm]["root"] == own[nm]["root"] for nm in own)
+    vreg = RR.verifier_value(st.prog, RR.V_VALUE, [RR.words(v, RR.v_words(S_SMALL)) for v in (v0, v1)])
+    assert reads["v"] == {**vreg.entry(), "word_bits": 16, "reads": [0, 1]}
     if not BIN.exists():
         pytest.skip("the Lean verifier is not built")
     p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(tmp_path / "circuit.txt"),
-                        "--public", str(tmp_path / "pub.bin"), "--public-inputs", str(tmp_path / "public-inputs.bin"),
+                        "--public", str(tmp_path / "pub.bin"),
                         "--partition", str(tmp_path / "partition.json"), "--program", str(tmp_path / "program.json"),
                         "--registered", str(tmp_path / "registered.json")], capture_output=True, text=True, check=False)
     assert p.returncode == 0, p.stdout + p.stderr
