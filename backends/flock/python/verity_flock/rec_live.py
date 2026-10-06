@@ -463,8 +463,9 @@ class Proxy:
             return resp_str(RESP_REFUSED, self.stopped)
         try:
             return self._handle(decode_req(req))
-        except ValueError as e:
-            why = f"rec proxy: {e}"
+        except Exception as e:  # noqa: BLE001 - a request the gateway cannot handle stops its session, never the gateway
+            why = f"rec proxy: {e}" if isinstance(e, ValueError) else \
+                f"rec proxy: {refused(f'a request the gateway cannot read ({type(e).__name__}: {e})')}"
             self.stop(why)
             return resp_str(RESP_REFUSED, why)
 
@@ -552,6 +553,8 @@ class Proxy:
             self.proofs[(table, rep)] = b
             return resp_ok()
         if t == REQ_FINISH:
+            if self.commit is None or self.y is None:
+                raise ValueError("Finish before the link exchange")
             if self.schedule is not None:
                 rec = self.coins.record()
                 self._pinned("Finish's rounds", len(rec["rounds"]), len(self.schedule["rounds"]))

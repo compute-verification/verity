@@ -169,6 +169,41 @@ def test_a_session_that_ends_without_finish_is_written_and_counted_as_a_stop(tmp
     assert not (tmp_path / "s0" / "session").exists() and not (tmp_path / "s1" / "session").exists()
 
 
+@pytest.mark.parametrize("hello", ["[]", "7", '"x"', "{", "[" * 100000, '{"link": []}'],
+                         ids=["list", "number", "string", "not-json", "nested", "link-list"])
+def test_a_hello_the_gateway_cannot_read_is_a_refusal(hello):
+    """Not an object, not JSON, or nested past what the parser takes (RecursionError, not a ValueError)."""
+    proxy = _proxy(_schedule())
+    resp = _run(proxy, hello=hello)
+    assert _refusal(resp).startswith("rec proxy: ") and resp[-1][0] == RL.RESP_VERDICT
+    assert proxy.coins.hello is None and proxy.coins.record()["end"] == "stop"
+
+
+def test_any_exception_while_handling_a_request_is_a_refusal_and_serve_goes_on(tmp_path):
+    """The gateway's own fault (here the coin server's, a KeyError) stops the session it happened in, as a refusal; and a
+    request that raises something other than ValueError ends neither `Proxy.handle` nor `serve`."""
+
+    class Broken(RL.CoinServer):
+        def round(self, *a):
+            raise KeyError("no such coin")
+
+    proxy = RL.Proxy(Broken(T._counter_rand()), T._salts(), schedule=_schedule())
+    why = _refusal(_run(proxy))
+    assert why == "rec proxy: GATE-REFUSED: a request the gateway cannot read (KeyError: 'no such coin')"
+    assert proxy.coins.record()["end"] == "stop"
+    t, got = _serve(tmp_path, 2, _schedule())
+    w = _Wire(got["addr"])
+    first = _run(w, hello="[" * 100000)
+    w.close()
+    w = _Wire(got["addr"])
+    assert _held(_run(w))
+    w.close()
+    t.join()
+    assert "RecursionError" in _refusal(first) and "crash" not in got
+    assert [r["session"] for r in got["res"]] == [None, str(tmp_path / "s1" / "session")]
+    assert json.loads((tmp_path / "s0" / "public.json").read_text())["end"] == "stop"
+
+
 def test_a_refused_session_is_recorded_as_a_stop():
     proxy = _proxy(_schedule())
     resp = _run(proxy, y=bytes(48))
