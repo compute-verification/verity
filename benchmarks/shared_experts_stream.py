@@ -135,13 +135,14 @@ def paired(args) -> int:
     """Both arms in one engine (flag unset, so vLLM builds the aux stream), each decode point measured back to back in both,
     the order alternating by pair: ``one`` forces ``NO_OVERLAP``, the order the flag's ``_stream = None`` gives; ``aux`` is
     vLLM's own choice.  Host load that drifts between engines (shared cores) cancels in the paired deltas."""
+    os.environ.update({k: v for k, v in _arm_env("aux").items() if k in ENGINE or k == "HF_HUB_OFFLINE"})
+    os.environ.pop(FLAG, None)
     import numpy as np
     import torch
     import vllm
     from vllm import LLM, SamplingParams
     from vllm.model_executor.layers.fused_moe.runner import shared_experts as se
 
-    assert FLAG not in os.environ
     mode = {"m": "aux"}
     counts: dict[str, dict[str, int]] = {"one": {}, "aux": {}}
     orig = se.SharedExperts._determine_shared_experts_order
@@ -202,8 +203,10 @@ def paired(args) -> int:
                      f"({min(d):+.2f}..{max(d):+.2f}) | {len(d)} |")
     summary = ("\n".join(lines) + "\n\nDelta: one/aux - 1 of the decode step time (positive: one stream slower). Orders chosen: "
                + json.dumps(counts) + "\n")
+    ok = (counts["aux"].get("MULTI_STREAM_OVERLAPPED@le256", 0) > 0 and "NO_OVERLAP@le256" not in counts["aux"]
+          and counts["one"].get("NO_OVERLAP@le256", 0) > 0 and "MULTI_STREAM_OVERLAPPED@le256" not in counts["one"])
     out = Path(args.out)
-    res = {"samples": samples, "orders": counts, "out_tokens": out_tokens, "pairs": args.pairs, "gpu": _gpu(),
+    res = {"ok": ok, "samples": samples, "orders": counts, "out_tokens": out_tokens, "pairs": args.pairs, "gpu": _gpu(),
            "versions": {"vllm": vllm.__version__, "torch": torch.__version__}, "affinity": sorted(os.sched_getaffinity(0)),
            "env": {k: os.environ.get(k) for k in [*ENGINE, "CUDA_VISIBLE_DEVICES"]}}
     (out / "paired.json").write_text(json.dumps(res, indent=1, sort_keys=True) + "\n")
@@ -213,13 +216,15 @@ def paired(args) -> int:
     if run_dir:
         result = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "kind": "bench-result/v1",
                   "workload_fingerprint": {"workload": "shared_experts_stream.paired", "model": args.model, "pairs": args.pairs},
-                  "validation": {"status": "passed", "checker": "every pair measured", "detail": f"samples={len(samples)}", "evidence": []},
+                  "validation": {"status": "passed" if ok else "failed",
+                                 "checker": "in-process engine; every <=256-token call overlapped in aux mode and none in one mode",
+                                 "detail": json.dumps(counts), "evidence": []},
                   "measurements": [{"name": f"p{s['pair']}.{s['arm']}.{s['point']}.step_ms", "value": s["step_ms"], "unit": "ms"}
                                    for s in samples],
                   "measurement_files": [os.path.relpath(p, run_dir) for p in (out / "paired.json", out / "summary-paired.md")],
                   "artifacts": []}
         (Path(run_dir) / "result.json").write_text(json.dumps(result, indent=1) + "\n")
-    return 0
+    return 0 if ok else 1
 
 
 # Each point's delta is extra time with the shared expert on the main stream: one/aux - 1 for TPOT, aux/one - 1 for tok/s.
