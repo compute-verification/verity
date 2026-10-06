@@ -556,8 +556,8 @@ def test_an_assumption_is_listed_by_name_with_its_record():
     assert pol["assumptions"] == {"P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
     changed = facts(pins={"P.t": fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
                                              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "4" * 32}])})
-    assert "assumptions: P.Hyp's definition in P.Assumptions changed; run `audit.py --update`, and name a statement " \
-           "reviewer" in A.judge(pol, changed, FILES)[0]
+    assert "assumptions: P.Hyp's definition in P.Assumptions changed; run `audit.py --update` and commit the record " \
+           "(Daniel's DM shows the change when it lands)" in A.judge(pol, changed, FILES)[0]
     unread = {**pol, "assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}}
     assert A.judge(unread, facts(), FILES)[0] == ["assumptions: P.Other is listed, but no guarantee reads it; remove the entry"]
     assert A.judge(unread, facts(), FILES, update=True)[1]["assumptions"] == pol["assumptions"]

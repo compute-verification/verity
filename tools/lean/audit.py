@@ -716,8 +716,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         if "digest" not in (rec or {}):
             fails.append(f"assumptions: {a} has no record; run `audit.py --update` and commit the record")
         elif rec["digest"] != h:
-            fails.append(f"assumptions: {a}'s definition in {m} changed; run `audit.py --update`, and name a statement "
-                         f"reviewer")
+            fails.append(f"assumptions: {a}'s definition in {m} changed; run `audit.py --update` and commit the record "
+                         f"(Daniel's DM shows the change when it lands)")
     return out, fails
 
 
