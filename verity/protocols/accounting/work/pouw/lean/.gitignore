@@ -1,3 +1,0 @@
-.lake/
-# fp8atom_vectors.py writes the bulk here by default; the Lean audit pins it by SHA-256 (`runs`)
-conformance/

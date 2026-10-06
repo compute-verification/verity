@@ -262,7 +262,7 @@ def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]]
         splits_rec["why"] = f"num_SMs of record disagree across the request Programs: {sorted(nsms)}"
         unlinked.append({"request_id": None, "engine_step": None, "kind": "splits", "why": "num_SMs of record disagree across the request Programs: " + str(sorted(nsms))})
     else:
-        from verity_vllm.program.registry.topp_split import splits_for_v1
+        from verity_vllm.program.registry.topp_geometry import splits_for_v1
         nsm = nsms.pop()
         splits_rec["num_sms"] = nsm
         sched: dict[int, int] = {}

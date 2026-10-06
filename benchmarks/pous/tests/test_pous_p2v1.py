@@ -1,7 +1,7 @@
 """P2 v1's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu`) on CPU: the reference
 (`p2_v1/reference.py`) against the P2 kit's pinned vectors, and every step of the arm with the reference standing in for the GPU
 library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's own verifier process
-(`p2_v1/live.py`) on its logical clock, so no outcome depends on a clock."""
+(`p2_v1/memory_challenger.py`) on its logical clock, so no outcome depends on a clock."""
 from __future__ import annotations
 
 import importlib.util
@@ -129,6 +129,17 @@ def test_the_tree_and_the_audit_derivation_are_the_specs():
     assert audit_id == again_id and [key.uniform(1 << 19, j) for j in range(5)] == [again.uniform(1 << 19, j) for j in range(5)]
     other_id, _ = R.audit_key(b"s" * 32, b"e" * 32, b"r" * 32, b"t" * 32, 1)
     assert other_id != audit_id                                                               # a fresh counter, a fresh audit
+
+
+def test_the_spec_rtt_cap_is_the_schemes():
+    """The arm's Δ and RTT cap are spec v1.1's, as `verity`'s P2 scheme states them, so `rtt_allowance_within_spec`
+    judges against the cap whose `Δ + RTT` the certificate admits."""
+    from verity.protocols.accounting.space.pous import audit
+    from verity.protocols.accounting.space.pous.schemes import p2
+
+    R, _, _ = _p2()
+    assert (R.DELTA_NS, R.MAX_RTT_ALLOWANCE_NS) == (audit.DEADLINE_NS, p2.RTT_ALLOWANCE_CAP_NS) == (500_000, 354_000)
+    assert R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS < p2.ROOT_CALL_NS <= R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS + 1_000
 
 
 def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
