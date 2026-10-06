@@ -34,10 +34,10 @@ def RowLeftPacked {S : ℕ} (r : Fin S → Bool) : Prop :=
 def LeftPacked {T S : ℕ} (P : Fin T → Fin S → Bool) : Prop :=
   ∀ t, RowLeftPacked (P t)
 
-instance {S : ℕ} : DecidablePred (RowLeftPacked (S := S)) := fun r => by
+instance instDecidablePredForallFinBoolRowLeftPacked {S : ℕ} : DecidablePred (RowLeftPacked (S := S)) := fun r => by
   unfold RowLeftPacked; infer_instance
 
-instance {T S : ℕ} : DecidablePred (LeftPacked (T := T) (S := S)) := fun P => by
+instance instDecidablePredForallFinForallBoolLeftPacked {T S : ℕ} : DecidablePred (LeftPacked (T := T) (S := S)) := fun P => by
   unfold LeftPacked; infer_instance
 
 /-- The number of occupied slots of a row. -/
