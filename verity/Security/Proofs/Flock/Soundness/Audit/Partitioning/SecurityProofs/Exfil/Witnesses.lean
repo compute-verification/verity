@@ -1,4 +1,5 @@
 import Specs.Flock.Guarantees.Partitioning
+import Proofs.Flock.Soundness.Audit.Harm
 
 /-!
 # Exfiltration: the witnesses' facts
