@@ -65,7 +65,9 @@ theorem PrivateOutBitsLe : Guarantees.PrivateOutBitsLe :=
   fun _ _ P _ _ h T => P.sum_outBits_le h T
 
 theorem RegisteredMeets : Guarantees.RegisteredMeets := by
-  intro R C advice Q root ⟨n, P, ⟨_, hf, hn, _⟩, hr⟩
-  exact ⟨n, P, hr, hn, hf, P.sum_outBits_le hf⟩
+  intro R C advice hbind Q root ⟨n₀, P₀, ⟨_, hf, hn, _⟩, hr₀⟩ n P hr
+  have h : (⟨n, P⟩ : (n : ℕ) × Partition C n) = ⟨n₀, P₀⟩ := hbind (hr.trans hr₀.symm)
+  cases h
+  exact ⟨hn, hf, P₀.sum_outBits_le hf⟩
 
 end Verity.SecurityProofs
