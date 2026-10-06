@@ -8,6 +8,7 @@ import itertools
 import json
 import os
 import re
+import textwrap
 import tomllib
 from pathlib import Path
 
@@ -160,6 +161,36 @@ def test_every_upstream_watch_is_scanned():
 PROOF_ONLY = ("ArkLib", "VCVio", "CompPoly")
 SOUNDNESS = "Proofs.Flock.Soundness"
 
+#: C-Flock soundness modules, without the `Proofs.Flock.Soundness.` prefix and in order, that the ZK session records read
+#: and that reach a proof-only library today. Those 31 records stay pinned as `main` has them, under `reads_exempt`, until
+#: proofs extracts ZK's spec (@old-circuits-and-proofs, 6 Oct 7:20 AM PDT, Slack 1791296405.283989). The list only
+#: shrinks, and empties when ZK's spec is extracted: an entry that no longer reaches one, or that no pinned record reads,
+#: fails until it goes.
+ARKLIB_PENDING = tuple("""
+Assumptions.Zk Audit.FlockBatched Audit.FlockLinked Audit.FlockPublic Binding.Layout Binding.Leaf Binding.Rows
+CompiledLock CompiledSound Discharge.Aliased.Keys Discharge.Composed.Base Discharge.Composed.Coined
+Discharge.Composed.DefsJ Discharge.Composed.Inner Discharge.Composed.Inner.Lincheck Discharge.DecodeZL.LIG
+Discharge.DecodeZL.OP Discharge.DecodeZL.Wire Discharge.DecodeZLJ.Statements Discharge.Exec.CompiledL
+Discharge.Exec.Decode Discharge.Exec.Pts Discharge.Exec.Setup Discharge.Hidden.Defs Discharge.Hidden.Flat
+Discharge.HiddenExec.Flat Discharge.HiddenExec.KeyH Discharge.HiddenExec.Placed Discharge.HiddenExec.Ret
+Discharge.HiddenExec.SiteH Discharge.HiddenExec.Sites Discharge.HiddenExec.Tables Discharge.Hm.Port
+Discharge.Integrate.Sites Discharge.Layout.HmRegion Discharge.Layout.KeyProg Discharge.Layout.Keyed
+Discharge.Layout.KeysRow Discharge.Layout.OfRows Discharge.Layout.OutPin Discharge.Layout.Outs Discharge.Layout.Pins
+Discharge.Layout.Readers Discharge.Layout.RowEnc Discharge.Layout.Scope Discharge.Layout.Site Discharge.Placed.Keyed
+Discharge.Placed.Setup Discharge.Placed.Wiring Discharge.Tables.Sim Discharge.Tables.Statements
+Discharge.Tables.Steps Discharge.ZkBind.At Discharge.ZkBind.Bind Discharge.ZkBind.Place Discharge.ZkBind.Shadow
+Discharge.ZkExec.RunsStatements Discharge.ZkExec.Statements Discharge.ZkExec.VerdictStatements
+Discharge.ZkHidden.Defs Discharge.ZkHidden.DefsJ Discharge.ZkHidden.SoundBind Discharge.ZkHidden.View
+Discharge.ZkLink.BadZ Discharge.ZkLink.Compiled Discharge.ZkLink.CompiledLink Discharge.ZkLink.DrawOk
+Discharge.ZkLink.Link Discharge.ZkLink.LockLevel Discharge.ZkLink.LockRep Discharge.ZkLink.OracleP
+Discharge.ZkLink.Push Discharge.ZkLink.SessionZ Discharge.ZkLink.StrictZ Discharge.ZkLink.TablesAt
+Discharge.ZkReg.BindHJ Discharge.ZkReg.Defs Discharge.ZkReg.DefsHJ Discharge.ZkSession.Algebraic
+Discharge.ZkSession.Inner Discharge.ZkSession.Level0 Discharge.ZkSession.Session Discharge.ZkView.Defs E2E
+ExecDrawOS ExecFlatCopies Instance LigeritoPadLevel0 LigeritoPhase LinkSound PadCode Refine.ArithK Refine.Frames
+Refine.LigeritoRun Refine.Live Refine.LiveSim Refine.Paths Refine.Regions Refine.Salted Refine.StmtOf Refine.Table
+Refine.Tapes Registered.Defs SessionBatch SoundnessPad StrictCR ZerocheckPhase
+""".split())
+
 _IMPORT = re.compile(r"(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?(\S+)")
 _DEFINES = re.compile(r"^(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable|partial)\s+)*"
                       r"(?:def|abbrev|structure|inductive|class|instance|opaque)\b", re.M)
@@ -227,11 +258,17 @@ def test_zk_simulator_and_extractor_build_on_mathlib():
 
 def test_trusted_text_builds_on_mathlib():
     """Every module whose definitions a guarantee's statement reads (the record's `reads`) or that states a named
-    assumption (under its `assumptions`) reaches no proof-only library."""
+    assumption (under its `assumptions`) reaches no proof-only library, but for `ARKLIB_PENDING`, which only shrinks."""
     record = json.loads((SECURITY / "lean-audit.json").read_text())
     trusted = set(record["reads"]) | {m for p in record["assumptions"] for m in _modules_under(p)}
     missing = sorted(m for m in trusted if _source(m) is None)
     assert not missing, f"trusted modules with no source in the tree: {missing}"
     reach = {m for m in trusted if _proof_only_chain(m)}
-    assert not reach, ("trusted text that reaches a proof-only library; move the definitions it reads into a module that "
-                       "builds on Mathlib alone (as `ZK/GK/Model.lean` holds Theorem GK's):\n" + "\n".join(_chains(reach)))
+    assert list(ARKLIB_PENDING) == sorted(set(ARKLIB_PENDING)), "ARKLIB_PENDING is not sorted, or repeats an entry"
+    pending = {f"{SOUNDNESS}.{m}" for m in ARKLIB_PENDING}
+    new = reach - pending
+    assert not new, ("trusted text that reaches a proof-only library; move the definitions it reads into a module that "
+                     "builds on Mathlib alone (as `ZK/GK/Model.lean` holds Theorem GK's):\n" + "\n".join(_chains(new)))
+    stale = sorted(m.removeprefix(SOUNDNESS + ".") for m in pending - reach)
+    assert not stale, ("ARKLIB_PENDING entries that no longer reach a proof-only library or hold no trusted text; remove "
+                       "them:\n" + textwrap.fill(" ".join(stale), 116))
