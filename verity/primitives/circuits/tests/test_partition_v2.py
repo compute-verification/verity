@@ -81,6 +81,9 @@ def test_the_advice_round_trips(program):
     for bad in (rs[:-1], [rs[0][:-1] + b"\1", *rs[1:]], [*rs, b"\1" + bytes(V.ROW_BYTES - 1)], [bytes(V.ROW_BYTES), *rs[1:]]):
         with pytest.raises(V.Malformed):
             V.decode(bad)
+    assert V._payload_rows(adv.entries[0]) == 1                                  # one unit: its shape only, the owners implied
+    with pytest.raises(ValueError):
+        V.rows(_mutate(adv, entry=(0, {"owner": (0, 1)})))
 
 
 def test_query_mode_numbers_units_as_v1(program):
@@ -185,6 +188,17 @@ def test_each_global_predicate_refuses(program, label, edit, pedit, code):
     st = V.statement("test", preds, adv, "0" * 128)
     v = V.check(st, rs, program)
     assert not v.ok and code in v.codes, (v.codes, v.detail)
+
+
+def test_outputs_of_at_most_16_bits_refuse_every_unit_returning_a_32_bit_value(program):
+    """The width rule (16, 16), outputs of at most 16 bits with no single-value exception, refuses every unit whose output is
+    one 32-bit value: here every unit with an output, all of this program's values being 32 bits wide."""
+    adv, rs, _reg, st = _registered(program, preds=V.predicates((16, 16)))
+    v = V.check(st, rs, program)
+    assert v.codes == ("unit-too-wide",)
+    wide = {g["definition"].split("_v")[0]: [u for u, _ob, _og in g["units"]] for g in v.detail["unit-too-wide"]["gates"]}
+    assert wide == {"VMax3": [0], "VPair": [0, 1], "VTwice": [0], "VAddOne": [0], "VFan": [0, 1, 2]}
+    assert all([ob, og] == [32, 1] for g in v.detail["unit-too-wide"]["gates"] for _u, ob, og in g["units"])
 
 
 def test_the_unit_count_is_on_the_grid(program):

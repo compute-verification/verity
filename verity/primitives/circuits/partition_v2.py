@@ -30,7 +30,8 @@ numbering as v1 (`Partition.locate`).  Rows are `ROW_BYTES` bytes, integers litt
 program's SHA-512, n, m, e, the rows used), rows 1..m the Call table (node, entry, members, start: 8 bytes each), then one
 directory row per entry (the SHA-512 of its Definition's id, kind, computing gates, units, first payload row, payload rows, items:
 a flat entry's shape classes or a parts entry's body nodes), then the payloads: a flat entry's owners (4 bytes each, 32 to a
-row), its units' shape classes (the same; classes numbered in first-use order) and the classes' SHA-512 shapes (2 to a row); a
+row), its units' shape classes (the same; classes numbered in first-use order; neither for a one-unit entry, whose owners
+and class are all 0) and the classes' SHA-512 shapes (2 to a row); a
 parts entry's (child, members) pairs (8 bytes each, 8 to a row; `NONE` for no child).  Every unused byte is 0, and the rows past
 the header's count up to R_b are all 0.
 
@@ -253,10 +254,17 @@ def _row(*parts: bytes) -> bytes:
     return b + bytes(ROW_BYTES - len(b))
 
 
+def _flat_rows(gates: int, units: int, classes: int) -> tuple[int, int, int]:
+    """A flat entry's owner, class and shape rows; a one-unit entry stores no owners and no classes (all 0)."""
+    implied = units == 1
+    return (0 if implied else _rows_of(gates, OWNERS_PER_ROW), 0 if implied else _rows_of(units, OWNERS_PER_ROW),
+            _rows_of(classes, SHAPES_PER_ROW))
+
+
 def _payload_rows(e: Entry) -> int:
     if e.kind == FLAT:
-        return -(-len(e.owner) // OWNERS_PER_ROW) + -(-len(e.shape) // OWNERS_PER_ROW) + -(-len(e.classes) // SHAPES_PER_ROW)
-    return -(-len(e.parts) // PAIRS_PER_ROW)
+        return sum(_flat_rows(len(e.owner), e.units, len(e.classes)))
+    return _rows_of(len(e.parts), PAIRS_PER_ROW)
 
 
 def rows(advice: Advice) -> list[bytes]:
@@ -272,8 +280,11 @@ def rows(advice: Advice) -> list[bytes]:
     out += [_row(bytes.fromhex(en.definition), _u(en.kind), _u(en.gates), _u(en.units), _u(s), _u(_payload_rows(en)),
                  _u(len(en.classes) if en.kind == FLAT else len(en.parts))) for en, s in zip(advice.entries, starts)]
     for en in advice.entries:
+        if en.kind == FLAT and en.units == 1:
+            if any(en.owner) or en.shape != (0,):
+                raise ValueError(f"a one-unit entry's owners and class are 0, not {sorted(set(en.owner))}, {en.shape}")
         if en.kind == FLAT:
-            for o in (en.owner, en.shape):
+            for o in ((en.owner, en.shape) if en.units != 1 else ()):
                 out += [_row(*(_u(u, 4) for u in o[j:j + OWNERS_PER_ROW])) for j in range(0, len(o), OWNERS_PER_ROW)]
             s = en.classes
             out += [_row(*(bytes.fromhex(x) for x in s[j:j + SHAPES_PER_ROW])) for j in range(0, len(s), SHAPES_PER_ROW)]
@@ -381,11 +392,15 @@ def _entry(read: Reader, m: int, j: int, total: int, unit: int | None = None) ->
             _zero(r, 16 * c, f"entry {j} parts row {t}")
             parts += [(None if (ch := _int(r, 16 * x, 16 * x + 8)) == NONE else ch, _int(r, 16 * x + 8, 16 * x + 16)) for x in range(c)]
         return Entry(d, PARTS, gates, units, parts=tuple(parts))
-    o_rows, u_rows, c_rows = _rows_of(gates, OWNERS_PER_ROW), _rows_of(units, OWNERS_PER_ROW), _rows_of(items, SHAPES_PER_ROW)
+    o_rows, u_rows, c_rows = _flat_rows(gates, units, items)
     if o_rows + u_rows + c_rows != n_rows:
         raise Malformed(f"entry {j}: {n_rows} payload rows for {gates} owners, {units} units and {items} classes")
-    owner = [w for t in range(o_rows) for w in _words(read, j, start, gates, t, "owner")]
     at_shape, at_class = start + o_rows, start + o_rows + u_rows
+    if units == 1:
+        if not items == 1:
+            raise Malformed(f"entry {j}: one unit of {items} classes")
+        return Entry(d, FLAT, gates, 1, (0,) * gates, (0,), tuple(_digests(read, j, at_class, items, 0)))
+    owner = [w for t in range(o_rows) for w in _words(read, j, start, gates, t, "owner")]
     if unit is None:
         shape = [w for t in range(u_rows) for w in _words(read, j, at_shape, units, t, "class")]
         classes = [x for t in range(c_rows) for x in _digests(read, j, at_class, items, t)]
@@ -600,8 +615,9 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], program: Any) -> CutVerdic
         if canon is not None and en.units > evaluate_definition(fn, int(canon["params"]["X"]), G.memo).units:
             fail("units-canonical", [j, fn.id, en.units])
         if en.kind == PARTS:
-            if _check_parts(j, en, fn, adv, G, fail):
-                # members are cut apart, so only a value two members compute crosses units: the recompute rule on the whole body
+            if _check_parts(j, en, fn, adv, G, fail) and p["recompute"] == "refuse":
+                # members are cut apart, so only a value two members compute crosses units, and only `refuse` refuses it: the
+                # rule on the whole body's graph, as `partition_object.verify` checks a Call (its memory grows with the body)
                 r = check_cut(G.graph(fn), _flat_owner(j, adv), None, None, p["recompute"])
                 if not r.ok:
                     fail("cut", {"entry": j, "definition": fn.id, "codes": list(r.codes), "detail": r.detail})
@@ -688,8 +704,8 @@ def _check_parts(j: int, en: Entry, fn: Any, adv: Advice, G: _Graphs, fail: Call
     if units != en.units:
         fail("entry-units", [j, en.units, units])
         ok = False
-    if not gates == en.gates == G.graph(fn).n:
-        fail("entry-gates", [j, en.gates, gates, G.graph(fn).n])
+    if gates != en.gates:
+        fail("entry-gates", [j, en.gates, gates])
         ok = False
     return ok
 
