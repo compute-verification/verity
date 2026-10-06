@@ -2,22 +2,36 @@
 differ from the definitions a proof is about (`native_decide`, `implemented_by`, `extern`, `unsafe`)."""
 from __future__ import annotations
 
+import fcntl
+import hashlib
+import importlib.util
 import json
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
 
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
-TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the soundness package's Mathlib and ArkLib pin v4.34.0
+PROOFS = Path(__file__).resolve().parents[3] / "verity" / "Security" / "Proofs"
+TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the security packages' Mathlib and ArkLib pin v4.34.0
 FORBIDDEN = re.compile(r"\b(native_decide|implemented_by|extern|unsafe)\b")
 
 
+def build_proofs_verifier() -> None:
+    """`lake build Proofs.Flock.Verifier` in `security_proofs`, one process at a time: on a fresh tree Lake first clones that
+    package's dependencies, and two Lake processes cloning them at once (two xdist workers) both fail."""
+    key = hashlib.sha256(str(PROOFS).encode()).hexdigest()[:16]
+    with open(Path(tempfile.gettempdir()) / f"verity-security-proofs-{key}.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        subprocess.run(["lake", "build", "Proofs.Flock.Verifier"], cwd=PROOFS, check=True, capture_output=True)
+
+
 def sources():
-    """The executable's sources (the proofs' package, `soundness/`, has its own dependencies and checks)."""
-    return sorted(p for p in LEAN.rglob("*.lean") if ".lake" not in p.parts and "soundness" not in p.relative_to(LEAN).parts)
+    """The executable's sources (its proofs are under `verity/Security/Proofs/Flock/`, with their own dependencies and checks)."""
+    return sorted(p for p in LEAN.rglob("*.lean") if ".lake" not in p.parts)
 
 
 def test_toolchain_is_pinned():
@@ -36,13 +50,13 @@ def test_no_escape_hatches():
     assert not hits, hits
 
 
-AUDIT = LEAN / "soundness" / "FlockSoundness" / "Audit"
-AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|FlockSoundness\.Game\.|FlockSoundness\.Audit\.)")
+AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
+AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Proofs\.Flock\.Soundness\.Game\.|Proofs\.Flock\.Soundness\.Audit\.)")
 
 
 def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib and each other, so any backend can instantiate them
-    (`soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
+    (`verity/Security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
     two composed) and `FlockWork.lean` (the executable's work rule). No proof is admitted."""
@@ -59,7 +73,7 @@ def test_audit_layer_is_abstract():
 
 def _has_unit_cut():
     try:
-        from verity.ir.partition import validate_unit_cut  # noqa: F401
+        from verity.primitives.circuits.partition import validate_unit_cut  # noqa: F401
     except ImportError:
         return False
     return True
@@ -96,8 +110,8 @@ def test_layout_agrees_with_the_reference(tmp_path):
 
 
 def _stream_uniform(n, stream, pos):
-    """`verity.randomness`'s exact reduction on a raw stream: (value, next position), or None when it runs out."""
-    from verity.randomness import uniform_from_words
+    """`verity.primitives.randomness`'s exact reduction on a raw stream: (value, next position), or None when it runs out."""
+    from verity.primitives.randomness import uniform_from_words
     w = (n.bit_length() + 64 + 7) // 8
     at = [pos]
 
@@ -200,13 +214,18 @@ def test_unit_draw_check(tmp_path):
         assert g["ok"] == (want == "") and g["why"].startswith(want), (case, g)
 
 
+def _ir_tests() -> Path:
+    """The circuits' `tests`, inside the `verity.primitives.circuits` the import system finds (whichever member ships it): the vectors the
+    Lean verifier agrees with.  Located, never checked for here: one that is missing fails `test_the_reference_vectors_exist`, not a skip."""
+    return Path(importlib.util.find_spec("verity.primitives.circuits").origin).resolve().parent / "tests"
+
+
 def _template_vectors():
     try:
-        import verity
+        import verity  # noqa: F401
     except ImportError:
         return None
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "template_instance_vectors.json"
-    return v if v.exists() else None
+    return _ir_tests() / "template_instance_vectors.json"
 
 
 
@@ -543,7 +562,7 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
 
 def _one_stage_draw():
     try:
-        from verity_sampled_proofs.one_stage import draw
+        from verity.protocols.verification.sampled_proofs.one_stage import draw
     except ImportError:
         return None
     return draw if hasattr(draw, "derive") else None
@@ -567,13 +586,13 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
 
 def _has_check_cut():
     try:
-        from verity.ir.cut import check_cut  # noqa: F401
+        from verity.primitives.circuits.cut import check_cut  # noqa: F401
     except ImportError:
         return False
     return True
 
 
-@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ir.cut (PR #111)")
+@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.primitives.circuits.cut (PR #111)")
 def test_check_cut_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(LEAN.parent / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
@@ -584,12 +603,10 @@ def test_check_cut_agrees_with_the_reference(tmp_path):
 
 def _qword_vector_file():
     try:
-        import verity
-        from verity.ir.codec import decode_program  # noqa: F401
+        from verity.primitives.circuits.codec import decode_program  # noqa: F401
     except ImportError:
         return None
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "qword_vectors.json"
-    return v if v.exists() else None
+    return _ir_tests() / "qword_vectors.json"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vector_file() is None,
@@ -609,13 +626,11 @@ def test_qword_cuts_agree_with_core_verify(tmp_path):
 
 def _qword_vectors():
     try:
-        import verity.ir.partition_object  # noqa: F401
-        from verity.ir.cut import cut_word  # noqa: F401
+        import verity.primitives.circuits.partition_object  # noqa: F401
+        from verity.primitives.circuits.cut import cut_word  # noqa: F401
     except ImportError:
         return None
-    import verity
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "partition_vectors.json"
-    return v if v.exists() else None
+    return _ir_tests() / "partition_vectors.json"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator (PR #111)")
@@ -628,12 +643,19 @@ def test_qword_evaluator_agrees_with_the_reference(tmp_path):
 
 def _format_vectors():
     try:
-        import verity
+        import verity  # noqa: F401
     except ImportError:
         return None
-    ir = Path(verity.__file__).resolve().parents[2] / "tests" / "ir"
-    need = [ir / "format_vectors.json", ir / "partition_vectors.json", ir / "test_format_spec.py"]
-    return ir if all(p.exists() for p in need) else None
+    return _ir_tests()
+
+
+def test_the_reference_vectors_exist():
+    """The agreement tests below skip without Lean or without core, never for a vectors file that is not where they look."""
+    ir = _format_vectors()
+    files = [_template_vectors(), _qword_vector_file(), _qword_vectors(),
+             *(ir / n for n in ("format_vectors.json", "partition_vectors.json", "test_format_spec.py", "qcall_vectors.json"))]
+    missing = [str(f) for f in files if not f.exists()]
+    assert not missing, missing
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None,
@@ -649,8 +671,7 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
-@pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None
-                    or not (_format_vectors() / "qcall_vectors.json").exists(), reason="no Lean toolchain or no Q_call vectors")
+@pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None, reason="no Lean toolchain or no Q_call vectors")
 def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     ir = _format_vectors()
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -665,7 +686,7 @@ def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
     (`[0] ‖ []` against `[] ‖ [0]`) gives one node, and must not count, since the children are not of the digest's width
     (PR #146's red-team review). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
-    subprocess.run(["lake", "build", "FlockProofs"], cwd=LEAN, check=True, capture_output=True)
+    build_proofs_verifier()
     for goal, witness in [
         ('(MerkleScheme.sha256 "flock-leaf/sha256-unsalted").Collision',
          "⟨.node (ByteArray.mk #[0]) ByteArray.empty ByteArray.empty (ByteArray.mk #[0]), by simp only [MerklePair.Collides]; "
@@ -675,8 +696,8 @@ def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
          "exact ⟨by decide, by decide, by decide, by decide, by decide, rfl⟩⟩"),
     ]:
         f = tmp_path / "Split.lean"
-        f.write_text(f"import FlockProofs\nopen Flock\nexample : {goal} :=\n  {witness}\n")
-        p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
+        f.write_text(f"import Proofs.Flock.Verifier\nopen Flock\nexample : {goal} :=\n  {witness}\n")
+        p = subprocess.run(["lake", "env", "lean", str(f)], cwd=PROOFS, capture_output=True, text=True)
         assert p.returncode != 0 and "decide" in p.stdout + p.stderr, (goal, p.stdout[-800:])
 
 
@@ -835,8 +856,8 @@ def test_bit_row_constants_complete_core_s_v2_commit_strings(tmp_path):
     ``sha512_row_v2_digest`` at every residue of the length."""
     import random
 
-    from verity.commitments import hm96
-    from verity.commitments.rowleaf import sha512_row_v2_digest
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.rowleaf import sha512_row_v2_digest
 
     rng, cases = random.Random(20261001), []
     for n_bits in BIT_ROW_LENGTHS:
@@ -919,7 +940,7 @@ def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True)
 
     import numpy as np
 
-    from verity.ir.types import Array, Tuple, Value
+    from verity.primitives.circuits.types import Array, Tuple, Value
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
     from verity_flock import gf2
@@ -982,8 +1003,8 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
     (its prefix, or its words and compressions), a length of 2^64 or one past `MAX_COMPS`, a v1 prefix and midstate under v2,
     a changed padding, both row-schema keys, a v1 schema in `row_schemas`, a schema missing, no row with a compression, and a
     pinned dummy ``b || c`` that is not the padding instance's row of the port's bits (here, a v1 row's of its words)."""
-    from verity.commitments import hm96
-    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_digest
     from verity_flock import circuit as FC
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -1132,8 +1153,8 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
     that the statement can't link is refused with the Rust verifier's message: runs that don't cover the output ports once or
     don't match the row's length, no runs (one row per port), a row named after another port, a later port of its run named
     after an input row, and its length or schema changed. The composer refuses a run that isn't consecutive output ports."""
-    from verity.commitments import hm96
-    from verity.commitments.rowleaf import sha512_row_seg_word_digest
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.rowleaf import sha512_row_seg_word_digest
     from verity_flock import circuit as FC
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -1228,8 +1249,8 @@ def test_an_exact_v2_output_row_of_one_or_several_ports_is_the_row_its_reader_co
     commitment ``b || c`` and hm96 tree leaf; each side's statement digest is the one `flock-circuit statement` gives it,
     seeded and under `FC_COINS=os`. A run written as a v1 row, or at a length other than its words, is refused."""
     import numpy as np
-    from verity.commitments import hm96
-    from verity.commitments.rowleaf import sha512_row_v2_digest
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.rowleaf import sha512_row_v2_digest
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     inst = hm96.SHA512
@@ -1271,7 +1292,7 @@ def test_an_exact_v2_output_row_of_one_or_several_ports_is_the_row_its_reader_co
         assert p.returncode != 0, name
 
 
-TOY_EXTRACTOR = r"""import FlockProofs
+TOY_EXTRACTOR = r"""import Proofs.Flock.Verifier
 open Flock
 
 /-- A toy scheme with 1-byte digests: a node is the sum of its children's bytes, a leaf the row encoding's first byte. -/
@@ -1308,10 +1329,10 @@ def test_merkle_extractor_computes_a_collision(tmp_path):
     """`merkle_binding` is stated over `merklePair`, a computable extractor, since a collision of a fixed hash exists by
     counting (PR #146's red-team delta check). On a toy scheme with 1-byte digests, two accepted checks with different rows
     give its pair: two children pairs under one node, or two rows with one leaf, and each collides."""
-    subprocess.run(["lake", "build", "FlockProofs"], cwd=LEAN, check=True, capture_output=True)
+    build_proofs_verifier()
     f = tmp_path / "Toy.lean"
     f.write_text(TOY_EXTRACTOR)
-    p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
+    p = subprocess.run(["lake", "env", "lean", str(f)], cwd=PROOFS, capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     assert p.stdout.split("\n")[:4] == ["(true, true, true)", '"node 01 05 | 02 04"',
         '"leaf 01000000000000000000000000000000  | 01010000000000000000000000000000 "', "(true, true)"], p.stdout

@@ -6,13 +6,15 @@ its wire byte for byte, and one that holds a session past every sync is rejected
 from __future__ import annotations
 
 import importlib.util
+import json
+import shutil
 import sys
 from pathlib import Path
 
 import pytest
-from verity_network_warden import calibration
-from verity_network_warden.active import DATA, LAST, encode_frame
-from verity_network_warden.grid import COMPLETE, GridParams, Reason, Record, Status, Warden
+from verity.protocols.accounting.communication.warden import calibration
+from verity.protocols.accounting.communication.warden.active import DATA, LAST, encode_frame
+from verity.protocols.accounting.communication.warden.grid import COMPLETE, GridParams, Reason, Record, Status, Warden
 
 HERE = Path(__file__).resolve().parents[1]
 T = 60
@@ -117,7 +119,31 @@ def test_an_honest_run_is_accepted_and_is_run_shapers(runs):
     assert c["wire_is_the_records"]
     assert c["frames_read"] == c["frames_meant"] == 36
     assert c["ready_off_meant"] == c["releases_off_model"] == c["hands_max_diff_from_model"] == 0
+    assert c["released_not_the_programs"] == 0
     assert audit["timing"]["tick_late_ms"]["egress"]["max"] < 0.001
+
+
+def test_a_released_frame_that_isnt_the_programs_is_counted_not_a_crash(setup, runs, tmp_path):
+    """The records of an honest run with one released frame replaced, as a server that numbers an event other than
+    the Program does: the audit counts it, and its window is a mismatch raw (the committed records are the run's)."""
+    _, report, s = setup
+    plan, results = runs
+    run = tmp_path / "honest"
+    shutil.copytree(results["honest"][0], run)
+    e = s.egress_params
+    records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    (run / "responses.records").unlink()
+    for r in records:
+        if r.window == 1:
+            t = next(t for t, row in enumerate(r.grid) if row[0] is not None)
+            row = (encode_frame(DATA, 99, b"id: 999\n\n", e.frame_bytes), *r.grid[t][1:])
+            r = Record(r.link, r.window, r.grid[:t] + (row,) + r.grid[t + 1 :], r.status)
+        ar.write_blobs(run / "responses.records", ar.pack_record(r))
+    audit = ar.audit_configuration(plan, report, run)
+    assert audit["comparisons"]["released_not_the_programs"] == 1
+    assert [(r["link"], r["window"], r["raw"], r["committed"]) for r in audit["rows"]] == \
+        [("responses", w, "mismatch" if w == 1 else None, None) for w in range(3)] + \
+        [("requests", w, None, None) for w in range(3)]
 
 
 @pytest.mark.parametrize("strategy", ["burst", "spread", "bits"])
@@ -147,6 +173,54 @@ def test_a_session_held_past_every_sync_is_rejected(runs):
     assert all(raw == committed for _, raw, committed in egress)
     assert all(r["raw"] is None for r in audit["rows"] if r["link"] == "requests")
     assert not ar.against_honest(run, results["honest"][0])["wire_is_honests"]
+
+
+def test_a_proxy_that_declares_its_own_syncs_is_accepted_and_is_run_shapers(setup, tmp_path):
+    """Under an online rule the proxy's prover declares each window's sync from the frames it has read: the envelope
+    (δ = 3) with no history, then a bucket past what the earlier windows needed. They are what the plan declares on the
+    model's run, the audit accepts every link-window, and the records are `run_shaper`'s under them."""
+    doc, report, s = setup
+    plan = ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1")
+    assert plan["sync_rule"] == "cover-2-1" and [d for d, _ in plan["syncs"]] == [3, 4, 4]
+    assert ar.run_virtual(plan, report, tmp_path) == {"server": 0, "proxy": 0, "peer": 0}
+    audit = ar.audit_configuration(plan, report, tmp_path)
+    assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"])
+    c = audit["comparisons"]
+    assert c["declared_are_planned"] and c["records_are_run_shapers"] and c["hands_are_the_rules"]
+    with pytest.raises(ValueError):
+        ar.plan_configuration(doc["configurations"][0], s, syncs="cover")
+
+
+def test_the_command_line_parses_a_sync_rule(tmp_path, capsys):
+    """`--syncs` takes an online rule's name and refuses anything else, as an argument error."""
+    argv = ["t.json", "--calibration", "c.json", "--out", str(tmp_path)]
+    with pytest.raises(SystemExit) as bad:
+        ar.main([*argv, "--syncs", "cover"])
+    assert bad.value.code == 2 and "--syncs" in capsys.readouterr().err
+    assert ar.parse_sync_policy("cover-3-2") == "cover-3-2"
+
+
+@pytest.mark.parametrize("ms, responses, requests", [
+    (15, None, None),
+    (110, "status:delivery-refused", "status:delivery-refused"),
+    (300, "status:monitor-unavailable", "status:delivery-refused"),
+])
+def test_a_stalled_proxy_fails_its_window_closed(setup, runs, tmp_path, ms, responses, requests):
+    """The proxy stopped right after window 1's first release (`--stall`): under the slack nothing faults; 110 ms,
+    between two ticks, forwards the request late (`delivery-refused`), though no tick is late enough to fault; 300 ms
+    also makes the egress tick late. Only window 1 fails, both links, and nowhere is there a mismatch."""
+    _, report, _ = setup
+    plan, _ = runs
+    run = tmp_path / "stalled"
+    ar.run_virtual(plan, report, run, stalls=[(T + 1, ms / 1000)])
+    assert [(s["tick"], s["paused_ms"]) for s in json.loads((run / "stalls.json").read_text())] == \
+        [(T + 1, ms)]
+    audit = ar.audit_configuration(plan, report, run)
+    assert [(r["link"], r["window"], r["raw"], r["committed"]) for r in audit["rows"]] == \
+        [("responses", w, responses if w == 1 else None, responses if w == 1 else None) for w in range(3)] + \
+        [("requests", w, requests if w == 1 else None, requests if w == 1 else None) for w in range(3)]
+    assert audit["comparisons"]["released_not_the_programs"] == 0
+    assert audit["comparisons"]["frames_log_is_the_programs"]
 
 
 TOKENS = 4

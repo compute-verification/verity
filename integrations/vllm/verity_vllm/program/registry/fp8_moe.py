@@ -71,20 +71,17 @@ function.  `scales` is [pairs, I/G] row-major (`is_scale_transposed` False, _cus
 """
 from __future__ import annotations
 
-from verity.ir.defs import bind, composite
-from verity.ir.refs import Coll, concat, tuple_of
-from verity.ir.types import Array, Tuple
-from verity.ml.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
-from verity.ml.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg
+from verity.primitives.circuits.defs import bind, composite
+from verity.primitives.circuits.refs import Coll, concat, tuple_of
+from verity.primitives.circuits.types import Array, Tuple
+from verity_catalog.definitions.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
+from verity_catalog.definitions.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.fp8 import C448, C_NEG448, E4M3, Fp8RowScale, weight_blocks
 from verity_vllm.program.registry.moe import ONE32, NvExpf
 from verity_vllm.program.registry.prims import BF16, F32
 
-#: `get_default_config` under VLLM_BATCH_INVARIANT (fused_moe.py:1308-1315) clamped by the block (fused_moe.py:844-846)
-BATCH_INVARIANT_KB = 32
-BATCH_INVARIANT_SWAP = False
 
 _CONF = ("model-untested: read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1; tests/properties/glm53_block_fp8_capture_gpu.py "
          "is its hardware check")

@@ -22,7 +22,9 @@
   research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
                                                  # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
                                                  # until UTC (<= 48 h), preemptible; no VM stays awake (research/keeper.py)
-  research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
+  research compare <original>... <replay> [--expect E] [--json]
+                                                 # the replay's verdict from the store (same | within-band | differs | expected-change);
+                                                 # --dirs: two run dirs' differences and ratios, which the workload contract judges
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
   research keep PATH --owner @LANE --expires DATE|never --priority low|normal|high|keep [--regenerate CMD] [--art ART | --preserve] [--why T]
@@ -54,8 +56,13 @@
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
-  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...]   # what runs on the Nebius nodes
-                                                 # (pods/nebius/deploy.toml) against main, and installs from a pushed commit (research/deploy.py)
+  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
+                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (research/deploy.py)
+  research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
+                                                 # incident once and its clear once; the relay posts them (research/monitors.py)
+  research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
+                                                 # GPU-h held, busy and useful per node and UTC hour, and the holdings that held GPUs
+                                                 # idle: `cluster usage` (tools/cluster usage.py) over the console's record on vy-nebius-1
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -173,7 +180,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--mem-gb", type=float, default=None, metavar="N",
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
-                         "and reserve them for the run; else MemoryNotAvailable (research.mem)")
+                         "and reserve them for the run; else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
+                         "(its scope's MemoryMax=), required unless --kind names a registered kind, whose shape gives it")
     ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S", help="with --mem-gb: wait up to S seconds for the memory instead of refusing")
     ap.add_argument("--preflight", default=None, metavar="TOOL",
                     help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
@@ -375,6 +383,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     from .telemetry.run import run as harness_run
 
     write_json_atomic(run_dir / "job.json", job)
+    if ns.claimed and remote_info and remote_info.get("request"):
+        remote.ack_launch(Path(remote_info["request"]).parent / remote.LAUNCH_ACK, remote.FIRST_RECORD)
     os.environ.update(result.env_for(run_id, run_dir, source_sha=getattr(a, "tree_sha", None)))
     os.environ.update(prep["env"])
     # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
@@ -941,6 +951,11 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         print(f"research: run {run_id} refused on {ns.on} ({launch.get('fault') or 'Refused'}): {launch.get('refused')}  (recorded in {run_dir})", file=sys.stderr)
         return 3
     print(f"research: run {run_id} launched on {ns.on} ({rec['pod_id']}) pid={launch.get('runner_pid')} -> {rec['remote_run_dir']}", file=sys.stderr)
+    if launch.get("unconfirmed"):
+        print(f"research: {ns.on} could not confirm its runner is up ({launch['unconfirmed']}); `research fetch {run_id}` says how it went",
+              file=sys.stderr)
+    if launch.get("first_record") == "disk-hold":
+        print(f"research: {ns.on} holds it for disk before its runner starts (research disk-hold, in its launcher.log)", file=sys.stderr)
     print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
     print(f"research: observe with `research fetch {run_id}`; the workload does not depend on this session staying alive", file=sys.stderr)
     return 0
@@ -1036,15 +1051,59 @@ def cmd_cancel(argv: list[str]) -> int:
 
 
 def cmd_compare(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="research compare")
-    ap.add_argument("baseline")
-    ap.add_argument("candidate")
+    ap = argparse.ArgumentParser(
+        prog="research compare", formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="ORIGINAL... REPLAY: the replay's verdict against the originals, read from the evidence store by run id (local, "
+                    "else its remote), so the run dirs need not exist here. Exit 0 for same, within-band and expected-change, 1 for "
+                    "differs. --dirs (or a run the store lacks): the descriptive diff of two run dirs under --runs-dir.",
+        epilog=C.__doc__)
+    ap.add_argument("runs", nargs="+", metavar="RUN", help="run ids: one or more originals, then the replay")
+    ap.add_argument("--expect", default=None, help="a replay_expect value (`refused: FORM`, `blocked: GATE`); default: the latest "
+                                                   "replay_expect label on the first original, if any")
+    ap.add_argument("--no-expect", action="store_true", help="ignore the originals' replay_expect labels")
+    ap.add_argument("--store", default=None, help="store root (default $RESEARCH_STORE or ~/.research/store)")
+    ap.add_argument("--dirs", action="store_true", help="the descriptive diff of two run directories (BASELINE CANDIDATE)")
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
+    if len(ns.runs) < 2:
+        ap.error("needs at least one original and the replay")
+    if not ns.dirs:
+        from .store import ids as store_ids
+        from .store.local import LocalStore, StoreError
+
+        st = LocalStore(ns.store)
+        try:
+            bad = [r for r in ns.runs if not store_ids.is_run_id(r)]
+            if bad:
+                raise LookupError(f"{bad[0]}: not a full run id")
+            atts = [C.load(st, r) for r in ns.runs]
+            expect = None if ns.no_expect else ns.expect
+            if expect is None and not ns.no_expect:
+                labels = st.labels(ns.runs[0], key=C.EXPECT_KEY)
+                expect = str(labels[-1].value) if labels else None
+            v = C.verdict(atts[:-1], atts[-1], expect)
+        except LookupError as e:
+            if len(ns.runs) != 2:
+                print(f"research compare: {e}", file=sys.stderr)
+                return 1
+            print(f"research compare: {e}; comparing the run dirs instead", file=sys.stderr)
+        except StoreError as e:
+            print(f"research compare: {e}", file=sys.stderr)
+            return 1
+        except ValueError as e:
+            print(f"research compare: {e}", file=sys.stderr)
+            return 2
+        else:
+            print(json.dumps(v.to_doc(), indent=2, sort_keys=True) if ns.json else C.render_verdict(v))
+            return 1 if v.verdict == C.DIFFERS else 0
+        finally:
+            st.close()
+    if len(ns.runs) != 2:
+        ap.error("--dirs compares exactly two run dirs")
     root = R.runs_root(ns.runs_dir)
     try:
-        b, c = R.resolve(root, ns.baseline), R.resolve(root, ns.candidate)
+        b, c = R.resolve(root, ns.runs[0]), R.resolve(root, ns.runs[1])
     except (FileNotFoundError, LookupError) as e:
         print(f"research compare: {e}", file=sys.stderr)
         return 1
@@ -1234,6 +1293,23 @@ def cmd_inspect(argv: list[str]) -> int:
     return 0
 
 
+CLUSTER_SRC = Path(__file__).resolve().parents[3] / "cluster" / "src"
+
+
+def cmd_usage(argv: list[str]) -> int:
+    """`research usage ...` is `cluster usage ...`, run from this tree's tools/cluster (research never imports cluster), with
+    its output and exit code: 0, 1 on a finding (the record unread, stale or short of hours), 2 on bad arguments or with no
+    tools/cluster here."""
+    import subprocess
+
+    if not (CLUSTER_SRC / "cluster" / "usage.py").is_file():
+        print(f"research usage: no tools/cluster beside this research package ({CLUSTER_SRC})", file=sys.stderr)
+        return 2
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(CLUSTER_SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    return subprocess.run([sys.executable, "-m", "cluster", "usage", *argv], env=env).returncode
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
@@ -1308,6 +1384,10 @@ def main(argv: list[str] | None = None) -> int:
         from .deploy import main as deploy_main
 
         return deploy_main(rest)
+    if cmd == "monitors":
+        from .monitors import main as monitors_main
+
+        return monitors_main(rest)
     if cmd == "notes":
         from .notes import main as notes_main
 
@@ -1336,6 +1416,8 @@ def main(argv: list[str] | None = None) -> int:
         from .slack import main as slack_main
 
         return slack_main(rest, prog=f"research {cmd}")
+    if cmd == "usage":
+        return cmd_usage(rest)
     age = checkout_age()
     print(f"research: unknown command {cmd!r}" + (f". {age} If {cmd!r} is newer than that, update the checkout "
                                                   "(`git pull`) and retry." if age else "") + f"\n\n{__doc__.strip()}",

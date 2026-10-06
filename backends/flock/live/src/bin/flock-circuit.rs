@@ -159,16 +159,19 @@ fn zk_shape_ok(st: &Stmt) -> Result<(), String> {
 
 /// Ligerito level 0's hiding randomness for a session (both reps open the one level-0 codeword): every lane's padding, and
 /// the four uniform lanes (a pair per rep), from the prover's ChaCha20 streams 6 and 7; for rep 0 (a rep's copy sets `rep`).
-/// `zero`: M1's control (all zero).
+/// `zero`: M1's control (all zero). Lane `i` of stream `s` is `rng.f128s(s, i << 32, n)`, the lanes drawn in parallel.
 fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, tamper: u8) -> flock_core::pcs::ligerito::zk::Level0Zk {
     use flock_core::pcs::ligerito::zk::{EXTRA_LANES, Level0Zk};
+    let tr = Instant::now();
     let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
     let (lanes, l, t) = ((1usize << lc.initial_k) + EXTRA_LANES, 1usize << lc.initial_log_msg_cols, zk_t_pad(st.m));
-    let draw = |rng: &mut flock_live::zk_hooks::ProverRng, stream: u64, i: usize, n: usize| {
-        if zero { vec![F128::ZERO; n] } else { rng.f128s(stream, (i as u64) << 32, n) }
+    let draw = |stream: u64, lanes: usize, n: usize| -> Vec<Vec<F128>> {
+        if zero { vec![vec![F128::ZERO; n]; lanes] } else { rng.f128s_lanes(stream, lanes, n) }
     };
-    Level0Zk { queries0: zk_queries0(st.m).expect("checked when the statement is built"), t_pad: t, rep: 0,
-               extra: std::array::from_fn(|i| draw(rng, 6, i, l)), pads: (0..lanes).map(|i| draw(rng, 7, i, t)).collect(), tamper }
+    let z = Level0Zk { queries0: zk_queries0(st.m).expect("checked when the statement is built"), t_pad: t, rep: 0,
+                       extra: draw(6, EXTRA_LANES, l).try_into().expect("EXTRA_LANES lanes"), pads: draw(7, lanes, t), tamper };
+    eprintln!("ZKL0\t{}", json!({"lanes": lanes, "t_pad": t, "extra_words": l, "s": tr.elapsed().as_secs_f64()}));
+    z
 }
 
 /// M1's hooks identity: what is masked, and what is not yet (the statement is not zero knowledge until the list is empty).
@@ -887,6 +890,8 @@ struct ZkRep {
     pad_mismatch: bool,
     /// a dishonest prover: re-solve `final_c'` after the inner proof's coins so that the batched constraint holds
     final_c_solved: bool,
+    /// whether the inner proof stops when its batched constraint fails on the pads
+    self_check: zkv::SelfCheck,
     /// seconds to draw the pads and build their commitment (counted in the rep's prove time)
     t_commit: f64,
     /// Ligerito level 0's hiding, drawn once per session (both reps open the one level-0 codeword), with this rep's pair
@@ -906,8 +911,15 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
     let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
     let sb = salts.lock().unwrap_or_else(PoisonError::into_inner).expand(id, n);
     let ic = zkv::InnerCommit::new(&pads, sb);
-    ZkRep { lay, pads, ic, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, final_c_solved: plan.zk_final_c_solved, t_commit: tz0.elapsed().as_secs_f64(),
-            level0: Arc::new(flock_core::pcs::ligerito::zk::Level0Zk { rep: if plan.zk_shared_pair { 0 } else { rep }, ..level0.clone() }) }
+    let self_check = if plan.zero_witness { zkv::SelfCheck::Skip } else { plan.zk_self_check };
+    let t_commit = tz0.elapsed().as_secs_f64();
+    // each rep's copy of the extra lanes (4 · 2^22 words at m = 35) written on rayon's threads, not one
+    let level0 = flock_core::pcs::ligerito::zk::Level0Zk {
+        queries0: level0.queries0, t_pad: level0.t_pad, rep: if plan.zk_shared_pair { 0 } else { rep }, tamper: level0.tamper,
+        extra: std::array::from_fn(|i| { use rayon::prelude::*; level0.extra[i].par_iter().copied().collect() }), pads: level0.pads.clone(),
+    };
+    ZkRep { lay, pads, ic, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, final_c_solved: plan.zk_final_c_solved, self_check,
+            t_commit, level0: Arc::new(level0) }
 }
 
 /// M1 on the device: level 0's hiding and both reps' pads with their commitments, drawn beside the witness build (they depend on
@@ -926,6 +938,7 @@ fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, sa
         let id = id0 + rep as u64 * (1 + trees);
         (make_zkrep(st, plan, &mut prng, &level0, points, rep, id, salts), id)
     });
+    eprintln!("ZKPRE\t{}", json!({"level0_s": t_level0, "s": tl0.elapsed().as_secs_f64()}));
     (t_level0, reps)
 }
 
@@ -1090,7 +1103,7 @@ fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep,
     let fails = zkv::failing(&cons, &zk.pads.h);
     let kept = zk.final_c_solved.then(|| cons.clone());
     let mut lch = zkv::Logging { inner: &mut inner_ch, coins: Vec::new() };
-    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, zc.final_c_eval, cons, &mut lch).unwrap_or_else(|e| panic!("{e}"));
+    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, zc.final_c_eval, cons, zk.self_check, &mut lch).unwrap_or_else(|e| panic!("{e}"));
     if let Some(cons) = kept {
         zc.final_c_eval += final_c_shift(&zk.lay, &zk.pads.h, cons, &inner, &lch.coins);
     }
@@ -2283,7 +2296,13 @@ struct Plan {
     zk_l0_tamper: u8,
     /// both reps fold, sum and pad rep 0's pair of extra lanes (red-team-m1-zk F1's shared lanes; the verifier rejects rep 1)
     zk_shared_pair: bool,
-    /// prove a dummy witness: all zero but the public regions (M2's extraction run; M1's simulator takes its opening)
+    /// M1: whether the inner proof checks its batched constraint before it speaks (`zk_veil::SelfCheck`). Every honest plan
+    /// stops; `Skip` is for the negative controls in `plan_of` whose witness or pads fail by design, so that their proofs
+    /// reach the verifier
+    zk_self_check: zkv::SelfCheck,
+    /// prove a dummy witness: all zero but the public regions (M2's extraction run; M1's simulator takes its opening). Its
+    /// inner proof skips the self-check: the dummy fails the constraints, and the simulator's runs must reach the proofs as
+    /// the prover's do
     zero_witness: bool,
     /// the coin-tree nonce `Hello` carries, instead of the prover's own fresh one: the simulator's, drawn once per simulated
     /// session, so every run restarts after the same `Hello`
@@ -2916,6 +2935,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_verifier_coin_off_its_commitment", false, false),
     ("zk_verifier_commits_beta_zero", false, false),
     ("zk_verifier_commits_outer_coin_one", false, false),
+    ("zk_failing_witness_stops_before_tau", false, false),
     ("zk_session_relations_vary_with_the_seed", true, false),
     ("zk_audit_attributes_the_inner_proof", true, false),
     ("zk_dummy_witness_passes_the_region_claims", false, true),
@@ -2950,30 +2970,33 @@ fn skipped(st: &Stmt, name: &str) -> bool {
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
     let h = Plan { gpu, ..Plan::default() };
+    // a control whose witness or pads fail by design: its prover skips the self-check, so that the verifier gets its proofs
+    let f = Plan { zk_self_check: zkv::SelfCheck::Skip, ..h.clone() };
     match name {
         "mask_cells_random" => Plan { mask_random: true, ..h },
-        "private_cut_word_tampered" => Plan { cut_flip: true, ..h },
-        "tail_swapped" => Plan { tail_swapped: true, ..h },
-        "message_byte_differs_from_the_committed_row" => Plan { message_flip: true, ..h },
-        "unit_input_differs_from_its_message_bits" => Plan { input_flip: true, ..h },
-        "unit_internal_bit_flipped" => Plan { unit_flip: true, ..h },
-        "chaining_value_forged" => Plan { chain_forged: true, ..h },
-        "row_salt_forged" => Plan { salt_forged: true, ..h },
-        "row_midstate_forged" => Plan { midstate_forged: true, ..h },
-        "padding_block_forged" => Plan { pad_forged: true, ..h },
-        "row_fill_bit_set" => Plan { fill_forged: true, ..h },
-        "row_padding_bit_forged_beside_its_bytes" => Plan { mixed_pad_forged: true, ..h },
+        "output_row_committed_false" => f,
+        "private_cut_word_tampered" => Plan { cut_flip: true, ..f },
+        "tail_swapped" => Plan { tail_swapped: true, ..f },
+        "message_byte_differs_from_the_committed_row" => Plan { message_flip: true, ..f },
+        "unit_input_differs_from_its_message_bits" => Plan { input_flip: true, ..f },
+        "unit_internal_bit_flipped" => Plan { unit_flip: true, ..f },
+        "chaining_value_forged" => Plan { chain_forged: true, ..f },
+        "row_salt_forged" => Plan { salt_forged: true, ..f },
+        "row_midstate_forged" => Plan { midstate_forged: true, ..f },
+        "padding_block_forged" => Plan { pad_forged: true, ..f },
+        "row_fill_bit_set" => Plan { fill_forged: true, ..f },
+        "row_padding_bit_forged_beside_its_bytes" => Plan { mixed_pad_forged: true, ..f },
         "coins_before_y" => Plan { no_y: true, ..h },
         "reps_with_different_witness" => Plan { rep1_other_witness: true, skip_level0_check: true, ..h },
         "reps_differ_prover_stops" => Plan { rep1_other_witness: true, ..h },
         "fast_profile_proofs" => Plan { fast: true, ..h },
         "opened_salt_altered" => Plan { salt_flip: true, ..h },
-        "zk_pads_not_the_committed_ones" => Plan { zk_pad_mismatch: true, ..h },
-        "zk_final_c_solved_after_the_batching_coins" => Plan { zk_pad_mismatch: true, zk_final_c_solved: true, ..h },
-        "zk_level0_folds_another_extra_lane" => Plan { zk_l0_tamper: 1, ..h },
-        "zk_level0_blinded_claim_forged" => Plan { zk_l0_tamper: 2, ..h },
-        "zk_level0_ybar_forged" => Plan { zk_l0_tamper: 3, ..h },
-        "zk_level0_extra_lane_sum_forged" => Plan { zk_l0_tamper: 4, ..h },
+        "zk_pads_not_the_committed_ones" => Plan { zk_pad_mismatch: true, ..f },
+        "zk_final_c_solved_after_the_batching_coins" => Plan { zk_pad_mismatch: true, zk_final_c_solved: true, ..f },
+        "zk_level0_folds_another_extra_lane" => Plan { zk_l0_tamper: 1, ..f },
+        "zk_level0_blinded_claim_forged" => Plan { zk_l0_tamper: 2, ..f },
+        "zk_level0_ybar_forged" => Plan { zk_l0_tamper: 3, ..f },
+        "zk_level0_extra_lane_sum_forged" => Plan { zk_l0_tamper: 4, ..f },
         _ => h,
     }
 }
@@ -3232,6 +3255,27 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let inner_only = reps.len() == 2 && reps.iter().all(|r| r["ok"] == false && r["why"].as_str().is_some_and(|w| w.starts_with("zk inner")));
         return json!({"case": name, "gpu": gpu, "expect": "rejected by the inner proof alone (the region claims pass)", "accepted": v["accepted"],
                       "pass": v["accepted"] != true && inner_only, "reps_ok": reps.iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect::<Vec<_>>()});
+    }
+    #[cfg(feature = "seed-injection")]
+    if name == "zk_failing_witness_stops_before_tau" {
+        // the prover checks before it speaks: an honest plan's prover on a witness with a flipped unit bit fails its batched
+        // constraint and stops after the batching coins, so rep 0's stream ends with the round that opens them (its message
+        // `[ρ, σ]`, after the inner proof's label) and no τ commitment, β or proof goes out
+        let v = VStar::new(st, inst, Strategy::Honest, [7; 32]);
+        let view = v.view.clone();
+        let (r, _) = session(st, inst, shared(v), &Plan { gpu, unit_flip: true, ..Plan::default() }, ProverSeed::from_os());
+        let (view, rep0) = (view.lock().unwrap_or_else(PoisonError::into_inner), rep_stream(TABLE, 0));
+        let rounds: Vec<&Vec<u8>> = view.iter()
+            .filter_map(|(q, _)| match q { Req::Round { stream, content, .. } if *stream == rep0 => Some(content), _ => None }).collect();
+        let gamma_last = rounds.last().and_then(|c| parse_items(c).ok())
+            .is_some_and(|it| matches!(it.as_slice(), [Item::Obs(v), Item::Framing(16), Item::Framing(16)] if v.len() == 2));
+        let after_label = rounds.len() >= 2 && rounds[rounds.len() - 2].windows(zkv::LABEL_INNER.len()).any(|w| w == zkv::LABEL_INNER);
+        let stopped = r["prover_stopped"].as_str().is_some_and(|x| x.contains("PROVER-STOPPED: the batched constraint fails"));
+        let (no_tau, no_proof) = (beta_round(&view, &rep0).is_none(), !complete(&view));
+        return json!({"case": name, "gpu": gpu, "expect": "the prover stops after the batching coins", "accepted": r["accepted"],
+                      "pass": stopped && r["accepted"] != true && gamma_last && after_label && no_tau && no_proof,
+                      "prover_stopped": r["prover_stopped"], "rep0_rounds": rounds.len(), "last_round_opens_the_batching_coins": gamma_last && after_label,
+                      "no_tau_commitment": no_tau, "no_proof": no_proof});
     }
     #[cfg(feature = "seed-injection")]
     if name == "zk_session_relations_vary_with_the_seed" {

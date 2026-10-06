@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from verity.ir.partition import Level
-from verity.proofs.profile import IntegrityProfile, Subset
+from verity.primitives.circuits.partition import Level
+from verity.protocols.profile import IntegrityProfile, Subset
 
-AUDIT = Path(__file__).resolve().parents[1] / "verifier" / "lean" / "soundness" / "FlockSoundness" / "Audit"
+AUDIT = Path(__file__).resolve().parents[3] / "verity" / "Security" / "Proofs" / "Flock" / "Soundness" / "Audit"
 SUBSET_MISS = "(subset n k hk).miss K = ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞)"
 AUDIT_COUNT = "L.miss K + εks + δlink"
 

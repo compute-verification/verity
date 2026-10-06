@@ -161,6 +161,13 @@ def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_pa
     assert CHECK.take_lean_deps_urls(tmp_path) == Path("/somewhere/urls.json")
 
 
+def test_custody_deletes_the_lean_dependency_urls_wherever_a_run_leaves_them():
+    """A run of anything else, or a check that ends before `check.py` starts, leaves them in inputs/ for custody to delete."""
+    from research.store.custody import CREDENTIALS
+
+    assert f"inputs/{CHECK.LEAN_DEPS_URLS}" in CREDENTIALS
+
+
 def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch):
     import json
 
@@ -484,23 +491,26 @@ def test_the_agreement_scripts_import_only_the_standard_library_and_each_other()
 
 
 def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_in_it(tmp_path, monkeypatch):
-    """`flock-verify` is built from the Lean package alone: level3/ and soundness/ (Lake packages of their own) are no input,
-    unless the package's lakefile requires something, which keeps everything in.  Nor is the package's `lean-audit.json`, which
-    only the audit reads: that one path, not every file of the name."""
+    """`flock-verify` is built from the Lean package alone: its proofs (`verity/Security/Proofs/Flock/`) and any Lake package
+    nested in it are no input, unless the package's lakefile requires something, which keeps everything in.  Nor is the
+    package's `lean-audit.json`, which only the audit reads: that one path, not every file of the name."""
     files = CHECK.tracked_files()
     closure = CHECK.agreement_closure(files)
     policy, other = "backends/flock/verifier/lean/lean-audit.json", "backends/flock/verifier/lean/Flock/lean-audit.json"
     assert policy not in CHECK.agreement_closure([*files, policy]) and other in CHECK.agreement_closure([*files, other])
-    assert "backends/flock/verifier/ci.py" in closure and "backends/flock/verifier/lean/Main.lean" in closure
+    assert "backends/flock/verifier/ci.py" in closure and "backends/flock/verifier/lean/FlockVerify.lean" in closure
     assert "backends/flock/verifier/upstream.json" in closure
-    assert not [f for f in closure if f.startswith(("backends/flock/verifier/lean/soundness/", "backends/flock/verifier/lean/level3/"))]
-    assert [f for f in files if f.startswith("backends/flock/verifier/lean/soundness/")]
-    (tmp_path / "backends/flock/verifier/lean/soundness").mkdir(parents=True)
-    (tmp_path / "backends/flock/verifier/lean/lakefile.toml").write_text('[[require]]\nname = "x"\n')
-    (tmp_path / "backends/flock/verifier/lean/soundness/lakefile.toml").write_text("")
+    assert not [f for f in closure if f.startswith("verity/Security/")]
+    assert [f for f in files if f.startswith("verity/Security/Proofs/Flock/")]
+    nested = ["backends/flock/verifier/lean/lakefile.toml", "backends/flock/verifier/lean/nested/lakefile.toml",
+              "backends/flock/verifier/lean/nested/N.lean"]
+    (tmp_path / "backends/flock/verifier/lean/nested").mkdir(parents=True)
+    (tmp_path / nested[0]).write_text("")
+    (tmp_path / nested[1]).write_text("")
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
-    fake = ["backends/flock/verifier/lean/lakefile.toml", "backends/flock/verifier/lean/soundness/lakefile.toml"]
-    assert CHECK.agreement_closure(fake) == fake
+    assert CHECK.agreement_closure(nested) == nested[:1]
+    (tmp_path / nested[0]).write_text('[[require]]\nname = "x"\n')
+    assert CHECK.agreement_closure(nested) == nested
 
 
 def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, monkeypatch):

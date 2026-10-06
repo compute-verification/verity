@@ -53,6 +53,15 @@
                     so (remote.json workload_cwd).
     claim           `research launch-request` on the machine does mkdir(<root>/runs/<run-id>) as the claim, then starts the detached
                     runner.  Re-delivering the same request finds the directory and reports its state; it never starts a second workload.
+                    Each delivery holds flock(<root>/requests/<run-id>/.launch.lock) until it has answered, so a re-delivery (an ssh drop,
+                    or the launcher's deadline, mid-wait) reports the first one's settled answer, never a run still starting.
+    first record    launch-request answers only once the runner has parsed its arguments and written job.json: the runner says so on
+                    the FIFO <root>/requests/<run-id>/.launch-ack (`ack_launch`), found from the request path its --remote-json carries,
+                    so no wrapper has to pass an fd or the environment through.  A runner (or a wrapper ahead of it) that exits first is
+                    refused (RunnerFailed, refused.json with its rc and launcher.log's tail), so `research run --on` exits 3, never
+                    `launched`.  `disk-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
+                    launch-request can't tell (job.json is there without an ack, the wrapper exited but its process group lives on, or the
+                    wait itself failed), it answers started with `unconfirmed` and releases nothing: a live run is never called refused.
     exclusive       --exclusive takes <root>/runs/.exclusive.lock (O_EXCL) naming the run; a live holder refuses the launch with the reason.
                     A dead holder (terminal status or vanished pid) is reclaimed.  The runner releases its own lock at exit.
     memory          --mem-gb N: the machine side admits the run only if its memory cgroup's limit - in use - live reservations
@@ -83,21 +92,27 @@
     custody         --custody-r2: the launcher mints a delete-free R2 key (store.custody.mint_for_machine) and stages it with a secret-free
                     store.toml in <root>/requests/<run-id>/custody/ (mode 600, never in request.json or the workload's environment);
                     launch-request passes --custody-dir to the runner, which after the workload publishes the attempt with every run file
-                    (outputs.run_record), verifies it on the remote, deletes the key and writes <run>/.custody (store.custody).  It terminates with the
-                    pod's OWN key (RUNPOD_API_KEY in /proc/1/environ); without one it is not installed and the launch says so.  The account
-                    key is never sent.  <root>/guard/state.json: verdict, last activity, idle minutes, refusal reasons.
+                    (outputs.run_record) but a sent credential, deleted first (store.custody.CREDENTIALS), verifies it on the remote,
+                    deletes the key and writes <run>/.custody (store.custody).  A refused launch deletes the key and those credentials from
+                    the request dir.  It terminates with the pod's OWN key (RUNPOD_API_KEY in /proc/1/environ); without one it is not
+                    installed and the launch says so.  The account key is never sent.  <root>/guard/state.json: verdict, last activity,
+                    idle minutes, refusal reasons.
     lease           a pod `research pods create` made carries a lease (research.pods.lease, pods/sh/lease.sh): it ends itself at the
                     lease's expiry.  The request's `lease_extend_s` (the run's --timeout + lease.RUN_MARGIN_S) makes launch-request
                     push the expiry to at least now + that, so the lease cannot end the run; the answer's `lease` says what it did.
 """
 from __future__ import annotations
 
+import errno
+import fcntl
 import hashlib
 import io
 import json
 import os
 import secrets
+import select
 import shlex
+import stat
 import subprocess
 import sys
 import tarfile
@@ -128,6 +143,10 @@ TERMINAL = ("done", "failed", "cancelled")
 FETCHED_FILE = ".fetched"                     # <run>/.fetched on the machine: written by `fetch --all` once every file verified
 FETCHED_SCHEMA = "research/fetched/v0.1"
 CUSTODY_DIR = "custody"                       # <root>/requests/<run-id>/custody/: --custody-r2's minted key + store.toml (store.custody)
+LAUNCH_ACK = ".launch-ack"                    # <root>/requests/<run-id>/.launch-ack: the FIFO the runner names its first record on
+LAUNCH_LOCK = ".launch.lock"                  # <root>/requests/<run-id>/.launch.lock: held by a delivery of the request until it answers
+FIRST_RECORD = "job.json"
+RUNNER_FAILED_LINES = 5                       # launcher.log lines in a RunnerFailed reason (refused.json keeps PREFLIGHT_TAIL)
 GUARD_IDLE_MIN_DEFAULT = 90
 GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and the pod-scoped RUNPOD_API_KEY into the container's first process
 DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods/nebius/sky/cluster_up.sh): `none` once Kueue owns every GPU
@@ -166,6 +185,11 @@ class PreflightFailed(Refused):
         self.report = report
 
 
+class RunnerFailed(Refused):
+    """The machine-side runner, or a wrapper ahead of it, exited before writing the run's first record (job.json): an argv it
+    rejected, a store preparation that failed, a CPU scope that would not start.  No workload ran."""
+
+
 # ---- machines ---------------------------------------------------------------------------------------------------------------------------
 
 def machines_path() -> Path:
@@ -181,6 +205,10 @@ def load_machines(path: Path | None = None) -> dict[str, dict[str, Any]]:
 
         ms = registry.merged(ms, p)
     return ms
+
+
+#: a machine's runs root when its entry names none (a pod `research pods register` wrote without --root)
+DEFAULT_ROOT = "/workspace/research"
 
 
 def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -200,7 +228,7 @@ def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str
     if project not in allowed:
         raise Refused(f"machine {name!r} belongs to project(s) {allowed}, not {project!r}; refusing to touch it")
     out = dict(m)
-    out.setdefault("root", "/workspace/research")
+    out.setdefault("root", DEFAULT_ROOT)
     out.setdefault("python", "python3")
     out["name"] = name
     return out
@@ -522,7 +550,8 @@ def launch_request_failure(rc: int, stdout: bytes, stderr: bytes) -> Refused:
         except ValueError:
             continue
         if isinstance(doc, dict) and doc.get("refused"):
-            cls = {"ResearchVersionMismatch": ResearchVersionMismatch, "PreflightFailed": PreflightFailed}.get(str(doc.get("fault")), Refused)
+            cls = {"ResearchVersionMismatch": ResearchVersionMismatch, "PreflightFailed": PreflightFailed,
+                   "RunnerFailed": RunnerFailed}.get(str(doc.get("fault")), Refused)
             return cls(str(doc["refused"]))
     if rc == 2 and "--expect-tool" in err:
         return ResearchVersionMismatch("the research package that answered `launch-request` on the machine predates the version check, so it "
@@ -1137,14 +1166,12 @@ def tool_preflight(harness_args: list[str], tree: Path | str | None, asked: str 
         return None
     from .store import tools_registry
 
-    module, _, attr = tools_registry.REGISTRY.get(spec, spec).rpartition(":")
-    rel = Path(*module.split(".")) if module else None
-    if rel is None or not any((Path(tree) / c).is_file() for c in (rel.with_suffix(".py"), rel / "__init__.py")):
+    if tools_registry.locate(spec, Path(tree)) is None:
         if asked:
             raise PreflightFailed(f"--preflight {asked}: {tree} does not declare that tool; nothing started")
         return None
     try:
-        decl = tools_registry._from_file(module, attr, Path(tree))
+        decl = tools_registry.from_tree(spec, Path(tree))
     except Exception as e:  # noqa: BLE001
         raise PreflightFailed(f"{flag} {spec}: its declaration in {tree} cannot be read ({type(e).__name__}: {e}), so its preflight is "
                               f"unknown; nothing started") from None
@@ -1178,7 +1205,10 @@ def run_preflight(argv: list[str], tree: Path | str, env: dict[str, str]) -> dic
 def launch_request(request_path: Path) -> dict[str, Any]:
     """Claim the run directory and start the detached runner (idempotent per run id); with the request's `guard`, make sure the pod's
     guard daemon runs (ensure_guard; its answer is the result's `guard`, and a guard that cannot start never fails the launch)."""
-    out = _launch_request(request_path)
+    request_path = Path(request_path).resolve()        # the runner finds the ack FIFO from this path, whatever its cwd
+    with open(request_path.parent / LAUNCH_LOCK, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        out = _launch_request(request_path)
     try:
         req = json.loads(request_path.read_text())
         g = req.get("guard")
@@ -1256,11 +1286,16 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             if concurrent:
                 release_exclusive(runs_root, run_id)
                 raise Refused(f"--exclusive: other run(s) are live on this machine: {', '.join(concurrent)}; not starting {run_id}")
+        ack = request_path.parent / LAUNCH_ACK
+        try:
+            log = open(run_dir / "launcher.log", "ab")
+            ack.unlink(missing_ok=True)
+            os.mkfifo(ack, 0o600)
+            ack_fd = os.open(ack, os.O_RDONLY | os.O_NONBLOCK)      # before the runner starts, so its non-blocking open finds a reader
+        except OSError as e:
+            raise Refused(f"could not prepare the launch ({type(e).__name__}: {e}); not starting {run_id}") from None
     except Refused as e:
-        if mem_rec:
-            M.release(mem_rec["reservation"], run_id)
-        if req.get("custody"):                    # nothing will publish: the key goes now, not at its expiry
-            (request_path.parent / CUSTODY_DIR / "cred.json").unlink(missing_ok=True)
+        _release_launch(req, request_path, mem_rec)
         pf = {"preflight": e.report} if isinstance(e, PreflightFailed) and e.report else {}
         write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": str(e), "fault": type(e).__name__, "at_utc": utc_now_ms(), **pf})
         return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": str(e), "fault": type(e).__name__, **pf}
@@ -1289,21 +1324,136 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         argv = [*req[QUEUE_WRAP], *argv]
     if (req.get("queue") or {}).get("disk_gb"):    # held here, ahead of the allocation, while the disk would pass 80% (research.disk)
         argv = [req.get("python") or sys.executable, "-m", "research", "disk-hold", "--gb", str(req["queue"]["disk_gb"]),
-                "--path", str(runs_root), "--", *argv]
-    log = open(run_dir / "launcher.log", "ab")
+                "--path", str(runs_root), "--ack", str(request_path.parent / LAUNCH_ACK), "--", *argv]
+    started = {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": True, **({"preflight": preflight} if preflight else {})}
     try:
-        proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True,
-                                preexec_fn=(lambda: os.sched_setaffinity(0, cpus)) if cpus else None)
+        try:
+            proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                    start_new_session=True, preexec_fn=(lambda: os.sched_setaffinity(0, cpus)) if cpus else None)
+        except OSError as e:
+            _release_launch(req, request_path, mem_rec)
+            reason = f"the runner could not be started: {type(e).__name__}: {e}"
+            write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": reason, "fault": RunnerFailed.__name__, "at_utc": utc_now_ms()})
+            return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": reason, "fault": RunnerFailed.__name__}
+        started["runner_pid"] = proc.pid
+        try:
+            if mem_rec:
+                M.set_pid(mem_rec["reservation"], proc.pid)
+            write_json_atomic(run_dir / "launch.json", {"run_id": run_id, "claimed_utc": utc_now_ms(), "runner_pid": proc.pid, "argv": argv,
+                                                        "cwd": req.get("cwd"), "request": str(request_path), "hostname": os.uname().nodename})
+            first = await_first_record(proc, ack_fd)
+        except Exception as e:  # noqa: BLE001  (the runner is started: an error here leaves its launch unconfirmed, never refused)
+            return {**started, "first_record": None, "unconfirmed": f"{type(e).__name__}: {e}"}
+    finally:
+        log.close()
+        os.close(ack_fd)
+        ack.unlink(missing_ok=True)
+    if first is None:
+        return _runner_failed(req, request_path, run_dir, proc, mem_rec, started)
+    return {**started, "first_record": first}
+
+
+def ack_launch(path: Path | str, what: str) -> None:
+    """Tell the launch-request waiting on the FIFO `path` that `what` (the run's first record, or `disk-hold`) is in place.  Never
+    blocks: no FIFO there, or nobody reading it any more (ENXIO), means nobody waits on this launch."""
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
+    except OSError as e:
+        if e.errno not in (errno.ENOENT, errno.ENXIO):
+            print(f"research: could not acknowledge the launch on {path}: {type(e).__name__}: {e}", file=sys.stderr)
+        return
+    try:
+        if stat.S_ISFIFO(os.fstat(fd).st_mode):
+            os.write(fd, what.encode() + b"\n")
     except OSError:
-        if mem_rec:
-            M.release(mem_rec["reservation"], run_id)
-        raise
+        pass
+    finally:
+        os.close(fd)
+
+
+def await_first_record(proc: subprocess.Popen, ack_fd: int) -> str | None:
+    """What the runner named on the ack FIFO (`ack_launch`), or None once `proc` (the runner, or the wrapper it runs under) exited
+    without a word.  Waits on those two events (the FIFO and a pidfd of `proc`), never on a clock: a run that is up acknowledges
+    in the time its runner takes to parse its arguments and write job.json, then detaches."""
+    try:
+        pid_fd = os.pidfd_open(proc.pid)
+    except OSError:                        # no pidfd (kernel < 5.3, or a seccomp profile without it): a pipe closed at the exit
+        pid_fd, w = os.pipe()
+        threading.Thread(target=lambda: (proc.wait(), os.close(w)), daemon=True, name=f"exit-{proc.pid}").start()
+    watch = [ack_fd, pid_fd]
+    try:
+        while True:
+            ready, _, _ = select.select(watch, [], [])
+            try:
+                got = os.read(ack_fd, 256)
+            except BlockingIOError:
+                got = None
+            if got:
+                return got.decode(errors="replace").split()[0]
+            if pid_fd in ready:
+                proc.wait()
+                return None
+            if got == b"":                 # a writer opened and closed it without a word: only the exit is left to wait on
+                watch = [pid_fd]
+    finally:
+        os.close(pid_fd)
+
+
+def _release_launch(req: dict[str, Any], request_path: Path, mem_rec: dict[str, Any] | None) -> None:
+    """What a launch took and a runner would release at its exit: the memory reservation, the exclusive lock, the custody key (nothing
+    will publish: the key goes now, not at its expiry), and the sent URLs no run will take out of the staged inputs/.  Each release is
+    idempotent and touches only this run's."""
     if mem_rec:
-        M.set_pid(mem_rec["reservation"], proc.pid)
-    write_json_atomic(run_dir / "launch.json", {"run_id": run_id, "claimed_utc": utc_now_ms(), "runner_pid": proc.pid, "argv": argv,
-                                                "cwd": req.get("cwd"), "request": str(request_path), "hostname": os.uname().nodename})
-    return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": True, "runner_pid": proc.pid,
-            **({"preflight": preflight} if preflight else {})}
+        from .mem import release
+
+        release(mem_rec["reservation"], req["run_id"])
+    if req.get("exclusive"):
+        release_exclusive(Path(req["runs_root"]), req["run_id"])
+    if req.get("custody"):
+        (request_path.parent / CUSTODY_DIR / "cred.json").unlink(missing_ok=True)
+    from .store.custody import drop_credentials
+
+    drop_credentials(request_path.parent)
+
+
+def _group_alive(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _runner_failed(req: dict[str, Any], request_path: Path, run_dir: Path, proc: subprocess.Popen, mem_rec: dict[str, Any] | None,
+                   started: dict[str, Any]) -> dict[str, Any]:
+    """The answer for a runner that exited before its first record: its own refusal when it wrote one (ResearchVersionMismatch), else
+    RunnerFailed with its exit code and launcher.log's tail, recorded in refused.json, and what the launch took goes now.  Unless the
+    run may be live: job.json is there (its ack went astray) or the process went but its session's group lives on (a wrap that forked
+    the runner off), which answers started and `unconfirmed` and releases nothing."""
+    run_id = req["run_id"]
+    if (run_dir / FIRST_RECORD).exists():
+        return {**started, "first_record": None, "rc": proc.returncode,
+                "unconfirmed": f"no ack arrived, but the runner wrote {FIRST_RECORD} (exit {proc.returncode})"}
+    if _group_alive(proc.pid):                  # start_new_session: the session's process group is the runner's pid
+        return {**started, "first_record": None, "rc": proc.returncode,
+                "unconfirmed": f"pid {proc.pid} exited {proc.returncode} before {FIRST_RECORD}, but its process group lives on"}
+    if own := _read_json(run_dir / "refused.json"):
+        reason, fault = str(own.get("reason")), str(own.get("fault") or "Refused")
+    else:
+        try:
+            tail = _tail((run_dir / "launcher.log").read_text(errors="replace"))
+        except OSError:
+            tail = []
+        reason = (f"the runner exited {proc.returncode} before writing {FIRST_RECORD}: "
+                  + ("; ".join(tail[-RUNNER_FAILED_LINES:]) or "nothing in launcher.log"))
+        fault = RunnerFailed.__name__
+        write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": reason, "fault": fault, "rc": proc.returncode,
+                                                     "log_tail": tail, "at_utc": utc_now_ms()})
+    _release_launch(req, request_path, mem_rec)
+    return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": reason, "fault": fault,
+            "runner_pid": proc.pid, "rc": proc.returncode}
 
 
 def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remote: dict[str, Any]) -> dict[str, str]:
@@ -1319,9 +1469,10 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
         from .pythonpath import import_roots_dir, pythonpath
 
         derived = import_roots_dir(src_dir)                 # the tree's own workspace declaration, not a hand list (pythonpath.py)
-        env["PYTHONPATH"] = pythonpath(src_dir, derived, extra=env.get("PYTHONPATH"))
+        env["PYTHONPATH"] = pythonpath(src_dir, derived, extra=env.get("PYTHONPATH"), shim_base=runs_root.parent / "cache" / "pyshim")
         remote["pythonpath"] = [p for p in env["PYTHONPATH"].split(":") if p]
-        remote["pythonpath_derived"] = {"roots": derived["roots"], "missing": derived["missing"], "source": derived["source"]}
+        remote["pythonpath_derived"] = {"roots": derived["roots"], "missing": derived["missing"], "source": derived["source"],
+                                        **({"shim": derived["shim"]} if derived["shim"] else {})}
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
@@ -1532,9 +1683,15 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         write_json_atomic(local_dir / "remote.json", rec)
         last_err = None
         expect = ["--expect-tool", rec["tool_identity"]] if rec["tool_checked"] else []
+        deadline = 120 + PREFLIGHT_TIMEOUT_S + (mem_wait_s or 0)
         for attempt in range(3):
-            r = ssh_run(ssh, ["env", f"PYTHONPATH={tool_dir}", m["python"], "-m", "research", "launch-request", *expect, req_path],
-                        timeout=120 + PREFLIGHT_TIMEOUT_S + (mem_wait_s or 0))
+            try:
+                r = ssh_run(ssh, ["env", f"PYTHONPATH={tool_dir}", m["python"], "-m", "research", "launch-request", *expect, req_path],
+                            timeout=deadline)
+            except subprocess.TimeoutExpired:  # the request goes on on the machine: a re-delivery waits on its lock for the answer
+                last_err = f"no answer from launch-request in {deadline:g} s"
+                time.sleep(3 * (attempt + 1))
+                continue
             if r.returncode == 0:
                 out = json.loads(r.stdout.decode().strip().splitlines()[-1])
                 break
@@ -1543,7 +1700,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                 raise launch_request_failure(r.returncode, r.stdout, r.stderr)
             time.sleep(3 * (attempt + 1))
         else:
-            rec.update(phase="unknown", note=f"ssh failed 3 times after staging; the request may or may not have started: {last_err}")
+            rec.update(phase="unknown", note=f"3 deliveries of the staged request failed; it may or may not have started: {last_err}")
             write_json_atomic(local_dir / "remote.json", rec)
             raise Refused(rec["note"])
         rec.update(phase="refused" if out.get("refused") else "launched", launch=out, observed_utc=utc_now_ms())
@@ -1598,6 +1755,7 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         except Refused as e:
             answers.append(f"{name}: {e}")
             continue
+        m = {**m, "root": m.get("root") or DEFAULT_ROOT}
         rd = f"{m['root']}/runs/{run_id}"
         ssh = ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"))
         try:
