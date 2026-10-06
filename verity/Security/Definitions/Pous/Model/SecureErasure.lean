@@ -6,10 +6,10 @@ import Definitions.Pous.Model.Audit
 Added on 4 Oct 2026, under the model Daniel set that day: the disks are unplugged, so the prover's memory is volatile
 only (device memory and host DRAM), and the audit is a proof of memory utilization. A prover declares `S` bits of volatile memory;
 the audit asks it to fill them with the keyed fill `C` and then reads `C` back at random places under a short deadline.
-`EraseMeets` (`Pous/Protocol/Accounting/EraseMeets.lean`) states the requirement over this game.
+`EraseMeets` (`verity/Security/Definitions/Pous/Accounting/EraseMeets.lean`) states the requirement over this game.
 
-**The game.** It is the sequential timed audit (`Pous/Protocol/Model/Audit.lean`) with a fill check before it and the
-prover's foreign content beside it:
+**The game.** It is the sequential timed audit (`verity/Security/Definitions/Pous/Model/Audit.lean`) with a fill check
+before it and the prover's foreign content beside it:
 
 1. The prover holds **foreign content** `z`: `S_φ` bits, uniform, independent of everything below. It is what a secure
    erasure must remove (data from before the audit, another tenant's model, anything not of `C`), and `S_φ` is its
@@ -34,9 +34,9 @@ prover's foreign content beside it:
 
 **Memory.** `σ_j` is the prover's whole volatile memory at round `j`'s arrival, and nothing else survives from one round
 to the next: no disk, no network (perfect isolation, the 4 Oct model). So the state bound is a bound on memory at the
-arrivals, which is what the guarantee is about; unlike the storage audit (`Pous/Protocol/Model/Graded.lean`, "Why late
-rounds are bounded"), it needs no link to storage at rest, and a prover may recompute anything during the audit within
-its memory.
+arrivals, which is what the guarantee is about; unlike the storage audit
+(`verity/Security/Definitions/Pous/Model/Graded.lean`, "Why late rounds are bounded"), it needs no link to storage at
+rest, and a prover may recompute anything during the audit within its memory.
 
 **What the game does not model.** The bandwidth between memory tiers: device memory and host DRAM count alike, and no statement
 over this game rests on a bandwidth-separation premise (the host-link assumption `TwoTierBandwidth` was dropped on

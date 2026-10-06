@@ -31,13 +31,13 @@ The Lean model is `chainDense` (POUS `lean/submissions/sponge-dense/SpongeModel.
 ## P3 (`scheme.py`, Lean `p3Scheme`)
 
 The Lean model is `p3Scheme` (POUS `lean/submissions/p3-meets/P3Meets.lean`) over `p3Model'`
-(`pebbling/ColumnAwareDraft.lean`) and `Pous.Protocol.Model.Invertible`. The prose is POUS `docs/p3-scheme.md` (§1, §2c)
-and `docs/p3-instantiation.md`. Where they disagree, the code follows Lean, except where the instantiation deliberately
-changes the scheme (items 3, 5 and 6). `p3Scheme` has not absorbed those changes, but the concrete-`H` model has:
-`Pous.P3Concrete.p3SchemeC` and `p3SchemeNC` over `Pous.Sponge.p3ChainModel` (`verity/Security/Definitions/Pous/Model/P3Chain.lean`).
-The pins `P3ConcreteMeets64`, `P3ConcreteMeets14GB` and `P3ConcreteMeets64D12` are proved over it with no hypothesis
-(`verity/Security/Proofs/Pous/Chain/Flat.lean`), at the code's parameters, but their chain starts from another `h_0`
-(item 16), so P3 has no certificate.
+(`pebbling/ColumnAwareDraft.lean`) and `Definitions.Pous.Model.Invertible`. The prose is POUS `docs/p3-scheme.md` (§1,
+§2c) and `docs/p3-instantiation.md`. Where they disagree, the code follows Lean, except where the instantiation
+deliberately changes the scheme (items 3, 5 and 6). `p3Scheme` has not absorbed those changes, but the concrete-`H`
+model has: `Pous.P3Concrete.p3SchemeC` and `p3SchemeNC` over `Pous.Sponge.p3ChainModel`
+(`verity/Security/Definitions/Pous/Model/P3Chain.lean`). The pins `P3ConcreteMeets64`, `P3ConcreteMeets14GB` and
+`P3ConcreteMeets64D12` are proved over it with no hypothesis (`verity/Security/Proofs/Pous/Chain/Flat.lean`), at the
+code's parameters, but their chain starts from another `h_0` (item 16), so P3 has no certificate.
 
 | # | Topic | Lean model | Prose | This code |
 |---|---|---|---|---|

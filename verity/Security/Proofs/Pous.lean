@@ -45,10 +45,10 @@ import Proofs.Pous.Rebuild.Exclusion
 /-!
 # The proved guarantees
 
-`Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Pous/Guarantees.lean`,
-`Pous/Guarantees/P2.lean` and `Pous/Guarantees/SecureErasure.lean` that has a proof. `lean-audit.json` pins these theorems, so a change to a guarantee, or to a
-definition it reads, changes their records. The open statements (`A2LemmaAM1`, `A5RabinGcd`, `A7Params`, `M1Meets`)
-have no entry here.
+`Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `verity/Security/Specs/Pous/Guarantees.lean`,
+`verity/Security/Specs/Pous/Guarantees/P2.lean` and `verity/Security/Specs/Pous/Guarantees/SecureErasure.lean` that has
+a proof. `lean-audit.json` pins these theorems, so a change to a guarantee, or to a definition it reads, changes their
+records. The open statements (`A2LemmaAM1`, `A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
 
 Two proofs were written against a prover's copy of a trusted recursive definition, and a bridge lemma shows the copy
 equal to the trusted one: `PousPebbling.chain` (`Pous.HashChain.chain`) and `PousThm1.seqState`
@@ -121,11 +121,12 @@ theorem StackedAuditSeq : Pous.Guarantees.StackedAuditSeq := @PousAudit.stacked_
 theorem StackedAuditOnePercent : Pous.Guarantees.StackedAuditOnePercent := @PousAudit.stacked_audit_one_percent
 theorem DenseMeets : Pous.Guarantees.DenseMeets := PousDense.dense_meets
 
-/-! ## The overwrite chain (`Pous/SecurityProofs/Chain/Flat.lean`, `Family.lean` for `BandMultiMeetsFamily`, and
+/-! ## The overwrite chain (`verity/Security/Proofs/Pous/Chain/Flat.lean`, `Family.lean` for `BandMultiMeetsFamily`, and
 `FamilyRounds.lean` for the band at `D = 2`, `D = 1` and `D = 0`)
 
 P3 with a concrete `H`, the band, the dense chain scheme and the public encoder, each over the trusted copies
-(`Pous/Protocol/Model/P3Chain.lean`, `BandChain.lean`, `PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`). -/
+(`verity/Security/Definitions/Pous/Model/P3Chain.lean`, `BandChain.lean`, `PubEncoder.lean`,
+`verity/Security/Definitions/Pous/Accounting/PubMeets.lean`). -/
 
 theorem P3ConcreteMeets64 : Pous.Guarantees.P3ConcreteMeets64 :=
   PousP3ConcreteMulti.p3_meets_concrete_64_D10_unconditional
@@ -189,7 +190,7 @@ theorem P2ErrorSplitB19Uncond : Pous.Guarantees.P2ErrorSplitB19Uncond := by
   exact ⟨h1, h2, h3, h0, (PousMargin.b19_64_129 b hsp hb D).2.2.2.2, (PousMargin.b19_128_129 b hsp hb D).2.2.2.2,
     (PousMargin.b19_256_129 b hsp hb D).2.2.2.2⟩
 
-/-! ## Proved results cited outside the package (`Pous/Guarantees.lean`) -/
+/-! ## Proved results cited outside the package (`verity/Security/Specs/Pous/Guarantees.lean`) -/
 
 theorem B5Stacked : Pous.Guarantees.B5Stacked := @PousBridge.b5_stacked
 theorem DenseMeets64 : Pous.Guarantees.DenseMeets64 := PousDenseReCert.dense_meets_64

@@ -30,7 +30,7 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 -- accounting: the report's operating point
 #print axioms Pous.Accounting.p₀_at_report
 #print axioms Pous.Accounting.report_k214
--- the proved guarantees (`Pous/SecurityProofs.lean`)
+-- the proved guarantees (`verity/Security/Proofs/Pous.lean`)
 #print axioms Pous.SecurityProofs.KFloor
 #print axioms Pous.SecurityProofs.Theorem1ii
 #print axioms Pous.SecurityProofs.Theorem1iiTimed
@@ -123,8 +123,9 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms Pous.SecurityProofs.P2ErrorSplitB19Uncond
 #print axioms PousP2p.not_meets_m1p_b19_k85
 #print axioms PousMargin.not_slack_raw
--- P2 in the ring cost model (`Pous/Protocol/P2/Cost.lean`): `MeetsOn` at `L = Q` gives `Meets`, the non-vacuity pins
--- (honest storage is accepted; recomputing the roots breaks `MeetsOn`), and dropping low bits breaks `k = 88`
+-- P2 in the ring cost model (`verity/Security/Definitions/Pous/P2/Cost.lean`): `MeetsOn` at `L = Q` gives `Meets`,
+-- the non-vacuity pins (honest storage is accepted; recomputing the roots breaks `MeetsOn`), and dropping low bits
+-- breaks `k = 88`
 #print axioms PousP2Ring.meets_of_meetsOn
 #print axioms PousP2Ring.complete
 #print axioms PousP2Ring.tight

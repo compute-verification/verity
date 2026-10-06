@@ -4,7 +4,7 @@ import Proofs.Pous.Graded.Tail
 /-!
 # Theorem 1(ii) for the graded audit
 
-The game is `Pous/Protocol/Model/Graded.lean`. `theorem1_ii_graded` is `theorem1_ii_seq`
+The game is `verity/Security/Definitions/Pous/Model/Graded.lean`. `theorem1_ii_graded` is `theorem1_ii_seq`
 with the tail rule in place of the chain rule:
 
 `Pr[accept] ≤ (Σ_{j<k} B^j)·π + P[Bin(k, c) ≥ k − t]` for any `c ≤ 1` with `p₀ ≤ c`.

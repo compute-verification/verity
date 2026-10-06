@@ -7,8 +7,8 @@ import Definitions.Pous.Accounting.EraseMeets
 
 Added on 4 Oct 2026, under the model Daniel set that day: the disks are unplugged, so the prover's memory is volatile
 only (device memory and host DRAM), and the audit is a proof of memory utilization. The game is
-`Pous/Protocol/Model/SecureErasure.lean`, the requirement `EraseMeets` (`Pous/Protocol/Accounting/EraseMeets.lean`).
-Proofs: `Pous/SecurityProofs/SecureErasure/`.
+`verity/Security/Definitions/Pous/Model/SecureErasure.lean`, the requirement `EraseMeets`
+(`verity/Security/Definitions/Pous/Accounting/EraseMeets.lean`). Proofs: `verity/Security/Proofs/Pous/SecureErasure/`.
 
 **What they rest on.** The ideal-primitive model and the `(D, Q)` game the band family is proved in, and the
 incompressibility of the keyed fill there (the band's `TimedINC`, proved, `PousSpongeChain.chainExPostFactoG_v6`): a

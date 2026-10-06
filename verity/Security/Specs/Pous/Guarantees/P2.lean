@@ -4,10 +4,10 @@ import Definitions.Pous.Model.M1p
 /-!
 # The `m1p` statements at P2's parameters (trusted)
 
-Six statements about the abstract model `m1p` (`Pous/Protocol/Model/M1p.lean`: independent uniform permutations of
-`[0, p)`, forward queries only), at the block counts, widths and primes P2 uses, that `grade.sh` grades against, in
-namespace `Pous.Guarantees` with the rest. The proofs are in `Pous/SecurityProofs/P2/`
-(`Pous.SecurityProofs.P2MeetsM1pB19Uncond` and the others in `Pous/SecurityProofs.lean`); a docstring's
+Six statements about the abstract model `m1p` (`verity/Security/Definitions/Pous/Model/M1p.lean`: independent uniform
+permutations of `[0, p)`, forward queries only), at the block counts, widths and primes P2 uses, that `grade.sh` grades
+against, in namespace `Pous.Guarantees` with the rest. The proofs are in `verity/Security/Proofs/Pous/P2/`
+(`Pous.SecurityProofs.P2MeetsM1pB19Uncond` and the others in `verity/Security/Proofs/Pous.lean`); a docstring's
 `lean/submissions/efficient-crypto/…` path names the store draft each was graded from.
 
 Each is a theorem about `m1p` only, not about the concrete P2: nothing here models square–mask–square, SHAKE256, roots

@@ -4,10 +4,10 @@ import Proofs.Pous.P2.Rows
 # The abstract model `m1p` on `[0, p)`: `Meets` for `Pous.m1p`, at any payload width `b`
 
 P2 permutes `Z_p` with `p = 2^w − c₀`, not `Bits w`. The abstract model `Pous.m1p B w p b`
-(`Pous/Protocol/Model/M1p.lean`) draws `B` independent uniform permutations of `Fin p`; they act on `w`-bit strings
-through the numeric value and fix the tail `[p, 2^w)`. Each block carries `b` payload bits, zero-extended to `w` bits.
-These are theorems about `m1p` at P2's parameters, not about the concrete P2's square–mask–square maps. This file
-proves, with no hypothesis beyond what the rows discharge:
+(`verity/Security/Definitions/Pous/Model/M1p.lean`) draws `B` independent uniform permutations of `Fin p`; they act on
+`w`-bit strings through the numeric value and fix the tail `[p, 2^w)`. Each block carries `b` payload bits,
+zero-extended to `w` bits. These are theorems about `m1p` at P2's parameters, not about the concrete P2's
+square–mask–square maps. This file proves, with no hypothesis beyond what the rows discharge:
 
 * `PousP2p.p2_meets_m1p_b19`: `2^19` blocks at `w = 16,448`, `p = 2^16448 − 21065`, `Q = 2^20`, `k = 88`, for every
   `b` with `20·16448 ≤ 21·b` and `b ≤ 16447` (instances `b = 16447` and `b = 16432`, 2,054 bytes);
@@ -30,9 +30,9 @@ The route:
    (`20·w ≤ 21·b`). No payload and no code block lies in the tail (`pad_lt`, `m1p_code`), and the code blocks are
    uniform on `[0, p)` (`m1p_code_uniform`).
 
-The generic count (`PousGen`, from `a2/A2.lean`) is `Pous/SecurityProofs/P2/Count.lean`, the certificate plumbing
-(`PousP2`, from `p2/P2Meets.lean` up to `meets_m1_of_row`) is `Pous/SecurityProofs/P2/Rows.lean`, and A3′ is
-`PousTrackA.a3_prime_lam`. This module is the new part (`PousP2p`).
+The generic count (`PousGen`, from `a2/A2.lean`) is `verity/Security/Proofs/Pous/P2/Count.lean`, the certificate
+plumbing (`PousP2`, from `p2/P2Meets.lean` up to `meets_m1_of_row`) is `verity/Security/Proofs/Pous/P2/Rows.lean`, and
+A3′ is `PousTrackA.a3_prime_lam`. This module is the new part (`PousP2p`).
 -/
 
 /-! ## M1 on P2's exact domain `[0, p)`: `Pous.m1p` -/

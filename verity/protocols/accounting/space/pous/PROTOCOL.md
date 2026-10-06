@@ -68,7 +68,7 @@ Three codecs share everything above the scheme (setup, layout, `vk`, audits):
   (`lean/submissions/sponge-dense/SpongeModel.lean` §9). It is the same construction with every earlier block a parent.
 - **P3 (`scheme.P3`), the fast research codec.** Two layers with a transpose, Lean's `p3Scheme`
   (`lean/submissions/p3-meets/P3Meets.lean`) over `p3Model'` (`pebbling/ColumnAwareDraft.lean`) and
-  `Pous.Protocol.Model.Invertible`.
+  `Definitions.Pous.Model.Invertible`.
 
 The concrete primitives are those of POUS `docs/p3-instantiation.md`. Each set of parameters names its codec
 (`params.codec`), and every function that takes a codec defaults to it. P2 (`schemes/p2.py`, experimental) is a
@@ -740,7 +740,5 @@ the dense chain scheme and P3 with the concrete `H` ("Guarantees"), in
 - A GPU codec for the dense scheme (#172's is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
 - The bulk bandwidth audit that would pin storage to HBM rather than the whole server.
-- The memory challenger: its committed coin tree and its signed per-round record ("Public outputs"). Today
-  `audit.TimedVerifier` runs the rounds and holds their record in the clear.
 - In `lean/`: N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`, `n10prime`; its core `n10prime_core` is open) and
   `p3-meets` (P3 with a random-oracle `H`) come in later PRs.
