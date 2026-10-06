@@ -454,9 +454,9 @@ useful    U/(α_A·α_B), glue
     before it chooses the row. It can then form every row onto a few shared A′ rows, compute their C̃ once per weight
     and copy it, while every row passes every rule (`note:pouw-gamma/20261006T0318Z-finding-gamma-adaptive-a`; Pearl-C4's
     `noise` has the same shape, and every row folds onto one A′ row there, in
-    `art:afb6390197a14ef8fd8e969258b5dfea408bd26ef8cbd855981ee095524d2583`). Keyed on its own leaf, each candidate row
-    costs an oracle query again. Forming waits on that row's leaf alone, so A's tree may leave the main lane
-    (`schedule_refusals`).
+    `art:afb6390197a14ef8fd8e969258b5dfea408bd26ef8cbd855981ee095524d2583`, and its -h3 is in its section). Keyed on its
+    own leaf, each candidate row costs an oracle query again. Forming waits on that row's leaf alone, so A's tree may
+    leave the main lane (`schedule_refusals`).
   - The row cap: the debit cap is checked for every credited row, each row's debit at most ρ times its share of the
     credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
     row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
@@ -683,6 +683,19 @@ useful    U/(α_A·α_B), glue
   values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is two-sided
   (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on crafted
   stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
+- **seed_A doesn't read A's rows, so Pearl-C's adaptive-A attack applies here too.** `noise` keys every row's E_A by the
+  unit's seed_A alone, so the prover knows each row's noise before it chooses the row and can fold every row onto one A′
+  row, whose C̃ it computes once per weight row, while every row passes every rule
+  (`art:afb6390197a14ef8fd8e969258b5dfea408bd26ef8cbd855981ee095524d2583`). The fix is Pearl-C's -h3 (above):
+  - `PearlC4(hashing="h3")` (`pearl-c-nvfp4-v0-h3`, not registered) draws row i's E_A as line 0 (role E_A) of its own
+    seed, `pearl_c4.row_seed`: `pearl_c.row_seed`'s layout under Pearl-C4's label, keyed BLAKE3 under
+    blake3("pearl-c4/v0/seed-A") of salt ‖ leaf_i ‖ root_B ‖ u·2^32 + i, over the row's leaf in A's frame-b3s tree.
+    `hash.cuh`'s `b3_seeds` in mode 1 writes it under that label's key (a host test).
+  - seed_B and what it keys (E_B, F_A, F_B) are unchanged, and the tickets keep the unit's seed_A over root_A. A's and
+    B's trees are frame-b3s and the tile leaf is BLAKE3 (`pearl_c.leaf` at -h3); the work law checks the row cap as well
+    as the tile cap.
+  - The `test-16-nvfp4-h3` vector pins a call end to end. -h0's names, vectors, certificate, circuit (`circuit.pc4`) and
+    kernels are unchanged, and no device path forms -h3 yet.
 - **The domain (`check`):** 1,024 ≤ k ≤ 2^16 with 128 | k, 64 × 64 tiles, m ≤ 2^24, and 128 ≤ n ≤ 2^18. The n ≥ 128
   floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
 - **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at 18:45Z; theory

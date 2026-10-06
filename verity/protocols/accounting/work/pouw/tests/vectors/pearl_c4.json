@@ -503,6 +503,207 @@
     ],
     "split_units": "697709125791863/37778931862957161709568"
    }
+  },
+  {
+   "case": "test-16-nvfp4-h3",
+   "scheme": "pearl-c-nvfp4-v0-h3",
+   "shape": [
+    16,
+    128,
+    16
+   ],
+   "tile": {
+    "rows": [
+     0,
+     16
+    ],
+    "cols": [
+     0,
+     16
+    ]
+   },
+   "index": 3,
+   "weight": 9,
+   "test_instance": true,
+   "admissible": true,
+   "seed_a": "ebe4bb531ee16acc7566bc102e515ba0fad2eb86ff3bd70056e8afc28f59f9df",
+   "seed_b": "5212937c3232ce1c797ec409143633848ee35bde1ede5f7c3068375b00148439",
+   "a_codes_sha256": "4464fd8b957c09e5018e42b5c32f053e8f59458ab621d652e5f0571c927dbe72",
+   "b_codes_sha256": "cc8f3c23941e8e049f6eed168e0c0498902928597172b1db6b618d2a4c6b23f5",
+   "a_scales_sha256": "473472727928c33cd5a527ca54df4332017ea258f51679ec34c2bde867b92f13",
+   "b_scales_sha256": "b537f10b6616688304475640cb37b575c177145d9cec1a616a865e569e5f04d0",
+   "alpha_a": [
+    1141125382,
+    1141050053,
+    1140717683,
+    1140175459
+   ],
+   "beta_a": [
+    1114709055,
+    1112240792,
+    1113801315,
+    1115211813
+   ],
+   "ae_a": [
+    103,
+    101,
+    102,
+    104
+   ],
+   "alpha_b": [
+    1139492245,
+    1139674743,
+    1142314836,
+    1141072167
+   ],
+   "beta_b": [
+    1116098225,
+    1115938554,
+    1107227279,
+    1112658563
+   ],
+   "ae_b": [
+    104,
+    104,
+    96,
+    101
+   ],
+   "pa_sha256": "33aae593edeea6767bf7b05920d41ef0d04aa481b4a8b0372ba43da415098109",
+   "pb_sha256": "4be02d1ec14d8da3fa050c435997677d9093dfa0704215dd997b07ac83648efa",
+   "pa_0": [
+    49264,
+    16624,
+    49392,
+    16820,
+    49460,
+    16564,
+    49136,
+    16496
+   ],
+   "pb_0": [
+    50893,
+    18145,
+    18060,
+    50318,
+    18161,
+    50803,
+    50774,
+    18150
+   ],
+   "c_sha256": "b0454bf6d07c76c8037a589118ef1fcdc403e60f240616b9522b851335c2dc50",
+   "u_sha256": "da4c4ac5f874ec4fa3b0f2eb666fac5322571ce148895fcd1afb24ad17e82464",
+   "c_0": [
+    3398078336,
+    1248282112,
+    1246148352,
+    3390503424
+   ],
+   "u_0": [
+    3399459748,
+    1252574448,
+    1237797528,
+    3392743006
+   ],
+   "leaf": "1f567441ebdb0af9f165c6c0ae0dbd71b7bb644bf410cfa202bffa216a546953",
+   "tickets": [
+    "c1cd4be618630288d03b30860a5daef204edb96b2f4dcf6076441c510a136006"
+   ],
+   "useful_sha256": "43a41020f927491e655e98cfc55e50b5e3bc511c0ce0cdf4b269066c8be5a4cd",
+   "useful_00": -21.024522491939855,
+   "debit": {
+    "total": "18428976203364406843279793687/2475880078570760549798248448",
+    "split": "18428976203364406843279793687/2475880078570760549798248448",
+    "int8": "0",
+    "identity": 0,
+    "dead_pairs": 0,
+    "forming": "0",
+    "subgrid": 0,
+    "windows": 0,
+    "counts": {
+     "salt_dead_a": 0,
+     "salt_dead_b": 0,
+     "uncertified_blocks": 0,
+     "two_four_windows_a": 0,
+     "two_four_windows_b": 0,
+     "d24_spans_a": 0,
+     "identity_atom_words": 0,
+     "subgrid_block_words": 0,
+     "dead_pairs": 0,
+     "screened_block_pairs": 0,
+     "screened_blocks_a": 0,
+     "screened_blocks_b": 0,
+     "forming_elements": 0,
+     "screened_only_elements": 0,
+     "unneeded_positions": 0,
+     "dss_spread_rows": 0,
+     "words": 256
+    }
+   },
+   "cap": "22699/25",
+   "f1_a0": {
+    "noise_law_lo": -1752,
+    "noise_law_sha256": "b46e0f2aa10adf5003b0e42dadbf650fcf91cf4e385602f3959bd683bb09cdbd",
+    "modal_bytes_sha256": "94b426efdd5b599f21ae954514312be0843d4adaef788b2ed1786f9c21131945",
+    "modal_bytes": [
+     122,
+     120,
+     121,
+     122,
+     112,
+     120,
+     113,
+     122
+    ],
+    "p_sha256": "3e176d786e8570e4965ae4143e7df7c7d91324411cc531bc15d59dc7d02c2157",
+    "p": [
+     "0x1.e734ef6b2d1f3p-3",
+     "0x1.2be486764d6d8p-2",
+     "0x1.9be68e347fed3p-3",
+     "0x1.56fa738f6ee39p-1",
+     "0x1.56add9a6f9667p-1",
+     "0x1.5a66bba5dce4ep-1",
+     "0x1.5869be9707cfbp-1",
+     "0x1.570c2cee02d44p-1"
+    ],
+    "split_units": "4497840615187513/38685626227668133590597632"
+   },
+   "hashing": "h3",
+   "row_seed_a0": "2422c578b57c9030273b203e7afec55ee46af2f713e32795b53705a709aa6d4d",
+   "row_seeds_sha256": "35e4b767caadd977969d43aca79a479c9545aa9b30f3b49551250dd0beb18e20",
+   "e_a0": [
+    10,
+    4,
+    12,
+    7,
+    13,
+    3,
+    9,
+    2,
+    8,
+    12,
+    2,
+    1,
+    2,
+    5,
+    15,
+    9,
+    2,
+    8,
+    6,
+    14,
+    6,
+    15,
+    8,
+    7,
+    7,
+    3,
+    4,
+    8,
+    11,
+    5,
+    2,
+    4
+   ]
   }
  ]
 }
