@@ -258,16 +258,41 @@ def unitNet (LANES H : Nat) : V Net := netOf (unitName LANES H) (unitLaid LANES 
 /-- A unit named `rec-open/…` is the verifier's at the `LANES` and `H` its name gives, equal in every field; any other
 unit passes. Irreducible, so that no unification against it builds the net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
-  if !c.unit.name.startsWith "rec-open/" then pure ()
-  else match params c.unit.name with
-    | none => throw s!"circuit {c.name}: unit {c.unit.name} is not rec-open/l<LANES>-h<H>"
-    | some (L, H) =>
-      if !valid L H then throw s!"circuit {c.name}: rec-open's LANES is a positive multiple of 8 and H is 1 to 16"
-      else match unitNet L H with
-        | .error e => throw e
-        | .ok g =>
-          if c.unit = g then pure ()
-          else throw s!"circuit {c.name}: not the verifier's {c.unit.name} ({firstDiff c.unit g})"
+  match params c.unit.name with
+  | some (L, H) =>
+    if !valid L H then throw s!"circuit {c.name}: rec-open's LANES is a positive multiple of 8 and H is 1 to 16"
+    else match unitNet L H with
+      | .error e => throw e
+      | .ok g =>
+        if c.unit = g then pure ()
+        else throw s!"circuit {c.name}: not the verifier's {c.unit.name} ({firstDiff c.unit g})"
+  | none =>
+    if c.unit.name.startsWith "rec-open/" then
+      throw s!"circuit {c.name}: unit {c.unit.name} is not rec-open/l<LANES>-h<H>"
+    else pure ()
+
+/-- `check` reads a circuit's name and unit only. -/
+theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) : check c = check c' := by
+  unfold check
+  rw [hn, hu]
+
+/-- **What `check` accepted**: a unit named `rec-open/l<L>-h<H>` has a valid `L` and `H`, and it is the net the verifier
+builds at them. -/
+theorem check_ok {c : Circuit} (h : check c = .ok ()) {L H : Nat} (hp : params c.unit.name = some (L, H)) :
+    valid L H = true ∧ netOf (unitName L H) (unitLaid L H) = .ok c.unit := by
+  unfold check at h
+  rw [hp] at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rename_i hv
+    split at h
+    · cases h
+    · rename_i g hg
+      split at h
+      · rename_i hcg
+        exact ⟨by simpa using hv, by rw [hcg]; exact hg⟩
+      · cases h
 
 end RecOpen
 end Flock

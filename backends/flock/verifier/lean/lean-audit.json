@@ -84,6 +84,7 @@
    "assumptions": [],
    "type_hash": "7bf153a0141e760b9af939f67f66f0fc1cb0d35adc767800cff8afa74f08a4e5"
   },
+  "Flock.RecOpen.check_ok": {"owner": "@proofs"},
   "Flock.checkInRange_ok": {
    "owner": "@proofs",
    "signature": [
