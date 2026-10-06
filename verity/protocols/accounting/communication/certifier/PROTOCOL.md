@@ -195,8 +195,7 @@ the `8·B·N` bits read.
 
 ## The schedule's declared bound and the coins
 
-Under the proof service the warden is the network certifier and its records are network certificates. This section
-fixes the two terms of the charge that the capacity bounds leave open: the content advice `A_c` and the coins (D7).
+This section fixes the two terms of the charge that the capacity bounds leave open: the content advice `A_c` and the coins (D7).
 Nothing in it is implemented yet. The numbers are at the llama8b-node1 calibration (`art:962e249a`,
 `calibrations/llama8b-node1.json`): T = 600 buckets of 100 ms, B = 4,096, one egress link at r = 1,686, one ingress
 link (`requests`) at r_in = 34 and τ_in = 100 ms, Σ_sync of 16 × 8 values, and J (D = 1).
