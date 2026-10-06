@@ -174,7 +174,8 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   the contract on every session of `test_firewall_agreement.py`. `--sessions`
   replays recorded sessions from their coins and salts. The K = 4096 sessions it replayed before (`r20261006-070620-e02d`'s,
   4 of 4 accepted by both) are `rec/inner-transcript/v0`'s, from before rec-step3's tops and level0, and today's firewall
-  refuses their schedule; no v1 session has been recorded at that size yet. The
+  refuses their schedule. A v1 session at that size has been recorded since (`r20261006-021550-4e4b`, rec-reprice's
+  `85-rec-reprice.sh STEP=inner K=4096`), but its outputs keep no `private.json`, whose salts the replay needs. The
   outer phase: `firewall_outer_agree.py` runs the contract on the outer firewall's transcripts (`FC_FIREWALL_TRANSCRIPT`,
   `live/PROTOCOL.md` §10.4), each honest one accepted and each `FC_FIREWALL_TAMPER` control cut where the firewall stopped, for its
   control's reason, with every check's outcome recomputed from its affine form over the tape's pads, all under one public
