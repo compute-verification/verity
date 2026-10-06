@@ -170,7 +170,9 @@ def capture_protocols(wl: dict, args: Options, model: object) -> tuple[object | 
     observed run executes what the Commit serves and records each executed call as its executor's own op (`protocol_options.at_capture`)."""
     from verity_vllm import protocol_options as PO
 
-    protocols = PO.at_capture(va.target_of_workload(wl, args.target), model, wl.get("protocols_config"))
+    from verity_vllm.protocol_options import pouw
+    target = va.target_of_workload(wl, args.target)
+    protocols = PO.at_capture(target, model, pouw.challenged(PO.load_settings(wl.get("protocols_config")), getattr(target, "protocols", None)))
     return protocols, list(protocols.entries) if protocols is not None else []
 
 

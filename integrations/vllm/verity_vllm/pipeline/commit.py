@@ -1181,8 +1181,12 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
                       f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
+    # the protocols' settings, PoUW's with this process's challenger of the epoch's coins: the Commit is its run's own auditor
+    from verity_vllm.protocol_options import pouw as _pouw
+    _settings = _pouw.challenged(PO.load_settings(args.protocols_config or wl.get("protocols_config")),
+                                 getattr(va.target_of_workload(wl, args.target), "protocols", None))
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args,
-                target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=args.protocols_config or wl.get("protocols_config")), execution=va.execution_of_workload(wl))
+                target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=_settings), execution=va.execution_of_workload(wl))
     _live = (_HOT or {}).get("eng")
     if _live is not None:
         # [R16 sys] hot worker with a live engine: reuse iff THIS job would build exactly the same engine (kwargs set + env flags +
@@ -1761,7 +1765,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
               f"errors {rc.extra.get('errors')}", flush=True)
         coms[kind] = com
     com = coms[kinds[0]] if kinds else None
-    protocols = PO.at_commit(_ekw["target"], eng.model, versions, args.protocols_config or wl.get("protocols_config"))   # after every committer registered the weights
+    protocols = PO.at_commit(_ekw["target"], eng.model, versions, _settings)   # after every committer registered the weights
     if args.value_check and com is not None and hasattr(com, "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
         from verity_vllm.check.value_check import run_value_check
