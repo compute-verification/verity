@@ -1072,3 +1072,18 @@ def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):
 def test_the_controls(tmp_path):
     toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()
     assert A.controls(toolchain, tmp_path, log=lambda *_: None) == []
+
+
+def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path):
+    """`run` reaps with `os.wait4`, so a step's `peak_gib` covers the grandchildren a `lake` runs, not only `lake` itself;
+    the output and exit code are what `subprocess.run` gave."""
+    child = "import sys; b = bytearray(300 << 20); b[::4096] = b'x' * len(b[::4096]); print('out'); sys.exit(3)"
+    rep = {"seconds": {}}
+    A._peak.bytes = 0
+    rc, text = A.run(["bash", "-c", f"{sys.executable} -c \"{child}\"; exit $?"], tmp_path, tmp_path / "step.log")
+    assert (rc, text) == (3, "out\n") and (tmp_path / "step.log").read_text() == "out\n"
+    A.took(rep, "replay", 0.0)
+    assert rep["peak_gib"]["replay"] >= 0.3
+    A.run(["true"], tmp_path)
+    A.took(rep, "fresh", 0.0)
+    assert rep["peak_gib"]["fresh"] < 0.3                                   # each step's own peak, not the run's so far
