@@ -53,6 +53,7 @@ import json
 import os
 import socket
 import struct
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -704,7 +705,8 @@ class Proxy:
 
 def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None,
           sessions: int = 1, done: Callable[[dict], None] | None = None, *, schedule: dict, firewall=None,
-          stream: str = "rec") -> list[dict]:
+          stream: str = "rec", budget: int | None = None, release: dict | None = None,
+          now_ms: Callable[[], int] = lambda: time.time_ns() // 1_000_000) -> list[dict]:
     """Accept connections on ``listen`` until ``sessions`` of them have each carried a session, one connection each (several:
     a prover's ``--warm`` and ``--runs`` sessions), write each into ``out``, or ``out/s<k>`` when there are several, and
     return their summaries, each also passed to ``done`` as it ends. A session that finishes is written whole
@@ -713,7 +715,11 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     with the bound address. Every session is held to ``schedule`` (`schedule_for`'s, from public data alone), written to
     ``out/schedule.json`` before the first is served. With ``firewall`` (a `verity_flock.firewall.Firewall`), each session
     opens a recursive session on ``stream``, its id in the session directory's ``firewall.json``: a stop is that recursive
-    session's stop, so the firewall serves none of its outer sessions, and a finished session lets them be served."""
+    session's stop, so the firewall serves none of its outer sessions, and a finished session lets them be served.
+    ``budget`` is the stream's failure budget (the challenger's stream's ``budget``); once the stream has stopped at it, a
+    connection is closed before anything is served and ``serve`` returns. ``release`` (``{"parts": [...], "windows_ms":
+    [...]}``, public) is each recursive session's release schedule, its ``start_ms`` the time (``now_ms``) its connection
+    was accepted, so that no release time depends on how long the inner session took."""
     host, port = listen.rsplit(":", 1)
     res: list[dict] = []
     check_schedule(schedule)
@@ -726,7 +732,18 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             ready(addr)
         while len(res) < sessions:
             conn, _ = srv.accept()
-            sid = firewall.open(stream) if firewall is not None else None
+            sid = None
+            if firewall is not None:
+                from .firewall import Refused
+                try:
+                    sid = firewall.open(stream, budget, None if release is None else {"start_ms": now_ms(), **release})
+                except Refused as e:
+                    conn.close()
+                    print("STOPPED\t" + json.dumps({"session": len(res), "refused": str(e)}), flush=True)
+                    res.append({"session": None, "refused": str(e), "rounds": 0, "firewall": None})
+                    if done:
+                        done(res[-1])
+                    break
             proxy = Proxy(CoinServer(rand), schedule=schedule)
             try:
                 with conn, conn.makefile("rb") as rf, conn.makefile("wb") as wf:
@@ -779,6 +796,10 @@ def main(argv=None) -> int:
     ap.add_argument("--schedule-of", help="print a coin server record's (public.json) schedule and exit")
     ap.add_argument("--firewall", metavar="DIR", help="the firewall's state: each session opens a recursive session on it")
     ap.add_argument("--stream", default="rec", help="the stream the recursive sessions are on (--firewall)")
+    ap.add_argument("--budget", type=int, help="the stream's failure budget, the challenger's stream's (--firewall)")
+    ap.add_argument("--release-parts", metavar="L0,L1,...", help="each recursive session's release schedule: its parts in order")
+    ap.add_argument("--release-windows-ms", metavar="W0,W1,...",
+                    help="the schedule's public window a part, in ms: part j leaves at the connection's time plus W0 + ... + Wj")
     a = ap.parse_args(argv)
     if a.schedule_for:
         print(json.dumps(schedule_for(statement_of(Path(a.schedule_for).read_text())), indent=1))
@@ -788,13 +809,19 @@ def main(argv=None) -> int:
         return 0
     if not a.out or not a.schedule:
         ap.error("--out and --schedule are required (rec_live --schedule-for STATEMENT derives the schedule)")
+    if (a.release_parts is None) != (a.release_windows_ms is None):
+        ap.error("--release-parts and --release-windows-ms go together")
+    release = None if a.release_parts is None else {
+        "parts": a.release_parts.split(","), "windows_ms": [int(w) for w in a.release_windows_ms.split(",")]}
+    if (a.budget is not None or release is not None) and not a.firewall:
+        ap.error("--budget and --release-* need --firewall")
     fw = None
     if a.firewall:
         from .firewall import Firewall
         fw = Firewall(Path(a.firewall))
     serve(a.listen, Path(a.out), ready=lambda addr: print(f"SERVING {addr}", flush=True), sessions=a.sessions,
           done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True), schedule=json.loads(Path(a.schedule).read_text()),
-          firewall=fw, stream=a.stream)
+          firewall=fw, stream=a.stream, budget=a.budget, release=release)
     sys.stdout.flush()
     return 0
 

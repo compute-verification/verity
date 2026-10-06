@@ -229,12 +229,12 @@ def test_a_stream_stops_at_its_budget_and_the_python_relay_keeps_no_schedule(tmp
     assert not any(name in ("b", "s") for name, _ in log)
 
 
-def _serve(tmp_path, sessions, fw):
+def _serve(tmp_path, sessions, fw, **kw):
     bound, got = threading.Event(), {}
 
     def run():
         got["res"] = RL.serve("127.0.0.1:0", tmp_path / "inner", T._counter_rand(), sessions=sessions, schedule=G._schedule(),
-                              ready=lambda a: (got.update(addr=a), bound.set()), firewall=fw, stream="pouw")
+                              ready=lambda a: (got.update(addr=a), bound.set()), firewall=fw, stream="pouw", **kw)
 
     t = threading.Thread(target=run)
     t.start()
@@ -262,6 +262,27 @@ def test_an_inner_stop_ends_the_recursive_session(tmp_path):
     assert out["why"] == "FIREWALL-REFUSED: recursive session r0000 stopped at inner: the firewall serves nothing more of it" and log == []
     assert _outer(fw, "r0001", "L0", HONEST, Challenger(log, "L0"))[0]["outcome"] == "release"
     assert fw.failures("pouw") == 1
+
+
+def test_serve_opens_each_recursive_session_with_the_streams_budget_and_its_public_schedule(tmp_path):
+    """`rec_live.serve` opens each recursive session with the stream's ``budget`` and the public windows, the schedule
+    starting when the connection was accepted (``now_ms``, injected); once the stream has stopped at its budget, the next
+    connection is closed before anything is served, and ``serve`` returns."""
+    fw = FW.Firewall(tmp_path / "fw")
+    windows = {"parts": ["L0", "alg"], "windows_ms": [12000, 28000]}
+    t, got = _serve(tmp_path, 3, fw, budget=1, release=windows, now_ms=lambda: 1234)
+    w = G._Wire(got["addr"])
+    assert not G._held(G._run(w, y=bytes(48)))
+    w.close()
+    w = G._Wire(got["addr"])
+    assert w.rf.read(1) == b""
+    w.close()
+    t.join()
+    assert [r["firewall"] for r in got["res"]] == ["r0000", None] and fw.failures("pouw") == 1
+    assert got["res"][1]["refused"] == "FIREWALL-REFUSED: stream pouw stopped at its failure budget (1 of 1)"
+    opened = [e for e in fw.record() if e["event"] == "open"]
+    assert opened == [{"seq": 0, "event": "open", "session": "r0000", "stream": "pouw", "budget": 1,
+                       "release": {"start_ms": 1234, **windows}}]
 
 
 def test_a_stop_is_recorded_once():

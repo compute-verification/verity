@@ -5,8 +5,13 @@ proxy (`verity_flock.rec_live`, §10.3).
     python -m verity_flock.firewall relay --state DIR --session ID --part NAME --to HOST:PORT [--listen 127.0.0.1:0] [--sessions N]
     python -m verity_flock.firewall record --state DIR
 
+The release side of record is Rust's: ``flock-circuit prove --firewall-state DIR --session ID --part NAME``
+(``flock_live::release``) keeps the same record, byte for byte (``live/src/firewall_record_vectors.json``, which both sides'
+tests run), and the rules below. This module is the inner side's (`rec_live`'s ``serve`` opens and ends recursive sessions
+here) and the tests' relay.
+
 Every process of one firewall shares its state directory: ``record.jsonl``, its events in order (each with its ``seq``),
-appended under ``record.lock``, and ``slot.lock``, the outer slot. Two rules hold through it:
+appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules hold through it:
 
 * **A recursive session ends at its first stop.** The inner phase opens a recursive session (`Firewall.open`: `rec_live`'s
   ``serve`` opens one for each session it serves). Its first stop, inner or outer, is its one failure (``stop``). After it
@@ -16,7 +21,15 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Two rules hol
 * **Outer proofs go one at a time.** The firewall has one slot, across streams and protocols. An outer session takes it at
   its first request and holds it until the session is released (the challenger's verdict accepts it) or fails. A second
   session that asks meanwhile waits (``wait``) and takes the slot after (``slot``), so each ``slot`` event is followed by its
-  session's outcome before the next one.
+  session's outcome before the next one. A holder that ended before its outcome (killed, say) is recorded as its session's
+  stop by the next session to take the slot.
+* **A stream stops at its failure budget.** A stream opened with ``budget`` b (the challenger's stream's ``budget``, P1)
+  refuses every outer session and every open after its b-th failure: a recursive session's stop, or a refusal of a recursive
+  session that had not stopped, on a stream that had not.
+* **Proofs leave at public times.** A recursive session opened with a ``release`` schedule (``start_ms``, its ``parts`` in
+  order and one window a part, ``windows_ms``) releases part j's proofs at ``start_ms + windows_ms[0] + ... +
+  windows_ms[j]``: proofs ready early wait, and proofs not ready by then are a stop. Only the Rust firewall keeps the
+  times; this module's relay refuses a scheduled session rather than release it early.
 
 An outer session stops when the worker cuts it, when the worker sends ``Finish`` before its proofs (the send check refused:
 ``flock-circuit`` then sends ``Finish`` at once), when the challenger's verdict rejects it, or on any fault of the relay's.
