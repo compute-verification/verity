@@ -1269,6 +1269,19 @@
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/PearlC/Cap/": "verity/Security/Proofs/Pouw/PearlC/Cap/",
         "verity/protocols/compliance/nci/lean/Nci/SecurityProofs/": "verity/Security/Proofs/Nci/"
       }
+    },
+    {
+      "paths": {
+        "verity/Security/Proofs/Flock/Soundness/Accounting/Bound.lean": "verity/Security/Definitions/Flock/Accounting/Bound.lean",
+        "verity/Security/Proofs/Flock/Soundness/Accounting/Schedule.lean": "verity/Security/Definitions/Flock/Accounting/Schedule.lean",
+        "verity/Security/Proofs/Flock/Soundness/Audit/Partitioning/Guarantees.lean": "verity/Security/Specs/Flock/Guarantees/Partitioning.lean",
+        "verity/Security/Proofs/Flock/Soundness/Audit/Partitioning/Model.lean": "verity/Security/Definitions/Flock/Audit/Partitioning/Model.lean",
+        "verity/Security/Proofs/Flock/Soundness/Model/Basic.lean": "verity/Security/Definitions/Flock/Model/Basic.lean",
+        "verity/Security/Proofs/Flock/Soundness/Model/Ligerito.lean": "verity/Security/Definitions/Flock/Model/Ligerito.lean",
+        "verity/Security/Proofs/Flock/Soundness/Model/Piop.lean": "verity/Security/Definitions/Flock/Model/Piop.lean",
+        "verity/Security/Proofs/Flock/Soundness/Model/Session.lean": "verity/Security/Definitions/Flock/Model/Session.lean",
+        "verity/Security/Proofs/Flock/Soundness/Model/Statement.lean": "verity/Security/Definitions/Flock/Model/Statement.lean"
+      }
     }
   ]
 }
