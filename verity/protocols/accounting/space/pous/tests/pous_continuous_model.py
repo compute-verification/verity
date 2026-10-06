@@ -1,4 +1,4 @@
-"""The continuous audit's verifier as the Lean model states it (`verity/Security/Definitions/Pous/Model/Continuous.lean`): the oracle
+"""The continuous audit's memory challenger as the Lean model states it (`verity/Security/Definitions/Pous/Model/Continuous.lean`): the oracle
 of `test_pous_continuous_difftest.py`. It imports nothing from `verity.protocols.accounting.space.pous`.
 
 Two restatements of one set of rules:
@@ -7,7 +7,7 @@ Two restatements of one set of rules:
   definition, which is its docstring after the first line, and `test_the_oracle_transcribes_the_lean_model` finds that
   text verbatim in the Lean file the first line names. A responder is a `ContMachine` (`rest`, `step`) whose `W`, `pp`,
   `C` and `ω` are fixed for a run and so closed over, and `f` is the primitive that answers its queries.
-* **On the verifier's clock** (`ClockOracle`): the same rules on what `audit.TimedVerifier` observes, nanoseconds on its
+* **On the verifier's clock** (`ClockOracle`): the same rules on what `audit.MemoryChallenger` observes, nanoseconds on its
   own clock. `(D, Q)` becomes `limit = Δ + RTT` and `(D_late, Q_late)` becomes `late_limit = Δ_late + RTT`, or `None`
   for a verifier without a hard deadline, which waits for every answer.
 
@@ -290,7 +290,7 @@ class Record:
 class ClockOracle:
     """The verifier on its own clock (the module docstring, "On the verifier's clock"): `n` challenges, the `j`th
     asking for block `index(j)` of `C`. `named` is a verifier whose answers name their challenge
-    (`ContinuousVerifier.respond(j, …)`); an unnamed one credits every answer to the open challenge. Each action takes
+    (`ContinuousMemoryChallenger.respond(j, …)`); an unnamed one credits every answer to the open challenge. Each action takes
     the clock reading `t` and returns what the verifier must do: the `(j, index)` it reveals, the `Record` it closes,
     or a `Refused`."""
 
