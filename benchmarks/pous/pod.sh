@@ -111,6 +111,11 @@ gpu_env() {
     && uv pip install -q --python "$PY" "torch==$TORCH_VERSION" --index-url "https://download.pytorch.org/whl/$TORCH_CUDA"; } || return 3
   "$PY" -c 'import torch; assert torch.cuda.is_available(), "torch sees no CUDA device"; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))' || return 3
   export PATH=$(dirname "$PY"):$PATH
+  # ninja runs each step of torch's JIT build in a process group of its own, which node 2's Quiet stops while any timed lease
+  # is held unless the group's command names GNU timeout: the build compiles (PYTORCH_NVCC) and links (CXX) through timeout
+  mkdir -p "$W/jit-cc" && printf '#!/bin/sh\nexec timeout 3600 c++ "$@"\n' > "$W/jit-cc/g++.$$" && chmod +x "$W/jit-cc/g++.$$" \
+    && mv "$W/jit-cc/g++.$$" "$W/jit-cc/g++" || return 3
+  export PYTORCH_NVCC="timeout 3600 $CUDA_HOME/bin/nvcc" CXX=$W/jit-cc/g++
 }
 # the host facts a result is re-derived with, and two distinct physical cores (not SMT siblings) for the verifier and responder
 record_host() {
