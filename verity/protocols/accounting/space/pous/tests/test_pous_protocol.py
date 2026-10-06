@@ -290,14 +290,14 @@ def test_certificates_at_their_points():
 
 
 def test_certificates_name_proved_guarantees():
-    """A certificate's `theorem` is the proof `Pous.SecurityProofs.X` it rests on, a guarantee in `lean/lean-audit.json`,
-    of the statement `Pous.Guarantees.X` (`lean/Pous/Guarantees.lean` and the files under `lean/Pous/Guarantees/`),
-    experimental schemes' included."""
-    lean = Path(__file__).parents[1] / "lean"
-    texts = [(lean / "Pous" / "Guarantees.lean").read_text()] + [f.read_text() for f in
-                                                                  sorted((lean / "Pous" / "Guarantees").glob("*.lean"))]
+    """A certificate's `theorem` is the proof `Pous.SecurityProofs.X` it rests on, a guarantee in
+    `verity/Security/lean-audit.json`, of the statement `Pous.Guarantees.X` (`Specs/Pous/Guarantees.lean` there and the
+    files under `Specs/Pous/Guarantees/`), experimental schemes' included."""
+    security = Path(__file__).parents[5] / "Security"
+    specs = security / "Specs" / "Pous"
+    texts = [(specs / "Guarantees.lean").read_text()] + [f.read_text() for f in sorted((specs / "Guarantees").glob("*.lean"))]
     statements = {x for t in texts for x in re.findall(r"^def (\w+) : Prop", t, re.M)}
-    guarantees = json.loads((lean / "lean-audit.json").read_text())["guarantees"]
+    guarantees = json.loads((security / "lean-audit.json").read_text())["guarantees"]
     checked = 0
     for name in schemes.REGISTRY:
         sch = schemes.get(name)

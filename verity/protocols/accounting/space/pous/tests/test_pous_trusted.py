@@ -12,6 +12,8 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).parents[1] / "lean"
+#: the trusted layer's directory as TRUSTED.sha256 names it, relative to `lean/` (the grader and its driver are here)
+SECURITY = "../../../../../Security/"
 COMMAND = re.compile(r"^(sha256sum ([^$\n]*)\$\(find ([^)\n]*) -name '\*\.lean' \| LC_ALL=C sort\) > TRUSTED\.sha256)$", re.M)
 LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 
@@ -66,14 +68,18 @@ def test_trusted_hashes_are_current():
 
 
 def copy(tmp: Path) -> Path:
-    """The files `stale` reads, copied from `lean/` into ``tmp``, with `TRUSTED.sha256` regenerated there: the regressions
-    start clean even when `lean/` is stale."""
+    """The files `stale` reads, copied from `lean/` and the trusted layer into ``tmp`` at their places under `verity/` (so
+    `SECURITY` names the copy), with `TRUSTED.sha256` regenerated there: the regressions start clean even when `lean/` is
+    stale."""
+    base = LEAN.parents[4]
+    pkg = tmp / LEAN.relative_to(base)
     _, named, trees = command(LEAN)
     for rel in ["README.md", *named, *trees]:
-        (tmp / rel).parent.mkdir(parents=True, exist_ok=True)
-        (shutil.copytree if (LEAN / rel).is_dir() else shutil.copy2)(LEAN / rel, tmp / rel)
-    (tmp / "TRUSTED.sha256").write_text(regenerated(tmp, trusted(tmp)))
-    return tmp
+        dest = tmp / (LEAN / rel).resolve().relative_to(base.resolve())
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        (shutil.copytree if (LEAN / rel).is_dir() else shutil.copy2)(LEAN / rel, dest)
+    (pkg / "TRUSTED.sha256").write_text(regenerated(pkg, trusted(pkg)))
+    return pkg
 
 
 def relist(pkg: Path, change) -> None:
@@ -88,7 +94,7 @@ def edited(pkg: Path) -> None:
 
 
 def corrupted(pkg: Path) -> None:
-    relist(pkg, lambda d: [f"{'0' * 64 if f == 'Pous/Guarantees.lean' else h}  {f}" for f, h in d.items()])
+    relist(pkg, lambda d: [f"{'0' * 64 if f == SECURITY + 'Specs/Pous/Guarantees.lean' else h}  {f}" for f, h in d.items()])
 
 
 def dropped(pkg: Path) -> None:
@@ -96,7 +102,7 @@ def dropped(pkg: Path) -> None:
 
 
 def added(pkg: Path) -> None:
-    (pkg / "Pous/Guarantees/Added.lean").write_text("import Pous.Protocol\n")
+    (pkg / SECURITY / "Specs/Pous/Guarantees/Added.lean").write_text("import Definitions.Pous\n")
 
 
 def extra(pkg: Path) -> None:
@@ -109,9 +115,9 @@ def reordered(pkg: Path) -> None:
 
 @pytest.mark.parametrize("mutate, problems", [
     (edited, ["Grader/Registry.lean does not match its hash in TRUSTED.sha256"]),
-    (corrupted, ["Pous/Guarantees.lean does not match its hash in TRUSTED.sha256"]),
+    (corrupted, [f"{SECURITY}Specs/Pous/Guarantees.lean does not match its hash in TRUSTED.sha256"]),
     (dropped, ["lake-manifest.json is trusted but not listed"]),
-    (added, ["Pous/Guarantees/Added.lean is trusted but not listed"]),
+    (added, [f"{SECURITY}Specs/Pous/Guarantees/Added.lean is trusted but not listed"]),
     (extra, ["README.md is listed but the command does not hash it"]),
     (reordered, ["the files are listed in another order than the command's, or more than once"]),
 ], ids=lambda x: getattr(x, "__name__", None))
