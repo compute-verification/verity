@@ -179,18 +179,6 @@ theorem correct_congr {X Y : Fin C.N → Bool} {u : Fin n} (hXY : ∀ g ∈ P.io
   rw [hXY g hio, P.localEval_congr hXY g.val g rfl hu]
   exact hY g hg hu
 
-/-- `Pf` refines `Pc`: every fine unit lies inside one coarse unit, its `parent`. -/
-structure Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) where
-  parent : Fin nf → Fin nc
-  sub : ∀ g, Pc.unit g = (Pf.unit g).map parent
-
-namespace Refines
-
-variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (r : Refines Pf Pc)
-include r
-
-end Refines
-
 end Partition
 
 end FlockSoundness.Audit

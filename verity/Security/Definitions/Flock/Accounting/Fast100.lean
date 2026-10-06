@@ -12,12 +12,6 @@ namespace FlockSoundness.Accounting
 
 open Real
 
-/-- The level conditions the rational bounds need: rates `2^-1 … 2^-7`, at least two message
-columns. Every `fast100` level satisfies them (checked below). -/
-def Level.Ok (l : Level) : Prop := 1 ≤ l.logInvRate ∧ l.logInvRate ≤ 7 ∧ 1 ≤ l.logCols
-
-instance (l : Level) : Decidable l.Ok := by unfold Level.Ok; infer_instance
-
 /-- The statement shapes covered: at most `2^27` witness bits per block, 1024 public regions,
 64 coordinates per link point. -/
 def Stmt.InRange (st : Stmt) : Prop := st.kLog ≤ 27 ∧ st.nRegions ≤ 1024 ∧ st.mPts ≤ 64

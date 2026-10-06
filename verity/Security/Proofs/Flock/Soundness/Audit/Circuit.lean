@@ -140,6 +140,11 @@ theorem compose (X a : Fin C.N → Bool) (hin : C.InputsAgree X a) (h : P.wrong 
 
 /-! ## Refinement -/
 
+/-- `Pf` refines `Pc`: every fine unit lies inside one coarse unit, its `parent`. -/
+structure Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) where
+  parent : Fin nf → Fin nc
+  sub : ∀ g, Pc.unit g = (Pf.unit g).map parent
+
 namespace Refines
 
 variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (r : Refines Pf Pc)

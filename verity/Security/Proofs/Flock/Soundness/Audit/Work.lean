@@ -316,6 +316,12 @@ theorem workK_rest {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → ℕ
   unfold workK workRule
   rw [h0, max_eq_left (Nat.zero_le _)]
 
+/-- The count law's rule, the executable's `Flock.Draw.stratumK`: `C · size / population` rounded half up, at least one. -/
+def countRule (C size population : ℕ) : ℕ := max 1 ((2 * C * size + population) / (2 * population))
+
+/-- The count law's sizes over `σ`'s strata at count budget `C`: `main`'s stratified law, `stratumK C n_s N`. -/
+def countK (σ : Fin n → Fin m) (C : ℕ) (s : Fin m) : ℕ := min (stratum σ s).card (countRule C (stratum σ s).card n)
+
 theorem countK_le (σ : Fin n → Fin m) (C : ℕ) (s : Fin m) : countK σ C s ≤ (stratum σ s).card :=
   min_le_left _ _
 

@@ -80,6 +80,11 @@ theorem Separates.union {K₁ K₂ : Finset (Fin C.N)} {B₁ B₂ : Finset (Fin 
 
 variable (P)
 
+open Classical in
+/-- The committed wires of the units of `B`: what they export. -/
+noncomputable def exits (B : Finset (Fin n)) : Finset (Fin C.N) :=
+  P.committed.filter fun g => ∃ u ∈ B, P.unit g = some u
+
 /-- **The exits separate**: every path from a unit of `B` to a delivered wire leaves `B` through a committed wire, or
 ends at a delivered wire of `B`, which is committed. -/
 theorem separates_exits (B : Finset (Fin n)) {D : Finset (Fin C.N)} (hD : D ⊆ P.committed) :
@@ -147,6 +152,11 @@ theorem outputs_eq_of_separates {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D :
   · exact hXY t htK
   · exact (P.separator_induction hK hsep hX hY hwX hwY hXY t.val t rfl ⟨t, ht, .refl htK⟩).2 (hD ht)
 
+open Classical in
+/-- What the transcripts with the anchors' inputs whose wrong units lie in `B` deliver on `D`. -/
+noncomputable def delivered (D : Finset (Fin C.N)) (a : Fin C.N → Bool) (B : Finset (Fin n)) : Finset (D → Bool) :=
+  univ.filter fun y => ∃ X, C.InputsAgree X a ∧ P.wrong X ⊆ B ∧ out D X = y
+
 /-- **At most `2^|K|` delivered values** behind a committed separator `K` of `B`. -/
 theorem card_delivered_le {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}
     (hK : K ⊆ P.committed) (hD : D ⊆ P.committed) (hsep : P.Separates K B D) (a : Fin C.N → Bool) :
@@ -169,6 +179,13 @@ theorem card_delivered_le {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finse
         funext t
         exact P.outputs_eq_of_separates hK hD hsep hX hY hwX hwY (fun g hg => congrFun hf ⟨g, hg⟩) t t.2
     _ = 2 ^ K.card := by rw [card_univ, Fintype.card_fun, Fintype.card_bool, Fintype.card_coe]
+
+open Classical in
+/-- **The influence set at `δ`**: what is delivered on `D` with the wrong units of some set whose escape `e B` is at
+least `δ`. -/
+noncomputable def influenceSet (D : Finset (Fin C.N)) (e : Finset (Fin n) → ℝ≥0∞) (a : Fin C.N → Bool)
+    (δ : ℝ≥0∞) : Finset (D → Bool) :=
+  (univ.filter fun B => δ ≤ e B).biUnion fun B => P.delivered D a B
 
 /-- **The influence bound**: with a committed separator `K B` of every set `B`,
 `|influenceSet| ≤ ∑_{B : δ ≤ e B} 2^|K B|`. -/
