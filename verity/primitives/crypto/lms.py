@@ -25,7 +25,7 @@ Appendix A): ``x_q[i] = H(I || u32(q) || u16(i) || u8(0xff) || SEED)``, ``C = H(
 SEED)`` and ``I = SHA-512(b"verity/lms/v0/I" || SEED)[:16]``. With the hash swapped for SHA-256 (`Params.hash`), the tests
 reproduce RFC 8554's Test Case 2.
 
-**Cost.** Keygen hashes about 2^H (P 2^W + 70) times: about 1.37G compressions at the deployed parameters, about 20
+**Cost.** Keygen hashes about 2^H (P 2^W + 70) times: about 1.37G compressions at the deployed parameters, about 16
 minutes on one core, divided by ``workers``; a signature at most P (2^W - 1) + P + 1 hashes; a verification 827 compressions
 at the deployed parameters (P (2^W - 1) chain steps, the one-time key's ceil((P N + 39) / 128) blocks, two for the message,
 one for the leaf and two per interior node). A signature is 34,756 bytes, a public key 80. Standard library only.
