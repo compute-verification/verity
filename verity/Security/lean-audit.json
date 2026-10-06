@@ -1,9 +1,6 @@
 {
  "roots": ["Definitions", "Specs"],
  "proved_in": ["Proofs"],
- "exempt": {
-  "Specs.Flock": "built by security_proofs, whose `Proofs.Flock.Recursive` imports it: it reads C-Flock's proof-side model, which `security` does not require; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
- },
  "assumptions": [
   "Specs.Core.Assumptions",
   "Specs.Nci.Assumptions",
@@ -34,8 +31,7 @@
   "Specs.Pous.Assumptions",
   "Specs.Pous.Assumptions.P2",
   "Specs.NetworkCertifier.Assumptions",
-  "Proofs.Flock.Soundness.Assumptions",
-  "Specs.Flock.Assumptions"
+  "Proofs.Flock.Soundness.Assumptions"
  ],
  "meaning": [
   "Definitions.Core",
@@ -58,7 +54,6 @@
   "Proofs.Flock.Level3",
   "Proofs.Flock.Soundness",
   "Proofs.Flock.Recursive",
-  "Specs.Flock",
   "Proofs.Flock.VBridge"
  ],
  "layers": {
@@ -238,7 +233,6 @@
   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Specs.Flock": "C-Flock's guarantees and assumptions, over its proof-side model; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
