@@ -16,7 +16,10 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.NonVacuousHJ
 import Proofs.Flock.Soundness.Discharge.ZkRegV2.Sound
 import Proofs.Flock.Soundness.Discharge.ZkRegV2.SoundH
 import Proofs.Flock.Soundness.Discharge.ZkRegV2.SoundHCustody
+import Proofs.Flock.Soundness.Discharge.ZkRegV2.SoundHJ
+import Proofs.Flock.Soundness.Discharge.ZkRegV2.SoundHJCustody
 import Proofs.Flock.Soundness.Discharge.ZkRegV2.NonVacuous
+import Proofs.Flock.Soundness.Discharge.ZkRegV2.NonVacuousHJ
 
 /-!
 # One `--zk` sampled session with registered reads
@@ -38,6 +41,8 @@ satisfiable together.
 
 At `sha512/row/v2` rows, the rows the registered check admits (`ZkRegV2/`): `scopeOkV2` and, at hidden outputs,
 `scopeOkHV2` in place of `Layout.scopeOk`, which admits `sha512/row/v1` rows only; `zk_session_soundRV2`,
-`zk_session_soundHRV2` and `zk_session_soundHR_custodyV2`; `ZkRegV2.NonVacuous`: their circuit premises and the
-registered check's port test hold together, and at `Layout.scopeOk` the registered check refuses every registered port.
+`zk_session_soundHRV2`, `zk_session_soundHR_custodyV2`, `zk_session_soundHJRV2` and `zk_session_soundHJR_custodyV2`;
+`ZkRegV2.NonVacuous`: their circuit premises and the registered check's port test hold together, and at
+`Layout.scopeOk` the registered check refuses every registered port; `ZkRegV2.NonVacuousHJ`: the `J`-table statements'
+reference setup and draw hypotheses satisfiable together at `scopeOkHV2`.
 -/
