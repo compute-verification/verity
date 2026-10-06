@@ -63,7 +63,7 @@ def test_trusted_hashes_are_current():
     problems = stale(LEAN)
     assert not problems, ("lean/TRUSTED.sha256 is not what its regeneration command writes (grade.sh refuses every "
                           "submission while a listed file differs, and never hashes an unlisted one):\n  " +
-                          "\n  ".join(problems) + "\nOnce the trusted change is reviewed, regenerate it:\n"
+                          "\n  ".join(problems) + "\nRegenerate it, then run the audit (`bash check.sh`):\n"
                           f"  cd verity/protocols/accounting/space/pous/lean && {cmd}")
 
 

@@ -552,7 +552,7 @@ the timed audit and the simulator with the dense codec as default.
 
 ## In Lean (`lean/`)
 
-- **Trusted, reviewed once:** `verity/Security/Definitions/Pous/Game` (bits, uniform probability, parallel oracle programs `Prog`),
+- **Trusted without proof:** `verity/Security/Definitions/Pous/Game` (bits, uniform probability, parallel oracle programs `Prog`),
   `verity/Security/Definitions/Pous/Model` (schemes, the audit game `AuditSecure`, `INC`/`TimedINC`, and the models below),
   `verity/Security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `verity/Security/Specs/Pous/Assumptions.lean` and
   `verity/Security/Specs/Pous/Guarantees.lean`.

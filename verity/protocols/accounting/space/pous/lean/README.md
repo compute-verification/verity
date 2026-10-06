@@ -132,9 +132,10 @@ syntactic comparison, so a near-miss statement cannot keep the kernel unfolding)
 (`POUS_GRADE_TIMEOUT`, `POUS_GRADE_MEMORY_MB`). `grade.sh` needs unprivileged user namespaces (`unshare --user`). A
 graded proof moves into `verity/Security/Proofs/Pous/` as a module, with its theorem added to
 `verity/Security/Proofs/Pous.lean` and listed as a guarantee in `verity/Security/lean-audit.json` (`audit.py --update`,
-then review the records' diff).
+which prints the records' diff).
 
-**Changing the trusted layer** means editing the files listed in `TRUSTED.sha256` and regenerating it after review:
+**Changing the trusted layer** means editing the files listed in `TRUSTED.sha256`, regenerating it from this directory,
+and running the audit (`bash check.sh`):
 
 ~~~bash
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \
