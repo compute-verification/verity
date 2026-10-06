@@ -9,8 +9,8 @@ import Definitions.Pouw.Fp8Atom.H1TVectors
 M2 of `internal/pouw-fp8/lean-atom-m2-plan.md`: the map `DistinctLiveH1T` is about (`Pouw.Fp8Atom.H1T`), the facts
 about it that do not need the Target A proof, and the FP32 lemmas that proof uses.
 
-The map is checked against three other computations (`scripts/h1t_vectors.py`;
-`Pouw/Protocol/Fp8Atom/H1TCoverage.json`).
+The map is checked against three other computations (`verity/protocols/accounting/work/pouw/lean/scripts/h1t_vectors.py`;
+`Definitions/Pouw/Fp8Atom/H1TCoverage.json`).
 The generator checks every expected value below against an exact transcription of §3.1 over fractions, Track H's
 `h1t_ref` and `chain` (`h1_tagged.py`, the pinned map), and a float16 simulation of the kernel `h1t_form_xq`, before
 it writes them.

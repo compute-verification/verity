@@ -11,10 +11,10 @@ M1 of `internal/pouw-fp8/lean-atom-plan.md`: the bit-exact `HOPPER_E4M3_K32` ste
 * **`Conformance`**: on each of 631 vectors, `hopperStep` writes the word
   `verity.ml.tc.total_fp8.tc_dot_total_e4m3(HOPPER_E4M3_K32, …)` computes. They are the 49 chained steps of the
   repository's `fp8-hopper-wgmma-k32`/`-k1536` model replays, and the union of two greedy branch covers of the
-  10,549 steps of `scripts/fp8atom_vectors.py` (`scripts/fp8atom_cover.json`), 582 vectors with 15 in common:
+  10,549 steps of `verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py` (`fp8atom_cover.json` beside it), 582 vectors with 15 in common:
   * red-team R1's 450, which hit each of its 24 branch outcomes at least 50 times;
   * the Lean worker's 147, which reach every branch feature the 10,549 reach (739).
-  The 10,549 and R1's 166,000 differential steps run in `check.sh` as a compiled test (`PouwBulk.lean`), which is
+  The 10,549 and R1's 166,000 differential steps run in the Lean audit as a compiled test (`Proofs.Pouw.Bulk`, under `runs`), which is
   not a proof. `verity.ml.tc`'s `HOPPER_E4M3_K32` agrees with H100 silicon on two campaigns, with 0 mismatches, but
   their raw words are in neither the repository nor the store, so no H100 capture is included (R1 F2).
 * **`AdaCaptures`**: the same adder with two groups of 16 (`adaStep`) reproduces the 360 RTX 4090 captures of
@@ -31,10 +31,10 @@ The FP32 add of the running words, `rnAdd` (`Pouw.Fp8Atom.Fp32`):
 
 * **`AddConformance`**: on each of 1,090 add vectors, the three words are finite and `rnAdd` maps the values of the
   operand words to the value of the word IEEE binary32 addition writes (numpy on the CPU, cross-checked against an
-  exact rounding in the generator). They are a greedy cover of the 5,000 of `scripts/fp8atom_vectors.py` (random,
+  exact rounding in the generator). They are a greedy cover of the 5,000 of `verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py` (random,
   close exponents, cancellation, ties, absorption, `±0 + x`, subnormal operands, near the top of the range, binade
   boundaries). It hits each of 42 branch features of `rnAdd` at least 75 times, or every time it occurs if fewer. Every
-  vector's exact sum is zero or normal. The 5,000 run in `check.sh`'s compiled test.
+  vector's exact sum is zero or normal. The 5,000 run in that compiled test.
 * **`RnAddExact`**: a representable sum is returned exactly.
 * **`RnAddMono`**: `rnAdd` is monotone in the exact sum.
 * **`RnAddAbsorb`**: a summand below half an ulp of a nonzero representable `r` is absorbed, unless `r` is a power of
