@@ -102,6 +102,33 @@ def test_the_sweep_keeps_a_landed_branch_that_moved_past_its_landed_head(tmp_pat
     assert _heads(repo) == {"main", "A", "C", "D", "E"} and any(line.startswith("research merge: kept A") for line in lines)
 
 
+def test_the_sweep_closes_a_pr_whose_pinned_head_landed_and_whose_head_since_only_merged_main(tmp_path):
+    """#1273, #1274 and #1283 merged `main` into heads a tip had pinned (6 Oct): the tip lands them as the pinned heads, so the sweep
+    closes such a PR, saying so, and keeps its branch.  One whose head since adds content stays open."""
+    repo, gh, tips, _merge = _world(tmp_path)
+    _git(repo, "checkout", "-q", "-b", "train", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge #3 ({tips['C'][:8]})", tips["C"])
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "Merge train U (#3)", "train")
+    _git(repo, "push", "-q", "origin", "main")
+    landed = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "C")
+    _git(repo, "merge", "-q", "--no-ff", "--no-edit", tips["B"])
+    _git(repo, "push", "-q", "origin", "C")
+    gh.open[3]["headRefOid"] = moved = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "D")
+    (repo / "D2.txt").write_text("more\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "more")
+    _git(repo, "checkout", "-q", "main")
+    lines: list[str] = []
+    closed, _ = M.sweep(repo, gh=gh, log=lines.append)
+    assert 3 in closed and 4 not in closed
+    note = f"Merged into main at {landed[:12]} (Merge train U (#3)). Its head since, {moved[:12]}, adds nothing to main."
+    assert ("pr", "close", "3", "--comment", note) in gh.mutations
+    assert "C" in _heads(repo)
+
+
 def test_the_sweep_is_idempotent_and_its_dry_run_changes_nothing(tmp_path):
     repo, gh, _tips, _merge = _world(tmp_path)
     lines: list[str] = []
