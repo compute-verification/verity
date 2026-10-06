@@ -1,6 +1,6 @@
 """P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu | p2-v3-gpu`) on CPU: the reference
 (`p2_v1/reference.py`) against the P2 kit's pinned vectors, and every step of the arm with the reference standing in for the GPU
-library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's verifier process
+library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's memory challenger process
 (`p2_v1/memory_challenger.py` for v1, `band_gpu/memory_challenger.py`'s `protocol.MemoryChallenger` for `p2-16448/v3`) on its logical clock, so no outcome
 depends on a clock."""
 from __future__ import annotations
@@ -283,7 +283,7 @@ def test_the_v3_expander_given_the_kits_prefix_gives_every_pinned_key():
         "v3-expander/p2-v1/w64/0", "v3-expander/p2-v1/w96/0", "v3-expander/p2-v1/w128/0", "v3-expander/p2-v1/w16448/0"}
 
 
-def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_verifier(tmp_path):
+def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_challenger(tmp_path):
     """Under `V3` the device's `C` is v3's encoding of `W` (v3's own codec decodes it back), the leaves are `vk`'s, and every
     audit and control is `protocol.MemoryChallenger`'s.  At the test's 128-bit width P2 has no certificate, so the audit runs as a
     research audit and says so."""
@@ -300,8 +300,8 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_verifier(
     params = schemes.P2Params(128, 173, 64, 3)
     setup = body["setup"]
     assert setup["scheme"] == "p2-128/v3" and setup["manifest"] == params.manifest() and len(bytes.fromhex(setup["salt"])) == 24
-    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-gpu", "verifier": "band_gpu/memory_challenger.py",
-                                      "verifier_args": []}
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-gpu", "memory_challenger": "band_gpu/memory_challenger.py",
+                                      "memory_challenger_args": []}
     w = b"".join(_bench()._w_segment(WS["id"], s, params.segment_bytes, WS["bytes"]) for s in range(3))
     commitment = protocol.commit(schemes.P2(params), w)
     salt = protocol.draw_salt(harness.SETUP_SOURCE, commitment)
@@ -320,14 +320,14 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_verifier(
 def test_the_v3_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fails(tmp_path):
     body = _bench().P2V3Gpu().run(_args(tmp_path, k=105), WS, tmp_path, backend=_backend(), params=_small())
     gates, honest = body["gates"], body["metrics"]["audit"]
-    assert body["implementation"]["verifier_args"] == ["--strict"]
+    assert body["implementation"]["memory_challenger_args"] == ["--strict"]
     assert "has no certificate" in honest["refused"] and honest["audits"] == 0 and honest["responder"]["answered"] == 0
     assert not gates["timed_audit"]["passed"] and not gates["certificate"]["passed"] and body["profile"] is None
 
 
 def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
     """`band_gpu/memory_challenger.py`'s audit, strict, of `p2-16448/v3` at its registered point (one segment), against a responder whose
-    blocks match `vk`'s leaves, on the logical clock (or `clock`): the verifier checks leaves, not codewords."""
+    blocks match `vk`'s leaves, on the logical clock (or `clock`): the memory challenger checks leaves, not codewords."""
     import hashlib
 
     sys.path.insert(0, str(BENCH))
@@ -349,10 +349,10 @@ def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
         responder.stop()
 
 
-def test_protocol_verifier_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it(tmp_path):
-    """The end-to-end claim's verifier: `Δ + 354 µs` (spec v1.1's cap) is inside `P2SlackFamilyUncond`'s certificate, so
-    105 challenges run and are accepted; `Δ + 355 µs` fits one 854,029 ns root call, so the verifier refuses before sending
-    any challenge."""
+def test_protocol_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it(tmp_path):
+    """The end-to-end claim's memory challenger: `Δ + 354 µs` (spec v1.1's cap) is inside `P2SlackFamilyUncond`'s
+    certificate, so 105 challenges run and are accepted; `Δ + 355 µs` fits one 854,029 ns root call, so the memory challenger
+    refuses before sending any challenge."""
     from verity.protocols.accounting.space.pous.schemes import p2
 
     doc, answered = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
@@ -366,9 +366,9 @@ def test_protocol_verifier_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_i
 
 
 def test_the_host_trace_splits_each_slow_round_trip_into_where_its_time_went():
-    """A ping over `TRACE_OVER_NS` is kept; a challenge is kept when its round trip or the verifier's time for it is over,
-    and its split adds up: send, the wait for the first byte (the responder's reported time and the rest), the rest of the
-    answer, and the verifier's own work outside the round trip."""
+    """A ping over `TRACE_OVER_NS` is kept; a challenge is kept when its round trip or the memory challenger's time for it is
+    over, and its split adds up: send, the wait for the first byte (the responder's reported time and the rest), the rest of
+    the answer, and the memory challenger's own work outside the round trip."""
     sys.path.insert(0, str(BENCH))
     from band_gpu import memory_challenger as live
 
@@ -391,9 +391,9 @@ def test_the_host_trace_splits_each_slow_round_trip_into_where_its_time_went():
 
 
 def test_a_wall_clock_audit_traces_every_round_trip_and_a_logical_one_none(tmp_path):
-    """On a clock that is not the logical one, the verifier logs every round trip (the pings before and after and each
-    answer, the 50 warm-up pings before each set included) and its thread's faults and context switches; each kept split adds
-    up to its round trip."""
+    """On a clock that is not the logical one, the memory challenger logs every round trip (the pings before and after and
+    each answer, the 50 warm-up pings before each set included) and its thread's faults and context switches; each kept split
+    adds up to its round trip."""
     import itertools
 
     from verity.protocols.accounting.space.pous.schemes import p2
@@ -406,7 +406,7 @@ def test_a_wall_clock_audit_traces_every_round_trip_and_a_logical_one_none(tmp_p
     for row in trace["kept"]:
         assert row["send_ns"] + row["wait_ns"] + row["recv_ns"] == row["roundtrip_ns"]
         assert row["server_ns"] + row["responder_other_ns"] == row["wait_ns"]
-    assert set(doc["verifier_rusage"]["after"]) == {"minflt", "majflt", "nvcsw", "nivcsw"}
+    assert set(doc["memory_challenger_rusage"]["after"]) == {"minflt", "majflt", "nvcsw", "nivcsw"}
     doc, _ = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
     assert "host_trace" not in doc
 
@@ -455,13 +455,13 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
               "late_control", "recompute_control", "tampered_control", "signature_control", "fail_closed"):
         assert gates[g]["passed"], (g, gates[g])
     assert "certificate" not in gates and body["profile"] is None
-    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "verifier": "memory_challenger/live.py",
-                                      "verifier_args": ["--signer", "test"]}
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "memory_challenger": "memory_challenger/live.py",
+                                      "memory_challenger_args": ["--signer", "test"]}
     nb = _small().width_bytes
     raw = (tmp_path / "leaves-p2.bin").read_bytes()
     assert len(raw) == 64 * body["blocks"]
     honest = m["audit"]
-    assert honest["verifier"] == "memory-challenger" and honest["limit_ns"] == 854_000 and honest["limit_fixed_before_load"]
+    assert honest["memory_challenger"] == "memory_challenger.MemoryChallenger" and honest["limit_ns"] == 854_000 and honest["limit_fixed_before_load"]
     assert honest["audits"] == honest["audits_accepted_under_signer"] == 2 and honest["audits_accepted"] == 0
     assert honest["answers"] == 2 * 105 and honest["profile"] is None and honest["signer"]["test"]
     assert honest["signer"]["scheme"] == "test/lms-sha512/n32-w1-h1/v0"

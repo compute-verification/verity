@@ -70,7 +70,7 @@ class V1:
     commitment and that salt) and leaves, audited by `p2_v1/memory_challenger.py`'s own loop (mode 0's challenge derivation)."""
 
     impl, scheme, live = "p2-v1-gpu", R.PROTOCOL, MEMORY_CHALLENGER
-    verifier_args: tuple[str, ...] = ()
+    memory_challenger_args: tuple[str, ...] = ()
     accepted = "audits_accepted"
     """The audit document's count of accepted audits that the gates read."""
 
@@ -125,7 +125,7 @@ class V3(V1):
         self.model = protocol.commit(self.scheme_obj, w_host)
         self.salt = protocol.draw_salt(SETUP_SOURCE, self.model)
         self.prefix = p2.expand_prefix(self.params, self.salt)
-        self.verifier_args = () if research else ("--strict",)
+        self.memory_challenger_args = () if research else ("--strict",)
 
     def manifest(self) -> dict[str, Any]:
         return self.params.manifest()
@@ -171,7 +171,7 @@ class MC(V3):
 
     def sign_with(self, lms_key: str) -> None:
         self.lms_key = lms_key
-        self.verifier_args = (*self.verifier_args, *(("--signer", "lms", "--lms-key", lms_key) if lms_key else ("--signer", "test")))
+        self.memory_challenger_args = (*self.memory_challenger_args, *(("--signer", "lms", "--lms-key", lms_key) if lms_key else ("--signer", "test")))
 
     def leaf(self, i: int, block: bytes) -> bytes:
         from verity.protocols.accounting.space.pous.memory_challenger import block_digest
@@ -362,8 +362,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
         backend: Backend | None = None, params: R.Params | None = None, vectors: dict[str, Any] | None = None,
         research: bool = False) -> dict[str, Any]:
     """One run of P2's arm under `framing` (`V1`, the frozen spec's, or `V3`, `p2-16448/v3`'s).  `backend`, `params` and
-    `vectors` replace the GPU kernels, the deployment point and the pinned vectors, and `research` lets `V3`'s verifier audit
-    where P2 has no certificate (the CPU tests)."""
+    `vectors` replace the GPU kernels, the deployment point and the pinned vectors, and `research` lets `V3`'s memory
+    challenger audit where P2 has no certificate (the CPU tests)."""
     import torch
 
     base = params or R.DEPLOYMENT
@@ -449,7 +449,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
         return {"implementation": {"name": fr.impl, "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
                                    "kernels": f"p2v1.cu: p2dec.cu's tuned decode with {fr.scheme} keys expanded by "
                                               "pous_native.shake256_rows; encode by an addition-chain root on CGBN's generic squaring",
-                                   "verifier": str(fr.live.relative_to(HERE.parent)), "verifier_args": list(fr.verifier_args)},
+                                   "memory_challenger": str(fr.live.relative_to(HERE.parent)), "memory_challenger_args": list(fr.memory_challenger_args)},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
                 "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex()},
                 **({} if a.audits else H.UNTIMED), "gates": gates, "metrics": metrics, "profile": prof,
@@ -472,7 +472,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     leaves = out / "leaves-p2.bin"
     leaves.write_bytes(b"".join(fr.leaf(i, c_host[i * nb:(i + 1) * nb]) for i in range(blocks)))
-    fields, live, extra = fr.ready(), fr.live, list(fr.verifier_args)
+    fields, live, extra = fr.ready(), fr.live, list(fr.memory_challenger_args)
     H.leave_reserved(a)
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None
@@ -534,9 +534,9 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
              "deadline": honest.get("deadline_ns") == R.DELTA_NS, "blocks": 1 << 8 <= blocks <= 1 << 23}
     gates["operating_point"] = {"passed": all(point.values()), **point}
     gaps = tuple(f"operating point: {name} is not the frozen value" for name, ok in point.items() if not ok)
-    if "--strict" in fr.verifier_args:
+    if "--strict" in fr.memory_challenger_args:
         gates["certificate"] = {"passed": not honest.get("refused") and bool(honest.get("audits")),
-                                "refused": honest.get("refused"), "verifier_gaps": honest.get("gaps"),
+                                "refused": honest.get("refused"), "memory_challenger_gaps": honest.get("gaps"),
                                 "note": "protocol.MemoryChallenger refuses any k or Δ + RTT the certificate does not cover; the "
                                         "gaps it lists (such as W's segment count) are reported, not refused"}
         gaps += tuple(honest.get("gaps") or ())

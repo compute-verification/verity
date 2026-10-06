@@ -1,5 +1,5 @@
 #!/bin/bash
-# hosttrace.sh VCPU RCPU -- CMD...: run CMD with hosttrace.bt tracing the verifier's and the responder's cores into
+# hosttrace.sh VCPU RCPU -- CMD...: run CMD with hosttrace.bt tracing the memory challenger's and the responder's cores into
 # $RESEARCH_RUN_DIR/hosttrace.txt (HOSTTRACE_OUT overrides; HOSTTRACE_OVER_NS, default 5000, is its threshold).  Start it
 # outside vy-pous-quiet so bpftrace's own process stays off the quiet cores:
 #   gpu-lease 1 --on N --timed -- bash benchmarks/pous/hosttrace.sh 124 126 -- vy-pous-quiet env ... bash benchmarks/pous/pod.sh ...

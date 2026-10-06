@@ -645,7 +645,7 @@ def test_the_kernel_settings_and_the_loop_layout():
     assert [(name, off, size) for name, _, _, off, size in pl] == [("q", 0, 1024), ("k", 1024, 512)]   # down ends past 2000
 
 
-def test_the_harness_moves_every_one_of_its_threads_off_the_verifiers_and_responders_cpus():
+def test_the_harness_moves_every_one_of_its_threads_off_the_memory_challengers_and_responders_cpus():
     harness = _harness()
     here = sorted(os.sched_getaffinity(0))
     if len(here) < 3:

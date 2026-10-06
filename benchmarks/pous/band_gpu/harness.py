@@ -539,10 +539,10 @@ def _memory_challenger_env() -> dict[str, str]:
 
 
 def leave_reserved(a: Any) -> None:
-    """Move every thread of this process (the load loop, CUDA's own threads) off the verifier's and responder's CPUs; threads
-    started later inherit the mask, and the responder and verifier pin themselves back.  Every thread, not only the caller:
-    on cores booted `isolcpus=domain` nothing is load-balanced, so a thread left on a reserved core stays there and takes
-    whole scheduler slices from the verifier."""
+    """Move every thread of this process (the load loop, CUDA's own threads) off the memory challenger's and responder's
+    CPUs; threads started later inherit the mask, and the responder and memory challenger pin themselves back.  Every thread,
+    not only the caller: on cores booted `isolcpus=domain` nothing is load-balanced, so a thread left on a reserved core
+    stays there and takes whole scheduler slices from the memory challenger."""
     here = set(os.sched_getaffinity(0))
     reserved = {x for x in (a.verifier_cpu, a.responder_cpu) if x is not None} & here
     if not reserved or not here - reserved:
@@ -571,9 +571,9 @@ def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Pa
 def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, leaves: Path, out: Path, tag: str, a: Any,
                 load: Callable[[], Any] | None, limit_ns: int | None = None, sync: Callable[[], Any] | None = None,
                 extra: Sequence[str] = ()) -> dict[str, Any]:
-    """One verifier process (`script`, with `extra` arguments) against the responder `start()` returns, judged against
-    `limit_ns` when given, with `load` run until the verifier exits.  Every load call is synchronized (`sync`) so
-    `forwards_completed` counts finished forwards, not enqueued ones."""
+    """One memory challenger process (`script`, with `extra` arguments) against the responder `start()` returns, judged
+    against `limit_ns` when given, with `load` run until the memory challenger exits.  Every load call is synchronized
+    (`sync`) so `forwards_completed` counts finished forwards, not enqueued ones."""
     responder = start()
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))

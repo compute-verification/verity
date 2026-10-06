@@ -1,5 +1,5 @@
-// What the guest kernel and the hypervisor took from two cores, the timed audit's verifier's ($1) and responder's ($2), each
-// line stamped with bpftrace's nsecs (CLOCK_MONOTONIC, the clock of live.py's host_trace):
+// What the guest kernel and the hypervisor took from two cores, the timed audit's memory challenger's ($1) and responder's
+// ($2), each line stamped with bpftrace's nsecs (CLOCK_MONOTONIC, the clock of band_gpu/memory_challenger.py's host_trace):
 //   switch CPU T PREV_COMM PREV_PID NEXT_COMM NEXT_PID    every context switch
 //   irq|softirq|vec CPU T WHAT NS                        a hard interrupt, softirq or APIC vector (the local timer, IPIs) over $3 ns
 //   fault CPU T PID NS                                   a page fault handled for over $3 ns
