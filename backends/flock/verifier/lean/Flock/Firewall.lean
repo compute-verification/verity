@@ -37,8 +37,9 @@ inductive Sent where
   /-- a stream's name, parent and position, the schedule's (fixed), sent just before the stream's first round, never where
   the worker's `Open` came -/
   | openStream (stream parent : String) (pos : Nat)
-  /-- a round: its stream and coin count (fixed), its caps' nodes and its message rows, salted -/
-  | round (stream : String) (caps : List (List ByteArray)) (rows : List ByteArray) (n : Nat)
+  /-- a round: its stream, its coin count and its copies of a level-0 top committed at `Commit` (fixed), the nodes of each
+  top it commits and its one message row, salted -/
+  | round (stream : String) (tops : List (List ByteArray)) (level0 : Nat) (rows : List ByteArray) (n : Nat)
   /-- how the session ended, `finish` (true) or `stop` (false), never why -/
   | finish (ok : Bool)
 
@@ -185,11 +186,11 @@ def rowDigest (row : Array Nat) : ByteArray :=
   let pre := Hm96.pad ("verity/sha512-row/v1".toUTF8.push 0 ++ ByteArray.mk #[1, 16] ++ be32 row.size.toUInt32) 128
   Sha512.hash (row.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) pre)
 
-/-- `F_k` as rows of `ROW_WORDS` u16 words, each element 8 words, lo then hi; the last row zero-padded. -/
+/-- `F_k` as its round's one row (none for an empty message): each element 8 u16 words, lo then hi, then zero words up to
+whole blocks of `ROW_WORDS`. -/
 def messageRows (free : Array Nat) : List (Array Nat) :=
   let words := free.foldl (fun ws v => ws ++ (Array.range 8).map fun j => v / 65536 ^ j % 65536) #[]
-  let words := words ++ Array.replicate ((ROW_WORDS - words.size % ROW_WORDS) % ROW_WORDS) 0
-  (List.range (words.size / ROW_WORDS)).map fun i => words.extract (ROW_WORDS * i) (ROW_WORDS * (i + 1))
+  if words.isEmpty then [] else [words ++ Array.replicate ((ROW_WORDS - words.size % ROW_WORDS) % ROW_WORDS) 0]
 
 /-- A tree top's nodes as rows: each 64-byte node as 32 little-endian u16 words, then 32 zero words. -/
 def topRows (top : ByteArray) : List (Array Nat) :=
@@ -239,7 +240,7 @@ structure Schedule where
 
 def schedule (s : Json) : V Schedule := do
   let e : V Schedule := do
-    if (← str s "kind") != "rec/inner-transcript/v0/schedule" then throw "kind"
+    if (← str s "kind") != "rec/inner-transcript/v1/schedule" then throw "kind"
     let h ← field s "hello"
     let _ ← obj h
     let l ← field h "link"
@@ -260,13 +261,14 @@ def schedule (s : Json) : V Schedule := do
       if !(streams.any (·.1 == st)) then throw "a round's stream"
       let _ ← nat r "k"
       let _ ← nat r "n"
-      for c in ← arr (← field r "caps") do
-        if (natOf? c).isNone then throw "caps"
+      for c in ← arr (← field r "tops") do
+        if (natOf? c).isNone then throw "tops"
+      let _ ← nat r "level0"
       let _ ← nat r "commits"
     return { hello := h, roots, y, m, streams := streams.toList, rounds }
   match e with
   | .ok v => return v
-  | .error _ => throw "not a rec/inner-transcript/v0/schedule"
+  | .error _ => throw "not a rec/inner-transcript/v1/schedule"
 
 /-! ## The firewall (`rec_live.Proxy`) -/
 
@@ -275,6 +277,8 @@ structure State where
   sent : Array Sent := #[]
   hello : Bool := false
   committed : Bool := false
+  /-- each table's level-0 top, as `Commit` gave it -/
+  roots : List (String × ByteArray) := []
   linked : Bool := false
   /-- each opened stream: its parent and its rounds so far -/
   streams : List (String × String × Nat) := []
@@ -365,7 +369,7 @@ def step (s : Schedule) : Req → Fw Unit
     let tops ← roots.mapM fun (n, v) => do return (n, ← saltedTop v)
     let st ← get
     if !st.hello || st.committed then throw "the link points are drawn once, after Hello"
-    set { st with committed := true }
+    set { st with committed := true, roots }
     send (.commit tops)
   | .link y => do
     if (← get).finished then throw "session finished"
@@ -387,21 +391,31 @@ def step (s : Schedule) : Req → Fw Unit
     let some (_, parent, k) := (← get).streams.find? (·.1 == stream) | throw s!"a round on stream {stream}, never opened"
     let sp ← split content (k == 0 && parent == "")
     if sp.n != n then throw s!"the round squeezes {sp.n} coins, the prover asked for {n}"
+    let roots := (← get).roots
+    let level0 := fun (c : ByteArray) => roots.any (·.2 == c)
+    if k == 0 && parent == "" then
+      let parts := stream.splitOn "/"
+      let table := if parts.length ≤ 1 then stream else "/".intercalate parts.dropLast
+      match roots.find? (·.1 == table), sp.caps[0]? with
+      | some (_, rootB), some c => if c != rootB then throw s!"{stream}: the binding round's cap is not the committed root_B"
+      | _, _ => throw s!"{stream}: the binding round's cap is not the committed root_B"
+    let fresh := sp.caps.toList.filter (!level0 ·)
+    let copies := (sp.caps.toList.filter level0).length
+    let tops ← fresh.mapM saltedTop
     let rows := messageRows sp.free
     let i := (← get).rounds
-    let caps ← sp.caps.toList.mapM fun c => do return jnat (← nodes c)
-    let got := Json.mkObj [("stream", .str stream), ("k", jnat k), ("n", jnat n), ("caps", .arr caps.toArray),
-      ("commits", jnat rows.length)]
+    let topNodes ← fresh.mapM fun c => do return jnat (← nodes c)
+    let got := Json.mkObj [("stream", .str stream), ("k", jnat k), ("n", jnat n), ("tops", .arr topNodes.toArray),
+      ("level0", jnat copies), ("commits", jnat rows.length)]
     pinned s!"round {i}" got (s.rounds.getD i .null)
     let bcs ← rows.mapM salted
-    let capsSalted ← sp.caps.toList.mapM saltedTop
     if !(← get).linked then throw "a coin before the link exchange"
     if k == 0 then
       let some (_, _, pos, _) := s.streams.find? (·.1 == stream) | throw s!"FIREWALL-REFUSED: Open {stream}"
       send (.openStream stream parent pos)
     modify fun st => { st with rounds := st.rounds + 1,
                                streams := st.streams.map fun e => if e.1 == stream then (e.1, e.2.1, e.2.2 + 1) else e }
-    send (.round stream capsSalted bcs n)
+    send (.round stream tops copies bcs n)
   | .finish => do
     let st ← get
     if st.finished then throw "session finished"
@@ -441,20 +455,19 @@ def record (sent : Array Sent) (ok : Bool) : Json := Id.run do
     match m with
     | .hello h => hello := h
     | .commit roots =>
-      link := Json.mkObj [("roots", Json.mkObj (roots.map fun (n, ns) => (n, .str (ns.foldl (· ++ hexOf ·) "")))),
-                          ("y", .null)]
+      link := Json.mkObj [("roots", Json.mkObj (roots.map fun (n, ns) => (n, hexs ns))), ("y", .null)]
     | .link z => link := withField link "y" (.arr (Array.replicate z (.str ("".pushn '0' 32))))
     | .openStream st p pos => streams := streams ++ [(st, Json.mkObj [("parent", .str p), ("at", jnat pos)])]
-    | .round st caps bcs n =>
+    | .round st tops level0 bcs n =>
       let k := (counts.find? (·.1 == st)).map (·.2) |>.getD 0
       counts := (st, k + 1) :: counts.filter (·.1 != st)
       rows := rows + bcs.length
-      rounds := rounds.push (Json.mkObj [("stream", .str st), ("k", jnat k),
-        ("caps", .arr (caps.map fun ns => Json.str (ns.foldl (· ++ hexOf ·) "")).toArray), ("commits", hexs bcs), ("n", jnat n)])
+      rounds := rounds.push (Json.mkObj [("stream", .str st), ("k", jnat k), ("tops", .arr (tops.map hexs).toArray),
+        ("level0", jnat level0), ("commits", hexs bcs), ("n", jnat n)])
     | .finish _ => pure ()
   let named := streams.filterMap fun (n, v) =>
     (counts.find? (·.1 == n)).map fun (_, k) => (n, withField v "rounds" (jnat k))
-  return Json.mkObj [("kind", .str "rec/inner-transcript/v0"), ("tops", .str "hm96-sha512/v1/node-row"), ("hello", hello),
+  return Json.mkObj [("kind", .str "rec/inner-transcript/v1"), ("tops", .str "hm96-sha512/v1/node-row"), ("hello", hello),
     ("link", link), ("streams", Json.mkObj named), ("rounds", .arr rounds), ("message_rows", jnat rows),
     ("row_words", jnat ROW_WORDS), ("end", .str (if ok then "finish" else "stop"))]
 
@@ -466,7 +479,7 @@ def calls (sent : Array Sent) : Json :=
     | .commit _ => some (.arr #[.str "commit"])
     | .link _ => some (.arr #[.str "y"])
     | .openStream st p pos => some (.arr #[.str "open", .str st, .str p, jnat pos])
-    | .round st _ _ n => some (.arr #[.str "round", .str st, jnat n])
+    | .round st _ _ _ n => some (.arr #[.str "round", .str st, jnat n])
     | .finish _ => none)
 
 /-- One case of `flock-firewall`'s input, `{"schedule", "requests": [hex], "salts": [hex]}`: the record; with
