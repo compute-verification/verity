@@ -100,7 +100,8 @@ def fast100(m: int) -> Schedule:
 @dataclass(frozen=True)
 class Shape:
     """What a rep's algebra depends on: the table's m and k_log, the number of claims (2 + the statement's extra claims), and
-    the Merkle scheme's digest and salt widths (hm96-sha512: 64 and 192 bytes)."""
+    the Merkle scheme's digest and salt widths (hm96-sha512: 64 and 192 bytes; plain SHA-512 leaves: 64 and 0, whose
+    ``opened_salts`` the SHA-512 build still writes, empty)."""
 
     m: int
     k_log: int
@@ -163,7 +164,7 @@ def decode(sh: Shape, data: bytes) -> Proof:
     R = len(s.levels) - 1
     r = _Reader(data)
     h = lambda: r.take(sh.hash_len)
-    salts = lambda q: r.vec(q, lambda: r.take(sh.salt_len), "opened_salts") if sh.salt_len else None
+    salts = lambda q: r.vec(q if sh.salt_len else 0, lambda: r.take(sh.salt_len), "opened_salts")
     pair = lambda: (r.f(), r.f())
     r.vec(1 << s.levels[0].cap, h, "cap")
     r.take(8 * 3 + 4)
