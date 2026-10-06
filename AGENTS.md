@@ -12,7 +12,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 
 - `verity/`: the core library, the distribution `verity` (the root `pyproject.toml`).
   - `verity.primitives`: circuits and their evaluator (`circuits`, format in `circuits/PROTOCOL.md`), commitments
-    (`commitments`), shared hash and curve code (`crypto`), and the one challenge derivation (`randomness`).
+    (`commitments`), shared hash code (`crypto`), and the one challenge derivation (`randomness`).
   - `verity.protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs
     (`verification.sampled_proofs`), PoUW (`accounting.work.pouw`), PoUS (`accounting.space.pous`) and the network
     certifier (`accounting.communication.certifier`). NCI is Lean only.
