@@ -136,6 +136,16 @@ def test_the_whole_block_is_hashed():
         session(lambda i: block(i)[:-1])
 
 
+def test_without_expected_digests_the_rounds_digests_are_left_to_the_proof():
+    """`expected=None`: a proof opens each `H(block)` against C, so a wrong answer passes this check and every other
+    check still runs."""
+    c, signed, signer = session(lambda i: b"\0" * BLOCK_BYTES)
+    v = mc.verdict(signed, c.commitment, c.openings(), None, trusted={signer.public_key}, schemes=ts.SCHEMES)
+    assert v.accepted and v.wrong == 0
+    late = mc.verdict(signed, c.commitment, c.openings()[1:], None, trusted={signer.public_key}, schemes=ts.SCHEMES)
+    assert late.reasons == ("round 0's index is not its committed coin",)
+
+
 def test_receipt_time_is_read_before_hashing(monkeypatch):
     events: list[str] = []
 

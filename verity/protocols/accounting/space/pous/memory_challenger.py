@@ -449,12 +449,13 @@ class Verdict:
 
 
 def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequence[CoinOpening],
-            expected: Callable[[int], bytes], *, trusted: frozenset[bytes] | set[bytes],
+            expected: Callable[[int], bytes] | None, *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Verify] = SCHEMES) -> Verdict:
     """The check of a signed session against the commitment published before it (module docstring): `expected(i)` is
-    `block_digest` of block `i` of `C`, `trusted` the memory challengers' public keys, `schemes` the accepted signature schemes
-    (S1's; a test's own mapping in tests).  It fails closed: an unknown scheme, an untrusted key or a bad signature
-    rejects, whatever the rounds."""
+    `block_digest` of block `i` of `C`, or None when a proof opens each round's `H(block)` against C instead
+    (`answer_circuit`); `trusted` the memory challengers' public keys, `schemes` the accepted signature schemes (S1's; a
+    test's own mapping in tests).  It fails closed: an unknown scheme, an untrusted key or a bad signature rejects,
+    whatever the rounds."""
     reasons: list[str] = []
     verify = schemes.get(signed.scheme)
     if verify is None:
@@ -478,7 +479,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
         o = by_j.get(j)
         if r.j != j or o is None or o.index != r.index or not verify_coin(commitment, o):
             reasons.append(f"round {j}'s index is not its committed coin")
-        if not 0 <= r.index < commitment.blocks or r.digest != expected(r.index):
+        if not 0 <= r.index < commitment.blocks or (expected is not None and r.digest != expected(r.index)):
             wrong += 1
         if not 0 <= r.elapsed_ns <= commitment.limit_ns:
             late += 1
