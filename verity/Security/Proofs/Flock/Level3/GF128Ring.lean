@@ -12,7 +12,7 @@ open Polynomial Flock
 
 namespace FlockLevel3
 
-instance : Fact (Nat.Prime 2) := ⟨Nat.prime_two⟩
+instance instFactPrimeOfNatNat_flockLevel3 : Fact (Nat.Prime 2) := ⟨Nat.prime_two⟩
 
 /-- Every polynomial with no coefficient at `k` or above is the polynomial of a number below `2^k`. -/
 theorem natPoly_surj : ∀ (k : ℕ) (r : P), (∀ i, k ≤ i → r.coeff i = 0) → ∃ n, n < 2 ^ k ∧ natPoly n = r := by

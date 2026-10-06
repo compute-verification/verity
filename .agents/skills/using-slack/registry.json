@@ -98,7 +98,12 @@
       "usergroup": "S0C5U3Q04JD",
       "owns": [
         "verity/protocols/accounting/work/pouw/",
-        "verity/protocols/compliance/nci/",
+        "verity/Security/Definitions/Pouw/",
+        "verity/Security/Specs/Pouw/",
+        "verity/Security/Proofs/Pouw/",
+        "verity/Security/Definitions/Nci.lean",
+        "verity/Security/Specs/Nci/",
+        "verity/Security/Proofs/Nci/",
         "benchmarks/pouw/",
         ".agents/skills/kernel-engineering/"
       ]
@@ -111,6 +116,9 @@
       "usergroup": "S0C5VRGBZFE",
       "owns": [
         "verity/protocols/accounting/space/pous/",
+        "verity/Security/Definitions/Pous/",
+        "verity/Security/Specs/Pous/",
+        "verity/Security/Proofs/Pous/",
         "benchmarks/pous/"
       ]
     },
@@ -122,6 +130,9 @@
       "usergroup": "S0C6LGGSY6L",
       "owns": [
         "verity/protocols/accounting/communication/warden/",
+        "verity/Security/Definitions/Warden/",
+        "verity/Security/Specs/Warden/",
+        "verity/Security/Proofs/Warden/",
         "benchmarks/network_traces/"
       ]
     },
