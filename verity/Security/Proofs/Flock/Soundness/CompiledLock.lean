@@ -643,7 +643,7 @@ def TopRel (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) (
       OpensOK H E cap₀ 0 out.pend.1 out.opens ∧ OpensOK H E cap₀ 1 out.pend.2 out.opens) ∧
     RecStruct sch i.1 out.pend.1 ∧ RecStruct sch i.2 out.pend.2
 
-instance : Inhabited (Oracle F) := ⟨fun _ _ => 0⟩
+instance instInhabitedOracle : Inhabited (Oracle F) := ⟨fun _ _ => 0⟩
 
 /-- **The table in lockstep** below the level-0 cap: the link points, both reps interleaved, the
 openings. -/
