@@ -97,6 +97,12 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-06 (7:51 to 8:14 AM PDT): one hash, SHA-512 with its whole output, everywhere: Pearl-C's `-h3` (its cost over
+  the BLAKE3 formats accepted), PoUS's P2 (v4) and its key expansion, core's `randomness.derive`, and LMS (n = 64, no
+  truncation). No hash flags or modular hashing in research mode, and performance requirements relax as far as that
+  needs. BLAKE3 code leaves the served path for `archive/` (Pearl-C's is `archive/pouw-blake3/`), kept but not
+  maintained. Pearl's FP8 scheme stays as Pearl defines it, semi-maintained (BLAKE3 in `schemes/pearl_kw.py`), with
+  `cr/blake3` its assumption alone.
 - 2026-10-05 (10:45 PM PDT): when Daniel hands over a design to implement, build it unless there is a strong reason not
   to: a measured cost that breaks a budget, a soundness or zero-knowledge hole, or a contradiction with a proved theorem.
   Taste isn't one. With a strong reason, build the nearest version you can defend and leave him a report, rather than
