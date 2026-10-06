@@ -2,11 +2,11 @@
 # The warden program: rows, grids, fill and the FIFO warden
 
 The executable forms of `verity/Security/Definitions/Warden/Grid.lean` that the difftest runs, under the same names in
-`NetTiming.Code`. Lean core only: `offset` sums over `List.finRange` where the reference sums over a `Finset`.
+`Warden`. Lean core only: `offset` sums over `List.finRange` where the reference sums over a `Finset`.
 `Proofs.Warden.Code` proves what the difftest computes from them equal to the reference's.
 -/
 
-namespace NetTiming.Code
+namespace Warden
 
 /-- One bucket's `S` slots on one link. -/
 abbrev Row (S : Nat) (F : Type) := Fin S → Option F
@@ -38,4 +38,4 @@ the frames leaving in queue order `f 0, f 1, …`. -/
 def fifoGrid (T S : Nat) {F : Type} (f : Nat → F) (enq : Nat → Nat) : Grid T S F :=
   fill f (fun t : Fin T => released S enq t)
 
-end NetTiming.Code
+end Warden

@@ -7,7 +7,7 @@ import Lean.Data.Json
 
 `scripts/difftest_vectors.py` generates instances and runs the Python audit on them (`schedule.expected_grids`,
 `Audit.check_link`, `Audit.check_ingress_link`). `Warden/DifftestMain.lean` reads both files and fails unless `evaluate`,
-which computes the same results from the program's definitions (`NetTiming.Code`), gives every one of them. The Lean
+which computes the same results from the program's definitions (`Warden`), gives every one of them. The Lean
 audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof. `Proofs.Warden.Code`
 (`security_proofs`) proves what it evaluates (`expectedRow`, `Accepted` of `constantRate`, `StatusComplete`, membership
 in `Σ_sync`) equal to the reference definitions in `verity/Security/Definitions/Warden/`, which the guarantees read.
@@ -34,7 +34,7 @@ records stop at a window boundary, so the sequence has `T` steps per window reco
 * for every prefix, `complete`: `StatusComplete` on the first `m·T` steps, by `decide`.
 -/
 
-namespace NetTiming.Code.Difftest
+namespace Warden.Difftest
 
 open Lean
 
@@ -247,4 +247,4 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"difftest: {a.size} instances compared, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
-end NetTiming.Code.Difftest
+end Warden.Difftest

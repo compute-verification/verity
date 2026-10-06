@@ -4,10 +4,10 @@ import Warden.Grid
 # The warden program: statuses, observations, the Program and acceptance
 
 The executable forms of `verity/Security/Definitions/Warden/Run.lean` that the difftest runs, under the same names in
-`NetTiming.Code`, written as there. The interaction and its runs have no executable role and stay in the reference only.
+`Warden`, written as there. The interaction and its runs have no executable role and stay in the reference only.
 -/
 
-namespace NetTiming.Code
+namespace Warden
 
 /-- Why a link's coverage was not established (draft §4, W5). -/
 inductive Reason
@@ -49,4 +49,4 @@ def Accepted {L K S : Nat} {In Adv : Type} (P : Program L S In Adv) (op : Nat �
   ∀ t (ht : t < k), ∃ h : t < o.length,
     o[t].rows = P.rows t (ingressUpTo op o t) a ∧ ∀ κ, o[t].status κ = Status.complete
 
-end NetTiming.Code
+end Warden

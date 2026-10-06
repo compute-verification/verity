@@ -1,7 +1,7 @@
 {
  "roots": ["Warden"],
  "exempt": {
-  "Warden.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Code.Difftest.main, audited under Warden, a test and not a proof"
+  "Warden.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of Warden.Difftest.main, audited under Warden, a test and not a proof"
  },
  "runs": {
   "Warden.DifftestMain": {

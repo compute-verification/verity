@@ -360,7 +360,7 @@ per-window forms (`SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`,
 Python counterpart.
 
 **The difftest** checks the definitions those statements are about, not the statements. On 10,000 random instances,
-the warden program (`lean/`, `NetTiming.Code`), evaluated, gives what this package gives. The Lean side is
+the warden program (`lean/`, `Warden`), evaluated, gives what this package gives. The Lean side is
 `expectedRow`, with `Accepted` of `constantRate` and `StatusComplete` decided per prefix of whole windows. The Python
 side is `expected_grids`, `check_link`'s verdicts with the first differing bucket, `check_ingress_link`, and each
 prefix's acceptance. `lean/scripts/difftest_vectors.py` writes the instances and this package's results, and the Lean

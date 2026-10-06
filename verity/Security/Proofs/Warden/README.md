@@ -30,7 +30,7 @@ PerWindow.lean  the last two over the run's first `m` whole windows: the factor 
                                          per link-window
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
-Code.lean       the warden program (`warden_program`, `NetTiming.Code`), which the difftest runs, equal to the
+Code.lean       the warden program (`warden_program`, `Warden`), which the difftest runs, equal to the
                                definitions above: four guarantees (below)
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/lean/audit.py
 CheckAxioms.lean               one #print axioms line per statement and witness, then three more lemmas
@@ -131,17 +131,17 @@ proved by the lemma of the same statement whose name it spells in UpperCamelCase
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
 
 The other four tie the difftest to these definitions (`NetTiming.SecurityProofs.Code`): the difftest holds the Python audit
-to the warden program (`verity/protocols/accounting/communication/warden/lean/`, Lean core only, `NetTiming.Code`), and
+to the warden program (`verity/protocols/accounting/communication/warden/lean/`, Lean core only, `Warden`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
 (`tests/test_lean_packages.py`) and so `Specs/` cannot name the program:
 
-- `CodeExpectedRow`: `Code.expectedRow` is `expectedRow` for clock syncs with the same δ and ρ and frames with the same
+- `CodeExpectedRow`: `Warden.expectedRow` is `expectedRow` for clock syncs with the same δ and ρ and frames with the same
   payloads, anchors and logical indices (the difftest's `rows`, `diff` and `mismatch`);
-- `CodeAcceptedConstantRate`: `Code.Accepted` of `Code.constantRate` is `Accepted` of `constantRate` for observations
+- `CodeAcceptedConstantRate`: `Warden.Accepted` of `Warden.constantRate` is `Accepted` of `constantRate` for observations
   with the same rows and complete statuses, operators giving the same ingress on them, related frames and advice naming
   the same values (`accepted`);
-- `CodeStatusComplete`: `Code.StatusComplete` is `StatusComplete` for observations with the same complete statuses
+- `CodeStatusComplete`: `Warden.StatusComplete` is `StatusComplete` for observations with the same complete statuses
   (`complete`);
 - `CodeSyncSet`: every sync set of the program has a reference sync set with the same values and conversely (`advice`).
 

@@ -3,7 +3,7 @@
 `lean/scripts/difftest_vectors.py` writes 10,000 random instances and this package's results on each
 (`schedule.expected_grids`, `Audit.check_link` with the first differing bucket, `Audit.check_ingress_link`, and each
 prefix's acceptance). `check` runs the Lean half in its Lean audit (`runs` in `lean/lean-audit.json`):
-`lean/Warden/DifftestMain.lean` evaluates every instance with the program's definitions (`NetTiming.Code`: `expectedRow`,
+`lean/Warden/DifftestMain.lean` evaluates every instance with the program's definitions (`Warden`: `expectedRow`,
 and `Accepted` of `constantRate` and `StatusComplete` by `decide`) and fails on any difference, and `security_proofs`
 proves those definitions equal to `NetTiming`'s, which the guarantees read. The audit checks that data against the
 record's SHA-256, and its pass is cached on the Lean package's files alone, so the test here is what says the data is

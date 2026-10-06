@@ -4,11 +4,11 @@ import Warden.Run
 # The warden program: the logical schedule, the clock-sync advice and the constant-rate Program
 
 The executable forms of `verity/Security/Definitions/Warden/Schedule.lean` that the difftest runs, under the same names
-in `NetTiming.Code`. They mirror `schedule.py` one for one, with each Python name in its docstring. Lean core only:
+in `Warden`. They mirror `schedule.py` one for one, with each Python name in its docstring. Lean core only:
 `Σ_sync` is two duplicate-free lists, as in Python, where the reference has two `Finset`s.
 -/
 
-namespace NetTiming.Code
+namespace Warden
 
 /-- `ClockSync`: one window's clock-sync advice, the offset δ (buckets after the anchor) and the rate ρ (frames per
 bucket within a session, a positive fraction). Python rejects `delta < 0` (here `Nat`) and `rho ≤ 0`. -/
@@ -85,4 +85,4 @@ def constantRate {L S : Nat} {In Ac : Type} (T W : Nat) (ss : SyncSet)
     (frames : List In → Ac → Fin L → List LogicalFrame) : Program L S In (Ac × (Fin W → ss.Elem)) where
   rows t ins a ℓ := expectedRow S T W (fun w => ss.sync (a.2 w)) (frames ins a.1 ℓ) t
 
-end NetTiming.Code
+end Warden
