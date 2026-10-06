@@ -244,7 +244,9 @@ def _serve(tmp_path, sessions, fw, **kw):
 
 def test_an_inner_stop_ends_the_recursive_session(tmp_path):
     """`rec_live.serve` opens a recursive session for each session it serves: a refused inner session (here Link's y of the
-    wrong length) is that recursive session's stop, and no V* statement of it is then served; a finished one lets them be."""
+    wrong length) is that recursive session's stop, and no V* statement of it is then served; a finished one lets them be.
+    The ``firewall.json`` beside each inner session's record names its recursive session and nothing else: the firewall's
+    state stays with the developer."""
     fw = FW.Firewall(tmp_path / "fw")
     t, got = _serve(tmp_path, 2, fw)
     w = G._Wire(got["addr"])
@@ -254,8 +256,9 @@ def test_an_inner_stop_ends_the_recursive_session(tmp_path):
     assert G._held(G._run(w))
     w.close()
     t.join()
-    ids = [json.loads((tmp_path / "inner" / f"s{k}" / "firewall.json").read_text())["session"] for k in range(2)]
-    assert ids == [r["firewall"] for r in got["res"]] == ["r0000", "r0001"]
+    named = [json.loads((tmp_path / "inner" / f"s{k}" / "firewall.json").read_text()) for k in range(2)]
+    assert named == [{"kind": "firewall/v0/session", "session": r["firewall"]} for r in got["res"]]
+    assert [r["firewall"] for r in got["res"]] == ["r0000", "r0001"]
     assert fw.stopped("r0000")["part"] == "inner" and fw.stopped("r0001") is None
     log: list = []
     out, _ = _outer(fw, "r0000", "L0", HONEST, Challenger(log, "L0"))
