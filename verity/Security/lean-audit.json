@@ -74411,11 +74411,11 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
   },
   "Specs.Flock.Guarantees.Recursive": {
-   "digest": "8a6f905c36cbcdfc570780f3c18f2ba75a850cab30eacba601d1bcebba10b01a",
+   "digest": "bb36723c590410a73d5ca20de058e7c15115eba33bdf232b77d4dcd8af8c2807",
    "definitions": {
     "Flock.Guarantees.RecursiveSound": "829d1a4ea9db824cf86a951a79462474a7da0d57a0ed590ac0f84055bef0c5bf",
-    "Flock.Guarantees.RecursiveZK": "68bb56165f33f70ba80b219f23fe67635a4843ebefa97fe20b2466bd919b497f",
-    "Flock.Guarantees.gatewayLeaf": "f1b305e951dbb636610e9ab637426ff04b74bdd3a8e18a560c21bb077ab837b5",
+    "Flock.Guarantees.RecursiveZK": "6f95e6daa2d78cd07209b987c8dedae43ccab535bdfe98363b8d52050d68532d",
+    "Flock.Guarantees.firewallLeaf": "fddc41ec1f4b4e2810231afa00a4c024566a4b2b2e9daefba922aeb3695bd425",
     "Flock.Guarantees.idealLeaf": "2b0d4879d5125fbe63d0df20472cb5c2e84da64fd9f79c72d0db1f3f93455ea4"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveSound", "Flock.SecurityProofs.RecursiveZK"]
