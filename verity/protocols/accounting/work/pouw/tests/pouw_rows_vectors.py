@@ -25,10 +25,17 @@ from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 OUT = Path(__file__).with_name("vectors") / "pouw_rows.json"
 ROLES = {"x": ROLE_X, "w": ROLE_W}
 #: (case, row, role, k or (TM, TN)): the four element rows in both trees at k = 64 and 4,096 (in role X a row-seg row of
-#: one short segment and of several), the tile digests, the ok rows, and the row_k cut's six rows in both trees
+#: one short segment and of several), the tile digests, the ok rows, the cap's rows: the salt-dead counts (row-seg, one
+#: short segment and two), a word's C̃ ‖ U, its flags row with padding (k = 256) and without (8,192), a tile row's chunk
+#: digests at TN = 32 (one, then zeros) and 64 (two; the case's k is TN), a tile row's sums, and a strip's row; and
+#: the row_k cut's six rows in both trees
 CASES = tuple((f"{row}-{role}-{k}", row, role, k) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p")
               for role in ("x", "w") for k in (64, 4096)) + (
     ("tile-2x33", "tile", "x", (2, 33)), ("tile-64x64", "tile", "x", (64, 64)), ("ok-x", "ok", "x", 64), ("ok-w", "ok", "w", 4096),
+    ("sd-x-64", "sd", "x", 64), ("sd-x-16384", "sd", "x", 16384), ("cap-word-x", "cap-word", "x", 64),
+    ("cap-flags-x-256", "cap-flags", "x", 256), ("cap-flags-x-8192", "cap-flags", "x", 8192),
+    ("cap-chunks-x-32", "cap-chunks", "x", 32), ("cap-chunks-x-64", "cap-chunks", "x", 64), ("cap-sums-x", "cap-sums", "x", 64),
+    ("cap-rows-x", "cap-rows", "x", 64),
     ("pc8-head-x", "pc8-head", "x", 2048), ("pc8-head-w", "pc8-head", "w", 2048),
     ("pc8-carry-x", "pc8-carry", "x", 2048), ("pc8-carry-w", "pc8-carry", "w", 2048),
     ("fp8-codes-x-64", "fp8-codes", "x", 64), ("fp8-codes-w-2048", "fp8-codes", "w", 2048),
@@ -67,6 +74,20 @@ def inputs(case: str, row: str, k) -> dict:
         return {"codes": codes(case, "codes", k, 8), "p": u16(case, "p", L.P_WORDS)}
     if row == "ok":
         return {"ok": codes(case, "ok", 1, 1)[0]}
+    if row == "sd":
+        return {"counts": u32(case, "counts", k // 32)}
+    if row == "cap-word":
+        return {"c": u32(case, "c", 1)[0], "u": u32(case, "u", 1)[0]}
+    if row == "cap-flags":
+        return {"flags": codes(case, "flags", k // 32, 1), "atoms": u32(case, "atoms", 1)[0],
+                "zeros": u32(case, "zeros", 1)[0], "good": codes(case, "good", 1, 1)[0]}
+    if row == "cap-chunks":
+        return {"digests": [shake(case, f"d{h}", 32) for h in range(-(-k // C.CHUNK))]}
+    if row == "cap-sums":
+        return {"atoms": u32(case, "atoms", 1)[0], "zeros": u32(case, "zeros", 1)[0], "elems": u32(case, "elems", 1)[0],
+                "good": codes(case, "good", 1, 1)[0]}
+    if row == "cap-rows":
+        return {"oks": codes(case, "oks", k, 1), "bound": u32(case, "bound", 1)[0]}
     if row == "pc8-head":
         return {"alpha": u32(case, "alpha", 1)[0], "ep": codes(case, "ep", C.R, 8),
                 "th": int.from_bytes(shake(case, "th", 8), "little"), "finite": codes(case, "finite", 1, 1)[0],
@@ -96,6 +117,18 @@ def words(row: str, x: dict) -> list[int]:
         return L.words_fp8_p(x["codes"], x["p"])
     if row == "ok":
         return L.words_ok(x["ok"])
+    if row == "sd":
+        return L.words_sd(x["counts"])
+    if row == "cap-word":
+        return L.words_cap_word(x["c"], x["u"])
+    if row == "cap-flags":
+        return L.words_cap_flags(x["flags"], x["atoms"], x["zeros"], x["good"])
+    if row == "cap-chunks":
+        return L.words_cap_chunks(x["digests"])
+    if row == "cap-sums":
+        return L.words_cap_sums(x["atoms"], x["zeros"], x["elems"], x["good"])
+    if row == "cap-rows":
+        return L.words_cap_rows(x["oks"], x["bound"])
     if row == "pc8-head":
         return L.words_pc8_head(x["alpha"], x["ep"], x["th"], x["finite"], x["floor"])
     if row == "pc8-carry":

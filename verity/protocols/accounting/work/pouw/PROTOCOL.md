@@ -584,10 +584,46 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
     `pouw/row-ok/v1` rows. A 64 × 64 tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile
     with its rows, as for `pc4`.
+  - **The cap** (`circuit.cap`; opt-in, `pc8.Shape.cap`, off by default, on the hiding Programs only) decides rev1's
+    `capOK` (`pearlCTilesDevRev1`: `tileDebitRev1 ≤ ρ·creditDevRev1·tileShare` over a tile's passing rows and all its
+    columns, at the record's `cap`) in gates, the debit with it. The call is `Pc8CallCap` (the check `Pc8CheckCap`), cut
+    into a unit per word, since a cap word is about 7.8M ANDs at K = 8,192 and a whole cap tile does not stage, and its
+    tile digest and tally cut per tile row, since C-Flock gives each row a unit reads or writes a 2^18-bit hm96 slot in
+    a block of at most 2^27 bits (at most 256 rows) and a 64 × 64 tile has 4,096 words:
+
+    ~~~text
+    template                        per           reads                                 returns
+    Pc8RowACap{K,DEV}               row i of A    `Pc8RowA`'s inputs                    `Pc8RowA`'s outputs, sd_i
+    Pc8CapStrip{K,TM,TN,N,RHO,DEV}  TM rows of A  their ok words                        their admission bits, the bound
+    Pc8CapWordUnit{K,DEV}           word (i, j)   A′_i ‖ P_A,i, B̃_j ‖ P_B,j, its cert  C̃, U, flags, their count, later
+                                                                                        +0 promotions, good
+    Pc8CapRowDigest{TN}             tile row      its TN words' C̃ and U                 its chunk digests
+    Pc8CapRowTally{K,TN}            tile row      its TN words' flags, counts,          its flag count, later +0
+                                                  promotions and good, its A row's sd   promotions, forming elements,
+                                                                                        good
+    Pc8CapTile{TM,TN}               tile          its TM rows' chunk digests            the tile digest
+    Pc8CapTally{K,TM,TN,N,RHO,DEV}  tile          its TM rows' sums, its strip's bits   the cap's verdict (an ok word)
+                                                  and bound
+    ~~~
+
+    - sd_i is row i's salt-dead count per block of 32 elements (P3's `saltDeadP`, decided at its support's two ends:
+      `saltDeadP_iff_ends`). The certificate is Freeze's intervals for the word's groups, prover advice in no row or
+      region (`cap.ADVICE`); only the exact intervals pass, and any other certificate fails good.
+    - **A drawn tile is accepted only when its tile check passes and its tally's verdict is ok**: its tile unit's digest
+      is the miner's h0, and its tally's ok word, the tally's public output beside the digest, is ok. The verdict is
+      `Pc8TileCap`'s (the cap in one tile unit, the split's reference): every passing row's words are good, and the
+      cap's inequality holds in its integer form on 31-bit words (`cap._cap_constants`).
+    - Every cap word is proved, never sampled: a drawn tile's closure (`plan.tile_layout`) holds its TM A rows, its
+      strip, all TM·TN of its word units, its TM row digests and row tallies, and its tally (4,291 units at 64 × 64, none
+      with more than 66 rows). Every partition still computes each value in exactly one unit: the strip computes its
+      rows' admission bits once for all the tiles in it.
+    - The cap's rows are `sd`, `cap-word`, `cap-flags`, `cap-chunks`, `cap-sums` and `cap-rows` (under `circuit.pc4`
+      below).
+    - The cap takes whole tiles only: `Shape.check` refuses a short last tile row under the cap.
   - The row cut along k (``Shape.row_k``, `circuit.rowk`) is `pc4`'s, below, on each of the three records. It takes
     whole tiles only: `Shape.check` refuses a short last tile row under the cut.
-  - Not in it yet: the debit and the cap. Until they land, Pearl-C's runs are checked by its reference audit, a
-    development shortcut that opens rows.
+  - Not in it yet: the cap in a run. Until it is, Pearl-C's runs are checked by its reference audit, a development
+    shortcut that opens rows.
 
 ## `pearl-c-nvfp4-v0`: Pearl-C on sm_120's block-scaled FP4, NVFP4 only (`schemes/pearl_c4.py`)
 
@@ -828,18 +864,42 @@ useful    U/(α_A·α_B), glue
     pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W               seg / v2
     pouw/row-ok/v1       the row's admission bit, bit 0 of one word, bits 1–15 0   1                 X, W               v2 / v2
     pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X                  v2
+    pouw/row-sd/v1       a row of A's k/32 salt-dead counts, each 32-bit word as   k/16              X                  seg
+                         two, low half first (Pearl-C's cap)
+    pouw/cap-word/v1     a cap word's C̃ and U, as the FP32 row's words            4                 X                  v2
+    pouw/cap-flags/v1    a cap word's k/32 flag bits 16 a word, low bit first      ⌈k/512⌉ + 5       X                  v2
+                         (the last word's high bits 0), its flag count and later
+                         +0 promotions as two words each, then good's ok word
+    pouw/cap-chunks/v1   a tile row's chunk digests, TurboSHAKE128 (D = 0x21) of   64                X                  v2
+                         each 32 columns' C̃ and U (`pearl_c.message_digest`), two
+                         bytes a word, low byte first (TN ≤ 64; the second 0 at
+                         TN ≤ 32), then 32 zero words
+    pouw/cap-sums/v1     a tile row's flag count, later +0 promotions and forming  7                 X                  v2
+                         elements as two words each, then its words' good as an ok
+                         word
+    pouw/cap-rows/v1     a strip's admission bits 16 a word, 64 bits (TM ≤ 64,     64                X                  v2
+                         the rest 0), then the cap's bound as two words, then 58
+                         zero words
     ~~~
 
-    Every per-call row (role X) but ok, the tile digest and the row cut's rows (below) is a row-seg row, so decode's
-    serial hash chain is a segment's, not the row's (Daniel's ruling, card 637f70c6): A_i (bf16, 8 KiB at k = 4,096, 8
-    segments), A′_i ‖ P_A,i (3 segments), and Pearl-C's FP32 A_i (16 KiB, 16 segments) and fp8-p row (5 segments). Every
-    other row is a v2 row, the registered rows (role W) included, in the registered tree and in every statement that
-    reads or writes them, so each (row, role) has one leaf schema wherever it appears and no row is `sha512/row/v1`
-    (Daniel's ruling, Slack 1790973124.259289). A v2 row costs what a v1 row of the same words would, a 128-byte prefix
-    block and the row, and is any length; the role byte v2 drops is bound by the registration domain. nvfp4-p's codes
-    and scales are core's `nvfp4_row_bytes`, as in flock-fp's packed rows, with P appended: every unit that reads such a
-    row reads all of it, since a tile needs A′_i and P_A,i both. The salt is 192 bytes; the verifier computes the tree
-    leaf, H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c.
+    Every per-call row (role X) but ok, the tile digest, the cap's rows and the row cut's rows (below) is a row-seg row,
+    so decode's serial hash chain is a segment's, not the row's (Daniel's ruling, card 637f70c6): A_i (bf16, 8 KiB at k
+    = 4,096, 8 segments), A′_i ‖ P_A,i (3 segments), and Pearl-C's FP32 A_i (16 KiB, 16 segments), fp8-p row (5
+    segments) and salt-dead counts (1 KiB at k = 8,192, 1 segment). The cap's per-word and per-row-sum rows are at most
+    one SHA-512 block at k ≤ 2^14, so a segment's chain is the row's, and v2 hashes them in fewer blocks. The chunk
+    digests and the strip row are v2 rows padded with zero words to 64, one whole block: C-Flock's composer refuses a
+    unit none of whose rows hashes a block before its last, and without a whole block the strip, a row digest, the tile
+    and the tally would read and write only one-block v2 rows. They are not row-seg rows because C-Flock's widened
+    proved scope takes a v2 row whose bytes are whole blocks or end in its first block, and a row-seg row only of whole
+    blocks; padded, each costs two compressions, as its short row-seg row did, where a row-seg row padded to a block
+    would cost three. A row digest and the strip write the zero words as constants, and the tile and the tally leave
+    them unread. Every other row is a v2 row, the registered rows (role W) included, in the registered tree and in every
+    statement that reads or writes them, so each (row, role) has one leaf schema wherever it appears and no row is
+    `sha512/row/v1` (Daniel's ruling, Slack 1790973124.259289). A v2 row costs what a v1 row of the same words would, a
+    128-byte prefix block and the row, and is any length; the role byte v2 drops is bound by the registration domain.
+    nvfp4-p's codes and scales are core's `nvfp4_row_bytes`, as in flock-fp's packed rows, with P appended: every unit
+    that reads such a row reads all of it, since a tile needs A′_i and P_A,i both. The salt is 192 bytes; the verifier
+    computes the tree leaf, H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c.
   - A unit's C-Flock statement names its rows in META (`leaves.statement_rows` of its ports): ``row_schemas``, each
     row's [schema, bits] (the input rows, one per row a tile reads, then the output rows), and ``out_row_ports``, each
     output row's run of output ports, which META names when an output row is row-seg or a run of several. Every output
@@ -851,7 +911,9 @@ useful    U/(α_A·α_B), glue
   - In gates the hiding adds only the tile digest: 281 Keccak-p[1600, 12] a 64 × 64 tile.
   - Vectors: `tests/vectors/pouw_rows.json` (`tests/pouw_rows_vectors.py`) pins each schema's row bytes, row digest,
     commit string and tree leaf in each role at k = 64 and 4,096 (a row-seg row's with each segment's length and digest),
-    and the digest of two tiles, which the gates compute. `test_circuit_leaves.py` rebuilds every row-seg vector from the
+    the cap's rows at the k where their words change (sd in one segment and two, cap-flags with and without padding,
+    cap-chunks with one digest and two), and
+    the digest of two tiles, which the gates compute. `test_circuit_leaves.py` rebuilds every row-seg vector from the
     spec by hand and reads core's own row-seg vectors as PoUW's rows. C-Flock's ports commit every row byte for byte:
     `backends/flock/tests/test_pouw_rows.py` recomputes each one's vector through C-Flock's port for the row, and two v2
     rows and a tile through the Lean verifier's row constants; on C-Flock's writer/reader pairs (`ROW_SEG_PAIRS`: A′_i ‖

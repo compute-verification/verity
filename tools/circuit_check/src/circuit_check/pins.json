@@ -489,6 +489,9 @@
   "PouwBf16Neg_v2": {
    "and": 0
   },
+  "PouwBlackwellE4m3SaltDead_v2": {
+   "and": 2493
+  },
   "PouwChi32_v2": {
    "and": 32
   },
@@ -497,6 +500,9 @@
   },
   "PouwF32SqrtRn_v2": {
    "and": 937
+  },
+  "PouwHopperE4m3SaltDead_v2": {
+   "and": 1806
   },
   "PouwRotl64Hi_v2": {
    "and": 218
@@ -512,6 +518,9 @@
   },
   "PouwSqGe_v2": {
    "and": 1036
+  },
+  "PouwWindowWord_v2": {
+   "and": 503
   },
   "PouwXor32_v2": {
    "and": 0
