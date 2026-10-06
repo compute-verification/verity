@@ -100,6 +100,9 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
   asks for a change. A conflict is fixed at the tip (ci restacks it), not by pushing to the PR: a new head refuses every
   tip that pins the old one at landing, and their checks are spent for nothing.
+- 2026-10-06 (8:07 AM PDT): one hash covers derivations and PRFs: `derive` is SHA-512, P2's key expansion counter-mode
+  SHA-512, and SHA-512 truncated to 256 bits counts as SHA-512; Pearl's FP8 scheme keeps BLAKE3 as Pearl's own
+  definition.
 - 2026-10-06 (8:03 and 8:14 AM PDT): research velocity first, no red tape (`AGENTS.md`, "Working principles"). Its
   applications so far:
   - a red-team grant carries when the PR's own patch is byte-identical at both heads, even if `main` moved under it,
@@ -116,9 +119,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
   needs. BLAKE3 code leaves the served path for `archive/` (Pearl-C's is `archive/pouw-blake3/`), kept but not
   maintained. Pearl's FP8 scheme stays as Pearl defines it, semi-maintained (BLAKE3 in `schemes/pearl_kw.py`), with
   `cr/blake3` its assumption alone.
-- 2026-10-06 (8:07 AM PDT): one hash covers derivations and PRFs: `derive` is SHA-512, P2's key expansion counter-mode
-  SHA-512, and SHA-512 truncated to 256 bits counts as SHA-512; Pearl's FP8 scheme keeps BLAKE3 as Pearl's own
-  definition.
 - 2026-10-06 (8:03 AM PDT): a train member needs no quick-tier pass. The train's own full check is the gate, and the
   owner's `ready` label at the PR's head may be written by hand (`research data label pr:N@SHA ready true --by LANE`).
   Grants are still required.
