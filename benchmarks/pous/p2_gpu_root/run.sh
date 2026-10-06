@@ -27,6 +27,8 @@ model() {
 }
 if [ "$set_" = model ]; then model; exit 0; fi
 if [ "$set_" = lat ]; then
+  hm=$(date -u +%H%M)
+  if [ "$hm" -ge 0640 ] && [ "$hm" -lt 0830 ]; then echo "refused: node 2 is reserved 07:00-08:30Z" >&2; exit 75; fi
   $nv $f -o "$b/probe5" "$here/probe5.cu"
   "${CUOBJDUMP:-/usr/local/cuda/bin/cuobjdump}" -sass "$b/probe5" > "$out/probe5.sass"
   nvidia-smi -q -d CLOCK,PERFORMANCE > "$out/nvidia-smi-before.txt"

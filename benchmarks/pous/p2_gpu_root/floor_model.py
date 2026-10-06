@@ -27,7 +27,10 @@ Constructions:
                level of size n is charged n/2 log2 n + n products (one transform and a pointwise pass, a third of
                the usual three transforms) and log2 n + 1 dependent butterflies of t_bfly cycles plus one t_smem
                pass inside the SM; transforms count one product per butterfly at T. All of that favors the attacker.
-    python floor_model.py [--hop 447] [--clock-mhz 2430] [--t-bfly 4] [--t-smem 20] [--sms 188] [--t-sm 92.75] [--json]
+    python floor_model.py [--hop 447] [--clock-mhz 2430] [--t-bfly 4] [--t-smem 20] [--sms 188] [--t-sm 92.75]
+                          [--t-mma 27] [--sm-sq-cyc C] [--json]
+--t-mma is the dependent mma latency in a redundant squaring's chain; --sm-sq-cyc replaces that squaring's cost with a
+measured one (probe5's dependent squaring-sized mma round on one SM) instead of the max of work and chain.
 --sms and --t-sm (26-bit products per cycle per SM) describe another part, e.g. a B200 estimate:
 --sms 148 --t-sm 511.25 --clock-mhz 1965 (30 IMAD + about 7,700 dense int8 MACs / 16).
 """
@@ -81,7 +84,7 @@ def reduce_ways(s: int, t_mul: float, t_bfly: float, t_smem: float) -> list[tupl
 
 
 def rows(hop: float, t_mul: float, clock_mhz: float, t_bfly: float = 4.0, t_smem: float = 20.0,
-         sms: int = SMS, t_sm: float = T_SM) -> list[dict]:
+         sms: int = SMS, t_sm: float = T_SM, t_mma: float = T_MMA, sm_sq_cyc: float | None = None) -> list[dict]:
     t = sms * t_sm
     wpos = 633 * 634 / 2
     out = []
@@ -99,7 +102,7 @@ def rows(hop: float, t_mul: float, clock_mhz: float, t_bfly: float = 4.0, t_smem
 
     add("positional", 1, 1, wpos, 2)
     kara = wpos * (3 / 4) ** 3
-    one = max(kara / t_sm, T_MMA + t_mul + t_smem)
+    one = sm_sq_cyc if sm_sq_cyc is not None else max(kara / t_sm, t_mma + t_mul + t_smem)
     for j in range(2, 13):
         add("positional-J", j, 1, wpos, 2, local=(j - 1) * one)
     add("single-sm", 1, 0, 0.0, 0, local=one)
@@ -129,12 +132,15 @@ def main() -> None:
     ap.add_argument("--t-smem", type=float, default=20.0)
     ap.add_argument("--sms", type=int, default=SMS)
     ap.add_argument("--t-sm", type=float, default=T_SM)
+    ap.add_argument("--t-mma", type=float, default=T_MMA)
+    ap.add_argument("--sm-sq-cyc", type=float, default=None)
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
-    rs = rows(a.hop, a.t_mul, a.clock_mhz, a.t_bfly, a.t_smem, a.sms, a.t_sm)
+    rs = rows(a.hop, a.t_mul, a.clock_mhz, a.t_bfly, a.t_smem, a.sms, a.t_sm, a.t_mma, a.sm_sq_cyc)
     if a.json:
         print(json.dumps({"hop": a.hop, "t_mul": a.t_mul, "clock_mhz": a.clock_mhz, "t_bfly": a.t_bfly,
-                          "t_smem": a.t_smem, "sms": a.sms, "t_sm": a.t_sm, "rows": rs}))
+                          "t_smem": a.t_smem, "sms": a.sms, "t_sm": a.t_sm, "t_mma": a.t_mma,
+                          "sm_sq_cyc": a.sm_sq_cyc, "rows": rs}))
         return
     marks = " ".join(f"{m * a.clock_mhz / 1e3:.1f} cycles ({m} ns)" for m in (103.9, 51.9))
     print(f"hop {a.hop} cycles, t_mul {a.t_mul}, t_bfly {a.t_bfly}, t_smem {a.t_smem}, {a.sms} SMs x {a.t_sm} "
