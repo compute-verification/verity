@@ -1,3 +1,5 @@
+import Specs.Flock.Guarantees.Partitioning
+
 /-!
 # C-Flock's guarantees (trusted)
 

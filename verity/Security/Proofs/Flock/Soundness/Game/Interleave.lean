@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Game.Basic
+import Definitions.Flock.Game.Interleave
 
 /-!
 # Two interactions run concurrently
@@ -23,8 +24,6 @@ open scoped ENNReal
 namespace Game
 
 variable {α β : Type}
-
-export Verity.Game (interleaveWith interleave)
 
 theorem value_map (p : β → Prop) (f : α → β) : ∀ g : Game α,
     value p (g.map f) = value (fun a => p (f a)) g

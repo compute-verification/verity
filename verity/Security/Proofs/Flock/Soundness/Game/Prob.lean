@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Game.Union
+import Definitions.Flock.Game.Prob
 
 /-!
 # Probabilities for a fixed prover strategy
@@ -118,8 +119,6 @@ theorem prCoin_pi_forall {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → 
         refine Finset.prod_congr rfl fun i hi => ?_
         simp only [hi, ite_true]
         exact avg_ite_eq_prCoin _
-
-export Verity.Game (Strategy.ofMap)
 
 /-- Relabelling the output relabels the event. -/
 theorem prob_map (p : β → Prop) (f : α → β) :

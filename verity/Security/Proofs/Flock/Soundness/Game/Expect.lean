@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Rewinding
+import Definitions.Flock.Game.Expect
 
 /-!
 # Expectations against a strategy, and the rewinding lemma for any run distribution
@@ -24,12 +25,6 @@ open scoped ENNReal
 namespace Game
 
 variable {α : Type}
-
-/-- The expectation of `f` over the verifier's uniform coins, against the strategy `s`. -/
-noncomputable def expect (f : α → ℝ) : (g : Game α) → Strategy g → ℝ
-  | .ret a, _ => f a
-  | .send _ k, s => expect f (k s.1) s.2
-  | @Game.coin _ C iF _ k, s => (∑ c : C, expect f (k c) (s c)) / (@Fintype.card C iF)
 
 /-- The expectation over two independent runs of the same strategy. -/
 noncomputable def expect₂ (F : α → α → ℝ) (g : Game α) (s : Strategy g) : ℝ :=

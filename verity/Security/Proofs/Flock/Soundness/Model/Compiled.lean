@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Model.Session
+import Definitions.Flock.Model.Session
 import Proofs.Flock.Soundness.Merkle
 
 /-!

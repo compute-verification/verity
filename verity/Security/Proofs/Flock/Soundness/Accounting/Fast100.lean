@@ -1,9 +1,10 @@
-import Proofs.Flock.Soundness.Accounting.Bound
+import Definitions.Flock.Accounting.Bound
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.GCongr
+import Definitions.Flock.Accounting.Fast100
 
 /-!
 # The bound for `fast100` run twice on one root
@@ -221,12 +222,6 @@ def ligUp : List Level → ℚ
   | [l] => lastUp l
   | l :: l' :: rest => midUp l l' + ligUp (l' :: rest)
 
-/-- The level conditions the rational bounds need: rates `2^-1 … 2^-7`, at least two message
-columns. Every `fast100` level satisfies them (checked below). -/
-def Level.Ok (l : Level) : Prop := 1 ≤ l.logInvRate ∧ l.logInvRate ≤ 7 ∧ 1 ≤ l.logCols
-
-instance (l : Level) : Decidable l.Ok := by unfold Level.Ok; infer_instance
-
 theorem midLevelError_le (l l' : Level) (hl : l.Ok) :
     midLevelError l l' ≤ (midUp l l' : ℝ) := by
   have hf := foldError_le l (max l.listBound l'.listBound) hl.2.1 hl.2.2
@@ -258,10 +253,6 @@ theorem ligeritoError_le : ∀ ls : List Level, (∀ l ∈ ls, l.Ok) →
       linarith
 
 /-! ## The statement ranges -/
-
-/-- The statement shapes covered: at most `2^27` witness bits per block, 1024 public regions,
-64 coordinates per link point. -/
-def Stmt.InRange (st : Stmt) : Prop := st.kLog ≤ 27 ∧ st.nRegions ≤ 1024 ∧ st.mPts ≤ 64
 
 /-- The worst-case numerator of `piopError` over the covered statements. -/
 def piopNumMax (m L₀ : ℕ) : ℕ :=

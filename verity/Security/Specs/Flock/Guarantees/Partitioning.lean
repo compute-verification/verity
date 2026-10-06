@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Model
+import Definitions.Flock.Audit.Partitioning.Model
 
 /-!
 # Optimal partitioning: the guarantees

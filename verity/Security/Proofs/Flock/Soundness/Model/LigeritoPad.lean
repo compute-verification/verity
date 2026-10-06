@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Model.Session
+import Definitions.Flock.Model.Session
 
 /-!
 # Ligerito with M1's padded level 0, in the clear

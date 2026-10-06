@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+import Specs.Flock.Guarantees.Partitioning
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Rungs
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Bernoulli

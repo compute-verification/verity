@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Audit.Work
+import Definitions.Flock.Audit.Closure
 
 /-!
 # Closure draws
@@ -33,14 +34,6 @@ namespace Law
 
 variable {n m : ℕ}
 
-/-- The units made unsound by the wrong-unit set `B`: those whose closure meets it. -/
-def unsoundTiles (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) : Finset (Fin n) :=
-  univ.filter fun t => ¬ Disjoint (cl t) B
-
-/-- **Closure draws**: `L`'s draw, each drawn unit proved together with its closure. -/
-def closure (L : Law n) (cl : Fin n → Finset (Fin n)) : Law n :=
-  L.widen fun S => S ∪ S.biUnion cl
-
 /-- **What a closure draw proves**: a unit is proved when it is drawn or lies in a drawn unit's closure. -/
 theorem mem_closure_draw (L : Law n) (cl : Fin n → Finset (Fin n)) (ω : (L.closure cl).Ω) (u : Fin n) :
     u ∈ (L.closure cl).draw ω ↔ u ∈ L.draw ω ∨ ∃ t ∈ L.draw ω, u ∈ cl t := by
@@ -64,18 +57,10 @@ theorem closure_escape (L : Law n) (cl : Fin n → Finset (Fin n)) (B : Finset (
     by_contra hc
     exact disjoint_left.1 h2 ht (mem_filter.2 ⟨mem_univ t, hc⟩)
 
-/-- The work of the wrong units `B` and of the units they make unsound. -/
-abbrev unsoundWork (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) : ℕ :=
-  workOf σ w (B ∪ unsoundTiles cl B)
-
 /-- **The wrong units' own work is in the unsound work**, whatever the closure map. -/
 theorem workOf_le_unsoundWork (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) :
     workOf σ w B ≤ unsoundWork σ w cl B :=
   sum_le_sum_of_subset subset_union_left
-
-/-- **The harm of a unit**: its own work and the work of every unit whose closure holds it, what it spoils when wrong. -/
-def harm (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (u : Fin n) : ℕ :=
-  workOf σ w (insert u (univ.filter fun t => u ∈ cl t))
 
 /-- **A wrong unit's whole harm is in the unsound work**, whether or not a draw reaches it: it is wrong itself, and every
 unit whose closure holds it is unsound. -/

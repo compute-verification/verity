@@ -1,5 +1,5 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Model
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+import Definitions.Flock.Audit.Partitioning.Model
+import Specs.Flock.Guarantees.Partitioning
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfiltration
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.TwoStage

@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Model.Statement
+import Definitions.Flock.Model.Statement
 
 /-!
 # The compiled lowering: a satisfied table makes every placed unit correct

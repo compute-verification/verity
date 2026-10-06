@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+import Specs.Flock.Guarantees.Partitioning
 
 /-!
 # Exfiltration: the witnesses' facts

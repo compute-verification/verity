@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Model
+import Definitions.Flock.Audit.Partitioning.Model
 
 /-!
 # Two laws for the free-compute proofs

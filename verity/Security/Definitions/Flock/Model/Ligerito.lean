@@ -1,5 +1,5 @@
-import Proofs.Flock.Soundness.Model.Piop
-import Proofs.Flock.Soundness.Accounting.Bound
+import Definitions.Flock.Model.Piop
+import Definitions.Flock.Accounting.Bound
 
 /-!
 # Ligerito (PROTOCOL.md §13), as an interactive oracle proof

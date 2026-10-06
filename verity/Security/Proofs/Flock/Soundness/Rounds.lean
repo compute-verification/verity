@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.Game.Poly
-import Proofs.Flock.Soundness.Model.Piop
-import Proofs.Flock.Soundness.Model.Ligerito
+import Definitions.Flock.Model.Piop
+import Definitions.Flock.Model.Ligerito
 import Mathlib.Algebra.CharP.Defs
 
 /-!

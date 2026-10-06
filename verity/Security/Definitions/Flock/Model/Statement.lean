@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Model.Basic
+import Definitions.Flock.Model.Basic
 import Mathlib.Data.Matrix.Mul
 import Mathlib.Basic.Real.Basic
 import Mathlib.Data.Fintype.Card
@@ -138,5 +138,10 @@ to the committed level-0 table packs a witness that satisfies `S`. -/
 def CommittedSatisfies (A : Arith F K) (S : Statement) (k₀ cols₀ d₀ : ℕ) (γ₀ : ℝ)
     (C₀ : Table F k₀ d₀) : Prop :=
   ∃ M : Message F k₀ cols₀, Close γ₀ C₀ (encode A d₀ M) ∧ S.Satisfies (witnessOf A S.m k₀ cols₀ M)
+
+/-- The layout of the link points (§16.2): each region's free bits are distinct and read link
+coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` fit inside the point. -/
+def Statement.LinkLayout (S : Statement) (ptLocal mPts : ℕ) : Prop :=
+  (∀ R ∈ S.regions, R.free.Nodup ∧ R.free.length ≤ ptLocal) ∧ ptLocal + S.nbl ≤ mPts
 
 end FlockSoundness.Model

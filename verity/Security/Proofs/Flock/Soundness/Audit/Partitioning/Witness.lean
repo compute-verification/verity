@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+import Specs.Flock.Guarantees.Partitioning
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.TwoStage
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Witnesses

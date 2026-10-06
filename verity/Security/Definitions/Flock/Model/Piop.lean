@@ -1,5 +1,5 @@
-import Proofs.Flock.Soundness.Model.Statement
-import Proofs.Flock.Soundness.Game.Basic
+import Definitions.Flock.Model.Statement
+import Definitions.Flock.Game.Basic
 
 /-!
 # One rep before Ligerito: zerocheck, lincheck, the claims and the opening
