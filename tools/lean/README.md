@@ -204,6 +204,11 @@ statement reviewer for it. Any other lift prints in full: a `G` whose value diff
 theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
 lists a lifted guarantee as changed.
 
+`four_names` lists the namespace roots (`["Nci", "NetTiming"]`) whose guarantees are all in the four-name form: each is
+`X.SecurityProofs.G : X.Guarantees.G` (universe parameters aside), with `G` a definition of a `Guarantees` module, and the
+audit fails on any other guarantee under a listed root. A package's owner adds its root once every guarantee there is
+lifted, or no longer a guarantee.
+
 `audit.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` with the theorem's doc comment,
 binders and type as its source writes them, after the `variable`s in scope that Lean includes in the theorem (those the
 statement mentions, and the instances over them), in the theorem's namespace with its file's `open`s (less the namespaces
