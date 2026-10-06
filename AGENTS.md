@@ -12,7 +12,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 
 - `verity/`: the core library, the distribution `verity` (the root `pyproject.toml`).
   - `verity.primitives`: circuits and their evaluator (`circuits`, format in `circuits/PROTOCOL.md`), commitments
-    (`commitments`), shared hash and curve code (`crypto`), and the one challenge derivation (`randomness`).
+    (`commitments`), shared hash code (`crypto`), and the one challenge derivation (`randomness`).
   - `verity.protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs
     (`verification.sampled_proofs`), PoUW (`accounting.work.pouw`), PoUS (`accounting.space.pous`) and the network
     certifier (`accounting.communication.certifier`). NCI is Lean only.
@@ -159,7 +159,9 @@ Landing:
   new workload needs no verifier or proof change.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `verity/Security/`: C-Flock's executable verifier
-    (`backends/flock/verifier/lean/`, no dependencies) and the PoUS grader (`verity/protocols/accounting/space/pous/lean/`).
+    (`backends/flock/verifier/lean/`, no dependencies), the PoUS grader (`verity/protocols/accounting/space/pous/lean/`)
+    and the certifier program (`verity/protocols/accounting/communication/certifier/lean/`, `NetworkCertifier`, with its
+    difftest).
   - The analysis is `verity/Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Specs/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `SecurityProofs.G : G` for each guarantee.

@@ -23,6 +23,16 @@ code, and lists what the Lean does not state yet.
 6. The audit record keeps the registration, the receipt, the draw, the proved units, the statement's digests and every
    verdict, and, when everything accepted, the integrity profile.
 
+**The proof service** (`service`) runs these steps for a protocol, on the challenger's side. A protocol states a `Spec`:
+- what it commits;
+- its selection rule;
+- the check, as a public Program;
+- its public items, each with its reason.
+
+Everything the auditor observes must be a function of those items. A `Stream` per `Spec` holds each registration to that
+rule and then to one-stage's checks, draws once, binds the delivered proof to its outcome, and counts failures against a
+public budget. The design is `note:proofs/20261006T0307Z-draft-proof-service-architecture`.
+
 **The laws.** `subset:K` is a uniform `K`-subset of the `N` units, and `bernoulli:NUM/DEN` takes each unit independently
 with probability `NUM/DEN`.
 The default is `stratified:K` (Daniel, Sep 27): one stratum per template, and inside each an independent uniform draw
@@ -69,7 +79,8 @@ captured from serving, and says so (`window.kind = "stand-in"`).
   prove that its draws escape no more often than the modelled laws, and `Audit/FlockWork.lean` that its sizes are the
   model's.
 - **The Python.** `verity.protocols.verification.sampled_proofs.one_stage` is the one-stage audit: `registration`, `draw` (the draw's checks, not
-  a sampler), `partition`, `audit`, `verdict` and `consumers`. `verity_experimental.sampled_proofs.law` is the two-stage law and the
+  a sampler), `partition`, `audit`, `verdict` and `consumers`. `service` is the proof service over it, whose `Stream`
+  draws from the challenger's own randomness. `verity_experimental.sampled_proofs.law` is the two-stage law and the
   verifier's randomness, and `verity_experimental.sampled_proofs.plan` holds verification plans over IR Programs.
 - **The Lean-generated vectors.** `experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json` is `audit_exfiltration`
   and `stratified_miss_eq_greedy` evaluated by Lean (`experimental/tests/sampled_proofs/lean/ExfiltrationVectors.lean`,
@@ -87,12 +98,18 @@ Tests: `uv run tools/check/suites.py verity-sampled-proofs`.
 ## Core API
 
 ~~~python
+from verity.protocols.verification.sampled_proofs import service
 from verity.protocols.verification.sampled_proofs.one_stage import audit, draw, partition, registration
 from verity_experimental.sampled_proofs.consumers import compute_bound, exfiltration_bound, location_bits
 from verity_experimental.sampled_proofs.law import OwnRandomness, ReplayUnit, Stage, TwoStageLaw
 from verity_experimental.sampled_proofs.plan import VerificationPlan
 ~~~
 
+- `service`: the types `Spec`, `Value`, `Public`, `Check` and `Outcome`, and the selection rules `All`, `Law`, `TwoStage`
+  and `Sequential`.
+  - `check_public` is the public-items rule on a registration.
+  - `Stream(spec, unit, budget=, delta=, challenger=)` has the calls `register`, `select`, `deliver` and `outcome`, which
+    raise `Refused` (with its `Verdict`) or `Pending`.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R7), `matches_public` to the verifier's public file, `receipt` logs it, `digest` names it, and `served_domain` is a
   served root's commitment domain.
@@ -155,8 +172,8 @@ named with each. A rule leaves this list in the change whose Lean states it.
   values captured from serving, whose link to the served root is provenance, not proof.
 - A served root's domain (`served_domain`, agreed with vllm-serving-commit) binds the program, the partition, the port,
   its schema, its leaf count and the run: the hex `domain_id` of `CommitmentDomain(B, -1, RangeIndexedDomain(0, leaves),
-  hash="sha512")`, `B` being the bytes of `identity_digest("verity/one-stage/served-domain/v0", {"program", "partition",
-  "port", "schema", "leaves", "run"})`.
+  hash="sha512")`, `B` being the 64 bytes of `identity_digest_sha512("verity/one-stage/served-domain/v1", {"program",
+  "partition", "port", "schema", "leaves", "run"})`.
 
 Pinned by `tests/test_one_stage.py` (`test_registration_v1_passes_r1_to_r6`, `test_registration_refusals`,
 `test_receipt_names_the_record`, `test_registration_holds_the_public_file`, `test_the_window_says_served_or_stand_in`,
@@ -315,6 +332,38 @@ bound `harm_bound`; each application counts delta once.
 
 Pinned by `experimental/tests/sampled_proofs/test_consumers.py` and
 `experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json`, whose recorded sha256 of the Lean files it came from fails `test_the_lean_vectors_were_generated_from_this_tree` until it is regenerated.
+
+### The proof service
+
+`service.Stream` holds one protocol's registrations to its `Spec`, on the challenger's side:
+
+- **The public-items rule** (`check_public`) runs before one-stage's R1 to R7. Each field of a registration record is the
+  service's own (`format`, `protocol`, `previous`, `law`, `scheme`, which is `SCHEME`, and `query`, which is the
+  check's), a declared Value's one salted root (a `roots` entry by port, a `registered` entry by value), or an item the
+  Spec declares in `public` with its kind (`structure`, `output`, `coins` or `commitment`) and reason. The declared
+  items a record shows are `population` (for `population`, `program` and `partition`), `population:<template>` for each
+  stratum, `window`, `leaf_layer` and `anchors` when not empty, and each value's `leaves:<v>` and `domain:<v>`, with
+  `words:<v>` and `word_bits:<v>` for a registered value. Its codes are `keys`, `roots`, `unsalted`, `query` and
+  `undeclared`.
+- **The order.** A stream holds one open registration at a time. `register` logs the receipt, whose `received` is the
+  registration's order in the stream. `select` then draws once, from 32 fresh bytes of the challenger's coins through
+  `verity.primitives.randomness.derive` under `verity/proof-service/draw/v1`, bound to the stream, the registration, the
+  receipt and the Spec's context, or from the stream's `sampler`; either draw is held to `draw.check_draw`.
+- **No retries.** A second `select`, `deliver` or `outcome` is refused. A proof delivered more than `Check.proof_deadline`
+  seconds after the draw, or none by then, is the symbol `late`. An outcome is pending until every verifier of record has
+  run, and each verdict of record names the delivered sessions.
+- **The failure budget.** At its `budget`-th `reject` or `late` a stream stops, and it refuses registrations from then on.
+- **The records.** The stream's digest is the SHA-512 of `{"format": "verity/proof-service/stream/v0", "spec": <the
+  Spec's digest>, "budget", "delta", "challenger"}`. An outcome's record is `{"format":
+  "verity/proof-service/outcome/v0", "stream", "order", "registration", "receipt", "draw", "sessions", "symbol",
+  "public", "audit"}`, with the receipt and the draw as the SHA-512 of their canonical JSON and `audit` one-stage's audit
+  record (null for `late`), and `Outcome.record` is its SHA-512.
+
+A stream refuses the `TwoStage` and `Sequential` rules, a window statement and a timed session until they are built.
+Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outcome`,
+`test_the_rule_refuses_an_extra_field` and the other `test_the_rule_refuses_*`,
+`test_no_retries_nothing_redraws_and_an_outcome_is_final`, `test_a_late_proof_is_a_reject`,
+`test_the_stream_stops_at_its_budgeth_failure`, `test_a_call_names_its_own_streams_registration_and_draw`).
 
 ### The two-stage law
 

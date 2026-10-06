@@ -105,7 +105,7 @@ research merge --canary [--tool check] [--json]                    # the gates' 
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
-research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync [--dry-run]   # Slack (slack.py, below)
+research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
 
 After a history rewrite, an accepted `commit-map/v1` (labelled `commit_map=accepted`) lets an attempt of an old commit count for
@@ -478,26 +478,27 @@ lane had approved the deletion, so the passes were lost. Here that `rm` is refus
 
 ### Slack
 
-`research slack` (`slack.py`) is the coordination API on Slack: handles ask one another (`ask`), announce to some or all
-(`announce`), and close each thread with 👀/✅/❌ (`pickup`, `done`, `decline`; `roster` for an announcement). The conventions
-(only handle holders are on Slack, who subscribes to what, the wake recipe, the norms) are the `using-slack` skill, and
-`.agents/skills/using-slack/registry.json` names the handles (user groups), the channels and the humans the commands
-check against. It speaks the Web API over `urllib` with `$SLACK_BOT_TOKEN`, never prints a token, and `$SLACK_API_URL` points
-it elsewhere: `tests/test_slack.py` runs every subcommand against a fake Web API on a local port. `--dry-run` sends nothing
-and prints each request. `match` reads the thread (`conversations.replies`) only for a reply that tags no one;
-`verify-author` always fetches the message by channel and ts, since a wake payload is not evidence of its author, and fails
-closed on an allowlist entry without an id. Every handle posts through the one bot under its own username, so the username
-is a label: `verify-author` proves a post is Verity's bot, a listed alerting bot or a named human, not which handle wrote it.
-The same bot can place each reaction on a message only once, which is why an announcement's addressees answer with status
-lines rather than reactions. `groups sync` is a plan until `--apply`, which then writes the groups' ids into the registry.
+`research msg` (`slack.py`; `research slack` is the same command) is the coordination API on Slack: a handle posts with
+`send` (`--to` names lead it and are woken; `--kind announce` for an announcement, `--kind fyi` or `--quiet` for a note that
+needs no reply) and closes a thread it was asked in with `close` (a status line, ✅, or ❌ with `--declined WHY`). The
+conventions (only handle holders are on Slack, who subscribes to what, the norms) are the `using-slack` skill, and
+`.agents/skills/using-slack/registry.json` names the handles (user groups, and the paths each `owns`), the channels and the
+humans the commands check against. It speaks the Web API over `urllib` with `$SLACK_BOT_TOKEN`, never prints a token, and
+`$SLACK_API_URL` points it elsewhere: `tests/test_slack.py` runs every subcommand against a fake Web API on a local port.
+`--dry-run` sends nothing and prints each request. Every handle posts through the one bot under its own username, so the
+username is a label: `verify-author` proves a post is Verity's bot, a listed alerting bot or a named human, not which handle
+wrote it. The same bot can place each reaction on a message only once, which is why an announcement's addressees answer with
+status lines rather than reactions. `groups sync` is a plan until `--apply`, which then writes the groups' ids into the
+registry.
 
-The bot needs `chat:write`, `chat:write.customize` (the handle as the username), `groups:history` (read, match, roster,
-verify-author in private channels; `channels:history` for a public one), `reactions:write` (pickup, done, decline), and for
-`groups sync` `usergroups:read` and `usergroups:write`. It must be a member of both channels (`chat:write.public` does not
-reach private channels), and Cursor's Slack app must be in both too: Cursor delivers the wakes, this bot posts.
+The bot needs `chat:write`, `chat:write.customize` (the handle as the username), `groups:history` (reading threads in private
+channels; `channels:history` for a public one), `reactions:write` (`close`), and for `groups sync` `usergroups:read` and
+`usergroups:write`. It must be a member of both channels (`chat:write.public` does not reach private channels), and Cursor's
+Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
-Routing: each handle holder subscribes to its own inbox, not to the top level; the sending CLI rings the doorbells of the
-handles a post addresses (`route_targets`, `slack.py`).
+Routing: each handle holder subscribes to its own inbox thread, not to the top level. The site's router
+(`/api/agent-slack/events`) rings the doorbells of the names a post addresses, by the rule in `route_targets` (`slack.py`),
+which `tests/slack_routing_vectors.json` pins for both.
 
 ### Notes and evidence over MCP
 
