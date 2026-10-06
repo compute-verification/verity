@@ -21462,6 +21462,26 @@
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
   },
+  "FlockVBridge.sound_mul128": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.sound_mul128 (a b : List Flock.HmNets.Lin) (ha : Eq a.length 128) (hb : Eq b.length 128) :",
+    "  FlockSoundness.Discharge.Hm.Sound (FlockVBridge.mul128 a b) fun z c =>",
+    "    ∀ (x y : Flock.F128),",
+    "      (∀ (k : Nat),",
+    "          instLTNat.lt k 128 →",
+    "            Eq (FlockSoundness.Discharge.Hm.ev z (a.getD k Flock.HmNets.Lin.zero)) (FlockVBridge.bitOf x k)) →",
+    "        (∀ (k : Nat),",
+    "            instLTNat.lt k 128 →",
+    "              Eq (FlockSoundness.Discharge.Hm.ev z (b.getD k Flock.HmNets.Lin.zero)) (FlockVBridge.bitOf y k)) →",
+    "          ∀ (k : Nat),",
+    "            instLTNat.lt k 128 →",
+    "              Eq (FlockSoundness.Discharge.Hm.ev z (c.getD k Flock.HmNets.Lin.zero))",
+    "                (FlockVBridge.bitOf (instHMul.hMul x y) k)"
+   ],
+   "assumptions": [],
+   "type_hash": "0e7d673601715760130d9b7f727c950291b09f8277c923841e5200db9b801fa3"
+  },
   "FlockVBridge.sound_shaFrom": {
    "owner": "@proofs",
    "signature": [
@@ -45362,7 +45382,8 @@
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
-    "FlockSoundness.table_sound_exec_fast100_34_35"
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockVBridge.sound_mul128"
    ]
   },
   "Flock.Hash": {
@@ -46441,6 +46462,7 @@
     "FlockSoundness.Prog.flock_headline_live",
     "FlockSoundness.Prog.flock_headline_live_on",
     "FlockSoundness.Refine.setupH_wf",
+    "FlockVBridge.sound_mul128",
     "FlockVBridge.sound_shaFrom"
    ]
   },
@@ -54287,7 +54309,8 @@
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
-    "FlockSoundness.table_sound_exec_fast100_34_35"
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockVBridge.sound_mul128"
    ]
   },
   "Proofs.Flock.Level3.GF128Field": {
@@ -61680,6 +61703,7 @@
     "FlockSoundness.Discharge.Hm.hm96_commit",
     "FlockSoundness.Discharge.Hm.port_commit",
     "FlockSoundness.Discharge.Hm.row_commit",
+    "FlockVBridge.sound_mul128",
     "FlockVBridge.sound_shaFrom"
    ]
   },
@@ -73953,6 +73977,20 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewH",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ"
    ]
+  },
+  "Proofs.Flock.VBridge.Karatsuba": {
+   "digest": "12706ec9a508498e92595e6049ffe2499f370c0b498e8266b7b77abc64d38d5b",
+   "definitions": {
+    "FlockVBridge.addL": "c6342f5f857b828e7ec13fadd4029273044d1808dbc5fbd06558ef27c88500e3",
+    "FlockVBridge.bitOf": "334a3785f03820a47458c5a9a0b3e7b363c68fd3639f28df79c951894d8d655e",
+    "FlockVBridge.foldG": "89888d97bd5b837f53507c240d02a8a1ba65ef949844e599eabdf0af2a4bb128",
+    "FlockVBridge.kara": "48f9c5dd419910fd4f84a532fe1377f1f78b9b3f804247ffdc7771d7c494d27d",
+    "FlockVBridge.mul128": "93cddf48cc27607c10de84001cba7f11ac589d86d9cc8cae560ba248ed49dfb0",
+    "FlockVBridge.mulS": "517dcecf7d424d0befdfb92dce2d851e5545ba9162eab3aeb4499eedb8510e80",
+    "FlockVBridge.reduceG": "94445b1886242ad02f0326794a6250c05ea493d21600105e4901dbebc24e0412",
+    "FlockVBridge.shiftL": "12f86c853d4019382bfa95a5749a7a1a9cc1c3d52f53e4096a34dc0c3c01151a"
+   },
+   "guarantees": ["FlockVBridge.sound_mul128"]
   },
   "Proofs.Flock.VBridge.Sha": {
    "digest": "8ecb8ea6d469ac3a6d0f2b4940afc0242b3a45f71d16e48b5a83e0d94ceedbc5",
