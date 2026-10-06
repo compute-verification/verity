@@ -11,7 +11,8 @@ direction bit `d[h]` swaps the current digest and the sibling (`_Forms.swap`: `t
 
 `sound_climbFrom`: whenever the rows hold, if the forms carry the bytes of a 64-byte digest and of 64-byte siblings
 (`Carries`) and the direction bits are the position's low bits, the output carries the verifier of record's climb,
-`Flock.climb hm96Sha512` of the digest at the position through the siblings.
+`Flock.climb ms` of the digest at the position through the siblings, for any scheme `ms` whose node is `SHA-512(l ‖ r)`
+(`MerkleScheme.hm96Sha512`, and `MerkleScheme.sha512`'s unsalted leaves).
 -/
 
 namespace FlockVBridge
@@ -94,30 +95,32 @@ theorem sound_swap (d : Lin) (a s : List Lin) : Sound (swap d a s) fun z lr => �
   · rw [hlen2]; cases ev z d <;> simp [hx.1, hxy]
   · rw [(hbit i (by omega)).2]; cases ev z d <;> simp [hx.2 i (by omega), hy.2 i (by omega)]
 
-/-- **V*'s climb is the verifier of record's.** Whenever the rows of `climbFrom d h cur sibs` hold under `z`: if `cur`
-carries a 64-byte digest `acc`, each sibling's forms carry a 64-byte sibling of `ss`, and the direction bit at level
-`h + j` is bit `j` of the position `idx`, the output carries `Flock.climb hm96Sha512 acc idx ss`. -/
-theorem sound_climbFrom (d : List Lin) : ∀ (h : ℕ) (cur : List Lin) (sibs : List (List Lin)),
+/-- **V*'s climb is the verifier of record's.** For a Merkle scheme `ms` whose node is `SHA-512(l ‖ r)`, whenever the
+rows of `climbFrom d h cur sibs` hold under `z`: if `cur` carries a 64-byte digest `acc`, each sibling's forms carry a
+64-byte sibling of `ss`, and the direction bit at level `h + j` is bit `j` of the position `idx`, the output carries
+`Flock.climb ms acc idx ss`. -/
+theorem sound_climbFrom (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (d : List Lin) :
+    ∀ (h : ℕ) (cur : List Lin) (sibs : List (List Lin)),
     Sound (climbFrom d h cur sibs) fun z out => ∀ (acc : ByteArray) (idx : ℕ) (ss : List ByteArray),
       acc.size = 64 → Carries z cur acc → List.Forall₂ (fun w b => b.size = 64 ∧ Carries z w b) sibs ss →
       (∀ j < sibs.length, ev z (d.getD (h + j) Lin.zero) = idx.testBit j) →
-      Carries z out (Flock.climb MerkleScheme.hm96Sha512 acc idx ss)
+      Carries z out (Flock.climb ms acc idx ss)
   | _, cur, [] => Sound.pure' fun z acc idx ss _ hcur hss _ => by
       cases hss
       exact hcur
   | h, cur, s :: rest => by
       unfold climbFrom
       refine Sound.bind' (sound_swap _ cur s) fun lr => Sound.bind' (sound_shaIv _) fun cur' =>
-        Sound.mono (sound_climbFrom d (h + 1) cur' rest) fun z out hih hsha hsw acc idx ss hacc hcur hss hdir => ?_
+        Sound.mono (sound_climbFrom ms hms d (h + 1) cur' rest) fun z out hih hsha hsw acc idx ss hacc hcur hss hdir => ?_
       obtain _ | ⟨⟨hsb, hs⟩, hss⟩ := hss
       rename_i sb ss
       obtain ⟨h1, h2⟩ := hsw acc sb hcur hs (by rw [hacc, hsb])
       have hd : ev z (d.getD h Lin.zero) = idx.testBit 0 := hdir 0 (by simp)
-      have hnode : (if idx % 2 = 0 then MerkleScheme.hm96Sha512.node acc sb else MerkleScheme.hm96Sha512.node sb acc) =
+      have hnode : (if idx % 2 = 0 then ms.node acc sb else ms.node sb acc) =
           Sha512.hash ((if ev z (d.getD h Lin.zero) then sb else acc) ++
             (if ev z (d.getD h Lin.zero) then acc else sb)) := by
-        rw [hd, Nat.testBit_zero]
-        rcases Nat.mod_two_eq_zero_or_one idx with hp | hp <;> simp [hp, MerkleScheme.hm96Sha512]
+        rw [hd, Nat.testBit_zero, hms, hms]
+        rcases Nat.mod_two_eq_zero_or_one idx with hp | hp <;> simp [hp]
       rw [Flock.climb, hnode]
       exact hih _ (idx / 2) ss (Sha512.hash_size _) (hsha _ (carries_append h1 h2)) hss fun j hj => by
         rw [Nat.testBit_div_two, ← hdir (j + 1) (by simp; omega), show h + 1 + j = h + (j + 1) by omega]
