@@ -35,7 +35,7 @@ import Specs.Pouw.Assumptions.PearlC.TTOutUOnly
 /-!
 # Pearl-C's guarantees (trusted)
 
-Each guarantee is a `def G : Prop`, stated over `Pouw.Protocol`'s definitions with the named assumptions it rests on as
+Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
 hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G`.
 γ at the RTX PRO 6000's v1 record under rev1 at the cap 1/1,000 (`Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192`
 in `Pouw.SecurityProofs.PearlC.DeviceCapRev1Gamma`), its binders written as a `∀`. `Pouw.CostModel` and `Pouw.Gγ` are
