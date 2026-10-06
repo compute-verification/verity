@@ -20,6 +20,7 @@ from pathlib import Path
 from verity.primitives.commitments.rowleaf import (ROLE_W, ROLE_X, ROW_SEG_BYTES, SCHEMA_HM96_SHA512_ROW_SEG, row_bytes,
                                         sha512_row_seg_segment_prefix, sha512_row_seg_segments)
 from verity.protocols.accounting.work.pouw.circuit import leaves as L
+from verity.protocols.accounting.work.pouw.circuit import words as W
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 
 OUT = Path(__file__).with_name("vectors") / "pouw_rows.json"
@@ -28,7 +29,7 @@ ROLES = {"x": ROLE_X, "w": ROLE_W}
 #: one short segment and of several), the tile digests, the ok rows, the cap's rows: the salt-dead counts (row-seg, one
 #: short segment and two), a word's C̃ ‖ U, its flags row with padding (k = 256) and without (8,192), a tile row's chunk
 #: digests at TN = 32 (one, then zeros) and 64 (two; the case's k is TN), a tile row's sums, and a strip's row; and
-#: the row_k cut's six rows in both trees
+#: the row_k cut's six rows in both trees; and the served unit's leaf rows (its advice, the word's place, its output)
 CASES = tuple((f"{row}-{role}-{k}", row, role, k) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p")
               for role in ("x", "w") for k in (64, 4096)) + (
     ("tile-2x33", "tile", "x", (2, 33)), ("tile-64x64", "tile", "x", (64, 64)), ("ok-x", "ok", "x", 64), ("ok-w", "ok", "w", 4096),
@@ -41,7 +42,8 @@ CASES = tuple((f"{row}-{role}-{k}", row, role, k) for row in ("bf16", "fp32", "n
     ("fp8-codes-x-64", "fp8-codes", "x", 64), ("fp8-codes-w-2048", "fp8-codes", "w", 2048),
     ("pc4-head-x", "pc4-head", "x", 2048), ("pc4-head-w", "pc4-head", "w", 2048),
     ("pc4-carry-x", "pc4-carry", "x", 2048), ("pc4-carry-w", "pc4-carry", "w", 2048),
-    ("nvfp4-codes-x-64", "nvfp4-codes", "x", 64), ("nvfp4-codes-w-2048", "nvfp4-codes", "w", 2048))
+    ("nvfp4-codes-x-64", "nvfp4-codes", "x", 64), ("nvfp4-codes-w-2048", "nvfp4-codes", "w", 2048),
+    ("leaf-advice-x", "leaf-advice", "x", 4096), ("leaf-at-x", "leaf-at", "x", 4096), ("leaf-h3-x", "leaf-h3", "x", 4096))
 
 
 def shake(case: str, part: str, n: int) -> bytes:
@@ -102,6 +104,12 @@ def inputs(case: str, row: str, k) -> dict:
         return {"tot": u32(case, "tot", C.R)}
     if row == "nvfp4-codes":
         return {"codes": codes(case, "codes", k, 4), "scales": codes(case, "scales", k // 16, 8)}
+    if row == "leaf-advice":
+        return {"seg": u32(case, "seg", 256), "digests": [shake(case, f"d{q}", 64) for q in range(32)]}
+    if row == "leaf-at":
+        return {"at": W.leaf_at(*codes(case, "at", 2, 6), 48)}
+    if row == "leaf-h3":
+        return {"leaf": shake(case, "leaf", 64), "at": W.leaf_at(*codes(case, "at", 2, 6), 64)}
     tm, tn = k
     return {"c": [u32(case, f"c{i}", tn) for i in range(tm)], "u": [u32(case, f"u{i}", tn) for i in range(tm)]}
 
@@ -141,6 +149,12 @@ def words(row: str, x: dict) -> list[int]:
         return L.words_pc4_carry(x["tot"])
     if row == "nvfp4-codes":
         return L.words_nvfp4_codes(x["codes"], x["scales"])
+    if row == "leaf-advice":
+        return L.words_leaf_advice(x["seg"], x["digests"])
+    if row == "leaf-at":
+        return L.words_leaf_at(x["at"])
+    if row == "leaf-h3":
+        return L.words_leaf_h3(x["leaf"], x["at"])
     return L.words_tile(C.leaf(types.SimpleNamespace(c=x["c"], u=x["u"])))
 
 

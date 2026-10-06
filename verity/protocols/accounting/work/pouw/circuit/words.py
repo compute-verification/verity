@@ -1,20 +1,23 @@
 """PoUW's IR primitives: the word operations `ncp-v2`'s circuit is built from, the three Pearl-C4's tile check (`pc4`)
 adds to core's FP32, cast and tensor-core primitives, the three exact sums of squares Pearl-C's (`pc8`) liveness
-reads, and the masked words of a promotion window and an element's salt-dead bit that the prototype of Pearl-C's cap
-(`cap`) reads.
+reads, the masked words of a promotion window and an element's salt-dead bit that the prototype of Pearl-C's cap
+(`cap`) reads, and the -h3 tile leaf of one word that Pearl-C's served unit returns (`PouwPc8LeafH3`).
 
-Every primitive but `PouwSqAcc` (576 bits), `PouwSqCeil` (64) and the two windows (480) returns one value of at most 32
-bits, so every unit of any `Q_word` cut of these Definitions meets the width rule, and a 64-bit hash word is carried as two
-32-bit halves: SHA-512's words as (hi, lo), Keccak's lanes as (lo, hi).  The two wide sums stay inside one `pc8` row unit,
-whose partition is `Q_template_instances`, and a window inside its cap word.
+Every primitive but `PouwSqAcc` (576 bits), `PouwSqCeil` (64), the two windows (480) and the -h3 leaf (512) returns one
+value of at most 32 bits, so every unit of any `Q_word` cut of these Definitions meets the width rule, and a 64-bit hash
+word is carried as two 32-bit halves: SHA-512's words as (hi, lo), Keccak's lanes as (lo, hi).  The two wide sums stay
+inside one `pc8` row unit, whose partition is `Q_template_instances`, a window inside its cap word, and the leaf inside
+its tile unit.
 Encodings: `U32` = `Value<32>`; `I7` = `Value<7>`, a two's-complement int7 (A's and B's entries: the type is the int7 domain
 check); `U8` = `Value<8>`, a byte read as u8 (X + β) or s8 (the noise, Y) as each primitive says; `F32`, `BF16` and `E2M1`
 the float encodings.  Every evaluator is total on encodings.
 """
 from __future__ import annotations
 
+import hashlib
 import struct
 
+from verity.primitives.commitments.rowleaf import sha512_row_seg_prefix, sha512_row_seg_segment_prefix
 from verity.primitives.circuits.defs import primitive
 from verity.primitives.circuits.types import Array, Value
 from verity_catalog.definitions import prims as _prims
@@ -368,5 +371,48 @@ def PouwHopperE4m3SaltDead(acc: int, cb: int) -> int:
     return ends_agree(_prims.HopperE4m3QgmmaDot32, acc, cb)
 
 
-__all__ = ["A16", "BETA", "BF16", "E2M1", "F32", "F_ENDS", "I7", "M32", "MASKED", "MASKS", "U32", "U8", "WINDOW", "sx",
-           "ends_agree", "i32_to_f32_rn", "masked_words", *sorted(n for n in list(globals()) if n.startswith("Pouw"))]
+# ---- Pearl-C's -h3 tile leaf (`pc8.Pc8TileLeafH3`): one word of a tile, put in its segment ------------------------------------
+
+#: a tile segment's words (`pearl_c.messages` of two tile rows of 64 columns: le32 C̃ then le32 U of each 32-column chunk)
+SEG_WORDS = 256
+#: the most segments a -h3 tile leaf has (64 tile rows), each a 64-byte digest
+LEAF_SEGMENTS = 32
+D512 = Value(512)
+
+
+def leaf_at(r: int, col: int, rows: int) -> int:
+    """`PouwPc8LeafH3`'s ``at``: the word's tile row ``r`` and column ``col`` (each below 64) and the tile's height ``rows``
+    (16, 32, 48 or 64), as ``r | col << 6 | (rows / 16 − 1) << 12``."""
+    if not (0 <= r < rows and 0 <= col < 64 and rows in (16, 32, 48, 64)):
+        raise ValueError(f"a word at tile row {r}, column {col} of a tile of {rows} rows (16, 32, 48 or 64) and 64 columns")
+    return r | col << 6 | (rows // 16 - 1) << 12
+
+
+def leaf_slot(at: int) -> tuple[int, int, int, int]:
+    """``at``'s (segment, C̃'s word in the segment, the tile's segments, the tile's bits): U's word is C̃'s + 32."""
+    r, col, rows = at & 63, (at >> 6) & 63, 16 * (((at >> 12) & 3) + 1)
+    return r >> 1, (r & 1) * 128 + (col >> 5) * 64 + (col & 31), rows // 2, rows * 512 * 8
+
+
+@primitive("PouwPc8LeafH3", 1, [("c", F32), ("u", F32), ("seg", Array(SEG_WORDS, U32)), ("dig", Array(LEAF_SEGMENTS, D512)),
+                                ("at", U32)], D512, conformance="protocol-defined")
+def PouwPc8LeafH3(c: int, u: int, *rest: int) -> int:
+    """The -h3 tile leaf (`pearl_c.leaf` under h3, ``sha512/row-seg/v1`` of the tile's messages) with the word C̃ = ``c``,
+    U = ``u`` at ``at`` (`leaf_at`): its segment s is ``seg`` (the segment's words, little-endian, as the messages lay them
+    out) with C̃ and U put at their words (`leaf_slot`), d_s its digest, and the leaf ``SHA-512(Q(n) ‖ d_0 ‖ … ‖ d_(S−1))``
+    over ``dig`` (each digest's 64 bytes little-endian) with d_s in place of ``dig[s]``; a row at or past the tile's height
+    puts no word in (only ``dig`` is hashed).  The leaf's 64 bytes, little-endian."""
+    seg, dig, at = list(rest[:SEG_WORDS]), rest[SEG_WORDS:SEG_WORDS + LEAF_SEGMENTS], rest[-1]
+    s, w, n_seg, n_bits = leaf_slot(at)
+    seg[w], seg[w + 32] = c, u
+    ds = [(d & ((1 << 512) - 1)).to_bytes(64, "little") for d in dig]
+    if s < n_seg:
+        body = b"".join((x & M32).to_bytes(4, "little") for x in seg)
+        ds[s] = hashlib.sha512(sha512_row_seg_segment_prefix(s, n_seg, 8 * len(body)) + body).digest()
+    leaf = hashlib.sha512(sha512_row_seg_prefix(n_bits) + b"".join(ds[:n_seg])).digest()
+    return int.from_bytes(leaf, "little")
+
+
+__all__ = ["A16", "BETA", "BF16", "D512", "E2M1", "F32", "F_ENDS", "I7", "LEAF_SEGMENTS", "M32", "MASKED", "MASKS", "SEG_WORDS",
+           "U32", "U8", "WINDOW", "sx", "ends_agree", "i32_to_f32_rn", "leaf_at", "leaf_slot", "masked_words",
+           *sorted(n for n in list(globals()) if n.startswith("Pouw"))]

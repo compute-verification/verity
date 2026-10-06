@@ -49,6 +49,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from types import SimpleNamespace
 from typing import Any, ClassVar
 
 from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X
@@ -270,6 +271,31 @@ Pc8TileHiddenDef = CompositeDefinition(
     doc="`Pc8Tile` with its checked words hidden: their tile digest (`leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and U).",
     conformance="protocol-defined")
 
+
+def _tile_leaf_h3_body(B, S_, ac, bc, pa, pb, seg, dig, at):
+    out = B.call(templates(S_.K, (1, 1), S_.DEV)["tile"], ac, bc, pa, pb)
+    return tuple_of(B.call(W.PouwPc8LeafH3, out[0][0][0], out[1][0][0], seg, dig, at), at)
+
+
+#: the -h3 tile leaf's advice: the word's segment and every segment's digest (row leaf-advice), and the word's place in
+#: its tile (`words.leaf_at`, row leaf-at)
+LEAF_ADVICE = (("seg", Array(W.SEG_WORDS, W.U32)), ("dig", Array(W.LEAF_SEGMENTS, W.D512)), ("at", W.U32))
+
+Pc8TileLeafH3Def = CompositeDefinition(
+    "Pc8TileLeafH3", 1, ("K", "DEV"),
+    lambda S_: ((*_tile_sig(SimpleNamespace(K=S_.K, TM=1, TN=1))[0], *LEAF_ADVICE), Tuple(W.D512, W.U32)),
+    _tile_leaf_h3_body,
+    doc="One word's `Pc8Tile` (C̃_ij and U_ij) and the -h3 leaf of the 64-column tile holding it (`pearl_c.leaf` under h3, "
+        "the leaf the pass's tile commitment holds), from the advice: the word's 1 KiB segment of the tile's messages, "
+        "every segment's digest and the word's place in the tile (`words.PouwPc8LeafH3`); returns the leaf and the place.",
+    conformance="protocol-defined")
+
+
+@lru_cache(maxsize=4)
+def tile_leaf_h3(k: int, dev: str = "sm120") -> SpecializedDefinition:
+    """The served unit at depth ``k`` on ``dev``: one word and its tile's -h3 leaf (`Pc8TileLeafH3`)."""
+    return bind(Pc8TileLeafH3Def, K=k, DEV=dev)
+
 #: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, the anchors' regions, and its
 #: advice: parameters the prover supplies that no unit computes and nothing binds (the cap word's certificates,
 #: `cap.ADVICE`), which C-Flock proves as private inputs.  An advice port is in the unit's io and in no read set: in no
@@ -282,6 +308,10 @@ PORTS = {
               "regions": {"e": "ea", "fa": "fa", "fb": "fb"}, "advice": ()},
     "tile": {"rows": (("fp8-p", ROLE_X, ("ac", "pa")), ("fp8-p", ROLE_W, ("bc", "pb")), ("tile", ROLE_X, (0,))),
              "regions": {}, "advice": ()},
+    "tile_leaf_h3": {"rows": (("fp8-p", ROLE_X, ("ac", "pa")), ("fp8-p", ROLE_W, ("bc", "pb")),
+                              ("leaf-advice", ROLE_X, ("seg", "dig")), ("leaf-at", ROLE_X, ("at",)),
+                              ("leaf-h3", ROLE_X, (0, 1))),
+                     "regions": {}, "advice": ()},
 }
 
 
@@ -586,6 +616,6 @@ def unit_cut(fn: SpecializedDefinition):
     return pc4.unit_cut(fn, _role_of())
 
 
-__all__ = ["ATOMS", "BASIS", "DERIVATIONS", "DIGESTS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE",
-           "Shape", "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query", "templates",
-           "tile_templates", "unit_cut", "units", "weight"]
+__all__ = ["ATOMS", "BASIS", "DERIVATIONS", "DIGESTS", "GRAM", "LEAF_ADVICE", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES",
+           "SEEDS", "TILE", "Shape", "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query", "templates",
+           "tile_leaf_h3", "tile_templates", "unit_cut", "units", "weight"]

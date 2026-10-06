@@ -17,6 +17,9 @@ on (lo, hi) half-lanes), the same function on bits.
     PouwChi32_v2       (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>                    word view: PouwChi32_v1
     PouwRotl64Lo_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Lo_v1
     PouwRotl64Hi_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Hi_v1
+    PouwPc8LeafH3_v2   (c, u: Array<32, Value<1>>, seg: Array<256, Array<32, Value<1>>>,
+                        dig: Array<32, Array<512, Value<1>>>, at: Array<32, Value<1>>) -> Array<512, Value<1>>
+                                                                                                word view: PouwPc8LeafH3_v1
 
 Each is traced from a builder over core's `forms` (`verity.primitives.circuits.boolean.trace.definition`), so its And gates are the builder's
 live ANDs but for its commits (`forms.Circuit.commit`, a row of a `forms` lowering and no gate); a backend whose lowering
@@ -49,8 +52,14 @@ takes `forms` builders (C-Flock's pieces) can run the builder itself (``.build``
 * `rotl64`: a barrel rotator over the 64-bit word hi:lo, one stage per bit of the amount's low six, the largest first, so
   each stage's live ANDs are only the window the returned half reads.  A constant amount, as every call in `hashes` has,
   folds each stage to wiring with no AND (`forms`' AND of a constant is no gate).
+* `leaf_h3`: the served unit's -h3 tile leaf (`words.PouwPc8LeafH3`): 27 compressions, the word's segment digest's ten
+  (prefix, eight blocks, pad) and the outer chain's 16 blocks of digests and its pad, the tile height picking the chain's
+  state after 4, 8, 12 or 16 blocks; the height's Q midstate and pad are constants picked by XOR, so only the muxes, the
+  picked state and the compressions have ANDs.
 """
 from __future__ import annotations
+
+from functools import reduce
 
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.types import Array
@@ -60,19 +69,22 @@ from verity_catalog.definitions.boolean import scalar as BS
 from verity.primitives.circuits.boolean.forms import (NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
                                      or_reduce, shl_window, sub)
 from verity.primitives.circuits.boolean.trace import definition
+from verity.primitives.commitments.gates import sha512 as G
+from verity.primitives.commitments.rowleaf import sha512_row_seg_prefix, sha512_row_seg_segment_prefix
 
 from . import words as W
 
 __all__ = ["PouwBf16Neg", "PouwBlackwellE4m3SaltDead", "PouwBlackwellE4m3Window", "PouwChi32", "PouwETilde", "PouwF32SqrtRn",
-           "PouwHopperE4m3SaltDead", "PouwHopperE4m3Window", "PouwRotl64Hi", "PouwRotl64Lo", "PouwSqAcc", "PouwSqCeil",
-           "PouwSqGe", "PouwWindowWord", "PouwXor32", "chi32", "e_tilde", "f32_sqrt_rn", "isqrt", "rotl64", "salt_dead",
-           "sq_acc", "sq_ceil", "sq_ge", "square", "up48", "window", "window_word"]
+           "PouwHopperE4m3SaltDead", "PouwHopperE4m3Window", "PouwPc8LeafH3", "PouwRotl64Hi", "PouwRotl64Lo", "PouwSqAcc",
+           "PouwSqCeil", "PouwSqGe", "PouwWindowWord", "PouwXor32", "chi32", "e_tilde", "f32_sqrt_rn", "isqrt", "leaf_h3",
+           "rotl64", "salt_dead", "sq_acc", "sq_ceil", "sq_ge", "square", "up48", "window", "window_word"]
 
 BIT = BL.BIT
 F32 = U32 = Array(32, BIT)
 BF16, E2M1, U8 = Array(16, BIT), Array(4, BIT), Array(8, BIT)
 SQ, SQ48 = Array(576, BIT), Array(64, BIT)
 U4, CODES, MASKED = Array(4, BIT), Array(W.WINDOW, U8), Array(W.MASKED.w, BIT)
+D512 = Array(W.D512.w, BIT)
 _NAN_PTX = 0x7FFFFFFF
 
 
@@ -267,6 +279,74 @@ def rotl64(C, lo, hi, c):
     return x
 
 
+def _be_words(octets: list) -> list[list]:
+    """Bytes (each 8 bits, LSB first) as SHA-512's 64-bit big-endian words, each LSB first."""
+    return [[octets[t + 7 - p // 8][p % 8] for p in range(64)] for t in range(0, len(octets), 8)]
+
+
+def _octets(bits: list) -> list[list]:
+    return [list(bits[i:i + 8]) for i in range(0, len(bits), 8)]
+
+
+def _digest_bits(words: list[list]) -> list:
+    """SHA-512's eight state words as the digest's 64 bytes, little-endian bits."""
+    return [b for w in words for k in range(8) for b in w[8 * (7 - k):8 * (8 - k)]]
+
+
+def _pick(sel: list, consts: list[int], width: int) -> list:
+    """The constant ``consts[i]`` (``width`` bits) where ``sel`` is one-hot at i: an XOR of the selectors, no AND."""
+    out = []
+    for p in range(width):
+        bit = ZERO
+        for s, v in zip(sel, consts):
+            if v >> p & 1:
+                bit = bit ^ s
+        out.append(bit)
+    return out
+
+
+def leaf_h3(C, c, u, *rest):
+    """``PouwPc8LeafH3_v1``: the word put in its segment (a 7-bit decode of its row's parity, chunk and column, one mux a
+    word), d_s (the segment prefix's j and s from ``at``, then the segment's eight blocks and the pad), d_s put in the
+    digests (a 5-bit decode, one mux a digest), and the leaf over 16 blocks of digests from the tile height's Q midstate,
+    the chain's state after S/2 of them and the pad picked by the height (a 2-bit decode).  Every compression is core's
+    `compress_gadget`."""
+    seg = [list(w) for w in rest[:W.SEG_WORDS]]
+    dig = [list(d) for d in rest[W.SEG_WORDS:W.SEG_WORDS + W.LEAF_SEGMENTS]]
+    at = list(rest[-1])
+    r, col, code = at[0:6], at[6:12], at[12:14]
+    slot = fp.decode(C, [*col[0:5], col[5], r[0]])                 # C̃'s word, less its bit 5 (U's is C̃'s + 32)
+    for w in range(W.SEG_WORDS):
+        key = (w & 31) | ((w >> 6) & 1) << 5 | (w >> 7) << 6
+        seg[w] = mux(C, slot[key], list(u if w >> 5 & 1 else c), seg[w])
+    height = fp.decode(C, code)
+    n_seg = [ZERO, ZERO, ZERO, NOT(code[0]), code[0] ^ code[1], C.AND(code[0], code[1])] + [ZERO] * 2
+    prefix = _octets(const_bits(int.from_bytes(sha512_row_seg_segment_prefix(0, 1, 8192), "little"), 1024))
+    prefix[40] = [*r[1:6], ZERO, ZERO, ZERO]                        # u64be j's last byte: j = r >> 1 < 32
+    prefix[48] = n_seg                                              # u64be s's last byte: s = rows / 2 = 8 (code + 1)
+    body = _octets([b for w in seg for b in w])
+    state = [const_bits(v, 64) for v in G.IV]
+    for blk in [prefix] + [body[i:i + 128] for i in range(0, len(body), 128)]:
+        state = G.compress_gadget(C, state, _be_words(blk))
+    d_s = G.compress_gadget(C, state, [const_bits(v, 64) for v in G.words_be(G.pad_tail(128 + 4 * W.SEG_WORDS))])
+    at_seg = fp.decode(C, r[1:6])
+    digs = [_be_words(_octets(d)) for d in dig]
+    digs = [[mux(C, at_seg[q], d_s[t], digs[q][t]) for t in range(8)] for q in range(W.LEAF_SEGMENTS)]
+    rows = [16 * (h + 1) for h in range(4)]
+    mids = [G.midstate(sha512_row_seg_prefix(h * 512 * 8)) for h in rows]
+    state = [_pick(height, [m[i] for m in mids], 64) for i in range(8)]
+    kept = []
+    for q in range(0, W.LEAF_SEGMENTS, 2):
+        state = G.compress_gadget(C, state, digs[q] + digs[q + 1])
+        if (q + 2) % 8 == 0:
+            kept.append(state)
+    state = [[reduce(lambda x, y: x ^ y, [C.AND(height[h], kept[h][i][p]) for h in range(4)]) for p in range(64)]
+             for i in range(8)]
+    pads = [G.words_be(G.pad_tail(128 + 64 * (h // 2))) for h in rows]
+    pad = [_pick(height, [p[i] for p in pads], 64) for i in range(16)]
+    return _digest_bits(G.compress_gadget(C, state, pad))
+
+
 PouwF32SqrtRn = definition("PouwF32SqrtRn", 2, f32_sqrt_rn, (("a", F32),), F32, word=W.PouwF32SqrtRn,
                            conformance=W.PouwF32SqrtRn.conformance,
                            doc="sqrt.rn.f32 on bits: PouwF32SqrtRn_v1, NaN and negative operands 0x7FFFFFFF")
@@ -314,3 +394,7 @@ PouwRotl64Hi = definition("PouwRotl64Hi", 2, lambda C, lo, hi, c: rotl64(C, lo, 
                           (("lo", U32), ("hi", U32), ("c", U32)), U32, word=W.PouwRotl64Hi,
                           conformance=W.PouwRotl64Hi.conformance,
                           doc="the high half of hi:lo rotated left by c mod 64, on bits: PouwRotl64Hi_v1")
+PouwPc8LeafH3 = definition("PouwPc8LeafH3", 2, leaf_h3, (("c", F32), ("u", F32), ("seg", Array(W.SEG_WORDS, U32)),
+                                                       ("dig", Array(W.LEAF_SEGMENTS, D512)), ("at", U32)), D512,
+                           word=W.PouwPc8LeafH3, conformance=W.PouwPc8LeafH3.conformance,
+                           doc="The -h3 tile leaf of one word put in its segment, on bits: PouwPc8LeafH3_v1")

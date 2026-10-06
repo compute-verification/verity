@@ -138,7 +138,7 @@ def test_a_row_unit_writes_its_row_seg_row_as_its_reader_commits_it(vid, tmp_pat
 
 #: each check's hiding unit templates (`PORTS` are theirs) and a small depth
 UNITS = {"pc4": (lambda k: pc4.templates(k, pc4.TILE, True), 64),
-         "pc8": (lambda k: pc8.templates(k, pc8.TILE, "sm120", True), 128)}
+         "pc8": (lambda k: {**pc8.templates(k, pc8.TILE, "sm120", True), "tile_leaf_h3": pc8.tile_leaf_h3(k)}, 128)}
 MODS = {"pc4": pc4, "pc8": pc8}
 OUT_ROWS = [(m, role, j, out[0], out[1]) for m, mod in MODS.items() for role, ports in mod.PORTS.items()
             for j, out in enumerate(r for r in ports["rows"] if isinstance(r[2][0], int))]

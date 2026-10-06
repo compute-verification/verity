@@ -48,8 +48,8 @@ def _wide(d, ref, cols, widths):
 
 
 def test_each_names_its_word_primitive_and_is_boolean():
-    """Each is the next version of its word primitive and names it; each but `PouwSqCeil_v2` and the windows (traced in
-    their own, slow tests) is Boolean through its body."""
+    """Each is the next version of its word primitive and names it; each but `PouwSqCeil_v2`, the windows (traced in
+    their own, slow tests) and the -h3 leaf (2.2M ANDs, checked on constant operands) is Boolean through its body."""
     from verity.primitives.circuits.boolean import is_boolean
     from verity.primitives.circuits.boolean.trace import word_of
 
@@ -57,9 +57,9 @@ def test_each_names_its_word_primitive_and_is_boolean():
                  (B.PouwSqAcc, W.PouwSqAcc), (B.PouwSqCeil, W.PouwSqCeil), (B.PouwSqGe, W.PouwSqGe),
                  (B.PouwBlackwellE4m3Window, W.PouwBlackwellE4m3Window), (B.PouwHopperE4m3Window, W.PouwHopperE4m3Window),
                  (B.PouwWindowWord, W.PouwWindowWord), (B.PouwBlackwellE4m3SaltDead, W.PouwBlackwellE4m3SaltDead),
-                 (B.PouwHopperE4m3SaltDead, W.PouwHopperE4m3SaltDead)) + KECCAK:
+                 (B.PouwHopperE4m3SaltDead, W.PouwHopperE4m3SaltDead), (B.PouwPc8LeafH3, W.PouwPc8LeafH3)) + KECCAK:
         assert word_of(d) is w and d.id == w.id.replace("_v1", "_v2")
-        assert d in (B.PouwSqCeil, B.PouwBlackwellE4m3Window, B.PouwHopperE4m3Window) or is_boolean(d.bind())
+        assert d in (B.PouwSqCeil, B.PouwBlackwellE4m3Window, B.PouwHopperE4m3Window, B.PouwPc8LeafH3) or is_boolean(d.bind())
 
 
 @pytest.mark.slow
@@ -72,15 +72,15 @@ def test_the_windows_are_boolean():
 
 def test_building_a_tile_check_registers_them():
     """C-Flock's lowering finds a primitive's Boolean Definition only in core's registry, so importing `pc4` (and `pc8`,
-    which imports it) must register all fifteen (the hiding tile's digest calls the four Keccak words, the cap the five
-    window words), in a fresh interpreter where nothing else imported `boolean`."""
+    which imports it) must register all sixteen (the hiding tile's digest calls the four Keccak words, the cap the five
+    window words, the served unit the -h3 leaf), in a fresh interpreter where nothing else imported `boolean`."""
     import subprocess
     import sys
 
     ids = [w.id.replace("_v1", "_v2") for w in (W.PouwF32SqrtRn, W.PouwETilde, W.PouwBf16Neg, W.PouwSqAcc, W.PouwSqCeil,
                                                 W.PouwSqGe, W.PouwBlackwellE4m3Window, W.PouwHopperE4m3Window,
-                                                W.PouwWindowWord, W.PouwBlackwellE4m3SaltDead, W.PouwHopperE4m3SaltDead)
-                                               + tuple(w for _d, w in KECCAK)]
+                                                W.PouwWindowWord, W.PouwBlackwellE4m3SaltDead, W.PouwHopperE4m3SaltDead,
+                                                W.PouwPc8LeafH3) + tuple(w for _d, w in KECCAK)]
     code = ("import sys, verity.protocols.accounting.work.pouw.circuit.pc8\nfrom verity.primitives.circuits.defs import REGISTRY\n"
             f"missing = [i for i in {ids!r} if i not in REGISTRY]\nsys.exit(','.join(missing) if missing else 0)")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
@@ -314,3 +314,45 @@ def test_chi_commits_its_output_in_forms_and_traces_no_gate_for_it():
     C.output("o", out)
     assert C.counts()["ands"] == 64 and all(len(x.s) == 1 and x.c == 0 for x in out)
     assert B.PouwChi32.traced().counts == {"and": 32, "xor": 32, "not": 32}
+
+
+def _leaf_case(rng: random.Random, rows: int, r: int, col: int) -> tuple[list[int], bytes]:
+    """`PouwPc8LeafH3`'s operands for word (r, col) of a random 64-column tile of `rows` rows, its own slots in the segment
+    overwritten and its own digest garbage (neither is read), and `pearl_c.leaf` of the tile under h3."""
+    import hashlib
+
+    from verity.primitives.commitments.rowleaf import sha512_row_seg_segment_prefix
+    from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
+
+    c = [[rng.getrandbits(32) for _ in range(64)] for _ in range(rows)]
+    u = [[rng.getrandbits(32) for _ in range(64)] for _ in range(rows)]
+    checked = C.Checked(c, u)
+    joined = b"".join(C.messages(checked))
+    s = r // 2
+    seg = [int.from_bytes(joined[1024 * s + 4 * w:1024 * s + 4 * w + 4], "little") for w in range(W.SEG_WORDS)]
+    digs = [hashlib.sha512(sha512_row_seg_segment_prefix(q, rows // 2, 8192) + joined[1024 * q:1024 * (q + 1)]).digest()
+            for q in range(rows // 2)] + [bytes(64)] * (W.LEAF_SEGMENTS - rows // 2)
+    at = W.leaf_at(r, col, rows)
+    _, w, _, _ = W.leaf_slot(at)
+    seg[w], seg[w + 32] = rng.getrandbits(32), rng.getrandbits(32)
+    digs[s] = rng.randbytes(64)
+    return [c[r][col], u[r][col], *seg, *[int.from_bytes(d, "little") for d in digs], at], C.leaf(checked, "h3")
+
+
+def test_the_leaf_is_pearl_cs_h3_leaf():
+    """`PouwPc8LeafH3` is `pearl_c.leaf` under h3 of the tile holding the word, at every tile height and at the segment's
+    and the tile's ends; on bits, the builder on constant operands (which `forms` folds: its trace is 2.2M ANDs) gives
+    the same leaf, and a word at another place gives another."""
+    from verity.primitives.circuits.boolean.forms import const_bits
+
+    rng = random.Random(11)
+    widths = [32, 32] + [32] * W.SEG_WORDS + [512] * W.LEAF_SEGMENTS + [32]
+    for rows, r, col in ((16, 0, 0), (32, 31, 63), (48, 20, 33), (64, 63, 31), (64, 1, 32)):
+        args, want = _leaf_case(rng, rows, r, col)
+        assert W.PouwPc8LeafH3.evaluate(*args).to_bytes(64, "little") == want
+        out = B.leaf_h3(Circuit(), *[const_bits(a, w) for a, w in zip(args, widths)])
+        assert all(b.is_const() for b in out) and sum(b.c << j for j, b in enumerate(out)).to_bytes(64, "little") == want
+        moved = args[:-1] + [W.leaf_at(r ^ 1, col, rows)]
+        assert W.PouwPc8LeafH3.evaluate(*moved).to_bytes(64, "little") != want
+    with pytest.raises(ValueError):
+        W.leaf_at(0, 0, 24)

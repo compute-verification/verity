@@ -45,6 +45,16 @@ id, the word count and the role, and each tree holds exactly one (schema id, wor
     cap-sums (pouw/cap-sums/v1)   a tile row's flag count, later +0 promotions and   7                  X
                                   forming elements as two words each, then its
                                   words' good bit's ok word (`cap`)
+    leaf-advice                   a word's 1 KiB segment of its tile's -h3 messages  1536               X
+      (pouw/leaf-h3-advice/v1)    (256 32-bit words, each as two, low half first),
+                                  then the tile's 32 segment digests two bytes per
+                                  word, low byte first, zero past the tile's
+                                  (`pc8.Pc8TileLeafH3`)
+    leaf-at (pouw/leaf-h3-at/v1)  the word's place in its tile (`words.leaf_at`)     2                  X
+                                  as two words, low half first
+    leaf-h3 (pouw/tile-h3/v1)     the tile's 64-byte -h3 leaf (`pearl_c.leaf` under  34                 X
+                                  h3), two bytes per word, low byte first, then
+                                  the word's place as two words
 
     row        X (per call)    W (registered)
     bf16       row-seg/v1      row/v2
@@ -59,9 +69,14 @@ id, the word count and the role, and each tree holds exactly one (schema id, wor
     cap-sums   row/v2          (none)
     cap-rows   row/v2          (none)
     cap-chunks row/v2          (none)
+    leaf-advice row/v2         (none)
+    leaf-at    row/v2          (none)
+    leaf-h3    row/v2          (none)
 
-Every per-call row (role X) but ok, the tile digest, the cap's rows and the row_k cut's rows (below) is a row-seg row,
-so decode's serial hash chain is a segment's, not the row's (Daniel's ruling, card 637f70c6).  The cap's per-word and
+Every per-call row (role X) but ok, the tile digest, the cap's rows, the served unit's leaf rows and the row_k cut's rows
+(below) is a row-seg row, so decode's serial hash chain is a segment's, not the row's (Daniel's ruling, card 637f70c6).
+The leaf rows are v2 rows that the widened scope (below) takes: leaf-advice is 24 whole blocks, which is why the word's
+place is a row of its own, and leaf-at and leaf-h3 each end in their first block.  The cap's per-word and
 per-row-sum rows are at most one SHA-512 block at any k up to 2^14, so a segment's chain is the row's and v2 hashes them
 in fewer blocks.  The cap's strip row and chunk digests are padded with zero words to 64, one whole block, because
 C-Flock's composer refuses a unit none of whose rows hashes a block before its last one (its SHA-512 range would hold no
@@ -145,13 +160,15 @@ SCHEMAS = {"bf16": "pouw/row-bf16/v1", "fp32": "pouw/row-fp32/v1", "nvfp4-p": "p
            "cap-chunks": "pouw/cap-chunks/v1", "cap-sums": "pouw/cap-sums/v1",
            "pc8-head": "pouw/row-pc8-head/v1", "pc8-carry": "pouw/row-pc8-carry/v1", "fp8-codes": "pouw/row-fp8-codes/v1",
            "pc4-head": "pouw/row-pc4-head/v1", "pc4-carry": "pouw/row-pc4-carry/v1",
-           "nvfp4-codes": "pouw/row-nvfp4-codes/v1"}
+           "nvfp4-codes": "pouw/row-nvfp4-codes/v1", "leaf-advice": "pouw/leaf-h3-advice/v1", "leaf-at": "pouw/leaf-h3-at/v1",
+           "leaf-h3": "pouw/tile-h3/v1"}
 ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: k // 4 + k // 32 + P_WORDS,
              "fp8-p": lambda k: k // 2 + P_WORDS, "ok": lambda k: 1, "tile": lambda k: 16, "sd": lambda k: k // 16,
              "cap-word": lambda k: 4, "cap-flags": lambda k: -(-k // 512) + 5, "cap-rows": lambda k: CAP_ROW_WORDS,
              "cap-chunks": lambda k: CAP_ROW_WORDS, "cap-sums": lambda k: 7,
              "pc8-head": lambda k: 23, "pc8-carry": lambda k: 128, "fp8-codes": lambda k: k // 2, "pc4-head": lambda k: 3,
-             "pc4-carry": lambda k: 64, "nvfp4-codes": lambda k: k // 4 + k // 32}
+             "pc4-carry": lambda k: 64, "nvfp4-codes": lambda k: k // 4 + k // 32,
+             "leaf-advice": lambda k: 2 * W.SEG_WORDS + 32 * W.LEAF_SEGMENTS, "leaf-at": lambda k: 2, "leaf-h3": lambda k: 34}
 _V2, _SEG = SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG
 #: each row's frame-leaf schema in a tree of each role it sits in: the per-call rows (role X) segmented, and the registered
 #: rows (role W), the admission bit, the tile digest, the cap's rows and the cut's rows v2
@@ -159,7 +176,8 @@ ROW_SCHEMA = {("bf16", ROLE_X): _SEG, ("bf16", ROLE_W): _V2, ("fp32", ROLE_X): _
               ("nvfp4-p", ROLE_X): _SEG, ("nvfp4-p", ROLE_W): _V2, ("fp8-p", ROLE_X): _SEG, ("fp8-p", ROLE_W): _V2,
               ("ok", ROLE_X): _V2, ("ok", ROLE_W): _V2, ("tile", ROLE_X): _V2, ("sd", ROLE_X): _SEG,
               ("cap-word", ROLE_X): _V2, ("cap-flags", ROLE_X): _V2, ("cap-sums", ROLE_X): _V2, ("cap-rows", ROLE_X): _V2,
-              ("cap-chunks", ROLE_X): _V2,
+              ("cap-chunks", ROLE_X): _V2, ("leaf-advice", ROLE_X): _V2, ("leaf-at", ROLE_X): _V2,
+              ("leaf-h3", ROLE_X): _V2,
               **{(row, role): _V2 for row in ("pc8-head", "pc8-carry", "fp8-codes", "pc4-head", "pc4-carry", "nvfp4-codes")
                  for role in (ROLE_X, ROLE_W)}}
 
@@ -322,6 +340,27 @@ def words_nvfp4_codes(codes: Sequence[int], scales: Sequence[int]) -> list[int]:
             + [(scales[2 * w] & 0xFF) | (scales[2 * w + 1] & 0xFF) << 8 for w in range(len(scales) // 2)])
 
 
+def words_leaf_advice(seg: Sequence[int], digests: Sequence[bytes]) -> list[int]:
+    """A leaf-advice row (`pc8.Pc8TileLeafH3`'s advice): the word's segment's 256 words, then the tile's 32 segment digests
+    (64 bytes each, zero past the tile's)."""
+    if len(seg) != W.SEG_WORDS or len(digests) != W.LEAF_SEGMENTS or any(len(d) != 64 for d in digests):
+        raise ValueError(f"a leaf-advice row is {W.SEG_WORDS} words and {W.LEAF_SEGMENTS} 64-byte digests")
+    raw = b"".join(digests)
+    return words_fp32(seg) + [int.from_bytes(raw[2 * i:2 * i + 2], "little") for i in range(len(raw) // 2)]
+
+
+def words_leaf_at(at: int) -> list[int]:
+    """A leaf-at row: the word's place in its tile (`words.leaf_at`) as two words, low half first."""
+    return _halves(at, 2)
+
+
+def words_leaf_h3(leaf: bytes, at: int) -> list[int]:
+    """A leaf-h3 row (`pc8.Pc8TileLeafH3`'s output): the -h3 tile leaf's 64 bytes, then ``at``."""
+    if len(leaf) != 64:
+        raise ValueError("a -h3 tile leaf is 64 bytes")
+    return [int.from_bytes(leaf[2 * i:2 * i + 2], "little") for i in range(32)] + _halves(at, 2)
+
+
 def row_digest(row: str, role: int, words: Sequence[int]) -> bytes:
     """x, the digest of a ``row`` row of 16-bit ``words`` in a tree of ``role``, under its schema (`ROW_SCHEMA`): core's
     `sha512/row-seg/v1` or `sha512/row/v2` digest of the words as a bit row, 16 bits a word; an ok row's words, and a
@@ -390,5 +429,5 @@ __all__ = ["CAP_CHUNKS", "CAP_ROW_WORDS", "DIGEST", "INST", "KEY", "OK", "P_WORD
            "ROW_WORDS", "SCHEMAS", "chunk_digests", "commit", "digest_bytes", "leaf_digest", "ok_of", "row_digest",
            "statement_rows", "tile_digest", "tree_leaf", "words_bf16", "words_cap_chunks", "words_cap_flags",
            "words_cap_rows", "words_cap_sums", "words_cap_word", "words_fp32", "words_fp8_codes", "words_fp8_p",
-           "words_nvfp4_codes", "words_nvfp4_p", "words_ok", "words_pc4_carry", "words_pc4_head", "words_pc8_carry",
-           "words_pc8_head", "words_sd", "words_tile"]
+           "words_leaf_advice", "words_leaf_at", "words_leaf_h3", "words_nvfp4_codes", "words_nvfp4_p", "words_ok",
+           "words_pc4_carry", "words_pc4_head", "words_pc8_carry", "words_pc8_head", "words_sd", "words_tile"]
