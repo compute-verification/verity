@@ -160,7 +160,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time",
-         "dependency_unchecked", "layers", "reads_exempt", "upstream", "guarantees", "reads", "dependencies")
+         "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
@@ -768,6 +768,10 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             else:
                 fails.append(f"guarantees: {name} assumes ({h['binder']} : {h['type']}), a closed Prop that is not a named assumption "
                              f"(a Prop constant of {', '.join(policy.get('assumptions', [])) or 'an `assumptions` module'})")
+        if name.split(".")[0] in policy.get("four_names", []) and not four_named(name, f):
+            fails.append(f"four names: {name} is a guarantee of {name.split('.')[0]}, which `four_names` lists, so it is "
+                         f"stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a definition of a `Guarantees` module "
+                         f"(`audit.py --lift` writes it), or is not a guarantee")
         now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]}
         kept[name] = ({"owner": who} if who else {}) | now
         if update:
@@ -1022,6 +1026,20 @@ MOVED = "the same statement under its old names"
 LIFTED = "the same statement, its definition unfolded once"
 MOVED_READS = "definitions read in another module or under another name: the same under their old names"
 OWNED = "who answers for it, not what it says"
+
+
+def four_named(name: str, fact: dict) -> bool:
+    """Whether the guarantee ``name`` (its facts ``fact``) is in the four-name form: `X.SecurityProofs.G : X.Guarantees.G`,
+    universe parameters aside, with `X.Guarantees.G` a definition of a spec module (`spec_module`)."""
+    parts = name.split(".")
+    if "SecurityProofs" not in parts[1:-1]:
+        return False
+    at = parts.index("SecurityProofs", 1)
+    g = ".".join([*parts[:at], "Guarantees", *parts[at + 1:]])
+    univ = r"(\.\{[^}]*\})?"
+    lift = fact.get("lift") or {}
+    return bool(re.fullmatch(rf"{re.escape(name)}{univ} : {re.escape(g)}{univ}", " ".join(fact["signature"].split()))) \
+        and lift.get("head") == g and spec_module(lift.get("module") or "")
 
 
 def spec_module(module: str) -> bool:

@@ -228,6 +228,7 @@
   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
+ "four_names": ["Nci", "NetTiming"],
  "guarantees": {
   "Flock.HmNets.col_and": {
    "owner": "@proofs",
