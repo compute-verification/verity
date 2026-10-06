@@ -26,11 +26,7 @@ constexpr int E_WORDS = 880;           // phys(OFF + 513) + 1, rounded up
 constexpr int SNAP_STRIDE = 52;        // words per lane: 48 used, 16-byte aligned, conflict-free for 128-bit accesses
 constexpr int SNAP_WORDS = 32 * SNAP_STRIDE;
 constexpr int STAGE_WORDS = 552;       // stage(x) = x + x / 16 for x < 514
-#if defined(P2SQ_KARA) && defined(P2SQ_KSMEM)
-constexpr int WARP_WORDS = 2224;       // Karatsuba's arrays and snapshots only
-#else
 constexpr int WARP_WORDS = E_WORDS + SNAP_WORDS;   // the staging area aliases the snapshot area
-#endif
 
 __device__ __forceinline__ int phys(int e) { return e + (e >> 3); }
 __device__ __forceinline__ int stage(int x) { return x + (x >> 4); }
