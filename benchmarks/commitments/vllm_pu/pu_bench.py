@@ -25,6 +25,7 @@ import argparse
 import calendar
 import json
 import os
+import signal
 import statistics
 import subprocess
 import sys
@@ -433,10 +434,13 @@ def cells(args) -> int:
     waves of b concurrent requests (distinct random prompts, ``ignore_eos``, temperature 1): ``reps`` waves of
     ``output_len`` tokens and ``reps`` of one token, interleaved.  TPOT at b = (median full wave - median one-token wave) /
     (output_len - 1); output tok/s = b * output_len / median full wave.  Each finished cell is written at once."""
+    from cell_state import Store
     from vllm import LLM, SamplingParams
     state, out = Path(args.state) / "cells", Path(args.out) / "cells"
     state.mkdir(parents=True, exist_ok=True)
     out.mkdir(parents=True, exist_ok=True)
+    store = Store(args.shared or args.state)
+    done = store.done()
     t0 = time.perf_counter()
     llm = LLM(model=args.model, max_num_seqs=max(args.batches), max_model_len=args.max_model_len, seed=args.seed,
               gpu_memory_utilization=args.gpu_mem, worker_extension_cls="pu_ext.PUExt")
@@ -449,7 +453,7 @@ def cells(args) -> int:
     rc = 0
     for b in args.batches:
         name = _cell_name(args.model_key, args.gran, b, args.seed)
-        if (state / name).exists():
+        if name in done:
             continue
         in_len = args.input_len
         while in_len > 64 and b * -(-(in_len + args.output_len + 1) // bs) > blocks:
@@ -485,8 +489,10 @@ def cells(args) -> int:
             _write(out / f"failed__{name}", {"error": "no commitment steps recorded", **res})
             continue
         _write(out / name, res)
-        _write(state / name, res)
-        print(f"[cells] {name}: {res['output_tps']:.1f} tok/s, TPOT {res['tpot_ms']:.2f} ms, in {in_len}", flush=True)
+        got = store("put", f"cells/{name}", payload=(out / name).read_bytes())
+        if args.shared:
+            _write(state / name, res)
+        print(f"[cells] {name}: {res['output_tps']:.1f} tok/s, TPOT {res['tpot_ms']:.2f} ms, in {in_len} (store: {got})", flush=True)
     return rc
 
 
@@ -501,7 +507,7 @@ def _cells_child(args, model_key: str, path: Path, gran: str, seed: int, batches
     cmd = [sys.executable, str(HERE / "pu_bench.py"), "cells", "--out", args.out, "--state", args.state, "--model", str(path),
            "--model-key", model_key, "--gran", gran, "--seed", str(seed), "--batches", ",".join(map(str, batches)),
            "--input-len", str(args.input_len), "--output-len", str(args.output_len), "--max-model-len", str(args.max_model_len),
-           "--gpu-mem", str(args.gpu_mem)]
+           "--gpu-mem", str(args.gpu_mem), *(["--shared", args.shared] if args.shared else [])]
     print(f"[sweep] {model_key} {gran} seed {seed} batches {batches} -> {log}", flush=True)
     t = time.time()
     with log.open("w") as f:
@@ -518,15 +524,48 @@ def sweep(args) -> int:
     one engine per granularity (order rotated by seed, reversed on odd seeds) running that seed's missing batches.  Stops
     starting engines when the next one would not finish before ``--deadline`` or ``--budget-min`` from now; a lane resumed
     later skips finished cells.  Run as a keeper chunk (``research keeper set``), it stops its own target once no cell is
-    missing, so the keeper starts no more empty chunks."""
+    missing, so the keeper starts no more empty chunks.
+
+    The finished cells and the verify records live in ``--shared`` (``HOST:PATH``, default ``--state``: ``cell_state``), which
+    chunks on several nodes share: each engine and each verify is claimed there first, until this chunk's deadline, and
+    skipped while another chunk's claim is live; a SIGTERM (a preemption) releases this chunk's claims."""
+    from cell_state import Store
     out, st = Path(args.out), Path(args.state)
     (out / "logs").mkdir(parents=True, exist_ok=True)
     st.mkdir(parents=True, exist_ok=True)
+    store = Store(args.shared or args.state)
+    holder = os.environ.get("RESEARCH_RUN_ID") or f"{os.uname().nodename}:{os.getpid()}"
     ends = [calendar.timegm(time.strptime(args.deadline, "%Y-%m-%dT%H:%MZ"))] if args.deadline else []
     ends += [time.time() + args.budget_min * 60] if args.budget_min else []
     deadline = min(ends) if ends else None
+    until = f"{(deadline or time.time() + 6 * 3600) + 180:.0f}"
+    held: list[str] = []
+
+    def release_and_exit(signum, frame):
+        for key in held:
+            try:
+                store("release", key, holder)
+            except Exception:  # noqa: BLE001 - an unreleased claim lapses at its until
+                pass
+        sys.exit(128 + signum)
+
+    signal.signal(signal.SIGTERM, release_and_exit)
+
+    def claim(key: str) -> bool:
+        got = store("claim", key, holder, until)
+        if got == "ok":
+            held.append(key)
+            return True
+        print(f"[sweep] {key}: {got}; skipped", flush=True)
+        return False
+
+    def release(key: str) -> None:
+        store("release", key, holder)
+        held.remove(key)
+
+    done = store.done()
     left = [(m, g, b, s) for m in args.models for g in args.grans for b in args.batches for s in args.seeds
-            if not (st / "cells" / _cell_name(m, g, b, s)).exists()]
+            if _cell_name(m, g, b, s) not in done]
     if not left and os.environ.get("RESEARCH_KEEPER_TARGET"):
         target = os.environ["RESEARCH_KEEPER_TARGET"]
         r = subprocess.run([sys.executable, "/usr/local/bin/vy-keeper", "stop", target, "--by", os.environ.get("GPU_LEASE_WHO", "-"),
@@ -541,14 +580,16 @@ def sweep(args) -> int:
             notes.append(f"{model_key}: no complete local snapshot of {MODELS[model_key]}; skipped")
             print(f"[sweep] {notes[-1]}", flush=True)
             continue
-        if args.verify and not (st / f"verify-{model_key}-staged.json").exists():
+        vname = f"verify-{model_key}-staged.json"
+        if args.verify and store("exists", vname) == "no" and claim(f"verify__{model_key}"):
             vargs = argparse.Namespace(**{**vars(args), "model": str(path), "max_num_seqs": 16})
             vrc = _child(vargs, ["verify", "--arm", "staged"], "staged", out / "logs" / f"verify-{model_key}.log")
             v = out / "verify-staged.json"
             if v.exists():
-                v.rename(out / f"verify-{model_key}-staged.json")
+                v.rename(out / vname)
                 if vrc == 0:
-                    (st / f"verify-{model_key}-staged.json").write_bytes((out / f"verify-{model_key}-staged.json").read_bytes())
+                    store("put", vname, payload=(out / vname).read_bytes())
+            release(f"verify__{model_key}")
             rc |= vrc
         for seed in args.seeds:
             k = seed % len(grans)
@@ -556,7 +597,8 @@ def sweep(args) -> int:
             if seed % 2:
                 order.reverse()
             for gran in order:
-                missing = [b for b in args.batches if not (st / "cells" / _cell_name(model_key, gran, b, seed)).exists()]
+                done = store.done()
+                missing = [b for b in args.batches if _cell_name(model_key, gran, b, seed) not in done]
                 if not missing:
                     continue
                 need = max(engine_s) if engine_s else args.engine_min * 60
@@ -565,10 +607,14 @@ def sweep(args) -> int:
                     print(f"[sweep] {notes[-1]}", flush=True)
                     _sweep_result(args, rc, notes)
                     return rc
+                key = f"{model_key}__{gran}__s{seed}"
+                if not claim(key):
+                    continue
                 t = time.time()
                 crc = _cells_child(args, model_key, path, gran, seed, missing,
                                    out / "logs" / f"{model_key}__{gran}__s{seed}.log",
                                    deadline + 180 - time.time() if deadline else None)
+                release(key)
                 engine_s.append(time.time() - t)
                 rc |= crc
                 if crc:
@@ -693,6 +739,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--batches", type=ints, default=[1, 8, 32, 128])
     ap.add_argument("--seeds", type=ints, default=[0, 1, 2])
     ap.add_argument("--state", default="/workspace/jobs/cco-sweep", help="finished cells (resumable across runs), caches")
+    ap.add_argument("--shared", default=None, metavar="[HOST:]PATH",
+                    help="the cell store every node's chunks share (cell_state.py; default --state), e.g. vy-n2:/workspace/jobs/cco-sweep")
     ap.add_argument("--deadline", default=None, help="UTC YYYY-MM-DDTHH:MMZ: start no engine that would end after it")
     ap.add_argument("--budget-min", type=float, default=None,
                     help="start no engine that would end more than this many minutes from now (a keeper chunk: its --max-min less a margin)")

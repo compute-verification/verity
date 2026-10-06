@@ -82,3 +82,36 @@ def test_vllm_pu_commit_tool_is_registered() -> None:
     argv = ["python", "benchmarks/commitments/vllm_pu/pu_bench.py", "run", "--micro", "--rounds", "0,1"]
     _, key = tool.resolve_params(argv, ROOT)
     assert key["mode"] == "run" and key["micro"] and key["rounds"] == "0,1" and key["arms"] == "control,coarse,fine,retain"
+    chunk = ["/bin/gpu-lease", "1", "--wait", "--preemptible", "--max-min", "30", "--", "/usr/bin/env", "HF_HOME=/hf", "python",
+             "benchmarks/commitments/vllm_pu/pu_bench.py", "sweep", "--models", "glm47-flash", "--verify", "--chunk", "3"]
+    _, key = tool.resolve_params(chunk, ROOT)
+    assert key["mode"] == "sweep" and key["models"] == "glm47-flash" and key["verify"]
+
+
+def _cell_state():
+    spec = importlib.util.spec_from_file_location("cell_state", ROOT / "benchmarks" / "commitments" / "vllm_pu" / "cell_state.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_cell_state_claims_lapse_and_cells_are_written_once(tmp_path: Path) -> None:
+    cs = _cell_state()
+    store = cs.Store(str(tmp_path))
+    assert store.done() == set() and store("exists", "verify-m-staged.json") == "no"
+    assert store("claim", "m__fine__s0", "run-a", "1e12") == "ok"
+    assert store("claim", "m__fine__s0", "run-a", "1e12") == "ok"
+    assert store("claim", "m__fine__s0", "run-b", "1e12").startswith("held run-a ")
+    assert store("release", "m__fine__s0", "run-b") == "ok" and store("claim", "m__fine__s0", "run-b", "1e12").startswith("held")
+    assert store("release", "m__fine__s0", "run-a") == "ok" and store("claim", "m__fine__s0", "run-b", "0") == "ok"
+    assert store("claim", "m__fine__s0", "run-c", "1e12") == "ok", "a claim past its until lapses"
+    assert store("put", "cells/m__fine__b1__s0.json", payload=b"{}") == "ok"
+    assert store("put", "cells/m__fine__b1__s0.json", payload=b"[]") == "exists"
+    assert (tmp_path / "cells" / "m__fine__b1__s0.json").read_bytes() == b"{}"
+    assert store.done() == {"m__fine__b1__s0.json"} and not list((tmp_path / "cells").glob(".put-*"))
+    for bad in ("../x", "/etc/x"):
+        try:
+            store("put", bad, payload=b"")
+        except ValueError:
+            continue
+        raise AssertionError(f"{bad} was written")
