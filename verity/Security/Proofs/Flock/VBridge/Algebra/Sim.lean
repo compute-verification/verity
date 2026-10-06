@@ -18,12 +18,6 @@ namespace FlockVBridge.Algebra
 
 open Flock FlockSoundness.Refine FlockLevel3
 
-/-! ## F's arithmetic -/
-
-/-- An identity of F128 words that holds in `GF128`. -/
-macro "f128_ring" : tactic =>
-  `(tactic| (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_zero, fOf_one]; ring))
-
 /-! ## Evaluating symbolic values -/
 
 /-- A dict's value: `Σ x · g k` over its entries. -/
@@ -33,25 +27,36 @@ def tEval {κ : Type} (g : κ → F128) : Terms κ → F128
 
 theorem tEval_addAt {κ : Type} [DecidableEq κ] (g : κ → F128) :
     ∀ (ts : Terms κ) (k : κ) (v : F128), tEval g (addAt ts k v) = tEval g ts + v * g k
-  | [], k, v => by simp only [addAt, tEval]; f128_ring
+  | [], k, v => by
+    simp only [addAt, tEval]
+    (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_zero]; ring)
   | (k', x) :: r, k, v => by
     unfold addAt
     split
-    · rename_i h; subst h; simp only [tEval]; f128_ring
-    · simp only [tEval, tEval_addAt g r k v]; f128_ring
+    · rename_i h; subst h; simp only [tEval]
+      (apply fOf_injective; simp only [fOf_add, fOf_mul]; ring)
+    · simp only [tEval, tEval_addAt g r k v]
+      (apply fOf_injective; simp only [fOf_add, fOf_mul]; ring)
 
 theorem tEval_mergeT {κ : Type} [DecidableEq κ] (g : κ → F128) :
     ∀ (b a : Terms κ), tEval g (mergeT a b) = tEval g a + tEval g b
-  | [], a => by simp only [mergeT, List.foldl_nil, tEval]; f128_ring
+  | [], a => by
+    simp only [mergeT, List.foldl_nil, tEval]
+    (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
   | (k, x) :: r, a => by
     have := tEval_mergeT g r (addAt a k x)
     simp only [mergeT, List.foldl_cons] at this ⊢
-    rw [this, tEval_addAt]; simp only [tEval]; f128_ring
+    rw [this, tEval_addAt]; simp only [tEval]
+    (apply fOf_injective; simp only [fOf_add, fOf_mul]; ring)
 
 theorem tEval_scale {κ : Type} (g : κ → F128) (s : F128) :
     ∀ ts : Terms κ, tEval g (ts.map fun kv => (kv.1, s * kv.2)) = s * tEval g ts
-  | [] => by simp only [List.map_nil, tEval]; f128_ring
-  | (k, x) :: r => by simp only [List.map_cons, tEval, tEval_scale g s r]; f128_ring
+  | [] => by
+    simp only [List.map_nil, tEval]
+    (apply fOf_injective; simp only [fOf_mul, fOf_zero]; ring)
+  | (k, x) :: r => by
+    simp only [List.map_cons, tEval, tEval_scale g s r]
+    (apply fOf_injective; simp only [fOf_add, fOf_mul]; ring)
 
 /-- A symbolic value at the elements' values `val`: `Σ t[k]·val k + c + Σ q[(a, b)]·val a·val b`. -/
 def Lin.eval (val : Key → F128) (a : Lin) : F128 :=
@@ -61,11 +66,13 @@ theorem Lin.eval_xor (val : Key → F128) (a b : Lin) : (a.xor b).eval val = a.e
   simp only [Lin.eval, Lin.xor, tEval_mergeT]
   rcases a with ⟨at', ac, aq⟩
   rcases b with ⟨bt, bc, bq⟩
-  cases ac <;> cases bc <;> simp only [Option.getD] <;> f128_ring
+  cases ac <;> cases bc <;> simp only [Option.getD]
+  all_goals (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
 
 theorem Lin.eval_scale (val : Key → F128) (s : F128) (a : Lin) : (a.scale s).eval val = s * a.eval val := by
   simp only [Lin.eval, Lin.scale, tEval_scale]
-  cases a.c <;> simp only [Option.map, Option.getD] <;> f128_ring
+  cases a.c <;> simp only [Option.map, Option.getD]
+  all_goals (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_zero]; ring)
 
 theorem Lin.eval_mv (val : Key → F128) {x y z : Lin} (h : x.mv y = .ok z) : z.eval val = x.eval val * y.eval val := by
   unfold Lin.mv at h
@@ -75,18 +82,20 @@ theorem Lin.eval_mv (val : Key → F128) {x y z : Lin} (h : x.mv y = .ok z) : z.
     · rename_i hab
       obtain ⟨rfl, rfl⟩ := hab
       cases h
-      simp only [Lin.eval, tEval, Option.getD]; f128_ring
+      simp only [Lin.eval, tEval, Option.getD]
+      (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_zero, fOf_one]; ring)
     · cases h
   · cases h
 
 theorem Lin.eval_zero (val : Key → F128) : Lin.eval val {} = 0 := by
-  simp only [Lin.eval, tEval, Option.getD]; f128_ring
+  simp only [Lin.eval, tEval, Option.getD]; (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
 
 theorem Lin.eval_cst (val : Key → F128) (v : F128) : Lin.eval val { c := some v } = v := by
-  simp only [Lin.eval, tEval, Option.getD]; f128_ring
+  simp only [Lin.eval, tEval, Option.getD]; (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
 
 theorem Lin.eval_var (val : Key → F128) (k : Key) : (Lin.var k).eval val = val k := by
-  simp only [Lin.eval, Lin.var, tEval, Option.getD]; f128_ring
+  simp only [Lin.eval, Lin.var, tEval, Option.getD]
+  (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_zero, fOf_one]; ring)
 
 /-! ## Maps that commute with the operations -/
 
