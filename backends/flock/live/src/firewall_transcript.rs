@@ -1,12 +1,12 @@
-//! What the outer gate (PROTOCOL.md §10.1, `FC_GATE=1`, the CPU prover) lets out of a `--zk` session, as a
+//! What the outer firewall (PROTOCOL.md §10.1, `FC_FIREWALL=1`, the CPU prover) lets out of a `--zk` session, as a
 //! `verity/firewall-transcript/v0` transcript for `Flock.Firewall.Contract` (`flock-firewall contract`): with
-//! `FC_GATE_TRANSCRIPT=DIR`, each session's is `DIR/session-<k>.json`, written when the session sends `Finish`, with the
+//! `FC_FIREWALL_TRANSCRIPT=DIR`, each session's is `DIR/session-<k>.json`, written when the session sends `Finish`, with the
 //! public input it is held to beside it (`DIR/public-<k>.json`, `verity/firewall-public/v0`: the relations the verifier
 //! checks, each statement item's value by name, and the names of the values fixed by the firewall's recheck, shadow or own
 //! computation; the transcript carries none of it, and the outer agreement holds every session to the honest sessions'
 //! one). The recorder
-//! reads the wire's requests and coins (a [`Recording`] transport after `coin_tree::Checked`) and the gate's candidates and
-//! wants (one-line hooks in `Gate`, `ShadowLink::check` and `zk_finish`); it changes nothing the gate sends.
+//! reads the wire's requests and coins (a [`Recording`] transport after `coin_tree::Checked`) and the firewall's candidates and
+//! wants (one-line hooks in `Firewall`, `ShadowLink::check` and `zk_finish`); it changes nothing the firewall sends.
 //!
 //! Items, in the order they leave:
 //! - `Register` (fixed by the statement), `Hello` (the firewall's own, on its word), each rep's `Open` (the statement: the
@@ -16,7 +16,7 @@
 //!   statement's skeleton (its level-0 cap by the recheck), each observed value `masked` with its pad in `Layout::absorbed` order, and the pads' label and root
 //!   that the masking challenger inserts (the statement, the firewall's own); in the opening every frame by the shadow, level
 //!   0's observed values `masked`; then the round's `coins` (the wire's, after the coin tree's opening is checked and
-//!   stripped) and the ones the gate relayed;
+//!   stripped) and the ones the firewall relayed;
 //! - the inner proof's rounds (the firewall's own stream, nothing relayed): `final_c'`, `ρ = ε h_fa + h_x` and `σ = h_fb + h_y`
 //!   masked; then one `check` per constraint row the verifier checks (`zk_finish`'s rows and the triple's), its outcome
 //!   `Lin.eval(h) = 0` with its affine `form` beside it; then `τ`'s commitment and `Y` (the firewall's own, recomputed here
@@ -25,7 +25,7 @@
 //!   passed), commitment (the recheck), opening (the shadow's, level 0 masked) and inner proof (own, on its word); `finish`
 //!   when both reps' proofs went out.
 //!
-//! Where the gate refuses, the candidate it held back is written as the items it would have sent (masked values with their
+//! Where the firewall refuses, the candidate it held back is written as the items it would have sent (masked values with their
 //! pads), up to the first item the contract must refuse, and the transcript stops there (`firewall.gate.at`); where the
 //! prover stops (its own self-check), the transcript stops after what it sent. An item taken on its word carries
 //! `"on_its_word": true`; items the recorder made up to stand for a refusal it cannot itemize carry `"stand_in": true`.
@@ -51,7 +51,7 @@ pub const PUBLIC_FORMAT: &str = "verity/firewall-public/v0";
 /// The rows `zk_finish` adds to the replay's: the ring switch's, then level 0's lane phase.
 const RING_SWITCH: [&str; 2] = ["ring switch ab", "ring switch c"];
 const LANE_PHASE: [&str; 2] = ["ligerito lane phase (c0)", "ligerito lane phase (c1)"];
-/// `gate::skeleton`'s item that is the recheck commitment's cap (after the domain, the R1CS label and the digest): a value
+/// `firewall::skeleton`'s item that is the recheck commitment's cap (after the domain, the R1CS label and the digest): a value
 /// of the session's, fixed by the recheck, not by the statement.
 const SKELETON_CAP: usize = 3;
 
@@ -63,14 +63,14 @@ pub fn with<R>(f: impl FnOnce(&mut Rec) -> R) -> Option<R> {
     REC.lock().unwrap_or_else(PoisonError::into_inner).as_mut().map(f)
 }
 
-/// A new session's recorder, when `FC_GATE_TRANSCRIPT` names a directory: whether one started.
+/// A new session's recorder, when `FC_FIREWALL_TRANSCRIPT` names a directory: whether one started.
 pub fn start() -> bool {
-    let Ok(dir) = std::env::var("FC_GATE_TRANSCRIPT") else { return false };
+    let Ok(dir) = std::env::var("FC_FIREWALL_TRANSCRIPT") else { return false };
     let k = SESSIONS.fetch_add(1, Ordering::SeqCst);
-    std::fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("FC_GATE_TRANSCRIPT {dir}: {e}"));
+    std::fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("FC_FIREWALL_TRANSCRIPT {dir}: {e}"));
     *REC.lock().unwrap_or_else(PoisonError::into_inner) =
         Some(Rec::new(PathBuf::from(&dir).join(format!("session-{k}.json")), PathBuf::from(&dir).join(format!("public-{k}.json")),
-                      std::env::var("FC_GATE_TAMPER").unwrap_or_default()));
+                      std::env::var("FC_FIREWALL_TAMPER").unwrap_or_default()));
     true
 }
 
@@ -102,7 +102,7 @@ fn push_f128(out: &mut Vec<u8>, v: F128) {
     out.extend_from_slice(&v.hi.to_le_bytes());
 }
 
-/// An item's frame as the live challenger writes it (`gate::parse`'s inverse).
+/// An item's frame as the live challenger writes it (`firewall::parse`'s inverse).
 pub fn frame(it: &Item) -> Vec<u8> {
     let mut v = Vec::new();
     match it {
@@ -197,7 +197,7 @@ struct RepRec {
     stream: Option<String>,
     wire_rounds: usize,
     used: BTreeSet<usize>,
-    /// the values the gate passed, `final_c'` its own (set when the gate passes the device's proof)
+    /// the values the firewall passed, `final_c'` its own (set when the firewall passes the device's proof)
     vals: Option<Vec<F128>>,
     opening: Option<Vec<u8>>,
     inner: Option<usize>,
@@ -227,7 +227,7 @@ pub struct Rec {
     reps: Vec<RepRec>,
     pending: Option<Pending>,
     root_want: Option<Vec<u8>>,
-    /// the last gated round's coins on the wire (stream, round), for the gate's answer
+    /// the last gated round's coins on the wire (stream, round), for the firewall's answer
     coins: Option<(String, usize, Vec<F128>)>,
     link: Option<Vec<F128>>,
     tables: usize,
@@ -318,21 +318,21 @@ impl Rec {
         self.pending = Some(Pending::Root { got: got.to_vec(), want: want.to_vec() });
     }
 
-    /// A device round the gate is about to check (after any tamper): the algebraic phase's (`alg`) or the opening's.
+    /// A device round the firewall is about to check (after any tamper): the algebraic phase's (`alg`) or the opening's.
     pub fn candidate(&mut self, alg: bool, content: &[u8], n: usize) {
         let Some(r) = self.reps.last_mut() else { return };
         let k = if alg { r.alg_rounds += 1; r.alg_rounds - 1 } else { r.open_rounds += 1; r.open_rounds - 1 };
         self.pending = Some(Pending::Round { alg, k, content: content.to_vec(), n, want: None });
     }
 
-    /// The shadow's round the gate compares the device's opening round with.
+    /// The shadow's round the firewall compares the device's opening round with.
     pub fn shadow_round(&mut self, want: &[u8], n: usize) {
         if let Some(Pending::Round { want: w, .. }) = self.pending.as_mut() {
             *w = Some((want.to_vec(), n));
         }
     }
 
-    /// The coins the gate relayed to the device for the round it passed.
+    /// The coins the firewall relayed to the device for the round it passed.
     pub fn answer(&mut self, relayed: &[F128]) {
         let Some((stream, k, coins)) = self.coins.take() else { return };
         self.coins_item(&stream, k, &coins, relayed);
@@ -350,14 +350,14 @@ impl Rec {
         }
     }
 
-    /// The values the gate passed, `final_c'` the one it computed from them.
+    /// The values the firewall passed, `final_c'` the one it computed from them.
     pub fn passed(&mut self, vals: &[F128]) {
         if let Some(r) = self.reps.last_mut() {
             r.vals = Some(vals.to_vec());
         }
     }
 
-    /// The gate passed the device's proof: the shadow's opening, which is what leaves (level 0 masked).
+    /// The firewall passed the device's proof: the shadow's opening, which is what leaves (level 0 masked).
     pub fn shadow_opening(&mut self, open: &BatchOpeningProofLigerito) {
         let Some(r) = self.reps.last_mut() else { return };
         let mut o = open.clone();
@@ -367,7 +367,7 @@ impl Rec {
         r.inner = Some(0);
     }
 
-    /// The device's proof the gate refuses (after any tamper).
+    /// The device's proof the firewall refuses (after any tamper).
     pub fn proof_candidate(&mut self, proof: &R1csProofLigerito) {
         self.pending = Some(Pending::Proof { proof: Box::new(proof.clone()) });
     }
@@ -384,7 +384,7 @@ impl Rec {
         self.stopped = Some(why.chars().take(400).collect());
     }
 
-    /// The gate refused: the candidate it held back, as the items it would have sent, up to the first the contract refuses.
+    /// The firewall refused: the candidate it held back, as the items it would have sent, up to the first the contract refuses.
     pub fn refused(&mut self, why: &str) {
         if self.halted() {
             return;
@@ -396,7 +396,7 @@ impl Rec {
             None => true,
         };
         if ok {
-            self.items.push(json!({"fixed": {"what": format!("the gate's refusal: {why}"), "by": "own", "want": "", "sent": "01", "pads": [],
+            self.items.push(json!({"fixed": {"what": format!("the firewall's refusal: {why}"), "by": "own", "want": "", "sent": "01", "pads": [],
                                               "stand_in": true}}));
         }
         self.refused = Some((why.to_string(), self.items.len() - 1));
@@ -414,7 +414,7 @@ impl Rec {
         Ok((0..cand.len()).map(|f| w.get(f).cloned()).collect())
     }
 
-    /// Items of one device round: `wire` the round as it left (None: the gate held it back, and what would have left is the
+    /// Items of one device round: `wire` the round as it left (None: the firewall held it back, and what would have left is the
     /// device's frames with their values masked). Returns whether every item may leave (stops at the first that may not when
     /// `wire` is None).
     fn round_items(&mut self, ri: usize, alg: bool, k: usize, cand: &[Item], wire: Option<&[Item]>, want: &Option<(Vec<u8>, usize)>)
@@ -579,7 +579,7 @@ impl Rec {
             Req::Commit { root_f, roots, publics } => {
                 self.pending = None;
                 self.on_its_word("the session's Commit: σ (root_f)".into(), "own", root_f, vec![]);
-                let want = self.root_want.clone().ok_or("a Commit before the gate saw the device's root")?;
+                let want = self.root_want.clone().ok_or("a Commit before the firewall saw the device's root")?;
                 self.tables = roots.len();
                 self.commit_roots(roots, &want);
                 let enc: Vec<u8> = publics.iter().flat_map(|(n, p)| [n.as_bytes(), p.as_slice()].concat()).collect();
@@ -605,7 +605,7 @@ impl Rec {
                         self.round_items(ri, alg, dk, &parse(&dc)?, Some(&wire), &want)?;
                         self.coins = Some((stream.clone(), k, coins.clone()));
                     }
-                    Some(Pending::Proof { .. }) => return Err(format!("{stream} round {k}: a round while the gate holds a proof")),
+                    Some(Pending::Proof { .. }) => return Err(format!("{stream} round {k}: a round while the firewall holds a proof")),
                     // a later rep's root, held to the recheck's but sent once, in rep 0's Commit
                     Some(Pending::Root { .. }) | None => self.inner_round(ri, &wire, coins)?,
                 }
@@ -623,7 +623,7 @@ impl Rec {
 
     /// The inner proof's rounds on the rep's own stream (no coin is relayed).
     fn inner_round(&mut self, ri: usize, wire: &[Item], coins: &[F128]) -> Result<(), String> {
-        let j = self.reps[ri].inner.ok_or("a round the gate never saw, before the rep's inner proof")?;
+        let j = self.reps[ri].inner.ok_or("a round the firewall never saw, before the rep's inner proof")?;
         self.reps[ri].inner = Some(j + 1);
         let (rep, base, lay) = (self.reps[ri].rep, self.reps[ri].base, self.reps[ri].lay);
         let what = |f: usize| format!("rep {rep} inner proof round {j} frame {f}");
@@ -634,7 +634,7 @@ impl Rec {
         match (j, wire) {
             (0, [l, o @ Item::Obs { vals, .. }, sq]) if vals.len() == 1 => {
                 st(self, 0, Item::Label(LABEL_INNER.to_vec()), l);
-                let fc = self.reps[ri].vals.as_ref().ok_or("final_c' before the gate passed the proof")?[lay.fc()];
+                let fc = self.reps[ri].vals.as_ref().ok_or("final_c' before the firewall passed the proof")?[lay.fc()];
                 self.fixed(format!("{}: observe header", what(1)), "statement", &obs_header(Some(&Item::Obs { kind: KIND_SCALAR, vals: vec![F128::ZERO] })), &obs_header(Some(o)), vec![]);
                 self.masked(ri, fc, lay.fc(), vals[0]);
                 st(self, 2, Item::Squeeze { kind: KIND_SCALAR, n: 1 }, sq);
@@ -694,12 +694,12 @@ impl Rec {
         let lay = self.reps[ri].lay;
         let (w, s) = Self::shape(&lay, &p.zerocheck, &p.lincheck);
         self.fixed(format!("rep {rep} proof: shape (round1_ab, round1_c, multilinear_rounds, lincheck rounds, z_partial)"), "statement", &w, &s, vec![]);
-        let want = Self::piop_want(&self.reps[ri]).ok_or_else(|| format!("rep {rep}'s proof before the gate passed it"))?;
+        let want = Self::piop_want(&self.reps[ri]).ok_or_else(|| format!("rep {rep}'s proof before the firewall passed it"))?;
         let pads = self.used(ri, |i| i < lay.piop_exposed());
         self.fixed(format!("rep {rep} proof: the masked zerocheck and lincheck"), "own", &want, &[bin(&p.zerocheck), bin(&p.lincheck)].concat(), pads);
         let want = self.reps[ri].cm.clone();
         self.fixed(format!("rep {rep} proof: the level-0 commitment"), "recheck", &want, &bin(&cm), vec![]);
-        let want = self.reps[ri].opening.clone().ok_or_else(|| format!("rep {rep}'s opening before the gate passed it"))?;
+        let want = self.reps[ri].opening.clone().ok_or_else(|| format!("rep {rep}'s opening before the firewall passed it"))?;
         let pads = self.used(ri, |i| i >= lay.piop_exposed() && i < lay.hab());
         self.fixed(format!("rep {rep} proof: the opening"), "shadow", &want, &bin(&p.pcs_open), pads);
         let pads = self.used(ri, |_| true);
@@ -722,7 +722,7 @@ impl Rec {
                             "computes": self.computes});
         for (path, v) in [(&self.public, &public), (&self.path, &t)] {
             if let Err(e) = std::fs::write(path, serde_json::to_vec(v).expect("JSON")) {
-                eprintln!("FC_GATE_TRANSCRIPT: {}: {e}", path.display());
+                eprintln!("FC_FIREWALL_TRANSCRIPT: {}: {e}", path.display());
             }
         }
     }

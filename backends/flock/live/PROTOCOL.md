@@ -674,13 +674,13 @@ or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), befor
 | `algebra-proof` | flips a masked value in its returned proof only | `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` |
 | `shape` | appends a value to its returned proof's `round1_ab`, past the ones the firewall compares | `FIREWALL-REFUSED: the proof's shape (…) is [65, 64, …] where the statement's is [64, 64, …]` |
 
-With `FC_GATE_TRANSCRIPT=DIR` (the CPU path only), each gated session also writes what the gate let out as a
+With `FC_FIREWALL_TRANSCRIPT=DIR` (the CPU path only), each gated session also writes what the firewall let out as a
 `verity/firewall-transcript/v0` transcript, `DIR/session-<k>.json`, for the firewall's contract (`flock-firewall contract`):
-`gate_transcript.rs` reads the wire after the coin tree's check and the gate's candidates, and changes nothing the gate
-sends. Where the gate refuses, the transcript holds the refused candidate's items up to the first one the contract must
+`firewall_transcript.rs` reads the wire after the coin tree's check and the firewall's candidates, and changes nothing the firewall
+sends. Where the firewall refuses, the transcript holds the refused candidate's items up to the first one the contract must
 refuse; where the prover stops, it ends where the prover did. Beside it, `DIR/public-<k>.json` (`verity/firewall-public/v0`)
-is the public input the contract holds it to (`flock-firewall contract --public`): the relations the gate checks, the
-statement's values (the constants, the labels, the shapes), and the names of the values the gate fixes by its own
+is the public input the contract holds it to (`flock-firewall contract --public`): the relations the firewall checks, the
+statement's values (the constants, the labels, the shapes), and the names of the values the firewall fixes by its own
 computation (the recheck, the shadow opening, its own values; the skeleton's cap, whose bytes depend on the session, among
 them). The transcript carries no schedule or relations of its own. `verifier/firewall_outer_agree.py` runs the contract on
 them under one public input, the honest sessions', which every session's must agree with.

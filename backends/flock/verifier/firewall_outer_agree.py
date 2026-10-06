@@ -1,15 +1,15 @@
-"""The outer gate's contract check: `flock-circuit prove --zk` gated sessions (`FC_GATE=1 FC_HOST_WITNESS=1`, the CPU
-prover) with `FC_GATE_TRANSCRIPT` recording what the gate lets out (`live/src/gate_transcript.rs`), and the contract
+"""The outer firewall's contract check: `flock-circuit prove --zk` gated sessions (`FC_FIREWALL=1 FC_HOST_WITNESS=1`, the CPU
+prover) with `FC_FIREWALL_TRANSCRIPT` recording what the firewall lets out (`live/src/firewall_transcript.rs`), and the contract
 (`flock-firewall contract`, `Flock/Firewall/Contract.lean`) on each transcript. `firewall_agree.py` is the inner phase's.
 
     python firewall_outer_agree.py --lean BIN --out DIR CASE=DIR...
 
-`CASE` is `honest` or an `FC_GATE_TAMPER` control, `DIR` the directory its sessions' transcripts went to (``session-<k>.json``)
+`CASE` is `honest` or an `FC_FIREWALL_TAMPER` control, `DIR` the directory its sessions' transcripts went to (``session-<k>.json``)
 with the public input each recorded (``public-<k>.json``). The contract holds every transcript to one public input
 (`public_input`, written to DIR/public.json): the honest sessions', which must be one and the same in every honest session,
 and with which every control's agrees wherever both name a value. Each transcript must
-meet its case's expectation (`EXPECT`): an honest session passes the gate, the prover does not stop, and the contract
-accepts; a control's session is refused by the gate (or, for `algebra`, stopped by the prover's self-check), and the contract
+meet its case's expectation (`EXPECT`): an honest session passes the firewall, the prover does not stop, and the contract
+accepts; a control's session is refused by the firewall (or, for `algebra`, stopped by the prover's self-check), and the contract
 refuses it for the control's own reason at the item where the firewall stopped (`firewall.gate.at`; for `algebra`, the first
 failing check). Every check's outcome is recomputed here from its affine form and the tape's pads (`c + Σ a_i h_i = 0` in
 GF(2^128)); the form is the verifier's replay of the masked values and the coins, on the transcript's word. Writes
@@ -25,21 +25,21 @@ from pathlib import Path
 
 MOD = (1 << 128) | 0x87
 
-#: per case: the gate's refusal (a prefix) or the prover's stop, and the contract's reason (a prefix and a suffix)
+#: per case: the firewall's refusal (a prefix) or the prover's stop, and the contract's reason (a prefix and a suffix)
 EXPECT = {
     "honest": {"firewall": None, "lean": None},
-    "root": {"firewall": "GATE-REFUSED: level-0 root",
+    "root": {"firewall": "FIREWALL-REFUSED: level-0 root",
              "lean": ("the session's Commit: the level-0 roots", "not the value the firewall's recheck fixes")},
-    "witness": {"firewall": "GATE-REFUSED: level-0 root",
+    "witness": {"firewall": "FIREWALL-REFUSED: level-0 root",
                 "lean": ("the session's Commit: the level-0 roots", "not the value the firewall's recheck fixes")},
-    "label": {"firewall": "GATE-REFUSED: algebraic phase, round 0, frame 1",
+    "label": {"firewall": "FIREWALL-REFUSED: algebraic phase, round 0, frame 1",
               "lean": ("rep 0 algebraic phase round 0 frame 1: label", "not the value the statement fixes")},
-    "opening": {"firewall": "GATE-REFUSED: opening round 0, frame 2",
+    "opening": {"firewall": "FIREWALL-REFUSED: opening round 0, frame 2",
                 "lean": ("rep 0 opening round 0 frame 2: ", "not the value the firewall's opening fixes")},
     "algebra": {"firewall": "PROVER-STOPPED: the batched constraint fails", "lean": ("the relation ", " fails")},
-    "algebra-proof": {"firewall": "GATE-REFUSED: the proof's exposed value 0",
+    "algebra-proof": {"firewall": "FIREWALL-REFUSED: the proof's exposed value 0",
                       "lean": ("rep 0 proof: the masked zerocheck and lincheck", "not the value the firewall's own values fixes")},
-    "shape": {"firewall": "GATE-REFUSED: the proof's shape",
+    "shape": {"firewall": "FIREWALL-REFUSED: the proof's shape",
               "lean": ("rep 0 proof: shape", "not the value the statement fixes")},
 }
 

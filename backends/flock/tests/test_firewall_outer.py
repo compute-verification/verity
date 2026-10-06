@@ -1,7 +1,7 @@
-"""The outer gate's agreement harness (`verifier/firewall_outer_agree.py`) on hand-made transcripts: a check's outcome is
+"""The outer firewall's agreement harness (`verifier/firewall_outer_agree.py`) on hand-made transcripts: a check's outcome is
 recomputed from its affine form over the tape's pads, and a case's expectation holds only when the firewall stopped where
 the control says and the contract cut at that item for the control's reason. The transcripts themselves come from
-`flock-circuit`'s recorder (`live/src/gate_transcript.rs`), run by the outer agreement run."""
+`flock-circuit`'s recorder (`live/src/firewall_transcript.rs`), run by the outer agreement run."""
 from __future__ import annotations
 
 import importlib.util
@@ -48,7 +48,7 @@ def test_a_checks_outcome_is_recomputed_from_its_form():
 
 def test_a_control_must_stop_where_the_firewall_did_and_for_its_reason():
     why = "rep 0 algebraic phase round 0 frame 1: label: not the value the statement fixes"
-    t = transcript([{"fixed": {}}] * 10, refused="GATE-REFUSED: algebraic phase, round 0, frame 1: label \"glock\"", at=9)
+    t = transcript([{"fixed": {}}] * 10, refused="FIREWALL-REFUSED: algebraic phase, round 0, frame 1: label \"glock\"", at=9)
     assert OA.judge("label", t, {"accepted": False, "released": 9, "why": why}) == (True, "")
     assert not OA.judge("label", t, {"accepted": False, "released": 8, "why": why})[0]
     assert not OA.judge("label", t, {"accepted": False, "released": 9, "why": "the session ended without Finish"})[0]
@@ -89,7 +89,7 @@ def test_every_session_is_held_to_the_honest_sessions_public_input(tmp_path):
     hon, ctl = tmp_path / "honest", tmp_path / "label"
     honest = [session(hon, k, {"Register": "00"}) for k in range(2)]
     odd = session(hon, 2, {"Register": "01"})
-    more = session(ctl, 0, {"Register": "00", "the gate's refusal": "01"})
+    more = session(ctl, 0, {"Register": "00", "the firewall's refusal": "01"})
     clash = session(ctl, 1, {"Register": "01"})
     extra = session(ctl, 2, {"Register": "00"}, relations=("r", "the firewall's own"))
     pub, bad = OA.public_input([("honest", honest + [odd]), ("label", [more, clash, extra])])

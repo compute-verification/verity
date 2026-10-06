@@ -173,12 +173,12 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   tape number naming another's value, the public input from the transcript, a name of the firewall's choosing), and runs
   the contract on every session of `test_firewall_agreement.py`. `--sessions`
   replays recorded K = 4096 sessions from their coins and salts (`r20261006-070620-e02d`'s, 4 of 4 accepted by both). The
-  outer phase: `firewall_outer_agree.py` runs the contract on the outer gate's transcripts (`FC_GATE_TRANSCRIPT`,
-  `live/PROTOCOL.md` §10.4), each honest one accepted and each `FC_GATE_TAMPER` control cut where the gate stopped, for its
+  outer phase: `firewall_outer_agree.py` runs the contract on the outer firewall's transcripts (`FC_FIREWALL_TRANSCRIPT`,
+  `live/PROTOCOL.md` §10.4), each honest one accepted and each `FC_FIREWALL_TAMPER` control cut where the firewall stopped, for its
   control's reason, with every check's outcome recomputed from its affine form over the tape's pads, all under one public
   input: the honest sessions' (`public-<k>.json`, the same in each), which every control's agrees with. On RoPE d64 at
   m = 25, CPU gated sessions, 60 of 60 as expected (`r20261006-113126-30c2`: 10 relations, 265 statement values, 383 values
-  of the gate's own computation).
+  of the firewall's own computation).
 - Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agrees 27 of 27. Set 14 (a shared-row RoPE file whose six
   instances repeat three rows) agrees 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included; set 15
   (the same instances per instance) 22 of 22. The `967b8d06` vectors patch writes each false statement as the verifier's
