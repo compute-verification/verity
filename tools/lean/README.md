@@ -153,7 +153,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   spec of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency
   (the toolchain, Mathlib, ArkLib). A definition in a spec module must also be under `meaning`, or the record would hold
   nothing of it. `reads_exempt` lists, each with the reason, module prefixes a guarantee may read outside the spec (a
-  package whose statements are about its executable, not about a model of it); an entry that exempts nothing fails.
+  package whose statements are about its executable, not about a model of it), as an object {prefix: the reason}; an
+  entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`.
   The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
   package's (`unread_spec` in `report.json`).
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
