@@ -594,7 +594,7 @@ witness, and the opening's basis fold `w^r`, which `T'`, `ybar` and levels 1+ al
 
 **What a refusal costs.** A refusal stops the session, which the auditor sees, at a message the device can move: §10.5 bounds
 what that reveals over the whole recursive session. A firewall that refuses is evidence against its rack. Timing (when a
-message leaves) is not in this rule; the network warden covers it.
+message leaves) is not in this rule; the network certifier covers it.
 
 ### 10.2 The level-0 recheck
 
