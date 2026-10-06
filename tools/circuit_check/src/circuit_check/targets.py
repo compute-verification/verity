@@ -88,6 +88,7 @@ def load_registries() -> None:
     import verity.protocols.accounting.space.pous.circuit  # noqa: F401  (P2's modular squaring on bits)
     import verity.protocols.accounting.space.pous.decode_circuit  # noqa: F401  (P2's decode of one block)
     import verity.protocols.accounting.space.pous.answer_circuit  # noqa: F401  (PoUS's per-answer opening)
+    import verity_flock.rec_open  # noqa: F401  (V*'s opening check: recursion's inner Ligerito openings)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -459,6 +460,14 @@ def _pous_roots() -> list[Any]:
     return [bind(PousModSquare, W=128, C0=21065), bind(PousP2Decode, W=64, C0=189, L=116), bind(PousAnswerOpens, N=264)]
 
 
+def _rec_roots() -> list[Any]:
+    """V*'s opening check (`verity_flock.rec_open`) at its smallest shape: a row of 8 lanes (one SHA-512 block) and one level,
+    six compressions. Wider rows add message blocks and higher openings repeat the level, both at the same compression."""
+    from verity_flock.rec_open import definition
+
+    return [definition(8, 1)]
+
+
 def _kernel_roots() -> list[Any]:
     from verity_vllm.program.kernels import kernel_registry as KR
 
@@ -748,9 +757,8 @@ def catalog(by_unit: list | None = None) -> list[Any]:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
     for units, make in ((("_core_roots",), _core_roots), (("_boolean_roots",), _boolean_roots),
-                        (("_boolean_gather_roots",), _boolean_gather_roots), (("_universal_roots",), _universal_roots),
-                        (("_gf2k_roots",), _gf2k_roots),
-                        (("_merkle_roots",), _merkle_roots), (("_pous_roots",), _pous_roots), (("_kernel_roots",), _kernel_roots),
+                        (("_boolean_gather_roots",), _boolean_gather_roots), (("_universal_roots",), _universal_roots), (("_gf2k_roots",), _gf2k_roots),
+                        (("_merkle_roots",), _merkle_roots), (("_pous_roots",), _pous_roots), (("_rec_roots",), _rec_roots), (("_kernel_roots",), _kernel_roots),
                         (("_vocabulary_roots", "_vocabulary_bindings"), _vocabulary_roots), (("_pouw_roots",), _pouw_roots)):
         roots += _produce(units, make, by_unit)
     for label, make in _model_roots():
