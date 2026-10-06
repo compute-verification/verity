@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 
 from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.registry.serve3_reference import materialize
+from verity_vllm.program.kernels.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager")
 BF = torch.bfloat16

@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import bisect
 import difflib
+import functools
 import json
 import posixpath
 import re
@@ -139,11 +140,25 @@ class Tree:
                 return None
             d = posixpath.dirname(d)
 
+    @functools.cache
+    def source_dirs(self, pkg: str) -> list[str]:
+        """The directories ``pkg``'s module names are relative to, deepest first: each `lean_lib`'s `srcDir` under the
+        package's (`lakefile.toml`; Lake's default `.`), so a nested package with `srcDir = ".."` names its modules from the
+        directory above it."""
+        try:
+            cfg = tomllib.loads(self.text(posixpath.join(pkg, "lakefile.toml")) or "")
+        except tomllib.TOMLDecodeError:
+            cfg = {}
+        top = posixpath.normpath(posixpath.join(pkg, cfg.get("srcDir", ".")))
+        dirs = {top, *(posixpath.normpath(posixpath.join(top, lib.get("srcDir", "."))) for lib in cfg.get("lean_lib", []))}
+        return sorted(dirs, key=lambda d: (d != ".") * (d.count("/") + 1), reverse=True)
+
     def module(self, path: str) -> str | None:
         pkg = self.package(path)
         if pkg is None:
             return None
-        return (path[len(pkg) + 1:] if pkg else path)[:-len(".lean")].replace("/", ".")
+        src = next((s for s in self.source_dirs(pkg) if s == "." or path.startswith(s + "/")), pkg)
+        return (path[len(src) + 1:] if src not in ("", ".") else path)[:-len(".lean")].replace("/", ".")
 
     def text(self, path: str) -> str | None:
         try:

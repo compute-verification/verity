@@ -74,9 +74,10 @@ def check_ports(fn, ports: dict, derivations: dict, k: int, reads: dict[str, int
     assert Counter(listed) == Counter([name for name, _t in params] + list(range(len(outs)))), fn.id
     types_ = dict(params) | dict(enumerate(outs))
     padded = lambda p, b: -(-b // 16) * 16 if isinstance(p, int) else b  # noqa: E731
-    for schema, _role, ps in ports["rows"]:
+    for schema, role, ps in ports["rows"]:
         bits = sum(padded(p, sum(types_[p].leaf_widths()) // reads.get(p, 1)) for p in ps)
         assert bits == 16 * L.ROW_WORDS[schema]((ks or {}).get(schema, k)), (fn.id, schema)
+        assert (schema, role) in L.ROW_SCHEMA, (fn.id, schema, role)
     assert list(ports["regions"]) == [name for name, _t in params if name in ports["regions"]], fn.id
     for port, anchor in ports["regions"].items():
         widths = types_[port].leaf_widths()
