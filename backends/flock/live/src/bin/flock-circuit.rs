@@ -1336,20 +1336,22 @@ fn gated_round<C: flock_transcript::challenger::Challenger>(gate: &Option<Arc<Mu
     coins
 }
 
-/// The gate's end check on a device's returned proof (refused by name), with its timings added to the rep's buckets.
-fn gated_finish(gate: &Option<Arc<Mutex<Gate>>>, proof: &mut R1csProofLigerito, cm: &Commitment, bk: &mut Value) {
-    let Some(g) = gate else { return };
-    let v = g.lock().unwrap_or_else(PoisonError::into_inner).finish(proof, cm).unwrap_or_else(|why| panic!("{why}"));
+/// The gate's end check on a device's returned proof (its refusal, by name, is the rep's error), with its timings added to the
+/// rep's buckets.
+fn gated_finish(gate: &Option<Arc<Mutex<Gate>>>, proof: &mut R1csProofLigerito, cm: &Commitment, bk: &mut Value) -> Result<(), String> {
+    let Some(g) = gate else { return Ok(()) };
+    let v = g.lock().unwrap_or_else(PoisonError::into_inner).finish(proof, cm)?;
     if let (Some(o), Some(v)) = (bk.as_object_mut(), v.as_object()) {
         o.extend(v.clone());
     }
+    Ok(())
 }
 
 /// M1's CPU prover: upstream's prover under the masking challenger (or, with `FC_ZK_FRAMED`, under a [`Framer`] whose rounds are
 /// replayed into it, as the device's are), then [`zk_finish`].
 #[allow(clippy::too_many_arguments)]
 fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger, zk: &ZkRep,
-                gate: &Option<Arc<Mutex<Gate>>>) -> (Vec<u8>, Value) {
+                gate: &Option<Arc<Mutex<Gate>>>) -> Result<(Vec<u8>, Value), String> {
     #[allow(irrefutable_let_patterns)]
     let WitData::Host((z, a, b, zl)) = wt.clone() else { panic!("M1's CPU prover takes a host witness") };
     let tp = Instant::now();
@@ -1364,8 +1366,8 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, 
     };
     let t_upstream = tp.elapsed().as_secs_f64();
     let mut bk = json!({});
-    gated_finish(gate, &mut proof, &commitment, &mut bk);
-    zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, bk)
+    gated_finish(gate, &mut proof, &commitment, &mut bk)?;
+    Ok(zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, bk))
 }
 
 /// After upstream's prover (the CPU's, or the device's with the same unmasked proof, level-0 record and folded comb): the
@@ -2504,7 +2506,7 @@ fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused:
 #[cfg(feature = "gpu")]
 #[allow(clippy::too_many_arguments)]
 fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger,
-             salts: &Mutex<flock_live::zk_hooks::LeafSalts>, reuse_tag: Option<u64>, native_sha: bool) -> (Vec<u8>, Value) {
+             salts: &Mutex<flock_live::zk_hooks::LeafSalts>, reuse_tag: Option<u64>, native_sha: bool) -> Result<(Vec<u8>, Value), String> {
     use flock_live::gpu_circuit::{Live, Reuse, kept, prove_circuit};
     let reuse = match (reuse_tag, rep) {
         (None, _) => Reuse::None,
@@ -2514,13 +2516,13 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
     let reused = matches!(reuse, Reuse::Take(t) if kept(t));
     let (proof, commitment, ph, wph, hph) =
         with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, Live::Stream(ch), Some(salts), reuse,
-                                                 native_sha));
+                                                 native_sha))?;
     let ts = Instant::now();
     let bytes = bincode::serialize(&(commitment, proof)).unwrap();
     let mut bk = gpu_buckets(wt, ph, wph, hph, reused, native_sha);
     bk["h.serialize"] = json!(ts.elapsed().as_secs_f64());
     eprintln!("GPUPHASE\t{bk}");
-    (bytes, bk)
+    Ok((bytes, bk))
 }
 
 /// M1 on the device, its device part: every live round the device frames goes to `rounds` (the rep's masking challenger, made
@@ -2530,29 +2532,29 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
 #[allow(clippy::too_many_arguments)]
 fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
                  level0: &flock_core::pcs::ligerito::zk::Level0Zk, rounds: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, native_sha: bool)
-                 -> (R1csProofLigerito, Commitment, Value) {
+                 -> Result<(R1csProofLigerito, Commitment, Value), String> {
     use flock_live::gpu_circuit::{Live, Reuse, prove_circuit};
     let (proof, commitment, ph, wph, hph) =
         with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, Live::Zk { level0, rounds }, Some(salts),
-                                                 Reuse::None, native_sha));
+                                                 Reuse::None, native_sha))?;
     let bk = gpu_buckets(wt, ph, wph, hph, false, native_sha);
     eprintln!("GPUPHASE\t{bk}");
-    (proof, commitment, bk)
+    Ok((proof, commitment, bk))
 }
 
 #[cfg(not(feature = "gpu"))]
 #[allow(clippy::too_many_arguments)]
 fn prove_gpu(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &mut LiveChallenger,
-             _: &Mutex<flock_live::zk_hooks::LeafSalts>, _: Option<u64>, _: bool) -> (Vec<u8>, Value) {
-    panic!("built without the gpu feature")
+             _: &Mutex<flock_live::zk_hooks::LeafSalts>, _: Option<u64>, _: bool) -> Result<(Vec<u8>, Value), String> {
+    Err("built without the gpu feature".into())
 }
 
 #[cfg(not(feature = "gpu"))]
 #[allow(clippy::too_many_arguments)]
 fn gpu_zk_device(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &Mutex<flock_live::zk_hooks::LeafSalts>,
                  _: &flock_core::pcs::ligerito::zk::Level0Zk, _: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, _: bool)
-                 -> (R1csProofLigerito, Commitment, Value) {
-    panic!("built without the gpu feature")
+                 -> Result<(R1csProofLigerito, Commitment, Value), String> {
+    Err("built without the gpu feature".into())
 }
 
 #[derive(Clone, Default)]
@@ -3073,7 +3075,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                     }));
                 }
                 let mut zkrep = zkrep;
-                let proved = catch_unwind(AssertUnwindSafe(|| {
+                let proved = catch_unwind(AssertUnwindSafe(|| -> Result<(Vec<u8>, Value), String> {
                     if plan.gpu {
                         let wt = if rep == 0 { wt_dev.as_ref().or(wt0.as_ref()) } else { wt1.as_ref().or(wt0.as_ref()) }.expect("a rep's witness");
                         match zkrep.take() {
@@ -3083,12 +3085,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                 let tp = Instant::now();
                                 let (mut proof, cm, mut bk) = {
                                     let mut rounds = |c: &[u8], n: usize| gated_round(&gate, &mut mch, c, n);
-                                    gpu_zk_device(st, wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds, native_sha)
+                                    gpu_zk_device(st, wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds, native_sha)?
                                 };
-                                gated_finish(&gate, &mut proof, &cm, &mut bk);
+                                gated_finish(&gate, &mut proof, &cm, &mut bk)?;
                                 let (t_up, st2) = (tp.elapsed().as_secs_f64(), st.clone());
                                 rep0_finish = Some(std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk)));
-                                (Vec::new(), Value::Null)
+                                Ok((Vec::new(), Value::Null))
                             }
                             // rep 1 beside rep 0's finish: the device starts now, its first round waits for rep 0's last one and then
                             // opens rep 1's stream; otherwise (sequential) the rep's stream is open already
@@ -3121,11 +3123,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                 if let Some(r) = r0 {
                                     rep0_done = Some(r.unwrap_or_else(|e| panic!("{e}")));
                                 }
-                                let (mut proof, cm, mut bk) = dev.unwrap_or_else(|e| std::panic::resume_unwind(e));
-                                gated_finish(&gate, &mut proof, &cm, &mut bk);
+                                let (mut proof, cm, mut bk) = dev.unwrap_or_else(|e| std::panic::resume_unwind(e))?;
+                                gated_finish(&gate, &mut proof, &cm, &mut bk)?;
                                 let t_up = tp.elapsed().as_secs_f64();
                                 let (mch, sent) = opened.take().expect("rep 1's stream opened");
-                                zk_finish(st, &z, proof, cm, mch, &sent, tp, t_up, bk)
+                                Ok(zk_finish(st, &z, proof, cm, mch, &sent, tp, t_up, bk))
                             }
                             None => prove_gpu(st, wt, lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), salts,
                                              reuse_tag.map(|t| (t << 8) | j as u64), native_sha),
@@ -3137,7 +3139,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                         };
                         prove_cpu_zk(st, &wt, lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), z, &gate)
                     } else {
-                        prove_cpu(st, own(&mut wt0, &mut wt1), lig, &mut hook, lch.as_mut().expect("the rep's stream"))
+                        Ok(prove_cpu(st, own(&mut wt0, &mut wt1), lig, &mut hook, lch.as_mut().expect("the rep's stream")))
                     }
                 }));
                 #[cfg(feature = "sha512")]
@@ -3146,7 +3148,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 }
                 // the gate's refusal comes first: nothing after it was sent
                 let gate_why = gate.as_ref().and_then(|g| g.lock().unwrap_or_else(PoisonError::into_inner).why.clone());
-                let (p, bk) = proved.map_err(|e| gate_why.or_else(|| stop_why.clone()).unwrap_or_else(|| panic_msg(e)))?;
+                let (p, bk) = proved.map_err(panic_msg).and_then(|r| r).map_err(|e| gate_why.or_else(|| stop_why.clone()).unwrap_or(e))?;
                 if rep0_finish.is_some() {
                     // rep 0 on the device path: its proof comes with rep 1's
                     continue;
