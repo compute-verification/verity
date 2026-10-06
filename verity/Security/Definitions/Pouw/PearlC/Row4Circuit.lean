@@ -3,7 +3,7 @@ import Definitions.Pouw.PearlC.RowCircuit
 /-!
 # Pearl-C4's row units as core circuits (definitions only)
 
-`pc4`'s row templates `Pc4RowA_v1{K}` and `Pc4RowB_v1{K}` (`verity_pouw.circuit.pc4`, their `_row_a_body`,
+`pc4`'s row templates `Pc4RowA_v1{K}` and `Pc4RowB_v1{K}` (`verity.protocols.accounting.work.pouw.circuit.pc4`, their `_row_a_body`,
 `_row_b_body`, `_alpha`, `_form` and `_chain`) as gate tables (`RowCircuit.Rows`), generic in the depth `K`, as
 `RowCircuit` writes `pc8`'s. The inputs are laid out as `pc8`'s (`rowIn`), with `x` as BF16 words and the codes as
 E2M1 nibbles; the statistics read `x` widened (`Wire.bf16`). Then:
