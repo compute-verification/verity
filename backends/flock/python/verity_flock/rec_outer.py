@@ -231,7 +231,8 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
     opened = [bool((int(ok) >> i) & 1) and got[i, :R.OUT_WORDS].astype(np.uint16).tolist() == list(out_rows[i]) for i in range(n)]
     summed = [bool((int(ok) >> i) & 1) and got[i, R.OUT_WORDS:].astype(np.uint16).tolist() == list(out_acc[i]) for i in range(n)]
     sub = subcircuit(LANES, H)
-    text = FC.compose(low, sub, partition=P.digest(part), program=prog)
+    text = FC.compose(low, sub, partition=P.digest(part), program=prog, port_bits=[16 * w for w, _ in low.leaves["in_ports"]],
+                      v2_out_rows=tuple((p.name,) for p in sub.outputs))
     read = lambda e, reads: {**e, "word_bits": 16, "reads": list(reads)}
     own = {"format": G.READS, "ports": {"out": read(tops.own, tops_at), "acc": read(chain.reg.entry(), at),
                                        "coef": read(coef_reg.entry(), range(n)), "dirs": read(dirs_reg.entry(), range(n)),

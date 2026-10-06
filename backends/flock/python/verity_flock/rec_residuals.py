@@ -418,7 +418,8 @@ def statement(S: dict, name: str, n: int) -> SimpleNamespace:
     prog = P.program_sha512(program)
     low = lowering(S, name)
     sub = subcircuit(S, name)
-    text = FC.compose(low, sub, partition=P.digest(part), program=prog)
+    text = FC.compose(low, sub, partition=P.digest(part), program=prog, port_bits=[16 * w for w, _ in low.leaves["in_ports"]],
+                      v2_out_rows=tuple((p.name,) for p in sub.outputs))
     return SimpleNamespace(S=S, n=n, defn=defn, program=program, part=part, prog=prog, low=low, sub=sub, text=text,
                            build_s=round(time.perf_counter() - t0, 1))
 
