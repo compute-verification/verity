@@ -46,11 +46,11 @@
                     `source/SUB`, or a relative SUB) runs it inside the tree instead, an explicit opt-in; `--cwd clone` (or `clone/SUB`)
                     in the run's own `git clone --shared` of the tree at <root>/scratch/<run-id>/tree, checked to be the shipped commit
                     and removed when the workload exits (research/clone.py), so nothing one run does there reaches another's; its
-                    PYTHONPATH entries under the tree move into the clone too (cli._clone_imports); job.json records run.cwd and
-                    run.cwd_basis (and run.cwd_clone).  The launcher refuses `--cwd clone` for a tree shipped without git or a package
-                    that predates it.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not into the tree; a clone's
-                    goes beside the clone.  A tree whose own research package predates this runs its workloads in the tree; the launcher says
-                    so (remote.json workload_cwd).
+                    PYTHONPATH entries under the tree, and the tree's shim, move into the clone too (cli._clone_imports); job.json
+                    records run.cwd and run.cwd_basis (and run.cwd_clone).  The launcher refuses `--cwd clone` for a tree shipped
+                    without git or a package that predates it.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not
+                    into the tree; a clone's goes beside the clone.  A tree whose own research package predates this runs its workloads
+                    in the tree; the launcher says so (remote.json workload_cwd).
     claim           `research launch-request` on the machine does mkdir(<root>/runs/<run-id>) as the claim, then starts the detached
                     runner.  Re-delivering the same request finds the directory and reports its state; it never starts a second workload.
                     Each delivery holds flock(<root>/requests/<run-id>/.launch.lock) until it has answered, so a re-delivery (an ssh drop,

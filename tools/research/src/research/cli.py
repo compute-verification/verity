@@ -570,14 +570,20 @@ def _clone_imports(of: Path, tree: Path, home: Path, remote_info: dict | None) -
     """A machine's runner has the shipped tree's import roots on PYTHONPATH (launch_request), so the workload would import its code
     from the shared tree: a write beside a module's __file__ would land there, and the run would execute that tree's files, whatever
     another run left in them, while the record describes the clean clone.  Each entry under `of` is moved to the same directory in
-    the clone (run.remote.pythonpath too), and bytecode goes beside the clone: under <root>/cache/pycache every clone path would add
-    its own copies, never removed.  Locally the workload imports from whatever its interpreter has installed (an editable install
-    points at the invoking checkout); nothing is moved."""
+    the clone, and `of`'s shim (`pythonpath.shim_packages`: <root>/cache/pyshim/<key>, outside `of` but linking into it, so
+    `import verity` reached the shared tree) is replaced by a shim of the clone under `home`, removed with it; in place,
+    run.remote.pythonpath too.  Bytecode goes beside the clone: under <root>/cache/pycache every clone path would add its own
+    copies, never removed.  Locally the workload imports from whatever its interpreter has installed (an editable install points
+    at the invoking checkout); nothing is moved."""
+    from .pythonpath import shim_dir, shim_packages
+
     base = os.path.realpath(of)
 
     def move(p: str) -> str:
         real = os.path.realpath(p)
-        return str(tree / os.path.relpath(real, base)) if real == base or real.startswith(base + os.sep) else p
+        if real == base or real.startswith(base + os.sep):
+            return str(tree / os.path.relpath(real, base))
+        return shim_dir(tree, pkgs, home / "pyshim") if (pkgs := shim_packages(p, base)) else p
 
     if remote_info is not None and remote_info.get("pythonpath"):
         remote_info["pythonpath"] = [move(p) for p in remote_info["pythonpath"]]
