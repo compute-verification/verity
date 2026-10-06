@@ -55,7 +55,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -99,6 +99,11 @@ decode's lane-pair kernel on one row's single chain call (`dense.chain_call`): e
 round's squeeze, about half the sequential Keccak-f of the others, with its bit-interleaved Keccak core."""
 LAUNCH_BOUND_FRACTION = 0.5
 """A plain-arm bandwidth below this fraction of the device-copy bandwidth is flagged launch-bound."""
+
+PLAIN_WARMUP_S = 0.5
+"""Device seconds of untimed forwards the plain arm runs before its first rep.  The GPU idles through the CPU gates before
+it and runs its first tens of ms after them slow: at T=1 on Llama-3.1-8B, 5.36 against 3.47 ms a forward for up to 11 reps,
+enough to put the median of 20 there (art:232d274d2fd9)."""
 
 
 def quantiles(xs: list[float]) -> dict[str, float]:
@@ -210,6 +215,8 @@ class Backend:
     """The band's encoder at another in-degree (the pinned vector's, when the run's `d` is not the registered one)."""
     memory: Callable[[Callable[[], Any]], dict[str, int]] | None = None
     """Runs `fn` and returns the device memory allocated before it and the peak while it ran (`max_memory_allocated`)."""
+    warmup_s: float = 0.0
+    """Device seconds of untimed forwards the plain arm runs before its first rep (the GPU's: `PLAIN_WARMUP_S`)."""
 
 
 def set_kernels(flags: dict[str, Any]) -> dict[str, Any]:
@@ -358,7 +365,8 @@ def gpu(scheme: Any, build_dir: str, kernels: dict[str, Any]) -> Backend:
     smi_id = device_uuid(device.index)
     return Backend(device, lambda w, t: dense.encode(w, t, window), lambda c, t: dense.decode_segments(c, t, window),
                    codec.segment_tags, tag_bytes, responder, timer, graphed, copy_bw, lambda: _sm_clock_mhz(smi_id), step,
-                   keccak_latency, recompute, facts, lambda d: (lambda w, t: dense.encode(w, t, d)), memory=memory)
+                   keccak_latency, recompute, facts, lambda d: (lambda w, t: dense.encode(w, t, d)), memory=memory,
+                   warmup_s=PLAIN_WARMUP_S)
 
 
 def _nvcc_version() -> str | None:
@@ -481,14 +489,17 @@ def _encode(backend: Backend, w: Any, tags: Any) -> tuple[float, Any]:
 
 
 def _timed_arm(backend: Backend, fn: Callable[[], Any], reps: int) -> tuple[list[float], dict[str, Any]]:
-    """`fn`'s reps, from a CUDA graph where the path is capturable, and how it was timed."""
-    if backend.graphed is not None:
-        try:
-            replay = backend.graphed(fn)
-            return _reps(backend, replay, reps), {"graphed": True}
-        except Exception as e:  # noqa: BLE001  a non-capturable path (a host read mid-kernel) falls back to eager
-            return _reps(backend, fn, reps), {"graphed": False, "reason": type(e).__name__ + ": " + str(e)[:200]}
-    return _reps(backend, fn, reps), {"graphed": False, "reason": "no CUDA graph backend (CPU stand-in)"}
+    """`fn`'s reps, from a CUDA graph where the path is capturable, and how it was timed.  The eager fallback runs after the
+    `except` clause: inside it the traceback holds the failed capture's frames and their tensors (a decode's state and output,
+    44 GiB on llama3.1-8b/linears+head at 384 KiB blocks) through every eager rep."""
+    if backend.graphed is None:
+        return _reps(backend, fn, reps), {"graphed": False, "reason": "no CUDA graph backend (CPU stand-in)"}
+    try:
+        replay = backend.graphed(fn)
+        return _reps(backend, replay, reps), {"graphed": True}
+    except Exception as e:  # noqa: BLE001  a non-capturable path (a host read mid-kernel) falls back to eager
+        reason = type(e).__name__ + ": " + str(e)[:200]
+    return _reps(backend, fn, reps), {"graphed": False, "reason": reason}
 
 
 def take_decode_paths() -> list[dict[str, Any]]:
@@ -542,15 +553,16 @@ def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Pa
 
 
 def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, leaves: Path, out: Path, tag: str, a: Any,
-                load: Callable[[], Any] | None, limit_ns: int | None = None, sync: Callable[[], Any] | None = None) -> dict[str, Any]:
-    """One verifier process (`script`) against the responder `start()` returns, judged against `limit_ns` when given, with
-    `load` run until the verifier exits.  Every load call is synchronized (`sync`) so `forwards_completed` counts finished
-    forwards, not enqueued ones."""
+                load: Callable[[], Any] | None, limit_ns: int | None = None, sync: Callable[[], Any] | None = None,
+                extra: Sequence[str] = ()) -> dict[str, Any]:
+    """One verifier process (`script`, with `extra` arguments) against the responder `start()` returns, judged against
+    `limit_ns` when given, with `load` run until the verifier exits.  Every load call is synchronized (`sync`) so
+    `forwards_completed` counts finished forwards, not enqueued ones."""
     responder = start()
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
     result = out / f"audit-{tag}.json"
-    cmd = _verifier_cmd(script, ready, leaves, result, a, limit_ns, [])
+    cmd = _verifier_cmd(script, ready, leaves, result, a, limit_ns, list(extra))
     completed = 0
     with (out / f"audit-{tag}.log").open("w") as log:
         proc = subprocess.Popen(cmd, env=_verifier_env(), stdout=log, stderr=subprocess.STDOUT)
@@ -631,8 +643,12 @@ def recompute_gate(recompute: dict[str, Any]) -> dict[str, Any]:
 
 def _plain_arm(backend: Backend, w: Any, pl: list[tuple[str, int, int, int, int]], xs: dict[int, dict[int, Any]], tokens: list[int],
                reps: int) -> tuple[dict[int, list[float]], dict[int, dict[str, Any]]]:
-    """The plain arm, `W` itself resident: each `T`'s reps and how they were timed."""
+    """The plain arm, `W` itself resident: the backend's `warmup_s` of untimed forwards, then each `T`'s reps and how they were
+    timed."""
     flat = w.view(-1)
+    spent = 0.0
+    while tokens and spent < backend.warmup_s:
+        spent += backend.timer(lambda: forward(flat, pl, xs[tokens[0]]))
     out, how = {}, {}
     for t in tokens:
         out[t], how[t] = _timed_arm(backend, lambda t=t: forward(flat, pl, xs[t]), reps)

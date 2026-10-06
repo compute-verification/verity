@@ -36,6 +36,9 @@ Implementations (`IMPLS`), each adding one class:
   at k = 105, so the two compare side by side (`side_by_side.py`). It is its own scheme (`--scheme` is ignored): P2 v1 is not a
   `verity.protocols.accounting.space.pous` registered scheme, whose P2 is the MVP's `p2-16448/v3` (the spec's SHAKE256 keys, its 24-byte salt and leaves)
   and `p2-16448/v2` (ChaCha8 keys).
+* `p2-v3-gpu`: the same kernels and steps, under `p2-16448/v3`'s framing (its commitment, salt, key prefix and leaves:
+  `p2_v1/harness.py`'s `V3`), so the device serves v3's blocks, and its audits go through `protocol.Verifier` with the v3
+  certificate (`band_gpu/live.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
 * `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, the whole-chain decode on lane pairs
   (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
   encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable),
@@ -341,6 +344,41 @@ class P2V1Gpu:
         return harness.run(a, ws, out, w_segment=_w_segment, **kw)
 
 
+class P2V3Gpu(P2V1Gpu):
+    """The same kernels under `p2-16448/v3`'s framing, audited by `protocol.Verifier` (`p2_v1/harness.py`'s `V3`)."""
+
+    name = "p2-v3-gpu"
+    own_scheme = "p2-16448/v3"
+
+    def conformance_gate(self) -> dict[str, Any]:
+        """The kit's vectors (the kernels' map and its SHAKE256 streams), and v3's expander given the kit's prefix: its
+        `shake_keys` gives every vector's `K` and `t`, so the two framings differ only in their prefix."""
+        sys.path.insert(0, str(HERE))
+        from p2_v1 import reference
+
+        from verity.protocols.accounting.space.pous.schemes import p2
+
+        got = reference.conformance()
+        doc = json.loads(reference.VECTORS.read_bytes())
+        for v in doc["vectors"]:
+            w, c0 = int(v["w"]), int(v["c0"])
+            ref = reference.Params(w, c0, w // 8 - 2)
+            params = p2.P2Params(w, c0, 1 << 16)
+            model = bytes.fromhex(v["model_commitment"])
+            prefix = reference.expand_prefix(bytes.fromhex(v["setup_salt"]), ref, model)
+            k, t = p2.shake_keys(params, prefix, int(v["segment"]), int(v["block"]))
+            n = params.block_bytes
+            got["checks"][f"v3-expander/{v['id']}"] = k.to_bytes(n, "big").hex() == v["K"] and t.to_bytes(n, "big").hex() == v["t"]
+        got["passed"] = all(got["checks"].values())
+        return got
+
+    def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path, **kw: Any) -> dict[str, Any]:
+        sys.path.insert(0, str(HERE))
+        from p2_v1 import harness
+
+        return harness.run(a, ws, out, w_segment=_w_segment, framing=harness.V3, **kw)
+
+
 # ---------------------------------------------------------------------------------------------------------- p2-gpu
 
 class P2Gpu:
@@ -466,7 +504,7 @@ class P2Gpu:
         }
 
 
-IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2Gpu)}
+IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2V3Gpu, P2Gpu)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -508,6 +546,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--p2-lib", default=str(HERE / "p2_v1" / "bin"), help="p2-v1-gpu: the directory of libp2v1.so")
     ap.add_argument("--p2-encode-blocks", type=int, default=2048,
                     help="p2-v1-gpu: blocks encoded on the device for encode GB/s (0: all; the rest of C is random canonical)")
+    ap.add_argument("--p2-c-cache", default="",
+                    help="the P2 arms, with all of C encoded: keep C = Enc(W) in this directory and reuse it when the setup "
+                         "matches (a timed run of a large W then skips the encode an untimed run measured)")
     ap.add_argument("--band-d", type=int, default=0,
                     help="band-gpu: the band's in-degree d (0: the registered scheme's, 12); d >= 5, where the certificate "
                          "holds with its cliff at d")
@@ -520,8 +561,8 @@ def main(argv: list[str] | None = None) -> int:
     t = time.perf_counter()
     from verity.protocols.accounting.space.pous import schemes as _schemes
 
-    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu")):
-        raise SystemExit(f"--audits {a.audits}: only band-gpu and p2-v1-gpu run untimed (--audits 0)")
+    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu", "p2-v3-gpu")):
+        raise SystemExit(f"--audits {a.audits}: only band-gpu and the P2 arms run untimed (--audits 0)")
     if a.band_d:
         if a.impl != "band-gpu":
             raise SystemExit(f"--band-d is band-gpu's, not {a.impl}'s")

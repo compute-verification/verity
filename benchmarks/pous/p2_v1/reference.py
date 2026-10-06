@@ -33,8 +33,10 @@ W_COMMITMENT_LABEL = b"verity-pous/w-commitment/v1"
 K_AUDIT = 105
 """The deployment audit's challenges (spec §5, F6)."""
 DELTA_NS = 500_000
-MAX_RTT_ALLOWANCE_NS = 1_000_000
-"""Δ and the most round-trip allowance the frozen operating point permits (spec §6)."""
+MAX_RTT_ALLOWANCE_NS = 354_000
+"""Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, Daniel's ruling of 4 Oct
+2026, so that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
+(`verity.protocols.accounting.space.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
 
 try:
     import gmpy2
@@ -104,8 +106,14 @@ def expand_prefix(salt: bytes, params: Params, model: bytes) -> bytes:
 
 def keys(salt: bytes, params: Params, model: bytes, segment: int, block: int) -> tuple[int, int, int]:
     """Block `(segment, block)`'s full-width mask `K`, its tweak `t` (uniform below `p`) and `t`'s candidate index."""
+    return keys_after(expand_prefix(salt, params, model), params, segment, block)
+
+
+def keys_after(prefix: bytes, params: Params, segment: int, block: int) -> tuple[int, int, int]:
+    """`keys` after any framing's `prefix`: v1's (`expand_prefix`), or `p2-16448/v3`'s, whose prefix frames the protocol's
+    24-byte salt and no model commitment (`verity...schemes.p2.expand_prefix`)."""
     n = params.width_bytes
-    base = expand_prefix(salt, params, model) + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
+    base = prefix + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
     k = int.from_bytes(hashlib.shake_256(base + b"K").digest(n), "big")
     stream = hashlib.shake_256(base + b"t")
     attempt = 0

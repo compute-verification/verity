@@ -1,9 +1,11 @@
-"""P2 v1's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu`) on CPU: the reference
+"""P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu | p2-v3-gpu`) on CPU: the reference
 (`p2_v1/reference.py`) against the P2 kit's pinned vectors, and every step of the arm with the reference standing in for the GPU
-library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's own verifier process
-(`p2_v1/live.py`) on its logical clock, so no outcome depends on a clock."""
+library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's verifier process
+(`p2_v1/live.py` for v1, `band_gpu/live.py`'s `protocol.Verifier` for `p2-16448/v3`) on its logical clock, so no outcome
+depends on a clock."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import sys
 import types
@@ -40,15 +42,14 @@ def _small():
 
 
 class _Bound:
-    """The reference as one setup's kernels, on CPU rows."""
+    """The reference as one setup's kernels (its key prefix), on CPU rows."""
 
-    def __init__(self, params, salt, model, flip: bool) -> None:
-        self.params, self.salt, self.model, self.flip = params, salt, model, flip
+    def __init__(self, params, prefix, flip: bool) -> None:
+        self.params, self.prefix, self.flip = params, prefix, flip
 
     def _keys(self, i):
         R, _, _ = _p2()
-        bps = self.params.blocks_per_segment
-        k, t, _ = R.keys(self.salt, self.params, self.model, i // bps, i % bps)
+        k, t, _ = R.keys_after(self.prefix, self.params, *divmod(i, self.params.blocks_per_segment))
         return k, t
 
     def keys(self, first, count):
@@ -87,7 +88,7 @@ def _backend(flip: bool = False):
         fn()
         return 1e-3
 
-    return harness.Backend("cpu", lambda params, salt, model: _Bound(params, salt, model, flip), lambda c, cpu: PyResponder(c), timer)
+    return harness.Backend("cpu", lambda params, prefix: _Bound(params, prefix, flip), lambda c, cpu: PyResponder(c), timer)
 
 
 def _args(tmp_path, **kw):
@@ -129,6 +130,17 @@ def test_the_tree_and_the_audit_derivation_are_the_specs():
     assert audit_id == again_id and [key.uniform(1 << 19, j) for j in range(5)] == [again.uniform(1 << 19, j) for j in range(5)]
     other_id, _ = R.audit_key(b"s" * 32, b"e" * 32, b"r" * 32, b"t" * 32, 1)
     assert other_id != audit_id                                                               # a fresh counter, a fresh audit
+
+
+def test_the_spec_rtt_cap_is_the_schemes():
+    """The arm's Δ and RTT cap are spec v1.1's, as `verity`'s P2 scheme states them, so `rtt_allowance_within_spec`
+    judges against the cap whose `Δ + RTT` the certificate admits."""
+    from verity.protocols.accounting.space.pous import audit
+    from verity.protocols.accounting.space.pous.schemes import p2
+
+    R, _, _ = _p2()
+    assert (R.DELTA_NS, R.MAX_RTT_ALLOWANCE_NS) == (audit.DEADLINE_NS, p2.RTT_ALLOWANCE_CAP_NS) == (500_000, 354_000)
+    assert R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS < p2.ROOT_CALL_NS <= R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS + 1_000
 
 
 def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
@@ -183,10 +195,10 @@ def test_the_recompute_control_covers_c_past_its_encoded_head(tmp_path):
 
 def test_the_p2_recompute_adversary_reencodes_every_dropped_block_of_c():
     """`plaintext_rows` + `_recomputer` give back `C_i` for dropped blocks in the encoded head and past it."""
-    _, harness, _ = _p2()
+    R, harness, _ = _p2()
     P = _small().with_segments(1)
     salt, model = b"s" * 32, b"m" * 32
-    bound = _Bound(P, salt, model, False)
+    bound = _Bound(P, R.expand_prefix(salt, P, model), False)
     blocks, nb = P.blocks, P.width_bytes
     m = torch.zeros(blocks, nb, dtype=torch.uint8)
     m[:, nb - P.payload_bytes:] = torch.randint(0, 256, (blocks, P.payload_bytes), generator=torch.Generator().manual_seed(1),
@@ -260,3 +272,170 @@ def test_side_by_side_tables_both_arms_and_withholds_a_failed_one(tmp_path, monk
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     assert sbs.main([str(tmp_path / "band.json"), str(tmp_path / "p2.json"), "--out", str(tmp_path / "side.json")]) == 1
     assert json.loads((tmp_path / "side.json").read_text())["schema"] == sbs.SCHEMA
+
+
+def test_the_v3_expander_given_the_kits_prefix_gives_every_pinned_key():
+    bench = _bench()
+    assert bench.IMPLS["p2-v3-gpu"] is bench.P2V3Gpu and bench.IMPLS["p2-v1-gpu"] is bench.P2V1Gpu
+    got = bench.P2V3Gpu().conformance_gate()
+    assert got["passed"], got
+    assert {k for k in got["checks"] if k.startswith("v3-expander/")} == {
+        "v3-expander/p2-v1/w64/0", "v3-expander/p2-v1/w96/0", "v3-expander/p2-v1/w128/0", "v3-expander/p2-v1/w16448/0"}
+
+
+def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_verifier(tmp_path):
+    """Under `V3` the device's `C` is v3's encoding of `W` (v3's own codec decodes it back), the leaves are `vk`'s, and every
+    audit and control is `protocol.Verifier`'s.  At the test's 128-bit width P2 has no certificate, so the audit runs as a
+    research audit and says so."""
+    from verity.protocols.accounting.space.pous import protocol, schemes
+    from verity.protocols.accounting.space.pous.verifier import leaf_hash
+
+    _, harness, _ = _p2()
+    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105), WS, tmp_path, backend=_backend(), params=_small(), research=True)
+    gates, m = body["gates"], body["metrics"]
+    for g in ("vector", "round_trip", "reference_decode", "kernel_flags", "codec", "timed_audit", "value_control",
+              "late_control", "recompute_control"):
+        assert gates[g]["passed"], (g, gates[g])
+    assert "certificate" not in gates and gates["codec"]["codec"] == "p2-128/v3"
+    params = schemes.P2Params(128, 173, 64, 3)
+    setup = body["setup"]
+    assert setup["scheme"] == "p2-128/v3" and setup["manifest"] == params.manifest() and len(bytes.fromhex(setup["salt"])) == 24
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-gpu", "verifier": "band_gpu/live.py",
+                                      "verifier_args": []}
+    w = b"".join(_bench()._w_segment(WS["id"], s, params.segment_bytes, WS["bytes"]) for s in range(3))
+    commitment = protocol.commit(schemes.P2(params), w)
+    salt = protocol.draw_salt(harness.SETUP_SOURCE, commitment)
+    assert setup["w_commitment"] == commitment.hex() and setup["salt"] == salt.hex()
+    raw = (tmp_path / "leaves-p2.bin").read_bytes()
+    encoded = protocol.encode(schemes.P2(params), w, salt)
+    assert raw == b"".join(leaf_hash(params, salt, s * 64 + j, b) for s, seg in enumerate(encoded) for j, b in enumerate(seg))
+    honest = m["audit"]
+    assert honest["scheme"] == "p2-128/v3" and honest["strict"] is False and honest["audits_accepted"] == 2
+    assert honest["k"] == 105 and any("no certificate" in g for g in honest["gaps"])
+    assert m["value_control"]["audits_accepted"] == 0 and m["late_control"]["audits_accepted"] == 0
+    assert m["recompute_control"]["wrong"] == 0 and m["recompute_control"]["recomputed_answers"] > 0
+    assert body["profile"]["scheme"] == "p2-128/v3" and not body["profile"]["certified"]
+
+
+def test_the_v3_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fails(tmp_path):
+    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105), WS, tmp_path, backend=_backend(), params=_small())
+    gates, honest = body["gates"], body["metrics"]["audit"]
+    assert body["implementation"]["verifier_args"] == ["--strict"]
+    assert "has no certificate" in honest["refused"] and honest["audits"] == 0 and honest["responder"]["answered"] == 0
+    assert not gates["timed_audit"]["passed"] and not gates["certificate"]["passed"] and body["profile"] is None
+
+
+def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
+    """`band_gpu/live.py`'s audit, strict, of `p2-16448/v3` at its registered point (one segment), against a responder whose
+    blocks match `vk`'s leaves, on the logical clock (or `clock`): the verifier checks leaves, not codewords."""
+    import hashlib
+
+    sys.path.insert(0, str(BENCH))
+    from band_gpu import harness as H
+    from band_gpu import live
+
+    from verity.protocols.accounting.space.pous import schemes
+    from verity.protocols.accounting.space.pous.verifier import VerifierKey, leaf_hash
+
+    scheme = schemes.get("p2-16448/v3")
+    params, salt = scheme.params, b"s" * 24
+    block = lambda i: hashlib.shake_256(i.to_bytes(4, "big")).digest(params.block_bytes)  # noqa: E731
+    vk = VerifierKey.from_leaves(params, salt, [leaf_hash(params, salt, i, block(i)) for i in range(params.blocks)])
+    responder = H.ControlResponder(params.block_bytes, lambda i: (block(i), 0, 1_000, 0))
+    try:
+        return live.audit("127.0.0.1", responder.port(), scheme, vk, audits=2, pings=20, limit_ns=limit_ns,
+                          clock=clock or live.LogicalClock(), research=False), responder.answered()
+    finally:
+        responder.stop()
+
+
+def test_protocol_verifier_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it(tmp_path):
+    """The end-to-end claim's verifier: `Δ + 354 µs` (spec v1.1's cap) is inside `P2SlackFamilyUncond`'s certificate, so
+    105 challenges run and are accepted; `Δ + 355 µs` fits one 854,029 ns root call, so the verifier refuses before sending
+    any challenge."""
+    from verity.protocols.accounting.space.pous.schemes import p2
+
+    doc, answered = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
+    assert doc["strict"] and "refused" not in doc and doc["audits_accepted"] == doc["audits"] == 2 and answered == 2 * 105
+    assert doc["k"] == 105 and doc["gaps"] == ["W has 1 segments; Pous.SecurityProofs.P2SlackFamilyUncond is about 8"]
+    assert doc["profile"]["certificate"]["theorem"] == "Pous.SecurityProofs.P2SlackFamilyUncond"
+    assert doc["profile"]["limit_ns"] == 854_000 and doc["profile"]["effective_rounds"] == 0
+    doc, answered = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS + 1_000)
+    assert doc["audits"] == 0 and answered == 0 and doc["records"] == []
+    assert "Δ + RTT = 855000 ns fits 1 calls of 854029 ns" in doc["refused"]
+
+
+def test_the_host_trace_splits_each_slow_round_trip_into_where_its_time_went():
+    """A ping over `TRACE_OVER_NS` is kept; a challenge is kept when its round trip or the verifier's time for it is over,
+    and its split adds up: send, the wait for the first byte (the responder's reported time and the rest), the rest of the
+    answer, and the verifier's own work outside the round trip."""
+    sys.path.insert(0, str(BENCH))
+    from band_gpu import live
+
+    ping, challenge = live.OP_PING, live.OP_CHALLENGE
+    log = [(ping, 0, 0, 1_000, 5_000, 6_000, 1_000, 2_000, 0),
+           (ping, 0, 10_000, 11_000, 90_000, 95_000, 70_000, 15_000, 0),
+           (challenge, 7, 100_000, 101_000, 140_000, 141_000, 3_000, 120_000, 30_000),
+           (challenge, 9, 200_000, 201_000, 210_000, 211_000, 1_000, 205_000, 5_000)]
+    records = [{"answers": [{"elapsed_ns": 600_000}, {"elapsed_ns": 12_000}]}]
+    trace = live.host_trace(log, records)
+    assert trace["clock"] == "CLOCK_MONOTONIC" and trace["roundtrips"] == 4 and trace["over_ns"] == live.TRACE_OVER_NS
+    slow_ping, slow_answer = trace["kept"]
+    assert slow_ping == {"kind": "ping", "start_ns": 10_000, "roundtrip_ns": 85_000, "send_ns": 1_000, "wait_ns": 79_000,
+                         "server_ns": 0, "responder_other_ns": 79_000, "recv_ns": 5_000, "poll_gap_ns": 70_000,
+                         "poll_gap_at_ns": 15_000}
+    assert slow_answer == {"kind": "challenge", "audit": 0, "round": 0, "index": 7, "elapsed_ns": 600_000,
+                           "outside_ns": 559_000, "start_ns": 100_000, "roundtrip_ns": 41_000, "send_ns": 1_000,
+                           "wait_ns": 39_000, "server_ns": 30_000, "responder_other_ns": 9_000, "recv_ns": 1_000,
+                           "poll_gap_ns": 3_000, "poll_gap_at_ns": 120_000}
+
+
+def test_a_wall_clock_audit_traces_every_round_trip_and_a_logical_one_none(tmp_path):
+    """On a clock that is not the logical one, the verifier logs every round trip (the pings before and after and each
+    answer, the 50 warm-up pings before each set included) and its thread's faults and context switches; each kept split adds
+    up to its round trip."""
+    import itertools
+
+    from verity.protocols.accounting.space.pous.schemes import p2
+
+    ticks = itertools.count(0, 7)
+    doc, answered = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS, clock=lambda: next(ticks))
+    assert doc["audits_accepted"] == 2 and answered == 2 * 105
+    trace = doc["host_trace"]
+    assert trace["roundtrips"] == 2 * (50 + 20) + 2 * 105
+    for row in trace["kept"]:
+        assert row["send_ns"] + row["wait_ns"] + row["recv_ns"] == row["roundtrip_ns"]
+        assert row["server_ns"] + row["responder_other_ns"] == row["wait_ns"]
+    assert set(doc["verifier_rusage"]["after"]) == {"minflt", "majflt", "nvcsw", "nivcsw"}
+    doc, _ = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
+    assert "host_trace" not in doc
+
+
+def test_a_cached_encoding_is_reused_for_its_own_setup_and_never_when_its_bytes_changed(tmp_path):
+    """`--p2-c-cache`: the first run encodes and stores `C`; a second run of the same setup loads it (the encode time is
+    the first run's) and passes every gate a fresh `C` does; a cached `C` whose bytes no longer match its sha256 is
+    encoded again."""
+    cache = tmp_path / "cache"
+
+    def run(name: str) -> dict:
+        out = tmp_path / name
+        out.mkdir()
+        return _bench().P2V3Gpu().run(_args(out, k=105, p2_c_cache=str(cache)), WS, out, backend=_backend(),
+                                      params=_small(), research=True)
+
+    first = run("first")
+    rec = first["metrics"]["encode_cache"]
+    assert rec["hit"] is False and (cache / f"{rec['key']}.c").stat().st_size == rec["bytes"]
+    second = run("second")
+    assert second["metrics"]["encode_cache"] == {**rec, "hit": True}
+    assert second["metrics"]["encode_s"] == first["metrics"]["encode_s"]
+    for g in ("round_trip", "reference_decode", "codec", "timed_audit", "value_control", "late_control", "recompute_control"):
+        assert second["gates"][g]["passed"], (g, second["gates"][g])
+    assert (tmp_path / "second" / "leaves-p2.bin").read_bytes() == (tmp_path / "first" / "leaves-p2.bin").read_bytes()
+    data = cache / f"{rec['key']}.c"
+    raw = bytearray(data.read_bytes())
+    raw[5] ^= 1
+    data.write_bytes(bytes(raw))
+    third = run("third")
+    assert third["metrics"]["encode_cache"]["hit"] is False and third["gates"]["round_trip"]["passed"]
+    assert hashlib.sha256(data.read_bytes()).hexdigest() == rec["sha256"]

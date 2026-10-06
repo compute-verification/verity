@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import types
+import weakref
 from pathlib import Path
 
 import pytest
@@ -328,7 +329,7 @@ def test_audits_0_runs_the_band_untimed_with_no_limit_audit_or_control_and_says_
 def test_bench_labels_an_untimed_result_and_refuses_audits_0_where_it_would_pass_vacuously(tmp_path, monkeypatch):
     bench = _bench()
     common = ["--weight-set", "qwen2.5-0.5b/linears+head", "--hardware", "cpu", "--out", str(tmp_path)]
-    with pytest.raises(SystemExit, match="only band-gpu and p2-v1-gpu run untimed"):
+    with pytest.raises(SystemExit, match="only band-gpu and the P2 arms run untimed"):
         bench.main(["--impl", "reference", "--audits", "0", *common])
 
     class Untimed:
@@ -475,6 +476,43 @@ def test_the_step_floor_is_the_fastest_kernel_and_a_call_under_the_certificate_i
     assert got["sampled_nvidia_smi_id"] == "GPU-b"
     assert got["at_plus15pct_overclock_s"] == got["at_max_clock_s"] / 1.15
     assert not harness.step_floor(fake, 2, 300_000, facts)["below_certificate"]
+
+
+def test_the_plain_arm_warms_the_device_up_before_its_first_rep_and_keeps_no_warmup_rep(monkeypatch):
+    harness = _harness()
+    ran = []
+    monkeypatch.setattr(harness, "forward", lambda flat, pl, x: ran.append(x))
+
+    def timer(fn):
+        fn()
+        return 0.125
+
+    fake = harness.Backend("cpu", None, None, None, None, None, timer, warmup_s=harness.PLAIN_WARMUP_S)
+    reps, how = harness._plain_arm(fake, types.SimpleNamespace(view=lambda *_: None), [], {1: "x1", 8: "x8"}, [1, 8], 3)
+    warm = int(harness.PLAIN_WARMUP_S / 0.125)
+    assert warm > 0 and ran == ["x1"] * warm + ["x1"] * 4 + ["x8"] * 4           # then each T: one untimed call, 3 reps
+    assert reps == {1: [0.125] * 3, 8: [0.125] * 3} and not how[1]["graphed"]
+    assert harness.Backend("cpu", None, None, None, None, None, timer).warmup_s == 0           # the CPU stand-in's: none
+
+
+def test_the_eager_fallback_runs_after_the_failed_capture_and_its_tensors_are_released():
+    harness = _harness()
+    held = []
+
+    class Tensors:
+        pass
+
+    def graphed(fn):
+        state = Tensors()                                      # a failed capture's tensors, alive in its frame
+        held.append(weakref.ref(state))
+        raise RuntimeError("operation not permitted when stream is capturing")
+
+    def fn():
+        assert held[0]() is None
+
+    fake = harness.Backend("cpu", None, None, None, None, None, lambda f: (f(), 1e-3)[1], graphed=graphed)
+    reps, how = harness._timed_arm(fake, fn, 2)
+    assert reps == [1e-3, 1e-3] and not how["graphed"] and how["reason"].startswith("RuntimeError: operation not permitted")
 
 
 SMI_STUB = """\
