@@ -10,7 +10,8 @@
 # ship's sources are that directory; served_profile.sh checks its manifest and run.py), and reused.  Then each point's REPLICATES runs (each its own beacon, so its own seeds)
 # go PAR at a time, each in its own one-GPU preemptible lease of at most LEASE_MIN minutes that ends by UNTIL (its --max-min,
 # and a timeout inside it), served_profile.sh with NSYS=0 writing out/points/<point>.r<k>/; a failed run (a preemption) is
-# tried once more as .t2.  Each finished run is a line of out/progress.jsonl; out/sweep.{json,md} summarize what finished.
+# tried once more as .t2.  A point with NSYS=1 (and NSYS_ARGS=--cuda-graph-trace=node for graphs) is profiled, and its
+# served-profile.json is analyzed after the lease.  Each finished run is a line of out/progress.jsonl; out/sweep.{json,md} summarize what finished.
 # SETUP=1 runs setup.sh first (CPU only).
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out; mkdir -p "$OUT/points"
@@ -47,10 +48,16 @@ one() {  # one run of one point: <dir name> <VAR=value>...
   left=$(( ($(date -u -d "$UNTIL" +%s) - $(date -u +%s)) / 60 ))
   if [ "$left" -lt "$MIN_MIN" ]; then echo "{\"point\": \"$name\", \"rc\": null, \"skipped\": \"$left min to $UNTIL\"}" >> "$OUT/progress.jsonl"; return 0; fi
   max=$(( left < LEASE_MIN ? left : LEASE_MIN ))
-  env "$@" NSYS=0 OUT="$dir" gpu-lease 1 --wait --preemptible --max-min "$max" -- bash -c '
+  env NSYS=0 "$@" OUT="$dir" gpu-lease 1 --wait --preemptible --max-min "$max" -- bash -c '
     left=$(( $(date -u -d "$UNTIL" +%s) - $(date -u +%s) )); [ "$left" -gt 240 ] || exit 75
     exec timeout --kill-after=30 "$left" bash benchmarks/pouw/pearl_c_vllm/served_profile.sh gpu' > "$dir/log" 2>&1
   rc=$?
+  if [ -f "$dir/served.nsys-rep" ]; then   # a point with NSYS=1: its analysis after the lease, the report itself not kept
+    nsys export --type sqlite --force-overwrite true -o "$dir/served.sqlite" "$dir/served.nsys-rep" >> "$dir/log" 2>&1 \
+      && "$WORK/venv312/bin/python" benchmarks/pouw/pearl_c_vllm/served_profile.py --analyze "$dir/served.sqlite" \
+           --out "$dir/served-profile.json" >> "$dir/log" 2>&1
+    rm -f "$dir/served.sqlite" "$dir/served.nsys-rep"
+  fi
   echo "{\"point\": \"$name\", \"rc\": $rc, \"ended\": \"$(date -u +%FT%TZ)\", \"e2e\": $( [ -f "$dir/e2e.json" ] && echo true || echo false)}" >> "$OUT/progress.jsonl"
   return "$rc"
 }
