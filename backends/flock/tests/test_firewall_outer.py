@@ -68,3 +68,32 @@ def test_an_honest_session_is_accepted_with_nothing_stopped():
     t = transcript([{"finish": {}}])
     assert OA.judge("honest", t, {"accepted": True, "released": 1, "why": None}) == (True, "")
     assert not OA.judge("honest", t, {"accepted": False, "released": 0, "why": "x"})[0]
+
+
+def test_every_session_is_held_to_the_honest_sessions_public_input(tmp_path):
+    """`public_input`: the honest sessions' public input, which must be the same in each; a control's may name more, but a
+    statement value it gives a name the honest one fixes otherwise, or a relation the honest one lacks, is a miss; and
+    without an honest session nothing fixes the public input."""
+    import json
+
+    import pytest
+
+    def session(d, k, statement, relations=("r",), computes=("σ",)):
+        d.mkdir(exist_ok=True)
+        (d / f"session-{k}.json").write_text("{}")
+        pub = {"kind": "verity/firewall-public/v0", "schedule": None, "relations": list(relations), "statement": statement,
+               "computes": list(computes)}
+        (d / f"public-{k}.json").write_text(json.dumps(pub))
+        return d / f"session-{k}.json"
+
+    hon, ctl = tmp_path / "honest", tmp_path / "label"
+    honest = [session(hon, k, {"Register": "00"}) for k in range(2)]
+    odd = session(hon, 2, {"Register": "01"})
+    more = session(ctl, 0, {"Register": "00", "the gate's refusal": "01"})
+    clash = session(ctl, 1, {"Register": "01"})
+    extra = session(ctl, 2, {"Register": "00"}, relations=("r", "the firewall's own"))
+    pub, bad = OA.public_input([("honest", honest + [odd]), ("label", [more, clash, extra])])
+    assert pub["statement"] == {"Register": "00"} and pub["relations"] == ["r"]
+    assert set(bad) == {str(odd), str(clash), str(extra)} and str(more) not in bad
+    with pytest.raises(SystemExit):
+        OA.public_input([("label", [more])])

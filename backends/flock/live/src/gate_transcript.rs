@@ -1,14 +1,19 @@
 //! What the outer gate (PROTOCOL.md §10.1, `FC_GATE=1`, the CPU prover) lets out of a `--zk` session, as a
 //! `verity/firewall-transcript/v0` transcript for `Flock.Firewall.Contract` (`flock-firewall contract`): with
-//! `FC_GATE_TRANSCRIPT=DIR`, each session's is `DIR/session-<k>.json`, written when the session sends `Finish`. The recorder
+//! `FC_GATE_TRANSCRIPT=DIR`, each session's is `DIR/session-<k>.json`, written when the session sends `Finish`, with the
+//! public input it is held to beside it (`DIR/public-<k>.json`, `verity/firewall-public/v0`: the relations the verifier
+//! checks, each statement item's value by name, and the names of the values fixed by the firewall's recheck, shadow or own
+//! computation; the transcript carries none of it, and the outer agreement holds every session to the honest sessions'
+//! one). The recorder
 //! reads the wire's requests and coins (a [`Recording`] transport after `coin_tree::Checked`) and the gate's candidates and
 //! wants (one-line hooks in `Gate`, `ShadowLink::check` and `zk_finish`); it changes nothing the gate sends.
 //!
 //! Items, in the order they leave:
 //! - `Register` (fixed by the statement), `Hello` (the firewall's own, on its word), each rep's `Open` (the statement: the
-//!   rep's domain), the `Commit` (σ on its word; the level-0 root by the recheck), the `Link` (the statement: zeros);
+//!   rep's domain), the `Commit` (σ, the firewall's own on its word; the level-0 root by the recheck), the `Link` (the
+//!   statement: zeros);
 //! - each device round, frame by frame: in the algebraic phase a label, bytes, a squeeze or an observe's header by the
-//!   statement's skeleton, each observed value `masked` with its pad in `Layout::absorbed` order, and the pads' label and root
+//!   statement's skeleton (its level-0 cap by the recheck), each observed value `masked` with its pad in `Layout::absorbed` order, and the pads' label and root
 //!   that the masking challenger inserts (the statement, the firewall's own); in the opening every frame by the shadow, level
 //!   0's observed values `masked`; then the round's `coins` (the wire's, after the coin tree's opening is checked and
 //!   stripped) and the ones the gate relayed;
@@ -25,7 +30,7 @@
 //! prover stops (its own self-check), the transcript stops after what it sent. An item taken on its word carries
 //! `"on_its_word": true`; items the recorder made up to stand for a refusal it cannot itemize carry `"stand_in": true`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, PoisonError};
@@ -41,10 +46,14 @@ use crate::zk_veil::{self as zkv, InnerProof, L0_CLOSE, L0_OPEN, LABEL_INNER, LA
 use crate::{KIND_SCALAR, KIND_SLICE, OP_BYTES, OP_DOMAIN, OP_LABEL, OP_OBSERVE, OP_SQUEEZE, Req, Resp, Transport, hex, push_header, push_padded};
 
 pub const FORMAT: &str = "verity/firewall-transcript/v0";
+pub const PUBLIC_FORMAT: &str = "verity/firewall-public/v0";
 
 /// The rows `zk_finish` adds to the replay's: the ring switch's, then level 0's lane phase.
 const RING_SWITCH: [&str; 2] = ["ring switch ab", "ring switch c"];
 const LANE_PHASE: [&str; 2] = ["ligerito lane phase (c0)", "ligerito lane phase (c1)"];
+/// `gate::skeleton`'s item that is the recheck commitment's cap (after the domain, the R1CS label and the digest): a value
+/// of the session's, fixed by the recheck, not by the statement.
+const SKELETON_CAP: usize = 3;
 
 static REC: Mutex<Option<Rec>> = Mutex::new(None);
 static SESSIONS: AtomicUsize = AtomicUsize::new(0);
@@ -60,7 +69,8 @@ pub fn start() -> bool {
     let k = SESSIONS.fetch_add(1, Ordering::SeqCst);
     std::fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("FC_GATE_TRANSCRIPT {dir}: {e}"));
     *REC.lock().unwrap_or_else(PoisonError::into_inner) =
-        Some(Rec::new(PathBuf::from(dir).join(format!("session-{k}.json")), std::env::var("FC_GATE_TAMPER").unwrap_or_default()));
+        Some(Rec::new(PathBuf::from(&dir).join(format!("session-{k}.json")), PathBuf::from(&dir).join(format!("public-{k}.json")),
+                      std::env::var("FC_GATE_TAMPER").unwrap_or_default()));
     true
 }
 
@@ -205,9 +215,14 @@ enum Pending {
 
 pub struct Rec {
     path: PathBuf,
+    public: PathBuf,
     tamper: String,
     items: Vec<Value>,
     relations: Vec<String>,
+    /// each statement item's value (hex), by name
+    statement: BTreeMap<String, String>,
+    /// the names of the items the firewall's recheck, shadow or own computation fixes
+    computes: BTreeSet<String>,
     pads: Vec<F128>,
     reps: Vec<RepRec>,
     pending: Option<Pending>,
@@ -223,8 +238,9 @@ pub struct Rec {
 }
 
 impl Rec {
-    fn new(path: PathBuf, tamper: String) -> Self {
-        Rec { path, tamper, items: Vec::new(), relations: Vec::new(), pads: Vec::new(), reps: Vec::new(), pending: None, root_want: None,
+    fn new(path: PathBuf, public: PathBuf, tamper: String) -> Self {
+        Rec { path, public, tamper, items: Vec::new(), relations: Vec::new(), statement: BTreeMap::new(), computes: BTreeSet::new(),
+              pads: Vec::new(), reps: Vec::new(), pending: None, root_want: None,
               coins: None, link: None, tables: 0, proofs: 0, refused: None, stopped: None, errors: Vec::new() }
     }
 
@@ -233,12 +249,30 @@ impl Rec {
     }
 
     fn fixed(&mut self, what: String, by: &str, want: &[u8], sent: &[u8], pads: Vec<usize>) -> bool {
+        self.public_item(&what, by, want);
         self.items.push(json!({"fixed": {"what": what, "by": by, "want": hex(want), "sent": hex(sent), "pads": pads}}));
         want == sent
     }
 
     fn on_its_word(&mut self, what: String, by: &str, sent: &[u8], pads: Vec<usize>) {
+        self.public_item(&what, by, sent);
         self.items.push(json!({"fixed": {"what": what, "by": by, "want": hex(sent), "sent": hex(sent), "pads": pads, "on_its_word": true}}));
+    }
+
+    /// The public input's part for one fixed item: a statement item's value under its name (one value per name), or the
+    /// name of a value the firewall fixes itself.
+    fn public_item(&mut self, what: &str, by: &str, want: &[u8]) {
+        if by != "statement" {
+            self.computes.insert(what.to_string());
+            return;
+        }
+        match self.statement.get(what) {
+            Some(w) if *w != hex(want) => self.errors.push(format!("{what}: two statement values under one name")),
+            Some(_) => {}
+            None => {
+                self.statement.insert(what.to_string(), hex(want));
+            }
+        }
     }
 
     fn masked(&mut self, ri: usize, value: F128, pad: usize, sent: F128) -> bool {
@@ -401,6 +435,7 @@ impl Rec {
         };
         let stop = wire.is_none();
         for (f, c) in cand.iter().enumerate() {
+            let by = if alg && self.reps[ri].sk_at + f == SKELETON_CAP { "recheck" } else { by };
             let what = format!("rep {rep} {phase} round {k} frame {f}");
             let w = wants[f].as_ref();
             let wf = w.map(frame).unwrap_or_default();
@@ -543,7 +578,7 @@ impl Rec {
             }
             Req::Commit { root_f, roots, publics } => {
                 self.pending = None;
-                self.on_its_word("the session's Commit: σ (root_f)".into(), "statement", root_f, vec![]);
+                self.on_its_word("the session's Commit: σ (root_f)".into(), "own", root_f, vec![]);
                 let want = self.root_want.clone().ok_or("a Commit before the gate saw the device's root")?;
                 self.tables = roots.len();
                 self.commit_roots(roots, &want);
@@ -676,15 +711,19 @@ impl Rec {
     fn write(&mut self) {
         let h = |v: &[F128]| v.iter().map(|x| f128_hex(*x)).collect::<Vec<_>>();
         let t = json!({
-            "kind": FORMAT, "phase": "outer", "schedule": null, "relations": self.relations,
+            "kind": FORMAT, "phase": "outer",
             "tape": {"salts": [], "pads": h(&self.pads)}, "exposed": {"salts": [], "pads": []},
             "items": self.items,
             "firewall": {"gate": {"refused": self.refused.as_ref().map(|r| r.0.clone()), "at": self.refused.as_ref().map(|r| r.1)},
                          "stopped": self.stopped, "tamper": self.tamper, "recorder_errors": self.errors,
                          "reps": self.reps.iter().map(|r| json!({"rep": r.rep, "pad_base": r.base, "layout": r.lay.to_json()})).collect::<Vec<_>>()},
         });
-        if let Err(e) = std::fs::write(&self.path, serde_json::to_vec(&t).expect("JSON")) {
-            eprintln!("FC_GATE_TRANSCRIPT: {}: {e}", self.path.display());
+        let public = json!({"kind": PUBLIC_FORMAT, "schedule": null, "relations": self.relations, "statement": self.statement,
+                            "computes": self.computes});
+        for (path, v) in [(&self.public, &public), (&self.path, &t)] {
+            if let Err(e) = std::fs::write(path, serde_json::to_vec(v).expect("JSON")) {
+                eprintln!("FC_GATE_TRANSCRIPT: {}: {e}", path.display());
+            }
         }
     }
 }

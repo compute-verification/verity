@@ -4,7 +4,10 @@ prover) with `FC_GATE_TRANSCRIPT` recording what the gate lets out (`live/src/ga
 
     python firewall_outer_agree.py --lean BIN --out DIR CASE=DIR...
 
-`CASE` is `honest` or an `FC_GATE_TAMPER` control, `DIR` the directory its sessions' transcripts went to. Each transcript must
+`CASE` is `honest` or an `FC_GATE_TAMPER` control, `DIR` the directory its sessions' transcripts went to (``session-<k>.json``)
+with the public input each recorded (``public-<k>.json``). The contract holds every transcript to one public input
+(`public_input`, written to DIR/public.json): the honest sessions', which must be one and the same in every honest session,
+and with which every control's agrees wherever both name a value. Each transcript must
 meet its case's expectation (`EXPECT`): an honest session passes the gate, the prover does not stop, and the contract
 accepts; a control's session is refused by the gate (or, for `algebra`, stopped by the prover's self-check), and the contract
 refuses it for the control's own reason at the item where the firewall stopped (`firewall.gate.at`; for `algebra`, the first
@@ -96,8 +99,33 @@ def judge(case: str, t: dict, v: dict) -> tuple[bool, str]:
     return True, ""
 
 
-def contract(lean: str, files: list[Path]) -> dict[str, dict]:
-    p = subprocess.run([lean, "contract", *map(str, files)], capture_output=True, text=True, check=False)
+def public_input(cases: list[tuple[str, list[Path]]]) -> tuple[dict, dict[str, str]]:
+    """The public input every transcript is held to: the honest sessions' (each ``public-<k>.json`` beside its transcript),
+    which must all be equal; and per transcript of any case, why its own disagrees (a statement value under a name the
+    honest one gives another, or a relation it lacks)."""
+    pub_of = lambda f: json.loads(f.with_name(f.name.replace("session-", "public-", 1)).read_text())
+    honest = [(f, pub_of(f)) for case, files in cases if case == "honest" for f in files]
+    if not honest:
+        raise SystemExit("no honest session: nothing fixes the public input")
+    pub = honest[0][1]
+    bad = {}
+    for case, files in cases:
+        for f in files:
+            mine = pub_of(f)
+            if case == "honest" and mine != pub:
+                bad[str(f)] = "its public input is not the other honest sessions'"
+                continue
+            clash = next((k for k, v in mine["statement"].items() if pub["statement"].get(k, v) != v), None)
+            extra = next((r for r in mine["relations"] if r not in pub["relations"]), None)
+            if clash is not None:
+                bad[str(f)] = f"its statement value for {clash!r} is not the honest sessions'"
+            elif extra is not None:
+                bad[str(f)] = f"its relation {extra!r} is not the honest sessions'"
+    return pub, bad
+
+
+def contract(lean: str, files: list[Path], public: Path) -> dict[str, dict]:
+    p = subprocess.run([lean, "contract", "--public", str(public), *map(str, files)], capture_output=True, text=True, check=False)
     out = {}
     for line in p.stdout.splitlines():
         d = json.loads(line)
@@ -114,7 +142,7 @@ def main(argv=None) -> int:
     ap.add_argument("cases", nargs="+", help="CASE=DIR: a case of EXPECT and its transcripts' directory")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
-    rows, ok_all = [], True
+    rows, ok_all, cases = [], True, []
     for spec in a.cases:
         case, _, d = spec.partition("=")
         if case not in EXPECT:
@@ -122,11 +150,17 @@ def main(argv=None) -> int:
         files = sorted(Path(d).glob("session-*.json"), key=lambda p: int(p.stem.split("-")[1]))
         if not files:
             ap.error(f"{d}: no session-*.json")
-        verdicts = contract(a.lean, files)
+        cases.append((case, files))
+    pub, disagree = public_input(cases)
+    (a.out / "public.json").write_text(json.dumps(pub))
+    for case, files in cases:
+        verdicts = contract(a.lean, files, a.out / "public.json")
         for f in files:
             t, v = json.loads(f.read_text()), verdicts[str(f)]
             if "error" in v:
                 good, why = False, f"not a transcript: {v['error']}"
+            elif str(f) in disagree:
+                good, why = False, disagree[str(f)]
             else:
                 good, why = judge(case, t, v)
             agree, total = recheck(t)
@@ -148,12 +182,14 @@ def main(argv=None) -> int:
         fh.write("\t".join(cols) + "\n")
         for r in rows:
             fh.write("\t".join("" if r[c] is None else str(r[c]).replace("\t", " ") for c in cols) + "\n")
-    summary = {"transcripts": len(rows), "ok": sum(r["ok"] for r in rows), "cases": sorted({r["case"] for r in rows}), "rows": rows}
+    summary = {"transcripts": len(rows), "ok": sum(r["ok"] for r in rows), "cases": sorted({r["case"] for r in rows}),
+               "public": {"relations": len(pub["relations"]), "statement": len(pub["statement"]), "computes": len(pub["computes"])},
+               "rows": rows}
     (a.out / "result.json").write_text(json.dumps(summary, indent=1))
     for r in rows:
         if not r["ok"]:
             print(f"MISS {r['case']} {r['file']}: {r['miss']}", file=sys.stderr)
-    print(json.dumps({k: summary[k] for k in ("transcripts", "ok", "cases")}))
+    print(json.dumps({k: summary[k] for k in ("transcripts", "ok", "cases", "public")}))
     return 0 if ok_all else 1
 
 
