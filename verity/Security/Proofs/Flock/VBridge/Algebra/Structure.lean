@@ -56,6 +56,11 @@ def coinVec (n : Nat) : CM (Array F128) := do
   | .ok r => set (k + 1); return r
   | .error e => throw e
 
+/-- A computation that can fail, in `CM`. -/
+def liftE {A : Type} : Except String A → CM A
+  | .ok a => pure a
+  | .error e => throw e
+
 /-- `Coins.one` (rec_algebra.py:244–245). -/
 def coinOne : CM F128 := do return (← coinVec 1)[0]!
 
@@ -240,9 +245,7 @@ def zerocheck (m : Nat) (M : Messages α) : CM (α × ZcPts α) := do
   let pc := dotV (lagrange nodesL den6Inv z) M.c
   let claim := add (dotV (combWeights z) (M.ab.zipWith add M.c)) pc
   let (claim, rho) ← zcRounds r M.zc.toList 0 claim #[]
-  let ab ← match mv M.fa M.fb with
-    | .ok x => pure x
-    | .error e => throw e
+  let ab ← liftE (mv M.fa M.fb)
   return (add claim ab, ⟨z, rho, r, pc⟩)
 
 /-- The lincheck's fold points (`fold=dict(...)`, rec_algebra.py:616): `α`, `β`, the skip weights at the zerocheck's
@@ -280,9 +283,7 @@ def lincheck (kLog : Nat) (M : Messages α) (zc : ZcPts α) : CM (α × LcPts α
   let alpha ← coinOne
   let beta ← coinOne
   let (claim, ts) ← lcRounds M.lc.toList (add (add (sm alpha M.fa) M.fb) (cst beta)) #[]
-  let acc ← match combDot (M.comb.zip M.zp).toList zero with
-    | .ok x => pure x
-    | .error e => throw e
+  let acc ← liftE (combDot (M.comb.zip M.zp).toList zero)
   let rPrime ← coinOne
   let w := dotV (skipWeights rPrime) M.zp
   return (add acc claim, ⟨⟨alpha, beta, skipWeights zc.z, zc.rho.extract 0 (kLog - 6), ts⟩, w, rPrime, ts.reverse⟩)
@@ -509,9 +510,7 @@ def ligerito (sch : Schedule) (M : Messages α) (tIn : α) (sws : Array Switched
     (ligeritoRun sch M).run { s := kofF tIn, q := ((zero, zero), (zero, zero), (zero, zero)) }
   if !(← read).drawnAll (← get) then throw "recorded rounds were never drawn"
   if st.msg ≠ M.msgs.size ∨ st.ood ≠ M.ood.size then throw "ligerito: leftover messages"
-  let res ← match finalWeights sch ext initCh levels st.oods st.conss sws with
-    | .ok r => pure r
-    | .error e => throw e
+  let res ← liftE (finalWeights sch ext initCh levels st.oods st.conss sws)
   if M.yr.size ≠ 2 <<< ext then throw "ligerito: |yr|"
   let lhs := kaddAll ((Array.range res.size).toList.map fun j =>
     kc res[j]! (M.yr.getD (2 * j) zero, M.yr.getD (2 * j + 1) zero))
@@ -670,21 +669,32 @@ structure BSt where
   vVals : Array F128 := #[]
   kappa : Array (Array (Array F128))
 
-/-- `var_op` (rec_algebra.py:843–848): the operand of a message element, made when first needed; the comb's slots are
-placed after every coefficient's, so a comb element's operand is patched at the end. -/
-def varOp (sh : Shape) (k : Key) : StateT BSt (Except String) Nat := do
+/-- A message element's term (`var_op`, rec_algebra.py:847): its element of w, its ring switch's transpose (`wt`), or
+the comb's slot `comb0 + l` of v. A consistency sum is no operand: Python's `wi[k]` fails on it, as w holds none. -/
+def atomTerm (sh : Shape) (comb0 : Nat) : Key → Except String Term
+  | .rsT k u => match wi sh (.rs k 0) with
+    | some i => .ok (.wt i u)
+    | none => .error "build: no such ring switch"
+  | .comb l => .ok (.v (comb0 + l))
+  | .cons _ _ => .error "build: a consistency sum as an operand"
+  | k => match wi sh k with
+    | some i => .ok (.w i)
+    | none => .error "build: an element w does not hold"
+
+/-- A computation that can fail, in `_build`'s state. -/
+def liftB {A : Type} : Except String A → StateT BSt (Except String) A
+  | .ok a => pure a
+  | .error e => throw e
+
+/-- `var_op` (rec_algebra.py:843–848): the operand of a message element, made when first needed. Python places the
+comb's slots after every coefficient's by patching their operands at the end; here `comb0`, the number of coefficient
+slots, is counted first. -/
+def varOp (sh : Shape) (comb0 : Nat) (k : Key) : StateT BSt (Except String) Nat := do
   let st ← get
   match st.opOf.lookup k with
   | some i => return i
   | none =>
-    let term ← match k with
-      | .rsT k u => match wi sh (.rs k 0) with
-        | some i => pure (Term.wt i u)
-        | none => throw "build: no such ring switch"
-      | .comb _ => pure (Term.v 0)
-      | k => match wi sh k with
-        | some i => pure (Term.w i)
-        | none => throw "build: an element w does not hold"
+    let term ← liftB (atomTerm sh comb0 k)
     set { st with opOf := st.opOf ++ [(k, st.ops.size)], ops := st.ops.push #[term] }
     return st.ops.size
 
@@ -704,43 +714,73 @@ def sortBy {β : Type} (o : β → Except String Nat) (xs : List β) : Except St
   let keyed ← xs.mapM fun x => do return ((← o x), x)
   return (keyed.mergeSort fun a b => decide (a.1 ≤ b.1)).map (·.2)
 
-/-- `_build`'s pass over residual `ri` (rec_algebra.py:851–874). -/
-def buildRes (sh : Shape) (fin ri : Nat) (f : Lin) : StateT BSt (Except String) Res := do
-  let cons := f.t.filter (·.1.isCons)
-  let mut add : Array Term := #[]
-  if !cons.isEmpty then
-    if ri ≠ fin ∧ ri ≠ fin + 1 then throw s!"residual {ri}: a consistency sum outside Ligerito's final check"
-    for (k, x) in cons do
-      match k with
-      | .cons level l => modify fun st => { st with kappa := st.kappa.modify level (·.modify (ri - fin) (·.set! l x)) }
-      | _ => pure ()
-    match wi sh (.acc1 (ri - fin)), wi sh (.acc0 (ri - fin)) with
-    | some i1, some i0 => add := add ++ #[.w i1, .w i0]
-    | _, _ => throw "build: no running sums"
-  let mut mulp : Array (Nat × Nat) := #[]
-  for (k, x) in ← sortBy (fun kx => orderOf sh kx.1) (f.t.filter (!·.1.isCons)) do
+/-- `kappa[k[1]][ri - fin][k[2]] = f.t[k]` (rec_algebra.py:857–858), as a sum into `kappa`: the keys are distinct, so
+each entry is set once from zero, as Python sets it. A sum outside `kappa` is Python's `IndexError`. -/
+def kapAdd (r : Nat) : List (Key × F128) → StateT BSt (Except String) Unit
+  | [] => pure ()
+  | (k, x) :: rest => do
+    match k with
+    | .cons level l =>
+      let st ← get
+      if level < st.kappa.size ∧ r < st.kappa[level]!.size ∧ l < st.kappa[level]![r]!.size then
+        set { st with kappa := st.kappa.modify level (·.modify r (·.modify l (· + x))) }
+      else throw "build: a consistency sum outside kappa"
+    | _ => pure ()
+    kapAdd r rest
+
+/-- A residual's coefficient slots and their products (rec_algebra.py:860–865). -/
+def coefOps (sh : Shape) (comb0 ri : Nat) : List (Key × F128) → StateT BSt (Except String) (Array (Nat × Nat))
+  | [] => return #[]
+  | (k, x) :: rest => do
     let st ← get
-    let slot := st.vNames.size
-    set { st with vNames := st.vNames.push (.coef ri k), vVals := st.vVals.push x, ops := st.ops.push #[.v slot] }
-    let coefOp := st.ops.size
-    mulp := mulp.push (coefOp, ← varOp sh k)
-  for ((a, b), x) in ← sortBy (fun abx => do return (← orderOf sh abx.1.1) * 2 ^ 32 + (← orderOf sh abx.1.2)) f.q do
+    set { st with vNames := st.vNames.push (.coef ri k), vVals := st.vVals.push x,
+                  ops := st.ops.push #[.v st.vNames.size] }
+    let o ← varOp sh comb0 k
+    return #[(st.ops.size, o)] ++ (← coefOps sh comb0 ri rest)
+
+/-- A residual's products of two messages (rec_algebra.py:866–869). -/
+def prodOps (sh : Shape) (comb0 ri : Nat) : List ((Key × Key) × F128) → StateT BSt (Except String) (Array (Nat × Nat))
+  | [] => return #[]
+  | ((a, b), x) :: rest => do
     if x ≠ 1 then throw s!"residual {ri}: a product of messages with a coefficient other than 1"
-    let oa ← varOp sh a
-    let ob ← varOp sh b
-    mulp := mulp.push (oa, ob)
-  if let some c := f.c then
+    let oa ← varOp sh comb0 a
+    let ob ← varOp sh comb0 b
+    return #[(oa, ob)] ++ (← prodOps sh comb0 ri rest)
+
+/-- A residual's running sums (rec_algebra.py:855–859): none without consistency sums; else, in Ligerito's final check
+only, its coefficients on them go into `kappa` and the running sums after and before the openings are added. -/
+def accTerms (sh : Shape) (fin ri : Nat) (cons : List (Key × F128)) : StateT BSt (Except String) (Array Term) :=
+  if cons.isEmpty then pure #[]
+  else if ri ≠ fin ∧ ri ≠ fin + 1 then throw s!"residual {ri}: a consistency sum outside Ligerito's final check"
+  else do
+    kapAdd (ri - fin) cons
+    match wi sh (.acc1 (ri - fin)), wi sh (.acc0 (ri - fin)) with
+    | some i1, some i0 => pure #[Term.w i1, .w i0]
+    | _, _ => throw "build: no running sums"
+
+/-- A residual's constant (rec_algebra.py:870–873): a v slot holding it. -/
+def constTerm (ri : Nat) : Option F128 → StateT BSt (Except String) (Array Term)
+  | some c => do
     let st ← get
     set { st with vNames := st.vNames.push (.const ri), vVals := st.vVals.push c }
-    add := add.push (.v st.vNames.size)
-  return ⟨mulp, add⟩
+    pure #[Term.v st.vNames.size]
+  | none => pure #[]
+
+/-- `_build`'s pass over residual `ri` (rec_algebra.py:851–874). -/
+def buildRes (sh : Shape) (fin comb0 ri : Nat) (f : Lin) : StateT BSt (Except String) Res := do
+  let acc ← accTerms sh fin ri (f.t.filter (·.1.isCons))
+  let cm ← coefOps sh comb0 ri (← liftB (sortBy (fun kx => orderOf sh kx.1) (f.t.filter (!·.1.isCons))))
+  let pm ← prodOps sh comb0 ri
+    (← liftB (sortBy (fun abx => do return (← orderOf sh abx.1.1) * 2 ^ 32 + (← orderOf sh abx.1.2)) f.q))
+  let c ← constTerm ri f.c
+  return ⟨cm ++ pm, acc ++ c⟩
 
 /-- `_build`'s passes over the residuals from `ri`. -/
-def buildAll (sh : Shape) (fin : Nat) : List Lin → Nat → StateT BSt (Except String) (Array Res)
+def buildAll (sh : Shape) (fin comb0 : Nat) : List Lin → Nat → StateT BSt (Except String) (Array Res)
   | [], _ => return #[]
   | f :: rest, ri => do
-    let r ← buildRes sh fin ri f
-    let rs ← buildAll sh fin rest (ri + 1)
+    let r ← buildRes sh fin comb0 ri f
+    let rs ← buildAll sh fin comb0 rest (ri + 1)
     return #[r] ++ rs
 
 /-- What `_build` reads off the symbolic residuals (rec_algebra.py:830–881): S, the v slots' names and the
@@ -752,16 +792,17 @@ structure Built where
   vVals : Array F128
   kappa : Array (Array (Array F128))
 
-/-- `_build` (rec_algebra.py:830–881). -/
+/-- A residual's coefficient slots: its terms but the consistency sums, and its constant. -/
+def slotsOf (f : Lin) : Nat := (f.t.filter (!·.1.isCons)).length + (if f.c.isSome then 1 else 0)
+
+/-- `_build` (rec_algebra.py:830–881). The comb's slots follow the `comb0` coefficient slots, which the passes fill. -/
 def build (sh : Shape) (lins : Array Lin) : Except String Built := do
   let kappa := sh.sched.levels.map fun lv => Array.replicate 2 (Array.replicate (2 ^ lv.lanes) (0 : F128))
-  let (res, st) ← (buildAll sh (2 + sh.claims) lins.toList 0).run { kappa }
-  let comb0 := st.vNames.size
-  let ops := st.opOf.foldl (init := st.ops) fun ops ki => match ki.1 with
-    | .comb l => ops.set! ki.2 #[.v (comb0 + l)]
-    | _ => ops
+  let comb0 := (lins.toList.map slotsOf).sum
+  let (res, st) ← (buildAll sh (2 + sh.claims) comb0 lins.toList 0).run { kappa }
+  if st.vNames.size ≠ comb0 ∨ st.vVals.size ≠ comb0 then throw "build: the coefficient slots miscounted"
   let vNames := st.vNames ++ (Array.range 64).map .comb
-  return ⟨⟨(wNames sh).size, vNames.size, ops, res⟩, vNames, st.vVals, st.kappa⟩
+  return ⟨⟨(wNames sh).size, vNames.size, st.ops, res⟩, vNames, st.vVals, st.kappa⟩
 
 /-- The symbolic residuals at a coin source (`_residual_lins`, rec_algebra.py:825–827). -/
 def residualLins (sh : Shape) (coins : Coins) (extras : Array Claim) : Except String (Array Lin × Info Lin) :=
