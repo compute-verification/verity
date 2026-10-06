@@ -24,7 +24,7 @@ namespace FlockSoundness.Refine
 open Flock Transcript
 
 /-- The executable's `==` on field elements is equality. -/
-instance : LawfulBEq F128 where
+instance instLawfulBEqF128_flockSoundness : LawfulBEq F128 where
   eq_of_beq {a b} h := by
     cases a with | mk alo ahi => cases b with | mk blo bhi =>
     have h' : ((alo == blo) && (ahi == bhi)) = true := h
@@ -35,7 +35,7 @@ instance : LawfulBEq F128 where
     show ((alo == alo) && (ahi == ahi)) = true
     simp
 
-instance : LawfulBEq F256 where
+instance instLawfulBEqF256_flockSoundness : LawfulBEq F256 where
   eq_of_beq {a b} h := by
     cases a with | mk a0 a1 => cases b with | mk b0 b1 =>
     have h' : ((a0 == b0) && (a1 == b1)) = true := h

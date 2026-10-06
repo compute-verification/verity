@@ -3,8 +3,7 @@
 Representing computations precisely, verifying claims about them, and
 deriving compute/memory/network resource guarantees. The architecture and
 component boundaries are in `README.md`; that document is settled, read it
-first. Code migrates incrementally from `veritor` as real consumers need it;
-do not bulk-migrate or scaffold directories the README merely anticipates.
+first. Do not scaffold directories the README merely anticipates.
 
 ## Map and commands
 
@@ -67,16 +66,16 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
     that `--m0-pythonpath` names, not from the checkout) and the Lean
     verifier. `verity.protocols.accounting.space.pous` is proof of useful space: the reference
-    codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`: the
-    statements of its guarantees, their proofs and a submission grader). `verity.protocols.accounting.work.pouw`
+    codecs, setup and timed audit, its `PROTOCOL.md`, and its submission grader (`lean/`; the
+    statements of its guarantees and their proofs are its area of `verity/Security/`). `verity.protocols.accounting.work.pouw`
     is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
     (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
     pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
-    package (`lean/`, whose `Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
+    in `verity/Security/` (`Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
     `verity.protocols.accounting.communication.warden` is network transparency's timing
-    channel: the warden, its audit and calibration, and its Lean package (`lean/`).
-    `verity/protocols/compliance/nci` is novel communication intensity, the policy that throttles frontier training
-    and leaves inference alone; so far only its Lean package (`lean/`).
+    channel: the warden, its audit and calibration, and its Lean in `verity/Security/`.
+    NCI is novel communication intensity, the policy that throttles frontier training
+    and leaves inference alone; so far only its Lean, in `verity/Security/`.
     Applications (vLLM) compose protocols.
   - `verity.claims`: the ids of security claims (guarantees, assumptions as `property/instance`
     such as `cr/sha-512`, models, setup) that Table 1 cites; the docs site imports them from the
@@ -131,9 +130,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   still in the benchmark tables, but not developed; so is the VOLE research
   backend (`archive/vole`). `benchmarks/numerical` holds the numerical references
   and the benchmark tooling that renders the tables. `archive/sp1/README.md` is
-  D-SP1's how-to (build, identity, Python API, tests, recorded pod runs).
-  **SP1 proving never runs on a laptop or the control pod**: use
-  `research run --on vy-sp1 ...` (`~/.research/machines.toml`).
+  D-SP1's how-to (build, identity, Python API, tests, recorded pod runs, and where proving may run).
   `integrations/vllm` (`verity_vllm`) is the vLLM integration.
 
 Dependency direction (README "Development"): `primitives.circuits <- primitives.commitments -> primitives.crypto`,
@@ -172,13 +169,10 @@ against `verity.primitives.circuits`, the Lean audit, and the verifier's cross-c
 CPU pod, with caches that hit only on identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into `main`
 only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence store, or
 when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on one `check`
-of the merged tree. One commit's `check` can run on N pods at once (`check.py --record --shard K/N --on POD` for each K, then
-`check.py --record --combine RUN...`; the plans are in `tools/check/ci.toml`), and the gate takes the combined Attempt only
-after re-reading every shard. The lander checks a train-prep commit with `tools/check/train.sh COMMIT POD` (`--agreement` for a pinned
-guarantee changed outside `backends/flock/`). A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
-(`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`; not for a `README.md` or `PROTOCOL.md`
-alone, and skipped by name elsewhere): record it with
-`uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
+of the merged tree. Sharding one commit's `check` across pods (`check.py --shard K/N`, `--combine`) and the lander's train
+check (`tools/check/train.sh`) are documented in their usage text. `research merge` also demands the steps
+`merge_requires` (`tools/check/tool.py`) names for the paths a change touches, such as `lean-agreement` for
+`backends/flock/`, and `check.py --record` sends what they need.
 `check` reuses a pass (a test suite, a circuit-check target, a Lean package's audit) only while every input it read is
 unchanged, and keeps each pod's Lean dependencies warm under their manifest and toolchain.
 A pure move goes through the same `check`, but once `uv run python tools/check/move_check.py BASE HEAD` certifies it (only
@@ -192,21 +186,21 @@ first in a quiet window, alone in its train (Daniel, 4 Oct).
   hypothesis on the circuit file or the statement's form. The verifier refuses any form the proof doesn't cover, and gains
   no new form ahead of its proof. Circuit inputs and outputs use one canonical format proved in general, so a new workload
   needs no verifier or proof change (ruling 2026-10-04, `.agents/skills/friction/SKILL.md`).
-- The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
-  about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
-  `verity/protocols/accounting/space/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `verity/Security/` (PoUW's games,
-  named assumptions and the proofs behind its γ, Mathlib and core's), `verity/Security/` (the network
-  warden's timing-channel guarantees and their proofs, Mathlib), `verity/Security/` (NCI's policy and guarantees, on
-  core's), and `verity/Security/` (the model every protocol states its guarantees in: circuits, partitions,
-  declarations and games; and core's own proofs about `verity`'s definitions, such as `verity_catalog.silicon`'s step relation;
-  Mathlib only). New Lean goes into the package whose dependencies it needs, in a subdirectory and namespace of its own;
-  a core-only proof goes into core's package, never a backend's. A protocol's package may require core's and other
-  protocols' packages, never a backend's. All packages share one toolchain and
-  one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
-- Core's and NCI's packages are laid out under four names: `Protocol` (definitions), `Assumptions` (named `Prop`s) and
-  `Guarantees` (each a `def G : Prop`) are the spec (README "Glossary"), importing only one another, core's spec and
-  Mathlib (`layers` in `lean-audit.json`); `SecurityProofs` holds every proof and lemma, with `SecurityProofs.G : G` for
-  each guarantee proved. The other packages move to this layout one at a time.
+- Lean is code or security analysis (Daniel's layout ruling, 5 Oct). Code stays with its component and never requires
+  `verity/Security/`: C-Flock's executable verifier (`backends/flock/verifier/lean/`, `Flock` and `FlockVerify`, no
+  dependencies) and the PoUS grader (`verity/protocols/accounting/space/pous/lean/`, Lean only). The analysis is
+  `verity/Security/`, in three trees: `Definitions/` (each component's vocabulary) and `Specs/` (its named assumptions and
+  guarantee statements), the package `security` (Mathlib, no ArkLib), and `Proofs/`, the nested package `security_proofs`
+  (`srcDir = ".."`, root `Proofs`, ArkLib allowed), which requires `security` and holds every proof, C-Flock's level3 and
+  soundness among them (`Proofs.Flock.*`). Each component has an area of its own in each tree (`Core`, `Nci`, `Pouw`,
+  `Pous`, `Warden`, `Flock`): `Definitions.Pouw.X`, `Specs.Pouw.Guarantees`, `Proofs.Pouw.X`; declarations keep their
+  names (`Pouw.Guarantees.G`, `Pouw.SecurityProofs.G`). New Lean goes into its component's area of the tree it belongs
+  to; `tools/move/lean.py --resolve MODULE` names where a module from before the move went. All packages share one
+  toolchain and one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
+- `Definitions` and `Specs` are the spec (README "Glossary"), importing only one another and Mathlib (`layers` in
+  `verity/Security/lean-audit.json`); `Proofs` holds every proof and lemma, with `SecurityProofs.G : G` for each
+  guarantee proved. A theorem left in a trusted module is tolerated; a trusted module importing a proof or ArkLib is not.
+  C-Flock's analysis is all under `Proofs.Flock` for now (its reads are exempt until its spec is extracted).
 - Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
   `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a
   definition of the spec stated as a `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name
@@ -218,14 +212,8 @@ first in a quiet window, alone in its train (Daniel, 4 Oct).
   changed statement before and after, each changed definition as it is now). Nobody signs off and nothing waits on it.
   A guarantee that only moved to another module or name sends nothing when `--update --moved MOVES.json` (old names to
   new) prints it as the same statement under its old names.
-- A named assumption or hand-proved lemma that a pinned dependency could prove, because its statement can be written in
-  that dependency's constants, has an entry in the package's `upstream` watch list. The audit fails when the pinned
-  dependency proves a theorem about it that nobody has acknowledged (`tools/lean/upstream.py`). One stated over the
-  package's own definitions (PoUS's `LemmaA`) gets no entry, since no upstream theorem can mention them, and neither does
-  one about a single number (PoUS's `PrimeP16448`), whose entry would match every theorem about primes. A document's
-  "status upstream" cites that output; it is never written by hand.
-- Two agents never share a writable Lake build directory (`.lake`): parallel Lean work uses separate checkouts.
-- How to work on Lean, and how parallel Lean lanes avoid conflicts: `.agents/skills/lean-proofs/SKILL.md`.
+- How to work on Lean, how parallel Lean lanes avoid conflicts (two agents never share a writable `.lake`), and which
+  assumptions get an `upstream` watch entry (`tools/lean/upstream.py`): `.agents/skills/lean-proofs/SKILL.md`.
 
 ## Working principles
 
@@ -267,27 +255,20 @@ Never print a secret's value. List environment variable names with `compgen -e` 
 never `env | cut`, `env | grep` or `printenv | …`: a multi-line value's later lines print as if they were names. A secret
 is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env` on the VM.
 
-Architectural rationale and human-facing reports belong in Notion;
-experimental evidence belongs in artifact storage. Temporary working notes
-need not become permanent documentation. Remove obsolete rules and machinery
-rather than accumulating them.
+Remove obsolete rules and machinery rather than accumulating them.
 
 ## Where writing goes
 
-- This repo: code, tests, small fixtures, and maintained current-truth docs only (`README.md`, `AGENTS.md`, `PROTOCOL.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`).
+- This repo: code, tests, small fixtures, and maintained current-truth docs only (`README.md`, `AGENTS.md`, `PROTOCOL.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`). `tests/test_repository.py` enforces this section's file rules (report-genre names, generated output, the 256 KiB cap) and says where each offender goes; large fixtures: `.agents/skills/testing/SKILL.md`.
 - Lane reports, checkpoints, findings, drafts, friction notes: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|finding|draft|friction`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`. Notes are records, never messages: a handoff, an order or an ask goes on Slack (below), or to your own Cursor workers as a follow-up.
 - Qualitative writing that anyone else may need goes in the research notes, where it can be shared, and data goes in the
   evidence store (Daniel, 4 Oct). A Cursor agent store is its agent's scratch: nothing another agent or a person needs
   lives only there, and nothing cites a `store:` path, which no other VM can read. Copy such a file into the notes or the
   store and cite its `note:` or `art:` id. `research notes sync --path lanes/<lane>` publishes notes to the notes' `main`
   from any VM with `RESEARCH_NOTES_TOKEN` set.
-- Evidence and generated output (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports): the evidence store only, never Git, neither this repo nor the notes. `research run` publishes a run's outputs; anything else goes in with `research data put --kind K --file|--tree P --preserve`; cite it as `art:<id>`. Tables and reports are rendered on demand from code plus the store. An old `notes-asset:<path>` resolves through the notes README.
+- Evidence and generated output (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports): the evidence store only, never Git, neither this repo nor the notes. `research run` publishes every run, completed or failed, as an Attempt with its outputs (contract in `tools/research/src/research/store/README.md`); anything else goes in with `research data put --kind K --file|--tree P --preserve`; cite it as `art:<id>`. Tables and reports are rendered on demand from code plus the store. An old `notes-asset:<path>` resolves through the notes README.
 - Architecture decisions: Notion (the coordinator publishes); no `docs/adr/` in the repo.
-- Evidence goes through `research run --tool … --campaign …`: every completed or failed run is auto-published as an Attempt in the evidence store (`~/.research/store`, `research data …`; contract in `tools/research/src/research/store/README.md`).
 - Findings and claims about a run are labels, never edits to a shared table: `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>` (a red-team verdict is another label by the red-team; tables pick a policy, `store_tables.py --proof-class-by 'red-team-*'`).
-- The overhead ledger is frozen history, in the store with the run results the frozen backends' scripts read (`verity_numerical.bench.frozen`, at their former paths `backends/numerical/reports/ledger/*.jsonl`, `backends/*/results*`); every ledger claim is a label there (`ledger_to_store.py`), and new rows are labels on the attempt they describe.
-- Fixtures are registered in `fixtures/artifacts.json` (`{art id: path}`, `research data put --kind fixture/v1 --file …`); `tools/research/tests/test_repo_replicas.py` checks every entry hashes to its id. A tracked file is at most 256 KiB (`tests/test_repository.py`); a larger fixture's path is gitignored and `research data fetch-fixtures` fetches it (the store README §7.3).
-- `tests/test_repository.py` rejects report-genre files (`*HANDOFF*`, `*REPORT*`, `*URGENT*`, `*DRAFT*`, `*TRIAGE*`, `*STATUS*`) and generated output (anything under `reports/`, `results/`, `renders/`, `previews/`, `plots/`, `evidence/`, `assets/` or `outputs/`, image, PDF and HTML renders, `<YYYYMMDDTHHMMZ>-*` stamped files), and `.gitignore` keeps them out of `git add`. In the notes, `research notes sync` and the steward's snapshot leave `renders/`, `campaigns/*/assets/` and `lanes/*/evidence/` out, and the steward's renders go to the store.
 
 ## Lanes (worker agents)
 
