@@ -37,6 +37,6 @@ inputs = [".agents/skills", ".gitignore", "archive/direct", "fixtures", "integra
           "pyproject.toml", "backends/flock/pyproject.toml", "archive/gkr/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "archive/sp1/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
           "benchmarks/pouw/pyproject.toml", "tools/check/pyproject.toml", "tools/circuit_check/pyproject.toml",
-          "tools/cluster", "tools/lean/pyproject.toml", "tools/native_peak/pyproject.toml",
+          "tools/cluster", "tools/lean/pyproject.toml", "tools/lean/run_daily.py", "tools/native_peak/pyproject.toml",
           "tools/tc_probe_fp4/pyproject.toml"]
 parallel = true
