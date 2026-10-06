@@ -683,6 +683,25 @@ def test_package_files_stop_at_nested_packages_and_lake(tmp_path):
     assert A.lean_modules(tmp_path) == {"A": "A.lean", "A.B": "A/B.lean"}
 
 
+def test_module_names_follow_src_dir(tmp_path):
+    """A nested package with `srcDir = ".."` (`Security/Proofs` under `Security`) names its modules from the directory
+    above it, as Lake does; a library's own `srcDir` is under the package's; a file outside every source directory keeps
+    its name from the package."""
+    proofs = tmp_path / "Security" / "Proofs"
+    for rel, text in {"lakefile.toml": 'name = "proofs"\nsrcDir = ".."\n[[lean_lib]]\nname = "Proofs"\n',
+                      "Proofs.lean": "", "Pouw/End.lean": ""}.items():
+        (proofs / rel).parent.mkdir(parents=True, exist_ok=True)
+        (proofs / rel).write_text(text)
+    (tmp_path / "Security" / "Spec.lean").write_text("")
+    assert A.lean_modules(proofs) == {"Proofs.Proofs": "Proofs.lean", "Proofs.Pouw.End": "Pouw/End.lean"}
+    pkg = tmp_path / "p"
+    for rel, text in {"lakefile.toml": 'name = "p"\n[[lean_lib]]\nname = "P"\nsrcDir = "src"\n',
+                      "src/P.lean": "", "src/P/A.lean": "", "Check.lean": ""}.items():
+        (pkg / rel).parent.mkdir(parents=True, exist_ok=True)
+        (pkg / rel).write_text(text)
+    assert A.lean_modules(pkg) == {"P": "src/P.lean", "P.A": "src/P/A.lean", "Check": "Check.lean"}
+
+
 def test_the_policy_layout_is_json():
     pol = recorded()
     assert json.loads(A.layout(pol)) == pol
