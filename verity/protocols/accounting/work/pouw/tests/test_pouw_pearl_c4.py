@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-import quicknet as Q
+import epoch_coins as E
 
 import pearl_c4_vectors as V
 from verity.primitives.crypto.turboshake import turboshake128
@@ -38,8 +38,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[6] / "benchmarks" / "pou
 import replay as R  # noqa: E402
 
 K = 128
-AFTER = Q.LATEST
-BEFORE = Q.recorded_before(AFTER)
 FMTS = ("nvfp4", "mxfp4")
 
 
@@ -989,7 +987,7 @@ def lifecycle(s: F.PearlC4, real=20):
     rows_b = V.rows("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
     prover = Prover(s, {9: rows_b})
-    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
 
@@ -999,10 +997,10 @@ def test_the_work_law_audits_pearl_c4():
     splits = {9: W.Split(K)}
     records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())]
-    out = W.audit(s, epoch, prover, tr, splits, records, BEFORE, AFTER, 8)
+    out = W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8)
     assert out.audit.accepted and out.job == s.job_cost(16, K)
     assert out.wref == W.cell_wref(s, records[0]) * 19 * 16
-    hides = W.audit(s, epoch, prover, tr, splits, [W.UnitRecord(epoch.workload.matmuls[0], 20, K)], BEFORE, AFTER, 8)
+    hides = W.audit(s, epoch, prover, tr, splits, [W.UnitRecord(epoch.workload.matmuls[0], 20, K)], E.challenger(), 8)
     assert not hides.audit.accepted
     assert any("A row 3 is credited but fails" in v.reason for v in hides.audit.verdicts if not v.ok)
 
@@ -1021,10 +1019,10 @@ def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
     assert W.records_root(epoch.salt, epoch.weights_root, splits, records) != \
         W.records_root(epoch.salt, epoch.weights_root, splits, plain)
     assert W.exclusion_tiles(s, records) == W.exclusion_tiles(s, plain)
-    out = W.audit(s, epoch, prover, tr, splits, records, BEFORE, AFTER, 8)
+    out = W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8)
     assert out.audit.accepted and out.wref == W.cell_wref(s, records[0]) * 18 * 15
     as_excluded = [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3, 5), ())]
-    reasons = [v.reason for v in W.audit(s, epoch, prover, tr, splits, as_excluded, BEFORE, AFTER, 8).audit.verdicts]
+    reasons = [v.reason for v in W.audit(s, epoch, prover, tr, splits, as_excluded, E.challenger(), 8).audit.verdicts]
     assert any("A row 5 is excluded but passes" in (r or "") for r in reasons)
 
 
@@ -1057,7 +1055,7 @@ def test_v_ex_past_its_count_cap_fails_the_audit():
     splits, u = {9: W.Split(K)}, epoch.workload.matmuls[0]
     assert (W.voluntary_cap(32), W.voluntary_cap(16), W.voluntary_cap(65)) == (1, 1, 2)
     for rec in (W.UnitRecord(u, 20, K, (3,), (), (5, 6)), W.UnitRecord(u, 20, K, (3,), (), (), (1, 2))):
-        out = W.audit(s, epoch, prover, tr, splits, [rec], BEFORE, AFTER, 8)
+        out = W.audit(s, epoch, prover, tr, splits, [rec], E.challenger(), 8)
         assert not out.audit.accepted and "more voluntary rows than V-EX allows" in out.audit.verdicts[0].reason
     with pytest.raises(ValueError):
         W.UnitRecord(u, 20, K, (3,), (), (3,))
@@ -1079,7 +1077,7 @@ def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_cap():
     va, vb = W.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b})
     assert (va, vb) == ({3: [7]}, {})
     fixed = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a=va, voluntary_b=vb)
-    assert W.audit(s, epoch, prover, tr, splits, fixed, BEFORE, AFTER, 8).audit.accepted
+    assert W.audit(s, epoch, prover, tr, splits, fixed, E.challenger(), 8).audit.accepted
     tile = s.tiles(epoch.workload.matmuls[0].shape)[0]
     ctx = Context(epoch.salt, epoch.workload.matmuls[0], tr.activation_roots[0], epoch.weight_roots[9])
     ops = s.encode(ctx, s.noise(ctx), rows_a[:16], rows_b, tile)
@@ -1205,12 +1203,12 @@ def test_b_tilde_is_keyed_by_this_jobs_salt(tmp_path):
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits = {9: W.Split(K)}
     records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
-    assert W.audit(s, epoch, prover, tr, splits, records, BEFORE, AFTER, 8).audit.accepted
+    assert W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.accepted
     for n, salt in enumerate((b"another epoch's salt", b"")):
         cheat = stale_b(s, salt)
         assert F.seed_b(salt, prover.weight_roots[9]) != F.seed_b(epoch.salt, prover.weight_roots[9])
         liar = Prover(cheat, {9: rows_b})
-        out = W.audit(s, epoch, liar, liar.prove(epoch, {3: rows_a}), splits, records, BEFORE, AFTER, 8)
+        out = W.audit(s, epoch, liar, liar.prove(epoch, {3: rows_a}), splits, records, E.challenger(), 8)
         assert not out.audit.accepted
         assert {v.reason for v in out.audit.verdicts if not v.ok} == {"checked values"}
         device_dump(tmp_path / str(n), cheat)
