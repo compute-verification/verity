@@ -133,7 +133,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   inbox branch, `cursor/inbox-<first 8 of the worker's id>-<launcher's suffix>`, and the worker runs `git fetch` on it
   at every checkpoint (at least every 20 minutes, contract §3), acting on each new commit message. The launcher writes
   there with empty commits; the inbox is a channel, not a note. A worker silent for 30 minutes gets one inbox message,
-  and only if that brings no answer does the launcher start a parallel lane.
+  and only if that brings no answer does the launcher start a parallel lane. A worker that is IDLE in
+  `list-cloud-agents` with no result delivered was stopped: report it to your coordinator, don't resume it.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
   piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
   critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
