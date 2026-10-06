@@ -156,7 +156,7 @@ theorem gammaSampled {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
 theorem ttOutTile_mono_domain {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D D' : Layout → Prop} {γ₀ : ℝ}
     {ε : ℕ → ℕ → ℝ} (hD : ∀ L, D' L → D L) (h : TTOutTile CM P TR D γ₀ ε) : TTOutTile CM P TR D' γ₀ ε :=
-  ⟨h.1, fun U hU => h.2 U ⟨hU.1, hD _ hU.2.1, hU.2.2⟩⟩
+  ⟨h.1, fun U hU => h.2 U ⟨hU.1, hD _ hU.2⟩⟩
 
 theorem gridTiles_unit_lt {tm tn : ℕ} {L : Layout} {b : ℕ × ℕ × ℕ} (hb : b ∈ gridTiles tm tn L) : b.1 < L.N := by
   unfold gridTiles at hb
@@ -178,7 +178,7 @@ theorem pearlCTiles_wref {Q R S : Type} (sem : PearlCSem Q R S) (c : Costs) (ρ 
         (pearlCTiles sem c ρ).Wcred U.layout g act ≤ (ω : ℝ) * (pearlCTiles sem c ρ).credit H s U g act := by
   intro U hU H s g hg act _
   have hu := auditTiling_unit_lt 64 64 U.layout hg
-  have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = sh := hU.2.1.2 _ hu
+  have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = sh := hU.2.2 _ hu
   simp only [pearlCTiles]
   rw [hsh, hω]
   push_cast
@@ -440,6 +440,7 @@ theorem ttOutTilePearlCWitness :
     TTOutTilePearlC (witnessTileCM (pearlCProtocol witnessSem Costs.adopted (1 / 400))
         (pearlCTiles witnessSem Costs.adopted (1 / 400))) witnessSem Costs.adopted (1 / 400) ∧
     witnessWorkload.InDomain (pearlCProtocol witnessSem Costs.adopted (1 / 400)) (pearlCDomain Params.pi) ∧
+    witnessWorkload.WeightsOK (pearlCProtocol witnessSem Costs.adopted (1 / 400)) ∧
     (pearlCTiles witnessSem Costs.adopted (1 / 400)).capOK (fun _ => ()) () witnessWorkload 0 (witnessAct 0) ∧
     0 < ∑ g ∈ range ((pearlCTiles witnessSem Costs.adopted (1 / 400)).tiling witnessWorkload.layout).NT,
       (pearlCTiles witnessSem Costs.adopted (1 / 400)).credit (fun _ => ()) () witnessWorkload g (witnessAct 0) := by
@@ -448,8 +449,8 @@ theorem ttOutTilePearlCWitness :
   have hNT : (TR.tiling witnessWorkload.layout).NT = 1 := by
     show (gridTiles 64 64 witnessWorkload.layout).length = 1
     rw [witness_gridTiles]; rfl
-  refine ⟨?_, ?_, ttOutPearlCWitness.2.2.1, ?_, ?_⟩
-  · refine ⟨true, fun U _ act _ H s => ⟨by simp [witnessTileCM], ?_, by simp [witnessTileCM]⟩⟩
+  refine ⟨?_, ?_, ttOutPearlCWitness.2.2.1, ttOutPearlCWitness.2.2.2.1, ?_, ?_⟩
+  · refine ⟨true, fun U _ _ act _ H s => ⟨by simp [witnessTileCM], ?_, by simp [witnessTileCM]⟩⟩
     show (if true = true then ∑ g ∈ range (TR.tiling U.layout).NT,
         max (TR.credit H s U g (act ((TR.tiling U.layout).unit g))) 0 else 0) ≤ tileWrefTotal TR U.layout
     simp only [↓reduceIte, tileWrefTotal]
