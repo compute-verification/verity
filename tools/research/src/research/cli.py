@@ -1176,7 +1176,8 @@ def cmd_status(argv: list[str]) -> int:
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--on", default=None, metavar="NAME", help="with RUN another VM launched: look for it on this machine only")
     ap.add_argument("--all", action="store_true", help="every run, not just the last 20")
-    ap.add_argument("--refresh", action="store_true", help="fetch the records of every non-terminal remote run first")
+    ap.add_argument("--refresh", action="store_true", help="fetch the records of every non-terminal remote run first, and read each "
+                                                          "active one's memory on its machine (research.scopemem)")
     ap.add_argument("--balance", action="store_true", help="show the provider's account ledger (balance, spend limit, current $/h) with its observation time")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
@@ -1208,6 +1209,20 @@ def cmd_status(argv: list[str]) -> int:
     rows = [R.summarize(one)] if one else R.list_runs(root)
     if not ns.all:
         rows = rows[-20:]
+    from . import scopemem
+
+    unread = 0
+    for s in rows:
+        rr = s.get("remote_rec")
+        if s["state"] not in R.ACTIVE or (rr and not rr.get("remote_run_dir")):
+            continue
+        if rr and not (ns.refresh or one):
+            unread += 1
+            continue
+        try:
+            s["scope_memory"] = remote.scope_memory(Path(s["dir"])) if rr else scopemem.reading(Path(s["dir"]))
+        except remote.Refused as e:
+            s["scope_memory_error"] = str(e)
     if ns.json:
         print(json.dumps({"runs_root": str(root), "runs": rows, "ledger": ledger}, indent=2, sort_keys=True))
         return 0
@@ -1223,9 +1238,14 @@ def cmd_status(argv: list[str]) -> int:
     print(f"{'run':<24} {'state':<10} {'rc':>3}  {'class':<22} {'res':<4} {'valid':<8} {'project':<10} {'where':<11} {'stage':<16} command")
     for s in rows:
         print(_fmt(s))
+        for m in s.get("scope_memory") or []:
+            print(f"{'':<26}mem  {scopemem.render(m)}")
+        if s.get("scope_memory_error"):
+            print(f"{'':<26}mem  unread: {s['scope_memory_error']}")
     active = sum(1 for s in rows if s["state"] in R.ACTIVE)
     unfetched = sum(1 for s in rows if s.get("remote_rec") and not s["has_job"] and s["state"] != "refused")
-    print(f"\n{len(rows)} shown ({active} active" + (f", {unfetched} remote not yet fetched: `research status --refresh`" if unfetched else "") + f") under {root}"
+    print(f"\n{len(rows)} shown ({active} active" + (f", {unfetched} remote not yet fetched: `research status --refresh`" if unfetched else "")
+          + (f", memory of {unread} active remote run(s): `--refresh` or `research status RUN`" if unread else "") + f") under {root}"
           f"   res: result.json ok/BAD/-absent   valid: the workload's own checker")
     return 0
 

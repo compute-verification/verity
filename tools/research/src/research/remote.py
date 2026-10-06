@@ -1835,6 +1835,27 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     return rec
 
 
+def scope_memory(local_dir: Path) -> list[dict[str, Any]]:
+    """The run's memory in the cgroups it executes in on the machine (research.scopemem, sent as `python3 -` over fetch's ssh)."""
+    from . import scopemem
+
+    rec = _read_json(local_dir / "remote.json")
+    if not rec or not rec.get("remote_run_dir"):
+        raise Refused(f"{local_dir} is not a launched remote run")
+    ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
+    try:
+        r = ssh_run(ssh, ["python3", "-", rec["remote_run_dir"]], stdin=Path(scopemem.__file__).read_bytes(), timeout=60)
+    except subprocess.TimeoutExpired:
+        raise Refused(f"reading its cgroups on {rec.get('machine')} took over 60 s") from None
+    try:
+        out = json.loads(r.stdout) if r.returncode == 0 else None
+    except ValueError:
+        out = None
+    if not isinstance(out, list):
+        raise Refused(f"reading its cgroups on {rec.get('machine')}: rc {r.returncode} {r.stderr.decode(errors='replace').strip()[-200:]}")
+    return out
+
+
 def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
     run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  Never the runner and never SIGKILL:
