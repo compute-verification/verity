@@ -36,12 +36,15 @@ Its named assumption, a hypothesis:
 * `hash-derived-key` (`Assumptions.Zk.HashDerivedKeyHm96`): the pinned hm96 key hides at `2^-193`.
 
 And one hypothesis no check implies yet: every table's statement avoids the mask slot (`avoidsMask`), until the
-verifier's D11 refusal in `Net.ofRows` discharges it. The rest is an untyped statement. -/
+verifier's D11 refusal in `Net.ofRows` discharges it. The rest are an untyped statement and `EndToEndHidden`'s
+reference setup `y₀`: table 0's, at `mPts` link points, at some draw `d₀`, which every draw flock-verify accepts gives
+(`Flock.SecurityProofs.EndToEndHidden_refSetup`). -/
 def ZeroKnowledgeHidden : Prop :=
   ∀ (n : ℕ) (Reg : Type) (P : LigProver)
-    -- the session's statement, and the record's draw file and setup at registration
+    -- the session's statement, the record's draw file, and the reference setup
     (I : Inputs) (_ht : I.tags.typed = false)
-    (mPts : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (mPts : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     -- every table's statement avoids the mask slot
     (_hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
       (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)

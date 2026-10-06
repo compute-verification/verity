@@ -12,7 +12,7 @@ namespace Flock.SecurityProofs
 
 /-- **C-Flock's one-stage audit under hidden outputs is zero knowledge.** -/
 theorem ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden :=
-  fun _ _ P I ht _ dj _ y₀ hdm hKey S R ys =>
+  fun _ _ P I ht _ dj _ _ y₀ hdm hKey S R ys =>
     FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ P I dj y₀ ht hdm hKey S R ys
 
 end Flock.SecurityProofs
