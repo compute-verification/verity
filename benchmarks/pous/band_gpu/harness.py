@@ -17,9 +17,9 @@ One run, in order:
    `W` is freed after the plain arm. After the timed reps one more decode must give back `W`'s digest (a race in the
    persistent decode would show only under timing; a mismatch publishes nothing), and its peak device memory is recorded.
    Which decode ran (kernel, rows, calls) is recorded per phase (`implementation.decode_paths`).
-4. **The limit, fixed before any load.** With no load running, the verifier calibrates its loopback round trip and fixes the
-   limit `Δ + allowance`; every audit below is judged against that one limit, so rounds under load are comparable. The allowance
-   is a loopback one (a remote memory challenger's round trip adds to it).
+4. **The limit, fixed before any load.** With no load running, the memory challenger calibrates its loopback round trip
+   and fixes the limit `Δ + allowance`; every audit below is judged against that one limit, so rounds under load are
+   comparable. The allowance is a loopback one (a remote memory challenger's round trip adds to it).
 5. **Timed audits** against the responder serving `C` from device memory:
    - the honest audit, under POUS forwards as load (completed forwards counted);
    - the value control: one block in ten of `C` zeroed, which must reject on the value;
@@ -127,7 +127,7 @@ class ControlResponder:
     `answer(i) -> (block, device_ns, server_ns, hold_ns)`.  With `real_delay`, an answer is held `hold_ns` before it is sent
     (`wait`, a busy-wait), so on the wall clock a late control's answer is really late; only the late control holds one: a
     recomputed answer has already spent its time when `answer` returns, so it is sent at once.  The CPU tests read the reported
-    server time through the verifier's logical clock instead."""
+    server time through the memory challenger's logical clock instead."""
 
     def __init__(self, block_bytes: int, answer: Callable[[int], tuple[bytes, int, int, int]], real_delay: bool = False,
                  wait: Callable[[int], None] = busy_wait) -> None:
@@ -556,7 +556,8 @@ def leave_reserved(a: Any) -> None:
 
 def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Path, out: Path, a: Any, leaves: Path | None = None,
                     tag: str = "calibrate") -> dict[str, Any]:
-    """The verifier's no-load loopback calibration (`--calibrate-only`): the limit every audit below is judged against."""
+    """The memory challenger's no-load loopback calibration (`--calibrate-only`): the limit every audit below is judged
+    against."""
     responder = start()
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))

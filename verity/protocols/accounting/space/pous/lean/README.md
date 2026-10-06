@@ -32,7 +32,7 @@ Pous/Protocol/Model/{BandGraph,SegLift}.lean
 Pous/Protocol/Model/Graded.lean     the graded audit: up to `t` late rounds, each within a hard `(D_late, Q_late)`
 Pous/Protocol/Model/Continuous.lean the continuous audit: an explicit memory challenger (sequential reveal, a hard
                                     deadline, every answer past `Δ` counted) and a responder on its clock; the
-                                    arrivals the verifier draws (queued, never dropped) and the memory at each time
+                                    arrivals the memory challenger draws (queued, never dropped) and the memory at each time
 Pous/Protocol/Model/{Digest,SecureErasure}.lean
                                     the keyed digest of a region (from PR #1010, without its bandwidth
                                     assumption); the secure-erasure audit: a keyed fill of all volatile memory,
@@ -41,7 +41,7 @@ Pous/Protocol/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild,EraseMeets}
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
                                     `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`;
                                     a band segment's re-encode cost `R(d)`, a graded row's round span and
-                                    the verifier's cap on an audit's duration; `EraseMeets`,
+                                    the memory challenger's cap on an audit's duration; `EraseMeets`,
                                     the secure-erasure requirement
 Pous/Protocol/P2/Cost.lean          P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
@@ -70,7 +70,7 @@ Pous/SecurityProofs/P2/             proved: the `m1p` guarantees (Count, Rows, D
 Pous/SecurityProofs/Chain/Flat.lean proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
                                     the public encoder over the overwrite chain (the graded lanes, flattened)
 Pous/SecurityProofs/Continuous/     proved: the continuous audit's counting step (`MissCount.lean`), the three
-                                    rules its verifier enforces (`Verifier.lean`), `PerAnswer` and
+                                    rules its memory challenger enforces (`Verifier.lean`), `PerAnswer` and
                                     `ContinuousAudit` (`PerAnswer.lean`), the 64 KiB band at `D = 5`
                                     (`Band.lean`, no record), completeness, `ContinuousComplete`
                                     (`Complete.lean`), the idle-slot time average `ContinuousTimeAverage`
@@ -79,7 +79,7 @@ Pous/SecurityProofs/Continuous/     proved: the continuous audit's counting step
 Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit
                                     (`Theorem.lean`) and the band with grace `t` at `D = 5` (`Band.lean`,
                                     `BandGradedMeetsFamily`)
-Pous/SecurityProofs/Rebuild/        proved: under the verifier's duration cap, no audit re-encodes a whole band
+Pous/SecurityProofs/Rebuild/        proved: under the memory challenger's duration cap, no audit re-encodes a whole band
                                     segment from `W` alone (`Clock.lean`, the cumulative chain clock;
                                     `Window.lean`, the counts; `Exclusion.lean`, `BackgroundRebuildExcluded`)
 Pous/SecurityProofs/SecureErasure/  proved: `DigestAU` (Digest), secure erasure from the audit by counting

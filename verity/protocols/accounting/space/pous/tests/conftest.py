@@ -1,5 +1,5 @@
-"""Every verifier in this suite runs on an injected clock (AGENTS.md "Tests"). `tests/test_no_wall_clock.py` scans for
-clock reads in test source, and cannot see an `audit.UnsignedRounds`, `ContinuousMemoryChallenger` or
+"""Every memory challenger in this suite runs on an injected clock (AGENTS.md "Tests"). `tests/test_no_wall_clock.py`
+scans for clock reads in test source, and cannot see an `audit.UnsignedRounds`, `ContinuousMemoryChallenger` or
 `memory_challenger.MemoryChallenger` left on its default `time.perf_counter_ns`; such a test passes or fails with the load on
 `check`'s slot. Here the default clock fails the test that reads it, every time."""
 
@@ -14,7 +14,7 @@ from verity.protocols.accounting.space.pous.continuous import ContinuousMemoryCh
 
 
 def _wall_clock() -> int:
-    raise AssertionError("a verifier read its default wall clock: pass clock=, e.g. itertools.count(0, 1000).__next__")
+    raise AssertionError("a memory challenger read its default wall clock: pass clock=, e.g. itertools.count(0, 1000).__next__")
 
 
 @pytest.fixture(autouse=True)

@@ -58,9 +58,9 @@ def SecureErasureMeets : Prop :=
 
 /-- **Secure erasure on the band, at every memory size from 32 MiB to 2^64 segments.** For every `N` with
 `1 ≤ N ≤ 2^64` and every in-degree `d ≥ 5`, the `N`-segment band `chainBandSeg N (2^9) d` (`2^9` blocks of 64 KiB per
-segment, so a fill of `M = N · 32 MiB`), keyed by the verifier's fresh key as its salt (per-segment tags `segDom salt`,
-any 192-bit salt, or one global 256-bit salt), meets `EraseMeets` at `f = 1 − ρ = 1/19`, `D = 5`, `Q = 2^20`,
-`s = 2152` spot reads and `ε = 2^-128`:
+segment, so a fill of `M = N · 32 MiB`), keyed by the memory challenger's fresh key as its salt (per-segment tags
+`segDom salt`, any 192-bit salt, or one global 256-bit salt), meets `EraseMeets` at `f = 1 − ρ = 1/19`, `D = 5`,
+`Q = 2^20`, `s = 2152` spot reads and `ε = 2^-128`:
 
 - every prover whose volatile memory at each spot read's arrival is at most `⌊(18/19)·|C|⌋` bits is accepted with
   probability at most `2^-128`;
@@ -71,8 +71,8 @@ any 192-bit salt, or one global 256-bit salt), meets `EraseMeets` at `f = 1 − 
   read's arrival and be accepted with probability about 0.9, erasing it while it rebuilds, during the first reads, the
   blocks it dropped.
 
-Cite it as "cannot keep it through all the reads", never as "holds at the challenge", and for a verifier that draws
-2152 sequential reads under a deadline bounding `(D, Q) = (5, 2^20)`.
+Cite it as "cannot keep it through all the reads", never as "holds at the challenge", and for a memory challenger that
+draws 2152 sequential reads under a deadline bounding `(D, Q) = (5, 2^20)`.
 
 `M` must be the prover's whole volatile memory, on-chip SRAM included; with host DRAM, `N` is the total over 32 MiB.
 `N = 3072` is 96 GiB (`SecureErasureMeets96GiB`), the GDDR7 an RTX PRO 6000 has, but no fill covers all of it: software

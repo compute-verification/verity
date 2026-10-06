@@ -833,13 +833,13 @@ band `chainBandSeg N (2^9) d` at `D = 5`, `Q = 2^20`, `ε = 2^-128`, both with t
 The hypotheses on `D_late` are the deployment condition, necessary for the game's `S`-bit state to be a model of
 storage at rest: the audit's window must be too short to re-encode `C`. Re-encoding a segment from `W` takes
 `R(d) = Σ_{v < 2^9} (min(v, d) + 1) ≥ R(5) = 3,057` sequential `Π₂` calls. Every row's rounds, `k − t` at `D = 5` and
-`t` at `D_late`, last under `240·6 + 3·13 = 1,479` call-times, and the verifier's gaps between them add to the window,
-so it is bounded by the verifier's limit on the audit's duration that `BackgroundRebuildExcluded` requires, `1,505`
-call-times. `D_late ≤ d` is the band's cliff applied to `Δ_late`; at the deployed `d = 12` both caps on `D_late` are
-`Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. That window argument and its wall-clock reading count whole `Π₂` calls,
-so they hold in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover re-encodes nothing,
-rebuilding any label from 1.53% of `C` in 481 Keccak-f, less than one call (red team, 4 Oct 2026, art:7617c8017e80).
-The statement itself is about the ideal model and is unaffected. Proof:
+`t` at `D_late`, last under `240·6 + 3·13 = 1,479` call-times, and the memory challenger's gaps between them add to
+the window, so it is bounded by the memory challenger's limit on the audit's duration that `BackgroundRebuildExcluded`
+requires, `1,505` call-times. `D_late ≤ d` is the band's cliff applied to `Δ_late`; at the deployed `d = 12` both caps
+on `D_late` are `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. That window argument and its wall-clock reading count whole
+`Π₂` calls, so they hold in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover re-encodes
+nothing, rebuilding any label from 1.53% of `C` in 481 Keccak-f, less than one call (red team, 4 Oct 2026,
+art:7617c8017e80). The statement itself is about the ideal model and is unaffected. Proof:
 `PousGraded.band_graded_meets_family` (`Pous/SecurityProofs/Graded/Band.lean`); here
 `Pous.SecurityProofs.BandGradedMeetsFamily`. -/
 def BandGradedMeetsFamily : Prop :=
@@ -855,10 +855,11 @@ def BandGradedMeetsFamily : Prop :=
 
 /-! ### The continuous audit (`Pous.Protocol.Model.Continuous`)
 
-Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. The verifier enforces the three timing rules: it
-reveals the next index only after the last round closed, rejects an answer past the hard deadline, and counts every
-answer past `Δ` as a miss, with every rejected or wrong one. Neither statement takes a hypothesis about them, and both
-hold at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr` (`Pous/Protocol/Model/Continuous.lean`).
+Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. The memory challenger enforces the three timing
+rules: it reveals the next index only after the last round closed, rejects an answer past the hard deadline, and counts
+every answer past `Δ` as a miss, with every rejected or wrong one. Neither statement takes a hypothesis about them, and
+both hold at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr`
+(`Pous/Protocol/Model/Continuous.lean`).
 -/
 
 /-- **The per-answer bound in the continuous audit.** From `TimedINC sch D Q β π`, for every machine, every arrival
@@ -879,10 +880,10 @@ def PerAnswer : Prop :=
 
 /-- **The continuous audit's guarantee** (the explorer note, §1). From `TimedINC sch D Q β π`, for every machine,
 every arrival schedule, every hard deadline `(D_late, Q_late)`, every `f` and every `βe > 0` (the explorer's `β`), over
-the setup and `n` uniform indices: the verifier accepts with tolerance `f` and `Σ_j max(ε_j − ε_proof, 0)` exceeds
-`G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most `βe + n·(β + 1)·π`. Here `ε_j` is the
-freed fraction of the responder's memory at challenge `j`'s send time. The positive part keeps a memory above `|C|` at
-one challenge (`ε_j < 0`) from offsetting a shortfall at another. Dividing by `n`:
+the setup and `n` uniform indices: the memory challenger accepts with tolerance `f` and `Σ_j max(ε_j − ε_proof, 0)`
+exceeds `G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most `βe + n·(β + 1)·π`. Here `ε_j` is
+the freed fraction of the responder's memory at challenge `j`'s send time. The positive part keeps a memory above `|C|`
+at one challenge (`ε_j < 0`) from offsetting a shortfall at another. Dividing by `n`:
 `Pr[accept(f₀) ∧ ε̄ > g(f₀)] ≤ βe + n·(β + 1)·π`, with `ε̄ = (1/n)·Σ_j max(ε_j − ε_proof, 0)` and `g = G/n`. When
 `ε_proof ≥ 0` (whenever the bound is not vacuous), `max(ε_j − ε_proof, 0) ≥ max(ε_j, 0) − ε_proof`, so the same bound
 holds for the average of `max(ε_j, 0)` exceeding `ε_proof + g(f₀)`. The scope is the module docstring's: conditional
@@ -905,8 +906,8 @@ def ContinuousAudit : Prop :=
 Added on 3 Oct 2026. Statement reviewer: @lean (`bc-19c498a8`), granted at `f6aaddc36` on 4 Oct 2026, 06:16Z (Slack
 post ts 1791094669.362169); the red team granted the same head. -/
 
-/-- **Under the verifier's cap on an audit's duration: no graded audit lasts long enough to re-encode a whole band
-segment from `W` alone**, with no state about `Π₂`. It is the deployment condition of `BandGradedMeetsFamily`
+/-- **Under the memory challenger's cap on an audit's duration: no graded audit lasts long enough to re-encode a whole
+band segment from `W` alone**, with no state about `Π₂`. It is the deployment condition of `BandGradedMeetsFamily`
 (`PROTOCOL.md`, "Isolation over the whole graded window"), as counts and as a bound.
 1. **The counts.** Re-encoding a segment of `chainBand (2^9) d` from `W` costs `R(d) = rebuildCalls (2^9) d` sequential
    `Π₂` calls: `R(5) = 3,057`, `R(12) = 6,578`, and `R(d) ≥ 3,057` for every `d ≥ 5`. The rounds of each row `(t, k)`
@@ -919,14 +920,14 @@ segment from `W` alone**, with no state about `Π₂`. It is the deployment cond
    under the per-segment tags and `j ↦ dom salt (s·2^9 + j)` under one global salt (`Pous.BandMulti.segFaithfulCode`,
    `Pous.BandMulti.segFaithful`).
 
-**The precondition is the verifier's.** A rebuild runs beside the audit on the wall clock, through the rounds and the
-verifier's gaps between them, and no round deadline bounds the gaps. So the bound covers a graded audit only if the
-verifier aborts, without accepting, every audit that lasts more than `auditCap · call_ns` (≈ 363.5 ms at 241.5 µs per
-call) from its first challenge's send to its last answer's receipt. If every round of the worst row answers at its
-deadline, that leaves its 242 gaps `1,505 − 1,479 = 26` call-times (≈ 6.3 ms). The bound rests on the cap, which is the
-proof's reach, not on `R(d)`, which exceeds it. The milliseconds read call-times as whole `Π₂` calls of at least
-241.5 µs, which holds in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover answers from
-1.53% of `C` in 481 Keccak-f without re-encoding anything (red team, 4 Oct 2026, art:7617c8017e80).
+**The precondition is the memory challenger's.** A rebuild runs beside the audit on the wall clock, through the rounds
+and the memory challenger's gaps between them, and no round deadline bounds the gaps. So the bound covers a graded
+audit only if the memory challenger aborts, without accepting, every audit that lasts more than `auditCap · call_ns` (≈
+363.5 ms at 241.5 µs per call) from its first challenge's send to its last answer's receipt. If every round of the worst
+row answers at its deadline, that leaves its 242 gaps `1,505 − 1,479 = 26` call-times (≈ 6.3 ms). The bound rests on the
+cap, which is the proof's reach, not on `R(d)`, which exceeds it. The milliseconds read call-times as whole `Π₂` calls
+of at least 241.5 µs, which holds in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover
+answers from 1.53% of `C` in 481 Keccak-f without re-encoding anything (red team, 4 Oct 2026, art:7617c8017e80).
 
 **What it does not exclude.** It excludes only re-encoding a whole segment from `W` with no state about `Π₂`. Within the
 cap, `W` alone rebuilds a segment's first 253 labels (49%) at `d = 5` and its first 121 (24%) at `d = 12`. `d`
@@ -950,17 +951,17 @@ def BackgroundRebuildExcluded : Prop :=
 
 /-! ### Completeness of the continuous audit
 
-Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. `ContinuousAudit` bounds what the verifier of
-`Pous/Protocol/Model/Continuous.lean` accepts; `ContinuousComplete` bounds what the same verifier rejects, for a
-responder whose rounds miss at a bounded rate. It takes no named assumption: the miss rate `q` is a parameter.
+Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. `ContinuousAudit` bounds what the memory challenger
+of `Pous/Protocol/Model/Continuous.lean` accepts; `ContinuousComplete` bounds what the same memory challenger rejects,
+for a responder whose rounds miss at a bounded rate. It takes no named assumption: the miss rate `q` is a parameter.
 -/
 
 /-- **Completeness of the continuous audit.** Fix a configuration first: the scheme, the data `W`, the machine, the
 number of challenges `n`, the arrival schedule `arr`, the deadline `(D, Q)` and the hard deadline `(D_late, Q_late)`.
 Suppose that in this configuration the machine's rounds miss at rate at most `q`: at every setup and after every
 history `h` of fewer than `n` indices, the round after `h` is not a hit (it is rejected, late or wrong) for at most a
-`q` fraction of its uniform index. Then for every tolerance `f₀`, over the setup and `n` uniform indices, the verifier
-rejects (more than `f₀` rounds are not hits) with probability at most the binomial upper tail
+`q` fraction of its uniform index. Then for every tolerance `f₀`, over the setup and `n` uniform indices, the memory
+challenger rejects (more than `f₀` rounds are not hits) with probability at most the binomial upper tail
 `α = P[Bin(n, q) > f₀] = Σ_{f₀ < m ≤ n} C(n, m)·q^m·(1 − q)^(n − m)`.
 
 `q` is a parameter, not an assumption, and the statement holds for every machine, but a `q` is a rate in one
@@ -980,7 +981,8 @@ valid `q` is about `0.9`. Carrying the tail bound from the index draw to the clo
 rule applied outside the Lean model, and is not proved here.
 
 `1 − q` is truncated at `0`, so above `q = 1` the bound is `q^n ≥ 1` when `f₀ < n`, and `0` otherwise, where the
-verifier cannot reject. Proof: `PousContinuous.continuous_complete`; here `Pous.SecurityProofs.ContinuousComplete`. -/
+memory challenger cannot reject. Proof: `PousContinuous.continuous_complete`; here
+`Pous.SecurityProofs.ContinuousComplete`. -/
 def ContinuousComplete : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late n : ℕ) (q : ℝ≥0∞) (W : Bits sch.n) (mach : ContMachine sch)
     (arr : ℕ → ℕ),
@@ -998,21 +1000,22 @@ def ContinuousComplete : Prop :=
         ≤ ∑ m ∈ (Finset.range (n + 1)).filter (fun m : ℕ => f₀ < m),
             (n.choose m : ℝ≥0∞) * q ^ m * (1 - q) ^ (n - m)
 
-/-! ### The continuous audit, time-averaged, with arrivals drawn by the verifier
+/-! ### The continuous audit, time-averaged, with arrivals drawn by the memory challenger
 
-Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. The verifier of `ContinuousAudit`, unchanged, run on
-arrivals it draws itself: one coin per slot of one unit (`Pous/Protocol/Model/Continuous.lean`, "Arrivals drawn by
-the verifier"). Arrivals queue behind an open round (rule 1). The memory is read at every idle slot, not only at send
-times, and the bound is normalized by the expected number of challenges `λT`, not the realized one. -/
+Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. The memory challenger of `ContinuousAudit`,
+unchanged, run on arrivals it draws itself: one coin per slot of one unit (`Pous/Protocol/Model/Continuous.lean`,
+"Arrivals drawn by the memory challenger"). Arrivals queue behind an open round (rule 1). The memory is read at every
+idle slot, not only at send times, and the bound is normalized by the expected number of challenges `λT`, not the
+realized one. -/
 
 /-- **The continuous audit's time-averaged bound.** From `TimedINC sch D Q β π`, for every machine, every hard
-deadline `(D_late, Q_late)`, every `f` and every `βe > 0`, over the setup and the verifier's `T` slot draws
+deadline `(D_late, Q_late)`, every `f` and every `βe > 0`, over the setup and the memory challenger's `T` slot draws
 `x t ∈ Fin b × Fin B` (a challenge arrives at slot `t` iff its coin is below `a`, probability `p = a/b`; its index is
-the slot's): the verifier, run on these arrivals, accepts with tolerance `f` and `p·Σ_{t idle} max(ε_t − ε_proof, 0)`
-exceeds `G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most `βe + T·(β + 1)·π`. Here `ε_t` is
-the freed fraction of the responder's memory at slot `t` (`contHeldAt`), read at every idle slot (`contIdle`: every
-earlier arrival has closed) whether or not a challenge arrives there, and a busy slot counts as `0`. Dividing by
-`pT`, the expected number of challenges (`λ·T` in seconds):
+the slot's): the memory challenger, run on these arrivals, accepts with tolerance `f` and
+`p·Σ_{t idle} max(ε_t − ε_proof, 0)` exceeds `G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most
+`βe + T·(β + 1)·π`. Here `ε_t` is the freed fraction of the responder's memory at slot `t` (`contHeldAt`), read at every
+idle slot (`contIdle`: every earlier arrival has closed) whether or not a challenge arrives there, and a busy slot
+counts as `0`. Dividing by `pT`, the expected number of challenges (`λ·T` in seconds):
 `Pr[accept(f₀) ∧ (1/T)·Σ_{t idle} max(ε_t − ε_proof, 0) > g(f₀)] ≤ βe + T·(β + 1)·π` with `g = G/(pT)`, the explorer's
 `g` at `n = λT`. In an accepted run off that event, the idle slots with `ε_t > X` are at most a `g/(X − ε_proof)`
 fraction of the `T` slots (Markov).
@@ -1024,9 +1027,9 @@ event, with `0 < a` and `ε_proof ≥ 0`, `ε̄ ≤ ε_proof + g + (busy slots)/
 a responder that pads every hit to `D` units makes about 2.5% of the slots busy at `D = 2` and 9.9% at `D = 5`
 (100 challenges/s on 241.5 µs slots) without a miss. Neither is proved here. `a ≤ b` keeps `a/b` a probability,
 and `0 < b` makes the draw space nonempty. The
-scope is the model's: the arrival coins are the verifier's own randomness, independent of the setup and the answers;
-memory is read once per slot, so a dip shorter than one slot is not seen; time is in units of one round, which the
-step floor converts to seconds in the ideal-permutation model only (at the reference Feistel-SHAKE256 `Π₂` a prover
+scope is the model's: the arrival coins are the memory challenger's own randomness, independent of the setup and the
+answers; memory is read once per slot, so a dip shorter than one slot is not seen; time is in units of one round, which
+the step floor converts to seconds in the ideal-permutation model only (at the reference Feistel-SHAKE256 `Π₂` a prover
 answers from 1.53% of `C` in 481 Keccak-f, under one call: red team, 4 Oct 2026, art:7617c8017e80). Proof:
 `PousContinuous.continuous_time_average`; here `Pous.SecurityProofs.ContinuousTimeAverage`. -/
 def ContinuousTimeAverage : Prop :=

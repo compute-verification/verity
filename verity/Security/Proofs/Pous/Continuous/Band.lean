@@ -35,7 +35,7 @@ theorem band64_epsProof (d : ℕ) (salt : Bits 256) : epsProof (band64 d salt) 2
   norm_num
 
 /-- **The continuous audit on the 64 KiB band at `D = 5`.** For every machine, arrival schedule, hard deadline
-`(D_late, Q_late)`, `f` and `βe > 0`, over `n` challenges: the verifier accepts with tolerance `f` and
+`(D_late, Q_late)`, `f` and `βe > 0`, over `n` challenges: the memory challenger accepts with tolerance `f` and
 `Σ_j max(ε_j − ε_proof, 0)` exceeds `G(f)` with probability at most `βe + n·2^-1098`, where
 `ε_proof = epsProof (band64 d salt) 265253616 = 3182352/2^28` (`band64_epsProof`). -/
 theorem band64_continuous (d : ℕ) (hd : 5 ≤ d) (salt : Bits 256) (D_late Q_late n : ℕ) (W : Bits (band64 d salt).n)

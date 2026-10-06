@@ -41,7 +41,7 @@ For dense, use `dense.POINT_64K` and `dense.reference`; for P3, `params.OPERATIN
 Everything else is the same.
 
 The same lifecycle through the generic protocol. A scheme implements only `encode_segment` and `decode_segment`, and
-the verifier refuses any `k` or deadline its certificate doesn't cover:
+the memory challenger refuses any `k` or deadline its certificate doesn't cover:
 
 ~~~python
 from verity.protocols.accounting.space.pous import protocol, schemes

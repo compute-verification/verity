@@ -51,10 +51,10 @@ takes `min(v mod 2^9, d) + 1` sequential `Π₂` calls even with every parent he
   when `d ≥ 2^9 − 1`, where the band is the complete DAG (`R = 2^9·(2^9 + 1)/2 = 131,328` calls). A deployment that
   wants a larger `D_late` re-pins with its own number.
 - With both, the rounds of every row of the table, `k − t` of `D = 5` and `t` of `D_late`, last under
-  `240·6 + 3·13 = 1,479` call-times: a round answered at its deadline takes just under `D + 1`. The verifier's gaps
-  between rounds add to the window, so it is bounded by the verifier's limit on the audit's duration, `1,505` call-times
-  (`Pous.Guarantees.BackgroundRebuildExcluded`), below `3,057 ≤ R(d)` for every `d ≥ 5`: too short to re-encode a
-  whole segment from `W` alone.
+  `240·6 + 3·13 = 1,479` call-times: a round answered at its deadline takes just under `D + 1`. The memory challenger's
+  gaps between rounds add to the window, so it is bounded by the memory challenger's limit on the audit's duration,
+  `1,505` call-times (`Pous.Guarantees.BackgroundRebuildExcluded`), below `3,057 ≤ R(d)` for every `d ≥ 5`: too short to
+  re-encode a whole segment from `W` alone.
 - `Q_late` is any work bound at least `Q`: re-encoding is limited by its depth, not its width.
 
 **This rationale holds in the ideal-permutation model only.** Every count above is of whole `Π₂` calls, and the

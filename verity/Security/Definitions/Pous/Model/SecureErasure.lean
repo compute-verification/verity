@@ -15,19 +15,19 @@ prover's foreign content beside it:
    erasure must remove (data from before the audit, another tenant's model, anything not of `C`), and `S_φ` is its
    information content.
 2. Setup is the timed audit's: `W` is arbitrary and public, `ω` and the coins are uniform, `(pp, C) := enc W ω r`. `C`
-   is the **keyed fill** `F_K`: the scheme's salt is the key `K` the verifier draws fresh for the audit
+   is the **keyed fill** `F_K`: the scheme's salt is the key `K` the memory challenger draws fresh for the audit
    (`verity.randomness`). Every statement holds for every salt with the prover chosen after it, so in particular for
    a fresh uniform `K` drawn after `z` is fixed.
-3. **Fill.** The verifier draws a digest key `κ` uniformly. From `z`, `(W, pp, C)`, the whole primitive `ω` and `κ`,
-   the prover returns a digest value `h` and its memory `σ₀ : Bits S` at the first spot read's arrival
+3. **Fill.** The memory challenger draws a digest key `κ` uniformly. From `z`, `(W, pp, C)`, the whole primitive `ω` and
+   `κ`, the prover returns a digest value `h` and its memory `σ₀ : Bits S` at the first spot read's arrival
    (`EraseProver.fill`). The fill is unbounded: it may compute anything, so every bound here holds at every fill
    deadline `T_fill`.
-4. **Spot reads.** The verifier draws `s` indices `I : Fin s → Fin B`, uniform and with replacement, and reveals them
-   one at a time, as the sequential audit does: round `j` receives `i_j`, the round number and the memory `σ_j` left by
-   round `j − 1`, and runs a `(D, Q)`-bounded program that returns block `i_j` and the next memory `σ_{j+1} : Bits S`
-   (`EraseProver.read`, a `SeqResponder`). `(D, Q)` is what the prover completes within the read deadline `T_read`;
-   the hardware calibration of `T_read` is separate.
-5. The verifier **accepts** iff `h = dig κ C` and every returned block is correct.
+4. **Spot reads.** The memory challenger draws `s` indices `I : Fin s → Fin B`, uniform and with replacement, and
+   reveals them one at a time, as the sequential audit does: round `j` receives `i_j`, the round number and the memory
+   `σ_j` left by round `j − 1`, and runs a `(D, Q)`-bounded program that returns block `i_j` and the next memory
+   `σ_{j+1} : Bits S` (`EraseProver.read`, a `SeqResponder`). `(D, Q)` is what the prover completes within the read
+   deadline `T_read`; the hardware calibration of `T_read` is separate.
+5. The memory challenger **accepts** iff `h = dig κ C` and every returned block is correct.
 6. The prover **keeps** its foreign content iff `keep j σ_j = z` at every round `j < s` (`EraseProver.keep`): `z` can be
    read off its memory at every spot read's arrival, by any function of the memory alone (it does not query the
    primitive), which may change from round to round.
@@ -77,8 +77,8 @@ def eraseAnswers {ℓ S S_φ B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits
   | j, i :: is, σ =>
       (((step j σ i).run f).1, keep j σ) :: eraseAnswers f step keep (j + 1) is ((step j σ i).run f).2
 
-/-- The prover wins: the verifier accepts (the digest is `dig κ C` and every spot read is correct) and the foreign
-content is in memory at every spot read's arrival. -/
+/-- The prover wins: the memory challenger accepts (the digest is `dig κ C` and every spot read is correct) and the
+foreign content is in memory at every spot read's arrival. -/
 def eraseWins (sch : Scheme M) {S S_φ D Q : ℕ} {K V : Type} (dig : K → sch.Code → V) (s : ℕ) (W : Bits sch.n)
     (P : EraseProver sch S S_φ D Q K V) (x : EraseOutcome sch S_φ K s) : Prop :=
   let z := x.1

@@ -1,5 +1,5 @@
 """The generic protocol (`verity.protocols.accounting.space.pous.protocol`) over every scheme (`verity.protocols.accounting.space.pous.schemes`): one conformance suite for
-the lifecycle, the certificates the verifier enforces, the storage profile and the claims it cites."""
+the lifecycle, the certificates the memory challenger enforces, the storage profile and the claims it cites."""
 
 from __future__ import annotations
 
@@ -405,8 +405,8 @@ def test_the_band_has_certificates_at_fewer_rounds():
 
 
 def test_the_memory_challenger_audits_at_two_or_one_rounds_when_asked():
-    """With `k` unset the verifier stays at `k = 111` (`D = 5`), even under a deadline that fits fewer rounds.  Asked
-    for `k = 97` it audits under `BandMultiMeetsFamilyD2` within 724.5 µs, and for `k = 93` under
+    """With `k` unset the memory challenger stays at `k = 111` (`D = 5`), even under a deadline that fits fewer rounds.
+    Asked for `k = 97` it audits under `BandMultiMeetsFamilyD2` within 724.5 µs, and for `k = 93` under
     `BandMultiMeetsFamilyD1` within 483 µs, which the default 500 µs deadline overruns.  A band of in-degree 2 or 1,
     which has no `D = 5` certificate, defaults to its own."""
     sch = schemes.get()
@@ -507,11 +507,11 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
 
 
 def test_p2_is_experimental_and_says_so():
-    """P2 (`p2-16448/v3`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the verifier refuses it
-    unless asked, never makes it the default, and its profile states why.  The certificate is the pinned
+    """P2 (`p2-16448/v3`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the memory challenger
+    refuses it unless asked, never makes it the default, and its profile states why.  The certificate is the pinned
     `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile.  Its call is
-    `ROOT_CALL_NS`, half the fastest cooperating root: the verifier accepts spec v1.1's cap, `Δ + RTT = 854 µs`, and
-    refuses a µs more, and v1's 1 ms."""
+    `ROOT_CALL_NS`, half the fastest cooperating root: the memory challenger accepts spec v1.1's cap,
+    `Δ + RTT = 854 µs`, and refuses a µs more, and v1's 1 ms."""
     for name in ("p2-16448/v3", "p2-16448/v2"):
         sch = schemes.get(name, segments=8)
         v2 = name.endswith("v2")

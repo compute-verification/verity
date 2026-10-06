@@ -1,17 +1,17 @@
 """Differential tests: `verity.protocols.accounting.space.pous`'s memory challengers against the Lean model of the continuous audit
 (`verity/Security/Definitions/Pous/Model/Continuous.lean`), restated as the oracle in `pous_continuous_model.py`.
 
-Each action of a trace goes to the verifier and to `ClockOracle` at one reading of an injected clock, and after every
-action the two must agree exactly: whether the action was refused and why, the challenge revealed, every closed round's
-challenge, index, verdict and delay, the misses, the late count, `pending`, `exceeded` and `accepted`. The traces are
-a state-aware fuzzer's (answers at and one nanosecond past each limit, wrong blocks, pipelined, stale and repeated
-answers, challenges and `expire()` before the hard deadline, dropped answers closed by `expire()` or by the next
-challenge, actions after the last round) and a few scripted ones. `test_lean_machine_bridge` then drives the verifier
-from Lean `ContMachine` scripts and checks its verdicts against `cont_records`, the transcription of Lean's
+Each action of a trace goes to the memory challenger and to `ClockOracle` at one reading of an injected clock, and after
+every action the two must agree exactly: whether the action was refused and why, the challenge revealed, every closed
+round's challenge, index, verdict and delay, the misses, the late count, `pending`, `exceeded` and `accepted`. The
+traces are a state-aware fuzzer's (answers at and one nanosecond past each limit, wrong blocks, pipelined, stale and
+repeated answers, challenges and `expire()` before the hard deadline, dropped answers closed by `expire()` or by the
+next challenge, actions after the last round) and a few scripted ones. `test_lean_machine_bridge` then drives the memory
+challenger from Lean `ContMachine` scripts and checks its verdicts against `cont_records`, the transcription of Lean's
 `contRecords`, and its acceptance against `contAccepts`.
 
-The verifiers: `UnsignedRounds` without a hard deadline (the single audit's), and, once
-`cursor/pous-continuous-enforce-3cf5` has landed, `UnsignedRounds` with one and `ContinuousMemoryChallenger`.
+The memory challengers: `UnsignedRounds` without a hard deadline (the single audit's), `UnsignedRounds` with one, and
+`ContinuousMemoryChallenger`.
 """
 
 from __future__ import annotations
@@ -69,7 +69,7 @@ MESSAGES = {
     WITHIN: "the open challenge is within its hard deadline",
     NO_HARD_DEADLINE: "no hard deadline",
 }
-"""The verifier's error for each reason the oracle refuses."""
+"""The memory challenger's error for each reason the oracle refuses."""
 
 
 @pytest.fixture(scope="module")
@@ -100,7 +100,7 @@ def verdict(a) -> str:
 
 
 class Subject:
-    """One of the verifiers, behind the oracle's actions."""
+    """One of the memory challengers, behind the oracle's actions."""
 
     def __init__(self, kind, vk, key, n, deadline, late, rtt, clock, max_misses):
         self.kind, self.named, self.hard = kind, kind == "continuous", kind != "timed"
@@ -130,7 +130,7 @@ class Subject:
         return [Record(a.j, a.index, verdict(a), a.elapsed_ns) for a in self.timed.answers]
 
     def counts(self) -> dict:
-        """What this verifier reports of the run."""
+        """What this memory challenger reports of the run."""
         r = self.timed.result()
         out = {"done": self.v.done, "accepted": self.v.accepted}
         if hasattr(AuditResult, "misses"):
@@ -149,7 +149,8 @@ class Subject:
 
 
 class Harness:
-    """A verifier and the oracle on one clock, compared after every action; `seen` counts each `(label, outcome)`."""
+    """A memory challenger and the oracle on one clock, compared after every action; `seen` counts each
+    `(label, outcome)`."""
 
     def __init__(self, world, kind, limits, source, n, max_misses=0):
         self.blocks, vk = world
@@ -181,11 +182,11 @@ class Harness:
         try:
             got = getattr(self.subject, action)(*args)
         except RuntimeError as e:
-            assert isinstance(expected, Refused), f"{where}: the verifier refused ({e}), the model did {expected}"
+            assert isinstance(expected, Refused), f"{where}: the memory challenger refused ({e}), the model did {expected}"
             assert re.search(MESSAGES[expected.reason], str(e)), f"{where}: refused with {e!r}, not {expected.reason}"
             outcome = expected.reason
         else:
-            assert not isinstance(expected, Refused), f"{where}: the verifier did it, the model refuses: {expected}"
+            assert not isinstance(expected, Refused), f"{where}: the memory challenger did it, the model refuses: {expected}"
             if action == "challenge":
                 assert got == expected, where
             outcome = "revealed" if action == "challenge" else expected.verdict
@@ -285,7 +286,7 @@ REQUIRED = {
     "named": {("pipelined", NOT_REVEALED), ("stale", CLOSED), ("out-of-turn", CLOSED), ("out-of-turn", NOT_REVEALED),
               ("after-done-respond", CLOSED), ("after-done-respond", NOT_REVEALED)},
 }
-"""The `(label, outcome)` pairs a fuzz run over `LIMITS` must reach, by verifier."""
+"""The `(label, outcome)` pairs a fuzz run over `LIMITS` must reach, by memory challenger."""
 
 
 @pytest.mark.parametrize("kind", KINDS)
@@ -369,8 +370,8 @@ def _same_index_twice(vk):
 @pytest.mark.parametrize("kind", KINDS[1:])
 def test_a_stale_answer_for_the_same_block(world, kind):
     """Challenge 0 is dropped and challenge 1 asks for the same block; answer 0 then arrives. Lean's round 1 is
-    answered by whatever the responder sends after its send, so an unnamed verifier credits it as a hit, as the model
-    does; a named one refuses it, as the model does an answer naming another challenge."""
+    answered by whatever the responder sends after its send, so an unnamed memory challenger credits it as a hit, as the
+    model does; a named one refuses it, as the model does an answer naming another challenge."""
     h = Harness(world, kind, LIMITS[0], _same_index_twice(world[1]), 2)
     h.act("challenge", "challenge", 0)
     h.act("dropped->challenge", "challenge", h.oracle.late_limit + 1)
@@ -378,7 +379,7 @@ def test_a_stale_answer_for_the_same_block(world, kind):
     assert out == (Refused(CLOSED) if kind == "continuous" else Record(1, h.index(1), HIT, 1))
 
 
-# Lean machines, run by the verifier.
+# Lean machines, run by the memory challenger.
 
 @dataclass
 class Scripted:
@@ -410,7 +411,7 @@ def _script(rng, n, D, Q, D_late, Q_late, hard):
 
 
 def _lean_bounds(lim, hard):
-    """`(D, Q, D_late, Q_late)` for the bridge; without a hard deadline the verifier waits for every answer, so
+    """`(D, Q, D_late, Q_late)` for the bridge; without a hard deadline the memory challenger waits for every answer, so
     `D_late` and `Q_late` exceed every script's."""
     late = (hard // CALL, hard // QUERY) if hard is not None else (10**6, 10**9)
     return (lim // CALL, lim // QUERY, *late)
@@ -423,12 +424,12 @@ def _elapsed(d, w):
 @pytest.mark.parametrize("jitter", [False, True], ids=["exact", "jitter"])
 @pytest.mark.parametrize("kind", KINDS)
 def test_lean_machine_bridge(world, kind, jitter):
-    """A scripted `ContMachine` per seed, its answers arriving `max(d·call_ns, w·QUERY)` after the verifier's send (plus
-    a network delay with `jitter`), its arrivals `arr j` units apart. Exact: the verifier's verdicts are Lean's
-    `contRecords`, its misses and late count Lean's non-hits and late or rejected rounds, and it accepts iff
-    `contAccepts f₀`. With jitter the verifier is never more lenient: a hit is Lean's hit, a Lean late round is late or
-    rejected, a Lean rejected round is rejected, so it accepts only runs Lean accepts. Each send is no earlier than
-    Lean's (the model's "only sends the next index later") and no earlier than the last round's close."""
+    """A scripted `ContMachine` per seed, its answers arriving `max(d·call_ns, w·QUERY)` after the memory challenger's
+    send (plus a network delay with `jitter`), its arrivals `arr j` units apart. Exact: the memory challenger's verdicts
+    are Lean's `contRecords`, its misses and late count Lean's non-hits and late or rejected rounds, and it accepts iff
+    `contAccepts f₀`. With jitter the memory challenger is never more lenient: a hit is Lean's hit, a Lean late round is
+    late or rejected, a Lean rejected round is rejected, so it accepts only runs Lean accepts. Each send is no earlier
+    than Lean's (the model's "only sends the next index later") and no earlier than the last round's close."""
     blocks, vk = world
     rank = {HIT: 0, WRONG: 0, LATE: 1, REJECT: 2}
     for limits in LIMITS:

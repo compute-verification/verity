@@ -11,8 +11,8 @@ honest answer is more than the stored block.  Everything else is written once, h
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
 4. **Serve.** `decode` of a segment, and `decode_tensor` of one tensor of a `layout.Layout`.
 5. **Audit.** `TimedAudit` reveals `k` indices one at a time.  Each answer must arrive within `Δ + RTT` and match `vk`.
-   The verifier refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit gives a
-   `StorageProfile`: what the certificate says about the server, and what that rests on.
+   The memory challenger refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
+   gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
 Every coin is drawn here through `verity.primitives.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
 none.  The claims a certificate rests on are ids in `verity.claims`' format (`claim`).
@@ -159,8 +159,8 @@ class Scheme(ABC):
 
     name: ClassVar[str] = ""
     experimental: ClassVar[str | None] = None
-    """Why the scheme is experimental, or None.  An experimental scheme is never the default; the verifier audits it
-    only when asked to (`TimedAudit(..., experimental=True)`), and its profile states the reason."""
+    """Why the scheme is experimental, or None.  An experimental scheme is never the default; the memory challenger
+    audits it only when asked to (`TimedAudit(..., experimental=True)`), and its profile states the reason."""
     backend: ClassVar[Callable[[Any], Primitives]]
 
     def __init__(self, params: Geometry, prims: Primitives | None = None) -> None:
@@ -175,8 +175,8 @@ class Scheme(ABC):
     @property
     def certificates(self) -> tuple[Certificate, ...]:
         """Every certificate at these parameters, the default (`certificate`, when there is one) first.  A scheme with
-        guarantees at several round budgets lists them all; the verifier audits under the first that covers its `k` and
-        deadline."""
+        guarantees at several round budgets lists them all; the memory challenger audits under the first that covers its
+        `k` and deadline."""
         return () if self.certificate is None else (self.certificate,)
 
     @abstractmethod
@@ -259,9 +259,9 @@ def verifier_key(scheme: Scheme, commitment: bytes, salt: bytes, *, mode: str = 
 
 
 def challenge_key(source: bytes, vk: VerifierKey) -> Key:
-    """The audit's key, bound to `vk`'s root and salt; `source` is the verifier's own secret, kept secret until the
-    audit starts, never a public beacon or the prover's (`audit.challenge_key`). A public source lets a prover compute
-    the challenged indices before the audit and rebuild only those blocks within the deadline."""
+    """The audit's key, bound to `vk`'s root and salt; `source` is the memory challenger's own secret, kept secret until
+    the audit starts, never a public beacon or the prover's (`audit.challenge_key`). A public source lets a prover
+    compute the challenged indices before the audit and rebuild only those blocks within the deadline."""
     return audit.challenge_key(source, vk)
 
 

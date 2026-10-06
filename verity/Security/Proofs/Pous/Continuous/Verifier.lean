@@ -1,9 +1,9 @@
 import Definitions.Pous.Model.Continuous
 
 /-!
-# The continuous verifier enforces its three rules
+# The continuous audit's memory challenger enforces its three rules
 
-PR #896's draft assumed three requirements on the protocol. Each is proved here of the verifier in
+PR #896's draft assumed three requirements on the protocol. Each is proved here of the memory challenger in
 `Pous/Protocol/Model/Continuous.lean`, for every machine.
 
 1. **No pipelining.** `close_le_send`: round `j + 1` is sent no earlier than round `j` closed.

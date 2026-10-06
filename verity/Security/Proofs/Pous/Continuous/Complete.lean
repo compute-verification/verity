@@ -6,12 +6,13 @@ import Proofs.Pous.Continuous.PerAnswer
 # Completeness of the continuous audit: `Pous.Guarantees.ContinuousComplete`
 
 The proof of `Pous.Guarantees.ContinuousComplete`, pinned as `Pous.SecurityProofs.ContinuousComplete`, over the
-verifier of `Pous/Protocol/Model/Continuous.lean`. It is the graded audit's tail rule (`PousGraded.pr_hits_ge_le_binomial`)
-read the other way round: there a round's success is a hit, bounded by `p₀`; here it is a miss, bounded by `q`.
+memory challenger of `Pous/Protocol/Model/Continuous.lean`. It is the graded audit's tail rule
+(`PousGraded.pr_hits_ge_le_binomial`) read the other way round: there a round's success is a hit, bounded by `p₀`; here
+it is a miss, bounded by `q`.
 
-1. **The rounds as the tail rule's** (`after_contNext`, `misses_hits`). The tail rule's state is the verifier's
-   `ContState`, advanced by `contNext`, and a round "fails" when it is a hit. Its `after` is `contAfter`, and its count
-   of failed rounds is the number of hits among `contRecords`.
+1. **The rounds as the tail rule's** (`after_contNext`, `misses_hits`). The tail rule's state is the memory
+   challenger's `ContState`, advanced by `contNext`, and a round "fails" when it is a hit. Its `after` is `contAfter`,
+   and its count of failed rounds is the number of hits among `contRecords`.
 2. **One setup** (`pr_reject_le`). A rejection with tolerance `f₀` is more than `f₀` non-hits, so at least the least
    `m₀ ≤ n` above `f₀`, so at most `n − m₀` hits. The tail rule bounds that by `binTail n (n − m₀) q`, which is
    `Σ_{f₀ < m ≤ n} C(n, m)·q^m·(1 − q)^(n − m)` after `m = n − j`. Above `q = 1` the bound's term at `m = n` is
@@ -34,7 +35,7 @@ section
 variable {sch : Scheme M} (mach : ContMachine sch) (D Q D_late Q_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t)
   (C : sch.Code) (ω : M.Ω) (arr : ℕ → ℕ)
 
-/-- The tail rule's state after a history is the verifier's. -/
+/-- The tail rule's state after a history is the memory challenger's. -/
 theorem after_contNext : ∀ (j : ℕ) (h : List (Fin sch.B)) (s : ContState sch.B),
     after (fun _ => contNext mach D_late W pp C ω arr) j h s = h.foldl (contNext mach D_late W pp C ω arr) s
   | _, [], _ => rfl
@@ -106,7 +107,7 @@ variable {sch : Scheme M} (mach : ContMachine sch) (D Q D_late Q_late : ℕ) (W 
 
 open Classical in
 /-- **One setup.** If after every history of fewer than `n` indices the round misses for at most a `q` fraction of
-its index, the verifier rejects with tolerance `f₀` with probability at most `P[Bin(n, q) > f₀]`. -/
+its index, the memory challenger rejects with tolerance `f₀` with probability at most `P[Bin(n, q) > f₀]`. -/
 theorem pr_reject_le (n : ℕ) (q : ℝ≥0∞)
     (hq : ∀ h : List (Fin sch.B), h.length < n →
       pr (fun i => (contRecord mach D Q D_late Q_late W pp C ω arr (contAfter mach D_late W pp C ω arr h) i).verdict
@@ -163,7 +164,7 @@ theorem pr_reject_le (n : ℕ) (q : ℝ≥0∞)
         (Finset.mem_Icc.2 ⟨by omega, le_rfl⟩)))
       rw [Nat.choose_self, Nat.cast_one, one_mul, Nat.sub_self, pow_zero, mul_one]
       exact one_le_pow₀ (le_of_lt (lt_of_not_ge hq1))
-  · -- no `m ≤ n` above `f₀`: the verifier never rejects
+  · -- no `m ≤ n` above `f₀`: the memory challenger never rejects
     rw [Finset.not_nonempty_iff_eq_empty] at hne
     refine le_trans (pr_mono fun I hI => ?_) (pr_false'.trans_le (zero_le))
     have := hrej I hI

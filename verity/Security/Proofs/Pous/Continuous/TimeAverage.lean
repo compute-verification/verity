@@ -4,9 +4,9 @@ import Proofs.Pous.Continuous.PerAnswer
 /-!
 # The continuous audit's time-averaged bound: `Pous.Guarantees.ContinuousTimeAverage`
 
-The proof, pinned as `Pous.SecurityProofs.ContinuousTimeAverage`. The verifier and the responder are
-`Pous/Protocol/Model/Continuous.lean`'s; the verifier draws one coin and one index per slot, and a challenge arrives at
-slot `t` iff its coin is below `a`.
+The proof, pinned as `Pous.SecurityProofs.ContinuousTimeAverage`. The memory challenger and the
+responder are `Pous/Protocol/Model/Continuous.lean`'s; the memory challenger draws one coin and one index per slot, and
+a challenge arrives at slot `t` iff its coin is below `a`.
 
 1. **The arrivals before `t`** (`pre`) are a prefix of all the arrivals, because the arrivals are sorted
    (`arrivals_split`). If a challenge arrives at `t`, it is the next one (`arrAt_pre`, `histAt_get`).
@@ -178,7 +178,7 @@ theorem arrS_congr (a : ℕ) {x x' : Fin T → Fin b × Fin B} {t : ℕ}
 
 end Arrivals
 
-/-! ## The verifier reads the schedule only up to the next challenge -/
+/-! ## The memory challenger reads the schedule only up to the next challenge -/
 
 section Congr
 

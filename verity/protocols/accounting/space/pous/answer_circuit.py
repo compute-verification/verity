@@ -1,5 +1,5 @@
 """PoUS's audit answer as a Boolean circuit: the block the memory challenger received for round j is block i_j of C, by
-its hiding leaf.  One instance per round, k per audit.
+its hiding leaf.  One input per round, k per audit.
 
     PousAnswerOpens_v1{N}           (block: Array<8N>, h: Array<512>, y: Array<1536>, bc: Array<1024>) -> Array<1>
     PousRowDigest_v1{N}             (row: Array<8N>) -> Array<512>                     sha512/row/v2 of an N-byte row
@@ -19,13 +19,13 @@ inner digest x = SHA-512(P(16448) ‖ block) (`rowleaf.sha512_row_v2_prefix`), w
 
     x = SHA-512(P(8N) ‖ block) equals h,   and   hm96-sha512's commit string of (x, y) equals bc.
 
-So h must be the block's ``sha512/row/v2`` digest: the challenger hashes P's constant midstate onward, the same 17
-compressions as a plain SHA-512 of the block.  The signature over the record, the index and the leaf's place under C's
-root are other parts of the session's statement.
+So h must be the block's ``sha512/row/v2`` digest: the memory challenger hashes P's constant midstate onward, the same
+17 compressions as a plain SHA-512 of the block.  The signature over the record, the index and the leaf's place under
+C's root are other parts of the session's statement.
 
-At N = 2,056 the instance is 19 compressions: 16 for the block's whole 128-byte blocks after P's constant first block, one
-for its last 8 bytes and the padding, and hm96's two for c (b is XORs).  `tests/test_pous_answer_circuit.py` pins the
-counts.
+At N = 2,056 the circuit is 19 compressions: 16 for the block's whole 128-byte blocks after P's constant first block,
+one for its last 8 bytes and the padding, and hm96's two for c (b is XORs).  `tests/test_pous_answer_circuit.py` pins
+the counts.
 """
 from __future__ import annotations
 

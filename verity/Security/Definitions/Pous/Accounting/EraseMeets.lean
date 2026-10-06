@@ -21,9 +21,9 @@ fill `C` that covers the prover's whole declared volatile memory of `|C| = B·�
 - **full use:** every prover whose memory at each spot read's arrival is at most `⌊(1 − f)·|C|⌋` bits is accepted with
   probability at most `ε` (the sequential audit's bound, with the fill unbounded);
 - **erasure:** every prover with `|C|` bits of memory that keeps foreign content of `S_φ ≥ f·|C| + 2λ` bits through the
-  spot reads wins with probability at most `ε`, whatever the digest of the fill check. So the verifier accepts a prover
-  that keeps `f·|C| + 2λ` bits of uniform content, independent of the fill, the primitive and the challenges, through
-  all the spot reads with probability at most `ε`. -/
+  spot reads wins with probability at most `ε`, whatever the digest of the fill check. So the memory challenger accepts
+  a prover that keeps `f·|C| + 2λ` bits of uniform content, independent of the fill, the primitive and the challenges,
+  through all the spot reads with probability at most `ε`. -/
 def EraseMeets (sch : Scheme M) (f : ℚ) (D Q s : ℕ) (ε : ℝ≥0∞) : Prop :=
   ε ≤ Params.εMax ∧
     AuditSecure sch .sequential ⌊(1 - f) * ((sch.B * sch.ℓ : ℕ) : ℚ)⌋₊ D Q s 0 ε ∧
