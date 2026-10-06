@@ -637,6 +637,15 @@ builds a registered value from the coin server's `b ‖ c` (one row a node, unde
 `out` reads the row of the node it climbs to. The gateway pays one SHA-512 a node more than for a bare node (the row
 digest).
 
+The rule is also a Lean program, `Flock.Firewall.run` (`verifier/lean/Flock/Firewall.lean`, the executable
+`flock-firewall`): the pinned schedule, the worker's requests and the gateway's salts in, the coin server's record out. Its
+message type is the contract: each message is the schedule's own value, a count it fixes, zeros, or commitments under the
+gateway's salts, so nothing a worker sends reaches the coin server any other way. `tests/test_firewall_agreement.py` holds
+`rec_live`'s proxy to it byte for byte (the record without the coins it drew), on an honest session and on every prefix,
+drop, duplicate, swap, forgery and seeded byte flip of one. One difference is deliberate: Lean's JSON keeps no number's
+spelling, so `flock-firewall` refuses any `Hello` with a fraction or an exponent, where the proxy compares Python's canonical
+JSON. The two agree whenever the schedule's `Hello` holds only integers, as `schedule_for`'s does.
+
 ### 10.4 The prototype (`FC_GATE=1`)
 
 `flock-circuit prove --zk` with `FC_GATE=1` runs the gate (`gate.rs`, and `Gate` in `flock-circuit.rs`) on the GPU path and
