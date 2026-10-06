@@ -2,6 +2,7 @@
 
     python tools/lean/audit.py [--build] [--update [--owner @LANE] [--moved FILE]] [--out DIR] PACKAGE_DIR...
     python tools/lean/audit.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
+    python tools/lean/audit.py --name-instances [--build] PACKAGE_DIR...  write each anonymous instance's name into its source
 
 For each package it reads the facts from the roots' `.olean` files as data (`Facts.lean`: initializers disabled and no
 environment extension loaded, so none of the package's code runs), and replays the audited modules through the kernel
@@ -22,6 +23,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  listing names one module with the digest of its file as it was reviewed, so a later edit needs a new
                  review (`--update` records the digest), and no listed module may declare a guarantee or a definition a
                  guarantee reads
+    instance     an audited module declares an instance without a name (`instance : C α`): Lean names it from its type
+                 and, when nothing in the type is the project's own, the project's root (`_proofs`), so a move or a split
+                 renames it, and with it every record whose definitions use it; `--name-instances` writes each one's
+                 current name into its declaration, which changes no record
     policy       the package has no `lean-audit.json` (the message carries a template)
     dependencies the `.olean` files of the imported modules that a fetched package (Mathlib's cache, ArkLib's build) or the
                  toolchain provides differ from the record, which changes only with the package's imports or at a bump
@@ -335,6 +340,47 @@ def scans(pkg: Path, files: dict[str, str], policy: dict) -> list[str]:
                             f"({hit.group(1) or hit.group(2)}), which can write anywhere the build can; list {m} under "
                             f"`compile_time` with the reason if it must")
     return hits
+
+
+def anonymous_instances(pkg: Path, files: dict[str, str], facts: dict) -> list[dict]:
+    """The instances `Facts.lean` reports (`instances`) whose declaration names none: the keyword `instance` stands where
+    the name would. Each with its file (`file`, relative to the package)."""
+    out, lines = [], {}
+    for i in facts.get("instances", []):
+        if (rel := files.get(i["module"])) is None:
+            continue
+        if rel not in lines:
+            lines[rel] = (pkg / rel).read_text(errors="replace").split("\n")
+        row, col = i["at"]
+        text = lines[rel][row - 1] if 0 < row <= len(lines[rel]) else ""
+        if re.match(r"instance(?![\w'!?.])", text[col:]):
+            out.append(i | {"file": rel})
+    return sorted(out, key=lambda i: (i["file"], i["at"]))
+
+
+def name_instances(pkg: Path, found: list[dict]) -> None:
+    """Write each of ``found`` (`anonymous_instances`) as `instance NAME`, after its `(priority := …)` if it has one, with
+    the name Lean gave it."""
+    by_file: dict[str, list[dict]] = {}
+    for i in found:
+        by_file.setdefault(i["file"], []).append(i)
+    for rel, xs in by_file.items():
+        src = (pkg / rel).read_text()
+        starts = [0]
+        for line in src.split("\n"):
+            starts.append(starts[-1] + len(line) + 1)
+        for i in sorted(xs, key=lambda i: i["at"], reverse=True):
+            at = starts[i["at"][0] - 1] + i["at"][1] + len("instance")
+            if m := re.match(r"\s*\(\s*priority\b", src[at:]):
+                depth, j = 0, at + m.start() + m.group(0).index("(")
+                while True:
+                    depth += {"(": 1, ")": -1}.get(src[j], 0)
+                    j += 1
+                    if depth == 0:
+                        break
+                at = j
+            src = src[:at] + " " + i["id"] + src[at:]
+        (pkg / rel).write_text(src)
 
 
 def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict, update: bool = False
@@ -1171,14 +1217,15 @@ def template(pkg: Path) -> dict:
 
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
-          ready=lambda q: None, owner: str | None = None) -> dict:
+          ready=lambda q: None, owner: str | None = None, name: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended (`proved`). ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
     the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
     guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote.
-    ``owner`` (with ``update``) is the owner of a guarantee whose entry names none.  The report lists the spec's definitions
+    ``owner`` (with ``update``) is the owner of a guarantee whose entry names none.  ``name`` writes each anonymous
+    instance's name into its source (`name_instances`) instead of failing on it.  The report lists the spec's definitions
     that no guarantee reads (`unread_spec`)."""
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
@@ -1235,6 +1282,17 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
     rep["seconds"]["dependency-sources"] = round(time.monotonic() - s, 1)
     fails = scans(pkg, files, policy) + missed + fails
+    anonymous = anonymous_instances(pkg, files, facts)
+    if name and anonymous:
+        name_instances(pkg, anonymous)
+        rep["named_instances"] = [f"{i['file']}:{i['at'][0]} {i['name']}" for i in anonymous]
+        log(f"audit: {pkg}: wrote the names of {len(anonymous)} anonymous instances into "
+            f"{', '.join(sorted({i['file'] for i in anonymous}))}; build and audit again to see that no record changed")
+        anonymous = []
+    fails += [f"instance: {i['file']}:{i['at'][0]} declares an instance without a name, which Lean names {i['name']} from its "
+              f"type (and, when nothing in the type is the project's own, its project's root): a move or a split renames it, and "
+              f"with it every record whose definitions use it. Write `instance {i['id']}` there (`audit.py --name-instances` "
+              f"writes each one)" for i in anonymous]
     if "upstream" in policy:
         s = time.monotonic()
         rep["upstream"], missed = sibling("upstream").pinned(pkg, policy["upstream"])
@@ -1438,6 +1496,8 @@ def main(argv: list[str]) -> int:
                     "under one that moves keeps its name); the record's guarantees are "
                     "renamed, and the review compares the build with the records under the old names")
     ap.add_argument("--owner", metavar="@LANE", help="with --update: the owner of each guarantee whose entry names none")
+    ap.add_argument("--name-instances", action="store_true", help="write each anonymous instance's name (the one Lean gave "
+                    "it) into its declaration instead of failing on it; no record changes")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
@@ -1513,7 +1573,8 @@ def main(argv: list[str]) -> int:
             mine = pkg in named
             rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh, built=lambda: seal(pkg),
                         runs=not a.no_runs, repo=a.repo.resolve(), moved=moved if mine else None,
-                        ready=lambda q: built[q].wait() if q in built else None, owner=a.owner)
+                        ready=lambda q: built[q].wait() if q in built else None, owner=a.owner,
+                        name=a.name_instances and mine)
         finally:
             if not built[pkg].is_set():
                 seal(pkg)
