@@ -1,4 +1,4 @@
-import Specs.Flock.Guarantees.EndToEndHidden
+import Proofs.Flock.EndToEndHidden.Statement
 
 /-!
 # Proof of C-Flock's end-to-end guarantee under hidden outputs
