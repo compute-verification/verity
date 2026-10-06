@@ -100,15 +100,22 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-06 (9:49 AM PDT): the repository becomes the minimal, DRY implementation of the system as now decided. Every
+  owner removes the smells it finds in its own files without asking: code serving a retired question, two sources of
+  truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired process,
+  structure that doesn't earn itself, and dead references. Directory moves wait for the consolidation move. What is
+  unclear (it changes agreed semantics, deletes what another owner may use, or crosses owners) goes to Daniel with a
+  recommendation.
 - 2026-10-06 (9:45 AM PDT): the benchmark comparison tables (`verity_numerical.bench`'s `views`, `tables`, `drilldown`
   and `store_tables`, spec `kb/TABLES.md`) and `verity.claims`, their label registry, go to `archive/`; the docs site is
   Daniel's to settle later. A certificate cites the Lean assumptions it rests on by name. The circuit templates, input
   sets and generators stay live.
 - 2026-10-06 (9:32 AM PDT): the repository is consolidated in one pure move after the current trains land:
-  `backends/flock` becomes `flock/`, `integrations/vllm` becomes `vllm/`, every tool in `tools/` moves into `infra/`
-  (the GPU probes go to `benchmarks/`), the frozen numerical work goes to `archive/`, and
-  `verity/protocols/accounting/{work,space,communication}/X` flattens to `verity/protocols/X`. The full tree is being
-  settled with Daniel. "Network transparency" is "network accounting".
+  `backends/flock` becomes `flock/`, `integrations/vllm` becomes `vllm/`, the GPU probes go to `benchmarks/`, the
+  frozen numerical work goes to `archive/`, and `verity/protocols/accounting/{work,space,communication}/X` flattens to
+  `verity/protocols/X`. Whether the cluster and repository tools live in `tools/` or `infra/` is infra's
+  recommendation to make, and the full tree is being settled with Daniel. "Network transparency" is "network
+  accounting".
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
   asks for a change. A conflict is fixed at the tip (ci restacks it), not by pushing to the PR: a new head refuses every
   tip that pins the old one at landing, and their checks are spent for nothing.
