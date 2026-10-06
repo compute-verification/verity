@@ -137,9 +137,9 @@ def test_band_through_the_interface_is_the_pinned_band_codec():
 
 
 def test_registry():
-    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v3", "p2-16448/v2"}
+    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v4", "p2-16448/v2"}
     assert schemes.DEFAULT == band.BAND12.name
-    assert schemes.EXPERIMENTAL == {"p2-16448/v3", "p2-16448/v2"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
+    assert schemes.EXPERIMENTAL == {"p2-16448/v4", "p2-16448/v2"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
     assert schemes.get().experimental is None
     b = schemes.get()
     assert isinstance(b, schemes.Band) and b.params == band.SECURE_FIRST and b.name == "band-chain/d12/v1"
@@ -253,7 +253,7 @@ def test_the_band_certificate_covers_every_segment_count():
 def test_the_14_gb_certificate():
     """448 segments (14 GB, where the family is also `BandMultiMeets14`) and 30 segments are certified, with no gap."""
     sch = schemes.get(segments=448)
-    vk = VerifierKey.from_leaves(sch.params, SALT, [bytes(32)] * sch.params.blocks)
+    vk = VerifierKey.from_leaves(sch.params, SALT, [bytes(64)] * sch.params.blocks)
     v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"\x00" * 32, vk))
     assert v.gaps == ()
     p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 111, 536_800,
@@ -326,7 +326,7 @@ def test_p3_has_no_certificate_because_its_chain_does_not_start_from_leans():
 
 
 def _fake_vk(sch: protocol.Scheme) -> VerifierKey:
-    return VerifierKey.from_leaves(sch.params, SALT, [hashlib.sha256(bytes([i % 251])).digest()
+    return VerifierKey.from_leaves(sch.params, SALT, [hashlib.sha512(bytes([i % 251])).digest()
                                                      for i in range(sch.params.blocks)])
 
 
@@ -503,16 +503,17 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
         with pytest.raises(KeyError):
             core_claim(c)
         assert "/" not in c and c == c.lower()
-    assert protocol.claim("cr/sha-256").kind == "assumption"
+    assert protocol.claim("cr/sha-512").kind == "assumption"
+    assert protocol.claim("honest-nebius-host").kind == "assumption"
 
 
 def test_p2_is_experimental_and_says_so():
-    """P2 (`p2-16448/v3`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the verifier refuses it
+    """P2 (`p2-16448/v4`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the verifier refuses it
     unless asked, never makes it the default, and its profile states why.  The certificate is the pinned
     `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile.  Its call is
     `ROOT_CALL_NS`, half the fastest cooperating root: the verifier accepts spec v1.1's cap, `Δ + RTT = 854 µs`, and
     refuses a µs more, and v1's 1 ms."""
-    for name in ("p2-16448/v3", "p2-16448/v2"):
+    for name in ("p2-16448/v4", "p2-16448/v2"):
         sch = schemes.get(name, segments=8)
         v2 = name.endswith("v2")
         assert sch.experimental == (f"{EXPERIMENTAL}; {CHACHA8_NONCONFORMING}" if v2 else EXPERIMENTAL)
@@ -521,9 +522,10 @@ def test_p2_is_experimental_and_says_so():
         cert = sch.certificate
         assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.call_ns, cert.segments, cert.hypotheses) == (
             "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, ROOT_CALL_NS, 8, ())
-        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root"} <= set(cert.claims)
+        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "honest-nebius-host"} <= set(
+            cert.claims) and not any("sha-256" in c for c in cert.claims)
         one = schemes.get(name)
-        vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
+        vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
         key = protocol.challenge_key(b"\x00" * 32, vk)
         with pytest.raises(ValueError, match="experimental"):
             protocol.TimedAudit(one, vk, key)
@@ -540,12 +542,12 @@ def test_p2_is_experimental_and_says_so():
         assert "P2SlackFamilyUncond" in p.statement() and p.to_json()["experimental"] == sch.experimental
         assert p.state_bound_bits == (1 << 19) * 16448 * 18 // 19
     with pytest.raises(ValueError, match="chacha8"):
-        schemes.get("p2-16448/v3", params=P2Params(16448, 21065, 1 << 16, 1, CHACHA8))
+        schemes.get("p2-16448/v4", params=P2Params(16448, 21065, 1 << 16, 1, CHACHA8))
     with pytest.raises(ValueError, match="expander"):
         P2Params(128, 173, 8, 1, "chacha20")
 
 
-@pytest.mark.parametrize("expander", ["shake256-v1", CHACHA8])
+@pytest.mark.parametrize("expander", ["sha512-ctr-v4", CHACHA8])
 def test_p2_arithmetic(expander):
     """sq inverts the parity-canonical root, σ is an involution on [0, p), blocks and payloads are big-endian integers
     (the spec's wire format), and a block that is not a codeword is refused."""
@@ -583,8 +585,8 @@ def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_u
     assert ROOT_CALL_NS == int(half) == 854_029
     delta = 500_000
     assert RTT_ALLOWANCE_CAP_NS == max(us * 1_000 for us in range(1_000) if delta + us * 1_000 < ROOT_CALL_NS) == 354_000
-    one = schemes.get("p2-16448/v3")
-    vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
+    one = schemes.get("p2-16448/v4")
+    vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
     key = protocol.challenge_key(b"\x00" * 32, vk)
     edge = ROOT_CALL_NS - 1 - delta
     assert edge - RTT_ALLOWANCE_CAP_NS == 28
@@ -595,28 +597,34 @@ def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_u
     assert cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS) >= 2 > cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS + 1_000)
 
 
-def test_p2_v3_keys_are_the_specs():
-    """v3's keys are the frozen spec's §4 SHAKE256 streams: given the spec's base, `shake_keys` gives every pinned K and
-    t of the P2 kit's `vectors.json` (`fixtures/p2-v1-keys.json`, copied with that file's hash), at w = 64, 96, 128 and
-    16,448.  The protocol's base frames its 24-byte salt where the spec frames the model commitment and its 32-byte
-    setup salt, and nothing else differs."""
+def test_p2_v4_keys_are_the_specs():
+    """v4's keys are the spec's §4 counter-mode SHA-512 streams: given the spec's prefix, `sha512_keys` gives every pinned
+    K and t of the spec's `vectors.json` (`fixtures/p2-v4-keys.json`, copied with that file's hash), at w = 64, 96, 128
+    and 16,448.  The protocol's prefix frames its 24-byte salt where the spec frames the model commitment and its 32-byte
+    setup salt, and nothing else differs; both are zero-padded to whole 128-byte blocks."""
     from verity.primitives.randomness import frame
 
-    from verity.protocols.accounting.space.pous.schemes.p2 import EXPAND_LABEL, PROTOCOL_ID, expand_prefix, shake_keys
+    from verity.protocols.accounting.space.pous.schemes.p2 import KEYS_TAG, PROTOCOL_ID, expand_prefix, sha512_keys, stream
 
-    doc = json.loads((Path(__file__).parent / "fixtures" / "p2-v1-keys.json").read_text())
-    assert doc["source_sha256"] == "781fec77f4fcadb45f10673457ecd9b63d26cf826a2ebaed5da795539d8a5fab"
+    doc = json.loads((Path(__file__).parent / "fixtures" / "p2-v4-keys.json").read_text())
+    assert doc["source_sha512"] == "29471c3b26a19b9e48a8888ba3450329693194161b6cf08ce2c8658e2772aa5e3028d4dc9f94cb9757582f326e9afe97017bdd597e4de9636d253e6908768bd9"
     for v in doc["vectors"]:
         params = P2Params(v["w"], v["c0"], 1 << 16, 8)
-        spec_base = (frame("verity/pous/p2/expand/v1") + frame("p2/v1") + frame(f"p2-p{v['w']}-c{v['c0']}")
-                     + frame(bytes.fromhex(v["model_commitment"])) + frame(bytes.fromhex(v["setup_salt"])))
-        k, t = shake_keys(params, spec_base, v["segment"], v["block"])
+        spec = (KEYS_TAG + frame("p2/v4") + frame(f"p2-p{v['w']}-c{v['c0']}")
+                + frame(bytes.fromhex(v["model_commitment"])) + frame(bytes.fromhex(v["setup_salt"])))
+        spec += bytes(-len(spec) % 128)
+        k, t = sha512_keys(params, spec, v["segment"], v["block"])
         n = params.block_bytes
         assert (k.to_bytes(n, "big").hex(), t.to_bytes(n, "big").hex()) == (v["K"], v["t"]), v["id"]
     assert len(doc["vectors"]) == 4 and {v["w"] for v in doc["vectors"]} == {64, 96, 128, 16448}
     params = P2Params(16448, 21065, 4)
-    assert (EXPAND_LABEL, PROTOCOL_ID, params.prime_id) == ("verity/pous/p2/expand/v1", "p2/v1", "p2-p16448-c21065")
-    assert expand_prefix(params, SALT) == frame(EXPAND_LABEL) + frame(PROTOCOL_ID) + frame(params.prime_id) + frame(SALT)
+    assert (KEYS_TAG, PROTOCOL_ID, params.prime_id) == (b"verity/pous/p2/keys/v4\0", "p2/v4", "p2-p16448-c21065")
+    prefix = expand_prefix(params, SALT)
+    body = KEYS_TAG + frame(PROTOCOL_ID) + frame(params.prime_id) + frame(SALT)
+    assert len(body) == 95 and prefix == body + bytes(33) and len(prefix) == 128
+    base = prefix + (3).to_bytes(8, "big") + (9).to_bytes(8, "big")
+    assert stream(base, b"K", 130) == b"".join(hashlib.sha512(base + b"K" + i.to_bytes(4, "big")).digest() for i in range(3))[:130]
+    assert len(base) % 128 + 1 + 4 + 17 <= 128                       # a chunk is one compression after the midstate
     with pytest.raises(ValueError, match="24 bytes"):
         expand_prefix(params, bytes(32))
 
@@ -661,11 +669,11 @@ def test_p2_tweak_is_rejection_sampled():
     assert k == (1 << 128) - 1 and t == int.from_bytes(real(bytes(32), 0, 0)[32:48], "big") < params.p
     assert t != (1 << 128) - 1 - params.p
 
-    # v3 at w = 24, c0 = 65,533, where a candidate is ≥ p about once in 256: the first block whose first one is
+    # v4 at w = 24, c0 = 65,533, where a candidate is ≥ p about once in 256: the first block whose first one is
     small = P2Params(24, 65533, 4)
     prefix = p2.expand_prefix(small, SALT)
-    j = next(j for j in range(10_000) if int.from_bytes(hashlib.shake_256(
-        prefix + bytes(8) + j.to_bytes(8, "big") + b"t").digest(3), "big") >= small.p)
-    words = hashlib.shake_256(prefix + bytes(8) + j.to_bytes(8, "big") + b"t").digest(9)
+    j = next(j for j in range(10_000) if int.from_bytes(hashlib.sha512(
+        prefix + bytes(8) + j.to_bytes(8, "big") + b"t" + bytes(4)).digest()[:3], "big") >= small.p)
+    words = hashlib.sha512(prefix + bytes(8) + j.to_bytes(8, "big") + b"t" + bytes(4)).digest()[:9]
     first, second, third = (int.from_bytes(words[i:i + 3], "big") for i in (0, 3, 6))
-    assert p2.shake_keys(small, prefix, 0, j)[1] == (second if second < small.p else third) != first - small.p
+    assert p2.sha512_keys(small, prefix, 0, j)[1] == (second if second < small.p else third) != first - small.p

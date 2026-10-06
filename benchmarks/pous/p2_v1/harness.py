@@ -2,11 +2,11 @@
 on one device, the same steps, controls and metrics as the band's arm (`band_gpu/harness.py`), so the two compare side by side.
 The kernels take a setup's key prefix, so one arm runs either framing:
 
-- `V1` (`p2-v1-gpu`): the frozen v1 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
-- `V3` (`p2-16448/v3`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
+- `V1` (`p2-v1-gpu`): the v4 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
+- `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
   the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `band_gpu/memory_challenger.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
-  with v3's own codec back to `W`'s, when that segment is wholly encoded.
+  with the scheme's own codec back to `W`'s, when that segment is wholly encoded.
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
   cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
   of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
@@ -61,8 +61,8 @@ SETUP_SOURCE = hashlib.sha256(b"verity-pous/bench/p2-v1/setup-source").digest()
 """The bench's setup source: in a deployment the verifier's secret or a beacon round drawn after the commitment to `W`."""
 PINS = ("P2MeetsM1pB19Uncond", "P2MeetsM1pFamilyUncond", "P2MeetsM1pW8192Uncond", "P2SlackB19Uncond", "P2SlackFamilyUncond",
         "P2ErrorSplitB19Uncond")
-ASSUMPTIONS = ("P2-EXP-IO", "SHAKE256/P2-EXP-IO storage-game idealization", "P2–M1-SGI (not accepted)", "SeqRoot",
-               "perfect isolation", "cr/sha-256")
+ASSUMPTIONS = ("P2-EXP-IO", "SHA-512-CTR/P2-EXP-IO", "P2–M1-SGI (not accepted)", "SeqRoot", "perfect isolation", "cr/sha-512",
+               "honest-nebius-host")
 RECOMPUTE_EVERY = 10
 """The recompute control drops one block in this many; P2's blocks are independent, so any pattern keeps what a block needs."""
 

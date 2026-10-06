@@ -27,7 +27,7 @@ from p2_v1 import reference as R  # noqa: E402
 from p2_v1.gpu import Kernels  # noqa: E402
 
 SALT = hashlib.sha256(b"verity-pous/bench/p2-v1/decode-bench/salt").digest()
-MODEL = hashlib.sha256(b"verity-pous/bench/p2-v1/decode-bench/model").digest()
+MODEL = hashlib.sha512(b"verity-pous/bench/p2-v1/decode-bench/model").digest()
 
 
 def timed(torch, fn, reps: int) -> list[float]:

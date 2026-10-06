@@ -7,9 +7,10 @@
    "seq-root",
    "random-oracle",
    "perfect-isolation",
-   "cr/sha-256",
+   "cr/sha-512",
    "live-verifier",
-   "designated-verifier"
+   "designated-verifier",
+   "honest-nebius-host"
   ],
   "cliff": null,
   "delta": "1/100",
@@ -39,7 +40,7 @@
    "segments": 1,
    "w": 16448
   },
-  "root": "9b0641568fa1d01dc173e637144ad21a24fb5d39cf223d32b40ade90eedda474",
+  "root": "b847497399864345194baed333f54e93982d8d5af40942b09f4cd24282821d4f64e6bf5a6c5fb16798e0f9a57c4dfa5eed4f51e38ca14796b0480461514f2354",
   "salt": "0476a3eda3f250223684161e0edb7802beb30e8a0db3792e",
   "segments": [
    "8fcd6ce135df49e5f4b869c98c955ea7dba7e1c45e2150a04086f36e261fa36b"

@@ -5,7 +5,7 @@ harness's `ControlResponder`) and `verity.protocols.accounting.space.pous.protoc
         [--k K] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
 
 `READY.json` names the responder's port, the salt, the scheme and its parameters; `vk` is `VerifierKey.from_leaves` over
-`LEAVES.bin` (32 bytes a block, in block order).
+`LEAVES.bin` (64 bytes a block, in block order).
 
 - **The limit.** `--calibrate-only` measures the round trip with pings (a block-sized answer that touches no GPU) and writes
   `limit_ns = Δ + allowance`, the allowance a quantile of it (`--allowance`). The harness runs it before any load and hands
@@ -309,7 +309,7 @@ def calibrate_only(host: str, port: int, block_bytes: int, *, pings: int, cpu: i
 def main(argv: list[str] | None = None) -> int:
     from verity.protocols.accounting.space.pous import audit as pous_audit
     from verity.protocols.accounting.space.pous import schemes
-    from verity.protocols.accounting.space.pous.verifier import VerifierKey
+    from verity.protocols.accounting.space.pous.verifier import DIGEST_BYTES, VerifierKey
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ready", required=True)
@@ -339,7 +339,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     scheme = scheme_of(ready["scheme"], params)
     raw = Path(a.leaves).read_bytes()
-    vk = VerifierKey.from_leaves(params, bytes.fromhex(ready["salt"]), [raw[i:i + 32] for i in range(0, len(raw), 32)])
+    vk = VerifierKey.from_leaves(params, bytes.fromhex(ready["salt"]),
+                                 [raw[i:i + DIGEST_BYTES] for i in range(0, len(raw), DIGEST_BYTES)])
     doc = {"root": vk.root.hex(), "clock": a.clock,
            **audit("127.0.0.1", ready["port"], scheme, vk, audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu,
                    allowance=a.allowance, deadline_ns=deadline, limit_ns=a.limit_ns or None, clock=clock,
