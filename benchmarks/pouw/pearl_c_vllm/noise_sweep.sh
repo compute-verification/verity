@@ -6,7 +6,8 @@
 #     bash benchmarks/pouw/pearl_c_vllm/noise_sweep.sh "$RESEARCH_RUN_DIR"/inputs/points.txt
 # A points file has one point a line, its name then served_profile.sh's variables (BATCH, PROMPT, SCHEME, GRAPHS, ...):
 #   eager-b32-p64 BATCH=32 PROMPT=64 SCHEME=pearl-c-sm120-v1-h2 ROWS_FORM=s
-# GPU 1's ship is built once from this tree (CPU).  Then each point's REPLICATES runs (each its own beacon, so its own seeds)
+# GPU 1's ship is built from this tree (CPU) once per kernel directory's git tree, kept in SHIPS under that tree's hash (the
+# ship's sources are that directory; served_profile.sh checks its manifest and run.py), and reused.  Then each point's REPLICATES runs (each its own beacon, so its own seeds)
 # go PAR at a time, each in its own one-GPU preemptible lease of at most LEASE_MIN minutes that ends by UNTIL (its --max-min,
 # and a timeout inside it), served_profile.sh with NSYS=0 writing out/points/<point>.r<k>/; a failed run (a preemption) is
 # tried once more as .t2.  Each finished run is a line of out/progress.jsonl; out/sweep.{json,md} summarize what finished.
@@ -26,12 +27,18 @@ if [ "${SETUP:-0}" = 1 ]; then
   bash benchmarks/pouw/pearl_c_vllm/setup.sh > "$OUT/setup.log" 2>&1 || { stamp "SETUP_FAIL"; tail -20 "$OUT/setup.log"; exit 10; }
   tail -2 "$OUT/setup.log"
 fi
-stamp "ship build"
-CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/build.sh "$S/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
-  || { stamp "BUILD_FAIL"; tail -20 "$OUT/build.log"; exit 11; }
-cp "$S/ship-${HEAD:0:8}/sass.json" "$S/ship-${HEAD:0:8}/source.txt" "$S/ship-${HEAD:0:8}/toolchain.txt" "$OUT/" 2>/dev/null || true
-tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}"
-export SHIP_TAR=$S/ship.tar
+KTREE=$(git rev-parse HEAD:benchmarks/pouw/pearl_c_sm120); SHIPS=${SHIPS:-/workspace/pouw/noise-sweep/ships}
+export SHIP_TAR=$SHIPS/$KTREE.tar
+if [ -f "$SHIP_TAR" ]; then
+  stamp "ship of kernel tree $KTREE from $SHIP_TAR"
+else
+  stamp "ship build"
+  CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/build.sh "$S/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
+    || { stamp "BUILD_FAIL"; tail -20 "$OUT/build.log"; exit 11; }
+  mkdir -p "$SHIPS" && tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}" && mv "$S/ship.tar" "$SHIP_TAR.$$" && mv "$SHIP_TAR.$$" "$SHIP_TAR"
+fi
+tar -xOf "$SHIP_TAR" --wildcards '*/source.txt' > "$OUT/source.txt"; tar -xOf "$SHIP_TAR" --wildcards '*/sass.json' > "$OUT/sass.json"
+echo "$KTREE $(sha256sum "$SHIP_TAR" | cut -c1-64)" > "$OUT/ship.txt"
 
 one() {  # one run of one point: <dir name> <VAR=value>...
   local name=$1; shift
