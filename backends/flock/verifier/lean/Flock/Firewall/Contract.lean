@@ -5,8 +5,9 @@ The firewall is the developer's only path from the workers to the auditor. Its c
 learns nothing"): before release, every outbound value is one of three things.
 
 * (a) A commitment under a fresh salt the workers never see: `Item.commit`, the hm96-sha512 commit string `b ‖ c` of
-  SHA-512 of the message (`commitBC`), whose tree leaf is `firewallLeaf`, the commitment `Flock.Guarantees.gatewayLeaf`
-  states (`gatewayLeaf msg y = firewallLeaf msg (saltBytes y)`, by `ZkView.leafSplit`).
+  SHA-512 of the message (`commitBC`), whose tree leaf is `firewallLeaf`. That leaf is the gateway's commitment the
+  recursive guarantee states (`Flock.Guarantees.gatewayLeaf`, on the rec-thm branch, not in this package), which
+  `ZkView.leafSplit` equates with `Hm96.Default512.leaf` of the digest.
 * (b) A value masked with a fresh pad the workers never see (`Item.masked`: `v + h` in GF(2^128)), then checked against
   every relation the verifier will check (`Item.check`, each of the transcript's `relations`), before anything that
   depends on its pad leaves (an `Item.fixed` naming the pad) and before the session ends.
@@ -15,8 +16,8 @@ learns nothing"): before release, every outbound value is one of three things.
   values (its level-0 recheck, its opening, the values it computes from its pads). Under D8 (a) the last three are
   today's Rust, which the transcript reports and this contract does not recompute.
 
-Coins go to the workers exactly as the challenger sent them (`Item.coins`), and when the challenger committed to its
-coins (`coin-tree/hm96-sha512/v2`) each round's opening must open that commitment.
+Coins go to the workers exactly as the challenger sent them (`Item.coins`). They are live coins the challenger never
+committed to, so a coins item carries no opening, and one that does is refused.
 
 A transcript is the firewall's candidate outbound items in order: the values it would release, each tagged with its case,
 with its tape (the salts and pads it drew, by id) and the tape entries it handed the workers. The firewall's send check
