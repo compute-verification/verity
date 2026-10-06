@@ -28,7 +28,7 @@ import re
 import time
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity.primitives.commitments.identity import identity_digest
+from verity.primitives.commitments.identity import identity_digest_sha512
 from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.merkle import CommitmentDomain
 from verity.primitives.circuits.codec import canonical_json
@@ -41,7 +41,7 @@ FORMAT = "verity/registration/v1"
 FORMAT_V2 = "verity/registration/v2"
 PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 RECEIPT = "verity/registration-receipt/v1"
-SERVED_DOMAIN = "verity/one-stage/served-domain/v0"
+SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
 KINDS = ("served", "stand-in")
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
@@ -54,9 +54,9 @@ def query_digest(query: Mapping[str, Any]) -> str:
 
 
 def served_domain(program: str, partition: str, port: str, schema: str, leaves: int, run: str) -> str:
-    binding = identity_digest(SERVED_DOMAIN, {"program": program, "partition": partition, "port": port, "schema": schema,
-                                              "leaves": int(leaves), "run": run})
-    return CommitmentDomain(bytes.fromhex(binding), -1, RangeIndexedDomain(0, int(leaves)), hash="sha512").domain_id.hex()
+    binding = identity_digest_sha512(SERVED_DOMAIN, {"program": program, "partition": partition, "port": port, "schema": schema,
+                                                     "leaves": int(leaves), "run": run})
+    return CommitmentDomain(binding, -1, RangeIndexedDomain(0, int(leaves)), hash="sha512").domain_id.hex()
 
 
 def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],

@@ -999,9 +999,10 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     rid = flags[flags.index("--id") + 1]
     assert flags[:4] == [sys.executable, "-m", "research", "run"] and "--require-result" in flags
     assert [flags[flags.index(k) + 1] for k in ("--on", "--project", "--cwd", "--declared-output")] == ["vy-test", "verity", "source", "out/*"]
-    assert float(flags[flags.index("--timeout") + 1]) == Q.REMOTE_TIMEOUT_S
+    assert float(flags[flags.index("--timeout") + 1]) == Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S
     assert sorted(Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send") == ["quick_tier.py", "slot.py"]
-    assert json.loads((world.tmp / "slot-seen.json").read_text())[:4] == ["--by", "lane-1", "--", "python3"]
+    assert json.loads((world.tmp / "slot-seen.json").read_text())[:8] == [
+        "--by", "lane-1", "--wait-max", f"{Q.REMOTE_WAIT_S:g}", "--run-max", f"{Q.REMOTE_TIMEOUT_S:g}", "--", "python3"]
     s = json.loads(seen.read_text())
     assert s["argv"][:3] == ["--quick", "--changed", main] and s["pythonpath"] is None
     assert Path(s["argv"][s["argv"].index("--json") + 1]) == machine.root / "runs" / rid / "out" / "suites.json"
@@ -1189,17 +1190,55 @@ def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_af
     refused = lambda argv, cwd: subprocess.CompletedProcess(argv, 3, "", "research run: refused: vy-test isn't in machines.toml\n")
     tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp), launch=refused)
     assert tier(pr) == "`research run --on vy-test` failed (exit 3): research run: refused: vy-test isn't in machines.toml" and sleeps == []
-    tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports({"state": "running"})), timeout_s=60)
-    assert re.fullmatch(r"run r\S+ on vy-test didn't end within 90 s \(last seen running\): `research inspect r\S+`", tier(pr))
-    assert sleeps == [Q.REMOTE_POLL_S] * 3, "the run's timeout and the grace, at one fetch per poll"
-    tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports(), reachable=False), timeout_s=60)
-    assert re.fullmatch(r"run r\S+ on vy-test didn't end within 90 s \(last seen without a status\): .*", tier(pr)) and len(sleeps) == 3
+    tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports({"state": "running"})), timeout_s=60, wait_s=30)
+    assert re.fullmatch(r"run r\S+ on vy-test didn't end within 120 s \(last seen running\): `research inspect r\S+`", tier(pr))
+    assert sleeps == [Q.REMOTE_POLL_S] * 4, "the run's wait for a slot, its timeout and the grace, at one fetch per poll"
+    tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports(), reachable=False), timeout_s=60, wait_s=30)
+    assert re.fullmatch(r"run r\S+ on vy-test didn't end within 120 s \(last seen without a status\): .*", tier(pr)) and len(sleeps) == 4
     exited = Machine(world.tmp, outcome=lambda run, rid, head: None, fetched={"launcher_exited": {"last_line": "Traceback: boom"}})
     tier, sleeps = _remote_tier(world, monkeypatch, exited)
     assert re.fullmatch(r"run r\S+'s runner on vy-test exited before the run ended \(Traceback: boom\)", tier(pr)) and len(sleeps) == 1
     tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp), slot=world.tmp / "no-slot.py")
     assert tier(pr).endswith("no-slot.py isn't there to take a check slot on vy-test with (run it from a checkout of the repository)")
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+
+
+def test_a_remote_quick_tier_that_never_got_a_check_slot_never_started_and_did_not_fail(world, monkeypatch, capsys):
+    """6 Oct: #1344's and compute-accounting's #1282/#1314 tiers spent their 3 h waiting in node 1's line and were reported failed.
+    slot.py gives up at --wait-max with exit 75 before running anything; that is no verdict on the head, and says so."""
+    from research import queue as Q
+
+    machine = Machine(world.tmp, outcome=_reports({"state": "failed", "rc": Q.SLOT_NOT_STARTED}, result=lambda d: None))
+    tier, _ = _remote_tier(world, monkeypatch, machine)
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == Q.READY_NOT_STARTED
+    err = capsys.readouterr().err
+    assert re.search(r"#1 is not marked ready at \w{12}: the quick tier never started: run \S+ on vy-test waited for a check slot "
+                     r"until its --wait-max and never ran the tier", err) and "the quick tier failed" not in err
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+    rid = machine.launched[-1][machine.launched[-1].index("--id") + 1]
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1
+    assert "never ran the tier" in capsys.readouterr().err
+
+
+def test_a_remote_quick_tier_on_auto_runs_on_the_machine_placed_and_without_one_never_starts(world, monkeypatch, capsys):
+    from research import queue as Q
+
+    machine = Machine(world.tmp, outcome=_reports())
+    asked = []
+    placed = lambda spec, repo: asked.append(spec) or ("vy-test", "a check slot and a Lean check slot are free (check slots: d free)")
+    tier, _ = _remote_tier(world, monkeypatch, machine, place=placed)
+    tier.on = "auto"
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and asked == ["auto"]
+    flags = machine.launched[-1][:machine.launched[-1].index("--")]
+    assert flags[flags.index("--on") + 1] == "vy-test"
+    assert "research queue: --on auto: vy-test: a check slot and a Lean check slot are free" in capsys.readouterr().out
+    tier.place, tier.on = (lambda spec, repo: (None, "no machine's slots could be read")), "vy-a,vy-b"
+    world.gh.put(1, h2 := world.change({"a.txt": "a2\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == Q.READY_NOT_STARTED and len(machine.launched) == 1
+    assert "the quick tier never started: --on vy-a,vy-b: no machine's slots could be read" in capsys.readouterr().err
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is False
 
 
 def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_takes(tmp_path):
@@ -1217,11 +1256,11 @@ def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_ta
         clock[0] += 900
         return {}
 
-    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", timeout_s=3600, poll_s=30, fetch=hung_fetch, sleep=advance,
+    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", timeout_s=3600, wait_s=1800, poll_s=30, fetch=hung_fetch, sleep=advance,
                              clock=lambda: clock[0])
     (d := tmp_path / "runs" / "r1").mkdir(parents=True)
-    _, why = tier._wait(d)
-    bound = 3600 + Q.REMOTE_GRACE_S
+    _, why = tier._wait(d, "vy-test")
+    bound = 1800 + 3600 + Q.REMOTE_GRACE_S
     assert why == f"run r1 on vy-test didn't end within {bound:g} s (last seen without a status): `research inspect r1`"
     assert bound <= clock[0] <= bound + 30 + 900, "it ends with the poll under way at the deadline"
 
@@ -1321,3 +1360,32 @@ def test_quick_tier_py_refuses_a_call_it_cannot_place(tmp_path, monkeypatch):
         assert quick_tier.main(argv) == 2
     monkeypatch.delenv("RESEARCH_RUN_DIR")
     assert quick_tier.main(["--head", "h", "--base", "b", "--", "c"]) == 2 and not (tmp_path / "result.json").exists()
+
+
+def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_path):
+    """Each tier's checkout is fresh, so the verifier's `lake build` ran cold in every one and held a node-1 slot for most of a
+    small PR's tier (#1298, 6 Oct). In a slot (CHECK_SLOT) it starts from the slot's last passing `.lake`; a warm build that fails
+    is retried cold, and outside a slot nothing is kept."""
+    from research import quick_tier
+
+    lake = tmp_path / "lake"
+    lake.write_text('#!/bin/sh\n[ -f .lake/warm ] && w=warm || w=cold\necho "$w" >> "$LOG"\n'
+                    '[ "$w" = warm ] && [ -n "$FAIL_WARM" ] && exit 3\nmkdir -p .lake && echo x > .lake/warm\n')
+    lake.chmod(0o755)
+    log = tmp_path / "log"
+    env = {"HOME": str(tmp_path / "home"), "PATH": os.environ["PATH"], "LOG": str(log), "CHECK_SLOT": "a"}
+    d = "backends/flock/verifier/lean"
+
+    def run(n, **extra):
+        (pkg := tmp_path / f"t{n}" / d).mkdir(parents=True)
+        return quick_tier.build(str(lake), pkg, d, {**env, **extra})
+
+    assert run(1) == {"dir": d, "rc": 0, "start": "cold"}
+    warm = tmp_path / "home" / ".cache" / "verity" / "lake-slot-a" / "backends--flock--verifier--lean"
+    assert (warm / "warm").is_file()
+    assert run(2) == {"dir": d, "rc": 0, "start": "warm"}
+    assert run(3, FAIL_WARM="1") == {"dir": d, "rc": 0, "start": "cold"}
+    assert log.read_text().split() == ["cold", "warm", "warm", "cold"]
+    assert quick_tier.warm_dir({"HOME": env["HOME"]}, d) is None and quick_tier.warm_dir({**env, "CHECK_SLOT": "../x"}, d) is None
+    env.pop("CHECK_SLOT")
+    assert run(4) == {"dir": d, "rc": 0, "start": "cold"} and log.read_text().split()[-1] == "cold"

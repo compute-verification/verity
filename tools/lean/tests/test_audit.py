@@ -458,11 +458,117 @@ def test_naming_the_anonymous_instances_keeps_their_names_and_the_record(tmp_pat
     record = (pkg / A.POLICY).read_text()
     facts = lambda: sorted(i["name"] for i in json.loads((tmp_path / "out" / "audit-control" / "facts.json").read_text())["instances"])
     names = facts()
-    assert len(audit(name=True)["named_instances"]) == 4
+    named = audit(name=True)
+    assert len(named["named_instances"]) == 4
+    assert named["failures"] == ["instance: named 4 anonymous instances in Control/Inst.lean, so this audit is of sources it has "
+                                 "since rewritten: build and audit again to see that no record changed"]
     assert "local instance instInhabitedNat_control : Inhabited Nat" in (pkg / "Control" / "Inst.lean").read_text()
     build()
     assert audit()["failures"] == []
     assert facts() == names and (pkg / A.POLICY).read_text() == record
+
+
+def test_all_neither_updates_records_nor_names_instances(capsys):
+    for flag in ("--update", "--name-instances"):
+        with pytest.raises(SystemExit):
+            A.main(["--all", flag])
+        assert "neither updates records nor names instances" in capsys.readouterr().err
+
+
+def test_a_theorem_s_statement_is_read_from_its_source():
+    src = ("namespace P\n/-- twice -/\n@[simp] theorem t.{u} {α : Sort u} (f : α → α) -- a note\n    (h : ∀ x, f x = x) :\n"
+           "    ∀ x, f (f x) = x := by\n  intro x; simp [h]\n"
+           "theorem s : (fun (n : Nat) => n) 0 = 0\n  | _ => rfl\n")
+    assert A.statement(src, (2, 0)) == ("/-- twice -/", ".{u}", "{α : Sort u} (f : α → α) (h : ∀ x, f x = x)",
+                                         "∀ x, f (f x) = x")
+    assert A.statement(src, (7, 0)) == ("", "", "", "(fun (n : Nat) => n) 0 = 0")
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
+    """On a real build: `lift` writes `def G : Prop` (doc comment, universe parameters, binders across lines) into a
+    `Guarantees` module, which then imports the module of the definition it reads, and `theorem X.SecurityProofs.G :
+    X.Guarantees.G` beside the proof, or in the module `beside` names, which then imports the spec module and the proof's;
+    after a build, `--update --moved` with the moves it returns certifies each as the same statement under its old name,
+    and the record changes no statement."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text()
+                                      + "import Control.Lifts\nimport Control.Guarantees\nimport Control.Collect\n")
+    (pkg / "Control" / "Guarantees.lean").write_text("")
+    (pkg / "Control" / "Collect.lean").write_text("import Control.Defs\n")
+    (pkg / "Control" / "Lifts.lean").write_text(
+        "import Control.Defs\nopen Nat\nnamespace Control.Sub\n"
+        "/-- Doubling is adding. -/\ntheorem twice {m : Nat} (n : Nat)\n    (h : m = n) :\n    double n = n + n := by\n"
+        "  subst h; unfold double; omega\n"
+        "theorem refl.{u} (α : Sort u) (a : α) : a = a := rfl\n"
+        "section\nvariable {k : Nat} (j : Nat) [Inhabited (Fin k)]\n"
+        "open Classical in\ntheorem pick (p : Prop) : (if p then j else j) = j + 0 := by split <;> rfl\nend\n"
+        "end Control.Sub\n")
+    pol = A.load(pkg)
+    A.dump(pkg, pol | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.Sub.twice", "Control.Sub.refl",
+                                                                        "Control.Sub.pick")},
+                       "layers": pol["layers"] | {"Control.Guarantees": {"imports": ["Control.Defs"]}}})
+    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    audit = lambda **kw: A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
+    build()
+    assert audit(update=True)["failures"] == []
+    rep = audit(lifts={"Control.Sub.twice": {"as": "Control.Guarantees.Twice", "into": "Control.Guarantees"},
+                       "Control.Sub.refl": {"as": "Control.Guarantees.Refl", "into": "Control.Guarantees",
+                                            "beside": "Control.Collect"},
+                       "Control.Sub.pick": {"as": "Control.Guarantees.Pick", "into": "Control.Guarantees"}})
+    assert rep["failures"] == [] and rep["moved"] == {"Control.Sub.twice": "Control.SecurityProofs.Twice",
+                                                      "Control.Sub.refl": "Control.SecurityProofs.Refl",
+                                                      "Control.Sub.pick": "Control.SecurityProofs.Pick"}
+    assert (pkg / "Control" / "Guarantees.lean").read_text() == (
+        "import Control.Defs\n\nnamespace Control.Sub\nopen Nat\n\nopen Classical in\n"
+        "def _root_.Control.Guarantees.Pick : Prop :=\n  ∀ (j : Nat) (p : Prop),\n    (if p then j else j) = j + 0\n\n"
+        "end Control.Sub\n\n"
+        "namespace Control.Sub\nopen Nat\n\ndef _root_.Control.Guarantees.Refl.{u} : Prop :=\n"
+        "  ∀ (α : Sort u) (a : α),\n    a = a\n\nend Control.Sub\n\n"
+        "namespace Control.Sub\nopen Nat\n\n/-- Doubling is adding. -/\ndef _root_.Control.Guarantees.Twice : Prop :=\n"
+        "  ∀ {m : Nat} (n : Nat) (h : m = n),\n    double n = n + n\n\nend Control.Sub\n")
+    lifts = (pkg / "Control" / "Lifts.lean").read_text()
+    assert lifts.startswith("import Control.Defs\nimport Control.Guarantees\nopen Nat\n") and lifts.endswith(
+        "\ntheorem Control.SecurityProofs.Pick : Control.Guarantees.Pick := @Control.Sub.pick\n\n"
+        "theorem Control.SecurityProofs.Twice : Control.Guarantees.Twice := @Control.Sub.twice\n")
+    assert "Refl" not in lifts
+    assert (pkg / "Control" / "Collect.lean").read_text() == (
+        "import Control.Defs\nimport Control.Guarantees\nimport Control.Lifts\n\n"
+        "theorem Control.SecurityProofs.Refl.{u} : Control.Guarantees.Refl.{u} := @Control.Sub.refl.{u}\n")
+    build()
+    rep = audit(update=True, moved=rep["moved"])
+    assert rep["failures"] == [] and A.statement_changes(rep["review"]) == []
+    assert set(A.load(pkg)["guarantees"]) == {"Control.main_thm", "Control.SecurityProofs.Twice", "Control.SecurityProofs.Refl",
+                                              "Control.SecurityProofs.Pick"}
+
+
+def test_a_lift_whose_statement_reads_a_proof_package_s_definition_is_refused(tmp_path):
+    (tmp_path / "spec" / "Spec").mkdir(parents=True)
+    (tmp_path / "proofs" / "Proofs").mkdir(parents=True)
+    (tmp_path / "spec" / "Spec" / "Guarantees.lean").write_text("")
+    (tmp_path / "proofs" / "Proofs" / "D.lean").write_text("def P.d : Nat := 0\n")
+    (tmp_path / "proofs" / "Proofs" / "T.lean").write_text("import Proofs.D\ntheorem P.t : P.d = 0 := rfl\n")
+    for read in ({"reads": [{"name": "P.d", "module": "Proofs.D"}]}, {"outside": [["P.d", "Proofs.D"]]}):
+        facts = {"pins": {"P.t": {"kind": "theorem", "at": [2, 0], "module": "Proofs.T", **read}}}
+        with pytest.raises(ValueError, match="reads definitions of Proofs.D"):
+            A.lift(tmp_path / "spec", {"proved_in": ["../proofs"]}, facts,
+                   {"P.t": {"as": "P.Guarantees.T", "into": "Spec.Guarantees"}})
+    assert (tmp_path / "spec" / "Spec" / "Guarantees.lean").read_text() == ""
+
+
+def test_a_lift_takes_the_variables_its_statement_uses_and_no_namespace_only_a_proof_declares():
+    src = ("namespace P\nvariable {α : Type} [Fintype α]\nsection\nvariable (gone : Nat)\nend\n"
+           "variable {β : Type} [DecidableEq α] (k : ℕ) {n m : ℕ} [Inhabited (Fin n)]\n"
+           "open Classical in\n/-- doc -/\ntheorem t (x : α) : k = k := rfl\n")
+    start = src.index("/--")
+    variables, open_in = A.in_scope(src, start)
+    assert variables == ["{α : Type}", "[Fintype α]", "{β : Type}", "[DecidableEq α]", "(k : ℕ)", "{n m : ℕ}",
+                         "[Inhabited (Fin n)]"] and open_in == "open Classical in"
+    assert A.used(variables, "(x : α) k = k") == ["{α : Type}", "[Fintype α]", "[DecidableEq α]", "(k : ℕ)"]
+    assert A.in_scope("theorem t : 1 = 1 := rfl\n", 0) == ([], "")
+    assert [A.unproved_opens(line, {"PThm"}) for line in ("open P PThm", "open PThm", "open scoped PThm", "  open P")] == [
+        "open P", "", "open scoped PThm", "  open P"]
 
 
 def test_generated_constants_belong_to_their_declaration():
@@ -535,6 +641,18 @@ def test_a_moved_guarantee_and_its_definitions_are_compared_with_their_old_recor
     now = facts(pins={"Q.t": moved_fact(as_was="00000000000000bb")})
     text = A.review(old, A.judge(current, now, FILES, update=True)[1], now, {})
     assert text[:2] == ["guarantee Q.t: changed (moved from P.t)", "  before:"] and A.statement_changes(text) == text[:-1]
+
+
+def test_a_definition_the_base_records_under_its_new_name_is_compared_under_it():
+    """A base lock re-recorded after the move: `--moved` changes nothing in it, and a changed definition is shown once, by the
+    name the base records."""
+    now = facts(pins={"Q.t": moved_fact()})
+    base = A.judge({**POLICY, "guarantees": {"Q.t": {}}}, now, FILES, update=True)[1]
+    assert "Q.f" in base["reads"]["Q.Defs"]["definitions"]
+    assert A.review(base, A.judge(base, now, FILES, update=True)[1], now, {}) == []
+    now = facts(pins={"Q.t": moved_fact(f="9" * 32, f_was="9" * 32)})
+    text = A.review(base, A.judge(base, now, FILES, update=True)[1], now, {})
+    assert text == ["definition Q.f (Q.Defs), read by Q.t: changed"]
 
 
 def test_a_moved_statement_lifted_into_a_guarantees_definition_is_the_same_statement():
