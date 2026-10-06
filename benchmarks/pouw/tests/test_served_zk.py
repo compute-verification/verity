@@ -43,7 +43,7 @@ def served():
 def _commit(words, run="r-request"):
     binding = {"run": run, "manifest_sha256": "00" * 32, "scheme": "pearl-c-sm120-v1-h2", "matmul": 5, "shape": [16, K, N],
                "weight": 2, "real_rows": M + 1}
-    st = SC.statement_of(K, M + 1, N, f"{run}/matmul-5")
+    st = SC.statement_of(K, M + 1, N, SC.run_of(binding))
     sides, priv = SC.commit_words(st, words, K)
     return {"schema": SC.SCHEMA, "binding": binding, "statement": st, "sides": sides, "served": {}}, priv
 
@@ -89,7 +89,7 @@ def test_commitment_is_the_statements(served):
 def test_the_registration_is_received_before_the_draw(served):
     """The committer's record is v1 with one root per side, the law subset:1 and a served window, over the call's tiles;
     the verifier's R1-R6 hold it to its own copies and its receipt names it.  A record whose root count or domain is not
-    the verifier's own, or a stand-in window under the served run, is refused (no receipt)."""
+    the verifier's own, or another request's record, is refused (no receipt)."""
     *_, words = served
     c, _ = _commit(words)
     rec = SC.registration_of(c)
@@ -104,6 +104,9 @@ def test_the_registration_is_received_before_the_draw(served):
     other, _ = _commit(words, run="r-other")
     moved = {**rec, "roots": SC.registration_of(other)["roots"]}
     v, receipt = SC.receive(c, moved)
+    assert not v["ok"] and "R3-domain" in v["codes"] and receipt is None
+    # another request's whole registration, its window naming its own run: the verifier derives the run from the request
+    v, receipt = SC.receive(c, SC.registration_of(other))
     assert not v["ok"] and "R3-domain" in v["codes"] and receipt is None
 
 
@@ -125,7 +128,7 @@ def test_check_accepts_the_drawn_rows_only(served, tmp_path):
     oop = {"a": SC.opening(other, "a", opriv["a"]["bcs"], 1), "b": SC.opening(other, "b", opriv["b"]["bcs"], 3)}
     assert "not the registered row" in SC.check(orec, other, _draw(1, 3), honest, oop)
     # roots registered under another run's domain, an opening of another row, an excluded row, a draw of two units
-    assert "served domain" in SC.check({**rec, "window": {**rec["window"], "run": "r-other/matmul-5"}}, c, _draw(1, 3), honest, op)
+    assert "served domain" in SC.check({**rec, "window": {**rec["window"], "run": SC.run_of({**c["binding"], "run": "r-other"})}}, c, _draw(1, 3), honest, op)
     assert "not the drawn row" in SC.check(rec, c, _draw(2, 3), honest, op)
     assert "excluded" in SC.check(rec, c, _draw(M, 3), honest, op)
     assert "not one" in SC.check(rec, c, {**_draw(1, 3), "k": 2, "units": [3, 4]}, honest, op)

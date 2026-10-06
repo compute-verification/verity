@@ -89,6 +89,11 @@ def statement_of(k: int, rows: int, n: int, run: str) -> dict:
     return {"program": part["program"], "partition": PT.digest(part), "population": rows * n, "tiles": [rows, n], "run": run}
 
 
+def run_of(binding: dict) -> str:
+    """The request's run, as its served domains bind it: the serving run, the pass's manifest and the call."""
+    return f"{binding['run']}/{binding['manifest_sha256'][:16]}/matmul-{binding['matmul']}"
+
+
 def tile_of(rows: int, n: int, unit: int) -> tuple[int, int]:
     if not 0 <= unit < rows * n:
         raise ValueError(f"unit {unit} is not a tile of a {rows} x {n} call")
@@ -259,9 +264,10 @@ def registration_of(c: dict) -> dict:
 def receive(c: dict, rec: dict) -> tuple[dict, dict | None]:
     """The verifier's R1-R6 on `rec` against its own copies: the program and query of the call's tiles (its shape and real
     rows, public in this prototype), its law and scheme, and the ports it derives (each side's row count and served domain
-    under its own program, partition and the window's run).  The receipt when they hold, else None."""
+    under its own program, partition and the run of the request it audits, `run_of` the served request's binding, never
+    the record's own window).  The receipt when they hold, else None."""
     prog, q, part = population(c["binding"]["shape"][1], *c["statement"]["tiles"])
-    st = {"program": part["program"], "partition": PT.digest(part), "run": rec["window"].get("run")}
+    st = {"program": part["program"], "partition": PT.digest(part), "run": run_of(c["binding"])}
     rows = dict(zip(("a", "b"), c["statement"]["tiles"]))
     ports = {s: {"leaves": rows[s], "domain": domain(st, s, rows[s])[0].domain_id.hex()} for s in SIDES}
     v = R.check(rec, prog, q, LAW, SCHEME, ports)
@@ -338,7 +344,7 @@ def cmd_commit(a) -> int:
     sha = hashlib.sha256(raw).hexdigest()
     binding = {"run": man.get("run"), "manifest_sha256": sha, "scheme": man["scheme"],
                "matmul": u["index"], "shape": [u["m"], k, n], "weight": u["weight"], "real_rows": real}
-    st = statement_of(k, real, n, f"{man.get('run')}/{sha[:16]}/matmul-{u['index']}")
+    st = statement_of(k, real, n, run_of(binding))
     sides, priv = commit_words(st, words, k)
     c = {"schema": SCHEMA, "binding": binding, "statement": st, "sides": sides,
          "served": {"transcript_root": man.get("transcript_root"), "commitment": man.get("commitment"),
