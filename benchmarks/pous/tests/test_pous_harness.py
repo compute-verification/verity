@@ -643,3 +643,28 @@ def test_the_kernel_settings_and_the_loop_layout():
         harness.set_kernels(before)
     pl = harness.placements(WS["tensors"], 2000)
     assert [(name, off, size) for name, _, _, off, size in pl] == [("q", 0, 1024), ("k", 1024, 512)]   # down ends past 2000
+
+
+def test_the_harness_moves_every_one_of_its_threads_off_the_verifiers_and_responders_cpus():
+    harness = _harness()
+    here = sorted(os.sched_getaffinity(0))
+    if len(here) < 3:
+        pytest.skip("needs three CPUs")
+    started, stop, tid = threading.Event(), threading.Event(), []
+
+    def wait():
+        tid.append(threading.get_native_id())
+        started.set()
+        stop.wait()
+
+    t = threading.Thread(target=wait)
+    t.start()
+    started.wait()
+    try:
+        harness.leave_reserved(types.SimpleNamespace(verifier_cpu=here[0], responder_cpu=here[1]))
+        assert os.sched_getaffinity(0) == os.sched_getaffinity(tid[0]) == set(here[2:])     # a thread started before, too
+    finally:
+        stop.set()
+        t.join()
+        for x in os.listdir("/proc/self/task"):
+            os.sched_setaffinity(int(x), here)
