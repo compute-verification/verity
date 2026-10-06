@@ -139,6 +139,16 @@ def test_a_live_shim_under_the_envelope_conveys_nothing(setup, tmp_path):
     assert c["mutual_information_full_bits"] == c["decoded_bits_per_window"] == 0
 
 
+def test_in_steady_state_last_carries_nothing_and_a_margin_keeps_the_channel_open(setup):
+    """Accepted under `last`, a window's frontier is at most the δ it declared, and the next declares that frontier: δ
+    never rises, so past the start a sender's rate goes to 0. A margin lets δ rise again."""
+    s = setup[2]
+    rate = {r: covert.steady_state(s.sync_set, T, r, s.envelope, 300, 1)["mutual_information_corrected_bits"]
+            for r in ("last", "cover-1-1", "envelope")}
+    assert rate["last"] < 0.1 and rate["envelope"] == 0
+    assert 1 < rate["cover-1-1"] <= s.sync_set.bits
+
+
 def test_the_measure_pools_runs_and_is_exact_on_a_noiseless_channel():
     s = ar.Setup(calibration.calibrate(trace())).sync_set
     symbols = [3, 1, 2, 1, 3, 2]

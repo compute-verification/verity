@@ -257,26 +257,56 @@ def pool(summaries: Sequence[dict], sync_set: SyncSet) -> dict:
     return out
 
 
+def steady_state(sync_set: SyncSet, window_buckets: int, rule_name: str, envelope: ClockSync, windows: int,
+                 seed: int) -> dict:
+    """`encode_writes`' sender over one link of `windows` windows on a noiseless channel (one frame per window, at its
+    start, so its frontier is exactly the symbol), measured by `measure_runs`: the rate past the start, where every
+    `active_replay` configuration declares the envelope. `envelope` names the fixed control."""
+    T = window_buckets
+    keys = [(w * T + 1, w * T, w, 0) for w in range(windows)]
+    rule = None if rule_name == "envelope" else online.rule(rule_name)
+    enc = encode_writes(keys, [[f"s{w}"] for w in range(windows)], sync_set, T, windows, rule, envelope, seed,
+                        windows * T, [envelope] * windows)
+    return measure_runs([(enc["symbols"], enc["declared"])], sync_set, margin=margin_of(rule_name) if rule else 0)
+
+
+def _line(m: dict) -> str:
+    return (f"MI {m['mutual_information_full_bits']:.3f} bits/window (null {m['mutual_information_null_bits']:.3f}, "
+            f"corrected {m['mutual_information_corrected_bits']:.3f}), δ-MI {m['mutual_information_delta_bits']:.3f}, "
+            f"decoded {m['decoded_bits_per_window']:.3f}, SER {m['symbol_error_rate']:.3f}, "
+            f"{m['window_decisions']} window-decisions")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     import argparse
     import json
     from fractions import Fraction
     from pathlib import Path
 
-    ap = argparse.ArgumentParser(prog="covert.py", description="pool active_replay.py summaries' covert measurements")
-    ap.add_argument("summaries", nargs="+", type=Path)
+    ap = argparse.ArgumentParser(prog="covert.py", description="pool active_replay.py summaries' covert measurements, "
+                                 "or measure the sender's steady state under each --steady rule")
+    ap.add_argument("summaries", nargs="*", type=Path)
     ap.add_argument("--calibration", required=True, type=Path)
     ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--steady", action="append", default=[], metavar="RULE", help="last, cover-K-M[-fallback] or envelope")
+    ap.add_argument("--windows", type=int, default=5000, help="with --steady: the link's windows")
+    ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args(argv)
-    cs = json.loads(args.calibration.read_text())["clock_sync"]
+    report = json.loads(args.calibration.read_text())
+    cs = report["clock_sync"]
     sync_set = SyncSet(tuple(cs["deltas"]), tuple(Fraction(r) for r in cs["rhos"]))
-    result = pool([json.loads(p.read_text()) for p in args.summaries], sync_set)
+    if args.steady:
+        d = cs["declared"]
+        envelope = ClockSync(max(d["delta"]), min(Fraction(r) for r in d["rho"]))
+        result = {rule: steady_state(sync_set, report["grid"]["window_buckets"], rule, envelope, args.windows,
+                                     stream_seed(args.seed, rule)) for rule in args.steady}
+        for rule, m in result.items():
+            print(f"{rule}: {_line(m)}")
+    else:
+        result = pool([json.loads(p.read_text()) for p in args.summaries], sync_set)
+        for s, m in result.items():
+            print(f"{s}: {_line(m)}, accepted {m['accepted']} of {m['link_windows']}")
     args.out.write_text(json.dumps(result, indent=1))
-    for s, m in result.items():
-        print(f"{s}: MI {m['mutual_information_full_bits']:.3f} bits/window (null {m['mutual_information_null_bits']:.3f},"
-              f" corrected {m['mutual_information_corrected_bits']:.3f}), δ-MI {m['mutual_information_delta_bits']:.3f},"
-              f" decoded {m['decoded_bits_per_window']:.3f}, SER {m['symbol_error_rate']:.3f}, "
-              f"{m['window_decisions']} window-decisions, accepted {m['accepted']} of {m['link_windows']}")
     return 0
 
 
