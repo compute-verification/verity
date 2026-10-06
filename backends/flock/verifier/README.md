@@ -161,6 +161,12 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
 - Template queries (§16.10): `template_query_agree.py` checks the decoding against #131's `template_instance_vectors.json`
   (16 of 16: the population, the ranges, every unit's node, member and gates, the refusals word for word, the malformed
   parameters).
+- The firewall's contract (`Flock.Firewall`, `flock-firewall check`): `firewall_agree.py` runs the inner phase's firewall
+  (`rec_live.Proxy`) and the contract on the same transcript (`verity_flock.firewall_transcript`) over 22 cases: the honest
+  sessions accepted by both, the red team's six on #1270 refused by both, tamper controls the firewall passes and the
+  contract refuses, and one divergence (an Open the schedule does not place, which the firewall forwards). `--sessions`
+  replays recorded K = 4096 sessions from their coins and salts (`r20261006-070620-e02d`: 4 of 4 accepted by both). The
+  outer phase (`gate.rs`) is not covered yet.
 - Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agrees 27 of 27. Set 14 (a shared-row RoPE file whose six
   instances repeat three rows) agrees 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included; set 15
   (the same instances per instance) 22 of 22. The `967b8d06` vectors patch writes each false statement as the verifier's
