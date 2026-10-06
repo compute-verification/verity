@@ -458,7 +458,7 @@ oprove)
   # the prover's sides, WARM + RUNS sessions each per statement: dev (the device's witness, rec-reprice's), host
   # (FC_HOST_WITNESS=1, no gate) and gate (FC_GATE=1 on the host witness: the send check and the level-0 recheck, PROTOCOL.md
   # §10); the gateway's cost is gate's minus host's. The last mode's last session is the one oreplay and lean read.
-  MODES=${MODES:-dev}
+  MODES=${MODES:-dev}; MODES=${MODES//,/ }
   for C in $(ls -d $DD/outer/L* 2>/dev/null | sort -V) $( [ -f $DD/alg/honest/inst.bin ] && echo $DD/alg/honest); do
     l=$(basename $C); [ $l = honest ] && l=alg
     [ -n "${LEVELS:-}" ] && [[ ",$LEVELS," != *",${l#L},"* ]] && continue
