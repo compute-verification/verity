@@ -801,6 +801,10 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
                 continue
             lacking = set(need) - grants(pr, sha) if need else set()
             if missing := sorted(lacking - grants.carried(pr, sha, lacking)):
+                if conflicts := _conflicts(repo, base, sha):
+                    out.append(f"{label} at {sha[:12]} conflicts with {base[:12]} in {', '.join(conflicts)}, so it needs every grant "
+                               f"until it merges cleanly: merge {base[:12]}, or the pull request there that touched those files, into it")
+                    continue
                 target = grant_target(pr, sha)
                 out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: {TRAIN_GRANTS[g]}); once it has it, "
                         f"`research data label {target} grant {g} --by REVIEWER` (one on an earlier head counts only when this "
@@ -811,6 +815,12 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
     except QueueError as e:                             # a store or git that can't answer (STALE), not the rules
         raise Refused(str(e)) from e
     return out
+
+
+def _conflicts(repo: Path, base: str, head: str) -> list[str]:
+    """The files merging ``head`` into ``base`` leaves conflicted (none when it merges cleanly)."""
+    r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
+    return [p for p in r.stdout.splitlines()[1:] if p] if r.returncode == 1 else []
 
 
 def queue_rules(repo: Path, base: str):

@@ -332,6 +332,25 @@ def _origin_with(tmp_path: Path, main: Path, files: dict[str, str], prs: dict[in
     return origin, heads
 
 
+def test_a_head_that_conflicts_with_the_base_is_refused_for_the_conflict_not_for_grants(tmp_path, monkeypatch, capsys):
+    """Comms' #1392 touched only `slack.py` and its test, but conflicted with #1379 in the tip: no tree says what it changes, so
+    it needs every grant, and prepare asked for grants it never needed.  The refusal names the
+    conflict and its files instead."""
+    _store_remote(tmp_path, monkeypatch)
+    main, _feat, _tip = _repos(tmp_path)
+    origin, heads = _origin_with(tmp_path, main, {"tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\npaths = ["f.txt"]\n',
+                                                  "s.txt": "one\n"}, {40: {"s.txt": "two\n"}})
+    (main / "s.txt").write_text("three\n")
+    _git(main, "commit", "-q", "-am", "main moves s.txt")
+    _git(main, "push", "-q", "origin", "main")
+    monkeypatch.chdir(main)
+    assert merge_main(["--train", "--prepare", "train-prep/c", f"40@{heads[40][:9]}", "--lint", "true"]) == 3
+    err = capsys.readouterr().err
+    base = _git(main, "rev-parse", "main")
+    assert f"#40 at {heads[40][:12]} conflicts with {base[:12]} in s.txt, so it needs every grant until it merges cleanly" in err
+    assert "grant statement-reviewer --by REVIEWER" not in err
+
+
 def test_a_conflict_only_on_import_lines_keeps_both_sides_and_any_other_line_refuses(tmp_path, monkeypatch, capsys):
     """Stacked PRs each adding a module to one root import list (old-circuits-and-proofs resolved #850, #857, #860, #861, #863
     and #866 on FlockSoundness.lean by hand, 2 Oct): the train keeps ours, then the lines theirs adds, and says so in the
