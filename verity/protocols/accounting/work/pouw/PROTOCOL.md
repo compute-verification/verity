@@ -6,8 +6,8 @@ PoUW problem statement's; the guarantee is Lean's `Pouw.SecurityProofs.EndToEnd`
 conjecture. PoUW's Lean is under `verity/Security/` (`Definitions/Pouw`, `Specs/Pouw`, `Proofs/Pouw`), and every theorem this document
 cites is pinned in `verity/Security/lean-audit.json`.
 
-This document describes the scheme while it is experimental; what is proved is the Lean. Each guarantee is stated in
-`Specs/Pouw` (`Pouw.Guarantees.G`) and proved in `Proofs/Pouw` (`Pouw.SecurityProofs.G`), and this document points at
+This document describes the scheme while it is experimental; what is proved is the Lean. Each guarantee G is stated in
+`Specs/Pouw` and proved in `Proofs/Pouw`, as `Pouw.SecurityProofs.G : Pouw.Guarantees.G`, and this document points at
 those names rather than restating them.
 
 ## The interface
@@ -177,10 +177,10 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   `tests/test_pouw_word_p.py` certifies all of them exactly at the k the MVP uses (1,088, 2,048, 11,008).
   `ncp-v1-shift24` uses the shift by 24 instead, admissible with independent checkpoints for every k ≥ 1,024 with
   16 ∣ k (Lean `Pouw.SecurityProofs.NCP.ShiftBy24Admissible`, `Pouw.SecurityProofs.NCP.IndependentWitness`).
-- **Lean.** The certificate's guarantees are its `theorems`: NCP's in `Pouw.Guarantees.NCP`
-  (`verity/Security/Specs/Pouw/Guarantees/NCP.lean`, the reduction `GammaFromTTNCP_U_v1` from the named assumption
-  `Pouw.NCP.Assumptions.TTNCP_U`), the barrier `Pouw.Guarantees.Barrier.Generic`, and the game's
-  `Pouw.Guarantees.Theorem1`, `WorkWeightedSampling` and `EndToEnd`.
+- **Lean.** The certificate's guarantees are its `theorems`: NCP's in `verity/Security/Specs/Pouw/Guarantees/NCP.lean`
+  (the reduction `Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1`, from the named assumption `Pouw.NCP.Assumptions.TTNCP_U`),
+  the barrier `Pouw.Guarantees.Barrier.Generic`, and the game's `Pouw.Guarantees.Theorem1`, `WorkWeightedSampling` and
+  `EndToEnd`.
 
   Assumed: TTNCP_U(0.5%); `Word.NzNCP` of the route-U words (the floors' hypothesis). Not proved: that M_4090 runs H_ref
   within `wref` (`AdmitsRef`), and the byte-level noise expansion here (the Lean takes any expansion of H's answers with
@@ -556,7 +556,7 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     names the cap among its parameters.
   - γ at the headline record (FP32 at 8.376, the packed cast at 8.72, rev1's credit) is the pinned guarantee
     `Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` (8,192³). The 16,384³ shape and the issue-bound FP32
-    add (8.00) are lemmas in `Pouw.PearlC` (`pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_16384`,
+    add (8.00) are lemmas beside it, not pinned (`pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_16384`,
     `pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192` and `_16384`); the ledger publishes the larger of the two prices, the
     in-loop add's.
   - The verifier's credit, cap and debit are rev1's, the rule these γ are proved for: `credit_of` is `creditDevRev1`,
