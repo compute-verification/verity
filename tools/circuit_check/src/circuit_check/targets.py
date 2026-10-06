@@ -434,14 +434,15 @@ def _pous_roots() -> list[Any]:
     """P2's modular squaring (`verity.protocols.accounting.space.pous.circuit`) at W = 128 with P2's C0 = 21,065: its square
     takes a Toom-3 level (above `TOOM`), then Karatsuba (above `SCHOOL`), then schoolbook, so it reaches every piece; the
     package's tests check it against Python's integers at P2's width and pin its gate counts there.  P2's decode of one
-    block at W = 64 (C0 = 189, its 116-byte expansion base) reaches the Keccak and field pieces; the answer opening of a
+    block at W = 64 (C0 = 189, its 144-byte expansion base: one midstate block and a 16-byte rest) reaches the counter-mode
+    SHA-512 and field pieces; the answer opening of a
     264-byte row reaches the row digest's head, a middle compression and a tail with its rest."""
     from verity.primitives.circuits.defs import bind
     from verity.protocols.accounting.space.pous.answer_circuit import PousAnswerOpens
     from verity.protocols.accounting.space.pous.circuit import PousModSquare
     from verity.protocols.accounting.space.pous.decode_circuit import PousP2Decode
 
-    return [bind(PousModSquare, W=128, C0=21065), bind(PousP2Decode, W=64, C0=189, L=116), bind(PousAnswerOpens, N=264)]
+    return [bind(PousModSquare, W=128, C0=21065), bind(PousP2Decode, W=64, C0=189, L=144), bind(PousAnswerOpens, N=264)]
 
 
 def _kernel_roots() -> list[Any]:
