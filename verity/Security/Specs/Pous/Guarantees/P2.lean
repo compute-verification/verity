@@ -1,4 +1,5 @@
 import Definitions.Pous.Accounting.Params
+import Definitions.Pous.Model.FreeBlocks
 import Definitions.Pous.Model.M1p
 
 /-!
@@ -8,7 +9,8 @@ Six statements about the abstract model `m1p` (`verity/Security/Definitions/Pous
 permutations of `[0, p)`, forward queries only), at the block counts, widths and primes P2 uses, that `grade.sh` grades
 against, in namespace `Pous.Guarantees` with the rest. The proofs are in `verity/Security/Proofs/Pous/P2/`
 (`Pous.SecurityProofs.P2MeetsM1pB19Uncond` and the others in `verity/Security/Proofs/Pous.lean`); a docstring's
-`lean/submissions/efficient-crypto/…` path names the store draft each was graded from.
+`lean/submissions/efficient-crypto/…` path names the store draft each was graded from. A seventh,
+`P2SlackFamilyFreeBlocks` (the sampled setup's free blocks), is proved in `verity/Security/Proofs/Pous/FreeBlocks/`.
 
 Each is a theorem about `m1p` only, not about the concrete P2: nothing here models square–mask–square, SHAKE256, roots
 or time, so none of them says the deployed P2 is secure.
@@ -144,5 +146,23 @@ def P2ErrorSplitB19Uncond : Prop :=
         ((2⁻¹ : ENNReal) ^ 129) ∧
       AuditSecure sch .sequential (sch.stateBound Params.ρ + 256 * sch.B) D (2 ^ 20) 127 (ENNReal.ofReal Params.δ)
         ((2⁻¹ : ENNReal) ^ 129)
+
+/-- **The sampled setup's free blocks.** For every `B` with `2^8 ≤ B ≤ 2^23` and every `b` with
+`20·16448 ≤ 21·b` and `b ≤ 16447`, the `m1p B 16448 (2^16448 − 21065) b` audit with at most `⌊B/100⌋` free blocks
+(`AuditSecureFree`: blocks a sampled setup let through, which pass every challenge) accepts every adversary holding
+`⌊ρ_eff·|C|⌋ + 128·B` bits, `ρ_eff = 18/19 · 99/100 ≈ 0.938`, with sequential reveal, `2^20` forward queries per
+answer and any depth, with probability at most `1% + 2^-128 + 2^-129`, at `k = 140`.
+
+Where the numbers come from: a sampled setup of `s = 8,828` blocks (`⌈128 / −log₂ 0.99⌉`) leaves more than `B/100`
+blocks not decoding to `W` with probability at most `2^-128`, which the profile's failure union carries, not this
+statement. `ρ_eff` is `ρ` of the blocks that must be stored. The proof (`Pous.FreeBlocks.p2_slack_family_free_blocks`)
+counts the free blocks in the 1% term, `((g − 1 + ⌊B/100⌋)/B)^140 ≤ (0.9576 + 0.01)^140 ≤ 1/100` with
+`g = ⌊0.9576·B⌋ + 1`, and the state is below `P2SlackFamilyUncond`'s `λ = 0` one, so it shows `1% + 2^-129`; the `2^-128`
+term is slack. Scope: as `P2SlackB19Uncond`. -/
+def P2SlackFamilyFreeBlocks : Prop :=
+  ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 23 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
+    let sch := m1p B 16448 (2 ^ 16448 - 21065) b
+    AuditSecureFree sch (B / 100) (sch.stateBound (Params.ρ * (99 / 100)) + 128 * sch.B) D (2 ^ 20) 140
+      (ENNReal.ofReal Params.δ) (Params.εMax + (2⁻¹ : ℝ≥0∞) ^ 129)
 
 end Pous.Guarantees

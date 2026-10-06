@@ -168,9 +168,9 @@ def device_run():
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.unverified(declared, roots, BEACON).salt
 
-    def make(hashing=True, schedule="serial"):
+    def make(hashing=True, schedule="serial", flag_rows=PPD.FLAG_ROWS):
         return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, salt, BEACON, hashing=hashing,
-                                   capacity=1 << 12, schedule=schedule)
+                                   capacity=1 << 12, schedule=schedule, flag_rows=flag_rows)
     return make, kernel, weights, roots, salt
 
 
@@ -224,6 +224,17 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
     assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == ["stats_s5", "eprime", "form_s5", "words", "pa",
                                                                           "gemm_pearlc_d"]
     assert run.end() == {"units": 1, "tiles": 0, "hashing": False, "schedule": "serial"}
+
+
+def test_a_pass_screens_at_most_its_flag_rows(device_run):
+    make, _, weights, _, _ = device_run
+    run = make(flag_rows=48)
+    assert run.flag_buf.shape == (48, 2)
+    run.begin()
+    x = torch.randn(32, 1024).to(torch.bfloat16)
+    run.gemm(0, x, weights[0], None)
+    with pytest.raises(RuntimeError, match="over its capacity .* 48 screened rows"):
+        run.gemm(1, x, weights[1], None)
 
 
 def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
@@ -988,6 +999,57 @@ def test_the_schedule_alternates_the_baseline_rep_by_rep_or_in_abab_blocks():
     assert sum(b.count("fp8") for b in blocks) == 3 and sum(b.count("pearlc") for b in blocks) == 3
 
 
+def test_a_sweep_points_decode_batch_and_prompt_name_its_key_and_its_graph_sizes():
+    """Off the panel's decode (32 prompts of 64 tokens) the key names the batch and the prompt, so `panel_rows.py` never reads
+    a sweep point as its decode row; the graphed baseline captures the point's batch."""
+    E2E = load("pearl_c_vllm_e2e_sweep", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
+    assert E2E.decode_key() == "decode_b32" and E2E.CAPTURE_SIZES == [1, 2, 4, 8, 16, 24, 32]
+    assert E2E.SHAPES == {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
+    E2E.configure(types.SimpleNamespace(batch=128, prompt=2048))
+    assert E2E.decode_key() == "decode_b128_p2048" and E2E.CAPTURE_SIZES == [1, 2, 4, 8, 16, 24, 32, 128]
+    assert E2E.SHAPES["decode_b128_p2048_step"] == "e2e-llama31-8b-vllm-m128-p2048" and len(E2E.SHAPES) == 2
+    rec = lambda m, ph: {"mode": m, "phase": ph, "rep": 0, "s": 1.0, "gemm_s": 0.0, "step_s": 0.01, "gemm_step_s": 0.0}
+    t = E2E.timing([rec(m, ph) for m in E2E.MODES for ph in ("prefill", "decode")])
+    assert set(t["fp8"]["timing"]) == {"prefill_8192_s", "prefill_8192_gemm_s", "decode_b128_p2048_step_s", "decode_b128_p2048_step_gemm_s"}
+    assert list(E2E.split(t)) == ["prefill_8192", "decode_b128_p2048_step"]
+    ns = [6144, 4096, 28672, 4096] * 32                               # Llama-3.1-8B's linears
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
+    assert E2E.pass_capacity(128, ns) == (PPD.LEAF_CAPACITY, PPD.FLAG_ROWS)
+    E2E.configure(types.SimpleNamespace(batch=256, prompt=64))       # 256 x (64 + 65) tokens, 128 calls each: over 4M rows
+    assert E2E.pass_capacity(128, ns) == (PPD.LEAF_CAPACITY, 2 * PPD.FLAG_ROWS)
+    E2E.configure(types.SimpleNamespace(batch=1, prompt=64))
+    assert E2E.decode_key() == "decode_b1" and E2E.CAPTURE_SIZES == [1]
+
+
+def test_the_noise_sweep_pairs_each_pearl_c_rep_with_the_stock_reps_around_it(tmp_path):
+    NS = load("pearl_c_vllm_noise_sweep", KERNEL.parent / "pearl_c_vllm" / "noise_sweep.py")
+    fp8 = [10.0, 12.0, 14.0, 20.0, 22.0, 24.0]                       # two cycles of three fp8 reps
+    steps = {"fp8": fp8, "pearlc": [13.2, 25.3], "pearlc-nohash": [14.3, 25.3], "bf16": [9.0, 9.0]}
+    reps = lambda m: [{"rep": i, "step_s": s / 1e3, "clock": {"sm_mhz": 2100}} for i, s in enumerate(steps[m])]
+    e2e = {"run": "r1", "interleave": "rep", "summary": {"gates": {"arm": True}},
+           "results": {m: {"reps": {"prefill_8192": [], "decode_b8": reps(m)}} for m in steps}}
+    r = NS.run_ratios(e2e)["ratios"]["fp8"]
+    assert r["pearlc"] == pytest.approx([1.2, 25.3 / 21]) and r["pearlc-nohash"] == pytest.approx([1.1, 25.3 / 23])
+    assert r["hashing"] == pytest.approx([0.1, 25.3 / 21 - 25.3 / 23])
+    for d in ("eager-b8.r1", "eager-b8.r2.t2"):
+        (tmp_path / d).mkdir()
+        (tmp_path / d / "e2e.json").write_text(json.dumps(e2e))
+    (tmp_path / "eager-b8.r3").mkdir()
+    (tmp_path / "eager-b8.r3" / "e2e.json").write_text(json.dumps({"error": "base: preempted", "results": {}}))
+    doc = NS.summarize([tmp_path])
+    p = doc["points"]["eager-b8"]
+    assert len(p["runs"]) == 2 and p["failed"][0]["error"] == "base: preempted" and set(p["rows"]) == {"fp8"}
+    row = p["rows"]["fp8"]
+    assert row["pearlc-nohash"]["median"] == pytest.approx((1.1 + 25.3 / 23) / 2) and row["flag"] is None
+    assert (row["pearlc-nohash"]["n"], row["pearlc-nohash"]["runs"]) == (4, 2)
+    assert "| eager-b8 | fp8 | 17.00 | 1.100 [1.100, 1.100] n=4/2 |" in NS.table(doc)
+    steps["pearlc-nohash"] = [10.0, 20.0]                             # faster than stock FP8: flagged, not a win
+    for d in ("eager-b8.r1", "eager-b8.r2.t2"):
+        (tmp_path / d / "e2e.json").write_text(json.dumps({**e2e, "results": {m: {"reps": {"decode_b8": reps(m)}} for m in steps}}))
+    assert "assessor" in NS.summarize([tmp_path])["points"]["eager-b8"]["rows"]["fp8"]["flag"]
+
+
 def test_a_wikitext_window_starts_with_the_configs_bos_when_the_tokenizer_names_none(monkeypatch):
     """Qwen3-8B's tokenizer has no BOS (vLLM refused its windows' None id); its config's `bos_token_id` stands in."""
     E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
@@ -1086,6 +1148,15 @@ def test_the_profile_maps_gpu_1s_kernels_to_their_categories(tmp_path):
                     '50,2000000,10,200000,"gemm_pearlc_b"\n30,1200000,40,30000,"hash_leaf_p"\n20,800000,5,160000,"flash_fwd"\n')
     got = PF.nsys_kernels(csvf)
     assert got["gpu_ms_by_category"] == {"gemm": 2.0, "hashing": 1.2, "other": 0.8} and got["top_kernels"][0]["kernel"] == "gemm_pearlc_b"
+
+
+def test_the_served_profile_counts_stock_fp8s_cutlass_3_kernel_as_gemm(monkeypatch):
+    """vLLM's FP8 linear on sm_120 is CUTLASS 3's `device_kernel`, the stock arm's matmul, not `other`."""
+    monkeypatch.setenv("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    SP = load("pearl_c_vllm_served_profile", KERNEL.parent / "pearl_c_vllm" / "served_profile.py")
+    assert [SP.category(k) for k in ("device_kernel", "Kernel2", "gemm_pearlc_d", "words", "hash_leaf_p", "flash_fwd_splitkv_kernel",
+                                     "some_device_kernel_x")] == [
+        "gemm", "gemm", "pearlc:gemm", "pearlc:forming", "pearlc:tile_hash", "attention", "other"]
 
 
 def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_back(device_run):
