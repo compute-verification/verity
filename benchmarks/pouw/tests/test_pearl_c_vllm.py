@@ -321,10 +321,13 @@ def test_the_pipelines_h2_templates_bind_the_audits_schemas():
 
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
-@pytest.mark.parametrize("scheme,rows_form", [(s, "w") for s in sorted(PPD.SCHEMES)] + [("pearl-c-sm120-v1-h2", "s")])
+@pytest.mark.parametrize("scheme,rows_form", [(s, "w") for s in sorted(PPD.SCHEMES)]
+                         + [("pearl-c-sm120-v1-h2", "s"), ("pearl-c-sm120-v1-h3", "s")])
 def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, rows_form):
     """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
-    their kernels run by `simt_twin`: each is `MerkleTree`'s root in the scheme's tree hash (frame-b3 or frame-b3s)."""
+    their kernels run by `simt_twin`: each is `MerkleTree`'s root in the scheme's tree hash (frame-b3 or frame-b3s).  Under
+    -h3, each call's row seeds (b3_seeds over the leaves, the unit index read from the call's key slot) are the scheme's
+    `row_seeds`, and E_A's lines read them for the m₁₆ committed rows."""
     hashing = PPD.scheme_of(scheme).hashing
     h = PPD.scheme_of(scheme).commitment_hash
     rng = np.random.default_rng(5)
@@ -343,9 +346,20 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, rows_
         kernel.dev.log.clear()
         run.gemm(w, x, weights[w], None)
         names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
-        want_rows = ["hash_rows_b3s" + ("_stats" if rows_form == "s" else "")] if hashing == "h2" else ["hash_rows_w"]
+        want_rows = ["hash_rows_b3s" + ("_stats" if rows_form == "s" else "")] if hashing in R.B3S_HASHINGS else ["hash_rows_w"]
         assert names[:len(want_rows) + 2] == ["hash_node_keys", *want_rows, "hash_tree_small"], names
         assert ("stats_s5" in names) == (rows_form == "w")
+        seeds = ["seed_line_a", "b3_seeds", "lines"] if hashing == "h3" else ["seed_line_a", "lines"]
+        assert names[len(want_rows) + 2:len(want_rows) + 2 + len(seeds)] == seeds, names
+        if hashing == "h3":
+            sh, index = run.shapes[(32, weights[w].shape[0], 1024)], len(run.cur.matmuls) - 1
+            a = torch.zeros((32, 1024), dtype=torch.float32)
+            a[:x.shape[0]] = x.float()
+            mm = Matmul(index, Shape(32, 1024, weights[w].shape[0]), w)
+            ctx = Context(salt, mm, PPD._bytes(run.roots_buf[32 * index:32 * index + 32]), roots[w])
+            assert PPD._bytes(sh.b["seeds_a"][:32 * 32]) == b"".join(PPD.scheme_of(scheme).row_seeds(ctx, rows(a), range(32)))
+            (lines_ea,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "lines"]
+            assert lines_ea[0][4] == sh.b["seeds_a"].data_ptr() and lines_ea[1][2:5] == (sh.mp, R.NORM_256, 32)
         if rows_form == "s":
             a = torch.zeros((32, 1024), dtype=torch.float32)
             a[:x.shape[0]] = x.float()
@@ -363,7 +377,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, rows_
     run.leaves[:32 * count] = torch.frombuffer(bytearray(leaves), dtype=torch.uint8)
     kernel.dev.log.clear()
     out = run.end()
-    assert [n for n, *_ in kernel.dev.log][-2] == ("hash_leaves_b3s" if hashing == "h2" else "hash_tree_leaves")
+    assert [n for n, *_ in kernel.dev.log][-2] == ("hash_leaves_b3s" if hashing in R.B3S_HASHINGS else "hash_tree_leaves")
     dt = transcript_domain(Epoch(Workload(tuple(run.cur.matmuls)), roots, salt), count, h)
     tree = MerkleTree(dt, {i: leaves[32 * i:32 * i + 32] for i in range(count)}, lambda _: TILE_SCHEMA)
     assert out["transcript_root"] == tree.commitment.root.hex()
@@ -551,10 +565,14 @@ def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(hone
     assert doc["fresh_source"] == src and doc["fresh_draws"] == 4 and doc["m"] == 2
     lines = [json.loads(x) for x in (out / f"{path.parent.name}.fresh-tiles.jsonl").read_text().splitlines()]
     assert len(lines) == 8 and len({t["salt"] for t in lines}) == 8 and epoch.salt.hex() not in {t["salt"] for t in lines}
-    assert sum(bool(t.get("cross_checked")) for t in lines) == 4 and all(t["openings_ok"] and t["ok"] for t in lines)
+    fails = [t for t in lines if not t["ok"]]
+    assert sum(bool(t.get("cross_checked")) for t in lines) == 4 and all(t["openings_ok"] for t in lines)
+    # an honest row can exceed its own cap (-h3's row cap, k 128 here), and the served path volunteers no rows
+    assert all("the row cap" in t["reason"] for t in fails) and (not fails or PW.row_cap(s))
     for row in doc["inputs"]:
-        assert row["method"] == "fresh" and row["drawn"] == 4 and row["failures"] == 0
-        assert row["upper"] == SD.clopper_pearson_upper(0, 4, 0.025) and row["bound_method"].startswith("fresh")
+        failures = sum(t["matmul"] == row["matmul"] for t in fails)
+        assert row["method"] == "fresh" and row["drawn"] == 4 and row["failures"] == failures
+        assert row["upper"] == SD.clopper_pearson_upper(failures, 4, 0.025) and row["bound_method"].startswith("fresh")
     t = lines[0]
     ref = Verifier(PW._TileRuleView(s), epoch).refs[t["tile"]]
     op = prover.open(epoch, ref.id)
@@ -1285,8 +1303,9 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     assert not hasattr(PPD, "TREE_HASH") and all(SchemeId.parse(n).name == n for n in PPD.SCHEMES)
     assert not hasattr(PPD, "tree_hash") and not hasattr(PPD, "variant")
     assert C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"
+    assert hash_format(PPD.scheme_of("pearl-c-sm120-v1-h3")) is HASH_FORMATS["h3"]
     with pytest.raises(KeyError, match="this device path runs"):
-        PPD.scheme_of("pearl-c-sm120-v1-h3")
+        PPD.scheme_of("pearl-c-sm120-unpromoted-v1-h3")
 
 
 # ---- the schedule as data ---------------------------------------------------------------------------------------------

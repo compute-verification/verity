@@ -23,7 +23,8 @@
 # group a chunk with CHUNK_MIN=0, exiting 99 while groups remain.  OUT names the output directory where there is no research
 # run (a fill job).  SCHEDULE (serial, the default, or deferred) and SCHEME (the Pearl-C scheme, and so its hashing format)
 # pass to e2e.py and profile_decode.py; the quality run names its own schemes.  GRAPHS=1 passes --graphs to e2e.py, FP8_GRAPHS=1 --fp8-graphs.
-# ROWS_FORM=s (an -h2 SCHEME only) passes --rows-form s to e2e.py and profile_decode.py: forming's statistics from -h2's row-leaf pass.
+# ROWS_FORM=s (an -h2 or -h3 SCHEME only) passes --rows-form s to e2e.py and profile_decode.py: forming's statistics from the
+# frame-b3s row-leaf pass.
 # WHOLE_STEP=1 passes --whole-step: the arm's decode forwards as vLLM's FULL graphs with Pearl-C's calls inside; with it,
 # WHOLE_DEFER=1 passes --whole-defer: each call's tile hashing captured beside the next call.
 set -euo pipefail

@@ -223,6 +223,9 @@ def test_row_seeds_over_a_calls_leaves_are_the_schemes(host):
     host.launch("b3_seeds", 1, 128, p=(host.put(b"".join(leaves)), out, skey, psalt, prb), i=(m, ctx.matmul.index, 1))
     seeds = s.row_seeds(ctx, rows, range(m))
     assert host.read(out, 32 * m) == b"".join(seeds)
+    slot, out2 = host.put(ctx.matmul.index.to_bytes(8, "little")), host.alloc(32 * m)   # the index read from a graph's key slot
+    host.launch("b3_seeds", 1, 128, p=(host.put(b"".join(leaves)), out2, skey, psalt, prb, slot), i=(m, 0, 1))
+    assert host.read(out2, 32 * m) == b"".join(seeds)
     host.launch("seed_subkeys", 1, 32, p=(out + 32 * 5, keys))
     assert host.read(keys, 32) == P._line_key(seeds[5])
 

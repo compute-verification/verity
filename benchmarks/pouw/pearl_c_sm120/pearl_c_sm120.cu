@@ -497,18 +497,26 @@ DEV int k32(int t) { return (t & ~31) | (t >> 1 & 3) << 3 | (t >> 3 & 3) << 1 | 
 
 // p0 the line key (8 words), p1 codes (count x 32, row-major), p2 transposed (32 x count) or 0, p3 transposed into 128 x count
 // (rows 32-127 left as they are) or 0, both in K32 order along count (the F lines, count = k); i0 side, i1 factor, i2 count,
-// i3 bf16(32 x the line's L2 norm): 0x4600 for Pearl's 256, 0x4400 for 16
+// i3 bf16(32 x the line's L2 norm): 0x4600 for Pearl's 256, 0x4400 for 16.  i4 lines keyed per row (-h3's E_A,
+// `pearl_c.PearlC.encode`): line t < i4 is line 0 under the noise-line subkey of its own seed, p4 + 32 t (b3_seeds' mode 1);
+// the rest, line t under p0
 extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
   const int line = blockIdx.x * blockDim.x + threadIdx.x, count = a.i[2];
   if (line >= count) return;
-  const uint32_t* key = reinterpret_cast<const uint32_t*>(a.p[0]);
+  const bool own = line < a.i[4];
   uint32_t kw[8], msg[16], h[8];
-#pragma unroll
-  for (int i = 0; i < 8; i++) kw[i] = key[i];
+  if (own) {
+    uint32_t seed[8];
+    load_key(a.p[4] + (uint64_t)line * 32, seed);
+    b3_short<23>(seed, [&](int j) { return (uint32_t)NOISE_LINE_LABEL[j]; }, kw);
+  } else {
+    load_key(a.p[0], kw);
+  }
+  const uint32_t at = own ? 0u : (uint32_t)line;
 #pragma unroll
   for (int i = 0; i < 16; i++) msg[i] = 0;
-  msg[0] = (uint32_t)a.i[0] | (uint32_t)a.i[1] << 8 | ((uint32_t)line & 0xFFFF) << 16;
-  msg[1] = (uint32_t)line >> 16;
+  msg[0] = (uint32_t)a.i[0] | (uint32_t)a.i[1] << 8 | (at & 0xFFFF) << 16;
+  msg[1] = at >> 16;
   blake3_block(kw, msg, h);
   int xs[32];
   uint32_t sumsq = 0;

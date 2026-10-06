@@ -40,7 +40,7 @@ counts the steps replayed and run eagerly.  vLLM's eager decode isn't its graph'
 check compares Pearl-C's graphed calls with its eager ones both under vLLM's eager decode.  ``--whole-defer`` (with
 ``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), under the same gate.
 
-``--rows-form s`` (-h2 only) serves A's rows form ``s``: forming's statistics come from the row-leaf kernel's own pass over A
+``--rows-form s`` (-h2 and -h3, frame-b3s's) serves A's rows form ``s``: forming's statistics come from the row-leaf kernel's own pass over A
 (`run.Pipeline`'s ``rows_form``), the same bytes as ``stats_s5``'s.  The quality run keeps its schemes' form, ``w``.
 
 Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before a window: both
@@ -823,7 +823,7 @@ def main() -> None:
     ap.add_argument("--whole-defer", action="store_true",
                     help="(with --whole-step) a whole capture runs each call's tile hashing beside the next call's A tree")
     ap.add_argument("--rows-form", choices=("w", "s"), default="w",
-                    help="A's rows form: s takes forming's statistics from -h2's row-leaf pass over A (-h2 schemes only)")
+                    help="A's rows form: s takes forming's statistics from the frame-b3s row-leaf pass over A (-h2 and -h3 schemes only)")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
     ap.add_argument("--perplexity", action="store_true", help="untimed: WikiText-2 perplexity and agreement for bf16, fp8, v1, v2")
     ap.add_argument("--ppl-windows", type=int, help="the quality run's first N windows (default all)")
@@ -832,8 +832,8 @@ def main() -> None:
     args.graphs = args.graphs or args.whole_step
     if args.whole_defer and not args.whole_step:
         ap.error("--whole-defer defers within a whole capture: it needs --whole-step")
-    if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing != "h2":
-        ap.error(f"--rows-form s is -h2's, and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
+    if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing not in ("h2", "h3"):
+        ap.error(f"--rows-form s is frame-b3s's (-h2, -h3), and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
     if args.smoke:
         smoke(args)
         return

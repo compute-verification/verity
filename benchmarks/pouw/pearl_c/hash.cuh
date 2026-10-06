@@ -299,7 +299,8 @@ extern "C" __global__ void __launch_bounds__(128) hash_tree_leaves(const Args a)
 // Seeds: -h3's row seeds and a unit's seed_A, each the standard keyed BLAKE3 under the seed-A label's key (p2,
 // blake3("pearl-c/v0/seed-A")) of salt ‖ root ‖ root_B ‖ u64 LE ι (104 bytes: two blocks).  i2 = 1: row r of i0 rows, root its
 // leaf (p0 + 32 r) and ι = i1 · 2^32 + r (`pearl_c.row_seed`, the one-row unit's seed_A); i2 = 0: the unit's, root p0 and
-// ι = i1 (`pearl_c.unit_seed_a`).  p0 leaves or the root, p1 out (32 B a seed), p2 the key, p3 salt, p4 root_B; i0 rows,
+// ι = i1 (`pearl_c.unit_seed_a`).  p0 leaves or the root, p1 out (32 B a seed), p2 the key, p3 salt, p4 root_B, p5 0 or the
+// unit index's address (its low 32 bits, little-endian, in place of i1: a captured graph's per-call key slot); i0 rows,
 // i1 the unit index, i2 the mode
 extern "C" __global__ void __launch_bounds__(128) b3_seeds(const Args a) {
   const uint64_t r = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
@@ -309,7 +310,8 @@ extern "C" __global__ void __launch_bounds__(128) b3_seeds(const Args a) {
   load_key(a.p[3], m);
   load_key(a.p[0] + 32 * r, m + 8);
   b3c(key, m, 0, 64, B3_KEYED | B3_START, cv);
-  const uint64_t iota = a.i[2] ? ((uint64_t)(uint32_t)a.i[1] << 32 | r) : (uint64_t)(uint32_t)a.i[1];
+  const uint32_t unit = a.p[5] ? *reinterpret_cast<const uint32_t*>(a.p[5]) : (uint32_t)a.i[1];
+  const uint64_t iota = a.i[2] ? ((uint64_t)unit << 32 | r) : (uint64_t)unit;
   uint32_t m2[16] = {0};
   load_key(a.p[4], m2);
   m2[8] = (uint32_t)iota;
