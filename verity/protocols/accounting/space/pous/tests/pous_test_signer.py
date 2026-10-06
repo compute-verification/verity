@@ -15,19 +15,19 @@ HEIGHTS = range(1, 11)
 
 
 def scheme(height: int) -> str:
-    return mc.TEST_PREFIX + f"lms-sha512/n32-w1-h{height}/v0"
+    return mc.TEST_PREFIX + f"lms-sha512/n64-w1-h{height}/v0"
 
 
 def TestSigner(secret: bytes, height: int = 3, state_dir: str | Path | None = None) -> mc.LmsSigner:  # noqa: N802
     """2^`height` one-time keys from `secret`; each `sign` uses the next, and one past the last is refused."""
     if height not in HEIGHTS:
         raise ValueError(f"a test signer's height is in {HEIGHTS}, not {height}")
-    params = lms.Params(32, 1, height)
-    key = lms.keygen(params, hashlib.sha512(b"verity-pous/test-signer/v0" + secret).digest()[:32])
+    params = lms.Params(64, 1, height)
+    key = lms.keygen(params, hashlib.sha512(b"verity-pous/test-signer/v0" + secret).digest())
     path = Path(state_dir or tempfile.mkdtemp(prefix="pous-test-signer-")) / "leaf-state.json"
     lms.LeafState.create(path, lms.public_key(key), height)
     return mc.LmsSigner(key, lms.LeafState(path, lms.public_key(key), height), scheme=scheme(height))
 
 
-SCHEMES: dict[str, mc.Verify] = {scheme(h): mc.lms_verify(lms.Params(32, 1, h)) for h in HEIGHTS}
+SCHEMES: dict[str, mc.Verify] = {scheme(h): mc.lms_verify(lms.Params(64, 1, h)) for h in HEIGHTS}
 """The mapping a test passes to `memory_challenger.verdict`: the test signers accepted, in that test alone."""

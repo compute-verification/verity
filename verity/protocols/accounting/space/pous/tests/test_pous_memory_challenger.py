@@ -237,11 +237,11 @@ class _SparseTree:
         self.root = lms.root_of(lms.DEPLOYED, I, b"probe", probe)
 
     def __getitem__(self, r: int) -> bytes:
-        return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()[:32]
+        return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()
 
 
 def deployed_signer(tmp_path) -> mc.LmsSigner:
-    I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:32]
+    I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
     return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
@@ -249,7 +249,7 @@ def deployed_signer(tmp_path) -> mc.LmsSigner:
 
 def test_an_lms_signed_session_is_accepted_under_the_deployed_scheme(tmp_path):
     signer = deployed_signer(tmp_path)
-    assert signer.scheme == mc.LMS and len(signer.public_key) == 48
+    assert signer.scheme == mc.LMS and len(signer.public_key) == 80
     c, signed, _ = session(signer=signer)
     assert len(signed.signature) == lms.DEPLOYED.signature_bytes()
     assert judge(c, signed, signer, schemes_=mc.SCHEMES).public() == {"accepted": True}
@@ -265,9 +265,9 @@ def test_an_lms_signed_session_is_accepted_under_the_deployed_scheme(tmp_path):
 
 
 def test_the_deployed_scheme_id_is_lms_at_the_deployed_parameters():
-    small = lms.keygen(lms.Params(32, 1, 1), bytes(32))
-    with pytest.raises(ValueError, match="lms-sha512/n32-w1-h20/v0 is LMS at"):
+    small = lms.keygen(lms.Params(64, 1, 1), bytes(64))
+    with pytest.raises(ValueError, match="lms-sha512/n64-w1-h20/v0 is LMS at"):
         mc.LmsSigner(small, None)  # type: ignore[arg-type]
-    big = lms.PrivateKey(lms.DEPLOYED, bytes(16), bytes(32), (b"", bytes(32)))
+    big = lms.PrivateKey(lms.DEPLOYED, bytes(16), bytes(64), (b"", bytes(64)))
     with pytest.raises(ValueError, match="is LMS at"):
         mc.LmsSigner(big, None, scheme=ts.scheme(20))  # type: ignore[arg-type]

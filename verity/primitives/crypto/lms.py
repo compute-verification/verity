@@ -1,21 +1,22 @@
 """A stateful hash-based signature: LMS with LM-OTS (RFC 8554) over SHA-512, in plain Python, the scheme of the network
 certifier's certificates and the memory challenger's records, and the reference of their in-proof verifier
-(`verity.primitives.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n32`` (`verity.claims`).
+(`verity.primitives.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n64`` (`verity.claims`).
 
-**Use.** One key per device per role. ``keygen(DEPLOYED, seed)`` (seed: 32 secret bytes the device keeps), then once
+**Use.** One key per device per role. ``keygen(DEPLOYED, seed)`` (seed: N = 64 secret bytes the device keeps), then once
 ``LeafState.create(path, public_key(key), DEPLOYED.H)``; to sign, ``sign(key, state, message)`` with ``state = LeafState(path,
 public_key(key), DEPLOYED.H)``; to check, ``verify(DEPLOYED, public, message, sig)``. The message is a role's digest
 (`certificate_message`, `memory_challenger_message`), never hand-rolled.
 
-**The hash.** ``H(x) = SHA-512(x)[:N]``, N = 32 (SHA-512 truncated, deployed) or 64 (or `TOY_N` = 8, asked for by name, for
-circuit-check's binding of the verifier). Every hash input is RFC 8554's, with its domain separators: a chain step ``H(I ||
+**The hash.** ``H(x) = SHA-512(x)``, the whole output: N = 64, nothing truncated. The one other N, `TOY_N` = 8 (the
+first word of SHA-512's output, asked for by name with ``toy=True``), is circuit-check's binding of the verifier and is never
+deployed. Every hash input is RFC 8554's, with its domain separators: a chain step ``H(I ||
 u32(q) || u16(i) || u8(j) || tmp)``, the message ``Q = H(I || u32(q) || u16(D_MESG) || C || message)``, the one-time public
 key ``K = H(I || u32(q) || u16(D_PBLC) || z_0 || ... || z_{P-1})``, a leaf ``H(I || u32(r) || u16(D_LEAF) || K)`` and an
 interior node ``H(I || u32(r) || u16(D_INTR) || left || right)``, node r of the tree numbered from the root r = 1 (a leaf q
 is node 2^H + q). A message is any bytes; a role's digest is 64, the length the in-proof verifier takes.
 
 **Parameters.** (N, W, H): N the hash length, W in {1, 2, 4, 8} the Winternitz width, H the tree height (2^H one-time keys).
-Deployed: ``DEPLOYED = Params(32, 1, 20)``. P = U + V chains, U = ceil(8N / W) message digits and V checksum digits, and the
+Deployed: ``DEPLOYED = Params(64, 1, 20)``, W = 1 the fewest compressions to verify. P = U + V chains, U = ceil(8N / W) message digits and V checksum digits, and the
 checksum shifted left LS = 16 - V W bits (RFC 8554 §4.1, Appendix B).
 
 **Differences from RFC 8554.** No type fields: a verifier holds one parameter set, so a signature is ``u32(q) || C || y_0 ||
@@ -24,9 +25,10 @@ Appendix A): ``x_q[i] = H(I || u32(q) || u16(i) || u8(0xff) || SEED)``, ``C = H(
 SEED)`` and ``I = SHA-512(b"verity/lms/v0/I" || SEED)[:16]``. With the hash swapped for SHA-256 (`Params.hash`), the tests
 reproduce RFC 8554's Test Case 2.
 
-**Cost.** Keygen hashes about 2^H (P 2^W + 70) times: about 628M at the deployed parameters, about 10 minutes on one core,
-divided by ``workers``; a signature at most P (2^W - 1) + P + 1; a verification at most P (2^W - 1) + 25. Standard library
-only.
+**Cost.** Keygen hashes about 2^H (P 2^W + 70) times: about 1.37G compressions at the deployed parameters, about 16
+minutes on one core, divided by ``workers``; a signature at most P (2^W - 1) + P + 1 hashes; a verification 827 compressions
+at the deployed parameters (P (2^W - 1) chain steps, the one-time key's ceil((P N + 39) / 128) blocks, two for the message,
+one for the leaf and two per interior node). A signature is 34,756 bytes, a public key 80. Standard library only.
 """
 from __future__ import annotations
 
@@ -53,8 +55,9 @@ def _u16(x: int) -> bytes:
     return x.to_bytes(2, "big")
 
 
-#: The one N below 32 that `Params` admits, and only with ``toy=True``: one SHA-512 word, the smallest value of the same byte and
-#: word layout, for circuit-check's binding of the in-proof verifier. Never a key's: 64 bits of hash is no signature.
+#: The one N besides 64 that `Params` admits, and only with ``toy=True``: one SHA-512 word, the smallest value of the same byte
+#: and word layout, for circuit-check's binding of the in-proof verifier. Never deployed, never a key's: 64 bits of hash is no
+#: signature.
 TOY_N = 8
 
 
@@ -66,7 +69,7 @@ class Params:
     toy: bool = field(default=False, compare=False)
 
     def __post_init__(self) -> None:
-        sizes = (TOY_N, 32, 64) if self.toy else (32, 64)
+        sizes = (TOY_N, 64) if self.toy else (64,)
         if self.N not in sizes or self.W not in (1, 2, 4, 8) or isinstance(self.H, bool) or not 1 <= self.H <= 30:
             raise ValueError(f"LMS parameters are N in {sizes}, W in (1, 2, 4, 8), 1 <= H <= 30, not {self}")
 
@@ -93,7 +96,7 @@ class Params:
         return 4 + self.N * (1 + self.P + self.H)
 
 
-DEPLOYED = Params(32, 1, 20)
+DEPLOYED = Params(64, 1, 20)
 
 
 @dataclass(frozen=True)
