@@ -529,6 +529,35 @@ def _reused(tmp_path: Path) -> list[str]:
     return sorted(json.loads(p.read_text())) if p.exists() else []
 
 
+def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_is_killed(tmp_path):
+    """A pytest the OOM killer ends wrote no report and left its forkserver running (network-accounting, #1202's tier): the
+    suite's own process group takes what it left with it, and the signal and peak RSS are said."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    for f in tests.glob("test_*.py"):
+        f.unlink()
+    left = tmp_path / "left.pid"
+    (tests / "test_killed.py").write_text(
+        "import os, signal, subprocess, sys\n\n"
+        "def test_killed():\n"
+        "    p = subprocess.Popen([sys.executable, '-c', 'import signal; signal.pause()'])\n"
+        f"    open({str(left)!r}, 'w').write(str(p.pid))\n"
+        "    os.kill(os.getpid(), signal.SIGKILL)\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "killed")
+    p = _run_suite(root, tmp_path, "--fresh")
+    assert p.returncode == 1 and "killed by SIGKILL: pytest died by SIGKILL at a peak RSS of" in p.stdout, p.stdout
+    assert "killed 1 processes its tests left in the suite's process group" in p.stdout, p.stdout
+    stat = Path("/proc") / left.read_text() / "stat"
+    assert not stat.exists() or stat.read_text().rsplit(")", 1)[1].split()[0] in ("Z", "X"), stat.read_text()
+
+
+def test_oom_kills_reads_the_kernels_count(monkeypatch, tmp_path):
+    S = _suites(monkeypatch, tmp_path)
+    n = S.oom_kills()
+    assert n is None if not Path("/proc/vmstat").exists() else isinstance(n, int) and n >= 0
+
+
 def test_a_failed_suite_keeps_its_passes_and_a_sibling_fix_reuses_them(tmp_path):
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
