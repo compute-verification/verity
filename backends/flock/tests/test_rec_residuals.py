@@ -56,6 +56,18 @@ def _cases(g: random.Random, k: int) -> list[tuple[list[list[int]], list[int], l
     return out
 
 
+@pytest.mark.parametrize("op", [[["w", 130]], [["v", 3]], [["wt", 3, 0]], [["wt", 1, 128]]],
+                         ids=["w-past-end", "v-past-end", "wt-past-end", "wt-bit-128"])
+def test_the_unit_refuses_an_out_of_range_s(op):
+    """A term past its port's end would slice short and the sums' `zip` would truncate it; `residual_forms` refuses the S."""
+    bad = {**SMALL, "ops": SMALL["ops"] + [op], "res": SMALL["res"] + [{"mul": [[len(SMALL["ops"]), 0]], "add": []}]}
+    C = RR.Circuit()
+    W = [b for i in range(SMALL["nw"]) for b in C.input(f"w{i}", 128)]
+    V = [b for i in range(SMALL["nv"]) for b in C.input(f"v{i}", 128)]
+    with pytest.raises(ValueError, match="out of range"):
+        RR.residual_forms(C, bad, W, V)
+
+
 @pytest.mark.slow
 def test_the_unit_sums_each_residuals_products_leaf_by_leaf():
     """The unit (through its M0 layout) equals the reference on random ports, the words after each port's elements unread: one
