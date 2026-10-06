@@ -962,7 +962,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     says what its record says (`lifted_into`) gets one line, and the definition, new and read by nothing else, needs no
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
-    (moved from its old name, lifted), and the definitions that are the same are counted on one line."""
+    (moved from its old name, lifted), and the definitions that are the same are counted on one line.  One the base already
+    records under its new name (a lock re-recorded after the move) is compared with that record."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
@@ -999,19 +1000,21 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
             out.append(f"  named assumptions: {', '.join(a.get('assumptions', [])) or 'none'} -> "
                        f"{', '.join(b.get('assumptions', [])) or 'none'}")
     spans = {r["name"]: r.get("lines") for p in facts["pins"].values() for r in p.get("reads", [])}
+    oreads = old.get("reads", {})
+    recorded = {d: {"module": m, "hash": h, "guarantees": rec.get("guarantees", [])}
+                for m, rec in oreads.items() for d, h in definitions(rec).items()}
     now: dict[str, dict] = {}
     for m, es in guarantee_reads(facts).items():
         groups: dict[str, list] = {}
         for n, e in es.items():
-            groups.setdefault(parent(e["moved"]["as"] if moves and e.get("moved") else n), []).append(e)
+            was = moves and e.get("moved") and parent(n) not in recorded
+            groups.setdefault(parent(e["moved"]["as"]) if was else parent(n), []).append(e)
         for d, g in groups.items():
-            as_was = [{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]}
-                      if moves and e.get("moved") else e for e in g]
-            now[d] = {"name": parent(min(e["name"] for e in g)), "module": m, "sha256": digest(as_was),
+            as_was = digest([{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]}
+                             if moves and e.get("moved") else e for e in g])
+            sha256 = digest(g) if recorded.get(d, {}).get("hash") == digest(g) else as_was
+            now[d] = {"name": parent(min(e["name"] for e in g)), "module": m, "sha256": sha256,
                       "hash": digest(g, old=True)[:OLD], "guarantees": sorted(set().union(*(e["guarantees"] for e in g)))}
-    oreads = old.get("reads", {})
-    recorded = {d: {"module": m, "hash": h, "guarantees": rec.get("guarantees", [])}
-                for m, rec in oreads.items() for d, h in definitions(rec).items()}
     regrouped = sum(old_group(rec) and all(now.get(d, {}).get("hash") == h for d, h in definitions(rec).items())
                     for rec in oreads.values())
     elsewhere = 0
