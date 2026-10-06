@@ -98,10 +98,30 @@ def pick_cores(allowed: set[int], numa_cpus: set[int], busy: dict[int, float], c
     return [list(k) for k in sorted(pool, key=lambda k: (pool[k], k))[:count]]
 
 
-def sample(path: Path, watch: list[int]) -> None:
-    """Every second until killed: every CPU's busy share, the watched CPUs', the load average and every GPU's load."""
+def _cgroup_ticks(depth: int = 3) -> dict[str, int]:
+    """Every process's CPU ticks so far, summed by its cgroup's first `depth` components."""
+    ticks: dict[str, int] = {}
+    for d in Path("/proc").iterdir():
+        if not d.name.isdigit():
+            continue
+        try:
+            fields = (d / "stat").read_text().rsplit(")", 1)[1].split()
+            cg = (d / "cgroup").read_text().splitlines()[-1].split(":", 2)[2]
+        except (OSError, IndexError):
+            continue
+        key = "/".join(cg.split("/")[: depth + 1]) or "/"
+        ticks[key] = ticks.get(key, 0) + int(fields[11]) + int(fields[12])
+    return ticks
+
+
+def sample(path: Path, watch: list[int], every: int = 10) -> None:
+    """Every second until killed: every CPU's busy share, the watched CPUs', the load average and every GPU's load; every
+    `every` seconds, the cgroups that used the most CPUs since the last such line (`top_cgroups`, in CPUs), who the
+    neighbours were."""
     out = path.open("a", buffering=1)
     prev = _cpu_times()
+    hz = os.sysconf("SC_CLK_TCK")
+    cg_prev, cg_t, i = _cgroup_ticks(), time.time(), 0
     while True:
         time.sleep(1.0)
         cur = _cpu_times()
@@ -112,9 +132,15 @@ def sample(path: Path, watch: list[int]) -> None:
         gpus = [dict(zip(("i", "util", "mem_mib", "power_w", "sm_mhz"), (x.strip() for x in line.split(","))))
                 for line in q.strip().splitlines()]
         n = max(busy) + 1 if busy else 0
-        out.write(json.dumps({"t": time.time(), "loadavg": Path("/proc/loadavg").read_text().split()[:3],
-                              "busy": [busy.get(c) for c in range(n)], "watch": {str(c): busy.get(c) for c in watch},
-                              "gpus": gpus}) + "\n")
+        line = {"t": time.time(), "loadavg": Path("/proc/loadavg").read_text().split()[:3],
+                "busy": [busy.get(c) for c in range(n)], "watch": {str(c): busy.get(c) for c in watch}, "gpus": gpus}
+        i += 1
+        if i % every == 0:
+            cg, t = _cgroup_ticks(), time.time()
+            used = {k: (v - cg_prev.get(k, 0)) / hz / (t - cg_t) for k, v in cg.items()}
+            line["top_cgroups"] = {k: round(v, 1) for k, v in sorted(used.items(), key=lambda kv: -kv[1])[:10] if v >= 0.5}
+            cg_prev, cg_t = cg, t
+        out.write(json.dumps(line) + "\n")
 
 
 def prepare(work: str, pod: list[str], env: dict[str, str], out: Path) -> int:
@@ -314,8 +340,16 @@ def read_cell(run_dir: Path) -> dict[str, Any] | None:
                neighbours={"loadavg_start": cell.get("loadavg_at_start"),
                            "numa_busy_mean_pct": round(statistics.fmean(
                                statistics.fmean(s["busy"][c] for c in cell["numa_cpus"] if c < len(s["busy"]) and s["busy"][c] is not None)
-                               for s in samples), 1) if samples else None})
+                               for s in samples), 1) if samples else None,
+                           "top_cgroups_mean_cpus": _top_cgroups(samples)})
     return row
+
+
+def _top_cgroups(samples: list[dict[str, Any]], count: int = 5) -> dict[str, float]:
+    tops = [s["top_cgroups"] for s in samples if "top_cgroups" in s]
+    keys = {k for t in tops for k in t}
+    mean = {k: sum(t.get(k, 0.0) for t in tops) / len(tops) for k in keys}
+    return {k: round(v, 1) for k, v in sorted(mean.items(), key=lambda kv: -kv[1])[:count]}
 
 
 def _pool(cells: list[dict[str, Any]]) -> dict[str, Any]:
