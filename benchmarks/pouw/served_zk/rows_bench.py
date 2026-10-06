@@ -14,7 +14,7 @@ order; the figure is the median replay over CALLS, in µs a call.  Variants, per
                   and in form w (hash_rows_b3s), each with tree_a
   k.stats_a       forming's stats_a, which form s folds into A's commitment and the hm96 variants run on their own
   a.hm96          the statement's A commitment: A's 32 FP32 rows (4k bytes) as hm96-sha512/row-seg/v1 leaves and their tree
-  a.sha512        the same rows' unsalted sha512/row-seg/v1 digests alone (a gateway salting them later)
+  a.sha512        the same rows' unsalted sha512/row-seg/v1 digests alone (a firewall salting them later)
   p.hm96          A's fp8-p rows (A' ‖ P_A, k + 128 bytes) the same way: the tile's input rows, which a prover may commit after
                   the pass instead
   t.h2            -h2's tile hashing (hash_msg, hash_leaf, the tile tree)
