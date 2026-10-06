@@ -47,8 +47,7 @@ first. Do not scaffold directories the README merely anticipates.
     challenge derivation, with exact samplers (`uniform`, `bernoulli`, `subset`)
     over counter-mode streams. Stdlib only, and it imports no other core module.
     Its byte formats are pinned by `verity/primitives/randomness/tests/vectors.json`.
-  - `verity.primitives.crypto`: the hashes and the curve the commitments and protocols share (`blake3`, `turboshake`,
-    `bls12_381`, `beacon`).
+  - `verity.primitives.crypto`: the hashes the commitments and protocols share (`blake3`, `turboshake`).
   - `verity.primitives.commitments`: see its module docstring; SHA-512 and the Merkle tree as Boolean gates are its
     `gates`.
   - `verity.protocols.profile.IntegrityProfile` records what verification

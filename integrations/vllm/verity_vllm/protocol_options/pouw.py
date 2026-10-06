@@ -1,11 +1,12 @@
 """PoUW as a protocol option: every linear layer's GEMM computed as a `verity.protocols.accounting.work.pouw` scheme's honest work.
 
 The executor at each linear layer's ``quant_method.apply`` (``EXECUTES``; innermost, `protocol_options.SITES`).  In the
-composition's weight phase, with the model untouched and no beacon read, `commit_weights` finds the linear layers by
+composition's weight phase, with the model untouched and no coin opened, `commit_weights` finds the linear layers by
 type (vLLM's ``LinearBase``, `linear_types`) and commits every layer's int7 weight rows (`verity.protocols.accounting.work.pouw.audit.commit_rows`).
-`install` then derives the epoch salt from those roots and the operator's beacon bytes, unverified
-(`verity.protocols.accounting.work.pouw.audit.Epoch.unverified`), and replaces each ``apply`` through the composition's tagged `Hooks`.  Each
-call of a replaced ``apply(layer, x, bias)`` is one unit of the run's workload:
+`install` then asks the epoch's challenger (the setting ``coins``) for its salt coin, opened after those roots' weights
+root, and starts the epoch from it (`verity.protocols.accounting.work.pouw.audit.Epoch.start`, which refuses any other
+coin), and replaces each ``apply`` through the composition's tagged `Hooks`.  There is no beacon and no salt without a
+coin.  Each call of a replaced ``apply(layer, x, bias)`` is one unit of the run's workload:
 
 1. quantize x's rows to int7 per row (`quantize`), and prepare the weight operands (`weight_operands`: the int7 weight per
    output channel with the epoch's noise, Y = [B + F₁ ; B + F₂ ; B + F₃], and c₀) from the weight of the layer the call
@@ -15,7 +16,8 @@ call of a replaced ``apply(layer, x, bias)`` is one unit of the run's workload:
 3. return the useful output, the final checkpoint A·Bᵀ, dequantized by the row and column scales, plus the bias.
 
 Its commitment to the weights of record is made first, in the composition's weight phase (`commit_weights`: every
-layer's weight root); `commitment` is the scheme, the salt, the weights root the salt is derived from and, once closed,
+layer's weight root); `commitment` is the scheme, the salt, the weights root the salt is derived from, the epoch's coin
+commitment and its salt coin's opening and, once closed,
 the transcript root with its unit and tile counts.  The audit (drawing tiles, opening them) is `verity.protocols.accounting.work.pouw.audit`'s,
 after the run.  Beside sampled proofs the composition asks `verity.protocols.accounting.work.pouw.circuit` (`protocol_options.CIRCUITS`), and only
 ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
@@ -50,6 +52,7 @@ from verity.protocols.accounting.work.pouw.audit import (
     weight_binding,
     weights_root,
 )
+from verity.protocols.accounting.work.pouw.coins import Challenger, CoinCommitment
 from verity.protocols.accounting.work.pouw.protocol import Context as UnitContext
 from verity.protocols.accounting.work.pouw.protocol import DomainError, Matmul, Shape
 from verity.protocols.accounting.work.pouw.schemes import ncp
@@ -75,14 +78,13 @@ UNQUANTIZED = ("bfloat16", "float16", "float32")
 QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_point", "weight_packed")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
-KEYS = ("beacon", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule")
+KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
 #: (`pouw_device.commit_call(on="fused")`, held to `pouw_native` leaf for leaf by its gate)
 DEVICES = ("cuda",)
 PLACEHOLDER = (
-    "without a `beacon` setting the salt comes from 32 zero bytes, so it is predictable",
     "a forward's weight is not re-checked against the root committed at install",
     "not auditable yet: one epoch per install (no rotation), activation rows kept only in memory for the last "
     "`retain_steps` units (0 by default) and never persisted, no opener, and the transcript's leaves grow without bound "
@@ -101,7 +103,9 @@ def schemes() -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class Settings:
-    beacon: bytes | None = None
+    #: the epoch's challenger, in-process: its coin commitment (``commitment``, published before the epoch) and
+    #: ``open(label, after)``, each coin once (`verity.protocols.accounting.work.pouw.coins.Challenger`, or a proxy of one)
+    coins: Any = None
     retain_steps: int = 0
     transcript_dir: str | None = None
     #: ``ncp-v2``'s replay: the window's work-law budget K, each call drawing its share (`plan.window_laws`); None is
@@ -125,14 +129,10 @@ class Settings:
         unknown = sorted(set(raw) - set(KEYS))
         if unknown:
             raise ValueError(f"unknown pouw settings {unknown} (known: {', '.join(KEYS)})")
-        beacon = raw.get("beacon")
-        if beacon is not None:
-            try:
-                beacon = bytes.fromhex(beacon)
-            except (TypeError, ValueError):
-                raise ValueError("pouw setting 'beacon' is a hex string") from None
-            if len(beacon) < 32:
-                raise ValueError("pouw setting 'beacon' has at least 32 bytes")
+        coins = raw.get("coins")
+        if coins is not None and not (isinstance(getattr(coins, "commitment", None), CoinCommitment)
+                                      and callable(getattr(coins, "open", None))):
+            raise ValueError("pouw setting 'coins' is the epoch's challenger: its coin commitment and open(label, after)")
         retain = raw.get("retain_steps", 0)
         if not isinstance(retain, int) or isinstance(retain, bool) or retain < 0:
             raise ValueError("pouw setting 'retain_steps' is a non-negative integer")
@@ -155,7 +155,7 @@ class Settings:
         schedule = raw.get("schedule", "serial")
         if schedule not in SCHEDULES:
             raise ValueError(f"pouw setting 'schedule' is one of {', '.join(SCHEDULES)}")
-        return cls(beacon, retain, tdir, draws, tamper, device, *paths, schedule)
+        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -312,7 +312,6 @@ class _Run:
             "scheme": scheme.name, "quantizer": QUANTIZER, "basis": "none", "layers": len(weight_roots),
             "certificate": {"conjecture": cert.conjecture, "gamma": None if cert.gamma is None else str(cert.gamma),
                             "parameters": dict(cert.parameters)},
-            "beacon": "given" if settings.beacon else "placeholder: 32 zero bytes",
             "units": 0, "tiles": 0, "padded_rows": 0, "uncovered": "every GEMM outside LinearBase (lm_head, attention)",
             "placeholder": list(PLACEHOLDER)}
 
@@ -413,7 +412,6 @@ class _CircuitRun:
                        "call its own NcpLinear_v1 Program call reading it, their units computed natively and committed a leaf "
                        "per unit; y served, credited words committed",
             "permutation": PC.kind_of(scheme),
-            "beacon": "given" if settings.beacon else "placeholder: 32 zero bytes",
             "calls": 0, "padded_rows": 0, "commit_seconds": 0.0, "uncovered": "every GEMM outside LinearBase (lm_head, attention)",
             "committer": "pouw_device fused (ncp2_fused.cu, cuda)" if settings.device == "cuda" else "pouw_native (host)",
             "placeholder": list(PLACEHOLDER)}
@@ -565,7 +563,7 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
 
 
 def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
-    """The composition's first phase, with the model untouched and no beacon read: every linear layer's int7 weight rows
+    """The composition's first phase, with the model untouched and no coin opened: every linear layer's int7 weight rows
     committed (`verity.protocols.accounting.work.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``."""
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:
@@ -579,21 +577,36 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     return {"weight_roots": roots, "shapes": {str(w): list(v) for w, v in shapes.items()}}
 
 
+def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: int = 0) -> dict[str, dict[str, Any]]:
+    """`settings` (the loaded protocols config) with PoUW's ``coins`` a challenger of `epoch` held in this process
+    (`verity.protocols.accounting.work.pouw.coins.Challenger`) when `enabled` (the protocol set) has PoUW, for a pipeline
+    that is its run's own auditor (it replays and judges what it served); a config's own ``coins`` is kept."""
+    out = {k: dict(v) for k, v in settings.items()}
+    if any(str(e).partition(":")[0] == NAME for e in (enabled or ())):
+        out.setdefault(NAME, {}).setdefault("coins", Challenger(epoch))
+    return out
+
+
 def install(scheme: str, target: Target) -> Option:
     entry = f"{NAME}:{scheme}"
     settings = Settings.of(target.context.settings_of(NAME))
+    if settings.coins is None:
+        raise ValueError(f"{entry}: no 'coins' setting: the epoch's salt is its challenger's salt coin, opened after the "
+                         "weights' root, and there is no beacon")
     s, layers, shapes = _layers(scheme, target)
     committed = target.weight_commitments.get(entry) or commit_weights(scheme, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
-    salt = Epoch.unverified(declared, roots, settings.beacon or bytes(32)).salt
+    commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
+    salt = Epoch.start(declared, roots, commitment, opening).salt
     if scheme in PPD.SCHEMES:
         run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
-                                  {w: m.weight for w, m in enumerate(layers)}, roots, salt, settings.beacon or bytes(32),
+                                  {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
                                   schedule=settings.schedule)
     else:
         run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
                else _Run(s, entry, settings, roots, salt))
+        run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
     if isinstance(run, _CircuitRun):
         _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
     h = target.hooks(entry)
