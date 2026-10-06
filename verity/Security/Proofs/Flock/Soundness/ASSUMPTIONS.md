@@ -125,7 +125,7 @@ coins.
 - **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
   coins from `/dev/urandom` when it has no seed. A3 is about Lean's `IO.getRandomBytes`, so it doesn't cover these bytes.
 - **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
-  `live/src/coin_seed.rs`, through `verity.primitives.randomness.derive`). Those sessions also rest on `prf/sha-256` (A4's claim)
+  `live/src/coin_seed.rs`, through `verity.primitives.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
   and on the seed commitment's hiding, and no headline covers them. Under `FC_COINS=os` the server draws every round's
   coins as above (The headline, its coins).
 - **Tree coins (`--zk`).** Under `--zk` the coins are committed, not drawn round by round (`coin-tree/hm96-sha512/v2`,
@@ -246,8 +246,8 @@ drawn after the prover's message, as the coin server's `os` coins are under A6. 
 then names the mode, and `flock-verify verify --coins os` binds that identity (`Tags.withCoins`; the verifier's
 `PROTOCOL.md` §7.1). The benches run M0 so by default (`backends/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
 `61-circuit-cell.sh`), and their records name the coins (`coins: live-os`). The binary's default still derives every coin
-from one OS seed through a SHA-256 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
-That rests on `prf/sha-256` and the seed commitment's hiding, and the headline takes neither. So the headline is cited
+from one OS seed through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
+That rests on `prf/sha-512` and the seed commitment's hiding, and the headline takes neither. So the headline is cited
 only for runs on per-round OS coins: a session whose identity names `live-os`, or a bench point with `coins: live-os`.
 The identity and a bench point's `coins` say which mode ran. flock-verify replays the recorded coins, so that they were
 the verifier's own OS draws, each drawn after the prover's message, is the record's custody (`PROTOCOL.md` §17.2) and
@@ -286,34 +286,45 @@ malicious-verifier claim rests on beyond the theorems.
   (`Binding.HmRows.binding`) and `flock_e2e_*_hm96` take as `hHm`.
 
 **A4. `verity.primitives.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
-(`prf/sha-256`), for the PoUW window's keyed draw. The red team would grant it as a named hypothesis
-(`lanes/pous/20260929T1724Z-redteam-a4-keyed-streams.md`).
+(`prf/sha-512`), for the PoUW window's keyed draw. The red team would grant it as a named hypothesis
+(`lanes/pous/20260929T1724Z-redteam-a4-keyed-streams.md`, for its SHA-256 form; one hash moved it to SHA-512, Daniel,
+6 Oct).
 
 - **Statement.** A secret of `S` uniform bytes (A5) gives the key `Randomness.derive`. For a test `E` of the key's
   streams at indices whose framings (`Randomness.frames`) are pairwise distinct, each read to `L i` bytes
   (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
-  `η`. `Randomness.lean` is the Lean spec of `verity.primitives.randomness` v1: it reproduces
+  `η`. `Randomness.lean` is the Lean spec of `verity.primitives.randomness` v2 (on `Flock.Sha512.hash`): it reproduces
   `verity/primitives/randomness/tests/vectors.json`, and Python matches its vectors
   (`backends/flock/tests/test_randomness_spec.py`).
 - **Per test, as `SHA512CRExpected` is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
   most that many stream tuples. `keyedWindow_escape_le` takes A4 for one test per set `B` (`windowTest`: the window draw
   misses `B`), and `η` enters its bound.
-- **What it assumes of SHA-256.** Its compression function `f` is a pseudorandom function in two ways.
+- **What it assumes of SHA-512.** Its compression function `f`, on a 1024-bit message block and a 512-bit chaining
+  value, is a pseudorandom function in two ways.
   - Keyed by its chaining value, it makes the cascade a PRF on prefix-free inputs (Bellare, Canetti and Krawczyk 1996).
     The inputs are prefix-free: `frames` is length-framed and the counter is 8 bytes, so length extension doesn't apply.
   - Keyed by the secret bytes in its first message block, it is a dual PRF, as the HMAC analyses use. The secret follows
-    a fixed public tag: 28 bytes for `stream`, and 37 for `derive` with the source's frame header.
+    a fixed public tag: 28 bytes for `stream`, and 37 for `derive` with the source's frame header. A 32-byte secret sits
+    whole in the 128-byte first block after either tag (a source of up to 91 bytes does).
   - The secret's uniformity is not A4's but A5's.
 - **η, stated.** η stays symbolic in Lean, and every record-level statement keeps `+ η` visible, never absorbed.
   - **The claimed value:** for `S = 32`, η ≤ 2⁻¹²⁸ for the chain's tests. The derivation is generic key search over
     `min(256, 8S)` bits, plus a hybrid over the `q` compression calls the test's streams take. With `q ≤ 2⁴⁰` and a
-    test of `T ≤ 2⁸⁰` hash evaluations, the bound stays under 2⁻¹²⁸.
+    test of `T ≤ 2⁸⁰` hash evaluations, the bound stays under 2⁻¹²⁸: the key's term is `q·T·2⁻²⁵⁶ = 2⁻¹³⁶`, and the
+    hybrid's chaining values are 512 bits, so their terms are smaller still.
+  - **What truncation to 32 bytes costs.** `derive` and `shard` keep SHA-512's first 32 bytes, so a key is 256 bits
+    (SHA-512 truncated to 256 bits counts as SHA-512, SP 800-107 §5.1); a stream block is SHA-512's full 64 bytes.
+    Truncation gives a test nothing: a test of the truncated output is a test of the full output, so its advantage is at
+    most the full output's. What the 256-bit key bounds is key search, which the source already caps at `8S = 256` bits
+    for `S = 32`. So at `S = 32` it costs nothing, and 256 bits keeps 128-bit security against a quantum (Grover)
+    search. Only a source longer than 32 bytes loses anything: its key search stops at 256 bits, still past 128-bit
+    security.
   - **One η for the whole family:** every set `B` (the closures of the bad sets, which `closure_escape` evaluates), every
     stream budget `L`, and every receipt context. The audit takes a sup over `B`, not a union, and `E_B` costs the same
     for every `B`, every `L` and every context.
   - **Vacuity:** A4 is plausible only for `S ≥ 32`, and η can never be below about 2⁻⁸ˢ, since keyed probabilities are
     multiples of that. It holds trivially at η ≥ 1, and is claimed only for the chain's efficient tests `E_B`.
-- **Upstream:** watch entry `A4-prf-sha256`.
+- **Upstream:** watch entry `A4-prf-sha512`.
 
 **A5. The PoUW window's secret is `S` uniform bytes, fresh for the window** (`uniform/python-secrets`).
 
@@ -332,7 +343,7 @@ malicious-verifier claim rests on beyond the theorems.
   - A VM snapshot restored more than once must not repeat the kernel's CSPRNG state. That holds when the kernel reseeds
     on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes in a hardware RNG.
   - The CSPRNG is idealized as exactly uniform. The true bound carries its negligible distinguishing advantage.
-- **Split out of A4** at the red team's request: it is a property of what produces the secret, not of SHA-256.
+- **Split out of A4** at the red team's request: it is a property of what produces the secret, not of the hash.
 - **Upstream:** watch entry `A5-uniform-secret`.
 
 **`HmRowComputes`. The circuit's row hashing computes the `hm96-sha512/row/v1` or `hm96-sha512/row/v2` commit string**
