@@ -238,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--base", metavar="REF", help="the tree the move ran on (default: the move commit's parent)")
     ap.add_argument("--python", default=sys.executable, help="the interpreter that runs layout.py")
     ap.add_argument("--script", default=SCRIPT, help=f"the move's script, under {SCRIPT_DIR}/ (default {SCRIPT}; the Lean "
-                                                    "move's is tools/move/lean.py)")
+                                                    "move's is tools/move/lean.py, the rename move's tools/move/rename.py)")
     ap.add_argument("--push-to", metavar="NEWBRANCH", help="push the clean result to this new branch")
     ap.add_argument("--remote", default="origin")
     ap.add_argument("--dry-run", action="store_true", help="report only; never push")

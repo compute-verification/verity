@@ -84,6 +84,11 @@ def test_otherwise_the_fewest_waiters_ahead_and_with_priority_only_the_priority_
     assert CHECK.choose([N1, N2], {N1: machine([slot("c", HOLDER)], [waiter()]), N2: tied})[0] == N1   # a tie: the first listed
     spoken = machine([slot("a")], [waiter()])                                      # a free slot the waiter ahead takes next
     assert CHECK.placement(spoken)[:2] == (False, 1) and CHECK.placement(spoken, priority=True)[:2] == (True, 0)
+    trains = machine([{**slot("d"), "trains": True}, slot("e", HOLDER)])           # node 2's d is only=trains
+    assert CHECK.placement(trains) == (False, 0, "check slots: e held; 0 waiting ahead; no Lean audit cap")
+    assert CHECK.placement(trains, priority=True)[:2] == (True, 0)
+    with pytest.raises(ValueError, match="every slot in .* is for train checks"):
+        CHECK.placement(machine([{**slot("d"), "trains": True}]))
 
 
 def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
