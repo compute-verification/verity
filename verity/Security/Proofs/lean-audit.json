@@ -8,21 +8,6 @@
   "Proofs.NetworkCertifier.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof"
  },
  "runs": {
-  "Proofs.Pouw.Bulk": {
-   "why": "every generated FP8 step and FP32 add, with red-team R1's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers (29 Sep 01:10Z, granted by R1)",
-   "args": ["{conformance/steps.txt}", "176549", "{conformance/adds.txt}", "5000"],
-   "data": {
-    "conformance/adds.txt": "517e190bae67fd64ae9273eba6e52be524038f17cdcc1821b759311ca72b8a6b",
-    "conformance/steps.txt": "2d3c5317e24727543da4e12da608f9d8a1650538b4a6d4e65abf1047f58d9ce8"
-   },
-   "generate": [
-    "python3",
-    "{repo}/verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py",
-    "{repo}",
-    "--out",
-    "{out}"
-   ]
-  },
   "Proofs.NetworkCertifier.DifftestMain": {
    "why": "10,000 random instances on which NetTiming's definitions (expectedRow, and Accepted of constantRate and StatusComplete by decide) give what the Python audit gives: schedule.expected_grids, Audit.check_link with the first differing bucket, Audit.check_ingress_link, and each prefix's acceptance",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "10000"],
@@ -33,6 +18,21 @@
    "generate": [
     "python3",
     "{repo}/verity/protocols/accounting/communication/certifier/lean/scripts/difftest_vectors.py",
+    "{repo}",
+    "--out",
+    "{out}"
+   ]
+  },
+  "Proofs.Pouw.Bulk": {
+   "why": "every generated FP8 step and FP32 add, with red-team R1's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers (29 Sep 01:10Z, granted by R1)",
+   "args": ["{conformance/steps.txt}", "176549", "{conformance/adds.txt}", "5000"],
+   "data": {
+    "conformance/adds.txt": "517e190bae67fd64ae9273eba6e52be524038f17cdcc1821b759311ca72b8a6b",
+    "conformance/steps.txt": "2d3c5317e24727543da4e12da608f9d8a1650538b4a6d4e65abf1047f58d9ce8"
+   },
+   "generate": [
+    "python3",
+    "{repo}/verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py",
     "{repo}",
     "--out",
     "{out}"
