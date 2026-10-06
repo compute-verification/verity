@@ -203,7 +203,7 @@ pub fn leaf_scheme() -> Value {
 }
 
 /// The leaves of a statement whose trees need no hiding, a recursive session's inner statement (`verity_flock.rec_live`): its
-/// gateway commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
+/// firewall commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
 /// SHA-512 digest (`HashKind::Sha512`) and an opening carries no salt. ZK off only (`verity_flock.circuit.LEAF_SCHEME_PLAIN`).
 pub fn leaf_scheme_plain() -> Value {
     json!({"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,

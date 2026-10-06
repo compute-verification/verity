@@ -388,10 +388,10 @@ LABELS = {
     "measured": ("Same host, under vLLM load", "empirical",
                  ("Measured on loopback under vLLM generation (RTX PRO 6000, band d = 12 responder); past 750 µs continued "
                   "as a Pareto of exponent 1.8.")),
-    "rack": ("Verifier on another host in the rack", "assumed",
+    "rack": ("Memory challenger on another host in the rack", "assumed",
              ("The measured server side (12 µs of loopback removed) plus a round trip lognormal (median 25 µs, p99 60 µs), "
               "with a 1e-4 chance of a Pareto(200 µs, 2) delay.")),
-    "datacenter": ("Verifier a few hops away", "assumed",
+    "datacenter": ("Memory challenger a few hops away", "assumed",
                    ("The measured server side plus a round trip lognormal (median 120 µs, p99 400 µs), with a 1e-3 chance of "
                     "a Pareto(500 µs, 1.5) incast delay.")),
     "heavy-tail": ("Shared, noisy host", "assumed",
@@ -471,9 +471,9 @@ def tor_terms(params: dict[str, Any]) -> str:
 
 
 SOAK_PRESETS = {
-    "rack": ("tor_400_tuned", "Verifier on another host in the rack, 400 Gb/s"),
-    "rack-100g": ("tor_100_default", "Verifier on another host in the rack, 100 Gb/s, default NIC"),
-    "datacenter": ("tor_100_default", "Verifier a few hops away"),
+    "rack": ("tor_400_tuned", "Memory challenger on another host in the rack, 400 Gb/s"),
+    "rack-100g": ("tor_100_default", "Memory challenger on another host in the rack, 100 Gb/s, default NIC"),
+    "datacenter": ("tor_100_default", "Memory challenger a few hops away"),
 }
 
 

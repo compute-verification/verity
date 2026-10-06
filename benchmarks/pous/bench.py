@@ -223,7 +223,7 @@ class Reference:
     def _audits(protocol, scheme, vk, block, audits: int, rtt_ns: int) -> dict[str, Any]:
         results = []
         for j in range(audits):
-            v = protocol.Verifier(scheme, vk, protocol.challenge_key(f"bench-audit/{j}".encode(), vk), rtt_allowance_ns=rtt_ns,
+            v = protocol.MemoryChallenger(scheme, vk, protocol.challenge_key(f"bench-audit/{j}".encode(), vk), rtt_allowance_ns=rtt_ns,
                                   experimental=True)   # an experimental scheme's profile says so
             results.append(v.run(protocol.responder(scheme, block)))
         elapsed = [x.elapsed_ns for r in results for x in r.answers]
@@ -499,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--deadline-ns", type=int, default=0, help="band-gpu, p2-v1-gpu: the audit's Δ (0: the protocol's 0.5 ms)")
     ap.add_argument("--clock", default="wall", choices=["wall", "logical"],
                     help="band-gpu, p2-v1-gpu: time answers on the verifier's clock (wall) or by the responder's reported time (logical)")
-    ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the verifier process's core")
+    ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the memory challenger process's core")
     ap.add_argument("--responder-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the responder thread's core")
     ap.add_argument("--load-tokens", type=int, default=1, help="band-gpu, p2-v1-gpu: T of the POUS forwards run during the audit (0: none)")
     ap.add_argument("--step-reps", type=int, default=200, help="band-gpu: single-row Π₂ calls timed per kernel variant")
