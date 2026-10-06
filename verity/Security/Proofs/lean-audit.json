@@ -189,6 +189,11 @@
     "mentions": ["IO.getRandomBytes"],
     "ack": []
    },
+   "A4-prf-sha512": {
+    "about": "A4 (KeyedStreamsUniform, prf/sha-512): verity.randomness's keyed streams at distinct indices pass a test as independent uniform streams do, up to eta, SHA-512's compression function keyed by a secret first block or by its chaining value being a PRF",
+    "mentions": ["PRFScheme.prfAdvantage"],
+    "ack": []
+   },
    "hm96-hiding": {
     "about": "Assumptions.Hm96Hiding (zero knowledge's T1, hash-derived-key): (M·y, H(sp‖y)) is δ₁-close to (U, H(sp‖y)), the leftover hash lemma at the pinned key",
     "mentions": ["PMF.tvDist", "Matrix.mulVec"],
@@ -222,6 +227,7 @@
    }
   }
  },
+ "guarantees": {},
  "dependencies": {
   "Arklib": "dd87231a60935b888a323851a96eb3dc4d6b1dd859510a5eafccdaa0d1119015",
   "CompPoly": "b35d6047fbdd4decc997b0e37de48c0a528d8b11b2d77c370bbc98b691cf572d",

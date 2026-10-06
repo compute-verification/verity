@@ -26,7 +26,7 @@ as likely as acceptance itself. For those statements the refinement targets `bat
 `accepts_tables_hm96`), and what is open
 is the headline restated there: knowledge soundness and the link theorem over `Merkle.Leaf`, the bound
 `flock_headline_exec_L` takes as `hB`. The other open half of R11 is `hRef` itself: a strategy of the audit built from
-the live prover, the coin server's per-round coins (A6) as the audit's coins, and the live event `bad` bounded.
+the live prover, the challenger's per-round coins (A6) as the audit's coins, and the live event `bad` bounded.
 -/
 
 namespace FlockSoundness.Discharge.Exec

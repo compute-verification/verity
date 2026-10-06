@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.ZK.GK.Rand
 import Proofs.Flock.Soundness.ZK.GK.Extract
 
 /-!
-# Zero knowledge: the Goldreich–Kahan simulator for M2
+# Zero knowledge: the Goldreich–Kahan simulator for C-Flock ZK
 
 The simulator of `backends/flock/live/PROTOCOL.md` §9 (`gk_simulate` in `backends/flock/live/src/bin/flock-circuit.rs`),
 as a finite uniform program (`Rand`). It plays one dummy run, the protocol with a dummy witness, against the verifier `V*`.
