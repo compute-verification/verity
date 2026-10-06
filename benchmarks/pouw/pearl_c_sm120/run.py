@@ -663,8 +663,8 @@ class Pipeline:
         mr, kk, tiles = self.m_real, self.keys, self.tiles
         ea = lines("ea", b["line_a"], 0, 0, m, "ea_codes")
         if self.hashing in ROW_SEEDED:
-            own = b["lkeys_a"] if self.hashing == "h3s" else b["seeds_a"]
-            ea = ("lines_ea", lambda: d.launch(lk, cdiv(m, 128), 128, p=(b["line_a"], b["ea_codes"], 0, 0, own),
+            own = "lkeys_a" if self.hashing == "h3s" else "seeds_a"
+            ea = ("lines_ea", lambda: d.launch(lk, cdiv(m, 128), 128, p=(b["line_a"], b["ea_codes"], 0, 0, b[own]),
                                                i=(0, 0, m, NORM_256, mr)))
         forming = [ea, *form_side("a", m, "xa", "ea_codes", "fa_codes", "at")]
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]

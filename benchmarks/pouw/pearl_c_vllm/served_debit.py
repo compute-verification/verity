@@ -81,7 +81,7 @@ from verity.primitives.commitments import Commitment  # noqa: E402
 from verity.primitives.commitments import verify_opening  # noqa: E402
 from verity.primitives.randomness import derive  # noqa: E402
 from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, Epoch, Transcript, Verifier, Workload, activation_binding, commitment_hash,  # noqa: E402
-                               rows_domain, weight_binding)
+                               opened_value, rows_domain, weight_binding)
 from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW  # noqa: E402
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
@@ -270,8 +270,8 @@ def _measure(item) -> dict:
     out = {"tile": tid, "matmul": ref.matmul, "m": s.m, "k": s.k, "n": s.n, "row0": ref.tile.rows[0], "rows": len(ref.tile.rows),
            "col0": ref.tile.cols[0], "cols": len(ref.tile.cols), "manifest_sha256": j["sha256"],
            "replay": "scalar" if j.get("undo") is None or _IMPL["chain_debit"] is _CHAIN_DEBIT else "batch"}
-    opened = j["prover"].open(epoch, tid)
-    a, b = [o.value for o in opened.a], [o.value for o in opened.b]
+    opened, h = j["prover"].open(epoch, tid), commitment_hash(scheme)
+    a, b = [opened_value(h, o.value) for o in opened.a], [opened_value(h, o.value) for o in opened.b]
     if fresh is not None:
         _, draw, salt = fresh
         out.update(draw=draw, salt=salt.hex(), openings_ok=_openings_ok(j, opened))

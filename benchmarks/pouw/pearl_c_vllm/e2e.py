@@ -139,12 +139,14 @@ def install(model, args, beacon: bytes):
     if bad:
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
-    roots = PPD.weight_roots(kernel, weights, scheme)
+    salt_key = PPD.new_salt_key(scheme)
+    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.unverified(declared, roots, beacon).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
-                              rows_form=getattr(args, "rows_form", "w"), whole_defer=getattr(args, "whole_defer", False))
+                              rows_form=getattr(args, "rows_form", "w"), whole_defer=getattr(args, "whole_defer", False),
+                              salt_key=salt_key)
     stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
     bad = stack.refusals()
     if bad:
@@ -832,8 +834,8 @@ def main() -> None:
     args.graphs = args.graphs or args.whole_step
     if args.whole_defer and not args.whole_step:
         ap.error("--whole-defer defers within a whole capture: it needs --whole-step")
-    if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing not in ("h2", "h3", "h3s"):
-        ap.error(f"--rows-form s is frame-b3s's (-h2, -h3, -h3s), and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
+    if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing not in ("h2", "h3"):
+        ap.error(f"--rows-form s is frame-b3s's (-h2, -h3), and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
     if args.smoke:
         smoke(args)
         return

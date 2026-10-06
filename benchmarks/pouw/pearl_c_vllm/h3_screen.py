@@ -4,7 +4,7 @@ calls against the reference.
   python benchmarks/pouw/pearl_c_vllm/h3_screen.py capture --kernel SHIP --out DIR [--scheme S]    # on the GPU
   python benchmarks/pouw/pearl_c_vllm/h3_screen.py check --out DIR [--jobs J]                        # on CPUs, after
 
-``capture`` runs `PearlCDeviceRun` (rows form ``s``, the serial schedule) on synthetic BF16 weights, (256, 1024) and
+``capture`` runs `PearlCDeviceRun` (rows form ``s``, ``w`` under -h3s; the serial schedule) on synthetic BF16 weights, (256, 1024) and
 (128, 2048), at m = 20, 100 and 200, each pass retained from outputs poisoned 0xA5: eagerly (each call's ``seeds_a``,
 ``seed_a`` and ``ea_codes`` dumped beside the pass), under CUDA graphs (the unit index read from the call's key slot),
 and eagerly with ``seeds_a`` omitted (the negative control: E_A's lines read the poison).  Under -h3s the eager pass also
@@ -60,14 +60,17 @@ def capture(args) -> int:
     if bad:
         raise SystemExit(f"{args.scheme} refuses the screen's weights: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
-    roots = PPD.weight_roots(kernel, weights, args.scheme)
+    salt_key = PPD.new_salt_key(args.scheme)
+    roots = PPD.weight_roots(kernel, weights, args.scheme, salt_key=salt_key)
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.unverified(declared, roots, BEACON).salt
     xs = [torch.randn(m, weights[w].shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, m in CALLS]
     s, log = PPD.scheme_of(args.scheme), {}
     dumps = ("seeds_a", "seed_a", "ea_codes") + (("rowdig_a",) if s.hashing == "h3s" else ())
+    rows_form = "w" if s.hashing == "h3s" else "s"
     for name, (graphs, omit) in passes(args.scheme).items():
-        run = PPD.PearlCDeviceRun(s, f"pouw:{args.scheme}", kernel, weights, roots, salt, BEACON, graphs=graphs, rows_form="s")
+        run = PPD.PearlCDeviceRun(s, f"pouw:{args.scheme}", kernel, weights, roots, salt, BEACON, graphs=graphs,
+                                  rows_form=rows_form, salt_key=salt_key)
         d = out / name
         try:
             run.begin(retain=str(d), run=os.environ.get("RESEARCH_RUN_ID", "h3-screen"))
@@ -103,7 +106,6 @@ def _calls(d: Path) -> dict:
     import verify_run as VR
     from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
     from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-    from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
 
     man = json.loads((d / "manifest.json").read_text())
     s, files, out = _scheme(man), VR.Files(d), []
@@ -117,8 +119,9 @@ def _calls(d: Path) -> dict:
         got = (d / f"call{u['index']}.seeds_a").read_bytes()
         seed_a, ea = (d / f"call{u['index']}.seed_a").read_bytes()[:32], (d / f"call{u['index']}.ea_codes").read_bytes()
         lines = [ea[32 * r:32 * r + 32] for r in range(len(ea) // 32)]
-        rows_ok = [lines[i] == bytes(P.sample_line(x, 0, 0, 0)) for i, x in enumerate(seeds)]
-        pad_ok = [lines[r] == bytes(P.sample_line(seed_a, 0, 0, r)) for r in range(u["m"], len(lines))]
+        seed_a = C.S512Seed(seed_a) if s.hashing == "h3s" else seed_a
+        rows_ok = [lines[i] == bytes(C.sample_line(x, 0, 0, 0)) for i, x in enumerate(seeds)]
+        pad_ok = [lines[r] == bytes(C.sample_line(seed_a, 0, 0, r)) for r in range(u["m"], len(lines))]
         dig = d / f"call{u['index']}.rowdig_a"
         digests = dig.read_bytes()[:64 * u["m"]] == b"".join(C.row_digest(x) for x in rows) if s.hashing == "h3s" else True
         out.append({"call": u["index"], "m16": u["m"], "padded": len(lines), "seed_a": seed_a == s.noise(ctx).seed_a,

@@ -164,6 +164,16 @@ def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int, hashing: 
     return S512Seed(s512("seed-A", msg)) if hashing == "h3s" else _labelled(msg, "seed-A")
 
 
+def seed_b(salt: bytes, root_b: bytes, hashing: str = "h0") -> bytes:
+    """An epoch weight's seed_B: H_"pearl-c/v0/seed-B"(salt ‖ root_B); under -h3s H_"seed-B" (`s512`)."""
+    return S512Seed(s512("seed-B", salt + root_b)) if hashing == "h3s" else _labelled(salt + root_b, "seed-B")
+
+
+def line_key(seed: bytes) -> bytes:
+    """The key a seed's noise lines are drawn under: Pearl's (`pearl_kw._line_key`), or an `S512Seed`'s H_"noise-line"(seed)."""
+    return _s512_line_key(seed) if isinstance(seed, S512Seed) else P._line_key(seed)
+
+
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int, hashing: str = "h3") -> bytes:
     """-h3's seed of row `row` of unit `unit`, whose E_A line is drawn from it alone: the one-row unit's seed_A over the
     row's own leaf in A's tree, H_"pearl-c/v0/seed-A"(salt ‖ leaf ‖ root_B ‖ (unit · 2^32 + row) u64 LE).  `hash.cuh`'s
@@ -567,9 +577,8 @@ class PearlC:
                 + self.prices.fadd * n * R * R)
 
     def noise(self, ctx: Context) -> Noise:
-        seed_b = (S512Seed(s512("seed-B", ctx.salt + ctx.root_b)) if self.hashing == "h3s"
-                  else _labelled(ctx.salt + ctx.root_b, "seed-B"))
-        return Noise(unit_seed_a(ctx.salt, ctx.root_a, ctx.root_b, ctx.matmul.index, self.hashing), seed_b)
+        return Noise(unit_seed_a(ctx.salt, ctx.root_a, ctx.root_b, ctx.matmul.index, self.hashing),
+                     seed_b(ctx.salt, ctx.root_b, self.hashing))
 
     def row_seeds(self, ctx: Context, a_rows: Sequence[bytes], idx: Sequence[int]) -> list[bytes]:
         """-h3's seeds of A's rows `idx` (values `a_rows`): `row_seed` over each row's leaf in A's tree, as the prover

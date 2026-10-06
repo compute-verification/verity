@@ -62,9 +62,11 @@ CASE, INDEX, WEIGHT = H.CASE, H.INDEX, H.WEIGHT
 BEACON = b"verity-pouw/pearl-c-sm120-gpu-check/beacon"
 
 
-def unit_block(salt: bytes, root_b: bytes, index: int) -> bytes:
-    """seed_line_a's p1: salt ‖ root_B ‖ u64 index ‖ BLAKE3("pearl-c/v0/seed-A") (seed_A's key)."""
-    return salt + root_b + index.to_bytes(8, "little") + blake3(C.LABELS["seed-A"])
+def unit_block(salt: bytes, root_b: bytes, index: int, hashing: str = "h1") -> bytes:
+    """seed_line_a's p1: salt ‖ root_B ‖ u64 index ‖ BLAKE3("pearl-c/v0/seed-A") (seed_A's key); under -h3s s512_seeds' p3,
+    salt ‖ root_B (64 bytes) ‖ u64 index."""
+    head = salt + root_b + index.to_bytes(8, "little")
+    return head if hashing == "h3s" else head + blake3(C.LABELS["seed-A"])
 
 
 def epoch_of(matmul: Matmul, b_rows: list[bytes], beacon: bytes, hash: str) -> tuple[Epoch, bytes, bytes]:
@@ -77,14 +79,15 @@ def epoch_of(matmul: Matmul, b_rows: list[bytes], beacon: bytes, hash: str) -> t
 
 def keys_of(scheme: C.PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict[str, bytes]:
     """The pipeline's key inputs for a unit of `epoch` (run.Pipeline's `keys`; -h2's templates are run.b3s_template's): the
-    domains in the scheme's tree hash and the digests' keys the scheme's."""
+    domains in the scheme's tree hash and the digests' keys the scheme's (none under -h3s, whose salt key and hm96 constants
+    the caller adds)."""
     s, salt, h, dk = matmul.shape, epoch.salt, scheme.commitment_hash, scheme.digest_keys
-    return {"line_b": P._line_key(seed_b),
+    return {"line_b": C.line_key(seed_b),
             "dom_a": rows_domain(activation_binding(salt, matmul.index), matmul.index, s.m, h).domain_id,
             "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, h).domain_id,
             "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), h).domain_id,
-            "k_msg": dk["message"], "k_leaf": dk["leaf"],
-            "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}
+            **({"k_msg": dk["message"], "k_leaf": dk["leaf"]} if dk else {}),
+            "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index, scheme.hashing)}
 
 
 def rowmajor(x: np.ndarray) -> bytes:
