@@ -218,9 +218,9 @@ def test_sm120_h3_phases_are_the_verifiers(host):
     c = rng.integers(0, 2**32, (m, n), dtype=np.uint64).astype(np.uint32)
     u = rng.integers(0, 2**32, (m, n), dtype=np.uint64).astype(np.uint32)
     salt, salt_key, tiles = bytes(range(32)), bytes(range(100, 132)), S.cdiv(mr, 64) * (n // 64)
-    b_tree = audit.commit_rows(audit.weight_binding(w), -2, b_rows, audit.HM96, salt_key, audit.HM96_WEIGHTS + w)
+    b_tree = audit.commit_rows(audit.weight_binding(w, audit.HM96), -2, b_rows, audit.HM96, salt_key, audit.HM96_WEIGHTS + w)
     root_b = b_tree.commitment.root
-    dom_a, dom_b = rows_domain(activation_binding(salt, idx), idx, mr, audit.HM96), b_tree.domain
+    dom_a, dom_b = rows_domain(activation_binding(salt, idx, audit.HM96), idx, mr, audit.HM96), b_tree.domain
     epoch = audit.Epoch(audit.Workload((C.Matmul(idx, C.Shape(mr, k, n), w),)), {w: root_b}, salt)
     dom_t = audit.transcript_domain(epoch, tiles, audit.HM96)
     keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),

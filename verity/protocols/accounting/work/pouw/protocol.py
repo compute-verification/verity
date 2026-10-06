@@ -32,6 +32,11 @@ def tagged(tag: str, *parts: Part) -> bytes:
     return hashlib.sha256(tag.encode() + b"\0" + b"".join(frame(p) for p in parts)).digest()
 
 
+def tagged_sha512(tag: str, *parts: Part) -> bytes:
+    """`tagged` on SHA-512: the first 32 bytes of SHA-512 over ``tag \\0 || frame(part)...``."""
+    return hashlib.sha512(tag.encode() + b"\0" + b"".join(frame(p) for p in parts)).digest()[:32]
+
+
 @dataclass(frozen=True, slots=True)
 class Shape:
     m: int

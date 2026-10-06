@@ -15,8 +15,8 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
                                                                               its output the pass's tile leaf
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
 
-- **The window** is SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), picked from ``os.urandom`` unless
-  ``--call`` names them.  Each call's A rows (the pass's retained activations, BF16 widened to FP32) and its weight's B rows
+- **The window** is SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), a uniform subset under a key derived from
+  32 bytes of ``os.urandom`` (`choose_calls`) unless ``--call`` names them.  Each call's A rows (the pass's retained activations, BF16 widened to FP32) and its weight's B rows
   are formed on the CPU as `pearl_c` forms them under the pass's epoch (`PearlC.noise`, forming v1, the peel factors), and
   become the statement's fp8-p rows (A′_i ‖ P_A,i of role X, ``hm96-sha512/row-seg/v1``; B̃_j ‖ P_B,j of role W,
   ``hm96-sha512/row/v2``; `leaves.words_fp8_p`).  A row whose forming the scheme refuses is no tile's.
@@ -110,6 +110,8 @@ SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
 #: the window draw's key, from the epoch's draw coin (`draw_key`)
 DRAW_DOMAIN = "verity/pouw/served-zk-draw/v1"
+#: the committer's choice of the window's calls (`choose_calls`)
+CALLS_DOMAIN = "verity/pouw/served-zk-calls/v1"
 #: the window root's port: the window's entries
 PORT = "entries"
 #: a window stream's failure budget: its first failure stops it
@@ -476,9 +478,9 @@ def leaf_opening(leaf: bytes, at: int, out_salt: bytes, tile: int | None = None,
 
 @dataclass(frozen=True)
 class Pass:
-    """A window's pass as the check reads it: its manifest's SHA-512, each call's workload position and served activation
+    """A window's pass as the check reads it: its name (`manifest_name`), each call's workload position and served activation
     root, its tiles (`audit.tile_refs`), and its tile commitment, the domain -h3's leaves sit in and the root."""
-    sha512: str
+    name: str
     positions: dict[int, int]
     roots_a: dict[int, str]
     refs: tuple
@@ -499,7 +501,7 @@ def read_pass(raw: bytes, coins: CoinCommitment | None, recorded: bool = False) 
     refs = tuple(tile_refs(scheme, epoch.workload))
     if len(refs) != c["count"]:
         raise ValueError(f"the pass commits {c['count']} tiles; its workload has {len(refs)}")
-    return Pass(hashlib.sha512(raw).hexdigest(), {u.index: p for p, u in enumerate(epoch.workload.matmuls)},
+    return Pass(manifest_name(raw), {u.index: p for p, u in enumerate(epoch.workload.matmuls)},
                 {u["index"]: u.get("root_a") for u in man["matmuls"]}, refs, transcript_domain(epoch, c["count"], HM96),
                 Commitment(bytes.fromhex(c["root"]), c["count"]))
 
@@ -543,7 +545,7 @@ def leaf_problem(params: dict, entry: dict, i: int, j: int, out_bc: bytes, op: A
         return None if leaf == filler_leaf(params["k"]) else "the filler unit's leaf is not the zero rows' tile's"
     if passed is None:
         return "no pass to open the unit's tile under"
-    if passed.sha512[:16] != params["context"].rsplit("/", 1)[-1]:
+    if passed.name != params["context"].rsplit("/", 1)[-1]:
         return "the pass is not the one the window's parameters name"
     rec = entry["record"]
     if passed.roots_a.get(rec["matmul"]) != rec["served"]["root_a"]:
@@ -703,6 +705,18 @@ def width(n: int) -> int:
     return (n.bit_length() + 64 + 7) // 8
 
 
+def manifest_name(raw: bytes) -> str:
+    """A pass as the window's context names it: the SHA-512 of its manifest's bytes, in hex."""
+    return hashlib.sha512(raw).hexdigest()
+
+
+def choose_calls(source: bytes, calls: list[dict], n: int) -> list[dict]:
+    """`n` of `calls` (all of them when there are fewer), a uniform subset under `derive(source, CALLS_DOMAIN, {})`, in
+    index order."""
+    among = sorted(calls, key=lambda u: u["index"])
+    return [among[i] for i in derive(source, CALLS_DOMAIN, {}).subset(min(n, len(among)), len(among), "calls")]
+
+
 def draw_key(coin: bytes, stream: S.Stream, reg: S.Registration) -> Key:
     """The window draw's key: the epoch's draw coin, under the stream and the registration and receipt it was opened after."""
     return derive(coin, DRAW_DOMAIN, {"stream": stream.digest, "registration": reg.digest,
@@ -816,7 +830,7 @@ class Challenger:
             raise _refused("coin", str(e)) from None
         except (KeyError, TypeError, ValueError) as e:
             raise _refused("manifest", f"{type(e).__name__}: {e}") from None
-        if hashlib.sha512(raw).hexdigest()[:16] != self.params["context"].rsplit("/", 1)[-1]:
+        if manifest_name(raw) != self.params["context"].rsplit("/", 1)[-1]:
             raise _refused("manifest", "the pass is not the one the window's parameters name")
         return how
 
@@ -992,7 +1006,7 @@ def _pass(pass_dir: Path):
     calls = [u for u in man["matmuls"] if u["k"] == K and u["n"] == K]
     if not calls:
         raise SystemExit(f"{pass_dir}: no call of k = n = {K}")
-    return PD, man, hashlib.sha512(raw).hexdigest(), calls
+    return PD, man, manifest_name(raw), calls
 
 
 def _weights(man: dict, calls: list[dict]) -> list[int]:
@@ -1002,10 +1016,10 @@ def _weights(man: dict, calls: list[dict]) -> list[int]:
 def cmd_params(a) -> int:
     """The verifier's own parameters, from the served request it audits: its run and manifest name the window, and the
     model's k = n = K weights give |W|."""
-    _, man, sha, calls = _pass(Path(a.pass_dir))
+    _, man, name, calls = _pass(Path(a.pass_dir))
     rows = sum(next(u["n"] for u in calls if int(u["weight"]) == w) for w in _weights(man, calls))
     deployment = f"served-zk/{man.get('run')}"
-    params = {"context": f"{deployment}/{sha[:16]}", "deployment": deployment, "k": K, "eps": a.eps, "delta": a.delta,
+    params = {"context": f"{deployment}/{name}", "deployment": deployment, "k": K, "eps": a.eps, "delta": a.delta,
               "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows}
     Path(a.out).write_text(json.dumps(params, sort_keys=True))
     print(json.dumps(params), flush=True)
@@ -1014,7 +1028,7 @@ def cmd_params(a) -> int:
 
 def cmd_commit(a) -> int:
     pass_dir = Path(a.pass_dir)
-    PD, man, sha, calls = _pass(pass_dir)
+    PD, man, name, calls = _pass(pass_dir)
     import fast_tile as FT
     params = _json(a.params)
     scheme = PD.scheme_of(man["scheme"])
@@ -1022,8 +1036,7 @@ def cmd_commit(a) -> int:
     if a.call:
         chosen = [next(x for x in calls if x["index"] == i) for i in a.call]
     else:
-        order = sorted(calls, key=lambda u: hashlib.sha512(source + u["index"].to_bytes(8, "little")).digest())
-        chosen = sorted(order[:a.calls], key=lambda u: u["index"])
+        chosen = choose_calls(source, calls, a.calls)
     undo = FT.install(scheme)
     window = []
     try:
@@ -1052,7 +1065,7 @@ def cmd_commit(a) -> int:
                 yield data[2 * K * j:2 * K * (j + 1)]
     root_w, _ = commit_weights(params, w_rows())
     public, advice, priv = commit_window(params, window, root_w)
-    advice["provenance"] = {"run": man.get("run"), "manifest_sha512": sha, "scheme": man["scheme"],
+    advice["provenance"] = {"run": man.get("run"), "manifest_sha512": name, "scheme": man["scheme"],
                             "transcript_root": man.get("transcript_root"), "commitment": man.get("commitment"),
                             "records_root": man.get("records_root"),
                             "call_draw": {"source": source.hex(), "among": [x["index"] for x in calls]} if not a.call else {"given": a.call}}

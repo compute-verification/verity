@@ -671,7 +671,7 @@ def test_h3_lifecycle_commits_hm96_sha512_trees():
         hls = [hm96.SHA512.tree_leaf(K, hm96.SHA512.commit_string(K, x, hm96_salt(key, nonce, i))) for i, x in enumerate(xs)]
         return tree_levels(dom, [row_leaf(dom, i, hl, SCHEMA_HM96_SHA512_ROW_SEG) for i, hl in enumerate(hls)])[-1][0]
 
-    da, db = rows_domain(activation_binding(epoch.salt, 3), 3, 32, "hm96-sha512"), rows_domain(weight_binding(9), -2, 16, "hm96-sha512")
+    da, db = rows_domain(activation_binding(epoch.salt, 3, "hm96-sha512"), 3, 32, "hm96-sha512"), rows_domain(weight_binding(9, "hm96-sha512"), -2, 16, "hm96-sha512")
     assert da.hash == db.hash == "sha512" and len(tr.activation_roots[0]) == 64
     assert tr.activation_roots[0] == root(da, [C.row_digest(r) for r in rows_a], 3)
     assert prover.weight_roots[9] == root(db, [C.row_digest(r) for r in rows_b], HM96_WEIGHTS + 9)

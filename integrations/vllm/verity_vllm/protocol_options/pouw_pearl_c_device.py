@@ -241,7 +241,7 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[
         size = R.Pipeline.sizes(R.BM, n, k, R.BM)
         b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "faT32", "fbT32", "fbT128", "rowdig_b")}
         keys, const = _zeros(128, weight.device), _constants(s, weight.device, salt_key)
-        _put(keys[64:], rows_domain(_weight_binding(w), -2, n, hash).domain_id)
+        _put(keys[64:], rows_domain(_weight_binding(w, hash), -2, n, hash).domain_id)
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
                          {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **_constant_keys(const)},
@@ -258,9 +258,9 @@ def new_salt_key(scheme: str) -> bytes:
     return os.urandom(32)
 
 
-def _weight_binding(w: int) -> bytes:
+def _weight_binding(w: int, hash: str) -> bytes:
     from verity.protocols.accounting.work.pouw.audit import weight_binding
-    return weight_binding(w)
+    return weight_binding(w, hash)
 
 
 def _constants(scheme: C.PearlC, device: Any, salt_key: bytes | None) -> Any:
@@ -659,7 +659,7 @@ class PearlCDeviceRun(GraphCalls):
             roots_a = _bytes(self.roots_buf[:nb * len(cur.matmuls)])
             flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0).tolist() if cur.flag_rows else [0, 0]
             out.update(transcript_root=_bytes(tree[-nb:]).hex(),
-                       activation_roots=hashlib.sha256(roots_a).hexdigest(),
+                       activation_roots=hashlib.sha512(roots_a).hexdigest(),
                        screened_rows=cur.flag_rows, failing_rows=int(flags[0]), unsure_rows=int(flags[1]),
                        excluded_rows=sum(len(r.excluded_a) for r in cur.records) if cur.retain is not None else None)
             if cur.retain is not None:

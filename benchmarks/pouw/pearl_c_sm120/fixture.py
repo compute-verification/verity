@@ -94,7 +94,7 @@ def epoch_of(matmul: Matmul, b_rows: list[bytes], coins: Challenger, salt_key: b
              ) -> tuple[Epoch, CoinOpening, bytes, bytes]:
     """A one-unit epoch on B's rows as `verity.protocols.accounting.work.pouw.audit` starts it, from `coins`' salt coin
     opened after B's root: (epoch, the salt coin's opening, B's tree bytes, its root)."""
-    dom_b = rows_domain(weight_binding(matmul.weight), -2, len(b_rows), HM96)
+    dom_b = rows_domain(weight_binding(matmul.weight, HM96), -2, len(b_rows), HM96)
     tree_b = tree_bytes(dom_b, b_rows, ROW_SCHEMA, salt_key, HM96_WEIGHTS + matmul.weight)
     roots = {matmul.weight: tree_b[-64:]}
     opening = coins.open("salt", weights_root(roots))
@@ -106,8 +106,8 @@ def keys_of(scheme: C.PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> di
     constants, which the caller adds: E_B's line key and the domains in the scheme's tree hash."""
     s, salt, h = matmul.shape, epoch.salt, scheme.commitment_hash
     return {"line_b": C.line_key(seed_b),
-            "dom_a": rows_domain(activation_binding(salt, matmul.index), matmul.index, s.m, h).domain_id,
-            "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, h).domain_id,
+            "dom_a": rows_domain(activation_binding(salt, matmul.index, h), matmul.index, s.m, h).domain_id,
+            "dom_b": rows_domain(weight_binding(matmul.weight, h), -2, s.n, h).domain_id,
             "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), h).domain_id,
             "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}
 
@@ -273,11 +273,11 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     mm = Matmul(INDEX, Shape(m, k, n), WEIGHT)
     coins = test_challenger()
     epoch, salt_opening, tree_b, root_b = epoch_of(mm, rb, coins, SALT_KEY)
-    assert root_b == commit_rows(weight_binding(WEIGHT), -2, rb, h, SALT_KEY, HM96_WEIGHTS + WEIGHT).commitment.root
-    dom_a = rows_domain(activation_binding(epoch.salt, INDEX), INDEX, m, h)
+    assert root_b == commit_rows(weight_binding(WEIGHT, h), -2, rb, h, SALT_KEY, HM96_WEIGHTS + WEIGHT).commitment.root
+    dom_a = rows_domain(activation_binding(epoch.salt, INDEX, h), INDEX, m, h)
     tree_a = tree_bytes(dom_a, ra, ROW_SCHEMA, SALT_KEY, INDEX)
     root_a = tree_a[-64:]
-    assert root_a == commit_rows(activation_binding(epoch.salt, INDEX), INDEX, ra, h, SALT_KEY, INDEX).commitment.root
+    assert root_a == commit_rows(activation_binding(epoch.salt, INDEX, h), INDEX, ra, h, SALT_KEY, INDEX).commitment.root
     ctx = Context(epoch.salt, mm, root_a, root_b)
     noise = scheme.noise(ctx)
     seeds = scheme.row_seeds(ctx, ra, range(m))

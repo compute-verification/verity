@@ -367,7 +367,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
     rows = lambda x: [r.tobytes() for r in x.float().numpy()]  # noqa: E731
     kernel = PPD.Kernel(R, F, TwinDev(), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, scheme, salt_key=key)
-    assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h, key, HM96_WEIGHTS + w).commitment.root
+    assert roots == {w: commit_rows(weight_binding(w, h), -2, rows(t), h, key, HM96_WEIGHTS + w).commitment.root
                      for w, t in weights.items()}
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     coins = salt_coin(roots)
@@ -398,7 +398,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
     for index, (w, x) in enumerate(calls):
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
-        want = commit_rows(activation_binding(salt, index), index, rows(a), h, key, index).commitment.root
+        want = commit_rows(activation_binding(salt, index, h), index, rows(a), h, key, index).commitment.root
         assert PPD._bytes(run.roots_buf[nb * index:nb * index + nb]) == want, index
     count = run.cur.tiles
     assert count == 4 + 2
@@ -454,7 +454,7 @@ def honest_pass(tmp_path, request):
     (tmp_path / "weights").mkdir()
     weights = {}
     for w, x in wrows.items():
-        d = rows_domain(weight_binding(w), -2, len(x), s.commitment_hash)
+        d = rows_domain(weight_binding(w, s.commitment_hash), -2, len(x), s.commitment_hash)
         weights[str(w)] = {"n": len(x), "k": k, "root": prover.weight_roots[w].hex(), "excluded_b": list(records[0 if w == 0 else 1].excluded_b),
                            "rows": PPD._write(tmp_path / "weights" / f"{w}.rows.bf16", bf16_file(rows(x)), digest=False),
                            "tree": PPD._write(tmp_path / "weights" / f"{w}.tree",
@@ -463,7 +463,7 @@ def honest_pass(tmp_path, request):
     matmuls = []
     for u, rec, root in zip(work.matmuls, records, tr.activation_roots):
         x = rows(acts[u.index])
-        d = rows_domain(activation_binding(epoch.salt, u.index), u.index, u.shape.m, s.commitment_hash)
+        d = rows_domain(activation_binding(epoch.salt, u.index, s.commitment_hash), u.index, u.shape.m, s.commitment_hash)
         matmuls.append({"index": u.index, "m": u.shape.m, "k": k, "n": u.shape.n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
                         "rows": PPD._write(tmp_path / "calls" / f"{u.index}.rows.bf16", bf16_file(x), digest=False),

@@ -29,7 +29,8 @@ Everything else is the protocol's (`audit`), the same for every scheme.
 ## Lifecycle (`audit`)
 
 1. **Weights.** Each weight's rows are committed in a `verity.primitives.commitments.merkle` tree bound to the weight id (owner −2);
-   `weights_root` binds every weight root.
+   `weights_root` binds every weight root: `tagged_sha512("verity/pouw/weights/v2", w, root_w, …)` over the weights in
+   id order, `tagged_sha512` the first 32 bytes of SHA-512 over the tag, a zero byte and the parts' frames.
 2. **Salt.** The challenger opens the epoch's salt coin after the verifier recorded `weights_root` ("Epoch coins"); the
    salt is `derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": coins_root, "weights": weights_root})`,
    32 bytes (`Epoch.start`). An epoch without coins (`Epoch.unverified`, benchmarks and replays of recorded runs) keeps
@@ -71,8 +72,8 @@ leaves:
 ~~~text
 x_l     = SHA-512("verity/pouw/epoch-coin/v1" || 0x00 || coin_l)
 value_l = hm96-sha512 tree_leaf(key, commit_string(key, x_l, salt_l))     salt_l: 192 fresh bytes, key the pinned default
-root    = MerkleTree over (value_salt, value_draw) at positions 0, 1, binding tagged("verity/pouw/epoch-coins/v1", e),
-          owner -1, schema "verity/pouw/epoch-coins/v1"
+root    = MerkleTree over (value_salt, value_draw) at positions 0, 1, binding tagged_sha512("verity/pouw/epoch-coins/v2", e),
+          owner -1, schema "verity/pouw/epoch-coins/v2"
 ~~~
 
 An unopened coin is statistically hidden (`hm96/PROTOCOL.md`); binding rests on SHA-512's collision resistance. A coin is
@@ -355,7 +356,7 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
       to are fixed by the receipt before any draw.
     - *Each window's source is fresh and used once* (root's C2). `Ledger.open` takes no source: it draws 32 bytes from
       the operating system's CSPRNG (`secrets`, `anchors.py:165`) once the receipt is complete, for that window
-      alone. So A4 (`prf/sha-256`) applies as stated, one fresh uniform source per derivation, with the source's
+      alone. So A4 (`prf/sha-512`) applies as stated, one fresh uniform source per derivation, with the source's
       uniformity its own claim, A5 (`uniform/python-secrets`). Once the window's draw is sent (`Ledger.sent`), it draws
       nothing more, and the audit record keeps its source and receipt digest (`Ledger.record`, `anchors.py:245`),
       from which anyone re-derives the key and the draw (`replay_key`). The limit: a third party can check that the
@@ -477,8 +478,11 @@ useful    U/(α_A·α_B), glue
     (`audit.Hm96Domain`): x is a row's `sha512/row-seg/v1` digest (the same d_i) or the tile leaf, the salt the prover's
     ChaCha20 stream (`audit.hm96_salt`, nonce the unit index for A's tree, 2^62 + w for weight w's, 2^63 for the
     transcript's), and an opening's value carries its salt.
-  - SHA-256 stays where the protocol, not the scheme, hashes: each domain's binding (`tagged`, which core's frame takes as
-    32 bytes), the salt's derivation, the draws and the records' root.
+  - The protocol's values are SHA-512 too: each tree's binding is `tagged_sha512` under the format's v2 tags
+    (`verity/pouw/activation-rows/v2`, `weight-rows/v2`, `transcript/v2`; h0's SHA-256 frames keep `tagged` and v1), and
+    for every format `weights_root`, the coin commitment's binding, Pearl-C's records root (`pearl-c/records/v3`), split
+    (`split/v2`) and draw-after (`draw-after/v2`) are `tagged_sha512`; the salt and the draws are core's `derive`, on
+    SHA-512 (`prf/sha-512`).
   - The row cap: the debit cap is checked for every credited row, each row's debit at most ρ times its share of the
     credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
     row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't

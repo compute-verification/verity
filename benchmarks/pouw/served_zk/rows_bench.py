@@ -66,7 +66,7 @@ SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "dow
 POISON, SLOT, SEG_TPB = 0xA5, 256, 256
 INST, KEY = hm96.SHA512, hm96.SHA512.default_key
 SEG, V2 = RL.SCHEMA_HM96_SHA512_ROW_SEG, RL.SCHEMA_HM96_SHA512_ROW_V2
-SALT_KEY = hashlib.sha256(b"served-zk/rows-bench/salt-key").digest()
+SALT_KEY = hashlib.sha512(b"served-zk/rows-bench/salt-key").digest()[:32]
 HASH_A = ("hash_rows_a", "tree_a")
 HASH_T = ("hash_msg", "hash_leaf", "tree_leaves_t", "tree_t")
 CALL_PHASES = ("commit", "forming", "cleanup", "hashing")
@@ -120,6 +120,11 @@ def node_head(dom: MK.CommitmentDomain, level: int, index: int) -> bytes:
             + (64).to_bytes(8, "big"))
 
 
+def binding(prefix: str, tag: str) -> bytes:
+    """A tree's domain binding: the SHA-512 of ``prefix/tag``, 64 bytes (frame-v3-sha512 takes a SHA-512 identity)."""
+    return hashlib.sha512(f"{prefix}/{tag}".encode()).digest()
+
+
 def constants(h, salt_key: bytes = SALT_KEY) -> dict:
     """hm96_rows.cu's constants on the device: M_key's byte tables, the salt stream's key, and the midstates of hm96's salt
     and leaf prefixes."""
@@ -154,7 +159,7 @@ class Commit:
         mids = h.alloc(64 * len(blocks))
         h.launch("sz_mid", 1, 32 * ((len(blocks) + 31) // 32), p=(h.put(b"".join(blocks)), mids), i=(len(blocks),))
         self.seg_mids, self.q_mid = mids, mids + 64 * (len(blocks) - 1)
-        self.dom = MK.CommitmentDomain(hashlib.sha256(f"{prefix}/{tag}".encode()).digest(), -1,
+        self.dom = MK.CommitmentDomain(binding(prefix, tag), -1,
                                        RangeIndexedDomain(0, rows), hash="sha512")
         self.width = 1 << max(rows - 1, 0).bit_length()
         self.leaf_heads = h.put(slots([self.dom.leaf_prefix(r, r, schema, 64) for r in range(rows)]))
@@ -279,7 +284,7 @@ def main() -> int:
             g[name] = got == same
 
     for shape, (n, k) in SHAPES.items():
-        rb, nonce = 4 * k, int.from_bytes(hashlib.sha256(f"served-zk/{shape}".encode()).digest()[:8], "little")
+        rb, nonce = 4 * k, int.from_bytes(hashlib.sha512(f"served-zk/{shape}".encode()).digest()[:8], "little")
         xa, xb = dev.alloc(m * rb), dev.alloc(n * rb)
         dev.launch("gen_f32", R.cdiv(M_REAL * k, 256), 256, p=(xa,), i=(M_REAL, k, 11))
         dev.launch("gen_f32", R.cdiv(n * k, 256), 256, p=(xb,), i=(n, k, 12))

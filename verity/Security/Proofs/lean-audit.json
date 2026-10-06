@@ -213,6 +213,11 @@
     "about": "Assumptions.Zk.RecordCustodyZKJ (live-verifier): RecordCustodyZK at J tables, the record flock-verify verify --zk --session-tables J reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own subset draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
     "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
     "ack": []
+   },
+   "A4-prf-sha512": {
+    "about": "A4 (KeyedStreamsUniform, prf/sha-512): verity.randomness's keyed streams at distinct indices pass a test as independent uniform streams do, up to eta, SHA-512's compression function keyed by a secret first block or by its chaining value being a PRF",
+    "mentions": ["PRFScheme.prfAdvantage"],
+    "ack": []
    }
   },
   "scan": {
