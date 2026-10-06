@@ -54,7 +54,7 @@ from verity_vllm.check.tp_shards import replicated_qkv, shard_dim as _shard_dim,
 
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
-FULL_DIGEST_RE = re.compile(r"[0-9a-f]{64}")        # a Program digest (sha256 hex): compared only whole, a prefix names no Program
+FULL_DIGEST_RE = re.compile(r"[0-9a-f]{128}")       # a Program digest (sha512 hex): compared only whole, a prefix names no Program
 
 #: safetensors dtype -> (numpy view dtype, element bytes)
 _ST_DTYPE = {"BF16": (np.uint16, 2), "F16": (np.float16, 2), "F32": (np.float32, 4), "F64": (np.float64, 8),

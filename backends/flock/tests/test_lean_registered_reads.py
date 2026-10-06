@@ -78,7 +78,7 @@ def staged(tmp_path_factory):
     program, query = _program()
     part = P.partition(program, query)
     s = InputSet.open(generate(TM.rope_head(64), len(POSITIONS), 20260928, d / "set")["path"])
-    text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_sha512(program),
+    text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_digest(program),
                       statics=FC.set_statics(s))
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(program)))
@@ -86,11 +86,11 @@ def staged(tmp_path_factory):
     reads = G.reads(program, query, {VALUE: 64})
     assert reads == {"cs": {"value": VALUE, "rows": list(POSITIONS)}}
     rng = np.random.default_rng(20261001)
-    reg = G.Registered.commit(P.program_sha512(program), VALUE, rng.integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
+    reg = G.Registered.commit(P.program_digest(program), VALUE, rng.integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
     own = G.reads_file(program, query, {VALUE: 64}, {VALUE: reg.root.hex()})
     (d / "own.json").write_text(json.dumps(own))
     x = rng.integers(0, 1 << 16, (8, 64))
-    out = G.Registered.commit(P.program_sha512(program), OUT_VALUE,
+    out = G.Registered.commit(P.program_digest(program), OUT_VALUE,
                               np.random.default_rng(20261003).integers(0, 1 << 16, (OUT_ROWS, 64)).tolist())
     own_out = {**own, "ports": {**own["ports"], "out": {**out.entry(), "word_bits": 16, "reads": list(OUT_POSITIONS)}}}
     (d / "own-out.json").write_text(json.dumps(own_out))

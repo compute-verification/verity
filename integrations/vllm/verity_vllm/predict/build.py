@@ -406,14 +406,13 @@ class BuildResult:
     wrapper: str
     program: Any
     digest: str
-    sha512: str | None
     desc: dict | None
     function: str
     n_root_nodes: int
     timings: dict = field(default_factory=dict)
 
     def summary(self) -> dict:
-        return {"wrapper": self.wrapper, "function": self.function, "digest": self.digest, "sha512": self.sha512,
+        return {"wrapper": self.wrapper, "function": self.function, "digest": self.digest,
                 "n_root_nodes": self.n_root_nodes, "gates": getattr(self.program, "gates", None), "timings": self.timings}
 
 
@@ -725,14 +724,12 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     sd.set_body(body)
     program = Program(sd)
     timings = {"body_s": round(t_body - t0, 3), "program_s": round(time.time() - t_body, 3)}
-    desc = digest = sha512 = None
+    desc = digest = None
     if with_desc:
-        from verity.primitives.circuits.partition_object import program_sha512
         t2 = time.time()
         desc = encode_program(program)
         digest = program_digest(desc)
-        sha512 = program_sha512(desc)
         timings["encode_digest_s"] = round(time.time() - t2, 3)
     timings["total_s"] = round(time.time() - t0, 3)
-    return BuildResult(wrapper=wrapper, program=program, digest=digest or "", sha512=sha512, desc=desc, function=sd.id,
+    return BuildResult(wrapper=wrapper, program=program, digest=digest or "", desc=desc, function=sd.id,
                        n_root_nodes=len(program.fn.body.nodes) if hasattr(program.fn, "body") else -1, timings=timings)

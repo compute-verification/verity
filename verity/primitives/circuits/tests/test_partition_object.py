@@ -70,7 +70,7 @@ def test_the_width_rule_counts_bits():
 
 def test_the_object_names_the_query(program):
     obj = PO.build(program)
-    assert obj == {"format": "verity/partition/v1", "program": PO.program_sha512(program),
+    assert obj == {"format": "verity/partition/v1", "program": codec.program_digest(program),
                    "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}
     assert PO.digest(obj) == hashlib.sha512(b"verity/partition/v1\x00" + codec.canonical_json(obj)).hexdigest()
     assert PO.validate(obj).ok and PO.verify(obj, program).ok
@@ -169,7 +169,7 @@ def test_the_pinned_vector_bytes_in_graph_and_partition_out(program):
     assert codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"}).decode() == VECTORS["descriptor"]
     D = codec.decode_program(json.loads(VECTORS["descriptor"]), REGISTRY)           # the verifier's side: from the bytes alone
     assert PO.order_violation(D) is None                                             # topological: every query applies
-    assert PO.program_sha512(D.desc) == VECTORS["program_sha512"] == PO.program_sha512(program)
+    assert codec.program_digest(D.desc) == VECTORS["program_digest"] == codec.program_digest(program)
     obj = PO.build(D)
     assert obj == VECTORS["object"] and PO.digest(obj) == VECTORS["object_digest"]
     part = PO.evaluate(D)

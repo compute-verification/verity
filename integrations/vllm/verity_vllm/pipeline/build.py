@@ -23,7 +23,6 @@ import time
 import traceback
 from dataclasses import dataclass
 
-from verity.primitives.circuits.partition_object import program_sha512
 from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.boolean import derived
@@ -578,7 +577,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
-    digest = hashlib.sha256(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
+    digest = hashlib.sha512(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
     # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
     corr_digest = correspondence_digest(desc)
     assert corr_digest == rep.correspondence_digest, (corr_digest, rep.correspondence_digest)
@@ -586,7 +585,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
         f.write(raw)
     corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
-    res["program"] = {"function": program.fn.id, "digest": digest, "sha512": program_sha512(desc), "gates": program.gates, "input_gates": program.input_gates,
+    res["program"] = {"function": program.fn.id, "digest": digest, "gates": program.gates, "input_gates": program.input_gates,
                       "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": len(canon),
                       "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
                       "correspondence_digest": corr_digest,

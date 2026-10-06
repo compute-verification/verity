@@ -130,14 +130,14 @@ Build, evaluate and query a circuit from the primitive library:
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits import Program, query
 from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.partition_object import program_sha512
+from verity.primitives.circuits.codec import program_digest
 from verity_catalog.definitions.gemm import GEMM_AMPERE, Gemm
 
 gemm = bind(Gemm, K=64, N=8, **GEMM_AMPERE)   # x[64] @ W[8, 64]^T in BF16, as an A100's tensor cores compute it
 x, W = [0x3F80] * 64, [0x3F80] * (8 * 64)     # BF16 encodings of 1.0, with W flattened row by row
 evaluate(gemm, x, W)                          # eight BF16 words 0x4280, that is 64.0
 program = Program(gemm)
-program_sha512(program)                       # the circuit's name: its SHA-512 digest
+program_digest(program)                       # the circuit's name: its SHA-512 digest
 query(program.circuit, "//GemmCoordinate")    # its 8 output coordinates, each with its interval of gates
 ~~~
 

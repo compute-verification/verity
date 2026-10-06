@@ -190,7 +190,7 @@ Selection = All | Law | TwoStage | Sequential
 
 @dataclass(frozen=True)
 class Check:
-    """The check each drawn unit passes. `program`: the per-unit check Program's SHA-512 (`partition.program_sha512`).
+    """The check each drawn unit passes. `program`: the per-unit check Program's digest (`partition.program_digest`).
     `query`: its proof units, one-stage's template query over that Program's Definition. `window`: the window statement's
     Program's SHA-512, proved once per window over the committed layout. `public_outputs`: what the verifier reports that
     the auditor reads. `deadline`: a timed session's (PoUS's rounds). `proof_deadline`: seconds on the challenger's clock
@@ -429,7 +429,7 @@ class Stream:
             raise ValueError(f"the service doesn't run a {type(spec.selection).__name__} selection yet")
         if spec.check.window is not None or spec.check.deadline is not None:
             raise ValueError("the service doesn't prove a window statement or run a timed session yet")
-        if P.program_sha512(Program(unit)) != spec.check.program:
+        if P.program_digest(Program(unit)) != spec.check.program:
             raise ValueError("the challenger's unit is not the check's program")
         if dict(spec.check.query) != P.template_instance_query(unit):
             raise ValueError("the check's query is not the template query over the challenger's unit")

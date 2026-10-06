@@ -248,7 +248,7 @@ def main() -> int:
     if worst > 5:
         bad.append(("frequency", counts, worst))
     # a query that defines no strata
-    wq = {"format": "verity/partition/v1", "program": P.program_sha512(prog), "query": {"name": "Q_word", "version": 1,
+    wq = {"format": "verity/partition/v1", "program": P.program_digest(prog), "query": {"name": "Q_word", "version": 1,
                                                                                       "params": {"X": 16, "W": 32}}}
     (out / "qword.partition.json").write_text(json.dumps(wq))
     p = subprocess.run([a.lean, "draw", "--program", str(out / "freq.desc"), "--partition", str(out / "qword.partition.json"),

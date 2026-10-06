@@ -253,7 +253,7 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int])
 def registered_entries(program: Program, values: Mapping[str, int]) -> dict[str, dict[str, Any]]:
     """The verifier's own `{value: {"leaves", "words", "word_bits", "domain"}}` for the parameters it expects registered
     (`values`: `{parameter: words}`), from its own program (`word_bits`: `width`)."""
-    prog = P.program_sha512(program)
+    prog = P.program_digest(program)
     out = {}
     for v, w in values.items():
         n, b = shape(program, v, w), width(program, v)

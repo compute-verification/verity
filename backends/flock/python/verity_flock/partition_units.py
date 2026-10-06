@@ -29,6 +29,7 @@ from typing import Any, Callable, Mapping, Sequence
 import numpy as np
 
 from verity.primitives.circuits import partition_object as PO
+from verity.primitives.circuits.codec import program_digest
 from verity.primitives.circuits.cut import CallGraph, check_cut
 from verity.primitives.circuits.program import input_id
 from verity.primitives.circuits.units import Activation, PartitionUnits, UnitCircuit
@@ -172,7 +173,7 @@ def check(units: PartitionUnits, T: int = 16, seed: int = 0, max_gates: int = 1 
             log(f"  {cl.representative.definition} u{cl.representative.unit}: {len(cl.representative.gates)} word gates, "
                 f"{c.counts['ands'] if c.counts else c.reason} {','.join(c.missing)}")
     lower_s = time.time() - t1
-    key = derive(SOURCE, DOMAIN, {"program": PO.program_sha512(units.program)[:32], "seed": int(seed)})
+    key = derive(SOURCE, DOMAIN, {"program": program_digest(units.program)[:32], "seed": int(seed)})
     t2 = time.time()
     mismatches, checked, lanes_checked = Counter(), 0, 0
     for fn, circuits in list(units._flat.values()):

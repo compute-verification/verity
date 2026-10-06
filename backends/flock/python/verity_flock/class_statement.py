@@ -50,6 +50,7 @@ from typing import Any, Sequence
 import numpy as np
 
 from verity.primitives.circuits import partition_object as PO
+from verity.primitives.circuits.codec import program_digest
 from verity.primitives.circuits.types import Array, Tuple, Value
 from verity.primitives.circuits.cut import DefinitionCut
 from verity.primitives.circuits.units import Activation, PartitionUnits, UnitCircuit
@@ -471,7 +472,7 @@ def partition_binding(units: PartitionUnits, spec: str) -> tuple[str, str]:
     cached = _BINDINGS.setdefault(units, {})
     if spec in cached:
         return cached[spec]
-    program = PO.program_sha512(units.program)
+    program = program_digest(units.program)
     if units.query is not None:
         out = PO.digest(PO.build(units.program, units.query)), program
     else:
@@ -1182,7 +1183,7 @@ def _stage_cache(s: str) -> Path | None:
     if "source_digest" not in c:
         c["source_digest"] = _source_digest()
     a = c["a"]
-    ident = [c["source_digest"], c["program_sha512"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
+    ident = [c["source_digest"], c["program_digest"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
              a.seed, a.partition, a.max_ands, a.select, GEMM_TILE] + (["pack-words"] if PACK_WORDS else []) + (["core-rows"] if CORE_ROWS else [])
     return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
 
@@ -1473,7 +1474,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         program = PU._program(a)
     units = PU.partition_units(program, a.partition)
     classes = units.classes()
-    key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": PO.program_sha512(program)[:32], "seed": a.seed})
+    key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": program_digest(program)[:32], "seed": a.seed})
     salt_key = hashlib.sha256(b"verity/flock/class-statement/stress-salts\0" + str(a.seed).encode()).digest()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1506,7 +1507,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     jobs = [s for s, _cl in order if not (s in done or (a.only and not any(s.startswith(p) for p in a.only.split(",")))
                                           or (wanted is not None and not any(s.startswith(p) for p in wanted)))]
     _CTX.update(units=units, classes=classes, row_units=row_units, shared=broadcast_params(units), key=key, salt_key=salt_key,
-                out=out, a=a, batch_ands=a.batch_ands, max_statement_bits=a.max_statement_bits, program_sha512=PO.program_sha512(program))
+                out=out, a=a, batch_ands=a.batch_ands, max_statement_bits=a.max_statement_bits, program_digest=program_digest(program))
     partition_binding(units, a.partition)
     # a shape taken from FLOCK_STAGE_CACHE composes nothing; built before _staged, so forked stagers share them
     if any(not ((c := _stage_cache(s)) and (c / "rec.json").exists()) for s in jobs):

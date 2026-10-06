@@ -151,4 +151,4 @@ def test_pinned_shapes(program):
     """The shapes of the test program's `Q_word` units: a change here changes every class digest a backend has recorded."""
     got = sorted(c.representative.form for c in PartitionUnits(program, PO.query(16, 32)).classes().values())
     assert len(got) == len(set(got))
-    assert hashlib.sha256(codec.canonical_json(got)).hexdigest() == "dfcabcd699b02150816ae56e131e76366a3078907da3e540faa46da077225b5d"
+    assert hashlib.sha512(codec.canonical_json(got)).hexdigest() == "94f3cb71f5e3cd2637f39cd3df9998db80f1ef692a3aa5d77bab14516564452ac26ab702b5a520ced5ab3c6a2eaa9a41fa1102c273be1b1846c03fea86ada2db"

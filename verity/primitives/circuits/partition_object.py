@@ -5,10 +5,9 @@
      "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}
 
 * **Digest.** `SHA-512("verity/partition/v1\\0" || canon(object))`, canon = `codec.canonical_json` (keys sorted, no whitespace, ASCII).
-* **Program.** `program_sha512`: SHA-512 over the canonical descriptor (`codec.encode_program`, schema `verity-ir/descriptor/v1`,
+* **Program.** `codec.program_digest`: SHA-512 over the canonical descriptor (`codec.encode_program`, schema `verity-ir/descriptor/v1`,
   annotations excluded) -- the bytes the evaluator's input is defined over; a descriptor of another schema is refused.  It carries no
-  domain prefix (the object and owners digests do): adding one is deferred to the re-baseline, where the IR's identity digests move
-  anyway, because tonight's A2 roots already bind the current digest.
+  domain prefix (the object and owners digests do).
 * **Query.** Nothing about the partition is stored: owners, units and the committed set are what `evaluate(program, query)` computes,
   deterministically, from the program (`QUERIES`).  Any change to a query's behaviour bumps its version; `verity/primitives/circuits/tests/test_partition_object.py`
   pins a program, its object digest and the digest of its evaluated owners (`owners_digest`).
@@ -56,7 +55,7 @@ import hashlib
 import re
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from .codec import canonical_json, descriptor_id, encode_program
+from .codec import canonical_json, descriptor_id, encode_program, program_digest
 from .codec import SCHEMA_V1
 from .cut import (CALL_X, RECOMPUTE, WIRING, CallCut, CallGates, CallGraph, DefinitionCut, QueryInapplicable, call_committed, call_gates,
                   check_call_cut, check_cut, derived_committed, evaluate_call, evaluate_definition, member_refs)
@@ -102,12 +101,12 @@ QUERIES: dict[tuple[str, int], tuple[tuple[str, ...], Callable[[Mapping[str, Any
 QueryRefused = QueryInapplicable
 
 
-def program_sha512(program_or_desc: Any) -> str:
-    """The Program's SHA-512: over the canonical JSON of its descriptor (`codec.encode_program`) without annotations."""
+def _program(program_or_desc: Any) -> str:
+    """The `program` field: `codec.program_digest` of a v1 descriptor."""
     desc = program_or_desc if isinstance(program_or_desc, dict) else encode_program(program_or_desc)
     if desc.get("schema") != SCHEMA_V1:
         raise ValueError(f"the program digest is over a {SCHEMA_V1} descriptor, not {desc.get('schema')!r}")
-    return hashlib.sha512(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
+    return program_digest(desc)
 
 
 def query(X: int = 16, W: int = 32, version: int = 1) -> dict[str, Any]:
@@ -143,7 +142,7 @@ def template_instances_query(templates: Sequence[Any]) -> dict[str, Any]:
 
 def build(program: Any, q: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The object naming `program`'s partition as the query `q` (default `Q_word{X=16, W=32}` v1)."""
-    return {"format": FORMAT, "program": program_sha512(program), "query": dict(q or query())}
+    return {"format": FORMAT, "program": _program(program), "query": dict(q or query())}
 
 
 def canonical(obj: Mapping[str, Any]) -> bytes:
@@ -436,7 +435,7 @@ def owners_digest(part: Partition | CallPartition) -> str:
 
 
 def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[int]] | None = None) -> CutVerdict:
-    """The object against the program: `validate`, `program` = `program_sha512(program)`, then the query evaluated here
+    """The object against the program: `validate`, `program` = `codec.program_digest(program)`, then the query evaluated here
     (`query-inapplicable` when it does not apply) and every Call's cut checked on its derived graph (`cut.check_cut`: the invariant with
     the derived committed set, and the width rule with the query's X and W), once per Definition; failures by Call under `cut`
     ({"call", "codes", "detail"}).
@@ -455,7 +454,7 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
         return v
     bad: dict[str, list] = {}
     report: list[dict] = []
-    if obj["program"] != program_sha512(program):
+    if obj["program"] != _program(program):
         bad["program"] = [obj["program"]]
     template = (obj["query"]["name"], obj["query"]["version"]) in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES)
     if template and served is not None:
@@ -511,5 +510,5 @@ def _verdict(bad: dict[str, list]) -> CutVerdict:
 
 
 __all__ = ["FORMAT", "QUERIES", "PARAM_MAX", "QueryInapplicable", "QueryRefused", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCES", "Q_CALL",
-           "call_query", "CallPartition", "template_id", "template_instance_query", "template_instances_query", "TemplatePartition", "ranges_digest", "program_sha512", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
+           "call_query", "CallPartition", "template_id", "template_instance_query", "template_instances_query", "TemplatePartition", "ranges_digest", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
            "owners_digest", "verify"]
