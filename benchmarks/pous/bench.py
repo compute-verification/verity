@@ -37,8 +37,8 @@ Implementations (`IMPLS`), each adding one class:
   `verity.protocols.accounting.space.pous` registered scheme, whose P2 is the MVP's `p2-16448/v3` (the spec's SHAKE256 keys, its 24-byte salt and leaves)
   and `p2-16448/v2` (ChaCha8 keys).
 * `p2-v3-gpu`: the same kernels and steps, under `p2-16448/v3`'s framing (its commitment, salt, key prefix and leaves:
-  `p2_v1/harness.py`'s `V3`), so the device serves v3's blocks, and its audits go through `protocol.Verifier` with the v3
-  certificate (`band_gpu/live.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
+  `p2_v1/harness.py`'s `V3`), so the device serves v3's blocks, and its audits go through `protocol.MemoryChallenger` with the v3
+  certificate (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
 * `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory challenger (`memory_challenger/live.py`, `p2_v1/harness.py`'s `MC`) at
   `Δ + RTT_ALLOWANCE_CAP_NS`, with a tampered-block and a bad-signature control beside the others.  Its sessions are signed
   with S1's LMS key in `--mc-lms-key DIR`; without one they are test-signed, so the verdict rejects them all (its
@@ -230,7 +230,7 @@ class Reference:
     def _audits(protocol, scheme, vk, block, audits: int, rtt_ns: int) -> dict[str, Any]:
         results = []
         for j in range(audits):
-            v = protocol.Verifier(scheme, vk, protocol.challenge_key(f"bench-audit/{j}".encode(), vk), rtt_allowance_ns=rtt_ns,
+            v = protocol.MemoryChallenger(scheme, vk, protocol.challenge_key(f"bench-audit/{j}".encode(), vk), rtt_allowance_ns=rtt_ns,
                                   experimental=True)   # an experimental scheme's profile says so
             results.append(v.run(protocol.responder(scheme, block)))
         elapsed = [x.elapsed_ns for r in results for x in r.answers]
@@ -349,7 +349,7 @@ class P2V1Gpu:
 
 
 class P2V3Gpu(P2V1Gpu):
-    """The same kernels under `p2-16448/v3`'s framing, audited by `protocol.Verifier` (`p2_v1/harness.py`'s `V3`)."""
+    """The same kernels under `p2-16448/v3`'s framing, audited by `protocol.MemoryChallenger` (`p2_v1/harness.py`'s `V3`)."""
 
     name = "p2-v3-gpu"
     own_scheme = "p2-16448/v3"
@@ -553,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--deadline-ns", type=int, default=0, help="band-gpu, p2-v1-gpu: the audit's Δ (0: the protocol's 0.5 ms)")
     ap.add_argument("--clock", default="wall", choices=["wall", "logical"],
                     help="band-gpu, p2-v1-gpu: time answers on the verifier's clock (wall) or by the responder's reported time (logical)")
-    ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the verifier process's core")
+    ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the memory challenger process's core")
     ap.add_argument("--responder-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the responder thread's core")
     ap.add_argument("--load-tokens", type=int, default=1, help="band-gpu, p2-v1-gpu: T of the POUS forwards run during the audit (0: none)")
     ap.add_argument("--step-reps", type=int, default=200, help="band-gpu: single-row Π₂ calls timed per kernel variant")

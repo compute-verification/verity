@@ -9,7 +9,7 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=...]      # built for the device's arch (ARCH=sm_NN overrides)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=...] [NVME_DIR=/workspace/nvme] [SCHEME=dense-chain/v1]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_v1/libp2v1.so with CGBN)
-#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu [WS=...] [NVME_DIR=...]       # p2-16448/v3 on the same library, audited by protocol.Verifier
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu [WS=...] [NVME_DIR=...]       # p2-16448/v3 on the same library, audited by protocol.MemoryChallenger
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu [WS=...] [NVME_DIR=...]    # the same, audited by the memory challenger,
 #                                                                               signed with S1's key in $W/pous-mc-lms (MC_SIGNER=test: the test signer)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then P2_ARM (p2-v3-gpu), and the table

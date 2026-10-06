@@ -2,9 +2,9 @@
 on one device, the same steps, controls and metrics as the band's arm (`band_gpu/harness.py`), so the two compare side by side.
 The kernels take a setup's key prefix, so one arm runs either framing:
 
-- `V1` (`p2-v1-gpu`): the frozen v1 spec as `reference.py` states it, audited by `live.py`'s own loop.
+- `V1` (`p2-v1-gpu`): the frozen v1 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
 - `V3` (`p2-16448/v3`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
-  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.Verifier` through `band_gpu/live.py --strict`, which
+  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.MemoryChallenger` through `band_gpu/memory_challenger.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
   with v3's own codec back to `W`'s, when that segment is wholly encoded.
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
@@ -27,7 +27,7 @@ The kernels take a setup's key prefix, so one arm runs either framing:
    bytes as `W` and runs the weight set's GEMMs on them; plain reads `W`. Both are timed from a CUDA graph where the path is
    capturable, every rep kept. Decode overhead is POUS over plain, minus one.
 4. **The limit and the audits.** The limit is fixed before any load (`Δ = 0.5 ms` plus the loopback allowance, which spec v1.1
-   caps at 354 µs); `p2_v1/live.py` audits at k = 105 against it: the honest audit under POUS forwards, then the value control
+   caps at 354 µs); `p2_v1/memory_challenger.py` audits at k = 105 against it: the honest audit under POUS forwards, then the value control
    (one block in ten zeroed), the late control (one answer in ten held past the limit; the only answers held) and the
    recompute control (one block in ten of all of `C` dropped, each challenged dropped block re-encoded on the device from its
    decoded row `Dec(C_i)`, which the game gives the prover free: two roots, and the margin is the limit minus each
@@ -54,7 +54,7 @@ from band_gpu import harness as H
 from . import reference as R
 
 HERE = Path(__file__).resolve().parent
-LIVE = HERE / "live.py"
+MEMORY_CHALLENGER = HERE / "memory_challenger.py"
 SETUP_SOURCE = hashlib.sha256(b"verity-pous/bench/p2-v1/setup-source").digest()
 """The bench's setup source: in a deployment the verifier's secret or a beacon round drawn after the commitment to `W`."""
 PINS = ("P2MeetsM1pB19Uncond", "P2MeetsM1pFamilyUncond", "P2MeetsM1pW8192Uncond", "P2SlackB19Uncond", "P2SlackFamilyUncond",
@@ -67,9 +67,9 @@ RECOMPUTE_EVERY = 10
 
 class V1:
     """The frozen spec's framing (`reference.py`): its commitment to `W`, 32-byte setup salt, key prefix (which frames the
-    commitment and that salt) and leaves, audited by `p2_v1/live.py`'s own loop (mode 0's challenge derivation)."""
+    commitment and that salt) and leaves, audited by `p2_v1/memory_challenger.py`'s own loop (mode 0's challenge derivation)."""
 
-    impl, scheme, live = "p2-v1-gpu", R.PROTOCOL, LIVE
+    impl, scheme, live = "p2-v1-gpu", R.PROTOCOL, MEMORY_CHALLENGER
     verifier_args: tuple[str, ...] = ()
     accepted = "audits_accepted"
     """The audit document's count of accepted audits that the gates read."""
@@ -106,7 +106,7 @@ class V1:
 class V3(V1):
     """`p2-16448/v3` (`verity.protocols.accounting.space.pous.schemes.p2`): `protocol.commit`'s commitment to `W` under v3's
     manifest, `protocol.draw_salt`'s 24-byte salt, v3's key prefix (which frames that salt and no commitment) and `vk`'s
-    leaves, audited by `protocol.Verifier` (`band_gpu/live.py --strict`), which refuses any `k` or `Δ + RTT` the
+    leaves, audited by `protocol.MemoryChallenger` (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
 
@@ -296,7 +296,7 @@ def payload_bytes(m: Any, params: R.Params, used: int) -> Any:
 
 def profile(k: int, limit_ns: int, gaps: tuple[str, ...], scheme: str = R.PROTOCOL,
             storage: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The run's profile; `storage` is `protocol.Verifier`'s `StorageProfile` of the audit of record (v3), whose
+    """The run's profile; `storage` is `protocol.MemoryChallenger`'s `StorageProfile` of the audit of record (v3), whose
     `certified` it reports alongside the arm's own gaps."""
     return {"scheme": scheme, "k": k, "limit_ns": limit_ns, "rho": "18/19", "error": "1% + 2^-128", "pins": list(PINS),
             "assumptions": list(ASSUMPTIONS), "gaps": list(gaps),
@@ -535,7 +535,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     if "--strict" in fr.verifier_args:
         gates["certificate"] = {"passed": not honest.get("refused") and bool(honest.get("audits")),
                                 "refused": honest.get("refused"), "verifier_gaps": honest.get("gaps"),
-                                "note": "protocol.Verifier refuses any k or Δ + RTT the certificate does not cover; the "
+                                "note": "protocol.MemoryChallenger refuses any k or Δ + RTT the certificate does not cover; the "
                                         "gaps it lists (such as W's segment count) are reported, not refused"}
         gaps += tuple(honest.get("gaps") or ())
     deadline = {"limit_ns": limit, "limit_fixed_before_load": bool(honest.get("limit_fixed_before_load")),

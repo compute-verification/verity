@@ -1,6 +1,6 @@
 """The POUS-only harness (`benchmarks/pous/band_gpu/harness.py`, `bench.py --impl band-gpu`) on CPU: the band's reference codec
 stands in for the GPU twin on CPU tensors, a Python thread for the native responder (its wire format), and the verifier is the
-harness's own `live.py` process.  The harness's timer is injected and the verifier runs on its logical clock (`--clock
+harness's own `memory_challenger.py` process.  The harness's timer is injected and the verifier runs on its logical clock (`--clock
 logical`: each answer's time is the responder's reported one), so no outcome here depends on a clock or on the machine's
 load: what is checked is that each step runs and each gate and control decides, not the numbers."""
 from __future__ import annotations
@@ -98,7 +98,7 @@ def _backend(params, flip_last: bool = False):
     from verity.protocols.accounting.space.pous.labels import salt_value, tag
 
     harness = _harness()
-    from band_gpu.live import scheme_of
+    from band_gpu.memory_challenger import scheme_of
 
     at = lambda d: schemes.Band(type(params)(params.blocks_per_segment, params.m, d, 64))  # noqa: E731
     sch = scheme_of(at(params.d).name, at(params.d).params)
@@ -253,12 +253,12 @@ def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
 def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_there():
     """`--band-d 6`: the band at in-degree 6, unregistered (`band-chain/d6/v1` is the codec's name, not a registered byte
     format), whose segments round-trip and whose certificate at the frozen point is
-    `Pous.SecurityProofs.BandMultiMeetsFamily` with the cliff at 6; the verifier process rebuilds it from its manifest;
+    `Pous.SecurityProofs.BandMultiMeetsFamily` with the cliff at 6; the memory challenger process rebuilds it from its manifest;
     d = 4 has no certificate and is refused."""
     from verity.protocols.accounting.space.pous import band, schemes
 
     harness = _harness()
-    from band_gpu.live import params_of, scheme_of
+    from band_gpu.memory_challenger import params_of, scheme_of
 
     small = harness.with_in_degree(_small(), 6)
     sch = scheme_of("band-chain/d6/v1", small)

@@ -1,5 +1,5 @@
 """The memory challenger: PoUS's timed rounds, run by an auditor-trusted device beside the network certifier, inside the
-node's isolation boundary.  It replaces the timed verifier (`audit.TimedVerifier`) on the deployed path.
+node's isolation boundary.  It replaces the memory challenger (`audit.MemoryChallenger`) on the deployed path.
 
 A session has four steps:
 
@@ -83,7 +83,7 @@ COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
 RECORD_SCHEMA = "pous/round-record/v1"
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
-"""The coarsest clock the memory challenger runs on: a microsecond (the warden's 100 ms buckets are far too coarse)."""
+"""The coarsest clock the memory challenger runs on: a microsecond (the certifier's 100 ms buckets are far too coarse)."""
 COMPLETE, LATE = "complete", "late"
 HM96 = hm96.SHA512
 LIMITS = VerificationLimits()
@@ -336,7 +336,7 @@ class SignedSession:
 
 
 def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> Certificate:
-    """The first of `scheme`'s certificates that covers `k` rounds within `limit_ns`, as `protocol.Verifier` picks it;
+    """The first of `scheme`'s certificates that covers `k` rounds within `limit_ns`, as `protocol.MemoryChallenger` picks it;
     `ValueError` when none does, or when the scheme is experimental and `experimental` is not set."""
     if scheme.experimental and not experimental:
         raise ValueError(f"{scheme.name} is experimental ({scheme.experimental}): pass experimental=True to audit it")
