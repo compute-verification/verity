@@ -198,7 +198,7 @@ in prose. Remove obsolete rules and machinery rather than accumulating them.
 that PR rewrites every place that states the old way: `git grep` the old phrase across this file, the README and its
 Glossary, the skills, READMEs, docstrings and CLI help. When code has to change first, the ruling's relay names the
 owner and the PR, and the docs change with that PR. A stale statement found later is fixed on sight, by whoever finds
-it.
+it. `tests/test_doc_paths.py` fails on a maintained doc that names a repository path that no longer exists.
 
 Make reversible engineering decisions yourself. When a tool, rule or step gets in your way, fix it at the source if the
 fix is clearly yours. Surface changes to agreed semantics, acceptance criteria, material spending or destructive
