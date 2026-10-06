@@ -7,7 +7,8 @@
 # MODE: smoke (the default; untimed, both engines resident, the gates, each mode's first sampling calls) or window (the gates,
 # the interleaved reps with pearlc-zk after each pearlc, and the retained verify passes, deleted after: their -h2 commitments
 # are pouw-e2e's, not this run's).  LEASE: gpu-lease's arguments (default one preemptible GPU, untimed), e.g. "8 --wait
-# --timed" in a booked window.
+# --timed" in a booked window.  WRAP: words between gpu-lease's -- and the command, e.g. infra's host-thread pinning
+# "env VY_PROVERS_CPUS=160-175 vy-provers taskset -c 160-175".
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; ID=${RESEARCH_RUN_ID:?}; OUT=$D/out; mkdir -p "$OUT"
 WORK=/workspace/pouw/mvp-e2e; PASSES=$WORK/passes/$ID; CUDA=/usr/local/cuda-13.0
@@ -26,8 +27,10 @@ tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}"
 export SCHEME=pearl-c-sm120-v1-h2 GRAPHS=1 FP8_GRAPHS=1 SCHEDULE=serial ROWS_FORM=s WHOLE_STEP=1 WHOLE_DEFER=1
 export MODE=${MODE:-smoke} STATEMENT=$S/hm96_rows.cubin
 read -r -a LEASE_ARGS <<< "${LEASE:-1 --wait --preemptible --max-min 25}"
-stamp "window.sh MODE=$MODE under gpu-lease ${LEASE_ARGS[*]}"
-SHIP_TAR=$S/ship.tar OUT=$OUT/window gpu-lease "${LEASE_ARGS[@]}" -- timeout 1440 bash benchmarks/pouw/pearl_c_vllm/window.sh
+read -r -a WRAP_ARGS <<< "${WRAP:-}"
+stamp "window.sh MODE=$MODE under gpu-lease ${LEASE_ARGS[*]} -- ${WRAP_ARGS[*]}"
+SHIP_TAR=$S/ship.tar OUT=$OUT/window gpu-lease "${LEASE_ARGS[@]}" -- "${WRAP_ARGS[@]}" timeout 1440 \
+  bash benchmarks/pouw/pearl_c_vllm/window.sh
 rc=$?; stamp "window.sh exited $rc"
 rm -rf "$OUT/window/ship"
 [ -d "$PASSES" ] && { du -sh "$PASSES"; rm -rf "$PASSES"; stamp "passes deleted"; }
