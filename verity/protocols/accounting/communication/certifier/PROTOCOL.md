@@ -72,20 +72,20 @@ certificate verifies, and the audit's verdicts are those of the raw records.
 | T, r, B, τ_b | 4 each | τ_b in ms |
 | status | 1 | 0 complete; 1 monitor-unavailable, 2 overflow, 3 malformed, 4 dropped, 5 delivery-refused, 6 coverage-never-established (`STATUS_CODES`) |
 | deadline | 1 | 1 when the certifier settled the record by the verdict deadline |
-| parameters | 64 | `parameters_digest`: `tagged_sha512("verity-network-warden/parameters/v1", ·)` of the canonical JSON of every `GridParams` field, Q included, and of Σ_sync (δs, and ρs as fraction strings; null on ingress) |
+| parameters | 64 | `parameters_digest`: `tagged_sha512("verity-network-certifier/parameters/v1", ·)` of the canonical JSON of every `GridParams` field, Q included, and of Σ_sync (δs, and ρs as fraction strings; null on ingress) |
 | n_0 … n_{T−1} | 4 each | the occupancy |
 | root | 64 | the frame tree's root |
 
-The record digest is `tagged_sha512("verity-network-warden/record/v2", R)` (`verity.primitives.commitments.identity`).
+The record digest is `tagged_sha512("verity-network-certifier/record/v2", R)` (`verity.primitives.commitments.identity`).
 Every field has a fixed width or a length before it, so R parses one way, and the counts fix where each frame sits in
 the grid (W4). The schedule check reads the counts exhaustively; the frames are in the tree.
 
 **The frame tree** is a binary SHA-512 Merkle tree over the window's N = Σ n_t real frames, in the order `grid.fill`
 places them, each of B bytes:
 
-    leaf(f)    = SHA-512( block("verity-network-warden/frame/v2\0" ‖ u32be B) ‖ f )
-    E_0        = SHA-512( block("verity-network-warden/empty/v2\0") )
-    node(a, b) = SHA-512( block("verity-network-warden/node/v2\0") ‖ a ‖ b ),   E_{l+1} = node(E_l, E_l)
+    leaf(f)    = SHA-512( block("verity-network-certifier/frame/v2\0" ‖ u32be B) ‖ f )
+    E_0        = SHA-512( block("verity-network-certifier/empty/v2\0") )
+    node(a, b) = SHA-512( block("verity-network-certifier/node/v2\0") ‖ a ‖ b ),   E_{l+1} = node(E_l, E_l)
 
 `block(x)` is x zero-padded to one 128-byte SHA-512 block, so each of the three hashes starts from a constant
 midstate, and the tags keep leaves, nodes and empty subtrees apart. The depth is fixed, D = ⌈log2(T·r)⌉: leaf k is

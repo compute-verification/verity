@@ -10,16 +10,16 @@ certificate is witness: it enters proofs and never reaches the auditor in the cl
       ‖ u32be T ‖ u32be r ‖ u32be B ‖ u32be τ_b
       ‖ u8 status ‖ u8 deadline ‖ parameters (64 bytes)
       ‖ u32be n_0 ‖ … ‖ u32be n_{T−1} ‖ root (64 bytes)
-    record digest = tagged_sha512("verity-network-warden/record/v2", R)
+    record digest = tagged_sha512("verity-network-certifier/record/v2", R)
 
 `direction` is 0 for egress and 1 for ingress, `status` is `STATUS_CODES`'s code, `deadline` is 1 when the certifier
 settled the record by the verdict deadline, and `parameters` is `parameters_digest`. The counts n_t are the occupancy,
 which the schedule check reads exhaustively. `root` is a Merkle root over the window's N = Σ n_t real frames, in
 the order `grid.fill` places them, each of B bytes:
 
-    leaf(f)    = SHA-512( block("verity-network-warden/frame/v2\\0" ‖ u32be B) ‖ f )
-    E_0        = SHA-512( block("verity-network-warden/empty/v2\\0") )
-    node(a, b) = SHA-512( block("verity-network-warden/node/v2\\0") ‖ a ‖ b ),   E_{l+1} = node(E_l, E_l)
+    leaf(f)    = SHA-512( block("verity-network-certifier/frame/v2\\0" ‖ u32be B) ‖ f )
+    E_0        = SHA-512( block("verity-network-certifier/empty/v2\\0") )
+    node(a, b) = SHA-512( block("verity-network-certifier/node/v2\\0") ‖ a ‖ b ),   E_{l+1} = node(E_l, E_l)
 
 `block(x)` is x zero-padded to one 128-byte SHA-512 block, so every message starts from a constant midstate. The tree
 has the fixed depth D = ⌈log2(T·r)⌉: leaf k is frame k for k < N and E_0 after, so a padding slot never enters it.
@@ -49,12 +49,12 @@ from verity.primitives.commitments.identity import canonical_json_bytes, tagged_
 from verity.protocols.accounting.communication.certifier.grid import Grid, GridParams, Reason, Record, Status, row_left_packed
 from verity.protocols.accounting.communication.certifier.schedule import SyncSet
 
-RECORD_TAG = "verity-network-warden/record/v2"
-PARAMETERS_TAG = "verity-network-warden/parameters/v1"
+RECORD_TAG = "verity-network-certifier/record/v2"
+PARAMETERS_TAG = "verity-network-certifier/parameters/v1"
 CERTIFICATE_TAG = "verity/network-certificate/v1"
-FRAME_TAG = b"verity-network-warden/frame/v2\0"
-EMPTY_TAG = b"verity-network-warden/empty/v2\0"
-NODE_TAG = b"verity-network-warden/node/v2\0"
+FRAME_TAG = b"verity-network-certifier/frame/v2\0"
+EMPTY_TAG = b"verity-network-certifier/empty/v2\0"
+NODE_TAG = b"verity-network-certifier/node/v2\0"
 DIGEST_BYTES = 64
 
 STATUS_CODES: dict[Reason | None, int] = {

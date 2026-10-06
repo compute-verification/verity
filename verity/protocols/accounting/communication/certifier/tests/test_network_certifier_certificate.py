@@ -36,21 +36,21 @@ def test_the_record_is_the_documented_bytes():
     head = record_head("lnk", INGRESS, 7, grid, Status(Reason.DROPPED), params, PARAMS, deadline=False)
 
     def leaf(f):
-        return hashlib.sha512(block(b"verity-network-warden/frame/v2\0" + struct.pack(">I", 2)) + f).digest()
+        return hashlib.sha512(block(b"verity-network-certifier/frame/v2\0" + struct.pack(">I", 2)) + f).digest()
 
     def node(a, b):
-        return hashlib.sha512(block(b"verity-network-warden/node/v2\0") + a + b).digest()
+        return hashlib.sha512(block(b"verity-network-certifier/node/v2\0") + a + b).digest()
 
-    e0 = hashlib.sha512(block(b"verity-network-warden/empty/v2\0")).digest()
+    e0 = hashlib.sha512(block(b"verity-network-certifier/empty/v2\0")).digest()
     e1 = node(e0, e0)
     assert depth(params) == 3 and empty(1) == e1
     root = node(node(node(leaf(b"ab"), leaf(b"cd")), node(leaf(b"ef"), e0)), node(e1, e1))
     want = (struct.pack(">H", 3) + b"lnk" + bytes([1]) + struct.pack(">Q", 7) + struct.pack(">IIII", 3, 2, 2, 50)
             + bytes([4, 0]) + PARAMS + struct.pack(">III", 2, 0, 1) + root)
     assert head.root == root and head.encode() == want
-    assert head.digest() == tagged_sha512("verity-network-warden/record/v2", want)
-    assert head.digest().hex() == ("6bfe9f6aa8fd40d8d3c5c2cc21486123e6f4905c2b150bd7571d9d5518a6f13e"
-                                   "fbafb76814ec98d4adc640d5c7dbb2ba3a61434999958dce03cc51a7182d226d")
+    assert head.digest() == tagged_sha512("verity-network-certifier/record/v2", want)
+    assert head.digest().hex() == ("545323d2d0e56bd1b5da2f725e82dba77c531e7bc9b1949dd9a3524ed38dc55d"
+                                   "c94240506a7f25e288353dc17722b0b2d696904a80560be830cce0f309171f40")
 
 
 def test_status_codes_cover_every_reason_once():
