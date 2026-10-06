@@ -28,7 +28,8 @@ from . import cache as CC
 
 REPO = Path(__file__).resolve().parents[4]
 #: the packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`) and the templates'
-PACKAGES = ("verity", "verity_catalog", "verity_kernels", "verity_experimental", "verity_vllm", "verity_numerical")
+PACKAGES = ("verity", "verity_catalog", "verity_kernels", "verity_experimental", "verity_vllm", "verity_numerical",
+            "verity_flock")
 SUFFIX = CC.SUFFIX
 #: the pins of a Definition no module defines
 SHARED_PINS = Path(__file__).with_name("pins.json")

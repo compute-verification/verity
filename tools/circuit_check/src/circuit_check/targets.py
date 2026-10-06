@@ -221,8 +221,8 @@ TINY_FP8 = {**TINY, "H": 256, "NL": 1, "NH": 2, "KVH": 1, "D": 128, "I": 256, "V
 BINDINGS: dict[str, set[str]] = {}
 #: the root functions a binding file may define, in catalog order (each file's in turn, this module first); ``_X_roots`` holds
 #: ``_X_bindings`` beside it as one binding when the file defines both
-ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_universal_roots", "_gf2k_roots", "_merkle_roots",
-                  "_pous_roots", "_rec_roots", "_kernel_roots", "_vocabulary_roots", "_pouw_roots")
+ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_universal_roots", "_gf2k_roots",
+                  "_merkle_roots", "_pous_roots", "_rec_roots", "_kernel_roots", "_vocabulary_roots", "_pouw_roots")
 
 
 def binding_files() -> list[tuple[str, dict[str, Any]]]:
@@ -287,31 +287,6 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
             BINDINGS.setdefault(sub.id, set()).update(unit)
             out.append((sub.id, sub, sts))
     return out
-
-
-def _gf2k_roots() -> list[Any]:
-    """GF(2^128) arithmetic (`verity_catalog.definitions.boolean.gf2k`): Gf128Mul and Gf256Mul are static-free; GfScale at L = 2, and GfResiduals
-    on two residuals over 129 + 2 elements whose operands use every term kind (an element, a transposed block, a sum)."""
-    from verity.primitives.circuits.defs import bind
-    from verity_catalog.definitions.boolean import gf2k as G
-
-    S = {"nw": 129, "nv": 2, "ops": [[["w", 0]], [["wt", 1, 3], ["v", 0]]],
-         "res": [{"mul": [[0, 1]], "add": [["v", 1]]}, {"mul": [], "add": [["w", 0]]}]}
-    return [bind(G.GfScale, L=2), bind(G.GfResiduals, S=S)]
-
-
-def _rec_roots() -> list[Any]:
-    """V*'s opening check (`verity_flock.rec_open`) at its smallest shape: a row of 8 lanes (one SHA-512 block) and one level,
-    four compressions (the plain leaf's two and the level's two) and the consistency term's 16 products. Wider rows add
-    message blocks and products, and higher openings
-    repeat the level. And V*'s algebra (`verity_flock.rec_residuals`) on two row ports (an element alone, a transposed block)
-    and v, under `_gf2k_roots`' GfResiduals: a rep's is the same Calls over more ports and products."""
-    from verity_flock import rec_residuals as RR
-    from verity_flock.rec_open import definition
-
-    S = {"nw": 129, "nv": 2, "ops": [[["w", 0]], [["wt", 1, 3], ["v", 0]]],
-         "res": [{"mul": [[0, 1]], "add": [["v", 1]]}, {"mul": [], "add": [["w", 0]]}]}
-    return [definition(8, 1), RR.definition({"gf": S, "ports": [["m0", 1], ["m1", 128]]})]
 
 
 def _kernel_roots() -> list[Any]:
