@@ -71,7 +71,7 @@ import time
 import zlib
 from collections import Counter, defaultdict
 from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from fractions import Fraction
 from pathlib import Path
 
@@ -768,7 +768,8 @@ def proxy_log(proxy: Proxy) -> dict:
     return {"lateness_ms": {k: [round(x * 1000, 3) for x in v] for k, v in proxy.lateness.items()},
             "syncs": [[s.delta, str(s.rho)] for s in proxy.shaper.syncs],
             "frames": proxy.frames, "hands": proxy.shaper.hands, "link_frames_read": proxy.link_frames_read,
-            "streams": len(proxy.streams), "slack_ms": proxy.slack * 1000} | _usage()
+            "streams": len(proxy.streams), "slack_ms": proxy.slack * 1000,
+            "prover": getattr(proxy.shaper.prover, "log", None)} | _usage()
 
 
 def write_logs(out: Path, proxy: Proxy | None = None, server: Server | None = None, peer: Peer | None = None) -> None:
@@ -800,12 +801,75 @@ async def _server(plan: dict, params: dict, conn, out: Path) -> None:
     write_logs(out, server=server)
 
 
-def prover_args(plan: dict, setup: Setup) -> dict:
-    """The proxy's advice: the plan's syncs, or, under an online rule, its own prover's over the plan's windows."""
+def prover_args(plan: dict, setup: Setup, threaded: bool = True) -> dict:
+    """The proxy's advice: the plan's syncs, or, under an online rule, its own prover's over the plan's windows (a
+    `LaggedProver` under `plan["prover_lag"]`)."""
     if "sync_rule" not in plan:
         return {"syncs": [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]}
-    prover = online.Prover(setup.sync_set, setup.egress_params.buckets, online.rule(plan["sync_rule"]), setup.envelope)
+    args = (setup.sync_set, setup.egress_params.buckets, online.rule(plan["sync_rule"]), setup.envelope)
+    if plan.get("prover_lag"):
+        prover = LaggedProver(*args, lag=plan["prover_lag"], threaded=threaded)
+    else:
+        prover = online.Prover(*args)
     return {"syncs": [], "prover": prover, "windows": plan["windows"]}
+
+
+class LaggedProver(online.Prover):
+    """The online prover with its choice taken off the proxy's tick: `Prover.declare` costs every value of Σ_sync over
+    the recent windows' frames (hundreds of ms on a live configuration, against a slack of tens), and the proxy's tick
+    at a window's first bucket would wait for it. Here window w's sync is the rule's on the frames ready by w·T − lag,
+    chosen in a worker thread that `run` starts just after that bucket's tick (`start`); `declare` at w·T takes it, or
+    the envelope when it isn't ready (`log["unready"]`), so the tick never waits. Window 0 has no history: the
+    envelope. `threaded=False` chooses at `start`, for a driver on a virtual clock."""
+
+    def __init__(self, sync_set: SyncSet, window_buckets: int, rule: online.Rule, envelope: ClockSync, lag: int,
+                 threaded: bool = True) -> None:
+        super().__init__(sync_set, window_buckets, rule, envelope)
+        if not 0 < lag < window_buckets:
+            raise ValueError("the prover's lag is 1 … T−1 buckets")
+        self.lag, self.threaded = lag, threaded
+        self._next: tuple[int, Future] | None = None
+        self._pool = ThreadPoolExecutor(1) if threaded else None
+        self.log = {"lag": lag, "unready": [], "choose_ms": []}
+        self.started = 0
+
+    def start(self, w: int) -> None:
+        link = self.links[0]
+        n = len(link.ready)
+        snapshot = (link.anchor[:n], link.index[:n], link.ready[:n], list(self.syncs))
+        if self._pool is None:
+            future = Future()
+            future.set_result(self._choose(w, *snapshot))
+        else:
+            future = self._pool.submit(self._choose, w, *snapshot)
+        self._next = (w, future)
+        self.started += 1
+
+    def _choose(self, w: int, anchor: list, index: list, ready: list, syncs: list) -> ClockSync:
+        t0 = time.perf_counter()
+        n = bisect.bisect_right(ready, w * self.T - self.lag)  # canonical order is by ready bucket first
+        p = online.Prover(self.sync_set, self.T, self.rule, self.envelope)
+        p.links[0].anchor, p.links[0].index, p.links[0].ready = anchor[:n], index[:n], ready[:n]
+        p.syncs = syncs[:w]
+        sync = p.declare()
+        self.log["choose_ms"].append(round((time.perf_counter() - t0) * 1000, 1))
+        return sync
+
+    def declare(self) -> ClockSync:
+        w = len(self.syncs)
+        sync = self.envelope
+        if w and self._next is not None and self._next[0] == w and self._next[1].done():
+            sync = self._next[1].result()
+        elif w:
+            self.log["unready"].append(w)
+        self.syncs.append(sync)
+        return sync
+
+    async def run(self, origin: float, tau: float, windows: int, clock=time.monotonic, sleep=asyncio.sleep) -> None:
+        for w in range(1, windows):
+            if (delay := origin + (w * self.T - self.lag + 0.5) * tau - clock()) > 0:
+                await sleep(delay)
+            self.start(w)
 
 
 class Stalls(asyncio.Event):
@@ -883,7 +947,12 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
                                     ingress_link=setup.ingress_link, **advice)
     if stalls:
         proxy._changed = Stalls(proxy, stalls, pause)
+    if isinstance(prover := advice.get("prover"), LaggedProver):
+        sys.setswitchinterval(0.001)
+        lagged = asyncio.create_task(prover.run(origin, setup.egress_params.bucket_ms / 1000, plan["windows"]))
     await done
+    if isinstance(prover, LaggedProver):
+        lagged.cancel()
     listening.close()
     publish.close()
     write_logs(out, proxy=proxy)
@@ -1004,7 +1073,9 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     peer = Peer(plan, params, clock, clock.sleep, notify)
     listening = await asyncio.start_server(server.handle, "127.0.0.1", 0)
     publish = Publisher(out, setup, threaded=False)
-    advice = prover_args(plan, setup)
+    advice = prover_args(plan, setup, threaded=False)
+    if isinstance(prover := advice.get("prover"), LaggedProver):
+        lagged = asyncio.create_task(prover.run(0.0, e.bucket_ms / 1000, plan["windows"], clock, clock.sleep))
     proxy = holder["proxy"] = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, advice.pop("syncs"),
                                     origin=0.0, clock=clock, sleep=clock.sleep, publish=publish,
                                     egress_link=setup.egress_link, ingress_link=setup.ingress_link, **advice)
@@ -1034,7 +1105,9 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
                 and peer.instants_sent >= bisect.bisect_right(sends, x + 1e-9)
                 and proxy.link_frames_read >= peer.frames_sent and server.log["requests"] >= proxy.requests_released
                 and len(proxy.frames) >= server.log["events"]
-                and peer.bytes >= len(proxy.lateness["egress"]) * e.allocation * e.frame_bytes)
+                and peer.bytes >= len(proxy.lateness["egress"]) * e.allocation * e.frame_bytes
+                and (not isinstance(prover, LaggedProver) or prover.started >= sum(
+                    1 for w in range(1, plan["windows"]) if (w * e.buckets - prover.lag + 0.5) * tau_e <= x + 1e-9)))
 
     for x in instants:
         if x > end + 1e-9:
@@ -1044,6 +1117,8 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     await running
     await tasks[1]
     tasks[0].cancel()
+    if isinstance(prover, LaggedProver):
+        lagged.cancel()
     writer.close()
     listening.close()
     link.close()
@@ -1371,6 +1446,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--served-model", default="served", help="the live endpoint's model name")
     ap.add_argument("--syncs", type=parse_sync_policy,
                     help=f"the prover's syncs: {', '.join(SYNC_POLICIES)} (default: envelope live, else model)")
+    ap.add_argument("--prover-lag", type=int, default=0, metavar="BUCKETS",
+                    help="under an online rule: choose window w's sync from the frames ready by w·T − BUCKETS, off the "
+                         "proxy's tick (`LaggedProver`); 0 chooses at the tick")
     ap.add_argument("--stall", dest="stalls", action="append", default=[], metavar="BUCKET:MS",
                     type=lambda s: (int(s.split(":")[0]), float(s.split(":")[1]) / 1000),
                     help="test-only: stop the proxy for MS right after the first ingress tick at or after BUCKET that "
@@ -1476,6 +1554,8 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
             if args.truncate:
                 cfg = truncate(cfg, args.truncate, setup.egress_params)
             plan = plan_configuration(cfg, setup, args.served_model if live else None, sync_policy)
+            if args.prover_lag and "sync_rule" in plan:
+                plan["prover_lag"] = args.prover_lag
             span_s = plan["windows"] * setup.egress_params.buckets * setup.egress_params.bucket_ms / 1000 + STARTUP_S
             if (not args.reaudit and args.max_minutes
                     and time.monotonic() - started + span_s + 10 > 60 * args.max_minutes):
@@ -1536,6 +1616,7 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
                                            "cpus": sorted({str(p.get("cpus")) for p in processes}),
                                            "selection": [[str(p), n] for p, n in picked],
                                            "server": "live" if live else "fake", "sync_policy": sync_policy,
+                                           "prover_lag": args.prover_lag,
                                            "stopped": stopped}
     summary["adversarial"] = {}
     for s in strategies[1:]:

@@ -192,6 +192,43 @@ def test_a_proxy_that_declares_its_own_syncs_is_accepted_and_is_run_shapers(setu
         ar.plan_configuration(doc["configurations"][0], s, syncs="cover")
 
 
+def test_a_lagged_prover_declares_off_the_tick_and_is_accepted(setup, tmp_path):
+    """`--prover-lag`: window w's sync is the rule's on the frames ready by w·T − lag, chosen at that bucket, so the
+    tick at w·T only takes it. Every window after the first takes the rule's choice, none the envelope for want of
+    it, and the run is accepted and is `run_shaper`'s under what was declared."""
+    from verity.protocols.accounting.communication.warden import online
+
+    doc, report, s = setup
+    plan = ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1") | {"prover_lag": 5}
+    assert ar.run_virtual(plan, report, tmp_path) == {"server": 0, "proxy": 0, "peer": 0}
+    import gzip
+    log = json.load(gzip.open(tmp_path / "proxy.json.gz", "rt"))
+    assert log["prover"]["lag"] == 5 and log["prover"]["unready"] == [] and len(log["prover"]["choose_ms"]) == 2
+    audit = ar.audit_configuration(plan, report, tmp_path)
+    assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"])
+    assert audit["comparisons"]["records_are_run_shapers"] and audit["comparisons"]["hands_are_the_rules"]
+    # the rule's choice on the model's frames ready by w·T − 5, window by window
+    release = {int(k): v for k, v in plan["model_release"].items()}
+    frames, ready = ar.model_frames(plan["sessions"], release, plan["windows"] * T)
+    want = [s.envelope]
+    for w in range(1, plan["windows"]):
+        seen = [(f, r) for f, r in zip(frames, ready) if r <= w * T - 5]
+        p = online.Prover(s.sync_set, T, online.rule("cover-2-1"), s.envelope)
+        for k, (f, r) in enumerate(seen):
+            p.arrive(0, k, f, r)
+        p.syncs = list(want)
+        want.append(p.declare())
+    assert log["syncs"] == [[x.delta, str(x.rho)] for x in want]
+
+
+def test_a_lagged_prover_with_no_choice_ready_declares_the_envelope(setup):
+    _, _, s = setup
+    p = ar.LaggedProver(s.sync_set, T, ar.online.rule("last"), s.envelope, lag=5, threaded=False)
+    assert p.declare() == s.envelope and p.declare() == s.envelope and p.log["unready"] == [1]
+    with pytest.raises(ValueError):
+        ar.LaggedProver(s.sync_set, T, ar.online.rule("last"), s.envelope, lag=T)
+
+
 def test_the_command_line_parses_a_sync_rule(tmp_path, capsys):
     """`--syncs` takes an online rule's name and refuses anything else, as an argument error."""
     argv = ["t.json", "--calibration", "c.json", "--out", str(tmp_path)]
