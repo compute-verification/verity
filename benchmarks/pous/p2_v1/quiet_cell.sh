@@ -2,7 +2,7 @@
 # quiet_cell.sh BUDGET_MIN UNTIL AVOID[,AVOID...] -- CELL_ARGS...: one P2 sweep cell on vy-nebius-2's quiet slice (vy-pous-quiet, cores
 # 124-127, GPU 7) under a timed GPU-7 lease, which serializes it with every other timed run there. It waits on the node until a
 # BUDGET_MIN lease from now clears every held window AVOID (START/END, UTC), takes the lease, and runs `sweep.py cell` with the
-# same guard; a cell whose lease came too late refuses (75) and the loop waits again, until UNTIL (UTC) passes.
+# same guard; a cell whose lease came too late refuses (75) and the loop waits again, until a lease would end past UNTIL (UTC).
 set -u
 budget=$1 until=$2 avoid=$3
 shift 3

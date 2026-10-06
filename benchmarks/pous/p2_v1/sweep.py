@@ -521,10 +521,10 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--avoid", action="append", default=[], metavar="START/END",
                    help="a held window, UTC (2026-10-06T07:00Z/2026-10-06T08:30Z): refuse (75) when --budget-min reaches it")
     c.add_argument("--budget-min", type=int, default=30, help="the cell's lease, minutes (gpu-lease --max-min)")
-    w = sub.add_parser("clear", help="sleep until --budget-min from now clears every --avoid window; 75 once --until passes")
+    w = sub.add_parser("clear", help="sleep until --budget-min from now clears every --avoid window; 75 once it would end past --until")
     w.add_argument("--avoid", action="append", default=[], metavar="START/END")
     w.add_argument("--budget-min", type=int, default=30)
-    w.add_argument("--until", required=True, help="UTC, 2026-10-06T13:30Z: the last time a cell may start")
+    w.add_argument("--until", required=True, help="UTC, 2026-10-06T13:30Z: the time by which a cell's lease must end")
     p = sub.add_parser("prepare", help="build WORK's venv, CGBN and library (a gates-only run) outside any timed lease")
     p.add_argument("--work", required=True)
     p.add_argument("--hardware", default="rtx-pro-6000-server/bf16")
@@ -539,9 +539,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "cell":
         return run_cell(a)
     if a.cmd == "clear":
-        while window_clash(time.time(), a.budget_min, a.avoid):
+        while time.time() + 60 * a.budget_min <= _utc(a.until):
+            if not window_clash(time.time(), a.budget_min, a.avoid):
+                return 0
             time.sleep(30.0)
-        return 0 if time.time() <= _utc(a.until) else 75
+        return 75
     if a.cmd == "prepare":
         out = Path(os.environ["RESEARCH_RUN_DIR"]) / "out"
         out.mkdir(parents=True, exist_ok=True)
