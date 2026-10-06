@@ -1,10 +1,10 @@
-"""hash.cuh on the host (pearl_c/hash_host.cpp, built with g++): each hashing kernel, launched as run.py launches it, writes
-the bytes the verifier's reference computes.  A's row leaves and frame-b3 trees (pads, level keys, one-compression nodes)
-at rows of 1 to 75 chunks, the message digests, the tile leaves full and partial (decode's 32 x 64), Pearl's tickets, the
-tile tree, a unit's seed_A over its root with its line and jackpot keys, and -h3's row seeds at the pinned vectors (Pearl-C's
-and, under its own label, Pearl-C4's) and over an -h3 call's frame-b3s row leaves, -h3s's SHA-512 row digests and its seeds
-over them at the pinned vectors; then
-run.py's commit and hashing phases end to end."""
+"""hash.cuh and hash_h3s.cuh on the host (pearl_c/hash_host.cpp, built with g++): each hashing kernel, launched as run.py
+launches it, writes the bytes the verifier's reference computes.  A's row leaves and frame-b3 trees (pads, level keys,
+one-compression nodes) at rows of 1 to 75 chunks, the message digests, the tile leaves full and partial (decode's 32 x 64),
+Pearl's tickets, the tile tree, a unit's seed_A over its root with its line and jackpot keys, and -h3's row seeds at the pinned
+vectors (Pearl-C's and, under its own label, Pearl-C4's) and over an -h3 call's frame-b3s row leaves; -h3s's SHA-512 row
+digests, its seeds and line keys over them at the pinned vectors, its line raws, tickets and tile leaves, and its hm96-sha512
+frame-v3-sha512 trees under ChaCha20 salts; then run.py's commit and hashing phases end to end."""
 
 from __future__ import annotations
 
@@ -27,6 +27,8 @@ import fixture as F  # noqa: E402
 import run as R  # noqa: E402
 from verity.primitives.commitments import MerkleTree  # noqa: E402
 from verity.primitives.crypto.blake3 import blake3  # noqa: E402
+from verity.primitives.commitments.merkle import tree_levels  # noqa: E402
+from verity.protocols.accounting.work.pouw import audit  # noqa: E402
 from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, TILE_SCHEMA, activation_binding, rows_domain  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import pearl_c4 as C4  # noqa: E402
@@ -86,7 +88,7 @@ def tree(host: Host, count: int, domain_id: bytes) -> SimpleNamespace:
 
 
 def test_every_hash_kernel_is_built(host):
-    names = set(re.findall(r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\(', (HERE / "hash.cuh").read_text()))
+    names = set(re.findall(r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\(', "".join((HERE / f).read_text() for f in ("hash.cuh", "hash_h3s.cuh"))))
     built = {host.lib.kernel_name(i).decode() for i in range(len(names))}
     assert built == names and host.lib.kernel_name(len(names)) is None
 
@@ -220,10 +222,10 @@ def h3s_row(k: int) -> bytes:
 H3S_DIGESTS = {
     4096: "823a21352763ecee3ba7b06da44a04525577197dbee48ef82b12927e6eb6a847360933bed78d80f85b798b77096a8746ce81dc3f48e6891d95d80d0b9432788f",
     14336: "9743c48588f788041e55fc2ef5cf44aa01225029edcf0539230053fedfcf240032ee695fd36f194c832834df8da839899cdb251e74c0090c150affc90aecadb8"}
-H3S_SEEDS = {(7, 3): "f89d02524a2d9dbc43c9d0f85225c20be248997127c6989e628424b4ac1b8ebc",
-             (7, 200): "e17bc3505bfc9a9b88b67ab02b295dc0939f1f75d88ea986471db261004a3d13",
-             (2 ** 32 - 1, 3): "9f5f48c6cbfbcebe113c4b4795b76a721f4830888efccd72fa3250a0d6b43a76",
-             (2 ** 32 - 1, 200): "e2397edb00222d193f59372a4d0ba21d598b6ca575719c4f87f31877a0ed6bcb"}
+H3S_SEEDS = {(7, 3): "48f3f41d75a3d208007bdf3f7ffd1f4649de6ac8cbeae2bc03bdc306b3358896",
+             (7, 200): "f1ccc13e0ae11eb9e61f36ef1a1ccfc2c8d059f5f9bd7811fd166982d1763900",
+             (2 ** 32 - 1, 3): "e7c2a2ca4c4c207c3ed6075fd0b4a9055d8aacb725a930ce3d8d1f6e7d4b6a4a",
+             (2 ** 32 - 1, 200): "a8f6f7a7e2f8b1672167196ad066e4857954a064f44aa010c95fe8b95dcb3b2d"}
 
 
 @pytest.mark.parametrize("k,rows", [(256, 3), (768, 2), (4096, 2), (14336, 1), (32768, 1)])
@@ -241,18 +243,99 @@ def test_s512_rows_are_row_seg_v1_digests(host, k, rows):
         assert got[:64].hex() == H3S_DIGESTS[k]
 
 
+def unit_block(salt: bytes, root_b: bytes, unit: int) -> bytes:
+    """-h3s's unit block (hash_h3s.cuh's `s512_seeds`): salt ‖ root_B (64 B) ‖ the unit index u64 LE."""
+    return salt + root_b + unit.to_bytes(8, "little")
+
+
 def test_h3s_row_seeds_are_the_pinned_vectors(host):
-    """b3_seeds in mode 2 over 201 64-byte row digests (136 bytes a seed, three BLAKE3 blocks) is `pearl_c.row_seed` over
-    each, and rows 3 and 200 over the pinned row's digest are the pinned bytes, at unit 7 and at 2^32 − 1."""
-    salt, root_b, d = bytes(range(32)), bytes(range(32, 64)), C.row_digest(h3s_row(4096))
-    skey, psalt, prb = host.put(blake3(C.LABELS["seed-A"])), host.put(salt), host.put(root_b)
+    """s512_seeds in mode 1 over 201 64-byte row digests (168 bytes after the label, two SHA-512 blocks) is `pearl_c.row_seed`
+    over each, and rows 3 and 200 over the pinned row's digest are the pinned bytes, at unit 7 and at 2^32 − 1; each seed's
+    line key is `pearl_c._s512_line_key`'s.  In mode 0 over root_A it is `pearl_c.unit_seed_a`."""
+    salt, root_b, d = bytes(range(32)), bytes(range(32, 96)), C.row_digest(h3s_row(4096))
     digests = [d if r in (3, 200) else hashlib.sha512(bytes([r])).digest() for r in range(201)]
     for unit in (7, 2 ** 32 - 1):
-        src, out = host.put(b"".join(digests)), host.alloc(32 * 201)
-        host.launch("b3_seeds", 2, 128, p=(src, out, skey, psalt, prb), i=(201, unit - (unit >> 31 << 32), 2))
+        src, out, keys = host.put(b"".join(digests)), host.alloc(32 * 201), host.alloc(32 * 201)
+        host.launch("s512_seeds", 2, 128, p=(src, out, keys, host.put(unit_block(salt, root_b, unit))), i=(201, 0, 1))
         got = host.read(out, 32 * 201)
-        assert got == b"".join(C.row_seed(salt, x, root_b, unit, r) for r, x in enumerate(digests))
+        seeds = [C.row_seed(salt, x, root_b, unit, r, "h3s") for r, x in enumerate(digests)]
+        assert got == b"".join(seeds)
         assert [got[32 * r:32 * r + 32].hex() for r in (3, 200)] == [H3S_SEEDS[unit, 3], H3S_SEEDS[unit, 200]]
+        assert host.read(keys, 32 * 201) == b"".join(C._s512_line_key(x) for x in seeds)
+    root_a, out = hashlib.sha512(b"root_A").digest(), host.alloc(32)
+    host.launch("s512_seeds", 1, 128, p=(host.put(root_a), out, 0, host.put(unit_block(salt, root_b, 9))), i=(1, 0, 0))
+    assert host.read(out, 32) == C.unit_seed_a(salt, root_a, root_b, 9, "h3s")
+
+
+def test_h3s_line_raws_and_tickets_are_the_schemes(host):
+    """s512_line_raws is H_line(key ‖ side ‖ factor ‖ line u32 LE) at lines past one byte and for own-keyed rows (line 0), the
+    32 bytes `pearl_c.sample_line` maps to codes; s512_tickets is `PearlC.tickets` under -h3s, H_jackpot(seed_A ‖ fold)."""
+    seed = C.unit_seed_a(bytes(32), bytes(64), bytes(64), 3, "h3s")
+    key, own = C._s512_line_key(seed), [C._s512_line_key(bytes([r]) * 32) for r in range(5)]
+    out = host.alloc(32 * 300)
+    host.launch("s512_line_raws", 3, 128, p=(host.put(key), out, 0, 0, host.put(b"".join(own))), i=(1, 2, 300, 0, 5))
+    want = [C.s512("line", (own[t] if t < 5 else key) + bytes([1, 2]) + (0 if t < 5 else t).to_bytes(4, "little")) for t in range(300)]
+    assert host.read(out, 32 * 300) == b"".join(want)
+    rows, cols = 32, 64
+    c = np.random.default_rng(4).standard_normal((rows, cols)).astype(np.float32).view(np.uint32)
+    out = host.alloc((rows // 16) * (cols // 16) * 32)
+    host.launch("s512_tickets", 1, 128, p=(host.put(c.astype("<u4").tobytes()), out, host.put(seed)), i=(rows, cols))
+    want = C.PearlC(forming="v1", hashing="h3s").tickets(C.Noise(seed, bytes(32)), C.Checked(c.tolist(), c.tolist()))
+    assert host.read(out, 32 * len(want)) == b"".join(want)
+
+
+@pytest.mark.parametrize("rows", [16, 32, 64, 96])
+def test_h3s_tile_leaves_are_the_schemes(host, rows):
+    """s512_tile_leaves at 128 columns: each tile's leaf is `pearl_c.leaf` under -h3s, ``sha512/row-seg/v1`` over its messages
+    (32 segments a full tile; a last row block of 16 or 32 rows, decode's, is partial, 8 or 16)."""
+    cols = 128
+    rng = np.random.default_rng(rows)
+    c, u = (rng.integers(0, 2**32, (rows, cols), dtype=np.uint64).astype(np.uint32) for _ in range(2))
+    tiles = R.cdiv(rows, 64) * (cols // 64)
+    lv = host.alloc(tiles * 64)
+    host.launch("s512_tile_leaves", tiles, 32, p=(host.put(c.astype("<u4").tobytes()), host.put(u.astype("<u4").tobytes()), lv),
+                i=(rows, cols))
+    want = [C.leaf(C.Checked(c[r0:r0 + 64, c0:c0 + 64].tolist(), u[r0:r0 + 64, c0:c0 + 64].tolist()), "h3s")
+            for r0 in range(0, rows, 64) for c0 in range(0, cols, 64)]
+    assert host.read(lv, tiles * 64) == b"".join(want)
+
+
+def s512_levels(host: Host, base: int, count: int, dom: int, small: int = 4) -> None:
+    """Pads, then s512_nodes up to a level of `small` nodes, then s512_tree_small: run.py's levels under -h3s."""
+    width = R.pow2(count)
+    if width > count:
+        host.launch("s512_pads", R.cdiv(width - count, 64), 64, p=(base, dom), i=(count, width))
+    level = 0
+    while width > small:
+        host.launch("s512_nodes", R.cdiv(width // 2, 64), 64, p=(base, base + 64 * width, dom), i=(level, width // 2))
+        base, width, level = base + 64 * width, width // 2, level + 1
+    host.launch("s512_tree_small", 1, 64, p=(base, dom), i=(width, level))
+
+
+@pytest.mark.parametrize("count,digests,nonce", [(1, False, 0), (5, False, 7), (300, True, 1 << 63), (64, False, (1 << 62) + 3)])
+def test_hm96_trees_are_the_verifiers(host, count, digests, nonce):
+    """hm_leaves over 64-byte values (row digests, or with ``digests`` tile leaves) under ChaCha20 salts at each tree's nonce
+    (an activation tree's unit index, a weight's 2^62 + w, the transcript's 2^63), then pads, nodes and the small tree: every
+    level is the frame-v3-sha512 tree `audit.commit_rows` builds, its root the `MerkleTree`'s.  300 leaves put ranks past one
+    byte; the nonce is read from the unit block's index at 7 and given as i1, i2 otherwise."""
+    rng = np.random.default_rng(count)
+    rows = [rng.integers(0, 256, 128 * (r % 3 + 1), dtype=np.uint8).tobytes() for r in range(count)]
+    xs = [r[:64] for r in rows] if digests else [C.row_digest(r) for r in rows]
+    values = xs if digests else rows
+    salt_key, binding = bytes(range(64, 96)), hashlib.sha256(b"binding").digest()
+    dom = rows_domain(binding, 3, count, audit.HM96, digests)
+    width = R.pow2(count)
+    buf, pdom = host.alloc(64 * (2 * width - 1)), host.put(dom.domain_id)
+    const = host.put(audit.hm96_kernel_constants())
+    block = host.put(unit_block(bytes(32), bytes(64), nonce)) if nonce == 7 else 0
+    host.launch("hm_leaves", R.cdiv(count, 64), 64, p=(host.put(b"".join(xs)), buf, host.put(salt_key), const, pdom, block + 96 if block else 0),
+                i=(count, 0, 0) if block else (count, nonce & 0xFFFFFFFF, nonce >> 32))
+    s512_levels(host, buf, count, pdom)
+    salted = [v + audit.hm96_salt(salt_key, nonce, i) for i, v in enumerate(values)]
+    want = b"".join(b"".join(level) for level in tree_levels(dom, [dom.leaf(i, i, ROW_SCHEMA, v) for i, v in enumerate(salted)]))
+    assert host.read(buf, 64 * (2 * width - 1)) == want
+    root = audit.commit_rows(binding, 3, values, audit.HM96, salt_key, nonce, digests).commitment.root
+    assert want[-64:] == root
 
 
 def test_row_seeds_over_a_calls_leaves_are_the_schemes(host):

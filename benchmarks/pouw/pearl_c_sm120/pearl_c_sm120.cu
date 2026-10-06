@@ -15,6 +15,7 @@
 #include <cuda_fp8.h>
 
 #include "../pearl_c/hash_h2.cuh"
+#include "../pearl_c/hash_h3s.cuh"
 #include "../pouw_hash/pouw_hash.cuh"
 #include "mainloop_sm120.cuh"
 
@@ -499,25 +500,31 @@ DEV int k32(int t) { return (t & ~31) | (t >> 1 & 3) << 3 | (t >> 3 & 3) << 1 | 
 // (rows 32-127 left as they are) or 0, both in K32 order along count (the F lines, count = k); i0 side, i1 factor, i2 count,
 // i3 bf16(32 x the line's L2 norm): 0x4600 for Pearl's 256, 0x4400 for 16.  i4 lines keyed per row (-h3's E_A,
 // `pearl_c.PearlC.encode`): line t < i4 is line 0 under the noise-line subkey of its own seed, p4 + 32 t (b3_seeds' mode 1);
-// the rest, line t under p0
-extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
+// the rest, line t under p0.  lines_s is -h3s's (`pearl_c.sample_line` on an S512Seed): the raw bytes H_line (hash_h3s.cuh's
+// s512_line_raw) in place of BLAKE3's, and p4 the rows' line keys themselves (s512_seeds' p2)
+template <bool S512> DEV void lines_body(const Args a) {
   const int line = blockIdx.x * blockDim.x + threadIdx.x, count = a.i[2];
   if (line >= count) return;
   const bool own = line < a.i[4];
-  uint32_t kw[8], msg[16], h[8];
-  if (own) {
+  uint32_t kw[8], h[8];
+  if (own && !S512) {
     uint32_t seed[8];
     load_key(a.p[4] + (uint64_t)line * 32, seed);
     b3_short<23>(seed, [&](int j) { return (uint32_t)NOISE_LINE_LABEL[j]; }, kw);
   } else {
-    load_key(a.p[0], kw);
+    load_key(own ? a.p[4] + (uint64_t)line * 32 : a.p[0], kw);
   }
   const uint32_t at = own ? 0u : (uint32_t)line;
+  if (S512) {
+    s512_line_raw(kw, (uint32_t)a.i[0], (uint32_t)a.i[1], at, h);
+  } else {
+    uint32_t msg[16];
 #pragma unroll
-  for (int i = 0; i < 16; i++) msg[i] = 0;
-  msg[0] = (uint32_t)a.i[0] | (uint32_t)a.i[1] << 8 | (at & 0xFFFF) << 16;
-  msg[1] = at >> 16;
-  blake3_block(kw, msg, h);
+    for (int i = 0; i < 16; i++) msg[i] = 0;
+    msg[0] = (uint32_t)a.i[0] | (uint32_t)a.i[1] << 8 | (at & 0xFFFF) << 16;
+    msg[1] = at >> 16;
+    blake3_block(kw, msg, h);
+  }
   int xs[32];
   uint32_t sumsq = 0;
 #pragma unroll
@@ -544,6 +551,8 @@ extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
       for (int j = 0; j < 32; j++) t[(size_t)j * count + k32(line)] = c[j];
     }
 }
+extern "C" __global__ void __launch_bounds__(128) lines(const Args a) { lines_body<false>(a); }
+extern "C" __global__ void __launch_bounds__(128) lines_s(const Args a) { lines_body<true>(a); }
 
 // ---------------------------------------------------------------- forming v1 (cheap-binding §5)
 constexpr uint32_t S5_LINE = 0x3AB504F3;   // f32(sqrt(32) / (256 * 16))

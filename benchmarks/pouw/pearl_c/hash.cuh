@@ -414,6 +414,38 @@ template <int TL, int L2> DEV void rs_header(uint64_t* st, const uint8_t* tag, u
   rs_iv(st);
   rs_compress(st, w);
 }
+DEV void s512_store(uint64_t p, const uint64_t* st, int words) {   // the first `words` words of a state at device address p
+  uint32_t* out = reinterpret_cast<uint32_t*>(p);
+#pragma unroll
+  for (int t = 0; t < 8; t++)
+    if (t < words) {
+      out[2 * t] = rs_be32((uint32_t)(st[t] >> 32));
+      out[2 * t + 1] = rs_be32((uint32_t)st[t]);
+    }
+}
+// the digest over s segment digests (dig, 8 words each) after the Q header's state qst, into p (64 bytes)
+DEV void rs_fold(const uint64_t* qst, const uint64_t* dig, int s, uint64_t p) {
+  uint64_t st[8], w[16];
+#pragma unroll
+  for (int t = 0; t < 8; t++) st[t] = qst[t];
+  int j = 0;
+#pragma unroll 1
+  for (; j + 1 < s; j += 2) {
+#pragma unroll
+    for (int t = 0; t < 16; t++) w[t] = dig[8 * j + t];
+    rs_compress(st, w);
+  }
+  if (j < s) {
+#pragma unroll
+    for (int t = 0; t < 8; t++) { w[t] = dig[8 * j + t]; w[t + 8] = 0; }
+    w[8] = 0x8000000000000000ull;
+    w[15] = 8ull * (128 + 64 * s);
+    rs_compress(st, w);
+  } else {
+    rs_pad(st, 128 + 64ull * s);
+  }
+  s512_store(p, st, 8);
+}
 // -h3s's row digests (`pearl_c.row_digest`): block r hashes row r (p0 + 4 i1 r, i1 = k words), its thread j < s = k / 256
 // segment j into shared memory and its last thread Q, then thread 0 the row.  p0 rows, p1 out (64 B a row, the digest's
 // bytes); i0 rows, i1 k (a multiple of 256, at most 256 RS_MAX_SEGS)
@@ -447,31 +479,7 @@ extern "C" __global__ void __launch_bounds__(128) s512_rows(const Args a) {
     for (int t = 0; t < 8; t++) qst[t] = st[t];
   }
   __syncthreads();
-  if (threadIdx.x) return;
-#pragma unroll
-  for (int t = 0; t < 8; t++) st[t] = qst[t];
-  int j = 0;
-#pragma unroll 1
-  for (; j + 1 < s; j += 2) {
-#pragma unroll
-    for (int t = 0; t < 16; t++) w[t] = dig[8 * j + t];
-    rs_compress(st, w);
-  }
-  if (j < s) {
-#pragma unroll
-    for (int t = 0; t < 8; t++) { w[t] = dig[8 * j + t]; w[t + 8] = 0; }
-    w[8] = 0x8000000000000000ull;
-    w[15] = 8ull * (128 + 64 * s);
-    rs_compress(st, w);
-  } else {
-    rs_pad(st, 128 + 64ull * s);
-  }
-  uint32_t* out = reinterpret_cast<uint32_t*>(a.p[1] + 64 * r);
-#pragma unroll
-  for (int t = 0; t < 8; t++) {
-    out[2 * t] = rs_be32((uint32_t)(st[t] >> 32));
-    out[2 * t + 1] = rs_be32((uint32_t)st[t]);
-  }
+  if (threadIdx.x == 0) rs_fold(qst, dig, s, a.p[1] + 64 * r);
 }
 
 // A seed's two subkeys (`pearl_kw.subkey`): BLAKE3 keyed by the seed over "pearl/v4/FP8/noise-line", the key E's lines are
@@ -495,13 +503,7 @@ extern "C" __global__ void __launch_bounds__(32) seed_subkeys(const Args a) {
 // Pearl's tickets: per 16 x 16 subtile of C~, the 16-lane fold (lane (rb, cb) folds its 4 x 4 block row-major,
 // lane <- rotl32(lane 0x9E3779B1 + bits, 13)) hashed as one keyed BLAKE3 block.  p0 C~, p1 out (subtiles row-major x 32 B),
 // p2 key (8 words); i0 rows, i1 cols
-extern "C" __global__ void __launch_bounds__(128) tickets(const Args a) {
-  const int cols = a.i[1], sn = cols / 16;
-  const int t = blockIdx.x * blockDim.x + threadIdx.x;
-  if (t >= a.i[0] / 16 * sn) return;
-  const int si = t / sn, sj = t % sn;
-  const uint32_t* C = reinterpret_cast<const uint32_t*>(a.p[0]);
-  uint32_t z[16], kw[8], h[8];
+DEV void ticket_fold(const uint32_t* C, int cols, int si, int sj, uint32_t* z) {
 #pragma unroll
   for (int l = 0; l < 16; l++) {
     uint32_t lane = 0;
@@ -512,6 +514,14 @@ extern "C" __global__ void __launch_bounds__(128) tickets(const Args a) {
     }
     z[l] = lane;
   }
+}
+extern "C" __global__ void __launch_bounds__(128) tickets(const Args a) {
+  const int cols = a.i[1], sn = cols / 16;
+  const int t = blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= a.i[0] / 16 * sn) return;
+  const int si = t / sn, sj = t % sn;
+  uint32_t z[16], kw[8], h[8];
+  ticket_fold(reinterpret_cast<const uint32_t*>(a.p[0]), cols, si, sj, z);
 #pragma unroll
   for (int i = 0; i < 8; i++) kw[i] = reinterpret_cast<const uint32_t*>(a.p[2])[i];
   blake3_block(kw, z, h);

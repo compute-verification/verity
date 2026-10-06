@@ -25,6 +25,7 @@ value carries its salt, so `opened_value` strips it before the scheme reads the 
 
 from __future__ import annotations
 
+import functools
 import os
 import struct
 from bisect import bisect_right
@@ -84,6 +85,15 @@ def hm96_salt(key: bytes, nonce: int, i: int) -> bytes:
     """Leaf i's 192-byte salt in the tree with salt nonce `nonce`: ChaCha20 blocks 3i, 3i + 1 and 3i + 2 under the prover's
     32-byte `key` (C-Flock's ``hm96_salt``)."""
     return b"".join(chacha20_block(key, 3 * i + j, nonce) for j in range(3))
+
+
+@functools.lru_cache(maxsize=1)
+def hm96_kernel_constants() -> bytes:
+    """`HM96`'s constants as a kernel reads them (C-Flock's ``hm96_finish_leaves``, pearl_c's ``hm_leaves``): the salt prefix
+    and the leaf prefix (a 128-byte block each), then the byte tables, per salt byte position and byte value the 64-byte
+    column XOR little-endian (3 MiB)."""
+    tables = b"".join(v.to_bytes(64, "little") for table in hm96.SHA512.byte_tables(HM96_KEY) for v in table)
+    return hm96.SHA512.salt_prefix + hm96.SHA512.leaf_prefix(HM96_KEY) + tables
 
 
 @dataclass(frozen=True, slots=True)
@@ -445,5 +455,5 @@ class Verifier:
 
 
 __all__ = ["AUDIT_DOMAIN", "HM96", "SALT_DOMAIN", "Audit", "Epoch", "Hm96Domain", "Lottery", "Prover", "Sampled", "TileOpening",
-           "TileRef", "Transcript", "Verdict", "Verifier", "WorkProfile", "Workload", "commit_rows", "commitment_hash", "hm96_salt",
-           "opened_value", "reference_kernel", "tickets", "tile_refs"]
+           "TileRef", "Transcript", "Verdict", "Verifier", "WorkProfile", "Workload", "commit_rows", "commitment_hash", "hm96_kernel_constants",
+           "hm96_salt", "opened_value", "reference_kernel", "tickets", "tile_refs"]
