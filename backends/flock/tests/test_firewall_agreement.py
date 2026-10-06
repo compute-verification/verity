@@ -124,6 +124,12 @@ def cases() -> list[tuple[str, dict, list[bytes]]]:
         r = honest()
         r[i] = req
         out.append((f"forged: {what}", SCHEDULE, r))
+    stop = b"not a request"
+    out += [("stopped before Open", SCHEDULE, honest()[:4] + [stop]), ("stopped after Open", SCHEDULE, honest()[:5] + [stop]),
+            ("stopped after a round", SCHEDULE, honest()[:6] + [stop]),
+            ("two streams: stopped before Open", SCHEDULE2, honest2()[:4] + [stop]),
+            ("two streams: stopped after both Opens", SCHEDULE2, honest2()[:6] + [stop]),
+            ("two streams: stopped after the parent's round", SCHEDULE2, honest2()[:7] + [stop])]
     rng = random.Random(20261006)
     for k in range(300):
         name, sched, reqs = out[rng.randrange(2)]
@@ -155,6 +161,19 @@ def test_the_proxy_sends_what_the_lean_firewall_sends(lean_records):
     cs, lean = lean_records
     differ = [(name, proxy_record(s, r), got) for (name, s, r), got in zip(cs, lean) if proxy_record(s, r) != got]
     assert not differ, differ[:3]
+
+
+def test_a_stopped_record_does_not_show_an_open(lean_records):
+    """A stream enters the record at its first round, so a session stopped before then records the same with or without
+    its ``Open`` and leaves nothing that says whether, or when, the worker opened it."""
+    cs, lean = lean_records
+    got = {name: rec for (name, _, _), rec in zip(cs, lean)}
+    for before, after in [("stopped before Open", "stopped after Open"),
+                          ("two streams: stopped before Open", "two streams: stopped after both Opens")]:
+        assert got[before]["end"] == "stop" and got[before]["streams"] == {}
+        assert got[after] == got[before]
+    assert list(got["stopped after a round"]["streams"]) == ["circuit/rep0"]
+    assert list(got["two streams: stopped after the parent's round"]["streams"]) == ["circuit/rep0"]
 
 
 def test_the_cases_reach_every_ending(lean_records):

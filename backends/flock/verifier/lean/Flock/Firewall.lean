@@ -449,7 +449,8 @@ def record (sent : Array Sent) (ok : Bool) : Json := Id.run do
       rounds := rounds.push (Json.mkObj [("stream", .str st), ("k", jnat k),
         ("caps", .arr (caps.map fun ns => Json.str (ns.foldl (· ++ hexOf ·) "")).toArray), ("commits", hexs bcs), ("n", jnat n)])
     | .finish _ => pure ()
-  let named := streams.map fun (n, v) => (n, withField v "rounds" (jnat ((counts.find? (·.1 == n)).map (·.2) |>.getD 0)))
+  let named := streams.filterMap fun (n, v) =>
+    (counts.find? (·.1 == n)).map fun (_, k) => (n, withField v "rounds" (jnat k))
   return Json.mkObj [("kind", .str "rec/inner-transcript/v0"), ("tops", .str "hm96-sha512/v1/node-row"), ("hello", hello),
     ("link", link), ("streams", Json.mkObj named), ("rounds", .arr rounds), ("message_rows", jnat rows),
     ("row_words", jnat ROW_WORDS), ("end", .str (if ok then "finish" else "stop"))]
