@@ -201,11 +201,11 @@ v=$("$PY" "$SC" shape "$W/$FT" "$W/u$REAL_UNIT" --out "$OUT/shape-filler.json" |
 expect shape-filler SAME "${v:-ERROR}"
 
 # ---- 6. deliver and outcome ---------------------------------------------------------------------------------------------------
-units_json() {   # units_json DEST [FIRST_STAGE FIRST_PUB FIRST_LEAN FIRST_OPENING]: the drawn units' files, the first replaced
-  "$PY" - "$OUT" "$W" "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" $UNITS <<'PY'
+units_json() {   # units_json DEST [FIRST_STAGE FIRST_PUB FIRST_LEAN FIRST_OPENING FIRST_SESSION]: the drawn units' files, the first replaced
+  "$PY" - "$OUT" "$W" "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" $UNITS <<'PY'
 import json, sys
 from pathlib import Path
-out, w, dest, st, pub, lean, op, *units = sys.argv[1:]
+out, w, dest, st, pub, lean, op, session, *units = sys.argv[1:]
 rows = []
 for i, t in enumerate(units):
     u = f"{out}/u{t}"
@@ -214,7 +214,7 @@ for i, t in enumerate(units):
            "opening": f"{out}/open-u{t}.json", "rust": f"{u}/prove.out",
            "session": str(sessions[-1]) if sessions else f"{w}/u{t}/sessions/none"}
     if i == 0:
-        row.update({k: v for k, v in (("stage", st), ("pub", pub), ("lean", lean), ("opening", op)) if v})
+        row.update({k: v for k, v in (("stage", st), ("pub", pub), ("lean", lean), ("opening", op), ("session", session)) if v})
         if lean:
             row.pop("rust")
     rows.append(row)
@@ -246,7 +246,7 @@ ask retry-foreign-proof "$(req op register name retry registration "$R" stream c
 expect retry-foreign-proof REFUSED "$REPLY"
 for c in $HZ_CASES; do
   [ -f "$U/lean-st-$c.out" ] || continue
-  units_json "$OUT/units-st-$c.json" "" "" "$U/lean-st-$c.out"
+  units_json "$OUT/units-st-$c.json" "" "" "$U/lean-st-$c.out" "" "$W/u$U0/st/$c/session.json"
   control "st-$c" "$([ "$c" = honest ] && echo ACCEPT || echo REJECT)" "$OUT/units-st-$c.json"
 done
 [ -n "${SVC[1]:-}" ] && echo '{"op": "quit"}' >&"${SVC[1]}"
