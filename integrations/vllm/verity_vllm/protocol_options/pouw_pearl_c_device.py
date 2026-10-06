@@ -348,7 +348,8 @@ class PearlCDeviceRun(GraphCalls):
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
-                 schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w", whole_defer: bool = False):
+                 schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w", whole_defer: bool = False,
+                 flag_rows: int = FLAG_ROWS):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.rows_form = rows_form
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
@@ -368,7 +369,7 @@ class PearlCDeviceRun(GraphCalls):
         self.const = _constants(kernel, scheme, self.device)
         self.leaves = _zeros(32 * capacity, self.device)
         self.roots_buf = _zeros(32 * CALL_CAPACITY, self.device)
-        self.flag_buf = _zeros(2 * FLAG_ROWS, self.device).view(FLAG_ROWS, 2)
+        self.flag_buf = _zeros(2 * flag_rows, self.device).view(flag_rows, 2)
         self.tree_hash = hash_format(scheme).tree_hash
         self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
         self.fused_screen = self.device.type == "cuda"
@@ -574,9 +575,9 @@ class PearlCDeviceRun(GraphCalls):
         sh = self._shape(m16, wt.n, k)
         index = len(cur.matmuls)
         tiles = self.kernel.run.cdiv(m16, self.kernel.run.TILE) * (wt.n // self.kernel.run.TILE)
-        if self.hashing and (cur.tiles + tiles > self.capacity or index >= CALL_CAPACITY or cur.flag_rows + m > FLAG_ROWS):
+        if self.hashing and (cur.tiles + tiles > self.capacity or index >= CALL_CAPACITY or cur.flag_rows + m > len(self.flag_buf)):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity ({self.capacity} tiles, {CALL_CAPACITY} calls, "
-                               f"{FLAG_ROWS} screened rows); end it and begin another")
+                               f"{len(self.flag_buf)} screened rows); end it and begin another")
         self.join_before(sh)
         sh.xa[:m].copy_(x2)
         if m16 > m:
