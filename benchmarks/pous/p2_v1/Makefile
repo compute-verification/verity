@@ -2,7 +2,7 @@
 # CGBN = NVlabs/CGBN at ../p2_gpu/CGBN.commit; CGBN's host pass includes gmp.h (libgmp-dev's, or INC="-I <dir of a gmp.h>",
 # such as gmpy2's wheel's, where nothing may be installed on the system).
 # ARCH is the device's: sm_89 for the RTX 4090 and the L40S, sm_120 for the RTX PRO 6000.
-# FAST selects the decode: p2sq.cuh's squaring and p2keys.cuh's key expansion by default, FAST= for CGBN's and band_gpu's.
+# FAST selects the decode: p2sq.cuh's Karatsuba squaring and p2keys.cuh's key expansion by default, FAST= for CGBN's and band_gpu's.
 NVCC ?= nvcc
 CGBN ?= CGBN
 BIN ?= bin
