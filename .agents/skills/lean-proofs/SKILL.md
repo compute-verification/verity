@@ -55,12 +55,12 @@ To check your records, or get the `--update` printout of what changed (what Dani
 your own, use the fast path on a shared machine.
 
 ~~~text
-research run --on vy-nebius-2 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- \
+research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- \
   python3 tools/lean/lean_changed.py --records PKG --update
 ~~~
 
-It waits for one of the node's Lean slots of pool `build` (`lean_slot.py`; a node whose slot file lists no `build` pool,
-vy-nebius-1's today, refuses it, exit 2, even with an `any` pool), never behind merge checks or hour-long audits, rebuilds only what changed since
+It waits for one of the node's Lean slots of pool `build` (`lean_slot.py`; a node whose slot file lists no `build` pool
+refuses it, exit 2, even with an `any` pool), never behind merge checks or hour-long audits, rebuilds only what changed since
 that slot's last run, and audits without the kernel replay: on C-Flock's soundness with nothing to rebuild that was 6.5 minutes, and a
 slot's first run, a cold build, 31. The record is in the run's `lean-audit/audit-*/`, with `review.txt` when it changed; commit
 the record. It vouches for nothing: its result is of kind `lean-fast/v1`, which `check`'s lean-audit step and `research merge`
