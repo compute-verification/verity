@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Lean for a Lake package on a Linux machine: elan at the package's `lean-toolchain` (elan's default too, on a machine
-# that has none), its dependencies (the pinned bundle from the store when the repository pins one, else
-# `lake-manifest.json` through lake), Mathlib's prebuilt oleans (`lake exe cache get`) when Mathlib is among them, and
+# that has none), its dependencies and build where it has none (this machine's kept ones, which check's lean-audit step
+# keeps; else the pinned bundle from the store when the repository pins one, else `lake-manifest.json` through lake),
+# Mathlib's prebuilt oleans (`lake exe cache get`) when Mathlib is among them, and
 # main's cached build of the package itself (`cache.py get`, every file checked against its sha256). Idempotent.
 # `LEAN_CACHE=off` skips the build cache, as the audit does.
 #   bash tools/lean/setup.sh PACKAGE_DIR
@@ -19,8 +20,10 @@ elan toolchain install "$toolchain"
 (cd / && lean --version >/dev/null 2>&1) || elan default "$toolchain"
 lake --version
 root=$(git rev-parse --show-toplevel 2>/dev/null || true)
-if [ ! -e .lake/packages ] && [ -n "$root" ] && [ -f "$root/tools/lean/lean_audit.py" ] && command -v uv >/dev/null 2>&1; then
-  (cd "$root" && uv run --quiet python tools/lean/lean_audit.py --restore "$(realpath --relative-to="$root" .)") \
+if { [ ! -e .lake/packages ] || [ ! -e .lake/build ]; } && [ -n "$root" ] && [ -f "$root/tools/lean/lean_audit.py" ]; then
+  # without uv, only this machine's kept trees: fetching the pinned bundle needs `research`
+  if command -v uv >/dev/null 2>&1; then py=(uv run --quiet python); else py=(python3); fi
+  (cd "$root" && "${py[@]}" tools/lean/lean_audit.py --restore "$(realpath --relative-to="$root" .)") \
     || echo "setup.sh: the pinned dependency bundle didn't restore; lake fetches the dependencies"
 fi
 lake env true

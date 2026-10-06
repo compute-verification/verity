@@ -52,26 +52,34 @@ never change a `require`, a revision or `lean-toolchain` in a feature PR. The so
 of memory: on a machine with less than 24 GB, add a swapfile first, and give a queued job `--mem-gb 32`.
 
 To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
-your own, use the fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took
-about 22 minutes unpinned on the check cores.
+your own, use the fast path on a shared machine.
 
 ~~~text
-research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- \
+research run --on vy-nebius-2 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- \
   python3 tools/lean/lean_changed.py --records PKG --update
 ~~~
 
-It waits for one of the node's Lean slots of pool `build` (`lean_slot.py`; a node whose slot file lists no `build` pool
-refuses it, exit 2, even with an `any` pool), never behind merge checks or hour-long audits, rebuilds only what changed since
+It waits for one of the node's Lean slots of pool `build` (`lean_slot.py`; a node whose slot file lists no `build` pool,
+vy-nebius-1's today, refuses it, exit 2, even with an `any` pool), never behind merge checks or hour-long audits, rebuilds only what changed since
 that slot's last run, and audits without the kernel replay: on C-Flock's soundness with nothing to rebuild that was 6.5 minutes, and a
 slot's first run, a cold build, 31. The record is in the run's `lean-audit/audit-*/`, with `review.txt` when it changed; commit
 the record. It vouches for nothing: its result is of kind `lean-fast/v1`, which `check`'s lean-audit step and `research merge`
 refuse.
 
-To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd clone -- python
-tools/lean/audit.py --build --update PKG` with no wrapper around it. It exits 0 when the audit passes, whether or not the
-record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`. `--cwd clone` builds
-in the run's own clone of the shipped tree, removed when the run ends; with `--cwd source` every run of the commit builds in
-the one shared tree, and a cancelled duplicate there deleted `PKG/.lake/packages` under a live audit.
+To audit with the kernel replay, or regenerate a record, on a node or pod, this is the one recipe:
+
+~~~text
+research run --on NODE --project verity --source . --cwd clone -- uv run python tools/lean/audit.py --build [--update] PKG
+~~~
+
+Run it with no wrapper around it. `uv run` gives a `runs` step in `lean-audit.json` the workspace's Python, numpy
+included. `setup.sh` starts the package as warm as `check`'s lean-audit step: it copies the dependencies and build that
+step keeps on this machine, where they match the package's manifest, toolchain and lakefile, else the pinned dependency
+bundle from the store. A copy leaves check's trees in place, and nothing this run builds goes back. It exits 0 when the
+audit passes, whether or not the record changed, and the record is among the run's outputs, at
+`lean-audit/audit-TAG/lean-audit.json`. `--cwd clone` builds in the run's own clone of the shipped tree, removed when the
+run ends; with `--cwd source` every run of the commit builds in the one shared tree, and a cancelled duplicate there
+deleted `PKG/.lake/packages` under a live audit.
 
 While proving, check one file at a time, and leave the whole package and the audit for the end:
 

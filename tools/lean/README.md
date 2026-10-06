@@ -18,7 +18,8 @@ the same way. The only package code that runs is the build's and, after the fact
 code and runs outside it.
 
 ~~~text
-bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
+bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, the dependencies and build check keeps on this
+                                                  machine (copied) else its pinned dependencies, Mathlib's cache when
                                                   Mathlib is a dependency, and main's cached build of PKG (below)
 python tools/lean/cache.py get [PKG...]           main's cached build of each package, every file sha256-checked
 python tools/lean/audit.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)

@@ -4,7 +4,8 @@ whose passes can't be reused, with dependencies kept warm.
     python tools/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
                                                       (only those packages: a shard's share, `check.py --shard`)
     python tools/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
-    python tools/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
+    python tools/lean/lean_audit.py --restore PKG    PKG's `.lake/packages` and `.lake/build` where it has none (`setup.sh`):
+                                                      this machine's kept ones (`copy_kept`), else its pinned bundle
     python tools/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
@@ -628,7 +629,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         if not fresh:
             for p in sorted({*audited, *(d for q in audited for d in path_deps(q))}):
                 builds.take(work, p, p in audited, log)
-        env = {**os.environ, "LEAN_NUM_THREADS": str(COMMON.cores())}
+        env = {**os.environ, "LEAN_NUM_THREADS": str(COMMON.cores()), "LEAN_KEPT": "off"}
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), *FLAGS, *(str(work / p) for p in audited),
@@ -776,18 +777,46 @@ def pin(run_id: str) -> int:
     return 0
 
 
-def restore_into(pkg: str, log=print) -> int:
-    """`--restore PKG` (`tools/lean/setup.sh`): PKG's pinned bundle from the store as its `.lake/packages`, when it has none.
-    0 also when there is nothing to restore (no pin for its manifest and toolchain, or no store remote here): `lake` then
-    fetches them itself."""
-    from research.store.local import object_key
-    from research.store.remote import ConfigError, load_remote
+def copy_kept(pkg: Path, cache: Path, log=print) -> None:
+    """Copy this machine's kept dependencies (``cache/lean-deps``, under `deps_key`) and build (``cache/lean-builds``, under
+    `build_key`) into ``pkg``, each where it has none: the warm start check's lean-audit step gets, for an `audit.py --build`
+    run by hand. A copy, never moved out of the store, so nothing a hand-run build writes comes back to check. Not inside
+    check's own audit (`LEAN_KEPT=off`), whose scratch packages take them from `WarmDeps` and `WarmBuilds` or, `--fresh`,
+    build cold."""
+    if os.environ.get("LEAN_KEPT") == "off":
+        return
+    k = deps_key(pkg)
+    for what, dst, s in (("dependencies", pkg / ".lake" / "packages", cache / "lean-deps" / k if k else None),
+                         ("build", pkg / ".lake" / "build", cache / "lean-builds" / build_key(pkg.name, pkg.parent))):
+        if dst.exists() or s is None or not s.is_dir():
+            continue
+        t0 = time.monotonic()
+        with open(s.parent / f"{s.name}.lock", "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            if not s.is_dir():
+                continue
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(s, dst, symlinks=True)
+        stale = f"; {prune(pkg)} stale output(s) removed" if what == "build" else ""
+        log(f"lean-audit: {pkg.name}: {what} copied from this machine's ({s.name[:12]}) in {time.monotonic() - t0:.0f} s{stale}")
 
+
+def restore_into(pkg: str, log=print) -> int:
+    """`--restore PKG` (`tools/lean/setup.sh`): this machine's kept dependencies and build for PKG (`copy_kept`), else its
+    pinned bundle from the store, as its `.lake/packages`, when it has none. 0 also when there is nothing to restore (no pin
+    for its manifest and toolchain, or no store remote here): `lake` then fetches them itself."""
     d = (ROOT / pkg).resolve()
+    copy_kept(d, COMMON.cache_dir(), log)
     if (k := deps_key(d)) is None or (d / ".lake" / "packages").exists():
         return 0
     if (p := pins().get(k)) is None:
         log(f"lean-audit: {pkg}: no bundle is pinned for its manifest and toolchain ({k[:12]}); lake fetches them")
+        return 0
+    try:
+        from research.store.local import object_key
+        from research.store.remote import ConfigError, load_remote
+    except ImportError:
+        log(f"lean-audit: {pkg}: no `research` here to fetch its pinned bundle with (run under `uv run`); lake fetches them")
         return 0
     try:
         r = load_remote()

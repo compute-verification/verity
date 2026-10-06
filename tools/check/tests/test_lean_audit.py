@@ -523,6 +523,7 @@ def test_setup_takes_a_cold_packages_pinned_bundle_from_the_store_and_replaces_n
     """`--restore PKG` (`tools/lean/setup.sh`): the pinned bundle becomes PKG's `.lake/packages` when its bytes are the
     pinned ones; dependencies already there, a manifest with no pin, or other bytes leave the package for lake to fetch."""
     root = _tree(tmp_path, monkeypatch)
+    monkeypatch.setattr(LA.COMMON, "cache_dir", lambda: tmp_path / "cache")
     k = LA.deps_key(root / "pkg/a")
     (tmp_path / "made" / "dep").mkdir(parents=True)
     (tmp_path / "made" / "dep" / "built").write_text("x")
@@ -542,6 +543,34 @@ def test_setup_takes_a_cold_packages_pinned_bundle_from_the_store_and_replaces_n
     pins({})
     assert LA.restore_into("pkg/a", logs.append) == 0 and not deps.exists() and "no bundle is pinned" in logs[-1]
     assert LA.restore_into("pkg/b", logs.append) == 0 and not (root / "pkg/b/.lake").exists()       # path dependencies only
+
+
+def test_setup_copies_the_trees_check_kept_here_and_leaves_them_kept(tmp_path, monkeypatch):
+    """An `audit.py --build` run by hand on a node starts as warm as check's lean-audit step: `--restore` copies the
+    dependencies and build that step kept on this machine into the checkout's package, where it has none, and the store
+    keeps them for the next check. Check's own audit (`LEAN_KEPT=off`) takes them by moving, never by this copy."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    monkeypatch.setattr(LA.COMMON, "cache_dir", lambda: tmp_path / "cache")
+    assert _run(tmp_path, 1)[0] == 0
+    kd = tmp_path / "cache/lean-deps" / LA.deps_key(root / "pkg/a")
+    kb = tmp_path / "cache/lean-builds" / LA.build_key("pkg/a", root)
+    (kb / "lib/lean/Gone.olean").write_text("its source was deleted")
+    a = root / "pkg/a/.lake"
+    monkeypatch.setenv("LEAN_KEPT", "off")
+    assert LA.restore_into("pkg/a", lambda s: None) == 0 and not a.exists()
+    monkeypatch.delenv("LEAN_KEPT")
+    logs = []
+    assert LA.restore_into("pkg/a", logs.append) == 0
+    assert (a / "packages/dep/built").read_text() == "x" and (a / "build/lib/lean/A.olean").read_text() == "built"
+    assert not (a / "build/lib/lean/Gone.olean").exists() and (kb / "lib/lean/Gone.olean").exists()
+    assert (kd / "dep/built").is_file() and (kb / "lib/lean/A.olean").is_file()                  # copied, not moved
+    assert [ln.split(":")[2].split()[0] for ln in logs] == ["dependencies", "build"]
+    (a / "build/lib/lean/A.olean").write_text("mine")
+    assert LA.restore_into("pkg/a", logs.append) == 0 and (a / "build/lib/lean/A.olean").read_text() == "mine"
+    assert len(logs) == 2                                                                        # nothing replaced
+    shutil.rmtree(a / "packages")
+    assert LA.restore_into("pkg/a", logs.append) == 0 and (a / "packages/dep/built").is_file() and len(logs) == 3
 
 
 def test_pinning_takes_only_bundles_on_the_remote_for_this_trees_manifests(tmp_path, monkeypatch, capsys):
