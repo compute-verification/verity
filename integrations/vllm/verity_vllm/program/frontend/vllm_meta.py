@@ -8,6 +8,8 @@ Environment knobs of the pinned vLLM that the construction sets (declared, not h
   VLLM_BATCH_INVARIANT=1     the admitted profile (selects the BI code paths: fused_add_rms_norm / Triton rms_norm / BI GEMM)
   VLLM_USE_LAYERNAME=0       layer names as plain `str` op arguments (torch>=2.11 default wraps them in an opaque `LayerName`
                              object, which export would lift as a custom object); the vLLM source documents this switch.
+  VLLM_DISABLE_SHARED_EXPERTS_STREAM=1  a shared expert runs on the main stream: `SharedExperts.__init__` would otherwise make a CUDA
+    aux stream (no driver on a GPU-free Build host); the stream schedules the same kernels on the same values.
   HF_HUB_OFFLINE=1           the model config is the seeded snapshot; no network.
 """
 
