@@ -27,17 +27,19 @@ def test_clopper_pearson_matches_the_beta_quantiles():
     assert hi == 1.0 and abs(lo - 0.025 ** (1 / 500)) < 1e-12
 
 
-def test_a_late_answer_is_the_devices_when_its_server_time_leaves_no_room_else_loads_when_a_neighbour_was_busy():
+def test_a_late_answer_is_the_part_furthest_over_its_median_under_load_when_a_neighbour_was_busy():
     cell = {"verifier_core": [10, 11], "responder_core": [12, 13], "numa_cpus": list(range(16))}
     quiet = {"t": 0.0, "loadavg": ["1", "1", "1"], "busy": [100.0 if c in (10, 12) else 0.0 for c in range(16)]}
     busy_sibling = {**quiet, "busy": [100.0 if c in (10, 11, 12) else 0.0 for c in range(16)]}
-    limit, host = 540_000, 30_000
+    limit, medians = 540_000, {"device": 5_000, "responder": 15_000, "verifier": 30_000}
     device = {"elapsed_ns": 600_000, "server_ns": 520_000, "device_ns": 500_000}
-    hostly = {"elapsed_ns": 600_000, "server_ns": 20_000, "device_ns": 5_000}
-    assert sweep.attribute(device, limit, host, busy_sibling, cell)["cause"] == "device"
-    assert sweep.attribute(hostly, limit, host, busy_sibling, cell)["cause"] == "load"
-    assert sweep.attribute(hostly, limit, host, quiet, cell)["cause"] == "host, unattributed"
-    assert sweep.attribute(hostly, limit, host, None, cell)["cause"] == "host, unattributed"
+    responder = {"elapsed_ns": 600_000, "server_ns": 570_000, "device_ns": 5_000}
+    verifier = {"elapsed_ns": 600_000, "server_ns": 20_000, "device_ns": 5_000}
+    assert sweep.attribute(device, limit, medians, quiet, cell)["cause"] == "device, quiet"
+    assert sweep.attribute(device, limit, medians, busy_sibling, cell)["cause"] == "device, load"
+    assert sweep.attribute(responder, limit, medians, busy_sibling, cell)["cause"] == "responder, load"
+    assert sweep.attribute(verifier, limit, medians, quiet, cell)["cause"] == "verifier, quiet"
+    assert sweep.attribute(verifier, limit, medians, None, cell)["cause"] == "verifier, no sample"
 
 
 def test_a_cell_whose_only_failed_gate_is_timed_audit_succeeds_and_any_other_failure_keeps_pod_shs_rc(tmp_path):

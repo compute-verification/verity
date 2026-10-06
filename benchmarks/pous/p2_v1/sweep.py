@@ -263,15 +263,25 @@ def _neighbour_at(samples: list[dict[str, Any]], t: float) -> dict[str, Any] | N
     return min(after, key=lambda s: s["t"]) if after and after[0]["t"] - t <= 2.0 else None
 
 
-def attribute(answer: dict[str, Any], limit_ns: int, host_median_ns: float, sample: dict[str, Any] | None,
+PARTS = ("device", "responder", "verifier")
+
+
+def parts(answer: dict[str, Any]) -> dict[str, int]:
+    """An answer's time in three parts: the block's copy off the device (`device_ns`, CUDA events from the copy's start to
+    its end, so a responder thread descheduled between the two counts here too), the rest of the responder's
+    (`server_ns - device_ns`) and the verifier's side, the loopback included (`elapsed_ns - server_ns`)."""
+    return {"device": answer["device_ns"], "responder": answer["server_ns"] - answer["device_ns"],
+            "verifier": answer["elapsed_ns"] - answer["server_ns"]}
+
+
+def attribute(answer: dict[str, Any], limit_ns: int, medians: dict[str, float], sample: dict[str, Any] | None,
               cell: dict[str, Any]) -> dict[str, Any]:
-    """A late honest answer's cause, from its own split and the sampler's second:
-    - `device`: the responder's own time (`server_ns`, the block's copy off the device under the run's forwards included)
-      leaves no room for the run's median host part: the honest prover's GPU, not a neighbour;
-    - `load`: the host part (verifier, loopback, scheduling) made it late, and a sibling of the verifier's or responder's core
-      or the GPU's NUMA node was at least `BUSY`% busy that second;
-    - `host, unattributed`: the host part made it late with no neighbour seen, or no sample covers it."""
-    host_ns = answer["elapsed_ns"] - answer["server_ns"]
+    """A late honest answer's cause, `PART, load|quiet|no sample`: PART is the part (`parts`) furthest over its median in the
+    cell, and `load` means a sibling of the verifier's or responder's core, or the GPU's NUMA node on average, was at least
+    `BUSY`% busy in the sampler's second; `quiet` that neither was, so a `device, quiet` answer is the honest prover's own
+    GPU (its forwards), the genuine kind."""
+    split = parts(answer)
+    part = max(PARTS, key=lambda k: split[k] - medians[k])
     ours = set(cell["verifier_core"][:1] + cell["responder_core"][:1])
     siblings = [t for t in cell["verifier_core"] + cell["responder_core"] if t not in ours]
     sib_busy = numa_busy = None
@@ -280,15 +290,11 @@ def attribute(answer: dict[str, Any], limit_ns: int, host_median_ns: float, samp
         sib_busy = max((busy[t] for t in siblings if t < len(busy) and busy[t] is not None), default=None)
         numa = [busy[t] for t in cell["numa_cpus"] if t < len(busy) and busy[t] is not None]
         numa_busy = round(statistics.fmean(numa), 1) if numa else None
-    if answer["server_ns"] + host_median_ns > limit_ns:
-        cause = "device"
-    elif sample is not None and ((sib_busy or 0) >= BUSY or (numa_busy or 0) >= BUSY):
-        cause = "load"
-    else:
-        cause = "host, unattributed"
-    return {"cause": cause, "elapsed_ns": answer["elapsed_ns"], "server_ns": answer["server_ns"], "device_ns": answer["device_ns"],
-            "host_ns": host_ns, "over_limit_ns": answer["elapsed_ns"] - limit_ns, "sibling_busy_pct": sib_busy,
-            "numa_busy_pct": numa_busy, "loadavg": sample["loadavg"] if sample else None}
+    load = "no sample" if sample is None else "load" if (sib_busy or 0) >= BUSY or (numa_busy or 0) >= BUSY else "quiet"
+    return {"cause": f"{part}, {load}", "elapsed_ns": answer["elapsed_ns"], "server_ns": answer["server_ns"],
+            "device_ns": answer["device_ns"], **{f"{k}_ns": v for k, v in split.items() if k != "device"},
+            "over_limit_ns": answer["elapsed_ns"] - limit_ns, "sibling_busy_pct": sib_busy, "numa_busy_pct": numa_busy,
+            "loadavg": sample["loadavg"] if sample else None}
 
 
 def read_cell(run_dir: Path) -> dict[str, Any] | None:
@@ -314,14 +320,15 @@ def read_cell(run_dir: Path) -> dict[str, Any] | None:
     if (out / "neighbors.jsonl").exists():
         samples = [json.loads(line) for line in (out / "neighbors.jsonl").read_text().splitlines() if line.strip()]
     answers = [x for rec in honest["records"] for x in rec["answers"]]
-    host_median = statistics.median(x["elapsed_ns"] - x["server_ns"] for x in answers)
+    medians = {k: statistics.median(parts(x)[k] for x in answers) for k in PARTS}
+    cap_limit = DELTA_NS + RTT_CAP_NS
     late = []
     for rec in honest["records"]:
         for x in rec["answers"]:
-            if not x["on_time"]:
-                late.append({"audit": rec["counter"], **attribute(x, limit, host_median,
-                                                                  _neighbour_at(samples, rec.get("started_unix", 0.0)), cell)})
-    cap_limit = DELTA_NS + RTT_CAP_NS
+            if not x["on_time"] or x["elapsed_ns"] > cap_limit:
+                late.append({"audit": rec["counter"], "late_at_own_limit": not x["on_time"],
+                             "late_at_cap": x["elapsed_ns"] > cap_limit,
+                             **attribute(x, limit, medians, _neighbour_at(samples, rec.get("started_unix", 0.0)), cell)})
     full = [rec for rec in honest["records"] if len(rec["answers"]) == k]
     at_cap_lower = sum(all(x["correct"] and x["elapsed_ns"] <= cap_limit for x in rec["answers"]) for rec in full)
     at_cap_upper = sum(all(x["correct"] and x["elapsed_ns"] <= cap_limit for x in rec["answers"]) for rec in honest["records"])
@@ -377,15 +384,15 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
             causes: dict[str, int] = {}
             for r in cells:
                 for a in r["late_answers"]:
-                    causes[a["cause"]] = causes.get(a["cause"], 0) + 1
+                    if a["late_at_cap"]:
+                        causes[a["cause"]] = causes.get(a["cause"], 0) + 1
             table.append({"weight_set": ws, "tokens": t, "reps": len(cells), "runs": [r["run"] for r in cells],
                           "overhead_median": statistics.median(ov), "overhead_min": min(ov), "overhead_max": max(ov),
                           "accepted": x, "audits": n, "cp95": [lo, hi], "late_answers": sum(r["late"] for r in cells),
-                          "late_by_cause": causes, "wrong": sum(r["wrong"] for r in cells),
+                          "late_at_cap": sum(causes.values()), "late_at_cap_by_cause": causes, "wrong": sum(r["wrong"] for r in cells),
                           "rtt_allowance_us_median": statistics.median(r["rtt_allowance_ns"] for r in cells) / 1e3,
                           "allowance_within_cap": all(r["allowance_within_cap"] for r in cells),
-                          "accepted_at_cap_limit": [sum(r["accepted_at_cap_limit"][0] for r in cells),
-                                                    sum(r["accepted_at_cap_limit"][1] for r in cells)],
+                          **{k: v for k, v in _pool(cells).items() if k in ("accepted_at_cap", "cp95_at_cap")},
                           "gates_failed": sorted({g for r in cells for g, ok in r["gates"].items() if not ok})})
     pooled = {}
     for ws in WEIGHT_SETS + ("all",):
@@ -397,13 +404,15 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def markdown(doc: dict[str, Any]) -> str:
-    lines = ["| weight set | T | reps | overhead median (min-max) | honest accepted | 95% CP | late (by cause) | allowance µs |",
-             "|---|---:|---:|---|---:|---|---|---:|"]
+    lines = ["| weight set | T | reps | overhead median (min-max) | allowance µs | accepted at own limit | accepted at Δ + 354 µs "
+             "| 95% CP at cap | late at cap (by cause) |", "|---|---:|---:|---|---:|---:|---:|---|---|"]
     for r in doc["table"]:
-        causes = ", ".join(f"{k}: {v}" for k, v in sorted(r["late_by_cause"].items())) or "-"
+        causes = ", ".join(f"{k}: {v}" for k, v in sorted(r["late_at_cap_by_cause"].items())) or "-"
+        lo, hi = r["accepted_at_cap"]
         lines.append(f"| {r['weight_set']} | {r['tokens']} | {r['reps']} | {r['overhead_median']:.2f}x "
-                     f"({r['overhead_min']:.2f}-{r['overhead_max']:.2f}) | {r['accepted']}/{r['audits']} | "
-                     f"[{r['cp95'][0]:.4f}, {r['cp95'][1]:.4f}] | {r['late_answers']} ({causes}) | {r['rtt_allowance_us_median']:.0f} |")
+                     f"({r['overhead_min']:.2f}-{r['overhead_max']:.2f}) | {r['rtt_allowance_us_median']:.0f} | "
+                     f"{r['accepted']}/{r['audits']} | {lo if lo == hi else f'{lo}-{hi}'}/{r['audits']} | "
+                     f"[{r['cp95_at_cap'][0]:.4f}, {r['cp95_at_cap'][1]:.4f}] | {r['late_at_cap']} ({causes}) |")
     lines += ["", "| pooled | cells | accepted at own limit | 95% CP | accepted at Δ + 354 µs | 95% CP |",
               "|---|---:|---:|---|---:|---|"]
     for ws, p in doc["pooled"].items():
