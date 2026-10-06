@@ -90,7 +90,7 @@ identity `k0 + 3·R + ext = m − 7` (`R` = levels − 1). -/
 def Schedule.WellShaped (s : Schedule) (ds : List ℕ) : Prop :=
   s.levels.map Level.logLen = ds ∧ s.k0 + 3 * (s.levels.length - 1) + s.ext = s.m - 7
 
-instance (s : Schedule) (ds : List ℕ) : Decidable (s.WellShaped ds) := by
+instance instDecidableWellShaped (s : Schedule) (ds : List ℕ) : Decidable (s.WellShaped ds) := by
   unfold Schedule.WellShaped; infer_instance
 
 /-- The `d` column of §15, checked against the schedule. -/
