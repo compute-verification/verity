@@ -48,6 +48,7 @@ import Specs.Pouw.Assumptions.PearlC.TTOutFp4
 import Specs.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly
 import Specs.Pouw.Assumptions.PearlC.TTOutRev1
 import Specs.Pouw.Assumptions.PearlC.TTOutRowSeed
+import Specs.Pouw.Assumptions.PearlC.TTOutRowSeedK
 import Specs.Pouw.Assumptions.PearlC.TTOutTileUOnly
 import Specs.Pouw.Assumptions.PearlC.TTOutUOnly
 import Specs.Pouw.Assumptions.Pinned
