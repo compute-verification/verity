@@ -1,9 +1,9 @@
-"""The active warden on recorded traces, in real time: `verity.protocols.accounting.communication.warden.active` serving a replay of honest traces'
+"""The active certifier on recorded traces, in real time: `verity.protocols.accounting.communication.certifier.active` serving a replay of honest traces'
 configurations over localhost, then the audit of the records it published.
 
 Each configuration is one run of three processes on the host's monotonic clock, from an origin they share:
 - **the peer**, outside the boundary, sends each request of the trace as B-byte link frames (`active.encode_frame`) in
-  the middle of the ingress bucket its arrival falls in, so the ingress warden enqueues it at ⌈t/τ_in⌉, `replay.py`'s
+  the middle of the ingress bucket its arrival falls in, so the ingress certifier enqueues it at ⌈t/τ_in⌉, `replay.py`'s
   model; it reads the wire and keeps one SHA-256 per window of it;
 - **the proxy**, `active.Proxy` at the calibration's r, r_in, B and Σ_sync, with the prover's syncs given before the run;
   it publishes every record raw and committed (`commitment.commit`) from a worker thread;
@@ -12,7 +12,7 @@ Each configuration is one run of three processes on the host's monotonic clock, 
   `ready − anchor` in the trace. An event's `id:` is its position in the canonical order (ready, anchor, session, k).
 
 **The honest prover** declares (`--syncs model`) `calibration.choose_syncs` over the run the model predicts: each request released by the
-ingress warden's rule, its frame k ready d_k buckets after its release. The replay keeps every bucket the warden sees and
+ingress certifier's rule, its frame k ready d_k buckets after its release. The replay keeps every bucket the certifier sees and
 leaves half a bucket of margin around each write; a write later than that moves its bucket.
 
 **The audit** reads each request's release from the raw ingress records, rebuilds the Program's frames (the server's
@@ -74,8 +74,8 @@ from fractions import Fraction
 from pathlib import Path
 
 import replay
-from verity.protocols.accounting.communication.warden import online
-from verity.protocols.accounting.communication.warden.active import (
+from verity.protocols.accounting.communication.certifier import online
+from verity.protocols.accounting.communication.certifier.active import (
     DATA,
     HEADER,
     LAST,
@@ -85,19 +85,19 @@ from verity.protocols.accounting.communication.warden.active import (
     decode_frame,
     encode_frame,
 )
-from verity.protocols.accounting.communication.warden.audit import Audit
-from verity.protocols.accounting.communication.warden.calibration import choose_syncs
-from verity.protocols.accounting.communication.warden.commitment import CommittedRecord, commit
-from verity.protocols.accounting.communication.warden.grid import (
+from verity.protocols.accounting.communication.certifier.audit import Audit
+from verity.protocols.accounting.communication.certifier.calibration import choose_syncs
+from verity.protocols.accounting.communication.certifier.commitment import CommittedRecord, commit
+from verity.protocols.accounting.communication.certifier.grid import (
     COMPLETE,
     GridParams,
     Reason,
     Record,
     Status,
-    Warden,
+    Certifier,
     row_count,
 )
-from verity.protocols.accounting.communication.warden.schedule import (
+from verity.protocols.accounting.communication.certifier.schedule import (
     ClockSync,
     LogicalFrame,
     SyncSet,
@@ -273,7 +273,7 @@ def read_committed(path: Path) -> list[CommittedRecord]:
 
 
 class Setup(replay.Setup):
-    """The calibration report's parameters at its own B, the frame size the active warden runs at."""
+    """The calibration report's parameters at its own B, the frame size the active certifier runs at."""
 
     def __init__(self, report: dict) -> None:
         super().__init__(report)
@@ -377,7 +377,7 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
 
 
 def model_releases(requests: Sequence[dict], params: GridParams, windows: int, egress_bucket_ms: int) -> dict[int, int]:
-    """Each request's release as the ingress warden's rule gives it: its frames enqueued at their bucket, in send
+    """Each request's release as the ingress certifier's rule gives it: its frames enqueued at their bucket, in send
     order, and released r_in per bucket; the egress bucket of its last frame's release."""
     pending = sorted((q["enqueue"], q["send_ms"], q["stream"], q["frames"]) for q in requests)
     out, queue, k = {}, [], 0
@@ -1053,7 +1053,7 @@ def live_program(plan: dict, release: dict[int, int], params: GridParams,
                  path: Path) -> tuple[list[LogicalFrame], list[int]]:
     """The Program a live server served: the shim's events in position order, each anchored at its stream's release,
     and the ready bucket each was meant for, the one after the bucket it was written in. An event longer than a frame
-    is kept unpadded, as a frame of the wrong size, which the Warden faults as malformed just as the proxy did."""
+    is kept unpadded, as a frame of the wrong size, which the Certifier faults as malformed just as the proxy did."""
     stream_of = {q["session"] or f"none-{q['stream']}": q["stream"] for q in plan["requests"]}
     events = sorted(read_events(path))
     if [p for p, *_ in events] != list(range(len(events))):
@@ -1114,7 +1114,7 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
 
     seen = {p: (stream, k, anchor, ready) for p, stream, k, anchor, ready in log["frames"]}
     ready = [seen[p][3] if p in seen else horizon for p in range(len(frames))]
-    ref = run_shaper(frames, ready, syncs, Warden(setup.egress_link, e))
+    ref = run_shaper(frames, ready, syncs, Certifier(setup.egress_link, e))
     logical = handing_buckets(frames, syncs, T)
     rule, last = [], 0
     for h, r in zip(logical, ready, strict=True):

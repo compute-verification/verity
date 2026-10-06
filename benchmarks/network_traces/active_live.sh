@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The active warden in front of a live vLLM on one leased GPU (active_replay.py's "A live server"), from the shipped
+# The active certifier in front of a live vLLM on one leased GPU (active_replay.py's "A live server"), from the shipped
 # tree's root, with the calibration and the traces sent as inputs:
 #   research run --queue --source <tree> --cwd source --project verity --gpus 1 --max-min 45 --declared-output 'out/*' \
 #     --send calibration.json --send NAME.trace.json.gz [--env MODEL=...] [--env VLLM_CPUS=96-103] [--env MINUTES=40] -- \
