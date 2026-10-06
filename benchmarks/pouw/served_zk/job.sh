@@ -354,7 +354,8 @@ v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay-twin" | tee "$OUT/repl
 expect replay-twin SAME "${v:-ERROR}"
 
 # every BLAKE3 or SHA-256 name the records carry, each with its count, for the record of what the served path still hashes so
-grep -rhoiE '[A-Za-z0-9_./:-]*(blake3|sha256|sha-256)[A-Za-z0-9_./:-]*' "$OUT" --exclude=hash-ids.txt 2>/dev/null \
+# (the builds' logs name the code compiled, not what the window hashes, as serve.sh's do)
+grep -rhoiE '[A-Za-z0-9_./:-]*(blake3|sha256|sha-256)[A-Za-z0-9_./:-]*' "$OUT" --exclude=hash-ids.txt --exclude='build-*.log' 2>/dev/null \
   | sort | uniq -c | sort -rn > "$OUT/hash-ids.txt"
 
 # ---- 7. summary ---------------------------------------------------------------------------------------------------------------
