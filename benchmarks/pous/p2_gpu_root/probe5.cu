@@ -81,13 +81,16 @@ __global__ void k_chain(int op, int n, uint32_t p0, uint32_t p1, unsigned long l
       }
     }
     break;
-  case 6:
+  case 6: {
+    // A lane-uniform op commutes with the shuffle and lets the compiler cancel pairs; a per-lane key does not.
+    const uint32_t k = p0 * (threadIdx.x + 1);
     #pragma unroll 1
     for (int i = 0; i < n; i++) {
       #pragma unroll
-      for (int j = 0; j < L; j++) u = __shfl_xor_sync(0xffffffffu, u, 1) + 1;
+      for (int j = 0; j < L; j++) u = __shfl_xor_sync(0xffffffffu, u ^ k, 1);
     }
     break;
+  }
   }
   c1 = clock64();
   if (threadIdx.x == 0) out[0] = c1 - c0;
