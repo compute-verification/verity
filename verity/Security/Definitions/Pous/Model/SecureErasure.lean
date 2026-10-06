@@ -42,7 +42,7 @@ its memory.
 over this game rests on a bandwidth-separation premise (the host-link assumption `TwoTierBandwidth` was dropped on
 3 Oct 2026). Memory the prover has beyond the `S` bits it declares: `S` must be all of its volatile memory.
 
-**What a reviewer checks.** That `z` is independent of the primitive, the coins, `κ` and the indices; that the fill
+**What to check.** That `z` is independent of the primitive, the coins, `κ` and the indices; that the fill
 sees `κ` (it may, as when the digest key is derived from `K`); that keeping is required at every round's arrival
 (foreign content dropped during the audit is erased, which is what a secure erasure asks); and that the spot reads are
 the sequential audit's, so `AuditSecure` bounds them.
