@@ -15,21 +15,27 @@
 #      sampled_proofs.service Stream, holding the epoch's coins: challenger/coins.json, the commitment it publishes first;
 #      its requests and replies in challenger/requests.jsonl, the coins it opened in challenger/openings.jsonl): its salt
 #      coin opened after the request pass's weights' root (salt-opening.json), receive (Stream.register: receipt.json;
-#      the challenger re-starts the pass's epoch from its manifest under its own commitment, the request pass, salted by a
-#      beacon before epoch coins, as a recorded replay) and select (draw.json: the epoch's draw coin opened after the
-#      registration, once, and Lean flock-verify draw --population N --k K' --stream over its key)
-#   5. per drawn unit u<t>: stage_tile.py (Pc8TileHidden{K=4096,1,1,sm120}), the --zk session, the opening check, Lean;
-#      the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
+#      the challenger re-starts the pass's epoch from its manifest under its own commitment: a pass salted by epoch coins
+#      (manifest v2) was salted by the serving controller's challenger, whose entropy this one holds (--state, serve.sh's
+#      $WORK/coin-state/<run id>); one salted by a beacon before epoch coins (v1) is received as a recorded replay) and
+#      select (draw.json: the epoch's draw coin opened after the registration, once, and Lean flock-verify draw
+#      --population N --k K' --stream over its key)
+#   5. per drawn unit u<t>: stage_tile.py (Pc8TileHidden{K=4096,1,1,sm120}), the --zk session behind the firewall's send
+#      check (FC_FIREWALL=1 on the host's witness; SZ_FIREWALL=0 without), the opening check, Lean; the selftest build's
+#      controls and the firewall's tamper cases (fw-<case>) on the first; a filler unit's the same, and the other request's
+#      tile staged
 #   6. deliver (the drawn units' session records' SHA-512) and outcome (one-stage's audit record over every drawn unit and
 #      PoUW's public items, outcome-<case>/); each control on a stream of its own that replays the honest draw
 #   7. the checks, each as expected, into summary.json:
 #        coins                 the challenger's coin commitment, published before any request                  COINS
+#        coins-pass            that commitment is the one the serving controller published beside a v2 pass    SAME
 #        coin-salt             its salt coin, opened after the request pass's weights' root                    OPENED
 #        receive-coin-<case>   the request pass carrying a salt coin of another challenger (foreign), opened
 #                              after what the verifier had not recorded (early), labelled the draw coin
 #                              (mislabelled), a byte flipped (tampered), or the genuine coin beside the
 #                              beacon's salt (resalted)                                                        REFUSED
-#        receive-unrecorded    the request pass, salted by a beacon, not received as a recorded replay         REFUSED
+#        receive-unrecorded    the request pass salted by a beacon (a v2 pass: its v1 form), not received as a
+#                              recorded replay                                                                 REFUSED
 #        register-extra        a registration with one more public item (the calls' shapes)                    REFUSED
 #        receive-foreign       the other request's registration, against the request's parameters              REFUSED
 #        receive-extra         the request's registration with one more public key                             REFUSED
@@ -42,6 +48,8 @@
 #        lean-u<t>             the Lean verifier on each drawn unit's --zk session                             ACCEPT
 #        open-filler           the filler unit's proof opens its zero rows under the window root              ACCEPT
 #        lean-filler           the Lean verifier on the filler unit's --zk session                             ACCEPT
+#        firewall-u<t>, -filler  each such session ran behind the firewall (its FIREWALL line), nothing refused  FIREWALLED
+#        firewall-<case>       the first unit's session, the device dishonest by FC_FIREWALL_TAMPER=<case>    REFUSED
 #        shape-filler          the filler's proof and a real tile's: circuit, class, proof files' sizes and
 #                              the session record's skeleton (its integers, string lengths)                      SAME
 #        open-foreign-proof    the other request's proof, against the request's registration                   REJECT
@@ -68,6 +76,10 @@ WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
 export PYTHONPATH=$SRC:$SRC/catalog:$SRC/kernels:$SRC/experimental:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/backends/flock/python
 SC="$Z/served_commit.py"
+# every unit's --zk session behind the firewall's send check (backends/flock/live/PROTOCOL.md §10.4), on the host's witness;
+# SZ_FIREWALL=0 proves without it.  The selftest controls run without it
+if [ "${SZ_FIREWALL:-1}" = 1 ]; then export FC_FIREWALL=1 FC_HOST_WITNESS=1; fi
+FW_TAMPER=${SZ_FW_TAMPER:-root witness label opening algebra-proof shape}
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 
 setup
@@ -112,9 +124,14 @@ expect register-extra REFUSED "${v:-ERROR}"
 R=$OUT/request/registration.json RP=$OUT/request/params.json
 "$PY" "$SC" edit "$R" "$OUT/registration-extra.json" 'window.public.calls=2'
 "$PY" "$SC" edit "$R" "$OUT/registration-raised.json" "window.public.work.level=$(( $(jq_ "$R" "d['window']['public']['work']['level']") + 1 ))"
-# the challenger: one process holding P1's streams and the epoch's coins from the receipt to the outcomes; ask() is its one channel
-coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" 2> "$OUT/challenger.err"; }
+# the challenger: one process holding P1's streams and the epoch's coins from the receipt to the outcomes; ask() is its one channel.
+# A pass salted by epoch coins (manifest v2) was salted by the serving controller's challenger, whose entropy this one holds
 MAN=$PASSES/request/manifest.json
+V1=$("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'].endswith('/v1'))" "$MAN")
+STATE=${SZ_COIN_STATE:-$WORK/coin-state/$SERVED_RUN}
+if [ "$V1" = True ]; then REC=true; STATEARG=(); else REC=false; STATEARG=(--state "$STATE"); fi
+log "pass: $("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'])" "$MAN"), the challenger ${STATEARG[*]:-fresh}"
+coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" "${STATEARG[@]}" 2> "$OUT/challenger.err"; }
 ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out, its word in $REPLY
   local line=
   if [ -n "${SVC[1]:-}" ]; then echo "$2" >&"${SVC[1]}" && IFS= read -r line <&"${SVC[0]}"; fi
@@ -124,6 +141,11 @@ ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out
 req() { "$PY" -c "import json, sys; a = sys.argv[1:]; print(json.dumps(dict(zip(a[::2], a[1::2]))))" "$@"; }
 ask coins "$(req op coins)"
 expect coins COINS "$REPLY"
+if [ "$V1" != True ]; then
+  v=$("$PY" -c "import json, sys; print('SAME' if json.load(open(sys.argv[1])) == json.load(open(sys.argv[2])) else 'DIFFERENT')" \
+    "$OUT/challenger/coins.json" "$PASSES/coins.json" 2>/dev/null)
+  expect coins-pass SAME "${v:-ERROR}"
+fi
 WR=$("$PY" -c "import json, sys; from verity.protocols.accounting.work.pouw.audit import weights_root; m = json.load(open(sys.argv[1])); \
 print(weights_root({int(w): bytes.fromhex(v['root']) for w, v in m['weights'].items()}).hex())" "$MAN")
 ask coin-salt "$(req op salt after "$WR" out "$OUT/salt-opening.json")"
@@ -133,17 +155,23 @@ for c in foreign early mislabelled tampered resalted; do
   ask "receive-coin-$c" "$(req op register name "coin-$c" registration "$R" manifest "$W/coin-$c.json")"
   expect "receive-coin-$c" REFUSED "$REPLY"
 done
-ask receive-unrecorded "$(req op register name unrecorded registration "$R" manifest "$MAN")"
+UNREC=$MAN
+if [ "$V1" != True ]; then   # the pass as one recorded before epoch coins would carry it: a beacon's salt, no coin
+  UNREC=$W/beacon.json
+  "$PY" -c "import json, os, sys; m = json.load(open(sys.argv[1])); [m.pop(k, None) for k in ('coins', 'salt_opening')]; \
+m.update(schema=m['schema'].rsplit('/', 1)[0] + '/v1', beacon=os.urandom(32).hex()); json.dump(m, open(sys.argv[2], 'w'))" "$MAN" "$UNREC"
+fi
+ask receive-unrecorded "$(req op register name unrecorded registration "$R" manifest "$UNREC")"
 expect receive-unrecorded REFUSED "$REPLY"
-ask receive-foreign "$(req op register name foreign registration "$OUT/other/registration.json" manifest "$PASSES/other/manifest.json" recorded true)"
+ask receive-foreign "$(req op register name foreign registration "$OUT/other/registration.json" manifest "$PASSES/other/manifest.json" recorded $REC)"
 expect receive-foreign REFUSED "$REPLY"
-ask receive-extra "$(req op register name extra registration "$OUT/registration-extra.json" manifest "$MAN" recorded true)"
+ask receive-extra "$(req op register name extra registration "$OUT/registration-extra.json" manifest "$MAN" recorded $REC)"
 expect receive-extra REFUSED "$REPLY"
-ask receive-raised "$(req op register name raised registration "$OUT/registration-raised.json" manifest "$MAN" recorded true)"
+ask receive-raised "$(req op register name raised registration "$OUT/registration-raised.json" manifest "$MAN" recorded $REC)"
 expect receive-raised REFUSED "$REPLY"
-ask receive-honest "$(req op register name honest registration "$R" manifest "$MAN" recorded true out "$OUT/receipt.json")"
+ask receive-honest "$(req op register name honest registration "$R" manifest "$MAN" recorded $REC out "$OUT/receipt.json")"
 expect receive-honest REGISTERED "$REPLY"
-ask receive-open "$(req op register name open registration "$R" manifest "$MAN" recorded true)"
+ask receive-open "$(req op register name open registration "$R" manifest "$MAN" recorded $REC)"
 expect receive-open REFUSED "$REPLY"
 [ -f "$OUT/receipt.json" ] || { log "receive FAILED: $(cat "$OUT/receive-honest.out")"; exit 3; }
 log "select: the draw coin, opened after the registration, and $LEAN draw over its key"
@@ -185,11 +213,19 @@ BG=()
 for t in $UNITS; do
   stage_unit "u$t" request "$t" || continue
   opencheck "open-u$t" ACCEPT request "$t" "$OUT/u$t/pub.bin" "$OUT/u$t/opening.json"
-  if [ -z "$U0" ]; then U0=$t; controls "$W/u$t" "$OUT/u$t" hidden; fi
+  if [ -z "$U0" ]; then U0=$t; ( unset FC_FIREWALL FC_HOST_WITNESS; controls "$W/u$t" "$OUT/u$t" hidden ); fi
   [ "$t" -lt "$FILL" ] && [ -z "$REAL_UNIT" ] && REAL_UNIT=$t
   prove_unit "u$t"
 done
 [ -n "$U0" ] || { log "no drawn unit staged"; exit 4; }
+fw_tamper() {    # fw_tamper CASE: the first unit's --zk session with the device dishonest in one named way (FC_FIREWALL_TAMPER)
+  local d=$W/fw-$1 o=$OUT/fw-$1
+  mkdir -p "$d" "$o"
+  cp "$W/u$U0/pin.txt" "$W/u$U0/pub.bin" "$W/u$U0/inst.bin" "$W/u$U0/circuit.txt" "$d/"
+  ( export FC_FIREWALL_TAMPER=$1; session "$d" "$o" )
+  expect "firewall-$1" REFUSED "$(grep -qE 'FIREWALL-REFUSED' "$o/prove.err" "$o/prove.out" 2>/dev/null && echo REFUSED || echo SENT)"
+}
+if [ -n "${FC_FIREWALL:-}" ]; then for c in $FW_TAMPER; do fw_tamper "$c"; done; fi
 if [ -z "$REAL_UNIT" ]; then stage_unit u0-real request 0 && prove_unit u0-real && REAL_UNIT=0-real; fi
 DRAWN_FILLER=$(for t in $UNITS; do [ "$t" -ge "$FILL" ] && echo "$t"; done | head -1)
 FU=${DRAWN_FILLER:-$FILL}
@@ -214,6 +250,11 @@ fi
 log "waiting for the Lean checks"
 wait "${BG[@]}"   # not the challenger
 for t in $UNITS; do expect "lean-u$t" ACCEPT "$(lean_verdict "$OUT/u$t/lean-honest-own.out")"; done
+firewalled() { grep -q "^FIREWALL"$'\t' "$1/prove.err" 2>/dev/null && ! grep -q 'FIREWALL-REFUSED' "$1/prove.err" && echo FIREWALLED || echo NONE; }
+if [ -n "${FC_FIREWALL:-}" ]; then
+  for t in $UNITS; do expect "firewall-u$t" FIREWALLED "$(firewalled "$OUT/u$t")"; done
+  expect firewall-filler FIREWALLED "$(firewalled "$OUT/$FT")"
+fi
 expect lean-filler ACCEPT "$(lean_verdict "$OUT/$FT/lean-honest-own.out")"
 expect lean-foreign-pub REJECT "$(lean_verdict "$OUT/u$U0/lean-foreign-pub.out")"
 for c in $HZ_CASES; do
@@ -268,7 +309,7 @@ expect deliver-again REFUSED "$REPLY"
 U=$OUT/u$U0
 units_json "$OUT/units-foreign-proof.json" "$OUT/other-tile/stage.json" "$OUT/other-tile/pub.bin" "$U/lean-foreign-pub.out" "$OUT/open-foreign-proof.json"
 control foreign-proof REJECT "$OUT/units-foreign-proof.json"
-ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof manifest "$MAN" recorded true)"
+ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof manifest "$MAN" recorded $REC)"
 expect retry-foreign-proof REFUSED "$REPLY"
 for c in $HZ_CASES; do
   [ -f "$U/lean-st-$c.out" ] || continue
@@ -282,6 +323,10 @@ expect replay SAME "${v:-ERROR}"
 v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay-twin" | tee "$OUT/replay-twin.out" | first)
 expect replay-twin SAME "${v:-ERROR}"
 
+# every BLAKE3 or SHA-256 name the records carry, each with its count, for the record of what the served path still hashes so
+grep -rhoiE '[A-Za-z0-9_./:-]*(blake3|sha256|sha-256)[A-Za-z0-9_./:-]*' "$OUT" --exclude=hash-ids.txt 2>/dev/null \
+  | sort | uniq -c | sort -rn > "$OUT/hash-ids.txt"
+
 # ---- 7. summary ---------------------------------------------------------------------------------------------------------------
 {
   echo "{"
@@ -289,6 +334,8 @@ expect replay-twin SAME "${v:-ERROR}"
   echo "\"real_tiles\": $REAL, \"filler_from\": $FILL, \"filler_unit\": $FU, \"params\": $(cat "$RP"),"
   echo "\"public\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['public'])" 2>/dev/null || echo null),"
   echo "\"coins\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['coins'])" 2>/dev/null || echo null),"
+  echo "\"profile\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['profile'])" 2>/dev/null || echo null),"
+  echo "\"firewall\": $([ -n "${FC_FIREWALL:-}" ] && echo true || echo false),"
   echo "\"stage\": $(cat "$OUT/u$U0/stage.json"),"
   echo "\"shape\": $(cat "$OUT/shape-filler.json" 2>/dev/null || echo null),"
   echo "\"checks\": {$(for t in "${!VERDICT[@]}"; do printf '"%s": {"verdict": "%s", "expected": "%s"},' "$t" "${VERDICT[$t]}" "${EXPECT[$t]}"; done | sed 's/,$//')}"

@@ -308,6 +308,7 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
         assert refused(SC.coin_variant(man, coins.commitment, opening, case)) == f"the salt's {why}", case
     assert "not the epoch's" in refused({**man, "coins": _coins(8).commitment.to_json()})
     assert "salt is not its coin's" in refused(SC.coin_variant({**man, "salt": "00" * 32}, coins.commitment, opening, "resalted"))
+    assert "salt is not its coin's" in refused(SC.coin_variant(man, coins.commitment, opening, "resalted"))
     assert "no salt coin" in refused({k: v for k, v in man.items() if k not in ("coins", "salt_opening")})
     assert "names no pass" in refused(None)
     assert "not the one the window's parameters name" in refused({**man, "note": "another pass"}, code="manifest")
@@ -327,6 +328,26 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
     ch = _challenger(bparams, coins=_coins())
     ch.register("honest", brec, manifest=braw, recorded=True)
     assert ch.passes == {"honest": "recorded beacon"} and len(ch.select("honest").units) == SC.law_of(bparams, bpublic["level"])["k"]
+
+
+def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(tmp_path, monkeypatch, capsys):
+    """e2e.py's coins under ``POUW_COIN_STATE`` and `served_commit.py challenger --state` on the same file publish one
+    commitment and open the one salt coin; the state file is its owner's alone, and a missing one is refused, never
+    replaced by fresh coins."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
+    import e2e
+    state, after = tmp_path / "state" / "r1", bytes(range(64))
+    monkeypatch.setenv("POUW_COIN_STATE", str(state))
+    served = e2e.epoch_coins(type("A", (), {"retain": None})(), 0)
+    assert stat.S_IMODE(state.stat().st_mode) == 0o600
+    assert e2e.epoch_coins(type("A", (), {"retain": None})(), 0).commitment == served.commitment
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"op": "salt", "after": after.hex(), "out": f"{tmp_path}/salt.json"}) + "\n"))
+    (tmp_path / "params.json").write_text("{}")
+    assert SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log", "--state", str(state)]) == 0
+    assert json.loads((tmp_path / "log" / "coins.json").read_text()) == served.commitment.to_json()
+    assert json.loads((tmp_path / "salt.json").read_text()) == served.open("salt", after).to_json()
+    with pytest.raises(SystemExit, match="no challenger state"):
+        SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log2", "--state", str(tmp_path / "none")])
 
 
 def test_stream_subset_is_the_exact_partial_fisher_yates_on_one_stream():

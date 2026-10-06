@@ -6,7 +6,7 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the window, salted and committed
   python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
   python served_commit.py edit REGISTRATION OUT KEY=JSON ...                  a control's registration, a field changed
-  python served_commit.py challenger PARAMS LOG [--lean F --epoch E]          the challenger: one JSON request a line on stdin
+  python served_commit.py challenger PARAMS LOG [--lean F --epoch E --state S] the challenger: one JSON request a line on stdin
                                                                               (`handle`), one reply a line on stdout
   python served_commit.py replay PARAMS LOG OUT [--lean F]                    its requests again, from its recorded coins
   python served_commit.py coin-variant MANIFEST COINS OPENING OUT CASE        a control's pass, its salt coin CASE
@@ -41,7 +41,8 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   and `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one law and K′ is a function of the
   level, so the challenger holds one Stream per level.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
-  challenger, whose commitment it publishes before the epoch (``LOG/coins.json``).  A window's registration names its
+  challenger, whose commitment it publishes before the epoch (``LOG/coins.json``); with ``--state`` its entropy is the
+  serving controller's (e2e.py's ``POUW_COIN_STATE``), so its salt coin is the one the pass was salted by.  A window's registration names its
   pass, and the challenger re-starts the pass's epoch from the pass's manifest under its own commitment
   (`pouw_pearl_c_device.manifest_epoch`): the pass's salt coin must open against it, as the salt coin, after the
   weights' root, and the pass's salt must be that coin's; a pass recorded before epoch coins (a beacon's salt) is read
@@ -1007,7 +1008,14 @@ def cmd_challenger(a) -> int:
     LOG/requests.jsonl and each coin it opened to LOG/openings.jsonl; it ends at end of input or ``{"op": "quit"}``."""
     log = Path(a.log)
     log.mkdir(parents=True, exist_ok=True)
-    coins = Coins(a.epoch)
+    if a.state:
+        if not Path(a.state).is_file():
+            raise SystemExit(f"no challenger state at {a.state}")
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
+        from e2e import state_entropy
+        coins = Coins(a.epoch, state_entropy(a.state))
+    else:
+        coins = Coins(a.epoch)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler)
     for line in sys.stdin:
@@ -1073,7 +1081,7 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     """`man` carrying the epoch's commitment and a salt coin `case` made of `opening`, the challenger's genuine salt coin:
     another challenger's (``foreign``), opened after what the verifier had not recorded (``early``), the epoch's draw coin
     label (``mislabelled``), a byte of the coin flipped (``tampered``), or the genuine coin in a pass whose salt is not
-    that coin's (``resalted``)."""
+    that coin's (``resalted``: a beacon's, or a coin pass's salt zeroed)."""
     o = opening
     if case == "foreign":
         o = Coins(coins.epoch).open("salt", opening.after)
@@ -1086,6 +1094,8 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     elif case != "resalted":
         raise ValueError(f"a coin variant is one of {', '.join(CASES)}")
     out = {k: v for k, v in man.items() if k != "beacon"}
+    if case == "resalted" and "beacon" not in man:
+        out["salt"] = bytes(len(bytes.fromhex(man["salt"]))).hex()
     return {**out, "schema": _pd().MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
 
 
@@ -1187,6 +1197,8 @@ def main(argv=None) -> int:
     p.add_argument("--lean", help="Lean flock-verify, whose draw over the draw coin's key is the challenger's "
                                   "(default: its Python twin, stream_subset)")
     p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
+    p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's coins drew from "
+                                   "(e2e.py's POUW_COIN_STATE); default fresh coins from os.urandom")
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):
         p.add_argument(x)
