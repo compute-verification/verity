@@ -4,6 +4,8 @@ prover's is the same canonical JSON, and the record lists streams by name, whate
 from __future__ import annotations
 
 import json
+import socket
+import threading
 
 import pytest
 from verity_flock import rec_live as RL
@@ -98,3 +100,79 @@ def test_the_record_lists_streams_in_the_schedules_order_whatever_order_they_wer
         assert _held(_run(proxy, opens=opens, streams=two))
         recs.append(json.dumps(proxy.coins.record()))
     assert recs[0] == recs[1] and list(json.loads(recs[0])["streams"]) == list(two)
+
+
+def _serve(tmp_path, sessions, schedule):
+    """`rec_live.serve` on a thread; its result (or what ended it) in ``got``, the address it bound in ``got["addr"]``."""
+    bound, got = threading.Event(), {}
+
+    def run():
+        try:
+            got["res"] = RL.serve("127.0.0.1:0", tmp_path, T._counter_rand(), sessions=sessions, schedule=schedule,
+                                  ready=lambda a: (got.update(addr=a), bound.set()))
+        except Exception as e:  # noqa: BLE001 - the test reports what ended serve
+            got["crash"] = f"{type(e).__name__}: {e}"
+        finally:
+            bound.set()
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    bound.wait()
+    return t, got
+
+
+class _Wire:
+    """A prover's connection to `serve`: `_run` drives it as it drives a `Proxy`."""
+
+    def __init__(self, addr):
+        host, port = addr.rsplit(":", 1)
+        self.sock = socket.create_connection((host, int(port)))
+        self.rf, self.wf = self.sock.makefile("rb"), self.sock.makefile("wb")
+
+    def handle(self, req):
+        RL.write_frame(self.wf, req)
+        return RL.read_frame(self.rf)
+
+    def close(self):
+        self.rf.close()
+        self.wf.close()
+        self.sock.close()
+
+
+def test_a_session_that_ends_without_finish_is_written_and_counted_as_a_stop(tmp_path):
+    """A connection that closes after drawing coins (here after its binding round), and one cut inside a frame, are each a
+    session that stopped: the coin server's record of it is written and says so, and it counts. Otherwise the prover could
+    draw coins, look at them and drop the connection as often as it likes, and the record would never show it."""
+    t, got = _serve(tmp_path, 3, _schedule())
+    w = _Wire(got["addr"])
+    drew = [RL.decode_resp(w.handle(r))[0] for r in (
+        RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO)),
+        RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [("circuit", T.CAP0)], []), RL.encode_req(RL.REQ_LINK, bytes(32)),
+        RL.encode_req(RL.REQ_OPEN, "circuit/rep0", "", b"flock-circuit/fast100/rep0", 0),
+        RL.encode_req(RL.REQ_ROUND, "circuit/rep0", T._binding_round(), 6))]
+    w.close()
+    w = _Wire(got["addr"])
+    w.handle(RL.encode_req(RL.REQ_REGISTER))
+    w.wf.write(b"\x40\x00")
+    w.close()
+    w = _Wire(got["addr"])
+    assert _held(_run(w))
+    w.close()
+    t.join()
+    assert drew == [RL.RESP_DRAW, RL.RESP_OK, RL.RESP_COINS, RL.RESP_OK, RL.RESP_OK, RL.RESP_COINS] and "crash" not in got
+    res = got["res"]
+    assert [r["session"] for r in res] == [None, None, str(tmp_path / "s2" / "session")]
+    assert [(r["refused"], r["rounds"]) for r in res[:2]] == [("rec proxy: the session ended without Finish", 1),
+                                                              ("rec proxy: the session ended without Finish", 0)]
+    pubs = [json.loads((tmp_path / f"s{k}" / "public.json").read_text()) for k in range(3)]
+    assert [p["end"] for p in pubs] == ["stop", "stop", "finish"] and [len(p["rounds"]) for p in pubs] == [1, 0, 2]
+    assert not (tmp_path / "s0" / "session").exists() and not (tmp_path / "s1" / "session").exists()
+
+
+def test_a_refused_session_is_recorded_as_a_stop():
+    proxy = _proxy(_schedule())
+    resp = _run(proxy, y=bytes(48))
+    assert resp[-1][0] == RL.RESP_VERDICT and json.loads(resp[-1][1])["accepted"] is False
+    assert proxy.coins.record()["end"] == "stop"
+    proxy = _proxy(_schedule())
+    assert _held(_run(proxy)) and proxy.coins.record()["end"] == "finish"

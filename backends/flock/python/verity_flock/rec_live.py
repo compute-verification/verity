@@ -24,7 +24,9 @@ proxy holds the session to a pinned **schedule** (`schedule_of`: the public ``He
 number of ``Link``'s ``y`` elements, every stream's parent, position and round count, and per round its stream, index, coin
 count, caps' node counts and message-row count): ``--schedule`` gives it; without one, the first session the proxy serves
 pins it for the rest (``OUT/schedule.json``). A request that leaves the schedule, or a ``Link`` whose ``y`` is not the
-schedule's number of zero elements (the prover sends zeros), is refused ``GATE-REFUSED`` before the coin server sees it.
+schedule's number of zero elements (the prover sends zeros), is refused ``GATE-REFUSED`` before the coin server sees it. A
+refusal, or a session that ends without ``Finish``, is a **stop**: the coin server's record says so (``end``: ``stop``, not
+why), and `serve` writes that record and counts the session.
 
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (its bytes public), a
@@ -357,6 +359,8 @@ class CoinServer:
         self.link: dict | None = None
         self.streams: dict[str, dict] = {}
         self.rounds: list[dict] = []
+        #: how the session ended: "finish", or "stop" (a refusal, or a session that ended without Finish)
+        self.end: str | None = None
 
     def _coins(self, n: int) -> list[int]:
         b = self.rand(16 * n)
@@ -406,7 +410,7 @@ class CoinServer:
         prover opened them in."""
         return {"kind": KIND, "tops": TOPS, "hello": self.hello, "link": self.link,
                 "streams": {s: self.streams[s] for s in sorted(self.streams)}, "rounds": self.rounds,
-                "message_rows": sum(len(r["commits"]) for r in self.rounds), "row_words": ROW_WORDS}
+                "message_rows": sum(len(r["commits"]) for r in self.rounds), "row_words": ROW_WORDS, "end": self.end}
 
 
 # --- the prover's side ------------------------------------------------------------------------------------------------------------
@@ -444,6 +448,11 @@ class Proxy:
         if self.schedule is not None and canonical(got) != canonical(want):
             raise ValueError(refused(f"{what}: {canonical(got)} where the pinned schedule has {canonical(want)}"))
 
+    def stop(self, why: str) -> None:
+        """The session stops (its first reason is kept), and the coin server's record says so (``end``: ``stop``)."""
+        self.stopped = self.stopped or why
+        self.coins.end = "stop"
+
     def handle(self, req: bytes) -> bytes:
         """One request's answer. A refusal stops the session: every later request is refused for the same reason, and
         ``Finish`` answers a verdict that names it."""
@@ -456,7 +465,7 @@ class Proxy:
             return self._handle(decode_req(req))
         except ValueError as e:
             why = f"rec proxy: {e}"
-            self.stopped = self.stopped or why
+            self.stop(why)
             return resp_str(RESP_REFUSED, why)
 
     def _handle(self, r: tuple) -> bytes:
@@ -548,6 +557,7 @@ class Proxy:
                 self._pinned("Finish's rounds", len(rec["rounds"]), len(self.schedule["rounds"]))
                 self._pinned("Finish's streams", {s: v["rounds"] for s, v in sorted(rec["streams"].items())},
                              {s: v["rounds"] for s, v in sorted(self.schedule["streams"].items())})
+            self.coins.end = "finish"
             self.verdict = {"accepted": None, "why": "rec/inner-transcript/v0: the inner proof is V*'s witness; nothing verified here"}
             return resp_str(RESP_VERDICT, json.dumps(self.verdict))
         raise ValueError(f"request tag {t} has no place in an inner session")
@@ -594,11 +604,13 @@ class Proxy:
 
 def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None,
           sessions: int = 1, done: Callable[[dict], None] | None = None, schedule: dict | None = None) -> list[dict]:
-    """Accept connections on ``listen`` until ``sessions`` of them have each carried a whole session (``Finish``), write each
-    (`Proxy.write`: into ``out``, or ``out/s<k>`` when there are several, a prover's ``--warm`` and ``--runs`` sessions, one
-    connection each) and return their summaries, each also passed to ``done`` as it finishes. ``ready`` is called with the
-    bound address. Every session is held to ``schedule``; without one, the first finished session's pins the rest, and
-    ``out/schedule.json`` is the schedule they were held to."""
+    """Accept connections on ``listen`` until ``sessions`` of them have each carried a session, one connection each (several:
+    a prover's ``--warm`` and ``--runs`` sessions), write each into ``out``, or ``out/s<k>`` when there are several, and
+    return their summaries, each also passed to ``done`` as it ends. A session that finishes is written whole
+    (`Proxy.write`); one that stops (a refusal, or a connection that ends without ``Finish``: closed, reset, or cut inside a
+    frame) has only the coin server's record, ``public.json``, and counts as one of the ``sessions``. ``ready`` is called
+    with the bound address. Every session is held to ``schedule``; without one, the first finished session's pins the rest,
+    and ``out/schedule.json`` is the schedule they were held to."""
     host, port = listen.rsplit(":", 1)
     res: list[dict] = []
     given = schedule is not None
@@ -610,14 +622,20 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
         while len(res) < sessions:
             conn, _ = srv.accept()
             proxy = Proxy(CoinServer(rand), schedule=schedule)
-            with conn, conn.makefile("rb") as rf, conn.makefile("wb") as wf:
-                while (req := read_frame(rf)) is not None:
-                    was = proxy.stopped
-                    write_frame(wf, proxy.handle(req))
-                    if was is None and proxy.stopped is not None:
-                        print("STOPPED\t" + json.dumps({"session": len(res), "refused": proxy.stopped}), flush=True)
-                    if proxy.verdict is not None:
-                        break
+            try:
+                with conn, conn.makefile("rb") as rf, conn.makefile("wb") as wf:
+                    while (req := read_frame(rf)) is not None:
+                        was = proxy.stopped
+                        write_frame(wf, proxy.handle(req))
+                        if was is None and proxy.stopped is not None:
+                            print("STOPPED\t" + json.dumps({"session": len(res), "refused": proxy.stopped}), flush=True)
+                        if proxy.verdict is not None:
+                            break
+            except (OSError, ValueError):
+                pass
+            if proxy.verdict is None and proxy.stopped is None:
+                proxy.stop("rec proxy: the session ended without Finish")
+                print("STOPPED\t" + json.dumps({"session": len(res), "refused": proxy.stopped}), flush=True)
             if proxy.stopped is not None:
                 d = Path(out) / f"s{len(res)}" if sessions > 1 else Path(out)
                 d.mkdir(parents=True, exist_ok=True)
@@ -625,7 +643,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 res.append({"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)})
                 if done:
                     done(res[-1])
-            elif proxy.verdict is not None:
+            else:
                 sess = proxy.write(out if sessions == 1 else Path(out) / f"s{len(res)}")
                 rec = proxy.coins.record()
                 if schedule is None:
