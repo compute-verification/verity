@@ -273,10 +273,11 @@ HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm1
 #: power of two) and no level wider than hash_tree_small's; and -h2's (hash_h2.cuh) in place of the leaves'
 H1_LAUNCHED = {"hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
 H2_LAUNCHED = H1_LAUNCHED - {"hash_rows_w", "hash_tree_leaves"} | {"hash_rows_b3s", "hash_leaves_b3s"}
-#: the kernels of the headers pearl_c_sm120.cu includes from its own directory, and those that run under -h2 only (rows form
-#: `s`, A's row leaves and stats_s5's outputs in one pass)
+#: the kernels of the headers pearl_c_sm120.cu includes from its own directory, those that run under -h2 only (rows form
+#: `s`, A's row leaves and stats_s5's outputs in one pass), and -h3s's own E_A lines
 OWN_HEADERS = "".join((HERE / f).read_text() for f in ("h2_rows_stats.cuh",))
 H2_ONLY = {"hash_rows_b3s_stats"}
+H3S_ONLY = {"lines_s"}
 
 
 def form_kernels() -> list[str]:
@@ -460,7 +461,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
         track(ev, allocs, maps)
         if ev["op"] == "launch":
             seen.add(ev["name"])
-    assert seen == set(own_kernels()) - H2_ONLY | H1_LAUNCHED
+    assert seen == set(own_kernels()) - H2_ONLY - H3S_ONLY | H1_LAUNCHED
     for t in rows[3:]:
         assert t["fused"] and t["hashing"] == "h1"
         assert set(t["consistency"]) >= {"y_s_vs_unfused_words_differing", "y_fused_vs_unfused_words_differing",
