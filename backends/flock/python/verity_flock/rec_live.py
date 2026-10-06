@@ -758,7 +758,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 if firewall is not None:
                     firewall.finish(sid)
             if firewall is not None:
-                (d / "firewall.json").write_text(json.dumps({"kind": "firewall/v0/session", "state": str(firewall.state), "session": sid}))
+                (d / "firewall.json").write_text(json.dumps({"kind": "firewall/v0/session", "session": sid}))
                 res[-1]["firewall"] = sid
             if done:
                 done(res[-1])

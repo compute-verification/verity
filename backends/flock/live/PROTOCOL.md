@@ -697,9 +697,11 @@ connection). The auditor sees every stop:
   Without the firewall's relay, the outer prover sends `Finish` after a refusal and a crash or a cut does not, so an outer
   record also shows which of the two ended it. Through the relay a stop the firewall makes reaches serve as a cut, never
   `Finish` (below), so the record shows where the session stopped and not how; a rejecting verdict is serve's own;
-- the firewall: its record (`verity_flock.firewall`, `firewall/v0`: `record.jsonl` in its state directory) lists each
-  recursive session's opening and its inner session's finish, every outer session's slot and outcome (`release`, `stop` or
-  `refused`), every `wait` for the slot, and the recursive session's one `stop`.
+- not the firewall's own record. `record.jsonl` (`verity_flock.firewall`, `firewall/v0`, in the firewall's state directory)
+  stays with the developer, beside the firewall: it holds more than the auditor's records do (each stop's `why`, every
+  `refused` attempt with its part, every `wait` for the slot). The auditor sees serve's and `rec_live`'s records only.
+  `firewall.json`, which `rec_live` writes beside each inner session's record, names the recursive session and nothing
+  else.
 
 **A stop ends the recursive session** (`verity_flock.firewall`). `rec_live --firewall DIR` opens a recursive session for
 each inner session it serves (`firewall.json`, beside the session's record, names it) and records its finish or its stop.
@@ -731,12 +733,19 @@ session at K = 4096 (2 reps a session): the inner session's 286 messages (139 ro
 
 | a stop | what it reveals, at most | at K = 4096 |
 |---|---|---|
-| ends the recursive session (`rec_live --firewall`, every outer session through the relay) | `log₂(1 + Σ_p (M_p + 1))` | 11.19 bits (`log₂ 2336`) |
+| ends the recursive session, its statements and their order fixed before it (only the next unreleased one served, a statement never opened a stop where it stands) | `log₂(1 + Σ_p (M_p + 1))` | 11.19 bits (`log₂ 2336`) |
+| ends the recursive session, the statements and their order the worker's (`rec_live --firewall`, every outer session through the relay as it is) | `log₂((M_inner + 1) + 2ⁿ + 2ⁿ⁻¹ Σ_outer M_p)` for n outer statements, plus the order's `log₂ n!` | 18.00 bits (`log₂ 261663`), plus up to 15.30 (`log₂ 8!`) |
 | ends its own session only (each V* statement against its own `serve`, no relay) | `Σ_p log₂(s_p + 2)`, `s_p = M_p` stops inner and `2 M_p` outer | 80.1 bits (72.1 = `Σ_p log₂(M_p + 1)` without the outer's `Finish` bit and the never-opened sessions) |
 
-The first row holds wherever the inner phase runs `rec_live --firewall` and the outer phase runs through the relay
-(`tests/test_firewall_release.py`, a rule a test). `85-rec-reprice.sh` does not yet: it proves each V* statement against its
-own `serve`, so its sessions are the second row's.
+The relay gives the second row, not the first. It ends the recursive session at its first stop, but it doesn't fix which
+V* statements come or in what order: a statement the worker never opens is no stop, the relay admits statements in any
+order, and it serves a released one again. So each outer statement is released or never opened at the worker's choice,
+with at most one stopped, and the order in which the challenger's `serve`s are reached comes on top, if the challenger can
+see it. A statement served again is one more session in its `serve`'s record, up to that `serve`'s `--sessions`. The first
+row needs the statements and their order fixed when the recursive session opens (L0–L6 and the algebra at K = 4096, from
+K) and an `admit` that serves only the next unreleased statement, so that any other request ends the recursive session
+where it stands: the Rust release side's schedule and `admit`, next. `85-rec-reprice.sh` runs neither: it proves each V*
+statement against its own `serve`, so its sessions are the third row's.
 
 **Retries.** Every stop is recorded and counted, in both phases, so the auditor knows how many times a recursive session was
 run, and each run it allows reveals its own ending: `r` stopped runs before an accepted one reveal at most `r + 1` times the
