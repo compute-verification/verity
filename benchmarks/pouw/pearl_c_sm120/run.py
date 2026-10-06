@@ -596,7 +596,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
         files = man["variants"][variant]["files"]
         want = lambda name: load(variant, files[name]) if name in files else load("", common[name])  # noqa: E731
         xa, xb = dev.put(load("", common["xa"])), dev.put(load("", common["xb"]))
-        pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb)
+        pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb, weight=man["weight"])
         pipe.run_all()
         res = {}
         for name in [*common, *files]:
@@ -609,7 +609,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             for kernel in FORM_ALTS:
                 pipe.form_alt(tag, kernel)
                 res[f"{tag}t@{kernel}"] = compare(dev, pipe, f"{tag}t", want(f"{tag}t"), alias="at2")
-        small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D)
+        small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D, weight=man["weight"])
         for p_, grids, tag in ((pipe, (None, 1, 3), ""), (small, (None, 3), "bm64")):
             steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
             for grid in grids:

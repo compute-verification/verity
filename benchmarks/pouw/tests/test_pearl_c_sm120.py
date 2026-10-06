@@ -370,6 +370,14 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     rows = [json.loads(x) for x in r.stdout.splitlines()]
     assert [x["kind"] for x in rows] == ["env", "mem", "check"] and rows[0]["uuid"] == UUID and rows[0]["cc"] == [12, 0]
     assert all(not v["pearl_c_ok"] and v["failed"] for v in rows[2]["variants"].values())
+    # each tree's hm96 salt nonce is the fixture's: B's HM96_WEIGHTS + its weight, A's read from the unit block, the tiles'
+    # the transcript's
+    evs = [json.loads(x) for x in log.read_text().splitlines()]
+    unit = {ev["ptr"] for ev in evs if ev["op"] == "alloc" and ev["bytes"] == 104}
+    nonces = {(tuple(ev["i"][1:3]), ev["p"][5] - 96 in unit) for ev in evs if ev["op"] == "launch" and ev["name"] == "hm_leaves"}
+    assert json.loads((small_fixture / "check.json").read_text())["weight"] == F.WEIGHT != 0
+    assert nonces == {(RUN.nonce_args(F.HM96_WEIGHTS + F.WEIGHT), False), ((0, 0), True),
+                      (RUN.nonce_args(F.HM96_TRANSCRIPT), False)}, nonces
 
     log = tmp_path / "launches.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],

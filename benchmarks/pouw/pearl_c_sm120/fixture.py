@@ -263,7 +263,7 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     keys["salt_key"] = SALT_KEY
     dom_t = transcript_domain(epoch, len(scheme.tiles(mm.shape)), h)
     manifest = {"schema": "verity-pouw/pearl-c-sm120-gpu-check/v4", "shape": [m, n, k], "case": CASE, "layout": "rowmajor, k32",
-                "hashing": scheme.hashing, "beacon": BEACON.hex(), "keys": {name: x.hex() for name, x in keys.items()},
+                "hashing": scheme.hashing, "weight": WEIGHT, "beacon": BEACON.hex(), "keys": {name: x.hex() for name, x in keys.items()},
                 "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex(), "salt": epoch.salt.hex(),
                           "root_a": root_a.hex(), "root_b": root_b.hex()}, "variants": {}}
     kf = Out(out_dir)
