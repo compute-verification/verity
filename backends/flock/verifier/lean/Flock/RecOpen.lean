@@ -255,12 +255,23 @@ def valid (LANES H : Nat) : Bool := 8 ≤ LANES && LANES % 8 == 0 && 1 ≤ H && 
 /-- The verifier's unit net at `LANES` and `H`. -/
 def unitNet (LANES H : Nat) : V Net := netOf (unitName LANES H) (unitLaid LANES H)
 
+/-- A net's input bits, over its input groups' ports. -/
+def inBits (n : Net) : Nat := n.inGroups.foldl (fun a g => a + g.bits.foldl (· + ·) 0) 0
+
+/-- A net's output bits, over its output groups' ports. -/
+def outBits (n : Net) : Nat := n.outGroups.foldl (fun a g => a + g.bits.foldl (· + ·) 0) 0
+
 /-- A unit named `rec-open/…` is the verifier's at the `LANES` and `H` its name gives, equal in every field; any other
-unit passes. Irreducible, so that no unification against it builds the net. -/
+unit passes. Its input and output bits are compared first, so the net is built only at a `LANES` the file's own rows
+bound (a parsed net's input bits are below its constant row). Irreducible, so that no unification against it builds the
+net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
   match params c.unit.name with
   | some (L, H) =>
     if !valid L H then throw s!"circuit {c.name}: rec-open's LANES is a positive multiple of 8 and H is 1 to 16"
+    else if inBits c.unit != (ports L H).bits.foldl (· + ·) 0 || outBits c.unit != 2048 then
+      throw (s!"circuit {c.name}: unit {c.unit.name} has {inBits c.unit} input and {outBits c.unit} output bits, " ++
+        s!"not rec-open's {(ports L H).bits.foldl (· + ·) 0} and 2048")
     else match unitNet L H with
       | .error e => throw e
       | .ok g =>
@@ -288,11 +299,41 @@ theorem check_ok {c : Circuit} (h : check c = .ok ()) {L H : Nat} (hp : params c
   · rename_i hv
     split at h
     · cases h
-    · rename_i g hg
-      split at h
-      · rename_i hcg
-        exact ⟨by simpa using hv, by rw [hcg]; exact hg⟩
+    · split at h
       · cases h
+      · rename_i g hg
+        split at h
+        · rename_i hcg
+          exact ⟨by simpa using hv, by rw [hcg]; exact hg⟩
+        · cases h
+
+theorem foldl_add_replicate (n a b : Nat) : (List.replicate n a).foldl (· + ·) b = b + n * a := by
+  induction n generalizing b with
+  | zero => simp
+  | succ n ih => rw [List.replicate_succ, List.foldl_cons, ih, Nat.succ_mul]; omega
+
+theorem foldl_wordPorts (bits : Nat) : (wordPorts bits).foldl (· + ·) 0 = bits / 16 * 16 := by
+  rw [wordPorts, ← Array.foldl_toList, Array.toList_replicate, foldl_add_replicate, Nat.zero_add]
+
+theorem foldl_ports (LANES H : Nat) :
+    (ports LANES H).bits.foldl (· + ·) 0 = 128 * LANES + 1024 * ((H + 1) / 2) + 1024 + 256 * LANES + 1024 := by
+  simp [ports, Ports.bits] <;> omega
+
+/-- The cap refuses no unit the comparison would accept: the verifier's own net has `ports`' input bits and 2048 output
+bits. -/
+theorem unitNet_bits {LANES H : Nat} {g : Net} (h : unitNet LANES H = .ok g) :
+    inBits g = (ports LANES H).bits.foldl (· + ·) 0 ∧ outBits g = 2048 := by
+  unfold unitNet netOf at h
+  obtain ⟨-, -, -, -, -, hi, ho, -⟩ := Net.ofRows_ok h
+  have hin : (unitLaid LANES H).inGroups =
+      #[⟨0, groupWords ((wordPorts ((ports LANES H).bits.foldl (· + ·) 0)).foldl (· + ·) 0),
+        wordPorts ((ports LANES H).bits.foldl (· + ·) 0)⟩] := rfl
+  obtain ⟨col, w, hout⟩ : ∃ col w, (unitLaid LANES H).outGroups = #[⟨col, w, wordPorts 2048⟩] := ⟨_, _, rfl⟩
+  refine ⟨?_, ?_⟩
+  · rw [inBits, hi, hin]
+    simp [foldl_wordPorts, foldl_ports] <;> omega
+  · rw [outBits, ho, hout]
+    simp [foldl_wordPorts]
 
 end RecOpen
 end Flock
