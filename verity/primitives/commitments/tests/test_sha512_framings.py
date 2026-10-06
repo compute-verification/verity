@@ -68,7 +68,8 @@ def test_frame_row_leaf_vectors(case: dict) -> None:
     assert sha512_row_digest(words, case["word_bits"], case["role"]).hex() == case["digest"]
 
 
-@pytest.mark.parametrize("case", F["row_trees"], ids=lambda c: f"n{len(c['rows'])}")
+@pytest.mark.parametrize("case", F["row_trees"] + F["binding64_trees"],
+                         ids=lambda c: f"binding{len(c['domain']['binding']) // 2}-n{len(c['rows'])}")
 def test_frame_row_tree_vectors(case: dict) -> None:
     n = len(case["rows"])
     d = _domain(case["domain"])
@@ -89,6 +90,36 @@ def test_frame_row_tree_vectors(case: dict) -> None:
     tree = MerkleTree(d, {r: _b(v) for r, v in enumerate(case["rows"])}, lambda _p: "raw")
     op = tree.open(n - 1)
     assert len(tree.commitment.root) == 64 and verify_opening(d, tree.commitment, op, "raw", VerificationLimits())
+
+
+@pytest.mark.parametrize("case", F["binding64_trees"], ids=lambda c: f"n{len(c['rows'])}")
+def test_frame_binding64_vectors_spell_out_the_domain(case: dict) -> None:
+    doc, n = case["domain"], len(case["rows"])
+    binding = _b(doc["binding"])
+    assert binding == identity_digest_sha512(case["binding_identity"]["tag"], case["binding_identity"]["doc"]) and len(binding) == 64
+    assert _b(case["positions_sha512"]) == RangeIndexedDomain(*doc["range"]).identity_sha512()
+    parts = (binding, _uint(doc["owner"] + 2), _b(case["positions_sha512"]), _uint(n))
+    message = b"veritor/protocol/merkle/frame/v3\0" + (6).to_bytes(4, "big") + b"domain" + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+    assert _b(case["domain_message"]) == message
+    assert hashlib.sha512(message).hexdigest() == doc["domain_id"] == _domain(doc).domain_id.hex()
+
+
+def test_a_sha512_frame_binds_a_64_byte_identity_and_no_other_frame_does() -> None:
+    b64 = identity_digest_sha512("verity/test/binding/v1", {"x": 1})
+    positions = RangeIndexedDomain(4)
+    d = CommitmentDomain(b64, -1, positions, hash="sha512")
+    assert d.domain_id == _hash(b"domain", b64, _uint(1), positions.identity_sha512(), _uint(4), hash="sha512")
+    assert d.domain_id != CommitmentDomain(b64[:32], -1, positions, hash="sha512").domain_id
+    assert d.domain_id != CommitmentDomain(b64[32:], -1, positions, hash="sha512").domain_id
+    for other in ("sha256", "blake3", "blake3-s256"):
+        CommitmentDomain(b64[:32], -1, positions, hash=other)
+        with pytest.raises(ProtocolError, match="binding"):
+            CommitmentDomain(b64, -1, positions, hash=other)
+    for width in (0, 31, 33, 63, 65, 128):
+        with pytest.raises(ProtocolError, match="binding"):
+            CommitmentDomain(bytes(width), -1, positions, hash="sha512")
+    with pytest.raises(ProtocolError, match="binding"):
+        CommitmentDomain(bytearray(b64), -1, positions, hash="sha512")   # type: ignore[arg-type]
 
 
 def test_frame_word_leaves_and_empty_root() -> None:
