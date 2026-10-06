@@ -128,7 +128,7 @@ CATEGORIES = (
     ("pearlc:screen", r"^kernel$|screen"),
     ("fp8:quant", r"fp8_quant|scaled_fp8|segmented_max|dynamic_scaled|per_token_group_quant|quant"),
     ("attention", r"flash|fmha|attention|attn|FlashAttn|paged"),
-    ("gemm", r"cutlass|nvjet|gemm|Gemm|sm90_|sm100_|sm120_|xmma|cublas|Kernel2|splitK"),
+    ("gemm", r"cutlass|nvjet|gemm|Gemm|sm90_|sm100_|sm120_|xmma|cublas|Kernel2|splitK|^device_kernel$"),
     ("norm", r"rms_norm|layernorm|layer_norm"),
     ("act", r"act_and_mul|silu|gelu"),
     ("rotary", r"rotary"),
