@@ -28,6 +28,25 @@ step `p` that has a relative error on a range, and for every `G`, with `G = 0` t
   give `0` and `10` at `G = 4` and at `G = 0`, by kernel evaluation.
 -/
 
+namespace Pouw.PearlC.PeelExactP
+
+open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact Matrix
+
+variable {m n k : Nat}
+
+theorem windowWordP?_hopper : windowWordP? hopperE4m3K32 = windowWord? := rfl
+
+/-- Π's chain on words (windows of `Params.pi.G = 4`) is the chain twin at `hopperE4m3K32`. -/
+theorem chainWordP?_hopper : chainWordP? hopperE4m3K32 4 = chainWord? := rfl
+
+/-- Π's U is U's twin at `hopperE4m3K32` and `G = 4`. -/
+theorem peelExactP_hopper : @peelExactP m n k hopperE4m3K32 4 = @peelExact m n k := rfl
+
+/-- Π's U as values is U's twin's at `hopperE4m3K32` and `G = 4`. -/
+theorem peelExactValP_hopper : @peelExactValP m n k hopperE4m3K32 4 = @peelExactVal m n k := rfl
+
+end Pouw.PearlC.PeelExactP
+
 namespace Pouw.PearlC.PeelExactProofsP
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs Pouw.PearlC Pouw.PearlC.PeelExact
