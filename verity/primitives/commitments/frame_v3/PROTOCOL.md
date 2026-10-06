@@ -112,10 +112,13 @@ SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
   `verity/tagged-sha512/v1\0`.
 - `leaf_prefix` is the same prefix over the 64-byte domain id, so `leaf = SHA-512(prefix ‖ value)`.
 
-**What stays: the one SHA-256 input.** `binding` is the caller's 32-byte SHA-256 identity digest of what the commitment may not
-outlive: a header, a replay phase or a weights tag. It is an identity from the protocol and the IR, not something the frame computes.
-It moves to SHA-512 with the other identity digests at the re-baseline, which Daniel's rule of 2026-09-26 extends E4 to. That makes
-it a fixed-width change to this section, with new vectors.
+**The binding.** `binding` is the caller's identity digest of what the commitment may not outlive: a header, a replay phase or a
+weights tag. It is an identity from the protocol and the IR, not something the frame computes. Under `frame-v3-sha512` it is 64
+bytes, an `identity_digest_sha512` (Daniel's one-hash ruling: one hash, SHA-512), or 32 bytes, a SHA-256 identity digest as recorded
+statements carry it; every other frame takes 32 bytes only. The domain message frames every part with its u64be length, so a 64-byte
+binding and a 32-byte one never give the same message, and the frame version does not change. `binding64_trees` in
+`vectors_sha512.json` gives row trees over 64-byte bindings, each with its identity's tag and document, the positions' SHA-512
+identity and the domain message; the other groups are unchanged.
 
 **Row leaves.** A SHA-512 frame binds `sha512/row/v1` rows and the bit rows below, and no other row kind. `FrameV3` refuses SHA-256
 and BLAKE3 rows under it, and SHA-512 rows under a SHA-256 frame.
