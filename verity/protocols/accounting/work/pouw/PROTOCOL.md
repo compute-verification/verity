@@ -556,9 +556,12 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     names the cap among its parameters.
   - γ at the headline record (FP32 at 8.376, the packed cast at 8.72, rev1's credit) is the pinned guarantee
     `Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` (8,192³). The 16,384³ shape and the issue-bound FP32
-    add (8.00) are lemmas beside it, not pinned (`pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_16384`,
-    `pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192` and `_16384`); the ledger publishes the larger of the two prices, the
+    add (8.00) are pinned under their own names, not lifted into Pouw's `Guarantees`
+    (`Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_16384`, `Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192`
+    and `Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap1000_16384`); the ledger publishes the larger of the two prices, the
     in-loop add's.
+  - The per-unit γ doesn't need TT_OUT(1/1,000): the same γ for the cap-1/1,000 protocol follows from rev1 at 1/400 alone
+    (`Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400`, from `TTOutPearlCDevRev1` at 1/400).
   - The verifier's credit, cap and debit are rev1's, the rule these γ are proved for: `credit_of` is `creditDevRev1`,
     `wref` is `wrefDevRev1` (`wrefDevRev1K` at the cast's offset), and the tile rule is `tileDebitRev1` against
     ρ·`creditDevRev1`·`tileShare`. Python's γ, credit and tile cap equal the Lean's exactly on every pinned price twin
