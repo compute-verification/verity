@@ -377,7 +377,10 @@ inner)
   taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-proxy.txt $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt \
     --sessions $SESS/session > $O/inner/replay-proxy.txt 2>&1
   taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-vstar.txt python3 -m verity_flock.rec_vstar $SESS > $O/inner/vstar.json 2> $O/inner/vstar.err
-  echo "vstar exit $?"
+  rc=$?; echo "vstar exit $rc"
+  # the prover reports a stop (prover_stopped) and exits 0; the honest session's V* is what refuses one without its proofs
+  [ $rc = 0 ] || { cat $O/inner/vstar.json; grep -h -m3 -e panicked -e prover_stopped $O/inner/proxy/prove.err $O/inner/proxy/prove.tsv
+    mkdir -p $O/inner/session && cp -r $SESS/session $SESS/public.json $O/inner/session/; exit 1; }
   # the forged sessions V*'s reference must refuse: the session's private.json with the first salted top's first node (node)
   # or its salt (salt) one bit off, the public record and the proofs as they are
   for f in node salt; do
