@@ -619,6 +619,12 @@ nodes = ["vy-nebius-2"]
 owner = "infra"
 
 [[file]]
+path = "/usr/local/sbin/vy-device-cores"
+src = "tools/research/src/research/pods/nebius/device_cores.sh"
+nodes = ["vy-nebius-2"]
+owner = "infra"
+
+[[file]]
 path = "/workspace/pouw/infra/bin/gpu-lease"
 src = "tools/research/src/research/pods/sh/gpu_lease.sh"
 nodes = ["vy-nebius-2"]
