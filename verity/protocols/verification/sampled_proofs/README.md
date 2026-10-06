@@ -106,7 +106,6 @@ Tests: `uv run tools/check/suites.py verity-sampled-proofs`.
 from verity.protocols.verification.sampled_proofs import service
 from verity.protocols.verification.sampled_proofs.one_stage import audit, draw, partition, registration
 from verity.protocols.verification.sampled_proofs.two_stage import OwnRandomness, ReplayUnit, Stage, TwoStageLaw, draw_first
-from verity.protocols.verification.sampled_proofs.two_stage_driver import ReplayDraw, TwoStageStream
 from verity_experimental.sampled_proofs.consumers import compute_bound, exfiltration_bound, location_bits
 from verity_experimental.sampled_proofs.plan import VerificationPlan
 ~~~
@@ -135,9 +134,6 @@ from verity_experimental.sampled_proofs.plan import VerificationPlan
 - `two_stage`: `TwoStageLaw` of `Stage`s and its `profile`; stage 1's draws `select_replay_units` and `draw_first` (a
   one-stage law's draw object over the RUs, with `closure_of` for a work law's closure), stage 2's `select_proof_units`,
   all from `OwnRandomness`; and `check_probability`.
-- `two_stage_driver`: `TwoStageStream(spec, unit, budget=, delta=, challenger=)` has the calls `register`, `select`
-  (with the verifier's `closure` for a work law), `register_interiors`, `deliver` and `outcome`, which raise `Refused`
-  or `Pending` as `Stream`'s do; its draw is a `ReplayDraw` (`units`, and `proved` with the closure).
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
   `weight_binding_plan`.
 
@@ -394,6 +390,19 @@ Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outc
 `test_a_two_stage_outcome_accepts_only_when_both_audits_do`, `test_a_work_draw_carries_its_closure_and_the_proof_proves_it`,
 `test_a_closure_widens_a_work_draw_only_and_stays_in_range`, `test_the_default_draw_is_draw_first_on_the_challengers_bytes`).
 
+PoUW's example runs on a two-stage `Stream` in `tests/test_service_two_stage.py`, following the architecture note
+(`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, §4.1): a uniform `subset:K′` over `N`
+equal tiles, whose boundaries are A's rows, the tile digests and the per-call records, and whose interiors are A′, the
+ok rows, `rowk`'s carries and the cap rows. A `work:K` first stage runs as well, with the challenger's closure, and an
+accepted audit's profile is `two_stage.TwoStageLaw.profile` of `Stage(law)` over the RUs. Pinned by
+`tests/test_service_two_stage.py` (`test_the_pouw_example_runs_the_four_steps_and_one_record_binds_them`,
+`test_each_step_waits_for_the_one_before`, `test_the_interiors_are_the_proved_replay_units_held_to_the_rule`,
+`test_a_work_first_stage_draws_with_the_challengers_closure`, `test_a_wrong_interior_or_boundary_rejects_the_audit_once`,
+`test_the_stream_stops_at_its_budgeth_failure`, `test_no_retries_nothing_redraws_and_an_outcome_is_final`,
+`test_a_late_proof_or_missing_interiors_are_late`,
+`test_a_draw_of_no_rus_has_no_interiors_and_its_proof_goes_to_the_boundary`,
+`test_what_a_two_stage_spec_and_stream_refuse`, `test_the_draw_is_the_challengers_own_randomness`).
+
 ### The two-stage law
 
 `two_stage.TwoStageLaw({class: Stage(first, k)})` (decision 43):
@@ -444,53 +453,6 @@ proof-unit draw after the interiors are.
 Pinned by `tests/test_two_stage.py` (`test_own_randomness_is_the_lean_verifiers_samplers_on_raw_bytes`,
 `test_draw_first_is_the_lean_verifiers_draw_on_the_same_bytes`, `test_a_stream_that_runs_out_is_extended_as_lean_does`,
 `test_a_work_draw_carries_its_closure_and_the_profile_counts_the_drawn_rus`, `test_draw_first_refuses_what_lean_refuses`).
-
-### The two-stage driver
-
-`two_stage_driver.TwoStageStream` runs `TwoStage(replay=Law(...), check="all")` on the proof service's Streams, on the
-challenger's side:
-
-- **The Spec.** Its values are the RUs' boundaries, committed by serve time (phase `epoch` or `serve`, and registered
-  values), and their interiors (phase `interior`), neither empty; a registered value is never an interior, and no value
-  is committed inside a deadline (`in-deadline`). Each RU is
-  one instance of the check's unit, so `check` is `"all"` and a count is refused. The driver splits the Spec into a
-  boundary half under the first stage's law and an interior half under `All`, each declaring the Spec's public items
-  except the other half's roots.
-- **The steps.** `register` is the boundary Stream's `register`. `select` draws once, after its receipt, by
-  `two_stage.draw_first` on the verifier's own randomness through the Stream's `sampler`, so the draw is held to
-  `draw.check_draw`; a `closure` widens a work draw only. `register_interiors` takes one-stage's record over the proved
-  RUs (`ReplayDraw.proved`: the drawn ones and their closure, ascending, unit `i` being RU `proved[i]`) once, after the
-  draw and before any proof, under `All` in a Stream of its own (codes `interior-population` and
-  `interior-registered`). `deliver` refuses a proof before the interiors (`interior`) and delivers it to both
-  registrations. `outcome` runs the interior outcome, then the boundary outcome with the interior's as its verdict
-  `two-stage/interior` (not of record), giving each the `session_roots` of its own values. A draw of no RUs has no
-  interiors, and its proof goes to the boundary registration alone, as a Stream's empty draw does.
-- **What it decides.** The boundary Stream's outcome is the audit's: an accept exactly when both audits accept, a reject
-  when either rejects, and `late` by the boundary's `proof_deadline` from the RU draw, which covers the replay, the
-  interiors and the proof (the interior Stream has none). The driver's failures, budget and symbols are the boundary
-  Stream's. An accepted audit's profile is one-stage's profile of the boundary registration, which is
-  `TwoStageLaw.profile` of `Stage(law)` over the RUs.
-- **The records.** The driver's digest is the SHA-512 of `{"format": "verity/proof-service/two-stage/stream/v0",
-  "spec", "budget", "delta", "challenger"}`. An audit's record is `{"format": "verity/proof-service/two-stage/audit/v0",
-  "stream", "order", "boundary": {"registration", "receipt", "outcome"}, "draw", "replay_units", "interior": null |
-  {"registration", "receipt", "outcome"}, "sessions", "symbol"}`: both registration records and receipts, the draw
-  object with its closure, the proved RUs, and the SHA-512 of each Stream's outcome record (the interior's null when no
-  proof came). The audit's `Outcome.record` is its SHA-512.
-- **No retries.** One draw, one interior registration, one delivery and one outcome per audit, and a refused call
-  changes nothing.
-
-Until `Stream` runs `TwoStage` itself, the interiors' Stream is the audit's own, so the interior record's `previous` is
-null and the driver's record is what binds it to the boundary's. PoUW's example in the tests follows the architecture
-note (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, §4.1): a uniform `subset:K′` over
-`N` equal tiles, whose boundaries are A's rows, the tile digests and the per-call records, and whose interiors are A′,
-the ok rows, `rowk`'s carries and the cap rows. A `work:K` first stage runs as well. Pinned by
-`tests/test_two_stage_driver.py` (`test_the_pouw_example_runs_the_four_steps_and_one_record_binds_them`,
-`test_each_step_waits_for_the_one_before`, `test_the_interiors_are_the_proved_replay_units_held_to_the_rule`,
-`test_a_work_first_stage_draws_with_the_verifiers_closure`, `test_a_wrong_interior_or_boundary_rejects_the_audit_once`,
-`test_the_driver_stops_at_its_budgeth_failure`, `test_no_retries_nothing_redraws_and_an_outcome_is_final`,
-`test_a_late_proof_or_missing_interiors_are_late`,
-`test_a_draw_of_no_rus_has_no_interiors_and_its_proof_goes_to_the_boundary`, `test_what_the_driver_refuses`,
-`test_the_draw_is_the_verifiers_own_randomness`).
 
 ### Verification plans
 
