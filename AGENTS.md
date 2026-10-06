@@ -40,7 +40,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `research`: runs, the evidence store, Slack, pods and deploys. It imports nothing from Verity.
   - `check`: the one check a merge requires.
   - `circuit_check`: the property checks every circuit passes.
-  - `lean`: the Lean audit.
+  - `lean`: the Lean check (`audit.py` until lean renames it `lean_check.py`).
   - `cluster`: the shared machines' policy, planner and ledger. Stdlib only.
   - `agent-guard`: the VM's secret guard.
   - `move`: layout moves.
@@ -129,11 +129,11 @@ There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check
 - `circuit-check --all`;
 - C-Flock's Rust build and tests;
 - the Lean verifier's build and its partition check;
-- the Lean audit;
+- the Lean check;
 - `merge_requires` (`tools/check/tool.py`): the steps a change's paths demand, such as `lean-agreement`, the cross-check
   against upstream's Rust verifier, for `backends/flock/` (`check.py --record` sends what it needs).
 
-A pass of a test suite, a circuit-check target or a Lean package's audit is reused only while every input it read is
+A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
 
 Landing:
@@ -165,11 +165,11 @@ Landing:
     `security_proofs` (ArkLib allowed): every proof and lemma, with `SecurityProofs.G : G` for each guarantee.
   - Each component has its own area in each tree (`Core`, `Nci`, `Pouw`, `Pous`, `NetworkCertifier`, `Flock`).
   - The spec imports only itself and Mathlib (`layers` in `verity/Security/lean-audit.json`). A theorem that must stay
-    in a trusted module (a definition's proof field) may; the audit replays it like any proof. C-Flock's analysis is all
+    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's analysis is all
     in `Proofs.Flock` until its spec is extracted.
   - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
     PR of their own.
-- **The audit.** Every Lake package has a `lean-audit.json`, and `check` audits every declaration
+- **The Lean check.** Every Lake package has a lock, `lean-audit.json` until lean renames it `lean-lock.json`, and `check` runs the Lean check on every declaration
   (`tools/lean/audit.py`):
   - only `propext`, `Classical.choice` and `Quot.sound`;
   - no `sorry`, `axiom`, `native_decide` or kernel bypass;
