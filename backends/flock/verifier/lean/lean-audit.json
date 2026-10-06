@@ -499,7 +499,7 @@
    "guarantees": ["Flock.Firewall.Contract.holds_computed"]
   },
   "Flock.Firewall.Contract": {
-   "digest": "1e8063725231ba5806ba337ace5e565808a328d03b3519a1150c63f274b429a3",
+   "digest": "106a5407ab06dd9814b07d865bd58ae4fcb4d319e769e117c77f8f749d6e9d89",
    "definitions": {
     "Flock.Firewall.Contract.By": "8e60c093b9eaa6cc8eb65cb5b35c2a1e08f62b958cd8365447b4ce5ccbb780ca",
     "Flock.Firewall.Contract.By.name": "49216a41e224ed2b80cfc4840bf4d22601588b6dca36f0b757f04a4279b088fe",
@@ -527,6 +527,7 @@
     "Flock.Firewall.Contract.PublicInput.schedule": "eb33258d42a340ded01e9d2582d4e4bde6e7adceef973169ef24a664ed7c2a3e",
     "Flock.Firewall.Contract.PublicInput.statement": "24ceb43621403bc66f925855d69e1e84fb1f33ccefefcb9013b9b36bb8cb5393",
     "Flock.Firewall.Contract.SALT_BYTES": "76eaa71673568b18e3a2687449cf2b8061edd307bb4e9dd29c5b9469a341d4e8",
+    "Flock.Firewall.Contract.SCHEDULE_FORMAT": "c43dfd14d1f8928c8ec925974ad8956aae3e221dfba2275bf573f2853be0635b",
     "Flock.Firewall.Contract.State": "6fb51505d7c1744b9c9284671a2109a13cd8a30b02a5789e7ae3c9b25dbe7f3e",
     "Flock.Firewall.Contract.State.checked": "24db83301a30ad320f4e9e28885d4f3dd82e0dc13aeb6da626dfdc20e86134b9",
     "Flock.Firewall.Contract.State.finished": "92b29e564f71ba5935703b72d37832b2f513c9b4e5e48c9eb3335dae43b64ad9",
@@ -553,10 +554,11 @@
     "Flock.Firewall.Contract.go": "72d79bac4f7527575bb8d221421ec0e0119fddf6eb7eeb8188639c89cea530c2",
     "Flock.Firewall.Contract.instReprBy.repr": "2574e8aeb412e3c7de5f0afe1c2bfda9e04d441ab96fe09142fbd67237f30675",
     "Flock.Firewall.Contract.need": "6b4de406b9b94627197f7ff5799c90ad473e2c802b1dff66074f1282aee15087",
-    "Flock.Firewall.Contract.owes": "a431bb056f8db9ffab204c9ab11e8f6528d33606b6bdc7cf687c806663c09039",
+    "Flock.Firewall.Contract.owes": "b2d2614915f6cdf36cc10ccc41d8c1db0cc5d66ac09c59e95e7582de74fa9c4f",
     "Flock.Firewall.Contract.pairwiseDistinct": "d2a5394b192d247c2b3ff0cffe1cb0b64cbddc46bd8925f52f5892e47acecd97",
+    "Flock.Firewall.Contract.roundAt": "7e93c1d73124dd2a19a07cec4eed2882647943b04ff77855c501c2853e1e5cac",
     "Flock.Firewall.Contract.run": "023132311ee04af5726060196e033d6f9600afde7c247601605f0f4fec95ff4d",
-    "Flock.Firewall.Contract.scheduled": "1e27e107947dfa9f9df628f9e5b7a8f842b777d61581eea5f90f7b7c354487a7",
+    "Flock.Firewall.Contract.scheduled": "829ea3f813c76595368012455e7934a834f6192693afcdf7e20cd0990dd141f0",
     "Flock.Firewall.Contract.step": "30f0767565d20e695ad4df03e7334547fee7e4a1560b8f5cecaa9577c8acb567",
     "Flock.Firewall.Contract.streams": "3c51543d9d99b53c9df37585e56bd589e341a0b9f1681ca15e621d2e2f2e36a7",
     "Flock.Firewall.Contract.tapeError": "6192f99f01cdc9102d90f5527433e4e6f0cde62d44a7809caf0a988d9b05d323",
