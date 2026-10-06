@@ -147,6 +147,8 @@ Landing:
   `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass, since the train's full `check` is the
   gate.
 - A grant carries to a head whose own patch is byte-identical.
+- A PR in a tip that is being checked keeps its head until the tip lands or ci asks for a change. ci fixes a conflict at
+  the tip; a push to the PR would refuse every tip that pins its old head.
 - A pure move that `tools/check/move_check.py BASE HEAD` certifies goes first, alone in its train.
 
 ## Lean
@@ -253,7 +255,8 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
 - **Check what's being tried.** Before starting work another agent could plausibly be doing, read the notes'
   `kb/onboarding.md`, check `research notes approaches`, and claim yours at your first checkpoint
   (`research notes claim`).
-- **Push your branch after every commit** (never `main`, never `--force`). Only the lander moves `main`, through
+- **Push your branch after every commit** (never `main`, never `--force`), except to a PR in a tip being checked
+  (Checking and merging). Only the lander moves `main`, through
   `research merge`.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
