@@ -131,6 +131,97 @@ def arm(args) -> int:
     return 0
 
 
+def paired(args) -> int:
+    """Both arms in one engine (flag unset, so vLLM builds the aux stream), each decode point measured back to back in both,
+    the order alternating by pair: ``one`` forces ``NO_OVERLAP``, the order the flag's ``_stream = None`` gives; ``aux`` is
+    vLLM's own choice.  Host load that drifts between engines (shared cores) cancels in the paired deltas."""
+    import numpy as np
+    import torch
+    import vllm
+    from vllm import LLM, SamplingParams
+    from vllm.model_executor.layers.fused_moe.runner import shared_experts as se
+
+    assert FLAG not in os.environ
+    mode = {"m": "aux"}
+    counts: dict[str, dict[str, int]] = {"one": {}, "aux": {}}
+    orig = se.SharedExperts._determine_shared_experts_order
+
+    def switched(self, hidden_states):
+        order = orig(self, hidden_states)
+        if mode["m"] == "one":
+            order = se.SharedExpertsOrder.NO_OVERLAP
+        c = counts[mode["m"]]
+        key = f"{order.name}@{'le256' if hidden_states.shape[0] <= 256 else 'gt256'}"
+        c[key] = c.get(key, 0) + 1
+        return order
+
+    se.SharedExperts._determine_shared_experts_order = switched
+    llm = LLM(model=args.model, tokenizer=args.model, dtype="bfloat16", seed=0, max_model_len=4096, gpu_memory_utilization=0.80,
+              trust_remote_code=False, enforce_eager=True, enable_prefix_caching=False, max_num_seqs=max(DECODE_BATCHES),
+              kernel_config={"enable_flashinfer_autotune": False})
+    vocab = llm.get_tokenizer().vocab_size
+    rng = np.random.default_rng(2000)
+    out_tokens = args.out_tokens
+
+    def timed(ps: list[dict], n: int) -> float:
+        sp = SamplingParams(temperature=0.0, max_tokens=n, ignore_eos=True)
+        torch.cuda.synchronize()
+        t = time.perf_counter()
+        llm.generate(ps, sp, use_tqdm=False)
+        return time.perf_counter() - t
+
+    def prompts(n: int, length: int) -> list[dict]:
+        return [{"prompt_token_ids": rng.integers(1000, vocab - 1000, length).tolist()} for _ in range(n)]
+
+    for m in ARMS:
+        mode["m"] = m
+        timed(prompts(8, 256), 32)
+    for c in counts.values():
+        c.clear()
+    shapes = {"b1": (1, B1_IN), **{f"b{b}": (b, DECODE_IN) for b in DECODE_BATCHES}}
+    samples: list[dict] = []
+    for p in range(args.pairs):
+        order = list(ARMS) if p % 2 == 0 else list(reversed(ARMS))
+        for name, (b, length) in shapes.items():
+            mode["m"] = "aux"
+            t1 = timed(prompts(b, length), 1)
+            for m in order:
+                mode["m"] = m
+                dt = timed(prompts(b, length), out_tokens) - t1
+                samples.append({"pair": p, "point": name, "arm": m, "decode_s": dt, "step_ms": dt / (out_tokens - 1) * 1e3,
+                                "tok_s": b * (out_tokens - 1) / dt})
+        print(f"[paired] pair {p} done", flush=True)
+    lines = ["| point | aux: median ms/step (min..max) | one: median ms/step (min..max) | paired delta: median (min..max) | pairs |",
+             "|---|---|---|---|---|"]
+    for name, (b, _) in shapes.items():
+        a = [s["step_ms"] for s in samples if s["point"] == name and s["arm"] == "aux"]
+        o = [s["step_ms"] for s in samples if s["point"] == name and s["arm"] == "one"]
+        d = [(y / x - 1) * 100 for x, y in zip(a, o)]
+        lines.append(f"| {name} decode (batch {b}) | {statistics.median(a):.1f} ({min(a):.1f}..{max(a):.1f}) | "
+                     f"{statistics.median(o):.1f} ({min(o):.1f}..{max(o):.1f}) | {statistics.median(d):+.2f}% "
+                     f"({min(d):+.2f}..{max(d):+.2f}) | {len(d)} |")
+    summary = ("\n".join(lines) + "\n\nDelta: one/aux - 1 of the decode step time (positive: one stream slower). Orders chosen: "
+               + json.dumps(counts) + "\n")
+    out = Path(args.out)
+    res = {"samples": samples, "orders": counts, "out_tokens": out_tokens, "pairs": args.pairs, "gpu": _gpu(),
+           "versions": {"vllm": vllm.__version__, "torch": torch.__version__}, "affinity": sorted(os.sched_getaffinity(0)),
+           "env": {k: os.environ.get(k) for k in [*ENGINE, "CUDA_VISIBLE_DEVICES"]}}
+    (out / "paired.json").write_text(json.dumps(res, indent=1, sort_keys=True) + "\n")
+    (out / "summary-paired.md").write_text(summary)
+    print(summary)
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    if run_dir:
+        result = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "kind": "bench-result/v1",
+                  "workload_fingerprint": {"workload": "shared_experts_stream.paired", "model": args.model, "pairs": args.pairs},
+                  "validation": {"status": "passed", "checker": "every pair measured", "detail": f"samples={len(samples)}", "evidence": []},
+                  "measurements": [{"name": f"p{s['pair']}.{s['arm']}.{s['point']}.step_ms", "value": s["step_ms"], "unit": "ms"}
+                                   for s in samples],
+                  "measurement_files": [os.path.relpath(p, run_dir) for p in (out / "paired.json", out / "summary-paired.md")],
+                  "artifacts": []}
+        (Path(run_dir) / "result.json").write_text(json.dumps(result, indent=1) + "\n")
+    return 0
+
+
 # Each point's delta is extra time with the shared expert on the main stream: one/aux - 1 for TPOT, aux/one - 1 for tok/s.
 POINTS = (("batch-1 TPOT (ms)", "b1_tpot_ms", False), ("decode b8 (tok/s)", "b8_decode_tok_s", True),
           ("decode b32 (tok/s)", "b32_decode_tok_s", True), ("decode b128 (tok/s)", "b128_decode_tok_s", True),
