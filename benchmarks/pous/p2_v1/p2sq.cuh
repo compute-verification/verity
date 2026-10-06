@@ -646,8 +646,13 @@ __device__ __forceinline__ void sqr_k(uint32_t *__restrict__ sm, Num &x, bool od
 
 // rows of NL big-endian words <-> limbs: through the staging area, coalesced on the global side
 __device__ __forceinline__ void load_row(uint32_t *__restrict__ st, const uint32_t *__restrict__ row, Num &x, uint32_t lane) {
+  uint32_t v[17];                                              // all of a lane's loads in flight at once
+  #pragma unroll
+  for (int i = 0; i < 17; i++) v[i] = i < 16 || lane < N - 512 ? row[lane + 32 * i] : 0;
   __syncwarp();
-  for (int w = lane; w < N; w += 32) st[stage(N - 1 - w)] = __byte_perm(row[w], 0, 0x0123);
+  #pragma unroll
+  for (int i = 0; i < 17; i++)
+    if (i < 16 || lane < N - 512) st[stage(N - 1 - (int)lane - 32 * i)] = __byte_perm(v[i], 0, 0x0123);
   __syncwarp();
   #pragma unroll
   for (int q = 0; q < 16; q++) x.l[q] = st[stage(16 * lane + q)];
