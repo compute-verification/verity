@@ -7,10 +7,12 @@ from typing import Any
 
 def _pous_roots() -> list[Any]:
     """PoUS's per-answer opening (`verity.protocols.accounting.space.pous.answer_circuit`) of a 264-byte row reaches the row
-    digest's head, a middle compression and a tail with its rest."""
+    digest's head, a middle compression and a tail with its rest; the proof service's unit for PoUS is P2's 2,056-byte block,
+    unchanged."""
     from verity.primitives.circuits.defs import bind
-    from verity.protocols.accounting.space.pous.answer_circuit import PousAnswerOpens
+    from verity.protocols.accounting.space.pous.answer_circuit import PousAnswerOpens, PousAnswerRow
 
     return [
         bind(PousAnswerOpens, N=264),
+        bind(PousAnswerRow, N=2056),
     ]
