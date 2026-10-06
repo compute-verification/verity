@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.space.pous import band, dense, setup
-from verity.protocols.accounting.space.pous.audit import TimedVerifier, challenge_key, run_timed
+from verity.protocols.accounting.space.pous.audit import MemoryChallenger, challenge_key, run_timed
 from verity.protocols.accounting.space.pous.codec import Codec, split
 from verity.protocols.accounting.space.pous.labels import salt_value, tag
 from verity.protocols.accounting.space.pous.oracle import KeyQuery, run
@@ -69,7 +69,7 @@ def test_1_honest(scheme):
     reference_vk = setup.verifier_key(x.params, x.prims, x.w, x.commitment, x.salt)
     assert vk == reference_vk and vk.root == reference_vk.root
     blocks = [b for seg in x.honest for b in seg]
-    assert run_timed(TimedVerifier(vk, challenge_key(b"audit", vk), clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
+    assert run_timed(MemoryChallenger(vk, challenge_key(b"audit", vk), clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
 
 
 def test_1_honest_details():
@@ -79,7 +79,7 @@ def test_1_honest_details():
     assert setup.check_server_root(vk, MerkleTree([x for s, seg in enumerate(HONEST)
                                                    for x in segment_leaves(PARAMS, SALT, s, seg)]).root)
     blocks = [b for seg in HONEST for b in seg]
-    assert run_timed(TimedVerifier(vk, challenge_key(b"audit", vk), clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
+    assert run_timed(MemoryChallenger(vk, challenge_key(b"audit", vk), clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
 
 
 @pytest.mark.parametrize("scheme", SCHEMES)
