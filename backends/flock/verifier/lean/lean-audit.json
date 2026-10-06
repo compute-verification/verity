@@ -46,13 +46,98 @@
    "assumptions": [],
    "type_hash": "8b51a2bc209063b9a70f8ff3a37cb03145aa863e76568467c9d23b3c58b9ff2d"
   },
-  "Flock.Firewall.Contract.firewallLeaf_eq": {"owner": "@firewall-contract"},
-  "Flock.Firewall.Contract.holds_coins": {"owner": "@firewall-contract"},
-  "Flock.Firewall.Contract.holds_commit": {"owner": "@firewall-contract"},
-  "Flock.Firewall.Contract.holds_computed": {"owner": "@firewall-contract"},
-  "Flock.Firewall.Contract.holds_finish": {"owner": "@firewall-contract"},
-  "Flock.Firewall.Contract.holds_fixed": {"owner": "@firewall-contract"},
-  "Flock.Firewall.Contract.holds_masked": {"owner": "@firewall-contract"},
+  "Flock.Firewall.Contract.firewallLeaf_eq": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.Firewall.Contract.firewallLeaf_eq (msg salt : ByteArray) :",
+    "  Eq (Flock.Firewall.Contract.firewallLeaf msg salt)",
+    "    (Flock.Hm96.Default512.treeLeaf (Flock.Firewall.Contract.commitBC msg salt))"
+   ],
+   "assumptions": [],
+   "type_hash": "6f1893f049eb5c8d276ff54ab6256c6f755ba9401745fff070bd3fa060bbe189"
+  },
+  "Flock.Firewall.Contract.holds_coins": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.Firewall.Contract.holds_coins {t : Flock.Firewall.Contract.Transcript} (h : Flock.Firewall.Contract.Holds t)",
+    "  {stream : String} {k : Nat} {cs relayed opening : Array Flock.F128}",
+    "  (hm : List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.coins stream k cs relayed opening)) :",
+    "  Eq relayed cs"
+   ],
+   "assumptions": [],
+   "type_hash": "02e9fe36579fa5ddd9ff136d76ce7bab100c41945be616d7ac6a7f52df833f3c"
+  },
+  "Flock.Firewall.Contract.holds_commit": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.Firewall.Contract.holds_commit {t : Flock.Firewall.Contract.Transcript} (h : Flock.Firewall.Contract.Holds t)",
+    "  {msg : ByteArray} {i : Nat} {sent : ByteArray}",
+    "  (hm : List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.commit msg i sent)) :",
+    "  And (instLTNat.lt i t.salts.size)",
+    "    (And (Not (Array.instMembership.mem t.exposedSalts i))",
+    "      (And (Eq (Array.instGetElem?NatLtSize.getElem! t.salts i).size Flock.Firewall.Contract.SALT_BYTES)",
+    "        (Eq sent.data (Flock.Firewall.Contract.commitBC msg (Array.instGetElem?NatLtSize.getElem! t.salts i)).data)))"
+   ],
+   "assumptions": [],
+   "type_hash": "b5761a3369364f05bdb6a46b3978d1243b31762b941cd7bd28f68c137e9629a1"
+  },
+  "Flock.Firewall.Contract.holds_computed": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.Firewall.Contract.holds_computed {spec : String → Option ByteArray} {t : Flock.Firewall.Contract.Transcript}",
+    "  (h : Flock.Firewall.Contract.Holds t) (hc : Flock.Firewall.Contract.FirewallComputes spec t) {what : String}",
+    "  {src : Flock.Firewall.Contract.By} {want sent : ByteArray} {ps : Array Nat}",
+    "  (hm : List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps))",
+    "  (hs :",
+    "    Or (Eq src Flock.Firewall.Contract.By.recheck)",
+    "      (Or (Eq src Flock.Firewall.Contract.By.shadow) (Eq src Flock.Firewall.Contract.By.own))) :",
+    "  Eq (spec what) (Option.some sent)"
+   ],
+   "assumptions": [],
+   "type_hash": "03dd1a9e535b8db23daa7d8a389bad7eb32c1741b9490d7c7c2c2fa064f26c11"
+  },
+  "Flock.Firewall.Contract.holds_finish": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.Firewall.Contract.holds_finish {t : Flock.Firewall.Contract.Transcript} (h : Flock.Firewall.Contract.Holds t) :",
+    "  Eq t.items.toList.getLast? (Option.some Flock.Firewall.Contract.Item.finish)"
+   ],
+   "assumptions": [],
+   "type_hash": "ecd450812c440b10675cf82a0046b799ac0ba9839bfaa8220a5af75eeaff9cbf"
+  },
+  "Flock.Firewall.Contract.holds_fixed": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.Firewall.Contract.holds_fixed {t : Flock.Firewall.Contract.Transcript} (h : Flock.Firewall.Contract.Holds t)",
+    "  {what : String} {src : Flock.Firewall.Contract.By} {want sent : ByteArray} {ps : Array Nat}",
+    "  (hm : List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps)) :",
+    "  And",
+    "    (Eq src Flock.Firewall.Contract.By.schedule →",
+    "      Exists fun sched =>",
+    "        Exists fun o =>",
+    "          Exists fun w =>",
+    "            Exists fun o' =>",
+    "              And (Eq t.schedule (Option.some sched))",
+    "                (And (Eq (Flock.Firewall.Contract.scheduled sched o what) (Except.ok { fst := w, snd := o' }))",
+    "                  (Eq sent.data w.data)))",
+    "    (Ne src Flock.Firewall.Contract.By.schedule → Eq sent.data want.data)"
+   ],
+   "assumptions": [],
+   "type_hash": "4be7813bc3511af32a3e2b64ff1f776ccca6e6383d3d3067b53d60b6afe788bd"
+  },
+  "Flock.Firewall.Contract.holds_masked": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.Firewall.Contract.holds_masked {t : Flock.Firewall.Contract.Transcript} (h : Flock.Firewall.Contract.Holds t)",
+    "  {v : Flock.F128} {p : Nat} {sent : Flock.F128}",
+    "  (hm : List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.masked v p sent)) :",
+    "  And (instLTNat.lt p t.pads.size)",
+    "    (And (Not (Array.instMembership.mem t.exposedPads p))",
+    "      (Eq sent (instHAdd.hAdd v (Array.instGetElem?NatLtSize.getElem! t.pads p))))"
+   ],
+   "assumptions": [],
+   "type_hash": "0fd0a366bb22d71e7ffb5ba6811bf2350a8f67b82a95d5d957761339451dc0c9"
+  },
   "Flock.HmNets.check_ok": {
    "owner": "@proofs",
    "signature": [
@@ -124,11 +209,38 @@
     "Flock.be32": "851cf97622c41660202d5e44f768a86d5721ade4ad9466a725555a580f9da652"
    },
    "guarantees": [
+    "Flock.Firewall.Contract.firewallLeaf_eq",
+    "Flock.Firewall.Contract.holds_coins",
+    "Flock.Firewall.Contract.holds_commit",
+    "Flock.Firewall.Contract.holds_computed",
+    "Flock.Firewall.Contract.holds_finish",
+    "Flock.Firewall.Contract.holds_fixed",
+    "Flock.Firewall.Contract.holds_masked",
     "Flock.HmNets.check_ok",
     "Flock.HmNets.hm96Net_get",
     "Flock.HmNets.sha512x3Net_get",
     "Flock.checkInRange_ok",
     "Flock.mkRegion_ok"
+   ]
+  },
+  "Flock.Canon": {
+   "digest": "321dbff7165fa2f5f78b74100cb6f71fcc2d4cb91499b2f5c6f8ac3c242a341c",
+   "definitions": {
+    "Flock.J.asArr": "1b27db679047d2f116aa1f9a34f952f53a203ac47471331311ff49f0937597b0",
+    "Flock.J.asNat": "b2bb333e2ead86afa350e700ce020b00506fa75b672f7eef4753f1a8c71595a5",
+    "Flock.J.asStr": "791157c5ecc4f6a140378e575b030661c8cca532c1e232153200c3c3f238fc90",
+    "Flock.J.get": "b9713926f46759187e8644c994f413c55b938954c67e17c896bc28271d5b02ef",
+    "Flock.J.nat": "14651f660693f11c7c802159f9ef5dd00e9d1ab41c9994d1475731cc4fec6aa0",
+    "Flock.J.str": "e3b64bf9e865f4b684f547639349e4d4af1dca863e4b32aa1becab9980d2fdaa",
+    "Flock.canon": "93dbf8cf653d16c809b10196ae319b382c9029b69aef49a3395c51de57ae1519"
+   },
+   "guarantees": [
+    "Flock.Firewall.Contract.holds_coins",
+    "Flock.Firewall.Contract.holds_commit",
+    "Flock.Firewall.Contract.holds_computed",
+    "Flock.Firewall.Contract.holds_finish",
+    "Flock.Firewall.Contract.holds_fixed",
+    "Flock.Firewall.Contract.holds_masked"
    ]
   },
   "Flock.Circuit": {
@@ -339,6 +451,101 @@
    },
    "guarantees": ["Flock.HmNets.check_ok"]
   },
+  "Flock.Field": {
+   "digest": "2e2786b7af470f1632225d59785f96d6a44fd0389cb3e30360c2257aa158703b",
+   "definitions": {
+    "Flock.F128": "9b9ebbf4bb6eee44675a07045f6e2eeec0a4635887f66e43dd717de349321c99",
+    "Flock.F128.add": "73415928f6866b7129e7d03b882cbb59f41f78637c0651d96c038a9149c02630",
+    "Flock.F128.hi": "a42da87163e1b8071c9f4ca3df254e93cc112b99b4702f4cf0c09abe9edbb029",
+    "Flock.F128.instAdd": "5cee72303721838d57af2d8420a2f20e31d09ddd689960105e3392f1315ff69b",
+    "Flock.F128.lo": "db5ae9b1f97d8ed952ceeb8de392e324d29237765edec027d8c07fd07e7f9fac",
+    "Flock.instDecidableEqF128": "64db341ba35145c642555e7a5c17d4bb56278d71a562f82b3a9a92beedb45af4",
+    "Flock.instDecidableEqF128.decEq": "ca7f811a669439eb731def3ed0b740a2414438a85a6bedb65a496824c7d0c72b",
+    "Flock.instInhabitedF128": "1445bfc4dbf2629a006edd44e31f4e4fc8cac348d22f185d369df767dfc8cbb4",
+    "Flock.instInhabitedF128.default": "89808d8c99404cf711cd7a7fa912344164cf03836c52a99155a188ad8c998d2b"
+   },
+   "guarantees": [
+    "Flock.Firewall.Contract.holds_coins",
+    "Flock.Firewall.Contract.holds_commit",
+    "Flock.Firewall.Contract.holds_computed",
+    "Flock.Firewall.Contract.holds_finish",
+    "Flock.Firewall.Contract.holds_fixed",
+    "Flock.Firewall.Contract.holds_masked"
+   ]
+  },
+  "Flock.Firewall.Assumptions": {
+   "digest": "d13c6c63143d3ce1d60a9ea77cc9c736edf43fbd7e49d641370c75f0d4a7f132",
+   "definitions": {
+    "Flock.Firewall.Contract.FirewallComputes": "0c8b7fe474f4820e1d04fd025d2f6f5b1f83032f66704316d3f21d62dfe4682b"
+   },
+   "guarantees": ["Flock.Firewall.Contract.holds_computed"]
+  },
+  "Flock.Firewall.Contract": {
+   "digest": "acde5757b84382dd24795116d1047b5b5c443f2eeb5cb8b048057ed1b1a731b7",
+   "definitions": {
+    "Flock.Firewall.Contract.By": "f0b3d4a6e1eb0d7d704cc7540400ee24a1d9b710e12fea110aec52d3f99d82b9",
+    "Flock.Firewall.Contract.By.name": "49216a41e224ed2b80cfc4840bf4d22601588b6dca36f0b757f04a4279b088fe",
+    "Flock.Firewall.Contract.By.own": "89a4962b5c522aec3161a27b4f99ef52ad0f3a5e177a9f4a656b683d9af1fae8",
+    "Flock.Firewall.Contract.By.recheck": "4d73027880bec0f8b742ded9b35f7a82511d5af0cc8d0d693444863fd20239a9",
+    "Flock.Firewall.Contract.By.schedule": "bfc189027ed74e464f6e3e7ec5ec55e7975e71fee84a5893653f74b4b8e7b199",
+    "Flock.Firewall.Contract.By.shadow": "0842791377b2519fca9730ad83c6c09b6e53a628da00eaf6c657ef620ed11ebd",
+    "Flock.Firewall.Contract.By.statement": "33089f4773d8189957b703d75b5eb65be50ff15579fd777ec33dda03cfa72c04",
+    "Flock.Firewall.Contract.Holds": "8f7c8a04fea5d72ccb28e0a849ca6b892a68ed98ca1d9de84b58a4d34fc5a1e2",
+    "Flock.Firewall.Contract.Item": "05273af67a1d0fcc3eb68b06d48e890498d56d4f4c090904d2f53dbafb96fa6d",
+    "Flock.Firewall.Contract.Item.check": "49cef243c504bbc2d35a2e032d6e07d0342c2cd828f9d3931cecb9780a109520",
+    "Flock.Firewall.Contract.Item.coins": "ec291796d51a012636c0f9e1531ff38412ac517d37258d97270cb225e8726ce3",
+    "Flock.Firewall.Contract.Item.commit": "0a96218d9f091d7da9d76a4de379754bc737a96a615e813dc132036816af42c6",
+    "Flock.Firewall.Contract.Item.finish": "cffb4ad10ee5f96a2883d5a26251d20dc305d341e36098b51c31cfebbd0cb37b",
+    "Flock.Firewall.Contract.Item.fixed": "748c4962d89dee5328e60cf3642cd23b54e2f63150e7fde0c083d9ab633ed648",
+    "Flock.Firewall.Contract.Item.masked": "28c699cfb8b27c1d79c690a1aee13cfea7c00c8c651c58313c5a338f142d19d1",
+    "Flock.Firewall.Contract.Order": "944860fa9db7c01bae9cdc3874cf7a9f4c6154a7c110a6434e1ea691a4da2bce",
+    "Flock.Firewall.Contract.Order.opened": "4b927ed0b00af6a0e6d9066fc6e4a6132465a3cc68e029453527c213f5c26297",
+    "Flock.Firewall.Contract.Order.rounds": "2f3f7dfc2dc3301e302d1a3b29c3a804c079def59eace92c08315f9aa89c0e05",
+    "Flock.Firewall.Contract.Order.stage": "be17bd84140828dba6d8e4b10dc012a32c0c3ec16e233ee8ab5be9ef617431cf",
+    "Flock.Firewall.Contract.SALT_BYTES": "76eaa71673568b18e3a2687449cf2b8061edd307bb4e9dd29c5b9469a341d4e8",
+    "Flock.Firewall.Contract.State": "2adc0153117316e4286112302eecd93fcaccd3d1878988553d9abfb011fc9a36",
+    "Flock.Firewall.Contract.State.checked": "b18ead9e53d2d40b8712bdde5afb414086ff6b9b5254ca7f0f4af70f9e6037e1",
+    "Flock.Firewall.Contract.State.finished": "ea1564a5dceeef6bee996afa39d6054ea198907dcbbf345fddef75152c2d7b27",
+    "Flock.Firewall.Contract.State.init": "a4e6ce8049c905adc194cde8bb74649515fd9e2f1fc4bfb3d1e2d5067bbbeeaa",
+    "Flock.Firewall.Contract.State.order": "faa6f3af9dae517bc25d38f91547e81c722974e3d73aac31b75347411e5740d0",
+    "Flock.Firewall.Contract.State.passed": "be164eff485dc958994e3cd140378e855af3b121c1cc8e67552e082e21ef0f55",
+    "Flock.Firewall.Contract.State.usedPad": "fdd70a0f65d11d9dea0108fbcde7b5090bc7429221ca8b04d0544270cf5c06ac",
+    "Flock.Firewall.Contract.State.usedSalt": "1dbf2f76089fe5774341e9627e88a627dde67c3a09d789c0bb4374519fcf7dd4",
+    "Flock.Firewall.Contract.Transcript": "cab1f85817c803e67cf169e99c96ae3a8607ca341a6b790b940db6933084a00b",
+    "Flock.Firewall.Contract.Transcript.exposedPads": "9077a82a7fbc9bdc97fc598a06899b1d57e5f6a3c92ba2fb7b56ab8716a82915",
+    "Flock.Firewall.Contract.Transcript.exposedSalts": "e87c0a7f15fcef929a14eee46851dc58eb2e1ebd09b8d352877a06cf03783cb0",
+    "Flock.Firewall.Contract.Transcript.items": "fea79846d5ff1d7492d0b67abdf03462eaa2f2b9e6fb426c442a89897dd90fb0",
+    "Flock.Firewall.Contract.Transcript.pads": "187d5ef6d78ed7885041ee91fc6454e6625c08f86a13fbaa0f8fe16c172d1cb1",
+    "Flock.Firewall.Contract.Transcript.relations": "10c36d1cbe3373590527f50beeba66956a8c8b66666cc973364d573a8cc9e537",
+    "Flock.Firewall.Contract.Transcript.salts": "5e48a4a3ba67829eef9133e96d5cc5e63a7cf1049efb5b41c4d34c6412f6314d",
+    "Flock.Firewall.Contract.Transcript.schedule": "0788ae2c390c697c3bf057d074284e1874608b79c71f3a33e17c7587ba3628d3",
+    "Flock.Firewall.Contract.Verdict": "0f9c18de251c518b140cec914ee800e0cc7f8451f8a5d0f0bb21e657c04bdb81",
+    "Flock.Firewall.Contract.Verdict.accepted": "49b3f5069d9448f44fbb62bea541f5c15d83aa19936218fd78b3b1b167e04567",
+    "Flock.Firewall.Contract.Verdict.cut": "85ea441c0e09bd7619af0e21b9c1e0150a6094bf8c432e9b01b39fcfa84883e4",
+    "Flock.Firewall.Contract.bytesEq": "c4b29028da21ff73831875115b5c900a548873834563a21b2b3bf2144cd2cb56",
+    "Flock.Firewall.Contract.commitBC": "27bd408fc640be0ed9d38299371f18e5bfe8548c6fe5c866c16d0dae82f44c52",
+    "Flock.Firewall.Contract.firewallLeaf": "85ec0ae3bae80e71880fb9c7d41e63ac3a27d555d4135552e55bebe33d52fdac",
+    "Flock.Firewall.Contract.go": "e7086ac9f1f68413e1905f59c9e9ddc26d32cb8e4c2c9fae5c09548af48b24b5",
+    "Flock.Firewall.Contract.instDecidableEqBy": "d8bded98b6827c75340e860300281b93def8742dea5fea1245961f7ddc6b85dd",
+    "Flock.Firewall.Contract.instReprBy.repr": "2574e8aeb412e3c7de5f0afe1c2bfda9e04d441ab96fe09142fbd67237f30675",
+    "Flock.Firewall.Contract.need": "6b4de406b9b94627197f7ff5799c90ad473e2c802b1dff66074f1282aee15087",
+    "Flock.Firewall.Contract.run": "30198e1b19b02f3ffe8a5c4af2eb13ee5820ac2b18104c4ea9248761c5eb2f49",
+    "Flock.Firewall.Contract.scheduled": "1e27e107947dfa9f9df628f9e5b7a8f842b777d61581eea5f90f7b7c354487a7",
+    "Flock.Firewall.Contract.step": "4c29966b1626582c2aeafe438f80f2e8f82b02b0fc000713edd817e628c249a3",
+    "Flock.Firewall.Contract.streams": "3c51543d9d99b53c9df37585e56bd589e341a0b9f1681ca15e621d2e2f2e36a7",
+    "_private.Flock.Firewall.Contract.0.Flock.Firewall.Contract.canonBytes": "be796eca9f941ff1425bb1e8566cd8e5d7049a9a30859c4ba3a83c70a9489289",
+    "_private.Flock.Firewall.Contract.0.Flock.Firewall.Contract.field": "dcb171c437411d4dca3aa64f4b9002ffbca0cec5af2ba02f856e04fa28f7b43a"
+   },
+   "guarantees": [
+    "Flock.Firewall.Contract.firewallLeaf_eq",
+    "Flock.Firewall.Contract.holds_coins",
+    "Flock.Firewall.Contract.holds_commit",
+    "Flock.Firewall.Contract.holds_computed",
+    "Flock.Firewall.Contract.holds_finish",
+    "Flock.Firewall.Contract.holds_fixed",
+    "Flock.Firewall.Contract.holds_masked"
+   ]
+  },
   "Flock.Hash": {
    "digest": "cb1439cd1bfd5c1ea74e6e395d1c9a2bccc42b7d32869ac54843ee560264d28d",
    "definitions": {
@@ -349,28 +556,60 @@
     "Flock.Sha512.k": "da498b32594a0b1a4c2a2f530afba05bbe3d5cfb74500e02f338bb3f8ad29992",
     "Flock.Sha512.rotr": "c2cd7489ff2877fb65640d82519ba0815a2815bf1dfd3106f95568aeed0b3ec1"
    },
-   "guarantees": ["Flock.HmNets.check_ok", "Flock.HmNets.hm96Net_get", "Flock.HmNets.sha512x3Net_get"]
+   "guarantees": [
+    "Flock.Firewall.Contract.firewallLeaf_eq",
+    "Flock.Firewall.Contract.holds_coins",
+    "Flock.Firewall.Contract.holds_commit",
+    "Flock.Firewall.Contract.holds_computed",
+    "Flock.Firewall.Contract.holds_finish",
+    "Flock.Firewall.Contract.holds_fixed",
+    "Flock.Firewall.Contract.holds_masked",
+    "Flock.HmNets.check_ok",
+    "Flock.HmNets.hm96Net_get",
+    "Flock.HmNets.sha512x3Net_get"
+   ]
   },
   "Flock.Hm96": {
-   "digest": "0c09b1fe4c2bfeb36685f32133844397d4a49f41c48a887562125390de1a4d96",
+   "digest": "434e061ba6043f67b1f102cb1d4987327e8733cb0697ddd3e5a6902050fd71f5",
    "definitions": {
     "Flock.Hm96": "9299d56f48ec1fe9ffe26a3c2ae97f2544bd71066ec39dc147ddfeeaac88b068",
+    "Flock.Hm96.Default512.cols": "b5f41149ed2758c8199a851a93515d93b278f79526f0b98ff141a0c681075e98",
+    "Flock.Hm96.Default512.commitString": "5dad889b4ea7e3885ee79079583e51c2cfacb38fbd78801356f7cb7416dad3b3",
     "Flock.Hm96.Default512.key": "aaa3fcd05add439c302181a5f6544a79f9ffc0be18f3c423a6d4eef57982aaca",
+    "Flock.Hm96.Default512.leaf": "16c77c6efa5a60f3b36ebf66713f27c5da57d809317e9fe8cbdee0565b79348e",
+    "Flock.Hm96.Default512.leafPrefix": "1a086741c7bba1f2244a36b5c3381c64f3c3fb3f9369a8ab1b5dc6d5b38ec919",
+    "Flock.Hm96.Default512.mask": "7c388df159b102981a7f684ad20ae3233939e61b6b3423fcca5786299c402a2d",
     "Flock.Hm96.Default512.saltPrefix": "32dbba4cd558f09b46d78bf72dbd4827dca5ea107a1f63607ce8b7229534eb2a",
+    "Flock.Hm96.Default512.tables": "48dba400e24d883b4f333dc38b9aa77b5c369f118b2e7fe7d6e40e20794fb113",
+    "Flock.Hm96.Default512.treeLeaf": "886a3e72ac719884f3279e68e57053ea4ad601cbe0d7b9045cb59d1b44739423",
     "Flock.Hm96.bit": "e8513a45187947c21f7d5f30dc129d7f8a382342eb2b52b442c7afa4d4d9cb20",
+    "Flock.Hm96.block": "edd875eeaf0fac2a97be31553bb8dbf5d1cb32b28783ba0b4d3b5d9d770dd7e6",
     "Flock.Hm96.digestBytes": "896455bbe4e4c2a31506dc22e14b9c659a418f2412e102cb4973d06c213c91e2",
     "Flock.Hm96.hash": "6ffe8d908366200b9a00d4169e034e8466b463c00629bf93ac41778ed9bff40a",
     "Flock.Hm96.keyBits": "c8a27e1adef2f45fb0b4e57a101dfa73a14f9838c2402547b0638ff9e735c5d7",
     "Flock.Hm96.keyBytes": "a4e8ee32d0e00544e9f1ddd7a574aaa5ef6b7078a81adf175b346f67004b92b5",
     "Flock.Hm96.keyFromLabel": "e9d3ee926e03fb61fae85e126d5994ddcd49718f027250ad866adf6de96b6cfa",
     "Flock.Hm96.keyLabel": "09f4964c0e4affbbb7256c913214a53e275a72a86ccceb7504fb4b048d4a0670",
+    "Flock.Hm96.leafPrefix": "dc732df8f4e5dcf90d70a0fa683cf40f1223de03a3f755e0155fb6d03b9053a6",
+    "Flock.Hm96.leafTag": "24e7d113a4302837e23275406787913b82a501611bf80255493801c98c77c5cd",
     "Flock.Hm96.pad": "ee7a3dfc698cb952ce512be3d1c0d6b79b13af6f4e57ee80fa10457b2cf07378",
     "Flock.Hm96.saltBytes": "133f5d9a1200f192e8c0c8c7c1eb3c6a117adba366c503db9d40d64e53a6aaea",
     "Flock.Hm96.saltTag": "bb9e6c8c8e922d69d92c98c240665696dd7f210c105814cf4e60c4156f4c3da2",
     "Flock.Hm96.sha512": "f32b7f14f94d7e1c0097b1d74d263d345ed57f484b1fd5c1c9ef31dcd0e84428",
+    "_private.Flock.Hm96.0.Flock.Hm96.Default512.keyBit": "8093b686534510973e90360c1868f8d33f1d8209b2471ad540d17f90fe41c0ff",
     "_private.Flock.Hm96.0.Flock.Hm96.tag": "824dbcae40eb3817e77d8bdc91e1a12f0b1fe7ccbebc0be5d3097e7c4fc436eb"
    },
-   "guarantees": ["Flock.HmNets.check_ok", "Flock.HmNets.hm96Net_get"]
+   "guarantees": [
+    "Flock.Firewall.Contract.firewallLeaf_eq",
+    "Flock.Firewall.Contract.holds_coins",
+    "Flock.Firewall.Contract.holds_commit",
+    "Flock.Firewall.Contract.holds_computed",
+    "Flock.Firewall.Contract.holds_finish",
+    "Flock.Firewall.Contract.holds_fixed",
+    "Flock.Firewall.Contract.holds_masked",
+    "Flock.HmNets.check_ok",
+    "Flock.HmNets.hm96Net_get"
+   ]
   },
   "Flock.HmNets": {
    "digest": "3b5874b39edb63df11df576d9cb94fe0fd9e9e3aac6b56538f3a22e5d3551240",
