@@ -24,7 +24,9 @@ decides each candidate as it comes; so does `run`. The first item that breaks th
 stops the session, nothing after it leaves, and the auditor sees a stop. A session is accepted when every item may leave
 and the last one is `finish`; one that ends without `finish` is a stop at its end.
 
-The transcript's JSON form is `Transcript.ofJson`'s; `flock-firewall check FILE…` prints `run`'s verdict for each file.
+`holds_commit`, `holds_masked`, `holds_fixed`, `holds_coins` and `holds_finish` say what an accepted session lets out, in
+those terms. The transcript's JSON form is `Transcript.ofJson`'s; `flock-firewall check FILE…` prints `run`'s verdict for
+each file.
 -/
 import Flock.Canon
 import Flock.Hm96
@@ -254,6 +256,136 @@ def run (t : Transcript) : Verdict := go t (State.init t) t.items.toList 0
 
 /-- The contract holds of the transcript: every item may leave, and the session ends with `finish`. -/
 def Holds (t : Transcript) : Prop := (run t).accepted = true
+
+/-! ## What an accepted session lets out -/
+
+/-- Every item of a list `go` lets through whole is one `step` takes from some state before Finish. -/
+theorem go_steps {t : Transcript} : ∀ {s : State} {l : List Item} {n : Nat},
+    (go t s l n).cut = none → ∀ it ∈ l, ∃ s₀ s₁, s₀.finished = false ∧ step t s₀ it = .ok s₁
+  | s, [], n, _ => by intro it h; cases h
+  | s, it :: rest, n, h => by
+    unfold go at h
+    split at h
+    · simp at h
+    · rename_i hf
+      split at h
+      · rename_i s' hs
+        intro x hx
+        cases hx with
+        | head => exact ⟨s, s', by simpa using hf, hs⟩
+        | tail _ hx => exact go_steps h x hx
+      · simp at h
+
+/-- (a) item by item: a commitment leaves only as `b ‖ c` of its message under a drawn salt of 192 bytes, unused and
+unseen by the workers. -/
+theorem step_commit {t : Transcript} {s s' : State} {msg : ByteArray} {i : Nat} {sent : ByteArray}
+    (h : step t s (.commit msg i sent) = .ok s') :
+    i < t.salts.size ∧ s.usedSalt[i]! = false ∧ i ∉ t.exposedSalts ∧ (t.salts[i]!).size = SALT_BYTES ∧
+      sent.data = (commitBC msg t.salts[i]!).data := by
+  simp only [step, need, bind, Except.bind] at h
+  repeat' (split at h <;> try simp_all [pure, Except.pure, throw, throwThe, MonadExceptOf.throw])
+  all_goals simp_all [bytesEq]
+
+
+/-- (b) item by item: a masked value leaves only under a drawn pad, unused and unseen by the workers. -/
+theorem step_masked {t : Transcript} {s s' : State} {v : F128} {p : Nat} {sent : F128}
+    (h : step t s (.masked v p sent) = .ok s') :
+    p < t.pads.size ∧ s.usedPad[p]! = false ∧ p ∉ t.exposedPads ∧ sent = v + t.pads[p]! := by
+  simp only [step, need, bind, Except.bind] at h
+  repeat' (split at h <;> try simp_all [pure, Except.pure, throw, throwThe, MonadExceptOf.throw])
+
+/-- The workers' coins are the challenger's. -/
+theorem step_coins {t : Transcript} {s s' : State} {stream : String} {k : Nat} {cs relayed opening : Array F128}
+    (h : step t s (.coins stream k cs relayed opening) = .ok s') : relayed = cs := by
+  simp only [step, need, bind, Except.bind] at h
+  repeat' (split at h <;> try simp_all [pure, Except.pure, throw, throwThe, MonadExceptOf.throw])
+
+/-- (c) item by item: a fixed value leaves only as the schedule derives it (`By.schedule`) or as the value the transcript
+reports fixing it, and after every pad it depends on has passed every relation. -/
+theorem step_fixed {t : Transcript} {s s' : State} {what : String} {src : By} {want sent : ByteArray} {ps : Array Nat}
+    (h : step t s (.fixed what src want sent ps) = .ok s') :
+    (src = .schedule → ∃ sched w o, t.schedule = some sched ∧ scheduled sched s.order what = .ok (w, o) ∧
+      sent.data = w.data) ∧
+    (src ≠ .schedule → sent.data = want.data) ∧ ∀ p ∈ ps, s.usedPad.getD p false = true ∧ s.checked t p = true := by
+  simp only [step, need, bind, Except.bind] at h
+  repeat' (split at h <;> try simp_all [pure, Except.pure, throw, throwThe, MonadExceptOf.throw])
+  all_goals simp_all [bytesEq, Array.mem_iff_getElem]
+  all_goals rename_i _ hp
+  · exact ⟨⟨_, ⟨_, rfl⟩, rfl⟩, fun p i hi e => e ▸ hp i hi⟩
+  · exact fun p i hi e => e ▸ hp i hi
+
+theorem step_finished {t : Transcript} {s s' : State} {it : Item} (h : step t s it = .ok s') (hit : it ≠ .finish) :
+    s'.finished = s.finished := by
+  cases it <;> simp only [step, need, bind, Except.bind] at h
+  all_goals repeat' (split at h <;> try simp_all [pure, Except.pure, throw, throwThe, MonadExceptOf.throw])
+  all_goals (subst h; rfl)
+
+/-- A list `go` lets through whole, from a state before Finish, ends with Finish. -/
+theorem go_last {t : Transcript} : ∀ {s : State} {l : List Item} {n : Nat},
+    (go t s l n).cut = none → s.finished = false → l.getLast? = some .finish
+  | s, [], n, h, hf => by simp [go, hf] at h
+  | s, it :: rest, n, h, hf => by
+    unfold go at h
+    simp only [hf, Bool.false_eq_true, ↓reduceIte] at h
+    split at h
+    · rename_i s' hs
+      cases rest with
+      | nil =>
+        have h1 : s'.finished = true := by
+          unfold go at h; split at h <;> simp_all
+        by_cases hit : it = .finish
+        · simp [hit]
+        · have := step_finished hs hit; simp_all
+      | cons x xs =>
+        have hf' : s'.finished = false := by
+          unfold go at h; split at h
+          · simp at h
+          · simp_all
+        have := go_last h hf'
+        simpa [List.getLast?_cons_cons] using this
+    · simp at h
+
+theorem holds_go {t : Transcript} (h : Holds t) : (go t (State.init t) t.items.toList 0).cut = none := by
+  simpa [Holds, run, Verdict.accepted, Option.isNone_iff_eq_none] using h
+
+/-- An accepted session ends with Finish: a session that stops is never accepted. -/
+theorem holds_finish {t : Transcript} (h : Holds t) : t.items.toList.getLast? = some .finish :=
+  go_last (holds_go h) rfl
+
+/-- (a) on an accepted session: every commitment that left is hm96-sha512's `b ‖ c` of its message under a salt the
+firewall drew, of 192 bytes, that the workers never saw (`firewallLeaf` is its tree leaf). -/
+theorem holds_commit {t : Transcript} (h : Holds t) {msg : ByteArray} {i : Nat} {sent : ByteArray}
+    (hm : Item.commit msg i sent ∈ t.items.toList) :
+    i < t.salts.size ∧ i ∉ t.exposedSalts ∧ (t.salts[i]!).size = SALT_BYTES ∧ sent.data = (commitBC msg t.salts[i]!).data := by
+  obtain ⟨_, _, -, hs⟩ := go_steps (holds_go h) _ hm
+  obtain ⟨a, -, b, c, d⟩ := step_commit hs
+  exact ⟨a, b, c, d⟩
+
+/-- (b) on an accepted session: every masked value that left is its value plus a pad the firewall drew that the workers
+never saw. -/
+theorem holds_masked {t : Transcript} (h : Holds t) {v : F128} {p : Nat} {sent : F128}
+    (hm : Item.masked v p sent ∈ t.items.toList) : p < t.pads.size ∧ p ∉ t.exposedPads ∧ sent = v + t.pads[p]! := by
+  obtain ⟨_, _, -, hs⟩ := go_steps (holds_go h) _ hm
+  obtain ⟨a, -, b, c⟩ := step_masked hs
+  exact ⟨a, b, c⟩
+
+/-- On an accepted session the workers received exactly the challenger's coins. -/
+theorem holds_coins {t : Transcript} (h : Holds t) {stream : String} {k : Nat} {cs relayed opening : Array F128}
+    (hm : Item.coins stream k cs relayed opening ∈ t.items.toList) : relayed = cs := by
+  obtain ⟨_, _, -, hs⟩ := go_steps (holds_go h) _ hm
+  exact step_coins hs
+
+/-- (c) on an accepted session: every fixed value that left is the schedule's own (`scheduled`), or for the other
+sources the value the transcript reports fixing it. -/
+theorem holds_fixed {t : Transcript} (h : Holds t) {what : String} {src : By} {want sent : ByteArray} {ps : Array Nat}
+    (hm : Item.fixed what src want sent ps ∈ t.items.toList) :
+    (src = .schedule → ∃ sched o w o', t.schedule = some sched ∧ scheduled sched o what = .ok (w, o') ∧ sent.data = w.data) ∧
+    (src ≠ .schedule → sent.data = want.data) := by
+  obtain ⟨s, _, -, hs⟩ := go_steps (holds_go h) _ hm
+  obtain ⟨a, b, -⟩ := step_fixed hs
+  refine ⟨fun e => ?_, b⟩
+  obtain ⟨sched, w, o', h1, h2, h3⟩ := a e
+  exact ⟨sched, s.order, w, o', h1, h2, h3⟩
 
 /-! ## The transcript's JSON form -/
 

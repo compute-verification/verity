@@ -36,6 +36,12 @@
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
+  "Flock.Firewall.firewallLeaf_eq": {"owner": "@firewall-contract"},
+  "Flock.Firewall.holds_coins": {"owner": "@firewall-contract"},
+  "Flock.Firewall.holds_commit": {"owner": "@firewall-contract"},
+  "Flock.Firewall.holds_finish": {"owner": "@firewall-contract"},
+  "Flock.Firewall.holds_fixed": {"owner": "@firewall-contract"},
+  "Flock.Firewall.holds_masked": {"owner": "@firewall-contract"},
   "Flock.CircuitType.check_ok": {
    "owner": "@proofs",
    "signature": [
