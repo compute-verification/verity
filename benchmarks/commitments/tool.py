@@ -111,17 +111,22 @@ def parse_vllm_pu(argv: list[str]) -> dict:
     ap.add_argument("--lat-reqs", type=int, default=5)
     ap.add_argument("--micro", action="store_true")
     ap.add_argument("--verify", action="store_true")
+    ap.add_argument("--max-model-len", type=int, default=4096)
+    ap.add_argument("--models", default="llama31-8b,qwen3-8b,qwen3-30b-a3b,glm47-flash")
+    ap.add_argument("--grans", default="none,coarse,fine,staged")
+    ap.add_argument("--batches", default="1,8,32,128")
+    ap.add_argument("--seeds", default="0,1,2")
     ns, _ = ap.parse_known_args([a for a in argv if not a.endswith(("python", "python3", "pu_bench.py"))])
     return vars(ns)
 
 
 VLLM_PU_COMMIT = Tool(
     name="vllm_pu_commit",
-    version="1",
+    version="2",
     command=["python", "benchmarks/commitments/vllm_pu/pu_bench.py"],
     closure=["benchmarks/commitments/vllm_pu/**"],
     key_params=["mode", "model", "arms", "rounds", "max_num_seqs", "input_len", "output_len", "num_prompts", "lat_reqs", "micro",
-                "verify"],
+                "verify", "max_model_len", "models", "grans", "batches", "seeds"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse_vllm_pu,
 )

@@ -11,6 +11,8 @@ its own engine process; a round runs every arm once, in a rotated order, on one 
     python pu_bench.py verify --out OUT [--arm retain]  # a prefill and a decode step's leaves and root against hashlib
     python pu_bench.py arm --arm A --round R --out OUT  # one engine: throughput workload, then batch-1 latency
     python pu_bench.py summarize OUT... > summary.md    # arm x workload table over every round found
+    python pu_bench.py sweep --deadline 2026-10-06T13:55Z  # model x granularity x batch x seed cells, resumable via --state
+    python pu_bench.py summarize-cells DIR...           # their table
 
 Workloads: ``vllm bench throughput``'s random dataset run through the offline API (random token ids, ``ignore_eos``,
 temperature 1, top_p 1): input 1024, output 256, ``--num-prompts`` at once; then batch 1, input 1024, output 256,
@@ -20,6 +22,7 @@ TPOT = (median latency at 256 output tokens - median latency at 1) / 255, distin
 from __future__ import annotations
 
 import argparse
+import calendar
 import json
 import os
 import statistics
@@ -75,13 +78,13 @@ def micro(args) -> int:
     dev = torch.device("cuda")
     check = _self_check(P, dev)
     big = 2 << 30
-    x = torch.randint(-(1 << 15), 1 << 15, (big // 2,), dtype=torch.int16, device=dev)
+    x = torch.randint(-(1 << 15), 1 << 15, (big // P.CHUNK, P.CHUNK // 2), dtype=torch.int16, device=dev)
     n = big // P.CHUNK
     st = P.State(ring_leaves=n + 1024, keep_bytes=0)
     t_leaf = _cuda_time(lambda: st.leaf(x, 0, 0))
     t_fold = _cuda_time(lambda: st.finalize(n, big))
     keep = P.State(ring_leaves=(1 << 30) // P.CHUNK + 1024, keep_bytes=1 << 30)
-    x1 = x[: (1 << 30) // 2]
+    x1 = x[: (1 << 30) // P.CHUNK]
     t_keep = _cuda_time(lambda: keep.leaf(x1, 0, 0))
     src = torch.empty(1 << 30, dtype=torch.uint8, device=dev)
     pinned = torch.empty(1 << 30, dtype=torch.uint8, pin_memory=True)
@@ -98,7 +101,7 @@ def micro(args) -> int:
     # per-site cost inside a CUDA graph: 288 sites (Llama-8B's fine arm) of one decode step at batch 1 (8 KiB) and 256 (2 MiB)
     per_site = {}
     for label, nbytes in (("8KiB", 8192), ("2MiB", 2 << 20)):
-        xs = x[: nbytes // 2]
+        xs = x[: nbytes // P.CHUNK]
         cnt = nbytes // P.CHUNK
         g = torch.cuda.CUDAGraph()
         s = torch.cuda.Stream()
@@ -121,11 +124,12 @@ def micro(args) -> int:
     return 0 if check["ok"] else 1
 
 
+LLAMA8B_FINE = (("in_norm", 4096), ("qkv", 6144), ("attn", 4096), ("o_proj", 4096), ("post_norm", 4096),
+                ("resid_post", 4096), ("gate_up", 28672), ("act", 14336), ("down", 4096))
+
+
 def _llama8b_layout(P, tokens: int):
-    from types import SimpleNamespace
-    hf = SimpleNamespace(hidden_size=4096, num_attention_heads=32, num_key_value_heads=8, head_dim=128,
-                         intermediate_size=14336, num_hidden_layers=32)
-    return P.Layout(P.FINE, P.site_widths(hf), hf.num_hidden_layers, tokens)
+    return P.Layout([(f"{l}.{n}", 2 * w) for l in range(32) for n, w in LLAMA8B_FINE], tokens)
 
 
 def _graph_step(P, dev) -> dict:
@@ -135,13 +139,12 @@ def _graph_step(P, dev) -> dict:
     out = {}
     for tokens in (1, 256):
         lay = _llama8b_layout(P, tokens)
-        xs = [[torch.randn(tokens, w, device=dev, dtype=torch.bfloat16) for w in lay.widths] for _ in range(lay.layers)]
+        xs = [torch.randn(tokens, w // 2, device=dev, dtype=torch.bfloat16) for w in lay.bytes_per_token]
         n = tokens * lay.chunks_per_token
         for arm, st in (("fine", P.State(n + 1024, 0)), ("staged", P.State(n + 1024, 0, lay))):
             def step():
-                for l in range(lay.layers):
-                    for k in range(len(lay.names)):
-                        st.leaf(xs[l][k], l * len(lay.names) + k, tokens * lay.chunk_offset[l][k])
+                for s, x in enumerate(xs):
+                    st.leaf(x, s, tokens * lay.chunk_offset[s])
                 st.finalize(n, n * P.CHUNK)
             g = torch.cuda.CUDAGraph()
             s = torch.cuda.Stream()
@@ -157,33 +160,35 @@ def _graph_step(P, dev) -> dict:
 
 
 def _self_check_staged(P, dev) -> dict:
-    """The staged path (one site staged, one hashed directly) against hashlib."""
+    """The staged path (sites staged, hashed directly, and zero-padded to whole chunks: an fp32 site of 50 elements) against
+    hashlib."""
     import torch
     keep_min = P.DIRECT_MIN
     P.DIRECT_MIN = 10
     try:
-        lay = P.Layout(("a", "b"), {"a": 128, "b": 384}, 2, 8)
+        specs = [("0.a", 256, torch.bfloat16), ("0.b", 768, torch.bfloat16), ("0.c", 200, torch.float32),
+                 ("1.a", 256, torch.bfloat16), ("1.b", 768, torch.bfloat16), ("1.c", 200, torch.float32)]
+        lay = P.Layout([(n, w) for n, w, _ in specs], 8)
         T = 5
         n = T * lay.chunks_per_token
-        st = P.State(60, 0, lay)
+        st = P.State(80, 0, lay)
         st.ctr[0] = 41
-        xs = {}
-        for l in range(lay.layers):
-            for k in range(2):
-                x = torch.randint(-(1 << 15), 1 << 15, (T, lay.widths[k]), dtype=torch.int16, device=dev).view(torch.bfloat16)
-                xs[l, k] = x
-                st.leaf(x, l * 2 + k, T * lay.chunk_offset[l][k])
+        xs = []
+        for s, (_, w, dt) in enumerate(specs):
+            x = torch.randint(0, 256, (T, w), dtype=torch.uint8, device=dev).view(dt)
+            xs.append(x)
+            st.leaf(x, s, T * lay.chunk_offset[s])
         st.finalize(n, n * P.CHUNK)
         torch.cuda.synchronize()
         leaves = []
-        for l in range(lay.layers):
-            for k in range(2):
-                b = xs[l, k].cpu().view(torch.int16).numpy().tobytes()
-                cnt = len(b) // P.CHUNK
-                leaves += [P.leaf(l * 2 + k, ci, cnt, b[ci * P.CHUNK:(ci + 1) * P.CHUNK]) for ci in range(cnt)]
+        for s, x in enumerate(xs):
+            c = lay.site_chunks[s]
+            b = b"".join(r.tobytes() + bytes(c * P.CHUNK - len(r.tobytes())) for r in x.cpu().view(torch.uint8).numpy())
+            cnt = T * c
+            leaves += [P.leaf(s, ci, cnt, b[ci * P.CHUNK:(ci + 1) * P.CHUNK]) for ci in range(cnt)]
         root = st.record(0)[0]
-        return {"ok": root == P.fold(leaves), "root": root.hex(), "leaves": n, "staged_sites": "a (5 chunks)",
-                "direct_sites": "b (15 chunks)"}
+        return {"ok": root == P.fold(leaves), "root": root.hex(), "leaves": n, "staged_sites": "a, c (5 chunks)",
+                "direct_sites": "b (15 chunks)", "padded_sites": "c (200 B per token)"}
     finally:
         P.DIRECT_MIN = keep_min
 
@@ -194,7 +199,7 @@ def _self_check(P, dev) -> dict:
     counts = (7, 1, 300)
     st = P.State(ring_leaves=400, keep_bytes=500 * P.CHUNK)
     st.ctr[0], st.ctr[1] = 350, 450
-    xs = [torch.randint(-(1 << 15), 1 << 15, (c * P.CHUNK // 2,), dtype=torch.int16, device=dev) for c in counts]
+    xs = [torch.randint(-(1 << 15), 1 << 15, (c, P.CHUNK // 2), dtype=torch.int16, device=dev) for c in counts]
     off = 0
     for site, x in enumerate(xs):
         st.leaf(x, site, off)
@@ -213,7 +218,8 @@ def _self_check(P, dev) -> dict:
 
 def _llm(args):
     from vllm import LLM
-    return LLM(model=args.model, max_num_seqs=args.max_num_seqs, worker_extension_cls="pu_ext.PUExt", seed=0)
+    return LLM(model=args.model, max_num_seqs=args.max_num_seqs, worker_extension_cls="pu_ext.PUExt", seed=0,
+               max_model_len=args.max_model_len)
 
 
 def _prompts(seed: int, n: int, length: int, vocab: int) -> list[dict]:
@@ -335,11 +341,11 @@ def _child(args, mode: list[str], arm_name: str, log: Path) -> int:
     env = dict(os.environ)
     env.pop("VLLM_BATCH_INVARIANT", None)
     env.update(VLLM_PU_ARM=arm_name, PYTHONPATH=f"{HERE}{os.pathsep}{env.get('PYTHONPATH', '')}",
-               VLLM_CACHE_ROOT=str(Path(args.scratch) / f"vllm-{arm_name}"),
+               VLLM_CACHE_ROOT=str(Path(args.scratch) / f"vllm-{arm_name}"), VLLM_DISABLE_COMPILE_CACHE="1",
                TORCH_EXTENSIONS_DIR=str(Path(args.scratch) / "torch-ext"), TRITON_CACHE_DIR=str(Path(args.scratch) / "triton"))
     cmd = [sys.executable, str(HERE / "pu_bench.py"), *mode, "--out", args.out, "--model", args.model,
            "--max-num-seqs", str(args.max_num_seqs), "--input-len", str(args.input_len), "--output-len", str(args.output_len),
-           "--num-prompts", str(args.num_prompts), "--lat-reqs", str(args.lat_reqs)]
+           "--num-prompts", str(args.num_prompts), "--lat-reqs", str(args.lat_reqs), "--max-model-len", str(args.max_model_len)]
     print(f"[pu_bench] {' '.join(mode)} arm={arm_name} -> {log}", flush=True)
     t = time.time()
     with log.open("w") as f:
@@ -391,6 +397,226 @@ def run(args) -> int:
     return rc
 
 
+MODELS = {"llama31-8b": "unsloth/Meta-Llama-3.1-8B-Instruct", "qwen3-8b": "Qwen/Qwen3-8B",
+          "qwen3-30b-a3b": "Qwen/Qwen3-30B-A3B", "glm47-flash": "zai-org/GLM-4.7-Flash"}
+GRANS = {"none": "control", "coarse": "coarse", "fine": "fine", "staged": "staged"}
+HUBS = ("/workspace/hf/hub", "/workspace/jobs/hf/hub")
+
+
+def resolve(model_id: str) -> Path | None:
+    """The complete local snapshot of ``model_id`` (every shard its index names), or None."""
+    hubs = [Path(os.environ["HF_HOME"]) / "hub"] if os.environ.get("HF_HOME") else []
+    for hub in [*hubs, *map(Path, HUBS)]:
+        snaps = hub / f"models--{model_id.replace('/', '--')}" / "snapshots"
+        for snap in sorted(snaps.glob("*")) if snaps.is_dir() else []:
+            idx = snap / "model.safetensors.index.json"
+            shards = set(json.loads(idx.read_text())["weight_map"].values()) if idx.exists() else {"model.safetensors"}
+            if (snap / "config.json").exists() and all((snap / s).exists() for s in shards):
+                return snap
+    return None
+
+
+def _cell_name(model: str, gran: str, b: int, seed: int) -> str:
+    return f"{model}__{gran}__b{b}__s{seed}.json"
+
+
+def _gen(llm, prompts, sp) -> float:
+    t = time.perf_counter()
+    outs = llm.generate(prompts, sp, use_tqdm=False)
+    dt = time.perf_counter() - t
+    assert all(len(o.outputs[0].token_ids) == sp.max_tokens for o in outs), "a request stopped early"
+    return dt
+
+
+def cells(args) -> int:
+    """One engine (``--model-key``, ``--gran``, ``--seed``): for each batch b of ``--batches`` not yet in the state dir,
+    waves of b concurrent requests (distinct random prompts, ``ignore_eos``, temperature 1): ``reps`` waves of
+    ``output_len`` tokens and ``reps`` of one token, interleaved.  TPOT at b = (median full wave - median one-token wave) /
+    (output_len - 1); output tok/s = b * output_len / median full wave.  Each finished cell is written at once."""
+    from vllm import LLM, SamplingParams
+    state, out = Path(args.state) / "cells", Path(args.out) / "cells"
+    state.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
+    t0 = time.perf_counter()
+    llm = LLM(model=args.model, max_num_seqs=max(args.batches), max_model_len=args.max_model_len, seed=args.seed,
+              gpu_memory_utilization=args.gpu_mem, worker_extension_cls="pu_ext.PUExt")
+    init_s = time.perf_counter() - t0
+    rpc = lambda m, *a: llm.collective_rpc(m, args=a)[0]  # noqa: E731
+    vocab = llm.get_tokenizer().vocab_size
+    s_init = rpc("pu_stats")
+    eng = _engine(llm, s_init)
+    blocks, bs = s_init["num_gpu_blocks"], s_init["block_size"]
+    rc = 0
+    for b in args.batches:
+        name = _cell_name(args.model_key, args.gran, b, args.seed)
+        if (state / name).exists():
+            continue
+        in_len = args.input_len
+        while in_len > 64 and b * -(-(in_len + args.output_len + 1) // bs) > blocks:
+            in_len -= 64
+        reps = 5 if b == 1 else 3
+        try:
+            _gen(llm, _prompts([args.seed, b, 99], b, in_len, vocab), SamplingParams(max_tokens=8, ignore_eos=True))
+            s0 = rpc("pu_stats")
+            full, one = [], []
+            sp = SamplingParams(temperature=1.0, top_p=1.0, ignore_eos=True, max_tokens=args.output_len)
+            sp1 = SamplingParams(temperature=1.0, top_p=1.0, ignore_eos=True, max_tokens=1)
+            for r in range(reps):
+                full.append(_gen(llm, _prompts([args.seed, b, r, 0], b, in_len, vocab), sp))
+                one.append(_gen(llm, _prompts([args.seed, b, r, 1], b, in_len, vocab), sp1))
+            s1 = rpc("pu_stats", s0.get("steps"))
+        except Exception as e:  # noqa: BLE001 - a cell that cannot run is recorded and the engine moves on
+            rc = 1
+            _write(out / f"failed__{name}", {"error": repr(e)[:4000], "batch": b, "input_len": in_len})
+            print(f"[cells] {name} failed: {e!r}", flush=True)
+            continue
+        lf, lo = statistics.median(full), statistics.median(one)
+        tpot = (lf - lo) / (args.output_len - 1)
+        res = {"model": args.model_key, "model_path": args.model, "gran": args.gran, "arm": GRANS[args.gran], "batch": b,
+               "seed": args.seed, "input_len": in_len, "input_len_requested": args.input_len, "output_len": args.output_len,
+               "reps": reps, "full_wave_s": full, "one_token_wave_s": one, "full_wave_median_s": lf,
+               "one_token_wave_median_s": lo, "tpot_ms": tpot * 1e3, "output_tps": b * args.output_len / lf,
+               "decode_tps": b / tpot, "kv_tokens": blocks * bs, "commit": _window(s0, s1), "gpu": gpu_info(),
+               "versions": _versions(), "engine": eng, "init_s": init_s, "sites": s_init.get("sites"),
+               "layout": s1.get("layout"), "untraced": s1.get("untraced"), "ring_bytes": s1.get("ring_bytes"),
+               "stage_bytes": s1.get("stage_bytes"), "finished_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        if GRANS[args.gran] != "control" and not (res["commit"] and res["commit"]["steps"] > 0 and res["sites"]):
+            rc = 1
+            _write(out / f"failed__{name}", {"error": "no commitment steps recorded", **res})
+            continue
+        _write(out / name, res)
+        _write(state / name, res)
+        print(f"[cells] {name}: {res['output_tps']:.1f} tok/s, TPOT {res['tpot_ms']:.2f} ms, in {in_len}", flush=True)
+    return rc
+
+
+def _cells_child(args, model_key: str, path: Path, gran: str, seed: int, batches: list[int], log: Path) -> int:
+    env = dict(os.environ)
+    env.pop("VLLM_BATCH_INVARIANT", None)
+    scratch = Path(args.scratch)
+    env.update(VLLM_PU_ARM=GRANS[gran], PYTHONPATH=f"{HERE}{os.pathsep}{env.get('PYTHONPATH', '')}",
+               VLLM_CACHE_ROOT=str(scratch / f"vllm-{model_key}-{gran}"), VLLM_DISABLE_COMPILE_CACHE="1",
+               TORCH_EXTENSIONS_DIR=str(Path(args.state) / "torch-ext"), TRITON_CACHE_DIR=str(Path(args.state) / "triton"))
+    cmd = [sys.executable, str(HERE / "pu_bench.py"), "cells", "--out", args.out, "--state", args.state, "--model", str(path),
+           "--model-key", model_key, "--gran", gran, "--seed", str(seed), "--batches", ",".join(map(str, batches)),
+           "--input-len", str(args.input_len), "--output-len", str(args.output_len), "--max-model-len", str(args.max_model_len),
+           "--gpu-mem", str(args.gpu_mem)]
+    print(f"[sweep] {model_key} {gran} seed {seed} batches {batches} -> {log}", flush=True)
+    t = time.time()
+    with log.open("w") as f:
+        rc = subprocess.run(cmd, env=env, stdout=f, stderr=subprocess.STDOUT).returncode
+    print(f"[sweep] rc={rc} in {time.time() - t:.0f} s", flush=True)
+    return rc
+
+
+def sweep(args) -> int:
+    """Every (model, granularity, batch, seed) cell not yet in ``--state``: per model, a staged verify once, then per seed
+    one engine per granularity (order rotated by seed, reversed on odd seeds) running that seed's missing batches.  Stops
+    starting engines when the next one would not finish before ``--deadline``; a lane resumed later skips finished cells."""
+    out, st = Path(args.out), Path(args.state)
+    (out / "logs").mkdir(parents=True, exist_ok=True)
+    st.mkdir(parents=True, exist_ok=True)
+    deadline = calendar.timegm(time.strptime(args.deadline, "%Y-%m-%dT%H:%MZ")) if args.deadline else None
+    grans = list(args.grans)
+    engine_s: list[float] = []
+    rc, notes = 0, []
+    for model_key in args.models:
+        path = resolve(MODELS[model_key])
+        if path is None:
+            notes.append(f"{model_key}: no complete local snapshot of {MODELS[model_key]}; skipped")
+            print(f"[sweep] {notes[-1]}", flush=True)
+            continue
+        if args.verify and not (st / f"verify-{model_key}-staged.json").exists():
+            vargs = argparse.Namespace(**{**vars(args), "model": str(path), "max_num_seqs": 16})
+            vrc = _child(vargs, ["verify", "--arm", "staged"], "staged", out / "logs" / f"verify-{model_key}.log")
+            v = out / "verify-staged.json"
+            if v.exists():
+                v.rename(out / f"verify-{model_key}-staged.json")
+                if vrc == 0:
+                    (st / f"verify-{model_key}-staged.json").write_bytes((out / f"verify-{model_key}-staged.json").read_bytes())
+            rc |= vrc
+        for seed in args.seeds:
+            k = seed % len(grans)
+            order = grans[k:] + grans[:k]
+            if seed % 2:
+                order.reverse()
+            for gran in order:
+                missing = [b for b in args.batches if not (st / "cells" / _cell_name(model_key, gran, b, seed)).exists()]
+                if not missing:
+                    continue
+                need = max(engine_s) if engine_s else args.engine_min * 60
+                if deadline and time.time() + need > deadline:
+                    notes.append(f"stopped before {model_key} {gran} seed {seed}: the deadline")
+                    print(f"[sweep] {notes[-1]}", flush=True)
+                    _sweep_result(args, rc, notes)
+                    return rc
+                t = time.time()
+                crc = _cells_child(args, model_key, path, gran, seed, missing,
+                                   out / "logs" / f"{model_key}__{gran}__s{seed}.log")
+                engine_s.append(time.time() - t)
+                rc |= crc
+                if crc:
+                    notes.append(f"{model_key} {gran} seed {seed}: engine rc={crc}")
+                _sweep_result(args, rc, notes)
+    _sweep_result(args, rc, notes)
+    return rc
+
+
+def _sweep_result(args, rc: int, notes: list[str]) -> None:
+    out = Path(args.out)
+    rows = [json.loads(p.read_text()) for p in sorted((out / "cells").glob("*__s*.json")) if not p.name.startswith("failed")]
+    summary = summarize_cells([Path(args.state) / "cells"])
+    (out / "summary.md").write_text(summary + "".join(f"\n- {n}" for n in notes) + "\n")
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    if not run_dir:
+        return
+    result = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "kind": "bench-result/v1",
+              "workload_fingerprint": {"workload": "vllm_pu_commit_sweep", "models": args.models, "grans": args.grans,
+                                       "batches": args.batches, "seeds": args.seeds, "input_len": args.input_len,
+                                       "output_len": args.output_len, "max_model_len": args.max_model_len},
+              "validation": {"status": "passed" if rc == 0 else "failed",
+                             "checker": "every engine process exited 0 and every non-control cell recorded commitment steps"
+                                        + ("; staged verify per model" if args.verify else ""),
+                             "detail": f"rc={rc}; {len(rows)} cells this run; " + "; ".join(notes), "evidence": []},
+              "measurements": [m for r in rows for m in (
+                  {"name": f"{r['model']}.{r['gran']}.b{r['batch']}.s{r['seed']}.output_tps", "value": r["output_tps"], "unit": "tok/s"},
+                  {"name": f"{r['model']}.{r['gran']}.b{r['batch']}.s{r['seed']}.tpot", "value": r["tpot_ms"], "unit": "ms"})],
+              "measurement_files": [os.path.relpath(p, run_dir) for p in [*sorted(out.rglob("*.json")), out / "summary.md"]],
+              "artifacts": []}
+    (Path(run_dir) / "result.json").write_text(json.dumps(result, indent=1) + "\n")
+
+
+def summarize_cells(dirs: list[Path]) -> str:
+    """Per model, granularity and batch: medians over seeds of output tok/s and TPOT, and the overhead against the control
+    of the same seed (extra time: control_tps / tps - 1, tpot / control_tpot - 1), median and min..max over seeds."""
+    rows = {}
+    for d in dirs:
+        for p in sorted(Path(d).rglob("*__s*.json")):
+            if not p.name.startswith("failed"):
+                r = json.loads(p.read_text())
+                rows[(r["model"], r["gran"], r["batch"], r["seed"])] = r
+    lines = ["| model | granularity | batch | output tok/s | TPOT ms | throughput overhead | TPOT overhead | seeds | input |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    med = statistics.median
+    for model in MODELS:
+        for gran in GRANS:
+            for b in sorted({k[2] for k in rows}):
+                rs = [r for k, r in rows.items() if k[:3] == (model, gran, b)]
+                if not rs:
+                    continue
+                ot, tp = [], []
+                for r in rs:
+                    c = rows.get((model, "none", b, r["seed"]))
+                    if c and gran != "none":
+                        ot.append((c["output_tps"] / r["output_tps"] - 1) * 100)
+                        tp.append((r["tpot_ms"] / c["tpot_ms"] - 1) * 100)
+                fmt = lambda v: f"{med(v):+.2f}% ({min(v):+.2f}..{max(v):+.2f})" if v else "-"  # noqa: E731
+                lines.append(f"| {model} | {gran} | {b} | {med([r['output_tps'] for r in rs]):.1f} | "
+                             f"{med([r['tpot_ms'] for r in rs]):.2f} | {fmt(ot)} | {fmt(tp)} | {len(rs)} | "
+                             f"{'/'.join(sorted({str(r['input_len']) for r in rs}))} |")
+    return "\n".join(lines) + "\n"
+
+
 def summarize_dirs(dirs: list[Path]) -> str:
     rows = [json.loads(p.read_text()) for d in dirs for p in sorted(Path(d).rglob("arm-r*.json"))]
     by_round: dict[tuple, dict] = {}
@@ -427,7 +653,8 @@ def summarize_dirs(dirs: list[Path]) -> str:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=("run", "micro", "verify", "arm", "summarize"))
+    ints = lambda s: [int(x) for x in s.split(",")]  # noqa: E731
+    ap.add_argument("mode", choices=("run", "micro", "verify", "arm", "summarize", "sweep", "cells", "summarize-cells"))
     ap.add_argument("dirs", nargs="*")
     ap.add_argument("--out", default=str(Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out"))
     ap.add_argument("--scratch", default=None, help="compile caches and the extension build (default: a temporary directory)")
@@ -444,15 +671,30 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--lat-reqs", type=int, default=5)
     ap.add_argument("--micro", action="store_true")
     ap.add_argument("--verify", action="store_true")
+    ap.add_argument("--max-model-len", type=int, default=4096)
+    ap.add_argument("--models", type=lambda s: s.split(","), default=list(MODELS))
+    ap.add_argument("--grans", type=lambda s: s.split(","), default=list(GRANS))
+    ap.add_argument("--batches", type=ints, default=[1, 8, 32, 128])
+    ap.add_argument("--seeds", type=ints, default=[0, 1, 2])
+    ap.add_argument("--state", default="/workspace/jobs/cco-sweep", help="finished cells (resumable across runs), caches")
+    ap.add_argument("--deadline", default=None, help="UTC YYYY-MM-DDTHH:MMZ: start no engine that would end after it")
+    ap.add_argument("--engine-min", type=float, default=12.0, help="minutes one engine is assumed to take before one has run")
+    ap.add_argument("--model-key", default=None)
+    ap.add_argument("--gran", choices=tuple(GRANS), default="none")
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--gpu-mem", type=float, default=0.9)
     args = ap.parse_args(argv)
     if args.mode == "summarize":
         sys.stdout.write(summarize_dirs([Path(d) for d in args.dirs]))
         return 0
-    if args.mode == "run" and not args.scratch:
+    if args.mode == "summarize-cells":
+        sys.stdout.write(summarize_cells([Path(d) for d in args.dirs]))
+        return 0
+    if args.mode in ("run", "sweep") and not args.scratch:
         with tempfile.TemporaryDirectory(prefix="pu_bench-") as d:
             args.scratch = d
-            return run(args)
-    return {"run": run, "micro": micro, "verify": verify, "arm": arm}[args.mode](args)
+            return (run if args.mode == "run" else sweep)(args)
+    return {"run": run, "micro": micro, "verify": verify, "arm": arm, "sweep": sweep, "cells": cells}[args.mode](args)
 
 
 if __name__ == "__main__":

@@ -131,21 +131,20 @@ __global__ void leaf_kernel(const uint4 *__restrict__ x, long n_chunks, uint32_t
 }
 
 // the staged sites of a step of T tokens, from the staging buffer that holds the step's chunks at their leaf positions:
-// site (l, k) spans per-token chunks [off[k], off[k + 1]) of layer l, and is staged iff its T * width chunks < direct_min
-struct SiteOffsets { int64_t off[17]; };
-
-__global__ void stage_kernel(const uint4 *__restrict__ stage, long T, SiteOffsets so, int K, long n, long direct_min,
-                             const int64_t *__restrict__ ctr, uint8_t *__restrict__ ring, long R) {
+// site s spans per-token chunks [off[s], off[s + 1]) of the step, and is staged iff its T * width chunks < direct_min
+__global__ void stage_kernel(const uint4 *__restrict__ stage, long T, const int64_t *__restrict__ off, int S, long n,
+                             long direct_min, const int64_t *__restrict__ ctr, uint8_t *__restrict__ ring, long R) {
     const long gi = (long)blockIdx.x * blockDim.x + threadIdx.x;
     if (gi >= n) return;
-    const long per_layer = T * so.off[K];
-    const long l = gi / per_layer, r = gi - l * per_layer;
-    int k = 0;
-    while (k + 1 < K && T * so.off[k + 1] <= r) ++k;
-    const long cnt = T * (so.off[k + 1] - so.off[k]);
+    int lo = 0, hi = S - 1;
+    while (lo < hi) {
+        const int mid = (lo + hi + 1) / 2;
+        if (T * off[mid] <= gi) lo = mid; else hi = mid - 1;
+    }
+    const long cnt = T * (off[lo + 1] - off[lo]);
     if (cnt >= direct_min) return;
     uint32_t h[8];
-    leaf_digest(stage + gi * (CHUNK / 16), (uint32_t)(l * K + k), r - T * so.off[k], cnt, h);
+    leaf_digest(stage + gi * (CHUNK / 16), (uint32_t)lo, gi - T * off[lo], cnt, h);
     store_digest(ring + ((ctr[0] + gi) % R) * 32, h);
 }
 
@@ -245,19 +244,18 @@ void leaf_hash(const at::Tensor &x, int64_t site, int64_t offset, const at::Tens
     AT_CUDA_CHECK(cudaGetLastError());
 }
 
-// hashes the staged sites of a step of T tokens; offsets: the K + 1 per-token chunk offsets of a layer's sites
-void stage_hash(const at::Tensor &stage, int64_t T, const std::vector<int64_t> &offsets, int64_t layers, int64_t direct_min,
+// hashes the staged sites of a step of T tokens; offsets: the S + 1 per-token chunk offsets of the step's sites (int64, on
+// the device), total: offsets[S]
+void stage_hash(const at::Tensor &stage, int64_t T, const at::Tensor &offsets, int64_t total, int64_t direct_min,
                 const at::Tensor &ctr, const at::Tensor &ring) {
-    const int K = (int)offsets.size() - 1;
-    TORCH_CHECK(K >= 1 && K <= 16, "stage_hash: 1..16 sites per layer");
-    SiteOffsets so{};
-    for (int i = 0; i <= K; ++i) so.off[i] = offsets[i];
-    const long n = (long)T * so.off[K] * layers;
+    const int S = (int)offsets.numel() - 1;
+    TORCH_CHECK(S >= 1 && offsets.is_cuda() && offsets.scalar_type() == at::kLong, "stage_hash: int64 device offsets");
+    const long n = (long)T * total;
     TORCH_CHECK(stage.is_cuda() && stage.numel() >= n * CHUNK, "stage_hash: staging buffer too small");
     const int threads = 64;
     stage_kernel<<<(n + threads - 1) / threads, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
-        reinterpret_cast<const uint4 *>(stage.data_ptr()), T, so, K, n, direct_min, ctr.data_ptr<int64_t>(),
-        ring.data_ptr<uint8_t>(), ring.numel() / 32);
+        reinterpret_cast<const uint4 *>(stage.data_ptr()), T, offsets.data_ptr<int64_t>(), S, n, direct_min,
+        ctr.data_ptr<int64_t>(), ring.data_ptr<uint8_t>(), ring.numel() / 32);
     AT_CUDA_CHECK(cudaGetLastError());
 }
 

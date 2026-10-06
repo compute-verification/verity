@@ -1,34 +1,40 @@
-"""Commit to Llama's proof-unit outputs inside stock vLLM (torch.compile + CUDA graphs), for ``pu_bench.py``.
+"""Commit to a model's proof-unit outputs inside stock vLLM (torch.compile + CUDA graphs), for ``pu_bench.py``.
 
-Each site (a PU output: a layer's residual stream, or every linear and op output in the fine arms) hashes its 16-bit
-tensor into SHA-256 leaves of 256-byte chunks, written into a device digest ring at a static offset in the step;
-the last layer's ``finalize`` folds the step's leaves into a Merkle root and writes it, with the step's counters, into
-pinned host memory (``pu_hash.cu`` has the formats).  Both are ``torch.library`` custom ops that mutate one
-1-element token tensor; the rings live behind the op, so torch.compile sees a tiny mutation and CUDA graphs capture the
-kernels, whose ring positions come from device counters.  The ``retain`` arm's leaf kernel also writes every hashed
-byte into a pinned host ring (mapped stores from the same kernel: a graph-captured memcpy has frozen addresses, and a
-side stream would have to rejoin inside each piecewise graph).  The ``staged`` arm commits the same leaves and roots as
+Each site (a PU output: a layer's residual stream, or every linear and op output in the fine arms) hashes its tensor's
+bytes, one zero-padded row of whole 256-byte chunks per token, into SHA-256 leaves written into a device digest ring at a
+static offset in the step; the last layer's ``finalize`` folds the step's leaves into a Merkle root and writes it, with
+the step's counters, into pinned host memory (``pu_hash.cu`` has the formats).  Both are ``torch.library`` custom ops that
+mutate one 1-element token tensor; the rings live behind the op, so torch.compile sees a tiny mutation and CUDA graphs
+capture the kernels, whose ring positions come from device counters.  The ``retain`` arm's leaf kernel also writes every
+hashed byte into a pinned host ring (mapped stores from the same kernel: a graph-captured memcpy has frozen addresses, and
+a side stream would have to rejoin inside each piecewise graph).  The ``staged`` arm commits the same leaves and roots as
 ``fine``, but a site of fewer than ``DIRECT_MIN`` chunks in a step of at most ``STAGE_TOKENS`` tokens is only copied (in
 stream) to its leaf positions in a staging buffer, and the step's staged sites are hashed in one launch before the fold: a
 leaf costs five dependent SHA-256 compressions in one thread, so a small site's launch is latency-bound (~9 us) however
-few bytes it has, and a decode step has 288 of them.
+few bytes it has, and a decode step has hundreds of them.
 
-``install(arm)`` patches ``LlamaDecoderLayer``, ``LlamaAttention`` and ``LlamaMLP`` before the engine builds its
-model (``pu_ext`` runs it in the engine's worker).  ``fold`` and ``leaf`` are the hashlib reference ``verify`` uses.
+``install(arm)`` wraps the model loader (``pu_ext`` runs it in the engine's worker) so that each loaded model's decoder
+layers are instrumented before torch.compile traces them, whatever the architecture: ``coarse`` hashes the residual stream
+entering each layer (the input of layer 0, else the residual its ``input_layernorm`` returns); the fine arms hash the output
+of every linear, norm, attention, activation and fused-MoE module in a layer, and the residual each later norm returns.  A
+site exists only where Dynamo traces it: the step layout is the sites in trace order, fixed at the last layer's
+``finalize``.  A module that runs only inside an opaque op (an expert's linears inside fused MoE, MLA's ``kv_b_proj``) has
+no site and is listed in ``stats()["untraced"]``.  ``fold`` and ``leaf`` are the hashlib reference ``verify`` uses.
 """
 
 from __future__ import annotations
 
 import hashlib
 import os
+import re
 import struct
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 
 CHUNK = 256
-FINE = ("in_norm", "qkv", "attn", "o_proj", "resid_post", "post_norm", "gate_up", "act", "down")
-ARMS = {"control": (), "coarse": ("resid_in",), "fine": FINE, "retain": FINE, "staged": FINE}
+ARMS = ("control", "coarse", "fine", "retain", "staged")
 KEEP_BYTES = int(os.environ.get("VLLM_PU_KEEP_GB", "16")) << 30
 STEP_RECORDS = 1 << 20
 STAGE_TOKENS = int(os.environ.get("VLLM_PU_STAGE_TOKENS", "512"))
@@ -37,7 +43,13 @@ DIRECT_MIN = int(os.environ.get("VLLM_PU_DIRECT_MIN", "8192"))
 _EXT = None
 _STATE = None
 _TOKEN: torch.Tensor | None = None
-SITES: dict[str, int] = {}          # site name -> index within a layer, for the installed arm
+ARM = "control"
+MAX_TOKENS = 0
+SITES: dict[str, int] = {}                  # "module:role" -> site index, in trace order
+SITE_LIST: list[tuple[str, int]] = []       # (name, bytes per token)
+OFFS: list[int] = [0]                       # per-token chunk offset of each site, then the total
+FROZEN = False
+WRAPPED: list[str] = []                     # the qualified name of every module given sites
 LAYOUT: "Layout | None" = None
 
 
@@ -61,32 +73,23 @@ def fold(nodes: list[bytes]) -> bytes:
     return nodes[0]
 
 
-def site_widths(hf) -> dict[str, int]:
-    """Elements per token of each site's tensor (all 16-bit)."""
-    h = hf.hidden_size
-    hd = getattr(hf, "head_dim", None) or h // hf.num_attention_heads
-    q, kv, i = hf.num_attention_heads * hd, hf.num_key_value_heads * hd, hf.intermediate_size
-    return {"resid_in": h, "in_norm": h, "qkv": q + 2 * kv, "attn": q, "o_proj": h, "resid_post": h, "post_norm": h,
-            "gate_up": 2 * i, "act": i, "down": h}
-
-
 class Layout:
-    """Where each site's leaves sit in a step: site (layer, k) has id ``layer * len(names) + k`` and starts at
-    ``tokens * chunk_offset[layer][k]`` leaves into the step."""
+    """A step's sites in order: site ``s`` (``bytes_per_token[s]`` bytes per token, zero-padded to ``site_chunks[s]`` whole
+    chunks) has id ``s`` and its leaves start ``tokens * chunk_offset[s]`` leaves into the step."""
 
-    def __init__(self, names: tuple[str, ...], widths: dict[str, int], layers: int, max_tokens: int):
-        self.names, self.layers, self.max_tokens = names, layers, max_tokens
-        self.widths = tuple(widths[n] for n in names)
-        assert all(w % (CHUNK // 2) == 0 for w in self.widths), "every site must be whole 256-byte chunks per token"
-        self.per_layer = sum(self.widths)
-        self.chunks_per_token = self.per_layer * layers // (CHUNK // 2)
-        self.site_chunks = tuple(w // (CHUNK // 2) for w in self.widths)
-        self.chunk_offset = tuple(tuple((l * self.per_layer + sum(self.widths[:k])) // (CHUNK // 2) for k in range(len(names)))
-                                  for l in range(layers))
+    def __init__(self, sites: list[tuple[str, int]], max_tokens: int):
+        self.names = tuple(n for n, _ in sites)
+        self.bytes_per_token = tuple(w for _, w in sites)
+        self.site_chunks = tuple(-(-w // CHUNK) for w in self.bytes_per_token)
+        self.chunk_offset = tuple(sum(self.site_chunks[:s]) for s in range(len(sites) + 1))
+        self.chunks_per_token = self.chunk_offset[-1]
+        self.max_tokens = max_tokens
 
     def as_dict(self) -> dict:
-        return {"sites": dict(zip(self.names, self.widths)), "layers": self.layers, "max_tokens": self.max_tokens,
-                "bytes_per_token_step": self.per_layer * self.layers * 2, "chunks_per_token": self.chunks_per_token}
+        return {"sites": len(self.names), "max_tokens": self.max_tokens, "bytes_per_token_step": sum(self.bytes_per_token),
+                "padded_bytes_per_token_step": self.chunks_per_token * CHUNK, "chunks_per_token": self.chunks_per_token,
+                "padded_sites": sum(w % CHUNK != 0 for w in self.bytes_per_token),
+                "first_sites": dict(zip(self.names[:24], self.bytes_per_token[:24]))}
 
 
 class State:
@@ -106,20 +109,24 @@ class State:
         self.keep_ptr = e.device_pointer(self.keep) if keep_bytes else 0
         self.leaf_calls = self.finalize_calls = 0
         self.stage_layout = stage
-        self.stage = (torch.empty(STAGE_TOKENS * stage.chunks_per_token * CHUNK, dtype=torch.uint8, device=dev)
+        self.stage = (torch.zeros(STAGE_TOKENS * stage.chunks_per_token * CHUNK, dtype=torch.uint8, device=dev)
                       if stage else None)
-        self.stage_offsets = [sum(stage.site_chunks[:k]) for k in range(len(stage.names) + 1)] if stage else []
+        self.stage_offsets = torch.tensor(stage.chunk_offset, dtype=torch.int64, device=dev) if stage else None
 
     def staged(self, tokens: int, n_chunks: int) -> bool:
         return self.stage is not None and tokens <= STAGE_TOKENS and n_chunks < DIRECT_MIN
 
     def leaf(self, x: torch.Tensor, site: int, offset: int) -> None:
         self.leaf_calls += 1
-        nbytes = x.numel() * x.element_size()
-        if self.staged(x.shape[0], nbytes // CHUNK):
-            self.stage.narrow(0, offset * CHUNK, nbytes).copy_(x.reshape(-1).view(torch.uint8))
+        t = x.shape[0]
+        rows = x.contiguous().view(torch.uint8).reshape(t, -1)
+        pad = -rows.shape[1] % CHUNK
+        if pad:
+            rows = F.pad(rows, (0, pad))
+        if self.staged(t, rows.numel() // CHUNK):
+            self.stage.narrow(0, offset * CHUNK, rows.numel()).copy_(rows.reshape(-1))
             return
-        ext().leaf_hash(x, site, offset, self.ctr, self.ring, self.keep_ptr, self.RH)
+        ext().leaf_hash(rows, site, offset, self.ctr, self.ring, self.keep_ptr, self.RH)
 
     def finalize(self, n: int, nbytes: int) -> None:
         self.finalize_calls += 1
@@ -127,7 +134,7 @@ class State:
             lay = self.stage_layout
             tokens = n // lay.chunks_per_token
             if tokens <= STAGE_TOKENS:
-                ext().stage_hash(self.stage, tokens, self.stage_offsets, lay.layers, DIRECT_MIN, self.ctr, self.ring)
+                ext().stage_hash(self.stage, tokens, self.stage_offsets, lay.chunks_per_token, DIRECT_MIN, self.ctr, self.ring)
         ext().finalize(n, nbytes, self.ctr, self.ring, self.scratch, self.RH, self.rec_ptr, STEP_RECORDS, self.mirror_ptr)
 
     def record(self, step: int) -> tuple[bytes, int, int, int, int]:
@@ -136,11 +143,13 @@ class State:
 
 
 def state() -> State:
-    global _STATE
+    global _STATE, LAYOUT
     if _STATE is None:
-        arm = os.environ.get("VLLM_PU_ARM")
-        _STATE = State(LAYOUT.max_tokens * LAYOUT.chunks_per_token + (1 << 20), KEEP_BYTES if arm == "retain" else 0,
-                       LAYOUT if arm == "staged" else None)
+        if not FROZEN:
+            raise RuntimeError("a commitment op ran before the step layout was fixed (was the model traced?)")
+        LAYOUT = Layout(SITE_LIST, MAX_TOKENS)
+        _STATE = State(LAYOUT.max_tokens * LAYOUT.chunks_per_token + (1 << 20), KEEP_BYTES if ARM == "retain" else 0,
+                       LAYOUT if ARM == "staged" else None)
     return _STATE
 
 
@@ -164,94 +173,173 @@ def _(token, n_leaves, nbytes):
     return None
 
 
-def _hash(mod, name: str, x: torch.Tensor) -> None:
-    k = SITES.get(name)
-    if k is None:
+# The bookkeeping runs in Python while Dynamo traces (assume_constant_result calls it and keeps its result as a constant),
+# so the sites are numbered in trace order and their offsets are static in the compiled graph.
+@torch._dynamo.assume_constant_result
+def _site(name: str, w: int) -> int:
+    s = SITES.get(name)
+    if s is None:
+        if FROZEN:
+            raise RuntimeError(f"site {name} first traced after the step layout was fixed")
+        s = SITES[name] = len(SITE_LIST)
+        SITE_LIST.append((name, w))
+        OFFS.append(OFFS[-1] + -(-w // CHUNK))
+    return s
+
+
+@torch._dynamo.assume_constant_result
+def _offset(s: int) -> int:
+    return OFFS[s]
+
+
+@torch._dynamo.assume_constant_result
+def _freeze() -> int:
+    global FROZEN
+    FROZEN = True
+    return OFFS[-1]
+
+
+def _hash(mod, role: str, x) -> None:
+    if not isinstance(x, torch.Tensor) or x.dim() < 1:
         return
-    layer = mod._pu_layer
-    torch.ops.verity_pu.leaf_hash(x, _TOKEN, layer * len(LAYOUT.names) + k, x.shape[0] * LAYOUT.chunk_offset[layer][k])
+    w = x.element_size()
+    for d in x.shape[1:]:
+        w *= d
+    s = _site(f"{mod._pu_name}:{role}", w)
+    torch.ops.verity_pu.leaf_hash(x, _TOKEN, s, x.shape[0] * _offset(s))
 
 
-def _finalize(mod, x: torch.Tensor) -> None:
-    if SITES and mod._pu_layer == LAYOUT.layers - 1:
-        t = x.shape[0]
-        torch.ops.verity_pu.finalize(_TOKEN, t * LAYOUT.chunks_per_token, t * LAYOUT.chunks_per_token * CHUNK)
+def _observe(mod, args, kwargs, out) -> None:
+    for role in mod._pu_roles:
+        if role == "out":
+            _hash(mod, role, out[0] if isinstance(out, tuple) else out)
+        elif role == "resid":
+            if isinstance(out, tuple) and len(out) > 1:
+                _hash(mod, role, out[1])
+        elif role == "resid_in":
+            residual = args[1] if len(args) > 1 else kwargs.get("residual")
+            _hash(mod, role, out[1] if residual is not None else (args[0] if args else kwargs["x"]))
+        elif role == "all":
+            for i, t in enumerate(out if isinstance(out, tuple) else (out,)):
+                _hash(mod, f"out{i}", t)
+
+
+def _finalize_after(mod, out) -> None:
+    total = _freeze()
+    if total:
+        t = (out[0] if isinstance(out, tuple) else out).shape[0]
+        torch.ops.verity_pu.finalize(_TOKEN, t * total, t * total * CHUNK)
+
+
+_SUBCLASSES: dict[type, type] = {}
+
+
+def _wrap(mod, name: str, roles: tuple[str, ...] = (), last: bool = False) -> None:
+    """Give ``mod`` a subclass of its class whose forward hashes ``roles`` of its output while Dynamo traces it (and, for
+    the last decoder layer, folds the step after it)."""
+    cls = type(mod)
+    if cls.__dict__.get("_pu_wrapped"):
+        cls = cls.__mro__[1]
+    sub = _SUBCLASSES.get(cls)
+    if sub is None:
+        def forward(self, *args, **kwargs):
+            out = cls.forward(self, *args, **kwargs)
+            if torch.compiler.is_compiling():
+                _observe(self, args, kwargs, out)
+                if self._pu_last:
+                    _finalize_after(self, out)
+            return out
+        sub = _SUBCLASSES[cls] = type(cls.__name__, (cls,), {"forward": forward, "_pu_wrapped": True,
+                                                              "__module__": cls.__module__, "__qualname__": cls.__qualname__})
+    mod.__class__ = sub
+    mod._pu_roles = tuple(getattr(mod, "_pu_roles", ())) + roles
+    mod._pu_last = getattr(mod, "_pu_last", False) or last
+    mod._pu_name = name
+    if roles:
+        WRAPPED.append(name)
+
+
+def _site_types() -> tuple[tuple[type, ...], ...]:
+    from vllm.model_executor.layers import activation, layernorm
+    from vllm.model_executor.layers.attention import Attention, MLAAttention
+    from vllm.model_executor.layers.fused_moe import FusedMoE
+    from vllm.model_executor.layers.linear import LinearBase
+    from vllm.model_executor.custom_op import CustomOp
+    acts = tuple(c for c in vars(activation).values() if isinstance(c, type) and issubclass(c, CustomOp) and c is not CustomOp)
+    norms = tuple(c for c in vars(layernorm).values() if isinstance(c, type) and issubclass(c, torch.nn.Module)
+                  and c.__module__ == layernorm.__name__)
+    return (LinearBase, Attention, MLAAttention, *acts), norms, (FusedMoE,)
+
+
+def _decoder_layers(model) -> tuple[str, torch.nn.ModuleList]:
+    lists = [(n, m) for n, m in model.named_modules() if isinstance(m, torch.nn.ModuleList) and n.split(".")[-1] == "layers"]
+    if not lists:
+        raise RuntimeError(f"no decoder layer list in {type(model).__name__}")
+    return max(lists, key=lambda nm: len(nm[1]))
+
+
+def instrument(model, arm: str, max_tokens: int) -> dict:
+    global ARM, MAX_TOKENS, _TOKEN
+    ARM, MAX_TOKENS = arm, max_tokens
+    if arm == "control":
+        return {}
+    _TOKEN = torch.zeros(1, dtype=torch.int64, device=torch.device("cuda", torch.cuda.current_device()))
+    plain, norms, moe = _site_types()
+    lname, layers = _decoder_layers(model)
+    real = [(i, l) for i, l in enumerate(layers) if hasattr(l, "input_layernorm")]
+
+    def walk(mod, prefix):
+        for n, c in mod.named_children():
+            q = f"{prefix}.{n}"
+            if isinstance(c, moe):
+                _wrap(c, q, ("all",))
+            elif isinstance(c, norms):
+                _wrap(c, q, ("out",) if n == "input_layernorm" else ("out", "resid"))
+            elif isinstance(c, plain):
+                _wrap(c, q, ("out",))
+            else:
+                walk(c, q)
+
+    for i, layer in real:
+        if arm == "coarse":
+            _wrap(layer.input_layernorm, f"{lname}.{i}.input_layernorm", ("resid_in",))
+        else:
+            walk(layer, f"{lname}.{i}")
+    i, last = real[-1]
+    _wrap(last, f"{lname}.{i}", last=True)
+    return {"layers": len(real), "wrapped": len(WRAPPED)}
 
 
 def install(arm: str) -> None:
-    """Patch vLLM's Llama modules to hash the arm's sites (the control arm patches nothing)."""
-    global SITES
-    names = ARMS[arm]
-    if not names:
-        return
-    SITES = {n: k for k, n in enumerate(names)}
-    from vllm.model_executor.models import llama as L
+    """Wrap vLLM's model loader so the loaded model is instrumented for ``arm`` (the control arm instruments nothing)."""
+    from vllm.model_executor.model_loader.base_loader import BaseModelLoader
+    load0 = BaseModelLoader.load_model
 
-    init0 = L.LlamaDecoderLayer.__init__
+    def load_model(self, vllm_config, model_config, *args, **kwargs):
+        model = load0(self, vllm_config, model_config, *args, **kwargs)
+        instrument(model, arm, vllm_config.scheduler_config.max_num_batched_tokens)
+        return model
 
-    def init(self, *args, **kwargs):
-        global LAYOUT, _TOKEN
-        init0(self, *args, **kwargs)
-        vc = kwargs["vllm_config"] if "vllm_config" in kwargs else args[0]
-        prefix = kwargs.get("prefix", args[1] if len(args) > 1 else "")
-        if LAYOUT is None:
-            hf = vc.model_config.hf_config
-            LAYOUT = Layout(names, site_widths(hf), hf.num_hidden_layers, vc.scheduler_config.max_num_batched_tokens)
-            _TOKEN = torch.zeros(1, dtype=torch.int64, device=torch.device("cuda", torch.cuda.current_device()))
-        self._pu_layer = self.self_attn._pu_layer = self.mlp._pu_layer = L.extract_layer_index(prefix)
-
-    def layer_forward(self, positions, hidden_states, residual):
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
-        _hash(self, "resid_in", residual)
-        _hash(self, "in_norm", hidden_states)
-        hidden_states = self.self_attn(positions=positions, hidden_states=hidden_states)
-        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
-        _hash(self, "resid_post", residual)
-        _hash(self, "post_norm", hidden_states)
-        hidden_states = self.mlp(hidden_states)
-        _finalize(self, hidden_states)
-        return hidden_states, residual
-
-    def attn_forward(self, positions, hidden_states):
-        qkv, _ = self.qkv_proj(hidden_states)
-        _hash(self, "qkv", qkv)
-        q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
-        q, k = self.rotary_emb(positions, q, k)
-        attn_output = self.attn(q, k, v)
-        _hash(self, "attn", attn_output)
-        output, _ = self.o_proj(attn_output)
-        _hash(self, "o_proj", output)
-        return output
-
-    def mlp_forward(self, x):
-        x, _ = self.gate_up_proj(x)
-        _hash(self, "gate_up", x)
-        x = L.maybe_fused_act_quant(self.act_fn, x, self.down_proj)
-        _hash(self, "act", x)
-        x, _ = self.down_proj(x)
-        _hash(self, "down", x)
-        return x
-
-    L.LlamaDecoderLayer.__init__ = init
-    L.LlamaDecoderLayer.forward = layer_forward
-    L.LlamaAttention.forward = attn_forward
-    L.LlamaMLP.forward = mlp_forward
+    BaseModelLoader.load_model = load_model
 
 
 def stats(since_step: int | None = None) -> dict:
     """Counters (from the host-mapped mirror the last finalize wrote) and, given ``since_step``, the token counts of the
     steps since then (from their records)."""
+    traced = {k.rsplit(":", 1)[0] for k in SITES}
+    untraced: dict[str, int] = {}
+    for n in WRAPPED:
+        if n not in traced:
+            p = re.sub(r"\.\d+\.", ".*.", n)
+            untraced[p] = untraced.get(p, 0) + 1
     if _STATE is None:
-        return {"installed": bool(SITES)}
+        return {"installed": bool(WRAPPED), "sites": len(SITE_LIST), "untraced": untraced}
     torch.cuda.synchronize()
     m = _STATE.mirror.tolist()
     out = {"installed": True, "steps": m[2], "bytes": m[3], "leaves": m[4], "leaf_calls": _STATE.leaf_calls,
            "finalize_calls": _STATE.finalize_calls, "ring_bytes": _STATE.ring.numel(), "keep_bytes": _STATE.RH * CHUNK,
-           "layout": LAYOUT.as_dict()}
+           "layout": LAYOUT.as_dict(), "sites": len(SITE_LIST), "untraced": untraced,
+           "stage_bytes": _STATE.stage.numel() if _STATE.stage is not None else 0}
     if since_step is not None:
         tokens: dict[int, int] = {}
         for s in range(max(since_step, m[2] - STEP_RECORDS), m[2]):
@@ -273,9 +361,8 @@ def _ring_slice(ring: torch.Tensor, start: int, n: int, width: int) -> bytes:
 
 
 def verify(step: int) -> dict:
-    """Recompute step ``step`` with hashlib: its root from the device ring's leaves, and (retain arm) every leaf from the
-    retained bytes; plus a check that the retained bytes are the model's: each layer's ``act`` = silu(gate) * up of its
-    ``gate_up``, rounded to bf16."""
+    """Recompute step ``step`` with hashlib: its root from the device ring's leaves, (staged arm, last step) every staged
+    leaf from the staging buffer, and (retain arm) every leaf from the retained bytes."""
     st = state()
     torch.cuda.synchronize()
     root, n, base, hbase, idx = st.record(step)
@@ -285,47 +372,24 @@ def verify(step: int) -> dict:
     out = {"step": step, "n_leaves": n, "tokens": n // LAYOUT.chunks_per_token, "root": root.hex(),
            "root_from_device_leaves_matches": fold(leaves) == root, "nonzero_leaves": sum(l != bytes(32) for l in leaves)}
     t = n // LAYOUT.chunks_per_token
-    if st.stage is not None and step == int(st.mirror[2]) - 1:
-        # the staging buffer still holds the last step: recompute its staged sites' leaves
-        data = st.stage[:n * CHUNK].cpu().numpy().tobytes()
+
+    def recompute(data: bytes, only_staged: bool) -> tuple[int, int]:
         done = bad = 0
-        for layer in range(LAYOUT.layers):
-            for k, c in enumerate(LAYOUT.site_chunks):
-                site, off, cnt = layer * len(LAYOUT.names) + k, t * LAYOUT.chunk_offset[layer][k], t * c
-                if not st.staged(t, cnt):
-                    continue
-                for ci in range(cnt):
-                    done += 1
-                    bad += leaf(site, ci, cnt, data[(off + ci) * CHUNK:(off + ci + 1) * CHUNK]) != leaves[off + ci]
-        out.update(staged_leaves_recomputed=done, staged_leaves_mismatched=bad,
-                   root_from_staged_bytes_matches=done == n and bad == 0 and out["root_from_device_leaves_matches"])
-    if st.keep is None:
-        return out
-    data = _ring_slice(st.keep, hbase, n, CHUNK)
-    bad = 0
-    for layer in range(LAYOUT.layers):
-        for k, w in enumerate(LAYOUT.widths):
-            site, off, cnt = layer * len(LAYOUT.names) + k, t * LAYOUT.chunk_offset[layer][k], t * w // (CHUNK // 2)
+        for s, c in enumerate(LAYOUT.site_chunks):
+            off, cnt = t * LAYOUT.chunk_offset[s], t * c
+            if only_staged and not st.staged(t, cnt):
+                continue
             for ci in range(cnt):
-                if leaf(site, ci, cnt, data[(off + ci) * CHUNK:(off + ci + 1) * CHUNK]) != leaves[off + ci]:
-                    bad += 1
-    out["leaves_recomputed"] = n
-    out["leaves_mismatched"] = bad
-    out["root_from_retained_bytes_matches"] = bad == 0 and out["root_from_device_leaves_matches"]
-    if "gate_up" in SITES and "act" in SITES:
-        def site_tensor(layer: int, name: str) -> torch.Tensor:
-            k = SITES[name]
-            off, w = t * LAYOUT.chunk_offset[layer][k], LAYOUT.widths[k]
-            raw = bytearray(data[off * CHUNK:(off + t * w // (CHUNK // 2)) * CHUNK])
-            return torch.frombuffer(raw, dtype=torch.bfloat16).view(t, w)
-        equal = total = 0
-        worst = 0.0
-        for layer in range(LAYOUT.layers):
-            gu, act = site_tensor(layer, "gate_up").float(), site_tensor(layer, "act")
-            g, u = gu.chunk(2, dim=-1)
-            ref = (torch.nn.functional.silu(g) * u).to(torch.bfloat16)
-            equal += int((ref == act).sum())
-            total += act.numel()
-            worst = max(worst, float((ref.float() - act.float()).abs().max()))
-        out["act_eq_silu_gate_times_up"] = {"bf16_equal_fraction": equal / total, "max_abs_diff": worst, "elements": total}
+                done += 1
+                bad += leaf(s, ci, cnt, data[(off + ci) * CHUNK:(off + ci + 1) * CHUNK]) != leaves[off + ci]
+        return done, bad
+
+    if st.stage is not None and step == int(st.mirror[2]) - 1:
+        done, bad = recompute(st.stage[:n * CHUNK].cpu().numpy().tobytes(), True)
+        out.update(staged_leaves_recomputed=done, staged_leaves_mismatched=bad,
+                   root_from_staged_bytes_matches=done > 0 and bad == 0 and out["root_from_device_leaves_matches"])
+    if st.keep is not None:
+        done, bad = recompute(_ring_slice(st.keep, hbase, n, CHUNK), False)
+        out.update(leaves_recomputed=done, leaves_mismatched=bad,
+                   root_from_retained_bytes_matches=bad == 0 and out["root_from_device_leaves_matches"])
     return out
