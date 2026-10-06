@@ -24,10 +24,9 @@ touches what `merge_requires` sends the Lean agreement for, and `upstream.json`'
 The dedupe key makes adding idempotent, and a deliberate re-run names a new one (--dedupe-key).  A merge check's is
 `merge-check:{commit}`.  A Lean regeneration's is `lean-regen:{digest of its inputs}`: the blobs, at that commit, of every tracked
 file the audit reads (each package, the packages its `proved_in` names, and every package these require by path, less the
-Lake packages nested in them, and
-`tools/lean/`; `tools/lean/lean_audit.py`'s inputs without check's own files).  So trains whose Lean inputs are the same share
-one regeneration, and the second add answers with the first job and its run.  The site is `$JOBS_URL`.  Exit 1 when the
-Job queue refuses, 4 when it can't be reached.
+Lake packages nested in them, and `tools/lean/`; `tools/lean/lean_audit.py`'s inputs without check's own files).  So trains
+whose Lean inputs are the same share one regeneration, and the second add answers with the first job and its run.  The site
+is `$JOBS_URL`.  Exit 1 when the Job queue refuses, 4 when it can't be reached.
 """
 from __future__ import annotations
 
