@@ -539,10 +539,10 @@ def _memory_challenger_env() -> dict[str, str]:
 
 
 def leave_reserved(a: Any) -> None:
-    """Move every thread of this process (the load loop, CUDA's own threads) off the memory challenger's and responder's
-    CPUs; threads started later inherit the mask, and the responder and memory challenger pin themselves back.  Every thread,
-    not only the caller: on cores booted `isolcpus=domain` nothing is load-balanced, so a thread left on a reserved core
-    stays there and takes whole scheduler slices from the memory challenger."""
+    """Move every thread of this process (the load loop, CUDA's own threads) off the memory challenger's and responder's CPUs;
+    threads started later inherit the mask, and the responder and memory challenger pin themselves back.  Every thread, not
+    only the caller: on cores booted `isolcpus=domain` nothing is load-balanced, so a thread left on a reserved core stays there
+    and takes whole scheduler slices from the memory challenger."""
     here = set(os.sched_getaffinity(0))
     reserved = {x for x in (a.verifier_cpu, a.responder_cpu) if x is not None} & here
     if not reserved or not here - reserved:

@@ -18,7 +18,7 @@ against C's leaf).
 - **The signer.** `--signer lms` signs with S1's LMS at `lms.DEPLOYED` (`memory_challenger.LMS`), the key in `--lms-key DIR`:
   `seed` (secret, 0600), `public` (`I || T[1]`), `tree.bin` (the key's tree, a cache checked against `public` and
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
-  first (`--keygen-workers`; about 628M hashes).  `--signer test` signs with the PoUS tests' test signer (`pous_test_signer.py`: LMS at a small height under a
+  first (`--keygen-workers`; about 1.1G SHA-512 hashes).  `--signer test` signs with the PoUS tests' test signer (`pous_test_signer.py`: LMS at a small height under a
   `test/` id), its leaf state in `$TMPDIR`.
 - **The verdict** is `memory_challenger.verdict` under `memory_challenger.SCHEMES`, which accepts S1's scheme alone, so a
   test-signed session is rejected: it fails closed.  `accepted_under_signer` is the same verdict under the signer's own

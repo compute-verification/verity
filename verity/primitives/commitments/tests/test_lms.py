@@ -1,5 +1,5 @@
 """`verity.primitives.crypto.lms`: RFC 8554's Test Case 2 with SHA-256 swapped in (keys from (I, SEED), C, every chain value
-and path node), the parameter table, pinned SHA-512 vectors at the deployed shape (N = 32, W = 1) and a small tree, the roles'
+and path node), the parameter table, pinned SHA-512 vectors at the deployed shape (N = 64, W = 1) and a small tree, the roles'
 digests, refusal of tampered signatures, and a leaf state that fails closed."""
 from __future__ import annotations
 
@@ -14,17 +14,23 @@ import pytest
 from verity.primitives.crypto import lms as R
 
 FIXTURE = Path(__file__).with_name("lms_rfc8554_tc2.json")
-SEED = bytes(range(32))
-SMALL = R.Params(32, 1, 4)
+SEED = bytes(range(64))
+SMALL = R.Params(64, 1, 4)
 #: SMALL's key from SEED: its public key, and the first 16 bytes of SHA-512 over the encoded signatures sign_at gives at
 #: (q, message) for q = 0 (a certificate) and q = 15 (a memory challenger record)
-PUBLIC = "e436778fb8460c2bbc30ccf0fdd50f38f80696ae37d3cbdb8ea9aab24f36a42271b73f281ae62b28a53b26ec927399e9"
-CERTIFICATE = "d6548a0c2ed08a7279ad82ffe4647e8ef25171749d94b504cb0f4560c6a31fd2bce4e9ad113867f526a386ed1209ae7e48fa6a8bf960db0233be1001ef31deaf"
-RECORD = "635304bea4a7f2a90ad9ee0ca6c49ff8a9bfb7a05c84a5b73c91ed7a480cb7f16acdaec3c008dd552334819d13698cbc01ac039e8fd98abfef1a155377539b81"
-SIGNATURES = {0: "b2c0906514c9f7d9608decea0b9ea981", 15: "ec943d027d27c42ffa32ae24c3112c64"}
+PUBLIC = "326497cc0d59b0a4b1cebb5b8e7786372ccf46cb21f1a8b37ca0d33c24e43004743eacee9765553fc4097cd7b3e1af1d71c372488ea4bdb6b63bd8d48de09b676f1760513adca36d48ea256bac3edeb6"
+CERTIFICATE = "7f9a8469362072097be54bf65fc3c4827d0b42a61a0a747b43bde27e405da23b065742d4779db9d07e4825e1dfae9d0ad15c59ac9270dfebb32a0d82524c23d7"
+RECORD = "7e50764d622125f1e625bf8af2a01c86545171c2cf8f6d9e20adc9ec41bbb1701ee99c3fc97f57de3c6c7faef614f6b63b94a4acdd5150c5b608948fcd594562"
+SIGNATURES = {0: "f36d4f46a1620d8709bb2959dd6d81ff", 15: "5c2f9cf77f3a00a187acb34605474f5a"}
 
 
 class _Sha256(R.Params):
+    """RFC 8554's LMS_SHA256_M32 hash: N = 32, which `R.Params` admits only here, for the RFC's vectors and table."""
+
+    def __post_init__(self) -> None:
+        if self.N != 32:
+            raise ValueError(f"SHA-256's N is 32, not {self.N}")
+
     def hash(self, data: bytes) -> bytes:
         return hashlib.sha256(data).digest()
 
@@ -51,11 +57,17 @@ def test_rfc8554_test_case_2(level) -> None:
 
 
 def test_the_parameter_table_is_rfc8554s() -> None:
-    """P and LS for every (N, W) in RFC 8554 Appendix B's formulas (its Table 1 at N = 32)."""
-    got = {(n, w): (R.Params(n, w, 1).P, R.Params(n, w, 1).LS) for n in (32, 64) for w in (1, 2, 4, 8)}
+    """P and LS for every (N, W) in RFC 8554 Appendix B's formulas (its Table 1 at N = 32, SHA-256's), the deployed
+    parameters and their signature size, and no N but 64 (or the toy, by name) over SHA-512."""
+    got = {(n, w): (p.P, p.LS) for n in (32, 64) for w in (1, 2, 4, 8) for p in [(_Sha256 if n == 32 else R.Params)(n, w, 1)]}
     assert got == {(32, 1): (265, 7), (32, 2): (133, 6), (32, 4): (67, 4), (32, 8): (34, 0),
                    (64, 1): (522, 6), (64, 2): (261, 6), (64, 4): (131, 4), (64, 8): (66, 0)}
-    assert R.DEPLOYED == R.Params(32, 1, 20) and R.DEPLOYED.signature_bytes() == 9156
+    assert R.DEPLOYED == R.Params(64, 1, 20) and R.DEPLOYED.signature_bytes() == 34756
+    assert R.DEPLOYED.hash(b"x") == hashlib.sha512(b"x").digest()
+    for n in (32, R.TOY_N, 48):
+        with pytest.raises(ValueError):
+            R.Params(n, 1, 1)
+    assert R.Params(R.TOY_N, 1, 1, toy=True).N == R.TOY_N
 
 
 def test_pinned_vectors(small) -> None:
@@ -207,7 +219,7 @@ def test_a_state_changed_under_its_signer_is_refused(state, small, tmp_path) -> 
 
 
 def test_another_keys_state_and_an_existing_state_are_refused(state, small, tmp_path) -> None:
-    other = R.keygen(SMALL, bytes(32))
+    other = R.keygen(SMALL, bytes(64))
     with pytest.raises(R.StateError, match="another key"):
         _open(state, other)
     with _open(state, small) as st:
@@ -218,7 +230,7 @@ def test_another_keys_state_and_an_existing_state_are_refused(state, small, tmp_
 
 
 def test_every_leaf_is_used_once_then_signing_is_refused(tmp_path) -> None:
-    p, k = tmp_path / "s", R.keygen(R.Params(32, 1, 1), SEED)
+    p, k = tmp_path / "s", R.keygen(R.Params(64, 1, 1), SEED)
     R.LeafState.create(p, R.public_key(k), 1)
     with _open(p, k) as st:
         assert [R.sign(k, st, b"m").q for _ in range(2)] == [0, 1]
