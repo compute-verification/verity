@@ -154,6 +154,7 @@ what a suite may read (`[tool.verity.tests] inputs`), and the rules for slow tes
 `.agents/skills/testing/SKILL.md`.
 No test depends on wall-clock time (no sleeps, clock readings or timeouts; wait on the event itself or inject the clock):
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
+A test that flakes is deleted, not fixed or rerun.
 A test that adds more than about a minute to `check` says in its docstring what it catches that a cheaper test can't.
 
 ## Circuits
@@ -216,6 +217,10 @@ first in a quiet window, alone in its train (Daniel, 4 Oct).
   assumptions get an `upstream` watch entry (`tools/lean/upstream.py`): `.agents/skills/lean-proofs/SKILL.md`.
 
 ## Working principles
+
+Research velocity comes first (Daniel, 6 Oct). Be as generous as possible with what lands and cut ceremony: propose
+cutting any gate, review or step that slows landing without catching real errors, and fix what breaks later. Our
+machines are research infrastructure, not a rehearsal of deployment, so don't mimic deployment settings.
 
 Solve the current task with the smallest clear implementation. Reuse
 existing code and commands before adding abstractions or procedures. Add
