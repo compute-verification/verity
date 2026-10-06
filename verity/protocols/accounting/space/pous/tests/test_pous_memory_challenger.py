@@ -251,7 +251,7 @@ class _SparseTree:
 
 
 def deployed_signer(tmp_path) -> mc.LmsSigner:
-    I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()
+    I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
     return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
@@ -259,7 +259,7 @@ def deployed_signer(tmp_path) -> mc.LmsSigner:
 
 def test_an_lms_signed_session_is_accepted_under_the_deployed_scheme(tmp_path):
     signer = deployed_signer(tmp_path)
-    assert signer.scheme == mc.LMS and len(signer.public_key) == 80
+    assert signer.scheme == mc.LMS and len(signer.public_key) == 16 + lms.DEPLOYED.N
     c, signed, _ = session(signer=signer)
     assert len(signed.signature) == lms.DEPLOYED.signature_bytes()
     assert judge(c, signed, signer, schemes_=mc.SCHEMES).public() == {"accepted": True}

@@ -52,6 +52,8 @@ def _cases(p: R.Params) -> tuple[list, list[int]]:
 @pytest.mark.slow
 @pytest.mark.parametrize("H", [1, 2])
 def test_the_verifier_agrees_with_the_reference(H) -> None:
+    """About a minute at H = 1 (the parts' first evaluation): the only check of the whole verifier at the deployed N, whose
+    two-block message hash and tree nodes the toy binding circuit-check runs never reaches."""
     p = R.Params(64, 1, H)
     rows, want = _cases(p)
     assert want == [1, 0, 0, 0, 0, 0, 0, 0] * 2 ** H
@@ -66,9 +68,14 @@ def test_the_parts_cost_the_pinned_gates() -> None:
         assert getattr(G, name).traced(*statics).counts == {"and": ands, "xor": xors, "not": nots}, name
 
 
-def test_the_verifier_is_boolean_and_typed_by_its_shape() -> None:
+@pytest.mark.slow
+def test_the_verifier_is_boolean() -> None:
+    assert BL.is_boolean(G.verifier(64, 1, 3))
+
+
+def test_the_verifier_is_typed_by_its_shape() -> None:
     v = G.verifier(64, 1, 3)
-    assert BL.is_boolean(v) and v is G.verifier(64, 1, 3)
+    assert v is G.verifier(64, 1, 3)
     assert [t.leaves for _, t in v.signature()[0]] == [128, 512, 512, 3, 512, 522 * 512, 3 * 512]
     for n in (32, 48):
         with pytest.raises(ValueError):

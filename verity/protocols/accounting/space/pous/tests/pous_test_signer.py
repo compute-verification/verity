@@ -23,7 +23,7 @@ def TestSigner(secret: bytes, height: int = 3, state_dir: str | Path | None = No
     if height not in HEIGHTS:
         raise ValueError(f"a test signer's height is in {HEIGHTS}, not {height}")
     params = lms.Params(64, 1, height)
-    key = lms.keygen(params, hashlib.sha512(b"verity-pous/test-signer/v0" + secret).digest())
+    key = lms.keygen(params, hashlib.sha512(b"verity-pous/test-signer/v0" + secret).digest()[:params.N])
     path = Path(state_dir or tempfile.mkdtemp(prefix="pous-test-signer-")) / "leaf-state.json"
     lms.LeafState.create(path, lms.public_key(key), height)
     return mc.LmsSigner(key, lms.LeafState(path, lms.public_key(key), height), scheme=scheme(height))

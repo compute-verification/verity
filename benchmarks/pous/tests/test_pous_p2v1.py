@@ -603,7 +603,7 @@ def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profil
     from verity.protocols.accounting.space.pous.schemes import p2
 
     live = _live()
-    I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()
+    I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
     signer = mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
