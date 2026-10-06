@@ -554,8 +554,10 @@ Where the boundary runs:
   of `flock-circuit` (the masking challenger, the live stream, `zk_finish`, and the gate between them) is the gateway. The
   device reaches the gateway through three channels: each round's frames (`rounds(content, n)`, at its squeeze), the
   level-0 root (`hook(root)`, at the session's `Commit`), and the returned `(R1csProofLigerito, Commitment)`. The gate
-  checks all three. The device holds the witness, the level-0 hiding (`Level0Zk`: padding and extra lanes) and the level-0
-  salts, but never the pads `h`, `mu` or the inner proof's randomness.
+  checks all three. The device holds the witness, the level-0 hiding (`Level0Zk`: padding and extra lanes) and the whole
+  `LeafSalts` key (32 bytes, from which every tree's salts expand: level 0's, levels 1+'s and the pads tree's), but never the
+  pads `h`, `mu` or the inner proof's randomness. Holding the key fixes nothing it sends: every salted leaf and path that
+  leaves is the recheck's or a recomputed tree's (§10.1), and the pads tree is the gateway's own.
 
 ### 10.1 The rule, outer phase (one rep, in §1's order)
 
@@ -589,9 +591,9 @@ folds the lincheck's comb for its own relation check, as the verifier does. It d
 lincheck, the bulk of the device's arithmetic. What it recomputes is a CPU Ligerito: the commitment over the whole
 witness, and the opening's basis fold `w^r`, which `T'`, `ybar` and levels 1+ all read.
 
-**What a refusal costs.** A refusal stops the session, which the auditor sees: one event per session, at a round the
-device can move (about `log₂ 100` bits a rep). A gateway that refuses is evidence against its rack. Timing (when a message
-leaves) is not in this rule; the network warden covers it.
+**What a refusal costs.** A refusal stops the session, which the auditor sees, at a message the device can move: §10.5 bounds
+what that reveals over the whole recursive session. A gateway that refuses is evidence against its rack. Timing (when a
+message leaves) is not in this rule; the network warden covers it.
 
 ### 10.2 The level-0 recheck
 
@@ -608,19 +610,24 @@ the proof's level-0 rows and paths are checked against it at the end. Its cost i
 
 | item | rule | why the M0 prover has no free choice |
 |---|---|---|
-| `Hello` | constant | the gateway forwards its public part (no Σ) only when it equals the pinned schedule's |
+| `Hello` | constant | the gateway compares the prover's, Σ aside, with the pinned schedule's as canonical JSON (`rec_live.canonical`: sorted keys, no spaces, so `2` and `2.0` differ) and forwards the schedule's own, never the prover's text or object |
 | `Commit`'s level-0 roots | salted | each 64-byte node of each root reaches the coin server as a registered row's `b ‖ c` (`rec_live.top_rows`: its 32 u16 words, then 32 zero words; `hm96-sha512/row/v1`) under its own fresh 192-byte salt; the roots and salts stay in `private.json` |
 | a round's caps (its `BYTES` frames that commit a tree) | salted | as the roots, one fresh salt per node |
 | a round's free message | salted | `c_k`, its rows committed under fresh salts (as before) |
 | statement digest, labels, domain, nonces | dropped | public constants or functions of the hidden statement; never forwarded |
-| `Link`'s `y` | constant `0` | the prover sends zeros; the gateway refuses anything else |
-| stream names, `Open`'s parent and position, each round's coin count and the counts of its caps' nodes and message rows | constant | the pinned schedule's; the gateway refuses any other |
+| `Link`'s `y` | constant `0` | the schedule fixes its length (`link.y` elements of 16 bytes); the gateway refuses any other byte length, and any nonzero byte |
+| stream names, `Open`'s parent and position, each round's coin count and the counts of its caps' nodes and message rows | constant | the pinned schedule's; the gateway refuses any other. The coin server's record lists the streams by name, as the schedule does, never in the order the prover opened them |
+| how the session ends | `finish` or `stop` | every session served is written and counted toward `--sessions`, with `end` `finish` or `stop` (a refusal, or a session that ends without `Finish`: closed, reset or cut inside a frame), never why |
+| a request the gateway cannot read, or the gateway's own fault | refusal | any exception while handling a request stops the session (`GATE-REFUSED: a request the gateway cannot read (…)`), never the gateway |
 
-The schedule is `rec_live --schedule FILE` (`--schedule-of PUBLIC_JSON` prints one record's), or else the first session the
-proxy finishes pins it for the rest; `schedule.json` beside the sessions is the one in force. The record says how its tops
+The schedule is `rec_live --schedule FILE`, and the proxy refuses to serve without one. `rec_live --schedule-for STATEMENT`
+derives it before any session from `flock-circuit statement`'s record of the public file alone (`schedule_for`: `dense_m`,
+`k_log`, `nbl` and `regions`, the four numbers the schedule reveals anyway), and `serve` writes it to `schedule.json` before
+the first session. No session pins it: a schedule taken from a session the prover ran would be the prover's choice
+(`--schedule-of PUBLIC_JSON` prints a record's schedule, to compare with the one it was held to). The record says how its tops
 are salted (`"tops": "hm96-sha512/v1/node-row"`, `rec_live.TOPS`). A refusal (`GATE-REFUSED: …`) stops the session: every later
 request is refused with the same reason, `Finish` answers not accepted, and only `public.json` (what the coin server had
-received) is written.
+received, `end: "stop"`) is written.
 
 A salted node's opening (node and salt) is the prover's. V*'s inputs (`rec_vstar.root`, `caps`) read the clear tops from
 `private.json` and refuse `GATE-REFUSED: tree top` when one does not open its commit string in `public.json`, or when the
@@ -670,3 +677,41 @@ cores. All of it is CPU work. Three changes not yet made would shorten it: the g
 about 10 s), the recheck a session ahead (it reads only the host witness and the gateway's own salts and hiding), and the
 device skipping the opening the shadow replaces (freeing the device's share of the cores). The shadow's own opening (15.7 s
 over the eight, under contention) and the comb fold stay on the session's path.
+
+### 10.5 What a stop reveals: the whole recursive session
+
+A recursive session is the inner phase's session and the outer phase's sessions, one per V* statement (at K = 4096 eight: the
+levels L0–L6 and the algebra). With §10.1 and §10.3, every message of a session that reaches the auditor is fixed, and so is
+their order: `Hello`, `Commit`, `Link`, each stream's `Open` and rounds, the proofs, `Finish` (`Ping` touches no session
+state). What a worker still chooses is whether and where a session stops: a refusal it provokes, or a session that ends
+without `Finish` (a crash, a hang, a cut connection). The auditor sees every stop:
+- inner phase: `rec_live` writes every session it serves, with `end` `finish` or `stop` (a refusal and a session that ends
+  without `Finish` alike, never why), and counts it toward `--sessions` (§10.3);
+- outer phase: `flock-circuit serve` writes every connection's record, finished or not, and counts it toward `--sessions`.
+  The gateway sends `Finish` after a refusal and a crash or a cut does not, so an outer record also shows which of the two
+  ended it.
+
+**A stop ends its session**, never part of it: the inner gateway refuses every later request, and the outer gateway sends
+nothing after its refusal but `Finish`. The outer phase starts only from a finished inner session (V*'s statements are staged
+from its record: `rec_outer`, `rec_residuals`), so a stop in the inner phase ends the recursive session. A stop in the outer
+phase ends its own session alone: nothing carries it to the other V* statements, which `85-rec-reprice.sh` proves each
+against its own `serve`.
+
+**The bound.** A session of `M_p` messages ends in one of `s_p + 2` ways: finished, never opened, or stopped after its `k`-th
+message (`k < M_p`), with `s_p = M_p` stops in the inner phase and `s_p = 2 M_p` in the outer (with `Finish` or without).
+Counted from serve's and the proxy's records of one recursive session at K = 4096 (2 reps a session): the inner session's
+286 messages (139 rounds a rep) and the outer sessions' 268, 266, 266, 242, 242, 236, 232 and 288 (L0–L6, the algebra),
+2326 in all.
+
+| a stop | what it reveals, at most | at K = 4096 |
+|---|---|---|
+| ends the recursive session (no later session of it runs) | `log₂(1 + Σ_p (s_p + 1))` | 12.1 bits (11.18 = `log₂(2326 + 1)` without the outer's `Finish` bit and the never-opened sessions) |
+| ends its own session only (each V* statement on its own, as today) | `Σ_p log₂(s_p + 2)` | 80.1 bits (72.1 = `Σ_p log₂(M_p + 1)` without them) |
+
+Today the second row holds: a stop in the outer phase does not end the others. The first needs an auditor's rule, that a
+recursive session ends at its first stop (no further V* statement of it is proved), which no code enforces yet.
+
+**Retries.** Every stop is recorded and counted, in both phases, so the auditor knows how many times a recursive session was
+run, and each run it allows reveals its own ending: `r` stopped runs before an accepted one reveal at most `r + 1` times the
+row's bound. The auditor chooses `r`, since it decides whether a rack runs again after a stop; with `r = 0` a rack whose
+gateway stops once has no second run.
