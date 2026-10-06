@@ -13,7 +13,8 @@ import Flock.Firewall.Contract
 
 namespace Flock.Firewall.Contract
 
-/-- D8 (a): every value the firewall reports fixing by its own computation is the specified one, `spec what`. -/
+/-- D8 (a): every value the firewall reports fixing by its own computation is the specified one, `spec what`. The
+decisions across sessions (whether to go on, whether to release) are outside this assumption, in Lean or in Rust. -/
 def FirewallComputes (spec : String → Option ByteArray) (t : Transcript) : Prop :=
   ∀ what src want sent ps, Item.fixed what src want sent ps ∈ t.items.toList →
     (src = .recheck ∨ src = .shadow ∨ src = .own) → spec what = some want
