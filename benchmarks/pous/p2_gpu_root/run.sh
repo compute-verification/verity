@@ -4,7 +4,8 @@
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign pous --declared-output 'out/*' -- \
 #     gpu-lease 1 --wait --on 0,1,2,3 --max-min 30 -- taskset -c 0-7 bash benchmarks/pous/p2_gpu_root/run.sh [N] [CONFIGS] [SET]
 # SET is all (default), rns (only the RNS chains, rnschain and rns.py, and the floor model) or model (only the floor
-# model over its hop and latency grid: CPU, no GPU, no lease).
+# model over its hop and latency grid: CPU, no GPU, no lease) or lat (only probe5: the per-level latencies and one SM's
+# dependent int8 mma rate, with its SASS).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 out=${RESEARCH_RUN_DIR:?}/out
@@ -25,6 +26,15 @@ model() {
   done
 }
 if [ "$set_" = model ]; then model; exit 0; fi
+if [ "$set_" = lat ]; then
+  $nv $f -o "$b/probe5" "$here/probe5.cu"
+  "${CUOBJDUMP:-/usr/local/cuda/bin/cuobjdump}" -sass "$b/probe5" > "$out/probe5.sass"
+  nvidia-smi -q -d CLOCK,PERFORMANCE > "$out/nvidia-smi-before.txt"
+  "$b/probe5" > "$out/probe5.jsonl"
+  "$b/probe5" > "$out/probe5-rep2.jsonl"
+  nvidia-smi -q -d CLOCK,PERFORMANCE > "$out/nvidia-smi-after.txt"
+  exit 0
+fi
 $nv $f -DRR=7 -DNC4=6 -DJJ=1 -DTPR=64 -o "$b/rns_r7_j1" "$here/rnschain.cu"
 $nv $f -DRR=10 -DNC4=5 -DJJ=1 -DTPR=64 -o "$b/rns_r10_j1" "$here/rnschain.cu"
 $nv $f -DRR=14 -DNC4=11 -DJJ=1 -DTPR=32 -o "$b/rns_r14_j1" "$here/rnschain.cu"
