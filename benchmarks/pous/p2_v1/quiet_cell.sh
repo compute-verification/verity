@@ -12,8 +12,11 @@ windows=()
 for w in ${avoid//,/ }; do windows+=(--avoid "$w"); done
 while :; do
   python3 "$here/sweep.py" clear "${windows[@]}" --budget-min "$budget" --until "$until" || exit 75
+  # node_ops' Quiet stops this user's busy process groups outside the lease's process tree while a timed lease is held, and
+  # vy-pous-quiet's sudo (root's) cuts that tree; a group under GNU timeout is exempt, so the cell runs as one.
   gpu-lease 1 --on 7 --wait --max-min "$budget" --timed -- \
-    vy-pous-quiet python3 "$here/sweep.py" cell "$@" --quiet-slice "${windows[@]}" --budget-min "$budget"
+    vy-pous-quiet timeout -k 20 $((budget * 60 - 30)) python3 "$here/sweep.py" cell "$@" --quiet-slice "${windows[@]}" \
+    --budget-min "$budget"
   rc=$?
   [ "$rc" = 75 ] || exit "$rc"
 done
