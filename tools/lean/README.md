@@ -27,7 +27,7 @@ python tools/lean/audit.py --update PKG...        write the guarantees' records 
 python tools/lean/audit.py --update --owner @lane PKG...   the same, with @lane as the owner of each new guarantee
 python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
 python tools/lean/audit.py --name-instances PKG...  write each anonymous instance's name, the one Lean gave it, into its
-                                                  declaration (no record changes)
+                                                  declaration (no record changes); it fails until you build and audit again
 python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
