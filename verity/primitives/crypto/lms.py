@@ -6,8 +6,8 @@ certifier's certificates and the memory challenger's records, and the reference 
 its domain separators: a chain step ``H(I || u32(q) || u16(i) || u8(j) || tmp)``, the message
 ``Q = H(I || u32(q) || u16(D_MESG) || C || message)``, the one-time public key ``K = H(I || u32(q) || u16(D_PBLC) || z_0 ||
 ... || z_{P-1})``, a leaf ``H(I || u32(r) || u16(D_LEAF) || K)`` and an interior node ``H(I || u32(r) || u16(D_INTR) || left
-|| right)``, node r of the tree numbered from the root r = 1 (a leaf q is node 2^H + q). The message signed is a record's
-SHA-512 digest, 64 bytes.
+|| right)``, node r of the tree numbered from the root r = 1 (a leaf q is node 2^H + q). A message is any bytes; a
+certifier signs a record's 64-byte SHA-512 digest, the message the in-proof verifier takes.
 
 **Parameters.** (N, W, H): N the hash length, W in {1, 2, 4, 8} the Winternitz width, H the tree height (2^H one-time keys;
 20 for a certifier). P = U + V chains, U = ceil(8N / W) message digits and V checksum digits, and the checksum shifted left
@@ -17,7 +17,8 @@ LS = 16 - V W bits (RFC 8554 §4.1, Appendix B).
 ... || y_{P-1} || path_0 || ... || path_{H-1}`` and a public key ``I || T[1]``. Keys are deterministic from a seed (the RFC's
 Appendix A): ``x_q[i] = H(I || u32(q) || u16(i) || u8(0xff) || SEED)``, ``C = H(I || u32(q) || u16(0xfffd) || u8(0xff) ||
 SEED)`` and ``I = SHA-512(b"verity/lms/v0/I" || SEED)[:16]``. The scheme is stateful: a key signs at most once per q,
-and keeping q is the signer's (`sign` takes it).
+and keeping q is the signer's (`sign` takes it). With the hash swapped for SHA-256 (`Params.hash`), the tests reproduce
+RFC 8554's Test Case 2.
 
 Standard library only, and slow: keygen hashes 2^H P (2^W - 1) times, so the tests use small H.
 """
@@ -26,11 +27,10 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 
-__all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "Params", "PrivateKey", "Signature", "digits", "keygen", "public_key",
-           "sign", "verify"]
+__all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "Params", "PrivateKey", "Signature", "digits", "key", "keygen",
+           "public_key", "root_of", "sign", "verify"]
 
 D_PBLC, D_MESG, D_LEAF, D_INTR = 0x8080, 0x8181, 0x8282, 0x8383
-MESSAGE_BYTES = 64
 
 
 def _u32(x: int) -> bytes:
@@ -143,7 +143,13 @@ def keygen(params: Params, seed: bytes) -> PrivateKey:
     """The key with 2^H one-time keys that ``seed`` (N bytes) determines, with its whole tree."""
     if len(seed) != params.N:
         raise ValueError(f"an LMS seed is {params.N} bytes, not {len(seed)}")
-    I = hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16]
+    return key(params, hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16], seed)
+
+
+def key(params: Params, I: bytes, seed: bytes) -> PrivateKey:
+    """The key of identifier ``I`` (16 bytes) whose one-time keys ``seed`` derives (RFC 8554 Appendix A)."""
+    if len(I) != 16:
+        raise ValueError(f"an LMS identifier is 16 bytes, not {len(I)}")
     top = 2 ** params.H
     tree: list[bytes] = [b""] * (2 * top)
     e = 2 ** params.W - 1
@@ -161,8 +167,6 @@ def public_key(key: PrivateKey) -> bytes:
 
 
 def _message_hash(params: Params, I: bytes, q: int, C: bytes, message: bytes) -> bytes:
-    if len(message) != MESSAGE_BYTES:
-        raise ValueError(f"the signed message is a {MESSAGE_BYTES}-byte SHA-512 digest, not {len(message)} bytes")
     return params.hash(I + _u32(q) + _u16(D_MESG) + C + message)
 
 
