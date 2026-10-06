@@ -24,6 +24,14 @@ order; the figure is the median replay over CALLS, in µs a call.  Variants, per
   call.nohash     the call without A's commitment and the tile hashing (form w, so stats_a stays)
   call.hm96       call.nohash with a.hm96 in A's commitment's place and the tile rows as hash_msg, hash_leaf, t.hm96
   call.both       call.h2 with a.hm96 and t.hm96 added (both formats)
+A decode step's four linears LAYERS deep, each a graph replayed REPS rounds, in ms:
+  step.nohash, step.h2, step.hm96   every call as call.nohash, call.h2, call.hm96
+  step.both.side    every call as call.h2, each call's a.hm96 and t.hm96 on a side stream forked after it, joined at the step's
+                    end (-h2's root seeding forming, the statement's roots off the critical path)
+  step.h2.batch     step.h2, then batch.hm96
+  batch.hm96        the step's rows in one commitment a format: its FP32 A rows of each k as hm96-sha512 row-seg leaves and
+                    the tile rows as row/v2 leaves, each in one tree (grid-wide launches)
+  batch.sha512      the step's A rows' unsalted sha512/row-seg/v1 digests alone
 Throughput, outside graphs: hash_rows_b3s against a.hm96's kernels over PREFILL rows of each k, in GB/s of row bytes.
 
   python3 rows_bench.py --cubin pearl_c_sm120.cubin --rows-cubin hm96_rows.cubin --out OUT.json
@@ -214,7 +222,8 @@ def main() -> int:
     h = R.Dev(rimage)
     h.open()
     R.bind(dev.cu, {"cuStreamCreate": [P(vp), C.c_uint], "cuStreamBeginCapture_v2": [vp, C.c_int], "cuStreamEndCapture": [vp, P(vp)],
-                    "cuGraphInstantiateWithFlags": [P(vp), vp, C.c_ulonglong], "cuGraphLaunch": [vp, vp]})
+                    "cuGraphInstantiateWithFlags": [P(vp), vp, C.c_ulonglong], "cuGraphLaunch": [vp, vp],
+                    "cuStreamWaitEvent": [vp, vp, C.c_uint]})
     nv = R.Nvml(dev.uuid)
     res["clk_before"] = nv.read()
     s = vp()
@@ -226,12 +235,12 @@ def main() -> int:
     consts = {"tables": h.put(tables), "salt_key": h.put(SALT_KEY), "hm_mid": h.alloc(128)}
     h.launch("sz_mid", 1, 32, p=(hm_pre, consts["hm_mid"]), i=(2,))
     m = R.cdiv(M_REAL, R.BM_D) * R.BM_D
-    ok, graphs, gates = True, {}, {}
+    ok, graphs, gates, per = True, {}, {}, {}
 
-    def capture(body) -> vp:
+    def capture(body, times: int | None = None) -> vp:
         dev.stream = h.stream = s
         dev.ck("cuStreamBeginCapture_v2", s, 0)
-        for _ in range(calls):
+        for _ in range(calls if times is None else times):
             body()
         g, ge = vp(), vp()
         dev.ck("cuStreamEndCapture", s, C.byref(g))
@@ -242,10 +251,10 @@ def main() -> int:
     def poison(ptr: int, n: int) -> None:
         dev.ck("cuMemsetD8_v2", u64(ptr), POISON, n)
 
-    def gate(cm: Commit, mode: int, tag: str, g: dict) -> None:
+    def gate(cm: Commit, mode: int, tag: str, g: dict, one_cta: bool = True) -> None:
         """cm's outputs from poisoned buffers against Python's (equal), and the no-write control's (unequal)."""
         want = cm.reference(cm.read_rows())
-        for run, name, same in ((lambda: cm.run(mode), tag, True), (lambda: None, f"{tag}.control", False)):
+        for run, name, same in ((lambda: cm.run(mode, one_cta), tag, True), (lambda: None, f"{tag}.control", False)):
             for p_, n_ in ((cm.x, 64 * cm.rows), (cm.bc, 128 * cm.rows), (cm.tree, cm.tree_bytes)):
                 poison(p_, n_)
             cm.write_pads()
@@ -297,13 +306,15 @@ def main() -> int:
         nohash = [nm for nm in call["w"] if nm not in HASH_A + HASH_T]
         a_hm96, t_hm96 = (lambda: cm_a.run(2)), (lambda: cm_t.run(2))
 
-        def call_hm96() -> None:
-            a_hm96()
-            for nm in (*nohash, "hash_msg", "hash_leaf"):
-                if nm in steps["w"]:
-                    steps["w"][nm]()
-            t_hm96()
+        def hm96_call(a_hm96, t_hm96, fs) -> callable:
+            def run() -> None:
+                a_hm96()
+                for fn in fs:
+                    fn()
+                t_hm96()
+            return run
 
+        call_hm96 = hm96_call(a_hm96, t_hm96, [steps["w"][nm] for nm in (*nohash, "hash_msg", "hash_leaf") if nm in steps["w"]])
         call_s = seq("s", call["s"])
         v = {"a.h2s": seq("s", HASH_A), "a.h2w": seq("w", HASH_A), "k.stats_a": seq("w", ("stats_a",)),
              "a.hm96": a_hm96, "a.sha512": lambda: cm_a.run(0), "p.hm96": lambda: cm_p.run(2),
@@ -312,8 +323,61 @@ def main() -> int:
              "call.both": lambda: (call_s(), a_hm96(), t_hm96()),
              "k.sz_segments.a": cm_a.segments, "k.sz_finish.a": lambda: cm_a.finish(2), "k.hash_rows_a.s": seq("s", ("hash_rows_a",))}
         graphs[shape] = {nm: capture(fn) for nm, fn in v.items()}
+        per[shape] = {"h2": call_s, "nohash": v["call.nohash"], "hm96": call_hm96,
+                      "a": [Commit(dev, h, consts, f"{shape}/a/{lyr}", xa, M_REAL, rb, rb, SEG, nonce + 16 * lyr) for lyr in range(LAYERS)],
+                      "t": [Commit(dev, h, consts, f"{shape}/t/{lyr}", pipes["s"].b["leaves"], tiles, 32, 32, V2, nonce + 16 * lyr + 1)
+                            for lyr in range(LAYERS)]}
         dev.sync()
+    # a decode step's four linears, LAYERS deep, and one batched commitment of all of its rows
+    s2, evf, evj = vp(), vp(), vp()
+    dev.ck("cuStreamCreate", C.byref(s2), 1)
+    for e in (evf, evj):
+        dev.ck("cuEventCreate", C.byref(e), 2)
+    step_rows = {4096: 3 * LAYERS * M_REAL, 14336: LAYERS * M_REAL}
+    step_tiles = LAYERS * sum(R.cdiv(M_REAL, R.TILE) * (n // R.TILE) for n, _ in SHAPES.values())
+    batch = []
+    for k, rows in step_rows.items():
+        x = dev.alloc(rows * 4 * k)
+        dev.launch("gen_f32", R.cdiv(rows * k, 256), 256, p=(x,), i=(rows, k, 31))
+        batch.append(Commit(dev, h, consts, f"step/a/{k}", x, rows, 4 * k, 4 * k, SEG, 1000 + k))
+    tl = dev.alloc(step_tiles * 32)
+    dev.launch("gen_f32", R.cdiv(step_tiles * 8, 256), 256, p=(tl,), i=(step_tiles, 8, 32))
+    batch.append(Commit(dev, h, consts, "step/t", tl, step_tiles, 32, 32, V2, 999))
+    dev.sync()
+    g = {}
+    for cm, tag in zip(batch, ("batch.a4096", "batch.a14336", "batch.t")):
+        gate(cm, 2, tag, g, one_cta=False)
+    gate(batch[0], 0, "batch.a4096.sha512", g, one_cta=False)
+    gates["step"] = g
+    print(f"gates step: {g}", flush=True)
+    ok = ok and all(g.values())
+
+    def forward(per_call) -> callable:
+        return lambda: [per_call(lyr, sh) for lyr in range(LAYERS) for sh in SHAPES]
+
+    def side(lyr: int, sh: str) -> None:
+        per[sh]["h2"]()
+        dev.ck("cuEventRecord", evf, s)
+        dev.ck("cuStreamWaitEvent", s2, evf, 0)
+        dev.stream = h.stream = s2
+        per[sh]["a"][lyr].run(2)
+        per[sh]["t"][lyr].run(2)
+        dev.stream = h.stream = s
+
+    def both_side() -> None:
+        forward(side)()
+        dev.ck("cuEventRecord", evj, s2)
+        dev.ck("cuStreamWaitEvent", s, evj, 0)
+
+    run_batch = lambda: [cm.run(2, one_cta=False) for cm in batch]  # noqa: E731
+    step_v = {"step.nohash": forward(lambda lyr, sh: per[sh]["nohash"]()), "step.h2": forward(lambda lyr, sh: per[sh]["h2"]()),
+              "step.hm96": forward(lambda lyr, sh: per[sh]["hm96"]()), "step.both.side": both_side,
+              "step.h2.batch": lambda: (forward(lambda lyr, sh: per[sh]["h2"]())(), run_batch()),
+              "batch.hm96": run_batch, "batch.sha512": lambda: [cm.run(0, one_cta=False) for cm in batch[:2]]}
+    step_graphs = {nm: capture(fn, 1) for nm, fn in step_v.items()}
+    dev.sync()
     res["gates"] = gates
+    res["step"] = {"rows": {str(k): v for k, v in step_rows.items()}, "tiles": step_tiles}
     save()
     print(f"gates: {gates}", flush=True)
     if not ok:
@@ -347,6 +411,17 @@ def main() -> int:
     res["us_per_call"] = us
     med = lambda nm: sum(us[sh][nm]["median"] for sh in us if nm in us[sh])  # noqa: E731
     res["per_forward_ms"] = {nm: round(LAYERS * med(nm) / 1e3, 3) for nm in next(iter(us.values()))}
+    for ge in step_graphs.values():
+        replay(ge)
+    st_: dict = {nm: [] for nm in step_graphs}
+    names = list(step_graphs)
+    for r in range(reps):
+        for j in range(len(names)):
+            nm = names[(j + r) % len(names)]
+            st_[nm].append(replay(step_graphs[nm]))
+    res["step_ms"] = {nm: {"median": round(statistics.median(xs), 3), "q1": round(statistics.quantiles(xs, n=4)[0], 3),
+                           "q3": round(statistics.quantiles(xs, n=4)[2], 3)} for nm, xs in st_.items()}
+    print("step (ms):", {nm: v["median"] for nm, v in res["step_ms"].items()}, flush=True)
     save()
 
     # throughput: prefill's rows of each k, hash_rows_b3s (frame-b3s leaves) against hm96-sha512 row-seg leaves and tree
