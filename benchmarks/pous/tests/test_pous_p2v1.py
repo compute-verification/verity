@@ -42,13 +42,14 @@ def _small():
 class _Bound:
     """The reference as one setup's kernels, on CPU rows."""
 
-    def __init__(self, params, salt, model, flip: bool) -> None:
+    def __init__(self, params, salt, model, flip: bool, version: int = 1, says: int | None = None) -> None:
         self.params, self.salt, self.model, self.flip = params, salt, model, flip
+        self.version, self.keys_version = version, version if says is None else says
 
     def _keys(self, i):
         R, _, _ = _p2()
         bps = self.params.blocks_per_segment
-        k, t, _ = R.keys(self.salt, self.params, self.model, i // bps, i % bps)
+        k, t, _ = (R.keys_v4 if self.version == 4 else R.keys)(self.salt, self.params, self.model, i // bps, i % bps)
         return k, t
 
     def keys(self, first, count):
@@ -80,14 +81,15 @@ class _Bound:
         return 0
 
 
-def _backend(flip: bool = False):
+def _backend(flip: bool = False, version: int = 1, says: int | None = None):
     _, harness, _ = _p2()
 
     def timer(fn):
         fn()
         return 1e-3
 
-    return harness.Backend("cpu", lambda params, salt, model: _Bound(params, salt, model, flip), lambda c, cpu: PyResponder(c), timer)
+    return harness.Backend("cpu", lambda params, salt, model: _Bound(params, salt, model, flip, version, says),
+                           lambda c, cpu: PyResponder(c), timer)
 
 
 def _args(tmp_path, **kw):
@@ -237,6 +239,18 @@ def test_a_wrong_p2_kernel_stops_the_run_before_anything_is_timed(tmp_path):
     body = _bench().P2V1Gpu().run(_args(tmp_path), WS, tmp_path, backend=_backend(flip=True), params=_small())
     assert body["gates"]["vector"]["passed"] and not body["gates"]["round_trip"]["passed"]
     assert body["metrics"] is None and body["measurements"] == [] and "nothing was timed" in body["stopped"]
+
+
+def test_a_v4_keyed_library_is_gated_against_the_v4_reference_keys(tmp_path):
+    """A library that expands `reference.keys_v4` passes the gates it reports v4 for, and fails the pinned vector's keys when it
+    reports v1."""
+    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(version=4), params=_small())
+    assert all(g["passed"] for g in body["gates"].values()), body["gates"]
+    assert body["gates"]["vector"]["keys_version"] == 4
+    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(version=4, says=1),
+                                  params=_small())
+    vector = body["gates"]["vector"]
+    assert not vector["passed"] and not vector["K"] and not vector["t"] and not body["gates"]["reference_decode"]["passed"]
 
 
 def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):

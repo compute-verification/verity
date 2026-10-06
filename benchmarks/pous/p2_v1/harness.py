@@ -130,11 +130,22 @@ def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | No
     first = int(v["segment"]) * params.blocks_per_segment + int(v["block"])
     k, t = bound.keys(first, 1)
     nb = params.width_bytes
-    m, c = rows([int(v["m"], 16)], nb, backend.device), rows([int(v["c"], 16)], nb, backend.device)
-    got = {"K": k[0].cpu().numpy().tobytes().hex() == v["K"], "t": t[0].cpu().numpy().tobytes().hex() == v["t"],
-           "encode": bytes(bound.encode(m, first)[0].cpu().numpy()) == bytes.fromhex(v["c"]),
-           "decode": bytes(bound.decode(c, first)[0].cpu().numpy()) == bytes.fromhex(v["m"]), "flags": bound.raised() == 0}
-    return {"passed": all(got.values()), "vector": v["id"], **got}
+    want = {x: v[x] for x in ("K", "t", "m", "c")}
+    version = keys_version(bound)
+    if version == 4:   # vectors.json pins v1's keys: v4's K, t and c are the reference's at the vector's setup, block and m
+        k4, t4, _ = R.keys_v4(salt, params, model, int(v["segment"]), int(v["block"]))
+        c4 = R.encode(params, int(v["m"], 16), k4, t4)
+        want.update(K=k4.to_bytes(nb, "big").hex(), t=t4.to_bytes(nb, "big").hex(), c=c4.to_bytes(nb, "big").hex())
+    m, c = rows([int(want["m"], 16)], nb, backend.device), rows([int(want["c"], 16)], nb, backend.device)
+    got = {"K": k[0].cpu().numpy().tobytes().hex() == want["K"], "t": t[0].cpu().numpy().tobytes().hex() == want["t"],
+           "encode": bytes(bound.encode(m, first)[0].cpu().numpy()) == bytes.fromhex(want["c"]),
+           "decode": bytes(bound.decode(c, first)[0].cpu().numpy()) == bytes.fromhex(want["m"]), "flags": bound.raised() == 0}
+    return {"passed": all(got.values()), "vector": v["id"], "keys_version": version, **got}
+
+
+def keys_version(bound: Any) -> int:
+    """The key framing a bound library expands: 1 (`reference.keys`) or 4 (`reference.keys_v4`)."""
+    return getattr(bound, "keys_version", 1)
 
 
 def picks(encoded: int, blocks: int, extra: int = 8) -> list[int]:
@@ -150,8 +161,9 @@ def reference_gate(bound: Any, params: R.Params, salt: bytes, model: bytes, c_ho
     """`chosen` blocks of `C`, decoded on the device, equal to the reference's decode under the reference's keys."""
     nb, bps = params.width_bytes, params.blocks_per_segment
     equal, keys_equal = [], []
+    keys = R.keys_v4 if keys_version(bound) == 4 else R.keys
     for i in chosen:
-        k, t, _ = R.keys(salt, params, model, i // bps, i % bps)
+        k, t, _ = keys(salt, params, model, i // bps, i % bps)
         want = R.decode(params, int.from_bytes(c_host[i * nb:(i + 1) * nb], "big"), k, t).to_bytes(nb, "big")
         equal.append(bytes(m_dev[i].cpu().numpy()) == want)
         dk, dt = bound.keys(i, 1)
@@ -298,7 +310,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                                    "kernels": "p2v1.cu: p2dec.cu's tuned decode with v1 keys expanded by pous_native.shake256_rows; "
                                               "encode by an addition-chain root on CGBN's generic squaring"},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
-                "setup": {"manifest": P.manifest(), "w_commitment": model.hex(), "salt": salt.hex()},
+                "setup": {"manifest": P.manifest(), "w_commitment": model.hex(), "salt": salt.hex(),
+                          "keys_version": keys_version(bound)},
                 **({} if a.audits else H.UNTIMED), "gates": gates, "metrics": metrics, "profile": prof,
                 "measurements": [{"name": n, "value": v, "unit": u} for n, v, u in rows_ if v is not None]}
 
