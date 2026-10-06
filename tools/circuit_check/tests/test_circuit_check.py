@@ -72,6 +72,42 @@ def test_every_template_is_checked():
     assert {sub.template.id for sub, _ in TEMPLATES.values()} == set(TM.TEMPLATES)
 
 
+def _descriptor_digest(fn) -> str:
+    """A target's canonical descriptor digest: `program_digest` of the one-call Program at its statics."""
+    from verity.primitives.circuits import codec
+    from verity.primitives.circuits.defs import CompositeDefinition, bind
+    from verity.primitives.circuits.program import Program
+
+    params, ret = fn.signature()
+    shell = CompositeDefinition(f"Show[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a),
+                                register=False)
+    return codec.program_digest(codec.encode_program(Program(bind(shell))))
+
+
+SPLIT = Path(__file__).parent / "fixtures" / "split"
+#: split fixtures another test reads, in that split script's own format
+SPLIT_READERS = {"prims_serve": "test_split_prims_serve.py"}
+
+
+def test_every_split_fixture_another_test_reads_is_read():
+    for stem, reader in SPLIT_READERS.items():
+        assert (SPLIT / f"{stem}.json").exists(), stem
+        assert f"{stem}.json" in (Path(__file__).parent / reader).read_text(), (stem, reader)
+
+
+@pytest.mark.parametrize("pinned", sorted(p for p in SPLIT.glob("*.json") if p.stem not in SPLIT_READERS), ids=lambda p: p.stem)
+def test_a_split_family_keeps_its_targets_and_digests(pinned):
+    """`fixtures/split/<family>.json` was written before that family's registry modules were split into Definitions, twins and
+    vocabulary (`integrations/vllm/tools/migrate/split_<family>.py pin`). Every target it lists is still checked, at the same
+    canonical descriptor digest, and every Definition family it lists is still registered. A new binding may add targets."""
+    pin = json.loads(pinned.read_text())
+    missing = sorted(set(pin["definitions"]) - set(SUITE))
+    assert not missing, f"{pin['family']}: targets no longer checked: {missing}"
+    moved = {fid: (want, got) for fid, want in pin["definitions"].items() if (got := _descriptor_digest(SUITE[fid])) != want}
+    assert not moved, f"{pin['family']}: descriptor digests changed: {moved}"
+    assert not sorted(set(pin["registered"]) - set(TG.REGISTERED)), pin["family"]
+
+
 def test_the_partition_applies_to_the_calls_of_served_programs():
     calls = TG.call_families()
     assert {"Gemm_v1", "RMSNormTriton_v1", "Attention_v3", "TokenSelect_v1", "GumbelTopPTokenSelect_v1", "RoPEHead_v1"} <= calls
@@ -99,6 +135,23 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
     assert TG.definition(res) is SUITE[res]
     with pytest.raises(KeyError):
         TG.definition("NoSuchDefinition_v9")
+
+
+def test_a_target_with_a_record_static_parses_as_its_id_prints_it(monkeypatch):
+    """Every suite target whose statics hold a record (printed as a digest, ``C={d0dc81b7fa41}``) parses back from its id to
+    itself, the record also at statics the suite does not bind, and a digest of no record the suite binds raises."""
+    import re
+
+    monkeypatch.setattr(TG, "suite", lambda: SUITE)
+    records = [fid for fid in SUITE if re.search(r"=\{[0-9a-f]{12}\}", fid)]
+    assert "StepBody_v1{C={d0dc81b7fa41},T=4,GEMM={1af1018d695c},ATTENTION={f63c865fa1fc},NORM={c0107547e710}}" in records
+    for fid in records:
+        assert TG.definition(fid).id == fid
+    step = next(fid for fid in records if fid.startswith("StepBody_v1{"))
+    other = TG.definition(step.replace(",T=4,", ",T=6,"))
+    assert other.id == step.replace(",T=4,", ",T=6,") and other.bindings["C"] is SUITE[step].bindings["C"]
+    with pytest.raises(KeyError, match="no Definition the suite checks"):
+        TG.definition("StepBody_v1{C={000000000000},T=4}")
 
 
 # --- the suite ----------------------------------------------------------------------------------------------------------------

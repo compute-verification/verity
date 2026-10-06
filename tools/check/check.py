@@ -1014,10 +1014,10 @@ STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key
 
 
 def agreement_closure(files: list[str]) -> list[str]:
-    """The tracked files the agreement job can read: backends/flock/verifier/, less the Lake packages nested in its Lean package
-    (`level3/`, `soundness/`: proofs with a lakefile of their own), which `flock-verify` is not built from as long as the Lean
-    package requires nothing (a `require` in its lakefile keeps them all in), and less that package's `lean-audit.json`, which
-    only `tools/lean/audit.py` reads (a test fails if the agreement's scripts or the package's lakefile mention it)."""
+    """The tracked files the agreement job can read: backends/flock/verifier/, less any Lake package nested in its Lean package
+    (C-Flock's proofs are under `verity/Security/Proofs/`), which `flock-verify` is not built from as long as the Lean package
+    requires nothing (a `require` in its lakefile keeps them all in), and less that package's `lean-audit.json`, which only
+    `tools/lean/audit.py` reads (a test fails if the agreement's scripts or the package's lakefile mention it)."""
     pre, lean = "backends/flock/verifier/", "backends/flock/verifier/lean/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
