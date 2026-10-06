@@ -21,7 +21,7 @@ from verity_vllm.acquire.sources import (call_boundary_source, norm_scale_source
                                          vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
-from verity_vllm.program.registry.topp_split import splits_for_v1
+from verity_vllm.program.registry.topp_geometry import splits_for_v1
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP

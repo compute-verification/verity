@@ -7,6 +7,7 @@ A spec-level reference for network transparency's timing channel:
   ingress links' status check;
 - the capacity counts;
 - the calibration of honest runs;
+- the online prover (`online`): each window's clock sync declared at its first bucket from what it has seen by then;
 - the active warden (`active`): an asyncio TCP proxy that runs the wardens on a live link and publishes their records.
 
 It is pure Python. It imports only the standard library and `verity`, for the record digest's `tagged_sha256` and

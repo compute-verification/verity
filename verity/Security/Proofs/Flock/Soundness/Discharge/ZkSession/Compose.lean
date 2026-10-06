@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
+import Proofs.Flock.Soundness.Discharge.ZkSession.InnerSound
 
 /-!
 # A masked rep followed by the inner proof (live/PROTOCOL.md §5, VEIL Lemma 4.3)
