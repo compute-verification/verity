@@ -33,7 +33,7 @@ pub mod ir_sampling;
 pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
-pub mod gate;
+pub mod firewall;
 pub mod glue;
 pub mod pure_block;
 #[cfg(feature = "glue")]

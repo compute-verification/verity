@@ -97,17 +97,17 @@ def test_a_top_that_does_not_open_its_salted_top_is_refused():
     s = "circuit/rep0"
     public, private = _salted([_round(s, 0, [a.hex()], n=6), _round(s, 1, [b[:64].hex()], ["00"], 3)])
     wrong = {**private, "rounds": [private["rounds"][0], {**private["rounds"][1], "caps": [a[:64].hex()]}]}
-    with pytest.raises(ValueError, match="^GATE-REFUSED: tree top: circuit/rep0 round 1 cap 0 does not open"):
+    with pytest.raises(ValueError, match="^FIREWALL-REFUSED: tree top: circuit/rep0 round 1 cap 0 does not open"):
         V.caps(public, wrong, s)
     missing = {**private, "rounds": private["rounds"][:1]}
-    with pytest.raises(ValueError, match="^GATE-REFUSED: tree top: circuit/rep0 round 1 has 1 salted tops and 0 clear ones"):
+    with pytest.raises(ValueError, match="^FIREWALL-REFUSED: tree top: circuit/rep0 round 1 has 1 salted tops and 0 clear ones"):
         V.caps(public, missing, s)
     clear = {"rounds": [_round(s, 0, [a.hex()], n=6), _round(s, 1, [b[:64].hex()], ["00"], 3)]}
-    with pytest.raises(ValueError, match="^GATE-REFUSED: tree top: the record's tops are not salted"):
+    with pytest.raises(ValueError, match="^FIREWALL-REFUSED: tree top: the record's tops are not salted"):
         V.caps(clear, private, s)
     root = {"tops": RL.TOPS, "link": {"roots": {"circuit": public["rounds"][0]["caps"][0]}}}
     assert V.root(root, {"tops": RL.TOPS, "roots": {"circuit": {"top": a.hex(), "salts": private["rounds"][0]["cap_salts"][0]}}}, "circuit") == a
-    with pytest.raises(ValueError, match="^GATE-REFUSED: tree top: circuit's root does not open"):
+    with pytest.raises(ValueError, match="^FIREWALL-REFUSED: tree top: circuit's root does not open"):
         V.root(root, {"tops": RL.TOPS, "roots": {"circuit": {"top": b.hex(), "salts": private["rounds"][0]["cap_salts"][0]}}}, "circuit")
 
 

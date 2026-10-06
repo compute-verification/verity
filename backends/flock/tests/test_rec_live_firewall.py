@@ -1,4 +1,4 @@
-"""The inner phase's gateway (`verity_flock.rec_live`) held to what live PROTOCOL.md §10.3 says it does, one rule a test:
+"""The inner phase's firewall (`verity_flock.rec_live`) held to what live PROTOCOL.md §10.3 says it does, one rule a test:
 ``Link``'s ``y`` is the schedule's number of zero elements; the coin server is shown the schedule's ``Hello``, once the
 prover's is the same canonical JSON; the record lists streams by name, whatever order the prover opened them in; a session
 that ends without ``Finish`` is a stop, written and counted; any exception while handling a request is a refusal; and the
@@ -64,7 +64,7 @@ def test_link_y_of_another_length_is_refused_before_the_coin_server_sees_it(n):
     """``y`` of zeros passes ``any(y)`` whatever its length, so the length is the schedule's (2 elements here), and a ``y``
     that is not whole elements is refused as well."""
     proxy = _proxy(_schedule())
-    assert _refusal(_run(proxy, y=bytes(n))).startswith("rec proxy: GATE-REFUSED: Link's y: ")
+    assert _refusal(_run(proxy, y=bytes(n))).startswith("rec proxy: FIREWALL-REFUSED: Link's y: ")
     assert proxy.coins.link["y"] is None and proxy.coins.rounds == []
 
 
@@ -89,7 +89,7 @@ def test_a_hello_whose_canonical_json_is_not_the_pinned_ones_is_refused(edit):
     """``==`` holds ``2.0`` equal to ``2``; the canonical JSON does not. A Hello without Σ as a string is refused too (the
     session record needs it, the coin server never sees it)."""
     proxy = _proxy(_schedule())
-    assert _refusal(_run(proxy, hello={**HELLO, **edit})).startswith("rec proxy: GATE-REFUSED: Hello: ")
+    assert _refusal(_run(proxy, hello={**HELLO, **edit})).startswith("rec proxy: FIREWALL-REFUSED: Hello: ")
     assert proxy.coins.hello is None and proxy.coins.link is None
 
 
@@ -174,7 +174,7 @@ def test_a_session_that_ends_without_finish_is_written_and_counted_as_a_stop(tmp
 
 @pytest.mark.parametrize("hello", ["[]", "7", '"x"', "{", "[" * 100000, '{"link": []}'],
                          ids=["list", "number", "string", "not-json", "nested", "link-list"])
-def test_a_hello_the_gateway_cannot_read_is_a_refusal(hello):
+def test_a_hello_the_firewall_cannot_read_is_a_refusal(hello):
     """Not an object, not JSON, or nested past what the parser takes (RecursionError, not a ValueError)."""
     proxy = _proxy(_schedule())
     resp = _run(proxy, hello=hello)
@@ -183,7 +183,7 @@ def test_a_hello_the_gateway_cannot_read_is_a_refusal(hello):
 
 
 def test_any_exception_while_handling_a_request_is_a_refusal_and_serve_goes_on(tmp_path):
-    """The gateway's own fault (here the coin server's, a KeyError) stops the session it happened in, as a refusal; and a
+    """The firewall's own fault (here the coin server's, a KeyError) stops the session it happened in, as a refusal; and a
     request that raises something other than ValueError ends neither `Proxy.handle` nor `serve`."""
 
     class Broken(RL.CoinServer):
@@ -192,7 +192,7 @@ def test_any_exception_while_handling_a_request_is_a_refusal_and_serve_goes_on(t
 
     proxy = RL.Proxy(Broken(T._counter_rand()), T._salts(), schedule=_schedule())
     why = _refusal(_run(proxy))
-    assert why == "rec proxy: GATE-REFUSED: a request the gateway cannot read (KeyError: 'no such coin')"
+    assert why == "rec proxy: FIREWALL-REFUSED: a request the firewall cannot read (KeyError: 'no such coin')"
     assert proxy.coins.record()["end"] == "stop"
     t, got = _serve(tmp_path, 2, _schedule())
     w = _Wire(got["addr"])
@@ -236,7 +236,7 @@ def test_a_schedule_that_is_not_one_is_refused_before_anything_is_served(tmp_pat
     assert list(tmp_path.iterdir()) == []
 
 
-def test_the_gateway_serves_only_with_a_schedule(tmp_path, capsys):
+def test_the_firewall_serves_only_with_a_schedule(tmp_path, capsys):
     """No first session pins one: `Proxy` and `serve` take the schedule as a required keyword, and `main` will not serve
     without ``--schedule``."""
     with pytest.raises(TypeError):
@@ -262,7 +262,7 @@ def test_the_first_session_is_held_to_the_schedule_serve_was_given(tmp_path):
     assert _held(_run(w))
     w.close()
     t.join()
-    assert _refusal(first).startswith("rec proxy: GATE-REFUSED: Hello: ") and "crash" not in got
+    assert _refusal(first).startswith("rec proxy: FIREWALL-REFUSED: Hello: ") and "crash" not in got
     assert [r["session"] for r in got["res"]] == [None, str(tmp_path / "s1" / "session")]
     assert json.loads((tmp_path / "schedule.json").read_text()) == sched
     assert not any(secret in p.read_text() for p in tmp_path.rglob("*.json"))
@@ -294,7 +294,7 @@ def test_the_schedule_of_a_statements_shape_is_the_one_a_real_session_keeps():
     assert rounds == want["rounds"] and len(rounds) == 2 * 94
 
 
-def test_the_schedule_of_the_gated_k4096_statement():
+def test_the_schedule_of_the_firewalled_k4096_statement():
     """The K = 4096 statement (``flock-circuit statement``: dense_m 35, k_log 24, nbl 11, three regions) gives the schedule
     its inner sessions keep: link points of 35 coordinates, a 128-node level-0 cap, 139 rounds a rep."""
     text = "statement circuit ...\nSTATEMENT\t" + json.dumps({"statement": "verity/flock-circuit", "k_log": 24, "nbl": 11,

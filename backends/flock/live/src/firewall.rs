@@ -1,7 +1,7 @@
-//! The gateway's send check on the outer `--zk` prover (PROTOCOL.md §10.1): every live round the device frames is held to
-//! the statement's skeleton in the algebraic phase, and byte for byte to an opening the gateway computes itself (the shadow,
+//! The firewall's send check on the outer `--zk` prover (PROTOCOL.md §10.1): every live round the device frames is held to
+//! the statement's skeleton in the algebraic phase, and byte for byte to an opening the firewall computes itself (the shadow,
 //! in lock-step on the same coins) in the opening phase, before the masking challenger sends any of it. A refusal is a
-//! `GATE-REFUSED: <what>` message, raised before anything that depends on the refused round leaves.
+//! `FIREWALL-REFUSED: <what>` message, raised before anything that depends on the refused round leaves.
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 
@@ -11,7 +11,7 @@ use flock_transcript::challenger::Challenger;
 use crate::{KIND_SCALAR, KIND_SLICE, OP_BYTES, OP_DOMAIN, OP_LABEL, OP_OBSERVE, OP_SQUEEZE, push_header, push_padded};
 
 pub fn refused(what: impl std::fmt::Display) -> String {
-    format!("GATE-REFUSED: {what}")
+    format!("FIREWALL-REFUSED: {what}")
 }
 
 /// One framed item of a round, as the transcript absorbs it.
@@ -199,7 +199,7 @@ impl Checker {
     }
 }
 
-/// The gate's end of the shadow opening's lock-step: each of the shadow's rounds, to compare with the device's, and the coins
+/// The firewall's end of the shadow opening's lock-step: each of the shadow's rounds, to compare with the device's, and the coins
 /// back. The shadow ([`ShadowEnd`] in a [`Framer`]) runs on its own thread.
 pub struct ShadowLink {
     rx: Receiver<(Vec<u8>, usize)>,
@@ -219,10 +219,10 @@ pub fn shadow_pair() -> (ShadowLink, ShadowEnd) {
 }
 
 impl ShadowEnd {
-    /// The shadow's round: hand it to the gate and wait for its coins (the shadow stops when the gate has gone).
+    /// The shadow's round: hand it to the firewall and wait for its coins (the shadow stops when the firewall has gone).
     pub fn round(&mut self, content: &[u8], n: usize) -> Vec<F128> {
         self.tx.send((content.to_vec(), n)).ok().and_then(|_| self.rx.recv().ok())
-            .unwrap_or_else(|| panic!("the gate stopped the shadow opening"))
+            .unwrap_or_else(|| panic!("the firewall stopped the shadow opening"))
     }
 }
 
@@ -231,7 +231,7 @@ impl ShadowLink {
     pub fn check(&mut self, content: &[u8], n: usize) -> Result<(), String> {
         let r = self.round;
         self.round += 1;
-        let (want, k) = self.rx.recv().map_err(|_| refused(format!("opening round {r}: the gateway's opening ended before the device's")))?;
+        let (want, k) = self.rx.recv().map_err(|_| refused(format!("opening round {r}: the firewall's opening ended before the device's")))?;
         if want == content && k == n {
             return Ok(());
         }
@@ -239,10 +239,10 @@ impl ShadowLink {
         let show = |x: Option<&Item>| x.map_or("nothing".into(), |x| x.to_string());
         match (0..g.len().max(w.len())).find(|&i| g.get(i) != w.get(i)) {
             Some(i) if show(g.get(i)) == show(w.get(i)) => {
-                Err(refused(format!("opening round {r}, frame {i}: the device's {} differs from the gateway's in its payload", show(g.get(i)))))
+                Err(refused(format!("opening round {r}, frame {i}: the device's {} differs from the firewall's in its payload", show(g.get(i)))))
             }
-            Some(i) => Err(refused(format!("opening round {r}, frame {i}: the device's {} is not the gateway's {}", show(g.get(i)), show(w.get(i))))),
-            None => Err(refused(format!("opening round {r}: the device squeezes {n} coins, the gateway {k}"))),
+            Some(i) => Err(refused(format!("opening round {r}, frame {i}: the device's {} is not the firewall's {}", show(g.get(i)), show(w.get(i))))),
+            None => Err(refused(format!("opening round {r}: the device squeezes {n} coins, the firewall {k}"))),
         }
     }
 
@@ -257,14 +257,14 @@ impl ShadowLink {
         self.rx.try_recv().is_ok()
     }
 
-    /// Stop the shadow: its next round finds no gate.
+    /// Stop the shadow: its next round finds no firewall.
     pub fn close(&mut self) {
         self.tx = None;
     }
 }
 
 /// Frames every call as the device prover's challenger does (`FsChallenger` under its live hook) and hands each round to
-/// `rounds` at its squeeze: M1's CPU prover takes the device path's host side through it (`FC_ZK_FRAMED`), and the gate's
+/// `rounds` at its squeeze: M1's CPU prover takes the device path's host side through it (`FC_ZK_FRAMED`), and the firewall's
 /// shadow opening frames its rounds through it for the comparison.
 pub struct Framer<'a> {
     pub pending: Vec<u8>,
@@ -377,7 +377,7 @@ mod tests {
             f.sample_f128();
         });
         let e = checker().round(&bad[0].0, bad[0].1).unwrap_err();
-        assert!(e.starts_with("GATE-REFUSED: algebraic phase, round 0, frame 1: label"), "{e}");
+        assert!(e.starts_with("FIREWALL-REFUSED: algebraic phase, round 0, frame 1: label"), "{e}");
         let short = framed(|f| {
             f.observe_label(b"flock-r1cs-v0");
             f.observe_bytes(&[1; 64]);
@@ -410,8 +410,8 @@ mod tests {
         link.check(&dev[0].0, dev[0].1).unwrap();
         link.answer(&[F128::ONE]);
         let e = link.check(&dev[1].0, dev[1].1).unwrap_err();
-        assert_eq!(e, "GATE-REFUSED: opening round 1, frame 0: the device's observe scalar of 1 differs from the gateway's in its payload");
+        assert_eq!(e, "FIREWALL-REFUSED: opening round 1, frame 0: the device's observe scalar of 1 differs from the firewall's in its payload");
         link.close();
-        assert!(t.join().is_err(), "the shadow stops when the gate closes");
+        assert!(t.join().is_err(), "the shadow stops when the firewall closes");
     }
 }

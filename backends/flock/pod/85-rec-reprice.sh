@@ -6,7 +6,7 @@
 #                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
 #                --definitions DEFS --stage-only, BATCH=fixed N) into data/$TAG/stage (STAGE_FROM=DIR: another job's)
 #   STEP=inner   (GPU leases) the inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy (verity_flock.rec_live,
-#                the inner phase's gateway: salted tree tops, the schedule of the statement's public shape, rec_live
+#                the inner phase's firewall: salted tree tops, the schedule of the statement's public shape, rec_live
 #                --schedule-for; WARM + RUNS sessions), upstream's replay of the last one and V*'s hashing reference
 #                (rec_vstar) over it (CHECKS=0: STEP=icheck's); then the same statement on loopback, M0 and --zk, WARM + RUNS
 #                sessions each (today's numbers, this node and build; INNER_TODAY=0: not)
@@ -17,7 +17,7 @@
 #   STEP=alg     (CPU) V*'s algebra: InnerClaims.lean's claims on the inner's last session, and rec_residuals' InnerRepCheck
 #                on both reps staged into data/$TAG/alg/honest
 #   STEP=oprove  (GPU leases) each level (and the algebra, once staged) proved with --zk on loopback, WARM + RUNS sessions per MODES
-#                (dev host gate); upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=LEVEL: the gate's
+#                (dev host firewall); upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=LEVEL: the firewall's
 #                negative controls on that level
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
@@ -227,12 +227,12 @@ def live(d):
     ranks = [json.loads(l.split("\t", 1)[1])["s"] for l in text(d / "prove.err").splitlines() if l.startswith("ZKRANK\t")]
     per = len(ranks) // len(rows) if ranks and len(ranks) % len(rows) == 0 else 0
     rank_s = [sum(ranks[i * per:(i + 1) * per]) for i in range(len(rows))][warm:] if per else []
-    # the prover process's CPU seconds over all its sessions, the gate's per-session timings (both reps summed), its refusals
+    # the prover process's CPU seconds over all its sessions, the firewall's per-session timings (both reps summed), its refusals
     cpu = [float(tv(d / "time-prove.txt", k) or "nan") for k in (r"User time \(seconds\)", r"System time \(seconds\)")]
-    gate = {k: med(lambda v: sum(b.get(k) or 0 for b in v.get("buckets") or [])) for k in ("t.gate_recheck", "cpu.gate_recheck", "t.gate_shadow", "t.gate_wait")}
-    stops = [l for l in text(d / "prove.err").splitlines() if l.startswith(("GATE-REFUSED", "PROVER-STOPPED"))]
+    firewall = {k: med(lambda v: sum(b.get(k) or 0 for b in v.get("buckets") or [])) for k in ("t.firewall_recheck", "cpu.firewall_recheck", "t.firewall_shadow", "t.firewall_wait")}
+    stops = [l for l in text(d / "prove.err").splitlines() if l.startswith(("FIREWALL-REFUSED", "PROVER-STOPPED"))]
     return {"sessions": len(rows), "timed": len(timed), "accepted": [v.get("accepted") for _, v in rows],
-            "env": text(d / "prove-env.txt").strip(), "prover_cpu_s": sum(cpu), "gate": gate, "refusals": stops[:8],
+            "env": text(d / "prove-env.txt").strip(), "prover_cpu_s": sum(cpu), "firewall": firewall, "refusals": stops[:8],
             "why": [v.get("why") for _, v in rows], "stopped": [v.get("prover_stopped") for _, v in rows],
             "prover_cores_busy_before": float(text(d / "bgload.txt").strip() or "nan"),
             "serve_verify_s": statistics.median([v["verify_s"] for v in served[warm:]]) if len(served) > warm else None,
@@ -247,7 +247,7 @@ def live(d):
             "statement_digest": rows[0][1].get("statement_digest"), "prover_peak_gb": gb(d / "time-prove.txt"),
             "gpu_peak_mib": max(mib) if mib else None, "gpu_idle_mib": min(mib) if mib else None,
             "lease": [l for l in text(d / "prove.err").splitlines() if l.startswith("gpu-lease:")],
-            "buckets": [{k: x for k, x in b.items() if k.startswith(("t.", "cpu.", "gate_")) or k in ("device_witness", "native_sha")} for b in (timed[-1][1].get("buckets") or [])]
+            "buckets": [{k: x for k, x in b.items() if k.startswith(("t.", "cpu.", "firewall_")) or k in ("device_witness", "native_sha")} for b in (timed[-1][1].get("buckets") or [])]
             if timed else None}
 
 def replay(p):
@@ -519,14 +519,14 @@ oprove)
   [ -d $DD/outer ] || [ "${LEVELS:-}" = alg ] || { echo "run STEP=ostage first"; exit 1; }
   # every level's RecOpen statement, then the algebra's (STEP=alg) when it is staged; LEVELS=0,1,alg picks some. MODES names
   # the prover's sides, WARM + RUNS sessions each per statement: dev (the device's witness, rec-reprice's), host
-  # (FC_HOST_WITNESS=1, no gate) and gate (FC_GATE=1 on the host witness: the send check and the level-0 recheck, PROTOCOL.md
-  # §10); the gateway's cost is gate's minus host's. The last mode's last session is the one oreplay and lean read.
+  # (FC_HOST_WITNESS=1, no firewall) and firewall (FC_FIREWALL=1 on the host witness: the send check and the level-0 recheck, PROTOCOL.md
+  # §10); the firewall's cost is firewall's minus host's. The last mode's last session is the one oreplay and lean read.
   MODES=${MODES:-dev}; MODES=${MODES//,/ }
   for C in $(ls -d $DD/outer/L* 2>/dev/null | sort -V) $( [ -f $DD/alg/honest/inst.bin ] && echo $DD/alg/honest); do
     l=$(basename $C); [ $l = honest ] && l=alg
     [ -n "${LEVELS:-}" ] && [[ ",$LEVELS," != *",${l#L},"* ]] && continue
     for mode in $MODES; do
-      case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; gate) PENV="FC_GATE=1 FC_HOST_WITNESS=1" ;; *) echo "MODES: dev host gate"; exit 1 ;; esac
+      case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
       LAST=; again loopback $n $C/pub.bin $C/inst.bin $C/circuit.txt --zk
     done
@@ -541,12 +541,12 @@ oprove)
     rm -rf $DD/outer-sess/$l; mkdir -p $DD/outer-sess && cp -r $LAST $DD/outer-sess/$l && echo $mode > $DD/outer-sess/$l.mode
     du -sb $C/inst.bin $C/pub.bin $C/circuit.txt $LAST/*.bin > $O/oprove/$n/sizes.txt
   done
-  # CONTROLS=LEVEL (e.g. L6): on that statement, one gated session per FC_GATE_TAMPER control (the device's side dishonest in
-  # one named way), each of which the gateway must refuse by name before the tampered message leaves
+  # CONTROLS=LEVEL (e.g. L6): on that statement, one firewalled session per FC_FIREWALL_TAMPER control (the device's side dishonest in
+  # one named way), each of which the firewall must refuse by name before the tampered message leaves
   if [ -n "${CONTROLS:-}" ]; then
     C=$DD/outer/$CONTROLS; [ $CONTROLS = alg ] && C=$DD/alg/honest
     for w in root witness label opening algebra algebra-proof shape; do
-      PENV="FC_GATE=1 FC_HOST_WITNESS=1 FC_GATE_TAMPER=$w" WARM=0 RUNS=1 NS=1 again loopback neg-$CONTROLS-$w $C/pub.bin $C/inst.bin $C/circuit.txt --zk
+      PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_TAMPER=$w" WARM=0 RUNS=1 NS=1 again loopback neg-$CONTROLS-$w $C/pub.bin $C/inst.bin $C/circuit.txt --zk
     done
   fi
   ;;

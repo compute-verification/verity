@@ -6,7 +6,7 @@ C-Flock prover against a verifier that never sees the hidden statement or the pr
     python -m verity_flock.rec_live --schedule-of PUBLIC_JSON        a record's schedule, to compare with the one it was held to
 
 The prover (``flock-circuit prove --verifier ADDR`` under ``FC_COINS=os``) speaks the live protocol (``live/src/lib.rs``) to
-:class:`Proxy`, which runs on the prover's side. The proxy is the gateway of the inner phase (live PROTOCOL.md §10.3): it
+:class:`Proxy`, which runs on the prover's side. The proxy is the firewall of the inner phase (live PROTOCOL.md §10.3): it
 answers what the live server would, except that every coin comes from :class:`CoinServer`, the verifier's side, which is shown
 only the session's public schedule and salted hashes:
 
@@ -26,7 +26,7 @@ number of ``Link``'s ``y`` elements, every stream's parent, position and round c
 count, caps' node counts and message-row count). ``--schedule`` gives it and is required: `schedule_for` derives it from the
 statement's public shape alone (``flock-circuit statement``), never from a session the prover ran, and `serve` writes it to
 ``OUT/schedule.json`` before the first session. A request that leaves the schedule, or a ``Link`` whose ``y`` is not the
-schedule's number of zero elements (the prover sends zeros), is refused ``GATE-REFUSED`` before the coin server sees it. A
+schedule's number of zero elements (the prover sends zeros), is refused ``FIREWALL-REFUSED`` before the coin server sees it. A
 refusal, or a session that ends without ``Finish``, is a **stop**: the coin server's record says so (``end``: ``stop``, not
 why), and `serve` writes that record and counts the session.
 
@@ -334,11 +334,11 @@ def commit_top(top: bytes, salts: list[bytes]) -> bytes:
 
 
 def refused(what: str) -> str:
-    return f"GATE-REFUSED: {what}"
+    return f"FIREWALL-REFUSED: {what}"
 
 
 def canonical(v) -> str:
-    """``v`` as the gateway compares it with the pinned schedule: JSON with sorted keys and no spaces, so ``2`` and ``2.0``
+    """``v`` as the firewall compares it with the pinned schedule: JSON with sorted keys and no spaces, so ``2`` and ``2.0``
     (or ``true`` and ``1``) differ."""
     return json.dumps(v, sort_keys=True, separators=(",", ":"))
 
@@ -548,9 +548,9 @@ class Proxy:
             return resp_str(RESP_REFUSED, self.stopped)
         try:
             return self._handle(decode_req(req))
-        except Exception as e:  # noqa: BLE001 - a request the gateway cannot handle stops its session, never the gateway
+        except Exception as e:  # noqa: BLE001 - a request the firewall cannot handle stops its session, never the firewall
             why = f"rec proxy: {e}" if isinstance(e, ValueError) else \
-                f"rec proxy: {refused(f'a request the gateway cannot read ({type(e).__name__}: {e})')}"
+                f"rec proxy: {refused(f'a request the firewall cannot read ({type(e).__name__}: {e})')}"
             self.stop(why)
             return resp_str(RESP_REFUSED, why)
 
