@@ -1,7 +1,7 @@
 """verity.primitives.circuits — the Verity IR core; the program format is ``PROTOCOL.md``, and "IR §" cites veritor's ``docs/verity-ir-2026-09-07.md``.
 
 Promoted from ``veritor`` ``verity.ir/`` at commit ``eb865ce29``: ``types``, ``refs``, ``defs``, ``program``, ``layout``,
-``evaluate``, ``query`` byte for byte (``plan`` moved to ``verity_sp1.proofs.plan``); ``codec`` with its hard-coded registry families replaced by the
+``evaluate``, ``query`` byte for byte (``plan`` stayed in veritor); ``codec`` with its hard-coded registry families replaced by the
 ``register_lazy_family`` hook.  The registry (``b1``, ``hopper``, ``prims``, ...), frontend, and derive tooling stayed behind;
 semantics packages register their primitives with this core.
 

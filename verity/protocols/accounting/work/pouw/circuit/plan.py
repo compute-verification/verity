@@ -109,7 +109,8 @@ def check_work_strata(strata: Sequence[StratumSpec]) -> None:
 def record_k(epsilon: Fraction, delta: Fraction) -> int:
     """The smallest K with (1 − ε)^K ≤ δ, decided in exact integers: wrong units doing a fraction ε of the work escape the
     work law's draw with at most (1 − ε)^K (#362's `work_escape_le`). At ε = 0.1% and δ = 2⁻⁴⁰ it is 27,713; 27,712 misses
-    (#362's `record_sizing`, `record_sizing_one_fewer`)."""
+    (#362's `record_sizing`, `record_sizing_one_fewer`). That ε at δ is the default point the profile reports at, not a
+    policy parameter: PoUW has none."""
     eps, dlt = Fraction(epsilon), Fraction(delta)
     if not (0 < eps < 1 and 0 < dlt < 1):
         raise ValueError("0 < ε < 1 and 0 < δ < 1")
@@ -129,7 +130,7 @@ def record_k(epsilon: Fraction, delta: Fraction) -> int:
     return k
 
 
-#: the tile draws of record: ε = 0.1%, δ = 2⁻⁴⁰
+#: the tile draws at the default report point, ε = 0.1% at δ = 2⁻⁴⁰
 RECORD_K = 27_713
 
 

@@ -1,16 +1,16 @@
 """Batch evaluation over numpy arrays, the kernel registry, and `self_check`.
 
-A batch of instances is one integer array per parameter with a leading batch axis: shape ``(N,)`` for a ``Value<w>``,
+A batch of inputs is one integer array per parameter with a leading batch axis: shape ``(N,)`` for a ``Value<w>``,
 ``(N, n, ...)`` for an ``Array``, ``(N, leaves)`` for a tuple or record.  `evaluate_batch` returns the output the same way.
 
 A kernel is registered against a Definition id (without statics) or a `ScalarReference` id, under a name (``"numpy"``):
 
     fn(*arrays, **statics) -> (out, declined) | NotImplemented
 
-``declined`` is a boolean ``(N,)`` mask (or ``None``) of instances outside the kernel's exact domain; `evaluate_batch`
+``declined`` is a boolean ``(N,)`` mask (or ``None``) of inputs outside the kernel's exact domain; `evaluate_batch`
 recomputes those with the reference, so a kernel never has to be total.  ``NotImplemented`` declines the whole call
 (statics the kernel does not cover, e.g. an unknown ``DOT`` step).  Every registered kernel must pass `self_check`: on
-seeded random instances every instance it accepts equals the reference bit for bit, and every instance the reference
+seeded random inputs every input it accepts equals the reference bit for bit, and every input the reference
 rejects is one it declined.
 """
 from __future__ import annotations
@@ -59,8 +59,8 @@ _KERNELS: dict[str, dict[str, Kernel]] = {}
 def register_kernel(target: Target | str, fn: KernelFn, *, kernel: str = "numpy", domain: str = "", version: int = 1,
                     sample: Sampler | None = None) -> Kernel:
     """Register ``fn`` as kernel ``kernel`` of ``target`` (a Definition, a `ScalarReference`, or a Definition id).
-    ``domain`` says in words which instances it computes (the rest it declines); ``sample(rng, n, params, **statics)``
-    optionally draws the instances `self_check` uses.  Re-registering the same function is a no-op; a different one
+    ``domain`` says in words which inputs it computes (the rest it declines); ``sample(rng, n, params, **statics)``
+    optionally draws the inputs `self_check` uses.  Re-registering the same function is a no-op; a different one
     under the same (target, kernel) is an error, as for Definitions."""
     key = key_of(target)
     k = Kernel(key, kernel, fn, domain, version, sample)
@@ -157,10 +157,10 @@ def _store(out: np.ndarray, i: int, leaves: tuple[int, ...]) -> None:
 # ---- evaluate_batch ----------------------------------------------------------------------------------------------------
 
 def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.ndarray:
-    """Evaluate ``N`` instances of ``target``: one array per parameter with a leading batch axis, the output likewise.
+    """Evaluate ``target`` on ``N`` inputs: one array per parameter with a leading batch axis, the output likewise.
     ``kernel="auto"`` uses the ``numpy`` kernel when one is registered, ``"reference"`` forces the plain-integer
     reference, any other name selects that kernel; with ``"auto"`` a Boolean composite without a kernel is evaluated
-    bit-sliced (`bits.evaluate_bits`).  Instances a kernel declines are computed by the reference, whose exceptions (inputs
+    bit-sliced (`bits.evaluate_bits`).  Inputs a kernel declines are computed by the reference, whose exceptions (inputs
     outside the function's domain) propagate.  A `RegisteredTable` input is refused by name."""
     t = resolve(target)
     refuse_registered_tables(t.id, inputs, "evaluate_batch")
@@ -234,9 +234,9 @@ class SelfCheck:
 
 def self_check(target: Target, *, kernel: str = "numpy", n: int = 1024, seed: int = 0,
                inputs: Sequence[Any] | None = None) -> SelfCheck:
-    """Compare kernel ``kernel`` of ``target`` with the reference on ``n`` seeded instances (the kernel's own sampler if it
-    registered one, else `sample_uniform`) or on ``inputs``.  An accepted instance must equal the reference bit for bit;
-    an instance the reference rejects (raises on) must be declined."""
+    """Compare kernel ``kernel`` of ``target`` with the reference on ``n`` seeded inputs (the kernel's own sampler if it
+    registered one, else `sample_uniform`) or on ``inputs``.  An accepted input must equal the reference bit for bit;
+    an input the reference rejects (raises on) must be declined."""
     t = resolve(target)
     params, ret = signature_of(t)
     k = _pick(t, kernel)
