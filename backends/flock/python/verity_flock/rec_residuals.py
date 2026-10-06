@@ -307,6 +307,8 @@ def unit_circuit(S: dict):
 def residual_forms(C, S: dict, W: list, V: list) -> list:
     """``GfResiduals{S}``'s residuals over `forms` (128 bits each, in order) from w's and v's element bits (element ``i`` is
     bits ``128 i ..``), each residual's products summed leaf by leaf."""
+    G.check_structure(S)
+
     def term(t):
         if t[0] == "w":
             return W[128 * t[1]:128 * t[1] + 128]
