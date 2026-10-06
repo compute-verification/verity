@@ -1,4 +1,4 @@
-import Specs.Flock.Guarantees.EndToEndRegistered
+import Proofs.Flock.EndToEndRegistered.Statement
 
 /-!
 # Proof of C-Flock's end-to-end guarantee with registered reads

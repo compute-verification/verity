@@ -1,4 +1,4 @@
-import Specs.Flock.Guarantees.ZeroKnowledgeHidden
+import Proofs.Flock.ZeroKnowledgeHidden.Statement
 
 /-!
 # Proof of C-Flock's zero-knowledge guarantee under hidden outputs

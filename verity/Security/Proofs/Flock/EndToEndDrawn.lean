@@ -1,4 +1,4 @@
-import Specs.Flock.Guarantees.EndToEndDrawn
+import Proofs.Flock.EndToEndDrawn.Statement
 
 /-!
 # Proof of C-Flock's end-to-end guarantee at the drawn units
