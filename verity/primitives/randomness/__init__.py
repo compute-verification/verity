@@ -17,11 +17,13 @@ Byte formats (pinned by ``verity/primitives/randomness/tests/vectors.json``):
 * ``frame(x)`` = tag || len(body) as 8 bytes big-endian || body, with tag ``b`` for bytes, ``s`` for UTF-8 str, ``i``
   for a nonnegative int as minimal big-endian bytes (0 is one zero byte).  An index or a tuple of parts frames each
   part and concatenates.
-* ``derive`` = SHA-256(``verity/randomness/derive/v1\\0`` || frame(source) || frame(domain) || frame(ctx)), where ctx
-  concatenates frame(key) || frame(value) over the context sorted by key.
-* ``stream(index)`` block c = SHA-256(``verity/randomness/stream/v1\\0`` || key || frame(frames(index)) || c as 8 bytes
-  big-endian), for c = 0, 1, ...; the stream is the blocks' concatenation.
-* ``shard(index)`` = SHA-256(``verity/randomness/shard/v1\\0`` || key || frame(frames(index))).
+* ``derive`` = the first 32 bytes of SHA-512(``verity/randomness/derive/v2\\0`` || frame(source) || frame(domain) ||
+  frame(ctx)), where ctx concatenates frame(key) || frame(value) over the context sorted by key.
+* ``stream(index)`` block c = SHA-512(``verity/randomness/stream/v2\\0`` || key || frame(frames(index)) || c as 8 bytes
+  big-endian), all 64 bytes, for c = 0, 1, ...; the stream is the blocks' concatenation.
+* ``shard(index)`` = the first 32 bytes of SHA-512(``verity/randomness/shard/v2\\0`` || key || frame(frames(index))).
+* A `Key` is 32 bytes: SHA-512 truncated to 256 bits is SHA-512 (one hash, SP 800-107 §5.1), and a 256-bit key keeps
+  128-bit security against a quantum search.
 * ``uniform(n, index)`` reads w-byte big-endian words from ``stream(("u", *index))``, w = ceil((bitlen(n) + 64) / 8),
   and returns the first word below the largest multiple of n that fits, reduced mod n (exact, no modulo bias).
 * ``bernoulli(p, index)`` = uniform(denominator) on ``("b", *index)`` < numerator; p = 0 and p = 1 draw nothing.
@@ -38,9 +40,9 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 
 DOMAIN = re.compile(r"verity/[a-z0-9-]+/[a-z0-9-]+/v[0-9]+")
-_DERIVE = b"verity/randomness/derive/v1\0"
-_STREAM = b"verity/randomness/stream/v1\0"
-_SHARD = b"verity/randomness/shard/v1\0"
+_DERIVE = b"verity/randomness/derive/v2\0"
+_STREAM = b"verity/randomness/stream/v2\0"
+_SHARD = b"verity/randomness/shard/v2\0"
 
 type Part = bytes | str | int
 type Index = Part | tuple[Part, ...]
@@ -94,7 +96,7 @@ class Key:
         head = _STREAM + self.value + _frames(index)
         c = 0
         while True:
-            yield hashlib.sha256(head + c.to_bytes(8, "big")).digest()
+            yield hashlib.sha512(head + c.to_bytes(8, "big")).digest()
             c += 1
 
     def stream(self, index: Index, n: int) -> bytes:
@@ -108,7 +110,7 @@ class Key:
 
     def shard(self, index: Index) -> Key:
         """An independent sub-key for one shard of a population."""
-        return Key(hashlib.sha256(_SHARD + self.value + _frames(index)).digest())
+        return Key(hashlib.sha512(_SHARD + self.value + _frames(index)).digest()[:32])
 
     def _uniform(self, n: int, index: tuple[Part, ...]) -> int:
         if n <= 0:
@@ -158,7 +160,7 @@ def derive(source: bytes, domain: str, context: Mapping[str, Part]) -> Key:
     if not all(isinstance(key, str) for key in context):
         raise TypeError("context keys are str")
     ctx = b"".join(frame(key) + frame(context[key]) for key in sorted(context))
-    return Key(hashlib.sha256(_DERIVE + frame(source) + frame(domain) + frame(ctx)).digest())
+    return Key(hashlib.sha512(_DERIVE + frame(source) + frame(domain) + frame(ctx)).digest()[:32])
 
 
 __all__ = ["DOMAIN", "Index", "Key", "Part", "derive", "frame", "uniform_from_words"]
