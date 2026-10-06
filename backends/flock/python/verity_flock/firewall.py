@@ -79,11 +79,28 @@ class Firewall:
         with self._locked() as ev:
             return ev
 
-    def open(self, stream: str) -> str:
-        """A new recursive session on ``stream``, opened by its inner session: its id."""
+    def open(self, stream: str, budget: int | None = None, release: dict | None = None) -> str:
+        """A new recursive session on ``stream``, opened by its inner session: its id. ``budget`` is the stream's failure
+        budget (P1's ``budget``, b), the same at every open of the stream; once the stream has ``budget`` failures, `Refused`.
+        ``release`` is the recursive session's release schedule, public and fixed here, before the session: part ``j`` of
+        ``release["parts"]`` is released at ``start_ms + (j + 1) * period_ms`` (the Rust firewall's rule 3)."""
+        if budget is not None and not (type(budget) is int and budget >= 1):
+            raise ValueError(f"a failure budget is a positive integer, not {budget!r}")
+        if release is not None:
+            _schedule_ok(release)
         with self._locked() as ev:
+            first = next((e for e in ev if e["event"] == "open" and e["stream"] == stream), None)
+            if first is not None and first.get("budget") != budget:
+                raise ValueError(f"stream {stream}'s budget is {first.get('budget')}, not {budget}")
+            if budget is not None and (n := _failures(ev, stream)) >= budget:
+                raise Refused(refused(f"stream {stream} stopped at its failure budget ({n} of {budget})"))
             sid = f"r{sum(e['event'] == 'open' for e in ev):04d}"
-            self._append(ev, {"event": "open", "session": sid, "stream": stream})
+            e = {"event": "open", "session": sid, "stream": stream}
+            if budget is not None:
+                e["budget"] = budget
+            if release is not None:
+                e["release"] = release
+            self._append(ev, e)
             return sid
 
     def finish(self, session: str) -> None:
@@ -104,35 +121,51 @@ class Firewall:
         with self._locked() as ev:
             self._append(ev, {"event": "release", "session": session, "part": part})
 
-    def admit(self, session: str, part: str) -> None:
-        """Raise `Refused` unless an outer session of ``session`` may be served now: the recursive session is open, its inner
-        session finished, and it has not stopped. A refusal is recorded (``refused``), never as a failure."""
+    def admit(self, session: str, part: str, *, timed: bool = False) -> int | None:
+        """Raise `Refused` unless an outer session of ``session`` may be served now: the recursive session is open, has not
+        stopped, its stream has not stopped at its budget, its inner session finished, and ``part`` has a place in its
+        release schedule if it has one. A refusal is recorded (``refused``). Returns ``part``'s release time (rule 3), or
+        None. Only a ``timed`` caller (one that holds the proofs to that time: the Rust firewall, or a test of its rules)
+        is admitted to a scheduled session; this module's relay is not."""
         with self._locked() as ev:
-            why = None
-            if not any(e["event"] == "open" and e["session"] == session for e in ev):
+            why, at = None, None
+            open_ = next((e for e in ev if e["event"] == "open" and e["session"] == session), None)
+            if open_ is None:
                 why = f"recursive session {session} was never opened"
             elif (s := _stopped(ev, session)) is not None:
                 why = f"recursive session {session} stopped at {s['part']}: the firewall serves nothing more of it"
+            elif (b := _budget(ev, open_["stream"])) is not None and (n := _failures(ev, open_["stream"])) >= b:
+                why = f"stream {open_['stream']} stopped at its failure budget ({n} of {b})"
             elif not any(e["event"] == "finish" and e["session"] == session for e in ev):
                 why = f"recursive session {session}: its inner session has not finished"
+            elif (r := open_.get("release")) is not None:
+                if part not in r["parts"]:
+                    why = f"recursive session {session}: {part} has no place in its release schedule"
+                elif not timed:
+                    why = (f"recursive session {session}: its release schedule needs the Rust firewall "
+                           "(flock-circuit prove --firewall-state)")
+                else:
+                    at = r["start_ms"] + (r["parts"].index(part) + 1) * r["period_ms"]
             if why is not None:
                 self._append(ev, {"event": "refused", "session": session, "part": part})
                 raise Refused(refused(why))
+            return at
 
     def stopped(self, session: str) -> dict | None:
         with self._locked() as ev:
             return _stopped(ev, session)
 
     def failures(self, stream: str) -> int:
-        """The failures on ``stream`` so far: its recursive sessions that stopped."""
+        """The failures on ``stream`` so far (rule 4): its recursive sessions' stops, and each refusal of one that had not
+        stopped while the stream had not."""
         with self._locked() as ev:
-            mine = {e["session"] for e in ev if e["event"] == "open" and e["stream"] == stream}
-            return sum(e["event"] == "stop" and e["session"] in mine for e in ev)
+            return _failures(ev, stream)
 
     @contextmanager
     def slot(self, session: str, part: str, waiting: Callable[[], None] | None = None) -> Iterator[None]:
         """The firewall's one outer slot, held for the block. A session that finds it taken records ``wait``, calls
-        ``waiting``, and blocks until the holder leaves it; ``slot`` is recorded once it is held."""
+        ``waiting``, and blocks until the holder leaves it. Once it holds the slot, a ``slot`` event whose session has no
+        outcome after it (its holder died) is recorded as that session's stop, and then ``slot`` is recorded."""
         with open(self.state / "slot.lock", "a") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -144,6 +177,9 @@ class Firewall:
                 fcntl.flock(f, fcntl.LOCK_EX)
             try:
                 with self._locked() as ev:
+                    if (o := _orphan(ev)) is not None and _stopped(ev, o["session"]) is None:
+                        self._append(ev, {"event": "stop", "session": o["session"], "part": o["part"],
+                                          "why": f"the slot's holder ended before its outcome (slot {o['seq']})"})
                     self._append(ev, {"event": "slot", "session": session, "part": part})
                 yield
             finally:
@@ -152,6 +188,42 @@ class Firewall:
 
 def _stopped(ev: list[dict], session: str) -> dict | None:
     return next((e for e in ev if e["event"] == "stop" and e["session"] == session), None)
+
+
+def _budget(ev: list[dict], stream: str) -> int | None:
+    return next((e.get("budget") for e in ev if e["event"] == "open" and e["stream"] == stream), None)
+
+
+def _failures(ev: list[dict], stream: str) -> int:
+    budget, mine, stopped, n = _budget(ev, stream), set(), set(), 0
+    for e in ev:
+        if e["event"] == "open" and e["stream"] == stream:
+            mine.add(e["session"])
+        elif e["event"] == "stop" and e["session"] in mine:
+            stopped.add(e["session"])
+            n += 1
+        elif e["event"] == "refused" and e["session"] in mine and e["session"] not in stopped and (budget is None or n < budget):
+            n += 1
+    return n
+
+
+def _orphan(ev: list[dict]) -> dict | None:
+    """The last ``slot`` event, if no outcome of its session at its part (``release``, ``stop`` or ``refused``) follows it."""
+    k = next((k for k in range(len(ev) - 1, -1, -1) if ev[k]["event"] == "slot"), None)
+    if k is None:
+        return None
+    s = ev[k]
+    done = any(e["session"] == s["session"] and (e["event"] in ("release", "refused") and e["part"] == s["part"] or e["event"] == "stop")
+               for e in ev[k + 1:])
+    return None if done else s
+
+
+def _schedule_ok(r: dict) -> None:
+    parts = r.get("parts") if isinstance(r, dict) else None
+    if not (isinstance(r, dict) and set(r) == {"start_ms", "period_ms", "parts"}
+            and all(type(r[k]) is int and r[k] >= 0 for k in ("start_ms", "period_ms")) and r["period_ms"] > 0
+            and isinstance(parts, list) and parts and all(isinstance(p, str) for p in parts) and len(set(parts)) == len(parts)):
+        raise ValueError(f'a release schedule is {{"start_ms": S, "period_ms": P > 0, "parts": [distinct names]}}, not {r!r}')
 
 
 Conn = tuple  # (reader, writer, close): a connection's two file objects and how to close it

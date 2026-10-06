@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import socket
 import threading
+from pathlib import Path
 
 import pytest
 from verity_flock import firewall as FW
@@ -153,6 +154,8 @@ def test_a_firewall_stop_reaches_the_challenger_as_a_cut_without_finish(tmp_path
 
 
 def test_an_outer_session_is_served_only_after_its_inner_session_finished(tmp_path):
+    """A refusal of a recursive session that had not stopped is one of its stream's failures (rule 4); one that was never
+    opened is on no stream."""
     fw = FW.Firewall(tmp_path / "fw")
     log: list = []
     out, _ = _outer(fw, "r0000", "L0", HONEST, Challenger(log, "L0"))
@@ -160,7 +163,68 @@ def test_an_outer_session_is_served_only_after_its_inner_session_finished(tmp_pa
     sid = fw.open("pouw")
     out, _ = _outer(fw, sid, "L0", HONEST, Challenger(log, "L0"))
     assert out["why"] == f"FIREWALL-REFUSED: recursive session {sid}: its inner session has not finished" and log == []
-    assert fw.failures("pouw") == 0
+    assert fw.failures("pouw") == 1
+
+
+VECTORS = Path(__file__).resolve().parents[1] / "live" / "src" / "firewall_record_vectors.json"
+
+
+def _vector_op(fw: FW.Firewall, op: list):
+    def why(e: FW.Refused) -> dict:
+        return {"refused": str(e).removeprefix("FIREWALL-REFUSED: ")}
+    k = op[0]
+    if k == "open":
+        try:
+            return fw.open(op[1], op[2], op[3])
+        except FW.Refused as e:
+            return why(e)
+        except ValueError as e:
+            return {"error": str(e)}
+    if k == "admit":
+        try:
+            return {"release_ms": fw.admit(op[1], op[2], timed=True)}
+        except FW.Refused as e:
+            return why(e)
+    if k == "slot":
+        with fw.slot(op[1], op[2]):
+            return None
+    return getattr(fw, k)(*op[1:])
+
+
+def test_the_record_is_the_rust_firewalls_byte_for_byte(tmp_path):
+    """Each case of ``firewall_record_vectors.json``, run on an empty state directory, gives its results and its
+    ``record.jsonl`` exactly: rules 1 and 2 (with a slot holder that died), the budget, the schedule, and strings Python
+    escapes. ``flock_live::release``'s ``the_shared_vectors_hold`` runs the same file, so the two firewalls read and write
+    one record."""
+    v = json.loads(VECTORS.read_text())
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "budget", "schedule", "escapes"}
+    for c in v["cases"]:
+        fw = FW.Firewall(tmp_path / c["name"])
+        assert [_vector_op(fw, op) for op in c["ops"]] == c["results"], c["name"]
+        assert (tmp_path / c["name"] / "record.jsonl").read_text() == c["record"], c["name"]
+
+
+def test_a_stream_stops_at_its_budget_and_the_python_relay_keeps_no_schedule(tmp_path):
+    """At its ``budget``-th failure a stream refuses every outer session and every open; the budget is the same at every
+    open. A scheduled recursive session is the Rust firewall's: this module's relay refuses it, rather than release its
+    proofs before their time."""
+    fw = FW.Firewall(tmp_path / "fw")
+    log: list = []
+    a, b = fw.open("pouw", budget=1), fw.open("pouw", budget=1)
+    for sid in (a, b):
+        fw.finish(sid)
+    with pytest.raises(ValueError, match="stream pouw's budget is 1, not 2"):
+        fw.open("pouw", budget=2)
+    assert _outer(fw, a, "L0", REFUSED, Challenger(log, "L0"))[0]["outcome"] == "stop"
+    out, _ = _outer(fw, b, "L0", HONEST, Challenger(log, "b"))
+    assert out["why"] == "FIREWALL-REFUSED: stream pouw stopped at its failure budget (1 of 1)" and fw.failures("pouw") == 1
+    with pytest.raises(FW.Refused, match=r"stream pouw stopped at its failure budget \(1 of 1\)"):
+        fw.open("pouw", budget=1)
+    s = fw.open("other", release={"start_ms": 0, "period_ms": 1000, "parts": ["L0"]})
+    fw.finish(s)
+    out, _ = _outer(fw, s, "L0", HONEST, Challenger(log, "s"))
+    assert out["why"].endswith("its release schedule needs the Rust firewall (flock-circuit prove --firewall-state)")
+    assert not any(name in ("b", "s") for name, _ in log)
 
 
 def _serve(tmp_path, sessions, fw):

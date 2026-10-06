@@ -1,0 +1,316 @@
+{
+ "kind": "firewall/v0/vectors",
+ "about": "verity_flock.firewall (Python) and flock_live::release (Rust) each run every case's ops on an empty state directory, and must give its results and its record.jsonl byte for byte",
+ "cases": [
+  {
+   "name": "rules-1-2",
+   "ops": [
+    [
+     "open",
+     "s",
+     null,
+     null
+    ],
+    [
+     "finish",
+     "r0000"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L0"
+    ],
+    [
+     "slot",
+     "r0000",
+     "L0"
+    ],
+    [
+     "release",
+     "r0000",
+     "L0"
+    ],
+    [
+     "slot",
+     "r0000",
+     "L1"
+    ],
+    [
+     "stop",
+     "r0000",
+     "L1",
+     "cut"
+    ],
+    [
+     "stop",
+     "r0000",
+     "L1",
+     "again"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L2"
+    ],
+    [
+     "admit",
+     "r9999",
+     "L0"
+    ],
+    [
+     "open",
+     "s",
+     null,
+     null
+    ],
+    [
+     "admit",
+     "r0001",
+     "L0"
+    ],
+    [
+     "failures",
+     "s"
+    ],
+    [
+     "slot",
+     "r0001",
+     "L0"
+    ],
+    [
+     "slot",
+     "r0001",
+     "L1"
+    ],
+    [
+     "failures",
+     "s"
+    ]
+   ],
+   "results": [
+    "r0000",
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    null,
+    null,
+    true,
+    false,
+    {
+     "refused": "recursive session r0000 stopped at L1: the firewall serves nothing more of it"
+    },
+    {
+     "refused": "recursive session r9999 was never opened"
+    },
+    "r0001",
+    {
+     "refused": "recursive session r0001: its inner session has not finished"
+    },
+    2,
+    null,
+    null,
+    3
+   ],
+   "record": "{\"event\": \"open\", \"seq\": 0, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 1, \"session\": \"r0000\"}\n{\"event\": \"slot\", \"part\": \"L0\", \"seq\": 2, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 3, \"session\": \"r0000\"}\n{\"event\": \"slot\", \"part\": \"L1\", \"seq\": 4, \"session\": \"r0000\"}\n{\"event\": \"stop\", \"part\": \"L1\", \"seq\": 5, \"session\": \"r0000\", \"why\": \"cut\"}\n{\"event\": \"refused\", \"part\": \"L2\", \"seq\": 6, \"session\": \"r0000\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 7, \"session\": \"r9999\"}\n{\"event\": \"open\", \"seq\": 8, \"session\": \"r0001\", \"stream\": \"s\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 9, \"session\": \"r0001\"}\n{\"event\": \"slot\", \"part\": \"L0\", \"seq\": 10, \"session\": \"r0001\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 11, \"session\": \"r0001\", \"why\": \"the slot's holder ended before its outcome (slot 10)\"}\n{\"event\": \"slot\", \"part\": \"L1\", \"seq\": 12, \"session\": \"r0001\"}\n"
+  },
+  {
+   "name": "budget",
+   "ops": [
+    [
+     "open",
+     "s",
+     2,
+     null
+    ],
+    [
+     "open",
+     "s",
+     3,
+     null
+    ],
+    [
+     "open",
+     "s",
+     2,
+     null
+    ],
+    [
+     "finish",
+     "r0000"
+    ],
+    [
+     "finish",
+     "r0001"
+    ],
+    [
+     "stop",
+     "r0000",
+     "L0",
+     "cut"
+    ],
+    [
+     "failures",
+     "s"
+    ],
+    [
+     "admit",
+     "r0001",
+     "L0"
+    ],
+    [
+     "open",
+     "s",
+     2,
+     null
+    ],
+    [
+     "admit",
+     "r0002",
+     "L0"
+    ],
+    [
+     "failures",
+     "s"
+    ],
+    [
+     "admit",
+     "r0001",
+     "L1"
+    ],
+    [
+     "failures",
+     "s"
+    ],
+    [
+     "open",
+     "s",
+     2,
+     null
+    ],
+    [
+     "open",
+     "t",
+     null,
+     null
+    ],
+    [
+     "finish",
+     "r0003"
+    ],
+    [
+     "admit",
+     "r0003",
+     "L0"
+    ]
+   ],
+   "results": [
+    "r0000",
+    {
+     "error": "stream s's budget is 2, not 3"
+    },
+    "r0001",
+    null,
+    null,
+    true,
+    1,
+    {
+     "release_ms": null
+    },
+    "r0002",
+    {
+     "refused": "recursive session r0002: its inner session has not finished"
+    },
+    2,
+    {
+     "refused": "stream s stopped at its failure budget (2 of 2)"
+    },
+    2,
+    {
+     "refused": "stream s stopped at its failure budget (2 of 2)"
+    },
+    "r0003",
+    null,
+    {
+     "release_ms": null
+    }
+   ],
+   "record": "{\"budget\": 2, \"event\": \"open\", \"seq\": 0, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"budget\": 2, \"event\": \"open\", \"seq\": 1, \"session\": \"r0001\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 2, \"session\": \"r0000\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 3, \"session\": \"r0001\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 4, \"session\": \"r0000\", \"why\": \"cut\"}\n{\"budget\": 2, \"event\": \"open\", \"seq\": 5, \"session\": \"r0002\", \"stream\": \"s\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 6, \"session\": \"r0002\"}\n{\"event\": \"refused\", \"part\": \"L1\", \"seq\": 7, \"session\": \"r0001\"}\n{\"event\": \"open\", \"seq\": 8, \"session\": \"r0003\", \"stream\": \"t\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 9, \"session\": \"r0003\"}\n"
+  },
+  {
+   "name": "schedule",
+   "ops": [
+    [
+     "open",
+     "s",
+     null,
+     {
+      "start_ms": 1000,
+      "period_ms": 500,
+      "parts": [
+       "L0",
+       "L1",
+       "alg"
+      ]
+     }
+    ],
+    [
+     "finish",
+     "r0000"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L1"
+    ],
+    [
+     "admit",
+     "r0000",
+     "alg"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L9"
+    ]
+   ],
+   "results": [
+    "r0000",
+    null,
+    {
+     "release_ms": 2000
+    },
+    {
+     "release_ms": 2500
+    },
+    {
+     "refused": "recursive session r0000: L9 has no place in its release schedule"
+    }
+   ],
+   "record": "{\"event\": \"open\", \"release\": {\"parts\": [\"L0\", \"L1\", \"alg\"], \"period_ms\": 500, \"start_ms\": 1000}, \"seq\": 0, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 1, \"session\": \"r0000\"}\n{\"event\": \"refused\", \"part\": \"L9\", \"seq\": 2, \"session\": \"r0000\"}\n"
+  },
+  {
+   "name": "escapes",
+   "ops": [
+    [
+     "open",
+     "sé",
+     null,
+     null
+    ],
+    [
+     "stop",
+     "r0000",
+     "inner",
+     "a \"cut\" — é\\ 😀\n"
+    ]
+   ],
+   "results": [
+    "r0000",
+    true
+   ],
+   "record": "{\"event\": \"open\", \"seq\": 0, \"session\": \"r0000\", \"stream\": \"s\\u00e9\"}\n{\"event\": \"stop\", \"part\": \"inner\", \"seq\": 1, \"session\": \"r0000\", \"why\": \"a \\\"cut\\\" \\u2014 \\u00e9\\\\ \\ud83d\\ude00\\n\\u007f\"}\n"
+  }
+ ]
+}
