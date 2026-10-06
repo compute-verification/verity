@@ -27,6 +27,8 @@
 # ROWS_FORM=s (an -h2 SCHEME only) passes --rows-form s to e2e.py and profile_decode.py: forming's statistics from -h2's row-leaf pass.
 # WHOLE_STEP=1 passes --whole-step: the arm's decode forwards as vLLM's FULL graphs with Pearl-C's calls inside; with it,
 # WHOLE_DEFER=1 passes --whole-defer: each call's tile hashing captured beside the next call.
+# STATEMENT (with WHOLE_STEP=1) passes --statement: hm96_rows.cu's cubin (a path, or "build" to build it here with
+# /usr/local/cuda-13.0's nvcc), adding e2e.py's pearlc-zk mode, each decode forward's rows committed in the ZK statement's format too.
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
@@ -45,6 +47,12 @@ export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BU
 UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}
 [ -n "$UUID" ] || fail IDENTITY "no GPU_LEASE_UUID: run under gpu-lease"
 export E2E_GPU_UUID=$UUID
+if [ "${STATEMENT:-}" = build ]; then
+  /usr/local/cuda-13.0/bin/nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$OUT/hm96_rows.cubin" \
+    benchmarks/pouw/served_zk/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
+  STATEMENT=$OUT/hm96_rows.cubin
+fi
+[ -z "${STATEMENT:-}" ] || SWITCHES+=(--statement "$STATEMENT")
 touch "$OUT/.started"
 trap 'find "$HOME/.cache/flashinfer" -name "*.so" -newer "$OUT/.started" > "$OUT/jit-built.txt" 2>/dev/null || true' EXIT
 
