@@ -1,4 +1,8 @@
-/-
+import Proofs.Flock.Soundness.Discharge.Hm.Slot
+
+/-!
+# V*'s SHA-512 after a known prefix
+
 V*'s SHA-512 of a message that starts after a known prefix (`verity_flock.rec_open._sha`), as the verifier's builder
 (`Flock.HmNets`) states it: the chaining value after the prefix's blocks is constant, the message's bits are forms, SHA-512's
 padding is constant forms, and each block is one `Flock.HmNets.compress` of its bits in word order (`wordBit`).
@@ -7,7 +11,6 @@ padding is constant forms, and each block is one `Flock.HmNets.compress` of its 
 `q / 8`), the output's bit `t` is bit `t` of `SHA-512(pre ‖ data)` (`Flock.Sha512.hash`), for a prefix `pre` of whole
 blocks whose chaining value is the constant (`preCv`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Slot
 
 namespace FlockVBridge
 
