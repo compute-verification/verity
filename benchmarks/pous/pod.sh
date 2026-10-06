@@ -105,7 +105,8 @@ gpu_env() {
   fi
   local venv=$W/gpu312-torch$TORCH_VERSION-$TORCH_CUDA
   PY=$venv/bin/python
-  [ -x "$PY" ] || { uv venv -q "$venv" --python 3.12 && uv pip install -q --python "$PY" numpy ninja \
+  # uv's own Python: torch's JIT build needs Python.h, which a host without python3-dev (node 1) lacks
+  [ -x "$PY" ] || { uv venv -q "$venv" --python 3.12 --managed-python && uv pip install -q --python "$PY" numpy ninja \
     && uv pip install -q --python "$PY" "torch==$TORCH_VERSION" --index-url "https://download.pytorch.org/whl/$TORCH_CUDA"; } || return 3
   "$PY" -c 'import torch; assert torch.cuda.is_available(), "torch sees no CUDA device"; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))' || return 3
   export PATH=$(dirname "$PY"):$PATH
