@@ -43,8 +43,10 @@ Its named assumptions, each a hypothesis:
   prover's session, at budgets `qF` (rewinding) and `qS` (self-clash);
 * `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through `LinkCRZC`) for the prover's link finders.
 
-The rest are the verify command's tags (`TagsOkZJ`), an untyped statement whose outputs are public, and the count
-curve's numeric conditions. -/
+The rest are the verify command's tags (`TagsOkZJ`), an untyped statement whose outputs are public, the count curve's
+numeric conditions, and a reference setup `y₀`: table 0's, at the session's link points, at some draw `d₀`, which the
+session's plan puts in place of a table that a draw doesn't set up. Every draw flock-verify accepts gives one
+(`Flock.SecurityProofs.EndToEnd_refSetup`), at any number of tables. -/
 def EndToEnd : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit, which the verifier parses, and its public file
@@ -55,8 +57,8 @@ def EndToEnd : Prop :=
     -- the law: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     -- the record: the draw file at each draw, and the session at each draw and registration
-    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n))
-    (y₀ : DrawSetupZK I (mPtsOf c.g (kd / nTab I)) S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
+    (y₀ : DrawSetupZJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
