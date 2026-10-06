@@ -66,6 +66,7 @@ def load_registries() -> None:
     import verity_catalog.definitions.boolean.cast  # noqa: F401
     import verity_catalog.definitions.boolean.elementwise  # noqa: F401
     import verity_catalog.definitions.boolean.gemm  # noqa: F401
+    import verity_catalog.definitions.boolean.gf2k  # noqa: F401
     import verity.primitives.commitments.gates.merkle  # noqa: F401
     import verity_catalog.definitions.boolean.mufu  # noqa: F401
     import verity_catalog.definitions.boolean.scalar  # noqa: F401
@@ -142,7 +143,8 @@ def _record(text: str) -> Any:
 
 def definition(spec: str) -> Any:
     """The registered Definition ``spec`` names, bound to the statics its id writes, or else the suite's target of that id: a
-    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers."""
+    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one
+    whose id writes a dict static as its digest, such as `gf2k.GfResiduals`'s schema."""
     from verity_vllm.query import word as W
 
     load_registries()
@@ -152,6 +154,8 @@ def definition(spec: str) -> Any:
     fam, body = m[1], m[2]
     statics = {k: _record(v) if _RECORD.fullmatch(v) else _value(v) for k, v in _split(body).items()} if body else {}
     try:
+        if any(isinstance(v, str) and re.fullmatch(r"\{[0-9a-f]{12}\}", v) for v in statics.values()):
+            raise KeyError(spec)
         fn = W.specialization(fam, statics)
     except KeyError:
         fn = suite().get(spec.strip())
@@ -418,6 +422,17 @@ def _universal_roots() -> list[Any]:
     from verity_experimental.private_circuits.universal import UniversalUnit
 
     return [bind(UniversalUnit, G=16, N_IN=16, N_OUT=8), bind(UniversalUnit, G=64, N_IN=64, N_OUT=32)]
+
+
+def _gf2k_roots() -> list[Any]:
+    """GF(2^128) arithmetic (`verity_catalog.definitions.boolean.gf2k`): Gf128Mul and Gf256Mul are static-free; GfScale at L = 2, and GfResiduals
+    on two residuals over 129 + 2 elements whose operands use every term kind (an element, a transposed block, a sum)."""
+    from verity.primitives.circuits.defs import bind
+    from verity_catalog.definitions.boolean import gf2k as G
+
+    S = {"nw": 129, "nv": 2, "ops": [[["w", 0]], [["wt", 1, 3], ["v", 0]]],
+         "res": [{"mul": [[0, 1]], "add": [["v", 1]]}, {"mul": [], "add": [["w", 0]]}]}
+    return [bind(G.GfScale, L=2), bind(G.GfResiduals, S=S)]
 
 
 def _merkle_roots() -> list[Any]:
@@ -734,6 +749,7 @@ def catalog(by_unit: list | None = None) -> list[Any]:
     ROOT_ERRORS.clear()
     for units, make in ((("_core_roots",), _core_roots), (("_boolean_roots",), _boolean_roots),
                         (("_boolean_gather_roots",), _boolean_gather_roots), (("_universal_roots",), _universal_roots),
+                        (("_gf2k_roots",), _gf2k_roots),
                         (("_merkle_roots",), _merkle_roots), (("_pous_roots",), _pous_roots), (("_kernel_roots",), _kernel_roots),
                         (("_vocabulary_roots", "_vocabulary_bindings"), _vocabulary_roots), (("_pouw_roots",), _pouw_roots)):
         roots += _produce(units, make, by_unit)
