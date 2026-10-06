@@ -2143,7 +2143,7 @@
 "reading": "forming-credited",
 "shape": 16384,
 "sizing": null,
-"source": "verity/protocols/accounting/work/pouw/lean/lean-audit.json",
+"source": "verity/Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
 "type_hash": "dbadd61dc32a5769f7fc677e67ce8fe0050981dffd5cfeebf27660a97b3f202e"
@@ -2158,7 +2158,7 @@
 "reading": "forming-credited",
 "shape": 8192,
 "sizing": null,
-"source": "verity/protocols/accounting/work/pouw/lean/lean-audit.json",
+"source": "verity/Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
 "type_hash": "6abf3b593f2c24abdc454563045a596c491b50c7c3437583f7f4178105dd08c3"
@@ -2413,7 +2413,7 @@
 "reading": "forming-credited",
 "shape": 16384,
 "sizing": null,
-"source": "verity/protocols/accounting/work/pouw/lean/lean-audit.json",
+"source": "verity/Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
 "type_hash": "1f464c41d8528dbdc400d97447dbf55e2df4d285ce362871ae1cde5bf304d321"
@@ -3208,7 +3208,7 @@
 "reading": "forming-credited",
 "shape": 16384,
 "sizing": null,
-"source": "verity/protocols/accounting/work/pouw/lean/lean-audit.json",
+"source": "verity/Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
 "type_hash": "cc1e9febd3476552b5fb77c8ca2867aacbf1516e724d4ef3ed9c2ca64e2a6217"
@@ -3223,7 +3223,7 @@
 "reading": "forming-credited",
 "shape": 8192,
 "sizing": null,
-"source": "verity/protocols/accounting/work/pouw/lean/lean-audit.json",
+"source": "verity/Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
 "type_hash": "30d471e3bd7071bdccd7cae13fbeb9df3eefce42ffbccc6a1091b4779b081b7b"
@@ -3478,7 +3478,7 @@
 "reading": "forming-credited",
 "shape": 16384,
 "sizing": null,
-"source": "verity/protocols/accounting/work/pouw/lean/lean-audit.json",
+"source": "verity/Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
 "type_hash": "11bb7975b859b271d1b3e841c31781372d656aaef5090218b9a344fe11fd932f"
@@ -3493,7 +3493,7 @@
 "reading": "forming-credited",
 "shape": 8192,
 "sizing": null,
-"source": "verity/protocols/accounting/work/pouw/lean/lean-audit.json",
+"source": "verity/Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
 "type_hash": "d30762893aa85fb86604e26f5b349ccc287fe73b4378b6f75bbf7801cc771823"
@@ -4108,7 +4108,7 @@
 "reading": "forming-credited",
 "shape": 8192,
 "sizing": null,
-"source": "verity/protocols/accounting/work/pouw/lean/lean-audit.json",
+"source": "verity/Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
 "type_hash": "aadbaa10cfa180cdbb5fba09578a3b59990714ffbd9c3f499e12c75fa621f016"

@@ -6,10 +6,12 @@
 # unprivileged user namespaces (`unshare --user`), which the sandbox needs.
 #   1. The trusted sources match TRUSTED.sha256, and the trusted layer and the grader build, before any submission code
 #      runs. The hashes of the grader binary, the toolchain's `lean`, the trusted sources and every `.olean` on the
-#      grader's LEAN_PATH (this package, Mathlib and its dependencies, the toolchain's core) are recorded.
-#   2. The submission may import only the trusted layer (`Pous.Protocol`, `Pous.Assumptions`, `Pous.Guarantees`), the
-#      proved `Pous.SecurityProofs.Sanity` and `Pous.SecurityProofs.Accounting.Numbers`, and `Mathlib.*`; the grader's
-#      trusted environment is exactly those imports.
+#      grader's LEAN_PATH (the security packages, Mathlib and their other dependencies, the toolchain's core) are recorded.
+#      The trusted layer is built in `verity/Security/Proofs`, and the grader here; TRUSTED.sha256's paths are relative
+#      to this directory.
+#   2. The submission may import only the trusted layer (`Definitions.Pous`, `Specs.Pous.Assumptions`,
+#      `Specs.Pous.Guarantees`, in `verity/Security`), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers`
+#      (in `verity/Security/Proofs`), and `Mathlib.*`; the grader's trusted environment is exactly those imports.
 #   3. It compiles in a throwaway directory, inside a user, mount, PID and network namespace where every other mount is
 #      read-only. Compile-time IO (`#eval`, `run_cmd`) can write nothing outside that directory, and every process it
 #      starts dies with the namespace.
@@ -22,6 +24,7 @@
 # 5.3 GB resident and 17.9 GB mapped.
 set -uo pipefail
 root=$(cd "$(dirname "$0")" && pwd)
+proofs=$(cd "$root/../../../../../Security/Proofs" && pwd)
 cd "$root"
 export PATH="$HOME/.elan/bin:$PATH"
 file=${1:?usage: grade.sh SUBMISSION.lean Pous.Guarantees.NAME}
@@ -34,11 +37,12 @@ unshare --user --map-root-user --pid --fork --mount --net true 2> /dev/null \
 
 # 1. the trusted tree, before any submission code runs
 sha256sum --quiet -c TRUSTED.sha256 >&2 || fatal "trusted files differ from TRUSTED.sha256"
-lake build Definitions.Pous Specs.Pous.Assumptions Specs.Pous.Guarantees Proofs.Pous.Sanity \
-  Pous.SecurityProofs.Accounting.Numbers pous-grader >&2 || fatal "the trusted layer or the grader does not build"
+(cd "$proofs" && lake build Definitions.Pous Specs.Pous.Assumptions Specs.Pous.Guarantees Proofs.Pous.Sanity \
+  Proofs.Pous.Accounting.Numbers) >&2 || fatal "the trusted layer does not build"
+lake build pous-grader >&2 || fatal "the grader does not build"
 grader=$root/.lake/build/bin/pous-grader
 lean=$(elan which lean) || fatal "no lean for $(cat lean-toolchain)"
-lean_path=$(lake env printenv LEAN_PATH) || fatal "no LEAN_PATH"
+lean_path=$(cd "$proofs" && lake env printenv LEAN_PATH) || fatal "no LEAN_PATH"
 state() {
   { sha256sum "$grader" "$lean" $(cut -c67- TRUSTED.sha256)
     for d in $(echo "$lean_path" | tr ':' ' '); do [ -d "$d" ] && find "$d" -name '*.olean*' -type f; done | sort -u \
@@ -55,20 +59,20 @@ imports=$(sed -n 's/^[[:space:]]*import[[:space:]]\{1,\}//p' "$work/PousSubmissi
 [ -n "$imports" ] || fail "no import"
 for m in $imports; do
   case "$m" in
-    Pous.Protocol|Pous.Assumptions|Pous.Guarantees|Mathlib|Mathlib.*) ;;
-    Pous.SecurityProofs.Sanity|Pous.SecurityProofs.Accounting.Numbers) ;;
+    Definitions.Pous|Specs.Pous.Assumptions|Specs.Pous.Guarantees|Mathlib|Mathlib.*) ;;
+    Proofs.Pous.Sanity|Proofs.Pous.Accounting.Numbers) ;;
     *) fail "import $m: a submission may import only the trusted layer, Sanity, Numbers and Mathlib modules" ;;
   esac
 done
 
 # 3. the sandboxed compile, after a dry run of the sandbox itself
 sandbox='
-w=$1; root=$2; lean=$3; export LEAN_PATH=$4; mode=$5; mem=$6
+w=$1; root=$2; lean=$3; export LEAN_PATH=$4; mode=$5; mem=$6  # $7: the security packages
 mount --bind "$w" "$w" || exit 97
 for mp in $(awk "{print \$2}" /proc/self/mounts | sort -u); do
   case "$mp" in "$w"|/proc|/proc/*|/dev|/dev/*|/sys|/sys/*) ;; *) mount -o remount,bind,ro "$mp" 2> /dev/null ;; esac
 done
-for probe in "$root" "$HOME" "$(dirname "$lean")" /tmp; do
+for probe in "$root" "$7" "$HOME" "$(dirname "$lean")" /tmp; do
   touch "$probe/.pous-sandbox-probe" 2> /dev/null && { echo "sandbox: $probe is writable" >&2; exit 97; }
 done
 [ "$mode" = probe ] && exit 0
@@ -78,7 +82,7 @@ cd "$w" && exec "$lean" -M "$mem" -o PousSubmission.olean PousSubmission.lean
 mem=${POUS_GRADE_MEMORY_MB:-16384}
 run_sandbox() {
   timeout "${POUS_GRADE_TIMEOUT:-3600}" unshare --user --map-root-user --pid --fork --kill-child --mount --mount-proc \
-    --net bash -c "$sandbox" _ "$1" "$root" "$lean" "$lean_path" "$2" "$mem" >&2
+    --net bash -c "$sandbox" _ "$1" "$root" "$lean" "$lean_path" "$2" "$mem" "$(dirname "$proofs")" >&2
 }
 run_sandbox "$probe" probe
 case $? in

@@ -32,10 +32,11 @@ ALLOWED_EXTRA = (
     "verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
     "benchmarks/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
-#: One file per entry behind an index document, so that no one document outgrows its cap: the Flock soundness package's
-#: detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and ligero-verify's discrepancies
-#: (indexed by its ``DISCREPANCIES.md``).
-SPLIT_DOCUMENT_DIRS = ("verity/Security/Proofs/Flock/Soundness/assumption-notes/", "archive/ligero-verify/discrepancies/")
+#: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. C-Flock
+#: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and ligero-verify's
+#: discrepancies (indexed by its ``DISCREPANCIES.md``).
+SPLIT_DOCUMENT_DIRS = {"verity/Security/Proofs/Flock/Soundness/assumption-notes/": "verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+                       "archive/ligero-verify/discrepancies/": "archive/ligero-verify/DISCREPANCIES.md"}
 #: The one evidence file left in the tree: not read by code, kept with the rest of fixtures/redteam until the red team rules
 #: on it.  The frozen campaign evidence that code reads (the overhead ledger, the run results the frozen backends' report
 #: scripts compare against) is in the evidence store (``verity_numerical.bench.frozen``).
@@ -72,8 +73,8 @@ ALLOWLIST = {
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
 #: what Daniel is shown when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
-#: executable verifier, `Flock`, took soundness's record past 2 MiB).
-AUDIT_RECORD_LIMIT = 4 * 1024 * 1024
+#: executable verifier, `Flock`, took soundness's record past 2 MiB, and `verity/Security`'s holds every package's guarantees).
+AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be.
 DATA_BUDGET = 40 * 1024 * 1024
@@ -88,7 +89,7 @@ def _tracked() -> list[str]:
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
                  and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
-                 and not p.startswith(SPLIT_DOCUMENT_DIRS)]
+                 and not p.startswith(tuple(SPLIT_DOCUMENT_DIRS))]
     assert not offenders, (
         "tracked markdown that is not a maintained document (reports, handoffs and drafts belong in ~/.research/notes):\n"
         + "\n".join(offenders)
@@ -140,10 +141,9 @@ def test_pinned_evidence_still_exists() -> None:
 
 
 def split_dir(path: str) -> str | None:
-    """The `SPLIT_DOCUMENT_DIRS` directory behind ``path``: the one it sits in, or the one it indexes (``ASSUMPTIONS.md`` beside
-    ``assumptions/``); None for any other document."""
-    indexed = os.path.join(os.path.dirname(path), os.path.splitext(os.path.basename(path))[0].lower()) + "/"
-    return next((d for d in SPLIT_DOCUMENT_DIRS if path.startswith(d) or indexed == d), None)
+    """The `SPLIT_DOCUMENT_DIRS` directory behind ``path``: the one it sits in, or the one it indexes (``ASSUMPTIONS.md``
+    indexes ``assumption-notes/``); None for any other document."""
+    return next((d for d, index in SPLIT_DOCUMENT_DIRS.items() if path.startswith(d) or path == index), None)
 
 
 def markdown_over_cap(path: str, size: int) -> str | None:
@@ -156,12 +156,12 @@ def markdown_over_cap(path: str, size: int) -> str | None:
 
 
 def test_markdown_over_cap_says_by_how_much_and_where_detail_goes() -> None:
-    soundness = "verity/Security/Proofs/"
+    soundness = "verity/Security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")
-    for p in (soundness + "ASSUMPTIONS.md", soundness + "assumptions/e2e-checklist.md"):
-        assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumptions/")
+    for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
+        assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
     assert markdown_over_cap("archive/ligero-verify/DISCREPANCIES.md", MD_SIZE_CAP + 1).endswith("archive/ligero-verify/discrepancies/")
     assert markdown_over_cap("archive/ligero-verify/README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
 
