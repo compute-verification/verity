@@ -182,3 +182,48 @@ def control_symbols(windows: int, seed: int) -> list[int]:
     the estimator's null (the control)."""
     rng = random.Random(seed ^ 0xC0FFEE)
     return [rng.randrange(1, 16) for _ in range(windows)]
+
+
+def pool(summaries: Sequence[dict], sync_set: SyncSet) -> dict:
+    """`measure_runs` over the runs of several `active_replay.py` summaries (one per trace, say), per strategy, with the
+    link-windows each strategy had accepted, raw and committed."""
+    out: dict[str, dict] = {}
+    for strategy in sorted({s for doc in summaries for s in doc.get("covert", {})}):
+        mine = [doc["covert"][strategy] for doc in summaries if strategy in doc.get("covert", {})]
+        runs = [tuple(r) for m in mine for r in m["runs"]]
+        out[strategy] = measure_runs(runs, sync_set, margin=mine[0]["margin"])
+        rows = [(doc["egress"], doc["ingress"]) if strategy == "honest" else (doc["adversarial"][strategy],)
+                for doc in summaries if strategy in doc.get("covert", {})]
+        out[strategy]["link_windows"] = sum(x["link_windows"] for r in rows for x in r)
+        out[strategy]["accepted"] = {k: sum(x["accepted"][k] for r in rows for x in r) for k in ("raw", "committed")}
+        out[strategy]["configurations"] = len(runs)
+        if any("declared_are_predicted" in m for m in mine):
+            out[strategy]["declared_are_predicted"] = all(m.get("declared_are_predicted", False) for m in mine)
+    return out
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    import argparse
+    import json
+    from fractions import Fraction
+    from pathlib import Path
+
+    ap = argparse.ArgumentParser(prog="covert.py", description="pool active_replay.py summaries' covert measurements")
+    ap.add_argument("summaries", nargs="+", type=Path)
+    ap.add_argument("--calibration", required=True, type=Path)
+    ap.add_argument("--out", required=True, type=Path)
+    args = ap.parse_args(argv)
+    cs = json.loads(args.calibration.read_text())["clock_sync"]
+    sync_set = SyncSet(tuple(cs["deltas"]), tuple(Fraction(r) for r in cs["rhos"]))
+    result = pool([json.loads(p.read_text()) for p in args.summaries], sync_set)
+    args.out.write_text(json.dumps(result, indent=1))
+    for s, m in result.items():
+        print(f"{s}: MI {m['mutual_information_full_bits']:.3f} bits/window (null {m['mutual_information_null_bits']:.3f},"
+              f" corrected {m['mutual_information_corrected_bits']:.3f}), δ-MI {m['mutual_information_delta_bits']:.3f},"
+              f" decoded {m['decoded_bits_per_window']:.3f}, SER {m['symbol_error_rate']:.3f}, "
+              f"{m['window_decisions']} window-decisions, accepted {m['accepted']} of {m['link_windows']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

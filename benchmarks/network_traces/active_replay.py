@@ -496,10 +496,10 @@ def covert_symbols(plan: dict, buckets: int) -> tuple[list[int], int]:
         rng = random.Random(plan["seed"])
         bits = {name: rng.randrange(2) for name, _, _ in plan["sessions"]}
         release = {int(k): v for k, v in plan["model_release"].items()}
-        out = [0] * plan["windows"]
+        out = [0] * plan["windows"]  # how many of each window's sessions burst rather than spread
         for name, stream, _ in plan["sessions"]:
             if (r := release.get(stream)) is not None and r // buckets < plan["windows"]:
-                out[r // buckets] = 2 * out[r // buckets] + bits[name]
+                out[r // buckets] += bits[name]
         return out, margin
     return covert.control_symbols(plan["windows"], plan.get("seed", 0)), margin
 
@@ -1563,8 +1563,9 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
     for s in strategies:
         mine = [r["comparisons"] for r in results if r["strategy"] == s]
         if mine:
-            summary["covert"][s] = covert.measure_runs([(c["covert"]["symbols"], c["covert"]["declared"]) for c in mine],
-                                                       setup.sync_set, margin=mine[0]["covert"]["margin"])
+            pairs = [(c["covert"]["symbols"], c["covert"]["declared"]) for c in mine]
+            summary["covert"][s] = covert.measure_runs(pairs, setup.sync_set, margin=mine[0]["covert"]["margin"]) | \
+                {"margin": mine[0]["covert"]["margin"], "runs": pairs}
             if "covert_declared_are_predicted" in mine[0]:
                 summary["covert"][s]["declared_are_predicted"] = all(c["covert_declared_are_predicted"] for c in mine)
     (args.out / "summary.json").write_text(json.dumps(summary, indent=1))
