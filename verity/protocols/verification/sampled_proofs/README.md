@@ -337,8 +337,8 @@ bound `harm_bound`; each application counts delta once.
   `n_v` proof units, the most work it can hold. Policies and PoUW pass their own utility to `worst_case`.
 - A unit's output bits or work is one number for every unit, or per stratum a number or `(bits, units)` pairs.
 
-Pinned by `experimental/tests/sampled_proofs/test_consumers.py` and `experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json`, whose recorded sha256 of the Lean files it
-came from fails `test_the_lean_vectors_were_generated_from_this_tree` until it is regenerated.
+Pinned by `experimental/tests/sampled_proofs/test_consumers.py` and
+`experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json`, whose recorded sha256 of the Lean files it came from fails `test_the_lean_vectors_were_generated_from_this_tree` until it is regenerated.
 
 ### The proof service
 
