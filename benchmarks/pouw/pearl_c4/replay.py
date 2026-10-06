@@ -12,7 +12,8 @@ many fall outside D-SB's byte range (`device_scales`).
 
 **`prove`** makes transcript v0 (`FORMAT`) from a dump, on the host:
 
-* the epoch: B's root as the device committed it, and the salt from the epoch beacon (`audit.Epoch.start`);
+* the epoch: B's root as the device committed it, and the salt keyed by the call's recorded epoch beacon
+  (`audit.Epoch.unverified`: a recorded replay's salt, with no coin behind it, not the epoch's live coin);
 * the transcript commitment over the device's leaves (`audit.transcript_domain`);
 * the records: one unit, no channel split, its real rows, and as excluded the rows that fail `row_passes` (D-NF) and the
   rows that pass it but not R1 (`PearlC4.r1_row`, row by row over the workers), as `pearl_c_work.declare` has them;
