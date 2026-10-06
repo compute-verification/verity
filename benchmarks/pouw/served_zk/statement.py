@@ -7,9 +7,10 @@ forward waits for it), its calls' A rows and its tile rows as hm96-sha512 leaves
   weight's slot of its k's stage (`stage`).  After the replay (`after`), each k's stage is one commitment of role X rows
   (``hm96-sha512/row-seg/v1``), and the forward's tile leaves (the scheme's, `run.nb` bytes each, standing in for the statement's tile
   digest, TurboSHAKE128, which is not computed) one of ``row/v2`` rows.
-- **The salts:** C-Flock's ChaCha20 stream under a key derived from the install's salt (`SALT_TAG`), the nonce the forward's
-  serial in the install and the tree's place.  Each tree's domain names its k (or the tiles) and m₁₆, not the forward (v0).
-- **The roots:** each forward's, copied to a device ring (`ROOTS` forwards), whose SHA-256 over the forwards since the last
+- **The salts:** C-Flock's ChaCha20 stream under `salt_key` of the install's salt (core's `derive`, `SALT_DOMAIN`), the
+  nonce the forward's serial in the install and the tree's place.  Each tree's domain names its k (or the tiles) and m₁₆,
+  not the forward (v1: its binding is SHA-512, `rows_bench.binding`).
+- **The roots:** each forward's, copied to a device ring (`ROOTS` forwards), whose SHA-512 over the forwards since the last
   `take` the e2e's decode response reports.
 - **What it is not:** the scheme's own A root seeds forming (seed_A), so the statement's roots are in addition to its.  Prefill
   runs eagerly, so its rows are not committed here; nor are the fp8-p rows (the tile's inputs), which a prover commits after
@@ -26,9 +27,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from verity.primitives.randomness import derive
+
 HERE = Path(__file__).resolve().parent
-SALT_TAG = b"verity/pouw/served-zk/statement-salt/v0"
-PREFIX = "verity/pouw/served-zk/statement/v0"
+SALT_DOMAIN = "verity/pouw/served-zk-statement-salt/v1"
+PREFIX = "verity/pouw/served-zk/statement/v1"
 #: forwards whose roots the device ring holds
 ROOTS = 1 << 12
 POISON = 0xA5
@@ -53,6 +56,11 @@ def slots_of(ks: dict[int, int]) -> tuple[dict[int, tuple[int, int]], dict[int, 
     return pos, count
 
 
+def salt_key(salt: bytes) -> bytes:
+    """The key of the statement's ChaCha20 salt stream (hm96_rows.cu's ``salt_key``) from the install's salt."""
+    return derive(salt, SALT_DOMAIN, {}).value
+
+
 class Statement:
     def __init__(self, run: Any, cubin: str | Path) -> None:
         import torch
@@ -61,7 +69,7 @@ class Statement:
         self.cubin_sha256 = hashlib.sha256(raw).hexdigest()
         self.h = run.kernel.run.Dev(raw)
         self.h.open()
-        self.consts = self.B.constants(self.h, hashlib.sha256(SALT_TAG + run.salt).digest())
+        self.consts = self.B.constants(self.h, salt_key(run.salt))
         self.h.sync()
         self.enabled = self.skip = False
         self.pos, self.count = slots_of({w: wt.k for w, wt in run.weights.items()})
@@ -122,15 +130,15 @@ class Statement:
         self.forwards += 1
 
     def take(self) -> dict:
-        """The forwards committed since the last take, and the SHA-256 of their roots in order (read after a sync)."""
+        """The forwards committed since the last take, and the SHA-512 of their roots in order (read after a sync)."""
         n, first = self.forwards - self.taken, self.taken
         self.taken = self.forwards
         if n > ROOTS:
-            return {"forwards": n, "roots_sha256": None, "wrapped": True}
+            return {"forwards": n, "roots_sha512": None, "wrapped": True}
         per = 64 * (len(self.ks) + 1)
         ring = bytes(self.ring.cpu().numpy())
         roots = b"".join(ring[per * ((first + i) % ROOTS):per * ((first + i) % ROOTS + 1)] for i in range(n))
-        return {"forwards": n, "roots_sha256": hashlib.sha256(roots).hexdigest()}
+        return {"forwards": n, "roots_sha512": hashlib.sha512(roots).hexdigest()}
 
     def poison(self) -> None:
         import torch
