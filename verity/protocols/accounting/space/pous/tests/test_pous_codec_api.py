@@ -6,7 +6,7 @@ import itertools
 import random
 
 import pytest
-from verity.primitives.commitments.identity import canonical_json_bytes, tagged_sha256
+from verity.primitives.commitments.identity import canonical_json_bytes, tagged_sha512
 
 from verity.protocols.accounting.space.pous import setup
 from verity.protocols.accounting.space.pous.audit import HonestResponder, MemoryChallenger, challenge_key, run_timed
@@ -44,7 +44,7 @@ def test_encode_segment_on_bytes():
 
 def test_commit_streams_the_same_digest():
     manifest = canonical_json_bytes(PARAMS.manifest())
-    whole = bytes.fromhex(tagged_sha256(setup.COMMIT_TAG, len(manifest).to_bytes(8, "big") + manifest + W))
+    whole = tagged_sha512(setup.COMMIT_TAG, len(manifest).to_bytes(8, "big") + manifest + W)
     assert setup.commit(PARAMS, W) == whole == setup.commit(PARAMS, list(split(PARAMS, W)))
 
 

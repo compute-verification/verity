@@ -1,17 +1,20 @@
-"""The verifier key `vk` (`docs/p3-instantiation.md` §4): the root of a SHA-256 Merkle tree over the top labels.
+"""The verifier key `vk` (`docs/p3-instantiation.md` §4): the root of a SHA-512 Merkle tree over the top labels.
 
 ~~~text
-leaf(i) = SHA256(0x00 || tag_s || u16(v) || c²_v)     block i = s * n + v, tag_s = salt || u64(s)
-node    = SHA256(0x01 || left || right)
+row(c)  = SHA512(P(8·|c|) || c)                      sha512/row/v2, P = ("verity/sha512-row/v2\0" || u64be bits) to 128 B
+leaf(i) = SHA512(0x00 || tag_s || u16(v) || row(c²_v))   block i = s * n + v, tag_s = salt || u64(s), little-endian
+node    = SHA512(0x01 || left || right)
 ~~~
 
 The tree has the shape of RFC 6962 (Certificate Transparency): over `k` leaves it splits at the largest power of two
-below `k`, and an audit path lists the siblings from the leaf up, verified as in RFC 9162 §2.1.3.2.  Binding is SHA-256's
-collision resistance, a single-stage property.  Lean's audit compares each answer with the true block (`Model/Audit.lean`:
-"no verifier key ... idealizes the per-block tags"); these digests are that idealization's instance.
+below `k`, and an audit path lists the siblings from the leaf up, verified as in RFC 9162 §2.1.3.2.  Binding is SHA-512's
+collision resistance, a single-stage property.  A leaf wraps the block's `sha512/row/v2` digest, the digest a
+row-digest gadget checks, in one more compression (99 bytes) that binds it to its salt, segment and index.  Lean's audit
+compares each answer with the true block (`Model/Audit.lean`: "no verifier key ... idealizes the per-block tags"); these
+digests are that idealization's instance.
 
-The verifier builds `vk` from its own encoding (`setup.verifier_key`) and keeps every leaf digest (0.05% of `C` at
-64 KB), so it checks an answer alone; `root` is the 32-byte key a root-only memory challenger keeps, checking an answer with the
+The verifier builds `vk` from its own encoding (`setup.verifier_key`) and keeps every leaf digest (0.1% of `C` at
+64 KB), so it checks an answer alone; `root` is the 64-byte key a root-only memory challenger keeps, checking an answer with the
 server's audit path.  `VerifierKey.from_segments` and `from_leaves` build it one segment at a time, without `C`.  Only
 the geometry (`codec.Geometry`) is read, so the same `vk` serves any codec.
 """
@@ -22,21 +25,33 @@ import hashlib
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from verity.primitives.commitments.rowleaf import sha512_row_v2_prefix
+
 from .codec import Geometry
 from .labels import salt_value, tag
 from .scheme import Encoding
 
 
+DIGEST_BYTES = 64
+
+
+def row_digest(block_bytes: int, block: bytes | Iterable[bytes]) -> bytes:
+    """`sha512_row_v2_digest(block, 8 * block_bytes)`; `block` is the block or its bytes in chunks, in order."""
+    h = hashlib.sha512(sha512_row_v2_prefix(8 * block_bytes))
+    count = 0
+    for chunk in (block,) if isinstance(block, (bytes, bytearray, memoryview)) else block:
+        h.update(chunk)
+        count += len(chunk)
+    if count != block_bytes:
+        raise ValueError(f"a block is {block_bytes} bytes, not {count}")
+    return h.digest()
+
+
 def leaf_hash(params: Geometry, salt: bytes, i: int, block: bytes | Iterable[bytes]) -> bytes:
     """Leaf `i`'s digest; `block` is the block or its bytes in chunks, in order."""
     s, v = divmod(i, params.blocks_per_segment)
-    h = hashlib.sha256(b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little") + v.to_bytes(2, "little"))
-    if isinstance(block, (bytes, bytearray, memoryview)):
-        h.update(block)
-    else:
-        for chunk in block:
-            h.update(chunk)
-    return h.digest()
+    return hashlib.sha512(b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little") + v.to_bytes(2, "little")
+                          + row_digest(params.block_bytes, block)).digest()
 
 
 def segment_leaves(params: Geometry, salt: bytes, s: int, blocks: Sequence[bytes]) -> list[bytes]:
@@ -48,7 +63,7 @@ def segment_leaves(params: Geometry, salt: bytes, s: int, blocks: Sequence[bytes
 
 
 def node_hash(left: bytes, right: bytes) -> bytes:
-    return hashlib.sha256(b"\x01" + left + right).digest()
+    return hashlib.sha512(b"\x01" + left + right).digest()
 
 
 def _split(k: int) -> int:
@@ -137,8 +152,8 @@ class VerifierKey:
     def from_leaves(cls, params: Geometry, salt: bytes, leaves: Sequence[bytes]) -> VerifierKey:
         """`vk` from every leaf digest, in block order; the root is recomputed."""
         leaves = tuple(leaves)
-        if len(leaves) != params.blocks or any(type(x) is not bytes or len(x) != 32 for x in leaves):
-            raise ValueError(f"expected {params.blocks} 32-byte leaf digests")
+        if len(leaves) != params.blocks or any(type(x) is not bytes or len(x) != DIGEST_BYTES for x in leaves):
+            raise ValueError(f"expected {params.blocks} {DIGEST_BYTES}-byte leaf digests")
         return cls(params, salt, MerkleTree(leaves).root, leaves)
 
     @classmethod

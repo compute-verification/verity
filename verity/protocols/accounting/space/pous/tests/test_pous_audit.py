@@ -8,6 +8,7 @@ import random
 
 import pytest
 
+from verity.primitives.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
 from verity.protocols.accounting.space.pous import setup
 from verity.protocols.accounting.space.pous.audit import (DEADLINE_NS, HonestResponder, MemoryChallenger, challenge_key, deadline_rounds, run_timed,
                                simulate)
@@ -65,9 +66,11 @@ def test_vk_is_the_spec(world):
     _, salt, enc, vk = world
     i = PARAMS.n + 5
     tag_s = salt + (1).to_bytes(8, "little")
-    assert leaf_hash(PARAMS, salt, i, enc.block(i)) == hashlib.sha256(b"\x00" + tag_s + (5).to_bytes(2, "little")
-                                                                     + enc.block(i)).digest()
-    assert vk.root == tree(enc).root and len(vk.root) == 32
+    row = hashlib.sha512(sha512_row_v2_prefix(8 * PARAMS.block_bytes) + enc.block(i)).digest()
+    assert row == sha512_row_v2_digest(enc.block(i), 8 * PARAMS.block_bytes)
+    assert leaf_hash(PARAMS, salt, i, enc.block(i)) == hashlib.sha512(b"\x00" + tag_s + (5).to_bytes(2, "little")
+                                                                     + row).digest()
+    assert vk.root == tree(enc).root and len(vk.root) == 64
     assert vk.check(i, enc.block(i)) and not vk.check(i, enc.block(i + 1)) and not vk.check(i, b"")
     assert vk.check_path(i, enc.block(i), tree(enc).path(i))
 

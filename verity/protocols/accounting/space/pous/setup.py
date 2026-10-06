@@ -27,23 +27,23 @@ from .params import SALT_BITS
 from .scheme import Encoding
 from .verifier import VerifierKey, segment_leaves, tree
 
-COMMIT_TAG = "verity-pous/w-commitment/v1"
+COMMIT_TAG = "verity-pous/w-commitment/v2"
 SALT_DOMAIN = "verity/pous/salt/v1"
-_TAGGED_SHA256 = b"veritor/tagged-sha256/v1\0"
+_TAGGED_SHA512 = b"verity/tagged-sha512/v1\0"
 
 
 def _commitment_hash(params: Geometry):
-    """`commit`'s running hash before the first byte of `W`: the tagged-SHA-256 header, the payload length, then
+    """`commit`'s running hash before the first byte of `W`: the tagged-SHA-512 header, the payload length, then
     `u64(len manifest) || manifest`, all from `params`."""
     manifest = canonical_json_bytes(params.manifest())
     tag = COMMIT_TAG.encode("utf-8")
-    return hashlib.sha256(_TAGGED_SHA256 + len(tag).to_bytes(4, "big") + tag
+    return hashlib.sha512(_TAGGED_SHA512 + len(tag).to_bytes(4, "big") + tag
                           + (8 + len(manifest) + params.w_bytes).to_bytes(8, "big")
                           + len(manifest).to_bytes(8, "big") + manifest)
 
 
 def commit(params: Geometry, w: bytes | Iterable[bytes]) -> bytes:
-    """The server's commitment to `W` under `params`: `verity.primitives.commitments.identity.tagged_sha256(COMMIT_TAG, u64(len
+    """The server's commitment to `W` under `params`: `verity.primitives.commitments.identity.tagged_sha512(COMMIT_TAG, u64(len
     manifest) || manifest || W)`, streamed over `W`'s segments."""
     h = _commitment_hash(params)
     for seg in split(params, w):
