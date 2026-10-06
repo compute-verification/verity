@@ -60,3 +60,28 @@ def test_link_y_of_another_length_is_refused_before_the_coin_server_sees_it(n):
     proxy = _proxy(_schedule())
     assert _refusal(_run(proxy, y=bytes(n))).startswith("rec proxy: GATE-REFUSED: Link's y: ")
     assert proxy.coins.link["y"] is None and proxy.coins.rounds == []
+
+
+def test_the_coin_server_records_the_pinned_hello_never_the_provers_spelling():
+    """A Hello in another key order (or other whitespace) is held, and the coin server records the schedule's, in canonical
+    form; key order alone was log2(7! 2!) free bits a session."""
+    sched = _schedule()
+    spelled = {k: HELLO[k] for k in reversed(list(HELLO))}
+    spelled["link"] = {"points": 2, "m": 4, "sigma": "ab" * 64}
+    for hello in (spelled, json.dumps(spelled, indent=3)):
+        proxy = _proxy(sched)
+        assert _held(_run(proxy, hello=hello))
+        rec = proxy.coins.record()["hello"]
+        assert json.dumps(rec, separators=(",", ":")) == RL.canonical(sched["hello"]) and rec == sched["hello"]
+
+
+@pytest.mark.parametrize("edit", [{"reps": 2.0}, {"link": {"sigma": "ab" * 64, "m": 4, "points": 2.0}},
+                                  {"link": {"sigma": "ab" * 64, "m": 4.0, "points": 2}},
+                                  {"tables": ["circuit", "circuit"]}, {"note": "5e" * 64}, {"link": {"m": 4, "points": 2}},
+                                  {"link": {"sigma": 7, "m": 4, "points": 2}}])
+def test_a_hello_whose_canonical_json_is_not_the_pinned_ones_is_refused(edit):
+    """``==`` holds ``2.0`` (and ``True``) equal to ``2``; the canonical JSON does not. A Hello without Σ as a string is refused
+    too (the session record needs it, the coin server never sees it)."""
+    proxy = _proxy(_schedule())
+    assert _refusal(_run(proxy, hello={**HELLO, **edit})).startswith("rec proxy: GATE-REFUSED: Hello: ")
+    assert proxy.coins.hello is None and proxy.coins.link is None

@@ -9,7 +9,8 @@ The prover (``flock-circuit prove --verifier ADDR`` under ``FC_COINS=os``) speak
 answers what the live server would, except that every coin comes from :class:`CoinServer`, the verifier's side, which is shown
 only the session's public schedule and salted hashes:
 
-* ``Hello``: the schedule (profile, reps, flavor, tables, the link's shape), without Σ (a digest of the hidden statement);
+* ``Hello``: the pinned schedule's (profile, reps, flavor, tables, the link's shape), without Σ (a digest of the hidden
+  statement), once the prover's, Σ aside, is the same canonical JSON (`canonical`); never the prover's own text or object;
 * ``Commit``: each table's level-0 cap (``root_B``) as a salted top (`commit_top`), answered with the link points; root_F
   (Σ) stays with the prover;
 * each ``Round``: its caps (the ``BYTES`` frames that commit a Merkle tree), each a salted top, and ``c_k``, a hiding
@@ -326,6 +327,12 @@ def refused(what: str) -> str:
     return f"GATE-REFUSED: {what}"
 
 
+def canonical(v) -> str:
+    """``v`` as the gateway compares it with the pinned schedule: JSON with sorted keys and no spaces, so ``2`` and ``2.0``
+    (or ``true`` and ``1``) differ."""
+    return json.dumps(v, sort_keys=True, separators=(",", ":"))
+
+
 def schedule_of(record: dict) -> dict:
     """What the pinned schedule fixes of a coin server's record (module docstring); a record of clear tops (no ``tops``)
     counts 64 bytes a node, a salted one ``b || c`` a node."""
@@ -431,8 +438,8 @@ class Proxy:
         return commit_top(top, salts), salts
 
     def _pinned(self, what: str, got, want) -> None:
-        if self.schedule is not None and got != want:
-            raise ValueError(refused(f"{what}: {json.dumps(got, sort_keys=True)} where the pinned schedule has {json.dumps(want, sort_keys=True)}"))
+        if self.schedule is not None and canonical(got) != canonical(want):
+            raise ValueError(refused(f"{what}: {canonical(got)} where the pinned schedule has {canonical(want)}"))
 
     def handle(self, req: bytes) -> bytes:
         """One request's answer. A refusal stops the session: every later request is refused for the same reason, and
@@ -458,14 +465,19 @@ class Proxy:
         if t == REQ_REGISTER:
             return resp_str(RESP_DRAW, "null")
         if t == REQ_HELLO:
-            self.hello = r[1]
-            self.hello_v = json.loads(r[1])
-            if "coins" in self.hello_v:
+            if self.hello is not None:
+                raise ValueError("a second Hello")
+            v = json.loads(r[1])
+            if not isinstance(v, dict) or not isinstance(v.get("link"), dict) or not isinstance(v["link"].get("sigma"), str):
+                raise ValueError(refused("Hello: not an object whose link names Σ"))
+            if "coins" in v:
                 raise ValueError("the inner session runs on live OS coins (FC_COINS=os): no seed, no coin tree")
-            pub = json.loads(r[1])
-            pub.get("link", {}).pop("sigma", None)
-            self._pinned("Hello", pub, self.schedule and self.schedule["hello"])
-            self.coins.start(pub)
+            pub = {**v, "link": {k: x for k, x in v["link"].items() if k != "sigma"}}
+            want = pub if self.schedule is None else self.schedule["hello"]
+            self._pinned("Hello", pub, want)
+            # the coin server records the schedule's Hello, never the prover's spelling of it
+            self.hello, self.hello_v = r[1], {**json.loads(canonical(want)), "link": {**want["link"], "sigma": v["link"]["sigma"]}}
+            self.coins.start(json.loads(canonical(want)))
             return resp_ok()
         if t == REQ_COMMIT:
             _, root_f, roots, publics = r
