@@ -17,7 +17,7 @@
    },
    "generate": [
     "python3",
-    "../../protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py",
+    "{repo}/verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py",
     "{repo}",
     "--out",
     "{out}"
@@ -32,7 +32,7 @@
    },
    "generate": [
     "python3",
-    "../../protocols/accounting/communication/warden/lean/scripts/difftest_vectors.py",
+    "{repo}/verity/protocols/accounting/communication/warden/lean/scripts/difftest_vectors.py",
     "{repo}",
     "--out",
     "{out}"
