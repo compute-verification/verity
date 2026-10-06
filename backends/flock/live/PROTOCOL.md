@@ -663,6 +663,6 @@ gated against 7.4 s with the host witness ungated and 6.7 s with the device's wi
 gateway's CPU is about 176 CPU seconds a session (the gated process's over the ungated one's). Of the 39 s the gate adds to
 prove, the level-0 recheck is 5.2 s (51 CPU seconds; L0's alone 1.8 s and 17.8), the device's wait for the shadow opening
 13.4 s, the gateway's own comb fold 10.5 s, and the rest the device's host phases slowed by the gate's threads on the same
-cores. None of it is the GPU's: the gate runs on CPUs the device does not need, it can run on cores of its own, the
-recheck can run a session ahead (it reads only the host witness and the gateway's own salts and hiding), and the device
-need not compute the opening the shadow replaces.
+cores. All of it is CPU work, and three changes not yet made would take most of it off the session's path: the gate on
+cores of its own, the recheck a session ahead (it reads only the host witness and the gateway's own salts and hiding), and
+the device skipping the opening the shadow replaces.
