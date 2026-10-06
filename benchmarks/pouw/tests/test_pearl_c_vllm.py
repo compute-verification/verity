@@ -7,6 +7,7 @@ import ctypes
 import importlib.util
 import json
 import math
+import random
 import shutil
 import sys
 import types
@@ -39,8 +40,10 @@ from verity.protocols.accounting.work.pouw.audit import (
     rows_domain,
     transcript_domain,
     weight_binding,
+    weights_root,
 )
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.work.pouw.coins import Challenger, CoinCommitment
+from verity.protocols.accounting.work.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
@@ -48,9 +51,24 @@ from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
 SCHEME = "pearl-c-sm120-v1-h3"
-BEACON = bytes(range(32))
+SEED = bytes(range(32))
 SALT_KEY = bytes(range(100, 132))
 RUN = "r20260930-120000-test"
+
+
+def salt_coin(roots: dict[int, bytes], epoch: int = 0, entropy: int = 7):
+    """An epoch's coin commitment and its salt coin, opened after `roots`' weights root, from a seeded challenger."""
+    ch = Challenger(epoch, random.Random(entropy).randbytes)
+    return ch.commitment, ch.open("salt", weights_root(roots))
+
+
+def published(path: Path) -> CoinCommitment:
+    """The epoch's coin commitment as its challenger published it beside the passes (e2e.py's ``coins.json``)."""
+    return CoinCommitment.from_json(json.loads((path.parent / "coins.json").read_text()))
+
+
+def coins_args(path: Path) -> list[str]:
+    return ["--coins", str(path.parent / "coins.json")]
 
 
 def load(name: str, path: Path):
@@ -121,7 +139,7 @@ def test_call_keys_are_the_fixtures_keys_of(scheme):
     s = PPD.scheme_of(scheme)
     roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
     work = Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1)))
-    epoch = Epoch.unverified(work, roots, BEACON)
+    epoch = Epoch.unverified(work, roots, SEED)
     for index, w, m16 in ((0, 0, 32), (5, 1, 8192), (127, 0, 16)):
         mm = Matmul(index, Shape(m16, 1024, 256 if w == 0 else 128), w)
         kk = F.keys_of(s, epoch, mm, C._labelled(epoch.salt + roots[w], "seed-B"))
@@ -172,11 +190,12 @@ def device_run():
     kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
-    salt = Epoch.unverified(declared, roots, BEACON).salt
+    coins = salt_coin(roots)
+    salt = Epoch.start(declared, roots, *coins).salt
 
-    def make(hashing=True, schedule="serial"):
-        return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, salt, BEACON, hashing=hashing,
-                                   capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
+    def make(hashing=True, schedule="serial", flag_rows=PPD.FLAG_ROWS):
+        return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, hashing=hashing,
+                                   capacity=1 << 12, schedule=schedule, flag_rows=flag_rows, salt_key=SALT_KEY)
     return make, kernel, weights, roots, salt
 
 
@@ -234,6 +253,17 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
     assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == ["stats_s5", "eprime", "form_s5", "words", "pa",
                                                                           "gemm_pearlc_d"]
     assert run.end() == {"units": 1, "tiles": 0, "hashing": False, "schedule": "serial"}
+
+
+def test_a_pass_screens_at_most_its_flag_rows(device_run):
+    make, _, weights, _, _ = device_run
+    run = make(flag_rows=48)
+    assert run.flag_buf.shape == (48, 2)
+    run.begin()
+    x = torch.randn(32, 1024).to(torch.bfloat16)
+    run.gemm(0, x, weights[0], None)
+    with pytest.raises(RuntimeError, match="over its capacity .* 48 screened rows"):
+        run.gemm(1, x, weights[1], None)
 
 
 def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
@@ -317,7 +347,7 @@ def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
     rng = np.random.default_rng(1)
     weights = {0: torch.from_numpy(bf16_words(rng, 128, 1024).view(np.float32).copy()).to(torch.bfloat16)}
     roots = PPD.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
-    run = PPD.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, bytes(32), BEACON, capacity=16, salt_key=SALT_KEY)
+    run = PPD.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots), capacity=16, salt_key=SALT_KEY)
     assert run.tree_hash == s.commitment_hash == C.TREE_HASH["h3"] == HM96 and PPD._bytes(run.const) == PPD._bytes(t)
 
 
@@ -340,8 +370,9 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
     assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h, key, HM96_WEIGHTS + w).commitment.root
                      for w, t in weights.items()}
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
-    salt = Epoch.unverified(declared, roots, BEACON).salt
-    run = PPD.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, salt, BEACON, capacity=1 << 12, salt_key=key)
+    coins = salt_coin(roots)
+    salt = Epoch.start(declared, roots, *coins).salt
+    run = PPD.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *coins, capacity=1 << 12, salt_key=key)
     calls = [(0, torch.from_numpy(bf16_words(rng, 20, 1024).view(np.float32).copy()).to(torch.bfloat16)),
              (1, torch.from_numpy(bf16_words(rng, 32, 1024).view(np.float32).copy()).to(torch.bfloat16))]
     for w, x in calls:
@@ -412,7 +443,8 @@ def honest_pass(tmp_path, request):
     work = Workload((Matmul(0, Shape(32, k, 16), 0), Matmul(1, Shape(16, k, 32), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=bytes(32))
     salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)  # noqa: E731
-    epoch = Epoch.unverified(work, prover.weight_roots, BEACON)
+    coins = salt_coin(prover.weight_roots)
+    epoch = Epoch.start(work, prover.weight_roots, *coins)
     tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
     records = PW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
@@ -442,7 +474,7 @@ def honest_pass(tmp_path, request):
     dt = transcript_domain(epoch, count, s.commitment_hash)
     head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
             "instance": {"k_min": 32, "tile": [16, 16]},
-            "beacon": BEACON.hex(), "salt": epoch.salt.hex(),
+            "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tr.commitment.root.hex(), "count": count},
             "leaves": PPD._write(tmp_path / "leaves", b"".join(leaves)),
@@ -450,6 +482,7 @@ def honest_pass(tmp_path, request):
                                                                     for i, v in enumerate(leaves)]))}
     head["hm96_salt_key"] = prover.salt_key.hex()
     path = PPD.write_manifest(tmp_path, head, weights, matmuls)
+    (tmp_path / "coins.json").write_text(json.dumps(coins[0].to_json()))
     return path, s, epoch, prover, tr, splits, records
 
 
@@ -457,19 +490,19 @@ def honest_pass(tmp_path, request):
 def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     path, s, epoch, prover, tr, splits, records = honest_pass
     source = b"verifier" * 4
-    got = VR.verify(path, 3, 1, "test", source)
-    want = PW.audit_replay(s, epoch, prover, tr, splits, records, 0, PW.Beacon(1, source), 3)
+    got = VR.verify(path, 3, 1, "test", source, coins=published(path))
+    want = PW.audit_replay(s, epoch, prover, tr, splits, records, 0, PW.RecordedDraw(1, source), 3)
     assert got["accepted"] and want.audit.accepted, got.get("line") or got.get("error")
     assert tuple(got["tiles"]) == want.audit.selected and got["exclusion_tiles"] == 1
     assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: pearl_c_work's tiles (3 drawn, 1 for excluded rows)")
     assert got["transcript"] == f"{RUN}:{path} sha256:{got['transcript_sha256']}" and got["transcript"] in got["line"]
-    assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7]) == 0
-    assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 1
-    fast = VR.verify(path, 3, 1, "test", source, fast=True, cross_check=1)
+    assert VR.main([str(path), *coins_args(path), "--jobs", "1", "--commit", "0" * 7]) == 0
+    assert VR.main([str(path), *coins_args(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 1
+    fast = VR.verify(path, 3, 1, "test", source, fast=True, cross_check=1, coins=published(path))
     assert fast["replay"] == "batch" and fast["cross_checked"] == fast["tiles"] and "cross_check_failed" not in fast
     assert {k: fast[k] for k in ("accepted", "tiles", "verdicts")} == {k: got[k] for k in ("accepted", "tiles", "verdicts")}
     assert C.form_v1 is SD.FT._SCALAR["form_v1"]
-    assert VR.main([str(path), "--jobs", "2", "--commit", "0" * 7, "--fast", "--cross-check", "1"]) == 0
+    assert VR.main([str(path), *coins_args(path), "--jobs", "2", "--commit", "0" * 7, "--fast", "--cross-check", "1"]) == 0
 
 
 @pytest.mark.slow
@@ -482,15 +515,15 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
     for j in range(16):
         bad[2 * 128 * j + 1] ^= 0x01
     rows.write_bytes(bytes(bad))
-    r = VR.verify(path, 3, 1, "test", b"verifier" * 4)
+    r = VR.verify(path, 3, 1, "test", b"verifier" * 4, coins=published(path))
     assert not r["accepted"] and "weight opening" in r["line"] and r["line"].startswith("REJECT") and RUN in r["line"]
-    assert {k: VR.verify(path, 3, 1, "test", b"verifier" * 4, fast=True, cross_check=1)[k] for k in ("accepted", "verdicts")} == \
-        {k: r[k] for k in ("accepted", "verdicts")}
-    assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 0
+    fast = VR.verify(path, 3, 1, "test", b"verifier" * 4, fast=True, cross_check=1, coins=published(path))
+    assert {k: fast[k] for k in ("accepted", "verdicts")} == {k: r[k] for k in ("accepted", "verdicts")}
+    assert VR.main([str(path), *coins_args(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 0
     rows.write_bytes(good)
     man["matmuls"][0]["excluded_a"] = []
     path.write_text(json.dumps(man))
-    r = VR.verify(path, 3, 1, "test", b"verifier" * 4)
+    r = VR.verify(path, 3, 1, "test", b"verifier" * 4, coins=published(path))
     assert not r["accepted"] and "records are not the ones" in r["line"]
 
 
@@ -518,13 +551,79 @@ def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
     assert HS._calls(d)["calls"][1]["ea_rows_wrong"] == [0]
     (d / "call1.rowdig_a").write_bytes(bytes(64) + (d / "call1.rowdig_a").read_bytes()[64:])
     assert not HS._calls(d)["calls"][1]["row_digests"]
+def test_verify_run_reads_a_v1_manifest_only_as_a_recorded_replay(honest_pass):
+    """A v1 manifest (a pass recorded before epoch coins) is refused unless ``--recorded``; read as a recorded pass it needs
+    a beacon its salt is from; a manifest of another schema is refused either way."""
+    path, *_ = honest_pass
+    man = json.loads(path.read_text())
+    v1 = path.parent / "manifest-v1.json"
+    for schema, recorded, why in ((PPD.MANIFEST_SCHEMA_RECORDED, False, "recorded before epoch coins"),
+                                  (PPD.MANIFEST_SCHEMA_RECORDED, True, "recorded pass has no beacon"),
+                                  ("verity-vllm/pouw-pearl-c-run/v0", True, f"not {PPD.MANIFEST_SCHEMA}")):
+        v1.write_text(json.dumps({**man, "schema": schema}))
+        r = VR.verify(v1, 3, 1, "test", b"verifier" * 4, coins=published(path), recorded=recorded)
+        assert not r["accepted"] and r["line"].startswith("REJECT") and why in r["line"], (schema, recorded, r["line"])
+    v1.unlink()
+
+
+def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refused():
+    """A pass's epoch re-starts only from the epoch's own salt coin under the commitment the verifier holds, opened after
+    the weights' root, with the salt it derives: a coin of another challenger, one opened after another record, the draw
+    coin's label, a flipped coin byte, a claimed commitment that isn't the published one, or a salt that isn't the coin's is
+    refused.  A pass recorded with a beacon (a v1 manifest) is read only as a replay of a recorded pass, and a manifest of
+    any other schema not at all."""
+    roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
+    commitment, opening = salt_coin(roots)
+    epoch = Epoch.start(Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1))), roots, commitment,
+                        opening)
+    man = {"schema": PPD.MANIFEST_SCHEMA, "matmuls": [{"index": 0, "m": 16, "k": 1024, "n": 256, "weight": 0}, {"index": 1, "m": 16, "k": 1024, "n": 128, "weight": 1}],
+           "weights": {str(w): {"root": r.hex()} for w, r in roots.items()},
+           "coins": commitment.to_json(), "salt_opening": opening.to_json(), "salt": epoch.salt.hex()}
+    got, how = PPD.manifest_epoch(man, commitment)
+    assert got == epoch and how == "coin"
+    foreign_c, foreign = salt_coin(roots, entropy=8)
+    tampered = opening.to_json()
+    tampered["coin"] = bytes([opening.coin[0] ^ 1]).hex() + tampered["coin"][2:]
+    bad = {"foreign": {"salt_opening": foreign.to_json()},
+           "early": {"salt_opening": {**opening.to_json(), "after": weights_root({0: roots[0], 1: bytes(32)}).hex()}},
+           "mislabelled": {"salt_opening": {**opening.to_json(), "label": "draw"}},
+           "tampered": {"salt_opening": tampered},
+           "claimed": {"coins": foreign_c.to_json(), "salt_opening": foreign.to_json()},
+           "salt": {"salt": "00" * 32}}
+    why = {"foreign": "does not open", "early": "not opened after", "mislabelled": "'draw' coin", "tampered": "does not open",
+           "claimed": "not the epoch's", "salt": "not its coin's"}
+    for name, change in bad.items():
+        with pytest.raises(DomainError, match=why[name]):
+            PPD.manifest_epoch({**man, **change}, commitment)
+    with pytest.raises(DomainError, match="the verifier holds"):
+        PPD.manifest_epoch(man, None)
+    with pytest.raises(DomainError, match="no salt coin"):
+        PPD.manifest_epoch({k: v for k, v in man.items() if k not in ("coins", "salt_opening")}, commitment)
+    recorded = {k: v for k, v in man.items() if k not in ("coins", "salt_opening")}
+    recorded |= {"schema": PPD.MANIFEST_SCHEMA_RECORDED, "beacon": SEED.hex(),
+                 "salt": Epoch.unverified(epoch.workload, roots, SEED).salt.hex()}
+    with pytest.raises(DomainError, match="recorded before epoch coins: only a replay of a recorded pass reads it"):
+        PPD.manifest_epoch(recorded, commitment)
+    assert PPD.manifest_epoch(recorded, None, recorded=True)[1] == "recorded beacon"
+    with pytest.raises(DomainError, match="recorded pass has no beacon"):
+        PPD.manifest_epoch({**man, "schema": PPD.MANIFEST_SCHEMA_RECORDED}, commitment, recorded=True)
+    with pytest.raises(DomainError, match="not its recorded beacon's"):
+        PPD.manifest_epoch({**recorded, "salt": "00" * 32}, None, recorded=True)
+    assert PPD.manifest_epoch(man, commitment, recorded=True) == (epoch, "coin")
+    for schema in ("verity-vllm/pouw-pearl-c-run/v0", None):
+        for flag in (False, True):
+            with pytest.raises(DomainError, match=f"schema {schema!r}, not {PPD.MANIFEST_SCHEMA}"):
+                PPD.manifest_epoch({**man, "schema": schema}, commitment, recorded=flag)
+    with pytest.raises(DomainError, match="recorded before epoch coins"):
+        PPD.manifest_epoch({**recorded, "schema": PPD.MANIFEST_SCHEMA_RECORDED, **{k: man[k] for k in ("coins", "salt_opening")}},
+                           commitment)
 
 
 @pytest.mark.slow
 def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_path):
     path, s, epoch, prover, tr, splits, records = honest_pass
     out = tmp_path / "out"
-    assert SD.main([str(path), "--tiles", "3", "--jobs", "1", "--out", str(out)]) == 0
+    assert SD.main([str(path), *coins_args(path), "--tiles", "3", "--jobs", "1", "--out", str(out)]) == 0
     assert PW._debit_cap is SD._DEBIT_CAP and PW.D.chain_debit is SD._CHAIN_DEBIT
     (got,) = json.loads((out / "summary.json").read_text())["passes"]
     assert got["scheme"] == s.name and got["cap"] == str(s.cap) and got["openings_failed"] == 0
@@ -558,7 +657,7 @@ def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_pa
     work-weighted draws, with its own failures, `W`, `w_max` and a simultaneous upper limit; nothing is pooled."""
     path, s, epoch, prover, tr, splits, records = honest_pass
     out = tmp_path / "out"
-    assert SD.main([str(path), "--per-input", "1", "--census-max", "4", "--draws", "3", "--jobs", "1", "--out", str(out)]) == 0
+    assert SD.main([str(path), *coins_args(path), "--per-input", "1", "--census-max", "4", "--draws", "3", "--jobs", "1", "--out", str(out)]) == 0
     doc = json.loads((out / "inputs.json").read_text())
     refs = Verifier(PW._TileRuleView(s), epoch).refs
     assert doc["m"] == len(doc["inputs"]) == 2 and doc["delta_per_input"] == 0.05 / 2
@@ -573,7 +672,7 @@ def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_pa
     for d in ("calls", "weights"):
         shutil.rmtree(path.parent / d)
     again = tmp_path / "again"
-    args = [str(path), "--per-input", "1", "--census-max", "4", "--draws", "3", "--jobs", "1", "--resumed-only"]
+    args = [str(path), "--per-input", "1", "--census-max", "4", "--draws", "3", "--jobs", "1", "--resumed-only", *coins_args(path)]
     assert SD.main([*args, "--out", str(again), "--resume", str(out / f"{path.parent.name}.input-tiles.jsonl")]) == 0
     assert json.loads((again / "inputs.json").read_text())["inputs"] == doc["inputs"]
     census = next(r for r in doc["inputs"] if r["method"] == "census")
@@ -590,7 +689,8 @@ def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(hone
     same source measures nothing again, and another source's trials are refused."""
     path, s, epoch, prover, tr, splits, records = honest_pass
     out, src = tmp_path / "out", "ab" * 32
-    args = [str(path), "--per-input", "1", "--fresh-draws", "4", "--fresh-source", src, "--jobs", "1", "--cross-check", "2"]
+    args = [str(path), "--per-input", "1", "--fresh-draws", "4", "--fresh-source", src, "--jobs", "1", "--cross-check", "2",
+            *coins_args(path)]
     assert SD.main([*args, "--out", str(out)]) == 0
     doc = json.loads((out / "inputs.json").read_text())
     assert doc["fresh_source"] == src and doc["fresh_draws"] == 4 and doc["m"] == 2
@@ -935,7 +1035,7 @@ def test_served_debits_batch_replay_and_resume_record_the_scalar_lines(honest_pa
     lines = {}
     for name, extra in (("scalar", ["--scalar"]), ("batch", ["--cross-check", "1"])):
         out = tmp_path / name
-        assert SD.main([str(path), "--tiles", "3", "--jobs", "1", "--out", str(out), *extra]) == 0
+        assert SD.main([str(path), *coins_args(path), "--tiles", "3", "--jobs", "1", "--out", str(out), *extra]) == 0
         lines[name] = [json.loads(x) for x in (out / f"{path.parent.name}.tiles.jsonl").read_text().splitlines()]
     drop = ("seconds", "replay", "cross_checked", "resumed_from")
     strip = lambda ts: sorted(({k: v for k, v in t.items() if k not in drop} for t in ts), key=lambda t: t["tile"])
@@ -943,7 +1043,7 @@ def test_served_debits_batch_replay_and_resume_record_the_scalar_lines(honest_pa
     assert {t["replay"] for t in lines["batch"]} == {"batch"} and {t["replay"] for t in lines["scalar"]} == {"scalar"}
     out = tmp_path / "resumed"
     src = tmp_path / "batch" / f"{path.parent.name}.tiles.jsonl"
-    assert SD.main([str(path), "--tiles", "3", "--jobs", "1", "--out", str(out), "--resume", str(src)]) == 0
+    assert SD.main([str(path), *coins_args(path), "--tiles", "3", "--jobs", "1", "--out", str(out), "--resume", str(src)]) == 0
     again = [json.loads(x) for x in (out / f"{path.parent.name}.tiles.jsonl").read_text().splitlines()]
     assert strip(again) == strip(lines["batch"]) and all(t["resumed_from"] == str(src) for t in again)
     summary = lambda d: {k: v for k, v in json.loads((d / "summary.json").read_text())["passes"][0].items() if k != "cpu_seconds"}
@@ -1037,6 +1137,76 @@ def test_the_schedule_alternates_the_baseline_rep_by_rep_or_in_abab_blocks():
     assert sum(b.count("fp8") for b in blocks) == 3 and sum(b.count("pearlc") for b in blocks) == 3
 
 
+def test_with_a_statement_each_pearlc_rep_is_followed_by_a_pearlc_zk_rep_in_the_arm_engine():
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    (one,) = E2E.schedule(2, "rep", zk=True)
+    assert one.count("pearlc-zk") == 2 and all(one[i + 1] == "pearlc-zk" for i, m in enumerate(one) if m == "pearlc")
+    assert [m for m in one if m != "pearlc-zk"] == list(E2E.CYCLE) * 2 and E2E.GROUP["pearlc-zk"] == "arm"
+    blocks = E2E.schedule(3, "blocks", zk=True)
+    assert sum(b.count("pearlc-zk") for b in blocks) == 3 and all(E2E.GROUP[m] == "arm" for m in blocks[1] + blocks[3])
+    assert E2E.schedule(3, "rep", graphed=True) == E2E.schedule(3, "rep", graphed=True, zk=False)
+    run = types.SimpleNamespace(statement=types.SimpleNamespace(enabled=False), entry="pouw:test")
+    args = types.SimpleNamespace(schedule="serial")
+    assert E2E.arm_of("pearlc-zk", run, args).spec.hashing and run.statement.enabled
+    assert E2E.arm_of("pearlc", run, args).spec.hashing and not run.statement.enabled
+    E2E.arm_of("pearlc-zk", run, args)
+    assert not E2E.arm_of("pearlc-nohash", run, args).spec.hashing and not run.statement.enabled
+    E2E.arm_of("pearlc-zk", run, args)
+    E2E.arm_of("bf16", run, args)
+    assert not run.statement.enabled
+
+
+def test_a_sweep_points_decode_batch_and_prompt_name_its_key_and_its_graph_sizes():
+    """Off the panel's decode (32 prompts of 64 tokens) the key names the batch and the prompt, so `panel_rows.py` never reads
+    a sweep point as its decode row; the graphed baseline captures the point's batch."""
+    E2E = load("pearl_c_vllm_e2e_sweep", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
+    assert E2E.decode_key() == "decode_b32" and E2E.CAPTURE_SIZES == [1, 2, 4, 8, 16, 24, 32]
+    assert E2E.SHAPES == {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
+    E2E.configure(types.SimpleNamespace(batch=128, prompt=2048))
+    assert E2E.decode_key() == "decode_b128_p2048" and E2E.CAPTURE_SIZES == [1, 2, 4, 8, 16, 24, 32, 128]
+    assert E2E.SHAPES["decode_b128_p2048_step"] == "e2e-llama31-8b-vllm-m128-p2048" and len(E2E.SHAPES) == 2
+    rec = lambda m, ph: {"mode": m, "phase": ph, "rep": 0, "s": 1.0, "gemm_s": 0.0, "step_s": 0.01, "gemm_step_s": 0.0}
+    t = E2E.timing([rec(m, ph) for m in E2E.MODES for ph in ("prefill", "decode")])
+    assert set(t["fp8"]["timing"]) == {"prefill_8192_s", "prefill_8192_gemm_s", "decode_b128_p2048_step_s", "decode_b128_p2048_step_gemm_s"}
+    assert list(E2E.split(t)) == ["prefill_8192", "decode_b128_p2048_step"]
+    ns = [6144, 4096, 28672, 4096] * 32                               # Llama-3.1-8B's linears
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
+    assert E2E.pass_capacity(128, ns) == (PPD.LEAF_CAPACITY, PPD.FLAG_ROWS)
+    E2E.configure(types.SimpleNamespace(batch=256, prompt=64))       # 256 x (64 + 65) tokens, 128 calls each: over 4M rows
+    assert E2E.pass_capacity(128, ns) == (PPD.LEAF_CAPACITY, 2 * PPD.FLAG_ROWS)
+    E2E.configure(types.SimpleNamespace(batch=1, prompt=64))
+    assert E2E.decode_key() == "decode_b1" and E2E.CAPTURE_SIZES == [1]
+
+
+def test_the_noise_sweep_pairs_each_pearl_c_rep_with_the_stock_reps_around_it(tmp_path):
+    NS = load("pearl_c_vllm_noise_sweep", KERNEL.parent / "pearl_c_vllm" / "noise_sweep.py")
+    fp8 = [10.0, 12.0, 14.0, 20.0, 22.0, 24.0]                       # two cycles of three fp8 reps
+    steps = {"fp8": fp8, "pearlc": [13.2, 25.3], "pearlc-nohash": [14.3, 25.3], "bf16": [9.0, 9.0]}
+    reps = lambda m: [{"rep": i, "step_s": s / 1e3, "clock": {"sm_mhz": 2100}} for i, s in enumerate(steps[m])]
+    e2e = {"run": "r1", "interleave": "rep", "summary": {"gates": {"arm": True}},
+           "results": {m: {"reps": {"prefill_8192": [], "decode_b8": reps(m)}} for m in steps}}
+    r = NS.run_ratios(e2e)["ratios"]["fp8"]
+    assert r["pearlc"] == pytest.approx([1.2, 25.3 / 21]) and r["pearlc-nohash"] == pytest.approx([1.1, 25.3 / 23])
+    assert r["hashing"] == pytest.approx([0.1, 25.3 / 21 - 25.3 / 23])
+    for d in ("eager-b8.r1", "eager-b8.r2.t2"):
+        (tmp_path / d).mkdir()
+        (tmp_path / d / "e2e.json").write_text(json.dumps(e2e))
+    (tmp_path / "eager-b8.r3").mkdir()
+    (tmp_path / "eager-b8.r3" / "e2e.json").write_text(json.dumps({"error": "base: preempted", "results": {}}))
+    doc = NS.summarize([tmp_path])
+    p = doc["points"]["eager-b8"]
+    assert len(p["runs"]) == 2 and p["failed"][0]["error"] == "base: preempted" and set(p["rows"]) == {"fp8"}
+    row = p["rows"]["fp8"]
+    assert row["pearlc-nohash"]["median"] == pytest.approx((1.1 + 25.3 / 23) / 2) and row["flag"] is None
+    assert (row["pearlc-nohash"]["n"], row["pearlc-nohash"]["runs"]) == (4, 2)
+    assert "| eager-b8 | fp8 | 17.00 | 1.100 [1.100, 1.100] n=4/2 |" in NS.table(doc)
+    steps["pearlc-nohash"] = [10.0, 20.0]                             # faster than stock FP8: flagged, not a win
+    for d in ("eager-b8.r1", "eager-b8.r2.t2"):
+        (tmp_path / d / "e2e.json").write_text(json.dumps({**e2e, "results": {m: {"reps": {"decode_b8": reps(m)}} for m in steps}}))
+    assert "assessor" in NS.summarize([tmp_path])["points"]["eager-b8"]["rows"]["fp8"]["flag"]
+
+
 def test_a_wikitext_window_starts_with_the_configs_bos_when_the_tokenizer_names_none(monkeypatch):
     """Qwen3-8B's tokenizer has no BOS (vLLM refused its windows' None id); its config's `bos_token_id` stands in."""
     E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
@@ -1098,7 +1268,7 @@ def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tm
         live: ClassVar[list] = []
         refuse_arm = False
 
-        def __init__(self, ctx, args, group, beacon):
+        def __init__(self, ctx, args, group, coins):
             if group == "arm" and Fake.refuse_arm:
                 raise RuntimeError("arm: OutOfMemoryError: CUDA out of memory")
             self.group, self.ready = group, {"gate": [{"ok": True}]} if group == "arm" else {}
@@ -1135,6 +1305,15 @@ def test_the_profile_maps_gpu_1s_kernels_to_their_categories(tmp_path):
                     '50,2000000,10,200000,"gemm_pearlc"\n30,1200000,40,30000,"s512_tile_leaves"\n20,800000,5,160000,"flash_fwd"\n')
     got = PF.nsys_kernels(csvf)
     assert got["gpu_ms_by_category"] == {"gemm": 2.0, "hashing": 1.2, "other": 0.8} and got["top_kernels"][0]["kernel"] == "gemm_pearlc"
+
+
+def test_the_served_profile_counts_stock_fp8s_cutlass_3_kernel_as_gemm(monkeypatch):
+    """vLLM's FP8 linear on sm_120 is CUTLASS 3's `device_kernel`, the stock arm's matmul, not `other`."""
+    monkeypatch.setenv("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    SP = load("pearl_c_vllm_served_profile", KERNEL.parent / "pearl_c_vllm" / "served_profile.py")
+    assert [SP.category(k) for k in ("device_kernel", "Kernel2", "gemm_pearlc_d", "words", "hash_leaf_p", "flash_fwd_splitkv_kernel",
+                                     "some_device_kernel_x")] == [
+        "gemm", "gemm", "pearlc:gemm", "pearlc:forming", "pearlc:tile_hash", "attention", "other"]
 
 
 def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_back(device_run):
@@ -1383,7 +1562,7 @@ def test_the_unpromoted_scheme_runs_gpu_1s_unpromoted_kernels(device_run):
     _, kernel, weights, roots, salt = device_run
     s = PPD.scheme_of("pearl-c-sm120-unpromoted-v1-h3")
     assert s.device.name == "sm120-unpromoted" and "pearl-c-sm120-unpromoted-v1-h3" in PPD.SCHEMES
-    run = PPD.PearlCDeviceRun(s, "pouw:pearl-c-sm120-unpromoted-v1-h3", kernel, weights, roots, salt, BEACON, capacity=1 << 12,
+    run = PPD.PearlCDeviceRun(s, "pouw:pearl-c-sm120-unpromoted-v1-h3", kernel, weights, roots, *salt_coin(roots), capacity=1 << 12,
                               salt_key=SALT_KEY)
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
@@ -1424,7 +1603,7 @@ def test_the_quality_run_does_a_group_a_chunk_and_skips_the_ones_done(tmp_path, 
     class Fake:
         live: ClassVar[list] = []
 
-        def __init__(self, ctx, args, group, beacon):
+        def __init__(self, ctx, args, group, coins):
             started.append((group, args.scheme, args.batch_tokens))
             self.ready = {"gate": [{"ok": True}], "committer": "x"} if group == "arm" else {}
 

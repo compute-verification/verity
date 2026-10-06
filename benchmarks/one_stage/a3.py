@@ -76,8 +76,10 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=7521)
     ap.add_argument("--draw-file", action="store_true", help="serve each template its share of the verifier's Lean draw (M0 --draw-file)")
     ap.add_argument("--statement", default=a0.STATEMENT_ID, help="the Lean verifier's statement name")
+    ap.add_argument("--binding", default=a0.STAND_IN_BINDING, choices=sorted(a0.STAND_IN_BINDINGS), help="M0's frame-domain binding tag")
     a = ap.parse_args()
     a0.STATEMENT_ID = a.statement
+    a0.STAND_IN_BINDING = a.binding
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     root = Path(a.sets)

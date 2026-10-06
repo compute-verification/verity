@@ -378,6 +378,40 @@ def test_a_retained_kinds_capture_copies_each_calls_a_words_and_tree_to_the_stag
     assert [t.dtype for t in run._graph_buffers()] == [torch.uint8, torch.uint8]
 
 
+def test_an_enabled_statement_is_in_the_key_stages_each_captured_call_and_commits_after_each_replay(monkeypatch):
+    torch = pytest.importorskip("torch")
+    run, capturing, log = Calls(torch), [False], []
+    monkeypatch.setattr(PG, "_capturing", lambda: capturing[0])
+    for name in ("_into", "_replay", "_slot"):
+        monkeypatch.setattr(run, name, lambda *a: ("y", True))
+    run.statement = SimpleNamespace(enabled=True, prepare=lambda w, sh: log.append(("prepare", w)),
+                                    stage=lambda w, sh: log.append(("stage", w)),
+                                    after=lambda calls, at: log.append(("after", tuple(c.w for c in calls), at)))
+    name = run.schedule.name
+    assert run.whole_key() == (True, frozenset(), name, False, False, "statement")
+    sh = SimpleNamespace(m16=32, k=8, n=16, xa=torch.zeros(48, 8), b={"tree_a": torch.zeros(100, dtype=torch.uint8)})
+    run.whole_capture_begin(run.whole_key())
+    run._graph_call(7, sh, "pipe", 0, 4, 32, 0, None)          # vLLM's warm-up, outside the capture
+    capturing[0] = True
+    run._graph_call(7, sh, "pipe", 0, 4, 32, 0, None)
+    calls = run.whole_capture_end()
+    assert log == [("prepare", 7), ("stage", 7)]
+    run.cur.tiles = 5
+    run.whole_replay(calls)
+    run.whole_replayed(calls)
+    assert log[-1] == ("after", (7,), 5) and run.cur.tiles == 9   # the forward's first tile, where the pass was
+    run.statement.enabled = False
+    assert run.whole_key() == (True, frozenset(), name, False, False)
+    run.whole_capture_begin(run.whole_key())
+    run._graph_call(7, sh, "pipe", 0, 4, 32, 0, None)
+    run.whole_capture_end()
+    run.whole_replay(calls)
+    run.whole_replayed(calls)
+    run.statement.enabled, run.hashing = True, False
+    assert run.whole_key() == (False, frozenset(), name, False, False)  # nothing to commit without hashing
+    assert len(log) == 3
+
+
 def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_made_alone_would(tmp_path):
     torch = pytest.importorskip("torch")
     run = Calls(torch)

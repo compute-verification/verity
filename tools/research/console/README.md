@@ -19,7 +19,7 @@ on a host.
   `scripts/overnight-dashboard.py`, and the `research` package. `console-loop.sh` is the loop, started at boot by the pod's
   `/post_start.sh`; it reads the R2 credentials from `/root/.config/verity/r2.env` and the store from `/workspace/steward/store`.
 
-Deploy to vy-nebius-1 with `research deploy` (`pods/nebius/deploy.toml` lists the two scripts, the `cluster` tree and both
+Deploy to vy-nebius-1 with `research deploy` (`tools/research/src/research/pods/nebius/deploy.toml` lists the two scripts, the `cluster` tree and both
 units; it reloads systemd after a unit changes, and the timer's next pass runs the new files):
 
 ~~~sh

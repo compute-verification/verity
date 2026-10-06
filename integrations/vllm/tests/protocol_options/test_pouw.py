@@ -14,8 +14,9 @@ import types
 import numpy as np
 import pytest
 from verity.protocols.accounting.work.pouw.audit import Epoch, Workload, activation_binding, commit_rows, weight_binding, weights_root
+from verity.protocols.accounting.work.pouw.coins import Challenger, CoinCommitment, CoinOpening, coin_reason
 from verity.protocols.accounting.work.pouw.protocol import Context as UnitContext
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape, Tile
+from verity.protocols.accounting.work.pouw.protocol import DomainError, Matmul, Shape, Tile
 from verity.protocols.accounting.work.pouw.schemes import SCHEMES, get
 from verity_vllm import protocol_options as PO
 from verity_vllm.engine import hooks
@@ -23,7 +24,6 @@ from verity_vllm.protocol_options import pouw
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 from verity_vllm.protocol_options import pouw_pearl_c_kernel as PPK
 
-BEACON = "5a" * 32
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n
 
 
@@ -57,7 +57,7 @@ def _rng(seed=0):
 
 
 def _serve(*enabled, settings=None, **kw):
-    return PO.Context(stage="serve", enabled=tuple(enabled), settings=settings or {"pouw": {"beacon": BEACON}}, **kw)
+    return PO.Context(stage="serve", enabled=tuple(enabled), settings=settings or {"pouw": {"coins": Challenger(0)}}, **kw)
 
 
 def _int7_linear(x, w, bias=None):
@@ -96,8 +96,8 @@ def test_pearl_c_sm120_refuses_linears_outside_the_kernels():
 
 
 @pytest.mark.parametrize("kw,match", [({"enforce_eager": False}, "graph-capturable"),
-                                      ({"settings": {"pouw": {"beacon": "zz"}}}, "hex string"),
-                                      ({"settings": {"pouw": {"beacon": "ab"}}}, "at least 32 bytes"),
+                                      ({"settings": {"pouw": {"coins": "5a" * 32}}}, "the epoch's challenger"),
+                                      ({"settings": {"pouw": {"beacon": "5a" * 32}}}, "unknown pouw settings"),
                                       ({"settings": {"pouw": {"retain_steps": -1}}}, "non-negative"),
                                       ({"settings": {"pouw": {"salt": "x"}}}, "unknown pouw settings"),
                                       ({"settings": {"pouw": {"weight_operands": "resident"}}}, "unknown pouw settings")])
@@ -109,9 +109,9 @@ def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_sampl
     assert pouw.EXECUTES == ("LinearBase.quant_method.apply",) and "pouw" in PO.SITES[pouw.EXECUTES[0]]
     assert not hasattr(pouw, "traced_as") and "ncp-v2" in pouw.schemes() and "ncp-v2" in pouw.EXECUTED
     for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"):
-        commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
+        commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": Challenger(0)}})
         assert any("no Definition" in r for r in PO.refusals(commit)), scheme
-    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
+    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": Challenger(0)}})
     assert PO.refusals(commit) == ()
 
 
@@ -122,6 +122,15 @@ def test_a_layer_outside_the_domain_is_refused_at_install_and_leaves_nothing():
         PO.install(model, _serve("pouw:ncp-v1"))
     assert hooks.live("pouw:ncp-v1") == () and model.layers[0].quant_method.apply == before
 
+
+
+def test_an_install_without_the_epochs_challenger_is_refused_and_leaves_nothing():
+    """There is no beacon and no fallback salt: without ``coins`` install refuses before anything is patched."""
+    model = Model(_rng().standard_normal((N, K), np.float32))
+    before = model.layers[0].quant_method.apply
+    with pytest.raises(ValueError, match="no 'coins' setting"):
+        PO.install(model, _serve("pouw:ncp-v1", settings={"pouw": {"retain_steps": 0}}))
+    assert hooks.live("pouw:ncp-v1") == () and model.layers[0].quant_method.apply == before
 
 
 @pytest.mark.parametrize("quantized", ["float8_e4m3fn", "int8"])
@@ -175,7 +184,8 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     rng = _rng(1)
     w0, w1 = rng.standard_normal((N, K), np.float32), rng.standard_normal((N + 64, N), np.float32)
     model = Model(w0, w1)
-    settings = {"pouw": {"beacon": BEACON, "transcript_dir": str(tmp_path)}}
+    coins = Challenger(0)
+    settings = {"pouw": {"coins": coins, "transcript_dir": str(tmp_path)}}
     comp = PO.install(model, _serve("pouw:ncp-v1", settings=settings))
     opt = comp.get("pouw")
     roots = {w: commit_rows(weight_binding(w), -2, [r.tobytes() for r in pouw.quantize(m)[0]]).commitment.root
@@ -184,7 +194,12 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     c = opt.commitment()
     assert comp.weight_commitments["pouw:ncp-v1"]["weight_roots"] == {str(w): r.hex() for w, r in roots.items()}
     assert c["weights_root"] == weights_root(roots).hex()
-    assert c["salt"] == Epoch.unverified(declared, roots, bytes.fromhex(BEACON)).salt.hex()
+    opening = CoinOpening.from_json(c["salt_opening"])
+    assert CoinCommitment.from_json(c["coins"]) == coins.commitment
+    assert coin_reason(coins.commitment, opening, "salt", weights_root(roots)) is None
+    assert c["salt"] == Epoch.start(declared, roots, coins.commitment, opening).salt.hex()
+    with pytest.raises(DomainError):                         # install opened the salt coin, and a coin opens once
+        coins.open("salt", weights_root(roots))
     assert comp.record()["protocols"][0]["weights"] == comp.weight_commitments["pouw:ncp-v1"]
     assert len(hooks.live("pouw:ncp-v1")) == 2
 
@@ -264,7 +279,7 @@ def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, sc
     """Pearl-C forms B~ once per install, and ncp-v2 reuses each weight's side: under POUS their GEMMs would read a copy made
     from the plaintext, not what POUS decodes (the composition's decision 3)."""
     _fake_pous(monkeypatch)
-    settings = {"pouw": {"beacon": BEACON, **({"device": "cuda", "kernel": "k"} if scheme.startswith("pearl") else {})}}
+    settings = {"pouw": {"coins": Challenger(0), **({"device": "cuda", "kernel": "k"} if scheme.startswith("pearl") else {})}}
     assert pouw.keeps_weight_copy(scheme, _serve(f"pouw:{scheme}", settings=settings))
     assert PO.refusals(_serve(f"pouw:{scheme}", settings=settings)) == ()
     got = PO.refusals(_serve(f"pouw:{scheme}", "pous:band-chain/d12/v1", settings=settings))
@@ -310,7 +325,7 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
     rng = _rng(3)
     w = rng.standard_normal((N, K), np.float32)
     model = Model(w)
-    settings = {"pouw": {"beacon": BEACON}}
+    settings = {"pouw": {"coins": Challenger(0)}}
     with PO.install(model, _serve("pouw:ncp-v1", "pous:band-chain/d12/v1", settings=settings)) as comp:
         assert comp.entries == ("pouw:ncp-v1", "pous:band-chain/d12/v1")
         layer = model.layers[0]
@@ -321,9 +336,9 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
 
 
 def test_pearl_cs_schedule_is_a_setting_checked_against_the_scheme():
-    scheme, on = "pearl-c-sm120-v1-h3", {"beacon": BEACON, "device": "cuda", "kernel": "k"}
+    scheme, on = "pearl-c-sm120-v1-h3", {"coins": Challenger(0), "device": "cuda", "kernel": "k"}
     for name in ("serial", "deferred", "deferred-caller"):
         assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": name}})) == ()
     assert any("'schedule' is one of" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": "h3o"}})))
     assert any("Pearl-C's; this executor runs serially" in r
-               for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"beacon": BEACON, "schedule": "deferred"}})))
+               for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"coins": Challenger(0), "schedule": "deferred"}})))

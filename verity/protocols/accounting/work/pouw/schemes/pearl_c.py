@@ -485,8 +485,8 @@ class PearlC:
             conjecture="tt-out",
             gamma0=None,
             omega=Fraction(1),
-            claims=("tt-out", "random-oracle", "cr/blake3", "device-reproducibility", "beacon-unpredictability") if hashing == "h0"
-            else ("tt-out", "random-oracle", "cr/sha-512", "cr/sha-256", "device-reproducibility", "beacon-unpredictability"),
+            claims=("tt-out", "random-oracle", "cr/blake3", "device-reproducibility", "live-verifier") if hashing == "h0"
+            else ("tt-out", "random-oracle", "cr/sha-512", "cr/sha-256", "device-reproducibility", "live-verifier"),
             theorems=("Pouw.SecurityProofs.WorkWeightedSampling",),
             hypotheses=hardware,
             allowances=(allowance, "the unscale is glue outside the checked values"),

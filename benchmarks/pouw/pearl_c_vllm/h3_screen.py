@@ -35,13 +35,12 @@ SCHEME = "pearl-c-sm120-v1-h3"
 WEIGHTS = {0: (256, 1024), 1: (128, 2048)}
 CALLS = ((0, 20), (1, 100), (0, 200))
 PASSES = {"eager": (False, ()), "graphs": (True, ()), "omit-seeds": (False, ("seeds_a",)), "omit-rowdig": (False, ("rowdig_a",))}
-BEACON = b"pouw-h3-device screen".ljust(32, b"\0")
 
 
 def capture(args) -> int:
     import torch
-    from verity.protocols.accounting.work.pouw.audit import Epoch, Workload
-    from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
+    from verity.protocols.accounting.work.pouw.audit import weights_root
+    from verity.protocols.accounting.work.pouw.coins import Challenger
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
     out, dev = Path(args.out), torch.device("cuda")
@@ -53,13 +52,14 @@ def capture(args) -> int:
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
     salt_key = PPD.new_salt_key(args.scheme)
     roots = PPD.weight_roots(kernel, weights, args.scheme, salt_key=salt_key)
-    declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
-    salt = Epoch.unverified(declared, roots, BEACON).salt
+    challenger = Challenger(0)
+    opening = challenger.open("salt", weights_root(roots))
     xs = [torch.randn(m, weights[w].shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, m in CALLS]
     s, log = PPD.scheme_of(args.scheme), {}
     dumps = ("seeds_a", "seed_a", "ea_codes", "rowdig_a")
     for name, (graphs, omit) in PASSES.items():
-        run = PPD.PearlCDeviceRun(s, f"pouw:{args.scheme}", kernel, weights, roots, salt, BEACON, graphs=graphs, salt_key=salt_key)
+        run = PPD.PearlCDeviceRun(s, f"pouw:{args.scheme}", kernel, weights, roots, challenger.commitment, opening, graphs=graphs,
+                                  salt_key=salt_key)
         d = out / name
         try:
             run.begin(retain=str(d), run=os.environ.get("RESEARCH_RUN_ID", "h3-screen"))
@@ -133,15 +133,14 @@ def _tiles(d: Path, jobs: int) -> dict:
     """Every tile of a pass under `Verifier.check_tile`: its openings, then its leaf recomputed by the reference."""
     import verify_run as VR
     from verity.primitives.commitments import Commitment
-    from verity.protocols.accounting.work.pouw.audit import Epoch, Transcript, Verifier, Workload
-    from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
+    from verity.protocols.accounting.work.pouw.audit import Transcript, Verifier
+    from verity.protocols.accounting.work.pouw.coins import CoinCommitment
     from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
+    from verity_vllm.protocol_options import pouw_pearl_c_manifest as PM
 
     man = json.loads((d / "manifest.json").read_text())
     s = _scheme(man)
-    matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
-    epoch = Epoch.unverified(Workload(matmuls), {int(w): bytes.fromhex(v["root"]) for w, v in man["weights"].items()},
-                             bytes.fromhex(man["beacon"]))
+    epoch, _ = PM.manifest_epoch(man, CoinCommitment.from_json(man["coins"]))
     c = man["commitment"]
     transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]), ())
     verifier = Verifier(PW._TileRuleView(s), epoch)

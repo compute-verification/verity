@@ -18,7 +18,7 @@ status shows a timed window running or waiting, the probe reads nothing. Bytes w
 before the next tick are missed. Stdlib only; it reads /proc and writes only under <out>.
 
 `relay` posts each new unmatched writer from both nodes to #agent-alerts, once per process and again hourly while it writes.
-The nodes hold no Slack credentials, so it runs where `research slack` works.
+The nodes hold no Slack credentials, so it runs where `research msg` works.
 """
 from __future__ import annotations
 

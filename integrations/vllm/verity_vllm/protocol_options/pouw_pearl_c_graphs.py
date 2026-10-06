@@ -18,6 +18,9 @@ stream of the run's own, and the next call joins it after its own A tree, so the
 a call joins at once when the call before is of its shape (the side steps still read that shape's buffers), and the
 forward's last call joins its own before vLLM's capture ends.  The same kernels write the same bytes, so the commitments are
 the serial capture's.
+
+With a `statement` enabled (and hashing), a whole capture also copies each call's A words to the statement's stage, and
+`whole_replayed` launches its commitment of the forward's rows after the replay; its key says so.
 """
 from __future__ import annotations
 
@@ -98,6 +101,10 @@ class GraphCalls:
     #: inside a deferred whole capture, the shape whose call's side steps no call has joined yet, and the side stream
     _deferred: Any = None
     _side_stream: Any = None
+    #: a commitment of each forward replayed whole beside the scheme's, while its ``enabled`` (with hashing): inside the
+    #: capture, `stage(w, sh)` after each call's steps (and `prepare(w, sh)` outside it, in the warm-up); after each replay,
+    #: `after(calls, tiles_at)` on the replaying stream (benchmarks/pouw/served_zk/statement.py's `Statement`)
+    statement: Any = None
 
     def _graph_call(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int, index: int, caller: Any) -> tuple[Any, bool]:
         """A graphed call: inside vLLM's capture of a whole forward, its steps launched into that capture (and in a retained
@@ -112,9 +119,13 @@ class GraphCalls:
             if self._whole_retained:
                 for stage, t in zip(self._stages[w], self._kept(sh, pipe), strict=True):
                     stage.copy_(t)
+            if self._statement_on():
+                self.statement.stage(w, sh)
             return out
         if self._whole is not None and self._whole_retained and w not in self._stages:
             self._stages[w] = tuple(t.new_empty(t.shape) for t in self._kept(sh, pipe))
+        if self._whole is not None and self._statement_on():
+            self.statement.prepare(w, sh)
         if self.hashing:
             self._slot(w, index, sh.m16, m, caller)
         return self._replay(w, sh, pipe, raw, tiles, m)
@@ -142,11 +153,16 @@ class GraphCalls:
         if not self.graphs or self.cur is None or self.schedule.side or self.schedule.main_priority == "greatest":
             return None
         retained = self.cur.retain is not None if retained is None else retained
-        return (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
+        key = (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
+        return (*key, "statement") if self._statement_on() else key
 
     def _defers(self) -> bool:
         """Whether a whole capture forks each call's tile hashing beside the next call (`whole_defer`, with hashing)."""
         return self.whole_defer and self.hashing
+
+    def _statement_on(self) -> bool:
+        """Whether forwards replayed whole commit `statement`'s rows too (it is set and enabled, with hashing)."""
+        return self.statement is not None and self.statement.enabled and self.hashing
 
     def whole_capture_begin(self, key: tuple | None = None) -> None:
         """Calls are recorded from here, for the forwards of `key`'s kind (`whole_key`'s; an unretained pass's when None).
@@ -232,6 +248,8 @@ class GraphCalls:
         s, self._uploaded = self._uploaded, None
         self._predicted = dict(s.predicted)    # the upload rewrote the uncalled weights' slots from the host copy
         cur.tiles, cur.flag_rows = s.after[1], s.after[2]
+        if self._statement_on():
+            self.statement.after(calls, s.at[1])
         if cur.retain is not None:
             self._keep_whole(calls, s.at[2])
         self._next = self._slots(calls, s.after)
