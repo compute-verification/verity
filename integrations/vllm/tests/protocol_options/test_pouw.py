@@ -21,6 +21,7 @@ from verity_vllm import protocol_options as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocol_options import pouw
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+from verity_vllm.protocol_options import pouw_pearl_c_kernel as PPK
 
 BEACON = "5a" * 32
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n
@@ -289,7 +290,7 @@ def test_kernel_directories_load_as_their_own_modules_named_by_their_sources(tmp
     def sha(p):
         return hashlib.sha256(p.read_bytes()).hexdigest()
 
-    monkeypatch.setattr(PPD, "_KERNELS", {})
+    monkeypatch.setattr(PPK, "_KERNELS", {})
     before = set(sys.modules)
     try:
         a, b, a2 = kernel_dir("a", "h1"), kernel_dir("b", "h2"), kernel_dir("a2", "h1")
