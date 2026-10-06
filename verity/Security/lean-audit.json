@@ -21575,6 +21575,18 @@
    "assumptions": [],
    "type_hash": "0693c86395598e912e46a3b378916fd19c2b49711826f9c16546ffecd8fea217"
   },
+  "NetTiming.SecurityProofs.CodeAcceptedConstantRate": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.CodeExpectedRow": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.CodeStatusComplete": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.CodeSyncSet": {
+   "owner": "@network-accounting"
+  },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
    "owner": "@network-accounting",
    "signature": [
