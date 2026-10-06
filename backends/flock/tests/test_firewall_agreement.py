@@ -49,9 +49,19 @@ def honest2() -> list[bytes]:
     return r[:5] + [RL.encode_req(RL.REQ_OPEN, "circuit/rep0/x", "circuit/rep0", b"x", 1)] + r[5:7] + [child] + r[7:]
 
 
-def proxy_record(schedule: dict, reqs: list[bytes]) -> dict:
-    salts = iter(SALTS)
-    proxy = RL.Proxy(RL.CoinServer(_coins), lambda: next(salts), schedule=schedule)
+#: how `Flock.Firewall.calls` writes each call the proxy makes on the coin server
+CALL = {"start": lambda a: ["start"], "commit": lambda a: ["commit"], "y": lambda a: ["y"],
+        "open": lambda a: ["open", a[0], a[1], a[2]], "round": lambda a: ["round", a[0], a[3]]}
+
+
+def proxy_session(schedule: dict, reqs: list[bytes]) -> tuple[dict, list]:
+    """The coin server's record and the calls it took, in order, while the proxy handles ``reqs`` (a call the coin server
+    refuses is a refusal the Lean firewall makes itself, before it sends anything)."""
+    salts, coins, calls = iter(SALTS), RL.CoinServer(_coins), []
+    for name, show in CALL.items():
+        f = getattr(coins, name)
+        setattr(coins, name, lambda *a, _f=f, _show=show: (r := _f(*a), calls.append(_show(a)))[0])
+    proxy = RL.Proxy(coins, lambda: next(salts), schedule=schedule)
     for b in reqs:
         proxy.handle(b)
     if proxy.verdict is None and proxy.stopped is None:
@@ -60,7 +70,29 @@ def proxy_record(schedule: dict, reqs: list[bytes]) -> dict:
     if rec["link"] is not None:
         rec["link"] = {k: v for k, v in rec["link"].items() if k != "points"}
     rec["rounds"] = [{k: v for k, v in r.items() if k != "coins"} for r in rec["rounds"]]
-    return rec
+    return rec, calls
+
+
+def placements() -> list[tuple[str, dict, list[bytes]]]:
+    """`honest2`'s session with its two `Open`s moved to every place before their streams' first rounds, in either order,
+    finished and cut after every request."""
+    h = honest2()
+    opn = {"p": h[4], "x": h[5]}
+    base = h[:4] + h[6:]
+    first = {"p": 4, "x": 6}
+    out = []
+    for i in range(first["p"] + 1):
+        for j in range(first["x"] + 1):
+            for order in ("px", "xp"):
+                at = {"p": i, "x": j}
+                reqs = []
+                for q, r in enumerate(base + [None]):
+                    reqs += [opn[s] for s in order if at[s] == q]
+                    reqs += [r] if r is not None else []
+                name = f"Opens at {i} and {j}, {order}"
+                out.append((name, SCHEDULE2, reqs))
+                out += [(f"{name}, cut at {c}", SCHEDULE2, reqs[:c] + [b"not a request"]) for c in range(len(reqs))]
+    return out
 
 
 def cases() -> list[tuple[str, dict, list[bytes]]]:
@@ -145,22 +177,45 @@ def cases() -> list[tuple[str, dict, list[bytes]]]:
 
 
 @pytest.fixture(scope="module")
-def lean_records():
+def lean_runs():
+    """Every case and every placement through `flock-firewall`: each one's record and the coin server's calls."""
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
     subprocess.run(["lake", "build", "flock-firewall"], cwd=LEAN, check=True, capture_output=True)
-    cs = cases()
-    lines = "".join(json.dumps({"schedule": s, "requests": [b.hex() for b in r], "salts": [x.hex() for x in SALTS]}) + "\n"
-                    for _, s, r in cs)
+    cs = cases() + placements()
+    lines = "".join(json.dumps({"schedule": s, "requests": [b.hex() for b in r], "salts": [x.hex() for x in SALTS],
+                                "calls": True}) + "\n" for _, s, r in cs)
     out = subprocess.run([str(BIN)], input=lines, capture_output=True, text=True, check=True).stdout.splitlines()
     assert len(out) == len(cs)
     return cs, [json.loads(line) for line in out]
 
 
-def test_the_proxy_sends_what_the_lean_firewall_sends(lean_records):
-    cs, lean = lean_records
-    differ = [(name, proxy_record(s, r), got) for (name, s, r), got in zip(cs, lean) if proxy_record(s, r) != got]
+@pytest.fixture(scope="module")
+def lean_records(lean_runs):
+    cs, out = lean_runs
+    return cs, [o["record"] for o in out]
+
+
+def test_the_proxy_sends_what_the_lean_firewall_sends(lean_runs):
+    """The same record and the same calls on the coin server, in the same order."""
+    cs, lean = lean_runs
+    differ = [(name, mine, got) for (name, s, r), got in zip(cs, lean)
+              if (mine := dict(zip(("record", "calls"), proxy_session(s, r)))) != got]
     assert not differ, differ[:3]
+
+
+def test_the_coin_server_never_sees_where_an_open_was_sent(lean_runs):
+    """The coin server is the auditor's, so its calls, not only its record, must not show where the worker sent each Open
+    (firewall-contract's gap 3): `Flock.Firewall.run` opens a stream there just before its first round. Every placement of
+    the two Opens gives the honest session's calls, and every cut of one a prefix of them."""
+    cs, lean = lean_runs
+    got = {name: o["calls"] for (name, _, _), o in zip(cs, lean) if name.startswith("Opens at ")}
+    honest = got["Opens at 4 and 4, px"]
+    assert [c[0] for c in honest].count("open") == 2
+    full = [n for n in got if ", cut at " not in n]
+    assert len(full) == 2 * 5 * 7
+    assert all(got[n] == honest for n in full)
+    assert all(c == honest[:len(c)] for n, c in got.items() if ", cut at " in n)
 
 
 def test_a_stopped_record_does_not_show_an_open(lean_records):
