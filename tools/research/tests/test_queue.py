@@ -517,6 +517,49 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
     assert ready(world.gh, world.store, 99, "lane-1", PASS) == 2
 
 
+def test_a_head_with_the_tree_of_a_head_marked_ready_is_marked_without_running_the_tier_again(world, monkeypatch, capsys):
+    """Merging a `main` that changes none of a PR's files (the repository move's merges did this) gave lanes a new head and a
+    35-minute tier over the same files.  Only an identical tree, read with labels pulled from the remote, skips the tier."""
+    from research import queue as Q
+
+    class Counting:
+        def __init__(self):
+            self.repo, self.remote, self.ran = world.dev, str(world.origin), []
+
+        def __call__(self, pr: PR) -> None:
+            self.ran.append(pr.head)
+
+    world.with_store_remote()
+    monkeypatch.setenv("RESEARCH_WRITE_THROUGH", "1")
+    tier = Counting()
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and tier.ran == [h1]
+    _move_main(world, {"a.txt": "a1\n", "b.txt": "b\n"})              # `main` makes the PR's own change
+    world.gh.put(1, h2 := _merge_main(world, h1), ready=False)
+    assert h2 != h1 and _git(world.dev, "rev-parse", f"{h2}^{{tree}}") == _git(world.dev, "rev-parse", f"{h1}^{{tree}}")
+    capsys.readouterr()
+    elsewhere = LocalStore(world.tmp / "elsewhere", config_path=world.tmp / "store.toml")   # h1's mark only on the remote
+    assert Q.ready(world.gh, elsewhere, 1, "lane-1", tier) == 0 and tier.ran == [h1]
+    assert f"#1's head {h2[:12]} has the tree of {h1[:12]}" in capsys.readouterr().out
+    assert Q.StoreGrants(elsewhere).ready(1, h2) is True
+
+    world.gh.put(1, h3 := world.change({"c.txt": "c3\n"}, base=h2), ready=False)
+    assert Q.ready(world.gh, elsewhere, 1, "lane-1", tier) == 0 and tier.ran == [h1, h3]
+
+    _move_main(world, {"a.txt": "a1\n", "b.txt": "b4\n"})
+    world.gh.put(1, h4 := _merge_main(world, h3), ready=False)        # a merge of `main` that changes a file runs the tier
+    assert Q.ready(world.gh, elsewhere, 1, "lane-1", tier) == 0 and tier.ran == [h1, h3, h4]
+
+    h5 = _git(world.dev, "commit-tree", f"{h4}^{{tree}}", "-p", h4, "-m", "h4's tree again")
+    _git(world.dev, "push", "-q", "origin", f"{h5}:refs/dev/{h5}")
+    world.gh.put(1, h5, ready=False)
+    monkeypatch.setattr(LocalStore, "remote", property(lambda self: _Unreachable()))
+    capsys.readouterr()
+    Q.ready(world.gh, LocalStore(world.tmp / "cut-off", config_path=world.tmp / "store.toml"), 1, "lane-1", tier)
+    assert tier.ran == [h1, h3, h4, h5]                               # labels it can't pull say nothing: the tier runs
+    assert "STALE" in capsys.readouterr().err
+
+
 #: a `suites.py` that says what it was asked and what it found, and fails one test when FAKE_FAIL names it
 FAKE_SUITES = """\
 # it knows "--changed"
@@ -1088,13 +1131,35 @@ def test_judge_marks_a_pr_ready_from_its_quick_tiers_run_once_it_ended_without_i
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
 
 
+def test_judge_marks_a_pr_whose_head_moved_to_the_same_tree_and_no_other(world, monkeypatch, capsys):
+    """A lane that merged `main` (changing no file) while its tier ran had a passing run whose head no open PR has now."""
+    from research import queue as Q
+
+    machine, rid, h1 = _orphaned(world, monkeypatch)
+    _move_main(world, {"a.txt": "a1\n", "b.txt": "b\n"})              # `main` makes the PR's own change
+    world.gh.put(1, h2 := _merge_main(world, h1), ready=False)
+    assert h2 != h1
+    world.gh.put(2, world.change({"b.txt": "b2\n"}), ready=False)
+    capsys.readouterr()
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1           # no clone to compare trees in
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch, repo=world.dev, url=str(world.origin)) == 0
+    assert f"#1's head {h2[:12]} has the tree of {h1[:12]}, where run {rid} ran the quick tier" in capsys.readouterr().out
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is True
+    h3 = _git(world.dev, "commit-tree", f"{h2}^{{tree}}", "-p", h2, "-m", "the same tree")
+    _git(world.dev, "push", "-q", "origin", f"{h3}:refs/dev/{h3}")
+    world.gh.put(3, h3, ready=False)
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch, repo=world.dev, url=str(world.origin)) == 1
+    assert "the head of each of #1, #3" in capsys.readouterr().err                          # two PRs with that tree: neither
+
+
 JUDGE_REFUSALS = {
     "a run that hasn't ended": ({"status": {"state": "running"}}, r"run (\S+) hasn't ended \(last seen running\): `research inspect \1`"),
     "not a quick tier": ({"result": lambda d: {**d, "kind": "check/v1"}}, r"run \S+'s result is a check/v1, not a quick-tier/v1 report"),
     "no result": ({"result": lambda d: None}, r"run \S+ on its machine ended done \(exit 0\) without a result\.json"),
     "a failed tier": ({"status": {"state": "failed", "rc": 1}},
                       r"#1 is not marked ready at \w{12}: the quick tier failed: run \S+'s facts show a pass, but it ended failed"),
-    "a head that moved": ({}, r"run \S+ ran the quick tier at \w{12}, which is no open PR's head now \(pushed again since, or closed\?\)"),
+    "a head that moved": ({}, r"run \S+ ran the quick tier at \w{12}, which is no open PR's head now, nor its tree \(pushed again "
+                              r"since, or closed\?\)"),
     "a run that isn't there": ({}, r"no run matching 'r-nowhere' under "),
 }
 
@@ -1108,7 +1173,8 @@ def test_judge_refuses_a_run_that_has_not_ended_is_not_a_quick_tier_failed_or_wh
     if case == "a head that moved":
         world.gh.put(1, world.change({"a.txt": "a2\n"}), ready=False)
     capsys.readouterr()
-    assert Q.judge(world.gh, world.store, "r-nowhere" if case == "a run that isn't there" else rid, "lane-1", fetch=machine.fetch) == 1
+    assert Q.judge(world.gh, world.store, "r-nowhere" if case == "a run that isn't there" else rid, "lane-1", fetch=machine.fetch,
+                   repo=world.dev, url=str(world.origin)) == 1
     err = capsys.readouterr().err
     assert err.startswith("research queue judge: ") and err.count("\n") == 1 and re.search(refusal, err)
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
@@ -1227,7 +1293,9 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
             research_main(argv)
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
-                      (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number")):
+                      (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync and land only"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync and land only")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err

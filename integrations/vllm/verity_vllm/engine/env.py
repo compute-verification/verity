@@ -23,12 +23,17 @@ ENGINE = {
     # greedy or explicitly seeded requests (sampler.py: any_greedy / any_explicit_seed), so the
     # torch path (apply_top_k_top_p + gumbel_sample) that W3 re-derives is the one that runs.
     "VLLM_USE_FLASHINFER_SAMPLER": "0",
+    # A shared expert runs on the main stream, in the order a Build (`EXPORT`) gives it. Otherwise vLLM moves it to an aux stream
+    # at <= VLLM_SHARED_EXPERTS_STREAM_TOKEN_THRESHOLD (256) tokens, and the log's order is no longer the execution order that
+    # operand_provenance (G5) takes it to be. Costs the shared/routed overlap there, on shared-expert models only.
+    "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
 }
 
 #: The meta-device instantiation of the pinned model class (``program/frontend/vllm_meta.py``).
 EXPORT = {
     "VLLM_BATCH_INVARIANT": "1",
     "VLLM_USE_LAYERNAME": "0",
+    "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
     "HF_HUB_OFFLINE": "1",
     "VLLM_LOGGING_LEVEL": "WARNING",
     "TOKENIZERS_PARALLELISM": "false",

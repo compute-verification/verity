@@ -7,9 +7,6 @@ from __future__ import annotations
 
 import math
 
-K_BITS = 9.12e7  # the inference-only policy's budget per isolation unit: α·Γ = 9.6e−11 × 9.5e17 bits, about 11 MB
-
-
 def free_patterns(buckets: int, allocation: int) -> int:
     """Lean `SecurityProofs.CardFree`: occupancies if the sender could pick slots within a bucket, `2^(T·r)`."""
     return 2 ** (buckets * allocation)
@@ -58,6 +55,7 @@ def ingress_rate(allocation: int, bucket_ms: int = 100) -> float:
     return math.log2(allocation + 1) / (bucket_ms / 1000)
 
 
-def k_share(bits: float) -> float:
-    """A charge in bits, as a share of K."""
-    return bits / K_BITS
+def k_share(bits: float, k_bits: float) -> float:
+    """A charge in bits, as a share of K, the policy's budget per isolation unit in bits. K is the caller's: NCI's
+    inference-only policy sets α·Γ = 9.6e−11 × 9.5e17 bits, 9.12e7 (about 11 MB)."""
+    return bits / k_bits
