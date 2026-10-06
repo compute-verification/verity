@@ -2,7 +2,7 @@
 (``flock-circuit prove --zk`` with its send check, ``FC_FIREWALL=1``, §10.4) and the challenger, beside the inner phase's
 proxy (`verity_flock.rec_live`, §10.3).
 
-    python -m verity_flock.firewall relay --state DIR --session ID --part NAME --to HOST:PORT [--listen 127.0.0.1:0] [--sessions N]
+    python -m verity_flock.firewall relay --state DIR --session ID --part NAME --to HOST:PORT [--listen 127.0.0.1:0] [--sessions N] [--proofs 2]
     python -m verity_flock.firewall record --state DIR
 
 The release side of record is Rust's: ``flock-circuit prove --firewall-state DIR --session ID --part NAME``
@@ -13,11 +13,14 @@ here) and the tests' relay.
 Every process of one firewall shares its state directory: ``record.jsonl``, its events in order (each with its ``seq``),
 appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules hold through it:
 
-* **A recursive session ends at its first stop.** The inner phase opens a recursive session (`Firewall.open`: `rec_live`'s
-  ``serve`` opens one for each session it serves). Its first stop, inner or outer, is its one failure (``stop``). After it
-  the firewall serves and releases nothing more of that recursive session: a relay refuses each later outer session of it
-  before anything reaches the challenger (``refused``, not a failure: the challenger sees nothing of it). An outer session
-  is admitted only once its recursive session's inner session has finished.
+* **A recursive session's statements go in their order, each once, and it ends at its first stop.** The inner phase opens
+  a recursive session (`Firewall.open`: `rec_live`'s ``serve`` opens one for each session it serves) with its V*
+  statements in their order (``parts``, public, from K: L0–L6 and the algebra at K = 4096). Its first stop, inner or
+  outer, is its one failure (``stop``). An outer session is admitted only once its recursive session's inner session has
+  finished, and only for its next statement not yet released: a request for any other (a later one, or a released one
+  again) is a stop at that next statement, never opened, so a statement the worker skips ends the recursive session where
+  it stands. After a stop, and after the last statement's release, a relay refuses each outer session of it before
+  anything reaches the challenger (``refused``, not a failure: the challenger sees nothing of it).
 * **Outer proofs go one at a time.** The firewall has one slot, across streams and protocols. An outer session takes it at
   its first request and holds it until the session is released (the challenger's verdict accepts it) or fails. A second
   session that asks meanwhile waits (``wait``) and takes the slot after (``slot``), so each ``slot`` event is followed by its
@@ -25,17 +28,21 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules ho
   stop by the next session to take the slot.
 * **A stream stops at its failure budget.** A stream opened with ``budget`` b (the challenger's stream's ``budget``, P1)
   refuses every outer session and every open after its b-th failure: a recursive session's stop, or a refusal of a recursive
-  session that had not stopped, on a stream that had not.
-* **Proofs leave at public times.** A recursive session opened with a ``release`` schedule (``start_ms``, its ``parts`` in
-  order and one window a part, ``windows_ms``) releases part j's proofs at ``start_ms + windows_ms[0] + ... +
-  windows_ms[j]``: proofs ready early wait, and proofs not ready by then are a stop. Only the Rust firewall keeps the
-  times; this module's relay refuses a scheduled session rather than release it early.
+  session that had neither stopped nor released its last statement, on a stream that had not stopped.
+* **Proofs leave at public times.** A recursive session opened with a ``release`` schedule (``start_ms``, and one window a
+  statement, ``windows_ms``) releases statement j's proofs at ``start_ms + windows_ms[0] + ... + windows_ms[j]``: proofs
+  ready early wait, and proofs not ready by then are a stop. Only the Rust firewall keeps the times; this module's relay
+  refuses a scheduled session rather than release it early.
 
-An outer session stops when the worker cuts it, when the worker sends ``Finish`` before its proofs (the send check refused:
-``flock-circuit`` then sends ``Finish`` at once), when the challenger's verdict rejects it, or on any fault of the relay's.
-Except for a rejecting verdict, which the challenger reached itself, the relay then cuts the challenger's connection without
-sending ``Finish``. So every stop the firewall makes looks the same to the challenger: a session cut after some message,
-never why.
+An outer session stops when the worker cuts it, when the worker sends ``Finish`` before all of the session's proofs (the
+send check refused: ``flock-circuit`` then sends ``Finish`` at once), when the challenger's verdict rejects it, or on any
+fault of the relay's. Except for a rejecting verdict, which the challenger reached itself, the relay then cuts the
+challenger's connection without sending ``Finish``. So every stop the firewall makes looks the same to the challenger: a
+session cut after some message, never why. A refused or stopped session's worker is answered outside the slot, so it
+can't hold up another session's.
+
+The record is read whole at every call. A torn last line (a writer killed inside its append) fails every call, so the
+firewall serves nothing until the developer repairs the record: it fails closed, never by skipping an event it can't read.
 """
 from __future__ import annotations
 
@@ -52,6 +59,8 @@ from .rec_live import (REQ_FINISH, REQ_PING, REQ_PROOF, RESP_REFUSED, RESP_VERDI
 
 KIND = "firewall/v0"
 INNER = "inner"
+#: an outer session's proofs, one a rep (2 at K = 4096)
+PROOFS = 2
 
 
 class Refused(Exception):
@@ -92,16 +101,17 @@ class Firewall:
         with self._locked() as ev:
             return ev
 
-    def open(self, stream: str, budget: int | None = None, release: dict | None = None) -> str:
-        """A new recursive session on ``stream``, opened by its inner session: its id. ``budget`` is the stream's failure
-        budget (P1's ``budget``, b), the same at every open of the stream; once the stream has ``budget`` failures, `Refused`.
-        ``release`` is the recursive session's release schedule, public and fixed here, before the session: part ``j`` of
-        ``release["parts"]`` is released at the end of its window, ``start_ms + sum(windows_ms[:j + 1])`` (the Rust
-        firewall's rule 3)."""
+    def open(self, stream: str, parts: list[str], budget: int | None = None, release: dict | None = None) -> str:
+        """A new recursive session on ``stream``, opened by its inner session, with its V* statements in their order
+        (``parts``, public: the Rust firewall's rule 1): its id. ``budget`` is the stream's failure budget (P1's ``budget``,
+        b), the same at every open of the stream; once the stream has ``budget`` failures, `Refused`. ``release`` is the
+        recursive session's release schedule, public and fixed here, before the session: statement ``j`` is released at the
+        end of its window, ``start_ms + sum(windows_ms[:j + 1])`` (rule 3)."""
+        _parts_ok(parts)
         if budget is not None and not (type(budget) is int and budget >= 1):
             raise ValueError(f"a failure budget is a positive integer, not {budget!r}")
         if release is not None:
-            _schedule_ok(release)
+            _schedule_ok(release, len(parts))
         with self._locked() as ev:
             first = next((e for e in ev if e["event"] == "open" and e["stream"] == stream), None)
             if first is not None and first.get("budget") != budget:
@@ -109,7 +119,7 @@ class Firewall:
             if budget is not None and (n := _failures(ev, stream)) >= budget:
                 raise Refused(refused(f"stream {stream} stopped at its failure budget ({n} of {budget})"))
             sid = f"r{sum(e['event'] == 'open' for e in ev):04d}"
-            e = {"event": "open", "session": sid, "stream": stream}
+            e = {"event": "open", "session": sid, "stream": stream, "parts": list(parts)}
             if budget is not None:
                 e["budget"] = budget
             if release is not None:
@@ -137,8 +147,9 @@ class Firewall:
 
     def admit(self, session: str, part: str, *, timed: bool = False) -> int | None:
         """Raise `Refused` unless an outer session of ``session`` may be served now: the recursive session is open, has not
-        stopped, its stream has not stopped at its budget, its inner session finished, and ``part`` has a place in its
-        release schedule if it has one. A refusal is recorded (``refused``). Returns ``part``'s release time (rule 3), or
+        stopped, has a statement not yet released, its stream has not stopped at its budget, its inner session finished,
+        and ``part`` is its next statement. A request for any other statement is the recursive session's stop at the next
+        one (never opened), then refused. A refusal is recorded (``refused``). Returns ``part``'s release time (rule 3), or
         None. Only a ``timed`` caller (one that holds the proofs to that time: the Rust firewall, or a test of its rules)
         is admitted to a scheduled session; this module's relay is not."""
         with self._locked() as ev:
@@ -148,18 +159,21 @@ class Firewall:
                 why = f"recursive session {session} was never opened"
             elif (s := _stopped(ev, session)) is not None:
                 why = f"recursive session {session} stopped at {s['part']}: the firewall serves nothing more of it"
+            elif (j := _next(ev, open_)) is None:
+                why = f"recursive session {session} released all its statements: the firewall serves nothing more of it"
             elif (b := _budget(ev, open_["stream"])) is not None and (n := _failures(ev, open_["stream"])) >= b:
                 why = f"stream {open_['stream']} stopped at its failure budget ({n} of {b})"
             elif not any(e["event"] == "finish" and e["session"] == session for e in ev):
                 why = f"recursive session {session}: its inner session has not finished"
+            elif (nxt := open_["parts"][j]) != part:
+                self._append(ev, {"event": "stop", "session": session, "part": nxt, "why": f"never opened: {part} was asked in its place"})
+                why = f"recursive session {session} stopped at {nxt}: {part} is not its next statement"
             elif (r := open_.get("release")) is not None:
-                if part not in r["parts"]:
-                    why = f"recursive session {session}: {part} has no place in its release schedule"
-                elif not timed:
+                if not timed:
                     why = (f"recursive session {session}: its release schedule needs the Rust firewall "
                            "(flock-circuit prove --firewall-state)")
                 else:
-                    at = r["start_ms"] + sum(r["windows_ms"][:r["parts"].index(part) + 1])
+                    at = r["start_ms"] + sum(r["windows_ms"][:j + 1])
             if why is not None:
                 self._append(ev, {"event": "refused", "session": session, "part": part})
                 raise Refused(refused(why))
@@ -208,15 +222,25 @@ def _budget(ev: list[dict], stream: str) -> int | None:
     return next((e.get("budget") for e in ev if e["event"] == "open" and e["stream"] == stream), None)
 
 
+def _next(ev: list[dict], open_: dict) -> int | None:
+    """The position of the recursive session's next statement, the first of its ``parts`` not released; None once all are."""
+    released = {e["part"] for e in ev if e["event"] == "release" and e["session"] == open_["session"]}
+    return next((j for j, p in enumerate(open_["parts"]) if p not in released), None)
+
+
 def _failures(ev: list[dict], stream: str) -> int:
-    budget, mine, stopped, n = _budget(ev, stream), set(), set(), 0
+    budget, mine, released, stopped, n = _budget(ev, stream), {}, set(), set(), 0
     for e in ev:
+        s = e["session"]
         if e["event"] == "open" and e["stream"] == stream:
-            mine.add(e["session"])
-        elif e["event"] == "stop" and e["session"] in mine:
-            stopped.add(e["session"])
+            mine[s] = e["parts"]
+        elif e["event"] == "release" and s in mine:
+            released.add((s, e["part"]))
+        elif e["event"] == "stop" and s in mine:
+            stopped.add(s)
             n += 1
-        elif e["event"] == "refused" and e["session"] in mine and e["session"] not in stopped and (budget is None or n < budget):
+        elif (e["event"] == "refused" and s in mine and not all((s, p) in released for p in mine[s]) and s not in stopped
+              and (budget is None or n < budget)):
             n += 1
     return n
 
@@ -232,23 +256,29 @@ def _orphan(ev: list[dict]) -> dict | None:
     return None if done else s
 
 
-def _schedule_ok(r: dict) -> None:
-    parts, windows = (r.get("parts"), r.get("windows_ms")) if isinstance(r, dict) else (None, None)
-    if not (isinstance(r, dict) and set(r) == {"start_ms", "parts", "windows_ms"} and type(r["start_ms"]) is int and r["start_ms"] >= 0
-            and isinstance(parts, list) and parts and all(isinstance(p, str) for p in parts) and len(set(parts)) == len(parts)
-            and isinstance(windows, list) and len(windows) == len(parts) and all(type(w) is int and w > 0 for w in windows)):
-        raise ValueError(f'a release schedule is {{"start_ms": S, "parts": [distinct names], "windows_ms": [one width > 0 a part]}}, '
-                         f'not {r!r}')
+def _parts_ok(parts) -> None:
+    if not (isinstance(parts, (list, tuple)) and parts and all(isinstance(p, str) and p and p != INNER for p in parts)
+            and len(set(parts)) == len(parts)):
+        raise ValueError(f"a recursive session's statements are distinct names, at least one, none of them {INNER}, "
+                         f"not {json.dumps(parts, sort_keys=True, default=repr)}")
+
+
+def _schedule_ok(r: dict, n: int) -> None:
+    windows = r.get("windows_ms") if isinstance(r, dict) else None
+    if not (isinstance(r, dict) and set(r) == {"start_ms", "windows_ms"} and type(r["start_ms"]) is int and r["start_ms"] >= 0
+            and isinstance(windows, list) and len(windows) == n and all(type(w) is int and w > 0 for w in windows)):
+        raise ValueError(f'a release schedule is {{"start_ms": S, "windows_ms": [one width > 0 for each of the {n} statements]}}, '
+                         f'not {json.dumps(r, sort_keys=True, default=repr)}')
 
 
 Conn = tuple  # (reader, writer, close): a connection's two file objects and how to close it
 
 
 def relay_session(fw: Firewall, session: str, part: str, worker_r, worker_w, connect: Callable[[], Conn],
-                  waiting: Callable[[], None] | None = None) -> dict:
+                  waiting: Callable[[], None] | None = None, proofs: int = PROOFS) -> dict:
     """One outer session, from a worker (``worker_r``, ``worker_w``) to the challenger (``connect()`` opens its connection):
-    held to the module docstring's rules. Returns its outcome: ``release``, ``stop``, ``refused``, or ``none`` (the worker
-    sent nothing but pings)."""
+    held to the module docstring's rules, ``Finish`` forwarded only after the session's ``proofs``. Returns its outcome:
+    ``release``, ``stop``, ``refused``, or ``none`` (the worker sent nothing but pings)."""
     while True:
         req = read_frame(worker_r)
         if req is None:
@@ -260,55 +290,61 @@ def relay_session(fw: Firewall, session: str, part: str, worker_r, worker_w, con
         try:
             fw.admit(session, part)
         except Refused as e:
-            _refuse_all(worker_r, worker_w, req, str(e))
-            return {"outcome": "refused", "why": str(e)}
-        up, proofs = None, 0
+            out, rest = {"outcome": "refused", "why": str(e)}, (req, str(e))
+        else:
+            out, rest = _relay_admitted(fw, session, part, req, worker_r, worker_w, connect, proofs)
+    if rest is not None:
         try:
-            up = connect()
-            while True:
-                if req[:1] == bytes([REQ_FINISH]):
-                    if proofs == 0:
-                        why = "the worker sent Finish before its proofs"
-                        fw.stop(session, part, why)
-                        _verdict(worker_w, refused(f"{why}: recursive session {session} stopped at {part}"))
-                        return {"outcome": "stop", "why": why}
-                    write_frame(up[1], req)
-                    resp = read_frame(up[0])
-                    if resp is None:
-                        raise ValueError("the challenger ended the session before its verdict")
-                    v = decode_resp(resp)
-                    accepted = v[0] == RESP_VERDICT and json.loads(v[1]).get("accepted") is True
-                    if accepted:
-                        fw.release(session, part)
-                    else:
-                        fw.stop(session, part, "the challenger's verdict rejects it")
-                    write_frame(worker_w, resp)
-                    return {"outcome": "release" if accepted else "stop", "proofs": proofs}
-                proofs += req[:1] == bytes([REQ_PROOF])
+            _refuse_all(worker_r, worker_w, *rest)
+        except (OSError, ValueError):
+            pass
+    return out
+
+
+def _relay_admitted(fw: Firewall, session: str, part: str, req: bytes, worker_r, worker_w, connect: Callable[[], Conn],
+                    need: int) -> tuple[dict, tuple | None]:
+    """An admitted outer session, relayed while it holds the slot: its outcome, and the request to answer from and the
+    refusal to answer with (`_refuse_all`, once the slot is left) when the relay's fault stopped it."""
+    up, proofs = None, 0
+    try:
+        up = connect()
+        while True:
+            if req[:1] == bytes([REQ_FINISH]):
+                if proofs < need:
+                    why = f"the worker sent Finish after {proofs} of the session's {need} proofs"
+                    fw.stop(session, part, why)
+                    _verdict(worker_w, refused(f"{why}: recursive session {session} stopped at {part}"))
+                    return {"outcome": "stop", "why": why}, None
                 write_frame(up[1], req)
                 resp = read_frame(up[0])
                 if resp is None:
-                    raise ValueError("the challenger ended the session")
+                    raise ValueError("the challenger ended the session before its verdict")
+                v = decode_resp(resp)
+                accepted = v[0] == RESP_VERDICT and json.loads(v[1]).get("accepted") is True
+                if accepted:
+                    fw.release(session, part)
+                else:
+                    fw.stop(session, part, "the challenger's verdict rejects it")
                 write_frame(worker_w, resp)
-                req = read_frame(worker_r)
-                if req is None:
-                    why = "the worker ended the session before Finish"
-                    fw.stop(session, part, why)
-                    return {"outcome": "stop", "why": why}
-        except Exception as e:  # noqa: BLE001 - any fault of the relay's stops the session, never the firewall
-            why = f"the relay's fault ({type(e).__name__}: {e})"
-            fw.stop(session, part, why)
-            if up is not None:
-                up[2]()
-                up = None
-            try:
-                _refuse_all(worker_r, worker_w, req, refused(f"{why}: recursive session {session} stopped at {part}"))
-            except (OSError, ValueError):
-                pass
-            return {"outcome": "stop", "why": why}
-        finally:
-            if up is not None:
-                up[2]()
+                return {"outcome": "release" if accepted else "stop", "proofs": proofs}, None
+            proofs += req[:1] == bytes([REQ_PROOF])
+            write_frame(up[1], req)
+            resp = read_frame(up[0])
+            if resp is None:
+                raise ValueError("the challenger ended the session")
+            write_frame(worker_w, resp)
+            req = read_frame(worker_r)
+            if req is None:
+                why = "the worker ended the session before Finish"
+                fw.stop(session, part, why)
+                return {"outcome": "stop", "why": why}, None
+    except Exception as e:  # noqa: BLE001 - any fault of the relay's stops the session, never the firewall
+        why = f"the relay's fault ({type(e).__name__}: {e})"
+        fw.stop(session, part, why)
+        return {"outcome": "stop", "why": why}, (req, refused(f"{why}: recursive session {session} stopped at {part}"))
+    finally:
+        if up is not None:
+            up[2]()
 
 
 def _refuse_all(worker_r, worker_w, req: bytes | None, why: str) -> None:
@@ -346,10 +382,12 @@ def tcp(addr: str) -> Callable[[], Conn]:
 
 
 def relay(fw: Firewall, session: str, part: str, listen: str, to: str, sessions: int = 1,
-          ready: Callable[[str], None] | None = None, done: Callable[[dict], None] | None = None) -> list[dict]:
+          ready: Callable[[str], None] | None = None, done: Callable[[dict], None] | None = None, proofs: int = PROOFS) -> list[dict]:
     """Accept ``sessions`` connections from workers on ``listen``, each an outer session of ``session`` at ``part``, relayed to
-    the challenger at ``to`` (`relay_session`), each on its own thread: a worker may open its next session while the last
-    one awaits its verdict (``FC_VERIFY_AHEAD``), and the slot orders them. Returns their outcomes in the order accepted."""
+    the challenger at ``to`` (`relay_session`), each on its own thread, and the slot orders them. The firewall serves
+    ``part`` once: a connection cut before its first request leaves it to the next, and any after its release is refused.
+    Returns their outcomes in the order accepted; a fault of the firewall's own (its record unreadable, say) is the outcome
+    ``error``, with nothing served."""
     host, port = listen.rsplit(":", 1)
     res: list[dict | None] = [None] * sessions
     threads = []
@@ -363,9 +401,11 @@ def relay(fw: Firewall, session: str, part: str, listen: str, to: str, sessions:
             def one(k=k, conn=conn) -> None:
                 with conn, conn.makefile("rb") as rf, conn.makefile("wb") as wf:
                     try:
-                        res[k] = {"k": k, **relay_session(fw, session, part, rf, wf, tcp(to))}
+                        res[k] = {"k": k, **relay_session(fw, session, part, rf, wf, tcp(to), proofs=proofs)}
                     except OSError as e:
                         res[k] = {"k": k, "outcome": "none", "why": f"the worker's connection: {e}"}
+                    except Exception as e:  # noqa: BLE001 - reported, so that done is called for every connection
+                        res[k] = {"k": k, "outcome": "error", "why": f"the firewall's fault ({type(e).__name__}: {e})"}
                 if done:
                     done(res[k])
             t = threading.Thread(target=one)
@@ -388,6 +428,7 @@ def main(argv=None) -> int:
     r.add_argument("--to", required=True, help="the challenger's address, HOST:PORT")
     r.add_argument("--listen", default="127.0.0.1:0")
     r.add_argument("--sessions", type=int, default=1)
+    r.add_argument("--proofs", type=int, default=PROOFS, help="the session's proofs, one a rep: Finish is forwarded only after them")
     rc = sub.add_parser("record", help="print the firewall's record")
     rc.add_argument("--state", required=True)
     a = ap.parse_args(argv)
@@ -397,7 +438,8 @@ def main(argv=None) -> int:
             print(json.dumps(e, sort_keys=True))
         return 0
     relay(fw, a.session, a.part, a.listen, a.to, a.sessions, ready=lambda addr: print(f"SERVING {addr}", flush=True),
-          done=lambda res: print("FIREWALL\t" + json.dumps({"session": a.session, "part": a.part, **res}), flush=True))
+          done=lambda res: print("FIREWALL\t" + json.dumps({"session": a.session, "part": a.part, **res}), flush=True),
+          proofs=a.proofs)
     return 0
 
 
