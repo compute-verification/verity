@@ -209,11 +209,16 @@ audit fails on any other guarantee under a listed root. A package's owner adds i
 lifted, or no longer a guarantee.
 
 `audit.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` with the theorem's doc comment,
-binders and type as its source writes them, in the theorem's namespace with its file's `open`s so that its names resolve
-as they did, and `theorem X.SecurityProofs.G : X.Guarantees.G := @X.t` beside the proof, whose module then imports the
-spec module; `"beside": M` puts the theorem in `M` instead (a package that collects its guarantees' proofs in one module),
-which then imports the proof's module too. The spec module imports the modules of the definitions the statement reads, and
-a statement that reads a definition of a `proved_in` package is refused: move the definition first. It writes the moves (`LIFTS.json.moved.json`, each `X.t` to `X.SecurityProofs.G`) for `--update --moved`,
+binders and type as its source writes them, after the `variable`s in scope that Lean includes in the theorem (those the
+statement mentions, and the instances over them), in the theorem's namespace with its file's `open`s (less the namespaces
+only proof modules declare) and the `open … in` right above it, so that its names resolve as they did, and
+`theorem X.SecurityProofs.G : X.Guarantees.G := @X.t` beside the proof, whose module then imports the spec module;
+`"beside": M` puts the theorem in `M` instead (a package that collects its guarantees' proofs in one module), which then
+imports the proof's module too. The spec module imports the modules of the definitions the statement reads, and a
+statement that reads a definition of a `proved_in` package (in `reads` or `outside`) is refused: move the definition
+first. What it cannot follow (an `open` of a namespace a definition module opens only through a proof's declaration, a
+`variable` an `omit` or `include` changes) fails the build or prints as a change, never as the same statement. It writes
+the moves (`LIFTS.json.moved.json`, each `X.t` to `X.SecurityProofs.G`) for `--update --moved`,
 which certifies each lift or prints it; `X.t` stays as a lemma. A guarantee that takes a named assumption as a hypothesis
 moves it into `G`, which prints as a change.
 
