@@ -267,6 +267,11 @@ timing bits. Taking `log2 #Cs` to be those content bits is an accounting step, n
 under fixed-length frames (W3): N frames of B bytes have `2^(8·B·N)` contents, so for `Cs` all of them, `log2 #Cs` is
 the `8·B·N` bits read.
 
+## The schedule's declared bound and the coins
+
+The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
+the trusted text: the last section of `verity/Security/Specs/NetworkCertifier/Guarantees.lean`'s documentation.
+
 ## Calibration (`calibration`)
 
 `network-certifier-calibrate TRACE [--ingress-bucket-ms 100]` reads honest timing traces (the format is in the module
