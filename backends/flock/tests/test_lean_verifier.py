@@ -51,12 +51,19 @@ def test_no_escape_hatches():
 
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
-AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Proofs\.Flock\.Soundness\.Game\.|Proofs\.Flock\.Soundness\.Audit\.)")
+AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Proofs\.Flock\.Soundness\.(Game|Audit)\.|Definitions\.Flock\.(Game|Audit)\."
+                           r"|Specs\.Flock\.Guarantees\.Partitioning$)")
+SECURITY = PROOFS.parent
+AUDIT_TEXT = [SECURITY / "Definitions" / "Flock" / "Game", SECURITY / "Definitions" / "Flock" / "Audit",
+              SECURITY / "Specs" / "Flock" / "Guarantees" / "Partitioning.lean"]
+AUDIT_TEXT_IMPORTS = re.compile(r"import (Mathlib\.|Definitions\.Core\.Game$|Definitions\.Flock\.(Game|Audit)\.)")
 
 
 def test_audit_layer_is_abstract():
-    """The audit theorems import only the interaction model, Mathlib and each other, so any backend can instantiate them
-    (`verity/Security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
+    """The audit theorems import only the interaction model, Mathlib, each other, and the definitions and statements they
+    are about (`Definitions.Flock.{Game,Audit}`, `Specs.Flock.Guarantees.Partitioning`), which import only Mathlib, core's
+    `Game` and each other, so any backend can instantiate them (`verity/Security/Proofs/Flock/Soundness/DESIGN.md` §12).
+    The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
     two composed) and `FlockWork.lean` (the executable's work rule). No proof is admitted."""
@@ -64,10 +71,14 @@ def test_audit_layer_is_abstract():
     flock = {"Flock.lean", "FlockCompiled.lean", "FlockBatched.lean", "FlockBatchedAcc.lean", "FlockLink.lean",
              "FlockLinked.lean", "FlockWork.lean"}
     assert files and flock <= {p.name for p in files}
+    text = sorted(q for p in AUDIT_TEXT for q in ([p] if p.suffix == ".lean" else p.rglob("*.lean")))
+    assert all(p.exists() for p in AUDIT_TEXT) and text
     bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
            if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
+    bad += [f"{p.relative_to(SECURITY)}: {line}" for p in text for line in p.read_text().splitlines()
+            if line.startswith("import ") and not AUDIT_TEXT_IMPORTS.match(line)]
     assert not bad, bad
-    admitted = [p.name for p in files if re.search(r"\b(sorry|admit)\b|^axiom ", p.read_text(), re.M)]
+    admitted = [p.name for p in files + text if re.search(r"\b(sorry|admit)\b|^axiom ", p.read_text(), re.M)]
     assert not admitted, admitted
 
 
