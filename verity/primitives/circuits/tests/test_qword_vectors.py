@@ -363,7 +363,7 @@ def build() -> dict:
     refused.append(["another program", "narrow", 16, 32, _codes(PO.verify(other, decoded["narrow"]))])
     return {
         "about": "Pinned vectors of Q_word v1 (verity.primitives.circuits.cut, verity.primitives.circuits.partition_object) beyond partition_vectors.json, checked by "
-                 "tests/ir/test_qword_vectors.py; written by it with --write.  Programs are descriptor bytes (TWide_v1, TNarrow_v1 and "
+                 "verity/primitives/circuits/tests/test_qword_vectors.py; written by it with --write.  Programs are descriptor bytes (TWide_v1, TNarrow_v1 and "
                  "TAdd64_v1 are test primitives: n leaves of Value<32> or two Value<64>, one output).",
         "constants": {"wiring": sorted(cut.WIRING), "wide_fan_in": cut.WIDE_FAN_IN, "width_rule": list(cut.WIDTH_RULE), "param_max": PO.PARAM_MAX},
         "descriptors": {k: _canon(p) for k, p in PROGRAMS.items()},
