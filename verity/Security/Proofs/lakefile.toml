@@ -23,4 +23,4 @@ path = "../../../backends/flock/verifier/lean"
 
 [[lean_lib]]
 name = "Proofs"
-roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Warden", "Proofs.Flock"]
+roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier", "Proofs.Flock"]

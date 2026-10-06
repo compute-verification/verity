@@ -1,14 +1,14 @@
-"""The continuous audit's verifier: `n` challenges over time, each answered in turn, accepted when at most `max_misses`
+"""The continuous audit's memory challenger: `n` challenges over time, each answered in turn, accepted when at most `max_misses`
 of them miss.
 
 Its model is the verifier of `verity/Security/Definitions/Pous/Model/Continuous.lean` (#954), with the guarantee
 `Pous.SecurityProofs.ContinuousAudit`.  That verifier sends `n` uniform, independent indices and counts a miss for
 every round that is not a hit: wrong, late or rejected.  Three requirements are theorems about it
-(`verity/Security/Proofs/Pous/Continuous/Verifier.lean`), and `ContinuousVerifier` enforces each one on a single
-`audit.TimedVerifier` over the whole stream, with its clock and its index draws:
+(`verity/Security/Proofs/Pous/Continuous/Verifier.lean`), and `ContinuousMemoryChallenger` enforces each one on a single
+`audit.MemoryChallenger` over the whole stream, with its clock and its index draws:
 
 1. **No pipelining.** Challenge `j + 1` is revealed only once answer `j` is in or its hard deadline has passed
-   (`TimedVerifier.challenge`), and each deadline runs from the verifier's own clock reading when it reveals the index,
+   (`MemoryChallenger.challenge`), and each deadline runs from the verifier's own clock reading when it reveals the index,
    never from a time the responder reports.  An answer names the challenge it answers; one for any other challenge
    than the open one (an earlier, closed one, or one not yet revealed) is refused.
 2. **A hard deadline.** An answer past `Δ_late + RTT`, or none by then, is rejected and its block is never checked;
@@ -42,13 +42,13 @@ from dataclasses import dataclass
 
 from verity.primitives.randomness import Key
 
-from .audit import DEADLINE_NS, RTT_ALLOWANCE_NS, Answer, AuditResult, TimedVerifier
+from .audit import DEADLINE_NS, RTT_ALLOWANCE_NS, Answer, AuditResult, MemoryChallenger
 from .verifier import VerifierKey
 
 
 @dataclass(frozen=True, slots=True)
 class Reply:
-    """An answer off the wire: the challenge `j` it names, its block, a root-only verifier's `path`, and the responder's
+    """An answer off the wire: the challenge `j` it names, its block, a root-only memory challenger's `path`, and the responder's
     own `report`."""
 
     j: int
@@ -57,7 +57,7 @@ class Reply:
     report: object = None
 
 
-class ContinuousVerifier:
+class ContinuousMemoryChallenger:
     """`n` challenges, each closed by its answer or its hard deadline before the next is revealed.
 
     `challenge()` returns `(j, index)`; `respond(j, block)` answers challenge `j` and refuses any other than the open
@@ -71,7 +71,7 @@ class ContinuousVerifier:
     `Pous.SecurityProofs.ContinuousAudit` measures the memory at each send time and needs no cap, and its model's
     verifier has none.
 
-    The continuous audit runs only on this class, never on a bare `TimedVerifier` with a hard deadline.  That one's
+    The continuous audit runs only on this class, never on a bare `MemoryChallenger` with a hard deadline.  That one's
     `respond(block)` names no challenge, so once a challenge expires, an answer to it still in flight is credited to
     the next one, a hit when both ask for the same block.  That block was on the wire, not in the memory the model
     measures at the send time, so the audit would credit storage the responder does not hold (#954's red team)."""
@@ -84,7 +84,7 @@ class ContinuousVerifier:
             raise ValueError("the continuous audit needs a hard deadline")
         if n < 1 or max_misses < 0:
             raise ValueError("a stream has at least one challenge, and a nonnegative miss allowance")
-        self.timed = TimedVerifier(vk, key, n, deadline_ns, rtt_allowance_ns, clock, on_answer, root_only,
+        self.timed = MemoryChallenger(vk, key, n, deadline_ns, rtt_allowance_ns, clock, on_answer, root_only,
                                    late_deadline_ns=late_deadline_ns, audit_cap=audit_cap)
         self.max_misses = max_misses
 
@@ -156,7 +156,7 @@ class ContinuousVerifier:
         return self.done and not self.aborted and not self.exceeded
 
     def challenge(self) -> tuple[int, int]:
-        """Reveal the next challenge, `(j, index)`, by `TimedVerifier.challenge()`: an open challenge past its hard
+        """Reveal the next challenge, `(j, index)`, by `MemoryChallenger.challenge()`: an open challenge past its hard
         deadline is closed first, and stays closed when the call then raises because it was the last."""
         i = self.timed.challenge()
         return self.timed.pending, i
@@ -174,7 +174,7 @@ class ContinuousVerifier:
         return self.timed.result()
 
 
-def run_continuous(verifier: ContinuousVerifier, send: Callable[[int, int], None],
+def run_continuous(verifier: ContinuousMemoryChallenger, send: Callable[[int, int], None],
                    receive: Callable[[int], Reply | None], wait: Callable[[int], None] | None = None) -> AuditResult:
     """Drive `verifier` through all `n` challenges over a transport.  `wait(j)` returns at challenge `j`'s arrival time
     on the verifier's own schedule; without it each challenge is sent once the last one closes.  `send(j, index)` sends
@@ -200,4 +200,4 @@ def run_continuous(verifier: ContinuousVerifier, send: Callable[[int, int], None
     return verifier.result()
 
 
-__all__ = ["ContinuousVerifier", "Reply", "run_continuous"]
+__all__ = ["ContinuousMemoryChallenger", "Reply", "run_continuous"]
