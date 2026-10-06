@@ -769,6 +769,8 @@ def proxy_log(proxy: Proxy) -> dict:
             "syncs": [[s.delta, str(s.rho)] for s in proxy.shaper.syncs],
             "frames": proxy.frames, "hands": proxy.shaper.hands, "link_frames_read": proxy.link_frames_read,
             "streams": len(proxy.streams), "slack_ms": proxy.slack * 1000,
+            "forwards": [[st.window, None if st.delivered is None else round((st.delivered - st.deadline) * 1000, 3)]
+                         for st in proxy.streams.values() if st.deadline is not None],
             "prover": getattr(proxy.shaper.prover, "log", None)} | _usage()
 
 
