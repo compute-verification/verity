@@ -8,7 +8,8 @@ a network certificate or a memory challenger's record without revealing it.
 
 1 iff ``u32(q) || C || y || path`` signs ``message`` under the public key ``I || root`` (`lms.verify`). Every N-byte value,
 the identifier and the message are SHA-512 words as `merkle` lays them out (bytes big-endian, each word's bits LSB first);
-``q`` is LSB first.
+``q`` is LSB first. An accepted signature means the key's holder signed the message under the claim
+``euf-cma/lms-sha512-n32`` (`verity.claims`), the scheme's unforgeability, which rests on SHA-512/256 and is not ``cr/sha-512``.
 
 **A fixed shape.** The circuit is a function of (N, W, H): the digits, the leaf index and the path are values. A chain runs all
 2^W - 1 steps, and step j keeps its input unless the chain's digit a is at most j (`LmsChainStep_v1`), so the proof pays
@@ -292,7 +293,8 @@ def _body(B, S, I, root, message, q, Cv, y, path):
 LmsVerify = CompositeDefinition(
     "LmsVerify", 1, ("N", "W", "H"), _signature, _body, conformance="exact-model-tested",
     doc="1 iff u32(q) || C || y || path is an LMS signature (RFC 8554 over SHA-512 truncated to N bytes, Winternitz width W, "
-        "tree height H, no type fields) of message under the public key I || root; every chain runs its 2^W - 1 steps")
+        "tree height H, no type fields) of message under the public key I || root; every chain runs its 2^W - 1 steps; "
+        "sound under the claim euf-cma/lms-sha512-n32")
 
 
 def verifier(N: int, W: int, H: int):
