@@ -78,7 +78,7 @@ except ImportError:                                                 # run as a s
 
 SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
-REGISTRY_REFS = ("origin/main", "origin/cursor/slack-routing-b252")   # where a checkout older than the registry finds it
+REGISTRY_REFS = ("origin/main",)                                  # where a checkout older than the registry finds it
 FRONT_DOOR = "agent-coordination"
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
@@ -668,7 +668,7 @@ def matches(filt: str, msg: dict, reg: dict, targets: list[str]) -> bool:
 def deliveries(msg: dict, root: dict | None, reg: dict, book: dict[str, dict], inboxes: set[str] | frozenset = frozenset()) -> list[dict]:
     """Who gets `msg`, and how: each of `route_targets` is woken (`wake`, why `addressed`); then each other name in `book`
     (name -> route) whose `subscriptions` match it, by its first matching subscription's `deliver` (`wake`: now; `digest`:
-    when that name reads its digest).  A quiet post wakes no one, but still reaches digests.  Nothing in an inbox thread,
+    when that name reads its digest).  A quiet post wakes only the names it starts with, and still reaches digests.  Nothing in an inbox thread,
     and nothing by an unknown author, reaches anyone; the author never gets their own post."""
     targets = route_targets(msg, root, reg, inboxes)
     out = [{"name": t, "deliver": "wake", "why": "addressed"} for t in targets]
@@ -1033,6 +1033,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if any(t["handle"] == h["handle"] for t in to):
         raise SlackError("--to names someone else")
     body = _body(ns)
+    if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]}:
+        raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its author: name its addressee with --to")
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
@@ -1764,7 +1766,7 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     except RouteError as e:
         if e.status != 400:
             raise
-        print(f"research slack: the route refused the card's fields ({e}); posting the old shape", file=sys.stderr)
+        print(f"research msg: the route refused the card's fields ({e}); posting the old shape", file=sys.stderr)
         out, fell_back = route.call("POST", "", old), True
     cid, ts = out.get("id"), out.get("ts")
     if not cid or not ts:

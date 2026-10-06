@@ -24,11 +24,9 @@ Five schemas:
 ``sha512/row-seg/v1``        a bit row (as ``sha512/row/v2``) cut into 1 KiB segments, each hashed on its own and the digests
                              hashed once more: ``SHA-512(Q(n_bits) || d_0 || ... || d_(s-1))``, ``d_j = SHA-512(S(j, s, m_j) ||
                              segment j)``, every prefix one constant block, so the segments hash in parallel (PoUW's A rows).
-``hm96-sha256/row/v1``       the schema a frame-v3 leaf binds over a hiding row's leaf digest: ``hm96.SHA256.tree_leaf(key, b || c)``
-                             over ``sha256/row/v1`` (32 bytes).
-``hm96-sha512/row/v1``       the same under a ``frame-v3-sha512`` domain: ``hm96.SHA512.tree_leaf(key, b || c)`` over
-                             ``sha512/row/v1`` (64 bytes); ``hm96-sha512/row/v2`` over ``sha512/row/v2``, ``hm96-sha512/row-seg/v1`` over
-                             ``sha512/row-seg/v1``.
+``hm96-sha512/row/v1``       the schema a ``frame-v3-sha512`` leaf binds over a hiding row's leaf digest:
+                             ``hm96.SHA512.tree_leaf(key, b || c)`` over ``sha512/row/v1`` (64 bytes); ``hm96-sha512/row/v2`` over
+                             ``sha512/row/v2``, ``hm96-sha512/row-seg/v1`` over ``sha512/row-seg/v1``.
 ``poseidon2-babybear-w24/row/v2h``  the Poseidon2 row digest. Admissible in a Table 2 cell (``frame-v3/poseidon2-babybear``),
                              but algebraic: its results are reported and flagged as algebraic in the security section,
                              and never count toward a standard-hash claim (Daniel's standing decision).
@@ -54,7 +52,6 @@ __all__ = [
     "ROLE_X",
     "SCHEMA_BLAKE3_ROW",
     "SCHEMA_BLAKE3_ROW_NVFP4",
-    "SCHEMA_HM96_SHA256_ROW",
     "SCHEMA_HM96_SHA512_ROW",
     "SCHEMA_HM96_SHA512_ROW_SEG",
     "SCHEMA_HM96_SHA512_ROW_V2",
@@ -100,14 +97,13 @@ SCHEMA_BLAKE3_ROW = "blake3-keyed/row/v2"
 SCHEMA_SHA256_ROW_NVFP4 = "sha256/row-nvfp4/v1"
 SCHEMA_BLAKE3_ROW_NVFP4 = "blake3-keyed/row-nvfp4/v1"
 SCHEMA_SHA512_ROW = "sha512/row/v1"
-SCHEMA_HM96_SHA256_ROW = "hm96-sha256/row/v1"
 SCHEMA_HM96_SHA512_ROW = "hm96-sha512/row/v1"
 SCHEMA_SHA512_ROW_V2 = "sha512/row/v2"
 SCHEMA_HM96_SHA512_ROW_V2 = "hm96-sha512/row/v2"
 SCHEMA_SHA512_ROW_SEG = "sha512/row-seg/v1"
 SCHEMA_HM96_SHA512_ROW_SEG = "hm96-sha512/row-seg/v1"
 _DIGEST_SCHEMAS = {SCHEMA_SHA256_ROW: 32, SCHEMA_BLAKE3_ROW: 32, SCHEMA_SHA256_ROW_NVFP4: 32, SCHEMA_BLAKE3_ROW_NVFP4: 32, SCHEMA_SHA512_ROW: 64,
-                   SCHEMA_HM96_SHA256_ROW: 32, SCHEMA_HM96_SHA512_ROW: 64, SCHEMA_SHA512_ROW_V2: 64, SCHEMA_HM96_SHA512_ROW_V2: 64,
+                   SCHEMA_HM96_SHA512_ROW: 64, SCHEMA_SHA512_ROW_V2: 64, SCHEMA_HM96_SHA512_ROW_V2: 64,
                    SCHEMA_SHA512_ROW_SEG: 64, SCHEMA_HM96_SHA512_ROW_SEG: 64}
 
 ROLE_X, ROLE_W = h2.ROLE_X, h2.ROLE_W
@@ -397,8 +393,8 @@ def row_leaf(domain: CommitmentDomain, rank: int, digest, schema: str = SCHEMA_R
 
     ``digest`` is 8 Poseidon2 lanes for ``leaf/v2h`` (the default), the 32-byte SHA-256 / BLAKE3 row digest (four digest
     schemas, NVFP4 rows included), the 64-byte ``sha512/row/v1`` or ``sha512/row/v2`` digest (under a ``frame-v3-sha512``
-    domain), or a hiding row's hm96 leaf digest under ``hm96-sha256/row/v1`` (32 bytes), ``hm96-sha512/row/v1`` or
-    ``hm96-sha512/row/v2`` or ``hm96-sha512/row-seg/v1`` (64 bytes); ``sha512/row-seg/v1`` digests too.
+    domain), or a hiding row's hm96 leaf digest under ``hm96-sha512/row/v1``, ``hm96-sha512/row/v2`` or
+    ``hm96-sha512/row-seg/v1`` (64 bytes); ``sha512/row-seg/v1`` digests too.
     """
     value = row_leaf_value(digest) if schema == SCHEMA_ROW else bytes(digest)
     if schema != SCHEMA_ROW and len(value) != _DIGEST_SCHEMAS.get(schema, -1):
