@@ -247,11 +247,15 @@
      null,
      {
       "start_ms": 1000,
-      "period_ms": 500,
       "parts": [
        "L0",
        "L1",
        "alg"
+      ],
+      "windows_ms": [
+       500,
+       300,
+       900
       ]
      }
     ],
@@ -279,16 +283,16 @@
     "r0000",
     null,
     {
-     "release_ms": 2000
+     "release_ms": 1800
     },
     {
-     "release_ms": 2500
+     "release_ms": 2700
     },
     {
      "refused": "recursive session r0000: L9 has no place in its release schedule"
     }
    ],
-   "record": "{\"event\": \"open\", \"release\": {\"parts\": [\"L0\", \"L1\", \"alg\"], \"period_ms\": 500, \"start_ms\": 1000}, \"seq\": 0, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 1, \"session\": \"r0000\"}\n{\"event\": \"refused\", \"part\": \"L9\", \"seq\": 2, \"session\": \"r0000\"}\n"
+   "record": "{\"event\": \"open\", \"release\": {\"parts\": [\"L0\", \"L1\", \"alg\"], \"start_ms\": 1000, \"windows_ms\": [500, 300, 900]}, \"seq\": 0, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 1, \"session\": \"r0000\"}\n{\"event\": \"refused\", \"part\": \"L9\", \"seq\": 2, \"session\": \"r0000\"}\n"
   },
   {
    "name": "escapes",

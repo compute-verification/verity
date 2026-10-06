@@ -83,7 +83,8 @@ class Firewall:
         """A new recursive session on ``stream``, opened by its inner session: its id. ``budget`` is the stream's failure
         budget (P1's ``budget``, b), the same at every open of the stream; once the stream has ``budget`` failures, `Refused`.
         ``release`` is the recursive session's release schedule, public and fixed here, before the session: part ``j`` of
-        ``release["parts"]`` is released at ``start_ms + (j + 1) * period_ms`` (the Rust firewall's rule 3)."""
+        ``release["parts"]`` is released at the end of its window, ``start_ms + sum(windows_ms[:j + 1])`` (the Rust
+        firewall's rule 3)."""
         if budget is not None and not (type(budget) is int and budget >= 1):
             raise ValueError(f"a failure budget is a positive integer, not {budget!r}")
         if release is not None:
@@ -145,7 +146,7 @@ class Firewall:
                     why = (f"recursive session {session}: its release schedule needs the Rust firewall "
                            "(flock-circuit prove --firewall-state)")
                 else:
-                    at = r["start_ms"] + (r["parts"].index(part) + 1) * r["period_ms"]
+                    at = r["start_ms"] + sum(r["windows_ms"][:r["parts"].index(part) + 1])
             if why is not None:
                 self._append(ev, {"event": "refused", "session": session, "part": part})
                 raise Refused(refused(why))
@@ -219,11 +220,12 @@ def _orphan(ev: list[dict]) -> dict | None:
 
 
 def _schedule_ok(r: dict) -> None:
-    parts = r.get("parts") if isinstance(r, dict) else None
-    if not (isinstance(r, dict) and set(r) == {"start_ms", "period_ms", "parts"}
-            and all(type(r[k]) is int and r[k] >= 0 for k in ("start_ms", "period_ms")) and r["period_ms"] > 0
-            and isinstance(parts, list) and parts and all(isinstance(p, str) for p in parts) and len(set(parts)) == len(parts)):
-        raise ValueError(f'a release schedule is {{"start_ms": S, "period_ms": P > 0, "parts": [distinct names]}}, not {r!r}')
+    parts, windows = (r.get("parts"), r.get("windows_ms")) if isinstance(r, dict) else (None, None)
+    if not (isinstance(r, dict) and set(r) == {"start_ms", "parts", "windows_ms"} and type(r["start_ms"]) is int and r["start_ms"] >= 0
+            and isinstance(parts, list) and parts and all(isinstance(p, str) for p in parts) and len(set(parts)) == len(parts)
+            and isinstance(windows, list) and len(windows) == len(parts) and all(type(w) is int and w > 0 for w in windows)):
+        raise ValueError(f'a release schedule is {{"start_ms": S, "parts": [distinct names], "windows_ms": [one width > 0 a part]}}, '
+                         f'not {r!r}')
 
 
 Conn = tuple  # (reader, writer, close): a connection's two file objects and how to close it

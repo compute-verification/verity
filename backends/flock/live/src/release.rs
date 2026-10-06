@@ -10,9 +10,10 @@
 //!    before anything reaches the challenger.
 //! 2. Outer proofs go one at a time across streams and protocols: [`Record::slot`]. A holder that died before recording its
 //!    session's outcome is recorded as that session's stop by the next one to take the slot.
-//! 3. A recursive session opened with a release schedule (`release`: `start_ms`, `period_ms`, its `parts` in order) releases
-//!    part `j`'s proofs at `start_ms + (j + 1) * period_ms`, never earlier and never late: proofs ready early wait for that
-//!    time, and proofs not ready by it are a stop (a missed time). The schedule is recorded at the open, before the session.
+//! 3. A recursive session opened with a release schedule (`release`: `start_ms`, its `parts` in order, and one public
+//!    window a part, `windows_ms`) releases part `j`'s proofs at the end of its window, `start_ms + windows_ms[0] + ... +
+//!    windows_ms[j]`, never earlier and never late: proofs ready early wait for that time, and proofs not ready by it are a
+//!    stop (a missed time). The schedule is recorded at the open, before the session, and depends on nothing secret.
 //! 4. A stream opened with a failure `budget` (P1's `budget`, b) stops at its b-th failure: after it every outer session on
 //!    it is refused, and so is every open. A failure is a recursive session's stop (a missed time included), or a refusal
 //!    of a recursive session that had not stopped, on a stream that had not.
@@ -259,26 +260,29 @@ fn show(b: Option<u64>) -> String {
     b.map_or("None".into(), |b| b.to_string())
 }
 
-/// A release schedule (rule 3): `{"start_ms": S, "period_ms": P, "parts": [...]}`, with P > 0 and distinct parts.
+/// A release schedule (rule 3): `{"start_ms": S, "parts": [distinct names], "windows_ms": [one positive width a part]}`.
 pub fn schedule_ok(r: &Value) -> Result<(), String> {
     let keys: Vec<&String> = r.as_object().map(|m| m.keys().collect()).unwrap_or_default();
     let parts = r["parts"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>()).unwrap_or_default();
+    let windows = r["windows_ms"].as_array().map(|a| a.iter().filter_map(Value::as_u64).filter(|&w| w > 0).count());
     let distinct = parts.iter().collect::<std::collections::HashSet<_>>().len() == parts.len();
-    if keys.len() != 3 || r["start_ms"].as_u64().is_none() || r["period_ms"].as_u64().is_none_or(|p| p == 0) || parts.is_empty()
-        || parts.len() != r["parts"].as_array().map_or(0, Vec::len) || !distinct {
-        return Err(format!("a release schedule is {{\"start_ms\": S, \"period_ms\": P > 0, \"parts\": [distinct names]}}, not {r}"));
+    if keys.len() != 3 || r["start_ms"].as_u64().is_none() || parts.is_empty() || parts.len() != r["parts"].as_array().map_or(0, Vec::len)
+        || !distinct || windows != Some(parts.len()) || r["windows_ms"].as_array().map_or(0, Vec::len) != parts.len() {
+        return Err(format!("a release schedule is {{\"start_ms\": S, \"parts\": [distinct names], \"windows_ms\": [one width > 0 a part]}}, not {r}"));
     }
     Ok(())
 }
 
-/// When `part`'s proofs are released under `release` (rule 3), or None when the recursive session has no schedule.
+/// When `part`'s proofs are released under `release` (rule 3): the end of its window, `start_ms` plus the widths of the
+/// windows up to and including its own; None when the recursive session has no schedule.
 pub fn release_ms(release: &Value, part: &str) -> Result<Option<u64>, String> {
     if release.is_null() {
         return Ok(None);
     }
     let j = release["parts"].as_array().and_then(|a| a.iter().position(|p| p == part))
         .ok_or_else(|| format!("{part} has no place in its release schedule"))?;
-    Ok(Some(release["start_ms"].as_u64().unwrap_or_default() + (j as u64 + 1) * release["period_ms"].as_u64().unwrap_or_default()))
+    let widths: u64 = release["windows_ms"].as_array().map_or(0, |w| w[..=j].iter().filter_map(Value::as_u64).sum());
+    Ok(Some(release["start_ms"].as_u64().unwrap_or_default() + widths))
 }
 
 /// JSON as Python's `json.dumps(v, sort_keys=True)` writes it: `", "` and `": "` between items, keys sorted, every
@@ -548,17 +552,21 @@ mod tests {
     #[test]
     fn proofs_leave_at_their_release_time_and_a_missed_time_is_a_stop() {
         let rec = scratch("schedule");
-        let sched = json!({"start_ms": 1000, "period_ms": 500, "parts": ["L0", "L1", "alg"]});
+        let sched = json!({"start_ms": 1000, "parts": ["L0", "L1", "alg"], "windows_ms": [500, 300, 900]});
         let sid = opened(&rec, Some(sched), None);
         let c = fake(1200);
         let o = outer_session(&rec, &sid, "L1", &c, || {}, || Ok(()), |_| Ok(()), |_| (true, ())).unwrap();
         assert_eq!(o.outcome, "release");
-        assert_eq!(c.slept.get(), Some(2000));
-        let c = fake(2501);
+        assert_eq!(c.slept.get(), Some(1800));
+        let c = fake(2701);
         let o = outer_session(&rec, &sid, "alg", &c, || {}, || Ok(()), |_| Ok(()), |_| -> (bool, ()) { panic!("sent late") }).unwrap();
-        assert_eq!((o.outcome, o.why.as_deref()), ("stop", Some("missed its release time (2501 ms, after 2500 ms)")));
+        assert_eq!((o.outcome, o.why.as_deref()), ("stop", Some("missed its release time (2701 ms, after 2700 ms)")));
         assert_eq!(c.slept.get(), None);
-        let sid2 = opened(&rec, Some(json!({"start_ms": 0, "period_ms": 1, "parts": ["L0"]})), None);
+        for bad in [json!({"start_ms": 0, "parts": ["L0"], "windows_ms": [0]}), json!({"start_ms": 0, "parts": ["L0", "L0"], "windows_ms": [1, 1]}),
+                    json!({"start_ms": 0, "parts": ["L0"], "windows_ms": [1, 1]}), json!({"start_ms": 0, "parts": ["L0"]})] {
+            assert!(rec.open("s", None, Some(&bad)).is_err(), "{bad}");
+        }
+        let sid2 = opened(&rec, Some(json!({"start_ms": 0, "parts": ["L0"], "windows_ms": [1]})), None);
         assert_eq!(rec.admit(&sid2, "L1").unwrap(), Err(format!("recursive session {sid2}: L1 has no place in its release schedule")));
     }
 

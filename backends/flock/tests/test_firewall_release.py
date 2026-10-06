@@ -220,7 +220,9 @@ def test_a_stream_stops_at_its_budget_and_the_python_relay_keeps_no_schedule(tmp
     assert out["why"] == "FIREWALL-REFUSED: stream pouw stopped at its failure budget (1 of 1)" and fw.failures("pouw") == 1
     with pytest.raises(FW.Refused, match=r"stream pouw stopped at its failure budget \(1 of 1\)"):
         fw.open("pouw", budget=1)
-    s = fw.open("other", release={"start_ms": 0, "period_ms": 1000, "parts": ["L0"]})
+    with pytest.raises(ValueError, match="a release schedule is"):
+        fw.open("other", release={"start_ms": 0, "parts": ["L0"], "windows_ms": [0]})
+    s = fw.open("other", release={"start_ms": 0, "parts": ["L0"], "windows_ms": [1000]})
     fw.finish(s)
     out, _ = _outer(fw, s, "L0", HONEST, Challenger(log, "s"))
     assert out["why"].endswith("its release schedule needs the Rust firewall (flock-circuit prove --firewall-state)")
