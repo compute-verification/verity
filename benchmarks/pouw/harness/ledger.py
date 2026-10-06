@@ -1,6 +1,6 @@
 """The attempt ledger: every (arm, shape) a verified run reports becomes one evidence-store record of kind
 ``kernel-attempt/v1``, so what was tried, on which kernel, with what result and why it was kept or dropped is a query, not
-prose (docs/pouw/kernel-tooling-report.md in the project store, recommendation 1).
+prose.
 
 A record's meta is everything the run knows, numbers included: the kernel variant (`verity.protocols.accounting.work.pouw.serving.KernelVariant`'s
 id, ``{family}-{device}/{source_sha256[:12]}``), the parent attempt, the tier, the harness commit and gate version, the
@@ -42,7 +42,7 @@ REPO = HERE.parents[2]
 
 KIND = "kernel-attempt/v1"
 #: the gate code's version, so a record's validity is derived from it rather than voided by hand: 1 = the reference verifier
-#: accepts the timed run's own transcript (server.md 08:35Z); 2 = outputs poisoned before the dumped call and a no-write
+#: accepts the timed run's own transcript (08:35Z); 2 = outputs poisoned before the dumped call and a no-write
 #: negative control the verifier rejects (11:50Z)
 GATES = "pouw-gates/2"
 GATES_REQUIRED = 2

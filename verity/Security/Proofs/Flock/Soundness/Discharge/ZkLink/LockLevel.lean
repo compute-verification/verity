@@ -5,10 +5,10 @@ import Proofs.Flock.Soundness.CompiledAlign
 # The compiled masked level 0 in lockstep with the oracle one
 
 `CompiledLock`'s lockstep with level 0's rows `w₀` lanes wide (`AgreeZ`: `AgreeRep` with level 0's lanes `< w₀`, the
-witness lanes and both reps' extra lanes of one tree). `lockRecZ` is `lockRec` over `AgreeZ`; `lockLigPadZ` runs M1's
-masked level 0 (`ligeritoPadZK`) beside its compiled form (`ligeritoPadZC`), whose level-0 consistency value is computed
-from the opened rows (`padColumnO_eq`). The folds and the OOD samples are `CompiledLock`'s (`lockFold`, `lockTwoOod`),
-the masked lane rounds and `ρ` the same game on both sides (`lockFoldZK`, `Lock.same`).
+witness lanes and both reps' extra lanes of one tree). `lockRecZ` is `lockRec` over `AgreeZ`; `lockLigPadZ` runs C-Flock
+ZK's masked level 0 (`ligeritoPadZK`) beside its compiled form (`ligeritoPadZC`), whose level-0 consistency value is
+computed from the opened rows (`padColumnO_eq`). The folds and the OOD samples are `CompiledLock`'s (`lockFold`,
+`lockTwoOod`), the masked lane rounds and `ρ` the same game on both sides (`lockFoldZK`, `Lock.same`).
 -/
 
 namespace FlockSoundness.Discharge.ZkLink
@@ -479,7 +479,7 @@ def lockLigTailZ (A : Arith F K) (r : ℕ) (hr : r < 2) (sch : Schedule) (t : �
             (lockTwoOod A r _ (fun _ => True) _ 0 0 rfl s (fromMsg msg' s) (fun _ => s) (fun _ => fromMsg msg' s)
               fun _ _ => ⟨rfl, rfl⟩)
 
-/-- **M1's masked level 0 in lockstep** (`ligeritoPadZK` beside `ligeritoPadZC`): equal lane-phase rows, and on
+/-- **C-Flock ZK's masked level 0 in lockstep** (`ligeritoPadZK` beside `ligeritoPadZC`): equal lane-phase rows, and on
 openings agreeing with `C₀` and the fixed tables the compiled verdict is the oracle's. -/
 def lockLigPadZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P : Pads0 np e) (t : ℕ) (c₀ : F) (T : F)
     (b : ℕ → F) (C₀ : Oracle F) :

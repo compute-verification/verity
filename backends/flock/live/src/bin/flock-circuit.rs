@@ -232,7 +232,7 @@ fn identity(c: &Composite) -> Value {
            "hashes": {"merkle": format!("{} (every Ligerito level)", merkle(c).as_str()),
                       "round_digest": "sha512 (framing: the coin server retains every round's bytes and the replay compares them)",
                       "statement_digest": "sha512", "sigma": "sha512", "coin_commitment": "sha512",
-                      "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
+                      "coin_derivation": "sha512 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
                       "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "hm96-sha512/row/v1 over sha512/row/v1"},
            "hooks": hooks});
     // only under FC_COINS=os: the statement digest pins the identity, and the default's must not move

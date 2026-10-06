@@ -4,10 +4,10 @@ import Proofs.Flock.Soundness.Lowering
 # A program's own instance of each unit's rows
 
 `Prog.isRowsUnit` gives each unit of a program an instance of its rows only as `Nonempty`. An instance chosen from it
-need not wire the unit's constant where the program does: a unit whose rows hold a row `[one]·[one]` (a VU's copy
-constant) and a row `[x]·[x]` reading an input has an instance that swaps the two, with input `x` on the constant's gate
-and the constant on `x`'s source. So the end-to-end theorem's `hConst` (`Partition.ConstCols`) is a fact about the
-instance a `ProgPlaces` carries, and holds for the program's own wiring:
+need not wire the unit's constant where the program does: a unit whose rows hold a row `[one]·[one]` (a template
+instance's copy constant) and a row `[x]·[x]` reading an input has an instance that swaps the two, with input `x` on the
+constant's gate and the constant on `x`'s source. So the end-to-end theorem's `hConst` (`Partition.ConstCols`) is a fact
+about the instance a `ProgPlaces` carries, and holds for the program's own wiring:
 
 * `Prog.rowsWireC p u`, `Prog.instC p outs u`: unit `u`'s rows wired as `p` wires them (`Prog.rowsWire_last`, lifted
   through later units by `Prog.rowsWire_snoc`). For the unit `snoc p R ins one hone` adds, input `c` is on `ins c`, its

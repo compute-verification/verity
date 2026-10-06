@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Merkle
 
 The one computational step of the public-circuit zero-knowledge proof (`docs/zk-proof-public.md` in the Project store, §4.1
 T6). The verifier commits to every coin of a session with `coin-tree/hm96-sha512/v1` (`backends/flock/live/src/coin_tree.rs`,
-M2): per (stream, round), a block of coins is chained, `T_i = H(CHAIN ‖ c_i ‖ T_{i+1})`; the round's digest is
+C-Flock ZK): per (stream, round), a block of coins is chained, `T_i = H(CHAIN ‖ c_i ‖ T_{i+1})`; the round's digest is
 `x = H(ROUND ‖ stream ‖ round ‖ T_0)`; the leaf is the hm96 leaf of `x` under a salt, `H(lp ‖ b ‖ c)` with `b = mix(x, y)`
 and `c = H(sp ‖ y)`; the leaves sit in one SHA-512 tree. An opening of `n` coins is the coins, `T_n`, the salt and the path.
 
