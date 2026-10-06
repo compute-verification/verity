@@ -619,7 +619,7 @@ Audit wire vectors:
 `p2-audit-wire/v4` and its reference verifier, and `memory_challenger.py` audits with v4's leaves and mode-0 derivation
 over the harness's own responder wire, not these frames. The registered scheme `p2-16448/v4`
 (`verity.protocols.accounting.space.pous.schemes.p2`) follows the maps, the values, the profile, the tweak rejection, k and
-the hash, and its keys are §4's streams, but it runs the generic protocol's setup, so three things differ:
+the hash, and its keys are §4's streams, but it runs the generic protocol's setup, so four things differ:
 
 | Topic | v4 | `p2-16448/v4` |
 |---|---|---|
