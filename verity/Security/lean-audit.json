@@ -49,6 +49,7 @@
   "Definitions.NetworkCertifier",
   "Specs.NetworkCertifier.Assumptions",
   "Specs.NetworkCertifier.Guarantees",
+  "NetworkCertifier",
   "Proofs.Flock.Verifier",
   "Flock",
   "Proofs.Flock.Level3",
