@@ -2,7 +2,8 @@
 certifier's certificates and the memory challenger's records, and the reference of their in-proof verifier
 (`verity.primitives.commitments.gates.lms`).
 
-**The hash.** ``H(x) = SHA-512(x)[:N]``, N = 32 (SHA-512 truncated, the default) or 64. Every hash input is RFC 8554's, with
+**The hash.** ``H(x) = SHA-512(x)[:N]``, N = 32 (SHA-512 truncated, the default) or 64 (or `TOY_N` = 8, asked for by name,
+for circuit-check's binding of the verifier). Every hash input is RFC 8554's, with
 its domain separators: a chain step ``H(I || u32(q) || u16(i) || u8(j) || tmp)``, the message
 ``Q = H(I || u32(q) || u16(D_MESG) || C || message)``, the one-time public key ``K = H(I || u32(q) || u16(D_PBLC) || z_0 ||
 ... || z_{P-1})``, a leaf ``H(I || u32(r) || u16(D_LEAF) || K)`` and an interior node ``H(I || u32(r) || u16(D_INTR) || left
@@ -25,9 +26,9 @@ Standard library only, and slow: keygen hashes 2^H P (2^W - 1) times, so the tes
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-__all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "Params", "PrivateKey", "Signature", "digits", "key", "keygen",
+__all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "TOY_N", "Params", "PrivateKey", "Signature", "digits", "key", "keygen",
            "public_key", "root_of", "sign", "verify"]
 
 D_PBLC, D_MESG, D_LEAF, D_INTR = 0x8080, 0x8181, 0x8282, 0x8383
@@ -41,15 +42,22 @@ def _u16(x: int) -> bytes:
     return x.to_bytes(2, "big")
 
 
+#: The one N below 32 that `Params` admits, and only with ``toy=True``: one SHA-512 word, the smallest value of the same byte and
+#: word layout, for circuit-check's binding of the in-proof verifier. Never a key's: 64 bits of hash is no signature.
+TOY_N = 8
+
+
 @dataclass(frozen=True)
 class Params:
     N: int
     W: int
     H: int
+    toy: bool = field(default=False, compare=False)
 
     def __post_init__(self) -> None:
-        if self.N not in (32, 64) or self.W not in (1, 2, 4, 8) or isinstance(self.H, bool) or not 1 <= self.H <= 30:
-            raise ValueError(f"LMS parameters are N in (32, 64), W in (1, 2, 4, 8), 1 <= H <= 30, not {self}")
+        sizes = (TOY_N, 32, 64) if self.toy else (32, 64)
+        if self.N not in sizes or self.W not in (1, 2, 4, 8) or isinstance(self.H, bool) or not 1 <= self.H <= 30:
+            raise ValueError(f"LMS parameters are N in {sizes}, W in (1, 2, 4, 8), 1 <= H <= 30, not {self}")
 
     @property
     def U(self) -> int:
