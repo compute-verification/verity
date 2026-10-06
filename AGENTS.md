@@ -59,8 +59,9 @@ first. Do not scaffold directories the README merely anticipates.
     import of the catalog is the one exception to "core imports no other distribution").
     `verity.protocols.verification.sampled_proofs` is the one-stage
     audit (`one_stage`: registration, the verifier's draw over a partition's proof units, and the
-    audit record with its profile); the two-stage law, its draws from the verifier's own
-    randomness, verification plans and consumers are experimental's (`verity_experimental.sampled_proofs`). The Lean states it; its `README.md` signposts that
+    audit record with its profile) and the two-stage law (`two_stage`: a probability or any one-stage law over replay
+    units, then proof units in each drawn one, all drawn from the verifier's own randomness); verification plans and
+    consumers are experimental's (`verity_experimental.sampled_proofs`). The Lean states it; its `README.md` signposts that
     Lean and lists what it does not state yet. `benchmarks/one_stage` runs the one-stage audit end to end with
     C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
     that `--m0-pythonpath` names, not from the checkout) and the Lean
@@ -106,7 +107,7 @@ first. Do not scaffold directories the README merely anticipates.
     (`verity_kernels.tc`: the numpy kernels of the catalog's Definitions, which register them lazily);
     `kernels/hash_gpu` is the frozen backends' CUDA hashing, imported by path.
   - `experimental/` (`verity-experimental`, `verity_experimental`): constructions under development or kept for study
-    (`commitments.multiproof`, `private_circuits`, sampled proofs' law, plans and consumers); `verity` never imports it.
+    (`commitments.multiproof`, `private_circuits`, sampled proofs' plans and consumers); `verity` never imports it.
 - `tools/research/`: development infrastructure for running, observing, and
   coordinating recorded work (`research run | status | inspect | fetch |
   compare`). Separate distribution; must not import `verity`, and a test
