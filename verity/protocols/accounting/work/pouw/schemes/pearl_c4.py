@@ -1145,7 +1145,7 @@ class PearlC4:
             gamma0=None,
             omega=Fraction(1),
             claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", *(("cr/sha-512",) if hashing != "h0" else ()),
-                    "cr/sha-256", "device-reproducibility", "beacon-unpredictability"),
+                    "cr/sha-256", "device-reproducibility", "live-verifier"),
             hypotheses=(
                 "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
                 "this job's salt, seed-B = keyed(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "

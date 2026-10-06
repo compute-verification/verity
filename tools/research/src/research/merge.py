@@ -49,11 +49,12 @@ remote is the main they last ran for, and every `research merge` that can change
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
 from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`); the gate
-reads each again when the tip lands, with its ready mark and grants (`unready`).
+reads each again when the tip lands, with its grants (`unready`); a train member needs no ready mark, since the train's own check
+is the gate (Daniel, 6 Oct).
 A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
 both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
-that doesn't parse (`_merge`).  Before a train is built, each ref whose change needs a TRAIN_GRANTS grant under
-`research queue`'s rules is refused until pull request N holds it at that head, or at an earlier
+that doesn't parse (`_merge`).  Before a train is built, each ref whose change needs a grant under
+`research queue`'s rules (any role) is refused until pull request N holds it at that head, or at an earlier
 head whose change against the train's base this one repeats file for file and byte for byte (a restack or a merge of `main`:
 `research.queue.carry`, which prints the head it carried from) (`ungranted`).
 
@@ -377,7 +378,7 @@ def tree_identical(repo: Path, commit: str) -> bool:
 
 def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print, remote: str = "origin") -> tuple[str, str]:
     """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise, including a pull request it
-    merges whose head on ``remote`` moved or that lacks its ready mark or a grant (`unready`)."""
+    merges whose head on ``remote`` moved or that lacks a grant (`unready`)."""
     commit = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
     head = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
     if head != into:
@@ -763,14 +764,9 @@ def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
     return chain
 
 
-#: the grants of `research queue`'s rules (role: what it attests) a train's pull request must hold at its pinned head before its
-#: check is spent; the lander applies the rules' other grants by hand
-TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed guarantees "
-                                      "and the definitions they read (lane contract §5)"}
-
-
 def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=print) -> list[str]:
-    """Why each train ref whose change from ``base`` needs a TRAIN_GRANTS grant under the queue's rules (as ``base`` has them;
+    """Why each train ref whose change from ``base`` (from the last ref pinned before it that it stacks on, if any) needs a grant
+    under the queue's rules (as ``base`` has them, every role;
     none when it has no rules file) can't go in: pull request N lacks the `grant` label on `pr:N@SHA` at its pinned head, or on
     an earlier head it only restacks or merges ``base`` into (`research.queue.carry`, printed as it carries), and, for a
     lean-audit.json change, a `lean_review` on either that printed it whole as the same statements (`research.queue.reviewed`);
@@ -792,9 +788,15 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
     out = []
     try:
         lean = {g.role for g in rules.grants if g.lean_audit}
+        by = {g.role: g.by for g in rules.grants}
+        below: list[str] = []
         for label, sha in pins:
             pr = int(label[1:]) if label.startswith("#") else None
-            need = sorted(rules.needs(repo, base, sha, (lambda: grants.reviews(pr, sha)) if pr else list, log=say) & set(TRAIN_GRANTS))
+            # a ref stacked on one pinned before it is judged on what it adds to that one, as `unready` judges it at landing
+            onto = next((b for b in reversed(below) if _git(repo, "merge-base", "--is-ancestor", b, sha, check=False).returncode == 0),
+                        base)
+            below.append(sha)
+            need = sorted(rules.needs(repo, onto, sha, (lambda: grants.reviews(pr, sha)) if pr else list, log=say))
             if need and pr is None:
                 out.append(f"{label} needs the {', '.join(need)} grant ({path}), which only a pull request's pinned head can hold: "
                            f"name it as N@SHA")
@@ -802,7 +804,7 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
             lacking = set(need) - grants(pr, sha) if need else set()
             if missing := sorted(lacking - grants.carried(pr, sha, lacking)):
                 target = grant_target(pr, sha)
-                out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: {TRAIN_GRANTS[g]}); once it has it, "
+                out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: from {by.get(g) or 'its rule, which names no `by`'}); once it has it, "
                         f"`research data label {target} grant {g} --by REVIEWER` (one on an earlier head counts only when this "
                         f"head just restacks it or merges main into it: `research.queue.carry`)" + (
                             f". A change `audit.py --update` (`--moved MOVES.json` for a move) prints only as the same statements "
@@ -828,19 +830,22 @@ def queue_rules(repo: Path, base: str):
 MERGED_PR = re.compile(r"Merge #(\d+) \(([0-9a-f]{7,40})\)")
 
 
-def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]:
-    """Why ``commit`` can't land for a pull request it merges above the checkout's HEAD (a first-parent `Merge #N (SHA)` commit
-    `_chain` wrote, whose second parent is the pinned head): N's head on ``remote`` is no longer that head, closed or not, or
-    `pr:N@{head}` lacks `ready = true` asserted by someone other than `merge-queue` (the owner's word; who asserted it isn't matched
-    to the PR's owner, which is mostly a Cursor agent id with no map to a lane) or a grant its change needs under the queue's rules
-    as HEAD has them (`Rules.needs`, every role, not only TRAIN_GRANTS) for what it adds onto the train below its merge (a PR stacked
-    on another in the train needs no grant for that one's change), read after pulling the labels from the store's remote; or N is
-    stacked on another pull request whose head on ``remote`` is in what N adds, so neither on main nor pinned below N at that
-    head (a grant at N's head covers N's own change, not its base's).  What can't be read refuses."""
-    from .queue import QueueError, StoreGrants, grant_target
+def adds_nothing(repo: Path, commit: str, head: str) -> bool:
+    """Whether merging ``head`` into ``commit`` leaves ``commit``'s own tree: what ``head`` has, ``commit`` has already (a merge of
+    `main` into a pull request the tip already holds)."""
+    r = _git(repo, "merge-tree", "--write-tree", commit, head, check=False)
+    return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
 
-    out, pins = [], []
-    for line in _git(repo, "log", "--first-parent", "--format=%P%x00%s", f"HEAD..{commit}").stdout.splitlines():
+
+def unstacked(repo: Path, commit: str, base: str, remote: str, log=print) -> tuple[list[str], list[tuple[int, str, str]]]:
+    """The structural part of the merge gate, which no label can fix: why ``commit`` can't land on ``base`` for a pull request it
+    merges above ``base`` (a first-parent `Merge #N (SHA)` commit `_chain` wrote, whose second parent is the pinned head).  The
+    merge names one head and merges another; N's head on ``remote`` is no longer that head, closed or not, and merging the new one
+    would change ``commit`` (`adds_nothing`; a head that only merged `main` in lands as the pinned one); or N is stacked on another
+    pull request whose head on ``remote`` is in what N adds, so neither on main nor pinned below N at that head.  Also the (N,
+    pinned head, the train below its merge) of each pin that lands, for `unready` to read labels at.  What can't be read refuses."""
+    out, pins, ok = [], [], []
+    for line in _git(repo, "log", "--first-parent", "--format=%P%x00%s", f"{base}..{commit}").stdout.splitlines():
         parents, _, subject = line.partition("\0")
         if m := MERGED_PR.fullmatch(subject):
             onto, sha = (parents.split() + ["", ""])[:2]
@@ -848,40 +853,54 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
                 pins.append((int(m[1]), sha, onto))
             else:
                 out.append(f"#{m[1]}'s merge names {m[2]} but merges {sha[:12] or 'nothing'}")
-    grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)))
+    if not pins:
+        return out, ok
+    r = _git(repo, "ls-remote", remote, "refs/pull/*/head", check=False)
+    if r.returncode:
+        raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {remote}'s pull request heads can't be "
+                      f"read ({(r.stderr or r.stdout).strip()[-200:]})")
     prs: dict[str, list[int]] = {}
-    if pins:
-        r = _git(repo, "ls-remote", remote, "refs/pull/*/head", check=False)
-        if r.returncode:
-            raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {remote}'s pull request heads can't be "
-                          f"read ({(r.stderr or r.stdout).strip()[-200:]})")
-        for line in r.stdout.splitlines():
-            h, _, ref = line.partition("\t")
-            prs.setdefault(h, []).append(int(ref.split("/")[2]))
-    try:
-        rules = queue_rules(repo, "HEAD") if pins else None
-        for n, sha, onto in pins:
-            r = _git(repo, "fetch", "-q", remote, f"pull/{n}/head", check=False)
-            head = None if r.returncode else _git(repo, "rev-parse", "FETCH_HEAD").stdout.strip()
-            if head != sha:
+    for line in r.stdout.splitlines():
+        h, _, ref = line.partition("\t")
+        prs.setdefault(h, []).append(int(ref.split("/")[2]))
+    for n, sha, onto in pins:
+        r = _git(repo, "fetch", "-q", remote, f"pull/{n}/head", check=False)
+        head = None if r.returncode else _git(repo, "rev-parse", "FETCH_HEAD").stdout.strip()
+        if head != sha:
+            if head and adds_nothing(repo, commit, head):
+                log(f"research merge: #{n}'s head moved from {sha[:12]} to {head[:12]}, which adds nothing to {commit[:12]} "
+                    f"(merging it leaves the tip's tree); it lands as {sha[:12]}, and the sweep closes it")
+            else:
                 out.append(f"#{n} was merged at {sha[:12]}, but its head on {remote} " + (
                     f"is now {head[:12]}: rebuild the train on the new head and check that" if head else
                     f"can't be read ({(r.stderr or r.stdout).strip()[-200:]})"))
                 continue
-            for h in _git(repo, "rev-list", f"{onto}..{sha}").stdout.split():
-                for m in prs.get(h, []):
-                    # rev-list's walk can stop early on skewed commit dates and list a commit `onto` has
-                    if m != n and _git(repo, "merge-base", "--is-ancestor", h, onto, check=False).returncode:
-                        out.append(f"#{n} at {sha[:12]} is stacked on #{m} at {h[:12]}, which is neither on main nor pinned below "
-                                   f"it in the tip at that head: pin {m}@{h[:9]} before it, or rebase #{n} off it")
-            if (by := grants.readied_by(n, sha)) == {"merge-queue"}:
-                out.append(f"#{n}'s ready at {sha[:12]} is by merge-queue, not its owner: the owner relabels it (research data "
-                           f"label {grant_target(n, sha)} ready true --by LANE)")
-            elif not by:
-                out.append(f"#{n} is not marked ready at {sha[:12]} (`ready = true` on {grant_target(n, sha)}: `research queue "
-                           f"ready {n} --by LANE`)")
+        ok.append((n, sha, onto))
+        for h in _git(repo, "rev-list", f"{onto}..{sha}").stdout.split():
+            for m in prs.get(h, []):
+                # rev-list's walk can stop early on skewed commit dates and list a commit `onto` has
+                if m != n and _git(repo, "merge-base", "--is-ancestor", h, onto, check=False).returncode:
+                    out.append(f"#{n} at {sha[:12]} is stacked on #{m} at {h[:12]}, which is neither on main nor pinned below "
+                               f"it in the tip at that head: pin {m}@{h[:9]} before it, or rebase #{n} off it")
+    return out, ok
+
+
+def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]:
+    """Why ``commit`` can't land for a pull request it merges above the checkout's HEAD: what `unstacked` names, or `pr:N@{head}`
+    lacks a grant its change needs under the queue's rules as HEAD has them (`Rules.needs`, every role) for what it adds onto the
+    train below its merge (a PR stacked on another in the train needs no grant for that one's change; a grant at N's head covers
+    N's own change, not its base's), on that head or carried from another (`research.queue.carry`), read after pulling the labels
+    from the store's remote.  What can't be read refuses."""
+    from .queue import QueueError, StoreGrants
+
+    out, pins = unstacked(repo, commit, "HEAD", remote, log)
+    grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)), repo=repo, base="HEAD")
+    try:
+        rules = queue_rules(repo, "HEAD") if pins else None
+        for n, sha, onto in pins:
             need = rules.needs(repo, onto, sha, lambda n=n, sha=sha: grants.reviews(n, sha)) if rules else set()
-            if missing := need - grants(n, sha):
+            lacking = need - grants(n, sha)
+            if missing := lacking - grants.carried(n, sha, lacking):
                 out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
     except QueueError as e:
         raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {e}") from e
@@ -954,8 +973,9 @@ def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, li
             allow_removal: tuple[str, ...] = ()) -> tuple[str, str]:
     """Build a train for its check without recording or landing anything: ``refs`` (`pinned`), refused while one lacks a grant
     (`ungranted`), merged in order onto ``onto`` as ``remote`` has it (the target, or the prep branch of a train ahead, to stack
-    on it) in a scratch worktree, refused at the first that doesn't merge or when the result loses lines no ref removes itself
-    (`reverted`, but for the paths of ``allow_removal``); ``lint`` run on the result there; its tip pushed to
+    on it) in a scratch worktree, refused at the first that doesn't merge, when the merge gate's structural checks (`unstacked`)
+    would refuse it whatever its labels, or when the result loses lines no ref removes itself (`reverted`, but for the paths of
+    ``allow_removal``); ``lint`` run on the result there; its tip pushed to
     ``remote`` as ``branch``, never forced, and read back.  Every step names the scratch worktree or ``repo``'s object store,
     never its checkout.  Returns (the tip, its tree)."""
     r = _git(repo, "fetch", "-q", remote, onto, check=False)
@@ -968,6 +988,8 @@ def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, li
     _git(repo, "worktree", "add", "-q", "--detach", str(tree), base)
     try:
         tip = _chain(tree, pins, stamp)[-1]
+        if why := unstacked(repo, tip, base, remote)[0]:
+            raise Refused("; ".join(why) + f": the merge gate would refuse the train ({tip[:12]}); nothing was pushed")
         if lost := reverted(repo, base, tip, pins, allow_removal):
             raise Refused(f"the train {tip[:12]} would revert what landed: " + "; ".join(lost) + REVERTED_HINT + "; nothing was pushed")
         if subprocess.run(lint, cwd=tree).returncode:
@@ -1059,7 +1081,8 @@ def landed_in(repo: Path, commit: str, tip: str) -> str:
 
 
 def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool = False, gh=None, log=print) -> tuple[list[int], list[int]]:
-    """Close every open pull request whose head is on ``remote``'s ``into`` (with a comment naming the commit it landed in) and
+    """Close every open pull request whose head is on ``remote``'s ``into``, or whose pinned head a train landed and whose head since
+    adds nothing to it (`adds_nothing`; its branch is kept), with a comment naming the commit it landed in, and
     retarget onto ``into`` every open pull request whose base branch's tip is on it, deleting each closed one's head branch that no
     open pull request uses.  Idempotent: what it closed is no longer open, and what it retargeted is based on ``into``.  Returns
     (closed, retargeted) PR numbers, ascending."""
@@ -1083,6 +1106,12 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
         out = _git(repo, "ls-remote", remote, *[f"refs/heads/{b}" for b in bases]).stdout
         tips = {ref.removeprefix("refs/heads/"): sha for sha, ref in (line.split() for line in out.splitlines())}
     moved = [p for p in rest if p["baseRefName"] in tips and on(tips[p["baseRefName"]])]
+    # a PR whose pinned head landed in a train and whose head since adds nothing to `into` (it merged `main` in)
+    pinned = {int(m[1]): parents.split()[1] for parents, _, subject in (line.partition("\0") for line in _git(
+        repo, "log", "-n", "5000", "--format=%P%x00%s", "--grep", r"^Merge #[0-9]", tip).stdout.splitlines())
+        if (m := MERGED_PR.fullmatch(subject)) and len(parents.split()) == 2}
+    done += [p for p in rest if p not in moved and p["number"] in pinned and adds_nothing(repo, tip, p["headRefOid"])]
+    rest = [p for p in rest if p not in done]
     verb = "would " if dry_run else ""
     for p in moved:
         log(f"research merge: {verb}retarget #{p['number']} from {p['baseRefName']} (on {remote}/{into}) onto {into}")
@@ -1091,14 +1120,16 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     # a closed PR's head branch goes too, unless an open PR still uses it (as its head, or as a base the retargets left)
     used = {p["headRefName"] for p in rest} | {p["baseRefName"] for p in rest if p not in moved}
     for p in done:
-        landed = landed_in(repo, p["headRefOid"], tip)
+        later = not on(p["headRefOid"])
+        landed = landed_in(repo, pinned[p["number"]] if later else p["headRefOid"], tip)
         subject = _git(repo, "log", "-1", "--format=%s", landed).stdout.strip()
-        note = f"Merged into {into} at {landed[:12]} ({subject})."
+        note = f"Merged into {into} at {landed[:12]} ({subject})." + (
+            f" Its head since, {p['headRefOid'][:12]}, adds nothing to {into}." if later else "")
         log(f"research merge: {verb}close #{p['number']} ({p['headRefName']}): {note}")
         if not dry_run:
             gh("pr", "close", str(p["number"]), "--comment", note)
         head = p["headRefName"]
-        if head in used:
+        if head in used or later:
             continue
         log(f"research merge: {verb}delete {remote}'s branch {head} (#{p['number']}'s head, on {into})")
         if not dry_run:

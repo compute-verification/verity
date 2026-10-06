@@ -36,7 +36,7 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
 * **Voluntary rows (V-EX; research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md`` §6.13, the assessor's B at
   17:32Z).**
   - A record may give up up to ⌈m/64⌉ A rows (`voluntary_a`), and a weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same
-    in every unit of the weight). They are committed in `records_root` with the excluded rows, before the draws' beacon.
+    in every unit of the weight). They are committed in `records_root` with the excluded rows, before the draw coin.
   - A voluntary row earns no credit. Its words are still formed, checked and hashed on every drawn tile that holds it.
   - It is exempt from the two-sided per-row check and R1, and it opens no exclusion tile.
   - The tile cap and R1 read credited rows only, as before. Giving up credit never helps a cheater, and the declaration
@@ -44,12 +44,12 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
 * **The sampling guarantee is per credited cell.** The draws are weighted by the credited cells' `wref`, and a drawn
   tile's uncredited cells (filler, excluded or voluntary) never count as coverage. Volunteering a tile's other rows only
   lowers that tile's weight to its credited cells, which is exactly the bound claimed.
-* **The draws (F8)** are keyed by a drand quicknet round published after the verifier recorded the prover's commitment
-  (the transcript root and the records root), through `verity.primitives.randomness.derive`.
-  - `audit` verifies the round's BLS signature against the pinned key (`verity.primitives.crypto.beacon`).
-  - It requires the round to be at least 2 rounds after the one due at `recorded_at`, the verifier's clock at the
-    commitment.
-  - `audit_replay` keeps the unverified draw for replays whose draws are Fiat–Shamir on the commitment.
+* **The draws (F8)** are keyed by the epoch's draw coin, through `verity.primitives.randomness.derive`.
+  - `audit` asks the challenger for the coin once the verifier has recorded the prover's commitment (the transcript root
+    and the records root, `draw_after`), and checks it against the epoch's coin commitment (`verity.protocols.accounting.work.pouw.coins`).
+    A coin that doesn't open against it, or that was opened after anything else, is refused.
+  - `audit_replay` keeps the unverified draw of a recorded run (`RecordedDraw`), for replays whose draws are Fiat–Shamir
+    on the commitment. It supports no claim about the draw.
 * **Other row formats.** A scheme with its own row encoding, per-row rules and debit (`pearl_c4`) brings
   `parse_row(row, k)`, `row_passes(words)` and `tile_cap(record, ops, rows, cols)`; Pearl-C v1's are this module's. Every
   scheme brings its `cap`.
@@ -67,10 +67,11 @@ from functools import partial
 from itertools import accumulate
 from math import lcm
 
-from verity.primitives.randomness import derive
+from verity.primitives.randomness import Key, derive
 
-from verity.primitives.crypto import beacon as B
-from ..audit import Audit, Epoch, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash, opened_value
+from ..audit import (Audit, Epoch, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash, draw_coin,
+                     opened_value)
+from ..coins import Challenger
 from ..protocol import Context, Matmul, Shape, Tile, tagged
 from ..serving import HASH_FORMATS
 from . import pearl_c as C
@@ -81,6 +82,7 @@ from .pearl_c_device import SM120, Prices
 RECORDS_TAG = "verity/pouw/pearl-c/records/v2"
 SPLIT_TAG = "verity/pouw/pearl-c/split/v1"
 DRAW_DOMAIN = "verity/pouw/pearl-c-draw/v1"
+DRAW_AFTER_TAG = "verity/pouw/pearl-c/draw-after/v1"
 ALIGN = 128
 
 
@@ -382,22 +384,34 @@ class _TileRuleView:
 # ---- the audit --------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class Beacon:
-    """A public beacon round: its index and value."""
+class RecordedDraw:
+    """A recorded run's draw source: its round and value, for `audit_replay` alone."""
 
     round: int
     value: bytes
 
 
-def draw(scheme: C.PearlC, records: Sequence[UnitRecord], beacon: Beacon, transcript_root: bytes, records_digest: bytes,
-         salt: bytes, t: int) -> list[tuple[int, Tile]]:
-    """t work-weighted draws with replacement over the tiles with credited cells, keyed by the beacon round and the
-    commitment."""
+def draw_after(transcript_root: bytes, records_digest: bytes) -> bytes:
+    """What the verifier records before the challenger opens the draw coin: the transcript root and the records root."""
+    return tagged(DRAW_AFTER_TAG, transcript_root, records_digest)
+
+
+def draw_key(coin: bytes, transcript_root: bytes, records_digest: bytes, salt: bytes) -> Key:
+    """The draws' key from the epoch's draw coin and the commitment it was opened after."""
+    return derive(coin, DRAW_DOMAIN, {"transcript": transcript_root, "records": records_digest, "salt": salt})
+
+
+def replay_key(recorded: RecordedDraw, transcript_root: bytes, records_digest: bytes, salt: bytes) -> Key:
+    """A recorded run's draws' key, byte for byte as the run drew them."""
+    return derive(recorded.value, DRAW_DOMAIN, {"round": recorded.round, "transcript": transcript_root,
+                                                "records": records_digest, "salt": salt})
+
+
+def draw(scheme: C.PearlC, records: Sequence[UnitRecord], key: Key, t: int) -> list[tuple[int, Tile]]:
+    """t work-weighted draws with replacement over the tiles with credited cells, under `key` (`draw_key`)."""
     tk = [x for x in tickets(scheme, records) if x[2] > 0]
     if not tk:
         return []
-    key = derive(beacon.value, DRAW_DOMAIN, {"round": beacon.round, "transcript": transcript_root, "records": records_digest,
-                                             "salt": salt})
     cumulative = list(accumulate(w for _, _, w in tk))
     return [(tk[i][0], tk[i][1]) for i in (bisect_right(cumulative, key.uniform(cumulative[-1], j)) for j in range(t))]
 
@@ -448,39 +462,40 @@ def check_drawn(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records:
 
 
 def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
-          records: Sequence[UnitRecord], recorded_at: float, beacon: B.Round, t: int,
-          split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map,
-          chain: B.Chain = B.QUICKNET) -> WorkAudit:
-    """Check the splits and the records, draw t tiles by the records' credit with a verified beacon round after the
-    commitment, open one tile per excluded row, and accept iff every opened tile passes `check_drawn`.
-    - `recorded_at` is the verifier's clock (UNIX s) when it recorded the commitment (the transcript root and the
-      records root). The draw's round must be a verified round of `chain` at least `beacon.MARGIN` rounds after the one
-      due then (`beacon.check_after`), never read against a lagging view of the latest round.
+          records: Sequence[UnitRecord], challenger: Challenger, t: int,
+          split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
+    """Check the splits and the records, draw t tiles by the records' credit with the epoch's draw coin, open one tile
+    per excluded row, and accept iff every opened tile passes `check_drawn`.
+    - The verifier asks `challenger` for the draw coin only once it has recorded the commitment (`draw_after`), and the
+      coin must open against the epoch's coin commitment (`audit.draw_coin`).
     - `split_check(weight, split)` recomputes S from the calibration data by the pinned rule, and is required when any S
       is nonempty.
     - `tile_map(f, picks)` applies `check_drawn` to the opened tiles in order (a process pool's map checks them in
       parallel)."""
-    reason = B.check_after(chain, beacon, recorded_at)
-    if reason is not None:
-        return _audit(scheme, epoch, prover, transcript, splits, records, 0, Beacon(beacon.round, beacon.value), t,
-                      split_check, tile_map, reason)
-    return _audit(scheme, epoch, prover, transcript, splits, records, B.round_at(chain, recorded_at),
-                  Beacon(beacon.round, beacon.value), t, split_check, tile_map)
+    def key_of(digest: bytes) -> tuple[Key | None, str | None]:
+        root = transcript.commitment.root
+        coin, reason = draw_coin(epoch, challenger, draw_after(root, digest))
+        return (None, reason) if reason is not None else (draw_key(coin, root, digest, epoch.salt), None)
+
+    return _audit(scheme, epoch, prover, transcript, splits, records, t, split_check, tile_map, key_of)
 
 
 def audit_replay(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
-                 records: Sequence[UnitRecord], committed_round: int, beacon: Beacon, t: int,
+                 records: Sequence[UnitRecord], committed_round: int, recorded: RecordedDraw, t: int,
                  split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
-    """`audit` with an unverified draw, for replays of recorded runs whose draws are Fiat–Shamir on the commitment
-    (`pearl_c4_replay`): the beacon's round must only exceed `committed_round`.  It supports no claim of
-    `beacon-unpredictability`."""
-    return _audit(scheme, epoch, prover, transcript, splits, records, committed_round, beacon, t, split_check, tile_map)
+    """`audit` with a recorded run's unverified draw, for replays whose draws are Fiat–Shamir on the commitment
+    (`pearl_c4_replay`): the recorded round must only exceed `committed_round`.  It supports no claim about the draw."""
+    def key_of(digest: bytes) -> tuple[Key | None, str | None]:
+        if recorded.round <= committed_round:
+            return None, "the draws' recorded round is not after the commitment"
+        return replay_key(recorded, transcript.commitment.root, digest, epoch.salt), None
+
+    return _audit(scheme, epoch, prover, transcript, splits, records, t, split_check, tile_map, key_of)
 
 
 def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
-           records: Sequence[UnitRecord], committed_round: int, beacon: Beacon, t: int,
-           split_check: Callable[[int, Split], bool] | None, tile_map: Callable, beacon_reason: str | None = None
-           ) -> WorkAudit:
+           records: Sequence[UnitRecord], t: int, split_check: Callable[[int, Split], bool] | None, tile_map: Callable,
+           key_of: Callable[[bytes], tuple[Key | None, str | None]]) -> WorkAudit:
     if getattr(scheme, "forming", "v1") != "v1":
         raise ValueError("the work law is stated for forming v1")
     device = getattr(scheme, "device", None)
@@ -493,12 +508,8 @@ def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcrip
         return WorkAudit(Audit(False, (), (Verdict(-1, False, reason),), None), w_ref, credit, job)
 
     reason = check_records(epoch, splits, records)
-    if reason is None:
-        reason = beacon_reason
     if reason is None and len(transcript.activation_roots) != len(records):
         reason = "the transcript does not have one activation root per record"
-    if reason is None and beacon.round <= committed_round:
-        reason = "the draws' beacon round is not after the commitment"
     if reason is None:
         for w, sp in sorted(splits.items()):
             if sp.side and (split_check is None or not split_check(w, sp)):
@@ -508,8 +519,11 @@ def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcrip
         return reject(reason)
     verifier = Verifier(_TileRuleView(scheme), epoch)
     digest = records_root(epoch.salt, epoch.weights_root, splits, records)
+    key, reason = key_of(digest)
+    if reason is not None:
+        return reject(reason)
     ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
-    picks = draw(scheme, records, beacon, transcript.commitment.root, digest, epoch.salt, t) + exclusion_tiles(scheme, records)
+    picks = draw(scheme, records, key, t) + exclusion_tiles(scheme, records)
     opened = [(pos, tile, prover.open(epoch, ids[(pos, tile.rows[0], tile.cols[0])])) for pos, tile in picks]
     verdicts = list(tile_map(partial(check_drawn, scheme, epoch, transcript, records), opened))
     ok = all(v.ok for v in verdicts)

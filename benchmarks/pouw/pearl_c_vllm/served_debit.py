@@ -80,8 +80,9 @@ import verify_run as VR  # noqa: E402
 from verity.primitives.commitments import Commitment  # noqa: E402
 from verity.primitives.commitments import verify_opening  # noqa: E402
 from verity.primitives.randomness import derive  # noqa: E402
-from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, Epoch, Transcript, Verifier, Workload, activation_binding, commitment_hash,  # noqa: E402
+from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, Transcript, Verifier, activation_binding, commitment_hash,  # noqa: E402
                                opened_value, rows_domain, weight_binding)
+from verity.protocols.accounting.work.pouw.coins import CoinCommitment  # noqa: E402
 from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW  # noqa: E402
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
@@ -147,20 +148,17 @@ class TileIndex:
         return list(range(self.first[pos], self.first[pos] + len(grid))), [len(t.rows) * len(t.cols) for t in grid]
 
 
-def load(path: Path, light: bool = False) -> dict:
-    """The pass as `verify_run.verify` reads it: the epoch from the beacon and the weights' roots, the records held to their
-    published root, the transcript's roots and the verifier's tile enumeration.  `light`: the manifest alone (no verifier,
+def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -> dict:
+    """The pass as `verify_run.verify` reads it: the epoch from its salt coin under `coins` (the epoch's published coin
+    commitment), or a recorded pass's beacon (`pouw_pearl_c_device.manifest_epoch`), and the weights' roots, the records
+    held to their published root, the transcript's roots and the verifier's tile enumeration.  `light`: the manifest alone (no verifier,
     no file of the pass is opened), for reading recorded lines back (``--resumed-only``)."""
     raw = path.read_bytes()
     man = json.loads(raw)
-    if man.get("schema") != PD.MANIFEST_SCHEMA:
-        raise ValueError(f"schema {man.get('schema')!r}, not {PD.MANIFEST_SCHEMA}")
+    PD.manifest_schema(man, recorded=True)
     scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
-    roots = {int(w): bytes.fromhex(v["root"]) for w, v in man["weights"].items()}
-    epoch = Epoch.unverified(Workload(matmuls), roots, bytes.fromhex(man["beacon"]))
-    if epoch.salt.hex() != man["salt"]:
-        raise ValueError("the manifest's salt is not the beacon's and the weights'")
+    epoch, _ = PD.manifest_epoch(man, coins, recorded=True)
     records = [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]),
                              tuple(man["weights"][str(mm.weight)]["excluded_b"])) for mm, u in zip(matmuls, man["matmuls"])]
     splits = {w: PW.Split(man["weights"][str(w)]["k"]) for w in epoch.workload.weights()}
@@ -363,7 +361,7 @@ def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
 def measure(path: Path, per: int, seed: int, jobs: int, out_dir: Path, opts: dict, label: str | None = None) -> dict:
     """One pass: its sample measured over `jobs` forked workers, a line a tile as each finishes, then its summary."""
     label, t0 = label or path.parent.name, time.perf_counter()
-    job = load(path)
+    job = load(path, coins=opts.get("coins"))
     strata, picks = sample(job, per, seed)
     print(f"{label}: {job['man'].get('run')} {job['scheme'].name} cap {job['scheme'].cap}: {len(picks)} tiles of "
           f"{len(job['verifier'].refs)} in {len(strata)} strata (loaded in {time.perf_counter() - t0:.0f} s)", flush=True)
@@ -561,7 +559,7 @@ def measure_inputs(path: Path, per_linear: int, census_max: int, draws: int, see
     an input with its failures at the scheme's cap (a tile whose openings hold and the tile rule rejects), `W` and
     `w_max`.  The bound is added once every pass's inputs are known (`m`)."""
     label = label or path.parent.name
-    job = load(path, light=bool(opts.get("resumed_only")))
+    job = load(path, light=bool(opts.get("resumed_only")), coins=opts.get("coins"))
     inputs = pick_inputs(job, per_linear, census_max, draws, seed)
     fresh = opts.get("fresh_draws")
     if fresh:
@@ -652,6 +650,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="the 32-byte source the fresh draws and salts derive from: recorded OS randomness drawn after the "
                         "pass, fixed in the command before the run (required with --fresh-draws)")
     p.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
+    p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (a pass with a salt coin)")
     p.add_argument("--out", type=Path, default=None)
     a = p.parse_args(argv)
     if a.rebound is not None:
@@ -668,7 +667,8 @@ def main(argv: list[str] | None = None) -> int:
         p.error("one --tiles per manifest")
     out_dir = a.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
-    opts = {"resume": a.resume, "scalar": a.scalar, "cross_check": a.cross_check, "resumed_only": a.resumed_only}
+    opts = {"resume": a.resume, "scalar": a.scalar, "cross_check": a.cross_check, "resumed_only": a.resumed_only,
+            "coins": CoinCommitment.from_json(json.loads(a.coins.read_text())) if a.coins else None}
     if a.resumed_only and (a.per_input is None or not a.resume):
         p.error("--resumed-only takes --per-input and --resume")
     fresh = None

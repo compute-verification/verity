@@ -55,7 +55,7 @@ class Node:
     tree: Path = Path("/build/verity")
     out: Path = Path("/build/out")
     prep: Path = Path("/workspace/research/lean-cache/prep")
-    deps: Path = Path("/var/lib/vy-lean-build/deps")
+    deps: Path = Path("/workspace/lean-build/deps")
     lock: Path = Path("/run/vy-lean-cache-daily.lock")
     sandbox: list[str] = field(default_factory=lambda: ["/usr/local/bin/vy-lean-sandbox"])
     research: list[str] = field(default_factory=as_research)

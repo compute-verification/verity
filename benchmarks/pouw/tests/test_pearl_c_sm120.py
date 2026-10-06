@@ -19,6 +19,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.protocols.accounting.work.pouw.audit import weights_root
+from verity.protocols.accounting.work.pouw.coins import CoinCommitment, CoinOpening, coin_reason
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
 
@@ -217,6 +219,9 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
     y_plain = (small_fixture / man["common"]["y_plain"]["file"]).read_bytes()
     y_fast = (small_fixture / man["common"]["y_fast"]["file"]).read_bytes()
     assert len(y_plain) == len(y_fast) == 2 * 128 * 128
+    commitment, opening = CoinCommitment.from_json(man["coins"]), CoinOpening.from_json(man["salt_opening"])
+    assert commitment == F.test_challenger().commitment and "beacon" not in man
+    assert coin_reason(commitment, opening, "salt", weights_root({F.WEIGHT: bytes.fromhex(man["seeds"]["root_b"])})) is None
 
 
 # ---- the dry run ---------------------------------------------------------------------------------------------------
