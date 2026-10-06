@@ -19,8 +19,8 @@
 #                prover that sends its proofs though the witness fails, FC_ZK_SELF_CHECK=skip), and upstream's replay --zk
 #                of the last
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
-#                --coins os, on Lean's plain-leaf statement verity/flock-circuit+plain-leaves; ZK_LEAN=1: also today's
-#                --zk session; LEVELS=none: neither of V*'s)
+#                --coins os, which Lean's tags refuse while they pin hm96 leaves; ZK_LEAN=1: also today's --zk session;
+#                LEVELS=none: neither of V*'s)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, serve, replay and Lean never hold one.

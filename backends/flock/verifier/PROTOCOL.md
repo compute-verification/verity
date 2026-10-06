@@ -1495,8 +1495,10 @@ needs none. `Tags.withPlainLeaves` changes three things.
   (`Setup.openedSalts`, set on every hm96-row statement); `631567f7`'s unsalted openings carry none. Every level's leaf and
   node are SHA-512 (`merkle_hash` 2).
 
-The statement is ZK off: `verify --zk` refuses any statement whose leaf scheme is that object (`Tags.plainLeaves`), as
-upstream's `--zk` does.
+The verifier identifies the statement (`statement` prints its identity and digest), but `verify` refuses any
+statement whose leaf scheme is that object (`Tags.plainLeaves`), with or without `--zk`, until a soundness headline
+covers it: every hidden-output headline needs `merkleLeaf = "hm96-sha512/v1"`. The statement is ZK off, and upstream's
+`--zk` refuses it too.
 
 ## 17. Acceptance, assumptions and trust
 
