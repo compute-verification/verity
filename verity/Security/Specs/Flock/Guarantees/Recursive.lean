@@ -8,15 +8,16 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Defs
 The recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`): the developer registers `R` (the hidden circuit's
 commitment among it); the auditor draws `ω`, the hidden circuit's units to prove; in each of the inner protocol's `I.r`
 rounds the developer's gateway sends the auditor a salted SHA-512 commitment to the round's inner message (C-Flock run
-with `--zk` off on the GPU workers), and the auditor answers with a live coin; then one C-Flock `--zk --registered`
-session of the public verifier circuit V* (`zs R ω t`, `ZkOuter`) proves that openings of those commitments exist on
-which the inner verifier accepts. Each guarantee is a `def G : Prop` in the form of `Pouw.Guarantees`; its proof is
-`Flock.SecurityProofs.G : Flock.Guarantees.G` (`Proofs.Flock.Recursive.Guarantees`).
+with `--zk` off on the GPU workers), and the auditor answers with a live coin; then C-Flock `--zk --registered` sessions
+of the public verifier circuits V* (`zs R ω t j`, `ZkOuter`, one per circuit `(Vs j).c`, in a row: `sessions`) prove
+that openings of those commitments exist on which the inner verifier accepts. Each guarantee is a `def G : Prop` in the
+form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarantees.G`
+(`Proofs.Flock.Recursive.Guarantees`).
 
-* `RecursiveSound`, for the auditor: when the auditor accepts V*'s session, the hidden circuit's statement holds, except
-  with probability at most V*'s session's soundness error, plus each round's transfer slack and rewinding loss (the
-  binding of the gateway's commitments under `cr/sha-512`), plus the inner protocol's soundness error. Its one new
-  assumption is `Flock.Assumptions.VBridge`.
+* `RecursiveSound`, for the auditor: when the auditor accepts every one of V*'s sessions, the hidden circuit's statement
+  holds, except with probability at most the sum of V*'s sessions' soundness errors, plus each round's transfer slack
+  and rewinding loss (the binding of the gateway's commitments under `cr/sha-512`), plus the inner protocol's soundness
+  error. Its one new assumption is `Flock.Assumptions.VBridge`.
 * `RecursiveZK`, for the developer: the auditor's whole view, the gateway's commitments (`gatewayLeaf`) to every inner
   message and tree top and then its view of the outer session, has a simulator that reads public inputs only, within
   the commitments' hiding gap (`hash-derived-key`) plus the outer session's zero-knowledge gap.
@@ -32,56 +33,56 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **The recursive audit is sound.** V*'s law is the live stratified law on the operating system's bytes (A3,
-`uniform/os-random`); at each history `(R, ω, t)` V*'s session is `zs R ω t`, whose fields carry
-`flock-verify verify --zk --registered`'s setup and the `live-verifier` record custody (`ZkOuter.hRec`). For every
-prover `σ` of the recursive audit, given `cr/sha-512` for the finders of its outer session at every leaf it reaches
-(`hCRo`) and for the fork finders of each round (`hCR`), V*'s bridge (`Flock.Assumptions.VBridge`) and the inner
-protocol's soundness at `ε_in`:
-$$\Pr[\text{V*'s session accepts} \wedge \neg\,\text{the hidden statement holds}] \le
-  \mathbb E[\text{outer bound}] + \sum_{i<r}\Big(\mathbb E[\text{stage slack}] +
+/-- **The recursive audit is sound.** V*'s sessions are of the circuits `(Vs j).c` under their laws `(Vs j).law`, each
+the live stratified law on the operating system's bytes (A3, `uniform/os-random`); at each history `(R, ω, t)` session
+`j` is `zs R ω t j`, whose fields carry `flock-verify verify --zk --registered`'s setup, the `live-verifier` record
+custody (`ZkOuter.hRec`) and the registrant's record of the registered reads (`ZkOuter.rd`). For every prover `σ` of the
+recursive audit, given V*'s bridge (`Flock.Assumptions.VBridge`), `cr/sha-512` for the fork finders of each round
+(`hCR`) and the inner protocol's soundness at `ε_in`:
+$$\Pr[\text{every session of V* accepts} \wedge \neg\,\text{the hidden statement holds}] \le
+  \mathbb E\Big[\sum_j \text{outer bound}_j\Big] + \sum_{i<r}\Big(\mathbb E\Big[\sum_j \text{stage slack}_j\Big] +
   \big(\textstyle\sum_{pos}\kappa_i(pos)\big)\sqrt{q_i^2/2^{513}}\Big) + \varepsilon_{in},$$
-the expectations over the draw and the rounds' coins at the prover's leaves (`expAt`). The outer bound is
-`zk_session_soundR`'s at one wrong unit plus `zk_session_regValsR`'s (`ZkOuter.bound`); the stage slack and
-`√(q²/2^513)` are the binding of round `i`'s commitments (`ZkOuter.stageSlack`, `stage_bind`). -/
+the expectations over the draw, the rounds' coins at the prover's leaves (`expAt`) and the sessions (`sumS`), each
+term at the strategy the prover names for its session. A session's outer bound (`ZkOuter.boundCR`) is, where its
+finders satisfy `cr/sha-512` at budgets `qF, qS, qW, qR` (`ZkOuter.CR`), its law's miss at one bad unit plus
+`zk_session_soundR`'s and `zk_session_regValsR`'s terms at the drawn units and `qR²/2^513` for its registered paths
+(`ZkOuter.bound`), and `1` elsewhere; its stage slack (`ZkOuter.slackCR`) is likewise `ZkOuter.stageSlack` or `1`. The
+weights `κ_i = weightS` and `√(q²/2^513)` are the binding of round `i`'s commitments (`stage_bind`). -/
 def RecursiveSound : Prop :=
-  ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit}
-    {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-    -- V*'s law and A3
-    {m : ℕ} (σs : Fin nv → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (_hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
-    (_hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
-    -- V*'s session at each history
-    (zs : Reg → L.Ω → List (Cm × I.Coin) →
-      ZkOuter mPts nv Reg' c hU hscope (Law.execOS (n := nv) src (.stratified Kd (Array.ofFn St)) pop))
+  ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
+    -- V*'s laws: their strata and A3
+    (_hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
+    (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+    -- V*'s sessions at each history
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the count curve's parameters
+    -- the count curve's parameters, and the finders' budgets
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
-    (_hr : ∀ R ω t S R' j, rateZ (planZAt (Reg := Reg') (zs R ω t).dj (zs R ω t).y₀ S R') j k ≤ ρ)
-    {t' : ℝ} (_ht' : 0 ≤ t')
-    -- the recursive prover, and cr/sha-512 for its outer session's finders at the leaves it reaches
-    (σ : Strategy (recGame L Reg I Cm fun R ω t => (zs R ω t).game dg N))
-    {qF qS qW : ℝ} (_hCRo : AllAt σ fun ω t τ => (zs σ.1 ω t).CR dg N k Rw qF qS qW τ)
-    -- the hidden circuit's statement, the messages V*'s layer holds, the rounds' commit strings, the gateway's
+    (_hr : ∀ R ω t j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t j).dj (zs R ω t j).y₀ S' R') i k ≤ ρ)
+    {t' : ℝ} (_ht' : 0 ≤ t') (qF qS qW qR : ℝ)
+    -- the recursive prover
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => sessions (zs R ω t) dg N))
+    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the gateway's
     -- commitments and the messages they open to, and V*'s bridge
-    (x : Reg → L.Ω → I.Stmt) (wmsg : (Fin (Layout.keyN c hU nv) → Bool) → List I.Msg)
-    (Sk : ℕ → Finset (PosK c hU nv)) (cmt : Cm → PosK c hU nv → (obK c hU nv).Dg)
-    (msg : ℕ → (PosK c hU nv → ValK c) → I.Msg)
-    (_hbr : Flock.Assumptions.VBridge σs ks zs dg N k Rw x wmsg Sk cmt msg)
+    (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
+    (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
     -- cr/sha-512 for the fork finders of each round
     (q : ℕ → ℝ)
     (_hCR : ∀ i < I.r, ∀ ω pos,
-      (forkAt (obK c hU nv) σ cmt (fun R ω t τ => (zs R ω t).trial dg N k Rw τ) i ω pos).CR H512 (q i))
+      (forkAt (obS Vs) σ (cmtS cmt) (fun R ω t s => trialS (zs R ω t) dg N k Rw s) i ω pos).CR H512 (q i))
     -- the inner protocol
     {εin : ℝ≥0∞} (_hin : InnerSound I εin),
-    prob (fun o => LiveAcceptsZKR (zs o.1 o.2.1 o.2.2.1).I (zs o.1 o.2.1 o.2.2.1).own o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
-        (recGame L Reg I Cm fun R ω t => (zs R ω t).game dg N) σ ≤
-      expAt σ (fun ω t τ => (zs σ.1 ω t).bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW τ) +
+    prob (fun o => Accepts (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
+        (recGame L Reg I Cm fun R ω t => sessions (zs R ω t) dg N) σ ≤
+      expAt σ (fun ω t s => sumS (zs σ.1 ω t) dg N
+          (fun j τ => (zs σ.1 ω t j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
         ∑ i ∈ Finset.range I.r,
-          (expAt σ (fun ω t τ => (zs σ.1 ω t).stageSlack dg N k Rw M ρ t' qF qS τ) +
-            (∑ pos, candWeightK c hU nv (Law.execOS (n := nv) src (.stratified Kd (Array.ofFn St)) pop) (Sk i) ρ pos) *
-              ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin
+          (expAt σ (fun ω t s => sumS (zs σ.1 ω t) dg N
+              (fun j τ => (zs σ.1 ω t j).slackCR dg N k Rw M ρ t' qF qS τ) s) +
+            (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin
 
 /-- **The gateway's commitment** to one message `msg` (an inner round message or a Merkle tree top) under the salt `y`:
 the hm96-sha512 leaf of the message's SHA-512 digest, `H(SHA-512(msg) ⊕ M·y, c(y))` (`ZkView.leafH`, `ZkView.My`,

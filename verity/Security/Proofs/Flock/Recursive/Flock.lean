@@ -1,25 +1,34 @@
 import Proofs.Flock.Recursive.Sound
+import Proofs.Flock.Recursive.Multi
 import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
 import Proofs.Flock.Recursive.ZkReg.Vals
+import Proofs.Flock.Recursive.ZkReg.Off
 
 /-!
-# Recursion: the outer proof a `--zk --registered` session of a fixed public verifier V*
+# Recursion: the outer proof, `--zk --registered` sessions of fixed public verifiers V*
 
-`zk_session_recursive` is `recursive_sound` with the outer proof one `flock-verify verify --zk --registered F` session of
-V*'s circuit `c` per history `(R, ω, t)` (the registration, the draw of the hidden circuit's units, the rounds'
-commitments and coins), its inputs `ZkOuter` (public file, registered reads, the coin server's record), the verdict
-`LiveAcceptsZKR`, and the decoded witness V*'s value layer (`XplurZC`, `ZkOuter.layer`). Outer soundness is
-`zk_session_soundR` at one wrong unit and `zk_session_regValsR` at the history's registered-reads record, on their
-hypotheses at each history and, for those that read the prover's strategy (`cr/sha-512` for the knowledge and
-registered-value finders, `ZkOuter.CR`), at each leaf the prover reaches. What V*'s circuit must compute is one named
-Prop, `VBridge`: at an accepted outcome, a value layer with no wrong unit whose drawn units read the registrant's values
-at the registered reads (the hidden circuit `P`, the draw, the coins) holds an inner transcript the inner verifier accepts
-on `P`'s statement at the rounds' coins. The stage hypotheses (`htr`, `hCR`) and `InnerSound` are `recursive_sound`'s;
-`zk_session_recursive_upto` takes `recursive_sound_upto`'s instead.
+The outer proof at a history `(R, ω, t)` (the registration, the draw of the hidden circuit's units, the rounds'
+commitments and coins) is `S` sessions in a row, session `j` one `flock-verify verify --zk --registered F` session of
+the public circuit `(Vs j).c` under its law `(Vs j).law` (`VStmt`), with inputs `zs R ω t j` (`ZkOuter`: public file,
+registered reads, the coin server's record). The audit accepts when every session accepts (`Accepts`), and the decoded
+witness is each session's value layer (`XplurZC`, `ZkOuter.layer`).
 
-The bound: `E[miss 1 + 2·(ksAvgStrictZ + linkBoundZC) + regTermZC] + Σ_{k < r} (E[εtr k] + (Σ_pos κ k pos)·√(q_k²/2^513))
-+ ε_in`, the expectations over the draw and the rounds' coins at the prover's leaves (`expAt`). `ksAvgStrictZ +
-linkBoundZC` is paid once by each of the two outer theorems.
+* `ZkOuter.Good`: a layer with no wrong unit whose every unit reads, at each of its registered reads, the registrant's
+  value (`RegAgree`). `rd` records those values, the hidden circuit's rows as registered and the values the verifier
+  registers itself (its coins, the comb `coef`).
+* `ZkOuter.accepts_le`: an accepted session whose layer is not `Good` is at most `bound` likely: the draw misses every
+  bad unit (`miss 1`); or a drawn unit computes wrongly or reads a registered value other than the registrant's at a
+  leaf that is the registrant's (`zk_session_regDrawnR`: `ksAvgStrictZ + linkBoundZC + regTermZC`); or a drawn row's
+  registered leaf is not the registrant's while the verifier's registered check passes (`Reads.prob_offOn_le`:
+  `qR²/2^513`). The units are bad at the strategy alone, so one sampling step covers all three.
+* `sessions`: the `S` sessions in a row, each played by a strategy the prover names at its start (`seqC`, `ofBase`);
+  every strategy of a session is named (`ZkOuter.ofBase_surj`), so no prover is lost.
+* `VBridge`: what V*'s circuits compute: when every session accepts and every layer is `Good`, the messages `wmsg` reads
+  from the layers hold an inner transcript the inner verifier accepts on the hidden circuit's statement `x R ω` at the
+  rounds' coins.
+* `zk_sessions_recursive_upto`: `recursive_sound_upto` at V*'s sessions, its outer term the expected sum over the
+  sessions of each one's `boundCR` (`bound` where its finders satisfy `cr/sha-512`, `ZkOuter.CR`, else `1`) at the
+  strategy the prover names there.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -30,10 +39,11 @@ open scoped ENNReal
 
 set_option genSizeOfSpec false in
 set_option genInjectivity false in
-/-- **V*'s `--zk --registered` session at one history**: what `zk_session_soundR` and `zk_session_regValsR` take besides
-the circuit `c` (fixed: V* is public), the law `Lv` of V*'s units, the count curve and the prover's strategy; `rd` is the
-registrant's record of the registered reads (the hidden circuit's rows from its registration, the draw and the coins
-from the verifier's). -/
+/-- **V*'s `--zk --registered` session at one history**: what its soundness takes besides the circuit `c` (fixed: V* is
+public), the law `Lv` of V*'s units, the count curve and the prover's strategy. `rd` is the registrant's record of the
+registered reads: the hidden circuit's rows from its registration, and the values the verifier registers itself (the
+draw, the coins, the comb `coef`). `hown`: at an accepted outcome, the reads at the rows of the drawn units are the
+verifier's own (`OwnReads`: its ports, at the positions its program reads). -/
 structure ZkOuter (mPts nv : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit) (hscope : Layout.scopeOk c = true)
     (Lv : Law nv) where
   I : Inputs
@@ -51,6 +61,13 @@ structure ZkOuter (mPts nv : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built 
   hRec : RecordsLiveZK I dj wr
   rd : FlockSoundness.Registered.Reads (laySh (Reg := Reg') ht dj y₀ hc hU (pub := pub))
     (rowsSh ht dj y₀ hc hU hpub hscope)
+  hown : ∀ ω R' o, LiveAcceptsZKR I own (R', Lv.draw ω, wr (Lv.draw ω) R' o) →
+    OwnReads own c pub (wr (Lv.draw ω) R' o) (rd.restrict (rowIn (Lv.draw ω))).isRead rd.port rd.readAt
+
+/-- **The names of a session's strategies**: a registration and, at each of the law's coins, a strategy of the live
+table; they read the same at every history. -/
+abbrev baseGame {nv : ℕ} (Lv : Law nv) (Reg' : Type) (dg : ByteArray → ByteArray) (mPts N : ℕ) : Game (LiveOut mPts) :=
+  .send Reg' fun _ => .coin Lv.Ω fun _ => liveTable dg mPts N
 
 namespace ZkOuter
 
@@ -60,57 +77,159 @@ variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {
 /-- V*'s live session at the history. -/
 abbrev game : Game (Reg' × Finset (Fin nv) × Exec.Transcript) := auditLive Lv Reg' (liveOf dg mPts N zo.wr)
 
+/-- The registered-reads layout of V*'s session (`laySh`). -/
+noncomputable abbrev lay := laySh (Reg := Reg') zo.ht zo.dj zo.y₀ zo.hc hU (pub := zo.pub)
+
+/-- The value binding of V*'s session (`rsZAtS`'s). -/
+noncomputable abbrev vb :=
+  (rsZAtS (Reg := Reg') zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope).bindingZ
+    (rsZAtS_computes zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope)
+
+/-- The strategy a name stands for in V*'s session. -/
+def ofBase (τ₀ : Strategy (baseGame Lv Reg' dg mPts N)) : Strategy (zo.game dg N) :=
+  ⟨τ₀.1, fun ω => Strategy.map (fun t => (τ₀.1, Lv.draw ω, t)) _ (Strategy.map (zo.wr (Lv.draw ω) τ₀.1) _ (τ₀.2 ω))⟩
+
+/-- **Every strategy of V*'s session has a name.** -/
+theorem ofBase_surj (τ : Strategy (zo.game dg N)) : ∃ τ₀, zo.ofBase dg N τ₀ = τ := by
+  obtain ⟨R, s⟩ := τ
+  refine ⟨⟨R, fun ω => Strategy.ofMap (zo.wr (Lv.draw ω) R) (liveTable dg mPts N)
+    (Strategy.ofMap (fun t => (R, Lv.draw ω, t)) (liveOf dg mPts N zo.wr (Lv.draw ω) R) (s ω))⟩,
+    congrArg (Sigma.mk R) (funext fun ω => ?_)⟩
+  have h1 := map_ofMap (zo.wr (Lv.draw ω) R) (liveTable dg mPts N)
+    (Strategy.ofMap (fun t => (R, Lv.draw ω, t)) (liveOf dg mPts N zo.wr (Lv.draw ω) R) (s ω))
+  have h2 := map_ofMap (fun t => (R, Lv.draw ω, t)) (liveOf dg mPts N zo.wr (Lv.draw ω) R) (s ω)
+  show Strategy.map (fun t => (R, Lv.draw ω, t)) (liveOf dg mPts N zo.wr (Lv.draw ω) R)
+    (Strategy.map (zo.wr (Lv.draw ω) R) (liveTable dg mPts N) (Strategy.ofMap (zo.wr (Lv.draw ω) R)
+      (liveTable dg mPts N) (Strategy.ofMap (fun t => (R, Lv.draw ω, t)) (liveOf dg mPts N zo.wr (Lv.draw ω) R)
+        (s ω)))) = s ω
+  rw [h1, h2]
+
 /-- The prover's strategy in V*'s session, simulated in the compiled batched session (`simZ`). -/
 noncomputable def sim (τ : Strategy (zo.game dg N)) :=
   simZ execArith hs512 _ zo.I zo.wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ zo.I zo.wr _ _ _ _
     (runsZC_live zo.I zo.ht zo.dj zo.y₀ zo.wr _ tablesAtZK_live zo.hTags zo.hRec zo.hDraw)) τ
 
+/-- The simulation registers what the prover sends. -/
+theorem reg_sim (τ : Strategy (zo.game dg N)) : reg (zo.sim dg N τ) = τ.1 :=
+  reg_cast (sessionZC_planOf execArith hs512 (tablesAtZK zo.dj zo.y₀)) _
+
 /-- **V*'s value layer at the strategy `τ`**: the decoded witness (`XplurZC`), each wire's bit in its commit string's
 plurality value. -/
 noncomputable def layer (k Rw : ℕ) (τ : Strategy (zo.game dg N)) : Fin (Layout.keyN c hU nv) → Bool :=
   XplurZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀) (tabZAt zo.dj zo.y₀)
-    ((rsZAtS zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope).bindingZ (rsZAtS_computes zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope))
-    (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw
+    zo.vb (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw
 
-/-- **`cr/sha-512` at the strategy `τ`**: for the knowledge finders of its simulation (`zk_session_soundR`'s `hCR`) at
-budgets `qF, qS`, and for its registered-value finders at `rd` (`zk_session_regValsR`'s `hW`) at budget `qW`. -/
-def CR (k Rw : ℕ) (qF qS qW : ℝ) (τ : Strategy (zo.game dg N)) : Prop :=
-  (∀ ω j, TableCRZ execArith hs512 (planZAt zo.dj zo.y₀ (Lv.draw ω) (reg (zo.sim dg N τ))) j
-      (zcStrat execArith hs512 (planZAt zo.dj zo.y₀) (cont (zo.sim dg N τ) ω)) qF qS) ∧
+/-- **`cr/sha-512` for the knowledge finders** of the simulation at the strategy `τ` (`TableCRZ`), at budgets
+`qF, qS`. -/
+def TabCR (qF qS : ℝ) (τ : Strategy (zo.game dg N)) : Prop :=
+  ∀ ω j, TableCRZ execArith hs512 (planZAt zo.dj zo.y₀ (Lv.draw ω) (reg (zo.sim dg N τ))) j
+    (zcStrat execArith hs512 (planZAt zo.dj zo.y₀) (cont (zo.sim dg N τ) ω)) qF qS
+
+/-- **`cr/sha-512` at the strategy `τ`**: for the knowledge finders of its simulation (`TabCR`) at budgets `qF, qS`,
+for its registered-value finders at `rd` (`RegCRZC`) at budget `qW`, and for the finder that plays the session once and
+outputs the extractor's pair of an off-leaf read at a drawn row (`Reads.pick`) at budget `qR`. -/
+def CR (k Rw : ℕ) (qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : Prop :=
+  zo.TabCR dg N qF qS τ ∧
     RegCRZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀) (tabZAt zo.dj zo.y₀)
-      ((rsZAtS zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope).bindingZ (rsZAtS_computes zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope))
-      (regOpenZ zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope zo.rd) (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw qW
+      zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope zo.rd) (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw
+      qW ∧
+    (StrictCR.oneRun (zo.game dg N) τ fun o =>
+      (zo.rd.restrict (rowIn o.2.1)).pick o.1 (regPaths c zo.pub o.2.2 zo.rd.port)).CR H512 qR
 
-/-- **The outer bound at the strategy `τ`**: `zk_session_soundR`'s at one wrong unit (`Lm` the model's law) plus
-`zk_session_regValsR`'s. -/
-noncomputable def bound (Lm : Law nv) (k Rw M : ℕ) (ρ t' qF qS qW : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
-  (Lm.miss 1 + ksAvgStrictZ (planZAt zo.dj zo.y₀) Lv k qF qS (reg (zo.sim dg N τ)) +
-      linkBoundZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
-        (tabZAt zo.dj zo.y₀)
-        ((rsZAtS zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope).bindingZ (rsZAtS_computes zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope))
-        k Rw M ρ t' (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ))) +
+/-- **The outer bound at the strategy `τ`**: the model's miss at one bad unit (`Lm` the model's law), the drawn units'
+`ksAvgStrictZ + linkBoundZC + regTermZC`, and the registered paths' `qR²/2^513`. -/
+noncomputable def bound (Lm : Law nv) (k Rw M : ℕ) (ρ t' qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
+  Lm.miss 1 +
     (ksAvgStrictZ (planZAt zo.dj zo.y₀) Lv k qF qS (reg (zo.sim dg N τ)) +
       linkBoundZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
-        (tabZAt zo.dj zo.y₀)
-        ((rsZAtS zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope).bindingZ (rsZAtS_computes zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope))
-        k Rw M ρ t' (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) +
+        (tabZAt zo.dj zo.y₀) zo.vb k Rw M ρ t' (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) +
       regTermZC execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt (Reg := Reg') zo.dj zo.y₀)
-        (tabZAt zo.dj zo.y₀)
-        ((rsZAtS zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope).bindingZ (rsZAtS_computes zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope))
-        Lv k Rw ρ qW)
+        (tabZAt zo.dj zo.y₀) zo.vb Lv k Rw ρ qW) +
+    ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ))
 
-/-- **A layer agrees with the registrant at the outcome's drawn units**: every wire a drawn unit reads at a registered
-read whose session leaf under the outcome's registration is the registrant's carries the registrant's bit. -/
-def RegAgree (bits : Fin (Layout.keyN c hU nv) → Bool) (o : Reg' × Finset (Fin nv) × Exec.Transcript) : Prop :=
-  ∀ u ∈ o.2.1, ∀ g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u,
-    zo.rd.isRead ((laySh zo.ht zo.dj zo.y₀ zo.hc hU (pub := zo.pub)).pos g) →
-    (laySh zo.ht zo.dj zo.y₀ zo.hc hU (pub := zo.pub)).regLeaf o.1 ((laySh zo.ht zo.dj zo.y₀ zo.hc hU (pub := zo.pub)).pos g) =
-      zo.rd.leaf ((laySh zo.ht zo.dj zo.y₀ zo.hc hU (pub := zo.pub)).pos g) →
-    bits g = (laySh zo.ht zo.dj zo.y₀ zo.hc hU (pub := zo.pub)).bit (zo.rd.wv ((laySh zo.ht zo.dj zo.y₀ zo.hc hU (pub := zo.pub)).pos g)) g
+open Classical in
+/-- **The outer bound where the strategy's finders satisfy `cr/sha-512`**, else `1`. -/
+noncomputable def boundCR (Lm : Law nv) (k Rw M : ℕ) (ρ t' qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
+  if zo.CR dg N k Rw qF qS qW qR τ then zo.bound dg N Lm k Rw M ρ t' qF qS qW qR τ else 1
 
-/-- **V*'s session at one history, at one strategy**: an accepted outcome at which V*'s value layer satisfies `Q`, when
-every accepted outcome whose layer has no wrong unit and agrees with the registrant at its drawn units satisfies `Q`,
-is at most `bound` likely to fail `Q`; `zk_session_soundR` at one wrong unit and `zk_session_regValsR` at `rd`. -/
+/-- **A layer agrees with the registrant**: every wire a unit reads at a registered read carries the registrant's bit. -/
+def RegAgree (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
+  ∀ u, ∀ g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u, zo.rd.isRead (zo.lay.pos g) →
+    bits g = zo.lay.bit (zo.rd.wv (zo.lay.pos g)) g
+
+/-- **A good layer**: no wrong unit, and agreement with the registrant. -/
+def Good (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
+  ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong bits = ∅ ∧ zo.RegAgree bits
+
+open Classical in
+/-- The units with a row at a registered read whose leaf under `R` is not the registrant's. -/
+noncomputable def offUnits (R : Reg') : Finset (Fin nv) :=
+  Finset.univ.filter fun u => ∃ p, zo.rd.isRead p ∧ rowIn {u} p ∧ zo.lay.regLeaf R p ≠ zo.rd.leaf p
+
+/-- **The bad units at the strategy `τ`**: wrong in the layer, reading a registered-value disagreement at the
+registrant's leaf, or holding an off-leaf registered read. -/
+noncomputable def badUnits (k Rw : ℕ) (τ : Strategy (zo.game dg N)) : Finset (Fin nv) :=
+  ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong (zo.layer dg N k Rw τ) ∪
+    regWrongZ execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀) (tabZAt zo.dj zo.y₀)
+      zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope zo.rd) (reg (zo.sim dg N τ)) (zo.layer dg N k Rw τ) ∪
+    zo.offUnits τ.1
+
+/-- **A layer that is not good has a bad unit.** -/
+theorem badUnits_nonempty (k Rw : ℕ) (τ : Strategy (zo.game dg N)) (hG : ¬ zo.Good (zo.layer dg N k Rw τ)) :
+    (zo.badUnits dg N k Rw τ).Nonempty := by
+  classical
+  by_cases hw : ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong (zo.layer dg N k Rw τ) = ∅
+  · obtain ⟨u, g, hg, hread, hne⟩ : ∃ u, ∃ g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u,
+        zo.rd.isRead (zo.lay.pos g) ∧ zo.layer dg N k Rw τ g ≠ zo.lay.bit (zo.rd.wv (zo.lay.pos g)) g := by
+      by_contra h
+      refine hG ⟨hw, fun u g hg hread => ?_⟩
+      by_contra hne
+      exact h ⟨u, g, hg, hread, hne⟩
+    by_cases hleaf : zo.lay.regLeaf τ.1 (zo.lay.pos g) = zo.rd.leaf (zo.lay.pos g)
+    · refine ⟨u, Finset.mem_union_left _ (Finset.mem_union_right _
+        (Finset.mem_filter.2 ⟨Finset.mem_univ _, g, hg, ?_⟩))⟩
+      exact regBadZ_of_leaf zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope zo.rd _ _ g hread
+        (by rw [zo.reg_sim dg N τ]; exact hleaf) hne
+    · obtain ⟨⟨u', q⟩, hp⟩ := Sum.isLeft_iff.1 (zo.rd.read_row _ hread)
+      refine ⟨u', Finset.mem_union_right _
+        (Finset.mem_filter.2 ⟨Finset.mem_univ _, zo.lay.pos g, hread, ?_, hleaf⟩)⟩
+      rw [hp]
+      exact Finset.mem_singleton_self u'
+  · exact (Finset.nonempty_iff_ne_empty.2 hw).mono (Finset.subset_union_left.trans Finset.subset_union_left)
+
+/-- **An off-leaf registered read at a drawn row**, at an accepted outcome, is at most `qR²/2^513` likely, under
+`cr/sha-512` for the finder that plays V*'s session once (`Reads.prob_offOn_le`): the verifier's registered check
+holds at the drawn rows (`checked_of_accepts`, on `hown`). -/
+theorem off_le {qR : ℝ} (τ : Strategy (zo.game dg N))
+    (hR : (StrictCR.oneRun (zo.game dg N) τ fun o =>
+      (zo.rd.restrict (rowIn o.2.1)).pick o.1 (regPaths c zo.pub o.2.2 zo.rd.port)).CR H512 qR) :
+    prob (fun o => LiveAcceptsZKR zo.I zo.own o ∧ ∃ u ∈ o.2.1, u ∈ zo.offUnits τ.1) (zo.game dg N) τ ≤
+      ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
+  classical
+  have hmono : ∀ ω o', (LiveAcceptsZKR zo.I zo.own (τ.1, Lv.draw ω, zo.wr (Lv.draw ω) τ.1 o') ∧
+      ∃ u ∈ Lv.draw ω, u ∈ zo.offUnits τ.1) →
+      (LiveAcceptsZKR zo.I zo.own (τ.1, Lv.draw ω, zo.wr (Lv.draw ω) τ.1 o') ∧
+        ∃ ω' o'', Lv.draw ω = Lv.draw ω' ∧ zo.wr (Lv.draw ω) τ.1 o' = zo.wr (Lv.draw ω') τ.1 o'') ∧
+      (zo.rd.restrict (rowIn (Lv.draw ω))).Off τ.1 := by
+    rintro ω o' ⟨hacc, u, hu, hoff⟩
+    obtain ⟨p, hp, hrow, hne⟩ := (Finset.mem_filter.1 hoff).2
+    exact ⟨⟨hacc, ω, o', rfl, rfl⟩, p, ⟨hp, rowIn_mono (Finset.singleton_subset_iff.2 hu) p hrow⟩, hne⟩
+  refine (prob_auditLive_liveOf_mono dg N zo.wr τ
+    (q := fun o => (LiveAcceptsZKR zo.I zo.own o ∧ ∃ ω o', o.2.1 = Lv.draw ω ∧ o.2.2 = zo.wr (Lv.draw ω) o.1 o') ∧
+      (zo.rd.restrict (rowIn o.2.1)).Off o.1) hmono).trans
+    (FlockSoundness.Registered.Reads.prob_offOn_le (zo.game dg N) τ (fun o => zo.rd.restrict (rowIn o.2.1))
+      (fun o => o.1) (fun o => LiveAcceptsZKR zo.I zo.own o ∧ ∃ ω o', o.2.1 = Lv.draw ω ∧ o.2.2 = zo.wr (Lv.draw ω) o.1 o')
+      (fun o => regPaths c zo.pub o.2.2 zo.rd.port) ?_ hR)
+  rintro ⟨R', S', tr⟩ ⟨hacc, ω, o', hS', htr⟩
+  obtain rfl : S' = Lv.draw ω := hS'
+  obtain rfl : tr = zo.wr (Lv.draw ω) R' o' := htr
+  exact checked_of_accepts zo.I zo.ht zo.own zo.dj zo.y₀ zo.hc hU zo.hpub hscope zo.hTags _ hacc _
+    (zo.hown ω R' o' hacc)
+
+/-- **V*'s session at one history, at one strategy**: an accepted outcome at which V*'s value layer is not `Good` is at
+most `bound` likely. The bad units are fixed by the strategy: the draw misses them all (`Law.execOS_escape_le` under
+A3, then `miss 1`), or meets a wrong unit or a registered-value disagreement at the registrant's leaf
+(`zk_session_regDrawnR`), or an off-leaf registered read (`off_le`). -/
 theorem accepts_le {m : ℕ} (σs : Fin nv → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
@@ -119,64 +238,185 @@ theorem accepts_le {m : ℕ} (σs : Fin nv → Fin m) (ks : Fin m → ℕ) (hks 
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZAt (Reg := Reg') zo.dj zo.y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
-    {qF qS qW : ℝ} (τ : Strategy (zo.game dg N)) (hCR : zo.CR dg N k Rw qF qS qW τ) (Q : Prop)
-    (hQ : ∀ o, LiveAcceptsZKR zo.I zo.own o →
-      ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong (zo.layer dg N k Rw τ) = ∅ →
-      zo.RegAgree (zo.layer dg N k Rw τ) o → Q) :
-    prob (fun o => LiveAcceptsZKR zo.I zo.own o ∧ ¬ Q) (zo.game dg N) τ ≤
-      zo.bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW τ := by
-  have h1 := (zk_session_soundR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hc hU zo.hpub hscope σs ks hks St hS Kd pop Lb src
-    hA3 zo.hDraw zo.hTags zo.hRec hk hRw hM hρ hr ht' 1 τ hCR.1).1
-  have h2 := zk_session_regValsR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hc hU zo.hpub hscope St Kd pop Lb src zo.hDraw
-    zo.hTags zo.hRec hk hRw hM hρ hr ht' zo.rd τ hCR.1 hCR.2
-  refine (prob_mono (fun o h => ?_) _ _).trans ((prob_or_le _ _ _ _).trans (add_le_add h1 h2))
-  obtain ⟨hacc, hnq⟩ := h
-  by_cases hw : 1 ≤ (((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong (zo.layer dg N k Rw τ)).card
-  · exact Or.inl ⟨hacc, hw⟩
-  · refine Or.inr ⟨hacc, ?_⟩
-    by_contra hno
-    refine hnq (hQ o hacc (Finset.card_eq_zero.1 (by omega)) fun u hu g hg hread hleaf => ?_)
-    by_contra hne
-    exact hno ⟨u, hu, g, hg, hread, hleaf, hne⟩
+    {qF qS qW qR : ℝ} (τ : Strategy (zo.game dg N)) (hCR : zo.CR dg N k Rw qF qS qW qR τ) :
+    prob (fun o => LiveAcceptsZKR zo.I zo.own o ∧ ¬ zo.Good (zo.layer dg N k Rw τ)) (zo.game dg N) τ ≤
+      zo.bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW qR τ := by
+  classical
+  by_cases hG : zo.Good (zo.layer dg N k Rw τ)
+  · exact (prob_mono (fun o h => h.2 hG) _ _).trans ((prob_false _ _).le.trans zero_le)
+  have h1 : prob (fun o => Disjoint o.2.1 (zo.badUnits dg N k Rw τ)) (zo.game dg N) τ ≤
+      (Law.stratified σs ks hks).miss 1 :=
+    (prob_auditLive_draw _ τ fun S => Disjoint S (zo.badUnits dg N k Rw τ)).trans_le
+      ((Law.execOS_escape_le σs ks hks St hS Kd pop Lb src hA3 _).trans
+        (Law.escape_le_miss _ (Finset.card_pos.2 (zo.badUnits_nonempty dg N k Rw τ hG))))
+  have h2 := zk_session_regDrawnR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hc hU zo.hpub hscope St Kd pop Lb src
+    zo.hDraw zo.hTags zo.hRec hk hRw hM hρ hr ht' zo.rd τ hCR.1 hCR.2.1
+  have h3 := zo.off_le dg N τ hCR.2.2
+  refine (prob_mono (fun o h => ?_) _ _).trans
+    ((prob_or_le _ _ _ _).trans (add_le_add ((prob_or_le _ _ _ _).trans (add_le_add h1 h2)) h3))
+  obtain ⟨hacc, -⟩ := h
+  by_cases hd : Disjoint o.2.1 (zo.badUnits dg N k Rw τ)
+  · exact Or.inl (Or.inl hd)
+  · obtain ⟨u, hu, hub⟩ := Finset.not_disjoint_iff.1 hd
+    rcases Finset.mem_union.1 hub with hub | hub
+    · exact Or.inl (Or.inr ⟨hacc, Finset.not_disjoint_iff.2 ⟨u, hub, hu⟩⟩)
+    · exact Or.inr ⟨hacc, u, hu, hub⟩
 
 end ZkOuter
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit}
-  {hU : Built c.unit} {hscope : Layout.scopeOk c = true} {Lv : Law nv}
+/-- **The law of a public verifier's units**: the live stratified law on a byte source (`live`), and the model's
+stratified law it escapes no more often than (`model`), with the strata `σs`, their draw counts `ks` and the
+executable's strata `St`. -/
+structure VLaw (nv : ℕ) : Type 1 where
+  m : ℕ
+  σs : Fin nv → Fin m
+  ks : Fin m → ℕ
+  hks : ∀ s, ks s ≤ (Law.stratum σs s).card
+  St : Fin m → Flock.Draw.Stratum
+  Kd : ℕ
+  pop : ℕ
+  Ω : Type
+  [fintypeΩ : Fintype Ω]
+  [nonemptyΩ : Nonempty Ω]
+  Lb : Fin m → ℕ
+  src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256
 
-/-- **What V*'s circuit computes** (`k, Rw` the count curve's): at every history `(R, ω, t)` and strategy `τ` of V*'s
-session there, every outcome flock-verify `--zk --registered` accepts at which V*'s value layer has no wrong unit and
-agrees with the registrant at the outcome's drawn units holds, in the messages `wmsg` reads from the layer, an inner
-transcript the inner verifier accepts on the hidden circuit's statement `x R ω` at the rounds' coins. -/
-def VBridge (zs : Reg → L.Ω → List (Cm × I.Coin) → ZkOuter mPts nv Reg' c hU hscope Lv) (dg : ByteArray → ByteArray)
-    (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : (Fin (Layout.keyN c hU nv) → Bool) → List I.Msg) : Prop :=
-  ∀ R ω t (τ : Strategy ((zs R ω t).game dg N)) o, LiveAcceptsZKR (zs R ω t).I (zs R ω t).own o →
-    ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong ((zs R ω t).layer dg N k Rw τ) = ∅ →
-    (zs R ω t).RegAgree ((zs R ω t).layer dg N k Rw τ) o →
-    I.accepts (x R ω) ((wmsg ((zs R ω t).layer dg N k Rw τ)).zip (t.map Prod.snd))
+attribute [instance] VLaw.fintypeΩ VLaw.nonemptyΩ
 
-/-- **The recursive audit with V*'s `--zk --registered` session as the outer proof is sound, up to what the inner verifier
-reads**: `recursive_sound_upto` at V*'s session, as `zk_session_recursive` is `recursive_sound` there. Stage `i` opens to
-`msg i v`, and its transfer bounds the message V*'s layer holds for round `i` not being `same i` as that. -/
-theorem zk_session_recursive_upto
-    -- V*'s law and A3
-    {m : ℕ} (σs : Fin nv → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
-    (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- V*'s session at each history
-    (zs : Reg → L.Ω → List (Cm × I.Coin) →
-      ZkOuter mPts nv Reg' c hU hscope (Law.execOS (n := nv) src (.stratified Kd (Array.ofFn St)) pop))
-    (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the count curve's parameters
+namespace VLaw
+
+variable {nv : ℕ} (law : VLaw nv)
+
+/-- The live stratified law on the source's bytes. -/
+abbrev live : Law nv := Law.execOS (n := nv) law.src (.stratified law.Kd (Array.ofFn law.St)) law.pop
+
+/-- The model's stratified law. -/
+abbrev model : Law nv := Law.stratified law.σs law.ks law.hks
+
+end VLaw
+
+/-- **A public verifier**: its circuit `c` over `nv` units and its law. -/
+structure VStmt : Type 1 where
+  nv : ℕ
+  mPts : ℕ
+  c : Flock.Circuit
+  hU : Built c.unit
+  hscope : Layout.scopeOk c = true
+  law : VLaw nv
+
+namespace VStmt
+
+/-- A session of the verifier's circuit at one history. -/
+abbrev Outer (Q : VStmt) (Reg' : Type) := ZkOuter Q.mPts Q.nv Reg' Q.c Q.hU Q.hscope Q.law.live
+
+/-- A value layer of the verifier's circuit. -/
+abbrev Bits (Q : VStmt) : Type := Fin (Layout.keyN Q.c Q.hU Q.nv) → Bool
+
+/-- A name for a strategy of a session of the verifier's circuit. -/
+abbrev Name (Q : VStmt) (Reg' : Type) (dg : ByteArray → ByteArray) (N : ℕ) : Type :=
+  Strategy (baseGame Q.law.live Reg' dg Q.mPts N)
+
+end VStmt
+
+variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
+
+/-- The record of V*'s sessions at one history: each session's name and outcome. -/
+abbrev VRec (Vs : Fin S → VStmt) (Reg' : Type) (dg : ByteArray → ByteArray) (N : ℕ) : Type :=
+  (j : Fin S) → (Vs j).Name Reg' dg N × (Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript)
+
+/-- **V*'s sessions at one history, in a row**: each played by the strategy the prover names at its start (`seqC`). -/
+abbrev sessions (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ) :
+    Game (VRec Vs Reg' dg N) :=
+  seqC S (T := fun j => (Vs j).Name Reg' dg N) (α := fun j => Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript)
+    (fun j => (zs j).game dg N) fun j => (zs j).ofBase dg N
+
+/-- **Every session accepts.** -/
+def Accepts (zs : (j : Fin S) → (Vs j).Outer Reg') {dg : ByteArray → ByteArray} {N : ℕ} (b : VRec Vs Reg' dg N) :
+    Prop :=
+  ∀ j, LiveAcceptsZKR (zs j).I (zs j).own (b j).2
+
+/-- **V*'s layers** at the strategies the record names. -/
+noncomputable def layers (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (b : VRec Vs Reg' dg N) : (j : Fin S) → (Vs j).Bits :=
+  fun j => (zs j).layer dg N k Rw ((zs j).ofBase dg N (b j).1)
+
+/-- **The expected sum over V*'s sessions** of `F j` at the strategy the prover names for session `j`. -/
+noncomputable def sumS (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
+    (F : (j : Fin S) → Strategy ((zs j).game dg N) → ℝ≥0∞) (s : Strategy (sessions zs dg N)) : ℝ≥0∞ :=
+  exG (fun rs => ∑ j, F j ((zs j).ofBase dg N (rs j).1)) (sessions zs dg N) s
+
+/-- **V*'s sessions at one history**: when every outcome at which every session accepts and every layer is `Good`
+satisfies `Q` of the layers, the sessions accept with `Q` failing at most the expected sum of the sessions' `boundCR`
+(`accepts_le`, `prob_seqC_exists_le`). -/
+theorem sessions_le
+    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
+    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+    (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t S R' j, rateZ (planZAt (Reg := Reg') (zs R ω t).dj (zs R ω t).y₀ S R') j k ≤ ρ)
-    {t' : ℝ} (ht' : 0 ≤ t')
-    -- the recursive prover, and cr/sha-512 for its outer simulation's finders at the leaves it reaches
-    (σ : Strategy (recGame L Reg I Cm fun R ω t => (zs R ω t).game dg N))
-    {qF qS qW : ℝ} (hCRo : AllAt σ fun ω t τ => (zs σ.1 ω t).CR dg N k Rw qF qS qW τ)
-    -- the hidden circuit's statement, the messages V*'s layer holds, and V*'s bridge
-    (x : Reg → L.Ω → I.Stmt) (wmsg : (Fin (Layout.keyN c hU nv) → Bool) → List I.Msg)
+    (hr : ∀ j S' R' i, rateZ (planZAt (Reg := Reg') (zs j).dj (zs j).y₀ S' R') i k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
+    (qF qS qW qR : ℝ) (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
+    (hQ : ∀ (τ : (j : Fin S) → Strategy ((zs j).game dg N))
+      (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+      (∀ j, LiveAcceptsZKR (zs j).I (zs j).own (o j) ∧ (zs j).Good ((zs j).layer dg N k Rw (τ j))) →
+      Q fun j => (zs j).layer dg N k Rw (τ j))
+    (s : Strategy (sessions zs dg N)) :
+    prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
+      sumS zs dg N (fun j τ => (zs j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
+  classical
+  have hmono : ∀ b : VRec Vs Reg' dg N, Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b) →
+      ∃ j, LiveAcceptsZKR (zs j).I (zs j).own (b j).2 ∧
+        ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N (b j).1)) := by
+    rintro b ⟨hacc, hnq⟩
+    by_contra hno
+    refine hnq (hQ (fun j => (zs j).ofBase dg N (b j).1) (fun j => (b j).2) fun j => ⟨hacc j, ?_⟩)
+    by_contra hg
+    exact hno ⟨j, hacc j, hg⟩
+  have hB : ∀ j τ₀, prob (fun a => LiveAcceptsZKR (zs j).I (zs j).own a ∧
+        ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N τ₀))) ((zs j).game dg N) ((zs j).ofBase dg N τ₀) ≤
+      (zs j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR ((zs j).ofBase dg N τ₀) := by
+    intro j τ₀
+    unfold ZkOuter.boundCR
+    split_ifs with hc
+    · exact ZkOuter.accepts_le (Vs j).law.σs (Vs j).law.ks (Vs j).law.hks (Vs j).law.St (hS j) (Vs j).law.Kd
+        (Vs j).law.pop (Vs j).law.Lb (Vs j).law.src (hA3 j) (zs j) dg N hk hRw hM hρ (hr j) ht' _ hc
+    · exact prob_le_one _ _ _
+  exact (prob_mono hmono _ _).trans
+    (prob_seqC_exists_le S _ _ (fun j r => LiveAcceptsZKR (zs j).I (zs j).own r.2 ∧
+        ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N r.1)))
+      (fun j τ₀ => (zs j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR ((zs j).ofBase dg N τ₀)) hB s)
+
+variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
+
+/-- **What V*'s circuits compute** (`k, Rw` the count curve's): at every history `(R, ω, t)` and strategies `τ` of V*'s
+sessions there, when every session's outcome flock-verify `--zk --registered` accepts and every session's value layer
+is `Good`, the messages `wmsg` reads from the layers hold an inner transcript the inner verifier accepts on the hidden
+circuit's statement `x R ω` at the rounds' coins. -/
+def VBridge (zs : Reg → L.Ω → List (Cm × I.Coin) → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray)
+    (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) : Prop :=
+  ∀ R ω t (τ : (j : Fin S) → Strategy ((zs R ω t j).game dg N))
+    (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+    (∀ j, LiveAcceptsZKR (zs R ω t j).I (zs R ω t j).own (o j) ∧
+      (zs R ω t j).Good ((zs R ω t j).layer dg N k Rw (τ j))) →
+    I.accepts (x R ω) ((wmsg fun j => (zs R ω t j).layer dg N k Rw (τ j)).zip (t.map Prod.snd))
+
+/-- **The recursive audit with V*'s `--zk --registered` sessions as the outer proof is sound, up to what the inner
+verifier reads**: `recursive_sound_upto` at V*'s sessions (`sessions_le` at every leaf, on `VBridge`). Stage `i` opens
+to `msg i v`, and its transfer bounds the messages V*'s layers hold for round `i` not being `same i` as that. -/
+theorem zk_sessions_recursive_upto
+    -- V*'s laws: their strata and A3
+    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
+    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+    -- V*'s sessions at each history
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the count curve's parameters, and the finders' budgets
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ R ω t j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t j).dj (zs R ω t j).y₀ S' R') i k ≤ ρ)
+    {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
+    -- the recursive prover
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => sessions (zs R ω t) dg N))
+    -- the hidden circuit's statement, the messages V*'s layers hold, and V*'s bridge
+    (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (hbr : VBridge zs dg N k Rw x wmsg)
     -- what the inner verifier reads of each round's message
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
@@ -185,81 +425,33 @@ theorem zk_session_recursive_upto
     -- the stages: commitments' openings, transfer, and cr/sha-512 for the fork finders
     {V Pos : Type} [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos] (ob : Openings H512 V)
     (cmt : Cm → Pos → ob.Dg) (msg : ℕ → (Pos → V) → I.Msg)
-    (T : ℕ → ∀ R ω t, Strategy ((zs R ω t).game dg N) → Pos → Finder (Finset ob.Op))
-    (εtr : ℕ → ∀ R ω t, Strategy ((zs R ω t).game dg N) → ℝ≥0∞) (κ : ℕ → Pos → ℝ≥0∞) (q : ℕ → ℝ)
-    (htr : ∀ i < I.r, AllAt σ fun ω t τ => ∀ (v : Pos → V) (e : Cm × I.Coin), t[i]? = some e →
-      prob (fun b => LiveAcceptsZKR (zs σ.1 ω t).I (zs σ.1 ω t).own b ∧ ¬ Option.Rel (same i (t.map Prod.snd))
-          (wmsg ((zs σ.1 ω t).layer dg N k Rw τ))[i]? (some (msg i v))) ((zs σ.1 ω t).game dg N) τ ≤
-        εtr i σ.1 ω t τ +
-          ∑ pos, κ i pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T i σ.1 ω t τ pos).g (T i σ.1 ω t τ pos).s)
+    (T : ℕ → ∀ R ω t, Strategy (sessions (zs R ω t) dg N) → Pos → Finder (Finset ob.Op))
+    (εtr : ℕ → ∀ R ω t, Strategy (sessions (zs R ω t) dg N) → ℝ≥0∞) (κ : ℕ → Pos → ℝ≥0∞) (q : ℕ → ℝ)
+    (htr : ∀ i < I.r, AllAt σ fun ω t s => ∀ (v : Pos → V) (e : Cm × I.Coin), t[i]? = some e →
+      prob (fun b => Accepts (zs σ.1 ω t) b ∧ ¬ Option.Rel (same i (t.map Prod.snd))
+          (wmsg (layers (zs σ.1 ω t) dg N k Rw b))[i]? (some (msg i v))) (sessions (zs σ.1 ω t) dg N) s ≤
+        εtr i σ.1 ω t s +
+          ∑ pos, κ i pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T i σ.1 ω t s pos).g (T i σ.1 ω t s pos).s)
     (hCR : ∀ i < I.r, ∀ ω pos, (forkAt ob σ cmt (T i) i ω pos).CR H512 (q i))
     -- the inner protocol
     {εin : ℝ≥0∞} (hin : InnerSound I εin) :
-    prob (fun o => LiveAcceptsZKR (zs o.1 o.2.1 o.2.2.1).I (zs o.1 o.2.1 o.2.2.1).own o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
-        (recGame L Reg I Cm fun R ω t => (zs R ω t).game dg N) σ ≤
-      expAt σ (fun ω t τ => (zs σ.1 ω t).bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW τ) +
+    prob (fun o => Accepts (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
+        (recGame L Reg I Cm fun R ω t => sessions (zs R ω t) dg N) σ ≤
+      expAt σ (fun ω t s => sumS (zs σ.1 ω t) dg N
+          (fun j τ => (zs σ.1 ω t j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (εtr i σ.1) + (∑ pos, κ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  have h := recursive_sound_upto ob σ (fun R ω t o => LiveAcceptsZKR (zs R ω t).I (zs R ω t).own o) x
-    (W := (Fin (Layout.keyN c hU nv) → Bool) × I.Stmt) (fun R ω t τ _ => ((zs R ω t).layer dg N k Rw τ, x R ω))
+  have h := recursive_sound_upto ob σ (fun R ω t b => Accepts (zs R ω t) b) x
+    (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt) (fun R ω t _ b => (layers (zs R ω t) dg N k Rw b, x R ω))
     Prod.snd (fun w => wmsg w.1) same hsame cmt msg T εtr κ q
-    (εo := expAt σ fun ω t τ => (zs σ.1 ω t).bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW τ) (εP := 0)
+    (εo := expAt σ fun ω t s => sumS (zs σ.1 ω t) dg N
+      (fun j τ => (zs σ.1 ω t j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) (εP := 0)
     ?_ ?_ htr hCR hin
   · rwa [add_zero] at h
-  · exact avg_mono fun ω => leafAvg_mono_all ((hCRo ω).mono fun t s _ hs =>
-      ZkOuter.accepts_le σs ks hks St hS Kd pop Lb src hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' _ hs _
-        (hbr σ.1 ω t _))
+  · exact avg_mono fun ω => leafAvg_mono (fun t s => sessions_le hS hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht'
+      qF qS qW qR (fun Xs => I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd))) (hbr σ.1 ω t) _) _
   · refine le_of_eq ((congrArg avg (funext fun ω => ?_)).trans (avg_const 0))
     refine (leafAvg_congr_len (G := fun _ _ => 0) (fun t s _ => ?_) _).trans (leafAvg_const 0 _)
     exact le_antisymm ((prob_mono (fun b hb => hb.2 rfl) _ _).trans (prob_false _ _).le) zero_le
-
-/-- **The recursive audit with V*'s `--zk --registered` session as the outer proof is sound.** The prover registers `R`,
-the verifier draws `ω` by `L`, `I.r` rounds of a commitment and a live coin follow, and V*'s session at the history
-(`zs R ω t`) ends the audit, which accepts when flock-verify `--zk --registered` accepts V*'s session. On
-`zk_session_soundR`'s and `zk_session_regValsR`'s hypotheses at every history (and `cr/sha-512` for the outer
-simulation's finders at the leaves the prover reaches, `hCRo`), V*'s bridge, the stages' transfer and `cr/sha-512` for
-their fork finders, and `InnerSound`, the audit accepts while the hidden circuit's statement is false with probability at
-most the expected outer bound, plus each stage's expected transfer slack and rewinding loss, plus `ε_in`. -/
-theorem zk_session_recursive
-    -- V*'s law and A3
-    {m : ℕ} (σs : Fin nv → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
-    (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- V*'s session at each history
-    (zs : Reg → L.Ω → List (Cm × I.Coin) →
-      ZkOuter mPts nv Reg' c hU hscope (Law.execOS (n := nv) src (.stratified Kd (Array.ofFn St)) pop))
-    (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the count curve's parameters
-    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t S R' j, rateZ (planZAt (Reg := Reg') (zs R ω t).dj (zs R ω t).y₀ S R') j k ≤ ρ)
-    {t' : ℝ} (ht' : 0 ≤ t')
-    -- the recursive prover, and cr/sha-512 for its outer simulation's finders at the leaves it reaches
-    (σ : Strategy (recGame L Reg I Cm fun R ω t => (zs R ω t).game dg N))
-    {qF qS qW : ℝ} (hCRo : AllAt σ fun ω t τ => (zs σ.1 ω t).CR dg N k Rw qF qS qW τ)
-    -- the hidden circuit's statement, the messages V*'s layer holds, and V*'s bridge
-    (x : Reg → L.Ω → I.Stmt) (wmsg : (Fin (Layout.keyN c hU nv) → Bool) → List I.Msg)
-    (hbr : VBridge zs dg N k Rw x wmsg)
-    -- the stages: commitments' openings, transfer, and cr/sha-512 for the fork finders
-    {V Pos : Type} [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos] (ob : Openings H512 V)
-    (cmt : Cm → Pos → ob.Dg) (msg : (Pos → V) → I.Msg)
-    (T : ℕ → ∀ R ω t, Strategy ((zs R ω t).game dg N) → Pos → Finder (Finset ob.Op))
-    (εtr : ℕ → ∀ R ω t, Strategy ((zs R ω t).game dg N) → ℝ≥0∞) (κ : ℕ → Pos → ℝ≥0∞) (q : ℕ → ℝ)
-    (htr : ∀ i < I.r, AllAt σ fun ω t τ => ∀ (v : Pos → V) (e : Cm × I.Coin), t[i]? = some e →
-      prob (fun b => LiveAcceptsZKR (zs σ.1 ω t).I (zs σ.1 ω t).own b ∧
-          (wmsg ((zs σ.1 ω t).layer dg N k Rw τ))[i]? ≠ some (msg v)) ((zs σ.1 ω t).game dg N) τ ≤
-        εtr i σ.1 ω t τ +
-          ∑ pos, κ i pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T i σ.1 ω t τ pos).g (T i σ.1 ω t τ pos).s)
-    (hCR : ∀ i < I.r, ∀ ω pos, (forkAt ob σ cmt (T i) i ω pos).CR H512 (q i))
-    -- the inner protocol
-    {εin : ℝ≥0∞} (hin : InnerSound I εin) :
-    prob (fun o => LiveAcceptsZKR (zs o.1 o.2.1 o.2.2.1).I (zs o.1 o.2.1 o.2.2.1).own o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
-        (recGame L Reg I Cm fun R ω t => (zs R ω t).game dg N) σ ≤
-      expAt σ (fun ω t τ => (zs σ.1 ω t).bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW τ) +
-        ∑ i ∈ Finset.range I.r,
-          (expAt σ (εtr i σ.1) + (∑ pos, κ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin :=
-  zk_session_recursive_upto σs ks hks St hS Kd pop Lb src hA3 zs dg N hk hRw hM hρ hr ht' σ hCRo x wmsg hbr
-    (fun _ _ a b => a = b) I.accepts_of_rel_eq ob cmt (fun _ => msg) T εtr κ q
-    (fun i hi => by simpa only [rel_eq_iff, ne_eq] using htr i hi) hCR hin
 
 end FlockSoundness.Discharge.Recursion
