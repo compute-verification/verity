@@ -1,12 +1,15 @@
 """The reference replay on pearlc_arm's transcripts: `verity.protocols.accounting.work.pouw.audit.Verifier(scheme, epoch).audit(prover, transcript,
-Sampled(t), source)`, #449's `pearl_c` audit, unchanged.  The epoch is re-started from the transcript's beacon and weight root
-(the salt is the verifier's own); the transcript is A's root and the tile tree's commitment; the draw's source is
-`os.urandom(32)`, drawn here, after the transcript is fixed.  The prover only opens: each opening's value and path are read
+Sampled(t), source)`, #449's `pearl_c` audit, unchanged.  The epoch is re-started from the transcript's salt coin and weight
+root (`Epoch.start`: the coin must open against the transcript's coin commitment, as the salt coin, after the weight root;
+the arm is its run's own challenger, a development shortcut); a transcript recorded before epoch coins (v1) carries a beacon
+instead and is read only with --recorded (`Epoch.unverified`, a salt that claims nothing).  The transcript is A's root and
+the tile tree's commitment; the draw's source is `os.urandom(32)`, drawn here, after the transcript is fixed (the arm's
+challenger opens no draw coin for this process, so the draw is a replay's, as `verify_run`'s is).  The prover only opens: each opening's value and path are read
 from the transcript's files (the device's tree levels, the tile leaves, A's and B's rows, every file held to its SHA-256
 first).  The verifier checks every path against the published roots and recomputes every drawn tile through the scheme on the
 CPU (about 11 s per tile per 1,024 of k).
 
-  python verify.py RUN_DIR [--draws T] [--jobs J] [--commit SHA] [--run ID]
+  python verify.py RUN_DIR [--draws T] [--jobs J] [--commit SHA] [--run ID] [--recorded]
 
 Prints one line per transcript under RUN_DIR/transcripts/*/*/manifest.json and per negative control under
 RUN_DIR/negative/*/*/manifest.json (the arm's dump of the call that writes none of the commitment into its poisoned
@@ -20,6 +23,7 @@ RESEARCH_RUN_ID, else RUN_DIR's name) the run, in every line.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import mmap
@@ -30,11 +34,14 @@ from pathlib import Path
 
 from verity.primitives.commitments import Commitment, Opening
 from verity.protocols.accounting.work.pouw.audit import Epoch, Sampled, TileOpening, Transcript, Verifier, Workload
+from verity.protocols.accounting.work.pouw.coins import CoinCommitment, CoinOpening
 from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import DEVICES
 
-SCHEMA = "verity-pouw/pearl-c-sm120-transcript/v1"
+SCHEMA = "verity-pouw/pearl-c-sm120-transcript/v2"
+#: a transcript recorded before epoch coins, salted from a beacon: read only as a recorded one (``--recorded``)
+SCHEMA_RECORDED = "verity-pouw/pearl-c-sm120-transcript/v1"
 DRAWS = 3
 
 
@@ -84,7 +91,26 @@ def load(base: Path, spec: dict):
     return data
 
 
-def verify(path: Path, draws: int, commit: str, run: str = "") -> dict:
+def transcript_epoch(man: dict, mm: Matmul, recorded: bool = False) -> Epoch:
+    """The transcript's epoch: from its salt coin under its coin commitment (`SCHEMA`), or, for a transcript recorded before
+    epoch coins (`SCHEMA_RECORDED`) and only when `recorded`, from its beacon; its salt must be the epoch's."""
+    roots = {mm.weight: bytes.fromhex(man["weight_root"])}
+    schema = man.get("schema")
+    if schema == SCHEMA:
+        epoch, how = Epoch.start(Workload((mm,)), roots, CoinCommitment.from_json(man["coins"]),
+                                 CoinOpening.from_json(man["salt_opening"])), "salt coin"
+    elif schema == SCHEMA_RECORDED and recorded:
+        epoch, how = Epoch.unverified(Workload((mm,)), roots, bytes.fromhex(man["beacon"])), "recorded beacon"
+    elif schema == SCHEMA_RECORDED:
+        raise ValueError(f"the transcript is {schema}, recorded before epoch coins: only --recorded reads it")
+    else:
+        raise ValueError(f"schema {schema!r}, not {SCHEMA}" + (f" or {SCHEMA_RECORDED}" if recorded else ""))
+    if epoch.salt.hex() != man["salt"]:
+        raise ValueError(f"the transcript's salt is not its {how}'s and weight root's")
+    return epoch
+
+
+def verify(path: Path, draws: int, commit: str, run: str = "", recorded: bool = False) -> dict:
     raw = path.read_bytes()
     man, digest = json.loads(raw), hashlib.sha256(raw).hexdigest()
     s, label = man["shape"], f"{man.get('arm')}/{man['shape']['label']}"
@@ -93,19 +119,17 @@ def verify(path: Path, draws: int, commit: str, run: str = "") -> dict:
     out = {"manifest": str(path), "transcript_sha256": digest, "arm": man.get("arm"), "shape": s, "verifier_commit": commit,
            "draws": draws, "negative_control": negative}
     try:
-        if man.get("schema") != SCHEMA:
-            raise ValueError(f"schema {man.get('schema')!r}, not {SCHEMA}")
+        mm = Matmul(man["matmul"]["index"], Shape(s["m"], s["k"], s["n"]), man["matmul"]["weight"])
+        epoch = transcript_epoch(man, mm, recorded)
         a = man["scheme_args"]
         scheme = C.PearlC(forming=a["forming"], device=DEVICES[a["device"]], hashing=a["hashing"])
         if scheme.name != man["scheme"]:
             raise ValueError(f"scheme {man['scheme']!r} is not {scheme.name!r}")
-        mm = Matmul(man["matmul"]["index"], Shape(s["m"], s["k"], s["n"]), man["matmul"]["weight"])
-        epoch = Epoch.unverified(Workload((mm,)), {mm.weight: bytes.fromhex(man["weight_root"])}, bytes.fromhex(man["beacon"]))
-        if epoch.salt.hex() != man["salt"]:
-            raise ValueError("the transcript's salt is not the beacon's and weight root's")
         c = man["commitment"]
         transcript = Transcript((bytes.fromhex(man["activation_root"]),), Commitment(bytes.fromhex(c["root"]), c["count"]), ())
-        verifier = Verifier(scheme, epoch)
+        # The arm's challenger, its run's own, opens no draw coin this process can ask for: like verify_run's replay
+        # (`RecordedDraw`), the draw is this verifier's own randomness, drawn after the transcript is fixed.
+        verifier = Verifier(scheme, dataclasses.replace(epoch, coins=None))
         files = {name: load(path.parent, spec) for name, spec in man["files"].items()}
         source = os.urandom(32)
         audit = verifier.audit(Opened(files, verifier, mm, c["count"]), transcript, Sampled(draws), source)
@@ -133,6 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--jobs", type=int, default=8)
     p.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
     p.add_argument("--run", default=os.environ.get("RESEARCH_RUN_ID"))
+    p.add_argument("--recorded", action="store_true", help="read transcripts recorded before epoch coins (their beacon's salt)")
     a = p.parse_args(argv)
     run = a.run or a.run_dir.resolve().name
     found = sorted(a.run_dir.glob("transcripts/*/*/manifest.json"))
@@ -140,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
     errors = sorted(str(e.parent.relative_to(a.run_dir)) for e in a.run_dir.glob("transcripts/*/*/error.txt"))
     # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
     with multiprocessing.get_context("fork").Pool(max(1, min(a.jobs, len(found) + len(negatives)))) as pool:
-        results = pool.map(_one, [(f, a.draws, a.commit, run) for f in found + negatives], chunksize=1)
+        results = pool.map(_one, [(f, a.draws, a.commit, run, a.recorded) for f in found + negatives], chunksize=1)
     results, controls = results[:len(found)], results[len(found):]
     for r in results + controls:
         print(r["line"], flush=True)
