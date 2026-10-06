@@ -1,6 +1,6 @@
-"""The kernel difftest adapters without a GPU (`registry.rope_difftest`, `registry.moe_difftest`, `registry.collectives_difftest`): their cases
-carry every edge kind admission requires, each case binds a spec whose parameters take exactly the case's input words, the rotary spec
-is the NeoX rotation of the query and the key by one cache row, the fused-MoE spec reads each (token, slot) pair's own expert id and
+"""The kernel difftest adapters without a GPU (`difftests.rope_difftest`, `difftests.rope_gptj_difftest`, `registry.moe_difftest`,
+`difftests.collectives_difftest`): their cases carry every edge kind admission requires, each case binds a spec whose parameters take exactly
+the case's input words, the rotary specs are the NeoX and the interleaved rotation of the query and the key by one cache row, the fused-MoE spec reads each (token, slot) pair's own expert id and
 routed weight, and the two-rank collectives are a bf16 add and a concatenation in rank order."""
 from __future__ import annotations
 
@@ -9,12 +9,13 @@ import random
 import numpy as np
 import pytest
 
-from verity.evaluation import evaluate
-from verity.ir.defs import bind
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.defs import bind
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import moe_difftest as MD
-from verity_vllm.program.registry import rope_difftest as RD
-from verity_vllm.program.registry import collectives_difftest as TD
+from verity_vllm.properties.difftests import rope_difftest as RD
+from verity_vllm.properties.difftests import rope_gptj_difftest as RG
+from verity_vllm.properties.difftests import collectives_difftest as TD
 from verity_vllm.program.registry.moe import MoeExpertGemm, MoeExpertGemmW, MoeSum
 from verity_vllm.properties import admission as A
 
@@ -25,7 +26,7 @@ def _words(c: dict, seed: int) -> list[np.ndarray]:
             for s in c["inputs"]]
 
 
-@pytest.mark.parametrize("mod,n", [(RD, 48), (MD, 20), (TD, 30)])
+@pytest.mark.parametrize("mod,n", [(RD, 48), (RG, 60), (MD, 20), (TD, 30)])
 def test_cases_carry_every_edge_kind_and_bind_their_inputs(mod, n):
     rng = random.Random(3)
     kinds = set()
@@ -56,6 +57,25 @@ def test_rope_spec_is_the_neox_rotation_of_query_and_key():
             h = f(x).reshape(-1, D)
             lo, hi = h[:, : D // 2], h[:, D // 2:]
             want.append(np.concatenate([_bf16_rne(lo * cos - hi * sin), _bf16_rne(hi * cos + lo * sin)], axis=1).reshape(-1))
+        assert np.array_equal(got, np.concatenate(want)), c["statics"]
+
+
+def test_rope_gptj_spec_is_the_interleaved_rotation_of_query_and_key():
+    for i in range(len(RG.SHAPES)):
+        c = RG.cases(random.Random(i), i)
+        c["inputs"] = [dict(s, kind="random") for s in c["inputs"]]
+        q, k, cs = _words(c, i)
+        D = c["statics"]["D"]
+        got = np.asarray(A.evaluate_spec(RG.spec(c["statics"]), [q, k, cs]), dtype=np.uint16)
+        f = lambda w: (w.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+        cos, sin = f(cs[: D // 2]), f(cs[D // 2:])
+        want = []
+        for x in (q, k):
+            h = f(x).reshape(-1, D)
+            ev, od = h[:, 0::2], h[:, 1::2]
+            out = np.empty(h.shape, np.uint16)
+            out[:, 0::2], out[:, 1::2] = _bf16_rne(ev * cos - od * sin), _bf16_rne(od * cos + ev * sin)
+            want.append(out.reshape(-1))
         assert np.array_equal(got, np.concatenate(want)), c["statics"]
 
 

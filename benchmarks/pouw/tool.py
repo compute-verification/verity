@@ -13,10 +13,14 @@ from __future__ import annotations
 
 import argparse
 
+from research.pythonpath import package_paths, workspace_root
 from research.store.tool import Tool
 
-CLOSURE = ["benchmarks/pouw/**", "protocols/pouw/verity_pouw/**", "packages/verity/src/verity/randomness/**",
-           "packages/verity/src/verity/commitments/**", "packages/verity/src/verity/ml/tc/**", "packages/verity/src/verity/errors.py"]
+TREE = workspace_root(__file__)
+
+CLOSURE = ["benchmarks/pouw/**", "verity/protocols/accounting/work/pouw/**",
+           *package_paths(TREE, "verity", "primitives/randomness/**", "primitives/commitments/**", "errors.py"),
+           *package_paths(TREE, "verity_catalog", "silicon/**")]
 
 
 def _parser() -> argparse.ArgumentParser:

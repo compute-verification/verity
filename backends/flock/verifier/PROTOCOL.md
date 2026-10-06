@@ -313,7 +313,7 @@ The verifier draws the sampled units itself, in the clear, between registration 
 its operating system's randomness and sends it; the drawn units' statements are fixed; only then does the verifier send
 its coin commitment. The draw is not under the coin commitment, and no hash derives it.
 
-The samplers are `verity.randomness`'s exact ones, read straight from the OS bytes (`Flock.Draw`, `flock-verify draw`).
+The samplers are `verity.primitives.randomness`'s exact ones, read straight from the OS bytes (`Flock.Draw`, `flock-verify draw`).
 `uniform(n)` takes big-endian words of `w = ⌈(bitlen(n) + 64) / 8⌉` bytes and returns the first `x < 2^(8w) − 2^(8w) mod n`,
 mod `n`. `subset(k, n)` is the partial Fisher–Yates of `Key.subset`: for `i < k`, `j = i + uniform(n − i)`, swap `i` and
 `j`, and return the first `k`, sorted. `bernoulli(p)` over `[0, N)` takes unit `u` when `uniform(den) < num`. A stream
@@ -329,7 +329,7 @@ The draw is the object
 ~~~
 
 **The stratified law** is the default (Daniel, Sep 27; the encoding is `note:20260927T1550Z-handoff-from-stratified-law`,
-the same as `verity_sampled_proofs.one_stage`'s, in `protocols/sampled_proofs/README.md`):
+the same as `verity.protocols.verification.sampled_proofs.one_stage`'s, in `verity/protocols/verification/sampled_proofs/README.md`):
 - **Strata.** The verifier derives them from its own program and partition object, never from anyone else
   (`HmRow.stratifiedLaw`, `flock-verify draw --program P --partition Q --stratified K`). It applies the query, groups the
   units by the template descriptor id of their root node, and writes each stratum's units as ascending, disjoint, non-empty
@@ -403,7 +403,7 @@ and the record keeps it as `unit_draw`. The offline checks:
 | U3 | the statement's `instances` is the number of drawn units and their closure. A work draw's closure must be the verifier's own derivation from its closure map, and `verify` refuses a closure draw without the map |
 
 `stratified_agree.py` checks the Lean verifier's laws, draws and U2 verdicts against core's (#164's
-`verity_sampled_proofs.one_stage.draw`, #161's `Stratified`).
+`verity.protocols.verification.sampled_proofs.one_stage.draw`, #161's `Stratified`).
 
 Offline, the draw's uniformity is not checkable; soundness rests on the verifier's honest draw after registration. A
 session without a draw on either side is unchanged. The live side (PR #83) sends the draw after registration, stages the
@@ -1058,6 +1058,8 @@ included. Claims are listed region-major, then point 0 before point 1.
   - The input rows end before the constant (`128 · inWords ≤ constPos`, 128 rows per input word). Otherwise an input
     port could cover the constant's column, and Δ's input copies would rewrite the slot's constant row, leaving the
     unit's constant free.
+  - Each output group ends inside the slot (`col + words ≤ 2^{unit_log} / 128`, D11). Otherwise a region at its column
+    (`Circuit.outRegion`) would reach past the slot into the next range's columns.
   - Upstream's composite verifier checks none of these.
   - Lookup slots (META `lookups`, in key order after the expanded circuits, each named `lookup:<table>`) are built from
     SHA-256-pinned tables (`rsq, sqrt, rcp, ex2`) as two-level one-hot circuits.
@@ -1109,7 +1111,7 @@ The verifier checks the partition invariant itself, on its own copy of each circ
 `flock-verify unit-cut`). A cut is `total_gates`, `structure_gates` (constants and wiring: circuit structure, never
 committed), `owner[g]` (`"input"` for an input gate, a computing unit `u ≥ 0` otherwise), the `reads` `(producer,
 consumer)`, the returned `outputs`, the `committed` gates, the `input_gates`, and the `recomputed` pairs `(gate, earlier
-gate)`. The failure codes, in order, are those of `verity.ir.partition.validate_unit_cut`:
+gate)`. The failure codes, in order, are those of `verity.primitives.circuits.partition.validate_unit_cut`:
 
 | code | rule |
 |---|---|
@@ -1125,14 +1127,14 @@ With no failure, each gate is certified by exactly one unit and the committed se
 circuit is malformed. Under `Q_word` v2 (a cut's `"recompute": "report"`, the reference's `recompute="report"`) a recomputed
 pair across units is no failure: it is counted (`recomputed_across`), and every other code is v1's.
 
-**One Call's cut against its graph** (`Partition.checkCut`, `flock-verify cut-check`; reference `verity.ir.cut.check_cut`). The invariant runs on the Call's computing gates, with its parameters as the input unit and, unless served values
+**One Call's cut against its graph** (`Partition.checkCut`, `flock-verify cut-check`; reference `verity.primitives.circuits.cut.check_cut`). The invariant runs on the Call's computing gates, with its parameters as the input unit and, unless served values
 are given, the committed set the cut implies: a value is committed exactly when another unit reads it or the Call returns
 it. Then the width rule `Q_word_v1{X, W, EXTRAS}`, today `(16, 32, 0)`: each unit's boundary (its gates another unit reads
 or the Call returns) is at most `X + EXTRAS` bits, or one value of at most `W + EXTRAS` bits; else `unit-too-wide`, with
 `(unit, bits, values)`.
 
 **`Q_word` v1 over the verifier's own copy of the program** (`Flock.Qword`, `Flock.Program`, `Flock.Extract`;
-`flock-verify evaluate`, `qword-program`; reference `verity.ir.cut` and `verity.ir.partition_object`):
+`flock-verify evaluate`, `qword-program`; reference `verity.primitives.circuits.cut` and `verity.primitives.circuits.partition_object`):
 - the program is decoded from its `verity-ir/descriptor/v1` bytes by #120's rules, and each Call's graph is built as core's
   `CallGraph` builds it;
 - a program that is not topological, or whose root batches or scans, is inapplicable to every query;
@@ -1323,7 +1325,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
 - **Identifier.** The header may carry `identifier`, a JSON object C-Flock does not read (an application's name for what the
   statement is about, such as PoUW's). The public digest covers the header, so Σ binds it. The verifier needs its own
   `--identifier F` (a JSON object, by path or archive digest), and the header's must equal `F`'s in RFC 8785 form: both are
-  `canon`'s on core's RFC 8785 domain (`Program.domainError`, `verity.ir.codec.jcs_domain_error`: strings and keys ASCII
+  `canon`'s on core's RFC 8785 domain (`Program.domainError`, `verity.primitives.circuits.codec.jcs_domain_error`: strings and keys ASCII
   without DEL, integers of magnitude at most 2^53 − 1), and anything outside it refuses. A header identifier that is not an object, one with no
   `F`, and an `F` with a header that names none refuse. Verdicts and `statement` report `identifier`. The prover writes it
   with `circuit.write(..., identifier=)`.
@@ -1522,6 +1524,13 @@ expectation):
 - **D10:** the header's `identifier` (§16.10). Upstream ignores it (the public digest binds it); the spec refuses one that
   is not the verifier's own `--identifier F`. No vector exercises it; `backends/flock/tests/test_lean_identifier.py` runs
   it on the Lean verifier.
+- **D11:** each expanded circuit's output groups end inside its slot, `col + words ≤ 2^{unit_log} / 128` (§16.5,
+  `Net.ofRows`). Upstream's `IrUnitNet::parse` in every pinned build checks only that a group is an aligned power of two of
+  words, and its `Composite::check` doesn't bound an output column, so upstream accepts a statement that moves an output
+  group past the slot; the spec refuses it, as `backends/flock/live`'s parser now does. Honest statements pass both: every
+  writer (`ir_lower.layout`, `derive`, `tail.stage_layout`) closes its output groups before the constant row, so
+  `128 · (col + words) ≤ constPos < useful ≤ 2^{unit_log}`. No vector exercises it;
+  `backends/flock/tests/test_lean_out_group_slot.py` runs it on the Lean verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

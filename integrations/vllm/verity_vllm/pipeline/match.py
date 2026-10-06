@@ -24,7 +24,7 @@ CPU phase (Python 3.12, torch-free; pod or laptop):
     root_policy       verity_vllm.check.root_policy -> RUN_DIR/root_policy.json
     golden            verity_vllm.properties.golden --check -> RUN_DIR/golden.json
     wiring            verity_vllm.check.operand_provenance -> RUN_DIR/wiring.json (G5: exhaustive operand provenance, D82)
-    replay_a          verity_vllm.check.replay.replay --tier a --k 10 -> RUN_DIR/replay_a.json (G4 bodies; G5 sampled VUs + served tokens)
+    replay_a          verity_vllm.check.replay.replay --tier a --k 10 [--jobs N] -> RUN_DIR/replay_a.json (G4 bodies; G5 sampled VUs + served tokens)
     replay_chain      verity_vllm.check.replay.replay --tier chain -> RUN_DIR/replay_chain.json (G5 chaining smoke test)
     replay_b_step<N>  (with --full-replay) verity_vllm.check.replay.replay --tier b --step N -> replay_b_step<N>.json (diagnostic only)
     replay_c          (with --tier-c) verity_vllm.check.replay.replay --tier c -> RUN_DIR/replay_c.json (diagnostic only)
@@ -234,15 +234,13 @@ class Plan:
             if g:
                 c += ["--safetensors", g]
             cs = self.snapshots / "cos_sin_cache.npy"
-            if cs.exists():
-                c += ["--cos-sin", str(cs)]
-            return c
+            return c + (["--cos-sin", str(cs)] if cs.exists() else [])
         if stage == "golden":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "golden", "--check", "--out", str(self.p("golden"))]
         if stage == "wiring":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "operand-provenance", "--log", str(self.log), "--profile", a.profile, "--out", str(self.p("wiring"))]
         if stage == "replay_a":
-            return self._replay(["--tier", "a", "--k", str(a.k), "--seed", str(a.seed)], self.p("replay_a"))
+            return self._replay(["--tier", "a", "--k", str(a.k), "--seed", str(a.seed), "--jobs", str(a.replay_a_jobs)], self.p("replay_a"))
         if stage == "replay_chain":
             return self._replay(["--tier", "chain", "--chains", str(a.chains), "--seed", str(a.seed)], self.p("replay_chain"))
         if stage.startswith("replay_b_step"):
@@ -617,6 +615,7 @@ class Options:
     keep_traces: bool = option("--keep-traces", default=False, action="store_true", help="census: keep the per-step Chrome traces")
     cards_dir: str = option("--cards-dir", default="out/gen/cards")
     k: int = option("--k", type=int, default=DEFAULT_K, help="tier a instances per (specialization, regime) stratum (gate minimum TIER_A_K)")
+    replay_a_jobs: int = option("--replay-a-jobs", type=int, default=1, help="replay_a's forked workers (replay --jobs): the same seed gives the same sample and report")
     seed: int | None = option("--seed", type=int, default=None, help="the replay sample's seed (replay_a, replay_chain: required when they run)")
     no_program: bool = option("--no-program", default=False, action="store_true", help="(--worker fold) skip Program(): no digest")
     persist_dir: str | None = option("--persist-dir", default=None, help="(--worker fold) write program.json + instances.jsonl + accesses.jsonl.gz here (D85)")
@@ -1034,7 +1033,7 @@ def instances_form() -> str:
 
 
 def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: str | Path) -> dict:
-    """D85: freeze the candidate.  `program.json` is the Verity Program through the existing codec (`verity.ir.codec`,
+    """D85: freeze the candidate.  `program.json` is the Verity Program through the existing codec (`verity.primitives.circuits.codec`,
     digest == `fold_summary.digest`); `instances.jsonl` is the runtime-correspondence record the fold already holds in
     memory -- one line per Compute instance (step, root event id, pattern, spec id, rows, operand/output `ViewDesc`s, and
     the operand `Refs` as runs) -- and `accesses.jsonl.gz` the full memory-access journal (alloc / root / read / write /
@@ -1044,8 +1043,8 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     import gzip
 
     from verity_vllm.observe.events import ViewDesc
-    from verity.ir import codec
-    from verity.ir.refs import runs
+    from verity.primitives.circuits import codec
+    from verity.primitives.circuits.refs import runs
 
     # [R17 mfast, COORD R17-39 (a) fold/persist] the writer converts by SHAPE, not by a generic walk: a ViewDesc is six known fields (the
     # same dict, in field order, that dataclasses.asdict + _jsonable produced), an operand_refs item is a list of a str and ints already

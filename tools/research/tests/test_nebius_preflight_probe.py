@@ -13,9 +13,9 @@ _spec.loader.exec_module(P)
 # what `research run --on vy-nebius-1 --preflight check -- true` printed on 2 Oct (00:51Z without the bundles' URLs, 00:52Z with)
 REFUSED = """research: preflight tools/check/preflight.py on vy-nebius-1: FAILED in 0.7 s
 research: preflight: uv 0.12.20
-research: run r20261002-005132-46b6 refused on vy-nebius-1 (PreflightFailed): the machine failed the preflight tools/check/preflight.py (exit 1): backends/flock/verifier/lean/level3: its Lean dependencies (32c884ee1ea4) are not warm here and the run carries no URL for their bundle
+research: run r20261002-005132-46b6 refused on vy-nebius-1 (PreflightFailed): the machine failed the preflight tools/check/preflight.py (exit 1): verity/Security/Proofs: its Lean dependencies (32c884ee1ea4) are not warm here and the run carries no URL for their bundle
 """
-LAUNCHED = """research: preflight: store: backends/flock/verifier/lean/level3's Lean bundle 32c884ee1ea4 read with the run's custody key
+LAUNCHED = """research: preflight: store: verity/Security/Proofs's Lean bundle 32c884ee1ea4 read with the run's custody key
 research: vy-nebius-1's lease was not extended: the run has no --timeout, so a pod lease (if any) may end it
 research: run r20261002-005227-a0ab launched on vy-nebius-1 (None) pid=1398558 -> /workspace/research/runs/r20261002-005227-a0ab
 research: workload cwd: --cwd source
@@ -58,11 +58,12 @@ def test_drift_posts_when_its_findings_change_and_clears_once_none_is_left():
     def rep(*entries, strays=()):
         return {"commit": "c", "entries": [{"path": p, "state": s, "restart": r, **({"tree": "/t"} if t else {})}
                                            for p, s, r, t in entries], "strays": list(strays)}
-    a = rep(("/b/a.py", "stale", None, False), ("/t/x", "missing", None, True), ("/b/c.py", "ok", "restart tmux:c", False),
-            strays=["/b/a.py.bak-1"])
+    a = rep(("/b/a.py", "stale", None, False), ("/t/x", "missing", None, True), ("/b/c.py", "ok", "restart systemd:c", False),
+            ("/u/d.service", "held", None, False), strays=["/b/a.py.bak-1"])
     P.drift_step(state, {"vy-nebius-1": a, "vy-nebius-2": {"error": "ssh: timed out"}}, post)
     assert len(posts) == 1 and "`vy-nebius-1` restart 1, stale 1, stray 1." in posts[0]
     assert "• vy-nebius-1 stale /b/a.py" in posts[0] and "/t/x" not in posts[0]       # a tree's missing file is no finding
+    assert "/u/d.service" not in posts[0]                                              # nor a held one
     P.drift_step(state, {"vy-nebius-1": a}, post)
     P.drift_step(state, {"vy-nebius-1": {"error": "ssh: timed out"}}, post)
     assert len(posts) == 1

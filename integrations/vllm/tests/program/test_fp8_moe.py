@@ -2,9 +2,9 @@
 BLOCK_SIZE_K 32) and its Boolean versions (`boolean_fp8_moe`), and `fp8`'s blockwise CUTLASS GEMM over a ragged N (GLM-5.3's
 `fused_qkv_a_proj`, N = 2624 over 21 weight-scale rows).
 
-* the plain-integer reference (`verity.evaluation.evaluate`) against a model written here from the kernels: core's k32 step
+* the plain-integer reference (`verity.primitives.circuits.evaluation.evaluate`) against a model written here from the kernels: core's k32 step
   (`HopperE4m3QgmmaDot32`), FMUL and FFMA each rounded once from the exact rational, and `cvt.rn.bf16.f32`;
-* the step's pinned vectors (`fixtures/tc/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
+* the step's pinned vectors (`catalog/verity_catalog/silicon/captures/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
   coordinates;
 * operands on which the per-tile promotion, SWAP_AB and CUTLASS's per-block promotion give different words;
 * the numpy twins in `derived_rows` and `fp8_moe_rows` that the H200 capture compares the kernels with, against the Definitions;
@@ -21,17 +21,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation import evaluate
-from verity.evaluation.batch import type_shape
-from verity.evaluation.reference import standalone_call
-from verity.ir import boolean as BL
-from verity.ir import codec
-from verity.ir.defs import bind
-from verity.ml.boolean import trace as TR
-from verity.ml.prims import F32ToE4m3Sat
-from verity.ml.prims import HopperE4m3QgmmaDot32 as DOT
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.evaluation.batch import type_shape
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits import boolean as BL
+from verity.primitives.circuits import codec
+from verity.primitives.circuits.defs import bind
+from verity.primitives.circuits.boolean import trace as TR
+from verity_catalog.definitions.prims import F32ToE4m3Sat
+from verity_catalog.definitions.prims import HopperE4m3QgmmaDot32 as DOT
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels import fp8_moe_rows as MR
@@ -40,10 +40,10 @@ from verity_vllm.program.registry import boolean_fp8 as BF
 from verity_vllm.program.registry import boolean_fp8_moe as BM
 from verity_vllm.program.registry import fp8 as F
 from verity_vllm.program.registry import fp8_moe as M
-from verity_vllm.program.registry.moe import nv_expf_bits
+from verity_vllm.program.kernels.moe_twins import nv_expf_bits
 from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 
-VECTORS = Path(__file__).resolve().parents[4] / "fixtures" / "tc" / "vectors"
+VECTORS = Path(__file__).resolve().parents[4] / "catalog" / "verity_catalog" / "silicon" / "captures" / "vectors"
 SIGN, ONE = 1 << 31, 0x3F800000
 
 

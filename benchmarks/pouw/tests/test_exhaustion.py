@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -33,9 +34,9 @@ A = load("exhaustion_audit", HERE / "audit.py")
 W = A.W
 H = W.F.H
 
-from verity_pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Prover, activation_binding, rows_domain,  # noqa: E402
+from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Prover, activation_binding, rows_domain,  # noqa: E402
                                transcript_domain, weight_binding)
-from verity_pouw.protocol import tagged  # noqa: E402
+from verity.protocols.accounting.work.pouw.protocol import tagged  # noqa: E402
 
 SMALL = (64, 64, 1024)                       # (m, n, k): one 64 x 64 tile, the scheme's least k
 
@@ -108,7 +109,8 @@ def test_fraction_draws_and_gamma():
     assert A.eps_for(300) == pytest.approx(0.00994, abs=1e-5)
     g = A.gamma(8192, 8192)
     assert g["gamma"] == "1648180439/446072750000" and g["status"] == "pinned"
-    assert g["pin"] == "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192" and g["source"].endswith("lean-audit.json")
+    assert g["pin"] == "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192"
+    assert g["source"].endswith("lean-audit.json")
     f = A.fraction({0: 600, 3: 300}, {0: 1.5, 3: 2.0}, 1.8, Fraction(1, 100))
     assert f["capacity_gemms"] == 1200 + 900 and f["credited_gemms"] == 900
     assert f["fraction"] == pytest.approx(0.99 * 0.95 * 900 / 2100) and f["slowdown"] == pytest.approx(2100 / 900)
@@ -222,6 +224,125 @@ def honest(tmp_path_factory, request):
     out = tmp_path_factory.mktemp(f"exhaustion-window-{request.param}")
     honest_window(out, {0: 2, 1: 1}, hashing=request.param)
     return out
+
+
+@pytest.mark.slow
+def test_audit_sh_audits_a_window_sh_out_from_its_tar(tmp_path):
+    """audit.sh, the CPU half window.sh runs after its lease (or elsewhere, with AUDIT=0): unpacked from a tar of a window.sh
+    OUT, it audits each window in place and runs the harness's verify on each card's bench (this one's is synthetic, so verify
+    fails; without a γ twin at the test's shape, the audit fails on γ alone)."""
+    src = tmp_path / "src"
+    honest_window(src / "overlap", {0: 1})
+    for when in ("before", "after"):
+        shutil.move(src / "overlap" / f"bench-{when}", src / f"bench-{when}")
+    subprocess.run(["tar", "-cf", str(tmp_path / "out.tar"), "-C", str(src), "."], check=True)
+    out = tmp_path / "out"
+    r = subprocess.run(["bash", str(HERE / "audit.sh"), str(tmp_path / "out.tar"), str(out)], capture_output=True, text=True,
+                       env={"PATH": "/usr/bin:/bin", "PY": sys.executable, "JOBS": "2"}, stdin=subprocess.DEVNULL)
+    assert r.returncode == 1 and "audit overlap rc=1" in r.stdout and "verify card0 rc=" in r.stdout, r.stdout + r.stderr
+    res = json.loads((out / "overlap" / "audit.json").read_text())
+    assert failed(res) == {"gamma"} and len(res["tiles"]) == 60 and all(t["ok"] for t in res["tiles"])
+    assert (out / "verify-before" / "card0.log").is_file()
+
+
+def rows_sh(script: str, **env: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["bash", "-c", f'. "{HERE / "rows.sh"}"; {script}'], capture_output=True, text=True,
+                          env={"PATH": "/usr/bin:/bin", "PY": sys.executable, **env}, stdin=subprocess.DEVNULL)
+
+
+def window_scratch(tmp_path: Path) -> tuple[Path, Path]:
+    """window.sh's scratch dir and OUT as its lease leaves them: the ship, the lease script, and card0's rows, which the arm's
+    transcript and negative control in OUT name by absolute path (bench.py's dump at the arm's shape)."""
+    scr, out = tmp_path / "scratch" / "exhaustion.Ab12Cd", tmp_path / "out"
+    rows = scr / "rows" / "card0" / "pearl-c-sm120-v1-h1" / "m64-n64-k1024"
+    for p, data in ((scr / "ship" / "pearl_c_sm120.cubin", b"\x7fELF"), (scr / "lease.sh", b"set -u\n"),
+                    (rows / "rows_a.bin", bytes(range(256)) * 16), (rows / "rows_b.bin", bytes(range(255, -1, -1)) * 16)):
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+
+    def spec(p: Path, path: str) -> dict:
+        return {"path": path, "bytes": p.stat().st_size, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+
+    for kind in ("transcripts", "negative"):
+        d = out / "bench-before" / "card0" / kind / "pearl-c-sm120-v1-h1" / "m64-n64-k1024"
+        d.mkdir(parents=True)
+        (d / "tree_a.bin").write_bytes(b"\x01" * 96)
+        files = {n: spec(rows / f"{n}.bin", str(rows / f"{n}.bin")) for n in ("rows_a", "rows_b")}
+        (d / "manifest.json").write_text(json.dumps({"files": files | {"tree_a": spec(d / "tree_a.bin", "tree_a.bin")}}))
+    (out / "bench-before" / "card0" / "bench.json").write_text(json.dumps({"exit": 0, "items": []}))
+    return scr, out
+
+
+def stub_py(tmp_path: Path) -> Path:
+    """A PY for audit.sh whose harness verify.py loads every file each of the card's transcripts names, through the Pearl-C
+    verifier's own `load` (the path, size and SHA-256 the real verify holds them to), and exits 0; anything else runs as is."""
+    fake = tmp_path / "fake_verify.py"
+    fake.write_text(f"""import importlib.util, json, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("pc_verify", {str(HERE.parent / "pearl_c_sm120" / "verify.py")!r})
+V = importlib.util.module_from_spec(spec); spec.loader.exec_module(V)
+bench, n = Path(sys.argv[1]), 0
+for m in sorted(bench.parent.glob("*/*/*/manifest.json")):
+    for f in json.loads(m.read_text())["files"].values():
+        V.load(m.parent, f); n += 1
+Path(sys.argv[sys.argv.index("--out") + 1]).write_text(json.dumps({{"loaded": n}}))
+""")
+    py = tmp_path / "py"
+    py.write_text(f'#!/bin/bash\ncase ${{1:-}} in */benchmarks/pouw/harness/verify.py) shift; exec "{sys.executable}" "{fake}" "$@" ;; esac\n'
+                  f'exec "{sys.executable}" "$@"\n')
+    py.chmod(0o755)
+    return py
+
+
+def test_window_sh_keeps_its_rows_with_audit_0_for_audit_sh_to_verify_and_release(tmp_path):
+    """With AUDIT=0, window.sh's exit keeps the scratch dir's rows alone, marked, and names it in OUT/kept-rows; audit.sh on
+    the same machine finds every row the transcripts name, runs the verify on them, and removes the kept dir after it."""
+    scr, out = window_scratch(tmp_path)
+    r = rows_sh(f'rows_exit "{scr}" "{out}"', AUDIT="0")
+    assert r.returncode == 0 and f"rows: kept {scr}" in r.stdout, r.stdout + r.stderr
+    assert sorted(p.name for p in scr.iterdir()) == [".kept-rows", "rows"] and (out / "kept-rows").read_text().strip() == str(scr)
+    r = subprocess.run(["bash", str(HERE / "audit.sh"), str(out)], capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                       env={"PATH": "/usr/bin:/bin", "PY": str(stub_py(tmp_path)), "JOBS": "1"})
+    assert "rows: 2 of 2 files the bench transcripts name outside OUT are here" in r.stdout, r.stdout + r.stderr
+    assert "verify card0 rc=0" in r.stdout and f"rows: released {scr}" in r.stdout, r.stdout + r.stderr
+    assert json.loads((out / "verify-before" / "card0.json").read_text()) == {"loaded": 6} and not scr.exists()
+
+
+def test_audit_sh_skips_the_verify_when_the_rows_are_elsewhere(tmp_path):
+    """OUT audited on another machine (or after its rows were released or swept): the verify is skipped, not run to fail."""
+    scr, out = window_scratch(tmp_path)
+    shutil.rmtree(scr)
+    r = subprocess.run(["bash", str(HERE / "audit.sh"), str(out)], capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                       env={"PATH": "/usr/bin:/bin", "PY": str(stub_py(tmp_path)), "JOBS": "1"})
+    assert "rows: 0 of 2 files" in r.stdout and "verify card0 skipped" in r.stdout, r.stdout + r.stderr
+    assert not (out / "verify-before" / "card0.log").exists()
+
+
+def test_window_sh_removes_its_scratch_when_audit_sh_runs_inline(tmp_path):
+    scr, out = window_scratch(tmp_path)
+    r = rows_sh(f'rows_exit "{scr}" "{out}"')
+    assert r.returncode == 0 and not scr.exists() and not (out / "kept-rows").exists(), r.stdout + r.stderr
+
+
+def test_rows_sweep_takes_only_kept_dirs_marked_long_ago(tmp_path):
+    """A forgotten audit's rows go at the next start: a kept dir whose mark is older than ROWS_KEEP_HOURS. A window still
+    waiting for its lease (no mark, however old its dir), a fresh mark and another program's dir stay."""
+    root = tmp_path / "scratch"
+    for name, marked in (("exhaustion.old", True), ("exhaustion.fresh", True), ("exhaustion.waiting", False), ("other.old", True)):
+        (root / name / "rows").mkdir(parents=True)
+        if marked:
+            (root / name / ".kept-rows").write_text("2026-10-05T00:00:00Z\n")
+    for p in (root / "exhaustion.old" / ".kept-rows", root / "other.old" / ".kept-rows", root / "exhaustion.waiting"):
+        os.utime(p, (0, 0))
+    r = rows_sh(f'rows_sweep "{root}"')
+    assert r.returncode == 0 and r.stdout.strip() == f"rows: swept {root / 'exhaustion.old'} (kept over 6 h)", r.stdout + r.stderr
+    assert sorted(p.name for p in root.iterdir()) == ["exhaustion.fresh", "exhaustion.waiting", "other.old"]
+
+
+def test_window_sh_sweeps_before_its_scratch_and_keeps_rows_on_exit():
+    src = (HERE / "window.sh").read_text()
+    assert src.index('. "$HERE/rows.sh"') < src.index('rows_sweep "${SCRATCH_ROOT:-/tmp}"') < src.index("SCR=$(mktemp")
+    assert "trap 'rows_exit \"$SCR\" \"$OUT\"' EXIT" in src and "rm -rf \"$SCR\"" not in src
 
 
 def failed(res: dict) -> set[str]:

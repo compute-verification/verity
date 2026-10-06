@@ -97,6 +97,23 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-05: don't resume or re-dispatch a turn cut off by a console drop or a provider outage unless Daniel asks;
+  report it to your coordinator and wait.
+- 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
+  piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
+  critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
+  work still names its question.
+- 2026-10-04 (2:21 PM PDT): during the migration, ci resolves a conflict that is only a rename (a moved file that another
+  PR edited) in the train tip's merge commit, instead of sending the PR back for a restack, and names each resolution in
+  the handoff. A conflict that needs judgment still goes to the PR's owner, and `check` still runs on the merged tree.
+- 2026-10-04 (8:42 AM PDT): the proof system proves batches of arbitrary Boolean circuits, so soundness is **one
+  theorem over everything the compiled Lean verifier accepts**, with no hypothesis on the circuit file or the statement's
+  form (no `scopeOk`, no `pub.tables = none`). The verifier fails closed: it refuses every form the proof doesn't cover,
+  and rejecting an unproved form is a completeness limit, never a soundness gap. A circuit's inputs and outputs use one
+  canonical format, proved once in general (any row length, any input groups, any output placement), and frontends
+  normalize to it. Adding a workload never needs a verifier or proof change. The verifier gains no new form ahead of its
+  proof, and progress is never measured by which workloads' files fall inside a proof's scope. Pushback is welcome:
+  send it to Daniel through @proofs.
 - 2026-10-03: a test tier too slow for `check` (the vLLM reference regression's manifest rebuilds, about an hour) runs as a
   detached job after each train lands on `main` (`tools/check/post_train.py`, started by `research merge --push`) and labels
   the landing's check attempt `note=regression pass` or `fail:<rows>`, which circuits sweeps daily; `check` blocks on the
@@ -105,16 +122,13 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-03 (the coordinator's): data you don't own on a node is deleted only with `research retention gc` or `research
   retention rm --approved-by @OWNER`, which refuses unless every retention record on the path names that owner; never a bare
   `rm`, and never on another lane's word about who owns it.
-- 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`EDGES` in
-  `tests/test_protocol_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
+- 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`ALLOWED` in
+  `verity/tests/test_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
   edges stay acyclic. The layout that follows (lean with compute-accounting): a protocol guarantee that needs a proof
   system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
   registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
   for itself. No package requires both a protocol and a backend, there is no `bridges/` layer, and a citation names both
   guarantees.
-- 2026-10-02 (10:27 PM PDT): a statement review or red-team grant on a PR carries across a restack or a merge of `main`
-  when the restacked head's `lean-audit.json` change against its base is byte-identical to the one that was granted.
-  Any other change to `lean-audit.json` needs a new grant.
 - 2026-10-02 (10:27 PM PDT): `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption. Hiding is
   proved at a fresh uniform key, and nobody works on proving that the pinned key behaves like one.
 - 2026-10-02 (10:27 PM PDT): the lander starts every merge check (`check --record`, `research merge`). The PR captain

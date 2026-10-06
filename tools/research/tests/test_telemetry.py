@@ -743,6 +743,33 @@ def test_rule_7b_needs_both_the_counter_and_the_killed_line(tmp_path, monkeypatc
     assert classify(d)["class"] == "CGROUP_OOM_ATTRIBUTED"
 
 
+def _queue_attempt(tmp_path, run_id, *, sig, oom, unit=None):
+    """A `research run --queue` attempt: its cgroup is the scope `cluster-<run id>.scope` capped at 8 GiB (job.json), which the
+    sampler calls the pod's because the runner and the sampler share it with the workload."""
+    d = tmp_path / run_id
+    d.mkdir()
+    path = f"/user.slice/user-1001.slice/user@1001.service/app.slice/{unit or f'cluster-{run_id}.scope'}"
+    cg = [{**_cg(t, k), "cgroup": {**_cg(t, k)["cgroup"], "path": path}} for t, k in ((100, 0), (104, oom))]
+    _attempt(d, rc=128 + sig, sig=sig, samples=cg, end=105.0)
+    (d / "job.json").write_text(json.dumps({"ownership": {"job": run_id}, "environment": {"cgroup": {"path": path, "memory_max_bytes": 8 << 30}}}))
+    return d
+
+
+def test_a_queue_scope_systemd_stopped_after_an_oom_kill_is_an_oom_that_names_the_cap(tmp_path):
+    doc = classify(_queue_attempt(tmp_path, "r20261005-064854-bd63", sig=15, oom=1))
+    assert doc["class"] == "CGROUP_OOM_ATTRIBUTED" and doc["certainty"] == "established", doc["why"]
+    assert "MemoryMax=8G" in doc["why"] and "--mem-gb" in doc["why"] and "systemd" in doc["why"]
+    assert any(e["kind"] == "cgroup.queue_scope" and e["memory_max"] == "MemoryMax=8G" for e in doc["evidence"])
+    killed = classify(_queue_attempt(tmp_path, "r2", sig=9, oom=1))
+    assert killed["class"] == "CGROUP_OOM_ATTRIBUTED" and killed["certainty"] == "established" and "MemoryMax=8G" in killed["why"]
+
+
+def test_a_sigterm_with_no_kill_or_outside_the_runs_own_scope_stays_unknown_signal(tmp_path):
+    assert classify(_queue_attempt(tmp_path, "r1", sig=15, oom=0))["class"] == "UNKNOWN_SIGNAL"
+    other = classify(_queue_attempt(tmp_path, "r3", sig=15, oom=1, unit="cluster-r9.scope"))
+    assert other["class"] == "UNKNOWN_SIGNAL" and "MemoryMax" not in other["why"]
+
+
 def test_killed_re_matches_shell_kernel_and_subprocess_reports_not_prose():
     from research.telemetry.classify import KILLED_RE
 
@@ -965,3 +992,27 @@ def test_a_failed_process_snapshot_keeps_the_holds(tmp_path, monkeypatch):
     assert s.errors["process"] == 1 and opened == [11, 12] and set(s.pss_hold) == {(11, 7)}
     held = _records(tmp_path, "pss")[-1]["processes"]
     assert [p["pid"] for p in held] == [11] and held[0]["skipped"] is True and "(90.0 s more)" in held[0]["reason"]
+
+
+# ---- source identity: a namespace package spans every portion ----------------------------------------------------------------------------------
+
+def _portion(tree: Path, root: str, name: str, module: str) -> str:
+    (tree / root / name / module).mkdir(parents=True)
+    (tree / root / name / module / "__init__.py").write_text("")
+    (tree / "EXPORT.json").write_text(json.dumps({"commit": tree.name * 8}))
+    return str(tree / root)
+
+
+def test_a_namespace_with_a_portion_from_another_tree_is_a_mismatch(tmp_path):
+    """Recording only the first portion passed a namespace whose second portion came from another checkout."""
+    from research.telemetry import source_identity as sid
+
+    ours, other = tmp_path / "ours", tmp_path / "other"
+    src, lib, foreign = _portion(ours, "src", "nsprobe", "ir"), _portion(ours, "lib", "nsprobe", "ml"), _portion(other, "src", "nsprobe", "ml")
+    both = sid.resolve_module("nsprobe", path=[src, lib])
+    assert both["repo_root"] == str(ours.resolve()) and [p["repo_root"] for p in both["portions"]] == [str(ours.resolve())] * 2
+    assert sid.check({"nsprobe": both}, str(ours)) == []
+    mixed = sid.resolve_module("nsprobe", path=[src, foreign])
+    assert mixed["resolved_path"] == str((ours / "src" / "nsprobe").resolve()) and mixed["repo_root"] is None
+    [m] = sid.check({"nsprobe": mixed}, str(ours))
+    assert "namespace portion(s) outside the requested tree" in m["why"] and str((other / "src" / "nsprobe").resolve()) in m["why"]

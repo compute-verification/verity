@@ -161,6 +161,13 @@ def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_pa
     assert CHECK.take_lean_deps_urls(tmp_path) == Path("/somewhere/urls.json")
 
 
+def test_custody_deletes_the_lean_dependency_urls_wherever_a_run_leaves_them():
+    """A run of anything else, or a check that ends before `check.py` starts, leaves them in inputs/ for custody to delete."""
+    from research.store.custody import CREDENTIALS
+
+    assert f"inputs/{CHECK.LEAN_DEPS_URLS}" in CREDENTIALS
+
+
 def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch):
     import json
 
@@ -405,15 +412,18 @@ def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the
     """Not beside `lake build`: whether their tests run or skip, and what `lake` finds built, must not depend on how far the
     concurrent Lean group has got (verity-flock passed or failed on build order, r20260929-015410-5a20). The audit builds only
     in scratch trees of its own, so it is a group of its own and nothing in the Lean group waits on it (r20261004-024819-11bc:
-    the audit's 3,238 s, then the suites' 979 s and the agreement's 515 s, one after another)."""
+    the audit's 3,238 s, then the suites' 979 s and the agreement's 515 s, one after another). The suites need only the
+    verifier lean-build built, so they wait on it alone and run beside the agreement (r20261004-150518-b201: 1,254 s, then
+    1,222 s)."""
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
     (_, pytest, _), = gs[0]
     lean = gs[2]
-    assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"]
+    assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-agreement"]
     assert [n for n, _, _ in gs[3]] == ["lean-audit"] and gs[3][0][1][4].endswith("tools/lean/lean_audit.py")
+    assert [n for n, _, _ in gs[5]] == ["lean-suites"] and CHECK.AFTER["lean-suites"] == "lean-build"
     assert all(pytest[pytest.index(s) - 1] == "--skip" for s in CHECK.AFTER_LEAN)
-    argv = lean[2][1]
+    argv = gs[5][0][1]
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
 
@@ -481,23 +491,26 @@ def test_the_agreement_scripts_import_only_the_standard_library_and_each_other()
 
 
 def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_in_it(tmp_path, monkeypatch):
-    """`flock-verify` is built from the Lean package alone: level3/ and soundness/ (Lake packages of their own) are no input,
-    unless the package's lakefile requires something, which keeps everything in.  Nor is the package's `lean-audit.json`, which
-    only the audit reads: that one path, not every file of the name."""
+    """`flock-verify` is built from the Lean package alone: its proofs (`verity/Security/Proofs/Flock/`) and any Lake package
+    nested in it are no input, unless the package's lakefile requires something, which keeps everything in.  Nor is the
+    package's `lean-audit.json`, which only the audit reads: that one path, not every file of the name."""
     files = CHECK.tracked_files()
     closure = CHECK.agreement_closure(files)
     policy, other = "backends/flock/verifier/lean/lean-audit.json", "backends/flock/verifier/lean/Flock/lean-audit.json"
     assert policy not in CHECK.agreement_closure([*files, policy]) and other in CHECK.agreement_closure([*files, other])
-    assert "backends/flock/verifier/ci.py" in closure and "backends/flock/verifier/lean/Main.lean" in closure
+    assert "backends/flock/verifier/ci.py" in closure and "backends/flock/verifier/lean/FlockVerify.lean" in closure
     assert "backends/flock/verifier/upstream.json" in closure
-    assert not [f for f in closure if f.startswith(("backends/flock/verifier/lean/soundness/", "backends/flock/verifier/lean/level3/"))]
-    assert [f for f in files if f.startswith("backends/flock/verifier/lean/soundness/")]
-    (tmp_path / "backends/flock/verifier/lean/soundness").mkdir(parents=True)
-    (tmp_path / "backends/flock/verifier/lean/lakefile.toml").write_text('[[require]]\nname = "x"\n')
-    (tmp_path / "backends/flock/verifier/lean/soundness/lakefile.toml").write_text("")
+    assert not [f for f in closure if f.startswith("verity/Security/")]
+    assert [f for f in files if f.startswith("verity/Security/Proofs/Flock/")]
+    nested = ["backends/flock/verifier/lean/lakefile.toml", "backends/flock/verifier/lean/nested/lakefile.toml",
+              "backends/flock/verifier/lean/nested/N.lean"]
+    (tmp_path / "backends/flock/verifier/lean/nested").mkdir(parents=True)
+    (tmp_path / nested[0]).write_text("")
+    (tmp_path / nested[1]).write_text("")
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
-    fake = ["backends/flock/verifier/lean/lakefile.toml", "backends/flock/verifier/lean/soundness/lakefile.toml"]
-    assert CHECK.agreement_closure(fake) == fake
+    assert CHECK.agreement_closure(nested) == nested[:1]
+    (tmp_path / nested[0]).write_text('[[require]]\nname = "x"\n')
+    assert CHECK.agreement_closure(nested) == nested
 
 
 def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, monkeypatch):
@@ -645,7 +658,7 @@ def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
 def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
-    assert len(gs) == 5 and [n for n, _, _ in gs[4]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
+    assert len(gs) == 6 and [n for n, _, _ in gs[4]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
     argv, audit = gs[4][0][1], gs[3][0][1]
     assert argv[1].endswith("tools/lean/lean_changed.py")
     assert argv[argv.index("--cache") + 1] == audit[audit.index("--cache") + 1], "the audit's own passes"
@@ -720,3 +733,51 @@ def test_a_contradicted_cached_pass_is_named_in_the_result(tmp_path, monkeypatch
     r = RES.check(tmp_path, "r20260929-010000-abcd")
     assert r.valid, r.errors
     assert r.doc["cache_contradictions"] == bad and r.doc["nondeterministic"] == flaky
+
+
+def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_path, monkeypatch, capsys):
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"backends/flock/\\303\\251.py"`), which no prefix of the
+    agreement's rule matched, so `--record` checked such a change without sending the agreement's pinned build."""
+    import shutil
+    import subprocess
+    import sys
+    import tempfile
+
+    from research.store import local
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tmp_path,
+                       check=True, capture_output=True)
+
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    shutil.copy(ROOT / "tools" / "check" / "tool.py", tmp_path / "tools" / "check" / "tool.py")
+    git("init", "-q", "-b", "main")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    (tmp_path / "backends" / "flock").mkdir(parents=True)
+    (tmp_path / "backends" / "flock" / "é.py").write_text("x = 1\n")
+    git("checkout", "-q", "-b", "pr")
+    git("add", "-A")
+    git("commit", "-q", "-m", "é")
+
+    class Store:
+        def fetch(self, art: str) -> Path:
+            return tmp_path / art.replace(":", "_")
+
+    real, launched = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(local, "LocalStore", Store)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(subprocess, "run", run)
+    assert CHECK.record(["--base", "main"]) == 0
+    assert "check: changes under backends/flock/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
+    [cmd] = launched
+    assert any(x.startswith("flock_upstream=art:") for x in cmd)

@@ -8,7 +8,7 @@ which the v2 query (`required.collective_sites`) turns into the module's k-th co
 Without the site the manifest folded both gathers into one `self_attn/out` of twice the width with no partial to bind (row #70:
 6,944 unbound identities per rank).  CPU, meta tensors; no vLLM.
 
-Run: `PYTHONPATH=.:../../packages/verity/src python -m pytest -q -p no:cacheprovider tests/correspondence/test_tp_collective_site.py`
+Run: `PYTHONPATH=.:../.. python -m pytest -q -p no:cacheprovider tests/correspondence/test_tp_collective_site.py`
 """
 from __future__ import annotations
 

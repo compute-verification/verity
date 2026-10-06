@@ -79,6 +79,9 @@ def test_dry_run_cpu_phase():
     assert ra[1:4] == ["-m", "verity_vllm.pipeline.cli", "replay"] and ra[ra.index("--tier") + 1] == "a" and ra[ra.index("--k") + 1] == str(RC.DEFAULT_K)
     assert ra[ra.index("--max-arg-leaves") + 1] == "4000000" and ra[ra.index("--out") + 1] == "/r/RUN/replay_a.json"
     assert ra[ra.index("--seed") + 1] == "12345"                      # the verifier's seed reaches the sampler
+    assert ra[ra.index("--jobs") + 1] == "1"                          # sequential unless --replay-a-jobs says otherwise
+    jobs = dry("--phase", "cpu", "--seed", "12345", "--replay-a-jobs", "14")["replay_a"]
+    assert jobs[jobs.index("--jobs") + 1] == "14" and jobs[jobs.index("--seed") + 1] == "12345"
     w = c["wiring"]
     assert w[1:4] == ["-m", "verity_vllm.pipeline.cli", "operand-provenance"] and w[w.index("--log") + 1] == log and w[w.index("--out") + 1] == "/r/RUN/wiring.json"
     ch = c["replay_chain"]

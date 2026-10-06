@@ -7,6 +7,9 @@ records) and `lean-deps.json` (the pinned dependency bundles). The audit needs t
 toolchain's `lean`; nothing here imports Verity, so another repository can copy the auditor (`audit.py`, `Facts.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
 own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they stay with this repository.
+`check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
+path relative to the package, a package required by path as its own content, so a `git mv` of a package is no miss, and its
+kept `.lake/build` follows it (`lean_audit.py`'s docstring has the key, `--explain PKG` what a miss changed).
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
@@ -114,6 +117,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
 ~~~
 
 - `roots`: the modules the audit imports; every module under them is audited. `axioms` is optional.
+- `proved_in` (optional): the packages, as paths relative to this one, that prove its guarantees (below).
 - `runs`: the package's tests, compiled evaluation that no proof reads (a bulk conformance check over more vectors than
   the kernel checks). Each is an exempt module, run after the replay by `lake env lean --run` in the build sandbox, and
   passes when it exits 0. An argument `{NAME}` is the path of data file NAME, which is what `generate` writes (run first,
@@ -134,7 +138,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   name a kernel bypass, each with the reason. An entry that no longer matches a hit fails, so the list stays current.
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
-- `guarantees`: the theorems a document or a PR cites as proved (README "Glossary"), and any lemma listed beside them.
+- `guarantees`: the guarantees (README "Glossary"), and any lemma still listed beside them.
   `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
   hypotheses, a hash of the type, and for each module the definitions the guarantees read, with a hash each, the
   guarantees that read them, and a `digest` of those hashes (which the record therefore determines). Without `--update`
@@ -176,19 +180,69 @@ of notation) gets one line, "printed differently", and is left out of the DM. De
 read from another module with the same content is counted on one line. A grant in `tools/check/queue.toml`
 (`lean_audit = ["guarantees", "reads"]`) would make such a change wait for a reviewer again.
 
+**A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with
+`def G (ys) : Prop := e'` in a `Guarantees` module, changes its record's signature and type hash. `audit.py --update`
+certifies the lift as the same statement when the type, with `G` unfolded once, hashes to the record's type hash and the
+named assumptions are the record's (`lifted_into`). `Facts.lean` (`liftOf`) unfolds by delta alone: the binders `xs` as they
+are, and in place of `G as` the value of `G` at the type's universe levels with its leading `fun`s instantiated by `as` (as
+`Meta.unfoldDefinition?` unfolds an applied constant), the proofs Lean abstracts out of a definition (its `G._proof_<n>`
+theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
+type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
+read by no other guarantee, needs no reading of its own; the review then holds no statement change, so the merge needs no
+statement reviewer for it. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+(binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
+theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
+lists a lifted guarantee as changed.
+
 **A move is not a change.** When declarations move (guarantees renamed, the definitions they read renamed or moved to other
-namespaces, a statement restated as a `def G : Prop` that a theorem `t : G` proves), write the moves as a JSON object of
-old names to new ones, each a declaration or a namespace (the longest prefix applies), and run
-`audit.py --update --moved MOVES.json PKG` on the record as it was before the move. The record's guarantees are renamed, and
-`Facts.lean` writes each guarantee's statement and each definition it reads once more with the build's names mapped back to
-the old ones, a statement whose type is a `Prop` definition under `meaning` also with that definition unfolded (and the
-proofs Lean abstracts out of a definition, its `G._proof_<n>` theorems, put back in place, as a theorem's type keeps them).
-The review compares those texts with the records of the old names: a guarantee that says what its record says gets one line, "the
-same statement under its old names" (moved from its old name, or restated as `G`, which then needs no reading of its own),
-and the definitions the same under their old names are counted on one line; neither is in Daniel's DM. Everything else
-prints as without the map. A map whose new names nest differently from its old ones is refused, and so is one under which two
-constants of those texts (or two guarantees) would have one old name, since the comparison could not tell them apart; an old
-theorem kept under its old name as the lemma behind a new guarantee is no conflict.
+namespaces), write the moves as a JSON object of old names to new ones, each a declaration or a namespace (the longest prefix
+applies), and run `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. The record's guarantees
+are renamed, and `Facts.lean` writes each guarantee's statement and each definition it reads once more with the build's names
+mapped back to the old ones, a lifted statement also with its definition unfolded. The review compares those texts with the
+records of the old names: a guarantee that says what its record says gets one line, "the same statement under its old
+names" (moved from its old name, lifted as above, or both), and the definitions the same under their old names are counted
+on one line. Daniel's DM, which reads only the records, leaves out a guarantee renamed with its type hash unchanged and a
+definition moved with its content. Everything else prints as without the map. A map whose new names nest differently
+from its old ones is refused, and so is one under which two constants of those texts (or two guarantees) would have one old
+name, since the comparison could not tell them apart; an old theorem kept under its old name as the lemma behind a new
+guarantee is no conflict.
+
+## A spec and its proofs in two packages: `proved_in`
+
+A spec package (`Pkg.Protocol`, `Pkg.Assumptions`, `Pkg.Guarantees`: definitions and `def G : Prop` statements) keeps the
+lock, the trusted object. Its proofs may live in another Lake package (`security_proofs/<area>/`) that `require`s the spec
+by path and proves `theorem SecurityProofs.G : Guarantees.G`; that package is untrusted. The spec's policy names it:
+
+~~~json
+{
+ "roots": ["Pkg.Protocol", "Pkg.Assumptions", "Pkg.Guarantees"],
+ "proved_in": ["../../security_proofs/pkg"],
+ "guarantees": {"Pkg.SecurityProofs.g": {}}
+}
+~~~
+
+and the proofs package has a policy of its own with no guarantees: its `roots` (all of its modules a proof uses), and its
+`layers`, `exempt`, `escapes` and the rest as any package's. The spec's audit then reads each guarantee from the `.olean`
+files of the package that declares it, with the spec's `meaning`, `axioms` and `assumptions`, and checks, records and
+`--update`s it in the spec's lock exactly as a guarantee proved in the spec itself. So moving a proof out of the spec's
+package changes no guarantee or `reads` record, and sends no DM (`tests/test_audit.py` builds the move). The spec's own
+checks (layers, scans, escapes, its replay) run as before. It fails when:
+
+- a guarantee is declared by no package among the spec and those named (`missing`), or in a module none of them audits, or
+  by two of them;
+- a named package does not require the spec by path, lists guarantees of its own, or lists under `compile_time` a module
+  where a guarantee it proves is declared or read;
+- its roots import a module of its own outside them, which its replay would skip;
+- its modules share a root namespace with a package it requires. Lean finds a module in the first package on its search
+  path that holds a directory for the module's root, so `lake env lean` (and the audit's reading) cannot load `Pkg.Spec`
+  from one package and `Pkg.SecurityProofs` from another, although `lake build` can. Put the proofs' modules under a root
+  of their own (`PkgProofs.…`); the declarations keep their names (`namespace Pkg.SecurityProofs`), which is all a record
+  holds. For the same reason, and because a library whose root is `Pkg` claims every `Pkg.*` module, an umbrella module
+  `Pkg` cannot move into the proofs package.
+
+The proofs package's own audit replays its declarations through the kernel, so `audit.py SPEC` audits each package
+`proved_in` names in the same run, without `--update` unless it is named too, and the spec's reading waits for its build.
+`check`'s key for a spec covers the files of the packages it names, so the two miss and are audited together.
 
 ## Merging records: `merge.py`
 

@@ -38,10 +38,10 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.defs import bind
 from verity_vllm.program.registry import act as _ACT
 from verity_vllm.program.registry import moe as _MOE
-from verity_vllm.program.registry import targets as T
+from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
 
 from verity_vllm.observe.events import ViewDesc
@@ -279,7 +279,7 @@ class MoEFusedExperts:
         # 3. up/gate GEMM over pairs --------------------------------------------------------------------------------
         P = M * TOPK
         ids_flat = _flat(ids, P)
-        try:   # the record target's expert GEMM Definitions (`registry.targets.moe_expert_gemm_spec`): the same selection the builder makes
+        try:   # the record target's expert GEMM Definitions (`frontend.targets.moe_expert_gemm_spec`): the same selection the builder makes
             up_spec, down_spec = (T.moe_expert_gemm_spec(target_of(ctx)[0], E, K, N, routed=w) for K, N, w in ((H, 2 * I, False), (I, H, True)))
         except T.UnregisteredTarget as e:
             return unsupported(node, f"target has no registered fused-MoE binding: {e}")
@@ -297,7 +297,7 @@ class MoEFusedExperts:
         # 4. silu_and_mul on the pair rows ------------------------------------------------------------------------
         silu_r = SiluAndMul().match(silu, ctx)
         if not isinstance(silu_r, Compute):
-            return unsupported(node, "silu_and_mul inside the MoE scope did not resolve as SiluMul_v1",
+            return unsupported(node, "silu_and_mul inside the MoE scope did not resolve as SiluMul",
                                detail=getattr(silu_r, "detail", None), reason=getattr(silu_r, "reason", None))
         if silu_r.rows != P:
             return unsupported(node, "silu_and_mul rows are not the M*TOPK pair rows", rows=silu_r.rows, P=P)
