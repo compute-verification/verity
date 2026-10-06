@@ -9,7 +9,7 @@ import random
 import pytest
 
 from verity.protocols.accounting.space.pous import setup
-from verity.protocols.accounting.space.pous.audit import (DEADLINE_NS, HonestResponder, TimedVerifier, challenge_key, deadline_rounds, run_timed,
+from verity.protocols.accounting.space.pous.audit import (DEADLINE_NS, HonestResponder, MemoryChallenger, challenge_key, deadline_rounds, run_timed,
                                simulate)
 from verity.protocols.accounting.space.pous.oracle import PQuery, Tweak, pure
 from verity.protocols.accounting.space.pous.params import Params
@@ -107,16 +107,16 @@ class FakeClock:
         return self.now
 
 
-def test_timed_verifier(world):
+def test_memory_challenger(world):
     _, _, enc, vk = world
     key = challenge_key(b"audit", vk)
     responder = HonestResponder(enc, tree(enc))
-    assert run_timed(TimedVerifier(vk, key, k=30, clock=itertools.count(0, 1000).__next__), responder.block).accepted
-    assert run_timed(TimedVerifier(vk, key, k=30, root_only=True, clock=itertools.count(0, 1000).__next__), responder.block, responder.path).accepted
+    assert run_timed(MemoryChallenger(vk, key, k=30, clock=itertools.count(0, 1000).__next__), responder.block).accepted
+    assert run_timed(MemoryChallenger(vk, key, k=30, root_only=True, clock=itertools.count(0, 1000).__next__), responder.block, responder.path).accepted
 
     assert DEADLINE_NS == 500_000
     clock = FakeClock()
-    v = TimedVerifier(vk, key, k=3, rtt_allowance_ns=40_000, clock=clock)
+    v = MemoryChallenger(vk, key, k=3, rtt_allowance_ns=40_000, clock=clock)
     assert v.limit_ns == 540_000
     i = v.challenge()
     with pytest.raises(RuntimeError):
