@@ -1,6 +1,6 @@
 """The Lean tile circuits are `pc8`'s and `pc4`'s tile templates: the same computing gates in the same order, their
 primitives, widths, reads and outputs, with the template's parameter leaves as its input gates. `lean_table` restates
-`TileCircuit.tileGate` (`lean/Pouw/Protocol/PearlC/TileCircuit.lean`, `tileSpec p K TM TN`) and `lean_table4` restates
+`TileCircuit.tileGate` (`verity/Security/Definitions/Pouw/PearlC/TileCircuit.lean`, `tileSpec p K TM TN`) and `lean_table4` restates
 `TileCircuit.tile4Gate` (`Tile4Circuit.lean`, `tile4Spec K TM TN`); the Lean proofs (`tile_correct`, `tile4_correct` in
 `Pouw.SecurityProofs.PearlC`) are about those tables, so this test and the pinned descriptor digests are what tie them to
 the Programs. Each gate's operand order and its primitive's semantics are the per-primitive trusted step (the atom is
