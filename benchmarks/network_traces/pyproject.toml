@@ -1,7 +1,7 @@
 [project]
 name = "verity-network-traces"
 version = "0.0.0"
-description = "Per-token timing traces of vLLM serving, for the network warden's calibration."
+description = "Per-token timing traces of vLLM serving, for the network certifier's calibration."
 requires-python = ">=3.12"
 dependencies = ["verity"]
 
