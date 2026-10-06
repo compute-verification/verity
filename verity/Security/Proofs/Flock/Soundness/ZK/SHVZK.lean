@@ -403,14 +403,14 @@ theorem table_prefinal_translate (hrank : T.Rank)
 variable [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype Seed]
   [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
 
-instance : DecidableEq T.Seeds := inferInstance
-instance : Fintype T.Seeds := inferInstance
-instance : DecidableEq T.Core := inferInstance
-instance : Fintype T.Core := inferInstance
-instance : DecidableEq T.Rand := inferInstance
-instance : Fintype T.Rand := inferInstance
-instance : DecidableEq T.SimRand := inferInstance
-instance : Fintype T.SimRand := inferInstance
+instance instDecidableEqSeeds : DecidableEq T.Seeds := inferInstance
+instance instFintypeSeeds : Fintype T.Seeds := inferInstance
+instance instDecidableEqCore : DecidableEq T.Core := inferInstance
+instance instFintypeCore : Fintype T.Core := inferInstance
+instance instDecidableEqRand : DecidableEq T.Rand := inferInstance
+instance instFintypeRand : Fintype T.Rand := inferInstance
+instance instDecidableEqSimRand : DecidableEq T.SimRand := inferInstance
+instance instFintypeSimRand : Fintype T.SimRand := inferInstance
 
 omit [Fintype K] in
 /-- **Lemma B's rows (i)–(iii) and (vi)–(x)**: the prover's view takes every value of its components equally often. -/

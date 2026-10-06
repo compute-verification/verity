@@ -66,14 +66,15 @@ first. Do not scaffold directories the README merely anticipates.
     C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
     that `--m0-pythonpath` names, not from the checkout) and the Lean
     verifier. `verity.protocols.accounting.space.pous` is proof of useful space: the reference
-    codecs, setup and timed audit, its `PROTOCOL.md`, and its submission grader (`lean/`; the
+    codecs, setup and the memory challenger's timed audit, its `PROTOCOL.md`, and its submission grader (`lean/`; the
     statements of its guarantees and their proofs are its area of `verity/Security/`). `verity.protocols.accounting.work.pouw`
     is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
     (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
     pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
     in `verity/Security/` (`Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
-    `verity.protocols.accounting.communication.warden` is network transparency's timing
-    channel: the warden, its audit and calibration, and its Lean in `verity/Security/`.
+    `verity.protocols.accounting.communication.certifier` is network transparency's timing
+    channel: the network certifier, its audit and calibration, and its Lean in `verity/Security/`
+    (`Definitions.NetworkCertifier`, `Specs.NetworkCertifier`, `Proofs.NetworkCertifier`).
     NCI is novel communication intensity, the policy that throttles frontier training
     and leaves inference alone; so far only its Lean, in `verity/Security/`.
     Applications (vLLM) compose protocols.
@@ -193,7 +194,7 @@ first in a quiet window, alone in its train (Daniel, 4 Oct).
   guarantee statements), the package `security` (Mathlib, no ArkLib), and `Proofs/`, the nested package `security_proofs`
   (`srcDir = ".."`, root `Proofs`, ArkLib allowed), which requires `security` and holds every proof, C-Flock's level3 and
   soundness among them (`Proofs.Flock.*`). Each component has an area of its own in each tree (`Core`, `Nci`, `Pouw`,
-  `Pous`, `Warden`, `Flock`): `Definitions.Pouw.X`, `Specs.Pouw.Guarantees`, `Proofs.Pouw.X`; declarations keep their
+  `Pous`, `NetworkCertifier`, `Flock`): `Definitions.Pouw.X`, `Specs.Pouw.Guarantees`, `Proofs.Pouw.X`; declarations keep their
   names (`Pouw.Guarantees.G`, `Pouw.SecurityProofs.G`). New Lean goes into its component's area of the tree it belongs
   to; `tools/move/lean.py --resolve MODULE` names where a module from before the move went. All packages share one
   toolchain and one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.

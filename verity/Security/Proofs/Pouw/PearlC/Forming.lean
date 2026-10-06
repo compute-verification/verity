@@ -726,7 +726,7 @@ variable {n : Nat}
 /-- Element `(i, l)` of `A′` is needed: some word `(i, j)` leaves the atom reading it, `l / 32`, unflagged. -/
 def Needed (flag : Flags m n) (i : Fin m) (l : Fin k) : Prop := ∃ j, flag i j ((l : ℕ) / 32) = false
 
-instance (flag : Flags m n) (i : Fin m) (l : Fin k) : Decidable (Needed flag i l) := by
+instance instDecidableNeeded (flag : Flags m n) (i : Fin m) (l : Fin k) : Decidable (Needed flag i l) := by
   unfold Needed; infer_instance
 
 /-- No atom flagged. -/

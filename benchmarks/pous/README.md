@@ -39,7 +39,7 @@ Implementations:
   - decode overhead on a synthetic loop of the weight set's GEMMs at T = 1, 8, 32 and 2048 tokens, against the same GEMMs
     on plaintext, both forwards from a CUDA graph where the path is capturable, the plain arm's bandwidth against a measured
     device copy, and every T where it is launch-bound flagged; every rep is recorded;
-  - the audit limit fixed before any load from a loopback calibration (labelled loopback: a remote verifier's round trip
+  - the audit limit fixed before any load from a loopback calibration (labelled loopback: a remote memory challenger's round trip
     adds to it), then timed audits against the native responder under POUS forwards, and three controls against that one
     limit: a value control (one block in ten zeroed), a late control (one answer in ten held past the limit, which must
     reject on time alone; the only answers held), and a recompute control (a fraction of `C` dropped, each challenged dropped
@@ -69,8 +69,8 @@ Implementations:
     squaring, reduced by `2^W ≡ c0`);
   - the kernel gates: the pinned vector through the device (keys, encode, decode), the round trip, sampled blocks against the
     reference's decode and keys, no kernel flag; a failed gate stops the run;
-  - audits at k = 105 (`p2_v1/live.py`: v1 leaves, `verity/pous/audit-challenge/v2`), against a limit fixed before load (the spec
-    caps the allowance at 1 ms), with the value, late and recompute controls (one block in ten of all of `C` dropped, each
+  - audits at k = 105 (`p2_v1/memory_challenger.py`: v1 leaves, `verity/pous/audit-challenge/v2`), against a limit fixed before load (spec
+    v1.1 caps the allowance at 354 µs), with the value, late and recompute controls (one block in ten of all of `C` dropped, each
     re-encoded on demand from its decoded row `Dec(C_i)`, which is `W_i` in the encoded head);
   - encode GB/s over the first `--p2-encode-blocks` blocks (the rest of `C` is random canonical blocks), and one block's two
     roots, the fastest of `--reps` on a pseudo-random block, against twice the limit (SeqRoot; the root is untuned, so an upper
