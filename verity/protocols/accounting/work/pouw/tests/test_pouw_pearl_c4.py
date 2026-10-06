@@ -1007,6 +1007,84 @@ def test_the_work_law_audits_pearl_c4():
     assert any("A row 3 is credited but fails" in v.reason for v in hides.audit.verdicts if not v.ok)
 
 
+#: -h3's row seeds under Pearl-C4's seed-A label: (unit, row) -> seed, at `test_pouw_pearl_c`'s ROW_SEEDS inputs (salt
+#: bytes 0 … 31, root_B bytes 32 … 63, the leaf blake3("pearl-c row leaf")); benchmarks/pouw's host test has `b3_seeds`
+#: write the same bytes under this label's key
+ROW_SEEDS = {(7, 3): "c6bf5c2d438504c44f5dda34ec27840d2403852bc8bbad0afac759da47fe3fb5",
+             (7, 200): "5efa282aa56b5f5b4b48fec6c4d8142a619385b2bae0c20f77bde37d4a2af0a3",
+             (2 ** 32 - 1, 3): "70d1c4a7113aec65a3a3e443253fc5de2922be2390c03ecb1d31297076e9c9ff",
+             (2 ** 32 - 1, 200): "facaf01038342577857bbc390cb1aa84323eb3e24908104cc6e0eef01a3b2b91"}
+
+
+def test_h3_row_seeds_are_pearl_cs_layout_under_pearl_c4s_label():
+    """-h3's row seed is the pinned bytes: `pearl_c.row_seed`'s message under `pearl-c4/v0/seed-A`, the one-row unit's
+    seed_A (`unit_seed_a`, which `noise` keys a unit by) at index unit · 2^32 + row, so never Pearl-C's seed; a unit or
+    row of 2^32 or more is refused."""
+    from verity.primitives.crypto.blake3 import blake3, keyed
+
+    salt, root_b, leaf = bytes(range(32)), bytes(range(32, 64)), blake3(b"pearl-c row leaf")
+    for (unit, row), seed in ROW_SEEDS.items():
+        got = F.row_seed(salt, leaf, root_b, unit, row)
+        assert got.hex() == seed and got == F.unit_seed_a(salt, leaf, root_b, unit << 32 | row) != C.row_seed(salt, leaf, root_b, unit, row)
+        assert got == keyed(blake3(b"pearl-c4/v0/seed-A"), salt + leaf + root_b + (unit << 32 | row).to_bytes(8, "little"))
+    ctx = V.ctx_of("seeds", (16, K, 16), 3, 9)
+    assert F.PearlC4().noise(ctx).seed_a == keyed(blake3(F.LABELS["seed-A"]), ctx.salt + ctx.root_a + ctx.root_b + (3).to_bytes(8, "little"))
+    for unit, row in ((2 ** 32, 0), (0, 2 ** 32), (-1, 0), (0, -1)):
+        with pytest.raises(ValueError, match="must each be below 2"):
+            F.row_seed(salt, leaf, root_b, unit, row)
+
+
+def test_h3_draws_each_rows_e_a_from_its_own_leaf():
+    """`PearlC4(hashing="h3")` is `pearl_c`'s -h3: frame-b3s trees and BLAKE3 digests, and row i's E_A is line 0 of
+    `row_seed` over row i's leaf in A's tree, so it moves with that row's bytes and position alone and not with root_A,
+    which keys only the tickets.  B's side and seed_B are h0's."""
+    from verity.primitives.commitments.merkle import tree_levels
+    from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, activation_binding, commit_rows
+    from verity.protocols.accounting.work.pouw.serving import HASH_FORMATS, SchemeId, hash_format
+
+    s, h0 = V.scheme("nvfp4", True, "h3"), V.scheme("nvfp4", True)
+    assert (s.name, s.commitment_hash, s.digest_keys) == ("pearl-c-nvfp4-v0-h3", "blake3-s256", C.H1_KEYS)
+    assert SchemeId.parse(s.name).hashing == "h3" and hash_format(s) is HASH_FORMATS["h3"] and W.row_cap(s)
+    assert hash_format(h0) is HASH_FORMATS["h0"] and not W.row_cap(h0) and h0.commitment_hash == "sha256"
+    assert dict(s.certificate.parameters)["hashing"] == "h3" and "hashing" not in dict(h0.certificate.parameters)
+    assert "xof/blake3" in s.certificate.claims and "xof/blake3" not in h0.certificate.claims
+    with pytest.raises(ValueError):
+        F.PearlC4(hashing="h2")
+    ctx = V.ctx_of("h3-rows", (16, K, 16), 3, 9)
+    a, b = V.rows("h3-rows", "A", 16, K), V.rows("h3-rows", "B", 16, K)
+    tile, noise = s.tiles(ctx.matmul.shape)[0], s.noise(ctx)
+    assert noise == h0.noise(ctx)
+    tree = commit_rows(activation_binding(ctx.salt, 3), 3, a, "blake3-s256")
+    leaves = [tree.domain.leaf(i, i, ROW_SCHEMA, r) for i, r in enumerate(a)]
+    assert tree_levels(tree.domain, leaves)[-1][0] == tree.commitment.root
+    seeds = s.row_seeds(ctx, a, tile.rows)
+    assert seeds == [F.row_seed(ctx.salt, leaves[i], ctx.root_b, 3, i) for i in range(16)] and len(set(seeds)) == 16
+    ops, ops0 = s.encode(ctx, noise, a, b, tile), h0.encode(ctx, noise, a, b, tile)
+    assert ops.e_a == [F.line(x, F.ROLE_EA, 0) for x in seeds] != ops0.e_a
+    assert ops.e_b == ops0.e_b and ops.b.codes == ops0.b.codes and ops.pb == ops0.pb
+    checked = s.checked(ctx, ops)
+    assert s.digest(ctx, noise, checked) == C.leaf(checked, "h3") != C.leaf(checked)
+    other = list(a)
+    other[5] = a[6]
+    e = s.encode(ctx, noise, other, b, tile).e_a
+    assert [i for i in range(16) if e[i] != ops.e_a[i]] == [5] and e[5] != ops.e_a[6]
+    moved = Context(ctx.salt, ctx.matmul, bytes(32), ctx.root_b)
+    assert s.encode(moved, s.noise(moved), a, b, tile).e_a == ops.e_a and s.noise(moved).seed_a != noise.seed_a
+
+
+def test_the_work_law_audits_pearl_c4_under_h3():
+    """The work law on `PearlC4(hashing="h3")`: R1's declaration forms each A row under its own seed, the audit accepts,
+    and h0's verifier refuses the transcript's openings (another tree hash)."""
+    s = V.scheme("nvfp4", True, "h3")
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
+    splits = {9: W.Split(K)}
+    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
+    assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())]
+    assert W.audit(s, epoch, prover, tr, splits, records, BEFORE, AFTER, 8).audit.accepted
+    h0 = W.audit(V.scheme("nvfp4", True), epoch, prover, tr, splits, records, BEFORE, AFTER, 8)
+    assert not h0.audit.accepted and {v.reason for v in h0.audit.verdicts if not v.ok} == {"activation opening"}
+
+
 def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
     """V-EX (theory §6.13, the assessor's B at 17:32Z): a row given up before the draws may pass the per-row rules and R1,
     earns nothing, opens no exclusion tile, and is committed in `records_root`; declared excluded instead, it fails.  A row

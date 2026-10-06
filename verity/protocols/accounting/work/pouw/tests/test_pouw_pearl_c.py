@@ -15,6 +15,7 @@ import pytest
 
 import pearl_c_vectors as CV
 import pearl_vectors as PV
+from verity.primitives.crypto.blake3 import blake3
 from verity.primitives.crypto.turboshake import turboshake128
 from verity_catalog.definitions.fp32 import F32DivV2, F32FmaV2, F32MulV2
 from verity_catalog.definitions.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
@@ -166,6 +167,28 @@ def test_seeds_are_keyed_as_the_design_says():
     one = instance("dup", index=3)[4]
     two = instance("dup", index=4)[4]
     assert one.c != two.c and one.u != two.u
+
+
+#: -h3's row seeds, as `hash.cuh`'s `b3_seeds` (mode 1, built for the host) writes them: (unit, row) -> seed, at the salt
+#: bytes 0 … 31, root_B bytes 32 … 63 and the leaf blake3("pearl-c row leaf"); benchmarks/pouw's host test checks the
+#: kernel against the same bytes
+ROW_SEEDS = {(7, 3): "c12884464d77c2b929ce7c21ebd1600b8d5422eef522cb6436519f4ccf5f8e6a",
+             (7, 200): "d6218857d90cbcd6e78ee0cbe69d50820baccbe3f7434c7346c0072a3381d139",
+             (2 ** 32 - 1, 3): "3d7c8deb306724f5f05284d6d04d51b8a85387b51b454da2430a519a9744f2f8",
+             (2 ** 32 - 1, 200): "ac1671c97f95166d8fd0ef09490934c7aba03d497eb08de99e84e2639b43d6a3"}
+
+
+def test_row_seeds_are_the_one_row_units_seed_a():
+    """-h3's row seed is the pinned bytes, the one-row unit's seed_A at index unit · 2^32 + row, so two rows, two units or
+    two leaves never share one; a unit or row of 2^32 or more is refused."""
+    salt, root_b, leaf = bytes(range(32)), bytes(range(32, 64)), blake3(b"pearl-c row leaf")
+    for (unit, row), seed in ROW_SEEDS.items():
+        assert C.row_seed(salt, leaf, root_b, unit, row).hex() == seed
+        assert C.row_seed(salt, leaf, root_b, unit, row) == C.unit_seed_a(salt, leaf, root_b, unit << 32 | row)
+    assert C.row_seed(salt, blake3(b"another row"), root_b, 7, 3).hex() != ROW_SEEDS[7, 3]
+    for unit, row in ((2 ** 32, 0), (0, 2 ** 32), (-1, 0), (0, -1)):
+        with pytest.raises(ValueError, match="must each be below 2"):
+            C.row_seed(salt, leaf, root_b, unit, row)
 
 
 def test_leaf_and_tickets_rebuilt_from_bytes():
@@ -529,7 +552,7 @@ def test_h1_hashes_with_blake3_throughout():
                        for c, u in zip(checked.c, checked.u) for h in (0, 32))
     assert C.leaf(checked, "h1") == keyed(C.H1_KEYS["leaf"], digests) != C.leaf(checked)
     with pytest.raises(ValueError):
-        C.PearlC(hashing="h3")
+        C.PearlC(hashing="h4")
 
 
 def test_each_hashing_formats_keys_are_on_the_scheme():
@@ -591,6 +614,56 @@ def test_h2_lifecycle_commits_with_frame_b3s():
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
     h1 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1"), epoch).check_tile(tr, prover.open(epoch, 0))
     assert not h1.ok and h1.reason == "activation opening"
+
+
+def test_h3_draws_each_rows_e_a_from_its_own_leaf():
+    """Hashing format -h3: row i's E_A is line 0 of `row_seed` over row i's leaf at level 0 of A's frame-b3s tree (as
+    `b3_seeds` reads it), so it moves with that row's bytes and position alone and not with root_A, which keys only the
+    tickets.  B's side, seed_B and the digests are -h2's."""
+    from verity.primitives.commitments.merkle import tree_levels
+    from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, activation_binding, commit_rows
+
+    s, h2 = (C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing=h) for h in ("h3", "h2"))
+    assert s.name == "pearl-c-h100-v1-h3" and s.commitment_hash == "blake3-s256" and s.digest_keys == C.H1_KEYS
+    assert s.certificate.claims == h2.certificate.claims and dict(s.certificate.parameters)["hashing"] == "h3"
+    ctx, k = CV.ctx_of("h3-rows", (16, 128, 16), 3, 9), 128
+    a, b = CV.rows_f32("h3-rows", "A", 16, k), CV.rows_f32("h3-rows", "B", 16, k)
+    tile, noise = Tile(tuple(range(16)), tuple(range(16))), s.noise(ctx)
+    assert noise == h2.noise(ctx)
+    tree = commit_rows(activation_binding(ctx.salt, 3), 3, a, "blake3-s256")
+    leaves = [tree.domain.leaf(i, i, ROW_SCHEMA, r) for i, r in enumerate(a)]
+    assert tree_levels(tree.domain, leaves)[-1][0] == tree.commitment.root
+    seeds = s.row_seeds(ctx, a, tile.rows)
+    assert seeds == [C.row_seed(ctx.salt, leaves[i], ctx.root_b, 3, i) for i in range(16)] and len(set(seeds)) == 16
+    ops, ops2 = s.encode(ctx, noise, a, b, tile), h2.encode(ctx, noise, a, b, tile)
+    assert ops.e_a == [P.sample_line(x, 0, 0, 0) for x in seeds] != ops2.e_a
+    assert ops.e_b == ops2.e_b and ops.b.codes == ops2.b.codes and ops.pb == ops2.pb
+
+    other = list(a)
+    other[5] = a[6]
+    e = s.encode(ctx, noise, other, b, tile).e_a
+    assert [i for i in range(16) if e[i] != ops.e_a[i]] == [5] and e[5] != ops.e_a[6]
+    assert h2.encode(ctx, noise, other, b, tile).e_a == ops2.e_a
+    moved = Context(ctx.salt, ctx.matmul, bytes(32), ctx.root_b)
+    assert s.encode(moved, s.noise(moved), a, b, tile).e_a == ops.e_a and s.noise(moved).seed_a != noise.seed_a
+    for ctx2 in (CV.ctx_of("h3-other", (16, 128, 16), 3, 9), Context(ctx.salt, Matmul(4, Shape(16, 128, 16), 9), ctx.root_a, ctx.root_b)):
+        assert s.encode(ctx2, s.noise(ctx2), a, b, tile).e_a[0] != ops.e_a[0]
+
+
+def test_h3_lifecycle_and_an_h2_verifier_refuses_it():
+    """An -h3 transcript is accepted by an -h3 verifier; -h2's verifier opens the same rows (both frame-b3s) and refuses
+    its checked values, which -h2's unit-seeded E_A doesn't give."""
+    from verity.protocols.accounting.work.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
+
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), 128
+    rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
+    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
+    prover = Prover(s, {9: rows_b})
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
+    h2 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h2"), epoch).check_tile(tr, prover.open(epoch, 0))
+    assert not h2.ok and h2.reason == "checked values"
 
 
 def test_v1_domain_rules():

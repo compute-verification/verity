@@ -1,8 +1,9 @@
 """hash.cuh on the host (pearl_c/hash_host.cpp, built with g++): each hashing kernel, launched as run.py launches it, writes
 the bytes the verifier's reference computes.  A's row leaves and frame-b3 trees (pads, level keys, one-compression nodes)
 at rows of 1 to 75 chunks, the message digests, the tile leaves full and partial (decode's 32 x 64), Pearl's tickets, the
-tile tree, and a unit's seed_A over its root with its line and jackpot keys; then run.py's commit and hashing phases end to
-end."""
+tile tree, a unit's seed_A over its root with its line and jackpot keys, and -h3's row seeds at the pinned vectors (Pearl-C's
+and, under its own label, Pearl-C4's) and over an -h3 call's frame-b3s row leaves; then
+run.py's commit and hashing phases end to end."""
 
 from __future__ import annotations
 
@@ -25,8 +26,9 @@ import fixture as F  # noqa: E402
 import run as R  # noqa: E402
 from verity.primitives.commitments import MerkleTree  # noqa: E402
 from verity.primitives.crypto.blake3 import blake3  # noqa: E402
-from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, TILE_SCHEMA, rows_domain  # noqa: E402
+from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, TILE_SCHEMA, activation_binding, rows_domain  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.accounting.work.pouw.schemes import pearl_c4 as C4  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P  # noqa: E402
 
 
@@ -156,7 +158,8 @@ def test_seeds_are_the_scheme_s(host):
     host.launch("b3_seeds", 1, 128, p=(src, out, skey, psalt, prb), i=(1, idx, 0))
     assert host.read(out, 32) == C.unit_seed_a(salt, leaves[0], root_b, idx)
     host.launch("b3_seeds", 1, 128, p=(src, out, skey, psalt, prb), i=(5, idx, 1))
-    assert host.read(out, 160) == b"".join(C.unit_seed_a(salt, leaves[r], root_b, idx << 32 | r) for r in range(5))
+    assert host.read(out, 160) == b"".join(C.row_seed(salt, leaves[r], root_b, idx, r) for r in range(5))
+    assert C.row_seed(salt, leaves[3], root_b, idx, 3) == C.unit_seed_a(salt, leaves[3], root_b, idx << 32 | 3)
     keys = host.alloc(64)
     host.launch("seed_subkeys", 1, 32, p=(out, keys))
     seed = host.read(out, 32)
@@ -165,6 +168,63 @@ def test_seeds_are_the_scheme_s(host):
     for name, role in (("NOISE_LINE_LABEL", "noise-line"), ("JACKPOT_LABEL", "jackpot")):
         chars = re.search(rf"__constant__ uint8_t {name}\[(\d+)\] = \{{([^}}]*)\}}", source)
         assert "".join(c.strip()[1] for c in chars.group(2).split(",")).encode() == P.LABELS[role]
+
+
+#: -h3's row seeds pinned in the scheme's suite (test_pouw_pearl_c's ROW_SEEDS): (unit, row) -> seed
+ROW_SEEDS = {(7, 3): "c12884464d77c2b929ce7c21ebd1600b8d5422eef522cb6436519f4ccf5f8e6a",
+             (7, 200): "d6218857d90cbcd6e78ee0cbe69d50820baccbe3f7434c7346c0072a3381d139",
+             (2 ** 32 - 1, 3): "3d7c8deb306724f5f05284d6d04d51b8a85387b51b454da2430a519a9744f2f8",
+             (2 ** 32 - 1, 200): "ac1671c97f95166d8fd0ef09490934c7aba03d497eb08de99e84e2639b43d6a3"}
+
+
+def test_row_seeds_are_the_pinned_vectors(host):
+    """b3_seeds in mode 1 over 201 rows (two blocks of 128 threads), at unit 7 and at the largest unit 2^32 − 1 (i1 = −1,
+    which the kernel reads as u32): every row's seed is `pearl_c.row_seed`'s, and rows 3 and 200 are the pinned bytes."""
+    salt, root_b, leaf = bytes(range(32)), bytes(range(32, 64)), blake3(b"pearl-c row leaf")
+    skey, psalt, prb = host.put(blake3(C.LABELS["seed-A"])), host.put(salt), host.put(root_b)
+    for unit in (7, 2 ** 32 - 1):
+        src, out = host.put(leaf * 201), host.alloc(32 * 201)
+        host.launch("b3_seeds", 2, 128, p=(src, out, skey, psalt, prb), i=(201, unit - (unit >> 31 << 32), 1))
+        got = host.read(out, 32 * 201)
+        assert got == b"".join(C.row_seed(salt, leaf, root_b, unit, r) for r in range(201))
+        assert [got[32 * r:32 * r + 32].hex() for r in (3, 200)] == [ROW_SEEDS[unit, 3], ROW_SEEDS[unit, 200]]
+
+
+#: Pearl-C4's -h3 row seeds at the same inputs, under `pearl-c4/v0/seed-A` (test_pouw_pearl_c4's ROW_SEEDS)
+C4_ROW_SEEDS = {(7, 3): "c6bf5c2d438504c44f5dda34ec27840d2403852bc8bbad0afac759da47fe3fb5",
+                (7, 200): "5efa282aa56b5f5b4b48fec6c4d8142a619385b2bae0c20f77bde37d4a2af0a3",
+                (2 ** 32 - 1, 3): "70d1c4a7113aec65a3a3e443253fc5de2922be2390c03ecb1d31297076e9c9ff",
+                (2 ** 32 - 1, 200): "facaf01038342577857bbc390cb1aa84323eb3e24908104cc6e0eef01a3b2b91"}
+
+
+def test_pearl_c4_row_seeds_are_b3_seeds_under_its_label(host):
+    """b3_seeds in mode 1 keyed by blake3("pearl-c4/v0/seed-A") is `pearl_c4.row_seed`: the same kernel serves Pearl-C4's
+    -h3 with its label's key, and rows 3 and 200 are the pinned bytes."""
+    salt, root_b, leaf = bytes(range(32)), bytes(range(32, 64)), blake3(b"pearl-c row leaf")
+    skey, psalt, prb = host.put(blake3(C4.LABELS["seed-A"])), host.put(salt), host.put(root_b)
+    for unit in (7, 2 ** 32 - 1):
+        src, out = host.put(leaf * 201), host.alloc(32 * 201)
+        host.launch("b3_seeds", 2, 128, p=(src, out, skey, psalt, prb), i=(201, unit - (unit >> 31 << 32), 1))
+        got = host.read(out, 32 * 201)
+        assert got == b"".join(C4.row_seed(salt, leaf, root_b, unit, r) for r in range(201))
+        assert [got[32 * r:32 * r + 32].hex() for r in (3, 200)] == [C4_ROW_SEEDS[unit, 3], C4_ROW_SEEDS[unit, 200]]
+
+
+def test_row_seeds_over_a_calls_leaves_are_the_schemes(host):
+    """An -h3 call's seeds as the device forms them: b3_seeds in mode 1 over level 0 of A's frame-b3s tree is
+    `PearlC.row_seeds`, and seed_subkeys's line key of each row seed is the key E_A's row line is drawn from."""
+    s, m, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), 32, 128
+    ctx, rng = F.context(m, 16, k), np.random.default_rng(11)
+    rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(m)]
+    dom = rows_domain(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, m, s.commitment_hash)
+    leaves = [dom.leaf(i, i, ROW_SCHEMA, r) for i, r in enumerate(rows)]
+    skey, psalt, prb = host.put(blake3(C.LABELS["seed-A"])), host.put(ctx.salt), host.put(ctx.root_b)
+    out, keys = host.alloc(32 * m), host.alloc(64)
+    host.launch("b3_seeds", 1, 128, p=(host.put(b"".join(leaves)), out, skey, psalt, prb), i=(m, ctx.matmul.index, 1))
+    seeds = s.row_seeds(ctx, rows, range(m))
+    assert host.read(out, 32 * m) == b"".join(seeds)
+    host.launch("seed_subkeys", 1, 32, p=(out + 32 * 5, keys))
+    assert host.read(keys, 32) == P._line_key(seeds[5])
 
 
 def test_run_commit_and_hashing_phases_are_the_verifiers(host):

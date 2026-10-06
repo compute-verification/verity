@@ -383,6 +383,7 @@ states every step.
 
 ~~~text
 seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64)
+          -h3: row i's own seed, H_"pearl-c/v0/seed-A"(salt ‖ leaf_i ‖ root_B ‖ index·2^32 + i u64)
 forming   v0, #311's as ported (`pearl_kw`): FP10 rows, exact norms, α, β, N = E·Fᵀ, X̃ = fp8(clamp(fma(α, X, β·N)))
           v1, §5's: FP32 rows x; s = max|x|, ρ = RMS over every 8th position, α = 448/max(s + 4ρ, 2^−32), σ = ρ,
           β_row = (σ·α)·√r/(256·16), E′ = e4m3(β_row·E), X̃ = e4m3(HOPPER_E4M3_K32.step(C = α·x, E′_row, F line)),
@@ -394,7 +395,7 @@ peel      P_A = [bf16(β_A·E_A) ‖ bf16(A′·F_B)],  P_B = [bf16((β_B·E_B)�
           U = C̃ + P_A·P_Bᵀ as four HOPPER_BF16_WGMMA_K16 steps into C̃'s word
 leaf      TurboSHAKE128 (D = 0x21) per tile row and 32-column chunk over its C̃ then U words, then TurboSHAKE128
           (D = 0x22) over those digests; -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf")
-trees     A's rows, B's rows, the tile leaves: SHA-256 Merkle; -h1: frame-b3; -h2: frame-b3s
+trees     A's rows, B's rows, the tile leaves: SHA-256 Merkle; -h1: frame-b3; -h2 and -h3: frame-b3s
 tickets   Pearl's lottery over C̃ per 16 × 16 subtile
 useful    U/(α_A·α_B), glue
 ~~~
@@ -446,6 +447,26 @@ useful    U/(α_A·α_B), glue
     1.41× -h1's compressions (767 against 545).
   - Only the trees change: its vectors are the -h1 cases' inputs, digests and leaves, with A's `frame-b3s` root and row
     leaf. The certificate is -h1's.
+- **Hashing format -h3** (`serving.HASH_FORMATS["h3"]`: `seed_a="row"`, `row_cap=True`) is -h2 with E_A seeded per row.
+  - Row i of unit u draws its line from the one-row unit's seed_A over the row's own leaf in A's tree, `row_seed`:
+    H_"pearl-c/v0/seed-A"(salt ‖ leaf_i ‖ root_B ‖ u·2^32 + i), with u and i each below 2^32. `hash.cuh`'s `b3_seeds`
+    computes it in mode 1. The vectors are pinned in the tests, and the kernel, built for the host, writes those bytes.
+  - Why: a seed that doesn't read A, such as the epoch coins and the index alone, tells the prover each row's noise
+    before it chooses the row. It can then form every row onto a few shared A′ rows, compute their C̃ once per weight
+    and copy it, while every row passes every rule (`note:pouw-gamma/20261006T0318Z-finding-gamma-adaptive-a`; Pearl-C4's
+    `noise` has the same shape, and every row folds onto one A′ row there, in
+    `art:afb6390197a14ef8fd8e969258b5dfea408bd26ef8cbd855981ee095524d2583`, and its -h3 is in its section). Keyed on its
+    own leaf, each candidate row costs an oracle query again. Forming waits on that row's leaf alone, so A's tree may
+    leave the main lane (`schedule_refusals`).
+  - The row cap: the debit cap is checked for every credited row, each row's debit at most ρ times its share of the
+    credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
+    row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
+    transfer.
+  - `PearlC(hashing="h3")` (`pearl-c-…-v1-h3`, not registered) draws row i's E_A as line 0 of its row seed, over the
+    row's frame-b3s leaf (`PearlC.row_seeds`); seed_B, E_B, the bases and the digests are -h2's, and the tickets keep the
+    unit's seed_A over root_A. The `test-16-v1-h3` and `decode-32-v1-h3` vectors pin a call end to end.
+  - The work law checks the row cap on every credited A row of a drawn tile, over its credited columns, after the tile's
+    cap (`pearl_c_work.row_cap`), and `volunteer` gives up a row over it first.
 - **Row tiles.** m is a multiple of 16, not of 64: the last row tile may be partial, in whole 16 × 16 ticket subtiles.
   Decode's 32 × 64 tile has a leaf over its 64 digests (2 KB), so decode is not padded to 64 rows.
 - **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
@@ -497,7 +518,8 @@ useful    U/(α_A·α_B), glue
     Lean's statements don't model that yet: their draw weight is the whole tile's `Wref`, whatever is volunteered.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
-    is at most ρ times those cells' credit. ρ is the device record's cap (`Device.cap`): 1/400 on the H100.
+    is at most ρ times those cells' credit; under -h3, every credited A row's too. ρ is the device record's cap
+    (`Device.cap`): 1/400 on the H100.
   - That credit is the cells' share of the unit's `credit_of` at the kept width, |rows|·|cols|/(m·n) (the per-tile
     statement's `tileShare`). A row's forming and A′·F_B are so charged once across its row band, a |cols|/n share in
     each tile. `credit_of` of the tile's own shape would charge them whole in every tile: at 8,192³ that cap is 2.17×
@@ -662,6 +684,19 @@ useful    U/(α_A·α_B), glue
   values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is two-sided
   (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on crafted
   stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
+- **seed_A doesn't read A's rows, so Pearl-C's adaptive-A attack applies here too.** `noise` keys every row's E_A by the
+  unit's seed_A alone, so the prover knows each row's noise before it chooses the row and can fold every row onto one A′
+  row, whose C̃ it computes once per weight row, while every row passes every rule
+  (`art:afb6390197a14ef8fd8e969258b5dfea408bd26ef8cbd855981ee095524d2583`). The fix is Pearl-C's -h3 (above):
+  - `PearlC4(hashing="h3")` (`pearl-c-nvfp4-v0-h3`, not registered) draws row i's E_A as line 0 (role E_A) of its own
+    seed, `pearl_c4.row_seed`: `pearl_c.row_seed`'s layout under Pearl-C4's label, keyed BLAKE3 under
+    blake3("pearl-c4/v0/seed-A") of salt ‖ leaf_i ‖ root_B ‖ u·2^32 + i, over the row's leaf in A's frame-b3s tree.
+    `hash.cuh`'s `b3_seeds` in mode 1 writes it under that label's key (a host test).
+  - seed_B and what it keys (E_B, F_A, F_B) are unchanged, and the tickets keep the unit's seed_A over root_A. A's and
+    B's trees are frame-b3s and the tile leaf is BLAKE3 (`pearl_c.leaf` at -h3); the work law checks the row cap as well
+    as the tile cap.
+  - The `test-16-nvfp4-h3` vector pins a call end to end. -h0's names, vectors, certificate, circuit (`circuit.pc4`) and
+    kernels are unchanged, and no device path forms -h3 yet.
 - **The domain (`check`):** 1,024 ≤ k ≤ 2^16 with 128 | k, 64 × 64 tiles, m ≤ 2^24, and 128 ≤ n ≤ 2^18. The n ≥ 128
   floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
 - **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at 18:45Z; theory
