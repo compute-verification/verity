@@ -6,7 +6,8 @@
 - **The epoch** is re-started from the manifest's beacon and every weight's root, and the salt must be the manifest's.
 - **The records** (each matmul's real rows, width and excluded rows; each weight's excluded rows) are the manifest's.
   Their root must be the one the pass published before any draw.
-- **The draws' beacon** is `os.urandom(32)`, drawn here after the transcript is fixed: round 1, after the commitment's 0.
+- **The draws' source** is `os.urandom(32)`, the verifier's own, drawn here after the transcript is fixed: a
+  `pearl_c_work.RecordedDraw` of round 1, after the commitment's 0.
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,
   B's rows and tree levels per weight, the tile tree.  Each is checked against the published roots.
 - **The tiles** are `pearl_c_work.audit`'s: its t work-weighted draws (`draw`) and one tile per excluded row
@@ -173,9 +174,9 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         if len(verifier.refs) != c["count"]:
             raise ValueError(f"the commitment counts {c['count']} tiles; the workload has {len(verifier.refs)}")
         source = os.urandom(32) if source is None else source
-        beacon = PW.Beacon(1, source)
+        key = PW.replay_key(PW.RecordedDraw(1, source), transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt)
         ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
-        picks = PW.draw(scheme, records, beacon, transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt, draws)
+        picks = PW.draw(scheme, records, key, draws)
         picks += PW.exclusion_tiles(scheme, records)
         todo = [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in picks]
         if fast and (scheme.forming != "v1" or scheme.device.g is None):
