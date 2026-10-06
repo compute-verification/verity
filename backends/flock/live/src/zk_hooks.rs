@@ -40,6 +40,9 @@ pub const SALT_BYTES: usize = 192;
 /// stream `purpose` at ChaCha20 stream `purpose | j << TABLE_SHIFT`, and its salt trees are ids `j << TABLE_SHIFT` (level 0)
 /// and up, below the next table's. Table 0's addresses are a one-table session's.
 pub const TABLE_SHIFT: u32 = 32;
+/// Words per piece of [`ProverRng::f128s_lanes`]'s parallel draw. Even: an index addresses 32 bytes, two words, so every
+/// piece starts at a whole index.
+const LANE_CHUNK: usize = 1 << 12;
 
 /// The prover's seed: an explicit input of every proof, so the prover is a function of (statement, witness, seed, verifier coins).
 /// A proving build can only draw it from the OS; a test harness (feature `seed-injection`, or unit tests) can inject one.
@@ -111,7 +114,7 @@ impl LeafSalts {
         LeafSalts { key: self.key.clone(), next: level0 + 1, level0 }
     }
 
-    /// A copy of these salts at their next id: the gate's shadow opening expands the trees the device takes from here next,
+    /// A copy of these salts at their next id: the firewall's shadow opening expands the trees the device takes from here next,
     /// without taking their ids from it.
     pub fn fork(&self) -> LeafSalts {
         LeafSalts { key: self.key.clone(), next: self.next, level0: self.level0 }
@@ -254,6 +257,19 @@ impl ProverRng {
         self.fill_at(purpose, index, &mut b);
         b.chunks(16).map(|c| F128::new(u64::from_le_bytes(c[..8].try_into().unwrap()), u64::from_le_bytes(c[8..].try_into().unwrap()))).collect()
     }
+
+    /// `n` words of stream `purpose` for each of `lanes` lanes, lane `i` at index `i << 32` (`f128s(purpose, (i as u64) << 32, n)`),
+    /// drawn on rayon's threads in [`LANE_CHUNK`]-word pieces, each worker with its own copy of the generator: a word is a
+    /// function of the seed and its address alone, so the draw is the sequential one's word for word.
+    pub fn f128s_lanes(&self, purpose: u64, lanes: usize, n: usize) -> Vec<Vec<F128>> {
+        use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator, ParallelSliceMut};
+        let mut out: Vec<Vec<F128>> = (0..lanes).into_par_iter().map(|_| vec![F128::ZERO; n]).collect();
+        out.par_iter_mut()
+            .enumerate()
+            .flat_map(|(i, lane)| lane.par_chunks_mut(LANE_CHUNK).enumerate().map(move |(c, w)| (((i as u64) << 32) + (c * LANE_CHUNK / 2) as u64, w)))
+            .for_each_init(|| ProverRng { rng: self.rng.clone(), table: self.table }, |r, (at, w)| w.copy_from_slice(&r.f128s(purpose, at, w.len())));
+        out
+    }
 }
 
 /// The prover's masking hooks. M0 implements them as the identity ([`NoMask`]).
@@ -311,6 +327,26 @@ mod tests {
         assert_eq!(r.f128s(STREAM_MASK, 5, 2), a, "the words are a function of the seed and their address");
         assert_ne!(r.f128s(STREAM_MASK, 6, 2), a);
         assert_ne!(r.f128s(STREAM_PAD, 5, 2), a);
+    }
+
+    /// Level 0's hiding draws its lanes in parallel (`f128s_lanes`): every lane's words are the sequential draw's, whatever the
+    /// generator read before, in every table, at lane lengths that end inside a ChaCha20 block, at a piece's end, and inside
+    /// a later piece.
+    #[test]
+    fn lanes_drawn_in_parallel_are_the_sequential_draw() {
+        let seed = ProverSeed::injected([11; 32]);
+        let c = LANE_CHUNK;
+        for (table, purpose, lanes, n) in [(0, 7, 3000, 37usize), (0, 6, 4, 4096), (2, 7, 257, 1), (5, 6, 64, 130), (0, 6, 4, 3 * c + 5),
+                                           (1, 7, 3, 2 * c), (0, 7, 2, c + 1), (3, 6, 5, 7 * c - 3)] {
+            let mut r = ProverRng::for_table(seed, table);
+            let _ = r.f128s(STREAM_PAD, 9, 5);
+            let par = r.f128s_lanes(purpose, lanes, n);
+            let mut s = ProverRng::for_table(seed, table);
+            let seq: Vec<Vec<F128>> = (0..lanes).map(|i| s.f128s(purpose, (i as u64) << 32, n)).collect();
+            assert!(par == seq, "table {table}, stream {purpose}: {lanes} lanes of {n} words");
+            assert_eq!(par.len(), lanes);
+        }
+        assert!(ProverRng::from_seed(seed).f128s_lanes(7, 0, 8).is_empty());
     }
 
     /// RFC 7539 section 2.3.2: key 00..1f, block counter 1, nonce 000000090000004a00000000 (words 13-15).
