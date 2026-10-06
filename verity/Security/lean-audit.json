@@ -60,27 +60,19 @@
   },
   "NetTiming.Allocated": {
    "owner": "@network-accounting",
-   "digest": "34af8276160d9290ab268a59c47709ecb9a2c7d4290162944dc267b80950a6c0"
+   "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
   },
   "NetTiming.JitterBounded": {
    "owner": "@network-accounting",
-   "digest": "3d7a2b39677d29793e680af09b356b1ef80f99806ef959d5079c3e45d703fd0f"
+   "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
   },
   "NetTiming.Packed": {
    "owner": "@network-accounting",
-   "digest": "21464d3f41f87be59967c1c9d1c7860ff4a8681b380a427151db57f5821b9998"
+   "digest": "07208a21923ece8f743252f10d99fd592646fa16e1b476a784300c62cc134570"
   },
   "NetTiming.Regenerates": {
    "owner": "@network-accounting",
-   "digest": "0520d939fabb6322356aa0473896aa3e831f7c9109c8948772fe7b7a6fea82b1"
-  },
-  "Pous.Assumptions.LemmaA": {
-   "owner": "@memory-accounting",
-   "digest": "443085b332aa09cadfa71231d70da316fb946789f2a8eefc024e04651911d8e6"
-  },
-  "Pous.P2.Assumptions.PrimeP16448": {
-   "owner": "@memory-accounting",
-   "digest": "88582f4a680fa4e016b25a000b822b465fd7754100edbea9718994503e8d20fe"
+   "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
   },
   "Pouw.Assumptions.HonestClock": {
    "owner": "@compute-accounting",
