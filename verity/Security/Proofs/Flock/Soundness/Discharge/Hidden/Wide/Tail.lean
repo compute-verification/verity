@@ -5,8 +5,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 /-!
 # A tail that returns the outputs (`OutputsCommittedTail`, `OutputsBindingTail`)
 
-`outputs_committed'` reads `outNet = unitNet` only for a unit per VU (`upv_pos`), which the forced-zero row needs
-(`Hm.zero_bit`); everything else it uses holds at any `outNet` (the outputs are read at `HmOut.outCol`). So
+`outputs_committed'` reads `outNet = unitNet` only for a unit per template instance (`upv_pos`), which the forced-zero
+row needs (`Hm.zero_bit`); everything else it uses holds at any `outNet` (the outputs are read at `HmOut.outCol`). So
 `outputs_committed_tail'` is its argument with `0 < upv` taken as given, and `outputs_binding_tail_of` is
 `outputs_binding_of`'s. `outputs_committed_of_tail`: the Tail statement gives the old one.
 -/
@@ -65,7 +65,8 @@ theorem outputs_binding_tail_of (hC : OutputsCommittedTail) : OutputsBindingTail
     exact hne (List.append_cancel_left e)
   · rw [hidx, hcc]
 
-/-- `OutputsCommittedTail` gives `OutputsCommitted`: a unit that returns the outputs has a unit per VU at least. -/
+/-- `OutputsCommittedTail` gives `OutputsCommitted`: a unit that returns the outputs has a unit per template instance at
+least. -/
 theorem outputs_committed_of_tail (hC : OutputsCommittedTail) : OutputsCommitted := by
   intro tags cf pf coins tables d partition program st ht h pop hpop hpt D hD hlt ho hv1 L regs hregs z hz o g j hg
     hg2 hj hr

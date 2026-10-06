@@ -5,7 +5,7 @@ name = "flock-live"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Live-coin sessions for Flock (flock-128-r2): a forwarding prover challenger, a verifier coin server, and the replaying session verifier"
+description = "Live-coin sessions for Flock (flock-128-r2): a forwarding prover challenger, the challenger's live-coin part, and the replaying session verifier"
 
 [features]
 # GPU tables built from the binary-census unit's expanded circuit (crates/flock-prover/src/r1cs_hashes/verity_unit.rs, which

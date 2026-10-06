@@ -34,9 +34,8 @@ def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
     its body exactly the ``b || c`` (then a shared-row file's refs), each the hm96 commit of one of the prover's rows (an output
     row too) under a nonzero salt. An output word, a digest of the set's values or any other value fails it."""
     from verity.primitives.commitments import hm96
-    from verity.primitives.commitments.identity import identity_digest
+    from verity.primitives.commitments.identity import identity_digest_sha512
     from verity.primitives.commitments.rowleaf import ROLE_X, sha512_row_digest
-    from verity_flock import ir_frame
 
     meta = json.loads(text.split("\n", 2)[1][5:])
     (hp, bp), (hv, bv) = (b.split(b"\n", 1) for b in (prover, verifier))
@@ -49,8 +48,8 @@ def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
     assert all(set(fv[k]) == set(names) for k in ("roots", "domain_ids", "bindings", "schemas"))
     assert set(fv["schemas"].values()) == {FC.ROW_SCHEMA}
     for nm in names:
-        assert fv["bindings"][nm] == identity_digest(ir_frame.BINDING_TAG, {"set": hv["set"], "lo": lo, "hi": hi, "port": nm,
-                                                                            "schema": FC.ROW_SCHEMA})
+        assert fv["bindings"][nm] == identity_digest_sha512(FC.BINDING_TAG, {"set": hv["set"], "lo": lo, "hi": hi, "port": nm,
+                                                                             "schema": FC.ROW_SCHEMA}).hex()
     shared = "shared_rows" in hv
     counts = hv["shared_rows"] if shared else {nm: n for nm in names}
     n_bcs = sum(counts.values())

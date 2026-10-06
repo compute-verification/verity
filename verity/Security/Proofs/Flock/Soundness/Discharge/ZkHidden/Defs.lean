@@ -123,7 +123,7 @@ noncomputable abbrev planAtZKH : Finset (Fin n) → Reg → List (TabZK 𝔽 mPt
 abbrev tabAtZKH : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planAtZKH (Reg := Reg) dj y₀ S R).length :=
   fun _ _ _ => ⟨0, Nat.zero_lt_one⟩
 
-/-- **The coin server's draw at `S`, at `--zk` under hidden outputs** (`DrawOkZK` with `setupHidden` for `setupH`): it
+/-- **The challenger's draw at `S`, at `--zk` under hidden outputs** (`DrawOkZK` with `setupHidden` for `setupH`): it
 proves `S`, and setupHidden sets up at it under the `--zk` tags and coin tree with `mPts` link points. -/
 def DrawOkZKH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧
