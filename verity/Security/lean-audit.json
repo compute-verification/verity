@@ -4,8 +4,8 @@
  "exempt": {
   "Specs.Flock.Guarantees.EndToEnd": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEnd` builds it, and its guarantee's record holds it (`meaning`), until those definitions move into `Definitions`",
   "Specs.Flock.Guarantees.EndToEndDrawn": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEndDrawn` builds it, and its guarantee's record holds it (`meaning`), until those definitions move into `Definitions`",
-  "Specs.Flock.Guarantees.EndToEndHidden": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEndHidden` builds it, and its guarantee's record holds it (`meaning`), until those definitions move into `Definitions`",
-  "Specs.Flock.Guarantees.EndToEndRegistered": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEndRegistered` builds it, and its guarantee's record holds it (`meaning`), until those definitions move into `Definitions`"
+  "Specs.Flock.Guarantees.EndToEndHidden": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEndHidden` builds it, and its guarantees' records hold it (`meaning`), until those definitions move into `Definitions`",
+  "Specs.Flock.Guarantees.EndToEndRegistered": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEndRegistered` builds it, and its guarantees' records hold it (`meaning`), until those definitions move into `Definitions`"
  },
  "assumptions": [
   "Specs.Core.Assumptions",
