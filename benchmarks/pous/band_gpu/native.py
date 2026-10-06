@@ -3,12 +3,14 @@
 `load(build_dir)` builds (or adopts) the extension under `<build_dir>/<digest12>`, the digest covering the source bytes, the flags,
 the torch/CUDA versions, the release of the nvcc that compiles it (`nvcc_release`) and the arch list (`arch_list`: always the
 device's capability, 12.0 on an sm_120), so a `.so` built from another source set or by another toolkit is never adopted (the
-rule of `commit.committer.native_jit`, which this layer may not import); `ext()` is the loaded extension.
+rule of `commit.committer.native_jit`, which this layer may not import), compiling a copy of the source staged in that directory
+(`staged`) so that a tree at another commit adopts the same build; `ext()` is the loaded extension.
 """
 from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -55,10 +57,22 @@ def load(build_dir: str):
     os.environ["TORCH_CUDA_ARCH_LIST"] = arches
     nvcc = nvcc_release(cpp_extension.CUDA_HOME)
     build = os.path.join(build_dir, source_digest(torch.__version__, str(torch.version.cuda), nvcc, arches)[:12])
-    os.makedirs(build, exist_ok=True)
-    _LOADED.append(jit_load(name="verity_pous_native", sources=[SOURCE], build_directory=build, extra_cflags=["-O3"],
+    _LOADED.append(jit_load(name="verity_pous_native", sources=[staged(build)], build_directory=build, extra_cflags=["-O3"],
                             extra_cuda_cflags=list(CUDA_CFLAGS), verbose=False))
     return _LOADED[0]
+
+
+def staged(build: str) -> str:
+    """`<build>/src/pous_native.cu`, copied once: torch's build.ninja names its sources' paths, and a research run's tree lives
+    under its commit (`src/<sha>/`), so compiling from the tree would rebuild for every commit; the digest keying `build`
+    covers the source's bytes, so a copy already there is this one."""
+    path = os.path.join(build, "src", os.path.basename(SOURCE))
+    if not os.path.exists(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = f"{path}.{os.getpid()}"
+        shutil.copyfile(SOURCE, tmp)
+        os.replace(tmp, path)
+    return path
 
 
 def ext():

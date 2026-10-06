@@ -450,6 +450,19 @@ def test_the_native_build_is_keyed_by_the_nvcc_release_that_compiles_it(tmp_path
     assert at("12.8") == at("12.8") != at("13.0")                       # another toolkit's .so is never adopted
 
 
+def test_the_native_build_compiles_a_copy_staged_once_in_its_keyed_directory(tmp_path):
+    """build.ninja names its sources' paths, and each research run's tree sits under its commit: compiling the tree's copy
+    rebuilt the extension in every new commit's first run, inside node 2's timed lease (r20261006-054903-459c)."""
+    sys.path.insert(0, str(BENCH))
+    from band_gpu import native
+
+    path = native.staged(str(tmp_path / "abc"))
+    assert path == str(tmp_path / "abc" / "src" / "pous_native.cu")
+    assert open(path, "rb").read() == open(native.SOURCE, "rb").read()
+    os.utime(path, (1, 1))
+    assert native.staged(str(tmp_path / "abc")) == path and os.stat(path).st_mtime == 1    # adopted, not rewritten
+
+
 def test_the_recompute_gate_fails_a_run_whose_challenges_missed_every_dropped_block():
     harness = _harness()
     assert harness.recompute_gate({"wrong": 0, "answers": 20, "recomputed_answers": 3})["passed"]

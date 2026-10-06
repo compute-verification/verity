@@ -479,7 +479,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--audits", type=int, default=20,
                     help="timed audits per round; 0 (band-gpu, p2-v1-gpu): an untimed placement, which runs the gates, encode, "
                          "the loop and the step floor but no limit, audit or control, and is labelled timed: false")
-    ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the verifier's round-trip allowance")
+    ap.add_argument("--control-audits", type=int, default=0,
+                    help="p2-v1-gpu: audits per control round (value, late, recompute; 0: --audits)")
+    ap.add_argument("--rtt-allowance-ns", type=int, default=0,
+                    help="reference: the verifier's round-trip allowance; p2-v1-gpu: a fixed allowance (0: the calibrated one)")
     ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
     ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v1-gpu, p2-gpu: only the first N segments (0: all)")
     ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous (#188)")

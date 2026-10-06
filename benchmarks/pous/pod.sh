@@ -19,6 +19,10 @@
 # RCPU among its cores: outside it, neighbours' load makes honest answers late (r20261005-231145-6d0f accepted 18 of 20).
 # AUDITS=0 is an untimed placement (a preemptible fill slot): the gates, encode, the synthetic loop and the step floor run, no
 # limit, audit or control does, and the result is labelled timed: false, audits: skipped (untimed placement).
+# OUT=<dir> moves the run's outputs (bench/, clocks, build logs) from the run dir to <dir>, e.g. $RESEARCH_RUN_DIR/out for
+# --declared-output 'out/*'. TOKENS=1,8 (the loop's T), LOAD_TOKENS=N (T of the forwards under the honest audit) and
+# CONTROL_AUDITS=N (P2's controls' audits, default AUDITS) and RTT_ALLOWANCE_NS=N (P2's allowance fixed at N, not calibrated)
+# pass through to bench.py in p2-v1-gpu and side-by-side.
 # KERNELS='<json>' (band-gpu) sets kernel switches over harness.KERNELS (bench.py --kernels): '{"chain_pairs": false}' runs the
 # run of record's kernels.
 #
@@ -39,7 +43,7 @@
 # venv with torch built for the pod's CUDA toolkit (TORCH_CUDA=cuNNN overrides), numpy and ninja, and this tree's band_gpu/.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench
+REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=${OUT:-$RESEARCH_RUN_DIR}; W=${WORK:-/workspace}/pous-bench
 IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
 # the run's GPU for nvidia-smi --id: a UUID, or an index as nvidia-smi counts them (gpu-lease's CUDA_DEVICE_ORDER=PCI_BUS_ID)
 gpu_uuid() {
@@ -104,10 +108,16 @@ gpu_env() {
   fi
   local venv=$W/gpu312-torch$TORCH_VERSION-$TORCH_CUDA
   PY=$venv/bin/python
-  [ -x "$PY" ] || { uv venv -q "$venv" --python 3.12 && uv pip install -q --python "$PY" numpy ninja \
+  # uv's own Python: torch's JIT build needs Python.h, which a host without python3-dev (node 1) lacks
+  [ -x "$PY" ] || { uv venv -q "$venv" --python 3.12 --managed-python && uv pip install -q --python "$PY" numpy ninja \
     && uv pip install -q --python "$PY" "torch==$TORCH_VERSION" --index-url "https://download.pytorch.org/whl/$TORCH_CUDA"; } || return 3
   "$PY" -c 'import torch; assert torch.cuda.is_available(), "torch sees no CUDA device"; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))' || return 3
   export PATH=$(dirname "$PY"):$PATH
+  # ninja runs each step of torch's JIT build in a process group of its own, which node 2's Quiet stops while any timed lease
+  # is held unless the group's command names GNU timeout: the build compiles (PYTORCH_NVCC) and links (CXX) through timeout
+  mkdir -p "$W/jit-cc" && printf '#!/bin/sh\nexec timeout 3600 c++ "$@"\n' > "$W/jit-cc/g++.$$" && chmod +x "$W/jit-cc/g++.$$" \
+    && mv "$W/jit-cc/g++.$$" "$W/jit-cc/g++" || return 3
+  export PYTORCH_NVCC="timeout 3600 $CUDA_HOME/bin/nvcc" CXX=$W/jit-cc/g++
 }
 # the host facts a result is re-derived with, and two distinct physical cores (not SMT siblings) for the verifier and responder
 record_host() {
@@ -176,7 +186,8 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
   fi
   CG=$W/CGBN
   [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
-  git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
+  [ "$(git -C "$CG" rev-parse HEAD)" = "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" ] \
+    || git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3   # concurrent runs share $W: no index.lock race
   NVCC_REL=$(nvcc_release "$CUDA_HOME" | tr ' ' .)
   [ -n "$NVCC_REL" ] || { echo "no nvcc under CUDA_HOME=$CUDA_HOME"; exit 3; }
   # keyed by the nvcc and the sources too: a .so another toolkit or another tree built is never adopted
@@ -188,7 +199,8 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
     ${3:+env -u RESEARCH_RUN_DIR} "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl "$1" --build-dir "$W/pous_build" --p2-lib "$P2LIB" \
       --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$2" --audits "$AUDITS" \
       --workers "$WORKERS" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} \
-      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO $([ "$1" = band-gpu ] && [ -n "${BAND_D:-}" ] && echo --band-d "$BAND_D")
+      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO $([ "$1" = band-gpu ] && [ -n "${BAND_D:-}" ] && echo --band-d "$BAND_D") \
+      ${TOKENS:+--tokens "$TOKENS"} ${LOAD_TOKENS:+--load-tokens "$LOAD_TOKENS"} ${CONTROL_AUDITS:+--control-audits "$CONTROL_AUDITS"} ${RTT_ALLOWANCE_NS:+--rtt-allowance-ns "$RTT_ALLOWANCE_NS"}
   }
   if [ "$IMPL" = side-by-side ]; then
     mkdir -p "$O/bench/band" "$O/bench/p2"

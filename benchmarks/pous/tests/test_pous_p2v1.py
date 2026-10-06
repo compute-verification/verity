@@ -173,6 +173,26 @@ def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
     assert {"encode_GBps", "decode_overhead_T1", "audit_margin_min_s", "recompute_margin_min_s", "seqroot_root_s"} <= names
 
 
+def test_control_audits_sets_the_controls_rounds_and_leaves_the_honest_round_its_own(tmp_path):
+    """`--control-audits` runs each control that many audits while the honest round runs `--audits`, and every honest audit
+    records its wall-clock start (read against a load sampler's seconds)."""
+    body = _bench().P2V1Gpu().run(_args(tmp_path, audits=3, control_audits=1), WS, tmp_path, backend=_backend(), params=_small())
+    m = body["metrics"]
+    assert len(m["audit"]["records"]) == 3 and body["gates"]["timed_audit"]["passed"]
+    assert len(m["value_control"]["records"]) == len(m["late_control"]["records"]) == len(m["recompute_control"]["records"]) == 1
+    assert all(isinstance(r["started_unix"], float) for r in m["audit"]["records"])
+
+
+def test_a_fixed_rtt_allowance_judges_every_audit_at_delta_plus_it_and_keeps_the_calibration(tmp_path):
+    """`--rtt-allowance-ns` sets the limit to Δ plus it in place of the calibrated allowance, which is still recorded."""
+    body = _bench().P2V1Gpu().run(_args(tmp_path, audits=2, rtt_allowance_ns=354_000), WS, tmp_path, backend=_backend(),
+                                  params=_small())
+    m = body["metrics"]
+    assert m["deadline"]["limit_ns"] == m["audit"]["limit_ns"] == 854_000 and m["audit"]["rtt_allowance_ns"] == 354_000
+    assert m["deadline"]["allowance_fixed_ns"] == 354_000 and body["gates"]["operating_point"]["rtt_allowance"]
+    assert m["calibration"]["limit_ns"] != 854_000
+
+
 def test_the_recompute_control_covers_c_past_its_encoded_head(tmp_path):
     """With only the first 64 of 192 blocks encoded (the rest random canonical, as on the device), every dropped block, in the
     head or past it, is re-encoded from its decoded row and answers correctly; the margin is the limit minus each recomputed
