@@ -10,7 +10,7 @@ bits, copied from the output bits the circuit computes. Its flat twin `Hidden.fl
 
 Every first column of `outPairs` is a message bit of a row's `sha512x3` slot (`deltaMsgCol`), which no unit slot's row
 is (`outPairs_ne_unit`, for `sha512/row/v1` rows). So at every unit slot's row the hidden statement's level-0 matrices
-are its flat twin's (`unitRowsFlat`): the rows that place a VU and copy its inputs read the same in both.
+are its flat twin's (`unitRowsFlat`): the rows that place a template instance and copy its inputs read the same in both.
 -/
 
 set_option Elab.async false
@@ -57,7 +57,7 @@ theorem flat_unitFacts (ht : tags.typed = false)
 
 /-! ## Δ's output pairs are at the rows' `sha512x3` slots -/
 
-/-- The first column of each of Δ's output pairs is `deltaMsgCol` at a VU, output row, word and bit. -/
+/-- The first column of each of Δ's output pairs is `deltaMsgCol` at a template instance, output row, word and bit. -/
 theorem outPairs_fst {c : Circuit} {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs c) :
     ∃ g < c.g, ∃ j < c.outRowPorts.size, ∃ k < (c.ports.getD (HmOut.nIn c + j) default).words, ∃ t < 16,
       q.1 = Hidden.deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8) := by
@@ -66,7 +66,7 @@ theorem outPairs_fst {c : Circuit} {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs 
   exact ⟨g, hg, j, hj, k, hk, t, ht, by rcases hq with rfl | rfl <;> rfl⟩
 
 /-- **A row's message bit at its `sha512x3` slot is no unit slot's row**: compression `byte / 128` of row `p` is one of
-the VU's `sha512x3` slots, its message input 1024 bits wide, and the bit is inside it. -/
+the template instance's `sha512x3` slots, its message input 1024 bits wide, and the bit is inside it. -/
 theorem deltaMsgCol_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : CheckFacts st.c)
     (hsha : st.c.unitNet ≠ st.c.shaNet) {g p byte t : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size)
     (hs : (st.c.ports.getD p default).segs = none) (hbyte : byte / 128 < st.c.ports[p]!.chunks) (ht : t < 8) {s₀ b : ℕ} (hs₀ : s₀ < st.c.unitRange.count)

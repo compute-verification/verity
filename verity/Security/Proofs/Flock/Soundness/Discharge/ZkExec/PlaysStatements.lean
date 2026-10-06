@@ -5,15 +5,15 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
 
 `RunsZC` (`Coin.lean`) asks each rep for a `RepRun`: a run of the compiled rep (`ZkLink.repZCAt`) on its rounds' coins
 whose messages, cut at the spine's coins, are the decoder's groups. `ZkCut` gives the cut for the rep's messages
-`repMsgsZ`; here is the run. As M0's `rep_refines` composes `zerocheck_refines`, `lincheck_refines`, `opening_refines`
-and `ligerito_refines`, the run is composed phase by phase from flock-verify's: each phase that succeeds from `t` to
-`t'` gives a run of the model's phase on the coins of the rounds it consumed (`consumed t.rounds t.k t'.k`), played with
-the proof's messages.
+`repMsgsZ`; here is the run. As the non-ZK session's `rep_refines` composes `zerocheck_refines`, `lincheck_refines`,
+`opening_refines` and `ligerito_refines`, the run is composed phase by phase from flock-verify's: each phase that
+succeeds from `t` to `t'` gives a run of the model's phase on the coins of the rounds it consumed
+(`consumed t.rounds t.k t'.k`), played with the proof's messages.
 
 The compiled rep's only branch on values is the opening's verdict (`openingZK` returns `none` when a switched claim
 fails its check); its other branches read the schedule. So the masked zerocheck, lincheck, Ligerito and inner proof
-play at any pads, link layout and batched value; the opening plays `some` by M0's `opening_refines`, on claims whose
-points the replay's coins give and whose values are the claim checks.
+play at any pads, link layout and batched value; the opening plays `some` by the non-ZK session's `opening_refines`, on
+claims whose points the replay's coins give and whose values are the claim checks.
 
 * `ZkReplayPlays`: `Zk.replay` gives runs of `zerocheckZK` and `lincheckZK`, and the two masked claims' points.
 * `ZkLigeritoPlays`: `Zk.ligerito` gives a run of `ligeritoPadZC` whose Ligerito part is not a reject.

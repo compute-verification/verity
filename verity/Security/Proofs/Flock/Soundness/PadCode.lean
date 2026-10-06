@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Accounting.Padded
 /-!
 # The padded level-0 code: `RS[2^d, k]` on the first `k` novel-basis monomials
 
-M1's level-0 lane of `2^cols` message coefficients and `t` padding coefficients is a codeword of
+C-Flock ZK's level-0 lane of `2^cols` message coefficients and `t` padding coefficients is a codeword of
 `RS[2^d, k]`, `k = 2^cols + t`: the evaluation of `Σ_{c < k} a_c·X̂_c` at `d` bits (`encAt`). This
 file gives that code what `ListSize`, `LigeritoLevels` and `LigeritoDecode` give a level's code:
 

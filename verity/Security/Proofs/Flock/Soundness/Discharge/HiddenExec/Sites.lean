@@ -8,9 +8,9 @@ table's acceptance (`TableH.acc`) is its `Stmt.setupHidden` run, with the layout
 gives, its unit slots' rows its flat twin's (`unitRowsFlat`, from `Hidden.hidden_delta'`, for `sha512/row/v1` rows), and
 the table's statement `stmtOf` of it, which is the layout's block R1CS (`Integrate.model_eq`).
 
-`sitesAtH` holds each drawn unit's acceptance, VU and block; every acceptance parses the session's one circuit file
-(`sitesAtH_parse`). So `ppH`, `hConstH` and `hZeroH` are `ProgPlaces`, `hConst` and `hZero` for `Placed.keyProg` at the
-hidden tables.
+`sitesAtH` holds each drawn unit's acceptance, template instance and block; every acceptance parses the session's one
+circuit file (`sitesAtH_parse`). So `ppH`, `hConstH` and `hZeroH` are `ProgPlaces`, `hConst` and `hZero` for
+`Placed.keyProg` at the hidden tables.
 -/
 
 set_option Elab.async false
@@ -57,7 +57,8 @@ end TableH
 
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
 
-/-- **The sites of the one-table hidden plan**: each drawn unit's acceptance, VU and block are its draw's table's. -/
+/-- **The sites of the one-table hidden plan**: each drawn unit's acceptance, template instance and block are its draw's
+table's. -/
 noncomputable def sitesAtH : SitesH (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀) where
   acc S _ _ _ := (tableAtH dj x₀ S).acc ht hc hv1
   vu S _ u h := (tableAtH dj x₀ S).vu u h

@@ -1,8 +1,8 @@
 """``pearl-c-h100-v0``, ``pearl-c-h100-v1`` and ``pearl-c-sm120-v1``: Pearl-C, Pearl's FP8 product with its noisy clean-up
 checked, on the H100 and on the RTX PRO 6000 Blackwell.
 
-The design is the cheap-binding lane's (research store ``docs/pouw/cheap-binding.md`` §1): Pearl's H100 product and its
-output tickets, plus #311's noisy clean-up ("peel") pinned bit for bit, so that the useful output U is a checked value
+The design is the cheap-binding lane's: Pearl's H100 product and its output tickets, plus #311's noisy clean-up
+("peel") pinned bit for bit, so that the useful output U is a checked value
 and no part of the clean-up can be skipped at a degenerate input.  γ rests on the named conjecture TT_OUT(ρ) at the device
 record's cap ρ (`Device.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
 reset-and-promote replay) are `pearl_kw`'s ports of pearl-research-labs/pearl PR #311 and its ``zk-pow`` verifier.
@@ -38,7 +38,7 @@ useful    U_ij / (α_A,i · α_B,j), the model's own unscale (glue)
 the rank-64 BF16 product P_A·P_Bᵀ.  #311 runs G and the B-side factor on a tolerance path; here both are pinned.
 
 **Two formings.**  ``pearl-c-h100-v0`` keeps #311's FP10 decode and exact norms (the port), whose 176–256 A-only units
-the red team counts as skippable (X-PC-2).  ``pearl-c-h100-v1`` is the rework (``cheap-binding.md`` §5), on rows of FP32
+the red team counts as skippable (X-PC-2).  ``pearl-c-h100-v1`` is the rework, on rows of FP32
 words x, with every rounding pinned here:
 
 ~~~text
@@ -425,9 +425,9 @@ class PearlC:
             conjecture="tt-out",
             gamma0=None,
             omega=Fraction(1),
-            claims=("tt-out", "random-oracle", "cr/blake3", "device-reproducibility", "beacon-unpredictability") if hashing == "h0"
+            claims=("tt-out", "random-oracle", "cr/blake3", "device-reproducibility", "live-verifier") if hashing == "h0"
             else ("tt-out", "random-oracle", "xof/blake3", "cr/blake3", "cr/sha-256", "device-reproducibility",
-                  "beacon-unpredictability"),
+                  "live-verifier"),
             theorems=("Pouw.SecurityProofs.WorkWeightedSampling",),
             hypotheses=hardware,
             allowances=(allowance, "the unscale is glue outside the checked values"),

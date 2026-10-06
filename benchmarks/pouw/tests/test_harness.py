@@ -1398,7 +1398,7 @@ class DumpingArm(FakeArm):
 
 
 class StaleCall(FakeCall):
-    """Its setup wrote the root and a seed; its timed launch writes neither (the stale-output case, server.md 11:50Z)."""
+    """Its setup wrote the root and a seed; its timed launch writes neither (the stale-output case, panel rule)."""
 
     def __init__(self, dev, ms):
         super().__init__(dev, ms)
