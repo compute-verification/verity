@@ -999,6 +999,25 @@ def test_the_schedule_alternates_the_baseline_rep_by_rep_or_in_abab_blocks():
     assert sum(b.count("fp8") for b in blocks) == 3 and sum(b.count("pearlc") for b in blocks) == 3
 
 
+def test_with_a_statement_each_pearlc_rep_is_followed_by_a_pearlc_zk_rep_in_the_arm_engine():
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    (one,) = E2E.schedule(2, "rep", zk=True)
+    assert one.count("pearlc-zk") == 2 and all(one[i + 1] == "pearlc-zk" for i, m in enumerate(one) if m == "pearlc")
+    assert [m for m in one if m != "pearlc-zk"] == list(E2E.CYCLE) * 2 and E2E.GROUP["pearlc-zk"] == "arm"
+    blocks = E2E.schedule(3, "blocks", zk=True)
+    assert sum(b.count("pearlc-zk") for b in blocks) == 3 and all(E2E.GROUP[m] == "arm" for m in blocks[1] + blocks[3])
+    assert E2E.schedule(3, "rep", graphed=True) == E2E.schedule(3, "rep", graphed=True, zk=False)
+    run = types.SimpleNamespace(statement=types.SimpleNamespace(enabled=False), entry="pouw:test")
+    args = types.SimpleNamespace(schedule="serial")
+    assert E2E.arm_of("pearlc-zk", run, args).spec.hashing and run.statement.enabled
+    assert E2E.arm_of("pearlc", run, args).spec.hashing and not run.statement.enabled
+    E2E.arm_of("pearlc-zk", run, args)
+    assert not E2E.arm_of("pearlc-nohash", run, args).spec.hashing and not run.statement.enabled
+    E2E.arm_of("pearlc-zk", run, args)
+    E2E.arm_of("bf16", run, args)
+    assert not run.statement.enabled
+
+
 def test_a_sweep_points_decode_batch_and_prompt_name_its_key_and_its_graph_sizes():
     """Off the panel's decode (32 prompts of 64 tokens) the key names the batch and the prompt, so `panel_rows.py` never reads
     a sweep point as its decode row; the graphed baseline captures the point's batch."""
