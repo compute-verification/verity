@@ -53292,22 +53292,23 @@
    ]
   },
   "Flock.Verify": {
-   "digest": "17954f7c68844a224af918e526778cbd23b9d2bc192856db1da4e92a28a5c7e3",
+   "digest": "ce7f104966830ec14fc7aff917bfcee78c6b8c7d7bb591b7d04f65cd6ccde6bf",
    "definitions": {
-    "Flock.Setup": "b5420e49bdc3ce5c4973edee77571e219fae98a1e8cbcb43a632fc75cb6caf60",
+    "Flock.Setup": "d2a3501d253e96d60f3a3d9ed6996b2d651e7311830ab69bab285a6540d4ddc4",
     "Flock.Setup.digest": "2c5aef9c9a030b9fe1e816f93568a87c3877fa6148511592758b14752e7bcab2",
     "Flock.Setup.extra": "ca8c23daab92d1d31cdb469bf1de57d04a03a117054d0ef8d60fd8d484a6a646",
     "Flock.Setup.fold": "04d0ceee57fa505fc50c6e103ea23d13557b95e22b34a4f62fe79c40fca5bdf3",
     "Flock.Setup.kLog": "bdb2b22d84a012665b897442c0e4aaeb6b3d955492e8bf5404b5de0abc8debdf",
     "Flock.Setup.m": "11c6f67e762d81e6863085b50ca067ed4bce6fa6b253fe8a507616426ca44c7d",
     "Flock.Setup.merkle": "77b5dc7cf6c95958ac926f4c3bb0ee8113bef6406f66bd862c6c5e41f55aa039",
-    "Flock.Setup.ofCircuit": "4404dd8d759ffab192d27ed8c5e44a0376cc7d4c62ecd7620404c216a6dc6b02",
+    "Flock.Setup.ofCircuit": "e62f8e19af1a130a24b37cd25ffb5ccda5e778289cc4d73bde746a18f4bdf94c",
+    "Flock.Setup.openedSalts": "729517cfda076faad3997168550f79f4d6283a0cfeabab3689ab48a648df6b43",
     "Flock.Setup.publics": "298b6095c2319908db69ade81bf060399c03f29f29421ed170a17cc043fdcbf9",
     "Flock.instInhabitedSetup": "d1cb5d1ed94c1644e245bf6ac8623c2e53f9493e0b7b7481f24837a817d5f1d9",
-    "Flock.instInhabitedSetup.default": "b775deed2bac9fc6e0fba077f62cc54ffcaa0d0a383a0d5fd5061421254ab9ff",
+    "Flock.instInhabitedSetup.default": "888fa22c942acaabd25fe05477261fc1201b6560e8881042d401f70cf12d2a5a",
     "Flock.pcsParams": "53349e4759eeab7fe4cde94ffeb46863b703ae2f9d7293993c20e39cb8f12c84",
     "Flock.verify": "cc1d6aa90406cd3e1698fcbf635d7a6960110b4c10915d554bb7dff037fe4aa9",
-    "Flock.verifyRep": "2cf106cd1d90ad6600c8cca1b840aeb66d49f2834ab54d92644c61d7764e5b18"
+    "Flock.verifyRep": "61fb68089b45490e59a39531dd79686983bd6c8be5db283080ed519f8d81b12b"
    },
    "guarantees": [
     "Flock.SecurityProofs.RecursiveSound",
@@ -72582,11 +72583,11 @@
    ]
   },
   "Proofs.Flock.Soundness.Refine.Rep": {
-   "digest": "b37a0f2da11550ecaa7e41bc78c12e63dc6b57aa9bd20202ab7f365938771f2c",
+   "digest": "ed2f56aad38008346dd3e8f62853f4ef52fedb6aaf3a42a529f27eab4819501f",
    "definitions": {
     "FlockSoundness.Refine.ExtraRealizes": "48934474a6cca692ea6437c452ea79ba395a2258a8cf61d393adc0e5800fe36d",
     "FlockSoundness.Refine.repMsgs": "25b0def1f833bb585f1220bc20c1ea738216c997cfdc53e7f147bf8a2597fd1a",
-    "FlockSoundness.Refine.shapeOf": "31f8feba2709e4e9db532ec99bfe96353fcf43984e51fdb91354f3a082417a5b"
+    "FlockSoundness.Refine.shapeOf": "36884f888e3a0f63ecb870a6436041d9df0f79eeb0a6af670dc1b74e673d4338"
    },
    "guarantees": [
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
