@@ -12,7 +12,7 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    (`RemoteQuickTier`), or here (`QuickTier`)
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
-                                                   (its caller gone), for the open PR at the head the tier ran at
+                                                   (its caller gone), for the open PR at the head the tier ran at, or at its tree
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, is marked ready at its head, and
@@ -997,17 +997,30 @@ def same_tree_mark(store, repo: Path, remote: str, pr: PR) -> str | None:
     at that head ran these exact files, and when a clean merge of `main` leaves the tree as it was, the files the new head changes
     against `main` are among those the marked head changed against its merge base, so the tier would run no suite it didn't.  None
     when either commit isn't here after fetching the PR's head (a rebase drops the old one), and QueueError when the PR's labels
-    can't be pulled from the store's remote.  Its own ref, so a tier's fetch under the worktree's lock never meets this one."""
-    _git(repo, "fetch", "-q", remote, f"+refs/pull/{pr.number}/head:refs/queue/same-tree/{pr.number}", check=False)
-
-    def tree(commit: str) -> str:
-        return _git(repo, "rev-parse", "-q", "--verify", f"{commit}^{{tree}}", check=False).stdout.strip()
-
-    if not (want := tree(pr.head)):
+    can't be pulled from the store's remote."""
+    _fetch_heads(repo, remote, [pr])
+    if not (want := _tree(repo, pr.head)):
         return None
     marked = StoreGrants(store, repo=repo)._other_heads(pr.number, pr.head, vocab.READY)
     return next((old for old, labs in sorted(marked.items()) if any(str(lab.value).lower() == "true" for lab in labs)
-                 and tree(old) == want), None)
+                 and _tree(repo, old) == want), None)
+
+
+def same_tree_prs(repo: Path, remote: str, prs: list[PR], head: str) -> list[PR]:
+    """The PRs of ``prs`` whose head has ``head``'s tree, after fetching their heads (none when ``head`` isn't here)."""
+    _fetch_heads(repo, remote, prs)
+    want = _tree(repo, head)
+    return [p for p in prs if want and _tree(repo, p.head) == want] if prs else []
+
+
+def _fetch_heads(repo: Path, remote: str, prs: list[PR]) -> None:
+    """Each PR's head into a ref of its own, so a tier's fetch under the worktree's lock never meets this one."""
+    if prs:
+        _git(repo, "fetch", "-q", remote, *(f"+refs/pull/{p.number}/head:refs/queue/same-tree/{p.number}" for p in prs), check=False)
+
+
+def _tree(repo: Path, commit: str) -> str:
+    return _git(repo, "rev-parse", "-q", "--verify", f"{commit}^{{tree}}", check=False).stdout.strip()
 
 
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None]) -> int:
@@ -1033,11 +1046,12 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
 
 
 def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callable[[Path], dict] | None = None,
-          runs_root: Path | None = None) -> int:
+          runs_root: Path | None = None, repo: Path | None = None, url: str | None = None) -> int:
     """`research queue judge RUN`: what `ready --on` does once its run ends, for a quick-tier run that already ended (its waiting
     client gone): fetch its records (`research fetch`; a run another VM launched is adopted from its machine, ``on`` or each), judge
-    them as `RemoteQuickTier` does, at the head the tier ran at, and mark the open PR at that head ready.  Refused when the run can't
-    be fetched, hasn't ended, isn't a quick tier, failed, or no open PR is at that head now."""
+    them as `RemoteQuickTier` does, at the head the tier ran at, and mark the open PR at that head ready, or, when none is there now
+    and ``repo`` (a clone of ``url``) is given, the one open PR whose head has that head's tree (`same_tree_mark`'s reason).
+    Refused when the run can't be fetched, hasn't ended, isn't a quick tier, failed, or no open PR is at that head or tree now."""
     from . import cli, remote
     from . import runs as R
 
@@ -1059,11 +1073,16 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
     if why:
         return refuse(why)
     head = tier.get("head") if isinstance(tier := res.doc.get("tier"), dict) else None
-    prs = [p for p in github.open_prs() if p.head == head]
+    open_prs = github.open_prs()
+    prs = [p for p in open_prs if p.head == head]
+    if not prs and repo is not None and isinstance(head, str):
+        if len(prs := same_tree_prs(repo, url, open_prs, head)) == 1:
+            print(f"research queue: #{prs[0].number}'s head {prs[0].head[:12]} has the tree of {head[:12]}, where run {rid} ran the "
+                  f"quick tier: the same files", flush=True)
     if len(prs) != 1:
         return refuse(f"run {rid} ran the quick tier at {str(head)[:12]}, " + (
             f"the head of each of {', '.join('#' + str(p.number) for p in prs)}: mark one with `research queue ready`" if prs else
-            "which is no open PR's head now (pushed again since, or closed?)"))
+            "which is no open PR's head now, nor its tree (pushed again since, or closed?)"))
     return _mark(store, prs[0], by, judge_report(res, rid, machine, head, status), "judge")
 
 
@@ -1122,7 +1141,8 @@ def main(argv: list[str]) -> int:
             raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
         store = LocalStore(a.store)
         if a.command == "judge":
-            return judge(GitHub(repo), store, a.pr, a.by, on=a.on)
+            here = _git(Path.cwd(), "rev-parse", "--show-toplevel", check=False).stdout.strip()
+            return judge(GitHub(repo), store, a.pr, a.by, on=a.on, repo=Path(here) if here else None, url=remote)
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)

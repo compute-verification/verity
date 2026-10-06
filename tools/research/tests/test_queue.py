@@ -1131,13 +1131,35 @@ def test_judge_marks_a_pr_ready_from_its_quick_tiers_run_once_it_ended_without_i
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
 
 
+def test_judge_marks_a_pr_whose_head_moved_to_the_same_tree_and_no_other(world, monkeypatch, capsys):
+    """A lane that merged `main` (changing no file) while its tier ran had a passing run whose head no open PR has now."""
+    from research import queue as Q
+
+    machine, rid, h1 = _orphaned(world, monkeypatch)
+    _move_main(world, {"a.txt": "a1\n", "b.txt": "b\n"})              # `main` makes the PR's own change
+    world.gh.put(1, h2 := _merge_main(world, h1), ready=False)
+    assert h2 != h1
+    world.gh.put(2, world.change({"b.txt": "b2\n"}), ready=False)
+    capsys.readouterr()
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1           # no clone to compare trees in
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch, repo=world.dev, url=str(world.origin)) == 0
+    assert f"#1's head {h2[:12]} has the tree of {h1[:12]}, where run {rid} ran the quick tier" in capsys.readouterr().out
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is True
+    h3 = _git(world.dev, "commit-tree", f"{h2}^{{tree}}", "-p", h2, "-m", "the same tree")
+    _git(world.dev, "push", "-q", "origin", f"{h3}:refs/dev/{h3}")
+    world.gh.put(3, h3, ready=False)
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch, repo=world.dev, url=str(world.origin)) == 1
+    assert "the head of each of #1, #3" in capsys.readouterr().err                          # two PRs with that tree: neither
+
+
 JUDGE_REFUSALS = {
     "a run that hasn't ended": ({"status": {"state": "running"}}, r"run (\S+) hasn't ended \(last seen running\): `research inspect \1`"),
     "not a quick tier": ({"result": lambda d: {**d, "kind": "check/v1"}}, r"run \S+'s result is a check/v1, not a quick-tier/v1 report"),
     "no result": ({"result": lambda d: None}, r"run \S+ on its machine ended done \(exit 0\) without a result\.json"),
     "a failed tier": ({"status": {"state": "failed", "rc": 1}},
                       r"#1 is not marked ready at \w{12}: the quick tier failed: run \S+'s facts show a pass, but it ended failed"),
-    "a head that moved": ({}, r"run \S+ ran the quick tier at \w{12}, which is no open PR's head now \(pushed again since, or closed\?\)"),
+    "a head that moved": ({}, r"run \S+ ran the quick tier at \w{12}, which is no open PR's head now, nor its tree \(pushed again "
+                              r"since, or closed\?\)"),
     "a run that isn't there": ({}, r"no run matching 'r-nowhere' under "),
 }
 
@@ -1151,7 +1173,8 @@ def test_judge_refuses_a_run_that_has_not_ended_is_not_a_quick_tier_failed_or_wh
     if case == "a head that moved":
         world.gh.put(1, world.change({"a.txt": "a2\n"}), ready=False)
     capsys.readouterr()
-    assert Q.judge(world.gh, world.store, "r-nowhere" if case == "a run that isn't there" else rid, "lane-1", fetch=machine.fetch) == 1
+    assert Q.judge(world.gh, world.store, "r-nowhere" if case == "a run that isn't there" else rid, "lane-1", fetch=machine.fetch,
+                   repo=world.dev, url=str(world.origin)) == 1
     err = capsys.readouterr().err
     assert err.startswith("research queue judge: ") and err.count("\n") == 1 and re.search(refusal, err)
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
