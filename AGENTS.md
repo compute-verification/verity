@@ -66,14 +66,15 @@ first. Do not scaffold directories the README merely anticipates.
     C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
     that `--m0-pythonpath` names, not from the checkout) and the Lean
     verifier. `verity.protocols.accounting.space.pous` is proof of useful space: the reference
-    codecs, setup and timed audit, its `PROTOCOL.md`, and its submission grader (`lean/`; the
+    codecs, setup and the memory challenger's timed audit, its `PROTOCOL.md`, and its submission grader (`lean/`; the
     statements of its guarantees and their proofs are its area of `verity/Security/`). `verity.protocols.accounting.work.pouw`
     is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
     (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
     pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
     in `verity/Security/` (`Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
     `verity.protocols.accounting.communication.certifier` is network transparency's timing
-    channel: the certifier, its audit and calibration, and its Lean in `verity/Security/`.
+    channel: the network certifier, its audit and calibration, and its Lean in `verity/Security/`
+    (`Definitions.NetworkCertifier`, `Specs.NetworkCertifier`, `Proofs.NetworkCertifier`).
     NCI is novel communication intensity, the policy that throttles frontier training
     and leaves inference alone; so far only its Lean, in `verity/Security/`.
     Applications (vLLM) compose protocols.
