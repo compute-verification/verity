@@ -7,7 +7,7 @@ The deadline is `Δ = deadline_ns` (0.5 ms: `docs/p3-gpu-measurements.md` found 
 132-answer audits on the host clock) plus `rtt_allowance_ns`, the verifier's network round trip and its jitter, which
 the verifier cannot tell apart from the responder's time and so also grants the adversary.
 
-Two clocks.  `TimedVerifier` is the deployed verifier: it measures each answer's wall-clock latency from the reveal and
+Two clocks.  `MemoryChallenger` is the memory challenger: it measures each answer's wall-clock latency from the reveal and
 rejects any over the deadline.  `simulate` is the model's: the responder answers each index with a `Prog` (Lean
 `SeqResponder.step`, state kept inside the responder), `oracle.run` counts the answer's rounds, and any answer over the
 round budget or `work` queries is late.  The budget is the deadline over `call_ns`, the fastest whole oracle call,
@@ -93,7 +93,7 @@ class Responder(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class HonestResponder:
-    """Answers from `C`, with no queries; `path` gives a root-only verifier the audit path."""
+    """Answers from `C`, with no queries; `path` gives a root-only memory challenger the audit path."""
 
     encoding: Encoding
     tree: MerkleTree | None = None
@@ -112,7 +112,7 @@ class HonestResponder:
 
 @dataclass(frozen=True, slots=True)
 class Answer:
-    """One answer: its index, verdict, and either its oracle cost (`simulate`) or its latency (`TimedVerifier`), with
+    """One answer: its index, verdict, and either its oracle cost (`simulate`) or its latency (`MemoryChallenger`), with
     the responder's own `report` (for example its device and server nanoseconds) beside it.  `rejected` is an answer
     past the hard deadline, or none by then: its block is never checked, and it is neither correct nor on time."""
 
@@ -184,7 +184,7 @@ def simulate(vk: VerifierKey, responder: Responder, prims: Primitives, key: Key,
     return AuditResult(tuple(answers))
 
 
-class TimedVerifier:
+class MemoryChallenger:
     """Verifier-driven sequential reveal with a strict wall-clock deadline per answer.
 
     For the band codec it refuses a deadline past the cliff (`band.check_deployment`: the effective `D` must not
@@ -197,7 +197,7 @@ class TimedVerifier:
     `LATE_ROUNDS` calls of the parameters' `call_ns`, or more than the band's `d`.  An answer past `Δ_late + RTT` is
     rejected without checking its block.  Once that deadline has passed with no answer, `expire()` closes the challenge
     as rejected, and so does the next `challenge()` before it reveals another index.  Without it, the verifier waits for
-    each answer however late it is.  The continuous audit runs on `continuous.ContinuousVerifier`, never on this class
+    each answer however late it is.  The continuous audit runs on `continuous.ContinuousMemoryChallenger`, never on this class
     alone: `respond(block)` names no challenge, so a stale answer to an expired challenge would answer the next one.
 
     `audit_cap` (at most `AUDIT_CAP`) caps the whole audit's duration at `audit_cap` calls of `call_ns`, from the first
@@ -341,10 +341,10 @@ class TimedVerifier:
         return AuditResult(tuple(self.answers), self.aborted)
 
 
-def run_timed(verifier: TimedVerifier, respond: Callable[[int], bytes | tuple[bytes, object]],
+def run_timed(verifier: MemoryChallenger, respond: Callable[[int], bytes | tuple[bytes, object]],
               path: Callable[[int], tuple[bytes, ...]] | None = None) -> AuditResult:
     """Drive `verifier` against `respond(index)` until all `k` are answered.  `respond` returns the block, or
-    `(block, report)` to keep the responder's own record in the `Answer`; `path(index)` serves a root-only verifier."""
+    `(block, report)` to keep the responder's own record in the `Answer`; `path(index)` serves a root-only memory challenger."""
     while not verifier.done:
         i = verifier.challenge()
         out = respond(i)
