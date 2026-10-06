@@ -5,6 +5,7 @@ a network certificate or a memory challenger's record without revealing it.
         (I: Array<2, Word>, root: Value_N, message: Array<8, Word>, q: Array<H, Value<1>>, C: Value_N,
          y: Array<P, Value_N>, path: Array<H, Value_N>) -> Value<1>
         Word = Array<64, Value<1>>, Value_N = Array<N / 8, Word>; N in (32, 64), W in (1, 2, 4, 8), 1 <= H <= 30
+        (or N = 8, `lms.TOY_N`: circuit-check's binding, the same circuit on one-word values)
 
 1 iff ``u32(q) || C || y || path`` signs ``message`` under the public key ``I || root`` (`lms.verify`). Every N-byte value,
 the identifier and the message are SHA-512 words as `merkle` lays them out (bytes big-endian, each word's bits LSB first);
@@ -61,7 +62,7 @@ def _value(N: int):
 
 
 def _params(S) -> R.Params:
-    return R.Params(S.N, S.W, getattr(S, "H", 1))
+    return R.Params(S.N, S.W, getattr(S, "H", 1), toy=S.N == R.TOY_N)
 
 
 # --- bytes and words ---------------------------------------------------------------------------------------------------------
@@ -108,7 +109,7 @@ def chain_step(C, N: int, W: int, I, q, i, j, a, s):
 
 def message_digits(C, N: int, W: int, I, q, Cv, message) -> list[list]:
     """The P digits of ``Q = H(I || u32(q) || u16(D_MESG) || C || message)`` and its checksum, each W bits LSB first."""
-    p = R.Params(N, W, 1)
+    p = _params(SimpleNamespace(N=N, W=W))
     Q = _bytes(_sha(C, _bytes(I) + _u32(q) + _const_bytes(R.D_MESG.to_bytes(2, "big")) + _bytes(Cv) + _bytes(message), N // 8))
     per = 8 // W
     digits = [Q[k // per][8 - W * (k % per + 1):8 - W * (k % per)] for k in range(p.U)]
