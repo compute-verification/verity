@@ -677,13 +677,23 @@ or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), befor
 With `FC_FIREWALL_TRANSCRIPT=DIR` (the CPU path only), each gated session also writes what the firewall let out as a
 `verity/firewall-transcript/v0` transcript, `DIR/session-<k>.json`, for the firewall's contract (`flock-firewall contract`):
 `firewall_transcript.rs` reads the wire after the coin tree's check and the firewall's candidates, and changes nothing the firewall
-sends. Where the firewall refuses, the transcript holds the refused candidate's items up to the first one the contract must
-refuse; where the prover stops, it ends where the prover did. Beside it, `DIR/public-<k>.json` (`verity/firewall-public/v0`)
+sends. Where the firewall refuses, the transcript holds the refused candidate's items (from `firewall.gate.from`) up to the
+first one the contract must refuse; where the prover stops, it ends where the prover did. Beside it, `DIR/public-<k>.json` (`verity/firewall-public/v0`)
 is the public input the contract holds it to (`flock-firewall contract --public`): the relations the firewall checks, the
 statement's values (the constants, the labels, the shapes), and the names of the values the firewall fixes by its own
 computation (the recheck, the shadow opening, its own values; the skeleton's cap, whose bytes depend on the session, among
 them). The transcript carries no schedule or relations of its own. `verifier/firewall_outer_agree.py` runs the contract on
 them under one public input, the honest sessions', which every session's must agree with.
+
+The contract does not yet hold the outer phase's order and count. The outer public input has no schedule, so the contract
+decides each outer item alone: `Holds` bounds each outer item's value, not how many items there are or where they stand, and
+it accepts a session with items dropped, swapped, duplicated or moved, or one that ends in `finish` early. The harness holds
+the order and count instead, against the honest sessions. Every honest session's item sequence is one and the same: each
+item's kind and place (a fixed item's name, source and pads, a masked value's pad, a check's relation and pads, a coins
+item's stream and round). Each control's is the same up to the candidate the firewall held back, and the candidate is the run
+where its items leave in an honest session. So for the recorded sessions the order and count carry nothing, and that rests
+on the harness's comparison, not on the contract. Holding them in the contract means a public input that carries the outer
+sequence, which `step` follows as it follows the inner phase's schedule; that is not written yet.
 
 The inner phase's controls are V*'s: `rec_inner.py forge --what top` (a clear top that does not open the salted one the coin
 server received) and `--what unsalted` (a record of clear tops), refused `FIREWALL-REFUSED: tree top: …` by `rec_vstar`.

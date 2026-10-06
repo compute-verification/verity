@@ -26,9 +26,14 @@
 //!   when both reps' proofs went out.
 //!
 //! Where the firewall refuses, the candidate it held back is written as the items it would have sent (masked values with their
-//! pads), up to the first item the contract must refuse, and the transcript stops there (`firewall.gate.at`); where the
-//! prover stops (its own self-check), the transcript stops after what it sent. An item taken on its word carries
+//! pads), from `firewall.gate.from` up to the first item the contract must refuse, and the transcript stops there
+//! (`firewall.gate.at`). The candidate is written where the firewall checked it, which need not be where its items leave in
+//! an honest session (a Commit's roots are checked before σ goes out, a rep's proof before its inner proof's rounds). Where
+//! the prover stops (its own self-check), the transcript stops after what it sent. An item taken on its word carries
 //! `"on_its_word": true`; items the recorder made up to stand for a refusal it cannot itemize carry `"stand_in": true`.
+//!
+//! The recorder is one per process (`start` replaces it), so a process records its gated sessions one at a time: sessions
+//! run concurrently in one process would interleave their items.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -232,7 +237,8 @@ pub struct Rec {
     link: Option<Vec<F128>>,
     tables: usize,
     proofs: usize,
-    refused: Option<(String, usize)>,
+    /// the refusal, the item the contract must refuse and where the held-back candidate's items begin
+    refused: Option<(String, usize, usize)>,
     stopped: Option<String>,
     errors: Vec<String>,
 }
@@ -389,6 +395,7 @@ impl Rec {
         if self.halted() {
             return;
         }
+        let from = self.items.len();
         let ok = match self.pending.take() {
             Some(Pending::Round { alg, k, content, want, .. }) => self.stop_round(alg, k, &content, want),
             Some(Pending::Root { got, want }) => self.commit_roots(&[("circuit".to_string(), got)], &want),
@@ -399,7 +406,7 @@ impl Rec {
             self.items.push(json!({"fixed": {"what": format!("the firewall's refusal: {why}"), "by": "own", "want": "", "sent": "01", "pads": [],
                                               "stand_in": true}}));
         }
-        self.refused = Some((why.to_string(), self.items.len() - 1));
+        self.refused = Some((why.to_string(), self.items.len() - 1, from));
     }
 
     fn wants(&self, ri: usize, alg: bool, cand: &[Item], want: &Option<(Vec<u8>, usize)>) -> Result<Vec<Option<Item>>, String> {
@@ -714,7 +721,8 @@ impl Rec {
             "kind": FORMAT, "phase": "outer",
             "tape": {"salts": [], "pads": h(&self.pads)}, "exposed": {"salts": [], "pads": []},
             "items": self.items,
-            "firewall": {"gate": {"refused": self.refused.as_ref().map(|r| r.0.clone()), "at": self.refused.as_ref().map(|r| r.1)},
+            "firewall": {"gate": {"refused": self.refused.as_ref().map(|r| r.0.clone()), "at": self.refused.as_ref().map(|r| r.1),
+                                  "from": self.refused.as_ref().map(|r| r.2)},
                          "stopped": self.stopped, "tamper": self.tamper, "recorder_errors": self.errors,
                          "reps": self.reps.iter().map(|r| json!({"rep": r.rep, "pad_base": r.base, "layout": r.lay.to_json()})).collect::<Vec<_>>()},
         });
