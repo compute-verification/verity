@@ -1,5 +1,5 @@
 """`verity.primitives.commitments.gates.lms`: the Boolean LMS verifier accepts every signature `lms.sign_at` makes at
-(N, W) = (32, 1) on trees of height 1 and 2, refuses each with one thing wrong (a chain value, C, a path node, the leaf index,
+(N, W) = (64, 1) on trees of height 1 and 2, refuses each with one thing wrong (a chain value, C, a path node, the leaf index,
 the message, I, the root) exactly where `lms.verify` does, and its parts cost the gates pinned here."""
 from __future__ import annotations
 
@@ -11,15 +11,15 @@ from verity.primitives.circuits import evaluation as E
 from verity.primitives.commitments.gates import lms as G
 from verity.primitives.crypto import lms as R
 
-SEED = bytes(range(32))
-#: (part, its statics) -> (And, Xor, Not) gates of its traced circuit at N = 32, W = 1
+SEED = bytes(range(64))
+#: (part, its statics) -> (And, Xor, Not) gates of its traced circuit at N = 64, W = 1
 PARTS = {
     ("Sha512Compress", ()): (57947, 286724, 4948),
-    ("LmsMessage", (32, 1)): (101541, 474336, 14103),
-    ("LmsChainStep", (32, 1)): (55370, 269056, 6004),
-    ("LmsLeaf", (32,)): (55041, 268226, 6023),
-    ("LmsNode", (32,)): (56211, 273884, 6028),
-    ("LmsEqual", (32,)): (255, 256, 256),
+    ("LmsMessage", (64, 1)): (113102, 554271, 11735),
+    ("LmsChainStep", (64, 1)): (56814, 275348, 6267),
+    ("LmsLeaf", (64,)): (56266, 274055, 6283),
+    ("LmsNode", (64,)): (113103, 553285, 11231),
+    ("LmsEqual", (64,)): (511, 512, 512),
 }
 
 
@@ -52,11 +52,11 @@ def _cases(p: R.Params) -> tuple[list, list[int]]:
 @pytest.mark.slow
 @pytest.mark.parametrize("H", [1, 2])
 def test_the_verifier_agrees_with_the_reference(H) -> None:
-    p = R.Params(32, 1, H)
+    p = R.Params(64, 1, H)
     rows, want = _cases(p)
     assert want == [1, 0, 0, 0, 0, 0, 0, 0] * 2 ** H
     cols = [np.array([r[k] for r in rows], dtype=np.uint8) for k in range(7)]
-    got = np.asarray(E.evaluate_batch(G.verifier(32, 1, H), *cols)).reshape(-1).tolist()
+    got = np.asarray(E.evaluate_batch(G.verifier(64, 1, H), *cols)).reshape(-1).tolist()
     assert got == want
 
 
@@ -67,13 +67,16 @@ def test_the_parts_cost_the_pinned_gates() -> None:
 
 
 def test_the_verifier_is_boolean_and_typed_by_its_shape() -> None:
-    v = G.verifier(32, 1, 3)
-    assert BL.is_boolean(v) and v is G.verifier(32, 1, 3)
-    assert [t.leaves for _, t in v.signature()[0]] == [128, 256, 512, 3, 256, 265 * 256, 3 * 256]
+    v = G.verifier(64, 1, 3)
+    assert BL.is_boolean(v) and v is G.verifier(64, 1, 3)
+    assert [t.leaves for _, t in v.signature()[0]] == [128, 512, 512, 3, 512, 522 * 512, 3 * 512]
+    for n in (32, 48):
+        with pytest.raises(ValueError):
+            G.verifier(n, 1, 1).signature()
 
 
 def test_malformed_arguments_are_refused() -> None:
-    p = R.Params(32, 1, 1)
+    p = R.Params(64, 1, 1)
     k = R.keygen(p, SEED)
     s = R.sign_at(k, 0, bytes(64))
     with pytest.raises(ValueError, match="the message 64"):

@@ -48,7 +48,7 @@ P's block a constant midstate, and is taken after the receipt time.
 
 **Signatures.** A `Signer` signs a session's record (`message`, 64 bytes) under its session id; `SCHEMES` maps an
 accepted scheme to its `verify(public_key, session, record, signature)`.  The one accepted scheme is S1's, `LMS`:
-LMS/LM-OTS over SHA-512 at `lms.DEPLOYED` (`verity.primitives.crypto.lms`, claim `euf-cma/lms-sha512-n32`), which signs
+LMS/LM-OTS over SHA-512 at `lms.DEPLOYED` (`verity.primitives.crypto.lms`, claim `euf-cma/lms-sha512-n64`), which signs
 the memory challenger role's digest `lms.memory_challenger_message(I, session, record)`; `LmsSigner` is its signer.  A
 test signer's scheme starts with `TEST_PREFIX`; `register` never adds one, so a test-signed record is refused outside
 tests, as is an unsigned one.
@@ -281,7 +281,7 @@ class Signer(Protocol):
 type Verify = Callable[[bytes, bytes, bytes, bytes], bool]
 """`verify(public_key, session, record, signature)`."""
 
-LMS = "lms-sha512/n32-w1-h20/v0"
+LMS = "lms-sha512/n64-w1-h20/v0"
 """S1's scheme at its deployed parameters (`lms.DEPLOYED`)."""
 
 

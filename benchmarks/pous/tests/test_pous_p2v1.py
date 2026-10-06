@@ -464,10 +464,10 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
     assert honest["memory_challenger"] == "memory_challenger.MemoryChallenger" and honest["limit_ns"] == 854_000 and honest["limit_fixed_before_load"]
     assert honest["audits"] == honest["audits_accepted_under_signer"] == 2 and honest["audits_accepted"] == 0
     assert honest["answers"] == 2 * 105 and honest["profile"] is None and honest["signer"]["test"]
-    assert honest["signer"]["scheme"] == "test/lms-sha512/n32-w1-h1/v0"
+    assert honest["signer"]["scheme"] == "test/lms-sha512/n64-w1-h1/v0"
     for rec in honest["records"]:
         assert set(rec["public"]) == {"commitment", "verdict", "openings"} and rec["public"]["verdict"] == {"accepted": False}
-        assert rec["witness"]["reasons"] == ["signature scheme 'test/lms-sha512/n32-w1-h1/v0' is not accepted"]
+        assert rec["witness"]["reasons"] == ["signature scheme 'test/lms-sha512/n64-w1-h1/v0' is not accepted"]
         assert rec["witness"]["reasons_under_signer"] == []
     tampered = m["tampered_control"]
     assert tampered["wrong"] > 0 and tampered["late"] == 0 and tampered["audits_accepted_under_signer"] == 0
@@ -537,9 +537,9 @@ def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused
     `test/` id."""
     from verity.primitives.crypto import lms
 
-    live, small = _live(), lms.Params(32, 1, 2)
+    live, small = _live(), lms.Params(64, 1, 2)
     first = live.lms_signer(tmp_path / "key", params=small)
-    assert first.scheme == "test/lms-sha512/n32-w1-h2/v0" and (tmp_path / "key" / "seed").stat().st_mode & 0o777 == 0o600
+    assert first.scheme == "test/lms-sha512/n64-w1-h2/v0" and (tmp_path / "key" / "seed").stat().st_mode & 0o777 == 0o600
     a = lms.Signature.decode(small, first.sign(b"s" * 32, b"r"))
     first.state.close()
     monkeypatch.setattr(lms, "keygen", lambda *_a, **_k: pytest.fail("the key is made again"))
@@ -565,7 +565,7 @@ class _SparseTree:
         self.root = lms.root_of(lms.DEPLOYED, I, b"probe", probe)
 
     def __getitem__(self, r: int) -> bytes:
-        return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()[:32]
+        return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()
 
 
 def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profile(tmp_path, monkeypatch):
@@ -576,7 +576,7 @@ def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profil
     from verity.protocols.accounting.space.pous.schemes import p2
 
     live = _live()
-    I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:32]
+    I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
     signer = mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
