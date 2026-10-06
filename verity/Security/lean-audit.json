@@ -21482,6 +21482,8 @@
    "assumptions": [],
    "type_hash": "57f354a4f07be45a9fe4d4ed84077bf6258d1f5fab89d7365baca747bc0cac32"
   },
+  "FlockVBridge.colsHold_words": {"owner": "@proofs"},
+  "FlockVBridge.laid_recOpen": {"owner": "@proofs"},
   "FlockVBridge.sound_climbRow": {
    "owner": "@proofs",
    "signature": [
