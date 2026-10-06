@@ -208,6 +208,31 @@ only inside a proof (`one_stage.registered`).
 
 Pinned by `tests/test_registered.py` and, for the Lean verifier's check, `backends/flock/tests/test_lean_registered_reads.py`.
 
+### The tensor table
+
+A deployment's weights W are committed once, by weight row, for PoUW and PoUS both (`one_stage.tensor_table`,
+`verity/tensor-table/v1`; its module docstring is the full format).
+
+- W's rows are the deployment's tensors' rows in a committed order, each row its elements in the stored dtype (BF16:
+  16 bits) little-endian, committed as a registered row is: `hm96-sha512/row/v2` over `sha512/row/v2` of its bits, whose
+  prefix carries the row's length in bits, one fresh 192-byte salt per row, under `CommitmentDomain(B, -2,
+  RangeIndexedDomain(0, N_W), hash="sha512")` with `B` from `identity_digest("verity/weights/domain/v1", {"deployment",
+  "schema", "leaves", "bytes", "table"})`.
+- The tensor table is hidden: entry `t` is `(first, rows, row_bits, elem_bits, offset, SHA-512 of the name)`, five u64
+  and 64 bytes as 52 u16 words, padded to a public `cap` with `(N_W, 0, 0, 0, |W|, zeros)`, and committed as `cap`
+  registered rows of 52 16-bit leaves under `verity/tensor-table/domain/v1`. W's domain binds the table's root. Public:
+  the two roots, `N_W`, `|W|` and `cap` (`manifest`).
+- Well-formedness, which PoUS's setup and PoUW's epoch statement prove in gates over the opened entries (`check` is the
+  reference): W1 entry 0 starts at row 0, byte 0; W2 each entry starts where the one before ends, in rows and bytes; W3
+  each entry is a tensor (at least one row, whole-byte rows within the statement's public bounds, an element width that
+  divides the row) or padding, and no tensor follows padding; W4 the last entry ends at `N_W` rows and `|W|` bytes. Then
+  the tensors tile W's rows and bytes exactly once, a read of row `i` through the entry that holds it has that entry's
+  length in its digest, and PoUS's payload `[lo, hi)` lies in the rows `byte_rows` names, at most two when every row is
+  at least `hi − lo − 1` bytes.
+
+Pinned by `tests/test_tensor_table.py` (the roots of a three-tensor table, every refusal W1 to W4, the tiling of rows
+and bytes).
+
 ### The partition
 
 Core's `verity/partition/v1` (`verity.primitives.circuits.partition_object`, applied by `one_stage.partition`) is
