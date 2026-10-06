@@ -4,8 +4,10 @@ import Definitions.Core.PrivatePartition
 /-!
 # Named assumptions
 
-The hardware semantics Verity's theorems take without proof, each a `Prop` taken as a hypothesis (no `axiom`). The
-moniker in each docstring is the entry of the overnight assumptions table that the red team rates.
+The hardware semantics and the deployment Verity's theorems take without proof, each a `Prop` taken as a hypothesis (no
+`axiom`). The moniker in each docstring is the entry of the overnight assumptions table that the red team rates; a
+deployment assumption's moniker is its `verity.claims` id. An area's `Specs/<Area>/Assumptions` cites these rather than
+restating them.
 -/
 
 namespace Verity.Assumptions
@@ -40,5 +42,20 @@ def GemmAmpereStep (step : Nat → List Nat → List Nat → Nat) : Prop :=
 root is SHA-512's (the one-hash rule), so two partitions with one root would be a collision. -/
 def AdviceBinding {R : Type} (C : Circuit) (advice : (n : ℕ) → Partition C n → R) : Prop :=
   Function.Injective fun x : (n : ℕ) × Partition C n => advice x.1 x.2
+
+/-- **`trusted-nebius-host`**: the auditor-trusted `device` (a network certifier, the memory challenger) runs its stated
+`code` on the Nebius host it is deployed to. `run device x` is everything the device does on input `x`: what it emits,
+and how it uses its clock and its keys. The host changes none of it. Nothing attests this, since no attestation hardware
+stands behind the device: it is trust in Nebius. It doesn't say the keys stay secret. A protocol that needs that takes
+an unforgeability assumption, such as `LmsEufCma`, against everyone but the device. -/
+def TrustedNebiusHost {Device In Out : Type} (device : Device) (run : Device → In → Out) (code : In → Out) : Prop :=
+  ∀ x, run device x = code x
+
+/-- **`euf-cma/lms-sha512-n64`**: LMS over SHA-512 with n = 64 (the whole output, not truncated) and h = 20 is
+existentially unforgeable under chosen-message attack. Stated for one key and one run: every message and signature that
+`verify` accepts under the key is a message the key's holder signed (`signed`). A theorem taking it holds on the runs in
+which no one forged a signature; the chance of a forgery is the standard EUF-CMA bound, which is not formalized here. -/
+def LmsEufCma {Msg Sig : Type} (verify : Msg → Sig → Bool) (signed : Msg → Prop) : Prop :=
+  ∀ m σ, verify m σ = true → signed m
 
 end Verity.Assumptions
