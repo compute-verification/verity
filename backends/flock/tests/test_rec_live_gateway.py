@@ -1,11 +1,14 @@
 """The inner phase's gateway (`verity_flock.rec_live`) held to what live PROTOCOL.md §10.3 says it does, one rule a test:
-``Link``'s ``y`` is the schedule's number of zero elements, and the coin server is shown the schedule's ``Hello``, once the
-prover's is the same canonical JSON, and the record lists streams by name, whatever order the prover opened them in."""
+``Link``'s ``y`` is the schedule's number of zero elements; the coin server is shown the schedule's ``Hello``, once the
+prover's is the same canonical JSON; the record lists streams by name, whatever order the prover opened them in; a session
+that ends without ``Finish`` is a stop, written and counted; any exception while handling a request is a refusal; and the
+schedule is required, derived from the statement's public shape (`schedule_for`), never from a session the prover ran."""
 from __future__ import annotations
 
 import json
 import socket
 import threading
+from pathlib import Path
 
 import pytest
 from verity_flock import rec_live as RL
@@ -211,3 +214,101 @@ def test_a_refused_session_is_recorded_as_a_stop():
     assert proxy.coins.record()["end"] == "stop"
     proxy = _proxy(_schedule())
     assert _held(_run(proxy)) and proxy.coins.record()["end"] == "finish"
+
+
+def _edited(edit):
+    s = json.loads(json.dumps(_schedule()))
+    edit(s)
+    return s
+
+
+@pytest.mark.parametrize("schedule", [
+    None, {}, [], _edited(lambda s: s.update(kind=RL.KIND)), _edited(lambda s: s["hello"]["link"].update(sigma="ab" * 64)),
+    _edited(lambda s: s["link"].update(y=2.0)), _edited(lambda s: s["link"].update(y=True)), _edited(lambda s: s["roots"].update(circuit=-1)),
+    _edited(lambda s: s["rounds"][0].update(stream="circuit/rep1")), _edited(lambda s: s["rounds"][0].update(caps=["2"])),
+    _edited(lambda s: s.pop("rounds"))],
+    ids=["none", "empty", "list", "kind", "sigma", "y-float", "y-bool", "root-negative", "stream-unknown", "cap-string", "no-rounds"])
+def test_a_schedule_that_is_not_one_is_refused_before_anything_is_served(tmp_path, schedule):
+    with pytest.raises(ValueError, match=f"not a {RL.KIND}/schedule"):
+        _proxy(schedule)
+    with pytest.raises(ValueError, match=f"not a {RL.KIND}/schedule"):
+        RL.serve("127.0.0.1:0", tmp_path, schedule=schedule)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_the_gateway_serves_only_with_a_schedule(tmp_path, capsys):
+    """No first session pins one: `Proxy` and `serve` take the schedule as a required keyword, and `main` will not serve
+    without ``--schedule``."""
+    with pytest.raises(TypeError):
+        RL.Proxy(RL.CoinServer(T._counter_rand()), T._salts())
+    with pytest.raises(TypeError):
+        RL.serve("127.0.0.1:0", tmp_path)
+    with pytest.raises(SystemExit) as e:
+        RL.main(["--out", str(tmp_path)])
+    assert e.value.code == 2 and "--schedule are required" in capsys.readouterr().err and list(tmp_path.iterdir()) == []
+
+
+def test_the_first_session_is_held_to_the_schedule_serve_was_given(tmp_path):
+    """`serve` writes its schedule before it accepts a connection, so the first session pins nothing: a Hello field of the
+    prover's choosing (64 bytes of hex) is refused, and reaches neither a record nor ``schedule.json``."""
+    sched = _schedule()
+    t, got = _serve(tmp_path, 2, sched)
+    assert json.loads((tmp_path / "schedule.json").read_text()) == sched
+    secret = "5e" * 64
+    w = _Wire(got["addr"])
+    first = _run(w, hello={**HELLO, "note": secret})
+    w.close()
+    w = _Wire(got["addr"])
+    assert _held(_run(w))
+    w.close()
+    t.join()
+    assert _refusal(first).startswith("rec proxy: GATE-REFUSED: Hello: ") and "crash" not in got
+    assert [r["session"] for r in got["res"]] == [None, str(tmp_path / "s1" / "session")]
+    assert json.loads((tmp_path / "schedule.json").read_text()) == sched
+    assert not any(secret in p.read_text() for p in tmp_path.rglob("*.json"))
+
+
+FLAT = Path(__file__).resolve().parent / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
+
+
+def test_the_schedule_of_a_statements_shape_is_the_one_a_real_session_keeps():
+    """`schedule_for` from the shape alone (m = 25, k_log = 22, nbl = 3, three regions) is the flat GEMM selftest's honest
+    session (the fetched fixture `test_rec_algebra` reads), round for round: coins, caps' node counts, message rows. That
+    session drew committed coins, so its Hello also names them; the inner session's, on live OS coins, does not."""
+    assert (FLAT / "records-cpu" / "honest.json").is_file(), (
+        f"{FLAT} is not fetched: `uv run research data fetch-fixtures backends/flock/tests/fixtures/hidden-outputs`")
+    rec = json.loads((FLAT / "records-cpu" / "honest.json").read_text())["record"]
+    want = RL.schedule_for({"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3})
+    hello = json.loads(rec["hello"])
+    assert hello.pop("coins") == "coin-commit/sha512" and isinstance(hello["link"].pop("sigma"), str)
+    assert RL.canonical(hello) == RL.canonical(want["hello"])
+    assert {t: len(v) // 2 // RL.CAP_NODE_BYTES for t, v in rec["link"]["root_b"].items()} == want["roots"]
+    assert len(rec["link"]["y"]) == want["link"]["y"]
+    assert {st["stream"]: {"parent": st["parent"], "at": st["at"], "rounds": len(st["rounds"])} for st in rec["streams"]} == want["streams"]
+    rounds = []
+    for st in rec["streams"]:
+        for k, rd in enumerate(st["rounds"]):
+            s = RL.split_round(bytes.fromhex(rd["msg"]), k == 0 and not st["parent"])
+            rounds.append({"stream": st["stream"], "k": k, "n": rd["n"], "caps": [len(RL.top_nodes(c)) for c in s.caps],
+                           "commits": len(RL.message_rows(s.free))})
+    assert rounds == want["rounds"] and len(rounds) == 2 * 94
+
+
+def test_the_schedule_of_the_gated_k4096_statement():
+    """The K = 4096 statement (``flock-circuit statement``: dense_m 35, k_log 24, nbl 11, three regions) gives the schedule
+    its inner sessions keep: link points of 35 coordinates, a 128-node level-0 cap, 139 rounds a rep."""
+    text = "statement circuit ...\nSTATEMENT\t" + json.dumps({"statement": "verity/flock-circuit", "k_log": 24, "nbl": 11,
+                                                             "dense_m": 35, "regions": 3, "statement_digest": "00" * 64})
+    s = RL.schedule_for(RL.statement_of(text))
+    assert RL.check_schedule(s) is s and "00" * 64 not in json.dumps(s)
+    assert s["hello"]["link"] == {"m": 35, "points": 2} and s["roots"] == {"circuit": 128} and s["link"] == {"y": 2}
+    assert s["streams"] == {f"circuit/rep{r}": {"parent": "", "at": 0, "rounds": 139} for r in range(2)}
+    assert (sum(r["n"] for r in s["rounds"]), sum(r["commits"] for r in s["rounds"])) == (2082, 510)
+
+
+@pytest.mark.parametrize("statement", [{}, {"dense_m": 35, "k_log": 24, "nbl": 11}, {"dense_m": 35.0, "k_log": 24, "nbl": 11, "regions": 3},
+                                       {"dense_m": 35, "k_log": True, "nbl": 11, "regions": 3}, {"dense_m": 35, "k_log": 24, "nbl": -1, "regions": 3}],
+                         ids=["empty", "no-regions", "m-float", "k-bool", "nbl-negative"])
+def test_a_statement_without_its_shape_has_no_schedule(statement):
+    with pytest.raises(ValueError, match="names dense_m, k_log, nbl and regions"):
+        RL.schedule_for(statement)

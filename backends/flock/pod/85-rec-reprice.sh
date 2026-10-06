@@ -6,11 +6,13 @@
 #                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
 #                --definitions DEFS --stage-only, BATCH=fixed N) into data/$TAG/stage (STAGE_FROM=DIR: another job's)
 #   STEP=inner   (GPU) the inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy (verity_flock.rec_live,
-#                the inner phase's gateway: salted tree tops, a pinned schedule; WARM + RUNS sessions), upstream's replay of
-#                the last one and V*'s hashing reference (rec_vstar) over it (CHECKS=0: STEP=icheck's); then the same statement
-#                on loopback, M0 and --zk, WARM + RUNS sessions each (today's numbers, this node and build; INNER_TODAY=0: not)
-#   STEP=icheck  (CPU) the replay and rec_vstar on the inner's last session, each session's schedule against the pinned one,
-#                the coin server's record against the clear tops, and the tree-top controls rec_vstar must refuse by name
+#                the inner phase's gateway: salted tree tops, the schedule of the statement's public shape, rec_live
+#                --schedule-for; WARM + RUNS sessions), upstream's replay of the last one and V*'s hashing reference
+#                (rec_vstar) over it (CHECKS=0: STEP=icheck's); then the same statement on loopback, M0 and --zk, WARM + RUNS
+#                sessions each (today's numbers, this node and build; INNER_TODAY=0: not)
+#   STEP=icheck  (CPU) the replay and rec_vstar on the inner's last session, the schedule the sessions were held to against
+#                the statement's (derived again), each session's own schedule, how it ended and its message count, the coin
+#                server's record against the clear tops, and the tree-top controls rec_vstar must refuse by name
 #   STEP=ostage  (CPU) V*'s RecOpen statements, one per Ligerito level of the inner's last session (rec_outer --link-rows)
 #   STEP=alg     (CPU) V*'s algebra: InnerClaims.lean's claims on the inner's last session, and rec_residuals' InnerRepCheck
 #                on both reps staged into data/$TAG/alg/honest
@@ -26,7 +28,6 @@
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (default every level)  JOBS=4 (ostage, lean)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
-#      SCHEDULE_FROM= (inner: a coin server record, public.json, whose schedule every session is held to)
 #      MODES=dev  REPLAY=1  CONTROLS= (oprove)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -323,11 +324,14 @@ inner)
   mkdir -p $O/inner/proxy
   # INNER_PROXY=0: only today's numbers again (the proxied sessions V*'s statements were staged from stay as they are)
   if [ "${INNER_PROXY:-1}" = 1 ]; then
-  # M0 against the rec proxy: WARM + RUNS sessions, each written to $DD/inner/s<k>, held to a pinned schedule
-  # (SCHEDULE_FROM=PUBLIC_JSON: another session's record's, e.g. an earlier job's on this statement; else the first session's)
+  # M0 against the rec proxy: WARM + RUNS sessions, each written to $DD/inner/s<k>, held to the schedule of the statement's
+  # public shape (flock-circuit statement on the public file, then rec_live --schedule-for), derived before any session
   rm -rf $DD/inner; mkdir -p $DD/inner
-  SCHED=; [ -n "${SCHEDULE_FROM:-}" ] && { python3 -m verity_flock.rec_live --schedule-of $SCHEDULE_FROM > $DD/inner/pinned.json || exit 1; SCHED="--schedule $DD/inner/pinned.json"; }
-  taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS $SCHED > $O/inner/proxy/proxy.log 2>&1 &
+  taskset -c $VCPU $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/inner/statement.txt 2>&1 \
+    || { tail -5 $O/inner/statement.txt; exit 1; }
+  python3 -m verity_flock.rec_live --schedule-for $O/inner/statement.txt > $O/inner/schedule.json || exit 1
+  taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS --schedule $O/inner/schedule.json \
+    > $O/inner/proxy/proxy.log 2>&1 &
   PP=$!
   wait_serving $O/inner/proxy/proxy.log $PP || { cat $O/inner/proxy/proxy.log; exit 1; }
   ADDR=$(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log)
@@ -364,17 +368,26 @@ icheck)
     --sessions $SESS/session > $O/icheck/replay-proxy.txt 2>&1; echo "replay exit $?"
   /usr/bin/time -v -o $O/icheck/time-vstar.txt python3 -m verity_flock.rec_vstar $SESS > $O/icheck/vstar.json 2> $O/icheck/vstar.err
   echo "vstar exit $?"
-  # every session's own schedule against the pinned one (SCHEDULE_FROM's, else the first session's), and the sessions it stopped
-  python3 - $DD/inner > $O/icheck/schedule.json <<'EOF'
+  # the schedule the sessions were held to against the statement's (derived again from the public file), each session's own
+  # schedule against it, how each ended, and each finished one's messages (the stop bound's: Hello, Commit, Link, every
+  # Open, Round and Proof, Finish)
+  $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/icheck/statement.txt 2>&1; echo "statement exit $?"
+  python3 - $DD/inner $O/icheck/statement.txt > $O/icheck/schedule.json <<'EOF'
 import json, sys
 from pathlib import Path
 from verity_flock import rec_live as R
 d = Path(sys.argv[1])
 pin = json.loads((d / "schedule.json").read_text())
 ss = sorted(d.glob("s*/public.json"), key=lambda p: int(p.parent.name[1:]))
-print(json.dumps({"pinned_by": "SCHEDULE_FROM" if (d / "pinned.json").exists() else "the first session", "sessions": len(ss),
+
+def messages(p):
+    rec = json.loads((p.parent / "session" / "session.json").read_text())
+    return sum(len(st["rounds"]) for st in rec["streams"]) + len(rec["streams"]) + len(rec["proof_sha512"]) + 4
+
+print(json.dumps({"held_to_the_statements": pin == R.schedule_for(R.statement_of(Path(sys.argv[2]).read_text())), "sessions": len(ss),
                   "held": [p.parent.name for p in ss if (p.parent / "session").exists() and R.schedule_of(json.loads(p.read_text())) == pin],
-                  "stopped": [p.parent.name for p in ss if not (p.parent / "session").exists()]}))
+                  "end": {p.parent.name: json.loads(p.read_text()).get("end") for p in ss},
+                  "messages": {p.parent.name: messages(p) for p in ss if (p.parent / "session").exists()}}))
 EOF
   cat $O/icheck/schedule.json
   python3 - $SESS > $O/icheck/tops.txt <<'EOF'
