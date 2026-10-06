@@ -638,8 +638,10 @@ the CPU path alike, for a statement of one table; it refuses to start without `F
 Each of the device's opening frames must equal the shadow's byte for byte (`gate_opening_rounds` counts the rounds
 compared), and the opening that leaves is the shadow's. The lincheck's folded comb is the gateway's (`zk_finish` folds it),
 and `final_c'` is computed from the passed values. The algebraic phase's frames are held to the skeleton (domain, labels,
-each item's op, kind and length, the coin counts), and at the end the replay of the values the gate passed must give the
-proof's exposed values.
+each item's op, kind and length, the coin counts). At the end the returned proof must have the statement's shape (each
+zerocheck and lincheck vector's length), the replay of the values the gate passed must give the proof's exposed values, and
+the zerocheck and lincheck that leave are rebuilt from the passed values (`zk_veil::from_exposed`), as the opening that leaves
+is the shadow's: nothing of the device's returned proof leaves.
 
 `FC_GATE_TAMPER` makes the device dishonest in one named way. Each is refused by name, before the tampered message leaves
 or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), before the inner proof does:
@@ -652,6 +654,7 @@ or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), befor
 | `opening` | flips an observed value in the opening's first round | `GATE-REFUSED: opening round 0, frame …: the device's observe … differs from the gateway's in its payload` |
 | `algebra` | flips a masked value, in its frame and its proof alike | `PROVER-STOPPED: the batched constraint fails (⟨c, h⟩ ≠ t)`: `zk_finish`'s self-check (§5) |
 | `algebra-proof` | flips a masked value in its returned proof only | `GATE-REFUSED: the proof's exposed value 0 is not the one the gate passed` |
+| `shape` | appends a value to its returned proof's `round1_ab`, past the ones the gate compares | `GATE-REFUSED: the proof's shape (…) is [65, 64, …] where the statement's is [64, 64, …]` |
 
 The inner phase's controls are V*'s: `rec_inner.py forge --what top` (a clear top that does not open the salted one the coin
 server received) and `--what unsalted` (a record of clear tops), refused `GATE-REFUSED: tree top: …` by `rec_vstar`.

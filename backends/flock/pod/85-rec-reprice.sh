@@ -545,7 +545,7 @@ oprove)
   # one named way), each of which the gateway must refuse by name before the tampered message leaves
   if [ -n "${CONTROLS:-}" ]; then
     C=$DD/outer/$CONTROLS; [ $CONTROLS = alg ] && C=$DD/alg/honest
-    for w in root witness label opening algebra algebra-proof; do
+    for w in root witness label opening algebra algebra-proof shape; do
       PENV="FC_GATE=1 FC_HOST_WITNESS=1 FC_GATE_TAMPER=$w" WARM=0 RUNS=1 NS=1 again loopback neg-$CONTROLS-$w $C/pub.bin $C/inst.bin $C/circuit.txt --zk
     done
   fi

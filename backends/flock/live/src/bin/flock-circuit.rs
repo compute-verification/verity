@@ -1017,7 +1017,8 @@ struct GateDraws {
 /// callbacks swallow their panics, so the first refusal is kept in `why`. `FC_GATE_TAMPER` makes the device's side dishonest
 /// in one named way (the negative controls): `root` (its level-0 root), `witness` (set by the caller: the device proves another
 /// witness), `label` (a frame of the statement's skeleton), `opening` (a recomputed opening message), `algebra` (a masked
-/// value, in the frame and the proof alike: the relation check's case) and `algebra-proof` (the proof alone).
+/// value, in the frame and the proof alike: the relation check's case), `algebra-proof` (the proof alone) and `shape` (a
+/// value appended to the proof's `round1_ab`, past the ones the gate compares).
 struct Gate {
     st: Arc<Stmt>,
     lig: LigeritoProfile,
@@ -1231,6 +1232,10 @@ impl Gate {
         if self.tamper == "algebra" || self.tamper == "algebra-proof" {
             proof.zerocheck.round1_ab[0].lo ^= 1;
         }
+        if self.tamper == "shape" {
+            let v = proof.zerocheck.round1_ab[0];
+            proof.zerocheck.round1_ab.push(v);
+        }
         let r = self.rep.as_mut().ok_or_else(|| refused("a proof outside a gated rep"))?;
         if r.link.is_none() {
             return Err(refused("the device returned before its opening"));
@@ -1252,6 +1257,12 @@ impl Gate {
             zkv::replay(&st.r1cs, &zc0, &lc0, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), &mut zkv::Tape::new(&r.coins))
         })).map_err(|e| refused(format!("the replay of the passed values: {}", panic_msg(e))))?.map_err(refused)?;
         vals[lay.fc()] = rp.cons.iter().find(|c| c.0 == "zerocheck c_eval").ok_or_else(|| refused("no c_eval row"))?.1.c;
+        let (zc, lc) = (&proof.zerocheck, &proof.lincheck);
+        let shape = [zc.round1_ab.len(), zc.round1_c.len(), zc.multilinear_rounds.len(), lc.rounds.len(), lc.z_partial.len()];
+        let want = [zkv::SKIP, zkv::SKIP, lay.n_mlv, lay.n_lc, zkv::SKIP];
+        if shape != want {
+            return Err(refused(format!("the proof's shape (round1_ab, round1_c, multilinear_rounds, lincheck rounds, z_partial) is {shape:?} where the statement's is {want:?}")));
+        }
         let got = zkv::exposed_values(&proof.zerocheck, &proof.lincheck, &lay);
         if let Some(i) = (0..vals.len()).find(|&i| got[i] != vals[i]) {
             return Err(refused(if i == lay.fc() { "the proof's final_c is not the one the gate computes from the passed values".to_string() }
@@ -1270,7 +1281,9 @@ impl Gate {
             return Err(refused(format!("the proof's opening is not the gateway's: {}", opening_diff(&proof.pcs_open, &open))));
         }
         proof.pcs_open = open;
-        proof.lincheck.comb_partial = Vec::new();
+        // what leaves is the gate's own: the zerocheck and lincheck rebuilt from the passed values (no comb_partial: zk_finish
+        // folds the gateway's comb), the shadow's opening
+        (proof.zerocheck, proof.lincheck) = zkv::from_exposed(&vals, &lay);
         let mut v = json!({"t.gate_shadow": t_shadow, "t.gate_wait": r.t_wait, "gate_opening_rounds": link.round});
         if r.rep == 0 {
             v["t.gate_recheck"] = json!(self.t_recheck);
