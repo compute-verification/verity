@@ -334,7 +334,7 @@ def test_a_live_server_behind_the_shim_is_accepted(live, setup):
     assert c["hindsight"]["misses"] == 0
 
 
-def _live_run(setup, run, syncs: str, strategy: str = "honest") -> tuple[dict, dict]:
+def _live_run(setup, run, syncs: str, strategy: str = "honest", lag: int = 0) -> tuple[dict, dict]:
     import asyncio
 
     doc, report, s = setup
@@ -345,6 +345,8 @@ def _live_run(setup, run, syncs: str, strategy: str = "honest") -> tuple[dict, d
     if strategy != "honest":
         plan |= {"strategy": strategy,
                  "writes": ar.adversary_writes(plan, s.sync_set, s.egress_params.buckets, strategy, seed=1)}
+    if lag:
+        plan |= {"prover_lag": lag}
 
     async def go():
         server = await asyncio.start_server(_fake_vllm, "127.0.0.1", 0)
@@ -379,6 +381,15 @@ def test_a_live_shim_that_holds_its_writes_is_accepted(setup, tmp_path, syncs):
     else:
         assert 0 not in vs["windows_whose_wire_differs"] and 0 not in vs["windows_whose_declared_differs"]
         assert vs["windows_whose_declared_differs"]
+
+
+def test_a_lagged_prover_in_front_of_a_live_shim_is_accepted(setup, tmp_path):
+    """The lagged prover's choices wake the driver on the injected clock, so a run behind the live shim, where nothing
+    else may move the proxy, still ends: every link-window accepted, no window declared the envelope for want of a choice."""
+    _, audit = _live_run(setup, tmp_path, "cover-2-1", lag=5)
+    assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"]) and len(audit["rows"]) == 6
+    import gzip
+    assert json.load(gzip.open(tmp_path / "proxy.json.gz", "rt"))["prover"]["unready"] == []
 
 
 def test_a_live_request_asks_for_no_token_ids():

@@ -869,11 +869,13 @@ class LaggedProver(online.Prover):
         self.syncs.append(sync)
         return sync
 
-    async def run(self, origin: float, tau: float, windows: int, clock=time.monotonic, sleep=asyncio.sleep) -> None:
+    async def run(self, origin: float, tau: float, windows: int, clock=time.monotonic, sleep=asyncio.sleep,
+                  notify=lambda: None) -> None:
         for w in range(1, windows):
             if (delay := origin + (w * self.T - self.lag + 0.5) * tau - clock()) > 0:
                 await sleep(delay)
             self.start(w)
+            notify()
 
 
 class Stalls(asyncio.Event):
@@ -1079,7 +1081,7 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     publish = Publisher(out, setup, threaded=False)
     advice = prover_args(plan, setup, threaded=False)
     if isinstance(prover := advice.get("prover"), LaggedProver):
-        lagged = asyncio.create_task(prover.run(0.0, e.bucket_ms / 1000, plan["windows"], clock, clock.sleep))
+        lagged = asyncio.create_task(prover.run(0.0, e.bucket_ms / 1000, plan["windows"], clock, clock.sleep, notify))
     proxy = holder["proxy"] = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, advice.pop("syncs"),
                                     origin=0.0, clock=clock, sleep=clock.sleep, publish=publish,
                                     egress_link=setup.egress_link, ingress_link=setup.ingress_link, **advice)
