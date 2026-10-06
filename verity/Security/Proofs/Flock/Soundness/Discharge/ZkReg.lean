@@ -13,6 +13,7 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 import Proofs.Flock.Soundness.Discharge.ZkReg.NonVacuousHJ
+import Proofs.Flock.Soundness.Discharge.ZkRegV2.Sound
 
 /-!
 # One `--zk` sampled session with registered reads
