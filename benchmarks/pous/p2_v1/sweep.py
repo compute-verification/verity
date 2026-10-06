@@ -10,7 +10,7 @@ the run's GPU lease it picks three idle whole cores on the leased GPU's NUMA nod
 verifier's, the responder's and the sampler's; their SMT siblings stay unused, so a sibling's busy share is a neighbour's),
 samples every CPU's busy share, the load average and every GPU at 1 Hz into `out/neighbors.jsonl`, and runs `pod.sh
 IMPL=p2-v1-gpu` with the loop at T and the honest audit under forwards at T, its outputs in `out/` (`--declared-output
-'out/*'`). The setup (W, C, the salt) is the harness's deterministic one, so a repetition differs only in its audits' secret
+'out/*'`), after `prepare` has built the venv, CGBN and the library the cells share in `--work`. The setup (W, C, the salt) is the harness's deterministic one, so a repetition differs only in its audits' secret
 draws and in its timing.
 
 `aggregate` reads the cells' run dirs (`research fetch --all RUN --on NODE`): per weight set and T, the decode overhead (median
@@ -117,6 +117,30 @@ def sample(path: Path, watch: list[int]) -> None:
                               "gpus": gpus}) + "\n")
 
 
+def prepare(work: str, pod: list[str], env: dict[str, str], out: Path) -> int:
+    """The cells share WORK's venv, CGBN and builds: the first cell to get here builds them with a gates-only run on one
+    segment (its outputs in `out/prepare/`) while the others wait on WORK's lock, and a marker keyed by this tree's pod.sh,
+    p2v1.cu and Makefile lets every later cell skip it."""
+    import fcntl
+    import hashlib
+
+    key = hashlib.sha256(b"".join((REPO / p).read_bytes() for p in ("benchmarks/pous/pod.sh", "benchmarks/pous/p2_v1/p2v1.cu",
+                                                                     "benchmarks/pous/p2_v1/Makefile"))).hexdigest()[:16]
+    Path(work).mkdir(parents=True, exist_ok=True)
+    marker = Path(work) / f"prepared-{key}"
+    with open(Path(work) / "prepare.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if marker.exists():
+            return 0
+        (out / "prepare").mkdir(exist_ok=True)
+        args = {**env, "OUT": str(out / "prepare"), "GATES_ONLY": "1", "MAX_SEGMENTS": "1", "AUDITS": "0"}
+        rc = subprocess.run([*pod, *(f"{k}={v}" for k, v in args.items())], cwd=REPO, env={**os.environ, "RESEARCH_RUN_DIR": ""}
+                            ).returncode
+        if rc == 0:
+            marker.write_text(json.dumps({"run": os.environ.get("RESEARCH_RUN_ID"), "at": time.time()}) + "\n")
+        return rc
+
+
 def run_cell(a: argparse.Namespace) -> int:
     run_dir = Path(os.environ["RESEARCH_RUN_DIR"])
     out = run_dir / "out"
@@ -148,10 +172,12 @@ def run_cell(a: argparse.Namespace) -> int:
            "CONTROL_AUDITS": str(a.control_audits), "TOKENS": str(c["tokens"]), "LOAD_TOKENS": str(c["tokens"]), "OUT": str(out),
            "WORK": a.work, "VCPU": str(vcore[0]), "RCPU": str(rcore[0]), "WORKERS": "2"}
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    pod = ["bash", str(REPO / "benchmarks" / "pous" / "pod.sh")]
     rc = 1
     try:
-        rc = subprocess.run(["bash", str(REPO / "benchmarks" / "pous" / "pod.sh"), *(f"{k}={v}" for k, v in env.items())],
-                            cwd=REPO).returncode
+        if (rc := prepare(a.work, pod, env, out)) != 0:
+            return rc
+        rc = subprocess.run([*pod, *(f"{k}={v}" for k, v in env.items())], cwd=REPO).returncode
     finally:
         sampler.terminate()
         (out / "bench" / "leaves-p2.bin").unlink(missing_ok=True)
