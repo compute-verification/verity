@@ -222,18 +222,28 @@ def query_rounds(public: dict, stream: str, qs: list[int]) -> list[dict]:
     return out
 
 
-def opened_top(opening: dict, bcs: list[str], what: str) -> list[bytes]:
-    """A top's nodes, the prover's ``opening`` (its nodes and salts), when they open ``bcs``, the ``b || c`` a node the coin
-    server received; refused by name otherwise."""
+@dataclass(frozen=True)
+class Top:
+    """A tree's top as the gateway committed it: its nodes and their salts (the prover's, ``private.json``) and each node's
+    ``b || c`` (the coin server's record, public)."""
+
+    nodes: tuple[bytes, ...]
+    salts: tuple[bytes, ...]
+    bcs: tuple[bytes, ...]
+
+
+def opened_top(opening: dict, bcs: list[str], what: str) -> Top:
+    """The prover's ``opening`` of a top (its nodes and salts), when they open ``bcs``, the ``b || c`` a node the coin server
+    received; refused by name otherwise."""
     nodes = [bytes.fromhex(x) for x in opening["nodes"]]
     salts = [bytes.fromhex(x) for x in opening["salts"]]
     if (not nodes or len(nodes) != len(bcs) or len(salts) != len(nodes) or any(len(n) != HASH for n in nodes)
             or [b.hex() for b in RL.commit_top(b"".join(nodes), salts)] != bcs):
         raise ValueError(f"GATE-REFUSED: tree top: {what} does not open its commitment")
-    return nodes
+    return Top(tuple(nodes), tuple(salts), tuple(bytes.fromhex(b) for b in bcs))
 
 
-def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> list[list[bytes]]:
+def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> list[Top]:
     """Each Ligerito level's top of a rep's stream, opened (`opened_top`) against the coin server's record: level 0's the
     table's ``root_B`` from ``Commit``, then each later salted top in the order the stream's rounds absorbed them. A round's
     copies of a level-0 top (``level0``: the binding round's, Ligerito's first absorb) are not levels of their own."""
@@ -259,10 +269,11 @@ def queries(public: dict, private: dict, proofs: dict[int, bytes], table: str = 
         ts = tops(public, private, stream, table)
         if len(ts) != len(levels):
             raise ValueError(f"{stream}: {len(ts)} committed tops for {len(levels)} opened levels")
-        if any(len(t) != len(lv.cap) for t, lv in zip(ts, levels)):
+        if any(len(t.nodes) != len(lv.cap) for t, lv in zip(ts, levels)):
             raise ValueError(f"{stream}: a committed top is not the width of the proof's cap")
         rounds = query_rounds(public, stream, [len(lv.rows) for lv in levels])
-        for li, (lv, top, rd) in enumerate(zip(levels, ts, rounds)):
+        for li, (lv, t, rd) in enumerate(zip(levels, ts, rounds)):
+            top = t.nodes
             d, c = lv.depth, (len(top) - 1).bit_length()
             pos = positions(len(lv.rows), d, [int(x, 16) for x in rd["coins"]])
             for j, ps in enumerate(pos):

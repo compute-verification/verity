@@ -105,7 +105,7 @@ def test_the_record_holds_every_top_salted_and_the_openings_climb_to_them(inner)
     text = (inner / "public.json").read_text()
     for r, b in proofs.items():
         caps = [lv.cap for lv in V.decode(b)["levels"]]
-        assert V.tops(public, private, f"circuit/rep{r}") == caps
+        assert [list(t.nodes) for t in V.tops(public, private, f"circuit/rep{r}")] == caps
         assert not any(n.hex() in text for c in caps for n in c)
     assert [len(bcs) for bcs in public["link"]["roots"].values()] == [len(V.decode(proofs[0])["levels"][0].cap)]
     assert all(V.opens(q) for q in V.queries(public, private, proofs))

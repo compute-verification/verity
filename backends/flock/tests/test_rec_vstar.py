@@ -88,8 +88,10 @@ def _session():
 
 def test_the_tops_are_the_committed_ones_level_0s_copies_are_not_levels():
     public, private, a, b = _session()
-    assert V.tops(public, private, "circuit/rep0") == [[a[:64], a[64:]], [b]]
-    assert V.tops(public, private, "circuit/rep1") == [[a[:64], a[64:]]]
+    t0, t1 = V.tops(public, private, "circuit/rep0")
+    assert (t0.nodes, t1.nodes) == ((a[:64], a[64:]), (b,))
+    assert [t.nodes for t in V.tops(public, private, "circuit/rep1")] == [t0.nodes]
+    assert list(t1.bcs) == [bytes.fromhex(x) for x in public["rounds"][2]["tops"][0]] == RL.commit_top(b, list(t1.salts))
 
 
 @pytest.mark.parametrize("forge", ["node", "salt", "root-node", "missing", "short"])
