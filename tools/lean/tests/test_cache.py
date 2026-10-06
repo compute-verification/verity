@@ -603,10 +603,14 @@ mkdir -p "$d" && printf olean > "$d/M.olean" && chmod 600 "$d/M.olean" && printf
 """
 
 
-def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0) -> tuple["D.Node", Path, str]:
-    """Node 1's bare repository with main (`pkg`, and a `setup.sh` that fetches a dependency), a sandbox that runs the
-    build as this user, and the key file; returns the node, the sandbox's log and main's commit."""
+def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0, extra: dict[str, str] | None = None
+         ) -> tuple["D.Node", Path, str]:
+    """Node 1's bare repository with main (`pkg`, ``extra``'s files, and a `setup.sh` that fetches a dependency), a sandbox
+    that runs the build as this user, and the key file; returns the node, the sandbox's log and main's commit."""
     src, _ = repo(tmp, "src")
+    for f, text in (extra or {}).items():
+        (src / f).parent.mkdir(parents=True, exist_ok=True)
+        (src / f).write_text(text)
     (src / "tools" / "lean").mkdir(parents=True)
     (src / "tools" / "lean" / "setup.sh").write_text(FAKE_SETUP)
     sh("git", "add", ".", cwd=src)
@@ -678,6 +682,22 @@ def test_the_daily_run_refuses_an_out_directory_another_user_could_replace(tmp_p
     (out / "a").chmod(0o777)
     with pytest.raises(SystemExit, match="is not a directory only"):
         D.owned_dirs(out, leaf)
+
+
+SUB = {"pkg/sub/lean-toolchain": "leanprover/lean4:v4.34.0\n", "pkg/sub/lean-audit.json": "{}\n",
+       "pkg/sub/lake-manifest.json": '{"version": "1.2.0", "packages": [], "name": "sub"}\n'}
+
+
+def test_the_daily_run_builds_and_publishes_a_package_inside_another(s3, tmp_path):
+    b, url = s3
+    n, log, sha = node(tmp_path, url, extra=SUB)
+    lines = []
+    assert D.daily(n, lines.append) == 0, "\n".join(lines)
+    assert sorted(p.name for p in n.out.iterdir()) == ["pkg", "pkg%2Fsub"]
+    assert f"--rw {n.out}/pkg%2Fsub " in log.read_text()
+    for pkg in ("pkg", "pkg/sub"):
+        assert C.record_key(C.identity(n.tree, pkg, PLAT), sha) in b.objects
+    assert "2 of 2 packages built; publish exited 0, prune 0" in lines[-1]
 
 
 def test_the_daily_run_refuses_dependencies_under_a_directory_another_user_could_write(tmp_path):

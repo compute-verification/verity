@@ -9,7 +9,8 @@
    gets that copy read-only, with no network. PREP's `.lake` directories are kept across runs (only the checkout moves),
    including bundles unpacked there before the first run.
 4. Per package, `vy-lean-sandbox run` builds it as `lean-build` with `cache.py build`. The build writes only the tree's
-   `.lake` directories and `/build/out/<package>`, the one directory below `/build/out` root doesn't own.
+   `.lake` directories and the package's directory in `/build/out` (`cache.out_dir`), the one below `/build/out` root
+   doesn't own.
 5. `vy-lean-sandbox clean` must find the tree still the commit's, with no build left running. Only then does root read the
    key, with `cache.py publish` of what built, then `cache.py prune`.
 
@@ -174,7 +175,7 @@ def _daily(n: Node, log) -> int:
     user = pwd.getpwnam(n.builder)
     built = []
     for pkg in pkgs:
-        o = n.out / pkg
+        o = CACHE.out_dir(n.out, pkg)
         owned_dirs(n.out, o)
         shutil.rmtree(o, ignore_errors=True)
         o.mkdir(mode=0o755)

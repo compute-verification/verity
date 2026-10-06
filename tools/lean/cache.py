@@ -9,7 +9,7 @@ every file checked against its sha256 first. Standard library only, with `git` a
                                                   cache under OUT, and stage what it built in OUT/stage
     python tools/lean/cache.py publish --tree DIR --rev SHA --out DIR PKG...
                                                   (integration, as root outside the sandbox) hash each package's
-                                                  OUT/PKG/stage and upload it with the key in /etc/verity/lean-cache.env
+                                                  `out_dir(OUT, PKG)`/stage and upload it with the key in /etc/verity/lean-cache.env
     python tools/lean/cache.py prune [--keep N] [--dry-run]
                                                   (integration) delete what no record of the last N published commits needs
 
@@ -463,6 +463,12 @@ def get(root: Path, pkgs: list[str], env=os.environ, log=print, now=time.time, f
 
 # ---------------------------------------------------------------- integration: build and publish
 
+def out_dir(out: Path, pkg: str) -> Path:
+    """Where `build` writes ``pkg``'s outputs below ``out``: one directory per package, never one inside another's (a
+    package may sit inside another, as `verity/Security/Proofs` does in `verity/Security`)."""
+    return out / urllib.parse.quote(pkg, safe="")
+
+
 def build(pkg: Path, out: Path, lake: list[str] | None = None) -> int:
     """Inside the build's sandbox: `lake build` ``pkg`` with Lake's cache writable under ``out``, then `lake cache stage`
     the root package's outputs into ``out/stage``. Lake's cache is deleted after: it holds copies of every dependency's
@@ -509,7 +515,7 @@ def _opendir(name: str, at: int | None = None) -> int:
 
 
 def staged(out: Path, pkg: str, into: Path) -> dict[str, dict]:
-    """{name: {sha256, bytes}} of every file `lake cache stage` wrote in ``out/<pkg>/stage``, each copied into ``into`` and
+    """{name: {sha256, bytes}} of every file `lake cache stage` wrote in `out_dir(out, pkg)`/stage, each copied into ``into`` and
     hashed as it is copied; CacheError on anything there but a regular file with one link and a plain name.
 
     The build's user wrote everything below ``out`` and this runs as root, so no link is followed below ``out``: each
@@ -518,7 +524,7 @@ def staged(out: Path, pkg: str, into: Path) -> dict[str, dict]:
     planted to the key (or a hard link to it) is refused, and a file changed afterwards changes nothing uploaded."""
     fd = _opendir(str(out))
     try:
-        for part in [*pkg.split("/"), "stage"]:
+        for part in [out_dir(out, pkg).name, "stage"]:
             nxt = _opendir(part, fd)
             os.close(fd)
             fd = nxt
@@ -573,7 +579,7 @@ def put_blob(s3: S3, p: Path, f: dict) -> bool:
 
 
 def publish_one(tree: Path, rev: str, pkg: str, out: Path, s3: S3, log=print, plat: str | None = None) -> str:
-    """Upload one package's build of ``rev``, staged in ``out/<pkg>/stage``: its blobs, then its record. Returns what
+    """Upload one package's build of ``rev``, staged in `out_dir(out, pkg)`/stage: its blobs, then its record. Returns what
     happened."""
     ident = identity(tree, pkg, plat)
     with tempfile.TemporaryDirectory(prefix="lean-cache-publish-") as tmp:
@@ -599,7 +605,7 @@ def publish_one(tree: Path, rev: str, pkg: str, out: Path, s3: S3, log=print, pl
 
 def publish(tree: Path, rev: str, out: Path, pkgs: list[str], s3: S3, log=print, main: str = "origin/main",
             plat: str | None = None) -> int:
-    """`publish`: each package in ``pkgs`` from ``out/<package>/stage``. 0 when each was published (or already was), 1
+    """`publish`: each package in ``pkgs`` from `out_dir(out, pkg)`/stage. 0 when each was published (or already was), 1
     when any was refused. ``out`` is a directory root made; run it only once no process of the build's user is left."""
     merged(tree, rev, main)
     status = 0
