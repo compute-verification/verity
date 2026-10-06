@@ -85,7 +85,7 @@ PROTOCOL_ID = "p2/v4"
 SEED_DOMAIN = b"verity/pous/p2/seed/v1"
 
 P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "random-oracle", "perfect-isolation",
-             "cr/sha-512", "live-verifier", "designated-verifier", "honest-nebius-host")
+             "cr/sha-512", "live-verifier", "designated-verifier", "trusted-nebius-host")
 """What P2's certificate rests on:
 - abstract M1 (the proof's model);
 - the SMS-to-M1 instantiation (not accepted);
@@ -94,7 +94,7 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
   (whose ChaCha8 streams P2-EXP-IO does not name);
 - perfect isolation;
 - SHA-512 collision resistance for the commitment to W and for `vk`;
-- a live, designated verifier, whose memory challenger runs on a Nebius VM that nothing attests (`honest-nebius-host`)."""
+- a live, designated verifier, whose memory challenger runs on a Nebius VM that nothing attests (core's `trusted-nebius-host`)."""
 
 POINT = (16448, 21065, 1 << 16)
 """`w`, `c0` and blocks per segment at the registered point.  `2^19` blocks, the certificate's store (1.08 GB), are 8

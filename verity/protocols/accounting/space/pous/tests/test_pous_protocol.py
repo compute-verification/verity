@@ -504,7 +504,7 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
             core_claim(c)
         assert "/" not in c and c == c.lower()
     assert protocol.claim("cr/sha-512").kind == "assumption"
-    assert protocol.claim("honest-nebius-host").kind == "assumption"
+    assert protocol.claim("trusted-nebius-host").kind == "assumption"
 
 
 def test_p2_is_experimental_and_says_so():
@@ -522,7 +522,7 @@ def test_p2_is_experimental_and_says_so():
         cert = sch.certificate
         assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.call_ns, cert.segments, cert.hypotheses) == (
             "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, ROOT_CALL_NS, 8, ())
-        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "honest-nebius-host"} <= set(
+        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "trusted-nebius-host"} <= set(
             cert.claims) and not any("sha-256" in c for c in cert.claims)
         one = schemes.get(name)
         vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
