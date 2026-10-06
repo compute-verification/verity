@@ -19,7 +19,7 @@ element of F = GF(2^128) is 8 words, its 16 bytes ``lo`` LE then ``hi`` LE, so i
 * ``dirs``: the position's low H bits (word 0, bit ``h`` the side at level ``h``, its other bits zero) and 63 zero words, one
   M0 row (the unit reads word 0's low H bits).
 * ``out``: the node H levels up (32 words) and 32 zero words: one M0 row, the top node's own registered row
-  (`expected`, `verity_flock.rec_live.top_rows`). The statement reads it from the prover's registration of the top the gateway
+  (`expected`, `verity_flock.rec_live.top_rows`). The statement reads it from the prover's registration of the top the firewall
   committed under salts (`verity_flock.rec_outer`), so one registered output row checks the climb against the top
   (PROTOCOL.md §16.13 "Registered reads") and ``dirs`` the side at every level.
 
@@ -35,7 +35,7 @@ the final check's share of that level's sums. The openings of a rep chain their 
 (`verity_flock.rec_outer`): each one's ``acc_out`` is the next one's ``acc``, and V*'s algebra reads the rep's first and last.
 
 The leaf is plain SHA-512 of the row (the inner statement's ``flock-leaf/sha512-unsalted``,
-`verity_flock.circuit.LEAF_SCHEME_PLAIN`): the tops are what the gateway salts, so a leaf needs none. A node is
+`verity_flock.circuit.LEAF_SCHEME_PLAIN`): the tops are what the firewall salts, so a leaf needs none. A node is
 ``SHA-512(left || right)`` (§14), the current digest on the side its bit names (``t = d AND (cur XOR sib)`` swaps them).
 Compressions: ``LANES / 8 + 1`` for the leaf and 2 a level.
 

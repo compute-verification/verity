@@ -224,7 +224,7 @@ def query_rounds(public: dict, stream: str, qs: list[int]) -> list[dict]:
 
 @dataclass(frozen=True)
 class Top:
-    """A tree's top as the gateway committed it: its nodes and their salts (the prover's, ``private.json``) and each node's
+    """A tree's top as the firewall committed it: its nodes and their salts (the prover's, ``private.json``) and each node's
     ``b || c`` (the coin server's record, public)."""
 
     nodes: tuple[bytes, ...]

@@ -16,7 +16,7 @@ v, the final check's κ and its query rows (`rec_algebra.verifier_rows`), each o
 (`rec_outer.coefficients`, its position checked against `rec_vstar`'s), and the entries its reads files name: per round i that
 absorbs message elements, the value ``rec-c<i>`` rebuilt from that round's two ``c_k`` (`rec_residuals.commits_entry`), and
 each level's committed tops, rebuilt from their recorded ``b || c`` (`rec_outer.TopValue`). **The prover's side**: the openings
-from its proofs, its tops with the salts the gateway committed them under (`rec_vstar.tops`), its running sums
+from its proofs, its tops with the salts the firewall committed them under (`rec_vstar.tops`), its running sums
 (`rec_outer.Chain`, under salts drawn once and kept in ``--salts FILE``, so that every statement staged with one FILE reads one
 chain), and its message rows with the salts it committed them under in the inner session, registered as ``rec-c<i>`` (row r:
 rep r's) under `rec_outer.session_program` of ``public.json``, which the chain shares.
@@ -33,9 +33,9 @@ rep r's) under `rec_outer.session_program` of ``public.json``, which the chain s
   (the part whose v holds it).
 * ``top``: a wrong top. The prover commits the last level's first opening with its first sibling one bit off (a fresh row it
   commits honestly), so the opening climbs to another node, and gives that node as its output row under the ``b || c`` the
-  gateway committed for the top node its position names (``L<last>/``).
+  firewall committed for the top node its position names (``L<last>/``).
 * ``top-salt``: a top that does not match its salt. Level 0's first opening, honest but for its output row's salt, one bit off
-  the salt the gateway committed ``root_B``'s node under (``L0/``).
+  the salt the firewall committed ``root_B``'s node under (``L0/``).
 
 In both, the opening climbs to the output row the prover gives, and that row does not open the committed ``b || c``.
 
