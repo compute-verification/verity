@@ -400,7 +400,7 @@ class StochasticRequest(nn.Module):
 def single_request_splits(sampling: dict) -> int | None:
     """The single-request constant S of a stochastic policy: `sampling["splits"]` when it is an int, the
     policy's geometry is one request's (`sampler_batch == 1`) and the int is SplitsFor_v1(1, num_SMs) of that geometry; else None."""
-    from verity_vllm.program.registry.topp_split import splits_for_v1
+    from verity_vllm.program.registry.topp_geometry import splits_for_v1
     S, g = sampling.get("splits"), sampling.get("geometry") or {}
     if isinstance(S, bool) or not isinstance(S, int) or g.get("sampler_batch") != 1 or g.get("num_sms") is None:
         return None
