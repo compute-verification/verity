@@ -36,6 +36,7 @@ ALLOWED = {
     "primitives.crypto": set(),
     "primitives.commitments": {"primitives.circuits", "primitives.crypto"},
     "protocols.profile": {"primitives.circuits"},
+    # The proof service's challenger draws through the one challenge derivation (`service.Stream.select`).
     "protocols.verification.sampled_proofs": {"primitives.circuits", "primitives.commitments", "primitives.randomness",
                                               "protocols.profile"},
     "protocols.accounting.space.pous": {"claims", "primitives.circuits", "primitives.commitments", "primitives.randomness"},
