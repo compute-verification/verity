@@ -6,8 +6,8 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
     python rec_inner.py forge --what challenge|query --inner DIR
                                                              flips one coin of rep 0 in DIR's session.json and public.json
     python rec_inner.py forge --what top|unsalted --inner DIR
-                                                             top: flips one byte of rep 0's level-1 cap in private.json;
-                                                             unsalted: public.json's tops as clear tops (no salts)
+                                                             top: flips one byte of rep 0's level-1 top in private.json;
+                                                             unsalted: public.json's tops as their clear nodes (no salts)
 """
 from __future__ import annotations
 
@@ -47,15 +47,16 @@ def forge(what: str, inner: Path, level: int = 0) -> dict:
     ``unsalted`` forge the tree tops instead (the module docstring)."""
     pub, priv, proofs = V.load(inner)
     if what == "top":
-        p = next(p for p in priv["rounds"] if p["stream"] == STREAM and p["k"] > 0 and p["caps"])
-        p["caps"][0] = format(int(p["caps"][0][:2], 16) ^ 1, "02x") + p["caps"][0][2:]
+        p = next(p for p in priv["rounds"] if p["stream"] == STREAM and p["k"] > 0 and p.get("tops"))
+        nodes = p["tops"][0]["nodes"]
+        nodes[0] = format(int(nodes[0][:2], 16) ^ 1, "02x") + nodes[0][2:]
         (inner / "private.json").write_text(json.dumps(priv))
-        return {"forged": what, "stream": STREAM, "k": p["k"], "cap": 0}
+        return {"forged": what, "stream": STREAM, "k": p["k"], "top": 0}
     if what == "unsalted":
-        clear = {(p["stream"], p["k"]): p["caps"] for p in priv["rounds"]}
+        clear = {(p["stream"], p["k"]): [o["nodes"] for o in p.get("tops", [])] for p in priv["rounds"]}
         for r in pub["rounds"]:
-            r["caps"] = clear[(r["stream"], r["k"])]
-        pub["link"]["roots"] = {t: v["top"] for t, v in priv["roots"].items()}
+            r["tops"] = clear.get((r["stream"], r["k"]), [])
+        pub["link"]["roots"] = {t: v["nodes"] for t, v in priv["roots"].items()}
         del pub["tops"]
         (inner / "public.json").write_text(json.dumps(pub))
         return {"forged": what}

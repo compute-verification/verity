@@ -76,6 +76,8 @@ def test_rope_composes_private_by_default(tmp_path):
     text = FC.compose(low, s.subcircuit)
     meta = json.loads(text.split("\n", 2)[1][5:])
     assert meta["statement"] == FC.STATEMENT and meta["leaf_scheme"] == FC.LEAF_SCHEME
+    plain = json.loads(FC.compose(low, s.subcircuit, leaf_scheme=FC.LEAF_SCHEME_PLAIN).split("\n", 2)[1][5:])
+    assert plain.pop("leaf_scheme") == FC.LEAF_SCHEME_PLAIN and plain == {k: v for k, v in meta.items() if k != "leaf_scheme"}
     assert not any(k in meta for k in ("tail", "cut", "public_ports", "native")), "no verifier-evaluated part"
     assert {r["net"] for r in meta["ranges"]} == {FC.SHA_NET, FC.HM_NET, "unit", "mask"}
     spans = sorted(((r["pos0"] << r["slot_log"]), ((r["pos0"] + (r["count"] if r.get("packed") else FC._pow2(r["count"]))) << r["slot_log"]),
