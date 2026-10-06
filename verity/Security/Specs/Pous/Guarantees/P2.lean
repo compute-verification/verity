@@ -129,23 +129,6 @@ def P2SlackFamilyUncond : Prop :=
         AuditSecure sch .sequential (sch.stateBound Params.ρ + 256 * sch.B) D (2 ^ 20) 127 (ENNReal.ofReal Params.δ)
           Params.εMax)
 
-/-- **Not proved; a statement for the sampled setup.** For every `B` with `2^8 ≤ B ≤ 2^23` and every `b` with
-`20·16448 ≤ 21·b` and `b ≤ 16447`, the `m1p B 16448 (2^16448 − 21065) b` audit with at most `⌊B/100⌋` free blocks
-(`AuditSecureFree`: blocks a sampled setup let through, which pass every challenge) accepts every adversary holding
-`⌊ρ_eff·|C|⌋ + 128·B` bits, `ρ_eff = 18/19 · 99/100 ≈ 0.938`, with sequential reveal, `2^20` forward queries per
-answer and any depth, with probability at most `1% + 2^-128 + 2^-129`, at `k = 140`.
-
-Where the numbers come from: a sampled setup of `s = 8,828` blocks (`⌈128 / −log₂ 0.99⌉`) leaves more than `B/100`
-blocks not decoding to `W` with probability at most `2^-128`, which the profile's failure union carries, not this
-statement. `ρ_eff` is `ρ` of the blocks that must be stored. Of 140 uniform challenges more than 35 land on free blocks
-with probability `P[Bin(140, 1/100) > 35] = 2^-129.2 ≤ 2^-129`, and the other 105 or more are `P2SlackFamilyUncond`'s
-`λ = 128` row. Scope: as `P2SlackB19Uncond`. -/
-def P2SlackFamilyFreeBlocks : Prop :=
-  ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 23 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
-    let sch := m1p B 16448 (2 ^ 16448 - 21065) b
-    AuditSecureFree sch (B / 100) (sch.stateBound (Params.ρ * (99 / 100)) + 128 * sch.B) D (2 ^ 20) 140
-      (ENNReal.ofReal Params.δ) (Params.εMax + (2⁻¹ : ℝ≥0∞) ^ 129)
-
 /-- **Unconditional (no hypothesis): the error split at the MVP's block count.** The rows `P2MeetsM1pB19Uncond`
 (`λ = 0`, `k = 88`) and `P2SlackB19Uncond` (`λ = 64`, `128`, `256` at `k = 95`, `104`, `127`) hold with
 `ε = 2^-129` in place of `2^-128`, for every payload width in range. The ideal-model term therefore needs at most
@@ -167,5 +150,22 @@ def P2ErrorSplitB19Uncond : Prop :=
         ((2⁻¹ : ENNReal) ^ 129) ∧
       AuditSecure sch .sequential (sch.stateBound Params.ρ + 256 * sch.B) D (2 ^ 20) 127 (ENNReal.ofReal Params.δ)
         ((2⁻¹ : ENNReal) ^ 129)
+
+/-- **Not proved; a statement for the sampled setup.** For every `B` with `2^8 ≤ B ≤ 2^23` and every `b` with
+`20·16448 ≤ 21·b` and `b ≤ 16447`, the `m1p B 16448 (2^16448 − 21065) b` audit with at most `⌊B/100⌋` free blocks
+(`AuditSecureFree`: blocks a sampled setup let through, which pass every challenge) accepts every adversary holding
+`⌊ρ_eff·|C|⌋ + 128·B` bits, `ρ_eff = 18/19 · 99/100 ≈ 0.938`, with sequential reveal, `2^20` forward queries per
+answer and any depth, with probability at most `1% + 2^-128 + 2^-129`, at `k = 140`.
+
+Where the numbers come from: a sampled setup of `s = 8,828` blocks (`⌈128 / −log₂ 0.99⌉`) leaves more than `B/100`
+blocks not decoding to `W` with probability at most `2^-128`, which the profile's failure union carries, not this
+statement. `ρ_eff` is `ρ` of the blocks that must be stored. Of 140 uniform challenges more than 35 land on free blocks
+with probability `P[Bin(140, 1/100) > 35] = 2^-129.2 ≤ 2^-129`, and the other 105 or more are `P2SlackFamilyUncond`'s
+`λ = 128` row. Scope: as `P2SlackB19Uncond`. -/
+def P2SlackFamilyFreeBlocks : Prop :=
+  ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 23 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
+    let sch := m1p B 16448 (2 ^ 16448 - 21065) b
+    AuditSecureFree sch (B / 100) (sch.stateBound (Params.ρ * (99 / 100)) + 128 * sch.B) D (2 ^ 20) 140
+      (ENNReal.ofReal Params.δ) (Params.εMax + (2⁻¹ : ℝ≥0∞) ^ 129)
 
 end Pous.Guarantees
