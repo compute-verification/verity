@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# served_zk's window through the proof service on node 2's CPUs: SZ_CALLS served calls of a retained request committed as
+# served_zk's window through the proof service on a node's CPUs: SZ_CALLS served calls of a retained request committed as
 # one audit window (padded with filler tiles to a grid level), registered with exactly PoUW's public items, received,
 # drawn subset:K' once, every drawn tile proved hidden and opened, a filler tile proved beside them, and the outcome; after
 # serve.sh's run SERVED_RUN retained its two requests under $WORK/passes/$SERVED_RUN.
@@ -12,21 +12,31 @@
 #   3. commit: served_commit.py commit of the same SZ_CALLS o_proj calls (picked from os.urandom, or SZ_CALL_LIST) on the
 #      "request" and the "other" pass: <p>/commitment.json (public), <p>/advice.json (the prover's entries), rows in scratch
 #   4. register (the committer: <p>/registration.json), then one challenger process (served_commit.py challenger, over P1's
-#      sampled_proofs.service Stream; its requests and replies in challenger/requests.jsonl): receive (Stream.register:
-#      receipt.json) and select (draw.json: Lean flock-verify draw --population N --k K', the challenger's own randomness,
-#      after the receipt, once)
+#      sampled_proofs.service Stream, holding the epoch's coins: challenger/coins.json, the commitment it publishes first;
+#      its requests and replies in challenger/requests.jsonl, the coins it opened in challenger/openings.jsonl): its salt
+#      coin opened after the request pass's weights' root (salt-opening.json), receive (Stream.register: receipt.json;
+#      the challenger re-starts the pass's epoch from its manifest under its own commitment, the request pass, salted by a
+#      beacon before epoch coins, as a recorded replay) and select (draw.json: the epoch's draw coin opened after the
+#      registration, once, and Lean flock-verify draw --population N --k K' --stream over its key)
 #   5. per drawn unit u<t>: stage_tile.py (Pc8TileHidden{K=4096,1,1,sm120}), the --zk session, the opening check, Lean;
 #      the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
 #   6. deliver (the drawn units' session records' SHA-512) and outcome (one-stage's audit record over every drawn unit and
 #      PoUW's public items, outcome-<case>/); each control on a stream of its own that replays the honest draw
 #   7. the checks, each as expected, into summary.json:
+#        coins                 the challenger's coin commitment, published before any request                  COINS
+#        coin-salt             its salt coin, opened after the request pass's weights' root                    OPENED
+#        receive-coin-<case>   the request pass carrying a salt coin of another challenger (foreign), opened
+#                              after what the verifier had not recorded (early), labelled the draw coin
+#                              (mislabelled), a byte flipped (tampered), or the genuine coin beside the
+#                              beacon's salt (resalted)                                                        REFUSED
+#        receive-unrecorded    the request pass, salted by a beacon, not received as a recorded replay         REFUSED
 #        register-extra        a registration with one more public item (the calls' shapes)                    REFUSED
 #        receive-foreign       the other request's registration, against the request's parameters              REFUSED
 #        receive-extra         the request's registration with one more public key                             REFUSED
 #        receive-raised        the request's registration claiming the next grid level (more credit)           REFUSED
 #        receive-honest        the challenger receives the request's registration                              REGISTERED
 #        receive-open          a second registration while the first has no outcome                            REFUSED
-#        select                Lean's draw of K' units, after the receipt                                     DRAWN
+#        select                Lean's draw of K' units over the draw coin's key, opened after the receipt    DRAWN
 #        select-again          a second select of the same registration: no retry redraws                     REFUSED
 #        open-u<t>             each drawn unit's proof opens that unit's rows under the window root            ACCEPT
 #        lean-u<t>             the Lean verifier on each drawn unit's --zk session                             ACCEPT
@@ -45,6 +55,8 @@
 #        outcome-foreign-proof the first unit's proof, opening and Lean verdict the other request's             REJECT
 #        retry-foreign-proof   a registration on that control's stream after its reject (budget 1)             REFUSED
 #        outcome-st-<case>     the first unit's Lean verdict a selftest case's: honest ACCEPT; the tampered    REJECT
+#        replay                the challenger's requests again from its recorded coins, Lean drawing          SAME
+#        replay-twin           the same, stream_subset (Lean's draw's Python twin) drawing                    SAME
 set -uo pipefail
 SRC=$(pwd)
 Z=$SRC/benchmarks/pouw/served_zk   # not J: hidden_zk/job.sh sets J to its own directory
@@ -100,8 +112,9 @@ expect register-extra REFUSED "${v:-ERROR}"
 R=$OUT/request/registration.json RP=$OUT/request/params.json
 "$PY" "$SC" edit "$R" "$OUT/registration-extra.json" 'window.public.calls=2'
 "$PY" "$SC" edit "$R" "$OUT/registration-raised.json" "window.public.work.level=$(( $(jq_ "$R" "d['window']['public']['work']['level']") + 1 ))"
-# the challenger: one process holding P1's streams from the receipt to the outcomes; ask() is its one channel
+# the challenger: one process holding P1's streams and the epoch's coins from the receipt to the outcomes; ask() is its one channel
 coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" 2> "$OUT/challenger.err"; }
+MAN=$PASSES/request/manifest.json
 ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out, its word in $REPLY
   local line=
   if [ -n "${SVC[1]:-}" ]; then echo "$2" >&"${SVC[1]}" && IFS= read -r line <&"${SVC[0]}"; fi
@@ -109,18 +122,31 @@ ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out
   REPLY=$(first < "$OUT/$1.out")
 }
 req() { "$PY" -c "import json, sys; a = sys.argv[1:]; print(json.dumps(dict(zip(a[::2], a[1::2]))))" "$@"; }
-ask receive-foreign "$(req op register name foreign registration "$OUT/other/registration.json")"
+ask coins "$(req op coins)"
+expect coins COINS "$REPLY"
+WR=$("$PY" -c "import json, sys; from verity.protocols.accounting.work.pouw.audit import weights_root; m = json.load(open(sys.argv[1])); \
+print(weights_root({int(w): bytes.fromhex(v['root']) for w, v in m['weights'].items()}).hex())" "$MAN")
+ask coin-salt "$(req op salt after "$WR" out "$OUT/salt-opening.json")"
+expect coin-salt OPENED "$REPLY"
+for c in foreign early mislabelled tampered resalted; do
+  "$PY" "$SC" coin-variant "$MAN" "$OUT/challenger/coins.json" "$OUT/salt-opening.json" "$W/coin-$c.json" "$c" || log "coin-variant $c FAILED"
+  ask "receive-coin-$c" "$(req op register name "coin-$c" registration "$R" manifest "$W/coin-$c.json")"
+  expect "receive-coin-$c" REFUSED "$REPLY"
+done
+ask receive-unrecorded "$(req op register name unrecorded registration "$R" manifest "$MAN")"
+expect receive-unrecorded REFUSED "$REPLY"
+ask receive-foreign "$(req op register name foreign registration "$OUT/other/registration.json" manifest "$PASSES/other/manifest.json" recorded true)"
 expect receive-foreign REFUSED "$REPLY"
-ask receive-extra "$(req op register name extra registration "$OUT/registration-extra.json")"
+ask receive-extra "$(req op register name extra registration "$OUT/registration-extra.json" manifest "$MAN" recorded true)"
 expect receive-extra REFUSED "$REPLY"
-ask receive-raised "$(req op register name raised registration "$OUT/registration-raised.json")"
+ask receive-raised "$(req op register name raised registration "$OUT/registration-raised.json" manifest "$MAN" recorded true)"
 expect receive-raised REFUSED "$REPLY"
-ask receive-honest "$(req op register name honest registration "$R" out "$OUT/receipt.json")"
+ask receive-honest "$(req op register name honest registration "$R" manifest "$MAN" recorded true out "$OUT/receipt.json")"
 expect receive-honest REGISTERED "$REPLY"
-ask receive-open "$(req op register name open registration "$R")"
+ask receive-open "$(req op register name open registration "$R" manifest "$MAN" recorded true)"
 expect receive-open REFUSED "$REPLY"
 [ -f "$OUT/receipt.json" ] || { log "receive FAILED: $(cat "$OUT/receive-honest.out")"; exit 3; }
-log "select: $LEAN draw (the challenger's own randomness, after the receipt)"
+log "select: the draw coin, opened after the registration, and $LEAN draw over its key"
 ask select "$(req op select name honest out "$OUT/draw.json")"
 expect select DRAWN "$REPLY"
 ask select-again "$(req op select name honest out "$W/draw-again.json")"
@@ -242,7 +268,7 @@ expect deliver-again REFUSED "$REPLY"
 U=$OUT/u$U0
 units_json "$OUT/units-foreign-proof.json" "$OUT/other-tile/stage.json" "$OUT/other-tile/pub.bin" "$U/lean-foreign-pub.out" "$OUT/open-foreign-proof.json"
 control foreign-proof REJECT "$OUT/units-foreign-proof.json"
-ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof)"
+ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof manifest "$MAN" recorded true)"
 expect retry-foreign-proof REFUSED "$REPLY"
 for c in $HZ_CASES; do
   [ -f "$U/lean-st-$c.out" ] || continue
@@ -251,6 +277,10 @@ for c in $HZ_CASES; do
 done
 [ -n "${SVC[1]:-}" ] && echo '{"op": "quit"}' >&"${SVC[1]}"
 [ -n "${SVC_PID:-}" ] && wait "$SVC_PID" 2>/dev/null
+v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay" --lean "$LEAN" | tee "$OUT/replay.out" | first)
+expect replay SAME "${v:-ERROR}"
+v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay-twin" | tee "$OUT/replay-twin.out" | first)
+expect replay-twin SAME "${v:-ERROR}"
 
 # ---- 7. summary ---------------------------------------------------------------------------------------------------------------
 {
@@ -258,6 +288,7 @@ done
   echo "\"served_run\": \"$SERVED_RUN\", \"calls\": [$(echo "$CALLS" | tr ' ' ',')], \"units\": [$(echo "$UNITS" | tr ' ' ',')],"
   echo "\"real_tiles\": $REAL, \"filler_from\": $FILL, \"filler_unit\": $FU, \"params\": $(cat "$RP"),"
   echo "\"public\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['public'])" 2>/dev/null || echo null),"
+  echo "\"coins\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['coins'])" 2>/dev/null || echo null),"
   echo "\"stage\": $(cat "$OUT/u$U0/stage.json"),"
   echo "\"shape\": $(cat "$OUT/shape-filler.json" 2>/dev/null || echo null),"
   echo "\"checks\": {$(for t in "${!VERDICT[@]}"; do printf '"%s": {"verdict": "%s", "expected": "%s"},' "$t" "${VERDICT[$t]}" "${EXPECT[$t]}"; done | sed 's/,$//')}"
