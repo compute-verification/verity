@@ -1,5 +1,12 @@
 import Definitions.Pous.Accounting.Params
 import Definitions.Pous.Model.M1p
+import Definitions.Pous.P2.Cost
+import Definitions.Pous.Game.Oracle
+import Definitions.Pous.Game.Prob
+import Definitions.Pous.Model.Audit
+import Definitions.Pous.Model.M1
+import Definitions.Pous.Model.Scheme
+import Definitions.Pous.P2.Cost
 
 /-!
 # The `m1p` statements at P2's parameters (trusted)
@@ -151,3 +158,89 @@ def P2ErrorSplitB19Uncond : Prop :=
         ((2⁻¹ : ENNReal) ^ 129)
 
 end Pous.Guarantees
+
+namespace PousMargin
+open Pous
+open scoped ENNReal
+
+/-- **`λ = 128`: raw storage (500,773 blocks, fraction 0.95515) breaks every `k ≤ 100`.** -/
+def _root_.Pous.Guarantees.MarginRawB19_128 : Prop :=
+  ∀ (p b D Q k : ℕ) (hk : k ≤ 100) (ε : ℝ≥0∞),
+    ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 128 D Q k ε
+
+end PousMargin
+
+namespace PousMargin
+open Pous
+open scoped ENNReal
+
+/-- **`λ = 256`: raw storage (504,854 blocks, fraction 0.96293) breaks every `k ≤ 121`.** -/
+def _root_.Pous.Guarantees.MarginRawB19_256 : Prop :=
+  ∀ (p b D Q k : ℕ) (hk : k ≤ 121) (ε : ℝ≥0∞),
+    ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 256 D Q k ε
+
+end PousMargin
+
+namespace PousMargin
+open Pous
+open scoped ENNReal
+
+/-- **`λ = 64`: raw storage (498,733 blocks, fraction 0.95126) breaks every `k ≤ 92`.** -/
+def _root_.Pous.Guarantees.MarginRawB19_64 : Prop :=
+  ∀ (p b D Q k : ℕ) (hk : k ≤ 92) (ε : ℝ≥0∞),
+    ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 64 D Q k ε
+
+end PousMargin
+
+namespace PousP2Ring
+open Pous
+open scoped ENNReal
+
+/-- **`MeetsOn` at `(D, Q, Q)` implies `Meets` at `(D, Q)`**, in either reveal mode, for every scheme in the ring
+model: the ring bound only enlarges the class of responders the requirement quantifies over. -/
+def _root_.Pous.Guarantees.P2RingMeetsOfMeetsOn : Prop :=
+  ∀ {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (reveal : Reveal) (D Q k : ℕ) (ε : ℝ≥0∞) (h : MeetsOn sch reveal D Q Q k ε),
+    Meets sch reveal D Q k ε
+
+end PousP2Ring
+
+namespace PousP2Ring
+open Pous
+open scoped ENNReal
+
+/-- **Tightness (non-vacuity) of P2 in the ring model.** For every prime `p ≡ 3 mod 4` with `2^b ≤ p ≤ 2^w`, and `n`
+with `(p+1)/4 < 2^n`: a responder that keeps no state and recomputes each challenged block (`recBlock`) within
+`2(n + 1)` multiplication rounds, `2` key queries and `4n + 5` ring queries is always right, so `p2ring` fails `MeetsOn`
+in the sequential audit at every `D ≥ 2(n + 1)`, `Q ≥ 2`, `L ≥ 4n + 5`, `k` and `ε`. At P2's modulus this is
+`D ≥ 32,894` (`tight_p16448`). No `(D, L)` at which `MeetsOn` holds is proved; at P2's parameters and `k ≤ 88` it
+fails from `D = 2` once `L ≥ 2^30` (`not_meetsOn_b19_k88`). -/
+def _root_.Pous.Guarantees.P2RingTight : Prop :=
+  ∀ (B w p b : ℕ) [NeZero B] [NeZero p] (hp : p.Prime) (h4 : p % 4 = 3) (hb : 2 ^ b ≤ p) (hp2 : p ≤ 2 ^ w) (n : ℕ) (hn : (p + 1) / 4 < 2 ^ n) (D Q L k : ℕ) (hD : 2 * (n + 1) ≤ D) (hQ : 2 ≤ Q) (hL : 4 * n + 5 ≤ L) (ε : ℝ≥0∞),
+    ¬ MeetsOn (p2ring B w p b) .sequential D Q L k ε
+
+end PousP2Ring
+
+namespace PousP2p
+open Pous
+open scoped ENNReal
+
+/-- **The family fails at `k = 85`**: its `2^19` instance fails `Meets` at `85` challenges, at every width and every
+`D` and `Q` (`not_meets_m1p_b19_k85`). -/
+def _root_.Pous.Guarantees.P2pFamilyK85Fails : Prop :=
+  ∃ (B : ℕ) (_ : NeZero B), 2 ^ 8 ≤ B ∧ B ≤ 2 ^ 23 ∧
+    ∀ b D Q, ¬ Meets (m1p B 16448 (2 ^ 16448 - 21065) b) .sequential D Q 85 Params.εMax
+
+end PousP2p
+
+namespace PousP2p
+open Pous
+open scoped ENNReal
+
+/-- **`k = 85` fails at `2^19` blocks, for every `p` and every payload width `b`.** Storing `⌊S/w⌋ = 496,693` of the
+`2^19` code blocks raw (`Pous.raw_seq_accepted`) passes 85 sequential challenges with probability
+`(496693/2^19)^85 > 1% + 2^-128`, for every `D` and `Q`. So `k = 88` is within three of what raw storage forces. -/
+def _root_.Pous.Guarantees.P2pNotMeetsM1pB19K85 : Prop :=
+  ∀ (p b D Q : ℕ),
+    ¬ Meets (m1p (2 ^ 19) 16448 p b) .sequential D Q 85 Params.εMax
+
+end PousP2p

@@ -22,6 +22,11 @@ import Specs.Pous.Guarantees.SecureErasure
 import Definitions.Pous.Model.BandGraph
 import Definitions.Pous.Model.SegLift
 import Definitions.Pous.Model.Continuous
+import Definitions.Pous.Game.Oracle
+import Definitions.Pous.Game.Prob
+import Definitions.Pous.Model.Audit
+import Definitions.Pous.Model.Graded
+import Definitions.Pous.Model.Scheme
 
 /-!
 # Guarantees
@@ -1191,3 +1196,89 @@ def BandTwoWay220_16 : Prop :=
   ColumnHard (PousP3Column.bandGraph 220 16) 12 220 3
 
 end Pous.Guarantees
+
+namespace Pous
+open scoped ENNReal
+
+/-- If the requirement holds with `ε = 0` and `19 ∣ B`, then `k ≥ 86`: storing `18/19` of the blocks raw passes
+with probability `(18/19)^k`. -/
+def _root_.Pous.Guarantees.KGe86 : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (reveal : Reveal) (D Q k : ℕ) (h19 : 19 ∣ sch.B) (hsec : AuditSecure sch reveal (sch.stateBound Params.ρ) D Q k (ENNReal.ofReal Params.δ) 0),
+    86 ≤ k
+
+end Pous
+
+namespace Pous
+open scoped ENNReal
+
+def _root_.Pous.Guarantees.NotMeetsEpsOne : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (reveal : Reveal) (D Q k : ℕ),
+    ¬ Meets sch reveal D Q k 1
+
+end Pous
+
+namespace Pous
+open scoped ENNReal
+
+/-- `ε` above `2^-128` never meets the requirement; in particular `ε = 1`, which would make the audit vacuous. -/
+def _root_.Pous.Guarantees.NotMeetsOfLtEps : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (reveal : Reveal) (D Q k : ℕ) {ε : ℝ≥0∞} (hε : Params.εMax < ε),
+    ¬ Meets sch reveal D Q k ε
+
+end Pous
+
+namespace Pous
+open scoped ENNReal
+
+/-- In the plain model, if the coins fit in `S` bits, an `S`-bit adversary that stores consistent coins and
+re-encodes is accepted with probability 1, for every `W` and `k`. -/
+def _root_.Pous.Guarantees.PlainShortCoinsInsecure : Prop :=
+  ∀ (sch : Scheme IdealModel.plain) (S k : ℕ) (hS : Fintype.card sch.Coins ≤ 2 ^ S),
+    ∃ (A₁ : Preprocessor sch S) (A₂ : SimResponder sch S 0 0 k), ∀ W, pr (simAccepts sch W A₁ A₂) = 1
+
+end Pous
+
+namespace PousContinuous
+open Pous
+open scoped ENNReal
+
+open Classical in
+/-- **The counting step** (the PoUS explorer note, §1). Indicators `X` of misses, each round's conditional miss
+probability at least `q` given the history, and any `β > 0`: the misses are at most `f` and `Σ_j q_j` exceeds
+`G(f) = inf_{θ > 0} (θ·f + ln(1/β)) / (1 − e^−θ)` with probability at most `β`. With `n` rounds,
+`G(f) = n·g(f)` for the explorer's `g(f) = min_{θ > 0} (θ·f + ln(1/β)) / ((1 − e^−θ)·n)`. -/
+def _root_.Pous.Guarantees.ContinuousPrMissesGtLe : Prop :=
+  ∀ {α : Type} [Fintype α] [Nonempty α] (n : ℕ) (X : List α → α → Prop) (q : List α → ℝ) (hq : ∀ h : List α, h.length < n → q h ≤ (pr (X h)).toReal) (f β : ℝ) (hβ : 0 < β),
+    pr (fun I : Fin n → α =>
+    ((Finset.univ.filter fun j : Fin n => X ((List.ofFn I).take j) (I j)).card : ℝ) ≤ f ∧
+      (⨅ θ : Set.Ioi (0 : ℝ), ((θ : ℝ) * f + Real.log (1 / β)) / (1 - Real.exp (-(θ : ℝ)))) <
+        ∑ j : Fin n, q ((List.ofFn I).take j)) ≤ ENNReal.ofReal β
+
+end PousContinuous
+
+namespace PousContinuous
+open Pous
+open scoped ENNReal
+
+open Classical in
+/-- **The counting step, at one `θ`.** Indicators `X` of misses, each round's conditional miss probability at least
+`q` given the history: for every `θ > 0`, `f` and `s`,
+`Pr[#misses ≤ f ∧ s ≤ Σ_j q_j] ≤ exp(θ·f − (1 − e^−θ)·s)`. -/
+def _root_.Pous.Guarantees.ContinuousPrMissesLe : Prop :=
+  ∀ {α : Type} [Fintype α] [Nonempty α] (n : ℕ) (X : List α → α → Prop) (q : List α → ℝ) (hq : ∀ h : List α, h.length < n → q h ≤ (pr (X h)).toReal) (θ f s : ℝ) (hθ : 0 < θ),
+    pr (fun I : Fin n → α =>
+      ((Finset.univ.filter fun j : Fin n => X ((List.ofFn I).take j) (I j)).card : ℝ) ≤ f ∧
+        s ≤ ∑ j : Fin n, q ((List.ofFn I).take j)) ≤
+    ENNReal.ofReal (Real.exp (θ * f - (1 - Real.exp (-θ)) * s))
+
+end PousContinuous
+
+namespace PousGraded
+open Pous
+open scoped ENNReal
+
+def _root_.Pous.Guarantees.GradedMeetsZeroIff : Prop :=
+  ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late k : ℕ) (hD : D ≤ D_late) (hQ : Q ≤ Q_late) (ε : ℝ≥0∞),
+    GradedMeets sch D Q D_late Q_late k 0 ε ↔ Meets sch .sequential D Q k ε
+
+end PousGraded

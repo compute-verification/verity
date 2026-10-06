@@ -11,7 +11,7 @@ fc0f14e06e3316b67369fa520ba81060884806bd9dce93d67ecc72f91c0206e3  ../../../../..
 414ad2f21442a2c3e6ff556139c15df3bad19cfd6bd20d33114c2337eac5f54f  ../../../../../Security/Proofs/lake-manifest.json
 365c9a5941bd0da05fd2937600ade8f87f52d8da37f471f6fe1c665e5941187f  ../../../../../Security/Definitions/Pous.lean
 08f3f47237b05bf513bfb1113650c9c12b9aac75db8866ca7f0c790af36a0f68  ../../../../../Security/Specs/Pous/Assumptions.lean
-649d21d4bb6c284b341981ea242af274d9071dca0b90c514d11f3321c2a5771c  ../../../../../Security/Specs/Pous/Guarantees.lean
+fdd108d72067c47b2a142ed041044b0d5e7e3ec4735df926031944b8ab6188ad  ../../../../../Security/Specs/Pous/Guarantees.lean
 9005c1c48de560fd4412db56fa9929cc4b68523b75ed9f0934d357eb0d0fad15  ../../../../../Security/Proofs/Pous/Sanity.lean
 7bd66e3b6894d7a96eba69163dfa99f8b9f4f9be5f9deddfc4d5fa2ed17ac137  ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean
 07f59ca064ff0da2f222f034d176d79b0d7c57d20831fce6ac7a82c230cbc687  ../../../../../Security/Definitions/Pous/Accounting/EraseMeets.lean
@@ -45,5 +45,5 @@ fbd6d2fee4fde620966a4707303d25a81f969420529f3bf53e05f47ad0548178  ../../../../..
 57e605cac56a8976de264946d3e0e7573efd583318d01ead07b1731fca0a248d  ../../../../../Security/Definitions/Pous/Model/SegLift.lean
 d1387ddc90e295e3a6cc44de9bf9ce3b1b01d30c3eafcd97ae24132e65805ceb  ../../../../../Security/Definitions/Pous/P2/Cost.lean
 b8197a23f8d3ae2ce906ed6e531fbf84c6e36c4b0a6d7421ded415990990c11d  ../../../../../Security/Specs/Pous/Assumptions/P2.lean
-47436069977253d61974885ab8938313c4bdb533ed858419dc312efb1beb2aca  ../../../../../Security/Specs/Pous/Guarantees/P2.lean
+2508e6f181e7eda1821b92341b7d03a9c5446f1a288c7bb9ee71a88eb41434bf  ../../../../../Security/Specs/Pous/Guarantees/P2.lean
 38f0faf3ba0810de6a753883b49210df36de03455a9b6ca65e9ad387a865ee8f  ../../../../../Security/Specs/Pous/Guarantees/SecureErasure.lean

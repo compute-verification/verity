@@ -41,6 +41,10 @@ import Proofs.Pous.Thm1.Theorem1iiiTimed
 import Proofs.Pous.Chain.PubFamily
 import Proofs.Pous.Chain.PubRounds
 import Proofs.Pous.Rebuild.Exclusion
+import Proofs.Pous.Continuous.MissCount
+import Proofs.Pous.Graded.Theorem
+import Specs.Pous.Guarantees
+import Specs.Pous.Guarantees.P2
 
 /-!
 # The proved guarantees
@@ -203,3 +207,31 @@ theorem BandTwoWay220_12D11 : Pous.Guarantees.BandTwoWay220_12D11 := PousP3Colum
 theorem BandTwoWay220_16 : Pous.Guarantees.BandTwoWay220_16 := PousP3Column.band_twoWay_220_16
 
 end Pous.SecurityProofs
+
+theorem Pous.SecurityProofs.KGe86 : Pous.Guarantees.KGe86 := @Pous.k_ge_86
+
+theorem Pous.SecurityProofs.NotMeetsEpsOne : Pous.Guarantees.NotMeetsEpsOne := @Pous.not_meets_eps_one
+
+theorem Pous.SecurityProofs.NotMeetsOfLtEps : Pous.Guarantees.NotMeetsOfLtEps := @Pous.not_meets_of_lt_eps
+
+theorem Pous.SecurityProofs.PlainShortCoinsInsecure : Pous.Guarantees.PlainShortCoinsInsecure := @Pous.plain_short_coins_insecure
+
+theorem Pous.SecurityProofs.ContinuousPrMissesGtLe : Pous.Guarantees.ContinuousPrMissesGtLe := @PousContinuous.pr_misses_gt_le
+
+theorem Pous.SecurityProofs.ContinuousPrMissesLe : Pous.Guarantees.ContinuousPrMissesLe := @PousContinuous.pr_misses_le
+
+theorem Pous.SecurityProofs.GradedMeetsZeroIff : Pous.Guarantees.GradedMeetsZeroIff := @PousGraded.gradedMeets_zero_iff
+
+theorem Pous.SecurityProofs.MarginRawB19_128 : Pous.Guarantees.MarginRawB19_128 := @PousMargin.raw_b19_128
+
+theorem Pous.SecurityProofs.MarginRawB19_256 : Pous.Guarantees.MarginRawB19_256 := @PousMargin.raw_b19_256
+
+theorem Pous.SecurityProofs.MarginRawB19_64 : Pous.Guarantees.MarginRawB19_64 := @PousMargin.raw_b19_64
+
+theorem Pous.SecurityProofs.P2RingMeetsOfMeetsOn : Pous.Guarantees.P2RingMeetsOfMeetsOn := @PousP2Ring.meets_of_meetsOn
+
+theorem Pous.SecurityProofs.P2RingTight : Pous.Guarantees.P2RingTight := @PousP2Ring.tight
+
+theorem Pous.SecurityProofs.P2pFamilyK85Fails : Pous.Guarantees.P2pFamilyK85Fails := @PousP2p.family_k85_fails
+
+theorem Pous.SecurityProofs.P2pNotMeetsM1pB19K85 : Pous.Guarantees.P2pNotMeetsM1pB19K85 := @PousP2p.not_meets_m1p_b19_k85
