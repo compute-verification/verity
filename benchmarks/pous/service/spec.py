@@ -51,7 +51,7 @@ KEY = HM.default_key
 ZERO_SALT = bytes(HM.salt_bytes)
 PORTS = ("block", "o0")
 C_BINDING = b"verity-pous/service/c-commitment/v1\0"
-C_SALT = b"verity-pous/service/c-salt/v1\0"
+C_SALT = b"verity-pous/service/c-salt/v2\0"
 SESSION_BINDING = b"verity-pous/service/session-binding/v1\0"
 CONTEXT = b"verity-pous/service/memory-challenger/v1"
 CHALLENGER = "pous-memory-challenger"
@@ -86,8 +86,11 @@ def spec(block_bytes: int) -> S.Spec:
 
 
 def c_salt(salt_key: bytes, i: int) -> bytes:
-    """`y_i`: block i's hm96 salt, from the prover's secret salt key."""
-    return hashlib.shake_256(C_SALT + salt_key + i.to_bytes(8, "big")).digest(HM.salt_bytes)
+    """`y_i`: block i's hm96 salt, from the prover's secret salt key: SHA-512 in counter mode (a u32 block counter after
+    the tag, the key and u64 i), its first `salt_bytes`."""
+    head = C_SALT + salt_key + i.to_bytes(8, "big")
+    n = -(-HM.salt_bytes // 64)
+    return b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(n))[:HM.salt_bytes]
 
 
 def c_domain(setup: bytes, blocks: int) -> CommitmentDomain:
