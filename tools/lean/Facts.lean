@@ -15,7 +15,7 @@ judgement; `audit.py` holds the policy.
 - `declared_axioms`: the `axiom` declarations among them.
 - `escapes`: the `opaque` ones (a `partial def` is one), and the `unsafe`, `@[implemented_by]` and `@[extern]` ones:
   compiled code with no definition a proof can unfold. The attributes are read from the modules' data.
-- `pins`: for each name in `pins`, its kind, where its declaration starts (`at`: line, codepoint column), signature,
+- `guarantees`: for each name in `guarantees`, its kind, where its declaration starts (`at`: line, codepoint column), signature,
   axioms, `Prop` hypotheses, the hash of its type, and the
   definitions its statement reads, followed through every definition, inductive type and constructor declared under
   `meaning`, with their source lines (`reads`), and the constants other than theorems outside `meaning` where that walk
@@ -28,7 +28,7 @@ judgement; `audit.py` holds the policy.
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
-before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
+before SHA-256. When `CONFIG` names a `canon` path, the guarantees' statements and the definitions they read are also written
 there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SHA-256. A pinned statement that is a
 definition under `meaning` applied under binders (`∀ xs, G as`) is also written with that definition unfolded once
 (`liftOf`), with the definition and its module, so that `audit.py` can certify a statement lifted into a `Guarantees`
@@ -322,7 +322,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let roots := names cfg "roots"
   let meaning := names cfg "meaning"
   let allowed := names cfg "allowed"
-  let pins := names cfg "pins"
+  let guarantees := names cfg "guarantees"
   let spec := names cfg "spec"
   let out := (cfg.getObjValD "out").getStr?.toOption.getD "facts.json"
   let str (j : Json) (i : Nat) : Option Name := ((j.getArrVal? i).toOption.bind (·.getStr?.toOption)).map String.toName
@@ -348,7 +348,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     imports := imports.push (m.toString, toJson (data.imports.map (·.module.toString)))
     audited := audited.push (m, data)
   let decls := audited.foldl (fun acc (_, data) => acc ++ data.constNames) #[]
-  let axioms := axiomsOf env (decls ++ pins)
+  let axioms := axiomsOf env (decls ++ guarantees)
   let mut counts : Std.HashMap String Nat := {}
   let mut used : NameSet := {}
   let mut offenders := #[]
@@ -387,20 +387,20 @@ unsafe def main (args : List String) : IO UInt32 := do
   let readsOf : Std.HashMap Name (Array (Name × Name × ConstantInfo) × Array (Name × Name)) := Id.run do
     let mut memo := {}
     let mut acc := {}
-    for p in pins do
+    for p in guarantees do
       if let some ci := env.find? p then
         let (rs, memo') := (reads env meaning ci.type.getUsedConstants).run memo
         memo := memo'
         acc := acc.insert p rs
     return acc
-  let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do
+  let (pinned, _) ← (MetaM.run' (guarantees.mapM fun p => do
     return (p.toString, ← pinInfo env axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
   let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
     let h ← IO.FS.Handle.mk path .write
     let mut done : NameSet := {}
     let mut named : NameSet := {}
-    for p in pins do
+    for p in guarantees do
       let some ci := env.find? p | continue
       h.putStrLn (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
       let head := liftOf env meaning ci.type
@@ -439,7 +439,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("declarations", Json.mkObj (counts.toList.map fun (k, v) => (k, toJson v))),
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
     ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
-    ("instances", toJson instances), ("pins", Json.mkObj pinned.toList),
+    ("instances", toJson instances), ("guarantees", Json.mkObj pinned.toList),
     ("moved_conflicts", toJson conflicts)]
   IO.FS.writeFile out doc.compress
   return 0

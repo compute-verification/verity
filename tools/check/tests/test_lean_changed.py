@@ -207,7 +207,7 @@ def _facts(definition: str) -> dict:
            "reads": [{"name": "c", "module": "C", "kind": "defn", "lines": [1, 1],
                       "hash": hashlib.sha256(definition.encode()).hexdigest()[:16]}]}
     return {"facts": {"offenders": [], "declared_axioms": [], "escapes": [], "modules": ["C"], "imports": {"C": []},
-                      "pins": {"C.c_eq": pin}, "oleans": [], "axioms": [], "lean": "v1", "declarations": 1},
+                      "guarantees": {"C.c_eq": pin}, "oleans": [], "axioms": [], "lean": "v1", "declarations": 1},
             "canon": [{"id": "pin:C.c_eq", "canon": "c = 1"}, {"id": "read:c", "canon": definition}]}
 
 
@@ -215,7 +215,7 @@ def _recorded(facts: dict) -> dict:
     """The policy `audit.py --update` writes for package `c` from ``facts`` (`facts_of`'s hashes of the canonical forms)."""
     sha = {r["id"]: hashlib.sha256(r["canon"].encode()).hexdigest() for r in facts["canon"]}
     f = json.loads(json.dumps(facts["facts"]))
-    for name, p in f["pins"].items():
+    for name, p in f["guarantees"].items():
         p["type_sha256"] = sha[f"pin:{name}"]
         for r in p["reads"]:
             r["sha256"] = sha[f"read:{r['name']}"]

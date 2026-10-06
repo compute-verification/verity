@@ -38,9 +38,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  signature, named assumptions, type hash, and (under `reads`, per module) the definitions the guarantees
                  read, the guarantees that read them and the digest of those definitions; the hashes are SHA-256 over a
                  canonical form of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are
-                 checked as they are until `--update` rewrites them); a record written before guarantees were called
-                 that holds them as `pins`, and is read so (`as_guarantees`); or an entry has no `owner`, the handle
-                 (`@lane`) of the lane that answers for it
+                 checked as they are until `--update` rewrites them); a record still holds `pins`, the name guarantees
+                 had before (`as_guarantees`); or an entry has no `owner`, the handle (`@lane`) of the lane that
+                 answers for it
     reads        a definition a guarantee's statement reads lies outside the spec (the `layers` prefixes) of its package
                  and of the packages it requires by path, and outside a pinned dependency, unless a `reads_exempt`
                  prefix lists its module with a reason (an entry that exempts nothing fails too); or it lies in a spec
@@ -214,19 +214,12 @@ def load(pkg: Path) -> dict:
 
 
 def as_guarantees(policy: dict) -> dict:
-    """A record under today's names: one written before guarantees were called that, on a branch from before the rename,
-    holds them as `pins` (and each `reads` module its readers as `pins`).  A record holding both is refused (`ValueError`):
-    the audit would check one and drop the other."""
+    """The record, refused (`ValueError`) if it still holds `pins`, the name guarantees had before."""
     groups = [("the record", policy),
               *((f"reads[{m}]", g) for m, g in (policy.get("reads") or {}).items() if isinstance(g, dict))]
-    if both := [w for w, g in groups if "pins" in g and "guarantees" in g]:
-        raise ValueError(f"{', '.join(both)} holds both `pins` and `guarantees` (a merge with a branch from before the "
-                         f"rename): move the `pins` entries under `guarantees` and run `audit.py --update`")
-    if "pins" in policy:
-        policy = {("guarantees" if k == "pins" else k): v for k, v in policy.items()}
-    for group in (policy.get("reads") or {}).values():
-        if isinstance(group, dict) and "pins" in group:
-            group["guarantees"] = group.pop("pins")
+    if old := [w for w, g in groups if "pins" in g]:
+        raise ValueError(f"{', '.join(old)} holds `pins` (a branch from before guarantees were called that): rename it "
+                         f"`guarantees` and run `audit.py --update`")
     return policy
 
 
@@ -512,7 +505,7 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
     for old, spec in sorted(lifts.items()):
         new, into = spec["as"], spec["into"]
         parts = new.split(".")
-        fact = facts["pins"].get(old) or {}
+        fact = facts["guarantees"].get(old) or {}
         if "Guarantees" not in parts[:-1] or not spec_module(into) or into not in files or into == fact.get("module"):
             raise ValueError(f"lift {old}: `as` names X.Guarantees.G and `into` a module of the package named `Guarantees` "
                              f"or under one, other than the proof's ({new}, {into})")
@@ -565,7 +558,7 @@ def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict, update
     statement means.  Returns (failures, the entries with today's digests, what `--update` asks a reviewer to read)."""
     fails, now, notes = [], {}, []
     cited: dict[str, set[str]] = {}
-    for p, rec in facts["pins"].items():
+    for p, rec in facts["guarantees"].items():
         for mod in {rec.get("module"), *(r["module"] for r in rec.get("reads", []))} - {None}:
             cited.setdefault(mod, set()).add(p)
     for m, entry in sorted(policy.get("compile_time", {}).items()):
@@ -643,7 +636,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     canon.unlink(missing_ok=True)
     config = work / "facts-config.json"
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                                  "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
+                                  "allowed": policy.get("axioms", STANDARD), "guarantees": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
@@ -662,7 +655,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
             elif rec["id"].startswith("lift:"):
                 lifts[rec["id"][5:]] = {"head": rec["head"], "module": rec["module"], "unfolded_sha256": hashes[rec["id"]]}
     canon.unlink()
-    for name, p in facts["pins"].items():
+    for name, p in facts["guarantees"].items():
         p["type_sha256"] = hashes.get(f"pin:{name}", "")
         if name in lifts:
             p["lift"] = lifts[name]
@@ -727,7 +720,7 @@ def old_group(record: dict) -> bool:
 def guarantee_reads(facts: dict) -> dict[str, dict[str, dict]]:
     """{module: {definition: its read entry, with the guarantees that read it}} for the theorems among the guarantees."""
     reads: dict[str, dict[str, dict]] = {}
-    for name, f in sorted(facts["pins"].items()):
+    for name, f in sorted(facts["guarantees"].items()):
         if f.get("kind") == "theorem":
             for r in f["reads"]:
                 reads.setdefault(r["module"], {}).setdefault(r["name"], r | {"guarantees": set()})["guarantees"].add(name)
@@ -828,7 +821,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                 continue
         elif not OWNER.fullmatch(who):
             fails.append(f"guarantees: {name}'s owner {who!r} is not a handle such as @proofs")
-        f = facts["pins"].get(name, {"kind": "missing"})
+        f = facts["guarantees"].get(name, {"kind": "missing"})
         if f["kind"] != "theorem":
             fails.append(f"guarantees: {name} is {'missing' if f['kind'] == 'missing' else 'a ' + f['kind'] + ', not a theorem'}")
             kept[name] = rec
@@ -942,7 +935,7 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
         return [f"reads: `reads_exempt` lists {', '.join(map(json.dumps, unreasoned))} without a module prefix and a reason"]
     bad: dict[tuple[str, str], tuple[set[str], set[str]]] = {}
     used: set[str] = set()
-    for g, f in sorted(facts["pins"].items()):
+    for g, f in sorted(facts["guarantees"].items()):
         if f.get("kind") != "theorem":
             continue
         for name, m in [*((r["name"], r["module"]) for r in f.get("reads", [])), *map(tuple, f.get("outside", []))]:
@@ -981,7 +974,7 @@ def unread_spec(facts: dict, elsewhere: set[str] = frozenset()) -> dict[str, lis
     ``elsewhere`` (the definitions other packages' records read): candidates to move out of the spec.  A generated
     constant goes with its declaration."""
     read = set(elsewhere)
-    for f in facts["pins"].values():
+    for f in facts["guarantees"].values():
         read |= {parent(r["name"]) for r in f.get("reads", [])} | {parent(n) for n, _ in f.get("outside", [])}
     out: dict[str, list[str]] = {}
     for d in facts.get("spec_definitions", []):
@@ -1023,10 +1016,10 @@ def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str
     """(each guarantee's facts, failures, {package: the guarantees it proves}) over ``sources``, each (a package, the facts of
     its roots, its own modules), the spec package first. A package proves a guarantee when it declares it in one of its own
     modules under its roots, which its replay covers. A pure function of the facts: the tests run it."""
-    pins, fails, by = {}, [], {label: [] for label, _, _ in sources}
+    got, fails, by = {}, [], {label: [] for label, _, _ in sources}
     for n in sorted(names):
-        found = [(label, f["pins"][n], f, files) for label, f, files in sources
-                 if f["pins"].get(n, {}).get("kind", "missing") != "missing"]
+        found = [(label, f["guarantees"][n], f, files) for label, f, files in sources
+                 if f["guarantees"].get(n, {}).get("kind", "missing") != "missing"]
         hits = [(label, p) for label, p, f, files in found if p.get("module") in files and p.get("module") in f["modules"]]
         if len(hits) > 1:
             where = " and in ".join(f"{p['module']} ({label})" for label, p in hits)
@@ -1035,10 +1028,10 @@ def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str
             fails.append(f"guarantees: {n} is declared in {found[0][1].get('module')}, which no package of "
                          f"{', '.join(label for label, _, _ in sources)} audits: a guarantee is proved in a module under the "
                          f"roots of the spec package or of a package its `proved_in` names")
-        pins[n] = (hits or [x[:2] for x in found] or [(None, {"kind": "missing"})])[0][1]
+        got[n] = (hits or [x[:2] for x in found] or [(None, {"kind": "missing"})])[0][1]
         if hits:
             by[hits[0][0]].append(n)
-    return pins, fails, by
+    return got, fails, by
 
 
 def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, str] | None = None,
@@ -1089,15 +1082,15 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
             fails.append(f"proved_in: {entry}'s roots ({', '.join(qpol['roots'])}) import its {', '.join(unaudited)}, which are "
                          f"not under them, so its replay does not check them")
         listed = qpol.get("compile_time", {})
-        for n, p in qf["pins"].items():
+        for n, p in qf["guarantees"].items():
             if p.get("kind", "missing") != "missing" and p.get("module") in files and (
                     hit := sorted({p["module"], *(r["module"] for r in p.get("reads", []))} & set(listed))):
                 fails.append(f"compile-time: {entry} lists {', '.join(hit)} under `compile_time`, where {n} is declared or "
                              f"read; move the compile-time code or the declarations to another module")
         sources.append((entry, qf, files))
         conflicts += qf.get("moved_conflicts", [])
-    pins, more, by = assign(policy.get("guarantees", {}), sources)
-    return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts}, by
+    got, more, by = assign(policy.get("guarantees", {}), sources)
+    return fails + more, facts | {"guarantees": got, "moved_conflicts": conflicts}, by
 
 
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
@@ -1157,7 +1150,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
-    moved = {n: f["moved"] for n, f in facts["pins"].items() if moves and f.get("moved")}
+    moved = {n: f["moved"] for n, f in facts["guarantees"].items() if moves and f.get("moved")}
     was = {n: moved[n]["as"] if n in moved and moved[n]["as"] in op else n for n in np}
     lifts: dict[str, set[str]] = {}
     for name in sorted(set(np) | (set(op) - set(was.values()))):
@@ -1170,13 +1163,13 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
             continue
         if o == name:
             rehashed = bool(a and b) and len(a.get("type_hash", "")) == OLD and \
-                a["type_hash"] == facts["pins"].get(name, {}).get("type_hash")
+                a["type_hash"] == facts["guarantees"].get(name, {}).get("type_hash")
             if a and b and (rehashed or a.get("type_hash") == b.get("type_hash")) and \
                     a.get("assumptions") == b.get("assumptions"):
                 out.append(f"guarantee {name}: {REHASHED if rehashed else REPRINTED}")
                 continue
         mv, th = moved.get(name, {}), a.get("type_hash")
-        head = None if th == mv.get("sha256") else lifted_into(a, b, facts["pins"].get(name, {}), mv, renames if moves else None)
+        head = None if th == mv.get("sha256") else lifted_into(a, b, facts["guarantees"].get(name, {}), mv, renames if moves else None)
         if a and b and th and (th == mv.get("sha256") or head):
             if head:
                 lifts.setdefault(head, set()).add(name)
@@ -1189,7 +1182,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         if a and b and a.get("assumptions") != b.get("assumptions"):
             out.append(f"  named assumptions: {', '.join(a.get('assumptions', [])) or 'none'} -> "
                        f"{', '.join(b.get('assumptions', [])) or 'none'}")
-    spans = {r["name"]: r.get("lines") for p in facts["pins"].values() for r in p.get("reads", [])}
+    spans = {r["name"]: r.get("lines") for p in facts["guarantees"].values() for r in p.get("reads", [])}
     oreads = old.get("reads", {})
     recorded = {d: {"module": m, "hash": h, "guarantees": rec.get("guarantees", [])}
                 for m, rec in oreads.items() for d, h in definitions(rec).items()}

@@ -11,7 +11,7 @@ A guarantee's record (its `owner` aside, which merges on its own) and a dependen
 read one module both change, the module's definitions merge the same way, its readers (`guarantees`) as sets, and its digest
 is recomputed from the merged definitions (`audit.module_digest`). The merge also refuses when one side stops reading a
 definition in a module the other side changed: the record does not say which guarantees read which definition. A side
-written before guarantees were called that (`pins`) is read under today's names (`audit.as_guarantees`).
+that still holds `pins`, the name guarantees had before, is refused (`audit.as_guarantees`).
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`audit.py --update`), as without the driver. A merged record is a candidate, never

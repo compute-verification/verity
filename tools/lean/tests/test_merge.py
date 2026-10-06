@@ -40,7 +40,7 @@ def thm(reads: list[dict], statement: str = "P.f n = n", h: str = "0000000000000
 def record(deps: dict | None = None, **guarantees: dict) -> dict:
     """The record `audit.py --update` writes for a package whose guarantees are ``guarantees`` (name suffix: its facts)."""
     facts = {"lean": "4.34.0", "modules": list(FILES), "imports": {}, "declarations": {}, "axioms": STD, "offenders": [],
-             "declared_axioms": [], "escapes": [], "pins": {f"P.{n}": f for n, f in guarantees.items()}}
+             "declared_axioms": [], "escapes": [], "guarantees": {f"P.{n}": f for n, f in guarantees.items()}}
     fails, pol = A.judge({"roots": ["P"], "meaning": ["P"], "guarantees": {f"P.{n}": {} for n in guarantees}}, facts, FILES,
                          update=True, owner="@lean")
     assert fails == []
@@ -116,33 +116,22 @@ def test_a_definition_one_side_stops_reading_refuses_when_the_other_side_changed
 
 def test_a_32_bit_group_is_not_merged_with_a_rehashed_one():
     base = record(t=thm([F]))
-    old = base | {"reads": A.read_groups(A.guarantee_reads({"pins": {"P.t": thm([F])}}), old=True)}
-    ours = old | {"reads": A.read_groups(A.guarantee_reads({"pins": {"P.t": thm([F]), "P.u": thm([F, G])}}), old=True),
+    old = base | {"reads": A.read_groups(A.guarantee_reads({"guarantees": {"P.t": thm([F])}}), old=True)}
+    ours = old | {"reads": A.read_groups(A.guarantee_reads({"guarantees": {"P.t": thm([F]), "P.u": thm([F, G])}}), old=True),
                   "guarantees": record(t=thm([F]), u=thm([F, G]))["guarantees"]}
     why = M.merge(old, ours, base)[1]
     assert why and all(w.startswith("reads[P.Defs]") for w in why)
     assert "reads[P.Defs]: its definitions would mix 32-bit and SHA-256 hashes (one side's record was rehashed)" in why
 
 
-def before_the_rename(rec: dict) -> dict:
-    """``rec`` as a branch from before guarantees were called that writes it: `pins`, and each module's readers as `pins`."""
-    out = {("pins" if k == "guarantees" else k): v for k, v in rec.items()}
-    out["reads"] = {m: {("pins" if k == "guarantees" else k): v for k, v in g.items()} for m, g in rec["reads"].items()}
-    return out
-
-
-def test_a_side_from_before_the_rename_merges_under_today_s_names(tmp_path):
+def test_a_side_still_holding_pins_is_refused(tmp_path):
     base = record(t=thm([F]))
     ours = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"))
     theirs = record(t=thm([F]), v=thm([H, K], "P.h n = P.k n", "00000000000000cc"))
-    tree = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"), v=thm([H, K], "P.h n = P.k n", "00000000000000cc"))
-    for n, d in (("base", before_the_rename(base)), ("ours", ours), ("theirs", before_the_rename(theirs))):
+    for n, d in (("base", base), ("ours", ours), ("theirs", {("pins" if k == "guarantees" else k): v for k, v in theirs.items()})):
         (tmp_path / n).write_text(A.text(d))
-    assert M.main([str(tmp_path / n) for n in ("base", "ours", "theirs")]) == 0
-    assert (tmp_path / "ours").read_text() == A.text(tree)
-    (tmp_path / "theirs").write_text(A.text(theirs | {"pins": {"P.w": {}}}))
     assert M.main([str(tmp_path / n) for n in ("base", "ours", "theirs")]) == 1
-    assert (tmp_path / "ours").read_text() == A.text(tree)
+    assert (tmp_path / "ours").read_text() == A.text(ours)
 
 
 def test_normalize_recomputes_each_digest_from_its_definitions(tmp_path):
