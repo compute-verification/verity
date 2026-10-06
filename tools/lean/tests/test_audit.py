@@ -129,6 +129,26 @@ def test_a_guarantee_reads_only_spec_definitions_and_pinned_dependencies():
         "reads: P.t read P.Hyp in P.Assumptions, outside the spec (none: no `layers`)"), "a package without layers has no spec"
 
 
+def test_a_reads_exemption_names_a_prefix_and_a_reason_and_covers_only_reads_outside_the_spec():
+    """Found by red-team-1150: the list form passed with no reason, `null` raised, and an exemption over a spec module
+    hid the `meaning` check while counting as used."""
+    pol = recorded() | {"layers": {"P.Defs": {"imports": []}, "P.Assumptions": {"imports": []}},
+                        "meaning": ["P.Assumptions"]}
+    home = dict.fromkeys(["P", "P.Defs", "P.Assumptions", "P.Proofs", "P.Thms"], A.spec_of(pol))
+    for bad, said in ((["P.Proofs"], 'is ["P.Proofs"]'), (None, "is null"), ("P.Proofs", 'is "P.Proofs"'),
+                      ({"": "why"}, 'lists "" without'), ({"P.Proofs": " "}, 'lists "P.Proofs" without'),
+                      ({"P.Proofs": None}, 'lists "P.Proofs" without')):
+        assert A.spec_reads(pol | {"reads_exempt": bad}, spec_facts(), home)[0].startswith(f"reads: `reads_exempt` {said}")
+    spec_only = pol | {"reads_exempt": {"P.Defs": "hides a spec module outside meaning"}}
+    assert A.spec_reads(spec_only, spec_facts(outside=[("P.f", "P.Defs")]), home) == [
+        "reads: P.t read P.f in P.Defs, a spec module outside `meaning`, so the record holds nothing of them: add P.Defs to "
+        "`meaning` and run `audit.py --update`",
+        "reads: `reads_exempt` lists P.Defs, under which no guarantee reads outside the spec; remove the entry"]
+    whole = pol | {"meaning": ["P"], "reads_exempt": {"P": "covers spec modules only"}}
+    assert A.spec_reads(whole, spec_facts(outside=[("P.f", "P.Defs")]), home) == [
+        "reads: `reads_exempt` lists P, under which no guarantee reads outside the spec; remove the entry"]
+
+
 def test_spec_definitions_no_guarantee_reads_are_reported():
     spec = [{"name": n, "module": m, "kind": "def"} for n, m in (
         ("P.f", "P.Defs"), ("P.f.match_1", "P.Defs"), ("P.unused", "P.Defs"), ("P.Hyp", "P.Assumptions"), ("P.Old", "P.Assumptions"),
@@ -1041,6 +1061,21 @@ def test_a_run_generates_its_data_and_fails_on_its_exit(tmp_path, monkeypatch):
     assert tests(policy={"exempt": {}, "runs": {"T": entry}})[0] == [
         "runs: T is not under `exempt`: a run is a test, not a proof the audit reads"]
     assert tests(policy={"exempt": {"U": "?"}, "runs": {"U": entry}})[0] == ["runs: U is not a module of the package"]
+
+
+def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):
+    pkg = tmp_path / "a" / "lean"
+    pkg.mkdir(parents=True)
+    runs = {"T": {"generate": ["python3", "../../b/gen.py", "{repo}", "--out", "{out}", "-c", "x = 1/2"],
+                  "args": ["{v.txt}", "data/v.txt", "/etc/v.txt"]},
+            "U": {"generate": ["python3", "{repo}/b/gen.py", "scripts/../gen.py", ".."]}}
+    assert A.run_paths(pkg, {"runs": runs}, tmp_path) == [
+        "runs: T's `generate` names ../../b/gen.py, outside the package: check's audit runs on a scratch tree, where it "
+        "finds nothing or another file; write {repo}/b/gen.py",
+        "runs: T's `args` names /etc/v.txt, outside the package: check's audit runs on a scratch tree, where it finds "
+        "nothing or another file; write a path under `{repo}`",
+        "runs: U's `generate` names .., outside the package: check's audit runs on a scratch tree, where it finds nothing "
+        "or another file; write {repo}/a"]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

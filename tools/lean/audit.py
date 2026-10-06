@@ -61,7 +61,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  Mathlib and core included
     runs         a test under `runs` (an exempt module: compiled evaluation, not a proof), run after the replay by
                  `lake env lean --run` in the sandbox, exits nonzero, or a data file it reads (the package's own, or what
-                 its `generate` command writes) has a SHA-256 other than the record's (`--update` records it)
+                 its `generate` command writes) has a SHA-256 other than the record's (`--update` records it); or its
+                 `generate` or `args` names a path outside the package other than as `{repo}/...`, which check's scratch
+                 tree would not hold
     tamper       this tool's files, the toolchain's `lean`, `lake` or `leanchecker`, or the `.olean` files of a package
                  built earlier in the run changed during it; the Lean files are run from a copy taken before the first build
 
@@ -754,9 +756,14 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
     """The reads check: every definition a guarantee's statement reads (`reads` under `meaning`, and `outside` it where the
     walk stops) lies in a spec module of its package or of a package it requires by path (``home``, `homes`), and the record
     holds it (its module is under `meaning`), or it is a pinned dependency's.  Theorems are not read: a statement means
-    what it means whatever proves the propositions inside it.  A module under a `reads_exempt` prefix is exempt, with the
-    reason; an entry that exempts nothing fails."""
+    what it means whatever proves the propositions inside it.  A module outside the spec under a `reads_exempt` prefix
+    ({prefix: the reason}) is exempt; an entry that exempts no such read fails, and an exemption never covers a spec module
+    outside `meaning` (the record would hold nothing of it)."""
     exempt, meaning = policy.get("reads_exempt", {}), policy.get("meaning", policy["roots"])
+    if not isinstance(exempt, dict):
+        return [f"reads: `reads_exempt` is {json.dumps(exempt)}; it is an object {{module prefix: the reason}}"]
+    if unreasoned := sorted(p for p, why in exempt.items() if not p or not isinstance(why, str) or not why.strip()):
+        return [f"reads: `reads_exempt` lists {', '.join(map(json.dumps, unreasoned))} without a module prefix and a reason"]
     bad: dict[tuple[str, str], tuple[set[str], set[str]]] = {}
     used: set[str] = set()
     for g, f in sorted(facts["pins"].items()):
@@ -765,10 +772,10 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
         for name, m in [*((r["name"], r["module"]) for r in f.get("reads", [])), *map(tuple, f.get("outside", []))]:
             if m not in home:
                 continue
-            if hit := {p for p in exempt if under([p], m)}:
+            why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
+            if why == "spec" and (hit := {p for p in exempt if under([p], m)}):
                 used |= hit
                 continue
-            why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
             if why:
                 defs, by = bad.setdefault((m, why), (set(), set()))
                 defs.add(parent(name))
@@ -1188,6 +1195,25 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
     return fails, now
 
 
+def run_paths(pkg: Path, policy: dict, repo: Path) -> list[str]:
+    """The arguments of `runs` entries (`generate` and `args`) that name a path outside the package other than through
+    `{repo}`: an absolute one, or one that `..` takes out of it.  Check's audit runs on a scratch tree that holds only the
+    package and what its audit reads, where such a path finds nothing, or another file than here."""
+    fails, top = [], os.path.normpath(pkg.resolve())
+    for mod, entry in sorted(policy.get("runs", {}).items()):
+        for key in ("generate", "args"):
+            for a in entry.get(key, []):
+                if "{" in a or ("/" not in a and a != ".."):
+                    continue
+                path = os.path.normpath(os.path.join(top, a))
+                if os.path.isabs(a) or os.path.commonpath([top, path]) != top:
+                    inside = os.path.commonpath([str(repo.resolve()), path]) == str(repo.resolve())
+                    fix = f"{{repo}}/{os.path.relpath(path, repo.resolve())}" if inside else "a path under `{repo}`"
+                    fails.append(f"runs: {mod}'s `{key}` names {a}, outside the package: check's audit runs on a scratch "
+                                 f"tree, where it finds nothing or another file; write {fix}")
+    return fails
+
+
 def template(pkg: Path) -> dict:
     """A minimal policy for a package without one: its libraries as roots, no guarantee yet."""
     libs = []
@@ -1319,6 +1345,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             elif rc:
                 fails.append(f"fresh: the kernel rejected a declaration in the closure of {r} (exit {rc}):\n{text[-2000:]}")
         rep["seconds"]["fresh"] = round(time.monotonic() - s, 1)
+    fails += run_paths(pkg, policy, repo)
     if runs and policy.get("runs"):
         s = time.monotonic()
         rfails, ran = tests(pkg, policy, files, work, repo, update)

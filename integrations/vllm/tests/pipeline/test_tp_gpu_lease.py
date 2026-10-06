@@ -113,8 +113,9 @@ class _Com:
 
 
 def free(lock: Path) -> bool:
-    """Whether nothing holds ``lock`` now."""
-    return subprocess.run(["flock", "-n", str(lock), "true"]).returncode == 0
+    """Whether nothing holds ``lock`` now.  A shared probe: the lease holds its locks exclusively, and two ranks probing at once
+    must not see each other's probe as a holder."""
+    return subprocess.run(["flock", "-s", "-n", str(lock), "true"]).returncode == 0
 
 
 class _Rank:
@@ -460,9 +461,10 @@ out = args[args.index("--out") + 1]
 
 
 def free(g):
+    # shared: the per-rank legs (build, global-program) run at once, and an exclusive probe would see the other leg's probe
     fd = os.open(os.path.join(TMP, g + ".lock"), os.O_CREAT | os.O_WRONLY | os.O_APPEND)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
         return True
     except BlockingIOError:
         return False
