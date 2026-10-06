@@ -55,7 +55,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -542,15 +542,16 @@ def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Pa
 
 
 def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, leaves: Path, out: Path, tag: str, a: Any,
-                load: Callable[[], Any] | None, limit_ns: int | None = None, sync: Callable[[], Any] | None = None) -> dict[str, Any]:
-    """One verifier process (`script`) against the responder `start()` returns, judged against `limit_ns` when given, with
-    `load` run until the verifier exits.  Every load call is synchronized (`sync`) so `forwards_completed` counts finished
-    forwards, not enqueued ones."""
+                load: Callable[[], Any] | None, limit_ns: int | None = None, sync: Callable[[], Any] | None = None,
+                extra: Sequence[str] = ()) -> dict[str, Any]:
+    """One verifier process (`script`, with `extra` arguments) against the responder `start()` returns, judged against
+    `limit_ns` when given, with `load` run until the verifier exits.  Every load call is synchronized (`sync`) so
+    `forwards_completed` counts finished forwards, not enqueued ones."""
     responder = start()
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
     result = out / f"audit-{tag}.json"
-    cmd = _verifier_cmd(script, ready, leaves, result, a, limit_ns, [])
+    cmd = _verifier_cmd(script, ready, leaves, result, a, limit_ns, list(extra))
     completed = 0
     with (out / f"audit-{tag}.log").open("w") as log:
         proc = subprocess.Popen(cmd, env=_verifier_env(), stdout=log, stderr=subprocess.STDOUT)
