@@ -5,8 +5,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
 
 `PlaysLig.lean`'s runs exist at any values; the verdict needs them at the executable's. The lane rounds end in the
 lane coins (`foldRoundsZK_val`), `ρ` is its two coins (`drawKs_two`), level 0's padded queries end in `qbPadOut`
-(`queryAndBatchPadC_plays`), and `ligeritoPadZC_model` composes the masked level 0 from runs of its parts, as M0's
-`ligeritoC_model`.
+(`queryAndBatchPadC_plays`), and `ligeritoPadZC_model` composes the masked level 0 from runs of its parts, as the non-ZK
+session's `ligeritoC_model`.
 -/
 
 namespace FlockSoundness.Discharge.ZkExec

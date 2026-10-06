@@ -62,15 +62,15 @@ theorem RowsIn.push2 {Q : ℕ → Prop} {d : Array (ℕ × ℕ)} (h : RowsIn Q d
 theorem RowsIn.mono {Q Q' : ℕ → Prop} {d : Array (ℕ × ℕ)} (h : RowsIn Q d) (hQ : ∀ x, Q x → Q' x) :
     RowsIn Q' d := fun p hp => hQ _ (h p hp)
 
-/-- **A bit of a row's chain**: in VU `g`, input `i` (`0` its `cv`, 512 bits; `1` its message, 1024) of row `p`'s `k`-th
-`sha512x3` slot. -/
+/-- **A bit of a row's chain**: in template instance `g`, input `i` (`0` its `cv`, 512 bits; `1` its message, 1024) of
+row `p`'s `k`-th `sha512x3` slot. -/
 def ShaRowBit (c : Circuit) (x : ℕ) : Prop :=
   ∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ k < ((HmRow.rowSlots c.ports).2[p]!).size, ∃ i < 2,
     ∃ t < 512 * (i + 1), x = c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[k]!.1 +
       (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * ((HmRow.rowSlots c.ports).2[p]!)[k]!.2 + i]!.1 + t
 
-/-- **A bit of a row's hm96 slot**: in VU `g`, input `i` (`0` its `cv`, 512 bits; `1` its `pad`, 1024) of row `p`'s
-`hm96` slot. -/
+/-- **A bit of a row's hm96 slot**: in template instance `g`, input `i` (`0` its `cv`, 512 bits; `1` its `pad`, 1024) of
+row `p`'s `hm96` slot. -/
 def HmRowBit (c : Circuit) (x : ℕ) : Prop :=
   ∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ i < 2, ∃ t < 512 * (i + 1),
     x = c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[i]!.1 + t
