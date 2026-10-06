@@ -241,8 +241,7 @@ def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | Non
     for r in reqs:
         s.handle(r)
     got = s.coins.record()
-    want = {k: pub[k] for k in got if k in pub}
-    diff = next((k for k in got if json.dumps(got[k], sort_keys=True) != json.dumps(want.get(k), sort_keys=True)), None)
+    diff = next((k for k in got if k in pub and json.dumps(got[k], sort_keys=True) != json.dumps(pub[k], sort_keys=True)), None)
     return s, (f"the replay's coin server record differs from public.json at {diff}" if diff else None)
 
 

@@ -186,7 +186,7 @@ def scheduled (sched : Json) (o : Order) (what : String) : V (ByteArray × Order
     return (← canonBytes r, { o with rounds := o.rounds + 1 })
   | _ => throw s!"{what}: not an item of the schedule"
 
-private def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
+def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
 
 /-- Whether every relation has passed on the value masked under pad `p`. -/
 def State.checked (s : State) (t : Transcript) (p : Nat) : Bool :=
@@ -206,7 +206,7 @@ def step (t : Transcript) (s : State) : Item → V State
     need (p < t.pads.size) s!"a value masked with pad {p}, which the firewall never drew"
     need (!s.usedPad[p]!) s!"a value masked with pad {p}, used before: not fresh"
     need (!t.exposedPads.contains p) s!"a value masked with pad {p}, which the workers saw"
-    need (sent == v + t.pads[p]!) s!"a value sent under pad {p} that is not the value masked with it"
+    need (decide (sent = v + t.pads[p]!)) s!"a value sent under pad {p} that is not the value masked with it"
     return { s with usedPad := s.usedPad.set! p true }
   | .check r ps ok => do
     need (t.relations.contains r) s!"a check of {r}, which is not a relation the verifier checks"
@@ -214,7 +214,7 @@ def step (t : Transcript) (s : State) : Item → V State
     need ok s!"the relation {r} fails"
     return { s with passed := ps.foldl (fun a p => a.modify p (·.push r)) s.passed }
   | .fixed what src want sent ps => do
-    let (want, o) ← if src == .schedule then
+    let (want, o) ← if src = .schedule then
         match t.schedule with
         | some sched => scheduled sched s.order what
         | none => throw s!"{what}: fixed by a schedule the transcript does not carry"
@@ -224,7 +224,7 @@ def step (t : Transcript) (s : State) : Item → V State
       s!"{what}: depends on a masked value not yet checked against every relation"
     return { s with order := o }
   | .coins stream k cs relayed opening => do
-    need (relayed == cs) s!"{stream} round {k}: the workers' coins are not the challenger's"
+    need (decide (relayed = cs)) s!"{stream} round {k}: the workers' coins are not the challenger's"
     need opening.isEmpty s!"{stream} round {k}: an opening of coins the challenger never committed to"
     return s
   | .finish => do
