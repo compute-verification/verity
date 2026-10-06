@@ -279,7 +279,7 @@ HASHINGS = ("h1", "h2", "h3", "h3s")
 B3S_HASHINGS = ("h2", "h3")
 #: the formats whose rows of A seed their own E_A lines
 ROW_SEEDED = ("h3", "h3s")
-#: s512_rows' most segments a row (hash.cuh's RS_MAX_SEGS), 1 KiB each
+#: s512_rows' most segments a row (hash_h3s.cuh's RS_MAX_SEGS), 1 KiB each
 RS_MAX_SEGS = 128
 #: -h3s's hm96 salt nonces (`audit.HM96_WEIGHTS`, `audit.HM96_TRANSCRIPT`; an activation tree's is its unit index) and the widest
 #: level s512_tree_small (64 threads) takes
