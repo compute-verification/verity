@@ -99,7 +99,7 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 - [`verity/protocols/verification/sampled_proofs/`](verity/protocols/verification/sampled_proofs/README.md): sampled proofs, as the one-stage audit and the two-stage law
 - [`verity/protocols/accounting/space/pous/`](verity/protocols/accounting/space/pous/README.md): proofs of useful space
 - [`verity/protocols/accounting/work/pouw/`](verity/protocols/accounting/work/pouw/PROTOCOL.md): proofs of useful work
-- [`verity/protocols/accounting/communication/certifier/`](verity/protocols/accounting/communication/certifier/README.md): the network certifier, network transparency's timing channel
+- [`verity/protocols/accounting/communication/certifier/`](verity/protocols/accounting/communication/certifier/README.md): the network certifier, network accounting's timing channel
 - [`integrations/vllm/`](integrations/vllm/README.md): the vLLM integration, a hooked vLLM engine that builds each served workload's circuit and commits its values while serving
 - [`tools/research/`](tools/research/README.md): the research harness, for recorded runs on remote pods and the evidence store that keeps their results; it treats every workload as opaque and imports nothing from Verity
 - [`tools/check/`](tools/check/check.py): `check`, the one check a merge requires, and `suites.py`, which runs the test suites; `rename_merge.py` merges a PR onto a train tip that moved files it edits, applying its changes at the new paths or refusing with the paths
@@ -232,6 +232,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "M0"; its first statement id, baked into the Lean verifier's `Flock/Tags.lean` | C-Flock's circuit prover: module `verity_flock.circuit`, CLI `flock-circuit`, statement `verity/flock-circuit` |
 | "M1", "M2" (elsewhere in the code these also name unrelated things) | C-Flock ZK |
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
+| "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
 | "warden", "network warden"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the firewall |
