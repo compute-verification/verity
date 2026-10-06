@@ -5,12 +5,15 @@
 //            iteration's free lanes
 //   phase 2  a shuffle reduce-scatter: at offset 16 lanes 0..15 keep column k's two sums and 16..31 column k+1's, then
 //            offsets 8..1; lane 0 (column k) and lane 16 (column k+1) each double, add the square, fold T = S_lo + c' S_hi and cut it into chunks
-//   phase 3  one thread per 4 owned digits: the carry passes, then one 16-byte relaxed.gpu store of the tagged digits
-//   arrival  every CTA polls the whole vector (16-byte relaxed.gpu loads) until each word has this step's tag
+//   phase 3  one thread per 4 owned digits: the carry passes, then a 16-byte relaxed.gpu store of the tagged digits into
+//            each of REPL replicas of the exchange vector
+//   arrival  CTA g polls replica g % REPL (16-byte relaxed.gpu loads) until each word has this step's tag. With one copy
+//            every CTA's polls land on the same 20 L2 lines, and arrival slowed as CTAs were added; with 8 a step at
+//            80 CTAs took 1,143 ns against 1,432 (2 or 4 polls in flight per word made it slower still).
 // The partial sums never touch shared memory, so a step has two __syncthreads (after phase 2 and after arrival).
 //
 // Timing: device clocks only (clock64 and %globaltimer on CTA 0, around the N steps).
-// Build: nvcc -O3 -arch=sm_120 -std=c++17 [-DLB=512] -o sqchain4 sqchain4.cu
+// Build: nvcc -O3 -arch=sm_120 -std=c++17 [-DLB=512] [-DREPL=8] -o sqchain4 sqchain4.cu
 // Run:   sqchain4 PER TPB N reps in.bin out.bin    (C = ceil(633 / PER) >= 2; PER a multiple of 4; TPB = 32 * ceil((PER + 4) / 2))
 #include <cstdio>
 #include <cstdlib>
@@ -23,6 +26,9 @@
 #define CK(x) do { cudaError_t e_ = (x); if (e_ != cudaSuccess) { \
   fprintf(stderr, "CUDA %s at %s:%d\n", cudaGetErrorString(e_), __FILE__, __LINE__); exit(1); } } while (0)
 
+#ifndef REPL
+#define REPL 8
+#endif
 #ifndef LB
 #define LB 512
 #endif
@@ -35,6 +41,7 @@ static const int PADL = 64, PADR = 96;
 static const int DLEN = PADL + ND4 + PADR;
 static const int HALO = 4;
 static const int MAXCOLS = 640;
+static const int RSTR = 1056;                       // words between replicas of the exchange vector
 static const int ZERO = ND;                          // cur[ZERO] is always 0
 
 __host__ __device__ __forceinline__ int floordiv2(int x) { return x >= 0 ? x / 2 : -((1 - x) / 2); }
@@ -163,7 +170,7 @@ __global__ void __launch_bounds__(LB, 1) chain_kernel(const uint32_t *__restrict
     unsigned long long q2 = clock64(); pacc[1] += q2 - q0;
 #endif
     const uint32_t tag = (uint32_t)(step % 31 + 1) << 27;
-    uint32_t *Gn = G + ((step + 1) & 1) * ND4;
+    uint32_t *Gn = G + ((step + 1) & 1) * REPL * RSTR;
     if (p3) {
       const uint32_t *tw = (const uint32_t *)(T4 + lb);
       uint64_t ep = 0;
@@ -176,17 +183,20 @@ __global__ void __launch_bounds__(LB, 1) chain_kernel(const uint32_t *__restrict
         if (x > 0) f[x - 1] = m0 + x - 1 < a + nown ? (uint32_t)((e & MASK) + (ep >> 26) * (m0 + x - 1 == 0 ? CP : 1)) : 0;
         ep = e;
       }
-      asm volatile("st.relaxed.gpu.global.v4.u32 [%0], {%1, %2, %3, %4};"
-                   :: "l"(Gn + m0), "r"(f[0] | tag), "r"(f[1] | tag), "r"(f[2] | tag), "r"(f[3] | tag) : "memory");
+      #pragma unroll
+      for (int r = 0; r < REPL; r++)
+        asm volatile("st.relaxed.gpu.global.v4.u32 [%0], {%1, %2, %3, %4};"
+                     :: "l"(Gn + r * RSTR + m0), "r"(f[0] | tag), "r"(f[1] | tag), "r"(f[2] | tag), "r"(f[3] | tag) : "memory");
     }
 #ifdef PROF
     unsigned long long q3 = clock64(); pacc[2] += q3 - q2;
 #endif
+    const uint32_t *Gr = Gn + (g % REPL) * RSTR;
     #pragma unroll 1
     for (int q = 4 * tid; q < ND4; q += 4 * tpb) {
       uint4 v;
       do {
-        asm volatile("ld.relaxed.gpu.global.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(Gn + q) : "memory");
+        asm volatile("ld.relaxed.gpu.global.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(Gr + q) : "memory");
       } while (((v.x & ~VMASK) != tag) | ((v.y & ~VMASK) != tag) | ((v.z & ~VMASK) != tag) | ((v.w & ~VMASK) != tag));
       *(uint4 *)&nxt[q] = make_uint4(v.x & VMASK, v.y & VMASK, v.z & VMASK, v.w & VMASK);
     }
@@ -214,7 +224,7 @@ int main(int argc, char **argv) {
   std::vector<uint32_t> x(ND);
   FILE *f = fopen(argv[5], "rb"); if (!f || fread(x.data(), 4, ND, f) != (size_t)ND) { fprintf(stderr, "bad in.bin\n"); return 2; } fclose(f);
   uint32_t *dx, *dy, *dG; unsigned long long *dtm;
-  CK(cudaMalloc(&dx, ND * 4)); CK(cudaMalloc(&dy, ND * 4)); CK(cudaMalloc(&dG, 2 * ND4 * 4)); CK(cudaMalloc(&dtm, 8 * 80));
+  CK(cudaMalloc(&dx, ND * 4)); CK(cudaMalloc(&dy, ND * 4)); CK(cudaMalloc(&dG, 2 * REPL * RSTR * 4)); CK(cudaMalloc(&dtm, 8 * 80));
   CK(cudaMemset(dtm, 0, 8 * 80));
   CK(cudaMemcpy(dx, x.data(), ND * 4, cudaMemcpyHostToDevice));
   size_t sm = (size_t)2 * DLEN * 4 + MAXCOLS * 16;
@@ -225,7 +235,7 @@ int main(int argc, char **argv) {
 
   std::vector<double> ns, cyc; double prof[4] = {0, 0, 0, 0};
   for (int rep = 0; rep < reps + 1; rep++) {
-    CK(cudaMemset(dG, 0, 2 * ND4 * 4));
+    CK(cudaMemset(dG, 0, 2 * REPL * RSTR * 4));
     void *args[] = {&dx, &dy, &dG, &N, &per, &dtm};
     CK(cudaLaunchCooperativeKernel((void *)chain_kernel, dim3(C), dim3(tpb), args, sm, 0));
     CK(cudaGetLastError()); CK(cudaDeviceSynchronize());
@@ -246,9 +256,9 @@ int main(int argc, char **argv) {
     for (int gg = 0; gg < std::min(C, 18); gg++) fprintf(stderr, " [%llu %llu %llu %llu]", tm[2 + 4 * gg] / N, tm[3 + 4 * gg] / N, tm[4 + 4 * gg] / N, tm[5 + 4 * gg] / N);
     fprintf(stderr, "\n"); }
 #endif
-  printf("{\"kernel\":\"warp-pairs-l2-r26\",\"mode\":\"l2-tagged-v4-poll\",\"prof_cyc_max_over_ctas\":[%.0f,%.0f,%.0f,%.0f],\"per\":%d,\"C\":%d,\"tpb\":%d,\"slices\":32,\"N\":%d,\"reps\":%d,"
+  printf("{\"kernel\":\"warp-pairs-l2-r26\",\"mode\":\"l2-tagged-v4-poll\",\"replicas\":%d,\"prof_cyc_max_over_ctas\":[%.0f,%.0f,%.0f,%.0f],\"per\":%d,\"C\":%d,\"tpb\":%d,\"slices\":32,\"N\":%d,\"reps\":%d,"
          "\"ns_per_sq_min\":%.2f,\"ns_per_sq_med\":%.2f,\"cyc_per_sq_at_min\":%.1f,\"sm_clock_mhz_at_min\":%.1f,\"smem\":%zu,\"gpu\":\"%s\",\"sms\":%d}\n",
-         prof[0], prof[1], prof[2], prof[3], per, C, tpb, N, reps, sns[0], sns[sns.size() / 2], cyc[imin], cyc[imin] / ns[imin] * 1000.0, sm,
+         REPL, prof[0], prof[1], prof[2], prof[3], per, C, tpb, N, reps, sns[0], sns[sns.size() / 2], cyc[imin], cyc[imin] / ns[imin] * 1000.0, sm,
          p.name, p.multiProcessorCount);
   return 0;
 }
