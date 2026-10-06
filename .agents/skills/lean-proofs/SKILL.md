@@ -4,12 +4,12 @@ description: >
   How to work on Lean in Verity: where a new Lean file or package goes, the inner loop (lake env lean on one file,
   scratch probes with #print axioms, exact? and trace_state, profiling a slow proof), building and auditing with
   tools/lean/audit.py, stating assumptions as named Props, freezing and listing the guarantees a ledger or PR cites in
-  lean-audit.json, moving them without a statement review (--moved), watching ArkLib and other dependencies for proofs
+  lean-audit.json, moving them without a DM to Daniel (--moved), watching ArkLib and other dependencies for proofs
   of what we assume (tools/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
   directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
-  them). Use when adding or changing Lean proofs, definitions or packages (backends/flock/verifier/lean, level3,
-  soundness, verity/Security, verity/protocols/accounting/space/pous/lean, verity/Security), when a Lean build or proof is
-  slow, editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
+  them). Use when adding or changing Lean proofs, definitions or packages (backends/flock/verifier/lean, verity/Security
+  and its Proofs, the PoUS grader in verity/protocols/accounting/space/pous/lean), when a Lean build or proof is slow,
+  editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
 # Lean proofs
@@ -44,12 +44,13 @@ bash tools/lean/setup.sh PKG                  once per machine: elan, the toolch
 cd PKG && lake build                          once per checkout; incremental from then on
 lake env lean Pkg/Area/File.lean              each edit: elaborate one file against the built imports
 lake build Pkg.Area.File                      after editing a file others import, so they see the change
-python tools/lean/audit.py PKG                once, before pushing (seconds; level3's replay takes ~3 min)
+python tools/lean/audit.py PKG                once, before pushing (the kernel replay of verity/Security/Proofs is the slow part)
 ~~~
 
-Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
-never change a `require`, a revision or `lean-toolchain` in a feature PR. The soundness package's build peaks at 15–24 GB
-of memory: on a machine with less than 24 GB, add a swapfile first, and give a queued job `--mem-gb 32`.
+Build on a CPU machine; `verity/Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
+update`, and never change a `require`, a revision or `lean-toolchain` in a feature PR. Its build of C-Flock's soundness
+proofs peaks at 15–24 GB of memory: on a machine with less than 24 GB, add a swapfile first, and give a queued job
+`--mem-gb 32`.
 
 To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
 your own, use the fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took
@@ -108,7 +109,8 @@ simp with that.
 
 ## Assumptions and guarantees
 
-- **An assumption is a named `Prop`** in the package's assumptions module (`FlockSoundness.Assumptions`), taken as a
+- **An assumption is a named `Prop`** in its area's `Specs/<Area>/Assumptions` (C-Flock's in
+  `Proofs/Flock/Soundness/Assumptions`, `FlockSoundness.Assumptions`, until its spec is extracted), taken as a
   hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`). Its docstring opens with its
   claim id (`uniform/io-getrandombytes`, from `verity.claims`) and gives its rationale. Lean is the source of truth for
   what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on
@@ -137,7 +139,8 @@ simp with that.
   change, your edit changed what that guarantee says: undo it, or say so in the PR and update the ledger.
 - **A changed record reaches Daniel.** The axiom checks and the replay pass a weakened definition (a vacuous theorem is
   still a theorem), so paste what `--update` printed into the PR. When it lands on `main`, Daniel gets a DM showing the
-  change; nobody signs off and nothing waits on it.
+  change, and that DM is the check: nobody signs off and nothing waits on it. A statement reviewer is optional: ask one
+  when you want a second reading of the printout, but don't hold the merge for it.
 - **A move is not a change.** When you rename guarantees or move what they read (a package moving to the four names), write
   the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
   `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A guarantee that says what its
@@ -145,13 +148,13 @@ simp with that.
   in full. Moving a definition to another module needs no map.
 - **A lift needs no map.** `theorem X (xs) : e` becoming `theorem X (xs) : G as`, with `def G (ys) : Prop := e` in a
   `Guarantees` module, prints as "lifted into G" on a plain `--update` when `G` unfolded once is `e` (the same type hash)
-  and the theorem keeps its named assumptions as binders (tools/lean/README.md, "A lift is not a change"). It needs no
-  statement reviewer, but Daniel's DM still lists the changed record.
+  and the theorem keeps its named assumptions as binders (tools/lean/README.md, "A lift is not a change"). Daniel's DM
+  still lists the changed record.
 
 ## Before the PR
 
 - `python tools/lean/audit.py PKG` passes for every package you touched, and `pytest backends/flock/tests
-  tools/lean/tests tests/test_lean_packages.py` passes.
+  tools/lean/tests tools/check/tests/test_lean_*.py tests/test_lean_packages.py` passes.
 - The PR says which guarantees changed, if any, and why; the ledger's status rows match `lean-audit.json`.
 - Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping
   both sides' rows. Run `python tools/lean/merge.py --install` once per clone: `lean-audit.json` then merges without a
@@ -168,11 +171,13 @@ These are Daniel's rulings, newest first.
   conclusion, where an assumption is a named `Prop` (README "Glossary").
 - 2026-10-01: a guarantee that only moved, renamed or restated as a `Guarantees` definition, needs no statement reviewer
   when `--update --moved` prints it as the same statement under its old names, with every definition it reads the same.
+  Since 2026-10-03 no change needs one; `--moved` now decides only whether Daniel's DM lists it.
 - 2026-10-01: a Lean protocol package may require another protocol's package (NCI's requiring sampled proofs', say),
   because composing their guarantees needs it. The requires stay acyclic, and a protocol never requires a backend. Such a
   `path` require changes no revision, so a feature PR may add it. Python's protocols import only `verity`, themselves
   and the protocols `ALLOWED` in `verity/tests/test_boundaries.py` lists (PoUW → sampled proofs, the ruling of
-  2026-10-03 in `.agents/skills/friction/SKILL.md`).
+  2026-10-03 in `.agents/skills/friction/SKILL.md`). Its Lean half is superseded by the Lean layout move (2026-10-06):
+  there are no protocol packages, only areas of `verity/Security` and its Proofs.
 - 2026-10-01: there are guarantees and assumptions, and a guarantee is **proved under its assumptions**; there is no
   third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one
   than a fact about our own circuit that we mean to prove (`HmRowComputes`). So what a guarantee assumes is explicit and

@@ -31,7 +31,7 @@ it:
 - a bug in a shared tool that stops it doing what its own docs or help say;
 - a wrong or missing command, flag or gotcha in a skill or a `kb/` doc;
 - a failure message that didn't say how to fix the failure;
-- a nondeterministic or needlessly slow test: make it deterministic or smaller, or delete it.
+- a flaky test: delete it; a needlessly slow one: make it smaller or delete it.
 
 Say what you fixed in the PR description. It needs no note.
 
@@ -41,7 +41,7 @@ A change is near the line when it changes what other agents must do or what a ga
 in-flight files, spends money, deletes others' work, or changes agreed semantics or acceptance criteria. Read the rulings
 below first, and follow one if it covers the case. Otherwise ask:
 
-- one stand-alone question to your coordinator (a handle holder: on Slack, `research slack ask`; a worker: its report or
+- one stand-alone question to your coordinator (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or
   reply to the coordinator that launched it). The coordinator answers from the rulings when one applies, and
   otherwise puts the question to Daniel as written;
 - the case, the change, and your recommendation, in a few lines;
@@ -60,6 +60,9 @@ makes the change or in a one-line PR of its own:
 - otherwise: a line under "Rulings so far" below, with its date.
 
 Write it for the class of case, not the one instance, in one line. Delete it once code enforces it.
+
+Then roll it out in the same PR: search for the old way's terms and paths (`rg`) and rewrite every place that still states it,
+in `AGENTS.md`, `README.md`, the skills, docstrings and docs. A ruling written only in a log is one the next agent misses.
 
 ## 4. Note it, when you can't fix it now
 
@@ -97,6 +100,27 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
+  asks for a change. A conflict is fixed at the tip (ci restacks it), not by pushing to the PR: a new head refuses every
+  tip that pins the old one at landing, and their checks are spent for nothing.
+- 2026-10-06 (8:03 and 8:14 AM PDT): research velocity first, no red tape (`AGENTS.md`, "Working principles"). Its
+  applications so far:
+  - a red-team grant carries when the PR's own patch is byte-identical at both heads, even if `main` moved under it,
+    `lean-audit.json` included;
+  - a train member needs no quick-tier pass (its own line below);
+  - a flaky test is deleted, not rerun or fixed (testing skill, "Write tests that mean something");
+  - an auditor-trusted device runs on Nebius, with trust in Nebius a named assumption, rather than on hardware that
+    attests.
+- 2026-10-06 (8:14 AM PDT): a protocol carries no policy parameter. It surfaces what its draw established (ε at δ, in the
+  integrity profile), and accounting decides later what it accepts. The model's size is public.
+- 2026-10-06 (7:51 to 8:14 AM PDT): one hash, SHA-512 with its whole output, everywhere: Pearl-C's `-h3`, PoUS's P2
+  (v4) and its key expansion, core's `randomness.derive`, and LMS (n = 64, no truncation). No hash flags or modular
+  hashing in research mode, and performance requirements relax as far as that needs. BLAKE3 code leaves the served path
+  for `archive/`, kept but not maintained. Pearl's FP8 scheme stays as Pearl defines it, semi-maintained, with
+  `cr/blake3` its assumption alone.
+- 2026-10-06 (8:03 AM PDT): a train member needs no quick-tier pass. The train's own full check is the gate, and the
+  owner's `ready` label at the PR's head may be written by hand (`research data label pr:N@SHA ready true --by LANE`).
+  Grants are still required.
 - 2026-10-05 (10:45 PM PDT): when Daniel hands over a design to implement, build it unless there is a strong reason not
   to: a measured cost that breaks a budget, a soundness or zero-knowledge hole, or a contradiction with a proved theorem.
   Taste isn't one. With a strong reason, build the nearest version you can defend and leave him a report, rather than
@@ -156,7 +180,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
   registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
   for itself. No package requires both a protocol and a backend, there is no `bridges/` layer, and a citation names both
-  guarantees.
+  guarantees. Its package clause is superseded by the Lean layout move (2026-10-06): every proof is in
+  `verity/Security/Proofs`, whose package requires C-Flock's verifier.
 - 2026-10-02 (10:27 PM PDT): `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption. Hiding is
   proved at a fresh uniform key, and nobody works on proving that the pinned key behaves like one.
 - 2026-10-02 (10:27 PM PDT): the lander starts every merge check (`check --record`, `research merge`). The PR captain
@@ -220,7 +245,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
   nightly uncached check of `main` as the backstop.
 - 2026-09-29: after a train lands, the coordinator closes each stacked PR whose code is on `main` but that GitHub didn't
   mark merged, with a "Merged into main at {sha} (train {name})" comment, without asking.
-- 2026-09-28: a timing-dependent test is made deterministic or deleted.
 - 2026-09-28: changes that speed up checks or merges land ahead of other work.
 
 ## Before you finish
