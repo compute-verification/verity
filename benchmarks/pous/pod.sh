@@ -19,7 +19,8 @@
 # limit, audit or control does, and the result is labelled timed: false, audits: skipped (untimed placement).
 # OUT=<dir> moves the run's outputs (bench/, clocks, build logs) from the run dir to <dir>, e.g. $RESEARCH_RUN_DIR/out for
 # --declared-output 'out/*'. TOKENS=1,8 (the loop's T), LOAD_TOKENS=N (T of the forwards under the honest audit) and
-# CONTROL_AUDITS=N (P2's controls' audits, default AUDITS) pass through to bench.py in p2-v1-gpu and side-by-side.
+# CONTROL_AUDITS=N (P2's controls' audits, default AUDITS) and RTT_ALLOWANCE_NS=N (P2's allowance fixed at N, not calibrated)
+# pass through to bench.py in p2-v1-gpu and side-by-side.
 # KERNELS='<json>' (band-gpu) sets kernel switches over harness.KERNELS (bench.py --kernels): '{"chain_pairs": false}' runs the
 # run of record's kernels.
 #
@@ -190,7 +191,7 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
       --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$2" --audits "$AUDITS" \
       --workers "$WORKERS" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} \
       ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO $([ "$1" = band-gpu ] && [ -n "${BAND_D:-}" ] && echo --band-d "$BAND_D") \
-      ${TOKENS:+--tokens "$TOKENS"} ${LOAD_TOKENS:+--load-tokens "$LOAD_TOKENS"} ${CONTROL_AUDITS:+--control-audits "$CONTROL_AUDITS"}
+      ${TOKENS:+--tokens "$TOKENS"} ${LOAD_TOKENS:+--load-tokens "$LOAD_TOKENS"} ${CONTROL_AUDITS:+--control-audits "$CONTROL_AUDITS"} ${RTT_ALLOWANCE_NS:+--rtt-allowance-ns "$RTT_ALLOWANCE_NS"}
   }
   if [ "$IMPL" = side-by-side ]; then
     mkdir -p "$O/bench/band" "$O/bench/p2"

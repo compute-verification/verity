@@ -16,7 +16,7 @@ the two compare side by side.
    bytes as `W` and runs the weight set's GEMMs on them; plain reads `W`. Both are timed from a CUDA graph where the path is
    capturable, every rep kept. Decode overhead is POUS over plain, minus one.
 4. **The limit and the audits.** The limit is fixed before any load (`Δ = 0.5 ms` plus the loopback allowance, which spec v1.1
-   caps at 354 µs); `p2_v1/live.py` audits at k = 105 against it: the honest audit under POUS forwards, then the value control
+   caps at 354 µs; `--rtt-allowance-ns N` fixes it at N instead, the calibration still recorded); `p2_v1/live.py` audits at k = 105 against it: the honest audit under POUS forwards, then the value control
    (one block in ten zeroed), the late control (one answer in ten held past the limit; the only answers held) and the
    recompute control (one block in ten of all of `C` dropped, each challenged dropped block re-encoded on the device from its
    decoded row `Dec(C_i)`, which the game gives the prover free: two roots, and the margin is the limit minus each
@@ -324,7 +324,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None
     cal = H.calibrate_limit(native_start, fields, LIVE, out, a, leaves, "p2-calibrate")
-    limit = int(cal.get("limit_ns") or 0)
+    limit = R.DELTA_NS + a.rtt_allowance_ns if getattr(a, "rtt_allowance_ns", 0) else int(cal.get("limit_ns") or 0)
     honest = H.audit_round(native_start, fields, LIVE, leaves, out, "p2-honest", a,
                            (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync)
 
@@ -363,7 +363,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     deadline = {"limit_ns": limit, "limit_fixed_before_load": bool(honest.get("limit_fixed_before_load")),
                 "allowance_kind": honest.get("allowance_kind"), "rtt_allowance_ns": honest.get("rtt_allowance_ns"),
                 "honest_margin_min_s": (honest.get("margin_s") or {}).get("min"),
-                "spec_rtt_allowance_max_ns": R.MAX_RTT_ALLOWANCE_NS}
+                "spec_rtt_allowance_max_ns": R.MAX_RTT_ALLOWANCE_NS,
+                "allowance_fixed_ns": getattr(a, "rtt_allowance_ns", 0) or None}
     metrics = {"encode_s": encode_s, "encoded_blocks": encoded, "encode_GBps": encoded * payload / encode_s / 1e9,
                "encode_stored_GBps": encoded * nb / encode_s / 1e9, "decode_pass_s": decode_s, "ewb": used / decode_s,
                "stored_GBps": blocks * nb / decode_s / 1e9, "decode_reps_s": decode_reps, "loop": loop, "deadline": deadline,

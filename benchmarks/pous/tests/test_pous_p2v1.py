@@ -183,6 +183,16 @@ def test_control_audits_sets_the_controls_rounds_and_leaves_the_honest_round_its
     assert all(isinstance(r["started_unix"], float) for r in m["audit"]["records"])
 
 
+def test_a_fixed_rtt_allowance_judges_every_audit_at_delta_plus_it_and_keeps_the_calibration(tmp_path):
+    """`--rtt-allowance-ns` sets the limit to Δ plus it in place of the calibrated allowance, which is still recorded."""
+    body = _bench().P2V1Gpu().run(_args(tmp_path, audits=2, rtt_allowance_ns=354_000), WS, tmp_path, backend=_backend(),
+                                  params=_small())
+    m = body["metrics"]
+    assert m["deadline"]["limit_ns"] == m["audit"]["limit_ns"] == 854_000 and m["audit"]["rtt_allowance_ns"] == 354_000
+    assert m["deadline"]["allowance_fixed_ns"] == 354_000 and body["gates"]["operating_point"]["rtt_allowance"]
+    assert m["calibration"]["limit_ns"] != 854_000
+
+
 def test_the_recompute_control_covers_c_past_its_encoded_head(tmp_path):
     """With only the first 64 of 192 blocks encoded (the rest random canonical, as on the device), every dropped block, in the
     head or past it, is re-encoded from its decoded row and answers correctly; the margin is the limit minus each recomputed

@@ -57,3 +57,19 @@ def test_a_cell_whose_only_failed_gate_is_timed_audit_succeeds_and_any_other_fai
     assert sweep.cell_rc(1, result) == 0
     result.write_text(json.dumps({"gates": {"operating_point": {**over_cap, "k": False}, "timed_audit": {"passed": True}}}))
     assert sweep.cell_rc(1, result) == 1
+
+
+def test_wilson_matches_its_closed_form():
+    lo, hi = sweep.wilson(18, 20)
+    assert abs(lo - 0.698966) < 1e-5 and abs(hi - 0.972134) < 1e-5
+    lo, hi = sweep.wilson(2000, 2000)                # n / (n + z^2)
+    assert abs(hi - 1.0) < 1e-12 and abs(lo - 2000 / (2000 + 1.959963984540054 ** 2)) < 1e-12
+
+
+def test_a_cell_is_refused_when_its_lease_would_reach_a_held_window():
+    window = ["2026-10-06T07:00Z/2026-10-06T08:30Z"]
+    at = sweep._utc
+    assert sweep.window_clash(at("2026-10-06T06:20Z"), 40, window) is None
+    assert sweep.window_clash(at("2026-10-06T06:21Z"), 40, window) == window[0]
+    assert sweep.window_clash(at("2026-10-06T08:00Z"), 10, window) == window[0]
+    assert sweep.window_clash(at("2026-10-06T08:30Z"), 60, window) is None

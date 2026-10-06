@@ -29,6 +29,7 @@ import statistics
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -167,11 +168,28 @@ def prepare(work: str, pod: list[str], env: dict[str, str], out: Path) -> int:
         return rc
 
 
+def _utc(text: str) -> float:
+    return datetime.strptime(text, "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc).timestamp()
+
+
+def window_clash(now: float, budget_min: int, avoid: list[str]) -> str | None:
+    """The first `START/END` window (UTC, `2026-10-06T07:00Z/2026-10-06T08:30Z`) that `[now, now + budget_min)` reaches."""
+    for w in avoid:
+        start, end = (_utc(x) for x in w.split("/"))
+        if now < end and now + 60 * budget_min > start:
+            return w
+    return None
+
+
 def run_cell(a: argparse.Namespace) -> int:
+    if a.avoid and (clash := window_clash(time.time(), a.budget_min, a.avoid)):
+        print(f"sweep: refused: {a.budget_min} min from now reaches the held window {clash}", file=sys.stderr)
+        return 75
     run_dir = Path(os.environ["RESEARCH_RUN_DIR"])
     out = run_dir / "out"
     out.mkdir(parents=True, exist_ok=True)
     c = cell_of(a.seed)
+    c = {**c, "weight_set": a.weight_set or c["weight_set"], "tokens": a.tokens or c["tokens"]}
     gpu = _gpu()
     allowed = os.sched_getaffinity(0)
     numa_file = Path(f"/sys/devices/system/node/node{gpu['numa']}/cpulist")
@@ -179,34 +197,46 @@ def run_cell(a: argparse.Namespace) -> int:
     t0 = _cpu_times()
     time.sleep(2.0)
     busy0 = _busy(t0, _cpu_times())
-    cores = pick_cores(set(allowed), numa_cpus, busy0)
-    if len(cores) < 3:
-        print(f"sweep: fewer than 3 whole cores in the allowed CPUs {sorted(allowed)}", file=sys.stderr)
+    want = 2 if a.quiet_slice else 3
+    cores = pick_cores(set(allowed), numa_cpus, busy0, want)
+    if len(cores) < want:
+        print(f"sweep: fewer than {want} whole cores in the allowed CPUs {sorted(allowed)}", file=sys.stderr)
         return 3
-    (vcore, rcore, score) = cores
-    doc = {**c, "audits": a.audits, "control_audits": a.control_audits, "gpu": gpu, "allowed_cpus": sorted(allowed),
-           "numa_cpus": sorted(numa_cpus), "verifier_core": vcore, "responder_core": rcore, "sampler_core": score,
+    vcore, rcore, score = cores[0], cores[1], cores[2] if len(cores) > 2 else []
+    doc = {**c, "audits": a.audits, "control_audits": a.control_audits, "rtt_allowance_ns": a.rtt_allowance_ns or None,
+           "quiet_slice": a.quiet_slice, "gpu": gpu, "allowed_cpus": sorted(allowed), "numa_cpus": sorted(numa_cpus),
+           "verifier_core": vcore, "responder_core": rcore, "sampler_core": score,
            "busy_at_start": {str(t): busy0.get(t) for t in vcore + rcore + score},
            "loadavg_at_start": Path("/proc/loadavg").read_text().split()[:3], "host": os.uname().nodename,
            "started_unix": time.time()}
     (out / "cell.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(json.dumps({k: doc[k] for k in ("seed", "rep", "weight_set", "tokens", "gpu", "verifier_core", "responder_core")}),
           flush=True)
-    sampler = subprocess.Popen(["taskset", "-c", str(score[0]), sys.executable, __file__, "sample", str(out / "neighbors.jsonl"),
-                                "--watch", ",".join(map(str, vcore + rcore))])
+    sampler = None
+    if score:
+        sampler = subprocess.Popen(["taskset", "-c", str(score[0]), sys.executable, __file__, "sample",
+                                    str(out / "neighbors.jsonl"), "--watch", ",".join(map(str, vcore + rcore))])
     env = {"IMPL": "p2-v1-gpu", "WS": c["weight_set"], "HW": a.hardware, "AUDITS": str(a.audits),
            "CONTROL_AUDITS": str(a.control_audits), "TOKENS": str(c["tokens"]), "LOAD_TOKENS": str(c["tokens"]), "OUT": str(out),
-           "WORK": a.work, "VCPU": str(vcore[0]), "RCPU": str(rcore[0]), "WORKERS": "2"}
+           "WORK": a.work, "VCPU": str(vcore[0]), "RCPU": str(rcore[0]), "WORKERS": "2",
+           **({"RTT_ALLOWANCE_NS": str(a.rtt_allowance_ns)} if a.rtt_allowance_ns else {})}
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     pod = ["bash", str(REPO / "benchmarks" / "pous" / "pod.sh")]
     rc = 1
+    cpu0 = _cpu_times()
     try:
         if (rc := prepare(a.work, pod, env, out)) != 0:
             return rc
+        cpu0 = _cpu_times()
         rc = subprocess.run([*pod, *(f"{k}={v}" for k, v in env.items())], cwd=REPO).returncode
     finally:
-        sampler.terminate()
+        if sampler is not None:
+            sampler.terminate()
         (out / "bench" / "leaves-p2.bin").unlink(missing_ok=True)
+        busy = _busy(cpu0, _cpu_times())
+        (out / "host-load.json").write_text(json.dumps({
+            "loadavg_at_end": Path("/proc/loadavg").read_text().split()[:3], "ended_unix": time.time(),
+            "busy_over_cell": {str(t): busy.get(t) for t in sorted(busy)}}) + "\n")
     return cell_rc(rc, out / "bench" / "bench-result.json")
 
 
@@ -257,6 +287,15 @@ def clopper_pearson(x: int, n: int, alpha: float = 0.05) -> tuple[float, float]:
     return lower, upper
 
 
+def wilson(x: int, n: int, z: float = 1.959963984540054) -> tuple[float, float]:
+    """The Wilson score interval for x successes in n trials (95% by default)."""
+    if n == 0:
+        return 0.0, 1.0
+    p = x / n
+    centre, half = p + z * z / (2 * n), z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+    return max(0.0, (centre - half) / (1 + z * z / n)), min(1.0, (centre + half) / (1 + z * z / n))
+
+
 def _neighbour_at(samples: list[dict[str, Any]], t: float) -> dict[str, Any] | None:
     """The sampler's line whose second covers `t` (the first line at or after it, within 2 s)."""
     after = [s for s in samples if s["t"] >= t]
@@ -290,7 +329,8 @@ def attribute(answer: dict[str, Any], limit_ns: int, medians: dict[str, float], 
         sib_busy = max((busy[t] for t in siblings if t < len(busy) and busy[t] is not None), default=None)
         numa = [busy[t] for t in cell["numa_cpus"] if t < len(busy) and busy[t] is not None]
         numa_busy = round(statistics.fmean(numa), 1) if numa else None
-    load = "no sample" if sample is None else "load" if (sib_busy or 0) >= BUSY or (numa_busy or 0) >= BUSY else "quiet"
+    load = ("quiet slice" if cell.get("quiet_slice") else "no sample" if sample is None else
+            "load" if (sib_busy or 0) >= BUSY or (numa_busy or 0) >= BUSY else "quiet")
     return {"cause": f"{part}, {load}", "elapsed_ns": answer["elapsed_ns"], "server_ns": answer["server_ns"],
             "device_ns": answer["device_ns"], **{f"{k}_ns": v for k, v in split.items() if k != "device"},
             "over_limit_ns": answer["elapsed_ns"] - limit_ns, "sibling_busy_pct": sib_busy, "numa_busy_pct": numa_busy,
@@ -344,12 +384,26 @@ def read_cell(run_dir: Path) -> dict[str, Any] | None:
                          "late_accepted": (m.get("late_control") or {}).get("audits_accepted"),
                          "recompute_accepted": (m.get("recompute_control") or {}).get("audits_accepted"),
                          "recompute_margin_max_s": ((m.get("recompute_control") or {}).get("device_margin_s") or {}).get("max")},
+               quiet_slice=bool(cell.get("quiet_slice")), wilson95=list(wilson(honest["audits_accepted"], honest["audits"])),
+               max_answer_ns=max(x["elapsed_ns"] for x in answers), host=cell.get("host"), started_unix=cell.get("started_unix"),
+               host_load=_host_load(out, cell),
                neighbours={"loadavg_start": cell.get("loadavg_at_start"),
                            "numa_busy_mean_pct": round(statistics.fmean(
                                statistics.fmean(s["busy"][c] for c in cell["numa_cpus"] if c < len(s["busy"]) and s["busy"][c] is not None)
                                for s in samples), 1) if samples else None,
                            "top_cgroups_mean_cpus": _top_cgroups(samples)})
     return row
+
+
+def _host_load(out: Path, cell: dict[str, Any]) -> dict[str, Any]:
+    """The host's load average at the cell's start and end, and the mean busy share over the cell of the CPUs it could not use."""
+    path = out / "host-load.json"
+    end = json.loads(path.read_text()) if path.exists() else {}
+    ours = set(cell["allowed_cpus"])
+    others = [v for c, v in (end.get("busy_over_cell") or {}).items() if int(c) not in ours and v is not None]
+    return {"loadavg_start": cell.get("loadavg_at_start"), "loadavg_end": end.get("loadavg_at_end"),
+            "others_busy_mean_pct": round(statistics.fmean(others), 1) if others else None,
+            "minutes": round((end["ended_unix"] - cell["started_unix"]) / 60, 1) if end.get("ended_unix") else None}
 
 
 def _top_cgroups(samples: list[dict[str, Any]], count: int = 5) -> dict[str, float]:
@@ -403,6 +457,22 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "pooled": pooled, "cells": rows, "incomplete": [r["run"] for r in rows if not r["complete"]]}
 
 
+def quiet_markdown(doc: dict[str, Any]) -> str:
+    """The quiet-slice cells, one row each: accepted/total with the Wilson 95% interval, late answers, the largest honest answer
+    time against the limit and the host's load average (1-minute at the start and end, 5-minute at the end)."""
+    lines = ["| run | weight set | T | accepted | Wilson 95% | late | max answer / limit µs | load avg start, end (5 min) | "
+             "other CPUs busy % | min |", "|---|---|---:|---:|---|---:|---|---|---:|---:|"]
+    for r in sorted((r for r in doc["cells"] if r.get("quiet_slice") and r["complete"]),
+                    key=lambda r: (WEIGHT_SETS.index(r["weight_set"]), r["tokens"])):
+        hl = r["host_load"]
+        end = hl["loadavg_end"] or ["-", "-"]
+        lines.append(f"| {r['run']} | {r['weight_set']} | {r['tokens']} | {r['accepted']}/{r['audits']} | "
+                     f"[{r['wilson95'][0]:.5f}, {r['wilson95'][1]:.5f}] | {r['late']} | "
+                     f"{r['max_answer_ns'] / 1e3:.1f} / {r['limit_ns'] / 1e3:.0f} | {hl['loadavg_start'][0]}, {end[0]} ({end[1]}) | "
+                     f"{hl['others_busy_mean_pct']} | {hl['minutes']} |")
+    return "\n".join(lines) + "\n"
+
+
 def markdown(doc: dict[str, Any]) -> str:
     lines = ["| weight set | T | reps | overhead median (min-max) | allowance µs | accepted at own limit | accepted at Δ + 354 µs "
              "| 95% CP at cap | late at cap (by cause) |", "|---|---:|---:|---|---:|---:|---:|---|---|"]
@@ -443,6 +513,17 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--audits", type=int, default=500)
     c.add_argument("--control-audits", type=int, default=50)
     c.add_argument("--hardware", default="rtx-pro-6000-server/bf16")
+    c.add_argument("--weight-set", help="this cell's weight set in place of the seed's")
+    c.add_argument("--tokens", type=int, help="this cell's T in place of the seed's")
+    c.add_argument("--rtt-allowance-ns", type=int, default=0, help="judge at Δ plus this allowance (0: the calibrated one)")
+    c.add_argument("--quiet-slice", action="store_true",
+                   help="a slice of two whole cores (vy-pous-quiet): the verifier's and the responder's, and no sampler")
+    c.add_argument("--avoid", action="append", default=[], metavar="START/END",
+                   help="a held window, UTC (2026-10-06T07:00Z/2026-10-06T08:30Z): refuse (75) when --budget-min reaches it")
+    c.add_argument("--budget-min", type=int, default=30, help="the cell's lease, minutes (gpu-lease --max-min)")
+    p = sub.add_parser("prepare", help="build WORK's venv, CGBN and library (a gates-only run) outside any timed lease")
+    p.add_argument("--work", required=True)
+    p.add_argument("--hardware", default="rtx-pro-6000-server/bf16")
     s = sub.add_parser("sample")
     s.add_argument("path")
     s.add_argument("--watch", default="")
@@ -453,15 +534,21 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "cell":
         return run_cell(a)
+    if a.cmd == "prepare":
+        out = Path(os.environ["RESEARCH_RUN_DIR"]) / "out"
+        out.mkdir(parents=True, exist_ok=True)
+        env = {"IMPL": "p2-v1-gpu", "WS": WEIGHT_SETS[0], "HW": a.hardware, "WORK": a.work, "WORKERS": "2"}
+        return prepare(a.work, ["bash", str(REPO / "benchmarks" / "pous" / "pod.sh")], env, out)
     if a.cmd == "sample":
         sample(Path(a.path), [int(x) for x in a.watch.split(",") if x])
         return 0
     rows = [r for r in (read_cell(Path(p)) for p in a.runs) if r is not None]
     doc = aggregate(rows)
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
+    text = (quiet_markdown(doc) + "\n" if any(r.get("quiet_slice") for r in rows) else "") + markdown(doc)
     if a.markdown:
-        Path(a.markdown).write_text(markdown(doc))
-    print(markdown(doc))
+        Path(a.markdown).write_text(text)
+    print(text)
     return 0
 
 
