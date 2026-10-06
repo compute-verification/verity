@@ -18,6 +18,8 @@ Ligerito.lean:165–277) computes over `F256`: a K value `(c0, c1)` is the word 
   (Ligerito.lean:235–273, `Refine.finalProg`) holds on V*'s final state: the shape checks, and `lhsE yr ext res = s`,
   with `res` the verifier's residual weights (`Refine.resE`) at V*'s challenges and contexts.
 * `ligerito_of_residuals` is the stage at a rep.
+* `finalProg_of` is `Refine.finalProg_ok`'s converse: on a state that meets the final check's conditions, the verifier's
+  final check passes; `finalProg_of_finalOK` applies it to `FinalOK`.
 -/
 
 namespace FlockVBridge.Algebra
@@ -263,6 +265,90 @@ structure FinalOK (sch : Schedule) (sws : Array Switched) (yr : Array F128) (ini
   yr_size : yr.size = 2 ^ (ext + 1)
   check : ∀ vst : LState, vst.oods = st.oods → vst.conss = st.conss →
     lhsE yr ext (resE (basis sws) sch.n initCh levels ext vst) = kv st.s
+
+/-! ## The verifier's final check passes -/
+
+theorem lbind_of {α β : Type} {x : Flock.LM α} {f : α → Flock.LM β} {st st₁ : LState} {t t₁ : Transcript}
+    {a : α} (hx : x st t = .ok ((a, st₁), t₁)) : (x >>= f) st t = f a st₁ t₁ := by
+  change (StateT.bind x f) st t = _
+  unfold StateT.bind
+  change (StateT.bind (x st) fun p => f p.1 p.2) t = _
+  unfold StateT.bind
+  rw [hx]
+  rfl
+
+theorem lget_bind_eq {β : Type} {f : LState → Flock.LM β} {st : LState} {t : Transcript} :
+    (get >>= f) st t = f st st t := rfl
+
+/-- A loop whose every step yields a function of the step, touching neither state, runs as that fold. -/
+theorem forIn_yield_of {α σ : Type} (body : α → σ → Flock.LM (ForInStep σ)) (g : σ → α → σ)
+    (P : α → Prop) (hb : ∀ a s st tr, P a → body a s st tr = .ok ((.yield (g s a), st), tr)) :
+    ∀ (l : List α) (s : σ) (st : LState) (tr : Transcript), (∀ a ∈ l, P a) →
+      forIn l s body st tr = .ok ((l.foldl g s, st), tr)
+  | [], _, _, _, _ => rfl
+  | a :: l, s, st, tr, hP => by
+    rw [List.forIn_cons, lbind_of (hb a s st tr (hP a (List.mem_cons_self ..)))]
+    exact forIn_yield_of body g P hb l (g s a) st tr fun x hx => hP x (List.mem_cons_of_mem _ hx)
+
+theorem lbind_forIn {α σ β : Type} {body : α → σ → Flock.LM (ForInStep σ)} {f : σ → Flock.LM β}
+    (g : σ → α → σ) (P : α → Prop) {l : List α} {s : σ} {st : LState} {tr : Transcript}
+    (hb : ∀ a s st tr, P a → body a s st tr = .ok ((.yield (g s a), st), tr)) (hP : ∀ a ∈ l, P a) :
+    (forIn l s body >>= f) st tr = f (l.foldl g s) st tr :=
+  lbind_of (forIn_yield_of body g P hb l s st tr hP)
+
+/-- **The verifier's final check passes** (`Refine.finalProg_ok`'s converse): on a state that meets its shape checks,
+its value check `lhs = s` and its leftover-list check (Ligerito.lean:274), `finalProg` succeeds and changes nothing. -/
+theorem finalProg_of {p : LigeritoProof} {basisAt : Array F256 → Nat → Array F256} {n : Nat} {initCh : Array F256}
+    {levels : Array (Array F256)} {ext : Nat} {st : LState} {tr : Transcript}
+    (h1 : (origE initCh levels).size + ext = n) (h2 : (basisAt (origE initCh levels) ext).size = 2 ^ ext)
+    (hood : ∀ o ∈ st.oods.toList, o.z.size = (oodFixed levels (origE initCh levels) o).1.size + ext)
+    (hcons : ∀ cs ∈ st.conss.toList, (consFixed levels cs.start).size + ext = cs.cols)
+    (hlhs : lhsE p.finalProof.yr ext (resE basisAt n initCh levels ext st) = st.s)
+    (hleft : st.ood = p.oodValues.size ∧ st.qn = p.queryNonces.size ∧ st.cn = p.consistencyNonces.size ∧
+      st.cbn = p.claimNonces.size) :
+    finalProg p basisAt n initCh levels ext st tr = .ok (((), st), tr) := by
+  unfold finalProg
+  rw [lget_bind_eq]
+  dsimp only
+  change ((if ((origE initCh levels).size + ext != n) = true then _ else _ : Flock.LM Unit) st tr) = _
+  rw [ite_eq_right (by simp [h1])]
+  change ((if ((basisAt (origE initCh levels) ext).size != 2 ^ ext) = true then _ else _ : Flock.LM Unit) st tr) = _
+  rw [ite_eq_right (by simp [h2]), ← Array.forIn_toList]
+  rw [lbind_forIn (fun res o => oodStep ext (oodFixed levels (origE initCh levels) o) o res)
+    (fun o => o.z.size = (oodFixed levels (origE initCh levels) o).1.size + ext) ?hb1 hood]
+  case hb1 =>
+    intro o s st tr hz
+    change ((if (o.z.size != (oodFixed levels (origE initCh levels) o).1.size + ext) = true then _ else _ :
+      Flock.LM (ForInStep (Array F256))) st tr) = _
+    rw [ite_eq_right (by simp [hz])]
+    rfl
+  rw [← Array.forIn_toList]
+  rw [lbind_forIn (consStep (svTable (n + 1)) ext levels)
+    (fun cs => (consFixed levels cs.start).size + ext = cs.cols) ?hb2 hcons]
+  case hb2 =>
+    intro cs s st tr hz
+    change ((if ((consFixed levels cs.start).size + ext != cs.cols) = true then _ else _ :
+      Flock.LM (ForInStep (Array F256))) st tr) = _
+    rw [ite_eq_right (by simp [hz]), lforIn_range_eq, List.forIn_pure_yield_eq_foldl]
+    rfl
+  change ((if (lhsE p.finalProof.yr ext (resE basisAt n initCh levels ext st) != st.s) = true then _ else _ :
+    Flock.LM Unit) st tr) = _
+  obtain ⟨e1, e2, e3, e4⟩ := hleft
+  rw [ite_eq_right (by simp [hlhs]), ite_eq_right (by simp [e1, e2, e3, e4])]
+  rfl
+
+/-- **`FinalOK` is the verifier's final check.** On a verifier state with V*'s OOD and consistency contexts and V*'s
+running sum read in K, and with no proof list left over, `finalProg` passes at V*'s challenges, for a proof whose
+final `y_r` is V*'s. -/
+theorem finalProg_of_finalOK {sch : Schedule} {sws : Array Switched} {yr : Array F128} {initCh : Array F256}
+    {levels : Array (Array F256)} {ext : Nat} {st : LSt F128} (hf : FinalOK sch sws yr initCh levels ext st)
+    {p : LigeritoProof} (hyr : p.finalProof.yr = yr) {vst : LState} {tr : Transcript} (ho : vst.oods = st.oods)
+    (hc : vst.conss = st.conss) (hs : vst.s = kv st.s)
+    (hleft : vst.ood = p.oodValues.size ∧ vst.qn = p.queryNonces.size ∧ vst.cn = p.consistencyNonces.size ∧
+      vst.cbn = p.claimNonces.size) :
+    finalProg p (basis sws) sch.n initCh levels ext vst tr = .ok (((), vst), tr) :=
+  finalProg_of hf.orig_size hf.basis_size (ho ▸ hf.ood_dim) (hc ▸ hf.cons_dim)
+    (by rw [hyr, hf.check vst ho hc, hs]) hleft
 
 /-- **Ligerito's final check.** When `ligerito` over F returns residuals all zero, its run up to the final check
 (`ligeritoRun`) ends in a state on which the verifier's final check passes (`FinalOK`), having read every message

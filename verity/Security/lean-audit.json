@@ -20966,6 +20966,12 @@
   "FlockVBridge.Algebra.decoded_rsT": {
    "owner": "@proofs"
   },
+  "FlockVBridge.Algebra.finalProg_of": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.finalProg_of_finalOK": {
+   "owner": "@proofs"
+  },
   "FlockVBridge.Algebra.finalWeights_ok": {
    "owner": "@proofs"
   },
