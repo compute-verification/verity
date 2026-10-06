@@ -45,18 +45,9 @@ Everything else is the protocol's (`audit`), the same for every scheme.
    a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
    `TileCheck.Accepts` asks the same of the tile's weight rows (the protocol's `weightOK`), and a good tile
    (`TileGood`) has every one passing.
-The row and tile trees are framed SHA-256 unless the scheme names another frame hash (`commitment_hash`). `"blake3"` is
-`frame-b3` (`verity.primitives.commitments.merkle`), BLAKE3 keyed by the domain id. A leaf's header fills one 64-byte block, so a row
-leaf streams through BLAKE3's chunk tree, for rows that must be committed within a decode step. A node is one compression
-of left ‖ right under its level's key, keyed(domain id, 0x02 ‖ u8 level). `"blake3-s256"` is `frame-b3s`, `frame-b3` with a
-shallower leaf. A leaf over L bytes is a tree over its ⌈L/256⌉ segments (one empty segment when L = 0):
-
-- each segment is the standard keyed BLAKE3 of its exact bytes, the last at its true length;
-- segment j's key is keyed(domain id, 0x05 ‖ u64 rank ‖ u64 position ‖ u64 L ‖ u32 j ‖ u16 len ‖ schema), so it binds the
-  segment's position, the length and the schema;
-- nodes are one compression under keyed(domain id, 0x06 ‖ u8 level);
-- the odd last node of a level is promoted unchanged;
-- the domain id's tag is `domain/b3s`.
+The row and tile trees are framed SHA-256 unless the scheme names another frame hash (`commitment_hash`): `"hm96-sha512"`
+(`audit.HM96`, Pearl-C's -h3) is `frame-v3-sha512` with hm96-sha512 leaves, in its section. The BLAKE3 tree modes `frame-b3`
+and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/` (one hash, SHA-512: Daniel, 2026-10-06).
 
 7. **Profile.** When every selected tile passes, `WorkProfile`: for every ε_s in (0, 1] and every operator whose online cost
    is at most T, `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + η` (Lean `Pouw.SecurityProofs.EndToEnd`), with
@@ -383,7 +374,8 @@ states every step.
 
 ~~~text
 seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64)
-          -h3: row i's own seed, H_"pearl-c/v0/seed-A"(salt ‖ leaf_i ‖ root_B ‖ index·2^32 + i u64)
+          -h3: every H_ℓ SHA-512 (`s512`); row i's own seed, H_"seed-A"(salt ‖ d_i ‖ root_B ‖ index·2^32 + i u64),
+          d_i row i's SHA-512 digest
 forming   v0, #311's as ported (`pearl_kw`): FP10 rows, exact norms, α, β, N = E·Fᵀ, X̃ = fp8(clamp(fma(α, X, β·N)))
           v1, §5's: FP32 rows x; s = max|x|, ρ = RMS over every 8th position, α = 448/max(s + 4ρ, 2^−32), σ = ρ,
           β_row = (σ·α)·√r/(256·16), E′ = e4m3(β_row·E), X̃ = e4m3(HOPPER_E4M3_K32.step(C = α·x, E′_row, F line)),
@@ -394,8 +386,8 @@ peel      P_A = [bf16(β_A·E_A) ‖ bf16(A′·F_B)],  P_B = [bf16((β_B·E_B)�
           (v1: bf16(E′) in place of bf16(β·E));
           U = C̃ + P_A·P_Bᵀ as four HOPPER_BF16_WGMMA_K16 steps into C̃'s word
 leaf      TurboSHAKE128 (D = 0x21) per tile row and 32-column chunk over its C̃ then U words, then TurboSHAKE128
-          (D = 0x22) over those digests; -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf")
-trees     A's rows, B's rows, the tile leaves: SHA-256 Merkle; -h1: frame-b3; -h2 and -h3: frame-b3s
+          (D = 0x22) over those digests; -h3: `sha512/row-seg/v1` over the tile's messages
+trees     A's rows, B's rows, the tile leaves: SHA-256 Merkle; -h3: `audit.HM96`
 tickets   Pearl's lottery over C̃ per 16 × 16 subtile
 useful    U/(α_A·α_B), glue
 ~~~
@@ -429,69 +421,47 @@ useful    U/(α_A·α_B), glue
       (exact product) and liveness on the exact statistic, at most k/64 entries with x² ≥ 64ρ², where
       ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values (`live_row`).
     - It shares v0's seed labels (`pearl-c/v0/seed-*`).
-- **Hashing format -h1** (`pearl-c-h100-v1-h1`, `hashing="h1"`) is the hash cut's P4 and P5 (research store
-  `internal/pouw/hashing-sm120-options.md`).
-  - Its motivation: decode can't wait for A's commitment under SHA-256 over whole rows, a serial chain of 513
-    compressions per 32 KB row.
-  - The message digests and the tile leaf are BLAKE3 keyed by public labels, and every tree is `frame-b3`. A row's leaf
-    streams through BLAKE3's 1 KB chunk tree (about 22 serial compressions for a 32 KB row), and a node is one.
-  - Only the hashing changes: its vectors are the h0 cases' inputs, with the same C̃ and U words, a new leaf, and A's
-    `frame-b3` root, one row leaf and one message digest pinned. A decode case (m = 32) pins the partial tile's leaf.
-  - The certificate cites `xof/blake3`, `cr/blake3` and `cr/sha-256`. TurboSHAKE128 no longer backs anything. SHA-256
-    still does: the bindings that name each tree's domain and the epoch's `weights_root` are SHA-256 (`tagged`), and the
-    salt and the draw's `derive` (`prf/sha-256`) are unchanged.
-- **Hashing format -h2** (`pearl-c-h100-v1-h2`, `hashing="h2"`) is -h1 with every tree `frame-b3s`. It is P1 of research
-  store `internal/pouw/rtx-pro/a-commit-latency.md`, which the theory sign-off there rules sound under four format
-  conditions. `verity/primitives/commitments/tests/test_frame_b3s.py` tests each condition.
-  - A 32 KB row's leaf is 1 + 4 + 7 serial compressions (segment key, segment, segment tree) in place of -h1's 17 + 6, with
-    1.41× -h1's compressions (767 against 545).
-  - Only the trees change: its vectors are the -h1 cases' inputs, digests and leaves, with A's `frame-b3s` root and row
-    leaf. The certificate is -h1's.
-- **Hashing format -h3** (`serving.HASH_FORMATS["h3"]`: `seed_a="row"`, `row_cap=True`) is -h2 with E_A seeded per row.
-  - Row i of unit u draws its line from the one-row unit's seed_A over the row's own leaf in A's tree, `row_seed`:
-    H_"pearl-c/v0/seed-A"(salt ‖ leaf_i ‖ root_B ‖ u·2^32 + i), with u and i each below 2^32. `hash.cuh`'s `b3_seeds`
-    computes it in mode 1. The vectors are pinned in the tests, and the kernel, built for the host, writes those bytes.
-  - Why: a seed that doesn't read A, such as the epoch coins and the index alone, tells the prover each row's noise
-    before it chooses the row. It can then form every row onto a few shared A′ rows, compute their C̃ once per weight
-    and copy it, while every row passes every rule (`note:pouw-gamma/20261006T0318Z-finding-gamma-adaptive-a`; Pearl-C4's
-    `noise` has the same shape, and every row folds onto one A′ row there, in
-    `art:afb6390197a14ef8fd8e969258b5dfea408bd26ef8cbd855981ee095524d2583`, and its -h3 is in its section). Keyed on its
-    own leaf, each candidate row costs an oracle query again. Forming waits on that row's leaf alone, so A's tree may
-    leave the main lane (`schedule_refusals`).
-  - The row cap: the debit cap is checked for every credited row, each row's debit at most ρ times its share of the
-    credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
-    row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
-    transfer.
-  - `PearlC(hashing="h3")` (`pearl-c-…-v1-h3`, not registered) draws row i's E_A as line 0 of its row seed, over the
-    row's frame-b3s leaf (`PearlC.row_seeds`); seed_B, E_B, the bases and the digests are -h2's, and the tickets keep the
-    unit's seed_A over root_A. The `test-16-v1-h3` and `decode-32-v1-h3` vectors pin a call end to end.
-  - The work law checks the row cap on every credited A row of a drawn tile, over its credited columns, after the tile's
-    cap (`pearl_c_work.row_cap`), and `volunteer` gives up a row over it first.
-- **Hashing format -h3s** (`serving.HASH_FORMATS["h3s"]`: tree hash `audit.HM96`, no BLAKE3 keys,
-  `row_digest="sha512/row-seg/v1"`) is -h3 through SHA-512: every place -h3 hashes with BLAKE3 hashes with SHA-512, as the
-  proof service's row commitments do, so the scheme assumes one hash's collision resistance (`cr/sha-512`) where -h3 assumes
-  BLAKE3's.
+- **Hashing format -h3** (`pearl-c-sm120-v1-h3`, `serving.HASH_FORMATS["h3"]`: tree hash `audit.HM96`, `seed_a="row"`,
+  `row_cap=True`, `row_digest="sha512/row-seg/v1"`) is SHA-512 throughout, with E_A seeded per row. It is the one hash
+  format besides h0 (Daniel, 2026-10-06: one hash, SHA-512, as the proof service's row commitments; its cost accepted), so
+  the scheme assumes SHA-512's collision resistance (`cr/sha-512`). The BLAKE3 formats -h1, -h2 and BLAKE3 -h3, with
+  their vectors and kernels, are in `archive/pouw-blake3/`, unmaintained.
   - Labels: H_ℓ(x) = `pearl_c.s512`(ℓ, x), the first 32 bytes of SHA-512(``pearl-c/h3s/<ℓ>\0`` zero-padded to 128 bytes ‖
-    x), for ℓ in seed-A, seed-B, noise-line, line and jackpot. seed_B = H_seed-B(salt ‖ root_B), seed_A = H_seed-A(salt ‖
-    root_A ‖ root_B ‖ u64 LE index), the roots 64 bytes.
-  - `row_seed`(salt, d_i, root_B, u, i) is H_seed-A over salt ‖ d_i ‖ root_B ‖ u64 LE (u · 2^32 + i), 168 bytes, with
-    d_i = `pearl_c.row_digest`(row i), `rowleaf.sha512_row_seg_digest` over the row's FP32 words little-endian: 1 KiB
-    segments hashed on their own, then their digests (a 4096-wide row is 16 segments, a 14336-wide one 56).
+    x), for ℓ in seed-A, seed-B, noise-line, line and jackpot; the label's ``h3s`` is the domain tag the format was first
+    pinned under. seed_B = H_seed-B(salt ‖ root_B), seed_A = H_seed-A(salt ‖ root_A ‖ root_B ‖ u64 LE index), the roots
+    64 bytes.
+  - Row i of unit u draws its E_A line from its own seed, `row_seed`(salt, d_i, root_B, u, i) = H_seed-A over salt ‖ d_i ‖
+    root_B ‖ u64 LE (u · 2^32 + i), 168 bytes, with u and i each below 2^32 and d_i = `pearl_c.row_digest`(row i),
+    `rowleaf.sha512_row_seg_digest` over the row's FP32 words little-endian: 1 KiB segments hashed on their own, then
+    their digests (a 4096-wide row is 16 segments, a 14336-wide one 56). `hash_h3.cuh`'s `s512_rows` and `s512_seeds`
+    compute them; the pins are in the tests, and the kernels, built for the host, write those bytes.
+  - Why per row: a seed that doesn't read A, such as the epoch coins and the index alone, tells the prover each row's
+    noise before it chooses the row. It can then form every row onto a few shared A′ rows, compute their C̃ once per
+    weight and copy it, while every row passes every rule (`note:pouw-gamma/20261006T0318Z-finding-gamma-adaptive-a`;
+    Pearl-C4's `noise` has the same shape, and every row folds onto one A′ row there, in
+    `art:afb6390197a14ef8fd8e969258b5dfea408bd26ef8cbd855981ee095524d2583`, and its -h3 is in its section). Keyed on its
+    own digest, each candidate row costs an oracle query again. Forming waits on that row's digest alone, so A's tree may
+    leave the main lane (`schedule_refusals`).
   - Lines (`pearl_c.sample_line`): Pearl's rule over 32 bytes H_line(H_noise-line(seed) ‖ side ‖ factor ‖ u32 LE line)
     in place of BLAKE3's keyed by Pearl's line key.
   - The tile leaf is `sha512_row_seg_digest` over the tile's messages themselves (le32 C̃ ‖ le32 U per row and 32-column
     chunk, row-major), 64 bytes; its 1 KiB segment digests take the message digests' place. The tickets are
-    H_jackpot(seed_A ‖ fold).
+    H_jackpot(seed_A ‖ fold), seed_A the unit's over root_A.
   - Trees: A's rows, B's rows and the tile leaves are `audit.HM96`, `frame-v3-sha512` with hm96-sha512 leaves
     (`audit.Hm96Domain`): x is a row's `sha512/row-seg/v1` digest (the same d_i) or the tile leaf, the salt the prover's
     ChaCha20 stream (`audit.hm96_salt`, nonce the unit index for A's tree, 2^62 + w for weight w's, 2^63 for the
     transcript's), and an opening's value carries its salt.
   - SHA-256 stays where the protocol, not the scheme, hashes: each domain's binding (`tagged`, which core's frame takes as
-    32 bytes), the salt's derivation, the draws and the records' root. It is not -h3's own and was never BLAKE3.
-  - The row cap holds as under -h3. A's tree is not read by forming, so it may leave the main lane as under -h3.
-  - `PearlC(hashing="h3s")` (`pearl-c-…-v1-h3s`, not registered); the `test-16-v1-h3s` and `decode-32-v1-h3s` vectors pin
-    a call end to end, with row 0's digest and a hash of every row digest. -h3's verifier refuses an -h3s transcript on its
-    activation openings. -h3 (BLAKE3) stays as the comparison arm.
+    32 bytes), the salt's derivation, the draws and the records' root.
+  - The row cap: the debit cap is checked for every credited row, each row's debit at most ρ times its share of the
+    credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
+    row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
+    transfer. The work law checks it on every credited A row of a drawn tile, over its credited columns, after the
+    tile's cap (`pearl_c_work.row_cap`), and `volunteer` gives up a row over it first.
+  - `pearl-c-sm120-v1-h3` is registered (the served default, `pouw_pearl_c_device`); `PearlC(hashing="h3")` on the H100
+    record names `pearl-c-h100-v1-h3`. The `test-16-v1-h3` and `decode-32-v1-h3` vectors pin a call end to end, with A's
+    row root and row 0's leaf, digest, seed and E_A line, and a hash of every row digest and seed. h0's verifier refuses
+    an -h3 transcript on its activation openings.
 - **Row tiles.** m is a multiple of 16, not of 64: the last row tile may be partial, in whole 16 × 16 ticket subtiles.
   Decode's 32 × 64 tile has a leaf over its 64 digests (2 KB), so decode is not padded to 64 rows.
 - **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
@@ -715,13 +685,13 @@ useful    U/(α_A·α_B), glue
   (`art:afb6390197a14ef8fd8e969258b5dfea408bd26ef8cbd855981ee095524d2583`). The fix is Pearl-C's -h3 (above):
   - `PearlC4(hashing="h3")` (`pearl-c-nvfp4-v0-h3`, not registered) draws row i's E_A as line 0 (role E_A) of its own
     seed, `pearl_c4.row_seed`: `pearl_c.row_seed`'s layout under Pearl-C4's label, keyed BLAKE3 under
-    blake3("pearl-c4/v0/seed-A") of salt ‖ leaf_i ‖ root_B ‖ u·2^32 + i, over the row's leaf in A's frame-b3s tree.
-    `hash.cuh`'s `b3_seeds` in mode 1 writes it under that label's key (a host test).
+    blake3("pearl-c4/v0/seed-A") of salt ‖ d_i ‖ root_B ‖ u·2^32 + i, over the row's SHA-512 digest d_i
+    (`pearl_c.row_digest`). The seed is still Pearl-C4's BLAKE3 seed-A derivation, as at h0.
   - seed_B and what it keys (E_B, F_A, F_B) are unchanged, and the tickets keep the unit's seed_A over root_A. A's and
-    B's trees are frame-b3s and the tile leaf is BLAKE3 (`pearl_c.leaf` at -h3); the work law checks the row cap as well
-    as the tile cap.
-  - The `test-16-nvfp4-h3` vector pins a call end to end. -h0's names, vectors, certificate, circuit (`circuit.pc4`) and
-    kernels are unchanged, and no device path forms -h3 yet.
+    B's trees are `audit.HM96`, the tile leaf and the tickets are Pearl-C's -h3 (SHA-512); the work law checks the row cap
+    as well as the tile cap.
+  - The `test-16-nvfp4-h3` vector pins a call end to end, its roots 64 bytes. -h0's names, vectors, certificate, circuit
+    (`circuit.pc4`) and kernels are unchanged, and no device path forms -h3 yet.
 - **The domain (`check`):** 1,024 ≤ k ≤ 2^16 with 128 | k, 64 × 64 tiles, m ≤ 2^24, and 128 ≤ n ≤ 2^18. The n ≥ 128
   floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
 - **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at 18:45Z; theory

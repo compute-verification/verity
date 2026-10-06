@@ -16,7 +16,6 @@ import pytest
 
 import pearl_c_vectors as CV
 import pearl_vectors as PV
-from verity.primitives.crypto.blake3 import blake3
 from verity.primitives.crypto.turboshake import turboshake128
 from verity_catalog.definitions.fp32 import F32DivV2, F32FmaV2, F32MulV2
 from verity_catalog.definitions.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
@@ -170,75 +169,58 @@ def test_seeds_are_keyed_as_the_design_says():
     assert one.c != two.c and one.u != two.u
 
 
-#: -h3's row seeds, as `hash.cuh`'s `b3_seeds` (mode 1, built for the host) writes them: (unit, row) -> seed, at the salt
-#: bytes 0 … 31, root_B bytes 32 … 63 and the leaf blake3("pearl-c row leaf"); benchmarks/pouw's host test checks the
-#: kernel against the same bytes
-ROW_SEEDS = {(7, 3): "c12884464d77c2b929ce7c21ebd1600b8d5422eef522cb6436519f4ccf5f8e6a",
-             (7, 200): "d6218857d90cbcd6e78ee0cbe69d50820baccbe3f7434c7346c0072a3381d139",
-             (2 ** 32 - 1, 3): "3d7c8deb306724f5f05284d6d04d51b8a85387b51b454da2430a519a9744f2f8",
-             (2 ** 32 - 1, 200): "ac1671c97f95166d8fd0ef09490934c7aba03d497eb08de99e84e2639b43d6a3"}
-
-
-def test_row_seeds_are_the_one_row_units_seed_a():
-    """-h3's row seed is the pinned bytes, the one-row unit's seed_A at index unit · 2^32 + row, so two rows, two units or
-    two leaves never share one; a unit or row of 2^32 or more is refused."""
-    salt, root_b, leaf = bytes(range(32)), bytes(range(32, 64)), blake3(b"pearl-c row leaf")
-    for (unit, row), seed in ROW_SEEDS.items():
-        assert C.row_seed(salt, leaf, root_b, unit, row).hex() == seed
-        assert C.row_seed(salt, leaf, root_b, unit, row) == C.unit_seed_a(salt, leaf, root_b, unit << 32 | row)
-    assert C.row_seed(salt, blake3(b"another row"), root_b, 7, 3).hex() != ROW_SEEDS[7, 3]
-    for unit, row in ((2 ** 32, 0), (0, 2 ** 32), (-1, 0), (0, -1)):
-        with pytest.raises(ValueError, match="must each be below 2"):
-            C.row_seed(salt, leaf, root_b, unit, row)
-
-
-def h3s_row(k: int) -> bytes:
+def h3_row(k: int) -> bytes:
     """The pins' FP32 row of k words: byte i is 7i + k mod 256."""
     return bytes((7 * i + k) % 256 for i in range(4 * k))
 
 
-#: -h3s's row digests (`row_digest`, ``sha512/row-seg/v1``) of `h3s_row(k)`: one segment, two with a 176-byte last, and the
+#: -h3's row digests (`row_digest`, ``sha512/row-seg/v1``) of `h3_row(k)`: one segment, two with a 176-byte last, and the
 #: 16 and 56 of Llama's 4096- and 14336-wide rows; `sha512_rows.cuh`'s `s512_rows`, built for the host, writes the same
-H3S_DIGESTS = {
+H3_DIGESTS = {
     128: "ee92fa29ad7ace8732aa9a138b3d816ce140018e9e9e9d820e3ac4a64d974c2e9410831984599a36a1e58d29d1e59d330b845fe0a98d4cc753d5093c4c70ac99",
     300: "0986088e50ea36f19742c6af42083c59323d69f0db773bc9a49c12bf86999be75a7d615614bf137fe495fe32bac4e978a41b6f5781d1a8e2034411fccbe4a3a5",
     4096: "823a21352763ecee3ba7b06da44a04525577197dbee48ef82b12927e6eb6a847360933bed78d80f85b798b77096a8746ce81dc3f48e6891d95d80d0b9432788f",
     14336: "9743c48588f788041e55fc2ef5cf44aa01225029edcf0539230053fedfcf240032ee695fd36f194c832834df8da839899cdb251e74c0090c150affc90aecadb8"}
-#: -h3s's row seeds over the digest of `h3s_row(4096)`, at salt bytes 0 … 31 and a 64-byte root_B, bytes 32 … 95, as
+#: -h3's row seeds over the digest of `h3_row(4096)`, at salt bytes 0 … 31 and a 64-byte root_B, bytes 32 … 95, as
 #: `s512_seeds` writes them
-H3S_SEEDS = {(7, 3): "48f3f41d75a3d208007bdf3f7ffd1f4649de6ac8cbeae2bc03bdc306b3358896",
+H3_SEEDS = {(7, 3): "48f3f41d75a3d208007bdf3f7ffd1f4649de6ac8cbeae2bc03bdc306b3358896",
              (7, 200): "f1ccc13e0ae11eb9e61f36ef1a1ccfc2c8d059f5f9bd7811fd166982d1763900",
              (2 ** 32 - 1, 3): "e7c2a2ca4c4c207c3ed6075fd0b4a9055d8aacb725a930ce3d8d1f6e7d4b6a4a",
              (2 ** 32 - 1, 200): "a8f6f7a7e2f8b1672167196ad066e4857954a064f44aa010c95fe8b95dcb3b2d"}
 
 
 def s512_label(role: str) -> bytes:
+    """-h3's label block; its ``h3s`` is the domain tag the format was pinned under (`pearl_c.S512_LABELS`)."""
     return f"pearl-c/h3s/{role}\0".encode().ljust(128, b"\0")
 
 
-def test_h3s_row_digests_are_row_seg_v1_over_the_rows_bytes():
-    """-h3s keys a row's seed on ``sha512/row-seg/v1`` of its bytes, rebuilt here from hashlib: SHA-512 of each 1 KiB segment
+def test_h3_row_digests_are_row_seg_v1_over_the_rows_bytes():
+    """-h3 keys a row's seed on ``sha512/row-seg/v1`` of its bytes, rebuilt here from hashlib: SHA-512 of each 1 KiB segment
     under its 128-byte header S(j, s, m_j) (m_j in bits), then SHA-512 of the row header Q(n_bits, s, 1024) and the segment digests.  The
-    seed is the first 32 bytes of SHA-512 over seed-A's label block, salt ‖ digest ‖ root_B ‖ (unit · 2^32 + row) u64 LE."""
+    seed is the first 32 bytes of SHA-512 over seed-A's label block, salt ‖ digest ‖ root_B ‖ (unit · 2^32 + row) u64 LE, so
+    two rows, two units or two digests never share one; a unit or row of 2^32 or more is refused."""
     def header(tag: bytes, *fields: tuple[int, int]) -> bytes:
         return (tag + b"".join(v.to_bytes(n, "big") for v, n in fields)).ljust(128, b"\0")
 
-    for k, pin in H3S_DIGESTS.items():
-        row = h3s_row(k)
+    for k, pin in H3_DIGESTS.items():
+        row = h3_row(k)
         segs = [row[i:i + 1024] for i in range(0, len(row), 1024)]
         s = len(segs)
         inner = b"".join(hashlib.sha512(header(b"verity/sha512-row-seg/v1/segment\0", (j, 8), (s, 8), (8 * len(g), 8)) + g).digest()
                          for j, g in enumerate(segs))
         outer = hashlib.sha512(header(b"verity/sha512-row-seg/v1\0", (8 * len(row), 8), (s, 8), (1024, 4)) + inner).digest()
         assert C.row_digest(row) == outer and outer.hex() == pin
-    salt, root_b, d = bytes(range(32)), bytes(range(32, 96)), C.row_digest(h3s_row(4096))
-    for (unit, row), seed in H3S_SEEDS.items():
+    salt, root_b, d = bytes(range(32)), bytes(range(32, 96)), C.row_digest(h3_row(4096))
+    for (unit, row), seed in H3_SEEDS.items():
         want = hashlib.sha512(s512_label("seed-A") + salt + d + root_b + (unit << 32 | row).to_bytes(8, "little")).digest()[:32]
-        got = C.row_seed(salt, d, root_b, unit, row, "h3s")
+        got = C.row_seed(salt, d, root_b, unit, row)
         assert got.hex() == seed == want.hex() and isinstance(got, C.S512Seed)
-    other = bytearray(h3s_row(4096))
+    other = bytearray(h3_row(4096))
     other[4095] ^= 1
-    assert C.row_seed(salt, C.row_digest(bytes(other)), root_b, 7, 3, "h3s").hex() != H3S_SEEDS[7, 3]
+    assert C.row_seed(salt, C.row_digest(bytes(other)), root_b, 7, 3).hex() != H3_SEEDS[7, 3]
+    for unit, row in ((2 ** 32, 0), (0, 2 ** 32), (-1, 0), (0, -1)):
+        with pytest.raises(ValueError, match="must each be below 2"):
+            C.row_seed(salt, d, root_b, unit, row)
 
 
 def test_leaf_and_tickets_rebuilt_from_bytes():
@@ -540,9 +522,9 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
     assert s.bf16_mac == m["bf16_mac"]
     assert s.forming_credited == 32 + m["cast_alone"] <= 32 + m["cast_loop"]
     assert s.forming_a_only == round(m["fp8_mac"] / m["ffma_alone"]) / 8
-    sm120 = C.PearlC(forming="v1", hashing="h1", prices=s)
-    assert sm120.name == "pearl-c-h100-v1-h1@sm_120" and dict(sm120.certificate.parameters)["prices"] == "sm_120"
-    assert dict(get("pearl-c-h100-v1-h1").certificate.parameters)["prices"] == "sm_90"
+    sm120 = C.PearlC(forming="v1", hashing="h3", prices=s)
+    assert sm120.name == "pearl-c-h100-v1-h3@sm_120" and dict(sm120.certificate.parameters)["prices"] == "sm_120"
+    assert dict(C.PearlC(forming="v1", hashing="h3").certificate.parameters)["prices"] == "sm_90"
     for sh in (Shape(32, 1024, 64), Shape(2048, 3584, 18944), Shape(8192, 8192, 8192)):
         assert sm120.wref(sh) == wref_of(sh.m, sh.k, sh.n, fs=40, qa=1, add=8, bf16=2)
         assert sm120.credit_of(sh) == sm120.wref(sh) - sh.m * sh.k < get("pearl-c-h100-v1").credit_of(sh)
@@ -587,139 +569,21 @@ def test_v1_lifecycle_on_a_test_instance():
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
 
 
-def test_h1_hashes_with_blake3_throughout():
-    """Hashing format -h1 (P4, P5): the messages and the leaf are BLAKE3 keyed by public labels, and every tree is frame-b3."""
-    from verity.primitives.crypto.blake3 import blake3, keyed
-
-    s = get("pearl-c-h100-v1-h1")
-    assert s.name == "pearl-c-h100-v1-h1" and s.commitment_hash == "blake3" and dict(s.certificate.parameters)["hashing"] == "h1"
-    assert "xof/blake3" in s.certificate.claims and get("pearl-c-h100-v1").commitment_hash == "sha256"
-    assert C.H1_KEYS == {"message": blake3(b"pearl-c/h1/message"), "leaf": blake3(b"pearl-c/h1/leaf")}
-    rng = random.Random(3)
-    grid = lambda: [[rng.getrandbits(32) for _ in range(64)] for _ in range(4)]  # noqa: E731
-    checked = C.Checked(grid(), grid())
-    digests = b"".join(keyed(C.H1_KEYS["message"], struct.pack("<32I", *c[h:h + 32]) + struct.pack("<32I", *u[h:h + 32]))
-                       for c, u in zip(checked.c, checked.u) for h in (0, 32))
-    assert C.leaf(checked, "h1") == keyed(C.H1_KEYS["leaf"], digests) != C.leaf(checked)
-    with pytest.raises(ValueError):
-        C.PearlC(hashing="h4")
-
-
-def test_each_hashing_formats_keys_are_on_the_scheme():
-    """`digest_keys` is what the digests are keyed by, and each instance carries its format's keys and tree hash, so a
-    device path reads them from the scheme."""
+def test_each_hashing_format_is_on_the_scheme():
+    """Each instance carries its format's tree hash, so a device path reads it from the scheme; h0's messages are
+    TurboSHAKE128, and a format outside `HASHINGS` is refused."""
     msg = bytes(range(64))
+    assert C.HASHINGS == ("h0", "h3")
     for hashing in C.HASHINGS:
-        s = C.PearlC(forming="v1", hashing=hashing)
-        assert s.digest_keys is C.digest_keys(hashing) and s.commitment_hash == C.TREE_HASH[hashing]
-        if hashing == "h0":
-            assert s.digest_keys is None and C.message_digest(msg, hashing) == C.turboshake128(msg, C.D_MESSAGE, 32)
-        elif hashing == "h3s":
-            assert s.digest_keys is None
-        else:
-            assert s.digest_keys == C.H1_KEYS and C.message_digest(msg, hashing) == C.keyed(s.digest_keys["message"], msg)
-    with pytest.raises(ValueError):
-        C.digest_keys("h9")
+        assert C.PearlC(forming="v1", hashing=hashing).commitment_hash == C.TREE_HASH[hashing]
+    assert C.message_digest(msg) == C.turboshake128(msg, C.D_MESSAGE, 32)
+    for bad in ("h1", "h2", "h3s", "h4"):
+        with pytest.raises(ValueError):
+            C.PearlC(hashing=bad)
 
 
-def test_h1_lifecycle_commits_with_frame_b3():
-    from verity.protocols.accounting.work.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload, activation_binding, commit_rows, weight_binding
-
-    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1"), 128
-    rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
-    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
-    prover = Prover(s, {9: rows_b})
-    assert prover.weight_roots[9] == commit_rows(weight_binding(9), -2, rows_b, "blake3").commitment.root
-    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
-    tr = prover.prove(epoch, {3: rows_a})
-    assert tr.activation_roots[0] == commit_rows(activation_binding(epoch.salt, 3), 3, rows_a, "blake3").commitment.root
-    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
-    h0 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1"), epoch).check_tile(tr, prover.open(epoch, 0))
-    assert not h0.ok and h0.reason == "activation opening"
-
-
-def test_h2_is_h1_with_frame_b3s_trees():
-    """Hashing format -h2 (P1 at s = 256): h1's message digests and leaf, and every tree frame-b3s."""
-    s, h1 = get("pearl-c-h100-v1-h2"), get("pearl-c-h100-v1-h1")
-    assert s.name == "pearl-c-h100-v1-h2" and s.commitment_hash == "blake3-s256" and dict(s.certificate.parameters)["hashing"] == "h2"
-    assert s.certificate.claims == h1.certificate.claims and "cr/blake3" in s.certificate.claims
-    rng = random.Random(5)
-    grid = lambda: [[rng.getrandbits(32) for _ in range(64)] for _ in range(4)]  # noqa: E731
-    checked = C.Checked(grid(), grid())
-    assert C.leaf(checked, "h2") == C.leaf(checked, "h1")
-    msg = bytes(range(256))
-    assert C.message_digest(msg, "h2") == C.message_digest(msg, "h1")
-
-
-def test_h2_lifecycle_commits_with_frame_b3s():
-    from verity.protocols.accounting.work.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload, activation_binding, commit_rows, weight_binding
-
-    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h2"), 128
-    rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
-    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
-    prover = Prover(s, {9: rows_b})
-    assert prover.weight_roots[9] == commit_rows(weight_binding(9), -2, rows_b, "blake3-s256").commitment.root
-    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
-    tr = prover.prove(epoch, {3: rows_a})
-    root_a = commit_rows(activation_binding(epoch.salt, 3), 3, rows_a, "blake3-s256").commitment.root
-    assert tr.activation_roots[0] == root_a != commit_rows(activation_binding(epoch.salt, 3), 3, rows_a, "blake3").commitment.root
-    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
-    h1 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1"), epoch).check_tile(tr, prover.open(epoch, 0))
-    assert not h1.ok and h1.reason == "activation opening"
-
-
-def test_h3_draws_each_rows_e_a_from_its_own_leaf():
-    """Hashing format -h3: row i's E_A is line 0 of `row_seed` over row i's leaf at level 0 of A's frame-b3s tree (as
-    `b3_seeds` reads it), so it moves with that row's bytes and position alone and not with root_A, which keys only the
-    tickets.  B's side, seed_B and the digests are -h2's."""
-    from verity.primitives.commitments.merkle import tree_levels
-    from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, activation_binding, commit_rows
-
-    s, h2 = (C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing=h) for h in ("h3", "h2"))
-    assert s.name == "pearl-c-h100-v1-h3" and s.commitment_hash == "blake3-s256" and s.digest_keys == C.H1_KEYS
-    assert s.certificate.claims == h2.certificate.claims and dict(s.certificate.parameters)["hashing"] == "h3"
-    ctx, k = CV.ctx_of("h3-rows", (16, 128, 16), 3, 9), 128
-    a, b = CV.rows_f32("h3-rows", "A", 16, k), CV.rows_f32("h3-rows", "B", 16, k)
-    tile, noise = Tile(tuple(range(16)), tuple(range(16))), s.noise(ctx)
-    assert noise == h2.noise(ctx)
-    tree = commit_rows(activation_binding(ctx.salt, 3), 3, a, "blake3-s256")
-    leaves = [tree.domain.leaf(i, i, ROW_SCHEMA, r) for i, r in enumerate(a)]
-    assert tree_levels(tree.domain, leaves)[-1][0] == tree.commitment.root
-    seeds = s.row_seeds(ctx, a, tile.rows)
-    assert seeds == [C.row_seed(ctx.salt, leaves[i], ctx.root_b, 3, i) for i in range(16)] and len(set(seeds)) == 16
-    ops, ops2 = s.encode(ctx, noise, a, b, tile), h2.encode(ctx, noise, a, b, tile)
-    assert ops.e_a == [P.sample_line(x, 0, 0, 0) for x in seeds] != ops2.e_a
-    assert ops.e_b == ops2.e_b and ops.b.codes == ops2.b.codes and ops.pb == ops2.pb
-
-    other = list(a)
-    other[5] = a[6]
-    e = s.encode(ctx, noise, other, b, tile).e_a
-    assert [i for i in range(16) if e[i] != ops.e_a[i]] == [5] and e[5] != ops.e_a[6]
-    assert h2.encode(ctx, noise, other, b, tile).e_a == ops2.e_a
-    moved = Context(ctx.salt, ctx.matmul, bytes(32), ctx.root_b)
-    assert s.encode(moved, s.noise(moved), a, b, tile).e_a == ops.e_a and s.noise(moved).seed_a != noise.seed_a
-    for ctx2 in (CV.ctx_of("h3-other", (16, 128, 16), 3, 9), Context(ctx.salt, Matmul(4, Shape(16, 128, 16), 9), ctx.root_a, ctx.root_b)):
-        assert s.encode(ctx2, s.noise(ctx2), a, b, tile).e_a[0] != ops.e_a[0]
-
-
-def test_h3_lifecycle_and_an_h2_verifier_refuses_it():
-    """An -h3 transcript is accepted by an -h3 verifier; -h2's verifier opens the same rows (both frame-b3s) and refuses
-    its checked values, which -h2's unit-seeded E_A doesn't give."""
-    from verity.protocols.accounting.work.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
-
-    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), 128
-    rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
-    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
-    prover = Prover(s, {9: rows_b})
-    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
-    tr = prover.prove(epoch, {3: rows_a})
-    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
-    h2 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h2"), epoch).check_tile(tr, prover.open(epoch, 0))
-    assert not h2.ok and h2.reason == "checked values"
-
-
-def test_h3s_is_h3_through_sha512():
-    """Hashing format -h3s: -h3 with SHA-512 in every place BLAKE3 had, each rebuilt here from hashlib: seed_B, seed_A and
+def test_h3_is_sha512_throughout():
+    """Hashing format -h3, SHA-512 throughout, each rebuilt here from hashlib: seed_B, seed_A and
     row i's seed (keyed on its `row_digest`) are H_ℓ, the first 32 bytes of SHA-512 after ℓ's 128-byte block; a line's 32
     bytes are H_"line"(H_"noise-line"(seed) ‖ side ‖ factor ‖ u32 LE line) under Pearl's map to codes; the tile leaf is
     ``sha512/row-seg/v1`` over the tile's messages; a ticket is H_"jackpot"(seed_A ‖ fold).  E_A moves with a row's bytes
@@ -727,14 +591,14 @@ def test_h3s_is_h3_through_sha512():
     from verity.primitives.commitments.rowleaf import sha512_row_seg_digest
     from verity.protocols.accounting.work.pouw.serving import HASH_FORMATS, SchemeId, hash_format
 
-    s, h3 = (C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing=h) for h in ("h3s", "h3"))
-    assert s.name == "pearl-c-h100-v1-h3s" and s.commitment_hash == "hm96-sha512" and s.digest_keys is None
+    s, h0 = (C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing=h) for h in ("h3", "h0"))
+    assert s.name == "pearl-c-h100-v1-h3" and s.commitment_hash == "hm96-sha512"
     assert "cr/sha-512" in s.certificate.claims and not any("blake3" in c for c in s.certificate.claims)
-    assert dict(s.certificate.parameters)["hashing"] == "h3s" and C.ROW_SEEDED == ("h3", "h3s")
-    assert SchemeId.parse("pearl-c-sm120-v1-h3s").hashing == "h3s" and hash_format(s) is HASH_FORMATS["h3s"]
-    assert HASH_FORMATS["h3s"].row_digest == "sha512/row-seg/v1" and HASH_FORMATS["h3"].row_digest is None
-    ctx, k = CV.ctx_of("h3s-rows", (16, 384, 16), 3, 9, wide=True), 384
-    a, b = CV.rows_f32("h3s-rows", "A", 16, k), CV.rows_f32("h3s-rows", "B", 16, k)
+    assert dict(s.certificate.parameters)["hashing"] == "h3" and C.ROW_SEEDED == ("h3",)
+    assert SchemeId.parse("pearl-c-sm120-v1-h3").hashing == "h3" and hash_format(s) is HASH_FORMATS["h3"]
+    assert HASH_FORMATS["h3"].row_digest == "sha512/row-seg/v1"
+    ctx, k = CV.ctx_of("h3-rows", (16, 384, 16), 3, 9, wide=True), 384
+    a, b = CV.rows_f32("h3-rows", "A", 16, k), CV.rows_f32("h3-rows", "B", 16, k)
     tile, noise = Tile(tuple(range(16)), tuple(range(16))), s.noise(ctx)
     H = lambda role, msg: hashlib.sha512(s512_label(role) + msg).digest()[:32]  # noqa: E731
     assert noise.seed_b == H("seed-B", ctx.salt + ctx.root_b) and isinstance(noise.seed_b, C.S512Seed)
@@ -764,7 +628,7 @@ def test_h3s_is_h3_through_sha512():
     assert [i for i in range(16) if e[i] != ops.e_a[i]] == [5] and e[5] != ops.e_a[6]
     moved = Context(ctx.salt, ctx.matmul, bytes(64), ctx.root_b)
     assert s.encode(moved, s.noise(moved), a, b, tile).e_a == ops.e_a and s.noise(moved).seed_a != noise.seed_a
-    assert ops.e_a != h3.encode(ctx, h3.noise(ctx), a, b, tile).e_a
+    assert ops.e_a != h0.encode(ctx, h0.noise(ctx), a, b, tile).e_a
 
 
 def test_hm96_salts_are_chacha20s_stream():
@@ -779,10 +643,10 @@ def test_hm96_salts_are_chacha20s_stream():
     assert hm96_salt(key, 5, 2) == b"".join(chacha20_block(key, c, 5) for c in (6, 7, 8))
 
 
-def test_h3s_lifecycle_commits_hm96_sha512_trees():
-    """An -h3s transcript is accepted by an -h3s verifier.  Every tree is ``frame-v3-sha512`` with hm96-sha512 leaves under
+def test_h3_lifecycle_commits_hm96_sha512_trees():
+    """An -h3 transcript is accepted by an -h3 verifier.  Every tree is ``frame-v3-sha512`` with hm96-sha512 leaves under
     the pinned key and the prover's salts, rebuilt here from core's pieces: A's and B's rows over their ``sha512/row-seg/v1``
-    digests, the tiles over their 64-byte leaves.  A wrong salt, or -h3's verifier (frame-b3s trees), refuses the opening."""
+    digests, the tiles over their 64-byte leaves.  A wrong salt, or h0's verifier (SHA-256 trees), refuses the opening."""
     from dataclasses import replace
 
     from verity.primitives.commitments import CommitmentDomain, hm96
@@ -792,7 +656,7 @@ def test_h3s_lifecycle_commits_hm96_sha512_trees():
                                                               Workload, activation_binding, hm96_salt, rows_domain,
                                                               transcript_domain, weight_binding)
 
-    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3s"), 128
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     key = bytes(range(100, 132))
@@ -816,8 +680,8 @@ def test_h3s_lifecycle_commits_hm96_sha512_trees():
     opening = prover.open(epoch, 0)
     bad = replace(opening, a=(replace(opening.a[0], value=opening.a[0].value[:-1] + b"\0"),) + opening.a[1:])
     assert Verifier(s, epoch).check_tile(tr, bad).reason == "activation opening"
-    h3 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), epoch).check_tile(tr, opening)
-    assert not h3.ok and h3.reason == "activation opening"
+    h0 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1"), epoch).check_tile(tr, opening)
+    assert not h0.ok and h0.reason == "activation opening"
 
 
 def test_v1_domain_rules():

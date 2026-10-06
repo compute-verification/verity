@@ -273,12 +273,12 @@ def test_v_ex_is_a_no_op_on_pearl_c():
     assert W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
 
 
-def test_audit_under_hashing_h1():
-    """The work law's audit is the same under hashing format -h1: its openings verify against frame-b3 roots."""
-    h1 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1")
-    epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h1)
-    records = W.declare(h1, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
-    assert W.audit(h1, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
+def test_audit_under_hashing_h3():
+    """The work law's audit is the same under hashing format -h3: its openings verify against hm96-sha512 roots."""
+    h3 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3")
+    epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h3)
+    records = W.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert W.audit(h3, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
     assert not W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
 
 
@@ -335,15 +335,14 @@ def test_aligned_spike_unit_is_rejected_by_the_cap():
             assert "exceeds the cap" in out.audit.verdicts[0].reason
 
 
-@pytest.mark.parametrize("hashing", ["h3", "h3s"])
-def test_h3_caps_each_credited_row_as_well_as_the_tile(hashing):
-    """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), and -h3s's, whose seeds are keyed on SHA-512 row digests: one A row with
-    the aligned spikes among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under
-    3/4 of the tile's.  -h2's tile rule accepts the tile and -h3's audit refuses it for that row; V-EX gives the row up, and
-    the audit then accepts on the other 31 rows."""
+def test_h3_caps_each_credited_row_as_well_as_the_tile():
+    """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with the aligned spikes
+    among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under 3/4 of the tile's.
+    h0's tile rule accepts the tile and -h3's audit refuses it for that row; V-EX gives the row up, and the audit then
+    accepts on the other 31 rows."""
     k, m, n = 1024, 32, 4
-    h3, h2 = (C.PearlC(k_min=128, tile=(m, n), forming="v1", hashing=h) for h in (hashing, "h2"))
-    assert W.row_cap(h3) and not W.row_cap(h2) and not W.row_cap(S)
+    h3, h0 = (C.PearlC(k_min=128, tile=(m, n), forming="v1", hashing=h) for h in ("h3", "h0"))
+    assert W.row_cap(h3) and not W.row_cap(h0) and not W.row_cap(S)
     rows_a = spiked_rows(k, 1, 100, 300.0) + spiked_rows(k, m - 1, 200, None)
     rows_b = spiked_rows(k, n, 900, 300.0)
     work = Workload((Matmul(0, Shape(m, k, n), 1),))
@@ -355,12 +354,12 @@ def test_h3_caps_each_credited_row_as_well_as_the_tile(hashing):
     assert records == [W.UnitRecord(work.matmuls[0], m, k)]
     tile = h3.tiles(work.matmuls[0].shape)[0]
     ctx = Context(epoch.salt, work.matmuls[0], tr.activation_roots[0], epoch.weight_roots[1])
-    for s in (h3, h2):
+    for s in (h3, h0):
         ops = s.encode(ctx, s.noise(ctx), rows_a, rows_b, tile)
         debit, cap = W._debit_cap(s, records[0], tile, ops, list(range(m)), list(range(n)))
         row = W._debit_cap(s, records[0], tile, ops, [0], list(range(n)))
         assert debit < cap * 3 / 4 and row[0] > 10 * row[1] and row[1] == cap / m
-    assert W.check_opened(h2, records[0], tile, rows_a, rows_b, ops) is None
+    assert W.check_opened(h0, records[0], tile, rows_a, rows_b, ops) is None
     out = W.audit(h3, epoch, prover, tr, splits, records, BEFORE, AFTER, 1)
     assert not out.audit.accepted
     assert out.audit.verdicts[0].reason.startswith("A row 0's replayed debit") and "the row cap" in out.audit.verdicts[0].reason

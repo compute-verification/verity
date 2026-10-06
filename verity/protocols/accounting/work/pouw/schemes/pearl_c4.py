@@ -15,7 +15,7 @@ stats     s = max|x|, ρ = pearl_c's every-8th RMS in its pinned order;  σ = ρ
           β_row = (σ·α)·f32(16/√2346.125);  a_E = ue4m3(β_row)                     (FP32 nearest even, in that order)
 lines     32 uniform E2M1 codes per line: TurboSHAKE128(seed ‖ role ‖ index u32 LE, D = 0x24), 16 bytes, low nibble first.
           E_A (row i, seed_A), F_A and F_B (position t), E_B (row j) from seed_B
-          (-h3: row i's E_A is line 0 of its own seed, `row_seed` over the row's leaf in A's tree; the tickets keep seed_A)
+          (-h3: row i's E_A is line 0 of its own seed, `row_seed` over the row's SHA-512 digest; the tickets keep seed_A)
 atom      D_t = NVF4.step(C = α·x_t, E ‖ 0^32 at scale a_E, F_t ‖ 0^32 at scale 2^-4)    (one k64 atom per element)
 block     nvfp4, 16 along k: s_b = max(ue4m3(amax_b|D| · f32(1/6)), 2^-9), r_b = 1/s_b (FP32 nearest even)
           mxfp4, 32 along k: s_b = 2^⌈log2(amax_b|D| · f32(1/6))⌉ as UE8M0, r_b = 1/s_b (exact)
@@ -115,7 +115,6 @@ from verity.errors import InvalidArtifact
 from verity_catalog.silicon import fp32
 from verity_catalog.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
 
-from ..audit import ROW_SCHEMA, activation_binding, rows_domain
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from . import pearl_c as C
 from . import pearl_c4_c_L as CL
@@ -187,7 +186,8 @@ NVFP4 = Fmt("nvfp4", BLACKWELL_SM120_NVF4, 16, UE4M3_ONE)
 MXFP4 = Fmt("mxfp4", BLACKWELL_SM120_MXF4, 32, UE8M0_ONE)
 FORMATS = {f.name: f for f in (NVFP4, MXFP4)}
 NAMES = {"nvfp4": "pearl-c-nvfp4-v0", "mxfp4": "pearl-c-mxfp4-v0"}
-#: the hashing formats Pearl-C4 implements (`serving.HASH_FORMATS`): h0, and h3 (h2's trees and digests, E_A per row)
+#: the hashing formats Pearl-C4 implements (`serving.HASH_FORMATS`): h0, and h3 (`pearl_c`'s SHA-512 trees, leaf and tickets,
+#: E_A per row from a seed keyed on the row's SHA-512 digest)
 HASHINGS = ("h0", "h3")
 
 
@@ -294,7 +294,8 @@ def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int) -> bytes:
 
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int) -> bytes:
     """-h3's seed of row `row` of unit `unit`, `pearl_c.row_seed`'s layout under Pearl-C4's seed-A label: the one-row
-    unit's seed_A over the row's own leaf in A's tree, at index unit · 2^32 + row, the unit and the row each below 2^32."""
+    unit's seed_A over the row's 64-byte SHA-512 digest `leaf` (`pearl_c.row_digest`), at index unit · 2^32 + row, the unit
+    and the row each below 2^32."""
     if not (0 <= unit < 1 << 32 and 0 <= row < 1 << 32):
         raise ValueError(f"row_seed: unit {unit} and row {row} must each be below 2^32")
     return unit_seed_a(salt, leaf, root_b, unit << 32 | row)
@@ -1112,8 +1113,8 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
 
 class PearlC4:
     """Pearl-C on sm_120's FP4: ``k_min`` = 1024, 64 x 64 tiles and ``n_min`` = 128 (`B_OVF_MIN_N`); smaller bounds make a
-    test instance.  ``hashing`` h3 names the scheme ``…-h3``: `pearl_c`'s -h3 on this scheme, frame-b3s trees, BLAKE3
-    digests and each row of A drawing its E_A line from its own seed (`row_seeds`); h0 is the default."""
+    test instance.  ``hashing`` h3 names the scheme ``…-h3``: `pearl_c`'s -h3 on this scheme, SHA-512 trees, leaf and
+    tickets, and each row of A drawing its E_A line from its own seed (`row_seeds`); h0 is the default."""
 
     tickets = C.PearlC.tickets
     cap = CAP
@@ -1125,7 +1126,7 @@ class PearlC4:
         if hashing not in HASHINGS:
             raise ValueError(f"hashing {hashing!r}: one of {', '.join(HASHINGS)}")
         self.fmt, self.hashing = FORMATS[fmt], hashing
-        self.commitment_hash, self.digest_keys = C.TREE_HASH[hashing], C.digest_keys(hashing)
+        self.commitment_hash = C.TREE_HASH[hashing]
         #: F1′'s evaluation: the rule's own, or a verifier's that charges at least it (staged: `f1_fast`, pending the
         #: assessor's rating of its bounds)
         self.f1 = row_f1 if f1 is None else f1
@@ -1143,7 +1144,7 @@ class PearlC4:
             conjecture="tt-out/fp4-sm120",
             gamma0=None,
             omega=Fraction(1),
-            claims=("tt-out/fp4-sm120", "random-oracle", *(("xof/blake3",) if hashing != "h0" else ()), "cr/blake3",
+            claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", *(("cr/sha-512",) if hashing != "h0" else ()),
                     "cr/sha-256", "device-reproducibility", "beacon-unpredictability"),
             hypotheses=(
                 "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
@@ -1217,12 +1218,10 @@ class PearlC4:
         return C.Noise(unit_seed_a(ctx.salt, ctx.root_a, ctx.root_b, ctx.matmul.index), seed_b(ctx.salt, ctx.root_b))
 
     def row_seeds(self, ctx: Context, a_rows: Sequence[bytes], idx: Sequence[int]) -> list[bytes]:
-        """-h3's seeds of A's rows `idx` (values `a_rows`): `row_seed` over each row's leaf in A's tree, as the prover
-        commits it (`audit.commit_rows` at the unit's activation binding)."""
+        """-h3's seeds of A's rows `idx` (values `a_rows`): `row_seed` over each row's SHA-512 digest (`pearl_c.row_digest`,
+        the inner digest of its hm96 leaf in A's tree)."""
         u = ctx.matmul
-        dom = rows_domain(activation_binding(ctx.salt, u.index), u.index, u.shape.m, self.commitment_hash)
-        return [row_seed(ctx.salt, dom.leaf(dom.positions.rank(i), i, ROW_SCHEMA, r), ctx.root_b, u.index, i)
-                for i, r in zip(idx, a_rows, strict=True)]
+        return [row_seed(ctx.salt, C.row_digest(r), ctx.root_b, u.index, i) for i, r in zip(idx, a_rows, strict=True)]
 
     def _lines_a(self, ctx: Context, noise: C.Noise, a_rows: Sequence[bytes], idx: Sequence[int]) -> list[list[int]] | None:
         """E_A's lines of A's rows `idx` under -h3 (line 0 of each row's seed); None under h0, which draws line i of seed_A."""

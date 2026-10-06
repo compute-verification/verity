@@ -14,10 +14,7 @@
 
 The protocol owns every outer coin (the salt and the draw).  A scheme's noise is its own derivation from the salt and the
 prover's roots, Fiat-Shamir inside the scheme.  Commitments are `verity.primitives.commitments.merkle` trees, framed SHA-256 unless the
-scheme names another frame hash in ``commitment_hash`` (`commitment_hash`): ``"blake3"`` is ``frame-b3``, the tree mode whose
-row leaves stream through BLAKE3's chunk tree, for schemes whose rows must be committed within a decode step, and
-``"blake3-s256"`` is ``frame-b3s``, ``frame-b3`` with each leaf a tree over its value's 256-byte segments (a shallower leaf).
-``"hm96-sha512"`` (`HM96`) is ``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
+scheme names another frame hash in ``commitment_hash`` (`commitment_hash`): ``"hm96-sha512"`` (`HM96`) is ``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
 followed by a 192-byte salt, a row's leaf ``hm96-sha512/row-seg/v1`` over the row's ``sha512/row-seg/v1`` digest and a tile's
 over its 64-byte digest itself; the prover's salts are a ChaCha20 stream under its own key (`hm96_salt`), and an opening's
 value carries its salt, so `opened_value` strips it before the scheme reads the value.

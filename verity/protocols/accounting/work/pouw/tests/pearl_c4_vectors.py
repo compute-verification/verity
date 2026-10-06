@@ -4,8 +4,9 @@ rewrites ``tests/vectors/pearl_c4.json``.  A change to that file is a change to 
 Inputs are derived, not stored: word t of row i of operand ``name`` in case ``c`` is the BF16 value with sign bit b0 >> 7,
 mantissa b0 & 0x7F and exponent −4 + (b1 mod 6), where (b0, b1) are bytes 2t and 2t + 1 of
 SHAKE256("verity/pouw/pearl-c4-vectors/v1", c, name, "words", i).  The context's salt and roots are SHA-256 of their
-labels.  A ``-h3`` case (hashing format h3) reads its h0 twin's inputs (its label without ``-h3``) and adds row 0's seed
-and E_A line and a hash of every row seed (`pearl_c4.row_seed` over each row's frame-b3s leaf)."""
+labels.  A ``-h3`` case (hashing format h3, SHA-512 trees, leaf and tickets) reads its h0 twin's inputs (its label without
+``-h3``), its context's roots are 64 bytes (SHA-512 of their labels), and it adds row 0's seed and E_A line and a hash of
+every row seed (`pearl_c4.row_seed` over each row's SHA-512 digest, `pearl_c.row_digest`)."""
 
 from __future__ import annotations
 
@@ -40,9 +41,10 @@ def rows(case: str, name: str, count: int, k: int) -> list[bytes]:
     return [F.bf16_row(row_codes(case, name, i, k)) for i in range(count)]
 
 
-def ctx_of(case: str, shape: tuple[int, int, int], index: int, weight: int) -> Context:
+def ctx_of(case: str, shape: tuple[int, int, int], index: int, weight: int, wide: bool = False) -> Context:
     h = lambda s: hashlib.sha256(f"{s}/{case}".encode()).digest()  # noqa: E731
-    return Context(h("salt"), Matmul(index, Shape(*shape), weight), h("root_a"), h("root_b"))
+    r = (lambda s: hashlib.sha512(f"{s}/{case}".encode()).digest()) if wide else h  # noqa: E731
+    return Context(h("salt"), Matmul(index, Shape(*shape), weight), r("root_a"), r("root_b"))
 
 
 def scheme(fmt: str, test: bool, hashing: str = "h0") -> F.PearlC4:
@@ -63,7 +65,7 @@ def halves(grid: list[list[int]]) -> bytes:
 
 def case_vector(case, fmt, shape, index, weight, test, hashing="h0") -> dict:
     base = case.removesuffix("-h3")
-    s, ctx = scheme(fmt, test, hashing), ctx_of(base, shape, index, weight)
+    s, ctx = scheme(fmt, test, hashing), ctx_of(base, shape, index, weight, hashing == "h3")
     s.check(ctx.matmul)
     tile = s.tiles(ctx.matmul.shape)[0]
     a, b = rows(base, "A", len(tile.rows), shape[1]), rows(base, "B", len(tile.cols), shape[1])

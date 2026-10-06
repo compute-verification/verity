@@ -1,5 +1,5 @@
-"""``pearl-c-h100-v0``, ``pearl-c-h100-v1`` and ``pearl-c-sm120-v1``: Pearl-C, Pearl's FP8 product with its noisy clean-up
-checked, on the H100 and on the RTX PRO 6000 Blackwell.
+"""``pearl-c-h100-v0``, ``pearl-c-h100-v1``, ``pearl-c-sm120-v1`` and ``pearl-c-sm120-v1-h3``: Pearl-C, Pearl's FP8
+product with its noisy clean-up checked, on the H100 and on the RTX PRO 6000 Blackwell.
 
 The design is the cheap-binding lane's (research store ``docs/pouw/cheap-binding.md`` §1): Pearl's H100 product and its
 output tickets, plus #311's noisy clean-up ("peel") pinned bit for bit, so that the useful output U is a checked value
@@ -13,9 +13,9 @@ reset-and-promote replay) are `pearl_kw`'s ports of pearl-research-labs/pearl PR
 seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE)
           H_ℓ(x) = BLAKE3(x; key = BLAKE3(ℓ)).  E_A lines by seed_A (row i); E_B lines and the bases F_A, F_B (lines
           0 … k−1) by seed_B: Pearl's line rule (`pearl_kw.sample_line`), so F_A, E_B, F_B are per job (weight)
-          (-h3: row i's E_A is line 0 of its own seed, `row_seed` over the row's leaf in A's tree; the tickets keep seed_A;
-          -h3s: -h3 through SHA-512, every H_ℓ `s512` (SHA-512 after a 128-byte label block, 32 bytes kept), the line rule
-          `sample_line`'s 32 bytes of H_"line" for BLAKE3's, and row i's seed keyed on its `sha512/row-seg/v1` digest)
+          (-h3, SHA-512 throughout: every H_ℓ `s512` (SHA-512 after a 128-byte label block, 32 bytes kept), the line rule
+          `sample_line`'s 32 bytes of H_"line" for BLAKE3's, and row i's E_A line 0 of its own seed, `row_seed` keyed on
+          the row's `sha512/row-seg/v1` digest; the tickets keep seed_A)
 forming  v0, #311's as ported (`pearl_kw`): FP10 rows -> BF16 X, exact norms, α, β, N = E·Fᵀ on the H100 atom,
           X̃ = fp8(clamp(fma(α, X, β·N), ±448));  A′ = X̃_A, B̃ = X̃_B
 chain     C̃_ij = the H100 replay of A′_i · B̃_j: every 128 products a fresh accumulator at +0 chains four
@@ -27,16 +27,12 @@ peel      P_A,i = [bf16(β_A,i · E_A,ip) ‖ RNE_bf16(AF_ip)],   P_B,j = [RNE_b
           U_ij = C̃_ij, then four HOPPER_BF16_WGMMA_K16 steps over P_A,i · P_B,j (k16 slices in order)
 leaf      for each tile row r and each 32-column chunk h: d_rh = TurboSHAKE128(le32 C̃ of the chunk ‖ le32 U of the chunk,
           D = 0x21); leaf = TurboSHAKE128(d_00 ‖ d_01 ‖ d_10 ‖ … , D = 0x22), 32 bytes each
-          (hashing format -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf") in their places;
-          -h3s: the leaf is `sha512/row-seg/v1` over the messages themselves, 64 bytes)
+          (-h3: the leaf is `sha512/row-seg/v1` over the messages themselves, 64 bytes)
 trees     A's rows, B's rows and the tile leaves: `verity.protocols.accounting.work.pouw.audit`'s framed SHA-256 Merkle trees
-          (-h1: `frame-b3`, BLAKE3 keyed by the domain id, each row leaf through BLAKE3's chunk tree;
-          -h2: `frame-b3s`, -h1 with each leaf a tree over its value's 256-byte segments, each segment's key binding its
-          position, the value's length and the leaf's rank, position and schema;
-          -h3s: `audit.HM96`, frame-v3-sha512 with hm96-sha512 leaves over each row's `sha512/row-seg/v1` digest and each
+          (-h3: `audit.HM96`, frame-v3-sha512 with hm96-sha512 leaves over each row's `sha512/row-seg/v1` digest and each
           tile's leaf, salted by the prover)
 tickets   Pearl's lottery over C̃: per 16 x 16 subtile, the 16-lane fold (`pearl_kw.extract`) hashed as H_"jackpot"(z; seed_A)
-          (-h3s: `s512`'s H_"jackpot"(seed_A ‖ z))
+          (-h3: `s512`'s H_"jackpot"(seed_A ‖ z))
 useful    U_ij / (α_A,i · α_B,j), the model's own unscale (glue)
 ~~~
 
@@ -88,7 +84,6 @@ from verity.primitives.crypto.blake3 import blake3, keyed
 from verity.primitives.crypto.turboshake import turboshake128
 from verity_catalog.silicon import fp32
 
-from ..audit import ROW_SCHEMA, activation_binding, rows_domain
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from ..serving import HASH_FORMATS
 from . import pearl_kw as P
@@ -105,28 +100,14 @@ CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
 LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
 #: The hashing formats this scheme implements, of the one table (`verity.protocols.accounting.work.pouw.serving.HASH_FORMATS`): h0 (TurboSHAKE128
-#: messages and leaf, SHA-256 trees), h1 (BLAKE3 throughout, for decode latency) and h2 (h1's messages and leaf; every tree
-#: `frame-b3s`, 256-byte segments under each leaf, for a shallower A commitment), h3 (h2, with E_A seeded per row from the
-#: row's leaf) and h3s (h3 through SHA-512: `s512` seeds, lines and tickets, a `sha512/row-seg/v1` tile leaf and `audit.HM96`
-#: trees, each row's seed keyed on its row digest)
-HASHINGS = ("h0", "h1", "h2", "h3", "h3s")
+#: messages and leaf, SHA-256 trees) and h3 (SHA-512 throughout: `s512` seeds, lines and tickets, a `sha512/row-seg/v1` tile
+#: leaf and `audit.HM96` trees, each row of A seeding its own E_A line from its row digest).  The BLAKE3 formats h1, h2 and
+#: BLAKE3 -h3 are in ``archive/pouw-blake3/`` (one hash, SHA-512: Daniel, 2026-10-06).
+HASHINGS = ("h0", "h3")
 #: the formats whose rows seed their own E_A lines (`HashFormat.seed_a` ``row``)
 ROW_SEEDED = tuple(h for h in HASHINGS if HASH_FORMATS[h].seed_a == "row")
 #: each hashing format's frame hash for the row and transcript trees (`verity.primitives.commitments.merkle`), from the one table
 TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
-#: each hashing format's BLAKE3 keys of the message digests and the tile leaf, from the one table, built once (h2 shares h1's
-#: labels, so their keys are equal)
-_DIGEST_KEYS = {h: None if HASH_FORMATS[h].message_key() is None else
-                {"message": HASH_FORMATS[h].message_key(), "leaf": HASH_FORMATS[h].leaf_key()} for h in HASHINGS}
-H1_KEYS = _DIGEST_KEYS["h1"]
-
-
-def digest_keys(hashing: str) -> dict[str, bytes] | None:
-    """A hashing format's BLAKE3 keys of the message digests and the tile leaf (``message``, ``leaf``), from the one table:
-    h1's labels under h1, h2 and h3, none under h0 (TurboSHAKE128) and h3s (SHA-512, `s512` and `leaf`)."""
-    if hashing not in HASHINGS:
-        raise ValueError(f"hashing {hashing!r}: one of {', '.join(HASHINGS)}")
-    return _DIGEST_KEYS[hashing]
 
 
 #: Forming v0 (#311 as ported) per operand element: the red team's 240–320 for #311's port (X-PC-2), at the upper end
@@ -144,29 +125,30 @@ def _labelled(message: bytes, role: str) -> bytes:
     return keyed(blake3(LABELS[role]), message)
 
 
-#: -h3s's labels: H_ℓ(x) = SHA-512(``pearl-c/h3s/<ℓ>\0`` zero-padded to one 128-byte block ‖ x), its first 32 bytes
+#: -h3's labels: H_ℓ(x) = SHA-512(``pearl-c/h3s/<ℓ>\0`` zero-padded to one 128-byte block ‖ x), its first 32 bytes.  The
+#: ``h3s`` in the label bytes is a domain tag, kept from the format's first name, so the pinned digests are unchanged
 S512_ROLES = ("seed-A", "seed-B", "noise-line", "line", "jackpot")
 S512_LABELS = {r: f"pearl-c/h3s/{r}\0".encode().ljust(128, b"\0") for r in S512_ROLES}
 
 
 def s512(role: str, message: bytes) -> bytes:
-    """-h3s's H_ℓ (`S512_LABELS`): the first 32 bytes of SHA-512 over the label's block and the message."""
+    """-h3's H_ℓ (`S512_LABELS`): the first 32 bytes of SHA-512 over the label's block and the message."""
     return hashlib.sha512(S512_LABELS[role] + message).digest()[:32]
 
 
 class S512Seed(bytes):
-    """A seed of -h3s: its noise lines are drawn by `sample_line`'s SHA-512 rule, not Pearl's BLAKE3 one."""
+    """A seed of -h3: its noise lines are drawn by `sample_line`'s SHA-512 rule, not Pearl's BLAKE3 one."""
 
 
 def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int, hashing: str = "h0") -> bytes:
-    """A unit's seed_A: H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE); under -h3s H_"seed-A" (`s512`)."""
+    """A unit's seed_A: H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE); under -h3 H_"seed-A" (`s512`)."""
     msg = salt + root_a + root_b + index.to_bytes(8, "little")
-    return S512Seed(s512("seed-A", msg)) if hashing == "h3s" else _labelled(msg, "seed-A")
+    return S512Seed(s512("seed-A", msg)) if hashing == "h3" else _labelled(msg, "seed-A")
 
 
 def seed_b(salt: bytes, root_b: bytes, hashing: str = "h0") -> bytes:
-    """An epoch weight's seed_B: H_"pearl-c/v0/seed-B"(salt ‖ root_B); under -h3s H_"seed-B" (`s512`)."""
-    return S512Seed(s512("seed-B", salt + root_b)) if hashing == "h3s" else _labelled(salt + root_b, "seed-B")
+    """An epoch weight's seed_B: H_"pearl-c/v0/seed-B"(salt ‖ root_B); under -h3 H_"seed-B" (`s512`)."""
+    return S512Seed(s512("seed-B", salt + root_b)) if hashing == "h3" else _labelled(salt + root_b, "seed-B")
 
 
 def line_key(seed: bytes) -> bytes:
@@ -176,17 +158,16 @@ def line_key(seed: bytes) -> bytes:
 
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int, hashing: str = "h3") -> bytes:
     """-h3's seed of row `row` of unit `unit`, whose E_A line is drawn from it alone: the one-row unit's seed_A over the
-    row's own leaf in A's tree, H_"pearl-c/v0/seed-A"(salt ‖ leaf ‖ root_B ‖ (unit · 2^32 + row) u64 LE).  `hash.cuh`'s
-    `b3_seeds` at mode 1 computes it, with the unit index and the row each below 2^32.  Under -h3s `leaf` is the row's
-    64-byte SHA-512 digest (`row_digest`) and the hash -h3s's H_"seed-A" (`s512`, 168 bytes after the label's block with
-    root_B's 64), which `s512_seeds` computes."""
+    row's 64-byte SHA-512 digest `leaf` (`row_digest`), H_"seed-A"(salt ‖ leaf ‖ root_B ‖ (unit · 2^32 + row) u64 LE)
+    (`s512`, 168 bytes after the label's block with root_B's 64), with the unit index and the row each below 2^32.
+    `hash_h3.cuh`'s `s512_seeds` computes it."""
     if not (0 <= unit < 1 << 32 and 0 <= row < 1 << 32):
         raise ValueError(f"row_seed: unit {unit} and row {row} must each be below 2^32")
     return unit_seed_a(salt, leaf, root_b, unit << 32 | row, hashing)
 
 
 def row_digest(row: bytes) -> bytes:
-    """-h3s's key of a row's seed: ``sha512/row-seg/v1`` over the row's bytes (its FP32 words little-endian, the row A's
+    """-h3's key of a row's seed: ``sha512/row-seg/v1`` over the row's bytes (its FP32 words little-endian, the row A's
     tree commits), `rowleaf.sha512_row_seg_digest`: 1 KiB segments hashed on their own, then their digests.  It is also
     the inner digest x of the row's hm96 leaf in A's tree (`audit.Hm96Domain`)."""
     return sha512_row_seg_digest(row, 8 * len(row))
@@ -430,11 +411,9 @@ def form_v1(x_rows: Sequence[Sequence[int]], e_rows: Sequence[Sequence[int]], f:
     return out
 
 
-def message_digest(msg: bytes, hashing: str = "h0") -> bytes:
-    """One (row, 32-column chunk) message's digest: TurboSHAKE128 (D = 0x21), or BLAKE3 keyed by the format's message key
-    (`digest_keys`)."""
-    keys = digest_keys(hashing)
-    return keyed(keys["message"], msg) if keys else turboshake128(msg, D_MESSAGE, 32)
+def message_digest(msg: bytes) -> bytes:
+    """One (row, 32-column chunk) message's digest under h0: TurboSHAKE128 (D = 0x21)."""
+    return turboshake128(msg, D_MESSAGE, 32)
 
 
 def messages(checked: Checked) -> list[bytes]:
@@ -448,26 +427,20 @@ def messages(checked: Checked) -> list[bytes]:
 
 
 def leaf(checked: Checked, hashing: str = "h0") -> bytes:
-    """The tile leaf over the per-(row, 32-column chunk) message digests, row-major, chunks in order: TurboSHAKE128
-    (D = 0x22), or BLAKE3 keyed by the format's leaf key (`digest_keys`; a tree over 1 KB chunks of digests).  Under -h3s
-    the 64-byte ``sha512/row-seg/v1`` digest of the messages themselves, so each 1 KiB segment's digest (four 256-byte
-    messages of a 64-column tile) takes the message digests' place."""
-    if hashing == "h3s":
+    """The tile leaf.  Under h0, TurboSHAKE128 (D = 0x22) over the per-(row, 32-column chunk) message digests, row-major,
+    chunks in order.  Under -h3, the 64-byte ``sha512/row-seg/v1`` digest of the messages themselves, so each 1 KiB
+    segment's digest (four 256-byte messages of a 64-column tile) takes the message digests' place."""
+    if hashing == "h3":
         joined = b"".join(messages(checked))
         return sha512_row_seg_digest(joined, 8 * len(joined))
-    digests = [message_digest(msg, hashing) for msg in messages(checked)]
-    joined, keys = b"".join(digests), digest_keys(hashing)
-    return keyed(keys["leaf"], joined) if keys else turboshake128(joined, D_LEAF, 32)
+    return turboshake128(b"".join(message_digest(msg) for msg in messages(checked)), D_LEAF, 32)
 
 
 class PearlC:
     """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain) and 64 x 64 tiles;
-    smaller bounds make a test instance.  ``hashing`` names the scheme ``…-<hashing>``: h1 commits with BLAKE3 throughout
-    (`commitment_hash`, `leaf`); h2 keeps h1's digests and leaf and makes every tree `frame-b3s`; h3 is h2 with each row of A
-    drawing its E_A line from its own seed (`row_seeds`), the work law checking the cap per row too; h3s is h3 with SHA-512
-    in every place BLAKE3 had (the module docstring), each row's seed keyed on its SHA-512 row digest (`row_digest`) instead
-    of its leaf.  The tree hash is
-    `TREE_HASH[hashing]` and the digests' keys `digest_keys(hashing)`, both on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
+    smaller bounds make a test instance.  ``hashing`` h3 names the scheme ``…-h3``: SHA-512 throughout (the module
+    docstring), each row of A drawing its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
+    `row_digest`), the work law checking the cap per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
 
@@ -478,8 +451,7 @@ class PearlC:
         if forming == "v0" and device != H100:
             raise ValueError(f"forming v0 is #311's H100 port; {device.name} takes v1")
         if hashing not in HASHINGS:
-            raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256), h1 (BLAKE3), h2 (h1 with frame-b3s trees) "
-                             "h3 (h2 with per-row seeds) or h3s (h3 keyed on SHA-512 row digests)")
+            raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256) or h3 (SHA-512, per-row seeds)")
         prices = prices or device.prices
         if forming == "v0" and prices != H100_PRICES:
             raise ValueError(f"forming v0 is #311's H100 port, priced on the H100 only, not {prices.device}")
@@ -488,7 +460,7 @@ class PearlC:
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
         #: ρ, the device record's: the tile rule's debit cap and the credit's (1 − ρ) (`pearl_c_work`)
         self.cap = device.cap
-        self.commitment_hash, self.digest_keys = TREE_HASH[hashing], digest_keys(hashing)
+        self.commitment_hash = TREE_HASH[hashing]
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
         allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
                      "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
@@ -514,9 +486,7 @@ class PearlC:
             gamma0=None,
             omega=Fraction(1),
             claims=("tt-out", "random-oracle", "cr/blake3", "device-reproducibility", "beacon-unpredictability") if hashing == "h0"
-            else ("tt-out", "random-oracle", "cr/sha-512", "cr/sha-256", "device-reproducibility", "beacon-unpredictability")
-            if hashing == "h3s" else ("tt-out", "random-oracle", "xof/blake3", "cr/blake3", "cr/sha-256", "device-reproducibility",
-                                      "beacon-unpredictability"),
+            else ("tt-out", "random-oracle", "cr/sha-512", "cr/sha-256", "device-reproducibility", "beacon-unpredictability"),
             theorems=("Pouw.SecurityProofs.WorkWeightedSampling",),
             hypotheses=hardware,
             allowances=(allowance, "the unscale is glue outside the checked values"),
@@ -581,15 +551,10 @@ class PearlC:
                      seed_b(ctx.salt, ctx.root_b, self.hashing))
 
     def row_seeds(self, ctx: Context, a_rows: Sequence[bytes], idx: Sequence[int]) -> list[bytes]:
-        """-h3's seeds of A's rows `idx` (values `a_rows`): `row_seed` over each row's leaf in A's tree, as the prover
-        commits it (`audit.commit_rows` at the unit's activation binding) and `b3_seeds` reads it from the tree's level 0.
-        -h3s's: `row_seed` over each row's `row_digest`, the inner digest of its hm96 leaf, which needs no salt."""
+        """-h3's seeds of A's rows `idx` (values `a_rows`): `row_seed` over each row's `row_digest`, the inner digest of its
+        hm96 leaf in A's tree, which needs no salt."""
         u = ctx.matmul
-        if self.hashing == "h3s":
-            return [row_seed(ctx.salt, row_digest(r), ctx.root_b, u.index, i, "h3s") for i, r in zip(idx, a_rows, strict=True)]
-        dom = rows_domain(activation_binding(ctx.salt, u.index), u.index, u.shape.m, self.commitment_hash)
-        return [row_seed(ctx.salt, dom.leaf(dom.positions.rank(i), i, ROW_SCHEMA, r), ctx.root_b, u.index, i)
-                for i, r in zip(idx, a_rows, strict=True)]
+        return [row_seed(ctx.salt, row_digest(r), ctx.root_b, u.index, i, self.hashing) for i, r in zip(idx, a_rows, strict=True)]
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], side: int, seed_e: bytes, seed_b: bytes, k: int,
               e: list[list[int]] | None = None) -> tuple[P.Built | Formed, list[list[int]]]:
@@ -634,14 +599,14 @@ class PearlC:
         return leaf(checked, self.hashing)
 
     def tickets(self, noise: Noise, checked: Checked) -> list[bytes]:
-        """Pearl's lottery tickets over C̃: one per 16 x 16 subtile, row-major, H_"jackpot"(fold; seed_A); under -h3s
+        """Pearl's lottery tickets over C̃: one per 16 x 16 subtile, row-major, H_"jackpot"(fold; seed_A); under -h3
         `s512`'s H_"jackpot"(seed_A ‖ fold)."""
         out = []
         for i in range(0, len(checked.c), P.TILE):
             for j in range(0, len(checked.c[0]), P.TILE):
                 sub = [[P.f32_of_bits(w) for w in row[j:j + P.TILE]] for row in checked.c[i:i + P.TILE]]
                 fold = P.extract(sub)
-                out.append(s512("jackpot", noise.seed_a + fold) if self.hashing == "h3s"
+                out.append(s512("jackpot", noise.seed_a + fold) if self.hashing == "h3"
                            else P.hash_labelled(fold, "jackpot", noise.seed_a))
         return out
 
