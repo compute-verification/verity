@@ -111,6 +111,12 @@ impl LeafSalts {
         LeafSalts { key: self.key.clone(), next: level0 + 1, level0 }
     }
 
+    /// A copy of these salts at their next id: the gate's shadow opening expands the trees the device takes from here next,
+    /// without taking their ids from it.
+    pub fn fork(&self) -> LeafSalts {
+        LeafSalts { key: self.key.clone(), next: self.next, level0: self.level0 }
+    }
+
     /// The salt key, for the device to expand; it stays in memory only.
     pub fn key(&self) -> &[u8; 32] {
         &self.key
