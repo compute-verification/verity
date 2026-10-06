@@ -116,7 +116,7 @@ theorem equivPhi_apply (a : F256) : equivPhi a = phi a := rfl
 
 /-! ### `Y^2 + Y + x⁻¹` is irreducible -/
 
-instance : CharP GF128 2 := (CharP.charP_iff_prime_eq_zero Nat.prime_two).mpr (by exact_mod_cast GF128.two_eq_zero)
+instance instCharPGF128OfNatNat : CharP GF128 2 := (CharP.charP_iff_prime_eq_zero Nat.prime_two).mpr (by exact_mod_cast GF128.two_eq_zero)
 
 theorem GF128.pow_eq (a : F128) (n : ℕ) : GF128.of a ^ n = equivAdj.symm (toAdj a ^ n) := rfl
 
@@ -185,12 +185,12 @@ theorem Q_irreducible : Irreducible Q := by
   rw [natDegree_eq_of_degree_eq_some Q_degree]
   decide
 
-instance : Fact (Irreducible Q) := ⟨Q_irreducible⟩
+instance instFactIrreduciblePolynomialKQ : Fact (Irreducible Q) := ⟨Q_irreducible⟩
 
 /-- GF(2^256): the field GF128[Y]/(Y^2 + Y + x⁻¹) on the executable's representation. -/
 def GF256 := F256
 
-noncomputable instance : Field GF256 := equivPhi.field
+noncomputable instance instFieldGF256 : Field GF256 := equivPhi.field
 
 namespace GF256
 
