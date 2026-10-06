@@ -34,7 +34,7 @@ unshare --user --map-root-user --pid --fork --mount --net true 2> /dev/null \
 
 # 1. the trusted tree, before any submission code runs
 sha256sum --quiet -c TRUSTED.sha256 >&2 || fatal "trusted files differ from TRUSTED.sha256"
-lake build Pous.Protocol Pous.Assumptions Pous.Guarantees Pous.SecurityProofs.Sanity \
+lake build Definitions.Pous Specs.Pous.Assumptions Specs.Pous.Guarantees Proofs.Pous.Sanity \
   Pous.SecurityProofs.Accounting.Numbers pous-grader >&2 || fatal "the trusted layer or the grader does not build"
 grader=$root/.lake/build/bin/pous-grader
 lean=$(elan which lean) || fatal "no lean for $(cat lean-toolchain)"
