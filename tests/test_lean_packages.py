@@ -134,7 +134,7 @@ def test_proofs_require_the_security_package():
 
 
 def test_code_never_requires_the_security_analysis():
-    """Code (C-Flock's verifier, the PoUS grader, the warden's program) stays with its component and never imports
+    """Code (C-Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
     `verity/Security/`: the analysis reads the code, never the reverse (Daniel's layout ruling of Oct 5)."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
     assert code, "no code packages outside verity/Security"
