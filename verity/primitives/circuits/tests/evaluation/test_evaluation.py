@@ -1,6 +1,6 @@
 """`verity.primitives.circuits.evaluation`: the reference, `evaluate_batch`, the kernel registry and `self_check`.
 
-Every registered kernel is self-checked here against the plain-integer reference on seeded random instances (the test
+Every registered kernel is self-checked here against the plain-integer reference on seeded random inputs (the test
 fails if a kernel is registered without being listed), and the tensor-core kernels also replay the hardware captures the
 scalar models are pinned to (A100 / RTX 4090 / H100 special-value records, RTX 5090 NVFP4 vectors, RTX 4090 GEMM
 coordinates) through `evaluate_batch`.

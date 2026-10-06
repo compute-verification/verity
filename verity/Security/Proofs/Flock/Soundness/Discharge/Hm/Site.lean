@@ -59,7 +59,7 @@ theorem saltCol_lt {g p j t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hj : 
   unfold saltCol
   omega
 
-/-- The `hm96` net's slots per VU are a power of two, as `Layout.bcAddr` reads them. -/
+/-- The `hm96` net's slots per template instance are a power of two, as `Layout.bcAddr` reads them. -/
 theorem perVu_hm_pow2 : c.perVu.getD c.hmNet 0 = 2 ^ (c.perVu.getD c.hmNet 1).log2 := by
   have h0 := R.perVu_hm
   have hlt : c.hmNet < c.perVu.size := by
@@ -128,9 +128,9 @@ theorem bytesAt_site (a : Placed.Accepted T) (z : Witness T.m) (o : Fin (2 ^ T.n
   ofFn_site a z o N col hcol
 
 /-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement whose unit returns the
-outputs and whose rows are `sha512/row/v1` rows (`hv1`), at block `o`, VU `g` and row port `p`, the 128 bytes at the
-`hm96` slot's output (`bcCol`) are the commit string of the row prefix and the `2 · words` bytes at the message columns
-(`Typed.msgCol`), under the 192 bytes at `saltCol`. -/
+outputs and whose rows are `sha512/row/v1` rows (`hv1`), at block `o`, template instance `g` and row port `p`, the 128
+bytes at the `hm96` slot's output (`bcCol`) are the commit string of the row prefix and the `2 · words` bytes at the
+message columns (`Typed.msgCol`), under the 192 bytes at `saltCol`. -/
 theorem bc_site_col (a : Placed.Accepted T) (ho : a.st.c.outNet = a.st.c.unitNet)
     (hv1 : ∀ p ∈ a.st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)

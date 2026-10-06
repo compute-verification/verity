@@ -3,11 +3,11 @@
 Shared tooling for executing, observing, and coordinating computational work
 during development. One installable package, one CLI (`research`), stdlib
 only. It runs commands and records what happened; it imports nothing from
-Verity's `packages/` (enforced by `tests/test_cli.py::test_no_packages_import`).
+Verity's packages (enforced by `tests/test_cli.py::test_no_packages_import`).
 
 The user-facing procedure (when to record a run, how to find one, how to hand
-off) is the repo-level skill at `.agents/skills/research/SKILL.md`, once it
-exists. This file is for people changing the tool.
+off) will be a repo-level skill, once it exists. This file is for people changing
+the tool.
 
 ## Layout and provenance
 
@@ -30,7 +30,7 @@ tests/              pure-Python; the machine side of --on is exercised locally (
 tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
 
-`telemetry/` and `pods/` were promoted from `veritor` `zk/campaign/` at
+The `telemetry` and `pods` packages were promoted from `veritor` `zk/campaign/` at
 commit `df7fbea3d` (branch `lane/r17-mprof`, 2026-09-21) and have since been
 edited here like the rest of the package.
 
@@ -105,7 +105,7 @@ research merge --canary [--tool check] [--json]                    # the gates' 
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
-research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync [--dry-run]   # Slack (slack.py, below)
+research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
 
 After a history rewrite, an accepted `commit-map/v1` (labelled `commit_map=accepted`) lets an attempt of an old commit count for
@@ -153,9 +153,9 @@ regression's manifest rebuilds, which label the landing's check attempt.
 label alone lands nothing; ask the train runner on Slack as well until the queue lands a full train.
 
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
-fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (draft state is ignored),
+fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
-ready PR`, a `ready` label on `pr:{n}@{head}`), and has the grants the rules file
+ready PR`, a `ready` label on `pr:{n}@{head}`, by hand for a train member), and has the grants the rules file
 (`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}`, or on an older head it only
 restacks or merges `main` into (`carry`). The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
@@ -185,7 +185,7 @@ root = "/workspace/research"
 python = "python3"
 ~~~
 
-The pod registry (`pods/registry.py`) is the same table as one file per machine,
+The pod registry (`src/research/pods/registry.py`) is the same table as one file per machine,
 `machines.d/<name>.toml` in the notes repo, so creating a pod never means
 hand-merging a shared file: `research pods create --name N --max-hours H ... --register
 --project P`, or `research pods register N --pod-id ID --project P` for an
@@ -203,15 +203,15 @@ exit 2.
 A machine that isn't a RunPod pod is `provider = "ssh"`: `host`, and optionally `port` (22), `user` (root) and
 `rate_usd_per_hour` (the attempts' cost rate), reached with the same research key. `research pods register NAME --host ADDR
 --user U --rate R --project P` writes it, refusing a host where `hostname` doesn't answer over ssh; `research pods ssh NAME`
-reaches it. The one such machine is the Nebius server `vy-nebius-1` (`pods/nebius/`): `launch.sh` brings it up (`--dry-run`
+reaches it. The one such machine is the Nebius server `vy-nebius-1` (`src/research/pods/nebius/`): `launch.sh` brings it up (`--dry-run`
 needs no credentials), `teardown.sh` stops or deletes it, `check.py` is its bootstrap check, `prefetch.py` fills its weight
 cache from `weights.tsv`, and its lease is `sh/lease.sh` with `LEASE_MACHINE_ID` and a stop command in place of RunPod's key.
 Its runs share its GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: one flock per GPU, `CUDA_VISIBLE_DEVICES` set).
 
-What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `pods/nebius/deploy.toml`,
+What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `src/research/pods/nebius/deploy.toml`,
 each with its repository file and owner (a Slack handle), and goes there only through `research deploy install NODE --by WHO
 [PATH ...] --apply` (else a dry run) from a pushed commit (`main`, or a PR's head for a hotfix). Each loop is a systemd unit
-(`pods/nebius/units/`, settings in `pods/nebius/env/`), never tmux; `install` restarts a running service whose unit, env file
+(`units/` beside the manifest, settings in `env/`), never tmux; `install` restarts a running service whose unit, env file
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
 `research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process running a file replaced since it started (`restart`), and every file in a managed directory
@@ -326,13 +326,14 @@ evidence is on the machine. Provisioning is a separate, explicit act; `--on` nev
 ### Standing campaign targets: `research keeper`
 
 `research keeper set|stop|status NAME --on NODE` keeps N chunks of a command leased on a Nebius node until a deadline, so no agent
-VM stays awake to relaunch them (`pods/nebius/keeper.py`).
+VM stays awake to relaunch them (`src/research/pods/nebius/keeper.py`).
 
 ### Pods bound themselves: leases, one budget file, one guard
 
 Nothing that bounds spend may depend on an agent VM, which can be suspended at any moment, or on one guard process staying alive.
+The code is in `src/research/pods/`.
 
-- **A lease on every pod** (`pods/lease.py`, `pods/sh/lease.sh`). `research pods create --max-hours H` puts the expiry in the pod's
+- **A lease on every pod** (`lease.py`, `sh/lease.sh`). `research pods create --max-hours H` puts the expiry in the pod's
   environment, then, once sshd answers, arms the lease loop over ssh with the lease file and starts the idle guard (`pod_guard.sh
   daemon`: `--first-idle-min`, default 20, before the pod's first run; `--idle-min 0` arms none, for a pool pod kept up idle);
   `--boot-lease` also runs the loop from a RunPod image's start
@@ -341,11 +342,11 @@ Nothing that bounds spend may depend on an agent VM, which can be suspended at a
   with the pod's own key (GraphQL `podTerminate`). A pod that cannot be armed is terminated by `create`. `research run --on` extends
   the lease to cover the run's `--timeout` plus 15 minutes; `research pods extend TARGET --hours H` extends it by hand (never
   shortens it), `research pods lease TARGET` shows it.
-- **One budget file** (`pods/budgets.py`): `budgets.toml` at the notes repo's root; each line is a prefix with `cap_usd` (total),
+- **One budget file** (`budgets.py`): `budgets.toml` at the notes repo's root; each line is a prefix with `cap_usd` (total),
   `cap_usd_per_day` (any rolling 24 hours; its trip clears as the window moves) or both, `expires`, `max_pod_hours` and `by`. `research pods create` reads the guard's state from its host (one ssh call) and refuses (exit 6) unless
   the guard polled in the last 3 minutes and its budgets have a live, untripped line covering the name with `max_pod_hours` at least
   `--max-hours`.
-- **One guard** (`research pods guard`, `pods/guard.py`; its docstring is the contract) on the control pod re-reads `budgets.toml`
+- **One guard** (`research pods guard`, `guard.py`; its docstring is the contract) on the control pod re-reads `budgets.toml`
   from the notes origin every poll: per-line caps (a tripped line's pods terminated, new creates refused until the cap is raised),
   the account balance floor, each line's max pod age, and project pods no line covers. It never trips on the clock. It never fails
   open: it decides and terminates from memory before it records, every write is best effort, a failed read keeps the last value,
@@ -477,26 +478,27 @@ lane had approved the deletion, so the passes were lost. Here that `rm` is refus
 
 ### Slack
 
-`research slack` (`slack.py`) is the coordination API on Slack: handles ask one another (`ask`), announce to some or all
-(`announce`), and close each thread with 👀/✅/❌ (`pickup`, `done`, `decline`; `roster` for an announcement). The conventions
-(only handle holders are on Slack, who subscribes to what, the wake recipe, the norms) are the `using-slack` skill, and
-`.agents/skills/using-slack/registry.json` names the handles (user groups), the channels and the humans the commands
-check against. It speaks the Web API over `urllib` with `$SLACK_BOT_TOKEN`, never prints a token, and `$SLACK_API_URL` points
-it elsewhere: `tests/test_slack.py` runs every subcommand against a fake Web API on a local port. `--dry-run` sends nothing
-and prints each request. `match` reads the thread (`conversations.replies`) only for a reply that tags no one;
-`verify-author` always fetches the message by channel and ts, since a wake payload is not evidence of its author, and fails
-closed on an allowlist entry without an id. Every handle posts through the one bot under its own username, so the username
-is a label: `verify-author` proves a post is Verity's bot, a listed alerting bot or a named human, not which handle wrote it.
-The same bot can place each reaction on a message only once, which is why an announcement's addressees answer with status
-lines rather than reactions. `groups sync` is a plan until `--apply`, which then writes the groups' ids into the registry.
+`research msg` (`slack.py`; `research slack` is the same command) is the coordination API on Slack: a handle posts with
+`send` (`--to` names lead it and are woken; `--kind announce` for an announcement, `--kind fyi` or `--quiet` for a note that
+needs no reply) and closes a thread it was asked in with `close` (a status line, ✅, or ❌ with `--declined WHY`). The
+conventions (only handle holders are on Slack, who subscribes to what, the norms) are the `using-slack` skill, and
+`.agents/skills/using-slack/registry.json` names the handles (user groups, and the paths each `owns`), the channels and the
+humans the commands check against. It speaks the Web API over `urllib` with `$SLACK_BOT_TOKEN`, never prints a token, and
+`$SLACK_API_URL` points it elsewhere: `tests/test_slack.py` runs every subcommand against a fake Web API on a local port.
+`--dry-run` sends nothing and prints each request. Every handle posts through the one bot under its own username, so the
+username is a label: `verify-author` proves a post is Verity's bot, a listed alerting bot or a named human, not which handle
+wrote it. The same bot can place each reaction on a message only once, which is why an announcement's addressees answer with
+status lines rather than reactions. `groups sync` is a plan until `--apply`, which then writes the groups' ids into the
+registry.
 
-The bot needs `chat:write`, `chat:write.customize` (the handle as the username), `groups:history` (read, match, roster,
-verify-author in private channels; `channels:history` for a public one), `reactions:write` (pickup, done, decline), and for
-`groups sync` `usergroups:read` and `usergroups:write`. It must be a member of both channels (`chat:write.public` does not
-reach private channels), and Cursor's Slack app must be in both too: Cursor delivers the wakes, this bot posts.
+The bot needs `chat:write`, `chat:write.customize` (the handle as the username), `groups:history` (reading threads in private
+channels; `channels:history` for a public one), `reactions:write` (`close`), and for `groups sync` `usergroups:read` and
+`usergroups:write`. It must be a member of both channels (`chat:write.public` does not reach private channels), and Cursor's
+Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
-Routing: each handle holder subscribes to its own inbox, not to the top level; the sending CLI rings the doorbells of the
-handles a post addresses (`route_targets`, `slack.py`).
+Routing: each handle holder subscribes to its own inbox thread, not to the top level. The site's router
+(`/api/agent-slack/events`) rings the doorbells of the names a post addresses, by the rule in `route_targets` (`slack.py`),
+which `tests/slack_routing_vectors.json` pins for both.
 
 ### Notes and evidence over MCP
 

@@ -1,8 +1,8 @@
-"""The word-granular production P v1.1 at the k the MVP uses (``pword-repair2.py``, red-team Phase 10b).
+"""The word-granular production P v1.1 at the k the MVP uses (red-team Phase 10b).
 
 Its repairs guarantee clause 1 of the rejection rule and no cycle of π² inside a step.  The rule's other two clauses and
-λ₃ ≥ 16 (the edge connectivity of the step multigraph, which gives MinRank 16 under minrank.md's hypotheses) are not
-guaranteed by construction, so each is certified here, exactly, per k.
+λ₃ ≥ 16 (the edge connectivity of the step multigraph, which gives MinRank 16 under the MinRank argument's hypotheses)
+are not guaranteed by construction, so each is certified here, exactly, per k.
 """
 
 from __future__ import annotations

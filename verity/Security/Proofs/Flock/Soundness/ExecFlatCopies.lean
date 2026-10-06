@@ -59,34 +59,35 @@ def leafPairs (c : Circuit) : List (ℕ × ℕ) :=
   (List.range c.unitRange.count).flatMap fun k => (List.range (c.leavesIn.getD (k % c.upv) #[]).size).flatMap fun j =>
     (List.range 16).flatMap fun t => [(leafCol c k j t, leafCol c k j t), (leafCol c k j t, leafSrc c k j t)]
 
-/-- VU `g`'s cut `e`: its port's first column. -/
+/-- Template instance `g`'s cut `e`: its port's first column. -/
 def cutCol (c : Circuit) (g : ℕ) (e : ℕ × ℕ × ℕ) : ℕ := c.slotCol c.unitNet g e.1 + (portCols c.unit.inGroups)[e.2.1]!.1
 
-/-- VU `g`'s cut `e`, bit `t`: its row word's message bit, or the forced-zero row past the word or the row's length. -/
+/-- Template instance `g`'s cut `e`, bit `t`: its row word's message bit, or the forced-zero row past the word or the
+row's length. -/
 def cutSrc (c : Circuit) (g : ℕ) (e : ℕ × ℕ × ℕ) (t : ℕ) : ℕ :=
   let p := ((List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ e.2.2)).getD 0
   if t < 16 && 16 * (e.2.2 - (Typed.starts c)[p]!) + t < c.ports[p]!.bits then
     Typed.msgCol c g p (2 * (e.2.2 - (Typed.starts c)[p]!) + t / 8) (t % 8)
   else c.unitRange.slot 0 + c.unit.useful
 
-/-- `HmRow.delta`'s cut pairs: each VU's cut ports copy their row words' bits. -/
+/-- `HmRow.delta`'s cut pairs: each template instance's cut ports copy their row words' bits. -/
 def cutPairs (c : Circuit) : List (ℕ × ℕ) :=
   (List.range c.g).flatMap fun g => c.leafCuts.toList.flatMap fun e =>
     (List.range (portCols c.unit.inGroups)[e.2.1]!.2).flatMap fun t =>
       [(cutCol c g e + t, cutCol c g e + t), (cutCol c g e + t, cutSrc c g e t)]
 
-/-- VU `g`'s wire `w`: its destination port's first column. -/
+/-- Template instance `g`'s wire `w`: its destination port's first column. -/
 def wireDst (c : Circuit) (g : ℕ) (w : Wire) : ℕ :=
   c.slotCol w.dst.1 g w.dst.2.1 + ((portCols (c.nets.getD w.dst.1 default).2.inGroups).getD w.dst.2.2 default).1
 
-/-- VU `g`'s wire `w`: its source port's first column. -/
+/-- Template instance `g`'s wire `w`: its source port's first column. -/
 def wireSrc (c : Circuit) (g : ℕ) (w : Wire) : ℕ :=
   c.slotCol w.src.1 g w.src.2.1 + ((portCols (c.nets.getD w.src.1 default).2.outGroups).getD w.src.2.2 default).1
 
 /-- A wire's width: its destination port's. -/
 def wireWidth (c : Circuit) (w : Wire) : ℕ := ((portCols (c.nets.getD w.dst.1 default).2.inGroups).getD w.dst.2.2 default).2
 
-/-- `HmRow.delta`'s wire pairs: each VU's wired input bits copy their sources. -/
+/-- `HmRow.delta`'s wire pairs: each template instance's wired input bits copy their sources. -/
 def wirePairs (c : Circuit) : List (ℕ × ℕ) :=
   (List.range c.g).flatMap fun g => c.wires.toList.flatMap fun w =>
     (List.range (wireWidth c w)).flatMap fun t =>
@@ -341,8 +342,8 @@ theorem count_pair_eq (x b j : ℕ) :
   simp only [List.count_cons, List.count_nil, beq_iff_eq, Prod.mk.injEq, true_and]
   by_cases h1 : x = j <;> by_cases h2 : b = j <;> simp [h1, h2]
 
-/-- A count over VUs, items and bits whose pairs land at `x` only at VU `g₀`, bit `t₀`, for the items `F` picks: each
-picked item's copy pair there. -/
+/-- A count over template instances, items and bits whose pairs land at `x` only at template instance `g₀`, bit `t₀`,
+for the items `F` picks: each picked item's copy pair there. -/
 theorem count_vu_items {α : Type} (n : ℕ) (l : List α) (W : α → ℕ) (D S : ℕ → α → ℕ → ℕ) (F : α → Prop)
     [DecidablePred F] {g₀ t₀ x j : ℕ} (hg₀ : g₀ < n)
     (hD : ∀ g < n, ∀ a ∈ l, ∀ tt < W a, D g a tt = x ↔ g = g₀ ∧ F a ∧ tt = t₀)
@@ -496,7 +497,7 @@ theorem getD_portCols {gs : Array Group} {p : ℕ} (hp : p < (portCols gs).size)
     (portCols gs).getD p default = (portCols gs)[p]! := by
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hp, Option.getD_some, getElem!_pos (portCols gs) p hp]
 
-/-- The unit's range slots per VU: its units per VU. -/
+/-- The unit's range slots per template instance: its units per template instance. -/
 theorem perVu_eq (C : CheckFacts st.c) {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) :
     st.c.perVu.getD st.c.unitNet 0 = st.c.upv := by
   refine perVu_unit C L.unit_mem L.unit_kind L.unit_count ?_
@@ -504,7 +505,7 @@ theorem perVu_eq (C : CheckFacts st.c) {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRan
   · rw [L.unit_count, h0, Nat.zero_mul] at hs₀; omega
   · exact h0
 
-/-- **The cut pairs at a unit port bit**: the copy pair of each cut into its port, in its VU. -/
+/-- **The cut pairs at a unit port bit**: the copy pair of each cut into its port, in its template instance. -/
 theorem cutPairs_count (C : CheckFacts st.c) (hnd : (portBits st.c.unit.inGroups).Nodup) {s₀ p t : ℕ}
     (hs₀ : s₀ < st.c.unitRange.count) (hp : p < (portCols st.c.unit.inGroups).size)
     (ht : t < (portCols st.c.unit.inGroups)[p]!.2) (j : ℕ) :
@@ -539,7 +540,7 @@ theorem cutPairs_count (C : CheckFacts st.c) (hnd : (portBits st.c.unit.inGroups
   · rintro ⟨rfl, ⟨h1, rfl⟩, rfl⟩
     rw [(vu_split he1).2 ⟨rfl, h1⟩]
 
-/-- **The wire pairs at a unit port bit**: the copy pair of each wire into its port, in its VU. -/
+/-- **The wire pairs at a unit port bit**: the copy pair of each wire into its port, in its template instance. -/
 theorem wirePairs_count {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c)
     (hnd : (portBits st.c.unit.inGroups).Nodup) {s₀ p t : ℕ}
     (hs₀ : s₀ < st.c.unitRange.count) (hp : p < (portCols st.c.unit.inGroups).size)

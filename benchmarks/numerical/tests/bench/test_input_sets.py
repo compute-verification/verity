@@ -111,10 +111,10 @@ def test_draw_format_is_pinned():
     """Instance words are a function of (key, draw) alone: the counter stream's bytes and the word rule, fixed here."""
     sub = TM.subcircuit("gemm-coordinate", K=64)
     k = G.key_for(sub, 1)
-    assert k.stream(("x", 0), 8).hex() == "bf07a934b42bcac4"
+    assert k.stream(("x", 0), 8).hex() == "cbfb52e4ff385132"
     d = sub.draw(k, 0)
-    assert d.inputs["x"][:8].tolist() == [48095, 15706, 14853, 16912, 15198, 48432, 17159, 17042]
-    assert d.inputs["w"][:8].tolist() == [17252, 14907, 17181, 14606, 15076, 18320, 15426, 15512]
+    assert d.inputs["x"][:8].tolist() == [48997, 48895, 48786, 48679, 49141, 49163, 16398, 48634]
+    assert d.inputs["w"][:8].tolist() == [14769, 15487, 49039, 15187, 49013, 48260, 15627, 47538]
     assert TM.bf16_words(np.array([0, 1, 0xFFFFFFFF, 0x12345678, 0x01000000], dtype=np.uint32), 127, 4).tolist() == \
         [0, 0, 49407, 16572, 15744]
 
@@ -237,7 +237,7 @@ def test_e4m3_words_are_pinned():
     assert sub.draw(G.key_for(sub, 1), 0).inputs["x"][:8].tolist() == PINNED_ADA_X
 
 
-PINNED_ADA_X = [177, 191, 177, 63, 5, 227, 161, 160]
+PINNED_ADA_X = [121, 85, 110, 206, 231, 247, 42, 81]
 
 
 def test_fp8_suite():

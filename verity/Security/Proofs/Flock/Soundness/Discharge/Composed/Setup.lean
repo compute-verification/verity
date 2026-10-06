@@ -10,8 +10,8 @@ import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
 coin ties and padding columns by definition, and `coin_facts` gives the rank check, `W^r` and `β ≠ 0` from `Admits`.
 What is left reads `bodyOf`, the refinement, and is stated here as three named facts, the third in its own file at every draw:
 
-* `bodyOf_geometry` (proved): M1's level-0 padding geometry from the table's `PadOK`, the opened positions distinct and
-  in range by `padPos`.
+* `bodyOf_geometry` (proved): C-Flock ZK's level-0 padding geometry from the table's `PadOK`, the opened positions
+  distinct and in range by `padPos`.
 * `bodyOf_padsOnto` (proved): each rep's pads code reaches every value at its opened positions (`padsOnto_pow` at
   `coinedOf`'s `Cp`, the inner code's padding monomials at the distinct nonzero opened points).
 * `innerOf_holds` (`Composed/Inner/Holds.lean`, the inner lane's): the honest prover's pads satisfy the inner proof's constraint at every valid witness whose registered
@@ -55,8 +55,8 @@ theorem padPos_lt {L t : ℕ} (qs : List ℕ) (h : t ≤ L) (i : Fin t) : padPos
   rw [List.getD_eq_getElem _ _ (by omega)]
   exact hlt _ (List.getElem_mem _)
 
-/-- **M1's level-0 padding geometry at the draw**: from the table's `PadOK` (`cols ≤ logLen ≤ 40`, `t ≤ 2^cols`) and
-`padPos`. -/
+/-- **C-Flock ZK's level-0 padding geometry at the draw**: from the table's `PadOK` (`cols ≤ logLen ≤ 40`, `t ≤ 2^cols`)
+and `padPos`. -/
 theorem bodyOf_geometry_of (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
     C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧

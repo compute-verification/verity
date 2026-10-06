@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Refine.Tapes
 /-!
 # The live session, and simulating it in the model
 
-The transfer (R11) compares two interactions. The **live** one is the coin server's session as the executable sees it:
+The transfer (R11) compares two interactions. The **live** one is the challenger's session as the executable sees it:
 the prover sends framed bytes, the server draws coins, and at the end the executable checks what the server recorded.
 The **model** one is the compiled game the soundness theorems bound.
 
@@ -106,7 +106,7 @@ coins, and the bytes themselves, which the unsalted path's server retains (PROTO
 def roundOf (dg : ByteArray → ByteArray) (b : ByteArray) (n : ℕ) (c : Fin n → 𝔽) : Round :=
   { n, sha := dg b, coins := Array.ofFn fun i => (c i).val, bytes := some b }
 
-/-- A round the prover submits to the coin server (PROTOCOL.md §7.1): its stream (rep `0` or `1`), the framed bytes,
+/-- A round the prover submits to the challenger (PROTOCOL.md §7.1): its stream (rep `0` or `1`), the framed bytes,
 and the coin count. -/
 structure Submit where
   rep : Fin 2
@@ -117,7 +117,7 @@ structure Submit where
 def addRound (acc : List Round × List Round) (r : Fin 2) (rd : Round) : List Round × List Round :=
   if r = 0 then (acc.1 ++ [rd], acc.2) else (acc.1, acc.2 ++ [rd])
 
-/-- **The coin server's rounds** (PROTOCOL.md §7.1). The prover submits a round on either rep's stream, or stops, at
+/-- **The challenger's rounds** (PROTOCOL.md §7.1). The prover submits a round on either rep's stream, or stops, at
 most `N` times; the server draws the round's `n` coins uniformly once its bytes are fixed, and appends the round to that
 stream. The output is the two streams' rounds, in order. -/
 def liveRounds (dg : ByteArray → ByteArray) : ℕ → List Round × List Round → Game (List Round × List Round)

@@ -43,7 +43,7 @@ include hU hpub in
 /-- **The site fact at a drawn table under hidden outputs**: at a draw flock-verify sets up with `Stmt.setupHidden`,
 each drawn unit's site is `BcSiteH`: the acceptance's draw is `dj S`, which decodes to `D`, its regions are the
 executable's, its public file loads (`HmOut.loadPublic`) to `pub`, with or without shared rows, and the unit's block
-and VU index its rank in `D.proved`, the VU below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2`). -/
+and template instance index its rank in `D.proved`, the template instance below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2`). -/
 theorem tableH_bcSiteS {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.acc ht hc (v2_of_scope hscope)) pub (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : x.st.c = c := x.table.c_eq hc
@@ -118,7 +118,7 @@ theorem rsAtH_computes : (rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).C
 /-- **The headline at the executable over hidden-output sessions.** Let `I` be a verify command's inputs (one table)
 under a tag with hidden outputs, whose one circuit file parses to an untyped circuit `c` (`hc`: `HmOut.parse`, which
 checks each output row holds its port's words, `ht`) and whose public file loads to `pub` with no shared-row tables
-(`hpub`: `HmOut.loadPublic`, every row's `b ‖ c` and no output word; `hpt`), and let the coin server write draw `S` as
+(`hpub`: `HmOut.loadPublic`, every row's `b ‖ c` and no output word; `hpt`), and let the challenger write draw `S` as
 the JSON `dj S` (`x₀` one draw it sets up with `Stmt.setupHidden`). Let the verifier draw the units with
 `Flock.Draw.drawOS`'s stratified law on a byte source A3 makes uniform, and let each draw's session be the live coin
 server's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, flock-verify accepts with at
@@ -129,7 +129,7 @@ on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere
 Its hypotheses, past the session's inputs, are #828's `flock_headline_exec`'s at the hidden tables:
 * the circuit is in `rs`'s scope, `hscope : Layout.scopeOk c = true` (as #828's);
 * `hdec` (`DecodesOn`, R11b, at the law's draws only), open, at the hidden tables `tablesAtH`: at a draw flock-verify
-  accepts under hidden outputs whose record carries the coin server's draw `dj S`, proving `S`, with link points
+  accepts under hidden outputs whose record carries the challenger's draw `dj S`, proving `S`, with link points
   `mPts`, the table is `stmtOf` of the `Stmt.setupHidden` statement it accepted (`tableAtH_of_accepts`);
 * the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),
   `ecr/sha-512` for the link finders (`hCR`); A6 (`uniform/flock-coin-server`) is the live session `liveTable` itself;
@@ -139,7 +139,7 @@ What differs from #828's headline: the statement is `Stmt.setupHidden`'s, whose 
 output rows' `b ‖ c` in place of its output words, so a unit's computed committed gates are bits of output rows bound
 through their `b ‖ c` (`rsAtH`), not single gates pinned by region "out"; the units' committed values and the bound are
 the same expressions at the hidden tables. Scope otherwise as #828's: W6 is definitional on the untyped path, `keyProg`
-has no edges between units, the proof coins are the live coin server's OS coins (A6), and sessions of more than one
+has no edges between units, the proof coins are the challenger's OS coins (A6), and sessions of more than one
 table are outside it. -/
 theorem flock_headline_exec_hidden
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
