@@ -13,7 +13,8 @@ $$\Pr[\text{accept} \wedge \text{at least } K \text{ wrong}] \le \mathrm{miss}_L
 What it rests on, all named:
 * A2, expected-time collision resistance of SHA-512 for the link theorem's explicit finders of the prover bounded
   (`hCR : LinkCRL … (reg σ) (cont σ) …`);
-* `ValueBinding`, the binding of wires to registered commit strings, which M0's `hm96-sha512` leaf layout discharges;
+* `ValueBinding`, the binding of wires to registered commit strings, which the circuit prover's `hm96-sha512` leaf
+  layout discharges;
 * the lowering, `LoweringSoundB`, or in the `_placed` forms each drawn unit's place in its table (`UnitPlace`: the row
   placement of #154).
 

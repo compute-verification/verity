@@ -299,9 +299,9 @@ strict time.
 
 The targets and expected assumptions are README.md §3.
 
-**The masked protocol** is lane `flock-netlist`'s M1/M2 (PR #83). It consists of VEIL-style masking of the sumchecks,
-Reed–Solomon padding in Ligerito over GF(2^128), and Halevi–Micali leaf commitments. The model in `Model/*` is written
-so that these slot in without restructuring:
+**The masked protocol** is lane `flock-netlist`'s C-Flock ZK (PR #83). It consists of VEIL-style masking of the
+sumchecks, Reed–Solomon padding in Ligerito over GF(2^128), and Halevi–Micali leaf commitments. The model in `Model/*`
+is written so that these slot in without restructuring:
 
 - the prover's randomness becomes an extra input of the reference prover;
 - masks are extra messages or extra committed columns in the existing phases;
@@ -502,7 +502,7 @@ are in `note:20260927T0015Z-finding-malicious-verifier-zk-options`.
 - VEIL proves exactly that for its compiler: a simulator whose output equals the real view "for any value of verifier
   randomness" (perfect; Lemma 4.3). Its footnote names the notion "semi-malicious", and Succinct has machine-checked
   the paper's statements in Lean.
-- Masked Flock (M1, VEIL-style) must keep that property on binary fields:
+- Masked Flock (C-Flock ZK, VEIL-style) must keep that property on binary fields:
   - every leaked GF(2^128) value needs 128 uniform mask bits whose weights span;
   - ring switching must be covered;
   - adversarial out-of-domain points or repeated query positions must not reveal more than the padding covers.

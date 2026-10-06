@@ -16,7 +16,7 @@ import Proofs.Flock.Soundness.ZK.PadNonvanishing40
 * **zero knowledge**: at every draw `verify --zk` sets up, the verifier's view of the session's table at the executable's
   leaves (`coinedOf P (tablesAtZK dj y₀ S R)`) is within `2·|Hid|·2^-193` of `S_shvzk`'s, which reads only the public
   values, both ways (Lemma B, `session_shvzk_hm96`, with `PadOnto` from `PadNonvanishing` by `padOnto_M1`, which
-`ZK.padNonvanishing40` proves at M1's padding constant).
+`ZK.padNonvanishing40` proves at C-Flock ZK's padding constant).
 
 What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`: `⊤` at a prover whose link finders break
 it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `DrawOkZK` at each of the law's draws),

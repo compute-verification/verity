@@ -29,7 +29,7 @@ certificate (`RowsCert`, `IsRowsUnit.computes_of_cert`) and the Definition's Boo
 
 Its proof coins are the model's: uniform, drawn each round after the prover's message. That the challenger's round
 coins are those is A6 (`uniform/flock-coin-server`, `ASSUMPTIONS.md`), which the model embodies rather than a hypothesis
-states, and which covers only per-round OS coins: M0's seed-derived coins are outside the headline.
+states, and which covers only per-round OS coins: the circuit prover's seed-derived coins are outside the headline.
 -/
 
 namespace FlockSoundness.Audit
