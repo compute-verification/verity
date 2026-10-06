@@ -20,6 +20,14 @@
 # KERNELS='<json>' (band-gpu) sets kernel switches over harness.KERNELS (bench.py --kernels): '{"chain_pairs": false}' runs the
 # run of record's kernels.
 #
+# GATE_ROLE=<role> runs the run as that party of the proof service (memory-challenger for the auditor's timed audit on a node):
+# before anything is built or timed, bench/placement.py's gate checks where it runs and records placement-gate.json, and a
+# refusal exits 4. GATE_CORES are the role's dedicated CPUs (vy-pous-quiet's 124-127 on node 2), GATE_PEERS its peers' probe
+# records, space-separated ROLE[:NAME]=FILE (a relative FILE is one of the run's inputs, --send), and GATE_ABSENT the peer
+# roles not deployed yet:
+#   gpu-lease 1 --on 7 --max-min M --timed -- vy-pous-quiet bash benchmarks/pous/pod.sh IMPL=band-gpu GATE_ROLE=memory-challenger \
+#     GATE_CORES=124-127 GATE_PEERS=worker:vy-nebius-2=/etc/vy/placement/vy-nebius-2.json GATE_ABSENT='firewall challenger'
+#
 # GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
 #
@@ -125,6 +133,13 @@ nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null || true
 command -v uv >/dev/null || { python3 -m pip install -q uv || exit 3; }
 export PATH=$HOME/.local/bin:$PATH
 export PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/tools/research/src
+if [ -n "${GATE_ROLE:-}" ]; then
+  gate=(--role "$GATE_ROLE" --out "$O/placement-gate.json" ${GATE_CORES:+--cores "$GATE_CORES"})
+  for p in ${GATE_PEERS:-}; do f=${p#*=}; [ "${f#/}" = "$f" ] && f=$I/$f; gate+=(--peer "${p%%=*}=$f"); done
+  for r in ${GATE_ABSENT:-}; do gate+=(--absent "$r"); done
+  python3 benchmarks/numerical/python/verity_numerical/bench/placement.py gate "${gate[@]}" > /dev/null \
+    || { echo "the placement gate refused this run as $GATE_ROLE (placement-gate.json)"; exit 4; }
+fi
 if [ "$IMPL" = vllm-gpu ]; then
   [ -f "$I/impl.tar" ] || { echo "vllm-gpu needs --send impl.tar"; exit 2; }
   SHA=$(sha256sum "$I/impl.tar" | cut -c1-16)
