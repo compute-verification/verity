@@ -488,9 +488,9 @@
   "Definitions.Pous",
   "Specs.Pous.Assumptions",
   "Specs.Pous.Guarantees",
-  "Definitions.Warden",
-  "Specs.Warden.Assumptions",
-  "Specs.Warden.Guarantees",
+  "Definitions.NetworkCertifier",
+  "Specs.NetworkCertifier.Assumptions",
+  "Specs.NetworkCertifier.Guarantees",
   "Proofs.Flock.Verifier",
   "Flock",
   "Proofs.Flock.Level3",
@@ -643,18 +643,18 @@
    "except": [],
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
-  "Definitions.Warden": {
-   "imports": ["Mathlib", "Definitions.Warden"],
+  "Definitions.NetworkCertifier": {
+   "imports": ["Mathlib", "Definitions.NetworkCertifier"],
    "except": [],
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
   },
-  "Specs.Warden.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Warden", "Specs.Warden.Assumptions"],
+  "Specs.NetworkCertifier.Assumptions": {
+   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Specs.NetworkCertifier.Assumptions"],
    "except": [],
    "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof"
   },
-  "Specs.Warden.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Warden", "Specs.Warden.Assumptions", "Specs.Warden.Guarantees"],
+  "Specs.NetworkCertifier.Guarantees": {
+   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Specs.NetworkCertifier.Assumptions", "Specs.NetworkCertifier.Guarantees"],
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   }
