@@ -5,9 +5,9 @@
     python loops.py helper --ready READY.json --leaves LEAVES.bin --k K --limit-ns L [--cpu C]
 
 - **python** is `memory_challenger.py`'s timed audit (`LiveResponder`, `protocol.MemoryChallenger.run`, the garbage collector frozen and off), with
-  every reading of the verifier's clock kept. A round reads it four times, in order: the challenge's start (`challenge()`,
+  every reading of the memory challenger's clock kept. A round reads it four times, in order: the challenge's start (`challenge()`,
   after the draw), the send and the whole answer (`LiveResponder.roundtrip`), and the receipt (`respond()`, before the check).
-- **helper** keeps the socket and the verifier, and answers the Lean driver's frames (`lean/TimingLoop/Frame.lean`) on stdin
+- **helper** keeps the socket and the memory challenger, and answers the Lean driver's frames (`lean/TimingLoop/Frame.lean`) on stdin
   and stdout: `A` a new audit, `D` the next challenge's index, `R` reveal it (the reply is the answer's header and the
   socket round trip in ns, once the whole answer is in), `V` the verdict on it (correct, on time), `P` a ping, `Q` quit.
 """
@@ -49,7 +49,7 @@ def quiet(cpu: int | None) -> None:
     gc.disable()
 
 
-def verifier(scheme: Any, vk: Any, k: int, limit_ns: int, clock: Any) -> Any:
+def memory_challenger(scheme: Any, vk: Any, k: int, limit_ns: int, clock: Any) -> Any:
     from verity.protocols.accounting.space.pous import audit, protocol
 
     return protocol.MemoryChallenger(scheme, vk, protocol.challenge_key(os.urandom(32), vk), k=k, deadline_ns=audit.DEADLINE_NS,
@@ -83,7 +83,7 @@ def python_loop(a: argparse.Namespace) -> int:
         pings = np.array(reads, dtype=np.int64).reshape(-1, 2)
         reads.clear()
         for n in range(a.audits):
-            v = verifier(scheme, vk, a.k, a.limit_ns, clock)
+            v = memory_challenger(scheme, vk, a.k, a.limit_ns, clock)
             start = len(reads)
             res = v.run(r.block)
             if len(reads) - start != READS_PER_ROUND * a.k:
@@ -123,7 +123,7 @@ def helper(a: argparse.Namespace) -> int:
         while len(hdr := rd.read(8)) == 8:
             op = rd.read(struct.unpack(">Q", hdr)[0])
             if op == b"A":
-                v = verifier(scheme, vk, a.k, a.limit_ns, time.perf_counter_ns)
+                v = memory_challenger(scheme, vk, a.k, a.limit_ns, time.perf_counter_ns)
                 reply(b"")
             elif op == b"D":
                 i = v.challenge()

@@ -11,7 +11,7 @@ import TimingLoop.Wire
   before the send to the whole answer, and checks the answer byte for byte against block `i` of the store, or with `--check
   digest` as `VerifierKey.check` does: `Flock.Sha256` of leaf `i`'s 35-byte prefix and the block against leaf `i`.
 * `drive --k K --audits A --pings N --limit-ns L --out FILE -- CMD ARGS…`: Lean drives a Python worker (`CMD ARGS…`,
-  `helper.py`) that keeps the socket and the verifier. Each round asks it for the challenge (`D`), then times the reveal
+  `helper.py`) that keeps the socket and the memory challenger. Each round asks it for the challenge (`D`), then times the reveal
   (`R`: the worker sends it and replies with the answer's header once the whole answer is in), then asks for the verdict
   (`V`). Every request is one frame (`TimingLoop.Frame`).
 

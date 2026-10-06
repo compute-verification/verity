@@ -1,5 +1,5 @@
 """PoUS's timing loop measured three ways against one responder on the same host: how much of the window
-(Δ = `audit.DEADLINE_NS` plus the RTT allowance) each verifier architecture spends.
+(Δ = `audit.DEADLINE_NS` plus the RTT allowance) each memory challenger architecture spends.
 
     python benchmarks/pous/timing_loop/bench.py --out DIR --scratch DIR --lean-exe EXE [--cpu-responder] [--segments S]
         [--rounds N] [--pings N] [--loads idle,load] [--verifier-cpu C] [--helper-cpu C] [--responder-cpu C] [--limit-ns L]
@@ -9,7 +9,7 @@
   challenge, the reveal and the verdict, while Python keeps the socket: the Lean-to-Python hop on every round.
 - **lean-own**: Lean owns the socket and the clock (`timing-loop own`, `Std.Internal.UV.TCP`), sends indices drawn here as
   `audit.MemoryChallenger` draws them, and checks each answer byte for byte against the store. `lean-own-2cpu` is the same loop
-  with the verifier CPU's sibling allowed too, so Lean's event-loop thread need not share the loop's CPU; `lean-own-digest`
+  with the memory challenger CPU's sibling allowed too, so Lean's event-loop thread need not share the loop's CPU; `lean-own-digest`
   checks each answer as `VerifierKey.check` does, its leaf digest in Lean (`Flock.Sha256`), on one CPU.
 
 The responder is `pous_native.cu`'s over a store `C` encoded on the GPU from a random `W` (`--segments` segments of the band),
@@ -18,7 +18,7 @@ harness's load beside it (`harness.py`'s POUS forward: decode all of `C`, the we
 synchronized), as the honest audit runs. Every loop is pinned (`--verifier-cpu`; the worker on `--helper-cpu`; the
 responder's thread on `--responder-cpu`).
 
-A round's latency is the verifier's own reading, from just before the send to the whole answer (python: `challenge()` to
+A round's latency is the memory challenger's own reading, from just before the send to the whole answer (python: `challenge()` to
 `respond()`, as `MemoryChallenger` judges it); its overhead is the latency less the responder's reported server time; its gap is
 the time from that receipt to the next round's send within one audit (the check and the next draw, on a sequential reveal's
 critical path). `out/summary.json` holds each configuration's quantiles, the fractions over 0.5 and 0.85 ms and the machine;
@@ -203,7 +203,7 @@ def rounds_of(loop: str, raw: Path, k: int) -> dict[str, np.ndarray]:
         z = np.load(raw)
         latency = z["received"] - z["start"]
         if not np.array_equal(latency, z["elapsed_ns"]):
-            raise RuntimeError("python: the recorded clock disagrees with the verifier's elapsed_ns")
+            raise RuntimeError("python: the recorded clock disagrees with the memory challenger's elapsed_ns")
         nxt_send, this_recv = z["sent"][1:], z["answered"][:-1]
         out = {"index": z["index"], "latency_ns": latency, "server_ns": z["server_ns"], "device_ns": z["device_ns"],
                "wire_ns": z["answered"] - z["sent"], "correct": z["correct"], "check_draw_ns":

@@ -3,7 +3,7 @@
 #   research run --on vy-nebius-2 --cwd source --declared-output 'out/*' -- bash benchmarks/pous/timing_loop/node.sh [bench args]
 # It builds `timing-loop` from a copy of lean/ in a scratch directory, then takes one GPU of $TIMING_GPUS (NUMA node 1, beside
 # the quiet cores) for at most $TIMING_MAX_MIN minutes and runs bench.py in `vy-pous-quiet`'s scope on cores $TIMING_CPUS: the
-# responder's thread, the verifier and the worker on the quiet cores 124-127, the harness and its load on 120-123.
+# responder's thread, the memory challenger and the worker on the quiet cores 124-127, the harness and its load on 120-123.
 # Results go to $RESEARCH_RUN_DIR/out; the store, the leaves and the build are scratch.
 set -euo pipefail
 OUT=${RESEARCH_RUN_DIR:?}/out
