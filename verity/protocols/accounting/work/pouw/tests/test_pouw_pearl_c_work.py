@@ -348,7 +348,7 @@ def test_h3_caps_each_credited_row_as_well_as_the_tile(hashing):
     rows_b = spiked_rows(k, n, 900, 300.0)
     work = Workload((Matmul(0, Shape(m, k, n), 1),))
     splits = {1: W.Split(k)}
-    prover = Prover(h3, {1: rows_b})
+    prover = Prover(h3, {1: rows_b}, salt_key=bytes(32))
     epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
     tr = prover.prove(epoch, {0: rows_a})
     records = W.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits)
