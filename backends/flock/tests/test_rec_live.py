@@ -188,7 +188,7 @@ def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(
 
 
 def test_a_binding_round_whose_cap_is_not_root_b_is_refused():
-    """The gateway commits level 0's top once, at ``Commit``; a rep that binds another cap gets no coins."""
+    """The firewall commits level 0's top once, at ``Commit``; a rep that binds another cap gets no coins."""
     proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts())
     hello = json.dumps({"profile": "fast100", "reps": 2, "flavor": "rs", "tables": ["circuit"], "link": {"sigma": "00", "m": 2, "points": 2}})
     for req in ((RL.REQ_HELLO, hello), (RL.REQ_COMMIT, b"rf", [("circuit", CAP1 + CAP1)], []), (RL.REQ_LINK, bytes(32)),

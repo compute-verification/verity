@@ -1,5 +1,5 @@
 """`verity_flock.rec_outer`, V*'s outer statements: a level of inner openings staged as one statement of `RecOpen` instances
-whose top nodes the prover registers under the gateway's salts (the verifier's entry rebuilt from their ``b || c``) and whose
+whose top nodes the prover registers under the firewall's salts (the verifier's entry rebuilt from their ``b || c``) and whose
 running sums the prover registers as one chain. Staged here at the smallest shape (8 lanes, one sibling: a synthetic tree of
 four plain leaves, its top two nodes) with three honest openings and one whose sibling is another node's. Composing the
 unit's circuit takes about a minute, so that test is slow; it catches what `test_rec_open` can't: the statement's ports,
@@ -71,7 +71,7 @@ def test_a_levels_tops_are_one_value_the_verifier_rebuilds_from_their_b_c():
     assert t1.first == {0: 0, 1: 2} and t1.own["leaves"] == 4 and t1.own == t1.reg.entry()
     assert [t1.position(q) for q in qs] == [0, 1, 3, 2]
     bad = V.Top(shared.nodes[::-1], shared.salts, shared.bcs)
-    with pytest.raises(ValueError, match="gateway committed"):
+    with pytest.raises(ValueError, match="firewall committed"):
         O.TopValue.build(PROGRAM, 0, {0: bad, 1: bad})
 
 
@@ -113,7 +113,7 @@ def test_a_level_is_one_template_over_both_reps(staged):
 def test_the_top_forgeries_move_the_provers_output_row_or_its_salt_alone(staged, tmp_path):
     """`rec_vstage.forge_top` on the staged level: ``top`` on the opening whose sibling is another node's (it climbs to that
     node, which becomes its output row), ``top-salt`` on an honest one. Only the prover's ``inst.bin`` moves, by that row or
-    that salt; the verifier's ``pub.bin`` holds the ``b || c`` the gateway committed for each opening's top node, which the
+    that salt; the verifier's ``pub.bin`` holds the ``b || c`` the firewall committed for each opening's top node, which the
     forged row (or salt) does not open."""
     from verity_flock import rec_vstage as S
 

@@ -104,7 +104,7 @@ without completing a call, rebuilding a label from 1.53% of `C` in 481 Keccak-f 
   `D′ = d + 1` the gap attack (`band_gap_attack`, `band_cliff_d12`) holds every block but each `(d + 1)`-th: every
   dropped row has all its parents held, and the audit accepts with probability 1. At 241.5 µs per call, `d = 12`
   holds while `Δ + RTT < 13 × 241.5 µs ≈ 3.14` ms, in the ideal-permutation model (at the reference `Π₂` a prover
-  answers in 24 µs from 1.53% of `C`, inside every deployed deadline: "Main caveat"). `audit.TimedVerifier` refuses
+  answers in 24 µs from 1.53% of `C`, inside every deployed deadline: "Main caveat"). `audit.MemoryChallenger` refuses
   a deadline past it (`band.check_deployment`), and `test_gap_attack_at_the_cliff` replays the attack on real labels.
 - `band.codec_for(d)` gives the codec for any in-degree; with `d ≥ B − 1` the band is the complete DAG, dense.
 
@@ -197,7 +197,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
    The encoder is deterministic and public, so the server running it changes nothing in the timed game. A
    server-chosen or predictable salt would break the model's "`W` before coins" order.
 4. **Serve.** `layout.decode_tensor` decodes one tensor from the segments it overlaps.
-5. **Audit.** The verifier reveals `k` indices one at a time (`audit.TimedVerifier`, uniform with replacement, keyed
+5. **Audit.** The verifier reveals `k` indices one at a time (`audit.MemoryChallenger`, uniform with replacement, keyed
    by `audit.challenge_key` and bound to `vk`'s root). The challenge key is the verifier's own secret, kept secret
    until the audit starts (never a public beacon): a public key makes every challenged index computable in advance, so
    a prover holding little of `C` could rebuild only the challenged blocks within the deadline and pass. Each block
@@ -286,11 +286,11 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
   P3 has no certificate: the concrete-`H` guarantees have its parameters, but their chain starts from a different `h_0`
   ("P3 (research)").
-- **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
+- **`protocol.MemoryChallenger`** is `audit.MemoryChallenger` at the certificate's `k`. It refuses:
   - a `k` below the certificate's;
   - a deadline whose effective D (calls of `call_ns` within `Δ + RTT`) exceeds the certificate's `rounds`: for the
     band and dense, `Δ + RTT` must stay under 1.449 ms (a model-level bound: at the reference `Π₂` a prover answers
-    from 1.53% of `C` well inside it, "Main caveat"). `TimedVerifier` alone refuses only past the band's cliff, at
+    from 1.53% of `C` well inside it, "Main caveat"). `MemoryChallenger` alone refuses only past the band's cliff, at
     about 3.14 ms (3,139,500 ns at `d = 12`);
   - a scheme with no certificate at its parameters.
 
@@ -330,14 +330,14 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   and `vk` root. `VERITY_POUS_SLOW=1` also encodes a whole band12 segment through the interface against
   `band/64kb/segment`.
 
-## The continuous audit's verifier (`continuous`)
+## The continuous audit's memory challenger (`continuous`)
 
-`continuous.ContinuousVerifier(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the verifier of the
+`continuous.ContinuousMemoryChallenger(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the verifier of the
 continuous audit's model, `verity/Security/Definitions/Pous/Model/Continuous.lean`, with the guarantee
 `Pous.SecurityProofs.ContinuousAudit` (#954): `n` challenges over time, drawn as the timed audit's indices, accepted
 when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
 stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). The verifier is
-one `audit.TimedVerifier` over the stream with a hard deadline, and it enforces the three requirements that
+one `audit.MemoryChallenger` over the stream with a hard deadline, and it enforces the three requirements that
 `verity/Security/Proofs/Pous/Continuous/Verifier.lean` proves of the model's verifier:
 
 1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
@@ -348,23 +348,23 @@ one `audit.TimedVerifier` over the stream with a hard deadline, and it enforces 
    whether that challenge is closed or not yet revealed. So a stale answer is never credited to the next challenge,
    even when both ask for the same block.
 2. **A hard deadline.** An answer past `Δ_late + RTT` is rejected without its block being checked (`Answer.rejected`).
-   So is a challenge still unanswered by then, closed by `expire()` or by the next `challenge()`. `TimedVerifier`
+   So is a challenge still unanswered by then, closed by `expire()` or by the next `challenge()`. `MemoryChallenger`
    refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds `audit.LATE_ROUNDS = 12` or the band's `d`, where
    `D_late` is the number of 241.5 µs calls that fit in `Δ_late + RTT`; at `d = 12`, `Δ_late + RTT` must be under
    3,139,500 ns. That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
-   conservative. `ContinuousVerifier` refuses to run without a hard deadline.
+   conservative. `ContinuousMemoryChallenger` refuses to run without a hard deadline.
 3. **Every late answer counted.** Every challenge closes with exactly one `Answer`, whether it was answered, rejected
    or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer past
    `Δ + RTT`, rejected ones included.
 
-Run the continuous audit only on `ContinuousVerifier`, never on a bare `TimedVerifier` with `late_deadline_ns`. Its
+Run the continuous audit only on `ContinuousMemoryChallenger`, never on a bare `MemoryChallenger` with `late_deadline_ns`. Its
 `respond(block)` names no challenge, so once challenge `j` expires, an answer to `j` still in flight is credited to
 `j + 1`, a hit when both ask for the same block. That block was on the wire, not in the memory the model measures at
 the send time, so the audit would credit storage the responder does not hold (#954's red team).
 
 **The audit's duration cap.** `audit.AUDIT_CAP = 1,505` (`Pous.Rebuild.auditCap`) is the cap on a graded audit's
 window that `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the verifier to enforce (#953).
-`TimedVerifier(..., audit_cap=...)` and `ContinuousVerifier(..., audit_cap=...)` enforce it on the verifier's clock,
+`MemoryChallenger(..., audit_cap=...)` and `ContinuousMemoryChallenger(..., audit_cap=...)` enforce it on the verifier's clock,
 counted in calls of the parameters' `call_ns` as `D` and `D_late` are, so the limit is 1,505 × 241.5 µs ≈ 363.5 ms.
 - An answer received more than `audit_cap · call_ns` after the first challenge's send is rejected unchecked and aborts
   the audit (`ends_at`). So does a challenge closed after that time by `expire()` or the next `challenge()`.
@@ -385,8 +385,8 @@ reply naming any challenge but the open one is dropped. Once the hard deadline h
 challenge with `expire()`, the last one too, so a silent or slow responder cannot hold the stream open. A transport
 that returns None before the deadline makes `expire()` refuse, and the audit stops with the challenge open. The caller
 chooses the arrival times and `n`, and nothing here draws or checks them. The game needs both to be the verifier's own
-randomness, independent of the setup, the indices and the answers. Without `late_deadline_ns`, `TimedVerifier` is
-unchanged, the single audit's verifier. `tests/test_pous_continuous.py` tests each requirement.
+randomness, independent of the setup, the indices and the answers. Without `late_deadline_ns`, `MemoryChallenger` is
+unchanged, the single audit's memory challenger. `tests/test_pous_continuous.py` tests each requirement.
 
 ## API
 
@@ -403,9 +403,9 @@ unchanged, the single audit's verifier. `tests/test_pous_continuous.py` tests ea
 | `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
-| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `TimedVerifier` refuses a band deadline past the cliff |
+| `audit` | `challenge_key`, `HonestResponder`, `MemoryChallenger` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `MemoryChallenger` refuses a band deadline past the cliff |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
-| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `Verifier` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
+| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `MemoryChallenger` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
@@ -459,7 +459,7 @@ a version bump in the strings they carry.
 
 `vk` (`docs/p3-instantiation.md` §4) is a SHA-256 Merkle tree over the blocks, with the shape of RFC 6962. Each leaf
 is `SHA256(0x00 || tag_s || u16(v) || c2_v)` and each node is `SHA256(0x01 || l || r)`. The verifier keeps the root and
-every leaf digest. A root-only verifier checks the server's audit path. This follows the instantiation's byte format
+every leaf digest. A root-only memory challenger checks the server's audit path. This follows the instantiation's byte format
 rather than `verity.primitives.commitments`' frame v3.
 
 ## Rounds
@@ -606,7 +606,7 @@ and the cap's conversion into wall-clock time, count whole `Π₂` calls and so 
 at the reference Feistel-SHAKE256 `Π₂` a prover re-encodes nothing, answering each challenge from 1.53% of `C` in 481
 Keccak-f, less than one call ("Main caveat").
 
-No graded verifier exists yet: `audit.TimedVerifier` and `protocol.Verifier` accept only when every answer is correct
+No graded verifier exists yet: `audit.MemoryChallenger` and `protocol.MemoryChallenger` accept only when every answer is correct
 and on time, the `t = 0` rule (`DISCREPANCIES.md` B5).
 
 ### The dense scheme
