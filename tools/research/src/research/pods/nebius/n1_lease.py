@@ -35,7 +35,8 @@ cgroup) into `n1-lease.json`; that record is the lease's heartbeat. A lease held
 hung job gpu-lease's own timeout didn't end) has its pod deleted. A lease on a GPU outside the pool (its holder was deleted by
 hand, or Kueue reclaimed it) has its pod deleted at once: Kubernetes may already have given that GPU to someone else. A lease
 held by a host process (a `research run --queue` job, in no pod) is signalled instead, its gpu-lease scope else its owner pid:
-SIGTERM, then SIGKILL once `KILL_AFTER_S` have passed, as gpu-lease's own preemption does.
+SIGTERM, then SIGKILL once `KILL_AFTER_S` have passed, as gpu-lease's own preemption does. The scope is signalled after its
+owner has exited too, since a child that inherited the lock (a vLLM engine core) still holds the GPU.
 **Pools.** One controller serves one queue's pool, named `$VY_POOL_NAME` (its holders' `verity.dev/gpu-pool` label; default
 node1, the `provers` pool in /run/gpu-lease). A second pool runs as a second controller with its own `$GPU_LEASE_DIR`,
 `$VY_POOL_QUEUE`, `$VY_POOL_PRIORITY` and `$VY_POOL_NAME` (circuits': /run/gpu-lease-circuits, `deployments-gpu`, `circuits-gpu`,
@@ -292,7 +293,7 @@ class Controller:
         self.uuid_of_pod: dict[str, str] = {}
         self.free_since: dict[int, float] = {}
         self.outside: dict[int, int] = {}
-        self.stopping: dict[int, float] = {}           # host pid -> when it was first signalled
+        self.stopping: dict[int | str, float] = {}     # host pid (else its scope) -> when it was first signalled
         self.brain_misses = BRAIN_MISSES
         self.agent_fd: int | None = None
         self.events: list[dict] = []
@@ -358,17 +359,23 @@ class Controller:
         return {"jobs": jobs, "pods": pods, "cq": cq, "workloads": workloads}
 
     def stop(self, t: float, lease: dict, why: str) -> None:
-        """End a lease: delete its pod, or signal a host process's scope (else its owner pid), SIGKILL after `KILL_AFTER_S`."""
-        if lease.get("pod") or not (lease.get("pid") and lease.get("owner_alive")):
+        """End a lease: delete its pod, or signal a host process's scope (else its owner pid), SIGKILL after `KILL_AFTER_S`.
+        A scope is signalled after its owner has exited too: a child that inherited the lock (a vLLM engine core) holds the GPU."""
+        alive = bool(lease.get("pid") and lease.get("owner_alive"))
+        if lease.get("pod") or not (alive or lease.get("scope")):
             self.log(t, why, lease=lease)
             if lease.get("pod"):
                 kubectl("delete", "pod", lease["pod"], "--wait=false")
             return
         pid = lease["pid"]
-        sig = signal.SIGKILL if t - self.stopping.setdefault(pid, t) >= KILL_AFTER_S else signal.SIGTERM
+        key = pid if alive else lease["scope"]
+        sig = signal.SIGKILL if t - self.stopping.setdefault(key, t) >= KILL_AFTER_S else signal.SIGTERM
         self.log(t, why, lease=lease, signal=sig.name)
         if lease.get("scope") and subprocess.run(["systemctl", "--user", "kill", f"--signal={sig.name}", f"{lease['scope']}.scope"],
                                                  capture_output=True).returncode == 0:
+            return
+        if not alive:
+            self.log(t, "signal-failed", scope=lease["scope"], error="systemctl --user kill failed")
             return
         try:
             os.kill(pid, sig)
@@ -480,7 +487,9 @@ class Controller:
         target = brain.get("pool_target") if brain else None
         if target is None:
             target = len(pool) - len(free) + wanted
-        self.stopping = {p: s for p, s in self.stopping.items() if Path(f"/proc/{p}").exists()}
+        scopes = {g["lease"].get("scope") for g in gpus if g.get("lease")}
+        self.stopping = {p: s for p, s in self.stopping.items()
+                         if (p in scopes if isinstance(p, str) else Path(f"/proc/{p}").exists())}
         cap = unborrowed(obs, {j["metadata"]["name"] for j in obs["jobs"]})
         borrow = lim["borrow"] if want and all(w.get("preempt") == "1" for w in want) and \
             t < (epoch(lim["borrow-until"]) or float("inf")) else 0

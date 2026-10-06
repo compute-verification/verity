@@ -2783,6 +2783,42 @@ def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_h
 
 
 @needs_flock
+def test_n1_lease_signals_the_scope_of_an_expired_lease_whose_owner_exited_and_left_a_child_holding_the_lock(
+        monkeypatch, tmp_path, reap):
+    """Node 1, 03:29Z Oct 6: a vLLM engine core outlived its gpu-lease and kept the lock it inherited, so the expired lease held
+    GPU 6 for 17 minutes while the loop logged it expired every tick and signalled nothing."""
+    import fcntl
+    m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-a")])
+    monkeypatch.setattr(m, "pod_uid_of", lambda pid: None)
+    gone = subprocess.Popen(["true"])
+    gone.wait()
+    real, killed = subprocess.run, []
+
+    def run(argv, **kw):
+        if argv[:3] == ["systemctl", "--user", "kill"]:
+            killed.append(argv[3:])
+            return subprocess.CompletedProcess(argv, 0)
+        return real(argv, **kw)
+
+    monkeypatch.setattr(m.subprocess, "run", run)
+    t = 1_800_000_000.0
+    c = m.Controller()
+    c.tick(t)
+    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    (tmp_path / "gl" / "0.owner").write_text(f"pid={gone.pid} run=r-x who=adhoc:me since={m.iso(t - 3600)} until={m.iso(t - 200)} "
+                                             f"scope=gpu-lease-{gone.pid} cmd=x\n")
+    s = c.tick(t + 1)
+    assert not s["gpus"][0]["lease"]["owner_alive"] and [e["ev"] for e in s["events"]] == ["expired"]
+    c.tick(t + 1 + m.KILL_AFTER_S)
+    assert killed == [["--signal=SIGTERM", f"gpu-lease-{gone.pid}.scope"], ["--signal=SIGKILL", f"gpu-lease-{gone.pid}.scope"]]
+    os.close(lock)
+    (tmp_path / "gl" / "0.owner").write_text("")
+    c.tick(t + 2 + m.KILL_AFTER_S)
+    assert c.stopping == {}
+
+
+@needs_flock
 def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_sigkills_a_lease_that_outlives_sigterm(
         monkeypatch, tmp_path, reap):
     import fcntl
