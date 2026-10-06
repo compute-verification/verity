@@ -27,7 +27,7 @@ def PadNonvanishing40 : Prop :=
 `flock-verify verify --zk` reads the draw and the proofs only from the record, so no check of the record establishes
 either fact:
 
-* `RecordsLiveZK I dj wr`: the record `verify --zk` reads is the one the verifier's coin server wrote for the live
+* `RecordsLiveZK I dj wr`: the record `verify --zk` reads is the one the challenger wrote for the live
   session. At every transcript it accepts, its draw is `dj S`, its proofs are the prover's, and its root, link points
   and rounds are the live outcome's.
 * `DrawFileZK dj law pop`: the draw file is the one `flock-verify draw` printed for the verifier's own draw. Every draw
@@ -41,7 +41,7 @@ def RecordCustodyZK {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj 
   Discharge.ZkLink.RecordsLiveZK I dj wr ∧ Discharge.ZkLink.DrawFileZK dj law pop
 
 /-- **The record is the live session's, at `J` tables** (`live-verifier`, as `RecordCustodyZK`): the record
-`verify --zk --session-tables J` reads is the one the verifier's coin server wrote for the live session
+`verify --zk --session-tables J` reads is the one the challenger wrote for the live session
 (`RecordsLiveZKJ`: its draw, proofs and link points, and each table's root and rounds, are the live outcome's), and its
 draw file the one `flock-verify draw` printed for the verifier's own draw under the subset law, the one law flock-verify
 takes at more than one table (`DrawFileZK` at `subset kd` over the `n` units). -/

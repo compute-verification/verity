@@ -46,7 +46,7 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # /workspace/jobs/dispatch, node 1's loop's) into os.environ outside monkeypatch, so every later test in the worker would see
     # node 1's CPU slices
     monkeypatch.setenv("VY_DISPATCH_ROOT", str(tmp_path_factory.mktemp("dispatch") / "absent"))
-    # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research slack asks this socket for an OIDC token for its broker
+    # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research msg asks this socket for an OIDC token for its broker
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
 
 

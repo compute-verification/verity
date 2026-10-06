@@ -25,7 +25,7 @@ bounds the second kind of run and pays for it in the headline, so that the decod
 * `HeadlineCard`: `Prog.flock_headline_live_on` with the decoder needed only at the draws of `∑ s, k s` units, its
   bound gaining exactly `(∑ s, k s) · 2^-64`.
 
-`hdj`, that the server's draw file proves exactly its draw's units, is a property of the file the coin server writes,
+`hdj`, that the server's draw file proves exactly its draw's units, is a property of the file the challenger writes,
 not of flock-verify; it stays a named hypothesis.
 -/
 
@@ -159,7 +159,7 @@ def DecodesWhereOfOn : Prop :=
     (∀ L' : Law n, (∀ ω, good (L'.draw ω)) → DecodesOn H E Lf T I wr opn dec one fin capOf L') →
     DecodesWhere H E Lf T I wr opn dec one fin capOf L good
 
-/-- **`m_pts` at a draw file that proves exactly its draw's units** (`hdj`, a property of the file the coin server
+/-- **`m_pts` at a draw file that proves exactly its draw's units** (`hdj`, a property of the file the challenger
 writes): every statement setupH accepts at the draw file `dj S` has `m_pts = mPtsOf c.g S.card`, `c` the circuit
 file's parse. At the live law's draws of `∑ s, k s` units that is the one value `mPtsOf c.g (∑ s, k s)`. -/
 def MPtsAtCard : Prop :=
