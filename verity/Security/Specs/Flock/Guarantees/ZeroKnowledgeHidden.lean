@@ -18,7 +18,8 @@ open FlockSoundness FlockSoundness.Discharge.Exec FlockSoundness.Refine FlockSou
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.DecodeZL
 open scoped ENNReal
 
-/-- **C-Flock's one-stage audit under hidden outputs is zero knowledge, at the coins the prover doesn't refuse.** At
+/-- **C-Flock's one-stage audit under hidden outputs is zero knowledge, at the coins the prover doesn't refuse, on runs
+its self-check doesn't stop.** At
 every draw `S` at which `verify --zk` sets every one of the session's `J = nTab I` tables up (`ys`), and every
 registration `R`, the joint view of the session's plan `planZHJ dj y₀` (the plan `EndToEndHidden` is sound on), table
 `j` at its executable statement, is within `Σ_j 2·|Hid_j|·2^-193` of the per-table simulators' joint view, both ways
@@ -27,6 +28,12 @@ encoding of the joint view and any event on it, the real view at valid witnesses
 ones, and the simulators' at any witnesses, each table's prover randomness independent. `|Hid_j|` is the number of
 table `j`'s leaves the final message doesn't open, and the prover `P` is any prover of Ligerito's levels ≥ 1
 (`LigProver`).
+
+The honest prover also stops when its own batched constraint fails (`zk_veil.rs`'s `SelfCheck::Stop`, when
+`⟨c, h⟩ + t ≠ 0`, after the batching coins and before `τ`'s commitment), and that stop depends on the witness, not only
+on the coins. The real view here never stops there, so this is a statement about the runs where it doesn't fire. At a
+valid witness and admitted coins it never fires if the clear protocol is complete (`ZK/Complete.lean`'s `InnerHolds`,
+which `inner_complete` takes as a hypothesis), and nothing here proves that.
 
 Which verifiers: honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the refused.
 It covers a verifier that chooses its coins because the coin server commits every coin at `Hello`, before the prover's
