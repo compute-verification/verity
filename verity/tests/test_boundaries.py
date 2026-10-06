@@ -36,7 +36,8 @@ ALLOWED = {
     "primitives.crypto": set(),
     "primitives.commitments": {"primitives.circuits", "primitives.crypto"},
     "protocols.profile": {"primitives.circuits"},
-    "protocols.verification.sampled_proofs": {"primitives.circuits", "primitives.commitments", "protocols.profile"},
+    "protocols.verification.sampled_proofs": {"primitives.circuits", "primitives.commitments", "primitives.randomness",
+                                              "protocols.profile"},
     "protocols.accounting.space.pous": {"claims", "primitives.commitments", "primitives.randomness"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.
     "protocols.accounting.work.pouw": {"primitives.circuits", "primitives.commitments", "primitives.crypto",
