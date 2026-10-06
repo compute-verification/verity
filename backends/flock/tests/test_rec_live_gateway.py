@@ -129,9 +129,9 @@ def test_a_stopped_record_does_not_show_whether_or_when_an_open_was_sent():
 
 
 def _coin_calls(reqs, schedule):
-    """Every call the gateway makes on the coin server while it handles `reqs`, in order."""
+    """Every call the gateway makes on the coin server while it handles `reqs`, in order, the ones it refuses included."""
     coins, calls = RL.CoinServer(T._counter_rand()), []
-    for name in ("start", "commit", "y", "open", "round"):
+    for name in ("start", "commit", "y", "open", "round", "record"):
         f = getattr(coins, name)
         setattr(coins, name, lambda *a, _f=f, _n=name: (calls.append((_n, a)), _f(*a))[1])
     proxy = RL.Proxy(coins, T._salts(), schedule=schedule)
@@ -173,6 +173,30 @@ def test_the_coin_server_never_sees_where_an_open_was_sent():
                     assert calls == honest[:len(calls)]
                 sessions += 1
     assert sessions == 2 * (first[two[0]] + 1) * (first[two[1]] + 1)
+
+
+def test_a_stray_commit_link_or_finish_reaches_the_coin_server_as_a_plain_stop():
+    """A Commit before Hello or after the first, a Link before Commit or after the first, and a Finish before the last
+    round are refused by the gateway itself, before any call on the coin server, so wherever one comes the coin server's
+    calls are a prefix of the honest session's: they show where the session stopped, never which request stopped it
+    (review-zk-gateway's r4)."""
+    two = ("circuit/rep0", "circuit/rep1")
+    sched = _schedule(two)
+    reg, hello = RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO, separators=(",", ":")))
+    commit = RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [("circuit", T.CAP0)], [])
+    link, finish = RL.encode_req(RL.REQ_LINK, bytes(32)), RL.encode_req(RL.REQ_FINISH)
+    base = [reg, hello, commit, link]
+    for s in two:
+        base += [RL.encode_req(RL.REQ_OPEN, s, "", s.replace("circuit", "flock-circuit/fast100").encode(), 0),
+                 RL.encode_req(RL.REQ_ROUND, s, T._binding_round(), 6),
+                 RL.encode_req(RL.REQ_ROUND, s, T._obs([5, 6, 7]) + T._sq(1, RL.KIND_SCALAR), 1)]
+    base += [RL.encode_req(RL.REQ_PROOF, "circuit", 0, b"the proof"), finish]
+    honest = _coin_calls(base, sched)
+    assert [c[0] for c in honest] == ["start", "commit", "y"] + ["open", "round", "round"] * 2
+    for stray in (commit, link, finish):
+        for p in range(len(base)):
+            calls = _coin_calls(base[:p] + [stray] + base[p:], sched)
+            assert calls == honest[:len(calls)], (stray[:1], p)
 
 
 def _serve(tmp_path, sessions, schedule):
