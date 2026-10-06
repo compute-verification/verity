@@ -185,12 +185,17 @@ def run_cell(a: argparse.Namespace) -> int:
 
 
 def cell_rc(rc: int, result: Path) -> int:
-    """A late honest answer is what the sweep measures, not a failed cell: pod.sh's rc unless `timed_audit` is the only gate
-    that failed, so a keeper counts only broken cells toward its pause."""
+    """Late honest answers and a loopback allowance over the cap are what the sweep measures, not a failed cell: pod.sh's rc
+    unless the only failed gates are `timed_audit` and `operating_point` on its `rtt_allowance` alone, so a keeper counts only
+    broken cells toward its pause."""
     if rc == 0 or not result.exists():
         return rc
     gates = json.loads(result.read_text()).get("gates") or {}
-    return 0 if "timed_audit" in gates and all(v.get("passed") for g, v in gates.items() if g != "timed_audit") else rc
+
+    def measured(g: str, v: dict[str, Any]) -> bool:
+        return g == "timed_audit" or (g == "operating_point" and v.get("rtt_allowance") is False and
+                                      all(ok for name, ok in v.items() if name not in ("passed", "rtt_allowance")))
+    return 0 if "timed_audit" in gates and all(v.get("passed") or measured(g, v) for g, v in gates.items()) else rc
 
 
 # --- aggregate --------------------------------------------------------------------------------------------------------------
@@ -313,6 +318,17 @@ def read_cell(run_dir: Path) -> dict[str, Any] | None:
     return row
 
 
+def _pool(cells: list[dict[str, Any]]) -> dict[str, Any]:
+    """Honest audits accepted at each cell's own limit, and at `Δ + RTT_CAP_NS` as [lower, upper] (an audit the run stopped at
+    an answer late at its own limit but inside the cap's could have passed): the cap's interval is the lower count's
+    Clopper-Pearson lower end to the upper count's upper end."""
+    x, n = sum(r["accepted"] for r in cells), sum(r["audits"] for r in cells)
+    lo_x, hi_x = (sum(r["accepted_at_cap_limit"][i] for r in cells) for i in (0, 1))
+    return {"cells": len(cells), "accepted": x, "audits": n, "cp95": list(clopper_pearson(x, n)) if n else None,
+            "accepted_at_cap": [lo_x, hi_x],
+            "cp95_at_cap": [clopper_pearson(lo_x, n)[0], clopper_pearson(hi_x, n)[1]] if n else None}
+
+
 def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
     done = [r for r in rows if r["complete"]]
     table = []
@@ -339,9 +355,9 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
                           "gates_failed": sorted({g for r in cells for g, ok in r["gates"].items() if not ok})})
     pooled = {}
     for ws in WEIGHT_SETS + ("all",):
-        cells = [r for r in done if ws in ("all", r["weight_set"])]
-        x, n = sum(r["accepted"] for r in cells), sum(r["audits"] for r in cells)
-        pooled[ws] = {"cells": len(cells), "accepted": x, "audits": n, "cp95": list(clopper_pearson(x, n)) if n else None}
+        for within in (None, True, False):
+            cells = [r for r in done if ws in ("all", r["weight_set"]) and within in (None, r["allowance_within_cap"])]
+            pooled[ws if within is None else f"{ws}, allowance {'within' if within else 'over'} cap"] = _pool(cells)
     return {"schema": "verity-pous/p2-sweep-table/v0", "delta_ns": DELTA_NS, "rtt_cap_ns": RTT_CAP_NS, "table": table,
             "pooled": pooled, "cells": rows, "incomplete": [r["run"] for r in rows if not r["complete"]]}
 
@@ -354,10 +370,24 @@ def markdown(doc: dict[str, Any]) -> str:
         lines.append(f"| {r['weight_set']} | {r['tokens']} | {r['reps']} | {r['overhead_median']:.2f}x "
                      f"({r['overhead_min']:.2f}-{r['overhead_max']:.2f}) | {r['accepted']}/{r['audits']} | "
                      f"[{r['cp95'][0]:.4f}, {r['cp95'][1]:.4f}] | {r['late_answers']} ({causes}) | {r['rtt_allowance_us_median']:.0f} |")
-    lines += ["", "| pooled | cells | honest accepted | 95% CP |", "|---|---:|---:|---|"]
+    lines += ["", "| pooled | cells | accepted at own limit | 95% CP | accepted at Δ + 354 µs | 95% CP |",
+              "|---|---:|---:|---|---:|---|"]
     for ws, p in doc["pooled"].items():
-        cp = f"[{p['cp95'][0]:.5f}, {p['cp95'][1]:.5f}]" if p["cp95"] else "-"
-        lines.append(f"| {ws} | {p['cells']} | {p['accepted']}/{p['audits']} | {cp} |")
+        if not p["cells"]:
+            continue
+        cp, cap = (f"[{c[0]:.5f}, {c[1]:.5f}]" for c in (p["cp95"], p["cp95_at_cap"]))
+        at_cap = "{}-{}".format(*p["accepted_at_cap"]) if p["accepted_at_cap"][0] != p["accepted_at_cap"][1] else p["accepted_at_cap"][0]
+        lines.append(f"| {ws} | {p['cells']} | {p['accepted']}/{p['audits']} | {cp} | {at_cap}/{p['audits']} | {cap} |")
+    lines += ["", "| run | seed | weight set | T | GPU | allowance µs | accepted (own, at cap) | late | load avg at start | NUMA busy % |",
+              "|---|---:|---|---:|---:|---:|---|---:|---|---:|"]
+    for r in sorted(doc["cells"], key=lambda r: r["seed"]):
+        if not r["complete"]:
+            lines.append(f"| {r['run']} | {r['seed']} | {r['weight_set']} | {r['tokens']} | {r['gpu']} | incomplete | | | | |")
+            continue
+        nb = r["neighbours"]
+        lines.append(f"| {r['run']} | {r['seed']} | {r['weight_set']} | {r['tokens']} | {r['gpu']} | {r['rtt_allowance_ns'] / 1e3:.0f} | "
+                     f"{r['accepted']}, {'-'.join(map(str, sorted(set(r['accepted_at_cap_limit']))))} /{r['audits']} | {r['late']} | "
+                     f"{' '.join(nb['loadavg_start'] or [])} | {nb['numa_busy_mean_pct']} |")
     return "\n".join(lines) + "\n"
 
 

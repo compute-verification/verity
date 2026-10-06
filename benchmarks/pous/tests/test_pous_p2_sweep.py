@@ -50,3 +50,8 @@ def test_a_cell_whose_only_failed_gate_is_timed_audit_succeeds_and_any_other_fai
     assert sweep.cell_rc(1, result) == 1
     result.write_text(json.dumps({"gates": {"operating_point": {"passed": True}}}))
     assert sweep.cell_rc(1, result) == 1
+    over_cap = {"passed": False, "k": True, "rtt_allowance": False, "deadline": True}
+    result.write_text(json.dumps({"gates": {"operating_point": over_cap, "timed_audit": {"passed": False}}}))
+    assert sweep.cell_rc(1, result) == 0
+    result.write_text(json.dumps({"gates": {"operating_point": {**over_cap, "k": False}, "timed_audit": {"passed": True}}}))
+    assert sweep.cell_rc(1, result) == 1
