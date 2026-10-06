@@ -692,7 +692,7 @@ class Challenger:
             raise _refused("coin", str(e)) from None
         except (KeyError, TypeError, ValueError) as e:
             raise _refused("manifest", f"{type(e).__name__}: {e}") from None
-        if hashlib.sha256(raw).hexdigest()[:16] != self.params["context"].rsplit("/", 1)[-1]:
+        if hashlib.sha512(raw).hexdigest()[:16] != self.params["context"].rsplit("/", 1)[-1]:
             raise _refused("manifest", "the pass is not the one the window's parameters name")
         return how
 
@@ -868,7 +868,7 @@ def _pass(pass_dir: Path):
     calls = [u for u in man["matmuls"] if u["k"] == K and u["n"] == K]
     if not calls:
         raise SystemExit(f"{pass_dir}: no call of k = n = {K}")
-    return PD, man, hashlib.sha256(raw).hexdigest(), calls
+    return PD, man, hashlib.sha512(raw).hexdigest(), calls
 
 
 def _weights(man: dict, calls: list[dict]) -> list[int]:
@@ -898,7 +898,7 @@ def cmd_commit(a) -> int:
     if a.call:
         chosen = [next(x for x in calls if x["index"] == i) for i in a.call]
     else:
-        order = sorted(calls, key=lambda u: hashlib.sha256(source + u["index"].to_bytes(8, "little")).digest())
+        order = sorted(calls, key=lambda u: hashlib.sha512(source + u["index"].to_bytes(8, "little")).digest())
         chosen = sorted(order[:a.calls], key=lambda u: u["index"])
     undo = FT.install(scheme)
     window = []
@@ -928,7 +928,7 @@ def cmd_commit(a) -> int:
                 yield data[2 * K * j:2 * K * (j + 1)]
     root_w, _ = commit_weights(params, w_rows())
     public, advice, priv = commit_window(params, window, root_w)
-    advice["provenance"] = {"run": man.get("run"), "manifest_sha256": sha, "scheme": man["scheme"],
+    advice["provenance"] = {"run": man.get("run"), "manifest_sha512": sha, "scheme": man["scheme"],
                             "transcript_root": man.get("transcript_root"), "commitment": man.get("commitment"),
                             "records_root": man.get("records_root"),
                             "call_draw": {"source": source.hex(), "among": [x["index"] for x in calls]} if not a.call else {"given": a.call}}

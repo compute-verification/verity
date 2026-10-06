@@ -58,6 +58,8 @@
 #        lean-st-<case>        the selftest build's records on the first unit: honest ACCEPT; the tampered REJECT
 #        deliver-honest        the drawn units' session records, once                                           DELIVERED
 #        outcome-honest        every drawn unit's verdicts, one audit record; public = PoUW's items            ACCEPT
+#        profile-eps           the outcome's profile at its δ: at most `bound` of its N units wrong, bound / N
+#                              within the window's ε (profile-eps.json)                                        WITHIN
 #        outcome-again         a second outcome of the same registration: final                                 REFUSED
 #        deliver-again         a second delivery of the same draw                                               REFUSED
 #        outcome-foreign-proof the first unit's proof, opening and Lean verdict the other request's             REJECT
@@ -302,6 +304,23 @@ ask deliver-honest "$(req op deliver name honest units "$OUT/units-honest.json")
 expect deliver-honest DELIVERED "$REPLY"
 ask outcome-honest "$(req op outcome name honest units "$OUT/units-honest.json" out "$OUT/outcome-honest")"
 expect outcome-honest ACCEPT "$REPLY"
+v=$("$PY" - "$OUT/outcome-honest/outcome.json" "$RP" "$OUT/profile-eps.json" <<'PY'
+import json, sys
+from fractions import Fraction
+from verity.protocols.profile import Stratified
+o, params, dest = json.load(open(sys.argv[1])), json.load(open(sys.argv[2])), sys.argv[3]
+p = o["profile"]
+(lv,) = p["levels"]
+bound = Stratified.uniform(lv["size"], lv["draw"]["subset"], lv["name"]).count_bound(p["delta"])
+eps = Fraction(params["eps"])
+out = {"delta": p["delta"], "units": lv["size"], "k": lv["draw"]["subset"], "bound": bound, "eps_at_delta": bound / lv["size"],
+       "eps": str(eps), "within": Fraction(bound, lv["size"]) <= eps}
+json.dump(out, open(dest, "w"), sort_keys=True)
+print(("WITHIN " if out["within"] else "ABOVE ") + json.dumps(out, sort_keys=True))
+PY
+)
+log "profile: $v"
+expect profile-eps WITHIN "$(echo "$v" | first)"
 ask outcome-again "$(req op outcome name honest units "$OUT/units-honest.json" out "$W/outcome-again")"
 expect outcome-again REFUSED "$REPLY"
 ask deliver-again "$(req op deliver name honest units "$OUT/units-honest.json")"
