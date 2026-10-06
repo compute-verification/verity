@@ -105,6 +105,29 @@ def test_the_record_lists_streams_in_the_schedules_order_whatever_order_they_wer
     assert recs[0] == recs[1] and list(json.loads(recs[0])["streams"]) == list(two)
 
 
+def _stopped_record(reqs, then_stop=b"not a request"):
+    """The coin server's record of a session sent `reqs` and then a request the gateway refuses."""
+    proxy = _proxy(_schedule())
+    for r in reqs + [then_stop]:
+        proxy.handle(r)
+    return proxy.coins.record()
+
+
+def test_a_stopped_record_does_not_show_whether_or_when_an_open_was_sent():
+    """An Open is accepted any time before its stream's first round, so a stream enters the record only at that round;
+    otherwise two sessions stopped at the same point differ in whether the Open came (the review's probe, r2)."""
+    reg, hello = RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO, separators=(",", ":")))
+    commit = RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [("circuit", T.CAP0)], [])
+    link = RL.encode_req(RL.REQ_LINK, bytes(32))
+    opn = RL.encode_req(RL.REQ_OPEN, "circuit/rep0", "", b"flock-circuit/fast100/rep0", 0)
+    for prefix in ([reg, hello], [reg, hello, commit, link]):
+        recs = [_stopped_record(reqs) for reqs in (prefix, [opn] + prefix, prefix + [opn])]
+        assert recs[0]["end"] == "stop" and recs[0]["streams"] == {}
+        assert recs[1] == recs[0] and recs[2] == recs[0]
+    proxy = _proxy(_schedule())
+    assert _held(_run(proxy)) and list(proxy.coins.record()["streams"]) == ["circuit/rep0"]
+
+
 def _serve(tmp_path, sessions, schedule):
     """`rec_live.serve` on a thread; its result (or what ended it) in ``got``, the address it bound in ``got["addr"]``."""
     bound, got = threading.Event(), {}

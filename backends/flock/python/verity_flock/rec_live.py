@@ -492,9 +492,11 @@ class CoinServer:
 
     def record(self) -> dict:
         """Everything the coin server saw and issued; its streams by name, as a schedule lists them, whatever order the
-        prover opened them in."""
+        prover opened them in. A stream is listed once it has a round: the prover may send an Open any time before the
+        stream's first round, so a stopped session's record would otherwise show when it did."""
         return {"kind": KIND, "tops": TOPS, "hello": self.hello, "link": self.link,
-                "streams": {s: self.streams[s] for s in sorted(self.streams)}, "rounds": self.rounds,
+                "streams": {s: self.streams[s] for s in sorted(self.streams) if self.streams[s]["rounds"]},
+                "rounds": self.rounds,
                 "message_rows": sum(len(r["commits"]) for r in self.rounds), "row_words": ROW_WORDS, "end": self.end}
 
 
