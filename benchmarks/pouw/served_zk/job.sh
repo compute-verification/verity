@@ -6,20 +6,26 @@
 #     --env HZ_CACHE=/workspace/research/cache/pouw-hidden-zk --env HZ_JOB=benchmarks/pouw/served_zk/job.sh -- bash benchmarks/pouw/hidden_zk/scope.sh CPUS GB
 # In order, each step's files under out/:
 #   1. hidden_zk/job.sh's builds (cached under $HZ_CACHE): flock-circuit (proving and selftest builds), Lean flock-verify, a venv
-#   2. commit: served_commit.py commit on the "request" pass (an o_proj call drawn from os.urandom), then on the "other" pass
-#      at the same call index: request/commitment.json, other/commitment.json (public), the prover's rows and salts in scratch
-#   3. draw: served_commit.py draw against request/commitment.json, after it is written (draw.json); the same source against
-#      other/commitment.json (draw-other.json, the foreign control's)
-#   4. stage: stage_tile.py on each pass's rows at the drawn tile: Pc8TileHidden{K=4096,1,1,sm120}
-#   5. the checks, each ACCEPT or REJECT as expected, into summary.json:
-#        open-honest          the request's proof opens the drawn rows of the request's commitment         ACCEPT
-#        open-foreign-proof   the other request's proof, against the request's commitment                  REJECT
-#        open-foreign-commit  the request's proof, against the other request's commitment                  REJECT
-#        lean-honest-own      the Lean verifier on the request's --zk session and public file              ACCEPT
-#        lean-foreign-pub     the same session against the other request's public file                     REJECT
-#        lean-st-<case>       the selftest build's records (verity/flock-circuit+seed-injection): honest ACCEPT;
-#                             message_byte_differs_from_the_committed_row (a tampered byte of an opened row),
-#                             output_row_committed_false, unit_internal_bit_flipped REJECT
+#   2. commit: served_commit.py commit on the "request" pass (an o_proj call picked from os.urandom, or SZ_CALL), then on the
+#      "other" pass at the same call index: <p>/commitment.json (public), the prover's rows and salts in scratch
+#   3. register and receive, one-stage's (verity/registration/v1, one root per side, window.kind "served"): <p>/registration.json,
+#      the verifier's R1-R6 (<p>/check.json) and its receipt (<p>/receipt.json), before any draw
+#   4. draw: Lean flock-verify draw --population N --k 1, from the verifier's own randomness, after the receipt (draw.json)
+#   5. stage: stage_tile.py on each pass's rows at the drawn tile: Pc8TileHidden{K=4096,1,1,sm120}
+#   6. the checks, each as expected, into summary.json:
+#        receive-honest        the verifier receives the request's registration                             RECEIVED
+#        receive-foreign       the request's commitment's ports, against the other request's registration    REFUSED
+#        open-honest           the request's proof opens the drawn tile of the request's registration        ACCEPT
+#        open-foreign-proof    the other request's proof, against the request's registration                 REJECT
+#        open-foreign-commit   the request's proof, against the other request's registration                 REJECT
+#        lean-honest-own       the Lean verifier on the request's --zk session and public file               ACCEPT
+#        lean-foreign-pub      the same session against the other request's public file                      REJECT
+#        lean-st-<case>        the selftest build's records (verity/flock-circuit+seed-injection): honest ACCEPT;
+#                              message_byte_differs_from_the_committed_row (a tampered byte of an opened row),
+#                              output_row_committed_false, unit_internal_bit_flipped REJECT
+#        audit-<case>          one-stage's audit record (verity/one-stage/audit/v0, audit-<case>.json): the registration,
+#                              receipt, draw and statement with the Lean verdict of record, the opening check and Rust's.
+#                              honest ACCEPT; foreign-proof, foreign-commit and st-<each tampered case> REJECT
 #      The Rust side's verdicts: the --zk session's own (prove.out) and each selftest case's (NEG lines).
 set -uo pipefail
 SRC=$(pwd)
@@ -37,42 +43,52 @@ setup
 log "served-zk: passes $PASSES"
 for p in request other; do [ -f "$PASSES/$p/manifest.json" ] || { log "no $PASSES/$p/manifest.json"; exit 2; }; done
 
-log "commit: request"
-$TIME "$OUT/commit-request.time" "$WORK/venv312/bin/python" "$SC" commit "$PASSES/request" "$W/request" > "$OUT/commit-request.out" 2>&1 \
-  || { log "commit FAILED: $(tail -3 "$OUT/commit-request.out")"; exit 3; }
-mkdir -p "$OUT/request" "$OUT/other" && cp "$W/request/commitment.json" "$OUT/request/"
-CALL=$("$PY" -c "import json; print(json.load(open('$W/request/commitment.json'))['binding']['matmul'])")
-log "commit: request call $CALL: $(tail -1 "$OUT/commit-request.out")"
-log "draw (after the commitment is written)"
-"$PY" "$SC" draw "$W/request/commitment.json" "$OUT/draw.json" | tee -a "$OUT/job.log"
-log "commit: other, call $CALL"
-$TIME "$OUT/commit-other.time" "$WORK/venv312/bin/python" "$SC" commit "$PASSES/other" "$W/other" --call "$CALL" > "$OUT/commit-other.out" 2>&1 \
-  || { log "commit FAILED: $(tail -3 "$OUT/commit-other.out")"; exit 3; }
-cp "$W/other/commitment.json" "$OUT/other/"
-"$PY" "$SC" draw "$W/other/commitment.json" "$OUT/draw-other.json" \
-  --source "$("$PY" -c "import json; print(json.load(open('$OUT/draw.json'))['source'])")" > /dev/null
+declare -A VERDICT EXPECT
+expect() { EXPECT[$1]=$2; VERDICT[$1]=$3; log "  $1: $3 (expected $2)"; }
+mkdir -p "$OUT/request" "$OUT/other"
+CALL=${SZ_CALL:-}
+for p in request other; do
+  log "commit: $p${CALL:+, call $CALL}"
+  $TIME "$OUT/commit-$p.time" "$WORK/venv312/bin/python" "$SC" commit "$PASSES/$p" "$W/$p" ${CALL:+--call "$CALL"} \
+    > "$OUT/commit-$p.out" 2>&1 || { log "commit FAILED: $(tail -3 "$OUT/commit-$p.out")"; exit 3; }
+  cp "$W/$p/commitment.json" "$OUT/$p/"
+  CALL=$("$PY" -c "import json; print(json.load(open('$OUT/$p/commitment.json'))['binding']['matmul'])")
+  log "commit: $p call $CALL: $(tail -1 "$OUT/commit-$p.out")"
+  log "register: $p: $("$PY" "$SC" register "$OUT/$p/commitment.json" "$OUT/$p/registration.json")"
+done
+log "receive (the verifier's R1-R6 and its receipt, before the draw)"
+v=$("$PY" "$SC" receive "$OUT/request/commitment.json" "$OUT/request/registration.json" "$OUT/request" | tee "$OUT/receive-honest.out" | cut -d' ' -f1)
+expect receive-honest RECEIVED "${v:-ERROR}"
+"$PY" "$SC" receive "$OUT/other/commitment.json" "$OUT/other/registration.json" "$OUT/other" > "$OUT/receive-other.out"
+v=$("$PY" "$SC" receive "$OUT/request/commitment.json" "$OUT/other/registration.json" "$W/receive-foreign" | tee "$OUT/receive-foreign.out" | cut -d' ' -f1)
+expect receive-foreign REFUSED "${v:-ERROR}"
+[ -f "$OUT/request/receipt.json" ] && [ -f "$OUT/other/receipt.json" ] || { log "receive FAILED: $(cat "$OUT/receive-honest.out" "$OUT/receive-other.out")"; exit 3; }
+POP=$("$PY" -c "import json; print(json.load(open('$OUT/request/registration.json'))['population'])")
+log "draw: $LEAN draw --population $POP --k 1 (the verifier's own randomness, after the receipt)"
+"$LEAN" draw --population "$POP" --k 1 > "$OUT/draw.out" 2>&1 || { log "draw FAILED: $(tail -2 "$OUT/draw.out")"; exit 3; }
+sed -n 's/^DRAW //p' "$OUT/draw.out" > "$OUT/draw.json"
+log "draw: $(cat "$OUT/draw.json")"
 
 D=$W/served-k4096 O=$OUT/served-k4096 DO=$W/other-k4096
 mkdir -p "$D" "$O" "$DO"
-for x in "request $D draw.json" "other $DO draw-other.json"; do
-  read -r p dir dr <<< "$x"
+for x in "request $D" "other $DO"; do
+  read -r p dir <<< "$x"
   log "stage: $p"
-  $TIME "$OUT/stage-$p.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $Z/stage_tile.py $W/$p $OUT/$dr $dir" > "$OUT/stage-$p.out" 2>&1 \
+  $TIME "$OUT/stage-$p.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $Z/stage_tile.py $W/$p $OUT/draw.json $dir" > "$OUT/stage-$p.out" 2>&1 \
     || { log "stage FAILED: $(tail -3 "$OUT/stage-$p.out")"; exit 4; }
   cp "$dir/stage.json" "$OUT/$p/stage.json"; cp "$dir/opening.json" "$dir/pin.txt" "$OUT/$p/"; cp "$dir/pub.bin" "$OUT/$p/pub.bin"
 done
-log "staged: $("$PY" -c "import json; s = json.load(open('$OUT/request/stage.json')); print(s['definition'], s['ands'], 'ANDs, k_log', s['k_log'], 'draw', s['draw']['a'], s['draw']['b'], s['seconds'], 's')")"
+log "staged: $("$PY" -c "import json; s = json.load(open('$OUT/request/stage.json')); print(s['definition'], s['ands'], 'ANDs, k_log', s['k_log'], 'units', s['draw']['units'], s['seconds'], 's')")"
 
-declare -A VERDICT EXPECT
-expect() { EXPECT[$1]=$2; VERDICT[$1]=$3; log "  $1: $3 (expected $2)"; }
-opencheck() {   # opencheck TAG EXPECT COMMIT DRAW PUB OPENING
-  local v; v=$("$PY" "$SC" check "$3" "$4" "$5" "$6" | tee "$OUT/$1.out" | cut -d' ' -f1)
+opencheck() {   # opencheck TAG EXPECT SIDE(registration and commitment) PUB OPENING
+  local v; v=$("$PY" "$SC" check "$OUT/$3/registration.json" "$OUT/$3/commitment.json" "$OUT/draw.json" "$4" "$5" --out "$OUT/$1.json" \
+    | tee "$OUT/$1.out" | cut -d' ' -f1)
   expect "$1" "$2" "${v:-ERROR}"
 }
 log "opening checks"
-opencheck open-honest ACCEPT "$OUT/request/commitment.json" "$OUT/draw.json" "$D/pub.bin" "$D/opening.json"
-opencheck open-foreign-proof REJECT "$OUT/request/commitment.json" "$OUT/draw.json" "$DO/pub.bin" "$D/opening.json"
-opencheck open-foreign-commit REJECT "$OUT/other/commitment.json" "$OUT/draw-other.json" "$D/pub.bin" "$DO/opening.json"
+opencheck open-honest ACCEPT request "$D/pub.bin" "$D/opening.json"
+opencheck open-foreign-proof REJECT request "$DO/pub.bin" "$D/opening.json"
+opencheck open-foreign-commit REJECT other "$D/pub.bin" "$DO/opening.json"
 
 log "--zk session ($WARM warm + $RUNS timed)"
 session "$D" "$O" || log "--zk session FAILED: $(tail -2 "$O/prove.err")"
@@ -90,6 +106,21 @@ expect lean-foreign-pub REJECT "$(lean_verdict "$O/lean-foreign-pub.out")"
 for c in $HZ_CASES; do
   [ -f "$O/lean-st-$c.out" ] || continue
   expect "lean-st-$c" "$([ "$c" = honest ] && echo ACCEPT || echo REJECT)" "$(lean_verdict "$O/lean-st-$c.out")"
+done
+
+auditrec() {   # auditrec CASE EXPECT SIDE(registration and receipt) STAGE PUB LEAN OPENING [RUST]
+  local v; v=$("$PY" "$SC" audit "$OUT/$3/registration.json" "$OUT/$3/receipt.json" "$OUT/draw.json" "$4" "$5" "$OUT/audit-$1.json" \
+    --lean "$6" --opening "$7" ${8:+--rust "$8"} | tee "$OUT/audit-$1.out" | cut -d' ' -f2)
+  expect "audit-$1" "$2" "${v:-ERROR}"
+}
+log "audit records (verity/one-stage/audit/v0)"
+auditrec honest ACCEPT request "$OUT/request/stage.json" "$D/pub.bin" "$O/lean-honest-own.out" "$OUT/open-honest.json" "$O/prove.out"
+auditrec foreign-proof REJECT request "$OUT/other/stage.json" "$DO/pub.bin" "$O/lean-foreign-pub.out" "$OUT/open-foreign-proof.json"
+auditrec foreign-commit REJECT other "$OUT/request/stage.json" "$D/pub.bin" "$O/lean-honest-own.out" "$OUT/open-foreign-commit.json" "$O/prove.out"
+for c in $HZ_CASES; do
+  [ -f "$O/lean-st-$c.out" ] || continue
+  auditrec "st-$c" "$([ "$c" = honest ] && echo ACCEPT || echo REJECT)" request "$OUT/request/stage.json" "$D/pub.bin" \
+    "$O/lean-st-$c.out" "$OUT/open-honest.json"
 done
 
 {

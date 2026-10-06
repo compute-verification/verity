@@ -1,5 +1,6 @@
 """served_zk's commitment and its check (`served_zk/served_commit.py`): a served call's fp8-p rows committed as C-Flock commits
-a unit's rows, and a tile proof's public file accepted only when its committed rows are the drawn rows of that commitment."""
+a unit's rows, registered and received as one-stage's v1 record, a tile proof's public file accepted only when its committed
+rows are the drawn tile's rows of that registration, and the audit record that holds them with the verdicts."""
 from __future__ import annotations
 
 import hashlib
@@ -16,6 +17,8 @@ from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import DEVICES
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC  # noqa: E402
+from verity.protocols.verification.sampled_proofs.one_stage import audit as A  # noqa: E402
+from verity.protocols.verification.sampled_proofs.one_stage import registration as R  # noqa: E402
 
 K, M, N = 128, 3, 4
 
@@ -40,8 +43,9 @@ def served():
 def _commit(words, run="r-request"):
     binding = {"run": run, "manifest_sha256": "00" * 32, "scheme": "pearl-c-sm120-v1-h2", "matmul": 5, "shape": [16, K, N],
                "weight": 2, "real_rows": M + 1}
-    sides, priv = SC.commit_words(binding, words, K)
-    return {"schema": SC.SCHEMA, "binding": binding, "sides": sides}, priv
+    st = SC.statement_of(K, M + 1, N, f"{run}/matmul-5")
+    sides, priv = SC.commit_words(st, words, K)
+    return {"schema": SC.SCHEMA, "binding": binding, "statement": st, "sides": sides, "served": {}}, priv
 
 
 def _pub(bca: bytes, bcb: bytes, c) -> bytes:
@@ -52,8 +56,9 @@ def _pub(bca: bytes, bcb: bytes, c) -> bytes:
     return json.dumps(head).encode() + b"\n" + bca + bcb + bytes(128)
 
 
-def _draw(c, a, b):
-    return {"commitment_sha256": hashlib.sha256(json.dumps(c, sort_keys=True).encode()).hexdigest(), "a": a, "b": b}
+def _draw(a, b):
+    """The Lean verifier's subset:1 draw (`DRAW {…}`) of tile (a, b)."""
+    return {"law": "subset", "population": (M + 1) * N, "k": 1, "units": [a * N + b]}
 
 
 def test_rows_are_the_schemes_operands(served):
@@ -69,31 +74,116 @@ def test_rows_are_the_schemes_operands(served):
 
 def test_commitment_is_the_statements(served):
     """A row's b || c is C-Flock's commit of the row under its salt (`leaves.commit`), and each side's root the frame over
-    those leaves; the refused row is listed as excluded."""
+    those leaves under one-stage's served domain; the refused row is listed as excluded."""
     *_, words = served
     c, priv = _commit(words)
     assert c["sides"]["a"]["excluded"] == [M] and c["sides"]["b"]["excluded"] == []
     assert priv["b"]["bcs"][2] == L.commit("fp8-p", SC.SIDES["b"], words["b"][2], priv["b"]["salts"][2])
-    again, _ = SC.commit_words(c["binding"], words, K, {s: p["salts"] for s, p in priv.items()})
+    again, _ = SC.commit_words(c["statement"], words, K, {s: p["salts"] for s, p in priv.items()})
     assert again == c["sides"]
+    st = c["statement"]
+    for side, s in c["sides"].items():
+        assert s["domain_id"] == R.served_domain(st["program"], st["partition"], side, s["schema"], s["rows"], st["run"])
+
+
+def test_the_registration_is_received_before_the_draw(served):
+    """The committer's record is v1 with one root per side, the law subset:1 and a served window, over the call's tiles;
+    the verifier's R1-R6 hold it to its own copies and its receipt names it.  A record whose root count or domain is not
+    the verifier's own, or a stand-in window under the served run, is refused (no receipt)."""
+    *_, words = served
+    c, _ = _commit(words)
+    rec = SC.registration_of(c)
+    assert rec["format"] == R.FORMAT and rec["window"]["kind"] == "served" and rec["population"] == (M + 1) * N
+    assert [r["port"] for r in rec["roots"]] == ["a", "b"] and rec["law"] == SC.LAW
+    v, receipt = SC.receive(c, rec)
+    assert v["ok"] and receipt["registration"] == R.digest(rec)
+    bad = json.loads(json.dumps(rec))
+    bad["roots"][1]["leaves"] += 1
+    v, receipt = SC.receive(c, bad)
+    assert not v["ok"] and "R3-leaves" in v["codes"] and receipt is None
+    other, _ = _commit(words, run="r-other")
+    moved = {**rec, "roots": SC.registration_of(other)["roots"]}
+    v, receipt = SC.receive(c, moved)
+    assert not v["ok"] and "R3-domain" in v["codes"] and receipt is None
 
 
 def test_check_accepts_the_drawn_rows_only(served, tmp_path):
     *_, words = served
     c, priv = _commit(words)
+    rec = SC.registration_of(c)
     SC.save(tmp_path / "p.npz", priv)
     priv = SC.load(tmp_path / "p.npz")
     op = {"a": SC.opening(c, "a", priv["a"]["bcs"], 1), "b": SC.opening(c, "b", priv["b"]["bcs"], 3)}
     honest = _pub(priv["a"]["bcs"][1], priv["b"]["bcs"][3], c)
-    assert SC.check(c, _draw(c, 1, 3), honest, op) is None
+    assert SC.check(rec, c, _draw(1, 3), honest, op) is None
     # another row of the same commitment, opened at the drawn position
-    assert "not the commitment's row" in SC.check(c, _draw(c, 1, 3), _pub(priv["a"]["bcs"][0], priv["b"]["bcs"][3], c), op)
-    # the drawn rows of another request's commitment
+    assert "not the registered row" in SC.check(rec, c, _draw(1, 3), _pub(priv["a"]["bcs"][0], priv["b"]["bcs"][3], c), op)
+    # the drawn rows of another request's commitment, and this proof against another request's registration
     other, opriv = _commit(words, run="r-other")
-    assert "not the commitment's row" in SC.check(c, _draw(c, 1, 3), _pub(opriv["a"]["bcs"][1], opriv["b"]["bcs"][3], c), op)
+    orec = SC.registration_of(other)
+    assert "not the registered row" in SC.check(rec, c, _draw(1, 3), _pub(opriv["a"]["bcs"][1], opriv["b"]["bcs"][3], c), op)
     oop = {"a": SC.opening(other, "a", opriv["a"]["bcs"], 1), "b": SC.opening(other, "b", opriv["b"]["bcs"], 3)}
-    assert "not the commitment's row" in SC.check(other, _draw(other, 1, 3), honest, oop)
-    # a draw against another commitment, an opening of another row, an excluded row
-    assert SC.check(c, _draw(other, 1, 3), honest, op) == "the draw names another commitment"
-    assert "not the drawn row" in SC.check(c, _draw(c, 2, 3), honest, op)
-    assert "excluded" in SC.check(c, _draw(c, M, 3), honest, op)
+    assert "not the registered row" in SC.check(orec, other, _draw(1, 3), honest, oop)
+    # roots registered under another run's domain, an opening of another row, an excluded row, a draw of two units
+    assert "served domain" in SC.check({**rec, "window": {**rec["window"], "run": "r-other/matmul-5"}}, c, _draw(1, 3), honest, op)
+    assert "not the drawn row" in SC.check(rec, c, _draw(2, 3), honest, op)
+    assert "excluded" in SC.check(rec, c, _draw(M, 3), honest, op)
+    assert "not one" in SC.check(rec, c, {**_draw(1, 3), "k": 2, "units": [3, 4]}, honest, op)
+
+
+def test_the_audit_record_accepts_only_when_lean_and_the_opening_accept(served):
+    """One-stage's audit record of the drawn tile: the registration, receipt and draw, the proved unit and the verdicts.
+    It is accepted, with its profile, only when the Lean verdict of record and the opening check both accept and the draw
+    is the registration's; a rejected Lean verdict, a rejected opening, or a receipt of another record leave it
+    rejected."""
+    *_, words = served
+    c, _ = _commit(words)
+    rec = SC.registration_of(c)
+    _, receipt = SC.receive(c, rec)
+    stage = {"definition": "Pc8TileHidden", "circuit_sha512": "11" * 64, "class_sha512": "22" * 64, "ands": 7, "k_log": 3,
+             "binding": "hash scratch"}
+    yes = {"of_record": False, "accepted": True, "why": ""}
+    lean = {"of_record": True, "accepted": True, "why": "", "digest": "33" * 64}
+    a = SC.audit(rec, receipt, _draw(1, 3), stage, b"pub", {"lean": lean, "opening": yes, "rust": None})
+    assert a["format"] == A.FORMAT and a["accepted"] and a["complete"] and a["proved_units"] == [1 * N + 3]
+    assert a["statement"]["tile"] == [1, 3] and a["integrity_profile"]["registration"] == R.digest(rec)
+    assert a["verdicts"]["opening"]["accepted"] and all(ch["ok"] for ch in a["checks"].values())
+    assert not SC.audit(rec, receipt, _draw(1, 3), stage, b"pub", {"lean": {**lean, "accepted": False}, "opening": yes})["accepted"]
+    assert not SC.audit(rec, receipt, _draw(1, 3), stage, b"pub", {"lean": lean, "opening": {**yes, "accepted": False}})["accepted"]
+    other = SC.registration_of(_commit(words, run="r-other")[0])
+    assert not SC.audit(rec, R.receipt(other, SC.VERIFIER), _draw(1, 3), stage, b"pub", {"lean": lean, "opening": yes})["accepted"]
+
+
+def test_lean_and_rust_verdicts_are_read_from_their_outputs(tmp_path):
+    (tmp_path / "lean.out").write_text('setup: 3 ms\nVERDICT {"accepted":false,"why":"ring-switch claim 2 mismatch"}\n')
+    v = SC.lean_verdict(tmp_path / "lean.out")
+    assert v["of_record"] and v["accepted"] is False and "ring-switch" in v["why"] and len(v["digest"]) == 128
+    (tmp_path / "none.out").write_text("")
+    assert SC.lean_verdict(tmp_path / "none.out")["accepted"] is None
+    (tmp_path / "prove.out").write_text('LIVE\t{"verdict": {"accepted": true, "why": ""}}\n')
+    assert SC.rust_verdict(tmp_path / "prove.out")["accepted"] is True and not SC.rust_verdict(tmp_path / "prove.out")["of_record"]
+
+
+def test_the_cli_registers_receives_checks_and_audits(served, tmp_path):
+    """The job's steps through `main`: register, receive (check.json and receipt.json), the opening check's verdict file,
+    and the audit record accepting the honest tile."""
+    *_, words = served
+    c, priv = _commit(words)
+    (tmp_path / "commitment.json").write_text(json.dumps(c))
+    assert SC.main(["register", str(tmp_path / "commitment.json"), str(tmp_path / "registration.json")]) == 0
+    assert SC.main(["receive", str(tmp_path / "commitment.json"), str(tmp_path / "registration.json"), str(tmp_path)]) == 0
+    assert json.loads((tmp_path / "check.json").read_text())["ok"]
+    (tmp_path / "draw.json").write_text(json.dumps(_draw(1, 3)))
+    (tmp_path / "pub.bin").write_bytes(_pub(priv["a"]["bcs"][1], priv["b"]["bcs"][3], c))
+    (tmp_path / "opening.json").write_text(json.dumps({"a": SC.opening(c, "a", priv["a"]["bcs"], 1),
+                                                       "b": SC.opening(c, "b", priv["b"]["bcs"], 3)}))
+    names = ("registration", "commitment", "draw")
+    assert SC.main(["check", *(str(tmp_path / f"{n}.json") for n in names), str(tmp_path / "pub.bin"),
+                    str(tmp_path / "opening.json"), "--out", str(tmp_path / "open.json")]) == 0
+    (tmp_path / "stage.json").write_text(json.dumps({"definition": "d", "circuit_sha512": "1", "class_sha512": "2", "ands": 1,
+                                                     "k_log": 1, "binding": "hash scratch"}))
+    (tmp_path / "lean.out").write_text('VERDICT {"accepted":true,"why":""}\n')
+    assert SC.main(["audit", *(str(tmp_path / f"{n}.json") for n in ("registration", "receipt", "draw", "stage")),
+                    str(tmp_path / "pub.bin"), str(tmp_path / "audit.json"), "--lean", str(tmp_path / "lean.out"),
+                    "--opening", str(tmp_path / "open.json")]) == 0
+    assert json.loads((tmp_path / "audit.json").read_text())["accepted"]

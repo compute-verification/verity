@@ -50,7 +50,9 @@ def main() -> None:
     c = json.loads((src / "commitment.json").read_text())
     priv = SC.load(src / "prover.npz")
     k = c["binding"]["shape"][1]
-    i, j = draw["a"], draw["b"]
+    if len(draw["units"]) != 1:
+        raise SystemExit(f"the draw has {len(draw['units'])} units; this stages one tile")
+    i, j = SC.tile_of(*c["statement"]["tiles"], draw["units"][0])
     d = pc8.templates(k, TILE, DEV, hidden=True)["tile"]
     bits = 16 * L.ROW_WORDS["fp8-p"](k)
     in_rows = [("a0", L.ROW_SCHEMA["fp8-p", ROLE_X], bits, ["ac[0]", "pa[0]"]),
