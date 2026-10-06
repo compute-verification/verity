@@ -65,7 +65,8 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.accounting.work.pouw.audit import Epoch, Workload, rows_domain, transcript_domain
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
+from verity.protocols.accounting.work.pouw.coins import CoinCommitment, CoinOpening
+from verity.protocols.accounting.work.pouw.protocol import DomainError, Matmul, Shape
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
 from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
@@ -162,6 +163,35 @@ def scheme_of(name: str, **instance: Any) -> C.PearlC:
     if s.name != name:
         raise ValueError(f"the scheme built for {name!r} names itself {s.name!r}")
     return s
+
+
+def manifest_epoch(man: dict, coins: CoinCommitment | None, recorded: bool = False) -> tuple[Epoch, str]:
+    """A retained pass's epoch, as its verifier re-starts it, and how its salt was had.  A pass carries the epoch's coin
+    commitment and its salt coin's opening: the commitment must be `coins`, the one the challenger published (the verifier's
+    copy, not the pass's), and the opening the salt coin's against it, opened after every weight's root (`Epoch.start`).
+    A pass recorded before epoch coins carries a beacon instead, which only a replay of a recorded pass reads (`recorded`:
+    `Epoch.unverified`, a salt that claims nothing).  Either way the pass's salt must be the epoch's.  Raises `DomainError`
+    naming what doesn't hold."""
+    matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
+    roots = {int(w): bytes.fromhex(v["root"]) for w, v in man["weights"].items()}
+    if "salt_opening" in man:
+        if coins is None:
+            raise DomainError("the pass's salt coin opens against the epoch's published coin commitment, which the verifier holds")
+        try:
+            opening = CoinOpening.from_json(man["salt_opening"])
+            claimed = CoinCommitment.from_json(man["coins"])
+        except (KeyError, TypeError, ValueError) as e:
+            raise DomainError(f"the pass's coins are malformed: {e}") from None
+        if claimed != coins:
+            raise DomainError("the pass's coin commitment is not the epoch's")
+        epoch, how = Epoch.start(Workload(matmuls), roots, coins, opening), "coin"
+    elif recorded and "beacon" in man:
+        epoch, how = Epoch.unverified(Workload(matmuls), roots, bytes.fromhex(man["beacon"])), "recorded beacon"
+    else:
+        raise DomainError("the pass has no salt coin" + ("" if recorded else " (a pass recorded before epoch coins is a replay's)"))
+    if epoch.salt.hex() != man.get("salt"):
+        raise DomainError(f"the pass's salt is not its {how}'s and the weights'")
+    return epoch, how
 
 
 def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
@@ -347,8 +377,11 @@ class PearlCDeviceRun(GraphCalls):
     the passes the bench and the verifier need (`begin`, `end`)."""
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
-                 salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
-                 schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w", whole_defer: bool = False):
+                 coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
+                 time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w",
+                 whole_defer: bool = False):
+        """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
+        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's."""
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.rows_form = rows_form
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
@@ -357,14 +390,15 @@ class PearlCDeviceRun(GraphCalls):
         self.variant = scheme.device.name
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
         self.torch_stream = _TorchStream()
-        self.salt, self.beacon, self.roots = salt, beacon, dict(roots)
+        self.roots, self.coins, self.opening = dict(roots), coins, opening
+        self.epoch = Epoch.start(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
+                                 self.roots, coins, opening)
+        self.salt = salt = self.epoch.salt
         self.device = next(iter(weights.values())).device
         self.schedule = schedule_of(schedule, scheme)
         self.main: _Lane | None = None      # the main lane, when the schedule runs it above the caller's priority
         self.side: _Lane | None = None      # the side lane, when the schedule has one
         self._launching: Any = None          # the torch stream the current step group launches on (the GEMM's timing events)
-        self.epoch = Epoch(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
-                           self.roots, salt)
         self.const = _constants(kernel, scheme, self.device)
         self.leaves = _zeros(32 * capacity, self.device)
         self.roots_buf = _zeros(32 * CALL_CAPACITY, self.device)
@@ -386,6 +420,7 @@ class PearlCDeviceRun(GraphCalls):
         self.pipes: dict[tuple[int, int, frozenset, bool], tuple[Any, list[Any]]] = {}
         self.stream = lambda: _stream(self.device)
         self.commits: dict[str, Any] = {"scheme": scheme.name, "salt": salt.hex(), "weights_root": self.epoch.weights_root.hex(),
+                                        "coins": coins.to_json(), "salt_opening": opening.to_json(),
                                         "transcript_root": None, "units": 0, "tiles": 0}
         self.details: dict[str, Any] = {
             "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]}, "
@@ -730,7 +765,8 @@ class PearlCDeviceRun(GraphCalls):
                    for u, r, f in zip(cur.matmuls, cur.records, cur.files)]
         head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
                 "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
-                "beacon": self.beacon.hex(), "salt": self.salt.hex(), "cubin_sha256": self.kernel.cubin_sha256,
+                "coins": self.coins.to_json(), "salt_opening": self.opening.to_json(), "salt": self.salt.hex(),
+                "cubin_sha256": self.kernel.cubin_sha256,
                 "kernel_source_sha256": self.kernel.source_sha256, "schedule": self.details["schedule"],
                 "records_root": PW.records_root(self.salt, epoch.weights_root,
                                                 {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}, cur.records).hex(),
