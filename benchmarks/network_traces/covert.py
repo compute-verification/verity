@@ -24,7 +24,7 @@ injected clock. `measure` reports the achieved rate from the proxy's logged decl
 the symbol the sender sent and the sync the receiver read, the symbol error rate of a concrete decoder, and the bits a
 decoder recovers per window. Every number is `≤ log2 #Σ_sync`; a measurement above it would be a soundness finding.
 
-Stdlib only; it imports the warden's `schedule` and `online` and nothing from the benchmark harness, so the tests and
+Stdlib only; it imports the certifier's `schedule` and `online` and nothing from the benchmark harness, so the tests and
 `active_replay.py` share it.
 """
 
@@ -37,8 +37,8 @@ import random
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 
-from verity.protocols.accounting.communication.warden import online
-from verity.protocols.accounting.communication.warden.schedule import ClockSync, LogicalFrame, SyncSet
+from verity.protocols.accounting.communication.certifier import online
+from verity.protocols.accounting.communication.certifier.schedule import ClockSync, LogicalFrame, SyncSet
 
 
 def encode_writes(keys: Sequence[tuple[int, int, int, int]], sessions: Sequence[list], sync_set: SyncSet,
