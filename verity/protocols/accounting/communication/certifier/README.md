@@ -16,6 +16,14 @@ It is pure Python. It imports only the standard library and `verity`, for the re
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean package.
 
+The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
+`verity/Security/Specs/NetworkCertifier/Guarantees.lean`'s documentation:
+- the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
+  scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
+  `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;
+- the challenger's coins (D7), an ingress link whose timing is charged on the ingress grid and whose content costs
+  0 bits.
+
 ~~~python
 from verity.protocols.accounting.communication.certifier.audit import Audit
 from verity.protocols.accounting.communication.certifier.grid import GridParams, Certifier
