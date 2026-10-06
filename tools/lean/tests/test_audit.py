@@ -457,13 +457,16 @@ def test_a_theorem_s_statement_is_read_from_its_source():
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
     """On a real build: `lift` writes `def G : Prop` (doc comment, universe parameters, binders across lines) into a
-    `Guarantees` module and `theorem X.SecurityProofs.G : X.Guarantees.G` beside the proof, which then imports it; after a
-    build, `--update --moved` with the moves it returns certifies each as the same statement under its old name, and the
-    record changes no statement."""
+    `Guarantees` module, which then imports the module of the definition it reads, and `theorem X.SecurityProofs.G :
+    X.Guarantees.G` beside the proof, or in the module `beside` names, which then imports the spec module and the proof's;
+    after a build, `--update --moved` with the moves it returns certifies each as the same statement under its old name,
+    and the record changes no statement."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
-    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Lifts\nimport Control.Guarantees\n")
-    (pkg / "Control" / "Guarantees.lean").write_text("import Control.Defs\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text()
+                                      + "import Control.Lifts\nimport Control.Guarantees\nimport Control.Collect\n")
+    (pkg / "Control" / "Guarantees.lean").write_text("")
+    (pkg / "Control" / "Collect.lean").write_text("import Control.Defs\n")
     (pkg / "Control" / "Lifts.lean").write_text(
         "import Control.Defs\nopen Nat\nnamespace Control.Sub\n"
         "/-- Doubling is adding. -/\ntheorem twice {m : Nat} (n : Nat)\n    (h : m = n) :\n    double n = n + n := by\n"
@@ -477,7 +480,8 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
     build()
     assert audit(update=True)["failures"] == []
     rep = audit(lifts={"Control.Sub.twice": {"as": "Control.Guarantees.Twice", "into": "Control.Guarantees"},
-                       "Control.Sub.refl": {"as": "Control.Guarantees.Refl", "into": "Control.Guarantees"}})
+                       "Control.Sub.refl": {"as": "Control.Guarantees.Refl", "into": "Control.Guarantees",
+                                            "beside": "Control.Collect"}})
     assert rep["failures"] == [] and rep["moved"] == {"Control.Sub.twice": "Control.SecurityProofs.Twice",
                                                       "Control.Sub.refl": "Control.SecurityProofs.Refl"}
     assert (pkg / "Control" / "Guarantees.lean").read_text() == (
@@ -488,11 +492,28 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
     lifts = (pkg / "Control" / "Lifts.lean").read_text()
     assert lifts.startswith("import Control.Defs\nimport Control.Guarantees\nopen Nat\n") and lifts.endswith(
         "\ntheorem Control.SecurityProofs.Twice : Control.Guarantees.Twice := @Control.Sub.twice\n")
-    assert "\ntheorem Control.SecurityProofs.Refl.{u} : Control.Guarantees.Refl.{u} := @Control.Sub.refl.{u}\n" in lifts
+    assert "Refl" not in lifts
+    assert (pkg / "Control" / "Collect.lean").read_text() == (
+        "import Control.Defs\nimport Control.Guarantees\nimport Control.Lifts\n\n"
+        "theorem Control.SecurityProofs.Refl.{u} : Control.Guarantees.Refl.{u} := @Control.Sub.refl.{u}\n")
     build()
     rep = audit(update=True, moved=rep["moved"])
     assert rep["failures"] == [] and A.statement_changes(rep["review"]) == []
     assert set(A.load(pkg)["guarantees"]) == {"Control.main_thm", "Control.SecurityProofs.Twice", "Control.SecurityProofs.Refl"}
+
+
+def test_a_lift_whose_statement_reads_a_proof_package_s_definition_is_refused(tmp_path):
+    (tmp_path / "spec" / "Spec").mkdir(parents=True)
+    (tmp_path / "proofs" / "Proofs").mkdir(parents=True)
+    (tmp_path / "spec" / "Spec" / "Guarantees.lean").write_text("")
+    (tmp_path / "proofs" / "Proofs" / "D.lean").write_text("def P.d : Nat := 0\n")
+    (tmp_path / "proofs" / "Proofs" / "T.lean").write_text("import Proofs.D\ntheorem P.t : P.d = 0 := rfl\n")
+    facts = {"pins": {"P.t": {"kind": "theorem", "at": [2, 0], "module": "Proofs.T",
+                              "reads": [{"name": "P.d", "module": "Proofs.D"}]}}}
+    with pytest.raises(ValueError, match="reads definitions of Proofs.D"):
+        A.lift(tmp_path / "spec", {"proved_in": ["../proofs"]}, facts,
+               {"P.t": {"as": "P.Guarantees.T", "into": "Spec.Guarantees"}})
+    assert (tmp_path / "spec" / "Spec" / "Guarantees.lean").read_text() == ""
 
 
 def test_generated_constants_belong_to_their_declaration():

@@ -30,7 +30,8 @@ python tools/lean/audit.py --name-instances PKG...  write each anonymous instanc
                                                   declaration (no record changes)
 python tools/lean/audit.py --lift LIFTS.json PKG  write each guarantee {"X.t": {"as": "X.Guarantees.G", "into": MODULE}}
                                                   as `def G : Prop` in MODULE and `theorem X.SecurityProofs.G :
-                                                  X.Guarantees.G := @X.t` beside its proof; then build and run
+                                                  X.Guarantees.G := @X.t` beside its proof (or in the module
+                                                  `"beside": M` names); then build and run
                                                   `--update --moved LIFTS.json.moved.json PKG` (below)
 python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
@@ -205,7 +206,9 @@ lists a lifted guarantee as changed.
 `audit.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` with the theorem's doc comment,
 binders and type as its source writes them, in the theorem's namespace with its file's `open`s so that its names resolve
 as they did, and `theorem X.SecurityProofs.G : X.Guarantees.G := @X.t` beside the proof, whose module then imports the
-spec module. It writes the moves (`LIFTS.json.moved.json`, each `X.t` to `X.SecurityProofs.G`) for `--update --moved`,
+spec module; `"beside": M` puts the theorem in `M` instead (a package that collects its guarantees' proofs in one module),
+which then imports the proof's module too. The spec module imports the modules of the definitions the statement reads, and
+a statement that reads a definition of a `proved_in` package is refused: move the definition first. It writes the moves (`LIFTS.json.moved.json`, each `X.t` to `X.SecurityProofs.G`) for `--update --moved`,
 which certifies each lift or prints it; `X.t` stays as a lemma. A guarantee that takes a named assumption as a hypothesis
 moves it into `G`, which prints as a change.
 

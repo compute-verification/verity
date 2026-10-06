@@ -429,12 +429,14 @@ def statement(src: str, at: tuple[int, int]) -> tuple[str, str, str, str]:
 def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[str, str]:
     """Lift each guarantee ``old`` of ``lifts`` ({old: {"as": "X.Guarantees.G", "into": spec module}}) into the four-name
     form: `def G : Prop := ∀ binders, type` (its theorem's doc comment, binders and type as its source writes them),
-    appended to the spec module in the theorem's namespace with its file's `open`s, so that its names resolve as they did,
-    and `theorem X.SecurityProofs.G :
-    X.Guarantees.G := @old` appended to the module that proves ``old``, which then imports the spec module. Returns the
+    appended to the spec module in the theorem's namespace with its file's `open`s, so that its names resolve as they did
+    (the spec module then imports the modules of the definitions the statement reads; a statement that reads a definition
+    of a proof package is refused), and `theorem X.SecurityProofs.G : X.Guarantees.G := @old` appended to the module that
+    proves ``old``, or to the one ``beside`` names, which then imports the spec module and the proof's. Returns the
     moves ({old: X.SecurityProofs.G}) for `--update --moved`, which certifies each lift as the same statement or prints
     the change."""
     files = {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
+    proofs = {m for _, q in provers(pkg, policy) if q.is_dir() for m in lean_modules(q)}
     moves, original, added, needs = {}, {}, {}, {}
     for old, spec in sorted(lifts.items()):
         new, into = spec["as"], spec["into"]
@@ -445,11 +447,19 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
                              f"or under one, other than the proof's ({new}, {into})")
         if fact.get("kind") != "theorem" or not fact.get("at") or fact.get("module") not in files:
             raise ValueError(f"lift {old}: not a guarantee of the package that this build declares in its source")
+        m = fact["module"]
+        beside = spec.get("beside", m)
+        if beside not in files or spec_module(beside):
+            raise ValueError(f"lift {old}: `beside` names a module of the package outside `Guarantees` ({beside})")
+        reads = {r["module"] for r in fact.get("reads", []) if r.get("module") in files} - {into}
+        if bad := sorted(reads & proofs):
+            raise ValueError(f"lift {old}: its statement reads definitions of {', '.join(bad)}, which a spec module may not "
+                             f"import; move them into the definitions first")
         at = len(parts) - 1 - parts[::-1].index("Guarantees")
         proof = ".".join([*parts[:at], "SecurityProofs", *parts[at + 1:]])
-        m = fact["module"]
         src = original.setdefault(m, files[m].read_text())
         original.setdefault(into, files[into].read_text())
+        original.setdefault(beside, files[beside].read_text())
         doc, univ, binders, typ = statement(src, tuple(fact["at"]))
         opens = [line for line in strip_comments(src).split("\n") if re.match(r"open\s", line) and not re.search(r"\sin\s*$", line)]
         ns = ".".join(old.split(".")[:-1])
@@ -457,8 +467,9 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
             f"namespace {ns}" if ns else "section", *opens, "", *([doc] if doc else []),
             f"def _root_.{new}{univ} : Prop :=", *([f"  ∀ {binders},", f"    {typ}"] if binders else [f"  {typ}"]), "",
             f"end {ns}".rstrip()]))
-        added.setdefault(m, []).append(f"theorem {proof}{univ} : {new}{univ} := @{old}{univ}")
-        needs.setdefault(m, set()).add(into)
+        added.setdefault(beside, []).append(f"theorem {proof}{univ} : {new}{univ} := @{old}{univ}")
+        needs.setdefault(beside, set()).update({into, m} - {beside})
+        needs.setdefault(into, set()).update(reads)
         moves[old] = proof
     for m, src in original.items():
         imports = list(re.finditer(r"(?m)^import\s+(\S+)[ \t]*$", strip_comments(src)))
@@ -1574,8 +1585,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--name-instances", action="store_true", help="write each anonymous instance's name (the one Lean gave "
                     "it) into its declaration instead of failing on it; no record changes")
     ap.add_argument("--lift", type=Path, metavar="FILE", help="one package: a JSON object {guarantee: {\"as\": X.Guarantees.G, "
-                    "\"into\": spec module}}; write each as `def G : Prop` in the spec module and `theorem X.SecurityProofs.G : "
-                    "X.Guarantees.G` beside its proof (`lift`) instead of auditing, and FILE.moved.json for `--update --moved`")
+                    "\"into\": spec module[, \"beside\": module]}}; write each as `def G : Prop` in the spec module and "
+                    "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
+                    "auditing, and FILE.moved.json for `--update --moved`")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
@@ -1605,7 +1617,7 @@ def main(argv: list[str]) -> int:
             ap.error("--lift goes with one package, and not with --update, --all or --name-instances")
         lifts = json.loads(a.lift.read_text())
         if not isinstance(lifts, dict) or not all(isinstance(v, dict) and {"as", "into"} <= set(v) for v in lifts.values()):
-            ap.error(f"{a.lift}: a JSON object {{guarantee: {{\"as\": X.Guarantees.G, \"into\": module}}}}")
+            ap.error(f"{a.lift}: a JSON object {{guarantee: {{\"as\": X.Guarantees.G, \"into\": module[, \"beside\": module]}}}}")
     if a.owner is not None and not (a.update and OWNER.fullmatch(a.owner)):
         ap.error("--owner goes with --update, and names a handle such as @proofs")
     named = set(pkgs)
