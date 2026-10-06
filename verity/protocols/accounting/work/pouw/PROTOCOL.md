@@ -6,6 +6,10 @@ PoUW problem statement's; the guarantee is Lean's `Pouw.SecurityProofs.EndToEnd`
 conjecture. PoUW's Lean is under `verity/Security/` (`Definitions/Pouw`, `Specs/Pouw`, `Proofs/Pouw`), and every theorem this document
 cites is pinned in `verity/Security/lean-audit.json`.
 
+This document describes the scheme while it is experimental; what is proved is the Lean. Each guarantee is stated in
+`Specs/Pouw` (`Pouw.Guarantees.G`) and proved in `Proofs/Pouw` (`Pouw.SecurityProofs.G`), and this document points at
+those names rather than restating them.
+
 ## The interface
 
 A scheme (`protocol.PoUWScheme`) is a named, versioned object, looked up by name (`schemes.get`), with pinned vectors under
@@ -144,9 +148,8 @@ tiles    16 × 16
 domain   16 | m;  64 | k, n;  1,088 ≤ k ≤ 2^16  (γ_0 = 1/200 ≥ 16/(3k));  n₀ = 1,600 ≤ n ≤ 2^16  (Ω* = 1 + f/(3n₀) ≤ 1.005)
 wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves priced, Lean `wrefU 24`; the per-weight forming of
          B + F_i is left out)
-γ        1 − (199/200)/(1 + 8/n₀) ≈ 0.995% over the whole domain (`Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1`);
-         ≈ 0.89% at n = 2,048; ≈ 0.69% at 4,096²; the same formula gives 1.27% at n = 1,024, so the certificate records
-         n₀ with β and f
+γ        1 − (1 − γ_0)/Ω* ≈ 0.995%, the certificate's at n₀ ≤ n (`Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1`), so the
+         certificate records n₀ with β and f
 ~~~
 
 - **Checked values.** Route U's accumulator, the u8 × s8 tensor-core schedule the W1 accounting prices. It equals the
@@ -154,7 +157,7 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   (`Pouw.SecurityProofs.NCP.CheckedUEq`), so every bound proved modulo V₀ transfers. The unbiased sums
   (`checked_unbiased`) are retired as checked values; their honest program would cost 36 units per position (γ = 1.08%
   at n = 2,048).
-- **β = 129** (f = 20, γ ≈ 0.91% at n₀ = 1,600, 0.82% at n = 2,048; `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2`) needs
+- **β = 129** (f = 20, `Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2`) needs
   an unsigned P and a SASS check that the IADD3 with two negated sources is one instruction. The native route-U kernel
   (`kernels/pouw_gemm.cu`, `ncp_route_u`) reads X + β already formed, so its SASS shows the u8 × s8 `IMMA` but not the
   forming step; `ncp-v1` stays at β = 128.
@@ -174,19 +177,10 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   `tests/test_pouw_word_p.py` certifies all of them exactly at the k the MVP uses (1,088, 2,048, 11,008).
   `ncp-v1-shift24` uses the shift by 24 instead, admissible with independent checkpoints for every k ≥ 1,024 with
   16 ∣ k (Lean `Pouw.SecurityProofs.NCP.ShiftBy24Admissible`, `Pouw.SecurityProofs.NCP.IndependentWitness`).
-- **Lean** (the certificate's guarantees, all approved by the red team, Phase 13):
-  - the reduction: `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1` (β = 128, f = 24, n₀ ≤ n), from the named assumption
-    `Pouw.NCP.Assumptions.TTNCP_U`, with `Pouw.SecurityProofs.NCP.TTNCPUIff` (it is TT_NCP over the route-U checked
-    set) and `Pouw.SecurityProofs.NCP.TTNCPUWitness`;
-  - the algebra: `Pouw.SecurityProofs.NCP.Cancel` and `Pouw.SecurityProofs.NCP.Stacked` (the unbiased stack, which the
-    final checkpoint equals), and `Pouw.SecurityProofs.NCP.CheckedUEq`, `Pouw.SecurityProofs.NCP.CheckedUFinal`,
-    `Pouw.SecurityProofs.NCP.WrapU`, `Pouw.SecurityProofs.NCP.RangeU`, `Pouw.SecurityProofs.NCP.MmWUExact`,
-    `Pouw.SecurityProofs.NCP.YUChecked`;
-  - the chain to the checked words: `Pouw.SecurityProofs.NCP.Int7Int32UPos` (k ≤ 2^16 for an unsigned P, 2^15 for a
-    signed one), `Pouw.SecurityProofs.NCP.NCPWordFloorIndU`, `Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU`,
-    `Pouw.SecurityProofs.NCP.WrapWordFloorIndU`;
-  - the barrier and the generic game: `Pouw.SecurityProofs.Barrier.Generic`, `Pouw.SecurityProofs.Theorem1`,
-    `Pouw.SecurityProofs.WorkWeightedSampling`, `Pouw.SecurityProofs.EndToEnd`.
+- **Lean.** The certificate's guarantees are its `theorems`: NCP's in `Pouw.Guarantees.NCP`
+  (`verity/Security/Specs/Pouw/Guarantees/NCP.lean`, the reduction `GammaFromTTNCP_U_v1` from the named assumption
+  `Pouw.NCP.Assumptions.TTNCP_U`), the barrier `Pouw.Guarantees.Barrier.Generic`, and the game's
+  `Pouw.Guarantees.Theorem1`, `WorkWeightedSampling` and `EndToEnd`.
 
   Assumed: TTNCP_U(0.5%); `Word.NzNCP` of the route-U words (the floors' hypothesis). Not proved: that M_4090 runs H_ref
   within `wref` (`AdmitsRef`), and the byte-level noise expansion here (the Lean takes any expansion of H's answers with
@@ -560,12 +554,11 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
   - The verifier rejects a drawn tile whose replayed debit passes 1/1,000 of its credited cells' credit, and an accepted
     unit is credited (1 − 1/1,000)·`credit_of`. `volunteer` reads the same cap. The certificate states TT_OUT(1/1000) and
     names the cap among its parameters.
-  - γ at the headline record (FP32 at 8.376, the packed cast at 8.72, rev1's credit) is 0.36949% at 8,192³ and 0.35973%
-    at 16,384³, per unit and per audit tile (Lean `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192`,
-    which is `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192`; its `_16384` and their `pearlCSampled…` twins). Per unit it follows from rev1 at 1/400 alone (`…Cap1000_8192_of_cap400`); per tile, TT_OUT
-    at 1/1,000 is the assumption. At the issue-bound FP32 add (8.00) it is 0.36901% and 0.35949%
-    (`pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192`, `_16384` and their `pearlCSampled…` twins, from TT_OUT at 1/1,000);
-    the ledger publishes the larger of the two prices, the in-loop add's.
+  - γ at the headline record (FP32 at 8.376, the packed cast at 8.72, rev1's credit) is the pinned guarantee
+    `Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` (8,192³). The 16,384³ shape and the issue-bound FP32
+    add (8.00) are lemmas in `Pouw.PearlC` (`pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_16384`,
+    `pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192` and `_16384`); the ledger publishes the larger of the two prices, the
+    in-loop add's.
   - The verifier's credit, cap and debit are rev1's, the rule these γ are proved for: `credit_of` is `creditDevRev1`,
     `wref` is `wrefDevRev1` (`wrefDevRev1K` at the cast's offset), and the tile rule is `tileDebitRev1` against
     ρ·`creditDevRev1`·`tileShare`. Python's γ, credit and tile cap equal the Lean's exactly on every pinned price twin
