@@ -98,10 +98,10 @@ class Findings:
         self.warnings += other.warnings
 
 
-_SHA512 = ("one SHA-512 compression under the AND budget: C-Flock's whole lowering keeps every XOR as an uncommitted linear "
-           "form, and the additions compound them round over round; each of these four was OOM-killed at 64 GiB (MemoryMax) "
-           "after 14 minutes on vy-nebius-1 (run r20261006-074613-c4b9). C-Flock's own SHA-512 gadget commits a copy every "
-           "few carries (`sha512.commit`)")
+_SHA512 = ("one SHA-512 compression under the AND budget, traced from `sha512.compress_gadget`: the trace turns the gadget's "
+           "23,455 commits (`sha512.commit`, And(x, ONE)) into x's wire, and `ir_lower` cannot commit an Xor, so every form "
+           "is carried whole and grows round over round (mean 3,132 bits, 8.2 GB a third of the way in); each of these four "
+           "was OOM-killed at 64 GiB (MemoryMax) after 14 minutes on vy-nebius-1 (run r20261006-074613-c4b9)")
 #: Boolean Definition families whose whole C-Flock lowering does not fit in memory, and why
 UNLOWERED: dict[str, str] = {f: _SHA512 for f in ("Sha512Compress_v1", "LmsChainStep_v1", "LmsLeaf_v1", "LmsNode_v1")}
 
