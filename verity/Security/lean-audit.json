@@ -20969,6 +20969,15 @@
   "FlockVBridge.Algebra.run_sim": {
    "owner": "@proofs"
   },
+  "FlockVBridge.Algebra.zerocheck_checks": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.zerocheck_coins": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.zerocheck_of_residuals": {
+   "owner": "@proofs"
+  },
   "FlockVBridge.sound_shaFrom": {
    "owner": "@proofs",
    "signature": [
