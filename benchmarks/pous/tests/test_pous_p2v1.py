@@ -439,3 +439,85 @@ def test_a_cached_encoding_is_reused_for_its_own_setup_and_never_when_its_bytes_
     third = run("third")
     assert third["metrics"]["encode_cache"]["hit"] is False and third["gates"]["round_trip"]["passed"]
     assert hashlib.sha256(data.read_bytes()).hexdigest() == rec["sha256"]
+
+
+def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_test_signer(tmp_path):
+    """Under `MC` every audit and control is the memory challenger's: its leaves are SHA-512 of each block, the honest
+    sessions pass under the test signer's own mapping and every control is rejected under it (the tampered one for a flipped
+    bit in a block's last byte, the bad-signature one for a flipped signature bit and for a receipt time edited after
+    signing).  `memory_challenger.SCHEMES` holds no scheme, so the real verdict rejects every session and no profile is
+    issued; a session's public part is its commitment, its verdict and its coin openings."""
+    bench = _bench()
+    assert bench.IMPLS["p2-v3-mc-gpu"] is bench.P2V3McGpu
+    body = bench.P2V3McGpu().run(_args(tmp_path, k=105), WS, tmp_path, backend=_backend(), params=_small(), research=True)
+    gates, m = body["gates"], body["metrics"]
+    for g in ("vector", "round_trip", "reference_decode", "kernel_flags", "codec", "timed_audit", "value_control",
+              "late_control", "recompute_control", "tampered_control", "signature_control", "fail_closed"):
+        assert gates[g]["passed"], (g, gates[g])
+    assert "certificate" not in gates and body["profile"] is None
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "verifier": "memory_challenger/live.py",
+                                      "verifier_args": ["--signer", "test"]}
+    nb = _small().width_bytes
+    raw = (tmp_path / "leaves-p2.bin").read_bytes()
+    assert len(raw) == 64 * body["blocks"]
+    honest = m["audit"]
+    assert honest["verifier"] == "memory-challenger" and honest["limit_ns"] == 854_000 and honest["limit_fixed_before_load"]
+    assert honest["audits"] == honest["audits_accepted_under_test_signer"] == 2 and honest["audits_accepted"] == 0
+    assert honest["answers"] == 2 * 105 and honest["profile"] is None and honest["signer"]["test"]
+    for rec in honest["records"]:
+        assert set(rec["public"]) == {"commitment", "verdict", "openings"} and rec["public"]["verdict"] == {"accepted": False}
+        assert rec["witness"]["reasons"] == ["signature scheme 'test/xmss-wots16-sha512/v0' is not accepted"]
+        assert rec["witness"]["reasons_under_test_signer"] == []
+    tampered = m["tampered_control"]
+    assert tampered["wrong"] > 0 and tampered["late"] == 0 and tampered["audits_accepted_under_test_signer"] == 0
+    assert all(any(r.endswith("answers are not their blocks of C") for r in rec["witness"]["reasons_under_test_signer"])
+               for rec in tampered["records"])
+    assert m["late_control"]["late"] == 2 and all(len(rec["answers"]) == 10 for rec in m["late_control"]["records"])
+    assert m["signature_control"] == {"sessions": 2, "unedited_accepted": 2, "flipped_rejected": 2, "edited_rejected": 2,
+                                      "passed": True}
+    assert len(bytes.fromhex(honest["records"][0]["public"]["openings"][0]["salt"])) == 192 and nb == 16
+
+
+def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset()):
+    """`memory_challenger/live.py`'s audit, strict, of `p2-16448/v3` at its registered point (one segment), on the logical
+    clock, against a responder whose blocks are the digests' (`tamper`'s with their last byte's top bit flipped)."""
+    sys.path.insert(0, str(BENCH))
+    from band_gpu import harness as H
+    from memory_challenger import live
+
+    from verity.protocols.accounting.space.pous import schemes
+
+    scheme = schemes.get("p2-16448/v3")
+    nb = scheme.params.block_bytes
+    block = lambda i: i.to_bytes(8, "big") * (nb // 8)  # noqa: E731
+    digests = b"".join(hashlib.sha512(block(i)).digest() for i in range(scheme.params.blocks))
+    responder = H.ControlResponder(nb, H.control_answers(b"".join(block(i) for i in range(scheme.params.blocks)), nb,
+                                                         tamper=set(tamper)))
+    try:
+        return live.audit("127.0.0.1", responder.port(), scheme, b"s" * 24, digests, audits=2, pings=20, limit_ns=limit_ns,
+                          clock=live.LogicalClock()), responder.answered()
+    finally:
+        responder.stop()
+
+
+def test_the_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it():
+    """`Δ + 354 µs` is inside `P2SlackFamilyUncond`'s certificate: 105 rounds a session run, the test-signed sessions pass
+    under the test signer's mapping and the real verdict rejects them; `Δ + 355 µs` is refused before any round."""
+    from verity.protocols.accounting.space.pous.schemes import p2
+
+    doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS)
+    assert doc["strict"] and "refused" not in doc and answered == 2 * 105 and doc["k"] == 105
+    assert doc["audits"] == doc["audits_accepted_under_test_signer"] == 2 and doc["audits_accepted"] == 0
+    assert doc["late"] == doc["wrong"] == 0 and doc["profile"] is None
+    doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS + 1_000)
+    assert doc["audits"] == 0 and answered == 0 and doc["records"] == []
+    assert "fits 1 calls of 854029 ns" in doc["refused"]
+
+
+def test_the_memory_challenger_catches_a_flipped_bit_in_a_blocks_last_byte():
+    """Every block tampered: each round's digest is wrong, each session rejected, and no round is late or retried."""
+    from verity.protocols.accounting.space.pous.schemes import p2
+
+    doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, tamper=frozenset(range(1 << 16)))
+    assert answered == 2 * 105 and doc["wrong"] == 2 * 105 and doc["late"] == 0
+    assert doc["audits_accepted_under_test_signer"] == doc["audits_accepted"] == 0

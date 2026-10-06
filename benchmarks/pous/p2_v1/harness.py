@@ -1,4 +1,4 @@
-"""P2's arm of the POUS-only harness (`bench.py --impl p2-v1-gpu | p2-v3-gpu`): P2 with its GPU kernels (`p2v1.cu`, `gpu.py`)
+"""P2's arm of the POUS-only harness (`bench.py --impl p2-v1-gpu | p2-v3-gpu | p2-v3-mc-gpu`): P2 with its GPU kernels (`p2v1.cu`, `gpu.py`)
 on one device, the same steps, controls and metrics as the band's arm (`band_gpu/harness.py`), so the two compare side by side.
 The kernels take a setup's key prefix, so one arm runs either framing:
 
@@ -7,6 +7,9 @@ The kernels take a setup's key prefix, so one arm runs either framing:
   the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.Verifier` through `band_gpu/live.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
   with v3's own codec back to `W`'s, when that segment is wholly encoded.
+- `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
+  cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
+  of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
 
 1. **Kernel gates.** The pinned vector of the width (`vectors.json`, the P2 kit's): its keys expanded on the device, its `m`
    encoded and its `c` decoded, all bit-exact. Then the run's own blocks: the encoded ones decode back to their payloads (the
@@ -66,6 +69,13 @@ class V1:
 
     impl, scheme, live = "p2-v1-gpu", R.PROTOCOL, LIVE
     verifier_args: tuple[str, ...] = ()
+    accepted = "audits_accepted"
+    """The audit document's count of accepted audits that the gates read."""
+
+    @property
+    def c_of(self) -> str:
+        """The arm whose `C` this framing serves, which keys `CCache`."""
+        return self.impl
 
     def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
         self.P = P
@@ -143,7 +153,28 @@ class V3(V1):
         return {"passed": ok, "segment": 0, "codec": self.params.codec.name}
 
 
-FRAMINGS = {f.impl: f for f in (V1, V3)}
+class MC(V3):
+    """`p2-16448/v3` audited by the memory challenger (`p2-v3-mc-gpu`, `memory_challenger/live.py`): sessions over a coin
+    tree committed before them, each round's whole answer hashed with SHA-512 after its receipt time, one signature a
+    session.  Its leaves are SHA-512 of each block, what the verdict checks a round's digest against.  The sessions are
+    signed by the PoUS tests' test signer, which `memory_challenger.SCHEMES` never accepts (fail closed until S1 lands), so
+    its gates read the verdict under that signer's own mapping (`accepted`) and check the real verdict rejected them all."""
+
+    impl, live = "p2-v3-mc-gpu", HERE.parent / "memory_challenger" / "live.py"
+    accepted = "audits_accepted_under_test_signer"
+    c_of = V3.impl
+
+    def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
+        super().__init__(P, w_host, research)
+        self.verifier_args = (*self.verifier_args, "--signer", "test")
+
+    def leaf(self, i: int, block: bytes) -> bytes:
+        return hashlib.sha512(block).digest()
+
+
+FRAMINGS = {f.impl: f for f in (V1, V3, MC)}
+TAMPER_EVERY = 10
+"""The tampered control flips the top bit of the last byte of one block in this many."""
 
 
 @dataclass
@@ -453,6 +484,12 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     recompute = {"dropped_fraction": len(dropped) / blocks, "dropped_blocks": len(dropped),
                  "pattern": f"one block in {RECOMPUTE_EVERY} of all of C, each re-encoded on demand from its decoded row Dec(C_i)",
                  **rec, **H.recompute_margins(rec, set(dropped), limit)}
+    mc = isinstance(fr, MC)
+    if mc:
+        from memory_challenger.live import signature_control
+
+        tampered = control("p2-tampered", H.control_answers(c_host, nb, tamper=set(range(0, blocks, TAMPER_EVERY))))
+        signature = signature_control(honest, lambda i: fr.leaf(i, c_host[i * nb:(i + 1) * nb]))
 
     seqroot = _seqroot(backend, bound, plain_rows, dropped, a.reps, limit)
     del plain_rows
@@ -460,19 +497,29 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     facts["after"] = backend.facts()
 
     k = int(honest.get("k") or 0)
-    gates["timed_audit"] = {"passed": honest.get("audits") == honest.get("audits_accepted") and bool(honest.get("audits")),
-                            "rc": honest["rc"]}
-    gates["value_control"] = {"passed": value.get("audits_accepted") == 0 and value.get("wrong", 0) > 0,
-                              "accepted": value.get("audits_accepted"), "wrong": value.get("wrong")}
-    gates["late_control"] = {"passed": late.get("audits_accepted") == 0 and late.get("late", 0) > 0 and late.get("wrong", 1) == 0,
-                             "accepted": late.get("audits_accepted"), "late": late.get("late"), "wrong": late.get("wrong")}
+    acc = fr.accepted
+    gates["timed_audit"] = {"passed": honest.get("audits") == honest.get(acc) and bool(honest.get("audits")),
+                            "rc": honest["rc"], "accepted_by": acc}
+    gates["value_control"] = {"passed": value.get(acc) == 0 and value.get("wrong", 0) > 0,
+                              "accepted": value.get(acc), "wrong": value.get("wrong")}
+    gates["late_control"] = {"passed": late.get(acc) == 0 and late.get("late", 0) > 0 and late.get("wrong", 1) == 0,
+                             "accepted": late.get(acc), "late": late.get("late"), "wrong": late.get("wrong")}
     gates["recompute_control"] = H.recompute_gate(recompute)
+    if mc:
+        gates["tampered_control"] = {"passed": tampered.get(acc) == 0 and tampered.get("wrong", 0) > 0,
+                                     "accepted": tampered.get(acc), "wrong": tampered.get("wrong")}
+        gates["signature_control"] = signature
+        rounds = (honest, value, late, rec, tampered)
+        gates["fail_closed"] = {"passed": all(d.get("audits_accepted") == 0 for d in rounds),
+                                "accepted": [d.get("audits_accepted") for d in rounds],
+                                "note": "memory_challenger.SCHEMES accepts no test-signed session; until S1 is registered "
+                                        "no session is accepted, honest or not, and no storage profile is issued"}
     allowance = honest.get("rtt_allowance_ns")
     point = {"k": k == R.K_AUDIT, "rtt_allowance": allowance is not None and allowance <= R.MAX_RTT_ALLOWANCE_NS,
              "deadline": honest.get("deadline_ns") == R.DELTA_NS, "blocks": 1 << 8 <= blocks <= 1 << 23}
     gates["operating_point"] = {"passed": all(point.values()), **point}
     gaps = tuple(f"operating point: {name} is not the frozen value" for name, ok in point.items() if not ok)
-    if fr.verifier_args:
+    if "--strict" in fr.verifier_args:
         gates["certificate"] = {"passed": not honest.get("refused") and bool(honest.get("audits")),
                                 "refused": honest.get("refused"), "verifier_gaps": honest.get("gaps"),
                                 "note": "protocol.Verifier refuses any k or Δ + RTT the certificate does not cover; the "
@@ -487,7 +534,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                "encode_stored_GBps": encoded * nb / encode_s / 1e9, "decode_pass_s": decode_s, "ewb": used / decode_s,
                "stored_GBps": blocks * nb / decode_s / 1e9, "decode_reps_s": decode_reps, "loop": loop, "deadline": deadline,
                "calibration": cal, "audit": honest, "value_control": value, "late_control": late, "recompute_control": recompute,
-               "seqroot": seqroot, "nvme": nvme}
+               "seqroot": seqroot, "nvme": nvme,
+               **({"tampered_control": tampered, "signature_control": signature} if mc else {})}
     rows_ = [("encode_GBps", metrics["encode_GBps"], "GB/s"), ("stored_GBps", metrics["stored_GBps"], "GB/s")]
     rows_ += [(f"decode_overhead_T{t}", loop["overhead"][t], "x") for t in tokens]
     rows_ += [(f"audit_answer_{q}_s", (honest.get("elapsed_s") or {}).get(q), "s") for q in ("p50", "p99.9", "max")]
@@ -497,8 +545,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
               ("recompute_margin_max_s", recompute["device_margin_s"].get("max"), "s"),
               ("seqroot_root_s", seqroot["root_s"], "s")]
     rows_ += [("nvme_block_read_p99.9_s", nvme["block_read_s"].get("p99.9"), "s")] if nvme else []
-    return result(metrics, rows_, profile(k, limit, gaps, fr.scheme, honest.get("profile")) if gates["timed_audit"]["passed"]
-                  else None)
+    issued = gates["timed_audit"]["passed"] and honest.get("audits_accepted") == honest.get("audits")
+    return result(metrics, rows_, profile(k, limit, gaps, fr.scheme, honest.get("profile")) if issued else None)
 
 
 class CCache:
@@ -508,7 +556,7 @@ class CCache:
     fresh one does (the round trip decodes all of it back to `W`).  `record` says which run encoded it and in what time."""
 
     def __init__(self, root: Path, fr: V1) -> None:
-        key = {"impl": fr.impl, "manifest": fr.manifest(), "prefix": fr.prefix.hex(), "model": fr.model.hex()}
+        key = {"impl": fr.c_of, "manifest": fr.manifest(), "prefix": fr.prefix.hex(), "model": fr.model.hex()}
         self.key = hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()
         self.data, self.meta = root / f"{self.key}.c", root / f"{self.key}.json"
         self.record: dict[str, Any] = {"key": self.key, "hit": False}

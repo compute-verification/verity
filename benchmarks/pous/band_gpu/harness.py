@@ -593,11 +593,12 @@ def recompute_drops(blocks_per_segment: int, segments: int, window: int | None) 
 
 
 def control_answers(c_host: bytes, width: int, *, zero: set[int] = frozenset(), late_every: int = 0, late_ns: int = 0,
-                    recompute: Callable[[int], tuple[bytes, int]] | None = None,
-                    dropped: set[int] = frozenset()) -> Callable[[int], tuple[bytes, int, int, int]]:
-    """The `ControlResponder`'s answer `(block, device_ns, server_ns, hold_ns)`: block `i` from `c_host` (zeroed for `zero`),
-    recomputed for `dropped` (its device time the reported server time, and never held: the recompute has already run), or
-    held past the limit every `late_every`-th answer (the only answers held)."""
+                    recompute: Callable[[int], tuple[bytes, int]] | None = None, dropped: set[int] = frozenset(),
+                    tamper: set[int] = frozenset()) -> Callable[[int], tuple[bytes, int, int, int]]:
+    """The `ControlResponder`'s answer `(block, device_ns, server_ns, hold_ns)`: block `i` from `c_host` (zeroed for `zero`,
+    with the top bit of its last byte flipped for `tamper`), recomputed for `dropped` (its device time the reported server
+    time, and never held: the recompute has already run), or held past the limit every `late_every`-th answer (the only
+    answers held)."""
     state = {"n": 0}
 
     def answer(i: int) -> tuple[bytes, int, int, int]:
@@ -606,6 +607,8 @@ def control_answers(c_host: bytes, width: int, *, zero: set[int] = frozenset(), 
             block, device_ns = recompute(i)
             return block, device_ns, device_ns, 0
         block = bytes(width) if i in zero else c_host[i * width:(i + 1) * width]
+        if i in tamper:
+            block = block[:-1] + bytes([block[-1] ^ 0x80])
         if late_every and state["n"] % late_every == 0:
             return block, 0, late_ns, late_ns
         return block, 0, 1_000, 0

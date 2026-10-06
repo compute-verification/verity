@@ -39,6 +39,9 @@ Implementations (`IMPLS`), each adding one class:
 * `p2-v3-gpu`: the same kernels and steps, under `p2-16448/v3`'s framing (its commitment, salt, key prefix and leaves:
   `p2_v1/harness.py`'s `V3`), so the device serves v3's blocks, and its audits go through `protocol.Verifier` with the v3
   certificate (`band_gpu/live.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
+* `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory challenger (`memory_challenger/live.py`, `p2_v1/harness.py`'s `MC`) at
+  `Δ + RTT_ALLOWANCE_CAP_NS`, with a tampered-block and a bad-signature control beside the others.  Its sessions are
+  test-signed, so the verdict rejects them all until S1 lands (its `fail_closed` gate), and it issues no storage profile.
 * `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, the whole-chain decode on lane pairs
   (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
   encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable),
@@ -379,6 +382,18 @@ class P2V3Gpu(P2V1Gpu):
         return harness.run(a, ws, out, w_segment=_w_segment, framing=harness.V3, **kw)
 
 
+class P2V3McGpu(P2V3Gpu):
+    """The same kernels and framing, audited by the memory challenger (`p2_v1/harness.py`'s `MC`)."""
+
+    name = "p2-v3-mc-gpu"
+
+    def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path, **kw: Any) -> dict[str, Any]:
+        sys.path.insert(0, str(HERE))
+        from p2_v1 import harness
+
+        return harness.run(a, ws, out, w_segment=_w_segment, framing=harness.MC, **kw)
+
+
 # ---------------------------------------------------------------------------------------------------------- p2-gpu
 
 class P2Gpu:
@@ -504,7 +519,7 @@ class P2Gpu:
         }
 
 
-IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2V3Gpu, P2Gpu)}
+IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2V3Gpu, P2V3McGpu, P2Gpu)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -561,7 +576,7 @@ def main(argv: list[str] | None = None) -> int:
     t = time.perf_counter()
     from verity.protocols.accounting.space.pous import schemes as _schemes
 
-    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu", "p2-v3-gpu")):
+    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu", "p2-v3-gpu", "p2-v3-mc-gpu")):
         raise SystemExit(f"--audits {a.audits}: only band-gpu and the P2 arms run untimed (--audits 0)")
     if a.band_d:
         if a.impl != "band-gpu":
