@@ -15,7 +15,7 @@ such result (`accZ_lig`).
   rounds along `repShapeZ`, with `fin`'s messages as the tail, and the compiled table accepts at the two runs' ends.
 * `decodesZK_of_runsZC`: `RunsZC` gives `DecodesZK` at the compiled table.
 * `RunsOnZC`, `decodes_of_runsOnZC`: the same at the law's draws only, for a decoder that is right only where the
-  coin server's draws are (`DrawOkZK` at `L.draw ω`).
+  challenger's draws are (`DrawOkZK` at `L.draw ω`).
 * `zk_headline_exec_zc_runs`: `zk_headline_exec_zc_execOS` with `RunsZC` in place of `hdec`.
 -/
 

@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Discharge.Placed
 
 `Prog.flock_headline_live` takes a table `T S R` at every draw `S` and each drawn unit's site in it (`Placed.Sites`).
 This file builds both from the session's inputs `I : Inputs` (the verify command's flags: one circuit file, one public
-file, one table), at the draw the coin server writes for `S` (`dj S`, the draw's JSON):
+file, one table), at the draw the challenger writes for `S` (`dj S`, the draw's JSON):
 
 * `DrawSetup I mPts S d`: `Stmt.setupH` on `I` accepts the draw `d`, which decodes to a draw `D` proving every unit of
   `S`; the statement's blocks hold `D`'s proved units, its `fast100` schedule has two levels or more, and its link

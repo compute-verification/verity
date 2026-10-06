@@ -49,7 +49,7 @@ on the hash's output width `n`.
 **The route that avoids both the random oracle and the knowledge assumption** (adopted by Daniel, 2026-09-26):
 
 1. Build the in-proof Merkle trees with SHA-512, leaves and nodes.
-2. Make the round digests assumption-free by having the coin server keep each round's bytes (it already receives
+2. Make the round digests assumption-free by having the challenger keep each round's bytes (it already receives
    them).
 
 The compiled bound is then 2^-205 plus `t·2^{17.3−256}` plus negligible terms, from plain collision resistance, for
@@ -74,7 +74,7 @@ in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and 
 ## 2. The compiled theorem: its terms, its number, its proof
 
 The protocol is README.md §1.1's table (the `fast100` profile twice on one root, live `os` coins, a statement of
-§16) in the adopted variant: SHA-512 Merkle caps, and the coin server keeping each round's bytes.
+§16) in the adopted variant: SHA-512 Merkle caps, and the challenger keeping each round's bytes.
 
 **The committed values of an arbitrary prover.** Let `P*` be any classical prover. Without loss of generality it is
 deterministic, since a randomized prover is an average of deterministic ones. Its **committed table** is the plurality
@@ -338,7 +338,7 @@ We follow the staging and vocabulary, and differ where the setting does.
 |---|---|---|---|
 | **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, with no named assumption: A1, mutual correlated agreement up to the Johnson bound, is proved from DKT26, which ArkLib proves (#907; README.md §1.6). |
 | **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (README.md §2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
-| **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The oracle protocol plus Merkle commitments (1b) plus session binding, which needs no assumption since the coin server keeps each round's bytes. | Differs. No random oracle for coins, avoiding the article's main caveat; a Fiat–Shamir variant is future work (§8). |
+| **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The oracle protocol plus Merkle commitments (1b) plus session binding, which needs no assumption since the challenger keeps each round's bytes. | Differs. No random oracle for coins, avoiding the article's main caveat; a Fiat–Shamir variant is future work (§8). |
 | **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (spec §16) is satisfied exactly by correct evaluations of the named circuit (level 3, another lane). | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
 | **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§6). | Follows. **Recursion caveat:** triggered only by the recursion track. Its outer proof must be knowledge-sound (§3), and every component inside it verified. |
 | **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` (lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (`assumption-notes/trusted-components.md`). |
@@ -533,7 +533,7 @@ soundness:
    bytes are recorded. So the union bound gives `Σ tableError` over the session's tables, and there is no barrier
    across machines. Squaring the per-rep error into the table's needs independent coins per repetition.
 4. **Latency.** A session lasts one machine's proving work plus about 220 round trips, paced by the slowest stream.
-   - With tables spread across GPUs and a coin server co-located per datacenter, that is about 1–2 s.
+   - With tables spread across GPUs and a challenger co-located per datacenter, that is about 1–2 s.
    - Sessions run back to back, so a table waits at most one window plus one session: twice the session length.
    - Throughput scales with machines, until prover memory limits the tables a machine holds in lockstep.
 

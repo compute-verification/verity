@@ -66,9 +66,9 @@ noncomputable abbrev tablesAt : Finset (Fin n) → Reg → TabSpec mPts := fun S
 
 /-- **The headline at the executable.** Let `I` be a verify command's inputs (one table) whose one circuit file parses
 to an untyped circuit `c` (`hc`, `ht`) and whose public file loads to `pub` with no shared-row tables (`hpt`, as
-M0's per-instance public files load, under `@967b8d06` too, whose tag allows them), and let the coin server write
+M0's per-instance public files load, under `@967b8d06` too, whose tag allows them), and let the challenger write
 draw `S` as the JSON `dj S` (`x₀` one draw it sets up). Let the verifier draw the units with `Flock.Draw.drawOS`'s
-stratified law on a byte source A3 makes uniform, and let each draw's session be the live coin server's one table
+stratified law on a byte source A3 makes uniform, and let each draw's session be the challenger's one table
 (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K` wrong units
 of the production program `Placed.keyProg c hU n`, at the simulated prover's committed values (1 on the constant's
 gate, 0 on the zero's, the plurality of its openings elsewhere), with probability at most `miss(K) + ε_ks + δ_link`.
@@ -80,7 +80,7 @@ Its hypotheses, past the session's inputs:
   `Layout.scopeOk_spec` gives `rs`'s `h1`, `ho` and `PortReads`, `Layout.scopeOk_ports` gives `hHm`'s v1 rows;
   e2e-layout's `#eval` on M0's composed RoPE circuit returns `true`;
 * `hdec` (`DecodesOn`, R11b, at the law's draws only), open: owner e2e-exec (the framing decoder, `wr` as the server's
-  record, `opn`, `fin`, `capOf`). At a draw flock-verify accepts whose record carries the coin server's draw `dj S`,
+  record, `opn`, `fin`, `capOf`). At a draw flock-verify accepts whose record carries the challenger's draw `dj S`,
   proving `S`, with link points `mPts`, the table is `stmtOf` of the statement it accepted (`tableAt_of_accepts`, by
   `model_eq_stmtOf`), the statement e2e-exec's acceptance plays. At an accepted draw whose link points are not `mPts`
   the table is unsatisfiable and `hdec` fails there, so `hdec` also needs every accepted draw of the law to set up at
@@ -93,7 +93,7 @@ Scope. W6 is definitional on the untyped path: the unit's rows are the parsed ne
 that the unit net lowers its template's Definition. The tail stages of `tc_units` templates are outside every unit's
 rows. The typed path is not production. `keyProg` has no edges between units: the headline bounds VUs that fail at their
 own committed values, and a VU reading its producers' outputs is carried by the copy constraints and the region pins,
-not by an edge of the program. The proof coins are the live coin server's per-round OS coins (A6): seed-derived coins
+not by an edge of the program. The proof coins are the challenger's per-round OS coins (A6): seed-derived coins
 are outside the headline, so an M0 session counts only under `FC_COINS=os`. The tag is whatever the verifier passes as
 `--statement`: a session counts when `flock-verify verify --statement verity/flock-circuit@967b8d06 --coins os`
 accepts it with one table, so the headline covers only public-output `@967b8d06` sessions, from builds before #757.

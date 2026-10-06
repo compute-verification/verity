@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Assumptions
 /-!
 # Interactions with committed coins (live/PROTOCOL.md §9, M2)
 
-Under M2 the coin server draws every round's block of coins, and a salt for each, at Hello, and sends a commitment to
+Under M2 the challenger draws every round's block of coins, and a salt for each, at Hello, and sends a commitment to
 all of them before the prover's first message: round `i`'s block `b` is chained into a digest `dig i b`, its leaf is the
 hm96 leaf `H(dig i b ⊕ M·y ‖ c y)` under the round's salt `y` (`c y = H(sp ‖ y)`), and the leaves go under a SHA-512 tree.
 Round `i`'s coins, `T_n`, the salt and the path are opened only when the prover's round-`i` message arrives.

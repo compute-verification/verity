@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 
 `zk_flock_countC_execOS_keyProg` takes the sites `si`, the parse `hparse`, the layout `lay`, the rows `rs` and
 `HmRowComputes` `hHm`. Here they are built at item 3's `--zk` tables (`ZkLink.tablesAtZK dj y₀`: at each draw `S` the
-table of a `DrawSetupZK` at the coin server's draw `dj S`, a refused table otherwise), as `Integrate.sitesAt`, `layAt`,
+table of a `DrawSetupZK` at the challenger's draw `dj S`, a refused table otherwise), as `Integrate.sitesAt`, `layAt`,
 `rsAt` and `rsAt_computes` are at the public path's `tablesAt`:
 
 * `tableSh`: the public table (`Integrate.Table`) at the same draw: the `DrawSetupZK`'s `DrawSetup` at `zkInputs I` and

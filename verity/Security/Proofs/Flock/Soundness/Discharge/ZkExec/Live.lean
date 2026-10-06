@@ -4,12 +4,12 @@ import Proofs.Flock.Soundness.Discharge.Exec.Live
 /-!
 # The live `--zk` audit, and the compiled `--zk` table it is simulated in
 
-The live audit is `Exec.auditLive` with the live coin server's one table (`liveOf dg mPts N wr`: `liveTable`, every
+The live audit is `Exec.auditLive` with the challenger's one table (`liveOf dg mPts N wr`: `liveTable`, every
 round's coins fresh and drawn after its bytes, written out by `wr`), as at M0. Under `--zk` the coins come from the
 keyed coin tree committed before the prover's first message (M2), so this is the session with each round's coins
 fresh: the coin tree's step from that to M2's is [wave2-zk-coins]'s, an open guarantee here.
 
-The target is a compiled `--zk` table on one table, named by its pieces in `modelTable`'s shape (the live coin server's
+The target is a compiled `--zk` table on one table, named by its pieces in `modelTable`'s shape (the challenger's
 simulation, `Refine/LiveSim.lean`, reads exactly these), at each draw `S` and registration `R`:
 
 * `Cp S R`, the level-0 commitment the prover sends first (`root_B`);
