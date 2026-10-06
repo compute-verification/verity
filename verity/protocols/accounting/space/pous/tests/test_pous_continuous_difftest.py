@@ -10,8 +10,8 @@ challenge, actions after the last round) and a few scripted ones. `test_lean_mac
 from Lean `ContMachine` scripts and checks its verdicts against `cont_records`, the transcription of Lean's
 `contRecords`, and its acceptance against `contAccepts`.
 
-The verifiers: `MemoryChallenger` without a hard deadline (the single audit's), and, once
-`cursor/pous-continuous-enforce-3cf5` has landed, `MemoryChallenger` with one and `ContinuousMemoryChallenger`.
+The verifiers: `UnsignedRounds` without a hard deadline (the single audit's), and, once
+`cursor/pous-continuous-enforce-3cf5` has landed, `UnsignedRounds` with one and `ContinuousMemoryChallenger`.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ import pous_continuous_model as model
 from pous_continuous_model import (ALL_SENT, CLOSED, HIT, LATE, NO_HARD_DEADLINE, NONE_OPEN, NOT_REVEALED, REJECT,
                                    UNANSWERED, WITHIN, WRONG, ClockOracle, Record, Refused)
 from verity.protocols.accounting.space.pous import band
-from verity.protocols.accounting.space.pous.audit import AuditResult, MemoryChallenger, challenge_key, run_timed
+from verity.protocols.accounting.space.pous.audit import AuditResult, UnsignedRounds, challenge_key, run_timed
 from verity.protocols.accounting.space.pous.codec import encode_segments
 from verity.protocols.accounting.space.pous.verifier import VerifierKey
 
@@ -41,7 +41,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[6]
 MODEL = "verity/Security/Definitions/Pous/Model/Continuous.lean"
 ENFORCE = "the hard deadline and ContinuousMemoryChallenger land with cursor/pous-continuous-enforce-3cf5"
-HARD = "late_deadline_ns" in inspect.signature(MemoryChallenger).parameters
+HARD = "late_deadline_ns" in inspect.signature(UnsignedRounds).parameters
 
 PARAMS = band.BandParams(16, 64, 12, 2)
 SALT = bytes(range(24))
@@ -110,7 +110,7 @@ class Subject:
             self.timed = self.v.timed
         else:
             kw = {"late_deadline_ns": late} if self.hard else {}
-            self.v = self.timed = MemoryChallenger(vk, key, n, deadline, rtt, clock, **kw)
+            self.v = self.timed = UnsignedRounds(vk, key, n, deadline, rtt, clock, **kw)
         self.max_misses = max_misses if self.named else 0
         self.can_expire = hasattr(self.timed, "expire")
 

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.space.pous import dense, setup
-from verity.protocols.accounting.space.pous.audit import HonestResponder, MemoryChallenger, challenge_key, run_timed, simulate
+from verity.protocols.accounting.space.pous.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed, simulate
 from verity.protocols.accounting.space.pous.codec import encode_segments, split
 from verity.protocols.accounting.space.pous.labels import salt_value, tag
 from verity.protocols.accounting.space.pous.layout import Layout, decode_tensor
@@ -101,10 +101,10 @@ def test_end_to_end_with_the_parameters_codec():
     blocks = [b for seg in server for b in seg]
     assert all(decode_tensor(layout, prims, salt, name, blocks.__getitem__) == data[name] for name in data)
     key = challenge_key(b"audit", vk)
-    timed = MemoryChallenger(vk, key, clock=itertools.count(0, 1000).__next__)
+    timed = UnsignedRounds(vk, key, clock=itertools.count(0, 1000).__next__)
     assert timed.k == 111
     assert run_timed(timed, blocks.__getitem__).accepted
-    wrong = run_timed(MemoryChallenger(vk, key, k=5, clock=itertools.count(0, 1000).__next__), lambda i: blocks[(i + 1) % len(blocks)])
+    wrong = run_timed(UnsignedRounds(vk, key, k=5, clock=itertools.count(0, 1000).__next__), lambda i: blocks[(i + 1) % len(blocks)])
     assert not wrong.accepted
     from verity.protocols.accounting.space.pous.scheme import Encoding
 

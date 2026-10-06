@@ -1,5 +1,5 @@
 """The verifier process of the harness's timed audit: a client of the responder (`pous_native.cu`'s wire format, or the
-harness's `ControlResponder`) and `verity.protocols.accounting.space.pous.protocol.MemoryChallenger`'s audits against it.
+harness's `ControlResponder`) and `verity.protocols.accounting.space.pous.protocol.TimedAudit`'s audits against it.
 
     python benchmarks/pous/band_gpu/memory_challenger.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--audits N] [--pings N]
         [--k K] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
@@ -152,7 +152,7 @@ class LiveResponder:
         return (end - t0) / 1e9
 
     def block(self, i: int) -> tuple[bytes, dict[str, Any]]:
-        """`respond` for `protocol.MemoryChallenger.run`: block `i` as the responder sent it, with its report."""
+        """`respond` for `protocol.TimedAudit.run`: block `i` as the responder sent it, with its report."""
         self.roundtrip(OP_CHALLENGE, i)
         return bytes(self.view[HEADER:]), {"index": i, "device_ns": self.device_ns, "server_ns": self.server_ns}
 
@@ -251,7 +251,7 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
         for _ in range(audits):
             source = os.urandom(32)
             try:
-                v = protocol.MemoryChallenger(scheme, vk, protocol.challenge_key(source, vk), k=k, deadline_ns=deadline_ns,
+                v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(source, vk), k=k, deadline_ns=deadline_ns,
                                       rtt_allowance_ns=limit - deadline_ns, clock=clock, research=research,
                                       experimental=True)
             except ValueError as e:
@@ -325,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--calibrate-only", action="store_true", help="measure the round trip and write the limit, audit nothing")
     ap.add_argument("--clock", default="wall", choices=["wall", "logical"])
     ap.add_argument("--strict", action="store_true",
-                    help="refuse an audit the certificate does not cover (protocol.MemoryChallenger's default) instead of running "
+                    help="refuse an audit the certificate does not cover (protocol.TimedAudit's default) instead of running "
                          "it as a research audit; the refusal is recorded and the exit is 1")
     a = ap.parse_args(argv)
     ready = json.loads(Path(a.ready).read_text())

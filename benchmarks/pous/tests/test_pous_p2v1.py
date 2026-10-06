@@ -1,7 +1,7 @@
 """P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu | p2-v3-gpu`) on CPU: the reference
 (`p2_v1/reference.py`) against the P2 kit's pinned vectors, and every step of the arm with the reference standing in for the GPU
 library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's memory challenger process
-(`p2_v1/memory_challenger.py` for v1, `band_gpu/memory_challenger.py`'s `protocol.MemoryChallenger` for `p2-16448/v3`) on its logical clock, so no outcome
+(`p2_v1/memory_challenger.py` for v1, `band_gpu/memory_challenger.py`'s `protocol.TimedAudit` for `p2-16448/v3`) on its logical clock, so no outcome
 depends on a clock."""
 from __future__ import annotations
 
@@ -285,7 +285,7 @@ def test_the_v3_expander_given_the_kits_prefix_gives_every_pinned_key():
 
 def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_challenger(tmp_path):
     """Under `V3` the device's `C` is v3's encoding of `W` (v3's own codec decodes it back), the leaves are `vk`'s, and every
-    audit and control is `protocol.MemoryChallenger`'s.  At the test's 128-bit width P2 has no certificate, so the audit runs as a
+    audit and control is `protocol.TimedAudit`'s.  At the test's 128-bit width P2 has no certificate, so the audit runs as a
     research audit and says so."""
     from verity.protocols.accounting.space.pous import protocol, schemes
     from verity.protocols.accounting.space.pous.verifier import leaf_hash

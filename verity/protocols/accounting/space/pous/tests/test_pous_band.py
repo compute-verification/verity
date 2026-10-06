@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.space.pous import band, dense, setup
-from verity.protocols.accounting.space.pous.audit import HonestResponder, MemoryChallenger, challenge_key, run_timed, simulate
+from verity.protocols.accounting.space.pous.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed, simulate
 from verity.protocols.accounting.space.pous.codec import encode_segments, split
 from verity.protocols.accounting.space.pous.labels import salt_value, tag
 from verity.protocols.accounting.space.pous.layout import Layout, decode_tensor
@@ -94,11 +94,11 @@ def test_cliff_is_enforced():
     p = band.SECURE_FIRST
     vk = VerifierKey(p, SALT, bytes(32), (bytes(32),) * p.blocks)
     key = challenge_key(b"audit", vk)
-    MemoryChallenger(vk, key, deadline_ns=500_000, rtt_allowance_ns=2_639_499)
+    UnsignedRounds(vk, key, deadline_ns=500_000, rtt_allowance_ns=2_639_499)
     assert band.effective_rounds(p, 500_000, 2_639_499) == 12 and band.effective_rounds(p, 500_000, 2_639_500) == 13
     with pytest.raises(ValueError, match="cliff"):
-        MemoryChallenger(vk, key, deadline_ns=500_000, rtt_allowance_ns=2_639_500)
-    MemoryChallenger(VerifierKey(dense.POINT_64K, SALT, bytes(32), (bytes(32),) * 512), key, rtt_allowance_ns=10 ** 9)
+        UnsignedRounds(vk, key, deadline_ns=500_000, rtt_allowance_ns=2_639_500)
+    UnsignedRounds(VerifierKey(dense.POINT_64K, SALT, bytes(32), (bytes(32),) * 512), key, rtt_allowance_ns=10 ** 9)
 
 
 class GapResponder:
@@ -150,7 +150,7 @@ def test_end_to_end_with_the_parameters_codec():
     blocks = [b for seg in server for b in seg]
     assert all(decode_tensor(layout, prims, salt, name, blocks.__getitem__) == data[name] for name in data)
     key = challenge_key(b"audit", vk)
-    timed = MemoryChallenger(vk, key, clock=itertools.count(0, 1000).__next__)
+    timed = UnsignedRounds(vk, key, clock=itertools.count(0, 1000).__next__)
     assert timed.k == 111 and run_timed(timed, blocks.__getitem__).accepted
     enc = Encoding(params, salt, tuple(int.from_bytes(b, "little") for b in blocks))
     assert simulate(vk, HonestResponder(enc), prims, key).accepted

@@ -5,10 +5,10 @@ Its model is the verifier of `verity/Security/Definitions/Pous/Model/Continuous.
 `Pous.SecurityProofs.ContinuousAudit`.  That verifier sends `n` uniform, independent indices and counts a miss for
 every round that is not a hit: wrong, late or rejected.  Three requirements are theorems about it
 (`verity/Security/Proofs/Pous/Continuous/Verifier.lean`), and `ContinuousMemoryChallenger` enforces each one on a single
-`audit.MemoryChallenger` over the whole stream, with its clock and its index draws:
+`audit.UnsignedRounds` over the whole stream, with its clock and its index draws:
 
 1. **No pipelining.** Challenge `j + 1` is revealed only once answer `j` is in or its hard deadline has passed
-   (`MemoryChallenger.challenge`), and each deadline runs from the verifier's own clock reading when it reveals the index,
+   (`UnsignedRounds.challenge`), and each deadline runs from the verifier's own clock reading when it reveals the index,
    never from a time the responder reports.  An answer names the challenge it answers; one for any other challenge
    than the open one (an earlier, closed one, or one not yet revealed) is refused.
 2. **A hard deadline.** An answer past `Δ_late + RTT`, or none by then, is rejected and its block is never checked;
@@ -42,7 +42,7 @@ from dataclasses import dataclass
 
 from verity.primitives.randomness import Key
 
-from .audit import DEADLINE_NS, RTT_ALLOWANCE_NS, Answer, AuditResult, MemoryChallenger
+from .audit import DEADLINE_NS, RTT_ALLOWANCE_NS, Answer, AuditResult, UnsignedRounds
 from .verifier import VerifierKey
 
 
@@ -71,7 +71,7 @@ class ContinuousMemoryChallenger:
     `Pous.SecurityProofs.ContinuousAudit` measures the memory at each send time and needs no cap, and its model's
     verifier has none.
 
-    The continuous audit runs only on this class, never on a bare `MemoryChallenger` with a hard deadline.  That one's
+    The continuous audit runs only on this class, never on a bare `UnsignedRounds` with a hard deadline.  That one's
     `respond(block)` names no challenge, so once a challenge expires, an answer to it still in flight is credited to
     the next one, a hit when both ask for the same block.  That block was on the wire, not in the memory the model
     measures at the send time, so the audit would credit storage the responder does not hold (#954's red team)."""
@@ -84,7 +84,7 @@ class ContinuousMemoryChallenger:
             raise ValueError("the continuous audit needs a hard deadline")
         if n < 1 or max_misses < 0:
             raise ValueError("a stream has at least one challenge, and a nonnegative miss allowance")
-        self.timed = MemoryChallenger(vk, key, n, deadline_ns, rtt_allowance_ns, clock, on_answer, root_only,
+        self.timed = UnsignedRounds(vk, key, n, deadline_ns, rtt_allowance_ns, clock, on_answer, root_only,
                                    late_deadline_ns=late_deadline_ns, audit_cap=audit_cap)
         self.max_misses = max_misses
 
@@ -156,7 +156,7 @@ class ContinuousMemoryChallenger:
         return self.done and not self.aborted and not self.exceeded
 
     def challenge(self) -> tuple[int, int]:
-        """Reveal the next challenge, `(j, index)`, by `MemoryChallenger.challenge()`: an open challenge past its hard
+        """Reveal the next challenge, `(j, index)`, by `UnsignedRounds.challenge()`: an open challenge past its hard
         deadline is closed first, and stays closed when the call then raises because it was the last."""
         i = self.timed.challenge()
         return self.timed.pending, i
