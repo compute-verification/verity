@@ -714,6 +714,19 @@ outer session stops when the worker cuts it, when the worker sends `Finish` befo
 `flock-circuit` then sends `Finish` at once), when serve's verdict rejects it, or on any fault of the relay's. In all but the
 verdict the relay cuts the challenger's connection without forwarding `Finish`, and the worker gets the relay's own verdict.
 
+**The release side is Rust's** (`flock_live::release`). `flock-circuit prove --zk --firewall-state DIR --session ID --part
+NAME`, behind its send check (`FC_FIREWALL=1`, §10.4), runs each outer session straight to `serve` under the rules of this
+section, and keeps `verity_flock.firewall`'s record byte for byte: `live/src/firewall_record_vectors.json`, which
+`release::tests::the_shared_vectors_hold` and `test_the_record_is_the_rust_firewalls_byte_for_byte` both run. It takes the
+slot, admits the session, runs its rounds, holds its proofs and `Finish` until the session's release time, and sends them.
+Every stop (the send check's refusal, a fault, a panic, a missed time) drops the connection before `Finish`, and a
+prover killed while it holds the slot is recorded as its session's stop by the next one to take it. It refuses
+`FC_VERIFY_AHEAD` (the slot is held until each session's verdict). `verity_flock.firewall` stays as the inner side
+(`rec_live`'s opens, finishes and inner stops) and as the tests' relay. These decisions across sessions (whether a
+recursive session's next outer session goes on, and when its proofs leave) are outside `FirewallComputes`, in either
+language: that assumption covers the values one session's transcript reports the firewall fixed, and no contract checks
+the record yet.
+
 **Outer proofs one at a time.** The firewall has one slot across streams and protocols (`slot.lock` in its state directory,
 which every relay process of the firewall shares). An outer session takes it at its first request other than `Ping` and holds
 it until the session is released or fails; a session that asks meanwhile waits (`wait`) and takes it after, so in the record
@@ -734,11 +747,76 @@ session at K = 4096 (2 reps a session): the inner session's 286 messages (139 ro
 | ends the recursive session (`rec_live --firewall`, every outer session through the relay) | `log₂(1 + Σ_p (M_p + 1))` | 11.19 bits (`log₂ 2336`) |
 | ends its own session only (each V* statement against its own `serve`, no relay) | `Σ_p log₂(s_p + 2)`, `s_p = M_p` stops inner and `2 M_p` outer | 80.1 bits (72.1 = `Σ_p log₂(M_p + 1)` without the outer's `Finish` bit and the never-opened sessions) |
 
-The first row holds wherever the inner phase runs `rec_live --firewall` and the outer phase runs through the relay
-(`tests/test_firewall_release.py`, a rule a test). `85-rec-reprice.sh` does not yet: it proves each V* statement against its
-own `serve`, so its sessions are the second row's.
+The first row holds wherever the inner phase runs `rec_live --firewall` and the outer phase runs through the firewall
+(`flock-circuit prove --firewall-state`, or the tests' relay; `tests/test_firewall_release.py` and `release::tests`, a rule
+a test). `85-rec-reprice.sh` does not yet: it proves each V* statement against its own `serve`, so its sessions are the
+second row's.
+
+**A stream stops at its failure budget.** `rec_live --firewall DIR --budget b` opens each recursive session on its stream
+with the failure budget b, the same at every open of the stream (`firewall.open` refuses another). A failure is a recursive
+session's stop (a missed time included), or a refusal of a recursive session that had not stopped, on a stream that had
+not; at the b-th, the firewall refuses every outer session of the stream and every open, and `rec_live` closes the next
+connection before anything is served. b is the challenger's stream's `budget` (P1's `Stream(budget=...)`,
+`verity/protocols/verification/sampled_proofs/service.py` on `cursor/proof-service-95d4`, bound into the stream's digest),
+and the two must agree in three places: the same b, the same stream (one firewall stream a challenger stream), and one
+recursive session a registration, so that each firewall failure is one `reject` or `late` there. A stop shows the
+challenger a cut or a missing proof, which is `late` or `reject`; a session the firewall refuses after its stop sends
+nothing, and is no further failure on either side.
+
+**Proofs leave at public times.** `rec_live --release-parts L0,...,alg --release-windows-ms w0,...,w7` gives each
+recursive session a release schedule, recorded at its open: `start_ms`, the time its connection was accepted, and one
+public window a statement position. Part j's proofs and `Finish` leave at `start_ms + w0 + ... + wj`, never earlier (a
+session ready early waits) and never late (a session not ready by then is a stop, a missed time). The schedule is fixed
+before the session and depends on nothing secret: not on how long the inner session or any outer one took. Only the Rust
+firewall keeps the times; the Python relay refuses a scheduled session rather than release it early. Windows from node 1's
+honest sessions at K = 4096 (`r20261006-065256-f517`, 10 timed sessions a statement, all accepted, the firewall on the same
+cores as the prover): the release of part j follows part j − 1's verdict by its session's end to end, so
+`w_j = 1.5 × (max e2e_j + max gap_{j−1})` rounded up to a second, `gap` being a slot's hold beyond the session
+(`tp_s − e2e_s`, the verdict):
+
+| part | max e2e_j (s) | max gap_{j−1} (s) | need (s) | window (s) | margin |
+|---|---|---|---|---|---|
+| L0 | 7.84 | (from `start_ms`, below) | 7.84 | 12 | 1.53× |
+| L1 | 4.92 | 1.47 | 6.38 | 10 | 1.57× |
+| L2 | 5.02 | 1.36 | 6.38 | 10 | 1.57× |
+| L3 | 3.11 | 1.37 | 4.48 | 7 | 1.56× |
+| L4 | 3.23 | 1.19 | 4.42 | 7 | 1.58× |
+| L5 | 2.13 | 1.12 | 3.25 | 5 | 1.54× |
+| L6 | 2.32 | 0.72 | 3.05 | 5 | 1.64× |
+| algebra | 16.99 | 1.27 | 18.26 | 28 | 1.53× |
+
+The windows sum to 84 s, against 224 s for one period (8 × the algebra's 28 s). Two limits. L0's window counts from the
+connection's accept, so on top of L0's session it must cover the inner session and the V* stage (`InnerFold`, 1:59 at
+step 3, `r20261006-022005-409a`; the inner session's prove 0.98 s, `--zk` 5.41 s, in `r20261006-021550-4e4b`); 12 s covers
+L0's session alone, and no run has yet timed a whole recursive session against its schedule. And the slot is shared: two
+recursive sessions whose outer phases overlap in time take turns at it, so the later one misses its times. That is a
+failure, never an early release, but an honest operator must space recursive sessions so their outer phases don't
+overlap, and nothing enforces that yet. Dedicated cores for the firewall (infra's I1, a firewall VM, priced, not created)
+would take the recheck and serve's verify off the prover's cores. On node 1 the algebra's worst session is 1.5× its median
+(16.99 s against 11.33 s) and a contended `serve` has taken 15–44 s to verify L1 (`r20261006-024439-6203`), either of which
+turns an honest session into a missed time. With dedicated cores the margin could fall toward the measured spread, and
+co-tenant load could no longer spend the budget.
+
+**The bound over a stream.** Over a stream of n recursive sessions with budget b, rules 1–4 leave the challenger: which
+recursive sessions failed (at most b, by rule 4), and for each failure j, the form it took (one, at one position, by rule
+1). Every proof that leaves, leaves at its public time (rule 3), one at a time (rule 2). That is at most
+
+`log₂ Σ_{i≤b} C(n, i) + Σ_j log₂ q_j` bits,
+
+with q_j the number of forms failure j can take. A failure is not one symbol today: the challenger sees where its session
+was cut, inner or outer, so `q_j ≤ 1 + Σ_p (M_p + 1) = 2336` at K = 4096, the first row's 11.19 bits, and the bound that
+holds is `log₂ Σ_{i≤b} C(n, i) + 11.19 b` bits (for n = 1000 and b = 4: 35.3 + 44.8 = 80.0 bits). It can't be made one
+symbol by the firewall alone. An outer session is interactive: the challenger answers each message with its coins, so
+every message before the cut has reached it, and so has where the cut fell. Ending every failed recursive session at one
+fixed point would need the session's messages to leave together, after the firewall has checked all of them: a
+non-interactive outer session, which changes the soundness argument (Daniel's call). Not counted in the bound: timing
+inside a session. The release time fixes when each outer session's proofs and `Finish` leave, not the pace of its rounds
+before them, which reach `serve` as the prover makes them, nor when a stop's cut comes (a missed time's comes when the late
+session is ready). Holding every cut until its statement's release time is the firewall's to do and would take the cut's
+time out; it is not done yet.
 
 **Retries.** Every stop is recorded and counted, in both phases, so the auditor knows how many times a recursive session was
 run, and each run it allows reveals its own ending: `r` stopped runs before an accepted one reveal at most `r + 1` times the
-row's bound. The auditor chooses `r`, since it decides whether a rack runs again after a stop; with `r = 0` a rack whose
-firewall stops once has no second run.
+row's bound. The stream's budget bounds them: a stream has at most b failed recursive sessions before it stops, whoever
+asks for the next run, so the bound over the stream counts every retry. The auditor chooses b. With b = 1, a stream whose
+firewall stops once runs nothing more.
