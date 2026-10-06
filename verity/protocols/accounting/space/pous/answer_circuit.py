@@ -7,6 +7,7 @@ its hiding leaf.  One instance per round, k per audit.
     PousSha512Compress_v1           (cv: Array<512>, msg: Array<1024>) -> Array<512>   one SHA-512 compression
     PousHm96Commit_v1               (x: Array<512>, y: Array<1536>) -> Array<1024>     hm96-sha512's b ‖ c
     PousEqual_v1{N}                 (a: Array<N>, b: Array<N>) -> Array<1>             a = b
+    PousAnswerRow_v1{N}             (block: Array<8N>) -> Array<8N>                    the block, the proof service's unit
 
 Every array is of `Value<1>`.  Byte strings (the block, digests, salts, commit strings) are bits in byte order, bit t
 being bit t mod 8 of byte ⌊t/8⌋ (hm96's order); a chaining value is SHA-512's eight words, each least significant bit
@@ -194,3 +195,15 @@ PousAnswerOpens = CompositeDefinition(
     "PousAnswerOpens", 1, ("N",), _answer_sig, _answer_body, conformance="protocol-defined",
     doc="1 iff the N-byte block's sha512/row/v2 digest is h and its hm96-sha512 commit string under salt y is bc: the "
         "memory challenger's hash of round j's answer and C's hiding leaf i_j open to the same block (N = 2056 for P2)")
+
+
+def _row_sig(S):
+    _check("PousAnswerRow", N=S.N)
+    return (("block", bits(8 * S.N)),), bits(8 * S.N)
+
+
+PousAnswerRow = CompositeDefinition(
+    "PousAnswerRow", 1, ("N",), _row_sig,
+    _traced_body(lambda S: ("answer-row", S.N), lambda S: (lambda C, b: list(b)), _row_sig), conformance="protocol-defined",
+    doc="The answered N-byte block, unchanged: the proof service's unit for PoUS, whose two rows (C's salt, the zero salt) "
+        "commit one block, so `PousAnswerOpens`'s two equalities are checked on C-Flock's row commitments")

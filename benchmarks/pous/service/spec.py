@@ -8,7 +8,7 @@ it commits the round's answers as the unit's two rows (`block`, `o0`, phase ``se
 answered in round j under C's salt `y_{i_j}`, so its commit string is C's leaf `i_j` exactly; `o0` is the same block
 under the zero salt, whose commit string is `x ‖ H(0)` with `x` the round's signed `H(block)`.
 
-**The check** (`unit`, `PousAnswerRow{N}`): the identity on an N-byte block, as a public Program. C-Flock proves each
+**The check** (`unit`, `answer_circuit.PousAnswerRow_v1{N}`): the identity on an N-byte block, as a public Program. C-Flock proves each
 instance's two rows are the same bits and publishes both commit strings; PoUS's claims check (`claims_check`) then holds
 row j's two commit strings to C's leaf at the round's index (an opening under C's root) and to the signed `H(block)`.
 That is `answer_circuit.PousAnswerOpens_v1`'s statement split at its public wires: the digest and the commit string
@@ -31,7 +31,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.primitives.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.primitives.circuits.defs import SpecializedDefinition, bind
 from verity.primitives.circuits.program import Program
 from verity.primitives.commitments import hm96
 from verity.primitives.commitments.identity import identity_digest
@@ -40,7 +40,7 @@ from verity.primitives.commitments.limits import VerificationLimits
 from verity.primitives.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
 from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.protocols.accounting.space.pous import memory_challenger as mc
-from verity.protocols.accounting.space.pous.circuit import _traced_body, bits
+from verity.protocols.accounting.space.pous.answer_circuit import PousAnswerRow
 from verity.protocols.verification.sampled_proofs import service as S
 from verity.protocols.verification.sampled_proofs.one_stage import partition as P, registration as R
 
@@ -56,17 +56,6 @@ FRAME_BINDING = "verity/flock-ir-frame/binding/v1"
 CONTEXT = b"verity-pous/service/memory-challenger/v1"
 CHALLENGER = "pous-memory-challenger"
 LIMITS = VerificationLimits()
-
-
-def _sig(S_):
-    return (("block", bits(8 * S_.N)),), bits(8 * S_.N)
-
-
-PousAnswerRow = CompositeDefinition(
-    "PousAnswerRow", 1, ("N",), _sig, _traced_body(lambda S_: ("answer-row", S_.N), lambda S_: (lambda C, b: list(b)), _sig),
-    register=False, conformance="protocol-defined",
-    doc="The answered block, unchanged: its two rows (C's salt, the zero salt) are one block, by C-Flock's row commitments.")
-
 
 def unit(block_bytes: int) -> SpecializedDefinition:
     return bind(PousAnswerRow, N=block_bytes)

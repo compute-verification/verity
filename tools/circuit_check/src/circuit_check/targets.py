@@ -454,13 +454,15 @@ def _pous_roots() -> list[Any]:
     takes a Toom-3 level (above `TOOM`), then Karatsuba (above `SCHOOL`), then schoolbook, so it reaches every piece; the
     package's tests check it against Python's integers at P2's width and pin its gate counts there.  P2's decode of one
     block at W = 64 (C0 = 189, its 116-byte expansion base) reaches the Keccak and field pieces; the answer opening of a
-    264-byte row reaches the row digest's head, a middle compression and a tail with its rest."""
+    264-byte row reaches the row digest's head, a middle compression and a tail with its rest; the proof service's unit
+    for PoUS is P2's 2,056-byte block, unchanged."""
     from verity.primitives.circuits.defs import bind
-    from verity.protocols.accounting.space.pous.answer_circuit import PousAnswerOpens
+    from verity.protocols.accounting.space.pous.answer_circuit import PousAnswerOpens, PousAnswerRow
     from verity.protocols.accounting.space.pous.circuit import PousModSquare
     from verity.protocols.accounting.space.pous.decode_circuit import PousP2Decode
 
-    return [bind(PousModSquare, W=128, C0=21065), bind(PousP2Decode, W=64, C0=189, L=116), bind(PousAnswerOpens, N=264)]
+    return [bind(PousModSquare, W=128, C0=21065), bind(PousP2Decode, W=64, C0=189, L=116), bind(PousAnswerOpens, N=264),
+            bind(PousAnswerRow, N=2056)]
 
 
 def _kernel_roots() -> list[Any]:
