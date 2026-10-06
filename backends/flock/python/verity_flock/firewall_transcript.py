@@ -1,7 +1,8 @@
 """The firewall's transcript (``verity/firewall-transcript/v0``): what the inner phase's firewall (`rec_live.Proxy`) sends
 its challenger (the coin server), in order, each item tagged with the case of the firewall's contract it falls under, with
 the firewall's own decision beside it. ``flock-firewall contract`` (``Flock.Firewall.Contract.run`` in the Lean verifier)
-decides the same transcript; `firewall_agree.py` compares the two.
+decides the same transcript, held to the verifier's public input (``verity/firewall-public/v0``, `public`), never to
+anything the transcript says of itself; `firewall_agree.py` compares the two.
 
 The recorder watches the firewall from outside: a coin server that keeps every call made to it (`RecordingCoins`), a salt
 source that keeps every salt it hands out (`Tape`), and every answer the firewall gives the workers (`Session.handle`). It
@@ -21,7 +22,16 @@ from verity.primitives.commitments.rowleaf import ROLE_X, row_bytes, sha512_row_
 from . import rec_live as RL
 
 FORMAT = "verity/firewall-transcript/v0"
+PUBLIC_FORMAT = "verity/firewall-public/v0"
 INST = hm96.SHA512
+
+
+def public(schedule, relations=(), statement=None, computes=()) -> dict:
+    """The verifier's public input `flock-firewall contract --public` reads (`Flock.Firewall.Contract.PublicInput`): the
+    session's schedule (or ``None``), the relations the verifier checks on masked values, the values the public statement
+    fixes (name to bytes), and the names of the values the firewall fixes by its own computation."""
+    return {"kind": PUBLIC_FORMAT, "schedule": schedule, "relations": list(relations),
+            "statement": {k: v.hex() for k, v in (statement or {}).items()}, "computes": list(computes)}
 
 
 def canon(v) -> bytes:
@@ -120,6 +130,11 @@ class Session:
         """The firewall's decision: the session ended with Finish, and the coin server's record says so."""
         return self.coins.end == "finish" and self.proxy.stopped is None
 
+    def public(self) -> dict:
+        """The inner session's public input: its schedule, and no relation, statement value or value of the firewall's
+        own (the inner phase masks nothing and fixes everything it sends by the schedule)."""
+        return public(self.schedule)
+
     def transcript(self) -> dict:
         tape = {s: i for i, s in reversed(list(enumerate(self.tape.salts)))}
         unknown = len(self.tape.salts)
@@ -179,6 +194,6 @@ class Session:
             items.append({"finish": {}})
         answers = b"".join(self.answers)
         exposed = [i for i, s in enumerate(self.tape.salts) if s in answers or s.hex().encode() in answers]
-        return {"kind": FORMAT, "phase": "inner", "schedule": self.schedule, "relations": [],
+        return {"kind": FORMAT, "phase": "inner",
                 "tape": {"salts": [s.hex() for s in self.tape.salts], "pads": []}, "exposed": {"salts": exposed, "pads": []},
                 "items": items, "firewall": {"accepted": self.accepted(), "why": self.proxy.stopped}}
