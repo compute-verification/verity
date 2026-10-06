@@ -615,3 +615,25 @@ def test_the_harness_moves_every_one_of_its_threads_off_the_memory_challengers_a
         t.join()
         for x in os.listdir("/proc/self/task"):
             os.sched_setaffinity(int(x), here)
+
+
+def test_the_memory_challenger_and_the_threads_it_starts_are_out_of_numa_balancings_reach():
+    script = """
+import sys, threading
+sys.path.insert(0, sys.argv[1])
+from band_gpu.memory_challenger import local_memory
+policy = local_memory()
+seen = []
+t = threading.Thread(target=lambda: seen.append(open("/proc/thread-self/numa_maps").read()))
+t.start()
+t.join()
+print(policy)
+print(seen[0])
+"""
+    out = subprocess.run([sys.executable, "-c", script, str(ROOT / "benchmarks" / "pous")], capture_output=True, text=True,
+                         check=True).stdout.splitlines()
+    if out[0] == "None":
+        pytest.skip("no set_mempolicy here")
+    assert out[0] == "local"
+    policies = {line.split()[1] for line in out[1:] if line.strip()}
+    assert policies == {"local"}, policies

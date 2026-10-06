@@ -18,6 +18,8 @@ harness's `ControlResponder`) and `verity.protocols.accounting.space.pous.protoc
   answer's time, the responder's reported device and server time, and its verdicts.
 - **Clocks.** `--clock wall` (the default) times each answer on this process's monotonic clock. `--clock logical` takes each
   answer's time to be the responder's reported server time (the CPU tests: no outcome there depends on the machine).
+- **Memory.** The process runs under the local memory policy (`local_memory`, recorded as `mempolicy`), out of automatic NUMA
+  balancing's reach.
 
 Wire: a request is `<QQ` (op, argument); an answer is a 24-byte header `<QQQ` (status, device ns, server ns) and one block.
 Exit 0 when every audit accepted, 1 otherwise.
@@ -25,6 +27,7 @@ Exit 0 when every audit accepted, 1 otherwise.
 from __future__ import annotations
 
 import argparse
+import errno
 import gc
 import json
 import os
@@ -137,6 +140,29 @@ def cgroup_cpu() -> dict[str, int]:
     return {k: int(stat[k]) for k in ("nr_periods", "nr_throttled", "throttled_usec") if k in stat}
 
 
+MPOL_LOCAL = 4
+SYS_SET_MEMPOLICY = {"x86_64": 238, "aarch64": 237}
+
+
+def local_memory() -> str | None:
+    """Put this thread, and every thread and child it starts later, under the local memory policy (`numactl --localalloc`);
+    `"local"`, or None where Linux has no `set_mempolicy`.  Automatic NUMA balancing skips memory whose policy is not the
+    default one, so it never unmaps the memory challenger's pages to sample their accesses: on node 2 those hinting faults
+    stalled the memory challenger's core 1-3 ms every 1.024 s.  The policy is per thread, so call this before any thread starts."""
+    nr = SYS_SET_MEMPOLICY.get(os.uname().machine) if sys.platform == "linux" else None
+    if nr is None:
+        return None
+    import ctypes
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.syscall(nr, MPOL_LOCAL, None, ctypes.c_ulong(0)) != 0:
+        err = ctypes.get_errno()
+        if err == errno.ENOSYS:
+            return None
+        raise OSError(err, f"set_mempolicy(MPOL_LOCAL): {os.strerror(err)}")
+    return "local"
+
+
 def calibrate(r: LiveResponder, pings: int) -> list[float]:
     """`pings` round trips (after 50 warm-up pings), in seconds."""
     for _ in range(50):
@@ -221,6 +247,7 @@ def calibrate_only(host: str, port: int, block_bytes: int, *, pings: int, cpu: i
 
 
 def main(argv: list[str] | None = None) -> int:
+    mempolicy = local_memory()
     from verity.protocols.accounting.space.pous import audit as pous_audit
     from verity.protocols.accounting.space.pous import schemes
     from verity.protocols.accounting.space.pous.verifier import VerifierKey
@@ -246,12 +273,12 @@ def main(argv: list[str] | None = None) -> int:
     if a.calibrate_only:
         doc = calibrate_only("127.0.0.1", ready["port"], params.block_bytes, pings=a.pings, cpu=a.verifier_cpu,
                              allowance=a.allowance, deadline_ns=deadline, clock=clock)
-        Path(a.out).write_text(json.dumps({**doc, "clock": a.clock}, indent=1) + "\n")
+        Path(a.out).write_text(json.dumps({**doc, "clock": a.clock, "mempolicy": mempolicy}, indent=1) + "\n")
         return 0
     scheme = scheme_of(ready["scheme"], params)
     raw = Path(a.leaves).read_bytes()
     vk = VerifierKey.from_leaves(params, bytes.fromhex(ready["salt"]), [raw[i:i + 32] for i in range(0, len(raw), 32)])
-    doc = {"root": vk.root.hex(), "clock": a.clock,
+    doc = {"root": vk.root.hex(), "clock": a.clock, "mempolicy": mempolicy,
            **audit("127.0.0.1", ready["port"], scheme, vk, audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu,
                    allowance=a.allowance, deadline_ns=deadline, limit_ns=a.limit_ns or None, clock=clock)}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")

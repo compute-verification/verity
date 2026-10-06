@@ -10,7 +10,7 @@ audit's counter, round `j`'s index `uniform(B, j)` of `verity/pous/audit-challen
 each is timed from the challenge's send to its answer's last byte, correct when the block's leaf is the retained one, on time
 within the limit, and the audit stops at the first failure. `k` is 105, the deployment's.
 
-The limit, the calibration, the clocks and the record are the band memory challenger's (`band_gpu/memory_challenger.py`): `--calibrate-only` fixes
+The limit, the calibration, the clocks, the memory policy and the record are the band memory challenger's (`band_gpu/memory_challenger.py`): `--calibrate-only` fixes
 `Δ + allowance` before any load, `--limit-ns` judges every audit against it, the allowance is a loopback one (spec v1.1 caps it
 at 354 µs), and every audit's secret source and every answer's time are kept.
 
@@ -40,6 +40,7 @@ from band_gpu.memory_challenger import (  # noqa: E402
     calibrate,
     cgroup_cpu,
     limit_of,
+    local_memory,
     quantiles,
 )
 from p2_v1 import reference  # noqa: E402
@@ -109,6 +110,7 @@ def audit(host: str, port: int, params: reference.Params, salt: bytes, model: by
 
 
 def main(argv: list[str] | None = None) -> int:
+    mempolicy = local_memory()
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ready", required=True)
     ap.add_argument("--leaves", required=True)
@@ -135,11 +137,12 @@ def main(argv: list[str] | None = None) -> int:
             rtt = calibrate(r, a.pings)
         finally:
             r.close()
-        Path(a.out).write_text(json.dumps({**limit_of(rtt, deadline, a.allowance), "pings_raw_s": rtt, "clock": a.clock},
+        Path(a.out).write_text(json.dumps({**limit_of(rtt, deadline, a.allowance), "pings_raw_s": rtt, "clock": a.clock,
+                                          "mempolicy": mempolicy},
                                           indent=1) + "\n")
         return 0
     raw = Path(a.leaves).read_bytes()
-    doc = {"clock": a.clock, **audit("127.0.0.1", ready["port"], params, bytes.fromhex(ready["salt"]), bytes.fromhex(ready["model"]),
+    doc = {"clock": a.clock, "mempolicy": mempolicy, **audit("127.0.0.1", ready["port"], params, bytes.fromhex(ready["salt"]), bytes.fromhex(ready["model"]),
                                      [raw[i:i + 32] for i in range(0, len(raw), 32)], audits=a.audits, pings=a.pings,
                                      k=a.k or reference.K_AUDIT, cpu=a.verifier_cpu, allowance=a.allowance, deadline_ns=deadline,
                                      limit_ns=a.limit_ns or None, clock=clock)}
