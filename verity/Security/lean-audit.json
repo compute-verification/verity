@@ -56056,6 +56056,16 @@
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
   },
+  "Proofs.Flock.Recursive.Statements": {
+   "digest": "005bd3a1fa7013a95a72379f3e60c9019b4928e68b5bdef13ef6fd888688f03a",
+   "definitions": {
+    "Flock.Guarantees.RecursiveSound": "d166a5bad723d027c8c259bff253ffb9e7d561a8b8bb9da2812dedecde261bf5",
+    "Flock.Guarantees.RecursiveZK": "6f95e6daa2d78cd07209b987c8dedae43ccab535bdfe98363b8d52050d68532d",
+    "Flock.Guarantees.firewallLeaf": "fddc41ec1f4b4e2810231afa00a4c024566a4b2b2e9daefba922aeb3695bd425",
+    "Flock.Guarantees.idealLeaf": "2b0d4879d5125fbe63d0df20472cb5c2e84da64fd9f79c72d0db1f3f93455ea4"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound", "Flock.SecurityProofs.RecursiveZK"]
+  },
   "Proofs.Flock.Recursive.Transfer": {
    "digest": "7a9cb3f46a88b37420a5132d5e21752442cd1e2d272346e75c4a7a13208ff502",
    "definitions": {
@@ -57137,6 +57147,13 @@
     "FlockSoundness.ZK.ideal_leaves_swap",
     "FlockSoundness.ZK.padOnto_M1"
    ]
+  },
+  "Proofs.Flock.Soundness.Assumptions.Recursive": {
+   "digest": "55e8b99d964f9d51bc208178bd905cae25b8c8961d1b14f1f6d729655a5a5b41",
+   "definitions": {
+    "Flock.Assumptions.VBridge": "c7133abbebba54516366c3f9ab4d930cc5e54a9475ff39fe6663208492377d2c"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
   },
   "Proofs.Flock.Soundness.Assumptions.Zk": {
    "digest": "b7c393171fd2fbe5348fd5f8d4fe32343f80e2cccc5d6e7054d159c6d03aa3a6",
@@ -74401,23 +74418,6 @@
     "FlockSoundness.Registered.flock_e2e_count_hm96_reads",
     "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads"
    ]
-  },
-  "Specs.Flock.Assumptions.Recursive": {
-   "digest": "55e8b99d964f9d51bc208178bd905cae25b8c8961d1b14f1f6d729655a5a5b41",
-   "definitions": {
-    "Flock.Assumptions.VBridge": "c7133abbebba54516366c3f9ab4d930cc5e54a9475ff39fe6663208492377d2c"
-   },
-   "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
-  },
-  "Specs.Flock.Guarantees.Recursive": {
-   "digest": "005bd3a1fa7013a95a72379f3e60c9019b4928e68b5bdef13ef6fd888688f03a",
-   "definitions": {
-    "Flock.Guarantees.RecursiveSound": "d166a5bad723d027c8c259bff253ffb9e7d561a8b8bb9da2812dedecde261bf5",
-    "Flock.Guarantees.RecursiveZK": "6f95e6daa2d78cd07209b987c8dedae43ccab535bdfe98363b8d52050d68532d",
-    "Flock.Guarantees.firewallLeaf": "fddc41ec1f4b4e2810231afa00a4c024566a4b2b2e9daefba922aeb3695bd425",
-    "Flock.Guarantees.idealLeaf": "2b0d4879d5125fbe63d0df20472cb5c2e84da64fd9f79c72d0db1f3f93455ea4"
-   },
-   "guarantees": ["Flock.SecurityProofs.RecursiveSound", "Flock.SecurityProofs.RecursiveZK"]
   },
   "Specs.Nci.Assumptions": {
    "digest": "f4315d64f98e55121fb85549ad8ce05cbc17be8d78b6d137db676a4c1c12dae5",
