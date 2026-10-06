@@ -12,7 +12,9 @@ The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock the lander's
 taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned to CPUS with that slot's test cache
 (`~/.cache/verity/tests-slot-NAME`), without LEASE_DIR and with LEASE_DEADLINE_FILE pointing nowhere. A slot with windows= is
 skipped while one of FILE's windows (`START_UTC MINUTES`, the node-2 fill runner's format) is open or starts within lead (30)
-minutes: a check there would run into a whole-node timed measurement. A slot with leases= is skipped likewise while a live
+minutes: a check there would run into a whole-node timed measurement, unless the window's comment marks it `slot-NAME=runs` (a
+window whose measurement leaves that slot's cores alone). Node 2 books every window once, in gpu-lease's file, which its leases,
+the fill and the slots all read. A slot with leases= is skipped likewise while a live
 `gpu-lease --timed` holds a GPU there (a DIR/<index>.owner line with timed=1 whose pid is alive), a window nobody booked. A slot with only=trains is taken only by a `--priority` waiter
 (the lander's train checks), so a lane's long check or quick tier never holds the slot a train needs (a slot.py from before it
 reads the key as unknown and the slot as any other).  With every slot busy it retries every POLL_S, reading
@@ -42,6 +44,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -85,7 +88,9 @@ def _windows(slot: dict) -> list[tuple[str, datetime, int, str]]:
 
 def blocked(slot: dict, now: datetime, proc: Path = Path("/proc")) -> str | None:
     """Why `slot` can't start a check at `now` (a window open or within its lead, or a live timed GPU lease), or None."""
-    for raw, start, minutes, _note in _windows(slot):
+    for raw, start, minutes, note in _windows(slot):
+        if re.search(rf"(?<![\w-])slot-{re.escape(slot['name'])}=runs(?![\w-])", note):
+            continue
         if start - timedelta(minutes=slot["lead"]) < now < start + timedelta(minutes=minutes):
             return f"window {raw} ({minutes} min) is open or starts within {slot['lead']} min"
     return timed_lease(slot, proc)

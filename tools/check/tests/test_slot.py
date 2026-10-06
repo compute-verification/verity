@@ -77,6 +77,17 @@ def test_a_slot_with_leases_pauses_while_a_live_timed_gpu_lease_holds_a_gpu(tmp_
     assert SLOT.parse("a 0-1")[0]["leases"] is None
 
 
+def test_a_window_marked_slot_name_runs_leaves_that_slot_running_and_pauses_the_others(tmp_path):
+    w = tmp_path / "windows"
+    d, e = SLOT.parse(f"d 0-47 windows={w} lead=30\ne 48-79 windows={w} lead=30")
+    w.write_text("2026-10-01T09:20Z 30 # compute-accounting window, host threads on 160-175 (slot-d=runs)\n")
+    assert SLOT.blocked(d, NOW) is None and SLOT.blocked(e, NOW)
+    w.write_text("2026-10-01T09:20Z 30 # slot-d=runs, slot-e=runs\n")
+    assert SLOT.blocked(d, NOW) is None and SLOT.blocked(e, NOW) is None
+    w.write_text("2026-10-01T09:20Z 30 # slot-dd=runs, not d's\n")
+    assert SLOT.blocked(d, NOW)
+
+
 def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path, monkeypatch):
     (tmp_path / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
