@@ -342,13 +342,13 @@ class UnsignedRounds:
         return AuditResult(tuple(self.answers), self.aborted)
 
 
-def run_timed(verifier: UnsignedRounds, respond: Callable[[int], bytes | tuple[bytes, object]],
+def run_timed(challenger: UnsignedRounds, respond: Callable[[int], bytes | tuple[bytes, object]],
               path: Callable[[int], tuple[bytes, ...]] | None = None) -> AuditResult:
-    """Drive `verifier` against `respond(index)` until all `k` are answered.  `respond` returns the block, or
+    """Drive `challenger` against `respond(index)` until all `k` are answered.  `respond` returns the block, or
     `(block, report)` to keep the responder's own record in the `Answer`; `path(index)` serves a root-only memory challenger."""
-    while not verifier.done:
-        i = verifier.challenge()
+    while not challenger.done:
+        i = challenger.challenge()
         out = respond(i)
         block, report = out if isinstance(out, tuple) else (out, None)
-        verifier.respond(block, path(i) if path is not None else None, report)
-    return verifier.result()
+        challenger.respond(block, path(i) if path is not None else None, report)
+    return challenger.result()

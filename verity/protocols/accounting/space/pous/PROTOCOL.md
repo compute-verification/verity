@@ -397,7 +397,7 @@ The cap is off by default. The continuous audit's guarantee measures the memory 
 and its model's memory challenger has none. Under the cap, a stream whose arrivals spread over more than 363.5 ms always
 aborts.
 
-`run_continuous(verifier, send, receive, wait=...)` drives the stream over a transport. `wait(j)` returns at arrival
+`run_continuous(challenger, send, receive, wait=...)` drives the stream over a transport. `wait(j)` returns at arrival
 `j`, `send(j, i)` sends challenge `j`, and `receive(until)` returns the next `Reply(j, block, path, report)`, or None
 once the memory challenger's clock is past `until`, the open challenge's `closes_at` (its send time plus
 `Δ_late + RTT`). A reply naming any challenge but the open one is dropped. Once the hard deadline has passed, the driver

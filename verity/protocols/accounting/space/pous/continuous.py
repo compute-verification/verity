@@ -174,10 +174,10 @@ class ContinuousMemoryChallenger:
         return self.timed.result()
 
 
-def run_continuous(verifier: ContinuousMemoryChallenger, send: Callable[[int, int], None],
+def run_continuous(challenger: ContinuousMemoryChallenger, send: Callable[[int, int], None],
                    receive: Callable[[int], Reply | None], wait: Callable[[int], None] | None = None) -> AuditResult:
-    """Drive `verifier` through all `n` challenges over a transport.  `wait(j)` returns at challenge `j`'s arrival time
-    on the memory challenger's own schedule; without it each challenge is sent once the last one closes.
+    """Drive `challenger` through all `n` challenges over a transport.  `wait(j)` returns at challenge `j`'s arrival
+    time on the memory challenger's own schedule; without it each challenge is sent once the last one closes.
     `send(j, index)` sends challenge `j`.  `receive(until)` returns the next `Reply` in, or None once the memory
     challenger's clock is past `until`, the open challenge's `closes_at`, with none.
 
@@ -186,18 +186,18 @@ def run_continuous(verifier: ContinuousMemoryChallenger, send: Callable[[int, in
     last one too, so a silent or slow responder never holds the stream open.  A transport that returns None before
     then fails closed: `expire()` refuses, and the audit stops with the challenge open.  With an `audit_cap`,
     `closes_at` is never past `ends_at`, and the driver stops once a challenge closed past it aborts the stream."""
-    while not verifier.done:
+    while not challenger.done:
         if wait is not None:
-            wait(len(verifier.answers))
-        j, i = verifier.challenge()
+            wait(len(challenger.answers))
+        j, i = challenger.challenge()
         send(j, i)
-        while verifier.pending == j:
-            reply = receive(verifier.closes_at)
+        while challenger.pending == j:
+            reply = receive(challenger.closes_at)
             if reply is not None and reply.j == j:
-                verifier.respond(j, reply.block, reply.path, reply.report)
-            elif reply is None or verifier.overdue:
-                verifier.expire()
-    return verifier.result()
+                challenger.respond(j, reply.block, reply.path, reply.report)
+            elif reply is None or challenger.overdue:
+                challenger.expire()
+    return challenger.result()
 
 
 __all__ = ["ContinuousMemoryChallenger", "Reply", "run_continuous"]
