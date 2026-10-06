@@ -151,7 +151,8 @@ def test_a_server_that_signals_by_its_write_times_leaves_the_wire_identical(runs
     _, results = runs
     run, audit = results[strategy]
     assert ar.against_honest(run, results["honest"][0]) == {"wire_is_honests": True, "committed_is_honests": True,
-                                                            "windows_whose_wire_differs": []}
+                                                            "windows_whose_wire_differs": [],
+                                                            "windows_whose_declared_differs": []}
     assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"])
     assert audit["comparisons"]["records_are_run_shapers"]
 
@@ -280,6 +281,53 @@ def test_a_live_server_behind_the_shim_is_accepted(live, setup):
         [b"id: %d\ndata: [DONE]\n\n" % p for p, _, k, _, _ in events if k == TOKENS]
     assert audit["timing"]["server_failed"] == 0 and audit["timing"]["server_cut_at_horizon"] == 0
     assert c["hindsight"]["misses"] == 0
+
+
+def _live_run(setup, run, syncs: str, strategy: str = "honest") -> tuple[dict, dict]:
+    import asyncio
+
+    doc, report, s = setup
+    mp = pytest.MonkeyPatch()
+    mp.setattr(ar, "live_body", lambda session, model: {"model": model, "prompt": [1, 2, 3], "max_tokens": TOKENS,
+                                                        "stream": True})
+    plan = ar.plan_configuration(doc["configurations"][0], s, "served", syncs)
+    if strategy != "honest":
+        plan |= {"strategy": strategy,
+                 "writes": ar.adversary_writes(plan, s.sync_set, s.egress_params.buckets, strategy, seed=1)}
+
+    async def go():
+        server = await asyncio.start_server(_fake_vllm, "127.0.0.1", 0)
+        await asyncio.to_thread(ar.run_virtual, plan, report, run, server.sockets[0].getsockname()[:2])
+        server.close()
+
+    try:
+        asyncio.run(go())
+        return plan, ar.audit_configuration(plan, report, run)
+    finally:
+        mp.undo()
+
+
+@pytest.mark.parametrize("syncs", ["envelope", "cover-2-1"])
+def test_a_live_shim_that_holds_its_writes_is_accepted(setup, tmp_path, syncs):
+    """A live endpoint that answers at once, behind a shim that holds each event to the bucket before its hand time
+    (`spread`): accepted on every link-window. Under the envelope its wire is honest's; under an online rule the proxy
+    declares from what it read, so the later windows' syncs, and with them the wire, may move, never window 0's."""
+    _, honest = _live_run(setup, tmp_path / "honest", syncs)
+    plan, audit = _live_run(setup, tmp_path / "spread", syncs, "spread")
+    assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"]) and len(audit["rows"]) == 6
+    c = audit["comparisons"]
+    assert c["records_are_run_shapers"] and c["hands_are_the_rules"] and c["frames_log_is_the_programs"]
+    assert c["wire_is_the_records"]
+    events = ar.read_events(tmp_path / "spread" / "server.events.gz")
+    honest_events = ar.read_events(tmp_path / "honest" / "server.events.gz")
+    assert len(events) == len(honest_events) == c["frames_read"]
+    assert sorted(b for *_, b, _ in events) != sorted(b for *_, b, _ in honest_events)
+    vs = ar.against_honest(tmp_path / "spread", tmp_path / "honest")
+    if syncs == "envelope":
+        assert vs["wire_is_honests"] and vs["windows_whose_declared_differs"] == []
+    else:
+        assert 0 not in vs["windows_whose_wire_differs"] and 0 not in vs["windows_whose_declared_differs"]
+        assert vs["windows_whose_declared_differs"]
 
 
 def test_a_live_request_asks_for_no_token_ids():

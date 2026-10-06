@@ -38,7 +38,9 @@ met by every window any declared value meets. Under an online rule (`--syncs cov
 prover declares each window's sync at its first tick from the frames it has read, the audit checks the syncs the
 proxy logged, and `declared_are_planned` says whether they are what the rule declares on the model's run. The sender's
 write times then move the declarations, so an adversarial strategy's wire differs from honest's from the second window
-on, within the log2 #Σ_sync bits per window the bound charges. The audit also counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
+on, within the log2 #Σ_sync bits per window the bound charges. Live, `--strategies` makes the shim the adversary: it
+holds each event until its planned bucket, never before vLLM sent it, and `windows_whose_declared_differs` counts the
+windows whose declared sync is not the honest run's. The audit also counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
 have met.
 
     python active_replay.py --calibration REPORT.json --out DIR [--windows 60] [--config-windows 4:10] TRACE.json ...
@@ -574,12 +576,17 @@ class LiveServer:
     server-sent event of the response with `id:` its position in write order, the HTTP head with the first. Every event
     written is logged as (position, session, k, the bucket it was written in, its bytes). From 1.5 buckets before the
     horizon on it writes nothing more, and closes the stream, so that every event logged is read before the last bucket.
-    `open` counts the streams whose response hasn't ended, for a driver on a virtual clock."""
+    An adversary's shim (`plan["writes"]`) holds event k of a session until the middle of its planned bucket, never
+    writing an event before the endpoint has sent it; an event past the plan waits for the last planned bucket.
+    `open` counts the streams whose response hasn't ended and aren't held, and `held` the deadlines of the held ones,
+    for a driver on a virtual clock."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
-        self.clock, self.notify = clock, notify
+        self.clock, self.sleep, self.notify = clock, sleep, notify
         self.upstream = tuple(params["upstream"])
         self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
+        self.writes = plan.get("writes")
+        self.held: Counter = Counter()
         self.position, self.origin, self.open = 0, None, 0
         self.writers: set = set()
         self.events: list[tuple[int, str, int, int, bytes]] = []
@@ -622,8 +629,13 @@ class LiveServer:
                 self.log["failed"].append(up_head.split(b"\r\n")[0].decode(errors="replace"))
                 return
             cutter, k, cutoff = Events(), 0, self.origin + (self.horizon - 1.5) * self.tau
+            planned = None if self.writes is None else [b for b, _ in self.writes.get(name, [])]
+            hold = -1
             async for data in _http_body(up_reader, up_head):
                 for event in cutter.feed(data):
+                    if planned is not None:
+                        hold = max(hold, planned[k] if k < len(planned) else hold)
+                        await self._hold(self.origin + hold * self.tau + self.tau / 2)
                     now = self.clock()
                     if now >= cutoff:
                         self.log["cut_at_horizon"] += 1
@@ -639,6 +651,19 @@ class LiveServer:
                 self.notify()
         finally:
             up_writer.close()
+
+    async def _hold(self, deadline: float) -> None:
+        if (delay := deadline - self.clock()) <= 0:
+            return
+        self.held[deadline] += 1
+        self.open -= 1
+        try:
+            await self.sleep(delay)
+        finally:
+            self.open += 1
+            self.held[deadline] -= 1
+            if not self.held[deadline]:
+                del self.held[deadline]
 
     async def serve(self, origin: float) -> None:
         self.origin = origin
@@ -1005,6 +1030,7 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
         batches = min(horizon - 1, math.floor((x - tau_e / 2) / tau_e + 1e-9) + 1) if x >= tau_e / 2 else 0
         return (len(proxy.lateness["egress"]) >= ticks_e and len(proxy.lateness["ingress"]) >= ticks_i
                 and getattr(server, "processed", horizon) + 1 >= batches and getattr(server, "open", 0) == 0
+                and not any(d <= x + 1e-9 for d in getattr(server, "held", ()))
                 and peer.instants_sent >= bisect.bisect_right(sends, x + 1e-9)
                 and proxy.link_frames_read >= peer.frames_sent and server.log["requests"] >= proxy.requests_released
                 and len(proxy.frames) >= server.log["events"]
@@ -1301,15 +1327,22 @@ def summarize(results: Sequence[dict], models: Sequence[dict]) -> dict:
 
 
 def against_honest(run: Path, honest: Path) -> dict:
-    """Whether a run's wire, as the peer read it, and its committed records are the honest run's."""
+    """Whether a run's wire, as the peer read it, and its committed records are the honest run's, and the windows whose
+    sync the proxy declared differently from honest's (under an online rule; else none)."""
     def wire(p: Path) -> list[str]:
         return json.loads((p / "peer.json").read_text())["window_sha256"]
 
     def committed(p: Path) -> list[str]:
         return sorted((p / "committed.jsonl").read_text().splitlines())
 
+    def declared(p: Path) -> list:
+        with gzip.open(p / "proxy.json.gz", "rt") as fh:
+            return json.load(fh).get("syncs") or []
+
     return {"wire_is_honests": wire(run) == wire(honest), "committed_is_honests": committed(run) == committed(honest),
-            "windows_whose_wire_differs": [w for w, (a, b) in enumerate(zip(wire(run), wire(honest))) if a != b]}
+            "windows_whose_wire_differs": [w for w, (a, b) in enumerate(zip(wire(run), wire(honest))) if a != b],
+            "windows_whose_declared_differs": [w for w, (a, b) in enumerate(zip(declared(run), declared(honest)))
+                                               if a != b]}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1350,8 +1383,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if strategies[0] != "honest" or any(s not in STRATEGIES for s in strategies):
         raise SystemExit(f"--strategies starts with honest and names some of {STRATEGIES}")
     live = bool(args.server_url or args.vllm)
-    if live and (strategies != ["honest"] or args.clock != "real"):
-        raise SystemExit("a live server runs honest, on the real clock")
+    if live and args.clock != "real":
+        raise SystemExit("a live server runs on the real clock")
     sync_policy = args.syncs or ("envelope" if live else "model")
     report = json.loads(args.calibration.read_text())
     setup = Setup(report)
@@ -1514,6 +1547,7 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
             "wire_is_honests": [r["against_honest"]["wire_is_honests"] for r in mine],
             "committed_is_honests": [r["against_honest"]["committed_is_honests"] for r in mine],
             "windows_whose_wire_differs": [r["against_honest"]["windows_whose_wire_differs"] for r in mine],
+            "windows_whose_declared_differs": [r["against_honest"]["windows_whose_declared_differs"] for r in mine],
             "records_are_run_shapers": all(r["comparisons"]["records_are_run_shapers"] for r in mine),
             "ready_off_honest": sum(r["comparisons"]["ready_off_meant"] for r in mine),
             "tick_late_ms": [r["timing"]["tick_late_ms"] for r in mine]}
