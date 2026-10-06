@@ -4,14 +4,13 @@ a network certificate or a memory challenger's record without revealing it.
     LmsVerify_v1{N, W, H}
         (I: Array<2, Word>, root: Value_N, message: Array<8, Word>, q: Array<H, Value<1>>, C: Value_N,
          y: Array<P, Value_N>, path: Array<H, Value_N>) -> Value<1>
-        Word = Array<64, Value<1>>, Value_N = Array<N / 8, Word>; N in (32, 64), W in (1, 2, 4, 8), 1 <= H <= 30
-        (or N = 8, `lms.TOY_N`: circuit-check's binding, the same circuit on one-word values)
+        Word = Array<64, Value<1>>, Value_N = Array<N / 8, Word>; N = 64, W in (1, 2, 4, 8), 1 <= H <= 30
+        (or N = 8, `lms.TOY_N`: circuit-check's binding, the same circuit on one-word values, never deployed)
 
 1 iff ``u32(q) || C || y || path`` signs ``message`` under the public key ``I || root`` (`lms.verify`). Every N-byte value,
 the identifier and the message are SHA-512 words as `merkle` lays them out (bytes big-endian, each word's bits LSB first);
 ``q`` is LSB first. An accepted signature means the key's holder signed the message under the claim
-``euf-cma/lms-sha512-n32`` (`verity.claims`), the scheme's unforgeability, which rests on SHA-512 truncated to 256 bits and is
-not ``cr/sha-512``.
+``euf-cma/lms-sha512-n64`` (`verity.claims`), the scheme's unforgeability, which rests on SHA-512 itself, its whole output.
 
 **A fixed shape.** The circuit is a function of (N, W, H): the digits, the leaf index and the path are values. A chain runs all
 2^W - 1 steps, and step j keeps its input unless the chain's digit a is at most j (`LmsChainStep_v1`), so the proof pays
@@ -294,9 +293,9 @@ def _body(B, S, I, root, message, q, Cv, y, path):
 
 LmsVerify = CompositeDefinition(
     "LmsVerify", 1, ("N", "W", "H"), _signature, _body, conformance="exact-model-tested",
-    doc="1 iff u32(q) || C || y || path is an LMS signature (RFC 8554 over SHA-512 truncated to N bytes, Winternitz width W, "
+    doc="1 iff u32(q) || C || y || path is an LMS signature (RFC 8554 over SHA-512, N bytes of its output, Winternitz width W, "
         "tree height H, no type fields) of message under the public key I || root; every chain runs its 2^W - 1 steps; "
-        "sound under the claim euf-cma/lms-sha512-n32")
+        "sound under the claim euf-cma/lms-sha512-n64 at N = 64")
 
 
 def verifier(N: int, W: int, H: int):
