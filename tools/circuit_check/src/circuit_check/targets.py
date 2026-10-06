@@ -2,7 +2,8 @@
 the suite runs over, every registered Definition and template at small bindings.
 
     definition  ``F32Add_v1``, ``RMSNormTriton_v1{N=64,EPS=1e-05}``, ``GemmCoordinate_v2{K=64,DOT=AmpereBF16TcDot16_v2}``: a
-                registered Definition bound to the statics its id writes (a function-valued static by its id)
+                registered Definition bound to the statics its id writes (a function-valued static by its id, a record by the
+                digest its id prints, ``StepBody_v1{C={d0dc81b7fa41},T=4,...}``, one of the records the suite binds)
     template    ``rope-head`` (its example parameters), ``rope-head:D=128`` (parameters given), or a subcircuit id
                 (``gemm-coordinate/k2048/sm80-mma-bf16``); ``attention-head`` is checked at the ends of its key-count range
     row         a Build's request Program: its directory or its ``instances.json.gz``
@@ -113,9 +114,29 @@ def _split(body: str) -> dict[str, str]:
 
 def _value(s: str) -> Any:
     try:
-        return ast.literal_eval(s)
+        v = ast.literal_eval(s)
     except (ValueError, SyntaxError):
         return s
+    return (v,) if s.startswith("(") and not isinstance(v, tuple) else v    # an id prints a tuple of one as `(7)`
+
+
+#: a record (dict-valued) static as a Definition id prints it, a prefix of its digest (`verity.primitives.circuits.defs`): the record itself is
+#: not in the id, so it is looked up among the records the suite's Definitions are bound to
+_RECORD = re.compile(r"\{[0-9a-f]{12}\}")
+_RECORDS: dict[str, Any] = {}
+
+
+def _record(text: str) -> Any:
+    """The record that a suite Definition's id prints as ``text``."""
+    if not _RECORDS:
+        for fn in suite().values():
+            m = re.fullmatch(r"[^{]+\{(.*)\}", fn.id)
+            for k, v in (_split(m[1]).items() if m else ()):
+                if _RECORD.fullmatch(v) and k in getattr(fn, "bindings", {}):
+                    _RECORDS.setdefault(v, fn.bindings[k])
+    if text not in _RECORDS:
+        raise KeyError(f"record static {text}: no Definition the suite checks is bound to a record of that digest")
+    return _RECORDS[text]
 
 
 def definition(spec: str) -> Any:
@@ -129,7 +150,7 @@ def definition(spec: str) -> Any:
     if m is None:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
-    statics = {k: _value(v) for k, v in _split(body).items()} if body else {}
+    statics = {k: _record(v) if _RECORD.fullmatch(v) else _value(v) for k, v in _split(body).items()} if body else {}
     try:
         if any(isinstance(v, str) and re.fullmatch(r"\{[0-9a-f]{12}\}", v) for v in statics.values()):
             raise KeyError(spec)
@@ -441,7 +462,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_catalog.definitions.boolean import gemm as BG
     from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
     from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
-    from verity_vllm.program.registry import serve3, spec
+    from verity_vllm.program.registry import act, serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
     from verity_vllm.program.registry import boolean_attention, boolean_dsa, boolean_fp8, boolean_fp8_moe, boolean_rope
     from verity_vllm.program.registry import boolean_sparse_mla, dsa, sparse_mla, tables
@@ -569,6 +590,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("GumbelTokenSelect_v1", lambda: bind(sampling.GumbelTokenSelect, V=16)),
         ("GumbelTokenSelectSharedGreedy_v1", lambda: bind(sampling.GumbelTokenSelectSharedGreedy, V=16)),
         ("GumbelTopPTokenSelectSharedGreedy_v1", lambda: bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)),
+        # the static-seed Gumbel argmax (T = 0.7f) and the erf GELU; LayerNormAten is the b1-eager-v3 vocabulary's
+        ("GumbelArgmaxBf16_v1", lambda: bind(sampling.GumbelArgmaxBf16, V=16, SEED=12345, POS=3)),
+        ("GumbelArgmaxTempBf16_v1", lambda: bind(sampling.GumbelArgmaxTempBf16, V=16, SEED=12345, POS=3, T=0x3F333333)),
+        ("GeluErf_v1", lambda: bind(act.GeluErf, N=8)),
         ("EmbeddingShard_v1", lambda: bind(b1_tp2.EmbeddingShard, VS=16, H=16, START=16)),
         ("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16)),
         ("RoPEGptJ_v1", lambda: bind(ref_prims.RoPEGptJ, NHEADS=2, D=16)),

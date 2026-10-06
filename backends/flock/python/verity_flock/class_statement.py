@@ -1002,15 +1002,23 @@ def _source_digest() -> str:
     """The staging code's digest: every Python file of the packages a staged statement is a function of (with the program, the
     shape, the batch parameters and the seed).  A namespace package's portions are hashed as one tree, by path under the package,
     so sys.path order does not move it.  Every portion is hashed, since Python imports from one that holds only namespace
-    subpackages; two portions that define one module make the import depend on that order, and raise ValueError."""
+    subpackages; two portions that define one module make the import depend on that order, and raise ValueError.  A directory or
+    file name holding a dot names no module, so a Lake package's `.lake/` (Mathlib's scripts, under `verity/lean/` once it is
+    built) is neither walked nor hashed."""
     import importlib.util
+
+    def py_files(root: Path):
+        for d, dirs, files in root.walk():
+            dirs[:] = [x for x in dirs if "." not in x]
+            yield from (d / f for f in files if f.endswith(".py") and "." not in f[:-3])
+
     h = hashlib.sha256()
     for name in ("verity", "verity_catalog", "verity_kernels", "verity_experimental", "verity_flock", "circuit_check",
                  "verity_vllm"):
         spec = importlib.util.find_spec(name)
         roots = [Path(r) for r in (spec.submodule_search_locations or [])] if spec else []
         owner: dict[tuple[str, ...], Path] = {}
-        for rel, f, root in sorted((f.relative_to(root), f, root) for root in roots for f in root.rglob("*.py")):
+        for rel, f, root in sorted((f.relative_to(root), f, root) for root in roots for f in py_files(root)):
             mod = rel.with_suffix("").parts
             mod = mod[:-1] if mod[-1:] == ("__init__",) else mod
             if owner.setdefault(mod, root) != root:

@@ -57,7 +57,7 @@ captured from serving, and says so (`window.kind = "stand-in"`).
 
 ## Where things are
 
-- **The Lean.** Today it sits in C-Flock's soundness package, `backends/flock/verifier/lean/soundness/FlockSoundness/Audit/`,
+- **The Lean.** Today it sits in C-Flock's soundness package, `verity/Security/Proofs/Flock/Soundness/Audit/`,
   whose `README.md` lists every theorem: the one-stage audit (`OneStage`), the laws (`Law`, `Stratified`, `StratifiedMiss`,
   `Work`, `Closure`, `Window`), the registration-dependent draw (`RegDraw`), two stages (`TwoStage`, with the tight and
   insecure cases in `Examples`), exfiltration (`Influence`, `Harm`), the compiled layer (`Extraction`) and composition
