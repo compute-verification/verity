@@ -72,17 +72,17 @@ from verity.primitives.randomness import Key, derive
 from ..audit import (Audit, Epoch, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash, draw_coin,
                      opened_value)
 from ..coins import Challenger
-from ..protocol import Context, Matmul, Shape, Tile, tagged
+from ..protocol import Context, Matmul, Shape, Tile, tagged_sha512
 from ..serving import HASH_FORMATS
 from . import pearl_c as C
 from . import pearl_c_debit as D
 from . import pearl_kw as P
 from .pearl_c_device import SM120, Prices
 
-RECORDS_TAG = "verity/pouw/pearl-c/records/v2"
-SPLIT_TAG = "verity/pouw/pearl-c/split/v1"
+RECORDS_TAG = "verity/pouw/pearl-c/records/v3"
+SPLIT_TAG = "verity/pouw/pearl-c/split/v2"
 DRAW_DOMAIN = "verity/pouw/pearl-c-draw/v1"
-DRAW_AFTER_TAG = "verity/pouw/pearl-c/draw-after/v1"
+DRAW_AFTER_TAG = "verity/pouw/pearl-c/draw-after/v2"
 ALIGN = 128
 
 
@@ -109,7 +109,7 @@ class Split:
         return -(-self.k_kept // ALIGN) * ALIGN
 
     def encode(self) -> bytes:
-        return struct.pack(f"<II{len(self.side)}I", self.k, len(self.side), *self.side) + tagged(SPLIT_TAG, self.calibration)
+        return struct.pack(f"<II{len(self.side)}I", self.k, len(self.side), *self.side) + tagged_sha512(SPLIT_TAG, self.calibration)
 
 
 @dataclass(frozen=True)
@@ -160,7 +160,7 @@ def voluntary_cap(rows: int) -> int:
 
 
 def records_root(salt: bytes, weights_root: bytes, splits: Mapping[int, Split], records: Sequence[UnitRecord]) -> bytes:
-    return tagged(RECORDS_TAG, salt, weights_root, *(p for w in sorted(splits) for p in (w, splits[w].encode())),
+    return tagged_sha512(RECORDS_TAG, salt, weights_root, *(p for w in sorted(splits) for p in (w, splits[w].encode())),
                   *(r.encode() for r in records))
 
 
@@ -393,7 +393,7 @@ class RecordedDraw:
 
 def draw_after(transcript_root: bytes, records_digest: bytes) -> bytes:
     """What the verifier records before the challenger opens the draw coin: the transcript root and the records root."""
-    return tagged(DRAW_AFTER_TAG, transcript_root, records_digest)
+    return tagged_sha512(DRAW_AFTER_TAG, transcript_root, records_digest)
 
 
 def draw_key(coin: bytes, transcript_root: bytes, records_digest: bytes, salt: bytes) -> Key:

@@ -67,7 +67,7 @@ def _bytes(t: Any) -> bytes:
 def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, hash: str = HM96) -> bytes:
     """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows, under tree hash `hash` (-h3's
     is `HM96`)."""
-    return rows_domain(activation_binding(salt, index), index, m16, hash).domain_id + fixture.unit_block(salt, root_b, index)
+    return rows_domain(activation_binding(salt, index, hash), index, m16, hash).domain_id + fixture.unit_block(salt, root_b, index)
 
 
 class _Keys:
@@ -88,7 +88,7 @@ class _Keys:
         pos = self.positions.get(m16)
         if pos is None:
             pos = self.positions[m16] = RangeIndexedDomain(m16).identity_sha512()
-        msg = domain_message(activation_binding(self.salt, index), index, pos, m16, "sha512")
+        msg = domain_message(activation_binding(self.salt, index, self.hash), index, pos, m16, "sha512")
         return self.native(msg).digest() + self.salt + root_b + index.to_bytes(8, "little")
 
 

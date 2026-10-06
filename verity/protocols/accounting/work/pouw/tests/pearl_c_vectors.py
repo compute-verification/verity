@@ -109,7 +109,7 @@ def case_vector(case, shape, r, c, index, weight, test, forming, hashing="h0") -
     }
     if hashing == "h3":
         key = salt_key(case)
-        tree = commit_rows(activation_binding(ctx.salt, index), index, a, s.commitment_hash, key, index)
+        tree = commit_rows(activation_binding(ctx.salt, index, s.commitment_hash), index, a, s.commitment_hash, key, index)
         digests, seeds = [C.row_digest(x) for x in a], s.row_seeds(ctx, a, tile.rows)
         out.update({"hashing": hashing, "rows_root_a": tree.commitment.root.hex(),
                     "row_leaf_a0": tree.domain.leaf(0, 0, ROW_SCHEMA, a[0] + hm96_salt(key, index, 0)).hex(),

@@ -244,8 +244,8 @@ def _openings_ok(job: dict, opened) -> bool:
     epoch, ref = job["epoch"], opened.ref
     u = epoch.workload.matmuls[ref.matmul]
     h = commitment_hash(job["scheme"])
-    da = rows_domain(activation_binding(epoch.salt, u.index), u.index, u.shape.m, h)
-    db = rows_domain(weight_binding(u.weight), -2, u.shape.n, h)
+    da = rows_domain(activation_binding(epoch.salt, u.index, h), u.index, u.shape.m, h)
+    db = rows_domain(weight_binding(u.weight, h), -2, u.shape.n, h)
     limits = job["verifier"].limits
     return ([o.position for o in opened.a] == list(ref.tile.rows) and [o.position for o in opened.b] == list(ref.tile.cols)
             and all(verify_opening(da, Commitment(job["transcript"].activation_roots[ref.matmul], u.shape.m), o, ROW_SCHEMA, limits)

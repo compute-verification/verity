@@ -43,7 +43,7 @@ from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sh
 from verity.primitives.randomness import derive
 
 from .coins import Challenger, CoinCommitment, CoinOpening, coin_reason
-from .protocol import Certificate, Context, DomainError, Matmul, PoUWScheme, Tile, tagged
+from .protocol import Certificate, Context, DomainError, Matmul, PoUWScheme, Tile, tagged, tagged_sha512
 
 SALT_DOMAIN = "verity/pouw/salt/v1"
 EPOCH_SALT_DOMAIN = "verity/pouw/epoch-salt/v1"
@@ -128,12 +128,17 @@ def rows_domain(binding: bytes, owner: int, count: int, hash: str = "sha256", di
     return CommitmentDomain(binding, owner, RangeIndexedDomain(count), hash=hash)
 
 
-def weight_binding(weight: int) -> bytes:
-    return tagged("verity/pouw/weight-rows/v1", weight)
+def _binding(hash: str, tag: str, *parts) -> bytes:
+    """A tree's binding: `tagged` under a SHA-256 frame (``<tag>/v1``), `tagged_sha512` under `HM96` (``<tag>/v2``)."""
+    return tagged_sha512(f"{tag}/v2", *parts) if hash == HM96 else tagged(f"{tag}/v1", *parts)
 
 
-def activation_binding(salt: bytes, index: int) -> bytes:
-    return tagged("verity/pouw/activation-rows/v1", salt, index)
+def weight_binding(weight: int, hash: str = "sha256") -> bytes:
+    return _binding(hash, "verity/pouw/weight-rows", weight)
+
+
+def activation_binding(salt: bytes, index: int, hash: str = "sha256") -> bytes:
+    return _binding(hash, "verity/pouw/activation-rows", salt, index)
 
 
 def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "sha256", salt_key: bytes | None = None,
@@ -147,7 +152,7 @@ def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "
 
 
 def weights_root(weight_roots: Mapping[int, bytes]) -> bytes:
-    return tagged("verity/pouw/weights/v1", *(p for w in sorted(weight_roots) for p in (w, weight_roots[w])))
+    return tagged_sha512("verity/pouw/weights/v2", *(p for w in sorted(weight_roots) for p in (w, weight_roots[w])))
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,12 +248,12 @@ def tile_refs(scheme: PoUWScheme, workload: Workload) -> list[TileRef]:
     return out
 
 
-def transcript_binding(epoch: Epoch) -> bytes:
-    return tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root)
+def transcript_binding(epoch: Epoch, hash: str = "sha256") -> bytes:
+    return _binding(hash, "verity/pouw/transcript", epoch.salt, epoch.weights_root)
 
 
 def transcript_domain(epoch: Epoch, count: int, hash: str = "sha256") -> CommitmentDomain:
-    return rows_domain(transcript_binding(epoch), -1, count, hash, digests=True)
+    return rows_domain(transcript_binding(epoch, hash), -1, count, hash, digests=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,7 +298,7 @@ class Prover:
         self.weights = {w: list(rows) for w, rows in weights.items()}
         self.hash = commitment_hash(scheme)
         self.salt_key = (salt_key or os.urandom(32)) if self.hash == HM96 else None
-        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash, self.salt_key, HM96_WEIGHTS + w)
+        self.weight_trees = {w: commit_rows(weight_binding(w, self.hash), -2, rows, self.hash, self.salt_key, HM96_WEIGHTS + w)
                              for w, rows in self.weights.items()}
         self._act_trees: list[MerkleTree] = []
         self._refs: list[TileRef] = []
@@ -314,7 +319,7 @@ class Prover:
             rows = list(activations[u.index])
             if len(rows) != u.shape.m:
                 raise DomainError(f"matmul {u.index} has {u.shape.m} activation rows")
-            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash, self.salt_key, u.index)
+            tree = commit_rows(activation_binding(epoch.salt, u.index, self.hash), u.index, rows, self.hash, self.salt_key, u.index)
             self._act_trees.append(tree)
             ctx = Context(epoch.salt, u, tree.commitment.root, epoch.weight_roots[u.weight])
             tiles = scheme.tiles(u.shape)
@@ -443,8 +448,8 @@ class Verifier:
         u = ep.workload.matmuls[ref.matmul]
         root_a, root_b = transcript.activation_roots[ref.matmul], ep.weight_roots[u.weight]
         h = commitment_hash(scheme)
-        da = rows_domain(activation_binding(ep.salt, u.index), u.index, u.shape.m, h)
-        db = rows_domain(weight_binding(u.weight), -2, u.shape.n, h)
+        da = rows_domain(activation_binding(ep.salt, u.index, h), u.index, u.shape.m, h)
+        db = rows_domain(weight_binding(u.weight, h), -2, u.shape.n, h)
         if [o.position for o in opening.a] != list(ref.tile.rows) or [o.position for o in opening.b] != list(ref.tile.cols):
             return Verdict(ref.id, False, "openings do not cover the tile")
 

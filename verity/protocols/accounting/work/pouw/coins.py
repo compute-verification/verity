@@ -7,7 +7,7 @@ from its own generator and publishes a coin commitment:
     x_l     = SHA-512("verity/pouw/epoch-coin/v1\\0" || coin_l)                      the coin's unsalted digest
     value_l = hm96-sha512 tree_leaf(key, commit_string(key, x_l, salt_l))           salt_l: 192 fresh bytes, key pinned
     root    = frame-v3-sha512 tree over (value_salt, value_draw) at positions 0, 1,
-              domain binding tagged("verity/pouw/epoch-coins/v1", e), owner -1, leaf schema "verity/pouw/epoch-coins/v1"
+              domain binding tagged_sha512("verity/pouw/epoch-coins/v2", e), owner -1, leaf schema "verity/pouw/epoch-coins/v2"
 
 The hm96 leaves keep every unopened coin statistically hidden (``hm96/PROTOCOL.md``); binding rests on SHA-512's collision
 resistance.  The challenger opens a coin only once the verifier has recorded what the coin must follow (`CoinOpening.after`:
@@ -30,9 +30,9 @@ from verity.primitives.commitments import (Commitment, CommitmentDomain, MerkleT
                                            VerificationLimits, verify_opening)
 from verity.primitives.commitments import hm96
 
-from .protocol import DomainError, tagged
+from .protocol import DomainError, tagged_sha512
 
-SCHEME = "verity/pouw/epoch-coins/v1"
+SCHEME = "verity/pouw/epoch-coins/v2"
 COIN_TAG = b"verity/pouw/epoch-coin/v1\0"
 LABELS = ("salt", "draw")
 COIN_BYTES = 32
@@ -41,7 +41,7 @@ KEY = HM96.default_key
 
 
 def domain(epoch: int) -> CommitmentDomain:
-    return CommitmentDomain(tagged(SCHEME, epoch), -1, RangeIndexedDomain(len(LABELS)), hash="sha512")
+    return CommitmentDomain(tagged_sha512(SCHEME, epoch), -1, RangeIndexedDomain(len(LABELS)), hash="sha512")
 
 
 def leaf_value(coin: bytes, salt: bytes) -> bytes:
