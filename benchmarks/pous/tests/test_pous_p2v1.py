@@ -445,8 +445,8 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
     """Under `MC` every audit and control is the memory challenger's: its leaves are SHA-512 of each block, the honest
     sessions pass under the test signer's own mapping and every control is rejected under it (the tampered one for a flipped
     bit in a block's last byte, the bad-signature one for a flipped signature bit and for a receipt time edited after
-    signing).  `memory_challenger.SCHEMES` holds no scheme, so the real verdict rejects every session and no profile is
-    issued; a session's public part is its commitment, its verdict and its coin openings."""
+    signing).  `memory_challenger.SCHEMES` accepts S1's scheme alone, so the real verdict rejects every test-signed session
+    and no profile is issued; a session's public part is its commitment, its verdict and its coin openings."""
     bench = _bench()
     assert bench.IMPLS["p2-v3-mc-gpu"] is bench.P2V3McGpu
     body = bench.P2V3McGpu().run(_args(tmp_path, k=105), WS, tmp_path, backend=_backend(), params=_small(), research=True)
@@ -462,15 +462,16 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
     assert len(raw) == 64 * body["blocks"]
     honest = m["audit"]
     assert honest["verifier"] == "memory-challenger" and honest["limit_ns"] == 854_000 and honest["limit_fixed_before_load"]
-    assert honest["audits"] == honest["audits_accepted_under_test_signer"] == 2 and honest["audits_accepted"] == 0
+    assert honest["audits"] == honest["audits_accepted_under_signer"] == 2 and honest["audits_accepted"] == 0
     assert honest["answers"] == 2 * 105 and honest["profile"] is None and honest["signer"]["test"]
+    assert honest["signer"]["scheme"] == "test/lms-sha512/n32-w1-h1/v0"
     for rec in honest["records"]:
         assert set(rec["public"]) == {"commitment", "verdict", "openings"} and rec["public"]["verdict"] == {"accepted": False}
-        assert rec["witness"]["reasons"] == ["signature scheme 'test/xmss-wots16-sha512/v0' is not accepted"]
-        assert rec["witness"]["reasons_under_test_signer"] == []
+        assert rec["witness"]["reasons"] == ["signature scheme 'test/lms-sha512/n32-w1-h1/v0' is not accepted"]
+        assert rec["witness"]["reasons_under_signer"] == []
     tampered = m["tampered_control"]
-    assert tampered["wrong"] > 0 and tampered["late"] == 0 and tampered["audits_accepted_under_test_signer"] == 0
-    assert all(any(r.endswith("answers are not their blocks of C") for r in rec["witness"]["reasons_under_test_signer"])
+    assert tampered["wrong"] > 0 and tampered["late"] == 0 and tampered["audits_accepted_under_signer"] == 0
+    assert all(any(r.endswith("answers are not their blocks of C") for r in rec["witness"]["reasons_under_signer"])
                for rec in tampered["records"])
     assert m["late_control"]["late"] == 2 and all(len(rec["answers"]) == 10 for rec in m["late_control"]["records"])
     assert m["signature_control"] == {"sessions": 2, "unedited_accepted": 2, "flipped_rejected": 2, "edited_rejected": 2,
@@ -478,7 +479,7 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
     assert len(bytes.fromhex(honest["records"][0]["public"]["openings"][0]["salt"])) == 192 and nb == 16
 
 
-def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset()):
+def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset(), audits: int = 2, **kw):
     """`memory_challenger/live.py`'s audit, strict, of `p2-16448/v3` at its registered point (one segment), on the logical
     clock, against a responder whose blocks are the digests' (`tamper`'s with their last byte's top bit flipped)."""
     sys.path.insert(0, str(BENCH))
@@ -494,8 +495,8 @@ def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset()):
     responder = H.ControlResponder(nb, H.control_answers(b"".join(block(i) for i in range(scheme.params.blocks)), nb,
                                                          tamper=set(tamper)))
     try:
-        return live.audit("127.0.0.1", responder.port(), scheme, b"s" * 24, digests, audits=2, pings=20, limit_ns=limit_ns,
-                          clock=live.LogicalClock()), responder.answered()
+        return live.audit("127.0.0.1", responder.port(), scheme, b"s" * 24, digests, audits=audits, pings=20,
+                          limit_ns=limit_ns, clock=live.LogicalClock(), **kw), responder.answered()
     finally:
         responder.stop()
 
@@ -507,7 +508,7 @@ def test_the_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_pa
 
     doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS)
     assert doc["strict"] and "refused" not in doc and answered == 2 * 105 and doc["k"] == 105
-    assert doc["audits"] == doc["audits_accepted_under_test_signer"] == 2 and doc["audits_accepted"] == 0
+    assert doc["audits"] == doc["audits_accepted_under_signer"] == 2 and doc["audits_accepted"] == 0
     assert doc["late"] == doc["wrong"] == 0 and doc["profile"] is None
     doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS + 1_000)
     assert doc["audits"] == 0 and answered == 0 and doc["records"] == []
@@ -520,4 +521,74 @@ def test_the_memory_challenger_catches_a_flipped_bit_in_a_blocks_last_byte():
 
     doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, tamper=frozenset(range(1 << 16)))
     assert answered == 2 * 105 and doc["wrong"] == 2 * 105 and doc["late"] == 0
-    assert doc["audits_accepted_under_test_signer"] == doc["audits_accepted"] == 0
+    assert doc["audits_accepted_under_signer"] == doc["audits_accepted"] == 0
+
+
+def _live():
+    sys.path.insert(0, str(BENCH))
+    from memory_challenger import live
+
+    return live
+
+
+def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused(tmp_path, monkeypatch):
+    """`--lms-key DIR`: the first use makes the key there (seed, public key, tree, leaf state), a later one loads it without a
+    keygen and signs at the next leaf, and a tree that is not the public key's is refused.  At a small height, so under a
+    `test/` id."""
+    from verity.primitives.crypto import lms
+
+    live, small = _live(), lms.Params(32, 1, 2)
+    first = live.lms_signer(tmp_path / "key", params=small)
+    assert first.scheme == "test/lms-sha512/n32-w1-h2/v0" and (tmp_path / "key" / "seed").stat().st_mode & 0o777 == 0o600
+    a = lms.Signature.decode(small, first.sign(b"s" * 32, b"r"))
+    first.state.close()
+    monkeypatch.setattr(lms, "keygen", lambda *_a, **_k: pytest.fail("the key is made again"))
+    again = live.lms_signer(tmp_path / "key", params=small)
+    assert again.public_key == first.public_key
+    assert (a.q, lms.Signature.decode(small, again.sign(b"s" * 32, b"r")).q) == (0, 1)
+    again.state.close()
+    tree = tmp_path / "key" / "tree.bin"
+    tree.write_bytes(tree.read_bytes()[:-1] + b"\0")
+    with pytest.raises(ValueError, match="is not the tree of"):
+        live.lms_signer(tmp_path / "key", params=small)
+
+
+class _SparseTree:
+    """A deployed key's tree for leaf 0 alone (its path's siblings arbitrary, its root the one they give): one session
+    signed at `lms.DEPLOYED` without its 2^20-leaf keygen."""
+
+    def __init__(self, I: bytes, seed: bytes) -> None:
+        from verity.primitives.crypto import lms
+
+        self.root = b""
+        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, I, seed, self), 0, b"probe")
+        self.root = lms.root_of(lms.DEPLOYED, I, b"probe", probe)
+
+    def __getitem__(self, r: int) -> bytes:
+        return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()[:32]
+
+
+def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profile(tmp_path, monkeypatch):
+    """With `--signer lms` the verdict is `memory_challenger.SCHEMES`'s and it accepts the honest session: the profile is
+    issued under the certificate; the bad-signature control rejects it flipped or edited under the same mapping."""
+    from verity.primitives.crypto import lms
+    from verity.protocols.accounting.space.pous import memory_challenger as mc
+    from verity.protocols.accounting.space.pous.schemes import p2
+
+    live = _live()
+    I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:32]
+    key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))
+    lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
+    signer = mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+    monkeypatch.setattr(live, "lms_signer", lambda d, workers=1: signer)
+    doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms", lms_key=tmp_path)
+    assert answered == 105 and doc["signer"]["scheme"] == mc.LMS and doc["signer"]["test"] is False
+    assert doc["audits"] == doc["audits_accepted"] == doc["audits_accepted_under_signer"] == 1
+    assert doc["records"][0]["public"]["verdict"] == {"accepted": True} and doc["profile"] is not None
+    from verity.protocols.accounting.space.pous import schemes
+
+    nb = schemes.get("p2-16448/v3").params.block_bytes
+    ctl = live.signature_control(doc, lambda i: hashlib.sha512(i.to_bytes(8, "big") * (nb // 8)).digest())
+    assert ctl == {"sessions": 1, "unedited_accepted": 1, "flipped_rejected": 1, "edited_rejected": 1, "passed": True}
+    with pytest.raises(ValueError, match="'lms' with a key directory"):
+        _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms")

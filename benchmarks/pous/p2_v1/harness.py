@@ -10,6 +10,8 @@ The kernels take a setup's key prefix, so one arm runs either framing:
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
   cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
   of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
+  Its sessions are signed with S1's LMS key in `--mc-lms-key DIR` (made there when absent), else with the PoUS tests'
+  test signer, whose sessions the verdict rejects (its `fail_closed` gate).
 
 1. **Kernel gates.** The pinned vector of the width (`vectors.json`, the P2 kit's): its keys expanded on the device, its `m`
    encoded and its `c` decoded, all bit-exact. Then the run's own blocks: the encoded ones decode back to their payloads (the
@@ -156,17 +158,19 @@ class V3(V1):
 class MC(V3):
     """`p2-16448/v3` audited by the memory challenger (`p2-v3-mc-gpu`, `memory_challenger/live.py`): sessions over a coin
     tree committed before them, each round's whole answer hashed with SHA-512 after its receipt time, one signature a
-    session.  Its leaves are SHA-512 of each block, what the verdict checks a round's digest against.  The sessions are
-    signed by the PoUS tests' test signer, which `memory_challenger.SCHEMES` never accepts (fail closed until S1 lands), so
-    its gates read the verdict under that signer's own mapping (`accepted`) and check the real verdict rejected them all."""
+    session.  Its leaves are SHA-512 of each block, what the verdict checks a round's digest against.  `sign_with` picks the
+    signer: S1's LMS key in a directory, whose sessions the verdict accepts, or the PoUS tests' test signer, which
+    `memory_challenger.SCHEMES` never accepts (fail closed), so its gates read the verdict under the signer's own mapping
+    (`accepted`) and, under the test signer, check the real verdict rejected them all."""
 
     impl, live = "p2-v3-mc-gpu", HERE.parent / "memory_challenger" / "live.py"
-    accepted = "audits_accepted_under_test_signer"
+    accepted = "audits_accepted_under_signer"
     c_of = V3.impl
+    lms_key = ""
 
-    def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
-        super().__init__(P, w_host, research)
-        self.verifier_args = (*self.verifier_args, "--signer", "test")
+    def sign_with(self, lms_key: str) -> None:
+        self.lms_key = lms_key
+        self.verifier_args = (*self.verifier_args, *(("--signer", "lms", "--lms-key", lms_key) if lms_key else ("--signer", "test")))
 
     def leaf(self, i: int, block: bytes) -> bytes:
         return hashlib.sha512(block).digest()
@@ -373,6 +377,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     w_host = b"".join(w_segment(ws["id"], s, bps * payload, used) for s in range(segments))
     fr = framing(P, w_host, research)
+    if isinstance(fr, MC):
+        fr.sign_with(getattr(a, "mc_lms_key", "") or "")
     bound = backend.bind(P, fr.prefix)
     pad = nb - payload
     m_dev = torch.zeros(blocks, nb, dtype=torch.uint8, device=backend.device)
@@ -510,10 +516,16 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                                      "accepted": tampered.get(acc), "wrong": tampered.get("wrong")}
         gates["signature_control"] = signature
         rounds = (honest, value, late, rec, tampered)
-        gates["fail_closed"] = {"passed": all(d.get("audits_accepted") == 0 for d in rounds),
-                                "accepted": [d.get("audits_accepted") for d in rounds],
-                                "note": "memory_challenger.SCHEMES accepts no test-signed session; until S1 is registered "
-                                        "no session is accepted, honest or not, and no storage profile is issued"}
+        if fr.lms_key:
+            gates["signer"] = {"passed": all((d.get("signer") or {}).get("test") is False
+                                             and d.get("audits_accepted") == d.get(acc) for d in rounds),
+                               "schemes": sorted({(d.get("signer") or {}).get("scheme") for d in rounds}, key=str),
+                               "note": "S1's LMS at lms.DEPLOYED: the verdict is the one under memory_challenger.SCHEMES"}
+        else:
+            gates["fail_closed"] = {"passed": all(d.get("audits_accepted") == 0 for d in rounds),
+                                    "accepted": [d.get("audits_accepted") for d in rounds],
+                                    "note": "memory_challenger.SCHEMES accepts no test-signed session: no session is "
+                                            "accepted, honest or not, and no storage profile is issued"}
     allowance = honest.get("rtt_allowance_ns")
     point = {"k": k == R.K_AUDIT, "rtt_allowance": allowance is not None and allowance <= R.MAX_RTT_ALLOWANCE_NS,
              "deadline": honest.get("deadline_ns") == R.DELTA_NS, "blocks": 1 << 8 <= blocks <= 1 << 23}

@@ -2,7 +2,8 @@
 memory_challenger` against the responder, over the harness's responder wire (`band_gpu/live.py`).
 
     python benchmarks/pous/memory_challenger/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
-        [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict] [--signer test]
+        [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
+        [--signer lms --lms-key DIR [--keygen-workers N] | --signer test]
 
 `READY.json` names the responder's port, the scheme, its manifest and the setup salt.  `DIGESTS.bin` is SHA-512 of every
 block of `C`, in block order: what `memory_challenger.verdict` checks each round's `H(block)` against, the verifier-side
@@ -11,12 +12,17 @@ table a proof will replace.
 - **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (spec v1.1's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
   calibration (`--calibrate-only`) still measures the loopback round trip and records whether its p99.9 fits under the cap.
 - **A session** draws a fresh session id and challenger secret and commits its coin tree, every session's before the first
-  round of any; it runs `k` rounds (the certificate's `k`) after `WARMUP_PINGS` pings, signs once and opens its coins.  `--strict` refuses a `k` or limit no certificate covers (`covering_certificate`)
-  before any round.
-- **The verdict** is `memory_challenger.verdict` under `memory_challenger.SCHEMES`, which holds no scheme until S1 lands, so
-  every session is rejected: it fails closed.  With `--signer test` the sessions are signed by the PoUS tests' XMSS-style
-  test signer (`pous_test_signer.py`), and `accepted_under_test_signer` is the same verdict under that signer's own mapping:
-  every check but the scheme's acceptance.  It is never the verdict.
+  round of any; it runs `k` rounds (the certificate's `k`) after `WARMUP_PINGS` pings, signs once and opens its coins.  `--strict` refuses a `k` or limit no
+  certificate covers (`covering_certificate`) before any round.
+- **The signer.** `--signer lms` signs with S1's LMS at `lms.DEPLOYED` (`memory_challenger.LMS`), the key in `--lms-key DIR`:
+  `seed` (secret, 0600), `public` (`I || T[1]`), `tree.bin` (the key's tree, a cache checked against `public` and
+  `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
+  first (`--keygen-workers`; about 628M hashes).  `--signer test` signs with the PoUS tests' test signer (`pous_test_signer.py`: LMS at a small height under a
+  `test/` id), its leaf state in `$TMPDIR`.
+- **The verdict** is `memory_challenger.verdict` under `memory_challenger.SCHEMES`, which accepts S1's scheme alone, so a
+  test-signed session is rejected: it fails closed.  `accepted_under_signer` is the same verdict under the signer's own
+  mapping (`memory_challenger.SCHEMES` for `lms`, the test signer's for `test`): for `test`, every check but the scheme's
+  acceptance, and never the verdict.
 - **The record** separates what is published (`public`: the commitment, the verdict, the coin openings) from the witness
   (`witness`: the signed session, the reasons, per-round on-time and digest bits), and keeps the responder's reports beside.
 
@@ -61,7 +67,7 @@ the challenger's own Python work (one 655.8 µs round 0 of 26 µs at the respond
 
 
 def test_signer() -> Any:
-    """The PoUS tests' XMSS-style test signer module (`SCHEME`, `TestSigner`, `verify`, `SCHEMES`)."""
+    """The PoUS tests' test signer module (`TestSigner`, `scheme`, `SCHEMES`)."""
     spec = importlib.util.spec_from_file_location("pous_test_signer", TEST_SIGNER)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -73,21 +79,67 @@ def rtt_cap_ns() -> int:
     return p2.RTT_ALLOWANCE_CAP_NS
 
 
+def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = None) -> Any:
+    """The memory challenger's S1 signer whose key is in `directory`, made there first when absent; at `params` other than
+    `lms.DEPLOYED` (tests), under a `test/` id."""
+    from verity.primitives.crypto import lms
+    from verity.protocols.accounting.space.pous import memory_challenger as mc
+
+    p = params or lms.DEPLOYED
+    d = Path(directory)
+    d.mkdir(parents=True, exist_ok=True)
+    seed_p, public_p, tree_p, state_p = d / "seed", d / "public", d / "tree.bin", d / "state.json"
+    check_p = d / "tree.sha512"
+    if not seed_p.exists():
+        fd = os.open(seed_p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, os.urandom(p.N))
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    seed = seed_p.read_bytes()
+    if tree_p.exists() and public_p.exists() and check_p.exists():
+        public, raw = public_p.read_bytes(), tree_p.read_bytes()
+        tree = (b"",) + tuple(raw[p.N * r:p.N * (r + 1)] for r in range(len(raw) // p.N))
+        key = lms.PrivateKey(p, public[:16], seed, tree)
+        if (len(tree) != 2 ** (p.H + 1) or lms.public_key(key) != public
+                or hashlib.sha512(public + raw).digest() != check_p.read_bytes()):
+            raise ValueError(f"{tree_p} is not the tree of {public_p}")
+    else:
+        key = lms.keygen(p, seed, workers)
+        raw, public = b"".join(key.tree[1:]), lms.public_key(key)
+        for path, data in ((tree_p, raw), (public_p, public), (check_p, hashlib.sha512(public + raw).digest())):
+            tmp = path.with_name(path.name + ".tmp")
+            tmp.write_bytes(data)
+            os.replace(tmp, path)
+    if not state_p.exists():
+        lms.LeafState.create(state_p, lms.public_key(key), p.H)
+    scheme = mc.LMS if p == lms.DEPLOYED else mc.TEST_PREFIX + f"lms-sha512/n{p.N}-w{p.W}-h{p.H}/v0"
+    return mc.LmsSigner(key, lms.LeafState(state_p, lms.public_key(key), p.H), scheme=scheme)
+
+
+def signer_schemes(scheme: str) -> Mapping[str, Any]:
+    """The mapping a session signed under `scheme` is judged by beside `memory_challenger.SCHEMES`: that one for S1's
+    scheme, the test signer's for a test one."""
+    from verity.protocols.accounting.space.pous import memory_challenger as mc
+
+    return mc.SCHEMES if scheme in mc.SCHEMES else test_signer().SCHEMES
+
+
 def binding_of(salt: bytes, digests: bytes) -> bytes:
     """What a session audits: SHA-512 of the setup salt and the table of block digests."""
     return hashlib.sha512(b"verity-pous/bench/memory-challenger/binding/v1\0" + salt + hashlib.sha512(digests).digest()).digest()
 
 
 def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trusted: set[bytes],
-          test_schemes: Mapping[str, Any] | None) -> list[dict[str, Any]]:
-    """Each session's verdict under `memory_challenger.SCHEMES` and, when given, under the test signer's mapping."""
+          signer_schemes: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Each session's verdict under `memory_challenger.SCHEMES` and under the signer's own mapping."""
     from verity.protocols.accounting.space.pous import memory_challenger as mc
 
     out = []
     for s in sessions:
         v = mc.verdict(s["signed"], s["commitment"], s["openings"], expected, trusted=trusted)
-        t = mc.verdict(s["signed"], s["commitment"], s["openings"], expected, trusted=trusted,
-                       schemes=test_schemes) if test_schemes is not None else None
+        t = mc.verdict(s["signed"], s["commitment"], s["openings"], expected, trusted=trusted, schemes=signer_schemes)
         rounds = s["signed"].rounds
         answers = [{"index": r.index, "elapsed_ns": r.elapsed_ns, "device_ns": d, "server_ns": sv,
                     "correct": r.digest == expected(r.index), "on_time": r.elapsed_ns <= s["commitment"].limit_ns}
@@ -96,19 +148,19 @@ def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trus
                     "public": {"commitment": s["commitment"].to_json(), "verdict": v.public(),
                                "openings": [o.to_json() for o in s["openings"]]},
                     "witness": {"signed": s["signed"].to_json(), "reasons": list(v.reasons),
-                                "reasons_under_test_signer": None if t is None else list(t.reasons)},
-                    "accepted": v.accepted, "accepted_under_test_signer": None if t is None else t.accepted,
+                                "reasons_under_signer": list(t.reasons)},
+                    "accepted": v.accepted, "accepted_under_signer": t.accepted,
                     "sign_ns": s["sign_ns"]})
     return out
 
 
 def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> dict[str, Any]:
     """The bad-signature control, on the honest audit's signed sessions: each with one signature bit flipped, and each with
-    one round's receipt time moved 1 ns earlier after signing (an on-time bit forged), judged under the test signer's
-    mapping; every one must be rejected for its signature, and the unedited sessions must pass."""
+    one round's receipt time moved 1 ns earlier after signing (an on-time bit forged), judged under the signer's own
+    mapping (`signer_schemes`); every one must be rejected for its signature, and the unedited sessions must pass."""
     from verity.protocols.accounting.space.pous import memory_challenger as mc
 
-    ts = test_signer()
+    schemes = signer_schemes(doc["signer"]["scheme"])
     out = {"sessions": 0, "unedited_accepted": 0, "flipped_rejected": 0, "edited_rejected": 0}
     for rec in doc.get("records") or []:
         signed = mc.SignedSession.from_json(rec["witness"]["signed"])
@@ -117,7 +169,7 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
         trusted = {signed.public_key}
 
         def reasons(s: mc.SignedSession) -> tuple[str, ...]:
-            return mc.verdict(s, commitment, openings, expected, trusted=trusted, schemes=ts.SCHEMES).reasons
+            return mc.verdict(s, commitment, openings, expected, trusted=trusted, schemes=schemes).reasons
 
         sig = bytearray(signed.signature)
         sig[len(sig) // 2] ^= 1
@@ -137,15 +189,16 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
 
 def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, audits: int, pings: int, k: int | None = None,
           cpu: int | None = None, allowance: str = "p99.9", deadline_ns: int | None = None, limit_ns: int | None = None,
-          clock: Callable[[], int] = time.perf_counter_ns, strict: bool = True, signer: str = "test") -> dict[str, Any]:
+          clock: Callable[[], int] = time.perf_counter_ns, strict: bool = True, signer: str = "test",
+          lms_key: str | os.PathLike | None = None, keygen_workers: int = 1) -> dict[str, Any]:
     """`audits` sessions of the memory challenger against `limit_ns` (else `Δ` plus the cap), each judged after all of them
     ran, off the timed path."""
     from verity.protocols.accounting.space.pous import audit as pous_audit
     from verity.protocols.accounting.space.pous import memory_challenger as mc
     from verity.protocols.accounting.space.pous.protocol import StorageProfile
 
-    if signer != "test":
-        raise ValueError(f"no signer {signer!r}: S1's scheme has not landed, and the test signer is 'test'")
+    if signer not in ("lms", "test") or (signer == "lms") != (lms_key is not None):
+        raise ValueError(f"the signer is 'lms' with a key directory or 'test' without one, not {signer!r}, {lms_key!r}")
     params = scheme.params
     blocks, nb = params.blocks, params.block_bytes
     if len(digests) != 64 * blocks:
@@ -167,11 +220,13 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
             gaps = (f"W has {params.segments} segments; {cert.theorem} is about {cert.segments}",)
     except ValueError as e:
         if strict:
-            return {**base, "refused": str(e), "audits": 0, "audits_accepted": 0, "audits_accepted_under_test_signer": 0,
+            return {**base, "refused": str(e), "audits": 0, "audits_accepted": 0, "audits_accepted_under_signer": 0,
                     "answers": 0, "late": 0, "wrong": 0, "records": []}
         cert, gaps = None, (str(e),)
-    ts = test_signer()
-    sig = ts.TestSigner(os.urandom(32), height=max(1, (max(1, audits) - 1).bit_length()))
+    t0 = time.perf_counter_ns()
+    sig = (lms_signer(lms_key, keygen_workers) if signer == "lms"
+           else test_signer().TestSigner(os.urandom(32), height=max(1, (max(1, audits) - 1).bit_length())))
+    key_load_s = (time.perf_counter_ns() - t0) / 1e9
     binding = binding_of(salt, digests)
     resolution = None if clock is time.perf_counter_ns else 1
     if cpu is not None:
@@ -205,7 +260,8 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
         r.close()
         gc.enable()
     expected = lambda i: digests[64 * i:64 * (i + 1)]  # noqa: E731
-    records = judge(sessions, expected, {sig.public_key}, ts.SCHEMES)
+    sig.state.close()
+    records = judge(sessions, expected, {sig.public_key}, signer_schemes(sig.scheme))
     answers = [a for rec in records for a in rec["answers"]]
     sha = [0] * 2000
     probe = digests[:nb].ljust(nb, b"\0")
@@ -218,15 +274,17 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     profile = (StorageProfile(scheme.name, params.manifest(), blocks, params.m, k, limit, cert, gaps,
                               scheme.experimental).to_json() if accepted and cert is not None else None)
     return {**base, "gaps": list(gaps), "profile": profile,
-            "signer": {"scheme": sig.scheme, "public_key": sig.public_key.hex(), "test": True,
-                       "note": "a test signer: memory_challenger.SCHEMES accepts no record it signs (fail closed)"},
+            "signer": {"kind": signer, "scheme": sig.scheme, "public_key": sig.public_key.hex(),
+                       "test": sig.scheme not in mc.SCHEMES, "key_load_s": key_load_s,
+                       "note": ("S1's LMS at lms.DEPLOYED, its leaf state on disk" if sig.scheme in mc.SCHEMES else
+                                "a test signer: memory_challenger.SCHEMES accepts no record it signs (fail closed)")},
             "calibration_here": {"rtt_s": quantiles(before), "within_cap": quantiles(before).get("p99.9", 0) * 1e9 <= cap},
             "rtt_after_s": quantiles(after), "pings_raw_s": {"before": before, "after": after},
             "audit_of_record": None if first is None else {"accepted": first["accepted"],
-                                                           "accepted_under_test_signer": first["accepted_under_test_signer"],
+                                                           "accepted_under_signer": first["accepted_under_signer"],
                                                            "rounds": len(first["answers"])},
             "audits": len(records), "audits_accepted": sum(rec["accepted"] for rec in records),
-            "audits_accepted_under_test_signer": sum(bool(rec["accepted_under_test_signer"]) for rec in records),
+            "audits_accepted_under_signer": sum(rec["accepted_under_signer"] for rec in records),
             "answers": len(answers), "late": sum(not a["on_time"] for a in answers),
             "wrong": sum(not a["correct"] for a in answers),
             "elapsed_s": quantiles([a["elapsed_ns"] / 1e9 for a in answers]),
@@ -255,7 +313,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--calibrate-only", action="store_true")
     ap.add_argument("--clock", default="wall", choices=["wall", "logical"])
     ap.add_argument("--strict", action="store_true", help="refuse a k or limit no certificate covers, before any round")
-    ap.add_argument("--signer", default="test", choices=["test"])
+    ap.add_argument("--signer", default="test", choices=["lms", "test"])
+    ap.add_argument("--lms-key", default=None, help="the S1 key's directory (--signer lms), made there when absent")
+    ap.add_argument("--keygen-workers", type=int, default=len(os.sched_getaffinity(0)))
     a = ap.parse_args(argv)
     ready = json.loads(Path(a.ready).read_text())
     params = params_of(ready["scheme"], ready["params"])
@@ -273,9 +333,10 @@ def main(argv: list[str] | None = None) -> int:
     doc = {"clock": a.clock,
            **audit("127.0.0.1", ready["port"], scheme, bytes.fromhex(ready["salt"]), Path(a.leaves).read_bytes(),
                    audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu, allowance=a.allowance, deadline_ns=deadline,
-                   limit_ns=a.limit_ns or None, clock=clock, strict=a.strict, signer=a.signer)}
+                   limit_ns=a.limit_ns or None, clock=clock, strict=a.strict, signer=a.signer, lms_key=a.lms_key,
+                   keygen_workers=a.keygen_workers)}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
-    return 0 if doc["audits"] and doc["audits_accepted_under_test_signer"] == doc["audits"] else 1
+    return 0 if doc["audits"] and doc["audits_accepted_under_signer"] == doc["audits"] else 1
 
 
 if __name__ == "__main__":
