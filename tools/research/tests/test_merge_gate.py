@@ -443,6 +443,14 @@ def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head_with_its
     capsys.readouterr()
     rc, err = merge_main(["train-prep/t", "--dry-run"]), capsys.readouterr().err
     assert rc == 0 and "ready" not in err, err
+    _git(main, "checkout", "-q", "-b", "A-again", "A")                     # a new head that adds nothing the tip lacks: lands as A
+    _git(main, "commit", "-q", "--allow-empty", "-m", "merge main (nothing new)")
+    merged = _git(main, "rev-parse", "HEAD")
+    _git(main, "checkout", "-q", "main")
+    _git(main, "push", "-q", "-f", "origin", f"{merged}:refs/pull/7/head")
+    assert merge_main(["train-prep/t", "--dry-run"]) == 0, capsys.readouterr().err
+    assert (f"#7's head moved from {a[:12]} to {merged[:12]}, which adds nothing to" in capsys.readouterr().out)
+    _git(main, "push", "-q", "-f", "origin", f"{a}:refs/pull/7/head")
     before = _git(main, "rev-parse", "main")
     _git(main, "checkout", "-q", "A")
     (main / "a2.txt").write_text("A, after the review\n")
