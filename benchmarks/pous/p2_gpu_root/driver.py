@@ -35,11 +35,14 @@ def from_digits(d: list[int]) -> int:
     return sum(v << (RB * m) for m, v in enumerate(d)) % P
 
 
-def run(binary: str, c: int, tpb: int, n: int, reps: int, x: int, tmp: Path) -> tuple[dict, int, list[int]]:
+def run(binary: str, c: int, tpb: int, mode: int, n: int, reps: int, x: int, tmp: Path) -> tuple[dict, int, list[int]]:
     xin, xout = tmp / "in.bin", tmp / "out.bin"
     xin.write_bytes(b"".join(v.to_bytes(4, "little") for v in to_digits(x)))
-    out = subprocess.run([binary, str(c), str(tpb), str(n), str(reps), str(xin), str(xout)], check=True, capture_output=True,
-                         text=True).stdout
+    pr = subprocess.run([binary, str(c), str(tpb), str(n), str(reps), str(xin), str(xout), str(mode)], capture_output=True,
+                        text=True)
+    if pr.returncode:
+        raise SystemExit(f"{binary} C={c} tpb={tpb} mode={mode}: exit {pr.returncode}: {pr.stderr.strip()}")
+    out = pr.stdout
     rec = json.loads(out.strip().splitlines()[-1])
     raw = xout.read_bytes()
     d = [int.from_bytes(raw[4 * m:4 * m + 4], "little") for m in range(ND)]
@@ -50,7 +53,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--configs", default="1:1024,2:1024,4:512,8:512,16:256")
+    ap.add_argument("--configs", default="1:1024,8:256:0,16:256:0,8:256:1,16:256:1", help="C:TPB[:MODE],...; MODE 1 = st.async")
     ap.add_argument("--n", type=int, default=10000)
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--roots", type=int, default=2, help="root identities per configuration, at N = 16,446")
@@ -63,16 +66,16 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         for cfg in a.configs.split(","):
-            c, tpb = (int(v) for v in cfg.split(":"))
+            c, tpb, mode = ([int(v) for v in cfg.split(":")] + [0])[:3]
             x = rng.randrange(P)
-            rec, got, d = run(a.bin, c, tpb, a.n, a.reps, x, tmp)
+            rec, got, d = run(a.bin, c, tpb, mode, a.n, a.reps, x, tmp)
             want = pow(x, 1 << a.n, P)
             rec.update(check_pow=got == want, max_digit_bits=max(d).bit_length())
             roots = []
             for _ in range(a.roots):
                 z = rng.randrange(1, P)
                 y = z * z % P
-                rr, s, _ = run(a.bin, c, tpb, E_SQ, 1, y, tmp)
+                rr, s, _ = run(a.bin, c, tpb, mode, E_SQ, 1, y, tmp)
                 r = s * pow(pow(y, E_TAIL, P), -1, P) % P
                 roots.append({"identity": r * r % P == y, "ns_per_sq": rr["ns_per_sq_min"],
                               "chain_us": rr["ns_per_sq_min"] * E_SQ / 1e3})

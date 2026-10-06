@@ -42,7 +42,12 @@ static const uint32_t CP = 21065u << 10;
 static const int PADL = 64, PADR = 96;
 static const int DLEN = PADL + ND + PADR;
 static const int HALO = 4;
-static const int MAXCOLS = 1024;
+static const int MAXCOLS = 640;
+static const int DLENS = (DLEN + DLEN / 32 + 4) / 4 * 4;   // the digit buffer with one pad word per 32 (swz)
+static const int MAXBH = 2 * ((ND + R - 1) / R + 2);
+static const int NMETA = 10;
+// x -> its word in a digit buffer: one pad word every 32, so lanes walking runs a multiple of 32 apart miss each other's banks
+__host__ __device__ __forceinline__ int swz(int x) { x += PADL; return x + (x >> 5); }
 
 struct Task { int s0, ib, ie, ng, slot; };          // a lane task: i in [ib, ie), ng groups of R, partials at slot
 struct BHalf { int s0, main_end, first, cnt; };      // a block-half: columns s0..s0+R-1, lane slots [first, first+cnt)
@@ -107,14 +112,18 @@ static Plan plan_cta(int g, int C, int tpb) {
     P.bh[q].cnt = slot - P.bh[q].first;
   }
   P.ntasks = slot;
-  if (P.ntasks > tpb || P.ncols > MAXCOLS || P.nown > tpb) { fprintf(stderr, "plan does not fit: tasks %d cols %d own %d tpb %d\n", P.ntasks, P.ncols, P.nown, tpb); exit(2); }
+  if (P.ntasks > tpb || P.ncols > MAXCOLS || P.nown > tpb || (C > 1 && P.nown > 512)) { fprintf(stderr, "plan does not fit: tasks %d cols %d own %d tpb %d\n", P.ntasks, P.ncols, P.nown, tpb); exit(2); }
   return P;
 }
 
 struct Dev {
-  const Task *tasks; const BHalf *bh; const Col *cols; const int *meta;   // meta per CTA: a nown kstart ncols ntasks nbh toff bhoff coff
+  const Task *tasks; const BHalf *bh; const Col *cols; const int *meta;   // meta per CTA: a nown kstart ncols ntasks nbh toff bhoff coff tpc
 };
 
+// one IMAD.WIDE.U32: nvcc otherwise multiplies the widened operands 64 x 64
+__device__ __forceinline__ uint64_t madw(uint32_t a, uint32_t b, uint64_t c) {
+  uint64_t r; asm("mad.wide.u32 %0, %1, %2, %3;" : "=l"(r) : "r"(a), "r"(b), "l"(c)); return r;
+}
 __device__ __forceinline__ uint64_t gtime() { uint64_t t; asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t)); return t; }
 
 __device__ __forceinline__ uint32_t smem_u32(const void *p) { return (uint32_t)__cvta_generic_to_shared(p); }
@@ -130,35 +139,48 @@ __device__ __forceinline__ void mbar_wait(uint32_t bar, uint32_t parity) {
 
 // MODE 0: digits by st.shared::cluster, then a cluster barrier. MODE 1: digits by st.async, each signalling the receiver's
 // mbarrier for that buffer with its bytes; a CTA starts the next step when all 4 * 633 bytes of it have landed.
+#ifndef LB
+#define LB 512
+#endif
 template <int C, int MODE>
-__global__ void __launch_bounds__(1024, 1) chain_kernel(Dev dv, const uint32_t *__restrict__ xin, uint32_t *__restrict__ xout,
-                                                        int nsteps, unsigned long long *timing) {
+__global__ void __launch_bounds__(LB, 1) chain_kernel(Dev dv, const uint32_t *__restrict__ xin,
+                                                                       uint32_t *__restrict__ xout, int nsteps,
+                                                                       unsigned long long *timing) {
   __shared__ __align__(8) uint64_t mbar[2];
 #ifdef PROF
   unsigned long long pacc[4] = {0, 0, 0, 0};
 #endif
   extern __shared__ __align__(16) unsigned char smem[];
-  uint32_t *D = (uint32_t *)smem;                                  // [2][DLEN]
-  uint64_t *P = (uint64_t *)(smem + ((2 * DLEN * 4 + 15) / 16) * 16);   // [R][tpb]
   const int tpb = blockDim.x, tid = threadIdx.x;
-  uint4 *T4 = (uint4 *)(P + (size_t)R * tpb);                      // [MAXCOLS]
-  BHalf *BH = (BHalf *)(T4 + MAXCOLS);                             // [nbh]
-  uint32_t *stage = (uint32_t *)(BH + 2 * ((ND + R - 1) / R + 2) * 2);
+  uint32_t *D = (uint32_t *)smem;                                   // [2][DLENS], swizzled
+  uint64_t *P = (uint64_t *)(smem + 2 * DLENS * 4);                 // [tpb][R + 1]
+  uint4 *T4 = (uint4 *)(P + (size_t)(R + 1) * tpb);                 // [MAXCOLS]
+  BHalf *BH = (BHalf *)(T4 + MAXCOLS);                              // [MAXBH]
+  uint32_t *stage = (uint32_t *)(BH + MAXBH);                       // [512]
 
   int g = C == 1 ? 0 : (int)cg::this_cluster().block_rank();
-  const int *mt = dv.meta + 9 * g;
-  const int a = mt[0], nown = mt[1], kstart = mt[2], ncols = mt[3], ntasks = mt[4], nbh = mt[5];
+  const int *mt = dv.meta + NMETA * g;
+  const int a = mt[0], nown = mt[1], kstart = mt[2], ncols = mt[3], ntasks = mt[4], nbh = mt[5], tpc = mt[9];
   const Task *tk = dv.tasks + mt[6];
   const Col *cl = dv.cols + mt[8];
   for (int q = tid; q < nbh; q += tpb) BH[q] = dv.bh[mt[7] + q];
-  for (int q = tid; q < 2 * DLEN; q += tpb) {
-    int x = q % DLEN - PADL;
-    D[q] = (x >= 0 && x < ND) ? xin[x] : 0;
+  for (int q = tid; q < DLEN; q += tpb) {
+    int x = q - PADL;
+    uint32_t v = (x >= 0 && x < ND) ? xin[x] : 0;
+    D[swz(x)] = v; D[DLENS + swz(x)] = v;
   }
   Task my = tid < ntasks ? tk[tid] : Task{0, 0, 0, 0, 0};
-  Col mc = tid < ncols ? cl[tid] : Col{0, 0, 0};
+  const int cidx = tid / tpc, sub = tid % tpc;
+  Col mc = cidx < ncols ? cl[cidx] : Col{0, 0, 0};
   __syncthreads();
-  BHalf blo = BH[mc.bh], bhi = BH[mc.bh + 1];
+  // this thread's two columns: partials at pb, cnt of them, tail from ti, column index cc (cnt 0 past the last column)
+  int pb0, cnt0, ti0, cc0, pb1, cnt1, ti1, cc1;
+  {
+    BHalf blo = BH[mc.bh], bhi = BH[mc.bh + 1];
+    bool on = cidx < ncols;
+    pb0 = blo.first * (R + 1) + mc.r; cnt0 = on ? blo.cnt : 0; ti0 = blo.main_end + 1; cc0 = on ? blo.s0 + mc.r : 0;
+    pb1 = bhi.first * (R + 1) + mc.r; cnt1 = on ? bhi.cnt : 0; ti1 = bhi.main_end + 1; cc1 = on ? bhi.s0 + mc.r : 0;
+  }
   if (MODE == 1 && tid == 0) {
     for (int b = 0; b < 2; b++) asm volatile("mbarrier.init.shared::cta.b64 [%0], 1;" :: "r"(smem_u32(&mbar[b])));
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
@@ -168,62 +190,69 @@ __global__ void __launch_bounds__(1024, 1) chain_kernel(Dev dv, const uint32_t *
 
   uint64_t c0 = clock64(), g0 = gtime();
   for (int step = 0; step < nsteps; step++) {
-    const uint32_t *cur = D + (step & 1) * DLEN + PADL;
-    uint32_t *nxt = D + ((step + 1) & 1) * DLEN + PADL;
+    const uint32_t *cur = D + (step & 1) * DLENS;
+    uint32_t *nxt = D + ((step + 1) & 1) * DLENS;
 #ifdef PROF
     unsigned long long q0 = clock64();
 #endif
-    // phase 1: lane tasks
+    // phase 1: lane tasks, R partial sums each
     if (tid < ntasks) {
       uint64_t acc[R];
       uint32_t B[R];
       #pragma unroll
-      for (int r = 0; r < R; r++) { acc[r] = 0; B[r] = cur[my.s0 - my.ib + r]; }
+      for (int r = 0; r < R; r++) { acc[r] = 0; B[r] = cur[swz(my.s0 - my.ib + r)]; }
       for (int gg = 0; gg < my.ng; gg++) {
         const int ib = my.ib + gg * R;
         #pragma unroll
         for (int u = 0; u < R; u++) {
           const int i = ib + u;
-          B[(R - u) % R] = cur[my.s0 - i];
-          uint32_t di = i < my.ie ? cur[i] : 0;
+          B[(R - u) % R] = cur[swz(my.s0 - i)];
+          uint32_t di = i < my.ie ? cur[swz(i)] : 0;
           #pragma unroll
-          for (int r = 0; r < R; r++) acc[r] += (uint64_t)di * B[(r - u + R) % R];
+          for (int r = 0; r < R; r++) acc[r] = madw(di, B[(r - u + R) % R], acc[r]);
         }
       }
       #pragma unroll
-      for (int r = 0; r < R; r++) P[r * tpb + my.slot] = acc[r];
+      for (int r = 0; r < R; r++) P[my.slot * (R + 1) + r] = acc[r];
     }
     __syncthreads();
 #ifdef PROF
     unsigned long long q1 = clock64(); pacc[0] += q1 - q0;
 #endif
-    // phase 2: one thread per computed column pair
-    if (tid < ncols) {
+    // phase 2: tpc threads per computed column pair; partials, tail, square, then a shuffle sum
+    {
       uint64_t s[2];
       #pragma unroll
       for (int h = 0; h < 2; h++) {
-        const BHalf &x = h ? bhi : blo;
-        const int c = x.s0 + mc.r;
-        uint64_t A = 0;
-        for (int j = 0; j < x.cnt; j++) A += P[mc.r * tpb + x.first + j];
-        for (int i = x.main_end + 1; 2 * i < c; i++) A += (uint64_t)cur[i] * cur[c - i];
-        A *= 2;
-        if ((c & 1) == 0) { uint32_t h2 = cur[c >> 1]; A += (uint64_t)h2 * h2; }
+        const int pb = h ? pb1 : pb0, cnt = h ? cnt1 : cnt0, i0 = h ? ti1 : ti0, c = h ? cc1 : cc0;
+        uint64_t A0 = 0, A1 = 0;
+        int j = sub;
+        for (; j + tpc < cnt; j += 2 * tpc) {
+          A0 += P[pb + j * (R + 1)];
+          A1 += P[pb + (j + tpc) * (R + 1)];
+        }
+        if (j < cnt) A0 += P[pb + j * (R + 1)];
+        for (int i = i0 + sub; 2 * i < c; i += tpc) A1 = madw(cur[swz(i)], cur[swz(c - i)], A1);
+        uint64_t A = 2 * (A0 + A1);
+        for (int o = tpc / 2; o > 0; o /= 2) A += __shfl_xor_sync(0xffffffffu, A, o);
+        if ((c & 1) == 0) { uint32_t h2 = cur[swz(c >> 1)]; A = madw(h2, h2, A); }
         s[h] = A;
       }
-      // T = s0 + c' s1, < 2^86: low 64 bits and the rest
-      uint64_t m0 = (uint64_t)CP * (uint32_t)s[1];
-      uint64_t m1 = (uint64_t)CP * (uint32_t)(s[1] >> 32);
-      uint64_t lo = s[0] + m0;
-      uint64_t hi = (lo < m0) + (m1 >> 32);
-      uint64_t mid = m1 << 32;
-      lo += mid; hi += (lo < mid);
-      uint4 t;
-      t.x = (uint32_t)lo & MASK;
-      t.y = (uint32_t)(lo >> 26) & MASK;
-      t.z = (uint32_t)((lo >> 52) | (hi << 12)) & MASK;
-      t.w = (uint32_t)(hi >> 14);
-      T4[tid] = t;
+      if (cidx < ncols && sub == 0) {
+        // T = s0 + c' s1 < 2^86: low 64 bits and the rest
+        uint64_t m0 = madw(CP, (uint32_t)s[1], 0);
+        uint64_t m1 = madw(CP, (uint32_t)(s[1] >> 32), 0);
+        uint64_t lo = s[0] + m0;
+        uint64_t hi = (lo < m0) + (m1 >> 32);
+        uint64_t mid = m1 << 32;
+        lo += mid; hi += (lo < mid);
+        uint4 t;
+        t.x = (uint32_t)lo & MASK;
+        t.y = (uint32_t)(lo >> 26) & MASK;
+        t.z = (uint32_t)((lo >> 52) | (hi << 12)) & MASK;
+        t.w = (uint32_t)(hi >> 14);
+        T4[cidx] = t;
+      }
     }
     __syncthreads();
 #ifdef PROF
@@ -236,19 +265,19 @@ __global__ void __launch_bounds__(1024, 1) chain_kernel(Dev dv, const uint32_t *
       #pragma unroll
       for (int q = 0; q < 2; q++) {
         int mm = m - q; if (mm < 0) mm += ND;
-        uint64_t s = 0;
+        uint64_t sm_ = 0;
         #pragma unroll
         for (int j = 0; j < 4; j++) {
           int k = mm - j; uint32_t w = 1;
           if (k < 0) { k += ND; w = CP; }
           int l = k - kstart; if (l < 0) l += ND;
           const uint32_t *tt = (const uint32_t *)&T4[l];
-          s += (uint64_t)w * tt[j];
+          sm_ = madw(w, tt[j], sm_);
         }
-        e[q] = s;
+        e[q] = sm_;
       }
       uint64_t f = (e[0] & MASK) + (e[1] >> 26) * (m == 0 ? CP : 1);
-      if (C == 1) nxt[m] = (uint32_t)f; else stage[tid] = (uint32_t)f;
+      if (C == 1) nxt[swz(m)] = (uint32_t)f; else stage[tid] = (uint32_t)f;
     }
     if (C > 1 && MODE == 0) {
       cg::cluster_group cluster = cg::this_cluster();
@@ -259,7 +288,7 @@ __global__ void __launch_bounds__(1024, 1) chain_kernel(Dev dv, const uint32_t *
       for (int q = tid; q < C * nown; q += tpb) {
         int h = q / nown, j = q - h * nown;
         uint32_t *rem = cluster.map_shared_rank(nxt, h);
-        rem[a + j] = stage[j];
+        rem[swz(a + j)] = stage[j];
       }
       cluster.sync();
 #ifdef PROF
@@ -271,10 +300,10 @@ __global__ void __launch_bounds__(1024, 1) chain_kernel(Dev dv, const uint32_t *
 #ifdef PROF
       unsigned long long q3 = clock64(); pacc[2] += q3 - q2;
 #endif
-      const uint32_t lnxt = smem_u32(nxt + a), lbar = smem_u32(&mbar[b]);
+      const uint32_t lnxt = smem_u32(nxt), lbar = smem_u32(&mbar[b]);
       for (int q = tid; q < C * nown; q += tpb) {
         int h = q / nown, j = q - h * nown;
-        st_async(mapa(lnxt + 4 * j, h), stage[j], mapa(lbar, h));
+        st_async(mapa(lnxt + 4 * swz(a + j), h), stage[j], mapa(lbar, h));
       }
       mbar_wait(lbar, (step >> 1) & 1);
       if (tid == 0 && step + 1 < nsteps)                       // re-arm the other buffer for the step after
@@ -288,14 +317,12 @@ __global__ void __launch_bounds__(1024, 1) chain_kernel(Dev dv, const uint32_t *
   }
   if (C > 1 && MODE == 1) cg::this_cluster().sync();
   uint64_t c1 = clock64(), g1 = gtime();
-  if (g == 0 && tid == 0) {
-    timing[0] = c1 - c0; timing[1] = g1 - g0;
+  if (g == 0 && tid == 0) { timing[0] = c1 - c0; timing[1] = g1 - g0; }
 #ifdef PROF
-    for (int q = 0; q < 4; q++) timing[2 + q] = pacc[q];
+  if (tid == 0) for (int q = 0; q < 4; q++) timing[2 + 4 * g + q] = pacc[q];
 #endif
-  }
-  const uint32_t *fin = D + (nsteps & 1) * DLEN + PADL;
-  if (g == 0) for (int q = tid; q < ND; q += tpb) xout[q] = fin[q];
+  const uint32_t *fin = D + (nsteps & 1) * DLENS;
+  if (g == 0) for (int q = tid; q < ND; q += tpb) xout[q] = fin[swz(q)];
 }
 
 template <int C, int MODE>
@@ -313,6 +340,7 @@ int main(int argc, char **argv) {
   if (argc < 7) { fprintf(stderr, "usage: %s C TPB N reps in.bin out.bin\n", argv[0]); return 2; }
   int C = atoi(argv[1]), tpb = atoi(argv[2]), N = atoi(argv[3]), reps = atoi(argv[4]);
   int mode = argc > 7 ? atoi(argv[7]) : 0;
+  if (tpb > LB) { fprintf(stderr, "tpb %d is over this build's launch bound %d\n", tpb, LB); return 2; }
   std::vector<uint32_t> x(ND);
   FILE *f = fopen(argv[5], "rb"); if (!f || fread(x.data(), 4, ND, f) != (size_t)ND) { fprintf(stderr, "bad in.bin\n"); return 2; } fclose(f);
 
@@ -321,7 +349,10 @@ int main(int argc, char **argv) {
   long long prods = 0;
   for (int g = 0; g < C; g++) {
     Plan P = plan_cta(g, C, tpb);
-    meta.insert(meta.end(), {P.a, P.nown, P.kstart, P.ncols, P.ntasks, P.nbh, (int)tasks.size(), (int)bhs.size(), (int)cols.size()});
+    int tpc = 1;
+    while (tpc < 8 && 2 * tpc * P.ncols <= tpb) tpc *= 2;
+    if (P.ncols * tpc > tpb || P.nbh > MAXBH) { fprintf(stderr, "columns do not fit\n"); return 2; }
+    meta.insert(meta.end(), {P.a, P.nown, P.kstart, P.ncols, P.ntasks, P.nbh, (int)tasks.size(), (int)bhs.size(), (int)cols.size(), tpc});
     for (auto &t : P.tasks) prods += (long long)t.ng * R * R;
     tasks.insert(tasks.end(), P.tasks.begin(), P.tasks.end());
     bhs.insert(bhs.end(), P.bh.begin(), P.bh.end());
@@ -336,9 +367,9 @@ int main(int argc, char **argv) {
   CK(cudaMalloc(&dm, meta.size() * sizeof(int))); CK(cudaMemcpy(dm, meta.data(), meta.size() * sizeof(int), cudaMemcpyHostToDevice));
   dv.tasks = dt; dv.bh = db; dv.cols = dc; dv.meta = dm;
   uint32_t *dx, *dy; unsigned long long *dtm;
-  CK(cudaMalloc(&dx, ND * 4)); CK(cudaMalloc(&dy, ND * 4)); CK(cudaMalloc(&dtm, 64)); CK(cudaMemset(dtm, 0, 64));
+  CK(cudaMalloc(&dx, ND * 4)); CK(cudaMalloc(&dy, ND * 4)); CK(cudaMalloc(&dtm, 8 * 80)); CK(cudaMemset(dtm, 0, 8 * 80));
   CK(cudaMemcpy(dx, x.data(), ND * 4, cudaMemcpyHostToDevice));
-  size_t sm = ((2 * DLEN * 4 + 15) / 16) * 16 + (size_t)R * tpb * 8 + MAXCOLS * 16 + 2 * ((ND + R - 1) / R + 2) * 2 * sizeof(BHalf) + 1024 * 4;
+  size_t sm = (size_t)2 * DLENS * 4 + (size_t)(R + 1) * tpb * 8 + MAXCOLS * 16 + MAXBH * sizeof(BHalf) + 512 * 4;
 
   cudaDeviceProp p; CK(cudaGetDeviceProperties(&p, 0));
   std::vector<double> ns, cyc; double prof[4] = {0, 0, 0, 0};
@@ -352,15 +383,18 @@ int main(int argc, char **argv) {
       default: fprintf(stderr, "C must be 1, 2, 4, 8 or 16\n"); return 2;
     }
     CK(cudaGetLastError()); CK(cudaDeviceSynchronize());
-    unsigned long long tm[6]; CK(cudaMemcpy(tm, dtm, 48, cudaMemcpyDeviceToHost));
-    if (rep > 0) { cyc.push_back((double)tm[0] / N); ns.push_back((double)tm[1] / N); for (int q = 0; q < 4; q++) prof[q] = (double)tm[2 + q] / N; }
+    unsigned long long tm[80]; CK(cudaMemcpy(tm, dtm, 8 * 80, cudaMemcpyDeviceToHost));
+    if (rep > 0) {
+      cyc.push_back((double)tm[0] / N); ns.push_back((double)tm[1] / N);
+      for (int q = 0; q < 4; q++) { prof[q] = 0; for (int gg = 0; gg < C; gg++) prof[q] = std::max(prof[q], (double)tm[2 + 4 * gg + q] / N); }
+    }
   }
   std::vector<uint32_t> y(ND);
   CK(cudaMemcpy(y.data(), dy, ND * 4, cudaMemcpyDeviceToHost));
   f = fopen(argv[6], "wb"); fwrite(y.data(), 4, ND, f); fclose(f);
   std::vector<double> sns = ns; std::sort(sns.begin(), sns.end());
   int imin = (int)(std::min_element(ns.begin(), ns.end()) - ns.begin());
-  printf("{\"kernel\":\"cluster-schoolbook-r26\",\"mode\":\"%s\",\"prof_cyc\":[%.0f,%.0f,%.0f,%.0f],\"R\":%d,\"C\":%d,\"tpb\":%d,\"N\":%d,\"reps\":%d,\"ns_per_sq_min\":%.2f,\"ns_per_sq_med\":%.2f,"
+  printf("{\"kernel\":\"cluster-schoolbook-r26\",\"mode\":\"%s\",\"prof_cyc_max_over_ctas\":[%.0f,%.0f,%.0f,%.0f],\"R\":%d,\"C\":%d,\"tpb\":%d,\"N\":%d,\"reps\":%d,\"ns_per_sq_min\":%.2f,\"ns_per_sq_med\":%.2f,"
          "\"cyc_per_sq_at_min\":%.1f,\"sm_clock_mhz_at_min\":%.1f,\"max_tasks\":%d,\"max_cols\":%d,\"products\":%lld,\"smem\":%zu,"
          "\"gpu\":\"%s\",\"sms\":%d}\n",
          mode ? "mbarrier-st.async" : "cluster-barrier", prof[0], prof[1], prof[2], prof[3], R, C, tpb, N, reps, sns[0], sns[sns.size() / 2], cyc[imin], cyc[imin] / ns[imin] * 1000.0, maxtasks, maxcols, prods, sm,
