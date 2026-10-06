@@ -55,12 +55,11 @@ CALL = {"start": lambda a: ["start"], "commit": lambda a: ["commit"], "y": lambd
 
 
 def proxy_session(schedule: dict, reqs: list[bytes]) -> tuple[dict, list]:
-    """The coin server's record and the calls it took, in order, while the proxy handles ``reqs`` (a call the coin server
-    refuses is a refusal the Lean firewall makes itself, before it sends anything)."""
+    """The coin server's record and every call made on it, in order, refused or not, while the proxy handles ``reqs``."""
     salts, coins, calls = iter(SALTS), RL.CoinServer(_coins), []
     for name, show in CALL.items():
         f = getattr(coins, name)
-        setattr(coins, name, lambda *a, _f=f, _show=show: (r := _f(*a), calls.append(_show(a)))[0])
+        setattr(coins, name, lambda *a, _f=f, _show=show: (calls.append(_show(a)), _f(*a))[1])
     proxy = RL.Proxy(coins, lambda: next(salts), schedule=schedule)
     for b in reqs:
         proxy.handle(b)
