@@ -390,6 +390,19 @@ Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outc
 `test_a_two_stage_outcome_accepts_only_when_both_audits_do`, `test_a_work_draw_carries_its_closure_and_the_proof_proves_it`,
 `test_a_closure_widens_a_work_draw_only_and_stays_in_range`, `test_the_default_draw_is_draw_first_on_the_challengers_bytes`).
 
+PoUW's example runs on a two-stage `Stream` in `tests/test_service_two_stage.py`, following the architecture note
+(`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, §4.1): a uniform `subset:K′` over `N`
+equal tiles, whose boundaries are A's rows, the tile digests and the per-call records, and whose interiors are A′, the
+ok rows, `rowk`'s carries and the cap rows. A `work:K` first stage runs as well, with the challenger's closure, and an
+accepted audit's profile is `two_stage.TwoStageLaw.profile` of `Stage(law)` over the RUs. Pinned by
+`tests/test_service_two_stage.py` (`test_the_pouw_example_runs_the_four_steps_and_one_record_binds_them`,
+`test_each_step_waits_for_the_one_before`, `test_the_interiors_are_the_proved_replay_units_held_to_the_rule`,
+`test_a_work_first_stage_draws_with_the_challengers_closure`, `test_a_wrong_interior_or_boundary_rejects_the_audit_once`,
+`test_the_stream_stops_at_its_budgeth_failure`, `test_no_retries_nothing_redraws_and_an_outcome_is_final`,
+`test_a_late_proof_or_missing_interiors_are_late`,
+`test_a_draw_of_no_rus_has_no_interiors_and_its_proof_goes_to_the_boundary`,
+`test_what_a_two_stage_spec_and_stream_refuse`, `test_the_draw_is_the_challengers_own_randomness`).
+
 ### The two-stage law
 
 `two_stage.TwoStageLaw({class: Stage(first, k)})` (decision 43):
