@@ -25,16 +25,19 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 /-- **`v-bridge`: V*'s circuits compute the inner verifier** (V*'s session `j` is of the circuit `(Vs j).c`, pinned by
 its file's digest through `ZkOuter.hc`, under the law `(Vs j).law`; `k, Rw` the count curve's). Four facts about V*'s
 circuits, laws and inputs, each read at every history `(R, ω, t)` (the registration, the draw of the hidden circuit's
-units, the rounds' commitments and coins):
+units, the rounds' commitments and coins) and every registration `R₂` of the outer proof (`outerV`: the values V*'s
+sessions read that the history does not fix, its running sums `rec-acc` and with `link_rows` its opened rows
+`rec-rows-L<level>`, sent after the last inner coin and before any session):
 
 * **they accept only an accepted inner transcript** (`Recursion.VBridge`): at all strategies of V*'s sessions there,
   when every session's outcome `flock-verify verify --zk --registered` accepts and every session's value layer is
   `Good` (no wrong unit, and at every unit each registered read carries the registrant's value: the hidden circuit's
-  rows as registered, and the values V* registers itself, the coins and the comb `coef`), the messages `wmsg` reads
-  from the layers hold an inner transcript the inner verifier accepts on the hidden circuit's statement `x R ω` at the
-  rounds' coins;
+  rows as registered, `R₂`'s values, and the values V* registers itself, the coins and the comb `coef`), the messages
+  `wmsg` reads from the layers hold an inner transcript the inner verifier accepts on the hidden circuit's statement
+  `x R ω` at the rounds' coins;
 * **their public files register the firewall's commitments** (`VCommits`): the digest session `j`'s value binding
-  registers at each commit string of stage `i`'s `Sk i j` is the firewall's stage-`i` commitment's, `cmt j`;
+  registers at each commit string of stage `i`'s `Sk i j` is the firewall's stage-`i` commitment's, `cmt j`, at every
+  `R₂`;
 * **they decode each round's message from those commit strings** (`VDecodes`, at equality): layers whose bits on the
   wires of each `Sk i j` are those of the values `v j` hold `msg i v` as their round-`i` message;
 * **their laws draw every such wire** (`VFull`): each wire of `Sk i j` is a wire of a unit whose stratum session `j`'s
@@ -42,8 +45,9 @@ units, the rounds' commitments and coins):
 
 The first is the soundness direction of "V* accepts exactly when the Lean verifier accepts the inner session the
 commitments commit to"; the recursive guarantees read no other. -/
-def VBridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
-    (zs : Reg → L.Ω → List (Cm × I.Coin) → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray)
+def VBridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type} (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)

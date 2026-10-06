@@ -22,11 +22,12 @@ strings up to the widest row) and each one's leaf scheme (`schemeK`: `hm96-sha51
   cover their wires;
 * `sessions_stage_le`: at V*'s sessions in a row, a layer that disagrees on a wire of a session's commit strings with
   the values `wv` is at most the sessions' expected slack plus each commit string's weight times its trial's chance of
-  opening the session's registered digest there off `wv`;
+  opening the session's registered digest there off `wv`; `outerV_stage_le` is the same at the registration `R₂` the
+  prover sends (`outerV`), and `trialV` the trial there;
 * `VCommits`, `VDecodes`, `VFull`: what V*'s inputs, circuits and laws must do at each stage: session `j`'s public file
-  at history `t` registers `t`'s stage-`i` commitment at the stage's commit strings `Sk i j`, the layers' round-`i`
-  message is read from the wires of those commit strings, and every such wire is a wire of a unit whose stratum the
-  session's law draws in full;
+  at history `t` registers `t`'s stage-`i` commitment at the stage's commit strings `Sk i j`, at every registration
+  `R₂`, the layers' round-`i` message is read from the wires of those commit strings, and every such wire is a wire of
+  a unit whose stratum the session's law draws in full;
 * `zk_sessions_recursive_full`: `zk_sessions_recursive_upto` at `obS`, its transfer from `sessions_stage_le`.
 -/
 
@@ -438,16 +439,53 @@ theorem sessions_stage_le
   rw [exG_sum]
   exact Finset.sum_congr rfl fun pos _ => exG_const_mul _ _ _ _
 
+variable {Reg₂ : Type}
+
+/-- **The trial for a tagged commit string** at V*'s outer proof: `trialS` at the registration the prover sends. -/
+noncomputable def trialV (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (s : Strategy (outerV zs dg N)) (pos : Σ j, PosK (Vs j).c (Vs j).hU (Vs j).nv) : Finder (Finset (obS Vs).Op) :=
+  trialS (zs s.1) dg N k Rw (sessOf zs dg N s) pos
+
+/-- **A stage's transfer at V*'s outer proof**: `sessions_stage_le` at the registration the prover sends, the session's
+registered digests at `Sk j` being `cs j` at every registration. -/
+theorem outerV_stage_le
+    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
+    (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ) {t' : ℝ}
+    (ht' : 0 ≤ t') (qF qS : ℝ) (Sk : (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (hfull : ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j →
+      ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
+        (Law.stratum (Vs j).law.σs ((Vs j).law.σs u)).card ≤ (Vs j).law.ks ((Vs j).law.σs u))
+    (cs : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (hcs : ∀ R₂ j, ∀ pos ∈ Sk j, ∀ R' : Reg', (zs R₂ j).vb.cs R' pos = cs j pos)
+    (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
+    (wv : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c)
+    (hQ : ∀ Xt : (j : Fin S) → (Vs j).Bits, (∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j →
+      Xt j g = bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g) → Q Xt)
+    (s : Strategy (outerV zs dg N)) :
+    prob (fun o => AcceptsV zs o ∧ ¬ Q (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
+      sumV zs dg N (fun R₂ j τ => (zs R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s +
+        ∑ j, ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
+          exG (fun rs : VRec Vs Reg' dg N =>
+            prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
+            ((zs s.1 j).trial dg N k Rw ((zs s.1 j).ofBase dg N (rs j).1) pos).g
+            ((zs s.1 j).trial dg N k Rw ((zs s.1 j).ofBase dg N (rs j).1) pos).s) (sessions (zs s.1) dg N)
+            (sessOf zs dg N s) := by
+  rw [prob_outerV]
+  exact sessions_stage_le hS (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS Sk hfull cs (hcs s.1) Q wv hQ
+    (sessOf zs dg N s)
+
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
 
-/-- **V*'s public files register the stages' commitments**: at every history `t`, where `t`'s stage-`i` commitment is
-`e.1`, the digest session `j`'s value binding registers at each commit string of `Sk i j` (`cs`, the public file's leaf
-there) is `cmt j e.1`'s. -/
-def VCommits (zs : Reg → L.Ω → List (Cm × I.Coin) → (j : Fin S) → (Vs j).Outer Reg')
+/-- **V*'s public files register the stages' commitments**: at every history `t` and registration `R₂`, where `t`'s
+stage-`i` commitment is `e.1`, the digest session `j`'s value binding registers at each commit string of `Sk i j` (`cs`,
+the public file's leaf there) is `cmt j e.1`'s. -/
+def VCommits (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg) : Prop :=
-  ∀ i R ω t (e : Cm × I.Coin), t[i]? = some e → ∀ j, ∀ pos ∈ Sk i j, ∀ R' : Reg',
-    (zs R ω t j).vb.cs R' pos = cmt j e.1 pos
+  ∀ i R ω t (e : Cm × I.Coin), t[i]? = some e → ∀ R₂ j, ∀ pos ∈ Sk i j, ∀ R' : Reg',
+    (zs R ω t R₂ j).vb.cs R' pos = cmt j e.1 pos
 
 /-- **V*'s circuits decode each stage's message from its commit strings**: layers whose bits on the wires of each
 `Sk i j` are those of the values `v j` hold a round-`i` message the inner verifier reads as `msg i v`, at any coins. -/
@@ -469,21 +507,21 @@ def VFull (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).h
 
 /-- **The recursive audit with V*'s `--zk --registered` sessions as the outer proof is sound, with its stages' transfer
 from V*'s sessions**: `zk_sessions_recursive_upto` at V*'s tagged openings `obS`, stage `i`'s trial for each tagged
-commit string `trialS`, its slack the sessions' expected `slackCR` and its weights `weightS` on `Sk i`, the transfer
-from `sessions_stage_le` on `VCommits`, `VDecodes` and `VFull`. -/
+commit string `trialV`, its slack the sessions' expected `slackCR` and its weights `weightS` on `Sk i`, the transfer
+from `outerV_stage_le` on `VCommits`, `VDecodes` and `VFull`. -/
 theorem zk_sessions_recursive_full
     -- V*'s laws: their strata and A3
     (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
-    -- V*'s sessions at each history
-    (zs : Reg → L.Ω → List (Cm × I.Coin) → (j : Fin S) → (Vs j).Outer Reg')
+    -- V*'s sessions at each history and registration
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the count curve's parameters, and the finders' budgets
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t j).dj (zs R ω t j).y₀ S' R') i k ≤ ρ)
+    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
     -- the recursive prover
-    (σ : Strategy (recGame L Reg I Cm fun R ω t => sessions (zs R ω t) dg N))
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     -- the hidden circuit's statement, the messages V*'s layers hold, and V*'s bridge
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (hbr : VBridge zs dg N k Rw x wmsg)
@@ -499,28 +537,28 @@ theorem zk_sessions_recursive_full
     (hcmt : VCommits zs Sk cmt) (hdec : VDecodes wmsg same Sk msg) (hfull : VFull I.r Sk)
     (q : ℕ → ℝ)
     (hCR : ∀ i < I.r, ∀ ω pos,
-      (forkAt (obS Vs) σ (cmtS cmt) (fun R ω t s => trialS (zs R ω t) dg N k Rw s) i ω pos).CR H512 (q i))
+      (forkAt (obS Vs) σ (cmtS cmt) (fun R ω t s => trialV (zs R ω t) dg N k Rw s) i ω pos).CR H512 (q i))
     -- the inner protocol
     {εin : ℝ≥0∞} (hin : InnerSound I εin) :
-    prob (fun o => Accepts (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
-        (recGame L Reg I Cm fun R ω t => sessions (zs R ω t) dg N) σ ≤
-      expAt σ (fun ω t s => sumS (zs σ.1 ω t) dg N
-          (fun j τ => (zs σ.1 ω t j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
+    prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
+        (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+      expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
         ∑ i ∈ Finset.range I.r,
-          (expAt σ (fun ω t s => sumS (zs σ.1 ω t) dg N
-              (fun j τ => (zs σ.1 ω t j).slackCR dg N k Rw M ρ t' qF qS τ) s) +
+          (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+              (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
   refine zk_sessions_recursive_upto hS hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsame
-    (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialS (zs R ω t) dg N k Rw s)
-    (fun _ R ω t s => sumS (zs R ω t) dg N (fun j τ => (zs R ω t j).slackCR dg N k Rw M ρ t' qF qS τ) s)
+    (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
+    (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
-  refine (sessions_stage_le hS (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
-    (fun j pos => cmt j e.1 pos) (fun j pos hp R' => hcmt i σ.1 ω t e he j pos hp R')
+  refine (outerV_stage_le hS (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
+    (fun j pos => cmt j e.1 pos) (fun R₂ j pos hp R' => hcmt i σ.1 ω t e he R₂ j pos hp R')
     (fun Xs => Option.Rel (same i (t.map Prod.snd)) (wmsg Xs)[i]? (some (msgS msg i v)))
     (fun j p => projV j (v ⟨j, p⟩)) (fun Xt hXt => hdec i hi _ Xt (fun j p => projV j (v ⟨j, p⟩)) hXt) _).trans
     (add_le_add le_rfl ?_)
   rw [Fintype.sum_sigma]
   exact Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun p _ =>
-    mul_le_mul' le_rfl (trialS_le (zs σ.1 ω t) dg N k Rw _ j p _ _)
+    mul_le_mul' le_rfl (trialS_le (zs σ.1 ω t _) dg N k Rw _ j p _ _)
 
 end FlockSoundness.Discharge.Recursion
