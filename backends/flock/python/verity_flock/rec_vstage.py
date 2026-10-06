@@ -38,10 +38,18 @@ rep r's) under `rec_outer.session_program` of ``public.json``, which the chain s
   the salt the firewall committed ``root_B``'s node under (``L0/``).
 
 In both, the opening climbs to the output row the prover gives, and that row does not open the committed ``b || c``.
+
+* ``filler``: the inner session's own forgery, a padded inner statement's filler output row one bit off in the inner prover's
+  file (`rec_shape.forge_filler`), so the session it gave is of an unsatisfied table. V*'s algebra over it is staged as it
+  is, under ``forged-filler/``, and must not hold (the openings are the session's, which the forgery leaves consistent).
+
+``--cap`` (default REC_CAP, `rec_shape.Cap.parse`): the deployment's public cap; a session whose V* is not the cap's shape is
+refused before anything is staged (`rec_shape.check`, exit 2).
 """
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import time
 from pathlib import Path
@@ -56,7 +64,7 @@ from . import rec_residuals as RR
 from . import rec_vstar as V
 
 TABLE = "circuit"
-FORGERIES = ("message", "sum", "comb", "top", "top-salt")
+FORGERIES = ("message", "sum", "comb", "top", "top-salt", "filler")
 VERIFIER_FILES = ("circuit.txt", "pub.bin", "public-inputs.bin", "program.json", "partition.json", "registered.json")
 
 
@@ -271,11 +279,12 @@ def _copy_verifier(src: Path, dst: Path) -> None:
 
 
 def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, algebra: bool = True, forge: str | None = None,
-          evaluate: bool = True, pts: dict | None = None, salts: Path | None = None) -> dict:
+          evaluate: bool = True, pts: dict | None = None, salts: Path | None = None, cap=None) -> dict:
     """V*'s statements over the inner session ``inner``: the levels ``levels`` (None: every level) and, with ``algebra``, the
     algebra, honest under ``out``; with ``forge``, that forgery's statements alone under ``out/forged-<forge>`` (the module
-    docstring). ``salts``: the running sums' salts file (`acc_salts`; None: fresh ones). Returns what each statement costs and
-    holds, and the verifier's own seconds."""
+    docstring). ``salts``: the running sums' salts file (`acc_salts`; None: fresh ones). ``cap`` (`rec_shape.Cap`): refuse a
+    session whose V* is not the cap's shape (`rec_shape.check`) before staging. Returns what each statement costs and holds,
+    and the verifier's own seconds."""
     inner, out = Path(inner), Path(out)
     t = {}
     t0 = time.perf_counter()
@@ -287,13 +296,17 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
     program = O.session_program(public_b)
     t0 = time.perf_counter()
     qs = V.queries(public, private, proofs, TABLE)
+    lvls = O.levels(qs)
+    if cap is not None:
+        from . import rec_shape
+
+        rec_shape.check(sh, lvls, cap)
     coefs = coefficients(vf, qs)
     t["coefficients_s"] = round(time.perf_counter() - t0, 2)
     ts = {rep: V.tops(public, private, f"{TABLE}/rep{rep}", TABLE) for rep in sorted(proofs)}
     chain = O.Chain.build(program, qs, coefs, None if salts is None else acc_salts(Path(salts), len(qs) + 1))
-    lvls = O.levels(qs)
     res: dict = {"shape": [sh.m, sh.k_log, sh.claims], "openings": len(qs), "chain_rows": chain.reg.leaves,
-                 "acc_root": chain.reg.root.hex(), "program": program, "verifier": t}
+                 "acc_root": chain.reg.root.hex(), "program": program, "verifier": t} | ({"cap": cap.spec()} if cap else {})
     p_last = chain.rep_ends(0)[1] - 1
     if forge is not None:
         if forge not in FORGERIES:
@@ -368,6 +381,8 @@ def main(argv=None) -> int:
     s.add_argument("--no-evaluate", action="store_true", help="skip evaluating the algebra's unit against the reference")
     s.add_argument("--salts", default=None, help="the running sums' salts, drawn and kept there if absent: every statement "
                    "staged with one FILE reads one chain")
+    s.add_argument("--cap", default=os.environ.get("REC_CAP") or None, help="the deployment's cap, instances=N,claims=C,k_log=K,"
+                   "vus_per_block=V (rec_shape.Cap.parse; default REC_CAP): refuse a session of another shape, exit 2")
     a = ap.parse_args(argv)
     if a.cmd == "points":
         inner = Path(a.inner)
@@ -378,8 +393,14 @@ def main(argv=None) -> int:
         return 0
     levels = None if a.levels == "all" else [] if a.levels == "none" else [int(x) for x in a.levels.split(",")]
     pts = json.loads(Path(a.points).read_text()) if a.points else None
-    res = stage(Path(a.inner), json.loads(Path(a.fold).read_text()), Path(a.out), levels, not a.no_algebra, a.forge,
-                not a.no_evaluate, pts, a.salts)
+    from . import rec_shape
+
+    try:
+        res = stage(Path(a.inner), json.loads(Path(a.fold).read_text()), Path(a.out), levels, not a.no_algebra, a.forge,
+                    not a.no_evaluate, pts, a.salts, rec_shape.Cap.parse(a.cap) if a.cap else None)
+    except rec_shape.Refused as e:
+        print(json.dumps({"refused": str(e)}), flush=True)
+        return 2
     print(json.dumps(res, sort_keys=True), flush=True)
     alg = res.get("algebra", [])
     if any(p["unit_agrees"] not in (None, [True] * p["instances"]) for p in alg):
