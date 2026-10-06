@@ -46,7 +46,7 @@ def bind : Game α → (α → Game β) → Game β
   | .send M k, f => .send M fun m => bind (k m) f
   | @Game.coin _ C iF iN k, f => @Game.coin _ C iF iN fun c => bind (k c) f
 
-instance : Monad Game where
+instance instMonad : Monad Game where
   pure := .ret
   bind := bind
 
