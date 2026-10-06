@@ -134,13 +134,13 @@ class _Uploads:
 
 
 def _write(path: Path, data: bytes, digest: bool = True) -> dict:
-    """A transcript file.  Row files carry no digest: the committed roots bind them, and the verifier checks every opened row
-    against them."""
+    """A transcript file, with its SHA-512.  Row files carry no digest: the committed roots bind them, and the verifier checks
+    every opened row against them."""
     path.write_bytes(data)
     nested = path.parent.name in ("calls", "weights")
     out = {"path": f"{path.parent.name}/{path.name}" if nested else path.name, "bytes": len(data)}
     if digest:
-        out["sha256"] = hashlib.sha256(data).hexdigest()
+        out["sha512"] = hashlib.sha512(data).hexdigest()
     return out
 
 

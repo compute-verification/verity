@@ -78,7 +78,7 @@ def opening(tree: bytes, count: int, pos: int, value: bytes, nb: int = 32) -> Op
 
 class Files:
     """The pass's files, each read once (large ones memory-mapped) and held to its size and, where the manifest has one, its
-    SHA-256."""
+    SHA-512 (a pass recorded before the manifest moved to SHA-512 names its SHA-256)."""
 
     def __init__(self, base: Path):
         self.base, self.cache = base, {}
@@ -90,8 +90,11 @@ class Files:
                 data = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) if spec["bytes"] > 1 << 24 else fh.read()
             if len(data) != spec["bytes"]:
                 raise ValueError(f"{key}: {len(data)} bytes; the manifest says {spec['bytes']}")
-            if "sha256" in spec and hashlib.sha256(data).hexdigest() != spec["sha256"]:
-                raise ValueError(f"{key}: its SHA-256 is not the manifest's")
+            for name in ("sha512", "sha256"):
+                if name in spec:
+                    if hashlib.new(name, data).hexdigest() != spec[name]:
+                        raise ValueError(f"{key}: its {name.upper()} is not the manifest's")
+                    break
             self.cache[key] = data
         return self.cache[key]
 

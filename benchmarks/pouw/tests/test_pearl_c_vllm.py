@@ -505,6 +505,24 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     assert VR.main([str(path), *coins_args(path), "--jobs", "2", "--commit", "0" * 7, "--fast", "--cross-check", "1"]) == 0
 
 
+def test_a_passs_files_are_held_to_the_manifests_sha512(tmp_path):
+    """The manifest names each head file by its SHA-512, which `verify_run.Files` checks; a pass recorded before names its
+    SHA-256, still checked."""
+    import hashlib
+    data = bytes(range(256)) * 3
+    spec = PPD._write(tmp_path / "leaves", data)
+    assert spec == {"path": "leaves", "bytes": len(data), "sha512": hashlib.sha512(data).hexdigest()}
+    assert VR.Files(tmp_path)(spec) == data
+    (tmp_path / "leaves").write_bytes(data[:-1] + b"\x00")
+    with pytest.raises(ValueError, match="SHA512 is not the manifest's"):
+        VR.Files(tmp_path)(spec)
+    recorded = {"path": "leaves", "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+    with pytest.raises(ValueError, match="SHA256 is not the manifest's"):
+        VR.Files(tmp_path)(recorded)
+    (tmp_path / "leaves").write_bytes(data)
+    assert VR.Files(tmp_path)(recorded) == data
+
+
 @pytest.mark.slow
 def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_pass):
     path, *_ = honest_pass
