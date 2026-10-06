@@ -673,6 +673,12 @@ or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), befor
 | `algebra-proof` | flips a masked value in its returned proof only | `GATE-REFUSED: the proof's exposed value 0 is not the one the gate passed` |
 | `shape` | appends a value to its returned proof's `round1_ab`, past the ones the gate compares | `GATE-REFUSED: the proof's shape (…) is [65, 64, …] where the statement's is [64, 64, …]` |
 
+With `FC_GATE_TRANSCRIPT=DIR` (the CPU path only), each gated session also writes what the gate let out as a
+`verity/firewall-transcript/v0` transcript, `DIR/session-<k>.json`, for the firewall's contract (`flock-firewall contract`):
+`gate_transcript.rs` reads the wire after the coin tree's check and the gate's candidates, and changes nothing the gate
+sends. Where the gate refuses, the transcript holds the refused candidate's items up to the first one the contract must
+refuse; where the prover stops, it ends where the prover did. `verifier/firewall_outer_agree.py` runs the contract on them.
+
 The inner phase's controls are V*'s: `rec_inner.py forge --what top` (a clear top that does not open the salted one the coin
 server received) and `--what unsalted` (a record of clear tops), refused `GATE-REFUSED: tree top: …` by `rec_vstar`.
 `85-rec-reprice.sh` runs both phases on node 1 (`STEP=icheck`; `STEP=oprove MODES=dev,host,gate CONTROLS=L6`).
