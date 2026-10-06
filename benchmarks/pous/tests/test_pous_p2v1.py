@@ -332,7 +332,7 @@ def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
 
     sys.path.insert(0, str(BENCH))
     from band_gpu import harness as H
-    from band_gpu import live
+    from band_gpu import memory_challenger as live
 
     from verity.protocols.accounting.space.pous import schemes
     from verity.protocols.accounting.space.pous.verifier import VerifierKey, leaf_hash
@@ -370,7 +370,7 @@ def test_the_host_trace_splits_each_slow_round_trip_into_where_its_time_went():
     and its split adds up: send, the wait for the first byte (the responder's reported time and the rest), the rest of the
     answer, and the verifier's own work outside the round trip."""
     sys.path.insert(0, str(BENCH))
-    from band_gpu import live
+    from band_gpu import memory_challenger as live
 
     ping, challenge = live.OP_PING, live.OP_CHALLENGE
     log = [(ping, 0, 0, 1_000, 5_000, 6_000, 1_000, 2_000, 0),

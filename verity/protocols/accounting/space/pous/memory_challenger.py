@@ -1,5 +1,6 @@
 """The memory challenger: PoUS's timed rounds, run by an auditor-trusted device beside the network certifier, inside the
-node's isolation boundary.  It replaces the memory challenger (`audit.MemoryChallenger`) on the deployed path.
+node's isolation boundary, which signs its rounds.  It replaces `audit.MemoryChallenger`'s unsigned loop (the former timed
+verifier) on the deployed path.
 
 A session has four steps:
 

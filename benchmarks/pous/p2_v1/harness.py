@@ -110,7 +110,7 @@ class V3(V1):
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
 
-    impl, live = "p2-v3-gpu", HERE.parent / "band_gpu" / "live.py"
+    impl, live = "p2-v3-gpu", HERE.parent / "band_gpu" / "memory_challenger.py"
 
     def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
         from verity.protocols.accounting.space.pous import protocol, schemes
