@@ -405,6 +405,9 @@
    "assumptions": [],
    "type_hash": "98d68470d723d245aac78106ff238e8d7903feea054a6748e7afe2e5e24e1aff"
   },
+  "Flock.SecurityProofs.EndToEnd_refSetup": {
+   "owner": "@proofs"
+  },
   "Flock.climb_binding": {
    "owner": "@proofs",
    "signature": [
