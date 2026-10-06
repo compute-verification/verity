@@ -450,7 +450,8 @@ before the session's first coin, not bounds state by state.
 ## What is pinned
 
 `lean-audit.json` records each pinned theorem's statement (`pins`) and the definitions it reads (`reads`). The audit
-fails when either changes until the record is rewritten, and a rewritten record needs a named statement reviewer. The
+fails when either changes until the record is rewritten. When a rewritten record lands on `main`, Daniel gets a DM
+showing it, and that is the check: a statement reviewer is optional, and nothing waits on one. The
 pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
 `Merkle.opening_binding`; none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
 (`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
