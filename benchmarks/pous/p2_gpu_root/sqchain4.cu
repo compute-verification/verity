@@ -1,10 +1,10 @@
 // sqchain3 with one warp per column pair. Same representation, carries, phase 3 and L2 exchange as sqchain3.cu; C >= 2 CTAs,
 // one per SM, each owning `per` digits and computing its columns (owned plus 4 below) as pairs (k, k+1).
 //   phase 1  warp w takes pair w; its iterations (the low run, then the high run: 315, or 316 for k = 631, 632) are
-//            interleaved over the lanes (run_pair_il). Lane 0 also adds the products column k's runs leave out, lane 16
-//            those of column k+1, and each squares its column's middle digit.
+//            interleaved over the lanes (run_pair_il), with the products the pair's runs leave out in the last
+//            iteration's free lanes
 //   phase 2  a shuffle reduce-scatter: at offset 16 lanes 0..15 keep column k's two sums and 16..31 column k+1's, then
-//            offsets 8..1; lane 0 and lane 16 each double, add the square, fold T = S_lo + c' S_hi and cut it into chunks
+//            offsets 8..1; lane 0 (column k) and lane 16 (column k+1) each double, add the square, fold T = S_lo + c' S_hi and cut it into chunks
 //   phase 3  one thread per 4 owned digits: the carry passes, then one 16-byte relaxed.gpu store of the tagged digits
 //   arrival  every CTA polls the whole vector (16-byte relaxed.gpu loads) until each word has this step's tag
 // The partial sums never touch shared memory, so a step has two __syncthreads (after phase 2 and after arrival).
@@ -35,6 +35,7 @@ static const int PADL = 64, PADR = 96;
 static const int DLEN = PADL + ND4 + PADR;
 static const int HALO = 4;
 static const int MAXCOLS = 640;
+static const int ZERO = ND;                          // cur[ZERO] is always 0
 
 __host__ __device__ __forceinline__ int floordiv2(int x) { return x >= 0 ? x / 2 : -((1 - x) / 2); }
 __host__ __device__ __forceinline__ int len_lo(int c) { return floordiv2(c - 1) + 1; }
@@ -51,19 +52,22 @@ __device__ __forceinline__ uint64_t shfl64(uint64_t v, int o) {
 
 // Interleaved: lane l takes iterations l, l+32, l+64, ..., so in each iteration the warp reads 32 consecutive digits and
 // two descending runs of partners, each in one shared-memory wavefront (contiguous slices put lanes about 9.8 words apart
-// and conflict 2 to 4 ways). T <= 316, so 10 iterations cover every pair; they are unrolled with a fixed count (a
-// runtime-count loop measured 2 to 3 times slower, probe3), each guarded by j < T and choosing its run by j < L0.
-__device__ __forceinline__ void run_pair_il(const uint32_t *cur, int k, int L0, int T, int lane, uint64_t &l0, uint64_t &l1,
-                                            uint64_t &h0, uint64_t &h1) {
+// and conflict 2 to 4 ways). T is 315 or 316, so iterations 0..8 are full and the 10th leaves 4 or 5 lanes free; those
+// take the pair's (at most 3) left-out products, so its operands come from per-lane indices (ii9, ia9, ib9; ZERO reads
+// a zero digit). The count is fixed and unrolled: a runtime-count loop measured 2 to 3 times slower (probe3).
+__device__ __forceinline__ void run_pair_il(const uint32_t *cur, int k, int L0, int lane, int ii9, int ia9, int ib9, bool lo9,
+                                            uint64_t &l0, uint64_t &l1, uint64_t &h0, uint64_t &h1) {
   const int hoff = k + 2 - L0, kh = k + ND;
   #pragma unroll
-  for (int t = 0; t < 10; t++) {
+  for (int t = 0; t < 9; t++) {
     const int j = lane + 32 * t;
     const bool lo = j < L0;
     const int i = lo ? j : j + hoff, b = lo ? k : kh;
-    const uint32_t di = j < T ? cur[i] : 0u, w0 = cur[b - i], w1 = cur[b + 1 - i];
+    const uint32_t di = cur[i], w0 = cur[b - i], w1 = cur[b + 1 - i];
     if (lo) { l0 = madw(di, w0, l0); l1 = madw(di, w1, l1); } else { h0 = madw(di, w0, h0); h1 = madw(di, w1, h1); }
   }
+  const uint32_t di = cur[ii9], w0 = cur[ia9], w1 = cur[ib9];
+  if (lo9) { l0 = madw(di, w0, l0); l1 = madw(di, w1, l1); } else { h0 = madw(di, w0, h0); h1 = madw(di, w1, h1); }
 }
 
 __global__ void __launch_bounds__(LB, 1) chain_kernel(const uint32_t *__restrict__ xin, uint32_t *__restrict__ xout, uint32_t *G,
@@ -92,10 +96,27 @@ __global__ void __launch_bounds__(LB, 1) chain_kernel(const uint32_t *__restrict
   const int cx = 2 * w + (upper ? 1 : 0);
   const bool lead = p1 && (lane & 15) == 0 && cx < ncols;
   const int clo = (kstart + cx) % ND, chi = clo + ND;
-  const int x0 = len_lo(k), y0 = len_lo(clo);
-  const int x1 = clo + 1, y1 = min(k + 2, me_hi(clo) + 1);
-  const int x2 = max(me_hi(k) + 1, clo + 1), y2 = me_hi(clo) + 1;
   const int sqi = (clo & 1) == 0 ? clo >> 1 : chi >> 1;
+  // iteration 9: a regular iteration below T; above it, free lane 0 takes column k's left-out high product (i = k + 1),
+  // free lane 1 column k+1's left-out low product, free lane 2 its left-out high product (each run covers the rest)
+  int ii9 = ZERO, ia9 = ZERO, ib9 = ZERO;
+  bool lo9 = false;
+  {
+    const int j = lane + 288, c1 = (k + 1) % ND;
+    if (j < T) {
+      lo9 = j < L0;
+      const int i = lo9 ? j : j + k + 2 - L0, b = lo9 ? k : k + ND;
+      ii9 = i; ia9 = b - i; ib9 = b + 1 - i;
+    } else if (j - T == 0) {
+      if (k + 1 < me_hi(k) + 1) { ii9 = k + 1; ia9 = k + ND - (k + 1); }
+    } else if (j - T == 1) {
+      const int x0 = len_lo(k), y0 = len_lo(c1);
+      if (x0 < y0) { lo9 = true; ii9 = x0; ib9 = c1 - x0; }
+    } else if (j - T == 2) {
+      const int x2 = max(me_hi(k) + 1, c1 + 1), y2 = me_hi(c1) + 1;
+      if (x2 < y2) { ii9 = x2; ib9 = c1 + ND - x2; }
+    }
+  }
   const int ngrp4 = (nown + 3) / 4, m0 = a + 4 * tid;
   const bool p3 = tid < ngrp4;
   const int lb = ((m0 - 4 - kstart) % ND + ND) % ND;
@@ -114,16 +135,9 @@ __global__ void __launch_bounds__(LB, 1) chain_kernel(const uint32_t *__restrict
     unsigned long long q0 = clock64();
 #endif
     if (p1) {
-      uint64_t el = 0, eh = 0, sq = 0;
-      if (lead) {
-        if (x0 < y0) el = madw(cur[x0], cur[clo - x0], el);
-        if (x1 < y1) eh = madw(cur[x1], cur[chi - x1], eh);
-        if (x2 < y2) eh = madw(cur[x2], cur[chi - x2], eh);
-        const uint32_t h = cur[sqi];
-        sq = madw(h, h, 0);
-      }
-      uint64_t l0 = upper ? 0 : el, l1 = upper ? el : 0, h0 = upper ? 0 : eh, h1 = upper ? eh : 0;
-      run_pair_il(cur, k, L0, T, lane, l0, l1, h0, h1);
+      uint64_t l0 = 0, l1 = 0, h0 = 0, h1 = 0;
+      const uint32_t hsq = cur[sqi];
+      run_pair_il(cur, k, L0, lane, ii9, ia9, ib9, lo9, l0, l1, h0, h1);
 #ifdef PROF
       pacc[0] += clock64() - q0;
 #endif
@@ -133,7 +147,7 @@ __global__ void __launch_bounds__(LB, 1) chain_kernel(const uint32_t *__restrict
       for (int o = 8; o > 0; o >>= 1) { A0 += shfl64(A0, o); A1 += shfl64(A1, o); }
       if (lead) {
         A0 *= 2; A1 *= 2;
-        if ((clo & 1) == 0) A0 += sq; else A1 += sq;
+        if ((clo & 1) == 0) A0 = madw(hsq, hsq, A0); else A1 = madw(hsq, hsq, A1);
         uint64_t m0_ = madw(CP, (uint32_t)A1, 0);
         uint64_t m1_ = madw(CP, (uint32_t)(A1 >> 32), 0);
         uint64_t lo = A0 + m0_;
