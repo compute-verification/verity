@@ -6,5 +6,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # tests/ checks the harness against PoUS itself (verity.protocols.accounting.space.pous) and the census's hardware ids;
-# test_pous_service.py stages the answers with C-Flock's row machinery (backends/flock/python, which reads catalog).
-inputs = ["verity", "catalog", "backends/flock/python"]
+# test_pous_service.py stages the answers with C-Flock's row machinery (backends/flock/python, which reads catalog and kernels).
+inputs = ["verity", "catalog", "kernels", "backends/flock/python"]

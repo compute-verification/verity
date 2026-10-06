@@ -70,7 +70,7 @@ done
 sha256sum "$BIN" "$LEAN" | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
 log "built"
 
-export PYTHONPATH=$SRC:$SRC/backends/flock/python:$SRC/catalog
+export PYTHONPATH=$SRC:$SRC/backends/flock/python:$SRC/catalog:$SRC/kernels
 ARGS=(--out "$OUT" --flock "$BIN" --lean "$LEAN")
 if [ -n "${FROM_AUDIT:-}" ]; then ARGS+=(--from-audit "$FROM_AUDIT")
 else ARGS+=(--scheme "${SCHEME:-p2-16448/v3}" --bps "${BPS:-2}" --segments "${SEGMENTS:-1}" --k "${K:-4}"); fi
