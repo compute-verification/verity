@@ -420,6 +420,18 @@
    "assumptions": [],
    "type_hash": "abddb3f765cc28e5b09bc85098badb0538e46f30a07e1d1dc9f363fade5177a8"
   },
+  "Flock.SecurityProofs.EndToEndHidden": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.EndToEndHiddenDrawn": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.EndToEndRegistered": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
+   "owner": "@proofs"
+  },
   "Flock.climb_binding": {
    "owner": "@proofs",
    "signature": [
