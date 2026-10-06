@@ -559,6 +559,42 @@ def test_lake_restores_a_build_published_from_another_path(s3, tmp_path):
     assert "Unpacked" in out.stdout and "Built Control" not in out.stdout, out.stdout
 
 
+@pytest.mark.slow
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_build_works_on_its_own_copy_of_dependencies_bound_read_only(tmp_path):
+    """With the artifact cache on, Lake writes beside a dependency's built artifacts, so a read-only `.lake/packages`
+    fails the build; the same dependencies bound at `.lake/deps` build, from a copy deleted after."""
+    dep = tmp_path / "dep"
+    dep.mkdir()
+    (dep / "lakefile.toml").write_text('name = "dep"\ndefaultTargets = ["Dep"]\n[[lean_lib]]\nname = "Dep"\n')
+    (dep / "Dep.lean").write_text("def depVal : Nat := 3\n")
+    (dep / "lean-toolchain").write_text((HERE / "fixtures" / "control" / "lean-toolchain").read_text())
+    (dep / ".gitignore").write_text(".lake/\n")
+    sh("git", "init", "-q", "-b", "main", cwd=dep)
+    sh("git", "add", ".", cwd=dep)
+    sh("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "c", cwd=dep)
+    app = tmp_path / "app"
+    app.mkdir()
+    (app / "lakefile.toml").write_text(f'name = "app"\ndefaultTargets = ["App"]\n[[require]]\nname = "dep"\n'
+                                       f'git = "file://{dep}"\nrev = "main"\n[[lean_lib]]\nname = "App"\n')
+    (app / "App.lean").write_text("import Dep\ntheorem t : depVal = 3 := rfl\n")
+    (app / "lean-toolchain").write_text((dep / "lean-toolchain").read_text())
+    sh(LAKE, "update", cwd=app)
+    sh(LAKE, "build", "Dep", cwd=app)
+    dep.rename(tmp_path / "gone")                              # as offline as the sandbox: Lake can't fetch it again
+    packages = app / ".lake" / "packages"
+    sh("chmod", "-R", "a-w", str(packages))
+    try:
+        assert C.build(app, tmp_path / "out1", [LAKE]) != 0
+        assert "failed to cache artifact" in (tmp_path / "out1" / C.BUILD_LOG).read_text()
+        sh("chmod", "u+w", str(packages.parent))
+        packages.rename(app / ".lake" / C.DEPS_RO)
+        assert C.build(app, tmp_path / "out2", [LAKE]) == 0, (tmp_path / "out2" / C.BUILD_LOG).read_text()
+        assert (tmp_path / "out2" / "stage" / C.MAPPING).is_file() and not packages.exists()
+    finally:
+        sh("chmod", "-R", "u+w", str(app / ".lake"))
+
+
 # ---------------------------------------------------------------- node 1's daily run (run_daily.py)
 
 _spec = importlib.util.spec_from_file_location("lean_run_daily", HERE.parent / "run_daily.py")

@@ -62,6 +62,8 @@ RECORD = ".sha256.json"
 MAPPING = "outputs.jsonl"
 #: Lake's output of `build`, beside its stage
 BUILD_LOG = "build.log"
+#: where the sandbox binds a package's fetched dependencies read-only; `build` works on its own copy at `.lake/packages`
+DEPS_RO = "deps"
 TOOL = "tools/lean/"
 STATE_URL = "https://website-docs-sage.vercel.app/api/lean-cache/state"
 STATE_TTL_S = 300
@@ -473,13 +475,20 @@ def out_dir(out: Path, pkg: str) -> Path:
 
 def build(pkg: Path, out: Path, lake: list[str] | None = None) -> int:
     """Inside the build's sandbox: `lake build` ``pkg`` with Lake's cache writable under ``out``, then `lake cache stage`
-    the root package's outputs into ``out/stage``. Lake's output goes to this process's and to ``out/build.log``. Lake's
+    the root package's outputs into ``out/stage``. Dependencies bound read-only at ``pkg/.lake/deps`` are built from a
+    writable copy at ``pkg/.lake/packages``, deleted after. Lake's output goes to this process's and to ``out/build.log``. Lake's
     cache is deleted after: it holds copies of every dependency's artifacts too (1.5 GB for core's package against
     Mathlib's 2 MB stage)."""
     out.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache"), "LEAN_CACHE": "off"}
     lake = lake or ["lake"]
+    ro, packages = pkg / ".lake" / DEPS_RO, pkg / ".lake" / "packages"
+    copied = ro.is_dir() and not packages.exists()
     try:
+        if copied:
+            # with the artifact cache on, Lake writes beside every dependency's artifacts (each `.hash`, and their modes)
+            subprocess.run(["cp", "-a", "--reflink=auto", str(ro), str(packages)], check=True)
+            subprocess.run(["chmod", "-R", "u+w", str(packages)], check=True)
         with open(out / BUILD_LOG, "wb") as f:
             p = subprocess.Popen([*lake, "build", "-o", str(out / MAPPING)], cwd=pkg, env=env, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT)
@@ -493,6 +502,8 @@ def build(pkg: Path, out: Path, lake: list[str] | None = None) -> int:
         return subprocess.run([*lake, "cache", "stage", str(out / MAPPING), str(out / "stage")], cwd=pkg, env=env).returncode
     finally:
         shutil.rmtree(out / "lake-cache", ignore_errors=True)
+        if copied:
+            shutil.rmtree(packages, ignore_errors=True)
 
 
 def git(tree: Path, *args: str) -> str:
