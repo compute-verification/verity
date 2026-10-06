@@ -57,14 +57,13 @@ passes, never within one.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
-import sys
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from verity.protocols.accounting.work.pouw.audit import Epoch, Workload, rows_domain, transcript_domain
+from verity.protocols.accounting.work.pouw.coins import CoinCommitment, CoinOpening
 from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
@@ -93,6 +92,17 @@ from .pouw_pearl_c_host import (
     call_keys,  # noqa: F401 - kept importable here, as the tests read it
     write_manifest,
 )
+from .pouw_pearl_c_kernel import (
+    Kernel,
+    source_digest,  # noqa: F401 - kept importable here, as callers read it
+)
+from .pouw_pearl_c_manifest import (  # noqa: F401 - the manifest's readers, kept importable here, as callers read them
+    MANIFEST_SCHEMA,
+    MANIFEST_SCHEMA_RECORDED,
+    MANIFEST_SCHEMAS,
+    manifest_epoch,
+    manifest_schema,
+)
 from .pouw_pearl_c_screen import (
     excluded,
     screen,
@@ -113,7 +123,6 @@ LEAF_CAPACITY = 1 << 23
 #: calls one pass's A-root buffer holds, and rows its screen-flag buffer holds
 CALL_CAPACITY = 1 << 16
 FLAG_ROWS = 1 << 22
-MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v1"
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
                   "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b", "skeys_b")
 CALL_BUFFERS = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "ea_codes", "at", "af", "pa_t", "c", "u", "digests",
@@ -176,60 +185,6 @@ def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
         except Exception as e:  # noqa: BLE001 - DomainError, named per layer
             out.append(f"linear {w}: {e}")
     return out
-
-
-def _load(name: str, path: Path) -> tuple[Any, str]:
-    """`path` as a module and its bytes' SHA-256.  The module is named by the digest, so two kernel directories in one process
-    never share a module, and the same bytes loaded twice are one module."""
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    key = f"{name}_{digest[:16]}"
-    if key not in sys.modules:
-        spec = importlib.util.spec_from_file_location(key, path)
-        mod = sys.modules[key] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-    return sys.modules[key], digest
-
-
-def _the_cubin(directory: Path) -> Path:
-    """A kernel directory's one cubin, when the caller names none."""
-    found = sorted(directory.glob("*.cubin"))
-    if len(found) != 1:
-        raise ValueError(f"{directory}: {len(found)} cubins, not one: name the cubin")
-    return found[0]
-
-
-def source_digest(run_sha256: str, fixture_sha256: str) -> str:
-    """The kernel sources' digest: `run.py`'s and `fixture.py`'s, in that order."""
-    return hashlib.sha256(bytes.fromhex(run_sha256) + bytes.fromhex(fixture_sha256)).hexdigest()
-
-
-@dataclass
-class Kernel:
-    """GPU 1's pipeline, loaded once per process per (sources, cubin): ``run.py`` (as `run`), ``fixture.py`` (as `fixture`), the
-    device (`dev`), and the digests that name what ran (the manifest records both)."""
-
-    run: Any
-    fixture: Any
-    dev: Any
-    cubin_sha256: str
-    source_sha256: str | None = None
-
-    @classmethod
-    def load(cls, directory: str, cubin: str | None = None) -> Kernel:
-        d = Path(directory)
-        run, run_sha = _load("pearl_c_run", d / "run.py")
-        fixture, fixture_sha = _load("pearl_c_fixture", d / "fixture.py")
-        raw = Path(cubin or _the_cubin(d)).read_bytes()
-        key = (source_digest(run_sha, fixture_sha), hashlib.sha256(raw).hexdigest())
-        if key not in _KERNELS:
-            dev = run.Dev(raw)
-            dev.open()
-            _KERNELS[key] = cls(run, fixture, dev, key[1], key[0])
-        return _KERNELS[key]
-
-
-#: (source_sha256, cubin_sha256) -> the loaded kernel
-_KERNELS: dict[tuple[str, str], Kernel] = {}
 
 
 @dataclass
@@ -347,9 +302,11 @@ class PearlCDeviceRun(GraphCalls):
     the passes the bench and the verifier need (`begin`, `end`)."""
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
-                 salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
-                 schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w", whole_defer: bool = False,
-                 flag_rows: int = FLAG_ROWS):
+                 coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
+                 time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w",
+                 whole_defer: bool = False, flag_rows: int = FLAG_ROWS):
+        """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
+        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's."""
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.rows_form = rows_form
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
@@ -358,14 +315,15 @@ class PearlCDeviceRun(GraphCalls):
         self.variant = scheme.device.name
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
         self.torch_stream = _TorchStream()
-        self.salt, self.beacon, self.roots = salt, beacon, dict(roots)
+        self.roots, self.coins, self.opening = dict(roots), coins, opening
+        self.epoch = Epoch.start(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
+                                 self.roots, coins, opening)
+        self.salt = salt = self.epoch.salt
         self.device = next(iter(weights.values())).device
         self.schedule = schedule_of(schedule, scheme)
         self.main: _Lane | None = None      # the main lane, when the schedule runs it above the caller's priority
         self.side: _Lane | None = None      # the side lane, when the schedule has one
         self._launching: Any = None          # the torch stream the current step group launches on (the GEMM's timing events)
-        self.epoch = Epoch(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
-                           self.roots, salt)
         self.const = _constants(kernel, scheme, self.device)
         self.leaves = _zeros(32 * capacity, self.device)
         self.roots_buf = _zeros(32 * CALL_CAPACITY, self.device)
@@ -387,6 +345,7 @@ class PearlCDeviceRun(GraphCalls):
         self.pipes: dict[tuple[int, int, frozenset, bool], tuple[Any, list[Any]]] = {}
         self.stream = lambda: _stream(self.device)
         self.commits: dict[str, Any] = {"scheme": scheme.name, "salt": salt.hex(), "weights_root": self.epoch.weights_root.hex(),
+                                        "coins": coins.to_json(), "salt_opening": opening.to_json(),
                                         "transcript_root": None, "units": 0, "tiles": 0}
         self.details: dict[str, Any] = {
             "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]}, "
@@ -731,7 +690,8 @@ class PearlCDeviceRun(GraphCalls):
                    for u, r, f in zip(cur.matmuls, cur.records, cur.files)]
         head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
                 "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
-                "beacon": self.beacon.hex(), "salt": self.salt.hex(), "cubin_sha256": self.kernel.cubin_sha256,
+                "coins": self.coins.to_json(), "salt_opening": self.opening.to_json(), "salt": self.salt.hex(),
+                "cubin_sha256": self.kernel.cubin_sha256,
                 "kernel_source_sha256": self.kernel.source_sha256, "schedule": self.details["schedule"],
                 "records_root": PW.records_root(self.salt, epoch.weights_root,
                                                 {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}, cur.records).hex(),
