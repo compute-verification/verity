@@ -1476,8 +1476,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if name and anonymous:
         name_instances(pkg, anonymous)
         rep["named_instances"] = [f"{i['file']}:{i['at'][0]} {i['name']}" for i in anonymous]
-        log(f"audit: {pkg}: wrote the names of {len(anonymous)} anonymous instances into "
-            f"{', '.join(sorted({i['file'] for i in anonymous}))}; build and audit again to see that no record changed")
+        fails.append(f"instance: named {len(anonymous)} anonymous instances in "
+                     f"{', '.join(sorted({i['file'] for i in anonymous}))}, so this audit is of sources it has since rewritten: "
+                     f"build and audit again to see that no record changed")
         anonymous = []
     fails += [f"instance: {i['file']}:{i['at'][0]} declares an instance without a name, which Lean names {i['name']} from its "
               f"type (and, when nothing in the type is the project's own, its project's root): a move or a split renames it, and "
@@ -1704,8 +1705,8 @@ def main(argv: list[str]) -> int:
                     "recorded run, else a temporary directory)")
     a = ap.parse_args(argv)
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
-    if not pkgs or (a.all and a.package) or (a.all and a.update):
-        ap.error("name package directories, or --all (which does not --update)")
+    if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):
+        ap.error("name package directories, or --all (which neither updates records nor names instances)")
     moved = None
     if a.moved:
         if not a.update:
