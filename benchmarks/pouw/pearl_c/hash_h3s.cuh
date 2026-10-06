@@ -134,13 +134,14 @@ extern "C" __global__ void __launch_bounds__(32) s512_tile_leaves(const Args a) 
   __shared__ uint64_t dig[32 * 8], qst[8];
   const int cols = a.i[1], tn = cols / 64, t = blockIdx.x;
   const int ti = t / tn, tj = t % tn, R = min(64, a.i[0] - 64 * ti), s = R / 2;
+  const uint64_t pc = a.p[0], pu = a.p[1];   // a runtime index into the parameters would copy them to local memory
   uint64_t st[8], w[16];
   for (int j = threadIdx.x; j < s; j += blockDim.x) {
     rs_header<33, 8>(st, RS_SEG_TAG, (uint64_t)j, (uint64_t)s, 8ull * RS_SEG);
 #pragma unroll 1
     for (int c = 0; c < RS_SEG / 128; c++) {
       const size_t row = 64 * (size_t)ti + 2 * j + c / 4;
-      const uint4* blk = reinterpret_cast<const uint4*>(a.p[c & 1]) + (row * cols + 64 * tj + 32 * (c >> 1 & 1)) / 4;
+      const uint4* blk = reinterpret_cast<const uint4*>(c & 1 ? pu : pc) + (row * cols + 64 * tj + 32 * (c >> 1 & 1)) / 4;
 #pragma unroll
       for (int q = 0; q < 8; q++) {
         const uint4 v = blk[q];
