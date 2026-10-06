@@ -21463,10 +21463,55 @@
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
   },
   "FlockVBridge.chainAcc_level": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.chainAcc_level (LANES : Nat) (kap rows : Array (Array Flock.F128)) (q : Nat) (alpha a : Array Flock.F128)",
+    "  {k : Nat} (hk : instLTNat.lt k 2) :",
+    "  Eq",
+    "    (instHAdd.hAdd",
+    "      (FlockSoundness.Refine.fOf",
+    "        (Array.instGetElem?NatLtSize.getElem!",
+    "          (FlockVBridge.chainAcc LANES kap",
+    "            (List.map",
+    "              (fun j =>",
+    "                { fst := Array.instGetElem?NatLtSize.getElem! (Flock.eqTable alpha) j,",
+    "                  snd := Array.instGetElem?NatLtSize.getElem! rows j })",
+    "              (List.range q))",
+    "            a)",
+    "          k))",
+    "      (FlockSoundness.Refine.fOf (Array.instGetElem?NatLtSize.getElem! a k)))",
+    "    ((Finset.range LANES).sum fun l =>",
+    "      instHMul.hMul",
+    "        (FlockSoundness.Refine.fOf",
+    "          (Array.instGetElem?NatLtSize.getElem! (Array.instGetElem?NatLtSize.getElem! kap k) l))",
+    "        ((Finset.range q).sum fun j =>",
+    "          instHMul.hMul (FlockSoundness.Refine.fOf (Array.instGetElem?NatLtSize.getElem! (Flock.eqTable alpha) j))",
+    "            (FlockSoundness.Refine.fOf",
+    "              (Array.instGetElem?NatLtSize.getElem! (Array.instGetElem?NatLtSize.getElem! rows j) l))))"
+   ],
+   "assumptions": [],
+   "type_hash": "7186bfc70e2dc167478812d1ab18222f0b94f987277d889927609ae898a8f932"
   },
   "FlockVBridge.chainAcc_sum": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.chainAcc_sum (LANES : Nat) (kap : Array (Array Flock.F128))",
+    "  (os : List (Prod Flock.F128 (Array Flock.F128))) (a : Array Flock.F128) {k : Nat} :",
+    "  instLTNat.lt k 2 →",
+    "    Eq (FlockSoundness.Refine.fOf (Array.instGetElem?NatLtSize.getElem! (FlockVBridge.chainAcc LANES kap os a) k))",
+    "      (instHAdd.hAdd (FlockSoundness.Refine.fOf (Array.instGetElem?NatLtSize.getElem! a k))",
+    "        ((Finset.range LANES).sum fun l =>",
+    "          instHMul.hMul",
+    "            (FlockSoundness.Refine.fOf",
+    "              (Array.instGetElem?NatLtSize.getElem! (Array.instGetElem?NatLtSize.getElem! kap k) l))",
+    "            (List.map",
+    "                (fun o =>",
+    "                  instHMul.hMul (FlockSoundness.Refine.fOf o.fst)",
+    "                    (FlockSoundness.Refine.fOf (Array.instGetElem?NatLtSize.getElem! o.snd l)))",
+    "                os).sum))"
+   ],
+   "assumptions": [],
+   "type_hash": "41c90b50991afb3fe0c1cb69d8f3f4b729e62fa355a38a8cb7462a07d61e666a"
   },
   "FlockVBridge.colsHold_words": {
    "owner": "@proofs",
@@ -45547,6 +45592,8 @@
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
     "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockVBridge.chainAcc_level",
+    "FlockVBridge.chainAcc_sum",
     "FlockVBridge.colsHold_words",
     "FlockVBridge.laid_recOpen",
     "FlockVBridge.sound_climbFrom",
@@ -49587,7 +49634,8 @@
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
-    "FlockSoundness.table_sound_exec_fast100_34_35"
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockVBridge.chainAcc_level"
    ]
   },
   "Flock.Program": {
@@ -54054,7 +54102,9 @@
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
-    "FlockSoundness.table_sound_exec_fast100_34_35"
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockVBridge.chainAcc_level",
+    "FlockVBridge.chainAcc_sum"
    ]
   },
   "Proofs.Flock.Level3.Fold": {
@@ -54495,6 +54545,8 @@
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
     "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockVBridge.chainAcc_level",
+    "FlockVBridge.chainAcc_sum",
     "FlockVBridge.colsHold_words",
     "FlockVBridge.sound_mul128",
     "FlockVBridge.sound_residualForms"
@@ -54811,7 +54863,9 @@
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
-    "FlockSoundness.table_sound_exec_fast100_34_35"
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockVBridge.chainAcc_level",
+    "FlockVBridge.chainAcc_sum"
    ]
   },
   "Proofs.Flock.Level3.GF128Ring": {
@@ -55066,7 +55120,9 @@
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
-    "FlockSoundness.table_sound_exec_fast100_34_35"
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockVBridge.chainAcc_level",
+    "FlockVBridge.chainAcc_sum"
    ]
   },
   "Proofs.Flock.Level3.GF256": {
@@ -72650,7 +72706,9 @@
     "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_refines_ofCircuit_hm96",
     "FlockSoundness.Refine.verify_tableAfter",
-    "FlockSoundness.Refine.zerocheck_refines"
+    "FlockSoundness.Refine.zerocheck_refines",
+    "FlockVBridge.chainAcc_level",
+    "FlockVBridge.chainAcc_sum"
    ]
   },
   "Proofs.Flock.Soundness.Registered.Defs": {
@@ -74201,6 +74259,14 @@
     "FlockVBridge.sound_recOpen"
    ]
   },
+  "Proofs.Flock.VBridge.Inputs": {
+   "digest": "5b09a649578c7e30ed61051624917b313a35705aec5a9c40b192a33ea74f7f9a",
+   "definitions": {
+    "FlockVBridge.chainAcc": "01165df50e985d62786fc265e5e87914dd469775a693ca1ee8adb5b3d6001e64",
+    "FlockVBridge.coefAt": "aacaf17ca4716a935bd34bc73377825b4587eb9544be1d403527b8c46ac888b0"
+   },
+   "guarantees": ["FlockVBridge.chainAcc_level", "FlockVBridge.chainAcc_sum"]
+  },
   "Proofs.Flock.VBridge.Karatsuba": {
    "digest": "12706ec9a508498e92595e6049ffe2499f370c0b498e8266b7b77abc64d38d5b",
    "definitions": {
@@ -74253,7 +74319,12 @@
     "FlockVBridge.consTerm": "b80175e494b438e7f9bc40a60efc00dfd5ca2dfe3a3e8a945fc445dd370b445d",
     "FlockVBridge.recOpen": "42970f59868957be34b38d39d1d34363bc3a7afb762240b7e09c1d182af13fca"
    },
-   "guarantees": ["FlockVBridge.laid_recOpen", "FlockVBridge.sound_recOpen"]
+   "guarantees": [
+    "FlockVBridge.chainAcc_level",
+    "FlockVBridge.chainAcc_sum",
+    "FlockVBridge.laid_recOpen",
+    "FlockVBridge.sound_recOpen"
+   ]
   },
   "Proofs.Flock.VBridge.Residuals": {
    "digest": "82306f6d55a705c0da8c74b9edcf7cac37a38113296a81f9c33dab05190399ad",
