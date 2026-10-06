@@ -22,7 +22,8 @@ one. `registered_v2_nonvacuous`: at every circuit whose unit meets `scopeOk`'s u
 `scopeOkV2` admits it, `Layout.scopeOk` refuses it, and every registered port naming one of its rows with that row's
 bits passes the registered check's port test (`Registered.check_ok`'s `p < c.ports.size`, the name and `Port.fits`).
 `witness`: one such circuit, a unit of one 1,024-bit input row whose one computed row reads two of the row's bits, with
-a registered port on that row; its conditions are checked by evaluation.
+a registered port on that row; its conditions are checked by evaluation. `registered_v2_nonvacuousH` and `witnessH` are
+the same at `scopeOkHV2`, the hidden-output statements' scope, which also asks one output port per output row.
 -/
 
 namespace FlockSoundness.Discharge.ZkRegV2
@@ -183,6 +184,54 @@ theorem witness :
       witnessReg.fits (v2Rows witnessCircuit).ports[0]! = true := by
   obtain ⟨h1, ho, hu, hpr, hw, hp, hname, hb⟩ := witness_conditions
   obtain ⟨-, h2, h3, h4, h5, h6⟩ := registered_v2_nonvacuous h1 ho hu hpr hw witnessReg hp hname hb
+  exact ⟨h2, h3, h4, h5, h6⟩
+
+/-! ## Hidden outputs -/
+
+/-- **`scopeOkHV2` admits `v2Rows c`** when `c` also has one output port per output row, as the composer writes a
+hidden-output statement (`v2Rows` keeps the output rows' ports). -/
+theorem scopeOkHV2_v2Rows {c : Circuit} (h1 : c.unit.inGroups.size = 1) (ho : c.outNet = c.unitNet)
+    (hu : c.unit.unitLog ≤ 32) (hpr : Layout.portReadsB c.unit = true)
+    (hw : ∀ p ∈ c.ports.toList, 2 * p.words = 128 * p.chunks)
+    (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) : scopeOkHV2 (v2Rows c) = true := by
+  unfold scopeOkHV2
+  rw [scopeOkV2_v2Rows h1 ho hu hpr hw]
+  simp only [Bool.true_and, beq_iff_eq]
+  exact hr
+
+/-- **The hidden-output v2 registered statements' circuit premises hold together**: `registered_v2_nonvacuous` with
+`scopeOkHV2`, at a circuit with one output port per output row. -/
+theorem registered_v2_nonvacuousH {c : Circuit} (h1 : c.unit.inGroups.size = 1) (ho : c.outNet = c.unitNet)
+    (hu : c.unit.unitLog ≤ 32) (hpr : Layout.portReadsB c.unit = true)
+    (hw : ∀ p ∈ c.ports.toList, 2 * p.words = 128 * p.chunks)
+    (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
+    (reg : Registered.Port) {p : ℕ} (hp : p < c.ports.size) (hname : c.ports[p]!.name = reg.name)
+    (hb : 16 * c.ports[p]!.words = reg.words * reg.wordBits) :
+    (v2Rows c).unit = c.unit ∧ scopeOkHV2 (v2Rows c) = true ∧ Layout.scopeOk (v2Rows c) = false ∧
+      p < (v2Rows c).ports.size ∧ (v2Rows c).ports[p]!.name = reg.name ∧ reg.fits (v2Rows c).ports[p]! = true := by
+  obtain ⟨hU, -, h3⟩ := registered_v2_nonvacuous h1 ho hu hpr hw reg hp hname hb
+  exact ⟨hU, scopeOkHV2_v2Rows h1 ho hu hpr hw hr, h3⟩
+
+/-- `witnessCircuit` with its output `y` in an output row of its own, as the composer writes a hidden-output statement:
+the row after the input row, of 64 u16 words (its one output word zero-padded to a whole SHA-512 block), one output
+port per output row. -/
+def witnessCircuitH : Circuit :=
+  { witnessCircuit with
+    ports := #[{ name := "w", words := 64, chunks := 1, nb := 1 }, { name := "y", words := 64, chunks := 1, nb := 1 }]
+    outRowPorts := #[1] }
+
+/-- **A hidden-output circuit with a registered port that the v2 statements' circuit premises admit together**:
+`v2Rows witnessCircuitH` is admitted by `scopeOkHV2`, refused by `Layout.scopeOk`, and passes the registered check's
+port test for `witnessReg` at its input row. -/
+theorem witnessH :
+    scopeOkHV2 (v2Rows witnessCircuitH) = true ∧ Layout.scopeOk (v2Rows witnessCircuitH) = false ∧
+      0 < (v2Rows witnessCircuitH).ports.size ∧ (v2Rows witnessCircuitH).ports[0]!.name = witnessReg.name ∧
+      witnessReg.fits (v2Rows witnessCircuitH).ports[0]! = true := by
+  obtain ⟨h1, ho, hu, hpr, -⟩ := witness_conditions
+  have hw : ∀ p ∈ witnessCircuitH.ports.toList, 2 * p.words = 128 * p.chunks := by decide +kernel
+  have hr : witnessCircuitH.outRowPorts = Array.replicate witnessCircuitH.outPorts.size 1 := by decide +kernel
+  obtain ⟨-, h2, h3, h4, h5, h6⟩ := registered_v2_nonvacuousH (c := witnessCircuitH) h1 ho hu hpr hw hr witnessReg
+    (p := 0) (by decide +kernel) (by decide +kernel) (by decide +kernel)
   exact ⟨h2, h3, h4, h5, h6⟩
 
 end FlockSoundness.Discharge.ZkRegV2

@@ -14,6 +14,8 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 import Proofs.Flock.Soundness.Discharge.ZkReg.NonVacuousHJ
 import Proofs.Flock.Soundness.Discharge.ZkRegV2.Sound
+import Proofs.Flock.Soundness.Discharge.ZkRegV2.SoundH
+import Proofs.Flock.Soundness.Discharge.ZkRegV2.SoundHCustody
 import Proofs.Flock.Soundness.Discharge.ZkRegV2.NonVacuous
 
 /-!
@@ -33,4 +35,9 @@ is drawn into (`OwnReadsHJ`, `regPathsHJ`); `BindHJ`, the `J`-table rows without
 `CheckedHJ`, `checked_of_acceptsHJ`; `SoundHJ`: `zk_session_soundHJR`; `SoundHJCustody`: `drawOkZKHJ_of_file` and
 `zk_session_soundHJR_custody`, under `live-verifier`; `NonVacuousHJ`: their reference setup and draw hypotheses
 satisfiable together.
+
+At `sha512/row/v2` rows, the rows the registered check admits (`ZkRegV2/`): `scopeOkV2` and, at hidden outputs,
+`scopeOkHV2` in place of `Layout.scopeOk`, which admits `sha512/row/v1` rows only; `zk_session_soundRV2`,
+`zk_session_soundHRV2` and `zk_session_soundHR_custodyV2`; `ZkRegV2.NonVacuous`: their circuit premises and the
+registered check's port test hold together, and at `Layout.scopeOk` the registered check refuses every registered port.
 -/

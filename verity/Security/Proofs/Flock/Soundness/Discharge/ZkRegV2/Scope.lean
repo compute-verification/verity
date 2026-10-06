@@ -41,4 +41,33 @@ theorem scopeOkV2_ports {c : Circuit} (h : scopeOkV2 c = true) :
   obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h.2 p (Array.mem_toList_iff.1 hp)
   exact ⟨h1, h2, h3, h4⟩
 
+/-! ## Hidden outputs -/
+
+/-- **The hidden-output circuits `rs` covers with `sha512/row/v2` rows**: `scopeOkV2`, and one output port per output
+row (`outRowPorts`), as C-Flock's composer writes a hidden-output statement's output rows (`out_row`, no
+`out_row_ports`). At `sha512/row/v1` rows `HmOut.checkRows` gives the second (`Hidden.out_rows_v1`); a `sha512/row/v2`
+output row may hold a run of output ports, which `Hidden.OutRows` does not cover. -/
+def scopeOkHV2 (c : Circuit) : Bool :=
+  scopeOkV2 c && c.outRowPorts == Array.replicate c.outPorts.size 1
+
+theorem scopeOkHV2_v2 {c : Circuit} (h : scopeOkHV2 c = true) : scopeOkV2 c = true := by
+  unfold scopeOkHV2 at h
+  simp only [Bool.and_eq_true] at h
+  exact h.1
+
+/-- **`scopeOkHV2` gives one output port per output row.** -/
+theorem scopeOkHV2_rows {c : Circuit} (h : scopeOkHV2 c = true) :
+    c.outRowPorts = Array.replicate c.outPorts.size 1 := by
+  unfold scopeOkHV2 at h
+  simp only [Bool.and_eq_true, beq_iff_eq] at h
+  exact h.2
+
+theorem scopeOkHV2_spec {c : Circuit} (hU : Built c.unit) (h : scopeOkHV2 c = true) :
+    c.unit.inGroups.size = 1 ∧ c.outNet = c.unitNet ∧ PortReads c hU :=
+  scopeOkV2_spec hU (scopeOkHV2_v2 h)
+
+theorem scopeOkHV2_ports {c : Circuit} (h : scopeOkHV2 c = true) :
+    ∀ p ∈ c.ports.toList, p.v2 = true ∧ p.segs = none ∧ p.bits = 16 * p.words ∧ 2 * p.words = 128 * p.chunks :=
+  scopeOkV2_ports (scopeOkHV2_v2 h)
+
 end FlockSoundness.Discharge.ZkRegV2
