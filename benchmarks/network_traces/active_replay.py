@@ -71,9 +71,10 @@ import subprocess
 import sys
 import time
 import zlib
+from array import array
 from collections import Counter, defaultdict
 from collections.abc import Sequence
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
 from fractions import Fraction
 from pathlib import Path
 
@@ -805,69 +806,84 @@ async def _server(plan: dict, params: dict, conn, out: Path) -> None:
     write_logs(out, server=server)
 
 
-def prover_args(plan: dict, setup: Setup, threaded: bool = True) -> dict:
+def prover_args(plan: dict, setup: Setup, background: bool = True) -> dict:
     """The proxy's advice: the plan's syncs, or, under an online rule, its own prover's over the plan's windows (a
     `LaggedProver` under `plan["prover_lag"]`)."""
     if "sync_rule" not in plan:
         return {"syncs": [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]}
     args = (setup.sync_set, setup.egress_params.buckets, online.rule(plan["sync_rule"]), setup.envelope)
     if plan.get("prover_lag"):
-        prover = LaggedProver(*args, lag=plan["prover_lag"], threaded=threaded)
+        prover = LaggedProver(*args, lag=plan["prover_lag"], background=background)
     else:
         prover = online.Prover(*args)
     return {"syncs": [], "prover": prover, "windows": plan["windows"]}
+
+
+def _warm() -> None:
+    pass
+
+
+def _lagged_choice(sync_set: SyncSet, T: int, rule: str, envelope: ClockSync, lag: int, w: int, anchor, index, ready,
+                   syncs: list) -> tuple[ClockSync, float]:
+    """Window w's sync under `rule` on the frames ready by w·T − lag, and the milliseconds it took."""
+    t0 = time.perf_counter()
+    n = bisect.bisect_right(ready, w * T - lag)  # canonical order is by ready bucket first
+    p = online.Prover(sync_set, T, online.rule(rule), envelope)
+    p.links[0].anchor, p.links[0].index, p.links[0].ready = list(anchor[:n]), list(index[:n]), list(ready[:n])
+    p.syncs = syncs[:w]
+    return p.declare(), round((time.perf_counter() - t0) * 1000, 1)
 
 
 class LaggedProver(online.Prover):
     """The online prover with its choice taken off the proxy's tick: `Prover.declare` costs every value of Σ_sync over
     the recent windows' frames (hundreds of ms on a live configuration, against a slack of tens), and the proxy's tick
     at a window's first bucket would wait for it. Here window w's sync is the rule's on the frames ready by w·T − lag,
-    chosen in a worker thread that `run` starts just after that bucket's tick (`start`); `declare` at w·T takes it, or
-    the envelope when it isn't ready (`log["unready"]`), so the tick never waits. Window 0 has no history: the
-    envelope. `threaded=False` chooses at `start`, for a driver on a virtual clock."""
+    chosen in a worker process that `run` starts just after that bucket's tick (`start`), so that the choice holds
+    neither the proxy's loop nor its GIL; `declare` at w·T takes it, or the envelope when it isn't ready
+    (`log["unready"]`), so the tick never waits. Window 0 has no history: the envelope. `background=False` chooses at
+    `start`, for a driver on a virtual clock."""
 
     def __init__(self, sync_set: SyncSet, window_buckets: int, rule: online.Rule, envelope: ClockSync, lag: int,
-                 threaded: bool = True) -> None:
+                 background: bool = True) -> None:
         super().__init__(sync_set, window_buckets, rule, envelope)
         if not 0 < lag < window_buckets:
             raise ValueError("the prover's lag is 1 … T−1 buckets")
-        self.lag, self.threaded = lag, threaded
+        self.lag = lag
         self._next: tuple[int, Future] | None = None
-        self._pool = ThreadPoolExecutor(1) if threaded else None
+        self._pool = None
+        if background:
+            self._pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
+            self._pool.submit(_warm)
         self.log = {"lag": lag, "unready": [], "choose_ms": []}
         self.started = 0
 
     def start(self, w: int) -> None:
         link = self.links[0]
         n = len(link.ready)
-        snapshot = (link.anchor[:n], link.index[:n], link.ready[:n], list(self.syncs))
+        args = (self.sync_set, self.T, self.rule.name, self.envelope, self.lag, w, array("q", link.anchor[:n]),
+                array("q", link.index[:n]), array("q", link.ready[:n]), list(self.syncs))
         if self._pool is None:
             future = Future()
-            future.set_result(self._choose(w, *snapshot))
+            future.set_result(_lagged_choice(*args))
         else:
-            future = self._pool.submit(self._choose, w, *snapshot)
+            future = self._pool.submit(_lagged_choice, *args)
         self._next = (w, future)
         self.started += 1
-
-    def _choose(self, w: int, anchor: list, index: list, ready: list, syncs: list) -> ClockSync:
-        t0 = time.perf_counter()
-        n = bisect.bisect_right(ready, w * self.T - self.lag)  # canonical order is by ready bucket first
-        p = online.Prover(self.sync_set, self.T, self.rule, self.envelope)
-        p.links[0].anchor, p.links[0].index, p.links[0].ready = anchor[:n], index[:n], ready[:n]
-        p.syncs = syncs[:w]
-        sync = p.declare()
-        self.log["choose_ms"].append(round((time.perf_counter() - t0) * 1000, 1))
-        return sync
 
     def declare(self) -> ClockSync:
         w = len(self.syncs)
         sync = self.envelope
         if w and self._next is not None and self._next[0] == w and self._next[1].done():
-            sync = self._next[1].result()
+            sync, ms = self._next[1].result()
+            self.log["choose_ms"].append(ms)
         elif w:
             self.log["unready"].append(w)
         self.syncs.append(sync)
         return sync
+
+    def close(self) -> None:
+        if self._pool is not None:
+            self._pool.shutdown(wait=False, cancel_futures=True)
 
     async def run(self, origin: float, tau: float, windows: int, clock=time.monotonic, sleep=asyncio.sleep,
                   notify=lambda: None) -> None:
@@ -954,11 +970,11 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
     if stalls:
         proxy._changed = Stalls(proxy, stalls, pause)
     if isinstance(prover := advice.get("prover"), LaggedProver):
-        sys.setswitchinterval(0.001)
         lagged = asyncio.create_task(prover.run(origin, setup.egress_params.bucket_ms / 1000, plan["windows"]))
     await done
     if isinstance(prover, LaggedProver):
         lagged.cancel()
+        prover.close()
     listening.close()
     publish.close()
     write_logs(out, proxy=proxy)
@@ -1079,7 +1095,7 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     peer = Peer(plan, params, clock, clock.sleep, notify)
     listening = await asyncio.start_server(server.handle, "127.0.0.1", 0)
     publish = Publisher(out, setup, threaded=False)
-    advice = prover_args(plan, setup, threaded=False)
+    advice = prover_args(plan, setup, background=False)
     if isinstance(prover := advice.get("prover"), LaggedProver):
         lagged = asyncio.create_task(prover.run(0.0, e.bucket_ms / 1000, plan["windows"], clock, clock.sleep, notify))
     proxy = holder["proxy"] = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, advice.pop("syncs"),

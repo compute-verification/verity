@@ -223,7 +223,7 @@ def test_a_lagged_prover_declares_off_the_tick_and_is_accepted(setup, tmp_path):
 
 def test_a_lagged_prover_with_no_choice_ready_declares_the_envelope(setup):
     _, _, s = setup
-    p = ar.LaggedProver(s.sync_set, T, ar.online.rule("last"), s.envelope, lag=5, threaded=False)
+    p = ar.LaggedProver(s.sync_set, T, ar.online.rule("last"), s.envelope, lag=5, background=False)
     assert p.declare() == s.envelope and p.declare() == s.envelope and p.log["unready"] == [1]
     with pytest.raises(ValueError):
         ar.LaggedProver(s.sync_set, T, ar.online.rule("last"), s.envelope, lag=T)
