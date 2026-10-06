@@ -2,7 +2,8 @@
 // one per SM, each owning `per` digits and computing its columns (owned plus 4 below) as pairs (k, k+1).
 //   phase 1  warp w takes pair w; its iterations (the low run, then the high run: 315, or 316 for k = 631, 632) are
 //            interleaved over the lanes (run_pair_il), with the products the pair's runs leave out in the last
-//            iteration's free lanes
+//            iteration's free lanes; the two partners d[m], d[m+1] come in one 8-byte load, from a copy of the vector
+//            shifted by one word when m is odd (PAIR64; arrival writes both copies)
 //   phase 2  a shuffle reduce-scatter: at offset 16 lanes 0..15 keep column k's two sums and 16..31 column k+1's, then
 //            offsets 8..1; lane 0 (column k) and lane 16 (column k+1) each double, add the square, fold T = S_lo + c' S_hi and cut it into chunks
 //   phase 3  one thread per 4 owned digits: the carry passes, then a 16-byte relaxed.gpu store of the tagged digits into
@@ -29,6 +30,9 @@
 #ifndef REPL
 #define REPL 8
 #endif
+#ifndef PAIR64
+#define PAIR64 1
+#endif
 #ifndef LB
 #define LB 512
 #endif
@@ -39,6 +43,12 @@ static const uint32_t VMASK = (1u << 27) - 1;
 static const uint32_t CP = 21065u << 10;
 static const int PADL = 64, PADR = 96;
 static const int DLEN = PADL + ND4 + PADR;
+#if PAIR64
+static const int SB = 1616;                         // shifted copy: 8-byte aligned, 16 banks from D
+#else
+static const int SB = 2 * DLEN;
+#endif
+static const int SHLEN = PAIR64 ? 2 * DLEN : 0;
 static const int HALO = 4;
 static const int MAXCOLS = 640;
 static const int RSTR = 1056;                       // words between replicas of the exchange vector
@@ -62,7 +72,7 @@ __device__ __forceinline__ uint64_t shfl64(uint64_t v, int o) {
 // and conflict 2 to 4 ways). T is 315 or 316, so iterations 0..8 are full and the 10th leaves 4 or 5 lanes free; those
 // take the pair's (at most 3) left-out products, so its operands come from per-lane indices (ii9, ia9, ib9; ZERO reads
 // a zero digit). The count is fixed and unrolled: a runtime-count loop measured 2 to 3 times slower (probe3).
-__device__ __forceinline__ void run_pair_il(const uint32_t *cur, int k, int L0, int lane, int ii9, int ia9, int ib9, bool lo9,
+__device__ __forceinline__ void run_pair_il(const uint32_t *cur, const uint32_t *csh, int k, int L0, int lane, int ii9, int ia9, int ib9, bool lo9,
                                             uint64_t &l0, uint64_t &l1, uint64_t &h0, uint64_t &h1) {
   const int hoff = k + 2 - L0, kh = k + ND;
   #pragma unroll
@@ -70,7 +80,13 @@ __device__ __forceinline__ void run_pair_il(const uint32_t *cur, int k, int L0, 
     const int j = lane + 32 * t;
     const bool lo = j < L0;
     const int i = lo ? j : j + hoff, b = lo ? k : kh;
-    const uint32_t di = cur[i], w0 = cur[b - i], w1 = cur[b + 1 - i];
+    const int m = b - i;
+#if PAIR64
+    const uint2 ww = *(const uint2 *)((m & 1) ? csh + m - 1 : cur + m);
+    const uint32_t di = cur[i], w0 = ww.x, w1 = ww.y;
+#else
+    const uint32_t di = cur[i], w0 = cur[m], w1 = cur[m + 1];
+#endif
     if (lo) { l0 = madw(di, w0, l0); l1 = madw(di, w1, l1); } else { h0 = madw(di, w0, h0); h1 = madw(di, w1, h1); }
   }
   const uint32_t di = cur[ii9], w0 = cur[ia9], w1 = cur[ib9];
@@ -85,7 +101,8 @@ __global__ void __launch_bounds__(LB, 1) chain_kernel(const uint32_t *__restrict
   extern __shared__ __align__(16) unsigned char smem[];
   const int tpb = blockDim.x, tid = threadIdx.x, g = blockIdx.x, w = tid >> 5, lane = tid & 31;
   uint32_t *D = (uint32_t *)smem;                                   // [2][DLEN]; digit x at PADL + x
-  uint4 *T4 = (uint4 *)(smem + 2 * DLEN * 4);                       // [MAXCOLS]
+  uint32_t *SH = (uint32_t *)smem + SB;                             // [2][DLEN]; digit x + 1 at PADL + x (PAIR64)
+  uint4 *T4 = (uint4 *)((uint32_t *)smem + SB + SHLEN);             // [MAXCOLS]
 
   const int a = min(ND, g * per), nown = min(ND, a + per) - a;
   const int kstart = ((a - HALO) % ND + ND) % ND, ncols = nown + HALO;
@@ -94,6 +111,7 @@ __global__ void __launch_bounds__(LB, 1) chain_kernel(const uint32_t *__restrict
     int x = q - PADL;
     uint32_t v = (x >= 0 && x < ND) ? xin[x] : 0;
     D[q] = v; D[DLEN + q] = v;
+    if (PAIR64 && q > 0) { SH[q - 1] = v; SH[DLEN + q - 1] = v; }
   }
   const bool p1 = w < NP;
   const int k = (kstart + 2 * w) % ND;
@@ -138,13 +156,15 @@ __global__ void __launch_bounds__(LB, 1) chain_kernel(const uint32_t *__restrict
   for (int step = 0; step < nsteps; step++) {
     const uint32_t *cur = D + (step & 1) * DLEN + PADL;
     uint32_t *nxt = D + ((step + 1) & 1) * DLEN + PADL;
+    const uint32_t *csh = SH + (step & 1) * DLEN + PADL;
+    uint32_t *nsh = SH + ((step + 1) & 1) * DLEN + PADL;
 #ifdef PROF
     unsigned long long q0 = clock64();
 #endif
     if (p1) {
       uint64_t l0 = 0, l1 = 0, h0 = 0, h1 = 0;
       const uint32_t hsq = cur[sqi];
-      run_pair_il(cur, k, L0, lane, ii9, ia9, ib9, lo9, l0, l1, h0, h1);
+      run_pair_il(cur, csh, k, L0, lane, ii9, ia9, ib9, lo9, l0, l1, h0, h1);
 #ifdef PROF
       pacc[0] += clock64() - q0;
 #endif
@@ -198,7 +218,9 @@ __global__ void __launch_bounds__(LB, 1) chain_kernel(const uint32_t *__restrict
       do {
         asm volatile("ld.relaxed.gpu.global.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(Gr + q) : "memory");
       } while (((v.x & ~VMASK) != tag) | ((v.y & ~VMASK) != tag) | ((v.z & ~VMASK) != tag) | ((v.w & ~VMASK) != tag));
-      *(uint4 *)&nxt[q] = make_uint4(v.x & VMASK, v.y & VMASK, v.z & VMASK, v.w & VMASK);
+      const uint4 dv = make_uint4(v.x & VMASK, v.y & VMASK, v.z & VMASK, v.w & VMASK);
+      *(uint4 *)&nxt[q] = dv;
+      if (PAIR64) { nsh[q - 1] = dv.x; *(uint2 *)&nsh[q] = make_uint2(dv.y, dv.z); nsh[q + 2] = dv.w; }
     }
     __syncthreads();
 #ifdef PROF
@@ -227,7 +249,7 @@ int main(int argc, char **argv) {
   CK(cudaMalloc(&dx, ND * 4)); CK(cudaMalloc(&dy, ND * 4)); CK(cudaMalloc(&dG, 2 * REPL * RSTR * 4)); CK(cudaMalloc(&dtm, 8 * 80));
   CK(cudaMemset(dtm, 0, 8 * 80));
   CK(cudaMemcpy(dx, x.data(), ND * 4, cudaMemcpyHostToDevice));
-  size_t sm = (size_t)2 * DLEN * 4 + MAXCOLS * 16;
+  size_t sm = (size_t)(SB + SHLEN) * 4 + MAXCOLS * 16;
   CK(cudaFuncSetAttribute(chain_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)sm));
   int nb = 0; CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&nb, chain_kernel, tpb, sm));
   cudaDeviceProp p; CK(cudaGetDeviceProperties(&p, 0));
