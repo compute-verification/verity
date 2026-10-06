@@ -24302,6 +24302,9 @@
    "assumptions": [],
    "type_hash": "d08db742928617c2330b2b99e9b084caa26a37884feb0fdcad9673ccae288fc8"
   },
+  "Pouw.PearlC.pearlCGammaDevRev1KRowSeedAt": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.PearlC.pearlCGammaDevRev1RowSeedAt": {
    "owner": "@compute-accounting",
    "signature": [
@@ -25505,6 +25508,9 @@
    "assumptions": [],
    "type_hash": "a6de20d828e025c4f774620adea2fd8f804ebaa971c2f94eacf985edfa6693e6"
   },
+  "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1_16384": {
    "owner": "@compute-accounting",
    "signature": [
@@ -26537,6 +26543,12 @@
    "assumptions": [],
    "type_hash": "b276de57012d9589f560c1eb1b9aac07ced7f573e6730105ed0644faf931b819"
   },
+  "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.PearlC.pearlCSampledDevChainCapKAt": {
    "owner": "@compute-accounting",
    "signature": [
@@ -26657,6 +26669,9 @@
    ],
    "assumptions": [],
    "type_hash": "aa5b77d98c8d390d72121aaf1dd71f03750c1b550dcfc45ac72154e1c8b98eba"
+  },
+  "Pouw.PearlC.pearlCSampledDevRev1KRowSeedAt": {
+   "owner": "@compute-accounting"
   },
   "Pouw.PearlC.pearlCSampledDevRev1RowSeedAt": {
    "owner": "@compute-accounting",
@@ -28019,6 +28034,12 @@
    ],
    "assumptions": [],
    "type_hash": "c8bb8bae5af7456f4d79b04960c3b67c71d75866fcc83417ee9ef26dc696939e"
+  },
+  "Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192": {
+   "owner": "@compute-accounting"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72Rev1_16384": {
    "owner": "@compute-accounting",
