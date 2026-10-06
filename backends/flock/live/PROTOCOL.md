@@ -718,7 +718,7 @@ note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2), and
 proofs is needed.
 
 **The bound.** A session of `M_p` messages ends finished, never opened, stopped after its `k`-th message (`k < M_p`), or (an
-outer session) rejected by serve's verdict. Without the relay, an outer stop shows also whether `Finish` came. Through the
+outer session) rejected by serve's verdict. Without the relay, an outer stop also shows whether `Finish` came. Through the
 relay it does not, and a session cut before its first request is one never opened (the relay connects to the challenger only
 at that request), so every session has at most `M_p + 1` stops. Counted from serve's and the proxy's records of one recursive
 session at K = 4096 (2 reps a session): the inner session's 286 messages (139 rounds a rep) and the outer sessions' 268, 266,
