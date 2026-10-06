@@ -23,7 +23,7 @@
 #      The Rust side's verdicts: the --zk session's own (prove.out) and each selftest case's (NEG lines).
 set -uo pipefail
 SRC=$(pwd)
-J=$SRC/benchmarks/pouw/served_zk
+Z=$SRC/benchmarks/pouw/served_zk   # not J: hidden_zk/job.sh sets J to its own directory
 export HZ_CONFIGS=served HZ_N=1 HZ_MEM_GB=${HZ_MEM_GB:-96} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ_WARM:-0}
 export HZ_CASES=${HZ_CASES:-honest message_byte_differs_from_the_committed_row output_row_committed_false unit_internal_bit_flipped}
 # shellcheck source=../hidden_zk/job.sh
@@ -31,7 +31,7 @@ source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
 export PYTHONPATH=$SRC:$SRC/catalog:$SRC/kernels:$SRC/experimental:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/backends/flock/python
-SC="$J/served_commit.py"
+SC="$Z/served_commit.py"
 
 setup
 log "served-zk: passes $PASSES"
@@ -57,7 +57,7 @@ mkdir -p "$D" "$O" "$DO"
 for x in "request $D draw.json" "other $DO draw-other.json"; do
   read -r p dir dr <<< "$x"
   log "stage: $p"
-  $TIME "$OUT/stage-$p.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $J/stage_tile.py $W/$p $OUT/$dr $dir" > "$OUT/stage-$p.out" 2>&1 \
+  $TIME "$OUT/stage-$p.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $Z/stage_tile.py $W/$p $OUT/$dr $dir" > "$OUT/stage-$p.out" 2>&1 \
     || { log "stage FAILED: $(tail -3 "$OUT/stage-$p.out")"; exit 4; }
   cp "$dir/stage.json" "$OUT/$p/stage.json"; cp "$dir/opening.json" "$dir/pin.txt" "$OUT/$p/"; cp "$dir/pub.bin" "$OUT/$p/pub.bin"
 done
