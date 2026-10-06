@@ -756,9 +756,14 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
     """The reads check: every definition a guarantee's statement reads (`reads` under `meaning`, and `outside` it where the
     walk stops) lies in a spec module of its package or of a package it requires by path (``home``, `homes`), and the record
     holds it (its module is under `meaning`), or it is a pinned dependency's.  Theorems are not read: a statement means
-    what it means whatever proves the propositions inside it.  A module under a `reads_exempt` prefix is exempt, with the
-    reason; an entry that exempts nothing fails."""
+    what it means whatever proves the propositions inside it.  A module outside the spec under a `reads_exempt` prefix
+    ({prefix: the reason}) is exempt; an entry that exempts no such read fails, and an exemption never covers a spec module
+    outside `meaning` (the record would hold nothing of it)."""
     exempt, meaning = policy.get("reads_exempt", {}), policy.get("meaning", policy["roots"])
+    if not isinstance(exempt, dict):
+        return [f"reads: `reads_exempt` is {json.dumps(exempt)}; it is an object {{module prefix: the reason}}"]
+    if unreasoned := sorted(p for p, why in exempt.items() if not p or not isinstance(why, str) or not why.strip()):
+        return [f"reads: `reads_exempt` lists {', '.join(map(json.dumps, unreasoned))} without a module prefix and a reason"]
     bad: dict[tuple[str, str], tuple[set[str], set[str]]] = {}
     used: set[str] = set()
     for g, f in sorted(facts["pins"].items()):
@@ -767,10 +772,10 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
         for name, m in [*((r["name"], r["module"]) for r in f.get("reads", [])), *map(tuple, f.get("outside", []))]:
             if m not in home:
                 continue
-            if hit := {p for p in exempt if under([p], m)}:
+            why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
+            if why == "spec" and (hit := {p for p in exempt if under([p], m)}):
                 used |= hit
                 continue
-            why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
             if why:
                 defs, by = bad.setdefault((m, why), (set(), set()))
                 defs.add(parent(name))
