@@ -1,8 +1,9 @@
 """`verity_flock.rec_shape`, outer proofs of one fixed shape: on rec-algebra's fixture session (`test_rec_vstage`'s), the cap's
 statements are exactly the ones V* stages over a session of the cap's shape, and a session of another shape (another instance
 count, other claims, a level whose openings are not the schedule's) is refused before anything is staged; on a small
-Gemm_v2 tile class, a statement padded to the cap (`class_statement --real`) has the cap's shape, its real tiles' rows and
-outputs are the unpadded statement's, and `forge_filler` moves one bit of one filler's output row alone."""
+Gemm_v2 class, in both layouts (tiles and one coordinate an instance), a statement padded to the cap (`class_statement
+--real`) has the cap's shape, its real instances' outputs are the unpadded statement's, and `forge_filler` moves one bit of
+one filler's output row alone."""
 from __future__ import annotations
 
 import hashlib
@@ -80,8 +81,9 @@ def test_a_level_that_is_not_the_schedules_is_refused(inner):
 
 
 @pytest.fixture(scope="module")
-def tiles(tmp_path_factory):
-    """A Gemm_v2{K=64} GemmCoordinate class staged as 4 x 4 tiles at 8 instances, unpadded and with 5 real tiles."""
+def staged(tmp_path_factory):
+    """A Gemm_v2{K=64} GemmCoordinate class staged in both layouts, 4 x 4 tiles (``tile``, `stage_tiled`) and one coordinate an
+    instance (``unit``, `stage`): at 8 and at 5 instances unpadded, and padded to 8 with 5 real."""
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU
 
@@ -91,14 +93,20 @@ def tiles(tmp_path_factory):
     units = PU.partition_units(program, "q-word")
     ((s, cl),) = units.classes().items()
     key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": "test", "seed": 0})
-    salt = hashlib.sha256(b"test").digest()
+    salt, shared = hashlib.sha256(b"test").digest(), CS.broadcast_params(units)
     out = {}
-    for name, real in (("plain", None), ("padded", 5)):
-        lanes = CS.class_lanes(units, cl, key, (real or 8) * 8, CS.broadcast_params(units))
-        d = tmp_path_factory.mktemp(name)
-        out[name] = (d, CS.stage_tiled(units, "q-word", s, cl, lanes, d, salt, 4, 4, 8, real))
+    for name, lanes_n, n, real in (("plain", 8, 8, None), ("five", 5, 5, None), ("padded", 5, 8, 5)):
+        d = tmp_path_factory.mktemp(f"tile-{name}")
+        lanes = CS.class_lanes(units, cl, key, lanes_n * 8, shared)
+        out["tile", name] = (d, n, CS.stage_tiled(units, "q-word", s, cl, lanes, d, salt, 4, 4, n, real))
+        d = tmp_path_factory.mktemp(f"unit-{name}")
+        lanes = CS.class_lanes(units, cl, key, lanes_n, shared)
+        out["unit", name] = (d, n, CS.stage(units, "q-word", s, cl, lanes, d, salt, pad=8 if real else None))
     with pytest.raises(ValueError, match="--real 9"):
-        CS.stage_tiled(units, "q-word", s, cl, lanes, tmp_path_factory.mktemp("bad"), salt, 4, 4, 8, 9)
+        CS.stage_tiled(units, "q-word", s, cl, CS.class_lanes(units, cl, key, 72, shared), tmp_path_factory.mktemp("bad"),
+                       salt, 4, 4, 8, 9)
+    with pytest.raises(ValueError, match="padded to 4"):
+        CS.stage(units, "q-word", s, cl, CS.class_lanes(units, cl, key, 5, shared), tmp_path_factory.mktemp("bad"), salt, pad=4)
     return out
 
 
@@ -114,26 +122,28 @@ def _header(d: Path, n: int) -> dict:
 
 
 @pytest.mark.slow
-def test_a_padded_statement_has_the_caps_shape_and_its_real_tiles(tiles):
-    """Padded to 8 instances with 5 real tiles, the statement is the unpadded one's shape (its circuit, its instance count),
-    its real tiles' output rows are the unpadded statement's, and its three fillers write one row and add one committed row,
-    zero, to each port."""
-    (dp, plain), (dq, padded) = tiles["plain"], tiles["padded"]
+@pytest.mark.parametrize("layout", ["tile", "unit"])
+def test_a_padded_statement_has_the_caps_shape_and_its_real_instances(staged, layout):
+    """Padded to 8 instances with 5 real, the statement is the unpadded 8's shape (its circuit, its instance count), its real
+    instances' output rows are the unpadded statement's, and its three fillers write one output row and add one committed
+    row to each port: the padded statement's tables are the unpadded 5's and one row more."""
+    (dp, _, plain), (d5, _, five), (dq, _, padded) = (staged[layout, k] for k in ("plain", "five", "padded"))
     assert (padded["real"], padded["fillers"], padded["n"]) == (5, 3, 8) and "real" not in plain
-    assert padded["circuit_sha512"] == plain["circuit_sha512"] and S.instances(dq / "pub-8.bin") == 8
+    assert padded["circuit_sha512"] == plain["circuit_sha512"] == five["circuit_sha512"] and S.instances(dq / "pub-8.bin") == 8
     assert S.shape(S.meta(dq / "circuit.txt"), 8) == S.shape(S.meta(dp / "circuit.txt"), 8)
     a, b = _out_rows(dp, 8), _out_rows(dq, 8)
-    assert b[:5] == a[:5] and b[5] == b[6] == b[7] and b[5] not in a[:5]
-    hp, hq = _header(dp, 8)["shared_rows"], _header(dq, 8)["shared_rows"]
-    assert hq["out"] == hp["out"] == 8 and all(hq[p] == hp[p] + 1 for p in hp if p != "out")
+    assert b[:5] == a[:5] == _out_rows(d5, 5) and b[5] == b[6] == b[7] and b[5] not in a[:5]
+    h5, hq = _header(d5, 5)["shared_rows"], _header(dq, 8)["shared_rows"]
+    assert hq["out"] == 8 and all(hq[p] == h5[p] + 1 for p in h5 if p != "out")
 
 
 @pytest.mark.slow
-def test_forge_filler_moves_one_bit_of_one_fillers_output_row(tiles, tmp_path):
+@pytest.mark.parametrize("layout", ["tile", "unit"])
+def test_forge_filler_moves_one_bit_of_one_fillers_output_row(staged, layout, tmp_path):
     """`forge_filler` flips bit 0 of the first filler's output row and nothing else, into a new file (a hard link to the staged
-    file, as the stage cache keeps one, is left as it was); a slot that is a real tile, or a REAL that is not the staging's,
-    is refused."""
-    dq, _ = tiles["padded"]
+    file, as the stage cache keeps one, is left as it was); a slot that is a real instance, or a REAL that is not the
+    staging's, is refused."""
+    dq, _, _ = staged[layout, "padded"]
     d = tmp_path / "s"
     d.mkdir()
     for f in ("circuit.txt", "inst-8.bin", "pub-8.bin"):
