@@ -210,7 +210,9 @@ first in a quiet window, alone in its train (Daniel, 4 Oct).
 - A guarantee (README "Glossary"), a theorem something outside Lean relies on as proved, is listed in `lean-audit.json`,
   and `audit.py --update` records what it says in the lock: its statement and every definition the statement reads. No axiom check
   can catch a weakened definition, so when a change to those records lands on `main`, Daniel gets a DM showing it (each
-  changed statement before and after, each changed definition as it is now). Nobody signs off and nothing waits on it.
+  changed statement before and after, each changed definition as it is now). That DM is the check: nobody signs off and
+  nothing waits on it. A lane may ask someone to read the `--update` printout as a statement reviewer, but no merge
+  requires one (Daniel, 3 Oct, 6:46 PM PDT).
   A guarantee that only moved to another module or name sends nothing when `--update --moved MOVES.json` (old names to
   new) prints it as the same statement under its old names.
 - How to work on Lean, how parallel Lean lanes avoid conflicts (two agents never share a writable `.lake`), and which
