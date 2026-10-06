@@ -97,7 +97,20 @@ DOCS: dict[str, tuple[str, dict[str, str]]] = {
 
 #: `_pouw_roots` split by module: the digest of the function it splits (`_digest`) and each module's function.  The suite
 #: checks every binding file's `_pouw_roots` whatever their size (`targets.suite`)
-POUW: tuple[str, dict[str, str]] = ("67f21ef8157ed78a", {
+POUW: tuple[str, dict[str, str]] = ("95c09339a3fda91f", {
+    "verity.protocols.accounting.work.pouw.circuit.cap": '''
+def _pouw_roots() -> list[Any]:
+    """The prototype of Pearl-C's per-tile cap: its row (pc8's with the salt-dead counts), its word and a one-word tile at
+    k = 256 (two promotion windows) on sm_120, the split's units (the strip, the word unit, a tile row's digests and sums,
+    the tile and its tally) at the same k, and a tile row's digests and sums at the deployed 64 columns (two chunks)."""
+    from verity.primitives.circuits.defs import bind
+    from verity.protocols.accounting.work.pouw.circuit import cap
+
+    out = [*cap.templates(256, "sm120").values()]
+    out += [t for r, t in cap.unit_templates(256, "sm120").items()
+            if r in ("strip", "word", "row_digest", "row_tally", "tile", "tally")]
+    return out + [bind(cap.Pc8CapRowDigestDef, TN=64), bind(cap.Pc8CapRowTallyDef, K=256, TN=64)]
+''',
     "verity.protocols.accounting.work.pouw.circuit.ncp2": '''
 def _pouw_roots() -> list[Any]:
     """`ncp-v2`'s unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on it, for
@@ -134,8 +147,10 @@ def _pouw_roots() -> list[Any]:
     "verity.protocols.accounting.work.pouw.circuit.pc8": '''
 def _pouw_roots() -> list[Any]:
     """Pearl-C's tile check as Pearl-C4's at k = 128 (one promotion window): its templates on the H100's and sm_120's
-    records and its roots on sm_120's; its hiding templates and roots on sm_120's; and its roots with the row units cut along
-    k (`verity.protocols.accounting.work.pouw.circuit.rowk`, ``Shape.row_k``) in two segments at k = 256 on sm_120's, plain and hiding."""
+    records and its roots on sm_120's; its hiding templates and roots on sm_120's; its hiding roots with the per-tile cap
+    (``Shape.cap``, `verity.protocols.accounting.work.pouw.circuit.cap`) at k = 256 (two promotion windows) on sm_120's with
+    one row a side; and its roots with the row units cut along k (`verity.protocols.accounting.work.pouw.circuit.rowk`,
+    ``Shape.row_k``) in two segments at k = 256 on sm_120's, plain and hiding."""
     from dataclasses import replace
 
     from verity.protocols.accounting.work.pouw.circuit import pc8
@@ -146,6 +161,8 @@ def _pouw_roots() -> list[Any]:
     h8 = replace(tile8, hidden=True)
     out += [t for t in [*pc8.templates(128, h8.tile, "sm120", True).values(), pc8.weight(h8), pc8.call(h8), pc8.check(h8)]
             if t not in out]
+    split = pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", hidden=True, cap=True)
+    out += [pc8.call(split), pc8.check(split)]
     s = pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", row_k=128)
     cut = [build(replace(s, hidden=h)) for h in (False, True) for build in (pc8.weight, pc8.call, pc8.check)]
     seen = {t.id for t in out}

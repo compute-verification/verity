@@ -374,7 +374,7 @@ def test_every_file_the_step_loads_is_in_its_key():
     import ast
 
     files = LA.COMMON.tracked_files()
-    got = LA.inputs("backends/flock/verifier/lean/soundness", files)
+    got = LA.inputs("verity/Security/Proofs", files)
     loaded = re.findall(r'_module\(ROOT / "tools" / "check" / "([a-z_]+\.py)"', (ROOT / "tools/lean/lean_audit.py").read_text())
     assert loaded == ["common.py"] and all(f"tools/check/{m}" in got for m in loaded)
     assert "tools/check/check.py" not in got
@@ -440,10 +440,10 @@ def test_a_spec_reads_the_packages_proving_its_guarantees_and_misses_with_them(t
 def test_the_real_packages_and_their_inputs():
     files = LA.COMMON.tracked_files()
     pkgs = LA.packages(files)
-    assert "backends/flock/verifier/lean/soundness" in pkgs and not [p for p in pkgs if p.startswith("tools/lean")]
-    got = LA.inputs("backends/flock/verifier/lean/soundness", files)
-    assert "backends/flock/verifier/lean/level3/lean-audit.json" in got and "backends/flock/verifier/lean/Main.lean" in got
-    assert "tools/lean/audit.py" in got and not [f for f in got if f.startswith("backends/flock/verifier/lean/soundness/.lake")]
+    assert "verity/Security/Proofs" in pkgs and not [p for p in pkgs if p.startswith("tools/lean")]
+    got = LA.inputs("verity/Security/Proofs", files)
+    assert "verity/Security/lean-audit.json" in got and "backends/flock/verifier/lean/FlockVerify.lean" in got
+    assert "tools/lean/audit.py" in got and not [f for f in got if "/.lake/" in f]
     assert "tools/lean/Replay.lean" in got and "tools/lean/README.md" not in got
     assert not [f for f in got if f.startswith("tools/lean/tests/")]
 

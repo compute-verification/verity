@@ -80,7 +80,8 @@ def load_registries() -> None:
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
-    import verity.protocols.accounting.work.pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits, the six `pc4` and `pc8` rows call)
+    import verity.protocols.accounting.work.pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits: the rows' six, the hiding tiles' four Keccak words, the cap's five window words)
+    import verity.protocols.accounting.work.pouw.circuit.cap  # noqa: F401  (PoUW's prototype of Pearl-C's per-tile cap)
     import verity.protocols.accounting.work.pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
     import verity.protocols.accounting.work.pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
     import verity.protocols.accounting.work.pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
