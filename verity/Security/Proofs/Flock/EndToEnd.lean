@@ -1,4 +1,4 @@
-import Specs.Flock.Guarantees.EndToEnd
+import Proofs.Flock.EndToEnd.Statement
 
 /-!
 # Proof of C-Flock's end-to-end guarantee
