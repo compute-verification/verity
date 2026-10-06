@@ -23,11 +23,13 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   tile is a tile of the same template on zero rows (both sides), committed like any row, so its proof has the shape of
   every other tile's.  Unit t is `pouw.window.tile_at` of the advice: the population is
   `population_program(Pc8TileHidden{K,1,1,sm120}, N)` under `Q_template_instance`.
-- **The commitment** is C-Flock's: each row's b ‖ c is hm96-sha512 over its row digest under a fresh 192-byte salt, each side
-  of each entry (a call, or the filler) one frame-v3-sha512 tree under one-stage's served domain of the window's program,
-  partition and context, its port ``<entry>/<side>``.  Each entry (`pouw.window`: its sides' roots, rows and kept rows, its
-  tile range and the call's record) is one ``hm96-sha512/row/v2`` row of its SHA-512 in the **window root** (port
-  ``entries``), padded with empty entries to the public bound P (L2).  W, every weight the pass's k = n = K calls read, is
+- **The commitment** is C-Flock's: each row's b ‖ c is hm96-sha512 over its row digest under a fresh 192-byte salt.  Each
+  side of each entry (a call, or the filler) is one frame-v3-sha512 tree of its kept rows only, in order, padded to 2^D
+  leaves under the window's side domain (`pouw.window.side_domain` of the window root's domain, one-stage's served domain
+  of the window's program, partition and context: one per window and side).  Each entry is one fixed-width entry row
+  (`pouw.window.Entry`: kind, tile range, each side's row count and root, the SHA-512 of the call's record, which holds the
+  kept rows' places in the call), an ``hm96-sha512/row/v2`` row in the **window root** (port ``entries``), padded with
+  empty entries to the public bound P (L2).  W, every weight the pass's k = n = K calls read, is
   committed by weight row (BF16, ``hm96-sha512/row/v2``) in **W's root**, beside it; the tiles read the formed B̃ rows of
   each call, not W's rows, until registered rows (P7) read B from W.  ``commitment.json`` is what the committer registers:
   the context, the level, the public items and the two roots.  ``advice.json`` (the entries and their salts) and
@@ -197,9 +199,9 @@ def window_domain(params: dict, ell: int) -> CommitmentDomain:
     return _served(params, ell, PORT, ENTRY_SCHEMA, params["entries"])
 
 
-def side_domain(params: dict, ell: int, e: int, side: str, rows: int) -> tuple[CommitmentDomain, str]:
-    schema = L.ROW_SCHEMA["fp8-p", SIDES[side]]
-    return _served(params, ell, f"{e}/{side}", schema, rows), schema
+def side_domain(params: dict, ell: int, side: str) -> tuple[CommitmentDomain, str]:
+    """The domain of the window's side-`side` trees at level `ell` and their rows' schema."""
+    return Wd.side_domain(window_domain(params, ell).domain_id, side), L.ROW_SCHEMA["fp8-p", SIDES[side]]
 
 
 def weights_domain(params: dict) -> CommitmentDomain:
@@ -314,14 +316,7 @@ def side_leaves(dom: CommitmentDomain, schema: str, bcs: list[bytes]) -> list[by
     return [row_leaf(dom, i, L.tree_leaf(bc), schema) for i, bc in enumerate(bcs)]
 
 
-def entry_bc(entry: dict, salt: bytes) -> bytes:
-    """An entry's b ‖ c: hm96-sha512 over the ``sha512/row/v2`` digest of its SHA-512 (32 words), under `salt`."""
-    h = hashlib.sha512(canonical_json(entry)).digest()
-    return L.INST.commit_string(L.KEY, sha512_row_v2_digest(h, 8 * len(h)), salt)
-
-
-def entry_leaf(dom: CommitmentDomain, e: int, bc: bytes) -> bytes:
-    return row_leaf(dom, e, L.tree_leaf(bc), ENTRY_SCHEMA)
+entry_bc, entry_leaf = Wd.entry_bc, Wd.entry_leaf
 
 
 def _salts(n: int) -> list[bytes]:
@@ -330,8 +325,8 @@ def _salts(n: int) -> list[bytes]:
 
 def commit_side(dom: CommitmentDomain, schema: str, side: str, words: list[list[int]], salts: list[bytes]) -> tuple[str, dict]:
     bcs = [L.commit("fp8-p", SIDES[side], w, s) for w, s in zip(words, salts)]
-    return tree_levels(dom, side_leaves(dom, schema, bcs))[-1][0].hex(), {"words": np.array(words, dtype=np.uint16),
-                                                                          "salts": salts, "bcs": bcs}
+    return Wd.side_levels(dom, side_leaves(dom, schema, bcs))[-1][0].hex(), {"words": np.array(words, dtype=np.uint16),
+                                                                             "salts": salts, "bcs": bcs}
 
 
 def commit_weights(params: dict, rows, salts: list[bytes] | None = None) -> tuple[str, list[bytes]]:
@@ -349,15 +344,20 @@ def commit_weights(params: dict, rows, salts: list[bytes] | None = None) -> tupl
 
 
 def filler_shape(fill: int) -> tuple[int, int]:
-    """The filler's zero rows (A, B): about the square root of its tiles each, so its tiles cover `fill`."""
-    b = max(1, math.isqrt(fill - 1) + 1)
+    """The filler's zero rows (A, B): about the square root of its tiles each, within the side trees' depths, so its tiles
+    cover `fill`."""
+    cap_a, cap_b = 1 << Wd.DEPTHS["a"], 1 << Wd.DEPTHS["b"]
+    b = min(cap_b, max(1, math.isqrt(fill - 1) + 1, -(-fill // cap_a)))
+    if -(-fill // b) > cap_a:
+        raise ValueError(f"{fill} filler tiles are more than one entry's 2^{Wd.DEPTHS['a']} x 2^{Wd.DEPTHS['b']}")
     return -(-fill // b), b
 
 
 def commit_window(params: dict, calls: list[dict], root_w: str, salts: dict | None = None) -> tuple[dict, dict, dict]:
     """The window's commitment from its calls (each `{"record", "words": {"a", "b"}}`, a side's words None where the scheme
-    refused the row): (``commitment.json``, ``advice.json``, the prover's rows).  `salts` replays the salts of an earlier
-    commit's prover file (`load`)."""
+    refused the row): (``commitment.json``, ``advice.json``, the prover's rows).  Each side tree holds the kept rows only,
+    and the call's record (`advice["records"]`, its SHA-512 in the entry) gains their places in the call (``keep``).
+    `salts` replays the salts of an earlier commit's prover file (`load`)."""
     k = params["k"]
     zero = [0] * L.ROW_WORDS["fp8-p"](k)
     keeps = [{s: [i for i, w in enumerate(c["words"][s]) if w is not None] for s in SIDES} for c in calls]
@@ -368,25 +368,25 @@ def commit_window(params: dict, calls: list[dict], root_w: str, salts: dict | No
     if len(calls) + 1 > params["entries"]:
         raise ValueError(f"{len(calls)} calls and the filler are more entries than the bound {params['entries']}")
     fa, fb = filler_shape(work.n - real)
-    sides = [{s: [w if w is not None else zero for w in c["words"][s]] for s in SIDES} for c in calls]
+    sides = [{s: [c["words"][s][i] for i in kp[s]] for s in SIDES} for c, kp in zip(calls, keeps)]
     sides.append({"a": [zero] * fa, "b": [zero] * fb})
+    records = [{**c["record"], "keep": kp} for c, kp in zip(calls, keeps)] + [None]
     entries, priv, at = [], {}, 0
     for e, (ws, kind) in enumerate(zip(sides, ["call"] * len(calls) + ["filler"])):
-        entry = {"kind": kind, "lo": at}
-        keep = keeps[e] if kind == "call" else {"a": list(range(fa)), "b": list(range(fb))}
-        size = len(keep["a"]) * len(keep["b"]) if kind == "call" else work.n - real
-        entry["hi"] = at + size
-        at += size
-        priv[e] = {}
+        if any(not 1 <= len(ws[s]) <= 1 << Wd.DEPTHS[s] for s in SIDES):
+            raise ValueError(f"entry {e}: its sides keep {len(ws['a'])} and {len(ws['b'])} rows, not 1 to 2^D_A and 2^D_B")
+        size = len(ws["a"]) * len(ws["b"]) if kind == "call" else work.n - real
+        priv[e], roots = {}, {}
         for s in SIDES:
-            dom, schema = side_domain(params, ell, e, s, len(ws[s]))
+            dom, schema = side_domain(params, ell, s)
             root, priv[e][s] = commit_side(dom, schema, s, ws[s], salts[e][s] if salts else _salts(len(ws[s])))
-            entry[s] = {"rows": len(ws[s]), "keep": keep[s], "root": root}
-        if kind == "call":
-            entry["record"] = calls[e]["record"]
-        entries.append(entry)
-    entries += [{"kind": "none", "index": e} for e in range(len(entries), params["entries"])]
-    problem = Wd.window_problem(entries, work, params["entries"], params["grid_bits"])
+            roots[s] = bytes.fromhex(root)
+        entries.append(Wd.Entry(kind, at, at + size, len(ws["a"]), len(ws["b"]), roots["a"], roots["b"],
+                                Wd.record_digest(records[e]) if kind == "call" else bytes(64)))
+        at += size
+    entries += [Wd.Entry("none")] * (params["entries"] - len(entries))
+    records += [None] * (params["entries"] - len(records))
+    problem = Wd.window_problem([x.row() for x in entries], work, params["entries"], params["grid_bits"])
     if problem:
         raise ValueError(f"the window statement fails on the committer's own advice: {problem}")
     dom = window_domain(params, ell)
@@ -396,10 +396,14 @@ def commit_window(params: dict, calls: list[dict], root_w: str, salts: dict | No
              {"port": "W", "root": root_w, "leaves": params["w_rows"], "domain": weights_domain(params).domain_id.hex()}]
     public = {"schema": SCHEMA, "context": params["context"], "level": ell, "items": items_of(params, ell, root_w),
               "roots": roots}
-    advice = {"schema": SCHEMA, "level": ell, "real": real, "entries": entries, "entry_salts": [s.hex() for s in esalts],
-              "window_path": [path(levels, e) for e in range(len(entries))]}
+    advice = {"schema": SCHEMA, "level": ell, "real": real, "entries": [x.to_json() for x in entries], "records": records,
+              "entry_salts": [s.hex() for s in esalts], "window_path": [path(levels, e) for e in range(len(entries))]}
     priv["entries"] = esalts
     return public, advice, priv
+
+
+def entries_of(advice: dict) -> list[Wd.Entry]:
+    return [Wd.Entry.from_json(x) for x in advice["entries"]]
 
 
 def save(p: Path, priv: dict) -> None:
@@ -427,14 +431,13 @@ def load(p: Path) -> dict:
 def opening(advice: dict, priv: dict, params: dict, unit: int) -> dict:
     """The prover's opening of unit `unit`: its entry with its salt and path to the window root, and each side's row with
     its path to the entry's side root."""
-    e, i, j = Wd.tile_at(advice["entries"], unit)
-    entry = advice["entries"][e]
-    out = {"unit": unit, "entry": e, "entry_value": entry, "entry_salt": advice["entry_salts"][e],
+    e, i, j = Wd.tile_at(entries_of(advice), unit)
+    out = {"unit": unit, "entry": e, "entry_value": advice["entries"][e], "entry_salt": advice["entry_salts"][e],
            "window_path": advice["window_path"][e]}
     for side, idx in (("a", i), ("b", j)):
-        dom, schema = side_domain(params, advice["level"], e, side, entry[side]["rows"])
-        levels = tree_levels(dom, side_leaves(dom, schema, priv[e][side]["bcs"]))
-        out[side] = {"index": idx, "path": path(levels, idx)}
+        dom, schema = side_domain(params, advice["level"], side)
+        levels = Wd.side_levels(dom, side_leaves(dom, schema, priv[e][side]["bcs"]))
+        out[side] = {"index": idx, "path": [x.hex() for x in Wd.side_path(dom, levels, idx)]}
     return out
 
 
@@ -451,8 +454,13 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
     dom = window_domain(params, ell)
     if roots.get(PORT, {}).get("domain") != dom.domain_id.hex():
         return "the registered window domain is not the window's served domain"
-    e, entry = op.get("entry"), op.get("entry_value")
-    if not isinstance(e, int) or not isinstance(entry, dict):
+    e = op.get("entry")
+    try:
+        entry = Wd.Entry.from_json(op["entry_value"])
+        entry.row()
+    except (KeyError, TypeError, ValueError):
+        return "the opening names no entry"
+    if not isinstance(e, int):
         return "the opening names no entry"
     leaf = entry_leaf(dom, e, entry_bc(entry, bytes.fromhex(op["entry_salt"])))
     if not verify_path(dom, bytes.fromhex(roots[PORT]["root"]), e, leaf, [bytes.fromhex(x) for x in op["window_path"]]):
@@ -473,9 +481,10 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
         o = op[side]
         if o["index"] != at[side]:
             return f"side {side}: the opening is of row {o['index']}, not the unit's row {at[side]}"
-        sdom, schema = side_domain(params, ell, e, side, entry[side]["rows"])
+        sdom, schema = side_domain(params, ell, side)
         leaf = row_leaf(sdom, at[side], L.tree_leaf(bc[side]), schema)
-        if not verify_path(sdom, bytes.fromhex(entry[side]["root"]), at[side], leaf, [bytes.fromhex(x) for x in o["path"]]):
+        root = entry.root_a if side == "a" else entry.root_b
+        if not verify_path(sdom, root, at[side], leaf, [bytes.fromhex(x) for x in o["path"]]):
             return f"side {side}: the proof's committed row is not entry {e}'s row {at[side]}"
     return None
 

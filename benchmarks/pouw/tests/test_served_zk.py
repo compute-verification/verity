@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.primitives.commitments.merkle import tree_levels
 from verity.protocols.accounting.work.pouw import window as Wd
 from verity.protocols.accounting.work.pouw.audit import Epoch, Workload, weights_root
 from verity.protocols.accounting.work.pouw.circuit import leaves as L
@@ -122,7 +123,7 @@ def _pub(bca: bytes, bcb: bytes) -> bytes:
 
 
 def _unit_pub(advice, priv, t: int) -> bytes:
-    e, i, j = Wd.tile_at(advice["entries"], t)
+    e, i, j = Wd.tile_at(SC.entries_of(advice), t)
     return _pub(priv[e]["a"]["bcs"][i], priv[e]["b"]["bcs"][j])
 
 
@@ -138,26 +139,34 @@ def test_rows_are_the_schemes_operands(served):
 
 
 def test_the_window_is_padded_to_a_grid_level_with_filler(served):
-    """The calls' kept tiles, then a filler entry of zero rows up to the padded count, then empty entries to the bound; the
-    window statement holds on the advice, each side's root is under one-stage's served domain of its entry's port, and
-    replaying the salts gives the same commitment."""
+    """The calls' kept tiles, then a filler entry of zero rows up to the padded count, then empty entries to the bound, each
+    an entry row; the window statement holds on the rows, each side tree holds its kept rows only under the window's side
+    domain (from the window root's one-stage served domain), the record keeps the rows' places in the call, and replaying
+    the salts gives the same commitment."""
     *_, words = served
     params, public, advice, priv = _window(words)
     work = Wd.bucket(2 * M * N)
     assert (advice["real"], public["level"], work.credited, work.n) == (2 * M * N, work.level, 24, 26)
-    kinds = [e["kind"] for e in advice["entries"]]
-    assert kinds == ["call", "call", "filler", "none"]
-    call, filler = advice["entries"][0], advice["entries"][2]
-    assert call["a"]["keep"] == list(range(M)) and call["a"]["rows"] == M + 1 and (call["lo"], call["hi"]) == (0, M * N)
-    assert (filler["lo"], filler["hi"]) == (24, 26) and (filler["a"]["rows"], filler["b"]["rows"]) == (1, 2)
+    entries = SC.entries_of(advice)
+    assert [e.kind for e in entries] == ["call", "call", "filler", "none"]
+    call, filler = entries[0], entries[2]
+    assert (call.n_a, call.n_b, call.lo, call.hi) == (M, N, 0, M * N) and (filler.lo, filler.hi) == (24, 26)
+    assert (filler.n_a, filler.n_b) == (1, 2) and filler.record == bytes(64) and entries[3] == Wd.Entry("none")
+    assert advice["records"][0]["keep"] == {"a": list(range(M)), "b": list(range(N))} and advice["records"][2:] == [None, None]
+    assert call.record == Wd.record_digest(advice["records"][0]) and len(priv[0]["a"]["bcs"]) == M
     assert not priv[2]["a"]["words"].any() and not priv[2]["b"]["words"].any()
-    assert Wd.window_problem(advice["entries"], work, params["entries"]) is None
+    assert Wd.window_problem([e.row() for e in entries], work, params["entries"]) is None
     _, _, part = SC.population(K, work.n)
+    (wroot,) = [r for r in public["roots"] if r["port"] == SC.PORT]
+    assert wroot["domain"] == R.served_domain(part["program"], SC.PT.digest(part), SC.PORT, SC.ENTRY_SCHEMA, params["entries"],
+                                              params["context"])
     for e in (0, 2):
         for side in "ab":
-            dom, schema = SC.side_domain(params, public["level"], e, side, advice["entries"][e][side]["rows"])
-            assert dom.domain_id.hex() == R.served_domain(part["program"], SC.PT.digest(part), f"{e}/{side}", schema,
-                                                           advice["entries"][e][side]["rows"], params["context"])
+            dom, schema = SC.side_domain(params, public["level"], side)
+            assert dom == Wd.side_domain(bytes.fromhex(wroot["domain"]), side) and dom.count == 1 << Wd.DEPTHS[side]
+            leaves = SC.side_leaves(dom, schema, priv[e][side]["bcs"])
+            root = tree_levels(dom, leaves + [dom.pad(r) for r in range(len(leaves), dom.count)])[-1][0]
+            assert root == (entries[e].root_a if side == "a" else entries[e].root_b)
     assert priv[0]["b"]["bcs"][2] == L.commit("fp8-p", SC.SIDES["b"], words["b"][2], priv[0]["b"]["salts"][2])
     salts = {e: {s: priv[e][s]["salts"] for s in "ab"} for e in range(3)}
     again, advice2, _ = SC.commit_window(params, _calls(words), public["items"]["root_W"], {**salts, "entries": priv["entries"]})
@@ -367,6 +376,8 @@ def test_check_opens_the_drawn_units_rows_only(served, tmp_path):
     assert "window" in SC.check(params, orec, draw, 5, _unit_pub(advice, priv, 5), op)
     forged = {**op, "entry_value": {**op["entry_value"], "hi": op["entry_value"]["hi"] + 1}}
     assert "not the registered window's entry" in SC.check(params, rec, draw, 5, _unit_pub(advice, priv, 5), forged)
+    for bad in ({**op["entry_value"], "kind": "tile"}, {**op["entry_value"], "root_a": "00"}, {"kind": "call"}, None):
+        assert SC.check(params, rec, draw, 5, _unit_pub(advice, priv, 5), {**op, "entry_value": bad}) == "the opening names no entry"
 
 
 def _session(t: int) -> str:

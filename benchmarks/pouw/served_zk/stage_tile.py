@@ -52,7 +52,7 @@ def main() -> None:
     advice = json.loads((src / "advice.json").read_text())
     priv = SC.load(src / "prover.npz")
     k = params["k"]
-    e, i, j = Wd.tile_at(advice["entries"], unit)
+    e, i, j = Wd.tile_at(SC.entries_of(advice), unit)
     side = {"a": priv[e]["a"], "b": priv[e]["b"]}
     d = pc8.templates(k, TILE, DEV, hidden=True)["tile"]
     bits = 16 * L.ROW_WORDS["fp8-p"](k)

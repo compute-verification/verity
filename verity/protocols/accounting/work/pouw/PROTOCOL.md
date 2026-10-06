@@ -131,6 +131,92 @@ W           {"matmuls": [{"index": "i", "m": m, "k": k, "n": n, "weight": "w"}, 
 - **Vectors:** `tests/vectors/identifier_v1.json` (`tests/identifier_vectors.py`) holds one case or more per named scheme:
   its inputs, W, both canonical byte strings as hex, and their SHA-512. A 64-bit case pins the decimal strings past 2^53.
 
+## The served audit window (`window`)
+
+A served window is audited by drawing tiles of one fixed template from the window's committed calls (the grid, the work
+level and K′ are in `window`'s docstring). This section is the window's layout for gates: what its commitment holds, so
+that a drawn tile's reads are a function of public inputs alone. `benchmarks/pouw/served_zk/served_commit.py` commits a
+window this way.
+
+**The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
+registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
+`hm96-sha512/row/v2` row at index e: the leaf is hm96-sha512's tree leaf of `commit_string(key, x, salt_e)`, where x is
+the entry row's `sha512/row/v2` digest over its 1,920 bits, salt_e is 192 fresh bytes and key is the pinned default
+(`Entry`, `entry_bc`, `entry_leaf`).
+
+**An entry row** is 240 bytes (120 u16 words). Each integer is a u64, little-endian:
+
+~~~text
+bytes     0..8    kind      0 none, 1 call, 2 filler
+          8..16   lo        the range's first tile index, < 2^40
+         16..24   hi        one past its last, < 2^40
+         24..32   n_a       A's rows: 1..2^D_A for a call or the filler, 0 for none
+         32..40   n_b       B's rows: 1..2^D_B, 0 for none
+         40..48   zero      so the digests start on a 128-bit word
+         48..112  root_a    A's side root (64 bytes)
+        112..176  root_b    B's side root
+        176..240  record    a call's record: SHA-512 of its RFC 8785 canonical JSON; zero for the filler and for none
+~~~
+
+An empty entry is the zero row. A call's record is the committer's own description of the call, including `keep`: for
+each side, the places in the call of the rows the side tree holds. The entry binds the record only by its SHA-512, so no
+tile reads it.
+
+**A side tree** is dense: it holds only the rows its call keeps (a row the scheme refused is no tile's), in order. So the
+call's n_a·n_b tiles are the products of A's rows and B's, row-major, and index u of the range [lo, hi) is A row
+u div n_b and B row u mod n_b (`tile_in`). The filler's sides are zero rows: n_b = min(2^D_B, max(⌈√fill⌉, ⌈fill/2^D_A⌉))
+and n_a = ⌈fill/n_b⌉. Its range covers N − N_real ≤ n_a·n_b tiles. Every side tree has 2^D leaves, with D_A = 13 (the
+served batch is at most 8,192 tokens) and D_B = 17. Leaf i < n is row i's frame-v3 leaf under the row's own schema. Every
+leaf from n on is frame-v3's pad leaf of the side domain at its rank: frame-v3 pads any tree to a power of two this way,
+so a side root is `tree_levels` over the n row leaves followed by 2^D − n pad leaves (`side_levels`, `side_path`).
+
+**The side domains** are one per window and side, with no entry index and no row count:
+
+~~~text
+side_domain(w, s) = frame-v3-sha512 domain, binding identity_digest_sha512("verity/pouw/window/side-domain/v1",
+                    {"window": hex(w), "side": s, "depth": D_s}), owner −1, positions [0, 2^D_s)
+~~~
+
+Here w is the window root's domain id, which is one-stage's served domain of the window's program, partition and
+context. So the side domains, like the window's, are a function of the context and ℓ alone.
+
+**The window statement** (L4, `window_problem`) holds on the P entry rows when all of the following hold:
+
+- each row is an entry row: 240 bytes, a known kind, and a zero word at 40..48;
+- each entry satisfies the layout (`layout_problem`): its range is 40-bit, an empty entry is the zero row, a call's or
+  the filler's sides hold 1..2^D rows, and the filler's record is zero;
+- the kinds are the calls (at least one), then one filler, then empty entries;
+- the calls' and the filler's ranges are nonempty and contiguous from 0;
+- a call's range is exactly its n_a·n_b tiles, and the filler's is at most its n_a·n_b;
+- the ranges end at N, and the registered level is `bucket` of the calls' tiles N_real.
+
+The verdict is unchanged: every drawn tile is proved and opened, or not. No served digest is compared.
+
+**The tile instances' public inputs.** The K′ drawn tiles are proved in S = ⌈K′/cap⌉ sessions of `cap` instances each
+(`sessions`). Session σ's instance s takes the tile t = drawn[σ·cap + s] while σ·cap + s < K′, and otherwise t = N − 1,
+the window's last tile, which is always a filler tile (`instance_ts`). The verifier writes its own `--public-inputs` file
+F_σ (C-Flock's `verity/flock-public-inputs/v1`, read by Lean's `HmIn.checkOwn`) from the one-stage registration (its
+population N, its law subset:K′, and its window root and domain at port `entries`), its own draw, σ and the cap alone
+(`public_inputs`). F_σ is a key-sorted JSON header line `{"format", "instances": cap, "ports"}`, then each instance's
+words, u16 little-endian, instance-major, in port order:
+
+~~~text
+port       words   seed           derivation                               value
+t          8       drawn          verity/pouw/window/t/v1                  t as a u128
+root       32      registration   verity/pouw/window/root/v1               the window root
+domain     32      registration   verity/pouw/window/domain/v1             its domain id w
+domain_a   32      registration   verity/pouw/window/side-domain-a/v1      side_domain(w, "a")'s id
+domain_b   32      registration   verity/pouw/window/side-domain-b/v1      side_domain(w, "b")'s id
+~~~
+
+Each port is a whole number of 128-bit words, so no row leaf shares a word with a public input. The window statement is
+proved as its own direct statement per window, separate from the tiles' sessions.
+
+**Vectors:** `tests/vectors/window.json` (`tests/window_vectors.py`) pins a toy window of P = 4 entries over a toy window
+domain. Call 0 keeps A rows 0, 1 and 3 of four, so its refused row 2 is no leaf. The vectors hold each entry's JSON, its
+row, digest, salt, b ‖ c and leaf; one side tree's leaves, its pad leaf, its root and a path; the window root; and F_σ for
+the draw (1, 4, 6) in sessions of 2, where the second session pads with N − 1 = 8.
+
 ## `ncp-v1`: noise-cancelling polarization under TTNCP_U(0.5%), route U at β = 128
 
 For int7 A and B (entries in [−64, 63], one two's-complement byte each):
