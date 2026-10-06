@@ -3,9 +3,9 @@ import Definitions.Pouw.Fp8Atom.Fp32
 /-!
 # The bulk conformance test (compiled evaluation: a test, not a proof)
 
-The Lean audit runs it (`runs` in `lean-audit.json`): `scripts/fp8atom_vectors.py` writes `conformance/steps.txt.gz`
+The Lean audit runs it (`runs` in `lean-audit.json`): `verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py` writes `conformance/steps.txt.gz`
 and `conformance/adds.txt.gz`, the audit checks each decompressed file against the SHA-256 the record holds, and runs
-`lake env lean --run PouwBulk.lean <steps.txt> <n> <adds.txt> <n>` in its sandbox.
+`lake env lean --run Proofs/Pouw/Bulk.lean <steps.txt> <n> <adds.txt> <n>` in its sandbox.
 
 On every line it evaluates the predicates of the kernel pins: `Vec.holds hopperStep` for the steps and `AddVec.holds`
 for the adds. It fails unless every line parses and holds and the line counts are the expected ones. The kernel does
