@@ -13,8 +13,8 @@ file, one table), at the draw the challenger writes for `S` (`dj S`, the draw's 
   `S`; the statement's blocks hold `D`'s proved units, its `fast100` schedule has two levels or more, and its link
   points are `mPts`.
 * `DrawSetup.table`: its table, the statement `(setupH_layout ht h).model (regionsOf st)` (what `Placed.Accepted` reads,
-  so `Accepted.hT` is `rfl`), and each unit `u`'s site: its rank `r` among `D.proved`, block `r / c.g` and VU `r % c.g`.
-  Distinct units have distinct ranks and so distinct sites (`table_site_inj`).
+  so `Accepted.hT` is `rfl`), and each unit `u`'s site: its rank `r` among `D.proved`, block `r / c.g` and template
+  instance `r % c.g`. Distinct units have distinct ranks and so distinct sites (`table_site_inj`).
 * `DrawSetup.refused`: at a draw with no `DrawSetup`, a table no witness satisfies (`refused_unsat`): a reference
   setup's statement with two regions pinning the same bit to 0 and to 1.
 * `tableAt`: the draw's table, `table` when the draw has a `DrawSetup` and `refused` otherwise; `tableAt_stmt` says it
@@ -33,8 +33,9 @@ open FlockSoundness.Discharge.Exec (Inputs)
 variable {n : ℕ} (I : Inputs) (mPts : ℕ)
 
 /-- **A draw flock-verify sets up**: on the session's inputs `I`, `Stmt.setupH` accepts the draw's JSON `d`, which
-decodes to a draw `D` whose proved units include `S`'s; the statement's `c.g · 2^nbl` VU slots hold `D`'s proved units,
-its `fast100` schedule has at least two levels (`hsch`, `hm`, as `TabSpec` asks), and its link points are `mPts`. -/
+decodes to a draw `D` whose proved units include `S`'s; the statement's `c.g · 2^nbl` template instance slots hold `D`'s
+proved units, its `fast100` schedule has at least two levels (`hsch`, `hm`, as `TabSpec` asks), and its link points are
+`mPts`. -/
 structure DrawSetup (S : Finset (Fin n)) (d : Lean.Json) where
   st : Stmt
   h : Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program = .ok st
@@ -54,7 +55,7 @@ structure DrawSetup (S : Finset (Fin n)) (d : Lean.Json) where
   hmPts : st.mPts = mPts
 
 /-- **A draw's table with its sites**: the table, an acceptance whose statement is the table's, and each drawn unit's
-VU and block there. -/
+template instance and block there. -/
 structure Table (S : Finset (Fin n)) where
   T : TabSpec mPts
   acc : Placed.Accepted T.S
@@ -116,7 +117,7 @@ theorem rank_div_lt {u : Fin n} (h : u ∈ S) : x.rank u / x.st.c.g < 2 ^ (x.st.
   exact lt_of_lt_of_le (x.rank_lt h) x.hblk
 
 /-- **The draw's table**: setupH's statement at its regions, and each drawn unit at its rank `r`: block `r / c.g`,
-VU `r % c.g`. -/
+template instance `r % c.g`. -/
 noncomputable def table : Table mPts S where
   T := x.specAt ht (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
   acc := ⟨I.tags, I.circuitFile, I.publicFile, I.coins, I.tables, some d, I.partition, I.program, x.st, ht, x.h,
@@ -172,7 +173,7 @@ theorem refused_wf : ∀ R ∈ regionsOf x.st ++ contra x.st.c.kLog (x.st.m - x.
   · exact contra_wf R hR
 
 /-- **The table of a refused draw `S'`**: a reference setup `x`'s statement with `contra`'s regions, which no witness
-satisfies (`refused_unsat`), every unit at block 0, VU 0. -/
+satisfies (`refused_unsat`), every unit at block 0, template instance 0. -/
 noncomputable def refused (S' : Finset (Fin n)) : Table mPts S' where
   T := x.specAt ht (regionsOf x.st ++ contra x.st.c.kLog (x.st.m - x.st.c.kLog)) x.refused_wf
   acc := ⟨I.tags, I.circuitFile, I.publicFile, I.coins, I.tables, some d, I.partition, I.program, x.st, ht, x.h,
@@ -232,7 +233,8 @@ noncomputable abbrev planAt : Finset (Fin n) → Reg → List (TabSpec mPts) := 
 abbrev tabAt : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planAt (Reg := Reg) ht dj x₀ S R).length :=
   fun _ _ _ => ⟨0, Nat.zero_lt_one⟩
 
-/-- **The sites of the one-table plan**: each drawn unit's acceptance, VU and block are its draw's table's. -/
+/-- **The sites of the one-table plan**: each drawn unit's acceptance, template instance and block are its draw's
+table's. -/
 noncomputable def sitesAt : Placed.Sites (planAt (Reg := Reg) ht dj x₀) (tabAt ht dj x₀) where
   acc S _ _ _ := (tableAt ht dj x₀ S).acc
   vu S _ u h := (tableAt ht dj x₀ S).vu u h
@@ -268,8 +270,8 @@ theorem sitesAt_inj {S : Finset (Fin n)} (hS : Nonempty (DrawSetup I mPts S (dj 
 variable {pop : Public}
 
 /-- **The site fact at the draw's table**, with or without shared rows: at a draw flock-verify sets up, each drawn
-unit's site is `BcSite`: the acceptance's draw is `dj S`, which decodes to `D`, and the unit's block and VU index its
-rank in `D.proved`. -/
+unit's site is `BcSite`: the acceptance's draw is `dj S`, which decodes to `D`, and the unit's block and template
+instance index its rank in `D.proved`. -/
 theorem table_bcSiteS (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop)
     {S : Finset (Fin n)} (x : DrawSetup I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :

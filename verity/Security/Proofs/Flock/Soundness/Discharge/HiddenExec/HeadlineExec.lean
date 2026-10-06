@@ -43,7 +43,7 @@ include hU hpub in
 /-- **The site fact at a drawn table under hidden outputs**: at a draw flock-verify sets up with `Stmt.setupHidden`,
 each drawn unit's site is `BcSiteH`: the acceptance's draw is `dj S`, which decodes to `D`, its regions are the
 executable's, its public file loads (`HmOut.loadPublic`) to `pub`, with or without shared rows, and the unit's block
-and VU index its rank in `D.proved`, the VU below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2`). -/
+and template instance index its rank in `D.proved`, the template instance below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2`). -/
 theorem tableH_bcSiteS {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.acc ht hc (v2_of_scope hscope)) pub (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : x.st.c = c := x.table.c_eq hc

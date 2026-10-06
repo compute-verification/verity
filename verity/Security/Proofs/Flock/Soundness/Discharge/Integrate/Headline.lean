@@ -92,11 +92,11 @@ Its hypotheses, past the session's inputs:
 
 Scope. W6 is definitional on the untyped path: the unit's rows are the parsed net's (`Rows.ofNet`), and nothing verifies
 that the unit net lowers its template's Definition. The tail stages of `tc_units` templates are outside every unit's
-rows. The typed path is not production. `keyProg` has no edges between units: the headline bounds VUs that fail at their
-own committed values, and a VU reading its producers' outputs is carried by the copy constraints and the region pins,
-not by an edge of the program. The proof coins are the challenger's per-round OS coins (A6): seed-derived coins
-are outside the headline, so a circuit-prover session counts only under `FC_COINS=os`. The tag is whatever the verifier
-passes as `--statement`: a session counts when
+rows. The typed path is not production. `keyProg` has no edges between units: the headline bounds template instances
+that fail at their own committed values, and a template instance reading its producers' outputs is carried by the copy
+constraints and the region pins, not by an edge of the program. The proof coins are the challenger's per-round OS coins
+(A6): seed-derived coins are outside the headline, so a circuit-prover session counts only under `FC_COINS=os`. The tag
+is whatever the verifier passes as `--statement`: a session counts when
 `flock-verify verify --statement verity/flock-circuit@967b8d06 --coins os` accepts it with one table, so the headline
 covers only public-output `@967b8d06` sessions, from builds before #757. Since #757, main's prover always writes the
 hidden-output statement (`verity/flock-circuit`, the default `--statement`, `hiddenOutputs = true`), under which
