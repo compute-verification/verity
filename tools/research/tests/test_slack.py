@@ -38,6 +38,7 @@ class FakeSlack:
         self.calls: list[tuple[str, dict]] = []
         self._ts = itertools.count(1)
         self.page = 200
+        self.replies_keep_root = False
 
     def add(self, channel: str, **msg) -> dict:
         msg.setdefault("ts", f"1700000000.{next(self._ts):06d}")
@@ -67,7 +68,8 @@ class FakeSlack:
             else:
                 msgs = [m for m in msgs if not m.get("thread_ts") or m["thread_ts"] == m["ts"]][::-1]     # newest first, like Slack
             if "oldest" in p:
-                msgs = [m for m in msgs if float(m["ts"]) >= float(p["oldest"])]
+                keep = p["ts"] if method == "conversations.replies" and self.replies_keep_root else None   # as Slack does
+                msgs = [m for m in msgs if float(m["ts"]) >= float(p["oldest"]) or m["ts"] == keep]
             if "latest" in p:
                 msgs = [m for m in msgs if float(m["ts"]) <= float(p["latest"])]
             start = int(p.get("cursor") or 0)
@@ -206,6 +208,26 @@ def test_handles_and_subscriptions(registry, capsys):
     assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and ALERTS not in out
 
 
+def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
+    rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
+                     "catalog/verity_catalog/definitions/tc.py", "verity/primitives/circuits/cut.py", "AGENTS.md", "nowhere/x")
+    assert rc == 0 and [line.split() for line in out.splitlines()] == [
+        ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
+        ["@circuits", "catalog/verity_catalog/definitions/tc.py"], ["@proofs", "verity/primitives/circuits/cut.py"],
+        ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
+    monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
+    rc, out, _ = run(capsys, "owners")
+    assert [line.split()[0] for line in out.splitlines()] == ["@infra", "@top"]
+
+
+def test_registry_refuses_a_path_two_handles_own(registry, capsys):
+    reg = json.loads(registry.read_text())
+    reg["handles"][1]["owns"] = [reg["handles"][0]["owns"][0]]
+    registry.write_text(json.dumps(reg))
+    rc, _, err = run(capsys, "owners", "AGENTS.md")
+    assert rc == 2 and "no other handle owns" in err
+
+
 def test_subscriptions_fail_visibly_without_channel_ids(registry, capsys):
     reg = json.loads(registry.read_text())
     reg["channels"]["agent-coordination"]["id"] = None
@@ -225,6 +247,20 @@ def test_ask_tags_one_owner_with_its_user_group_and_carries_no_footer(fake, regi
     assert TOKEN not in out + err
     assert run(capsys, "ask", "--as", "compute-accounting", "--to", "@compute-accounting", "--text", "x")[0] == 2
     assert run(capsys, "ask", "--as", "pous-worker-3", "--to", "@infra", "--text", "x")[0] == 2      # workers aren't on Slack
+
+
+def test_a_post_that_went_out_stands_when_its_permalink_fails(capsys):
+    """A caller that retries on a raise (the monitors' relay) would otherwise post it twice."""
+    class Api:
+        dry_run = False
+
+        def call(self, method, **kw):
+            if method == "chat.getPermalink":
+                raise slack.SlackError("chat.getPermalink: HTTP 429 (rate limited; retry after 1 s)")
+            return {"ok": True, "ts": "1700000000.000100"}
+
+    assert slack._post(Api(), ALERTS, "infra", "hello") == "1700000000.000100"
+    assert capsys.readouterr().out == "1700000000.000100 -\n"
 
 
 def test_ask_without_a_group_id_uses_plain_text_and_the_body_can_come_from_a_file(fake, registry, capsys, tmp_path):
@@ -316,6 +352,19 @@ def broker(fake, monkeypatch):
     monkeypatch.setattr(slack, "post", b)
     monkeypatch.setattr(slack, "oidc_token", b.oidc)
     return b
+
+
+def test_a_not_ok_answer_s_error_and_needed_scopes_are_echoed_only_as_codes():
+    answers = iter([{"ok": False, "error": "missing_scope", "needed": "chat:write,users:read.email"},
+                    {"ok": False, "error": "<html>refused dummy-verity-bot</html>", "needed": "see https://example.invalid/x\n"},
+                    {"ok": False, "error": "invalid_auth\n"}, {"ok": False, "error": 7}])
+    api = slack.Slack(TOKEN, transport=lambda url, data, headers: next(answers))
+    said = []
+    for _ in range(4):
+        with pytest.raises(slack.SlackError) as e:
+            api.call("auth.test")
+        said.append(str(e.value))
+    assert said == ["auth.test: missing_scope (needed scope chat:write,users:read.email)"] + ["auth.test: not ok"] * 3
 
 
 def test_the_transport_is_direct_with_a_token_and_the_broker_without_or_when_forced(monkeypatch):
@@ -597,6 +646,21 @@ def test_read_since_and_thread_oldest_first_across_pages(fake, registry, capsys)
     assert [m["text"] for m in json.loads(out)] == ["first", "reply"]
 
 
+def test_read_thread_since_reads_only_the_replies_after_ts(fake, registry, capsys):
+    """`--since` with `--thread` was refused, so a lane following a thread re-read all of it each time."""
+    fake.page = 2
+    root = fake.add(COORD, text="question", user="U1")
+    seen = fake.add(COORD, text="first answer", user="U2", thread_ts=root["ts"])
+    fake.add(COORD, text="elsewhere", user="U2")
+    fake.add(COORD, text="second answer", user="U3", thread_ts=root["ts"])
+    fake.add(COORD, text="third answer", username="console", bot_id=BOT, thread_ts=root["ts"])
+    rc, out, _ = run(capsys, "read", "--thread", root["ts"], "--since", seen["ts"])
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["second answer", "third answer"]
+    fake.replies_keep_root = True
+    rc, out, _ = run(capsys, "read", "--thread", root["ts"], "--since", seen["ts"], "--json")
+    assert rc == 0 and [m["text"] for m in json.loads(out)] == ["second answer", "third answer"]
+
+
 def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, registry, capsys):
     text = "freeze 2026-11-01T09:30Z, see note:20260930T2020Z-handoff-infra and `--since 2026-11-01T09:30Z`"
     assert run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", text)[0] == 0
@@ -869,9 +933,15 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
     assert run(capsys, "ask-daniel", "status")[0] == 2
 
 
-def test_resolve_records_a_thread_answer_and_says_clearly_when_the_route_is_missing(route, registry, capsys):
+def test_status_404_says_no_card_has_that_id(route, registry, capsys):
+    route.answer = (404, {"error": "not_found"})
+    rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err
+
+
+def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_card(route, registry, capsys):
     rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no", "--note", "Daniel in the thread: needs changes")
-    assert rc == 2 and "HTTP 404: the resolve route isn't deployed yet" in err and "record it as a ruling" in err
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "record Daniel's thread reply as a ruling" in err
     route.resolve = True
     rc, out, _ = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no", "--note", "needs changes")
     assert rc == 0 and out == "decided no thread -\n"
@@ -1103,8 +1173,8 @@ def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_b
     assert slack.seen_path("vllm-epoch-run").read_text().strip() == third["ts"]
     slack.mark_read("vllm-epoch-run", [second])
     assert slack.seen_path("vllm-epoch-run").read_text().strip() == third["ts"]
-    rc, _, err = run(capsys, "read", "--thread", first["ts"], "--since", first["ts"])
-    assert rc == 2 and "neither --since nor --as" in err
+    rc, _, err = run(capsys, "read", "--thread", first["ts"], "--as", "vllm-epoch-run")
+    assert rc == 2 and "--thread reads one thread; it doesn't take --as" in err
     rc, _, err = run(capsys, "read")
     assert rc == 2 and "one of --thread TS, --since TS or --as NAME" in err
 

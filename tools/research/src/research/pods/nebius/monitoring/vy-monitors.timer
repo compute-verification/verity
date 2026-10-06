@@ -1,0 +1,10 @@
+[Unit]
+Description=vy-monitors.service a minute after each pass ends
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=60s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

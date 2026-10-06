@@ -137,9 +137,9 @@ class Row:
             print(f"PRECHECK_FAIL_SOURCE_IDENTITY: {self.proc} at {self.tree} but $VERITY_TREE={self.env.verity_tree} names another tree",
                   file=sys.stderr)
             raise Stop(3)
-        core, research = Path(self.tree, "../../packages/verity/src"), Path(self.tree, "../../tools/research/src")
+        core, research = Path(self.tree, "../.."), Path(self.tree, "../../tools/research/src")
         if not core.is_dir():
-            print(f"PRECHECK_FAIL_SOURCE_IDENTITY: no packages/verity/src beside {self.tree} (not a shipped Verity tree)", file=sys.stderr)
+            print(f"PRECHECK_FAIL_SOURCE_IDENTITY: no Verity tree above {self.tree} (not a shipped Verity tree)", file=sys.stderr)
             raise Stop(3)
         if not research.is_dir():
             print(f"PRECHECK_FAIL_SOURCE_IDENTITY: no tools/research/src beside {self.tree}", file=sys.stderr)
@@ -283,11 +283,15 @@ class Row:
         """The item leases its GPU (`gpu_lease`): its pod has none of its own."""
         return GL.leased(self.child_env)
 
-    def run_gpu(self, stage: str, to: int | str, lf: str, cmd: list[str]) -> int:
-        """``run_tl`` for the stage that needs the GPU: under a lease when the item is leased, else as any stage."""
+    def run_gpu(self, stage: str, to: int | str, lf: str, cmd: list[str], *, lease_dir: str | None = None, kept: str | None = None) -> int:
+        """``run_tl`` for the stage that needs the GPU: under a lease when the item is leased, else as any stage.  ``lease_dir``: where
+        the lease's markers and ``gpu_lease.json`` go (default the row dir, the Commit's); ``kept``: why a process that never releases
+        holds its lease to its exit (`gpu_lease.run`)."""
         if not self.leased:
             return self.run_tl(stage, to, lf, cmd)
-        rc, rec = GL.run(self.d, lf, cmd, int(to), self.child_env, lambda t, argv: self.run_tl(stage, t, lf, argv))
+        d = lease_dir or self.d
+        os.makedirs(d, exist_ok=True)
+        rc, rec = GL.run(d, lf, cmd, int(to), self.child_env, lambda t, argv: self.run_tl(stage, t, lf, argv), kept=kept)
         self.log(f"GPU lease ({GL.RECORD}): waited {rec['waited_min']} min, held {rec['held_min']} min, released {rec['released']} after "
                  f"{rec['released_at']}{' (kept: ' + rec['kept'] + ')' if rec.get('kept') else ''}, rc={rc}")
         return rc

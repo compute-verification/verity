@@ -313,7 +313,7 @@ The verifier draws the sampled units itself, in the clear, between registration 
 its operating system's randomness and sends it; the drawn units' statements are fixed; only then does the verifier send
 its coin commitment. The draw is not under the coin commitment, and no hash derives it.
 
-The samplers are `verity.randomness`'s exact ones, read straight from the OS bytes (`Flock.Draw`, `flock-verify draw`).
+The samplers are `verity.primitives.randomness`'s exact ones, read straight from the OS bytes (`Flock.Draw`, `flock-verify draw`).
 `uniform(n)` takes big-endian words of `w = ⌈(bitlen(n) + 64) / 8⌉` bytes and returns the first `x < 2^(8w) − 2^(8w) mod n`,
 mod `n`. `subset(k, n)` is the partial Fisher–Yates of `Key.subset`: for `i < k`, `j = i + uniform(n − i)`, swap `i` and
 `j`, and return the first `k`, sorted. `bernoulli(p)` over `[0, N)` takes unit `u` when `uniform(den) < num`. A stream
@@ -329,7 +329,7 @@ The draw is the object
 ~~~
 
 **The stratified law** is the default (Daniel, Sep 27; the encoding is `note:20260927T1550Z-handoff-from-stratified-law`,
-the same as `verity_sampled_proofs.one_stage`'s, in `protocols/sampled_proofs/README.md`):
+the same as `verity.protocols.verification.sampled_proofs.one_stage`'s, in `verity/protocols/verification/sampled_proofs/README.md`):
 - **Strata.** The verifier derives them from its own program and partition object, never from anyone else
   (`HmRow.stratifiedLaw`, `flock-verify draw --program P --partition Q --stratified K`). It applies the query, groups the
   units by the template descriptor id of their root node, and writes each stratum's units as ascending, disjoint, non-empty
@@ -403,7 +403,7 @@ and the record keeps it as `unit_draw`. The offline checks:
 | U3 | the statement's `instances` is the number of drawn units and their closure. A work draw's closure must be the verifier's own derivation from its closure map, and `verify` refuses a closure draw without the map |
 
 `stratified_agree.py` checks the Lean verifier's laws, draws and U2 verdicts against core's (#164's
-`verity_sampled_proofs.one_stage.draw`, #161's `Stratified`).
+`verity.protocols.verification.sampled_proofs.one_stage.draw`, #161's `Stratified`).
 
 Offline, the draw's uniformity is not checkable; soundness rests on the verifier's honest draw after registration. A
 session without a draw on either side is unchanged. The live side (PR #83) sends the draw after registration, stages the
@@ -1058,6 +1058,8 @@ included. Claims are listed region-major, then point 0 before point 1.
   - The input rows end before the constant (`128 · inWords ≤ constPos`, 128 rows per input word). Otherwise an input
     port could cover the constant's column, and Δ's input copies would rewrite the slot's constant row, leaving the
     unit's constant free.
+  - Each output group ends inside the slot (`col + words ≤ 2^{unit_log} / 128`, D11). Otherwise a region at its column
+    (`Circuit.outRegion`) would reach past the slot into the next range's columns.
   - Upstream's composite verifier checks none of these.
   - Lookup slots (META `lookups`, in key order after the expanded circuits, each named `lookup:<table>`) are built from
     SHA-256-pinned tables (`rsq, sqrt, rcp, ex2`) as two-level one-hot circuits.
@@ -1109,7 +1111,7 @@ The verifier checks the partition invariant itself, on its own copy of each circ
 `flock-verify unit-cut`). A cut is `total_gates`, `structure_gates` (constants and wiring: circuit structure, never
 committed), `owner[g]` (`"input"` for an input gate, a computing unit `u ≥ 0` otherwise), the `reads` `(producer,
 consumer)`, the returned `outputs`, the `committed` gates, the `input_gates`, and the `recomputed` pairs `(gate, earlier
-gate)`. The failure codes, in order, are those of `verity.ir.partition.validate_unit_cut`:
+gate)`. The failure codes, in order, are those of `verity.primitives.circuits.partition.validate_unit_cut`:
 
 | code | rule |
 |---|---|
@@ -1125,14 +1127,14 @@ With no failure, each gate is certified by exactly one unit and the committed se
 circuit is malformed. Under `Q_word` v2 (a cut's `"recompute": "report"`, the reference's `recompute="report"`) a recomputed
 pair across units is no failure: it is counted (`recomputed_across`), and every other code is v1's.
 
-**One Call's cut against its graph** (`Partition.checkCut`, `flock-verify cut-check`; reference `verity.ir.cut.check_cut`). The invariant runs on the Call's computing gates, with its parameters as the input unit and, unless served values
+**One Call's cut against its graph** (`Partition.checkCut`, `flock-verify cut-check`; reference `verity.primitives.circuits.cut.check_cut`). The invariant runs on the Call's computing gates, with its parameters as the input unit and, unless served values
 are given, the committed set the cut implies: a value is committed exactly when another unit reads it or the Call returns
 it. Then the width rule `Q_word_v1{X, W, EXTRAS}`, today `(16, 32, 0)`: each unit's boundary (its gates another unit reads
 or the Call returns) is at most `X + EXTRAS` bits, or one value of at most `W + EXTRAS` bits; else `unit-too-wide`, with
 `(unit, bits, values)`.
 
 **`Q_word` v1 over the verifier's own copy of the program** (`Flock.Qword`, `Flock.Program`, `Flock.Extract`;
-`flock-verify evaluate`, `qword-program`; reference `verity.ir.cut` and `verity.ir.partition_object`):
+`flock-verify evaluate`, `qword-program`; reference `verity.primitives.circuits.cut` and `verity.primitives.circuits.partition_object`):
 - the program is decoded from its `verity-ir/descriptor/v1` bytes by #120's rules, and each Call's graph is built as core's
   `CallGraph` builds it;
 - a program that is not topological, or whose root batches or scans, is inapplicable to every query;
@@ -1298,7 +1300,11 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   by the descriptor id in the program's bytes. Each call is one unit and each batch member one unit, in node then member
   order, and a unit's gates are its instance's interval. Every listed template has an instance, or the query refuses. The
   circuit's template (the one key of META `program_digests`) must be listed, and every unit the header's `units.indices`
-  claims must be an instance of it: then the statement's units are derived.
+  claims must be an instance of it: then the statement's units are derived. A unit class's circuit (META `template`
+  `unit-class`, its one key `unit-class/…`) names the Definition its units are instances of in META `definition`, and that
+  descriptor id is then the template the query must list and the claimed units must be instances of. That the class circuit
+  lowers the Definition is the class's own claim, which the verifier does not check (the note says so); the class digest
+  covers META `definition`.
 - **The partition finding.** Every verdict of such a statement carries `partition = {rule, query, digest, units, note}`.
   `units` is `derived` when the verifier derived the statement's units itself, given `--program`: for the template
   queries (above), and for `Q_word` v1 and v2 (§16.7) when the program is the object's, the query applies, every claimed unit is
@@ -1316,6 +1322,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   registered row at `positions[i]`. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its
   position, each instance's ref name its unit's read position in the verifier's program (units `derived`). A port on
   one side only refuses; verdicts report `registered`.
+- **Identifier.** The header may carry `identifier`, a JSON object C-Flock does not read (an application's name for what the
+  statement is about, such as PoUW's). The public digest covers the header, so Σ binds it. The verifier needs its own
+  `--identifier F` (a JSON object, by path or archive digest), and the header's must equal `F`'s in RFC 8785 form: both are
+  `canon`'s on core's RFC 8785 domain (`Program.domainError`, `verity.primitives.circuits.codec.jcs_domain_error`: strings and keys ASCII
+  without DEL, integers of magnitude at most 2^53 − 1), and anything outside it refuses. A header identifier that is not an object, one with no
+  `F`, and an `F` with a header that names none refuse. Verdicts and `statement` report `identifier`. The prover writes it
+  with `circuit.write(..., identifier=)`.
 - **Public input ports** (`Flock.HmIn`, §16.13's statements). META may name `public_inputs` (`[{port, words, seed,
   derivation}]`) and `leaves_public` (per unit, each leaf's public word or −1): unit inputs the verifier recomputes from
   public data, not rows. The words of an unpacked unit range's leaf group holding them hold no row leaf; each run of
@@ -1428,10 +1441,34 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
   instance's (`dummy.outputs`) under zero salts, each row's `dummy.bc` checked.
 - **Identity** adds `outputs`: `"hidden: each output port an hm96-sha512/row/v1 row hashed in the circuit; the public file
   has no output word"` (`v2` under `row_schemas`).
-- **Linking.** An output row is committed as an input row of the same words, so a reader committing it under the producer's
-  salt has the producer's `b ‖ c` as its input leaf. A salt commits one row value: reused for another row, it reveals
-  `b₁ ⊕ b₂ = x₁ ⊕ x₂`. A link is as good as both proofs (under a draw, an undrawn producer instance's output is unproven),
-  and a deduplicated reader table (`shared_rows`) links at most one producer instance per row.
+- **Linking** is a check (`Flock.HmLinks`). It binds a public topology; it does not hide the topology: both verifiers
+  read the wiring from their own program (the descriptor, the links file), which is the circuit's, so publishing it is a
+  known leak beyond the size class that later work removes. An output row is committed as an input row of the same words, so a reader
+  committing it under the producer's salt has the producer's `b ‖ c` as its input leaf. META `links`
+  (`[{port, leaves: [lo, hi]}]`, at least one) names the link rows: each an input row (by name) that holds template parameter
+  leaves `[lo, hi)` as the one output row holds outputs, a `hm96-sha512/row/v1` row of that row's words, at most that many
+  leaves, a row once, the ranges disjoint. Staging (`class_statement.Wiring`) gives each reading instance its own link-row
+  table row under its writer's output-row salt. The check holds for a hidden-output statement under a template query with
+  the verifier's own program (`--program`, `--partition`), over every unit of the registered population, before any draw, so
+  a drawn reader is held to its writer's committed row whether the writer is drawn or not. Per unit, from the program
+  (`Program.operands` of its root node and member): every parameter leaf that is another unit's output (its gate inside a
+  unit's interval) lies in a link's range; each link's leaves are either all circuit inputs (an ordinary input row there) or
+  exactly one writer unit's outputs, all of them, in order; that writer is a unit of the public file; and the reader's
+  link-row `b ‖ c` equals the writer's output-row `b ‖ c`. Otherwise the verifier refuses, naming the leaves, the row, the
+  writer and the reader (`links: cut wire [lo, hi) from unit v to unit u: …`). A template-query statement with no META
+  `links` is held to the same check, so any cut wire between its units refuses it. META `links` without the program and
+  partition, under any other query, or on a statement with public outputs (`setupH`) is refused. The live verifier
+  (`flock-circuit serve`, `replay`, `statement`) makes the same comparison on the population's file against the
+  verifier's own `--links F` (`verity/flock-links/v1`: `circuit_sha512`, the partition digest, META's link ports, and every
+  `[reader, port, writer]` instance triple, derived from its program by `class_statement.links_file`); a circuit with
+  `links` needs the file and one without refuses it. Not checked: a link across statements (refused), that the class
+  circuit reads leaf `lo + k` from word `k` of the link row (the class lowering's claim, like the Definition it lowers), and
+  public-output statements' links (their outputs are words, not rows). A salt commits one row value: reused for another
+  row value, it reveals `b₁ ⊕ b₂ = x₁ ⊕ x₂`; a link row holds its writer's value, so the shared salt reveals `b₁ = b₂`,
+  that the two rows are equal: the wire itself, which a hidden topology would have to hide too. A link is as good
+  as both proofs (under a draw, an undrawn writer's output is unproven: the check binds the reader's input to the writer's
+  committed output, not to a correct one), and a deduplicated reader table (`shared_rows`) links at most one producer
+  instance per row.
 - **Registered reads** are §16.10's, of `v1` rows. A registered port is an input row or an output row: a registered output
   row opens the registered root at its unit's read position, under the registered row's salt, so the instance's output is
   that row (a `row-seg/v1` or `v2` row is refused: its leaf is not the registration's `row/v1` leaf).
@@ -1484,6 +1521,16 @@ expectation):
   `backends/flock/live`'s now does. No vector exercises it.
 - **D9:** at least one VU per block (§16.10). Upstream's `Composite::check` in the same builds lets `vus_per_block = 0`
   through when a tail returns the outputs; the spec refuses it, as `backends/flock/live`'s now does. No vector exercises it.
+- **D10:** the header's `identifier` (§16.10). Upstream ignores it (the public digest binds it); the spec refuses one that
+  is not the verifier's own `--identifier F`. No vector exercises it; `backends/flock/tests/test_lean_identifier.py` runs
+  it on the Lean verifier.
+- **D11:** each expanded circuit's output groups end inside its slot, `col + words ≤ 2^{unit_log} / 128` (§16.5,
+  `Net.ofRows`). Upstream's `IrUnitNet::parse` in every pinned build checks only that a group is an aligned power of two of
+  words, and its `Composite::check` doesn't bound an output column, so upstream accepts a statement that moves an output
+  group past the slot; the spec refuses it, as `backends/flock/live`'s parser now does. Honest statements pass both: every
+  writer (`ir_lower.layout`, `derive`, `tail.stage_layout`) closes its output groups before the constant row, so
+  `128 · (col + words) ≤ constPos < useful ≤ 2^{unit_log}`. No vector exercises it;
+  `backends/flock/tests/test_lean_out_group_slot.py` runs it on the Lean verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

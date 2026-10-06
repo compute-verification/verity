@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity_vllm.config import option
 from verity_vllm.program.registry import b1, prims  # noqa: F401  (registration)
 
@@ -65,7 +65,7 @@ NAN_CANONICALISATION = {
     "interface_family": {"F2fpBf16_v1": "veritor.tc-ampere-bf16@2 f32_to_bf16", "F32ToBf16Rn_v1": "veritor.tc-ampere-bf16@1 f32_to_bf16"},
     "narrow_delta": {"lean": ["VeritorSpec.TCBHw.castF32ToBf16Hw_eq_of_not_nan", "VeritorSpec.TCBHw.castF32ToBf16Hw_of_nan",
                               "VeritorSpec.TCBHw.castF32ToBf16Hw_ne_iff"],
-                     "rust": "backends/sp1/common/src/tc.rs the_two_casts_differ_only_on_nan (all 2^32 words, release build)",
+                     "rust": "archive/sp1/common/src/tc.rs the_two_casts_differ_only_on_nan (all 2^32 words, release build)",
                      "python": "the predecessor implementation's exhaustive 2^32 sweep (all 2^32 words; not in this repository)"},
     "program_digests_unchanged": {"B0": "03405bbdc7ec2825abd79aad723a2c75a417e8b3084567f89cf3341e31a5ab2d",
                                   "B1": "11f3b7b6092d8020821f2388d91b029b2ad033a925bf2682bd918720d6e61097"},

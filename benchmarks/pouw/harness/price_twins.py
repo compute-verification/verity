@@ -5,7 +5,7 @@ A twin is one pinned theorem: the Gγ statement of a device record at a cast (FP
 function (v1-hot, v2-hot, Pearl-C4 v1 and v2). Its key is
 
   statement   the panel line and version it is γ for, hashing format aside: pearl-c-sm120/v2, pearl-c-fp4/v1, ...
-  path        the priced path, as `verity_pouw.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
+  path        the priced path, as `verity.protocols.accounting.work.pouw.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
               statement's), cast-8.72, cast-16, cast-32, cast-32.06; lut256 or rcpApprox for Pearl-C4's block scale
   fadd        the FP32 add's W1 price: 8 (the cheapest bit-exact FADD) or 1047/125 (the measured in-loop one)
   reading     forming-credited, chain-only or chain-cap
@@ -18,6 +18,11 @@ Rounded twins (a record's own cast under the loop price, an upper bound) and U-o
 left out. Each twin keeps its pin's name, type hash and source, and is ``pinned`` when the Lean store's lean-audit.json
 or the repository's own (`REPO_AUDIT`, read after the store's files) holds that pin with that type hash, ``staged``
 otherwise.
+
+A twin lifted to a guarantee is pinned as `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G`, whose signature
+states no γ. Its statement is the body of the definition `G`, read from the Lean source of the module that the audit's
+`reads` records it in, and checked as a signature is. A lifted twin whose `G` the audit doesn't record, or whose body
+states no literal γ, fails the table (`TwinError`).
 
   python price_twins.py STORE_ROOT [--out price_twins.json]   regenerate the table from the POUS Project store's pins
 
@@ -42,8 +47,8 @@ FADD_PRICES = (Fraction(8), Fraction(1047, 125))
 #: staged with a red-team GO (price-twins-lean/README.md)
 LEAN_STORE = "lean/submissions/pouw/lean-audit.json"
 #: the repository's PoUW Lean audit, where pins land now; read after the store's files, so a pin they hold keeps its row
-REPO_AUDIT = HERE.parents[2] / "protocols" / "pouw" / "lean" / "lean-audit.json"
-REPO_SOURCE = "protocols/pouw/lean/lean-audit.json"
+REPO_AUDIT = HERE.parents[2] / "verity" / "protocols" / "accounting" / "work" / "pouw" / "lean" / "lean-audit.json"
+REPO_SOURCE = "verity/protocols/accounting/work/pouw/lean/lean-audit.json"
 STAGED = ("internal/pouw/price-twins-lean/proposed-pins.json", "internal/pouw/price-twins-lean/v2-hot/v2-hot-pins.json",
           "internal/pouw/price-twins-lean/v1-hot/v1-hot-pins.json", "internal/pouw/price-twins-lean/fp4-delta/fp4-delta-pins.json")
 CASTS = {"8": "cast-8", "8p72": "cast-8.72", "16": "cast-16", "32": "cast-32", "32p06": "cast-32.06"}
@@ -56,16 +61,22 @@ CAPS = {"pearl-c-sm120/v1": Fraction(1, 1000), "pearl-c-sm120/v2": Fraction(1, 1
 NAME_CAPS = {"Rev1": Fraction(1, 400), "Cap1000": Fraction(1, 1000), "Rev1Cap1000": Fraction(1, 1000)}
 
 _RAT = r"(\d+)(?: / (\d+))?"
+#: `Pouw.PearlC.`, which a signature prints and a `Guarantees` definition's source may leave to its `open`
+_NS = r"(?:Pouw\.PearlC\.)?"
 _FP8 = re.compile(r"pearlC(?P<kind>Gamma|Sampled)Sm120(?P<ver>v1|v2)(?P<loop>Loop)?(?:Cast(?P<cast>8p72|32p06|16|32|8))?"
                   r"(?P<read>ChainOnly|Chain)?(?P<cap>Rev1Cap1000|Rev1|Cap1000)_(?P<shape>8192|16384)")
-_CAP_ARG = re.compile(r"Pouw\.PearlC\.pearlCProtocolDev\w* \(Pouw\.PearlC\.devSm120v[12] Pouw\.PearlC\.Prices\.\w+\) "
+_LIFTED = re.compile(r"(\S+) : (Pouw\.Guarantees\.\S+)")
+_DEV = re.compile(_NS + r"devSm120(v1|v2) " + _NS + r"Prices\.(sm120Loop|sm120)\b")
+_CAP_ARG = re.compile(_NS + r"pearlCProtocolDev\w* \(" + _NS + r"devSm120v[12] " + _NS + r"Prices\.\w+\) "
                       r"\w+ \(" + _RAT + r"\)")
 _HOT = re.compile(r"gammaHot(?P<rev>Rev1)?(?P<read>ChainOnly)?_sm120(?P<ver>v1|v2)Hot(?P<loop>Loop)?Cast(?P<cast>8p72|32p06|16|32|8)"
                   r"_(?P<sizing>[A-Za-z0-9]+)_(?P<shape>8192|16384)")
 _FP4 = re.compile(r"gammaFp4(?P<hot>Hot)?(?P<read>ChainOnly)?_sm120(?P<price>Issue|Loop)_(?P<path>lut256|rcpApprox)"
                   r"_(?P<shape>8192|16384)")
 _CAST_ARG = re.compile(r"instHSub\.hSub \(?" + _RAT + r"\)?")
+_CAST_SOURCE = re.compile(r"\(" + _RAT + r" - ")
 _GAMMA_LITERAL = re.compile(r"(?:\(|↑\()" + _RAT + r"\)\)?(?:\.cast)? Pouw\.PearlC\.εPearlC\s*$")
+_GAMMA_SOURCE = re.compile(r"\(\(" + _RAT + r" : ℚ\) : ℝ\) " + _NS + r"εPearlC\s*$")
 _VALUE_LITERAL = re.compile(r"\(" + _RAT + r"\)\)*\s*$")
 _FP4_PRICE = re.compile(r"Fp4Prices\.sm120At \(?" + _RAT + r"\)? Pouw\.PearlC\.Fp4ScalePath\.(lut256|rcpApprox)")
 
@@ -78,23 +89,62 @@ def _q(num: str, den: str | None) -> Fraction:
     return Fraction(int(num), int(den or 1))
 
 
-def parse(name: str, pin: dict) -> dict | None:
-    """One pin as a twin, or None when it isn't one; TwinError when its name and its signature disagree."""
-    short = name.removeprefix("Pouw.PearlC.")
+def lifted_definitions(audit: dict, lean: Path) -> dict[str, str]:
+    """The body of each `Pouw.Guarantees` definition that the audit's `reads` record, from its module's source under `lean`,
+    with whitespace collapsed: `def G : Prop :=` and the indented lines after it, in `namespace` G's prefix."""
+    out = {}
+    for module, group in audit.get("reads", {}).items():
+        names = [d for d in group.get("definitions", {}) if d.startswith("Pouw.Guarantees.")]
+        path = lean / (module.replace(".", "/") + ".lean")
+        if not names or not path.is_file():
+            continue
+        text = path.read_text()
+        for d in names:
+            ns, short = d.rsplit(".", 1)
+            m = re.search(rf"^namespace {re.escape(ns)}\n(?:.*\n)*?def {re.escape(short)} : Prop :=\n((?:[ \t]+\S.*\n)+)", text,
+                          re.M)
+            if m:
+                out[d] = " ".join(m[1].split())
+    return out
+
+
+def _statement(name: str, pin: dict, defs: dict[str, str]) -> tuple[str, bool]:
+    """What the pin states, and whether it is a lifted guarantee's (`X : G`, stated by `G`'s body in `defs`)."""
     sig = " ".join(" ".join(pin["signature"]).split())
+    if (m := _LIFTED.fullmatch(sig)) and m[1] == name:
+        if m[2] not in defs:
+            raise TwinError(f"{name}: states {m[2]}, which no Guarantees definition the audit's reads record gives")
+        return defs[m[2]], True
+    return sig, False
+
+
+def parse(name: str, pin: dict, defs: dict[str, str] | None = None) -> dict | None:
+    """One pin as a twin, or None when it isn't one; TwinError when its name and its statement disagree, or when it is a
+    lifted guarantee whose definition `defs` (`lifted_definitions`) doesn't give or whose statement isn't a twin."""
+    short = re.sub(r"^Pouw\.SecurityProofs\.PearlC\.(?=Gamma|Sampled)", "pearlC", name).removeprefix("Pouw.PearlC.")
+    if not any(r.fullmatch(short) for r in (_FP8, _HOT, _FP4)):
+        return None
+    sig, lifted = _statement(name, pin, defs or {})
+    row = _row(name, short, sig)
+    if row is None and lifted:
+        raise TwinError(f"{name}: its guarantee's statement states no literal γ")
+    return None if row is None else row | {"pin": name, "type_hash": pin.get("type_hash")}
+
+
+def _row(name: str, short: str, sig: str) -> dict | None:
     row: dict
     if m := _FP8.fullmatch(short):
         loop, cast = bool(m["loop"]), m["cast"]
-        dev = re.search(r"Pouw\.PearlC\.devSm120(v1|v2) Pouw\.PearlC\.Prices\.(sm120Loop|sm120)\b", sig)
+        dev = _DEV.search(sig)
         if dev is None or dev[1] != m["ver"] or (dev[2] == "sm120Loop") != loop:
             raise TwinError(f"{name}: its signature's device record and prices aren't its name's")
-        arg = _CAST_ARG.search(sig)
+        arg = _CAST_ARG.search(sig) or _CAST_SOURCE.search(sig)
         if cast is None and (loop or arg):
             return None
         path = CASTS[cast or "8"]
         if arg and _q(arg[1], arg[2]) != CAST_VALUES[path]:
             raise TwinError(f"{name}: its signature prices the cast at {_q(arg[1], arg[2])}, not {path}")
-        lit = _GAMMA_LITERAL.search(sig)
+        lit = _GAMMA_LITERAL.search(sig) or _GAMMA_SOURCE.search(sig)
         if lit is None:
             return None
         rho = _CAP_ARG.search(sig)
@@ -131,14 +181,15 @@ def parse(name: str, pin: dict) -> dict | None:
                "gamma": _q(lit[1], lit[2])}
     else:
         return None
-    return row | {"pin": name, "type_hash": pin.get("type_hash")}
+    return row
 
 
-def extract(pins: dict[str, dict], source: str, pinned: dict[str, str]) -> list[dict]:
-    """Every twin among `pins`, from `source`; ``status`` pinned when `pinned` (the Lean store's name -> type hash) holds it."""
+def extract(pins: dict[str, dict], source: str, pinned: dict[str, str], defs: dict[str, str] | None = None) -> list[dict]:
+    """Every twin among `pins`, from `source`; ``status`` pinned when `pinned` (the Lean store's name -> type hash) holds it.
+    ``defs`` states the lifted guarantees (`lifted_definitions`)."""
     out = []
     for name in sorted(pins):
-        row = parse(name, pins[name])
+        row = parse(name, pins[name], defs)
         if row is not None:
             row["source"] = source
             row["status"] = "pinned" if pinned.get(name) == row["type_hash"] else "staged"
@@ -150,17 +201,23 @@ def _jsonable(row: dict) -> dict:
     return {k: (str(v) if isinstance(v, Fraction) else v) for k, v in row.items()}
 
 
+def guarantees(doc: dict) -> dict[str, dict]:
+    """A Lean audit record's guarantees; the store's files, written before they were called that, hold them as `pins`."""
+    return doc["guarantees"] if "guarantees" in doc else doc["pins"]
+
+
 def build(root: Path, repo_audit: Path = REPO_AUDIT) -> dict:
     """The table from the POUS Project store at `root` and the repository's audit: every twin, one per pin (the Lean
     store's copy of a pin first, the repository's last)."""
     files = {rel: root / rel for rel in (LEAN_STORE, *STAGED)} | {REPO_SOURCE: repo_audit}
     pinned: dict[str, str] = {}
     for rel in (REPO_SOURCE, LEAN_STORE):
-        pinned |= {k: v.get("type_hash") for k, v in json.loads(files[rel].read_text())["pins"].items()}
+        pinned |= {k: v.get("type_hash") for k, v in guarantees(json.loads(files[rel].read_text())).items()}
+    defs = lifted_definitions(json.loads(repo_audit.read_text()), repo_audit.parent)
     sources, twins, seen = [], [], set()
     for rel, path in files.items():
         raw = path.read_bytes()
-        rows = extract(json.loads(raw)["pins"], rel, pinned)
+        rows = extract(guarantees(json.loads(raw)), rel, pinned, defs)
         sources.append({"path": rel, "sha256": hashlib.sha256(raw).hexdigest(), "twins": len(rows)})
         for r in rows:
             if r["pin"] not in seen:

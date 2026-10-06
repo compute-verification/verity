@@ -29,10 +29,10 @@ from typing import Any, Callable, Iterable, Iterator
 
 import numpy as np
 
-from verity.ir.layout import WIDE_FAN_IN, resolve
-from verity.ir.refs import Affine, Concat, Strided
+from verity.primitives.circuits.layout import WIDE_FAN_IN, resolve
+from verity.primitives.circuits.refs import Affine, Concat, Strided
 
-from verity.ir import cut as CUT
+from verity.primitives.circuits import cut as CUT
 
 from verity_vllm.query import call_scope as CS
 from verity_vllm.query.program_view import iter_instance_rows, spec_base, spec_statics
@@ -579,11 +579,11 @@ def _name(a: dict[str, Any]) -> str:
 
 
 def members_check(fn: Any, memo: dict | None = None) -> dict[str, Any]:
-    """Recomputes between the node members of a Definition whose body nodes read only its parameters (`verity.ir.cut.separable`: its
+    """Recomputes between the node members of a Definition whose body nodes read only its parameters (`verity.primitives.circuits.cut.separable`: its
     partition is each member's own): each member is a Call over `fn`'s parameters, its operand runs its references
-    (`verity.ir.refs.runs`), checked as a Program's Calls are (`check_program`).  The recompute classes name each member's callee."""
-    from verity.ir.parts import n_members
-    from verity.ir.refs import runs
+    (`verity.primitives.circuits.refs.runs`), checked as a Program's Calls are (`check_program`).  The recompute classes name each member's callee."""
+    from verity.primitives.circuits.parts import n_members
+    from verity.primitives.circuits.refs import runs
     keys: dict[str, str] = {}
     fns: dict[str, Any] = {}
     rows: list[dict[str, Any]] = []

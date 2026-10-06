@@ -60,16 +60,16 @@ Ask each of these of a proposed process. A "no" costs velocity unless the propos
    reviewer is always the human.
 2. **Does it fire where results are relied on, not where they're made?** The reliance points are landing on `main`,
    publishing a table or a Notion page, citing a theorem as proved, and handing a spec to another implementer. Most
-   exploration results are thrown away. Good: pins only on cited theorems; `experimental` schemes. Bad: a `PROTOCOL.md`
-   kept current on every behavior change, which cost 64 commits to the protocols' prose against 70 to their Python in
-   the week of Sep 22–29.
+   exploration results are thrown away. Good: records only for cited theorems (guarantees); `experimental` schemes.
+   Bad: a `PROTOCOL.md` kept current on every behavior change, which cost 64 commits to the protocols' prose against 70
+   to their Python in the week of Sep 22–29.
 3. **Is it code, with the fix in its failure message?** A check costs nothing until it fires, and it teaches when it
    does. Prose taxes every agent's context and is followed unreliably; the lane contract says it: "a rule you can't see
-   enforced is not protection". Good: the Lean audit's `escapes` list; `packages/verity/tests/test_boundaries.py`.
+   enforced is not protection". Good: the Lean audit's `escapes` list; `verity/tests/test_boundaries.py`.
 4. **Does it label rather than block, unless the error would pass unnoticed?** A label lets work go on and lets readers
    filter. Block only for errors nobody would notice until they cost a lot: #118 made `merkle_binding` vacuous by
-   redefining `MerkleScheme.Collision`, the axiom audit passed it, and only the pins and a statement review catch that.
-   Good: `(alg.)` on algebraic-hash results.
+   redefining `MerkleScheme.Collision`, the axiom audit passed it, and only the guarantees' records and a person reading
+   them catch that. Good: `(alg.)` on algebraic-hash results.
 5. **Does it keep one source and generate the rest?** Every hand-kept copy doubles edits and drifts. Bad: the dense
    scheme's Lean re-certified as "matching the code" after the tag format had diverged between Lean and Python;
    hand-written proved/open tables.
@@ -102,7 +102,7 @@ where a result is relied on.
 
    ~~~sh
    git fetch origin main
-   git log origin/main --since=2.weeks --date=format:'%m-%d %H:%M' --format='%h %ad %s' -- protocols/pous   # changes by path
+   git log origin/main --since=2.weeks --date=format:'%m-%d %H:%M' --format='%h %ad %s' -- verity/protocols/accounting/space/pous   # changes by path
    git log origin/main --since=1.week --format=%h -- AGENTS.md | wc -l                                        # how often a file changes
    gh pr list --state merged --limit 300 --json number,createdAt,mergedAt,files --jq '
      .[] | select(any(.files[]; .path | startswith("protocols/")))
@@ -142,8 +142,8 @@ commit; the Python passes every vector except those in a hand-kept lag list; and
 through a week of changes to POUS, PoUW, the one-stage audit and sampled proofs:
 
 - about 30 Python changes that don't change behavior, 3 experimental scheme versions and about 14 Lean proofs: no cost;
-- about 6 changes of a default or a law: each would wait 1 to 3 hours for an executable spec, new vectors and a pin
-  review, which would have serialized POUS's three default switches in nine hours;
+- about 6 changes of a default or a law: each would wait 1 to 3 hours for an executable spec, new vectors and a
+  guarantee review, which would have serialized POUS's three default switches in nine hours;
 - the lag list: a second source, and a file lanes would collide on.
 
 The walkthrough justifies neither the lag list nor the default-switch match point, because a result built on an

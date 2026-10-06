@@ -11,7 +11,7 @@ import dataclasses
 import pytest
 
 from tests.query.test_literal_operands import RES, constant_s_program, sampler_program
-from verity.proofs.query import ValueRef
+from verity_vllm.query.units import ValueRef
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import ProgramView
 from verity_vllm.query.required import request_manifest
