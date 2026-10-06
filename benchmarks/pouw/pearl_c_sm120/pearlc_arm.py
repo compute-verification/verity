@@ -3,7 +3,8 @@ kernels as the honest prover of `pearl-c-sm120-v1-h1` on the harness's FP32 oper
 `pearl_c_device.SM120` (G = 4, the panel's `pearl-c-sm120` v1-h1) or `SM120_UNPROMOTED` (v2-h1).
 
 Each operand set is a one-unit epoch as `verity.protocols.accounting.work.pouw.audit` starts it, in hashing format -h1: B's frame-b3 row tree on the
-device, its root read back, the salt from that root and a beacon of `os.urandom(32)` drawn at `prepare`, seed_B, and the
+device, its root read back, the salt from the salt coin of the set's epoch challenger (`challenger`, the arm's own, live)
+opened after that root at `prepare` (`Epoch.start`), seed_B, and the
 domain ids and unit block the kernels read (run.Pipeline's `keys`).  `weight_side` is the per-(weight, epoch) work: B's row
 tree, the pads and level keys of A's tree and of the tile tree, E_B's, F_A's and F_B's lines, B's statistics, E′ and forming,
 B̃·F_A, G and P_B.  `launch` is one call: at m not a multiple of 64, A's rows into a zero-padded buffer; A's frame-b3 row
@@ -35,7 +36,7 @@ between the product and the hashes.  `build` names the cubin (`binaries`) and th
 The transcript: when the harness frees a gated hash call of operand set 0, the arm fills every buffer of the set but its
 tensor maps with 0xA5 (the trees, the tile leaves and what the weight side wrote among them), runs the weight side and the
 call once more on the set's operands, and writes what the prover publishes and opens: `transcripts/<arm>/<shape>/manifest.json`
-in the run's directory (the scheme, the matmul, the beacon, the salt, the weight root, A's root, the tile tree's commitment,
+in the run's directory (the scheme, the matmul, the coin commitment and the salt coin's opening, the salt, the weight root, A's root, the tile tree's commitment,
 and every file with its SHA-256), the levels of A's, B's and the tile tree and the tile leaves beside it, and the harness's
 A and B rows (up to 512 MB at 8,192²) under PEARLC_ROWS (default: a temporary directory).  Then the negative control, the
 same dump into `negative/<arm>/<shape>/` after the buffers are poisoned again and the call runs without its commitment or
@@ -83,7 +84,8 @@ F = _load("pearl_c_sm120_fixture", HERE / "fixture.py")
 W = F.W
 
 from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commitment_hash,  # noqa: E402
-                               rows_domain, transcript_domain, weight_binding)
+                               rows_domain, transcript_domain, weight_binding, weights_root)
+from verity.protocols.accounting.work.pouw.coins import Challenger  # noqa: E402
 from verity.protocols.accounting.work.pouw.protocol import Context, DomainError, Matmul  # noqa: E402
 from verity.protocols.accounting.work.pouw.protocol import Shape as MShape  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
@@ -102,7 +104,7 @@ REF = ("c2", "c", "u", "y", "line_a", "seed_a") + HASHED
 REF_BUFS = REF + ("tma",)                 # the second launch's own tensor maps
 REF_HASH_STEPS = ("pad_a", "pad_t", "hash_rows_a", "tree_a", "seed_a")
 REF_GRID = 3
-TRANSCRIPT_SCHEMA = "verity-pouw/pearl-c-sm120-transcript/v1"
+TRANSCRIPT_SCHEMA = "verity-pouw/pearl-c-sm120-transcript/v2"
 POISON = 0xA5
 NEGATIVE = ("the negative control: the call's buffers poisoned (0xA5) as before the transcript's call, then the call with A's "
             "row tree, seed_A, E_A's lines and every hash omitted and without the weight side, so it writes y (and C~ and U "
@@ -222,22 +224,24 @@ class _Call:
         return self.arm.rd.read(self.pipe.root("b"), 32)
 
     def start_epoch(self, steps) -> dict:
-        """B's row tree under its domain (the weight's alone), then the epoch on its root and the arm's beacon, and the keys
-        that follow: the unit's pads and level keys and the weight side run under them."""
+        """B's row tree under its domain (the weight's alone), then the epoch from the set's challenger's salt coin opened
+        after its root, and the keys that follow: the unit's pads and level keys and the weight side run under them."""
         arm, rd, sh = self.arm, self.arm.rd, self.shape
         h = commitment_hash(arm.scheme)
         mm = Matmul(arm.index, MShape(sh.m, sh.k, sh.n), self.ops.weight_id)
         self.put("dom_b", rows_domain(weight_binding(mm.weight), -2, sh.n, h).domain_id)
         self.enqueue([f for _, p, f in steps if p == "epoch"], None)
         rd.sync()
-        root_b, beacon = self.root_b(), arm.beacon(sh, self.ops)
-        epoch = Epoch.unverified(Workload((mm,)), {mm.weight: root_b}, beacon)
+        root_b, coins = self.root_b(), arm.challenger(sh, self.ops)
+        roots = {mm.weight: root_b}
+        opening = coins.open("salt", weights_root(roots))
+        epoch = Epoch.start(Workload((mm,)), roots, coins.commitment, opening)
         seed_b = C._labelled(epoch.salt + root_b, "seed-B")
         for name, x in F.keys_of(arm.scheme, epoch, mm, seed_b).items():
             self.put(name, x)
         self.enqueue([f for _, p, f in steps if p in ("unit", "job")], None)
         rd.sync()
-        return {"matmul": mm, "epoch": epoch, "beacon": beacon, "root_b": root_b, "seed_b": seed_b,
+        return {"matmul": mm, "epoch": epoch, "coins": coins.commitment, "salt_opening": opening, "root_b": root_b, "seed_b": seed_b,
                 "dom_a": rows_domain(activation_binding(epoch.salt, mm.index), mm.index, sh.m, h),
                 "dom_t": transcript_domain(epoch, self.pipe.tiles, h)}
 
@@ -391,8 +395,9 @@ class PearlCSm120:
         self.scratch: dict = {}
         self.sets: dict = {}
 
-    def beacon(self, shape, ops) -> bytes:
-        return os.urandom(32)
+    def challenger(self, shape, ops) -> Challenger:
+        """An operand set's epoch challenger: its coins live, from the operating system's generator."""
+        return Challenger(0)
 
     def acquire(self, table: dict, key, sizes) -> tuple[_Shared, bool]:
         fresh = key not in table
@@ -424,8 +429,9 @@ class PearlCSm120:
                "call": "at 128 x 128 tiles over m = m_real rows the fused chain: gemm_pearlc_b stores y and the -h1 message "
                        "digests hashed from registers (C~, U never stored), gemm_pearlc_s y alone without hashing; else "
                        "gemm_pearlc(_d) stores C~, U, y and hash_msg_v digests them",
-               "epoch": "per operand set: B's frame-b3 row tree on the device, the salt from its root and os.urandom(32) as "
-                        "the beacon (verity.protocols.accounting.work.pouw.audit.Epoch.unverified), matmul index 0 on the set's weight",
+               "epoch": "per operand set: B's frame-b3 row tree on the device, the salt from the salt coin of the set's own "
+                        "epoch challenger (verity.protocols.accounting.work.pouw.coins.Challenger) opened after its root "
+                        "(verity.protocols.accounting.work.pouw.audit.Epoch.start), matmul index 0 on the set's weight",
                "gate": f"all: a second, unfused launch word for word (A's tree and seed_A, gemm_ct, gemm_pearlc on {REF_GRID} "
                        "CTAs storing C~ and U, hash_msg_v over them and the other hashes), so fused digests are held to "
                        "hash_msg_v's; gemm_ct's C~ against the call's or, unstored, the second launch's; seed_A and E_A's line "
@@ -529,7 +535,7 @@ class PearlCSm120:
         man = {"schema": TRANSCRIPT_SCHEMA, "arm": self.name, "scheme": self.scheme.name,
                "scheme_args": {"forming": "v1", "device": self.device.name, "hashing": "h1"},
                "shape": {"label": sh.label, "m": sh.m, "k": sh.k, "n": sh.n}, "matmul": {"index": mm.index, "weight": mm.weight},
-               "beacon": ep["beacon"].hex(), "salt": epoch.salt.hex(), "weight_root": ep["root_b"].hex(),
+               "coins": ep["coins"].to_json(), "salt_opening": ep["salt_opening"].to_json(), "salt": epoch.salt.hex(), "weight_root": ep["root_b"].hex(),
                "activation_root": data["tree_a"][-32:].hex(),
                "commitment": {"root": data["tree_t"][-32:].hex(), "count": call.pipe.tiles},
                "poisoned": f"0x{POISON:02X}", **({"negative_control": negative} if negative else {}), "files": files}

@@ -36,4 +36,4 @@ def install(scheme: str, target: Target) -> Option:
     entry = f"{NAME}:{scheme}"
     return Option(name=entry, hooks=target.hooks(entry),
                   details={"commitment_scheme": commitment_scheme.NAME, "law": LAW,
-                           "challenge": "legacy (the run root)" if challenge.LEGACY else "verity.primitives.randomness.derive from a beacon or auditor key"})
+                           "challenge": "legacy (the run root)" if challenge.LEGACY else "verity.primitives.randomness.derive from an auditor key"})
