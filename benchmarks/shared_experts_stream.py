@@ -12,6 +12,7 @@ batch-1 TPOT, decode throughput at batch 8, 32 and 128 (every decode step <= 256
 Every engine also counts the order vLLM chose for its shared experts (``SharedExperts._determine_shared_experts_order``).
 
     python benchmarks/shared_experts_stream.py run [--reps 3]      # into $RESEARCH_RUN_DIR/out
+    python benchmarks/shared_experts_stream.py paired [--pairs 8]  # both arms in one engine, paired (``paired``'s docstring)
     python benchmarks/shared_experts_stream.py summarize OUT
 """
 
@@ -194,11 +195,13 @@ def run(args) -> int:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=("run", "arm", "summarize"))
+    ap.add_argument("mode", choices=("run", "arm", "paired", "summarize"))
     ap.add_argument("dirs", nargs="*")
     ap.add_argument("--arm", choices=ARMS)
     ap.add_argument("--rep", type=int, default=0)
     ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--pairs", type=int, default=8)
+    ap.add_argument("--out-tokens", type=int, default=64)
     ap.add_argument("--model", default=MODEL)
     ap.add_argument("--out", default=str(Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out"))
     args = ap.parse_args(argv)
@@ -206,7 +209,7 @@ def main(argv: list[str]) -> int:
         print(summarize(Path(args.dirs[0] if args.dirs else args.out)))
         return 0
     Path(args.out).mkdir(parents=True, exist_ok=True)
-    return {"run": run, "arm": arm}[args.mode](args)
+    return {"run": run, "arm": arm, "paired": paired}[args.mode](args)
 
 
 if __name__ == "__main__":
