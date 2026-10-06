@@ -4,11 +4,11 @@ import Proofs.Flock.Soundness.ExecRows
 /-!
 # V*'s opening in a unit of a partition
 
-`laid_recOpen` reads a laid-out net's rows at column values `v` (`LaidRows`); this file gives those values from the audit.
-A unit of a partition that is an instance of rows `R` (`Partition.IsRowsUnit`) satisfies them at its local evaluation
-(`sat_localEval`). Copy `j` of `k` stacked copies satisfies the copy's rows (`sat_stack`), and its constant row carries the
-shared constant (`stack_one`). The rows of a net (`Rows.ofNet`), satisfied with the constant 1, are the laid-out rows of
-the `Laid` the verifier built it from (`netOf`, `laidRows_ofNet`).
+`laid_recOpen` reads a laid-out net's rows at column values `v` (`LaidRows`); this file gives those values from the
+audit. A unit of a partition that is an instance of rows `R` (`Partition.IsRowsUnit`) satisfies them at its local
+evaluation (`sat_localEval`). Copy `j` of `k` stacked copies satisfies the copy's rows (`sat_stack`), and its constant
+row carries the shared constant (`stack_one`). The rows of a net (`Rows.ofNet`), satisfied with the constant 1, are the
+laid-out rows of the `Laid` the verifier built it from (`netOf`, `laidRows_ofNet`).
 
 So copy `j` of a unit whose rows are a stack of V*'s laid-out opening computes `laid_recOpen`'s outputs from its inputs
 at the unit's local evaluation (`unit_recOpen`, over `copyVal`). The copy's input columns read the transcript
@@ -219,7 +219,8 @@ theorem unit_recOpen {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin 
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : X (I.wire ((Rows.ofNet hB).stack k).one) = true)
     (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 16)
-    (p : Ports) (outBits : Array ℕ) {name : String} (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok net)
+    (p : Ports) (outBits : Array ℕ) {name : String}
+    (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok net)
     (hu : net.unitLog ≤ 32) (hout : (recOpenOuts LANES H p).length ≤ outBits.foldl (· + ·) 0)
     (r a c : Array Flock.F128) (rest : ByteArray) (idx : ℕ) (ss : List ByteArray)
     (hr : r.size = LANES) (ha : a.size = 2) (hss : ss.length = H)
