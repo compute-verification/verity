@@ -112,8 +112,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   sets and generators stay live.
 - 2026-10-06 (9:32 AM PDT): the repository is consolidated in one pure move after the current trains land:
   `backends/flock` becomes `flock/`, `integrations/vllm` becomes `vllm/`, the GPU probes go to `benchmarks/`, the
-  frozen numerical work goes to `archive/`, and `verity/protocols/accounting/{work,space,communication}/X` flattens to
-  `verity/protocols/X`. Whether the cluster and repository tools live in `tools/` or `infra/` is infra's
+  frozen numerical work goes to `archive/`, and `verity/protocols/accounting/{work,space,communication}/<name>` flattens
+  to `verity/protocols/<name>`. Whether the cluster and repository tools live in `tools/` or `infra/` is infra's
   recommendation to make, and the full tree is being settled with Daniel. "Network transparency" is "network
   accounting".
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
