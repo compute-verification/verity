@@ -13,9 +13,13 @@ unit, so it gets its own `audit.Audit` and one clock:
   when ready, so a window that no sync meets deviates from the Program's grid;
 - **the ingress warden** is a `grid.Warden` at the report's r_in and τ_in. A frame is enqueued at the first ingress
   bucket boundary after it arrives (`calibration.size_ingress_ms`'s model);
-- **the published records** are the warden's raw records and their commitments (`commitment.commit`);
-- **the verifier** is `Audit.check_link` on egress and `Audit.check_ingress_link` on ingress, once on the raw records
-  and once on the committed ones.
+- **the published records** are the warden's raw records, their commitments (`commitment.commit`) and their network
+  certificates (`certificate.Certifier`), signed by `DigestSigner`;
+- **the verifier** is `Audit.check_link` on egress and `Audit.check_ingress_link` on ingress, once on the raw records,
+  once on the committed ones and once on the certified ones. The three must agree on every link-window.
+
+`DigestSigner` is a stand-in that anyone could forge: its signature is the message's SHA-512. The replay compares the
+audits' verdicts on record digests, and the warden's certificate tests check signatures.
 
 A frame's content is its position in its link's canonical order, as 8 bytes (`REPLAY_FRAME_BYTES`), so the release
 bucket of every frame is read back from the records. Frames of the report's B (4 KiB) would hold gigabytes per window.
@@ -42,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import math
 import multiprocessing
@@ -53,12 +58,31 @@ from pathlib import Path
 from verity.protocols.accounting.communication.warden import online
 from verity.protocols.accounting.communication.warden.audit import Audit
 from verity.protocols.accounting.communication.warden.calibration import choose_syncs
+from verity.protocols.accounting.communication.warden.certificate import Certifier, Direction, parameters_digest
 from verity.protocols.accounting.communication.warden.commitment import commit
 from verity.protocols.accounting.communication.warden.grid import GridParams, Record, Warden
 from verity.protocols.accounting.communication.warden.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
 
 REPLAY_FRAME_BYTES = 8
 PERCENTILES = (50, 99, 99.9)
+AUDITS = ("raw", "committed", "certified")
+
+
+class DigestSigner:
+    """The replay's signer and public key at once: the signature is the message's SHA-512, so anyone can forge it."""
+
+    key_id = b"verity-network-traces/replay"
+
+    def sign(self, message: bytes) -> bytes:
+        return hashlib.sha512(message).digest()
+
+    def verify(self, message: bytes, signature: bytes) -> bool:
+        return signature == hashlib.sha512(message).digest()
+
+
+def certify(records: Sequence[Record], direction: Direction, params: GridParams, parameters: bytes) -> list:
+    certifier = Certifier(DigestSigner())
+    return [c for r in records if (c := certifier.certify(r, direction, params, parameters)) is not None]
 
 
 class Setup:
@@ -148,12 +172,13 @@ def diagnose(w: int, buckets: int, own_late: int, deviating: Sequence[tuple[int,
 
 def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
                          prior: Sequence[online.Past] = ()) -> tuple[list[dict], dict, list[online.Past]]:
-    """One configuration through prover, shaper, warden, records and audit, raw and committed. The prover's syncs are
-    `syncs` (`parse_sync_policy`), and an online rule starts from `prior`. Returns one row per link-window, the
-    configuration's tallies and the online prover's history (empty for the other policies)."""
+    """One configuration through prover, shaper, warden, records and audit, raw, committed and certified. The prover's
+    syncs are `syncs` (`parse_sync_policy`), and an online rule starts from `prior`. Returns one row per link-window,
+    the configuration's tallies and the online prover's history (empty for the other policies)."""
     sync_set = setup.sync_set
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
-    raw, committed = Audit(), Audit()
+    raw, committed, certified = Audit(), Audit(), Audit()
+    key = DigestSigner()
     rows: list[dict] = []
     tally = new_tally()
     run = cfg.get("labels", {}).get("run")
@@ -185,19 +210,22 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
         own_late = Counter(f.anchor // T for f, h, r in zip(frames, logical, ready, strict=True) if r > h)
         records = run_shaper(frames, ready, syncs, Warden(name, params))
         published = [commit(r, params) for r in records]
+        signed = certify(records, Direction.EGRESS, params, parameters_digest(params, sync_set))
         v_raw = raw.check_link(name, records, frames, syncs, sync_set, params)
         v_com = committed.check_link(name, published, frames, syncs, sync_set, params)
+        v_cer = certified.check_link(name, signed, frames, syncs, sync_set, params, key=key)
         released = releases(records, T)
         expected, deviating = None, []
-        if any(not v.accepted for v in v_raw + v_com):
+        if any(not v.accepted for v in v_raw + v_com + v_cer):
             expected = expected_grids(frames, syncs, params)
             deviating = [(f.anchor // T, h, a) for f, h, a in zip(frames, logical, actual, strict=True) if a != h]
-        for w, (a, b) in enumerate(zip(v_raw, v_com, strict=True)):
+        for w, (a, b, c) in enumerate(zip(v_raw, v_com, v_cer, strict=True)):
             real, slots = padding(records[w])
             row = {"config": cfg.get("name"), "run": run, "link": name, "direction": "egress", "window": w,
-                   "raw": a.violation, "committed": b.violation, "sync": [syncs[w].delta, str(syncs[w].rho)],
+                   "raw": a.violation, "committed": b.violation, "certified": c.violation,
+                   "sync": [syncs[w].delta, str(syncs[w].rho)],
                    "real_frames": real, "padding_share": 1 - real / slots, "own_late_frames": own_late.get(w, 0)}
-            violation = a.violation or b.violation
+            violation = a.violation or b.violation or c.violation
             if violation == "mismatch":
                 row["cause"], row["detail"] = diagnose(w, T, own_late.get(w, 0), deviating, expected, records[w])
             elif violation is not None:
@@ -221,7 +249,7 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
             if f.index == 0:
                 e["first_frame"][rel - f.anchor] += 1
                 e["first_frame_unshaped"][rd - f.anchor] += 1
-        del records, published, frames, released
+        del records, published, signed, frames, released
     for link in cfg.get("ingress", []):
         name, params = link["link"], setup.ingress[link["link"]]
         windows = config_windows(cfg, setup.grid["window_buckets"])
@@ -238,17 +266,19 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
             if (t + 1) % params.buckets == 0:
                 records.append(warden.close_window())
         published = [commit(r, params) for r in records]
+        signed = certify(records, Direction.INGRESS, params, parameters_digest(params))
         v_raw = raw.check_ingress_link(name, records, windows)
         v_com = committed.check_ingress_link(name, published, windows)
+        v_cer = certified.check_ingress_link(name, signed, windows, key=key, params=params)
         released = releases(records, params.buckets)
         i = tally["ingress"]
-        for w, (a, b) in enumerate(zip(v_raw, v_com, strict=True)):
+        for w, (a, b, c) in enumerate(zip(v_raw, v_com, v_cer, strict=True)):
             real, slots = padding(records[w])
             row = {"config": cfg.get("name"), "run": run, "link": name, "direction": "ingress", "window": w,
-                   "raw": a.violation, "committed": b.violation, "real_frames": real,
+                   "raw": a.violation, "committed": b.violation, "certified": c.violation, "real_frames": real,
                    "padding_share": 1 - real / slots}
-            if a.violation or b.violation:
-                row["cause"] = a.violation or b.violation
+            if a.violation or b.violation or c.violation:
+                row["cause"] = a.violation or b.violation or c.violation
             rows.append(row)
             i["real"] += real
             i["slots"] += slots
@@ -260,13 +290,14 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
             else:
                 i["delivery"][round(rel * params.bucket_ms - t, 3)] += 1
     tally["configurations"] = 1
-    tally["runs_accepted"] = {"raw": int(raw.accepted), "committed": int(committed.accepted)}
+    tally["runs_accepted"] = {"raw": int(raw.accepted), "committed": int(committed.accepted),
+                              "certified": int(certified.accepted)}
     return rows, tally, history
 
 
 def new_tally() -> dict:
     hists = ("shaping", "queueing", "end_to_end", "first_frame", "first_frame_unshaped")
-    return {"configurations": 0, "runs_accepted": {"raw": 0, "committed": 0},
+    return {"configurations": 0, "runs_accepted": dict.fromkeys(AUDITS, 0),
             "egress": {"real": 0, "slots": 0, "frames": 0, "unreleased": 0, "calibrator_misses": 0, "late_windows": 0}
             | {h: Counter() for h in hists},
             "ingress": {"real": 0, "slots": 0, "frames": 0, "unreleased": 0, "delivery": Counter()}}
@@ -274,7 +305,7 @@ def new_tally() -> dict:
 
 def add_tally(into: dict, other: dict) -> None:
     into["configurations"] += other["configurations"]
-    for k in ("raw", "committed"):
+    for k in AUDITS:
         into["runs_accepted"][k] += other["runs_accepted"][k]
     for side in ("egress", "ingress"):
         for k, v in other[side].items():
@@ -304,8 +335,8 @@ def summarize(rows: Sequence[dict], tally: dict, setup: Setup) -> dict:
         mine = [r for r in rows if r["direction"] == side]
         t = tally[side]
         n = len(mine)
-        acc = {k: sum(r[k] is None for r in mine) for k in ("raw", "committed")}
-        rejected = [r for r in mine if r["raw"] or r["committed"]]
+        acc = {k: sum(r[k] is None for r in mine) for k in AUDITS}
+        rejected = [r for r in mine if any(r[k] for k in AUDITS)]
         s = {"link_windows": n, "accepted": acc,
              "acceptance_rate": {k: (v / n if n else None) for k, v in acc.items()},
              "violations_by_cause": dict(Counter(r["cause"] for r in rejected)),
@@ -321,8 +352,9 @@ def summarize(rows: Sequence[dict], tally: dict, setup: Setup) -> dict:
             s["delivery_delay_ms"] = hist_percentiles(t["delivery"])
         summary[side] = s
     summary["committed_agrees"] = all(r["raw"] == r["committed"] for r in rows)
-    summary["disagreements"] = [r for r in rows if r["raw"] != r["committed"]]
-    summary["violations"] = [r for r in rows if r["raw"] or r["committed"]]
+    summary["certified_agrees"] = all(r["raw"] == r["certified"] for r in rows)
+    summary["disagreements"] = [r for r in rows if not r["raw"] == r["committed"] == r["certified"]]
+    summary["violations"] = [r for r in rows if any(r[k] for k in AUDITS)]
     return summary
 
 
@@ -410,10 +442,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     (args.out / "summary.json").write_text(json.dumps(summary, indent=1))
     e, i = summary["egress"], summary["ingress"]
     print(f"{summary['configurations']} configurations; egress {e['accepted']['raw']}/{e['link_windows']} accepted raw, "
-          f"{e['accepted']['committed']} committed; ingress {i['accepted']['raw']}/{i['link_windows']} raw, "
-          f"{i['accepted']['committed']} committed; committed agrees: {summary['committed_agrees']}; "
+          f"{e['accepted']['committed']} committed, {e['accepted']['certified']} certified; "
+          f"ingress {i['accepted']['raw']}/{i['link_windows']} raw, {i['accepted']['committed']} committed, "
+          f"{i['accepted']['certified']} certified; committed agrees: {summary['committed_agrees']}; "
+          f"certified agrees: {summary['certified_agrees']}; "
           f"violations {e['violations_by_cause'] | i['violations_by_cause']}")
-    return 0 if summary["committed_agrees"] else 1
+    return 0 if summary["committed_agrees"] and summary["certified_agrees"] else 1
 
 
 if __name__ == "__main__":
