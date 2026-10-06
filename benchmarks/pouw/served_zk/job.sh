@@ -28,7 +28,8 @@
 #        lean-u<t>             the Lean verifier on each drawn unit's --zk session                             ACCEPT
 #        open-filler           the filler unit's proof opens its zero rows under the window root              ACCEPT
 #        lean-filler           the Lean verifier on the filler unit's --zk session                             ACCEPT
-#        shape-filler          the filler's proof and a drawn real tile's: circuit, class, sizes               SAME
+#        shape-filler          the filler's proof and a real tile's: circuit, class, proof files' sizes and
+#                              the session record's skeleton (its integers, string lengths)                      SAME
 #        open-foreign-proof    the other request's proof, against the request's registration                   REJECT
 #        open-foreign-commit   the request's proof, against the other request's registration                   REJECT
 #        lean-foreign-pub      the first unit's session against the other request's public file               REJECT
@@ -173,6 +174,9 @@ expect lean-foreign-pub REJECT "$(lean_verdict "$OUT/u$U0/lean-foreign-pub.out")
 for c in $HZ_CASES; do
   [ -f "$OUT/u$U0/lean-st-$c.out" ] || continue
   expect "lean-st-$c" "$([ "$c" = honest ] && echo ACCEPT || echo REJECT)" "$(lean_verdict "$OUT/u$U0/lean-st-$c.out")"
+done
+for d in "$FT" "u$REAL_UNIT"; do
+  s=$(ls -d "$W/$d"/sessions/*/ 2>/dev/null | tail -1); [ -n "$s" ] && cp "$s/session.json" "$OUT/$d/session.json"
 done
 v=$("$PY" "$SC" shape "$W/$FT" "$W/u$REAL_UNIT" --out "$OUT/shape-filler.json" | tee "$OUT/shape-filler.out" | first)
 expect shape-filler SAME "${v:-ERROR}"

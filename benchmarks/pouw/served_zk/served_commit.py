@@ -652,23 +652,54 @@ def cmd_outcome(a) -> int:
     return 0 if o.accepted != a.expect_reject else 1
 
 
+#: the session record's (``session.json``) fields the verifier writes of its own: its verdict and its timings
+OWN = ("verdict",)
+#: the session directory's files the verifier writes, not the prover's messages
+RECORDS = ("session.json", "verifier.json")
+
+
+def skeleton(v, top: bool = True):
+    """A session record's shape: every integer and boolean as it is, every string by its length (hex or not), every float
+    (a timing) only as a float, and the verifier's own fields (`OWN`) dropped."""
+    if isinstance(v, dict):
+        return {k: skeleton(x, False) for k, x in v.items() if not (top and k in OWN)}
+    if isinstance(v, list):
+        return [skeleton(x, False) for x in v]
+    if isinstance(v, float):
+        return "float"
+    if isinstance(v, str):
+        return ["hex" if all(c in "0123456789abcdef" for c in v) else "str", len(v)]
+    return v
+
+
+def _diffs(a, b, at: str = "") -> list[str]:
+    if isinstance(a, dict) and isinstance(b, dict):
+        return [p for k in sorted(set(a) | set(b)) for p in _diffs(a.get(k), b.get(k), f"{at}.{k}")]
+    if isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
+        return [p for i, (x, y) in enumerate(zip(a, b)) for p in _diffs(x, y, f"{at}[{i}]")]
+    return [] if a == b else [f"{at}: {json.dumps(a)[:60]} / {json.dumps(b)[:60]}"]
+
+
 def shape(d1: Path, d2: Path) -> dict:
-    """What two staged units' proofs show the verifier beyond their bytes: circuit, class, the public file's and each
-    session file's size."""
-    def one(d: Path) -> dict:
+    """What two staged units' proofs show the verifier: circuit, class, the public file's size, each of the prover's
+    session files' size, and the session record's `skeleton`."""
+    def one(d: Path) -> tuple[dict, object]:
         s = _json(d / "stage.json")
         sess = sorted((d / "sessions").glob("*/")) if (d / "sessions").is_dir() else []
-        files = sorted((p.relative_to(sess[-1]).as_posix(), p.stat().st_size) for p in sess[-1].rglob("*") if p.is_file()) if sess else []
+        files = sorted((p.relative_to(sess[-1]).as_posix(), p.stat().st_size) for p in sess[-1].rglob("*")
+                       if p.is_file() and p.name not in RECORDS) if sess else []
+        rec = skeleton(_json(sess[-1] / "session.json")) if sess else None
         return {"circuit_sha512": s["circuit_sha512"], "class_sha512": s["class_sha512"], "ands": s["ands"], "k_log": s["k_log"],
-                "pub_bytes": (d / "pub.bin").stat().st_size, "session_files": files}
-    x, y = one(d1), one(d2)
-    return {"same": x == y and bool(x["session_files"]), "a": x, "b": y}
+                "pub_bytes": (d / "pub.bin").stat().st_size, "session_files": files}, rec
+    (x, rx), (y, ry) = one(d1), one(d2)
+    diffs = [f"{k}: {x[k]} / {y[k]}" for k in x if x[k] != y[k]] + _diffs(rx, ry, "session")
+    return {"same": not diffs and bool(x["session_files"]) and rx is not None, "diffs": diffs[:40], "a": x, "b": y}
 
 
 def cmd_shape(a) -> int:
     v = shape(Path(a.a), Path(a.b))
     print(f"{'SAME' if v['same'] else 'DIFFERENT'} {json.dumps({k: v['a'][k] for k in ('circuit_sha512', 'pub_bytes')})} "
-          f"{len(v['a']['session_files'])} session files", flush=True)
+          f"{len(v['a']['session_files'])} proof files {json.dumps(v['diffs'][:6])}", flush=True)
     if a.out:
         Path(a.out).write_text(json.dumps(v, sort_keys=True))
     return 0 if v["same"] else 1

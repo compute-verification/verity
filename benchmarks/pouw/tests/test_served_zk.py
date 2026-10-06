@@ -307,3 +307,27 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path):
     assert SC.main([*out, f"{t}/outcome2", "--log", f"{t}/olog", "--expect-refused"]) == 0
     assert not os.path.exists(tmp_path / "outcome2")
     assert Fraction(o["public"]["sampling"]["delta"]) == Fraction(1, 10)
+
+
+def _staged(d: Path, rec: dict, proof: int) -> Path:
+    s = d / "sessions" / "l0000-1"
+    s.mkdir(parents=True)
+    (d / "stage.json").write_text(json.dumps({"circuit_sha512": "11", "class_sha512": "22", "ands": 7, "k_log": 3}))
+    (d / "pub.bin").write_bytes(b"h\n" + bytes(384))
+    (s / "session.json").write_text(json.dumps(rec))
+    (s / "verifier.json").write_text(json.dumps({"host": str(d)}))
+    (s / "t.rep0.bin").write_bytes(bytes(proof))
+    return d
+
+
+def test_shape_compares_what_the_prover_sends(tmp_path):
+    """Two units' proofs have one shape when the circuit, the public file, each proof file's size and the session record's
+    skeleton agree; the verifier's own verdict and timings, and its own files, are not the prover's."""
+    rec = {"streams": [{"rounds": [{"k": 0, "msg_len": 96, "coins": ["ab" * 16]}]}], "verdict": {"verify_s": 1.5}, "g": 0.25}
+    a = _staged(tmp_path / "a", rec, 100)
+    b = _staged(tmp_path / "b", {**rec, "verdict": {"verify_s": 12.25, "why": "x"}, "g": 3.125}, 100)
+    assert SC.shape(a, b)["same"]
+    c = _staged(tmp_path / "c", {**rec, "streams": [{"rounds": [{"k": 0, "msg_len": 97, "coins": ["ab" * 16]}]}]}, 100)
+    v = SC.shape(a, c)
+    assert not v["same"] and any("msg_len" in x for x in v["diffs"])
+    assert not SC.shape(a, _staged(tmp_path / "d", rec, 101))["same"]
