@@ -76,15 +76,4 @@ def peelExactPureValP (p : Pipeline) (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Ma
     (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat) :
     Matrix (Fin m) (Fin n) (Option ℚ) := fun i j => (peelExactPureP p Aq Bq FA FB beA beB i j).bind wordQ
 
-theorem windowWordP?_hopper : windowWordP? hopperE4m3K32 = windowWord? := rfl
-
-/-- Π's chain on words (windows of `Params.pi.G = 4`) is the chain twin at `hopperE4m3K32`. -/
-theorem chainWordP?_hopper : chainWordP? hopperE4m3K32 4 = chainWord? := rfl
-
-/-- Π's U is U's twin at `hopperE4m3K32` and `G = 4`. -/
-theorem peelExactP_hopper : @peelExactP m n k hopperE4m3K32 4 = @peelExact m n k := rfl
-
-/-- Π's U as values is U's twin's at `hopperE4m3K32` and `G = 4`. -/
-theorem peelExactValP_hopper : @peelExactValP m n k hopperE4m3K32 4 = @peelExactVal m n k := rfl
-
 end Pouw.PearlC.PeelExactP
