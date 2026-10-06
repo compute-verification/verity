@@ -33,7 +33,7 @@ C = [params.codec.encode_segment(params, prims, salt, s, g)             # server
 vk = setup.verifier_setup(params, prims, commitment, salt, encoded=C)   # verifier: decodes C*, checks the commitment
 blocks = [b for seg in C for b in seg]
 w1 = decode_tensor(layout, prims, salt, "w1", blocks.__getitem__)      # decode one tensor
-v = audit.TimedVerifier(vk, audit.challenge_key(audit_secret, vk))     # k = 111, Δ = 0.5 ms (+ rtt_allowance_ns)
+v = audit.MemoryChallenger(vk, audit.challenge_key(audit_secret, vk))     # k = 111, Δ = 0.5 ms (+ rtt_allowance_ns)
 result = audit.run_timed(v, blocks.__getitem__)
 ~~~
 
@@ -52,7 +52,7 @@ salt = protocol.draw_salt(verifier_secret, commitment)
 C = protocol.encode(scheme, w, salt)                                           # server
 vk = protocol.verifier_key(scheme, commitment, salt, w=w)                      # PRIVATE: the verifier encodes
 # vk = protocol.verifier_key(scheme, commitment, salt, mode=protocol.PUBLIC, encoded=C)   # the same guarantee
-v = protocol.Verifier(scheme, vk, protocol.challenge_key(audit_secret, vk), rtt_allowance_ns=rtt)
+v = protocol.MemoryChallenger(scheme, vk, protocol.challenge_key(audit_secret, vk), rtt_allowance_ns=rtt)
 v.run(protocol.responder(scheme, blocks.__getitem__))
 print(v.profile().statement())                                                 # Pous.SecurityProofs.BandMultiMeetsFamily
 ~~~
