@@ -25,8 +25,9 @@ The executors, as they stand:
   node, would queue every Verity GPU job on node 1's pool (`provers`' unborrowed quota) while node 2 had GPUs free.
 
 A job's CPUs come from those its node allows it (its pool, else the CPUs outside every pool, narrowed by a guest's share). A job
-that asks for fewer takes that many in whole cores on the node when it starts (`CORES`), and keeps them until its runner ends, so
-two jobs never share a core; it waits while too few are free. A job that asks for all of them, or more, gets the whole set.
+that declares fewer (`--cpus`, or its kind's shape) takes that many in whole cores on the node when it starts (`CORES`), and keeps
+them until its runner ends, so two such jobs never share a core; it waits while too few are free. A job that asks for all of them,
+or more, or declares no CPUs at all, gets the whole set.
 
 A job asks for `max_s` of its own. A CPU job's allocation also covers `custody_s` (the runner's publish), so its `max_s` in the
 model is their sum; a GPU job's lease covers the workload alone, and custody runs in its CPU allocation after the lease ends.
@@ -132,10 +133,11 @@ def job(*, run_id: str, project: str, submitter: str, priority: str = "work", gp
 
 
 def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None = None,
-             gpu_host: bool = False) -> tuple[list[str], list[str]]:
+             gpu_host: bool = False, own_cores: bool = True) -> tuple[list[str], list[str]]:
     """The runner's wrapper (the job's CPU allocation, which holds the run through custody) and the workload's (a GPU phase's
     lease, around the workload alone, so the GPU is booked for the GPU phase only); Refused when the node has no executor.
-    A kind is named in the lease's holder, `who=<kind>:<submitter>`, as the fill runner's leases are `fill:<owner>`."""
+    A kind is named in the lease's holder, `who=<kind>:<submitter>`, as the fill runner's leases are `fill:<owner>`. `own_cores`: the
+    job takes `j.cpus` of its CPUs for itself (`CORES`) when that is fewer than all of them; else it shares the whole set."""
     if node not in (NODE1, NODE2):
         raise Refused(f"no executor on {node}")
     if j.gpus and node == NODE1 and cluster.nodes[node].gpu_executor != "n1-lease":
@@ -145,7 +147,7 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
     guest = cluster.standing(j.project, node) != OWNER
     allowed = allowed_cpus(cluster, cluster.nodes[node], j)
     pool = cpuset.format(allowed)
-    pin = CPUS_SLOT if j.cpus < len(allowed) else pool
+    pin = CPUS_SLOT if own_cores and j.cpus < len(allowed) else pool
     cores = ["python3", "-c", CORES, CORE_LOCKS, CPU_ROOT, pool, str(j.cpus), "--"] if pin == CPUS_SLOT else []
     runner = ["env", f"GPU_LEASE_WHO={f'{kind}:' if kind else ''}{j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
               *cores, "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", f"cluster-{run_id}",
@@ -162,7 +164,8 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
     return runner, [*lease, "--"]
 
 
-def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = None, gpu_host: bool = False) -> dict[str, Any]:
+def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = None, gpu_host: bool = False,
+            own_cores: bool = True) -> dict[str, Any]:
     """Where the job runs and under what: `{node, machine, why, job, wrap, workload_wrap}`. The router's node first, then any other node
     that could run it (only the pinned one when `j.node` is set); Refused with each node's reason when none can."""
     first = place(cluster, j, {}, now)
@@ -176,7 +179,7 @@ def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = 
             reasons.append(f"{name}: {why}")
             continue
         try:
-            wrap, workload_wrap = wrappers(cluster, pinned, name, run_id, kind, gpu_host)
+            wrap, workload_wrap = wrappers(cluster, pinned, name, run_id, kind, gpu_host, own_cores)
         except Refused as e:
             reasons.append(f"{name}: {e}")
             continue
@@ -191,9 +194,11 @@ def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int
            **declared: Any) -> dict[str, Any]:
     """`resolve` for a job of `kind`: what the job leaves unsaid comes from its registered kind (else 0 GPUs, 1 CPU), and the
     placement also names the kind, its question, the registry file it came from, and the held rules it breaks. A job whose
-    kind isn't registered names its memory: the scope's `MemoryMax=` kills the job at that cap."""
+    kind isn't registered names its memory: the scope's `MemoryMax=` kills the job at that cap. A job whose CPUs neither it nor its
+    kind declares shares its node's whole set."""
     k = registry.get(kind)
     shape = k.shape if k else {}
+    own_cores = cpus is not None or "cpus" in shape
     gpus = gpus if gpus is not None else int(shape.get("gpus", 0))
     cpus = cpus if cpus is not None else int(shape.get("cpus", 1))
     if memory_gib is None and "memory_gib" not in shape:
@@ -210,7 +215,7 @@ def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int
         raise Refused(f"--gpu-host is for a job that takes its GPUs with gpu-lease itself; this one asks the queue for {gpus}")
     j = job(run_id=run_id, gpus=gpus, cpus=cpus, memory_gib=memory_gib, max_s=max_s, quiet=quiet, preempt=preempt,
             submitted=now, **declared)
-    out = resolve(cluster, j, run_id, now, kind, gpu_host)
+    out = resolve(cluster, j, run_id, now, kind, gpu_host, own_cores)
     disk_gb = disk_gb if disk_gb is not None else k.disk_gb if k and k.disk_gb is not None else DISK_GB
     out.update(kind=kind, question=question, max_s=max_s, disk_gb=disk_gb, kind_source=k.source if k else None, gpu_host=gpu_host,
                warnings=warnings(k, kind, question=question, gpus=gpus, cpus=cpus, memory_gib=memory_gib, max_s=max_s,

@@ -195,7 +195,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     q.add_argument("--class", dest="queue_class", default="work", metavar="P", help="its priority class (the description's [priorities]; default work)")
     q.add_argument("--gpus", type=int, default=None, metavar="N", help="default: its kind's (else 0)")
     q.add_argument("--gpu-model", default=None, metavar="M", help="e.g. rtx-pro-6000; a node with other GPUs is never chosen")
-    q.add_argument("--cpus", type=int, default=None, metavar="N", help="default: its kind's (else 1); also the workload's OMP, OpenBLAS, MKL and NumExpr threads unless --env sets them")
+    q.add_argument("--cpus", type=int, default=None, metavar="N", help="default: its kind's (else 1, sharing the node's CPUs); N declared takes N CPUs in whole cores for the job alone, "
+                   "and is the workload's OMP, OpenBLAS, MKL and NumExpr threads unless --env sets them")
     q.add_argument("--max-min", type=int, default=None, metavar="M",
                    help="its longest run in minutes, which the GPU lease enforces (default --timeout, else its kind's max_wall_min); "
                         "without --timeout, a GPU job's runner also allows GPU_WAIT_MIN for the lease to be granted")

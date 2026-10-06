@@ -220,6 +220,18 @@ def test_the_repos_kinds_load_and_lean_audit_is_leans_cpu_m():
     assert kinds.kinds_dir(NEBIUS) == KINDS.resolve()
 
 
+def test_only_a_job_whose_cpus_are_declared_takes_cores_of_its_own():
+    """A job that names no CPUs counts as 1 in placement; held to one core, an unregistered kind's job (a lane's ad hoc loop, a
+    vLLM host) would lose the 32 CPUs it shares today."""
+    c, reg = model.load(NEBIUS), kinds.load(KINDS)
+    base = dict(run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=16, node="vy-nebius-1")
+    audit = submit.submit(c, reg, kind="lean-audit", **{**base, "max_s": None})["wrap"]
+    assert audit[audit.index(submit.CORES) + 3:][:2] == ["96-127", "8"], "lean-audit's shape (cpu-m) declares 8"
+    assert submit.CORES in submit.submit(c, reg, cpus=4, **base)["wrap"], "--cpus declares them"
+    shared = submit.submit(c, reg, **base)["wrap"]
+    assert submit.CORES not in shared and "AllowedCPUs=96-127" in shared and shared[-3:] == ["taskset", "-c", "96-127"]
+
+
 def test_a_registered_kind_supplies_what_the_job_leaves_unsaid_and_names_itself_in_the_lease():
     out = submit.submit(model.load(NEBIUS), kinds.load(KINDS), run_id="r1", now=T, kind="lean-audit", project="verity",
                         submitter="proofs-w", custody_s=900)
