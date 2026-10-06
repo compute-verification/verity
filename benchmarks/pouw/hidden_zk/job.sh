@@ -4,7 +4,7 @@
 # root (`research run --cwd source --declared-output 'out/*'`); results go to $RESEARCH_RUN_DIR/out, scratch to a
 # `mktemp -d` directory the job removes, builds to $HZ_CACHE (kept, keyed by their inputs) or the scratch directory.
 #   1. builds flock-circuit twice from Flock b684b12 and backends/flock's patches (the proving build: sha512, glue; the
-#      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
+#      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
 #      (HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded controls, and the Lean
 #      verifier on all of them:
@@ -77,7 +77,7 @@ build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
 }
 build_python() {    # build_python DEST: a venv
   local D=$1
-  rm -rf "$D" && uv venv -q --python 3.12 "$D" && uv pip install -q --python "$D/bin/python" numpy==2.5.3 blake3==1.0.9
+  rm -rf "$D" && uv venv -q --python 3.12 "$D" && uv pip install -q --python "$D/bin/python" numpy==2.5.3
 }
 cached() {          # cached NAME KEY BUILDER: the build's directory, built once per key under $HZ_CACHE's lock
   local name=$1 key=$2 builder=$3 base=${HZ_CACHE:-$W/cache}
@@ -97,7 +97,7 @@ setup() {
   local fail=0 p
   [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key backends/flock/live backends/flock/*.patch)" build_circuit > "$W/flock.dir" &
   [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(tree_key backends/flock/verifier/lean)" build_lean > "$W/lean.dir" &
-  [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
+  [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3 build_python > "$W/venv.dir" &
   wait
   [ -n "${FLOCK_PROVE:-}" ] || { FLOCK_PROVE=$(cat "$W/flock.dir")/flock-circuit-prove; FLOCK_SELFTEST=$(cat "$W/flock.dir")/flock-circuit-selftest; }
   [ -n "${FLOCK_VERIFY:-}" ] || FLOCK_VERIFY=$(cat "$W/lean.dir")/.lake/build/bin/flock-verify
