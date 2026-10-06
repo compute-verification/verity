@@ -39,7 +39,8 @@ prover declares each window's sync at its first tick from the frames it has read
 proxy logged, and `declared_are_planned` says whether they are what the rule declares on the model's run. The sender's
 write times then move the declarations, so an adversarial strategy's wire differs from honest's from the second window
 on, within the log2 #Σ_sync bits per window the bound charges. The audit also counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
-have met.
+have met. Under `--strategies honest,covert` the covert run's shim delays each stream's first event as
+`covert.LiveSender` says: the covert sender on a live server, which can only delay what the model writes.
 
     python active_replay.py --calibration REPORT.json --out DIR [--windows 60] [--config-windows 4:10] TRACE.json ...
     python active_replay.py --vllm MODEL --calibration REPORT.json --out DIR --config NAME ... TRACE.json ...
@@ -469,7 +470,8 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     """The plan an adversarial server runs: `adversary_writes`' writes, or, for `covert`, `covert.encode_writes`' (a
     sender that steers the online prover's declared sync with a random message), with the symbols it sent kept for
     the audit's `covert` measurement. Under syncs fixed before the run (`envelope`, `model`) the covert sender steers
-    nothing: the control."""
+    nothing: the control. On a live server the plan carries the sender's parameters, and the shim's
+    `covert.LiveSender` draws the symbols as it serves."""
     if strategy != "covert":
         return plan | {"strategy": strategy, "seed": seed,
                        "writes": adversary_writes(plan, setup.sync_set, setup.egress_params.buckets, strategy, seed)}
@@ -477,6 +479,12 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     horizon = plan["windows"] * T
     release = {int(k): v for k, v in plan["model_release"].items()}
     rule = online.rule(plan["sync_rule"]) if "sync_rule" in plan else None
+    if "live_model" in plan:
+        s, env = setup.sync_set, setup.envelope
+        return plan | {"strategy": strategy, "seed": seed,
+                       "covert": {"seed": covert.stream_seed(seed, plan["name"]), "deltas": list(s.deltas),
+                                  "rhos": [str(r) for r in s.rhos], "envelope": [env.delta, str(env.rho)],
+                                  "margin": covert.margin_of(plan["sync_rule"]) if rule else 0}}
     fixed = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     enc = covert.encode_writes(program_keys(plan["sessions"], release, horizon), plan["sessions"], setup.sync_set, T,
                                plan["windows"], rule, setup.envelope, covert.stream_seed(seed, plan["name"]), horizon,
@@ -615,13 +623,23 @@ class LiveServer:
     server-sent event of the response with `id:` its position in write order, the HTTP head with the first. Every event
     written is logged as (position, session, k, the bucket it was written in, its bytes). From 1.5 buckets before the
     horizon on it writes nothing more, and closes the stream, so that every event logged is read before the last bucket.
-    `open` counts the streams whose response hasn't ended, for a driver on a virtual clock."""
+    Under the `covert` strategy, `covert.LiveSender` holds each stream's first event until the bucket its symbol names.
+    `open` counts the streams whose response hasn't ended, and `held` those of them waiting on the clock, for a driver on
+    a virtual clock."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
-        self.clock, self.notify = clock, notify
+        self.clock, self.sleep, self.notify = clock, sleep, notify
         self.upstream = tuple(params["upstream"])
         self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
+        self.windows = plan["windows"]
         self.position, self.origin, self.open = 0, None, 0
+        self.dues: list[float] = []
+        self.sender = None
+        if (c := plan.get("covert")) is not None:
+            rule = online.rule(plan["sync_rule"]) if "sync_rule" in plan else None
+            self.sender = covert.LiveSender(SyncSet(tuple(c["deltas"]), tuple(Fraction(r) for r in c["rhos"])),
+                                            params["buckets"], rule, ClockSync(c["envelope"][0], Fraction(c["envelope"][1])),
+                                            c["seed"], [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]])
         self.writers: set = set()
         self.events: list[tuple[int, str, int, int, bytes]] = []
         self.log = {"receipt_late_ms": [], "batch_late_ms": [], "late_registrations": 0, "requests": 0, "events": 0,
@@ -663,8 +681,18 @@ class LiveServer:
                 self.log["failed"].append(up_head.split(b"\r\n")[0].decode(errors="replace"))
                 return
             cutter, k, cutoff = Events(), 0, self.origin + (self.horizon - 1.5) * self.tau
+            anchor = math.floor(received / self.tau)
             async for data in _http_body(up_reader, up_head):
                 for event in cutter.feed(data):
+                    if k == 0 and self.sender is not None:
+                        due = min(self.origin + self.sender.hold(anchor) * self.tau + self.tau / 2, cutoff)
+                        if (delay := due - self.clock()) > 0:
+                            self.dues.append(due)
+                            self.notify()
+                            try:
+                                await self.sleep(delay)
+                            finally:
+                                self.dues.remove(due)
                     now = self.clock()
                     if now >= cutoff:
                         self.log["cut_at_horizon"] += 1
@@ -675,11 +703,19 @@ class LiveServer:
                     if k == 0:
                         self.log["first_event_ms"].append(round((now - self.origin - received) * 1000, 3))
                     self.events.append((p, name, k, math.floor((now - self.origin) / self.tau), out))
+                    if self.sender is not None:
+                        self.sender.wrote(p, anchor, k, self.events[-1][3])
                     self.log["events"] += 1
                     k += 1
                 self.notify()
         finally:
             up_writer.close()
+
+    @property
+    def held(self) -> int:
+        """The streams waiting on the clock: held, and not yet due."""
+        now = self.clock()
+        return sum(d > now for d in self.dues)
 
     async def serve(self, origin: float) -> None:
         self.origin = origin
@@ -687,6 +723,8 @@ class LiveServer:
     def close(self) -> None:
         for w in self.writers:
             w.close()
+        if self.sender is not None:
+            self.log["covert"] = self.sender.log(self.windows)
 
     def dump_events(self, path: Path) -> None:
         with gzip.open(path, "wt", compresslevel=1) as fh:
@@ -1045,7 +1083,8 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
         ticks_i = min(plan["windows"] * i.buckets, math.floor(x / tau_i + 1e-9) + 1) if x >= 0 else 0
         batches = min(horizon - 1, math.floor((x - tau_e / 2) / tau_e + 1e-9) + 1) if x >= tau_e / 2 else 0
         return (len(proxy.lateness["egress"]) >= ticks_e and len(proxy.lateness["ingress"]) >= ticks_i
-                and getattr(server, "processed", horizon) + 1 >= batches and getattr(server, "open", 0) == 0
+                and getattr(server, "processed", horizon) + 1 >= batches
+                and getattr(server, "open", 0) == getattr(server, "held", 0)
                 and peer.instants_sent >= bisect.bisect_right(sends, x + 1e-9)
                 and proxy.link_frames_read >= peer.frames_sent and server.log["requests"] >= proxy.requests_released
                 and len(proxy.frames) >= server.log["events"]
@@ -1138,6 +1177,8 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
     in_records = [unpack_record(b, i.frame_bytes) for b in read_blobs(run / "requests.records")]
     release, in_frames = ingress_releases(in_records, i, e)
     live = "live_model" in plan
+    if live and "covert" in plan:
+        plan = plan | {"covert": plan["covert"] | json.loads((run / "server.json").read_text())["covert"]}
     frames, meant = live_program(plan, release, e, run / "server.events.gz") if live else program(plan, release, e)
     intern = {f.payload: f.payload for f in frames}
     position = {f.payload: p for p, f in enumerate(frames)}
@@ -1396,8 +1437,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if strategies[0] != "honest" or any(s not in STRATEGIES for s in strategies):
         raise SystemExit(f"--strategies starts with honest and names some of {STRATEGIES}")
     live = bool(args.server_url or args.vllm)
-    if live and (strategies != ["honest"] or args.clock != "real"):
-        raise SystemExit("a live server runs honest, on the real clock")
+    if live and (any(s not in ("honest", "covert") for s in strategies) or args.clock != "real"):
+        raise SystemExit("a live server runs honest and covert, on the real clock")
     sync_policy = args.syncs or ("envelope" if live else "model")
     report = json.loads(args.calibration.read_text())
     setup = Setup(report)

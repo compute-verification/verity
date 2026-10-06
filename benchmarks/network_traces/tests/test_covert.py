@@ -5,7 +5,9 @@ predicts are the proxy's, under `last` the receiver reads every symbol it sent, 
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -88,6 +90,53 @@ def test_under_a_fixed_sync_the_covert_sender_conveys_nothing(setup, tmp_path):
     assert len({tuple(d) for d in c["declared"]}) == 1
     assert c["mutual_information_full_bits"] == c["mutual_information_corrected_bits"] == 0
     assert c["decoded_bits_per_window"] == 0
+
+
+async def _fake_vllm(reader, writer):
+    """A streaming completions endpoint that answers at once: `max_tokens` events and `[DONE]`."""
+    head = await reader.readuntil(b"\r\n\r\n")
+    body = json.loads(await reader.readexactly(int(head.lower().split(b"content-length: ")[1].split(b"\r\n")[0])))
+    events = [b'data: {"choices":[{"text":" t%d"}]}\n\n' % k for k in range(body["max_tokens"])] + [b"data: [DONE]\n\n"]
+    writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\n\r\n" + b"".join(events))
+    await writer.drain()
+    writer.close()
+
+
+def live_run(setup, tmp_path, syncs: str) -> tuple[dict, dict]:
+    doc, report, s = setup
+    out = tmp_path / f"live-{syncs}"
+
+    async def go(plan):
+        server = await asyncio.start_server(_fake_vllm, "127.0.0.1", 0)
+        await asyncio.to_thread(ar.run_virtual, plan, report, out, server.sockets[0].getsockname()[:2])
+        server.close()
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(ar, "live_body", lambda session, model: {"model": model, "prompt": [1], "max_tokens": 3,
+                                                            "stream": True})
+        plan = ar.adversary_plan(ar.plan_configuration(doc["configurations"][0], s, "served", syncs), s, "covert", 3)
+        asyncio.run(go(plan))
+    return plan, ar.audit_configuration(plan, report, out)
+
+
+def test_a_live_shim_that_only_delays_steers_last_and_stays_accepted(setup, tmp_path):
+    """`covert.LiveSender` in the shim holds each stream's first event until its window's symbol: on an endpoint that
+    answers at once the frontier is the symbol, so under `last` the next window declares it, and its replica of the
+    proxy's prover predicted every declaration."""
+    _, audit = live_run(setup, tmp_path, "last")
+    assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"])
+    c = audit["comparisons"]
+    assert c["covert_declared_are_predicted"] and c["frames_log_is_the_programs"] and c["wire_is_the_records"]
+    assert [int(d) for d, _ in c["covert"]["declared"][1:]] == c["covert"]["symbols"][:-1]
+    assert c["covert"]["symbol_error_rate"] == 0
+
+
+def test_a_live_shim_under_the_envelope_conveys_nothing(setup, tmp_path):
+    _, audit = live_run(setup, tmp_path, "envelope")
+    assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"])
+    c = audit["comparisons"]["covert"]
+    assert len({tuple(d) for d in c["declared"]}) == 1
+    assert c["mutual_information_full_bits"] == c["decoded_bits_per_window"] == 0
 
 
 def test_the_measure_pools_runs_and_is_exact_on_a_noiseless_channel():

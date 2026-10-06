@@ -91,6 +91,54 @@ def encode_writes(keys: Sequence[tuple[int, int, int, int]], sessions: Sequence[
             "declared": declared}
 
 
+class LiveSender:
+    """The covert sender in a live server's shim, which can only delay what the model writes: a stream anchored in
+    window w writes nothing before bucket `anchor + g_w − 1` (`hold`), so window w's frontier is `max(g_w, the model's
+    own)`, and `g_w` is drawn from `[1, δ_declared(w)]` as `encode_writes` draws it. `δ_declared(w)` comes from a
+    replica of the proxy's prover fed every event as the shim wrote it (`wrote`), at the bucket after it was written;
+    the shim takes a stream's anchor to be the bucket its request reached it in. `symbol(w)` must be called no earlier
+    than bucket w·T, when every event that window's declaration reads has been written."""
+
+    def __init__(self, sync_set: SyncSet, window_buckets: int, rule: online.Rule | None, envelope: ClockSync,
+                 seed: int, fixed: Sequence[ClockSync] = ()) -> None:
+        self.T, self.fixed = window_buckets, list(fixed)
+        self.prover = online.Prover(sync_set, window_buckets, rule, envelope, links=1) if rule is not None else None
+        self.rng = random.Random(seed)
+        self.symbols: list[int] = []
+        self.caps: list[int] = []
+        self.declared: list[list] = []
+        self.written: list[tuple[int, int, int, int]] = []  # (bucket, position, anchor, index), in position order
+        self.fed = 0
+
+    def symbol(self, window: int) -> int:
+        while len(self.symbols) <= window:
+            w = len(self.symbols)
+            if self.prover is None:
+                sync = self.fixed[min(w, len(self.fixed) - 1)]
+            else:
+                while self.fed < len(self.written) and self.written[self.fed][0] < w * self.T:
+                    b, position, anchor, k = self.written[self.fed]
+                    self.prover.arrive(0, position, LogicalFrame(position.to_bytes(8, "big"), anchor, k), b + 1)
+                    self.fed += 1
+                sync = self.prover.declare()
+            self.declared.append([sync.delta, str(sync.rho)])
+            self.caps.append(max(1, sync.delta))
+            self.symbols.append(self.rng.randint(1, self.caps[-1]))
+        return self.symbols[window]
+
+    def hold(self, anchor: int) -> int:
+        """The first bucket a stream anchored at `anchor` may write in."""
+        return anchor + self.symbol(anchor // self.T) - 1
+
+    def wrote(self, position: int, anchor: int, k: int, bucket: int) -> None:
+        self.written.append((bucket, position, anchor, k))
+
+    def log(self, windows: int) -> dict:
+        if windows:
+            self.symbol(windows - 1)
+        return {"symbols": self.symbols[:windows], "caps": self.caps[:windows], "predicted": self.declared[:windows]}
+
+
 def _entropy(counts: Sequence[int]) -> float:
     total = sum(counts)
     if total == 0:
