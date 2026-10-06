@@ -1,0 +1,34 @@
+{
+ "definitions": {
+  "Bf16GtStrict_v2": {
+   "and": 56
+  },
+  "BitAnd_v2": {
+   "and": 1
+  },
+  "E4m3ToF32_v2": {
+   "and": 15
+  },
+  "F32Fabs_v2": {
+   "and": 0
+  },
+  "F32Fmaxf_v2": {
+   "and": 314
+  },
+  "F32Fminf_v2": {
+   "and": 314
+  },
+  "F32ToE2m1Sat_v2": {
+   "and": 60
+  },
+  "F32ToE4m3Sat_v2": {
+   "and": 231
+  },
+  "SelectBf16_v2": {
+   "and": 16
+  },
+  "SelectI32_v2": {
+   "and": 32
+  }
+ }
+}
