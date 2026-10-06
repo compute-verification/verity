@@ -34,7 +34,8 @@ inductive Sent where
   | commit (roots : List (String × List ByteArray))
   /-- `Link`'s `y`: the schedule's count of zero elements (fixed) -/
   | link (zeros : Nat)
-  /-- a stream's name, parent and position, the schedule's (fixed) -/
+  /-- a stream's name, parent and position, the schedule's (fixed), sent just before the stream's first round, never where
+  the worker's `Open` came -/
   | openStream (stream parent : String) (pos : Nat)
   /-- a round: its stream and coin count (fixed), its caps' nodes and its message rows, salted -/
   | round (stream : String) (caps : List (List ByteArray)) (rows : List ByteArray) (n : Nat)
@@ -381,7 +382,6 @@ def step (s : Schedule) : Req → Fw Unit
     let st ← get
     if st.streams.any (·.1 == stream) then throw s!"stream {stream} opened twice"
     set { st with streams := st.streams ++ [(stream, parent, 0)] }
-    send (.openStream stream parent pos)
   | .round stream content n => do
     if (← get).finished then throw "session finished"
     let some (_, parent, k) := (← get).streams.find? (·.1 == stream) | throw s!"a round on stream {stream}, never opened"
@@ -396,6 +396,9 @@ def step (s : Schedule) : Req → Fw Unit
     let bcs ← rows.mapM salted
     let capsSalted ← sp.caps.toList.mapM saltedTop
     if !(← get).linked then throw "a coin before the link exchange"
+    if k == 0 then
+      let some (_, _, pos, _) := s.streams.find? (·.1 == stream) | throw s!"GATE-REFUSED: Open {stream}"
+      send (.openStream stream parent pos)
     modify fun st => { st with rounds := st.rounds + 1,
                                streams := st.streams.map fun e => if e.1 == stream then (e.1, e.2.1, e.2.2 + 1) else e }
     send (.round stream capsSalted bcs n)
@@ -455,7 +458,19 @@ def record (sent : Array Sent) (ok : Bool) : Json := Id.run do
     ("link", link), ("streams", Json.mkObj named), ("rounds", .arr rounds), ("message_rows", jnat rows),
     ("row_words", jnat ROW_WORDS), ("end", .str (if ok then "finish" else "stop"))]
 
-/-- One case of `flock-firewall`'s input, `{"schedule", "requests": [hex], "salts": [hex]}`: the record. -/
+/-- The coin server's calls, in order, as `rec_live.CoinServer`'s methods: `start`, `commit`, `y`, `open` with its stream,
+parent and position, `round` with its stream and coin count. -/
+def calls (sent : Array Sent) : Json :=
+  .arr (sent.filterMap fun
+    | .hello _ => some (.arr #[.str "start"])
+    | .commit _ => some (.arr #[.str "commit"])
+    | .link _ => some (.arr #[.str "y"])
+    | .openStream st p pos => some (.arr #[.str "open", .str st, .str p, jnat pos])
+    | .round st _ _ n => some (.arr #[.str "round", .str st, jnat n])
+    | .finish _ => none)
+
+/-- One case of `flock-firewall`'s input, `{"schedule", "requests": [hex], "salts": [hex]}`: the record; with
+`"calls": true`, `{"record", "calls"}`. -/
 def case (j : Json) : V Json := do
   let s ← schedule (← field j "schedule")
   let hexList := fun (k : String) => do
@@ -464,6 +479,8 @@ def case (j : Json) : V Json := do
       | .str h => unhex h
       | _ => throw s!"{k}: not hex"
   let (sent, ok) := run s (← hexList "requests") (← hexList "salts")
+  if j.getObjValD "calls" == .bool true then
+    return Json.mkObj [("record", record sent ok), ("calls", calls sent)]
   return record sent ok
 
 /-- `flock-firewall`: one case a line on stdin, one record a line on stdout (`{"error": …}` for a case it cannot read). -/
