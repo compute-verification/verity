@@ -946,6 +946,33 @@ def _package(d: Path, files: dict[str, str], lakefile: str, policy: dict) -> Non
     A.dump(d, policy)
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_replay_names_a_module_outside_the_set_that_imports_one_in_it(tmp_path):
+    """#1261's shape (d7c1): a module of the spec package, which only the proofs import, imports a proof module. Through it
+    the replayed modules' constants come in again as imported, so the replay refuses, and says which import is the cause
+    rather than naming the first constant it finds twice (`UProg.ctorElimType`)."""
+    spec, proofs = tmp_path / "spec", tmp_path / "proofs"
+    _package(spec, {"Spec.lean": "def Spec.base : Nat := 1\n",
+                    "Spec/Extra.lean": "import P.A\ndef Spec.Extra.stmt : Prop := P.A.f 0 = 0\n"},
+             'name = "spec"\ndefaultTargets = ["Spec"]\n[[lean_lib]]\nname = "Spec"\n', {"roots": ["Spec"]})
+    _package(proofs, {"P.lean": "import P.A\nimport P.B\n",
+                      "P/A.lean": "import Spec\ninductive P.A.T | a | b\ndef P.A.f : Nat → Nat | 0 => 0 | n+1 => n\n",
+                      "P/B.lean": "import Spec.Extra\ntheorem P.B.ok : Spec.Extra.stmt := rfl\n"},
+             'name = "proofs"\ndefaultTargets = ["P"]\n[[require]]\nname = "spec"\npath = "../spec"\n[[lean_lib]]\nname = "P"\n',
+             {"roots": ["P"]})
+
+    def replay() -> subprocess.CompletedProcess:
+        subprocess.run(["lake", "build"], cwd=proofs, check=True, capture_output=True, env=A.lake_env())
+        return subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(tmp_path / "r.json"),
+                               "P", "P.A", "P.B"], cwd=proofs, capture_output=True, text=True, env=A.lake_env())
+
+    r = replay()
+    assert r.returncode == 1 and "Spec.Extra, which the set imports from outside it, imports P.A, which is in it" in r.stderr
+    (proofs / "P/B.lean").write_text("import Spec\ntheorem P.B.ok : Spec.base = 1 := rfl\n")
+    r = replay()
+    assert r.returncode == 0 and r.stdout.startswith("replay: "), r.stderr
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was(tmp_path):

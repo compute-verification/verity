@@ -122,6 +122,11 @@ unsafe def main (args : List String) : IO UInt32 := do
       if !mods.contains i.module && !imports.any (·.module == i.module) then
         imports := imports.push i
   let env ← importModules imports {}
+  -- Through such a module the set's own constants come in again, as imported: each would be declared twice.
+  for (n, d) in env.header.moduleNames.zip env.header.moduleData do
+    if let some i := (if mods.contains n then none else d.imports.find? (mods.contains ·.module)) then
+      throw <| IO.userError s!"{n}, which the set imports from outside it, imports {i.module}, which is in it: move {n} \
+        under the package's roots, or have it import none of their modules"
   -- An equation lemma (`f.eq_1`) is realized in each module that first asks for it, so an import from outside the set
   -- can hold the same theorem: that one, already checked as imported, stands for it.
   for (n, c) in constants do
