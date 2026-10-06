@@ -10,7 +10,9 @@ right when it is correct in `X` and one opening per commit string makes the circ
 (`Circuit.eval`), on every committed wire the unit reads or computes, the bit of an opening of that wire's registered
 commit string (`ValueBindingZ.cs`). On a unit's input wires the evaluation is `X` itself; on its outputs it is the
 program's output on `X`'s inputs. So a unit is right when the program's output on the committed inputs opens the
-registered output commitments, and the committed inputs open the registered input commitments.
+registered output commitments, and the committed inputs open the registered input commitments. The second half says
+something only of a binding commitment: under a hiding one (`hm96`, at the public file's rows) an opening to
+essentially every value exists, so there it adds nothing to correctness in `X`.
 
 * `Partition.ReadsOwn`, `Partition.correct_eval`: when a unit's gates read only its own gates and input gates, a unit
   correct in `X` carries, on each of its committed wires, the circuit's evaluation on `X`'s inputs;
