@@ -1,5 +1,6 @@
-"""P3, the two-layer invertible labelling with a trusted encoder, as a spec-level reference: Lean's `p3Scheme`
-(`lean/submissions/p3-meets/P3Meets.lean` over `p3Model'`), parametrized.
+"""PoUS, proof of useful space for model weights, as a spec-level reference: the schemes behind one codec API (the band
+first, then dense, P2 and P3), setup, the timed audit, and the memory challenger that signs its rounds.  It matches the
+Lean models' definitions and is the oracle for the GPU kernels.
 
 Import from the owning module: `params`, `labels` (the bit layout), `oracle` (queries, programs and their rounds),
 `primitives` (`H`, `P_t` and their choices), `scheme` (encode, decode, per-segment decode), `layout` (tensors in `W`,
