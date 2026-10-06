@@ -5,7 +5,8 @@
   "Specs.Flock.Guarantees.EndToEnd": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEnd` builds it, and its guarantee's record holds it (`meaning`), until those definitions move into `Definitions`",
   "Specs.Flock.Guarantees.EndToEndDrawn": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEndDrawn` builds it, and its guarantee's record holds it (`meaning`), until those definitions move into `Definitions`",
   "Specs.Flock.Guarantees.EndToEndHidden": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEndHidden` builds it, and its guarantees' records hold it (`meaning`), until those definitions move into `Definitions`",
-  "Specs.Flock.Guarantees.EndToEndRegistered": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEndRegistered` builds it, and its guarantees' records hold it (`meaning`), until those definitions move into `Definitions`"
+  "Specs.Flock.Guarantees.EndToEndRegistered": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.EndToEndRegistered` builds it, and its guarantees' records hold it (`meaning`), until those definitions move into `Definitions`",
+  "Specs.Flock.Guarantees.ZeroKnowledgeHidden": "it imports C-Flock's definitions from security_proofs, where they still are, so `Specs` (built without security_proofs) cannot import it: `Proofs.Flock.ZeroKnowledgeHidden` builds it, and its guarantee's record holds it (`meaning`), until those definitions move into `Definitions`"
  },
  "assumptions": [
   "Specs.Core.Assumptions",
@@ -62,7 +63,8 @@
   "Specs.Flock.Guarantees.EndToEnd",
   "Specs.Flock.Guarantees.EndToEndDrawn",
   "Specs.Flock.Guarantees.EndToEndHidden",
-  "Specs.Flock.Guarantees.EndToEndRegistered"
+  "Specs.Flock.Guarantees.EndToEndRegistered",
+  "Specs.Flock.Guarantees.ZeroKnowledgeHidden"
  ],
  "layers": {
   "Definitions.Core": {
@@ -240,7 +242,8 @@
   "Specs.Flock.Guarantees.EndToEnd": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Specs.Flock.Guarantees.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Specs.Flock.Guarantees.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Specs.Flock.Guarantees.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Specs.Flock.Guarantees.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Specs.Flock.Guarantees.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
   "Flock.HmNets.col_and": {
@@ -443,6 +446,9 @@
    "signature": ["Flock.SecurityProofs.EndToEndRegisteredDrawn : Flock.Guarantees.EndToEndRegisteredDrawn"],
    "assumptions": [],
    "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23"
+  },
+  "Flock.SecurityProofs.ZeroKnowledgeHidden": {
+   "owner": "@proofs"
   },
   "Flock.climb_binding": {
    "owner": "@proofs",
