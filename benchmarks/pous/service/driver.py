@@ -1,12 +1,13 @@
 """PoUS end to end through the proof service: setup, the memory challenger's signed timed audit, the answers proved
 through the service, the verifier of record, and a verdict-only output.
 
-    python benchmarks/pous/service/driver.py --out DIR [--scheme p2-16448/v3 --bps 2 --segments 1] [--k 4]
+    python benchmarks/pous/service/driver.py --out DIR [--scheme NAME --bps 2 --segments 1] [--k 4]
         [--signer test | --signer lms --lms-key DIR [--keygen-workers N]] [--flock BIN --lean BIN [--no-zk]]
         [--from-audit SERVICE-INPUT.json]
 
-1. **Setup** (CPU): `W` at random, its commitment, the verifier's salt, `C = Enc(W)` under `--scheme` (P2 v3 by default,
-   any registered scheme at `--bps`/`--segments`), and C's hiding commitment (`spec.commit_c`) under a fresh secret salt key.
+1. **Setup** (CPU): `W` at random, its commitment, the verifier's salt, `C = Enc(W)` under `--scheme` (by default P2's
+   conforming codec, `schemes.p2.P2().name`; any registered scheme at `--bps`/`--segments`), and C's hiding commitment
+   (`spec.commit_c`) under a fresh secret salt key.
 2. **The audit**: one session of `memory_challenger.MemoryChallenger` over `C` on a logical clock, its header binding
    C's root (`spec.session_binding`), signed by the PoUS tests' test signer or S1's LMS key (`--lms-key`, at
    `lms.DEPLOYED`), its coins opened after.  `--from-audit` takes a session the GPU harness ran instead
@@ -31,6 +32,7 @@ Exit 0 when the honest audit is accepted and every control is rejected.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import os
@@ -83,8 +85,8 @@ def setup_cpu(scheme_name: str, bps: int, segments: int) -> dict[str, Any]:
     from verity.protocols.accounting.space.pous.schemes.p2 import P2Params
 
     base = schemes.get(scheme_name)
-    params = P2Params(base.params.w, base.params.c0, bps, segments, base.params.expander) if isinstance(base.params, P2Params) \
-        else base.params.with_segments(segments)
+    params = dataclasses.replace(base.params, blocks_per_segment=bps, segments=segments) \
+        if isinstance(base.params, P2Params) else base.params.with_segments(segments)
     scheme = schemes.get(scheme_name, params=params)
     w = os.urandom(params.w_bytes)
     commitment = setup.commit(params, w)
@@ -247,7 +249,7 @@ def edited(signed: mc.SignedSession) -> mc.SignedSession:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True)
-    ap.add_argument("--scheme", default="p2-16448/v3")
+    ap.add_argument("--scheme", default=None, help="a registered scheme (CPU setup; default P2's, `schemes.p2.P2().name`)")
     ap.add_argument("--bps", type=int, default=2, help="blocks per segment (CPU setup)")
     ap.add_argument("--segments", type=int, default=1)
     ap.add_argument("--k", type=int, default=4, help="rounds (CPU setup)")
@@ -279,7 +281,7 @@ def run(a: argparse.Namespace, out: Path) -> dict[str, Any]:
     zk = not a.no_zk
     if a.from_audit:
         return from_audit(a, out, zk)
-    su = setup_cpu(a.scheme, a.bps, a.segments)
+    su = setup_cpu(a.scheme or p2.P2().name, a.bps, a.segments)
     blocks, nb = su["blocks"], len(su["blocks"][0])
     salt_key = os.urandom(32)
     t0 = time.monotonic()
@@ -306,7 +308,8 @@ def run(a: argparse.Namespace, out: Path) -> dict[str, Any]:
 
     controls = [prove("tampered-block", run_session(blocks, ctree, a.k, signer, limit, respond)),
                 prove("tampered-record", honest_s, edited(honest_s["signed"]))]
-    return summary(honest, controls, {"scheme": su["scheme"], "manifest": su["manifest"], "blocks": len(blocks),
+    return summary(honest, controls, {"scheme": su["scheme"], "manifest": su["manifest"],
+                                      "w_commitment": su["commitment"].hex(), "blocks": len(blocks),
                                       "block_bytes": nb, "encode_s": su["encode_s"], "commit_c_s": commit_s,
                                       "signer": {"scheme": signer.scheme, "test": signer.scheme not in mc.SCHEMES},
                                       "limit_ns": limit, "clock": "logical", "zk": zk})
@@ -330,7 +333,9 @@ def from_audit(a: argparse.Namespace, out: Path, zk: bool) -> dict[str, Any]:
     controls = [audit("tampered-block", out, nb, bad, salts, c_root, c_setup, paths, schemes, trusted, a.flock, a.lean, zk),
                 audit("tampered-record", out, nb, s, salts, c_root, c_setup, paths, schemes, trusted, a.flock, a.lean, zk,
                       edited(signed))]
-    return summary(honest, controls, {"from_audit": doc.get("source"), "blocks": s["commitment"].blocks, "block_bytes": nb,
+    return summary(honest, controls, {"from_audit": doc.get("source"), "scheme": doc.get("scheme"),
+                                      "manifest": doc.get("manifest"), "w_commitment": doc.get("w_commitment"),
+                                      "blocks": s["commitment"].blocks, "block_bytes": nb,
                                       "signer": {"scheme": signed.scheme, "test": signed.scheme not in mc.SCHEMES},
                                       "limit_ns": s["commitment"].limit_ns, "zk": zk,
                                       "timing": doc.get("timing")})

@@ -189,8 +189,9 @@ class MC(V3):
         self.memory_challenger_args = (*self.memory_challenger_args, "--c-root", self.c_tree.root.hex())
 
     def service_input(self, honest: dict[str, Any], c_host: bytes, out: Path) -> Path | None:
-        """The audit of record for `service/driver.py --from-audit`: its signed session and coin openings, C's root, and
-        each round's answered block of C with its salt and path (the prover's side, for the proof)."""
+        """The audit of record for `service/driver.py --from-audit`: the scheme and commitment to `W` it serves, its signed
+        session and coin openings, C's root, and each round's answered block of C with its salt and path (the prover's
+        side, for the proof)."""
         from service import spec as SP
 
         recs = honest.get("records") or []
@@ -201,7 +202,7 @@ class MC(V3):
                      "salt": SP.c_salt(self.c_salt_key, r["index"]).hex(), "path": [p.hex() for p in self.c_tree.path(r["index"])]}
                     for r in signed["rounds"]]
         doc = {"source": {"run": os.environ.get("RESEARCH_RUN_ID"), "audit": "p2-honest", "session": 0},
-               "signed": signed, "commitment": recs[0]["public"]["commitment"], "openings": recs[0]["public"]["openings"],
+               "scheme": self.scheme, "manifest": self.params.manifest(), "w_commitment": self.model.hex(), "signed": signed, "commitment": recs[0]["public"]["commitment"], "openings": recs[0]["public"]["openings"],
                "c_root": self.c_tree.root.hex(), "c_setup": self.c_setup.hex(), "answered": answered,
                "timing": {k: honest.get(k) for k in ("limit_ns", "elapsed_s", "margin_s", "audits", "audits_accepted")}}
         path = out / "service-input.json"

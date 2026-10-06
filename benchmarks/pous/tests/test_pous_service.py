@@ -3,13 +3,18 @@ commitment opens where the claims check needs it, and the CPU path end to end ac
 verdict-only output and rejects both controls."""
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from pathlib import Path
 
 import pytest
+from verity.protocols.accounting.space.pous import setup
+from verity.protocols.accounting.space.pous.schemes import p2
 
 BENCH = Path(__file__).resolve().parents[1]
+NB = p2.P2().params.block_bytes
+"""The unit's width: P2's registered block."""
 
 
 @pytest.fixture
@@ -20,7 +25,7 @@ def svc(monkeypatch):
     return spec, driver
 
 
-def _blocks(n: int, nb: int = 2056) -> list[bytes]:
+def _blocks(n: int, nb: int = NB) -> list[bytes]:
     return [hashlib.shake_256(b"C%d" % i).digest(nb) for i in range(n)]
 
 
@@ -30,16 +35,16 @@ def test_the_spec_is_all_and_a_stream_registers_a_session(svc):
     SP, _ = svc
     from verity.protocols.verification.sampled_proofs import service as S
 
-    sp = SP.spec(2056)
+    sp = SP.spec(NB)
     assert isinstance(sp.selection, S.All) and sp.check.public_outputs == ()
     assert [p.item for p in sp.public if p.kind == "output"] == ["verdict"]
     session = bytes(range(32))
-    stream = S.Stream(sp, SP.unit(2056), budget=1, delta=2.0 ** -40, challenger=SP.CHALLENGER)
-    rec = SP.record(2056, session, 5, {"block": "01" * 64, "o0": "02" * 64})
+    stream = S.Stream(sp, SP.unit(NB), budget=1, delta=2.0 ** -40, challenger=SP.CHALLENGER)
+    rec = SP.record(NB, session, 5, {"block": "01" * 64, "o0": "02" * 64})
     assert S.check_public(sp, rec).ok
     reg = stream.register(rec, SP.ports(session, 5))
     assert stream.select(reg).units == [0, 1, 2, 3, 4]
-    other = S.Stream(sp, SP.unit(2056), budget=1, delta=2.0 ** -40, challenger=SP.CHALLENGER)
+    other = S.Stream(sp, SP.unit(NB), budget=1, delta=2.0 ** -40, challenger=SP.CHALLENGER)
     with pytest.raises(S.Refused, match="R3-domain"):
         other.register(rec, SP.ports(bytes(32), 5))
 
@@ -63,14 +68,19 @@ def test_c_commitment_opens_each_leaf_and_binds_the_header(svc):
 
 @pytest.mark.slow
 def test_the_cpu_path_accepts_the_honest_audit_verdict_only_and_rejects_the_controls(svc, tmp_path):
-    """P2 v3's setup at two blocks, a three-round session on the logical clock under the test signer, its answers staged
-    for C-Flock and decided through a `Stream` (a stub verdict of record: no binaries here). The output file is the
-    verdict alone; the tampered block fails C's opening and the edited record its signature, each in a stream of its own."""
+    """The setup of P2's registered codec (its expander, and the setup's whole commitment to `W`) at two blocks, a
+    three-round session on the logical clock under the test signer, its answers staged for C-Flock and decided through a
+    `Stream` (a stub verdict of record: no binaries here). The output file is the verdict alone; the tampered block fails
+    C's opening and the edited record its signature, each in a stream of its own."""
     _, driver = svc
     assert driver.main(["--out", str(tmp_path), "--k", "3", "--bps", "2"]) == 0
     assert json.loads((tmp_path / "verdict.json").read_text()) == {"accepted": True}
     doc = json.loads((tmp_path / "summary.json").read_text())
-    assert doc["verifier_of_record"] == "stub (no binaries)" and doc["run"]["scheme"] == "p2-16448/v3"
+    assert doc["verifier_of_record"] == "stub (no binaries)" and doc["run"]["scheme"] == p2.P2().name
+    assert doc["run"]["block_bytes"] == NB
+    params = dataclasses.replace(p2.P2().params, blocks_per_segment=2)
+    assert doc["run"]["manifest"] == params.manifest()
+    assert len(bytes.fromhex(doc["run"]["w_commitment"])) == len(setup.commit(params, bytes(params.w_bytes)))
     h = doc["honest"]
     assert h["symbol"] == "accept" and h["exhaustive"] and h["claims"] == {"accepted": True, "reasons": [], "domains": True}
     assert h["k"] == 3 and h["ands"] == 0 and h["stream"]["public"] == {}

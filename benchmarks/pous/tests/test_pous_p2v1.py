@@ -478,12 +478,13 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
     assert m["signature_control"] == {"sessions": 2, "unedited_accepted": 2, "flipped_rejected": 2, "edited_rejected": 2,
                                       "passed": True}
     assert len(bytes.fromhex(honest["records"][0]["public"]["openings"][0]["salt"])) == 192 and nb == 16
-    _service_input_opens_under_c(tmp_path / "service-input.json", args[3], raw, honest)
+    _service_input_opens_under_c(tmp_path / "service-input.json", args[3], raw, honest, body["setup"])
 
 
-def _service_input_opens_under_c(path, c_root: str, digests: bytes, honest) -> None:
-    """The MC arm's audit of record for the proof service: the header binds C's hiding root, and each answered block is
-    C's leaf at its round's index under its salt and path (`service/spec.py`)."""
+def _service_input_opens_under_c(path, c_root: str, digests: bytes, honest, setup) -> None:
+    """The MC arm's audit of record for the proof service: it names the setup's scheme and commitment to `W`, C's
+    domain binds both, the header binds C's hiding root, and each answered block is C's leaf at its round's index under
+    its salt and path (`service/spec.py`)."""
     import json
 
     from verity.primitives.commitments.merkle import Commitment, Opening, verify_opening
@@ -491,6 +492,8 @@ def _service_input_opens_under_c(path, c_root: str, digests: bytes, honest) -> N
     from service import spec as SP
 
     doc = json.loads(path.read_text())
+    assert (doc["scheme"], doc["manifest"], doc["w_commitment"]) == (setup["scheme"], setup["manifest"], setup["w_commitment"])
+    assert doc["c_setup"] == setup["salt"] + setup["w_commitment"]
     commitment = mc.SessionCommitment.from_json(doc["commitment"])
     assert doc["c_root"] == c_root and doc["signed"] == honest["records"][0]["witness"]["signed"]
     assert commitment.binding == SP.session_binding(bytes.fromhex(c_root), commitment.blocks)

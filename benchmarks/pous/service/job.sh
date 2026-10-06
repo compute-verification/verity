@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # PoUS through the proof service (service/driver.py) with C-Flock's prover and the Lean verifier of record, on a node's CPUs:
 #   research run --on NODE --project verity --cwd source --campaign pous --declared-output 'out/*' \
-#     -- bash benchmarks/pous/service/job.sh [K=4] [BPS=2] [SEGMENTS=1] [SCHEME=p2-16448/v3] [SIGNER=lms LMS_KEY=DIR] [FROM_AUDIT=F]
+#     -- bash benchmarks/pous/service/job.sh [K=4] [BPS=2] [SEGMENTS=1] [SCHEME=NAME] [SIGNER=lms LMS_KEY=DIR] [FROM_AUDIT=F]
 # Builds flock-circuit (Flock b684b12 and backends/flock's patches: link, gpu-link, sha512, glue, zk, vtime; features sha512,
 # glue), the Lean flock-verify and a venv with numpy, once per input tree under $SVC_CACHE (kept), then runs the driver:
-# the CPU setup and a logical-clock session (default), or FROM_AUDIT, a GPU harness's service-input.json. Results go to
+# the CPU setup (SCHEME, else the driver's default, P2's registered codec) and a logical-clock session (default), or
+# FROM_AUDIT, a GPU harness's service-input.json. Results go to
 # $RESEARCH_RUN_DIR/out (verdict.json, summary.json, witness/), scratch to a mktemp directory the job removes.
 # SIGNER=lms signs with S1's key in LMS_KEY (made there with $(nproc) keygen workers when absent).
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -73,7 +74,7 @@ log "built"
 export PYTHONPATH=$SRC:$SRC/backends/flock/python:$SRC/catalog:$SRC/kernels
 ARGS=(--out "$OUT" --flock "$BIN" --lean "$LEAN")
 if [ -n "${FROM_AUDIT:-}" ]; then ARGS+=(--from-audit "$FROM_AUDIT")
-else ARGS+=(--scheme "${SCHEME:-p2-16448/v3}" --bps "${BPS:-2}" --segments "${SEGMENTS:-1}" --k "${K:-4}"); fi
+else ARGS+=(--bps "${BPS:-2}" --segments "${SEGMENTS:-1}" --k "${K:-4}"); [ -n "${SCHEME:-}" ] && ARGS+=(--scheme "$SCHEME"); fi
 [ "${SIGNER:-test}" = lms ] && ARGS+=(--signer lms --lms-key "${LMS_KEY:?SIGNER=lms takes LMS_KEY=DIR}" --keygen-workers "$TH")
 [ "${ZK:-1}" = 0 ] && ARGS+=(--no-zk)
 log "driver: ${ARGS[*]}"
