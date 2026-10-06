@@ -23,8 +23,8 @@ def _schedule(streams=("circuit/rep0",)):
     """The schedule of `_run`'s honest session: one binding round and one message round per stream."""
     return {"kind": RL.KIND + "/schedule", "hello": {**HELLO, "link": {"m": 4, "points": 2}}, "roots": {"circuit": 2},
             "link": {"y": 2}, "streams": {s: {"parent": "", "at": 0, "rounds": 2} for s in streams},
-            "rounds": [r for s in streams for r in ({"stream": s, "k": 0, "n": 6, "caps": [2], "commits": 0},
-                                                    {"stream": s, "k": 1, "n": 1, "caps": [], "commits": 1})]}
+            "rounds": [r for s in streams for r in ({"stream": s, "k": 0, "n": 6, "tops": [], "level0": 1, "commits": 0},
+                                                    {"stream": s, "k": 1, "n": 1, "tops": [], "level0": 0, "commits": 1})]}
 
 
 def _proxy(schedule):
@@ -133,7 +133,7 @@ def _coin_calls(reqs, schedule):
     coins, calls = RL.CoinServer(T._counter_rand()), []
     for name in ("start", "commit", "y", "open", "round", "record"):
         f = getattr(coins, name)
-        setattr(coins, name, lambda *a, _f=f, _n=name: (calls.append((_n, a)), _f(*a))[1])
+        setattr(coins, name, lambda *a, _f=f, _n=name, **kw: (calls.append((_n, a, kw)), _f(*a, **kw))[1])
     proxy = RL.Proxy(coins, T._salts(), schedule=schedule)
     for r in reqs:
         proxy.handle(r)
@@ -281,7 +281,7 @@ def test_any_exception_while_handling_a_request_is_a_refusal_and_serve_goes_on(t
     request that raises something other than ValueError ends neither `Proxy.handle` nor `serve`."""
 
     class Broken(RL.CoinServer):
-        def round(self, *a):
+        def round(self, *a, **kw):
             raise KeyError("no such coin")
 
     proxy = RL.Proxy(Broken(T._counter_rand()), T._salts(), schedule=_schedule())
@@ -319,9 +319,10 @@ def _edited(edit):
 @pytest.mark.parametrize("schedule", [
     None, {}, [], _edited(lambda s: s.update(kind=RL.KIND)), _edited(lambda s: s["hello"]["link"].update(sigma="ab" * 64)),
     _edited(lambda s: s["link"].update(y=2.0)), _edited(lambda s: s["link"].update(y=True)), _edited(lambda s: s["roots"].update(circuit=-1)),
-    _edited(lambda s: s["rounds"][0].update(stream="circuit/rep1")), _edited(lambda s: s["rounds"][0].update(caps=["2"])),
-    _edited(lambda s: s.pop("rounds"))],
-    ids=["none", "empty", "list", "kind", "sigma", "y-float", "y-bool", "root-negative", "stream-unknown", "cap-string", "no-rounds"])
+    _edited(lambda s: s["rounds"][0].update(stream="circuit/rep1")), _edited(lambda s: s["rounds"][0].update(tops=["2"])),
+    _edited(lambda s: s["rounds"][0].update(level0=True)), _edited(lambda s: s.pop("rounds"))],
+    ids=["none", "empty", "list", "kind", "sigma", "y-float", "y-bool", "root-negative", "stream-unknown", "top-string", "level0-bool",
+         "no-rounds"])
 def test_a_schedule_that_is_not_one_is_refused_before_anything_is_served(tmp_path, schedule):
     with pytest.raises(ValueError, match=f"not a {RL.KIND}/schedule"):
         _proxy(schedule)
@@ -367,7 +368,7 @@ FLAT = Path(__file__).resolve().parent / "fixtures" / "hidden-outputs" / "flat" 
 
 def test_the_schedule_of_a_statements_shape_is_the_one_a_real_session_keeps():
     """`schedule_for` from the shape alone (m = 25, k_log = 22, nbl = 3, three regions) is the flat GEMM selftest's honest
-    session (the fetched fixture `test_rec_algebra` reads), round for round: coins, caps' node counts, message rows. That
+    session (the fetched fixture `test_rec_algebra` reads), round for round: coins, tops' node counts, level-0 copies, message rows. That
     session drew committed coins, so its Hello also names them; the inner session's, on live OS coins, does not."""
     assert (FLAT / "records-cpu" / "honest.json").is_file(), (
         f"{FLAT} is not fetched: `uv run research data fetch-fixtures backends/flock/tests/fixtures/hidden-outputs`")
@@ -379,25 +380,27 @@ def test_the_schedule_of_a_statements_shape_is_the_one_a_real_session_keeps():
     assert {t: len(v) // 2 // RL.CAP_NODE_BYTES for t, v in rec["link"]["root_b"].items()} == want["roots"]
     assert len(rec["link"]["y"]) == want["link"]["y"]
     assert {st["stream"]: {"parent": st["parent"], "at": st["at"], "rounds": len(st["rounds"])} for st in rec["streams"]} == want["streams"]
+    level0 = {bytes.fromhex(v) for v in rec["link"]["root_b"].values()}
     rounds = []
     for st in rec["streams"]:
         for k, rd in enumerate(st["rounds"]):
             s = RL.split_round(bytes.fromhex(rd["msg"]), k == 0 and not st["parent"])
-            rounds.append({"stream": st["stream"], "k": k, "n": rd["n"], "caps": [len(RL.top_nodes(c)) for c in s.caps],
-                           "commits": len(RL.message_rows(s.free))})
+            rounds.append({"stream": st["stream"], "k": k, "n": rd["n"], "tops": [len(RL.top_nodes(c)) for c in s.caps if c not in level0],
+                           "level0": sum(c in level0 for c in s.caps), "commits": len(RL.message_rows(s.free))})
     assert rounds == want["rounds"] and len(rounds) == 2 * 94
 
 
 def test_the_schedule_of_the_firewalled_k4096_statement():
     """The K = 4096 statement (``flock-circuit statement``: dense_m 35, k_log 24, nbl 11, three regions) gives the schedule
-    its inner sessions keep: link points of 35 coordinates, a 128-node level-0 cap, 139 rounds a rep."""
+    its inner sessions keep: link points of 35 coordinates, a 128-node level-0 cap, 139 rounds a rep, 109 of them with a
+    message row."""
     text = "statement circuit ...\nSTATEMENT\t" + json.dumps({"statement": "verity/flock-circuit", "k_log": 24, "nbl": 11,
                                                              "dense_m": 35, "regions": 3, "statement_digest": "00" * 64})
     s = RL.schedule_for(RL.statement_of(text))
     assert RL.check_schedule(s) is s and "00" * 64 not in json.dumps(s)
     assert s["hello"]["link"] == {"m": 35, "points": 2} and s["roots"] == {"circuit": 128} and s["link"] == {"y": 2}
     assert s["streams"] == {f"circuit/rep{r}": {"parent": "", "at": 0, "rounds": 139} for r in range(2)}
-    assert (sum(r["n"] for r in s["rounds"]), sum(r["commits"] for r in s["rounds"])) == (2082, 510)
+    assert (sum(r["n"] for r in s["rounds"]), sum(r["commits"] for r in s["rounds"])) == (2082, 218)
 
 
 @pytest.mark.parametrize("statement", [{}, {"dense_m": 35, "k_log": 24, "nbl": 11}, {"dense_m": 35.0, "k_log": 24, "nbl": 11, "regions": 3},

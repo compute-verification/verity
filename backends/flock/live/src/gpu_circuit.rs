@@ -998,7 +998,7 @@ pub fn prove_circuit(
     }
     let bytes = unsafe { std::slice::from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };
-    let (proof, commitment) = decode_with(&bytes, pcs, level0.is_some());
+    let (proof, commitment) = decode_with(&bytes, pcs, level0.is_some(), salts.is_some());
     Ok((proof, commitment, phase, wphase, [h_setup, h_stage, t_decode.elapsed().as_secs_f64()]))
 }
 
