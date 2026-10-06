@@ -69,11 +69,13 @@ shallower leaf. A leaf over L bytes is a tree over its ⌈L/256⌉ segments (one
 
 7. **Profile.** When every selected tile passes, `WorkProfile` reports what the draw established, ε at δ, and for a scheme
    with a γ_0 the work certified at that ε, under the certificate's conjecture. PoUW has no policy parameter: accounting
-   decides which ε at δ it accepts (Daniel, 2026-10-06). The statement is `Pouw.Guarantees.EndToEnd` (proof
-   `Pouw.SecurityProofs.EndToEnd`); a scheme with no γ_0 gets only its sampling half, `Pouw.Guarantees.WorkWeightedSampling`.
+   decides which ε at δ it accepts (Daniel's ruling of 2026-10-06, 8:14 AM PDT). The statement is
+   `Pouw.Guarantees.EndToEnd` (proof `Pouw.SecurityProofs.EndToEnd`); a scheme with no γ_0 gets only its sampling half,
+   `Pouw.Guarantees.WorkWeightedSampling`.
 
-**What is public.** Every protocol is zero-knowledge, and only the minimum is public (Daniel, 2026-10-05). |W|, the size
-of the weights, is public (Daniel, 2026-10-06).
+**What is public.** Every protocol is zero-knowledge, and only the minimum is public (Daniel's ruling of 2026-10-05,
+7:48 PM PDT). |W|, the size of the weights, is public (his ruling of 2026-10-06, 8:14 AM PDT). Both rulings are recorded
+in `.agents/skills/friction/SKILL.md`.
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
 a public beacon and never Fiat-Shamir over the prover's roots. A scheme's noise is its own derivation from the salt and the
