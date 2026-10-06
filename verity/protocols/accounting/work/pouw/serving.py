@@ -29,7 +29,8 @@ from verity.primitives.crypto.blake3 import blake3
 @dataclass(frozen=True)
 class HashFormat:
     """``seed_a`` is ``unit-root`` when forming reads seed_A from A's root (so A's tree is on the critical path), ``row``
-    when each row seeds its own E_A line (h3)."""
+    when each row seeds its own E_A line (h3, h3s).  ``row_digest`` is what a row's seed is keyed on: None for the row's
+    leaf in A's tree (h3), or a row digest's schema (h3s: ``sha512/row-seg/v1``, `rowleaf.sha512_row_seg_digest`)."""
 
     name: str
     tree_hash: str
@@ -37,6 +38,7 @@ class HashFormat:
     leaf_label: str | None
     seed_a: str
     row_cap: bool = False
+    row_digest: str | None = None
 
     def message_key(self) -> bytes | None:
         return None if self.message_label is None else blake3(self.message_label.encode())
@@ -50,13 +52,15 @@ HASH_FORMATS: dict[str, HashFormat] = {
     "h1": HashFormat("h1", "blake3", "pearl-c/h1/message", "pearl-c/h1/leaf", "unit-root"),
     "h2": HashFormat("h2", "blake3-s256", "pearl-c/h1/message", "pearl-c/h1/leaf", "unit-root"),
     "h3": HashFormat("h3", "blake3-s256", "pearl-c/h1/message", "pearl-c/h1/leaf", "row", row_cap=True),
+    "h3s": HashFormat("h3s", "blake3-s256", "pearl-c/h1/message", "pearl-c/h1/leaf", "row", row_cap=True,
+                      row_digest="sha512/row-seg/v1"),
 }
 
 #: `pearl_c_device.DEVICES`' records: the panel's pearl-c-sm120 v1 is ``sm120`` (G = 4), its v2 ``sm120-unpromoted``
 FP8_DEVICES = ("h100", "sm120", "sm120-unpromoted")
 FP8_FORMINGS = ("v0", "v1")
 FP4_PRECISIONS = ("nvfp4", "mxfp4")
-_FP8 = re.compile(r"pearl-c-(?P<device>[a-z0-9]+(?:-(?!v[0-9])[a-z0-9]+)*)-(?P<forming>v[0-9]+)(?:-(?P<hashing>h[0-9]+))?"
+_FP8 = re.compile(r"pearl-c-(?P<device>[a-z0-9]+(?:-(?!v[0-9])[a-z0-9]+)*)-(?P<forming>v[0-9]+)(?:-(?P<hashing>h[0-9]+s?))?"
                   r"(?:@(?P<prices>[a-z0-9_]+))?")
 _FP4 = re.compile(r"pearl-c-(?P<precision>nvfp4|mxfp4)-(?P<forming>v[0-9]+)(?:-(?P<hashing>h[0-9]+))?")
 

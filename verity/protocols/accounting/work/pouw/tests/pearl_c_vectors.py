@@ -10,7 +10,9 @@ of their labels.  A ``-h1`` case (hashing format h1) reads its h0 twin's inputs 
 partial tile: 32 rows of a 64-column tile, its leaf over 64 digests.  A ``-h2`` case is its ``-h1`` twin with the trees
 ``frame-b3s``: the same inputs, digests and leaf, another row root and row leaf.  A ``-h3`` case is its ``-h2`` twin with E_A
 seeded per row (`pearl_c.row_seed` over each row's frame-b3s leaf): it adds row 0's seed and E_A line and a hash of every
-row seed, and its operands, peel factors, words, leaf and tickets are its own."""
+row seed, and its operands, peel factors, words, leaf and tickets are its own.  A ``-h3s`` case is its ``-h3`` twin with each
+row's seed keyed on its SHA-512 row digest (`pearl_c.row_digest`, ``sha512/row-seg/v1``): it adds row 0's digest and a hash
+of every row digest."""
 
 from __future__ import annotations
 
@@ -37,7 +39,9 @@ CASES = (("test-16", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v0"),
          ("prod-64-v1-h2", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v1", "h2"),
          ("decode-32-v1-h2", (32, 1024, 64), (0, 32), (0, 64), 7, 2, False, "v1", "h2"),
          ("test-16-v1-h3", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1", "h3"),
-         ("decode-32-v1-h3", (32, 1024, 64), (0, 32), (0, 64), 7, 2, False, "v1", "h3"))
+         ("decode-32-v1-h3", (32, 1024, 64), (0, 32), (0, 64), 7, 2, False, "v1", "h3"),
+         ("test-16-v1-h3s", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1", "h3s"),
+         ("decode-32-v1-h3s", (32, 1024, 64), (0, 32), (0, 64), 7, 2, False, "v1", "h3s"))
 
 
 def shake(case: str, name: str, part: str, i: int, n: int) -> bytes:
@@ -84,7 +88,7 @@ def halves(grid: list[list[int]]) -> bytes:
 
 
 def case_vector(case, shape, r, c, index, weight, test, forming, hashing="h0") -> dict:
-    base = case.removesuffix("-h1").removesuffix("-h2").removesuffix("-h3")   # a hashed case reads its h0 twin's inputs
+    base = case.removesuffix("-h1").removesuffix("-h2").removesuffix("-h3s").removesuffix("-h3")   # a hashed case reads its h0 twin's inputs
     s, ctx = scheme(test, forming, hashing), ctx_of(base, shape, index, weight)
     s.check(ctx.matmul)
     tile = Tile(tuple(range(*r)), tuple(range(*c)))
@@ -107,14 +111,17 @@ def case_vector(case, shape, r, c, index, weight, test, forming, hashing="h0") -
         "leaf": s.digest(ctx, noise, checked).hex(), "tickets": [t.hex() for t in s.tickets(noise, checked)],
         "useful_sha256": sha(json.dumps(useful).encode()), "useful_00": useful[0][0],
     }
-    if hashing in ("h1", "h2", "h3"):
+    if hashing in ("h1", "h2", "h3", "h3s"):
         tree = commit_rows(activation_binding(ctx.salt, index), index, a, s.commitment_hash)
         msg = words([checked.c[0][:C.CHUNK]]) + words([checked.u[0][:C.CHUNK]])
         out.update({"hashing": hashing, "rows_root_a": tree.commitment.root.hex(),
                     "row_leaf_a0": tree.domain.leaf(0, 0, ROW_SCHEMA, a[0]).hex(), "message_00": C.message_digest(msg, hashing).hex()})
-    if hashing == "h3":
+    if hashing in C.ROW_SEEDED:
         seeds = s.row_seeds(ctx, a, tile.rows)
         out.update({"row_seed_a0": seeds[0].hex(), "row_seeds_sha256": sha(b"".join(seeds)), "e_a0": ops.e_a[0]})
+    if hashing == "h3s":
+        digests = [C.row_digest(x) for x in a]
+        out.update({"row_digest_a0": digests[0].hex(), "row_digests_sha256": sha(b"".join(digests))})
     return out
 
 

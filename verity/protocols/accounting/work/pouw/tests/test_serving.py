@@ -22,8 +22,9 @@ from verity.protocols.accounting.work.pouw.serving import (
 )
 
 #: every Pearl-C name registered on the open PRs: #449 and #540 (`schemes.SCHEMES`, `pouw_pearl_c_device.SCHEMES`), #548
-#: (Pearl-C4), #532, #549 and #555 (-h2, -h3), and PearlC's price-override spelling
+#: (Pearl-C4), #532, #549 and #555 (-h2, -h3), -h3s, and PearlC's price-override spelling
 NAMES_IN_USE = ("pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-h100-v1-h1", "pearl-c-h100-v1-h2", "pearl-c-h100-v1-h3",
+                "pearl-c-h100-v1-h3s", "pearl-c-sm120-v1-h3s",
                 "pearl-c-h100-v1@sm_120", "pearl-c-sm120-v1", "pearl-c-sm120-v1-h1", "pearl-c-sm120-unpromoted-v1-h1",
                 "pearl-c-nvfp4-v0", "pearl-c-mxfp4-v0")
 
@@ -53,6 +54,7 @@ def test_the_hashing_format_is_a_switch():
     ("pearl-c-sm120-hot-v1-h1", "device 'sm120-hot'"),
     ("pearl-c-sm120-v9-h1", "forming 'v9'"),
     ("pearl-c-sm120-v1-h7", "hashing 'h7'"),
+    ("pearl-c-sm120-v1-h2s", "hashing 'h2s'"),
     ("pearl-fp8-v4", "not a Pearl-C scheme name"),
     ("ncp-v2", "not a Pearl-C scheme name"),
 ])
@@ -62,12 +64,13 @@ def test_a_name_outside_the_grammar_is_refused_by_what_is_wrong(name, why):
 
 
 def test_the_formats_keys_are_blake3_of_their_labels_and_h0_has_none():
-    """`pearl_c.H1_KEYS` is ``blake3(f"pearl-c/h1/{role}")``; h2 and h3 keep h1's digests and leaf (#532, #549)."""
-    for h in ("h1", "h2", "h3"):
+    """`pearl_c.H1_KEYS` is ``blake3(f"pearl-c/h1/{role}")``; h2, h3 and h3s keep h1's digests and leaf (#532, #549)."""
+    for h in ("h1", "h2", "h3", "h3s"):
         f = HASH_FORMATS[h]
         assert f.message_key() == blake3(b"pearl-c/h1/message") and f.leaf_key() == blake3(b"pearl-c/h1/leaf")
     assert HASH_FORMATS["h0"].message_key() is None and HASH_FORMATS["h0"].leaf_key() is None
-    assert [HASH_FORMATS[h].tree_hash for h in ("h0", "h1", "h2", "h3")] == ["sha256", "blake3", "blake3-s256", "blake3-s256"]
+    assert [HASH_FORMATS[h].tree_hash for h in ("h0", "h1", "h2", "h3", "h3s")] == ["sha256", "blake3", "blake3-s256", "blake3-s256",
+                                                                                     "blake3-s256"]
 
 
 def test_hash_format_reads_a_name_an_id_or_a_scheme_object():
@@ -95,7 +98,7 @@ def test_the_deferred_schedule_is_the_measured_one():
 
 def test_a_trees_leave_the_main_lane_only_where_forming_seeds_per_row():
     early = Schedule("h3o", frozenset({"a_tree", "tile_hash"}), ring=2)
-    assert schedule_refusals(HASH_FORMATS["h3"], early) == []
+    assert schedule_refusals(HASH_FORMATS["h3"], early) == schedule_refusals(HASH_FORMATS["h3s"], early) == []
     for h in ("h1", "h2"):
         (why,) = schedule_refusals(HASH_FORMATS[h], early)
         assert "a_tree can't leave the main lane" in why and "seed_A from A's root" in why

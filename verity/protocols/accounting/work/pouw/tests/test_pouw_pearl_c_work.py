@@ -335,12 +335,14 @@ def test_aligned_spike_unit_is_rejected_by_the_cap():
             assert "exceeds the cap" in out.audit.verdicts[0].reason
 
 
-def test_h3_caps_each_credited_row_as_well_as_the_tile():
-    """-h3's row cap (`TTOutRowSeed.lean`'s (C2)): one A row with the aligned spikes among 31 Gaussian rows, on spiked B,
-    is over 10x its own cap while the 32-row tile's debit is under 3/4 of the tile's.  -h2's tile rule accepts the tile
-    and -h3's audit refuses it for that row; V-EX gives the row up, and the audit then accepts on the other 31 rows."""
+@pytest.mark.parametrize("hashing", ["h3", "h3s"])
+def test_h3_caps_each_credited_row_as_well_as_the_tile(hashing):
+    """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), and -h3s's, whose seeds are keyed on SHA-512 row digests: one A row with
+    the aligned spikes among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under
+    3/4 of the tile's.  -h2's tile rule accepts the tile and -h3's audit refuses it for that row; V-EX gives the row up, and
+    the audit then accepts on the other 31 rows."""
     k, m, n = 1024, 32, 4
-    h3, h2 = (C.PearlC(k_min=128, tile=(m, n), forming="v1", hashing=h) for h in ("h3", "h2"))
+    h3, h2 = (C.PearlC(k_min=128, tile=(m, n), forming="v1", hashing=h) for h in (hashing, "h2"))
     assert W.row_cap(h3) and not W.row_cap(h2) and not W.row_cap(S)
     rows_a = spiked_rows(k, 1, 100, 300.0) + spiked_rows(k, m - 1, 200, None)
     rows_b = spiked_rows(k, n, 900, 300.0)

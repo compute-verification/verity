@@ -191,6 +191,48 @@ def test_row_seeds_are_the_one_row_units_seed_a():
             C.row_seed(salt, leaf, root_b, unit, row)
 
 
+def h3s_row(k: int) -> bytes:
+    """The pins' FP32 row of k words: byte i is 7i + k mod 256."""
+    return bytes((7 * i + k) % 256 for i in range(4 * k))
+
+
+#: -h3s's row digests (`row_digest`, ``sha512/row-seg/v1``) of `h3s_row(k)`: one segment, two with a 176-byte last, and the
+#: 16 and 56 of Llama's 4096- and 14336-wide rows; `sha512_rows.cuh`'s `s512_rows`, built for the host, writes the same
+H3S_DIGESTS = {
+    128: "ee92fa29ad7ace8732aa9a138b3d816ce140018e9e9e9d820e3ac4a64d974c2e9410831984599a36a1e58d29d1e59d330b845fe0a98d4cc753d5093c4c70ac99",
+    300: "0986088e50ea36f19742c6af42083c59323d69f0db773bc9a49c12bf86999be75a7d615614bf137fe495fe32bac4e978a41b6f5781d1a8e2034411fccbe4a3a5",
+    4096: "823a21352763ecee3ba7b06da44a04525577197dbee48ef82b12927e6eb6a847360933bed78d80f85b798b77096a8746ce81dc3f48e6891d95d80d0b9432788f",
+    14336: "9743c48588f788041e55fc2ef5cf44aa01225029edcf0539230053fedfcf240032ee695fd36f194c832834df8da839899cdb251e74c0090c150affc90aecadb8"}
+#: -h3s's row seeds over the digest of `h3s_row(4096)`, at `ROW_SEEDS`' salt and root_B, as `b3_seeds` (mode 2) writes them
+H3S_SEEDS = {(7, 3): "f89d02524a2d9dbc43c9d0f85225c20be248997127c6989e628424b4ac1b8ebc",
+             (7, 200): "e17bc3505bfc9a9b88b67ab02b295dc0939f1f75d88ea986471db261004a3d13",
+             (2 ** 32 - 1, 3): "9f5f48c6cbfbcebe113c4b4795b76a721f4830888efccd72fa3250a0d6b43a76",
+             (2 ** 32 - 1, 200): "e2397edb00222d193f59372a4d0ba21d598b6ca575719c4f87f31877a0ed6bcb"}
+
+
+def test_h3s_row_digests_are_row_seg_v1_over_the_rows_bytes():
+    """-h3s keys a row's seed on ``sha512/row-seg/v1`` of its bytes, rebuilt here from hashlib: SHA-512 of each 1 KiB segment
+    under its 128-byte header S(j, s, m_j) (m_j in bits), then SHA-512 of the row header Q(n_bits, s, 1024) and the segment digests.  The
+    seed is `row_seed` over that 64-byte digest."""
+    def header(tag: bytes, *fields: tuple[int, int]) -> bytes:
+        return (tag + b"".join(v.to_bytes(n, "big") for v, n in fields)).ljust(128, b"\0")
+
+    for k, pin in H3S_DIGESTS.items():
+        row = h3s_row(k)
+        segs = [row[i:i + 1024] for i in range(0, len(row), 1024)]
+        s = len(segs)
+        inner = b"".join(hashlib.sha512(header(b"verity/sha512-row-seg/v1/segment\0", (j, 8), (s, 8), (8 * len(g), 8)) + g).digest()
+                         for j, g in enumerate(segs))
+        outer = hashlib.sha512(header(b"verity/sha512-row-seg/v1\0", (8 * len(row), 8), (s, 8), (1024, 4)) + inner).digest()
+        assert C.row_digest(row) == outer and outer.hex() == pin
+    salt, root_b, d = bytes(range(32)), bytes(range(32, 64)), C.row_digest(h3s_row(4096))
+    for (unit, row), seed in H3S_SEEDS.items():
+        assert C.row_seed(salt, d, root_b, unit, row).hex() == seed != ROW_SEEDS[unit, row]
+    other = bytearray(h3s_row(4096))
+    other[4095] ^= 1
+    assert C.row_seed(salt, C.row_digest(bytes(other)), root_b, 7, 3).hex() != H3S_SEEDS[7, 3]
+
+
 def test_leaf_and_tickets_rebuilt_from_bytes():
     s, ctx, noise, ops, checked, a, b = instance("leaf")
     digests = []
@@ -664,6 +706,51 @@ def test_h3_lifecycle_and_an_h2_verifier_refuses_it():
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
     h2 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h2"), epoch).check_tile(tr, prover.open(epoch, 0))
     assert not h2.ok and h2.reason == "checked values"
+
+
+def test_h3s_draws_each_rows_e_a_from_its_sha512_row_digest():
+    """Hashing format -h3s: -h3 with row i's seed keyed on its `row_digest` instead of its leaf in A's tree, which stays
+    -h3's frame-b3s tree; so E_A moves with the row's bytes and position alone, and differs from -h3's for the same rows."""
+    from verity.protocols.accounting.work.pouw.serving import HASH_FORMATS, SchemeId, hash_format
+
+    s, h3 = (C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing=h) for h in ("h3s", "h3"))
+    assert s.name == "pearl-c-h100-v1-h3s" and s.commitment_hash == h3.commitment_hash == "blake3-s256"
+    assert s.digest_keys == C.H1_KEYS and s.certificate.claims == h3.certificate.claims
+    assert dict(s.certificate.parameters)["hashing"] == "h3s" and C.ROW_SEEDED == ("h3", "h3s")
+    assert SchemeId.parse("pearl-c-sm120-v1-h3s").hashing == "h3s" and hash_format(s) is HASH_FORMATS["h3s"]
+    assert HASH_FORMATS["h3s"].row_digest == "sha512/row-seg/v1" and HASH_FORMATS["h3"].row_digest is None
+    ctx, k = CV.ctx_of("h3s-rows", (16, 384, 16), 3, 9), 384
+    a, b = CV.rows_f32("h3s-rows", "A", 16, k), CV.rows_f32("h3s-rows", "B", 16, k)
+    tile, noise = Tile(tuple(range(16)), tuple(range(16))), s.noise(ctx)
+    assert noise == h3.noise(ctx)
+    seeds = s.row_seeds(ctx, a, tile.rows)
+    assert seeds == [C.row_seed(ctx.salt, C.row_digest(a[i]), ctx.root_b, 3, i) for i in range(16)] and len(set(seeds)) == 16
+    assert all(x != y for x, y in zip(seeds, h3.row_seeds(ctx, a, tile.rows)))
+    ops, ops3 = s.encode(ctx, noise, a, b, tile), h3.encode(ctx, noise, a, b, tile)
+    assert ops.e_a == [P.sample_line(x, 0, 0, 0) for x in seeds] != ops3.e_a
+    assert ops.e_b == ops3.e_b and ops.b.codes == ops3.b.codes and ops.pb == ops3.pb
+    other = list(a)
+    other[5] = a[6]
+    e = s.encode(ctx, noise, other, b, tile).e_a
+    assert [i for i in range(16) if e[i] != ops.e_a[i]] == [5] and e[5] != ops.e_a[6]
+    moved = Context(ctx.salt, ctx.matmul, bytes(32), ctx.root_b)
+    assert s.encode(moved, s.noise(moved), a, b, tile).e_a == ops.e_a
+
+
+def test_h3s_lifecycle_and_an_h3_verifier_refuses_it():
+    """An -h3s transcript is accepted by an -h3s verifier; -h3's verifier opens the same rows (one tree format) and refuses
+    its checked values, since its seeds read the rows' leaves."""
+    from verity.protocols.accounting.work.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
+
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3s"), 128
+    rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
+    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
+    prover = Prover(s, {9: rows_b})
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
+    h3 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), epoch).check_tile(tr, prover.open(epoch, 0))
+    assert not h3.ok and h3.reason == "checked values"
 
 
 def test_v1_domain_rules():
