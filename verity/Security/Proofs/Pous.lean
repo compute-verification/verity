@@ -6,6 +6,7 @@ import Proofs.Pous.TrackA.A6Rederive
 import Proofs.Pous.Pebbling.B1IndepSet
 import Proofs.Pous.Pebbling.B3Chain
 import Proofs.Pous.Dense.DenseMeets
+import Proofs.Pous.FreeBlocks.Zero
 import Proofs.Pous.P3.InvertibleCore
 import Proofs.Pous.P3.Refutation
 import Proofs.Pous.Chain.Flat
