@@ -73,6 +73,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fractions import Fraction
 from pathlib import Path
 
+import covert
 import replay
 from verity.protocols.accounting.communication.warden import online
 from verity.protocols.accounting.communication.warden.active import (
@@ -422,7 +423,7 @@ def program(plan: dict, release: dict[int, int], params: GridParams) -> tuple[li
     return frames, [rd for rd, _, _, _ in keys]
 
 
-STRATEGIES = ("honest", "burst", "spread", "bits", "late")
+STRATEGIES = ("honest", "burst", "spread", "bits", "late", "covert")
 
 
 def adversary_writes(plan: dict, sync_set: SyncSet, buckets: int, strategy: str, seed: int = 0) -> dict[str, list]:
@@ -462,6 +463,45 @@ def adversary_writes(plan: dict, sync_set: SyncSet, buckets: int, strategy: str,
             w[0] = last = max(w[0], last)
         out[name] = [w for w in ws if w[0] < horizon - 1]
     return dict(out)
+
+
+def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> dict:
+    """The plan an adversarial server runs: `adversary_writes`' writes, or, for `covert`, `covert.encode_writes`' (a
+    sender that steers the online prover's declared sync with a random message), with the symbols it sent kept for
+    the audit's `covert` measurement. Under syncs fixed before the run (`envelope`, `model`) the covert sender steers
+    nothing: the control."""
+    if strategy != "covert":
+        return plan | {"strategy": strategy, "seed": seed,
+                       "writes": adversary_writes(plan, setup.sync_set, setup.egress_params.buckets, strategy, seed)}
+    T = setup.egress_params.buckets
+    horizon = plan["windows"] * T
+    release = {int(k): v for k, v in plan["model_release"].items()}
+    rule = online.rule(plan["sync_rule"]) if "sync_rule" in plan else None
+    fixed = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
+    enc = covert.encode_writes(program_keys(plan["sessions"], release, horizon), plan["sessions"], setup.sync_set, T,
+                               plan["windows"], rule, setup.envelope, seed, horizon, fixed)
+    return plan | {"strategy": strategy, "seed": seed, "writes": enc["writes"],
+                   "covert": {"symbols": enc["symbols"], "caps": enc["caps"], "predicted": enc["declared"],
+                              "margin": covert.margin_of(plan["sync_rule"]) if rule else 0}}
+
+
+def covert_symbols(plan: dict, buckets: int) -> tuple[list[int], int]:
+    """What a run's sender sent per window, for `covert.measure`, and the rule's δ margin: the covert sender's symbols;
+    for `bits`, the bits of the sessions released in each window (as one integer); for any other run, a random stream
+    independent of it, so its measured rate is the estimator's null (the honest control)."""
+    margin = covert.margin_of(plan["sync_rule"]) if "sync_rule" in plan else 0
+    if "covert" in plan:
+        return plan["covert"]["symbols"], margin
+    if plan.get("strategy") == "bits":
+        rng = random.Random(plan["seed"])
+        bits = {name: rng.randrange(2) for name, _, _ in plan["sessions"]}
+        release = {int(k): v for k, v in plan["model_release"].items()}
+        out = [0] * plan["windows"]
+        for name, stream, _ in plan["sessions"]:
+            if (r := release.get(stream)) is not None and r // buckets < plan["windows"]:
+                out[r // buckets] = 2 * out[r // buckets] + bits[name]
+        return out, margin
+    return covert.control_symbols(plan["windows"], plan.get("seed", 0)), margin
 
 
 # The three processes.
@@ -1136,6 +1176,11 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
         "model_misses": plan["model_misses"],
         "declared_are_planned": declared == plan["syncs"],
     }
+    symbols, margin = covert_symbols(plan, T)
+    if "covert" in plan:
+        comparisons["covert_declared_are_predicted"] = declared == plan["covert"]["predicted"]
+    comparisons["covert"] = {"symbols": symbols, "declared": declared, "margin": margin} | \
+        covert.measure(symbols, declared, setup.sync_set, margin=margin)
     if live:
         comparisons |= live_comparisons(plan, setup, frames, ready)
     else:
@@ -1458,10 +1503,7 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
                     break
                 if not args.reaudit:
                     run.mkdir(parents=True, exist_ok=True)
-                    mine = plan if strategy == "honest" else plan | {
-                        "strategy": strategy,
-                        "writes": adversary_writes(plan, setup.sync_set, setup.egress_params.buckets, strategy,
-                                                   args.seed)}
+                    mine = plan if strategy == "honest" else adversary_plan(plan, setup, strategy, args.seed)
                     with gzip.open(run / "plan.json.gz", "wt") as fh:
                         json.dump(mine, fh)
                     t0 = time.monotonic()
@@ -1517,6 +1559,14 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
             "records_are_run_shapers": all(r["comparisons"]["records_are_run_shapers"] for r in mine),
             "ready_off_honest": sum(r["comparisons"]["ready_off_meant"] for r in mine),
             "tick_late_ms": [r["timing"]["tick_late_ms"] for r in mine]}
+    summary["covert"] = {}
+    for s in strategies:
+        mine = [r["comparisons"] for r in results if r["strategy"] == s]
+        if mine:
+            summary["covert"][s] = covert.measure_runs([(c["covert"]["symbols"], c["covert"]["declared"]) for c in mine],
+                                                       setup.sync_set, margin=mine[0]["covert"]["margin"])
+            if "covert_declared_are_predicted" in mine[0]:
+                summary["covert"][s]["declared_are_predicted"] = all(c["covert_declared_are_predicted"] for c in mine)
     (args.out / "summary.json").write_text(json.dumps(summary, indent=1))
     with open(args.out / "verdicts.jsonl", "w") as fh:
         for res in results:
@@ -1527,6 +1577,10 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
     for s, a in summary["adversarial"].items():
         print(f"{s}: accepted {a['accepted']} of {a['link_windows']}; wire is honest's {a['wire_is_honests']}; "
               f"committed is honest's {a['committed_is_honests']}")
+    for s, m in summary["covert"].items():
+        print(f"{s} through the declared sync: MI {m['mutual_information_full_bits']:.3f} bits/window (null "
+              f"{m['mutual_information_null_bits']:.3f}), decoded {m['decoded_bits_per_window']:.3f} bits/window, "
+              f"symbol error rate {m['symbol_error_rate']:.3f}, over {m['window_decisions']} window-decisions")
     return 143 if stopped and stopped.startswith("evicted") else 0
 
 
