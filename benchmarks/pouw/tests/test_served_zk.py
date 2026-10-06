@@ -1,12 +1,12 @@
-"""served_zk's window through the proof service (`served_zk/served_commit.py` over `served_zk/service.py`): a window of
-served calls' fp8-p rows committed as C-Flock commits a unit's rows, its tiles padded with filler tiles to a grid level,
-registered with exactly PoUW's public items, received, drawn once, each drawn tile's proof opened against the window
-root, and the outcome publishing exactly the public items."""
+"""served_zk's window through the proof service (`served_zk/served_commit.py` over P1, `sampled_proofs.service`): a
+window of served calls' fp8-p rows committed as C-Flock commits a unit's rows, its tiles padded with filler tiles to a
+grid level, registered with exactly PoUW's public items, received by a `Stream`, drawn once, each drawn tile's proof
+opened against the window root, delivered once, and the final outcome publishing exactly the public items."""
 from __future__ import annotations
 
 import hashlib
+import io
 import json
-import os
 import stat
 import sys
 from fractions import Fraction
@@ -19,11 +19,11 @@ from verity.protocols.accounting.work.pouw.circuit import leaves as L
 from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import DEVICES
+from verity.protocols.verification.sampled_proofs import service as S
 from verity.protocols.verification.sampled_proofs.one_stage import registration as R
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC  # noqa: E402
-import service as S  # noqa: E402
 
 K, M, N = 128, 3, 4
 
@@ -67,7 +67,14 @@ def _window(words, run="r-request"):
 
 
 def _register(params, public, **extra):
-    return S.register(SC.spec_of(params, public["level"]), {**public["items"], **extra}, public["roots"])
+    return SC.register(params, public, extra)
+
+
+def _codes(e: pytest.ExceptionInfo) -> set[str]:
+    return set(e.value.verdict.codes)
+
+
+SESSION = "5e" * 64
 
 
 def _pub(bca: bytes, bcb: bytes) -> bytes:
@@ -84,7 +91,7 @@ def _unit_pub(advice, priv, t: int) -> bytes:
 
 
 def _sample(units):
-    return lambda population, k: {"law": "subset", "population": population, "k": k, "units": sorted(units)[:k]}
+    return lambda law, n: list(units)[:law["k"]]
 
 
 def test_rows_are_the_schemes_operands(served):
@@ -133,63 +140,84 @@ def test_register_makes_exactly_the_public_items_public(served):
     params, public, _, _ = _window(words)
     rec = _register(params, public)
     assert rec["window"] == {"kind": "served", "context": params["context"], "public": public["items"]}
-    assert set(rec["window"]["public"]) == set(Wd.REGISTERED) and rec["population"] == 26
+    assert set(rec["window"]["public"]) == set(Wd.REGISTERED) and rec["population"] == 26 and rec["scheme"] == S.SCHEME
     assert rec["law"] == {"law": "subset", "k": rec["window"]["public"]["sampling"]["law"]["k"]}
-    assert [r["port"] for r in rec["roots"]] == ["window", "W"]
+    assert [r["port"] for r in rec["roots"]] == [SC.PORT, "W"]
+    assert S.check_public(SC.spec_of(params, public["level"]), rec).ok and SC.public_problem(params, rec).ok
     text = json.dumps(rec)
     for leak in ('"matmul"', '"shape"', '"real_rows"', '"rows"', '"keep"'):
         assert leak not in text
-    with pytest.raises(S.Refused, match="public-items"):
+    with pytest.raises(S.Refused) as e:
         _register(params, public, shapes=[[16, K, N]])
-    with pytest.raises(S.Refused, match="public-commitment"):
+    assert _codes(e) == {"public-items"}
+    with pytest.raises(S.Refused) as e:
         _register(params, public, root_W="00" * 64)
-    with pytest.raises(S.Refused, match="outside"):
+    assert _codes(e) == {"public-value"}
+    undeclared = SC.spec_of(params, public["level"])
+    undeclared = S.Spec(undeclared.values, undeclared.selection, undeclared.check, undeclared.public[:2], undeclared.context)
+    assert set(S.check_public(undeclared, rec).detail["undeclared"]) == {f"leaves:{SC.PORT}", f"domain:{SC.PORT}", "leaves:W",
+                                                                          "domain:W"}
+    with pytest.raises(ValueError, match="outside"):
         SC.work_at({**params, "range": [100, 1 << 40]}, public["level"])
 
 
-def test_receive_holds_every_item_to_the_verifiers_own(served):
-    """The verifier receives the honest record and its receipt names it.  An extra public key, a raised level (more credit),
-    a K′ other than its own, or another request's record (its own context) is refused, with no receipt."""
+def _challenger(params, units=None, coins=b"\x07") -> SC.Challenger:
+    return SC.Challenger(params, None if units is None else _sample(units), coins=lambda n: coins * n)
+
+
+def test_the_challenger_holds_every_item_to_its_own(served):
+    """The challenger's stream registers the honest record and its receipt names it.  An extra public key, a raised level
+    (more credit), a K′ other than its own, another request's record (its own context) or a field one-stage doesn't define
+    is refused, and so is a second registration while the first has no outcome."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    v, receipt = SC.receive(params, rec)
-    assert v["ok"] and receipt["registration"] == R.digest(rec)
+    ch = _challenger(params)
+
+    def refused(r) -> set[str]:
+        with pytest.raises(S.Refused) as e:
+            ch.register("x", r)
+        return _codes(e)
+
     extra = json.loads(json.dumps(rec))
     extra["window"]["public"]["shapes"] = [[16, K, N]]
-    v, receipt = SC.receive(params, extra)
-    assert not v["ok"] and "public-items" in v["codes"] and receipt is None
+    assert refused(extra) == {"public-items"}
     raised = json.loads(json.dumps(rec))
     raised["window"]["public"]["work"]["level"] += 1
-    v, receipt = SC.receive(params, raised)
-    assert not v["ok"] and receipt is None and {"public-value", "R2-population", "R3-domain"} <= set(v["codes"])
+    assert refused(raised) == {"public-value", "population"}
     k = json.loads(json.dumps(rec))
     k["window"]["public"]["sampling"]["law"]["k"] -= 1
-    v, receipt = SC.receive(params, k)
-    assert not v["ok"] and "public-value" in v["codes"] and receipt is None
+    assert refused(k) == {"public-value"}
     oparams, opublic, _, _ = _window(words, run="r-other")
-    v, receipt = SC.receive(params, _register(oparams, opublic))
-    assert not v["ok"] and "public-context" in v["codes"] and receipt is None
+    assert "public-context" in refused(_register(oparams, opublic))
+    assert refused({**rec, "tiles": [2, 3]}) == {"keys"}
+    assert "x" not in ch.regs
+    reg = ch.register("honest", rec)
+    assert reg.receipt["registration"] == R.digest(rec) == reg.digest and reg.order == 0
+    assert refused(rec) == {"open"}
 
 
-def test_select_draws_once_after_the_receipt(served, tmp_path):
-    """The draw is the law's subset:K′ over the padded population, once per receipt: a second select is refused, so no
-    retry redraws; a receipt of another record and a draw of the wrong size are refused."""
+def test_select_draws_once_after_the_receipt(served):
+    """The draw is the law's subset:K′ over the padded population, from the challenger's own coins, once: a second select
+    is refused, so no retry redraws; a sampler's draw of the wrong size is refused."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    _, receipt = SC.receive(params, rec)
-    spec = SC.spec_of(params, public["level"])
-    k = spec.selection["k"]
-    with pytest.raises(S.Refused, match="not the law"):
-        S.select(spec, rec, receipt, lambda p, _k: _sample(range(p))(p, k + 1), tmp_path / "bad")
-    d = S.select(spec, rec, receipt, _sample(range(26)), tmp_path / "log")
-    assert d["units"] == list(range(k)) and d["population"] == 26
-    with pytest.raises(S.Refused, match="once"):
-        S.select(spec, rec, receipt, _sample(range(26)), tmp_path / "log")
-    oparams, opublic, _, _ = _window(words, run="r-other")
-    with pytest.raises(S.Refused, match="receipt"):
-        S.select(spec, rec, R.receipt(_register(oparams, opublic), SC.VERIFIER), _sample(range(26)), tmp_path / "x")
+    k = SC.law_of(params, public["level"])["k"]
+    ch = _challenger(params)
+    ch.register("honest", rec)
+    d = ch.select("honest")
+    assert len(d.units) == k and d.draw["population"] == 26 and d.units == sorted(d.units) and all(0 <= u < 26 for u in d.units)
+    with pytest.raises(S.Refused) as e:
+        ch.select("honest")
+    assert _codes(e) == {"drawn"}
+    again = _challenger(params)
+    again.register("honest", rec)
+    assert again.select("honest").units == d.units
+    bad = SC.Challenger(params, lambda law, n: list(range(law["k"] + 1)))
+    bad.register("honest", rec)
+    with pytest.raises(S.Refused):
+        bad.select("honest")
 
 
 def test_check_opens_the_drawn_units_rows_only(served, tmp_path):
@@ -225,32 +253,44 @@ def _unit(t: int, lean: bool = True, opening: bool = True) -> dict:
                          "opening": {"of_record": False, "accepted": opening, "why": ""}}}
 
 
-def test_the_outcome_publishes_exactly_the_public_items(served, tmp_path):
-    """The outcome over every drawn unit accepts only when each unit's Lean verdict and opening check accept; its public
-    items are exactly PoUW's (`window.PUBLIC`); it is made once per registration, and units other than the draw's are
-    refused."""
+def test_the_outcome_publishes_exactly_the_public_items(served):
+    """The outcome over every drawn unit accepts only when each unit's Lean verdict and opening check accept; PoUW's public
+    items of it are exactly `window.PUBLIC`; it waits for the proof's delivery, is final, and units other than the draw's
+    are refused.  A control stream replays the honest draw: a reject there is final, and its failure budget stops it."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    _, receipt = SC.receive(params, rec)
-    spec = SC.spec_of(params, public["level"])
-    d = S.select(spec, rec, receipt, _sample([20, 3, 25, 7, 11]), tmp_path / "draw")
-    units = [_unit(t) for t in sorted(d["units"])]
-    o, audit = S.outcome(spec, rec, receipt, d, units, 0.1, tmp_path / "ok", {})
-    assert o.accepted and audit["accepted"] and audit["proved_units"] == sorted(d["units"])
-    assert set(o.public) == {p[0] for p in Wd.PUBLIC} and o.public["verdict"] is True and o.public["drawn"] == d["units"]
-    assert o.public["work"] == public["items"]["work"] and o.public["root_W"] == public["items"]["root_W"]
-    with pytest.raises(S.Refused, match="once"):
-        S.outcome(spec, rec, receipt, d, units, 0.1, tmp_path / "ok", {})
-    bad = [_unit(t, lean=t != units[1]["unit"]) for t in sorted(d["units"])]
-    o, audit = S.outcome(spec, rec, receipt, d, bad, 0.1, tmp_path / "lean", {})
-    assert not o.accepted and o.public["verdict"] is False and audit["verdicts"]["lean"]["units"][1] is False
-    o, _ = S.outcome(spec, rec, receipt, d, [_unit(t, opening=False) for t in sorted(d["units"])], 0.1, tmp_path / "op", {})
-    assert not o.accepted
-    with pytest.raises(S.Refused, match="draw"):
-        S.outcome(spec, rec, receipt, d, units[:-1], 0.1, tmp_path / "short", {})
-    with pytest.raises(S.Refused, match="declared"):
-        S.outcome(spec, rec, receipt, d, units, 0.1, tmp_path / "more", {"shapes": []})
+    ch = _challenger(params, [20, 3, 25, 7, 11])
+    ch.register("honest", rec)
+    d = ch.select("honest")
+    assert d.units == [3, 7, 20, 25]
+    units = [_unit(t) for t in d.units]
+    with pytest.raises(S.Pending):
+        ch.outcome("honest", units)
+    assert ch.deliver("honest", [SESSION]) is None
+    with pytest.raises(S.Refused) as e:
+        ch.outcome("honest", units[:-1])
+    assert _codes(e) == {"units"}
+    o, pub, body = ch.outcome("honest", units)
+    assert o.accepted and o.profile is not None and body["audit"]["proved_units"] == d.units and body["sessions"] == [SESSION]
+    assert set(pub) == {p[0] for p in Wd.PUBLIC} and pub["verdict"] is True and pub["drawn"] == d.units
+    assert pub["work"] == public["items"]["work"] and pub["root_W"] == public["items"]["root_W"]
+    assert body["audit"]["verdicts"]["lean"]["sessions"] == [SESSION]
+    for again in (lambda: ch.outcome("honest", units), lambda: ch.deliver("honest", [SESSION])):
+        with pytest.raises(S.Refused) as e:
+            again()
+        assert _codes(e) == {"final"}
+    for i, bad in enumerate(([_unit(t, lean=t != 7) for t in d.units], [_unit(t, opening=False) for t in d.units])):
+        name = f"ctl-{i}"
+        ch.register(name, rec, stream=name, replay="honest")
+        assert ch.select(name).units == d.units
+        ch.deliver(name, [SESSION])
+        o, pub, body = ch.outcome(name, bad)
+        assert not o.accepted and o.verdict.codes == ("reject",) and pub["verdict"] is False and o.profile is None
+        with pytest.raises(S.Refused) as e:
+            ch.register(f"{name}-retry", rec, stream=name)
+        assert _codes(e) == {"stopped"}
+    assert body["audit"]["verdicts"]["opening"]["units"] == [False] * 4
 
 
 def test_lean_and_rust_verdicts_are_read_from_their_outputs(tmp_path):
@@ -263,9 +303,10 @@ def test_lean_and_rust_verdicts_are_read_from_their_outputs(tmp_path):
     assert SC.rust_verdict(tmp_path / "prove.out")["accepted"] is True and not SC.rust_verdict(tmp_path / "prove.out")["of_record"]
 
 
-def test_the_cli_runs_the_window_through_the_service(served, tmp_path):
-    """The job's steps through `main`: register (and the refused extra item), receive (and the refused edited record),
-    select by a stand-in for Lean's draw (and the refused second select), the opening checks and the outcome."""
+def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypatch, capsys):
+    """The job's steps through `main`: register (and the refused extra item), then one challenger process's requests,
+    as the job sends them a line at a time: the refused edited record, the honest one, Lean's draw (a stand-in) and the
+    refused second select, the opening checks, the delivery, the outcome and the refused second one."""
     *_, words = served
     params, public, advice, priv = _window(words)
     (tmp_path / "params.json").write_text(json.dumps(params))
@@ -275,38 +316,51 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path):
     p, t = str(tmp_path / "params.json"), str(tmp_path)
     assert SC.main(["register", str(c), p, f"{t}/registration.json"]) == 0
     assert SC.main(["register", str(c), p, f"{t}/x.json", "--extra", "shapes=[[16,128,4]]", "--expect-refused"]) == 0
-    assert SC.main(["receive", p, f"{t}/registration.json", f"{t}/recv"]) == 0
     assert SC.main(["edit", f"{t}/registration.json", f"{t}/extra.json", 'window.public.calls=2']) == 0
-    assert SC.main(["receive", p, f"{t}/extra.json", f"{t}/recv-extra", "--expect-refused"]) == 0
     lean = tmp_path / "lean"
     lean.write_text(f"#!{sys.executable}\nimport json, sys\na = sys.argv\np, k = int(a[a.index('--population') + 1]), "
                     "int(a[a.index('--k') + 1])\nprint('DRAW ' + json.dumps({'law': 'subset', 'population': p, 'k': k, "
                     "'units': list(range(p - k, p))}))\n")
     lean.chmod(lean.stat().st_mode | stat.S_IEXEC)
-    sel = ["select", p, f"{t}/registration.json", f"{t}/recv/receipt.json", f"{t}/draw.json", "--lean", str(lean), "--log", f"{t}/log"]
-    assert SC.main(sel) == 0
-    assert SC.main([*sel, "--expect-refused"]) == 0
-    d = json.loads((tmp_path / "draw.json").read_text())
-    assert d["units"][-1] == 25                      # the draw holds the filler's tiles 24 and 25
-    units = []
-    for u in d["units"]:
+    k = SC.law_of(params, public["level"])["k"]
+    drawn = list(range(26 - k, 26))                  # the stand-in's draw holds the filler's tiles 24 and 25
+    rec = json.loads((tmp_path / "registration.json").read_text())
+    rows = []
+    for u in drawn:
         (tmp_path / f"pub{u}.bin").write_bytes(_unit_pub(advice, priv, u))
         (tmp_path / f"op{u}.json").write_text(json.dumps(SC.opening(advice, priv, params, u)))
-        assert SC.main(["check", p, f"{t}/registration.json", f"{t}/draw.json", str(u), f"{t}/pub{u}.bin", f"{t}/op{u}.json",
-                        "--out", f"{t}/open{u}.json"]) == 0
+        assert SC.check(params, rec, {"units": drawn}, u, _unit_pub(advice, priv, u), SC.opening(advice, priv, params, u)) is None
+        (tmp_path / f"open{u}.json").write_text(json.dumps({"of_record": False, "accepted": True, "why": ""}))
         (tmp_path / f"lean{u}.out").write_text('VERDICT {"accepted":true,"why":""}\n')
         (tmp_path / f"stage{u}.json").write_text(json.dumps({"definition": "d", "circuit_sha512": "1", "class_sha512": "2",
                                                              "ands": 1, "k_log": 1, "binding": "hash scratch"}))
-        units.append({"unit": u, "stage": f"{t}/stage{u}.json", "pub": f"{t}/pub{u}.bin", "lean": f"{t}/lean{u}.out",
-                      "opening": f"{t}/open{u}.json"})
-    (tmp_path / "units.json").write_text(json.dumps(units))
-    out = ["outcome", p, f"{t}/registration.json", f"{t}/recv/receipt.json", f"{t}/draw.json", f"{t}/units.json"]
-    assert SC.main([*out, f"{t}/outcome", "--log", f"{t}/olog"]) == 0
+        (tmp_path / f"session{u}.json").write_text(json.dumps({"unit": u}))
+        rows.append({"unit": u, "stage": f"{t}/stage{u}.json", "pub": f"{t}/pub{u}.bin", "lean": f"{t}/lean{u}.out",
+                     "opening": f"{t}/open{u}.json", "session": f"{t}/session{u}.json"})
+    (tmp_path / "units.json").write_text(json.dumps(rows))
+    reqs = [{"op": "register", "name": "extra", "registration": f"{t}/extra.json"},
+            {"op": "register", "name": "honest", "registration": f"{t}/registration.json", "out": f"{t}/receipt.json"},
+            {"op": "select", "name": "honest", "out": f"{t}/draw.json"},
+            {"op": "select", "name": "honest", "out": f"{t}/draw2.json"},
+            {"op": "outcome", "name": "honest", "units": f"{t}/units.json"},
+            {"op": "deliver", "name": "honest", "units": f"{t}/units.json"},
+            {"op": "outcome", "name": "honest", "units": f"{t}/units.json", "out": f"{t}/outcome"},
+            {"op": "outcome", "name": "honest", "units": f"{t}/units.json", "out": f"{t}/outcome2"},
+            {"op": "quit"}, {"op": "select", "name": "honest"}]
+    monkeypatch.setattr(sys, "stdin", io.StringIO("".join(json.dumps(r) + "\n" for r in reqs)))
+    capsys.readouterr()
+    assert SC.main(["challenger", p, f"{t}/log", "--lean", str(lean)]) == 0
+    words_ = [x.split(" ", 1)[0] for x in capsys.readouterr().out.splitlines()]
+    assert words_ == ["REFUSED", "REGISTERED", "DRAWN", "REFUSED", "PENDING", "DELIVERED", "ACCEPT", "REFUSED"]
+    d = json.loads((tmp_path / "draw.json").read_text())
+    assert d["units"] == drawn and json.loads((tmp_path / "receipt.json").read_text())["registration"] == R.digest(rec)
+    assert not (tmp_path / "draw2.json").exists() and not (tmp_path / "outcome2").exists()
     o = json.loads((tmp_path / "outcome" / "outcome.json").read_text())
-    assert o["accepted"] and set(o["public"]) == {x[0] for x in Wd.PUBLIC}
-    assert SC.main([*out, f"{t}/outcome2", "--log", f"{t}/olog", "--expect-refused"]) == 0
-    assert not os.path.exists(tmp_path / "outcome2")
+    assert o["accepted"] and set(o["public"]) == {x[0] for x in Wd.PUBLIC} and o["public"]["drawn"] == drawn
     assert Fraction(o["public"]["sampling"]["delta"]) == Fraction(1, 10)
+    audit = json.loads((tmp_path / "outcome" / "audit.json").read_text())
+    assert audit["sessions"] == [hashlib.sha512((tmp_path / f"session{u}.json").read_bytes()).hexdigest() for u in drawn]
+    assert len((tmp_path / "log" / "requests.jsonl").read_text().splitlines()) == 8
 
 
 def _staged(d: Path, rec: dict, proof: int) -> Path:

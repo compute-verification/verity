@@ -1,15 +1,14 @@
 """A served audit window's commitment in the ZK statement's format, from a retained Pearl-C pass, registered, drawn and
-judged through the proof service (`service.py`, P1's calls), and the check that a hidden tile proof's committed rows are
-the drawn tile's.
+judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
+`outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
 
   python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P]   the verifier's own parameters of the window
   python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the window, salted and committed
-  python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: `register`, the public items only
-  python served_commit.py receive PARAMS REGISTRATION OUT                     the verifier: `receive`, and its receipt
+  python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
   python served_commit.py edit REGISTRATION OUT KEY=JSON ...                  a control's registration, a field changed
-  python served_commit.py select PARAMS REGISTRATION RECEIPT OUT --lean F --log DIR   the verifier: `select`, Lean's draw
+  python served_commit.py challenger PARAMS LOG [--lean F]                    the challenger: one JSON request a line on stdin
+                                                                              (`handle`), one reply a line on stdout
   python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
-  python served_commit.py outcome PARAMS REGISTRATION RECEIPT DRAW UNITS OUT --log DIR   the verifier: `outcome`
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
 
 - **The window** is SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), picked from ``os.urandom`` unless
@@ -25,17 +24,21 @@ the drawn tile's.
 - **The commitment** is C-Flock's: each row's b ‖ c is hm96-sha512 over its row digest under a fresh 192-byte salt, each side
   of each entry (a call, or the filler) one frame-v3-sha512 tree under one-stage's served domain of the window's program,
   partition and context, its port ``<entry>/<side>``.  Each entry (`pouw.window`: its sides' roots, rows and kept rows, its
-  tile range and the call's record) is one ``hm96-sha512/row/v2`` row of its SHA-512 in the **window root**, padded with
-  empty entries to the public bound P (L2).  W, every weight the pass's k = n = K calls read, is committed by weight row
-  (BF16, ``hm96-sha512/row/v2``) in **W's root**, beside it; the tiles read the formed B̃ rows of each call, not W's rows,
-  until registered rows (P7) read B from W.  ``commitment.json`` is what the committer registers: the context, the level,
-  the public items and the two roots.  ``advice.json`` (the entries and their salts) and ``prover.npz`` (rows, salts, b ‖ c)
-  are the prover's.
-- **The service** (`service.py`): `register` writes one-stage's v1 record whose window holds the public items, exactly
-  `pouw.window.REGISTERED`, and refuses anything else; `receive` holds it to the verifier's own parameters (its context,
-  ε, δ, the grid, P and |W|), recomputing every item from the registered level; `select` is Lean ``flock-verify draw
-  --population N --k K′`` from the verifier's own randomness, after the receipt and once; `outcome` judges every drawn
-  unit and publishes exactly `pouw.window.PUBLIC`.
+  tile range and the call's record) is one ``hm96-sha512/row/v2`` row of its SHA-512 in the **window root** (port
+  ``entries``), padded with empty entries to the public bound P (L2).  W, every weight the pass's k = n = K calls read, is
+  committed by weight row (BF16, ``hm96-sha512/row/v2``) in **W's root**, beside it; the tiles read the formed B̃ rows of
+  each call, not W's rows, until registered rows (P7) read B from W.  ``commitment.json`` is what the committer registers:
+  the context, the level, the public items and the two roots.  ``advice.json`` (the entries and their salts) and
+  ``prover.npz`` (rows, salts, b ‖ c) are the prover's.
+- **The service** (P1): the committer's `register` writes one-stage's v1 record, scheme `service.SCHEME`, whose window
+  holds exactly `pouw.window.REGISTERED`.  Two rules hold it: the service's (`service.check_public` over the `Spec`,
+  which declares what one-stage's record shows besides the two salted roots: N, the window item, each root's leaf count
+  and domain) and PoUW's inside the window item (`public_problem`: exactly those items, each the verifier's own
+  recomputation at the registered level from its own context, ε, δ, the grid, P and |W|).  The `Challenger` holds both,
+  then `Stream.register` (R1-R7 and the receipt), `select` (Lean ``flock-verify draw --population N --k K′``, the
+  challenger's own randomness, after the receipt, once), `deliver` (the drawn units' session records' SHA-512, once) and
+  `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one law and K′ is a function of the
+  level, so the challenger holds one Stream per level.
 - **The check** reads a proof's public file (``pub.bin``): instance 0's b ‖ c of its A row and B row must be the unit's rows,
   each by its frame-v3 path to its entry's side root, and the entry by its path to the registered window root.  The
   opening hands the verifier the drawn units' entries: a development shortcut, until position reads in gates (the joint
@@ -53,8 +56,10 @@ import sys
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
+from typing import Any, Callable, Mapping
 
 import numpy as np
+from verity.primitives.circuits.program import Program
 from verity.primitives.commitments.identity import identity_digest
 from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
@@ -66,17 +71,18 @@ from verity.protocols.accounting.work.pouw.circuit import pc8
 from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
+from verity.protocols.verification.sampled_proofs import service as S
+from verity.protocols.verification.sampled_proofs.one_stage import draw as D
 from verity.protocols.verification.sampled_proofs.one_stage import partition as PT
 from verity.protocols.verification.sampled_proofs.one_stage import registration as R
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import service as S  # noqa: E402
+from verity.protocols.verification.sampled_proofs.one_stage.verdict import Verdict, _Collect
 
 SCHEMA = "verity-pouw/served-zk-window/v1"
-#: the registered scheme: one window root over hm96-sha512 entry rows, each entry's sides hm96-sha512 rows, all in
-#: frame-v3-sha512 trees, and W's root by weight row
-SCHEME = "verity/pouw/served-zk/window/hm96-sha512+frame-v3-sha512/v1"
-VERIFIER = "served-zk/lean-flock-verify"
+CHALLENGER = "served-zk/challenger"
+#: the window root's port: the window's entries
+PORT = "entries"
+#: a window stream's failure budget: its first failure stops it
+BUDGET = 1
 #: the frame's owner, as C-Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
 OWNER = -1
 SALT_BYTES = 192
@@ -118,12 +124,12 @@ def work_at(params: dict, ell: int) -> Wd.Work:
     w = Wd.Work.at(ell, params["grid_bits"])
     lo, hi = params["range"]
     if not (lo <= w.credited and w.n <= hi):
-        raise S.Refused(f"level {ell} ({w.credited} credited, {w.n} tiles) is outside the window's range {lo}..{hi}")
+        raise ValueError(f"level {ell} ({w.credited} credited, {w.n} tiles) is outside the window's range {lo}..{hi}")
     return w
 
 
 def check_item(params: dict) -> dict:
-    return {"template": template(params["k"]).id, "tile_work": tile_work(params), "scheme": SCHEME, "entries": params["entries"]}
+    return {"template": template(params["k"]).id, "tile_work": tile_work(params), "scheme": S.SCHEME, "entries": params["entries"]}
 
 
 def items_of(params: dict, ell: int, root_w: str | None) -> dict:
@@ -134,13 +140,30 @@ def items_of(params: dict, ell: int, root_w: str | None) -> dict:
             "root_W": root_w}
 
 
+#: what one-stage's record shows besides the two salted roots, each declared to the service's rule with its reason
+LAYOUT = (
+    ("population", "structure", "N, the padded tile count g_(ℓ+1): the draw's range, a function of the registered level"),
+    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, root_W), each "
+                         "the verifier's own recomputation at the registered level (`public_problem`)"),
+    (f"leaves:{PORT}", "structure", "P, the public bound on a window's entries"),
+    (f"domain:{PORT}", "structure", "the entries' served domain: the window's program, partition and context"),
+    ("leaves:W", "structure", "|W|, the deployment's weight rows at k = n = K"),
+    ("domain:W", "structure", "W's domain: the template and the deployment"),
+)
+
+
+def law_of(params: dict, ell: int) -> dict:
+    return items_of(params, ell, None)["sampling"]["law"]
+
+
 def spec_of(params: dict, ell: int) -> S.Spec:
-    w = work_at(params, ell)
-    prog, q, _ = population(params["k"], w.n)
-    law = items_of(params, ell, None)["sampling"]["law"]
-    return S.Spec(values=(S.Value("window", ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch", registered=True)),
-                  selection=law, check=S.Check(prog, q, SCHEME, ("tile digest",)),
-                  public=tuple(S.Public(i, k, r, s) for i, k, s, r in Wd.PUBLIC), context=params["context"])
+    """P1's Spec of a window at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
+    Program and query as the check, and `LAYOUT` declared."""
+    d = template(params["k"])
+    return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
+                  selection=S.Law(f"subset:{law_of(params, ell)['k']}"),
+                  check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d)),
+                  public=tuple(S.Public(i, k, r) for i, k, r in LAYOUT), context=params["context"].encode())
 
 
 def _frame(tag: str, fields: dict, count: int) -> CommitmentDomain:
@@ -155,7 +178,7 @@ def _served(params: dict, ell: int, port: str, schema: str, count: int) -> Commi
 
 
 def window_domain(params: dict, ell: int) -> CommitmentDomain:
-    return _served(params, ell, "window", ENTRY_SCHEMA, params["entries"])
+    return _served(params, ell, PORT, ENTRY_SCHEMA, params["entries"])
 
 
 def side_domain(params: dict, ell: int, e: int, side: str, rows: int) -> tuple[CommitmentDomain, str]:
@@ -170,18 +193,51 @@ def weights_domain(params: dict) -> CommitmentDomain:
 
 def ports(params: dict, ell: int) -> dict:
     """The verifier's own ports: the window root over P entries, and W's root over |W| rows."""
-    return {"window": {"leaves": params["entries"], "domain": window_domain(params, ell).domain_id.hex()},
+    return {PORT: {"leaves": params["entries"], "domain": window_domain(params, ell).domain_id.hex()},
             "W": {"leaves": params["w_rows"], "domain": weights_domain(params).domain_id.hex()}}
 
 
-def level_of(rec: dict) -> int:
+def level_of(rec: Mapping[str, Any]) -> int:
     try:
         ell = rec["window"]["public"]["work"]["level"]
     except (KeyError, TypeError) as e:
-        raise S.Refused(f"the registration names no work level: {e}") from None
+        raise ValueError(f"the registration names no work level: {e}") from None
     if not isinstance(ell, int) or isinstance(ell, bool) or ell < 0:
-        raise S.Refused(f"the registered level {ell!r} is not a level")
+        raise ValueError(f"the registered level {ell!r} is not a level")
     return ell
+
+
+def public_problem(params: dict, rec: Any) -> Verdict:
+    """PoUW's rule inside the window item, which the service's rule declares as one item: the window is
+    ``{"kind": "served", "context", "public"}`` under the verifier's own context, its public items are exactly
+    `pouw.window.REGISTERED`, each the verifier's own at the registered level (root_W the registered W root), and N is the
+    level's padded count."""
+    c = _Collect()
+    window = rec.get("window") if isinstance(rec, Mapping) else None
+    if not isinstance(window, Mapping) or set(window) != {"kind", "context", "public"}:
+        c.fail("public-window", sorted(window) if isinstance(window, Mapping) else window)
+        return c.verdict()
+    if window["kind"] != "served" or window["context"] != params["context"]:
+        c.fail("public-context", {"registered": [window["kind"], window["context"]], "verifier": ["served", params["context"]]})
+    items = window["public"]
+    if not isinstance(items, Mapping) or set(items) != set(Wd.REGISTERED):
+        c.fail("public-items", {"registered": sorted(items) if isinstance(items, Mapping) else items,
+                                "declared": sorted(Wd.REGISTERED)})
+        return c.verdict()
+    try:
+        ell = level_of(rec)
+        w = work_at(params, ell)
+    except ValueError as e:
+        c.fail("level", str(e))
+        return c.verdict()
+    roots = {r.get("port"): r.get("root") for r in rec.get("roots") or () if isinstance(r, Mapping)}
+    wrong = {k: {"registered": items[k], "verifier": v} for k, v in items_of(params, ell, roots.get("W")).items()
+             if items[k] != v}
+    if wrong:
+        c.fail("public-value", wrong)
+    if rec.get("population") != w.n:
+        c.fail("population", {"registered": rec.get("population"), "level": w.n})
+    return c.verdict()
 
 
 # ---- rows, trees and openings ------------------------------------------------------------------------------------------------
@@ -320,7 +376,7 @@ def commit_window(params: dict, calls: list[dict], root_w: str, salts: dict | No
     dom = window_domain(params, ell)
     esalts = salts["entries"] if salts else _salts(len(entries))
     levels = tree_levels(dom, [entry_leaf(dom, e, entry_bc(x, s)) for e, (x, s) in enumerate(zip(entries, esalts))])
-    roots = [{"port": "window", "root": levels[-1][0].hex(), "leaves": params["entries"], "domain": dom.domain_id.hex()},
+    roots = [{"port": PORT, "root": levels[-1][0].hex(), "leaves": params["entries"], "domain": dom.domain_id.hex()},
              {"port": "W", "root": root_w, "leaves": params["w_rows"], "domain": weights_domain(params).domain_id.hex()}]
     public = {"schema": SCHEMA, "context": params["context"], "level": ell, "items": items_of(params, ell, root_w),
               "roots": roots}
@@ -373,17 +429,17 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
     try:
         ell = level_of(rec)
         work_at(params, ell)
-    except S.Refused as e:
+    except ValueError as e:
         return str(e)
     roots = {r["port"]: r for r in rec["roots"]}
     dom = window_domain(params, ell)
-    if roots.get("window", {}).get("domain") != dom.domain_id.hex():
+    if roots.get(PORT, {}).get("domain") != dom.domain_id.hex():
         return "the registered window domain is not the window's served domain"
     e, entry = op.get("entry"), op.get("entry_value")
     if not isinstance(e, int) or not isinstance(entry, dict):
         return "the opening names no entry"
     leaf = entry_leaf(dom, e, entry_bc(entry, bytes.fromhex(op["entry_salt"])))
-    if not verify_path(dom, bytes.fromhex(roots["window"]["root"]), e, leaf, [bytes.fromhex(x) for x in op["window_path"]]):
+    if not verify_path(dom, bytes.fromhex(roots[PORT]["root"]), e, leaf, [bytes.fromhex(x) for x in op["window_path"]]):
         return f"entry {e} is not the registered window's entry"
     try:
         at = dict(zip(("a", "b"), Wd.tile_in(entry, unit)))
@@ -443,10 +499,174 @@ def statement(stage: dict, pub: bytes) -> dict:
             "binding": stage["binding"]}
 
 
-def outcome(params: dict, rec: dict, receipt: dict, draw: dict, units: list[dict], log: Path) -> tuple[S.Outcome, dict]:
-    spec = spec_of(params, level_of(rec))
-    o, audit = S.outcome(spec, rec, receipt, draw, units, float(Fraction(params["delta"])), log, {})
-    return o, audit
+# ---- the service ------------------------------------------------------------------------------------------------------------
+
+def _refused(code: str, detail: Any) -> S.Refused:
+    return S.Refused(Verdict(False, (code,), {code: detail}))
+
+
+def register(params: dict, commitment: dict, extra: Mapping[str, Any] = {}) -> dict:
+    """The committer's registration of `commitment`: one-stage's v1 record of the level's population, the check's query,
+    subset:K′ and `service.SCHEME`, its window the public items (with `extra`, which both rules refuse).  Raises
+    `service.Refused` under the service's rule or PoUW's."""
+    ell = commitment["level"]
+    try:
+        prog, q, _ = population(params["k"], work_at(params, ell).n)
+    except ValueError as e:
+        raise _refused("level", str(e)) from None
+    window = {"kind": "served", "context": params["context"], "public": {**commitment["items"], **extra}}
+    rec = R.record(prog, q, law_of(params, ell), S.SCHEME, commitment["roots"], window)
+    for v in (S.check_public(spec_of(params, ell), rec), public_problem(params, rec)):
+        if not v.ok:
+            raise S.Refused(v)
+    return rec
+
+
+def _all(units: list[dict], name: str, sessions: list[str]) -> dict[str, Any]:
+    """The drawn units' verdicts by one verifier as one verdict: accepted when every unit's is, null while one hasn't run;
+    a verdict of record names the delivered sessions."""
+    vs = [u["verdicts"].get(name) for u in units]
+    if all(v is None for v in vs):
+        return {}
+    ran = [v for v in vs if v is not None and v.get("accepted") is not None]
+    accepted = None if len(ran) < len(vs) else all(v["accepted"] for v in ran)
+    return {name: {"of_record": any(bool(v and v.get("of_record")) for v in vs), "accepted": accepted,
+                   "why": next((v.get("why", "") for v in ran if not v["accepted"]), ""),
+                   "digest": hashlib.sha512(canonical_json([(v or {}).get("digest") for v in vs])).hexdigest(),
+                   "units": [(v or {}).get("accepted") for v in vs], "sessions": list(sessions)}}
+
+
+Sampler = Callable[[Mapping[str, Any], int], list[int]]
+
+
+class Challenger:
+    """The challenger of one deployment's windows over P1's `Stream`: PoUW's rule (`public_problem`), then the stream's.
+    A Spec fixes one law and K′ is a function of the registered level, so it holds one Stream per (stream name, level);
+    each registration it accepted is held by name.  `sampler` draws instead of `coins` (Lean's draw); a control stream
+    `replay`s an earlier draw as its challenger's coins, so a control's verdicts are judged on the honest draw's units."""
+
+    def __init__(self, params: dict, sampler: Sampler | None = None, coins: Callable[[int], bytes] = os.urandom,
+                 budget: int = BUDGET) -> None:
+        self.params, self.sampler, self.coins, self.budget = params, sampler, coins, budget
+        self.streams: dict[tuple[str, int], S.Stream] = {}
+        self.regs: dict[str, tuple[S.Stream, S.Registration]] = {}
+        self.draws: dict[str, S.Draw] = {}
+        self.sessions: dict[str, list[str]] = {}
+
+    def stream(self, name: str, ell: int, sampler: Sampler | None) -> S.Stream:
+        if (name, ell) not in self.streams:
+            self.streams[name, ell] = S.Stream(spec_of(self.params, ell), template(self.params["k"]), budget=self.budget,
+                                               delta=float(Fraction(self.params["delta"])), challenger=f"{CHALLENGER}/{name}",
+                                               coins=self.coins, sampler=sampler)
+        return self.streams[name, ell]
+
+    def _held(self, name: str) -> tuple[S.Stream, S.Registration]:
+        if name not in self.regs:
+            raise _refused("unknown", name)
+        return self.regs[name]
+
+    def _drawn(self, name: str) -> S.Draw:
+        if name not in self.draws:
+            raise _refused("not-drawn", name)
+        return self.draws[name]
+
+    def register(self, name: str, rec: Mapping[str, Any], stream: str = "window", replay: str | None = None) -> S.Registration:
+        v = public_problem(self.params, rec)
+        if not v.ok:
+            raise S.Refused(v)
+        ell = level_of(rec)
+        sampler = self.sampler if replay is None else (lambda law, n, d=self._drawn(replay): d.units)
+        st = self.stream(stream, ell, sampler)
+        reg = st.register(rec, ports(self.params, ell))
+        self.regs[name] = (st, reg)
+        return reg
+
+    def select(self, name: str) -> S.Draw:
+        st, reg = self._held(name)
+        self.draws[name] = st.select(reg)
+        return self.draws[name]
+
+    def deliver(self, name: str, sessions: list[str]) -> S.Outcome | None:
+        st, _ = self._held(name)
+        o = st.deliver(self._drawn(name), sessions)
+        self.sessions[name] = list(sessions)
+        return o
+
+    def outcome(self, name: str, units: list[dict]) -> tuple[S.Outcome, dict, dict]:
+        """The final outcome from each drawn unit's ``{"unit", "statement", "verdicts"}``, ascending, and PoUW's public
+        items of it (exactly `pouw.window.PUBLIC`) and the stream's record of it."""
+        st, reg = self._held(name)
+        d = self._drawn(name)
+        if [u["unit"] for u in units] != D.proved(d.draw):
+            raise _refused("units", {"given": [u["unit"] for u in units][:16], "drawn": D.proved(d.draw)[:16]})
+        sessions = self.sessions.get(name, [])
+        verdicts = {k: v for n in sorted({n for u in units for n in u["verdicts"]}) for k, v in _all(units, n, sessions).items()}
+        o = st.outcome(d, verdicts, {"units": [{"unit": u["unit"], **u["statement"]} for u in units]})
+        public = {**reg.record["window"]["public"], "verdict": o.accepted, "drawn": d.units}
+        if set(public) != {p[0] for p in Wd.PUBLIC}:
+            raise _refused("public", sorted(public))
+        return o, public, st.records[-1]
+
+
+def _sessions(units: list[dict]) -> list[str]:
+    return [hashlib.sha512(Path(u["session"]).read_bytes()).hexdigest() for u in units]
+
+
+def _units(rows: list[dict]) -> list[dict]:
+    """The outcome's units from the job's rows (each unit's stage, public file, Lean output, opening verdict, live log)."""
+    out = []
+    for u in rows:
+        pub = Path(u["pub"]).read_bytes()
+        out.append({"unit": u["unit"], "statement": statement(_json(u["stage"]), pub),
+                    "verdicts": {"lean": lean_verdict(Path(u["lean"])), "opening": _json(u["opening"]),
+                                 **({"rust": rust_verdict(Path(u["rust"]))} if u.get("rust") else {})}})
+    return out
+
+
+def _put(p: str | None, obj: Any) -> None:
+    if p:
+        Path(p).parent.mkdir(parents=True, exist_ok=True)
+        Path(p).write_text(json.dumps(obj, sort_keys=True))
+
+
+def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
+    """One request to the challenger, as a reply word and its JSON.  Requests, each with its registration's ``name``:
+    ``register`` (``registration`` a record's file; ``stream`` and ``replay`` for a control; ``out`` the receipt),
+    ``select`` (``out`` the draw), ``deliver`` (``units``: the job's rows, each with its ``session`` record) and
+    ``outcome`` (``units``; ``out`` a directory: outcome.json, audit.json).  Replies: REGISTERED, DRAWN, DELIVERED,
+    ACCEPT, REJECT, LATE, PENDING, REFUSED, or ERROR for a request it couldn't read."""
+    op, name = cmd.get("op"), cmd.get("name")
+    try:
+        if op == "register":
+            reg = ch.register(name, _json(cmd["registration"]), cmd.get("stream", "window"), cmd.get("replay"))
+            _put(cmd.get("out"), reg.receipt)
+            return "REGISTERED", {"registration": reg.digest[:32], "order": reg.order, "population": reg.record["population"],
+                                  "law": reg.record["law"], "public": sorted(reg.record["window"]["public"])}
+        if op == "select":
+            d = ch.select(name)
+            _put(cmd.get("out"), d.draw)
+            return "DRAWN", d.draw
+        if op == "deliver":
+            o = ch.deliver(name, _sessions(_json(cmd["units"])))
+            return ("DELIVERED", {"sessions": len(ch.sessions[name])}) if o is None else (o.verdict.codes[0].upper(), {})
+        if op == "outcome":
+            o, public, body = ch.outcome(name, _units(_json(cmd["units"])))
+            if cmd.get("out"):
+                _put(f"{cmd['out']}/outcome.json", {"accepted": o.accepted, "verdict": o.verdict.to_json(), "public": public,
+                                                    "profile": o.profile.to_json() if o.profile else None,
+                                                    "terms": {"sampling": o.terms.sampling}, "record": o.record})
+                _put(f"{cmd['out']}/audit.json", body)
+            audit = body["audit"] or {}
+            return "ACCEPT" if o.accepted else o.verdict.codes[0].upper(), {
+                "verdicts": {k: v.get("accepted") for k, v in (audit.get("verdicts") or {}).items()},
+                "public": sorted(public), "record": o.record[:32]}
+        return "REFUSED", {"codes": ["op"], "detail": {"op": op}}
+    except S.Refused as e:
+        return "REFUSED", {"codes": list(e.verdict.codes), "detail": e.verdict.detail}
+    except S.Pending as e:
+        return "PENDING", {"why": str(e)}
+    except (OSError, KeyError, TypeError, ValueError) as e:
+        return "ERROR", {"why": f"{type(e).__name__}: {e}"}
 
 
 # ---- the CLI ------------------------------------------------------------------------------------------------------------
@@ -542,42 +762,19 @@ def cmd_commit(a) -> int:
 
 def cmd_register(a) -> int:
     c, params = _json(Path(a.commit_dir) / "commitment.json"), _json(a.params)
-    items = dict(c["items"])
+    extra = {}
     for x in a.extra or ():
         key, _, value = x.partition("=")
-        items[key] = json.loads(value)
+        extra[key] = json.loads(value)
     try:
-        rec = S.register(spec_of(params, c["level"]), items, c["roots"])
+        rec = register(params, c, extra)
     except S.Refused as e:
-        print(f"REFUSED {e}", flush=True)
+        print(f"REFUSED {json.dumps(e.verdict.to_json(), default=str)}", flush=True)
         return 0 if a.expect_refused else 1
     Path(a.out).write_text(json.dumps(rec, sort_keys=True))
     print(f"REGISTERED {json.dumps({'registration': R.digest(rec)[:32], 'population': rec['population'], 'law': rec['law'], 'public': sorted(rec['window']['public'])})}",
           flush=True)
     return 1 if a.expect_refused else 0
-
-
-def receive(params: dict, rec: dict) -> tuple[dict, dict | None]:
-    """The verifier's checks against its own parameters: the registered level is in its range, and every item but the
-    commitments is its own recomputation at that level."""
-    try:
-        ell = level_of(rec)
-        spec = spec_of(params, ell)
-        expect = items_of(params, ell, None)
-    except S.Refused as e:
-        return {"ok": False, "codes": ["level"], "detail": {"level": str(e)}}, None
-    return S.receive(spec, rec, ports(params, ell), expect, verifier=VERIFIER)
-
-
-def cmd_receive(a) -> int:
-    out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
-    v, receipt = receive(_json(a.params), _json(a.registration))
-    (out / "check.json").write_text(json.dumps(v, sort_keys=True))
-    if receipt is not None:
-        (out / "receipt.json").write_text(json.dumps(receipt, sort_keys=True))
-    print(f"{'RECEIVED' if receipt else 'REFUSED'} {json.dumps(v)}", flush=True)
-    return 0 if (receipt is not None) != a.expect_refused else 1
 
 
 def cmd_edit(a) -> int:
@@ -594,26 +791,44 @@ def cmd_edit(a) -> int:
     return 0
 
 
-def lean_sampler(lean: str):
-    def sample(population: int, k: int) -> dict:
-        p = subprocess.run([lean, "draw", "--population", str(population), "--k", str(k)], capture_output=True, text=True)
+def lean_sampler(lean: str, log: Path | None = None) -> Sampler:
+    """The challenger's draw by Lean ``flock-verify draw`` (its own randomness): the units of a subset law over N."""
+    def sample(law: Mapping[str, Any], n: int) -> list[int]:
+        if law.get("law") != "subset":
+            raise _refused("law", f"Lean's draw is a subset law's, not {dict(law)}")
+        p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(law["k"])], capture_output=True, text=True)
         lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
         if p.returncode != 0 or len(lines) != 1:
-            raise S.Refused(f"flock-verify draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
-        return json.loads(lines[0])
+            raise _refused("sampler", f"flock-verify draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
+        if log is not None:
+            with open(log, "a") as f:
+                f.write(lines[0] + "\n")
+        return list(json.loads(lines[0])["units"])
     return sample
 
 
-def cmd_select(a) -> int:
-    params, rec, receipt = _json(a.params), _json(a.registration), _json(a.receipt)
-    try:
-        draw = S.select(spec_of(params, level_of(rec)), rec, receipt, lean_sampler(a.lean), Path(a.log))
-    except S.Refused as e:
-        print(f"REFUSED {e}", flush=True)
-        return 0 if a.expect_refused else 1
-    Path(a.out).write_text(json.dumps(draw, sort_keys=True))
-    print(f"DRAWN {json.dumps(draw)}", flush=True)
-    return 1 if a.expect_refused else 0
+def cmd_challenger(a) -> int:
+    """The challenger's process: one JSON request a line on stdin (`handle`), one ``WORD {json}`` reply a line on stdout,
+    each also appended to LOG/requests.jsonl; it ends at end of input or ``{"op": "quit"}``."""
+    log = Path(a.log)
+    log.mkdir(parents=True, exist_ok=True)
+    ch = Challenger(_json(a.params), lean_sampler(a.lean, log / "draws.jsonl") if a.lean else None)
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        try:
+            cmd = json.loads(line)
+        except ValueError as e:
+            word, body = "REFUSED", {"codes": ["request"], "detail": {"request": str(e)}}
+        else:
+            if cmd.get("op") == "quit":
+                break
+            word, body = handle(ch, cmd)
+        reply = f"{word} {json.dumps(body, sort_keys=True, default=str)}"
+        with open(log / "requests.jsonl", "a") as f:
+            f.write(json.dumps({"request": line.strip(), "reply": reply[:4000]}) + "\n")
+        print(reply, flush=True)
+    return 0
 
 
 def cmd_check(a) -> int:
@@ -624,32 +839,6 @@ def cmd_check(a) -> int:
                                            "verifier": "served_zk opening check"}, sort_keys=True))
     print(f"ACCEPT {a.pub} opens unit {a.unit} of {a.registration}" if why is None else f"REJECT {a.pub}: {why}", flush=True)
     return 0 if (why is None) != a.expect_reject else 1
-
-
-def cmd_outcome(a) -> int:
-    params, reg, receipt, d = _json(a.params), _json(a.registration), _json(a.receipt), _json(a.draw)
-    units = []
-    for u in _json(a.units):
-        pub = Path(u["pub"]).read_bytes()
-        units.append({"unit": u["unit"], "statement": statement(_json(u["stage"]), pub),
-                      "verdicts": {"lean": lean_verdict(Path(u["lean"])), "opening": _json(u["opening"]),
-                                   **({"rust": rust_verdict(Path(u["rust"]))} if u.get("rust") else {})}})
-    try:
-        o, audit = outcome(params, reg, receipt, d, units, Path(a.log))
-    except S.Refused as e:
-        print(f"REFUSED {e}", flush=True)
-        return 0 if a.expect_refused else 1
-    if a.expect_refused:
-        print("NOT REFUSED", flush=True)
-        return 1
-    out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "outcome.json").write_text(json.dumps({"accepted": o.accepted, "public": o.public, "profile": o.profile,
-                                                  "terms": o.terms, "record": o.record, "verdict": o.verdict}, sort_keys=True))
-    (out / "audit.json").write_text(json.dumps(audit, sort_keys=True))
-    print(f"OUTCOME {'ACCEPT' if o.accepted else 'REJECT'} {json.dumps({k: v.get('accepted') for k, v in audit['verdicts'].items()})} "
-          f"public {json.dumps(sorted(o.public))}", flush=True)
-    return 0 if o.accepted != a.expect_reject else 1
 
 
 #: the session record's (``session.json``) fields the verifier writes of its own: its verdict and its timings
@@ -724,20 +913,14 @@ def main(argv=None) -> int:
         p.add_argument(x)
     p.add_argument("--extra", action="append", help="ITEM=JSON: one more public item, which register refuses")
     p.add_argument("--expect-refused", action="store_true")
-    p = sub.add_parser("receive")
-    for x in ("params", "registration", "out"):
-        p.add_argument(x)
-    p.add_argument("--expect-refused", action="store_true")
     p = sub.add_parser("edit")
     p.add_argument("registration")
     p.add_argument("out")
     p.add_argument("set", nargs="+", help="KEY=JSON, KEY dotted")
-    p = sub.add_parser("select")
-    for x in ("params", "registration", "receipt", "out"):
-        p.add_argument(x)
-    p.add_argument("--lean", required=True)
-    p.add_argument("--log", required=True)
-    p.add_argument("--expect-refused", action="store_true")
+    p = sub.add_parser("challenger")
+    p.add_argument("params")
+    p.add_argument("log")
+    p.add_argument("--lean", help="Lean flock-verify, whose draw is the challenger's (default: the stream's own coins)")
     p = sub.add_parser("check")
     for x in ("params", "registration", "draw"):
         p.add_argument(x)
@@ -747,19 +930,13 @@ def main(argv=None) -> int:
     p.add_argument("--out", help="the opening check's verdict, for the outcome")
     p.add_argument("--undrawn", action="store_true", help="a control: open a unit the draw did not draw")
     p.add_argument("--expect-reject", action="store_true")
-    p = sub.add_parser("outcome")
-    for x in ("params", "registration", "receipt", "draw", "units", "out"):
-        p.add_argument(x)
-    p.add_argument("--log", required=True)
-    p.add_argument("--expect-reject", action="store_true")
-    p.add_argument("--expect-refused", action="store_true")
     p = sub.add_parser("shape")
     p.add_argument("a")
     p.add_argument("b")
     p.add_argument("--out")
     a = ap.parse_args(argv)
-    return {"params": cmd_params, "commit": cmd_commit, "register": cmd_register, "receive": cmd_receive,
-            "edit": cmd_edit, "select": cmd_select, "check": cmd_check, "outcome": cmd_outcome, "shape": cmd_shape}[a.cmd](a)
+    return {"params": cmd_params, "commit": cmd_commit, "register": cmd_register, "edit": cmd_edit,
+            "challenger": cmd_challenger, "check": cmd_check, "shape": cmd_shape}[a.cmd](a)
 
 
 if __name__ == "__main__":

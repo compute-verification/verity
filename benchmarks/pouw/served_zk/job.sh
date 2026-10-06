@@ -11,19 +11,23 @@
 #   2. params: the verifier's own parameters of each request's window (<p>/params.json: its context, ε, δ, the grid, P, |W|)
 #   3. commit: served_commit.py commit of the same SZ_CALLS o_proj calls (picked from os.urandom, or SZ_CALL_LIST) on the
 #      "request" and the "other" pass: <p>/commitment.json (public), <p>/advice.json (the prover's entries), rows in scratch
-#   4. register, receive, select through the service (service.py, P1's calls): <p>/registration.json, recv-<p>/{check,receipt}.json,
-#      draw.json (Lean flock-verify draw --population N --k K', the verifier's own randomness, after the receipt, once)
+#   4. register (the committer: <p>/registration.json), then one challenger process (served_commit.py challenger, over P1's
+#      sampled_proofs.service Stream; its requests and replies in challenger/requests.jsonl): receive (Stream.register:
+#      receipt.json) and select (draw.json: Lean flock-verify draw --population N --k K', the challenger's own randomness,
+#      after the receipt, once)
 #   5. per drawn unit u<t>: stage_tile.py (Pc8TileHidden{K=4096,1,1,sm120}), the --zk session, the opening check, Lean;
 #      the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
-#   6. outcome: one-stage's audit record over every drawn unit and the outcome's public items (outcome-<case>/)
+#   6. deliver (the drawn units' session records' SHA-512) and outcome (one-stage's audit record over every drawn unit and
+#      PoUW's public items, outcome-<case>/); each control on a stream of its own that replays the honest draw
 #   7. the checks, each as expected, into summary.json:
 #        register-extra        a registration with one more public item (the calls' shapes)                    REFUSED
-#        receive-honest        the verifier receives the request's registration                                RECEIVED
 #        receive-foreign       the other request's registration, against the request's parameters              REFUSED
 #        receive-extra         the request's registration with one more public key                             REFUSED
 #        receive-raised        the request's registration claiming the next grid level (more credit)           REFUSED
+#        receive-honest        the challenger receives the request's registration                              REGISTERED
+#        receive-open          a second registration while the first has no outcome                            REFUSED
 #        select                Lean's draw of K' units, after the receipt                                     DRAWN
-#        select-again          a second select of the same receipt: no retry redraws                           REFUSED
+#        select-again          a second select of the same registration: no retry redraws                     REFUSED
 #        open-u<t>             each drawn unit's proof opens that unit's rows under the window root            ACCEPT
 #        lean-u<t>             the Lean verifier on each drawn unit's --zk session                             ACCEPT
 #        open-filler           the filler unit's proof opens its zero rows under the window root              ACCEPT
@@ -34,9 +38,12 @@
 #        open-foreign-commit   the request's proof, against the other request's registration                   REJECT
 #        lean-foreign-pub      the first unit's session against the other request's public file               REJECT
 #        lean-st-<case>        the selftest build's records on the first unit: honest ACCEPT; the tampered REJECT
+#        deliver-honest        the drawn units' session records, once                                           DELIVERED
 #        outcome-honest        every drawn unit's verdicts, one audit record; public = PoUW's items            ACCEPT
-#        outcome-again         a second outcome of the same registration                                        REFUSED
+#        outcome-again         a second outcome of the same registration: final                                 REFUSED
+#        deliver-again         a second delivery of the same draw                                               REFUSED
 #        outcome-foreign-proof the first unit's proof, opening and Lean verdict the other request's             REJECT
+#        retry-foreign-proof   a registration on that control's stream after its reject (budget 1)             REFUSED
 #        outcome-st-<case>     the first unit's Lean verdict a selftest case's: honest ACCEPT; the tampered    REJECT
 set -uo pipefail
 SRC=$(pwd)
@@ -91,24 +98,33 @@ v=$("$PY" "$SC" register "$W/request" "$OUT/request/params.json" "$W/extra.json"
   | tee "$OUT/register-extra.out" | first)
 expect register-extra REFUSED "${v:-ERROR}"
 R=$OUT/request/registration.json RP=$OUT/request/params.json
-v=$("$PY" "$SC" receive "$RP" "$R" "$OUT/recv-request" | tee "$OUT/receive-honest.out" | first)
-expect receive-honest RECEIVED "${v:-ERROR}"
-"$PY" "$SC" receive "$OUT/other/params.json" "$OUT/other/registration.json" "$OUT/recv-other" > "$OUT/receive-other.out"
-v=$("$PY" "$SC" receive "$RP" "$OUT/other/registration.json" "$W/recv-foreign" | tee "$OUT/receive-foreign.out" | first)
-expect receive-foreign REFUSED "${v:-ERROR}"
 "$PY" "$SC" edit "$R" "$OUT/registration-extra.json" 'window.public.calls=2'
-v=$("$PY" "$SC" receive "$RP" "$OUT/registration-extra.json" "$W/recv-extra" | tee "$OUT/receive-extra.out" | first)
-expect receive-extra REFUSED "${v:-ERROR}"
 "$PY" "$SC" edit "$R" "$OUT/registration-raised.json" "window.public.work.level=$(( $(jq_ "$R" "d['window']['public']['work']['level']") + 1 ))"
-v=$("$PY" "$SC" receive "$RP" "$OUT/registration-raised.json" "$W/recv-raised" | tee "$OUT/receive-raised.out" | first)
-expect receive-raised REFUSED "${v:-ERROR}"
-[ -f "$OUT/recv-request/receipt.json" ] || { log "receive FAILED: $(cat "$OUT/receive-honest.out")"; exit 3; }
-RC=$OUT/recv-request/receipt.json
-log "select: $LEAN draw (the verifier's own randomness, after the receipt)"
-v=$("$PY" "$SC" select "$RP" "$R" "$RC" "$OUT/draw.json" --lean "$LEAN" --log "$OUT/service" | tee "$OUT/select.out" | first)
-expect select DRAWN "${v:-ERROR}"
-v=$("$PY" "$SC" select "$RP" "$R" "$RC" "$W/draw-again.json" --lean "$LEAN" --log "$OUT/service" --expect-refused | tee "$OUT/select-again.out" | first)
-expect select-again REFUSED "${v:-ERROR}"
+# the challenger: one process holding P1's streams from the receipt to the outcomes; ask() is its one channel
+coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" 2> "$OUT/challenger.err"; }
+ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out, its word in $REPLY
+  local line=
+  if [ -n "${SVC[1]:-}" ]; then echo "$2" >&"${SVC[1]}" && IFS= read -r line <&"${SVC[0]}"; fi
+  echo "${line:-ERROR the challenger is gone: $(tail -2 "$OUT/challenger.err" 2>/dev/null)}" > "$OUT/$1.out"
+  REPLY=$(first < "$OUT/$1.out")
+}
+req() { "$PY" -c "import json, sys; a = sys.argv[1:]; print(json.dumps(dict(zip(a[::2], a[1::2]))))" "$@"; }
+ask receive-foreign "$(req op register name foreign registration "$OUT/other/registration.json")"
+expect receive-foreign REFUSED "$REPLY"
+ask receive-extra "$(req op register name extra registration "$OUT/registration-extra.json")"
+expect receive-extra REFUSED "$REPLY"
+ask receive-raised "$(req op register name raised registration "$OUT/registration-raised.json")"
+expect receive-raised REFUSED "$REPLY"
+ask receive-honest "$(req op register name honest registration "$R" out "$OUT/receipt.json")"
+expect receive-honest REGISTERED "$REPLY"
+ask receive-open "$(req op register name open registration "$R")"
+expect receive-open REFUSED "$REPLY"
+[ -f "$OUT/receipt.json" ] || { log "receive FAILED: $(cat "$OUT/receive-honest.out")"; exit 3; }
+log "select: $LEAN draw (the challenger's own randomness, after the receipt)"
+ask select "$(req op select name honest out "$OUT/draw.json")"
+expect select DRAWN "$REPLY"
+ask select-again "$(req op select name honest out "$W/draw-again.json")"
+expect select-again REFUSED "$REPLY"
 [ -f "$OUT/draw.json" ] || { log "select FAILED: $(cat "$OUT/select.out")"; exit 3; }
 UNITS=$(jq_ "$OUT/draw.json" "' '.join(map(str, sorted(d['units'])))")
 FILL=$(jq_ "$OUT/request/advice.json" "[e for e in d['entries'] if e['kind'] == 'filler'][0]['lo']")
@@ -132,12 +148,14 @@ opencheck() {    # opencheck TAG EXPECT SIDE UNIT PUB OPENING [--undrawn]
 prove_unit() {   # prove_unit TAG: the --zk session, then its Lean checks in the background
   session "$W/$1" "$OUT/$1" || log "$1: --zk session FAILED: $(tail -2 "$OUT/$1/prove.err")"
   ( lean_jobs "$W/$1" "$OUT/$1" hidden ) &
+  BG+=($!)
 }
 lean_verdict() { "$PY" -c "import json, sys; v = [json.loads(l[8:]) for l in open(sys.argv[1]) if l.startswith('VERDICT ')]; \
 print(('ACCEPT' if v[0]['accepted'] else 'REJECT') if v else 'NONE')" "$1" 2>/dev/null || echo NONE; }
 
 U0=
 REAL_UNIT=
+BG=()
 for t in $UNITS; do
   stage_unit "u$t" request "$t" || continue
   opencheck "open-u$t" ACCEPT request "$t" "$OUT/u$t/pub.bin" "$OUT/u$t/opening.json"
@@ -165,9 +183,10 @@ s=$(ls -d "$W/u$U0"/sessions/*/ 2>/dev/null | tail -1)
 if [ -n "$s" ]; then
   ( $TIME "$OUT/u$U0/lean-foreign-pub.time" bash -c "$(vlimit "$STAGE_GB") exec $LEAN verify --zk --circuit $W/u$U0/circuit.txt \
       --statement verity/flock-circuit --public $OUT/other-tile/pub.bin --session $s" > "$OUT/u$U0/lean-foreign-pub.out" 2> "$OUT/u$U0/lean-foreign-pub.err" ) &
+  BG+=($!)
 fi
 log "waiting for the Lean checks"
-wait
+wait "${BG[@]}"   # not the challenger
 for t in $UNITS; do expect "lean-u$t" ACCEPT "$(lean_verdict "$OUT/u$t/lean-honest-own.out")"; done
 expect lean-filler ACCEPT "$(lean_verdict "$OUT/$FT/lean-honest-own.out")"
 expect lean-foreign-pub REJECT "$(lean_verdict "$OUT/u$U0/lean-foreign-pub.out")"
@@ -181,16 +200,19 @@ done
 v=$("$PY" "$SC" shape "$W/$FT" "$W/u$REAL_UNIT" --out "$OUT/shape-filler.json" | tee "$OUT/shape-filler.out" | first)
 expect shape-filler SAME "${v:-ERROR}"
 
-# ---- 6. outcome ---------------------------------------------------------------------------------------------------------------
-units_json() {   # units_json OUT [FIRST_STAGE FIRST_PUB FIRST_LEAN FIRST_OPENING]: the drawn units' files, the first replaced
-  "$PY" - "$OUT" "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" $UNITS <<'PY'
+# ---- 6. deliver and outcome ---------------------------------------------------------------------------------------------------
+units_json() {   # units_json DEST [FIRST_STAGE FIRST_PUB FIRST_LEAN FIRST_OPENING]: the drawn units' files, the first replaced
+  "$PY" - "$OUT" "$W" "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" $UNITS <<'PY'
 import json, sys
-out, dest, st, pub, lean, op, *units = sys.argv[1:]
+from pathlib import Path
+out, w, dest, st, pub, lean, op, *units = sys.argv[1:]
 rows = []
 for i, t in enumerate(units):
     u = f"{out}/u{t}"
+    sessions = sorted(Path(f"{w}/u{t}/sessions").glob("*/session.json"))
     row = {"unit": int(t), "stage": f"{u}/stage.json", "pub": f"{u}/pub.bin", "lean": f"{u}/lean-honest-own.out",
-           "opening": f"{out}/open-u{t}.json", "rust": f"{u}/prove.out"}
+           "opening": f"{out}/open-u{t}.json", "rust": f"{u}/prove.out",
+           "session": str(sessions[-1]) if sessions else f"{w}/u{t}/sessions/none"}
     if i == 0:
         row.update({k: v for k, v in (("stage", st), ("pub", pub), ("lean", lean), ("opening", op)) if v})
         if lean:
@@ -199,24 +221,36 @@ for i, t in enumerate(units):
 json.dump(rows, open(dest, "w"))
 PY
 }
-outcome() {      # outcome CASE EXPECT UNITS_JSON [--expect-reject|--expect-refused]
-  local v; v=$("$PY" "$SC" outcome "$RP" "$R" "$RC" "$OUT/draw.json" "$3" "$OUT/outcome-$1" --log "$W/olog-${5:-$1}" ${4:-} \
-    | tee "$OUT/outcome-$1.out")
-  case $v in OUTCOME*) v=$(echo "$v" | cut -d' ' -f2);; *) v=$(echo "$v" | first);; esac
-  expect "outcome-$1" "$2" "${v:-ERROR}"
+control() {      # control CASE EXPECT UNITS_JSON: a stream of its own replaying the honest draw, delivered and judged
+  local n=ctl-$1
+  ask "register-$1" "$(req op register name "$n" registration "$R" stream "$n" replay honest)"
+  ask "select-$1" "$(req op select name "$n")"
+  ask "deliver-$1" "$(req op deliver name "$n" units "$3")"
+  ask "outcome-$1" "$(req op outcome name "$n" units "$3" out "$OUT/outcome-$1")"
+  expect "outcome-$1" "$2" "$REPLY"
 }
-log "outcome (verity/one-stage/audit/v0 over every drawn unit)"
+log "deliver and outcome (verity/one-stage/audit/v0 over every drawn unit)"
 units_json "$OUT/units-honest.json"
-outcome honest ACCEPT "$OUT/units-honest.json"
-outcome again REFUSED "$OUT/units-honest.json" --expect-refused honest
+ask deliver-honest "$(req op deliver name honest units "$OUT/units-honest.json")"
+expect deliver-honest DELIVERED "$REPLY"
+ask outcome-honest "$(req op outcome name honest units "$OUT/units-honest.json" out "$OUT/outcome-honest")"
+expect outcome-honest ACCEPT "$REPLY"
+ask outcome-again "$(req op outcome name honest units "$OUT/units-honest.json" out "$W/outcome-again")"
+expect outcome-again REFUSED "$REPLY"
+ask deliver-again "$(req op deliver name honest units "$OUT/units-honest.json")"
+expect deliver-again REFUSED "$REPLY"
 U=$OUT/u$U0
 units_json "$OUT/units-foreign-proof.json" "$OUT/other-tile/stage.json" "$OUT/other-tile/pub.bin" "$U/lean-foreign-pub.out" "$OUT/open-foreign-proof.json"
-outcome foreign-proof REJECT "$OUT/units-foreign-proof.json" --expect-reject
+control foreign-proof REJECT "$OUT/units-foreign-proof.json"
+ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof)"
+expect retry-foreign-proof REFUSED "$REPLY"
 for c in $HZ_CASES; do
   [ -f "$U/lean-st-$c.out" ] || continue
   units_json "$OUT/units-st-$c.json" "" "" "$U/lean-st-$c.out"
-  if [ "$c" = honest ]; then outcome "st-$c" ACCEPT "$OUT/units-st-$c.json"; else outcome "st-$c" REJECT "$OUT/units-st-$c.json" --expect-reject; fi
+  control "st-$c" "$([ "$c" = honest ] && echo ACCEPT || echo REJECT)" "$OUT/units-st-$c.json"
 done
+[ -n "${SVC[1]:-}" ] && echo '{"op": "quit"}' >&"${SVC[1]}"
+[ -n "${SVC_PID:-}" ] && wait "$SVC_PID" 2>/dev/null
 
 # ---- 7. summary ---------------------------------------------------------------------------------------------------------------
 {
