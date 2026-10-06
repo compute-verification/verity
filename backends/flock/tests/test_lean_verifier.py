@@ -683,7 +683,7 @@ def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
          "exact ⟨by decide, by decide, by decide, by decide, by decide, rfl⟩⟩"),
     ]:
         f = tmp_path / "Split.lean"
-        f.write_text(f"import FlockProofs\nopen Flock\nexample : {goal} :=\n  {witness}\n")
+        f.write_text(f"import Proofs.Flock.Verifier\nopen Flock\nexample : {goal} :=\n  {witness}\n")
         p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
         assert p.returncode != 0 and "decide" in p.stdout + p.stderr, (goal, p.stdout[-800:])
 
@@ -1279,7 +1279,7 @@ def test_an_exact_v2_output_row_of_one_or_several_ports_is_the_row_its_reader_co
         assert p.returncode != 0, name
 
 
-TOY_EXTRACTOR = r"""import FlockProofs
+TOY_EXTRACTOR = r"""import Proofs.Flock.Verifier
 open Flock
 
 /-- A toy scheme with 1-byte digests: a node is the sum of its children's bytes, a leaf the row encoding's first byte. -/

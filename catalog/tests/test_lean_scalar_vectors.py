@@ -1,4 +1,4 @@
-"""The Lean transcriptions of `verity_catalog.definitions.scalar`'s primitives (`verity/lean/Verity/Protocol/Scalar.lean`) and
+"""The Lean transcriptions of `verity_catalog.definitions.scalar`'s primitives (`verity/Security/Definitions/Core/Scalar.lean`) and
 `verity_catalog.definitions.prims`' casts (`Verity/Protocol/Prims.lean`) are held to the Python by vectors: `Verity/SecurityProofs/Scalar/
 Vectors.lean` and `Verity/SecurityProofs/Prims/Vectors.lean` state each one as a theorem the kernel checks against the
 Lean, and this test checks the same vectors against the Python: each primitive's evaluator, and `evaluate_batch` (its numpy
@@ -17,7 +17,7 @@ from verity_catalog.definitions import prims as P
 from verity_catalog.definitions import scalar as S
 from verity_catalog.silicon.cast import E2M1_UP
 
-LEAN = Path(__file__).resolve().parents[2] / "verity" / "lean" / "Verity" / "SecurityProofs"
+LEAN = Path(__file__).resolve().parents[2] / "verity" / "Security" / "Proofs" / "Core"
 FILES = (LEAN / "Scalar" / "Vectors.lean", LEAN / "Prims" / "Vectors.lean")
 #: each Lean function, the primitive it transcribes, and the fewest vectors its theorems hold
 PRIMITIVES = {
