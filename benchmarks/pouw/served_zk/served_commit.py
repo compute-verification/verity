@@ -6,8 +6,10 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the window, salted and committed
   python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
   python served_commit.py edit REGISTRATION OUT KEY=JSON ...                  a control's registration, a field changed
-  python served_commit.py challenger PARAMS LOG [--lean F]                    the challenger: one JSON request a line on stdin
+  python served_commit.py challenger PARAMS LOG [--lean F --epoch E]          the challenger: one JSON request a line on stdin
                                                                               (`handle`), one reply a line on stdout
+  python served_commit.py replay PARAMS LOG OUT [--lean F]                    its requests again, from its recorded coins
+  python served_commit.py coin-variant MANIFEST COINS OPENING OUT CASE        a control's pass, its salt coin CASE
   python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
 
@@ -35,10 +37,18 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   which declares what one-stage's record shows besides the two salted roots: N, the window item, each root's leaf count
   and domain) and PoUW's inside the window item (`public_problem`: exactly those items, each the verifier's own
   recomputation at the registered level from its own context, ε, δ, the grid, P and |W|).  The `Challenger` holds both,
-  then `Stream.register` (R1-R7 and the receipt), `select` (Lean ``flock-verify draw --population N --k K′``, the
-  challenger's own randomness, after the receipt, once), `deliver` (the drawn units' session records' SHA-512, once) and
-  `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one law and K′ is a function of the
+  then `Stream.register` (R1-R7 and the receipt), `select`, `deliver` (the drawn units' session records' SHA-512, once)
+  and `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one law and K′ is a function of the
   level, so the challenger holds one Stream per level.
+- **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
+  challenger, whose commitment it publishes before the epoch (``LOG/coins.json``).  A window's registration names its
+  pass, and the challenger re-starts the pass's epoch from the pass's manifest under its own commitment
+  (`pouw_pearl_c_device.manifest_epoch`): the pass's salt coin must open against it, as the salt coin, after the
+  weights' root, and the pass's salt must be that coin's; a pass recorded before epoch coins (a beacon's salt) is read
+  only when the request says it is a recorded replay.  `select` opens the epoch's draw coin after the registration (its
+  digest), once, with no retry, and the draw's key is `draw_key` of that coin; Lean ``flock-verify draw --population N
+  --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  The challenger records each
+  opening (``LOG/openings.jsonl``), and `replay` re-runs its requests from those records, byte for byte.
 - **The check** reads a proof's public file (``pub.bin``): instance 0's b ‖ c of its A row and B row must be the unit's rows,
   each by its frame-v3 path to its entry's side root, and the entry by its path to the registered window root.  The
   opening hands the verifier the drawn units' entries: a development shortcut, until position reads in gates (the joint
@@ -48,6 +58,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -65,10 +76,13 @@ from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.primitives.circuits.codec import canonical_json
+from verity.primitives.randomness import Key, derive
 from verity.protocols.accounting.work.pouw import window as Wd
 from verity.protocols.accounting.work.pouw.circuit import leaves as L
 from verity.protocols.accounting.work.pouw.circuit import pc8
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.work.pouw.coins import Challenger as Coins
+from verity.protocols.accounting.work.pouw.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.accounting.work.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
 from verity.protocols.verification.sampled_proofs import service as S
@@ -79,6 +93,8 @@ from verity.protocols.verification.sampled_proofs.one_stage.verdict import Verdi
 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
+#: the window draw's key, from the epoch's draw coin (`draw_key`)
+DRAW_DOMAIN = "verity/pouw/served-zk-draw/v1"
 #: the window root's port: the window's entries
 PORT = "entries"
 #: a window stream's failure budget: its first failure stops it
@@ -536,28 +552,142 @@ def _all(units: list[dict], name: str, sessions: list[str]) -> dict[str, Any]:
                    "units": [(v or {}).get("accepted") for v in vs], "sessions": list(sessions)}}
 
 
-Sampler = Callable[[Mapping[str, Any], int], list[int]]
+#: a draw over the key's stream: (law, N, the stream's bytes) to the units
+Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
+
+
+def width(n: int) -> int:
+    """Bytes per word of an exact uniform draw below `n` (Lean's ``Draw.width``, `Key.uniform`'s)."""
+    return (n.bit_length() + 64 + 7) // 8
+
+
+def draw_key(coin: bytes, stream: S.Stream, reg: S.Registration) -> Key:
+    """The window draw's key: the epoch's draw coin, under the stream and the registration and receipt it was opened after."""
+    return derive(coin, DRAW_DOMAIN, {"stream": stream.digest, "registration": reg.digest,
+                                      "receipt": hashlib.sha512(canonical_json(dict(reg.receipt))).hexdigest()})
+
+
+def draw_bytes(key: Key, law: Mapping[str, Any], n: int) -> bytes:
+    """The bytes a subset:k draw over N reads (Lean's ``2 k · width(N) + 64``)."""
+    if law.get("law") != "subset":
+        raise _refused("law", f"the window's draw is a subset law's, not {dict(law)}")
+    return key.stream("draw", 2 * law["k"] * width(n) + 64)
+
+
+def _uniform(n: int, src: bytes, pos: int) -> tuple[int, int] | None:
+    w = width(n)
+    space = 1 << (8 * w)
+    while pos + w <= len(src):
+        x, pos = int.from_bytes(src[pos:pos + w], "big"), pos + w
+        if x < space - space % n:
+            return x % n, pos
+    return None
+
+
+def stream_subset(k: int, n: int, src: bytes) -> list[int] | None:
+    """Lean's ``Draw.subset`` on one stream (``flock-verify draw --stream``): partial Fisher-Yates, each step an exact
+    uniform word of `width` bytes; None when the stream runs out."""
+    swapped: dict[int, int] = {}
+    pos = 0
+    for i in range(k):
+        r = _uniform(n - i, src, pos)
+        if r is None:
+            return None
+        j, pos = i + r[0], r[1]
+        swapped[i], swapped[j] = swapped.get(j, j), swapped.get(i, i)
+    return sorted(swapped.get(i, i) for i in range(k))
+
+
+def python_sampler(law: Mapping[str, Any], n: int, src: bytes) -> list[int]:
+    units = stream_subset(law["k"], n, src)
+    if units is None:
+        raise _refused("sampler", "the draw's stream ran out")
+    return units
+
+
+class Recorded:
+    """The epoch's coins as a replay holds them: the published commitment and the openings the challenger recorded.
+    Each opens once, and only after what it was recorded opened after; `Challenger.open` checks it against the commitment."""
+
+    def __init__(self, commitment: CoinCommitment, openings: list[CoinOpening]) -> None:
+        self.commitment, self._openings, self._opened = commitment, {o.label: o for o in openings}, set()
+
+    def open(self, label: str, after: bytes) -> CoinOpening:
+        if label in self._opened:
+            raise DomainError(f"epoch {self.commitment.epoch}'s {label!r} coin is already open: a retry never redraws")
+        self._opened.add(label)
+        o = self._openings.get(label)
+        if o is None or o.after != after:
+            raise DomainError(f"the record holds no {label!r} coin opened after {after.hex()[:32]}")
+        return o
+
+
+def _pd():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PD
+    return PD
 
 
 class Challenger:
-    """The challenger of one deployment's windows over P1's `Stream`: PoUW's rule (`public_problem`), then the stream's.
-    A Spec fixes one law and K′ is a function of the registered level, so it holds one Stream per (stream name, level);
-    each registration it accepted is held by name.  `sampler` draws instead of `coins` (Lean's draw); a control stream
-    `replay`s an earlier draw as its challenger's coins, so a control's verdicts are judged on the honest draw's units."""
+    """The challenger of one deployment's windows over P1's `Stream`: PoUW's rule (`public_problem`), the pass's epoch
+    under its own coins, then the stream's.  `coins` is the epoch's coin challenger (`pouw.coins.Challenger`, or
+    `Recorded` in a replay); the window's draw coin keys `sampler` (Lean's draw, or its twin `python_sampler`).  A Spec
+    fixes one law and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
+    registration it accepted is held by name.  A control stream `replay`s an earlier draw and opens no coin, so a
+    control's verdicts are judged on the honest draw's units.  The window's Check has no proof deadline, so the streams'
+    clock decides nothing; it counts the challenger's reads of it unless `clock` is given."""
 
-    def __init__(self, params: dict, sampler: Sampler | None = None, coins: Callable[[int], bytes] = os.urandom,
-                 budget: int = BUDGET) -> None:
-        self.params, self.sampler, self.coins, self.budget = params, sampler, coins, budget
+    def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
+                 clock: Callable[[], float] | None = None) -> None:
+        self.params, self.coins, self.sampler, self.budget = params, coins, sampler, budget
+        ticks = itertools.count()
+        self.clock = clock or (lambda: float(next(ticks)))
         self.streams: dict[tuple[str, int], S.Stream] = {}
         self.regs: dict[str, tuple[S.Stream, S.Registration]] = {}
+        self.replays: dict[str, str] = {}
+        self.passes: dict[str, str] = {}
         self.draws: dict[str, S.Draw] = {}
         self.sessions: dict[str, list[str]] = {}
+        self.openings: dict[str, CoinOpening] = {}
+        self._key: Key | None = None
 
-    def stream(self, name: str, ell: int, sampler: Sampler | None) -> S.Stream:
+    def open(self, label: str, after: bytes) -> CoinOpening:
+        """The epoch's `label` coin, opened once after `after` and checked against the published commitment."""
+        try:
+            o = self.coins.open(label, after)
+        except DomainError as e:
+            raise _refused("coin", str(e)) from None
+        why = coin_reason(self.coins.commitment, o, label, after)
+        if why is not None:
+            raise _refused("coin", f"the {label}'s {why}")
+        self.openings[label] = o
+        return o
+
+    def pass_epoch(self, raw: bytes | None, recorded: bool = False) -> str:
+        """How the pass's salt was had (``coin``, or ``recorded beacon`` for a recorded replay's), its manifest `raw`
+        re-started under the challenger's own coin commitment and named by the window's parameters.  Raises `Refused`."""
+        if raw is None:
+            raise _refused("coin", "the window names no pass, whose epoch the challenger re-starts from its manifest")
+        try:
+            _, how = _pd().manifest_epoch(json.loads(raw), self.coins.commitment, recorded)
+        except DomainError as e:
+            raise _refused("coin", str(e)) from None
+        except (KeyError, TypeError, ValueError) as e:
+            raise _refused("manifest", f"{type(e).__name__}: {e}") from None
+        if hashlib.sha256(raw).hexdigest()[:16] != self.params["context"].rsplit("/", 1)[-1]:
+            raise _refused("manifest", "the pass is not the one the window's parameters name")
+        return how
+
+    def _keyed(self, law: Mapping[str, Any], n: int) -> list[int]:
+        if self._key is None:
+            raise _refused("coin", "no draw coin is open for this draw")
+        return self.sampler(law, n, draw_bytes(self._key, law, n))
+
+    def stream(self, name: str, ell: int, sampler: Callable[[Mapping[str, Any], int], list[int]]) -> S.Stream:
         if (name, ell) not in self.streams:
             self.streams[name, ell] = S.Stream(spec_of(self.params, ell), template(self.params["k"]), budget=self.budget,
                                                delta=float(Fraction(self.params["delta"])), challenger=f"{CHALLENGER}/{name}",
-                                               coins=self.coins, sampler=sampler)
+                                               clock=self.clock, sampler=sampler)
         return self.streams[name, ell]
 
     def _held(self, name: str) -> tuple[S.Stream, S.Registration]:
@@ -570,21 +700,47 @@ class Challenger:
             raise _refused("not-drawn", name)
         return self.draws[name]
 
-    def register(self, name: str, rec: Mapping[str, Any], stream: str = "window", replay: str | None = None) -> S.Registration:
+    def register(self, name: str, rec: Mapping[str, Any], stream: str = "window", replay: str | None = None,
+                 manifest: bytes | None = None, recorded: bool = False) -> S.Registration:
+        """Receive window `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`)."""
         v = public_problem(self.params, rec)
         if not v.ok:
             raise S.Refused(v)
+        how = self.pass_epoch(manifest, recorded) if replay is None else None
         ell = level_of(rec)
-        sampler = self.sampler if replay is None else (lambda law, n, d=self._drawn(replay): d.units)
+        sampler = self._keyed if replay is None else (lambda law, n, d=self._drawn(replay): d.units)
         st = self.stream(stream, ell, sampler)
         reg = st.register(rec, ports(self.params, ell))
         self.regs[name] = (st, reg)
+        if replay is None:
+            self.passes[name] = how
+        else:
+            self.replays[name] = replay
         return reg
 
     def select(self, name: str) -> S.Draw:
+        """The draw, once: a window's opens the epoch's draw coin after its registration and samples over `draw_key`;
+        nothing redraws, and a coin opened once is never opened again (a failed draw's retry is refused)."""
         st, reg = self._held(name)
-        self.draws[name] = st.select(reg)
+        if name in self.draws:
+            raise _refused("drawn", name)
+        if name in self.replays:
+            self.draws[name] = st.select(reg)
+            return self.draws[name]
+        self._key = draw_key(self.open("draw", bytes.fromhex(reg.digest)).coin, st, reg)
+        try:
+            self.draws[name] = st.select(reg)
+        finally:
+            self._key = None
         return self.draws[name]
+
+    def coins_of(self, name: str) -> dict | None:
+        """A window's coins, for its outcome: the epoch's commitment, how its pass's salt was had and its draw coin."""
+        if name not in self.passes:
+            return None
+        draw = self.openings.get("draw")
+        return {"commitment": self.coins.commitment.to_json(), "pass": self.passes[name],
+                "draw": draw.to_json() if draw is not None and draw.after == bytes.fromhex(self.regs[name][1].digest) else None}
 
     def deliver(self, name: str, sessions: list[str]) -> S.Outcome | None:
         st, _ = self._held(name)
@@ -630,15 +786,25 @@ def _put(p: str | None, obj: Any) -> None:
 
 
 def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
-    """One request to the challenger, as a reply word and its JSON.  Requests, each with its registration's ``name``:
-    ``register`` (``registration`` a record's file; ``stream`` and ``replay`` for a control; ``out`` the receipt),
-    ``select`` (``out`` the draw), ``deliver`` (``units``: the job's rows, each with its ``session`` record) and
-    ``outcome`` (``units``; ``out`` a directory: outcome.json, audit.json).  Replies: REGISTERED, DRAWN, DELIVERED,
-    ACCEPT, REJECT, LATE, PENDING, REFUSED, or ERROR for a request it couldn't read."""
+    """One request to the challenger, as a reply word and its JSON.  Requests: ``coins`` (the epoch's coin commitment),
+    ``salt`` (``after`` hex, the weights' root; ``out`` the salt coin's opening), and with a registration's ``name``:
+    ``register`` (``registration`` a record's file, ``manifest`` its pass's manifest and ``recorded`` true for a pass
+    recorded before epoch coins; ``stream`` and ``replay`` for a control; ``out`` the receipt), ``select`` (``out`` the
+    draw), ``deliver`` (``units``: the job's rows, each with its ``session`` record) and ``outcome`` (``units``; ``out`` a
+    directory: outcome.json, audit.json).  Replies: COINS, OPENED, REGISTERED, DRAWN, DELIVERED, ACCEPT, REJECT, LATE,
+    PENDING, REFUSED, or ERROR for a request it couldn't read."""
     op, name = cmd.get("op"), cmd.get("name")
     try:
+        if op == "coins":
+            return "COINS", ch.coins.commitment.to_json()
+        if op == "salt":
+            o = ch.open("salt", bytes.fromhex(cmd["after"]))
+            _put(cmd.get("out"), o.to_json())
+            return "OPENED", {"label": o.label, "after": o.after.hex()}
         if op == "register":
-            reg = ch.register(name, _json(cmd["registration"]), cmd.get("stream", "window"), cmd.get("replay"))
+            manifest = Path(cmd["manifest"]).read_bytes() if cmd.get("manifest") else None
+            reg = ch.register(name, _json(cmd["registration"]), cmd.get("stream", "window"), cmd.get("replay"), manifest,
+                              cmd.get("recorded") in (True, "true"))
             _put(cmd.get("out"), reg.receipt)
             return "REGISTERED", {"registration": reg.digest[:32], "order": reg.order, "population": reg.record["population"],
                                   "law": reg.record["law"], "public": sorted(reg.record["window"]["public"])}
@@ -654,7 +820,8 @@ def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
             if cmd.get("out"):
                 _put(f"{cmd['out']}/outcome.json", {"accepted": o.accepted, "verdict": o.verdict.to_json(), "public": public,
                                                     "profile": o.profile.to_json() if o.profile else None,
-                                                    "terms": {"sampling": o.terms.sampling}, "record": o.record})
+                                                    "terms": {"sampling": o.terms.sampling}, "record": o.record,
+                                                    "coins": ch.coins_of(name)})
                 _put(f"{cmd['out']}/audit.json", body)
             audit = body["audit"] or {}
             return "ACCEPT" if o.accepted else o.verdict.codes[0].upper(), {
@@ -676,8 +843,7 @@ def _json(p) -> dict:
 
 
 def _pass(pass_dir: Path):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PD
+    PD = _pd()
     raw = (pass_dir / "manifest.json").read_bytes()
     man = json.loads(raw)
     if man.get("schema") != PD.MANIFEST_SCHEMA:
@@ -792,11 +958,10 @@ def cmd_edit(a) -> int:
 
 
 def lean_sampler(lean: str, log: Path | None = None) -> Sampler:
-    """The challenger's draw by Lean ``flock-verify draw`` (its own randomness): the units of a subset law over N."""
-    def sample(law: Mapping[str, Any], n: int) -> list[int]:
-        if law.get("law") != "subset":
-            raise _refused("law", f"Lean's draw is a subset law's, not {dict(law)}")
-        p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(law["k"])], capture_output=True, text=True)
+    """The window's draw by Lean ``flock-verify draw --stream``: the units of a subset law over N, on the key's stream."""
+    def sample(law: Mapping[str, Any], n: int, src: bytes) -> list[int]:
+        p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(law["k"]), "--stream", src.hex()],
+                           capture_output=True, text=True)
         lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
         if p.returncode != 0 or len(lines) != 1:
             raise _refused("sampler", f"flock-verify draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
@@ -807,27 +972,110 @@ def lean_sampler(lean: str, log: Path | None = None) -> Sampler:
     return sample
 
 
+def answer(ch: Challenger, line: str) -> str | None:
+    """The reply line to one request line; None for ``{"op": "quit"}``."""
+    try:
+        cmd = json.loads(line)
+    except ValueError as e:
+        word, body = "REFUSED", {"codes": ["request"], "detail": {"request": str(e)}}
+    else:
+        if isinstance(cmd, dict) and cmd.get("op") == "quit":
+            return None
+        word, body = handle(ch, cmd) if isinstance(cmd, dict) else ("REFUSED", {"codes": ["request"], "detail": {}})
+    return f"{word} {json.dumps(body, sort_keys=True, default=str)}"
+
+
 def cmd_challenger(a) -> int:
-    """The challenger's process: one JSON request a line on stdin (`handle`), one ``WORD {json}`` reply a line on stdout,
-    each also appended to LOG/requests.jsonl; it ends at end of input or ``{"op": "quit"}``."""
+    """The challenger's process: the epoch's coins, their commitment published to LOG/coins.json before any request; then
+    one JSON request a line on stdin (`handle`), one ``WORD {json}`` reply a line on stdout, each also appended to
+    LOG/requests.jsonl and each coin it opened to LOG/openings.jsonl; it ends at end of input or ``{"op": "quit"}``."""
     log = Path(a.log)
     log.mkdir(parents=True, exist_ok=True)
-    ch = Challenger(_json(a.params), lean_sampler(a.lean, log / "draws.jsonl") if a.lean else None)
+    coins = Coins(a.epoch)
+    (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
+    ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler)
     for line in sys.stdin:
         if not line.strip():
             continue
-        try:
-            cmd = json.loads(line)
-        except ValueError as e:
-            word, body = "REFUSED", {"codes": ["request"], "detail": {"request": str(e)}}
-        else:
-            if cmd.get("op") == "quit":
-                break
-            word, body = handle(ch, cmd)
-        reply = f"{word} {json.dumps(body, sort_keys=True, default=str)}"
+        opened = set(ch.openings)
+        reply = answer(ch, line)
+        if reply is None:
+            break
+        with open(log / "openings.jsonl", "a") as f:
+            for label in sorted(set(ch.openings) - opened):
+                f.write(json.dumps(ch.openings[label].to_json(), sort_keys=True) + "\n")
         with open(log / "requests.jsonl", "a") as f:
             f.write(json.dumps({"request": line.strip(), "reply": reply[:4000]}) + "\n")
         print(reply, flush=True)
+    return 0
+
+
+def _files(p: Path) -> dict[str, bytes]:
+    if p.is_file():
+        return {"": p.read_bytes()}
+    return {q.relative_to(p).as_posix(): q.read_bytes() for q in sorted(p.rglob("*")) if q.is_file()} if p.is_dir() else {}
+
+
+def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler) -> list[str]:
+    """The challenger's requests again (LOG/requests.jsonl) from its records alone: the published commitment and the
+    coins it opened (`Recorded`), each request's ``out`` under OUT.  Every difference from the record: a reply, or a file
+    a request wrote; empty when the replay is byte-identical."""
+    coins = Recorded(CoinCommitment.from_json(_json(log / "coins.json")),
+                     [CoinOpening.from_json(json.loads(x)) for x in
+                      ((log / "openings.jsonl").read_text().splitlines() if (log / "openings.jsonl").exists() else ()) if x])
+    ch, diffs = Challenger(params, coins, sampler), []
+    for i, x in enumerate((log / "requests.jsonl").read_text().splitlines()):
+        entry = json.loads(x)
+        line, was, wrote = entry["request"], entry["reply"], None
+        try:
+            cmd = json.loads(line)
+        except ValueError:
+            cmd = None
+        if isinstance(cmd, dict) and cmd.get("out"):
+            wrote, cmd["out"] = Path(cmd["out"]), str(out / f"{i:04d}" / Path(cmd["out"]).name)
+            line = json.dumps(cmd)
+        reply = (answer(ch, line) or "")[:4000]
+        if reply != was:
+            diffs.append(f"request {i}: reply {reply[:120]!r}, recorded {was[:120]!r}")
+        if wrote is not None and _files(Path(cmd["out"])) != _files(wrote):
+            diffs.append(f"request {i}: {wrote} differs from its replay")
+    return diffs
+
+
+def cmd_replay(a) -> int:
+    diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler)
+    n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
+    print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps({'requests': n, 'diffs': diffs[:8]})}", flush=True)
+    return 0 if not diffs else 1
+
+
+#: a control pass's salt coin (`coin_variant`): each is refused at registration, the first four by the coin check
+CASES = ("foreign", "early", "mislabelled", "tampered", "resalted")
+
+
+def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: str) -> dict:
+    """`man` carrying the epoch's commitment and a salt coin `case` made of `opening`, the challenger's genuine salt coin:
+    another challenger's (``foreign``), opened after what the verifier had not recorded (``early``), the epoch's draw coin
+    label (``mislabelled``), a byte of the coin flipped (``tampered``), or the genuine coin in a pass whose salt is not
+    that coin's (``resalted``)."""
+    o = opening
+    if case == "foreign":
+        o = Coins(coins.epoch).open("salt", opening.after)
+    elif case == "early":
+        o = CoinOpening(o.epoch, o.label, bytes(len(o.after)), o.coin, o.salt, o.path)
+    elif case == "mislabelled":
+        o = CoinOpening(o.epoch, "draw", o.after, o.coin, o.salt, o.path)
+    elif case == "tampered":
+        o = CoinOpening(o.epoch, o.label, o.after, bytes([o.coin[0] ^ 1]) + o.coin[1:], o.salt, o.path)
+    elif case != "resalted":
+        raise ValueError(f"a coin variant is one of {', '.join(CASES)}")
+    out = {k: v for k, v in man.items() if k != "beacon"}
+    return {**out, "coins": coins.to_json(), "salt_opening": o.to_json()}
+
+
+def cmd_coin_variant(a) -> int:
+    v = coin_variant(_json(a.manifest), CoinCommitment.from_json(_json(a.coins)), CoinOpening.from_json(_json(a.opening)), a.case)
+    Path(a.out).write_text(json.dumps(v, sort_keys=True))
     return 0
 
 
@@ -920,7 +1168,17 @@ def main(argv=None) -> int:
     p = sub.add_parser("challenger")
     p.add_argument("params")
     p.add_argument("log")
-    p.add_argument("--lean", help="Lean flock-verify, whose draw is the challenger's (default: the stream's own coins)")
+    p.add_argument("--lean", help="Lean flock-verify, whose draw over the draw coin's key is the challenger's "
+                                  "(default: its Python twin, stream_subset)")
+    p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
+    p = sub.add_parser("replay")
+    for x in ("params", "log", "out"):
+        p.add_argument(x)
+    p.add_argument("--lean", help="Lean flock-verify, the draw's sampler (default: its Python twin)")
+    p = sub.add_parser("coin-variant")
+    for x in ("manifest", "coins", "opening", "out"):
+        p.add_argument(x)
+    p.add_argument("case", choices=CASES)
     p = sub.add_parser("check")
     for x in ("params", "registration", "draw"):
         p.add_argument(x)
@@ -936,7 +1194,8 @@ def main(argv=None) -> int:
     p.add_argument("--out")
     a = ap.parse_args(argv)
     return {"params": cmd_params, "commit": cmd_commit, "register": cmd_register, "edit": cmd_edit,
-            "challenger": cmd_challenger, "check": cmd_check, "shape": cmd_shape}[a.cmd](a)
+            "challenger": cmd_challenger, "replay": cmd_replay, "coin-variant": cmd_coin_variant, "check": cmd_check,
+            "shape": cmd_shape}[a.cmd](a)
 
 
 if __name__ == "__main__":
