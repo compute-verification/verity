@@ -34,11 +34,11 @@ def polyOf (q : KV F128 × KV F128 × KV F128) : Poly := ⟨kv q.1, kv q.2.1, kv
 
 theorem gOf_inj {a b : F256} (h : gOf a = gOf b) : a = b := h
 
-/-- An identity of F256 words that holds in `GF256`. -/
-macro "f256_ring" : tactic =>
-  `(tactic| (apply gOf_inj; simp only [gOf_add, gOf_mul, gOf_zero, gOf_one]; ring))
+theorem f128_mul_comm (a b : F128) : a * b = b * a := by
+  (apply fOf_injective; simp only [fOf_mul]; ring)
 
-theorem f128_mul_comm (a b : F128) : a * b = b * a := by f128_ring
+theorem f128_zero_mul (b : F128) : 0 * b = 0 := by
+  (apply fOf_injective; simp only [fOf_mul, fOf_zero]; ring)
 
 theorem kv_kadd (x y : KV F128) : kv (kadd x y) = kv x + kv y := rfl
 
@@ -53,7 +53,7 @@ theorem kv_kc (c : F256) (x : KV F128) : kv (kc c x) = c * kv x := by
   rw [FlockLevel3.F256.mul_def]
   simp only [kv, kc, Val.add, Val.sm, F256.mk.injEq]
   constructor
-  · f128_ring
+  · (apply fOf_injective; simp only [fOf_add, fOf_mul]; ring)
   · apply fOf_injective
     simp only [fOf_add, fOf_mul]
     linear_combination (-(fOf c.c0 * fOf x.1)) * FlockLevel3.GF128.two_eq_zero
@@ -70,7 +70,7 @@ theorem kv_foldl_kadd : ∀ (l : List (KV F128)) (acc : KV F128),
 theorem kv_challenge (a0 a1 a2 : KV F128) (r : F256) :
     kv (kadd (kadd a0 (kc r a1)) (kc (r * r) a2)) = (polyOf (a0, a1, a2)).eval r := by
   simp only [kv_kadd, kv_kc, polyOf, Poly.eval]
-  f256_ring
+  (apply gOf_inj; simp only [gOf_add, gOf_mul]; ring)
 
 /-- A message's round polynomial (`Poly.ofMsg`). -/
 theorem polyOf_ofMsg (mm : KV F128 × KV F128) (s : KV F128) :
@@ -86,7 +86,7 @@ theorem polyOf_addScaled (q p : KV F128 × KV F128 × KV F128) (b : F128) :
 theorem kv_ood (s : KV F128) (b y : F128) : kv (kadd s (kofF (Val.sm b y))) = kv s + (F256.ofF y).smul b := by
   rw [kv_kadd, kv_kofF]
   show kv s + F256.ofF (b * y) = kv s + ⟨y * b, 0 * b⟩
-  rw [show (0 : F128) * b = 0 by f128_ring, f128_mul_comm b y]
+  rw [f128_zero_mul, f128_mul_comm b y]
   rfl
 
 /-- A level's queries' running sum (Ligerito.lean:197, 233): `s + e·β`. -/
