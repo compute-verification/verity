@@ -53,7 +53,7 @@ def rows(hop: float, t_mul: float, clock_mhz: float) -> list[dict]:
                     "note": note})
 
     add("positional", 1, 1, wpos, 2)
-    kara = wpos * 4 * (3 / 4) ** 3
+    kara = wpos * (3 / 4) ** 3
     for j in (2, 3):
         add("positional-J", j, 1, wpos, 0, local=(j - 1) * kara / T_SM)
     for j in range(1, 6):
