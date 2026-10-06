@@ -12,7 +12,8 @@ within the limit, and the audit stops at the first failure. `k` is 105, the depl
 
 The limit, the calibration, the clocks and the record are the band verifier's (`band_gpu/live.py`): `--calibrate-only` fixes
 `Δ + allowance` before any load, `--limit-ns` judges every audit against it, the allowance is a loopback one (spec v1.1 caps it
-at 354 µs), and every audit's secret source and every answer's time are kept.
+at 354 µs), and every audit's secret source and every answer's time are kept, with each audit's wall-clock start
+(`started_unix`, read outside the timed rounds) so a late answer can be read against a load sampler's seconds.
 
 The transport is the harness's responder wire, not `p2-audit-wire/v1`'s frames: a v1 RESPONSE also carries the block's
 authentication path (19 siblings at B = 2^19, 664 bytes more), which a verifier that keeps every leaf does not need. Exit 0
@@ -75,6 +76,7 @@ def audit(host: str, port: int, params: reference.Params, salt: bytes, model: by
         limit = limit_ns if fixed else cal["limit_ns"]
         for counter in range(audits):
             _, key = reference.audit_key(source, epoch, root, salt, counter)
+            started_unix = time.time()
             rounds = []
             for j in range(k):
                 i = key.uniform(blocks, j)
@@ -85,7 +87,7 @@ def audit(host: str, port: int, params: reference.Params, salt: bytes, model: by
                                "correct": correct, "on_time": elapsed_ns <= limit})
                 if not (correct and elapsed_ns <= limit):
                     break
-            records.append({"counter": counter, "answers": rounds})
+            records.append({"counter": counter, "started_unix": started_unix, "answers": rounds})
         after = calibrate(r, pings)
     finally:
         r.close()

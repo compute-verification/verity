@@ -20,7 +20,8 @@ the two compare side by side.
    (one block in ten zeroed), the late control (one answer in ten held past the limit; the only answers held) and the
    recompute control (one block in ten of all of `C` dropped, each challenged dropped block re-encoded on the device from its
    decoded row `Dec(C_i)`, which the game gives the prover free: two roots, and the margin is the limit minus each
-   recomputed answer's recorded device time).
+   recomputed answer's recorded device time). Each control runs `--control-audits` audits (default `--audits`): a recompute
+   costs two roots, so a long honest round need not make the recompute control as long.
 5. **SeqRoot.** One block's encode on one warp is two roots in sequence: half of the fastest of `--reps` encodes of a
    pseudo-random block against twice the audit's limit, which SeqRoot says a root outlasts. The kernel's root is an addition
    chain on CGBN's generic squaring, not tuned, so this is an upper bound on the fastest GPU root, not a floor. The SM clock is
@@ -35,6 +36,7 @@ import statistics
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from band_gpu import harness as H
@@ -326,9 +328,11 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     honest = H.audit_round(native_start, fields, LIVE, leaves, out, "p2-honest", a,
                            (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync)
 
+    ca = SimpleNamespace(**{**vars(a), "audits": getattr(a, "control_audits", 0) or a.audits})
+
     def control(tag: str, answer: Callable[[int], tuple[bytes, int, int, int]]) -> dict[str, Any]:
         start = lambda: H.ControlResponder(nb, answer, real_delay=a.clock == "wall")  # noqa: E731
-        return H.audit_round(start, fields, LIVE, leaves, out, tag, a, None, limit)
+        return H.audit_round(start, fields, LIVE, leaves, out, tag, ca, None, limit)
 
     value = control("p2-value", H.control_answers(c_host, nb, zero=set(range(0, blocks, 10))))
     late = control("p2-late", H.control_answers(c_host, nb, late_every=10, late_ns=limit + H.LATE_EXTRA_NS))
