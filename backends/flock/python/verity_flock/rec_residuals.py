@@ -1,8 +1,8 @@
 """V*'s algebra statement (hiding model architectures, lane rec-v0): the inner verifier's algebraic checks on each rep of the
-inner session (`verity_flock.rec_algebra`) as ``InnerRepCheck_v1{S}``, one instance a rep, one C-Flock statement.
+inner session (`verity_flock.rec_algebra`) as ``InnerRepCheck_v2{S}``, one instance a rep, one C-Flock statement.
 
     U16 = Array<16, Value<1>>
-    InnerRepCheck_v1{S}(m0: Array<P(n_0), U16>, .., acc0: Array<64, U16>, acc1: Array<64, U16>, v: Array<8 nv, U16>)
+    InnerRepCheck_v2{S}(m0: Array<P(n_0), U16>, .., acc0: Array<64, U16>, acc1: Array<64, U16>, v: Array<P(nv), U16>)
         -> Array<128, U16>
 
 ``S = {"gf": GfResiduals' S, "ports": [[name, n], ...]}`` (`spec`: the row ports in order, each with the F elements it holds).
@@ -20,8 +20,11 @@ then zero words.
   `rec_open` carries): rows of the prover's ``rec-acc`` registration, which the opening statements read too
   (`verity_flock.rec_outer.Chain`), so the final check sees the consistency sums the openings added.
 * ``v``: the coefficients and constants at the rep's coins, then ``z_partial``'s comb, the inner circuit's fold at the rep's
-  point (§10): a public input (PROTOCOL.md §16.10), which the verifier computes from the inner session's public record and the
-  inner statement (`rec_algebra.verifier_rows`; the extra claims and the comb `verity_flock.rec_vstage` computes).
+  point (§10), which the verifier computes from the inner session's public record and the inner statement
+  (`rec_algebra.verifier_rows`; the extra claims and the comb `verity_flock.rec_vstage` computes), as a row port of
+  ``P(nv)`` words, its words after the nv elements zero and unread. The verifier registers it itself (`verifier_value`): the
+  value ``rec-v`` (`V_VALUE`), row r rep r's, under public salts (`verifier_salts`), so its root is a function of the public
+  record and the statement has no public input.
 * ``out``: one output row, registered by the verifier as zero, so an instance is satisfiable only if every inner check of its
   rep holds.
 
@@ -57,8 +60,8 @@ from . import circuit as FC
 from . import ir_lower as IL
 from .class_statement import ClassDefinition
 
-__all__ = ["InnerRepCheck", "MAX_REGIONS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions", "residual_forms",
-           "residual_words", "spec",
+__all__ = ["InnerRepCheck", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
+           "residual_forms", "residual_words", "slots", "spec",
            "statement", "unit_circuit", "write"]
 
 U16 = Array(16, BL.BIT)
@@ -67,11 +70,16 @@ F_WORDS = 8
 ROW_BLOCK = 64
 LEAVES = 3 ** 7
 ZERO_SALT = b"verity/rec-v0/zero-residual-salt/v0"
-DERIVATION = "verity/rec-v0/inner-rep-check/coefficients/v1"
+VERIFIER_SALT = b"verity/rec-v0/verifier-salt/v0"
 ZERO_VALUE = "rec-residuals-zero"
+V_VALUE = "rec-v"
 # a part's regions, at most: each region is two claims, each claim a round of the rep's coin stream, and a rep's other rounds
 # (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 256 (`coin_spec_of`)
 MAX_REGIONS = 64
+# a part's sha512x3 slots per instance, at most (`slots`): 2^25 bits of compressions beside its hm96 slots' 2^24 (at most
+# MAX_REGIONS) leave its unit 2^24 of a 2^26 block, below circuit.K_MAX's 2^27 (`circuit.compose` refuses a larger one); K =
+# 4096's units are 2^22, and without the bound v's compressions (about nv / 8) put its first part at 2^27
+MAX_SLOTS = 128
 
 
 def port_words(n: int) -> int:
@@ -79,7 +87,7 @@ def port_words(n: int) -> int:
 
 
 def v_words(S: dict) -> int:
-    return F_WORDS * S["gf"]["nv"]
+    return port_words(S["gf"]["nv"])
 
 
 def spec(sh) -> dict:
@@ -96,24 +104,25 @@ def spec(sh) -> dict:
     return S
 
 
-def regions(ports: list, nv: int) -> int:
-    """The statement's public regions (live `circuit.rs`, `Stmt::regions`): a digest region per row port and one for ``out``,
-    and v's words, which follow the row ports' words, in aligned power-of-two blocks."""
-    a = sum(port_words(n) for _, n in ports)
-    b, blocks = a + F_WORDS * nv, 0
-    while a < b:
-        e = (b - a).bit_length() - 1
-        while a % (1 << e):
-            e -= 1
-        a, blocks = a + (1 << e), blocks + 1
-    return len(ports) + 1 + blocks
+def regions(ports: list) -> int:
+    """The statement's public regions (live `circuit.rs`, `Stmt::regions`): a digest region per row port, ``v``'s included,
+    and one for ``out``. The statement has no public input, so no region of public words."""
+    return len(ports) + 2
 
 
-def parts(S: dict, max_regions: int = MAX_REGIONS) -> list[SimpleNamespace]:
-    """S's residuals cut into InnerRepCheck S's of at most ``max_regions`` public regions each (`regions`), each residual in
-    the first part it fits, in S's order. A part reads the row ports its residuals touch (in S's order, under their names)
-    and the v elements they touch (in v's order), w and v renumbered; ``res`` and ``v`` are their indices in S. Every
-    residual of S is one of a part's, so the algebra holds exactly when every part does."""
+def slots(ports: list, nv: int) -> int:
+    """The statement's sha512x3 slots per instance (`circuit._row_slots`): the compressions of its row ports, ``v``'s and
+    ``out``'s before their last blocks, three a slot."""
+    rows = [FC.Port(nm, port_words(n)) for nm, n in ports] + [FC.Port("v", port_words(nv)), FC.Port("out", OUT_WORDS)]
+    return -(-sum(p.comps for p in rows) // FC.PER_SLOT)
+
+
+def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -> list[SimpleNamespace]:
+    """S's residuals cut into InnerRepCheck S's of at most ``max_regions`` public regions (`regions`), ``max_slots`` sha512x3
+    slots (`slots`) and ``OUT_WORDS / 8`` residuals each, each residual in the first part it fits, in S's order. A part
+    reads the row ports its residuals touch (in S's order, under their names) and the v elements they touch (in v's order),
+    w and v renumbered; ``res`` and ``v`` are their indices in S. Every residual of S is one of a part's, so the algebra
+    holds exactly when every part does."""
     _check(S)
     gf = S["gf"]
     starts = [0]
@@ -135,12 +144,16 @@ def parts(S: dict, max_regions: int = MAX_REGIONS) -> list[SimpleNamespace]:
 
     groups: list[tuple[list, set, set]] = []
     for i, (P, V) in enumerate(map(touched, gf["res"])):
-        fit = lambda g: regions([S["ports"][p] for p in g[1] | P], len(g[2] | V)) <= max_regions
+        def fit(g):
+            ports = [S["ports"][p] for p in g[1] | P]
+            return (regions(ports) <= max_regions and slots(ports, len(g[2] | V)) <= max_slots
+                    and F_WORDS * (len(g[0]) + 1) <= OUT_WORDS)
+
         g = next((g for g in groups if fit(g)), None)
         if g is None:
             g = ([], set(), set())
             if not fit(g):
-                raise ValueError(f"residual {i} alone reads more than {max_regions} regions")
+                raise ValueError(f"residual {i} alone reads more than {max_regions} regions or {max_slots} sha512x3 slots")
             groups.append(g)
         g[0].append(i)
         g[1].update(P)
@@ -223,7 +236,7 @@ def _body(B, S, *ports):
     w = _gather(s, [flat(p) for p in ports[:-1]])
     gf = s["gf"]
     res = B.call(bind(G.GfResiduals, S=gf), Coll(Array(gf["nw"], G.F), TR._refs(w)),
-                 Coll(Array(gf["nv"], G.F), TR._refs(flat(ports[-1]))))
+                 Coll(Array(gf["nv"], G.F), TR._refs(flat(ports[-1])[:128 * gf["nv"]])))
     bits = flat(res)
     zero = B.call(BL.constant(0)).refs[0]
     bits += [zero] * (16 * OUT_WORDS - len(bits))
@@ -231,9 +244,9 @@ def _body(B, S, *ports):
 
 
 InnerRepCheck = CompositeDefinition(
-    "InnerRepCheck", 1, ("S",), _signature, _body, conformance="exact-model-tested",
-    doc="One rep's inner algebraic checks: GfResiduals{S.gf} on the row ports' first elements (w, in port order) and v, its "
-        "residuals as u16 words then zero words")
+    "InnerRepCheck", 2, ("S",), _signature, _body, conformance="exact-model-tested",
+    doc="One rep's inner algebraic checks: GfResiduals{S.gf} on the row ports' first elements (w, in port order) and v's first "
+        "S.gf.nv, its residuals as u16 words then zero words")
 
 
 def definition(S: dict):
@@ -283,7 +296,7 @@ def unit_circuit(S: dict):
     flat = [b for wd in ins for b in wd]
     cuts = [16 * sum(pw[:i]) for i in range(len(pw) + 1)]
     parts = [flat[a:b] for a, b in zip(cuts, cuts[1:])]
-    bits = residual_forms(C, S["gf"], _gather(S, parts[:-1]), parts[-1])
+    bits = residual_forms(C, S["gf"], _gather(S, parts[:-1]), parts[-1][:128 * S["gf"]["nv"]])
     bits += [ZERO] * (16 * OUT_WORDS - len(bits))
     outs = [f"out{j}" for j in range(OUT_WORDS)]
     for j, nm in enumerate(outs):
@@ -349,7 +362,7 @@ def lowering(S: dict, name: str) -> IL.Lowering:
 
 
 def subcircuit(S: dict, name: str) -> SimpleNamespace:
-    """What `circuit.compose` and `circuit.write` read of a subcircuit: its ports and its Definition, ``InnerRepCheck_v1{S}``."""
+    """What `circuit.compose` and `circuit.write` read of a subcircuit: its ports and its Definition, ``InnerRepCheck_v2{S}``."""
     port = lambda nm: SimpleNamespace(name=nm, dtype="u16")
     defn = definition(S)
     digest = program_digest(Program(defn))
@@ -365,6 +378,23 @@ def zero_salts(value: str, n: int) -> list[bytes]:
             for i in range(n)]
 
 
+def verifier_salts(program: str, value: str, n: int) -> list[bytes]:
+    """The salts of a value the verifier registers itself (`verifier_value`), row i's from the program, the value's name and
+    i alone. They are public, as the rows are: the commitment's binding (cr/sha-512) is what the reads need, and it hides
+    nothing the verifier does not publish."""
+    head = VERIFIER_SALT + b"\0" + program.encode() + b"\0" + value.encode() + b"\0"
+    return [hashlib.shake_256(head + i.to_bytes(4, "little")).digest(hm96.SHA512.salt_bytes) for i in range(n)]
+
+
+def verifier_value(program: str, value: str, rows: list[list[int]]):
+    """A value the verifier registers itself (`registered.Registered`): rows it computes from the inner session's public record,
+    the inner statement and its own coins, under `verifier_salts`. Its entry is then a function of those rows alone, which the
+    verifier's reads file names, and the prover's table rows and salts are the same registration's."""
+    from verity.protocols.verification.sampled_proofs.one_stage import registered as RG
+
+    return RG.Registered.commit(program, value, rows, verifier_salts(program, value, len(rows)))
+
+
 def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> dict:
     """The verifier's own entry of a registered value it knows only by its rows' ``b || c`` (`registered.Registered.entry`'s
     fields): its domain and the root of its tree over them."""
@@ -377,7 +407,7 @@ def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> di
 
 
 def statement(S: dict, name: str, n: int) -> SimpleNamespace:
-    """``InnerRepCheck_v1{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n`` and ``S``
+    """``InnerRepCheck_v2{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n`` and ``S``
     decide."""
     from verity.protocols.verification.sampled_proofs.one_stage import partition as P
 
@@ -388,21 +418,19 @@ def statement(S: dict, name: str, n: int) -> SimpleNamespace:
     prog = P.program_sha512(program)
     low = lowering(S, name)
     sub = subcircuit(S, name)
-    public = {"v": {"seed": "the inner session's public record (rec/inner-transcript/v0) and the inner statement, rep = instance",
-                    "derivation": DERIVATION}}
-    text = FC.compose(low, sub, partition=P.digest(part), program=prog, public_inputs=public)
+    text = FC.compose(low, sub, partition=P.digest(part), program=prog)
     return SimpleNamespace(S=S, n=n, defn=defn, program=program, part=part, prog=prog, low=low, sub=sub, text=text,
                            build_s=round(time.perf_counter() - t0, 1))
 
 
 def write(st: SimpleNamespace, reads: dict, vs: list[list[int]], out_dir, evaluate: bool = True, own: dict | None = None) -> dict:
     """The statement (`statement`) on its instances, written to ``out_dir``: the circuit, the prover's ``inst.bin``, the
-    verifier's ``pub.bin``, ``public-inputs.bin`` (v), ``program.json``, ``partition.json`` and the reads file
-    ``registered.json``.
+    verifier's ``pub.bin``, ``program.json``, ``partition.json`` and the reads file ``registered.json``.
 
     ``reads``: per row port, ``(registration, positions)``, the prover's registered value (`registered.Registered`) and each
-    instance's row of it; ``vs``: each instance's v (F elements). ``own``: per row port the verifier's own entry (default the
-    registration's), which its reads file names; the outputs are the verifier's zero rows, registered under its own salts."""
+    instance's row of it; ``vs``: each instance's v (F elements), which the verifier registers as `V_VALUE` (`verifier_value`),
+    instance i reading row i. ``own``: per row port the verifier's own entry (default the registration's), which its reads file
+    names; the outputs are the verifier's zero rows, registered under its own salts."""
     from verity.protocols.verification.sampled_proofs.one_stage import partition as P
     from verity.protocols.verification.sampled_proofs.one_stage import registered as RG
 
@@ -415,7 +443,10 @@ def write(st: SimpleNamespace, reads: dict, vs: list[list[int]], out_dir, evalua
         rows, ss, e = reg.statement(pos)
         tables[nm], salts[nm], registered[nm] = np.array(rows, np.uint16), ss, e
         entries[nm] = {**((own or {}).get(nm) or reg.entry()), "word_bits": 16, "reads": [int(p) for p in pos]}
-    vrows = np.array([words(v, v_words(S)) for v in vs], np.uint16)
+    vreg = verifier_value(st.prog, V_VALUE, [words(v, v_words(S)) for v in vs])
+    vrows_, salts["v"], registered["v"] = vreg.statement(range(n))
+    tables["v"] = vrows = np.array(vrows_, np.uint16)
+    entries["v"] = {**vreg.entry(), "word_bits": 16, "reads": list(range(n))}
     ref = [residual_words(S, [tables[nm][i].tolist() for nm in names], vs[i]) for i in range(n)]
     agrees = None
     if evaluate:
@@ -430,10 +461,9 @@ def write(st: SimpleNamespace, reads: dict, vs: list[list[int]], out_dir, evalua
     (d / "program.json").write_bytes(canonical_json(encode_program(st.program)))
     (d / "partition.json").write_text(json.dumps(st.part))
     (d / "registered.json").write_text(json.dumps({"format": RG.READS, "ports": entries}))
-    FC.write_public_inputs(text, {"v": vrows}, n, d / "public-inputs.bin")
     FC.write(text, SimpleNamespace(name=ZERO_VALUE, subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None, list(range(n)),
-             share_rows=True, outs={"out": np.asarray(out_rows, np.uint16)}, tables=tables, refs={nm: list(range(n)) for nm in names},
-             salts=salts, registered=registered, public_words={"v": vrows})
+             share_rows=True, outs={"out": np.asarray(out_rows, np.uint16)}, tables=tables, refs={nm: list(range(n)) for nm in tables},
+             salts=salts, registered=registered)
     gf = S["gf"]
     meta = json.loads(text.split("\n", 2)[1][5:])
     return {"template": st.defn.id, "instances": n, "ports": len(names), "nw": gf["nw"], "nv": gf["nv"],
