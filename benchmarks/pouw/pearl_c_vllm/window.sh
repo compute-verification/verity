@@ -16,7 +16,8 @@
 # FlashInfer finds the sampling module setup.sh built, with the same flags.  jit-built.txt lists every FlashInfer library
 # built during the run: empty unless a first-call JIT landed in it.
 # MODE=smoke (untimed, `gpu-lease 1`): the same checks, then `e2e.py --smoke` (both engines resident and each one's first
-# sampling calls) into smoke.json.  MODE=profile (untimed, `gpu-lease 1`): the same checks, then `profile_decode.py` under
+# sampling calls) into smoke.json; with RETAIN=1 the arm then serves e2e.py's SERVED requests, each a retained pass under
+# $WORK/passes/<run id>.  MODE=profile (untimed, `gpu-lease 1`): the same checks, then `profile_decode.py` under
 # nsys (the capture is its steady-state pass) into profile.json, with nsys's per-kernel sums merged in.  SHIP_TAR names a
 # ship already on the node instead of the sent one.  MODE=perplexity (untimed, as node-2 fill or `gpu-lease 1`): the same
 # checks, GPU 1's for both variants (v2 runs the unpromoted kernels), then `e2e.py --perplexity` into quality.json, a scheme
@@ -61,7 +62,7 @@ PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=$VARIANTS "$PY" "$SHIP/run.py" "$SHI
 
 if [ "$MODE" = smoke ]; then
   "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
-    --out "$OUT/smoke.json" --smoke "${SWITCHES[@]}"
+    --out "$OUT/smoke.json" --smoke ${RETAIN:+--retain "$WORK/passes/${RESEARCH_RUN_ID:?}"} "${SWITCHES[@]}"
 elif [ "$MODE" = perplexity ]; then
   "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
     --out "$OUT/quality.json" --perplexity --chunk-min "${CHUNK_MIN:-7}"

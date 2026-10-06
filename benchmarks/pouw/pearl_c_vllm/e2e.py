@@ -88,6 +88,9 @@ CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "has
 #: the verify's no-write controls, each a retained pass the reference replay must reject: every commitment write omitted, and (under
 #: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
 CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_msg", "hash_leaf"})}
+#: ``--smoke --retain``'s served requests, each one chat prompt (vllm_bench's PROMPTS, by index) as a retained pass: the
+#: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control
+SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
 QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h1", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h1"}
 #: WikiText-2 (raw), its test split, at the revision cached on node 2
@@ -522,6 +525,15 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
                                          controls=(Control("omit", omits),))
                     out[label] = {"manifest": got.get("manifest"), "commitment": got, "omitted": sorted(omits)}
                 conn.send(out)
+            elif op == "served":
+                stack.activate(arm_of("pearlc", run, args))
+                sp = SamplingParams(temperature=0.0, max_tokens=SERVED_TOKENS, ignore_eos=True)
+                out = {}
+                for name, i in SERVED.items():
+                    _, _, got, outs = timed([chat[i]], sp, retain=str(Path(args.retain) / name))
+                    out[name] = {"prompt": PROMPTS[i], "tokens": list(outs[0].outputs[0].token_ids),
+                                 "text": outs[0].outputs[0].text, "manifest": got.get("manifest"), "commitment": got}
+                conn.send(out)
             else:
                 raise ValueError(f"unknown command {op!r}")
     except Exception as ex:  # noqa: BLE001 - the controller reports it
@@ -675,7 +687,8 @@ def memory_mib() -> int | None:
 def smoke(args) -> None:
     """Untimed: both engines resident on the GPU, and each one's first sampling calls.  The stock FP8 engine starts and
     samples; then the Pearl-C engine starts beside it (its install and gates) and samples as stock BF16 and as ``pearlc``.
-    Writes each step's time and the GPU's memory use after it, the gates, and the greedy tokens' agreement with BF16."""
+    Writes each step's time and the GPU's memory use after it, the gates, and the greedy tokens' agreement with BF16.  With
+    ``--retain``, the arm then serves `SERVED`'s requests, each a retained ``pearlc`` pass under its own name."""
     ctx, beacon = mp.get_context("spawn"), os.urandom(32)
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "scheme": getattr(args, "scheme", SCHEME),
                  "schedule": getattr(args, "schedule", "serial"), "rows_form": getattr(args, "rows_form", "w"),
@@ -698,6 +711,8 @@ def smoke(args) -> None:
         pearlc = step("pearlc: first sampling calls", lambda: arm.ask(op="chat", mode="pearlc"))
         out["texts"] = {"fp8": fp8["texts"][0], "bf16": bf16["texts"][0], "pearlc": pearlc["texts"][0]}
         out["token_agreement_vs_bf16"] = {"fp8": agree(fp8["tokens"], bf16["tokens"]), "pearlc": agree(pearlc["tokens"], bf16["tokens"])}
+        if getattr(args, "retain", None):
+            out["served"] = step("served: retained requests", lambda: arm.ask(op="served"))
     except (RuntimeError, SystemExit) as ex:
         out["error"] = str(ex)[:4000]
     finally:
