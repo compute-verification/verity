@@ -1079,6 +1079,12 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 3                                             # a status line reaches the root's poster
 
 
+def test_send_refuses_a_post_that_names_only_its_author(registry, capsys):
+    rc, _, err = run(capsys, "send", "--as", "infra", "--dry-run", "--text", "<!subteam^SINFRA|@infra> steward: is exit 1 harmless?")
+    assert rc == 2 and "never wakes its author" in err
+    assert run(capsys, "send", "--as", "infra", "--dry-run", "--text", "@infra @ci is exit 1 harmless?")[0] == 0
+
+
 def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys):
     rc, _, err = run(capsys, "send", "--as", "infra", "--kind", "announce", "--dry-run", "--text", "@lean @ci daily wasters")
     assert rc == 2 and "pass them as --to" in err

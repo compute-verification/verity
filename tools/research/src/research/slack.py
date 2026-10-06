@@ -1040,6 +1040,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if any(t["handle"] == h["handle"] for t in to):
         raise SlackError("--to names someone else")
     body = _body(ns)
+    if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]}:
+        raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its author: name its addressee with --to")
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
