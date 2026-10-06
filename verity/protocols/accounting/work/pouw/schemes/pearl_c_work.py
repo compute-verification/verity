@@ -29,7 +29,9 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
   - every opened row is zero past |K| (F7);
   - credited rows pass the per-row rules, and excluded rows fail them;
   - the debit replayed over the credited words (`pearl_c_debit`) is at most ρ times the credited cells' credit, their
-    share of the unit's `creditDevRev1` (F1; `tile_cap`).
+    share of the unit's `creditDevRev1` (F1; `tile_cap`);
+  - under a hashing format with the row cap (-h3, `row_cap`), so is each credited A row's debit over the credited columns,
+    at most ρ times its cells' credit (`TTOutRowSeed.lean`'s (C2)).
   A failure is a wrong tile, reported as a reason; nothing raises.
 * **Voluntary rows (V-EX; research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md`` §6.13, the assessor's B at
   17:32Z).**
@@ -70,6 +72,7 @@ from verity.primitives.randomness import derive
 from verity.primitives.crypto import beacon as B
 from ..audit import Audit, Epoch, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile
 from ..protocol import Context, Matmul, Shape, Tile, tagged
+from ..serving import HASH_FORMATS
 from . import pearl_c as C
 from . import pearl_c_debit as D
 from . import pearl_kw as P
@@ -333,10 +336,24 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
             return f"{side} row {index} is credited but its own debit passes R1's bound (ρ·its cell credit)"
     rows, cols = record.credited(tile)
     if rows and cols:
+        bound = 1 + Fraction(tol)
         debit, cap = _debit_cap(scheme, record, tile, ops, rows, cols)
-        if debit > cap * (1 + Fraction(getattr(scheme, "r1_tolerance", 0))):
+        if debit > cap * bound:
             return f"the replayed debit {float(debit):.0f} exceeds the cap {float(cap):.0f} (ρ·the credited cells' credit)"
+        for i in rows if row_cap(scheme) else ():
+            debit, cap = _debit_cap(scheme, record, tile, ops, [i], cols)
+            if debit > cap * bound:
+                return (f"A row {i}'s replayed debit {float(debit):.0f} exceeds its cap {float(cap):.0f} (the row cap: ρ·its "
+                        "credited cells' credit)")
     return None
+
+
+def row_cap(scheme) -> bool:
+    """Whether the scheme's hashing format caps every credited row's debit as well as the tile's (`HashFormat.row_cap`,
+    -h3's): (C2) of `TTOutRowSeed.lean`, `pearlCTilesDevRev1RowCap`, each row's debit over the tile's credited columns at
+    most ρ times its cells' share of the credit."""
+    hashing = getattr(scheme, "hashing", None)
+    return hashing in HASH_FORMATS and HASH_FORMATS[hashing].row_cap
 
 
 def _debit_cap(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, rows: Sequence[int], cols: Sequence[int]
@@ -541,7 +558,8 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
     no tile's credited debit passes its cap, for `declare`.  The prover knows the salt when it forms and commits, so it
     replays every tile's debit as the verifier will.  For a tile over the cap it gives up the credited row whose removal
     leaves the least debit over the cap, and repeats while the tile is over and the count caps allow; a tile the caps
-    leave over the cap stays so, and fails if drawn.  Rows go up to ⌈m/64⌉ per unit and ⌈n/64⌉ per weight."""
+    leave over the cap stays so, and fails if drawn.  Under the row cap (`row_cap`) a credited A row over its own cap goes
+    first, the furthest over first.  Rows go up to ⌈m/64⌉ per unit and ⌈n/64⌉ per weight."""
     va: dict[int, set[int]] = {r.matmul.index: set(r.voluntary_a) for r in records}
     vb: dict[int, set[int]] = {}
     for r in records:
@@ -565,6 +583,12 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
                     rows, cols = cur.credited(tile)
                     if not (rows and cols):
                         break
+                    over = [(d - c, i) for i in (rows if row_cap(scheme) else ())
+                            for d, c in (_debit_cap(scheme, cur, tile, ops, [i], cols),) if d > c * tol]
+                    if over and len(va[u.index]) < voluntary_cap(u.shape.m):
+                        va[u.index].add(max(over)[1])
+                        changed = True
+                        continue
                     debit, cap = _debit_cap(scheme, cur, tile, ops, rows, cols)
                     if debit <= cap * tol:
                         break

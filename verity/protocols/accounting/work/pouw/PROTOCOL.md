@@ -464,7 +464,8 @@ useful    U/(α_A·α_B), glue
   - `PearlC(hashing="h3")` (`pearl-c-…-v1-h3`, not registered) draws row i's E_A as line 0 of its row seed, over the
     row's frame-b3s leaf (`PearlC.row_seeds`); seed_B, E_B, the bases and the digests are -h2's, and the tickets keep the
     unit's seed_A over root_A. The `test-16-v1-h3` and `decode-32-v1-h3` vectors pin a call end to end.
-  - Not here yet: the work law checks the cap per tile only.
+  - The work law checks the row cap on every credited A row of a drawn tile, over its credited columns, after the tile's
+    cap (`pearl_c_work.row_cap`), and `volunteer` gives up a row over it first.
 - **Row tiles.** m is a multiple of 16, not of 64: the last row tile may be partial, in whole 16 × 16 ticket subtiles.
   Decode's 32 × 64 tile has a leaf over its 64 digests (2 KB), so decode is not padded to 64 rows.
 - **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
