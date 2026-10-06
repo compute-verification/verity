@@ -6,13 +6,15 @@ instead of spreading over every core the checks share (vy-nebius-1, 1 Oct: two u
 
 A machine's slots are SLOTS (`/workspace/research/locks/slots`; CHECK_SLOTS overrides), one per line:
 
-    NAME CPUS [windows=FILE] [lead=MINUTES]      # e.g. `a 32-63`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
+    NAME CPUS [windows=FILE] [lead=MINUTES] [only=trains]   # e.g. `a 32-63`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
 
 The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock the lander's `flock` takes) is free and no window blocks is
 taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned to CPUS with that slot's test cache
 (`~/.cache/verity/tests-slot-NAME`), without LEASE_DIR and with LEASE_DEADLINE_FILE pointing nowhere. A slot with windows= is
 skipped while one of FILE's windows (`START_UTC MINUTES`, the node-2 fill runner's format) is open or starts within lead (30)
-minutes: a check there would run into a whole-node timed measurement. With every slot busy it retries every POLL_S, reading
+minutes: a check there would run into a whole-node timed measurement. A slot with only=trains is taken only by a `--priority` waiter
+(the lander's train checks), so a lane's long check or quick tier never holds the slot a train needs (a slot.py from before it
+reads the key as unknown and the slot as any other).  With every slot busy it retries every POLL_S, reading
 SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. A slot
 with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
@@ -64,7 +66,8 @@ def parse(text: str) -> list[dict]:
         if len(f) < 2:
             continue
         opts = dict(x.split("=", 1) for x in f[2:])
-        slots.append({"name": f[0], "cpus": f[1], "windows": opts.get("windows"), "lead": int(opts.get("lead", 30))})
+        slots.append({"name": f[0], "cpus": f[1], "windows": opts.get("windows"), "lead": int(opts.get("lead", 30)),
+                      "trains": opts.get("only") == "trains"})
     return slots
 
 
@@ -172,7 +175,7 @@ def _read(p: Path) -> dict:
 def slot_docs(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc")) -> list[dict]:
     """Each slot as `--status --json` gives it: its name, cores, `holding`, what blocks it now (`blocked`) and its `upcoming`
     windows."""
-    return [{"name": s["name"], "cpus": s["cpus"], "windows": s["windows"], "lead": s["lead"],
+    return [{"name": s["name"], "cpus": s["cpus"], "windows": s["windows"], "lead": s["lead"], "trains": s.get("trains", False),
              "holder": holding(lock_dir / f"check-{s['name']}.lock", lock_dir / f"check-{s['name']}.who", now, proc),
              "blocked": blocked(s, now), "upcoming": upcoming(s, now)} for s in slots]
 
@@ -182,7 +185,8 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
     that came before it."""
     out = []
     for s in slot_docs(slots, lock_dir, now, proc):
-        out.append(f"{s['name']}  cores {s['cpus']}  {held_text(s['holder'])}" + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
+        out.append(f"{s['name']}  cores {s['cpus']}" + ("  trains only" if s["trains"] else "") + f"  {held_text(s['holder'])}"
+                   + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
         out += [f"{s['name']}  {window_text(w)}" for w in s["upcoming"]]
     return out + waiters(lock_dir / LINE, now, before)
 
@@ -356,16 +360,20 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         print(f"slot: skipping {out}: outside this process's cores; {DIRECT_CPUS_FIX}", file=sys.stderr, flush=True)
     if not slots:
         sys.exit(f"slot: none of {SLOTS}'s slots is within this process's cores; {DIRECT_CPUS_FIX}")
-    ticket, tfd = join(SLOTS.parent, priority="--priority" in opts, who=asker(by))
+    priority = "--priority" in opts
+    if not priority and all(s["trains"] for s in slots):
+        sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); a lane check runs on another machine")
+    ticket, tfd = join(SLOTS.parent, priority=priority, who=asker(by))
     told = None
     while True:
         slots = usable(reread(slots)) or slots
         n = ahead(ticket)
-        got = None if n else take(slots, SLOTS.parent, now())
+        got = None if n else take(slots if priority else [s for s in slots if not s["trains"]], SLOTS.parent, now())
         if got:
             break
         why = f"{n} check(s) ahead in line" if n else \
-            "every check slot is taken (" + "; ".join(f"{s['name']}: {blocked(s, now()) or 'busy'}" for s in slots) + ")"
+            "every check slot is taken (" + "; ".join(f"{s['name']}: {blocked(s, now()) or ('for train checks' if s['trains'] and not priority else 'busy')}"
+                                                   for s in slots) + ")"
         if why != told:
             print(f"slot: {why}; retrying every {POLL_S} s", file=sys.stderr, flush=True)
             for ln in status(slots, SLOTS.parent, now(), before=ticket.name):

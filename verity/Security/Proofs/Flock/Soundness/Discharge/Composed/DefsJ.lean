@@ -15,7 +15,7 @@ tables, each the one-table piece's counterpart:
 * `nTab`, `inputsJ`, `drawJ`, `partOf`, `partS`: the number of tables, table `j`'s inputs and draw, the table unit `u`
   is drawn into (its position among the draw's units over the parts' size), and the drawn units of table `j`.
 * `DrawSetupZJ`, `tableZJ`, `planZJ`, `tabZJ`: `DrawSetupZK`, `tableAtZK`, `planZAt` and `tabZAt` at table `j`'s inputs
-  and draw (`y₀`'s refused table where `verify --zk` sets none up).
+  and draw (where `verify --zk` sets none up, the refused table of `y₀`, a `DrawSetupZJ` at table 0's inputs).
 * `tableShJ`, `planShJ`, `sitesShJ`, `sitesZJ`, `layZJ`, `rsZJ`, `rsZJ_computes`: `ZkBind`'s public shadow, sites,
   layout and rows (`At.lean`) at `J` tables.
 * `liveOfZJ`, `DecodesOnZKJ`, `simZJ`, `zk_headline_exec_tables`: `Tables.liveOfJ`, `DecodesOnJ`, `simAuditJ` and
@@ -141,15 +141,21 @@ noncomputable def tabAt (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x
 /-- The table's `--zk` table: setupH's statement at its regions. -/
 noncomputable def table : TabZK 𝔽 mPts := y.tabAt (regionsOf y.x.st) (stmtOf_linkLayout y.x.st y.x.wf.1 y.x.wf.2).1
 
+/-- A refused table's `--zk` table: the statement with `contra`'s regions, which no witness satisfies. -/
+noncomputable def refused : TabZK 𝔽 mPts :=
+  y.tabAt (regionsOf y.x.st ++ DrawSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
+
 end DrawSetupZJ
 
 section Shadow
 
-variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
+variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+  (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
 
 open Classical in
 /-- **Table `j` at draw `S`** (`tableAtZK` at table `j`): the table `verify --zk` sets up at table `j`'s inputs and draw
-when it sets one up, and otherwise the reference setup `y₀`'s refused table. -/
+when it sets one up, and otherwise the reference setup `y₀`'s refused table (a setup at table 0's inputs, which every
+session `verify --zk` accepts at a draw `DrawOkZKJ` admits has: `setupZJ_of_acceptsZK`). -/
 noncomputable def tableZJ (S : Finset (Fin n)) (j : Fin (nTab I)) : TabZK 𝔽 mPts :=
   if h : Nonempty (DrawSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).table
@@ -183,13 +189,13 @@ open Classical in
 noncomputable def tableShJ (S : Finset (Fin n)) (j : Fin (nTab I)) : Integrate.Table mPts (partS I (dj S) S j) :=
   if h : Nonempty (DrawSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).x.table (typedJ ht j)
-  else y₀.x.refused (zkTyped ht) _
+  else y₀.x.refused (typedJ ht 0) _
 
 theorem tableZJ_S (S : Finset (Fin n)) (j : Fin (nTab I)) : (tableZJ dj y₀ S j).S = (tableShJ dj y₀ ht S j).T.S := by
   unfold tableZJ tableShJ
   split_ifs with h
   · exact (table_stmtOf (typedJ ht j) _).symm
-  · exact (model_eq_stmtOf (zkTyped ht) y₀.x.h y₀.x.wf.1 _).symm
+  · exact (model_eq_stmtOf (typedJ ht 0) y₀.x.h y₀.x.wf.1 _).symm
 
 /-- The public plan at the same draws. -/
 noncomputable def planShJ : Finset (Fin n) → Reg → List (TabSpec mPts) :=
@@ -243,7 +249,7 @@ theorem sitesShJ_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
   by_cases hS : Nonempty (DrawSetupZJ (inputsJ I (partOf I (dj S) u.val)) mPts (partS I (dj S) S (partOf I (dj S) u.val))
     (drawJ I (dj S) (partOf I (dj S) u.val)))
   · rw [dite_eq_left_of_eq_true (eq_true hS)]; exact (parse_tagsAt _ _ _ _ _).trans hc
-  · rw [dite_eq_right_of_eq_false (eq_false hS)]; exact hc
+  · rw [dite_eq_right_of_eq_false (eq_false hS)]; exact (parse_tagsAt _ _ _ _ _).trans hc
 
 include hc in
 theorem sitesZJ_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
@@ -310,10 +316,10 @@ theorem sitesShJ_bcSite :
     exact table_bcSite (typedJ ht _) (fun _ => drawJ I (dj S) (partOf I (dj S) u.val))
       ((parse_tagsAt _ _ _ _ _).trans hc) (Layout.scopeOk_spec hU hscope).2.1 ((loadPublic_tagsAt _ _ _ _ _).trans hpub)
       hpt (Classical.choice hS).x (mem_partS h)
-  · have e : tableShJ dj y₀ ht S (partOf I (dj S) u.val) = y₀.x.refused (zkTyped ht) _ := by
+  · have e : tableShJ dj y₀ ht S (partOf I (dj S) u.val) = y₀.x.refused (typedJ ht 0) _ := by
       unfold tableShJ; rw [dite_eq_right_of_eq_false (eq_false hS)]
     have hns : ∀ z, ¬ (Partition.tabOf (planShJ (Reg := Reg) dj y₀ ht) (tabShJ dj y₀ ht) S R u).S.Satisfies z := by
-      rw [tabOfShJ_eq, e]; exact y₀.x.refused_unsat (zkTyped ht) _
+      rw [tabOfShJ_eq, e]; exact y₀.x.refused_unsat (typedJ ht 0) _
     exact absurd hM (hns _)
 
 /-- **`rs` at `J` tables**: e2e-layout's `keyedRowsOuts` at the public sites, moved to the `--zk` tables. -/
@@ -663,7 +669,7 @@ tables): on untyped inputs under the tags `TagsOkZJ` fixes, with `wr` the coin s
 each of the law's draws setting each table up at `mPts` link points, `RunsOnZCJ` holds at the tables `planZJ` under
 `hm96-sha512/v1`, with the decoder `decAtZJ`, the openings `opnAtZJ`, no tail and table `j`'s cap from `root_B[j]`. -/
 theorem runsZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
+    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (L : Law n) (hT : TagsOkZJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr)
     (hDraw : ∀ ω, DrawOkZKJ I dj mPts (L.draw ω)) :
