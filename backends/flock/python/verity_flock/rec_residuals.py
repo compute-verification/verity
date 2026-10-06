@@ -60,8 +60,8 @@ from . import circuit as FC
 from . import ir_lower as IL
 from .class_statement import ClassDefinition
 
-__all__ = ["InnerRepCheck", "MAX_REGIONS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions", "residual_forms",
-           "residual_words", "spec",
+__all__ = ["InnerRepCheck", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
+           "residual_forms", "residual_words", "slots", "spec",
            "statement", "unit_circuit", "write"]
 
 U16 = Array(16, BL.BIT)
@@ -76,6 +76,10 @@ V_VALUE = "rec-v"
 # a part's regions, at most: each region is two claims, each claim a round of the rep's coin stream, and a rep's other rounds
 # (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 256 (`coin_spec_of`)
 MAX_REGIONS = 64
+# a part's sha512x3 slots per instance, at most (`slots`): 2^25 bits of compressions beside its hm96 slots' 2^24 (at most
+# MAX_REGIONS) and its unit keep its block at 2^26, below circuit.K_MAX's 2^27 at any inner shape; v's compressions (about
+# nv / 8) would otherwise put K = 4096's first part at 2^27
+MAX_SLOTS = 128
 
 
 def port_words(n: int) -> int:
@@ -106,11 +110,19 @@ def regions(ports: list) -> int:
     return len(ports) + 2
 
 
-def parts(S: dict, max_regions: int = MAX_REGIONS) -> list[SimpleNamespace]:
-    """S's residuals cut into InnerRepCheck S's of at most ``max_regions`` public regions (`regions`) and ``OUT_WORDS / 8``
-    residuals each, each residual in the first part it fits, in S's order. A part reads the row ports its residuals touch (in S's order, under their names)
-    and the v elements they touch (in v's order), w and v renumbered; ``res`` and ``v`` are their indices in S. Every
-    residual of S is one of a part's, so the algebra holds exactly when every part does."""
+def slots(ports: list, nv: int) -> int:
+    """The statement's sha512x3 slots per instance (`circuit._row_slots`): the compressions of its row ports, ``v``'s and
+    ``out``'s before their last blocks, three a slot."""
+    rows = [FC.Port(nm, port_words(n)) for nm, n in ports] + [FC.Port("v", port_words(nv)), FC.Port("out", OUT_WORDS)]
+    return -(-sum(p.comps for p in rows) // FC.PER_SLOT)
+
+
+def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -> list[SimpleNamespace]:
+    """S's residuals cut into InnerRepCheck S's of at most ``max_regions`` public regions (`regions`), ``max_slots`` sha512x3
+    slots (`slots`) and ``OUT_WORDS / 8`` residuals each, each residual in the first part it fits, in S's order. A part
+    reads the row ports its residuals touch (in S's order, under their names) and the v elements they touch (in v's order),
+    w and v renumbered; ``res`` and ``v`` are their indices in S. Every residual of S is one of a part's, so the algebra
+    holds exactly when every part does."""
     _check(S)
     gf = S["gf"]
     starts = [0]
@@ -132,12 +144,16 @@ def parts(S: dict, max_regions: int = MAX_REGIONS) -> list[SimpleNamespace]:
 
     groups: list[tuple[list, set, set]] = []
     for i, (P, V) in enumerate(map(touched, gf["res"])):
-        fit = lambda g: regions([S["ports"][p] for p in g[1] | P]) <= max_regions and F_WORDS * (len(g[0]) + 1) <= OUT_WORDS
+        def fit(g):
+            ports = [S["ports"][p] for p in g[1] | P]
+            return (regions(ports) <= max_regions and slots(ports, len(g[2] | V)) <= max_slots
+                    and F_WORDS * (len(g[0]) + 1) <= OUT_WORDS)
+
         g = next((g for g in groups if fit(g)), None)
         if g is None:
             g = ([], set(), set())
             if not fit(g):
-                raise ValueError(f"residual {i} alone reads more than {max_regions} regions")
+                raise ValueError(f"residual {i} alone reads more than {max_regions} regions or {max_slots} sha512x3 slots")
             groups.append(g)
         g[0].append(i)
         g[1].update(P)

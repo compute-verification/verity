@@ -134,10 +134,11 @@ def test_a_real_rep_holds_and_fails_at_a_changed_comb_or_running_sum(reps):
 
 
 def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
-    """`parts` cuts the algebra into statements of at most MAX_REGIONS regions that each read their residuals' row ports and v
-    elements: each part's residuals are the whole's on the fixture's reps (zero on the honest ones, the changed comb moving
-    the part of the lincheck alone), and at K = 4096's m = 35 the whole has 113 regions (111 row ports, v and out), so two
-    parts."""
+    """`parts` cuts the algebra into statements of at most MAX_REGIONS regions and MAX_SLOTS sha512x3 slots that each read
+    their residuals' row ports and v elements: each part's residuals are the whole's on the fixture's reps (zero on the
+    honest ones, the changed comb moving the part of the lincheck alone). At K = 4096's m = 35 the whole has 113 regions (111
+    row ports, v and out), so two parts; without the slot bound the first would take 171 slots, which put its block at
+    circuit.K_MAX (run r20261006-093343-89f7)."""
     for sh, rows, v in reps:
         S = RR.spec(sh)
         whole = RR.residual_words(S, rows, v)
@@ -146,6 +147,7 @@ def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
         assert sorted(i for p in ps for i in p.res) == list(range(len(S["gf"]["res"])))
         for p in ps:
             assert RR.regions(p.S["ports"]) <= RR.MAX_REGIONS and len(p.res) <= RR.OUT_WORDS // RR.F_WORDS
+            assert RR.slots(p.S["ports"], p.S["gf"]["nv"]) <= RR.MAX_SLOTS
             got = RR.residual_words(p.S, [by[nm] for nm, _ in p.S["ports"]], [v[i] for i in p.v])
             assert got[:8 * len(p.res)] == [x for i in p.res for x in whole[8 * i:8 * i + 8]] == [0] * (8 * len(p.res))
     sh, rows, v = reps[0]
@@ -157,6 +159,8 @@ def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
     assert len(moved) == 1 and 1 in moved[0]
     big = RR.spec(A.Shape(35, 24, 8))
     assert RR.regions(big["ports"]) == 113 and len(RR.parts(big)) == 2
+    assert all(RR.slots(p.S["ports"], p.S["gf"]["nv"]) <= RR.MAX_SLOTS for p in RR.parts(big))
+    assert [RR.slots(p.S["ports"], p.S["gf"]["nv"]) for p in RR.parts(big, max_slots=10 ** 9)] == [171, 40]
 
 
 def _holding(g: random.Random) -> tuple[list[int], list[int]]:
@@ -196,6 +200,7 @@ def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
     meta = json.loads((tmp_path / "circuit.txt").read_text().split("\n", 2)[1][5:])
     assert [p[0] for p in meta["ports"]] == ["m0", "m1", "m2", "v", "out"]
     assert [p[1] for p in meta["ports"]][3] == RR.v_words(S_SMALL) == 64
+    assert meta["per_vu"]["sha512x3"] == RR.slots(S_SMALL["ports"], SMALL["nv"])
     assert "public_inputs" not in meta and not (tmp_path / "public-inputs.bin").exists()
     reads = json.loads((tmp_path / "registered.json").read_text())["ports"]
     assert sorted(reads) == ["m0", "m1", "m2", "out", "v"] and all(reads[nm]["reads"] == [0, 1] for nm in reads)
