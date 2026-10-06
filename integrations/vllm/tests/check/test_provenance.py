@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import copy
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from verity_vllm.check import operand_provenance as P
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, ViewDesc
 from verity_vllm.observe.fold.fold import fold
-from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs
+from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view
 from verity_vllm.observe.log import LogWriter
 from tests.observe import test_fold_synthetic as tfs
 
@@ -213,6 +214,49 @@ def test_transposed_weight_verdicts_unchanged(tmp_path, monkeypatch):
     assert P.stream_and_schema_facts(log, span)[1]["writes_outside_schema"] == 0
 
 
+def _writes_as_extents(r):
+    """`check`'s journaled write regions before they took the declared side's rule: each write's byte extent."""
+    wbe = {}
+    for a in r.accesses:
+        if a["kind"] == "write" and a["event"] is not None and a["event"] >= 0:
+            v, rows = a["view"], a.get("rows")
+            for u in ([v] if rows is None else [row_view(v, i) for i in rows]):
+                lo, hi = byte_extent(u)
+                wbe.setdefault(a["event"], []).append((u.alloc, lo, hi))
+    return wbe
+
+
+def _rope_log(path, t, h):
+    """A rotary root (event 1) as MLA calls it: `query` is `q_pe`, per token h heads of 64 at a head stride of 256, after each
+    head's 192 `q_nope` elements; `key` is `k_pe`, the last 64 of a 576-wide row."""
+    q_pe = V(5, 192, [t, h, 64], strides=[h * 256, 256, 1])
+    k_pe = V(6, 512, [t, 1, 64], strides=[576, 64, 1])
+    schema = ("_C::rotary_embedding(Tensor positions, Tensor($0! -> ) query, Tensor($1! -> )? key, int head_size, Tensor cos_sin_cache, "
+              "bool is_neox, int rope_dim_offset=0, bool inverse=False) -> ()")
+    with LogWriter(path) as lw:
+        lw.write(DispatchEnter(id=1, parent=None, step=0, phase="forward", op="_C.rotary_embedding.default", schema=schema,
+                               args=[V(4, 0, [t], dtype="int64"), q_pe, k_pe, 64, V(3, 0, [64, 64]), False], kwargs={}, stream=0))
+        lw.write(DispatchExit(id=1, outs=None))
+    return q_pe, k_pe
+
+
+def test_strided_q_pe_write_is_inside_its_declared_runs(tmp_path):
+    t, h = 3, 4
+    log = tmp_path / "rope.jsonl.gz"
+    q_pe, k_pe = _rope_log(log, t, h)
+    accs = [acc(i, "write", row_view(q_pe, i), refs=[("n", 0, i * h * 64, (i + 1) * h * 64)]) for i in range(t)]   # a row per token
+    accs.append(acc(t, "write", k_pe, refs=[("n", 1, 0, t * 64)], rows=list(range(t))))
+    r = SimpleNamespace(accesses=accs, instances=[])
+    rep = P.check(r, log)
+    assert rep["status"] == "pass" and rep["schema"]["schema_roots"] == 1
+    assert rep["schema"]["writes_outside_schema"] == 0 and rep["schema"]["declared_unwritten"] == 0
+    # As its byte extent, each token's q_pe row spans the other heads' q_nope: one write outside per token, as GLM-4.7-Flash had.
+    assert P.stream_and_schema_facts(log, _writes_as_extents(r))[1]["writes_outside_schema"] == t
+    nope = acc(t + 1, "write", V(5, 0, [192]), refs=[("n", 2, 0, 192)])                                       # into the holes
+    rep = P.check(SimpleNamespace(accesses=[*accs, nope], instances=[]), log)
+    assert rep["status"] == "fail" and rep["schema"]["writes_outside_schema"] == 1
+
+
 # --- a real fold --------------------------------------------------------------------------------------------------
 
 
@@ -245,13 +289,12 @@ def test_m1_exhaustive_provenance():
 
 @pytest.mark.slow
 @pytest.mark.parametrize("log, profile", [(M1, "vllm_d9105ea80_sm89_eager"), (M6, "vllm_d9105ea80_sm89_eager_qwen15")], ids=["m1", "m6"])
-def test_fixture_wiring_unchanged_by_stride_ordered_regions(log, profile, monkeypatch):
+def test_fixture_wiring_unchanged_by_the_region_rules(log, profile, monkeypatch):
     if not log.exists():
         pytest.skip(f"{log} not present")
     from verity_vllm.check.fold_compare import fold_log, load_profile
     r = fold_log(log, load_profile(profile), with_program=False)
     now = P.check(r, log)
+    assert now["status"] == "pass"
     monkeypatch.setattr(P, "_declared_regions", _declared_regions_before)
-    before = P.check(r, log)
-    del now["seconds"], before["seconds"]
-    assert now["status"] == "pass" and now == before
+    assert P.stream_and_schema_facts(log, _writes_as_extents(r)) == (now["streams"], now["schema"])
