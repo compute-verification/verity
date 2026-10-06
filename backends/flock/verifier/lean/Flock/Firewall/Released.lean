@@ -6,7 +6,7 @@ With `holds_fixed`, the firewall's own values that leave an accepted session are
 -/
 import Flock.Firewall.Assumptions
 
-namespace Flock.Firewall
+namespace Flock.Firewall.Contract
 
 /-- Under D8 (a), every value an accepted session lets out by the firewall's own computation is `spec`'s for its name. -/
 theorem holds_computed {spec : String → Option ByteArray} {t : Transcript} (h : Holds t) (hc : FirewallComputes spec t)
@@ -19,4 +19,4 @@ theorem holds_computed {spec : String → Option ByteArray} {t : Transcript} (h 
   cases sent
   simp_all
 
-end Flock.Firewall
+end Flock.Firewall.Contract

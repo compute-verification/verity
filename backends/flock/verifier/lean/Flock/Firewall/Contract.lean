@@ -1,8 +1,10 @@
 /-
 # The firewall's contract (`verity/firewall-transcript/v0`)
 
-The firewall is the developer's only path from the workers to the auditor. Its contract (Daniel's draft, "Why the auditor
-learns nothing"): before release, every outbound value is one of three things.
+The firewall is the developer's only path from the workers to the auditor; the inner phase's is the program
+`Flock.Firewall.run` (`Flock/Firewall.lean`). This file is the property every firewall's sessions must have, stated over
+what it sends. Its contract (Daniel's draft, "Why the auditor learns nothing"): before release, every outbound value is one
+of three things.
 
 * (a) A commitment under a fresh salt the workers never see: `Item.commit`, the hm96-sha512 commit string `b ‖ c` of
   SHA-512 of the message (`commitBC`), whose tree leaf is `firewallLeaf`. That leaf is the gateway's commitment the
@@ -26,13 +28,13 @@ stops the session, nothing after it leaves, and the auditor sees a stop. A sessi
 and the last one is `finish`; one that ends without `finish` is a stop at its end.
 
 `holds_commit`, `holds_masked`, `holds_fixed`, `holds_coins` and `holds_finish` say what an accepted session lets out, in
-those terms. The transcript's JSON form is `Transcript.ofJson`'s; `flock-firewall check FILE…` prints `run`'s verdict for
-each file.
+those terms. The transcript's JSON form is `Transcript.ofJson`'s; `flock-firewall contract FILE…` prints `run`'s verdict
+for each file.
 -/
 import Flock.Canon
 import Flock.Hm96
 
-namespace Flock.Firewall
+namespace Flock.Firewall.Contract
 
 open Lean (Json)
 
@@ -104,9 +106,9 @@ def firewallLeaf (msg salt : ByteArray) : ByteArray := Hm96.Default512.leaf (Sha
 
 theorem firewallLeaf_eq (msg salt : ByteArray) : firewallLeaf msg salt = Hm96.Default512.treeLeaf (commitBC msg salt) := rfl
 
-/-- The schedule's items in the prover's order (`flock-circuit`'s live inner session): `hello`, the first stream's
-`open:<s>`, `roots`, `link.y`, then each `round:<i>` in the schedule's order, every later stream's `open:<s>` just before
-its first round, and `finish` after the last round. Each item has one place, so the order carries nothing either. -/
+/-- The schedule's items in their one order: `hello`, `roots`, `link.y`, then each `round:<i>` in the schedule's order,
+every stream's `open:<s>` just before its first round, and `finish` after the last round. Each item has one place, so the
+order carries nothing either: where a worker sent its Open does not reach the challenger. -/
 structure Order where
   stage : Nat := 0
   opened : Array String := #[]
@@ -146,7 +148,7 @@ def scheduled (sched : Json) (o : Order) (what : String) : V (ByteArray × Order
     need (o.stage == 0) "Hello: not the session's first item"
     return (← canonBytes (← field sched "hello"), { o with stage := 1 })
   if what == "roots" then
-    need (o.stage == 1 && o.opened.size == 1) "Commit's roots: not after Hello and the first stream's Open"
+    need (o.stage == 1) "Commit's roots: not just after Hello"
     return (← canonBytes (← field sched "roots"), { o with stage := 2 })
   if what == "link.y" then
     need (o.stage == 2) "Link's y: not after Commit"
@@ -163,16 +165,12 @@ def scheduled (sched : Json) (o : Order) (what : String) : V (ByteArray × Order
     return (← canonBytes v, { o with stage := 4 })
   match what.splitOn ":" with
   | ["open", s] =>
-    let all ← streams sched
-    need (all[o.opened.size]? == some s) s!"Open {s}: not the schedule's next stream"
-    if o.opened.isEmpty then
-      need (o.stage == 1) s!"Open {s}: the first stream opens after Hello, before Commit"
-    else
-      let rounds ← J.asArr (← field sched "rounds") "the schedule's rounds"
-      let next ← match rounds[o.rounds]? with
-        | some r => J.str r "stream" s!"the schedule's round {o.rounds}"
-        | none => pure ""
-      need (o.stage == 3 && next == s) s!"Open {s}: a later stream opens just before its first round"
+    need (o.stage == 3 && !o.opened.contains s) s!"Open {s}: not after Link, or a second time"
+    let rounds ← J.asArr (← field sched "rounds") "the schedule's rounds"
+    let next ← match rounds[o.rounds]? with
+      | some r => J.str r "stream" s!"the schedule's round {o.rounds}"
+      | none => pure ""
+    need (next == s) s!"Open {s}: not just before the stream's first round"
     let v ← J.get (← field sched "streams") s "the schedule's streams"
     let at_ ← J.get v "at" s!"stream {s}"
     let parent ← J.get v "parent" s!"stream {s}"
@@ -459,10 +457,11 @@ def Verdict.toJson (v : Verdict) : Json :=
   Json.mkObj [("accepted", Json.bool v.accepted), ("released", Json.num v.released),
     ("why", match v.cut with | some w => Json.str w | none => Json.null)]
 
-/-- `flock-firewall check FILE…`: each file's verdict, one JSON line each; exit 2 when a file is not a transcript. -/
+/-- `flock-firewall contract FILE…` (`args` the files): each file's verdict, one JSON line each; exit 2 when a file is not
+a transcript. -/
 def cmd (args : List String) : IO UInt32 := do
   match args with
-  | "check" :: files@(_ :: _) =>
+  | files@(_ :: _) =>
     let mut rc : UInt32 := 0
     for f in files do
       let text ← IO.FS.readFile f
@@ -474,7 +473,7 @@ def cmd (args : List String) : IO UInt32 := do
         rc := 2
     return rc
   | _ =>
-    IO.eprintln "usage: flock-firewall check TRANSCRIPT.json..."
+    IO.eprintln "usage: flock-firewall contract TRANSCRIPT.json..."
     return 2
 
-end Flock.Firewall
+end Flock.Firewall.Contract
