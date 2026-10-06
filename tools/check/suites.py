@@ -19,13 +19,28 @@ of them, read from git's view of the working tree, so uncommitted edits count. T
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
 `~/.cache/verity/tests` (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged.
 
+The key is content, not location. Whatever is at or under the suite's own directory is keyed by its path from there (`_rel`,
+written `<suite>/...`): the directory's git tree id (which hashes each file's path inside it and its blob, and not the
+directory's own name), the declared inputs, build outputs, fixtures and runner files under it, its test modules, and in
+`uv.lock` the workspace paths that name it (its `source`, a `requires-dist` on it). An input outside it (a dependency's
+directory, a declared path) is keyed by its path from the root, as before. A suite is the same suite after a move by its name:
+its distribution's name (`[project] name`, in the pyproject the tree id hashes), `repository` for the root's, and its path for a
+suite without one, which is a new suite where it lands. The key also holds the suite's depth (`depth`): its tests find the
+root by counting parents of `__file__`, so a suite moved to another depth would read elsewhere. So a suite renamed beside itself,
+or moved to the same depth, with every file as it was and every input outside it where it was, hits its pass and its tests'
+passes; any changed byte under it, or an outside input moved or changed, misses. What this can't see is a test that names its
+own suite's directory from the root (`ROOT / "packages/verity/tests/x"`): such a test fails after the move, which its kept pass
+hides until the suite next runs (`check.py --no-cache`, the nightly `audit-main` run). Locate a suite's own files from
+`__file__`.
+
 Fixtures too large for git are entries of `fixtures/artifacts.json` whose paths git does not track. Before the suites run, the
 entries under their inputs are fetched (`research data fetch-fixtures`: every byte checked against its id), and each suite's key
 adds the ids of those under its inputs, since git's tree ids leave ignored files out. A suite whose fixtures cannot be fetched
 fails without running.
 
 Every run loads `guard/verity_suite_guard.py`, which fails the suite if its tests open a repository file outside its inputs,
-so a cached pass never hides a change to something the tests read. It also records what the key leaves out but the tests
+so a cached pass never hides a change to something the tests read; the workspace metadata, and what a store fetch reads
+(`STORE_READS`), every suite may read. It also records what the key leaves out but the tests
 used: the workspace metadata files they opened, the installed distributions they imported outside their resolved
 dependencies, and the imports that found nothing. A pass is reused only while each of those is as it was. A Python a test
 starts, or a Python started by a program it starts, traces its own opens while it keeps the suite's PYTHONPATH and environment
@@ -56,6 +71,10 @@ keeps only passes that took at least that long; `--no-per-test` turns it off; `-
 that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal that a key misses an input
 (`check.py --no-cache`, the nightly `audit-main` job). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
 
+Each suite's pytest runs in a process group of its own, and whatever is left in the group when pytest ends (a multiprocessing
+forkserver and its workers, after a kill) is killed with it. A suite whose pytest dies by a signal is reported with it, its peak
+RSS and, when the kernel's OOM count rose meanwhile, as an OOM kill, with the machine's memory and the way to a check slot.
+
 Every suite, parallel or not, records each test's outcome under its module's key (a suite that isn't parallel keys every module on
 all its files, and reuses nothing): a test that both passed and failed under one key is `nondeterministic`, since its inputs were
 identical, and is never reused. Each pass keeps its key's components beside it (`components`: every input's object id, the build
@@ -81,6 +100,7 @@ import os
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -109,6 +129,10 @@ UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
 UNKEYED_PREFIX = "VERITY_SUITE_"
 QUICK = ["-m", "not slow"]
 REGISTRY = "fixtures/artifacts.json"
+#: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
+#: remote's manifest on an empty local store), and the bucket pin, when the remote is the environment's (`R2_*`). Neither changes
+#: what a fetch returns, which is checked against its id whichever replica or remote serves it.
+STORE_READS = (REGISTRY, "tools/research/store.pod.toml")
 
 
 def _norm(name: str) -> str:
@@ -149,7 +173,8 @@ def default_jobs(meminfo: Path = Path("/proc/meminfo")) -> int:
 
 
 def _git(*args: str, env: dict | None = None, stdin: str | None = None) -> str:
-    return subprocess.run(["git", *args], cwd=ROOT, env=env, input=stdin, capture_output=True, text=True, check=True).stdout
+    return subprocess.run(["git", *args], cwd=ROOT, env=env, input=stdin, capture_output=True, text=True, errors="surrogateescape",
+                          check=True).stdout
 
 
 def in_git() -> bool:
@@ -182,11 +207,21 @@ def _requires(project: dict, data: dict) -> tuple[str, ...]:
 
 
 def members() -> dict[str, str]:
-    """The workspace packages: {distribution name: directory}."""
-    out = {}
-    for path in _pyproject(".").get("tool", {}).get("uv", {}).get("workspace", {}).get("members", []):
+    """The workspace packages: {distribution name: directory}, the root's own distribution under "." when it builds one (uv makes
+    it a member)."""
+    root = _pyproject(".")
+    out = {_norm(root["project"]["name"]): "."} if _declared(".", root) is not None else {}
+    for path in root.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", []):
         out[_norm(_pyproject(path)["project"]["name"])] = path
     return out
+
+
+def shipped(path: str) -> list[str]:
+    """The directories a workspace package's dependents key on: its directory, or for the root, which holds the whole tree, the
+    packages its wheel ships."""
+    if path != ".":
+        return [path]
+    return list(_pyproject(".")["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
 
 
 def tests_pythonpath() -> str:
@@ -201,24 +236,67 @@ _ORIGINS = ("import importlib.util as u, json, sys; "
             "print(json.dumps({n: getattr(u.find_spec(n), 'origin', None) for n in sys.argv[1:]}))")
 
 
-def foreign(pkgs: dict[str, str], env: dict[str, str], python: str = sys.executable) -> str | None:
-    """The members' `verity*` packages that `python` under `env` would import from outside this tree, each with where from, or
-    None. A virtualenv installed from another checkout runs this tree's tests against that checkout's code."""
-    names = sorted({p.parent.name for d in pkgs.values() for g in ("verity*/__init__.py", "*/verity*/__init__.py")
-                    for p in (ROOT / d).glob(g)})
-    if not names:
+def _declared(path: str, data: dict) -> list[str] | None:
+    """The package directories (relative to the member) that the member's build configuration ships, or None when it is a
+    virtual member, which installs nothing. Hatch's `packages`, uv_build's module, setuptools' packages, else hatch's default
+    (`src/<name>` or `<name>`)."""
+    tool, project = data.get("tool", {}), data.get("project", {})
+    if tool.get("uv", {}).get("package") is False or not project or "build-system" not in data:
         return None
-    r = subprocess.run([python, "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
-    if r.returncode:
-        return f"{python} can't say where it imports them from: {r.stderr.strip()[-300:]}"
-    away = {n: o for n, o in json.loads(r.stdout.splitlines()[-1]).items() if o and not Path(o).resolve().is_relative_to(ROOT)}
+    if (wheel := tool.get("hatch", {}).get("build", {}).get("targets", {}).get("wheel", {})).get("packages"):
+        return list(wheel["packages"])
+    module = _norm(project["name"]).replace("-", "_")
+    if (ub := tool.get("uv", {}).get("build-backend")) is not None:
+        names = ub.get("module-name", module)
+        return [f"{ub.get('module-root', 'src')}/{n.replace('.', '/')}" for n in ([names] if isinstance(names, str) else names)]
+    if (st := tool.get("setuptools")) is not None:
+        listed, where = st.get("packages"), ["."]
+        if isinstance(listed, list):
+            base = st.get("package-dir", {}).get("", ".")
+            return [f"{base}/{p}" for p in listed if "." not in p]
+        if isinstance(listed, dict):
+            where = listed.get("find", {}).get("where", ["."])
+        return [str(p.parent.relative_to(ROOT / path)) for w in where for p in sorted((ROOT / path / w).glob("*/__init__.py"))]
+    return [p for p in (f"src/{module}", module) if (ROOT / path / p / "__init__.py").is_file()][:1]
+
+
+def importable(pkgs: dict[str, str]) -> dict[str, str]:
+    """The members' importable top-level packages, as their build configurations declare them: {import name: member directory}.
+    A member that builds but whose packages can't be found maps "" to its directory."""
+    out = {}
+    for d in pkgs.values():
+        found = _declared(d, _pyproject(d))
+        if found is None:
+            continue
+        names = {Path(p).name.removesuffix(".py") for p in found if not Path(p).is_absolute()}
+        for n in names or {""}:
+            out.setdefault(n, d)
+    return dict(sorted(out.items()))
+
+
+def foreign(pkgs: dict[str, str], env: dict[str, str], python: str = sys.executable) -> str | None:
+    """The members' packages that `python` under `env` would import from outside this tree, or can't import at all, each with
+    where from, or None. A virtualenv installed from another checkout runs this tree's tests against that checkout's code; one
+    that lacks a member's package can't say which code it would run."""
+    names = importable(pkgs)
+    away = {f"{d}'s package": "nowhere (its build configuration declares none)" for n, d in names.items() if not n}
+    if names := sorted(n for n in names if n):
+        r = subprocess.run([python, "-P", "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
+        if r.returncode:
+            return f"{python} can't say where it imports them from: {r.stderr.strip()[-300:]}"
+        for n, o in json.loads(r.stdout.splitlines()[-1]).items():
+            if not o:
+                away[n] = "nowhere (not importable)"
+            elif not Path(o).resolve().is_relative_to(ROOT):
+                away[n] = o
     return ", ".join(f"{n} from {o}" for n, o in sorted(away.items())) or None
 
 
 def metadata() -> list[str]:
     """The workspace's metadata: every pyproject.toml, and the lockfile. A suite's key holds what it resolves to (`resolved`);
     the tests may read the files themselves, which the guard records."""
-    listed = _git("ls-files", "--cached", "--others", "--exclude-standard", "--", "pyproject.toml", "*/pyproject.toml").split()
+    listed = [p for p in _git("ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "pyproject.toml",
+                              "*/pyproject.toml").split("\0") if p]
     return sorted(set(listed)) + ["uv.lock"]
 
 
@@ -262,7 +340,7 @@ def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
         seen[name] = pkgs[name]
         data = _pyproject(pkgs[name])
         todo += [r for r in _requires(data["project"], data) if r in pkgs]
-    return sorted(p for p in seen.values() if p != suite.path)
+    return sorted(s for p in seen.values() if p != suite.path for s in shipped(p))
 
 
 def worktree() -> str:
@@ -285,8 +363,8 @@ def object_ids(tree: str, paths: list[str]) -> dict[str, str]:
 
 
 def locked(text: str | None = None) -> dict[str, dict]:
-    """{distribution: sha256 of its entries in uv.lock, and the names they depend on (dependencies, extras, groups)}; of ``text``,
-    another revision's lock, when given."""
+    """{distribution: its entries in uv.lock, and the names they depend on (dependencies, extras, groups)}; of ``text``, another
+    revision's lock, when given."""
     lock = ROOT / "uv.lock"
     if text is None:
         text = lock.read_text() if lock.exists() else ""
@@ -297,9 +375,47 @@ def locked(text: str | None = None) -> dict[str, dict]:
     for n, entries in by.items():
         deps = [d for p in entries for d in p.get("dependencies", [])]
         deps += [d for p in entries for g in ("optional-dependencies", "dev-dependencies") for ds in p.get(g, {}).values() for d in ds]
-        out[n] = {"entry": hashlib.sha256(json.dumps(entries, sort_keys=True).encode()).hexdigest(),
-                  "requires": sorted({_norm(d["name"]) for d in deps})}
+        out[n] = {"entries": entries, "requires": sorted({_norm(d["name"]) for d in deps})}
     return out
+
+
+#: Where uv.lock writes a workspace path: a source (`{ editable = "verity" }`) and a requirement's (`requires-dist`).
+_LOCAL = frozenset({"editable", "virtual", "directory", "path"})
+#: How a key writes the suite's own directory, so that the same files in another directory key alike (`_rel`).
+SELF = "<suite>"
+
+
+def _relocated(doc, own: str):
+    """``doc`` (lock entries) with each workspace path at or under ``own`` written from it (`SELF`); every other path as it is."""
+    if isinstance(doc, list):
+        return [_relocated(x, own) for x in doc]
+    if isinstance(doc, dict):
+        return {k: (_rel(own, v) if k in _LOCAL and isinstance(v, str) else _relocated(v, own)) for k, v in doc.items()}
+    return doc
+
+
+def _rel(own: str, path: str) -> str:
+    """``path`` (repository-relative) as a key writes it for the suite at ``own``: from `SELF` when it is at or under ``own``, else
+    as it is; the repository's own suite (".") keys every path as it is."""
+    if own == "." or not (path == own or path.startswith(own + "/")):
+        return path
+    return SELF + path[len(own):]
+
+
+def _abs(own: str, path: str) -> str:
+    """The inverse of `_rel`."""
+    return own + path[len(SELF):] if own != "." and (path == SELF or path.startswith(SELF + "/")) else path
+
+
+def _rel_keys(own: str, d: dict) -> dict:
+    """``d`` with its keys (paths, or `fixture:` and a path) written by `_rel`."""
+    return {(f"fixture:{_rel(own, k.removeprefix('fixture:'))}" if k.startswith("fixture:") else _rel(own, k)): v for k, v in d.items()}
+
+
+def depth(suite: "Suite") -> int:
+    """How many directories the suite is below the root: its tests find the root by counting parents (`Path(__file__).parents[4]`),
+    so a suite moved to another depth reads elsewhere, and its key moves with it."""
+    return 0 if suite.path == "." else suite.path.count("/") + 1
 
 
 def _version(name: str) -> str | None:
@@ -309,20 +425,21 @@ def _version(name: str) -> str | None:
         return None
 
 
-def _state(name: str, lock: dict[str, dict]) -> list:
-    """[its lock entry's sha256, its installed version]."""
-    return [lock[name]["entry"] if name in lock else None, _version(name)]
+def _state(name: str, lock: dict[str, dict], own: str = ".") -> list:
+    """[the sha256 of its lock entries, with the workspace paths at or under ``own`` written from it (`_relocated`), its installed
+    version]."""
+    return [_digest(_relocated(lock[name]["entries"], own)) if name in lock else None, _version(name)]
 
 
-def resolved(names: list[str], lock: dict[str, dict]) -> dict[str, list]:
-    """`_state` of ``names`` and of everything they depend on in the lock."""
+def resolved(names: list[str], lock: dict[str, dict], own: str = ".") -> dict[str, list]:
+    """`_state` of ``names`` and of everything they depend on in the lock, for the suite at ``own``."""
     out: dict[str, list] = {}
     todo = [_norm(n) for n in names]
     while todo:
         n = todo.pop()
         if n in out or n not in lock:
             continue
-        out[n] = _state(n, lock)
+        out[n] = _state(n, lock, own)
         todo += lock[n]["requires"]
     return out
 
@@ -359,7 +476,7 @@ def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock
     """The suites whose key the change from ``rev`` to ``tree`` moves by path: a changed file under their inputs (the repository's
     own suite keys on all of them) or in the runner, or a changed resolution in `uv.lock`. What their tests read beside the key
     (`used`) is left out, so a suite this skips can still miss its cached pass."""
-    files = _git("diff", "--no-renames", "--name-only", rev, tree).split()      # a rename names its source too
+    files = [f for f in _git("diff", "--no-renames", "--name-only", "-z", rev, tree).split("\0") if f]   # a rename names its source too
     if any(f in RUNNER for f in files):
         return list(suites)
     before = lock
@@ -367,7 +484,7 @@ def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock
         r = subprocess.run(["git", "show", f"{rev}:uv.lock"], cwd=ROOT, capture_output=True, text=True)
         before = locked(r.stdout if r.returncode == 0 else "")
     return [s for s in suites if any(_under(f, inputs_of(s, pkgs)) for f in files)
-            or resolved(roots(s, pkgs), before) != resolved(roots(s, pkgs), lock)]
+            or resolved(roots(s, pkgs), before, s.path) != resolved(roots(s, pkgs), lock, s.path)]
 
 
 def fetched_fixtures(tree: str, paths: set[str]) -> dict[str, str]:
@@ -407,10 +524,11 @@ def _digest(doc) -> str:
 
 
 def components(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dict[str, list] | None = None) -> dict:
-    """What a suite's key hashes: each input's object id, the build outputs, the resolved dependencies, the environment and the
-    pytest arguments. A pass keeps them beside it, so `--explain` can say what a miss changed."""
-    return {"suite": suite.path, "inputs": ids, "artifacts": artifact_ids(suite), "resolved": deps or {}, "environment": env,
-            "pytest": args}
+    """What a suite's key hashes: its name and depth, each input's object id (under its own directory by the path from there:
+    `_rel`), the build outputs, the resolved dependencies, the environment and the pytest arguments. A pass keeps them beside it,
+    so `--explain` can say what a miss changed."""
+    return {"suite": suite.name, "depth": depth(suite), "inputs": _rel_keys(suite.path, ids),
+            "artifacts": _rel_keys(suite.path, artifact_ids(suite)), "resolved": deps or {}, "environment": env, "pytest": args}
 
 
 def key(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dict[str, list] | None = None) -> str:
@@ -584,8 +702,9 @@ def module_key(suite: Suite, module: str, keep: set[str] | None, mods: Modules, 
     ``keep`` (`Modules.reach`) left out; with ``keep`` None, none is."""
     inputs = {p: i for p, i in ids.items() if p != suite.path}
     inputs.update({f: i for f, i in own.items() if keep is None or f in keep or not mods.narrowable(f)})
-    blob = json.dumps({"suite": suite.path, "module": module, "inputs": inputs, "artifacts": artifact_ids(suite), "resolved": deps or {},
-                       "environment": env, "pytest": args}, sort_keys=True)
+    blob = json.dumps({"suite": suite.name, "depth": depth(suite), "module": _rel(suite.path, module),
+                       "inputs": _rel_keys(suite.path, inputs), "artifacts": _rel_keys(suite.path, artifact_ids(suite)),
+                       "resolved": deps or {}, "environment": env, "pytest": args}, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
@@ -597,9 +716,15 @@ def traced_key(suite: Suite, module: str, keep: set[str] | None, mods: Modules, 
     config = "pyproject.toml" if suite.path == "." else f"{suite.path}/pyproject.toml"
     inputs = {p: i for p, i in ids.items() if p != suite.path and not (ROOT / p).is_dir()}
     inputs.update({f: i for f, i in own.items() if f == config or (mods.narrowable(f) and (keep is None or f in keep))})
-    blob = json.dumps({"schema": "traced/v1", "suite": suite.path, "module": module, "inputs": inputs, "artifacts": artifact_ids(suite),
+    blob = json.dumps({"schema": "traced/v2", "suite": suite.name, "depth": depth(suite), "module": _rel(suite.path, module),
+                       "inputs": _rel_keys(suite.path, inputs), "artifacts": _rel_keys(suite.path, artifact_ids(suite)),
                        "resolved": deps or {}, "environment": env, "pytest": args}, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()
+
+
+def per_test_dir(suite: Suite) -> Path:
+    """Where a suite's per-test verdicts are kept: under its name, which a move leaves as it is."""
+    return CACHE / PER_TEST / suite.name.replace("/", "_")
 
 
 class PerTest:
@@ -608,7 +733,7 @@ class PerTest:
     def __init__(self, suite: Suite, ids: dict[str, str], env: dict, arg_sets: list[list[str]], deps: dict[str, list] | None,
                  tree: str):
         self.suite, self.tree = suite, tree
-        self.dir = CACHE / PER_TEST / (suite.path.replace("/", "_") if suite.path != "." else "repository")
+        self.dir = per_test_dir(suite)
         self.own = own_ids(tree, suite.path)
         self.narrow = suite.parallel             # a suite that doesn't declare order independence keys each module on everything
         texts = {}
@@ -629,16 +754,31 @@ class PerTest:
         self.fixtures = {p.removeprefix("fixture:"): i for p, i in ids.items() if p.startswith("fixture:")}
         self._index: tuple[dict[str, str], dict[str, str]] | None = None
         self._held: dict[str, bool] = {}
-        self.components = {"suite_tree": ids.get(suite.path), "outside": {p: i for p, i in ids.items() if p != suite.path},
-                           "artifacts": artifact_ids(suite), "environment": _digest(env), "resolved": _digest(deps or {}),
-                           "pytest": arg_sets[0]}
+        self.components = {"suite_tree": ids.get(suite.path), "depth": depth(suite),
+                           "outside": _rel_keys(suite.path, {p: i for p, i in ids.items() if p != suite.path}),
+                           "artifacts": _rel_keys(suite.path, artifact_ids(suite)), "environment": _digest(env),
+                           "resolved": _digest(deps or {}), "pytest": arg_sets[0]}
         self.nondeterministic: list[str] = []
 
+    def _rel(self, path: str) -> str:
+        return _rel(self.suite.path, path)
+
+    def _abs(self, path: str) -> str:
+        return _abs(self.suite.path, path)
+
+    def _stem(self, module: str) -> str:
+        """An entry's file name before its key: the module's path from the suite's directory."""
+        return self._rel(module).removeprefix(SELF + "/").replace("/", "~")
+
+    def _keep(self, keep: set[str] | None) -> list[str] | None:
+        return sorted(map(self._rel, keep)) if keep is not None else None
+
     def _entry(self, module: str, k: str) -> Path:
-        return self.dir / f"{module.replace('/', '~')}--{k}.json"
+        return self.dir / f"{self._stem(module)}--{k}.json"
 
     def _holds(self, e: dict, lock: dict[str, dict], provided: set[str]) -> bool:
-        return all(self.own.get(f, "absent") == i for f, i in (e.get("reads") or {}).items()) and holds(e, self.tree, lock, provided)
+        return (all(self.own.get(self._abs(f), "absent") == i for f, i in (e.get("reads") or {}).items())
+                and holds(e, self.tree, lock, provided))
 
     def _tree(self) -> tuple[dict[str, str], dict[str, str]]:
         """({file: git object id}, {directory: a digest of its entries' names}) for the whole tree, once."""
@@ -655,8 +795,9 @@ class PerTest:
     def _now(self, item: str) -> str:
         """What a traced read (`F<tab>file`, `L<tab>directory`) finds now: a file's git object id, a fixture's id, or the sha256 of
         a file git doesn't hold (a build output); a directory's entry names as git holds them, or as the disk does for one git
-        doesn't hold; `absent`."""
+        doesn't hold; `absent`. A read under the suite's directory is kept by its path from there (`_rel`)."""
         kind, path = item.split("\t", 1)
+        path = self._abs(path)
         files, dirs = self._tree()
         if kind == "L":
             if path in dirs:
@@ -693,7 +834,8 @@ class PerTest:
     def trace(self, items: set[str]) -> str:
         """Keep a run's traced reads, the suite's own test modules left out (`keep` and `reads` hold those), as a read set; its
         digest."""
-        return self.keep_reads({i: self._now(i) for i in sorted(items) if not (i.startswith("F\t") and self.mods.narrowable(i[2:]))})
+        return self.keep_reads({"\t".join((k, self._rel(p))): self._now(i) for i in sorted(items)
+                                if not (i.startswith("F\t") and self.mods.narrowable(i[2:])) for k, p in [i.split("\t", 1)]})
 
     def keep_reads(self, reads: dict[str, str]) -> str:
         """Keep ``reads`` ({traced read: what it found}) as a read set under its digest; the digest."""
@@ -751,7 +893,7 @@ class PerTest:
             if m not in self.keys or m in blind or "*" in blind:     # a child read what no key covers: nothing vouches for it
                 continue
             keep = self.keeps[m]
-            reads = {f: self.own.get(f, "absent") for f in [*(r.reads or {}).get(m, []), *(r.reads or {}).get("*", [])]
+            reads = {self._rel(f): self.own.get(f, "absent") for f in [*(r.reads or {}).get(m, []), *(r.reads or {}).get("*", [])]
                      if keep is not None and f not in keep and self.mods.narrowable(f)}
             traced = run_reads if m not in untraced else None       # a program no tracer sees into: the suite's inputs whole
             k = self.keys[m][0] if traced is None else self.tkeys[m][0]
@@ -765,14 +907,14 @@ class PerTest:
                 passed, failed = {**old.get("passed", {}), **passed}, {**old.get("failed", {}), **failed}
                 traced = self.keep_reads({**self._traced(old["traced"]), **self._traced(traced)})
             self.nondeterministic += sorted(set(passed) & set(failed))
-            doc = {"suite": self.suite.path, "module": m, "key": k, "commit": head, "when": when,
+            doc = {"suite": self.suite.name, "path": self.suite.path, "module": m, "key": k, "commit": head, "when": when,
                    "passed": dict(sorted(passed.items())), "failed": dict(sorted(failed.items())), "reads": reads,
-                   "narrowed": keep is not None, "components": {**self.components, "keep": sorted(keep) if keep is not None else None},
+                   "narrowed": keep is not None, "components": {**self.components, "keep": self._keep(keep)},
                    **({"traced": traced} if traced is not None else {}), **used_now}
             tmp = p.with_name(f".{p.name}.tmp")
             tmp.write_text(json.dumps(doc, indent=1) + "\n")
             os.replace(tmp, p)
-            prefix = f"{m.replace('/', '~')}--"
+            prefix = f"{self._stem(m)}--"
             older = sorted((q for q in self.dir.iterdir() if q.name.startswith(prefix) and q.suffix == ".json"),
                            key=lambda q: q.stat().st_mtime, reverse=True)[KEEP_PER_MODULE:]
             for q in older:
@@ -804,7 +946,7 @@ class PerTest:
         for m in sorted(self.keys):
             if m[len(base):] in mods or not self.narrow:
                 continue
-            prefix = f"{m.replace('/', '~')}--"
+            prefix = f"{self._stem(m)}--"
             entries = sorted((q for q in self.dir.glob(f"{prefix}*.json")), key=lambda q: q.stat().st_mtime, reverse=True) if self.dir.is_dir() else []
             if not entries:
                 out.append(f"  {m}: nothing kept")
@@ -817,14 +959,15 @@ class PerTest:
         was, now = e.get("components") or {}, {**self.components, "keep": sorted(self.keeps[m]) if self.keeps[m] is not None else None}
         if not was:
             return ["its entry predates recorded components"]
-        wide = [p for p in sorted(set(was.get("outside", {})) | set(now["outside"])) if not (e.get("traced") and (ROOT / p).is_dir())]
-        why = [f"input {p} changed" for p in wide if was.get("outside", {}).get(p) != now["outside"].get(p)]
+        wide = [p for p in sorted(set(was.get("outside", {})) | set(now["outside"]))
+                if not (e.get("traced") and (ROOT / self._abs(p)).is_dir())]
+        why = [f"input {self._abs(p)} changed" for p in wide if was.get("outside", {}).get(p) != now["outside"].get(p)]
         if e.get("traced"):
             reads = self._traced(e["traced"])
-            moved = sorted(i.split("\t", 1)[1] for i, v in (reads or {}).items() if self._now(i) != v)
+            moved = sorted(self._abs(i.split("\t", 1)[1]) for i, v in (reads or {}).items() if self._now(i) != v)
             why += (["its read set isn't kept here"] if reads is None else [f"it read {f}, which changed" for f in moved[:5]]
                     + ([f"and {len(moved) - 5} more"] if len(moved) > 5 else []))
-        why += [f"{k} changed" for k in ("artifacts", "environment", "resolved", "pytest") if was.get(k) != now[k]]
+        why += [f"{k} changed" for k in ("depth", "artifacts", "environment", "resolved", "pytest") if was.get(k) != now[k]]
         if (was.get("keep") is None) != (now["keep"] is None):
             why.append("narrowing " + ("is now off: it reaches a computed import" if now["keep"] is None else "is now on"))
         if was.get("suite_tree") != now["suite_tree"]:
@@ -859,23 +1002,27 @@ def _changed_files(old: str | None, new: str | None) -> list[str] | None:
     return r.stdout.split() if r.returncode == 0 else None
 
 
-def explain_changes(was: dict, now: dict) -> list[str]:
-    """What differs between two suites' key components (`components`), one line each, a changed directory with its files."""
+def explain_changes(was: dict, now: dict, own: str = ".") -> list[str]:
+    """What differs between two suites' key components (`components`), one line each, a changed directory with its files, by
+    their paths from the root for the suite at ``own``."""
     out = []
     wi, ni = was.get("inputs", {}), now["inputs"]
-    for p in sorted(set(wi) | set(ni)):
-        if p not in wi:
-            out.append(f"input {p}: new ({ni[p][:12]})")
-        elif p not in ni:
+    for q in sorted(set(wi) | set(ni)):
+        p = _abs(own, q)
+        if q not in wi:
+            out.append(f"input {p}: new ({ni[q][:12]})")
+        elif q not in ni:
             out.append(f"input {p}: no longer an input")
-        elif wi[p] != ni[p]:
-            files = _changed_files(wi[p], ni[p])
+        elif wi[q] != ni[q]:
+            files = _changed_files(wi[q], ni[q])
             where = "" if files is None else f": {', '.join(f'{p.rstrip(chr(47))}/{f}' if p != '.' else f for f in files[:8])}" + \
                 (f" and {len(files) - 8} more" if len(files) > 8 else "")
-            out.append(f"input {p} changed ({wi[p][:12]} -> {ni[p][:12]}){where}")
+            out.append(f"input {p} changed ({wi[q][:12]} -> {ni[q][:12]}){where}")
+    if was.get("depth") != now.get("depth"):
+        out.append(f"depth: {was.get('depth')} -> {now.get('depth')} (its tests find the root by counting parents)")
     for k in sorted(set(was.get("artifacts", {})) | set(now["artifacts"])):
         if was.get("artifacts", {}).get(k) != now["artifacts"].get(k):
-            out.append(f"build output {k}: {was.get('artifacts', {}).get(k, 'absent')} -> {now['artifacts'].get(k, 'absent')}")
+            out.append(f"build output {_abs(own, k)}: {was.get('artifacts', {}).get(k, 'absent')} -> {now['artifacts'].get(k, 'absent')}")
     wr, nr = was.get("resolved", {}), now["resolved"]
     for d in sorted(set(wr) | set(nr)):
         if wr.get(d) != nr.get(d):
@@ -901,7 +1048,7 @@ def explain(s: Suite, now: dict, keys: list[str], hit: dict | None, per: "PerTes
             provided: set[str]) -> list[str]:
     """Why ``s`` would run: its key against the nearest pass kept here (fewest differing components), and its per-test reuse."""
     if hit:
-        return [f"{s.name}: cached: a pass under this key, from {hit['commit'][:10]} {hit['when']}"]
+        return [f"{s.name}: cached: a pass under this key, from {_since(hit)}"]
     out = []
     held = next((c for c in map(cached, keys) if c), None)
     if held:
@@ -913,14 +1060,14 @@ def explain(s: Suite, now: dict, keys: list[str], hit: dict | None, per: "PerTes
             d = json.loads(f.read_text())
         except (OSError, ValueError):
             continue
-        if isinstance(d, dict) and d.get("suite") == s.path and "components" in d:
+        if isinstance(d, dict) and d.get("suite") == s.name and "components" in d:
             passes.append(d)
     if not passes and not held:
         out.append(f"{s.name}: missed; no pass of it kept here records its key's components (passes kept before `--explain` don't)")
     elif passes:
-        best = min(passes, key=lambda d: (len(explain_changes(d["components"], now)), d.get("when", "")))
-        out.append(f"{s.name}: missed; the nearest pass kept here ({best['commit'][:10]} {best['when']}) differs in:")
-        out += [f"  {line}" for line in explain_changes(best["components"], now)] or ["  nothing its key reads (a different pytest selection?)"]
+        best = min(passes, key=lambda d: (len(explain_changes(d["components"], now, s.path)), d.get("when", "")))
+        out.append(f"{s.name}: missed; the nearest pass kept here ({_since(best)}) differs in:")
+        out += [f"  {line}" for line in explain_changes(best["components"], now, s.path)] or ["  nothing its key reads (a different pytest selection?)"]
     return out + (per.explain(lock, provided) if per else [])
 
 
@@ -932,7 +1079,7 @@ def _durations() -> dict[str, float]:
 def longest(suite: Suite, n: int) -> list[str]:
     """The ``n`` tests of ``suite`` whose calls took longest when their passes were last kept (`PerTest`), longest first: what
     the guard starts at the heads of the workers' shares (`heavy_first`). An order only, which no key or verdict reads."""
-    d = CACHE / PER_TEST / (suite.path.replace("/", "_") if suite.path != "." else "repository")
+    d = per_test_dir(suite)
     last: dict[str, tuple[str, float]] = {}
     for p in d.glob("*.json") if d.is_dir() else ():
         try:
@@ -972,6 +1119,10 @@ class Result:
     untraced: dict | None = None     # test module (or "*") -> programs its tests started that no tracer sees into
     ran_all: bool = False            # pytest itself passed: every test it ran passed
     child_reads: list | None = None  # (kind, file or why, tests): "O" a file a child read outside the inputs, "E" a child untraced
+    signal: str = ""                 # the signal pytest died by ("" when it exited)
+    peak_rss_gb: float = 0.0         # pytest's peak RSS, its reaped children's included
+    oom: bool = False                # SIGKILL while the kernel's OOM-kill count rose
+    leftover: int = 0                # processes still in the suite's group when pytest ended, killed
 
 
 #: pytest with the guard loaded by name (`-p`), which xdist repeats in each worker, from `guard/`: appended to sys.path, and
@@ -1003,11 +1154,23 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         (logs / f"{slug}.heavy.json").write_text(json.dumps(first))
         env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
-    start = time.monotonic()
+    start, ooms = time.monotonic(), oom_kills()
     with log.open("w") as out:
-        rc = subprocess.run([sys.executable, "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
-                             *spread, *args], cwd=ROOT / suite.path, env=env, stdout=out, stderr=subprocess.STDOUT).returncode
+        p = subprocess.Popen([sys.executable, "-P", "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
+                              *spread, *args], cwd=ROOT / suite.path, env=env, stdout=out, stderr=subprocess.STDOUT,
+                             start_new_session=True)
+        with _GROUPS_LOCK:
+            _GROUPS.add(p.pid)
+        try:
+            status, usage = _wait4(p.pid)
+        finally:
+            with _GROUPS_LOCK:
+                _GROUPS.discard(p.pid)
+            leftover = kill_group(p.pid)
+    rc = p.returncode = os.waitstatus_to_exitcode(status)
     seconds = time.monotonic() - start
+    sig = signal.Signals(-rc).name if rc < 0 else ""
+    oom = sig == "SIGKILL" and ooms is not None and (oom_kills() or 0) > ooms
     rep = json.loads(report.read_text()) if report.exists() else None
     ran_all = rc == 0 or (rc == 5 and bool(reuse))           # 5: nothing left to run, every test's pass reused
     rep = rep or {}
@@ -1037,7 +1200,56 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
                   passed=rep.get("passed"), failed_tests=rep.get("failed"), reads=rep.get("reads"), reused=len(reuse),
                   child_outside={m: sorted(set(fs)) for m, fs in child_outside.items()}, traced=traced,
                   untraced={m: sorted(v) for m, v in untraced.items()}, ran_all=ran_all,
-                  child_reads=[(k, rel, sorted(w)) for (k, rel), w in sorted(by.items())])
+                  child_reads=[(k, rel, sorted(w)) for (k, rel), w in sorted(by.items())], signal=sig,
+                  peak_rss_gb=usage.ru_maxrss / 2**20, oom=oom, leftover=leftover)
+
+
+#: the process groups of the suites running now: a ^C reaches suites.py's group only, so `main` passes it on to these
+_GROUPS: set[int] = set()
+_GROUPS_LOCK = threading.Lock()
+
+
+def _wait4(pid: int):
+    while True:
+        try:
+            _, status, usage = os.wait4(pid, 0)
+            return status, usage
+        except InterruptedError:
+            continue
+
+
+def oom_kills() -> int | None:
+    """The kernel's count of OOM kills since boot (`/proc/vmstat`), or None where it isn't there."""
+    try:
+        for line in Path("/proc/vmstat").read_text().splitlines():
+            if line.startswith("oom_kill "):
+                return int(line.split()[1])
+    except OSError:
+        pass
+    return None
+
+
+def kill_group(pgid: int, sig: int = signal.SIGKILL) -> int:
+    """Signal what is left in a suite's process group; how many processes that was (0 where /proc can't say)."""
+    n = 0
+    for d in Path("/proc").glob("[0-9]*"):
+        try:
+            if int((d / "stat").read_text().rsplit(")", 1)[1].split()[2]) == pgid:
+                n += 1
+        except (OSError, ValueError, IndexError):
+            pass
+    try:
+        os.killpg(pgid, sig)
+    except (ProcessLookupError, PermissionError):
+        pass
+    return n
+
+
+def memory_gb() -> float | None:
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30
+    except (ValueError, OSError):
+        return None
 
 
 class Slots:
@@ -1073,6 +1285,12 @@ def select(suites: list[Suite], names: list[str]) -> list[Suite]:
             sys.exit(f"suites: {n!r} matches {len(hits)} suites: {', '.join(s.name for s in hits) or 'none'} (see --list)")
         chosen += hits
     return list(dict.fromkeys(chosen))
+
+
+def _since(d: dict | None) -> str:
+    """The commit and time a kept pass records, or `?` for what it lacks."""
+    d = d or {}
+    return f"{(d.get('commit') or '?')[:10]} {d.get('when') or '?'}"
 
 
 def _count(r: Result) -> str:
@@ -1129,12 +1347,12 @@ def main(argv: list[str] | None = None) -> int:
     needed = {p: art for p, art in fixtures.items() if any(_under(p, [x for x in ps if x != "."]) for ps in inputs.values())}
     unfetched = set() if a.list or a.explain else fetch_fixtures(needed, logs)
     plan, ids_of = [], {}
-    meta, lock, provided = metadata(), locked(), set(importlib.metadata.packages_distributions())
+    meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
         paths = inputs[s]
         ids = object_ids(tree, sorted(set(paths) | set(RUNNER)))
         ids.update({f"fixture:{p}": art for p, art in fixtures.items() if _under(p, paths)})
-        deps = resolved(roots(s, pkgs), lock)
+        deps = resolved(roots(s, pkgs), lock, s.path)
         keys = [key(s, ids, env, args, deps)] + ([key(s, ids, env, extra, deps)] if a.quick else [])   # a full pass also covers --quick
         hit = next((c for c in map(cached, keys) if c and holds(c, tree, lock, provided)), None)
         plan.append((s, paths, keys, hit, deps))
@@ -1150,7 +1368,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.list:
         for s, paths, keys, hit, _deps in plan:
-            state = f"cached from {hit['commit'][:10]} {hit['when']}" if hit else "not cached"
+            state = f"cached from {_since(hit)}" if hit else "not cached"
             print(f"{s.name:28} {s.path:28} {state}\n    inputs: {', '.join(paths)}")
         return 0
 
@@ -1164,9 +1382,10 @@ def main(argv: list[str] | None = None) -> int:
         results.append(Result(s, "failed", log=logs / "fetch-fixtures.log"))
     todo = [(s, paths, keys, deps) for s, paths, keys, hit, deps in plan if (a.fresh or not hit) and s not in blocked]
     known = _durations()
-    todo.sort(key=lambda t: (not t[0].parallel, -known.get(t[0].path, float("inf"))))
+    todo.sort(key=lambda t: (not t[0].parallel, -known.get(t[0].name, float("inf"))))
     for r in results:
-        print(f"cached  {r.suite.name:28} passed at {r.since['commit'][:10]} {r.since['when']}")
+        if r.status == "cached":
+            print(f"cached  {r.suite.name:28} passed at {_since(r.since)}")
     for s in skipped:
         print(f"skipped {s.name:28} (--skip)")
     jobs = max(1, a.jobs)
@@ -1193,7 +1412,7 @@ def main(argv: list[str] | None = None) -> int:
         r = fut.result()
         r.key = k
         results.append(r)
-        known[s.path] = r.seconds
+        known[s.name] = r.seconds
         u = used(r, paths, deps, tree, lock)
         if a.fresh and r.status == "failed":
             r.contradicts = (["(the suite)"] if hit_of.get(s) else []) + (per[s].contradicted(r, lock, provided) if s in per else [])
@@ -1201,6 +1420,13 @@ def main(argv: list[str] | None = None) -> int:
         r.nondeterministic = sorted(set(per[s].nondeterministic)) if s in per else []
         print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
               + (f"; {kept} per-test passes kept" if kept and per[s].narrow else f"; {kept} outcomes recorded" if kept else ""))
+        if r.signal:
+            mem = memory_gb()
+            print(f"        {'OOM-KILLED' if r.oom else 'killed by ' + r.signal}: pytest died by {r.signal} at a peak RSS of "
+                  f"{r.peak_rss_gb:.1f} GB" + (f" on a machine with {mem:.0f} GB" if mem else "")
+                  + ("; run it in a check slot (`research queue ready N --on vy-nebius-1`, or `check.py --on`)" if r.oom else ""))
+        if r.leftover:
+            print(f"        killed {r.leftover} processes its tests left in the suite's process group")
         if r.child_reads:
             def who(w: list[str]) -> str:
                 return " and ".join(w) if len(w) < 3 else f"{w[0]}, {w[1]} and {len(w) - 2} more"
@@ -1220,7 +1446,7 @@ def main(argv: list[str] | None = None) -> int:
                   " -- a key misses an input, or a test's outcome isn't a function of its inputs")
         if r.status == "passed":
             CACHE.mkdir(parents=True, exist_ok=True)
-            (CACHE / f"{k}.json").write_text(json.dumps({"suite": s.path, "key": k, "commit": head, "dirty": dirty,
+            (CACHE / f"{k}.json").write_text(json.dumps({"suite": s.name, "path": s.path, "key": k, "commit": head, "dirty": dirty,
                                                           "when": time.strftime("%Y-%m-%d %H:%M"), "counts": r.counts, "reused": r.reused,
                                                           "seconds": round(r.seconds, 1), **u,
                                                           "components": components(s, ids_of[s], env, args, deps)}, indent=1) + "\n")
@@ -1244,6 +1470,9 @@ def main(argv: list[str] | None = None) -> int:
         except KeyboardInterrupt:
             # a stop (check.py's, or ^C) reaches the suites' pytest processes too: keep what each finished run's guard vouches for
             stopping.set()
+            with _GROUPS_LOCK:
+                for g in list(_GROUPS):
+                    kill_group(g, signal.SIGINT)
             for fut in futures:
                 if fut not in handled:
                     finish(fut)

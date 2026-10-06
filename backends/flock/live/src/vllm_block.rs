@@ -1,5 +1,5 @@
 //! `verity/flock-vllm-block/v1`: the Flock backend's relation as ONE block R1CS whose operands are committed under
-//! `vllm-v1` (core spec `verity/commitments/vllm_v1/PROTOCOL.md`), lane flock-vllm-v1. The shape is flock-pure-block's
+//! `vllm-v1` (core spec `verity/primitives/commitments/vllm_v1/PROTOCOL.md`), lane flock-vllm-v1. The shape is flock-pure-block's
 //! (`pure_block`, lane flock-gpu-link), with the keyed-BLAKE3 row leaves replaced by `vllm-v1` position leaves.
 //!
 //! Block `v` is VU `v` (`k_log` = log2ceil(2 · per_role · 2^15 + units · 2^13): 21 for 8-bit rows):
@@ -560,7 +560,7 @@ impl VllmStmt {
     }
 }
 
-/// `vllm-v1` natively (PROTOCOL.md §1-§5, §9), with the port domains of `backends/direct/ligero/vllm_tree.py` (the
+/// `vllm-v1` natively (PROTOCOL.md §1-§5, §9), with the port domains of `archive/direct/ligero/vllm_tree.py` (the
 /// same derivation as B-Ligero's `+vllm-v1` statements, so a Flock cell and a B-Ligero cell on one line bind the same
 /// three roots).
 pub mod v1 {
@@ -614,7 +614,7 @@ pub mod v1 {
         level[0]
     }
 
-    /// `identity_digest(tag, doc)` (`verity.commitments.identity`): tagged SHA-256 of the compact sorted-key JSON.
+    /// `identity_digest(tag, doc)` (`verity.primitives.commitments.identity`): tagged SHA-256 of the compact sorted-key JSON.
     pub fn identity(tag: &str, doc: &Value) -> [u8; 32] {
         let json = serde_json::to_string(doc).unwrap();
         let mut h = Sha256::new();
@@ -797,7 +797,7 @@ mod tests {
 
     #[test]
     fn port_domains_match_b_ligero() {
-        // backends/ligero-verify vllm_v1::tests::port_domains_match_python: fp8-ada, 4096 VUs, manifest "ab" * 32
+        // archive/ligero-verify vllm_v1::tests::port_domains_match_python: fp8-ada, 4096 VUs, manifest "ab" * 32
         let s = Shape { k: 1536, word_bits: 8, y_bytes: 4 };
         let inst = json!({"dataset": "bench-instances-fp8-ada/v1", "tier": "vu-k1536-fp8-ada", "manifest_sha256": "ab".repeat(32), "range": [0, 4096]});
         let want = [("8c9e2fe698825dbd417132d1be07b802befdfb0be53a47e73c47b2b908cfcd88", "917265b14cb3fff7074a53be5887479176a1a9b0e17ac24a9a720d036811cddc")];

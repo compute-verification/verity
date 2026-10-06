@@ -1,7 +1,7 @@
 """``verity/flock-circuit``: any lowered IR template (``flock-ir-unit/v2`` circuits, :mod:`ir_lower`) proved with its serving
 rows committed in the circuit and nothing else public (``live/src/circuit.rs`` is the statement).
 
-Rows are ``frame-v3-sha512`` leaves under ``hm96-sha512/row/v1`` (``verity.commitments.rowleaf``): a row's inner digest is
+Rows are ``frame-v3-sha512`` leaves under ``hm96-sha512/row/v1`` (``verity.primitives.commitments.rowleaf``): a row's inner digest is
 ``x = SHA-512(sha512_row_prefix || row)`` (``sha512/row/v1``), its hiding commit string ``b || c`` with ``b = x XOR M(key) y`` and
 ``c = SHA-512(salt_prefix || y)`` for a 192-byte salt ``y`` (``hm96.SHA512``, key its ``default_key``), and the frame leaf binds
 ``hm96.SHA512.tree_leaf(key, b || c)``. Both hashes are proved here: the rows and their salts are private. A port may instead
@@ -69,7 +69,7 @@ SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW_SCHEMA = "hm96-sha512/row/v1"
 INST_FORMAT = "flock-circuit-inputs"
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
-#: identity and swappable: ``hm96-sha512/v1`` (``verity.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over the
+#: identity and swappable: ``hm96-sha512/v1`` (``verity.primitives.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over the
 #: SHA-512 column digest, leaf = ``tree_leaf(key, b || c)``, an opening = the column and its 192-byte salt (``opened_salts``).
 #: Salts are a ChaCha20 expansion of a fresh 256-bit OS key per proof (Daniel, 2026-09-27: salts drawn leaf by leaf from the OS
 #: cost +96% prover time at m = 33), modelled as uniform like the OS generator's own ChaCha20 output; the key is never reused or
@@ -113,9 +113,9 @@ def set_statics(input_set) -> dict:
 
 def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
     """META ``program_digests``: core's ``program_digest`` of the subcircuit's Definition at the instance statics, keyed by its
-    descriptor id (``verity.ir.codec``'s, the id the canonical partition and the verifier name a template by); a silicon
+    descriptor id (``verity.primitives.circuits.codec``'s, the id the canonical partition and the verifier name a template by); a silicon
     reference no core Definition wraps keeps its own key."""
-    from verity.ir.codec import _spec_id
+    from verity.primitives.circuits.codec import _spec_id
 
     digests = sub.program_digests([statics or {}])
     try:
@@ -129,8 +129,8 @@ def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
 def program_sha512(sub, statics: dict | None = None) -> str:
     """SHA-512 over the canonical descriptor core's ``program_digest`` hashes (the subcircuit's Definition at its default
     statics); a caller that builds the partition over another Program passes that Program's SHA-512 instead."""
-    from verity.ir.codec import canonical_json, encode_program
-    from verity.ir.program import Program
+    from verity.primitives.circuits.codec import canonical_json, encode_program
+    from verity.primitives.circuits.program import Program
 
     try:
         desc = encode_program(Program(sub.definition(**(statics or {}))))
@@ -158,7 +158,7 @@ def _log2(x: int) -> int:
 @dataclass
 class Port:
     """An input port's rows: ``words`` u16 leaves, framed as ``sha512/row/v1`` x rows of u16 words (whole SHA-512 blocks), or
-    (``bits``) as core's bit row ``sha512/row/v2`` of ``bits`` bits (``verity.commitments.rowleaf``): its leaves the row's bits
+    (``bits``) as core's bit row ``sha512/row/v2`` of ``bits`` bits (``verity.primitives.commitments.rowleaf``): its leaves the row's bits
     low first, ``words = ceil(bits / 16)``, the bits past ``bits`` zero."""
 
     name: str
@@ -182,7 +182,7 @@ class Port:
         """Compressions after the constant first block: the message's blocks but its last, which the hm96 slot compresses (the
         row's last bytes, if any, then SHA-512's padding: ``ceil((bytes + 17) / 128)`` blocks in all)."""
         if self.seg:
-            from verity.commitments.rowleaf import sha512_row_seg_segments
+            from verity.primitives.commitments.rowleaf import sha512_row_seg_segments
 
             segs = sha512_row_seg_segments(self.bits)
             return sum(-(-((m + 7) // 8 + 17) // 128) for m in segs) + -(-(64 * len(segs) + 17) // 128) - 1
@@ -193,7 +193,7 @@ class Port:
         segmented row's segment's or outer message's first. Every other reads the previous compression's output."""
         if not self.seg:
             return k == 0
-        from verity.commitments.rowleaf import sha512_row_seg_segments
+        from verity.primitives.commitments.rowleaf import sha512_row_seg_segments
 
         first = 0
         for m in sha512_row_seg_segments(self.bits):
@@ -214,19 +214,19 @@ class Port:
     def schema(self) -> str:
         """The frame leaf's schema: ``hm96-sha512/row/v1``, a bit row's ``hm96-sha512/row/v2``, a segmented row's
         ``hm96-sha512/row-seg/v1``."""
-        from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
+        from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 
         return ROW_SCHEMA if self.bits is None else SCHEMA_HM96_SHA512_ROW_SEG if self.seg else SCHEMA_HM96_SHA512_ROW_V2
 
     def digest(self, row: bytes) -> bytes:
         """The row's inner digest of its ``bytes`` row bytes (``sha512/row/v1``, ``/v2`` or ``sha512/row-seg/v1``)."""
-        from verity.commitments.rowleaf import sha512_row_seg_digest
+        from verity.primitives.commitments.rowleaf import sha512_row_seg_digest
 
         return sha512_row_seg_digest(row, self.bits) if self.seg else self.layout().digest(row)
 
     def prefix(self) -> bytes:
         """The row's first block: core's prefix, or a segmented row's outer ``Q(bits)``."""
-        from verity.commitments.rowleaf import sha512_row_seg_prefix
+        from verity.primitives.commitments.rowleaf import sha512_row_seg_prefix
 
         return sha512_row_seg_prefix(self.bits) if self.seg else self.layout().prefix
 
@@ -234,14 +234,14 @@ class Port:
     def tail_bytes(self) -> int:
         """The bytes the padding follows: the row's, or a segmented row's outer message's (its segments' digests)."""
         if self.seg:
-            from verity.commitments.rowleaf import sha512_row_seg_segments
+            from verity.primitives.commitments.rowleaf import sha512_row_seg_segments
 
             return 64 * len(sha512_row_seg_segments(self.bits))
         return self.bytes
 
     def leaf(self):
-        from verity.commitments.frame_v3 import BitRowLeaf, RowLeaf
-        from verity.commitments.rowleaf import ROLE_X
+        from verity.primitives.commitments.frame_v3 import BitRowLeaf, RowLeaf
+        from verity.primitives.commitments.rowleaf import ROLE_X
 
         return RowLeaf("sha512", ROLE_X, 16, self.words) if self.bits is None else BitRowLeaf(self.bits)
 
@@ -269,7 +269,7 @@ def _port(name: str, words: int, bits: int | None = None, seg: bool = False) -> 
 def _meta_ports(meta: dict) -> list[Port]:
     """META's rows, each a bit row (or a segmented one) of the length its ``row_schemas`` entry names (absent: ``sha512/row/v1``
     rows)."""
-    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
+    from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 
     if "row_schemas" not in meta:
         return [Port(nm, w) for nm, w, _ in meta["ports"]]
@@ -506,7 +506,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
     recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from ``in``
     regions (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_blocks`).
-    The data guard counts a port whose derivation it does not list as data (``verity.ml.operations.public_data``).
+    The data guard counts a port whose derivation it does not list as data (``verity.primitives.circuits.operations.public_data``).
 
     ``links`` (``[{"port", "leaves": [lo, hi]}]``, META ``links``, PROTOCOL.md §16.13): input rows that hold template parameter
     leaves ``[lo, hi)`` as an output row holds outputs (a word per leaf), so that a reader whose leaves are another unit's outputs
@@ -537,10 +537,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     for nm, v in public_inputs.items():
         if set(v) != {"seed", "derivation"} or not all(isinstance(v[k], str) and v[k] for k in v):
             raise ValueError(f"public input {nm}: it names its recomputation, a non-empty seed and derivation")
-    if port_bits is not None and None in port_bits:
-        raise ValueError(f"{low.name}: bit rows on every input port or on none")
-    if port_bits and public_inputs:
-        raise NotImplementedError(f"{low.name}: public input ports beside bit rows (a public leaf is a 16-bit word)")
+    if port_bits is not None and None in [b for (nm, _w), b in zip(in_ports, port_bits) if nm not in public_inputs]:
+        raise ValueError(f"{low.name}: bit rows on every input row or on none")
     bits_of = port_bits or [None] * len(sub.inputs)
     if seg_ports and (port_bits is None or not seg_ports <= {p.name for p in sub.inputs}):
         raise ValueError(f"{low.name}: segmented rows are bit rows of input ports: {sorted(seg_ports)}")
@@ -642,7 +640,7 @@ def _expanded(lay: IL.Layout, name: str) -> str:
 def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, list[bytes]]:
     """Each row's ``b || c`` (``hm96.SHA512`` over its row digest, ``sha512/row/v1``, ``/v2`` or ``row-seg/v1`` of the leaves' first
     ``Port.bytes`` bytes, and its salt). Refuses a bit row whose leaves have a bit set past its length."""
-    from verity.commitments import hm96
+    from verity.primitives.commitments import hm96
 
     inst = hm96.SHA512
     out = {}
@@ -697,13 +695,13 @@ def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts:
     bit row; the input rows, then the output rows; over ``rows[port]``: the instances' rows, or a shared-row file's table),
     each under a domain bound to the set, the range, the port and its schema. Returns the header's ``frame_v3`` entry and
     every row's ``b || c``."""
-    from verity.commitments import hm96
-    from verity.commitments.frame_v3 import BitRowLeaf, FrameV3
-    from verity.commitments.frame_v3 import Port as FPort
-    from verity.commitments.identity import identity_digest
-    from verity.commitments.indexed import RangeIndexedDomain
-    from verity.commitments.merkle import CommitmentDomain
-    from verity.commitments.rowleaf import row_leaf
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.frame_v3 import BitRowLeaf, FrameV3
+    from verity.primitives.commitments.frame_v3 import Port as FPort
+    from verity.primitives.commitments.identity import identity_digest
+    from verity.primitives.commitments.indexed import RangeIndexedDomain
+    from verity.primitives.commitments.merkle import CommitmentDomain
+    from verity.primitives.commitments.rowleaf import row_leaf
 
     from . import ir_frame
 
@@ -797,7 +795,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
     ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the ``sha512/row/v1`` rows whose table rows
     are rows of a registered value, committed with the registration's salts (``salts``), each table row's position and
-    frame-v3 path to the registered root (``verity_sampled_proofs.one_stage.registered``); the header's ``registered``. A port
+    frame-v3 path to the registered root (``verity.protocols.verification.sampled_proofs.one_stage.registered``); the header's ``registered``. A port
     is an input port (its table's rows) or an output port's row (its table the instances' output rows, one each: instance
     ``i``'s output is the registered row at ``positions[i]``, under that row's registered salt ``salts[port][i]``). A padding
     instance's rows keep their zero salts and pinned ``dummy`` either way: the verifier opens only the instances' rows.
@@ -807,9 +805,9 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     (``{port: (n, words)}``), else the set's.
 
     ``identifier``: the header's ``identifier`` (PROTOCOL.md §16.10), a JSON object C-Flock does not read, on which canonical JSON
-    is RFC 8785 (``verity.ir.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
+    is RFC 8785 (``verity.primitives.circuits.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
     (``--identifier F``)."""
-    from verity.ir.codec import jcs_domain_error
+    from verity.primitives.circuits.codec import jcs_domain_error
 
     if identifier is not None:
         bad = jcs_domain_error(identifier, "identifier") if isinstance(identifier, dict) else "identifier: not a JSON object"

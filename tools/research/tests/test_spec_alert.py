@@ -17,8 +17,8 @@ def _g(sig: str, h: str) -> dict:
     return {"signature": [sig], "assumptions": [], "type_hash": h}
 
 
-def _doc(pins: dict, defs: dict | None = None, readers: tuple[str, ...] = ("P.t",)) -> dict:
-    return {"pins": pins, "reads": {"P.Defs": {"digest": "x", "definitions": defs or {}, "pins": list(readers)}}}
+def _doc(guarantees: dict, defs: dict | None = None, readers: tuple[str, ...] = ("P.t",)) -> dict:
+    return {"guarantees": guarantees, "reads": {"P.Defs": {"digest": "x", "definitions": defs or {}, "guarantees": list(readers)}}}
 
 
 class Api:
@@ -59,8 +59,17 @@ def test_a_changed_definition_names_the_guarantees_that_read_it():
     old = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1, "P.E": H2}, readers)
     new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H3, "P.E": H2}, readers)
     assert spec.changes(old, new) == ["• definition `P.D` changed; read by `P.t`, `P.u`, `P.v`, `P.w` and 2 more"]
-    moved = {"reads": {"P.Other": {"definitions": {"P.D": H1, "P.E": H2}, "pins": ["P.t"]}}, "pins": old["pins"]}
+    moved = {"reads": {"P.Other": {"definitions": {"P.D": H1, "P.E": H2}, "guarantees": ["P.t"]}}, "guarantees": old["guarantees"]}
     assert spec.changes(old, moved) == []                                   # same names and hashes in another module
+
+
+def test_a_record_from_before_the_rename_compares_by_what_it_says():
+    new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1}, ("P.t",))
+    old = {"pins": new["guarantees"], "reads": {"P.Defs": {"digest": "x", "definitions": {"P.D": H1}, "pins": ["P.t"]}}}
+    assert spec.changes(old, new) == []
+    assert spec.changes(old, _doc({"P.t": _g("P.t : E", H2)}, {"P.D": H3})) == [
+        "• changed guarantee `P.t`, before:\n```\nP.t : D\n```\nafter:\n```\nP.t : E\n```",
+        "• definition `P.D` changed; read by `P.t`"]
 
 
 def _repo(tmp_path: Path) -> Path:
@@ -88,6 +97,18 @@ def test_the_dm_names_the_package_the_pull_requests_and_the_compare_link(tmp_pat
     assert text.startswith(f"A spec change landed on main (<https://github.com/owner/verity/compare/{old[:12]}...{new[:12]}|")
     assert "<https://github.com/owner/verity/pull/12|#12>, <https://github.com/owner/verity/pull/34|#34>" in text
     assert "*pkg/lean*\n• changed guarantee `P.t`" in text
+
+
+def test_a_record_that_moved_with_its_package_is_compared_at_its_old_path(tmp_path):
+    repo = _repo(tmp_path)
+    doc = _doc({"P.t": _g("P.t : A", H1), "P.u": _g("P.u : B", H2)})
+    old = _commit(repo, "protocols/p/lean/lean-audit.json", doc, "base")
+    subprocess.run(["git", "-C", str(repo), "mv", "protocols/p", "p"], check=True)
+    moved = _commit(repo, "p/lean/lean-audit.json", doc, "Layout move (#9)")
+    assert spec.message(repo, old, moved) is None
+    edited = _commit(repo, "p/lean/lean-audit.json", _doc({"P.t": _g("P.t : C", H3), "P.u": _g("P.u : B", H2)}), "m")
+    text = spec.message(repo, old, edited)
+    assert "*p/lean*\n• changed guarantee `P.t`" in text and "new guarantee" not in text and "P.u" not in text
 
 
 def test_a_long_dm_ends_with_the_compare_link_and_closes_its_code_block(tmp_path, monkeypatch):

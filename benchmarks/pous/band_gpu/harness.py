@@ -4,7 +4,7 @@ serving engine and no other protocol.
 One run, in order:
 
 1. **Kernel gates.** The scheme's pinned vector encoded on the device (`band/64kb/segment`, a whole segment; dense:
-   `dense/64kb/prefix16`), and `--reference-segments` segments of the run's `C` equal to `verity_pous`'s own encoding, and the
+   `dense/64kb/prefix16`), and `--reference-segments` segments of the run's `C` equal to `verity.protocols.accounting.space.pous`'s own encoding, and the
    round trip (decoding all of `C` gives back `W`). **A failed kernel gate stops the run; it times nothing and publishes no
    measurements** (a wrong kernel must not produce a flattering number).
 2. **Encode.** `W` (the weight set's bytes, filled as `bench.py`'s reference fills them) to `C` on the device, every segment in
@@ -19,7 +19,7 @@ One run, in order:
    Which decode ran (kernel, rows, calls) is recorded per phase (`implementation.decode_paths`).
 4. **The limit, fixed before any load.** With no load running, the verifier calibrates its loopback round trip and fixes the
    limit `Δ + allowance`; every audit below is judged against that one limit, so rounds under load are comparable. The allowance
-   is a loopback one (a remote verifier's round trip adds to it).
+   is a loopback one (a remote memory challenger's round trip adds to it).
 5. **Timed audits** against the responder serving `C` from device memory:
    - the honest audit, under POUS forwards as load (completed forwards counted);
    - the value control: one block in ten of `C` zeroed, which must reject on the value;
@@ -37,7 +37,7 @@ One run, in order:
 7. **NVMe** (`--nvme-dir`, optional): one block's read latency from a file there.
 8. **Clocks.** The GPU's clocks, throttle reasons, temperature and power before and after, and the SM clock per timed step.
 
-`vk` is built from `C`'s leaves; gate 1's reference segments check `C` against `verity_pous`. The verifier's full private
+`vk` is built from `C`'s leaves; gate 1's reference segments check `C` against `verity.protocols.accounting.space.pous`. The verifier's full private
 setup (it encodes all of `W` itself) is `bench.py --impl reference`'s.
 """
 from __future__ import annotations
@@ -63,9 +63,9 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-LIVE = HERE / "live.py"
+MEMORY_CHALLENGER = HERE / "memory_challenger.py"
 SALT = bytes(range(24))
-VECTORS = ROOT / "protocols" / "pous" / "tests" / "fixtures" / "vectors.json"
+VECTORS = ROOT / "verity" / "protocols" / "accounting" / "space" / "pous" / "tests" / "fixtures" / "vectors.json"
 LATE_EXTRA_NS = 50_000
 """How far past the limit the late control holds an answer (the red team's limit + 50 µs)."""
 PINNED = {"band-chain/d12/v1": ("band/64kb/segment", "band-segment-w", None),
@@ -118,7 +118,7 @@ def busy_wait(ns: int) -> None:
 
 
 class ControlResponder:
-    """A responder speaking `pous_native.cu`'s wire (`live.py`), whose answer to each challenge the harness supplies through
+    """A responder speaking `pous_native.cu`'s wire (`memory_challenger.py`), whose answer to each challenge the harness supplies through
     `answer(i) -> (block, device_ns, server_ns, hold_ns)`.  With `real_delay`, an answer is held `hold_ns` before it is sent
     (`wait`, a busy-wait), so on the wall clock a late control's answer is really late; only the late control holds one: a
     recomputed answer has already spent its time when `answer` returns, so it is sent at once.  The CPU tests read the reported
@@ -373,16 +373,16 @@ def _nvcc_version() -> str | None:
 
 
 def vector_bytes(label: str, n: int) -> bytes:
-    """The pinned vectors' input stream (`protocols/pous/tests/pous_vectors.py`'s `_bytes`)."""
+    """The pinned vectors' input stream (`verity/protocols/accounting/space/pous/tests/pous_vectors.py`'s `_bytes`)."""
     return hashlib.shake_256(b"verity-pous/vectors/" + label.encode()).digest(n)
 
 
 def vector_gate(name: str, backend: Backend, params: Any, pinned: dict[str, Any] | None = None) -> dict[str, Any]:
     """The scheme's pinned vector, encoded on the device: its pinned blocks' digest, and one segment's encode time.  The vector
     is pinned at the registered point, so a band run at another in-degree encodes it at the registered `d`
-    (`backend.encode_at`); the run's own `d` is gated against `verity_pous` by `reference_gate`."""
+    (`backend.encode_at`); the run's own `d` is gated against `verity.protocols.accounting.space.pous` by `reference_gate`."""
     import torch
-    from verity_pous import schemes
+    from verity.protocols.accounting.space.pous import schemes
 
     vector, label, count = PINNED[name]
     pinned = pinned or json.loads(VECTORS.read_text())
@@ -407,7 +407,7 @@ segment count from 1 to 2^64 at `D = 5`, `k = 111`, 241.5 µs, with the cliff at
 
 def with_in_degree(base: Any, d: int) -> Any:
     """The band's geometry at in-degree `d` (`--band-d`), refused below `MIN_BAND_D`: such a band has no certificate."""
-    from verity_pous.band import BandParams
+    from verity.protocols.accounting.space.pous.band import BandParams
 
     if not isinstance(base, BandParams):
         raise ValueError(f"--band-d sets a band's in-degree, and {type(base).__name__} is not a band's geometry")
@@ -419,14 +419,14 @@ def with_in_degree(base: Any, d: int) -> Any:
 
 
 def _reference_segment(job: tuple[str, Any, int, bytes]) -> tuple[int, bytes]:
-    from .live import scheme_of
+    from .memory_challenger import scheme_of
 
     name, params, s, w_seg = job
     return s, b"".join(scheme_of(name, params).encode_segment(SALT, s, w_seg))
 
 
 def reference_gate(scheme: Any, c: bytes, w: bytes, picks: list[int], workers: int) -> dict[str, Any]:
-    """`picks`' segments of `C` equal to `verity_pous`'s encoding of the same segments of `W`, in spawned processes (this one
+    """`picks`' segments of `C` equal to `verity.protocols.accounting.space.pous`'s encoding of the same segments of `W`, in spawned processes (this one
     runs CUDA and torch threads, which a fork would copy mid-flight)."""
     seg = scheme.params.segment_bytes
     jobs = [(scheme.name, scheme.params, s, w[s * seg:(s + 1) * seg]) for s in picks]
@@ -512,7 +512,7 @@ def decode_after_timing(backend: Backend, c: Any, tags: Any, w_digest: str) -> d
 
 # --- the audits -----------------------------------------------------------------------------------------------------------
 
-def _verifier_cmd(script: Path, ready: Path, leaves: Path, result: Path, a: Any, limit_ns: int | None, extra: list[str]) -> list[str]:
+def _memory_challenger_cmd(script: Path, ready: Path, leaves: Path, result: Path, a: Any, limit_ns: int | None, extra: list[str]) -> list[str]:
     cmd = [sys.executable, str(script), "--ready", str(ready), "--leaves", str(leaves), "--out", str(result),
            "--audits", str(a.audits), "--pings", str(a.pings), "--allowance", a.allowance, "--clock", a.clock]
     cmd += ["--k", str(a.k)] if a.k else []
@@ -522,9 +522,25 @@ def _verifier_cmd(script: Path, ready: Path, leaves: Path, result: Path, a: Any,
     return cmd + extra
 
 
-def _verifier_env() -> dict[str, str]:
-    paths = [str(ROOT / "packages" / "verity" / "src"), str(ROOT / "protocols" / "pous"), os.environ.get("PYTHONPATH", "")]
+def _memory_challenger_env() -> dict[str, str]:
+    paths = [str(ROOT), str(ROOT / "verity" / "protocols" / "accounting" / "space" / "pous"), os.environ.get("PYTHONPATH", "")]
     return {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in paths if p)}
+
+
+def leave_reserved(a: Any) -> None:
+    """Move every thread of this process (the load loop, CUDA's own threads) off the memory challenger's and responder's CPUs;
+    threads started later inherit the mask, and the responder and memory challenger pin themselves back.  Every thread, not
+    only the caller: on cores booted `isolcpus=domain` nothing is load-balanced, so a thread left on a reserved core stays there
+    and takes whole scheduler slices from the memory challenger."""
+    here = set(os.sched_getaffinity(0))
+    reserved = {x for x in (a.verifier_cpu, a.responder_cpu) if x is not None} & here
+    if not reserved or not here - reserved:
+        return
+    for tid in os.listdir("/proc/self/task"):
+        try:
+            os.sched_setaffinity(int(tid), here - reserved)
+        except ProcessLookupError:
+            pass
 
 
 def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Path, out: Path, a: Any, leaves: Path | None = None,
@@ -534,9 +550,9 @@ def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Pa
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
     result = out / f"{tag}.json"
-    cmd = _verifier_cmd(script, ready, leaves or out / "leaves.bin", result, a, None, ["--calibrate-only"])
+    cmd = _memory_challenger_cmd(script, ready, leaves or out / "leaves.bin", result, a, None, ["--calibrate-only"])
     with (out / f"{tag}.log").open("w") as log:
-        subprocess.Popen(cmd, env=_verifier_env(), stdout=log, stderr=subprocess.STDOUT).wait()
+        subprocess.Popen(cmd, env=_memory_challenger_env(), stdout=log, stderr=subprocess.STDOUT).wait()
     responder.stop()
     return json.loads(result.read_text()) if result.exists() else {}
 
@@ -550,10 +566,10 @@ def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, 
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
     result = out / f"audit-{tag}.json"
-    cmd = _verifier_cmd(script, ready, leaves, result, a, limit_ns, [])
+    cmd = _memory_challenger_cmd(script, ready, leaves, result, a, limit_ns, [])
     completed = 0
     with (out / f"audit-{tag}.log").open("w") as log:
-        proc = subprocess.Popen(cmd, env=_verifier_env(), stdout=log, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(cmd, env=_memory_challenger_env(), stdout=log, stderr=subprocess.STDOUT)
         if load is None:
             proc.wait()
         else:
@@ -763,10 +779,10 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     """One harness run (the module docstring's steps).  `backend`, `base` (the scheme's geometry before `W` sizes it) and
     `vectors` replace the GPU kernels, the registered geometry and the pinned vectors (the CPU tests)."""
     import torch
-    from verity_pous import schemes
-    from verity_pous.verifier import leaf_hash
+    from verity.protocols.accounting.space.pous import schemes
+    from verity.protocols.accounting.space.pous.verifier import leaf_hash
 
-    from .live import scheme_of
+    from .memory_challenger import scheme_of
 
     base = base or schemes.get(a.scheme).params
     if getattr(a, "band_d", 0):
@@ -858,21 +874,18 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     leaves = out / "leaves.bin"
     leaves.write_bytes(b"".join(leaf_hash(p, SALT, i, c_host[i * width:(i + 1) * width]) for i in range(p.blocks)))
-    here = set(os.sched_getaffinity(0))
-    reserved = {x for x in (a.verifier_cpu, a.responder_cpu) if x is not None} & here
-    if reserved and here - reserved:
-        os.sched_setaffinity(0, here - reserved)
+    leave_reserved(a)
     fields = {"salt": SALT.hex(), "scheme": scheme.name, "params": scheme.params.manifest()}
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None
-    cal = calibrate_limit(native_start, fields, LIVE, out, a)     # P5: fix the limit with no load running
+    cal = calibrate_limit(native_start, fields, MEMORY_CHALLENGER, out, a)     # P5: fix the limit with no load running
     limit = int(cal.get("limit_ns") or 0)
-    honest = audit_round(native_start, fields, LIVE, leaves, out, "honest", a,
+    honest = audit_round(native_start, fields, MEMORY_CHALLENGER, leaves, out, "honest", a,
                          (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync)
 
     def control(tag: str, answer: Callable[[int], tuple[bytes, int, int, int]]) -> dict[str, Any]:
         start = lambda: ControlResponder(width, answer, real_delay=a.clock == "wall")  # noqa: E731
-        return audit_round(start, fields, LIVE, leaves, out, tag, a, None, limit)
+        return audit_round(start, fields, MEMORY_CHALLENGER, leaves, out, tag, a, None, limit)
 
     value = control("value", control_answers(c_host, width, zero=set(range(0, p.blocks, 10))))
     late = control("late", control_answers(c_host, width, late_every=10, late_ns=limit + LATE_EXTRA_NS))

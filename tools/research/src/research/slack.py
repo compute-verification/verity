@@ -20,6 +20,7 @@ Notes are records, never messages.
   research msg pickup --thread TS                                  # 👀 on an ask you own
   research msg roster --thread TS [--json]                         # an announcement's status lines; exit 0 when all are done
   research msg handles [--json] | subscriptions --as HANDLE        # the registry; the subscribe calls a handle's holder makes
+  research msg owners [PATH...]                                    # who owns each path (stdin: `git diff --name-only main... |`)
   research msg match --as HANDLE --event JSON|TEXT|@PATH|- [--why] # exit 0 addressed, 1 not, 2 error
   research msg verify-author --event JSON|@PATH|- [--why]          # exit 0 only for our bot, a channel's bot or a named human
   research msg deliver --ts TS [--thread T]                         # ring the doorbells for a post no client delivered
@@ -167,7 +168,7 @@ def load_registry(path: Path) -> dict:
         raise SlackError(f"registry {path}: {e}") from e
     if reg.get("schema") != SCHEMA:
         raise SlackError(f"registry {path}: schema {reg.get('schema')!r}, expected {SCHEMA!r}")
-    handles = set()
+    handles, owned = set(), {}
     for h in reg.get("handles", []):
         name = h.get("handle", "")
         if not NAME_RE.match(name) or name in handles:
@@ -178,6 +179,10 @@ def load_registry(path: Path) -> dict:
                 raise SlackError(f"registry {path}: @{name} has no {k}")
         if len(h["remit"]) > DESCRIPTION_MAX:
             raise SlackError(f"registry {path}: @{name}'s remit is {len(h['remit'])} characters; its user group's description takes {DESCRIPTION_MAX}")
+        for p in h.get("owns", []):
+            if not isinstance(p, str) or not p or p.startswith("/") or ".." in p.split("/") or p in owned:
+                raise SlackError(f"registry {path}: @{name} owns {p!r}: a path relative to the checkout that no other handle owns")
+            owned[p] = name
     chans = reg.get("channels") or {}
     if FRONT_DOOR not in chans:
         raise SlackError(f"registry {path}: no #{FRONT_DOOR}")
@@ -191,6 +196,15 @@ def load_registry(path: Path) -> dict:
                 raise SlackError(f"registry {path}: #{key}'s alias {alias!r} is malformed or names another channel")
             names.add(alias)
     return reg
+
+
+def owner(reg: dict, path: str) -> str | None:
+    """The handle that owns a checkout path: the one whose `owns` entry is its longest prefix (a directory ends in `/`)."""
+    path = path.removeprefix("./")
+    best = max(((p, h["handle"]) for h in reg["handles"] for p in h.get("owns", [])
+                if path == p.rstrip("/") or path.startswith(p if p.endswith("/") else p + "/")),
+               key=lambda ph: len(ph[0]), default=None)
+    return best and best[1]
 
 
 def entry(reg: dict, handle: str) -> dict:
@@ -441,7 +455,10 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
     out = api.call("chat.postMessage", channel=ch, thread_ts=thread, username=handle, text=text,
                    unfurl_links="false", unfurl_media="false")
     ts = out.get("ts") or "DRY-RUN"
-    link = api.call("chat.getPermalink", channel=ch, message_ts=ts).get("permalink") or "-"
+    try:
+        link = api.call("chat.getPermalink", channel=ch, message_ts=ts).get("permalink") or "-"
+    except SlackError:                                   # the post went out: a caller that retries on a raise would post it twice
+        link = "-"
     print(f"{ts} {link}")
     if route and route[1] is not None and not api.dry_run:
         msg = {"text": text, "ts": ts, "thread_ts": thread, "bot_id": "self", "username": handle}
@@ -921,6 +938,14 @@ def cmd_handles(ns: argparse.Namespace, reg: dict) -> int:
     return 0
 
 
+def cmd_owners(ns: argparse.Namespace, reg: dict) -> int:
+    paths = ns.paths or sys.stdin.read().split()
+    for p in paths:
+        o = owner(reg, p)
+        print(f"{'@' + o if o else '-':<20} {p}")
+    return 0
+
+
 def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
     h = entry(reg, ns.handle)
     missing = False
@@ -1019,7 +1044,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
             body = body[m.end():]                                    # `--to @ci` with a body that starts `@ci` names it once
         text = " ".join([*(tag(t) for t in to), body])
     ch = channel_id(ns, reg, FRONT_DOOR) if not ns.thread else channel_id(ns, reg)
-    tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if ns.quiet else "") if t)
+    quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
+    tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if quiet else "") if t)
     _post(client(ns), ch, h["handle"], text, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent, tags=tags)
     return 0
 
@@ -1444,7 +1470,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             continue                                                 # a renamed name forwards into its successor's inbox
         counted.add(r["inbox_ts"])
         bells = [m for m in api.paged("conversations.replies", "messages", channel=r.get("channel") or ch, ts=r["inbox_ts"],
-                                      oldest=f"{since:.6f}") if m.get("ts") != r["inbox_ts"]]
+                                      oldest=f"{since:.6f}") if m.get("ts") != r["inbox_ts"] and m.get("username") == "router"]
         hours: dict[int, int] = {}
         for m in bells:
             hours[int(float(m["ts"]) // 3600)] = hours.get(int(float(m["ts"]) // 3600), 0) + 1
@@ -1792,12 +1818,15 @@ def main(argv: list[str], prog: str = "research msg") -> int:
         return p
 
     cmd("handles", "the registry").add_argument("--json", action="store_true")
+    cmd("owners", "the handle that owns each path (`-`: nobody)").add_argument("paths", nargs="*", metavar="PATH",
+                                                                               help="checkout paths (none: read them from stdin)")
     cmd("subscriptions", "the subscribe calls this handle's holder makes", as_=True)
     p = cmd("send", "post a message: a new thread, or into --thread; the --to names lead it and get it", as_=True, body=True, url=True)
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
-                   help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; fyi; ...)")
+                   help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; "
+                        "fyi, which implies --quiet; ...)")
     p.add_argument("--verify", default=None, metavar="CMD", help="announce: a required action, and the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="announce: code it runs, pinned")
     p.add_argument("--quiet", action="store_true", help="wake only the names it starts with: no reply needed (digests still get it)")
@@ -1898,7 +1927,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
         reg = load_registry(path)
         if ns.cmd == "groups":
             return cmd_groups_sync(ns, reg, path)
-        return {"handles": cmd_handles, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,
+        return {"handles": cmd_handles, "owners": cmd_owners, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,
                 "pickup": cmd_pickup, "done": cmd_done, "decline": cmd_decline, "roster": cmd_roster, "match": cmd_match,
                 "verify-author": cmd_verify_author, "deliver": cmd_deliver, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
                 "inbox": cmd_inbox, "traffic": cmd_traffic, "send": cmd_send, "close": cmd_close, "list": cmd_list,

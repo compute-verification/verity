@@ -5,9 +5,9 @@ The spec is what each package's `lean-audit.json` records: every guarantee's sta
 hash) and every definition the statements read (its hash, under `reads`). Between the main the push replaced and the one it
 pushed, `changes` lists the guarantees added, removed or restated, and the definitions whose hash changed under the same
 name. A guarantee that moved (removed and added under another name with the same type hash), one that only prints
-differently, and a definition that moved send nothing. The DM opens with each package's tally, then lists what existing
-guarantees and definitions now say before the new guarantees. A DM that fails is printed and posted to #agent-alerts, so
-a spec change never lands unseen.
+differently, a definition that moved, and a record that moved with its package send nothing. The DM opens with each
+package's tally, then lists what existing guarantees and definitions now say before the new guarantees. A DM that fails is
+printed and posted to #agent-alerts, so a spec change never lands unseen.
 """
 from __future__ import annotations
 
@@ -39,6 +39,7 @@ def _record(repo: Path, rev: str, path: str) -> dict:
 
 
 def _guarantees(doc: dict) -> dict:
+    """The record's guarantees; one written before they were called that (a push's old side, at the rename) has `pins`."""
     return doc.get("guarantees") or doc.get("pins") or {}
 
 
@@ -110,14 +111,29 @@ def web(repo: Path, remote: str) -> str | None:
     return f"https://github.com/{m[1]}/{m[2]}" if m else None
 
 
+def _is_record(path: str) -> bool:
+    return path == RECORD or path.endswith("/" + RECORD)
+
+
+def _records_changed(repo: Path, old: str, new: str) -> list[tuple[str, str]]:
+    """Each record that differs between ``old`` and ``new`` as (its path in ``old``, its path in ``new``): a record git
+    sees renamed (`-M`), such as one that moved with its package, is read from its old path, so a move says nothing new."""
+    out = []
+    for line in _git(repo, "diff", "--name-status", "-M", old, new).splitlines():
+        status, *paths = line.split("\t")
+        if status.startswith("R") and all(map(_is_record, paths)):
+            out.append((paths[0], paths[1]))
+        else:
+            out += [(p, p) for p in paths if _is_record(p)]
+    return out
+
+
 def message(repo: Path, old: str, new: str, url: str | None = None, prs: list[int] | None = None) -> str | None:
     """The DM for main moving from ``old`` to ``new``, or None when no guarantee says anything new.  ``prs``, the pull requests
     it landed, default to the numbers in its first-parent subjects (`Merge #12 #34 (…)`)."""
-    paths = [p for p in _git(repo, "diff", "--name-only", old, new).splitlines()
-             if p == RECORD or p.endswith("/" + RECORD)]
     tallies, blocks = [], []
-    for p in paths:
-        if entries := _entries(_record(repo, old, p), _record(repo, new, p)):
+    for before, p in _records_changed(repo, old, new):
+        if entries := _entries(_record(repo, old, before), _record(repo, new, p)):
             pkg = p.rpartition('/')[0] or '.'
             tallies.append(f"• `{pkg}`: {_tally([k for k, _ in entries])}")
             blocks.append(f"*{pkg}*\n" + "\n".join(text for _, text in entries))

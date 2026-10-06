@@ -5,15 +5,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.evaluation.reference import evaluate
-from verity.ir.defs import bind
+from verity.primitives.circuits.evaluation.reference import evaluate
+from verity.primitives.circuits.defs import bind
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import b1, dense, hopper
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import fa2_softcap as F2S
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import targets as TG
+from verity_vllm.program.frontend import targets as TG
 
 FA2 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}
 PRO6000 = TargetProfile(compute_capability=(12, 0), num_sms=188)
@@ -156,14 +156,17 @@ def test_the_replay_row_kernel_is_the_definition(masked_from):
 def test_the_target_binds_attention_softcap_v2_under_fa2_check_inf_only():
     spec = TG.attention_spec(PRO6000, 287, 8, 4, 256, 1, row=0, own_rows=1, cap=CAP)
     assert spec.id == bind(F2S.AttentionSoftcapV2, T=287, NH=8, KVH=4, D=256, BN=64, CAP=CAP, MASKED_FROM=4, **FA2).id
-    with pytest.raises(TG.UnregisteredTarget, match="per-iteration Check_inf"):
+    with pytest.raises(TG.UnregisteredTarget, match="check-inf-per-iteration: the row's index .* not known"):
         TG.attention_spec(PRO6000, 287, 8, 4, 256, 1, row=0, cap=CAP)
     assert TG.attention_spec(TargetProfile(), 287, 8, 4, 256, 1, cap=CAP).id == \
         bind(dense.AttentionSoftcap, T=287, NH=8, KVH=4, D=256, BN=64, CAP=CAP).id
     h100 = TargetProfile(compute_capability=(9, 0), num_sms=132)
     with pytest.raises(TG.UnregisteredTarget):
         TG.attention_spec(h100, 287, 8, 4, 256, 1, row=0, own_rows=1, cap=CAP)
-    assert TG.attention_spec(PRO6000, 287, 8, 4, 256, 1, row=0, own_rows=1).id.startswith("Attention_v5{")
+    plain = TG.attention_spec(PRO6000, 287, 8, 4, 256, 1, row=0, own_rows=1)
+    assert plain.id.startswith("Attention_v5{") and TG.softcapped(plain, CAP) is spec       # the fold's softcap scope re-binds through it
+    with pytest.raises(TG.UnregisteredTarget, match="Attention_v10 has no registered softcapped chain"):
+        TG.softcapped(TG.attention_spec(TargetProfile(), 287, 8, 4, 256, 1, scale_input=True), CAP)
 
 
 def test_the_builder_kind_binds_the_softcap_chain_only_with_fa2_masked_from():

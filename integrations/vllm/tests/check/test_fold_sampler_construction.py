@@ -18,13 +18,14 @@ from pathlib import Path
 import pytest
 import torch
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.defs import bind
 from verity_vllm.check.match import split_selects
 from verity_vllm.observe.fold.patterns.sampling import SCRATCH_TOPP_SELECT, TokenSelectGumbelTopP, with_sampler_construction
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.program import sampling_event as SE
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity_vllm.program.registry import sampling as SM
+from verity_vllm.program.registry import sampling_vocab
 from verity_vllm.program.registry import topp_words
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
@@ -37,10 +38,10 @@ ROW_101 = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__
 
 def test_the_construction_table_is_the_registrys():
     assert set(SE.CONSTRUCTION_OF.values()) == set(TargetProfile.SAMPLER_CONSTRUCTIONS) and set(SE.CONSTRUCTION_OF) <= set(SE.SAMPLING_EVENT_FAMILIES)
-    for plain_id, shared in SM.SHARED_GREEDY.items():
+    for plain_id, shared in sampling_vocab.SHARED_GREEDY.items():
         assert SE.CONSTRUCTION_OF[plain_id] == PLAIN and SE.CONSTRUCTION_OF[shared.id] == SHARED
         plain = next(d for d in (SM.GumbelTokenSelect, SM.GumbelTopPTokenSelect) if d.id == plain_id)
-        assert SM.select_for(plain, SE.CONSTRUCTION_OF[shared.id]) is shared and SM.select_for(plain, SE.CONSTRUCTION_OF[plain_id]) is plain
+        assert sampling_vocab.select_for(plain, SE.CONSTRUCTION_OF[shared.id]) is shared and sampling_vocab.select_for(plain, SE.CONSTRUCTION_OF[plain_id]) is plain
     assert SE.CONSTRUCTION_OF[topp_words.GumbelTopPTokenSelectV2.id] == PLAIN, "the specialised select has no shared-greedy form"
 
 
@@ -170,7 +171,8 @@ def test_101s_build_declares_the_plain_construction_and_its_select_folds_as_it_c
 
 def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_path):
     """#101's fourth Match, replayed on CPU from its records: the preserved capture folded under the construction its Build declares, then
-    the Match's own comparison (`program-compare`, as the row runs it) against the Build's request Program: canonical-equal.  The records
+    the Match's own comparison (`program-compare`, as the row runs it) against the Build's request Program: every family's count equal
+    but the dense SiLU's version (the Build predates SiluMul_v2), the selects among them.  The records
     tree holds `match/` (the capture log among it) but not the row-level `match_compare.json`; that file, the failing comparison, is
     checked only where a tree carries it.  A store that lists or fetches nothing skips by name."""
     store = _store()
@@ -208,7 +210,8 @@ def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_p
                           "--b", str(run), "--out", str(tmp_path / "match_compare.json")], cwd=VLLM_DIR, env=env, capture_output=True, text=True)
     assert cmp.returncode == 0, cmp.stderr[-3000:]
     res = json.load(open(tmp_path / "match_compare.json"))
-    assert res["histogram_diff_T_normalised"] == {} and res["compare"]["canonical_sha256"]["equal"] is True, res["histogram_diff_T_normalised"]
+    # #101's Build predates SiluMul_v2 (#820) and binds SiluMul_v1; the fold binds the record target's vocabulary's silu_mul (v2)
+    assert res["histogram_diff_T_normalised"] == {"SiluMul_v1{I=8192}": [4592, 0], "SiluMul_v2{I=8192}": [0, 4592]}, res["histogram_diff_T_normalised"]
 
 
 def _profile_of_101() -> str:

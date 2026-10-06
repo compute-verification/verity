@@ -1,16 +1,19 @@
-"""The network warden's honest path, end to end: honest traces through the reference protocol at calibrated parameters.
+"""The network certifier's honest path, end to end: honest traces through the reference protocol at calibrated parameters.
 
-`network-warden-calibrate` sizes the warden from honest traces (`record.py`'s) and estimates the honest miss rate with
+`network-certifier-calibrate` sizes the certifier from honest traces (`record.py`'s) and estimates the honest miss rate with
 its own model of the prover. This runs the protocol's code on the same windows, at the parameters of a calibration
 report (its JSON), and reports what the audit itself decides. Each configuration of a trace is one run of one spatial
 unit, so it gets its own `audit.Audit` and one clock:
-- **the honest prover** declares one sync per window for all the configuration's egress links, met on every one, with
-  `calibration.choose_syncs` over the report's Σ_sync;
-- **the honest sender** is `schedule.run_shaper`, driving a `grid.Warden` at the report's egress r. A late frame goes
+- **the honest prover** declares one sync per window for all the configuration's egress links (`--syncs`): by default
+  in hindsight, met on every one, with `calibration.choose_syncs` over the report's Σ_sync; `envelope`, the
+  calibration's envelope in every window; or an online rule of `online` (`last`, `cover-K-M[-fallback]`), declared at
+  each window's first bucket from the frames ready by then, with its history carried across a run's configurations
+  (`--fresh` starts each with none);
+- **the honest sender** is `schedule.run_shaper`, driving a `grid.Certifier` at the report's egress r. A late frame goes
   when ready, so a window that no sync meets deviates from the Program's grid;
-- **the ingress warden** is a `grid.Warden` at the report's r_in and τ_in. A frame is enqueued at the first ingress
+- **the ingress certifier** is a `grid.Certifier` at the report's r_in and τ_in. A frame is enqueued at the first ingress
   bucket boundary after it arrives (`calibration.size_ingress_ms`'s model);
-- **the published records** are the warden's raw records and their commitments (`commitment.commit`);
+- **the published records** are the raw network certificates and their commitments (`commitment.commit`);
 - **the verifier** is `Audit.check_link` on egress and `Audit.check_ingress_link` on ingress, once on the raw records
   and once on the committed ones.
 
@@ -30,7 +33,7 @@ A rejected window gets a cause:
 Latencies are in ms, counted in buckets: shaping is hand minus ready (as the calibrator reports it), queueing is
 release minus hand, and end to end is release minus ready. A frame not released by the last window is counted apart.
 
-    python replay.py --calibration REPORT.json --out DIR [--jobs N] TRACE.json|DIR ...
+    python replay.py --calibration REPORT.json --out DIR [--jobs N] [--syncs POLICY [--fresh]] TRACE.json|DIR ...
 
 It writes `verdicts.jsonl`, one line per link-window, and `summary.json`.
 """
@@ -47,11 +50,12 @@ from collections.abc import Iterable, Sequence
 from fractions import Fraction
 from pathlib import Path
 
-from verity_network_warden.audit import Audit
-from verity_network_warden.calibration import choose_syncs
-from verity_network_warden.commitment import commit
-from verity_network_warden.grid import GridParams, Record, Warden
-from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
+from verity.protocols.accounting.communication.certifier import online
+from verity.protocols.accounting.communication.certifier.audit import Audit
+from verity.protocols.accounting.communication.certifier.calibration import choose_syncs
+from verity.protocols.accounting.communication.certifier.commitment import commit
+from verity.protocols.accounting.communication.certifier.grid import GridParams, Record, Certifier
+from verity.protocols.accounting.communication.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
 
 REPLAY_FRAME_BYTES = 8
 PERCENTILES = (50, 99, 99.9)
@@ -75,6 +79,9 @@ class Setup:
                                                  i["bucket_ms"], g["queue_capacity"])
         cs = report["clock_sync"]
         self.sync_set = SyncSet(tuple(cs["deltas"]), tuple(Fraction(r) for r in cs["rhos"]))
+        declared = cs.get("declared")
+        self.envelope = (ClockSync(max(declared["delta"]), min(Fraction(r) for r in declared["rho"])) if declared
+                         else ClockSync(max(self.sync_set.deltas), min(self.sync_set.rhos)))
 
     def parameters(self) -> dict:
         def bps(p: GridParams) -> float:
@@ -139,9 +146,11 @@ def diagnose(w: int, buckets: int, own_late: int, deviating: Sequence[tuple[int,
     return "unexplained", detail
 
 
-def replay_configuration(cfg: dict, setup: Setup) -> tuple[list[dict], dict]:
-    """One configuration through prover, shaper, warden, records and audit, raw and committed. Returns one row per
-    link-window, and the configuration's tallies."""
+def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
+                         prior: Sequence[online.Past] = ()) -> tuple[list[dict], dict, list[online.Past]]:
+    """One configuration through prover, shaper, certifier, records and audit, raw and committed. The prover's syncs are
+    `syncs` (`parse_sync_policy`), and an online rule starts from `prior`. Returns one row per link-window, the
+    configuration's tallies and the online prover's history (empty for the other policies)."""
     sync_set = setup.sync_set
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
     raw, committed = Audit(), Audit()
@@ -153,20 +162,28 @@ def replay_configuration(cfg: dict, setup: Setup) -> tuple[list[dict], dict]:
     windows = config_windows(cfg, T)
     links = [([LogicalFrame(payload(k), f["anchor"], f["index"]) for k, f in enumerate(link["frames"])],
               [f["ready"] for f in link["frames"]]) for link in egress]
-    syncs, hands_per_link, misses = choose_syncs(links, sync_set, T)
-    syncs = syncs + [eager] * (windows - len(syncs))
-    tally["egress"]["calibrator_misses"] += misses
-    for link, (frames, ready), hands in zip(egress, links, hands_per_link, strict=True):
+    history: list[online.Past] = []
+    hands_per_link = None
+    if syncs == "hindsight":
+        declared, hands_per_link, misses = choose_syncs(links, sync_set, T)
+        declared = declared + [eager] * (windows - len(declared))
+        tally["egress"]["calibrator_misses"] += misses
+    elif syncs == "envelope":
+        declared = [setup.envelope] * windows
+    else:
+        declared, history = online.declare(links, sync_set, T, online.rule(syncs), windows, setup.envelope, prior)
+    syncs = declared
+    for k, (link, (frames, ready)) in enumerate(zip(egress, links, strict=True)):
         name, params = link["link"], setup.egress[link["link"]]
         logical = handing_buckets(frames, syncs, T)
         actual, last = [], 0
         for h, r in zip(logical, ready, strict=True):
             last = max(h, r, last)
             actual.append(last)
-        if actual != hands:
+        if hands_per_link is not None and actual != hands_per_link[k]:
             raise AssertionError(f"{cfg.get('name')} {name}: the shaper's hand times differ from the calibrator's")
         own_late = Counter(f.anchor // T for f, h, r in zip(frames, logical, ready, strict=True) if r > h)
-        records = run_shaper(frames, ready, syncs, Warden(name, params))
+        records = run_shaper(frames, ready, syncs, Certifier(name, params))
         published = [commit(r, params) for r in records]
         v_raw = raw.check_link(name, records, frames, syncs, sync_set, params)
         v_com = committed.check_link(name, published, frames, syncs, sync_set, params)
@@ -212,14 +229,14 @@ def replay_configuration(cfg: dict, setup: Setup) -> tuple[list[dict], dict]:
             raise ValueError(f"{cfg.get('name')}: ingress link {name} has counts, not arrival times")
         arrival_ms = sorted(link["arrival_ms"])
         hands = [math.ceil(t / params.bucket_ms) for t in arrival_ms]
-        warden, records, k = Warden(name, params), [], 0
+        certifier, records, k = Certifier(name, params), [], 0
         for t in range(windows * params.buckets):
             while k < len(hands) and hands[k] <= t:
-                warden.enqueue(payload(k))
+                certifier.enqueue(payload(k))
                 k += 1
-            warden.tick()
+            certifier.tick()
             if (t + 1) % params.buckets == 0:
-                records.append(warden.close_window())
+                records.append(certifier.close_window())
         published = [commit(r, params) for r in records]
         v_raw = raw.check_ingress_link(name, records, windows)
         v_com = committed.check_ingress_link(name, published, windows)
@@ -244,7 +261,7 @@ def replay_configuration(cfg: dict, setup: Setup) -> tuple[list[dict], dict]:
                 i["delivery"][round(rel * params.bucket_ms - t, 3)] += 1
     tally["configurations"] = 1
     tally["runs_accepted"] = {"raw": int(raw.accepted), "committed": int(committed.accepted)}
-    return rows, tally
+    return rows, tally, history
 
 
 def new_tally() -> dict:
@@ -316,8 +333,11 @@ def read_trace(path: Path) -> dict:
         return json.load(fh)
 
 
-def replay_file(args: tuple[Path, dict]) -> tuple[list[dict], dict]:
-    path, report = args
+def replay_file(args: tuple[Path, dict, str, bool]) -> tuple[list[dict], dict]:
+    """One trace file's configurations in order. An online rule carries its history from one configuration to the next
+    of the same run (`labels.run`), unless `fresh`: they are one run's stretches between the windows its recording
+    dropped, so a deployed prover would have seen the earlier ones."""
+    path, report, syncs, fresh = args
     setup = Setup(report)
     doc = read_trace(path)
     grid = {k: doc[k] for k in ("bucket_ms", "window_buckets", "frame_bytes", "queue_capacity")}
@@ -325,17 +345,30 @@ def replay_file(args: tuple[Path, dict]) -> tuple[list[dict], dict]:
         raise ValueError(f"{path}: grid {grid} differs from the calibration's {setup.grid}")
     configs = doc.pop("configurations")
     del doc
-    rows, tally = [], new_tally()
+    rows, tally, history, run = [], new_tally(), [], None
     while configs:
-        r, t = replay_configuration(configs.pop(0), setup)
+        cfg = configs.pop(0)
+        same = not fresh and run is not None and cfg.get("labels", {}).get("run") == run
+        run = cfg.get("labels", {}).get("run")
+        r, t, history = replay_configuration(cfg, setup, syncs, history if same else ())
         rows += r
         add_tally(tally, t)
     return rows, tally
 
 
-def replay(paths: Iterable[Path], report: dict, jobs: int = 1) -> tuple[list[dict], dict]:
-    """Every configuration of the traces at `paths`, at the report's parameters. With `jobs` > 1, one file per worker."""
-    tasks = [(Path(p), report) for p in paths]
+def parse_sync_policy(name: str) -> str:
+    """`hindsight` (`calibration.choose_syncs`), `envelope` (the calibration's envelope in every window), or an online
+    rule (`online.rule`)."""
+    if name not in ("hindsight", "envelope"):
+        online.rule(name)
+    return name
+
+
+def replay(paths: Iterable[Path], report: dict, jobs: int = 1, syncs: str = "hindsight",
+           fresh: bool = False) -> tuple[list[dict], dict]:
+    """Every configuration of the traces at `paths`, at the report's parameters, with the prover's `syncs`
+    (`parse_sync_policy`). With `jobs` > 1, one file per worker."""
+    tasks = [(Path(p), report, parse_sync_policy(syncs), fresh) for p in paths]
     rows, tally = [], new_tally()
     if jobs > 1 and len(tasks) > 1:
         with multiprocessing.get_context("spawn").Pool(jobs, maxtasksperchild=1) as pool:
@@ -351,15 +384,21 @@ def replay(paths: Iterable[Path], report: dict, jobs: int = 1) -> tuple[list[dic
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="replay.py", description=__doc__.splitlines()[0])
     ap.add_argument("traces", nargs="+", type=Path, help="trace files (JSON, or .json.gz) or job directories")
-    ap.add_argument("--calibration", required=True, type=Path, help="network-warden-calibrate's report (JSON)")
+    ap.add_argument("--calibration", required=True, type=Path, help="network-certifier-calibrate's report (JSON)")
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--jobs", type=int, default=1, help="trace files replayed in parallel")
+    ap.add_argument("--syncs", type=parse_sync_policy, default="hindsight",
+                    help="the prover's syncs: hindsight, envelope, or an online rule (last, cover-K-M[-fallback])")
+    ap.add_argument("--fresh", action="store_true",
+                    help="an online rule starts every configuration with no history, even within one run")
     args = ap.parse_args(argv)
     report = json.loads(args.calibration.read_text())
-    rows, tally = replay(args.traces, report, args.jobs)
+    rows, tally = replay(args.traces, report, args.jobs, args.syncs, args.fresh)
     setup = Setup(report)
-    summary = summarize(rows, tally, setup) | {"calibration": str(args.calibration),
-                                               "traces": [str(p) for p in args.traces]}
+    summary = summarize(rows, tally, setup) | {"calibration": str(args.calibration), "sync_policy": args.syncs,
+                                               "fresh": args.fresh, "traces": [str(p) for p in args.traces]}
+    if args.syncs != "hindsight":
+        summary["egress"]["calibrator_misses"] = None
     cal = report["clock_sync"]
     summary["calibrator"] = {"honest_windows": sum(e["honest_windows"] for e in report["egress"]),
                              "honest_misses": sum(e["honest_misses"] for e in report["egress"]),

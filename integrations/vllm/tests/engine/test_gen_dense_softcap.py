@@ -16,10 +16,13 @@ from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertW
 from verity_vllm.engine.profiles.gen_dense_softcap_patterns import AttentionScopeSoftcap, with_softcap_patterns
 
 gemma = importlib.import_module("verity_vllm.engine.profiles.derived_GEMMA2_2B")
+from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, resolve_step
 from tests.engine.test_gen_dense2 import FA2, SCOPE, _fa2_edit
-from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
+from tests.observe.test_patterns_synthetic import D, KVH, NH, _context_on_host, by_spec, context, decode_step
 from verity_vllm.observe.fold.tree import step_events
+from verity_vllm.program.frontend.rules.vocab import vocabulary_for
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.registry.quarantine.dense import softcap as SC
 
 BASE = "Attention_v3{T=33,NH=9,KVH=3,D=64,BN=128}"
@@ -45,7 +48,6 @@ def test_softcap_scope_is_inserted_ahead_of_the_attention_scopes_it_refines():
     i, j, k = kinds.index(AttentionScopeSoftcap), kinds.index(AttentionScopeInertWindow), kinds.index(AttentionScope)
     assert i == j - 1 == k - 2 and kinds.count(AttentionScopeSoftcap) == 1
     assert ps[i].bn == ps[k].bn and ps[i].num_splits == ps[k].num_splits and ps[i].name == "attention.fa2_varlen_fwd.softcap"
-    assert ps[i].body is SC.AttentionSoftcap
     # without the dense2 patterns the softcap scope sits directly ahead of the base scope
     ps2 = with_softcap_patterns(B1PROF.PROFILE.patterns)
     kinds2 = [type(p) for p in ps2]
@@ -128,6 +130,50 @@ def test_base_facts_are_still_checked_under_a_softcap():
     se, res = _resolve(softcap=50.0, is_causal=False)
     uns = [r for r in res if isinstance(r, Unsupported)]
     assert len(uns) == 1 and "causal" in uns[0].reason
+
+
+def _resolve_on_host(cc, sms, registered_values=False, fa=None, **fa2_edits):
+    """The softcap profile's resolution of the synthetic step on a host of capability `cc`; `fa` = the FA version its attention layers
+    reported (a forced version)."""
+    events, start = decode_step(num_sms=sms)
+    se = step_events(_fa2_edit(events, **fa2_edits))
+    base = _context_on_host(start, se.sample, sms, cc)
+    if fa is not None:
+        doc = {**base.header.profile, "backends": {**(base.header.profile.get("backends") or {}), "attention_flash_attn_version": fa}}
+        base = dataclasses.replace(base, header=dataclasses.replace(base.header, profile=doc))
+    prof = dataclasses.replace(base.profile, patterns=with_softcap_patterns(with_dense2_patterns(base.profile.patterns, base.config)),
+                               registered_values=registered_values)
+    ctx = dataclasses.replace(base, profile=prof)
+    return ctx, resolve_step(se, ctx)
+
+
+def test_on_the_rtx_pro_6000_a_softcapped_launch_is_the_builders_check_inf_softcap_chain():
+    """On cc 12.0 (FA2's per-iteration `Check_inf`) the base chain is `Attention_v5`; the softcapped launch is `AttentionSoftcap_v2` with
+    the same statics and CAP, the Definition the builder's `attention_dot` kind binds there, on the base pattern's operands."""
+    ctx0, base = _resolve_on_host((12, 0), 188)
+    ctx, res = _resolve_on_host((12, 0), 188, softcap=50.0)
+    assert not [r for r in res if isinstance(r, Unsupported)], [r.reason for r in res if isinstance(r, Unsupported)]
+    (c0,) = [c for k, v in by_spec(base).items() if k.startswith("Attention_v5{") for c in v]
+    (c,) = [c for k, v in by_spec(res).items() if k.startswith("AttentionSoftcap") for c in v]
+    tp = target_of(ctx)[0]
+    geom = TG.attention_geometry(tp, D, 1, NH, KVH)
+    built = vocabulary_for("profile", tp.numerics_profile).kind(
+        "attention_dot", T=33, NH=NH, KVH=KVH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
+        FA2_MASKED_FROM=TG.fa2_masked_from(tp, 33, D, 1, 0, 1), CAP=50.0)
+    assert c.spec is built and built.base_id == "AttentionSoftcap_v2"
+    assert c.spec is TG.attention_spec(tp, 33, NH, KVH, D, 1, row=0, own_rows=1, cap=50.0)
+    assert {k: v for k, v in c.spec.bindings.items() if k != "CAP"} == c0.spec.bindings
+    assert (c.operands, c.outputs, c.rows, c.attribution, c.consumed) == (c0.operands, c0.outputs, c0.rows, c0.attribution, c0.consumed)
+
+
+@pytest.mark.parametrize("cc,sms,registered_values,fa", [((8, 9), 142, True, None), ((12, 0), 188, True, None), ((9, 0), 132, False, 2)])
+def test_a_softcapped_launch_without_a_registered_softcap_chain_is_unsupported_by_name(cc, sms, registered_values, fa):
+    """No softcapped twin of the target's chain is folded (the value-input chains `Attention_v10` / `_v11`, forced FA2's `Attention_v2` on
+    Hopper): Unsupported by name, never the plain chain."""
+    _, res = _resolve_on_host(cc, sms, registered_values=registered_values, fa=fa, softcap=50.0)
+    uns = [r for r in res if isinstance(r, Unsupported)]
+    assert len(uns) == 1 and uns[0].op == SCOPE and "softcap" in uns[0].reason, [(u.op, u.reason) for u in uns]
+    assert not [k for k in by_spec(res) if k.startswith("Attention")]
 
 
 def test_synthetic_fa2_launch_is_the_varlen_fwd_schema():

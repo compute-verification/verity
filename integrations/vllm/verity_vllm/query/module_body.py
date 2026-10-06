@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 import numpy as np
-from verity.proofs.query import Boundary, Partition, ValueRef, boundary, partition_by
+from verity_vllm.query.units import Boundary, Partition, ValueRef, boundary, partition_by
 
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from .program_view import ProgramView
@@ -34,7 +34,7 @@ __all__ = ["Q_MODULE_BODY_ID", "Q_MODULE_BODY_TEXT", "Q_module_body_v1", "litera
 Q_MODULE_BODY_ID = "Q_module_body_v1"
 Q_MODULE_BODY_TEXT = ("Q_module_body_v1: unit = module body = the maximal set of Calls whose recorded owning module path (correspondence: "
                       "nn_module_stack-derived) is identical; a non-leaf module's own Calls are their own body; Calls with no module are the "
-                      "root body; boundary values = U_V (in(V) u out(V)) over these units (verity.proofs.query.boundary_values) minus "
+                      "root body; boundary values = U_V (in(V) u out(V)) over these units (verity_vllm.query.units.boundary_values) minus "
                       "the Program's literals (the Values of Calls that read no Value: written in the descriptor, never acquired)")
 
 

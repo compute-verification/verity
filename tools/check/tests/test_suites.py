@@ -63,17 +63,56 @@ def test_the_tests_get_the_callers_pythonpath_entries_inside_the_tree_only(tmp_p
     assert S.tests_pythonpath() == str(S.CHILD)
 
 
+_HATCH = '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n'
+
+
+def _member(root: Path, path: str, name: str, packages: list[str] | None, build: bool = True) -> None:
+    (root / path).mkdir(parents=True, exist_ok=True)
+    text = f'[project]\nname = "{name}"\n' + (_HATCH if build else '')
+    if packages is not None:
+        text += f"\n[tool.hatch.build.targets.wheel]\npackages = {packages!r}\n".replace("'", '"')
+    (root / path / "pyproject.toml").write_text(text)
+    for p in packages or []:
+        (root / path / p).mkdir(parents=True)
+        (root / path / p / "__init__.py").write_text("")
+
+
 def test_a_python_that_imports_the_trees_packages_from_another_checkout_is_named(tmp_path, monkeypatch):
     tree, other = tmp_path / "tree", tmp_path / "other"
     for root in (tree, other):
-        (root / "protocols" / "pous" / "verity_pous").mkdir(parents=True)
-        (root / "protocols" / "pous" / "verity_pous" / "__init__.py").write_text("")
+        _member(root, "protocols/pous", "verity-pous", ["verity_pous"])
+        _member(root, "tools/check", "check", None, build=False)
     S = _suites(monkeypatch, tree)
-    pkgs = {"verity-pous": "protocols/pous", "research": "tools/research"}
+    pkgs = {"verity-pous": "protocols/pous", "check": "tools/check"}
     env = dict(os.environ, PYTHONPATH=str(other / "protocols" / "pous"))
     assert S.foreign(pkgs, env) == f"verity_pous from {other / 'protocols' / 'pous' / 'verity_pous' / '__init__.py'}"
     env["PYTHONPATH"] = str(tree / "protocols" / "pous")
     assert S.foreign(pkgs, env) is None
+
+
+def test_every_declared_package_is_probed_whatever_its_name_and_one_that_wont_import_is_named(tmp_path, monkeypatch):
+    """The names come from each member's build configuration, not a `verity` prefix: a package moved to `catalog/` is probed like
+    `verity_pous`, and one the Python can't find at all is named rather than passed over."""
+    tree, other = tmp_path / "tree", tmp_path / "other"
+    for root in (tree, other):
+        _member(root, "catalog", "catalog", ["src/catalog"])
+        _member(root, "archive", "archive", ["python/archive_old"])
+    S = _suites(monkeypatch, tree)
+    pkgs = {"catalog": "catalog", "archive": "archive"}
+    assert S.importable(pkgs) == {"archive_old": "archive", "catalog": "catalog"}
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(other / "catalog" / "src"), str(tree / "archive" / "python")]))
+    assert S.foreign(pkgs, env) == f"catalog from {other / 'catalog' / 'src' / 'catalog' / '__init__.py'}"
+    env["PYTHONPATH"] = str(tree / "catalog" / "src")
+    assert S.foreign(pkgs, env) == "archive_old from nowhere (not importable)"
+
+
+def test_a_member_that_builds_but_declares_no_package_is_named(tmp_path, monkeypatch):
+    _member(tmp_path, "odd", "odd", None)
+    S = _suites(monkeypatch, tmp_path)
+    assert S.foreign({"odd": "odd"}, dict(os.environ)) == "odd's package from nowhere (its build configuration declares none)"
+    (tmp_path / "odd" / "src" / "odd").mkdir(parents=True)
+    (tmp_path / "odd" / "src" / "odd" / "__init__.py").write_text("")       # hatch's default layout
+    assert S.importable({"odd": "odd"}) == {"odd": "odd"}
 
 
 def test_suites_refuse_a_python_that_imports_the_trees_packages_from_elsewhere(tmp_path, monkeypatch, capsys):
@@ -187,8 +226,56 @@ def _keys(S) -> dict[str, str]:
     out = {}
     for s in S.discover():
         paths = S.inputs_of(s, pkgs)
-        out[s.name] = S.key(s, S.object_ids(tree, sorted(set(paths) | set(S.RUNNER))), env, [], S.resolved(S.roots(s, pkgs), lock))
+        out[s.name] = S.key(s, S.object_ids(tree, sorted(set(paths) | set(S.RUNNER))), env, [], S.resolved(S.roots(s, pkgs), lock, s.path))
     return out
+
+
+def _move(root: Path, old: str, new: str) -> None:
+    """Move the member at ``old`` to ``new`` as a layout change does: the directory, the workspace's members and the lock."""
+    (root / new).parent.mkdir(parents=True, exist_ok=True)
+    _git(root, "mv", old, new)
+    for f, was in (("pyproject.toml", f'"{old}"'), ("uv.lock", f'editable = "{old}"')):
+        if (root / f).exists():
+            (root / f).write_text((root / f).read_text().replace(was, was.replace(f'"{old}"', f'"{new}"')))
+
+
+def test_a_suite_moved_whole_keys_as_it_did_and_any_change_misses(tmp_path, monkeypatch):
+    """The key is content: a suite renamed with every file as it was hits, its uv.lock source included. Another depth misses (its
+    tests count parents to the root), as do a moved dependency directory and one changed byte."""
+    _workspace(tmp_path)
+    (tmp_path / "b" / "pyproject.toml").write_text('[project]\nname = "b"\ndependencies = ["a"]\n\n[tool.uv.sources]\n'
+                                                   'a = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (tmp_path / "a" / "tests" / "test_a.py").write_text("def test_a():\n    pass\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    before = _keys(S)
+
+    _move(tmp_path, "b", "c")
+    assert S.locked()["b"]["entries"][0]["source"] == {"editable": "c"}
+    assert _keys(S) == before                                       # renamed beside itself, nothing else changed
+    _move(tmp_path, "c", "nested/b")
+    assert _keys(S)["b"] != before["b"] and _keys(S)["a"] == before["a"]     # another depth
+    _move(tmp_path, "nested/b", "b")
+    assert _keys(S) == before
+
+    _move(tmp_path, "a", "z")                                       # b's dependency, outside it, moves: b misses, a hits
+    after = _keys(S)
+    assert after["a"] == before["a"] and after["b"] != before["b"]
+
+    (tmp_path / "z" / "tests" / "test_a.py").write_text("def test_a():\n    pass\n ")      # one byte
+    changed = _keys(S)
+    assert changed["a"] != after["a"] and changed["b"] != after["b"]
+
+
+def test_the_lock_keys_a_suite_s_own_paths_from_it_and_others_as_they_are(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    entry = [{"name": "b", "source": {"editable": "pkgs/b"}, "metadata": {"requires-dist": [
+        {"name": "a", "editable": "pkgs/a"}, {"name": "t", "editable": "pkgs/b/tools"}, {"name": "x", "editable": "pkgs/bb"}]}}]
+    assert S._relocated(entry, "pkgs/b") == [{"name": "b", "source": {"editable": "<suite>"}, "metadata": {"requires-dist": [
+        {"name": "a", "editable": "pkgs/a"}, {"name": "t", "editable": "<suite>/tools"}, {"name": "x", "editable": "pkgs/bb"}]}}]
+    assert S._relocated(entry, ".") == entry
+    assert S._abs("pkgs/b", S._rel("pkgs/b", "pkgs/b/tools")) == "pkgs/b/tools" and S._rel("pkgs/b", "pkgs/bb") == "pkgs/bb"
 
 
 def test_a_lock_or_metadata_change_rekeys_only_the_suites_it_resolves_to(tmp_path, monkeypatch):
@@ -271,6 +358,24 @@ def test_a_declared_package_is_its_directory_without_its_dependencies(tmp_path, 
     assert touched() == ["a", "b"]
     (tmp_path / "b" / "mod.py").write_text("Y = 1\n")
     assert touched() == ["a", "b", "c"]
+
+
+def test_the_roots_own_distribution_is_a_member_and_its_dependents_key_on_the_packages_it_ships(tmp_path, monkeypatch):
+    """The root's pyproject.toml builds `core`, so uv makes it a member; a suite that depends on it keys on `core/`, not on the
+    whole tree its directory holds."""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "core"\n' + _HATCH + '\n[tool.hatch.build.targets.wheel]\n'
+                                             'packages = ["core"]\n\n[tool.uv.workspace]\nmembers = ["p"]\n')
+    (tmp_path / "core").mkdir()
+    (tmp_path / "core" / "__init__.py").write_text("")
+    (tmp_path / "p" / "tests").mkdir(parents=True)
+    (tmp_path / "p" / "pyproject.toml").write_text('[project]\nname = "p"\ndependencies = ["core"]\n\n[tool.uv.sources]\n'
+                                                   'core = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs = S.members()
+    assert pkgs == {"core": ".", "p": "p"} and S.importable(pkgs) == {"core": "."}
+    assert S.inputs_of({s.name: s for s in S.discover()}["p"], pkgs) == ["core", "p"]
 
 
 def test_a_pass_is_reused_only_while_what_it_used_beside_its_key_holds(tmp_path, monkeypatch):
@@ -365,6 +470,8 @@ def test_a_shipped_tree_with_no_store_fails_only_on_a_fixture_it_cannot_fetch(tm
     p = _run_shipped(root, tmp_path)
     assert p.returncode == 1
     assert "its fixtures could not be fetched: pkg/tests/fixtures/big.proof" in p.stdout, p.stdout
+    assert "Traceback" not in p.stderr and "cached  pkg" not in p.stdout, p.stderr     # a suite that never ran has no pass to cite
+    assert "1 suites: 0 passed (0 cached), 1 failed" in p.stdout, p.stdout
 
 
 def test_what_a_module_can_reach_by_name(tmp_path, monkeypatch):
@@ -422,6 +529,35 @@ def _reused(tmp_path: Path) -> list[str]:
     return sorted(json.loads(p.read_text())) if p.exists() else []
 
 
+def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_is_killed(tmp_path):
+    """A pytest the OOM killer ends wrote no report and left its forkserver running (network-accounting, #1202's tier): the
+    suite's own process group takes what it left with it, and the signal and peak RSS are said."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    for f in tests.glob("test_*.py"):
+        f.unlink()
+    left = tmp_path / "left.pid"
+    (tests / "test_killed.py").write_text(
+        "import os, signal, subprocess, sys\n\n"
+        "def test_killed():\n"
+        "    p = subprocess.Popen([sys.executable, '-c', 'import signal; signal.pause()'])\n"
+        f"    open({str(left)!r}, 'w').write(str(p.pid))\n"
+        "    os.kill(os.getpid(), signal.SIGKILL)\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "killed")
+    p = _run_suite(root, tmp_path, "--fresh")
+    assert p.returncode == 1 and "killed by SIGKILL: pytest died by SIGKILL at a peak RSS of" in p.stdout, p.stdout
+    assert "killed 1 processes its tests left in the suite's process group" in p.stdout, p.stdout
+    stat = Path("/proc") / left.read_text() / "stat"
+    assert not stat.exists() or stat.read_text().rsplit(")", 1)[1].split()[0] in ("Z", "X"), stat.read_text()
+
+
+def test_oom_kills_reads_the_kernels_count(monkeypatch, tmp_path):
+    S = _suites(monkeypatch, tmp_path)
+    n = S.oom_kills()
+    assert n is None if not Path("/proc/vmstat").exists() else isinstance(n, int) and n >= 0
+
+
 def test_a_failed_suite_keeps_its_passes_and_a_sibling_fix_reuses_them(tmp_path):
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
@@ -453,6 +589,38 @@ def test_a_failed_suite_keeps_its_passes_and_a_sibling_fix_reuses_them(tmp_path)
     (tests / "test_effect.py").write_text("import os\nos.environ['PKG_FLAG'] = '2'\n\ndef test_effect():\n    pass\n")
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "7 passed" in p.stdout and _reused(tmp_path) == [], p.stdout
+
+
+def test_a_moved_suite_reuses_its_tests_passes_and_its_own_until_a_byte_changes(tmp_path):
+    """A layout change moves a suite whole: its kept passes, the suite's and each test's, answer for it where it lands."""
+    import json
+
+    root = tmp_path / "tree"
+    _per_test_workspace(root)
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 1 and "4 per-test passes kept" in p.stdout, p.stdout
+
+    _move(root, "pkg", "moved")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 1 and "1 failed" in p.stdout and "4 reused" in p.stdout, p.stdout
+    assert sorted(json.loads((tmp_path / "logs" / "moved.reuse.json").read_text())) == [
+        "tests/test_heavy.py::test_heavy", "tests/test_heavy.py::test_heavy_too", "tests/test_shared.py::test_shared",
+        "tests/test_uses.py::test_uses"]
+
+    (root / "moved" / "tests" / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    assert _run_suite(root, tmp_path).returncode == 0
+    _move(root, "moved", "again")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "cached  pkg" in p.stdout and "1 suites: 1 passed (1 cached)" in p.stdout, p.stdout
+
+    _move(root, "again", "deeper/pkg")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "cached  pkg" not in p.stdout and "5 passed" in p.stdout, p.stdout     # another depth
+
+    helpers = root / "deeper" / "pkg" / "tests" / "helpers.py"
+    helpers.write_text(helpers.read_text() + " ")                   # one byte, which every module's key holds
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "cached  pkg" not in p.stdout and "5 passed" in p.stdout, p.stdout
 
 
 def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
@@ -536,7 +704,7 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path):
     os.killpg(p.pid, signal.SIGINT)
     out = p.communicate()[0]
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
-    assert len(list((tmp_path / "cache" / "per-test" / "pkg").glob("pkg~tests~test_heavy.py--*.json"))) == 1
+    assert len(list((tmp_path / "cache" / "per-test" / "pkg").glob("tests~test_heavy.py--*.json"))) == 1
 
 
 _CHILD_TEST = '''import glob, os, subprocess, sys
@@ -601,8 +769,8 @@ def test_what_a_child_reads_outside_the_inputs_fails_the_suite_and_names_the_tes
     assert "log:" not in p.stdout, p.stdout                                     # pytest passed: no log tail to read
     assert json.loads(out.read_text())[0]["child_outside"] == {"pkg/tests/test_outside.py": ["elsewhere/data.txt"]}
     assert not [f for f in cache.glob("*.json") if json.loads(f.read_text()).get("suite") == "pkg"]
-    assert not list((cache / "per-test" / "pkg").glob("pkg~tests~test_outside.py--*.json"))
-    assert list((cache / "per-test" / "pkg").glob("pkg~tests~test_heavy.py--*.json"))
+    assert not list((cache / "per-test" / "pkg").glob("tests~test_outside.py--*.json"))
+    assert list((cache / "per-test" / "pkg").glob("tests~test_heavy.py--*.json"))
 
     p = _run_suite(root, tmp_path)                                              # nothing changed: no pass to reuse
     assert p.returncode == 1 and "1 passed, 5 reused" in p.stdout and "elsewhere/data.txt: read by" in p.stdout, p.stdout
@@ -613,6 +781,29 @@ def test_what_a_child_reads_outside_the_inputs_fails_the_suite_and_names_the_tes
     assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "cached  pkg" in p.stdout, p.stdout
+
+
+def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds_while_it_is_unchanged(tmp_path):
+    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `fixtures/artifacts.json` for
+    repo replicas: in the test's process or a child's, that read fails no suite, and the test's own read is watched."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    (root / "fixtures").mkdir()
+    (root / "fixtures" / "artifacts.json").write_text("{}\n")
+    (tests / "test_registry.py").write_text(
+        "import os, subprocess, sys\n\ndef test_registry():\n"
+        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'fixtures', 'artifacts.json')\n"
+        "    open(p).read()\n"
+        "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "registry")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
+    assert "cached  pkg" in _run_suite(root, tmp_path).stdout
+    (root / "fixtures" / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout
 
 
 def test_a_fork_a_collection_or_a_child_whose_tracer_fails_fails_the_suite_under_xdist(tmp_path):
@@ -814,7 +1005,7 @@ def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path
                      "        f.write(_os.environ.get('PYTEST_XDIST_WORKER', '-') + ' ' + request.node.nodeid + '\\n')\n")
     kept = tmp_path / "cache" / "per-test" / "pkg"
     kept.mkdir(parents=True)
-    (kept / "pkg~tests~test_z.py--earlier.json").write_text(json.dumps({"when": "2026-09-30 00:00", "passed": {"tests/test_z.py::test_zz": 120.0}}))
+    (kept / "tests~test_z.py--earlier.json").write_text(json.dumps({"when": "2026-09-30 00:00", "passed": {"tests/test_z.py::test_zz": 120.0}}))
     log = tmp_path / "order.log"
     p = _run_suite(root, tmp_path, "--jobs", "2", extra={"ORDER_LOG": str(log)})
     assert p.returncode == 0 and "on 2 workers" in p.stdout, p.stdout
@@ -824,3 +1015,27 @@ def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path
         worker, node = line.split(" ", 1)
         first.setdefault(worker, node)
     assert "tests/test_z.py::test_zz" in first.values(), log.read_text()
+
+
+def test_a_change_under_a_name_git_quotes_selects_the_suite_that_owns_it(tmp_path, monkeypatch):
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"a/\\303\\251.py"`), which is under no suite's inputs, so
+    `--changed` (the quick tier `research queue ready` runs) skipped the suite owning such a file."""
+    _workspace(tmp_path)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "a" / "é.py").write_text("x = 1\n")
+    assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a"]
+
+
+def test_a_package_under_a_name_git_quotes_is_a_suite(tmp_path, monkeypatch):
+    """`git ls-files` quotes a name with bytes outside ASCII (`"pk\\303\\251/pyproject.toml"`), a path to no file, so the package
+    there was no suite and its tests never ran."""
+    (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pké"]\n')
+    (tmp_path / "pké" / "tests").mkdir(parents=True)
+    (tmp_path / "pké" / "pyproject.toml").write_text('[project]\nname = "pke"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    assert S.metadata() == ["pké/pyproject.toml", "pyproject.toml", "uv.lock"]
+    assert [s.path for s in S.discover()] == ["pké"]

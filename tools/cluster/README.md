@@ -24,7 +24,8 @@ workload alone runs under `gpu-lease --wait` on node 2, so the GPU is booked onl
 `gpu-lease`, whose GPUs `n1_lease.py` lends from Kueue, once the description sets its `gpu_executor = "n1-lease"`; until then
 such a job goes to node 2 or is refused. Only a GPU job pinned to node 1 (`--on vy-nebius-1`) goes there, since the submit path
 can't see node 1's lease pool. A job names its kind (`--kind`, default `adhoc`) and research question (`--question`); a kind registered in
-`kinds/<owner>.toml` supplies its shape, time and question, and the rules on kinds only warn for now.
+`kinds/<owner>.toml` supplies its shape, time and question, and the rules on kinds only warn for now. A job of an unregistered
+kind gives its own time (`--max-min`) and memory (`--mem-gb`), or is refused: its scope is killed at `MemoryMax=`.
 
 ## Layout
 
@@ -45,8 +46,10 @@ src/cluster/
 ├── kinds.py    the job-kind registry (kinds/<owner>.toml): a kind's shape, time and question; the held rules as warnings
 ├── status.py   each node's running, queued and held jobs by owner and key, GPU-h ready, holds, disk and node 1's
 │               unreplayed bundles (release.py's rule), read over SSH; read-only
-└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status
-descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026
+├── policy.py   the policy a description declares ([policy]: each key and its owner) and every key where a node's live
+│               value differs, read over SSH; read-only
+└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | policy
+descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026, and their policy
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
 vy-cluster-agent.service   node 2's live agent as a systemd unit: install, pin, stop and restart in its header
 tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),
@@ -86,4 +89,19 @@ uv run cluster ledger verify|quiet|failures LEDGER.jsonl ...
 uv run cluster shadow replay tools/cluster/descriptions/nebius.toml --sampler UTIL.jsonl.gz --preempted preempted.log --out DIR
 uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
 uv run cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key
+uv run cluster policy show [--node nebius-1|nebius-2|all] [--key K] [--json]   # the policy in force: key, owner, source
+uv run cluster policy diff [--node nebius-1|nebius-2|all] [--json]   # over SSH: exit 1 drift, 3 a value unread
+uv run cluster policy override KEY VALUE --until 2026-10-04T10:30:00Z --by WHO --reason R [--apply]   # on KEY's node
 ~~~
+
+Policy is what node services read from outside git: node 1's lease pools (the `n1-lease` panes' environment), Kueue's
+ClusterQueue quotas and stop policies, the check and Lean slot files, `gpu-lease`'s direct-run maps, the cpuset drop-in,
+and node 2's booked windows and CPU sets. `[policy]` in the description declares each, with the handle who decides a
+change; `cluster policy diff` names every key whose live value differs or that the description lacks, and calls a key it
+couldn't read unknown, never as declared (node 2's are all unknown while a timed window is on: it reads nothing else then).
+A change that should end on its own is an override: `cluster policy override`, run on the key's node, records the value, who,
+why and until when in that node's hash-chained log (`/workspace/research/policy/overrides.jsonl`; a dry run without
+`--apply`), and `show` and `diff` use it until then. Nothing applies an override yet but `n1_lease.py`, which takes its pool's
+`max`, `borrow` and `borrow-until` from `cluster policy show --key vy-nebius-1.lease-pool.<pool> --json` when
+`$VY_POOL_POLICY` names that command; it writes the three in force to `n1-lease.limits` in its lease directory, and `diff`
+reads them there for such a loop, not from its environment.

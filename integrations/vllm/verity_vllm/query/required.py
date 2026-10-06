@@ -2,7 +2,7 @@
 
 What this module DECIDES (structure + correspondence, no by-name table):
 
-* WHICH Values are required: `verity.proofs.query.required_values(P, Q_module_body_v1, policy)` -- every Value that crosses a
+* WHICH Values are required: `verity_vllm.query.units.required_values(P, Q_module_body_v1, policy)` -- every Value that crosses a
   module-body boundary in the Program's own dataflow, plus the policy below.  v1's "promotion" of interior rows whose output another
   module reads (F-r19-int-20) is not a pass here: such a Value crosses the boundary and is required by definition.  A literal (a Call
   that reads no Value, `module_body.literal_calls`) is the descriptor's: never a boundary Value, never protocol-required.
@@ -49,8 +49,8 @@ from dataclasses import dataclass, field
 from functools import reduce
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity.ir import partition_object as PO
-from verity.proofs.query import Policy, RequiredValues, ValueRef, partition_by, required_values
+from verity.primitives.circuits import partition_object as PO
+from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by, required_values
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence
@@ -63,10 +63,10 @@ __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLIN
            "member_name", "shared_instances", "collective_sites", "request_manifest", "BridgeResult", "under",
            "CallMember", "Population", "population", "Q_WORD_ID", "Q_WORD_TEXT", "QUERY_OF_RECORD", "QUERIES", "partition_of"]
 
-#: the query of record: every Call cut into word units (`verity.ir.cut`); the Program's partition is the `verity/partition/v1` object
+#: the query of record: every Call cut into word units (`verity.primitives.circuits.cut`); the Program's partition is the `verity/partition/v1` object
 #: naming it (`partition_of`).  `Q_module_body_v1` stays selectable, for A/B only.
 Q_WORD_ID = word_query.query_id(16, 32)
-Q_WORD_TEXT = (f"{Q_WORD_ID}: units = the word units of every Call's cut (verity.ir.cut; {PO.FORMAT} names the partition as Q_word v1 "
+Q_WORD_TEXT = (f"{Q_WORD_ID}: units = the word units of every Call's cut (verity.primitives.circuits.cut; {PO.FORMAT} names the partition as Q_word v1 "
                "{X: 16, W: 32}); committed = every Value one Call produces and another Call reads or the Program returns, and the prescribed "
                "inputs a Call reads (U_C (in(C) u out(C)) over the Calls), minus the Program's literals (the Values of Calls that read no "
                "Value: written in the descriptor, never acquired); plus each Call's committed interior words (the tap families)")
@@ -98,7 +98,7 @@ SUPPLIED_PARAM = re.compile(r"^(values|run(_\d+)?)$")
 def collective_kind(family: str) -> str | None:
     """The tensor-parallel collective a Definition family is, any world: "all_reduce" | "all_gather" | None -- the registry's composites
     decide (AllReduce2_v1 / AllReduce_v2{WORLD,N} / AllGather2_v1 / AllGather_v1{WORLD,N}); imported on first use (only a rank Program asks)."""
-    from verity_vllm.program.registry.b1_tp2 import collective_kind as kind
+    from verity_vllm.program.frontend.collective_kinds import collective_kind as kind
     return kind(family)
 
 # ---------------------------------------------------------------------------------------------------------------------------------

@@ -13,7 +13,8 @@
 # The reference replay runs after the window, on the CPU (verify.sh <run id>); its ACCEPT is replay-verified (development
 # shortcut; the protocol's check is a ZK proof, PROTOCOL.md).  Needs setup.sh's $WORK.
 # The venv's tools (ninja, which FlashInfer's JIT calls) come first on PATH, and FLASHINFER_CUDA_ARCH_LIST is setup.sh's, so
-# FlashInfer finds the sampling module setup.sh built, with the same flags.  jit-built.txt lists every FlashInfer library
+# FlashInfer finds the sampling module setup.sh built, with the same flags, in the build's own cache (flashinfer_env.sh; a
+# ready.json whose library is elsewhere fails SETUP).  jit-built.txt lists every FlashInfer library
 # built during the run: empty unless a first-call JIT landed in it.
 # MODE=smoke (untimed, `gpu-lease 1`): the same checks, then `e2e.py --smoke` (both engines resident and each one's first
 # sampling calls) into smoke.json.  MODE=profile (untimed, `gpu-lease 1`): the same checks, then `profile_decode.py` under
@@ -37,15 +38,20 @@ SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GR
 fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 [ -x "$PY" ] && [ -f "$WORK/ready.json" ] || fail SETUP "no $WORK/ready.json: run setup.sh first"
 export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f
+. benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
+"$PY" -c 'import json, os, sys
+p = json.load(open(sys.argv[1]))["flashinfer"]["prebuilt"]["sampling"]
+sys.exit(not (p.startswith(os.environ["FLASHINFER_WORKSPACE_BASE"] + "/") and os.path.exists(p)))' "$WORK/ready.json" \
+  || fail SETUP "ready.json's FlashInfer sampling library is not in this build's cache $FLASHINFER_WORKSPACE_BASE: run setup.sh"
 export HF_HOME=${HF_HOME:-/workspace/hf}
-export PYTHONPATH=$PWD/packages/verity/src:$PWD/protocols/pouw:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/catalog:$PWD/kernels:$PWD/experimental:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
 # NVML ignores CUDA_VISIBLE_DEVICES, so every nvidia-smi query names the leased GPU by its UUID (gpu-lease's first)
 UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}
 [ -n "$UUID" ] || fail IDENTITY "no GPU_LEASE_UUID: run under gpu-lease"
 export E2E_GPU_UUID=$UUID
 touch "$OUT/.started"
-trap 'find "$HOME/.cache/flashinfer" -name "*.so" -newer "$OUT/.started" > "$OUT/jit-built.txt" 2>/dev/null || true' EXIT
+trap 'find "$FLASHINFER_WORKSPACE_BASE/.cache/flashinfer" -name "*.so" -newer "$OUT/.started" > "$OUT/jit-built.txt" 2>/dev/null || true' EXIT
 
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"
 grep -q "RTX PRO 6000 Blackwell" "$OUT/identity.csv" && grep -q ", 12.0," "$OUT/identity.csv" || fail IDENTITY "$(cat "$OUT/identity.csv")"

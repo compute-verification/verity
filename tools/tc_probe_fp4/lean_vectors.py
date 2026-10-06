@@ -1,7 +1,7 @@
 """Named NVFP4 conformance vectors from a generated Lean vector file, captured on the card (``probe.py --instruction
 nvf4_lean_vectors --vectors Fp4Vectors.lean``).
 
-The file is a ``Pouw.Protocol.PearlC.Fp4Vectors`` module: ``Vec`` entries ⟨acc, a, b, sa, sb, d⟩, one output word of
+The file is a ``Definitions.Pouw.PearlC.Fp4Vectors`` module: ``Vec`` entries ⟨acc, a, b, sa, sb, d⟩, one output word of
 ``blackwell_sm120_nvf4_m16n8k64`` (the accumulator word, A's row and B's column as 64 codes packed little-endian four bits each,
 four UE4M3 bytes per side packed likewise, and the word the model predicts, ``none`` outside it), and ``ChainVec`` entries
 ⟨acc, n, a, b, sa, sb, d⟩ (``n`` firings, firing j on codes 64j..64j+63 and bytes 4j..4j+3, D fed back as C).
@@ -17,7 +17,7 @@ device D buffer is filled with 0xA5 bytes before its launch.
 Gates, before a selected word is recorded: the device UUID; the operands hold each vector where it was placed; both kernels agree
 on every word, and both placements on every vector's word; no word reads the poison 0xA5A5A5A5; every background lane (outside the
 vector's row and column) reproduces ``BLACKWELL_SM120_NVF4``; the controls, the other entries of ``--vector-list`` and
-``nvf4Chains`` that carry a predicted word and no bit-7 byte, reproduce the file's words (``verity.ml.tc`` generated them); and a
+``nvf4Chains`` that carry a predicted word and no bit-7 byte, reproduce the file's words (``verity_catalog.silicon`` generated them); and a
 no-write control, the first tiles run again with every launch skipped, reads back nothing but the poison and fails the background
 gate on every lane.  So a layout error or a kernel that wrote nothing fails the run instead of reading as a finding.  The finding:
 each selected word against the file's ``d``, against its twin's device word, against the low-7-bit decode (the pinned model on the

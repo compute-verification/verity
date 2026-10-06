@@ -97,6 +97,43 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-05 (10:45 PM PDT): when Daniel hands over a design to implement, build it unless there is a strong reason not
+  to: a measured cost that breaks a budget, a soundness or zero-knowledge hole, or a contradiction with a proved theorem.
+  Taste isn't one. With a strong reason, build the nearest version you can defend and leave him a report, rather than
+  waiting for him.
+- 2026-10-05 (10:45 PM PDT): the proof service is built to the decisions table of
+  `note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`. The rules from it that generalize:
+  - One hash, SHA-512. Every commitment is hm96 rows in frame-v3-sha512 trees, and signatures are hash-based over
+    SHA-512.
+  - What an auditor-trusted device signs is witness and never reaches the auditor in the clear. Such devices are the
+    network certifiers and the memory challenger.
+  - Partitions are private, and their properties are public.
+  - No retries for now. A failed proof is a visible failure, and a retry never redraws.
+  - Outer proofs go through the firewall one at a time.
+  - Live coins only; Fiat–Shamir is out.
+- 2026-10-05 (10:45 PM PDT): the names are network certifier (was the warden), network certificates (its records),
+  memory challenger (PoUS's timed verifier), firewall (prover gateway), challenger (verifier gateway), verifier (batch
+  verifier) and workers (GPU workers). "Gateway" is retired. The rename move rolls them out with the Glossary.
+- 2026-10-05 (7:48 PM PDT): every protocol is zero-knowledge, PoUS included: the developer's data and circuit are hidden,
+  and so is anything that reveals them (shapes, row indices, layouts, unsalted digests). Only the minimum is public, each
+  item with its reason, and there is no clear mode. In top's reading (8:15 PM), public items are of four kinds: protocol
+  structure, the protocol's outputs (a verdict, PoUW's credited work), the verifier's own coins and draws, and hiding
+  commitments (a salted root).
+- 2026-10-05 (7:17 PM PDT): the proof layer is one service every accounting protocol uses. A protocol states what is
+  committed, which units need proofs (or the rule that selects them), the public Program each must pass, and what it
+  does with the outcome; the service owns commitments, live coins and the record, the selection, proving, verifying and
+  the integrity profile, and no protocol keeps its own copy of them.
+- 2026-10-05 (7:11 PM PDT): a circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the
+  circuit accepting implies the verifier of record accepts; completeness stays a test.
+- 2026-10-05: don't resume or re-dispatch a turn cut off by a console drop or a provider outage unless Daniel asks;
+  report it to your coordinator and wait.
+- 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
+  piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
+  critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
+  work still names its question.
+- 2026-10-04 (2:21 PM PDT): during the migration, ci resolves a conflict that is only a rename (a moved file that another
+  PR edited) in the train tip's merge commit, instead of sending the PR back for a restack, and names each resolution in
+  the handoff. A conflict that needs judgment still goes to the PR's owner, and `check` still runs on the merged tree.
 - 2026-10-04 (8:42 AM PDT): the proof system proves batches of arbitrary Boolean circuits, so soundness is **one
   theorem over everything the compiled Lean verifier accepts**, with no hypothesis on the circuit file or the statement's
   form (no `scopeOk`, no `pub.tables = none`). The verifier fails closed: it refuses every form the proof doesn't cover,
@@ -113,16 +150,13 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-03 (the coordinator's): data you don't own on a node is deleted only with `research retention gc` or `research
   retention rm --approved-by @OWNER`, which refuses unless every retention record on the path names that owner; never a bare
   `rm`, and never on another lane's word about who owns it.
-- 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`EDGES` in
-  `tests/test_protocol_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
+- 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`ALLOWED` in
+  `verity/tests/test_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
   edges stay acyclic. The layout that follows (lean with compute-accounting): a protocol guarantee that needs a proof
   system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
   registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
   for itself. No package requires both a protocol and a backend, there is no `bridges/` layer, and a citation names both
   guarantees.
-- 2026-10-02 (10:27 PM PDT): a statement review or red-team grant on a PR carries across a restack or a merge of `main`
-  when the restacked head's `lean-audit.json` change against its base is byte-identical to the one that was granted.
-  Any other change to `lean-audit.json` needs a new grant.
 - 2026-10-02 (10:27 PM PDT): `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption. Hiding is
   proved at a fresh uniform key, and nobody works on proving that the pinned key behaves like one.
 - 2026-10-02 (10:27 PM PDT): the lander starts every merge check (`check --record`, `research merge`). The PR captain
@@ -137,8 +171,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   is accepted for conceptual clarity unless it proves a bottleneck.
 - 2026-10-01 (3:32 PM PDT): no protocol deals with public values, so none gets an exemption; PoUW's tile check moves into
   a proof. During development a proof may be replaced by replay, or verification skipped, for research velocity: that's
-  a shortcut, never the protocol. Shapes such as batch size and sequence length may stay public for now: the first
-  protocol decouples values from circuits, and private-circuit protocols come later.
+  a shortcut, never the protocol. Its clause letting shapes stay public is superseded (2026-10-05, 7:48 PM PDT).
 - 2026-10-01 (2:43 PM PDT): a decision Daniel must make goes where Slack notifies him, never only in a note or a lead's
   thread. Use one question per post, with its options, your recommendation, and its deadline or default:
   `research msg ask-daniel` (the card mentions him), or, if the card fails, `research msg send --to @daniel`.
@@ -171,7 +204,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   on preemptible leases.
 - 2026-09-30: the Lean infrastructure lane changes `tools/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
   Lean foundations and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. It speeds up another
-  lane's proofs when no pinned record changes; a changed record in another lane's package goes through that lane. What a
+  lane's proofs when no guarantee's record changes; a changed record in another lane's package goes through that lane. What a
   headline theorem may rest on, what "proved" means, retiring a theorem a table cites, spend past a budget line and any
   new human gate go to Daniel.
 - 2026-09-30: a lane fixes a bug it hits in `tools/research` in a small PR of its own, and the research coordinator only
