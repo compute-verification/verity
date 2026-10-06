@@ -168,6 +168,16 @@ def test_custody_deletes_the_lean_dependency_urls_wherever_a_run_leaves_them():
     assert f"inputs/{CHECK.LEAN_DEPS_URLS}" in CREDENTIALS
 
 
+def test_the_agreement_leaves_memory_for_the_steps_beside_it(monkeypatch):
+    """vy-mig-check-21 (128 GB, 32 cores) gave the agreement 16 verifier processes at 8 GB each while lean-suites ran beside it,
+    and its cgroup OOM-killed 36 of them (6 Oct): the agreement counts on half."""
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 128)
+    monkeypatch.setattr(CHECK, "cores", lambda: 32)
+    assert CHECK.session_jobs() * 8 <= 128 // 2
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 8)
+    assert CHECK.session_jobs() == 1
+
+
 def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch):
     import json
 
