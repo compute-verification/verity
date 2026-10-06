@@ -387,3 +387,52 @@ def test_run_commit_and_hashing_phases_are_the_verifiers(host):
             "digests": b"".join(digests), "leaves": b"".join(leaves), "tickets": b"".join(F.tickets(c, seed_a)),
             "tree_t": F.tree_bytes(F.t_domain(ctx, tiles), leaves, TILE_SCHEMA)}
     assert {name: host.read(pipe.b[name], len(w)) == w for name, w in want.items()} == dict.fromkeys(want, True)
+
+
+def test_sm120_h3s_phases_are_the_verifiers(host):
+    """pearl_c_sm120/run.py's `Pipeline` under -h3s at 64 x 128 x 1024 (m_real 48: a partial row block), its epoch, unit, commit
+    and hashing phases on the host (every one of their kernels is hash_h3s.cuh's): B's HM96 tree under weight 3's nonce, A's
+    under the unit index read from the unit block, seed_A over root_A with its line key, each row's seed and line key, the
+    tile leaves over C~ and U and the transcript tree, each equal to the reference's (`audit.commit_rows`, `pearl_c`)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", HERE.parent / "pearl_c_sm120" / "run.py")
+    S = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(S)
+    m, n, k, mr, w, idx = 64, 128, 1024, 48, 3, 5
+    rng = np.random.default_rng(12)
+    a_rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(m)]
+    b_rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(n)]
+    c = rng.integers(0, 2**32, (m, n), dtype=np.uint64).astype(np.uint32)
+    u = rng.integers(0, 2**32, (m, n), dtype=np.uint64).astype(np.uint32)
+    salt, salt_key, tiles = bytes(range(32)), bytes(range(100, 132)), S.cdiv(mr, 64) * (n // 64)
+    b_tree = audit.commit_rows(audit.weight_binding(w), -2, b_rows, audit.HM96, salt_key, audit.HM96_WEIGHTS + w)
+    root_b = b_tree.commitment.root
+    dom_a, dom_b = rows_domain(activation_binding(salt, idx), idx, mr, audit.HM96), b_tree.domain
+    epoch = audit.Epoch(audit.Workload((C.Matmul(idx, C.Shape(mr, k, n), w),)), {w: root_b}, salt)
+    dom_t = audit.transcript_domain(epoch, tiles, audit.HM96)
+    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+            "dom_a": dom_a.domain_id, "dom_b": dom_b.domain_id, "dom_t": dom_t.domain_id, "line_b": bytes(32)}
+    host.sms = 4
+    pipe = S.Pipeline(host, m, n, k, "sm120", {name: host.put(v) for name, v in keys.items()}, host.put(b"".join(a_rows)),
+                      host.put(b"".join(b_rows)), m_real=mr, hashing="h3s", weight=w)
+    for name, words in (("c", c), ("u", u)):
+        host.bufs[pipe.b[name]][:m * n * 4] = np.frombuffer(words.astype("<u4").tobytes(), np.uint8)
+    names = [nm for nm, phase, step in pipe.steps() if phase in ("epoch", "unit", "commit", "hashing") and (step() or True)]
+    assert names == ["rowdig_b", "hash_rows_b", "tree_b", "pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a",
+                     "hash_leaf", "tree_leaves_t", "tree_t"]
+
+    def levels(dom, values, nonce):
+        salted = [v + audit.hm96_salt(salt_key, nonce, i) for i, v in enumerate(values)]
+        return b"".join(b"".join(lv) for lv in tree_levels(dom, [dom.leaf(i, i, ROW_SCHEMA, v) for i, v in enumerate(salted)]))
+
+    tree_a = levels(dom_a, a_rows[:mr], idx)
+    seed_a = C.unit_seed_a(salt, tree_a[-64:], root_b, idx, "h3s")
+    seeds = [C.row_seed(salt, C.row_digest(r), root_b, idx, i, "h3s") for i, r in enumerate(a_rows[:mr])]
+    cr, ur = c[:mr], u[:mr]
+    leaves = [C.leaf(C.Checked(cr[r0:r0 + 64, c0:c0 + 64].tolist(), ur[r0:r0 + 64, c0:c0 + 64].tolist()), "h3s")
+              for r0 in range(0, mr, 64) for c0 in range(0, n, 64)]
+    want = {"tree_b": levels(dom_b, b_rows, audit.HM96_WEIGHTS + w), "tree_a": tree_a, "seed_a": seed_a,
+            "line_a": C._s512_line_key(seed_a), "seeds_a": b"".join(seeds), "lkeys_a": b"".join(C._s512_line_key(x) for x in seeds),
+            "leaves": b"".join(leaves), "tree_t": levels(dom_t, leaves, audit.HM96_TRANSCRIPT)}
+    assert want["tree_b"][-64:] == root_b
+    assert {name: host.read(pipe.b[name], len(v)) == v for name, v in want.items()} == dict.fromkeys(want, True)

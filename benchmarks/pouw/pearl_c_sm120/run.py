@@ -273,14 +273,17 @@ TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_smal
 LEAF_TILES = 32                                  # hash_leaf_p's most tiles a CTA (its shared memory's)
 #: hashing formats: -h1 (frame-b3 trees), -h2 (frame-b3s: each leaf a tree over its value's 256-byte segments), -h3 (-h2's
 #: trees, each row of A drawing its E_A line from its own seed over its leaf: `seeds_a`, then `lines_ea` per row) and -h3s
-#: (-h3 with each row's seed over its SHA-512 row digest, `rowdig_a`, instead of its leaf)
+#: (-h3 entirely through SHA-512: hash_h3s.cuh's seeds, lines and tile leaves, and `audit.HM96` trees, 64-byte nodes)
 HASHINGS = ("h1", "h2", "h3", "h3s")
 #: the formats whose trees are frame-b3s
-B3S_HASHINGS = ("h2", "h3", "h3s")
+B3S_HASHINGS = ("h2", "h3")
 #: the formats whose rows of A seed their own E_A lines
 ROW_SEEDED = ("h3", "h3s")
 #: s512_rows' most segments a row (hash.cuh's RS_MAX_SEGS), 1 KiB each
 RS_MAX_SEGS = 128
+#: -h3s's hm96 salt nonces (`audit.HM96_WEIGHTS`, `audit.HM96_TRANSCRIPT`; an activation tree's is its unit index) and the widest
+#: level s512_tree_small (64 threads) takes
+HM96_WEIGHTS, HM96_TRANSCRIPT, S512_SMALL = 1 << 62, 1 << 63, 128
 #: `verity.protocols.accounting.work.pouw.audit`'s leaf schemas, which -h2's segment keys bind; hash_rows_b3s's segments a row (a thread each)
 ROW_SCHEMA, TILE_SCHEMA = "verity/pouw/row/v1", "verity/pouw/tile/v1"
 B3S_SEG, B3S_MAX_SEGS = 256, 512
@@ -288,6 +291,17 @@ B3S_SEG, B3S_MAX_SEGS = 256, 512
 #: hash_rows_b3s_stats, A's row leaves and stats_a's words in one pass over A (step `hash_rows_a`; forming drops stats_a).
 #: GPU 1's `s` for -h1 (h1_rows_stats) is on its forms branch, not here.
 ROWS_FORMS = ("w", "s")
+
+
+def node_bytes(hashing: str) -> int:
+    """A tree node's bytes: SHA-512's 64 under -h3s, else 32."""
+    return 64 if hashing == "h3s" else 32
+
+
+def nonce_args(nonce: int) -> tuple[int, int]:
+    """A 64-bit nonce as hm_leaves' i1, i2 (each an int32 slot, its bits)."""
+    lo, hi = nonce & 0xFFFFFFFF, nonce >> 32
+    return tuple(v - (1 << 32) if v >> 31 else v for v in (lo, hi))
 
 
 def pow2(n: int) -> int:
@@ -369,22 +383,27 @@ class Pipeline:
     leaves hash_leaves_b3s) or -h3 (-h2's trees; after A's tree, `seeds_a` is hash.cuh's b3_seeds in mode 1 over its m_real
     leaves, `pearl_c.row_seed` with the unit index read from `unit`, and `lines_ea` draws row i < m_real's line from its own
     seed, `pearl_c.PearlC.encode`'s E_A) or -h3s (-h3 with `rowdig_a` first, s512_rows' SHA-512 row digest of each of A's
-    m_real rows, `pearl_c.row_digest`, and `seeds_a` b3_seeds in mode 2 over those digests).  Pads, node keys and every level
-    above the leaves are frame-b3's in all.
-    `rows_form` is A's row-leaf form (ROWS_FORMS): under -h2, -h3 and -h3s `s` hashes A's m_real rows and writes stats_a's words for
+    m_real rows, `pearl_c.row_digest`, and every hash SHA-512: hash_h3s.cuh's `audit.HM96` trees (hm_leaves over the row
+    digests under the prover's salt key, s512_frame_leaves, s512_pads, s512_nodes and s512_tree_small; 64-byte nodes), seed_A
+    and each row's seed with their line keys (s512_seeds), the lines (lines_s), and the tile leaves over C~ and U themselves
+    (s512_tile_leaves, unfused) in an HM96 tree under the transcript's nonce).  Pads, node keys and every level above the
+    leaves are frame-b3's under -h1, -h2 and -h3.
+    `rows_form` is A's row-leaf form (ROWS_FORMS): under -h2 and -h3 `s` hashes A's m_real rows and writes stats_a's words for
     all m in one pass.
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
     labels `k_msg`, `k_leaf`, `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
-    BLAKE3("pearl-c/v0/seed-A")), and under -h2, -h3 and -h3s `t_row`, `t_tile`, the segment keys' templates (`b3s_template` of
-    ROW_SCHEMA and TILE_SCHEMA).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a` (under -h3 and -h3s the
-    key of the rows past m_real, the kernels' padding, which nothing commits)."""
+    BLAKE3("pearl-c/v0/seed-A"); under -h3s salt ‖ root_B's 64 bytes ‖ u64 index), under -h2 and -h3 `t_row`, `t_tile`, the
+    segment keys' templates (`b3s_template` of ROW_SCHEMA and TILE_SCHEMA), and under -h3s `salt_key` (the prover's hm96 salt
+    key) and `hm` (`audit.hm96_kernel_constants`); the domain ids are 64 bytes under -h3s.  `weight` is B's weight index, its
+    tree's salt nonce HM96_WEIGHTS + weight under -h3s.  E_A's line key is the pipeline's `line_a` buffer, written by
+    `seed_line_a` (under -h3 and -h3s the key of the rows past m_real, the kernels' padding, which nothing commits)."""
 
     GEMM_SMEM: dict[str, int] = {}
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None,
-                 fused: bool | None = None, hashing: str = "h1", rows_form: str = "w"):
+                 fused: bool | None = None, hashing: str = "h1", rows_form: str = "w", weight: int = 0):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
         matmul's, committed and hashed, the rest filler that only the products see."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
@@ -402,18 +421,18 @@ class Pipeline:
                              f"not k = {k}")
         if hashing == "h3s" and 4 * k > RS_MAX_SEGS * 1024:
             raise ValueError(f"s512_rows takes rows of at most {RS_MAX_SEGS} 1 KiB segments (k <= {RS_MAX_SEGS * 256}), not k = {k}")
-        self.hashing = hashing
+        self.hashing, self.nb, self.weight = hashing, node_bytes(hashing), weight
         if rows_form not in ROWS_FORMS or rows_form == "s" and not self.b3s:
-            raise ValueError(f"rows_form {rows_form!r}: one of {ROWS_FORMS}, and `s` only under -h2, -h3 or -h3s on this tree")
+            raise ValueError(f"rows_form {rows_form!r}: one of {ROWS_FORMS}, and `s` only under -h2 or -h3 on this tree")
         self.rows_form = rows_form
-        self.fusable = self.bm == BM and self.m_real == m
+        self.fusable = self.bm == BM and self.m_real == m and hashing != "h3s"
         if fused and not self.fusable:
             raise ValueError(f"gemm_pearlc_b digests every row of 128 x 128 tiles: m = {m} rows at bm = {self.bm}, m_real = "
                              f"{self.m_real}")
         self.fused = self.fusable if fused is None else fused
         self.row_bytes = 4 * k
         self.tiles = cdiv(self.m_real, TILE) * (n // TILE)
-        sizes = self.sizes(m, n, k, self.m_real)
+        sizes = self.sizes(m, n, k, self.m_real, hashing)
         self.size = sizes
         self.owned = bufs is None
         self.b = {name: dev.alloc(s) for name, s in sizes.items()} if self.owned else dict(bufs)
@@ -439,10 +458,10 @@ class Pipeline:
                 d.ck("cuMemcpyHtoD_v2", u64(b["tma"] + ML_SET * slot), C.c_char_p(ab + tail), ML_SET)
 
     @staticmethod
-    def sizes(m: int, n: int, k: int, m_real: int | None = None) -> dict[str, int]:
-        m_real = m if m_real is None else m_real
+    def sizes(m: int, n: int, k: int, m_real: int | None = None, hashing: str = "h1") -> dict[str, int]:
+        m_real, nb = m if m_real is None else m_real, node_bytes(hashing)
         tiles = cdiv(m_real, TILE) * (n // TILE)
-        tree = lambda count: {"tree": 32 * (2 * pow2(count) - 1), "keys": 32 * max(depth(count), 1)}  # noqa: E731
+        tree = lambda count: {"tree": nb * (2 * pow2(count) - 1), "keys": 32 * max(depth(count), 1)}  # noqa: E731
         return {
             "ea_codes": m * 32, "eb_codes": n * 32, "fa_codes": k * 32, "faT32": 32 * k, "fb_codes": k * 32, "fbT32": 32 * k,
             "fbT128": 128 * k, "g": 128 * 32 * 4,
@@ -450,7 +469,8 @@ class Pipeline:
             "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n, "epb_codes": n * 32,
             "at": m * k, "bt": n * k, "at2": max(m, n) * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2, "y2": m * n * 2, "tma": ML_SET * len(ML_MAPS),
-            "line_a": 32, "seed_a": 32, "seeds_a": 32 * m_real, "rowdig_a": 64 * m_real, "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * 32,
+            "line_a": 32, "seed_a": 32, "seeds_a": 32 * m_real, "lkeys_a": 32 * m_real, "rowdig_a": 64 * m_real, "rowdig_b": 64 * n,
+            "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * nb,
             **{f"{part}_{t}": size for t, count in (("a", m_real), ("b", n), ("t", tiles)) for part, size in tree(count).items()},
             **{f"skeys_{t}": 32 * max(b3s_levels(4 * k), 1) for t in ("a", "b")},
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
@@ -459,13 +479,23 @@ class Pipeline:
 
     def root(self, tag: str) -> int:
         """The device address of a tree's root, its last node."""
-        return self.b[f"tree_{tag}"] + self.size[f"tree_{tag}"] - 32
+        return self.b[f"tree_{tag}"] + self.size[f"tree_{tag}"] - self.nb
 
-    def levels(self, tag: str, count: int) -> None:
+    def levels(self, tag: str, count: int, dom: str | None = None) -> None:
         """A frame-b3 tree's levels above level 0 (leaves and pads written): hash_nodes a level at a time down to
-        TREE_SMALL nodes, then hash_tree_small for the rest in one launch."""
+        TREE_SMALL nodes, then hash_tree_small for the rest in one launch; under -h3s s512_nodes down to S512_SMALL, then
+        s512_tree_small, under the domain id `dom` (default dom_<tag>)."""
         d, base, lk = self.dev, self.b[f"tree_{tag}"], self.b[f"keys_{tag}"]
         width, off, level = pow2(count), 0, 0
+        if self.hashing == "h3s":
+            di = self.keys[dom or f"dom_{tag}"]
+            while width > S512_SMALL:
+                d.launch("s512_nodes", cdiv(width // 2, 64), 64, p=(base + 64 * off, base + 64 * (off + width), di),
+                         i=(level, width // 2))
+                off, width, level = off + width, width // 2, level + 1
+            if width > 1:
+                d.launch("s512_tree_small", 1, 64, p=(base + 64 * off, di), i=(width, level))
+            return
         while width > TREE_SMALL:
             d.launch("hash_nodes", cdiv(width // 2, 128), 128, p=(base + 32 * off, base + 32 * (off + width), lk + 32 * level),
                      i=(level, width // 2))
@@ -477,6 +507,11 @@ class Pipeline:
         """A tree's pads and level keys (hash_pad, hash_node_keys): its domain's alone, so once per unit."""
         d, b, width = self.dev, self.b, pow2(count)
         out = []
+        if self.hashing == "h3s":
+            if width > count:
+                out.append((f"pad_{tag}", lambda: d.launch("s512_pads", cdiv(width - count, 64), 64, p=(b[f"tree_{tag}"], self.keys[dom]),
+                                                           i=(count, width))))
+            return out
         if width > count:
             out.append((f"pad_{tag}", lambda: d.launch("hash_pad", cdiv(width - count, 128), 128, p=(b[f"tree_{tag}"], self.keys[dom]),
                                                        i=(count, width))))
@@ -489,6 +524,12 @@ class Pipeline:
         """A tree over `count` FP32 rows of x, then its levels: -h1 hash_sm120.cuh's hash_rows_w (a warp a row), -h2
         hash_h2.cuh's hash_rows_b3s (a CTA a row, a thread a segment, the segment tree's level keys its own)."""
         d, b, rb = self.dev, self.b, self.row_bytes
+        if self.hashing == "h3s":
+            nonce = (0, 0) if tag == "a" else nonce_args(HM96_WEIGHTS + self.weight)
+            block = self.keys["unit"] + 96 if tag == "a" else 0
+            return [(f"rowdig_{tag}", lambda: d.launch("s512_rows", count, 128, p=(b[x], b[f"rowdig_{tag}"]), i=(count, self.k))),
+                    (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block, nonce)),
+                    (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
         if self.b3s and tag == "a" and self.rows_form == "s":
             threads = 32 * cdiv(cdiv(rb, B3S_SEG), 32)
             leaves = lambda: d.launch("hash_rows_b3s_stats", self.m, threads, b3s_stats_smem(rb),  # noqa: E731
@@ -509,11 +550,20 @@ class Pipeline:
                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom]), i=(count, rb))
         return [(f"hash_rows_{tag}", leaves), (f"tree_{tag}", lambda: self.levels(tag, count))]
 
+    def hm_level0(self, tag: str, x: int, count: int, dom: str, block: int = 0, nonce: tuple[int, int] = (0, 0)) -> None:
+        """An `audit.HM96` tree's level 0 over `count` 64-byte values at x: hm_leaves under the salt key, the nonce read at
+        `block` (A's unit index) or given, then s512_frame_leaves in place."""
+        d, tree, kk = self.dev, self.b[f"tree_{tag}"], self.keys
+        d.launch("hm_leaves", cdiv(count, 64), 64, p=(x, tree, kk["salt_key"], kk["hm"], 0, block), i=(count, *nonce))
+        d.launch("s512_frame_leaves", cdiv(count, 64), 64, p=(tree, kk[dom]), i=(0, count))
+
     def tree_leaves(self, tag: str, values: int, count: int, dom: str) -> None:
-        """A tree's level 0 over `count` 32-byte values at device address `values` (the tile leaves): -h1 hash_tree_leaves,
-        -h2 hash_leaves_b3s under TILE_SCHEMA's template."""
+        """A tree's level 0 over `count` values at device address `values` (the tile leaves): -h1 hash_tree_leaves, -h2
+        hash_leaves_b3s under TILE_SCHEMA's template, -h3s `hm_level0` under the transcript's nonce."""
         d, tree = self.dev, self.b[f"tree_{tag}"]
-        if self.hashing in B3S_HASHINGS:
+        if self.hashing == "h3s":
+            Pipeline.hm_level0(self, tag, values, count, dom, nonce=nonce_args(HM96_TRANSCRIPT))
+        elif self.hashing in B3S_HASHINGS:
             d.launch("hash_leaves_b3s", cdiv(count, 128), 128, p=(values, tree, self.keys[dom], self.keys["t_tile"]),
                      i=(count, 32, 0, b3s_template_len(TILE_SCHEMA)))
         else:
@@ -586,9 +636,11 @@ class Pipeline:
         tile = "_d" if self.bm == BM_D else ""
         ct, chain = f"gemm_ct{tile}{sx}", self.extra()
 
+        lk = "lines_s" if self.hashing == "h3s" else "lines"
+
         def lines(tag, key, side, factor, count, codes, t32=0, t128=0):
             norm = NORM_16 if factor == 1 else NORM_256
-            return (f"lines_{tag}", lambda: d.launch("lines", cdiv(count, 128), 128, p=(key, b[codes], t32, t128),
+            return (f"lines_{tag}", lambda: d.launch(lk, cdiv(count, 128), 128, p=(key, b[codes], t32, t128),
                                                     i=(side, factor, count, norm)))
 
         def form_side(tag, rows, x, e_codes, f_codes, out):
@@ -611,7 +663,8 @@ class Pipeline:
         mr, kk, tiles = self.m_real, self.keys, self.tiles
         ea = lines("ea", b["line_a"], 0, 0, m, "ea_codes")
         if self.hashing in ROW_SEEDED:
-            ea = ("lines_ea", lambda: d.launch("lines", cdiv(m, 128), 128, p=(b["line_a"], b["ea_codes"], 0, 0, b["seeds_a"]),
+            own = b["lkeys_a"] if self.hashing == "h3s" else b["seeds_a"]
+            ea = ("lines_ea", lambda: d.launch(lk, cdiv(m, 128), 128, p=(b["line_a"], b["ea_codes"], 0, 0, own),
                                                i=(0, 0, m, NORM_256, mr)))
         forming = [ea, *form_side("a", m, "xa", "ea_codes", "fa_codes", "at")]
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
@@ -621,18 +674,25 @@ class Pipeline:
         lt = spread(tiles, LEAF_TILES, d.sms, 2)
         epoch = self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
         unit = self.tree_setup("a", mr, "dom_a") + self.tree_setup("t", tiles, "dom_t")
-        commit = self.row_tree("a", "xa", mr, "dom_a") + [
-            ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
         if self.hashing == "h3s":
-            commit.append(("rowdig_a", lambda: d.launch("s512_rows", mr, 128, p=(b["xa"], b["rowdig_a"]), i=(mr, k))))
-        if self.hashing in ROW_SEEDED:
-            mode, src = (2, "rowdig_a") if self.hashing == "h3s" else (1, "tree_a")
+            commit = self.row_tree("a", "xa", mr, "dom_a") + [
+                ("seed_a", lambda: d.launch("s512_seeds", 1, 128, p=(self.root("a"), b["seed_a"], b["line_a"], kk["unit"]),
+                                            i=(1, 0, 0))),
+                ("seeds_a", lambda: d.launch("s512_seeds", cdiv(mr, 128), 128, p=(b["rowdig_a"], b["seeds_a"], b["lkeys_a"], kk["unit"]),
+                                             i=(mr, 0, 1)))]
+        else:
+            commit = self.row_tree("a", "xa", mr, "dom_a") + [
+                ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
+        if self.hashing == "h3":
             commit.append(("seeds_a", lambda: d.launch("b3_seeds", cdiv(mr, 128), 128,
-                                                       p=(b[src], b["seeds_a"], kk["unit"] + 72, kk["unit"], kk["unit"] + 32,
-                                                          kk["unit"] + 64), i=(mr, 0, mode))))
-        hashing = ([] if self.fused else [("hash_msg", chain["hash_msg"])]) + [
-                   ("hash_leaf", lambda: d.launch("hash_leaf_p", cdiv(tiles, lt), 4 * lt, p=(b["digests"], b["leaves"], kk["k_leaf"]),
-                                                  i=(mr, n))),
+                                                       p=(b["tree_a"], b["seeds_a"], kk["unit"] + 72, kk["unit"], kk["unit"] + 32,
+                                                          kk["unit"] + 64), i=(mr, 0, 1))))
+        leaf = (("hash_leaf", lambda: d.launch("s512_tile_leaves", tiles, 32, p=(b["c"], b["u"], b["leaves"]), i=(mr, n)))
+                if self.hashing == "h3s" else
+                ("hash_leaf", lambda: d.launch("hash_leaf_p", cdiv(tiles, lt), 4 * lt, p=(b["digests"], b["leaves"], kk["k_leaf"]),
+                                               i=(mr, n))))
+        hashing = ([] if self.fused or self.hashing == "h3s" else [("hash_msg", chain["hash_msg"])]) + [
+                   leaf,
                    ("tree_leaves_t", lambda: self.tree_leaves("t", b["leaves"], tiles, "dom_t")),
                    ("tree_t", lambda: self.levels("t", tiles))]
         plain_job = [("plainq_b", lambda: d.launch("plainq", n, 256, p=(b["xb"], b["qb"], b["sb"]), i=(n, k)))]
@@ -746,7 +806,8 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
 # ---- the diagnostic timing ----------------------------------------------------------------------------------------
 
 CALL_PHASES = ("commit", "forming", "gemm", "cleanup", "hashing")
-TIMING_KEYS = {"line_b": 32, "dom_a": 32, "dom_b": 32, "dom_t": 32, "k_msg": 32, "k_leaf": 32, "unit": 104}
+TIMING_KEYS = {"line_b": 32, "dom_a": 64, "dom_b": 64, "dom_t": 64, "k_msg": 32, "k_leaf": 32, "unit": 104, "salt_key": 32,
+               "hm": 128 + 192 * 256 * 64}
 
 
 def parse_shape(s: str) -> tuple[int, int, int]:
