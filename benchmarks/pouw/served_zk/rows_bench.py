@@ -29,6 +29,8 @@ A decode step's four linears LAYERS deep, each a graph replayed REPS rounds, in 
   step.both.side    every call as call.h2, each call's a.hm96 and t.hm96 on a side stream forked after it, joined at the step's
                     end (-h2's root seeding forming, the statement's roots off the critical path)
   step.h2.batch     step.h2, then batch.hm96
+  step.tdig.batch   every call as call.nohash with -h2's tile digests (hash_msg, hash_leaf: the stand-in for the statement's),
+                    then batch.hm96: the statement's format instead of -h2's, committed once after the step
   batch.hm96        the step's rows in one commitment a format: its FP32 A rows of each k as hm96-sha512 row-seg leaves and
                     the tile rows as row/v2 leaves, each in one tree (grid-wide launches)
   batch.sha512      the step's A rows' unsalted sha512/row-seg/v1 digests alone
@@ -323,7 +325,8 @@ def main() -> int:
              "call.both": lambda: (call_s(), a_hm96(), t_hm96()),
              "k.sz_segments.a": cm_a.segments, "k.sz_finish.a": lambda: cm_a.finish(2), "k.hash_rows_a.s": seq("s", ("hash_rows_a",))}
         graphs[shape] = {nm: capture(fn) for nm, fn in v.items()}
-        per[shape] = {"h2": call_s, "nohash": v["call.nohash"], "hm96": call_hm96,
+        tdig = [steps["w"][nm] for nm in (*nohash, "hash_msg", "hash_leaf") if nm in steps["w"]]
+        per[shape] = {"h2": call_s, "nohash": v["call.nohash"], "hm96": call_hm96, "tdig": hm96_call(lambda: None, lambda: None, tdig),
                       "a": [Commit(dev, h, consts, f"{shape}/a/{lyr}", xa, M_REAL, rb, rb, SEG, nonce + 16 * lyr) for lyr in range(LAYERS)],
                       "t": [Commit(dev, h, consts, f"{shape}/t/{lyr}", pipes["s"].b["leaves"], tiles, 32, 32, V2, nonce + 16 * lyr + 1)
                             for lyr in range(LAYERS)]}
@@ -373,6 +376,7 @@ def main() -> int:
     step_v = {"step.nohash": forward(lambda lyr, sh: per[sh]["nohash"]()), "step.h2": forward(lambda lyr, sh: per[sh]["h2"]()),
               "step.hm96": forward(lambda lyr, sh: per[sh]["hm96"]()), "step.both.side": both_side,
               "step.h2.batch": lambda: (forward(lambda lyr, sh: per[sh]["h2"]())(), run_batch()),
+              "step.tdig.batch": lambda: (forward(lambda lyr, sh: per[sh]["tdig"]())(), run_batch()),
               "batch.hm96": run_batch, "batch.sha512": lambda: [cm.run(0, one_cta=False) for cm in batch[:2]]}
     step_graphs = {nm: capture(fn, 1) for nm, fn in step_v.items()}
     dev.sync()
