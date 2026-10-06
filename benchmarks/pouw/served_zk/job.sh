@@ -20,10 +20,11 @@
 #      $WORK/coin-state/<run id>); one salted by a beacon before epoch coins (v1) is received as a recorded replay) and
 #      select (draw.json: the epoch's draw coin opened after the registration, once, and Lean flock-verify draw
 #      --population N --k K' --stream over its key)
-#   5. per drawn unit u<t>: stage_tile.py (Pc8TileHidden{K=4096,1,1,sm120}), the --zk session behind the firewall's send
-#      check (FC_FIREWALL=1 on the host's witness; SZ_FIREWALL=0 without), the opening check, Lean; the selftest build's
-#      controls and the firewall's tamper cases (fw-<case>) on the first; a filler unit's the same, and the other request's
-#      tile staged
+#   5. per drawn unit u<t>: stage_tile.py (Pc8TileLeafH3{K=4096,sm120}: the unit's word and the -h3 leaf of the pass's tile
+#      holding it, its advice from the pass's own tile), the --zk session behind the firewall's send check (FC_FIREWALL=1 on
+#      the host's witness; SZ_FIREWALL=0 without), the opening check (its rows under the window root, its leaf under the
+#      pass's tile commitment), Lean; the selftest build's controls and the firewall's tamper cases (fw-<case>) on the
+#      first; a filler unit's the same, the other request's tile staged, and the first unit staged on another leaf
 #   6. deliver (the drawn units' session records' SHA-512) and outcome (one-stage's audit record over every drawn unit and
 #      PoUW's public items, outcome-<case>/); each control on a stream of its own that replays the honest draw
 #   7. the checks, each as expected, into summary.json:
@@ -44,9 +45,14 @@
 #        receive-open          a second registration while the first has no outcome                            REFUSED
 #        select                Lean's draw of K' units over the draw coin's key, opened after the receipt    DRAWN
 #        select-again          a second select of the same registration: no retry redraws                     REFUSED
-#        open-u<t>             each drawn unit's proof opens that unit's rows under the window root            ACCEPT
+#        open-u<t>             each drawn unit's proof opens that unit's rows under the window root, and its
+#                              output is its tile's leaf under the pass's tile commitment                      ACCEPT
 #        lean-u<t>             the Lean verifier on each drawn unit's --zk session                             ACCEPT
-#        open-filler           the filler unit's proof opens its zero rows under the window root              ACCEPT
+#        open-filler           the filler unit's proof opens its zero rows under the window root, its output
+#                              the zero rows' tile's leaf                                                      ACCEPT
+#        open-leaf-other       the first unit staged with a digest its leaf reads flipped (SZ_LEAF_TAMPER), so
+#                              it proves another tile's leaf                                                   REJECT
+#        open-leaf-forged      the first unit's proof, its opening naming another leaf than the one it proved  REJECT
 #        lean-filler           the Lean verifier on the filler unit's --zk session                             ACCEPT
 #        firewall-u<t>, -filler  each such session ran behind the firewall (its FIREWALL line), nothing refused  FIREWALLED
 #        firewall-<case>       the first unit's session, the device dishonest by FC_FIREWALL_TAMPER=<case>    REFUSED
@@ -131,7 +137,7 @@ R=$OUT/request/registration.json RP=$OUT/request/params.json
 MAN=$PASSES/request/manifest.json
 V1=$("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'].endswith('/v1'))" "$MAN")
 STATE=${SZ_COIN_STATE:-$WORK/coin-state/$SERVED_RUN}
-if [ "$V1" = True ]; then REC=true; STATEARG=(); else REC=false; STATEARG=(--state "$STATE"); fi
+if [ "$V1" = True ]; then REC=true RECARG=--recorded; STATEARG=(); else REC=false RECARG=; STATEARG=(--state "$STATE"); fi
 log "pass: $("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'])" "$MAN"), the challenger ${STATEARG[*]:-fresh}"
 coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" "${STATEARG[@]}" 2> "$OUT/challenger.err"; }
 ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out, its word in $REPLY
@@ -188,17 +194,17 @@ REAL=$(jq_ "$OUT/request/advice.json" "d['real']")
 log "draw: units $UNITS of $(jq_ "$R" "d['population']") (real tiles $REAL, the filler from $FILL)"
 
 # ---- 5. the units -------------------------------------------------------------------------------------------------------------
-stage_unit() {   # stage_unit TAG SIDE UNIT: $W/TAG staged, its stage.json, opening.json, pin.txt and pub.bin copied to $OUT/TAG
+stage_unit() {   # stage_unit TAG SIDE UNIT [ENV=V]: $W/TAG staged, its stage.json, opening.json, pin.txt and pub.bin copied to $OUT/TAG
   local tag=$1 p=$2 t=$3
   mkdir -p "$W/$tag" "$OUT/$tag"
-  $TIME "$OUT/$tag/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $Z/stage_tile.py $W/$p $OUT/$p/params.json $t $W/$tag" \
+  $TIME "$OUT/$tag/stage.time" env ${4:-} bash -c "$(vlimit "$STAGE_GB") exec $PY $Z/stage_tile.py $W/$p $OUT/$p/params.json $t $W/$tag $PASSES/$p" \
     > "$OUT/$tag/stage.out" 2>&1 || { log "stage $tag FAILED: $(tail -3 "$OUT/$tag/stage.out")"; return 1; }
   cp "$W/$tag/stage.json" "$W/$tag/opening.json" "$W/$tag/pin.txt" "$W/$tag/pub.bin" "$OUT/$tag/"
   log "stage $tag (unit $t): $(jq_ "$OUT/$tag/stage.json" "(d['kind'], d['entry'], d['ands'], d['k_log'], d['seconds'])")"
 }
-opencheck() {    # opencheck TAG EXPECT SIDE UNIT PUB OPENING [--undrawn]
+opencheck() {    # opencheck TAG EXPECT SIDE UNIT PUB OPENING [--undrawn]: the unit's rows under SIDE's window, its leaf under SIDE's pass
   local v; v=$("$PY" "$SC" check "$OUT/$3/params.json" "$OUT/$3/registration.json" "$OUT/draw.json" "$4" "$5" "$6" ${7:-} \
-    --out "$OUT/$1.json" | tee "$OUT/$1.out" | first)
+    --pass "$PASSES/$3/manifest.json" --coins "$OUT/challenger/coins.json" ${RECARG:-} --out "$OUT/$1.json" | tee "$OUT/$1.out" | first)
   expect "$1" "$2" "${v:-ERROR}"
 }
 prove_unit() {   # prove_unit TAG: the --zk session, then its Lean checks in the background
@@ -243,6 +249,11 @@ OU=$(( U0 < $(jq_ "$OUT/other/registration.json" "d['population']") ? U0 : 0 ))
 stage_unit other-tile other "$OU"
 opencheck open-foreign-proof REJECT request "$U0" "$OUT/other-tile/pub.bin" "$OUT/u$U0/opening.json"
 opencheck open-foreign-commit REJECT other "$OU" "$OUT/u$U0/pub.bin" "$OUT/other-tile/opening.json" --undrawn
+stage_unit leaf-other request "$U0" SZ_LEAF_TAMPER=1 && \
+  opencheck open-leaf-other REJECT request "$U0" "$OUT/leaf-other/pub.bin" "$OUT/leaf-other/opening.json"
+"$PY" -c "import json, sys; o = json.load(open(sys.argv[1])); x = o['leaf']['leaf']; \
+o['leaf']['leaf'] = ('00' if x[:2] != '00' else '01') + x[2:]; json.dump(o, open(sys.argv[2], 'w'))" "$OUT/u$U0/opening.json" "$OUT/leaf-forged.json"
+opencheck open-leaf-forged REJECT request "$U0" "$OUT/u$U0/pub.bin" "$OUT/leaf-forged.json"
 s=$(ls -d "$W/u$U0"/sessions/*/ 2>/dev/null | tail -1)
 if [ -n "$s" ]; then
   ( $TIME "$OUT/u$U0/lean-foreign-pub.time" bash -c "$(vlimit "$STAGE_GB") exec $LEAN verify --zk --circuit $W/u$U0/circuit.txt \

@@ -1,6 +1,6 @@
 """A served audit window's commitment in the ZK statement's format, from a retained Pearl-C pass, registered, drawn and
 judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
-`outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
+`outcome`), and the check that a unit proof's committed rows are the drawn tile's and its output the served tile's leaf.
 
   python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P]   the verifier's own parameters of the window
   python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the window, salted and committed
@@ -10,7 +10,9 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
                                                                               (`handle`), one reply a line on stdout
   python served_commit.py replay PARAMS LOG OUT [--lean F]                    its requests again, from its recorded coins
   python served_commit.py coin-variant MANIFEST COINS OPENING OUT CASE        a control's pass, its salt coin CASE
-  python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
+  python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING --pass MANIFEST --coins COINS [--recorded]
+                                                                              the verifier: the proof's rows are the unit's,
+                                                                              its output the pass's tile leaf
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
 
 - **The window** is SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), picked from ``os.urandom`` unless
@@ -22,7 +24,9 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   tiles register the grid level of `pouw.window.bucket`, credited g_ℓ <= N_real tiles and padded to N = g_(ℓ+1).  A filler
   tile is a tile of the same template on zero rows (both sides), committed like any row, so its proof has the shape of
   every other tile's.  Unit t is `pouw.window.tile_at` of the advice: the population is
-  `population_program(Pc8TileHidden{K,1,1,sm120}, N)` under `Q_template_instance`.
+  `population_program(Pc8TileLeafH3{K,sm120}, N)` under `Q_template_instance`: the tile's one word and the -h3 leaf of
+  the pass's 64-column tile holding it (`pc8.Pc8TileLeafH3`), from the prover's advice (the word's segment of the tile's
+  messages, every segment's digest, the word's place in the tile).
 - **The commitment** is C-Flock's: each row's b ‖ c is hm96-sha512 over its row digest under a fresh 192-byte salt, each side
   of each entry (a call, or the filler) one frame-v3-sha512 tree under one-stage's served domain of the window's program,
   partition and context, its port ``<entry>/<side>``.  Each entry (`pouw.window`: its sides' roots, rows and kept rows, its
@@ -51,7 +55,12 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  The challenger records each
   opening (``LOG/openings.jsonl``), and `replay` re-runs its requests from those records, byte for byte.
 - **The check** reads a proof's public file (``pub.bin``): instance 0's b ‖ c of its A row and B row must be the unit's rows,
-  each by its frame-v3 path to its entry's side root, and the entry by its path to the registered window root.  The
+  each by its frame-v3 path to its entry's side root, and the entry by its path to the registered window root.  Its
+  output row's b ‖ c must be the opened leaf and place (`leaves.words_leaf_h3`, under the salt the opening reveals), the
+  place the unit's word's in the tile the pass's tile commitment holds it in, and the leaf that tile's: its opening under
+  the commitment's root (`audit.transcript_domain` of the pass's epoch, the pass the window's parameters name, re-started
+  under the challenger's coins).  A filler unit's tile is the constant tile of the zero rows' word (`filler_leaf`), at
+  its row and column modulo 64.  So the unit is bound to what was served, not only its rows to the window root.  The
   opening hands the verifier the drawn units' entries: a development shortcut, until position reads in gates (the joint
   note's step 8) take it over.  Nothing it reads is in the outcome's public items.
 """
@@ -68,10 +77,13 @@ import sys
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
 import numpy as np
+from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits.program import Program
+from verity.primitives.commitments import Commitment, Opening, VerificationLimits, verify_opening
 from verity.primitives.commitments.identity import identity_digest_sha512
 from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
@@ -79,8 +91,10 @@ from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SH
 from verity.primitives.circuits.codec import canonical_json
 from verity.primitives.randomness import Key, derive
 from verity.protocols.accounting.work.pouw import window as Wd
+from verity.protocols.accounting.work.pouw.audit import HM96, TILE_SCHEMA, tile_refs, transcript_domain
 from verity.protocols.accounting.work.pouw.circuit import leaves as L
 from verity.protocols.accounting.work.pouw.circuit import pc8
+from verity.protocols.accounting.work.pouw.circuit import words as W
 from verity.protocols.accounting.work.pouw.coins import Challenger as Coins
 from verity.protocols.accounting.work.pouw.coins import CoinCommitment, CoinOpening, coin_reason
 from verity.protocols.accounting.work.pouw.protocol import Context, DomainError, Matmul, Shape
@@ -112,6 +126,12 @@ CHUNK = 256
 ENTRY_SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 W_SCHEMA = L.ROW_SCHEMA["bf16", ROLE_W]
 W_DOMAIN = "verity/pouw/served-zk/weights-domain/v0"
+#: a unit proof's rows (`verity_flock.circuit.write`): its input rows in order (A, B, the leaf's advice and place), then its
+#: output row, the leaf and place; its public file's header names each row's schema
+PUB_SCHEMAS = {"a0": L.ROW_SCHEMA["fp8-p", ROLE_X], "b0": L.ROW_SCHEMA["fp8-p", ROLE_W],
+               "x0": L.ROW_SCHEMA["leaf-advice", ROLE_X], "t0": L.ROW_SCHEMA["leaf-at", ROLE_X],
+               "o0": L.ROW_SCHEMA["leaf-h3", ROLE_X]}
+OUT_ROW = 4
 #: the public bound on a window's entries (its calls and the filler), and the tile counts a window may register
 ENTRIES = 16
 RANGE = (1, 1 << 40)
@@ -121,7 +141,7 @@ EPS, DELTA = "1/2", "1/10"
 # ---- the window's parameters and its spec ---------------------------------------------------------------------------------
 
 def template(k: int):
-    return pc8.templates(k, TILE, DEV, hidden=True)["tile"]
+    return pc8.tile_leaf_h3(k, DEV)
 
 
 def tile_work(params: dict) -> int:
@@ -430,9 +450,9 @@ def load(p: Path) -> dict:
     return out
 
 
-def opening(advice: dict, priv: dict, params: dict, unit: int) -> dict:
-    """The prover's opening of unit `unit`: its entry with its salt and path to the window root, and each side's row with
-    its path to the entry's side root."""
+def opening(advice: dict, priv: dict, params: dict, unit: int, leaf: dict | None = None) -> dict:
+    """The prover's opening of unit `unit`: its entry with its salt and path to the window root, each side's row with its
+    path to the entry's side root, and `leaf` (`leaf_opening`), the unit's output and its tile's opening."""
     e, i, j = Wd.tile_at(advice["entries"], unit)
     entry = advice["entries"][e]
     out = {"unit": unit, "entry": e, "entry_value": entry, "entry_salt": advice["entry_salts"][e],
@@ -441,11 +461,116 @@ def opening(advice: dict, priv: dict, params: dict, unit: int) -> dict:
         dom, schema = side_domain(params, advice["level"], e, side, entry[side]["rows"])
         levels = tree_levels(dom, side_leaves(dom, schema, priv[e][side]["bcs"]))
         out[side] = {"index": idx, "path": path(levels, idx)}
+    if leaf is not None:
+        out["leaf"] = leaf
     return out
 
 
-def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True) -> str | None:
-    """None if the proof's public file opens unit `unit`'s rows under the registered window root, else why not."""
+def leaf_opening(leaf: bytes, at: int, out_salt: bytes, tile: int | None = None, tile_salt: bytes = b"",
+                 tile_path: list[bytes] = ()) -> dict:
+    """A unit's output (its tile's -h3 leaf and the word's place, `words.leaf_at`) with its row's salt, and the tile's
+    opening under the pass's tile commitment: its id, its hm96 salt and its path (none for a filler unit)."""
+    return {"leaf": leaf.hex(), "at": at, "out_salt": out_salt.hex(), "tile": tile, "tile_salt": tile_salt.hex(),
+            "tile_path": [x.hex() for x in tile_path]}
+
+
+@dataclass(frozen=True)
+class Pass:
+    """A window's pass as the check reads it: its manifest's SHA-512, each call's workload position and served activation
+    root, its tiles (`audit.tile_refs`), and its tile commitment, the domain -h3's leaves sit in and the root."""
+    sha512: str
+    positions: dict[int, int]
+    roots_a: dict[int, str]
+    refs: tuple
+    domain: CommitmentDomain
+    commitment: Commitment
+
+
+def read_pass(raw: bytes, coins: CoinCommitment | None, recorded: bool = False) -> Pass:
+    """The pass of manifest `raw`, its epoch re-started under `coins` (`pouw_pearl_c_device.manifest_epoch`).  Raises
+    `DomainError` or ValueError."""
+    PD = _pd()
+    man = json.loads(raw)
+    epoch, _ = PD.manifest_epoch(man, coins, recorded)
+    scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
+    if scheme.commitment_hash != HM96:
+        raise ValueError(f"the pass's scheme {scheme.name} commits its tiles under {scheme.commitment_hash}, not -h3's {HM96}")
+    c = man["commitment"]
+    refs = tuple(tile_refs(scheme, epoch.workload))
+    if len(refs) != c["count"]:
+        raise ValueError(f"the pass commits {c['count']} tiles; its workload has {len(refs)}")
+    return Pass(hashlib.sha512(raw).hexdigest(), {u.index: p for p, u in enumerate(epoch.workload.matmuls)},
+                {u["index"]: u.get("root_a") for u in man["matmuls"]}, refs, transcript_domain(epoch, c["count"], HM96),
+                Commitment(bytes.fromhex(c["root"]), c["count"]))
+
+
+def tile_of(passed: Pass, matmul: int, i: int, j: int):
+    """The pass's tile (`audit.TileRef`) holding word (i, j) of call `matmul`."""
+    pos = passed.positions[matmul]
+    for ref in passed.refs:
+        if ref.matmul == pos and ref.tile.rows[0] <= i <= ref.tile.rows[-1] and ref.tile.cols[0] <= j <= ref.tile.cols[-1]:
+            return ref
+    raise ValueError(f"no tile of call {matmul} holds word ({i}, {j})")
+
+
+@lru_cache(maxsize=2)
+def filler_tile(k: int) -> C.Checked:
+    """A filler unit's tile: the 64 x 64 tile every word of which is the zero rows' (`Pc8Tile` on zero fp8-p rows)."""
+    zero = [0] * k
+    c, u = evaluate(pc8.templates(k, TILE, DEV)["tile"], zero, zero, [0] * L.P_WORDS, [0] * L.P_WORDS)
+    c, u = int(np.ravel(c)[0]), int(np.ravel(u)[0])
+    return C.Checked([[c] * 64 for _ in range(64)], [[u] * 64 for _ in range(64)])
+
+
+@lru_cache(maxsize=2)
+def filler_leaf(k: int) -> bytes:
+    """A filler unit's tile leaf: `filler_tile`'s under -h3."""
+    return C.leaf(filler_tile(k), "h3")
+
+
+def leaf_problem(params: dict, entry: dict, i: int, j: int, out_bc: bytes, op: Any, passed: Pass | None) -> str | None:
+    """None if the proof's output row is the opened leaf and place, the place word (i, j)'s in its tile and the leaf the
+    tile's under the pass's commitment (a filler's: `filler_leaf`), else why not."""
+    try:
+        leaf, at, salt = bytes.fromhex(op["leaf"]), op["at"], bytes.fromhex(op["out_salt"])
+        if out_bc != L.commit("leaf-h3", ROLE_X, L.words_leaf_h3(leaf, at), salt):
+            return "the proof's output row is not the opened tile leaf and place"
+    except (KeyError, TypeError, ValueError) as x:
+        return f"the opening has no unit output: {x}"
+    if entry["kind"] == "filler":
+        if at != W.leaf_at(i % 64, j % 64, 64):
+            return f"the filler unit's place {at} is not word ({i % 64}, {j % 64}) of a 64-row tile"
+        return None if leaf == filler_leaf(params["k"]) else "the filler unit's leaf is not the zero rows' tile's"
+    if passed is None:
+        return "no pass to open the unit's tile under"
+    if passed.sha512[:16] != params["context"].rsplit("/", 1)[-1]:
+        return "the pass is not the one the window's parameters name"
+    rec = entry["record"]
+    if passed.roots_a.get(rec["matmul"]) != rec["served"]["root_a"]:
+        return f"call {rec['matmul']}'s activation root is not the pass's"
+    try:
+        ref = tile_of(passed, rec["matmul"], i, j)
+        want = W.leaf_at(i - ref.tile.rows[0], j - ref.tile.cols[0], len(ref.tile.rows))
+    except (KeyError, ValueError) as x:
+        return f"the unit's tile: {x}"
+    if len(ref.tile.cols) != 64:
+        return f"tile {ref.id} has {len(ref.tile.cols)} columns; the unit's leaf is a 64-column tile's"
+    if at != want:
+        return f"the unit's place {at} is not word ({i}, {j})'s in tile {ref.id} ({want})"
+    if op.get("tile") != ref.id:
+        return f"the opening is of tile {op.get('tile')}, not the unit's tile {ref.id}"
+    try:
+        o = Opening(ref.id, leaf + bytes.fromhex(op["tile_salt"]), tuple(bytes.fromhex(x) for x in op["tile_path"]))
+        opens = verify_opening(passed.domain, passed.commitment, o, TILE_SCHEMA, VerificationLimits())
+    except Exception:  # noqa: BLE001 - an opening that can't be checked doesn't open
+        opens = False
+    return None if opens else f"the unit's tile leaf is not tile {ref.id}'s under the pass's tile commitment"
+
+
+def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True,
+          passed: Pass | None = None) -> str | None:
+    """None if the proof's public file opens unit `unit`'s rows under the registered window root and its output is the
+    tile leaf `passed` commits (`leaf_problem`), else why not."""
     if drawn and unit not in draw.get("units", ()):
         return f"unit {unit} is not drawn"
     try:
@@ -471,9 +596,8 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
     h = json.loads(head)
     if h.get("instances") != 1:
         return f"the proof has {h.get('instances')} instances, not one tile"
-    want = [L.ROW_SCHEMA["fp8-p", SIDES[s]] for s in ("a", "b")]
-    if [s for _p, s in list(h["frame_v3"]["schemas"].items())[:2]] != want:
-        return "the proof's first rows are not an A row and a B row of the registered schemas"
+    if h["frame_v3"]["schemas"] != PUB_SCHEMAS or len(body) != 128 * len(PUB_SCHEMAS):
+        return "the proof's rows are not an A row, a B row, the leaf's advice and the leaf, of the registered schemas"
     bc = {"a": body[0:128], "b": body[128:256]}
     for side in ("a", "b"):
         o = op[side]
@@ -483,7 +607,7 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
         leaf = row_leaf(sdom, at[side], L.tree_leaf(bc[side]), schema)
         if not verify_path(sdom, bytes.fromhex(entry[side]["root"]), at[side], leaf, [bytes.fromhex(x) for x in o["path"]]):
             return f"side {side}: the proof's committed row is not entry {e}'s row {at[side]}"
-    return None
+    return leaf_problem(params, entry, at["a"], at["b"], body[OUT_ROW * 128:(OUT_ROW + 1) * 128], op.get("leaf"), passed)
 
 
 # ---- verdicts --------------------------------------------------------------------------------------------------------------
@@ -1107,7 +1231,14 @@ def cmd_coin_variant(a) -> int:
 
 def cmd_check(a) -> int:
     params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
-    why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn)
+    passed, why = None, None
+    if a.pass_manifest:
+        try:
+            passed = read_pass(Path(a.pass_manifest).read_bytes(), CoinCommitment.from_json(_json(a.coins)) if a.coins else None,
+                               a.recorded)
+        except (DomainError, KeyError, TypeError, ValueError) as x:
+            why = f"the pass: {type(x).__name__}: {x}"
+    why = why or check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, passed=passed)
     if a.out:
         Path(a.out).write_text(json.dumps({"of_record": False, "accepted": why is None, "why": why or "",
                                            "verifier": "served_zk opening check"}, sort_keys=True))
@@ -1215,6 +1346,9 @@ def main(argv=None) -> int:
     p.add_argument("opening")
     p.add_argument("--out", help="the opening check's verdict, for the outcome")
     p.add_argument("--undrawn", action="store_true", help="a control: open a unit the draw did not draw")
+    p.add_argument("--pass", dest="pass_manifest", help="the window's pass's manifest, whose tile commitment holds the unit's leaf")
+    p.add_argument("--coins", help="the epoch's coin commitment, as the challenger published it (its coins.json)")
+    p.add_argument("--recorded", action="store_true", help="the pass was recorded before epoch coins")
     p.add_argument("--expect-reject", action="store_true")
     p = sub.add_parser("shape")
     p.add_argument("a")

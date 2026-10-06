@@ -15,9 +15,13 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.primitives.commitments import MerkleTree
+from verity.primitives.commitments.rowleaf import ROLE_X
 from verity.protocols.accounting.work.pouw import window as Wd
-from verity.protocols.accounting.work.pouw.audit import Epoch, Workload, weights_root
+from verity.protocols.accounting.work.pouw.audit import (HM96, HM96_TRANSCRIPT, TILE_SCHEMA, Epoch, Workload, hm96_salt,
+                                                         transcript_domain, weights_root)
 from verity.protocols.accounting.work.pouw.circuit import leaves as L
+from verity.protocols.accounting.work.pouw.circuit import words as W
 from verity.protocols.accounting.work.pouw.coins import Challenger as Coins
 from verity.protocols.accounting.work.pouw.coins import CoinOpening, coin_reason
 from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
@@ -32,6 +36,11 @@ import served_commit as SC  # noqa: E402
 PD = SC._pd()
 
 K, M, N = 128, 3, 4
+#: the pass's calls (5 and 9): 16 rows by 64 columns, one -h3 tile each, holding the window's M + 1 by N words
+CALLS, PASS_N = (5, 9), 64
+#: each pass's tile leaves and tile commitment tree, by run
+TILES: dict[str, tuple[list[bytes], MerkleTree]] = {}
+SALT_KEY = bytes(range(32))
 
 
 def _rows(seed: int, n: int) -> list[bytes]:
@@ -44,19 +53,32 @@ def _coins(seed: int = 7) -> Coins:
     return Coins(0, random.Random(seed).randbytes)
 
 
+def _root_a(run: str, m: int) -> str:
+    return hashlib.sha512(f"{run}/a{m}".encode()).hexdigest()
+
+
 def _manifest(run: str, coins: Coins | None) -> dict:
-    """A served pass's manifest as the challenger reads it: its calls, its weights' roots and its salt, the salt coin of
-    `coins` opened after the weights' root, or (None) a beacon's, as a pass recorded before epoch coins carries."""
+    """A served pass's manifest as the challenger and the check read it: its calls, its weights' roots and its salt, the
+    salt coin of `coins` opened after the weights' root, or (None) a beacon's, as a pass recorded before epoch coins
+    carries; and its -h3 tile commitment, over a leaf of the run's for each tile (`TILES`)."""
     roots = {2: hashlib.sha512(run.encode()).digest()}
-    work = Workload((Matmul(5, Shape(16, K, N), 2),))
-    man = {"run": run, "matmuls": [{"index": 5, "m": 16, "k": K, "n": N, "weight": 2}], "weights": {"2": {"root": roots[2].hex()}}}
+    work = Workload(tuple(Matmul(m, Shape(16, K, PASS_N), 2) for m in CALLS))
+    man = {"run": run, "scheme": PD.SCHEMES[0], "instance": {"k_min": K}, "hm96_salt_key": SALT_KEY.hex(),
+           "matmuls": [{"index": m, "m": 16, "k": K, "n": PASS_N, "weight": 2, "root_a": _root_a(run, m)} for m in CALLS],
+           "weights": {"2": {"root": roots[2].hex()}}}
     if coins is None:
         beacon = bytes(32)
-        return {**man, "schema": PD.MANIFEST_SCHEMA_RECORDED, "beacon": beacon.hex(),
-                "salt": Epoch.unverified(work, roots, beacon).salt.hex()}
-    opening = coins.open("salt", weights_root(roots))
-    return {**man, "schema": PD.MANIFEST_SCHEMA, "coins": coins.commitment.to_json(), "salt_opening": opening.to_json(),
-            "salt": Epoch.start(work, roots, coins.commitment, opening).salt.hex()}
+        epoch = Epoch.unverified(work, roots, beacon)
+        man.update(schema=PD.MANIFEST_SCHEMA_RECORDED, beacon=beacon.hex())
+    else:
+        opening = coins.open("salt", weights_root(roots))
+        epoch = Epoch.start(work, roots, coins.commitment, opening)
+        man.update(schema=PD.MANIFEST_SCHEMA, coins=coins.commitment.to_json(), salt_opening=opening.to_json())
+    leaves = [hashlib.sha512(f"{run}/tile{t}".encode()).digest() for t in range(len(CALLS))]
+    tree = MerkleTree(transcript_domain(epoch, len(leaves), HM96),
+                      {t: x + hm96_salt(SALT_KEY, HM96_TRANSCRIPT, t) for t, x in enumerate(leaves)}, lambda _: TILE_SCHEMA)
+    TILES[run] = (leaves, tree)
+    return {**man, "salt": epoch.salt.hex(), "commitment": {"root": tree.commitment.root.hex(), "count": len(leaves)}}
 
 
 def _raw(man: dict) -> bytes:
@@ -84,9 +106,10 @@ def served():
     return scheme, ctx, noise, words
 
 
-def _calls(words) -> list[dict]:
+def _calls(words, run: str = "r-request") -> list[dict]:
     """Two calls of the same rows: 2·M·N = 24 real tiles, grid level 23, padded to 26 with a filler entry of 1 x 2 zero rows."""
-    return [{"record": {"matmul": m, "shape": [16, K, N], "weight": 2, "real_rows": M + 1}, "words": words} for m in (5, 9)]
+    return [{"record": {"matmul": m, "shape": [16, K, N], "weight": 2, "real_rows": M + 1, "served": {"root_a": _root_a(run, m)}},
+             "words": words} for m in CALLS]
 
 
 def _weights() -> list[bytes]:
@@ -101,7 +124,7 @@ def _window(words, run="r-request", coins=None, recorded=False):
     params = _params(run, _raw(man))
     PASSES[params["context"]] = (coins, _raw(man), man)
     root_w, _ = SC.commit_weights(params, _weights())
-    public, advice, priv = SC.commit_window(params, _calls(words), root_w)
+    public, advice, priv = SC.commit_window(params, _calls(words, run), root_w)
     return params, public, advice, priv
 
 
@@ -113,17 +136,45 @@ def _codes(e: pytest.ExceptionInfo) -> set[str]:
     return set(e.value.verdict.codes)
 
 
-def _pub(bca: bytes, bcb: bytes) -> bytes:
-    """A tile proof's public file as `verity_flock.circuit.write` lays it out: its header, then instance 0's b || c in port
-    order (the A row, the B row, the tile digest's row)."""
-    schemas = {"a0": L.ROW_SCHEMA["fp8-p", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-p", SC.SIDES["b"]],
-               "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}
-    return json.dumps({"instances": 1, "frame_v3": {"schemas": schemas}}).encode() + b"\n" + bca + bcb + bytes(128)
+OUT_SALT = bytes(range(192))
 
 
-def _unit_pub(advice, priv, t: int) -> bytes:
+def _pub(bca: bytes, bcb: bytes, bco: bytes = bytes(128)) -> bytes:
+    """A unit proof's public file as `verity_flock.circuit.write` lays it out: its header, then instance 0's b || c in port
+    order (the A row, the B row, the leaf's advice and place, the output row)."""
+    return (json.dumps({"instances": 1, "frame_v3": {"schemas": SC.PUB_SCHEMAS}}).encode() + b"\n" + bca + bcb + bytes(256)
+            + bco)
+
+
+def _leaf(params: dict, advice: dict, t: int, leaf: bytes | None = None, at: int | None = None) -> dict:
+    """Unit `t`'s output and its tile's opening, as `stage_tile` makes them: its call's tile in the window's pass (the
+    run its parameters name) or the filler's; `leaf` and `at` in place of the tile's."""
     e, i, j = Wd.tile_at(advice["entries"], t)
-    return _pub(priv[e]["a"]["bcs"][i], priv[e]["b"]["bcs"][j])
+    entry = advice["entries"][e]
+    if entry["kind"] == "filler":
+        return SC.leaf_opening(leaf or SC.filler_leaf(K), W.leaf_at(i % 64, j % 64, 64) if at is None else at, OUT_SALT)
+    leaves, tree = TILES[params["deployment"].split("/", 1)[1]]
+    tid = CALLS.index(entry["record"]["matmul"])
+    return SC.leaf_opening(leaf or leaves[tid], W.leaf_at(i, j, 16) if at is None else at, OUT_SALT, tid,
+                           hm96_salt(SALT_KEY, HM96_TRANSCRIPT, tid), list(tree.open(tid).path))
+
+
+def _out_bc(lo: dict) -> bytes:
+    return L.commit("leaf-h3", ROLE_X, L.words_leaf_h3(bytes.fromhex(lo["leaf"]), lo["at"]), bytes.fromhex(lo["out_salt"]))
+
+
+def _unit_pub(params, advice, priv, t: int, lo: dict | None = None) -> bytes:
+    e, i, j = Wd.tile_at(advice["entries"], t)
+    return _pub(priv[e]["a"]["bcs"][i], priv[e]["b"]["bcs"][j], _out_bc(lo or _leaf(params, advice, t)))
+
+
+def _op(params, advice, priv, t: int, lo: dict | None = None) -> dict:
+    return SC.opening(advice, priv, params, t, lo or _leaf(params, advice, t))
+
+
+def _passed(params) -> SC.Pass:
+    coins, raw, man = PASSES[params["context"]]
+    return SC.read_pass(raw, coins.commitment if coins else None, coins is None)
 
 
 def test_rows_are_the_schemes_operands(served):
@@ -370,24 +421,52 @@ def test_check_opens_the_drawn_units_rows_only(served, tmp_path):
     this window: another row, another window's rows, another window's registration, or an undrawn unit is rejected."""
     *_, words = served
     params, public, advice, priv = _window(words)
-    rec = _register(params, public)
+    rec, passed = _register(params, public), _passed(params)
     SC.save(tmp_path / "p.npz", priv)
     priv = SC.load(tmp_path / "p.npz")
     draw = {"law": "subset", "population": 26, "k": 3, "units": [5, 13, 25]}
     for t in draw["units"]:
-        assert SC.check(params, rec, draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t)) is None
-    assert SC.opening(advice, priv, params, 25)["entry_value"]["kind"] == "filler"
-    op = SC.opening(advice, priv, params, 5)
-    assert "not entry 0's row" in SC.check(params, rec, draw, 5, _unit_pub(advice, priv, 6), op)
-    assert "not drawn" in SC.check(params, rec, draw, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6))
-    assert SC.check(params, rec, draw, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6), drawn=False) is None
-    assert "not the unit's row" in SC.check(params, rec, draw, 6, _unit_pub(advice, priv, 6), op, drawn=False)
+        assert SC.check(params, rec, draw, t, _unit_pub(params, advice, priv, t), _op(params, advice, priv, t), passed=passed) is None
+    assert _op(params, advice, priv, 25)["entry_value"]["kind"] == "filler"
+    op = _op(params, advice, priv, 5)
+    chk = lambda t, pub, op, **kw: SC.check(params, rec, draw, t, pub, op, passed=passed, **kw)  # noqa: E731
+    assert "not entry 0's row" in chk(5, _unit_pub(params, advice, priv, 6), op)
+    assert "not drawn" in chk(6, _unit_pub(params, advice, priv, 6), _op(params, advice, priv, 6))
+    assert chk(6, _unit_pub(params, advice, priv, 6), _op(params, advice, priv, 6), drawn=False) is None
+    assert "not the unit's row" in chk(6, _unit_pub(params, advice, priv, 6), op, drawn=False)
     oparams, opublic, oadvice, opriv = _window(words, run="r-other")
     orec = _register(oparams, opublic)
-    assert "row" in SC.check(params, rec, draw, 5, _unit_pub(oadvice, opriv, 5), op)
-    assert "window" in SC.check(params, orec, draw, 5, _unit_pub(advice, priv, 5), op)
+    assert "row" in chk(5, _unit_pub(oparams, oadvice, opriv, 5), op)
+    assert "window" in SC.check(params, orec, draw, 5, _unit_pub(params, advice, priv, 5), op, passed=passed)
     forged = {**op, "entry_value": {**op["entry_value"], "hi": op["entry_value"]["hi"] + 1}}
-    assert "not the registered window's entry" in SC.check(params, rec, draw, 5, _unit_pub(advice, priv, 5), forged)
+    assert "not the registered window's entry" in chk(5, _unit_pub(params, advice, priv, 5), forged)
+
+
+def test_check_holds_the_units_output_to_the_passs_tile_leaf(served):
+    """A unit's output row must be the opened leaf and place, the place word (i, j)'s in the pass's tile holding it, and the
+    leaf that tile's under the pass's tile commitment: a unit proving another leaf (another tile's, or the other pass's),
+    at another place, or opened under another pass, is rejected; a filler unit's leaf is the zero rows' tile's."""
+    *_, words = served
+    params, public, advice, priv = _window(words)
+    rec, passed = _register(params, public), _passed(params)
+    draw = {"units": [5, 13, 25]}
+    chk = lambda t, lo, p=passed: SC.check(params, rec, draw, t, _unit_pub(params, advice, priv, t, lo),  # noqa: E731
+                                           _op(params, advice, priv, t, lo), passed=p)
+    leaves, _ = TILES["r-request"]
+    assert "not tile 0's under the pass's tile commitment" in chk(5, _leaf(params, advice, 5, leaf=leaves[1]))
+    oparams, *_ = _window(words, run="r-other")
+    assert "not tile 1's" in chk(13, _leaf(params, advice, 13, leaf=TILES["r-other"][0][1]))
+    assert "place" in chk(5, _leaf(params, advice, 5, at=W.leaf_at(2, 1, 16)))
+    assert "zero rows' tile's" in chk(25, _leaf(params, advice, 25, leaf=leaves[0]))
+    assert "place" in chk(25, _leaf(params, advice, 25, at=W.leaf_at(0, 0, 16)))
+    assert "not the one the window's parameters name" in chk(5, _leaf(params, advice, 5), _passed(oparams))
+    assert "no pass" in chk(5, _leaf(params, advice, 5), None)
+    lo = _leaf(params, advice, 5)
+    tampered = {**lo, "leaf": leaves[1].hex()}
+    assert "output row is not the opened tile leaf" in SC.check(params, rec, draw, 5, _unit_pub(params, advice, priv, 5, lo),
+                                                                _op(params, advice, priv, 5, tampered), passed=passed)
+    assert "not the unit's tile 0" in chk(5, {**lo, "tile": 1})
+    assert "not tile 0's" in chk(5, {**lo, "tile_salt": "00" * 192})
 
 
 def _session(t: int) -> str:
@@ -510,11 +589,13 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     k = SC.law_of(params, public["level"])["k"]
     drawn = list(range(26 - k, 26))                  # the stand-in's draw holds the filler's tiles 24 and 25
     rec = json.loads((tmp_path / "registration.json").read_text())
+    (tmp_path / "drawn.json").write_text(json.dumps({"units": drawn}))
     rows = []
     for u in drawn:
-        (tmp_path / f"pub{u}.bin").write_bytes(_unit_pub(advice, priv, u))
-        (tmp_path / f"op{u}.json").write_text(json.dumps(SC.opening(advice, priv, params, u)))
-        assert SC.check(params, rec, {"units": drawn}, u, _unit_pub(advice, priv, u), SC.opening(advice, priv, params, u)) is None
+        (tmp_path / f"pub{u}.bin").write_bytes(_unit_pub(params, advice, priv, u))
+        (tmp_path / f"op{u}.json").write_text(json.dumps(_op(params, advice, priv, u)))
+        assert SC.main(["check", p, f"{t}/registration.json", f"{t}/drawn.json", str(u),
+                        f"{t}/pub{u}.bin", f"{t}/op{u}.json", "--pass", f"{t}/manifest.json", "--coins", f"{t}/coins.json"]) == 0
         (tmp_path / f"open{u}.json").write_text(json.dumps({"of_record": False, "accepted": True, "why": ""}))
         (tmp_path / f"s{u}").mkdir()
         (tmp_path / f"s{u}" / "session.json").write_text(json.dumps({"unit": u}))
