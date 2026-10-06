@@ -537,6 +537,18 @@ def test_a_moved_guarantee_and_its_definitions_are_compared_with_their_old_recor
     assert text[:2] == ["guarantee Q.t: changed (moved from P.t)", "  before:"] and A.statement_changes(text) == text[:-1]
 
 
+def test_a_definition_the_base_records_under_its_new_name_is_compared_under_it():
+    """A base lock re-recorded after the move: `--moved` changes nothing in it, and a changed definition is shown once, by the
+    name the base records."""
+    now = facts(pins={"Q.t": moved_fact()})
+    base = A.judge({**POLICY, "guarantees": {"Q.t": {}}}, now, FILES, update=True)[1]
+    assert "Q.f" in base["reads"]["Q.Defs"]["definitions"]
+    assert A.review(base, A.judge(base, now, FILES, update=True)[1], now, {}) == []
+    now = facts(pins={"Q.t": moved_fact(f="9" * 32, f_was="9" * 32)})
+    text = A.review(base, A.judge(base, now, FILES, update=True)[1], now, {})
+    assert text == ["definition Q.f (Q.Defs), read by Q.t: changed"]
+
+
 def test_a_moved_statement_lifted_into_a_guarantees_definition_is_the_same_statement():
     old = recorded()
     current = {**POLICY, "guarantees": {"Q.t": old["guarantees"]["P.t"]}}

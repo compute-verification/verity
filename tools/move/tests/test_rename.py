@@ -207,6 +207,25 @@ def test_the_move_on_a_toy_tree(toy, capsys):
     assert git(toy, "status", "--porcelain") == "" and git(toy, "rev-parse", "HEAD:") == head
 
 
+def test_the_moves_are_those_of_the_tree_re_recorded(toy, capsys):
+    """A branch carried across the move keeps its records under the old names, so the map its `--update --moved` takes is
+    `--moves` on its own tree: with a name only its lock records, and none once the lock is re-recorded under the new names."""
+    path = toy / "Sec/lean-audit.json"
+    lock = json.loads(path.read_text())
+    path.write_text(json.dumps(lock | {"guarantees": {"Flock.Guarantees.gatewayLeaf": {}}}, indent=1) + "\n")
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "a branch's guarantee")
+    assert M.main(["--root", str(toy)]) == 0
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")
+    capsys.readouterr()
+    assert M.main(["--root", str(toy), "--moves"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"Flock.Guarantees.gatewayLeaf": "Flock.Guarantees.firewallLeaf",
+                                                   "NetTiming.Warden": "NetTiming.Certifier"}
+    path.write_text(json.dumps({"guarantees": {"Flock.Guarantees.firewallLeaf": {}},
+                                "reads": {"Definitions.Warden": {"definitions": {"NetTiming.Certifier": "00"}}}}))
+    assert M.main(["--root", str(toy), "--moves"]) == 0
+    assert json.loads(capsys.readouterr().out) == {}
+
+
 def test_it_refuses_a_dirty_worktree(toy):
     (toy / "README.md").write_text("edited\n")
     with pytest.raises(SystemExit, match="isn't clean"):
