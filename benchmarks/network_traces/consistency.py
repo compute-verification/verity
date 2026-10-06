@@ -1,6 +1,6 @@
 """A first check of the consistency relation between a circuit and its network certificates, on real certified frames.
 
-The relation has two directions (`note:network-accounting/20261006T0700Z-draft-circuit-certificate-consistency`): every
+The relation has two directions (`note:network-accounting/20261006T0633Z-draft-circuit-certificate-consistency`): every
 crossing value appears in its link's certified traffic at the position the framing φ gives it, and every certified frame
 is explained by crossing values or by declared protocol traffic D. This reads the raw network certificates of one
 `active_replay.py` run (`requests.records`, `responses.records`, and the server's event log `server.events.gz`) and
