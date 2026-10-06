@@ -1025,10 +1025,11 @@ def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was
     assert any(f.startswith("reads: Core.SecurityProofs.inline read Core.SecurityProofs.twice in CoreProofs, outside the spec")
                for f in A.audit(spec, out, replay=False, runs=False, log=lambda *_: None)["failures"]), \
         "a statement reading a proof package's definition fails: that package requires the spec, so it is no spec of it"
-    (spec / "Core" / "Stray.lean").write_text("def Core.stray : Nat := 0\n")
-    (proofs / "CoreProofs.lean").write_text("import Core.Stray\n" + PROOFS)
+    (spec / "Core" / "Protocol").mkdir()
+    (spec / "Core" / "Protocol" / "Stray.lean").write_text("def Core.stray : Nat := 0\n")
+    (proofs / "CoreProofs.lean").write_text("import Core.Protocol.Stray\n" + PROOFS)
     build(proofs)
-    assert "proved_in: ../proofs's roots import this package's Core.Stray, which this package's roots do not, so neither " \
+    assert "proved_in: ../proofs's roots import this package's Core.Protocol.Stray, which this package's roots do not, so neither " \
            "package's replay checks them; import them from this package's roots, or move them into ../proofs" in \
            A.audit(spec, out, replay=False, runs=False, log=lambda *_: None)["failures"], \
         "#1261's shape: a spec module only the proofs import is replayed by neither package"
