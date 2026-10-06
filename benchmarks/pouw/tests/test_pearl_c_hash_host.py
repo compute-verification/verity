@@ -1,7 +1,8 @@
 """hash.cuh on the host (pearl_c/hash_host.cpp, built with g++): each hashing kernel, launched as run.py launches it, writes
 the bytes the verifier's reference computes.  A's row leaves and frame-b3 trees (pads, level keys, one-compression nodes)
 at rows of 1 to 75 chunks, the message digests, the tile leaves full and partial (decode's 32 x 64), Pearl's tickets, the
-tile tree, a unit's seed_A over its root with its line and jackpot keys, and -h3's row seeds at the pinned vectors; then
+tile tree, a unit's seed_A over its root with its line and jackpot keys, and -h3's row seeds at the pinned vectors and over
+an -h3 call's frame-b3s row leaves; then
 run.py's commit and hashing phases end to end."""
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ import fixture as F  # noqa: E402
 import run as R  # noqa: E402
 from verity.primitives.commitments import MerkleTree  # noqa: E402
 from verity.primitives.crypto.blake3 import blake3  # noqa: E402
-from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, TILE_SCHEMA, rows_domain  # noqa: E402
+from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, TILE_SCHEMA, activation_binding, rows_domain  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P  # noqa: E402
 
@@ -186,6 +187,23 @@ def test_row_seeds_are_the_pinned_vectors(host):
         got = host.read(out, 32 * 201)
         assert got == b"".join(C.row_seed(salt, leaf, root_b, unit, r) for r in range(201))
         assert [got[32 * r:32 * r + 32].hex() for r in (3, 200)] == [ROW_SEEDS[unit, 3], ROW_SEEDS[unit, 200]]
+
+
+def test_row_seeds_over_a_calls_leaves_are_the_schemes(host):
+    """An -h3 call's seeds as the device forms them: b3_seeds in mode 1 over level 0 of A's frame-b3s tree is
+    `PearlC.row_seeds`, and seed_subkeys's line key of each row seed is the key E_A's row line is drawn from."""
+    s, m, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), 32, 128
+    ctx, rng = F.context(m, 16, k), np.random.default_rng(11)
+    rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(m)]
+    dom = rows_domain(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, m, s.commitment_hash)
+    leaves = [dom.leaf(i, i, ROW_SCHEMA, r) for i, r in enumerate(rows)]
+    skey, psalt, prb = host.put(blake3(C.LABELS["seed-A"])), host.put(ctx.salt), host.put(ctx.root_b)
+    out, keys = host.alloc(32 * m), host.alloc(64)
+    host.launch("b3_seeds", 1, 128, p=(host.put(b"".join(leaves)), out, skey, psalt, prb), i=(m, ctx.matmul.index, 1))
+    seeds = s.row_seeds(ctx, rows, range(m))
+    assert host.read(out, 32 * m) == b"".join(seeds)
+    host.launch("seed_subkeys", 1, 32, p=(out + 32 * 5, keys))
+    assert host.read(keys, 32) == P._line_key(seeds[5])
 
 
 def test_run_commit_and_hashing_phases_are_the_verifiers(host):

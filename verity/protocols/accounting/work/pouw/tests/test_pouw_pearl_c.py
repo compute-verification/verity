@@ -552,7 +552,7 @@ def test_h1_hashes_with_blake3_throughout():
                        for c, u in zip(checked.c, checked.u) for h in (0, 32))
     assert C.leaf(checked, "h1") == keyed(C.H1_KEYS["leaf"], digests) != C.leaf(checked)
     with pytest.raises(ValueError):
-        C.PearlC(hashing="h3")
+        C.PearlC(hashing="h4")
 
 
 def test_each_hashing_formats_keys_are_on_the_scheme():
@@ -614,6 +614,56 @@ def test_h2_lifecycle_commits_with_frame_b3s():
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
     h1 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1"), epoch).check_tile(tr, prover.open(epoch, 0))
     assert not h1.ok and h1.reason == "activation opening"
+
+
+def test_h3_draws_each_rows_e_a_from_its_own_leaf():
+    """Hashing format -h3: row i's E_A is line 0 of `row_seed` over row i's leaf at level 0 of A's frame-b3s tree (as
+    `b3_seeds` reads it), so it moves with that row's bytes and position alone and not with root_A, which keys only the
+    tickets.  B's side, seed_B and the digests are -h2's."""
+    from verity.primitives.commitments.merkle import tree_levels
+    from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, activation_binding, commit_rows
+
+    s, h2 = (C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing=h) for h in ("h3", "h2"))
+    assert s.name == "pearl-c-h100-v1-h3" and s.commitment_hash == "blake3-s256" and s.digest_keys == C.H1_KEYS
+    assert s.certificate.claims == h2.certificate.claims and dict(s.certificate.parameters)["hashing"] == "h3"
+    ctx, k = CV.ctx_of("h3-rows", (16, 128, 16), 3, 9), 128
+    a, b = CV.rows_f32("h3-rows", "A", 16, k), CV.rows_f32("h3-rows", "B", 16, k)
+    tile, noise = Tile(tuple(range(16)), tuple(range(16))), s.noise(ctx)
+    assert noise == h2.noise(ctx)
+    tree = commit_rows(activation_binding(ctx.salt, 3), 3, a, "blake3-s256")
+    leaves = [tree.domain.leaf(i, i, ROW_SCHEMA, r) for i, r in enumerate(a)]
+    assert tree_levels(tree.domain, leaves)[-1][0] == tree.commitment.root
+    seeds = s.row_seeds(ctx, a, tile.rows)
+    assert seeds == [C.row_seed(ctx.salt, leaves[i], ctx.root_b, 3, i) for i in range(16)] and len(set(seeds)) == 16
+    ops, ops2 = s.encode(ctx, noise, a, b, tile), h2.encode(ctx, noise, a, b, tile)
+    assert ops.e_a == [P.sample_line(x, 0, 0, 0) for x in seeds] != ops2.e_a
+    assert ops.e_b == ops2.e_b and ops.b.codes == ops2.b.codes and ops.pb == ops2.pb
+
+    other = list(a)
+    other[5] = a[6]
+    e = s.encode(ctx, noise, other, b, tile).e_a
+    assert [i for i in range(16) if e[i] != ops.e_a[i]] == [5] and e[5] != ops.e_a[6]
+    assert h2.encode(ctx, noise, other, b, tile).e_a == ops2.e_a
+    moved = Context(ctx.salt, ctx.matmul, bytes(32), ctx.root_b)
+    assert s.encode(moved, s.noise(moved), a, b, tile).e_a == ops.e_a and s.noise(moved).seed_a != noise.seed_a
+    for ctx2 in (CV.ctx_of("h3-other", (16, 128, 16), 3, 9), Context(ctx.salt, Matmul(4, Shape(16, 128, 16), 9), ctx.root_a, ctx.root_b)):
+        assert s.encode(ctx2, s.noise(ctx2), a, b, tile).e_a[0] != ops.e_a[0]
+
+
+def test_h3_lifecycle_and_an_h2_verifier_refuses_it():
+    """An -h3 transcript is accepted by an -h3 verifier; -h2's verifier opens the same rows (both frame-b3s) and refuses
+    its checked values, which -h2's unit-seeded E_A doesn't give."""
+    from verity.protocols.accounting.work.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
+
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), 128
+    rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
+    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
+    prover = Prover(s, {9: rows_b})
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
+    h2 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h2"), epoch).check_tile(tr, prover.open(epoch, 0))
+    assert not h2.ok and h2.reason == "checked values"
 
 
 def test_v1_domain_rules():
