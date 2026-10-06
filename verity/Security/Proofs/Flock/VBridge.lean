@@ -1,4 +1,6 @@
 import Proofs.Flock.VBridge.Sha
+import Proofs.Flock.VBridge.Karatsuba
+import Proofs.Flock.VBridge.Residuals
 import Proofs.Flock.VBridge.Climb
 import Proofs.Flock.VBridge.Open
 
