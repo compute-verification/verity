@@ -14,6 +14,10 @@ verity = { workspace = true }
 research = { workspace = true }
 verity-vllm = { workspace = true }
 
+[tool.verity.tests]
+# Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through C-Flock's Python.
+inputs = ["backends/flock/python"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

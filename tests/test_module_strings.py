@@ -31,6 +31,7 @@ HISTORY_PATHS = (
     "**/*vectors*.json",           # pinned vectors: what a run produced, by the names it had then
     "**/ledger/**",                # the frozen overhead ledger
     "**/CHANGELOG*",
+    "tools/move/*_map.toml",       # each move's map: the names it gave, which a later move may have renamed
 )
 #: JSON keys whose values record how a past run was invoked (its argv), not code a tool resolves now
 HISTORY_KEYS = frozenset({"argv", "command", "cmd", "invocation", "provenance", "history"})
