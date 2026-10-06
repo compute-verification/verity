@@ -3,3 +3,7 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `lean.py` writes the merged locks with the Lean audit's own `audit.text`, which tests/test_lean.py imports.
+inputs = ["tools/lean"]

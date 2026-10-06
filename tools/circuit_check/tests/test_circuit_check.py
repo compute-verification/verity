@@ -49,6 +49,8 @@ def test_every_registered_definition_is_checked():
     assert not TG.ROOT_ERRORS, TG.ROOT_ERRORS
     assert len(TG.REGISTERED) > 200
     checked = {TG.family(fn) for fn in SUITE.values()}
+    assert set(TG.CHECKED_THROUGH_CALLS) <= set(TG.REGISTERED) - checked
+    checked |= set(TG.CHECKED_THROUGH_CALLS)
     missing = sorted(set(TG.REGISTERED) - checked)
     assert not missing, f"registered Definitions no circuit-check binding reaches: {missing}"
 

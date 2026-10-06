@@ -19,7 +19,7 @@ those states: with SHAKE's 1600-bit state, Dense in one round from about 20% of 
 ideal-hash result transfers to a concrete hash by citation. So "no named assumption" for `DenseMeets` means within the
 ideal-hash model only, and so do the dense scheme's deployment results below. The chosen fix is H as the overwrite chain
 over an ideal permutation `Π₂` of width `2m + 512`, proved in the ideal-permutation model. Its pebbling side and its ex
-post facto bounds are proved in this package (`Pous/SecurityProofs/Chain/Flat.lean`): `ChainExPostFacto` (B5 for `Π₂`)
+post facto bounds are proved in Lean (`verity/Security/Proofs/Pous/Chain/Flat.lean`): `ChainExPostFacto` (B5 for `Π₂`)
 for dense, and its DAG-generic form `ChainExPostFactoG` for the band, with the guarantees below (P3 with the concrete
 `H`, the band, and the dense chain scheme). They hold in the ideal-permutation model only. `Π₂` itself (Feistel-SHAKE)
 was taken as a heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
@@ -188,7 +188,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
      conditions in their docstrings, and `BandPubMeetsFamilyD2` and `BandPubMeetsFamilyD1` the same family at
      `D = 2`, `k = 97` and at `D = 1`, `k = 93`;
    - dense: `dense_pub_meets_64` and `seg_pub_meets_14` (a random-oracle `H`), and `chain_pub_meets_64` (the overwrite
-     chain), given `ChainExPostFacto`, which `chainExPostFacto_v6` proves (`lean/Pous/SecurityProofs/Chain/Flat.lean`;
+     chain), given `ChainExPostFacto`, which `chainExPostFacto_v6` proves (`verity/Security/Proofs/Pous/Chain/Flat.lean`;
      not a guarantee).
 
    An accept-all check provably fails (`acceptAll_fails_dense`). P3 goes through the same code, but its
@@ -333,12 +333,12 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 ## The continuous audit's verifier (`continuous`)
 
 `continuous.ContinuousVerifier(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the verifier of the
-continuous audit's model, `lean/Pous/Protocol/Model/Continuous.lean`, with the guarantee
+continuous audit's model, `verity/Security/Definitions/Pous/Model/Continuous.lean`, with the guarantee
 `Pous.SecurityProofs.ContinuousAudit` (#954): `n` challenges over time, drawn as the timed audit's indices, accepted
 when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
 stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). The verifier is
 one `audit.TimedVerifier` over the stream with a hard deadline, and it enforces the three requirements that
-`lean/Pous/SecurityProofs/Continuous/Verifier.lean` proves of the model's verifier:
+`verity/Security/Proofs/Pous/Continuous/Verifier.lean` proves of the model's verifier:
 
 1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
    index `j` was revealed, and in that case it first closes challenge `j` as rejected; the close stands even when `j`
@@ -499,7 +499,7 @@ column storage, whole lower labels as separators, meet in the middle through `P�
   sponge and on Miyaguchi–Preneel over band rows, and fail on the overwrite chain. The designer's state game
   (`pous_state_game.py`, from `internal/p3-instantiation/overwrite-state-game.py`) agrees on dense and band rows;
 - the continuous audit's verifiers against the Lean model (`test_pous_continuous_difftest.py`). `pous_continuous_model.py`
-  transcribes the verifier of `lean/Pous/Protocol/Model/Continuous.lean` definition by definition (a test finds each
+  transcribes the verifier of `verity/Security/Definitions/Pous/Model/Continuous.lean` definition by definition (a test finds each
   one word for word in the Lean file) and restates it on the verifier's clock. Fuzzed and scripted traces (answers at
   and one nanosecond past each deadline, wrong, pipelined, stale and dropped answers) must agree with it action for
   action, and Lean `ContMachine`s run against the verifier must get `contRecords`' verdicts and `contAccepts`;
@@ -531,45 +531,45 @@ the timed audit and the simulator with the dense codec as default.
 
 ## In Lean (`lean/`)
 
-- **Trusted, reviewed once:** `Pous/Protocol/Game` (bits, uniform probability, parallel oracle programs `Prog`),
-  `Pous/Protocol/Model` (schemes, the audit game `AuditSecure`, `INC`/`TimedINC`, and the models below),
-  `Pous/Protocol/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `Pous/Assumptions.lean` and
-  `Pous/Guarantees.lean`.
+- **Trusted, reviewed once:** `verity/Security/Definitions/Pous/Game` (bits, uniform probability, parallel oracle programs `Prog`),
+  `verity/Security/Definitions/Pous/Model` (schemes, the audit game `AuditSecure`, `INC`/`TimedINC`, and the models below),
+  `verity/Security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `verity/Security/Specs/Pous/Assumptions.lean` and
+  `verity/Security/Specs/Pous/Guarantees.lean`.
 - **`Meets sch reveal D Q k ε`:** `ε ≤ 2^-128`, `sch` is correct, `|C| ≥ |W|`, the space bound holds, and
   `AuditSecure` holds at a state of `⌊ρ|C|⌋` bits with bound `δ + ε`.
-- **Proofs:** `Pous/SecurityProofs/`, checked by Verity's `tools/lean/audit.py` against `lean-audit.json`.
-  `Pous/SecurityProofs.lean` proves `Pous.Guarantees.X` as `Pous.SecurityProofs.X`.
+- **Proofs:** `verity/Security/Proofs/Pous/`, checked by Verity's `tools/lean/audit.py` against `lean-audit.json`.
+  `verity/Security/Proofs/Pous.lean` proves `Pous.Guarantees.X` as `Pous.SecurityProofs.X`.
 - **Untrusted submissions:** `grade.sh FILE Pous.Guarantees.X` grades one file against one guarantee (`lean/README.md`).
 
 ### The band
 
-`Pous.BandChain.chainBand B d ℓ c dom` (`Pous/Protocol/Model/BandChain.lean`) is the band over the overwrite chain on
+`Pous.BandChain.chainBand B d ℓ c dom` (`verity/Security/Definitions/Pous/Model/BandChain.lean`) is the band over the overwrite chain on
 one ideal permutation `Π₂`, and `Pous.BandMulti.chainBandSeg` lays out segments of it. The proofs are in this package
-(`Pous/SecurityProofs/Chain/Flat.lean`, from the POUS store's `lean/submissions/band-chain/`, `band-multi/` and
+(`verity/Security/Proofs/Pous/Chain/Flat.lean`, from the POUS store's `lean/submissions/band-chain/`, `band-multi/` and
 `sponge-dense/`), with no hypothesis: `Pous.SecurityProofs.BandChainMeets64` gives `Meets` at 64 KiB, `B = 512`,
 `D = 5`, `Q = 2^20`, `k = 111` and `ε = 2^-128` for every `d ≥ 5`; `BandMultiMeets14` the same for 448 segments
 (14 GiB), with per-segment and with global salts, `BandMultiMeets14K106` at `k = 106` per segment, and
 `BandMultiMeetsFamily` the `k = 111` row for every segment count `N` with `1 ≤ N ≤ 2^64`
-(`Pous/SecurityProofs/Chain/Family.lean`). `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1` and
+(`verity/Security/Proofs/Pous/Chain/Family.lean`). `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1` and
 `BandMultiMeetsFamilyD0` are that family at fewer rounds, `D = 2` with `k = 97` for every `d ≥ 2`, `D = 1` with
 `k = 93` for every `d ≥ 1` and `D = 0` with `k = 89` for every `d`, and
 `BandChainMeets64Rounds2` and `BandChainMeets64Rounds1` their one-segment rows
-(`Pous/SecurityProofs/Chain/FamilyRounds.lean`). `BandPubMeets*` are the same rows with an untrusted server encoding and the
-exact setup check (`Pous/Protocol/Model/PubEncoder.lean`), under the four deployment conditions in their docstrings;
+(`verity/Security/Proofs/Pous/Chain/FamilyRounds.lean`). `BandPubMeets*` are the same rows with an untrusted server encoding and the
+exact setup check (`verity/Security/Definitions/Pous/Model/PubEncoder.lean`), under the four deployment conditions in their docstrings;
 `BandPubMeetsFamily`, `BandPubMeetsFamilyD2` and `BandPubMeetsFamilyD1` are `BandMultiMeetsFamily`'s and its two rows at
-fewer rounds (`Pous/SecurityProofs/Chain/PubFamily.lean`, `PubRounds.lean`). The
+fewer rounds (`verity/Security/Proofs/Pous/Chain/PubFamily.lean`, `PubRounds.lean`). The
 band needs `d ≥ D`.
 
 ### The graded audit
 
-The graded audit (`Pous/Protocol/Model/Graded.lean`, `GradedMeets` in `Pous/Protocol/Accounting/GradedMeets.lean`) is
+The graded audit (`verity/Security/Definitions/Pous/Model/Graded.lean`, `GradedMeets` in `verity/Security/Definitions/Pous/Accounting/GradedMeets.lean`) is
 the sequential audit with a grace of `t` late answers. A round is late when its program takes more than `D` rounds or
 `Q` queries on its own path, and every round, late or not, stays within a hard bound `(D_late, Q_late)`. The audit
 accepts when every answer is correct and at most `t` are late; at `t = 0` it is the sequential audit
 (`gradedMeets_zero_iff`). `Pous.SecurityProofs.BandGradedMeetsFamily` proves, with no hypothesis, the band at every
 segment count from 1 to `2^64` and every `d ≥ 5`, at `D = 5`, `Q = 2^20`, `ε = 2^-128`, `δ = 1%`, for
 `(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, whenever `5 ≤ D_late ≤ d`, `D_late ≤ 12` and `Q_late ≥ 2^20`
-(`Pous/SecurityProofs/Graded/`: `theorem1_ii_graded` with the binomial tail `pr_hits_ge_le_binomial`).
+(`verity/Security/Proofs/Pous/Graded/`: `theorem1_ii_graded` with the binomial tail `pr_hits_ge_le_binomial`).
 
 The game assumes three requirements on the protocol, and the certificate says nothing about a protocol that breaks one:
 
@@ -594,7 +594,7 @@ audit's duration:** it aborts, without accepting, an audit that lasts more than 
 (≈ 6.3 ms) for the worst row's 242 gaps if every round answers at its deadline.
 `Pous.SecurityProofs.BackgroundRebuildExcluded` proves the counts, and that programs which know `W` but hold no state
 about `Π₂`, each within any `T ≤ 1,505` sequential calls and `2^128` queries, output every label of a segment with
-probability at most `2^-128` (`Pous/SecurityProofs/Rebuild/`). The bound rests on the cap, which is the proof's reach,
+probability at most `2^-128` (`verity/Security/Proofs/Pous/Rebuild/`). The bound rests on the cap, which is the proof's reach,
 not on `R(d)`.
 
 It excludes only re-encoding a *whole* segment from `W` with *no* state about `Π₂`, and is not a claim that no rebuild
@@ -638,7 +638,7 @@ same rounds, work and acceptance probability, and the restricted oracle is again
 `tag_injective_14` record the index-level fact: the tagged keying is the global one relabeled injectively.
 
 **Over the overwrite chain** (`Pous.Sponge.chainDense`, `H` the overwrite chain on an ideal permutation, proved with no
-hypothesis in `Pous/SecurityProofs/Chain/Flat.lean`): `Pous.SecurityProofs.ChainDenseMeets64`, 512 blocks of 64 KiB at
+hypothesis in `verity/Security/Proofs/Pous/Chain/Flat.lean`): `Pous.SecurityProofs.ChainDenseMeets64`, 512 blocks of 64 KiB at
 `D = 5`, `Q = 2^20`, `k = 111`; and the deployment point, `Pous.SecurityProofs.ChainDenseMeets111`, `2^16` blocks of
 1 KiB at `D = 64`, `Q = 2^20`, `k = 111`. The deployment was pinned at `k = 107`, which the ex post facto argument does
 not reach; it is re-pinned at `k = 111`, four challenges more.
@@ -649,7 +649,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
   isolation: both outside Lean;
 - decode cost, which isn't modeled.
 
-## Guarantees (`lean/Pous/Guarantees.lean`)
+## Guarantees (`verity/Security/Specs/Pous/Guarantees.lean`)
 
 | Statements | What | Status |
 |---|---|---|
@@ -667,12 +667,12 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 | `SampledAuditProd`, `SampledAuditSeq`, `SampledAuditSim` | "fewer than `k` answerable" gives a sampled-audit bound | proved |
 | `StackedAuditSeq`, `StackedAuditOnePercent` | the stacked one-way scheme's audit clause; the second is conditional on a depth-robust graph | proved |
 | `DenseMeets` | the dense scheme S1 meets `Meets` with no named assumption, in the ideal-hash model only (security, correctness and rate, not decode cost) | proved |
-| `P3ConcreteMeets64`, `P3ConcreteMeets14GB`, `P3ConcreteMeets64D12` | P3 with the overwrite-chain `H` (`Pous/Protocol/Model/P3Chain.lean`), 64 KB labels, `k = 106`: one segment and 971 segments (14.005 GB) on `B(220, 12)` at `D = 10`, and `B(220, 16)` at `D = 12`, in the ideal two-permutation model | proved |
-| `BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`, `BandMultiMeets14`, `BandMultiMeets14K106`, `BandMultiMeetsFamily` | the band over the overwrite chain (`Pous/Protocol/Model/BandChain.lean`): 64 KiB labels, `D = 5`, `k = 111`, every `d ≥ 5` and `d = 5`, `12`; 448 segments (14 GiB) at `k = 111`, and at `k = 106` per segment; every segment count from 1 to `2^64` at `k = 111` | proved |
+| `P3ConcreteMeets64`, `P3ConcreteMeets14GB`, `P3ConcreteMeets64D12` | P3 with the overwrite-chain `H` (`verity/Security/Definitions/Pous/Model/P3Chain.lean`), 64 KB labels, `k = 106`: one segment and 971 segments (14.005 GB) on `B(220, 12)` at `D = 10`, and `B(220, 16)` at `D = 12`, in the ideal two-permutation model | proved |
+| `BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`, `BandMultiMeets14`, `BandMultiMeets14K106`, `BandMultiMeetsFamily` | the band over the overwrite chain (`verity/Security/Definitions/Pous/Model/BandChain.lean`): 64 KiB labels, `D = 5`, `k = 111`, every `d ≥ 5` and `d = 5`, `12`; 448 segments (14 GiB) at `k = 111`, and at `k = 106` per segment; every segment count from 1 to `2^64` at `k = 111` | proved |
 | `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1`, `BandMultiMeetsFamilyD0`, `BandChainMeets64Rounds2`, `BandChainMeets64Rounds1` | the band at fewer rounds: every segment count from 1 to `2^64` at `D = 2`, `k = 97`, every `d ≥ 2`, at `D = 1`, `k = 93`, every `d ≥ 1`, and at `D = 0`, `k = 89`, every `d`; one segment (64 KiB) at `D = 2` and `D = 1` | proved |
-| `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global`, `BandPubMeetsFamily`, `BandPubMeetsFamilyD2`, `BandPubMeetsFamilyD1` | the same band rows with a public encoder and the exact setup check (`Pous/Protocol/Model/PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`) | proved |
-| `BandGradedMeetsFamily` | the band with up to `t` late answers (`Pous/Protocol/Model/Graded.lean`, `Pous/Protocol/Accounting/GradedMeets.lean`): every segment count from 1 to `2^64`, `d ≥ 5`, `D = 5`, `(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, each late round within `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` | proved |
-| `BackgroundRebuildExcluded` | under the graded verifier's cap of `1,505 · call_ns` on an audit's duration, no audit re-encodes a whole band segment from `W` alone (`Pous/Protocol/Accounting/Rebuild.lean`): every row's rounds last under 1,479 call-times at `D_late ≤ 12`, re-encoding costs `R(d) ≥ R(5) = 3,057`, and programs with no state about `Π₂` re-encode a whole segment within `1,505` calls with probability at most `2^-128`. A prefix, or a whole segment from a few held labels, can be rebuilt within the cap | proved |
+| `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global`, `BandPubMeetsFamily`, `BandPubMeetsFamilyD2`, `BandPubMeetsFamilyD1` | the same band rows with a public encoder and the exact setup check (`verity/Security/Definitions/Pous/Model/PubEncoder.lean`, `verity/Security/Definitions/Pous/Accounting/PubMeets.lean`) | proved |
+| `BandGradedMeetsFamily` | the band with up to `t` late answers (`verity/Security/Definitions/Pous/Model/Graded.lean`, `verity/Security/Definitions/Pous/Accounting/GradedMeets.lean`): every segment count from 1 to `2^64`, `d ≥ 5`, `D = 5`, `(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, each late round within `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` | proved |
+| `BackgroundRebuildExcluded` | under the graded verifier's cap of `1,505 · call_ns` on an audit's duration, no audit re-encodes a whole band segment from `W` alone (`verity/Security/Definitions/Pous/Accounting/Rebuild.lean`): every row's rounds last under 1,479 call-times at `D_late ≤ 12`, re-encoding costs `R(d) ≥ R(5) = 3,057`, and programs with no state about `Π₂` re-encode a whole segment within `1,505` calls with probability at most `2^-128`. A prefix, or a whole segment from a few held labels, can be rebuilt within the cap | proved |
 | `ChainDenseMeets64`, `ChainDenseMeets111` | the dense scheme over the overwrite chain: 64 KiB at `D = 5`, and the deployment point (`2^16` blocks of 1 KiB, `D = 64`), both at `k = 111` | proved |
 | `B5Stacked` | the one-way bound on Fisch's stacked graph | proved |
 | `DenseMeets64`, `SegMeets14`, `SegTagMeets14` | the dense scheme at 64 KB, `D = 5`, `k = 106`, in the ideal-hash model: one segment, 448 segments (14 GB), and the 448 segments keyed as the implementation keys them, for every salt | proved |
@@ -683,7 +683,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over
 `Pous.ColumnGame`, is being drafted.
 
-## Named assumptions (`lean/Pous/Assumptions.lean`)
+## Named assumptions (`verity/Security/Specs/Pous/Assumptions.lean`)
 
 Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
@@ -710,10 +710,10 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
 Done, in this package: in the random-oracle model, the dense re-certificate at `POINT_64K` (`dense_meets_64`), the
 multi-segment lemma (`seg_meets_14`, 14 GB) and its form for the code's per-segment `tag_s` domains
-(`segTag_meets_14`), in `lean/Pous/SecurityProofs/Dense/`. Over the overwrite chain, the ex post facto bounds
+(`segTag_meets_14`), in `verity/Security/Proofs/Pous/Dense/`. Over the overwrite chain, the ex post facto bounds
 `ChainExPostFactoG` and `ChainExPostFacto` (`chainExPostFactoG_v6`, `chainExPostFacto_v6`), and from them the band,
 the dense chain scheme and P3 with the concrete `H` ("Guarantees"), in
-`lean/Pous/SecurityProofs/Chain/Flat.lean`. Pending:
+`verity/Security/Proofs/Pous/Chain/Flat.lean`. Pending:
 
 - P3's certificate: the code's `h_0` and Lean's `iv(domP3 tag L v)` differ ("P3 (research)").
 - A GPU codec for the dense scheme (#172's is P3's).
