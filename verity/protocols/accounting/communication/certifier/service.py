@@ -44,7 +44,7 @@ from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefini
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.types import Value as Bits
 from verity.primitives.commitments import hm96
-from verity.primitives.commitments.identity import identity_digest
+from verity.primitives.commitments.identity import identity_digest_sha512
 from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.merkle import CommitmentDomain, tree_levels
 from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
@@ -158,10 +158,10 @@ class LinkWindows:
 
     def domain(self, window: int) -> CommitmentDomain:
         """One-stage's served domain (`registration.served_domain`) for the link-window: run `<run>/<link>/<window>`."""
-        binding = identity_digest(R.SERVED_DOMAIN, {
+        binding = identity_digest_sha512(R.SERVED_DOMAIN, {
             "program": _PARTITION["program"], "partition": P.digest(_PARTITION), "port": VALUE, "schema": SCHEMA,
             "leaves": 2, "run": f"{self.run}/{self.link}/{window}"})
-        return CommitmentDomain(bytes.fromhex(binding), -1, RangeIndexedDomain(0, 2), hash="sha512")
+        return CommitmentDomain(binding, -1, RangeIndexedDomain(0, 2), hash="sha512")
 
     def ports(self, window: int) -> dict[str, dict[str, Any]]:
         """The challenger's own copy of the link-window's port: two leaves, under its domain."""
