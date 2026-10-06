@@ -17,7 +17,8 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
 - **Prefill** (the panel's m = 8,192): one prompt of 8,192 random tokens with max_tokens 1 and a batch budget of 8,192 tokens,
   so each linear call has m = 8,192.
 - **Decode** (the panel's m = 32): 32 prompts of 64 tokens.  The step is (t(1 + D tokens) − t(1 token)) / D over D = 64
-  decode steps, whose linear calls have m = 32.
+  decode steps, whose linear calls have m = 32.  ``--batch B`` and ``--prompt P`` set the decode batch and its prompts'
+  length (a sweep's point; `configure`): its key is ``decode_b<B>_step``, with ``_p<P>`` before ``_step`` off 64 tokens.
 - **The split:** ``pearlc`` over ``fp8``, the headline, and over ``bf16``; the GEMM (``gemm_pearlc``'s kernel time in
   ``pearlc-nohash``), hashing and records (``pearlc`` less ``pearlc-nohash``), and everything else.
 - **Gates, in the arm's process, before any timing:** at every distinct linear shape and both m, served y is held to the
@@ -83,13 +84,16 @@ ZK = ("pearlc-zk",)
 #: ``--fp8-graphs``: stock vLLM FP8 as vLLM serves it, compiled with its CUDA graphs (the decode headline's baseline, the
 #: 19:58Z ruling), in an engine of its own beside the eager one, timed after each eager ``fp8`` rep
 GRAPHED = ("fp8-graphs",)
-#: the graphed engine's CUDA-graph batch sizes: the decode batch and below
-CAPTURE_SIZES = [1, 2, 4, 8, 16, 24, 32]
+#: the graphed engine's CUDA-graph batch sizes at the default decode batch; `configure` keeps those under ``--batch`` and adds it
+CAPTURE_32 = [1, 2, 4, 8, 16, 24, 32]
+CAPTURE_SIZES = CAPTURE_32
 #: one rep of every mode, the baseline between each other mode's
 CYCLE = ("fp8", "pearlc", "fp8", "pearlc-nohash", "fp8", "bf16")
 #: the fallback's engine lifetimes: base, arm, base, arm, each timing its share of the reps
 BLOCKS = 4
+#: the decode batch and its prompts' length are ``--batch`` and ``--prompt`` (`configure`); these are their defaults, the panel's
 PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
+BATCH_DEFAULT, PROMPT_DEFAULT = BATCH, PROMPT
 #: the served y's bound against the float product (the scheme's tested bound, verity/protocols/accounting/work/pouw's sm120 useful-output test)
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
@@ -110,11 +114,49 @@ WINDOW, PPL_BATCH, PPL_WINDOWS_A_PASS = 2048, 2048, 8
 SHAPES = {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
 
 
+def configure(args) -> None:
+    """``--batch`` and ``--prompt`` in this process (the controller's, and each engine's: spawn re-imports this module).  Off
+    the defaults, the decode key names both, ``decode_b<B>_step`` with ``_p<P>`` before ``_step`` when the prompt isn't 64
+    tokens, so `panel_rows.py` (``decode_b32_step``) never reads a sweep point as the panel's decode row."""
+    global BATCH, PROMPT, CAPTURE_SIZES
+    BATCH, PROMPT = getattr(args, "batch", BATCH_DEFAULT), getattr(args, "prompt", PROMPT_DEFAULT)
+    CAPTURE_SIZES = [s for s in CAPTURE_32 if s < BATCH] + [BATCH]
+    SHAPES.pop(next((k for k in SHAPES if k.startswith("decode_")), None), None)
+    SHAPES[decode_key() + "_step"] = f"e2e-llama31-8b-vllm-m{BATCH}" + (f"-p{PROMPT}" if PROMPT != PROMPT_DEFAULT else "")
+
+
+def decode_key() -> str:
+    return f"decode_b{BATCH}" + (f"_p{PROMPT}" if PROMPT != PROMPT_DEFAULT else "")
+
+
+def kv_tokens(llm) -> int | None:
+    """The engine's KV cache in tokens (vLLM's block count times block size), read in-process; None where vLLM hides it."""
+    try:
+        cc = llm.llm_engine.vllm_config.cache_config
+        return int(cc.num_gpu_blocks) * int(cc.block_size)
+    except (AttributeError, TypeError):
+        return None
+
+
+def pass_capacity(tile: int, ns: list[int]) -> tuple[int, int]:
+    """The tiles and screened rows one decode generate's pass holds at the decode batch and prompt length, each a power of two
+    and at least the device run's defaults: the prompts' prefill in chunks of `PREFILL` tokens, then 1 + `STEPS` forwards of the
+    batch, each forward's rows padded to `ROW_ALIGN` and its tiles to whole tile rows, with as many forwards again for
+    vLLM's mixed prefill-and-decode steps.  Every linear (`ns`, their n) runs once per forward."""
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    cdiv = lambda a, b: -(-a // b)  # noqa: E731
+    prompt_rows, forwards = BATCH * PROMPT, 2 * (cdiv(BATCH * PROMPT, PREFILL) + 1 + STEPS)
+    tile_rows = cdiv(prompt_rows, tile) + forwards * cdiv(BATCH, tile)
+    rows = prompt_rows + forwards * cdiv(BATCH, PPD.ROW_ALIGN) * PPD.ROW_ALIGN
+    pow2 = lambda x: 1 << max(0, x - 1).bit_length()  # noqa: E731
+    return (max(PPD.LEAF_CAPACITY, pow2(tile_rows * sum(n // tile for n in ns))), max(PPD.FLAG_ROWS, pow2(rows * len(ns))))
+
+
 def engine(args, group: str):
     from vllm import LLM
     kw = {"model": args.model, "enforce_eager": True,
           "gpu_memory_utilization": args.mem_base if group in ("base", "base-graphs") else args.mem_arm,
-          "max_num_seqs": BATCH, "max_model_len": PREFILL + 64,
+          "max_num_seqs": BATCH, "max_model_len": max(PREFILL + 64, PROMPT + 1 + STEPS),
           "max_num_batched_tokens": getattr(args, "batch_tokens", None) or PREFILL, "enable_prefix_caching": False,
           "seed": 0}
     if args.revision:
@@ -154,9 +196,11 @@ def install(model, args, beacon: bytes):
     roots = PPD.weight_roots(kernel, weights, scheme)
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.unverified(declared, roots, beacon).salt
+    tiles, rows = pass_capacity(kernel.run.TILE, [t.shape[0] for t in weights.values()])
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
-                              rows_form=getattr(args, "rows_form", "w"), whole_defer=getattr(args, "whole_defer", False))
+                              rows_form=getattr(args, "rows_form", "w"), whole_defer=getattr(args, "whole_defer", False),
+                              capacity=tiles, flag_rows=rows)
     if getattr(args, "statement", None):
         import importlib.util
         spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement.py")
@@ -446,13 +490,14 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
     """One engine, resident in its own process: ``base`` (stock FP8) or ``arm`` (BF16 with the Pearl-C wrapper), answering
     the controller's commands one at a time."""
     try:
+        configure(args)
         import torch
         from vllm import SamplingParams
         from vllm_bench import PROMPTS, find_model
 
         llm = engine(args, group)
         run = stack = whole = None
-        ready: dict = {"group": group}
+        ready: dict = {"group": group, "kv_tokens": kv_tokens(llm)}
         if group == "arm":
             run, weights, stack = install(find_model(llm), args, beacon)
             ws = getattr(args, "whole_step", False)
@@ -467,7 +512,9 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
         one = SamplingParams(temperature=0.0, max_tokens=1, ignore_eos=True)
         many = SamplingParams(temperature=0.0, max_tokens=1 + STEPS, ignore_eos=True)
         tok = llm.get_tokenizer()
-        chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in PROMPTS]
+        # at most a decode batch of them, so a small batch's chat (its prompts one after another) stays within one pass
+        chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True)
+                for p in PROMPTS[:BATCH]]
 
         def timed(prompts, sp, retain=None, controls=()):
             """One timed generate; under a Pearl-C arm it is one pass (`Stack.pass_`), whose end is inside the time."""
@@ -597,6 +644,10 @@ class Worker:
             if self.proc.is_alive():
                 self.proc.terminate()
             raise
+        need, have = BATCH * (PROMPT + 1 + STEPS), self.ready.get("kv_tokens")
+        if have is not None and have < need:
+            raise SystemExit(f"{group}: its KV cache holds {have} tokens and the decode batch needs {need} ({BATCH} x "
+                             f"({PROMPT} + 1 + {STEPS})): vLLM would queue or preempt requests inside the timed step; raise --mem-*")
 
     def recv(self, timeout: float = 1200) -> dict:
         if not self.conn.poll(timeout):
@@ -650,7 +701,7 @@ def schedule(reps: int, interleave: str, graphed: bool = False, zk: bool = False
 
 def timing(records: list[dict]) -> dict:
     """Each mode's medians over its reps, and its reps, from the controller's records."""
-    out = {}
+    out, d = {}, decode_key()
     for mode in MODES + GRAPHED + ZK:
         pre = [r for r in records if r["mode"] == mode and r["phase"] == "prefill"]
         dec = [r for r in records if r["mode"] == mode and r["phase"] == "decode"]
@@ -658,9 +709,9 @@ def timing(records: list[dict]) -> dict:
             continue
         out[mode] = {"timing": {"prefill_8192_s": statistics.median(r["s"] for r in pre),
                                 "prefill_8192_gemm_s": statistics.median(r["gemm_s"] for r in pre),
-                                "decode_b32_step_s": statistics.median(r["step_s"] for r in dec),
-                                "decode_b32_step_gemm_s": statistics.median(r["gemm_step_s"] for r in dec)},
-                     "reps": {"prefill_8192": pre, "decode_b32": dec}}
+                                f"{d}_step_s": statistics.median(r["step_s"] for r in dec),
+                                f"{d}_step_gemm_s": statistics.median(r["gemm_step_s"] for r in dec)},
+                     "reps": {"prefill_8192": pre, d: dec}}
     return out
 
 
@@ -682,7 +733,7 @@ def split(results: dict) -> dict:
     kernel), hashing and records (``pearlc`` less the no-hash mode) and everything else."""
     t = {m: r["timing"] for m, r in results.items() if "timing" in r}
     out = {}
-    for key in ("prefill_8192", "decode_b32_step"):
+    for key in ("prefill_8192", decode_key() + "_step"):
         if not all(m in t for m in MODES):
             continue
         full, nohash, gemm = t["pearlc"][f"{key}_s"], t["pearlc-nohash"][f"{key}_s"], t["pearlc-nohash"][f"{key}_gemm_s"]
@@ -853,6 +904,8 @@ def main() -> None:
     ap.add_argument("--cubin", help="build.sh's pearl_c_sm120.cubin (default: the kernel directory's)")
     ap.add_argument("--out", type=Path, default=Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "e2e.json")
     ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--batch", type=int, default=BATCH_DEFAULT, help="the decode batch: its prompts, and each decode call's m")
+    ap.add_argument("--prompt", type=int, default=PROMPT_DEFAULT, help="each decode prompt's tokens (the context decode starts at)")
     ap.add_argument("--mem-base", type=float, default=0.2, help="the FP8 engine's gpu_memory_utilization (weights about 8 GB)")
     ap.add_argument("--mem-arm", type=float, default=0.3, help="the BF16 engine's; Pearl-C's buffers (about 13 GB) sit outside it")
     ap.add_argument("--interleave", choices=["rep", "blocks"], default="rep", help="blocks: skip co-residency, go straight to ABAB")
@@ -879,6 +932,12 @@ def main() -> None:
     ap.add_argument("--ppl-windows", type=int, help="the quality run's first N windows (default all)")
     ap.add_argument("--chunk-min", type=float, default=7.0, help="the quality run starts no group after this many minutes")
     args = ap.parse_args()
+    if args.batch < 1 or args.prompt < 1:
+        ap.error("--batch and --prompt are positive")
+    if args.whole_step and (args.batch > PPD.GRAPH_ROWS or args.batch % PPD.ROW_ALIGN):
+        ap.error(f"--whole-step captures the decode batch whole: --batch {args.batch} is not a multiple of {PPD.ROW_ALIGN} "
+                 f"of at most {PPD.GRAPH_ROWS} rows (pouw_pearl_c_whole)")
+    configure(args)
     args.graphs = args.graphs or args.whole_step
     if args.whole_defer and not args.whole_step:
         ap.error("--whole-defer defers within a whole capture: it needs --whole-step")
@@ -894,6 +953,7 @@ def main() -> None:
     ctx, beacon, p = mp.get_context("spawn"), os.urandom(32), prompts(args.reps)
     records: list[dict] = []
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
+                 "decode": {"batch": BATCH, "prompt": PROMPT, "steps": STEPS, "key": decode_key()},
                  "rows_form": args.rows_form, "whole_step": args.whole_step, "whole_defer": args.whole_defer,
                  "statement": args.statement, "run": os.environ.get("RESEARCH_RUN_ID"),
                  "beacon": beacon.hex(), "interleave": args.interleave, "resident_failure": None}
