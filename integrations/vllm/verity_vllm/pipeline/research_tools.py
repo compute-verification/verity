@@ -18,12 +18,13 @@ Rules encoded here (Phase 5a of the v2 plan):
   workload interpreter (``$PY``, default ``/workspace/venv312/bin/python``),
   probed via ``importlib.metadata`` so nothing heavy is imported.
 * ``closure`` is the integration's import closure: ``integrations/vllm/**``
-  plus Verity core (``packages/verity/src/verity``).
+  plus every directory that ships Verity core (``research.pythonpath.package_dirs``:
+  ``verity``, or each member's part of the namespace).
   ``source_identity.code_identity`` is the one code identity over it (the
   hot Commit worker's key, the TP Commit's tree of record).
 
-This module imports nothing beyond the standard library and
-``research.store.tool`` so it is loadable from any interpreter that can see
+This module imports nothing beyond the standard library, ``research.store.tool``
+and ``research.pythonpath``, so it is loadable from any interpreter that can see
 ``tools/research/src`` (``research`` loads it by dotted path or, failing
 that, by file — see ``research.store.tools_registry``).
 """
@@ -35,6 +36,7 @@ import subprocess
 from pathlib import PurePosixPath
 from typing import Any
 
+from research.pythonpath import package_dirs, workspace_root
 from research.store.tool import Tool
 
 DEFAULT_QUERY = "Q_word_v1{X=16,W=32,R=no-recompute}"
@@ -44,10 +46,11 @@ COMMAND = ["verity-vllm", "row", "stage"]
 _CLI_MODULE = "verity_vllm.pipeline.cli"
 _SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # the shell runners of earlier records (same grammar as `row stage` / `row run`)
 
-CLOSURE = [
-    "integrations/vllm/**",
-    "packages/verity/src/verity/**",
-]
+#: Each directory of this file's tree that ships Verity core, relative to the repository root.
+CORE_DIRS = package_dirs(workspace_root(__file__), "verity")
+#: The code the integration imports besides its own: core, and the catalog, the kernels and experimental beside it.
+CODE_DIRS = [*CORE_DIRS, "catalog", "kernels", "experimental"]
+CLOSURE = ["integrations/vllm/**", *(f"{d}/**" for d in CODE_DIRS)]
 
 # Row id grammar (see verity_vllm/ops/README):
 #   <model>__<dtype>__<hw>__tp<N>__b<N>__i<N>__o<N>__<arrivals>__<sampling>__<exec>
@@ -299,6 +302,7 @@ TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_PLAN, VLLM_MATCH, VLLM_COMMIT, VLL
 __all__ = [
     "CLOSURE",
     "COMMAND",
+    "CORE_DIRS",
     "DEFAULT_QUERY",
     "ROW_KEY_PARAMS",
     "STAGE_KEY_FLAGS",

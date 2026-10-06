@@ -624,7 +624,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("sha512-native-{}-{carry_every}", std::process::id()));
         std::fs::create_dir_all(&dir).ok()?;
         let py = format!(
-            "import sys\nsys.path[:0] = ['{r}/backends/flock/python', '{r}/packages/verity/src', '{r}/backends/numerical/python']\n\
+            "import sys\nsys.path[:0] = ['{r}/backends/flock/python', '{r}', '{r}/catalog', '{r}/kernels', '{r}/experimental', '{r}/benchmarks/numerical/python']\n\
              from verity_flock import ir_lower as IL, sha512_circuit as S\nS.CARRY_EVERY = {carry_every}\n\
              open('{d}/sha512x3.txt', 'w').write(IL.netlist(IL.layout(S.compression3(), ['cv0', 'msg0', 'cv1', 'msg1', 'cv2', 'msg2'], ['out0', 'out1', 'out2']), 'sha512x3', None, None))\n\
              open('{d}/hm96.txt', 'w').write(IL.netlist(IL.layout(S.hm96_row(), ['cv', 'pad', 'y'], ['bc']), 'hm96', None, None))\n",

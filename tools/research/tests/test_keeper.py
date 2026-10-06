@@ -554,7 +554,9 @@ def test_a_targets_env_is_set_inside_the_lease_where_bash_env_cannot_make_it_tim
     assert chunk["env"] == {"PYTHONPATH": "/mine", "GPU_LEASE_WHO": "keeper:@proofs", "RESEARCH_KEEPER_TARGET": "sweep", "RESEARCH_KEEPER_SEED": "0"}
     env = {key: v for key, v in os.environ.items() if not key.startswith(("GPU_LEASE_", "RESEARCH_RUN", "BASH_ENV"))}
     env.update(GPU_LEASE_DIR=str(tmp_path / "gl"), GPU_LEASE_COUNT="1", GPU_LEASE_UUID_TABLE="GPU-a0", RESEARCH_RUN_ID="r-x",
-               GPU_LEASE_USAGE_LOG=str(tmp_path / "u.jsonl"), GPU_LEASE_UTIL_LOG=str(tmp_path / "util-*.jsonl"), **chunk["env"])
+               GPU_LEASE_USAGE_LOG=str(tmp_path / "u.jsonl"), GPU_LEASE_UTIL_LOG=str(tmp_path / "util-*.jsonl"),
+               GPU_LEASE_ALLOWED_FILE=str(tmp_path / "absent-direct-gpus"), GPU_LEASE_WINDOWS=str(tmp_path / "absent-windows"),
+               **chunk["env"])       # the node's own direct-gpus and windows files would decide the lease (node 1: none)
     r = subprocess.run(chunk["command"], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     owner = next(x for x in r.stdout.splitlines() if x.startswith("pid="))
@@ -599,6 +601,7 @@ def test_a_chunks_runner_sees_only_the_keepers_env_and_pythonpath_and_runs_the_l
         pid = 4242
 
     monkeypatch.setattr(remote.subprocess, "Popen", lambda argv, **kw: seen.append((argv, kw["env"])) or Proc())
+    monkeypatch.setattr(remote, "await_first_record", lambda proc, fd: remote.FIRST_RECORD)     # the fake runner never acknowledges
     assert remote._launch_request(k.ROOT / "requests" / run_of(sd.started[0][0]) / "request.json")["started"]
     (argv, env), = seen
     assert argv[:4] == ["python3", "-m", "research", "run"]

@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from tests.query.test_module_body import W, _call
-from verity.proofs.query import ValueRef
+from verity_vllm.query.units import ValueRef
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.compose import merge_ranks
 from verity_vllm.query.program_view import InputView, Port, ProgramView
@@ -88,12 +88,13 @@ STORED = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-ea
           "art:82931d609f9f8df3df847190a4e63de2302dc1c2b12c3d722a227e79dc527d37"}
 #: the sha256 of the manifest.json each row's `build-global` writes: main 33828711's, built in one process (2026-09-29), with
 #: the query's named residuals (`query.required.NAMED_RESIDUALS`, which the manifest records) naming pouw:ncp-v2's linears and
-#: GemmBias_v1/v2 too.  The parallel build (`--jobs`: the word check's cuts prefetched, the components built in forked processes)
-#: writes the same bytes; a change to what the manifest says re-pins them (the failure prints the new digest)
+#: GemmBias_v1/v2 too, and the query's text naming the cut's module as `verity.primitives.circuits.cut`.  The parallel build
+#: (`--jobs`: the word check's cuts prefetched, the components built in forked processes) writes the same bytes; a change to what
+#: the manifest says re-pins them (the failure prints the new digest)
 MANIFEST_SHA256 = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager":
-                   "3713766e1ab07452753b89198b3dbf6c824a4747039e4b8f7cca50c87a55651e",
+                   "1f9810c533121c24ae38628e4d6152107a130c239859cd88140dc312bc5d81c1",
                    "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager":
-                   "1e0ac00b1aa797a00024a059cb741e58fa7053960d7a3115f07a95dda9fd362e"}
+                   "99d637bda80f94b07ae17a43accfcc6558ed20573a9666ca9bcda1aaafe4d39a"}
 
 
 @pytest.mark.slow

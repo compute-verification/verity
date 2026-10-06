@@ -164,7 +164,7 @@ def _workload_task(task: dict) -> dict:
 def predict_workload(phi: Phi) -> dict:
     """GP-01's composition (`program.workload.WorkloadProgram`) over the predicted request components, manifest order, with the
     lag the declared target resolves (`TargetProfile.lag()`)."""
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.defs import REGISTRY
     from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
     from verity_vllm.program.registry.catalog import load as load_registry
@@ -245,8 +245,8 @@ def first_divergence(pred: dict, traced: dict) -> dict:
 
 
 def equivalence(pred_program, traced_desc: dict) -> dict:
-    from verity.ir.codec import decode_program
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.codec import decode_program
+    from verity.primitives.circuits.defs import REGISTRY
     from verity_vllm.program import descriptor_equivalence as DE
     from verity_vllm.program.registry.catalog import load as load_registry
     load_registry()
@@ -374,17 +374,19 @@ UNSTAMPED = "unstamped"
 
 def code_version() -> str:
     """The predictor's code: a digest of every source file of the two packages a predicted Program is built from (`verity`,
-    `verity_vllm`)."""
+    `verity_vllm`).  A namespace package's portions are hashed as one tree, by path under the package, and only those holding a
+    module, so neither sys.path order nor a directory that joined the namespace from the cwd moves it."""
+    import pkgutil
     from pathlib import Path
 
     import verity
     import verity_vllm
     h = hashlib.sha256()
     for pkg in (verity, verity_vllm):
-        root = Path(pkg.__file__).resolve().parent
-        for p in sorted(root.rglob("*")):
+        roots = [Path(r).resolve() for r in pkg.__path__ if any(pkgutil.iter_modules([r]))]
+        for rel, p in sorted((p.relative_to(root), p) for root in roots for p in root.rglob("*")):
             if p.is_file() and "__pycache__" not in p.parts:
-                h.update(f"{pkg.__name__}/{p.relative_to(root).as_posix()}\0".encode() + hashlib.sha256(p.read_bytes()).digest())
+                h.update(f"{pkg.__name__}/{rel.as_posix()}\0".encode() + hashlib.sha256(p.read_bytes()).digest())
     return h.hexdigest()[:16]
 
 

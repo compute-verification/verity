@@ -18,12 +18,12 @@ from collections import Counter
 import pytest
 
 from verity_vllm.check import fold_compare as cmp
-from verity_vllm.check.replay import replay
+from verity_vllm.check.replay import replay, tier_a_pool
 from verity_vllm.check.replay import vu_query as vq
 from verity_vllm.observe.fold.fold import fold
 from tests.observe import test_fold_synthetic as tfs
 from tests.check.test_compare_synthetic import ToyWeights, _evaluate_program, _write_snapshots
-from verity.ir.layout import FunctionCall
+from verity.primitives.circuits.layout import FunctionCall
 
 REQ = tfs.REQ
 C = tfs.C
@@ -327,7 +327,7 @@ def test_tier_a_evaluations_are_population_members_and_cover_strata(consistent_t
         seen.append(vu)
     assert len(seen) == len(a["instances"]) and all(v in ix for v in seen)
     # every (specialization, regime) stratum present at a snapshot step was sampled and passed
-    present = {(m["spec"], replay._regime(m)) for m in r.instances if m["step"] in snapshots.steps}
+    present = {(m["spec"], tier_a_pool._regime(m)) for m in r.instances if m["step"] in snapshots.steps}
     sampled = {(e["spec"], e["regime"]) for e in a["instances"] if e["status"] == "pass"}
     assert sampled == present and a["strata"] == len(present)
     # and the sampled units of one specialization are distinct population members when k > 1 units exist

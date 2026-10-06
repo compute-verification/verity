@@ -59,9 +59,11 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity.randomness import Key
+from verity.primitives.randomness import Key
 
+from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.check.replay.fork import WorkerDied
 from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class
 from verity_vllm.commit.opened import opened_in_children
 from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
@@ -190,15 +192,7 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
 #: collection freed, `gc_freeze` = the policy (env VERITY_REPLAY_FORK_GC_FREEZE=0 opts out for a measurement, never for a record).
 _FORK_STATS: dict[str, Any] = {}
 FORK_GC_FREEZE = os.environ.get("VERITY_REPLAY_FORK_GC_FREEZE", "1").strip() not in ("0", "false", "no")
-#: seconds between the pool's checks for a dead worker: a worker that dies mid-task (an OOM kill) loses its task, and the pool would
-#: otherwise wait out its whole timeout
-POOL_POLL_S = 10.0
-CGROUP_MEMORY_EVENTS = "/sys/fs/cgroup/memory.events"
 CGROUP_MEMORY = ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current")
-
-
-class WorkerDied(RuntimeError):
-    """A forked replay worker exited mid-task, by name: OOM-killed when the cgroup's `memory.events` counted an OOM kill meanwhile."""
 
 
 class PoolDoesNotFit(RuntimeError):
@@ -261,28 +255,6 @@ def _gib(b: int) -> str:
     return f"{b / 2**30:.1f}"
 
 
-def _oom_kills() -> int | None:
-    try:
-        with open(CGROUP_MEMORY_EVENTS) as f:
-            return next(int(ln.split()[1]) for ln in f if ln.split()[:1] == ["oom_kill"])
-    except (OSError, StopIteration, ValueError, IndexError):
-        return None
-
-
-def _dead_worker(pool: Any, pids: set[int], oom0: int | None, workers: int) -> str | None:
-    """Why the pool lost a worker since it started (`pids`), or None while every worker it forked is alive."""
-    procs = list(pool._pool)
-    gone = sorted(pids - {p.pid for p in procs} | {p.pid for p in procs if p.exitcode not in (None, 0)})
-    oom = _oom_kills()
-    killed = oom is not None and oom0 is not None and oom > oom0
-    if not gone and not killed:
-        return None
-    if killed:
-        return (f"a forked replay worker was OOM-KILLED (cgroup memory.events oom_kill {oom0} -> {oom}; {workers} workers, pids exited "
-                f"{gone}): the pool does not fit the cgroup's memory.max; pass fewer --replay-workers")
-    return f"forked replay worker(s) {gone} exited mid-task ({workers} workers): their tasks are lost"
-
-
 def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: list[dict], workers: int) -> list[tuple[dict, dict, float]]:
     """Forked pool over the picked VUs; bounded by a timeout (a child deadlocked on a lock inherited at fork must not hang the Commit).
 
@@ -299,7 +271,6 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
     joins.  The record carries what was frozen (`evaluator.fork`)."""
     global _FORK_FN, _FORK_VUS
     import gc
-    from verity_vllm.check.replay.fork import fork_pool
     _FORK_FN, _FORK_VUS = fn, picked
     _FORK_STATS.clear()
     _FORK_STATS.update({"gc_freeze": bool(FORK_GC_FREEZE), "workers": int(workers), "picked": len(picked)})
@@ -314,19 +285,19 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
         print(f"[replay] fork gc.freeze={'on' if frozen else 'OFF'}: {workers} workers over {len(picked)} VUs"
               + (f", {_FORK_STATS['gc_frozen_objects']} objects frozen ({_FORK_STATS['gc_collected']} collected) before the fork" if frozen else
                  " (VERITY_REPLAY_FORK_GC_FREEZE=0: the children may copy the parent's C2 heap on write, F-r17-24 (b))"), flush=True)
-        oom0 = _oom_kills()
-        with fork_pool(workers) as pool:
+        oom0 = FK.oom_kills()
+        with FK.fork_pool(workers) as pool:
             pids = {p.pid for p in pool._pool}
             res = pool.map_async(_fork_worker, range(len(picked)), chunksize=max(1, len(picked) // (workers * 8)))
             per_vu = max([3.0] + [float(getattr(ev, "seconds_per_vu", 3.0)) for ev in ROW_EVALUATORS[-1:]])
             deadline = time.monotonic() + max(300.0, per_vu * len(picked))
             while not res.ready():
-                if (why := _dead_worker(pool, pids, oom0, workers)) is not None:
+                if (why := FK.dead_worker(pool, pids, oom0, workers, "--replay-workers")) is not None:
                     print(f"[replay] {why}", file=sys.stderr, flush=True)
                     raise WorkerDied(why)
                 if time.monotonic() > deadline:
                     raise multiprocessing.TimeoutError
-                res.wait(POOL_POLL_S)
+                res.wait(FK.POOL_POLL_S)
             out = res.get()
         return out
     finally:
