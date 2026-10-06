@@ -326,8 +326,8 @@ __device__ __forceinline__ void sqr_d(const uint32_t *__restrict__ sm, uint32_t 
 // A cyclic square of 257 limbs is the 514-limb walk at half the size: column 2h (h = 0 .. 128) pairs (h + k, h - k), column
 // 2h + 1 (h = 0 .. 127) pairs (h + k, h + 1 - k), k = 1 .. 128, wrapped exactly when the second index is negative (k > h,
 // k > h + 1), plus the diagonal s_h^2 (even, unwrapped) or s_{h+129}^2 (odd, wrapped). Lane t owns h = 4t .. 4t + 3 (columns
-// 8t .. 8t + 7) and walks k in chunks of 8 (Q = 15 .. 0): Q > t / 2 wrapped, Q < t / 2 unwrapped, Q = t / 2 mixed in one of two
-// patterns by t's parity. Column 256 is shared and reduced. Lane t holds the result's limbs 8t .. 8t + 7 and 257 + 8t ..
+// 8t .. 8t + 7) and walks k down in chunks of 8 (Q = 15 .. 0): Q > t / 2 wrapped, Q < t / 2 unwrapped, Q = t / 2 mixed (a
+// triangle of 4 k on the boundary, one half of the chunk or the other by t's parity). Column 256 is shared and reduced. Lane t holds the result's limbs 8t .. 8t + 7 and 257 + 8t ..
 // 264 + 8t (lane 31 also 256 and 513), a ring of 64 runs whose carries resolve over 64-bit ballots.
 constexpr int KOFF = 128;              // index x in [-128, 257) at kphys(KOFF + x), s_x = s_{x mod 257}
 constexpr int K_ARR = 484;             // kphys(384) + 1, rounded up
@@ -463,8 +463,9 @@ __device__ __forceinline__ void ksq(const uint32_t *__restrict__ S, uint32_t *__
 #else
 #define KLOOPS _Pragma("unroll") for (int r = 0; r < 4; r++) _Pragma("unroll") for (int s = 0; s < 8; s++)
 #endif
-#define KCHUNK(Ulo, Uhi, Dlo, Dhi)                                                         \
-  KLOOPS {                                                                                \
+// half H of a chunk: s = 4H .. 4H + 3 (k = 8Q + 1 + s)
+#define KHALF(Ulo, Uhi, Dlo, Dhi, H)                                                       \
+  KLOOPS if (s / 4 == (H)) {                                                              \
     const int mu = r + s, de = 7 + r - s, dd = 8 + r - s;                                 \
     const uint32_t u = mu < 8 ? Ulo[mu & 7] : Uhi[mu & 7];                                \
     mac(acc[2 * r], u, de < 8 ? Dlo[de & 7] : Dhi[de & 7]);                              \
@@ -477,18 +478,20 @@ __device__ __forceinline__ void ksq(const uint32_t *__restrict__ S, uint32_t *__
       snap[lane * KSNAP_STRIDE + 16 + j] = acc[j][2];                                     \
     }                                                                                     \
   }
+#define KCHUNK(Ulo, Uhi, Dlo, Dhi, Q)                                                      \
+  KHALF(Ulo, Uhi, Dlo, Dhi, 1)                                                            \
+  KSNAPQ(Q)                                                                               \
+  KHALF(Ulo, Uhi, Dlo, Dhi, 0)
   #pragma unroll 1
   for (int Q = 15; Q >= 0; Q -= 2) {
-    KSNAPQ(Q)
-    KCHUNK(Ua, Ub, Da, Db)
+    KCHUNK(Ua, Ub, Da, Db, Q)
     pu -= 10;
     pd += 10;
     #pragma unroll
     for (int m = 0; m < 8; m++) Ub[m] = pu[m + (m + 1) / 4];
     #pragma unroll
     for (int i = 0; i < 4; i++) { Db[4 + i] = pd[4 + i + (4 + i) / 4]; Da[i] = pd[8 + i + (8 + i) / 4]; }
-    KSNAPQ(Q - 1)
-    KCHUNK(Ub, Ua, Db, Da)
+    KCHUNK(Ub, Ua, Db, Da, Q - 1)
     pu -= 10;
     pd += 10;
     #pragma unroll
@@ -497,26 +500,28 @@ __device__ __forceinline__ void ksq(const uint32_t *__restrict__ S, uint32_t *__
     for (int i = 0; i < 4; i++) { Da[4 + i] = pd[4 + i + (4 + i) / 4]; Db[i] = pd[8 + i + (8 + i) / 4]; }
   }
 #undef KCHUNK
+#undef KHALF
 #undef KLOOPS
 #undef KSNAPQ
-  // the mixed chunk Q = t / 2, h = 8Q + off + r (off = 4 (t & 1)), k = 8Q + 1 + s: even wrapped when 1 + s > off + r, odd when
-  // s > off + r; U[m] = s_{8t - off + 1 + m}, D[m] = s_{off - 8 + m}
+  // The snapshot is taken halfway through chunk t / 2, which leaves the triangle k = 4t + 1 + s (s < 4), h = 4t + r on the
+  // boundary: still to come on an even lane, which adds its wrapped products (even column s >= r, odd s > r), and already in on
+  // an odd lane, which subtracts its unwrapped ones (even s < r, odd s <= r). U[m] = s_{8t + 1 + m}, D[m] = s_{m - 4}.
   uint32_t my[8][3];
   #pragma unroll
   for (int j = 0; j < 8; j++) my[j][0] = my[j][1] = my[j][2] = 0;
+  const bool lodd = lane & 1;
   {
-    const int off = 4 * (int)(lane & 1);
-    uint32_t U[11], D[12];
+    uint32_t U[7], D[8];
     #pragma unroll
-    for (int m = 0; m < 11; m++) U[m] = KS(S, 8 * (int)lane - off + 1 + m);
+    for (int m = 0; m < 7; m++) U[m] = KS(S, 8 * (int)lane + 1 + m);
     #pragma unroll
-    for (int m = 0; m < 12; m++) D[m] = KS(S, off - 8 + m);
+    for (int m = 0; m < 8; m++) D[m] = KS(S, m - 4);
     #pragma unroll
     for (int r = 0; r < 4; r++)
       #pragma unroll
-      for (int s = 0; s < 8; s++) {
-        if (1 + s > off + r) mac(my[2 * r], U[r + s], D[7 + r - s]);
-        if (s > off + r) mac(my[2 * r + 1], U[r + s], D[8 + r - s]);
+      for (int s = 0; s < 4; s++) {
+        if (lodd ? s < r : s >= r) mac(my[2 * r], U[r + s], D[3 + r - s]);
+        if (lodd ? s <= r : s > r) mac(my[2 * r + 1], U[r + s], D[4 + r - s]);
       }
   }
   const uint32_t *sv = snap + lane * KSNAP_STRIDE;
@@ -524,7 +529,8 @@ __device__ __forceinline__ void ksq(const uint32_t *__restrict__ S, uint32_t *__
   for (int j = 0; j < 8; j++) {
     const int h = h0 + j / 2;
     uint32_t y[3] = {sv[2 * j], sv[2 * j + 1], sv[16 + j]};
-    add96(y, my[j]);
+    if (lodd) sub96(y, my[j]);
+    else add96(y, my[j]);
     if (j & 1) {
       const uint32_t dg = KS(S, h + 129);
       dbl_sq(T[j], acc[j], dg);
