@@ -10,8 +10,8 @@ table a proof will replace.
 
 - **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (spec v1.1's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
   calibration (`--calibrate-only`) still measures the loopback round trip and records whether its p99.9 fits under the cap.
-- **A session** draws a fresh session id and challenger secret, commits its coin tree, runs `k` rounds (the certificate's
-  `k`), signs once and opens its coins.  `--strict` refuses a `k` or limit no certificate covers (`covering_certificate`)
+- **A session** draws a fresh session id and challenger secret and commits its coin tree, every session's before the first
+  round of any; it runs `k` rounds (the certificate's `k`) after `WARMUP_PINGS` pings, signs once and opens its coins.  `--strict` refuses a `k` or limit no certificate covers (`covering_certificate`)
   before any round.
 - **The verdict** is `memory_challenger.verdict` under `memory_challenger.SCHEMES`, which holds no scheme until S1 lands, so
   every session is rejected: it fails closed.  With `--signer test` the sessions are signed by the PoUS tests' XMSS-style
@@ -42,6 +42,7 @@ from band_gpu.live import (  # noqa: E402
     ALLOWANCE_KIND,
     HEADER,
     OP_CHALLENGE,
+    OP_PING,
     LiveResponder,
     LogicalClock,
     calibrate,
@@ -54,6 +55,9 @@ from band_gpu.live import (  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 TEST_SIGNER = ROOT / "verity" / "protocols" / "accounting" / "space" / "pous" / "tests" / "pous_test_signer.py"
+WARMUP_PINGS = 8
+"""Pings before each session's first round, after the previous session's signature: a session's round 0 otherwise follows
+the challenger's own Python work (one 655.8 µs round 0 of 26 µs at the responder in `r20261006-061825-bba8`)."""
 
 
 def test_signer() -> Any:
@@ -153,7 +157,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
     base = {"verifier": "memory-challenger", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records_tree": mc.RECORDS_TREE,
-            "strict": strict, "limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns,
+            "strict": strict, "warmup_pings": WARMUP_PINGS, "limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns,
             "allowance": "cap", "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": limit - deadline_ns, "rtt_cap_ns": cap,
             "k": k, "scheme": scheme.name}
     gaps: tuple[str, ...] = ()
@@ -178,12 +182,14 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     r = LiveResponder(host, port, nb, clock)
     cpu_before = cgroup_cpu()
     sessions = []
+    challengers = [mc.MemoryChallenger(mc.CoinTree.draw(os.urandom(32), os.urandom(32), blocks, k), sig, limit_ns=limit,
+                                       block_bytes=nb, binding=binding, clock=clock, resolution_ns=resolution)
+                   for _ in range(audits)]
     try:
         before = calibrate(r, pings)
-        for _ in range(audits):
-            coins = mc.CoinTree.draw(os.urandom(32), os.urandom(32), blocks, k)
-            c = mc.MemoryChallenger(coins, sig, limit_ns=limit, block_bytes=nb, binding=binding, clock=clock,
-                                    resolution_ns=resolution)
+        for c in challengers:
+            for _ in range(WARMUP_PINGS):
+                r.roundtrip(OP_PING, 0)
             reports = []
             while not c.done:
                 i = c.challenge()
