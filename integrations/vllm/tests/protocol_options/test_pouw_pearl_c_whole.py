@@ -241,7 +241,7 @@ class Calls(PG.GraphCalls):
     def __init__(self, torch):
         self.entry, self.hashing, self.graphs, self.omit = "test", True, True, frozenset()
         self.schedule, self.capacity = PPD.schedule_of(SERIAL, PPD.scheme_of(PPD.SCHEMES[2])), PPD.LEAF_CAPACITY
-        self.order = {7: 0, 8: 1, 9: 2}
+        self.order, self.nb = {7: 0, 8: 1, 9: 2}, 32
         self.roots = {w: bytes([w]) * 32 for w in self.order}
         self.keys = lambda root, index, m16: bytes([root[0], index, m16]) * 45 + b"\0"
         self.key_slots = torch.zeros((3, PG.SLOT_BYTES), dtype=torch.uint8)
@@ -471,13 +471,19 @@ def test_a_deferred_capture_runs_each_calls_tile_hashing_beside_the_next_calls_a
 
 
 def test_a_calls_steps_split_after_its_a_tree_and_before_its_tile_hashing():
-    pipe = SimpleNamespace(steps=lambda: [(x, None, None) for x in PPD.CALL_STEPS if x != "pad_a"])
+    h3 = SimpleNamespace(steps=lambda: [(x, None, None) for x in PPD.CALL_STEPS if x not in ("pad_a", "rowdig_a")])
     run = SimpleNamespace(entry="test", hashing=True, omit=frozenset(), _rows=lambda: "s")
     run._call_names = lambda: PPD.PearlCDeviceRun._call_names(run)
-    a, b = PPD.PearlCDeviceRun._call_cuts(run, pipe)
-    names = [x for x in run._call_names() if x != "pad_a"]
-    # every call step, so -h3's row seeds too: A's tree, before forming
+    a, b = PPD.PearlCDeviceRun._call_cuts(run, h3)
+    names = [x for x in run._call_names() if x not in ("pad_a", "rowdig_a")]
+    # every -h3 call step, so its row seeds too: A's tree, before forming
     assert names[:a] == ["node_keys_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a"] and names[b:] == ["hash_msg", "hash_leaf"]
+    # -h3s's row digests go with A's tree, and its tile hashing is the leaves alone
+    h3s = SimpleNamespace(steps=lambda: [(x, None, None) for x in PPD.CALL_STEPS if x not in ("pad_a", "hash_msg")])
+    a, b = PPD.PearlCDeviceRun._call_cuts(run, h3s)
+    names = [x for x in run._call_names() if x not in ("pad_a", "hash_msg")]
+    assert names[:a] == ["node_keys_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a"] and names[b:] == ["hash_leaf"]
+    pipe = h3
     run.hashing = False
     assert PPD.PearlCDeviceRun._call_cuts(run, pipe) == (0, len(run._call_names()))
     run._call_names = lambda: ("lines_ea", "hash_rows_a", "gemm_pearlc", "hash_msg")

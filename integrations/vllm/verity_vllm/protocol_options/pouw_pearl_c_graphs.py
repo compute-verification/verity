@@ -80,8 +80,8 @@ class _Slots:
 
 
 class GraphCalls:
-    """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``order``, ``key_slots``, ``offs``,
-    ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps` and `_call_cuts`, and
+    """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``order``, ``nb`` (its trees' node bytes),
+    ``key_slots``, ``offs``, ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps` and `_call_cuts`, and
     its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose lengths bound it)."""
 
     #: while vLLM captures forwards (`whole_capture_begin`), the calls made inside its stream capture, in order; None otherwise
