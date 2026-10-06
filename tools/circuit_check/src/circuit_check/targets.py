@@ -89,6 +89,7 @@ def load_registries() -> None:
     import verity.protocols.accounting.space.pous.decode_circuit  # noqa: F401  (P2's decode of one block)
     import verity.protocols.accounting.space.pous.answer_circuit  # noqa: F401  (PoUS's per-answer opening)
     import verity_flock.rec_open  # noqa: F401  (V*'s opening check: recursion's inner Ligerito openings)
+    import verity_flock.rec_residuals  # noqa: F401  (V*'s algebra: the inner verifier's checks on one rep)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -462,10 +463,15 @@ def _pous_roots() -> list[Any]:
 
 def _rec_roots() -> list[Any]:
     """V*'s opening check (`verity_flock.rec_open`) at its smallest shape: a row of 8 lanes (one SHA-512 block) and one level,
-    six compressions. Wider rows add message blocks and higher openings repeat the level, both at the same compression."""
+    six compressions and the consistency term's 16 products. Wider rows add message blocks and products, and higher openings
+    repeat the level. And V*'s algebra (`verity_flock.rec_residuals`) on two row ports (an element alone, a transposed block)
+    and v, under `_gf2k_roots`' GfResiduals: a rep's is the same Calls over more ports and products."""
+    from verity_flock import rec_residuals as RR
     from verity_flock.rec_open import definition
 
-    return [definition(8, 1)]
+    S = {"nw": 129, "nv": 2, "ops": [[["w", 0]], [["wt", 1, 3], ["v", 0]]],
+         "res": [{"mul": [[0, 1]], "add": [["v", 1]]}, {"mul": [], "add": [["w", 0]]}]}
+    return [definition(8, 1), RR.definition({"gf": S, "ports": [["m0", 1], ["m1", 128]]})]
 
 
 def _kernel_roots() -> list[Any]:
