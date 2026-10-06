@@ -386,8 +386,9 @@ pub fn y_leaf(net: &UnitNet) -> (&'static str, usize) {
     if net.epilogue() { ("u16", 2) } else { ("u32", 4) }
 }
 
-/// The most region claims the CUDA prover takes (`max_extra` in `cuda/prove_chunk.cuh`): two per public region.
-pub const MAX_EXTRA_CLAIMS: usize = 64;
+/// The most region claims the CUDA prover takes (`max_extra` in `cuda/prove_chunk.cuh`): two per public region, up to the
+/// verifier's proved range (`circuit::IN_RANGE_REGIONS`).
+pub const MAX_EXTRA_CLAIMS: usize = 2 * crate::circuit::IN_RANGE_REGIONS;
 
 /// The largest proof: m ≤ 35 (the Fast100 schedule's reach; Chunk(n): n × VUs ≤ 32,768 blocks).
 pub const MAX_M: usize = 35;
