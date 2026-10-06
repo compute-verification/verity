@@ -29,7 +29,7 @@ the `_hm96` forms state (`Binding/E2E.lean`).
 
 **The composition.** It composes `flock_batched_count_publicL` and `flock_batched_drawn_publicL`, which are the compiled
 audit, the link theorem and knowledge soundness, all on `main`. Each piece not yet proved is a named hypothesis. The
-checklist `assumptions/e2e-checklist.md` gives each one's owner and how it is discharged:
+checklist `assumption-notes/e2e-checklist.md` gives each one's owner and how it is discharged:
 * `hExec`: the executable verifier's acceptance implies the Lean protocol's. This is the refinement lane's theorem;
 * `dp : DerivedPlaces`: each drawn unit's place in its table, for the rows the verifier derives. For the program's
   circuit it is `ProgPlaces`: `placed`, the table's statement holds the unit's rows (`placement_of_setupH` for the rows
@@ -63,7 +63,7 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} 
 /-- **The end-to-end count curve (skeleton).** If `execAccept` holds (an event that implies the Lean protocol's
 acceptance), the probability that at least `K` units of the committed circuit are wrong at the committed values is at
 most `miss_L(K) + ε_ks(σ) + δ_link`. The committed values are 1 on `ones`, 0 on `zeros` and the plurality elsewhere
-(`Xpub`). The gaps are named hypotheses: `hExec`, `dp`, `hConst`, `hZero` and `vb` (`assumptions/e2e-checklist.md`);
+(`Xpub`). The gaps are named hypotheses: `hExec`, `dp`, `hConst`, `hZero` and `vb` (`assumption-notes/e2e-checklist.md`);
 `SHA512CRExpected` for `σ`'s link finders (`hCR`) is the assumption of record. -/
 theorem flock_e2e_countL
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
