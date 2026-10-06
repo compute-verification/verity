@@ -616,7 +616,8 @@ the proof's level-0 rows and paths are checked against it at the end. Its cost i
 | a round's free message | salted | `c_k`, its rows committed under fresh salts (as before) |
 | statement digest, labels, domain, nonces | dropped | public constants or functions of the hidden statement; never forwarded |
 | `Link`'s `y` | constant `0` | the schedule fixes its length (`link.y` elements of 16 bytes); the firewall refuses any other byte length, and any nonzero byte |
-| stream names, `Open`'s parent and position, each round's coin count and the counts of its caps' nodes and message rows | constant | the pinned schedule's; the firewall refuses any other. The coin server's record lists the streams by name, as the schedule does, never in the order the prover opened them |
+| the order of `Hello`, `Commit`, `Link` and `Finish` | constant | the firewall itself refuses a `Commit` before `Hello` or after the first, a `Link` before `Commit` or after the first, and a `Finish` before the schedule's last round (counted from its own streams, never by reading the coin server), each before any call on the coin server: a request out of its place reaches the coin server as a plain stop at the same point |
+| stream names, `Open`'s parent and position, each round's coin count and the counts of its caps' nodes and message rows | constant | the pinned schedule's; the firewall refuses any other. The coin server's record lists the streams by name, as the schedule does, never in the order the prover opened them. An `Open` may come any time before its stream's first round, so the firewall keeps it and opens the stream at the coin server just before that round: neither the coin server's calls nor its record show whether or when the `Open` came, and a stream is listed from its first round |
 | how the session ends | `finish` or `stop` | every session served is written and counted toward `--sessions`, with `end` `finish` or `stop` (a refusal, or a session that ends without `Finish`: closed, reset or cut inside a frame), never why |
 | a request the firewall cannot read, or the firewall's own fault | refusal | any exception while handling a request stops the session (`FIREWALL-REFUSED: a request the firewall cannot read (…)`), never the firewall |
 
@@ -683,7 +684,10 @@ over the eight, under contention) and the comb fold stay on the session's path.
 A recursive session is the inner phase's session and the outer phase's sessions, one per V* statement (at K = 4096 eight: the
 levels L0–L6 and the algebra). With §10.1 and §10.3, every message of a session that reaches the auditor is fixed, and so is
 their order: `Hello`, `Commit`, `Link`, each stream's `Open` and rounds, the proofs, `Finish` (`Ping`, and `Register` in a
-session that draws no units, change no record: the inner firewall answers `Register` itself). What a worker still chooses is
+session that draws no units, change no record: the inner firewall answers `Register` itself). An inner `Open` may come any
+time before its stream's first round, but the firewall passes it to the coin server only at that round (§10.3), so where it
+came never reaches the auditor. A `Commit`, `Link` or `Finish` out of its place is refused by the firewall before any call
+on the coin server (§10.3), so it reaches the auditor as a plain stop. What a worker still chooses is
 whether and where a session stops: a refusal it provokes, or a session that ends without `Finish` (a crash, a hang, a cut
 connection). The auditor sees every stop:
 - inner phase: `rec_live` writes every session it serves, with `end` `finish` or `stop` (a refusal and a session that ends

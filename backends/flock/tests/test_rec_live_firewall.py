@@ -105,6 +105,100 @@ def test_the_record_lists_streams_in_the_schedules_order_whatever_order_they_wer
     assert recs[0] == recs[1] and list(json.loads(recs[0])["streams"]) == list(two)
 
 
+def _stopped_record(reqs, then_stop=b"not a request"):
+    """The coin server's record of a session sent `reqs` and then a request the firewall refuses."""
+    proxy = _proxy(_schedule())
+    for r in reqs + [then_stop]:
+        proxy.handle(r)
+    return proxy.coins.record()
+
+
+def test_a_stopped_record_does_not_show_whether_or_when_an_open_was_sent():
+    """An Open is accepted any time before its stream's first round, so a stream enters the record only at that round;
+    otherwise two sessions stopped at the same point differ in whether the Open came (the review's probe, r2)."""
+    reg, hello = RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO, separators=(",", ":")))
+    commit = RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [("circuit", T.CAP0)], [])
+    link = RL.encode_req(RL.REQ_LINK, bytes(32))
+    opn = RL.encode_req(RL.REQ_OPEN, "circuit/rep0", "", b"flock-circuit/fast100/rep0", 0)
+    for prefix in ([reg, hello], [reg, hello, commit, link]):
+        recs = [_stopped_record(reqs) for reqs in (prefix, [opn] + prefix, prefix + [opn])]
+        assert recs[0]["end"] == "stop" and recs[0]["streams"] == {}
+        assert recs[1] == recs[0] and recs[2] == recs[0]
+    proxy = _proxy(_schedule())
+    assert _held(_run(proxy)) and list(proxy.coins.record()["streams"]) == ["circuit/rep0"]
+
+
+def _coin_calls(reqs, schedule):
+    """Every call the firewall makes on the coin server while it handles `reqs`, in order, the ones it refuses included."""
+    coins, calls = RL.CoinServer(T._counter_rand()), []
+    for name in ("start", "commit", "y", "open", "round", "record"):
+        f = getattr(coins, name)
+        setattr(coins, name, lambda *a, _f=f, _n=name: (calls.append((_n, a)), _f(*a))[1])
+    proxy = RL.Proxy(coins, T._salts(), schedule=schedule)
+    for r in reqs:
+        proxy.handle(r)
+    return calls
+
+
+def test_the_coin_server_never_sees_where_an_open_was_sent():
+    """The coin server is the auditor's, so its calls, not only its record, must not show where the prover sent each Open
+    (firewall-contract's gap 3): every placement of the two Opens before their first rounds, finished or cut anywhere,
+    gives the coin server the honest session's calls or a prefix of them."""
+    two = ("circuit/rep0", "circuit/rep1")
+    sched = _schedule(two)
+    opn = {s: RL.encode_req(RL.REQ_OPEN, s, "", s.replace("circuit", "flock-circuit/fast100").encode(), 0) for s in two}
+    base = [RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO, separators=(",", ":"))),
+            RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [("circuit", T.CAP0)], []), RL.encode_req(RL.REQ_LINK, bytes(32))]
+    first = {}
+    for s in two:
+        first[s] = len(base)
+        base += [RL.encode_req(RL.REQ_ROUND, s, T._binding_round(), 6),
+                 RL.encode_req(RL.REQ_ROUND, s, T._obs([5, 6, 7]) + T._sq(1, RL.KIND_SCALAR), 1)]
+    base += [RL.encode_req(RL.REQ_PROOF, "circuit", 0, b"the proof"), RL.encode_req(RL.REQ_FINISH)]
+    honest = _coin_calls(base[:2] + [opn[two[0]]] + base[2:first[two[1]]] + [opn[two[1]]] + base[first[two[1]]:], sched)
+    assert [c[0] for c in honest].count("open") == 2
+    sessions = 0
+    for i in range(first[two[0]] + 1):
+        for j in range(first[two[1]] + 1):
+            for order in (two, two[::-1]):
+                at = {two[0]: i, two[1]: j}
+                reqs = []
+                for p, r in enumerate(base + [None]):
+                    reqs += [opn[s] for s in order if at[s] == p]
+                    if r is not None:
+                        reqs.append(r)
+                assert _coin_calls(reqs, sched) == honest
+                for cut in range(len(reqs)):
+                    calls = _coin_calls(reqs[:cut] + [b"not a request"], sched)
+                    assert calls == honest[:len(calls)]
+                sessions += 1
+    assert sessions == 2 * (first[two[0]] + 1) * (first[two[1]] + 1)
+
+
+def test_a_stray_commit_link_or_finish_reaches_the_coin_server_as_a_plain_stop():
+    """A Commit before Hello or after the first, a Link before Commit or after the first, and a Finish before the last
+    round are refused by the firewall itself, before any call on the coin server, so wherever one comes the coin server's
+    calls are a prefix of the honest session's: they show where the session stopped, never which request stopped it
+    (review-zk-gateway's r4)."""
+    two = ("circuit/rep0", "circuit/rep1")
+    sched = _schedule(two)
+    reg, hello = RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO, separators=(",", ":")))
+    commit = RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [("circuit", T.CAP0)], [])
+    link, finish = RL.encode_req(RL.REQ_LINK, bytes(32)), RL.encode_req(RL.REQ_FINISH)
+    base = [reg, hello, commit, link]
+    for s in two:
+        base += [RL.encode_req(RL.REQ_OPEN, s, "", s.replace("circuit", "flock-circuit/fast100").encode(), 0),
+                 RL.encode_req(RL.REQ_ROUND, s, T._binding_round(), 6),
+                 RL.encode_req(RL.REQ_ROUND, s, T._obs([5, 6, 7]) + T._sq(1, RL.KIND_SCALAR), 1)]
+    base += [RL.encode_req(RL.REQ_PROOF, "circuit", 0, b"the proof"), finish]
+    honest = _coin_calls(base, sched)
+    assert [c[0] for c in honest] == ["start", "commit", "y"] + ["open", "round", "round"] * 2
+    for stray in (commit, link, finish):
+        for p in range(len(base)):
+            calls = _coin_calls(base[:p] + [stray] + base[p:], sched)
+            assert calls == honest[:len(calls)], (stray[:1], p)
+
+
 def _serve(tmp_path, sessions, schedule):
     """`rec_live.serve` on a thread; its result (or what ended it) in ``got``, the address it bound in ``got["addr"]``."""
     bound, got = threading.Event(), {}

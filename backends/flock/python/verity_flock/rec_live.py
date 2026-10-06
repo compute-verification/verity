@@ -492,9 +492,11 @@ class CoinServer:
 
     def record(self) -> dict:
         """Everything the coin server saw and issued; its streams by name, as a schedule lists them, whatever order the
-        prover opened them in."""
+        prover opened them in. A stream is listed once it has a round; the firewall opens it here only at that round, so
+        neither the record nor the coin server's calls show whether or when the prover sent its Open."""
         return {"kind": KIND, "tops": TOPS, "hello": self.hello, "link": self.link,
-                "streams": {s: self.streams[s] for s in sorted(self.streams)}, "rounds": self.rounds,
+                "streams": {s: self.streams[s] for s in sorted(self.streams) if self.streams[s]["rounds"]},
+                "rounds": self.rounds,
                 "message_rows": sum(len(r["commits"]) for r in self.rounds), "row_words": ROW_WORDS, "end": self.end}
 
 
@@ -578,6 +580,9 @@ class Proxy:
             self.coins.start(json.loads(canonical(want)))
             return resp_ok()
         if t == REQ_COMMIT:
+            # refused here, never by the coin server: a call it refuses would reach the auditor
+            if self.hello is None or self.commit is not None:
+                raise ValueError("Commit comes once, after Hello")
             _, root_f, roots, publics = r
             if publics and any(v for _, v in publics):
                 raise ValueError("public words in an inner session")
@@ -594,6 +599,8 @@ class Proxy:
             self.points = [pts[i:i + m] for i in range(0, len(pts), m)]
             return resp_coins(pts)
         if t == REQ_LINK:
+            if self.commit is None or self.y is not None:
+                raise ValueError("Link comes once, after Commit")
             if len(r[1]) != 16 * self.schedule["link"]["y"]:
                 raise ValueError(refused(f"Link's y: {len(r[1])} bytes where the pinned schedule has {self.schedule['link']['y']} elements of 16"))
             if any(r[1]):
@@ -606,7 +613,9 @@ class Proxy:
             _, stream, parent, label, at = r
             want = self.schedule["streams"].get(stream)
             self._pinned(f"Open {stream}", {"parent": parent, "at": at}, want and {"parent": want["parent"], "at": want["at"]})
-            self.coins.open(stream, parent, at)
+            if stream in self.streams:
+                raise ValueError(f"stream {stream} opened twice")
+            # held until the stream's first round: where the prover sent its Open must not reach the coin server
             self.streams[stream] = {"parent": parent, "label": label, "at": at, "rounds": [], "cap": None}
             return resp_ok()
         if t == REQ_ROUND:
@@ -627,6 +636,10 @@ class Proxy:
             salts = [self.fresh_salt() for _ in rows]
             bcs = commit_rows(rows, salts)
             caps, cap_salts = zip(*(self._salted(c) for c in s.caps)) if s.caps else ((), ())
+            if k == 0:
+                if self.y is None:
+                    raise ValueError("a coin before the link exchange")
+                self.coins.open(stream, st["parent"], st["at"])
             coins = self.coins.round(stream, list(caps), bcs, n)
             st["rounds"].append({"content": content, "n": n, "coins": coins})
             self.private.append({"stream": stream, "k": k, "elements": [f128_hex(v) for v in s.free], "rows": rows,
@@ -640,10 +653,10 @@ class Proxy:
         if t == REQ_FINISH:
             if self.commit is None or self.y is None:
                 raise ValueError("Finish before the link exchange")
-            rec = self.coins.record()
-            self._pinned("Finish's rounds", len(rec["rounds"]), len(self.schedule["rounds"]))
-            self._pinned("Finish's streams", {s: v["rounds"] for s, v in sorted(rec["streams"].items())},
-                         {s: v["rounds"] for s, v in sorted(self.schedule["streams"].items())})
+            # the firewall's own counts: an early Finish must not make it read the coin server
+            ran = {s: len(v["rounds"]) for s, v in sorted(self.streams.items()) if v["rounds"]}
+            self._pinned("Finish's rounds", sum(ran.values()), len(self.schedule["rounds"]))
+            self._pinned("Finish's streams", ran, {s: v["rounds"] for s, v in sorted(self.schedule["streams"].items())})
             self.coins.end = "finish"
             self.verdict = {"accepted": None, "why": "rec/inner-transcript/v0: the inner proof is V*'s witness; nothing verified here"}
             return resp_str(RESP_VERDICT, json.dumps(self.verdict))
