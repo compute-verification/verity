@@ -62,8 +62,6 @@ passes, never within one.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
-import sys
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -97,6 +95,10 @@ from .pouw_pearl_c_host import (
     _zeros,
     call_keys,  # noqa: F401 - kept importable here, as the tests read it
     write_manifest,
+)
+from .pouw_pearl_c_kernel import (
+    Kernel,
+    source_digest,  # noqa: F401 - kept importable here, as callers read it
 )
 from .pouw_pearl_c_screen import (
     excluded,
@@ -190,60 +192,6 @@ def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
         except Exception as e:  # noqa: BLE001 - DomainError, named per layer
             out.append(f"linear {w}: {e}")
     return out
-
-
-def _load(name: str, path: Path) -> tuple[Any, str]:
-    """`path` as a module and its bytes' SHA-256.  The module is named by the digest, so two kernel directories in one process
-    never share a module, and the same bytes loaded twice are one module."""
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    key = f"{name}_{digest[:16]}"
-    if key not in sys.modules:
-        spec = importlib.util.spec_from_file_location(key, path)
-        mod = sys.modules[key] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-    return sys.modules[key], digest
-
-
-def _the_cubin(directory: Path) -> Path:
-    """A kernel directory's one cubin, when the caller names none."""
-    found = sorted(directory.glob("*.cubin"))
-    if len(found) != 1:
-        raise ValueError(f"{directory}: {len(found)} cubins, not one: name the cubin")
-    return found[0]
-
-
-def source_digest(run_sha256: str, fixture_sha256: str) -> str:
-    """The kernel sources' digest: `run.py`'s and `fixture.py`'s, in that order."""
-    return hashlib.sha256(bytes.fromhex(run_sha256) + bytes.fromhex(fixture_sha256)).hexdigest()
-
-
-@dataclass
-class Kernel:
-    """GPU 1's pipeline, loaded once per process per (sources, cubin): ``run.py`` (as `run`), ``fixture.py`` (as `fixture`), the
-    device (`dev`), and the digests that name what ran (the manifest records both)."""
-
-    run: Any
-    fixture: Any
-    dev: Any
-    cubin_sha256: str
-    source_sha256: str | None = None
-
-    @classmethod
-    def load(cls, directory: str, cubin: str | None = None) -> Kernel:
-        d = Path(directory)
-        run, run_sha = _load("pearl_c_run", d / "run.py")
-        fixture, fixture_sha = _load("pearl_c_fixture", d / "fixture.py")
-        raw = Path(cubin or _the_cubin(d)).read_bytes()
-        key = (source_digest(run_sha, fixture_sha), hashlib.sha256(raw).hexdigest())
-        if key not in _KERNELS:
-            dev = run.Dev(raw)
-            dev.open()
-            _KERNELS[key] = cls(run, fixture, dev, key[1], key[0])
-        return _KERNELS[key]
-
-
-#: (source_sha256, cubin_sha256) -> the loaded kernel
-_KERNELS: dict[tuple[str, str], Kernel] = {}
 
 
 @dataclass

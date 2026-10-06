@@ -19,6 +19,7 @@ from verity.protocols.accounting.space.pous.codec import Geometry
 from verity.protocols.accounting.space.pous.layout import Layout
 from verity.protocols.accounting.space.pous.params import Params
 from verity.protocols.accounting.space.pous.schemes.p2 import CHACHA8, CHACHA8_NONCONFORMING, EXPERIMENTAL, P2Params
+from verity.protocols.accounting.space.pous.schemes.p2 import ROOT_CALL_NS, RTT_ALLOWANCE_CAP_NS
 from verity.protocols.accounting.space.pous.verifier import VerifierKey
 
 SALT = bytes(range(24))
@@ -102,12 +103,12 @@ def test_audit_through_the_interface(name):
     blocks = [b for seg in c for b in seg]
     key = protocol.challenge_key(b"audit secret", vk)
     with pytest.raises(ValueError, match="no certificate"):
-        protocol.Verifier(sch, vk, key, k=20, experimental=True)
-    v = protocol.Verifier(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
+        protocol.MemoryChallenger(sch, vk, key, k=20, experimental=True)
+    v = protocol.MemoryChallenger(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     profile = v.profile()
     assert not profile.certified and profile.state_bound_bits is None and "no certificate" in profile.statement()
-    wrong = protocol.Verifier(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
+    wrong = protocol.MemoryChallenger(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
     assert not wrong.run(lambda i: bytes(len(blocks[i]))).accepted
     with pytest.raises(ValueError, match="accepted"):
         wrong.profile()
@@ -226,12 +227,12 @@ def test_a_shared_domain_breaks_the_audit(name):
     shared = [sch.encode_segment(SALT, 0, seg) for _ in range(3)]
     vk_shared = VerifierKey.from_segments(sch.params, SALT, shared)
     held = shared[0]
-    v = protocol.Verifier(sch, vk_shared, protocol.challenge_key(b"audit", vk_shared), k=40, research=True,
+    v = protocol.MemoryChallenger(sch, vk_shared, protocol.challenge_key(b"audit", vk_shared), k=40, research=True,
                           experimental=True, clock=_ticks())
     assert v.run(lambda i: held[i % b]).accepted
     own = protocol.encode(sch, seg * 3, SALT)
     vk = VerifierKey.from_segments(sch.params, SALT, own)
-    v = protocol.Verifier(sch, vk, protocol.challenge_key(b"audit", vk), k=40, research=True, experimental=True,
+    v = protocol.MemoryChallenger(sch, vk, protocol.challenge_key(b"audit", vk), k=40, research=True, experimental=True,
                           clock=_ticks())
     assert not v.run(lambda i: own[0][i % b]).accepted
 
@@ -253,13 +254,13 @@ def test_the_14_gb_certificate():
     """448 segments (14 GB, where the family is also `BandMultiMeets14`) and 30 segments are certified, with no gap."""
     sch = schemes.get(segments=448)
     vk = VerifierKey.from_leaves(sch.params, SALT, [bytes(32)] * sch.params.blocks)
-    v = protocol.Verifier(sch, vk, protocol.challenge_key(b"\x00" * 32, vk))
+    v = protocol.MemoryChallenger(sch, vk, protocol.challenge_key(b"\x00" * 32, vk))
     assert v.gaps == ()
     p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 111, 536_800,
                                 sch.certificate)
     assert p.certified and p.state_bound_bits == 113_929_658_799
     s30 = schemes.get(segments=30)
-    assert protocol.Verifier(s30, _fake_vk(s30), protocol.challenge_key(b"\x00" * 32, vk)).gaps == ()
+    assert protocol.MemoryChallenger(s30, _fake_vk(s30), protocol.challenge_key(b"\x00" * 32, vk)).gaps == ()
 
 
 def test_the_family_certificate_covers_a_70_gb_store():
@@ -352,30 +353,30 @@ def test_a_two_ms_deadline_is_refused_for_five_rounds():
     vk = _fake_vk(sch)
     k = protocol.challenge_key(b"\x00" * 32, vk)
     with pytest.raises(ValueError, match="fits 8 calls of 241500 ns; the certificate covers 5"):
-        protocol.Verifier(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000)
-    research = protocol.Verifier(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000, research=True)
+        protocol.MemoryChallenger(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000)
+    research = protocol.MemoryChallenger(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000, research=True)
     assert any("covers 5" in g for g in research.gaps) and research.certificate.effective_rounds(research.limit_ns) == 8
 
 
-def test_the_verifier_enforces_the_certificate():
+def test_the_memory_challenger_enforces_the_certificate():
     """k = 111 is certified only for D = 5 calls of 241.5 µs: Δ + RTT < 1.449 ms, inside the cliff at 3.1395 ms.  A
     smaller k needs a deadline the `D = 2` certificate covers (`k ≥ 97`, under 724.5 µs)."""
     sch = schemes.get()
     vk, key = _fake_vk(sch), b"\x00" * 32
     k = protocol.challenge_key(key, vk)
-    assert protocol.Verifier(sch, vk, k, rtt_allowance_ns=36_800).k == 111
-    assert protocol.Verifier(sch, vk, k, rtt_allowance_ns=948_999).gaps == ()
+    assert protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=36_800).k == 111
+    assert protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=948_999).gaps == ()
     with pytest.raises(ValueError, match="covers 5"):
-        protocol.Verifier(sch, vk, k, rtt_allowance_ns=949_000)
+        protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=949_000)
     with pytest.raises(ValueError, match="below"):
-        protocol.Verifier(sch, vk, k, k=110, rtt_allowance_ns=224_500)
-    assert protocol.Verifier(sch, vk, k, k=110).certificate.theorem == "Pous.SecurityProofs.BandMultiMeetsFamilyD2"
-    uncertified = protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_639_499, research=True)
+        protocol.MemoryChallenger(sch, vk, k, k=110, rtt_allowance_ns=224_500)
+    assert protocol.MemoryChallenger(sch, vk, k, k=110).certificate.theorem == "Pous.SecurityProofs.BandMultiMeetsFamilyD2"
+    uncertified = protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=2_639_499, research=True)
     assert any("covers 5" in g for g in uncertified.gaps)
     with pytest.raises(ValueError, match="cliff"):
-        protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_639_500, research=True)
+        protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=2_639_500, research=True)
     with pytest.raises(ValueError, match="parameters"):
-        protocol.Verifier(schemes.get(segments=2), vk, k)
+        protocol.MemoryChallenger(schemes.get(segments=2), vk, k)
 
 
 def test_the_band_has_certificates_at_fewer_rounds():
@@ -403,7 +404,7 @@ def test_the_band_has_certificates_at_fewer_rounds():
     assert schemes.get("dense-chain/v1").certificates == (schemes.get("dense-chain/v1").certificate,)
 
 
-def test_the_verifier_audits_at_two_or_one_rounds_when_asked():
+def test_the_memory_challenger_audits_at_two_or_one_rounds_when_asked():
     """With `k` unset the verifier stays at `k = 111` (`D = 5`), even under a deadline that fits fewer rounds.  Asked
     for `k = 97` it audits under `BandMultiMeetsFamilyD2` within 724.5 µs, and for `k = 93` under
     `BandMultiMeetsFamilyD1` within 483 µs, which the default 500 µs deadline overruns.  A band of in-degree 2 or 1,
@@ -411,29 +412,29 @@ def test_the_verifier_audits_at_two_or_one_rounds_when_asked():
     sch = schemes.get()
     vk = _fake_vk(sch)
     key = protocol.challenge_key(b"\x00" * 32, vk)
-    assert protocol.Verifier(sch, vk, key).certificate.theorem == "Pous.SecurityProofs.BandMultiMeetsFamily"
-    assert protocol.Verifier(sch, vk, key, deadline_ns=300_000).k == 111
-    two = protocol.Verifier(sch, vk, key, k=97)
+    assert protocol.MemoryChallenger(sch, vk, key).certificate.theorem == "Pous.SecurityProofs.BandMultiMeetsFamily"
+    assert protocol.MemoryChallenger(sch, vk, key, deadline_ns=300_000).k == 111
+    two = protocol.MemoryChallenger(sch, vk, key, k=97)
     assert (two.k, two.certificate.theorem, two.gaps) == (97, "Pous.SecurityProofs.BandMultiMeetsFamilyD2", ())
-    assert protocol.Verifier(sch, vk, key, k=100, rtt_allowance_ns=224_499).certificate.rounds == 2
+    assert protocol.MemoryChallenger(sch, vk, key, k=100, rtt_allowance_ns=224_499).certificate.rounds == 2
     with pytest.raises(ValueError, match="below the certificate's 111; under Pous.SecurityProofs.BandMultiMeetsFamilyD2"
                                          ": .* fits 3 calls of 241500 ns; the certificate covers 2"):
-        protocol.Verifier(sch, vk, key, k=97, rtt_allowance_ns=224_500)
+        protocol.MemoryChallenger(sch, vk, key, k=97, rtt_allowance_ns=224_500)
     with pytest.raises(ValueError, match="covers 1, so Δ \\+ RTT must stay under 483000 ns"):
-        protocol.Verifier(sch, vk, key, k=93)
-    one = protocol.Verifier(sch, vk, key, k=93, deadline_ns=482_999)
+        protocol.MemoryChallenger(sch, vk, key, k=93)
+    one = protocol.MemoryChallenger(sch, vk, key, k=93, deadline_ns=482_999)
     assert (one.k, one.certificate.theorem, one.gaps) == (93, "Pous.SecurityProofs.BandMultiMeetsFamilyD1", ())
     with pytest.raises(ValueError, match="below the certificate's 93"):
-        protocol.Verifier(sch, vk, key, k=92, deadline_ns=482_999)
-    research = protocol.Verifier(sch, vk, key, k=92, deadline_ns=482_999, research=True)
+        protocol.MemoryChallenger(sch, vk, key, k=92, deadline_ns=482_999)
+    research = protocol.MemoryChallenger(sch, vk, key, k=92, deadline_ns=482_999, research=True)
     assert research.certificate.rounds == 5 and research.gaps == ("k = 92 is below the certificate's 111",)
     for d, k, deadline in ((4, 97, 500_000), (2, 97, 500_000), (1, 93, 482_999)):
         b = schemes.Band(band.BandParams(512, 524_288, d))
-        v = protocol.Verifier(b, _fake_vk(b), key, deadline_ns=deadline)
+        v = protocol.MemoryChallenger(b, _fake_vk(b), key, deadline_ns=deadline)
         assert (v.k, v.gaps, v.certificate.cliff) == (k, (), d)
     b1 = schemes.Band(band.BandParams(512, 524_288, 1))
     with pytest.raises(ValueError, match="past the cliff at 1"):
-        protocol.Verifier(b1, _fake_vk(b1), key)
+        protocol.MemoryChallenger(b1, _fake_vk(b1), key)
 
 
 def test_a_two_round_audit_gives_its_profile():
@@ -442,7 +443,7 @@ def test_a_two_round_audit_gives_its_profile():
     sch = schemes.get()
     blocks = [bytes(sch.params.block_bytes)] * sch.params.blocks
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
-    v = protocol.Verifier(sch, vk, protocol.challenge_key(b"audit secret", vk), k=97, rtt_allowance_ns=224_499,
+    v = protocol.MemoryChallenger(sch, vk, protocol.challenge_key(b"audit secret", vk), k=97, rtt_allowance_ns=224_499,
                           clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
@@ -457,8 +458,8 @@ def test_the_dense_certificate_has_no_cliff_but_the_same_rounds():
     vk = _fake_vk(sch)
     k = protocol.challenge_key(b"\x00" * 32, vk)
     with pytest.raises(ValueError, match="covers 5"):
-        protocol.Verifier(sch, vk, k, rtt_allowance_ns=949_000)
-    far = protocol.Verifier(sch, vk, k, rtt_allowance_ns=10_000_000, research=True)
+        protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=949_000)
+    far = protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=10_000_000, research=True)
     assert not any("cliff" in g for g in far.gaps)
 
 
@@ -469,7 +470,7 @@ def test_certified_profile_of_one_band12_segment():
     rng = random.Random(7)
     blocks = [rng.randbytes(sch.params.block_bytes) for _ in range(sch.params.blocks)]
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
-    v = protocol.Verifier(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=_ticks())
+    v = protocol.MemoryChallenger(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
     assert p.certified and p.gaps == () and p.effective_rounds == 2
@@ -478,7 +479,7 @@ def test_certified_profile_of_one_band12_segment():
     assert "given" not in p.statement()
     j = p.to_json()
     assert j["schema"] == "verity-pous/storage-profile/v1" and j["certified"] and j["certificate"]["k"] == 111
-    late = protocol.Verifier(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=_ticks(600_000))
+    late = protocol.MemoryChallenger(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=_ticks(600_000))
     assert not late.run(protocol.responder(sch, blocks.__getitem__)).accepted
 
 
@@ -487,9 +488,9 @@ def test_many_segments_are_a_gap_not_a_refusal():
     and no guarantee covers the dense chain scheme at more.  The band's family pin covers every count, so two
     band segments have none."""
     band2 = schemes.get(segments=2)
-    assert protocol.Verifier(band2, _fake_vk(band2), protocol.challenge_key(b"\x00" * 32, _fake_vk(band2))).gaps == ()
+    assert protocol.MemoryChallenger(band2, _fake_vk(band2), protocol.challenge_key(b"\x00" * 32, _fake_vk(band2))).gaps == ()
     sch = schemes.get("dense-chain/v1", segments=2)
-    v = protocol.Verifier(sch, _fake_vk(sch), protocol.challenge_key(b"\x00" * 32, _fake_vk(sch)))
+    v = protocol.MemoryChallenger(sch, _fake_vk(sch), protocol.challenge_key(b"\x00" * 32, _fake_vk(sch)))
     assert v.gaps == ("W has 2 segments; Pous.SecurityProofs.ChainDenseMeets64 is about 1",)
 
 
@@ -508,7 +509,9 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
 def test_p2_is_experimental_and_says_so():
     """P2 (`p2-16448/v3`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the verifier refuses it
     unless asked, never makes it the default, and its profile states why.  The certificate is the pinned
-    `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile."""
+    `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile.  Its call is
+    `ROOT_CALL_NS`, half the fastest cooperating root: the verifier accepts spec v1.1's cap, `Δ + RTT = 854 µs`, and
+    refuses a µs more, and v1's 1 ms."""
     for name in ("p2-16448/v3", "p2-16448/v2"):
         sch = schemes.get(name, segments=8)
         v2 = name.endswith("v2")
@@ -516,18 +519,21 @@ def test_p2_is_experimental_and_says_so():
         assert sch.params.profile == sch.params.manifest()["profile"] == "p2-2054B"
         assert ("expander" in sch.params.manifest()) is not v2
         cert = sch.certificate
-        assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.segments, cert.hypotheses) == (
-            "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, 8, ())
+        assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.call_ns, cert.segments, cert.hypotheses) == (
+            "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, ROOT_CALL_NS, 8, ())
         assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root"} <= set(cert.claims)
         one = schemes.get(name)
         vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
         key = protocol.challenge_key(b"\x00" * 32, vk)
         with pytest.raises(ValueError, match="experimental"):
-            protocol.Verifier(one, vk, key)
-        v = protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
+            protocol.MemoryChallenger(one, vk, key)
+        v = protocol.MemoryChallenger(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
         assert v.k == 105 and v.gaps == ("W has 1 segments; Pous.SecurityProofs.P2SlackFamilyUncond is about 8",)
-        with pytest.raises(ValueError, match="covers 0"):
-            protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=2_400_000)
+        capped = protocol.MemoryChallenger(one, vk, key, experimental=True, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
+        assert capped.limit_ns == 854_000 and capped.k == 105 and capped.certificate == cert
+        for rtt in (RTT_ALLOWANCE_CAP_NS + 1_000, 1_000_000):
+            with pytest.raises(ValueError, match="covers 0, so Δ \\+ RTT must stay under 854029 ns"):
+                protocol.MemoryChallenger(one, vk, key, experimental=True, rtt_allowance_ns=rtt)
         p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 105, 536_800, cert,
                                     experimental=sch.experimental)
         assert p.certified and p.statement().startswith(f"EXPERIMENTAL ({sch.experimental}). ")
@@ -563,6 +569,30 @@ def test_p2_arithmetic(expander):
     with pytest.raises(ValueError, match="codeword"):
         sch.decode_segment(SALT, 1, [bytes([7]) + bytes(15)] + c[1:])
     assert sch.decode_segment(SALT, 1, c) == w_seg
+
+
+def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_under_it():
+    """Spec v1.1 (§12, Daniel's ruling of 4 Oct 2026): `ROOT_CALL_NS` is half the cooperating root in ns, rounded down,
+    from the sources' own numbers: the red team's floor of 2,060.845 cycles at 5.7 GHz per squaring (`regate.py` at
+    w = 16,448), 16,486 squaring-equivalents per root, and the measured 8-core speedup 2,716.7 / 778.5 (run
+    r20260929-060834-0ec4).  The RTT cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`, so the certificate
+    admits the cap and refuses every whole µs past it; what it admits past the cap is under 1 µs."""
+    from fractions import Fraction
+
+    half = Fraction(16_486) * Fraction("2060.845") / Fraction("5.7") * Fraction("778.5") / Fraction("2716.7") / 2
+    assert ROOT_CALL_NS == int(half) == 854_029
+    delta = 500_000
+    assert RTT_ALLOWANCE_CAP_NS == max(us * 1_000 for us in range(1_000) if delta + us * 1_000 < ROOT_CALL_NS) == 354_000
+    one = schemes.get("p2-16448/v3")
+    vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
+    key = protocol.challenge_key(b"\x00" * 32, vk)
+    edge = ROOT_CALL_NS - 1 - delta
+    assert edge - RTT_ALLOWANCE_CAP_NS == 28
+    assert protocol.MemoryChallenger(one, vk, key, deadline_ns=delta, experimental=True, rtt_allowance_ns=edge).k == 105
+    with pytest.raises(ValueError, match="must stay under 854029 ns"):
+        protocol.MemoryChallenger(one, vk, key, deadline_ns=delta, experimental=True, rtt_allowance_ns=edge + 1)
+    cooperating_root = 2 * half
+    assert cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS) >= 2 > cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS + 1_000)
 
 
 def test_p2_v3_keys_are_the_specs():

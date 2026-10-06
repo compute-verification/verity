@@ -124,6 +124,8 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--quiet", action="store_true", default=None)
     sb.add_argument("--node")
     sb.add_argument("--gpu-ids", default="", help="comma-separated GPU indices the job must get")
+    sb.add_argument("--gpu-host", action="store_true", help="a job without --gpus that takes its GPUs with gpu-lease itself: its scope runs "
+                                                               "at a GPU job's CPU weight (node 1: not idle)")
     st = sub.add_parser("status", help="each node's running, queued and held jobs, GPU-h ready, holds, disk and bundles")
     st.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
     st.add_argument("--owner", help="only this owner's jobs (verity.dev/owner, else the workstream; a submitter on node 2)")
@@ -174,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
                                 question=a.question, gpus=a.gpus, cpus=a.cpus, memory_gib=a.mem_gb, max_s=a.max_s,
                                 quiet=a.quiet, preempt=a.preempt, disk_gb=a.disk_gb, project=a.project, submitter=a.submitter,
                                 priority=a.priority, gpu_model=a.gpu_model, custody_s=a.custody_s, node=a.node,
-                                gpu_ids=tuple(int(x) for x in a.gpu_ids.split(",") if x))
+                                gpu_ids=tuple(int(x) for x in a.gpu_ids.split(",") if x), gpu_host=a.gpu_host)
         except (submit.Refused, ValueError) as e:
             print(json.dumps({"refused": str(e)}))
             return 3
