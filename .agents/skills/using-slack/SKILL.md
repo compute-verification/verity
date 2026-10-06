@@ -19,7 +19,7 @@ description: >
 The coordination API has one place, three interactions and one lifecycle.
 
 - **Handles** are roles: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
-  `@memory-accounting` (proof of useful space), `@network-accounting` (the network warden) and `@console`, plus two advisors,
+  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier) and `@console`, plus two advisors,
   `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. The
   registry names each one's holder; one agent may hold several, and one handle may have two holders, and posts as whichever it acts for (`--as`). They are Slack user groups, so
   a human's composer autocompletes them. Daniel is a member of each, so a tag notifies him too.
