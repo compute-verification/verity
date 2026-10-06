@@ -101,7 +101,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   applications so far:
   - a red-team grant carries when the PR's own patch is byte-identical at both heads, even if `main` moved under it,
     `lean-audit.json` included;
-  - a train member may skip the quick-tier ready mark, since the train's own full check is the gate;
+  - a train member needs no quick-tier pass (its own line below);
   - a flaky test is deleted, not rerun or fixed (testing skill, "Write tests that mean something");
   - an auditor-trusted device runs on Nebius, with trust in Nebius a named assumption, rather than on hardware that
     attests.
@@ -112,6 +112,9 @@ Newest first. Each is Daniel's unless it names the coordinator.
   hashing in research mode, and performance requirements relax as far as that needs. BLAKE3 code leaves the served path
   for `archive/`, kept but not maintained. Pearl's FP8 scheme stays as Pearl defines it, semi-maintained, with
   `cr/blake3` its assumption alone.
+- 2026-10-06 (8:03 AM PDT): a train member needs no quick-tier pass. The train's own full check is the gate, and the
+  owner's `ready` label at the PR's head may be written by hand (`research data label pr:N@SHA ready true --by LANE`).
+  Grants are still required.
 - 2026-10-05 (10:45 PM PDT): when Daniel hands over a design to implement, build it unless there is a strong reason not
   to: a measured cost that breaks a budget, a soundness or zero-knowledge hole, or a contradiction with a proved theorem.
   Taste isn't one. With a strong reason, build the nearest version you can defend and leave him a report, rather than
