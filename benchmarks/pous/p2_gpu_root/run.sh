@@ -19,12 +19,15 @@ $nv $f -DR=4 -o "$b/sqchain2_r4" "$here/sqchain2.cu"
 $nv $f -DR=8 -o "$b/sqchain2_r8" "$here/sqchain2.cu"
 $nv $f -o "$b/probe2" "$here/probe2.cu"
 $nv $f -o "$b/sqchain3" "$here/sqchain3.cu"
+$nv $f -o "$b/sqchain4" "$here/sqchain4.cu"
+$nv $f -o "$b/probe3" "$here/probe3.cu"
 n=${1:-20000}
-configs=${2:-sqchain_lb1024:1:1024:0,sqchain:4:512:0,sqchain:8:256:0,sqchain:8:256:1,sqchain:16:256:1,sqchain2_r4:1:1024:1,sqchain2_r4:8:704:1,sqchain2_r4:16:352:1,sqchain2_r8:16:192:1,sqchain3:12:256:4,sqchain3:20:512:4,sqchain3:28:512:4,sqchain3:8:256:4,sqchain3:12:512:4,sqchain3:60:1024:4,sqchain3:633:1024:1}
+configs=${2:-sqchain_lb1024:1:1024:0,sqchain:4:512:0,sqchain:8:256:0,sqchain:8:256:1,sqchain:16:256:1,sqchain2_r4:1:1024:1,sqchain2_r4:8:704:1,sqchain2_r4:16:352:1,sqchain2_r8:16:192:1,sqchain3:12:256:4,sqchain3:20:512:4,sqchain3:28:512:4,sqchain3:8:256:4,sqchain3:12:512:4,sqchain3:60:1024:4,sqchain3:636:1024:1,sqchain4:12:256,sqchain4:16:320,sqchain4:20:384,sqchain4:8:192,sqchain4:28:512,sqchain4:4:128}
 nvidia-smi -q -d CLOCK,PERFORMANCE > "$out/nvidia-smi-before.txt"
 "$b/probe" > "$out/probe.jsonl"
 "$b/probe2" > "$out/probe2.jsonl"
+"$b/probe3" > "$out/probe3.jsonl"
 "$b/xchg" 256 > "$out/xchg.jsonl"
 python3 "$here/driver.py" --out "$out" --n "$n" --reps 5 --roots 2 --configs "$configs" \
-  --bin sqchain="$b/sqchain" --bin sqchain_lb1024="$b/sqchain_lb1024" --bin sqchain2_r4="$b/sqchain2_r4" --bin sqchain2_r8="$b/sqchain2_r8" --bin sqchain3="$b/sqchain3"
+  --bin sqchain="$b/sqchain" --bin sqchain_lb1024="$b/sqchain_lb1024" --bin sqchain2_r4="$b/sqchain2_r4" --bin sqchain2_r8="$b/sqchain2_r8" --bin sqchain3="$b/sqchain3" --bin sqchain4="$b/sqchain4"
 nvidia-smi -q -d CLOCK,PERFORMANCE > "$out/nvidia-smi-after.txt"
