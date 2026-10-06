@@ -410,3 +410,32 @@ def test_a_wall_clock_audit_traces_every_round_trip_and_a_logical_one_none(tmp_p
     doc, _ = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
     assert "host_trace" not in doc
 
+
+def test_a_cached_encoding_is_reused_for_its_own_setup_and_never_when_its_bytes_changed(tmp_path):
+    """`--p2-c-cache`: the first run encodes and stores `C`; a second run of the same setup loads it (the encode time is
+    the first run's) and passes every gate a fresh `C` does; a cached `C` whose bytes no longer match its sha256 is
+    encoded again."""
+    cache = tmp_path / "cache"
+
+    def run(name: str) -> dict:
+        out = tmp_path / name
+        out.mkdir()
+        return _bench().P2V3Gpu().run(_args(out, k=105, p2_c_cache=str(cache)), WS, out, backend=_backend(),
+                                      params=_small(), research=True)
+
+    first = run("first")
+    rec = first["metrics"]["encode_cache"]
+    assert rec["hit"] is False and (cache / f"{rec['key']}.c").stat().st_size == rec["bytes"]
+    second = run("second")
+    assert second["metrics"]["encode_cache"] == {**rec, "hit": True}
+    assert second["metrics"]["encode_s"] == first["metrics"]["encode_s"]
+    for g in ("round_trip", "reference_decode", "codec", "timed_audit", "value_control", "late_control", "recompute_control"):
+        assert second["gates"][g]["passed"], (g, second["gates"][g])
+    assert (tmp_path / "second" / "leaves-p2.bin").read_bytes() == (tmp_path / "first" / "leaves-p2.bin").read_bytes()
+    data = cache / f"{rec['key']}.c"
+    raw = bytearray(data.read_bytes())
+    raw[5] ^= 1
+    data.write_bytes(bytes(raw))
+    third = run("third")
+    assert third["metrics"]["encode_cache"]["hit"] is False and third["gates"]["round_trip"]["passed"]
+    assert hashlib.sha256(data.read_bytes()).hexdigest() == rec["sha256"]

@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import statistics
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -346,17 +347,26 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     m_dev = torch.zeros(blocks, nb, dtype=torch.uint8, device=backend.device)
     m_dev[:, pad:] = torch.frombuffer(bytearray(w_host), dtype=torch.uint8).to(backend.device).view(blocks, payload)
     encoded = min(a.p2_encode_blocks or blocks, blocks)
-    encode_s, head = _encode_head(backend, bound, m_dev, encoded)
-    c = torch.empty(blocks, nb, dtype=torch.uint8, device=backend.device)
-    c[:encoded] = head
-    if encoded < blocks:
-        g = torch.Generator().manual_seed(20260930)
-        tail = torch.randint(0, 256, (blocks - encoded, nb), dtype=torch.uint8, generator=g)
-        tail[:, 0] &= 0x7F
-        c[encoded:] = tail.to(backend.device)
+    cache = CCache(Path(a.p2_c_cache), fr) if getattr(a, "p2_c_cache", "") and encoded == blocks else None
+    hit = cache.load(blocks * nb) if cache is not None else None
+    if hit is not None:
+        c_host, encode_s = hit
+        c = torch.frombuffer(bytearray(c_host), dtype=torch.uint8).to(backend.device).view(blocks, nb)
+    else:
+        encode_s, head = _encode_head(backend, bound, m_dev, encoded)
+        c = torch.empty(blocks, nb, dtype=torch.uint8, device=backend.device)
+        c[:encoded] = head
+        del head
+        if encoded < blocks:
+            g = torch.Generator().manual_seed(20260930)
+            tail = torch.randint(0, 256, (blocks - encoded, nb), dtype=torch.uint8, generator=g)
+            tail[:, 0] &= 0x7F
+            c[encoded:] = tail.to(backend.device)
+        c_host = c.cpu().numpy().tobytes()
+        if cache is not None:
+            cache.store(c_host, encode_s)
     gates["round_trip"] = {"passed": bool(torch.equal(bound.decode(c[:encoded].contiguous(), 0), m_dev[:encoded])),
                            "blocks": encoded}
-    c_host = c.cpu().numpy().tobytes()
     gates["reference_decode"] = reference_gate(bound, P, fr.keys, c_host, bound.decode(c, 0), picks(encoded, blocks))
     gates["kernel_flags"] = {"passed": bound.raised() == 0}
     codec = fr.codec_gate(c_host, w_host, encoded)
@@ -410,7 +420,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
         seqroot = _seqroot(backend, bound, plaintext_rows(bound, c, dropped), dropped, a.reps, None)
         nvme = H.nvme_probe(a.nvme_dir, c_host, nb, a.nvme_samples) if a.nvme_dir else None
         facts["after"] = backend.facts()
-        metrics = {**H.UNTIMED, "encode_s": encode_s, "encoded_blocks": encoded, "encode_GBps": encoded * payload / encode_s / 1e9,
+        metrics = {**H.UNTIMED, "encode_s": encode_s, "encode_cache": cache.record if cache else None,
+                   "encoded_blocks": encoded, "encode_GBps": encoded * payload / encode_s / 1e9,
                    "encode_stored_GBps": encoded * nb / encode_s / 1e9, "decode_pass_s": decode_s, "ewb": used / decode_s,
                    "stored_GBps": blocks * nb / decode_s / 1e9, "decode_reps_s": decode_reps, "loop": loop, "seqroot": seqroot,
                    "nvme": nvme}
@@ -471,7 +482,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                 "allowance_kind": honest.get("allowance_kind"), "rtt_allowance_ns": honest.get("rtt_allowance_ns"),
                 "honest_margin_min_s": (honest.get("margin_s") or {}).get("min"),
                 "spec_rtt_allowance_max_ns": R.MAX_RTT_ALLOWANCE_NS}
-    metrics = {"encode_s": encode_s, "encoded_blocks": encoded, "encode_GBps": encoded * payload / encode_s / 1e9,
+    metrics = {"encode_s": encode_s, "encode_cache": cache.record if cache else None, "encoded_blocks": encoded,
+               "encode_GBps": encoded * payload / encode_s / 1e9,
                "encode_stored_GBps": encoded * nb / encode_s / 1e9, "decode_pass_s": decode_s, "ewb": used / decode_s,
                "stored_GBps": blocks * nb / decode_s / 1e9, "decode_reps_s": decode_reps, "loop": loop, "deadline": deadline,
                "calibration": cal, "audit": honest, "value_control": value, "late_control": late, "recompute_control": recompute,
@@ -487,6 +499,40 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     rows_ += [("nvme_block_read_p99.9_s", nvme["block_read_s"].get("p99.9"), "s")] if nvme else []
     return result(metrics, rows_, profile(k, limit, gaps, fr.scheme, honest.get("profile")) if gates["timed_audit"]["passed"]
                   else None)
+
+
+class CCache:
+    """`C = Enc(W)` kept on disk between runs (`--p2-c-cache DIR`), so a timed run of a large `W` skips the encode, which
+    an untimed run of the same setup measured (P2's roots take minutes a GB).  Keyed by the framing, its manifest, key
+    prefix and commitment to `W`; a cached `C` must match the sha256 it was stored with, and goes through every gate a
+    fresh one does (the round trip decodes all of it back to `W`).  `record` says which run encoded it and in what time."""
+
+    def __init__(self, root: Path, fr: V1) -> None:
+        key = {"impl": fr.impl, "manifest": fr.manifest(), "prefix": fr.prefix.hex(), "model": fr.model.hex()}
+        self.key = hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()
+        self.data, self.meta = root / f"{self.key}.c", root / f"{self.key}.json"
+        self.record: dict[str, Any] = {"key": self.key, "hit": False}
+
+    def load(self, size: int) -> tuple[bytes, float] | None:
+        if not (self.data.is_file() and self.meta.is_file()):
+            return None
+        meta = json.loads(self.meta.read_text())
+        data = self.data.read_bytes()
+        if len(data) != size or hashlib.sha256(data).hexdigest() != meta["sha256"]:
+            return None
+        self.record = {**meta, "key": self.key, "hit": True}
+        return data, float(meta["encode_s"])
+
+    def store(self, data: bytes, encode_s: float) -> None:
+        self.data.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.data.with_suffix(f".tmp{os.getpid()}")
+        tmp.write_bytes(data)
+        os.replace(tmp, self.data)
+        run = os.environ.get("RESEARCH_RUN_DIR", "")
+        meta = {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data), "encode_s": encode_s,
+                "encoded_by_run": Path(run).name if run else None}
+        self.meta.write_text(json.dumps(meta, indent=1) + "\n")
+        self.record = {**meta, "key": self.key, "hit": False}
 
 
 def _encode_head(backend: Backend, bound: Any, m_dev: Any, encoded: int) -> tuple[float, Any]:

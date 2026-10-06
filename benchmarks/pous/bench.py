@@ -546,6 +546,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--p2-lib", default=str(HERE / "p2_v1" / "bin"), help="p2-v1-gpu: the directory of libp2v1.so")
     ap.add_argument("--p2-encode-blocks", type=int, default=2048,
                     help="p2-v1-gpu: blocks encoded on the device for encode GB/s (0: all; the rest of C is random canonical)")
+    ap.add_argument("--p2-c-cache", default="",
+                    help="the P2 arms, with all of C encoded: keep C = Enc(W) in this directory and reuse it when the setup "
+                         "matches (a timed run of a large W then skips the encode an untimed run measured)")
     ap.add_argument("--band-d", type=int, default=0,
                     help="band-gpu: the band's in-degree d (0: the registered scheme's, 12); d >= 5, where the certificate "
                          "holds with its cliff at d")
