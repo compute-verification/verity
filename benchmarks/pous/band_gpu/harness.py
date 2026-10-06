@@ -538,6 +538,22 @@ def _verifier_env() -> dict[str, str]:
     return {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in paths if p)}
 
 
+def leave_reserved(a: Any) -> None:
+    """Move every thread of this process (the load loop, CUDA's own threads) off the verifier's and responder's CPUs; threads
+    started later inherit the mask, and the responder and verifier pin themselves back.  Every thread, not only the caller:
+    on cores booted `isolcpus=domain` nothing is load-balanced, so a thread left on a reserved core stays there and takes
+    whole scheduler slices from the verifier."""
+    here = set(os.sched_getaffinity(0))
+    reserved = {x for x in (a.verifier_cpu, a.responder_cpu) if x is not None} & here
+    if not reserved or not here - reserved:
+        return
+    for tid in os.listdir("/proc/self/task"):
+        try:
+            os.sched_setaffinity(int(tid), here - reserved)
+        except ProcessLookupError:
+            pass
+
+
 def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Path, out: Path, a: Any, leaves: Path | None = None,
                     tag: str = "calibrate") -> dict[str, Any]:
     """The verifier's no-load loopback calibration (`--calibrate-only`): the limit every audit below is judged against."""
@@ -877,10 +893,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     leaves = out / "leaves.bin"
     leaves.write_bytes(b"".join(leaf_hash(p, SALT, i, c_host[i * width:(i + 1) * width]) for i in range(p.blocks)))
-    here = set(os.sched_getaffinity(0))
-    reserved = {x for x in (a.verifier_cpu, a.responder_cpu) if x is not None} & here
-    if reserved and here - reserved:
-        os.sched_setaffinity(0, here - reserved)
+    leave_reserved(a)
     fields = {"salt": SALT.hex(), "scheme": scheme.name, "params": scheme.params.manifest()}
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None

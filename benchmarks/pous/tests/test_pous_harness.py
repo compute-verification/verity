@@ -451,6 +451,21 @@ def test_the_native_build_is_keyed_by_the_nvcc_release_that_compiles_it(tmp_path
     assert at("12.8") == at("12.8") != at("13.0")                       # another toolkit's .so is never adopted
 
 
+def test_every_checkout_of_the_same_native_source_compiles_one_copy_left_untouched(tmp_path, monkeypatch):
+    sys.path.insert(0, str(BENCH))
+    from band_gpu import native
+
+    copy = native._stable_copy(str(tmp_path))
+    assert open(copy, "rb").read() == open(native.SOURCE, "rb").read()
+    os.utime(copy, ns=(1, 1))
+    assert native._stable_copy(str(tmp_path)) == copy and os.stat(copy).st_mtime_ns == 1   # ninja sees nothing to rebuild
+    other = tmp_path / "checkout" / "pous_native.cu"
+    other.parent.mkdir()
+    other.write_bytes(b"// another source\n")
+    monkeypatch.setattr(native, "SOURCE", str(other))
+    assert native._stable_copy(str(tmp_path)) == copy and open(copy, "rb").read() == b"// another source\n"
+
+
 def test_the_recompute_gate_fails_a_run_whose_challenges_missed_every_dropped_block():
     harness = _harness()
     assert harness.recompute_gate({"wrong": 0, "answers": 20, "recomputed_answers": 3})["passed"]
@@ -628,3 +643,28 @@ def test_the_kernel_settings_and_the_loop_layout():
         harness.set_kernels(before)
     pl = harness.placements(WS["tensors"], 2000)
     assert [(name, off, size) for name, _, _, off, size in pl] == [("q", 0, 1024), ("k", 1024, 512)]   # down ends past 2000
+
+
+def test_the_harness_moves_every_one_of_its_threads_off_the_verifiers_and_responders_cpus():
+    harness = _harness()
+    here = sorted(os.sched_getaffinity(0))
+    if len(here) < 3:
+        pytest.skip("needs three CPUs")
+    started, stop, tid = threading.Event(), threading.Event(), []
+
+    def wait():
+        tid.append(threading.get_native_id())
+        started.set()
+        stop.wait()
+
+    t = threading.Thread(target=wait)
+    t.start()
+    started.wait()
+    try:
+        harness.leave_reserved(types.SimpleNamespace(verifier_cpu=here[0], responder_cpu=here[1]))
+        assert os.sched_getaffinity(0) == os.sched_getaffinity(tid[0]) == set(here[2:])     # a thread started before, too
+    finally:
+        stop.set()
+        t.join()
+        for x in os.listdir("/proc/self/task"):
+            os.sched_setaffinity(int(x), here)

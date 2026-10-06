@@ -4,8 +4,9 @@
 //   irq|softirq|vec CPU T WHAT NS                        a hard interrupt, softirq or APIC vector (the local timer, IPIs) over $3 ns
 //   fault CPU T PID NS                                   a page fault handled for over $3 ns
 //   work CPU T FUNCTION NS                               a workqueue item (a kworker's) that ran for over $3 ns
-// The hypervisor's steal is not here (account_steal_time is inlined, so a kprobe on it never fires): hosttrace.sh records
-// the two cores' /proc/stat steal before and after.  hosttrace.sh runs it.
+//   steal CPU T NS                                       time the hypervisor did not run that vCPU, over $3 ns, between two
+//                                                        reads of its KVM steal clock (each tick and run-queue clock update)
+// hosttrace.sh also records the two cores' /proc/stat steal before and after, and runs it.
 BEGIN { printf("hosttrace cpus %d %d over %d ns\n", $1, $2, $3); }
 
 tracepoint:sched:sched_switch /cpu == $1 || cpu == $2/ {
@@ -52,7 +53,17 @@ tracepoint:workqueue:workqueue_execute_end /@wq[tid]/ {
   delete(@wq[tid]); delete(@wqf[tid]);
 }
 
+kprobe:kvm_steal_clock /arg0 == $1 || arg0 == $2/ { @sc[tid] = arg0 + 1; }
+kretprobe:kvm_steal_clock /@sc[tid]/ {
+  $c = @sc[tid] - 1;
+  if (@steal_at[$c] && retval > @steal_at[$c] && retval - @steal_at[$c] > $3) {
+    printf("steal %d %llu %llu\n", $c, nsecs, retval - @steal_at[$c]);
+  }
+  if (retval > @steal_at[$c]) { @steal_at[$c] = retval; }
+  delete(@sc[tid]);
+}
+
 END {
-  clear(@irq); clear(@irqn); clear(@sirq); clear(@vec); clear(@pf); clear(@wq); clear(@wqf);
+  clear(@irq); clear(@irqn); clear(@sirq); clear(@vec); clear(@pf); clear(@wq); clear(@wqf); clear(@sc); clear(@steal_at);
   printf("end %llu\n", nsecs);
 }
