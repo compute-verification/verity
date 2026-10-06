@@ -60,6 +60,23 @@ def test_a_slot_with_windows_pauses_from_its_lead_to_the_windows_end(tmp_path):
     assert SLOT.parse("a 0-1")[0]["windows"] is None and SLOT.blocked(SLOT.parse("a 0-1")[0], NOW) is None
 
 
+def test_a_slot_with_leases_pauses_while_a_live_timed_gpu_lease_holds_a_gpu(tmp_path):
+    """Node 2, 6 Oct: an unbooked timed PoUS series paused a red-team Lean check for 50 of 65 minutes, since only booked windows
+    kept checks off. A live `gpu-lease --timed` blocks the slot too; an untimed lease, or a timed one whose pid is gone, doesn't."""
+    leases, proc = tmp_path / "gpu-lease", tmp_path / "proc"
+    leases.mkdir()
+    (proc / "4242").mkdir(parents=True)
+    slot = SLOT.parse(f"d 0-47 leases={leases}")[0]
+    (leases / "7.owner").write_text("pid=4242 run=- who=fill:bc-15 uuid=GPU-x since=2026-10-01T08:50Z preempt=1 cmd=bash x\n")
+    assert SLOT.blocked(slot, NOW, proc) is None
+    (leases / "7.owner").write_text("pid=4242 run=- who=memory-accounting uuid=GPU-x since=2026-10-01T08:50Z "
+                                    "until=2026-10-01T09:10Z timed=1 cmd=bash x\n")
+    assert SLOT.blocked(slot, NOW, proc) == "timed GPU lease pid=4242 who=memory-accounting on GPU 7 until 2026-10-01T09:10Z"
+    (proc / "4242").rmdir()
+    assert SLOT.blocked(slot, NOW, proc) is None
+    assert SLOT.parse("a 0-1")[0]["leases"] is None
+
+
 def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path, monkeypatch):
     (tmp_path / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")

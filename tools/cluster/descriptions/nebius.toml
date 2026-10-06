@@ -157,7 +157,7 @@ owner = "infra"
 user-cpuset = { delegate = "cpu cpuset memory pids" }
 # merge-check slots d and e pause through every booked window but those marked slot-d=runs (infra, 1 Oct); d is the lander's
 # train checks' alone (only=trains), so a lane's quick tier never holds the slot a train waits for (top, 6 Oct)
-check-slots = { d = "0-47 windows=/workspace/pouw/fill/windows lead=30 only=trains", e = "48-79 windows=/workspace/pouw/fill/windows lead=30" }
+check-slots = { d = "0-47 windows=/workspace/research/locks/slot-windows lead=30 leases=/run/gpu-lease only=trains", e = "48-79 windows=/workspace/research/locks/slot-windows lead=30 leases=/run/gpu-lease" }
 # /workspace/pouw/fill/cpu-sets: compute accounting's verifies, 4 at a time in 40 GB each, on slot d's cores
 fill.cpu-sets = { bc-e6a46970-b6ef-5738-af64-182b143075d4 = "0-47 4 40" }
 # /workspace/pouw/fill/windows: the booked timed windows, as `fill.window."START" = MINUTES` (START in UTC, to the minute).
