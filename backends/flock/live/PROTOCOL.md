@@ -596,25 +596,63 @@ leaves) is not in this rule; the network warden covers it.
 ### 10.2 The level-0 recheck
 
 Before the session's `Commit` the gateway recomputes the level-0 commitment itself: `commit_zk(z, params, level0)` over the
-host witness (`FC_HOST_WITNESS=1`: the witness is assembled on the host, untrusted work whose cost is the prover's), under
-`hm96::begin` with the session's level-0 salts (`LeafSalts::level0_id`), with the `Level0Zk` the host drew. It refuses
-`GATE-REFUSED: level-0 root` when the device's root differs, before anything leaves. It keeps the tree, so the proof's
-level-0 rows and paths are checked against it at the end. Its cost is reported per statement as `GATE` lines
-(`t.gate_recheck`, CPU seconds), beside the device's `t.encoding_commitment`.
+host witness (`FC_HOST_WITNESS=1`: the gateway assembles the witness on the host and uploads it whole, so the witness the
+recheck commits is its own; the assembly is counted in the session's prove time, as the device's witness kernel is
+without it), under `hm96::begin` with the session's level-0 salts (`LeafSalts::level0_id`), with the `Level0Zk` the host
+drew. It refuses `GATE-REFUSED: level-0 root` when the device's root differs, before anything leaves. It keeps the tree, so
+the proof's level-0 rows and paths are checked against it at the end. Its cost is reported per statement as `GATE` lines
+(`t.gate_recheck` wall seconds, `cpu.gate_recheck` the process's CPU seconds over it), beside the device's
+`t.encoding_commitment`.
 
 ### 10.3 The rule, inner phase (`rec_live`)
 
 | item | rule | why the M0 prover has no free choice |
 |---|---|---|
-| `Hello` | constant | the gateway forwards its public part (no Σ) only when it equals the pinned schedule's (`--schedule`) |
-| `Commit`'s level-0 roots | salted | the coin server receives `hm96-sha512` commitments of each root under a fresh 192-byte salt; the roots and salts stay in `private.json` |
-| a round's caps (its `BYTES` frames that commit a tree) | salted | as the roots, one fresh salt each |
+| `Hello` | constant | the gateway forwards its public part (no Σ) only when it equals the pinned schedule's |
+| `Commit`'s level-0 roots | salted | each 64-byte node of each root reaches the coin server as its `hm96-sha512/v1` commit string `b ‖ c` (`default_key`) under its own fresh 192-byte salt; the roots and salts stay in `private.json` |
+| a round's caps (its `BYTES` frames that commit a tree) | salted | as the roots, one fresh salt per node |
 | a round's free message | salted | `c_k`, its rows committed under fresh salts (as before) |
 | statement digest, labels, domain, nonces | dropped | public constants or functions of the hidden statement; never forwarded |
 | `Link`'s `y` | constant `0` | the prover sends zeros; the gateway refuses anything else |
-| stream names, `Open`'s parent and position, each round's coin count and the counts of its caps and message rows | constant | the pinned schedule's; the gateway refuses any other |
+| stream names, `Open`'s parent and position, each round's coin count and the counts of its caps' nodes and message rows | constant | the pinned schedule's; the gateway refuses any other |
 
-A salted top's opening (top and salt) is the prover's. V*'s inputs read the tops from `private.json` and refuse
-`GATE-REFUSED: tree top` when one does not open its commitment in `public.json`. The outer circuit does not yet climb to the
-committed tops: that needs rec-step2's openings to end at each salted commitment instead of at the clear top, an hm96 leaf
-(one more SHA-512 row over the top and its salt) per tree.
+The schedule is `rec_live --schedule FILE` (`--schedule-of PUBLIC_JSON` prints one record's), or else the first session the
+proxy finishes pins it for the rest; `schedule.json` beside the sessions is the one in force. The record says how its tops
+are salted (`"tops": "hm96-sha512/v1/node"`, `rec_live.TOPS`). A refusal (`GATE-REFUSED: …`) stops the session: every later
+request is refused with the same reason, `Finish` answers not accepted, and only `public.json` (what the coin server had
+received) is written.
+
+A salted node's opening (node and salt) is the prover's. V*'s inputs (`rec_vstar.root`, `caps`) read the clear tops from
+`private.json` and refuse `GATE-REFUSED: tree top` when one does not open its commit string in `public.json`, or when the
+record's tops are not salted. The outer circuit does not yet climb to the committed tops: `rec_outer` still registers the
+clear cap nodes. Climbing needs rec-step2's `RecOpen` openings to end at each opened cap node's commit string instead of at
+the node: per distinct cap node a query reaches, the commit string from the node and its private salt, which is two private
+SHA-512 compressions (`c`, 116,240 ANDs) and an XOR-only product under the constant key (`b`), with `b ‖ c` registered in
+place of the node.
+
+### 10.4 The prototype (`FC_GATE=1`)
+
+`flock-circuit prove --zk` with `FC_GATE=1` runs the gate (`gate.rs`, and `Gate` in `flock-circuit.rs`) on the GPU path and
+the CPU path alike, for a statement of one table; it refuses to start without `FC_HOST_WITNESS=1`. It is stricter than
+§10.1 in one place: the shadow recomputes the whole opening, level 0's lane rounds included, in lock step with the device.
+Each of the device's opening frames must equal the shadow's byte for byte (`gate_opening_rounds` counts the rounds
+compared), and the opening that leaves is the shadow's. The lincheck's folded comb is the gateway's (`zk_finish` folds it),
+and `final_c'` is computed from the passed values. The algebraic phase's frames are held to the skeleton (domain, labels,
+each item's op, kind and length, the coin counts), and at the end the replay of the values the gate passed must give the
+proof's exposed values.
+
+`FC_GATE_TAMPER` makes the device dishonest in one named way. Each is refused by name, before the tampered message leaves
+or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), before the inner proof does:
+
+| `FC_GATE_TAMPER` | the device | refusal |
+|---|---|---|
+| `root` | flips a bit of its level-0 root | `GATE-REFUSED: level-0 root: the device committed … where the recheck has …` |
+| `witness` | proves a witness one bit off the host's | `GATE-REFUSED: level-0 root: …` |
+| `label` | flips a label byte in the algebraic phase | `GATE-REFUSED: algebraic phase, round 0, frame 1: label …` |
+| `opening` | flips an observed value in the opening's first round | `GATE-REFUSED: opening round 0, frame …: the device's observe … differs from the gateway's in its payload` |
+| `algebra` | flips a masked value, in its frame and its proof alike | `PROVER-STOPPED: the batched constraint fails (⟨c, h⟩ ≠ t)`: `zk_finish`'s self-check (§5) |
+| `algebra-proof` | flips a masked value in its returned proof only | `GATE-REFUSED: the proof's exposed value 0 is not the one the gate passed` |
+
+The inner phase's controls are V*'s: `rec_inner.py forge --what top` (a clear top that does not open the salted one the coin
+server received) and `--what unsalted` (a record of clear tops), refused `GATE-REFUSED: tree top: …` by `rec_vstar`.
+`85-rec-reprice.sh` runs both phases on node 1 (`STEP=icheck`; `STEP=oprove MODES="dev host gate" CONTROLS=L6`).
