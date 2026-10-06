@@ -97,6 +97,23 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-05 (10:45 PM PDT): when Daniel hands over a design to implement, build it unless there is a strong reason not
+  to: a measured cost that breaks a budget, a soundness or zero-knowledge hole, or a contradiction with a proved theorem.
+  Taste isn't one. With a strong reason, build the nearest version you can defend and leave him a report, rather than
+  waiting for him.
+- 2026-10-05 (10:45 PM PDT): the proof service is built to the decisions table of
+  `note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`. The rules from it that generalize:
+  - One hash, SHA-512. Every commitment is hm96 rows in frame-v3-sha512 trees, and signatures are hash-based over
+    SHA-512.
+  - What an auditor-trusted device signs is witness and never reaches the auditor in the clear. Such devices are the
+    network certifiers and the memory challenger.
+  - Partitions are private, and their properties are public.
+  - No retries for now. A failed proof is a visible failure, and a retry never redraws.
+  - Outer proofs go through the firewall one at a time.
+  - Live coins only; Fiat–Shamir is out.
+- 2026-10-05 (10:45 PM PDT): the names are network certifier (was the warden), network certificates (its records),
+  memory challenger (PoUS's timed verifier), firewall (prover gateway), challenger (verifier gateway), verifier (batch
+  verifier) and workers (GPU workers). "Gateway" is retired. The rename move rolls them out with the Glossary.
 - 2026-10-05 (7:48 PM PDT): every protocol is zero-knowledge, PoUS included: the developer's data and circuit are hidden,
   and so is anything that reveals them (shapes, row indices, layouts, unsalted digests). Only the minimum is public, each
   item with its reason, and there is no clear mode. In top's reading (8:15 PM), public items are of four kinds: protocol
