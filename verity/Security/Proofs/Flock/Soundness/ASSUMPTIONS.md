@@ -287,8 +287,7 @@ malicious-verifier claim rests on beyond the theorems.
 
 **A4. `verity.primitives.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
 (`prf/sha-512`), for the PoUW window's keyed draw. The red team would grant it as a named hypothesis
-(`lanes/pous/20260929T1724Z-redteam-a4-keyed-streams.md`, for its SHA-256 form; one hash moved it to SHA-512, Daniel,
-6 Oct).
+(`lanes/pous/20260929T1724Z-redteam-a4-keyed-streams.md`, on SHA-256 before one hash moved it).
 
 - **Statement.** A secret of `S` uniform bytes (A5) gives the key `Randomness.derive`. For a test `E` of the key's
   streams at indices whose framings (`Randomness.frames`) are pairwise distinct, each read to `L i` bytes
@@ -304,21 +303,12 @@ malicious-verifier claim rests on beyond the theorems.
   - Keyed by its chaining value, it makes the cascade a PRF on prefix-free inputs (Bellare, Canetti and Krawczyk 1996).
     The inputs are prefix-free: `frames` is length-framed and the counter is 8 bytes, so length extension doesn't apply.
   - Keyed by the secret bytes in its first message block, it is a dual PRF, as the HMAC analyses use. The secret follows
-    a fixed public tag: 28 bytes for `stream`, and 37 for `derive` with the source's frame header. A 32-byte secret sits
-    whole in the 128-byte first block after either tag (a source of up to 91 bytes does).
+    a fixed public tag: 28 bytes for `stream`, and 37 for `derive` with the source's frame header.
   - The secret's uniformity is not A4's but A5's.
 - **η, stated.** η stays symbolic in Lean, and every record-level statement keeps `+ η` visible, never absorbed.
-  - **The claimed value:** for `S = 32`, η ≤ 2⁻¹²⁸ for the chain's tests. The derivation is generic key search over
-    `min(256, 8S)` bits, plus a hybrid over the `q` compression calls the test's streams take. With `q ≤ 2⁴⁰` and a
-    test of `T ≤ 2⁸⁰` hash evaluations, the bound stays under 2⁻¹²⁸: the key's term is `q·T·2⁻²⁵⁶ = 2⁻¹³⁶`, and the
-    hybrid's chaining values are 512 bits, so their terms are smaller still.
-  - **What truncation to 32 bytes costs.** `derive` and `shard` keep SHA-512's first 32 bytes, so a key is 256 bits
-    (SHA-512 truncated to 256 bits counts as SHA-512, SP 800-107 §5.1); a stream block is SHA-512's full 64 bytes.
-    Truncation gives a test nothing: a test of the truncated output is a test of the full output, so its advantage is at
-    most the full output's. What the 256-bit key bounds is key search, which the source already caps at `8S = 256` bits
-    for `S = 32`. So at `S = 32` it costs nothing, and 256 bits keeps 128-bit security against a quantum (Grover)
-    search. Only a source longer than 32 bytes loses anything: its key search stops at 256 bits, still past 128-bit
-    security.
+  - **The claimed value:** for `S = 32`, η ≤ 2⁻¹²⁸ for the chain's tests: generic key search over `min(256, 8S)` bits,
+    plus a hybrid over the test's `q` compression calls. The key is SHA-512 truncated to 32 bytes, which costs nothing
+    at `S = 32`. The derivation, and what truncation costs: `assumption-notes/a4-prf-sha512.md`.
   - **One η for the whole family:** every set `B` (the closures of the bad sets, which `closure_escape` evaluates), every
     stream budget `L`, and every receipt context. The audit takes a sup over `B`, not a union, and `E_B` costs the same
     for every `B`, every `L` and every context.
