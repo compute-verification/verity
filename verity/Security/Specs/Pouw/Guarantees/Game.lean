@@ -1,10 +1,4 @@
 import Specs.Pouw.Assumptions.Pinned
-import Definitions.Pouw.Basic.Mat
-import Definitions.Pouw.Basic.Prob
-import Definitions.Pouw.Basic.QTree
-import Definitions.Pouw.Game.Defs
-import Definitions.Pouw.Game.Params
-import Specs.Pouw.Assumptions.Game
 
 /-!
 # The game's guarantees (trusted)
@@ -62,12 +56,3 @@ def EndToEnd : Prop :=
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
 end Pouw.Guarantees
-
-namespace Pouw.Proofs
-open Finset
-
-/-- **(a)** `G_γ` from TT, with `γ = 1 − (1 − γ₀)/Ω_max` and `η = ε_TT(q)`. -/
-def _root_.Pouw.Guarantees.GammaFromTT : Prop :=
-  Pinned.GammaFromTT
-
-end Pouw.Proofs
