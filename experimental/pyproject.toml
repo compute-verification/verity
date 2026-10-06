@@ -24,6 +24,10 @@ inputs = ["verity/Security/Proofs/Flock/Soundness/Audit/Influence.lean",
           "verity/Security/Proofs/Flock/Soundness/Audit/Law.lean",
           "verity/Security/Proofs/Flock/Soundness/Audit/Stratified.lean",
           "verity/Security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean",
+          "verity/Security/Definitions/Flock/Audit/Influence.lean",
+          "verity/Security/Definitions/Flock/Audit/Law.lean",
+          "verity/Security/Definitions/Flock/Audit/Stratified.lean",
+          "verity/Security/Definitions/Flock/Audit/StratifiedMiss.lean",
           "verity/Security/Proofs/lake-manifest.json",
           "verity/Security/Proofs/lean-toolchain"]
 parallel = true

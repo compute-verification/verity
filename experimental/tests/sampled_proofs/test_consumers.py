@@ -119,17 +119,17 @@ def test_stratified_miss_is_the_lean_certified_greedy_fill():
         assert exfiltration_bound(p, b) >= H + log2(admissible)
 
 def test_the_lean_vectors_were_generated_from_this_tree():
-    """The vectors record the sha256 of the exporter and of the soundness package's files they read (`lean/generate.sh`):
+    """The vectors record the sha256 of the exporter and of the soundness files they read (`lean/generate.sh`):
     `audit_exfiltration` (`Audit/Influence.lean`), the uniform law and `subset_miss` (`Audit/Law.lean`), the stratified
-    law and `stratified_miss_eq_greedy` (`Audit/Stratified.lean`, `Audit/StratifiedMiss.lean`), and the toolchain and
-    Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
+    law and `stratified_miss_eq_greedy` (`Audit/Stratified.lean`, `Audit/StratifiedMiss.lean`), each with the
+    definitions it reads (`Definitions/Flock/Audit/`), and the toolchain and Mathlib pins.  A change to any of them fails
+    here until the vectors are regenerated."""
     recorded = json.loads(LEAN_VECTORS.read_text())["inputs"]
-    soundness = "verity/Security/Proofs/"
+    audit = ("Influence", "Law", "Stratified", "StratifiedMiss")
     assert set(recorded) == {"experimental/tests/sampled_proofs/lean/ExfiltrationVectors.lean",
-                             *(soundness + f for f in ("Flock/Soundness/Audit/Influence.lean", "Flock/Soundness/Audit/Law.lean",
-                                                       "Flock/Soundness/Audit/Stratified.lean",
-                                                       "Flock/Soundness/Audit/StratifiedMiss.lean",
-                                                       "lake-manifest.json", "lean-toolchain"))}
+                             *(f"verity/Security/Proofs/Flock/Soundness/Audit/{m}.lean" for m in audit),
+                             *(f"verity/Security/Definitions/Flock/Audit/{m}.lean" for m in audit),
+                             "verity/Security/Proofs/lake-manifest.json", "verity/Security/Proofs/lean-toolchain"}
     stale = [p for p, h in recorded.items() if hashlib.sha256((ROOT / p).read_bytes()).hexdigest() != h]
     assert not stale, f"changed since the vectors were generated, rerun experimental/tests/sampled_proofs/lean/generate.sh: {stale}"
 

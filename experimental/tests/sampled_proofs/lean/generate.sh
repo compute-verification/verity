@@ -15,13 +15,12 @@ from pathlib import Path
 out, here, pkg = map(Path, sys.argv[1:])
 data = json.loads(out.read_text())
 sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
-soundness = "verity/Security/Proofs/"
+audit = ("Influence", "Law", "Stratified", "StratifiedMiss")
 data["inputs"] = {"experimental/tests/sampled_proofs/lean/ExfiltrationVectors.lean": sha(here / "ExfiltrationVectors.lean"),
-                  **{soundness + f: sha(pkg / f) for f in ("Flock/Soundness/Audit/Influence.lean",
-                                                           "Flock/Soundness/Audit/Law.lean",
-                                                           "Flock/Soundness/Audit/Stratified.lean",
-                                                           "Flock/Soundness/Audit/StratifiedMiss.lean",
-                                                           "lake-manifest.json", "lean-toolchain")}}
+                  **{"verity/Security/" + f: sha(pkg.parent / f)
+                     for f in (*(f"Proofs/Flock/Soundness/Audit/{m}.lean" for m in audit),
+                               *(f"Definitions/Flock/Audit/{m}.lean" for m in audit),
+                               "Proofs/lake-manifest.json", "Proofs/lean-toolchain")}}
 lists = {key: data.pop(key) for key in ("vectors", "stratified")}
 text = json.dumps(data, indent=1)[:-2] + "".join(f',\n "{key}": [\n' + ",\n".join(json.dumps(v) for v in vs) + "\n ]"
                                                  for key, vs in lists.items()) + "\n}\n"

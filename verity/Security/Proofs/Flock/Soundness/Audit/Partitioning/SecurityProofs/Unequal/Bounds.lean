@@ -69,7 +69,7 @@ theorem miss_toReal_le_of {n : ℕ} {L : Law n} {K : ℕ} {δ : ℝ} (hδ : 0 �
 
 /-- **Achievability**, by independent draws with `q_u = min(1, Λ/C · w u)` rounded up to a multiple of
 `1/(⌈1/ε⌉ + 1)`. -/
-theorem achievability : Guarantees.Achievability := by
+theorem achievability : Flock.Guarantees.Partitioning.Achievability := by
   intro n w C δ ε hw hC hδ0 hδ1 hε
   set Λ := Real.log δ⁻¹ with hΛdef
   have hΛ : 0 ≤ Λ := log_inv_nonneg hδ0 hδ1
@@ -177,7 +177,7 @@ theorem granularity_arith {n s C Λ : ℝ} {K : ℕ} (hs : 0 < s) (hC : 0 < C) (
   exact granularity_arith' (div_pos hC hs) hΛ hn hK1 hK2 hX
 
 /-- **The granularity optimum.** -/
-theorem granularityOptimum (hCA : Guarantees.ConverseAsymptotic) : Guarantees.GranularityOptimum := by
+theorem granularityOptimum (hCA : Flock.Guarantees.Partitioning.ConverseAsymptotic) : Flock.Guarantees.Partitioning.GranularityOptimum := by
   intro n s C f o δ hs hC hf ho hδ0 hδ1
   set c := unitCost f o s with hcdef
   have hc : 0 ≤ c := unitCost_nonneg hf ho hs.le
@@ -236,7 +236,7 @@ theorem granularityOptimum (hCA : Guarantees.ConverseAsymptotic) : Guarantees.Gr
           linarith
 
 /-- **The best granularity minimizes `c(s)`**, from both sides of `GranularityOptimum`. -/
-theorem granularityChoice (hGO : Guarantees.GranularityOptimum) : Guarantees.GranularityChoice := by
+theorem granularityChoice (hGO : Flock.Guarantees.Partitioning.GranularityOptimum) : Flock.Guarantees.Partitioning.GranularityChoice := by
   intro n n' s s' C f o δ hs hs' hns hC hf ho hδ0 hδ1 L' hL' ε hε
   set c := unitCost f o s with hcdef
   set c' := unitCost f o s' with hc'def
@@ -324,7 +324,7 @@ theorem class_arith {m t A C : ℝ} {K : ℕ} (ht : 0 < t) (hC : 0 < C) (hm : 0 
 /-- **One class's draws.** A set `S` of units each doing work at least `t`, with `t ≤ A` when `S` has a unit, is drawn
 `Λ (1 − AΛ/(2C)) (|S|·t/C·(1 − A/C) − 1)` times in expectation, by `ConverseAsymptotic` on `L` restricted to `S` at
 `K = ⌈C/t⌉`. -/
-theorem class_bound (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (L : Law n) (w : Fin n → ℝ) {A C δ t : ℝ}
+theorem class_bound (hCA : Flock.Guarantees.Partitioning.ConverseAsymptotic) {n : ℕ} (L : Law n) (w : Fin n → ℝ) {A C δ t : ℝ}
     (hC : 0 < C) (hδ0 : 0 < δ) (hδ1 : δ ≤ 1) (hAΛ : A * Real.log δ⁻¹ ≤ C) (hL : MeetsTarget L w C δ)
     (S : Finset (Fin n)) (ht : 0 < t) (htS : ∀ u ∈ S, t ≤ w u) (htA : S.Nonempty → t ≤ A) :
     Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) * (S.card * t / C * (1 - A / C) - 1) ≤
@@ -391,7 +391,7 @@ theorem sum_classes {n : ℕ} (w : Fin n → ℝ) {ρ a A : ℝ} (hρ : 1 < ρ) 
     exact class_le hρ ha (hw u).1 (hw u).2) g
 
 /-- **The converse for unequal units, in draws.** -/
-theorem unequalDraws (hCA : Guarantees.ConverseAsymptotic) : Guarantees.UnequalDraws := by
+theorem unequalDraws (hCA : Flock.Guarantees.Partitioning.ConverseAsymptotic) : Flock.Guarantees.Partitioning.UnequalDraws := by
   intro n w ρ a A C δ hρ ha hw hC hδ0 hδ1 hAΛ L hL
   have hρ0 : 0 < ρ := by linarith
   set Λ := Real.log δ⁻¹ with hΛdef
@@ -456,7 +456,7 @@ theorem mul_unitCost_le {f o ρ t x : ℝ} (hf : 0 ≤ f) (ho : 0 ≤ o) (hρ : 
 
 /-- **The converse for unequal units, in cost.** Every `n ≥ 1` implies `a ≤ A`; at `n = 0`, without it, the statement
 is false (`unequalCost_needs_le`). -/
-theorem unequalCost_of_le (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (w : Fin n → ℝ) {ρ a A C δ f o : ℝ}
+theorem unequalCost_of_le (hCA : Flock.Guarantees.Partitioning.ConverseAsymptotic) {n : ℕ} (w : Fin n → ℝ) {ρ a A C δ f o : ℝ}
     (hρ : 1 < ρ) (ha : 0 < a) (haA : a ≤ A) (hw : ∀ u, a ≤ w u ∧ w u ≤ A) (hC : 0 < C) (hδ0 : 0 < δ) (hδ1 : δ ≤ 1)
     (hf : 0 ≤ f) (ho : 0 ≤ o) (hAΛ : A * Real.log δ⁻¹ ≤ C) (L : Law n) (hL : MeetsTarget L w C δ) :
     Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *

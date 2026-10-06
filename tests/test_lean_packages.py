@@ -8,7 +8,6 @@ import itertools
 import json
 import os
 import re
-import textwrap
 import tomllib
 from pathlib import Path
 
@@ -49,13 +48,13 @@ def test_one_mathlib():
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
-    """A3 (C-Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
-    for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and
-    updates the citation."""
-    proofs = ROOT / "verity/Security/Proofs"
-    version = (proofs / "lean-toolchain").read_text().strip().rpartition(":")[2]
-    for doc in ("ASSUMPTIONS.md", "Assumptions.lean"):
-        assert f"Lean {version}'s runtime" in (proofs / "Flock/Soundness" / doc).read_text(), doc
+    """A3 (C-Flock soundness's `ASSUMPTIONS.md`, `Specs.Flock.Assumptions.Soundness`'s `UniformRandomBytes`) cites what the
+    toolchain's runtime reads for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until
+    someone re-reads it and updates the citation."""
+    security = ROOT / "verity/Security"
+    version = (security / "Proofs/lean-toolchain").read_text().strip().rpartition(":")[2]
+    for doc in ("Proofs/Flock/Soundness/ASSUMPTIONS.md", "Specs/Flock/Assumptions/Soundness.lean"):
+        assert f"Lean {version}'s runtime" in (security / doc).read_text(), doc
 
 
 def _module_roots(pkg: Path):
@@ -201,53 +200,6 @@ def test_every_upstream_watch_is_scanned():
 PROOF_ONLY = ("ArkLib", "VCVio", "CompPoly")
 SOUNDNESS = "Proofs.Flock.Soundness"
 
-#: C-Flock soundness modules that hold trusted text and reach a proof-only library today, without the
-#: `Proofs.Flock.Soundness.` prefix. C-Flock's spec is not yet extracted (the record's `reads_exempt`), so its guarantees
-#: still read definitions that sit beside ArkLib-based proofs. The list only shrinks: a module that no longer reaches one, or
-#: holds no trusted text, fails until its entry goes.
-ARKLIB_PENDING = frozenset("""
-Assumptions.Zk Audit.Flock Audit.FlockBatched Audit.FlockBatchedAcc Audit.FlockLink Audit.FlockLinked
-Audit.FlockPublic Audit.TwoStageExfil Binding.Layout Binding.Leaf Binding.Rows CROnly.Defs CompiledLock
-CompiledSound CompiledTable Discharge.Aliased.Copies Discharge.Aliased.Keys Discharge.Composed.Base
-Discharge.Composed.Coined Discharge.Composed.Defs Discharge.Composed.DefsJ Discharge.Composed.Inner
-Discharge.Composed.Inner.Lincheck Discharge.Composed.Inner.LincheckReplay Discharge.DecodeZL.LIG
-Discharge.DecodeZL.OP Discharge.DecodeZL.Statements Discharge.DecodeZL.Wire Discharge.DecodeZLJ.Statements
-Discharge.DrawWords.Statements Discharge.Exec.CompiledL Discharge.Exec.Decode Discharge.Exec.Emit
-Discharge.Exec.FlockBatchedAccL Discharge.Exec.FlockBatchedL Discharge.Exec.FlockLinkL Discharge.Exec.FramesLigerito
-Discharge.Exec.FramesRep Discharge.Exec.Live Discharge.Exec.LiveOn Discharge.Exec.Pts Discharge.Exec.Rounds
-Discharge.Exec.SessionBatchAccL Discharge.Exec.SessionBatchL Discharge.Exec.SessionL Discharge.Exec.SessionLDecisive
-Discharge.Exec.SessionSoundL Discharge.Exec.Setup Discharge.Exec.Shape Discharge.Exec.StrictCRL
-Discharge.Exec.Verdict Discharge.Hidden.Defs Discharge.Hidden.Flat Discharge.Hidden.Wide.Checked
-Discharge.Hidden.Wide.Defs Discharge.HiddenDec.Statements Discharge.HiddenExec.Defs Discharge.HiddenExec.Flat
-Discharge.HiddenExec.HeadlineExec Discharge.HiddenExec.KeyH Discharge.HiddenExec.Placed Discharge.HiddenExec.Ret
-Discharge.HiddenExec.SiteH Discharge.HiddenExec.Sites Discharge.HiddenExec.Statements Discharge.HiddenExec.Tables
-Discharge.Hm.Delta Discharge.Hm.Place Discharge.Hm.Port Discharge.Hm.Row Discharge.Integrate.Headline
-Discharge.Integrate.Sites Discharge.Layout.HmRegion Discharge.Layout.KeyProg Discharge.Layout.Keyed
-Discharge.Layout.KeysRow Discharge.Layout.OfRows Discharge.Layout.OutPin Discharge.Layout.OutRegion
-Discharge.Layout.OutShape Discharge.Layout.Outs Discharge.Layout.Pins Discharge.Layout.Readers
-Discharge.Layout.RowEnc Discharge.Layout.Scope Discharge.Layout.Site Discharge.Placed.Keyed Discharge.Placed.Setup
-Discharge.Placed.Typed Discharge.Placed.Wiring Discharge.PlaysCoin.Statements Discharge.PrivateCircuit.Defs
-Discharge.PrivateCircuit.Statements Discharge.Tables.Session Discharge.Tables.Sim Discharge.Tables.Statements
-Discharge.Tables.Steps Discharge.Zero.Delta Discharge.Zero.Stack Discharge.ZkBind.At Discharge.ZkBind.Bind
-Discharge.ZkBind.Place Discharge.ZkBind.Shadow Discharge.ZkCoins.SessionDefs Discharge.ZkCoins.Statements
-Discharge.ZkEveryCoin.Defs Discharge.ZkExec.Coin Discharge.ZkExec.Compiled Discharge.ZkExec.Live
-Discharge.ZkExec.LiveStatements Discharge.ZkExec.PlaysStatements Discharge.ZkExec.RunsStatements
-Discharge.ZkExec.Shape Discharge.ZkExec.Statements Discharge.ZkExec.VerdictLig Discharge.ZkExec.VerdictStatements
-Discharge.ZkHidden.Defs Discharge.ZkHidden.DefsJ Discharge.ZkHidden.SoundBind Discharge.ZkHidden.SoundDefs
-Discharge.ZkHidden.Statements Discharge.ZkHidden.View Discharge.ZkLink.Analysis Discharge.ZkLink.BadZ
-Discharge.ZkLink.Compiled Discharge.ZkLink.CompiledLink Discharge.ZkLink.DrawOk Discharge.ZkLink.Link
-Discharge.ZkLink.LockLevel Discharge.ZkLink.LockRep Discharge.ZkLink.OracleP Discharge.ZkLink.Push
-Discharge.ZkLink.SessionZ Discharge.ZkLink.StrictZ Discharge.ZkLink.TablesAt Discharge.ZkReg.Bind
-Discharge.ZkReg.BindH Discharge.ZkReg.BindHJ Discharge.ZkReg.Defs Discharge.ZkReg.DefsH Discharge.ZkReg.DefsHJ
-Discharge.ZkSession.Algebraic Discharge.ZkSession.Compose Discharge.ZkSession.Inner Discharge.ZkSession.Level0
-Discharge.ZkSession.Numbers Discharge.ZkSession.Session Discharge.ZkSession.Table Discharge.ZkView.Defs
-Discharge.ZkView.Statements E2E ExecDrawOS ExecFlatCopies ExecStratified Headline Instance KeyedDraw Knowledge
-LigeritoPadLevel0 LigeritoPhase LinkSound ListSize PadCode Refine.ArithK Refine.Final Refine.Frames Refine.Ligerito
-Refine.LigeritoRun Refine.Live Refine.LiveCompiled Refine.LiveSim Refine.Paths Refine.Realizes Refine.Regions
-Refine.Rep Refine.Salted Refine.StmtOf Refine.Table Refine.Tapes Registered.Defs Session SessionBatch
-SessionBatchAcc SoundnessPad StrictCR Types.Program Types.ProgramPlaces Types.Units ZK.Masking ZerocheckPhase
-""".split())
-
 _IMPORT = re.compile(r"(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?(\S+)")
 _DEFINES = re.compile(r"^(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable|partial)\s+)*"
                       r"(?:def|abbrev|structure|inductive|class|instance|opaque)\b", re.M)
@@ -315,16 +267,11 @@ def test_zk_simulator_and_extractor_build_on_mathlib():
 
 def test_trusted_text_builds_on_mathlib():
     """Every module whose definitions a guarantee's statement reads (the record's `reads`) or that states a named
-    assumption (under its `assumptions`) reaches no proof-only library, but for `ARKLIB_PENDING`, which only shrinks."""
+    assumption (under its `assumptions`) reaches no proof-only library."""
     record = json.loads((SECURITY / "lean-audit.json").read_text())
     trusted = set(record["reads"]) | {m for p in record["assumptions"] for m in _modules_under(p)}
     missing = sorted(m for m in trusted if _source(m) is None)
     assert not missing, f"trusted modules with no source in the tree: {missing}"
     reach = {m for m in trusted if _proof_only_chain(m)}
-    pending = {f"{SOUNDNESS}.{m}" for m in ARKLIB_PENDING}
-    new = reach - pending
-    assert not new, ("trusted text that reaches a proof-only library; move the definitions it reads into a module that "
-                     "builds on Mathlib alone (as `ZK/GK/Model.lean` holds Theorem GK's):\n" + "\n".join(_chains(new)))
-    stale = sorted(m.removeprefix(SOUNDNESS + ".") for m in pending - reach)
-    assert not stale, ("ARKLIB_PENDING entries that no longer reach a proof-only library or hold no trusted text; remove "
-                       "them:\n" + textwrap.fill(" ".join(stale), 116))
+    assert not reach, ("trusted text that reaches a proof-only library; move the definitions it reads into a module that "
+                       "builds on Mathlib alone (as `ZK/GK/Model.lean` holds Theorem GK's):\n" + "\n".join(_chains(reach)))

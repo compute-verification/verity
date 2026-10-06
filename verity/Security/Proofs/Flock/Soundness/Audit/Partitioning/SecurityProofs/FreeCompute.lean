@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Bounds
 /-!
 # Optimal partitioning against free compute: the proofs
 
-The proofs of the free-compute statements of `Partitioning.Guarantees`.
+The proofs of the free-compute statements of `Flock.Guarantees.Partitioning`.
 -/
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs
@@ -81,7 +81,7 @@ theorem tangent_le (K : ℕ) (hK : 0 < K) {t₀ : ℝ} (ht₀ : 0 < t₀) (t : �
     have := mul_le_mul_of_nonneg_left hx (Nat.cast_nonneg K : (0 : ℝ) ≤ K)
     exact mul_nonpos_of_nonneg_of_nonpos (by positivity) (by linarith)
 
-theorem ConverseExact : Guarantees.ConverseExact := by
+theorem ConverseExact : Flock.Guarantees.Partitioning.ConverseExact := by
   classical
   intro n K L δ hK hKn hδ
   have hKn' : (K : ℝ) ≤ n := by exact_mod_cast hKn
@@ -178,7 +178,7 @@ theorem exp_neg_le (x : ℝ) (hx : 0 ≤ x) : Real.exp (-x) ≤ 1 - x + x ^ 2 / 
         linarith
     _ = 1 - x + x ^ 2 / 2 := by field_simp
 
-theorem ConverseAsymptotic : Guarantees.ConverseAsymptotic := by
+theorem ConverseAsymptotic : Flock.Guarantees.Partitioning.ConverseAsymptotic := by
   intro n K L δ hK hKn hδ0 hδ1 hmiss
   refine le_trans ?_ (ConverseExact n K L δ hK hKn hmiss)
   have hKpos : (0 : ℝ) < K := by exact_mod_cast hK
@@ -197,22 +197,22 @@ theorem ConverseAsymptotic : Guarantees.ConverseAsymptotic := by
         field_simp
     _ ≤ ((n : ℝ) - K + 1) * (1 - Real.exp (-(Λ / K))) := mul_le_mul_of_nonneg_left (by linarith) hM
 
-theorem Achievability : Guarantees.Achievability := Unequal.achievability
+theorem Achievability : Flock.Guarantees.Partitioning.Achievability := Unequal.achievability
 
-theorem GranularityOptimum : Guarantees.GranularityOptimum := Unequal.granularityOptimum ConverseAsymptotic
+theorem GranularityOptimum : Flock.Guarantees.Partitioning.GranularityOptimum := Unequal.granularityOptimum ConverseAsymptotic
 
-theorem GranularityChoice : Guarantees.GranularityChoice := Unequal.granularityChoice GranularityOptimum
+theorem GranularityChoice : Flock.Guarantees.Partitioning.GranularityChoice := Unequal.granularityChoice GranularityOptimum
 
-theorem HeavyUnit : Guarantees.HeavyUnit := by
+theorem HeavyUnit : Flock.Guarantees.Partitioning.HeavyUnit := by
   intro n w C δ L hL u hu
   have h := hL {u} (by simpa using hu)
   rw [Law.escape_singleton, ENNReal.toReal_sub_of_le (incl_le_one L u) ENNReal.one_ne_top,
     ENNReal.toReal_one] at h
   linarith
 
-theorem UnequalDraws : Guarantees.UnequalDraws := Unequal.unequalDraws ConverseAsymptotic
+theorem UnequalDraws : Flock.Guarantees.Partitioning.UnequalDraws := Unequal.unequalDraws ConverseAsymptotic
 
-theorem UnequalCost : Guarantees.UnequalCost := fun _ w _ _ _ _ _ _ _ hρ ha haA hw hC hδ0 hδ1 hf ho hAΛ L hL =>
+theorem UnequalCost : Flock.Guarantees.Partitioning.UnequalCost := fun _ w _ _ _ _ _ _ _ hρ ha haA hw hC hδ0 hδ1 hf ho hAΛ L hL =>
   Unequal.unequalCost_of_le ConverseAsymptotic w hρ ha haA hw hC hδ0 hδ1 hf ho hAΛ L hL
 
 end FlockSoundness.Audit.Partitioning.SecurityProofs

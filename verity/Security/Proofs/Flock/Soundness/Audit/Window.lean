@@ -159,9 +159,6 @@ theorem covers_work (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (hW :
     Covers σ (workK σ w f K) w K := fun s =>
   (workK_ge s hW).symm.imp (fun h => h.trans_eq (mul_comm _ _)) id
 
-theorem windowK_le (σ : Fin n → Fin m) (call : Fin m → Fin C) (w f : Fin m → ℕ) (K : ℕ) (s : Fin m) :
-    windowK σ call w f K s ≤ (stratum σ s).card := min_le_left _ _
-
 theorem card_le_callUnits (σ : Fin n → Fin m) (call : Fin m → Fin C) (s : Fin m) :
     (stratum σ s).card ≤ callUnits σ call (call s) :=
   Finset.single_le_sum (f := fun s => (stratum σ s).card) (fun _ _ => Nat.zero_le _)

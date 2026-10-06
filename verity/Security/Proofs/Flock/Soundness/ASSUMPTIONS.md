@@ -259,7 +259,7 @@ A6, which no check of the record establishes. At `--zk` the custody is a named `
 Not soundness's: the PoUW window's keyed draw takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
 prove. Zero knowledge's two (`Hm96Hiding`, `PadNonvanishing`) are in `Assumptions.lean` and
 `docs/zk-proof-public.md`. `Hm96Hiding` is now proved for hm96 at a bound on its gap (`CROnly.hm96Hiding_gap`; for
-hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, below), and `PadNonvanishing` is proved at
+hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`), and `PadNonvanishing` is proved at
 M1's padding constant (`ZK.padNonvanishing40`: `Ŵ_cols(ω_q)` is 0 or 1, and `PAD_C = x` is neither), so zero knowledge
 takes only `hash-derived-key` for the pinned key. `hash-derived-key` is `Assumptions.HashDerivedKey`: `Hm96Hiding` at `2^-193`, instantiated at hm96-sha512's
 `ZkView.My` and `ZkView.saltHash` (`Composed.zk_session_composed`).
@@ -448,36 +448,28 @@ before the session's first coin, not bounds state by state.
 
 ## What is pinned
 
-`lean-audit.json` records each pinned theorem's statement (`pins`) and the definitions it reads (`reads`). The audit
+`verity/Security/lean-audit.json` records each guarantee's statement and the definitions it reads (`reads`). The audit
 fails when either changes until the record is rewritten, and a rewritten record needs a named statement reviewer. The
-pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
-`Merkle.opening_binding`; none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
-(`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
-and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, whose bound is
-`linkBoundCR`: finite exactly at the provers whose link finders satisfy `SHA512CRExpected`. The end-to-end skeleton's `flock_e2e_count` and
-`flock_e2e_drawn` are pinned too; they take `SHA512CRExpected` for `σ`'s link finders as `hCR`. So are the four
-`flock_e2e_*_hm96`, which also take `SHA512CRStrict` for the knowledge term's finders (`hKS`) and `δ_tree`'s (`hT`).
-So are the headline, `Prog.flock_headline` (its footprint is The headline, above), and the theorems the footprints cite
-as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_strict`, `ksAvgBE_le_strict`,
-`tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
-`expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`,
-and the certificate's `IsRowsUnit.computes_of_cert`.
-The `cr/sha-512` restatements are pinned beside them (`FlockSoundness.CROnly`: `expected_of_strict`, `linkCR_of_strict`,
-`linkBoundE_at_cube`, each `flock_e2e_*`, `uprog_e2e_*`, `prog_e2e_*` and `flock_headline`), and so is zero knowledge's
-`Hm96Hiding`, proved: `hm96Hiding_gap` (no hypothesis, at `δ₁` the hiding gap), the leftover hash lemma
-(`sum_hidingGap_le`, `hankel_universal`), hm96-sha512's values (`hm96_sha512_sum`: mean `2^-257` over a uniform key;
-`hm96_sha512_bad_keys`: `Hm96Hiding` at `2^-193` fails for at most `2^-64` of the keys), and Lemma B and Lemma C with it
-discharged (`session_shvzk_gap`, `session_shvzk_le`, `adaptive_prefinal_gap`, `adaptive_prefinal_le`,
-`adaptive_prefinal_key`, `adaptive_prefinal_hm96_sha512`). What zero knowledge still takes of the key is its uniformity
-(`hash-derived-key` for the pinned key, `hm96/PROTOCOL.md` §2a).
-Zero knowledge's Theorem GK is pinned (`ZK/GK/`): `Model.gk_simulate` with its coin-tree forms
-`Model.gk_simulate_coins` and `Model.gk_simulate_coins_keyed`, `gk_simulate_hm96` and `gk_simulate_avg`, the run bounds
-`Model.sim_runs_le`, `Model.sim_runs_ev` and `Model.sim_runs_tail`, the two distances `prefinalClose_hm96` and
-`rewindClose_hm96`, and T6's extraction (`coinColl_isColl`, `coinCollKeyed_isColl`, `bindColl_isColl`,
-`bindCollKeyed_isColl`, and its cost `coinPairs_length_le`).
-`flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
-pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
-would not fail the audit.
+lock keeps the guarantees and nothing else (Daniel, Oct 4): a theorem is pinned when a ledger row, a published table, the
+docs site, a `verity.claims` id or code reading its result relies on it as proved. Each is a `def G : Prop` in
+`Specs.Flock.Guarantees`, over `Definitions.Flock` (Mathlib alone), proved by `Flock.SecurityProofs.G :
+Flock.Guarantees.G` in `Proofs.Flock`, which is the theorem here under its old name:
+
+- The table theorems Table 1 cites (`Flock.Guarantees.Table`): `Sound` (`table_sound`), the proximity cell it counts as
+  machine-checked, and `SoundFast100` and `SoundFast100_34_35` (`table_sound_fast100`, `table_sound_fast100_34_35`),
+  2^-205 per table at `η = 1/200`.
+- The audit bounds the code reads (`Flock.Guarantees.Audit`). `StratifiedMissEqGreedy` (`Law.stratified_miss_eq_greedy`)
+  is the `miss` of core's `Stratified` law. `Exfiltration` and `CardAdmissibleLe` (`Partition.audit_exfiltration`,
+  `Partition.card_admissible_le`) are sampled proofs' `exfiltration_bound` and `location_bits`. `WorkEscapeLe`
+  (`Law.work_escape_le`) is the work law's bound (`one_stage.draw`, `record_k`). The PoUW plan
+  (`verity.protocols.accounting.work.pouw.circuit.plan`) relies on `RecordSizing`, `RecordSizingOneFewer`,
+  `CoversWindow`, `HarmLeUnsoundWork`, `ClosureEscape`, `WorkWholeStratum`, `WorkFloor` and `WindowSplitOfRecord`.
+- Compute accounting's partitioning theorems (`Flock.Guarantees.Partitioning`, proved in `Audit.Partitioning`'s
+  `SecurityProofs`, with their instances in `Witness`).
+
+None takes a named assumption. Every other theorem is a lemma, among them the headlines (`zk_session_sound*`,
+`flock_headline_exec*`) and the table theorems' other forms. A lemma is still audited (standard axioms, kernel replay),
+but a change to its statement would not fail the audit.
 
 ## Upstream status
 

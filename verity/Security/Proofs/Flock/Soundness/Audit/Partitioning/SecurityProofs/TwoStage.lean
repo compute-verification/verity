@@ -3,7 +3,7 @@ import Specs.Flock.Guarantees.Partitioning
 /-!
 # Two-stage detection risk: the proofs
 
-The proofs of the two-stage statements of `Partitioning.Guarantees`.
+The proofs of the two-stage statements of `Flock.Guarantees.Partitioning`.
 -/
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs
@@ -55,7 +55,7 @@ theorem choose_sq_le (x j : ℕ) :
     linarith
   linarith
 
-theorem RiskConcave : Guarantees.RiskConcave := by
+theorem RiskConcave : Flock.Guarantees.Partitioning.RiskConcave := by
   intro N k m p hk hp0 hp
   obtain ⟨j, rfl⟩ : ∃ j, k = j + 2 := ⟨k - 2, by omega⟩
   set T : ℝ := (N.choose (j + 2) : ℝ) with hT
@@ -123,7 +123,7 @@ theorem RiskConcave : Guarantees.RiskConcave := by
   push_cast at hlog
   linarith
 
-theorem Concentration : Guarantees.Concentration := by
+theorem Concentration : Flock.Guarantees.Partitioning.Concentration := by
   intro N k R p hk hkN hp0 hp
   have hN : 0 < N := by omega
   set ψ : ℕ → ℝ := detectionRisk N k p with hψ
@@ -235,7 +235,7 @@ theorem nested_escape (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) (hab : a ≤ b
   rw [avg_pi_prod (Ω := fun _ : Fin R => Fin b) (fun i (x : Fin b) => if x.val < a then E i else 1)]
   exact Finset.prod_congr rfl fun i _ => Law.avg_bern hab _
 
-theorem NestedEscape : Guarantees.NestedEscape := by
+theorem NestedEscape : Flock.Guarantees.Partitioning.NestedEscape := by
   intro R N k a b _ hk hab B
   classical
   have hb : (0 : ℝ) < b := by exact_mod_cast NeZero.pos b

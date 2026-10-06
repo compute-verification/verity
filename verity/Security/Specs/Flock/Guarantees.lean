@@ -1,4 +1,6 @@
+import Specs.Flock.Guarantees.Audit
 import Specs.Flock.Guarantees.Partitioning
+import Specs.Flock.Guarantees.Table
 
 /-!
 # C-Flock's guarantees (trusted)

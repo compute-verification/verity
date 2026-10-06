@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
 /-!
 # Optimal partitioning against exfiltration: the proofs
 
-The proofs of the exfiltration statements of `Partitioning.Guarantees`.
+The proofs of the exfiltration statements of `Flock.Guarantees.Partitioning`.
 
 * `ExfiltrationOptimum`. A law certifying `ℓ` below the `(K+1)`-th rung has `miss (K + 1) ≤ δ`
   (`Exfil.miss_le_of_certifies`), so `ConverseExact` at `K + 1` gives the lower bound; when `K ≥ n` it is at most `0`.
@@ -25,7 +25,7 @@ namespace FlockSoundness.Audit.Partitioning.SecurityProofs
 
 open Finset
 
-theorem ExfiltrationOptimum : Guarantees.ExfiltrationOptimum := by
+theorem ExfiltrationOptimum : Flock.Guarantees.Partitioning.ExfiltrationOptimum := by
   intro n b K δ ℓ hδ0 hδ1 hlo hhi
   refine ⟨fun L hL => ?_, fun ε hε => Exfil.exists_certifying_law n b K hδ0 hδ1 hlo hε⟩
   have hmiss := Exfil.miss_le_of_certifies (J := K + 1) hδ0.le hL (by push_cast; exact hhi)
@@ -41,7 +41,7 @@ theorem ExfiltrationOptimum : Guarantees.ExfiltrationOptimum := by
       linarith
     exact (mul_nonpos_of_nonpos_of_nonneg h1 h2).trans (Exfil.meanDraws_nonneg L)
 
-theorem RefinementRule : Guarantees.RefinementRule := by
+theorem RefinementRule : Flock.Guarantees.Partitioning.RefinementRule := by
   intro n r b b' K s f o δ ℓ hr hs hf ho hδ0 hδ1 hn hlo hhi hw
   have hr0 : (0 : ℝ) < r := by exact_mod_cast hr
   have hc : 0 ≤ unitCost f o s := add_nonneg hf (mul_nonneg ho hs.le)
