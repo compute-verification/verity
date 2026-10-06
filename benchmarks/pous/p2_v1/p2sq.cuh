@@ -120,6 +120,39 @@ __device__ __forceinline__ uint32_t borrow_across(Num &x, uint32_t b, uint32_t l
   sub_bit(x, bin, lane);
   return (uint32_t)(S >> 32);
 }
+// out (< 2^W) reduced below p, then negated when odd is set (p - out unless zero): the end of P2's d
+__device__ __forceinline__ void finish(Num &out, bool odd, uint32_t c0, uint32_t lane) {
+  {
+    uint32_t v = 0xFFFFFFFFu;
+    #pragma unroll
+    for (int q = 1; q < 16; q++) v &= out.l[q];
+    if (lane != 0) v &= out.l[0];
+    if (lane == 31) v &= out.e0 & out.e1;
+    bool ge = (lane != 0 || out.l[0] >= 0u - c0) && v == 0xFFFFFFFFu;
+    if (__all_sync(0xFFFFFFFFu, ge)) {
+      uint32_t l0 = out.l[0] + c0;
+      #pragma unroll
+      for (int q = 0; q < 16; q++) out.l[q] = 0;
+      out.e0 = out.e1 = 0;
+      if (lane == 0) out.l[0] = l0;
+    }
+  }
+  // d: p - a^2 when a is odd and a^2 != 0; p - x = (2^W - 1 - x) - (c0 - 1)
+  if (odd && !__all_sync(0xFFFFFFFFu, all_zero(out, lane))) {
+    #pragma unroll
+    for (int q = 0; q < 16; q++) out.l[q] = ~out.l[q];
+    if (lane == 31) { out.e0 = ~out.e0; out.e1 = ~out.e1; }
+    uint32_t b = 0;
+    if (lane == 0) {
+      uint64_t v = (uint64_t)out.l[0] - (c0 - 1);
+      out.l[0] = (uint32_t)v;
+      b = (uint32_t)(v >> 63);
+      #pragma unroll
+      for (int q = 1; q < 16; q++) { v = (uint64_t)out.l[q] - b; out.l[q] = (uint32_t)v; b = (uint32_t)(v >> 63); }
+    }
+    borrow_across(out, b, lane);
+  }
+}
 // a^2 mod p, canonical, from a in shared memory (sm: this warp's E area; snap: its snapshot area); returns it negated when
 // odd is set (p - a^2 unless zero): P2's d(a).
 __device__ __forceinline__ void sqr_d(const uint32_t *__restrict__ sm, uint32_t *__restrict__ snap, Num &out, bool odd,
@@ -279,36 +312,336 @@ __device__ __forceinline__ void sqr_d(const uint32_t *__restrict__ sm, uint32_t 
     if (lane == 0) gg = add_in(out.l, topc * c0, 0, 0);
     topc = carry_across(out, gg, lane);
   }
+  finish(out, odd, c0, lane);
+}
+
+// The same square by one Karatsuba step (P2SQ_KARA). With X = 2^(32 * 257) and a = A0 + A1 X (257 limbs each), X^2 = 2^W = c0
+// mod p, and 2 A0 A1 = A0^2 + A1^2 - D^2 for D = |A0 - A1|, a^2 is assembled from three cyclic squares mod x^257 - 1. Square S's
+// column d (0 .. 256) has T_S (all its products) and Y_S (those with i + j = d + 257, so Y_S(256) = 0); then
+//   column d       = T0 + c0 T1 + (c0 - 1) Y0 - c0 YD,
+//   column d + 257 = T0 + T1 - TD + (c0 - 1) Y1 + YD.
+// Columns can be negative, so every one starts at 2^92 - 2^60 and column 0 at 2^92 - c0 2^60 (in all 2^60 p, 0 mod p); the
+// columns then lie in [0, 2^93) and are summed mod 2^96.
+//
+// A cyclic square of 257 limbs is the 514-limb walk at half the size: column 2h (h = 0 .. 128) pairs (h + k, h - k), column
+// 2h + 1 (h = 0 .. 127) pairs (h + k, h + 1 - k), k = 1 .. 128, wrapped exactly when the second index is negative (k > h,
+// k > h + 1), plus the diagonal s_h^2 (even, unwrapped) or s_{h+129}^2 (odd, wrapped). Lane t owns h = 4t .. 4t + 3 (columns
+// 8t .. 8t + 7) and walks k in chunks of 8 (Q = 15 .. 0): Q > t / 2 wrapped, Q < t / 2 unwrapped, Q = t / 2 mixed in one of two
+// patterns by t's parity. Column 256 is shared and reduced. Lane t holds the result's limbs 8t .. 8t + 7 and 257 + 8t ..
+// 264 + 8t (lane 31 also 256 and 513), a ring of 64 runs whose carries resolve over 64-bit ballots.
+constexpr int KOFF = 128;              // index x in [-128, 257) at kphys(KOFF + x), s_x = s_{x mod 257}
+constexpr int K_ARR = 484;             // kphys(384) + 1, rounded up
+constexpr int KSNAP = 3 * K_ARR;       // 16-byte aligned
+constexpr int KSNAP_STRIDE = 24;       // a lane's 8 columns: low words in pairs, then the top words
+static_assert(KSNAP + 32 * KSNAP_STRIDE <= WARP_WORDS, "the Karatsuba arrays fit a warp's shared memory");
+static_assert(STAGE_WORDS <= KSNAP, "the result's staging does not touch the snapshots");
+__device__ __forceinline__ int kphys(int e) { return e + (e >> 2); }   // lanes' loads, 4 limbs apart, in distinct banks
+
+__device__ __forceinline__ void add96(uint32_t *r, const uint32_t *x) { add3(r, x[0], x[1], x[2]); }
+__device__ __forceinline__ void sub96(uint32_t *r, const uint32_t *x) {
+  asm("sub.cc.u32 %0, %0, %3;\n\tsubc.cc.u32 %1, %1, %4;\n\tsubc.u32 %2, %2, %5;" : "+r"(r[0]), "+r"(r[1]), "+r"(r[2])
+      : "r"(x[0]), "r"(x[1]), "r"(x[2]));
+}
+// r += x k mod 2^96
+__device__ __forceinline__ void mad96(uint32_t *r, const uint32_t *x, uint32_t k) {
+  asm("mad.lo.cc.u32 %0, %3, %6, %0;\n\tmadc.hi.cc.u32 %1, %3, %6, %1;\n\tmadc.hi.u32 %2, %4, %6, %2;\n\t"
+      "mad.lo.cc.u32 %1, %4, %6, %1;\n\tmadc.lo.u32 %2, %5, %6, %2;"
+      : "+r"(r[0]), "+r"(r[1]), "+r"(r[2]) : "r"(x[0]), "r"(x[1]), "r"(x[2]), "r"(k));
+}
+// r -= x k mod 2^96
+__device__ __forceinline__ void msb96(uint32_t *r, const uint32_t *x, uint32_t k) {
+  uint32_t p[3] = {0, 0, 0};
+  mad96(p, x, k);
+  sub96(r, p);
+}
+// r = 2 x + s^2
+__device__ __forceinline__ void dbl_sq(uint32_t *r, const uint32_t *x, uint32_t s) {
+  r[0] = x[0] << 1; r[1] = __funnelshift_l(x[0], x[1], 1); r[2] = __funnelshift_l(x[1], x[2], 1);
+  mac(r, s, s);
+}
+
+// run (8 limbs, 9 on lane 31) += cin; returns the carry out
+__device__ __forceinline__ uint32_t run_add(uint32_t *v, uint64_t cin, uint32_t lane) {
+  #pragma unroll
+  for (int m = 0; m < 8; m++) { cin += v[m]; v[m] = (uint32_t)cin; cin >>= 32; }
+  if (lane == 31) { cin += v[8]; v[8] = (uint32_t)cin; cin >>= 32; }
+  return (uint32_t)cin;
+}
+__device__ __forceinline__ bool run_ones(const uint32_t *v, uint32_t lane) {
+  uint32_t o = 0xFFFFFFFFu;
+  #pragma unroll
+  for (int m = 0; m < 8; m++) o &= v[m];
+  if (lane == 31) o &= v[8];
+  return o == 0xFFFFFFFFu;
+}
+
+// a's halves A0, A1 and D = |A0 - A1| into this warp's three arrays (D: lane t's limbs 8t .. 8t + 7, lane 31's also 256)
+__device__ __forceinline__ void put_k(uint32_t *__restrict__ sm, const Num &x, uint32_t lane) {
+  uint32_t *SA = sm, *SB = sm + K_ARR, *SD = sm + 2 * K_ARR;
+#define KS(a, i) (a)[kphys(KOFF + (i))]
+  __syncwarp();
+  #pragma unroll
+  for (int q = 0; q < 16; q++) {
+    const int i = 16 * (int)lane + q, j = i < 257 ? i : i - 257;
+    uint32_t *S = i < 257 ? SA : SB;
+    KS(S, j) = x.l[q];
+    if (j >= 129) KS(S, j - 257) = x.l[q];
+  }
+  if (lane == 31) { KS(SB, 255) = x.e0; KS(SB, -2) = x.e0; KS(SB, 256) = x.e1; KS(SB, -1) = x.e1; }
+  __syncwarp();
+  const int i0 = 8 * (int)lane;
+  uint32_t d[9], b = 0;
+  #pragma unroll
+  for (int m = 0; m < 8; m++) {
+    const uint64_t v = (uint64_t)KS(SA, i0 + m) - KS(SB, i0 + m) - b;
+    d[m] = (uint32_t)v;
+    b = (uint32_t)(v >> 63);
+  }
+  d[8] = 0;
+  if (lane == 31) {
+    const uint64_t v = (uint64_t)KS(SA, 256) - KS(SB, 256) - b;
+    d[8] = (uint32_t)v;
+    b = (uint32_t)(v >> 63);
+  }
+  // borrows between lanes (a run of zeros passes one on); the one out of the top is A0 < A1
+  uint32_t neg = __shfl_sync(0xFFFFFFFFu, b, 31);
+  if (lane == 31) b = 0;
   {
-    uint32_t v = 0xFFFFFFFFu;
+    uint32_t z = 0;
     #pragma unroll
-    for (int q = 1; q < 16; q++) v &= out.l[q];
-    if (lane != 0) v &= out.l[0];
-    if (lane == 31) v &= out.e0 & out.e1;
-    bool ge = (lane != 0 || out.l[0] >= 0u - c0) && v == 0xFFFFFFFFu;
-    if (__all_sync(0xFFFFFFFFu, ge)) {
-      uint32_t l0 = out.l[0] + c0;
+    for (int m = 0; m < 9; m++) z |= d[m];
+    const uint32_t B = __ballot_sync(0xFFFFFFFFu, b), A = B | __ballot_sync(0xFFFFFFFFu, z == 0);
+    const uint64_t S = (uint64_t)A + B;
+    uint64_t bin = (((uint32_t)S ^ A ^ B) >> lane) & 1;
+    neg += (uint32_t)(S >> 32);
+    #pragma unroll
+    for (int m = 0; m < 8; m++) { const uint64_t v = (uint64_t)d[m] - bin; d[m] = (uint32_t)v; bin = v >> 63; }
+    if (lane == 31) d[8] -= (uint32_t)bin;
+  }
+  if (neg) {   // D = 2^(32 * 257) - (A0 - A1 mod 2^(32 * 257)): the complement plus one
+    #pragma unroll
+    for (int m = 0; m < 9; m++) d[m] = ~d[m];
+    if (lane != 31) d[8] = 0;
+    const uint32_t g = lane == 0 ? run_add(d, 1, lane) : 0;
+    const uint32_t G = __ballot_sync(0xFFFFFFFFu, g), A = G | __ballot_sync(0xFFFFFFFFu, run_ones(d, lane));
+    run_add(d, ((A + G) ^ A ^ G) >> lane & 1, lane);
+  }
+  #pragma unroll
+  for (int m = 0; m < 8; m++) {
+    const int i = i0 + m;
+    KS(SD, i) = d[m];
+    if (i >= 129) KS(SD, i - 257) = d[m];
+  }
+  if (lane == 31) { KS(SD, 256) = d[8]; KS(SD, -1) = d[8]; }
+  __syncwarp();
+}
+
+// The cyclic square of the 257 limbs at S: T and Y of this lane's columns 8t + j (j = 2r: h = 4t + r even, j = 2r + 1 odd),
+// and T of column 256 on every lane.
+__device__ __forceinline__ void ksq(const uint32_t *__restrict__ S, uint32_t *__restrict__ snap, uint32_t (&T)[8][3],
+                                    uint32_t (&Y)[8][3], uint32_t (&t256)[3], uint32_t lane) {
+  const int h0 = 4 * (int)lane;
+  uint32_t acc[8][3];
+  #pragma unroll
+  for (int j = 0; j < 8; j++) acc[j][0] = acc[j][1] = acc[j][2] = 0;
+  // chunk Q: U[m] = s_{h0 + 8Q + 1 + m} (m < 11), D[m] = s_{h0 - 8Q - 8 + m} (m < 12); at kphys: pu[m + (m + 1) / 4] with
+  // pu = S + 5 (32 + t + 2Q) + 1, pd[m + m / 4] with pd = S + 5 (30 + t - 2Q)
+  const uint32_t *pu = S + 5 * (32 + (int)lane + 30) + 1, *pd = S + 5 * (30 + (int)lane - 30);
+  uint32_t Ua[8], Ub[8], Da[8], Db[8];
+  #pragma unroll
+  for (int m = 0; m < 8; m++) {
+    Ua[m] = pu[m + (m + 1) / 4];
+    Ub[m] = m < 3 ? pu[m + 8 + (m + 9) / 4] : 0;
+    Da[m] = pd[m + m / 4];
+    Db[m] = m < 4 ? pd[m + 8 + (m + 8) / 4] : 0;
+  }
+#ifndef P2SQ_KORDER
+#define P2SQ_KORDER 1
+#endif
+#if P2SQ_KORDER == 1
+#define KLOOPS _Pragma("unroll") for (int s = 0; s < 8; s++) _Pragma("unroll") for (int r = 0; r < 4; r++)
+#else
+#define KLOOPS _Pragma("unroll") for (int r = 0; r < 4; r++) _Pragma("unroll") for (int s = 0; s < 8; s++)
+#endif
+#define KCHUNK(Ulo, Uhi, Dlo, Dhi)                                                         \
+  KLOOPS {                                                                                \
+    const int mu = r + s, de = 7 + r - s, dd = 8 + r - s;                                 \
+    const uint32_t u = mu < 8 ? Ulo[mu & 7] : Uhi[mu & 7];                                \
+    mac(acc[2 * r], u, de < 8 ? Dlo[de & 7] : Dhi[de & 7]);                              \
+    mac(acc[2 * r + 1], u, dd < 8 ? Dlo[dd & 7] : Dhi[dd & 7]);                          \
+  }
+#define KSNAPQ(Q)                                                                          \
+  if ((Q) == (int)(lane >> 1)) {                                                          \
+    _Pragma("unroll") for (int j = 0; j < 8; j++) {                                       \
+      reinterpret_cast<uint2 *>(snap + lane * KSNAP_STRIDE)[j] = make_uint2(acc[j][0], acc[j][1]); \
+      snap[lane * KSNAP_STRIDE + 16 + j] = acc[j][2];                                     \
+    }                                                                                     \
+  }
+  #pragma unroll 1
+  for (int Q = 15; Q >= 0; Q -= 2) {
+    KSNAPQ(Q)
+    KCHUNK(Ua, Ub, Da, Db)
+    pu -= 10;
+    pd += 10;
+    #pragma unroll
+    for (int m = 0; m < 8; m++) Ub[m] = pu[m + (m + 1) / 4];
+    #pragma unroll
+    for (int i = 0; i < 4; i++) { Db[4 + i] = pd[4 + i + (4 + i) / 4]; Da[i] = pd[8 + i + (8 + i) / 4]; }
+    KSNAPQ(Q - 1)
+    KCHUNK(Ub, Ua, Db, Da)
+    pu -= 10;
+    pd += 10;
+    #pragma unroll
+    for (int m = 0; m < 8; m++) Ua[m] = pu[m + (m + 1) / 4];
+    #pragma unroll
+    for (int i = 0; i < 4; i++) { Da[4 + i] = pd[4 + i + (4 + i) / 4]; Db[i] = pd[8 + i + (8 + i) / 4]; }
+  }
+#undef KCHUNK
+#undef KLOOPS
+#undef KSNAPQ
+  // the mixed chunk Q = t / 2, h = 8Q + off + r (off = 4 (t & 1)), k = 8Q + 1 + s: even wrapped when 1 + s > off + r, odd when
+  // s > off + r; U[m] = s_{8t - off + 1 + m}, D[m] = s_{off - 8 + m}
+  uint32_t my[8][3];
+  #pragma unroll
+  for (int j = 0; j < 8; j++) my[j][0] = my[j][1] = my[j][2] = 0;
+  {
+    const int off = 4 * (int)(lane & 1);
+    uint32_t U[11], D[12];
+    #pragma unroll
+    for (int m = 0; m < 11; m++) U[m] = KS(S, 8 * (int)lane - off + 1 + m);
+    #pragma unroll
+    for (int m = 0; m < 12; m++) D[m] = KS(S, off - 8 + m);
+    #pragma unroll
+    for (int r = 0; r < 4; r++)
       #pragma unroll
-      for (int q = 0; q < 16; q++) out.l[q] = 0;
-      out.e0 = out.e1 = 0;
-      if (lane == 0) out.l[0] = l0;
+      for (int s = 0; s < 8; s++) {
+        if (1 + s > off + r) mac(my[2 * r], U[r + s], D[7 + r - s]);
+        if (s > off + r) mac(my[2 * r + 1], U[r + s], D[8 + r - s]);
+      }
+  }
+  const uint32_t *sv = snap + lane * KSNAP_STRIDE;
+  #pragma unroll
+  for (int j = 0; j < 8; j++) {
+    const int h = h0 + j / 2;
+    uint32_t y[3] = {sv[2 * j], sv[2 * j + 1], sv[16 + j]};
+    add96(y, my[j]);
+    if (j & 1) {
+      const uint32_t dg = KS(S, h + 129);
+      dbl_sq(T[j], acc[j], dg);
+      dbl_sq(Y[j], y, dg);
+    } else {
+      dbl_sq(T[j], acc[j], KS(S, h));
+      Y[j][0] = y[0] << 1; Y[j][1] = __funnelshift_l(y[0], y[1], 1); Y[j][2] = __funnelshift_l(y[1], y[2], 1);
     }
   }
-  // d: p - a^2 when a is odd and a^2 != 0; p - x = (2^W - 1 - x) - (c0 - 1)
-  if (odd && !__all_sync(0xFFFFFFFFu, all_zero(out, lane))) {
+  // column 256: (128 + k, 128 - k), this lane's k = 4t + 1 .. 4t + 4, all unwrapped
+  uint32_t c[3] = {0, 0, 0};
+  #pragma unroll
+  for (int s = 0; s < 4; s++) mac(c, KS(S, 128 + h0 + 1 + s), KS(S, 127 - h0 - s));
+  #pragma unroll
+  for (int d = 1; d < 32; d <<= 1)
+    add3(c, __shfl_xor_sync(0xFFFFFFFFu, c[0], d), __shfl_xor_sync(0xFFFFFFFFu, c[1], d), __shfl_xor_sync(0xFFFFFFFFu, c[2], d));
+  dbl_sq(t256, c, KS(S, 128));
+}
+
+// 64-bit ballot lookahead over the ring of runs (run L of lane t at bit t, run H at bit 32 + t): gl, gh are the runs' carries
+// out (0/1), ol, oh whether they are all ones; returns the carry out of the top (bit 63) and sets the carries in.
+__device__ __forceinline__ uint32_t ring_carry(uint32_t gl, uint32_t gh, bool ol, bool oh, uint32_t &cl, uint32_t &ch,
+                                               uint32_t lane) {
+  const uint64_t G = (uint64_t)__ballot_sync(0xFFFFFFFFu, gl) | (uint64_t)__ballot_sync(0xFFFFFFFFu, gh) << 32;
+  const uint64_t A = G | (uint64_t)__ballot_sync(0xFFFFFFFFu, ol) | (uint64_t)__ballot_sync(0xFFFFFFFFu, oh) << 32;
+  const uint64_t S = A + G, C = S ^ A ^ G;
+  cl = (uint32_t)(C >> lane) & 1;
+  ch = (uint32_t)(C >> (32 + lane)) & 1;
+  return S < A;
+}
+// P2's d(a) as sqr_d, by the Karatsuba step; x is a, and becomes d(a)
+__device__ __forceinline__ void sqr_k(uint32_t *__restrict__ sm, Num &x, bool odd, uint32_t c0, uint32_t lane) {
+  put_k(sm, x, lane);
+  uint32_t *snap = sm + KSNAP;
+  uint32_t lo[9][3], hi[9][3];   // columns 8t + j and 257 + 8t + j; [8]: 256 and 513 (lane 31's)
+  #pragma unroll
+  for (int j = 0; j < 9; j++) { lo[j][0] = hi[j][0] = 0; lo[j][1] = hi[j][1] = 0xF0000000u; lo[j][2] = hi[j][2] = 0x0FFFFFFFu; }
+  if (lane == 0) { const uint32_t b[3] = {0, (c0 - 1) << 28, (c0 - 1) >> 4}; sub96(lo[0], b); }
+  const uint32_t k = c0 - 1;
+  {
+    uint32_t T[8][3], Y[8][3], t[3];
+    ksq(sm, snap, T, Y, t, lane);                                   // A0
     #pragma unroll
-    for (int q = 0; q < 16; q++) out.l[q] = ~out.l[q];
-    if (lane == 31) { out.e0 = ~out.e0; out.e1 = ~out.e1; }
-    uint32_t b = 0;
+    for (int j = 0; j < 8; j++) { add96(lo[j], T[j]); mad96(lo[j], Y[j], k); add96(hi[j], T[j]); }
+    add96(lo[8], t); add96(hi[8], t);
+    ksq(sm + K_ARR, snap, T, Y, t, lane);                           // A1
+    #pragma unroll
+    for (int j = 0; j < 8; j++) { mad96(lo[j], T[j], c0); add96(hi[j], T[j]); mad96(hi[j], Y[j], k); }
+    mad96(lo[8], t, c0); add96(hi[8], t);
+    ksq(sm + 2 * K_ARR, snap, T, Y, t, lane);                       // D
+    #pragma unroll
+    for (int j = 0; j < 8; j++) { msb96(lo[j], Y[j], c0); add96(hi[j], Y[j]); sub96(hi[j], T[j]); }
+    sub96(hi[8], t);
+  }
+  // each run's columns into limbs; carries (< 2^62) go to the next run, the top's times c0 to run L of lane 0
+  uint32_t vl[9], vh[9], ll0 = 0, ll1 = 0, hl0 = 0, hl1 = 0;
+  const int n = lane == 31 ? 9 : 8;
+  #pragma unroll
+  for (int j = 0; j < 9; j++) {
+    if (j >= n) { vl[j] = vh[j] = 0; continue; }
+    add3(lo[j], ll0, ll1, 0); vl[j] = lo[j][0]; ll0 = lo[j][1]; ll1 = lo[j][2];
+    add3(hi[j], hl0, hl1, 0); vh[j] = hi[j][0]; hl0 = hi[j][1]; hl1 = hi[j][2];
+  }
+  uint32_t il0 = __shfl_up_sync(0xFFFFFFFFu, ll0, 1), il1 = __shfl_up_sync(0xFFFFFFFFu, ll1, 1), il2 = 0;
+  uint32_t ih0 = __shfl_up_sync(0xFFFFFFFFu, hl0, 1), ih1 = __shfl_up_sync(0xFFFFFFFFu, hl1, 1);
+  {
+    const uint32_t a0 = __shfl_sync(0xFFFFFFFFu, ll0, 31), a1 = __shfl_sync(0xFFFFFFFFu, ll1, 31);
+    const uint32_t b0 = __shfl_sync(0xFFFFFFFFu, hl0, 31), b1 = __shfl_sync(0xFFFFFFFFu, hl1, 31);
     if (lane == 0) {
-      uint64_t v = (uint64_t)out.l[0] - (c0 - 1);
-      out.l[0] = (uint32_t)v;
-      b = (uint32_t)(v >> 63);
-      #pragma unroll
-      for (int q = 1; q < 16; q++) { v = (uint64_t)out.l[q] - b; out.l[q] = (uint32_t)v; b = (uint32_t)(v >> 63); }
+      ih0 = a0; ih1 = a1;
+      const uint64_t p0 = (uint64_t)b0 * c0, p1 = (uint64_t)b1 * c0 + (p0 >> 32);
+      il0 = (uint32_t)p0; il1 = (uint32_t)p1; il2 = (uint32_t)(p1 >> 32);
     }
-    borrow_across(out, b, lane);
   }
+  uint32_t gl, gh;
+  {
+    uint32_t t3[3] = {il0, il1, il2};
+    uint64_t c = 0;
+    #pragma unroll
+    for (int m = 0; m < 9; m++) {
+      if (m >= n) break;
+      c += (uint64_t)vl[m] + (m < 3 ? t3[m] : 0);
+      vl[m] = (uint32_t)c; c >>= 32;
+    }
+    gl = (uint32_t)c;
+    c = 0;
+    #pragma unroll
+    for (int m = 0; m < 9; m++) {
+      if (m >= n) break;
+      c += (uint64_t)vh[m] + (m == 0 ? ih0 : m == 1 ? ih1 : 0);
+      vh[m] = (uint32_t)c; c >>= 32;
+    }
+    gh = (uint32_t)c;
+  }
+  uint32_t cl, ch;
+  uint32_t topc = ring_carry(gl, gh, run_ones(vl, lane), run_ones(vh, lane), cl, ch, lane);
+  run_add(vl, cl, lane);
+  run_add(vh, ch, lane);
+  while (__any_sync(0xFFFFFFFFu, topc)) {   // the carry out of limb 513 has weight 2^W = c0
+    gl = lane == 0 ? run_add(vl, (uint64_t)topc * c0, lane) : 0;
+    topc = ring_carry(gl, 0, run_ones(vl, lane), run_ones(vh, lane), cl, ch, lane);
+    run_add(vl, cl, lane);
+    run_add(vh, ch, lane);
+  }
+  // into the Num layout through the staging area
+  __syncwarp();
+  #pragma unroll
+  for (int m = 0; m < 8; m++) { sm[stage(8 * lane + m)] = vl[m]; sm[stage(257 + 8 * lane + m)] = vh[m]; }
+  if (lane == 31) { sm[stage(256)] = vl[8]; sm[stage(513)] = vh[8]; }
+  __syncwarp();
+  #pragma unroll
+  for (int q = 0; q < 16; q++) x.l[q] = sm[stage(16 * lane + q)];
+  x.e0 = lane == 31 ? sm[stage(512)] : 0;
+  x.e1 = lane == 31 ? sm[stage(513)] : 0;
+  __syncwarp();
+#undef KS
+  finish(x, odd, c0, lane);
 }
 
 // rows of NL big-endian words <-> limbs: through the staging area, coalesced on the global side
@@ -364,16 +697,24 @@ __device__ __forceinline__ void decode_one(uint32_t *__restrict__ sm, uint32_t *
                                            uint32_t c0, uint32_t *__restrict__ flags, uint32_t lane) {
   Num x, k;
   load_row(snap, crow, x, lane);
+#ifdef P2SQ_KARA
+  sqr_k(sm, x, odd_of(x), c0, lane);                           // x = d(c)
+#else
   put_e(sm, x, lane);
   sqr_d(sm, snap, x, odd_of(x), c0, lane);                     // x = d(c)
+#endif
   __syncwarp();
   load_row(snap, krow, k, lane);
   #pragma unroll
   for (int q = 0; q < 16; q++) k.l[q] ^= x.l[q];
   k.e0 ^= x.e0; k.e1 ^= x.e1;
   if (!ge_p(k, c0, lane)) x = k;                               // sigma_K
+#ifdef P2SQ_KARA
+  sqr_k(sm, x, odd_of(x), c0, lane);                           // x = d(sigma_K(d(c)))
+#else
   put_e(sm, x, lane);
   sqr_d(sm, snap, x, odd_of(x), c0, lane);                     // x = d(sigma_K(d(c)))
+#endif
   __syncwarp();
   load_row(snap, trow, k, lane);
   if (ge_p(k, c0, lane) && lane == 0) atomicOr(flags, 1u);

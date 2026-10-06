@@ -93,7 +93,7 @@ inline bool midstate(const uint8_t *prefix, int plen, Mid &m) {
 
 constexpr int WARPS = 4;
 #ifndef P2K_MINB
-#define P2K_MINB 1
+#define P2K_MINB 4
 #endif
 constexpr int OUT_WORDS = P2_BITS / 64;   // W/8 bytes
 static_assert(P2_BITS % 64 == 0, "rows of whole 64-bit words");
