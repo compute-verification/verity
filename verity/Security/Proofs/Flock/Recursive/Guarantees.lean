@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.ZK.Hiding
   (`Flock.Assumptions.VBridge`) taken apart, the inner verifier reading each round's message whole (`same` is equality,
   `Inner.accepts_of_rel_eq`).
 * `Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK` is two hybrids: the outer session's simulator at
-  the gateway's commitments (the premise, averaged over the auditor's tape, the developer's randomness and the salts),
+  the firewall's commitments (the premise, averaged over the auditor's tape, the developer's randomness and the salts),
   then T1 once per commitment (`ZK.ideal_leaves_swap` under `hash-derived-key`), whose salts the simulated outer session
   no longer reads.
 -/
@@ -29,10 +29,10 @@ theorem RecursiveSound : Flock.Guarantees.RecursiveSound := by
 
 section ZK
 
-/-- The gateway's commitments at the auditor's tape and the developer's randomness `ω` and the salts `y`. -/
+/-- The firewall's commitments at the auditor's tape and the developer's randomness `ω` and the salts `y`. -/
 def commits {Ωa Ωp : Type} {nh : ℕ} (msgs : Ωa → Ωp → Fin nh → ByteArray) (ω : Ωa × Ωp)
     (y : Fin nh → ZkView.Salt) : Fin nh → ByteArray :=
-  fun i => Flock.Guarantees.gatewayLeaf (msgs ω.1 ω.2 i) (y i)
+  fun i => Flock.Guarantees.firewallLeaf (msgs ω.1 ω.2 i) (y i)
 
 /-- The salts and the outer session's randomness, exchanged. -/
 def swapLast (A B C : Type) : (A × C) × B ≃ (A × B) × C where
@@ -51,7 +51,7 @@ def pullMid (A P S U : Type) : ((A × P) × S) × U ≃ P × ((A × U) × S) whe
 /-- **The recursive audit is zero knowledge.** -/
 theorem RecursiveZK : Flock.Guarantees.RecursiveZK := by
   intro Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nh msgs view sim εo hOuter hKey E
-  -- the outer session, simulated at the gateway's commitments
+  -- the outer session, simulated at the firewall's commitments
   have h1 : prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
         E (w.1.1.1, commits msgs w.1.1 w.1.2, view w.1.1.1 (commits msgs w.1.1 w.1.2) w.1.1.2 w.1.2 w.2)) ≤
       prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωs =>
