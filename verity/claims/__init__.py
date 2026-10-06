@@ -53,11 +53,11 @@ class Instance:
 PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("cr", "Collision resistance", "CR"),
     # success linear in the finder's expected time (Chiesa-Dall'Agnol-Guan-Spooner-Yogev, ePrint 2024/1434, Thm 2); the constant
-    # is the assumption's statement (A2 in backends/flock/verifier/lean/soundness/ASSUMPTIONS.md), not restated here
+    # is the assumption's statement (A2 in verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md), not restated here
     Property("ecr", "Expected-time collision resistance", "ECR"),
     Property("xof", "Extendable-output-function security", "XOF"),
     Property("sis", "Ring-SIS binding", "SIS"),
-    # A3 in backends/flock/verifier/lean/soundness/ASSUMPTIONS.md, for the unit draw's bytes
+    # A3 in verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md, for the unit draw's bytes
     Property("uniform", "Independent uniform output", "Uniform"),
     # A4 there, for verity.primitives.randomness's keyed streams: SHA-256's compression function as a PRF keyed by its chaining value
     # (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the secret bytes in its

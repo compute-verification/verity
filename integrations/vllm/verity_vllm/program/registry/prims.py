@@ -20,7 +20,6 @@ evidence measured on sm_89 — this pod is sm_80 (A100), so every table-backed p
 from __future__ import annotations
 
 import math
-from functools import lru_cache
 
 import numpy as np
 
@@ -95,23 +94,6 @@ def RopeOutAdd(x: int, y: int, c: int, s: int) -> int:
 
 
 A16 = Array(16, BF16)
-
-
-# ---------------------------------------------------------------------------------------------------------
-# the C++ models the MUFU primitives were transliterated from, with their tables (twins, the replay driver)
-# ---------------------------------------------------------------------------------------------------------
-
-
-@lru_cache(maxsize=None)
-def _fa2():
-    from verity_vllm.program.kernels import fa2_model, fa2_relation
-    return fa2_model, fa2_relation.tables()
-
-
-@lru_cache(maxsize=None)
-def _rms():
-    from verity_vllm.program.kernels import rms_relation, rms_triton_model
-    return rms_triton_model, rms_relation.tables("cuda")
 
 
 # ---------------------------------------------------------------------------------------------------------

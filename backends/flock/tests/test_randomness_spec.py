@@ -1,5 +1,5 @@
-"""`verity.primitives.randomness` against its Lean spec (`verifier/lean/soundness/FlockSoundness/Randomness.lean`), which the keyed-draw
-theorems read (`KeyedDraw.lean`), through vectors the spec generates (`fixtures/randomness_lean.json`, `lean/generate.sh`)."""
+"""`verity.primitives.randomness` against its Lean spec (`verity/Security/Proofs/Flock/Soundness/Randomness.lean`), which
+the keyed-draw theorems read (`KeyedDraw.lean`), through vectors the spec generates (`fixtures/randomness_lean.json`, `lean/generate.sh`)."""
 
 from __future__ import annotations
 

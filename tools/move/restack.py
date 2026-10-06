@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`tools/move/restack.py BRANCH... --move-commit SHA [--onto REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
+"""`tools/move/restack.py BRANCH... --move-commit SHA [--script S] [--onto REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
 branch across a generated layout move by running the move's own script on it, instead of rebasing it.
 
 A layout move is one commit M that `python3 tools/move/layout.py` (with its map, `tools/move/layout_map.toml`) wrote by running at
@@ -28,6 +28,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -98,6 +101,26 @@ def move_base(move: str, cwd: str | None) -> str:
     return parents[0]
 
 
+def pinned_uv_env(base: str, tmp: str, cwd: str | None) -> dict[str, str] | None:
+    """The environment the move's script runs in: this one, unless the uv on the PATH isn't the version `base`'s
+    `tools/check/pod_setup.sh` pins, which layout.py refuses to `uv lock` with. Then a `uv` in `tmp` that runs the pinned
+    version through `uv tool run` goes first on the PATH, so the restack doesn't depend on which uv the caller has."""
+    found = git("show", f"{base}:tools/check/pod_setup.sh", cwd=cwd, ok=(0, 128)).stdout.decode()
+    m = re.search(r"^UV_VERSION=\$\{UV_VERSION:-([^}]+)\}", found, re.M)
+    real = shutil.which("uv")
+    if not m or not real:
+        return None
+    got = subprocess.run([real, "--version"], capture_output=True, text=True).stdout.split()[1:2]
+    if got == [m.group(1)]:
+        return None
+    shim = os.path.join(tmp, "pinned-uv")
+    os.makedirs(shim, exist_ok=True)
+    with open(os.path.join(shim, "uv"), "w") as f:
+        f.write(f'#!/bin/sh\nexec {shlex.quote(real)} tool run --quiet uv@{shlex.quote(m.group(1))} "$@"\n')
+    os.chmod(os.path.join(shim, "uv"), 0o755)
+    return {**os.environ, "PATH": shim + os.pathsep + os.environ.get("PATH", "")}
+
+
 def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[str, list[str], list[str]]:
     """Check `merged` out in a scratch worktree, run `base`'s layout script at its root, and return the tree it leaves (every
     change staged, ignored files left out), the `tools/move/` paths whose branch copy was put back, and the tail of the
@@ -115,7 +138,7 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
                 git("checkout", base, "--", SCRIPT_DIR, cwd=wt)
                 overlay = commit_tree(out("write-tree", cwd=wt), [merged], f"restack: {SCRIPT_DIR}/ as at {base}\n", wt)
                 git("reset", "-q", "--soft", overlay, cwd=wt)
-            p = subprocess.run([python, SCRIPT], cwd=wt, capture_output=True)
+            p = subprocess.run([python, SCRIPT], cwd=wt, capture_output=True, env=pinned_uv_env(base, tmp, cwd))
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
             if p.returncode:
                 raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
@@ -207,17 +230,23 @@ def line(r: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global SCRIPT
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("branches", nargs="+", metavar="BRANCH")
     ap.add_argument("--move-commit", required=True, metavar="SHA", help="the commit layout.py generated")
     ap.add_argument("--onto", metavar="REF", help="what to merge last: the moved main (default: the move commit)")
     ap.add_argument("--base", metavar="REF", help="the tree the move ran on (default: the move commit's parent)")
     ap.add_argument("--python", default=sys.executable, help="the interpreter that runs layout.py")
+    ap.add_argument("--script", default=SCRIPT, help=f"the move's script, under {SCRIPT_DIR}/ (default {SCRIPT}; the Lean "
+                                                    "move's is tools/move/lean.py, the rename move's tools/move/rename.py)")
     ap.add_argument("--push-to", metavar="NEWBRANCH", help="push the clean result to this new branch")
     ap.add_argument("--remote", default="origin")
     ap.add_argument("--dry-run", action="store_true", help="report only; never push")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+    if not a.script.startswith(SCRIPT_DIR + "/"):
+        ap.error(f"--script: a script under {SCRIPT_DIR}/")
+    SCRIPT = a.script
     if a.push_to and len(a.branches) != 1:
         ap.error("--push-to takes one branch")
     results = []
