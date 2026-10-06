@@ -6,7 +6,7 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue land [--dry-run]                fast-forward `main` to the newest commit on `next` that passed `check`, push it
     research queue eject PR --reason TEXT          keep the PR's current head out of `next`; a new push re-admits it
-    research queue ready PR (--on MACHINE | --local) [--by LANE]
+    research queue ready PR (--on MACHINE [--priority] | --local) [--by LANE]
                                                    the owner's word that the PR is ready at its current head (a new push needs it again),
                                                    once the quick tier passes there: as a run on MACHINE in a check slot
                                                    (`RemoteQuickTier`), or here (`QuickTier`)
@@ -896,11 +896,12 @@ class RemoteQuickTier(QuickTier):
     WORKTREE_SUFFIX = "-ship"
 
     def __init__(self, repo: Path, remote: str, on: str, *, by: str = "", project: str = "verity", root: Path | None = None,
-                 slot: Path | None = None, timeout_s: float = REMOTE_TIMEOUT_S, poll_s: float = REMOTE_POLL_S,
+                 slot: Path | None = None, priority: bool = False, timeout_s: float = REMOTE_TIMEOUT_S, poll_s: float = REMOTE_POLL_S,
                  launch: Callable[[list[str], Path], subprocess.CompletedProcess] = _launch, fetch: Callable[[Path], dict] | None = None,
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic):
         super().__init__(repo, remote, root)
         self.on, self.by, self.project, self.timeout_s, self.poll_s = on, by, project, timeout_s, poll_s
+        self.priority = priority
         self.slot = Path(slot or self.repo / "tools" / "check" / "slot.py")
         self.launch, self.fetch, self.sleep, self.clock = launch, fetch, sleep, clock
 
@@ -915,7 +916,8 @@ class RemoteQuickTier(QuickTier):
             if base is None:
                 return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
             args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", pr.head, "--base", base, "--", *QUICK_TIER]
-            script = (f'i="$RESEARCH_RUN_DIR/inputs"; exec python3 "$i/{self.slot.name}" {shlex.join(["--by", self.by] if self.by else [])} '
+            slot_opts = ["--priority"] * self.priority + (["--by", self.by] if self.by else [])
+            script = (f'i="$RESEARCH_RUN_DIR/inputs"; exec python3 "$i/{self.slot.name}" {shlex.join(slot_opts)} '
                       f'-- python3 "$i/{job.name}" {shlex.join(args)}')
             r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", self.on, "--project", self.project,
                              "--source", str(wt), "--cwd", "source", "--send", str(job), "--send", str(self.slot), "--require-result",
@@ -1120,11 +1122,16 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--on", metavar="MACHINE", help="ready: run the quick tier as a `research run` there, in a check slot; judge: look "
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
+    ap.add_argument("--priority", action="store_true",
+                    help="ready --on: wait for the check slot as a priority waiter (`slot.py --priority`), as train checks do; "
+                         "only with the slot's owners' grant for that PR")
     a = ap.parse_args(argv)
     if a.dry_run and a.command not in ("sync", "land"):
         ap.error(f"--dry-run is for sync and land only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) == a.local:
         ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot) and --local (here)")
+    if a.priority and not (a.command == "ready" and a.on):
+        ap.error("--priority is for ready --on MACHINE: the check slot's line is the machine's")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
     if a.command in ("ready", "judge") and not a.by:
@@ -1147,7 +1154,7 @@ def main(argv: list[str]) -> int:
             return judge(GitHub(repo), store, a.pr, a.by, on=a.on, repo=Path(here) if here else None, url=remote)
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
-            tier = RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
+            tier = RemoteQuickTier(top, remote, a.on, by=a.by, priority=a.priority) if a.on else QuickTier(top, remote)
             return ready(GitHub(repo), store, a.pr, a.by, tier)
         labels = StoreGrants(store, log=lambda s: print(s, file=sys.stderr), repo=a.workdir)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), grants=labels, ready=labels.ready, store=store, shadow=a.shadow,

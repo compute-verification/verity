@@ -1017,6 +1017,27 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is False
 
 
+def test_a_remote_quick_tier_with_priority_waits_for_its_slot_as_a_priority_waiter(world, monkeypatch, capsys):
+    """Slot priority for a lane's tiers is granted per PR (6 Oct), and `ready --on` could only join the line as an ordinary
+    waiter; `priority` asks the machine's slot.py with `--priority`, the way the lander's train checks do."""
+    from research import queue as Q
+
+    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    h1 = world.change({"a.txt": "a1\n"})
+    world.gh.put(1, h1, ready=False)
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp), priority=True)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    assert json.loads((world.tmp / "slot-seen.json").read_text())[:5] == ["--priority", "--by", "lane-1", "--", "python3"]
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
+    with pytest.raises(SystemExit):
+        Q.main(["status", "--priority"])
+    assert "--priority is for ready --on MACHINE" in capsys.readouterr().err
+
+
 def test_a_remote_quick_tier_does_not_wait_for_a_local_tier_of_the_same_repository(world, monkeypatch):
     """A local tier holds its worktree's lock for the whole tier (about an hour on a lane's VM), and a remote tier from any worktree
     of the same repository took that lock to check out and ship, so every `--on` tier on the VM waited for it (two lanes, 4 Oct);
