@@ -69,6 +69,7 @@ def _obs(vs):
 
 STREAMS = ("circuit/rep0", "circuit/rep1")
 CAP0 = hashlib.sha512(b"cap0").digest() + hashlib.sha512(b"cap0'").digest()
+CAP1 = hashlib.sha512(b"cap1").digest()
 DIGEST = bytes(range(64))
 HELLO = {"profile": "fast100", "reps": 2, "flavor": "rs", "tables": ["circuit"], "link": {"sigma": "ab" * 64, "m": 4, "points": 2},
          "rounds": "bytes retained", "digests": "sha512"}
@@ -76,16 +77,17 @@ SCHEDULE = {"kind": RL.KIND + "/schedule",
             "hello": {"digests": "sha512", "flavor": "rs", "link": {"m": 4, "points": 2}, "profile": "fast100", "reps": 2,
                       "rounds": "bytes retained", "tables": ["circuit"]},
             "roots": {"circuit": 2}, "link": {"y": 2}, "streams": {s: {"parent": "", "at": 0, "rounds": 2} for s in STREAMS},
-            "rounds": [r for s in STREAMS for r in ({"stream": s, "k": 0, "n": 6, "caps": [2], "commits": 0},
-                                                      {"stream": s, "k": 1, "n": 1, "caps": [], "commits": 2})]}
+            "rounds": [r for s in STREAMS for r in ({"stream": s, "k": 0, "n": 6, "tops": [], "level0": 1, "commits": 0},
+                                                      {"stream": s, "k": 1, "n": 1, "tops": [1], "level0": 0, "commits": 1})]}
 
 
 def _rounds(s):
-    """A rep's two rounds: the binding round (statement digest, level-0 cap) and one of 9 free elements (two rows)."""
+    """A rep's two rounds: the binding round (statement digest, level 0's top again) and one of 9 free elements (one row)
+    and a fresh top."""
     dom = s.replace("circuit", "flock-circuit/fast100").encode()
     return [(_framed(RL.OP_DOMAIN, dom) + _framed(RL.OP_LABEL, RL.LABEL_R1CS) + _framed(RL.OP_BYTES, DIGEST) + _framed(RL.OP_BYTES, CAP0)
              + _framed(RL.OP_LABEL, b"flock-zerocheck-v0") + _hdr(RL.OP_SQUEEZE, RL.KIND_SLICE, 6), 6),
-            (_obs([5 + i + 100 * len(s) for i in range(9)]) + _hdr(RL.OP_SQUEEZE, RL.KIND_SCALAR, 1), 1)]
+            (_obs([5 + i + 100 * len(s) for i in range(9)]) + _framed(RL.OP_BYTES, CAP1) + _hdr(RL.OP_SQUEEZE, RL.KIND_SCALAR, 1), 1)]
 
 
 def requests(hello=None, y=bytes(32), order="prover", finish=True, ping=False):
@@ -139,11 +141,12 @@ class AnyY(RL.Proxy):
 
 
 class ClearTop(RL.Proxy):
-    """A firewall that sends the level-0 cap's nodes as they are, unsalted."""
+    """A firewall that sends each top's nodes as they are, unsalted."""
 
     def _salted(self, top):
         salts = [self.fresh_salt() for _ in RL.top_nodes(top)]
-        return top + bytes(len(top)), salts
+        nodes = RL.top_nodes(top)
+        return [n + bytes(len(n)) for n in nodes], {"nodes": [n.hex() for n in nodes], "salts": [x.hex() for x in salts]}
 
 
 class ShowsSalt(RL.Proxy):
@@ -219,7 +222,7 @@ def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | Non
 
     link = rec["link"]
     salts = [bytes.fromhex(x) for t in sorted(link["root_b"]) for x in priv["roots"][t]["salts"]]
-    salts += [bytes.fromhex(x) for r in priv["rounds"] for x in r["salts"] + [y for cs in r["cap_salts"] for y in cs]]
+    salts += [bytes.fromhex(x) for r in priv["rounds"] for x in [y for o in r["tops"] for y in o["salts"]] + r["salts"]]
     it = iter(salts)
     streams = sorted(rec["streams"], key=lambda s: s["stream"])
     op = lambda s: RL.encode_req(RL.REQ_OPEN, s["stream"], s["parent"], s["label"].encode(), s["at"])

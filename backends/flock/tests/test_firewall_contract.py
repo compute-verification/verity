@@ -5,6 +5,7 @@ tamper controls (firewalls that let out what the contract forbids) refused by th
 each cut at its item, and every session `test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import importlib.util
 import json
@@ -48,13 +49,13 @@ def test_a_commit_item_is_the_row_the_coin_server_receives():
     row = s.proxy.private[1]["rows"][0]
     assert hashlib.sha512(FT.row_message(row)).digest() == sha512_row_digest(row, 16, ROLE_X)
     commits = [i["commit"] for i in t["items"] if "commit" in i]
-    assert len(commits) == 2 + 2 * (2 + 2), "the level-0 top's two nodes, then per rep its cap's two and two message rows"
+    assert len(commits) == 2 + 2 * (1 + 1), "the level-0 top's two nodes, then per rep its fresh top's node and its message row"
     for c in commits:
         msg, salt = bytes.fromhex(c["msg"]), bytes.fromhex(t["tape"]["salts"][c["salt"]])
         assert bytes.fromhex(c["sent"]) == FT.INST.commit_string(FT.INST.default_key, hashlib.sha512(msg).digest(), salt)
     assert sorted(c["salt"] for c in commits) == list(range(len(t["tape"]["salts"]))), "each salt drawn is used once"
-    sent = {bytes.fromhex(x) for r in s.coins.record()["rounds"] for x in r["commits"] + r["caps"]}
-    sent |= set(bytes.fromhex(v) for v in s.coins.record()["link"]["roots"].values())
+    sent = {bytes.fromhex(x) for r in s.coins.record()["rounds"] for x in r["commits"] + [y for t in r["tops"] for y in t]}
+    sent |= {bytes.fromhex(x) for v in s.coins.record()["link"]["roots"].values() for x in v}
     joined = b"".join(sent)
     assert all(bytes.fromhex(c["sent"]) in joined for c in commits)
     assert t["exposed"] == {"salts": [], "pads": []} and t["firewall"] == {"accepted": True, "why": None}
@@ -149,6 +150,33 @@ def test_the_contract_cuts_every_leak_of_review_r6_at_its_item(lean, tmp_path):
     names = [n for n, *_ in cases]
     assert review <= set(names) and len(names) == len(set(names))
     assert {n for n, (*_, e) in zip(names, cases) if e["accepted"]} == {"honest", "masked-checked"}
+
+
+def test_the_contract_reads_a_round_only_in_rec_step3s_form(lean, tmp_path):
+    """The public schedule's rounds are read in `rec_live.check_schedule`'s form and no other, and every field of one is
+    pinned: the honest transcript under a schedule whose round 1 has v0's ``caps``, no ``level0``, another key or two
+    message rows is cut at that round's item, as it is when the round's ``tops`` or ``level0`` differ from what the
+    firewall sent; under v0's kind it is cut at Hello."""
+    s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
+    t, sched = s.transcript(), s.public()["schedule"]
+    at = {it["fixed"]["what"]: i for i, it in enumerate(t["items"]) if "fixed" in it}
+    form = f"the schedule's round:1: not a round of {RL.KIND}/schedule"
+    edits = {"v0-caps": (lambda r: r.update(caps=r.pop("tops")), form), "no-level0": (lambda r: r.pop("level0"), form),
+             "another-key": (lambda r: r.update(note=0), form),
+             "two-rows": (lambda r: r.update(commits=2), "the schedule's round:1: 2 message rows"),
+             "other-tops": (lambda r: r.update(tops=[2]), "round:1: not the value the schedule fixes"),
+             "other-level0": (lambda r: r.update(level0=1), "round:1: not the value the schedule fixes")}
+    named, want = [], []
+    for name, (edit, why) in edits.items():
+        p = copy.deepcopy(sched)
+        edit(p["rounds"][1])
+        named.append((name, t, FT.public(p)))
+        want.append((at["round:1"], why))
+    named.append(("v0-kind", t, FT.public({**sched, "kind": "rec/inner-transcript/v0/schedule"})))
+    want.append((at["hello"], f"Hello: the public schedule is not a {RL.KIND}/schedule"))
+    got = FA.decide(lean, tmp_path, named)
+    assert [(v["accepted"], v["released"]) for v in got] == [(False, n) for n, _ in want], got
+    assert all(v["why"].startswith(w) for v, (_, w) in zip(got, want)), got
 
 
 def test_a_public_input_the_contract_cannot_read_decides_nothing(lean, tmp_path):
