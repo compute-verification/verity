@@ -181,8 +181,9 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   against the honest sessions instead. Every honest session's item sequence is one and the same, and each control's is the
   same up to its cut, with its held-back candidate where those items leave in an honest session. A public input that
   carries the outer sequence, for the contract to hold, is not written yet. On RoPE d64 at m = 25, CPU gated sessions,
-  60 of 60 as expected (`r20261006-113126-30c2`: 10 relations, 265 statement values, 383 values of the firewall's own
-  computation).
+  60 of 60 as expected (`r20261006-134729-fddc`: 10 relations, 265 statement values, 383 values of the firewall's own
+  computation, and one item sequence of 1,454 items), and each of 21 of its sessions with items dropped, swapped,
+  duplicated or moved, or with an early `finish`, a miss at the item it moves (12 of them accepted by the contract).
 - Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agrees 27 of 27. Set 14 (a shared-row RoPE file whose six
   instances repeat three rows) agrees 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included; set 15
   (the same instances per instance) 22 of 22. The `967b8d06` vectors patch writes each false statement as the verifier's
