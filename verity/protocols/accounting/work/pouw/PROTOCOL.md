@@ -355,7 +355,7 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
       to are fixed by the receipt before any draw.
     - *Each window's source is fresh and used once* (root's C2). `Ledger.open` takes no source: it draws 32 bytes from
       the operating system's CSPRNG (`secrets`, `anchors.py:165`) once the receipt is complete, for that window
-      alone. So A4 (`prf/sha-256`) applies as stated, one fresh uniform source per derivation, with the source's
+      alone. So A4 (`prf/sha-512`) applies as stated, one fresh uniform source per derivation, with the source's
       uniformity its own claim, A5 (`uniform/python-secrets`). Once the window's draw is sent (`Ledger.sent`), it draws
       nothing more, and the audit record keeps its source and receipt digest (`Ledger.record`, `anchors.py:245`),
       from which anyone re-derives the key and the draw (`replay_key`). The limit: a third party can check that the
@@ -478,7 +478,7 @@ useful    U/(α_A·α_B), glue
     ChaCha20 stream (`audit.hm96_salt`, nonce the unit index for A's tree, 2^62 + w for weight w's, 2^63 for the
     transcript's), and an opening's value carries its salt.
   - SHA-256 stays where the protocol, not the scheme, hashes: each domain's binding (`tagged`, which core's frame takes as
-    32 bytes), the salt's derivation, the draws and the records' root.
+    32 bytes), the salt's derivation and the records' root. The draws' `derive` is core's, on SHA-512 (`prf/sha-512`).
   - The row cap: the debit cap is checked for every credited row, each row's debit at most ρ times its share of the
     credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
     row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
