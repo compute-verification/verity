@@ -14,3 +14,4 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
 import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson
 import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
