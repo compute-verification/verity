@@ -19,11 +19,11 @@ A **salted top** is a tree top (a cap: one or more 64-byte nodes) with each node
 row (`top_rows`: its 32 u16 words, then 32 zero words; ``hm96-sha512/row/v1``) under its own fresh 192-byte salt, so V*'s
 openings read a node as one row of the value the verifier builds from them; the clear tops and their salts are the prover's
 (``private.json``), and V*'s inputs refuse a top that does not open its commitment (`verity_flock.rec_vstar.caps`). The
-proxy holds the session to a pinned **schedule** (`schedule_of`: the public ``Hello``, each table's root node count, every
-stream's parent, position and round count, and per round its stream, index, coin count, caps' node counts and message-row
-count): ``--schedule`` gives it; without one, the first session the proxy serves pins it for the rest
-(``OUT/schedule.json``). A request that leaves the schedule, or a ``Link`` whose ``y`` is not zero (the prover sends zeros),
-is refused ``GATE-REFUSED`` before the coin server sees it.
+proxy holds the session to a pinned **schedule** (`schedule_of`: the public ``Hello``, each table's root node count, the
+number of ``Link``'s ``y`` elements, every stream's parent, position and round count, and per round its stream, index, coin
+count, caps' node counts and message-row count): ``--schedule`` gives it; without one, the first session the proxy serves
+pins it for the rest (``OUT/schedule.json``). A request that leaves the schedule, or a ``Link`` whose ``y`` is not the
+schedule's number of zero elements (the prover sends zeros), is refused ``GATE-REFUSED`` before the coin server sees it.
 
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (its bytes public), a
@@ -332,7 +332,7 @@ def schedule_of(record: dict) -> dict:
     per = hm96.SHA512.proven_bytes if record.get("tops") == TOPS else CAP_NODE_BYTES
     nodes = lambda h: len(h) // 2 // per
     return {"kind": KIND + "/schedule", "hello": record["hello"],
-            "roots": {t: nodes(r) for t, r in sorted(record["link"]["roots"].items())},
+            "roots": {t: nodes(r) for t, r in sorted(record["link"]["roots"].items())}, "link": {"y": len(record["link"]["y"])},
             "streams": {s: {"parent": v["parent"], "at": v["at"], "rounds": v["rounds"]} for s, v in sorted(record["streams"].items())},
             "rounds": [{"stream": r["stream"], "k": r["k"], "n": r["n"], "caps": [nodes(c) for c in r["caps"]], "commits": len(r["commits"])}
                        for r in record["rounds"]]}
@@ -482,6 +482,8 @@ class Proxy:
             self.points = [pts[i:i + m] for i in range(0, len(pts), m)]
             return resp_coins(pts)
         if t == REQ_LINK:
+            if self.schedule is not None and len(r[1]) != 16 * self.schedule["link"]["y"]:
+                raise ValueError(refused(f"Link's y: {len(r[1])} bytes where the pinned schedule has {self.schedule['link']['y']} elements of 16"))
             if any(r[1]):
                 raise ValueError(refused("Link's y is not zero"))
             self.y = r[1]
