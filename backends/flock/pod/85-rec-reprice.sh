@@ -6,25 +6,32 @@
 #                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
 #                --definitions DEFS --stage-only, BATCH=fixed N) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
+#                (STAGE_FROM=DIR: another job's data/$TAG, both stagings)
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy
-#                (verity_flock.rec_live, WARM + RUNS sessions), upstream's replay of the last one and V*'s hashing reference
-#                (rec_vstar) over it, and over two forged copies of its private.json (a round's top: one node one bit off, one
-#                salt one bit off), which it must refuse; then (INNER_LOOPBACK=1) the hm96 statement on loopback, M0 and --zk,
-#                WARM + RUNS sessions each (today's numbers)
+#                (verity_flock.rec_live, the inner phase's firewall: salted tree tops, the schedule of the statement's public
+#                shape, rec_live --schedule-for; WARM + RUNS sessions), upstream's replay of the last one and V*'s hashing
+#                reference (rec_vstar) over it, and over two forged copies of its private.json (a round's top: one node one
+#                bit off, one salt one bit off), which it must refuse (CHECKS=0: STEP=icheck's); then (INNER_LOOPBACK=1) the
+#                hm96 statement on loopback, M0 and --zk, WARM + RUNS sessions each (today's numbers)
+#   STEP=icheck  (CPU) the replay and rec_vstar on the inner's last session, the schedule the sessions were held to against
+#                the statement's (derived again), each session's own schedule, how it ended and its message count, the coin
+#                server's record against the clear tops, and the tree-top controls rec_vstar must refuse by name
 #   STEP=vstage  (CPU) V*'s statements over the inner's last proxied session (verity_flock.rec_vstage) into data/$TAG/v: the
 #                verifier's fold points (rec_vstage points), its extra claims and comb (InnerFold.lean as an executable,
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
 #                InnerRepCheck and the forgeries (FORGE="message sum comb top top-salt coef dirs", each under forged-<kind>/),
 #                JOBS at once
-#   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions (a forgery's: one, by a
-#                prover that sends its proofs though the witness fails, FC_ZK_SELF_CHECK=skip), and upstream's replay --zk
-#                of the last
+#   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
+#                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
+#                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
+#                firewall's negative controls on that statement
+#   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
 #                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify refuses (exit 2) until a soundness
 #                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
-# --gpus (a CPU phase): staging, serve, replay and Lean never hold one.
+# --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
 # env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (the Gemm_v2 contraction: DEFS is Gemm_v2{K,N=4096})  N=2048
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
@@ -33,9 +40,10 @@
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
 #      GPU_LEASE= (the lease command; default the queue's for this node)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
+#      MODES=dev  REPLAY=1  CONTROLS= (oprove)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-STEP=${STEP:?STEP=build|inner|vstage|oprove|lean}
+STEP=${STEP:?STEP=build|inner|icheck|vstage|oprove|oreplay|lean}
 [ -z "${GPU_LEASE_UUID:-}" ] || { echo "REFUSED: the job holds a GPU lease (launched with --gpus): launch it without, each prove leases its own"; exit 2; }
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/rec-reprice-job}/out; mkdir -p $O
 FW=${FLOCK_WORK:-/workspace/jobs/rec-reprice}; W=$FW/flock-circuit; L=$FW/cache; TAG=${TAG:-k4096}; DD=$FW/data/$TAG
@@ -86,7 +94,7 @@ PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-
 [ -x /usr/bin/time ] || { echo "no /usr/bin/time" >&2; exit 1; }
 
 KEY=$(cat backends/flock/pod/20-gpu-link.sh backends/flock/pod/60-circuit.sh backends/flock/*.patch backends/flock/cuda_*_patch.py \
-  $(find backends/flock/cuda backends/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+  $(find backends/flock/cuda backends/flock/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g1-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
 LSHA=$(cd backends/flock/verifier/lean && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
@@ -138,7 +146,7 @@ again() {
   local t rc
   for t in $(seq ${GPU_TRIES:-3}); do
     "$@"; rc=$?; [ $rc = 143 ] || return $rc
-    echo "$1 $2: lease preempted, try $t" | tee -a $O/preempted.txt
+    echo "$1 ${2:-}: lease preempted, try $t" | tee -a $O/preempted.txt
   done
   return $rc
 }
@@ -158,7 +166,8 @@ a = snap(); time.sleep(2); b = snap()
 busy = [1 - (b[c][3] + b[c][4] - a[c][3] - a[c][4]) / max(1, sum(b[c]) - sum(a[c])) for c in sorted(a)]
 print(round(sum(busy) / len(busy), 3))
 EOF
-  on_gpu $d env FC_VERIFY_AHEAD=$NS FC_ZK_SELF_CHECK=${SELF_CHECK:-stop} taskset -c $PCPU /usr/bin/time -v -o $d/time-prove.txt \
+  echo "${PENV:-}" > $d/prove-env.txt
+  on_gpu $d env ${PENV:-} FC_VERIFY_AHEAD=$NS FC_ZK_SELF_CHECK=${SELF_CHECK:-stop} taskset -c $PCPU /usr/bin/time -v -o $d/time-prove.txt \
     $B prove $zk --gpu --verifier $addr --instances $inst --circuit $circ --warm $WARM --runs $RUNS | stamp > $d/prove.tsv
   local rc=${PIPESTATUS[0]}
   grep -h panicked $d/prove.err | head -3
@@ -180,10 +189,12 @@ loopback() {
   return $rc
 }
 
-# proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>) and prove_live against it; the prover's status
+# proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>, held to $O/inner/schedule.json) and prove_live
+# against it; the prover's status
 proxied() {
-  rm -rf $DD/inner
-  taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS > $O/inner/proxy/proxy.log 2>&1 &
+  rm -rf $DD/inner; mkdir -p $DD/inner
+  taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS --schedule $O/inner/schedule.json \
+    > $O/inner/proxy/proxy.log 2>&1 &
   local PP=$!
   wait_serving $O/inner/proxy/proxy.log $PP || { cat $O/inner/proxy/proxy.log; return 1; }
   prove_live proxy $(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log) $D/inst-$N.bin $D/circuit.txt; local rc=$?
@@ -194,7 +205,7 @@ proxied() {
 
 summary() {
   python3 - $O $STEP "$WARM" "$RUNS" <<'EOF'
-import json, re, statistics, sys
+import json, os, re, statistics, sys
 from pathlib import Path
 o, step, warm, runs = Path(sys.argv[1]), sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
 
@@ -230,9 +241,15 @@ def live(d):
     ranks = [json.loads(l.split("\t", 1)[1])["s"] for l in text(d / "prove.err").splitlines() if l.startswith("ZKRANK\t")]
     per = len(ranks) // len(rows) if ranks and len(ranks) % len(rows) == 0 else 0
     rank_s = [sum(ranks[i * per:(i + 1) * per]) for i in range(len(rows))][warm:] if per else []
+    # the prover process's CPU seconds over all its sessions, the firewall's per-session timings (both reps summed), its refusals
+    cpu = [float(tv(d / "time-prove.txt", k) or "nan") for k in (r"User time \(seconds\)", r"System time \(seconds\)")]
+    firewall = {k: med(lambda v: sum(b.get(k) or 0 for b in v.get("buckets") or [])) for k in ("t.firewall_recheck", "cpu.firewall_recheck", "t.firewall_shadow", "t.firewall_wait")}
+    stops = [l for l in text(d / "prove.err").splitlines() if l.startswith(("FIREWALL-REFUSED", "PROVER-STOPPED"))]
     return {"sessions": len(rows), "timed": len(timed), "accepted": [v.get("accepted") for _, v in rows],
+            "env": text(d / "prove-env.txt").strip(), "prover_cpu_s": sum(cpu), "firewall": firewall, "refusals": stops[:8],
             "why": [v.get("why") for _, v in rows if v.get("accepted") is not True],
             "serve_why": [v.get("why") for v in served if v.get("accepted") is not True],
+            "stopped": [v.get("prover_stopped") for _, v in rows],
             "prover_cores_busy_before": float(text(d / "bgload.txt").strip() or "nan"),
             "serve_verify_s": med(lambda v: v.get("verify_s"), served[warm:]),
             "serve_verify_all_s": [v.get("verify_s") for v in served], "serve_accepted": [v.get("accepted") for v in served],
@@ -246,7 +263,7 @@ def live(d):
             "statement_digest": rows[0][1].get("statement_digest"), "prover_peak_gb": gb(d / "time-prove.txt"),
             "gpu_peak_mib": max(mib) if mib else None, "gpu_idle_mib": min(mib) if mib else None,
             "lease": [l for l in text(d / "prove.err").splitlines() if l.startswith("gpu-lease:")],
-            "buckets": [{k: x for k, x in b.items() if k.startswith("t.") or k in ("device_witness", "native_sha")} for b in (timed[-1][1].get("buckets") or [])]
+            "buckets": [{k: x for k, x in b.items() if k.startswith(("t.", "cpu.", "firewall_")) or k in ("device_witness", "native_sha")} for b in (timed[-1][1].get("buckets") or [])]
             if timed else None}
 
 def replay(p):
@@ -286,6 +303,16 @@ elif step == "inner":
     s["vstar_wall"] = tv(d / "time-vstar.txt", r"Elapsed \(wall clock\) time")
     for f in ("node", "salt"):
         s[f"vstar_forged_{f}"] = (text(d / f"vstar-forged-{f}.json") + text(d / f"vstar-forged-{f}.err"))[-1500:]
+elif step == "icheck":
+    s["replay_proxy"] = {"verdict": replay(d / "replay-proxy.txt"), "wall": tv(d / "time-replay-proxy.txt", r"Elapsed \(wall clock\) time")}
+    s["vstar"] = text(d / "vstar.json")[-3000:]
+    s["vstar_wall"] = tv(d / "time-vstar.txt", r"Elapsed \(wall clock\) time")
+    s["schedule"] = json.loads(text(d / "schedule.json") or "null")
+    s["tops"] = text(d / "tops.txt")
+    s["controls"] = {f.stem[4:]: json.loads(text(f) or "null") for f in sorted(d.glob("neg-*.json"))}
+elif step == "oreplay":
+    s["levels"] = {x.name: {"mode": text(x / "mode.txt").strip(), "replay": replay(x / "replay.txt"), "wall": tv(x / "time-replay.txt", r"Elapsed \(wall clock\) time"),
+                            "peak_gb": gb(x / "time-replay.txt"), "sizes": text(x / "sizes.txt")} for x in sorted(p for p in d.iterdir() if p.is_dir())}
 elif step == "vstage":
     pts = json.loads(text(d / "points.json")) if text(d / "points.json").strip() else {}
     fold = json.loads(text(d / "fold.json")) if text(d / "fold.json").strip() else {}
@@ -301,6 +328,7 @@ elif step == "vstage":
                                    "wall": tv(d / f"time-{f.stem}.txt", r"Elapsed \(wall clock\) time"), "peak_gb": gb(d / f"time-{f.stem}.txt")}
     s["sizes"] = text(d / "sizes.txt")
 elif step == "oprove":
+    s["modes"] = os.environ.get("MODES", "dev")
     s["levels"] = {}
     for x in sorted(p for p in d.iterdir() if p.is_dir()):
         s["levels"][x.name] = {"live": live(x), "replay": replay(x / "replay.txt"), "replay_wall": tv(x / "time-replay.txt", r"Elapsed \(wall clock\) time"),
@@ -347,7 +375,15 @@ case $STEP in
 build)
   lean_build > $O/build-lean.log 2>&1 &
   LP=$!
-  { stage_inner stage 1 && stage_inner stage-zk 0; } > $O/stage-all.log 2>&1 &
+  # STAGE_FROM=DIR: another job's staged statements (its data/$TAG: stage and stage-zk) instead of staging them again
+  if [ -z "${STAGE_FROM:-}" ]; then
+    { stage_inner stage 1 && stage_inner stage-zk 0; } > $O/stage-all.log 2>&1 &
+  else
+    { for s in stage stage-zk; do
+        [ -f $STAGE_FROM/$s/inst-$N.bin ] || { echo "no staged statement under $STAGE_FROM/$s"; exit 1; }
+        mkdir -p $DD/$s && for f in circuit.txt inst-$N.bin pub-$N.bin rec.json; do ln -f $STAGE_FROM/$s/$f $DD/$s/$f || cp $STAGE_FROM/$s/$f $DD/$s/$f; done
+      done; } > $O/stage-all.log 2>&1 &
+  fi
   SPID=$!
   if [ ! -x $B ]; then
     exec 8>$W/build.lock; flock 8
@@ -361,6 +397,7 @@ build)
   fi
   sha256sum $B | tee $O/binary.sha256
   wait $SPID; rc=$?; cat $O/stage-all.log; [ $rc = 0 ] || exit 1
+  sha256sum $DD/stage/* $DD/stage-zk/* > $O/stage-sha256.txt
   $B statement --instances $DD/stage/inst-$N.bin --circuit $DD/stage/circuit.txt > $O/statement.txt 2>&1; echo "statement exit $?"
   wait $LP; echo "lean build exit $?"
   [ -x $LEAN_BIN ] && sha256sum $LEAN_BIN > $O/lean.sha
@@ -371,10 +408,16 @@ inner)
   mkdir -p $O/inner/proxy
   # INNER_PROXY=0: only today's numbers again (the proxied sessions V*'s statements were staged from stay as they are)
   if [ "${INNER_PROXY:-1}" = 1 ]; then
-  # M0 against the rec proxy: WARM + RUNS sessions, each written to $DD/inner/s<k>
+  # M0 against the rec proxy: WARM + RUNS sessions, each written to $DD/inner/s<k>, held to the schedule of the statement's
+  # public shape (flock-circuit statement on the public file, then rec_live --schedule-for), derived before any session
+  taskset -c $VCPU $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/inner/statement.txt 2>&1 \
+    || { tail -5 $O/inner/statement.txt; exit 1; }
+  python3 -m verity_flock.rec_live --schedule-for $O/inner/statement.txt > $O/inner/schedule.json || exit 1
   again proxied
   SESS=$DD/inner/s$((NS - 1))
   [ -f $SESS/session/session.json ] || { tail -20 $O/inner/proxy/proxy.log $O/inner/proxy/prove.err; exit 1; }
+  # CHECKS=0: the replay and V*'s hashing reference wait for STEP=icheck (CPU), outside the GPU lease
+  if [ "${CHECKS:-1}" = 1 ]; then
   taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-proxy.txt $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt \
     --sessions $SESS/session > $O/inner/replay-proxy.txt 2>&1
   taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-vstar.txt python3 -m verity_flock.rec_vstar $SESS > $O/inner/vstar.json 2> $O/inner/vstar.err
@@ -397,7 +440,8 @@ EOF
     taskset -c $VCPU python3 -m verity_flock.rec_vstar $F > $O/inner/vstar-forged-$f.json 2> $O/inner/vstar-forged-$f.err
     echo "vstar forged-$f exit $? (1: refused)"
   done
-  mkdir -p $O/inner/session && cp -r $SESS/session $SESS/public.json $O/inner/session/ && du -sb $SESS/* > $O/inner/session/sizes.txt
+  fi
+  mkdir -p $O/inner/session && cp -r $SESS/session $SESS/public.json $DD/inner/schedule.json $O/inner/session/ && du -sb $SESS/* > $O/inner/session/sizes.txt
   fi
   # today's numbers on this node and build: the hm96 statement's M0 and --zk on loopback, the verifier on its own cores, every
   # verdict ahead
@@ -408,6 +452,59 @@ EOF
   [ -n "${LAST:-}" ] && taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-zk.txt $B replay --zk --instances $DZ/pub-$N.bin \
     --circuit $DZ/circuit.txt --sessions $LAST > $O/inner/replay-zk.txt 2>&1
   fi
+  ;;
+icheck)
+  # (CPU) the inner's last proxied session: upstream's replay, V*'s hashing reference over the salted tops (rec_vstar), that
+  # the coin server's record holds none of the clear tops, and the tree-top controls (rec_inner.py forge: a top that is not
+  # the committed one, a record of unsalted tops), each of which V*'s inputs must refuse by name
+  D=$DD/stage; SESS=${INNER:-$DD/inner/s$((NS - 1))}
+  [ -f $SESS/session/session.json ] || { echo "run STEP=inner first"; exit 1; }
+  mkdir -p $O/icheck
+  /usr/bin/time -v -o $O/icheck/time-replay-proxy.txt $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt \
+    --sessions $SESS/session > $O/icheck/replay-proxy.txt 2>&1; echo "replay exit $?"
+  /usr/bin/time -v -o $O/icheck/time-vstar.txt python3 -m verity_flock.rec_vstar $SESS > $O/icheck/vstar.json 2> $O/icheck/vstar.err
+  echo "vstar exit $?"
+  # the schedule the sessions were held to against the statement's (derived again from the public file), each session's own
+  # schedule against it, how each ended, and each finished one's messages (the stop bound's: Hello, Commit, Link, every
+  # Open, Round and Proof, Finish)
+  $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/icheck/statement.txt 2>&1; echo "statement exit $?"
+  python3 - $DD/inner $O/icheck/statement.txt > $O/icheck/schedule.json <<'EOF'
+import json, sys
+from pathlib import Path
+from verity_flock import rec_live as R
+d = Path(sys.argv[1])
+pin = json.loads((d / "schedule.json").read_text())
+ss = sorted(d.glob("s*/public.json"), key=lambda p: int(p.parent.name[1:]))
+
+def messages(p):
+    rec = json.loads((p.parent / "session" / "session.json").read_text())
+    return sum(len(st["rounds"]) for st in rec["streams"]) + len(rec["streams"]) + len(rec["proof_sha512"]) + 4
+
+print(json.dumps({"held_to_the_statements": pin == R.schedule_for(R.statement_of(Path(sys.argv[2]).read_text())), "sessions": len(ss),
+                  "held": [p.parent.name for p in ss if (p.parent / "session").exists() and R.schedule_of(json.loads(p.read_text())) == pin],
+                  "end": {p.parent.name: json.loads(p.read_text()).get("end") for p in ss},
+                  "messages": {p.parent.name: messages(p) for p in ss if (p.parent / "session").exists()}}))
+EOF
+  cat $O/icheck/schedule.json
+  python3 - $SESS > $O/icheck/tops.txt <<'EOF'
+import json, sys
+from pathlib import Path
+d = Path(sys.argv[1])
+pub, priv = json.loads((d / "public.json").read_text()), json.loads((d / "private.json").read_text())
+text = (d / "public.json").read_text()
+opened = [o for r in priv["rounds"] for o in r.get("tops", [])] + list(priv["roots"].values())
+nodes = {n for o in opened for n in o["nodes"]}
+print(json.dumps({"tops": pub.get("tops"), "clear_tops": len(opened), "clear_nodes": len(nodes), "clear_nodes_in_public": sum(n in text for n in nodes),
+                  "public_bytes": len(text), "salted_top_bytes": sum(len(b) // 2 for r in pub["rounds"] for t in r["tops"] for b in t)
+                  + sum(len(b) // 2 for v in pub["link"]["roots"].values() for b in v),
+                  "message_rows": pub["message_rows"], "rounds": len(pub["rounds"])}))
+EOF
+  cat $O/icheck/tops.txt
+  for w in top unsalted; do
+    rm -rf $DD/neg-$w && mkdir -p $DD/neg-$w && cp -r $SESS/public.json $SESS/private.json $DD/neg-$w/ && ln -s $SESS/session $DD/neg-$w/session
+    python3 backends/flock/pod/rec_inner.py forge --what $w --inner $DD/neg-$w > $O/icheck/forge-$w.json
+    python3 -m verity_flock.rec_vstar $DD/neg-$w > $O/icheck/neg-$w.json 2> $O/icheck/neg-$w.err; echo "neg $w vstar exit $?"; cat $O/icheck/neg-$w.json
+  done
   ;;
 vstage)
   # V*'s statements over the inner's last proxied session: the verifier's fold points (from the coins), its extra claims and
@@ -476,21 +573,55 @@ oprove)
   V=$DD/v; [ -f $V/acc-salts.bin ] || { echo "run STEP=vstage first"; exit 1; }
   # every staged statement (each level's, each of the algebra's parts, each forgery's: L3, alg-p0, forged-sum-L6, ..), proved with --zk on
   # loopback, a forgery's once; upstream's replay --zk of the last session, which (accepted or not) is kept under $DD/v-sess
-  # beside the statement directory Lean reads it with
+  # beside the statement directory Lean reads it with. MODES names the prover's sides, WARM + RUNS sessions each per
+  # statement: dev (the device's witness, rec-reprice's), host (FC_HOST_WITNESS=1, no firewall) and firewall (FC_FIREWALL=1
+  # on the host witness: the send check and the level-0 recheck, PROTOCOL.md §10); the firewall's cost is firewall's minus
+  # host's. The last mode's last session is the one oreplay and lean read.
+  MODES=${MODES:-dev}; MODES=${MODES//,/ }
   mkdir -p $DD/v-sess
   W0=$WARM R0=$RUNS
   for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
     l=${C//\//-}; want $l || continue
-    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS)); LAST=
-    again loopback $l $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
-    du -sb $V/$C/inst.bin $V/$C/pub.bin $V/$C/circuit.txt ${LAST:+$LAST/*.bin} > $O/oprove/$l/sizes.txt
-    [ -n "${LAST:-}" ] || { echo "$l: no session"; continue; }
-    taskset -c $VCPU /usr/bin/time -v -o $O/oprove/$l/time-replay.txt $B replay --zk --instances $V/$C/pub.bin \
-      --circuit $V/$C/circuit.txt --sessions $LAST > $O/oprove/$l/replay.txt 2>&1
-    echo "$l replay exit $?"
-    rm -rf $DD/v-sess/$l && cp -r $LAST $DD/v-sess/$l && echo $V/$C > $DD/v-sess/$l.stmt
+    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
+    for mode in $MODES; do
+      case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac
+      n=$l; [ "$MODES" = dev ] || n=$l-$mode
+      LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
+    done
+    PENV=
+    du -sb $V/$C/inst.bin $V/$C/pub.bin $V/$C/circuit.txt ${LAST:+$LAST/*.bin} > $O/oprove/$n/sizes.txt
+    [ -n "${LAST:-}" ] || { echo "$n: no session"; continue; }
+    # REPLAY=0: upstream's replay waits for STEP=oreplay (CPU), outside the GPU lease
+    if [ "${REPLAY:-1}" = 1 ]; then
+      taskset -c $VCPU /usr/bin/time -v -o $O/oprove/$n/time-replay.txt $B replay --zk --instances $V/$C/pub.bin \
+        --circuit $V/$C/circuit.txt --sessions $LAST > $O/oprove/$n/replay.txt 2>&1
+      echo "$n replay exit $?"
+    fi
+    rm -rf $DD/v-sess/$l && cp -r $LAST $DD/v-sess/$l && echo $V/$C > $DD/v-sess/$l.stmt && echo $mode > $DD/v-sess/$l.mode
   done
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
+  # CONTROLS=DIR (a statement's directory under data/$TAG/v, e.g. L6): on that statement, one firewalled session per
+  # FC_FIREWALL_TAMPER control (the device's side dishonest in one named way), each of which the firewall must refuse by name
+  # before the tampered message leaves
+  if [ -n "${CONTROLS:-}" ]; then
+    C=$V/$CONTROLS
+    for w in root witness label opening algebra algebra-proof shape; do
+      PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_TAMPER=$w" WARM=0 RUNS=1 NS=1 again loopback neg-${CONTROLS//\//-}-$w $C/pub.bin $C/inst.bin $C/circuit.txt --zk
+    done
+  fi
+  ;;
+oreplay)
+  # (CPU) upstream's replay --zk of each statement's session that oprove kept (v-sess), with the statement's sizes
+  [ -d $DD/v-sess ] || { echo "run STEP=oprove first"; exit 1; }
+  mkdir -p $O/oreplay
+  for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | sort -V); do l=$(basename $S); C=$(cat $S.stmt)
+    want $l || continue
+    mkdir -p $O/oreplay/$l && cp $S.mode $O/oreplay/$l/mode.txt 2>/dev/null
+    /usr/bin/time -v -o $O/oreplay/$l/time-replay.txt $B replay --zk --instances $C/pub.bin --circuit $C/circuit.txt \
+      --sessions $S > $O/oreplay/$l/replay.txt 2>&1
+    echo "$l replay exit $?"
+    du -sb $C/inst.bin $C/pub.bin $C/circuit.txt $S/*.bin > $O/oreplay/$l/sizes.txt
+  done
   ;;
 lean)
   [ -x $LEAN_BIN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
