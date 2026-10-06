@@ -208,6 +208,19 @@ def lean_verify(lean: str, st: dict, n: int, out: Path) -> dict:
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
 
 
+def lean_refused(v: dict, names: str | None = None) -> bool:
+    """Lean's own verdict (a VERDICT line, not a0's stand-in for none) refused the proof, and not at setup, where a missing
+    or unreadable input is refused, unless the refusal names `names`, a check Lean makes there."""
+    why = v.get("why") or ""
+    return v.get("accepted") is False and v.get("digest") is not None and bool(why) and (
+        names in why if names else not why.startswith("setup:"))
+
+
+def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
+    """Lean's draw check refused case `i` by `code` (U1, U3), not for a draw it could not read."""
+    return len(cases) > i and not cases[i]["ok"] and cases[i]["why"].startswith(f"{code}:")
+
+
 def proved_units(header: dict, live: dict) -> list[int]:
     """The drawn statement's units as global unit indices: the population header's index of each drawn position."""
     pop = header["units"]["indices"]
@@ -288,7 +301,8 @@ def altered_public(lean: str, st: dict, n: int, session_dir: Path, out: Path, re
     digest = hashlib.sha512(bytes(body)).hexdigest()
     registration = check(dict(rec, leaf_layer=digest), digest)
     lean_v = lean_verify(lean, dict(st, dir=stage), n, out)
-    return {"refused": registration.ok and lean_v["accepted"] is False, "registration_passes": registration.ok,
+    return {"refused": registration.ok and lean_refused(lean_v, names="do not hash to the header's"),
+            "registration_passes": registration.ok,
             "lean": lean_v.get("why")}
 
 
@@ -409,11 +423,11 @@ def main() -> int:
     lean_alt = lean_draw_test(a.lean, [{"record": altered, "statement": draw, "instances": len(draw["units"])},
                                        {"record": draw, "statement": draw, "instances": len(draw["units"]) + 1},
                                        {"record": None, "statement": draw, "instances": len(draw["units"])}], out, "negatives")
-    neg["draw-altered-after-session (Lean U1)"] = {"refused": bool(lean_alt) and not lean_alt[0]["ok"], "lean": lean_alt[:1],
+    neg["draw-altered-after-session (Lean U1)"] = {"refused": drawcheck_refused(lean_alt, 0, "U1"), "lean": lean_alt[:1],
                                                    "proved-check": D.check_proved(altered, proved_units(header, live or {}),
                                                                                   (live or {}).get("instances", -1)).to_json()}
-    neg["instances-not-the-draw (Lean U3)"] = {"refused": len(lean_alt) > 1 and not lean_alt[1]["ok"], "lean": lean_alt[1:2]}
-    neg["draw-dropped-from-record (Lean U1)"] = {"refused": len(lean_alt) > 2 and not lean_alt[2]["ok"], "lean": lean_alt[2:3]}
+    neg["instances-not-the-draw (Lean U3)"] = {"refused": drawcheck_refused(lean_alt, 1, "U3"), "lean": lean_alt[1:2]}
+    neg["draw-dropped-from-record (Lean U1)"] = {"refused": drawcheck_refused(lean_alt, 2, "U1"), "lean": lean_alt[2:3]}
     for case in ("unit_draw_ignored_refused", "unit_draw_session"):
         p = run([a.bin, "selftest", "--instances", str(st["dir"] / "inst-4.bin"), "--circuit", str(st["dir"] / "circuit.txt"),
                  "--tables", str(st["dir"] / "tables"), "--only", case], out / f"selftest-{case}.log")
@@ -436,10 +450,11 @@ def main() -> int:
     trecord, tlive = session(a.bin, tst, tn, "subset:2", a.port + 1, out / "session-tampered")
     tres = audit_session(trec, R.receipt(trec, "one-stage-e2e verifier (a0.py)"), tst, theader, tlaw, trecord, tlive, a.lean,
                          a.lean_verify, out / "session-tampered", a.delta)
-    neg["wrong-output-word"] = {"refused": trecord is not None and tres.get("accepted") is False and tres.get("profile") is None,
+    tlean = tres.get("verdicts", {}).get("lean-verify", {})
+    neg["wrong-output-word"] = {"refused": trecord is not None and tres.get("accepted") is False and tres.get("profile") is None
+                                and lean_refused(tlean),
                                 "verifier": ((trecord or {}).get("verdict") or {}).get("why"),
-                                "lean": tres.get("verdicts", {}).get("lean-verify", {}).get("why"),
-                                "lean_refused": tres.get("verdicts", {}).get("lean-verify", {}).get("accepted") is False,
+                                "lean": tlean.get("why"), "lean_refused": lean_refused(tlean),
                                 "prover": (tlive or {}).get("why"), "draw": (trecord or {}).get("unit_draw")}
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
     summary["negatives"] = {k: v.get("refused", v.get("passed")) for k, v in neg.items()}
