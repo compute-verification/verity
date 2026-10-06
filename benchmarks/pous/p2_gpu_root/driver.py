@@ -1,4 +1,4 @@
-"""Runs the squaring-chain binaries (`sqchain`, `sqchain2`) over configurations and checks every result.
+"""Runs the squaring-chain binaries (`sqchain`, `sqchain2`, `sqchain3`) over configurations and checks every result.
 
 For each configuration: random x < p, N squarings on the device, the output digits read back as an integer and compared
 with Python's `pow(x, 2**N, p)`. Then the root identity at the real width: for y = z^2 mod p, the device's 16,446
@@ -8,7 +8,8 @@ reported; the host times nothing.
 
     python driver.py --bin NAME=PATH [--bin ...] --out DIR [--configs NAME:C:TPB[:X],...] [--n N] [--reps K] [--roots K]
 
-X is the binary's last argument: MODE for sqchain (1 = st.async), WPB (warps per column block) for sqchain2.
+X is the binary's last argument: MODE for sqchain (1 = st.async), WPB (warps per column block) for sqchain2, P (lanes per
+column) for sqchain3. For sqchain3 the C field is PER, the digits per CTA (C = ceil(633 / PER) CTAs).
 """
 from __future__ import annotations
 
