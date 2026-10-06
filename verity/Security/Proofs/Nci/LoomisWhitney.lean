@@ -1,5 +1,6 @@
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Analysis.Real.Sqrt
+import Specs.Nci.Guarantees
 
 /-!
 # The discrete Loomis–Whitney inequality
@@ -109,3 +110,5 @@ theorem sum_card_products_le_sqrt {L : Type*} (s : Finset L) (T : L → Finset (
 end Products
 
 end Nci.SecurityProofs
+
+theorem Nci.SecurityProofs.LoomisWhitney : Nci.Guarantees.LoomisWhitney := @Nci.SecurityProofs.loomis_whitney
