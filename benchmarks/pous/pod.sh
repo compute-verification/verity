@@ -179,7 +179,9 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
   git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
   NVCC_REL=$(nvcc_release "$CUDA_HOME" | tr ' ' .)
   [ -n "$NVCC_REL" ] || { echo "no nvcc under CUDA_HOME=$CUDA_HOME"; exit 3; }
-  P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL                  # keyed by the nvcc too: a .so another toolkit built is never adopted
+  # keyed by the nvcc and the sources too: a .so another toolkit or another tree built is never adopted
+  P2SRC=$(cat benchmarks/pous/p2_v1/Makefile benchmarks/pous/p2_v1/*.cu benchmarks/pous/p2_v1/*.cuh benchmarks/pous/p2_gpu/p2dec.cu | sha256sum | cut -c1-12)
+  P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL-$P2SRC
   make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
   arm() {  # arm IMPL OUT [sub]: one bench.py run of that implementation into OUT; a sub-run writes no result.json of its own
