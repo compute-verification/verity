@@ -16,7 +16,9 @@ harness's `ControlResponder`) and `verity.protocols.accounting.space.pous.protoc
   anyway; `gaps` names what it does not cover, and `bench.py`'s certificate gate decides.  With `--strict` (P2 v3's arm)
   the verifier refuses a `k` or limit the certificate does not cover, sends no challenge and records `refused`.
 - **The record** keeps what re-derives every number: each audit's challenge source (with `vk` it gives every index), and each
-  answer's time, the responder's reported device and server time, and its verdicts.
+  answer's time, the responder's reported device and server time, and its verdicts.  Under `--clock wall`, `host_trace`
+  splits every round trip over `TRACE_OVER_NS` into where its time went, on CLOCK_MONOTONIC (`hosttrace.sh`'s kernel trace
+  of the same cores reads that clock), and `verifier_rusage` counts the verifier thread's page faults and context switches.
 - **Clocks.** `--clock wall` (the default) times each answer on this process's monotonic clock. `--clock logical` takes each
   answer's time to be the responder's reported server time (the CPU tests: no outcome there depends on the machine).
 
@@ -29,6 +31,7 @@ import argparse
 import gc
 import json
 import os
+import resource
 import socket
 import struct
 import sys
@@ -40,6 +43,8 @@ from typing import Any
 OP_CHALLENGE, OP_PING, OP_CLOSE = 1, 2, 3
 HEADER = 24
 ALLOWANCE_KIND = "loopback"
+TRACE_OVER_NS = 60_000
+"""A round trip over this (or an answer the verifier timed over it) is kept in the audit's host trace."""
 
 
 def quantiles(xs: list[float]) -> dict[str, float]:
@@ -99,9 +104,11 @@ def scheme_of(name: str, params: Any) -> Any:
 
 class LiveResponder:
     """A connection to the responder, polled: the verifier never sleeps waiting for an answer.  With a `LogicalClock`, each
-    round trip advances it by the answer's reported server time instead of reading a clock."""
+    round trip advances it by the answer's reported server time instead of reading a clock.  With `trace`, each round trip
+    appends `(op, arg, start, sent, first byte, end, longest poll gap, its start, server ns)` to `log`, all on the clock."""
 
-    def __init__(self, host: str, port: int, block_bytes: int, clock: Callable[[], int] = time.perf_counter_ns) -> None:
+    def __init__(self, host: str, port: int, block_bytes: int, clock: Callable[[], int] = time.perf_counter_ns,
+                 trace: bool = False) -> None:
         self.clock = clock
         self.sock = socket.create_connection((host, port))
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -109,17 +116,28 @@ class LiveResponder:
         self.buf = bytearray(HEADER + block_bytes)
         self.view = memoryview(self.buf)
         self.device_ns = self.server_ns = 0
+        self.log: list[tuple[int, ...]] | None = [] if trace else None
 
     def roundtrip(self, op: int, arg: int) -> float:
         """One request and its whole answer; its time in seconds."""
-        want = len(self.buf)
-        t0 = self.clock()
+        want, log, clock = len(self.buf), self.log, self.clock
+        t0 = clock()
         self.sock.send(struct.pack("<QQ", op, arg))
-        got = 0
+        got = first = gap = gap_at = 0
+        sent = last = clock() if log is not None else 0
         while got < want:
             try:
                 n = self.sock.recv_into(self.view[got:], want - got)
             except BlockingIOError:
+                n = -1
+            if log is not None:
+                now = clock()
+                if now - last > gap:
+                    gap, gap_at = now - last, last
+                last = now
+                if n > 0 and not got:
+                    first = now
+            if n < 0:
                 continue
             if n == 0:
                 raise ConnectionError("the responder closed the connection")
@@ -127,7 +145,10 @@ class LiveResponder:
         _, self.device_ns, self.server_ns = struct.unpack_from("<QQQ", self.buf, 0)
         if isinstance(self.clock, LogicalClock):
             self.clock.now += self.server_ns
-        return (self.clock() - t0) / 1e9
+        end = clock()
+        if log is not None:
+            log.append((op, arg, t0, sent, first, end, gap, gap_at, self.server_ns))
+        return (end - t0) / 1e9
 
     def block(self, i: int) -> tuple[bytes, dict[str, Any]]:
         """`respond` for `protocol.Verifier.run`: block `i` as the responder sent it, with its report."""
@@ -140,6 +161,37 @@ class LiveResponder:
             self.sock.sendall(struct.pack("<QQ", OP_CLOSE, 0))
         finally:
             self.sock.close()
+
+
+def host_trace(log: list[tuple[int, ...]], records: list[dict[str, Any]], over_ns: int = TRACE_OVER_NS) -> dict[str, Any]:
+    """The round trips of `log` over `over_ns` (pings, and challenges whose round trip or verifier time is), each split on
+    the clock (CLOCK_MONOTONIC under `--clock wall`, as bpftrace's `nsecs`): `send_ns` the request's send, `wait_ns` from
+    it to the answer's first byte, of which `server_ns` the responder reported and `responder_other_ns` it did not (its
+    socket calls, loopback both ways, its core lost), `recv_ns` the rest of the answer, `outside_ns` the verifier's own work
+    between the challenge's clock and its answer's, and the longest gap between two of the verifier's polls (its core
+    lost) with its start."""
+    answers = iter([(ai, j, a) for ai, rec in enumerate(records) for j, a in enumerate(rec["answers"])])
+    kept = []
+    for op, arg, t0, sent, first, end, gap, gap_at, server in log:
+        rt, row = end - t0, None
+        if op == OP_CHALLENGE:
+            ai, j, a = next(answers)
+            if max(rt, a["elapsed_ns"]) > over_ns:
+                row = {"kind": "challenge", "audit": ai, "round": j, "index": arg, "elapsed_ns": a["elapsed_ns"],
+                       "outside_ns": a["elapsed_ns"] - rt}
+        elif rt > over_ns:
+            row = {"kind": "ping"}
+        if row is not None:
+            kept.append({**row, "start_ns": t0, "roundtrip_ns": rt, "send_ns": sent - t0, "wait_ns": first - sent,
+                         "server_ns": server, "responder_other_ns": first - sent - server, "recv_ns": end - first,
+                         "poll_gap_ns": gap, "poll_gap_at_ns": gap_at})
+    return {"clock": "CLOCK_MONOTONIC", "over_ns": over_ns, "roundtrips": len(log), "kept": kept}
+
+
+def thread_rusage() -> dict[str, int]:
+    """This thread's page faults and context switches (`RUSAGE_THREAD`)."""
+    ru = resource.getrusage(resource.RUSAGE_THREAD)
+    return {"minflt": ru.ru_minflt, "majflt": ru.ru_majflt, "nvcsw": ru.ru_nvcsw, "nivcsw": ru.ru_nivcsw}
 
 
 def cgroup_cpu() -> dict[str, int]:
@@ -185,8 +237,8 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
     gc.collect()
     gc.freeze()
     gc.disable()
-    r = LiveResponder(host, port, vk.params.block_bytes, clock)
-    cpu_before = cgroup_cpu()
+    r = LiveResponder(host, port, vk.params.block_bytes, clock, trace=not isinstance(clock, LogicalClock))
+    cpu_before, ru_before = cgroup_cpu(), thread_rusage()
     records, sources = [], []
     refused = None
     try:
@@ -207,6 +259,7 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
             results.append((v, v.run(r.block)))
             sources.append(source.hex())
         after = calibrate(r, pings)
+        ru_after = thread_rusage()
     finally:
         r.close()
         gc.enable()
@@ -235,7 +288,9 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
             "margin_s": quantiles([(limit - a["elapsed_ns"]) / 1e9 for a in answers]),
             "device_s": quantiles([a["device_ns"] / 1e9 for a in answers]),
             "server_s": quantiles([a["server_ns"] / 1e9 for a in answers]),
-            "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()}, "records": records}
+            "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()},
+            "verifier_rusage": {"before": ru_before, "after": ru_after},
+            **({"host_trace": host_trace(r.log, records)} if r.log is not None else {}), "records": records}
 
 
 def calibrate_only(host: str, port: int, block_bytes: int, *, pings: int, cpu: int | None, allowance: str, deadline_ns: int,

@@ -1,0 +1,54 @@
+// What the guest kernel and the hypervisor took from two cores, the timed audit's verifier's ($1) and responder's ($2), each
+// line stamped with bpftrace's nsecs (CLOCK_MONOTONIC, the clock of live.py's host_trace):
+//   switch CPU T PREV_COMM PREV_PID NEXT_COMM NEXT_PID    every context switch
+//   irq|softirq|vec CPU T WHAT NS                        a hard interrupt, softirq or APIC vector (the local timer, IPIs) over $3 ns
+//   fault CPU T PID NS                                   a page fault handled for over $3 ns
+//   steal CPU T NS                                       steal time over $3 ns that the hypervisor reported at a tick
+// (account_steal_time: time the vCPU did not run, accounted at the next tick after it).  hosttrace.sh runs it.
+BEGIN { printf("hosttrace cpus %d %d over %d ns\n", $1, $2, $3); }
+
+tracepoint:sched:sched_switch /cpu == $1 || cpu == $2/ {
+  printf("switch %d %llu %s %d %s %d\n", cpu, nsecs, args->prev_comm, args->prev_pid, args->next_comm, args->next_pid);
+}
+
+tracepoint:irq:irq_handler_entry /cpu == $1 || cpu == $2/ { @irq[cpu] = nsecs; @irqn[cpu] = args->irq; }
+tracepoint:irq:irq_handler_exit /(cpu == $1 || cpu == $2) && @irq[cpu]/ {
+  $d = nsecs - @irq[cpu];
+  @irqs[cpu] = count();
+  if ($d > $3) { printf("irq %d %llu %d %llu\n", cpu, @irq[cpu], @irqn[cpu], $d); }
+  delete(@irq[cpu]);
+}
+
+tracepoint:irq:softirq_entry /cpu == $1 || cpu == $2/ { @sirq[cpu] = nsecs; }
+tracepoint:irq:softirq_exit /(cpu == $1 || cpu == $2) && @sirq[cpu]/ {
+  $d = nsecs - @sirq[cpu];
+  @softirqs[cpu] = count();
+  if ($d > $3) { printf("softirq %d %llu %d %llu\n", cpu, @sirq[cpu], args->vec, $d); }
+  delete(@sirq[cpu]);
+}
+
+tracepoint:irq_vectors:*_entry /cpu == $1 || cpu == $2/ { @vec[cpu] = nsecs; }
+tracepoint:irq_vectors:*_exit /(cpu == $1 || cpu == $2) && @vec[cpu]/ {
+  $d = nsecs - @vec[cpu];
+  @vecs[cpu, probe] = count();
+  if ($d > $3) { printf("vec %d %llu %s %llu\n", cpu, @vec[cpu], probe, $d); }
+  delete(@vec[cpu]);
+}
+
+kprobe:handle_mm_fault /cpu == $1 || cpu == $2/ { @pf[tid] = nsecs; }
+kretprobe:handle_mm_fault /@pf[tid]/ {
+  $d = nsecs - @pf[tid];
+  @faults[cpu] = count();
+  if ($d > $3) { printf("fault %d %llu %d %llu\n", cpu, @pf[tid], pid, $d); }
+  delete(@pf[tid]);
+}
+
+kprobe:account_steal_time /cpu == $1 || cpu == $2/ {
+  @steal_ns[cpu] = sum(arg0);
+  if (arg0 > $3) { printf("steal %d %llu %llu\n", cpu, nsecs, arg0); }
+}
+
+END {
+  clear(@irq); clear(@irqn); clear(@sirq); clear(@vec); clear(@pf);
+  printf("end %llu\n", nsecs);
+}

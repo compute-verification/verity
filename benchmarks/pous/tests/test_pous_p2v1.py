@@ -5,6 +5,7 @@ library at the kit's 128-bit width, `test_pous_harness`'s Python responder for t
 depends on a clock."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import sys
 import types
@@ -324,9 +325,9 @@ def test_the_v3_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fa
     assert not gates["timed_audit"]["passed"] and not gates["certificate"]["passed"] and body["profile"] is None
 
 
-def _live_at_the_p2_point(tmp_path, limit_ns: int):
+def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
     """`band_gpu/live.py`'s audit, strict, of `p2-16448/v3` at its registered point (one segment), against a responder whose
-    blocks match `vk`'s leaves, on the logical clock: the verifier checks leaves, not codewords."""
+    blocks match `vk`'s leaves, on the logical clock (or `clock`): the verifier checks leaves, not codewords."""
     import hashlib
 
     sys.path.insert(0, str(BENCH))
@@ -343,7 +344,7 @@ def _live_at_the_p2_point(tmp_path, limit_ns: int):
     responder = H.ControlResponder(params.block_bytes, lambda i: (block(i), 0, 1_000, 0))
     try:
         return live.audit("127.0.0.1", responder.port(), scheme, vk, audits=2, pings=20, limit_ns=limit_ns,
-                          clock=live.LogicalClock(), research=False), responder.answered()
+                          clock=clock or live.LogicalClock(), research=False), responder.answered()
     finally:
         responder.stop()
 
@@ -362,3 +363,50 @@ def test_protocol_verifier_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_i
     doc, answered = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS + 1_000)
     assert doc["audits"] == 0 and answered == 0 and doc["records"] == []
     assert "Δ + RTT = 855000 ns fits 1 calls of 854029 ns" in doc["refused"]
+
+
+def test_the_host_trace_splits_each_slow_round_trip_into_where_its_time_went():
+    """A ping over `TRACE_OVER_NS` is kept; a challenge is kept when its round trip or the verifier's time for it is over,
+    and its split adds up: send, the wait for the first byte (the responder's reported time and the rest), the rest of the
+    answer, and the verifier's own work outside the round trip."""
+    sys.path.insert(0, str(BENCH))
+    from band_gpu import live
+
+    ping, challenge = live.OP_PING, live.OP_CHALLENGE
+    log = [(ping, 0, 0, 1_000, 5_000, 6_000, 1_000, 2_000, 0),
+           (ping, 0, 10_000, 11_000, 90_000, 95_000, 70_000, 15_000, 0),
+           (challenge, 7, 100_000, 101_000, 140_000, 141_000, 3_000, 120_000, 30_000),
+           (challenge, 9, 200_000, 201_000, 210_000, 211_000, 1_000, 205_000, 5_000)]
+    records = [{"answers": [{"elapsed_ns": 600_000}, {"elapsed_ns": 12_000}]}]
+    trace = live.host_trace(log, records)
+    assert trace["clock"] == "CLOCK_MONOTONIC" and trace["roundtrips"] == 4 and trace["over_ns"] == live.TRACE_OVER_NS
+    slow_ping, slow_answer = trace["kept"]
+    assert slow_ping == {"kind": "ping", "start_ns": 10_000, "roundtrip_ns": 85_000, "send_ns": 1_000, "wait_ns": 79_000,
+                         "server_ns": 0, "responder_other_ns": 79_000, "recv_ns": 5_000, "poll_gap_ns": 70_000,
+                         "poll_gap_at_ns": 15_000}
+    assert slow_answer == {"kind": "challenge", "audit": 0, "round": 0, "index": 7, "elapsed_ns": 600_000,
+                           "outside_ns": 559_000, "start_ns": 100_000, "roundtrip_ns": 41_000, "send_ns": 1_000,
+                           "wait_ns": 39_000, "server_ns": 30_000, "responder_other_ns": 9_000, "recv_ns": 1_000,
+                           "poll_gap_ns": 3_000, "poll_gap_at_ns": 120_000}
+
+
+def test_a_wall_clock_audit_traces_every_round_trip_and_a_logical_one_none(tmp_path):
+    """On a clock that is not the logical one, the verifier logs every round trip (the pings before and after and each
+    answer, the 50 warm-up pings before each set included) and its thread's faults and context switches; each kept split adds
+    up to its round trip."""
+    import itertools
+
+    from verity.protocols.accounting.space.pous.schemes import p2
+
+    ticks = itertools.count(0, 7)
+    doc, answered = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS, clock=lambda: next(ticks))
+    assert doc["audits_accepted"] == 2 and answered == 2 * 105
+    trace = doc["host_trace"]
+    assert trace["roundtrips"] == 2 * (50 + 20) + 2 * 105
+    for row in trace["kept"]:
+        assert row["send_ns"] + row["wait_ns"] + row["recv_ns"] == row["roundtrip_ns"]
+        assert row["server_ns"] + row["responder_other_ns"] == row["wait_ns"]
+    assert set(doc["verifier_rusage"]["after"]) == {"minflt", "majflt", "nvcsw", "nivcsw"}
+    doc, _ = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
+    assert "host_trace" not in doc
+
