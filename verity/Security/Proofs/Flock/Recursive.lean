@@ -2,6 +2,7 @@ import Proofs.Flock.Recursive.Defs
 import Proofs.Flock.Recursive.Compose
 import Proofs.Flock.Recursive.Fork
 import Proofs.Flock.Recursive.Sound
+import Proofs.Flock.Recursive.Multi
 import Proofs.Flock.Recursive.Flock
 import Proofs.Flock.Recursive.Schedule
 import Proofs.Flock.Recursive.Target
