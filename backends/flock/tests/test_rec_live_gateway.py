@@ -128,6 +128,53 @@ def test_a_stopped_record_does_not_show_whether_or_when_an_open_was_sent():
     assert _held(_run(proxy)) and list(proxy.coins.record()["streams"]) == ["circuit/rep0"]
 
 
+def _coin_calls(reqs, schedule):
+    """Every call the gateway makes on the coin server while it handles `reqs`, in order."""
+    coins, calls = RL.CoinServer(T._counter_rand()), []
+    for name in ("start", "commit", "y", "open", "round"):
+        f = getattr(coins, name)
+        setattr(coins, name, lambda *a, _f=f, _n=name: (calls.append((_n, a)), _f(*a))[1])
+    proxy = RL.Proxy(coins, T._salts(), schedule=schedule)
+    for r in reqs:
+        proxy.handle(r)
+    return calls
+
+
+def test_the_coin_server_never_sees_where_an_open_was_sent():
+    """The coin server is the auditor's, so its calls, not only its record, must not show where the prover sent each Open
+    (firewall-contract's gap 3): every placement of the two Opens before their first rounds, finished or cut anywhere,
+    gives the coin server the honest session's calls or a prefix of them."""
+    two = ("circuit/rep0", "circuit/rep1")
+    sched = _schedule(two)
+    opn = {s: RL.encode_req(RL.REQ_OPEN, s, "", s.replace("circuit", "flock-circuit/fast100").encode(), 0) for s in two}
+    base = [RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO, separators=(",", ":"))),
+            RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [("circuit", T.CAP0)], []), RL.encode_req(RL.REQ_LINK, bytes(32))]
+    first = {}
+    for s in two:
+        first[s] = len(base)
+        base += [RL.encode_req(RL.REQ_ROUND, s, T._binding_round(), 6),
+                 RL.encode_req(RL.REQ_ROUND, s, T._obs([5, 6, 7]) + T._sq(1, RL.KIND_SCALAR), 1)]
+    base += [RL.encode_req(RL.REQ_PROOF, "circuit", 0, b"the proof"), RL.encode_req(RL.REQ_FINISH)]
+    honest = _coin_calls(base[:2] + [opn[two[0]]] + base[2:first[two[1]]] + [opn[two[1]]] + base[first[two[1]]:], sched)
+    assert [c[0] for c in honest].count("open") == 2
+    sessions = 0
+    for i in range(first[two[0]] + 1):
+        for j in range(first[two[1]] + 1):
+            for order in (two, two[::-1]):
+                at = {two[0]: i, two[1]: j}
+                reqs = []
+                for p, r in enumerate(base + [None]):
+                    reqs += [opn[s] for s in order if at[s] == p]
+                    if r is not None:
+                        reqs.append(r)
+                assert _coin_calls(reqs, sched) == honest
+                for cut in range(len(reqs)):
+                    calls = _coin_calls(reqs[:cut] + [b"not a request"], sched)
+                    assert calls == honest[:len(calls)]
+                sessions += 1
+    assert sessions == 2 * (first[two[0]] + 1) * (first[two[1]] + 1)
+
+
 def _serve(tmp_path, sessions, schedule):
     """`rec_live.serve` on a thread; its result (or what ended it) in ``got``, the address it bound in ``got["addr"]``."""
     bound, got = threading.Event(), {}
