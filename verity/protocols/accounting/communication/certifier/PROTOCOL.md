@@ -1,4 +1,4 @@
-# Network transparency: the bucketed timing channel
+# Network accounting: the bucketed timing channel
 
 A spatial unit is the machines behind network certifiers. The question is how much a covert sender can move across its
 boundary through **when** frames leave, once the content and order of every frame are fixed by the declared Program.
@@ -297,6 +297,11 @@ the timing bits (`SecurityProofs.EncardIngressObsDecodableLeContents`, and
 timing bits. Taking `log2 #Cs` to be those content bits is an accounting step, not part of the theorem. It is exact
 under fixed-length frames (W3): N frames of B bytes have `2^(8·B·N)` contents, so for `Cs` all of them, `log2 #Cs` is
 the `8·B·N` bits read.
+
+## The schedule's declared bound and the coins
+
+The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
+the trusted text: the last section of `verity/Security/Specs/NetworkCertifier/Guarantees.lean`'s documentation.
 
 ## Calibration (`calibration`)
 

@@ -1,0 +1,40 @@
+{
+ "definitions": {
+  "DotE4m3_v3{K=32}": {
+   "and": 6596
+  },
+  "DotE4m3_v4{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 17984
+  },
+  "Fp8GroupScale_v2{G=32}": {
+   "and": 8544
+  },
+  "Fp8RowScale_v2": {
+   "and": 1211
+  },
+  "ScaledMmFp8BlockCoordinateGivenScale_v2{K=64,G=32}": {
+   "and": 21175
+  },
+  "ScaledMmFp8BlockCoordinateGivenScale_v4{K=64,G=32,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 25779
+  },
+  "ScaledMmFp8BlockCoordinate_v2{K=32,G=32}": {
+   "and": 12566
+  },
+  "ScaledMmFp8BlockCoordinate_v4{K=32,G=32,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 14868
+  },
+  "ScaledMmFp8Coordinate_v2{K=32,BIAS=False}": {
+   "and": 11514
+  },
+  "ScaledMmFp8NoSwapCoordinate_v2{K=64,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 24832
+  },
+  "ScaledMmFp8NoSwap_v2{K=64,N=2,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 49664
+  },
+  "ScaledMmFp8_v2{K=32,N=2,BIAS=False}": {
+   "and": 23028
+  }
+ }
+}
