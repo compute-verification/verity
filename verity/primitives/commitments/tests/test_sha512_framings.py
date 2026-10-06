@@ -17,7 +17,7 @@ from verity.primitives.commitments.leaves import LIFT_TAG, NODE_TAG, H
 from verity.primitives.commitments.limits import VerificationLimits
 from verity.primitives.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, _hash, _uint, validate_commitment, verify_opening
 from verity_experimental.commitments.multiproof import multiproof, verify_multiproof
-from verity.primitives.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA256_ROW, SCHEMA_HM96_SHA512_ROW, SCHEMA_SHA512_ROW, row_leaf, sha512_row_digest
+from verity.primitives.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_SHA512_ROW, row_leaf, sha512_row_digest
 from verity.primitives.commitments.scheme import CommitmentScheme
 from verity.primitives.commitments.vllm_v1 import vectors_sha512 as VV
 from verity.errors import InvalidArtifact, ProtocolError
@@ -255,8 +255,8 @@ def test_hiding_row_schemas_are_named_at_their_widths() -> None:
     d256 = CommitmentDomain(hashlib.sha256(b"h").digest(), 0, RangeIndexedDomain(1))
     d512 = CommitmentDomain(d256.binding, 0, RangeIndexedDomain(1), hash="sha512")
     assert row_leaf(d512, 0, bytes(64), SCHEMA_HM96_SHA512_ROW) == d512.leaf(0, 0, "hm96-sha512/row/v1", bytes(64))
-    assert row_leaf(d256, 0, bytes(32), SCHEMA_HM96_SHA256_ROW) == d256.leaf(0, 0, "hm96-sha256/row/v1", bytes(32))
     assert row_leaf(d512, 0, bytes(64), SCHEMA_HM96_SHA512_ROW) != row_leaf(d512, 0, bytes(64), SCHEMA_SHA512_ROW)
-    for schema, width in ((SCHEMA_HM96_SHA512_ROW, 32), (SCHEMA_HM96_SHA256_ROW, 64)):
-        with pytest.raises(ValueError):
-            row_leaf(d512, 0, bytes(width), schema)
+    with pytest.raises(ValueError):
+        row_leaf(d512, 0, bytes(32), SCHEMA_HM96_SHA512_ROW)
+    with pytest.raises(ValueError, match="unknown row schema"):
+        row_leaf(d256, 0, bytes(32), "hm96-sha256/row/v1")
