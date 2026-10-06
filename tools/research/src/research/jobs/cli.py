@@ -23,7 +23,8 @@ touches what `merge_requires` sends the Lean agreement for, and `upstream.json`'
 
 The dedupe key makes adding idempotent, and a deliberate re-run names a new one (--dedupe-key).  A merge check's is
 `merge-check:{commit}`.  A Lean regeneration's is `lean-regen:{digest of its inputs}`: the blobs, at that commit, of every tracked
-file the audit reads (each package and the packages it requires by path, less the Lake packages nested in them, and
+file the audit reads (each package, the packages its `proved_in` names, and every package these require by path, less the
+Lake packages nested in them, and
 `tools/lean/`; `tools/lean/lean_audit.py`'s inputs without check's own files).  So trains whose Lean inputs are the same share
 one regeneration, and the second add answers with the first job and its run.  The site is `$JOBS_URL`.  Exit 1 when the
 Job queue refuses, 4 when it can't be reached.
@@ -80,15 +81,24 @@ def lean_inputs(commit: str, packages: list[str], cwd: Path | None = None) -> di
         if entry:
             meta, path = entry.split("\t", 1)
             files[path] = meta.split()[2]
-    pkgs: set[str] = set()
+    def read(path: str) -> dict:
+        return json.loads(_git("show", f"{commit}:{path}", cwd=cwd)) if path in files else {}
+
+    def deps(pkg: str) -> set[str]:
+        return {posixpath.normpath(posixpath.join(pkg, d["dir"]))
+                for d in read(f"{pkg}/lake-manifest.json").get("packages", []) if d.get("type") == "path"}
+
+    todo: list[str] = []
     for pkg in packages:
         pkg = pkg.strip("/")
         if f"{pkg}/lean-audit.json" not in files:
             raise SystemExit(f"research jobs: {pkg} has no lean-audit.json at {commit[:12]}")
-        pkgs.add(pkg)
-        if f"{pkg}/lake-manifest.json" in files:
-            manifest = json.loads(_git("show", f"{commit}:{pkg}/lake-manifest.json", cwd=cwd))
-            pkgs |= {posixpath.normpath(posixpath.join(pkg, d["dir"])) for d in manifest.get("packages", []) if d.get("type") == "path"}
+        todo += [pkg, *(posixpath.normpath(posixpath.join(pkg, d)) for d in read(f"{pkg}/lean-audit.json").get("proved_in", []))]
+    pkgs: set[str] = set()
+    while todo:
+        if (pkg := todo.pop()) not in pkgs:
+            pkgs.add(pkg)
+            todo += deps(pkg)
 
     def own(pkg: str) -> list[str]:
         nested = {f.rsplit("/", 1)[0] + "/" for f in files if f.startswith(pkg + "/") and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")
