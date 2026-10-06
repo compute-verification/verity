@@ -186,7 +186,7 @@ Discharge.ZkLink.Link Discharge.ZkLink.LockLevel Discharge.ZkLink.LockRep Discha
 Discharge.ZkLink.Push Discharge.ZkLink.SessionZ Discharge.ZkLink.StrictZ Discharge.ZkLink.TablesAt
 Discharge.ZkReg.BindHJ Discharge.ZkReg.Defs Discharge.ZkReg.DefsHJ Discharge.ZkSession.Algebraic
 Discharge.ZkSession.Inner Discharge.ZkSession.Level0 Discharge.ZkSession.Session Discharge.ZkView.Defs E2E
-ExecDrawOS ExecFlatCopies Instance LigeritoPadLevel0 LigeritoPhase LinkSound PadCode Refine.ArithK Refine.Frames
+ExecDrawOS ExecFlatCopies Instance LigeritoPadLevel0 LigeritoPhase PadCode Refine.ArithK Refine.Frames
 Refine.LigeritoRun Refine.Live Refine.LiveSim Refine.Paths Refine.Regions Refine.Salted Refine.StmtOf Refine.Table
 Refine.Tapes Registered.Defs SessionBatch SoundnessPad StrictCR ZerocheckPhase
 """.split())
