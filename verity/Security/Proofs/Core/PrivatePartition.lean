@@ -12,15 +12,9 @@ variable {C : Circuit} {n m : ℕ} (P : Partition C n)
 theorem width_mono {S T : Finset (Fin C.N)} (h : S ⊆ T) : C.width S ≤ C.width T :=
   Finset.sum_le_sum_of_subset h
 
-theorem widthRule_mono {X W : ℕ} {S T : Finset (Fin C.N)} (h : S ⊆ T) (hT : WidthRule (C := C) X W T) :
-    WidthRule (C := C) X W S := by
-  rcases hT with hT | ⟨hc, hw⟩
-  · exact Or.inl ((width_mono h).trans hT)
-  · rcases Nat.lt_or_ge S.card 1 with h0 | h1
-    · left
-      rw [Finset.card_eq_zero.mp (show S.card = 0 by omega)]
-      simp [Circuit.width]
-    · exact Or.inr ⟨by have := Finset.card_le_card h; omega, (width_mono h).trans hw⟩
+theorem widthRule_mono {X : ℕ} {S T : Finset (Fin C.N)} (h : S ⊆ T) (hT : WidthRule (C := C) X T) :
+    WidthRule (C := C) X S :=
+  (width_mono h).trans hT
 
 theorem outs_subset_localOuts (K : Calls C m) (u : Fin n) : P.outs u ⊆ P.localOuts K u := by
   intro g hg
@@ -42,27 +36,24 @@ theorem outs_subset_localOuts (K : Calls C m) (u : Fin n) : P.outs u ⊆ P.local
       · simp [hin] at hi
       · exact Or.inl hr'
 
-theorem fits_of_local (K : Calls C m) {X W : ℕ} (h : P.FitsLocally K X W) : P.Fits X W :=
+theorem fits_of_local (K : Calls C m) {X : ℕ} (h : P.FitsLocally K X) : P.Fits X :=
   fun u => widthRule_mono (P.outs_subset_localOuts K u) (h u)
 
-theorem outBits_le {X W : ℕ} (h : P.Fits X W) (u : Fin n) : P.outBits u ≤ max X W := by
-  rcases h u with h | ⟨_, h⟩
-  · exact h.trans (le_max_left _ _)
-  · exact h.trans (le_max_right _ _)
+theorem outBits_le {X : ℕ} (h : P.Fits X) (u : Fin n) : P.outBits u ≤ X := h u
 
-theorem sum_outBits_le {X W : ℕ} (h : P.Fits X W) (T : Finset (Fin n)) :
-    ∑ u ∈ T, P.outBits u ≤ T.card * max X W := by
-  simpa using Finset.sum_le_card_nsmul T P.outBits (max X W) fun u _ => P.outBits_le h u
+theorem sum_outBits_le {X : ℕ} (h : P.Fits X) (T : Finset (Fin n)) :
+    ∑ u ∈ T, P.outBits u ≤ T.card * X := by
+  simpa using Finset.sum_le_card_nsmul T P.outBits X fun u _ => P.outBits_le h u
 
 end Verity.Partition
 
 namespace Verity.SecurityProofs
 
 theorem PrivateFitsOfLocal : Guarantees.PrivateFitsOfLocal :=
-  fun _ _ _ K P _ _ h => P.fits_of_local K h
+  fun _ _ _ K P _ h => P.fits_of_local K h
 
 theorem PrivateOutBitsLe : Guarantees.PrivateOutBitsLe :=
-  fun _ _ P _ _ h T => P.sum_outBits_le h T
+  fun _ _ P _ h T => P.sum_outBits_le h T
 
 theorem RegisteredMeets : Guarantees.RegisteredMeets := by
   intro R C advice hbind Q root ⟨n₀, P₀, ⟨_, hf, hn, _⟩, hr₀⟩ n P hr

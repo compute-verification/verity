@@ -11,8 +11,8 @@ a partition meeting `Q` whose advice commits to the root (`Registered`). This is
 `Partition`'s type already gives covering and disjointness: every computed gate is in exactly one unit, and inputs are in
 none. The predicates add the rest of the draft's global ones:
 * no unit is empty (G2);
-* the width rule (G4, `Fits`): unit `u`'s outputs, out(R) for its gates `R` (`outs`), are at most `X` bits, or exactly one
-  value of at most `W` bits. This is `cut.fits`, Q_word's rule with its single-value exception;
+* the width rule (G4, `Fits`): unit `u`'s outputs, out(R) for its gates `R` (`outs`), total at most `X` bits, with no
+  single-value exception (`from_v1` maps Q_word{X, W} to `X`);
 * the count (G6): `n` units, at most the padded count `Q.units`;
 * the caps (G7): each unit has at most `Q.maxGates` gates and reads at most `Q.maxInBits` bits from outside.
 
@@ -31,10 +31,8 @@ open Finset
 
 /-- The public predicates of a private partition: what the verifier holds besides the root. -/
 structure Predicates where
-  /-- The bound on a unit's output bits. -/
+  /-- The bound on a unit's output bits: the predicates' `width`. -/
   X : ℕ
-  /-- The bound on a unit's single output value, the width rule's exception. -/
-  W : ℕ
   /-- The padded unit count, a level of a public grid. -/
   units : ℕ
   /-- The most gates a unit may have. -/
@@ -55,17 +53,16 @@ def outBits (u : Fin n) : ℕ := C.width (P.outs u)
 /-- `og(u)`: the number of unit `u`'s outputs. -/
 def outCount (u : Fin n) : ℕ := (P.outs u).card
 
-/-- The width rule for a set of outputs `S`: at most `X` bits, or exactly one value of at most `W` bits. -/
-def WidthRule (X W : ℕ) (S : Finset (Fin C.N)) : Prop :=
-  C.width S ≤ X ∨ (S.card = 1 ∧ C.width S ≤ W)
+/-- The width rule for a set of outputs `S`: at most `X` bits. -/
+def WidthRule (X : ℕ) (S : Finset (Fin C.N)) : Prop := C.width S ≤ X
 
 /-- Every unit's outputs meet the width rule (G4). -/
-def Fits (X W : ℕ) : Prop := ∀ u, WidthRule (C := C) X W (P.outs u)
+def Fits (X : ℕ) : Prop := ∀ u, WidthRule (C := C) X (P.outs u)
 
 /-- `P` meets the public predicates `Q`: no unit is empty, every unit fits, the unit count is at most the padded one,
 and every unit is within the caps. -/
 def Meets (Q : Predicates) : Prop :=
-  (∀ u, (P.gates u).Nonempty) ∧ P.Fits Q.X Q.W ∧ n ≤ Q.units ∧
+  (∀ u, (P.gates u).Nonempty) ∧ P.Fits Q.X ∧ n ≤ Q.units ∧
     ∀ u, (P.gates u).card ≤ Q.maxGates ∧ C.width (C.into (P.gates u)) ≤ Q.maxInBits
 
 end Partition
@@ -93,7 +90,7 @@ def localOuts (K : Calls C m) (u : Fin n) : Finset (Fin C.N) :=
     g ∈ K.returned ∨ ∃ h, g ∈ C.reads h ∧ K.unit h = K.unit g ∧ P.unit h ≠ P.unit g
 
 /-- Every unit's outputs inside its Call meet the width rule: the check made once per Definition. -/
-def FitsLocally (K : Calls C m) (X W : ℕ) : Prop := ∀ u, WidthRule (C := C) X W (P.localOuts K u)
+def FitsLocally (K : Calls C m) (X : ℕ) : Prop := ∀ u, WidthRule (C := C) X (P.localOuts K u)
 
 end Partition
 
