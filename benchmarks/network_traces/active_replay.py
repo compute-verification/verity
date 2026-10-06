@@ -1,4 +1,4 @@
-"""The active warden on recorded traces, in real time: `verity_network_warden.active` serving a replay of honest traces'
+"""The active warden on recorded traces, in real time: `verity.protocols.accounting.communication.warden.active` serving a replay of honest traces'
 configurations over localhost, then the audit of the records it published.
 
 Each configuration is one run of three processes on the host's monotonic clock, from an origin they share:
@@ -70,7 +70,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import replay
-from verity_network_warden.active import (
+from verity.protocols.accounting.communication.warden.active import (
     DATA,
     HEADER,
     LAST,
@@ -80,10 +80,10 @@ from verity_network_warden.active import (
     decode_frame,
     encode_frame,
 )
-from verity_network_warden.audit import Audit
-from verity_network_warden.calibration import choose_syncs
-from verity_network_warden.commitment import CommittedRecord, commit
-from verity_network_warden.grid import (
+from verity.protocols.accounting.communication.warden.audit import Audit
+from verity.protocols.accounting.communication.warden.calibration import choose_syncs
+from verity.protocols.accounting.communication.warden.commitment import CommittedRecord, commit
+from verity.protocols.accounting.communication.warden.grid import (
     COMPLETE,
     GridParams,
     Reason,
@@ -92,7 +92,7 @@ from verity_network_warden.grid import (
     Warden,
     row_count,
 )
-from verity_network_warden.schedule import (
+from verity.protocols.accounting.communication.warden.schedule import (
     ClockSync,
     LogicalFrame,
     SyncSet,
@@ -257,7 +257,7 @@ def committed_line(record: CommittedRecord) -> str:
 
 
 def read_committed(path: Path) -> list[CommittedRecord]:
-    from verity.commitments.identity import Digest
+    from verity.primitives.commitments.identity import Digest
 
     out = []
     for line in path.read_text().splitlines() if path.exists() else []:
@@ -462,7 +462,8 @@ def _quiet_runtime() -> None:
 
 
 def _usage() -> dict:
-    return {"max_rss_mb": peak_rss_mb(), "cpu_s": sum(os.times()[:2]), "nice": os.getpriority(os.PRIO_PROCESS, 0)}
+    return {"max_rss_mb": peak_rss_mb(), "cpu_s": sum(os.times()[:2]), "nice": os.getpriority(os.PRIO_PROCESS, 0),
+            "cpus": sorted(os.sched_getaffinity(0))}
 
 
 class Server:
@@ -809,22 +810,24 @@ class Evicted(Exception):
 
 
 def run_configuration(plan: dict, report: dict, out: Path, nice: int | None = None,
-                      upstream: tuple[str, int] | None = None) -> dict:
+                      upstream: tuple[str, int] | None = None, cpus: Sequence[int] | None = None) -> dict:
     """One configuration in real time: the server, then the proxy, then the peer, released together at one origin.
-    With `nice`, every thread of the three runs at that niceness (`renice`, through sudo); threads they start later
-    inherit it. With `upstream`, the server is `LiveServer` in front of the endpoint there. On `Evicted` the three are
-    terminated and it is raised again."""
+    With `nice`, every thread of the three runs at that niceness (`renice`, through sudo); with `cpus`, the server's,
+    the proxy's and the peer's threads each run on one core of their own. Threads they start later inherit both. With
+    `upstream`, the server is `LiveServer` in front of the endpoint there. On `Evicted` the three are terminated and it
+    is raised again."""
     params = wire_params(Setup(report)) | ({"upstream": list(upstream)} if upstream else {})
     started: list = []
     try:
-        return _run_configuration(plan, report, out, nice, params, started)
+        return _run_configuration(plan, report, out, nice, cpus, params, started)
     except Evicted:
         for proc in started:
             proc.terminate()
         raise
 
 
-def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, params: dict, started: list) -> dict:
+def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, cpus: Sequence[int] | None,
+                       params: dict, started: list) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     ctx = multiprocessing.get_context("spawn")
     (s, s_child), (p, p_child), (q, q_child) = ctx.Pipe(), ctx.Pipe(), ctx.Pipe()
@@ -840,10 +843,12 @@ def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, pa
     started.append(peer)
     peer.start()
     q.recv()
-    if nice is not None:
-        for proc in (server, proxy, peer):
-            for tid in os.listdir(f"/proc/{proc.pid}/task"):
+    for proc, cpu in zip((server, proxy, peer), cpus or (None,) * 3):
+        for tid in os.listdir(f"/proc/{proc.pid}/task"):
+            if nice is not None:
                 subprocess.run(["sudo", "-n", "renice", "-n", str(nice), "-p", tid], check=True, capture_output=True)
+            if cpu is not None:
+                os.sched_setaffinity(int(tid), {cpu})
     origin = time.monotonic() + STARTUP_S
     for c in (s, p, q):
         c.send(origin)
@@ -853,7 +858,8 @@ def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, pa
     server.join()
     codes = {"server": server.exitcode, "proxy": proxy.exitcode, "peer": peer.exitcode}
     (out / "processes.json").write_text(json.dumps({"exit": codes, "origin": origin, "clock": "real",
-                                                    "nice": nice, "server": "live" if "upstream" in params else "fake"}))
+                                                    "nice": nice, "cpus": list(cpus) if cpus else None,
+                                                    "server": "live" if "upstream" in params else "fake"}))
     return codes
 
 
@@ -1044,12 +1050,16 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
         comparisons["hands_max_diff_from_model"] = max((abs(a - b) for a, b in zip(hands, model_hands)), default=0)
 
     released, real, slots = {}, 0, 0
+    comparisons["released_not_the_programs"] = 0
     for rec in out_records:
         for t, row in enumerate(rec.grid):
             n = row_count(row)
             real, slots = real + n, slots + len(row)
             for slot in row[:n]:
-                released[position[slot]] = rec.window * T + t
+                if (p := position.get(slot)) is None:
+                    comparisons["released_not_the_programs"] += 1
+                else:
+                    released[p] = rec.window * T + t
     send_ms = {q["stream"]: q["trace_ms"] for q in plan["requests"]}
     hist = {k: Counter() for k in ("shaping", "queueing", "first_frame", "first_frame_from_send")}
     for p, f in enumerate(frames):
@@ -1168,7 +1178,8 @@ def summarize(results: Sequence[dict], models: Sequence[dict]) -> dict:
     out["comparisons"] |= {k: max((r["comparisons"][k] for r in results if k in r["comparisons"]), default=None)
                            for k in ("hands_max_diff_from_rule", "hands_max_diff_from_model")}
     out["comparisons"] |= {k: sum(r["comparisons"][k] for r in results)
-                           for k in ("ready_off_meant", "releases_off_model", "model_misses")}
+                           for k in ("ready_off_meant", "releases_off_model", "model_misses",
+                                     "released_not_the_programs")}
     if any("hindsight" in r["comparisons"] for r in results):
         out["live"] = {
             "model_syncs_met_windows": sum(r["comparisons"]["model_syncs_met_windows"] for r in results),
@@ -1222,6 +1233,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--clock", choices=("real", "virtual"), default="real",
                     help="real: three processes on the host's clock; virtual: one event loop on an injected clock")
     ap.add_argument("--nice", type=int, help="run the three processes at this niceness, e.g. -20 (through sudo renice)")
+    ap.add_argument("--cpus", type=lambda s: [int(c) for c in s.split(",")],
+                    help="pin the server, the proxy and the peer each to one core, e.g. 1,2,3")
     ap.add_argument("--reaudit", action="store_true",
                     help="audit and summarize the runs already under --out, from their records, instead of running them")
     ap.add_argument("--server-url", help="a live OpenAI endpoint, e.g. http://127.0.0.1:8000, instead of the fake server")
@@ -1360,7 +1373,7 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
                             return 1
                     else:
                         try:
-                            run_configuration(mine, report, run, args.nice, upstream)
+                            run_configuration(mine, report, run, args.nice, upstream, args.cpus)
                         except Evicted:
                             stopped = f"evicted in {name}"
                             print(stopped, flush=True)
@@ -1387,6 +1400,7 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
     summary = summarize(honest, models) | {"calibration": str(args.calibration),
                                            "clock": sorted({p["clock"] for p in processes}),
                                            "nice": sorted({p.get("nice") for p in processes}, key=str),
+                                           "cpus": sorted({str(p.get("cpus")) for p in processes}),
                                            "selection": [[str(p), n] for p, n in picked],
                                            "server": "live" if live else "fake", "sync_policy": sync_policy,
                                            "stopped": stopped}

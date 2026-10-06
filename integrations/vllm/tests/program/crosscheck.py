@@ -13,17 +13,17 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from verity.ir.defs import bind
-from verity.ir.evaluate import evaluate_call
-from verity.ir.layout import FunctionCall
-from verity.ir.program import Program
-from verity.ir.refs import Coll
-from verity.ir.types import Array, Record
+from verity.primitives.circuits.defs import bind
+from verity.primitives.circuits.evaluate import evaluate_call
+from verity.primitives.circuits.layout import FunctionCall
+from verity.primitives.circuits.program import Program
+from verity.primitives.circuits.refs import Coll
+from verity.primitives.circuits.types import Array, Record
 from verity_vllm.program.registry import b1, prims as P
 from verity_vllm.program.registry.b1 import B1_CONFIG as C
 
 
-from verity.ir.defs import CompositeDefinition
+from verity.primitives.circuits.defs import CompositeDefinition
 
 _STANDALONE = CompositeDefinition("Standalone", 1, ("FN",), lambda S: S.FN.signature(),
                                   lambda B, S, *args: B.call(S.FN, *args),

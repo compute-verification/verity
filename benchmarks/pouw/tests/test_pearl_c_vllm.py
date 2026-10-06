@@ -19,10 +19,10 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.commitments import MerkleTree
-from verity.commitments.blake3 import keyed
-from verity.commitments.merkle import tree_levels
-from verity_pouw.audit import (
+from verity.primitives.commitments import MerkleTree
+from verity.primitives.crypto.blake3 import keyed
+from verity.primitives.commitments.merkle import tree_levels
+from verity.protocols.accounting.work.pouw.audit import (
     ROW_SCHEMA,
     TILE_SCHEMA,
     Epoch,
@@ -35,10 +35,10 @@ from verity_pouw.audit import (
     transcript_domain,
     weight_binding,
 )
-from verity_pouw.protocol import Context, Matmul, Shape
-from verity_pouw.schemes import pearl_c as C
-from verity_pouw.schemes import pearl_c_work as PW
-from verity_pouw.schemes import pearl_kw as P
+from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
+from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
+from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
@@ -577,7 +577,7 @@ def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tm
     """Lean's conditions on the fresh-trial ε: draw d is `key.uniform(W, d)` over the input's cumulative credited cells
     (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
     and the source is given in the command, never drawn inside the run."""
-    from verity.randomness import derive
+    from verity.primitives.randomness import derive
 
     src, job, row = bytes(range(32)), {"sha256": "ab" * 32}, {"matmul": 7, "area": {40: 64 * 64, 41: 64 * 64, 42: 32 * 64}}
     got = SD.fresh_trials(job, row, 50, src)
@@ -641,6 +641,44 @@ def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cann
     with pytest.raises(ValueError, match="one served pass"):
         files["q"].write_text(json.dumps(doc("rq", [64]) | {"inputs": [row("rq", 0, 64), row("rl", 1, 64)]}))
         ST.main(["--model", "qwen", str(files["q"]), "--out", str(out)])
+
+
+def test_the_served_table_labels_a_windows_fraction_as_the_replay_diagnostic_beside_proving_cost(tmp_path):
+    """A window's row comes from its accepting audit: credited against claimed GEMMs, capacity, the certified fraction with
+    its uncertified end, the overhead over cuBLASLt and a proving-cost cell that points to hidden-zk until it has a number;
+    a rejecting audit is refused."""
+    inputs = tmp_path / "inputs.json"
+    inputs.write_text(json.dumps({"m": 1, "inputs": [{"pass": "decode", "run": "rq", "manifest_sha256": "ab", "matmul": 0,
+                                                     "k": 4096, "n": 4096, "NT": 64, "W": 64, "w_max": 1, "method": "census",
+                                                     "drawn": 64, "openings_failed": 0, "failures": 0, "share_max": 5e-5}]}))
+    audit = lambda n, cap, ok=True: {
+        "ok": ok, "scheme": "pearl-c-sm120-v1-h2", "shape": [8192, 8192, 8192], "t_s": "t0", "t_d": "t1", "verifier_commit": "c",
+        "gemms": {"0": n // 2, "1": n - n // 2}, "tiles": [{"ok": True}] * 3,
+        "controls": [{"label": "tampered", "ok": False}, {"label": "wrong salt", "ok": False}],
+        "checks": [{"check": "gamma", "ok": ok}],
+        "fraction": {"credited_gemms": n, "capacity_gemms": cap, "uncertified_fraction": n / cap, "fraction": 0.98 * n / cap,
+                     "gamma": "1/100", "eps_s": "1/100", "slowdown": cap / n}}
+    paths = []
+    for i, doc in enumerate((audit(5_500, 10_000.4), audit(5_400, 10_000.4))):
+        paths.append(tmp_path / f"a{i}.json")
+        paths[-1].write_text(json.dumps(doc))
+    out = tmp_path / "t"
+    assert ST.main(["--model", "qwen", str(inputs), "--window", "w0", "r0", str(paths[0]), "--window", "w1", "r1", str(paths[1]),
+                    "--out", str(out)]) == 0
+    w0, w1 = json.loads((out / "table.json").read_text())["windows"]
+    assert (w0["credited_gemms"], w0["claimed_gemms"], w0["tiles_accepted"], w0["proving_cost"]) == (5_500, 5_500, 3, None)
+    assert w0["controls"] == {"tampered": "REJECT", "wrong salt": "REJECT"} and w1["fraction"] == pytest.approx(0.98 * 0.54, 1e-4)
+    md = (out / "table.md").read_text()
+    assert "## Replay diagnostic: salt-to-deadline windows" in md and "a diagnostic, not a verification" in md
+    assert ("| `w0` | `r0` | pearl-c-sm120-v1-h2 | t0 | 5,500 / 5,500 | 10,000 | 53.90% [0.5390, 0.5500] | 1.818 | "
+            "— (hidden-zk) | 3 / 3 | tampered REJECT, wrong salt REJECT |") in md
+    assert "spans 52.92% to 53.90% (spread 0.98%, 98.0 basis points)" in md
+    assert ST.main(["--model", "qwen", str(inputs), "--window", "w0", "r0", str(paths[0]),
+                    "--proving-cost", "pearl-c-sm120-v1-h2", "$1.00 per GEMM", "--out", str(out)]) == 0
+    assert "| $1.00 per GEMM | 3 / 3 |" in (out / "table.md").read_text()
+    paths[1].write_text(json.dumps(audit(5_400, 10_000.4, ok=False)))
+    with pytest.raises(ValueError, match="did not accept"):
+        ST.main(["--model", "qwen", str(inputs), "--window", "w1", "r1", str(paths[1]), "--out", str(out)])
 
 
 FH = load("pearl_c_vllm_forming_headroom", KERNEL.parent / "pearl_c_vllm" / "forming_headroom.py")
@@ -1234,9 +1272,9 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
 
 def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     """The message and leaf keys the kernels read and every tree's hash are the scheme's format's
-    (`verity_pouw.serving.HASH_FORMATS`), not literals, and -h1's bytes are what they were."""
-    from verity.commitments.blake3 import blake3
-    from verity_pouw.serving import HASH_FORMATS, SchemeId, hash_format
+    (`verity.protocols.accounting.work.pouw.serving.HASH_FORMATS`), not literals, and -h1's bytes are what they were."""
+    from verity.primitives.crypto.blake3 import blake3
+    from verity.protocols.accounting.work.pouw.serving import HASH_FORMATS, SchemeId, hash_format
 
     make, *_ = device_run
     run = make()
@@ -1255,7 +1293,7 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
 
 def test_a_schedule_this_path_or_the_format_cannot_run_is_refused():
     """-h1's forming reads seed_A from A's root, so A's tree stays on the main lane; and this path moves only the tile hashing."""
-    from verity_pouw.serving import Schedule
+    from verity.protocols.accounting.work.pouw.serving import Schedule
     s = PPD.scheme_of(SCHEME)
     with pytest.raises(ValueError, match="a_tree can't leave the main lane under h1"):
         PPD.schedule_of(Schedule("early-a", frozenset({"a_tree", "tile_hash"}), ring=2), s)

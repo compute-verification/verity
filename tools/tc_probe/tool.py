@@ -12,7 +12,10 @@ import argparse
 import shlex
 from pathlib import Path
 
+from research.pythonpath import package_paths, workspace_root
 from research.store.tool import Tool
+
+TREE = workspace_root(__file__)
 
 SCRIPT = "tc_probe.py"
 
@@ -51,7 +54,7 @@ def parse(argv: list[str]) -> dict:
 TC_PROBE = Tool(
     name="tc_probe", version="1",
     command=["python", "tools/tc_probe/tc_probe.py"],
-    closure=["tools/tc_probe/**", "packages/verity/src/verity/ml/tc/**"],
+    closure=["tools/tc_probe/**", *package_paths(TREE, "verity_catalog", "silicon/**")],
     key_params=["instruction", "arch", "pipeline", "sweep", "families", "seed", "n_random", "golden_per_family",
                 "replay_golden", "replay_special", "replay_instances", "instances_manifest", "canary"],
     key_conditions=["hw.family"],
@@ -118,8 +121,8 @@ def parse_instances(argv: list[str]) -> dict:
 INSTANCES_HW = Tool(
     name="instances_hw", version="1",
     command=["python", "tools/tc_probe/instances_hw.py"],
-    closure=["tools/tc_probe/**", "packages/verity/src/verity/ml/tc/**", "packages/verity/src/verity/proofs/target.py",
-             "backends/numerical/python/verity_numerical/bench/instances.py", "backends/numerical/python/verity_numerical/bench/instances_gen.py",
+    closure=["tools/tc_probe/**", *package_paths(TREE, "verity_catalog", "silicon/**", "targets/target.py"),
+             "benchmarks/numerical/python/verity_numerical/bench/instances.py", "benchmarks/numerical/python/verity_numerical/bench/instances_gen.py",
              "fixtures/bench-instances/v1/manifest.json"],
     key_params=["instances", "instruction", "arch", "root", "manifest", "range", "only_ids", "repeat", "sass_check"],
     key_conditions=["hw.family"],

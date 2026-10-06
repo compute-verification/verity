@@ -640,6 +640,64 @@ def test_triage_takes_a_valid_custody_marker_where_the_catalog_cannot_say(tmp_pa
     assert row["state"] == "no-custody"
 
 
+def test_the_custody_temp_file_a_killed_publish_leaves_is_no_file_of_the_run(tmp_path, monkeypatch):
+    """A custody Job stopped at its deadline (its bash exits on SIGTERM, and the kernel SIGKILLs research) can leave the
+    `.custody.tmp.<pid>` write_json_atomic writes before its rename. Counted as a run file, verify found it not in the run record,
+    and n1_custody.sh would hold the run as changed after its record, telling a person to waive logs the record holds."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    d, store = _fixture_run(tmp_path / "runs", "r20260925-010003-cccc"), str(tmp_path / "s")
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--store", store]) == 0
+    (d / f"{CU.MARKER}.tmp.4242").write_text('{"preserved": tr')
+    assert f"{CU.MARKER}.tmp.4242" not in CU.run_files(d) and CU.marker_problem(d) is None
+    assert CU.verify(LocalStore(store), d)["preserved"]
+
+
+def test_a_remote_holding_another_attempt_document_is_a_conflict_that_triage_reports_with_its_repair(tmp_path, monkeypatch, capsys):
+    """3 Oct: r20261003-174723-7ea5's attempt was already on R2 with other bytes, and an attempt key is write-once, so a node's custody
+    Job failed on it every round. A failed `custody --publish` leaves its verdict in .custody (never over a marker that still vouches
+    for the dir), triage reports the run as `conflict` with the repair, and the repair (reconcile, then --publish) makes it r2."""
+    from research.store import attempt as A
+    from research.store.local import attempt_key
+
+    vault, store = tmp_path / "vault", str(tmp_path / "s")
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    runs = tmp_path / "runs"
+    ok, d = _fixture_run(runs, "r20260925-010001-aaaa"), _fixture_run(runs, "r20260925-010002-bbbb")
+    offline = LocalStore(store, config_path=tmp_path / "absent.toml")
+    assert A.publish(d, store=offline, remote_push=False, run_record=True)["published"], "published where the remote wasn't visible"
+    first = json.loads(offline.attempt_path(d.name).read_bytes())
+    first["status"]["rc"] = 99
+    (vault / attempt_key(d.name)).parent.mkdir(parents=True)
+    (vault / attempt_key(d.name)).write_text(json.dumps(first, sort_keys=True, separators=(",", ":")))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    assert data_main(["custody", str(ok), "--publish", "--keep-local", "--store", store]) == 0
+    capsys.readouterr()
+
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--store", store, "--json"]) == 1
+    marker = json.loads((d / CU.MARKER).read_text())
+    assert marker["preserved"] is False and P.DIFFERS in marker["error"] and marker["verified_utc"] and marker["host"]
+    rows = {r["run"]: r for r in CU.triage(LocalStore(store), runs, host=HOST)}
+    assert rows[ok.name]["state"] == "r2" and rows[d.name]["state"] == "conflict" and rows[d.name]["files"] == len(CU.run_files(d))
+    assert P.DIFFERS in rows[d.name]["why"] and f"reconcile-attempts {d.name} --apply" in rows[d.name]["next"]
+    (verified,) = [r for r in CU.triage(LocalStore(store), runs, verify_remote=True, host=HOST) if r["run"] == d.name]
+    assert verified["state"] == "conflict", "--verify asks the remote itself"
+    assert data_main(["custody", "--triage", "--runs-dir", str(runs), "--store", store]) == 1
+    assert "1 need action" in capsys.readouterr().out
+
+    (vault / attempt_key(ok.name)).write_text("{}")
+    assert data_main(["custody", str(ok), "--publish", "--keep-local", "--store", store]) == 1
+    assert CU.marker_problem(ok) is None, "a failed check doesn't overwrite a marker that still vouches for the run dir"
+
+    assert data_main(["reconcile-attempts", d.name, "--apply", "--store", store]) == 0
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--store", store]) == 0
+    capsys.readouterr()
+    (row,) = [r for r in CU.triage(LocalStore(store), runs, host=HOST) if r["run"] == d.name]
+    assert row["state"] == "r2" and row["files"] is None
+
+
 def test_older_min_counts_only_runs_that_ended_n_minutes_ago_across_every_runs_root(tmp_path, capsys, monkeypatch):
     """The monitors' invariant, per node: ended runs not on the remote N minutes after they ended. One read-only command over every
     runs root of the node, `research/custody-triage/v1` with --json, exit 1 on a finding and 3 when triage itself fails; a run that
