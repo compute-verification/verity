@@ -31,7 +31,7 @@ import tarfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Callable, TYPE_CHECKING
+from typing import Callable, Iterable, TYPE_CHECKING
 
 from . import canon, ids
 from .model import Label
@@ -179,12 +179,30 @@ def pull_targets(store: LocalStore, targets: list[str]) -> dict:
     `push_targets`.  A remote file whose content doesn't hash to its name or doesn't validate is left alone and reported in `bad`.
         {"pulled": [content hash, ...], "bad": ["<key>: <why>", ...]}"""
     r = store._require_remote()  # noqa: SLF001
+    return _pull(store, r, ((t, remote_labels_for(r, t)) for t in dict.fromkeys(targets)))
+
+
+def pull_prefix(store: LocalStore, prefix: str) -> dict:
+    """`pull_targets` for every target whose id starts with `prefix` and has assertions on the remote, from one listing of their
+    common key prefix (`pr:12@`: each head of pull request 12).
+        {"pulled": [content hash, ...], "bad": ["<key>: <why>", ...], "targets": [target, ...]}"""
+    r = store._require_remote()  # noqa: SLF001
+    d = ids.target_dirname(prefix)
+    listing: dict[str, dict[str, str]] = {}
+    for k in r.list(f"{PREFIX}{d}"):
+        if m := KEY_RE.match(k):
+            listing.setdefault(prefix + m.group(1)[len(d):], {})[m.group(2)] = k
+    return _pull(store, r, sorted(listing.items())) | {"targets": sorted(listing)}
+
+
+def _pull(store: LocalStore, r: Remote, listings: Iterable[tuple[str, dict[str, str]]]) -> dict:
+    """Fetch each assertion of `listings` ((target, {content hash: key}) pairs from the remote) that this store lacks."""
     rep: dict = {"pulled": [], "bad": []}
     scratch = store.root / "scratch"
     scratch.mkdir(parents=True, exist_ok=True)
-    for t in dict.fromkeys(targets):
+    for t, theirs in listings:
         mine = local_labels_for(store, t)
-        for h, key in sorted(remote_labels_for(r, t).items()):
+        for h, key in sorted(theirs.items()):
             if h in mine:
                 continue
             tmp = scratch / f".label-pull-{h}-{os.getpid()}"

@@ -83,7 +83,8 @@ research run --queue --source GITDIR --project P [--kind K] [--question Q] [--me
              [--gpu-model M] [--cpus N] [--class work|bench|...] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...   # the one queue (tools/cluster): placed, then an --on run in its CPU allocation, a GPU leased around the workload alone
 research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
-research status [RUN] [--refresh] [--all] [--json]
+research status [RUN] [--refresh] [--all] [--json]   # under each active run, a `mem` line per cgroup it executes in (scopemem.py):
+                                         # current, peak, cap, growth from its own samples, NEAR CAP within 10%; remote: with RUN or --refresh
 research inspect RUN [--json]            # fetch, status RUN and inspect take a run another VM launched (a full id): found on
                                          # --on NAME, else on each ssh machine, and its records fetched here
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
@@ -97,8 +98,9 @@ research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
-research merge --train --prepare BRANCH [--onto BASE] N@SHA ...      # build a train, lint it, push it for train.sh
+research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
+research merge --mirror [SHA]                                           # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
@@ -136,7 +138,8 @@ it). From the remote's copy of the target, the truth rather than the checkout, i
 it, naming the commit, retargets each whose base branch's tip is on it (stacks GitHub never closes), and deletes a closed one's
 head branch unless an open one uses it. With `--push`, which whoever lands a train passes (Daniel, 1 Oct), a merge that lands is
 pushed, never forced, before the sweep, and a refused push sweeps nothing and exits 1; without it, run `research merge --sweep`
-after `git push`. No remote skips the sweep, and its failure leaves the exit code alone.
+after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Then `main` goes over ssh to node 1's
+bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs the `--mirror` rerun.
 
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
@@ -152,8 +155,9 @@ label alone lands nothing; ask the train runner on Slack as well until the queue
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
 fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (draft state is ignored),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
-ready PR`, a `ready` label on `pr:{n}@{head}`, which will replace the merge request once the queue lands trains), and has the grants the rules file
-(`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}` in the store. The branch holds the queue's state (each
+ready PR`, a `ready` label on `pr:{n}@{head}`), and has the grants the rules file
+(`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}`, or on an older head it only
+restacks or merges `main` into (`carry`). The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
 conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
@@ -186,8 +190,8 @@ The pod registry (`pods/registry.py`) is the same table as one file per machine,
 hand-merging a shared file: `research pods create --name N --max-hours H ... --register
 --project P`, or `research pods register N --pod-id ID --project P` for an
 existing pod. `register` refuses a pod id the RunPod account doesn't know and
-a pod whose name isn't `N`. It is read where `$RESEARCH_MACHINES_D` points,
-or from `~/.research/notes/machines.d` on a machine without machines.toml.
+a pod whose name isn't `N`. `register` and `run --on` use one directory: `$RESEARCH_MACHINES_D`,
+else `~/.research/notes/machines.d` (`none` turns it off, and `register` refuses).
 The two sources merge, and a name they bind to different pods is refused.
 `create` makes at most one live pod per `--name`, so a retry loop can't duplicate pods. It refuses when a live pod of that
 name exists (exit 4, `--allow-duplicate` overrides). After a failed create call it uses a pod that appeared under the name
@@ -560,7 +564,7 @@ at = "10:30Z"
 weekday = "mon"                              # weekly; daily without it
 source = "/workspace/steward/verity"         # the tree it is launched from: its cwd, and its workspace on PYTHONPATH
 args = ["--on", "vy-lean-small", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_upstream", "--",
-        "python", "tools/lean/upstream.py", "backends/flock/verifier/lean/soundness", "--fetch", "--rev", "origin/main"]
+        "python", "tools/lean/upstream.py", "verity/Security/Proofs", "--fetch", "--rev", "origin/main"]
 ~~~
 
 `args` are `research run`'s and must put the run on a machine (`--on`). The steward runs `research run --id <run id> <args>`,
@@ -604,15 +608,11 @@ research notes approaches render | check                                        
 
 ## Not yet built, in order
 
-1. `research compare <a> <b>`: descriptive diff of two run records
-   (source, fingerprints expected/observed, environment, measurements with
-   ratios labeled as treatment/baseline, validation, preservation). It shows
-   differences; the workload's contract decides which ones matter.
-2. `research status` reading the project's budget ledger with its
+1. `research status` reading the project's budget ledger with its
    observation time (no second spend counter).
-3. Reconcile the final `lane/r17-mprof` telemetry revision against
+2. Reconcile the final `lane/r17-mprof` telemetry revision against
    `df7fbea3d` once the r17 campaign is frozen; port, do not overwrite.
-4. Milestone: one real SP1 case through `--on`, then the seven-stage
+3. Milestone: one real SP1 case through `--on`, then the seven-stage
    `campaign_h100.sh` replaced end to end: the stage sequence stays a
    benchmark-owned script; `paired_run.py` writes `result.json`; `research`
    supplies targeting, shipping, identity, telemetry, retrieval. No SP1

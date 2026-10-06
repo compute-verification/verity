@@ -37,11 +37,11 @@ ALLOWED = {
     "primitives.commitments": {"primitives.circuits", "primitives.crypto"},
     "protocols.profile": {"primitives.circuits"},
     "protocols.verification.sampled_proofs": {"primitives.circuits", "primitives.commitments", "protocols.profile"},
-    "protocols.accounting.space.pous": {"claims", "primitives.commitments", "primitives.randomness"},
+    "protocols.accounting.space.pous": {"claims", "primitives.circuits", "primitives.commitments", "primitives.randomness"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.
     "protocols.accounting.work.pouw": {"primitives.circuits", "primitives.commitments", "primitives.crypto",
                                        "primitives.randomness", "protocols.profile", "protocols.verification.sampled_proofs"},
-    "protocols.accounting.communication.warden": {"primitives.commitments"},
+    "protocols.accounting.communication.certifier": {"primitives.commitments"},
 }
 #: Import names core never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
@@ -65,8 +65,10 @@ IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 
 
 def _sources(root: Path = SRC) -> list[Path]:
-    """Core's own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory."""
-    return sorted(p for p in root.rglob("*.py") if not {"tests", "lean", "__pycache__"} & set(p.relative_to(SRC).parts))
+    """Core's own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, or a Lake build
+    directory (``verity/Security/.lake`` holds its dependencies' checkouts, Mathlib's scripts among them)."""
+    return sorted(p for p in root.rglob("*.py")
+                  if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts))
 
 
 def _imports(path: Path) -> list[tuple[str, int, bool]]:

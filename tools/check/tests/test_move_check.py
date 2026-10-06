@@ -201,8 +201,8 @@ VERITY_PATH = {"type": "path", "scope": "", "name": "verity", "manifestFile": "l
                "dir": "../../packages/verity/lean", "configFile": "lakefile.toml"}
 PINS = {"Verity.SecurityProofs.G": {"signature": ["Verity.SecurityProofs.G : Verity.G"], "assumptions": [], "type_hash": "aa"}}
 READS = {"Verity.Guarantees": {"digest": "dd", "definitions": {"Verity.G": "ee"}}}
-FOO = "import Verity.Guarantees\n\nnamespace Verity.SecurityProofs\n\ntheorem G : Verity.G := rfl\n\nend Verity.SecurityProofs\n"
-BAR = ("import Verity.SecurityProofs.Foo\nimport Mathlib.Tactic\n\nnamespace Verity.SecurityProofs\n\n"
+FOO = "import Specs.Core.Guarantees\n\nnamespace Proofs.Core\n\ntheorem G : Verity.G := rfl\n\nend Proofs.Core\n"
+BAR = ("import Verity.SecurityProofs.Foo\nimport Mathlib.Tactic\n\nnamespace Proofs.Core\n\n"
        "theorem H : 1 = 1 := rfl\n\nend Verity.SecurityProofs\n")
 
 
@@ -218,9 +218,9 @@ SPEC_FILES = {
     f"{SPEC}/lakefile.toml": LAKEFILE_SPEC, f"{SPEC}/lean-toolchain": "leanprover/lean4:v4.99.0\n",
     f"{SPEC}/lake-manifest.json": _manifest("verity", MATHLIB),
     f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS, reads=READS),
-    f"{SPEC}/Verity.lean": "import Verity.Protocol\nimport Verity.Guarantees\nimport Verity.SecurityProofs\n",
+    f"{SPEC}/Verity.lean": "import Definitions.Core\nimport Specs.Core.Guarantees\nimport Proofs.Core\n",
     f"{SPEC}/Verity/Protocol.lean": "def Verity.p := 1\n",
-    f"{SPEC}/Verity/Guarantees.lean": "import Verity.Protocol\n\ndef Verity.G : Prop := Verity.p = 1\n",
+    f"{SPEC}/Verity/Guarantees.lean": "import Definitions.Core\n\ndef Verity.G : Prop := Verity.p = 1\n",
     f"{SPEC}/Verity/SecurityProofs.lean": "import Verity.SecurityProofs.Foo\nimport Verity.SecurityProofs.Bar\n",
     f"{SPEC}/Verity/SecurityProofs/Foo.lean": FOO,
     f"{SPEC}/Verity/SecurityProofs/Bar.lean": BAR,
@@ -256,6 +256,20 @@ def test_lean_split_is_certified(tmp_path):
     assert kinds == {f"{PROOFS}/CoreProofs/Bar.lean": "lean", f"{SPEC}/Verity/SecurityProofs.lean": "lean",
                      f"{SPEC}/lean-audit.json": "lock", **{f"{PROOFS}/{n}": "copy" for n in sorted(MC.LAKE_COPIES)
                                                              if n != "lakefile.lean"}}
+
+
+def test_module_names_follow_src_dir(tmp_path):
+    """A nested package with `srcDir = ".."` names its modules from the directory above it, as Lake does."""
+    repo, base = _repo(tmp_path, {"verity/Security/lakefile.toml": 'name = "security"\n[[lean_lib]]\nname = "Spec"\n',
+                                  "verity/Security/Spec/Pouw.lean": "",
+                                  "verity/Security/Proofs/lakefile.toml": 'name = "proofs"\nsrcDir = ".."\n',
+                                  "verity/Security/Proofs/Pouw/End.lean": "",
+                                  "p/lakefile.toml": '[[lean_lib]]\nname = "P"\nsrcDir = "src"\n', "p/src/P/A.lean": "",
+                                  "p/Check.lean": ""})
+    tree = MC.Tree(base, str(repo))
+    assert tree.module("verity/Security/Spec/Pouw.lean") == "Spec.Pouw"
+    assert tree.module("verity/Security/Proofs/Pouw/End.lean") == "Proofs.Pouw.End"
+    assert tree.module("p/src/P/A.lean") == "P.A" and tree.module("p/Check.lean") == "Check"
 
 
 def test_lean_split_that_changes_a_proof_line_is_refused(tmp_path):
