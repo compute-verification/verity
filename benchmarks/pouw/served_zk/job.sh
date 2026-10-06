@@ -48,9 +48,10 @@ WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
 export PYTHONPATH=$SRC:$SRC/catalog:$SRC/kernels:$SRC/experimental:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/backends/flock/python
 SC="$Z/served_commit.py"
-VPY=$WORK/venv312/bin/python
+VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 
 setup
+[ -x "$VPY" ] || VPY=$PY
 log "served-zk window: passes $PASSES"
 for p in request other; do [ -f "$PASSES/$p/manifest.json" ] || { log "no $PASSES/$p/manifest.json"; exit 2; }; done
 
