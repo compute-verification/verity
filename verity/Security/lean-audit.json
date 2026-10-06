@@ -20963,6 +20963,9 @@
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
   },
+  "FlockVBridge.Algebra.decoded_rsT": {
+   "owner": "@proofs"
+  },
   "FlockVBridge.Algebra.folded_size": {
    "owner": "@proofs"
   },
@@ -20978,7 +20981,19 @@
   "FlockVBridge.Algebra.residuals_eq_run": {
    "owner": "@proofs"
   },
+  "FlockVBridge.Algebra.ringSwitch_checks": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.ringSwitch_of_residuals": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.ringSwitch_spec": {
+   "owner": "@proofs"
+  },
   "FlockVBridge.Algebra.run_sim": {
+   "owner": "@proofs"
+  },
+  "FlockVBridge.Algebra.wi_rs": {
    "owner": "@proofs"
   },
   "FlockVBridge.Algebra.zerocheck_checks": {
