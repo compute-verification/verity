@@ -16,8 +16,8 @@ open FlockSoundness FlockSoundness.Audit
 
 /-- **C-Flock's one-stage audit, end to end, at the drawn units.** -/
 theorem EndToEndDrawn : Flock.Guarantees.EndToEndDrawn := by
-  intro n Reg I ht c hc hU pub hpub hpt hscope kd hdiv dj S₀ y₀ wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr
-    t' ht' τ qF qS L P vb σ hCR hA2
+  intro n Reg I ht c hc hU pub hpub hpt hscope kd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw hM ρ
+    hρ hr t' ht' τ qF qS L P vb σ hCR hA2
   have h := Discharge.Composed.zk_session_soundJ_custody_drawn_reg I ht hc hU hpub hpt hscope kd hdiv dj y₀ wr dg N Lb
     src hTags hCust hk hRw hM hρ hr ht' τ (qF := qF) (qS := qS) hCR
   rw [Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h

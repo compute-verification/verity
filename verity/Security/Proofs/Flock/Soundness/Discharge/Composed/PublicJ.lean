@@ -59,7 +59,7 @@ variable {n : ℕ} {Reg : Type}
 only through the public file `pub` (`layZJ`'s population is `fun _ => pub`), so its `wrongRegZ` is one set at every
 registration. -/
 theorem rsZJ_wrongRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {mPts : ℕ} {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) {pub : Public}
     (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOk c = true) (R R' : Reg) (Xv : Fin (Layout.keyN c hU n) → Bool) :
@@ -82,7 +82,7 @@ theorem zk_session_soundJ_custody_reg
     (hscope : Layout.scopeOk c = true)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I (mPtsOf c.g (kd / nTab I)) S₀ (dj S₀))
+    {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)

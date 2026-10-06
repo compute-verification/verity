@@ -50,7 +50,9 @@ Its named assumptions, each a hypothesis, are `EndToEnd`'s:
 * `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through `LinkCRZC`) for the prover's link finders.
 
 The rest are the verify command's tags under hidden outputs (`TagsOkZHJ`), an untyped statement with no shared-row
-tables (`pub.tables = none`), and the count curve's numeric conditions. -/
+tables (`pub.tables = none`), the count curve's numeric conditions, and a reference setup `y₀`: table 0's, at the
+session's link points, at some draw `d₀`, which the session's plan puts in place of a table that a draw doesn't set up.
+Every draw flock-verify accepts gives one (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of tables. -/
 def EndToEndHidden : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit, which the verifier parses, and its public file
@@ -61,8 +63,8 @@ def EndToEndHidden : Prop :=
     -- the law: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     -- the record: the draw file at each draw, and the session at each draw and registration
-    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n))
-    (y₀ : DrawSetupZKH I (mPtsOf c.g (kd / nTab I)) S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
+    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -113,7 +115,9 @@ Its named assumptions, each a hypothesis, are `EndToEndDrawn`'s: `live-verifier`
 with A6 `uniform/flock-coin-server` for its coins), `cr/sha-512` (`Assumptions.SHA512CRStrict`, through `TableCRZ`) for
 each table's knowledge finders at budgets `qF` and `qS`, and `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through
 `LinkCRZC`) for the prover's link finders. The rest are the verify command's tags under hidden outputs (`TagsOkZHJ`), an
-untyped statement with no shared-row tables (`pub.tables = none`), and the bound's numeric conditions. -/
+untyped statement with no shared-row tables (`pub.tables = none`), the bound's numeric conditions, and
+`EndToEndHidden`'s reference setup `y₀`: table 0's, at the session's link points, at some draw `d₀`, which every draw
+flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of tables. -/
 def EndToEndHiddenDrawn : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit, which the verifier parses, and its public file
@@ -124,8 +128,8 @@ def EndToEndHiddenDrawn : Prop :=
     -- the law: a `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (hdiv : kd % nTab I = 0)
     -- the record: the draw file at each draw, and the session at each draw and registration
-    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n))
-    (y₀ : DrawSetupZKH I (mPtsOf c.g (kd / nTab I)) S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
+    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)

@@ -30,7 +30,7 @@ variable {n : ℕ} {Reg : Type}
 /-- **The registered commit strings are the public file's**, under hidden outputs: the rows' value binding (`rsZHJ`)
 reads the registration only through the public file `pub`, so its `wrongRegZ` is one set at every registration. -/
 theorem rsZHJ_wrongRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {mPts : ℕ} {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOk c = true)
     (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hpt : pub.tables = none) (R R' : Reg) (Xv : Fin (Layout.keyN c hU n) → Bool) :
@@ -52,7 +52,7 @@ theorem zk_session_soundHJ_custody_reg
     (hscope : Layout.scopeOk c = true)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I (mPtsOf c.g (kd / nTab I)) S₀ (dj S₀))
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -106,7 +106,7 @@ theorem zk_session_soundHJ_custody_drawn_reg
     (hscope : Layout.scopeOk c = true)
     (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I (mPtsOf c.g (kd / nTab I)) S₀ (dj S₀))
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
