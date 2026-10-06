@@ -517,7 +517,8 @@ useful    U/(α_A·α_B), glue
     Lean's statements don't model that yet: their draw weight is the whole tile's `Wref`, whatever is volunteered.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
-    is at most ρ times those cells' credit. ρ is the device record's cap (`Device.cap`): 1/400 on the H100.
+    is at most ρ times those cells' credit; under -h3, every credited A row's too. ρ is the device record's cap
+    (`Device.cap`): 1/400 on the H100.
   - That credit is the cells' share of the unit's `credit_of` at the kept width, |rows|·|cols|/(m·n) (the per-tile
     statement's `tileShare`). A row's forming and A′·F_B are so charged once across its row band, a |cols|/n share in
     each tile. `credit_of` of the tile's own shape would charge them whole in every tile: at 8,192³ that cap is 2.17×
