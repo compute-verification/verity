@@ -161,6 +161,7 @@ def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
     limit = m["calibration"]["limit_ns"]
     assert honest["limit_fixed_before_load"] and honest["limit_ns"] == late["limit_ns"] == rec["limit_ns"] == limit
     assert honest["allowance_kind"] == "loopback" and len(honest["source"]) == 64 and len(honest["records"]) == 2
+    assert isinstance(honest["numa_balancing_exempt"], bool)
     assert value["audits_accepted"] == 0 and value["wrong"] > 0
     assert late["audits_accepted"] == 0 and late["late"] > 0 and late["wrong"] == 0
     assert rec["wrong"] == 0 and rec["late"] > 0 and rec["margin_s"]["min"] < 0 and rec["dropped_blocks"] == 20
@@ -291,3 +292,15 @@ def test_side_by_side_tables_both_arms_and_withholds_a_failed_one(tmp_path, monk
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     assert sbs.main([str(tmp_path / "band.json"), str(tmp_path / "p2.json"), "--out", str(tmp_path / "side.json")]) == 1
     assert json.loads((tmp_path / "side.json").read_text())["schema"] == sbs.SCHEMA
+
+
+def test_the_verifier_leaves_automatic_numa_balancing_by_an_explicit_local_policy():
+    """Where the kernel takes the policy, this thread's is MPOL_LOCAL afterwards (get_mempolicy), which the balancer skips."""
+    import subprocess
+    probe = ("import ctypes, os, sys; sys.path.insert(0, sys.argv[1]); from p2_v1 import live; ok = live.exempt_from_numa_balancing(); "
+             "mode = ctypes.c_int(-1); nr = {'x86_64': 239, 'aarch64': 236}.get(os.uname().machine); "
+             "got = ctypes.CDLL(None).syscall(nr, ctypes.byref(mode), None, 0, None, 0) if ok else 0; print(ok, mode.value, got)")
+    out = subprocess.run([sys.executable, "-c", probe, str(BENCH)], capture_output=True, text=True, check=True).stdout.split()
+    assert out[0] in ("True", "False")
+    if out[0] == "True":
+        assert out[1:] == ["4", "0"]                                   # MPOL_LOCAL
