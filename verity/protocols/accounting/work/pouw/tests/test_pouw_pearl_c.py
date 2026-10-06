@@ -15,6 +15,7 @@ import pytest
 
 import pearl_c_vectors as CV
 import pearl_vectors as PV
+from verity.primitives.crypto.blake3 import blake3
 from verity.primitives.crypto.turboshake import turboshake128
 from verity_catalog.definitions.fp32 import F32DivV2, F32FmaV2, F32MulV2
 from verity_catalog.definitions.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
@@ -166,6 +167,28 @@ def test_seeds_are_keyed_as_the_design_says():
     one = instance("dup", index=3)[4]
     two = instance("dup", index=4)[4]
     assert one.c != two.c and one.u != two.u
+
+
+#: -h3's row seeds, as `hash.cuh`'s `b3_seeds` (mode 1, built for the host) writes them: (unit, row) -> seed, at the salt
+#: bytes 0 … 31, root_B bytes 32 … 63 and the leaf blake3("pearl-c row leaf"); benchmarks/pouw's host test checks the
+#: kernel against the same bytes
+ROW_SEEDS = {(7, 3): "c12884464d77c2b929ce7c21ebd1600b8d5422eef522cb6436519f4ccf5f8e6a",
+             (7, 200): "d6218857d90cbcd6e78ee0cbe69d50820baccbe3f7434c7346c0072a3381d139",
+             (2 ** 32 - 1, 3): "3d7c8deb306724f5f05284d6d04d51b8a85387b51b454da2430a519a9744f2f8",
+             (2 ** 32 - 1, 200): "ac1671c97f95166d8fd0ef09490934c7aba03d497eb08de99e84e2639b43d6a3"}
+
+
+def test_row_seeds_are_the_one_row_units_seed_a():
+    """-h3's row seed is the pinned bytes, the one-row unit's seed_A at index unit · 2^32 + row, so two rows, two units or
+    two leaves never share one; a unit or row of 2^32 or more is refused."""
+    salt, root_b, leaf = bytes(range(32)), bytes(range(32, 64)), blake3(b"pearl-c row leaf")
+    for (unit, row), seed in ROW_SEEDS.items():
+        assert C.row_seed(salt, leaf, root_b, unit, row).hex() == seed
+        assert C.row_seed(salt, leaf, root_b, unit, row) == C.unit_seed_a(salt, leaf, root_b, unit << 32 | row)
+    assert C.row_seed(salt, blake3(b"another row"), root_b, 7, 3).hex() != ROW_SEEDS[7, 3]
+    for unit, row in ((2 ** 32, 0), (0, 2 ** 32), (-1, 0), (0, -1)):
+        with pytest.raises(ValueError, match="must each be below 2"):
+            C.row_seed(salt, leaf, root_b, unit, row)
 
 
 def test_leaf_and_tickets_rebuilt_from_bytes():

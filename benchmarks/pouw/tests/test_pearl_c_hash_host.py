@@ -1,8 +1,8 @@
 """hash.cuh on the host (pearl_c/hash_host.cpp, built with g++): each hashing kernel, launched as run.py launches it, writes
 the bytes the verifier's reference computes.  A's row leaves and frame-b3 trees (pads, level keys, one-compression nodes)
 at rows of 1 to 75 chunks, the message digests, the tile leaves full and partial (decode's 32 x 64), Pearl's tickets, the
-tile tree, and a unit's seed_A over its root with its line and jackpot keys; then run.py's commit and hashing phases end to
-end."""
+tile tree, a unit's seed_A over its root with its line and jackpot keys, and -h3's row seeds at the pinned vectors; then
+run.py's commit and hashing phases end to end."""
 
 from __future__ import annotations
 
@@ -156,7 +156,8 @@ def test_seeds_are_the_scheme_s(host):
     host.launch("b3_seeds", 1, 128, p=(src, out, skey, psalt, prb), i=(1, idx, 0))
     assert host.read(out, 32) == C.unit_seed_a(salt, leaves[0], root_b, idx)
     host.launch("b3_seeds", 1, 128, p=(src, out, skey, psalt, prb), i=(5, idx, 1))
-    assert host.read(out, 160) == b"".join(C.unit_seed_a(salt, leaves[r], root_b, idx << 32 | r) for r in range(5))
+    assert host.read(out, 160) == b"".join(C.row_seed(salt, leaves[r], root_b, idx, r) for r in range(5))
+    assert C.row_seed(salt, leaves[3], root_b, idx, 3) == C.unit_seed_a(salt, leaves[3], root_b, idx << 32 | 3)
     keys = host.alloc(64)
     host.launch("seed_subkeys", 1, 32, p=(out, keys))
     seed = host.read(out, 32)
@@ -165,6 +166,26 @@ def test_seeds_are_the_scheme_s(host):
     for name, role in (("NOISE_LINE_LABEL", "noise-line"), ("JACKPOT_LABEL", "jackpot")):
         chars = re.search(rf"__constant__ uint8_t {name}\[(\d+)\] = \{{([^}}]*)\}}", source)
         assert "".join(c.strip()[1] for c in chars.group(2).split(",")).encode() == P.LABELS[role]
+
+
+#: -h3's row seeds pinned in the scheme's suite (test_pouw_pearl_c's ROW_SEEDS): (unit, row) -> seed
+ROW_SEEDS = {(7, 3): "c12884464d77c2b929ce7c21ebd1600b8d5422eef522cb6436519f4ccf5f8e6a",
+             (7, 200): "d6218857d90cbcd6e78ee0cbe69d50820baccbe3f7434c7346c0072a3381d139",
+             (2 ** 32 - 1, 3): "3d7c8deb306724f5f05284d6d04d51b8a85387b51b454da2430a519a9744f2f8",
+             (2 ** 32 - 1, 200): "ac1671c97f95166d8fd0ef09490934c7aba03d497eb08de99e84e2639b43d6a3"}
+
+
+def test_row_seeds_are_the_pinned_vectors(host):
+    """b3_seeds in mode 1 over 201 rows (two blocks of 128 threads), at unit 7 and at the largest unit 2^32 − 1 (i1 = −1,
+    which the kernel reads as u32): every row's seed is `pearl_c.row_seed`'s, and rows 3 and 200 are the pinned bytes."""
+    salt, root_b, leaf = bytes(range(32)), bytes(range(32, 64)), blake3(b"pearl-c row leaf")
+    skey, psalt, prb = host.put(blake3(C.LABELS["seed-A"])), host.put(salt), host.put(root_b)
+    for unit in (7, 2 ** 32 - 1):
+        src, out = host.put(leaf * 201), host.alloc(32 * 201)
+        host.launch("b3_seeds", 2, 128, p=(src, out, skey, psalt, prb), i=(201, unit - (unit >> 31 << 32), 1))
+        got = host.read(out, 32 * 201)
+        assert got == b"".join(C.row_seed(salt, leaf, root_b, unit, r) for r in range(201))
+        assert [got[32 * r:32 * r + 32].hex() for r in (3, 200)] == [ROW_SEEDS[unit, 3], ROW_SEEDS[unit, 200]]
 
 
 def test_run_commit_and_hashing_phases_are_the_verifiers(host):

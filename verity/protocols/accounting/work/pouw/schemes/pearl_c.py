@@ -134,6 +134,15 @@ def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int) -> bytes:
     return _labelled(salt + root_a + root_b + index.to_bytes(8, "little"), "seed-A")
 
 
+def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int) -> bytes:
+    """-h3's seed of row `row` of unit `unit`, whose E_A line is drawn from it alone: the one-row unit's seed_A over the
+    row's own leaf in A's tree, H_"pearl-c/v0/seed-A"(salt ‖ leaf ‖ root_B ‖ (unit · 2^32 + row) u64 LE).  `hash.cuh`'s
+    `b3_seeds` at mode 1 computes it, with the unit index and the row each below 2^32."""
+    if not (0 <= unit < 1 << 32 and 0 <= row < 1 << 32):
+        raise ValueError(f"row_seed: unit {unit} and row {row} must each be below 2^32")
+    return unit_seed_a(salt, leaf, root_b, unit << 32 | row)
+
+
 def _word(x: float) -> int:
     return P.f32_bits(x)
 
