@@ -139,7 +139,7 @@ theorem lcRounds_fold (rounds : Array (F128 × F128)) (C : Nat → Array F128) :
         (Val.add (Val.add (Val.sm (c[0]! * c[0]!) qinf) (Val.sm c[0]! (Val.add (Val.add (Val.add claim q1) q1) qinf)))
           (Val.add claim q1), ts.push c[0]!) := by
       simp only [lStep, hq, hC0, Val.add, Val.sm, Prod.mk.injEq, and_true]
-      f128_ring
+      (apply fOf_injective; simp only [fOf_add, fOf_mul]; ring)
     rw [hstep]
     refine lcRounds_fold rounds C rest (i + 1) _ (ts.push c[0]!) _ _ src _ _ h (fun j hj => ?_) (fun j hj => ?_)
     · have e := hl (j + 1) (by omega)

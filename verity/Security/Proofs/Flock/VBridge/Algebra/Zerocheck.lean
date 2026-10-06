@@ -223,7 +223,7 @@ theorem zcRounds_fold (r : Array F128) (rounds : Array (F128 × F128)) (C : Nat 
           (Val.sm c[0]! g1)) (Val.sm (c[0]! * ((1 : F128) + c[0]!)) ginf), rho.push c[0]!) := by
       simp only [zStep, hg, hC0, Val.add, Val.sm]
       congr 1
-      f128_ring
+      (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_one]; ring)
     rw [hstep]
     refine zcRounds_fold r rounds C rest (i + 1) _ (rho.push c[0]!) _ _ src _ _ h (fun j hj => ?_) (fun j hj => ?_)
     · have e := hl (j + 1) (by omega)
