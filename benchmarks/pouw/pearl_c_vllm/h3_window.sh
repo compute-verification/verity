@@ -9,8 +9,8 @@
 # screen's retained passes stay in scratch (deleted after); its capture.json and screen.json are copied to out/screen.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/screen"
-WORK=/workspace/pouw/mvp-e2e; PY=$WORK/venv312/bin/python; CUDA=/usr/local/cuda-13.0
-S=$(mktemp -d /workspace/pouw/tmp-h3-window.XXXXXX); trap 'rm -rf "$S"' EXIT
+WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python; CUDA=/usr/local/cuda-13.0
+S=$(mktemp -d "$(dirname "$WORK")/tmp-h3-window.XXXXXX"); trap 'rm -rf "$S"' EXIT
 HEAD=$(git rev-parse HEAD); echo "tree $HEAD" | tee "$OUT/tree.txt"
 STEPS=${STEPS:-both}; SCHEME=${SCHEME:-pearl-c-sm120-v1-h3}
 stamp() { echo "h3-window: $* at $(date -u +%H:%M:%SZ)"; }
