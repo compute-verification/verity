@@ -1,4 +1,4 @@
-"""P2 v1's arm of the POUS-only harness (`bench.py --impl p2-v1-gpu`): the frozen v1 scheme (`reference.py`) with its GPU
+"""P2's arm of the POUS-only harness (`bench.py --impl p2-v1-gpu`): the v4 scheme (`reference.py`) with its GPU
 kernels (`p2v1.cu`, `gpu.py`) on one device, the same steps, controls and metrics as the band's arm (`band_gpu/harness.py`), so
 the two compare side by side.
 
@@ -47,8 +47,8 @@ SETUP_SOURCE = hashlib.sha256(b"verity-pous/bench/p2-v1/setup-source").digest()
 """The bench's setup source: in a deployment the verifier's secret or a beacon round drawn after the commitment to `W`."""
 PINS = ("P2MeetsM1pB19Uncond", "P2MeetsM1pFamilyUncond", "P2MeetsM1pW8192Uncond", "P2SlackB19Uncond", "P2SlackFamilyUncond",
         "P2ErrorSplitB19Uncond")
-ASSUMPTIONS = ("P2-EXP-IO", "SHAKE256/P2-EXP-IO storage-game idealization", "P2–M1-SGI (not accepted)", "SeqRoot",
-               "perfect isolation", "cr/sha-256")
+ASSUMPTIONS = ("P2-EXP-IO", "SHA-512-CTR/P2-EXP-IO", "P2–M1-SGI (not accepted)", "SeqRoot", "perfect isolation", "cr/sha-512",
+               "honest-nebius-host")
 RECOMPUTE_EVERY = 10
 """The recompute control drops one block in this many; P2's blocks are independent, so any pattern keeps what a block needs."""
 

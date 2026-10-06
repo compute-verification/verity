@@ -1,18 +1,21 @@
-"""P2 v1 on the CPU, as the frozen specification states it (the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, v1,
-29 Sep 2026): the reference the harness's GPU kernels are gated against.
+"""P2 v4 on the CPU, as `verity/protocols/accounting/space/pous/p2/PROTOCOL.md` (P2 specification v4) states it: the
+reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
+(`vectors.py`) are built on.
 
-A port of the P2 lane's `internal/efficient-crypto/p2-bounty-kit/p2_ref.py` onto core: `verity.primitives.randomness.frame` and
-`derive` are the spec's framing and derivation, and `verity.primitives.commitments.identity.canonical_json_bytes` its manifest
-encoding. Big integers are Python's (gmpy2's `powmod` when it is installed). It is pinned by `vectors.json` beside it, the
-kit's `p2-test-vectors/v1` (SHA-256 `781fec77…`, the file hash in the spec's §7).
+v4 is v1.1 with one hash, SHA-512 with its whole 64-byte output, everywhere (Daniel's ruling of 6 Oct 2026, 15:07Z): the
+W commitment, the verification tree, the epoch id and the keys, which are counter-mode SHA-512 where v1 read SHAKE256.
+`verity.primitives.randomness` is the spec's derivation (`frame`, `derive`) and
+`verity.primitives.commitments.identity.canonical_json_bytes` its manifest encoding. Big integers are Python's (gmpy2's
+`powmod` when it is installed). It is pinned by `vectors.json` beside it (`VECTORS_SHA512`, the hash in the spec's §7).
 
 - `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile (`p2-2054B` at `DEPLOYMENT`: 2,054 bytes of each 2,056-byte block)
   and the store's shape (blocks per segment, segments).
-- `setup_salt`, `keys`: §4's post-commitment salt and per-block `K` and `t` (SHAKE256 with the v1 framing; `t` is
-  rejection-sampled below `p`).
+- `setup_salt`, `expand_prefix`, `stream`, `keys`: §4's post-commitment salt and per-block `K` and `t` (counter-mode SHA-512
+  over a prefix of whole 128-byte blocks; `t` is rejection-sampled below `p`).
 - `d`, `rho`, `sigma`, `encode`, `decode`: §3's maps, `E_j(m) = ρ(σ_K(ρ(m + t)))` and `D_j(c) = d(σ_K(d(c))) − t`.
-- `manifest`, `w_commitment`, `leaf`, `root`, `epoch_id`, `audit_key`: the setup commitment, the RFC 6962 verification
-  tree over 0x00-tagged leaves, and the audit's challenge derivation (mode 0, `verity/pous/audit-challenge/v2`).
+- `manifest`, `w_commitment`, `row_digest`, `leaf`, `node`, `root`, `epoch_id`, `audit_key`, `round_key`: the setup
+  commitment, the RFC 6962 verification tree over 0x00-tagged leaves of each block's `sha512/row/v2` digest, and the
+  audit's challenge derivation (mode 0 and mode 1).
 """
 from __future__ import annotations
 
@@ -21,15 +24,28 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verity.primitives.commitments.identity import canonical_json_bytes
+from verity.primitives.commitments.rowleaf import sha512_row_v2_prefix
 from verity.primitives.randomness import Key, derive, frame
 
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"
-VECTORS_SHA256 = "781fec77f4fcadb45f10673457ecd9b63d26cf826a2ebaed5da795539d8a5fab"
-PROTOCOL = "p2/v1"
-SETUP_DOMAIN = "verity/pous/p2-setup/v1"
-EXPAND_LABEL = "verity/pous/p2/expand/v1"
-W_COMMITMENT_LABEL = b"verity-pous/w-commitment/v1"
+VECTORS_SHA512 = "29471c3b26a19b9e48a8888ba3450329693194161b6cf08ce2c8658e2772aa5e3028d4dc9f94cb9757582f326e9afe97017bdd597e4de9636d253e6908768bd9"
+AUDIT_VECTORS = HERE / "audit-vectors.json"
+AUDIT_VECTORS_SHA512 = "3f60386cae976e0271da8231061581120cda5c0976e2aff5d309e2b733d8c312242cc541df5dabdcd811dcd8a68b15470b824d46dc26ff16fc31de70ddba32c2"
+NEGATIVE_VECTORS = HERE / "audit-negative-vectors.json"
+NEGATIVE_VECTORS_SHA512 = "45620713146fc2ce8dac5f367ad1ebeb7ced642ff0e952b0ce48b97d5546822ea6b7e4ff0f3903ffe275806d9366c23c928778e4a9219dadabf172fe0937eb76"
+"""The spec's §7 pins: `vectors.py` writes the three files and rewrites these."""
+PROTOCOL = "p2/v4"
+SETUP_DOMAIN = "verity/pous/p2-setup/v4"
+AUDIT_ID_DOMAIN = "verity/pous/p2-audit-id/v4"
+CHALLENGE_DOMAIN = "verity/pous/p2-audit-challenge/v4"
+ROUND_DOMAIN = "verity/pous/p2-audit-round/v4"
+KEYS_TAG = b"verity/pous/p2/keys/v4\0"
+EPOCH_TAG = b"verity/pous/p2/epoch/v4\0"
+TAGGED_SHA512 = b"verity/tagged-sha512/v1\0"
+W_COMMITMENT_LABEL = b"verity-pous/w-commitment/v2"
+DIGEST_BYTES = 64
+SALT_BYTES = 32
 K_AUDIT = 105
 """The deployment audit's challenges (spec §5, F6)."""
 DELTA_NS = 500_000
@@ -98,21 +114,33 @@ def setup_salt(source: bytes, params: Params, model: bytes) -> bytes:
 
 
 def expand_prefix(salt: bytes, params: Params, model: bytes) -> bytes:
-    """Every block's SHAKE256 input before its `u64be(segment) ‖ u64be(local block) ‖ purpose`."""
-    if len(salt) != 32 or len(model) != 32:
-        raise ValueError("the setup salt and the model commitment are 32 bytes each")
-    return frame(EXPAND_LABEL) + frame(PROTOCOL) + frame(params.prime_id) + frame(model) + frame(salt)
+    """Every block's key-stream input before its `u64be(segment) ‖ u64be(local block)`: the framed setup, zero-padded to
+    whole 128-byte blocks, so that one midstate serves every block and each 64-byte chunk is one compression after it."""
+    if len(salt) != SALT_BYTES or len(model) != DIGEST_BYTES:
+        raise ValueError("the setup salt is 32 bytes and the model commitment 64")
+    body = KEYS_TAG + frame(PROTOCOL) + frame(params.prime_id) + frame(model) + frame(salt)
+    return body + bytes(-len(body) % 128)
+
+
+def stream(base: bytes, purpose: bytes, nbytes: int) -> bytes:
+    """The first `nbytes` of `SHA512(base ‖ purpose ‖ u32be 0) ‖ SHA512(base ‖ purpose ‖ u32be 1) ‖ …`."""
+    head = hashlib.sha512(base + purpose)
+    out = bytearray()
+    for i in range(-(-nbytes // DIGEST_BYTES)):
+        h = head.copy()
+        h.update(i.to_bytes(4, "big"))
+        out += h.digest()
+    return bytes(out[:nbytes])
 
 
 def keys(salt: bytes, params: Params, model: bytes, segment: int, block: int) -> tuple[int, int, int]:
     """Block `(segment, block)`'s full-width mask `K`, its tweak `t` (uniform below `p`) and `t`'s candidate index."""
     n = params.width_bytes
     base = expand_prefix(salt, params, model) + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
-    k = int.from_bytes(hashlib.shake_256(base + b"K").digest(n), "big")
-    stream = hashlib.shake_256(base + b"t")
+    k = int.from_bytes(stream(base, b"K", n), "big")
     attempt = 0
     while True:
-        candidate = int.from_bytes(stream.digest((attempt + 1) * n)[attempt * n:], "big")
+        candidate = int.from_bytes(stream(base, b"t", (attempt + 1) * n)[attempt * n:], "big")
         if candidate < params.p:
             return k, candidate, attempt
         attempt += 1
@@ -160,20 +188,31 @@ def decode(params: Params, c: int, k: int, t: int) -> int:
 
 
 def w_commitment(params: Params, w: bytes) -> bytes:
-    """The commitment to `W` (spec §4's `w_commitment`): tagged SHA-256 over the canonical manifest and `W`."""
+    """The commitment to `W` (spec §4's `w_commitment`): tagged SHA-512 over the canonical manifest and `W`, 64 bytes
+    (`verity.primitives.commitments.identity.tagged_sha512`'s frame, hashed here in pieces so that `W` is not copied)."""
     manifest = canonical_json_bytes(params.manifest())
-    h = hashlib.sha256(b"veritor/tagged-sha256/v1\0" + len(W_COMMITMENT_LABEL).to_bytes(4, "big") + W_COMMITMENT_LABEL)
+    h = hashlib.sha512(TAGGED_SHA512 + len(W_COMMITMENT_LABEL).to_bytes(4, "big") + W_COMMITMENT_LABEL)
     h.update((8 + len(manifest) + len(w)).to_bytes(8, "big") + len(manifest).to_bytes(8, "big") + manifest)
     h.update(w)
     return h.digest()
 
 
+def row_digest(data: bytes) -> bytes:
+    """A block's `sha512/row/v2` digest, `SHA512(P(8·len) ‖ block)`: the row a block's decode circuit hashes."""
+    return hashlib.sha512(sha512_row_v2_prefix(8 * len(data)) + data).digest()
+
+
 def leaf(salt: bytes, segment: int, block: int, data: bytes) -> bytes:
-    return hashlib.sha256(b"\x00" + salt + segment.to_bytes(8, "big") + block.to_bytes(2, "big") + data).digest()
+    """`SHA512(0x00 ‖ setup salt ‖ u64be(segment) ‖ u16be(local block) ‖ row_digest(block))`: 107 bytes, one compression."""
+    return hashlib.sha512(b"\x00" + salt + segment.to_bytes(8, "big") + block.to_bytes(2, "big") + row_digest(data)).digest()
+
+
+def node(left: bytes, right: bytes) -> bytes:
+    return hashlib.sha512(b"\x01" + left + right).digest()
 
 
 def root(leaves: list[bytes]) -> bytes:
-    """The RFC 6962 tree's root: split at the largest power of two below the count, nodes `SHA256(0x01 ‖ l ‖ r)`."""
+    """The RFC 6962 tree's root: split at the largest power of two below the count, nodes `SHA512(0x01 ‖ l ‖ r)`."""
     if not leaves:
         raise ValueError("a verification tree has at least one leaf")
 
@@ -181,22 +220,41 @@ def root(leaves: list[bytes]) -> bytes:
         if hi - lo == 1:
             return leaves[lo]
         k = 1 << ((hi - lo - 1).bit_length() - 1)
-        return hashlib.sha256(b"\x01" + mth(lo, lo + k) + mth(lo + k, hi)).digest()
+        return node(mth(lo, lo + k), mth(lo + k, hi))
 
     return mth(0, len(leaves))
 
 
+def path(leaves: list[bytes], index: int) -> list[bytes]:
+    """Leaf `index`'s RFC 9162 inclusion path, siblings from the leaf toward the root."""
+    if len(leaves) == 1:
+        return []
+    k = 1 << ((len(leaves) - 1).bit_length() - 1)
+    if index < k:
+        return path(leaves[:k], index) + [root(leaves[k:])]
+    return path(leaves[k:], index - k) + [root(leaves[:k])]
+
+
 def epoch_id(params: Params, model: bytes, salt: bytes, verification_root: bytes) -> bytes:
     manifest = canonical_json_bytes(params.manifest())
-    return hashlib.sha256(b"verity/pous/p2/epoch/v1\0" + len(manifest).to_bytes(4, "big") + manifest + model + salt
+    return hashlib.sha512(EPOCH_TAG + len(manifest).to_bytes(4, "big") + manifest + model + salt
                           + params.blocks.to_bytes(8, "big") + verification_root).digest()
 
 
+def audit_id(source: bytes, epoch: bytes, counter: int) -> bytes:
+    return derive(source, AUDIT_ID_DOMAIN, {"counter": counter, "epoch": epoch}).stream("id", 32)
+
+
 def audit_key(source: bytes, epoch: bytes, verification_root: bytes, salt: bytes, counter: int) -> tuple[bytes, Key]:
-    """Mode 0: the audit's id and the key whose `uniform(blocks, j)` is round `j`'s index."""
-    audit_id = derive(source, "verity/pous/audit-id/v1", {"counter": counter, "epoch": epoch}).stream("id", 32)
-    return audit_id, derive(source, "verity/pous/audit-challenge/v2",
-                            {"audit": audit_id, "epoch": epoch, "root": verification_root, "salt": salt})
+    """Mode 0: the audit's id and the key whose `uniform(blocks, j)` is round `j`'s index and `stream(("nonce", j), 32)`
+    its nonce."""
+    aid = audit_id(source, epoch, counter)
+    return aid, derive(source, CHALLENGE_DOMAIN, {"audit": aid, "epoch": epoch, "root": verification_root, "salt": salt})
+
+
+def round_key(beacon: bytes, aid: bytes, epoch: bytes, verification_root: bytes, j: int) -> Key:
+    """Mode 1: round `j`'s key from its 32-byte beacon value; its `uniform(blocks, j)` is the round's index."""
+    return derive(beacon, ROUND_DOMAIN, {"audit": aid, "epoch": epoch, "root": verification_root, "round": j})
 
 
 def conformance(full_encode: bool = False) -> dict[str, object]:
@@ -206,7 +264,7 @@ def conformance(full_encode: bool = False) -> dict[str, object]:
 
     raw = VECTORS.read_bytes()
     doc = json.loads(raw)
-    checks = {"file_sha256": hashlib.sha256(raw).hexdigest() == VECTORS_SHA256}
+    checks = {"file_sha512": hashlib.sha512(raw).hexdigest() == VECTORS_SHA512}
     for v in doc["vectors"]:
         w, c0 = int(v["w"]), int(v["c0"])
         params = Params(w, c0, 2054 if (w, c0) == (DEPLOYMENT.w, DEPLOYMENT.c0) else w // 8 - 1)

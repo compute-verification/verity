@@ -1,5 +1,5 @@
-"""P2 v1's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu`) on CPU: the reference
-(`p2_v1/reference.py`) against the P2 kit's pinned vectors, and every step of the arm with the reference standing in for the GPU
+"""P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu`) on CPU: the reference
+(`p2_v1/reference.py`) against the spec's pinned vectors, and every step of the arm with the reference standing in for the GPU
 library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's own verifier process
 (`p2_v1/memory_challenger.py`) on its logical clock, so no outcome depends on a clock."""
 from __future__ import annotations
@@ -100,8 +100,8 @@ def _args(tmp_path, **kw):
 def test_the_reference_matches_every_pinned_vector():
     R, _, _ = _p2()
     got = R.conformance()
-    assert got["passed"] and got["checks"]["file_sha256"], got
-    assert set(got["checks"]) == {"file_sha256", "p2-v1/w64/0", "p2-v1/w96/0", "p2-v1/w128/0", "p2-v1/w16448/0",
+    assert got["passed"] and got["checks"]["file_sha512"], got
+    assert set(got["checks"]) == {"file_sha512", "p2-v4/w64/0", "p2-v4/w96/0", "p2-v4/w128/0", "p2-v4/w16448/0",
                                   "sigma-rejection/w64", "sigma-rejection/w16448"}
 
 
@@ -120,14 +120,35 @@ def test_the_root_exponent_splits_as_the_kernel_takes_it():
 
 
 def test_the_tree_and_the_audit_derivation_are_the_specs():
+    import hashlib
+
+    from verity.primitives.commitments.identity import tagged_sha512
+    from verity.primitives.commitments.rowleaf import sha512_row_v2_digest
+    from verity.primitives.randomness import frame
+
     R, _, _ = _p2()
-    leaves = [bytes([i]) * 32 for i in range(3)]
-    node = lambda l, r: __import__("hashlib").sha256(b"\x01" + l + r).digest()  # noqa: E731
+    leaves = [bytes([i]) * 64 for i in range(3)]
+    node = lambda l, r: hashlib.sha512(b"\x01" + l + r).digest()  # noqa: E731
     assert R.root(leaves) == node(node(leaves[0], leaves[1]), leaves[2])                    # RFC 6962: split at 2
-    audit_id, key = R.audit_key(b"s" * 32, b"e" * 32, b"r" * 32, b"t" * 32, 0)
-    again_id, again = R.audit_key(b"s" * 32, b"e" * 32, b"r" * 32, b"t" * 32, 0)
+    assert R.path(leaves, 2) == [node(leaves[0], leaves[1])] and R.path(leaves, 0) == [leaves[1], leaves[2]]
+    block, salt = bytes(range(256)) * 8 + bytes(8), b"t" * 32
+    leaf = R.leaf(salt, 3, 513, block)
+    assert leaf == hashlib.sha512(b"\x00" + salt + (3).to_bytes(8, "big") + (513).to_bytes(2, "big")
+                                  + sha512_row_v2_digest(block, 8 * 2056)).digest()
+    assert len(b"\x00" + salt + bytes(10) + leaf) == 107 <= 111                            # the leaf is one compression
+    params, w = R.Params(64, 189, 7, 8, 1, "p2-63b"), b"\x01\x02"
+    manifest = R.canonical_json_bytes(params.manifest())
+    assert R.w_commitment(params, w) == tagged_sha512("verity-pous/w-commitment/v2", len(manifest).to_bytes(8, "big")
+                                                      + manifest + w)
+    prefix = R.expand_prefix(salt, R.DEPLOYMENT, b"m" * 64)
+    body = R.KEYS_TAG + frame("p2/v4") + frame("p2-p16448-c21065") + frame(b"m" * 64) + frame(salt)
+    assert len(body) == 176 and prefix == body + bytes(80) and len(prefix) == 256      # two whole blocks
+    base = prefix + bytes(16)
+    assert R.stream(base, b"t", 65) == b"".join(hashlib.sha512(base + b"t" + i.to_bytes(4, "big")).digest() for i in (0, 1))[:65]
+    audit_id, key = R.audit_key(b"s" * 32, b"e" * 64, b"r" * 64, salt, 0)
+    again_id, again = R.audit_key(b"s" * 32, b"e" * 64, b"r" * 64, salt, 0)
     assert audit_id == again_id and [key.uniform(1 << 19, j) for j in range(5)] == [again.uniform(1 << 19, j) for j in range(5)]
-    other_id, _ = R.audit_key(b"s" * 32, b"e" * 32, b"r" * 32, b"t" * 32, 1)
+    other_id, _ = R.audit_key(b"s" * 32, b"e" * 64, b"r" * 64, salt, 1)
     assert other_id != audit_id                                                               # a fresh counter, a fresh audit
 
 
@@ -152,7 +173,7 @@ def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
     for g in ("vector", "round_trip", "reference_decode", "kernel_flags", "timed_audit", "value_control", "late_control",
               "recompute_control"):
         assert gates[g]["passed"], (g, gates[g])
-    assert gates["vector"]["vector"] == "p2-v1/w128/0" and gates["round_trip"]["blocks"] == 192
+    assert gates["vector"]["vector"] == "p2-v4/w128/0" and gates["round_trip"]["blocks"] == 192
     point = gates["operating_point"]
     assert point["k"] and point["deadline"] and point["rtt_allowance"] and not point["blocks"]    # 192 < 2^8 at the test point
     m = body["metrics"]
@@ -196,7 +217,7 @@ def test_the_p2_recompute_adversary_reencodes_every_dropped_block_of_c():
     """`plaintext_rows` + `_recomputer` give back `C_i` for dropped blocks in the encoded head and past it."""
     _, harness, _ = _p2()
     P = _small().with_segments(1)
-    salt, model = b"s" * 32, b"m" * 32
+    salt, model = b"s" * 32, b"m" * 64
     bound = _Bound(P, salt, model, False)
     blocks, nb = P.blocks, P.width_bytes
     m = torch.zeros(blocks, nb, dtype=torch.uint8)
@@ -257,17 +278,17 @@ def test_side_by_side_tables_both_arms_and_withholds_a_failed_one(tmp_path, monk
     p2 = _bench().P2V1Gpu().run(_args(tmp_path / "p"), WS, tmp_path / "p", backend=_backend(), params=_small())
     doc = lambda body, scheme, ok: json.loads(json.dumps({"scheme": scheme, "passed": ok, "weight_set": WS["id"], "hardware": "cpu",  # noqa: E731
                                                           "gates": body["gates"], "metrics": body["metrics"]}, default=str))
-    both = sbs.table(doc(band, "band-chain/d12/v1", True), doc(p2, "p2/v1", True))
+    both = sbs.table(doc(band, "band-chain/d12/v1", True), doc(p2, "p2/v4", True))
     rows = {r["metric"]: r for r in both["rows"]}
     for name in ("encode_GBps", "decode_pass_s", "decode_overhead_T1", "decode_overhead_T8", "audit_answer_p99.9_s",
                  "audit_margin_min_s", "audit_limit_s", "recompute_margin_min_s"):
         assert rows[name]["band"] is not None and rows[name]["p2"] is not None, name
     assert rows["decode_pass_s"]["p2_over_band"] == rows["decode_pass_s"]["p2"] / rows["decode_pass_s"]["band"]
-    assert "| metric | band (band-chain/d12/v1) | P2 (p2/v1) |" in sbs.markdown(both)
-    one = sbs.table(doc(band, "band-chain/d12/v1", True), doc(p2, "p2/v1", False))
+    assert "| metric | band (band-chain/d12/v1) | P2 (p2/v4) |" in sbs.markdown(both)
+    one = sbs.table(doc(band, "band-chain/d12/v1", True), doc(p2, "p2/v4", False))
     assert all(r["p2"] is None for r in one["rows"]) and not one["p2"]["passed"]
     (tmp_path / "band.json").write_text(json.dumps(doc(band, "band-chain/d12/v1", True)))
-    (tmp_path / "p2.json").write_text(json.dumps(doc(p2, "p2/v1", False)))
+    (tmp_path / "p2.json").write_text(json.dumps(doc(p2, "p2/v4", False)))
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     assert sbs.main([str(tmp_path / "band.json"), str(tmp_path / "p2.json"), "--out", str(tmp_path / "side.json")]) == 1
     assert json.loads((tmp_path / "side.json").read_text())["schema"] == sbs.SCHEMA
