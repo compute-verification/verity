@@ -1124,6 +1124,9 @@ impl Firewall {
     }
 
     fn refuse(&mut self, why: String) -> String {
+        if self.why.is_none() {
+            flock_live::firewall_transcript::with(|t| t.refused(&why));
+        }
         self.why.get_or_insert_with(|| why.clone());
         why
     }
@@ -1141,6 +1144,11 @@ impl Firewall {
         let items = flock_live::firewall::skeleton(&domain(&st.c, rep), LABEL_R1CS, &st.r1cs.statement_digest(), self.cm.cap.as_flattened().as_flattened(),
                                                 zkv::LABEL_ZC, zkv::LABEL_PADS,
                                                 |r| zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), r).map(|_| ()))?;
+        flock_live::firewall_transcript::with(|t| {
+            let names: Vec<&str> = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]),
+                                               &mut flock_live::firewall::Recorder::default()).map(|r| r.cons.iter().map(|c| c.0).collect()).unwrap_or_default();
+            t.begin_rep(rep, lay, &zk.pads, &zk.ic.root(), &domain(&st.c, rep), &self.cm, &items, &names)
+        });
         self.rep = Some(FirewallRep { rep, lay, zk0: zk.level0.clone(), checker: flock_live::firewall::Checker::new(items, lay.piop_exposed()), coins: Vec::new(),
                                   extras: None, link: None, shadow: None, t_wait: 0.0, algebra_tampered: false });
         Ok(())
@@ -1152,6 +1160,7 @@ impl Firewall {
         if self.tamper == "root" {
             got[0] ^= 1;
         }
+        flock_live::firewall_transcript::with(|t| t.root(&got, &self.root));
         if got != self.root {
             return Err(self.refuse(flock_live::firewall::refused(format!("level-0 root: the device committed {} where the recheck has {}",
                                                                       hex(&got[..8]), hex(&self.root[..8])))));
@@ -1182,6 +1191,7 @@ impl Firewall {
             if (tamper == "label" || tamper == "algebra") && !r.algebra_tampered {
                 r.algebra_tampered = flip_first(&mut c, if tamper == "label" { OP_LABEL } else { OP_OBSERVE });
             }
+            flock_live::firewall_transcript::with(|t| t.candidate(true, &c, n));
             r.checker.round(&c, n)?;
             return Ok(c);
         }
@@ -1193,6 +1203,7 @@ impl Firewall {
         if tamper == "opening" && link.round == 0 {
             flip_first(&mut c, OP_OBSERVE);
         }
+        flock_live::firewall_transcript::with(|t| t.candidate(false, &c, n));
         let t = Instant::now();
         let res = link.check(&c, n);
         r.t_wait += t.elapsed().as_secs_f64();
@@ -1234,6 +1245,7 @@ impl Firewall {
     /// The coins the stream answered the round the firewall passed: the algebraic phase's are logged (the claim points), the
     /// opening's go to the shadow.
     fn answer(&mut self, coins: &[F128]) {
+        flock_live::firewall_transcript::with(|t| t.answer(coins));
         if let Some(r) = self.rep.as_mut() {
             match r.link.as_mut() {
                 Some(l) => l.answer(coins),
@@ -1247,6 +1259,9 @@ impl Firewall {
     /// folded comb is the firewall's own (`zk_finish` folds it). Returns the rep's firewall timings.
     fn finish(&mut self, proof: &mut R1csProofLigerito, cm: &Commitment) -> Result<Value, String> {
         let r = self.finish_inner(proof, cm);
+        if r.is_err() {
+            flock_live::firewall_transcript::with(|t| t.proof_candidate(proof));
+        }
         r.map_err(|e| self.refuse(e))
     }
 
@@ -1281,6 +1296,7 @@ impl Firewall {
             zkv::replay(&st.r1cs, &zc0, &lc0, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), &mut zkv::Tape::new(&r.coins))
         })).map_err(|e| refused(format!("the replay of the passed values: {}", panic_msg(e))))?.map_err(refused)?;
         vals[lay.fc()] = rp.cons.iter().find(|c| c.0 == "zerocheck c_eval").ok_or_else(|| refused("no c_eval row"))?.1.c;
+        flock_live::firewall_transcript::with(|t| t.passed(&vals));
         let (zc, lc) = (&proof.zerocheck, &proof.lincheck);
         let shape = [zc.round1_ab.len(), zc.round1_c.len(), zc.multilinear_rounds.len(), lc.rounds.len(), lc.z_partial.len()];
         let want = [zkv::SKIP, zkv::SKIP, lay.n_mlv, lay.n_lc, zkv::SKIP];
@@ -1304,6 +1320,7 @@ impl Firewall {
         if bincode::serialize(&proof.pcs_open).unwrap() != bincode::serialize(&open).unwrap() {
             return Err(refused(format!("the proof's opening is not the firewall's: {}", opening_diff(&proof.pcs_open, &open))));
         }
+        flock_live::firewall_transcript::with(|t| t.shadow_opening(&open));
         proof.pcs_open = open;
         // what leaves is the firewall's own: the zerocheck and lincheck rebuilt from the passed values (no comb_partial: zk_finish
         // folds the firewall's comb), the shadow's opening
@@ -1423,6 +1440,7 @@ fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep,
     cons.extend(zkv::ligerito_constraints(&zk.lay, &rec, &zkv::ligerito_exposed(&proof.pcs_open.ligerito, &zk.lay), t_prime).unwrap_or_else(|e| panic!("{e}")));
     let fails = zkv::failing(&cons, &zk.pads.h);
     let kept = zk.final_c_solved.then(|| cons.clone());
+    flock_live::firewall_transcript::with(|t| t.constraints(&cons));
     let mut lch = zkv::Logging { inner: &mut inner_ch, coins: Vec::new() };
     let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, zc.final_c_eval, cons, zk.self_check, &mut lch).unwrap_or_else(|e| panic!("{e}"));
     if let Some(cons) = kept {
@@ -2823,6 +2841,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let names = table_names(plan.tables);
     // M2: every coin the verifier sends is checked against its step-0 commitment before the prover uses it
     let t: SharedTransport = if is_zk(st) { shared(flock_live::coin_tree::Checked::new(SharedCall(t), coin_spec_of(&names))) } else { t };
+    // FC_FIREWALL_TRANSCRIPT: what the firewall lets out, after the coin tree's checks (the CPU prover's gated sessions)
+    let t: SharedTransport = if firewall_on(st) && !plan.gpu && flock_live::firewall_transcript::start() {
+        shared(flock_live::firewall_transcript::Recording(SharedCall(t)))
+    } else {
+        t
+    };
     let t: SharedTransport = shared(Logged { inner: SharedCall(t), coins: log.clone() });
     let t0 = Instant::now();
     // registration done: the verifier draws the units (or none), and the statement is the drawn units', in the session's tables
@@ -3063,6 +3087,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                 }
                             }
                             link_pts = Some(p.clone());
+                            flock_live::firewall_transcript::with(|t| t.relayed_link(&p.concat()));
                             p
                         }
                     };
@@ -3206,6 +3231,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                  buckets, tp0 } = p;
     let (st, inst) = (&tabs.list[0].st, &tabs.list[0].inst);
     if let Err(e) = res {
+        flock_live::firewall_transcript::with(|t| t.stopped(&e));
         let v = match call(&t, Req::Finish) {
             Ok(Resp::Verdict(v)) => serde_json::from_str(&v).unwrap(),
             other => json!({"accepted": false, "why": format!("{other:?}")}),
