@@ -101,19 +101,53 @@ SLOT_WRAP = ("python3", "tools/check/slot.py")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
 #: or `--cores N`
 CHECK_FLAGS = ("--no-cache", "--keep-going")
-#: the layout move's head (pr:1450) and the paths it gave check's scripts: main declares their old paths until the move lands,
-#: and a check of the moved tree can only run them at the new ones, so for that commit alone an argv naming the new paths is
-#: read as naming the old. Remove once main declares tools/verity/check/.
-MOVED_CHECK = {"8543eeccaccbca68dab78552e6eda2814b2afe2e": {"tools/verity/check/slot.py": "tools/check/slot.py",
-                                                            "tools/verity/check/check.py": "tools/check/check.py"}}
+#: the layout map a commit moves the tree by (`tools/move/layout.py`): its [paths] table maps an old prefix to a new one
+LAYOUT_MAP = "tools/move/layout_map.toml"
 
 
-def as_declared(argv, commit: str | None):
-    """``argv`` with the paths `MOVED_CHECK` gives ``commit`` mapped back to the ones main declares; ``argv`` itself otherwise."""
-    paths = MOVED_CHECK.get(commit or "")
-    if not paths or not isinstance(argv, list):
+def _moved(repo: Path, commit: str, path: str) -> str | None:
+    """Where ``commit``'s own `LAYOUT_MAP` puts ``path`` (the longest [paths] prefix that matches it), or None when it has no
+    map, the map can't be read, or no row of it moves ``path``."""
+    import tomllib
+
+    r = _git(repo, "show", f"{commit}:{LAYOUT_MAP}", check=False)
+    try:
+        rows = tomllib.loads(r.stdout).get("paths", {}) if r.returncode == 0 else {}
+    except (tomllib.TOMLDecodeError, AttributeError):
+        return None
+    if not isinstance(rows, dict):
+        return None
+    hits = [k for k, v in rows.items() if isinstance(k, str) and isinstance(v, str)
+            and (path == k or k.endswith("/") and path.startswith(k))]
+    if not hits:
+        return None
+    old = max(hits, key=len)
+    new = rows[old] + path[len(old):]
+    return new if new != path else None
+
+
+def _blob(repo: Path, rev: str, path: str) -> str | None:
+    r = _git(repo, "rev-parse", "--verify", "-q", f"{rev}:{path}", check=False)
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
+
+
+def as_declared(argv, commit: str | None, repo: Path | None, command) -> object:
+    """``argv`` with each argument that names a script of the target's declaration at another path (`SLOT_WRAP`'s slot.py, a
+    path in ``command``) put back as the declared one, when ``commit`` ran that script at the other path: ``commit``'s own
+    `LAYOUT_MAP` renames the declared path to it and ``commit`` no longer has the declared path, or ``commit``'s file there is
+    byte for byte the target's (``repo``'s HEAD) at the declared path.  Every other argument stays, for `invocation` to judge."""
+    if not (repo and commit and isinstance(argv, list) and all(isinstance(x, str) for x in argv)):
         return argv
-    return [paths.get(x, x) if isinstance(x, str) else x for x in argv]
+    declared = [p for p in dict.fromkeys([SLOT_WRAP[1], *(command or ())]) if "/" in p and _blob(repo, "HEAD", p)]
+    out = []
+    for x in argv:
+        if x not in declared and "/" in x and (here := _blob(repo, commit, x)):
+            for p in declared:
+                if (_moved(repo, commit, p) == x and not _blob(repo, commit, p)) or here == _blob(repo, "HEAD", p):
+                    x = p
+                    break
+        out.append(x)
+    return out
 
 
 def invocation(argv, command) -> tuple[str, object]:
@@ -321,7 +355,7 @@ def refused(store, run_id: str, kinds: frozenset[str], tool: str | None = None, 
     if isinstance(got, str):
         return got
     doc, art, result = got
-    argv = as_declared(doc.get("argv"), commit)
+    argv = as_declared(doc.get("argv"), commit, repo, command)
     mode, ids = invocation(argv, command)
     if mode != "combine" and (why := unlike(argv, command)):
         return why

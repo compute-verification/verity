@@ -828,35 +828,62 @@ def test_merge_admits_only_a_run_of_the_declared_command_whose_own_result_passed
     assert merge_main(["feat", "--dry-run"]) == 0
 
 
-def test_the_layout_moves_check_at_the_moved_paths_is_the_declared_command_for_the_moves_head_alone(tmp_path, monkeypatch, capsys):
+def test_a_check_run_at_a_path_the_commits_own_layout_map_renames_or_of_the_same_file_is_the_declared_command(tmp_path, monkeypatch, capsys):
     """Main declares `tools/check/check.py` until the layout move lands, and a check of the moved tree can only run
-    `tools/verity/check/check.py`, so no check of the move could pass (the move's check dc20, 7 Oct). `MOVED_CHECK` reads the moved
-    paths as the declared ones for the move's head and nothing else."""
+    `tools/verity/check/check.py`, so no check of the move could pass (the move's check dc20, 7 Oct).  A script of the
+    declaration run at another path counts as the declared one only when the commit's own `tools/move/layout_map.toml` renames
+    it there (and the commit no longer has it at the declared path), or the commit's file there is main's byte for byte; any
+    other path is refused (root's ruling, 7 Oct)."""
     import research.merge as M
 
-    main, feat, tip = _repos(tmp_path)
+    main, feat, _ = _repos(tmp_path)
+    moved = (sys.executable, "tools/verity/check/check.py")
+
+    def commit_and_gate(msg: str) -> int:
+        _git(feat, "add", "-A")
+        _git(feat, "commit", "-q", "-m", msg)
+        monkeypatch.delenv("FAKE_CHECK", raising=False)
+        assert _record(tmp_path, feat, monkeypatch, *moved) == 0
+        monkeypatch.chdir(main)
+        return merge_main(["feat", "--dry-run"])
+
     (feat / "tools" / "verity" / "check").mkdir(parents=True)
     (feat / "tools" / "verity" / "check" / "check.py").write_text(CHECK_PY)
-    _git(feat, "add", "-A")
-    _git(feat, "commit", "-q", "-m", "the move")
-    tip = _git(feat, "rev-parse", "HEAD")
-    moved = (sys.executable, "tools/verity/check/check.py")
-    monkeypatch.delenv("FAKE_CHECK", raising=False)
-    assert _record(tmp_path, feat, monkeypatch, *moved) == 0
-    monkeypatch.chdir(main)
-    assert merge_main(["feat", "--dry-run"]) == 3
-    assert f"isn't the target's declared `{shlex.join(CHECKED)}`" in capsys.readouterr().err
-    monkeypatch.setattr(M, "MOVED_CHECK", {"f" * 40: {"tools/verity/check/check.py": "tools/check/check.py"}})
-    assert merge_main(["feat", "--dry-run"]) == 3, "another commit's entry admits nothing"
+    assert commit_and_gate("the same check.py at a new path") == 0, "content-identical to main's declared file"
     capsys.readouterr()
-    monkeypatch.setattr(M, "MOVED_CHECK", {tip: {"tools/verity/check/check.py": "tools/check/check.py"}})
-    assert merge_main(["feat", "--dry-run"]) == 0
-    monkeypatch.undo()
-    head, declared = next(iter(M.MOVED_CHECK)), ("uv", "run", "--locked", "--extra", "torch-cpu", "python", "tools/check/check.py")
-    ran = ["python3", "tools/verity/check/slot.py", "--priority", "--by", "x", "--", "uv", "run", "--locked", "--extra", "torch-cpu",
-           "python", "tools/verity/check/check.py", "--keep-going", "--verdicts-in", "v.tgz"]
-    assert M.unlike(M.as_declared(ran, head), declared) is None
-    assert "isn't the target's declared" in M.unlike(M.as_declared(ran, "f" * 40), declared)
+    (feat / "tools" / "verity" / "check" / "check.py").write_text(CHECK_PY + "# moved\n")
+    assert commit_and_gate("another check.py at a new path, no map") == 3
+    assert f"isn't the target's declared `{shlex.join(CHECKED)}`" in capsys.readouterr().err
+    (feat / "tools" / "move").mkdir(parents=True)
+    (feat / "tools" / "move" / "layout_map.toml").write_text('[paths]\n"tools/check/" = "tools/verity/check/"\n')
+    assert commit_and_gate("a map that renames it, but main's path is still there") == 3, "a copy is not a rename"
+    assert "isn't the target's declared" in capsys.readouterr().err
+    _git(feat, "rm", "-q", "tools/check/check.py")
+    (feat / "tools" / "move" / "layout_map.toml").write_text('[paths]\n"tools/check/" = "tools/elsewhere/check/"\n')
+    assert commit_and_gate("a map that renames it somewhere else") == 3, "a rename the map doesn't list"
+    assert "isn't the target's declared" in capsys.readouterr().err
+    (feat / "tools" / "move" / "layout_map.toml").write_text(
+        '[paths]\n"tools/" = "tools/elsewhere/"\n"tools/check/" = "tools/verity/check/"\n')
+    assert commit_and_gate("the move: its map renames tools/check/ to tools/verity/check/") == 0, "the longest prefix decides"
+
+    (main / "tools" / "check" / "slot.py").write_text("# the slot\n")
+    _git(main, "add", "-A")
+    _git(main, "commit", "-q", "-m", "main declares slot.py")
+    (feat / "tools" / "verity" / "check" / "slot.py").write_text("# the moved slot\n")
+    _git(feat, "add", "-A")
+    _git(feat, "commit", "-q", "-m", "the move's slot.py")
+    head = _git(feat, "rev-parse", "HEAD")
+    declared = ("uv", "run", "--locked", "--extra", "torch-cpu", "python", "tools/check/check.py")
+    dc20 = ["python3", "tools/verity/check/slot.py", "--priority", "--by", "x", "--", "uv", "run", "--locked", "--extra",
+            "torch-cpu", "python", "tools/verity/check/check.py", "--keep-going", "--verdicts-in", "/tmp/verdicts-all.tar.gz"]
+    assert M.unlike(M.as_declared(dc20, head, main, declared), declared) is None, "dc20's argv on the move"
+    other = [x.replace("tools/verity/check/slot.py", "tools/other/slot.py") for x in dc20]
+    (feat / "tools" / "other").mkdir()
+    (feat / "tools" / "other" / "slot.py").write_text("# another slot\n")
+    _git(feat, "add", "-A")
+    _git(feat, "commit", "-q", "-m", "a slot.py the map doesn't rename")
+    head = _git(feat, "rev-parse", "HEAD")
+    assert "isn't the target's declared" in M.unlike(M.as_declared(other, head, main, declared), declared)
 
 
 def test_a_run_of_the_declared_command_is_it_in_a_check_slot_or_not_with_check_pys_own_flags_at_most():
