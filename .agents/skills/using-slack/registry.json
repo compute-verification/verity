@@ -65,7 +65,6 @@
       "usergroup": "S0C5Q6KJZTQ",
       "owns": [
         "verity/",
-        "backends/",
         "verity/experimental/protocols/sampled_proofs/",
         "benchmarks/one_stage/",
         "benchmarks/commitments/",
