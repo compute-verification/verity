@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The first recursive session's inner side (rec_inner.py, verity_flock.rec_live): RoPE d64 staged as M0's statement, proved
-# on the CPU by the unmodified prover (FC_COINS=os, non-zk) against the rec proxy, whose coin server sees only caps, message
-# commitments and the schedule (the statement's public shape's); then the recorded session replayed by upstream's verifier
+# on the CPU by the unmodified prover (FC_COINS=os, non-zk) against the rec proxy, whose coin server (the challenger) sees only salted
+# tops, message commitments and the schedule (the statement's public shape's); then the recorded session replayed by upstream's verifier
 # (flock-circuit replay) and by Lean's flock-verify (--coins os), V*'s hashing over it (verity_flock.rec_vstar), and two
 # forgeries (a changed challenge, a changed query coin) that every verifier must reject. Run from the verity tree (research run
 # --cwd source). Outputs under out/: host.txt, stage.json, statement.txt, schedule.json, time-prove.txt, prove.txt/.err,
@@ -92,7 +92,7 @@ s = {"stage": json.loads((o / "stage.json").read_text()), "replay": up("replay.t
                            "wall": re.search(r"Elapsed \(wall clock\) time.*: (\S+)", (o / "time-claims.txt").read_text()).group(1)})(
          json.loads((o / "inner" / "claims.json").read_text())) if (o / "inner" / "claims.json").stat().st_size else (o / "claims.err").read_text()[-400:],
      "inner": {"rounds": len(pub["rounds"]), "message_rows": pub["message_rows"], "coins": sum(r["n"] for r in pub["rounds"]),
-               "caps": sum(len(r["caps"]) for r in pub["rounds"]), "streams": len(pub["streams"])}}
+               "tops": sum(len(r["tops"]) for r in pub["rounds"]), "level0": sum(r["level0"] for r in pub["rounds"]), "streams": len(pub["streams"])}}
 (o / "summary.json").write_text(json.dumps(s, indent=1))
 print(json.dumps(s))
 EOF
