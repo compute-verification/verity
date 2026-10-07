@@ -58,8 +58,8 @@ def stub_case(draw, cid: str) -> dict:
     return case
 
 
-#: The binding breaks come thrice: they are the only ones under which the components' own verdicts still stand, so the
-#: only way to reach a rejection that no component's explains.
+#: The binding breaks come thrice: with `commitment-size` they are the breaks that leave every component's case standing,
+#: and so the way to a rejection that no component's own explains.
 MUTATIONS = [None] * 10 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
                            "repeat-param", "repeat-case", "case-params", "commitment-size", "evidence-noncanonical",
                            "params-extra-key", "case-extra-key", "case-missing-key", "bad-hex", "garbage-evidence",
