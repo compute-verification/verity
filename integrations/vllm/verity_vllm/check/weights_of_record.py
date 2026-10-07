@@ -667,7 +667,7 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
         stamped = record.get("of_record_set") if isinstance(record.get("of_record_set"), dict) else None
         st = {str(x) for x in (stamped.get("program_digests") or [])} if stamped is not None else set()
         if short := sorted(x[:16] for x in ofr | st | ({pd} if pd else set()) if not FULL_DIGEST_RE.fullmatch(x)):
-            prog_why = f"Program digests not full sha256 (64 hex), compared only whole: {short}"
+            prog_why = f"Program digests not full sha512 (128 hex), compared only whole: {short}"
         elif stamped is not None:
             # [rev-cb M-0733] a record stamped with the WHOLE of-record set is accepted iff that set equals the run's: a record of another
             # row -- more, fewer or other components -- is refused by name; the stamp itself must be sound (every component's struct equal)
@@ -867,7 +867,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
         digests.add(workload_digest)
     rec_pd = str(record.get("program_digest") or "")
     if short := sorted(x[:16] for x in digests | ({rec_pd} if rec_pd else set()) if not FULL_DIGEST_RE.fullmatch(x)):
-        why.append(f"Program digests not full sha256 (64 hex): {short}")
+        why.append(f"Program digests not full sha512 (128 hex): {short}")
     elif rec_pd and rec_pd not in digests:
         why.append(f"the record's own Program {rec_pd[:16]} is not of record under {os.path.basename(str(programs_root))} (derived from a non-component)")
     if not comps:
