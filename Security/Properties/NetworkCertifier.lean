@@ -164,7 +164,7 @@ def HonestAccepted : Prop :=
         recordsOf c .egress l w = [honestRecord p .egress l w h dg σ] ∧
         ∃ m, certificateMessage (p.key.extract 0 16) l .egress w dg = .ok m ∧ LmsVerifies p m σ) →
     (∀ l ∈ p.ingress.toList, ∀ w < p.windows, ∃ (h : RecordHead) (dg σ : ByteArray),
-      h.link = l ∧ h.direction = .ingress ∧ h.window = (w : Int) ∧ h.buckets = (p.ingressGrid.buckets : Int) ∧
+      h.buckets = (p.ingressGrid.buckets : Int) ∧
       h.allocation = (p.ingressGrid.allocation : Int) ∧ h.frameBytes = (p.ingressGrid.frameBytes : Int) ∧
       h.bucketMs = (p.ingressGrid.bucketMs : Int) ∧ h.parameters = ig ∧ h.status = none ∧ h.deadline = true ∧
       h.digest = .ok dg ∧ recordsOf c .ingress l w = [honestRecord p .ingress l w h dg σ] ∧
@@ -249,13 +249,16 @@ def levelAt : Nat → List ByteArray → List ByteArray
   | 0, level => level
   | k + 1, level => pairs k (levelAt k level)
 
-/-- What SHA-512 hashes for the frame tree of a grid under grid parameters `g`: each real frame's leaf, each node of
-each level below the root, and every empty subtree up to the depth. -/
+/-- What SHA-512 hashes for the tree of `frames` under grid parameters `g`: each frame's leaf, each node of each level
+below the root, and every empty subtree up to the depth. -/
+def FramesString (g : Grid) (frames : Array ByteArray) (x : ByteArray) : Prop :=
+  (∃ f ∈ frames.toList, leafInput f g.frameBytes = .ok x) ∨ x = emptyInput ∨
+    (∃ l < depth g, x = nodeInput (empty l) (empty l)) ∨
+    ∃ ls, leaves frames g = .ok ls ∧ ∃ lv < depth g, x ∈ pairInputs lv (levelAt lv ls.toList)
+
+/-- What SHA-512 hashes for the frame tree of a grid: `FramesString` of its real frames. -/
 def TreeString (g : Grid) (grid : Array (Array (Option ByteArray))) (x : ByteArray) : Prop :=
-  ∃ frames, realFrames grid g = .ok frames ∧
-    ((∃ f ∈ frames.toList, leafInput f g.frameBytes = .ok x) ∨ x = emptyInput ∨
-      (∃ l < depth g, x = nodeInput (empty l) (empty l)) ∨
-      ∃ ls, leaves frames g = .ok ls ∧ ∃ lv < depth g, x ∈ pairInputs lv (levelAt lv ls.toList))
+  ∃ frames, realFrames grid g = .ok frames ∧ FramesString g frames x
 
 /-- The strings the run hashes: the check's (each record's head and certificate message; the head and frame tree it
 recomputes of each egress link-window) and the device's (each issued head and its message; the frame tree of each
