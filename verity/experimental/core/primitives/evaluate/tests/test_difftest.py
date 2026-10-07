@@ -1439,6 +1439,7 @@ def _sampler_grid(fn: PrimitiveDefinition) -> list[list[tuple]]:
     return [[(nd, q) for q in Q_SWEEP] for nd in NUMDUP]
 
 
+@pytest.mark.slow
 def test_sampler_primitives_on_their_grids(server):
     """The logs on every word of `LOG_SWEEP`, the Gumbel lane (both versions) on the first 2048 vocabulary indices and the
     extremes under each key of `GUMBEL_KEYS` and on the lanes at the uniform's floor, the stream key on every pair of 64-bit edges and small positions, and the keep
@@ -1547,6 +1548,7 @@ def _test_mufu_literals(*names: str) -> dict:
     return ns
 
 
+@pytest.mark.slow
 def test_mufu_primitives_on_their_grids(server):
     """Each MUFU primitive on every word of `MUFU_SWEEP`, each answer also the Python primitive's own evaluator's."""
     counts = {fn.id: _agree_on(server, fn, [[(a,) for a in MUFU_SWEEP[i:i + 8192]] for i in range(0, len(MUFU_SWEEP), 8192)])
