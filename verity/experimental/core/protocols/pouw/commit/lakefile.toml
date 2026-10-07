@@ -1,0 +1,20 @@
+# PoUW's commitments as executable Lean: the epoch coins' check, the protocol's bindings and the roots of its row and tile
+# trees (`verity.experimental.protocols.pouw`: `coins`, `protocol.tagged`, `audit`), with the difftest against the Python.
+# It is code, so it requires nothing of `Security/`; it reads C-Flock's SHA-2 and hm96 leaves (`flock_verifier`).
+name = "pouw_commit"
+defaultTargets = ["PouwCommit", "pouw-commit-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../../../../core/service/flock"
+
+[[lean_lib]]
+name = "PouwCommit"
+
+[[lean_exe]]
+name = "pouw-commit-difftest"
+root = "PouwCommit.DifftestMain"

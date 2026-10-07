@@ -1,0 +1,26 @@
+{
+ "roots": ["PouwCommit"],
+ "exempt": {
+  "PouwCommit.DifftestMain": "the difftest against the Python, under `runs`: compiled evaluation of PouwCommit.Difftest.main, audited under PouwCommit, a test and not a proof"
+ },
+ "runs": {
+  "PouwCommit.DifftestMain": {
+   "why": "11,880 generated cases on which the port gives what verity.experimental.protocols.pouw gives: tagged, the bindings and weights_root, frame-v3 domain ids, commit_rows and transcript roots (sha256, sha512, hm96-sha512), verify_opening of honest and tampered openings, and coin_reason of honest and tampered coin openings, each refusal included",
+   "args": ["{difftest/cases.jsonl}", "11880"],
+   "data": {
+    "difftest/cases.jsonl": "ecedb76128aa6183f20e794814e7e48fd6ea4e600949df83a3db6b5944eea2c3"
+   },
+   "generate": ["python3", "tests/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  }
+ },
+ "layers": {
+  "PouwCommit": {
+   "imports": ["PouwCommit", "Flock", "Lean"],
+   "except": [],
+   "why": "the port is code: Lean core and C-Flock's verifier only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  }
+ },
+ "dependencies": {
+  "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
+ }
+}
