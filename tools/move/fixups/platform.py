@@ -90,6 +90,18 @@ EDITS = [
     # the stratified-draw check moved in beside the test, away from the Lean package `LEAN` names
     ("verity/ml/flock/tests/test_lean_verifier.py", 'LEAN.parent / "stratified_agree.py"',
      'Path(__file__).resolve().parent / "stratified_agree.py"'),
+    # the verifier's scripts stay in C-Flock's verifier/, away from the Lean package `LEAN` names, which was beside them
+    ("verity/ml/flock/tests/test_lean_verifier.py", '"flock"\nPROOFS = Path(__file__).resolve().parents[4]',
+     '"flock"\nVERIFIER = Path(__file__).resolve().parents[1] / "verifier"\nPROOFS = Path(__file__).resolve().parents[4]'),
+    ("verity/ml/flock/tests/test_lean_verifier.py", 'str(LEAN.parent / "', 'str(VERIFIER / "'),
+    *((f"verity/ml/flock/tests/test_lean_{t}.py", "VERIFIER = LEAN.parent\n",
+       'VERIFIER = Path(__file__).resolve().parents[1] / "verifier"\n')
+      for t in ("hidden_outputs", "typed_template", "identifier", "registered_reads", "public_inputs", "typed_reads", "zk",
+                "session_tables")),
+    *((f"verity/ml/flock/tests/test_lean_{t}.py", "sys.path.insert(0, str(LEAN.parent))",
+       'sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "verifier"))') for t in ("region_words", "typed_statement")),
+    ("verity/ml/flock/tests/test_lean_typed_statement.py", 'str(LEAN.parent / "selftest_records.py")',
+     'str(Path(__file__).resolve().parents[1] / "verifier" / "selftest_records.py")'),
     # relative to `lean/`, which stays, not to the test that moved
     ("verity/experimental/protocols/pous/tests/test_pous_trusted.py", 'SECURITY = "../../../../Security/"',
      'SECURITY = "../../../../../Security/"'),
