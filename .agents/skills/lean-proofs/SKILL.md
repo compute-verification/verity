@@ -178,7 +178,7 @@ These are Daniel's rulings, newest first.
   `path` require changes no revision, so a feature PR may add it. Python's protocols import only `verity`, themselves
   and the protocols `ALLOWED` in `tests/test_boundaries.py` lists (PoUW → sampled proofs, the ruling of
   2026-10-03 in `.agents/skills/friction/SKILL.md`). Its Lean half is superseded by the Lean layout move (2026-10-06):
-  there are no protocol packages, only areas of `Security/` and its Proofs.
+  there are no protocol packages, only areas of `Security` and its Proofs.
 - 2026-10-01: there are guarantees and assumptions, and a guarantee is **proved under its assumptions**; there is no
   third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one
   than a fact about our own circuit that we mean to prove (`HmRowComputes`). So what a guarantee assumes is explicit and
