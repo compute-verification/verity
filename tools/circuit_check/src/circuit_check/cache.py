@@ -54,7 +54,9 @@ own version is the digest of this package's sources less `targets.py` and ``pins
 interpreter and its optimization level, the platform, the installed distributions, ``sys.path`` (in-tree entries relative to the
 tree), the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
-entry, `descriptor`) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment. Each target's check runs with a memo of its own, so
+entry, `descriptor`), the modules the registries import for having a sidecar (`registries`: a new or removed sidecar, or a
+moved module that has one, reruns every target, as a new import line in `targets.py` would) and the ``VERITY_*`` /
+``CIRCUIT_CHECK_*`` environment. Each target's check runs with a memo of its own, so
 no result an earlier target computed stands in for its reads.
 
 A hit means every file, listing, probe, library, ``pins/`` pin and kernel registration this target's check read is unchanged
@@ -72,8 +74,8 @@ which the interpreter, platform, distribution list and ``sys.path`` stand for; a
 tracing began (the checker's own imports, ``verity.primitives.circuits`` and ``verity.primitives.circuits.evaluation`` among them: their sources are inputs, data
 they opened at import is not); what a function read or imported in its body when it did not run in the recording (a value a
 process-wide cache, ``functools.cache`` and the like, holds from a call another target's check made, beyond the function's own
-module and its closure); an edit to a binding that does not reach the target, or a new sidecar, even if it changes which object
-of the same id the catalog builds (the registry refuses two Definitions of one id); what a binding ran that changes, keeping its
+module and its closure); an edit to a binding that does not reach the target, even if it changes which object of the same id
+the catalog builds (the registry refuses two Definitions of one id); what a binding ran that changes, keeping its
 id, what a Definition it did not make does at check time without changing its descriptor: a value it computed (from a module
 only it imported) and left in a module's state, or closed over, where an evaluator reads it; a value a module only the
 registries import leaves in another module's state at import, other than a kernel registration or a Definition (an enumerated
@@ -392,6 +394,14 @@ def unit_files(paths: Iterable[str]) -> None:
     _SIDECARS.update(os.path.abspath(p) for p in paths)
     _UNIT_RELS.clear()
     _UNIT_RELS.update(r for f in _SIDECARS if (r := _rel(f)) is not None)
+
+
+_REGISTRIES: list[str] = []
+
+
+def registries(modules: Iterable[str]) -> None:
+    """The modules the registries import for having a sidecar (`targets.load_registries`), in every target's key."""
+    _REGISTRIES[:] = sorted(modules)
 
 
 def pin_files(paths: Iterable[str], where: Any) -> None:
@@ -1546,6 +1556,7 @@ def key(request: dict) -> dict:
             "platform": plat,
             "distributions": hashlib.sha256("\n".join(dists).encode()).hexdigest(),
             "path": _path_entries(_ROOT[0]) if _ROOT else list(sys.path),
+            "registries": hashlib.sha256("\n".join(_REGISTRIES).encode()).hexdigest(),
             "environment": {k: v for k, v in sorted(os.environ.items()) if k.startswith(("VERITY_", "CIRCUIT_CHECK_"))}}
 
 
@@ -1909,4 +1920,5 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
 
 
 __all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
-           "produced", "recorded_pins", "recording", "seen", "store", "trace", "tracing", "unit_files", "untraced", "version"]
+           "produced", "recorded_pins", "recording", "registries", "seen", "store", "trace", "tracing", "unit_files", "untraced",
+           "version"]
