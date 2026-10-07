@@ -7,7 +7,7 @@ posix_fadvise(DONTNEED) on every shard, which needs no root and leaves pages ano
 page of a file resident to a process that neither owns it nor may write it (Linux >= 5.0), so the residency fractions mean
 something only when the job owns the model's files.
 
-  python load_time.py --model DIR --out OUT_DIR [--plan default|quick|fastsafetensors|fastsafetensors-warm] [--tp 8]
+  python load_time.py --model DIR --out OUT_DIR [--plan default|quick|fastsafetensors|fastsafetensors-warm|fastsafetensors-restart] [--tp 8]
 
 writes OUT_DIR/summary.json after each configuration and OUT_DIR/<config>.log with the child's output.
 """
@@ -263,6 +263,9 @@ def driver(ns: argparse.Namespace) -> None:
     plan = [("warm-page_cold-compile_graphs", dict(page="warm", caches=warm))]
     if ns.plan == "fastsafetensors-warm":
         plan = [("warm-page_cold-compile_graphs_fastsafetensors", dict(page="warm", caches=warm, load_format="fastsafetensors"))]
+    elif ns.plan == "fastsafetensors-restart":
+        plan += [(f"warm-page_warm-compile_graphs_fastsafetensors{s}", dict(page="warm", caches=warm, load_format="fastsafetensors"))
+                 for s in ("", "_repeat")]
     elif ns.plan == "fastsafetensors":
         plan += [("warm-page_warm-compile_graphs_fastsafetensors", dict(page="warm", caches=warm, load_format="fastsafetensors")),
                  ("cold-page_warm-compile_graphs_fastsafetensors", dict(page="cold", caches=warm, load_format="fastsafetensors"))]
@@ -292,7 +295,7 @@ def main() -> None:
     ap.add_argument("--model", required=True)
     ap.add_argument("--out")
     ap.add_argument("--tp", type=int, default=8)
-    ap.add_argument("--plan", choices=["default", "quick", "fastsafetensors", "fastsafetensors-warm"], default="default")
+    ap.add_argument("--plan", choices=["default", "quick", "fastsafetensors", "fastsafetensors-warm", "fastsafetensors-restart"], default="default")
     ap.add_argument("--read-threads", type=int, default=16)
     ap.add_argument("--child-timeout-s", type=int, default=2700)
     ap.add_argument("--child", action="store_true", help=argparse.SUPPRESS)
