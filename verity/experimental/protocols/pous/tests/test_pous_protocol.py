@@ -291,10 +291,10 @@ def test_certificates_at_their_points():
 
 def test_certificates_name_proved_guarantees():
     """A certificate's `theorem` is the proof `Pous.SecurityProofs.X` it rests on, a guarantee in
-    `Security/lean-audit.json`, of the statement `Pous.Guarantees.X` (`Specs/Pous/Guarantees.lean` there and the
-    files under `Specs/Pous/Guarantees/`), experimental schemes' included."""
+    `Security/lean-audit.json`, of the statement `Pous.Guarantees.X` (`Models/Pous/Guarantees.lean` there and the
+    files under `Models/Pous/Guarantees/`), experimental schemes' included."""
     security = Path(__file__).parents[5] / "Security"
-    specs = security / "Specs" / "Pous"
+    specs = security / "Models" / "Pous"
     texts = [(specs / "Guarantees.lean").read_text()] + [f.read_text() for f in sorted((specs / "Guarantees").glob("*.lean"))]
     statements = {x for t in texts for x in re.findall(r"^def (\w+) : Prop", t, re.M)}
     guarantees = json.loads((security / "lean-audit.json").read_text())["guarantees"]
