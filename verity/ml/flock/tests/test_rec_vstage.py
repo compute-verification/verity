@@ -56,7 +56,8 @@ def inner(tmp_path_factory) -> Path:
         return out
 
     coins = lambda hexes: b"".join(RL.f128_bytes(int(c, 16)) for c in hexes)
-    proxy = RL.Proxy(RL.CoinServer(rand), lambda: g.randbytes(192))
+    schedule = RL.schedule_for({"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3})
+    proxy = RL.Proxy(RL.CoinServer(rand), lambda: g.randbytes(192), schedule=schedule)
     send = lambda *req: RL.decode_resp(proxy.handle(RL.encode_req(*req)))
     hello = json.loads(rec["hello"])
     del hello["coins"]
