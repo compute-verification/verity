@@ -3571,7 +3571,7 @@ mod tests {
     #[test]
     fn hm96_leaves_match_core_vectors() {
         use flock_merkle::hm96;
-        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().unwrap().join("../../../../../../backends");
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().unwrap().join("../../../../..");
         let Ok(text) = std::fs::read_to_string(repo.join("verity/primitives/commitments/hm96/vectors_sha512.json")) else {
             return;
         };

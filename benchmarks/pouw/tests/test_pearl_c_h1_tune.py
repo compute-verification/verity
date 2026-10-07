@@ -161,7 +161,7 @@ def test_rows_and_tree_in_one_launch_are_merkle_trees(m, rb):
 
 def verifier(path, *extra) -> "subprocess.CompletedProcess":
     import subprocess
-    env = {"PYTHONPATH": os.pathsep.join(str(Path(__file__).parents[3] / d) for d in (".", "catalog", "kernels")),
+    env = {"PYTHONPATH": os.pathsep.join(str(Path(__file__).parents[3] / d) for d in (".",)),
            "PATH": "/usr/bin:/bin"}
     return subprocess.run([sys.executable, str(HERE / "verify_h1.py"), *extra, "test", str(path)], capture_output=True, text=True,
                           env=env)

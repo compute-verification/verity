@@ -104,7 +104,7 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     out = tmp_path / "readiness.json"
     root, core, research = VLLM, TREE, TREE / "tools" / "research" / "src"
     experimental = TREE / "experimental"
-    env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research, TREE / "catalog", TREE / "kernels", experimental)),
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research, experimental)),
                https_proxy="http://127.0.0.1:9", HTTPS_PROXY="http://127.0.0.1:9")   # the network probe fails fast, recorded as an error
     r = subprocess.run([sys.executable, str(src), str(root), str(core), str(out), "", "", str(research), "cpu", str(experimental)],
                        capture_output=True, text=True, env=env)
@@ -117,13 +117,13 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     assert checks["torch_cpu"]["value"]["cuda_available"] == rec["cuda_available"]
     assert not {"torch_cuda", "hidden_gpu_so", "fa2_tap_so", "fa3_tap_so"} & set(checks), "GPU checks must not appear in cpu mode"
     for name in ("python_3_12", "vllm_import", "vllm_commit_d9105ea80", "verity_from_tree", "verity_vllm_from_tree",
-                 "research_telemetry_from_tree", "sampled_proofs_from_tree", "sampled_proofs_via_pth", "distributions_from_tree", "numpy_import",
+                 "verity_ml_from_tree", "research_telemetry_from_tree", "sampled_proofs_from_tree", "sampled_proofs_via_pth", "distributions_from_tree", "numpy_import",
                  "no_old_tree_on_path"):
         assert name in checks, name
-    for name in ("verity_from_tree", "verity_vllm_from_tree", "research_telemetry_from_tree", "sampled_proofs_from_tree", "distributions_from_tree",
+    for name in ("verity_from_tree", "verity_vllm_from_tree", "verity_ml_from_tree", "research_telemetry_from_tree", "sampled_proofs_from_tree", "distributions_from_tree",
                  "numpy_import"):
         assert checks[name]["ok"], (name, checks[name])
-    assert set(checks["distributions_from_tree"]["value"]) == {"catalog", "kernels", "experimental"}
+    assert set(checks["distributions_from_tree"]["value"]) == {"experimental"}
     assert rec["ok"] == all(c["ok"] for c in checks.values())
     assert (r.returncode == 0) == rec["ok"]
     meas = rec["measurements"]
@@ -169,18 +169,17 @@ def test_the_pth_check_passes_on_a_fresh_venv_and_fails_without_the_pth(tmp_path
 
 
 def test_bootstrap_writes_a_pth_for_each_distribution(tmp_path: Path) -> None:
-    """A row's stages set PYTHONPATH to the tree, the core and research, so the catalog, the kernels and experimental (each a
-    distribution under its grouping, imported as verity.ml.circuits, verity.ml.kernels, verity_experimental) reach them through a .pth."""
+    """A row's stages set PYTHONPATH to the tree, the core and research, so experimental (a distribution under its grouping,
+    imported as verity_experimental) reaches them through a .pth."""
     text = SCRIPT.read_text()
     start = text.index('for G in $DISTS; do\n')
     loop = text[start:text.index("\ndone\n", start) + len("\ndone")]
     assert start < text.index("# ---- 5. readiness")
     core = TREE.resolve()
-    script = f'fail() {{ echo "FAIL $*"; exit 3; }}\nCORE={core}; DISTS="catalog kernels experimental"; SITE={tmp_path}\n{loop}\n'
+    script = f'fail() {{ echo "FAIL $*"; exit 3; }}\nCORE={core}; DISTS="experimental"; SITE={tmp_path}\n{loop}\n'
     r = subprocess.run([BASH, "-c", script], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     assert {p.name: p.read_text() for p in tmp_path.glob("*.pth")} == {
-        "verity-catalog.pth": f"{core / 'catalog'}\n", "verity-kernels.pth": f"{core / 'kernels'}\n",
         "verity-experimental.pth": f"{core / 'experimental'}\n"}
 
 

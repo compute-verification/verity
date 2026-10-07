@@ -134,7 +134,7 @@ smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm --format=csv,nohead
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null || true
 command -v uv >/dev/null || { python3 -m pip install -q uv || exit 3; }
 export PATH=$HOME/.local/bin:$PATH
-export PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/tools/research/src
+export PYTHONPATH=$REPO:$REPO/experimental:$REPO/tools/research/src
 if [ -n "${GATE_ROLE:-}" ]; then
   gate=(--role "$GATE_ROLE" --out "$O/placement-gate.json" ${GATE_CORES:+--cores "$GATE_CORES"})
   for p in ${GATE_PEERS:-}; do f=${p#*=}; [ "${f#/}" = "$f" ] && f=$I/$f; gate+=(--peer "${p%%=*}=$f"); done
