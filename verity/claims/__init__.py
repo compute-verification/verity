@@ -59,9 +59,9 @@ PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("sis", "Ring-SIS binding", "SIS"),
     # A3 in verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md, for the unit draw's bytes
     Property("uniform", "Independent uniform output", "Uniform"),
-    # A4 there, for verity.primitives.randomness's keyed streams: SHA-256's compression function as a PRF keyed by its chaining value
-    # (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the secret bytes in its
-    # first message block; its eta is stated there (at most 2^-128 for the chain's tests, for a 32-byte secret)
+    # A4 there, for verity.primitives.randomness's keyed streams (prf/sha-512): SHA-512's compression function as a PRF keyed by
+    # its chaining value (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the
+    # secret bytes in its first message block; its eta is stated there (at most 2^-128 for the chain's tests, for a 32-byte key)
     Property("prf", "Pseudorandom function", "PRF"),
     # of a signature scheme: no forgery on a new message after chosen-message queries, each one-time key used once
     Property("euf-cma", "Existential unforgeability under chosen-message attack", "EUF-CMA"),
@@ -114,6 +114,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
+    # `Verity.Assumptions.TrustedNebiusHost` (verity/Security/Specs/Core/Assumptions.lean); no attestation hardware backs it
+    Entry("trusted-nebius-host", "assumption",
+          "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its Nebius host",
+          "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
 )}
 
