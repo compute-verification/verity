@@ -15,7 +15,8 @@ from pathlib import Path
 import pytest
 
 FLOCK = Path(__file__).resolve().parents[1]
-LEAN = FLOCK / "verifier" / "lean"
+VERIFIER = Path(__file__).resolve().parents[5] / "backends" / "flock" / "verifier"
+LEAN = VERIFIER / "lean"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: RoPE d64 (4 instances) with a seeded and an FC_COINS=os loopback session of a proving build; the circuit is #306's
 FIXTURE = "art:12f95e2a"
@@ -47,7 +48,7 @@ def test_the_live_os_identity_is_the_provers():
 def sessions(tmp_path_factory):
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    sys.path.insert(0, str(FLOCK / "verifier"))
+    sys.path.insert(0, str(VERIFIER))
     import ci
 
     store = tmp_path_factory.mktemp("store")

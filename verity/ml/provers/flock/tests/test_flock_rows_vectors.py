@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-LEAN = HERE.parents[0] / "verifier" / "lean"
+LEAN = HERE.parents[4] / "backends" / "flock" / "verifier" / "lean"
 VECTORS = HERE / "derive_vectors.json"
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"),
               pytest.mark.skipif(not VECTORS.exists(), reason="#203's derive vectors are not in this tree yet")]
