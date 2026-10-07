@@ -215,7 +215,7 @@ each with its repository file and owner (a Slack handle), and goes there only th
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
 `research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process running a file replaced since it started (`restart`), and every file in a managed directory
-that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`ops deploy`, `infra/ops/verity_ops/deploy.py`). A new
+that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`ops deploy`). A new
 loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
 `.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
 --by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
