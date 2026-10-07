@@ -1,4 +1,4 @@
-"""Move circuit-check's bindings and pins out of `targets.py` and `pins.json` into the sidecars of the Definition modules they
+"""Move circuit-check's bindings and pins out of `targets.py` and ``pins/`` into the sidecars of the Definition modules they
 bind (`circuit_check.sidecars`), and check that circuit-check's task list is unchanged.
 
     python tools/circuit_check/migrate_bindings.py [--verify] [--dry-run]
@@ -9,7 +9,7 @@ to the module that defines what it binds; and `_pouw_roots`, split by hand (`POU
 `sidecars.owner` for a Definition, a function's or class's module, else the module it was read from.  A template's module is
 the one that defines the templates.  Each pin moves to the pins file of the module that owns it (`sidecars.pin_owner`).  What
 resolves to no module of `sidecars.PACKAGES`, or would make a core or protocol sidecar import circuit-check, stays in
-`targets.py` or `pins.json`, and so do `targets.py`'s own root functions (`SHARED`).
+`targets.py` or ``pins/``, and so do `targets.py`'s own root functions (`SHARED`).
 
 A root function's docstring goes with its elements when they all go to one module; one split across modules is split by `DOCS`,
 written against that docstring (its digest): a changed docstring fails until `DOCS` follows it, and so does a changed
@@ -40,7 +40,8 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 TARGETS = HERE / "src" / "circuit_check" / "targets.py"
-PINS = HERE / "src" / "circuit_check" / "pins.json"
+PINS = HERE / "src" / "circuit_check" / "pins"
+LEGACY_PINS = PINS.with_name("pins.json")
 #: the source roots this tree's packages import from, ahead of any installed copy
 PATHS = ("tools/circuit_check/src", ".", "catalog", "kernels", "experimental", "integrations/vllm", "benchmarks/numerical/python",
          "backends/flock/python")
@@ -633,21 +634,28 @@ def render_sidecar(mod: str, bindings: dict[str, str], existing: str | None) -> 
 
 
 def move_pins() -> dict[str, int]:
-    """Every pin into the pins file of the module that owns it (`sidecars.pin_owner`), else `pins.json`; {file: pins}."""
+    """Every pin into the pins file of the module that owns it (`sidecars.pin_owner`), else its file in ``pins/``
+    (`sidecars.shared_pin`); {file: pins}.  A branch's `pins.json` (`LEGACY_PINS`, the shared pins before ``pins/``) is
+    moved too, its pins over those of the same key elsewhere, and removed."""
     from circuit_check import sidecars as SC
 
     SC.discover.cache_clear()
     pins = SC.load_pins(PINS)
+    if LEGACY_PINS.exists():
+        for kind, d in json.loads(LEGACY_PINS.read_text()).items():
+            pins.setdefault(kind, {}).update(d)
+        LEGACY_PINS.unlink()
     by: dict[Path, dict[str, dict]] = {}
     for kind, d in pins.items():
         for key, v in d.items():
             mod = SC.pin_owner(kind, key)
-            dest = (SC.path_of(mod, "json") if mod and _package(mod) in SC.PACKAGES else None) or PINS
+            dest = (SC.path_of(mod, "json") if mod and _package(mod) in SC.PACKAGES else None) or SC.shared_pin(kind, key)
             by.setdefault(dest, {}).setdefault(kind, {})[key] = v
     for p in SC.pin_files():
         if p not in by and p.exists():
             p.unlink()
     for p, kinds in by.items():
+        p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps({k: dict(sorted(v.items())) for k, v in sorted(kinds.items())}, indent=1, sort_keys=True) + "\n")
     SC.discover.cache_clear()
     return {SC.rel(p): sum(len(v) for v in kinds.values()) for p, kinds in sorted(by.items())}

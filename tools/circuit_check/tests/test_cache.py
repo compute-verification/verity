@@ -1,5 +1,5 @@
 """The cache's per-target keys (`circuit_check.cache`, `circuit-check-cache/v2`), on a synthetic tree: a registry of small
-Definitions, a catalog (`targets.py`) and a pins file of its own, checked through `cli.run`'s `--all` path with the catalog's
+Definitions, a catalog (`targets.py`) and shared pins of its own (``pins/``, a file per pin), checked through `cli.run`'s `--all` path with the catalog's
 functions standing in for the real ones (the real catalog takes a minute to build).  A target's entry holds what its own check
 read or resolved, and nothing another target or the task list read."""
 from __future__ import annotations
@@ -9,6 +9,8 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+from circuit_check import entries as E
 
 REPO = Path(__file__).resolve().parents[3]
 
@@ -231,7 +233,8 @@ def _model_roots():
 
 TEMPLATE_PARAMS = {"t": [{"K": 1}]}
 """,
-    "pins.json": json.dumps({"pieces": {"SynTop_v1": {"and": 3}, "SynOther_v1": {"and": 5}}}),
+    "pins/pieces/SynTop_v1.json": json.dumps({"pieces": {"SynTop_v1": {"and": 3}}}),
+    "pins/pieces/SynOther_v1.json": json.dumps({"pieces": {"SynOther_v1": {"and": 5}}}),
     ".gitignore": "cache/\n",
 }
 
@@ -244,8 +247,8 @@ root, repo = Path(sys.argv[1]), Path(sys.argv[2])
 sys.path.insert(0, str(root))
 from circuit_check import cache as CC, checks as CK, cli, sidecars as SC, targets as TG
 
-CC.TARGETS, CC.PINS, CC._TARGETS_FILE = root / "targets.py", root / "pins.json", str(root / "targets.py")
-CK.PINS = root / "pins.json"
+CC.TARGETS, CC.PINS, CC._TARGETS_FILE = root / "targets.py", root / "pins", str(root / "targets.py")
+CK.PINS = root / "pins"
 SC.REPO, SC.PACKAGES = root, ("syn",)
 cli.REPO = root
 inner = CC._interpreter_dirs
@@ -284,6 +287,25 @@ rep = cli.run([], CK.Options(), everything=True, log=None, cache=root / "cache")
 hits = sorted(t["target"] for t in rep["targets"] if "cache" in t)
 print(json.dumps({"stats": {k: v for k, v in rep["cache"].items()}, "hits": hits}))
 """
+
+
+def _pin(key: str) -> str:
+    """Where the synthetic tree's shared pin ``key`` (a piece) is, or goes."""
+    return E.path(Path("pins/pieces"), key, ".json").as_posix()
+
+
+def _pins(root: Path, key: str) -> dict:
+    return json.loads((root / _pin(key)).read_text())["pieces"][key]
+
+
+def _set_pin(root: Path, key: str, counts: dict | None) -> None:
+    """Pin ``key`` at ``counts`` in its shared file, or remove the file (None)."""
+    p = root / _pin(key)
+    if counts is None:
+        p.unlink()
+    else:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"pieces": {key: counts}}))
 
 
 def _tree(tmp_path: Path) -> Path:
@@ -337,8 +359,9 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
     assert not [f for f in [*top["files"], *other["files"]] if f.endswith(".py")]   # modules are held by name, not path
     assert set(top["units"]) == {"targets.py#_core_roots", "targets.py#common"}
     assert set(other["units"]) == {"targets.py#_model_roots:SynOther_v1", "targets.py#common"}
-    assert set(top["pins"]) == {"pins.json#pieces#SynTop_v1"} and set(other["pins"]) == {"pins.json#pieces#SynOther_v1"}
-    assert "targets.py" not in top["files"] and "pins.json" not in top["files"]
+    assert set(top["pins"]) == {f"{_pin('SynTop_v1')}#pieces#SynTop_v1"}
+    assert set(other["pins"]) == {f"{_pin('SynOther_v1')}#pieces#SynOther_v1"}
+    assert "targets.py" not in top["files"] and not [f for f in top["files"] if f.startswith("pins/")]
     assert set(top["enums"]) == {"syn"} and {"top", "other", "idle"} <= set(top["enums"]["syn"])   # `load_registries` listed it
 
 
@@ -392,20 +415,17 @@ def test_another_binding_or_pin_reuses_every_target_and_its_own_reruns_it(tmp_pa
     _run(root)
     _edit(root, "targets.py", '("Spare_v1", lambda: "Spare_v1"),', '("Spare_v1", lambda: "Spare_v1"),\n        ("New_v1", lambda: 0),  # new')
     _edit(root, "targets.py", '"t": [{"K": 1}]', '"t": [{"K": 1}], "u": [{"K": 2}]')
-    pins = json.loads((root / "pins.json").read_text())
-    pins["pieces"]["New_v1"] = {"and": 1}
-    (root / "pins.json").write_text(json.dumps(pins))
+    _set_pin(root, "New_v1", {"and": 1})
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
     _edit(root, "targets.py", 'return ["SynTop_v1"]', 'return ["SynTop_v1", "SynSub_v1"]')
     assert _run(root)["hits"] == ["SynOther_v1"]
     _edit(root, "targets.py", '("SynOther_v1", lambda: "SynOther_v1")', '("SynOther_v1", lambda: "SynOther_v1".lower())')
     assert _run(root)["hits"] == ["SynTop_v1"]
-    pins["pieces"]["SynTop_v1"] = {"and": 4}
-    (root / "pins.json").write_text(json.dumps(pins))
+    _set_pin(root, "SynTop_v1", {"and": 4})
     assert _run(root)["hits"] == ["SynOther_v1"]
 
 
-#: SynOther's binding and pin moved out of `targets.py` and `pins.json` into its module's sidecar
+#: SynOther's binding and pin moved out of `targets.py` and ``pins/`` into its module's sidecar
 SIDECAR = """
 def _model_roots():
     from verity.primitives.circuits.defs import bind
@@ -422,9 +442,8 @@ def _sidecar(root: Path) -> None:
     (root / "syn/catalog.py").write_text(text.replace(', (("_model_roots:SynOther_v1",), model)', "", 1))
     _edit(root, "targets.py", '("SynOther_v1", lambda: "SynOther_v1"),\n', "")
     (root / "syn/other.circuit-check.py").write_text(SIDECAR.lstrip("\n"))
-    pins = json.loads((root / "pins.json").read_text())
-    (root / "syn/other.circuit-check.json").write_text(json.dumps({"pieces": {"SynOther_v1": pins["pieces"].pop("SynOther_v1")}}))
-    (root / "pins.json").write_text(json.dumps(pins))
+    (root / "syn/other.circuit-check.json").write_text(json.dumps({"pieces": {"SynOther_v1": _pins(root, "SynOther_v1")}}))
+    _set_pin(root, "SynOther_v1", None)
 
 
 def test_a_sidecars_binding_and_pin_are_held_as_targets_pys_are(tmp_path):
@@ -439,7 +458,7 @@ def test_a_sidecars_binding_and_pin_are_held_as_targets_pys_are(tmp_path):
     assert set(other["units"]) == {"syn.other.circuit-check#_model_roots:SynOther_v1", "syn.other.circuit-check#common",
                                    "targets.py#common"}
     assert set(other["pins"]) == {"syn.other.circuit-check#pieces#SynOther_v1"}
-    assert set(top["pins"]) == {"pins.json#pieces#SynTop_v1"}
+    assert set(top["pins"]) == {f"{_pin('SynTop_v1')}#pieces#SynTop_v1"}
     assert not {side, "syn/other.circuit-check.json"} & set(other["files"])
     _edit(root, side, '("SynIdle_v1", lambda: bind(idle.SynIdle))', '("SynIdle_v1", lambda: bind(idle.SynIdle, **{}))')
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
@@ -451,9 +470,9 @@ def test_a_sidecars_binding_and_pin_are_held_as_targets_pys_are(tmp_path):
     assert _run(root)["hits"] == ["SynTop_v1"]
 
 
-def test_an_unpinned_target_reruns_when_its_pin_is_added_where_it_goes_or_to_pins_json(tmp_path):
-    """SynK has no pin: its check read the absence in the pins file a new pin of it goes to (its module's sidecar) and in
-    `pins.json`, so adding it to either reruns SynK alone.  (A new file in `syn` would rerun every target, whose imports
+def test_an_unpinned_target_reruns_when_its_pin_is_added_where_it_goes_or_to_its_shared_file(tmp_path):
+    """SynK has no pin: its check read the absence in the pins file a new pin of it goes to (its module's sidecar) and in its
+    file of ``pins/``, so adding it to either reruns SynK alone.  (A new file in `syn` would rerun every target, whose imports
     listed the directory, so the sidecar is there from the start.)"""
     root = _tree(tmp_path)
     _bindings(root, '(("_sized_roots",), sized)', families=("SynK_v1",))
@@ -462,13 +481,12 @@ def test_an_unpinned_target_reruns_when_its_pin_is_added_where_it_goes_or_to_pin
     (root / "syn/kdef.circuit-check.json").write_text("{}")
     _run(root)
     assert set(_entry(root, "SynK_v1{K=2}")["reads"]["pins"]) == {"syn.kdef.circuit-check#pieces#SynK_v1{K=2}",
-                                                                  "pins.json#pieces#SynK_v1{K=2}"}
+                                                                  f"{_pin('SynK_v1{K=2}')}#pieces#SynK_v1{{K=2}}"}
     (root / "syn/kdef.circuit-check.json").write_text(json.dumps({"pieces": {"SynK_v1{K=2}": {"and": 2}}}))
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
     (root / "syn/kdef.circuit-check.json").write_text("{}")
     _run(root)
-    pins = json.loads((root / "pins.json").read_text())
-    (root / "pins.json").write_text(json.dumps({"pieces": {**pins["pieces"], "SynK_v1{K=2}": {"and": 2}}}))
+    _set_pin(root, "SynK_v1{K=2}", {"and": 2})
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
 
 
@@ -488,7 +506,7 @@ SC.write_pins({("pieces", "SynOther_v1"): {"and": 7}, ("pieces", "SynTop_v1"): {
     read = lambda rel: json.loads((root / rel).read_text())["pieces"]  # noqa: E731
     assert read("syn/other.circuit-check.json") == {"SynOther_v1": {"and": 7}}
     assert read("syn/kdef.circuit-check.json") == {"SynK_v1": {"and": 9}}
-    assert read("pins.json") == {"SynTop_v1": {"and": 8}, "Nobody_v1": {"and": 1}}
+    assert read(_pin("SynTop_v1")) == {"SynTop_v1": {"and": 8}} and read(_pin("Nobody_v1")) == {"Nobody_v1": {"and": 1}}
 
 
 def test_a_sidecar_whose_module_is_gone_is_an_error(tmp_path, monkeypatch):
@@ -850,7 +868,7 @@ def test_every_binding_and_pin_is_in_the_module_it_binds():
     for kind, pins in CK.load_pins().items():
         for key in pins:
             mod = SC.pin_owner(kind, key)
-            want = (SC.path_of(mod, "json") if mod else None) or SC.SHARED_PINS
+            want = (SC.path_of(mod, "json") if mod else None) or SC.shared_pin(kind, key)
             if (have := SC.pin_file(kind, key)) != want:
                 misplaced.append(f"{kind} {key}: in {SC.rel(have)}, owned by {SC.rel(want)}")
     assert not misplaced, misplaced
