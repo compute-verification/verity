@@ -12,6 +12,7 @@ import Proofs.Flock.Soundness.Discharge.ZkPubIn.SiteP
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.RowsP
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.TablesJ
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.Bind
+import Proofs.Flock.Soundness.Discharge.ZkPubIn.Count
 
 /-!
 # One hidden-output `--zk` sampled session with the verifier's public inputs
@@ -39,5 +40,7 @@ canonical row's `b ‖ c` (`bc_site_commitHCP`). `RowsP`: `lay` and `rs` at `key
 from `Canonical.public_pinnedC`). `TablesJ`: the session's `J` tables with `own` (`setupOfP_tableJH`,
 `DrawSetupZHJP`, `planZHJP`) and their public shadow (`tableShHJP`, `planShHJP`). `Bind`: the canonical session's
 sites (`sitesShCP`, `sitesShCP_bcSite`) and `lay`, `rs` at `keyProgP` moved to its `--zk` tables (`layZCP`, `rsZCP`,
-`rsZCP_computes`).
+`rsZCP_computes`). `Count`: the count curve at the public transcript `Xpub pubOnes pubZeros XplurZC`
+(`zk_flock_countC_pub`), the public gates decoding to the verifier's own bits at the canonical places
+(`pubDecodesZ_placeZCP`).
 -/
