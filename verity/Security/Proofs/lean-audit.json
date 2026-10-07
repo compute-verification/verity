@@ -6,7 +6,7 @@
   "Proofs.Pous.CheckAxioms": "the headline #print axioms list (`lake env lean CheckAxioms.lean`)",
   "Proofs.NetworkCertifier.CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)",
   "Proofs.NetworkCertifier.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof",
-  "Proofs.Flock.Soundness.Discharge.Canonical.Gaps": "open targets: the statements the canonical headline's gaps need (a tail's outputs, registered reads; the session at public inputs in words), sorry until they land; lake build Proofs.Flock.Soundness.Discharge.Canonical.All builds them",
+  "Proofs.Flock.Soundness.Discharge.Canonical.Gaps": "open targets: the statements the canonical headline's gaps need (a tail's outputs, registered reads), sorry until they land; lake build Proofs.Flock.Soundness.Discharge.Canonical.All builds them",
   "Proofs.Flock.Soundness.Discharge.Canonical.All": "imports Gaps.lean, whose open targets are sorry; every other canonical module is under the root"
  },
  "runs": {
