@@ -1,0 +1,17 @@
+name = "lms"
+defaultTargets = ["Lms", "lms-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../../../../core/service/flock"
+
+[[lean_lib]]
+name = "Lms"
+
+[[lean_exe]]
+name = "lms-difftest"
+root = "Lms.DifftestMain"
