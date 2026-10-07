@@ -1,5 +1,5 @@
 import Proofs.Pouw.PearlC.KernelWrefGamma
-import Specs.Pouw.Assumptions.PearlC.TTOutChainOnly
+import Models.Pouw.Assumptions.PearlC.TTOutChainOnly
 
 /-!
 # γ under the chain-only reading, against the honest kernel's `W_ref` (the price-twins lane's file; staged)

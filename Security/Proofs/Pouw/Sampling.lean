@@ -1,11 +1,11 @@
-import Specs.Pouw.Assumptions.Pinned
+import Models.Pouw.Assumptions.Pinned
 import Proofs.Pouw.Prob
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Tactic.FieldSimp
 import Mathlib.Tactic.Ring
-import Specs.Pouw.Guarantees.Game
+import Models.Pouw.Guarantees.Game
 
 /-!
 # (c) Work-weighted sampling: `δ_s = (1 − ε_s)^t`
